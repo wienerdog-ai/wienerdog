@@ -17,7 +17,8 @@
   ],
   "scripts": {
     "test": "node --test",
-    "lint": "node scripts/lint.js"
+    "lint": "node scripts/lint.js",
+    "gen:agents": "node scripts/gen-agents-md.js"
   },
   "repository": {
     "type": "git",
