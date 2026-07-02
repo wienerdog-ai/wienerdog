@@ -11,6 +11,7 @@ Commands:
   init        Create the Wienerdog core (~/.wienerdog) and detect your AI tools
   sync        Re-render the session digest from your vault's identity notes
   dream       Consolidate recent sessions into vault memory (one commit)
+  schedule    Add, remove, or list scheduled jobs (dream, routines)
   doctor      Check an existing install for problems
   uninstall   Remove everything Wienerdog created (reverses the install)
   gws         Read Gmail/Calendar/Drive and draft mail (Google Workspace)
@@ -36,6 +37,7 @@ async function main() {
     init: () => require('../src/cli/init'),
     sync: () => require('../src/cli/sync'),
     dream: () => require('../src/cli/dream'),
+    schedule: () => require('../src/cli/schedule'),
     doctor: () => require('../src/cli/doctor'),
     uninstall: () => require('../src/cli/uninstall'),
     gws: () => require('../src/gws/index'),
