@@ -54,6 +54,7 @@ function main() {
       'docs/**/*.md',
       'skills/**/*.md',
       'templates/**/*.md',
+      'tests/**/*.md',
       '*.md',
     ])
   ) {
