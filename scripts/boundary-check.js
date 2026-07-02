@@ -16,7 +16,9 @@ function parseDeliverables(specText) {
   const paths = [];
   for (let i = start + 1; i < lines.length; i++) {
     const line = lines[i];
-    if (/^##\s/.test(line)) break;
+    // Stop at ANY heading (including "### Exact contracts") so tables in
+    // subsections cannot silently widen the allowed set.
+    if (/^#{2,}\s/.test(line)) break;
     const trimmed = line.trim();
     if (!trimmed.startsWith('|')) continue;
     const cells = trimmed
@@ -41,6 +43,10 @@ function main() {
   const allowed = new Set(parseDeliverables(specText));
   allowed.add(specPath);
   allowed.add('docs/specs/ROADMAP.md');
+  // Lockfile churn legitimately accompanies package.json changes.
+  allowed.add('package-lock.json');
+  // One appended dogfood lesson per session is allowed by CLAUDE.md.
+  allowed.add('memory/lessons/inbox.md');
 
   const offenders = changedFiles.filter((f) => !allowed.has(f));
   if (offenders.length > 0) {
