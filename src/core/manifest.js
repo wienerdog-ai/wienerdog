@@ -12,9 +12,21 @@ const crypto = require('node:crypto');
  * hash (files only) is the sha256 of the content we wrote, used to detect
  * user modifications on uninstall.
  *
- * @typedef {{kind: 'dir'|'file', path: string, hash?: string}} ManifestEntry
+ * Adapters add three more kinds (WP-006), each with precise reverse semantics:
+ *   {kind:'symlink', path}                          — a symlink we created
+ *   {kind:'managed-block', path, createdFile:bool}  — a sentinel block we wrote
+ *                                                     into a (maybe user-owned) file
+ *   {kind:'settings-entry', path, createdFile:bool, commands:string[]}
+ *                                                   — hook commands we merged into
+ *                                                     a JSON settings file
+ *
+ * @typedef {{kind: string, path: string, hash?: string, createdFile?: boolean,
+ *            commands?: string[]}} ManifestEntry
  * @typedef {{version: number, createdAt: string, entries: ManifestEntry[]}} Manifest
  */
+
+const BEGIN_SENTINEL = '<!-- wienerdog:begin -->';
+const END_SENTINEL = '<!-- wienerdog:end -->';
 
 /** @param {string} p @returns {boolean} */
 function isFile(p) {
@@ -37,6 +49,122 @@ function isDir(p) {
 /** @param {string} p @returns {string} sha256 hex of the file's current content. */
 function sha256File(p) {
   return crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex');
+}
+
+/** @param {string} p @returns {boolean} true if p is an existing symlink. */
+function isSymlink(p) {
+  try {
+    return fs.lstatSync(p).isSymbolicLink();
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Reverse a 'symlink' entry: unlink only if it is still a symlink we created.
+ * @param {ManifestEntry} entry
+ * @param {boolean} dryRun
+ * @param {string[]} removed @param {string[]} skipped @param {Set<string>} removedSet
+ */
+function reverseSymlink(entry, dryRun, removed, skipped, removedSet) {
+  if (!isSymlink(entry.path)) {
+    // User replaced it with a real file/dir, or it is already gone.
+    skipped.push(entry.path);
+    return;
+  }
+  if (!dryRun) fs.unlinkSync(entry.path);
+  removedSet.add(entry.path);
+  removed.push(entry.path);
+}
+
+/**
+ * Reverse a 'managed-block' entry: strip the exact span the forward step
+ * introduced — the block plus one leading newline (the blank-line separator)
+ * and the one trailing newline after the end sentinel — so a pre-existing
+ * file round-trips byte-identically through sync → uninstall. A block the
+ * user relocated mid-file uninstalls to exactly one blank line between the
+ * surrounding regions. Delete the file only if we created it and nothing
+ * else remains.
+ * @param {ManifestEntry} entry
+ * @param {boolean} dryRun
+ * @param {string[]} removed @param {string[]} skipped @param {Set<string>} removedSet
+ */
+function reverseManagedBlock(entry, dryRun, removed, skipped, removedSet) {
+  let content;
+  try {
+    content = fs.readFileSync(entry.path, 'utf8');
+  } catch {
+    skipped.push(entry.path);
+    return;
+  }
+  const begin = content.indexOf(BEGIN_SENTINEL);
+  const end = content.indexOf(END_SENTINEL);
+  if (begin === -1 || end === -1 || end < begin) {
+    // User removed the block themselves — nothing to reverse.
+    skipped.push(entry.path);
+    return;
+  }
+  let before = content.slice(0, begin);
+  let after = content.slice(end + END_SENTINEL.length);
+  // The forward step wrote '\n' + block + '\n' after the prior content's own
+  // trailing newline: one newline forming the blank-line separator, one
+  // terminating the end sentinel. Remove exactly those two characters along
+  // with the block itself.
+  if (before.endsWith('\n')) before = before.slice(0, -1);
+  if (after.startsWith('\n')) after = after.slice(1);
+  const remaining = before + after;
+
+  if (entry.createdFile === true && remaining.trim() === '') {
+    if (!dryRun) fs.rmSync(entry.path, { force: true });
+    removedSet.add(entry.path);
+  } else if (!dryRun) {
+    fs.writeFileSync(entry.path, remaining);
+  }
+  removed.push(entry.path);
+}
+
+/**
+ * Reverse a 'settings-entry' entry: drop the hook commands we merged in, then
+ * prune any now-empty groups / event arrays / the hooks key. Delete the file
+ * only if we created it and it is now `{}`.
+ * @param {ManifestEntry} entry
+ * @param {boolean} dryRun
+ * @param {string[]} removed @param {string[]} skipped @param {Set<string>} removedSet
+ */
+function reverseSettingsEntry(entry, dryRun, removed, skipped, removedSet) {
+  let raw;
+  try {
+    raw = fs.readFileSync(entry.path, 'utf8');
+  } catch {
+    skipped.push(entry.path);
+    return;
+  }
+  const settings = JSON.parse(raw);
+  const commands = new Set(entry.commands || []);
+  const hooks = settings && typeof settings === 'object' ? settings.hooks : null;
+  if (hooks && typeof hooks === 'object') {
+    for (const event of Object.keys(hooks)) {
+      if (!Array.isArray(hooks[event])) continue;
+      hooks[event] = hooks[event]
+        .map((group) => {
+          if (group && Array.isArray(group.hooks)) {
+            group.hooks = group.hooks.filter((h) => !(h && commands.has(h.command)));
+          }
+          return group;
+        })
+        .filter((group) => !(group && Array.isArray(group.hooks) && group.hooks.length === 0));
+      if (hooks[event].length === 0) delete hooks[event];
+    }
+    if (Object.keys(hooks).length === 0) delete settings.hooks;
+  }
+
+  if (entry.createdFile === true && Object.keys(settings).length === 0) {
+    if (!dryRun) fs.rmSync(entry.path, { force: true });
+    removedSet.add(entry.path);
+  } else if (!dryRun) {
+    fs.writeFileSync(entry.path, `${JSON.stringify(settings, null, 2)}\n`);
+  }
+  removed.push(entry.path);
 }
 
 /**
@@ -139,6 +267,12 @@ function reverse(paths, manifest, { dryRun = false } = {}) {
       if (!dryRun) fs.rmdirSync(entry.path);
       removedSet.add(entry.path);
       removed.push(entry.path);
+    } else if (entry.kind === 'symlink') {
+      reverseSymlink(entry, dryRun, removed, skipped, removedSet);
+    } else if (entry.kind === 'managed-block') {
+      reverseManagedBlock(entry, dryRun, removed, skipped, removedSet);
+    } else if (entry.kind === 'settings-entry') {
+      reverseSettingsEntry(entry, dryRun, removed, skipped, removedSet);
     } else {
       process.stderr.write(
         `wienerdog: skipping unknown manifest entry kind '${entry.kind}' (${entry.path})\n`
