@@ -39,6 +39,7 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 | [WP-018](WP-018-gws-send-grants.md) | gws send grants, Gmail send, _alert (ADR-0007) | M5 | opus | Ready | WP-011 |
 | [WP-019](WP-019-gws-cal-drive.md) | gws Calendar + Drive read verbs | M5 | sonnet | Ready | WP-011 |
 | [WP-020](WP-020-run-job-wrapper.md) | run-job wrapper (clean env, TCC-guard, watchdog, fail-loud, catch-up) | M6 | opus | Ready | WP-013, WP-018 |
+| [WP-021](WP-021-gws-dispatch-reconciliation.md) | Reconcile gws dispatch with verb-module contracts | M5 | sonnet | Ready | WP-018, WP-019 |
 
 ## Dependency graph
 
@@ -61,6 +62,8 @@ graph LR
   WP011 --> WP018[WP-018 gws send grants]
   WP011 --> WP019[WP-019 gws cal+drive]
   WP003 --> WP013[WP-013 scheduler gen + schedule]
+  WP018 --> WP021[WP-021 gws dispatch]
+  WP019 --> WP021
   WP013 --> WP020[WP-020 run-job wrapper]
   WP018 -.-> WP020
   WP018 --> WP014[WP-014 routine catalog + digest]
