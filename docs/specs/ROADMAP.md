@@ -26,8 +26,8 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 | [WP-005](WP-005-interview-skill-and-renderer.md) | Interview skill + identity→managed-block renderer | M2 | opus | Ready | WP-004 |
 | [WP-006](WP-006-claude-adapter.md) | Claude Code adapter (managed block, hooks, skills registration) | M2 | opus | Ready | WP-005 |
 | [WP-007](WP-007-transcript-parsers.md) | Transcript parsers (Claude JSONL + Codex rollout) | M3 | sonnet | Ready | WP-003 |
-| WP-008 | Dream orchestrator (lock, redact, validate, commit) | M3 | opus | Draft | WP-007 |
-| WP-009 | Dream skill (phases, tiered gates, provenance) | M3 | opus | Draft | WP-008 |
+| [WP-008](WP-008-dream-orchestrator.md) | Dream input assembly + brain launch (config, lock, watermarks, scratch, invocation) | M3 | opus | Ready | WP-007 |
+| [WP-009](WP-009-dream-skill.md) | Dream skill (phases, tiered gates, provenance) | M3 | opus | Ready | WP-008, WP-017 |
 | WP-010 | Codex adapter | M4 | sonnet | Draft | WP-006, WP-007 |
 | WP-011 | gws CLI (auth, gmail, cal, drive, send grants, _alert) | M5 | opus | Draft | WP-003 |
 | WP-012 | Google setup skill (guided OAuth) | M5 | sonnet | Draft | WP-011 |
@@ -35,6 +35,7 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 | WP-014 | Routine catalog skill + daily digest entry | M6 | sonnet | Draft | WP-011, WP-013 |
 | WP-015 | Scenario-test harness (nightly, incl. injection fixture) | M3/M7 | sonnet | Draft | WP-009 |
 | [WP-016](WP-016-curl-installer-script.md) | curl installer bootstrapper (install.sh) | M1 | sonnet | Ready | WP-003 |
+| [WP-017](WP-017-dream-validate-commit.md) | Dream runtime pipeline (watchdog run, diff validation, single commit) | M3 | opus | Ready | WP-008 |
 
 ## Dependency graph
 
@@ -46,8 +47,9 @@ graph LR
   WP004 --> WP005[WP-005 interview]
   WP005 --> WP006[WP-006 Claude adapter]
   WP003 --> WP007[WP-007 transcript parsers]
-  WP007 --> WP008[WP-008 dream orchestrator]
-  WP008 --> WP009[WP-009 dream skill]
+  WP007 --> WP008[WP-008 dream input+launch]
+  WP008 --> WP017[WP-017 dream validate/commit]
+  WP017 --> WP009[WP-009 dream skill]
   WP006 --> WP010[WP-010 Codex adapter]
   WP007 --> WP010
   WP003 --> WP011[WP-011 gws CLI]
@@ -58,3 +60,4 @@ graph LR
   WP009 --> WP015[WP-015 scenario harness]
   WP003 --> WP016[WP-016 curl installer]
 ```
+</content>
