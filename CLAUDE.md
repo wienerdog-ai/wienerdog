@@ -51,7 +51,9 @@ starts something that keeps running, it is wrong.
   `Generated-by: <model>` line.
 
 ## Memory (dogfooding)
-- This repo runs Wienerdog on itself. At the end of your session, append the
-  lessons or gotchas you hit to `memory/lessons/inbox.md` — one bullet per
-  lesson, each prefixed with your WP id. Don't organize it — the dream job
+- This repo runs Wienerdog on itself. At the end of your session, report the
+  lessons or gotchas you hit as bullets in your PR body / final message — one
+  bullet per lesson, prefixed with your WP id. The maintainer appends them to
+  `memory/lessons/inbox.md` on main (parallel branches editing that file
+  conflict on merge — don't edit it in a WP branch). The dream job
   consolidates.
