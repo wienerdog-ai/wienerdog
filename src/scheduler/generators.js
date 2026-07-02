@@ -1,8 +1,11 @@
 'use strict';
 
+const fs = require('node:fs');
 const path = require('node:path');
+const { spawnSync } = require('node:child_process');
 
 const { WienerdogError } = require('../core/errors');
+const manifestLib = require('../core/manifest');
 
 /**
  * Pure text renderers and path helpers for the OS-native scheduler entries.
@@ -198,6 +201,65 @@ ExecStart=${o.node} ${o.bin} run-job ${o.name}
 `;
 }
 
+/** @param {string} p @returns {boolean} */
+function isFile(p) {
+  try {
+    return fs.statSync(p).isFile();
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Default loader: register the catch-up plist with real launchd. Tests inject a
+ * spy via opts.loader so they never touch the real scheduler.
+ * @param {string[]} argv
+ * @returns {{status:number}}
+ */
+function defaultCatchupLoader(argv) {
+  const r = spawnSync(argv[0], argv.slice(1));
+  return { status: r.status == null ? 1 : r.status };
+}
+
+/**
+ * Ensure the macOS catch-up plist exists and is registered. Idempotent: if the
+ * plist file already exists with identical content AND a manifest entry tracks
+ * it, nothing is written or loaded. Darwin only (no-op on other platforms).
+ * Records a `scheduler-entry` manifest entry (with the catch-up unload argv) the
+ * first time it writes the file, mirroring schedule.js. This is a runtime
+ * backstop invoked by run-job after a job succeeds; the primary installer of the
+ * entry is WP-013's `schedule add`.
+ * @param {import('../core/paths').WienerdogPaths} paths
+ * @param {{loader?: (argv:string[])=>{status:number}}} opts
+ * @returns {{changed:boolean}}
+ */
+function ensureCatchup(paths, opts = {}) {
+  if (process.platform !== 'darwin') return { changed: false };
+  const loader = opts.loader || defaultCatchupLoader;
+  const uid = process.getuid();
+  const logDir = path.join(paths.logs, 'catchup');
+  const content = catchupPlist({ node: nodePath(), bin: wienerdogBin(), logDir });
+  const label = 'ai.wienerdog.catchup';
+  const plistPath = path.join(launchAgentsDir(paths.home), `${label}.plist`);
+  const unload = ['launchctl', 'bootout', `gui/${uid}/${label}`];
+
+  const manifest = manifestLib.load(paths);
+  const identical = isFile(plistPath) && fs.readFileSync(plistPath, 'utf8') === content;
+  const hasEntry = manifest.entries.some(
+    (e) => e.kind === 'scheduler-entry' && e.path === plistPath
+  );
+  if (identical && hasEntry) return { changed: false };
+
+  fs.mkdirSync(path.dirname(plistPath), { recursive: true });
+  fs.writeFileSync(plistPath, content);
+  if (!hasEntry) {
+    manifestLib.record(manifest, { kind: 'scheduler-entry', path: plistPath, unload });
+    manifestLib.save(paths, manifest);
+  }
+  loader(['launchctl', 'bootstrap', `gui/${uid}`, plistPath]);
+  return { changed: true };
+}
+
 module.exports = {
   nodePath,
   wienerdogBin,
@@ -210,4 +272,5 @@ module.exports = {
   catchupPlist,
   systemdTimer,
   systemdService,
+  ensureCatchup,
 };
