@@ -8,7 +8,7 @@ You already pay for a great AI model. Wienerdog makes it *feel* dramatically sma
 curl -fsSL https://raw.githubusercontent.com/wienerdog-ai/wienerdog/main/install.sh | bash
 ```
 
-(Prefer npm? `npx wienerdog@latest init` does the same thing. Windows: use the npx command for now. The script is short — [read it first](install.sh) if you like; it only checks for Node and hands over to the versioned npm package.)
+Prefer npm? `npx wienerdog@latest init` does the same thing. Windows: use the npx command (PowerShell installer coming). The script is ~60 lines — [read it first](install.sh) if you like; it only checks for Node and hands over to the versioned npm package.
 
 Not comfortable with the terminal at all? Paste this into Claude Code or Codex instead, and your AI will run the install for you (approving each step):
 

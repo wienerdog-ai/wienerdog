@@ -1,7 +1,7 @@
 ---
 id: WP-016
 title: Implement curl installer bootstrapper (install.sh)
-status: Ready
+status: In-Review
 model: sonnet
 size: S
 depends_on: [WP-003]
