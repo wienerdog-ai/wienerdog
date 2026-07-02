@@ -78,9 +78,13 @@ function reverseSymlink(entry, dryRun, removed, skipped, removedSet) {
 }
 
 /**
- * Reverse a 'managed-block' entry: strip the sentinel block (and one blank line
- * we may have inserted before it). Delete the file only if we created it and
- * nothing else remains.
+ * Reverse a 'managed-block' entry: strip the exact span the forward step
+ * introduced — the block plus one leading newline (the blank-line separator)
+ * and the one trailing newline after the end sentinel — so a pre-existing
+ * file round-trips byte-identically through sync → uninstall. A block the
+ * user relocated mid-file uninstalls to exactly one blank line between the
+ * surrounding regions. Delete the file only if we created it and nothing
+ * else remains.
  * @param {ManifestEntry} entry
  * @param {boolean} dryRun
  * @param {string[]} removed @param {string[]} skipped @param {Set<string>} removedSet
@@ -101,9 +105,13 @@ function reverseManagedBlock(entry, dryRun, removed, skipped, removedSet) {
     return;
   }
   let before = content.slice(0, begin);
-  const after = content.slice(end + END_SENTINEL.length);
-  // Drop a single blank-line separator we may have inserted before the block.
-  before = before.replace(/\n\n$/, '\n');
+  let after = content.slice(end + END_SENTINEL.length);
+  // The forward step wrote '\n' + block + '\n' after the prior content's own
+  // trailing newline: one newline forming the blank-line separator, one
+  // terminating the end sentinel. Remove exactly those two characters along
+  // with the block itself.
+  if (before.endsWith('\n')) before = before.slice(0, -1);
+  if (after.startsWith('\n')) after = after.slice(1);
   const remaining = before + after;
 
   if (entry.createdFile === true && remaining.trim() === '') {

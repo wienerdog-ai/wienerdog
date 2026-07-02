@@ -175,6 +175,42 @@ test('missing digest: returns early with a notice, no throw', () => {
   assert.ok(res.notices.some((n) => n.includes('digest not found')));
 });
 
+test('sync then uninstall round-trips a pre-existing CLAUDE.md byte-identically', () => {
+  const paths = setup();
+  const claudeMd = path.join(paths.claudeDir, 'CLAUDE.md');
+  const original = '# My notes\n\ntext\n';
+  fs.writeFileSync(claudeMd, original);
+
+  const manifest = freshManifest();
+  applyClaudeAdapter(paths, { manifest });
+  fs.mkdirSync(paths.core, { recursive: true });
+
+  manifestLib.reverse(paths, manifest, { dryRun: false });
+
+  assert.equal(fs.readFileSync(claudeMd, 'utf8'), original, 'byte-identical after sync → uninstall');
+});
+
+test('a user-relocated mid-file block uninstalls to exactly one blank line', () => {
+  const paths = setup();
+  const claudeMd = path.join(paths.claudeDir, 'CLAUDE.md');
+  const manifest = freshManifest();
+  applyClaudeAdapter(paths, { manifest });
+
+  // Simulate the user cutting the block and pasting it mid-file.
+  const written = fs.readFileSync(claudeMd, 'utf8');
+  const block = written.slice(0, -1); // adapter wrote exactly block + '\n'
+  fs.writeFileSync(claudeMd, `# Above\n\n${block}\n\n# Below\ntail\n`);
+  fs.mkdirSync(paths.core, { recursive: true });
+
+  manifestLib.reverse(paths, manifest, { dryRun: false });
+
+  assert.equal(
+    fs.readFileSync(claudeMd, 'utf8'),
+    '# Above\n\n# Below\ntail\n',
+    'exactly one blank line between the surrounding regions'
+  );
+});
+
 test('uninstall reverses everything, keeping unrelated hooks and user content', () => {
   const paths = setup();
   const coreSkill = path.join(paths.core, 'skills', 'wienerdog-setup');

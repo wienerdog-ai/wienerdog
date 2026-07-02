@@ -389,8 +389,6 @@ Use `node:test`, a `fs.mkdtemp` temp root, and env overrides
 
 - [ ] Byte-reversibility: a pre-existing CLAUDE.md with prior content (append case) is byte-identical after sync → uninstall (test asserts exact bytes).
 - [ ] A user-relocated block mid-file (text above and below) uninstalls to exactly one blank line between the regions (test asserts exact bytes of the expected result).
-
-
 - [ ] `sync` writes a managed block into `~/.claude/CLAUDE.md` (temp) matching
       the golden byte-for-byte for the fixed digest.
 - [ ] Content outside the sentinels is never modified (test case 2).
