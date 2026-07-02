@@ -1,0 +1,21 @@
+name: Feature request
+description: Something Wienerdog should do
+labels: [feature]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve for you?
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: Your idea (optional)
+  - type: checkboxes
+    id: invariant
+    attributes:
+      label: Sanity check
+      options:
+        - label: This doesn't require Wienerdog to run a daemon, server, or background process (see ADR-0004 — "Wienerdog is just files")
+          required: true

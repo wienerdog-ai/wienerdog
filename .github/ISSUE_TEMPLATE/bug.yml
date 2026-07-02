@@ -1,0 +1,36 @@
+name: Bug report
+description: Something Wienerdog did wrong on your machine
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Wienerdog version
+      description: Output of `npx wienerdog --version`
+    validations:
+      required: true
+  - type: dropdown
+    id: harness
+    attributes:
+      label: Harness
+      options: [Claude Code, Codex CLI, Both, Other]
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: OS and version
+      placeholder: macOS 15.5 / Ubuntu 24.04 / Windows 11
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Output of `npx wienerdog doctor`
+      render: shell
