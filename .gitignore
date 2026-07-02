@@ -11,3 +11,6 @@ memory/.state/
 
 # Test scratch output
 tests/.scratch/
+
+# Agent worktrees (local)
+.claude/worktrees/
