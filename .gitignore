@@ -1,0 +1,13 @@
+node_modules/
+*.log
+.DS_Store
+
+# Dogfood vault: transcripts and machine state stay local
+memory/transcripts/
+memory/.state/
+
+# Local-only Claude Code settings
+.claude/settings.local.json
+
+# Test scratch output
+tests/.scratch/

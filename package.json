@@ -1,0 +1,35 @@
+{
+  "name": "wienerdog",
+  "version": "0.0.0",
+  "description": "Give your AI a memory, habits, and a daily routine — with nothing but files. One-line setup for Claude Code and Codex CLI.",
+  "license": "MIT",
+  "bin": {
+    "wienerdog": "bin/wienerdog.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "skills/",
+    "templates/"
+  ],
+  "scripts": {
+    "test": "node --test tests/",
+    "lint": "echo 'lint pipeline lands in WP-001'"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wienerdog-ai/wienerdog.git"
+  },
+  "keywords": [
+    "claude-code",
+    "codex",
+    "ai-memory",
+    "second-brain",
+    "agents-md",
+    "claude-md",
+    "skills"
+  ]
+}
