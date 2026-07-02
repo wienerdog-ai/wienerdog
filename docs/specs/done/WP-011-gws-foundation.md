@@ -1,7 +1,7 @@
 ---
 id: WP-011
 title: Implement gws foundation (OAuth auth, client seam, Gmail read/draft)
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: [WP-003]

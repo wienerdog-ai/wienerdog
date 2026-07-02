@@ -1,7 +1,7 @@
 ---
 id: WP-020
 title: Implement the run-job wrapper (clean env, TCC-guard, watchdog, logs, fail-loud, catch-up)
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: [WP-013]

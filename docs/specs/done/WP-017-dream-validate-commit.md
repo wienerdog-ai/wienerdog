@@ -1,7 +1,7 @@
 ---
 id: WP-017
 title: Implement dream runtime pipeline (watchdog run, diff validation, single commit)
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: [WP-008]
