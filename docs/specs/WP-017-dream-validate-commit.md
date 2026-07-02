@@ -223,8 +223,8 @@ Pipeline (in order):
      then WienerdogError ("dream timed out after N min"). Always clear the timer;
      never leave a timer or child running past this point.
    - On normal exit with `code !== 0` → WienerdogError ("dream brain exited N").
-   - (Fail-loud email / digest banner is `run-job`'s job in WP-013 — here just log
-     + non-zero exit.)
+   - (Fail-loud email / digest banner is `run-job`'s job in WP-013 — here just
+     log plus non-zero exit.)
 8. `res = validateAndCommit({vaultDir, scratchDir: sel.scratchDir, date,
    expectedScratch: sel.wrote})`.
 9. `writeWatermarks(paths.state, {claude: sel.maxMtime.claude, codex: sel.maxMtime.codex})`

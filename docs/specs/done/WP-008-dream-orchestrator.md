@@ -1,7 +1,7 @@
 ---
 id: WP-008
 title: Implement dream input assembly and brain launch (config, lock, watermarks, scratch, invocation)
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: [WP-007]

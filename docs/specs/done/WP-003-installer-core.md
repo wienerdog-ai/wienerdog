@@ -1,7 +1,7 @@
 ---
 id: WP-003
 title: Implement installer core (init, doctor, uninstall, manifest)
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: [WP-001]
