@@ -1,0 +1,13 @@
+# Architecture Decision Records
+
+Durable decisions live here so they are made once, not re-litigated per session (human or model).
+
+**Process**: copy `0000-template.md` to the next number; keep it under one page; status `Proposed` → `Accepted`. Accepted ADRs are immutable — supersede with a new ADR, never edit. Work-package specs cite ADRs by number ("Per ADR-0004, …"); implementers treat cited ADRs as law.
+
+| # | Title | Status |
+|---|---|---|
+| [0001](0001-record-architecture-decisions.md) | Record architecture decisions | Accepted |
+| [0002](0002-mit-license.md) | MIT license | Accepted |
+| [0003](0003-npm-primary-distribution.md) | npm-primary distribution | Accepted |
+| [0004](0004-no-daemon-invariant.md) | No-daemon invariant ("Wienerdog is just files") | Accepted |
+| [0005](0005-spec-driven-agent-development.md) | Spec-driven agent development | Accepted |
