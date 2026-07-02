@@ -1,7 +1,7 @@
 ---
 id: WP-005
 title: Implement setup interview skill + identity→digest renderer
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: [WP-004]

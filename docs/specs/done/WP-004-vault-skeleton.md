@@ -1,7 +1,7 @@
 ---
 id: WP-004
 title: Implement vault skeleton generator + golden-file harness
-status: In-Review
+status: Done
 model: sonnet
 size: M
 depends_on: [WP-003]
