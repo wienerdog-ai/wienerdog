@@ -6,7 +6,7 @@ const path = require('node:path');
 
 const repoRoot = path.join(__dirname, '..', '..');
 const scriptPath = path.join(repoRoot, 'scripts', 'boundary-check.js');
-const specPath = 'docs/specs/WP-001-ci-and-lint-pipeline.md';
+const specPath = 'docs/specs/done/WP-001-ci-and-lint-pipeline.md';
 
 /** @param {string[]} args @returns {{status: number, stdout: string, stderr: string}} */
 function run(args) {
