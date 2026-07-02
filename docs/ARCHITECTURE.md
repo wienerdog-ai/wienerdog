@@ -69,6 +69,7 @@ Status: v1 baseline (2026-07-02). Facts verified July 2026; wd-researcher re-ver
 | Canonical core | Single source of truth for config, skills, prompts, machine state | No (files) |
 | Adapters (`sync`) | Idempotent compile of core → per-harness files via managed sentinel blocks | On change |
 | Interview | `/wienerdog-setup` skill — the user's own model conducts it | No (prompt) |
+| Routine catalog | `/wienerdog-routines` skill (ADR-0008) — opt-in menu of scheduled routines (digest, inbox triage, weekly review, …); each pick configures skill + schedule + any send grant in one flow; re-runnable anytime | No (prompt) |
 | Memory vault | PARA markdown + git; the only long-term memory store | No (files) |
 | Capture | SessionStart digest injection + SessionEnd enqueue (enrichment); transcript scanner is ground truth | Tiny scripts |
 | Dreaming | Orchestrator (lock/scan/redact/validate/commit) + dream skill (the intelligence) | Short-lived job |
@@ -90,7 +91,9 @@ User knowledge lives **in the vault** (vendor-neutral markdown by nature); `~/.w
 
 Wienerdog never owns the user's CLAUDE.md/AGENTS.md — it owns one clearly marked region. `uninstall` removes exactly that region. Edits inside sentinels are overwritten by `sync` (documented); edits outside are never touched.
 
-**GUI-readiness (v2):** everything a GUI needs is already on disk in parseable form — `config.yaml`, vault markdown with frontmatter, `state/*.json`, git history, dream reports. A v2 GUI is a local on-demand reader/editor of these files. There is no in-memory state anywhere, so no v1 decision blocks it.
+**Reconfiguration (v1):** the harness is the settings panel. `/wienerdog-setup` is re-runnable — with existing config it presents a section menu (profile, preferences/tone, goals, instructions, memory mode) instead of the full interview; `/wienerdog-routines` re-runs the routine catalog; `wienerdog doctor` reports state. No separate config UI in v1 (competitor research: `memory/research/2026-07-02-reconfig-ux.md` — OpenClaw needs a dashboard for this, Hermes makes users hand-edit YAML). Rule learned from Hermes issue #4775: never round-trip user config through a merged/expanded representation — Wienerdog only ever rewrites its own managed blocks and single config lines.
+
+**GUI-readiness (v2):** everything a GUI needs is already on disk in parseable form — `config.yaml`, vault markdown with frontmatter, `state/*.json`, git history, dream reports. A v2 GUI is a local on-demand reader/editor of these files (validated scope from competitor use: config form, skills toggle, schedules, memory browser), never an always-on server (ADR-0004). There is no in-memory state anywhere, so no v1 decision blocks it.
 
 ## Memory vault
 
@@ -152,9 +155,9 @@ Machine state (watermarks, queue, score cache) lives in `~/.wienerdog/state/`, n
 
 ## Google Workspace (`wienerdog gws`)
 
-Own thin CLI over `googleapis` (~600 LOC). Alternatives rejected: no maintained end-user Gmail+Calendar+Drive CLI exists (GAM is admin-oriented, gcalcli calendar-only, gmailctl filters-only); MCP costs permanent per-session context and has weak headless ergonomics.
+Own thin CLI over `googleapis` (~600 LOC). Alternatives rejected: MCP costs permanent per-session context and has weak headless ergonomics; GAM is admin-oriented, gcalcli calendar-only, gmailctl filters-only. The official `googleworkspace/cli` (Rust `gws`) was evaluated seriously (memo: `memory/research/2026-07-02-googleworkspace-cli.md`, 2026-07-02) and rejected for v1 on three grounds: it ships **no shared OAuth client** (users still face Cloud Console or a `gcloud` dependency — zero onboarding win); its `+send`/`+insert` verbs are **ungated**, so our send-grant enforcement (ADR-0007) would require wrapping it anyway, rebuilding most of what we'd hoped to save; and it has **open credential-storage bugs** (issues #367, #791 — silent Keychain write failure in exactly the no-session launchd context our scheduler uses; the `GOOGLE_WORKSPACE_CLI_KEYRING_BACKEND=file` footgun is real and unfixed). Revisit as a backend behind our own grant layer if Workspace scope grows (Sheets/Docs/Chat) and after it reaches v1.0 with those bugs closed.
 
-Command surface, **governance enforced in the CLI, not in prompts**: `gmail search|read|draft` (no send verb exists), `cal list|show|draft-event` (private visibility, "DRAFT:" prefix, or ICS output — no invites sent), `drive search|read`. Sole exception: `gws _alert` — fixed-template mail to the user's own address, for watchdog fail-loud.
+Command surface, **governance enforced in the CLI, not in prompts**: `gmail search|read|draft|send`, `cal list|show|draft-event`, `drive search|read`. Outbound verbs (`send`, event invites) execute only under a **send grant** (ADR-0007): scoped `(routine, recipient allowlist)` entries in config.yaml, created exclusively by the interactive `wienerdog grant send …` flow with a typed confirmation — never by any skill, hook, or headless job. An ungranted send degrades to a draft plus a notice. `gws _alert` — fixed-template mail to the user's own address for watchdog fail-loud — is a built-in self-grant.
 
 **OAuth**: guided per-user OAuth client (a shared client with Gmail scopes requires Google's restricted-scope security assessment — not viable for a young OSS project; test-mode sharing caps at 100 users with 7-day token expiry). The `/wienerdog-google-setup` skill walks the user through Cloud Console (project → APIs → consent → Desktop client → paste JSON), then `wienerdog gws auth` runs the localhost loopback flow (temporary port during auth only). Scopes: `gmail.readonly`, `gmail.compose`, `calendar`, `drive.readonly`. Tokens: `~/.wienerdog/secrets/google-token.json`, `chmod 600`, outside vault/git — deliberately file-based, not OS keyring (keyring env-var footgun + launchd/Keychain pain; documented trade-off in the threat model).
 
@@ -162,7 +165,7 @@ Command surface, **governance enforced in the CLI, not in prompts**: `gmail sear
 
 `wienerdog schedule add <name> --at 07:00 --skill <skill>` generates OS-native entries that all invoke `wienerdog run-job <name>` — a short-lived process.
 
-- **macOS**: `~/Library/LaunchAgents/ai.wienerdog.<name>.plist`, `StartCalendarInterval` (missed-while-asleep runs on wake natively). Missed-while-powered-off: one `RunAtLoad` plist (`ai.wienerdog.catchup`) runs `wienerdog run-job --catch-up` at login, comparing each job's `last_success` to its schedule — anacron behavior as a login-triggered check, not polling.
+- **macOS**: `~/Library/LaunchAgents/ai.wienerdog.<name>.plist`, `StartCalendarInterval` (missed-while-asleep runs on wake natively). Missed-while-powered-off: one catch-up plist (`ai.wienerdog.catchup`) runs `wienerdog run-job --catch-up` at login (`RunAtLoad`) **and hourly** (`StartCalendarInterval` on the same plist), comparing each job's `last_success` to its schedule and running anything overdue — anacron behavior as short-lived OS-scheduled checks, not polling, not a daemon. **Dreaming is a routine like any other and inherits catch-up**: a laptop that was closed at 03:30 dreams shortly after it comes back.
 - **Linux**: systemd user units, `.timer` with `Persistent=true` (native catch-up) + oneshot `.service`; installer sets `loginctl enable-linger` with consent. Non-systemd fallback: crontab + `@reboot` catch-up.
 - **Windows**: `schtasks` XML with `StartWhenAvailable=true` (native catch-up).
 
@@ -175,7 +178,7 @@ wienerdog/
 ├── CLAUDE.md · AGENTS.md (generated) · README · LICENSE(MIT) · CONTRIBUTING · SECURITY
 ├── package.json · bin/wienerdog.js
 ├── src/        # cli/ adapters/(claude,codex) core/(config,vault,git,manifest,transcripts) gws/ scheduler/
-├── skills/     # vendor-neutral SKILL.md folders: setup, memory, dream, google-setup, daily-digest
+├── skills/     # vendor-neutral SKILL.md folders: setup, memory, dream, google-setup, routines (catalog incl. daily-digest)
 ├── templates/  # vault skeleton, managed-block templates, hook scripts, scheduling templates
 ├── docs/       # this file + VISION, PRD, THREAT-MODEL, GLOSSARY, adr/, specs/, runbooks/, marketing/
 ├── memory/     # dogfood vault (transcripts gitignored)

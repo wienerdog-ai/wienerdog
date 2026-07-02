@@ -10,6 +10,12 @@ curl -fsSL https://raw.githubusercontent.com/wienerdog-ai/wienerdog/main/install
 
 (Prefer npm? `npx wienerdog@latest init` does the same thing. Windows: use the npx command for now. The script is short — [read it first](install.sh) if you like; it only checks for Node and hands over to the versioned npm package.)
 
+Not comfortable with the terminal at all? Paste this into Claude Code or Codex instead, and your AI will run the install for you (approving each step):
+
+```
+Please install Wienerdog for me: run `npx wienerdog@latest init`, then walk me through /wienerdog-setup.
+```
+
 Then, inside Claude Code or Codex CLI:
 
 ```
@@ -25,8 +31,8 @@ That's it. Your AI interviews you, builds your memory vault, and starts remember
 - **A proper CLAUDE.md / AGENTS.md** — generated from an interview, not a blank page. Your AI knows who you are, how you work, and what you care about, in every session.
 - **A markdown memory vault** — Obsidian-convention PARA structure (works *with* Obsidian if you use it, doesn't require it). Plain files you own, readable by you, versioned in git.
 - **Dreaming** — a nightly job reviews the day's conversations, promotes what matters into long-term memory through quality gates, and turns your repeated workflows into reusable skills. Every night is one git commit; anything can be reverted.
-- **Google Workspace senses** *(optional)* — Gmail, Calendar, and Drive access that is read-first and draft-only by design. The send button doesn't exist.
-- **Laptop-friendly routines** — a morning digest or any scheduled task, run by your OS's native scheduler (launchd / systemd / Task Scheduler). Missed while your laptop was closed? It catches up. No daemon.
+- **Google Workspace senses** *(optional)* — Gmail, Calendar, and Drive access that is read-first and draft-first by design. Your AI can only *send* what you explicitly granted, to recipients you explicitly approved — grants are created by you at the keyboard, never by the AI.
+- **Laptop-friendly routines** *(optional, pick from a catalog)* — after setup, choose from a menu of ready-made scheduled routines (morning digest, inbox triage, weekly review, …) run by your OS's native scheduler (launchd / systemd / Task Scheduler). Laptop was closed at run time? It catches up. No daemon.
 
 ## Why Wienerdog and not a "personal AI agent" app?
 

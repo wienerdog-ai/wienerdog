@@ -23,7 +23,9 @@ Canonical names. Use these exact terms in code, docs, specs, and prompts — nev
 - **fail-loud** — no silent failures: alert email (`gws _alert`) or a banner line in the digest.
 - **catch-up** — running jobs missed while the machine was off (login-triggered check on macOS; native on systemd/Task Scheduler).
 - **manifest** — `install-manifest.json`: every file/entry the installer touched; uninstall replays it in reverse.
-- **gws** — the `wienerdog gws` Google Workspace CLI (gmail/cal/drive). Read-first, draft-only; no send verb.
+- **gws** — the `wienerdog gws` Google Workspace CLI (gmail/cal/drive). Read-first, draft-first; outbound verbs execute only under a send grant.
+- **send grant** — a `(routine, recipient allowlist)` permission in config.yaml allowing outbound sending; created only by the interactive CLI with typed confirmation, never by any model-driven process (ADR-0007).
+- **routine catalog** — the opt-in post-setup menu of ready-made routines (`/wienerdog-routines`); nothing is scheduled by default (ADR-0008).
 - **interview** — the `/wienerdog-setup` conversation that produces `06-Identity/` notes, from which CLAUDE.md/AGENTS.md managed blocks are rendered.
 - **memory_mode** — user preset for gate strictness: conservative | standard | eager.
 - **work package (WP)** — one self-contained implementation spec in `docs/specs/`, sized for one implementer session, one branch, one PR.

@@ -19,7 +19,7 @@ Wienerdog packages that fix as a one-line install:
 curl -fsSL …/install.sh | bash   →   /wienerdog-setup
 ```
 
-An interview conducted *by the user's own AI* produces their profile, preferences, and working instructions. A PARA-structured markdown vault becomes the model's persistent memory. A nightly **dreaming** job reviews the day's conversations, promotes what matters into long-term memory through quality gates, and turns repeated workflows into reusable skills. Optional Google Workspace senses (read-first, draft-only) and OS-native scheduled routines complete the stack.
+An interview conducted *by the user's own AI* produces their profile, preferences, and working instructions. A PARA-structured markdown vault becomes the model's persistent memory. A nightly **dreaming** job reviews the day's conversations, promotes what matters into long-term memory through quality gates, and turns repeated workflows into reusable skills. Optional Google Workspace senses (read-first, draft-first, sending only under explicit user-created grants) and an opt-in catalog of OS-native scheduled routines — designed to deliver a spectacular first win within a day — complete the stack.
 
 ## The principle that defines us
 
@@ -45,5 +45,5 @@ Two weeks after install, the user's memory vault is growing without their effort
 
 - No daemon, gateway, or server — ever (ADR-0004).
 - No telemetry.
-- No auto-*sending* anything: Google integration is read-first, draft-only; the send verb does not exist.
+- No sending without a grant: outbound actions (email, invites) execute only under grants the user created interactively, scoped to specific routines and recipients (ADR-0007). The AI can never widen its own permissions.
 - No feature that requires the user to understand what a port is.

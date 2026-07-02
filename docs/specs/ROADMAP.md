@@ -11,8 +11,8 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 | M2 | Claude adapter + interview | `/wienerdog-setup` produces `06-Identity/*`; CLAUDE.md managed block rendered; new session demonstrably knows the user via injected digest; `sync` idempotent. *Go-public possible.* |
 | M3 | Capture + dreaming | Fixture transcripts incl. planted injection → gated notes with provenance; injection never reaches Tier 3; one git commit per run; readable dream report; `git revert` cleanly undoes a run. |
 | M4 | Codex adapter | Codex-only machine (no hooks) gets full setup + working dream from rollout files alone. |
-| M5 | Google Workspace | Guided OAuth completes; gmail/cal/drive read+draft work headlessly from `claude -p`; no send verb exists; tokens 0600, survive reboot. |
-| M6 | Scheduler + digest | Native schedule entries on each OS; simulated hang → watchdog kill + alert; job missed by shutdown runs at next login; digest arrives as Gmail draft. |
+| M5 | Google Workspace | Guided OAuth completes; gmail/cal/drive read+draft work headlessly from `claude -p`; sends execute only under a grant, ungranted sends degrade to draft+notice (ADR-0007); tokens 0600, survive reboot. |
+| M6 | Scheduler + routine catalog | Native schedule entries on each OS; simulated hang → watchdog kill + alert; job missed by shutdown (dream included) runs within an hour of the machine being back; catalog flow (ADR-0008) configures digest incl. its send-to-self grant; digest arrives by email. |
 | M7 | Hardening & release | Threat model finalized vs implementation; install→use→uninstall leaves only the vault; fresh-machine install from README alone; npm publish. |
 
 ## Work packages
@@ -29,10 +29,10 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 | WP-008 | Dream orchestrator (lock, redact, validate, commit) | M3 | opus | Draft | WP-007 |
 | WP-009 | Dream skill (phases, tiered gates, provenance) | M3 | opus | Draft | WP-008 |
 | WP-010 | Codex adapter | M4 | sonnet | Draft | WP-006, WP-007 |
-| WP-011 | gws CLI (auth, gmail, cal, drive, _alert) | M5 | opus | Draft | WP-003 |
+| WP-011 | gws CLI (auth, gmail, cal, drive, send grants, _alert) | M5 | opus | Draft | WP-003 |
 | WP-012 | Google setup skill (guided OAuth) | M5 | sonnet | Draft | WP-011 |
-| WP-013 | Scheduler generators + run-job wrapper | M6 | opus | Draft | WP-003 |
-| WP-014 | Daily digest skill + routine | M6 | sonnet | Draft | WP-011, WP-013 |
+| WP-013 | Scheduler generators + run-job wrapper (incl. catch-up) | M6 | opus | Draft | WP-003 |
+| WP-014 | Routine catalog skill + daily digest entry | M6 | sonnet | Draft | WP-011, WP-013 |
 | WP-015 | Scenario-test harness (nightly, incl. injection fixture) | M3/M7 | sonnet | Draft | WP-009 |
 | [WP-016](WP-016-curl-installer-script.md) | curl installer bootstrapper (install.sh) | M1 | sonnet | Ready | WP-003 |
 

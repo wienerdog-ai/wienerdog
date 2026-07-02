@@ -21,7 +21,7 @@
 ## Proof points
 
 - The repo is built by its own product (dogfood vault in `memory/`, spec-driven AI implementation, `Generated-by:` lines in history).
-- The threat model is published and the send button literally doesn't exist (`docs/THREAT-MODEL.md`).
+- The threat model is published; your AI can only send what you explicitly granted, to recipients you approved at the keyboard — and it can never widen its own permissions (`docs/THREAT-MODEL.md`, ADR-0007).
 - Uninstall shows you everything and removes everything except your memories.
 
 ## Audience
