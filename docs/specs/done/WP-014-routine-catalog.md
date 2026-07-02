@@ -1,7 +1,7 @@
 ---
 id: WP-014
 title: Author the routine catalog skill plus daily-digest, inbox-triage, and weekly-review routines
-status: In-Review
+status: Done
 model: sonnet
 size: M
 depends_on: [WP-013, WP-018, WP-019]

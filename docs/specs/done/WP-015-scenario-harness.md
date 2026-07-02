@@ -1,7 +1,7 @@
 ---
 id: WP-015
 title: Implement the scenario-test harness (nightly, real brain, injection fixture)
-status: In-Review
+status: Done
 model: sonnet
 size: M
 depends_on: [WP-009]
