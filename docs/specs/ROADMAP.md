@@ -24,8 +24,8 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 | [WP-003](WP-003-installer-core.md) | Installer core (init/doctor/uninstall, manifest) | M1 | opus | Ready | WP-001 |
 | [WP-004](WP-004-vault-skeleton.md) | Vault skeleton generator + golden tests | M1 | sonnet | Ready | WP-003 |
 | [WP-005](WP-005-interview-skill-and-renderer.md) | Interview skill + identity→managed-block renderer | M2 | opus | Ready | WP-004 |
-| WP-006 | Claude adapter: managed block, hooks, skills link | M2 | sonnet | Draft | WP-005 |
-| WP-007 | Transcript parsers (Claude JSONL + Codex rollout) | M3 | sonnet | Draft | WP-003 |
+| [WP-006](WP-006-claude-adapter.md) | Claude Code adapter (managed block, hooks, skills registration) | M2 | opus | Ready | WP-005 |
+| [WP-007](WP-007-transcript-parsers.md) | Transcript parsers (Claude JSONL + Codex rollout) | M3 | sonnet | Ready | WP-003 |
 | WP-008 | Dream orchestrator (lock, redact, validate, commit) | M3 | opus | Draft | WP-007 |
 | WP-009 | Dream skill (phases, tiered gates, provenance) | M3 | opus | Draft | WP-008 |
 | WP-010 | Codex adapter | M4 | sonnet | Draft | WP-006, WP-007 |
