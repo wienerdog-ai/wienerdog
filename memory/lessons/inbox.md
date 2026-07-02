@@ -33,3 +33,18 @@ One bullet per lesson, prefixed with WP id (or M0 for foundation work). The drea
 - WP-017: use git status --porcelain -z -uall so files in brand-new dirs are listed individually for frontmatter gating (default -u collapses to the dir).
 - WP-017: the Bash tool runs zsh — no word-splitting of unquoted $VAR; pass multi-file arg lists via xargs/substitution when invoking boundary-check locally.
 - Process: implementers no longer edit lessons inbox in-branch (parallel-merge conflicts); they report lessons in their final message and the session owner appends on main.
+- WP-011: initial npm i may predate googleapis in package.json — tests asserting "no real googleapis loaded" must guard require.resolve in try/catch.
+- WP-011: two-word dispatch keys (gmail search) vs group-word keys (auth/cal/drive) — router branches on group to avoid eating a positional as the verb.
+- WP-012: check-frontmatter only validates specs+agents; skill frontmatter relies on each WP's structural test (recurring gap — candidate for a skills schema).
+- WP-013: manifest reverse* helpers take boolean dryRun, not {dryRun} — mirror exactly when adding kinds.
+- WP-013: platform-dispatch CLI tests need {skip} guards for cross-platform CI; pure generators carry the unconditional coverage.
+- WP-014: structural tests grepping multi-word phrases must flatten whitespace first (markdown line-wrap breaks substrings); headings check raw.
+- WP-014/021: gws gmail send resolves routine from WIENERDOG_JOB when --routine absent — what lets headless routines send under run-job.
+- WP-015: node --test discovers by filename pattern only — plain scripts in tests/ never run; env-guard keeps quota safe.
+- WP-015: local scenario runs need ANTHROPIC_API_KEY — OAuth/subscription login does not survive CLAUDE_CONFIG_DIR isolation (nightly CI unaffected).
+- WP-020: don't override process.stdout.write inside node:test helpers — corrupts the reporter; tolerate noise.
+- WP-020: process.kill(pid, 0): ESRCH = gone, EPERM = alive-but-not-ours — easy to invert.
+- WP-020: watchdog-timeout tests are load-sensitive — give fake children ~2s headroom under full-suite parallelism.
+- WP-021: dual-write (structured flags + duplicated positionals) is the resolution when a dispatch layer must serve both structured rows and positional-re-parsing bridges — but downstream rows must then prefer the structured flag (the gmail read --id bug).
+- WP-021: monkeypatching a module export for tests is load-order-sensitive (destructured requires capture at first load); node --test's per-file processes keep it isolated.
+- Review-loop stat: 12 implementation PRs this session — 11 first-pass APPROVEs, 1 REQUEST-CHANGES cycle (WP-006); reviews caught 2 real security gaps (Bearer redaction, consent wording), 1 latent CLI bug (gmail read --id), and the M3 real-brain sign-off passed live.
