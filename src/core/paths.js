@@ -14,6 +14,7 @@ const path = require('node:path');
  * @property {string} manifest   install-manifest.json inside the core.
  * @property {string} claudeDir  Claude Code config dir ($CLAUDE_CONFIG_DIR || ~/.claude).
  * @property {string} codexDir   Codex CLI config dir ($CODEX_HOME || ~/.codex).
+ * @property {string} vault      The vault dir ($WIENERDOG_VAULT || ~/wienerdog).
  */
 
 /**
@@ -27,6 +28,7 @@ function getPaths(env = process.env) {
   const core = env.WIENERDOG_HOME || path.join(home, '.wienerdog');
   const claudeDir = env.CLAUDE_CONFIG_DIR || path.join(home, '.claude');
   const codexDir = env.CODEX_HOME || path.join(home, '.codex');
+  const vault = env.WIENERDOG_VAULT || path.join(home, 'wienerdog');
   return {
     home,
     core,
@@ -37,6 +39,7 @@ function getPaths(env = process.env) {
     manifest: path.join(core, 'install-manifest.json'),
     claudeDir,
     codexDir,
+    vault,
   };
 }
 
