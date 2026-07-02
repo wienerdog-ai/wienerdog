@@ -24,6 +24,7 @@ function tempEnv() {
     env: {
       ...process.env,
       WIENERDOG_HOME: core,
+      WIENERDOG_VAULT: path.join(root, 'vault'),
       CLAUDE_CONFIG_DIR: path.join(root, 'absent-claude'),
       CODEX_HOME: path.join(root, 'absent-codex'),
     },
