@@ -16,8 +16,8 @@
     "templates/"
   ],
   "scripts": {
-    "test": "node --test tests/",
-    "lint": "echo 'lint pipeline lands in WP-001'"
+    "test": "node --test",
+    "lint": "node scripts/lint.js"
   },
   "repository": {
     "type": "git",
@@ -31,5 +31,23 @@
     "agents-md",
     "claude-md",
     "skills"
-  ]
+  ],
+  "devDependencies": {
+    "markdownlint-cli2": "^0.23.0"
+  },
+  "markdownlint-cli2": {
+    "config": {
+      "default": true,
+      "MD009": false,
+      "MD013": false,
+      "MD022": false,
+      "MD025": false,
+      "MD031": false,
+      "MD032": false,
+      "MD033": false,
+      "MD034": false,
+      "MD040": false,
+      "MD060": false
+    }
+  }
 }

@@ -1,0 +1,11 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Agent frontmatter",
+  "type": "object",
+  "required": ["name", "description", "model"],
+  "properties": {
+    "name": { "type": "string", "pattern": "^wd-" },
+    "description": { "type": "string" },
+    "model": { "type": "string", "enum": ["sonnet", "opus", "haiku"] }
+  }
+}
