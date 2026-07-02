@@ -1,7 +1,7 @@
 ---
 id: WP-007
 title: Implement transcript parsers (Claude JSONL + Codex rollout)
-status: Ready
+status: In-Review
 model: sonnet
 size: M
 depends_on: [WP-003]

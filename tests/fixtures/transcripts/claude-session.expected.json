@@ -1,0 +1,12 @@
+{
+  "harness": "claude",
+  "session_id": "sess-abc",
+  "started": "2026-01-01T10:00:00.000Z",
+  "cwd": "/home/ada/proj",
+  "truncated": false,
+  "messages": [
+    { "role": "user", "text": "Help me refactor auth.js", "ts": "2026-01-01T10:00:00.000Z" },
+    { "role": "assistant", "text": "Sure, let me look.", "ts": "2026-01-01T10:00:05.000Z" },
+    { "role": "tool_result", "text": "export const API_KEY=[REDACTED:anthropic-key]", "ts": "2026-01-01T10:00:06.000Z" }
+  ]
+}

@@ -1,0 +1,5 @@
+{"type":"last-prompt","note":"metadata line — must be ignored"}
+{"type":"user","isMeta":false,"sessionId":"sess-abc","cwd":"/home/ada/proj","timestamp":"2026-01-01T10:00:00.000Z","message":{"role":"user","content":"Help me refactor auth.js"}}
+{"type":"assistant","sessionId":"sess-abc","cwd":"/home/ada/proj","timestamp":"2026-01-01T10:00:05.000Z","message":{"role":"assistant","content":[{"type":"thinking","thinking":"private reasoning"},{"type":"text","text":"Sure, let me look."},{"type":"tool_use","name":"Read","input":{"file_path":"auth.js"}}]}}
+{"type":"user","sessionId":"sess-abc","cwd":"/home/ada/proj","timestamp":"2026-01-01T10:00:06.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_1","is_error":null,"content":[{"type":"text","text":"export const API_KEY=sk-ant-abc123defghijklmnopqrstuvwx"}]}]}}
+{"type":"user","isMeta":true,"timestamp":"2026-01-01T10:00:07.000Z","message":{"role":"user","content":"<local-command-caveat>ignore me"}}
