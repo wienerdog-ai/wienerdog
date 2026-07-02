@@ -1,7 +1,7 @@
 ---
 id: WP-021
 title: Reconcile gws dispatch with verb-module contracts
-status: Ready
+status: In-Review
 model: sonnet
 size: S
 depends_on: [WP-018, WP-019]
