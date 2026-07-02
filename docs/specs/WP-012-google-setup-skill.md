@@ -1,7 +1,7 @@
 ---
 id: WP-012
 title: Author the wienerdog-google-setup skill (guided OAuth onboarding)
-status: Ready
+status: In-Review
 model: sonnet
 size: S
 depends_on: [WP-011]
