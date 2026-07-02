@@ -1,7 +1,7 @@
 ---
 id: WP-002
 title: Implement AGENTS.md generator
-status: Ready
+status: In-Review
 model: sonnet
 size: S
 depends_on: [WP-001]
