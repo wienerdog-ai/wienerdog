@@ -8,6 +8,7 @@ Durable decisions live here so they are made once, not re-litigated per session 
 |---|---|---|
 | [0001](0001-record-architecture-decisions.md) | Record architecture decisions | Accepted |
 | [0002](0002-mit-license.md) | MIT license | Accepted |
-| [0003](0003-npm-primary-distribution.md) | npm-primary distribution | Accepted |
+| [0003](0003-npm-primary-distribution.md) | npm-primary distribution | Accepted (amended by 0006) |
 | [0004](0004-no-daemon-invariant.md) | No-daemon invariant ("Wienerdog is just files") | Accepted |
 | [0005](0005-spec-driven-agent-development.md) | Spec-driven agent development | Accepted |
+| [0006](0006-curl-installer-default.md) | curl installer as the default entry point | Accepted |

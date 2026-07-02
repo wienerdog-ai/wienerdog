@@ -30,4 +30,4 @@ Knowledge workers who can be walked into Claude Code or Codex once. Not develope
 
 ## Voice
 
-Plain, confident, slightly wry. No hype-words. The dachshund is charming, not cutesy. Every article ends: `npx wienerdog@latest init`.
+Plain, confident, slightly wry. No hype-words. The dachshund is charming, not cutesy. Every article ends with the one-line install (the curl command from the README; ADR-0006).

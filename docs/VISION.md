@@ -16,7 +16,7 @@ This knowledge is *not* widespread. It surprised McKinsey consultants. It surpri
 Wienerdog packages that fix as a one-line install:
 
 ```
-npx wienerdog@latest init   →   /wienerdog-setup
+curl -fsSL …/install.sh | bash   →   /wienerdog-setup
 ```
 
 An interview conducted *by the user's own AI* produces their profile, preferences, and working instructions. A PARA-structured markdown vault becomes the model's persistent memory. A nightly **dreaming** job reviews the day's conversations, promotes what matters into long-term memory through quality gates, and turns repeated workflows into reusable skills. Optional Google Workspace senses (read-first, draft-only) and OS-native scheduled routines complete the stack.

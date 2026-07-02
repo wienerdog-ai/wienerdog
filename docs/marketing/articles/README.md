@@ -1,6 +1,6 @@
 # Article funnel
 
-One core concept per article; publish externally (blog/LinkedIn/dev.to) with canonical links back to the repo. Articles live in-repo so they version with the features they describe and go through the same PR+review loop. Every article's last line: `npx wienerdog@latest init`.
+One core concept per article; publish externally (blog/LinkedIn/dev.to) with canonical links back to the repo. Articles live in-repo so they version with the features they describe and go through the same PR+review loop. Every article's last line is the one-line install (the curl command from the README; ADR-0006).
 
 Planned series (drafted by wd-docs as the features ship — never document unimplemented behavior):
 

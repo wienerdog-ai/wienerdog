@@ -50,6 +50,12 @@ Wienerdog auto-writes persistent memory derived from conversation transcripts, i
 
 **Mitigations**: tokens live in `~/.wienerdog/secrets/` (0600), outside the vault and any git repo; a redaction pass strips secret-looking strings (key/token patterns) from transcript extracts before the dream model sees them; the vault skeleton's `.gitignore` excludes nothing from `secrets/` because secrets are never inside it; `gws` has no send verb (exception: `_alert`, fixed template, user's own address only). Trade-off accepted: file-based storage over OS keyring — keyring integration with unattended launchd jobs proved fragile (env-var footgun can silently delete credentials); strict file permissions are more predictable. 
 
+## T5a — curl|bash entry point
+
+**Hazard**: the default install is `curl … | bash` (ADR-0006), a pattern users are right to be wary of.
+
+**Mitigations**: the script is a bootstrapper only — it never writes to disk, never uses sudo or package managers, never installs Node (it prints guidance and exits); it delegates to the versioned, provenance-attested npm package, which does the manifest-tracked work; it is short, in-repo, and the README invites reading it before running.
+
 ## T5 — Installer / uninstaller overreach
 
 **Attack class**: install clobbers the user's hand-written CLAUDE.md; uninstall leaves executable state behind; a bug writes outside intended paths.
