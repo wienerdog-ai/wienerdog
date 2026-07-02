@@ -5,8 +5,10 @@
 You already pay for a great AI model. Wienerdog makes it *feel* dramatically smarter — not by changing the model, but by installing the right files around it: a real profile of you, a persistent markdown memory, skills for your recurring tasks, and a nightly "dreaming" process that learns from your conversations.
 
 ```
-npx wienerdog@latest init
+curl -fsSL https://raw.githubusercontent.com/wienerdog-ai/wienerdog/main/install.sh | bash
 ```
+
+(Prefer npm? `npx wienerdog@latest init` does the same thing. Windows: use the npx command for now. The script is short — [read it first](install.sh) if you like; it only checks for Node and hands over to the versioned npm package.)
 
 Then, inside Claude Code or Codex CLI:
 

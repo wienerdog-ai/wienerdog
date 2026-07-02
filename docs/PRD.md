@@ -9,7 +9,7 @@ Owner: Gyula Fehér. Status: locked for v1 (2026-07-02). Changes require an ADR.
 | v1 features | Installer, interview, memory vault, capture, dreaming, **Google Workspace**, scheduler. Browser GUI = v2 (must not be precluded; isn't — all state is on-disk files). |
 | Harnesses | **Claude Code AND Codex CLI in v1.** Vendor-neutral core, thin adapters. Hooks are enrichment, never a dependency. |
 | Memory writes | **Auto-write with tiered gates** + mandatory provenance frontmatter + git-backed vault (one commit per dream run) + human-readable dream reports. |
-| Distribution | npm `wienerdog` (npx primary, curl wrapper later). GitHub org `wienerdog-ai`. |
+| Distribution | Default entry point: `curl -fsSL …/install.sh \| bash` bootstrapper delegating to npm (ADR-0006); `npx wienerdog@latest init` as the alternative. npm `wienerdog` is the distribution registry. GitHub org `wienerdog-ai`. |
 | Visibility | Private until installable: init works end-to-end on macOS, ≥3 WPs shipped, threat model published. |
 | License / version | MIT. SemVer, **0.x until the installed file layout stabilizes** — the installed layout IS the public API. |
 | Windows | Lands M6–M7, "supported, less battle-tested". macOS and Linux gate earlier milestones. |

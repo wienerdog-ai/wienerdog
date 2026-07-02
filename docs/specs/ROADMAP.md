@@ -34,6 +34,7 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 | WP-013 | Scheduler generators + run-job wrapper | M6 | opus | Draft | WP-003 |
 | WP-014 | Daily digest skill + routine | M6 | sonnet | Draft | WP-011, WP-013 |
 | WP-015 | Scenario-test harness (nightly, incl. injection fixture) | M3/M7 | sonnet | Draft | WP-009 |
+| [WP-016](WP-016-curl-installer-script.md) | curl installer bootstrapper (install.sh) | M1 | sonnet | Ready | WP-003 |
 
 ## Dependency graph
 
@@ -55,4 +56,5 @@ graph LR
   WP011 --> WP014[WP-014 daily digest]
   WP013 --> WP014
   WP009 --> WP015[WP-015 scenario harness]
+  WP003 --> WP016[WP-016 curl installer]
 ```
