@@ -21,7 +21,8 @@
   "scripts": {
     "test": "node --test",
     "lint": "node scripts/lint.js",
-    "gen:agents": "node scripts/gen-agents-md.js"
+    "gen:agents": "node scripts/gen-agents-md.js",
+    "scenarios": "node tests/scenarios/run-scenarios.js"
   },
   "repository": {
     "type": "git",

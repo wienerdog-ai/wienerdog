@@ -1,0 +1,28 @@
+name: scenarios
+
+# Nightly, real-brain scenario harness (WP-015). Runs the actual `wienerdog
+# dream` pipeline against the real Claude model and Haiku grader, so it
+# spends real model quota. It must NEVER run per-PR — schedule + manual
+# dispatch only.
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  scenarios:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install dependencies
+        run: npm ci || npm i
+      - name: Install the Claude Code CLI
+        run: npm install -g @anthropic-ai/claude-code
+      - name: Run the scenario harness
+        env:
+          WIENERDOG_RUN_SCENARIOS: "1"
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: npm run scenarios

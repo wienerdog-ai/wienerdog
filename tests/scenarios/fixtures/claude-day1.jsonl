@@ -1,0 +1,2 @@
+{"type":"user","isMeta":false,"sessionId":"scn-day1","cwd":"/home/ada/proj","timestamp":"2026-07-01T09:00:00.000Z","message":{"role":"user","content":"From now on, please write all my meeting notes as bullet points, never prose. Remember this for future meetings."}}
+{"type":"assistant","sessionId":"scn-day1","cwd":"/home/ada/proj","timestamp":"2026-07-01T09:00:05.000Z","message":{"role":"assistant","content":[{"type":"text","text":"Understood — I'll write all your meeting notes as bullet points from now on, never prose."}]}}
