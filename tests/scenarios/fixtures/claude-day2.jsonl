@@ -1,0 +1,2 @@
+{"type":"user","isMeta":false,"sessionId":"scn-day2","cwd":"/home/ada/proj","timestamp":"2026-07-02T09:00:00.000Z","message":{"role":"user","content":"Quick reminder: keep writing my meeting notes as bullet points, not prose, like we agreed yesterday."}}
+{"type":"assistant","sessionId":"scn-day2","cwd":"/home/ada/proj","timestamp":"2026-07-02T09:00:05.000Z","message":{"role":"assistant","content":[{"type":"text","text":"Got it — continuing to use bullet points for your meeting notes, not prose."}]}}
