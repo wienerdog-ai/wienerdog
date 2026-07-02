@@ -248,8 +248,11 @@ entries removed only if empty — the existing two-phase order):
   whitespace-only → delete the file; else write the remaining content back.
   If sentinels are absent (user removed the block) or the file is missing →
   `skipped`. Add the file path to `removed` when a change is made.
-  **Round-trip guarantee (binding):** for any pre-existing file F, the byte
-  sequence after `sync` → `uninstall` equals F exactly.
+  **Round-trip guarantee (binding):** for any pre-existing file F ending in a
+  single trailing newline (the universal convention), the byte sequence after
+  `sync` → `uninstall` equals F exactly. Files ending in 2+ blank lines are
+  normalized to one trailing newline by the forward step's separator rule —
+  whitespace only, never content.
 - **`settings-entry`** — read + `JSON.parse` the file; for each event array
   under `hooks`, drop any `hooks[]` entry whose `command` is in
   `entry.commands`, then drop groups whose `hooks[]` became empty, then drop
