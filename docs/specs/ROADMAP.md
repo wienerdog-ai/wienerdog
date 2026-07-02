@@ -30,14 +30,15 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 | [WP-009](WP-009-dream-skill.md) | Dream skill (phases, tiered gates, provenance) | M3 | opus | Ready | WP-008, WP-017 |
 | [WP-010](WP-010-codex-adapter.md) | Codex CLI adapter (AGENTS.md block, hooks.json, skills discovery, codex-exec brain) | M4 | sonnet | Ready | WP-006, WP-007, WP-008 |
 | [WP-011](WP-011-gws-foundation.md) | gws foundation (OAuth, client seam, Gmail read/draft) | M5 | opus | Ready | WP-003 |
-| WP-012 | Google setup skill (guided OAuth) | M5 | sonnet | Draft | WP-011 |
-| WP-013 | Scheduler generators + run-job wrapper (incl. catch-up) | M6 | opus | Draft | WP-003 |
-| WP-014 | Routine catalog skill + daily digest entry | M6 | sonnet | Draft | WP-013, WP-018, WP-019 |
-| WP-015 | Scenario-test harness (nightly, incl. injection fixture) | M3/M7 | sonnet | Draft | WP-009 |
+| [WP-012](WP-012-google-setup-skill.md) | Google setup skill (guided OAuth) | M5 | sonnet | Ready | WP-011 |
+| [WP-013](WP-013-scheduler-generators.md) | Scheduler generators + schedule command (launchd/systemd, reversible) | M6 | opus | Ready | WP-003 |
+| [WP-014](WP-014-routine-catalog.md) | Routine catalog skill + daily-digest/inbox-triage/weekly-review | M6 | sonnet | Ready | WP-013, WP-018, WP-019 |
+| [WP-015](WP-015-scenario-harness.md) | Scenario-test harness (nightly, incl. injection fixture) | M3/M7 | sonnet | Ready | WP-009 |
 | [WP-016](done/WP-016-curl-installer-script.md) | curl installer bootstrapper (install.sh) | M1 | sonnet | Done | WP-003 |
 | [WP-017](WP-017-dream-validate-commit.md) | Dream runtime pipeline (watchdog run, diff validation, single commit) | M3 | opus | Ready | WP-008 |
 | [WP-018](WP-018-gws-send-grants.md) | gws send grants, Gmail send, _alert (ADR-0007) | M5 | opus | Ready | WP-011 |
 | [WP-019](WP-019-gws-cal-drive.md) | gws Calendar + Drive read verbs | M5 | sonnet | Ready | WP-011 |
+| [WP-020](WP-020-run-job-wrapper.md) | run-job wrapper (clean env, TCC-guard, watchdog, fail-loud, catch-up) | M6 | opus | Ready | WP-013, WP-018 |
 
 ## Dependency graph
 
@@ -59,10 +60,13 @@ graph LR
   WP011 --> WP012[WP-012 google setup skill]
   WP011 --> WP018[WP-018 gws send grants]
   WP011 --> WP019[WP-019 gws cal+drive]
-  WP003 --> WP013[WP-013 scheduler]
-  WP018 --> WP014[WP-014 daily digest]
+  WP003 --> WP013[WP-013 scheduler gen + schedule]
+  WP013 --> WP020[WP-020 run-job wrapper]
+  WP018 -.-> WP020
+  WP018 --> WP014[WP-014 routine catalog + digest]
   WP019 --> WP014
   WP013 --> WP014
+  WP020 -.-> WP014
   WP009 --> WP015[WP-015 scenario harness]
   WP003 --> WP016[WP-016 curl installer]
 ```
