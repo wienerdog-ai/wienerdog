@@ -37,7 +37,7 @@ This WP builds the CI that enforces those rules mechanically, plus the local lin
 ### Exact contracts
 
 `scripts/lint.js` (run as `npm run lint`), layers in order, all must pass:
-1. **markdownlint** on `docs/**/*.md`, `*.md` (use `markdownlint-cli2` as devDependency; config `.markdownlint.jsonc` may be created — add it to Deliverables? No: put config inline in package.json under `"markdownlint-cli2"` key, permitted since package.json is listed). Disable line-length rule (MD013).
+1. **markdownlint** on `docs/**/*.md`, `*.md` (use `markdownlint-cli2` as devDependency). Do NOT create a separate `.markdownlint.jsonc` file — put the config inline in package.json under the `"markdownlint-cli2"` key (permitted: package.json is in the Deliverables table). Disable line-length rule (MD013).
 2. **shellcheck** on `**/*.sh` if any exist AND shellcheck is installed; skip with a warning if the binary is absent (local machines), but in CI it is installed.
 3. **frontmatter check**: `node scripts/check-frontmatter.js` — validates every `docs/specs/WP-*.md` against `tests/schemas/spec.schema.json` and every `.claude/agents/*.md` against `tests/schemas/agent.schema.json`. Hand-roll minimal YAML frontmatter parsing (the frontmatter here is a flat key: value / key: [list] subset — no runtime YAML dep; document the subset in a comment).
 
