@@ -80,6 +80,8 @@ No telemetry. No network calls except the Google APIs the user configured and th
 
 ## Residual risks (accepted, documented)
 
+- The orchestrator's Tier-3 code gate validates provenance *frontmatter*; a fully hijacked dream brain could falsify `derived_from_untrusted: false`. Accepted with defense-in-depth: the skill computes the flag mechanically from tool_result tags, recurrence ≥3 requires multi-session persistence of the attack, the sandbox denies Bash/network, every run is one revertible commit surfaced in a readable report, and the scenario harness (WP-015) exercises a real planted injection end-to-end. Independent content-provenance analysis in code is deliberately not built in v1.
+
 - The user's harness provider processes transcript content by definition; Wienerdog adds no new exposure but cannot reduce it.
 - Tier 1/2 notes *can* contain untrusted-derived text (flagged); a user who manually promotes such a note into identity takes that action knowingly.
 - `memory_mode: eager` loosens gate thresholds (never the `derived_from_untrusted` rule, which is absolute).
