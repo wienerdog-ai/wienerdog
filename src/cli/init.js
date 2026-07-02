@@ -6,6 +6,7 @@ const readline = require('node:readline');
 const { getPaths } = require('../core/paths');
 const { detectHarnesses } = require('../core/detect');
 const manifestLib = require('../core/manifest');
+const { scaffoldVault } = require('../core/vault');
 
 /** @param {string} p @returns {boolean} */
 function dirExists(p) {
@@ -28,6 +29,19 @@ function fileExists(p) {
 /** @param {string} content @returns {string} sha256 hex. */
 function sha256(content) {
   return crypto.createHash('sha256').update(content).digest('hex');
+}
+
+/** @param {string} configContent @returns {boolean} true if the `vault:` line is still `null`. */
+function isVaultNull(configContent) {
+  return /^vault:\s*null(\s|#|$)/m.test(configContent);
+}
+
+/** @param {string} configContent @returns {string|null} the configured vault path, or null. */
+function readConfigVaultPath(configContent) {
+  const m = configContent.match(/^vault:\s*(.*)$/m);
+  if (!m) return null;
+  const value = m[1].split('#')[0].trim();
+  return value === 'null' || value === '' ? null : value;
 }
 
 /**
@@ -77,7 +91,11 @@ async function run(argv) {
   const needConfig = !fileExists(paths.config);
   const missingDirs = dirs.filter((d) => !dirExists(d));
 
-  if (missingDirs.length === 0 && !needConfig) {
+  const existingConfigContent = needConfig ? null : fs.readFileSync(paths.config, 'utf8');
+  const vaultNeeded = needConfig || isVaultNull(existingConfigContent);
+  const configuredVaultPath = (existingConfigContent && readConfigVaultPath(existingConfigContent)) || paths.vault;
+
+  if (missingDirs.length === 0 && !needConfig && !vaultNeeded) {
     console.log('wienerdog: already installed, nothing to do.');
     return;
   }
@@ -87,6 +105,10 @@ async function run(argv) {
   for (const d of dirs) console.log(`  ${dirExists(d) ? '[exists]' : '[create]'} ${d}`);
   console.log('\nFiles:');
   console.log(`  ${fileExists(paths.config) ? '[exists]' : '[create]'} ${paths.config}`);
+  console.log('\nVault:');
+  console.log(
+    `  ${vaultNeeded ? '[create]' : dirExists(configuredVaultPath) ? '[exists]' : '[MISSING]'} ${configuredVaultPath}`
+  );
   console.log('\nDetected AI tools:');
   console.log(`  Claude Code: ${harnesses.claude.present ? 'found' : 'not found'} (${harnesses.claude.dir})`);
   console.log(`  Codex CLI:   ${harnesses.codex.present ? 'found' : 'not found'} (${harnesses.codex.dir})`);
@@ -119,6 +141,21 @@ async function run(argv) {
     const content = renderConfig(harnesses);
     fs.writeFileSync(paths.config, content);
     manifestLib.record(manifest, { kind: 'file', path: paths.config, hash: sha256(content) });
+  }
+
+  if (vaultNeeded) {
+    console.log(`\nVault: scaffolding ${paths.vault}`);
+    const { created, skipped } = await scaffoldVault(paths.vault, { manifest });
+    console.log(`  created ${created.length} file(s), skipped ${skipped.length} existing file(s)`);
+    const configContent = fs.readFileSync(paths.config, 'utf8');
+    const updatedConfig = configContent.replace(/^vault: null.*$/m, `vault: ${paths.vault}`);
+    fs.writeFileSync(paths.config, updatedConfig);
+    // Keep the manifest's recorded hash in sync with our own rewrite, so
+    // uninstall doesn't mistake it for a user edit and refuse to remove it.
+    const configEntry = manifest.entries.find((e) => e.kind === 'file' && e.path === paths.config);
+    if (configEntry) configEntry.hash = sha256(updatedConfig);
+  } else if (!dirExists(configuredVaultPath)) {
+    console.log(`\nwienerdog: configured vault ${configuredVaultPath} not found — skipping vault step.`);
   }
 
   manifestLib.save(paths, manifest);
