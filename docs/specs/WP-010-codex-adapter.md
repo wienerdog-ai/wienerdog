@@ -1,7 +1,7 @@
 ---
 id: WP-010
 title: Implement Codex CLI adapter (AGENTS.md block, hooks.json, skills discovery, codex-exec brain)
-status: Ready
+status: In-Review
 model: sonnet
 size: M
 depends_on: [WP-006, WP-007, WP-008]
