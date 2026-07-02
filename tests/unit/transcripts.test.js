@@ -59,6 +59,13 @@ test('redact: every REDACTIONS pattern fires, ordinary text untouched', () => {
   assert.equal(redact('the meeting is at 10:00'), 'the meeting is at 10:00');
 });
 
+test('redact: catches space-separated Authorization Bearer headers', () => {
+  const out = redact('Authorization: Bearer myFreshBearerTokenValue12345 end');
+  assert.ok(!out.includes('myFreshBearerTokenValue12345'), out);
+  assert.ok(out.includes('[REDACTED:bearer-token]'), out);
+  assert.equal(redact('the bearer of this letter is trusted'), 'the bearer of this letter is trusted');
+});
+
 test('parse: per-message char cap truncates and sets truncated', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-transcripts-'));
   const filePath = path.join(dir, 'huge.jsonl');

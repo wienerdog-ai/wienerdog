@@ -28,6 +28,8 @@ const REDACTIONS = [
   [/\bxox[baprs]-[A-Za-z0-9-]{10,}\b/g, '[REDACTED:slack-token]'],
   [/\bya29\.[A-Za-z0-9\-_]+/g, '[REDACTED:google-oauth]'],
   [/\beyJ[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}\b/g, '[REDACTED:jwt]'],
+  // HTTP auth headers: "Authorization: Bearer <token>" (space-separated form)
+  [/\b(bearer)\s+([A-Za-z0-9_\-.~+/]{12,}=*)/gi, (_m, kw) => `${kw} [REDACTED:bearer-token]`],
   // sensitive key=value / key: value assignments (keeps the key, redacts the value)
   [
     /\b(api[_-]?key|secret|token|password|passwd|bearer)(["']?\s*[:=]\s*["']?)[A-Za-z0-9_\-]{12,}/gi,

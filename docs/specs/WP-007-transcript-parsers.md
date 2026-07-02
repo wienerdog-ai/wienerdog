@@ -240,6 +240,7 @@ function redact(text)
 const REDACTIONS = [
   [/-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g, '[REDACTED:private-key]'],
   [/\bsk-ant-[A-Za-z0-9\-_]{20,}\b/g, '[REDACTED:anthropic-key]'],
+  [/\b(bearer)\s+([A-Za-z0-9_\-.~+/]{12,}=*)/gi, (m, kw) => `${kw} [REDACTED:bearer-token]`],
   [/\bsk-[A-Za-z0-9]{20,}\b/g,        '[REDACTED:openai-key]'],
   [/\bAKIA[0-9A-Z]{16}\b/g,           '[REDACTED:aws-key]'],
   [/\bgh[pousr]_[A-Za-z0-9]{36,}\b/g, '[REDACTED:github-token]'],
