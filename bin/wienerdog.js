@@ -9,6 +9,7 @@ Usage: wienerdog <command> [options]
 
 Commands:
   init        Create the Wienerdog core (~/.wienerdog) and detect your AI tools
+  sync        Re-render the session digest from your vault's identity notes
   doctor      Check an existing install for problems
   uninstall   Remove everything Wienerdog created (reverses the install)
 
@@ -31,6 +32,7 @@ async function main() {
   /** @type {Record<string, () => {run: (argv: string[]) => Promise<void>}>} */
   const commands = {
     init: () => require('../src/cli/init'),
+    sync: () => require('../src/cli/sync'),
     doctor: () => require('../src/cli/doctor'),
     uninstall: () => require('../src/cli/uninstall'),
   };
