@@ -119,7 +119,8 @@ const DISPATCH = {
     }),
   'gmail read': ({ flags, services }) =>
     require('./gmail').read(services(), {
-      id: require_(flags.positionals[0], '<id>'),
+      // --id is captured as a structured flag; bare positional kept as fallback
+      id: require_(flags.id ?? flags.positionals[0], '<id>'),
     }),
   'gmail draft': ({ flags, services }) =>
     require('./gmail').draft(services(), {
