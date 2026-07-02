@@ -50,3 +50,28 @@ test('prints usage and exits 1 when no changed files are given', () => {
   assert.equal(result.status, 1);
   assert.match(result.stderr, /Usage:/);
 });
+
+test('allows files under a directory-style Deliverables entry', () => {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-bc-'));
+  const tempSpec = path.join(tmp, 'spec.md');
+  fs.writeFileSync(
+    tempSpec,
+    [
+      '## Deliverables',
+      '',
+      '| Action | Path | Notes |',
+      '|--------|------|-------|',
+      '| create | templates/vault/ | whole tree |',
+      '| create | src/core/vault.js | |',
+      '',
+      '## Next section',
+    ].join('\n')
+  );
+  const ok = run([tempSpec, 'templates/vault/01-Projects/README.md', 'src/core/vault.js']);
+  assert.equal(ok.status, 0);
+  const bad = run([tempSpec, 'templates/other/file.md']);
+  assert.equal(bad.status, 1);
+  fs.rmSync(tmp, { recursive: true, force: true });
+});

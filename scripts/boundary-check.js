@@ -48,7 +48,12 @@ function main() {
   // One appended dogfood lesson per session is allowed by CLAUDE.md.
   allowed.add('memory/lessons/inbox.md');
 
-  const offenders = changedFiles.filter((f) => !allowed.has(f));
+  // Deliverables entries ending in '/' allow the whole directory tree.
+  const dirPrefixes = [...allowed].filter((p) => p.endsWith('/'));
+  const isAllowed = (f) =>
+    allowed.has(f) || dirPrefixes.some((d) => f.startsWith(d));
+
+  const offenders = changedFiles.filter((f) => !isAllowed(f));
   if (offenders.length > 0) {
     console.error("Files outside the spec's Deliverables table:");
     for (const f of offenders) console.error(`  ${f}`);
