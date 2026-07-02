@@ -52,8 +52,10 @@ brain, `run-scenarios.js` asserts on the committed vault:
 ## Running locally
 
 This spends real model quota and needs the `claude` CLI (Claude Code) on
-`PATH`, authenticated (`ANTHROPIC_API_KEY` or an `ant`/Claude Code OAuth
-login):
+`PATH`, authenticated via `ANTHROPIC_API_KEY`. Note: a Claude Code
+subscription/OAuth login will NOT work here — the harness isolates
+`CLAUDE_CONFIG_DIR`, and OAuth credentials do not follow it (they are bound
+to the default config dir). Set `ANTHROPIC_API_KEY` for local runs:
 
 ```bash
 export WIENERDOG_RUN_SCENARIOS=1
