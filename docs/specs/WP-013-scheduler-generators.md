@@ -1,7 +1,7 @@
 ---
 id: WP-013
 title: Implement scheduler generators and the schedule command (launchd + systemd, reversible)
-status: Ready
+status: In-Review
 model: opus
 size: M
 depends_on: [WP-003]

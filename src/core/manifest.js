@@ -3,6 +3,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const { spawnSync } = require('node:child_process');
 
 /**
  * install-manifest.json shape:
@@ -20,8 +21,17 @@ const crypto = require('node:crypto');
  *                                                   — hook commands we merged into
  *                                                     a JSON settings file
  *
+ * Scheduler adds one more kind (WP-013):
+ *   {kind:'scheduler-entry', path, unload?:string[]} — an OS-native schedule file
+ *                                                     (launchd plist / systemd unit)
+ *                                                     whose reverse runs the stored
+ *                                                     `unload` argv (best-effort) then
+ *                                                     removes the file. `unload` is
+ *                                                     omitted/null when no OS
+ *                                                     unregistration is needed.
+ *
  * @typedef {{kind: string, path: string, hash?: string, createdFile?: boolean,
- *            commands?: string[]}} ManifestEntry
+ *            commands?: string[], unload?: string[]}} ManifestEntry
  * @typedef {{version: number, createdAt: string, entries: ManifestEntry[]}} Manifest
  */
 
@@ -168,6 +178,38 @@ function reverseSettingsEntry(entry, dryRun, removed, skipped, removedSet) {
 }
 
 /**
+ * Reverse a 'scheduler-entry' entry: run the stored `unload` argv best-effort to
+ * unregister the entry from the OS scheduler, then remove the file. Keeps
+ * manifest.js free of any launchd/systemd knowledge — the platform-specific
+ * `unload` argv is computed at add time (schedule.js) and stored on the entry.
+ * @param {ManifestEntry} entry
+ * @param {boolean} dryRun
+ * @param {string[]} removed @param {string[]} skipped @param {Set<string>} removedSet
+ */
+function reverseSchedulerEntry(entry, dryRun, removed, skipped, removedSet) {
+  if (Array.isArray(entry.unload) && entry.unload.length > 0) {
+    if (dryRun) {
+      process.stdout.write(`wienerdog: would run: ${entry.unload.join(' ')}\n`);
+    } else {
+      // Best-effort: the entry may already be unloaded. Ignore non-zero/errors;
+      // the goal is the file removal below.
+      try {
+        spawnSync(entry.unload[0], entry.unload.slice(1));
+      } catch {
+        /* ignore — unregistration is best-effort */
+      }
+    }
+  }
+  if (!isFile(entry.path)) {
+    skipped.push(entry.path);
+    return;
+  }
+  if (!dryRun) fs.rmSync(entry.path, { force: true });
+  removedSet.add(entry.path);
+  removed.push(entry.path);
+}
+
+/**
  * Load the install manifest. Returns a fresh empty manifest if none exists.
  * Throws (SyntaxError) if the file exists but is not valid JSON — callers that
  * need to distinguish "missing" from "corrupt" should check existence first.
@@ -273,6 +315,8 @@ function reverse(paths, manifest, { dryRun = false } = {}) {
       reverseManagedBlock(entry, dryRun, removed, skipped, removedSet);
     } else if (entry.kind === 'settings-entry') {
       reverseSettingsEntry(entry, dryRun, removed, skipped, removedSet);
+    } else if (entry.kind === 'scheduler-entry') {
+      reverseSchedulerEntry(entry, dryRun, removed, skipped, removedSet);
     } else {
       process.stderr.write(
         `wienerdog: skipping unknown manifest entry kind '${entry.kind}' (${entry.path})\n`
@@ -284,4 +328,4 @@ function reverse(paths, manifest, { dryRun = false } = {}) {
   return { removed, skipped };
 }
 
-module.exports = { load, record, save, reverse };
+module.exports = { load, record, save, reverse, reverseSchedulerEntry };
