@@ -238,12 +238,18 @@ entries removed only if empty — the existing two-phase order):
   (add to `removed`); if it exists but is **not** a symlink (user replaced it)
   or is missing → add to `skipped`.
 - **`managed-block`** — read the file; if both sentinels present, remove the
-  block and any single blank line immediately preceding the begin sentinel that
-  we may have inserted. If `entry.createdFile === true` and the remaining
-  content is empty or whitespace-only → delete the file; else write the
-  remaining content back. If sentinels are absent (user removed the block) or
-  the file is missing → `skipped`. Add the file path to `removed` when a change
-  is made.
+  exact span the forward step introduced: the block **including one leading
+  blank line and the trailing newline after the end sentinel** — i.e. remove
+  the match of `\n?\n<begin>…<end>\n?` such that a file produced by
+  sync-on-prior-content round-trips **byte-identically** to its pre-sync bytes.
+  For a block the user relocated mid-file (text above and below), removal must
+  leave exactly one blank line between the surrounding regions. If
+  `entry.createdFile === true` and the remaining content is empty or
+  whitespace-only → delete the file; else write the remaining content back.
+  If sentinels are absent (user removed the block) or the file is missing →
+  `skipped`. Add the file path to `removed` when a change is made.
+  **Round-trip guarantee (binding):** for any pre-existing file F, the byte
+  sequence after `sync` → `uninstall` equals F exactly.
 - **`settings-entry`** — read + `JSON.parse` the file; for each event array
   under `hooks`, drop any `hooks[]` entry whose `command` is in
   `entry.commands`, then drop groups whose `hooks[]` became empty, then drop
@@ -380,6 +386,10 @@ Use `node:test`, a `fs.mkdtemp` temp root, and env overrides
   the PR. Do NOT expand scope.
 
 ## Acceptance criteria
+
+- [ ] Byte-reversibility: a pre-existing CLAUDE.md with prior content (append case) is byte-identical after sync → uninstall (test asserts exact bytes).
+- [ ] A user-relocated block mid-file (text above and below) uninstalls to exactly one blank line between the regions (test asserts exact bytes of the expected result).
+
 
 - [ ] `sync` writes a managed block into `~/.claude/CLAUDE.md` (temp) matching
       the golden byte-for-byte for the fixed digest.
