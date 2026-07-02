@@ -7,13 +7,21 @@ const { getServices } = require('./client');
 /**
  * Parse `gws` flags out of an argv tail, returning flags plus leftover
  * positionals. Supported: --json (bool), --max <n>, --to <s>, --subject <s>,
- * --body <s>, --client <path>.
+ * --body <s>, --client <path>, --routine <name>, --title <s>, --start <iso>,
+ * --end <iso>, --attendee <email> (repeatable), --from <iso>, --id <s>.
+ *
+ * `--title`/`--start`/`--end`/`--attendee`/`--from`/`--id` are cal/drive verb
+ * flags: they are captured here AND also left in `positionals` (their raw
+ * tokens) so the unmodified `calendar.js`/`drive.js` `run()` bridges — which
+ * independently re-parse those verb flags out of `positionals` — keep working.
  * @param {string[]} argv
  * @returns {{json:boolean, max?:number, to?:string, subject?:string,
- *   body?:string, client?:string, positionals:string[]}}
+ *   body?:string, client?:string, routine?:string, title?:string,
+ *   start?:string, end?:string, attendee:string[], from?:string, id?:string,
+ *   positionals:string[]}}
  */
 function parseFlags(argv) {
-  const flags = { json: false, positionals: [] };
+  const flags = { json: false, positionals: [], attendee: [] };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     switch (a) {
@@ -35,11 +43,51 @@ function parseFlags(argv) {
       case '--client':
         flags.client = argv[++i];
         break;
+      case '--routine':
+        flags.routine = argv[++i];
+        break;
+      case '--title':
+        flags.title = argv[++i];
+        flags.positionals.push(a, flags.title);
+        break;
+      case '--start':
+        flags.start = argv[++i];
+        flags.positionals.push(a, flags.start);
+        break;
+      case '--end':
+        flags.end = argv[++i];
+        flags.positionals.push(a, flags.end);
+        break;
+      case '--from':
+        flags.from = argv[++i];
+        flags.positionals.push(a, flags.from);
+        break;
+      case '--id':
+        flags.id = argv[++i];
+        flags.positionals.push(a, flags.id);
+        break;
+      case '--attendee': {
+        const v = argv[++i];
+        flags.attendee.push(v);
+        flags.positionals.push(a, v);
+        break;
+      }
       default:
         flags.positionals.push(a);
     }
   }
   return flags;
+}
+
+/**
+ * Resolve the routine for a `gmail send` grant lookup: `--routine` flag, else
+ * `WIENERDOG_JOB` env, else null. Never invents a routine — absent everywhere
+ * means null, which `gmail.send` treats as ungranted (degrade to draft).
+ * @param {{routine?:string}} flags
+ * @returns {string|null}
+ */
+function resolveRoutine(flags) {
+  return flags.routine ?? process.env.WIENERDOG_JOB ?? null;
 }
 
 /**
@@ -56,9 +104,9 @@ function require_(value, name) {
 }
 
 /**
- * The `<group> <verb>` dispatch table. Each handler lazily requires its module
- * so a group whose module is not shipped yet (WP-018/WP-019) fails only when
- * invoked, without touching this file.
+ * The `<group> <verb>` dispatch table. Each handler lazily requires its
+ * module so a group whose module is not shipped yet fails only when invoked,
+ * without touching this file.
  * @type {Record<string, (ctx:{paths:object, flags:object, services:()=>object})=>Promise<*>>}
  */
 const DISPATCH = {
@@ -79,11 +127,18 @@ const DISPATCH = {
       subject: require_(flags.subject, '--subject'),
       body: require_(flags.body, '--body'),
     }),
-  'gmail send': ({ flags, services }) =>
-    require('./gmail').send(services(), flags), // WP-018; require throws until then
-  'cal': ({ flags, services }) => require('./calendar').run(services(), flags), // WP-019
-  'drive': ({ flags, services }) => require('./drive').run(services(), flags), // WP-019
-  '_alert': ({ paths, flags }) => require('./alert').run(paths, flags), // WP-018
+  'gmail send': ({ paths, flags, services }) =>
+    require('./gmail').send(services(), {
+      to: flags.to,
+      subject: flags.subject,
+      body: flags.body,
+      routine: resolveRoutine(flags),
+      paths,
+    }),
+  'cal': ({ flags, services }) => require('./calendar').run(services(), flags),
+  'drive': ({ flags, services }) => require('./drive').run(services(), flags),
+  '_alert': ({ flags, services }) =>
+    require('./alert').run(services(), { subject: flags.subject, body: flags.body }),
 };
 
 /**
@@ -151,4 +206,4 @@ async function run(argv) {
   render(key, result, flags.json);
 }
 
-module.exports = { run };
+module.exports = { run, resolveRoutine };
