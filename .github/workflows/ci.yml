@@ -1,13 +1,80 @@
-# Placeholder — replaced by WP-001 with the real pipeline
-# (lint, test matrix, boundary-check, pr-title).
 name: ci
+
 on:
   pull_request:
   push:
     branches: [main]
+
 jobs:
-  placeholder:
+  lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: echo "CI pipeline lands in WP-001"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install shellcheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+      - name: Install dependencies
+        run: npm ci || npm i
+      - name: Lint
+        run: npm run lint
+
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install dependencies
+        run: npm ci || npm i
+      - name: Test
+        run: npm test
+
+  boundary:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Check spec Deliverables boundary
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          SPEC=$(printf '%s\n' "$PR_BODY" | grep -m1 -oE 'Spec:[[:space:]]*docs/specs/WP-[0-9]{3}[A-Za-z0-9._-]*\.md' | sed -E 's/^Spec:[[:space:]]*//')
+          if [ -z "$SPEC" ]; then
+            echo "::notice::No Spec: line found in PR body — treating as a docs-only PR, boundary check skipped."
+            exit 0
+          fi
+          echo "Spec: $SPEC"
+          mapfile -t CHANGED < <(git diff --name-only origin/main...HEAD)
+          echo "Changed files:"
+          printf '%s\n' "${CHANGED[@]}"
+          node scripts/boundary-check.js "$SPEC" "${CHANGED[@]}"
+
+  pr-title:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check PR title format
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          if printf '%s\n' "$PR_BODY" | grep -qE '^Spec:'; then
+            PATTERN='^(feat|fix|docs|test|chore)(\([a-z0-9-]+\))?: .+ \(WP-[0-9]{3}\)$'
+          else
+            PATTERN='^(feat|fix|docs|test|chore)(\([a-z0-9-]+\))?: .+$'
+          fi
+          printf '%s' "$PR_TITLE" | grep -qE "$PATTERN" || {
+            echo "PR title '$PR_TITLE' does not match required format: $PATTERN"
+            exit 1
+          }

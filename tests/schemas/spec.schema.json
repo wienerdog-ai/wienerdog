@@ -1,0 +1,16 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "WP spec frontmatter",
+  "type": "object",
+  "required": ["id", "title", "status", "model", "size", "depends_on", "adrs", "branch"],
+  "properties": {
+    "id": { "type": "string", "pattern": "^WP-\\d{3}$" },
+    "title": { "type": "string" },
+    "status": { "type": "string", "enum": ["Draft", "Ready", "In-Progress", "In-Review", "Done"] },
+    "model": { "type": "string", "enum": ["sonnet", "opus"] },
+    "size": { "type": "string", "enum": ["S", "M"] },
+    "depends_on": { "type": "array" },
+    "adrs": { "type": "array" },
+    "branch": { "type": "string", "pattern": "^wp/" }
+  }
+}

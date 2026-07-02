@@ -1,7 +1,7 @@
 ---
 id: WP-001
 title: Implement CI and lint pipeline
-status: Ready
+status: In-Review
 model: sonnet
 size: M
 depends_on: []
