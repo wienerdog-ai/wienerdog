@@ -1,0 +1,6 @@
+{"type":"session_meta","payload":{"id":"rollout-2026-01-01-uuid","timestamp":"2026-01-01T09:00:00.000Z","cwd":"/home/ada/proj"}}
+{"type":"turn_context","payload":{"cwd":"/home/ada/proj","model":"gpt-5"}}
+{"type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"List my TODOs"}]}}
+{"type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Here are your TODOs."}]}}
+{"type":"response_item","payload":{"type":"function_call_output","output":"file contents: password=hunter2secret1234567"}}
+{"type":"event_msg","payload":{"type":"agent_message","message":"duplicate — ignored"}}
