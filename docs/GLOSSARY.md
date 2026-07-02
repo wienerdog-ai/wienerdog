@@ -12,7 +12,7 @@ Canonical names. Use these exact terms in code, docs, specs, and prompts — nev
 - **transcript** — a harness's on-disk session log (Claude JSONL / Codex rollout file).
 - **watermark** — per-harness marker in `state/watermarks.json` recording what dreaming has already processed.
 - **dreaming / dream run** — the nightly consolidation job: orchestrator (code) + dream skill (prompt). One dream run = one git commit in the vault.
-- **dream report** — human-readable `reports/dreams/YYYY-MM-DD.md`: what was written, what was gated out and why.
+- **dream report** — human-readable `reports/dreams/YYYY-MM-DD.md`: what was written, what was gated out and why. (User-facing skill prose may call it the "memory report" — a deliberate softening; code and specs always say dream report.)
 - **tier / gates** — write-destination classes with quality thresholds. Tier 1 daily log, Tier 2 atomic notes/MOCs, Tier 3 identity/skills/digest-feeding (strictest; closed to untrusted-derived content).
 - **provenance** — mandatory frontmatter on auto-written notes: origin, source_sessions, confidence, recurrence, derived_from_untrusted.
 - **untrusted-derived** — content whose support originates in tool results (email bodies, web pages, fetched files) rather than user-authored text.
