@@ -8,6 +8,7 @@ const { renderDigest } = require('../core/digest');
 const { detectHarnesses } = require('../core/detect');
 const manifestMod = require('../core/manifest');
 const { applyClaudeAdapter } = require('../adapters/claude');
+const { applyCodexAdapter } = require('../adapters/codex');
 
 /**
  * Read the `vault:` path out of config.yaml (flat-YAML subset, same approach as
@@ -163,6 +164,16 @@ async function run(argv) {
     summary.notices.push(...res.notices);
   } else {
     console.log('Claude Code not detected; skipping adapter.');
+  }
+
+  // 4b. Apply the Codex CLI adapter if Codex CLI is present.
+  if (detectHarnesses(process.env).codex.present) {
+    const res = applyCodexAdapter(paths, { dryRun, manifest });
+    summary.changed.push(...res.changed);
+    summary.unchanged.push(...res.unchanged);
+    summary.notices.push(...res.notices);
+  } else {
+    console.log('Codex CLI not detected; skipping adapter.');
   }
 
   // 5. Persist the manifest (never on dry-run).

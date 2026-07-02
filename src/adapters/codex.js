@@ -1,0 +1,84 @@
+'use strict';
+
+const fs = require('node:fs');
+const path = require('node:path');
+const shared = require('./shared');
+
+/**
+ * Apply the Codex CLI adapter idempotently.
+ *
+ * The AGENTS.md managed block holds the whole digest so a Codex session has
+ * its context even with zero (or untrusted) hooks; the SessionStart/Stop
+ * hooks are enrichment only. Correctness never depends on a hook firing.
+ * Ground-truth transcript capture is rollout-file scanning (WP-007), which
+ * works with zero hooks trusted.
+ *
+ * @param {ReturnType<import('../core/paths').getPaths>} paths
+ * @param {{dryRun?: boolean, manifest?: object}} [opts]
+ * @returns {{changed: string[], unchanged: string[], notices: string[]}}
+ *  Steps (each idempotent; on dryRun make NO writes, still report intended changes):
+ *    1. Managed block in <codexDir>/AGENTS.md ← contents of <state>/digest.md.
+ *       If <codexDir>/AGENTS.override.md exists, push a NOTICE: our AGENTS.md is
+ *       silently shadowed by the override (research fact) — user must merge manually.
+ *    2. Copy session-start.sh + codex-session-end.sh into <core>/bin/ (0755); register
+ *       SessionStart + Stop command hooks in <codexDir>/hooks.json (settings-entry).
+ *       Push a NOTICE: Codex requires trusting new hooks via `/hooks` before they run;
+ *       the AGENTS.md block already carries the digest so context works regardless.
+ *    3. Symlink each <core>/skills/wienerdog-* into <home>/.agents/skills/ (Codex
+ *       user-scope skill-discovery dir; NOT config.toml — see the research memo).
+ *  Never throws on a missing digest — if <state>/digest.md is absent, return early
+ *  with a notice (sync writes it first). Records new entries in opts.manifest.
+ */
+function applyCodexAdapter(paths, opts = {}) {
+  const dryRun = opts.dryRun === true;
+  const manifest = opts.manifest;
+  /** @type {{changed: string[], unchanged: string[], notices: string[]}} */
+  const out = { changed: [], unchanged: [], notices: [] };
+
+  const binDir = path.join(paths.core, 'bin');
+  const skillsDir = path.join(paths.core, 'skills');
+  const agentsMd = path.join(paths.codexDir, 'AGENTS.md');
+  const overridePath = path.join(paths.codexDir, 'AGENTS.override.md');
+  const hooksPath = path.join(paths.codexDir, 'hooks.json');
+  const agentsSkillsDir = path.join(paths.home, '.agents', 'skills'); // NOT codexDir-relative
+  const digestPath = path.join(paths.state, 'digest.md');
+  const startSrc = path.resolve(__dirname, '..', '..', 'templates', 'hooks', 'session-start.sh');
+  const stopSrc = path.resolve(__dirname, '..', '..', 'templates', 'hooks', 'codex-session-end.sh');
+  const startAbs = path.join(binDir, 'session-start.sh');
+  const stopAbs = path.join(binDir, 'codex-session-end.sh');
+
+  let digest;
+  try {
+    digest = fs.readFileSync(digestPath, 'utf8');
+  } catch {
+    out.notices.push(`digest not found at ${digestPath}; skipping Codex adapter`);
+    return out;
+  }
+
+  // Step 1 — managed block.
+  shared.applyManagedBlock(agentsMd, digest, dryRun, manifest, out);
+  if (fs.existsSync(overridePath)) {
+    out.notices.push(
+      "~/.codex/AGENTS.override.md exists — it shadows Wienerdog's AGENTS.md; merge the managed block manually or remove the override"
+    );
+  }
+
+  // Step 2 — hook scripts + hooks.json.
+  if (!fs.existsSync(binDir)) {
+    if (!dryRun) fs.mkdirSync(binDir, { recursive: true });
+    shared.recordOnce(manifest, { kind: 'dir', path: binDir });
+  }
+  shared.copyHookScript(startSrc, startAbs, dryRun, manifest, out);
+  shared.copyHookScript(stopSrc, stopAbs, dryRun, manifest, out);
+  shared.applySettings(hooksPath, [['SessionStart', startAbs], ['Stop', stopAbs]], dryRun, manifest, out);
+  out.notices.push(
+    "Codex requires trusting new hooks via `/hooks` before they run; the AGENTS.md block already carries the digest so context works regardless"
+  );
+
+  // Step 3 — skill symlinks.
+  shared.applySkillLinks(skillsDir, agentsSkillsDir, dryRun, manifest, out);
+
+  return out;
+}
+
+module.exports = { applyCodexAdapter };

@@ -59,17 +59,44 @@ function buildClaudeArgs({ vaultDir, scratchDir, date, model }) {
 }
 
 /**
+ * Build the argv for the headless Codex brain, AFTER the "codex" name.
+ * UNVERIFIED-until-live-M4-test: two open upstream bugs shape this (see comments);
+ * wd-researcher must re-verify against the shipping `codex --version` before M4.
+ * @param {{vaultDir:string, scratchDir:string, date:string, model:string|null}} o
+ * @returns {string[]}
+ */
+function buildCodexArgs({ vaultDir, scratchDir, date, model }) {
+  return [
+    'exec',
+    '--sandbox',
+    'workspace-write',
+    '--cd',
+    vaultDir, // THE write fence: --add-dir does NOT fence apply_patch (openai/codex#24214)
+    '--add-dir',
+    scratchDir, // best-effort read access to the extracts (see note)
+    '-c',
+    'approval_policy=never', // NOT `--ask-for-approval never` after exec (#26602)
+    '-c',
+    'sandbox_workspace_write.network_access=false', // no network
+    '--skip-git-repo-check', // the vault/scratch may not be a git repo
+    ...(model ? ['--model', model] : []),
+    DREAM_PROMPT(scratchDir, vaultDir, date), // positional prompt (last)
+  ];
+}
+
+/**
  * Spawn the brain and return a handle + completion promise. NO watchdog here —
  * WP-017 wraps this with the timeout kill. detached:true is REQUIRED so WP-017
  * can kill the whole process group. Must never run in production without that
  * watchdog.
  * @param {{vaultDir:string, scratchDir:string, date:string, model:string|null,
- *          env?:NodeJS.ProcessEnv, logStream?:NodeJS.WritableStream}} o
+ *          harness?:'claude'|'codex', env?:NodeJS.ProcessEnv,
+ *          logStream?:NodeJS.WritableStream}} o
  * @returns {{ child: import('child_process').ChildProcess,
  *             done: Promise<{code:number|null, durationMs:number}> }}
  */
 function spawnBrain(o) {
-  const { vaultDir, scratchDir, date, model, env, logStream } = o;
+  const { vaultDir, scratchDir, date, model, harness, env, logStream } = o;
   const baseEnv = env || process.env;
   const childEnv = {
     ...baseEnv,
@@ -78,10 +105,20 @@ function spawnBrain(o) {
     // WIENERDOG_FAKE_TODAY passes through from baseEnv unchanged.
   };
 
-  // WIENERDOG_DREAM_CMD is the test seam: run that executable instead of claude.
+  // WIENERDOG_DREAM_CMD is the test seam: run that executable instead of claude/codex.
   const fakeCmd = baseEnv.WIENERDOG_DREAM_CMD;
-  const command = fakeCmd || 'claude';
-  const args = fakeCmd ? [] : buildClaudeArgs({ vaultDir, scratchDir, date, model });
+  let command;
+  let args;
+  if (fakeCmd) {
+    command = fakeCmd;
+    args = [];
+  } else if (harness === 'codex') {
+    command = 'codex';
+    args = buildCodexArgs({ vaultDir, scratchDir, date, model });
+  } else {
+    command = 'claude';
+    args = buildClaudeArgs({ vaultDir, scratchDir, date, model });
+  }
 
   const startedAt = Date.now();
   const child = spawn(command, args, {
@@ -105,4 +142,4 @@ function spawnBrain(o) {
   return { child, done };
 }
 
-module.exports = { buildClaudeArgs, spawnBrain, DREAM_PROMPT };
+module.exports = { buildClaudeArgs, buildCodexArgs, spawnBrain, DREAM_PROMPT };
