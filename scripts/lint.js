@@ -2,7 +2,7 @@
 /**
  * Runs all lint layers for Wienerdog, in order. Exits 1 if any layer fails.
  *
- *   1. markdownlint-cli2 on docs/**\/*.md and *.md (config lives inline in
+ *   1. markdownlint-cli2 on docs, skills, templates and root *.md (config lives inline in
  *      package.json under the "markdownlint-cli2" key).
  *   2. shellcheck on **\/*.sh, if any .sh files exist AND the shellcheck
  *      binary is installed. Skipped with a warning if the binary is absent
@@ -52,6 +52,8 @@ function main() {
       '--configPointer',
       '/markdownlint-cli2',
       'docs/**/*.md',
+      'skills/**/*.md',
+      'templates/**/*.md',
       '*.md',
     ])
   ) {
