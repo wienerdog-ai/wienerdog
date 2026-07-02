@@ -19,6 +19,8 @@ jobs:
         run: npm ci || npm i
       - name: Lint
         run: npm run lint
+      - name: Check AGENTS.md is in sync with CLAUDE.md
+        run: node scripts/gen-agents-md.js --check
 
   test:
     strategy:

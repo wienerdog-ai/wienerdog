@@ -1,5 +1,4 @@
-<!-- GENERATED from CLAUDE.md — do not hand-edit. Regenerate with: npm run gen:agents (WP-002). -->
-
+<!-- GENERATED from CLAUDE.md — do not hand-edit. Regenerate with: npm run gen:agents. -->
 # Wienerdog — implementer guide
 
 ## What this is
