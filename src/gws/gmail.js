@@ -126,6 +126,47 @@ async function draft(services, opts) {
 }
 
 /**
+ * gmail send — grant-gated (ADR-0007). Sends ONLY under a matching send grant;
+ * otherwise degrades to a draft + notice (never throws for a missing grant).
+ * @param {{gmail:object}} services
+ * @param {{to:string, subject:string, body:string, routine:string|null,
+ *          paths:import('../core/paths').WienerdogPaths}} opts
+ * @returns {Promise<{sent:boolean, degraded:boolean, draftId?:string,
+ *   messageId?:string, notice?:string}>}
+ */
+async function send(services, opts) {
+  const { findGrant, isSendAllowed } = require('./grant');
+  const recipients = String(opts.to)
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const routine = opts.routine || null;
+  const grant = findGrant(opts.paths, routine);
+  const decision = isSendAllowed(grant, recipients);
+
+  if (decision.allowed) {
+    const raw = buildMime(opts);
+    const res = await services.gmail.users.messages.send({
+      userId: 'me',
+      requestBody: { raw },
+    });
+    return { sent: true, degraded: false, messageId: (res.data && res.data.id) || '' };
+  }
+
+  // Fail-safe, fail-visible: no/insufficient grant → draft instead of send.
+  const d = await draft(services, opts);
+  return {
+    sent: false,
+    degraded: true,
+    draftId: d.draftId,
+    messageId: d.messageId,
+    notice:
+      `No matching send grant (${decision.reason}); saved a draft instead. ` +
+      'Run: wienerdog grant send --routine <name> --to <recipients>',
+  };
+}
+
+/**
  * Build an RFC-2822 message, base64url-encoded (no padding, '+/'→'-_').
  * Exported for reuse by gmail send (WP-018).
  * @param {{to:string, subject:string, body:string, from?:string}} m
@@ -143,4 +184,4 @@ function buildMime(m) {
   return Buffer.from(mime).toString('base64url');
 }
 
-module.exports = { search, read, draft, buildMime };
+module.exports = { search, read, draft, send, buildMime };

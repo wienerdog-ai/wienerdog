@@ -1,7 +1,7 @@
 ---
 id: WP-018
 title: Implement gws send grants, Gmail send, and _alert (ADR-0007)
-status: Ready
+status: In-Review
 model: opus
 size: M
 depends_on: [WP-011]
