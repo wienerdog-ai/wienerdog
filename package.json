@@ -15,6 +15,9 @@
     "skills/",
     "templates/"
   ],
+  "dependencies": {
+    "googleapis": "^173.0.0"
+  },
   "scripts": {
     "test": "node --test",
     "lint": "node scripts/lint.js",

@@ -13,6 +13,7 @@ Commands:
   dream       Consolidate recent sessions into vault memory (one commit)
   doctor      Check an existing install for problems
   uninstall   Remove everything Wienerdog created (reverses the install)
+  gws         Read Gmail/Calendar/Drive and draft mail (Google Workspace)
 
 Global options:
   --dry-run   Show what would happen; make no changes
@@ -37,6 +38,7 @@ async function main() {
     dream: () => require('../src/cli/dream'),
     doctor: () => require('../src/cli/doctor'),
     uninstall: () => require('../src/cli/uninstall'),
+    gws: () => require('../src/gws/index'),
   };
 
   const loader = commands[cmd];
