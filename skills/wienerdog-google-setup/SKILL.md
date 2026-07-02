@@ -111,7 +111,11 @@ Explain what will happen: a browser tab opens to Google's sign-in and
 consent screen. They pick the same Google account, click through the
 "unverified app" warning (click **Advanced**, then **"Go to Wienerdog
 (unsafe)"** — expected, as covered above, because they built this app
-themselves), and approve the requested read and draft access. The tab then
+themselves), and approve the requested read and draft access. One heads-up:
+Google's list may include a line like "Manage drafts and send emails" — that
+wording is Google's name for the draft permission. Wienerdog itself never
+sends anything until you separately and explicitly turn sending on later
+(a different step, with its own confirmation). The tab then
 tells them they can close it, and the command prints a confirmation naming
 the connected account.
 
