@@ -1,0 +1,144 @@
+'use strict';
+
+const fs = require('node:fs');
+const path = require('node:path');
+
+/**
+ * Discover Claude session files modified after `since`.
+ * Layout: projectsDir/<sanitized>/<uuid>.jsonl (one dir level, then files).
+ * Missing projectsDir → []. Non-.jsonl files ignored. Never throws on IO.
+ * @param {string} projectsDir
+ * @param {{since: number|null}} opts   epoch ms; null = all files
+ * @returns {Array<{path:string, mtimeMs:number}>}  sorted ascending by mtimeMs
+ */
+function discoverClaude(projectsDir, opts) {
+  const since = opts && opts.since != null ? opts.since : null;
+  const results = [];
+  let sessionDirs;
+  try {
+    sessionDirs = fs.readdirSync(projectsDir, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  for (const dirEntry of sessionDirs) {
+    if (!dirEntry.isDirectory()) continue;
+    const dirPath = path.join(projectsDir, dirEntry.name);
+    let files;
+    try {
+      files = fs.readdirSync(dirPath, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const fileEntry of files) {
+      if (!fileEntry.isFile() || !fileEntry.name.endsWith('.jsonl')) continue;
+      const filePath = path.join(dirPath, fileEntry.name);
+      let stat;
+      try {
+        stat = fs.statSync(filePath);
+      } catch {
+        continue;
+      }
+      if (since != null && stat.mtimeMs <= since) continue;
+      results.push({ path: filePath, mtimeMs: stat.mtimeMs });
+    }
+  }
+  results.sort((a, b) => a.mtimeMs - b.mtimeMs);
+  return results;
+}
+
+/**
+ * Flatten a tool_result block's content into a string.
+ * @param {string|Array<{type:string, text?:string}>} content
+ * @returns {string}
+ */
+function flattenToolResultContent(content) {
+  if (typeof content === 'string') return content;
+  if (Array.isArray(content)) {
+    return content
+      .filter((block) => block && block.type === 'text')
+      .map((block) => block.text)
+      .join('\n');
+  }
+  return '';
+}
+
+/**
+ * Parse one Claude JSONL file into a RAW (un-redacted, un-capped) Extract.
+ * @param {string} filePath
+ * @returns {import('./index').Extract}
+ */
+function parseClaudeTranscript(filePath) {
+  let raw = '';
+  try {
+    raw = fs.readFileSync(filePath, 'utf8');
+  } catch {
+    raw = '';
+  }
+
+  const lines = raw.split('\n');
+  const messages = [];
+  let sessionId = null;
+  let cwd = null;
+
+  for (const line of lines) {
+    if (line.trim() === '') continue;
+    let obj;
+    try {
+      obj = JSON.parse(line);
+    } catch {
+      continue;
+    }
+
+    if (obj.type !== 'user' && obj.type !== 'assistant') continue;
+
+    if (sessionId === null && obj.sessionId) sessionId = obj.sessionId;
+    if (cwd === null && obj.cwd) cwd = obj.cwd;
+
+    if (obj.type === 'user') {
+      if (obj.isMeta === true) continue;
+      const content = obj.message && obj.message.content;
+      if (typeof content === 'string') {
+        messages.push({ role: 'user', text: content, ts: obj.timestamp || null });
+      } else if (Array.isArray(content)) {
+        for (const block of content) {
+          if (block && block.type === 'tool_result') {
+            messages.push({
+              role: 'tool_result',
+              text: flattenToolResultContent(block.content),
+              ts: obj.timestamp || null,
+            });
+          }
+        }
+      }
+    } else if (obj.type === 'assistant') {
+      const content = obj.message && obj.message.content;
+      if (Array.isArray(content)) {
+        const text = content
+          .filter((block) => block && block.type === 'text')
+          .map((block) => block.text)
+          .join('\n\n');
+        if (text !== '') {
+          messages.push({ role: 'assistant', text, ts: obj.timestamp || null });
+        }
+      }
+    }
+  }
+
+  if (sessionId === null) {
+    sessionId = path.basename(filePath, '.jsonl');
+  }
+
+  const started = messages.length > 0 ? messages[0].ts : null;
+
+  return {
+    harness: 'claude',
+    session_id: sessionId,
+    started,
+    cwd,
+    source_path: path.resolve(filePath),
+    truncated: false,
+    messages,
+  };
+}
+
+module.exports = { discoverClaude, parseClaudeTranscript };

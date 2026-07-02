@@ -1,0 +1,12 @@
+{
+  "harness": "codex",
+  "session_id": "rollout-2026-01-01-uuid",
+  "started": "2026-01-01T09:00:00.000Z",
+  "cwd": "/home/ada/proj",
+  "truncated": false,
+  "messages": [
+    { "role": "user", "text": "List my TODOs", "ts": null },
+    { "role": "assistant", "text": "Here are your TODOs.", "ts": null },
+    { "role": "tool_result", "text": "file contents: password=[REDACTED:generic-secret]", "ts": null }
+  ]
+}
