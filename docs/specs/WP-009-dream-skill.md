@@ -1,7 +1,7 @@
 ---
 id: WP-009
 title: Author the wienerdog-dream skill (phases, tiered gates, provenance)
-status: Ready
+status: In-Review
 model: opus
 size: M
 depends_on: [WP-008, WP-017]
