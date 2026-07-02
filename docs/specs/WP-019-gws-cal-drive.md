@@ -1,7 +1,7 @@
 ---
 id: WP-019
 title: Implement gws Calendar and Drive read verbs
-status: Ready
+status: In-Review
 model: sonnet
 size: S
 depends_on: [WP-011]
