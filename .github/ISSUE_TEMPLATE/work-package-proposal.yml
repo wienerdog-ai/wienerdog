@@ -1,0 +1,37 @@
+name: Work-package proposal
+description: Propose a concrete implementation unit — for contributors (human or AI-assisted) who want to build something
+labels: [wp-proposal]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Wienerdog development is spec-driven: approved proposals become work-package specs in `docs/specs/`,
+        and specs are what get implemented — by you, or by an AI session you run. Read `docs/specs/README.md` first.
+  - type: textarea
+    id: what
+    attributes:
+      label: What would this WP deliver?
+      description: Concrete files/commands/behavior, not a theme.
+    validations:
+      required: true
+  - type: textarea
+    id: fit
+    attributes:
+      label: Where does it fit?
+      description: Which milestone (docs/specs/ROADMAP.md), which existing WPs it depends on, which ADRs constrain it.
+    validations:
+      required: true
+  - type: textarea
+    id: verify
+    attributes:
+      label: How would we verify it?
+      description: Sketch the literal commands that would prove it works. If you can't, it's probably too big — split it.
+    validations:
+      required: true
+  - type: dropdown
+    id: implementer
+    attributes:
+      label: Who implements?
+      options: [I will (possibly AI-assisted), Proposing for the maintainers' queue]
+    validations:
+      required: true

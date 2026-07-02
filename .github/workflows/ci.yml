@@ -1,0 +1,13 @@
+# Placeholder — replaced by WP-001 with the real pipeline
+# (lint, test matrix, boundary-check, pr-title).
+name: ci
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  placeholder:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "CI pipeline lands in WP-001"
