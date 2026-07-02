@@ -1,7 +1,7 @@
 ---
 id: WP-006
 title: Implement Claude Code adapter (managed block, hooks, skills registration)
-status: Ready
+status: In-Review
 model: opus
 size: M
 depends_on: [WP-005]
