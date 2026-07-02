@@ -269,3 +269,24 @@ test('gws-dispatch: repeatable --attendee accumulates through to cal draft-event
     { email: 'c@x.com' },
   ]);
 });
+
+test('gws dispatch: gmail read accepts --id flag form', async () => {
+  const { env } = initPaths();
+  const calls = [];
+  currentServices = {
+    gmail: {
+      users: {
+        messages: {
+          get: async (o) => {
+            calls.push(o);
+            return { data: { id: o.id, snippet: '', payload: { headers: [] } } };
+          },
+        },
+      },
+    },
+  };
+  await withEnv(env, () =>
+    captureStdout(() => gwsIndex.run(['gmail', 'read', '--id', 'msg-42', '--json']))
+  );
+  assert.equal(calls[0].id, 'msg-42');
+});
