@@ -48,7 +48,13 @@ Wienerdog auto-writes persistent memory derived from conversation transcripts, i
 
 **Attack**: Google tokens or API keys leak into the vault, git, or dream inputs.
 
-**Mitigations**: tokens live in `~/.wienerdog/secrets/` (0600), outside the vault and any git repo; a redaction pass strips secret-looking strings (key/token patterns) from transcript extracts before the dream model sees them; the vault skeleton's `.gitignore` excludes nothing from `secrets/` because secrets are never inside it; `gws` has no send verb (exception: `_alert`, fixed template, user's own address only). Trade-off accepted: file-based storage over OS keyring — keyring integration with unattended launchd jobs proved fragile (env-var footgun can silently delete credentials); strict file permissions are more predictable. 
+**Mitigations**: tokens live in `~/.wienerdog/secrets/` (0600), outside the vault and any git repo; a redaction pass strips secret-looking strings (key/token patterns) from transcript extracts before the dream model sees them; the vault skeleton's `.gitignore` excludes nothing from `secrets/` because secrets are never inside it. Trade-off accepted: file-based storage over OS keyring — keyring integration with unattended launchd jobs proved fragile (env-var footgun can silently delete credentials); strict file permissions are more predictable.
+
+## T4a — Outbound sending as an exfiltration channel
+
+**Attack**: injected content steers a session or routine into emailing private data to an attacker, or into creating the permission to do so.
+
+**Mitigations (ADR-0007)**: sending executes only under a **send grant** scoped to `(routine, recipient allowlist)`; grants live in `~/.wienerdog/config.yaml` (mechanics — no model-writable surface) and are created only by the interactive CLI with a typed confirmation naming routine and recipients — no skill, hook, dream, or headless job can create or widen one; ungranted sends degrade to draft + notice (fail-safe, fail-visible); third-party-recipient grants carry an extra plain-language warning; the dream job has no `gws` access at all; `_alert` remains a fixed-template self-send.
 
 ## T5a — curl|bash entry point
 

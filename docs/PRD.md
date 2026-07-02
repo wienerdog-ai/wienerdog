@@ -19,8 +19,8 @@ Owner: Gyula Fehér. Status: locked for v1 (2026-07-02). Changes require an ADR.
 1. **Setup** — As a Claude Code/Codex user, I paste one line, answer an interview conducted by my own AI, and end up with a personalized CLAUDE.md/AGENTS.md and a memory vault at `~/wienerdog/`. If I already have an Obsidian vault, Wienerdog adopts it instead.
 2. **Memory** — My AI starts every session already knowing who I am, what I'm working on, and where we left off (injected digest). When I say "remember this," it lands in the vault immediately.
 3. **Dreaming** — Overnight, my conversations are reviewed: durable facts become atomic notes, my day gets a daily-log entry, workflows I repeated ≥3 times become draft skills. I can read what was learned in a dream report, and revert any night with one git command.
-4. **Senses** — After a guided Google setup, my AI can search/read my Gmail, Calendar, and Drive, and create *drafts* — never send.
-5. **Routines** — I schedule a morning digest at 07:00. If my laptop was closed, it runs when I open it. If it fails, I find out loudly, not silently.
+4. **Senses** — After a guided Google setup, my AI can search/read my Gmail, Calendar, and Drive, and create drafts. It can *send* only under a grant I created myself at the keyboard, scoped to a routine and approved recipients (ADR-0007); anything else falls back to a draft plus a notice.
+5. **Routines** — After setup, I pick from a catalog of ready-made routines (daily digest, inbox triage, weekly review, …) — nothing is scheduled by default (ADR-0008). If my laptop was closed at run time, the routine catches up shortly after I'm back — dreaming included. If anything fails, I find out loudly, not silently.
 6. **Exit** — `wienerdog uninstall` removes everything it installed except my vault, and shows me exactly what it's doing first.
 
 ## Success criteria

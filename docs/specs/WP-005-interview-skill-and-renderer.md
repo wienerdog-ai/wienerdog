@@ -36,6 +36,7 @@ From WP-004: `templates/vault/06-Identity/*.md` scaffolds with frontmatter (`typ
 ### Exact contracts
 
 `skills/wienerdog-setup/SKILL.md` — frontmatter `name: wienerdog-setup`, `description: Set up Wienerdog: interview the user and build their identity notes. Use when the user asks to set up or reconfigure Wienerdog.` Body must instruct the model to:
+0. **Reconfigure mode**: if `06-Identity/profile.md` already has content beyond the scaffold, do NOT redo the full interview — present a short menu ("What would you like to adjust? profile / preferences & tone / goals / standing instructions / memory mode") and update only the chosen section(s), then continue at step 5–6. This makes the skill the product's settings panel — re-runnable anytime.
 1. Read `~/.wienerdog/config.yaml` for the vault path; verify the vault exists (if not, tell the user to run `npx wienerdog init` and stop).
 2. Interview conversationally — **one topic at a time, ≤10 minutes total**: role & background; current projects/responsibilities; communication preferences (depth, tone, format); tools they live in; goals (now / this year); "anything your AI should always know or never do".
 3. Ask about existing memory: do they already keep an Obsidian vault or notes system? (If yes: record its path in the conversation and tell them adapter adoption arrives in a later version — do not move files.)

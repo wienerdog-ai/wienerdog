@@ -12,3 +12,5 @@ Durable decisions live here so they are made once, not re-litigated per session 
 | [0004](0004-no-daemon-invariant.md) | No-daemon invariant ("Wienerdog is just files") | Accepted |
 | [0005](0005-spec-driven-agent-development.md) | Spec-driven agent development | Accepted |
 | [0006](0006-curl-installer-default.md) | curl installer as the default entry point | Accepted |
+| [0007](0007-graduated-sending.md) | Graduated sending (send grants) instead of no-send | Accepted |
+| [0008](0008-routine-catalog.md) | Post-setup routine catalog (quick wins), digest opt-in | Accepted |
