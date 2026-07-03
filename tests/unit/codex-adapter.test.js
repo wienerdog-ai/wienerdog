@@ -229,8 +229,10 @@ test('Codex-only machine: full setup + working dream from rollout files alone', 
   const subprocessEnv = { ...process.env, HOME: home, WIENERDOG_HOME: core, WIENERDOG_VAULT: vault, CODEX_HOME: codexHome };
   delete subprocessEnv.CLAUDE_CONFIG_DIR;
 
-  // 1. `wienerdog init --yes` — Claude absent (no CLAUDE_CONFIG_DIR, no <home>/.claude), Codex present.
-  execFileSync('node', [bin, 'init', '--yes'], { env: subprocessEnv, encoding: 'utf8' });
+  // 1. `wienerdog init --fresh-vault --yes` — Claude absent (no CLAUDE_CONFIG_DIR, no
+  //    <home>/.claude), Codex present. --fresh-vault so a vault exists for sync (WP-027:
+  //    plain `init` now defers vault creation).
+  execFileSync('node', [bin, 'init', '--fresh-vault', '--yes'], { env: subprocessEnv, encoding: 'utf8' });
 
   // 2. Drop the WP-005 identity fixture into <vault>/06-Identity/.
   const identitySrc = path.join(repoRoot, 'tests', 'fixtures', 'identity-filled', '06-Identity');
