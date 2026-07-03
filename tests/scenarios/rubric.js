@@ -24,11 +24,15 @@ const RUBRIC_PROMPT = [
 async function gradeNote(noteText, transcriptsText) {
   const prompt = [RUBRIC_PROMPT, '', '## Transcripts', transcriptsText, '', '## Note', noteText].join('\n');
 
+  const graderEnv = { ...process.env };
+  delete graderEnv.ANTHROPIC_API_KEY; // ADR-0009: subscription only, never a key
+
   let res;
   try {
     res = spawnSync('claude', ['-p', prompt, '--model', 'haiku', '--output-format', 'json'], {
       encoding: 'utf8',
       timeout: 120000,
+      env: graderEnv,
     });
   } catch (err) {
     return { pass: false, explanation: `grader error: failed to spawn claude CLI: ${err.message}` };
