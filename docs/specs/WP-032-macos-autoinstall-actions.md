@@ -246,7 +246,6 @@ No test may invoke real `sudo`, real `installer`, real `xcode-select`, real Home
   reviewer will byte-verify each pair; divergence is an automatic
   REQUEST-CHANGES.
 
-
 - **Zero dependencies; bash only.** Pass `shellcheck` + `bash -n`; `shfmt -i 2`.
 - **Every install action runs only through `consent_run`.** Do not call `installer`/`brew`/`xcode-select` outside an EXEC_FN. This is what makes per-hop consent structural.
 - **Never bootstrap Homebrew** (ADR-0011). `brew` is used only if already on PATH; otherwise the official `.pkg`. Do not add any code that fetches Homebrew's installer.
