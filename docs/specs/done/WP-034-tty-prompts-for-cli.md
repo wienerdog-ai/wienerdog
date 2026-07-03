@@ -1,7 +1,7 @@
 ---
 id: WP-034
 title: Read CLI confirmation prompts from /dev/tty under piped stdin
-status: In-Review
+status: Done
 model: sonnet
 size: S
 depends_on: [WP-031]

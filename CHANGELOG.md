@@ -2,6 +2,11 @@
 
 All notable changes to Wienerdog. Format: [Keep a Changelog](https://keepachangelog.com), versioning: SemVer (0.x until the installed file layout stabilizes — ADR-0003).
 
+## [0.2.1] — 2026-07-03
+
+### Fixed
+- CLI confirmation prompts (`init`, `uninstall`) now read from the terminal (`/dev/tty`) when stdin is piped — the curl one-liner previously printed "Proceed? [y/N]" and exited silently without installing. When no terminal is available at all, the CLI aborts with a clear message instead of a silent no-op. Interactive Ctrl-D at a prompt aborts cleanly instead of hanging. (Found live in the first public curl-installer test.)
+
 ## [0.2.0] — 2026-07-03
 
 ### Added
