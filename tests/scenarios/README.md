@@ -49,23 +49,72 @@ brain, `run-scenarios.js` asserts on the committed vault:
   the scenario if a note references anything not present in the transcripts
   (hallucinated memory).
 
-## Running locally
+## Running locally (subscription)
 
-This spends real model quota and needs the `claude` CLI (Claude Code) on
-`PATH`, authenticated via `ANTHROPIC_API_KEY`. Note: a Claude Code
-subscription/OAuth login will NOT work here — the harness isolates
-`CLAUDE_CONFIG_DIR`, and OAuth credentials do not follow it (they are bound
-to the default config dir). Set `ANTHROPIC_API_KEY` for local runs:
+This harness runs on the maintainer's Claude **subscription**, not an API
+key (ADR-0009: subscription auth everywhere). Preconditions: the `claude` CLI
+is on `PATH` and already logged in interactively, so OAuth already works in
+the shell you run from — a bare `claude -p "hi"` should succeed before you
+run this. It spends real model quota.
 
 ```bash
-export WIENERDOG_RUN_SCENARIOS=1
-export ANTHROPIC_API_KEY=...   # or however your `claude` CLI is authenticated
+export WIENERDOG_RUN_SCENARIOS=1   # the hard guard; without it, npm run scenarios skips
 npm run scenarios
 ```
+
+Do **not** set `ANTHROPIC_API_KEY`. The harness strips it from every child
+env anyway, so a stray key in your shell can never silently take over — but
+the intent is subscription-only.
 
 Without `WIENERDOG_RUN_SCENARIOS=1`, `npm run scenarios` prints a skip
 message and exits 0 — it never spends quota by accident, and `npm test`
 never runs this harness at all.
+
+### How auth and fixture isolation are decoupled
+
+The harness points transcript collection at a temp fixtures dir via
+`WIENERDOG_CLAUDE_DIR` (a wienerdog-internal override that only the
+collection phase honors), and leaves `HOME` and `CLAUDE_CONFIG_DIR`
+untouched so the real `claude -p` brain resolves the maintainer's default
+config dir and Keychain OAuth — i.e., the subscription. It also temporarily
+installs the `wienerdog-dream` skill into the real config dir's `skills/`
+(backing up and restoring any pre-existing copy — or leaving an identical
+copy untouched if one is already there) so the brain can load it via
+`--setting-sources user`. It never reads the maintainer's real transcripts:
+collection only ever looks under `WIENERDOG_CLAUDE_DIR`, which always points
+at a temp dir during a run.
+
+### CI is dormant (needs a key)
+
+`.github/workflows/scenarios.yml` is **disabled by default** — manual
+dispatch only, no nightly schedule. It is the *one* place an API key could
+ever appear in this project: GitHub Actions cannot do subscription OAuth, so
+a future contributor who wants CI scenario runs must add an
+`ANTHROPIC_API_KEY` secret. ADR-0009 excludes that credential type from the
+maintainer's own setup; the workflow exists only as a documented, opt-in path
+for someone who accepts the tradeoff.
+
+### Scheduling it as a weekly local routine (dogfooding the scheduler)
+
+The primary runner is a local schedule on the maintainer's machine — e.g. a
+weekly launchd/cron entry that runs, on subscription:
+
+```bash
+WIENERDOG_RUN_SCENARIOS=1 npm run --prefix /path/to/wienerdog scenarios
+```
+
+Running it through Wienerdog's *own* scheduler (`wienerdog schedule add
+scenarios --at ...` + `run-job`) is the goal — it would dogfood the
+product's own scheduler — but is **not wired yet**: `run-job`'s
+`resolveCommand` only dispatches `builtin:dream` and `skill:<name>`, and its
+clean-env allowlist does not pass `WIENERDOG_RUN_SCENARIOS` or
+`WIENERDOG_CLAUDE_DIR`, so the harness cannot run as a routine today. Wiring
+it (a new run-kind + env passthrough) is a **future work package**.
+`run-job` already sets `HOME` to the real home and resolves the default
+config dir, so it is subscription-compatible in principle — whether the
+login Keychain is reachable in a launchd/systemd session is a
+verify-at-first-live-run item, and `run-job`'s fail-loud alert (WP-020)
+covers a failure.
 
 ## Future extraction (out of scope here)
 

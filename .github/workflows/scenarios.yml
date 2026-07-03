@@ -1,12 +1,16 @@
 name: scenarios
 
-# Nightly, real-brain scenario harness (WP-015). Runs the actual `wienerdog
-# dream` pipeline against the real Claude model and Haiku grader, so it
-# spends real model quota. It must NEVER run per-PR — schedule + manual
-# dispatch only.
+# DORMANT under ADR-0009 (subscription-everywhere). The project's primary
+# scenario run is a local subscription routine on the maintainer's machine
+# (see tests/scenarios/README.md); this workflow is retained only as an
+# optional path for a future contributor who accepts running scenarios under
+# an ANTHROPIC_API_KEY secret in CI (GitHub Actions cannot do subscription
+# OAuth). It does nothing until such a contributor supplies the secret.
+#
+# Real-brain scenario harness (WP-015). Runs the actual `wienerdog dream`
+# pipeline against the real Claude model and Haiku grader, so it spends real
+# model quota. It must NEVER run per-PR — manual dispatch only, no schedule.
 on:
-  schedule:
-    - cron: "0 6 * * *"
   workflow_dispatch: {}
 
 jobs:

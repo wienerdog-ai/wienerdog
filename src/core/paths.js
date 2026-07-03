@@ -26,7 +26,11 @@ const path = require('node:path');
 function getPaths(env = process.env) {
   const home = env.HOME || os.homedir();
   const core = env.WIENERDOG_HOME || path.join(home, '.wienerdog');
-  const claudeDir = env.CLAUDE_CONFIG_DIR || path.join(home, '.claude');
+  // WIENERDOG_CLAUDE_DIR (wienerdog-internal; the scenario harness sets it to a
+  // fixtures dir) takes precedence so transcript discovery can be redirected WITHOUT
+  // touching CLAUDE_CONFIG_DIR — which the spawned `claude -p` brain needs for its
+  // real subscription credentials (ADR-0009). Unset in production → identical behavior.
+  const claudeDir = env.WIENERDOG_CLAUDE_DIR || env.CLAUDE_CONFIG_DIR || path.join(home, '.claude');
   const codexDir = env.CODEX_HOME || path.join(home, '.codex');
   const vault = env.WIENERDOG_VAULT || path.join(home, 'wienerdog');
   return {
