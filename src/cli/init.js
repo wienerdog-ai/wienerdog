@@ -52,7 +52,7 @@ function readConfigVaultPath(configContent) {
 function renderConfig(harnesses) {
   return `# Wienerdog configuration — https://github.com/wienerdog-ai/wienerdog
 version: 1
-vault: null            # set by vault setup (WP-004)
+vault: null            # set by /wienerdog-setup or \`wienerdog adopt\`
 harnesses:
   claude: ${harnesses.claude.present}        # set true by init when detected
   codex: ${harnesses.codex.present}
@@ -84,6 +84,7 @@ function confirm(prompt) {
 async function run(argv) {
   const dryRun = argv.includes('--dry-run');
   const yes = argv.includes('--yes');
+  const freshVault = argv.includes('--fresh-vault');
   const paths = getPaths();
   const harnesses = detectHarnesses();
 
@@ -92,10 +93,12 @@ async function run(argv) {
   const missingDirs = dirs.filter((d) => !dirExists(d));
 
   const existingConfigContent = needConfig ? null : fs.readFileSync(paths.config, 'utf8');
-  const vaultNeeded = needConfig || isVaultNull(existingConfigContent);
-  const configuredVaultPath = (existingConfigContent && readConfigVaultPath(existingConfigContent)) || paths.vault;
+  // Scaffold the default vault ONLY under --fresh-vault, and only if the config
+  // does not already point at a vault (fresh machine, or config still `vault: null`).
+  const vaultStep = freshVault && (needConfig || isVaultNull(existingConfigContent));
+  const vaultConfigured = !needConfig && !isVaultNull(existingConfigContent);
 
-  if (missingDirs.length === 0 && !needConfig && !vaultNeeded) {
+  if (missingDirs.length === 0 && !needConfig && !vaultStep) {
     console.log('wienerdog: already installed, nothing to do.');
     return;
   }
@@ -106,9 +109,14 @@ async function run(argv) {
   console.log('\nFiles:');
   console.log(`  ${fileExists(paths.config) ? '[exists]' : '[create]'} ${paths.config}`);
   console.log('\nVault:');
-  console.log(
-    `  ${vaultNeeded ? '[create]' : dirExists(configuredVaultPath) ? '[exists]' : '[MISSING]'} ${configuredVaultPath}`
-  );
+  if (vaultStep) {
+    console.log(`  [create] ${paths.vault}`);
+  } else if (vaultConfigured) {
+    console.log(`  [configured] ${readConfigVaultPath(existingConfigContent)}`);
+  } else {
+    console.log('  [deferred] choose or create your vault with /wienerdog-setup');
+    console.log("             (or run 'wienerdog init --fresh-vault' for the default ~/wienerdog)");
+  }
   console.log('\nDetected AI tools:');
   console.log(`  Claude Code: ${harnesses.claude.present ? 'found' : 'not found'} (${harnesses.claude.dir})`);
   console.log(`  Codex CLI:   ${harnesses.codex.present ? 'found' : 'not found'} (${harnesses.codex.dir})`);
@@ -143,7 +151,7 @@ async function run(argv) {
     manifestLib.record(manifest, { kind: 'file', path: paths.config, hash: sha256(content) });
   }
 
-  if (vaultNeeded) {
+  if (vaultStep) {
     console.log(`\nVault: scaffolding ${paths.vault}`);
     const { created, skipped } = await scaffoldVault(paths.vault, { manifest });
     console.log(`  created ${created.length} file(s), skipped ${skipped.length} existing file(s)`);
@@ -154,12 +162,19 @@ async function run(argv) {
     // uninstall doesn't mistake it for a user edit and refuse to remove it.
     const configEntry = manifest.entries.find((e) => e.kind === 'file' && e.path === paths.config);
     if (configEntry) configEntry.hash = sha256(updatedConfig);
-  } else if (!dirExists(configuredVaultPath)) {
-    console.log(`\nwienerdog: configured vault ${configuredVaultPath} not found — skipping vault step.`);
   }
 
   manifestLib.save(paths, manifest);
-  console.log('\nwienerdog: installed. Run `wienerdog doctor` to check the setup.');
+  if (vaultStep) {
+    console.log('\nwienerdog: installed with a fresh vault. Run `wienerdog doctor` to check the setup.');
+  } else if (vaultConfigured) {
+    console.log('\nwienerdog: installed. Run `wienerdog doctor` to check the setup.');
+  } else {
+    console.log('\nwienerdog: core installed — no vault yet.');
+    console.log('Next: run /wienerdog-setup in Claude Code to create or choose your vault,');
+    console.log("or run 'wienerdog init --fresh-vault' for the default ~/wienerdog vault.");
+    console.log('Then run `wienerdog doctor` to check the setup.');
+  }
 }
 
 module.exports = { run };

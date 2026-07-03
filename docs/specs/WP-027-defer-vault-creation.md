@@ -1,7 +1,7 @@
 ---
 id: WP-027
 title: Defer vault creation until the vault path is chosen
-status: Ready
+status: In-Review
 model: opus
 size: M
 depends_on: [WP-026]
@@ -102,6 +102,9 @@ Tests that touch this area:
   `tests/integration/dream.test.js` — none assert the default vault exists after
   `init`; they build their own vaults or only check `config.yaml`. They keep
   passing.
+- `tests/unit/codex-adapter.test.js` — its integration test does
+  `init` → drop identity → `sync`, which now exits 1 on `vault: null`. Its init
+  call gains `--fresh-vault` (in Deliverables above). No assertions change.
 - `tests/unit/setup-skill-structure.test.js` — string-presence checks on the
   setup skill; must keep passing (all asserted substrings are preserved) plus a
   new assertion for the `--fresh-vault` command.
@@ -122,6 +125,7 @@ Tests that touch this area:
 | modify | tests/unit/init.test.js | add deferred-vault + `--fresh-vault` coverage |
 | create | tests/unit/doctor.test.js | cover the three vault-check states |
 | modify | tests/unit/setup-skill-structure.test.js | assert the skill references `wienerdog init --fresh-vault` |
+| modify | tests/unit/codex-adapter.test.js | its init→drop-identity→sync integration test needs a vault for the sync leg; change its init call to `--fresh-vault` (test-census gap, no assertions changed) |
 
 **Explicitly NOT touched (and why):** `src/core/vault.js` (`scaffoldVault`
 unchanged), `tests/unit/vault.test.js`, `tests/golden/vault-default/**` (golden
