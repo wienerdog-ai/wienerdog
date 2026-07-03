@@ -1,7 +1,7 @@
 ---
 id: WP-036
 title: Hermetic resolve_bin isolation for Linux ensure_node tests
-status: In-Review
+status: Done
 model: opus
 size: S
 depends_on: [WP-035]
@@ -41,10 +41,10 @@ The six Linux `ensure_node` sourcing-seam tests prepend (after sourcing the
 lib) a test-local override:
 
 ```bash
-resolve_bin() { hash -r 2>/dev/null || true; command -v "$1" || return 1; }
+resolve_bin() { command -v "$1"; }
 ```
 
-— PATH-only resolution, no dir scan — so the curated hermetic PATH is the
+— PATH-only resolution, no dir scan (command -v returns 1 when absent) — so the curated hermetic PATH is the
 single source of binary truth in those tests. Product `install.sh` unchanged.
 Applied uniformly to all six (not just the three red) for a uniform guarantee.
 
