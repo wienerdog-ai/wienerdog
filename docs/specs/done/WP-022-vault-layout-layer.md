@@ -1,7 +1,7 @@
 ---
 id: WP-022
 title: Vault layout config layer + layout-aware digest render
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: []
