@@ -36,6 +36,22 @@ So `adopt` enforces hard prerequisites before writing anything:
 4. **Conservative memory_mode for the first week** — set `memory_mode: conservative`
    so the strictest gates apply while the user builds trust.
 
+**Symlink-domain rule (binding):** every path handed to `tccguard.guard` must be
+in the same symlink-resolution domain — call it as
+`guard([fs.realpathSync(adoptedPath)], fs.realpathSync(paths.home))`. Comparing
+a realpath'd vault path against a raw `paths.home` makes `path.relative` yield
+`../…` under any symlinked home component (relocated homes, MDM setups, /tmp in
+tests) and the guard silently fails OPEN — reproduced in PR #26 review. A test
+must cover the symlinked-home refusal (macOS /tmp → /private/tmp makes this
+directly testable).
+
+**inferLayout hygiene (binding):** every proposal must be `trim()`ed and must
+pass `isSafeRelativePath` before being emitted (explicit validation, not
+safety-by-construction) — otherwise a folder named with surrounding whitespace
+round-trips differently through `readVaultLayout`'s trim and the config points
+at a different dir than adopt created.
+
+
 Then `adopt` points config at the adopted path, writes the confirmed `vault_layout`
 block, fills only the **missing** mapped directories (never overwriting existing
 files — the standing `scaffoldVault` guarantee), records manifest entries that
