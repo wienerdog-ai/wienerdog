@@ -1,7 +1,7 @@
 ---
 id: WP-024
 title: Layout-aware dream write path (validate tiers, brain prompt, skill)
-status: Ready
+status: In-Review
 model: opus
 size: M
 depends_on: [WP-022]

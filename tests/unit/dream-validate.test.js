@@ -9,6 +9,7 @@ const crypto = require('node:crypto');
 const { execFileSync } = require('node:child_process');
 
 const { validateAndCommit, parseFrontmatter } = require('../../src/core/dream/validate');
+const { defaultLayout } = require('../../src/core/layout');
 
 /** @param {string} cwd @param {string[]} args */
 function git(cwd, args) {
@@ -175,6 +176,50 @@ test('dream-validate: a symlink escaping the vault is reverted and recorded out-
   assert.ok(res.outOfVault.includes('06-Identity/escape'));
   // The outside file itself is untouched.
   assert.equal(fs.readFileSync(outside, 'utf8'), 'secret');
+});
+
+test('dream-validate: Tier-3 gate + report follow a non-default layout, not the default constants', () => {
+  const layout = {
+    ...defaultLayout(),
+    identity_dir: 'Identity', // fully renamed away from 06-Identity
+    skills_dir: '99-Skills',
+    reports_dir: 'reports/custom',
+  };
+  const { vault, scratch } = tempVault();
+
+  // Violation under the MAPPED identity dir (untrusted) → must revert.
+  writeVault(vault, 'Identity/injected.md', FM({ confidence: '0.95', recurrence: '5', derived_from_untrusted: 'true' }));
+  // Violation under the MAPPED skills dir (below floor) → must revert.
+  writeVault(vault, '99-Skills/weak/SKILL.md', FM({ confidence: '0.4', recurrence: '1', derived_from_untrusted: 'false' }));
+  // Valid mapped Tier-3 write (floor satisfied) → must survive.
+  writeVault(vault, 'Identity/valid.md', FM({ confidence: '0.9', recurrence: '3', derived_from_untrusted: 'false' }));
+  // A file under the OLD default 06-Identity/ is NOT Tier-3 now (identity mapped
+  // away), so this untrusted note is treated as Tier-2 and KEPT.
+  writeVault(vault, '06-Identity/note.md', FM({ type: 'note', confidence: '0.9', recurrence: '5', derived_from_untrusted: 'true' }));
+
+  const res = validateAndCommit({
+    vaultDir: vault,
+    scratchDir: scratch,
+    date: '2026-07-03',
+    expectedScratch: [],
+    layout,
+  });
+
+  // Mapped-dir violations reverted.
+  assert.equal(fs.existsSync(path.join(vault, 'Identity/injected.md')), false);
+  assert.equal(fs.existsSync(path.join(vault, '99-Skills/weak/SKILL.md')), false);
+  // Valid mapped Tier-3 survives.
+  assert.ok(fs.existsSync(path.join(vault, 'Identity/valid.md')));
+  // Default 06-Identity/ file is NOT gated (mapping, not the constant, governs).
+  assert.ok(fs.existsSync(path.join(vault, '06-Identity/note.md')));
+  assert.equal(res.reverted.length, 2);
+
+  // Report lands under the mapped reports dir; counts key off the mapped dirs.
+  const report = fs.readFileSync(path.join(vault, 'reports/custom/2026-07-03.md'), 'utf8');
+  assert.ok(report.includes('## Reverted by orchestrator (policy enforcement)'));
+  assert.ok(report.includes('Identity/injected.md'));
+  assert.ok(report.includes('99-Skills/weak/SKILL.md'));
+  assert.equal(res.counts.skills, 0); // both skills writes reverted
 });
 
 test('dream-validate: always commits (report append) even with only reverts', () => {
