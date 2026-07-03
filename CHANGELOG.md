@@ -2,6 +2,14 @@
 
 All notable changes to Wienerdog. Format: [Keep a Changelog](https://keepachangelog.com), versioning: SemVer (0.x until the installed file layout stabilizes — ADR-0003).
 
+## [0.2.0] — 2026-07-03
+
+### Added
+- Consented dependency auto-install in `install.sh` (ADR-0011): detects missing Node ≥ 18 / git and installs them with per-hop `[Y/n]` consent showing the exact command — macOS (Xcode Command Line Tools for git; official signed nodejs.org `.pkg`, or Homebrew if already present, for Node) and Linux (apt/dnf/yum/pacman/zypper/apk, post-install version verification, NodeSource as a separately consented fallback for old-Node distros). Node is the only hard gate; a missing git warns and proceeds. Every action falls back to printing the exact command on decline, failure, or when no terminal is available — non-interactive contexts are never auto-installed into. Threat model updated (new entry T5b).
+
+### Security
+- New safety posture on the record: "never installs software without consent" (amends the earlier "never installs software" rule). No password capture, no Homebrew bootstrapping, signed sources preferred over nested scripts.
+
 ## [0.1.0] — 2026-07-03
 
 First installable release. Everything below was built spec-driven by AI implementers with adversarial AI review; see docs/specs/done/ for the full record (30 work packages).

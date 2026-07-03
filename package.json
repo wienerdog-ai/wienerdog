@@ -1,7 +1,7 @@
 {
   "name": "wienerdog",
-  "version": "0.1.0",
-  "description": "Give your AI a memory, habits, and a daily routine — with nothing but files. One-line setup for Claude Code and Codex CLI.",
+  "version": "0.2.0",
+  "description": "Give your AI a memory, habits, and a daily routine \u2014 with nothing but files. One-line setup for Claude Code and Codex CLI.",
   "license": "MIT",
   "bin": {
     "wienerdog": "bin/wienerdog.js"
@@ -52,7 +52,10 @@
       "MD033": false,
       "MD034": false,
       "MD040": false,
-      "MD060": false
+      "MD060": false,
+      "MD024": {
+        "siblings_only": true
+      }
     }
   }
 }
