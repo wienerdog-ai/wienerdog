@@ -64,11 +64,54 @@ fine to skip a topic if they have nothing to say.
 
 ## Step 3 — Existing notes
 
-Ask whether they already keep an Obsidian vault or another notes system.
+Ask whether they already keep an Obsidian vault or another notes system, and
+where it lives.
 
-If they do, note where it lives so it is captured in the conversation, and let
-them know that automatically adopting an existing notes system is coming in a
-later version. **Do not move, copy, or change any of their existing files.**
+If they do, offer them three choices in plain language:
+
+1. **Start fresh** — keep the new, empty vault and do nothing with the old
+   one. This is the default if they are not sure.
+2. **Import from it** — you read their old vault once, pull the useful facts
+   about them into the new vault, and leave the old vault completely
+   untouched. Best for most people who already have notes somewhere.
+3. **Adopt it in place** (power users) — Wienerdog uses their existing vault
+   AS the vault, instead of the new one. This is not done here: tell them to
+   finish or exit this setup and run `wienerdog adopt <path-to-their-vault>`
+   from the terminal. That command checks the prerequisites (a normal local
+   folder, not iCloud or Documents; a git repository — it will offer to set
+   one up if it is not) and confirms the folder layout with them before it
+   changes anything. Do not attempt adoption yourself from inside this skill.
+
+**If they choose Import**, do the following:
+
+- Ask for the path to their existing vault. Read it **read-only**. You must
+  **never move, copy wholesale, edit, or delete any file in their existing
+  vault** — you only read it, and every write goes into the new vault
+  instead.
+- Mine four things from the old vault: who they are (role and background),
+  how they like to work (preferences, tone, tools), what they are working
+  toward (goals), and their current active projects. Look in the obvious
+  places — an about or profile note, recent daily notes, project folders and
+  MOCs.
+- Write what you found into the new vault's identity notes — the same four
+  files Step 5 uses (`06-Identity/profile.md`, `preferences.md`, `goals.md`,
+  `instructions.md`) — and seed each active project you find as its own
+  `01-Projects/<kebab-case-name>/index.md`. Only write facts you actually
+  found in the old vault; invent nothing.
+- On every note you write from imported content, set the frontmatter
+  `origin:` to **`import`** (not `interview`), so where it came from stays
+  auditable. Keep the rest of the standard note frontmatter as usual.
+- **Then show them exactly what was taken**: list, right there in the
+  conversation, each fact or project you imported and which file it went
+  into, so they can see it and correct anything that is wrong. This summary
+  of what was taken is mandatory — import is never silent.
+- After importing, carry on with the interview as normal (Steps 4–6) to fill
+  any gaps and let them fix anything the import got wrong.
+
+**If they choose Start fresh or Adopt**, skip the mining above and continue
+the interview normally. Adoption's own folder-layout mapping and
+prerequisite checks are handled entirely by `wienerdog adopt`, so this skill
+never edits the old vault.
 
 ## Step 4 — How much should the AI remember?
 
