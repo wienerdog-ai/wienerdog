@@ -24,7 +24,7 @@ Then, inside Claude Code or Codex CLI:
 
 That's it. Your AI interviews you, builds your memory vault, and starts remembering.
 
-> **Status: pre-release.** Wienerdog is under active development and not yet installable. Watch the repo — the line above will work soon.
+> **Status: 0.x.** Installable and dogfooded daily by its maintainer; file formats may still evolve until 1.0 (the installed file layout is our public API).
 
 ## What you get
 
