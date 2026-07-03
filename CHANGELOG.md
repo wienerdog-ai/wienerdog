@@ -17,5 +17,5 @@ First installable release. Everything below was built spec-driven by AI implemen
 
 ## [Unreleased]
 
-### Added
-- M0 foundation: vision, PRD, architecture, threat model, glossary, ADRs 0001–0005, spec system with WP-001…WP-005 Ready, agent team, dogfood vault, CI placeholder.
+### Notes
+- (M0 foundation history folded into 0.1.0 above.)
