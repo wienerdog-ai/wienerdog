@@ -82,8 +82,28 @@ test('adopt-e2e: init → adopt → sync → dream through mapped tiers, one rev
     await init.run(['--yes']);
     assert.ok(fs.existsSync(configPath), 'config.yaml written by init');
 
+    // 3a. Seed a pre-existing .gitignore with one custom line + one default line,
+    //     to prove adopt appends (never overwrites) and skips the already-present default.
+    const gitignorePath = path.join(adopted, '.gitignore');
+    fs.writeFileSync(gitignorePath, 'my-secret-notes/\n.DS_Store\n');
+
     // 4. adopt the power-user vault.
     await adopt.run([adopted, '--yes']);
+
+    // 4-gitignore. The starter .gitignore offer ran under --yes: all five defaults
+    //     present, the custom line preserved, and .DS_Store not duplicated.
+    const gitignore = fs.readFileSync(gitignorePath, 'utf8');
+    for (const l of [
+      '.obsidian/plugins/*/bin/',
+      '.smart-env/',
+      '.obsidian/workspace*',
+      '.DS_Store',
+      '.trash/',
+    ]) {
+      assert.ok(gitignore.includes(l), `.gitignore contains default line ${l}`);
+    }
+    assert.ok(gitignore.includes('my-secret-notes/'), 'custom .gitignore line survives (append-not-overwrite)');
+    assert.equal(gitignore.match(/\.DS_Store/g).length, 1, 'already-present default not duplicated');
 
     // 4a. The adopted dir is now a git repo with ≥1 commit.
     assert.ok(fs.existsSync(path.join(adopted, '.git')), 'adopted dir is a git repo');
