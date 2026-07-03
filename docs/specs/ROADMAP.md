@@ -40,6 +40,7 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 | [WP-019](done/WP-019-gws-cal-drive.md) | gws Calendar + Drive read verbs | M5 | sonnet | Done | WP-011 |
 | [WP-020](done/WP-020-run-job-wrapper.md) | run-job wrapper (clean env, TCC-guard, watchdog, fail-loud, catch-up) | M6 | opus | Done | WP-013, WP-018 |
 | [WP-021](done/WP-021-gws-dispatch-reconciliation.md) | Reconcile gws dispatch with verb-module contracts | M5 | sonnet | Done | WP-018, WP-019 |
+| [WP-023](WP-023-scenario-subscription-auth.md) | Scenario harness on subscription auth (decouple fixture isolation from auth) | M3/M7 | sonnet | Ready | WP-015, WP-020 |
 
 ## Dependency graph
 
@@ -72,5 +73,7 @@ graph LR
   WP020 -.-> WP014
   WP009 --> WP015[WP-015 scenario harness]
   WP003 --> WP016[WP-016 curl installer]
+  WP015 --> WP023[WP-023 scenario subscription auth]
+  WP020 --> WP023
 ```
 </content>
