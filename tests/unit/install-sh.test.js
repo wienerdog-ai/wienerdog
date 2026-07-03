@@ -49,9 +49,9 @@ function writeFakeTty(dir, answer) {
  * @param {string} stubBin
  * @param {string[]} [args]
  */
-function runInstallSh(stubBin, args = []) {
+function runInstallSh(stubBin, args = [], extraEnv = {}) {
   const result = spawnSync('bash', [scriptPath, ...args], {
-    env: { ...process.env, PATH: `${stubBin}:${process.env.PATH}` },
+    env: { ...process.env, PATH: `${stubBin}:${process.env.PATH}`, ...extraEnv },
     encoding: 'utf8',
   });
   return { status: result.status, stdout: result.stdout, stderr: result.stderr };
@@ -89,15 +89,18 @@ function mkStub(prefix) {
 // --- WP-016 tests kept (1: missing/old Node, 2: recent-Node handoff, 3: root) --
 
 test('install-sh: missing/old Node exits 1 with nodejs.org guidance (idempotent)', () => {
-  const { stubBin } = mkStub('wd-install-old-');
+  const { root, stubBin } = mkStub('wd-install-old-');
   writeShim(stubBin, 'node', 'if [ "$1" = "-v" ]; then echo "v16.0.0"; exit 0; fi\nexit 1');
+  // Force no-tty so the (now consented) macOS/Linux install path deterministically
+  // falls through to print-the-command and never blocks on /dev/tty.
+  const noTty = { WIENERDOG_TTY: path.join(root, 'no-tty') };
 
-  const r = runInstallSh(stubBin);
+  const r = runInstallSh(stubBin, [], noTty);
   assert.equal(r.status, 1);
   assert.match(r.stderr, /nodejs\.org/);
 
   // Idempotency: a second run with the same environment exits identically.
-  const r2 = runInstallSh(stubBin);
+  const r2 = runInstallSh(stubBin, [], noTty);
   assert.equal(r2.status, 1);
   assert.match(r2.stderr, /nodejs\.org/);
 });
@@ -134,8 +137,10 @@ test('install-sh: missing git prints a note but still hands off (exit 0)', () =>
   const argvFile = path.join(root, 'npx-argv.txt');
   writeShimAbs(stubBin, 'npx', `echo "$@" > "${argvFile}"\nexit 0`);
 
+  // No-tty so the (now consented) CLT offer declines to print-and-proceed
+  // rather than blocking on /dev/tty.
   const result = spawnSync(BASH, [scriptPath], {
-    env: { ...process.env, PATH: stubBin },
+    env: { ...process.env, PATH: stubBin, WIENERDOG_TTY: path.join(root, 'no-tty') },
     encoding: 'utf8',
   });
   assert.equal(result.status, 0);
@@ -286,4 +291,246 @@ test('install-sh resolve_bin: returns non-zero when NAME is nowhere', () => {
   // Exclusive PATH of an empty stub dir so no real `node` resolves either.
   const r = sourceAndRun(`resolve_bin node "${emptyDir}"`, { exclusivePath: stubBin });
   assert.notEqual(r.status, 0);
+});
+
+// --- WP-032: macOS consented auto-install actions ----------------------------
+//
+// These drive the full script with a curated PATH: `stubBin` first (so our
+// fakes for uname/curl/sudo/installer/brew/xcode-select/node/npx/git win), then
+// a minimal system path for real coreutils (mktemp/grep/head/rm/sleep). No test
+// invokes real sudo/installer/xcode-select/brew or a real terminal.
+
+/** Runs install.sh with `stubBin:sysPath`; injects WIENERDOG_TTY when given. */
+function runMacInstall(stubBin, sysPath, { tty, env = {} } = {}) {
+  const finalEnv = { ...process.env, PATH: `${stubBin}:${sysPath}`, ...env };
+  if (tty !== undefined) finalEnv.WIENERDOG_TTY = tty;
+  const r = spawnSync(BASH, [scriptPath], { env: finalEnv, encoding: 'utf8' });
+  return { status: r.status, stdout: r.stdout, stderr: r.stderr };
+}
+
+/** Shell snippet (for embedding in another shim) that writes a `node` shim. */
+function nodeShim(dir, version) {
+  return `cat > "${dir}/node" <<'NODE'\n#!${BASH}\nif [ "$1" = "-v" ]; then echo ${version}; fi\nNODE\nchmod +x "${dir}/node"`;
+}
+
+/** Writes a `node` shim file directly (a pre-existing, already-installed Node). */
+function nodeShimFile(dir, version) {
+  return writeShimAbs(dir, 'node', `if [ "$1" = "-v" ]; then echo ${version}; fi`);
+}
+
+const readIf = (p) => (fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : null);
+
+// System path that carries git (so ensure_git returns early in Node tests) plus
+// the coreutils install_node_pkg needs; node/npx/brew live elsewhere, so they
+// stay absent until a shim provides them.
+const SYS_PATH_NODE = '/usr/bin:/bin';
+// For git tests we exclude /usr/bin so the real /usr/bin/git can't leak in — git
+// must be absent until the (fake) CLT install creates it.
+const SYS_PATH_GIT = '/bin';
+
+// The two Node-install *success* tests drive `ensure_node` directly through the
+// sourcing seam rather than the whole script: `resolve_bin`'s hardcoded macOS
+// dirs (/opt/homebrew/bin, /usr/local/bin) may hold a REAL node on the test box,
+// which would shadow the fake and let `main` exec the REAL `npx wienerdog` — a
+// forbidden real install. Driving ensure_node stops at the (fake) install +
+// resolve and never reaches the handoff. The npx handoff itself is proven
+// cleanly by the git tests below, whose curated PATH excludes the real dirs.
+test('install-sh macOS: Node via .pkg, consent yes → sudo installer -pkg … -target / invoked', () => {
+  const { root, stubBin } = mkStub('wd-mac-pkg-yes-');
+  const installerArgv = path.join(root, 'installer-argv.txt');
+  const sudoArgv = path.join(root, 'sudo-argv.txt');
+  // curl: with -o it "downloads" (creates the target); else it lists one .pkg.
+  writeShim(
+    stubBin,
+    'curl',
+    'dl=""\nprev=""\nfor a in "$@"; do\n  if [ "$prev" = "-o" ]; then : > "$a"; dl=1; fi\n  prev="$a"\ndone\nif [ -n "$dl" ]; then exit 0; fi\necho "node-v26.4.0.pkg"'
+  );
+  writeShim(stubBin, 'sudo', `echo "$@" >> "${sudoArgv}"\nexec "$@"`);
+  writeShim(
+    stubBin,
+    'installer',
+    `echo "$@" >> "${installerArgv}"\n${nodeShim(stubBin, 'v22.4.1')}\nexit 0`
+  );
+  const tty = writeFakeTty(root, 'y');
+
+  // Exclusive PATH: stubBin (fakes) + coreutils; no brew → the .pkg branch.
+  const r = sourceAndRun('os=Darwin\nif ensure_node; then echo RC=0; else echo RC=$?; fi', {
+    exclusivePath: `${stubBin}:/usr/bin:/bin`,
+    env: { WIENERDOG_TTY: tty },
+  });
+  assert.match(r.stdout, /RC=0/); // install succeeded, node resolved
+  const inst = readIf(installerArgv);
+  assert.ok(inst, 'installer must have been invoked');
+  assert.match(inst, /-pkg/);
+  assert.match(inst, /-target \//);
+  assert.match(readIf(sudoArgv) || '', /installer/); // sudo carried the installer
+});
+
+test('install-sh macOS: Node via .pkg, consent no → installer NOT run, fallback + exit 1', () => {
+  const { root, stubBin } = mkStub('wd-mac-pkg-no-');
+  const installerArgv = path.join(root, 'installer-argv.txt');
+  writeShimAbs(stubBin, 'uname', 'echo Darwin');
+  writeShimAbs(stubBin, 'git', 'exit 0');
+  writeShimAbs(stubBin, 'curl', 'echo "node-v26.4.0.pkg"');
+  writeShimAbs(stubBin, 'sudo', 'exec "$@"');
+  writeShimAbs(stubBin, 'installer', `echo "$@" >> "${installerArgv}"\nexit 0`);
+  const tty = writeFakeTty(root, 'n');
+
+  const r = runMacInstall(stubBin, SYS_PATH_NODE, { tty });
+  assert.equal(r.status, 1);
+  assert.equal(readIf(installerArgv), null); // installer never invoked
+  assert.match(r.stderr, /sudo installer/);
+  assert.match(r.stderr, /nodejs\.org/);
+});
+
+test('install-sh macOS: Node via .pkg, no tty → no prompt, installer NOT run, fallback + exit 1', () => {
+  const { root, stubBin } = mkStub('wd-mac-pkg-notty-');
+  const installerArgv = path.join(root, 'installer-argv.txt');
+  writeShimAbs(stubBin, 'uname', 'echo Darwin');
+  writeShimAbs(stubBin, 'git', 'exit 0');
+  writeShimAbs(stubBin, 'installer', `echo "$@" >> "${installerArgv}"\nexit 0`);
+
+  const r = runMacInstall(stubBin, SYS_PATH_NODE, { tty: path.join(root, 'no-tty') });
+  assert.equal(r.status, 1);
+  assert.equal(readIf(installerArgv), null);
+  assert.doesNotMatch(r.stderr, /About to run/);
+  assert.match(r.stderr, /sudo installer/);
+  assert.match(r.stderr, /nodejs\.org/);
+});
+
+test('install-sh macOS: Node via brew when brew present → `brew install node`, no .pkg', () => {
+  const { root, stubBin } = mkStub('wd-mac-brew-');
+  const brewArgv = path.join(root, 'brew-argv.txt');
+  const installerArgv = path.join(root, 'installer-argv.txt');
+  const curlArgv = path.join(root, 'curl-argv.txt');
+  writeShim(
+    stubBin,
+    'brew',
+    `echo "$@" >> "${brewArgv}"\nif [ "$1" = "install" ]; then\n${nodeShim(stubBin, 'v22.4.1')}\nfi\nexit 0`
+  );
+  // If the .pkg path were wrongly taken these would record; they must not.
+  writeShim(stubBin, 'installer', `echo "$@" >> "${installerArgv}"\nexit 0`);
+  writeShim(stubBin, 'curl', `echo "$@" >> "${curlArgv}"\necho "node-v26.4.0.pkg"`);
+  const tty = writeFakeTty(root, 'y');
+
+  const r = sourceAndRun('os=Darwin\nif ensure_node; then echo RC=0; else echo RC=$?; fi', {
+    exclusivePath: `${stubBin}:/usr/bin:/bin`,
+    env: { WIENERDOG_TTY: tty },
+  });
+  assert.match(r.stdout, /RC=0/);
+  assert.match(readIf(brewArgv), /install node/);
+  assert.equal(readIf(installerArgv), null); // .pkg path not taken
+  assert.equal(readIf(curlArgv), null); // no nodejs.org download when brew present
+});
+
+test('install-sh macOS: Node install failure (installer non-zero) → fallback + exit 1', () => {
+  const { root, stubBin } = mkStub('wd-mac-pkg-fail-');
+  const installerArgv = path.join(root, 'installer-argv.txt');
+  writeShimAbs(stubBin, 'uname', 'echo Darwin');
+  writeShimAbs(stubBin, 'git', 'exit 0');
+  writeShimAbs(
+    stubBin,
+    'curl',
+    'dl=""\nprev=""\nfor a in "$@"; do\n  if [ "$prev" = "-o" ]; then : > "$a"; dl=1; fi\n  prev="$a"\ndone\nif [ -n "$dl" ]; then exit 0; fi\necho "node-v26.4.0.pkg"'
+  );
+  writeShimAbs(stubBin, 'sudo', 'exec "$@"');
+  writeShimAbs(stubBin, 'installer', `echo "$@" >> "${installerArgv}"\nexit 1`); // install fails
+  const tty = writeFakeTty(root, 'y');
+
+  const r = runMacInstall(stubBin, SYS_PATH_NODE, { tty });
+  assert.equal(r.status, 1);
+  assert.ok(readIf(installerArgv), 'installer was invoked but failed');
+  assert.match(r.stderr, /sudo installer/);
+  assert.match(r.stderr, /nodejs\.org/);
+});
+
+test('install-sh macOS: git via CLT, consent yes, install completes → git resolves, npx handoff', () => {
+  const { root, stubBin } = mkStub('wd-mac-clt-ok-');
+  const npxArgv = path.join(root, 'npx-argv.txt');
+  writeShimAbs(stubBin, 'uname', 'echo Darwin');
+  nodeShimFile(stubBin, 'v20.0.0'); // Node already satisfied
+  writeShimAbs(stubBin, 'npx', `echo "$@" > "${npxArgv}"\nexit 0`);
+  writeShimAbs(stubBin, 'sleep', 'exit 0'); // instant poll
+  // `--install` makes git appear; `-p` reports the CLT path is present.
+  writeShimAbs(
+    stubBin,
+    'xcode-select',
+    `if [ "$1" = "-p" ]; then exit 0; fi\nif [ "$1" = "--install" ]; then\ncat > "${stubBin}/git" <<'GIT'\n#!${BASH}\nexit 0\nGIT\nchmod +x "${stubBin}/git"\nfi\nexit 0`
+  );
+  const tty = writeFakeTty(root, 'y');
+
+  const r = runMacInstall(stubBin, SYS_PATH_GIT, {
+    tty,
+    env: { WIENERDOG_CLT_POLL: '1', WIENERDOG_CLT_TIMEOUT: '5' },
+  });
+  assert.equal(r.status, 0);
+  assert.equal(readIf(npxArgv).trim(), '--yes wienerdog@latest init');
+});
+
+test('install-sh macOS: git via CLT times out → note printed, still hands off (exit 0)', () => {
+  const { root, stubBin } = mkStub('wd-mac-clt-timeout-');
+  const npxArgv = path.join(root, 'npx-argv.txt');
+  writeShimAbs(stubBin, 'uname', 'echo Darwin');
+  nodeShimFile(stubBin, 'v20.0.0');
+  writeShimAbs(stubBin, 'npx', `echo "$@" > "${npxArgv}"\nexit 0`);
+  writeShimAbs(stubBin, 'sleep', 'exit 0');
+  // `-p` never succeeds and git is never created → poll times out.
+  writeShimAbs(stubBin, 'xcode-select', 'if [ "$1" = "-p" ]; then exit 1; fi\nexit 0');
+  const tty = writeFakeTty(root, 'y');
+
+  const r = runMacInstall(stubBin, SYS_PATH_GIT, {
+    tty,
+    env: { WIENERDOG_CLT_POLL: '1', WIENERDOG_CLT_TIMEOUT: '1' },
+  });
+  // git alone NEVER causes exit 1 — Node is the only hard gate.
+  assert.equal(r.status, 0);
+  assert.equal(readIf(npxArgv).trim(), '--yes wienerdog@latest init');
+  assert.match(r.stderr, /isn't installed/);
+  assert.match(r.stderr, /xcode-select --install/);
+});
+
+// --- unit-drive the EXEC_FNs directly (failure branches) via the sourcing seam
+
+test('install-sh macOS install_node_pkg: empty listing → returns non-zero, installer not run', () => {
+  const { root, stubBin } = mkStub('wd-mac-pkg-unit-');
+  const installerArgv = path.join(root, 'installer-argv.txt');
+  writeShim(stubBin, 'curl', 'exit 0'); // lists nothing → no .pkg found
+  writeShim(stubBin, 'installer', `echo ran >> "${installerArgv}"\nexit 0`);
+  const r = sourceAndRun('if install_node_pkg; then echo RC=0; else echo RC=$?; fi', {
+    pathPrefix: stubBin,
+  });
+  assert.match(r.stdout, /RC=1/);
+  assert.equal(readIf(installerArgv), null); // never reached sudo installer
+});
+
+test('install-sh macOS install_git_macos: poll times out → returns 1 (bounded, no hang)', () => {
+  const { stubBin } = mkStub('wd-mac-clt-unit-');
+  writeShim(stubBin, 'xcode-select', 'if [ "$1" = "-p" ]; then exit 1; fi\nexit 0');
+  writeShim(stubBin, 'sleep', 'exit 0'); // instant
+  // Exclusive stub PATH so the real /usr/bin/git can't satisfy `command -v git`.
+  const r = sourceAndRun('if install_git_macos; then echo RC=0; else echo RC=$?; fi', {
+    exclusivePath: stubBin,
+    env: { WIENERDOG_CLT_POLL: '1', WIENERDOG_CLT_TIMEOUT: '1' },
+  });
+  assert.match(r.stdout, /RC=1/);
+});
+
+// --- structural guarantees (ADR-0011: every install action is consent-gated) --
+
+test('install-sh macOS: every install action is reached only via consent_run', () => {
+  // Each real invocation (command at line start) appears exactly once — inside
+  // its EXEC_FN. The DISPLAY strings are quoted/echoed, so they don't match.
+  assert.equal((scriptText.match(/^\s*xcode-select --install\b/gm) || []).length, 1);
+  assert.equal((scriptText.match(/^\s*brew install node\b/gm) || []).length, 1);
+  assert.equal((scriptText.match(/^\s*sudo installer -pkg\b/gm) || []).length, 1);
+  // …and each EXEC_FN is passed to consent_run.
+  assert.match(scriptText, /consent_run[\s\S]{0,160}?install_git_macos/);
+  assert.match(scriptText, /consent_run[\s\S]{0,160}?install_node_brew/);
+  assert.match(scriptText, /consent_run[\s\S]{0,160}?install_node_pkg/);
+});
+
+test('install-sh macOS: Homebrew is never bootstrapped (no Homebrew-installer URL fetched)', () => {
+  assert.doesNotMatch(scriptText, /Homebrew\/install/i);
+  assert.doesNotMatch(scriptText, /brew\.sh\/install/i);
+  assert.doesNotMatch(scriptText, /raw\.githubusercontent[^\n]*Homebrew/i);
 });

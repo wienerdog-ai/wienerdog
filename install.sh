@@ -183,11 +183,65 @@ resolve_bin() {
   command -v "$name"
 }
 
+# --- macOS install actions (each is an EXEC_FN for consent_run) ------------
+# Every function below is invoked ONLY through consent_run (per-hop consent +
+# print-fallback). The command each runs is byte-identical to the DISPLAY_CMD
+# its caller passes to consent_run — ADR-0011 rule 1: displayed == executed.
+
+# Triggers the Xcode Command Line Tools GUI install (which provides git) and
+# polls for completion with a hard timeout. `xcode-select --install` returns
+# immediately and installs asynchronously, so its exit status does NOT mean
+# "done"; we poll `xcode-select -p` + `command -v git` until both succeed or the
+# timeout elapses. Returns 0 iff git resolves in time, 1 otherwise. Bounded and
+# synchronous — no background job, no `&`, no watcher (ADR-0004).
+# WIENERDOG_CLT_TIMEOUT / WIENERDOG_CLT_POLL are test-only seams (seconds) — a
+# real user never sets them; tests set the poll tiny so the loop finishes fast.
+install_git_macos() {
+  xcode-select --install >/dev/null 2>&1 || true # GUI trigger; async; ignore status
+  local waited=0 max="${WIENERDOG_CLT_TIMEOUT:-600}" poll="${WIENERDOG_CLT_POLL:-10}"
+  while [ "$waited" -lt "$max" ]; do
+    if xcode-select -p >/dev/null 2>&1 && command -v git >/dev/null 2>&1; then
+      return 0
+    fi
+    echo "Waiting for the Command Line Tools install to finish…" >&2
+    sleep "$poll"
+    waited=$((waited + poll))
+  done
+  return 1
+}
+
+# `brew install node` — used ONLY when brew is already on PATH. Wienerdog never
+# bootstraps Homebrew (ADR-0011 rule 4). Returns brew's exit status.
+install_node_brew() {
+  brew install node
+}
+
+# Downloads the latest official signed nodejs.org .pkg and installs it with
+# sudo (the .pkg installs into /usr/local and always needs root; there is no
+# non-sudo variant). Returns 0 on success, non-0 on any download/install
+# failure. The DISPLAY_CMD the caller shows names both https://nodejs.org and
+# the `sudo installer -pkg … -target /` step, matching what this runs.
+install_node_pkg() {
+  local dir file url pkg
+  dir="$(mktemp -d)"
+  file="$(curl -fsSL https://nodejs.org/dist/latest/ | grep -o 'node-v[0-9][0-9.]*\.pkg' | head -1)"
+  [ -n "$file" ] || return 1
+  url="https://nodejs.org/dist/latest/$file"
+  pkg="$dir/$file"
+  curl -fSL "$url" -o "$pkg" || return 1
+  sudo installer -pkg "$pkg" -target / || return 1
+  rm -f "$pkg"
+  rmdir "$dir" 2>/dev/null || true
+  return 0
+}
+
 # --- Dependency gates ------------------------------------------------------
 
-# HARD GATE. Returns 0 if a Node ≥ 18 is already on PATH. Otherwise, since this
-# WP installs nothing, prints the exact per-OS command + the nodejs.org pointer
-# and exits 1. (WP-032/033 replace the print with consent_run + real actions.)
+# HARD GATE. Returns 0 if a Node ≥ 18 is already on PATH. Otherwise, on macOS,
+# offers a consented install (brew-if-present, else the official signed
+# nodejs.org .pkg) and, on success, re-resolves node for the rest of this run;
+# on decline / failure / no-tty it prints the exact command + nodejs.org pointer
+# and exits 1. (Linux keeps WP-031's print-only fallback — WP-033 wires it.)
 ensure_node() {
   local node_version node_major
   if command -v node >/dev/null 2>&1; then
@@ -201,28 +255,68 @@ ensure_node() {
   else
     echo "Node.js was not found on your PATH." >&2
   fi
-  # Detect the install environment only now that Node actually needs providing
-  # (keeps the happy path side-effect-free). detect_pm is required to build the
-  # exact per-OS command string below.
-  if [ "$os" = "Linux" ]; then
-    detect_pm
+
+  if [ "$os" = "Darwin" ]; then
+    if command -v brew >/dev/null 2>&1; then
+      # brew already present → use it; never bootstrap Homebrew (ADR-0011 #4).
+      if consent_run "Install Node 18+ with Homebrew now?" \
+        "brew install node" install_node_brew; then
+        if resolve_bin node /opt/homebrew/bin /usr/local/bin >/dev/null; then
+          echo "Node installed. If a later step can't find it, run \`eval \"\$(/opt/homebrew/bin/brew shellenv)\"\` or open a new terminal." >&2
+          return 0
+        fi
+        print_fallback "brew install node" # installed but unresolved: show the command
+      fi
+      # consent_run already printed the fallback on decline/failure/no-tty; add
+      # the nodejs.org pointer so the Node fallback always names it.
+      echo "Or install Node LTS from https://nodejs.org." >&2
+      exit 1
+    fi
+    # No brew → official signed nodejs.org .pkg (needs sudo). This DISPLAY_CMD
+    # names the source and the sudo step, matching what install_node_pkg runs.
+    local pkg_cmd="sudo installer -pkg <official nodejs.org .pkg> -target /   (downloaded from https://nodejs.org)"
+    if consent_run "Install Node 18+ from the official nodejs.org installer (needs your password)?" \
+      "$pkg_cmd" install_node_pkg; then
+      if resolve_bin node /opt/homebrew/bin /usr/local/bin >/dev/null; then
+        echo "Node installed. If a later step can't find it, open a new terminal so /usr/local/bin is on your PATH." >&2
+        return 0
+      fi
+      print_fallback "$pkg_cmd" # installed but unresolved: show the command
+    fi
+    exit 1
   fi
+
+  # Linux keeps WP-031's print-only fallback (WP-033 wires consent there).
+  detect_pm
   print_fallback "$(node_install_cmd)"
   echo "Or install Node LTS from https://nodejs.org." >&2
   exit 1
 }
 
-# NON-BLOCKING. If git is missing, prints a one-line note (what git is for + the
-# exact install command) and returns 0 so the handoff still proceeds. A missing
-# git never causes exit 1. (WP-032/033 replace the note with consent_run + real
-# actions, still warn-and-proceed on decline/failure/no-tty.)
+# NON-BLOCKING. If git is missing, on macOS offers a consented CLT install
+# (which provides git) and re-resolves git on success; on decline / CLT timeout
+# / no-tty it prints a one-line note (what git is for + the exact command) and
+# returns 0 so the handoff still proceeds. A missing git NEVER causes exit 1 —
+# Node is the only hard gate. (Linux keeps WP-031's print-only note; WP-033
+# wires consent there.)
 ensure_git() {
   if command -v git >/dev/null 2>&1; then
     return 0
   fi
-  if [ "$os" = "Linux" ]; then
-    detect_pm
+
+  if [ "$os" = "Darwin" ]; then
+    if consent_run "Install the Xcode Command Line Tools (provides git) now?" \
+      "$(git_install_cmd)" install_git_macos; then
+      resolve_bin git /usr/bin /usr/local/bin /opt/homebrew/bin >/dev/null || true
+      return 0
+    fi
+    printf '%s\n' \
+      "git isn't installed — Wienerdog needs it once you create or adopt a vault. Install it with \`$(git_install_cmd)\` before running /wienerdog-setup." >&2
+    return 0
   fi
+
+  # Linux keeps WP-031's print-only note (WP-033 wires consent there).
+  detect_pm
   printf '%s\n' \
     "git isn't installed — Wienerdog needs it once you create or adopt a vault. Install it with \`$(git_install_cmd)\` before running /wienerdog-setup." >&2
 }
