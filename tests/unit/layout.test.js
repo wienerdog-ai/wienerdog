@@ -116,6 +116,70 @@ test('readVaultLayout strips quotes and inline comments like readScalar', () => 
   assert.equal(l.projects_dir, '01-Projects');
 });
 
+test('readVaultLayout rejects traversal values per-key (layout traversal safety)', () => {
+  const body = [
+    'vault_layout:',
+    '  identity_dir: ../../../etc',
+    '  daily_dir: 05-Daily', // safe key in the same block still applies
+    '  projects_dir: a/../b',
+  ].join('\n');
+  const file = writeConfig(body);
+  const l = readVaultLayout(file);
+  assert.equal(l.identity_dir, '06-Identity', '`..` traversal falls back to default');
+  assert.equal(l.projects_dir, '01-Projects', 'inner `..` segment falls back to default');
+  assert.equal(l.daily_dir, '05-Daily', 'safe sibling key still applies');
+});
+
+test('readVaultLayout rejects absolute-path values (layout traversal safety)', () => {
+  const file = writeConfig('vault_layout:\n  identity_dir: /etc\n  reports_dir: /var/tmp/x\n');
+  const l = readVaultLayout(file);
+  assert.equal(l.identity_dir, '06-Identity');
+  assert.equal(l.reports_dir, 'reports/dreams');
+});
+
+test('readVaultLayout rejects empty and backslash values (layout traversal safety)', () => {
+  const body = [
+    'vault_layout:',
+    '  identity_dir:',
+    '  daily_dir: ""',
+    '  skills_dir: notes\\skills',
+  ].join('\n');
+  const file = writeConfig(body);
+  const l = readVaultLayout(file);
+  assert.equal(l.identity_dir, '06-Identity', 'empty value falls back to default');
+  assert.equal(l.daily_dir, '07-Daily', 'empty-after-quote-strip falls back to default');
+  assert.equal(l.skills_dir, '05-Skills', 'backslash value falls back to default');
+});
+
+test('renderDigest with a hostile layout never reads outside the vault (layout traversal safety, end-to-end)', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-hostile-'));
+  const vault = path.join(tmp, 'vault');
+  fs.mkdirSync(vault, { recursive: true });
+  // Plant sentinel files OUTSIDE the vault, shaped so the digest would render
+  // them if the traversal values were honored.
+  const secretId = path.join(tmp, 'secret');
+  fs.mkdirSync(secretId, { recursive: true });
+  fs.writeFileSync(
+    path.join(secretId, 'profile.md'),
+    '# Profile\n\n## Role\n\nSENTINEL-OUT-OF-VAULT-SECRET\n'
+  );
+  const secretDaily = path.join(tmp, 'secret-daily');
+  fs.mkdirSync(secretDaily, { recursive: true });
+  fs.writeFileSync(
+    path.join(secretDaily, '2026-07-01.md'),
+    '# 2026-07-01\n\n## Summary\n\nSENTINEL-DAILY-SECRET\n'
+  );
+  // Hostile config → through the readVaultLayout chokepoint → renderDigest.
+  const config = writeConfig(
+    ['vault_layout:', '  identity_dir: ../secret', '  daily_dir: ../secret-daily', '  projects_dir: ..'].join('\n')
+  );
+  const layout = readVaultLayout(config);
+  const digest = renderDigest(vault, layout);
+  assert.ok(!digest.includes('SENTINEL-OUT-OF-VAULT-SECRET'), 'out-of-vault identity content absent');
+  assert.ok(!digest.includes('SENTINEL-DAILY-SECRET'), 'out-of-vault daily content absent');
+  assert.ok(!digest.includes('- secret'), 'out-of-vault dirs not listed as projects');
+});
+
 test('resolveDailyPath: default and power-user layouts', () => {
   assert.equal(resolveDailyPath(defaultLayout(), '2026-07-03'), '07-Daily/2026-07-03.md');
   const powerUser = { ...defaultLayout(), daily_dir: '05-Daily', daily_filename: 'YYYY/MM/YYYY-MM-DD.md' };

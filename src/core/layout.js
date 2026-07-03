@@ -64,11 +64,32 @@ function cleanValue(raw) {
 }
 
 /**
+ * True when a cleaned value is a safe vault-relative path. Layout values are
+ * joined under the vault root (digest render today; dream tier boundaries in
+ * WP-024, adopt in WP-026), so a traversal or absolute value would let a
+ * config edit read files OUTSIDE the vault into the injected session digest
+ * (confused-deputy; PR #24 review). Rejected: empty, absolute, any `..`
+ * segment (split on '/'), or a backslash anywhere.
+ * @param {string} value  output of cleanValue
+ * @returns {boolean}
+ */
+function isSafeRelativePath(value) {
+  if (value === '') return false;
+  if (path.isAbsolute(value) || value[0] === '/') return false;
+  if (value.includes('\\')) return false;
+  if (value.split('/').includes('..')) return false;
+  return true;
+}
+
+/**
  * Read the optional `vault_layout:` block from a config.yaml file. Missing file,
  * missing block, or missing keys → the corresponding defaults. Only the seven keys
  * above are honored; unknown nested keys are ignored. Values are treated as trimmed
  * strings (one layer of surrounding quotes stripped; inline ` #` comment dropped on
- * unquoted values — same rules as dream/config.js readScalar).
+ * unquoted values — same rules as dream/config.js readScalar). A value that is
+ * not a safe vault-relative path (see isSafeRelativePath) is rejected per-key:
+ * the built-in default for that key is used and the rest of the block still
+ * applies.
  * @param {string} configFile  absolute path to config.yaml
  * @returns {VaultLayout}
  */
@@ -101,7 +122,11 @@ function readVaultLayout(configFile) {
     const match = trimmed.match(/^([A-Za-z0-9_]+):\s*(.*)$/);
     if (!match) continue;
     if (!LAYOUT_KEYS.includes(match[1])) continue;
-    layout[match[1]] = cleanValue(match[2]);
+    const value = cleanValue(match[2]);
+    // Traversal-safety contract: an unsafe value falls back to the built-in
+    // default for that key, silently; the rest of the block still applies.
+    if (!isSafeRelativePath(value)) continue;
+    layout[match[1]] = value;
   }
 
   return layout;
