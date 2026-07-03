@@ -167,12 +167,23 @@ test('dry-run makes no writes but reports intended changes', () => {
   assert.equal(fs.existsSync(path.join(paths.core, 'bin', 'session-start.sh')), false);
 });
 
-test('missing digest: returns early with a notice, no throw', () => {
+test('missing digest: skips the managed block but still installs hooks + skills', () => {
   const paths = setup();
   fs.rmSync(path.join(paths.state, 'digest.md'));
+  const coreSkill = path.join(paths.core, 'skills', 'wienerdog-setup');
+  fs.mkdirSync(coreSkill, { recursive: true });
+  fs.writeFileSync(path.join(coreSkill, 'SKILL.md'), '# skill\n');
+
   const res = applyClaudeAdapter(paths, { manifest: freshManifest() });
-  assert.deepEqual(res.changed, []);
-  assert.ok(res.notices.some((n) => n.includes('digest not found')));
+
+  const claudeMd = path.join(paths.claudeDir, 'CLAUDE.md');
+  assert.equal(fs.existsSync(claudeMd), false, 'no managed block without a digest');
+  assert.ok(res.notices.some((n) => n.includes('managed block skipped')));
+  assert.ok(fs.existsSync(path.join(paths.core, 'bin', 'session-start.sh')), 'hook script installed');
+  if (process.platform !== 'win32') {
+    const link = path.join(paths.claudeDir, 'skills', 'wienerdog-setup');
+    assert.ok(fs.lstatSync(link).isSymbolicLink(), 'skill symlinked');
+  }
 });
 
 test('sync then uninstall round-trips a pre-existing CLAUDE.md byte-identically', () => {

@@ -14,11 +14,13 @@ const shared = require('./shared');
  * works with zero hooks trusted.
  *
  * @param {ReturnType<import('../core/paths').getPaths>} paths
- * @param {{dryRun?: boolean, manifest?: object}} [opts]
+ * @param {{dryRun?: boolean, manifest?: object, skipManagedBlock?: boolean}} [opts]
  * @returns {{changed: string[], unchanged: string[], notices: string[]}}
  *  Steps (each idempotent; on dryRun make NO writes, still report intended changes):
  *    1. Managed block in <codexDir>/AGENTS.md ← contents of <state>/digest.md.
- *       If <codexDir>/AGENTS.override.md exists, push a NOTICE: our AGENTS.md is
+ *       Requires a vault/digest: skipped when opts.skipManagedBlock is set, or
+ *       (with a notice) when <state>/digest.md is absent. If
+ *       <codexDir>/AGENTS.override.md exists, push a NOTICE: our AGENTS.md is
  *       silently shadowed by the override (research fact) — user must merge manually.
  *    2. Copy session-start.sh + codex-session-end.sh into <core>/bin/ (0755); register
  *       SessionStart + Stop command hooks in <codexDir>/hooks.json (settings-entry).
@@ -26,11 +28,13 @@ const shared = require('./shared');
  *       the AGENTS.md block already carries the digest so context works regardless.
  *    3. Symlink each <core>/skills/wienerdog-* into <home>/.agents/skills/ (Codex
  *       user-scope skill-discovery dir; NOT config.toml — see the research memo).
- *  Never throws on a missing digest — if <state>/digest.md is absent, return early
- *  with a notice (sync writes it first). Records new entries in opts.manifest.
+ *  Steps 2-3 carry no user knowledge and ALWAYS run; only Step 1 is gated on a
+ *  vault/digest. Never throws on a missing digest. Records new entries in
+ *  opts.manifest.
  */
 function applyCodexAdapter(paths, opts = {}) {
   const dryRun = opts.dryRun === true;
+  const skipManagedBlock = opts.skipManagedBlock === true;
   const manifest = opts.manifest;
   /** @type {{changed: string[], unchanged: string[], notices: string[]}} */
   const out = { changed: [], unchanged: [], notices: [] };
@@ -47,20 +51,27 @@ function applyCodexAdapter(paths, opts = {}) {
   const startAbs = path.join(binDir, 'session-start.sh');
   const stopAbs = path.join(binDir, 'codex-session-end.sh');
 
-  let digest;
-  try {
-    digest = fs.readFileSync(digestPath, 'utf8');
-  } catch {
-    out.notices.push(`digest not found at ${digestPath}; skipping Codex adapter`);
-    return out;
-  }
-
-  // Step 1 — managed block.
-  shared.applyManagedBlock(agentsMd, digest, dryRun, manifest, out);
-  if (fs.existsSync(overridePath)) {
-    out.notices.push(
-      "~/.codex/AGENTS.override.md exists — it shadows Wienerdog's AGENTS.md; merge the managed block manually or remove the override"
-    );
+  // Step 1 — managed block. Requires a vault/digest; skipped on a no-vault
+  // machine. Skills + hooks (Steps 2-3) carry no user knowledge and ALWAYS run.
+  if (!skipManagedBlock) {
+    let digest = null;
+    try {
+      digest = fs.readFileSync(digestPath, 'utf8');
+    } catch {
+      digest = null;
+    }
+    if (digest !== null) {
+      shared.applyManagedBlock(agentsMd, digest, dryRun, manifest, out);
+      if (fs.existsSync(overridePath)) {
+        out.notices.push(
+          "~/.codex/AGENTS.override.md exists — it shadows Wienerdog's AGENTS.md; merge the managed block manually or remove the override"
+        );
+      }
+    } else {
+      out.notices.push(
+        `digest not found at ${digestPath}; managed block skipped (hooks + skills still installed)`
+      );
+    }
   }
 
   // Step 2 — hook scripts + hooks.json.

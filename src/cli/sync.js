@@ -124,58 +124,63 @@ async function run(argv) {
   const dryRun = argv.includes('--dry-run');
   const paths = getPaths();
   const vaultPath = readVaultPath(paths.config);
-  if (!vaultPath) {
-    throw new WienerdogError(
-      'no vault set up yet — run /wienerdog-setup to create or choose your vault ' +
-        "(or 'wienerdog init --fresh-vault' for the default)."
-    );
-  }
-  let isDir = false;
-  try {
-    isDir = fs.statSync(vaultPath).isDirectory();
-  } catch {
-    isDir = false;
-  }
-  if (!isDir) {
-    throw new WienerdogError(
-      `vault not found at ${vaultPath} — run /wienerdog-setup, or 'wienerdog init --fresh-vault' for the default.`
-    );
+
+  // A configured vault MUST exist on disk. An UNSET vault is a valid first-time
+  // state (WP-027): we still install skills + hooks, we just defer memory.
+  if (vaultPath) {
+    let isDir = false;
+    try {
+      isDir = fs.statSync(vaultPath).isDirectory();
+    } catch {
+      isDir = false;
+    }
+    if (!isDir) {
+      throw new WienerdogError(
+        `vault not found at ${vaultPath} — run /wienerdog-setup, or 'wienerdog init --fresh-vault' for the default.`
+      );
+    }
   }
 
-  // 1. Render + write the digest atomically.
-  const layout = readVaultLayout(paths.config);
-  const digest = renderDigest(vaultPath, layout);
-  const dest = path.join(paths.state, 'digest.md');
-  if (!dryRun) {
-    fs.mkdirSync(paths.state, { recursive: true });
-    const tmp = path.join(paths.state, `.digest.md.${process.pid}.tmp`);
-    fs.writeFileSync(tmp, digest);
-    fs.renameSync(tmp, dest);
-  }
-  console.log(`wienerdog: ${dryRun ? 'would write' : 'wrote'} ${dest} (${Buffer.byteLength(digest)} bytes).`);
-
-  // 2. Load the manifest so adapter + skill staging can extend it.
   const manifest = manifestMod.load(paths);
-
   /** @type {{changed: string[], unchanged: string[], notices: string[]}} */
   const summary = { changed: [], unchanged: [], notices: [] };
 
-  // 3. Stage shipped skills into the core (vendor-neutral).
+  // 1. Digest + managed block need a vault. Skip both when unset (exit 0).
+  const skipManagedBlock = !vaultPath;
+  if (vaultPath) {
+    const layout = readVaultLayout(paths.config);
+    const digest = renderDigest(vaultPath, layout);
+    const dest = path.join(paths.state, 'digest.md');
+    if (!dryRun) {
+      fs.mkdirSync(paths.state, { recursive: true });
+      const tmp = path.join(paths.state, `.digest.md.${process.pid}.tmp`);
+      fs.writeFileSync(tmp, digest);
+      fs.renameSync(tmp, dest);
+    }
+    console.log(
+      `wienerdog: ${dryRun ? 'would write' : 'wrote'} ${dest} (${Buffer.byteLength(digest)} bytes).`
+    );
+  } else {
+    console.log(
+      'wienerdog: no vault yet — memory features (digest + managed block) activate after /wienerdog-setup; skills and hooks are installed.'
+    );
+  }
+
+  // 2. Stage shipped skills into the core (vendor-neutral) — ALWAYS.
   stageSkills(paths, dryRun, manifest, summary);
 
-  // 4. Apply the Claude Code adapter if Claude Code is present.
+  // 3. Apply each present harness adapter — ALWAYS. They install skills + hooks
+  //    and only skip the managed block when skipManagedBlock is true.
   if (detectHarnesses(process.env).claude.present) {
-    const res = applyClaudeAdapter(paths, { dryRun, manifest });
+    const res = applyClaudeAdapter(paths, { dryRun, manifest, skipManagedBlock });
     summary.changed.push(...res.changed);
     summary.unchanged.push(...res.unchanged);
     summary.notices.push(...res.notices);
   } else {
     console.log('Claude Code not detected; skipping adapter.');
   }
-
-  // 4b. Apply the Codex CLI adapter if Codex CLI is present.
   if (detectHarnesses(process.env).codex.present) {
-    const res = applyCodexAdapter(paths, { dryRun, manifest });
+    const res = applyCodexAdapter(paths, { dryRun, manifest, skipManagedBlock });
     summary.changed.push(...res.changed);
     summary.unchanged.push(...res.unchanged);
     summary.notices.push(...res.notices);
@@ -183,10 +188,8 @@ async function run(argv) {
     console.log('Codex CLI not detected; skipping adapter.');
   }
 
-  // 5. Persist the manifest (never on dry-run).
   if (!dryRun) manifestMod.save(paths, manifest);
 
-  // 6. Summary.
   console.log(
     `wienerdog: ${summary.changed.length} changed, ${summary.unchanged.length} unchanged.`
   );
