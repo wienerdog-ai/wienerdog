@@ -1,7 +1,7 @@
 ---
 id: WP-023
 title: Rework the scenario harness to run on subscription auth (decouple fixture isolation from auth)
-status: In-Review
+status: Done
 model: sonnet
 size: M
 depends_on: [WP-015, WP-020]
