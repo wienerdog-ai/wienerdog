@@ -53,3 +53,18 @@ test('missing identity files are omitted, not errored', () => {
   assert.ok(!digest.includes('## Preferences'));
   assert.ok(!digest.includes("# Who you're working with"));
 });
+
+test("compaction drops a note's own leading H1 (no duplicate under the section header)", () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-digest-h1-'));
+  const idDir = path.join(tmp, '06-Identity');
+  fs.mkdirSync(idDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(idDir, 'preferences.md'),
+    '---\nid: p\ntype: identity\norigin: interview\nstatus: active\n---\n\n' +
+      '# Preferences\n\nDirect and concise. Lead with the recommendation.\n'
+  );
+  const digest = renderDigest(tmp);
+  assert.ok(digest.includes('## Preferences'), 'injected section header present');
+  assert.ok(!/^# Preferences$/m.test(digest), "note's own leading H1 dropped");
+  assert.ok(digest.includes('Direct and concise'), 'content under the H1 preserved');
+});

@@ -87,11 +87,18 @@ If they do, offer them three choices in plain language:
    untouched. Best for most people who already have notes somewhere.
 3. **Adopt it in place** (power users) — Wienerdog uses their existing vault
    AS the vault, instead of the new one. This is not done here: tell them to
-   finish or exit this setup and run `wienerdog adopt <path-to-their-vault>`
-   from the terminal. That command checks the prerequisites (a normal local
-   folder, not iCloud or Documents; a git repository — it will offer to set
-   one up if it is not) and confirms the folder layout with them before it
-   changes anything. Do not attempt adoption yourself from inside this skill.
+   finish or exit this setup and run the adopt command from the terminal. The
+   exact form depends on how Wienerdog was installed:
+   - **Installed from npm** (the usual case): `wienerdog adopt
+     <path-to-their-vault>`
+   - **Running from a cloned repo** (before the npm release): `node
+     <path-to-the-wienerdog-repo>/bin/wienerdog.js adopt <path-to-their-vault>`
+
+   Both do exactly the same thing. That command checks the prerequisites (a
+   normal local folder, not iCloud or Documents; a git repository — it will
+   offer to set one up if it is not) and confirms the folder layout with them
+   before it changes anything. Do not attempt adoption yourself from inside
+   this skill.
 
 **If they choose Import**, do the following:
 

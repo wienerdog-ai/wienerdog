@@ -69,3 +69,7 @@ test('setup-skill: Step 3 references wienerdog init --fresh-vault', () => {
 test('setup-skill: Step 6 still references wienerdog sync', () => {
   assert.ok(text.includes('wienerdog sync'), 'wienerdog sync reference missing');
 });
+
+test('setup-skill: Step 3 shows the from-repo adopt invocation too', () => {
+  assert.ok(text.includes('bin/wienerdog.js adopt'), 'from-repo adopt invocation form missing');
+});
