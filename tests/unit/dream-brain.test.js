@@ -6,7 +6,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const { buildClaudeArgs, spawnBrain } = require('../../src/core/dream/brain');
+const { buildClaudeArgs, spawnBrain, DREAM_PROMPT } = require('../../src/core/dream/brain');
 
 test('dream-brain: buildClaudeArgs contains the sandbox flags, no model', () => {
   const args = buildClaudeArgs({ vaultDir: '/v', scratchDir: '/s', date: '2026-07-02', model: null });
@@ -33,6 +33,43 @@ test('dream-brain: buildClaudeArgs contains the sandbox flags, no model', () => 
   assert.ok(joined.includes('/s'));
   assert.ok(joined.includes('/v'));
   assert.ok(joined.includes('2026-07-02'));
+});
+
+test('dream-brain: DREAM_PROMPT with no layout carries the paths + default layout lines', () => {
+  const prompt = DREAM_PROMPT('/s', '/v', '2026-07-03');
+
+  // The three original path lines survive.
+  assert.ok(prompt.includes('Scratch extracts directory (read-only inputs): /s'));
+  assert.ok(prompt.includes('Vault directory (your only write target): /v'));
+  assert.ok(prompt.includes("Today's date: 2026-07-03"));
+
+  // Default layout lines are injected (folder names == today's defaults).
+  assert.ok(prompt.includes('- Identity notes directory: 06-Identity'));
+  assert.ok(prompt.includes('- Skills directory: 05-Skills'));
+  assert.ok(prompt.includes('- Daily log file for today: 07-Daily/2026-07-03.md'));
+  assert.ok(prompt.includes('- Reports directory: reports/dreams'));
+});
+
+test('dream-brain: buildClaudeArgs embeds a non-default layout, allowlist unchanged', () => {
+  // Power-user layout: renamed daily dir + nested filename pattern.
+  const layout = {
+    identity_dir: '06-Identity',
+    daily_dir: '05-Daily',
+    daily_filename: 'YYYY/MM/YYYY-MM-DD.md',
+    projects_dir: '01-Projects',
+    skills_dir: '05-Skills',
+    reports_dir: 'reports/dreams',
+    inbox_dir: '00-Inbox',
+  };
+  const args = buildClaudeArgs({ vaultDir: '/v', scratchDir: '/s', date: '2026-07-03', model: null, layout });
+  const joined = args.join(' ');
+
+  // The resolved (nested) daily-log path lands in the prompt; the default does not.
+  assert.ok(joined.includes('05-Daily/2026/07/2026-07-03.md'));
+  assert.ok(!joined.includes('07-Daily'));
+
+  // The tool allowlist is untouched by layout.
+  assert.ok(joined.includes('--tools Read,Write,Edit,Glob,Grep'));
 });
 
 test('dream-brain: buildClaudeArgs includes --model when set', () => {
