@@ -601,12 +601,13 @@ test('install-sh macOS: Homebrew is never bootstrapped (no Homebrew-installer UR
 // + fake `sudo`/`curl` stand in for real installs. No test invokes real sudo, a
 // real package manager, real network, or a real terminal.
 //
-// The Node-install *success* cases drive `ensure_node` directly through the
-// sourcing seam (not the whole script): `resolve_bin`'s hardcoded dirs
-// (/usr/bin, /usr/local/bin) hold no `node` on either CI runner (setup-node uses
-// hostedtoolcache) or this box, so the fake wins — but driving ensure_node stops
-// before the npx handoff regardless. The handoff is proven cleanly by the git
-// tests below, whose exclusive stub PATH excludes every real binary.
+// The Node-install cases drive `ensure_node` directly through the sourcing seam
+// (not the whole script) and prepend HERMETIC_RESOLVE_BIN so the stub on the
+// exclusive PATH wins: `resolve_bin`'s hardcoded dirs (/usr/bin, /usr/local/bin)
+// DO hold a real recent `node` on ubuntu-latest (/usr/local/bin/node), which
+// would otherwise shadow the fake. Driving ensure_node also stops before the npx
+// handoff, which is proven cleanly by the git tests below, whose exclusive stub
+// PATH excludes every real binary.
 
 // Fake `sudo`: answers the passwordless probe, strips leading flags/env-var
 // assignments (so `sudo VAR=v cmd` and `sudo -E cmd` work like the real thing),
@@ -632,6 +633,19 @@ function writeNodeTemplate(stubBin, verFile) {
     `if [ "$1" = "-v" ]; then v="v0.0.0"; [ -e "${verFile}" ] && v="$(< "${verFile}")"; echo "$v"; fi`
   );
 }
+
+// ensure_node calls `resolve_bin node /usr/bin /usr/local/bin`, which scans those
+// dirs *directly* (bypassing PATH) to pick up a freshly-installed binary. The
+// ubuntu-latest runner ships a real Node at /usr/local/bin/node, so after a fake
+// PM "install" leaves the stub reporting an OLD version, resolve_bin finds that
+// real (recent) node, prepends /usr/local/bin to PATH, and node_is_recent turns
+// true — silently skipping the old-Node NodeSource/fallback paths these tests
+// exercise. Green on macOS only because no recent /usr/local/bin/node exists
+// there. WP-035's PATH curation can't catch this (resolve_bin never consults
+// PATH). Prepending this override makes the stub on the exclusive PATH
+// authoritative — exactly how these tests already behave on macOS. resolve_bin's
+// real dir-scan is covered by its own tests above.
+const HERMETIC_RESOLVE_BIN = 'resolve_bin() { command -v "$1"; }\n';
 
 test('install-sh Linux node_is_recent: v18→0, v16→1, missing→1', () => {
   const { root, stubBin } = mkStub('wd-lin-nir-');
@@ -668,7 +682,7 @@ test('install-sh Linux: apt Node install, consent yes, repo ≥ 18 → PM instal
   writeShimAbs(stubBin, 'curl', `echo "$@" >> "${curlArgv}"\nexit 0`);
   const tty = writeFakeTty(root, 'y');
 
-  const r = sourceAndRun('os=Linux\nif ensure_node; then echo RC=0; else echo RC=$?; fi', {
+  const r = sourceAndRun(HERMETIC_RESOLVE_BIN + 'os=Linux\nif ensure_node; then echo RC=0; else echo RC=$?; fi', {
     exclusivePath: stubBin,
     env: { WIENERDOG_TTY: tty },
   });
@@ -703,7 +717,7 @@ test('install-sh Linux: apt repo Node < 18 → NodeSource offered as a separate 
   writeShimAbs(stubBin, 'bash', 'exit 0');
   const tty = writeFakeTty(root, 'y'); // both hops read yes (reopened each time)
 
-  const r = sourceAndRun('os=Linux\nif ensure_node; then echo RC=0; else echo RC=$?; fi', {
+  const r = sourceAndRun(HERMETIC_RESOLVE_BIN + 'os=Linux\nif ensure_node; then echo RC=0; else echo RC=$?; fi', {
     exclusivePath: stubBin,
     env: { WIENERDOG_TTY: tty },
   });
@@ -736,7 +750,7 @@ test('install-sh Linux: NodeSource hop declined → curl NOT run, fallback print
   writeShimAbs(stubBin, 'curl', `echo "$@" >> "${curlArgv}"\nexit 0`);
   const tty = writeFakeTty(root, 'y'); // hop1 reads yes; apt shim rewrites it to no
 
-  const r = sourceAndRun('os=Linux\nif ensure_node; then echo RC=0; else echo RC=$?; fi', {
+  const r = sourceAndRun(HERMETIC_RESOLVE_BIN + 'os=Linux\nif ensure_node; then echo RC=0; else echo RC=$?; fi', {
     exclusivePath: stubBin,
     env: { WIENERDOG_TTY: tty },
   });
@@ -811,7 +825,7 @@ test('install-sh Linux: git missing, no package manager → note printed, hands 
 test('install-sh Linux: no supported PM, Node missing → no prompt, fallback + exit 1', () => {
   const { stubBin } = mkStub('wd-lin-nopm-node-');
   // Exclusive, empty stub PATH: no node, no PM, no sudo.
-  const r = sourceAndRun('os=Linux\nif ensure_node; then echo RC=0; else echo RC=$?; fi', {
+  const r = sourceAndRun(HERMETIC_RESOLVE_BIN + 'os=Linux\nif ensure_node; then echo RC=0; else echo RC=$?; fi', {
     exclusivePath: stubBin,
   });
   assert.equal(r.status, 1);
@@ -824,7 +838,7 @@ test('install-sh Linux: sudo unavailable & not root, Node missing → no prompt,
   const aptArgv = path.join(root, 'apt-argv.txt');
   // PM present but NO sudo on the exclusive PATH → SUDO_MODE=none → frozen case (d).
   writeShimAbs(stubBin, 'apt-get', `echo "$@" >> "${aptArgv}"\nexit 0`);
-  const r = sourceAndRun('os=Linux\nif ensure_node; then echo RC=0; else echo RC=$?; fi', {
+  const r = sourceAndRun(HERMETIC_RESOLVE_BIN + 'os=Linux\nif ensure_node; then echo RC=0; else echo RC=$?; fi', {
     exclusivePath: stubBin,
   });
   assert.equal(r.status, 1);
@@ -845,7 +859,7 @@ test('install-sh Linux: non-apt/dnf PM (pacman) with old repo Node → NodeSourc
   writeShimAbs(stubBin, 'curl', `echo "$@" >> "${curlArgv}"\nexit 0`);
   const tty = writeFakeTty(root, 'y');
 
-  const r = sourceAndRun('os=Linux\nif ensure_node; then echo RC=0; else echo RC=$?; fi', {
+  const r = sourceAndRun(HERMETIC_RESOLVE_BIN + 'os=Linux\nif ensure_node; then echo RC=0; else echo RC=$?; fi', {
     exclusivePath: stubBin,
     env: { WIENERDOG_TTY: tty },
   });
