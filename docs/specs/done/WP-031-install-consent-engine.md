@@ -1,7 +1,7 @@
 ---
 id: WP-031
 title: install.sh dependency-consent engine (detection, tty gate, sudo probe, consent harness)
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: [WP-016]

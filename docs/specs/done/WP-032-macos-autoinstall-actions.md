@@ -1,7 +1,7 @@
 ---
 id: WP-032
 title: macOS consented auto-install actions (git via CLT; Node via brew-if-present else official signed .pkg)
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: [WP-031]

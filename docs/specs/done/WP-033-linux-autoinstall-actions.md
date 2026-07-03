@@ -1,7 +1,7 @@
 ---
 id: WP-033
 title: Linux consented auto-install actions (PM install + ≥18 verify; NodeSource as a separately-consented fallback)
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: [WP-031, WP-032]
@@ -179,7 +179,7 @@ install_node_nodesource() {
 - Set `SUDO="sudo"` (non-root; we already refused `EUID 0`). `CAN_INSTALL = [ -n "$PM" ] && [ "$SUDO_MODE" != none ]`.
 - **ensure_node (HARD GATE)** — runs first. If node missing/old:
   - `CAN_INSTALL` false → print the node fallback (`node_install_cmd`) + `Or install Node LTS from https://nodejs.org.` and **exit 1** (frozen case (d)); no prompt.
-  - Else → `consent_run "Install Node with $PM now?" "$(node_install_cmd)" install_pkg_linux nodejs npm` (adjust package list per PM). On 0 → `resolve_bin node /usr/bin /usr/local/bin`; if `node_is_recent` → done. Else (too old / still missing) → the NodeSource hop for apt/dnf/yum, or (other PMs / on decline) print node fallback + `https://nodejs.org` and **exit 1**. On the first `consent_run` returning 1 → exit 1.
+  - Else → `consent_run "Install Node with $PM now?" "$(pm_install_display nodejs npm)" install_pkg_linux nodejs npm  # display MUST be the long/verified form (display==exec)` (adjust package list per PM). On 0 → `resolve_bin node /usr/bin /usr/local/bin`; if `node_is_recent` → done. Else (too old / still missing) → the NodeSource hop for apt/dnf/yum, or (other PMs / on decline) print node fallback + `https://nodejs.org` and **exit 1**. On the first `consent_run` returning 1 → exit 1.
 - **ensure_git (NON-BLOCKING)** — runs after Node is satisfied, before the handoff. If git missing:
   - `CAN_INSTALL` false → print the git note and **PROCEED** (exit 0); no prompt.
   - Else → `consent_run "Install git with $PM now?" "$(git_install_cmd)" install_pkg_linux git`; on 0 → `resolve_bin git /usr/bin /usr/local/bin`, continue; on 1 (declined / failed / no-tty) → **print the git note and PROCEED** (exit 0). Never exit 1 on git alone. Git note:
