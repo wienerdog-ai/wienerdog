@@ -5,6 +5,7 @@ const path = require('node:path');
 const { getPaths } = require('../core/paths');
 const { WienerdogError } = require('../core/errors');
 const { renderDigest } = require('../core/digest');
+const { readVaultLayout } = require('../core/layout');
 const { detectHarnesses } = require('../core/detect');
 const manifestMod = require('../core/manifest');
 const { applyClaudeAdapter } = require('../adapters/claude');
@@ -137,7 +138,8 @@ async function run(argv) {
   }
 
   // 1. Render + write the digest atomically.
-  const digest = renderDigest(vaultPath);
+  const layout = readVaultLayout(paths.config);
+  const digest = renderDigest(vaultPath, layout);
   const dest = path.join(paths.state, 'digest.md');
   if (!dryRun) {
     fs.mkdirSync(paths.state, { recursive: true });

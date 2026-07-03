@@ -2,6 +2,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const { defaultLayout } = require('./layout');
 
 // Minimal, inlined frontmatter reader. We only need to (a) separate the YAML
 // block from the body and (b) read the single flat flag `derived_from_untrusted`.
@@ -142,34 +143,54 @@ function listProjectDirs(dir) {
 }
 
 /**
- * Find the newest daily note (files named YYYY-MM-DD.md sort chronologically).
+ * Find the newest daily note by walking `dir` recursively and collecting files
+ * whose basename matches YYYY-MM-DD.md (which sort chronologically). Handles both
+ * flat (07-Daily/2026-07-03.md) and nested (05-Daily/2026/07/2026-07-03.md)
+ * layouts with the same code. A missing `dir` returns null.
  * @param {string} dir
  * @returns {{path: string, date: string}|null}
  */
 function newestDaily(dir) {
-  let names;
-  try {
-    names = fs.readdirSync(dir);
-  } catch {
-    return null;
+  /** @type {string[]} */
+  const found = [];
+  /** @param {string} d */
+  function walk(d) {
+    let entries;
+    try {
+      entries = fs.readdirSync(d, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const full = path.join(d, entry.name);
+      if (entry.isDirectory()) {
+        walk(full);
+      } else if (entry.isFile() && /^\d{4}-\d{2}-\d{2}\.md$/.test(entry.name)) {
+        found.push(full);
+      }
+    }
   }
-  const daily = names.filter((n) => /^\d{4}-\d{2}-\d{2}\.md$/.test(n)).sort();
-  if (daily.length === 0) return null;
-  const name = daily[daily.length - 1];
-  return { path: path.join(dir, name), date: name.replace(/\.md$/, '') };
+  walk(dir);
+  if (found.length === 0) return null;
+  // Newest by basename (lexical sort == chronological for YYYY-MM-DD).
+  found.sort((a, b) => (path.basename(a) < path.basename(b) ? -1 : 1));
+  const newest = found[found.length - 1];
+  return { path: newest, date: path.basename(newest).replace(/\.md$/, '') };
 }
 
 /**
  * Render the SessionStart digest from a vault. Deterministic; no model calls.
- * Reads 06-Identity/{profile,preferences,goals,instructions}.md, the newest
- * 07-Daily/YYYY-MM-DD.md, and 01-Projects/* directory names. Notes flagged
- * `derived_from_untrusted: true` and blocks whose source is missing/empty are
- * omitted. Output is <=120 lines.
+ * Reads {identity_dir}/{profile,preferences,goals,instructions}.md, the newest
+ * daily note under {daily_dir} (found recursively), and {projects_dir}/* directory
+ * names — all resolved from `layout` (defaults == today's hardcoded paths). Notes
+ * flagged `derived_from_untrusted: true` and blocks whose source is missing/empty
+ * are omitted. Output is <=120 lines.
  * @param {string} vaultDir
+ * @param {import('./layout').VaultLayout} [layout]  defaults to defaultLayout()
  * @returns {string}
  */
-function renderDigest(vaultDir) {
-  const idDir = path.join(vaultDir, '06-Identity');
+function renderDigest(vaultDir, layout = defaultLayout()) {
+  const idDir = path.join(vaultDir, layout.identity_dir);
   /** @type {[string, string][]} */
   const identity = [
     ['profile.md', "# Who you're working with"],
@@ -189,12 +210,12 @@ function renderDigest(vaultDir) {
     parts.push(`${header}\n${content}`);
   }
 
-  const projects = listProjectDirs(path.join(vaultDir, '01-Projects'));
+  const projects = listProjectDirs(path.join(vaultDir, layout.projects_dir));
   if (projects.length > 0) {
     parts.push(`## Active projects\n${projects.map((n) => `- ${n}`).join('\n')}`);
   }
 
-  const daily = newestDaily(path.join(vaultDir, '07-Daily'));
+  const daily = newestDaily(path.join(vaultDir, layout.daily_dir));
   if (daily) {
     const note = readNote(daily.path);
     const summary = note && extractSection(note.body, 'Summary');
