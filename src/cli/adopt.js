@@ -12,6 +12,7 @@ const tccguard = require('../scheduler/tccguard');
 const { inferLayout } = require('../core/layout-infer');
 const { resolveDailyPath } = require('../core/layout');
 const { scaffoldMappedDirs } = require('../core/vault');
+const adoptGit = require('../core/adopt-git');
 
 // Small helpers copied from init.js (init does not export them, and it is not
 // in this WP's deliverables). Kept identical so behavior matches.
@@ -158,42 +159,80 @@ async function run(argv) {
     );
   }
 
-  // 6. Git prerequisite — the whole revert-safety guarantee rests on it.
+  // 6. Git prerequisite + initial snapshot — the revert-safety guarantee rests on it.
+  //    Idempotent: take the snapshot whenever the repo has no HEAD commit yet, so a
+  //    re-run after a crash mid-snapshot heals itself instead of skipping the block.
   const alreadyRepo = isGitRepo(adoptedPath);
-  if (!alreadyRepo) {
-    console.log(
-      '\nThis folder is not yet tracked by git.\n' +
-        'Wienerdog needs git so a night of auto-written memory is one commit you can undo\n' +
-        'with a single `git revert`. Without it, adopted memory would not be recoverable.'
-    );
+  const hasHead = alreadyRepo && git(adoptedPath, ['rev-parse', '--verify', 'HEAD']).status === 0;
+
+  if (!hasHead) {
+    if (!alreadyRepo) {
+      console.log(
+        '\nThis folder is not yet tracked by git.\n' +
+          'Wienerdog needs git so a night of auto-written memory is one commit you can undo\n' +
+          'with a single `git revert`. Without it, adopted memory would not be recoverable.'
+      );
+    }
+
     if (dryRun) {
-      console.log('(--dry-run: would initialize a git repository and take an initial snapshot here.)');
+      console.log(
+        alreadyRepo
+          ? '(--dry-run: this repo has no initial commit; would offer a starter .gitignore, clear any stale index.lock, and take an initial snapshot.)'
+          : '(--dry-run: would init git, offer a starter .gitignore, clear any stale index.lock, and take an initial snapshot here.)'
+      );
     } else {
-      const okGit = yes || (await confirm('Initialize a git repository here and take an initial snapshot? [y/N] '));
-      if (!okGit) {
-        throw new WienerdogError('adoption needs a git repo; aborted.');
+      // 6a. Consent to git init only when the folder is not a repo yet.
+      if (!alreadyRepo) {
+        const okGit = yes || (await confirm('Initialize a git repository here and take an initial snapshot? [y/N] '));
+        if (!okGit) throw new WienerdogError('adoption needs a git repo; aborted.');
+        adoptGit.runGitStep(adoptedPath, ['init'], 'git init');
       }
-      const init = git(adoptedPath, ['init']);
-      if (init.error || init.status !== 0) {
-        throw new WienerdogError('failed to run `git init` — is git installed?');
+
+      // 6b. Offer a starter .gitignore BEFORE staging, so churny/hazardous files
+      //     (running plugin binaries, huge caches) never enter the snapshot.
+      const plan = adoptGit.planGitignore(adoptedPath);
+      if (plan.missing.length > 0) {
+        console.log('\nWienerdog can add a starter .gitignore so git skips churny or hazardous files:');
+        for (const l of plan.missing) console.log(`  ${l}`);
+        console.log('(Appended to any existing .gitignore; nothing you wrote is overwritten.)');
+        const okIgnore = yes || (await confirm('Add these lines to .gitignore? [y/N] '));
+        if (okIgnore) adoptGit.applyGitignore(plan);
+        else console.log('Proceeding without them — a very large or locked file may make git fail.');
       }
-      git(adoptedPath, ['add', '-A']);
-      const commit = git(adoptedPath, [
-        '-c',
-        'user.name=wienerdog',
-        '-c',
-        'user.email=wienerdog@localhost',
-        'commit',
-        // --allow-empty so an initial snapshot always exists (giving `git revert`
-        // a HEAD to undo the first dream against) even if the vault has no
-        // committable content yet.
-        '--allow-empty',
-        '-m',
-        'wienerdog: adopt — initial snapshot',
-      ]);
-      if (commit.error || commit.status !== 0) {
-        throw new WienerdogError('failed to take the initial git snapshot.');
+
+      // 6c. Recover from a stale index.lock left by an interrupted earlier run.
+      const lock = adoptGit.inspectIndexLock(adoptedPath);
+      if (lock.present && lock.stale) {
+        console.log(
+          `\nFound a leftover git lock (${lock.lockPath}), about ${Math.round(lock.ageMs / 1000)}s old,\n` +
+            'likely from an interrupted earlier run. No git process appears to be using it.'
+        );
+        const okRm = yes || (await confirm('Remove the stale lock and continue? [y/N] '));
+        if (!okRm) throw new WienerdogError('git index is locked; remove `.git/index.lock` and retry.');
+        adoptGit.removeIndexLock(lock.lockPath);
+      } else if (lock.present && !lock.stale) {
+        throw new WienerdogError(
+          'another git process seems to be using this repo right now (a fresh `.git/index.lock`); ' +
+            'finish or stop it, then retry.'
+        );
       }
+
+      // 6d. Snapshot. Every step surfaces stderr + code/signal on failure.
+      adoptGit.runGitStep(adoptedPath, ['add', '-A'], 'git add -A (staging the vault)');
+      adoptGit.runGitStep(
+        adoptedPath,
+        [
+          '-c',
+          'user.name=wienerdog',
+          '-c',
+          'user.email=wienerdog@localhost',
+          'commit',
+          '--allow-empty',
+          '-m',
+          'wienerdog: adopt — initial snapshot',
+        ],
+        'git commit (initial snapshot)'
+      );
     }
   }
 
