@@ -86,4 +86,3 @@ graph LR
   WP024 --> WP026[WP-026 full adoption]
   WP025 --> WP026
 ```
-</content>
