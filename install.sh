@@ -235,6 +235,94 @@ install_node_pkg() {
   return 0
 }
 
+# --- Linux install actions (each EXEC_FN is invoked ONLY via consent_run) ---
+# The command each function runs is byte-identical to the DISPLAY_CMD its caller
+# builds via pm_install_display / nodesource_display — ADR-0011 rule 1
+# (displayed == executed). $SUDO ("sudo" for non-root; we refuse EUID 0) and $PM
+# are set by the caller (ensure_node/ensure_git) and are visible here through
+# bash's dynamic scope.
+
+# Echoes the Node package list for the detected PM (npm is bundled with the
+# nodejs package on dnf/yum/zypper, separate on apt/pacman/apk). Kept in one
+# place so the DISPLAY_CMD and the actual install use the identical list.
+node_pkg_list() {
+  case "$PM" in
+  apt-get | pacman | apk) echo "nodejs npm" ;;
+  *) echo "nodejs" ;;
+  esac
+}
+
+# Echoes the exact command install_pkg_linux runs for the given packages, so it
+# can be shown as the consent DISPLAY_CMD (displayed == executed). $SUDO expands
+# to the same literal the executor uses.
+pm_install_display() {
+  case "$PM" in
+  apt-get) echo "$SUDO apt-get update && $SUDO DEBIAN_FRONTEND=noninteractive apt-get install -y $*" ;;
+  dnf) echo "$SUDO dnf install -y $*" ;;
+  yum) echo "$SUDO yum install -y $*" ;;
+  pacman) echo "$SUDO pacman -Sy --noconfirm $*" ;;
+  zypper) echo "$SUDO zypper --non-interactive install $*" ;;
+  apk) echo "$SUDO apk add --no-cache $*" ;;
+  esac
+}
+
+# Installs one or more packages with the detected PM, prefixed with $SUDO.
+# Returns the PM's exit status. Byte-identical to `pm_install_display "$@"`.
+install_pkg_linux() {
+  case "$PM" in
+  apt-get)
+    "$SUDO" apt-get update &&
+      "$SUDO" DEBIAN_FRONTEND=noninteractive apt-get install -y "$@"
+    ;;
+  dnf) "$SUDO" dnf install -y "$@" ;;
+  yum) "$SUDO" yum install -y "$@" ;;
+  pacman) "$SUDO" pacman -Sy --noconfirm "$@" ;;
+  zypper) "$SUDO" zypper --non-interactive install "$@" ;;
+  apk) "$SUDO" apk add --no-cache "$@" ;;
+  *) return 1 ;;
+  esac
+}
+
+# Returns 0 iff `node` resolves and its major version is >= 18. Never assumes the
+# distro repo satisfied the bar — call after resolve_bin so a just-installed
+# binary is seen this run.
+node_is_recent() {
+  command -v node >/dev/null 2>&1 || return 1
+  local v
+  v="$(node -v 2>/dev/null)"
+  v="${v#v}"
+  v="${v%%.*}"
+  [ -n "$v" ] && [ "$v" -ge 18 ] 2>/dev/null
+}
+
+# Echoes the exact command install_node_nodesource runs (apt/dnf-family only),
+# with the PINNED major and full URL, for the consent DISPLAY_CMD.
+nodesource_display() {
+  case "$PM" in
+  apt-get) echo "curl -fsSL https://deb.nodesource.com/setup_20.x | $SUDO -E bash -  &&  $SUDO apt-get install -y nodejs" ;;
+  dnf | yum) echo "curl -fsSL https://rpm.nodesource.com/setup_20.x | $SUDO -E bash -  &&  $SUDO $PM install -y nodejs" ;;
+  esac
+}
+
+# apt/dnf-family only. Runs NodeSource's setup script (PINNED major 20) then
+# installs nodejs via the PM. This is a SECOND nested curl|bash — invoked ONLY
+# through its own consent_run hop (frozen fallback trigger (e)); never
+# auto-chained after the distro-repo attempt. Byte-identical to
+# nodesource_display. Returns 0 on success.
+install_node_nodesource() {
+  case "$PM" in
+  apt-get)
+    curl -fsSL https://deb.nodesource.com/setup_20.x | "$SUDO" -E bash - || return 1
+    "$SUDO" apt-get install -y nodejs
+    ;;
+  dnf | yum)
+    curl -fsSL https://rpm.nodesource.com/setup_20.x | "$SUDO" -E bash - || return 1
+    "$SUDO" "$PM" install -y nodejs
+    ;;
+  *) return 1 ;;
+  esac
+}
+
 # --- Dependency gates ------------------------------------------------------
 
 # HARD GATE. Returns 0 if a Node ≥ 18 is already on PATH. Otherwise, on macOS,
@@ -286,11 +374,63 @@ ensure_node() {
     exit 1
   fi
 
-  # Linux keeps WP-031's print-only fallback (WP-033 wires consent there).
+  # --- Linux -----------------------------------------------------------------
   detect_pm
-  print_fallback "$(node_install_cmd)"
-  echo "Or install Node LTS from https://nodejs.org." >&2
-  exit 1
+  detect_sudo_mode
+  # shellcheck disable=SC2034  # $SUDO is consumed by install_pkg_linux/nodesource via dynamic scope.
+  local SUDO="sudo" # non-root (EUID 0 refused earlier); PM installs elevate per-action.
+
+  # CAN_INSTALL = a supported package manager AND a way to elevate. Frozen case
+  # (d): no PM, or sudo unavailable & not root → print-only fallback, no prompt.
+  if [ -z "$PM" ] || [ "$SUDO_MODE" = "none" ]; then
+    print_fallback "$(node_install_cmd)"
+    echo "Or install Node LTS from https://nodejs.org." >&2
+    exit 1
+  fi
+
+  # 1. Distro-repo Node via the PM (consented). DISPLAY == what install_pkg_linux runs.
+  local pkgs display
+  pkgs="$(node_pkg_list)"
+  display="$(pm_install_display "$pkgs")"
+  # shellcheck disable=SC2086  # intentional split: install one or two packages.
+  if ! consent_run "Install Node with $PM now?" "$display" install_pkg_linux $pkgs; then
+    # Declined / failed / no-tty: consent_run already printed the fallback.
+    echo "Or install Node LTS from https://nodejs.org." >&2
+    exit 1
+  fi
+
+  # 2. VERIFY the actually-installed major is >= 18 — never assume the repo is.
+  resolve_bin node /usr/bin /usr/local/bin >/dev/null || true
+  if node_is_recent; then
+    return 0
+  fi
+
+  # 3. Repo Node is too old / still missing. Offer NodeSource (apt/dnf-family
+  #    only) as a SEPARATE consent hop — never auto-chained after step 1.
+  case "$PM" in
+  apt-get | dnf | yum)
+    local ns_domain ns_display
+    if [ "$PM" = "apt-get" ]; then ns_domain="deb.nodesource.com"; else ns_domain="rpm.nodesource.com"; fi
+    ns_display="$(nodesource_display)"
+    if consent_run \
+      "Node from your distro is older than 18. Install Node 20 from NodeSource (runs a script from ${ns_domain})? [this is a second download]" \
+      "$ns_display" install_node_nodesource; then
+      resolve_bin node /usr/bin /usr/local/bin >/dev/null || true
+      if node_is_recent; then
+        return 0
+      fi
+      print_fallback "$ns_display" # installed but still not >= 18
+    fi
+    echo "Or install Node LTS from https://nodejs.org." >&2
+    exit 1
+    ;;
+  *)
+    # pacman/zypper/apk: no NodeSource family → print fallback (no nvm in v1).
+    print_fallback "$(node_install_cmd)"
+    echo "Or install Node LTS from https://nodejs.org." >&2
+    exit 1
+    ;;
+  esac
 }
 
 # NON-BLOCKING. If git is missing, on macOS offers a consented CLT install
@@ -315,8 +455,20 @@ ensure_git() {
     return 0
   fi
 
-  # Linux keeps WP-031's print-only note (WP-033 wires consent there).
+  # --- Linux -----------------------------------------------------------------
   detect_pm
+  detect_sudo_mode
+  # shellcheck disable=SC2034  # $SUDO is consumed by install_pkg_linux via dynamic scope.
+  local SUDO="sudo"
+  # NON-BLOCKING. If we can install (PM present AND can elevate), offer it; on
+  # success re-resolve git and proceed. Frozen case (d) or any decline/failure
+  # /no-tty → print the note and PROCEED (exit 0); git alone never exits 1.
+  if [ -n "$PM" ] && [ "$SUDO_MODE" != "none" ]; then
+    if consent_run "Install git with $PM now?" "$(pm_install_display git)" install_pkg_linux git; then
+      resolve_bin git /usr/bin /usr/local/bin >/dev/null || true
+      return 0
+    fi
+  fi
   printf '%s\n' \
     "git isn't installed — Wienerdog needs it once you create or adopt a vault. Install it with \`$(git_install_cmd)\` before running /wienerdog-setup." >&2
 }

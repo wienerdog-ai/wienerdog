@@ -1,7 +1,7 @@
 ---
 id: WP-033
 title: Linux consented auto-install actions (PM install + ≥18 verify; NodeSource as a separately-consented fallback)
-status: Ready
+status: In-Review
 model: opus
 size: M
 depends_on: [WP-031, WP-032]

@@ -534,3 +534,275 @@ test('install-sh macOS: Homebrew is never bootstrapped (no Homebrew-installer UR
   assert.doesNotMatch(scriptText, /brew\.sh\/install/i);
   assert.doesNotMatch(scriptText, /raw\.githubusercontent[^\n]*Homebrew/i);
 });
+
+// --- WP-033: Linux consented auto-install actions ----------------------------
+//
+// Like the macOS tests, but the OS is forced to Linux and a fake package manager
+// + fake `sudo`/`curl` stand in for real installs. No test invokes real sudo, a
+// real package manager, real network, or a real terminal.
+//
+// The Node-install *success* cases drive `ensure_node` directly through the
+// sourcing seam (not the whole script): `resolve_bin`'s hardcoded dirs
+// (/usr/bin, /usr/local/bin) hold no `node` on either CI runner (setup-node uses
+// hostedtoolcache) or this box, so the fake wins — but driving ensure_node stops
+// before the npx handoff regardless. The handoff is proven cleanly by the git
+// tests below, whose exclusive stub PATH excludes every real binary.
+
+// Fake `sudo`: answers the passwordless probe, strips leading flags/env-var
+// assignments (so `sudo VAR=v cmd` and `sudo -E cmd` work like the real thing),
+// then execs the remaining command. Records every argv line for assertions.
+function writeLinuxSudo(stubBin, sudoArgv) {
+  writeShimAbs(
+    stubBin,
+    'sudo',
+    `echo "$@" >> "${sudoArgv}"\n` +
+      `if [ "$1" = "-n" ] && [ "$2" = "true" ]; then exit 0; fi\n` +
+      `while [ "$#" -gt 0 ]; do case "$1" in -*|*=*) shift ;; *) break ;; esac; done\n` +
+      `exec "$@"`
+  );
+}
+
+// Fake `node` whose reported version is read from `verFile` (so a fake PM
+// "install" can set the version by writing that file). Absent file → v0.0.0
+// (an "old" Node), which routes ensure_node into the Linux install flow.
+function writeNodeTemplate(stubBin, verFile) {
+  writeShimAbs(
+    stubBin,
+    'node',
+    `if [ "$1" = "-v" ]; then v="v0.0.0"; [ -e "${verFile}" ] && v="$(< "${verFile}")"; echo "$v"; fi`
+  );
+}
+
+test('install-sh Linux node_is_recent: v18→0, v16→1, missing→1', () => {
+  const { root, stubBin } = mkStub('wd-lin-nir-');
+  writeShimAbs(stubBin, 'node', 'if [ "$1" = "-v" ]; then echo v18.20.4; fi');
+  let r = sourceAndRun('if node_is_recent; then echo OK; else echo NO; fi', {
+    exclusivePath: stubBin,
+  });
+  assert.match(r.stdout, /OK/);
+
+  writeShimAbs(stubBin, 'node', 'if [ "$1" = "-v" ]; then echo v16.0.0; fi');
+  r = sourceAndRun('if node_is_recent; then echo OK; else echo NO; fi', { exclusivePath: stubBin });
+  assert.match(r.stdout, /NO/);
+
+  const empty = path.join(root, 'empty');
+  fs.mkdirSync(empty);
+  r = sourceAndRun('if node_is_recent; then echo OK; else echo NO; fi', { exclusivePath: empty });
+  assert.match(r.stdout, /NO/);
+});
+
+test('install-sh Linux: apt Node install, consent yes, repo ≥ 18 → PM install, no NodeSource', () => {
+  const { root, stubBin } = mkStub('wd-lin-apt-ok-');
+  const aptArgv = path.join(root, 'apt-argv.txt');
+  const curlArgv = path.join(root, 'curl-argv.txt');
+  const sudoArgv = path.join(root, 'sudo-argv.txt');
+  const verFile = path.join(root, 'node-ver.txt');
+  writeNodeTemplate(stubBin, verFile);
+  writeLinuxSudo(stubBin, sudoArgv);
+  // apt "install" makes node report a modern version (≥ 18).
+  writeShimAbs(
+    stubBin,
+    'apt-get',
+    `echo "$@" >> "${aptArgv}"\ncase "$1" in install) printf 'v18.20.4\\n' > "${verFile}" ;; esac\nexit 0`
+  );
+  writeShimAbs(stubBin, 'curl', `echo "$@" >> "${curlArgv}"\nexit 0`);
+  const tty = writeFakeTty(root, 'y');
+
+  const r = sourceAndRun('os=Linux\nif ensure_node; then echo RC=0; else echo RC=$?; fi', {
+    exclusivePath: stubBin,
+    env: { WIENERDOG_TTY: tty },
+  });
+  assert.match(r.stdout, /RC=0/);
+  assert.match(readIf(aptArgv), /install -y nodejs npm/);
+  assert.equal(readIf(curlArgv), null); // NodeSource never reached
+});
+
+test('install-sh Linux: apt repo Node < 18 → NodeSource offered as a separate consented hop', () => {
+  const { root, stubBin } = mkStub('wd-lin-ns-yes-');
+  const aptArgv = path.join(root, 'apt-argv.txt');
+  const aptCount = path.join(root, 'apt-count.txt');
+  const curlArgv = path.join(root, 'curl-argv.txt');
+  const sudoArgv = path.join(root, 'sudo-argv.txt');
+  const verFile = path.join(root, 'node-ver.txt');
+  writeNodeTemplate(stubBin, verFile);
+  writeLinuxSudo(stubBin, sudoArgv);
+  // 1st apt install → old Node (v12); 2nd apt install (via NodeSource) → v20.
+  writeShimAbs(
+    stubBin,
+    'apt-get',
+    `echo "$@" >> "${aptArgv}"\n` +
+      `if [ "$1" = "install" ]; then\n` +
+      `  n=0; [ -e "${aptCount}" ] && n="$(< "${aptCount}")"\n` +
+      `  n=$((n+1)); printf '%s' "$n" > "${aptCount}"\n` +
+      `  if [ "$n" -ge 2 ]; then printf 'v20.15.0\\n' > "${verFile}"; else printf 'v12.22.0\\n' > "${verFile}"; fi\n` +
+      `fi\nexit 0`
+  );
+  writeShimAbs(stubBin, 'curl', `echo "$@" >> "${curlArgv}"\nexit 0`);
+  // `curl … | sudo -E bash -` execs bash to run the (empty) setup script; on the
+  // exclusive stub PATH there is no real bash, so shim a no-op one.
+  writeShimAbs(stubBin, 'bash', 'exit 0');
+  const tty = writeFakeTty(root, 'y'); // both hops read yes (reopened each time)
+
+  const r = sourceAndRun('os=Linux\nif ensure_node; then echo RC=0; else echo RC=$?; fi', {
+    exclusivePath: stubBin,
+    env: { WIENERDOG_TTY: tty },
+  });
+  assert.match(r.stdout, /RC=0/);
+  // The pinned NodeSource URL was shown before the second consent…
+  assert.match(r.stderr, /deb\.nodesource\.com\/setup_20\.x/);
+  // …and the NodeSource curl ran exactly once (the second hop), never auto-chained.
+  assert.equal(readIf(curlArgv).trim().split('\n').length, 1);
+  assert.match(readIf(aptArgv), /install -y nodejs npm/); // distro attempt first
+  assert.match(readIf(aptArgv), /install -y nodejs\b/); // then NodeSource's install
+});
+
+test('install-sh Linux: NodeSource hop declined → curl NOT run, fallback printed, exit 1', () => {
+  const { root, stubBin } = mkStub('wd-lin-ns-no-');
+  const aptArgv = path.join(root, 'apt-argv.txt');
+  const curlArgv = path.join(root, 'curl-argv.txt');
+  const sudoArgv = path.join(root, 'sudo-argv.txt');
+  const verFile = path.join(root, 'node-ver.txt');
+  writeNodeTemplate(stubBin, verFile);
+  writeLinuxSudo(stubBin, sudoArgv);
+  // 1st (and only) apt install → old Node; then flip the tty answer to "n" so the
+  // *second* hop (NodeSource) is declined while the first was accepted.
+  writeShimAbs(
+    stubBin,
+    'apt-get',
+    `echo "$@" >> "${aptArgv}"\n` +
+      `if [ "$1" = "install" ]; then printf 'v12.22.0\\n' > "${verFile}"; printf 'n\\n' > "$WIENERDOG_TTY"; fi\n` +
+      `exit 0`
+  );
+  writeShimAbs(stubBin, 'curl', `echo "$@" >> "${curlArgv}"\nexit 0`);
+  const tty = writeFakeTty(root, 'y'); // hop1 reads yes; apt shim rewrites it to no
+
+  const r = sourceAndRun('os=Linux\nif ensure_node; then echo RC=0; else echo RC=$?; fi', {
+    exclusivePath: stubBin,
+    env: { WIENERDOG_TTY: tty },
+  });
+  assert.equal(r.status, 1);
+  assert.equal(readIf(curlArgv), null); // NodeSource script never fetched
+  assert.match(r.stderr, /deb\.nodesource\.com/); // fallback shows the pinned URL
+  assert.match(r.stderr, /nodejs\.org/); // …and the manual nodejs.org pointer
+});
+
+test('install-sh Linux: git via PM, consent yes → PM install of git, then npx handoff', () => {
+  const { root, stubBin } = mkStub('wd-lin-git-yes-');
+  const aptArgv = path.join(root, 'apt-argv.txt');
+  const sudoArgv = path.join(root, 'sudo-argv.txt');
+  const npxArgv = path.join(root, 'npx-argv.txt');
+  writeShimAbs(stubBin, 'uname', 'echo Linux');
+  nodeShimFile(stubBin, 'v20.0.0'); // Node already satisfied → straight to ensure_git
+  writeShimAbs(stubBin, 'npx', `echo "$@" > "${npxArgv}"\nexit 0`);
+  writeShimAbs(stubBin, 'apt-get', `echo "$@" >> "${aptArgv}"\nexit 0`);
+  writeLinuxSudo(stubBin, sudoArgv);
+  const tty = writeFakeTty(root, 'y');
+
+  // Exclusive stub PATH: no real git/npx can leak in.
+  const r = spawnSync(BASH, [scriptPath], {
+    env: { ...process.env, PATH: stubBin, WIENERDOG_TTY: tty },
+    encoding: 'utf8',
+  });
+  assert.equal(r.status, 0);
+  assert.match(readIf(aptArgv), /install -y git/);
+  assert.equal(readIf(npxArgv).trim(), '--yes wienerdog@latest init');
+});
+
+test('install-sh Linux: git missing, consent no → note printed, still hands off (exit 0)', () => {
+  const { root, stubBin } = mkStub('wd-lin-git-no-');
+  const aptArgv = path.join(root, 'apt-argv.txt');
+  const sudoArgv = path.join(root, 'sudo-argv.txt');
+  const npxArgv = path.join(root, 'npx-argv.txt');
+  writeShimAbs(stubBin, 'uname', 'echo Linux');
+  nodeShimFile(stubBin, 'v20.0.0');
+  writeShimAbs(stubBin, 'npx', `echo "$@" > "${npxArgv}"\nexit 0`);
+  writeShimAbs(stubBin, 'apt-get', `echo "$@" >> "${aptArgv}"\nexit 0`);
+  writeLinuxSudo(stubBin, sudoArgv);
+  const tty = writeFakeTty(root, 'n'); // decline the git hop
+
+  const r = spawnSync(BASH, [scriptPath], {
+    env: { ...process.env, PATH: stubBin, WIENERDOG_TTY: tty },
+    encoding: 'utf8',
+  });
+  assert.equal(r.status, 0); // git alone NEVER causes exit 1
+  assert.equal(readIf(npxArgv).trim(), '--yes wienerdog@latest init');
+  assert.match(r.stderr, /isn't installed/);
+  assert.equal(readIf(aptArgv), null); // install of git never attempted
+});
+
+test('install-sh Linux: git missing, no package manager → note printed, hands off (exit 0)', () => {
+  const { root, stubBin } = mkStub('wd-lin-git-nopm-');
+  const npxArgv = path.join(root, 'npx-argv.txt');
+  writeShimAbs(stubBin, 'uname', 'echo Linux');
+  nodeShimFile(stubBin, 'v20.0.0');
+  writeShimAbs(stubBin, 'npx', `echo "$@" > "${npxArgv}"\nexit 0`);
+  // No PM, no sudo on the exclusive stub PATH → CAN_INSTALL is false.
+
+  const r = spawnSync(BASH, [scriptPath], {
+    env: { ...process.env, PATH: stubBin, WIENERDOG_TTY: path.join(root, 'no-tty') },
+    encoding: 'utf8',
+  });
+  assert.equal(r.status, 0);
+  assert.equal(readIf(npxArgv).trim(), '--yes wienerdog@latest init');
+  assert.match(r.stderr, /isn't installed/);
+  assert.doesNotMatch(r.stderr, /About to run/); // no prompt when we can't install
+});
+
+test('install-sh Linux: no supported PM, Node missing → no prompt, fallback + exit 1', () => {
+  const { stubBin } = mkStub('wd-lin-nopm-node-');
+  // Exclusive, empty stub PATH: no node, no PM, no sudo.
+  const r = sourceAndRun('os=Linux\nif ensure_node; then echo RC=0; else echo RC=$?; fi', {
+    exclusivePath: stubBin,
+  });
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /nodejs\.org/);
+  assert.doesNotMatch(r.stderr, /About to run/); // frozen case (d): no prompt
+});
+
+test('install-sh Linux: sudo unavailable & not root, Node missing → no prompt, fallback + exit 1', () => {
+  const { root, stubBin } = mkStub('wd-lin-nosudo-node-');
+  const aptArgv = path.join(root, 'apt-argv.txt');
+  // PM present but NO sudo on the exclusive PATH → SUDO_MODE=none → frozen case (d).
+  writeShimAbs(stubBin, 'apt-get', `echo "$@" >> "${aptArgv}"\nexit 0`);
+  const r = sourceAndRun('os=Linux\nif ensure_node; then echo RC=0; else echo RC=$?; fi', {
+    exclusivePath: stubBin,
+  });
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /nodejs\.org/);
+  assert.doesNotMatch(r.stderr, /About to run/);
+  assert.equal(readIf(aptArgv), null); // no install attempted
+});
+
+test('install-sh Linux: non-apt/dnf PM (pacman) with old repo Node → NodeSource NOT offered', () => {
+  const { root, stubBin } = mkStub('wd-lin-pacman-');
+  const pacArgv = path.join(root, 'pacman-argv.txt');
+  const curlArgv = path.join(root, 'curl-argv.txt');
+  const sudoArgv = path.join(root, 'sudo-argv.txt');
+  const verFile = path.join(root, 'node-ver.txt');
+  writeNodeTemplate(stubBin, verFile);
+  writeLinuxSudo(stubBin, sudoArgv);
+  writeShimAbs(stubBin, 'pacman', `echo "$@" >> "${pacArgv}"\nprintf 'v12.22.0\\n' > "${verFile}"\nexit 0`);
+  writeShimAbs(stubBin, 'curl', `echo "$@" >> "${curlArgv}"\nexit 0`);
+  const tty = writeFakeTty(root, 'y');
+
+  const r = sourceAndRun('os=Linux\nif ensure_node; then echo RC=0; else echo RC=$?; fi', {
+    exclusivePath: stubBin,
+    env: { WIENERDOG_TTY: tty },
+  });
+  assert.equal(r.status, 1);
+  assert.equal(readIf(curlArgv), null); // NodeSource (wrong family) never reached
+  assert.doesNotMatch(r.stderr, /nodesource/i);
+  assert.match(r.stderr, /nodejs\.org/);
+});
+
+// --- structural: every Linux install action is reached only via consent_run ---
+
+test('install-sh Linux: PM install + NodeSource are reached only via consent_run', () => {
+  // Each EXEC_FN is passed to consent_run (Node distro install, git, NodeSource).
+  assert.match(scriptText, /consent_run[\s\S]{0,200}?install_pkg_linux \$pkgs/);
+  assert.match(scriptText, /consent_run[\s\S]{0,200}?install_pkg_linux git/);
+  assert.match(scriptText, /consent_run[\s\S]{0,260}?install_node_nodesource/);
+  // The real nested curl|bash lives ONLY inside install_node_nodesource, never
+  // auto-chained at top level after the distro attempt.
+  assert.match(scriptText, /install_node_nodesource\(\)\s*\{/);
+});
