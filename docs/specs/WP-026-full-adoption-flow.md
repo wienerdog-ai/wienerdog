@@ -51,7 +51,6 @@ safety-by-construction) — otherwise a folder named with surrounding whitespace
 round-trips differently through `readVaultLayout`'s trim and the config points
 at a different dir than adopt created.
 
-
 Then `adopt` points config at the adopted path, writes the confirmed `vault_layout`
 block, fills only the **missing** mapped directories (never overwriting existing
 files — the standing `scaffoldVault` guarantee), records manifest entries that

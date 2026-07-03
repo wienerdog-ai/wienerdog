@@ -31,7 +31,25 @@ function topLevelDirs(dir) {
 }
 
 /**
- * First top-level dir name whose lowercased form contains keyword, else fallback.
+ * True when a value is a safe vault-relative path. Copied from layout.js's
+ * private isSafeRelativePath (not exported; layout.js may not be modified) —
+ * same rules: rejects empty, absolute, any `..` segment, or a backslash.
+ * @param {string} value
+ * @returns {boolean}
+ */
+function isSafeRelativePath(value) {
+  if (value === '') return false;
+  if (path.isAbsolute(value) || value[0] === '/') return false;
+  if (value.includes('\\')) return false;
+  if (value.split('/').includes('..')) return false;
+  return true;
+}
+
+/**
+ * First top-level dir name whose lowercased form contains keyword (trimmed),
+ * else fallback. Trimming keeps the proposal in the same domain readVaultLayout
+ * round-trips through (its parser trims values), so config and scaffold agree
+ * on ONE directory even for a folder named with surrounding whitespace.
  * @param {string[]} dirs   top-level dir names
  * @param {string} keyword  lowercase substring to match
  * @param {string} fallback default when nothing matches
@@ -39,7 +57,7 @@ function topLevelDirs(dir) {
  */
 function pick(dirs, keyword, fallback) {
   const hit = dirs.find((d) => d.toLowerCase().includes(keyword));
-  return hit || fallback;
+  return hit ? hit.trim() : fallback;
 }
 
 /**
@@ -100,7 +118,17 @@ function inferLayout(vaultDir) {
     layout.reports_dir = 'reports/dreams';
   } else {
     const reportsTop = dirs.find((d) => d.toLowerCase().includes('reports'));
-    layout.reports_dir = reportsTop ? path.posix.join(reportsTop, 'dreams') : 'reports/dreams';
+    layout.reports_dir = reportsTop ? path.posix.join(reportsTop.trim(), 'dreams') : 'reports/dreams';
+  }
+
+  // inferLayout hygiene (spec, binding): every emitted proposal is trim()ed and
+  // explicitly validated with isSafeRelativePath — validation, not
+  // safety-by-construction. An unsafe proposal falls back to the built-in
+  // default for that key (same per-key rule readVaultLayout applies on read).
+  const defaults = defaultLayout();
+  for (const key of Object.keys(defaults)) {
+    const value = String(layout[key]).trim();
+    layout[key] = isSafeRelativePath(value) ? value : defaults[key];
   }
 
   return layout;

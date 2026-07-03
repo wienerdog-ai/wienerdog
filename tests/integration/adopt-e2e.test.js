@@ -139,3 +139,53 @@ test('adopt-e2e: init → adopt → sync → dream through mapped tiers, one rev
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
+
+test(
+  'adopt-e2e: symlinked home — TCC guard refuses a Documents vault with zero writes',
+  { skip: process.platform !== 'darwin' && 'TCC is macOS-only' },
+  async () => {
+    // macOS /tmp is a symlink to /private/tmp: a HOME under /tmp is in a
+    // different symlink domain than the realpath'd adopted path, which is
+    // exactly the asymmetry that made the guard fail OPEN (PR #26 review).
+    const base = path.join('/tmp', `wd-adopt-tcc-${process.pid}-${Date.now()}`);
+    const home = path.join(base, 'home'); // raw, symlinked-domain HOME
+    const core = path.join(base, 'core');
+    const vault = path.join(home, 'Documents', 'myvault');
+
+    const saved = {};
+    for (const k of ENV_KEYS) saved[k] = process.env[k];
+
+    try {
+      fs.mkdirSync(vault, { recursive: true });
+      fs.mkdirSync(core, { recursive: true });
+      fs.writeFileSync(path.join(vault, 'note.md'), '# my note\n');
+      const configPath = path.join(core, 'config.yaml');
+      const configBefore = 'version: 1\nvault: null\nmemory_mode: standard  # conservative | standard | eager\n';
+      fs.writeFileSync(configPath, configBefore);
+      fs.writeFileSync(
+        path.join(core, 'install-manifest.json'),
+        JSON.stringify({ version: 1, createdAt: 'x', entries: [{ kind: 'file', path: configPath, hash: 'x' }] })
+      );
+
+      Object.assign(process.env, { HOME: home, WIENERDOG_HOME: core });
+      for (const k of ['WIENERDOG_VAULT', 'CLAUDE_CONFIG_DIR', 'CODEX_HOME']) delete process.env[k];
+
+      await assert.rejects(
+        () => adopt.run([vault, '--yes']),
+        /macOS-protected location/,
+        'adopt must refuse a Documents vault even under a symlinked home'
+      );
+
+      // Zero writes: config untouched, vault untouched (no git init, no scaffold).
+      assert.equal(fs.readFileSync(configPath, 'utf8'), configBefore, 'config unchanged');
+      assert.deepEqual(fs.readdirSync(vault).sort(), ['note.md'], 'vault dir unchanged');
+      assert.equal(fs.existsSync(path.join(vault, '.git')), false, 'no git init');
+    } finally {
+      for (const k of ENV_KEYS) {
+        if (saved[k] === undefined) delete process.env[k];
+        else process.env[k] = saved[k];
+      }
+      fs.rmSync(base, { recursive: true, force: true });
+    }
+  }
+);

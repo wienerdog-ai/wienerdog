@@ -144,7 +144,11 @@ async function run(argv) {
   }
 
   // 5. TCC / local-disk check (macOS only; off-darwin always ok).
-  const tcc = tccguard.guard([adoptedPath], paths.home);
+  // Symlink-domain rule (spec, binding): guard compares via path.relative, so
+  // both sides must be in the same symlink-resolution domain. adoptedPath is
+  // already realpath'd above; a RAW home against it makes path.relative yield
+  // `../…` under any symlinked home component and the guard fails OPEN.
+  const tcc = tccguard.guard([adoptedPath], fs.realpathSync(paths.home));
   if (!tcc.ok) {
     throw new WienerdogError(
       `that folder is inside ${tcc.prefix}, a macOS-protected location (${tcc.offending}).\n` +
