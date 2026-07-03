@@ -125,7 +125,10 @@ async function run(argv) {
   const paths = getPaths();
   const vaultPath = readVaultPath(paths.config);
   if (!vaultPath) {
-    throw new WienerdogError('no vault configured in config.yaml — run `npx wienerdog init` first.');
+    throw new WienerdogError(
+      'no vault set up yet — run /wienerdog-setup to create or choose your vault ' +
+        "(or 'wienerdog init --fresh-vault' for the default)."
+    );
   }
   let isDir = false;
   try {
@@ -134,7 +137,9 @@ async function run(argv) {
     isDir = false;
   }
   if (!isDir) {
-    throw new WienerdogError(`vault not found at ${vaultPath} — run \`npx wienerdog init\` first.`);
+    throw new WienerdogError(
+      `vault not found at ${vaultPath} — run /wienerdog-setup, or 'wienerdog init --fresh-vault' for the default.`
+    );
   }
 
   // 1. Render + write the digest atomically.

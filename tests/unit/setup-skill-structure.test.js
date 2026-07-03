@@ -59,6 +59,13 @@ test('setup-skill: Step 3 seeds identity notes and project seeds on import', () 
   assert.ok(text.includes('01-Projects/'), 'project seed path missing');
 });
 
+test('setup-skill: Step 3 references wienerdog init --fresh-vault', () => {
+  assert.ok(
+    text.includes('wienerdog init --fresh-vault'),
+    'wienerdog init --fresh-vault command missing'
+  );
+});
+
 test('setup-skill: Step 6 still references wienerdog sync', () => {
   assert.ok(text.includes('wienerdog sync'), 'wienerdog sync reference missing');
 });

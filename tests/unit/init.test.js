@@ -79,6 +79,40 @@ test('init --yes creates the core, config, and manifest', () => {
   assert.match(cfg, /memory_mode: standard/);
 });
 
+test('init --yes defers the vault (vault: null, no vault dir, next-step output)', () => {
+  const { core, env } = tempEnv();
+  const r = run(['init', '--yes'], env);
+  assert.equal(r.status, 0);
+  const cfg = fs.readFileSync(path.join(core, 'config.yaml'), 'utf8');
+  assert.match(cfg, /^vault: null/m);
+  assert.equal(fs.existsSync(env.WIENERDOG_VAULT), false, 'default vault dir must not be created');
+  assert.match(r.stdout, /no vault yet/i);
+  assert.match(r.stdout, /wienerdog-setup/);
+});
+
+test('init --fresh-vault --yes scaffolds the default vault as a git repo', () => {
+  const { core, env } = tempEnv();
+  const r = run(['init', '--fresh-vault', '--yes'], env);
+  assert.equal(r.status, 0);
+  const cfg = fs.readFileSync(path.join(core, 'config.yaml'), 'utf8');
+  assert.match(cfg, new RegExp(`^vault: ${env.WIENERDOG_VAULT}$`, 'm'));
+  assert.ok(fs.statSync(env.WIENERDOG_VAULT).isDirectory(), 'vault dir should exist');
+  const count = execFileSync('git', ['-C', env.WIENERDOG_VAULT, 'rev-list', '--count', 'HEAD'], {
+    encoding: 'utf8',
+  }).trim();
+  assert.equal(count, '1', 'vault should be a git repo with exactly one commit');
+});
+
+test('a second init --fresh-vault makes zero changes and says so', () => {
+  const { core, env } = tempEnv();
+  run(['init', '--fresh-vault', '--yes'], env);
+  const before = snapshot(core);
+  const r = run(['init', '--fresh-vault', '--yes'], env);
+  assert.equal(r.status, 0);
+  assert.match(r.stdout, /already installed/i);
+  assert.deepEqual(snapshot(core), before);
+});
+
 test('secrets directory is created with mode 0700', { skip: process.platform === 'win32' }, () => {
   const { core, env } = tempEnv();
   run(['init', '--yes'], env);

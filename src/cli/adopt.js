@@ -248,7 +248,9 @@ async function run(argv) {
   console.log(`  Vault:        ${adoptedPath}`);
   console.log(`  Memory mode:  conservative (strict gates for your first week)`);
   console.log(`  Folders made: ${createdDirs.length}, starter notes seeded: ${seededFiles.length}`);
-  console.log(`\nThe default vault at ${paths.vault} is now unused — you can delete it if you like.`);
+  if (dirExists(paths.vault)) {
+    console.log(`\nThe default vault at ${paths.vault} is now unused — you can delete it if you like.`);
+  }
   console.log('Run `wienerdog sync` to render your session digest from this vault.');
 }
 

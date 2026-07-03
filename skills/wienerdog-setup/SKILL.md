@@ -26,6 +26,10 @@ in plain language. This is a conversation, not a form.
 
 First, find the vault path (see Step 1) and open `06-Identity/profile.md`.
 
+If there is no vault yet — the `vault:` line is empty or `null`, or the folder
+does not exist — this is always a first-time setup. Skip the `profile.md` peek
+and go straight to Step 1, then Step 3, where the vault gets created or chosen.
+
 - **If it still looks like an empty template** (headings like `## Role` with
   nothing written under them), this is a first-time setup. Go to Step 1 and do
   the full interview.
@@ -44,9 +48,14 @@ First, find the vault path (see Step 1) and open `06-Identity/profile.md`.
 Read `~/.wienerdog/config.yaml` and look at the `vault:` line — that is the
 folder where their notes live.
 
-Check that the folder actually exists. If it does not (or the `vault:` line is
-empty), stop and tell them to run `npx wienerdog init` first, then start this
-skill again.
+- **If `config.yaml` itself is missing** → stop; tell them to run
+  `npx wienerdog init` first, then start this skill again.
+- **If the `vault:` line is empty or `null`, or the folder does not exist yet**
+  → this is normal right after install; they have not chosen a vault yet. Treat
+  it as a first-time setup and continue to Step 3, where you create or choose
+  the vault **before** writing any notes.
+- **If it points at an existing folder with real identity content** → this is
+  the settings-panel case; use the Step 0 menu.
 
 ## Step 2 — The interview
 
@@ -69,8 +78,10 @@ where it lives.
 
 If they do, offer them three choices in plain language:
 
-1. **Start fresh** — keep the new, empty vault and do nothing with the old
-   one. This is the default if they are not sure.
+1. **Start fresh** — create a brand-new, empty vault and do nothing with the
+   old one. This is the default if they are not sure. To create it, run
+   `wienerdog init --fresh-vault` in the terminal — that scaffolds the default
+   vault at `~/wienerdog`, records it in `config.yaml`, and puts it under git.
 2. **Import from it** — you read their old vault once, pull the useful facts
    about them into the new vault, and leave the old vault completely
    untouched. Best for most people who already have notes somewhere.
@@ -84,6 +95,9 @@ If they do, offer them three choices in plain language:
 
 **If they choose Import**, do the following:
 
+- First, run `wienerdog init --fresh-vault` in the terminal to create the fresh
+  vault the import will write into (it scaffolds `~/wienerdog`, records it in
+  `config.yaml`, and puts it under git).
 - Ask for the path to their existing vault. Read it **read-only**. You must
   **never move, copy wholesale, edit, or delete any file in their existing
   vault** — you only read it, and every write goes into the new vault
@@ -112,6 +126,10 @@ If they do, offer them three choices in plain language:
 the interview normally. Adoption's own folder-layout mapping and
 prerequisite checks are handled entirely by `wienerdog adopt`, so this skill
 never edits the old vault.
+
+Shelling out to `wienerdog init --fresh-vault` (like `wienerdog sync` in
+Step 6) is consistent with the "only write inside the vault and `config.yaml`"
+rule: that command writes only to the vault and `config.yaml`.
 
 ## Step 4 — How much should the AI remember?
 

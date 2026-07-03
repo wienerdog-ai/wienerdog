@@ -23,6 +23,20 @@ function fileExists(p) {
   }
 }
 
+/** @param {string} configPath @returns {string|null} configured vault path, or null. */
+function readVaultPath(configPath) {
+  let content;
+  try {
+    content = fs.readFileSync(configPath, 'utf8');
+  } catch {
+    return null;
+  }
+  const m = content.match(/^vault:[ \t]*(.*)$/m);
+  if (!m) return null;
+  const value = m[1].split('#')[0].trim();
+  return value === '' || value === 'null' ? null : value;
+}
+
 /**
  * Report on an existing install. Prints one `ok`/`warn`/`fail` line per check;
  * exits 1 (via process.exitCode) if any check fails.
@@ -59,6 +73,16 @@ async function run(_argv) {
     check('ok', 'config.yaml exists and is non-empty');
   } else {
     check('fail', `config.yaml missing or empty (${paths.config})`);
+  }
+
+  // Memory vault — unset is a valid just-installed state (warn, not fail).
+  const vaultPath = readVaultPath(paths.config);
+  if (vaultPath === null) {
+    check('warn', 'no memory vault yet — run /wienerdog-setup to create or choose one (this is normal right after install)');
+  } else if (dirExists(vaultPath)) {
+    check('ok', `vault ready (${vaultPath})`);
+  } else {
+    check('fail', `vault is set to ${vaultPath} but that folder is missing — run /wienerdog-setup, or 'wienerdog init --fresh-vault' for the default`);
   }
 
   // secrets directory permissions (skip on Windows).
