@@ -45,6 +45,7 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 | [WP-024](done/WP-024-layout-aware-dream.md) | Layout-aware dream write path (validate tiers, brain prompt, skill) | M3 | opus | Done | WP-022 |
 | [WP-025](done/WP-025-guided-import.md) | Guided import from an existing vault (setup skill step 3) | M2 | sonnet | Done | WP-022 |
 | [WP-026](done/WP-026-full-adoption-flow.md) | Full vault adoption — `wienerdog adopt` CLI, prerequisites, layout mapping | M2/M3 | opus | Done | WP-024, WP-025 |
+| [WP-027](WP-027-defer-vault-creation.md) | Defer vault creation until the vault path is chosen (init `--fresh-vault`) | M2/M3 | opus | Ready | WP-026 |
 
 ## Dependency graph
 
@@ -85,4 +86,5 @@ graph LR
   WP022 --> WP025[WP-025 guided import]
   WP024 --> WP026[WP-026 full adoption]
   WP025 --> WP026
+  WP026 --> WP027[WP-027 defer vault creation]
 ```
