@@ -1,7 +1,7 @@
 ---
 id: WP-027
 title: Defer vault creation until the vault path is chosen
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: [WP-026]
