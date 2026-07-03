@@ -1,7 +1,7 @@
 ---
 id: WP-025
 title: Guided import from an existing vault (setup skill step 3)
-status: Ready
+status: In-Review
 model: sonnet
 size: S
 depends_on: [WP-022]
