@@ -327,8 +327,8 @@ async function main() {
 
     // 3. Seed: init the core + vault, then plant the fixtures under the
     // collection override (not the config dir).
-    console.log('scenarios: seeding harness (wienerdog init --yes)...');
-    const initRes = runWienerdog(['init', '--yes'], env);
+    console.log('scenarios: seeding harness (wienerdog init --fresh-vault --yes)...');
+    const initRes = runWienerdog(['init', '--fresh-vault', '--yes'], env);
     if (initRes.stdout) console.log(initRes.stdout);
     if (initRes.status !== 0) {
       failures.push(`wienerdog init exited ${initRes.status}: ${(initRes.stderr || '').trim()}`);
