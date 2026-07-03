@@ -1,7 +1,7 @@
 ---
 id: WP-026
 title: Full vault adoption — `wienerdog adopt` CLI, prerequisites, layout mapping
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: [WP-024, WP-025]
