@@ -27,6 +27,9 @@ signatures being extended, sample of existing output if relevant. For greenfield
 
 ## Deliverables (permission boundary — touch ONLY these)
 
+<!-- Always allowed without listing: this spec file itself (the status flip),
+     docs/specs/ROADMAP.md, package-lock.json. Everything else must be listed. -->
+
 | Action | Path | Notes |
 |--------|------|-------|
 | create | src/example/thing.js | exports `doThing(dir, opts)` |
