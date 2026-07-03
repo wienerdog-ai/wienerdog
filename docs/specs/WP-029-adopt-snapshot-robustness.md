@@ -214,10 +214,12 @@ is these lines joined with `\n`:
 3. **Only when** `r.signal === 'SIGKILL' || r.status === 137 ||
    /large|too big|out of memory|cannot allocate|pack/i.test(stderr)`, append the
    two hint lines:
-   - `  This usually means git choked on a very large or locked file (e.g. a running`
-   - `  binary or a multi-hundred-MB file). Exclude such paths via .gitignore and retry.`
+   - `This usually means git choked on a very large or locked file (e.g. a running`
+     (indented two spaces in output)
+   - `binary or a multi-hundred-MB file). Exclude such paths via .gitignore and retry.`
+     (indented two spaces in output)
 4. When the failure is a spawn error (git missing), append instead of the size
-   hint: `  Is git installed and on your PATH?`
+   hint (indented two spaces in output): `Is git installed and on your PATH?`
 
 `applyGitignore` output format: if the file did not exist, write exactly the
 header line, then each missing line, then a trailing `\n`. If it existed, first

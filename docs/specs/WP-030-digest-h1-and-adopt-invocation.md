@@ -169,7 +169,7 @@ Worked behavior (the two shapes that matter):
 
 ### Exact contract — the setup-skill wording
 
-In Step 3 option 3, replace the single `run `wienerdog adopt <path-to-their-vault>``
+In Step 3 option 3, replace the single run-`wienerdog adopt <path-to-their-vault>`
 instruction with both forms. Suggested prose (adapt to fit the paragraph, but
 keep both literal command strings):
 
