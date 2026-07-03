@@ -227,6 +227,7 @@ function commitCount(vaultDir) {
 function extractFixtureText(filePath) {
   const raw = fs.readFileSync(filePath, 'utf8');
   const out = [];
+  let headerDone = false;
   for (const line of raw.split('\n')) {
     if (line.trim() === '') continue;
     let obj;
@@ -234,6 +235,12 @@ function extractFixtureText(filePath) {
       obj = JSON.parse(line);
     } catch {
       continue;
+    }
+    // The grader must see session identity and dates, or it will falsely
+    // flag notes that (correctly) cite cross-session recurrence timelines.
+    if (!headerDone && obj.sessionId && obj.timestamp) {
+      out.push(`[session ${obj.sessionId} — ${String(obj.timestamp).slice(0, 10)}]`);
+      headerDone = true;
     }
     const content = obj.message && obj.message.content;
     if (typeof content === 'string') {
