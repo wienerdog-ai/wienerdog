@@ -6,11 +6,14 @@ const crypto = require('node:crypto');
 const { spawnSync } = require('node:child_process');
 
 const { WienerdogError } = require('../errors');
+const { defaultLayout } = require('../layout');
 
 // Tier-3 code floor. FIXED — never tuned by memory_mode (see WP-017 spec). A
-// change under one of these prefixes survives only if its frontmatter satisfies
-// ALL of: derived_from_untrusted === false, confidence >= 0.85, recurrence >= 3.
-const TIER3_PREFIXES = ['06-Identity/', '05-Skills/'];
+// change under one of the Tier-3 directories (the layout's mapped identity_dir +
+// skills_dir; defaults '06-Identity/' + '05-Skills/') survives only if its
+// frontmatter satisfies ALL of: derived_from_untrusted === false,
+// confidence >= 0.85, recurrence >= 3. Layout changes WHICH directories are
+// Tier 3; it never relaxes these thresholds.
 const MIN_CONFIDENCE = 0.85;
 const MIN_RECURRENCE = 3;
 
@@ -112,11 +115,6 @@ function parseFrontmatter(fileText) {
     data[m[1]] = value;
   }
   return data;
-}
-
-/** @param {string} rel @returns {boolean} true if rel is under a Tier-3 prefix. */
-function isTier3(rel) {
-  return TIER3_PREFIXES.some((prefix) => rel.startsWith(prefix));
 }
 
 /**
@@ -264,7 +262,11 @@ function changedPaths(vaultDir) {
  * report, and make exactly ONE commit.
  *
  * @param {{ vaultDir:string, scratchDir:string, date:string, expectedScratch:string[],
- *           scratchBaseline?:Record<string,string> }} o
+ *           scratchBaseline?:Record<string,string>,
+ *           layout?:import('../layout').VaultLayout }} o
+ *   layout = the vault layout (WP-022). Defaults to defaultLayout() when absent, so
+ *     direct-call/integration tests that omit it keep the current behavior. Only the
+ *     Tier-3 directories and the report location follow the layout; the floor does not.
  *   expectedScratch = the exact scratch files WP-008's collectExtracts wrote
  *     (its `wrote` array) — the baseline for the scratch-integrity check.
  *   scratchBaseline = OPTIONAL map of {absolutePath: sha256} captured by the
@@ -278,6 +280,12 @@ function changedPaths(vaultDir) {
  */
 function validateAndCommit(o) {
   const { vaultDir, scratchDir, date, expectedScratch, scratchBaseline } = o;
+  const layout = o.layout || defaultLayout();
+
+  // Tier-3 directories resolve from the layout (mapped identity + skills dirs);
+  // the floor thresholds above are layout-independent.
+  const tier3Prefixes = [layout.identity_dir + '/', layout.skills_dir + '/'];
+  const isTier3 = (rel) => tier3Prefixes.some((p) => rel.startsWith(p));
 
   // Preconditions (the caller checks these before the brain runs; re-assert).
   assertGitRepo(vaultDir);
@@ -337,7 +345,7 @@ function validateAndCommit(o) {
 
   // ── Step 4: append the enforcement section to the dream report ───────────
   // (Step 3, the revert mechanic, is applied inline above via revertPath.)
-  const reportRel = path.join('reports', 'dreams', `${date}.md`);
+  const reportRel = path.join(layout.reports_dir, `${date}.md`);
   const reportAbs = path.join(vaultDir, reportRel);
   if (!fs.existsSync(reportAbs)) {
     fs.mkdirSync(path.dirname(reportAbs), { recursive: true });
@@ -368,8 +376,8 @@ function validateAndCommit(o) {
     if (status[0] === 'R' || status[0] === 'C') rel = stagedTokens[++i];
     committed.push(rel);
     if (status[0] !== 'A' && status[0] !== 'M') continue; // count added/modified only
-    if (rel.startsWith('05-Skills/')) skills++;
-    else if (rel.startsWith('reports/')) continue;
+    if (rel.startsWith(layout.skills_dir + '/')) skills++;
+    else if (rel.startsWith(layout.reports_dir + '/')) continue;
     else notes++;
   }
 

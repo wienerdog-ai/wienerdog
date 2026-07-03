@@ -11,6 +11,7 @@ const { acquireLock, releaseLock } = require('../core/dream/lock');
 const { readWatermarks, writeWatermarks } = require('../core/dream/watermarks');
 const { collectExtracts, cleanScratch } = require('../core/dream/scratch');
 const { spawnBrain, buildClaudeArgs } = require('../core/dream/brain');
+const { readVaultLayout } = require('../core/layout');
 const { renderDigest } = require('../core/digest');
 const { validateAndCommit, assertGitRepo, assertCleanTree } = require('../core/dream/validate');
 
@@ -39,7 +40,7 @@ function hashScratch(files) {
 }
 
 /** Print the dry-run plan: session counts, bytes, drops, vault, resolved argv. */
-function printPlan(sel, cfg, vaultDir, date) {
+function printPlan(sel, cfg, vaultDir, date, layout) {
   /** @type {Record<string, number>} */
   const perHarness = {};
   for (const e of sel.entries) perHarness[e.harness] = (perHarness[e.harness] || 0) + 1;
@@ -59,7 +60,7 @@ function printPlan(sel, cfg, vaultDir, date) {
   }
   console.log(`  total input bytes: ${totalBytes}`);
   console.log(`  dropped for size: ${sel.droppedForSize}`);
-  const argv = buildClaudeArgs({ vaultDir, scratchDir: sel.scratchDir, date, model: cfg.model });
+  const argv = buildClaudeArgs({ vaultDir, scratchDir: sel.scratchDir, date, model: cfg.model, layout });
   console.log(`  brain argv: claude ${argv.join(' ')}`);
 }
 
@@ -68,11 +69,12 @@ function printPlan(sel, cfg, vaultDir, date) {
  * timer are gone before it returns, on BOTH the normal and timeout paths
  * (ADR-0004: nothing outlives the job).
  * @param {{vaultDir:string, scratchDir:string, date:string, model:string|null,
+ *          layout:import('../core/layout').VaultLayout,
  *          timeoutMs:number, logStream:NodeJS.WritableStream}} o
  */
 async function runBrainWithWatchdog(o) {
-  const { vaultDir, scratchDir, date, model, timeoutMs, logStream } = o;
-  const { child, done } = spawnBrain({ vaultDir, scratchDir, date, model, env: process.env, logStream });
+  const { vaultDir, scratchDir, date, model, layout, timeoutMs, logStream } = o;
+  const { child, done } = spawnBrain({ vaultDir, scratchDir, date, model, layout, env: process.env, logStream });
 
   let timer = null;
   const watchdog = new Promise((_resolve, reject) => {
@@ -113,6 +115,7 @@ async function run(argv) {
   const paths = getPaths();
   const cfg = readDreamConfig(paths.config); // throws WienerdogError when no vault
   const vaultDir = cfg.vault;
+  const layout = readVaultLayout(paths.config);
   const date = resolveDate();
 
   // 2. Vault must be a git repo with a clean working tree.
@@ -132,7 +135,7 @@ async function run(argv) {
 
   // 5. Dry-run → print the plan and stop.
   if (dryRun) {
-    printPlan(sel, cfg, vaultDir, date);
+    printPlan(sel, cfg, vaultDir, date, layout);
     cleanScratch(paths.state);
     return;
   }
@@ -162,6 +165,7 @@ async function run(argv) {
         scratchDir: sel.scratchDir,
         date,
         model: cfg.model,
+        layout,
         timeoutMs: cfg.timeoutMs,
         logStream,
       });
@@ -176,6 +180,7 @@ async function run(argv) {
       date,
       expectedScratch: sel.wrote,
       scratchBaseline,
+      layout,
     });
 
     // 9. Advance the watermarks — ONLY after a successful commit.
@@ -183,7 +188,7 @@ async function run(argv) {
 
     // 10. Regenerate the injected session digest (atomic temp + rename).
     fs.mkdirSync(paths.state, { recursive: true });
-    const digest = renderDigest(vaultDir);
+    const digest = renderDigest(vaultDir, layout);
     const digestDest = path.join(paths.state, 'digest.md');
     const digestTmp = path.join(paths.state, `.digest.md.${process.pid}.tmp`);
     fs.writeFileSync(digestTmp, digest);
