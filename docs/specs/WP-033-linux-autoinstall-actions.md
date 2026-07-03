@@ -264,6 +264,15 @@ No test may invoke real `sudo`, a real package manager, real network, or a real 
 
 ## Implementation notes & constraints
 
+- **BINDING (PR #31 review): display==exec identity is YOUR obligation.** The
+  engine's `consent_run(PROMPT, DISPLAY_CMD, EXEC_FN)` cannot enforce that the
+  displayed command equals what `EXEC_FN` runs — ADR-0011 rule 1 requires it.
+  Every consent hop you wire MUST make `EXEC_FN` execute byte-for-byte the
+  command shown in `DISPLAY_CMD` (same binary, same args, same URL). The
+  reviewer will byte-verify each pair; divergence is an automatic
+  REQUEST-CHANGES.
+
+
 - **Zero dependencies; bash only.** Pass `shellcheck` + `bash -n`; `shfmt -i 2`.
 - **Every install action runs only through `consent_run`** — including the NodeSource hop, which is *always* a distinct `consent_run` (frozen case (e): never auto-chain a second nested `curl|bash`).
 - **Verify Node ≥ 18 after any PM install** — never assume the distro repo satisfies it. Use `resolve_bin` + `node_is_recent`.
