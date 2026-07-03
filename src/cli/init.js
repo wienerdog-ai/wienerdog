@@ -2,11 +2,11 @@
 
 const fs = require('node:fs');
 const crypto = require('node:crypto');
-const readline = require('node:readline');
 const { getPaths } = require('../core/paths');
 const { detectHarnesses } = require('../core/detect');
 const manifestLib = require('../core/manifest');
 const { scaffoldVault } = require('../core/vault');
+const { confirm } = require('../core/prompt');
 
 /** @param {string} p @returns {boolean} */
 function dirExists(p) {
@@ -58,21 +58,6 @@ harnesses:
   codex: ${harnesses.codex.present}
 memory_mode: standard  # conservative | standard | eager
 `;
-}
-
-/**
- * Ask a yes/no question on stdin.
- * @param {string} prompt
- * @returns {Promise<boolean>}
- */
-function confirm(prompt) {
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  return new Promise((resolve) => {
-    rl.question(prompt, (answer) => {
-      rl.close();
-      resolve(/^y(es)?$/i.test(answer.trim()));
-    });
-  });
 }
 
 /**

@@ -1,10 +1,10 @@
 'use strict';
 
 const fs = require('node:fs');
-const readline = require('node:readline');
 const { getPaths } = require('../core/paths');
 const manifestLib = require('../core/manifest');
 const { WienerdogError } = require('../core/errors');
+const { confirm } = require('../core/prompt');
 
 /** @param {string} p @returns {boolean} */
 function fileExists(p) {
@@ -13,21 +13,6 @@ function fileExists(p) {
   } catch {
     return false;
   }
-}
-
-/**
- * Ask a yes/no question on stdin.
- * @param {string} prompt
- * @returns {Promise<boolean>}
- */
-function confirm(prompt) {
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  return new Promise((resolve) => {
-    rl.question(prompt, (answer) => {
-      rl.close();
-      resolve(/^y(es)?$/i.test(answer.trim()));
-    });
-  });
 }
 
 /**
