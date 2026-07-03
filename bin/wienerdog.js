@@ -9,6 +9,7 @@ Usage: wienerdog <command> [options]
 
 Commands:
   init        Create the Wienerdog core (~/.wienerdog) and detect your AI tools
+  adopt       Use an existing vault in place as your Wienerdog vault
   sync        Re-render the session digest from your vault's identity notes
   dream       Consolidate recent sessions into vault memory (one commit)
   schedule    Add, remove, or list scheduled jobs (dream, routines)
@@ -37,6 +38,7 @@ async function main() {
   /** @type {Record<string, () => {run: (argv: string[]) => Promise<void>}>} */
   const commands = {
     init: () => require('../src/cli/init'),
+    adopt: () => require('../src/cli/adopt'),
     sync: () => require('../src/cli/sync'),
     dream: () => require('../src/cli/dream'),
     schedule: () => require('../src/cli/schedule'),

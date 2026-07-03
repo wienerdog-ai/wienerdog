@@ -129,4 +129,78 @@ async function scaffoldVault(targetDir, opts = {}) {
   return { created, skipped };
 }
 
-module.exports = { scaffoldVault };
+/** The four identity stub templates seeded into an empty identity dir. */
+const IDENTITY_STUBS = ['profile.md', 'preferences.md', 'goals.md', 'instructions.md'];
+
+/**
+ * Fill ONLY the missing mapped directories of an adopted vault, without laying down
+ * the full default template and WITHOUT git-init (adoption handles git separately).
+ * Existing files are never touched. Manifest entries use kinds `uninstall` skips
+ * (vault-dir / vault-file), so the adopted vault is never removed on uninstall.
+ * @param {string} targetDir  the adopted vault
+ * @param {import('./layout').VaultLayout} layout
+ * @param {{dryRun?: boolean, manifest?: object}} [opts]
+ * @returns {{createdDirs: string[], seededFiles: string[], skipped: string[]}}
+ */
+function scaffoldMappedDirs(targetDir, layout, opts = {}) {
+  const { dryRun = false, manifest } = opts;
+  const date = today();
+
+  /** @type {string[]} */ const createdDirs = [];
+  /** @type {string[]} */ const seededFiles = [];
+  /** @type {string[]} */ const skipped = [];
+
+  const mappedDirs = [
+    layout.identity_dir,
+    layout.daily_dir,
+    layout.projects_dir,
+    layout.inbox_dir,
+    layout.skills_dir,
+    layout.reports_dir,
+  ];
+
+  for (const rel of mappedDirs) {
+    const abs = path.join(targetDir, rel);
+    if (fs.existsSync(abs)) {
+      skipped.push(abs);
+      continue;
+    }
+    if (!dryRun) {
+      fs.mkdirSync(abs, { recursive: true });
+      if (manifest) manifestLib.record(manifest, { kind: 'vault-dir', path: abs });
+    }
+    createdDirs.push(abs);
+  }
+
+  // Seed identity stubs ONLY IF the mapped identity dir contains no *.md file —
+  // a real adopted vault keeps its own identity notes untouched.
+  const identityAbs = path.join(targetDir, layout.identity_dir);
+  const hasIdentityNotes = () => {
+    try {
+      return fs.readdirSync(identityAbs).some((name) => name.toLowerCase().endsWith('.md'));
+    } catch {
+      return false;
+    }
+  };
+  if (!hasIdentityNotes()) {
+    for (const name of IDENTITY_STUBS) {
+      const destPath = path.join(identityAbs, name);
+      if (fs.existsSync(destPath)) {
+        skipped.push(destPath);
+        continue;
+      }
+      if (!dryRun) {
+        const srcPath = path.join(TEMPLATE_ROOT, '06-Identity', name);
+        const content = fs.readFileSync(srcPath, 'utf8').replaceAll('{{DATE}}', date);
+        fs.mkdirSync(path.dirname(destPath), { recursive: true });
+        fs.writeFileSync(destPath, content);
+        if (manifest) manifestLib.record(manifest, { kind: 'vault-file', path: destPath });
+      }
+      seededFiles.push(destPath);
+    }
+  }
+
+  return { createdDirs, seededFiles, skipped };
+}
+
+module.exports = { scaffoldVault, scaffoldMappedDirs };
