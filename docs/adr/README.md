@@ -14,3 +14,4 @@ Durable decisions live here so they are made once, not re-litigated per session 
 | [0006](0006-curl-installer-default.md) | curl installer as the default entry point | Accepted |
 | [0007](0007-graduated-sending.md) | Graduated sending (send grants) instead of no-send | Accepted |
 | [0008](0008-routine-catalog.md) | Post-setup routine catalog (quick wins), digest opt-in | Accepted |
+| [0009](0009-subscription-everywhere.md) | Subscription auth everywhere — no Anthropic API keys | Accepted |
