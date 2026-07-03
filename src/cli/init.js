@@ -100,6 +100,7 @@ async function run(argv) {
 
   if (missingDirs.length === 0 && !needConfig && !vaultStep) {
     console.log('wienerdog: already installed, nothing to do.');
+    console.log("Tip: run 'wienerdog sync' to refresh skills, hooks, and memory.");
     return;
   }
 
@@ -165,6 +166,14 @@ async function run(argv) {
   }
 
   manifestLib.save(paths, manifest);
+
+  // Register skills + hooks into every detected harness (and, when a vault is
+  // configured, the digest + managed block) so the promised /wienerdog-setup skill
+  // is live the moment init finishes. sync is idempotent; with no vault it installs
+  // skills + hooks and defers memory features (exit 0). Passing our argv is safe —
+  // sync only reads --dry-run from it, and we never reach here on a dry-run.
+  await require('./sync').run(argv);
+
   if (vaultStep) {
     console.log('\nwienerdog: installed with a fresh vault. Run `wienerdog doctor` to check the setup.');
   } else if (vaultConfigured) {

@@ -1,7 +1,7 @@
 ---
 id: WP-028
 title: Register skills + hooks on bootstrap so a fresh init leaves /wienerdog-setup usable
-status: Ready
+status: In-Review
 model: opus
 size: M
 depends_on: [WP-027]
