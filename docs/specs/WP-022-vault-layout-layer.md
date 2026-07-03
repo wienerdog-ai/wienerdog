@@ -214,6 +214,21 @@ module.exports = { defaultLayout, readVaultLayout, resolveDailyPath, layoutPromp
 
 Parser requirements for `readVaultLayout`:
 
+**Value validation (binding — the traversal-safety contract for WP-022/024/026):**
+every parsed value must be a safe vault-relative path. After `cleanValue`, a
+value is REJECTED — the built-in default for that key is used instead — when it
+is (a) empty, (b) absolute (`path.isAbsolute`, or a leading `/`), (c) contains
+a `..` segment when split on `/`, or (d) contains a backslash. Rejection is
+per-key and silent-safe: the rest of the block still applies. Rationale: these
+values are joined under the vault root by the digest render today and by the
+dream tier boundaries (WP-024) and adopt flow (WP-026) tomorrow — a traversal
+value would let a config edit exfiltrate out-of-vault file contents into the
+injected session digest (confused-deputy; reproduced in PR #24 review).
+Unit tests must cover: `../../../etc` → default; absolute path → default;
+`a/../b` → default; empty value → default; and an end-to-end proof that
+`renderDigest` with a hostile layout never reads outside the vault (plant a
+sentinel file outside; assert its content is absent from the digest).
+
 - Find the line that is exactly `vault_layout:` (no leading whitespace; a trailing
   comment after it is allowed). Then consume the following **indented** lines
   (leading whitespace) of the form `<key>: <value>` (two-space indented). Stop at the
