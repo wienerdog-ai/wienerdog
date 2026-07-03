@@ -86,6 +86,46 @@ function mkStub(prefix) {
   return { root, stubBin };
 }
 
+// --- WP-035: hermetic system-binary dir (usr-merge-safe PATH curation) -------
+//
+// Debian/Ubuntu's usr-merge makes `/bin` a symlink to `/usr/bin`, so any curated
+// PATH that included either (e.g. `stubBin:/bin`) exposed the CI runner's REAL
+// git/node and defeated the test's stubs — green on macOS (where `/bin` is
+// genuinely minimal), red on ubuntu-latest. hermeticBinDir sidesteps this by
+// symlinking ONLY the specific system binaries a test group legitimately needs,
+// resolved via `command -v` against the outer (uncurated) PATH, into a fresh
+// directory that is never named `/bin` or `/usr/bin`. git/node/npx/brew/sudo/PM
+// binaries are never included here — those come from a test's own stub, or are
+// deliberately left absent.
+
+/**
+ * @param {string[]} names system binaries to expose (e.g. 'mktemp', 'grep')
+ * @returns {string} absolute path to a directory containing only those binaries
+ */
+function hermeticBinDir(names) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-hermetic-'));
+  for (const name of names) {
+    const resolved = spawnSync(BASH, ['-c', `command -v ${name}`], { encoding: 'utf8' }).stdout.trim();
+    if (resolved) fs.symlinkSync(resolved, path.join(dir, name));
+  }
+  return dir;
+}
+
+// Sanity guard: the technique only works if a hermetic dir truly cannot resolve
+// git or node. Self-tests that on THIS box, right now, before any test relies
+// on it.
+test('install-sh test harness: hermeticBinDir cannot resolve git or node (usr-merge sanity guard)', () => {
+  const dir = hermeticBinDir(['mktemp', 'grep', 'head']);
+  assert.doesNotMatch(dir, /(^|:)\/usr\/bin(:|$)/);
+  assert.doesNotMatch(dir, /(^|:)\/bin(:|$)/);
+  const probe = spawnSync(
+    BASH,
+    ['-c', 'command -v git >/dev/null 2>&1 && exit 0; command -v node >/dev/null 2>&1 && exit 0; exit 1'],
+    { env: { PATH: dir }, encoding: 'utf8' }
+  );
+  assert.equal(probe.status, 1, 'neither git nor node may resolve under a hermetic PATH');
+});
+
 // --- WP-016 tests kept (1: missing/old Node, 2: recent-Node handoff, 3: root) --
 
 test('install-sh: missing/old Node exits 1 with nodejs.org guidance (idempotent)', () => {
@@ -320,13 +360,33 @@ function nodeShimFile(dir, version) {
 
 const readIf = (p) => (fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : null);
 
-// System path that carries git (so ensure_git returns early in Node tests) plus
-// the coreutils install_node_pkg needs; node/npx/brew live elsewhere, so they
-// stay absent until a shim provides them.
-const SYS_PATH_NODE = '/usr/bin:/bin';
-// For git tests we exclude /usr/bin so the real /usr/bin/git can't leak in — git
-// must be absent until the (fake) CLT install creates it.
-const SYS_PATH_GIT = '/bin';
+// Hermetic system-bin dirs (WP-035), replacing the old `/usr/bin:/bin` literals
+// (which usr-merge turns into the same real directory on Ubuntu, leaking the
+// runner's REAL git/node past every stub). Derived empirically: driving the
+// affected tests with an empty PATH and adding exactly what failed to resolve.
+// Node tests need `bash` (the curl/sudo/installer/brew shims below use
+// `#!/usr/bin/env bash`, which resolves `bash` via PATH) plus the coreutils
+// `install_node_pkg` shells out to. git/node/npx/brew/sudo/installer/curl/
+// uname/xcode-select are never included — those come from a test's own stub,
+// or are deliberately left absent so `command -v` fails until a fake install
+// creates them.
+const HERMETIC_SYS_BIN_NODE = hermeticBinDir(['bash', 'mktemp', 'grep', 'head', 'rm', 'rmdir']);
+// The git-via-CLT tests below shim every binary the script touches with an
+// absolute-path shebang (`writeShimAbs`), so no real system binary is needed at
+// all — an empty hermetic dir keeps `command -v git` failing until the fake
+// CLT install "creates" it, on macOS AND on usr-merged Ubuntu alike.
+const HERMETIC_SYS_BIN_GIT = hermeticBinDir([]);
+
+// WP-035 acceptance criterion: the curated PATHs actually used by the macOS/
+// Linux test groups above must contain neither `/bin` nor `/usr/bin` — the two
+// components that are the SAME real directory on usr-merged Ubuntu and would
+// leak the runner's real git/node past every stub.
+test('install-sh test harness: hermetic system-bin dirs exclude /bin and /usr/bin', () => {
+  for (const dir of [HERMETIC_SYS_BIN_NODE, HERMETIC_SYS_BIN_GIT]) {
+    assert.doesNotMatch(dir, /(^|:)\/usr\/bin(:|$)/);
+    assert.doesNotMatch(dir, /(^|:)\/bin(:|$)/);
+  }
+});
 
 // The two Node-install *success* tests drive `ensure_node` directly through the
 // sourcing seam rather than the whole script: `resolve_bin`'s hardcoded macOS
@@ -355,7 +415,7 @@ test('install-sh macOS: Node via .pkg, consent yes → sudo installer -pkg … -
 
   // Exclusive PATH: stubBin (fakes) + coreutils; no brew → the .pkg branch.
   const r = sourceAndRun('os=Darwin\nif ensure_node; then echo RC=0; else echo RC=$?; fi', {
-    exclusivePath: `${stubBin}:/usr/bin:/bin`,
+    exclusivePath: `${stubBin}:${HERMETIC_SYS_BIN_NODE}`,
     env: { WIENERDOG_TTY: tty },
   });
   assert.match(r.stdout, /RC=0/); // install succeeded, node resolved
@@ -376,7 +436,7 @@ test('install-sh macOS: Node via .pkg, consent no → installer NOT run, fallbac
   writeShimAbs(stubBin, 'installer', `echo "$@" >> "${installerArgv}"\nexit 0`);
   const tty = writeFakeTty(root, 'n');
 
-  const r = runMacInstall(stubBin, SYS_PATH_NODE, { tty });
+  const r = runMacInstall(stubBin, HERMETIC_SYS_BIN_NODE, { tty });
   assert.equal(r.status, 1);
   assert.equal(readIf(installerArgv), null); // installer never invoked
   assert.match(r.stderr, /sudo installer/);
@@ -390,7 +450,7 @@ test('install-sh macOS: Node via .pkg, no tty → no prompt, installer NOT run, 
   writeShimAbs(stubBin, 'git', 'exit 0');
   writeShimAbs(stubBin, 'installer', `echo "$@" >> "${installerArgv}"\nexit 0`);
 
-  const r = runMacInstall(stubBin, SYS_PATH_NODE, { tty: path.join(root, 'no-tty') });
+  const r = runMacInstall(stubBin, HERMETIC_SYS_BIN_NODE, { tty: path.join(root, 'no-tty') });
   assert.equal(r.status, 1);
   assert.equal(readIf(installerArgv), null);
   assert.doesNotMatch(r.stderr, /About to run/);
@@ -414,7 +474,7 @@ test('install-sh macOS: Node via brew when brew present → `brew install node`,
   const tty = writeFakeTty(root, 'y');
 
   const r = sourceAndRun('os=Darwin\nif ensure_node; then echo RC=0; else echo RC=$?; fi', {
-    exclusivePath: `${stubBin}:/usr/bin:/bin`,
+    exclusivePath: `${stubBin}:${HERMETIC_SYS_BIN_NODE}`,
     env: { WIENERDOG_TTY: tty },
   });
   assert.match(r.stdout, /RC=0/);
@@ -437,7 +497,7 @@ test('install-sh macOS: Node install failure (installer non-zero) → fallback +
   writeShimAbs(stubBin, 'installer', `echo "$@" >> "${installerArgv}"\nexit 1`); // install fails
   const tty = writeFakeTty(root, 'y');
 
-  const r = runMacInstall(stubBin, SYS_PATH_NODE, { tty });
+  const r = runMacInstall(stubBin, HERMETIC_SYS_BIN_NODE, { tty });
   assert.equal(r.status, 1);
   assert.ok(readIf(installerArgv), 'installer was invoked but failed');
   assert.match(r.stderr, /sudo installer/);
@@ -459,7 +519,7 @@ test('install-sh macOS: git via CLT, consent yes, install completes → git reso
   );
   const tty = writeFakeTty(root, 'y');
 
-  const r = runMacInstall(stubBin, SYS_PATH_GIT, {
+  const r = runMacInstall(stubBin, HERMETIC_SYS_BIN_GIT, {
     tty,
     env: { WIENERDOG_CLT_POLL: '1', WIENERDOG_CLT_TIMEOUT: '5' },
   });
@@ -478,7 +538,7 @@ test('install-sh macOS: git via CLT times out → note printed, still hands off 
   writeShimAbs(stubBin, 'xcode-select', 'if [ "$1" = "-p" ]; then exit 1; fi\nexit 0');
   const tty = writeFakeTty(root, 'y');
 
-  const r = runMacInstall(stubBin, SYS_PATH_GIT, {
+  const r = runMacInstall(stubBin, HERMETIC_SYS_BIN_GIT, {
     tty,
     env: { WIENERDOG_CLT_POLL: '1', WIENERDOG_CLT_TIMEOUT: '1' },
   });

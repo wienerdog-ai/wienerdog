@@ -30,7 +30,11 @@ const ENV_KEYS = [
 
 /** @param {string} cwd @param {string[]} args */
 function git(cwd, args) {
-  return execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf8' });
+  return execFileSync(
+    'git',
+    ['-C', cwd, '-c', 'user.name=wienerdog-test', '-c', 'user.email=test@localhost', ...args],
+    { encoding: 'utf8' }
+  );
 }
 
 /** @param {string} vault @returns {number} number of commits on HEAD. */

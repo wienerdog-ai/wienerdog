@@ -1,7 +1,7 @@
 ---
 id: WP-035
 title: Fix Linux CI test portability (usr-merge PATH curation, git identity)
-status: Ready
+status: In-Review
 model: sonnet
 size: S
 depends_on: [WP-033]
