@@ -1,7 +1,7 @@
 ---
 id: WP-029
 title: Harden `wienerdog adopt` initial-snapshot (surfaced git errors, stale-lock recovery, starter .gitignore)
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: [WP-026]
