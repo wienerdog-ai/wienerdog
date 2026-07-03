@@ -65,14 +65,22 @@ function isHeading(line) {
 
 /**
  * Compact a note body: drop the frontmatter (already removed by caller), drop
- * headings whose section has no non-blank content (this also removes the
- * document's `# Title`, which has no direct content), collapse runs of blank
- * lines to one, and trim leading/trailing blank lines.
+ * a single leading level-1 heading (the note's own `# Title`), drop headings
+ * whose section has no non-blank content, collapse runs of blank lines to
+ * one, and trim leading/trailing blank lines.
  * @param {string} body
  * @returns {string}
  */
 function compact(body) {
-  const lines = body.split('\n');
+  let lines = body.split('\n');
+  // Drop a single leading level-1 heading — the note's own `# Title`. renderDigest
+  // already prepends the section header (## Preferences, …); without this the note's
+  // own H1 stacks under it as a duplicate. Only the FIRST non-blank line, and only
+  // if it is exactly a one-hash heading (`# `). H2+ are section structure — preserved.
+  const first = lines.findIndex((l) => l.trim() !== '');
+  if (first !== -1 && /^#\s/.test(lines[first])) {
+    lines = [...lines.slice(0, first), ...lines.slice(first + 1)];
+  }
   /** @type {string[]} */
   const out = [];
   let i = 0;

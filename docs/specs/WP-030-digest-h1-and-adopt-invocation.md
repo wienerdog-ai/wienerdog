@@ -1,7 +1,7 @@
 ---
 id: WP-030
 title: Drop a note's leading H1 in digest compaction; show both adopt invocation forms in setup
-status: Ready
+status: In-Review
 model: sonnet
 size: S
 depends_on: [WP-022]
