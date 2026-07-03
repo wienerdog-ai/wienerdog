@@ -60,7 +60,23 @@ Wienerdog auto-writes persistent memory derived from conversation transcripts, i
 
 **Hazard**: the default install is `curl … | bash` (ADR-0006), a pattern users are right to be wary of.
 
-**Mitigations**: the script is a bootstrapper only — it never writes to disk, never uses sudo or package managers, never installs Node (it prints guidance and exits); it delegates to the versioned, provenance-attested npm package, which does the manifest-tracked work; it is short, in-repo, and the README invites reading it before running.
+**Mitigations**: the script is a bootstrapper — it delegates the real, manifest-tracked work to the versioned, provenance-attested npm package (`npx wienerdog@latest init`); it refuses to run as root; it is in-repo, and the README invites reading it before running. As of ADR-0011 the script **may also install missing dependencies** (Node, git) — but only with explicit per-hop consent and always with a print-the-command fallback. The earlier claim that the script "never uses sudo or package managers, never installs Node" no longer holds; the hazards that consented auto-install adds are covered in **T5b**.
+
+## T5b — Consented dependency auto-install (installer runs real installers)
+
+**Hazard**: per ADR-0011 the curl installer may now run real OS installers — `sudo apt-get install`, `sudo installer -pkg`, `brew install`, `xcode-select --install`, and (as a last resort) a nested `curl … | sudo bash` (NodeSource) — to provide a missing Node/git. This is a *qualitative* expansion of the installer's blast radius over T5a's read-only version check: a bug, or a compromised upstream, could now perform arbitrary root-level package installs, install the wrong or a malicious package, or execute an unverified nested script as root. This is real trust the user is knowingly opting into; the design's job is to keep the opt-in explicit, bounded, and always escapable.
+
+**Mitigations** (baked into ADR-0011 and its work packages WP-031/032/033):
+
+- **Per-hop consent showing the exact command.** Every install action prompts on `/dev/tty` (`[Y/n]`, default yes) and prints the exact command/URL before running it — one prompt per action, never a blanket "install everything," never a hidden action nested inside a consented one.
+- **Signed-source preference.** Distro package managers (GPG-signed repos) and the official signed nodejs.org `.pkg` are preferred over any `curl|bash`; a nested script is used only when the signed path cannot satisfy Node ≥ 18.
+- **No silent nested `curl|bash`.** Homebrew is never auto-bootstrapped (used only if already present); NodeSource — the one sanctioned nested script — is a *separate* consent hop with its URL shown and pinned to a specific upstream major. A second nested hop always requires its own consent (frozen fallback trigger (e)).
+- **`/dev/tty` gating.** No controlling terminal → no prompt, no auto-install; the script prints the exact command and exits non-zero. CI, cron, and `ssh host 'bash -s'` can therefore never be auto-installed into, and the default-yes never applies there.
+- **Fail-to-print fallback.** Any decline, failure, timeout, missing-sudo, or would-be-second-nested-hop degrades to printing the exact command — the user is never left worse off than under the old print-only behavior.
+- **sudo probe, no password capture.** `sudo` mode is detected with `sudo -n true` (a non-interactive probe that never prompts); the script never reads, stores, or pipes a password (never `sudo -S`). Interactive sudo prompts on its own terminal, or the action falls back to print.
+- **No root self-run.** The script still refuses `EUID 0`; installs go through per-action `sudo`, not a root-run script.
+
+**Residual risk (accepted)**: a compromised upstream package index or nested script could serve a malicious package that a consenting user installs as root — the same trust a user places in their OS package manager every day. Wienerdog adds no signature verification beyond what the OS package manager, the signed `.pkg`, and TLS already provide; it minimizes exposure by preferring signed sources and showing every command, but does not eliminate the inherent trust in installing software. This is the explicit cost of a one-line install for no-dependency users; a user who wants zero auto-install can decline every prompt (or run in a non-tty context) and follow the printed commands.
 
 ## T5 — Installer / uninstaller overreach
 
@@ -82,6 +98,7 @@ No telemetry. No network calls except the Google APIs the user configured and th
 
 - The orchestrator's Tier-3 code gate validates provenance *frontmatter*; a fully hijacked dream brain could falsify `derived_from_untrusted: false`. Accepted with defense-in-depth: the skill computes the flag mechanically from tool_result tags, recurrence ≥3 requires multi-session persistence of the attack, the sandbox denies Bash/network, every run is one revertible commit surfaced in a readable report, and the scenario harness (WP-015) exercises a real planted injection end-to-end. Independent content-provenance analysis in code is deliberately not built in v1.
 
+- Consented dependency auto-install (T5b, ADR-0011) installs software as root at the user's explicit per-hop consent; Wienerdog prefers signed sources and shows every command but relies on OS-package-manager / signed-`.pkg` / TLS trust, adding no signature verification of its own. Accepted as the cost of one-line install for no-dependency users; fully escapable by declining or running non-interactively.
 - The user's harness provider processes transcript content by definition; Wienerdog adds no new exposure but cannot reduce it.
 - Tier 1/2 notes *can* contain untrusted-derived text (flagged); a user who manually promotes such a note into identity takes that action knowingly.
 - `memory_mode: eager` loosens gate thresholds (never the `derived_from_untrusted` rule, which is absolute).

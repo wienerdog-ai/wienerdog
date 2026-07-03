@@ -49,6 +49,9 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 | [WP-028](done/WP-028-bootstrap-skill-registration.md) | Register skills + hooks on bootstrap (sync vault-independent; init runs sync) | M2 | opus | Done | WP-027 |
 | [WP-029](done/WP-029-adopt-snapshot-robustness.md) | Harden `adopt` initial-snapshot (surfaced git errors, stale-lock recovery, starter .gitignore) | M2/M3 | opus | Done | WP-026 |
 | [WP-030](done/WP-030-digest-h1-and-adopt-invocation.md) | Digest: drop note's leading H1; setup skill shows both adopt invocation forms | M2/M3 | sonnet | Done | WP-022 |
+| [WP-031](WP-031-install-consent-engine.md) | install.sh dependency-consent engine (detection, tty gate, sudo probe, consent harness) | M1/M7 | opus | Ready | WP-016 |
+| [WP-032](WP-032-macos-autoinstall-actions.md) | macOS consented auto-install (CLT git; official .pkg / brew Node) | M1/M7 | opus | Ready | WP-031 |
+| [WP-033](WP-033-linux-autoinstall-actions.md) | Linux consented auto-install (PM install + ≥18 verify; NodeSource fallback) | M1/M7 | opus | Ready | WP-031, WP-032 |
 
 ## Dependency graph
 
@@ -81,6 +84,10 @@ graph LR
   WP020 -.-> WP014
   WP009 --> WP015[WP-015 scenario harness]
   WP003 --> WP016[WP-016 curl installer]
+  WP016 --> WP031[WP-031 install consent engine]
+  WP031 --> WP032[WP-032 macOS auto-install]
+  WP031 --> WP033[WP-033 Linux auto-install]
+  WP032 -.serializes.-> WP033
   WP015 --> WP023[WP-023 scenario subscription auth]
   WP020 --> WP023
   WP017 -.retrofits.-> WP022[WP-022 vault layout layer]
