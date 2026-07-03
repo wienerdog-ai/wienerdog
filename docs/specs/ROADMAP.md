@@ -46,6 +46,7 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 | [WP-025](done/WP-025-guided-import.md) | Guided import from an existing vault (setup skill step 3) | M2 | sonnet | Done | WP-022 |
 | [WP-026](done/WP-026-full-adoption-flow.md) | Full vault adoption — `wienerdog adopt` CLI, prerequisites, layout mapping | M2/M3 | opus | Done | WP-024, WP-025 |
 | [WP-027](done/WP-027-defer-vault-creation.md) | Defer vault creation until the vault path is chosen (init `--fresh-vault`) | M2/M3 | opus | Done | WP-026 |
+| [WP-028](WP-028-bootstrap-skill-registration.md) | Register skills + hooks on bootstrap (sync vault-independent; init runs sync) | M2 | opus | Ready | WP-027 |
 
 ## Dependency graph
 
@@ -87,4 +88,5 @@ graph LR
   WP024 --> WP026[WP-026 full adoption]
   WP025 --> WP026
   WP026 --> WP027[WP-027 defer vault creation]
+  WP027 --> WP028[WP-028 bootstrap skill registration]
 ```
