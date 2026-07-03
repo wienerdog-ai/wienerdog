@@ -153,6 +153,51 @@ function validateNoteFrontmatter(fm) {
 // ── small helpers ────────────────────────────────────────────────────────
 
 /**
+ * Recursively list every regular file under `dir`, as paths relative to `dir`.
+ * @param {string} dir
+ * @returns {string[]}
+ */
+function listFilesRecursive(dir) {
+  /** @type {string[]} */
+  const out = [];
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const abs = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      out.push(...listFilesRecursive(abs).map((rel) => path.join(entry.name, rel)));
+    } else if (entry.isFile()) {
+      out.push(entry.name);
+    }
+  }
+  return out.sort();
+}
+
+/**
+ * Byte-for-byte comparison of two skill directories (same relative file set,
+ * identical contents) — used to detect an already-installed, up-to-date
+ * `wienerdog-dream` skill so the harness can leave it untouched instead of
+ * backing it up and restoring it.
+ * @param {string} srcDir @param {string} destDir
+ * @returns {boolean}
+ */
+function skillDirsIdentical(srcDir, destDir) {
+  let srcFiles, destFiles;
+  try {
+    srcFiles = listFilesRecursive(srcDir);
+    destFiles = listFilesRecursive(destDir);
+  } catch {
+    return false;
+  }
+  if (srcFiles.length !== destFiles.length || srcFiles.some((f, i) => f !== destFiles[i])) return false;
+  return srcFiles.every((rel) => {
+    try {
+      return fs.readFileSync(path.join(srcDir, rel)).equals(fs.readFileSync(path.join(destDir, rel)));
+    } catch {
+      return false;
+    }
+  });
+}
+
+/**
  * @param {string} vaultDir @param {string[]} args
  * @returns {{stdout:string, status:number|null}}
  */
@@ -235,29 +280,46 @@ async function main() {
   /** @type {string[]} */
   const failures = [];
   let root = null;
+  // Real config dir's skill install (set up below, restored in `finally`).
+  let skillBackup = null; // path we moved a pre-existing skill to, or null
+  let installedSkill = false; // did we create realSkillDest?
+  let realSkillDest = null;
 
   try {
-    // 2. Isolate: temp dirs for HOME / core / vault / Claude config.
+    // 2. Isolate: temp dirs for core / vault / fixture transcripts / codex.
+    // Deliberately do NOT create/point at a temp HOME or Claude config dir —
+    // the brain needs the maintainer's real HOME + default config dir to
+    // resolve subscription/Keychain OAuth (ADR-0009).
     root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-scenarios-'));
-    const home = path.join(root, 'home');
     const core = path.join(root, 'core');
     const vault = path.join(root, 'vault');
-    const claudeConfigDir = path.join(root, 'claude');
+    const transcriptsDir = path.join(root, 'claude-transcripts'); // fixtures live here
     const codexDir = path.join(root, 'codex-absent');
-    fs.mkdirSync(home, { recursive: true });
 
     const env = { ...process.env };
-    env.HOME = home;
     env.WIENERDOG_HOME = core;
     env.WIENERDOG_VAULT = vault;
-    env.CLAUDE_CONFIG_DIR = claudeConfigDir;
-    env.CODEX_HOME = codexDir;
+    env.WIENERDOG_CLAUDE_DIR = transcriptsDir; // collection reads fixtures from here
+    env.CODEX_HOME = codexDir; // isolate codex discovery (stays empty)
     env.WIENERDOG_FAKE_TODAY = FAKE_TODAY;
     // The scenario harness deliberately leaves this unset to exercise the
     // REAL brain — never inherit a fake-brain override from the caller's shell.
     delete env.WIENERDOG_DREAM_CMD;
+    delete env.ANTHROPIC_API_KEY; // ADR-0009: subscription only, never a key
+    // Deliberately NOT set: env.HOME (inherit the real one → default config +
+    // Keychain OAuth).
+    // Deliberately NOT set: env.CLAUDE_CONFIG_DIR (inherit the maintainer's
+    // real value, or none → ~/.claude; the brain authenticates against
+    // whatever their `claude` uses).
+    //
+    // Setting all four Wienerdog-scoped overrides (WIENERDOG_HOME,
+    // WIENERDOG_VAULT, WIENERDOG_CLAUDE_DIR, CODEX_HOME) fully redirects every
+    // Wienerdog write and read into temp dirs, so leaving HOME real is safe
+    // *and* required — the brain needs the real HOME to resolve the default
+    // config dir where the subscription/OAuth credential lives.
 
-    // 3. Seed: init the core + vault, then plant the fixtures + dream skill.
+    // 3. Seed: init the core + vault, then plant the fixtures under the
+    // collection override (not the config dir).
     console.log('scenarios: seeding harness (wienerdog init --yes)...');
     const initRes = runWienerdog(['init', '--yes'], env);
     if (initRes.stdout) console.log(initRes.stdout);
@@ -265,18 +327,36 @@ async function main() {
       failures.push(`wienerdog init exited ${initRes.status}: ${(initRes.stderr || '').trim()}`);
     }
 
-    const projDir = path.join(claudeConfigDir, 'projects', 'scenario');
+    const projDir = path.join(transcriptsDir, 'projects', 'scenario');
     fs.mkdirSync(projDir, { recursive: true });
     for (const f of FIXTURE_FILES) {
       fs.copyFileSync(path.join(FIXTURES_DIR, f), path.join(projDir, f));
     }
 
-    // Sync the dream skill into the harness so `claude -p` can load it
-    // (WP-009's dry-run precedent: copy skills/wienerdog-dream/ into the
-    // Claude Code skills dir for this run).
-    const skillsDest = path.join(claudeConfigDir, 'skills', 'wienerdog-dream');
-    fs.mkdirSync(path.dirname(skillsDest), { recursive: true });
-    fs.cpSync(DREAM_SKILL_SRC, skillsDest, { recursive: true });
+    // Install the dream skill into the REAL config dir so the brain (which
+    // resolves the real default config dir) can find it via
+    // `--setting-sources user`. Resolved from the harness's OWN process.env
+    // (not the child `env` above), since that's what the brain will inherit.
+    // Back up + restore any pre-existing copy so a maintainer who already
+    // dogfoods Wienerdog never loses their own installed skill. IMPROVEMENT:
+    // if an identical copy is already installed (e.g. via `wienerdog sync`),
+    // leave it untouched entirely — no backup/restore dance needed.
+    const realConfigDir = process.env.CLAUDE_CONFIG_DIR || path.join(process.env.HOME || os.homedir(), '.claude');
+    realSkillDest = path.join(realConfigDir, 'skills', 'wienerdog-dream');
+    fs.mkdirSync(path.dirname(realSkillDest), { recursive: true });
+    if (fs.existsSync(realSkillDest)) {
+      if (skillDirsIdentical(DREAM_SKILL_SRC, realSkillDest)) {
+        console.log('scenarios: an identical wienerdog-dream skill is already installed; leaving it untouched.');
+      } else {
+        skillBackup = path.join(root, 'wienerdog-dream.preexisting');
+        fs.renameSync(realSkillDest, skillBackup); // set aside the maintainer's own copy
+        fs.cpSync(DREAM_SKILL_SRC, realSkillDest, { recursive: true });
+        installedSkill = true;
+      }
+    } else {
+      fs.cpSync(DREAM_SKILL_SRC, realSkillDest, { recursive: true });
+      installedSkill = true;
+    }
 
     const baselineCommits = commitCount(vault);
     const baselineSha = git(vault, ['rev-parse', 'HEAD']);
@@ -371,6 +451,15 @@ async function main() {
       }
     }
   } finally {
+    // Restore the real config dir's skills/ to exactly its pre-run state
+    // before removing the temp root, wrapped so a cleanup error can never
+    // mask a scenario failure.
+    try {
+      if (installedSkill && realSkillDest) fs.rmSync(realSkillDest, { recursive: true, force: true });
+      if (skillBackup && realSkillDest && fs.existsSync(skillBackup)) fs.renameSync(skillBackup, realSkillDest);
+    } catch (err) {
+      console.error(`scenarios: WARNING — could not restore ${realSkillDest}: ${err.message}`);
+    }
     if (root) fs.rmSync(root, { recursive: true, force: true });
   }
 
