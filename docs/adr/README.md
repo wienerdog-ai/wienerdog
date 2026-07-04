@@ -8,13 +8,16 @@ Durable decisions live here so they are made once, not re-litigated per session 
 |---|---|---|
 | [0001](0001-record-architecture-decisions.md) | Record architecture decisions | Accepted |
 | [0002](0002-mit-license.md) | MIT license | Accepted |
-| [0003](0003-npm-primary-distribution.md) | npm-primary distribution | Accepted (amended by 0006) |
+| [0003](0003-npm-primary-distribution.md) | npm-primary distribution | Accepted (amended by 0006, 0013) |
 | [0004](0004-no-daemon-invariant.md) | No-daemon invariant ("Wienerdog is just files") | Accepted |
 | [0005](0005-spec-driven-agent-development.md) | Spec-driven agent development | Accepted |
-| [0006](0006-curl-installer-default.md) | curl installer as the default entry point | Accepted (amended by 0011) |
+| [0006](0006-curl-installer-default.md) | curl installer as the default entry point | Accepted (amended by 0011, 0013) |
 | [0007](0007-graduated-sending.md) | Graduated sending (send grants) instead of no-send | Accepted |
-| [0008](0008-routine-catalog.md) | Post-setup routine catalog (quick wins), digest opt-in | Accepted |
+| [0008](0008-routine-catalog.md) | Post-setup routine catalog (quick wins), digest opt-in | Accepted (amended by 0014) |
 | [0009](0009-subscription-everywhere.md) | Subscription auth everywhere — no Anthropic API keys | Accepted |
 | [0010](0010-vault-adoption-paths.md) | Three vault paths — fresh, guided import, full adoption | Accepted |
 | [0011](0011-consented-dependency-install.md) | Consented dependency auto-install in the curl installer | Accepted (amends 0006) |
 | [0012](0012-dream-run-lifecycle.md) | Dream run lifecycle — pre-commit, crash revert, durable alerts | Accepted |
+| [0013](0013-vendored-install.md) | Vendored install — stable app copy, `sync` as update command | Accepted (amends 0003, 0006) |
+| [0014](0014-dream-scheduled-by-default.md) | Dreaming is scheduled by default on vault creation | Accepted (amends 0008) |
+| [0015](0015-update-availability-check.md) | Update-availability check — bounded, cache-rendered, opt-out | Accepted |

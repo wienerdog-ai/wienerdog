@@ -60,6 +60,11 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 | [WP-039](done/WP-039-dream-precommit-crash-recovery.md) | Dream pre-commit of session edits + crashed-brain vault recovery | M7 | opus | Done | WP-017, WP-038 |
 | [WP-040](done/WP-040-dream-note-update-provenance.md) | Dream skill preserves provenance when updating an existing note | M7 | sonnet | Done | WP-009 |
 | [WP-041](done/WP-041-persistent-failure-alerts.md) | Persistent failure alerts (alerts.jsonl) rendered into the digest | M7 | opus | Done | WP-039 |
+| [WP-042](WP-042-vendored-install.md) | Vendor the package into the core; schedules target a stable app/current entry | M7 | opus | Ready | — |
+| [WP-043](WP-043-sync-repoints-schedules.md) | sync repoints existing schedules to the vendored entry (migration) | M7 | opus | Ready | WP-042 |
+| [WP-044](WP-044-dream-scheduled-by-default.md) | Schedule the nightly dream by default when a vault is created | M7 | opus | Ready | WP-043 |
+| [WP-045](WP-045-update-check-core.md) | Update-availability check — core module + config opt-out | M7 | sonnet | Ready | WP-044 |
+| [WP-046](WP-046-update-check-wiring.md) | Wire the update check into run-job + render in digest/doctor; threat model | M7 | opus | Ready | WP-045 |
 
 > **First-production-night incident (2026-07-04).** WP-038, WP-039 and WP-041 form
 > a serial chain (they edit the shared `run-job.js` / `dream.js` / `validate.js`
@@ -69,6 +74,23 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 > WP-039 surfaces), dirty-vault starvation and crashed-brain self-starvation
 > (WP-039), transient failure visibility (WP-041), and note-update provenance loss
 > (WP-040).
+
+<!-- -->
+
+> **Vendored-install + default-dream + update-check chain (2026-07-04).** WP-042→046
+> form a serial chain implementing three owner decisions (ADR-0013/0014/0015).
+> WP-042 vendors the package into `~/.wienerdog/app/<version>/` behind a stable
+> `app/current` symlink so scheduler entries stop pointing at the ephemeral npx
+> cache; WP-043 migrates the two live installs' existing schedules onto that
+> stable path (via `sync`, the canonical update command). WP-044 then schedules
+> the nightly dream by default the moment a vault is created (silent, 03:30),
+> which also seeds the update-check cache each night. WP-045 builds the bounded,
+> opt-out, semver-validated update-check module; WP-046 wires its refresh into
+> `run-job` and renders the cached notice into the digest + `doctor`, and adds
+> THREAT-MODEL T7 plus the deferred `alerts.jsonl` injection-surface note. The
+> chain is linear because these WPs share `sync.js`, `schedule.js`, `init.js`,
+> `run-job.js`, and `digest.js`; serializing them avoids merge conflicts and lets
+> each build on the prior contract.
 
 ## Dependency graph
 
@@ -122,4 +144,8 @@ graph LR
   WP017 --> WP039
   WP039 --> WP041[WP-041 persistent failure alerts]
   WP009 --> WP040[WP-040 note-update provenance]
+  WP042[WP-042 vendored install] --> WP043[WP-043 sync repoints schedules]
+  WP043 --> WP044[WP-044 dream scheduled by default]
+  WP044 --> WP045[WP-045 update-check core]
+  WP045 --> WP046[WP-046 update-check wiring]
 ```
