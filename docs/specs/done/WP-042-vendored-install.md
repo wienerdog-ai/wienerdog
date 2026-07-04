@@ -1,7 +1,7 @@
 ---
 id: WP-042
 title: Vendor the package into the core; schedules target a stable app/current entry
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: []
