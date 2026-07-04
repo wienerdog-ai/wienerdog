@@ -28,6 +28,14 @@ function write(rel, content) {
   fs.writeFileSync(full, content);
 }
 
+// Crash test: simulate a brain that died mid-write (transient API drop) — a
+// partial, unvalidated vault write, an error on stderr, then a nonzero exit.
+if (process.env.WIENERDOG_FAKE_BRAIN_MODE === 'crash') {
+  write('00-Inbox/partial-note.md', '---\ntype: note\n---\n\nhalf-written\n');
+  process.stderr.write('brain error: API connection dropped mid-run\n');
+  process.exit(1);
+}
+
 // 1. Valid Tier-2 note — not code-gated (Tier-2 path); must survive.
 write(
   '03-Resources/valid-note.md',

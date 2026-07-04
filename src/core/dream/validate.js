@@ -64,6 +64,45 @@ function assertCleanTree(vaultDir) {
 }
 
 /**
+ * If the vault working tree is dirty, commit ALL uncommitted changes (the user's
+ * own session edits) as a single commit so the subsequent dream diff is exactly
+ * the brain's writes. No-op on a clean tree (never make an empty commit — keeps a
+ * no-edit night idempotent). The message is frozen — do not vary it. Uses the
+ * `wienerdog` committer identity (matching the dream commit) so it works even
+ * when the vault has no configured git identity.
+ * @param {string} vaultDir
+ * @returns {{committed:boolean, sha:string|null}}
+ */
+function precommitSessionEdits(vaultDir) {
+  const status = git(vaultDir, ['status', '--porcelain', '-uall']);
+  if (status.stdout.trim() === '') return { committed: false, sha: null };
+  git(vaultDir, ['add', '-A']);
+  git(vaultDir, [
+    '-c',
+    'user.name=wienerdog',
+    '-c',
+    'user.email=wienerdog@localhost',
+    'commit',
+    '-m',
+    'vault: session edits before dream',
+  ]);
+  const sha = git(vaultDir, ['rev-parse', 'HEAD']).stdout.trim();
+  return { committed: true, sha };
+}
+
+/**
+ * Restore the vault working tree to HEAD: drop tracked modifications and remove
+ * untracked non-ignored files (the brain's unvalidated writes). Uses `git clean
+ * -fd` (NOT -x) so .gitignore'd files — e.g. the adopt starter-ignore's plugin
+ * binaries — are preserved. Vault-scoped by construction (the vault IS the repo).
+ * @param {string} vaultDir
+ */
+function restoreVaultToHead(vaultDir) {
+  git(vaultDir, ['reset', '--hard', 'HEAD']);
+  git(vaultDir, ['clean', '-fd']);
+}
+
+/**
  * Minimal frontmatter reader: a leading `--- ... ---` block of flat `key: value`
  * scalars. Unquoted `true`/`false` become booleans; quoted values stay strings;
  * everything else is a trimmed string. Missing/mangled block → {}. Same
@@ -401,4 +440,11 @@ function validateAndCommit(o) {
   };
 }
 
-module.exports = { validateAndCommit, parseFrontmatter, assertGitRepo, assertCleanTree };
+module.exports = {
+  validateAndCommit,
+  parseFrontmatter,
+  assertGitRepo,
+  assertCleanTree,
+  precommitSessionEdits,
+  restoreVaultToHead,
+};

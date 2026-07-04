@@ -204,15 +204,50 @@ test('dream-integration: --dry-run prints the plan and resolved argv, runs no br
   assert.equal(fs.existsSync(path.join(ctx.core, 'state', 'dream-scratch')), false);
 });
 
-test('dream-integration: a dirty vault working tree aborts before the brain, with no commit', async () => {
+test('dream-integration: a dirty vault is pre-committed, then the dream proceeds (starvation fix)', async () => {
   const ctx = setup();
   const before = commitCount(ctx.vault);
-  fs.writeFileSync(path.join(ctx.vault, 'uncommitted.md'), 'dirty\n');
+  // An ordinary interactive session left the vault dirty (uncommitted edits).
+  fs.writeFileSync(path.join(ctx.vault, 'uncommitted.md'), 'session edit\n');
+
   const { thrown } = await runDream(ctx, ['--yes']);
+  assert.equal(thrown, null, thrown && thrown.message);
+
+  // Two new commits: the pre-commit of the user's edits, then the dream commit.
+  assert.equal(commitCount(ctx.vault), before + 2);
+  const subjects = git(ctx.vault, ['log', '-2', '--pretty=%s']).trim().split('\n');
+  assert.match(subjects[0], /^dream: \d{4}-\d{2}-\d{2} — \d+ notes, \d+ skills$/);
+  assert.equal(subjects[1], 'vault: session edits before dream');
+
+  // The previously-uncommitted file is now tracked.
+  assert.ok(git(ctx.vault, ['ls-files']).includes('uncommitted.md'));
+  // The dream's own writes still landed and the tree is clean.
+  assert.ok(git(ctx.vault, ['ls-files']).includes('06-Identity/valid-identity.md'));
+  assert.equal(git(ctx.vault, ['status', '--porcelain']).trim(), '');
+});
+
+test('dream-integration: a crashed brain restores the vault, releases the lock, advances no watermark', async () => {
+  const ctx = setup();
+  const before = commitCount(ctx.vault);
+  const { output, thrown } = await runDream(ctx, ['--yes'], { WIENERDOG_FAKE_BRAIN_MODE: 'crash' });
+
+  // The run fails loud, surfacing the brain's stderr tail.
   assert.ok(thrown);
-  assert.match(thrown.message, /uncommitted changes/);
+  assert.match(thrown.message, /dream brain exited 1/);
+  assert.match(thrown.message, /API connection dropped/);
+
+  // No dream commit, watermarks not advanced.
   assert.equal(commitCount(ctx.vault), before);
-  assert.equal(fs.existsSync(path.join(ctx.vault, '06-Identity/injected.md')), false);
+  assert.equal(fs.existsSync(path.join(ctx.core, 'state', 'watermarks.json')), false);
+
+  // The brain's partial write is gone and the tree is byte-clean.
+  assert.equal(fs.existsSync(path.join(ctx.vault, '00-Inbox/partial-note.md')), false);
+  assert.equal(git(ctx.vault, ['status', '--porcelain']).trim(), '');
+
+  // Lock released and scratch wiped (the outer finally ran after the restore).
+  assert.equal(fs.existsSync(path.join(ctx.core, 'state', 'dream.lock')), false);
+  assert.equal(fs.existsSync(path.join(ctx.core, 'state', 'dream-scratch')), false);
+  assert.ok(!/dream committed/.test(output));
 });
 
 test('dream-integration: the watchdog kills a hanging brain, exits with a timeout error, no commit, no scratch left', async () => {

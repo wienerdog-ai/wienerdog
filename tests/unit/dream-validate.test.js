@@ -8,7 +8,12 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { execFileSync } = require('node:child_process');
 
-const { validateAndCommit, parseFrontmatter } = require('../../src/core/dream/validate');
+const {
+  validateAndCommit,
+  parseFrontmatter,
+  precommitSessionEdits,
+  restoreVaultToHead,
+} = require('../../src/core/dream/validate');
 const { defaultLayout } = require('../../src/core/layout');
 
 /** @param {string} cwd @param {string[]} args */
@@ -220,6 +225,60 @@ test('dream-validate: Tier-3 gate + report follow a non-default layout, not the 
   assert.ok(report.includes('Identity/injected.md'));
   assert.ok(report.includes('99-Skills/weak/SKILL.md'));
   assert.equal(res.counts.skills, 0); // both skills writes reverted
+});
+
+// ── precommitSessionEdits ──────────────────────────────────────────────────
+
+test('dream-validate: precommitSessionEdits is a no-op on a clean tree (no commit)', () => {
+  const { vault } = tempVault();
+  const before = git(vault, ['rev-list', '--count', 'HEAD']).trim();
+  const res = precommitSessionEdits(vault);
+  assert.deepEqual(res, { committed: false, sha: null });
+  assert.equal(git(vault, ['rev-list', '--count', 'HEAD']).trim(), before);
+});
+
+test('dream-validate: precommitSessionEdits commits a dirty tree with the frozen message', () => {
+  const { vault } = tempVault();
+  const before = Number(git(vault, ['rev-list', '--count', 'HEAD']).trim());
+  writeVault(vault, '05-Daily/2026-07-04.md', '# session edit\n');
+  writeVault(vault, 'README.md', 'changed\n'); // also modify a tracked file
+
+  const res = precommitSessionEdits(vault);
+  assert.equal(res.committed, true);
+  assert.match(res.sha, /^[0-9a-f]{40}$/);
+  assert.equal(Number(git(vault, ['rev-list', '--count', 'HEAD']).trim()), before + 1);
+  assert.equal(git(vault, ['log', '-1', '--pretty=%s']).trim(), 'vault: session edits before dream');
+  // Committed under the wienerdog identity, tree now clean, edit tracked.
+  assert.equal(git(vault, ['log', '-1', '--pretty=%an <%ae>']).trim(), 'wienerdog <wienerdog@localhost>');
+  assert.equal(git(vault, ['status', '--porcelain']).trim(), '');
+  assert.ok(git(vault, ['ls-files']).includes('05-Daily/2026-07-04.md'));
+});
+
+// ── restoreVaultToHead ─────────────────────────────────────────────────────
+
+test('dream-validate: restoreVaultToHead drops untracked brain writes and reverts tracked mods', () => {
+  const { vault } = tempVault({ 'tracked.md': 'original\n' });
+  // Brain modifies a tracked file and adds an untracked one.
+  writeVault(vault, 'tracked.md', 'tampered\n');
+  writeVault(vault, '00-Inbox/partial-note.md', 'half-written\n');
+
+  restoreVaultToHead(vault);
+
+  assert.equal(fs.readFileSync(path.join(vault, 'tracked.md'), 'utf8'), 'original\n');
+  assert.equal(fs.existsSync(path.join(vault, '00-Inbox/partial-note.md')), false);
+  assert.equal(git(vault, ['status', '--porcelain']).trim(), '');
+});
+
+test('dream-validate: restoreVaultToHead preserves a .gitignore\'d untracked file (no -x)', () => {
+  const { vault } = tempVault({ '.gitignore': '.smart-env/\n' });
+  fs.mkdirSync(path.join(vault, '.smart-env'), { recursive: true });
+  fs.writeFileSync(path.join(vault, '.smart-env/plugin.bin'), 'binary');
+  writeVault(vault, '00-Inbox/partial-note.md', 'half-written\n');
+
+  restoreVaultToHead(vault);
+
+  assert.ok(fs.existsSync(path.join(vault, '.smart-env/plugin.bin')));
+  assert.equal(fs.existsSync(path.join(vault, '00-Inbox/partial-note.md')), false);
 });
 
 test('dream-validate: always commits (report append) even with only reverts', () => {

@@ -13,7 +13,13 @@ const { collectExtracts, cleanScratch } = require('../core/dream/scratch');
 const { spawnBrain, buildClaudeArgs } = require('../core/dream/brain');
 const { readVaultLayout } = require('../core/layout');
 const { renderDigest } = require('../core/digest');
-const { validateAndCommit, assertGitRepo, assertCleanTree } = require('../core/dream/validate');
+const {
+  validateAndCommit,
+  assertGitRepo,
+  assertCleanTree,
+  precommitSessionEdits,
+  restoreVaultToHead,
+} = require('../core/dream/validate');
 
 /** @returns {string} today's date as local YYYY-MM-DD, or WIENERDOG_FAKE_TODAY. */
 function resolveDate() {
@@ -93,7 +99,8 @@ async function runBrainWithWatchdog(o) {
   try {
     const result = await Promise.race([done, watchdog]);
     if (result.code !== 0) {
-      throw new WienerdogError(`dream brain exited ${result.code}`);
+      const tail = (result.stderrTail || '').trim();
+      throw new WienerdogError(`dream brain exited ${result.code}${tail ? `: ${tail}` : ''}`);
     }
   } finally {
     if (timer) clearTimeout(timer);
@@ -118,9 +125,9 @@ async function run(argv) {
   const layout = readVaultLayout(paths.config);
   const date = resolveDate();
 
-  // 2. Vault must be a git repo with a clean working tree.
+  // 2. Vault must be a git repo. (Uncommitted session edits are handled by the
+  //    pre-commit below, after the lock — no clean-tree precondition here.)
   assertGitRepo(vaultDir);
-  assertCleanTree(vaultDir);
 
   // 3. Collect the fresh transcripts into scratch.
   const wm = readWatermarks(paths.state);
@@ -156,6 +163,13 @@ async function run(argv) {
 
   // 7. Run the brain under the watchdog, then validate + commit.
   try {
+    // Commit the user's own uncommitted session edits so the post-brain diff is
+    // exactly the brain's writes (fixes dirty-vault starvation).
+    precommitSessionEdits(vaultDir);
+    // After the pre-commit the tree MUST be clean. If it is not, dirt appeared
+    // while the lock was held (a race, not session edits) — refuse (pathological).
+    assertCleanTree(vaultDir);
+
     const logDir = path.join(paths.logs, 'dream');
     fs.mkdirSync(logDir, { recursive: true });
     const logStream = fs.createWriteStream(path.join(logDir, `${date}.log`), { flags: 'a' });
@@ -169,6 +183,12 @@ async function run(argv) {
         timeoutMs: cfg.timeoutMs,
         logStream,
       });
+    } catch (err) {
+      // Brain failed/timed out: discard its partial, unvalidated writes (all dirt
+      // is brain-authored by construction after the pre-commit) before releasing
+      // the lock. Still fail: run-job records the error + fails loud.
+      restoreVaultToHead(vaultDir);
+      throw err;
     } finally {
       logStream.end();
     }
