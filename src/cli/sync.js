@@ -119,9 +119,10 @@ function stageSkills(paths, dryRun, manifest, out) {
  * adapter (Claude Code in this WP). Idempotent and manifest-tracked; a second
  * run with unchanged inputs makes zero changes.
  * @param {string[]} argv
+ * @param {{loader?: (argv:string[])=>{status:number}}} [opts]  scheduler loader seam
  * @returns {Promise<void>}
  */
-async function run(argv) {
+async function run(argv, opts = {}) {
   const dryRun = argv.includes('--dry-run');
   const paths = getPaths();
   const vaultPath = readVaultPath(paths.config);
@@ -157,6 +158,13 @@ async function run(argv) {
       console.log(`wienerdog: add ${path.dirname(shim.path)} to your PATH to run \`wienerdog\` directly ` +
         `(e.g. add 'export PATH="$HOME/.local/bin:$PATH"' to your shell profile).`);
     }
+    // Migrate existing OS scheduler entries to the stable vendored bin (ADR-0013).
+    // Idempotent: only stale entries are rewritten+reloaded; a clean re-sync is a
+    // no-op. Never fails sync — an unschedulable job degrades to a notice.
+    const { repointSchedules } = require('./schedule');
+    const r = repointSchedules(paths, manifest, { loader: opts.loader });
+    if (r.changed > 0) console.log(`wienerdog: repointed ${r.changed} schedule(s) to the vendored app.`);
+    for (const n of r.notices) console.log(`  note: ${n}`);
   }
 
   /** @type {{changed: string[], unchanged: string[], notices: string[]}} */

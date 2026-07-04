@@ -218,6 +218,9 @@ function isFile(p) {
  * @returns {{status:number}}
  */
 function defaultCatchupLoader(argv) {
+  // Test/CI kill-switch (ADR-0013): higher-level flows that repoint schedules
+  // must never spawn the real scheduler. Injected loaders are unaffected.
+  if (process.env.WIENERDOG_LOADER_NOOP) return { status: 0 };
   const r = spawnSync(argv[0], argv.slice(1));
   return { status: r.status == null ? 1 : r.status };
 }

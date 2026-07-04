@@ -17,6 +17,11 @@ const gen = require('../scheduler/generators');
  * @returns {{status:number}} real impl: spawnSync(argv[0], argv.slice(1)).
  */
 function defaultLoader(argv) {
+  // Test/CI kill-switch (ADR-0013): higher-level flows that repoint schedules
+  // (sync, and WP-044's init/adopt) must never spawn the real scheduler.
+  // Injected loaders passed via opts.loader are unaffected — this only
+  // neutralizes the real-spawn default.
+  if (process.env.WIENERDOG_LOADER_NOOP) return { status: 0 };
   const r = spawnSync(argv[0], argv.slice(1));
   return { status: r.status == null ? 1 : r.status };
 }
@@ -163,6 +168,42 @@ function registerPlatform(paths, manifest, o, loader) {
   throw new WienerdogError(
     `scheduling is not supported on ${process.platform} yet (macOS and systemd Linux only)`
   );
+}
+
+/**
+ * Re-register every defined job's OS scheduler entry (ADR-0013 migration): after
+ * vendoring, this rewrites any entry that still embeds an old bin path so it
+ * targets the stable vendored bin. Idempotent — registerPlatform rewrites+reloads
+ * only when content changed. A job on a platform that cannot be scheduled
+ * (unsupported OS / non-systemd Linux) is skipped with a notice, never a throw.
+ * @param {import('../core/paths').WienerdogPaths} paths
+ * @param {import('../core/manifest').Manifest} manifest
+ * @param {{loader?: (argv:string[])=>{status:number}}} [opts]
+ * @returns {{repointed:number, changed:number, notices:string[]}}
+ */
+function repointSchedules(paths, manifest, opts = {}) {
+  const loader = opts.loader || defaultLoader;
+  const jobs = jobsLib.listJobs(paths);
+  let repointed = 0;
+  let changed = 0;
+  /** @type {string[]} */ const notices = [];
+  for (const job of jobs) {
+    let hm;
+    try {
+      hm = gen.parseAt(job.at);
+    } catch {
+      notices.push(`skip "${job.name}": bad time ${job.at}`);
+      continue;
+    }
+    try {
+      const res = registerPlatform(paths, manifest, { name: job.name, hour: hm.hour, minute: hm.minute }, loader);
+      repointed += 1;
+      if (res.changed) changed += 1;
+    } catch (err) {
+      notices.push(`could not repoint "${job.name}": ${err.message}`);
+    }
+  }
+  return { repointed, changed, notices };
 }
 
 /**
@@ -316,4 +357,4 @@ async function run(argv, { loader = defaultLoader } = {}) {
   }
 }
 
-module.exports = { run, defaultLoader };
+module.exports = { run, defaultLoader, repointSchedules };

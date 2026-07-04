@@ -1,7 +1,7 @@
 ---
 id: WP-043
 title: sync repoints existing schedules to the vendored entry (migration)
-status: Ready
+status: In-Review
 model: opus
 size: S
 depends_on: [WP-042]
@@ -34,7 +34,10 @@ files and asks the OS scheduler to reload, synchronously, then returns.
 
 ## Current state
 
-### `src/scheduler/schedule.js` — registration you will reuse
+### `src/cli/schedule.js` — registration you will reuse
+
+> Spec-path note (WP-043 impl): the registration lives in `src/cli/schedule.js`
+> (not `src/scheduler/schedule.js`, which does not exist). Paths corrected below.
 
 `registerPlatform(paths, manifest, {name, hour, minute}, loader)` writes the
 per-job launchd plist (darwin) or systemd `.timer`+`.service` (systemd Linux) via
@@ -61,7 +64,7 @@ an injectable `loader` seam so higher-level tests stay off the real scheduler.
 
 | Action | Path | Notes |
 |--------|------|-------|
-| modify | src/scheduler/schedule.js | add `repointSchedules()`; `defaultLoader` honors `WIENERDOG_LOADER_NOOP` |
+| modify | src/cli/schedule.js | add `repointSchedules()`; `defaultLoader` honors `WIENERDOG_LOADER_NOOP` |
 | modify | src/scheduler/generators.js | `defaultCatchupLoader` honors `WIENERDOG_LOADER_NOOP` |
 | modify | src/cli/sync.js | `run(argv, opts)`; call `repointSchedules` after vendoring (non-dry-run) |
 | create | tests/unit/sync-repoint.test.js | old-path plist → rewritten to stable path; idempotent second run |
@@ -69,7 +72,7 @@ an injectable `loader` seam so higher-level tests stay off the real scheduler.
 
 ### Exact contracts
 
-**`src/scheduler/schedule.js` — `repointSchedules`.** Re-register every defined
+**`src/cli/schedule.js` — `repointSchedules`.** Re-register every defined
 job on the current platform so its OS entry points at the (now vendored) stable
 bin. Idempotent; never throws (a job on an unsupported platform degrades to a
 notice, so `sync` never fails because of it):
@@ -127,7 +130,7 @@ the real-spawn defaults.)
 
 ```js
 if (!dryRun) {
-  const { repointSchedules } = require('../scheduler/schedule');
+  const { repointSchedules } = require('./schedule');
   const r = repointSchedules(paths, manifest, { loader: opts.loader });
   if (r.changed > 0) console.log(`wienerdog: repointed ${r.changed} schedule(s) to the vendored app.`);
   for (const n of r.notices) console.log(`  note: ${n}`);

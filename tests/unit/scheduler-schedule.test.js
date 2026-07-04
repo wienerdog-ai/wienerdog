@@ -12,7 +12,14 @@ const { getPaths } = require('../../src/core/paths');
 const manifestLib = require('../../src/core/manifest');
 const jobsLib = require('../../src/scheduler/jobs');
 const gen = require('../../src/scheduler/generators');
+const vendor = require('../../src/core/vendor');
 const schedule = require('../../src/cli/schedule');
+
+// Hermeticity: CI sets XDG_CONFIG_HOME to the real ~/.config, which
+// systemdUserDir() prefers over $HOME. Unset it (this file runs in its own
+// `node --test` process) so systemd units resolve under the temp HOME, never a
+// real dir — and so parallel test files never collide on a shared unit path.
+delete process.env.XDG_CONFIG_HOME;
 
 /** @param {string} c @returns {string} */
 function sha256(c) {
@@ -333,6 +340,80 @@ test('scheduler-schedule: remove runs the unload, deletes files, drops entries a
 test('scheduler-schedule: remove of an unknown job is a no-op notice', async () => {
   const { env } = setup();
   await runSchedule(env, ['remove', 'nope'], () => ({ status: 0 })); // must not throw
+});
+
+// -------------------------------------------------------------------------
+// schedule.js: repointSchedules (ADR-0013 migration) — idempotent re-register,
+// stale-path rewrite, unsupported-platform degrade.
+// -------------------------------------------------------------------------
+
+/**
+ * The primary scheduler-entry file for a job on the current platform whose
+ * content embeds the wienerdog bin path: the launchd plist on darwin, the
+ * systemd .service on Linux.
+ * @param {import('../../src/core/paths').WienerdogPaths} paths
+ * @param {string} name
+ * @returns {string}
+ */
+function primaryEntryFile(paths, name) {
+  if (process.platform === 'darwin') {
+    return path.join(gen.launchAgentsDir(paths.home), `${gen.launchdLabel(name)}.plist`);
+  }
+  return path.join(gen.systemdUserDir(paths.home, process.env), `${gen.systemdUnitBase(name)}.service`);
+}
+
+test('scheduler-schedule: repointSchedules after add is a no-op (changed:0, no OS call)', { skip: !SCHED_SUPPORTED }, async () => {
+  const { env, paths } = setup();
+  await runSchedule(env, ['add', 'dream', '--at', '03:30', '--job', 'dream'], () => ({ status: 0 }));
+
+  const calls = [];
+  const manifest = manifestLib.load(paths);
+  const res = schedule.repointSchedules(paths, manifest, { loader: (a) => (calls.push(a), { status: 0 }) });
+
+  assert.equal(res.repointed, 1, 'the one defined job was re-registered');
+  assert.equal(res.changed, 0, 'content already targets the stable bin — nothing rewritten');
+  assert.deepEqual(res.notices, []);
+  assert.equal(calls.length, 0, 'no OS reload on an unchanged repoint');
+});
+
+test('scheduler-schedule: repointSchedules rewrites a stale bin path (changed:1)', { skip: !SCHED_SUPPORTED }, async () => {
+  const { env, paths } = setup();
+  await runSchedule(env, ['add', 'dream', '--at', '03:30', '--job', 'dream'], () => ({ status: 0 }));
+
+  // Simulate an older version's entry: hand-edit the embedded bin to a stale path.
+  const file = primaryEntryFile(paths, 'dream');
+  const stableBin = vendor.currentBin(paths);
+  const oldBin = '/old/npx-cache/node_modules/wienerdog/bin/wienerdog.js';
+  const stale = fs.readFileSync(file, 'utf8').split(stableBin).join(oldBin);
+  assert.ok(stale.includes(oldBin) && !stale.includes(stableBin), 'seeded a stale entry');
+  fs.writeFileSync(file, stale);
+
+  const calls = [];
+  const manifest = manifestLib.load(paths);
+  const res = schedule.repointSchedules(paths, manifest, { loader: (a) => (calls.push(a), { status: 0 }) });
+
+  assert.equal(res.changed, 1, 'the stale entry was rewritten');
+  const after = fs.readFileSync(file, 'utf8');
+  assert.ok(after.includes(stableBin) && !after.includes(oldBin), 'entry now targets the stable bin');
+  assert.ok(calls.length >= 1, 'the OS scheduler was reloaded');
+});
+
+test('scheduler-schedule: repointSchedules degrades on an unsupported platform (notice, no throw)', async () => {
+  const { paths } = setup();
+  jobsLib.saveJob(paths, { name: 'dream', at: '03:30', run: 'builtin:dream', timeoutMinutes: 20 });
+
+  const orig = Object.getOwnPropertyDescriptor(process, 'platform');
+  Object.defineProperty(process, 'platform', { value: 'sunos', configurable: true });
+  try {
+    const manifest = manifestLib.load(paths);
+    const res = schedule.repointSchedules(paths, manifest, { loader: () => ({ status: 0 }) });
+    assert.equal(res.repointed, 0, 'nothing registered on an unschedulable platform');
+    assert.equal(res.changed, 0);
+    assert.equal(res.notices.length, 1, 'the job is collected as a notice, not a throw');
+    assert.match(res.notices[0], /could not repoint "dream"/);
+  } finally {
+    Object.defineProperty(process, 'platform', orig);
+  }
 });
 
 test('scheduler-schedule: list --json reports jobs with watermarks', { skip: !SCHED_SUPPORTED }, async () => {
