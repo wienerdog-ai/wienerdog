@@ -1,7 +1,7 @@
 ---
 id: WP-045
 title: Update-availability check — core module + config opt-out
-status: In-Review
+status: Done
 model: sonnet
 size: M
 depends_on: [WP-044]
