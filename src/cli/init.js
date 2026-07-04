@@ -57,6 +57,7 @@ harnesses:
   claude: ${harnesses.claude.present}        # set true by init when detected
   codex: ${harnesses.codex.present}
 memory_mode: standard  # conservative | standard | eager
+update_check: true     # check npm for new versions (set false to disable)
 `;
 }
 

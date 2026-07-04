@@ -85,6 +85,7 @@ test('init --yes creates the core, config, and manifest', () => {
   assert.match(cfg, /claude: false/);
   assert.match(cfg, /codex: false/);
   assert.match(cfg, /memory_mode: standard/);
+  assert.match(cfg, /update_check: true/);
 });
 
 test('init --yes defers the vault (vault: null, no vault dir, next-step output)', () => {
