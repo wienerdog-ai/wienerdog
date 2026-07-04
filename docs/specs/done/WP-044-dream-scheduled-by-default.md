@@ -1,7 +1,7 @@
 ---
 id: WP-044
 title: Schedule the nightly dream by default when a vault is created
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: [WP-043]
@@ -130,7 +130,7 @@ call, inside the `if (vaultStep)` summary block:
 
 ```js
 if (vaultStep) {
-  const { ensureDreamSchedule } = require('../scheduler/schedule');
+  const { ensureDreamSchedule } = require('./schedule');
   const d = ensureDreamSchedule(paths);
   console.log('\nwienerdog: installed with a fresh vault.');
   if (d.scheduled) {
@@ -156,7 +156,7 @@ const { vendorSelf, writeShim } = require('../core/vendor');
 vendorSelf(paths, { manifest });
 writeShim(paths, { manifest });
 manifestLib.save(paths, manifest);
-const { ensureDreamSchedule } = require('../scheduler/schedule');
+const { ensureDreamSchedule } = require('./schedule');
 const dream = ensureDreamSchedule(paths);
 ```
 
