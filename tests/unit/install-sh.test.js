@@ -504,27 +504,44 @@ test('install-sh macOS: Node install failure (installer non-zero) → fallback +
   assert.match(r.stderr, /nodejs\.org/);
 });
 
-test('install-sh macOS: git via CLT, consent yes, install completes → git resolves, npx handoff', () => {
+// Driven through the sourcing seam with HERMETIC_RESOLVE_BIN, like the Node
+// success cases above (WP-036 class, macOS mirror): a full-script run would hit
+// the real `resolve_bin git /usr/bin /usr/local/bin /opt/homebrew/bin`, and the
+// GitHub macOS image preinstalls Homebrew git, so /opt/homebrew/bin — which also
+// holds a REAL node + npx — gets prepended ahead of the stubs; main then execs
+// the REAL `npx wienerdog@latest init` (a forbidden real install; it exits 254
+// because npm can't spawn `sh` on the curated PATH). Green on dev boxes only
+// when /opt/homebrew/bin happens to lack git. The npx handoff after ensure_git
+// is proven by the CLT-timeout test below on a PATH that never gets real dirs
+// prepended. The old shim also created git via `cat`/`chmod`, which are absent
+// from the curated PATH — the redirection left a non-executable empty file that
+// only "resolved" because bash's `command -v` matches non-executable files;
+// printf (a builtin) plus a hermetic chmod now build a real executable fake.
+test('install-sh macOS: git via CLT, consent yes, install completes → git resolves', () => {
   const { root, stubBin } = mkStub('wd-mac-clt-ok-');
-  const npxArgv = path.join(root, 'npx-argv.txt');
-  writeShimAbs(stubBin, 'uname', 'echo Darwin');
-  nodeShimFile(stubBin, 'v20.0.0'); // Node already satisfied
-  writeShimAbs(stubBin, 'npx', `echo "$@" > "${npxArgv}"\nexit 0`);
   writeShimAbs(stubBin, 'sleep', 'exit 0'); // instant poll
   // `--install` makes git appear; `-p` reports the CLT path is present.
   writeShimAbs(
     stubBin,
     'xcode-select',
-    `if [ "$1" = "-p" ]; then exit 0; fi\nif [ "$1" = "--install" ]; then\ncat > "${stubBin}/git" <<'GIT'\n#!${BASH}\nexit 0\nGIT\nchmod +x "${stubBin}/git"\nfi\nexit 0`
+    `if [ "$1" = "-p" ]; then exit 0; fi\n` +
+      `if [ "$1" = "--install" ]; then printf '#!%s\\nexit 0\\n' "${BASH}" > "${stubBin}/git"; chmod +x "${stubBin}/git"; fi\n` +
+      `exit 0`
   );
   const tty = writeFakeTty(root, 'y');
 
-  const r = runMacInstall(stubBin, HERMETIC_SYS_BIN_GIT, {
-    tty,
-    env: { WIENERDOG_CLT_POLL: '1', WIENERDOG_CLT_TIMEOUT: '5' },
-  });
-  assert.equal(r.status, 0);
-  assert.equal(readIf(npxArgv).trim(), '--yes wienerdog@latest init');
+  const r = sourceAndRun(
+    HERMETIC_RESOLVE_BIN +
+      'os=Darwin\nif ensure_git; then echo RC=0; else echo RC=$?; fi\ncommand -v git',
+    {
+      exclusivePath: `${stubBin}:${hermeticBinDir(['chmod'])}`,
+      env: { WIENERDOG_TTY: tty, WIENERDOG_CLT_POLL: '1', WIENERDOG_CLT_TIMEOUT: '5' },
+    }
+  );
+  assert.match(r.stdout, /RC=0/);
+  // The fake CLT install created git and it resolves on the stub PATH.
+  assert.ok(r.stdout.includes(`${stubBin}/git`), `git did not resolve to the stub: ${r.stdout}`);
+  assert.doesNotMatch(r.stderr, /isn't installed/); // success path, not the note
 });
 
 test('install-sh macOS: git via CLT times out → note printed, still hands off (exit 0)', () => {
@@ -644,7 +661,10 @@ function writeNodeTemplate(stubBin, verFile) {
 // there. WP-035's PATH curation can't catch this (resolve_bin never consults
 // PATH). Prepending this override makes the stub on the exclusive PATH
 // authoritative — exactly how these tests already behave on macOS. resolve_bin's
-// real dir-scan is covered by its own tests above.
+// real dir-scan is covered by its own tests above. (Also used by the macOS
+// git-via-CLT success test above — same class, mirrored: the macOS image
+// preinstalls Homebrew git, so /opt/homebrew/bin with its real node/npx would
+// get prepended.)
 const HERMETIC_RESOLVE_BIN = 'resolve_bin() { command -v "$1"; }\n';
 
 test('install-sh Linux node_is_recent: v18→0, v16→1, missing→1', () => {
