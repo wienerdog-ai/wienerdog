@@ -1,6 +1,7 @@
 'use strict';
 
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const { spawn, spawnSync } = require('node:child_process');
 
@@ -62,6 +63,8 @@ function buildCleanEnv(paths, name) {
   /** @type {NodeJS.ProcessEnv} */
   const env = {
     HOME: paths.home,
+    // claude's Keychain credential lookup fails ("Not logged in") without USER.
+    USER: os.userInfo().username,
     PATH: [
       path.dirname(process.execPath), // node
       '/opt/homebrew/bin',
