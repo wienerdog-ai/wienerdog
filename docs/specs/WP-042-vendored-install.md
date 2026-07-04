@@ -43,9 +43,16 @@ migrates already-installed schedules to the stable path;** this WP does not.
 Key facts you must respect:
 
 - **Zero runtime deps in the vendored copy.** The published `files` list has no
-  `node_modules`; `googleapis` (the one runtime dep) is *not* vendored. Commands
-  that need it (`gws`) will not run from the vendored copy — that is acceptable
-  and intentional (ADR-0013). `dream` and job dispatch need only Node.
+  `node_modules`; `googleapis` (the one runtime dep) is *not* vendored. `dream`
+  and job dispatch need only Node and work from it. `gws` needs `googleapis` and
+  is handled on demand in a later WP (WP-047) — out of scope here.
+- **A PATH shim (this WP).** Bare `wienerdog` resolves nowhere on a real install
+  today (verified: no npm global bin under npx; no shim). This WP has `sync`
+  write an executable shim `~/.local/bin/wienerdog` that `exec`s the vendored
+  bin, so the brain (and the user) can run `wienerdog …`. `~/.local/bin` is
+  already first in `run-job`'s clean PATH (WP-038). The shim is manifest-tracked
+  and removed by `uninstall`. **Because the shim lives OUTSIDE the core, tests
+  that run `init`/`sync` must isolate `HOME` (see Implementation notes).**
 - **Idempotent + reversible** (CLAUDE.md): a second `sync` makes zero *content*
   changes; `uninstall` removes the whole vendored tree.
 - **Dev mode**: when the running package root is a git checkout (has a `.git`
@@ -95,16 +102,18 @@ right after the manifest load, on non-dry-run only. `init.js` already calls
 
 | Action | Path | Notes |
 |--------|------|-------|
-| create | src/core/vendor.js | `vendorSelf`, path helpers, dev detection, atomic repoint |
+| create | src/core/vendor.js | `vendorSelf`, `writeShim`, path helpers, dev detection, atomic repoint |
 | modify | src/core/manifest.js | add `vendored-tree` kind + `reverseVendoredTree` + export + doc comment |
 | modify | src/scheduler/generators.js | `wienerdogBin(paths)`; `ensureCatchup` passes `paths` |
 | modify | src/scheduler/schedule.js | pass `paths` to every `gen.wienerdogBin()` call |
 | modify | src/cli/run-job.js | `resolveCommand(paths, job)` + call site; `defaultSendAlert` passes `paths` |
-| modify | src/cli/sync.js | call `vendorSelf(paths, {manifest})` after manifest load (skip on dry-run) |
-| create | tests/unit/vendor.test.js | prod-mode copy, dev-mode symlink, idempotency, atomic repoint |
+| modify | src/cli/sync.js | call `vendorSelf` + `writeShim` after manifest load (skip on dry-run); PATH note |
+| create | tests/unit/vendor.test.js | prod copy, dev symlink, idempotency, atomic repoint, shim write |
 | modify | tests/unit/manifest.test.js | `vendored-tree` reverse removes the tree + empties the core |
 | modify | tests/unit/scheduler-generators.test.js | update `wienerdogBin(paths)` call(s) |
 | modify | tests/unit/scheduler-runjob.test.js | update `resolveCommand(paths, job)` call(s) |
+| modify | tests/unit/init.test.js | isolate `HOME` in `tempEnv` (shim writes to `~/.local/bin`) |
+| modify | tests/unit/uninstall.test.js | isolate `HOME` in `tempEnv`; assert the shim is removed |
 
 ### Exact contracts
 
@@ -210,9 +219,39 @@ function recordOnce(manifest, entry) {
   if (!exists) manifest.entries.push(entry);
 }
 
+/**
+ * Write the PATH shim ~/.local/bin/wienerdog → the vendored current bin, so bare
+ * `wienerdog …` resolves for the brain and the user (ADR-0013). Idempotent (skip
+ * when byte-identical). Records a manifest `file` entry (uninstall removes it).
+ * Does NOT record/remove the ~/.local/bin dir (may be user-shared).
+ * @param {import('./paths').WienerdogPaths} paths
+ * @param {{manifest?: object}} [opts]
+ * @returns {{path:string, changed:boolean, onPath:boolean}}
+ */
+function writeShim(paths, opts = {}) {
+  const localBin = path.join(paths.home, '.local', 'bin');
+  const shimPath = path.join(localBin, 'wienerdog');
+  const content =
+    '#!/usr/bin/env bash\n' +
+    '# Wienerdog CLI shim (managed) — points at the vendored app entry (ADR-0013).\n' +
+    `exec node "${currentBin(paths)}" "$@"\n`;
+  let same = false;
+  try { same = fs.readFileSync(shimPath, 'utf8') === content; } catch { same = false; }
+  let changed = false;
+  if (!same) {
+    fs.mkdirSync(localBin, { recursive: true });
+    fs.writeFileSync(shimPath, content, { mode: 0o755 });
+    fs.chmodSync(shimPath, 0o755);
+    changed = true;
+  }
+  if (opts.manifest) recordOnce(opts.manifest, { kind: 'file', path: shimPath });
+  const onPath = (process.env.PATH || '').split(path.delimiter).includes(localBin);
+  return { path: shimPath, changed, onPath };
+}
+
 module.exports = {
   packageRoot, readVersion, appDir, currentLink, currentBin,
-  isDevCheckout, copyTree, repointCurrent, vendorSelf,
+  isDevCheckout, copyTree, repointCurrent, vendorSelf, writeShim,
 };
 ```
 
@@ -272,12 +311,19 @@ Update its only call site in `runJob`: `const { command, args, shell } = resolve
 the digest step, add (dry-run makes no writes):
 
 ```js
-const { vendorSelf } = require('../core/vendor');
+const { vendorSelf, writeShim } = require('../core/vendor');
 if (!dryRun) {
   const v = vendorSelf(paths, { manifest });
+  const shim = writeShim(paths, { manifest });
   console.log(`wienerdog: vendored app ${v.version}${v.dev ? ' (dev checkout — linked in place)' : ''}.`);
+  if (!shim.onPath) {
+    console.log(`wienerdog: add ${path.dirname(shim.path)} to your PATH to run \`wienerdog\` directly ` +
+      `(e.g. add 'export PATH="$HOME/.local/bin:$PATH"' to your shell profile).`);
+  }
 }
 ```
+
+(`path` is already required in `sync.js`.)
 
 ### Example (evidence-shaped)
 
@@ -299,14 +345,23 @@ bin resolves to `/path/to/checkout/bin/wienerdog.js`.
 - **Windows**: symlinks need privilege there and scheduling is macOS/Linux-only
   today; the POSIX symlink is the decided v1 mechanism (ADR-0013). Do not add a
   Windows code path.
-- **Do NOT edit `tests/unit/init.test.js` or `tests/unit/uninstall.test.js` or
-  the integration tests.** Analysis says they still pass: init's "already
-  installed" path returns before `sync` (no re-vendor); their `snapshot()` walks
-  with `readdirSync(withFileTypes)` and does not recurse into the `current`
-  symlink; and `reverseVendoredTree` empties `app/` so the core is still fully
-  removed on uninstall. **If `npm test` shows any of those failing, STOP: that
-  means `vendorSelf`/`reverseVendoredTree` is wrong (not idempotent, or not
-  emptying `app/`) — fix `vendor.js`/`manifest.js`, do NOT edit those tests.**
+- **HOME isolation (required — the shim writes outside the core).** `sync` now
+  writes `~/.local/bin/wienerdog`. `init.test.js` and `uninstall.test.js` build
+  their `tempEnv()` env WITHOUT `HOME`, so they inherit the real `$HOME` and the
+  shim would land in (and uninstall would delete from) the developer's real
+  `~/.local/bin`. Add `HOME: root` to both `tempEnv()` env objects (they already
+  set `WIENERDOG_HOME`/`WIENERDOG_VAULT`/`CLAUDE_CONFIG_DIR`/`CODEX_HOME`; adding
+  `HOME` is safe — detection uses the config-dir overrides). In `uninstall.test.js`,
+  assert the shim (`<home>/.local/bin/wienerdog`) exists after install and is gone
+  after uninstall. (The integration tests `bootstrap-seam.test.js` and
+  `adopt-e2e.test.js` already set `HOME` to a temp dir — do not touch them.)
+- **Idempotency of the core snapshot is preserved:** init's "already installed"
+  path returns before `sync` (no re-vendor/re-shim); `snapshot()` walks with
+  `readdirSync(withFileTypes)` and does not recurse into the `current` symlink;
+  and `reverseVendoredTree` empties `app/` so the core is still fully removed on
+  uninstall. If `npm test` shows an init/uninstall *core-content* assertion
+  failing (as opposed to the HOME/shim additions above), STOP: that means
+  `vendorSelf`/`reverseVendoredTree` is wrong — fix `vendor.js`/`manifest.js`.
 - Tests for `vendor.js` MUST be hermetic: operate entirely in a temp
   `WIENERDOG_HOME`; exercise **prod mode** by passing `opts.sourceRoot` pointing
   at a temp fake package root (a dir with `bin/`, `src/`, `package.json`, and NO
@@ -329,9 +384,12 @@ bin resolves to `/path/to/checkout/bin/wienerdog.js`.
       `paths`; `npm test` scheduler suites pass.
 - [ ] A manifest with a `vendored-tree` entry reverses by recursively removing
       the app tree and marking it removed, so the enclosing core dir is removed.
-- [ ] `sync` (non-dry-run) vendors and prints one line; `sync --dry-run` vendors
-      nothing.
-- [ ] `npm test` and `npm run lint` pass unchanged for init/uninstall/integration.
+- [ ] `sync` (non-dry-run) vendors, writes an executable shim
+      `~/.local/bin/wienerdog` that `exec`s `currentBin(paths)`, records it in the
+      manifest, and prints a PATH note only when `~/.local/bin` is not on `PATH`;
+      `sync --dry-run` writes nothing. The shim is byte-idempotent on re-run.
+- [ ] `uninstall` removes the shim (assert in `uninstall.test.js`).
+- [ ] `npm test` and `npm run lint` pass; no test writes to the real `~/.local/bin`.
 
 ## Verification steps (run these; paste output in the PR)
 
@@ -349,8 +407,8 @@ npm run lint
 - Repointing EXISTING scheduler entries to the stable path (the migration for
   the two live installs) — **WP-043**.
 - Auto-scheduling the dream on vault creation — **WP-044**.
-- Vendoring `node_modules`/`googleapis`; fixing `gws` from the vendored copy —
-  explicitly not done (ADR-0013).
+- Vendoring `node_modules`/`googleapis`; the on-demand `googleapis` deps dir, the
+  gws require-seam, and the "Google isn't set up yet" error — **WP-047**.
 - Pruning old `app/<version>/` dirs — future; leave them.
 - Changing `nodePath()` / `process.execPath` handling.
 

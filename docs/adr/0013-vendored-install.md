@@ -55,14 +55,38 @@ long-lived reference at a stable entry path that survives version changes.
 
 - The nightly dream can no longer be stranded by npx-cache eviction: schedules
   point at a path Wienerdog owns and maintains under `~/.wienerdog/`.
-- `zero runtime deps` becomes load-bearing: because the vendored copy carries no
-  `node_modules`, only commands that need `googleapis` (`gws`) fail from it.
-  `dream` and job dispatch need nothing beyond Node and work. **`run-job`'s
-  best-effort fail-loud *email* (`gws _alert`) is not served by the vendored
-  copy** and degrades to the durable `state/alerts.jsonl` channel (already the
-  primary surface — ADR-0012). gws-using routines are unchanged: they run inside
-  the brain (`claude -p`) via `wienerdog` on the brain's `PATH`, not via the
-  vendored `run-job` process.
+- **A PATH shim makes the CLI resolvable — fixing a pre-existing P1 defect.**
+  Before this ADR, bare `wienerdog` resolved *nowhere* on a real install (no npm
+  global bin under the npx flow; no shim written by init/sync — verified on the
+  owner's live machine), yet the shipped gws routine skills instruct the brain to
+  run `wienerdog gws …`. So every gws routine was latently broken on every real
+  install, untriggered only because no one had enabled one. `init`/`sync` now
+  write an executable shim `~/.local/bin/wienerdog` that `exec`s the vendored bin
+  (`~/.wienerdog/app/current/bin/wienerdog.js`). `~/.local/bin` is already first
+  in `run-job`'s clean PATH (WP-038), so scheduled brains resolve it; for
+  interactive shells where `~/.local/bin` is not on PATH, install prints one
+  follow-up line (never mutating the shell — same posture as ADR-0011 §6). The
+  shim is manifest-tracked; `uninstall` removes it.
+- **`googleapis` is installed on demand, never vendored for everyone.** The
+  vendored copy carries no `node_modules` (published files only), so `dream` and
+  job dispatch — which need only Node — work from it. `gws` needs `googleapis`,
+  which is heavy and useless to non-Google users, so it is NOT bundled: the
+  Google-setup flow (`wienerdog gws auth`) installs it once, **with consent** (the
+  exact `npm install --prefix <deps> googleapis@<pinned-major>` command shown
+  first; fail-to-print fallback — ADR-0011 posture) into a per-install deps dir
+  `~/.wienerdog/app/deps/` that survives version updates (it is NOT under
+  `app/<version>/`, and `uninstall`'s recursive removal of `app/` still clears
+  it). The CLI's lazy require resolves `googleapis` from there; absent, `gws`
+  fails with a plain "Google isn't set up yet — run /wienerdog-google-setup"
+  message, never a raw `MODULE_NOT_FOUND`. This is **WP-047**. With `googleapis`
+  present, `run-job`'s best-effort fail-loud *email* (`gws _alert`, run from the
+  vendored bin) works; without it, failures still surface via the durable
+  `state/alerts.jsonl` channel (ADR-0012).
+- **Pinned-major refresh story.** The on-demand install is pinned to a specific
+  `googleapis` major (matching the package's own dependency). The pin is a
+  constant in the code; moving it is a normal release change, and re-running
+  `wienerdog gws auth` re-installs to satisfy the new pin. Wienerdog never
+  auto-upgrades the deps dir.
 - Old version dirs accumulate under `app/` (each is tiny — published files
   only). Pruning to current + previous is a future nicety, out of scope now.
 - **Windows-someday**: symlink creation needs privilege on Windows and

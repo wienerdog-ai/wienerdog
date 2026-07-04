@@ -150,10 +150,11 @@ the other branches — `vaultConfigured`, no-vault — unchanged).
 Before the "adoption complete" prints:
 
 ```js
-// Ensure the vendored app exists (adopt may run from an npx/temp copy), then
-// silently schedule the nightly dream (ADR-0014).
-const { vendorSelf } = require('../core/vendor');
+// Ensure the vendored app + PATH shim exist (adopt may run from an npx/temp copy
+// and does not call sync), then silently schedule the nightly dream (ADR-0014).
+const { vendorSelf, writeShim } = require('../core/vendor');
 vendorSelf(paths, { manifest });
+writeShim(paths, { manifest });
 manifestLib.save(paths, manifest);
 const { ensureDreamSchedule } = require('../scheduler/schedule');
 const dream = ensureDreamSchedule(paths);
@@ -195,13 +196,11 @@ the manifest; `wienerdog uninstall` reverses it.
     `scheduler-entry` is recorded, loader spy called); second call is a no-op
     (`scheduled:false, reason:'exists'`); a simulated unsupported platform yields
     `scheduled:false, reason:'unsupported'` and NO throw.
-  - `init.test.js`: its `tempEnv()` currently inherits the real `HOME`. You MUST
-    add `HOME: root` (so any scheduler files land under the temp home) AND
-    `WIENERDOG_LOADER_NOOP: '1'` (so the default loader never spawns
-    launchctl/systemctl) to the returned `env`. Then assert the fresh-vault run's
+  - `init.test.js`: `tempEnv()` already isolates `HOME` (added by WP-042 for the
+    shim). Add `WIENERDOG_LOADER_NOOP: '1'` to the returned `env` so the default
+    loader never spawns launchctl/systemctl. Then assert the fresh-vault run's
     stdout contains the dreaming summary, and that `config.yaml` gained the
-    `jobs:`/`dream` block. Adding `HOME` is safe: detection already uses the
-    `CLAUDE_CONFIG_DIR`/`CODEX_HOME` overrides.
+    `jobs:`/`dream` block.
   - `adopt-e2e.test.js`: add `WIENERDOG_LOADER_NOOP: '1'` to the subprocess env
     (its HOME is already a temp dir). Assert the adopt run schedules the dream
     (stdout mentions nightly dreaming; `jobs:` block present) OR, if the CI
@@ -209,6 +208,10 @@ the manifest; `wienerdog uninstall` reverses it.
 - `registerPlatform` on darwin also ensures the catch-up entry — that is desired
   and already idempotent; do not special-case it.
 - Do not prompt. Do not gate on `--yes`. This is silent-by-design (ADR-0014).
+- The summary lines reference interactive commands (`wienerdog schedule remove
+  dream`, `wienerdog dream`) that resolve via the PATH shim WP-042 installs — a
+  dependency already satisfied by the chain. Do not add any new PATH handling
+  here.
 - When uncertain: choose the simpler option, record it in the PR. Do NOT expand
   scope (e.g. do not add a config flag to opt out of default-scheduling —
   `schedule remove dream` is the documented off switch).
