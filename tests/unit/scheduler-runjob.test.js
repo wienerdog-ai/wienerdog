@@ -92,8 +92,11 @@ test('scheduler-runjob: buildCleanEnv has absolute PATH+node dir, HOME, WIENERDO
     const clean = runjob.buildCleanEnv(paths, 'dream');
     assert.equal(clean.HOME, paths.home);
     assert.equal(clean.WIENERDOG_JOB, 'dream');
-    assert.ok(path.isAbsolute(clean.PATH.split(':')[0]));
-    assert.ok(clean.PATH.split(':').includes(path.dirname(process.execPath)), 'PATH includes the node dir');
+    const pathDirs = clean.PATH.split(':');
+    assert.ok(path.isAbsolute(pathDirs[0]));
+    assert.equal(pathDirs[0], path.dirname(process.execPath), 'node dir stays first');
+    assert.equal(pathDirs[1], path.join(paths.home, '.local/bin'), '~/.local/bin at index 1');
+    assert.equal(clean.USER, os.userInfo().username, 'USER resolves to the login name');
     assert.equal(clean.WIENERDOG_SECRET_TEST, undefined, 'non-allowlisted vars are not carried through');
     assert.equal(clean.WIENERDOG_HOME, env.WIENERDOG_HOME, 'allowlisted overrides pass through');
   } finally {
@@ -101,6 +104,40 @@ test('scheduler-runjob: buildCleanEnv has absolute PATH+node dir, HOME, WIENERDO
       if (saved[k] === undefined) delete process.env[k];
       else process.env[k] = saved[k];
     }
+  }
+});
+
+test('scheduler-runjob: resolveUsername falls back to env when os.userInfo throws', () => {
+  const realUserInfo = os.userInfo;
+  const savedUser = process.env.USER;
+  const savedLogname = process.env.LOGNAME;
+  os.userInfo = () => {
+    throw new Error('no passwd entry for uid');
+  };
+  try {
+    // Falls back to USER, then LOGNAME.
+    process.env.USER = 'fallback-user';
+    delete process.env.LOGNAME;
+    assert.equal(runjob.resolveUsername(), 'fallback-user');
+    delete process.env.USER;
+    process.env.LOGNAME = 'fallback-logname';
+    assert.equal(runjob.resolveUsername(), 'fallback-logname');
+    // Neither set → null, and buildCleanEnv omits USER (never sets "undefined").
+    delete process.env.USER;
+    delete process.env.LOGNAME;
+    assert.equal(runjob.resolveUsername(), null);
+    const { paths } = setup();
+    let clean;
+    assert.doesNotThrow(() => {
+      clean = runjob.buildCleanEnv(paths, 'dream');
+    });
+    assert.ok(!('USER' in clean), 'USER absent when unresolvable');
+  } finally {
+    os.userInfo = realUserInfo;
+    if (savedUser === undefined) delete process.env.USER;
+    else process.env.USER = savedUser;
+    if (savedLogname === undefined) delete process.env.LOGNAME;
+    else process.env.LOGNAME = savedLogname;
   }
 });
 
@@ -179,6 +216,26 @@ test('scheduler-runjob: a non-zero exit records error, fails loud, throws', asyn
   assert.equal(state.dream.last_status, 'error');
   assert.ok(state.dream.last_error_at);
   assert.deepEqual(alerts, ['job dream failed'], 'fail-loud email attempted');
+});
+
+test('scheduler-runjob: a failing child\'s stderr tail reaches the fail-loud alert body', async () => {
+  const { root, env, paths } = setup();
+  jobsLib.saveJob(paths, { name: 'dream', at: '03:30', run: 'builtin:dream', timeoutMinutes: 20 });
+  const fake = writeScript(root, 'stderr-fail.sh', [
+    '#!/bin/sh',
+    'echo "brain boom: API drop mid-run" 1>&2',
+    'exit 3',
+  ]);
+  /** @type {string[]} */ const bodies = [];
+  const sendAlert = (_p, _n, _subject, body) => (bodies.push(body), { status: 0 });
+
+  await assert.rejects(
+    withRun(env, { WIENERDOG_RUNJOB_CMD: fake }, ['dream'], { sendAlert, loader: noopLoader }),
+    /exited 3/
+  );
+
+  assert.equal(bodies.length, 1, 'fail-loud email attempted');
+  assert.match(bodies[0], /brain boom: API drop mid-run/, 'the child stderr tail is in the alert body');
 });
 
 // -------------------------------------------------------------------------
@@ -278,24 +335,34 @@ test('scheduler-runjob: failLoud with no email prepends a banner to digest.md an
 // Log rotation
 // -------------------------------------------------------------------------
 
-test('scheduler-runjob: rotateLogs keeps only the newest 14 *.log files', () => {
+test('scheduler-runjob: rotateLogs keeps 14 run-stamp logs and never deletes the daily/launchd logs', () => {
   const { root } = setup();
   const dir = path.join(root, 'logdir');
   fs.mkdirSync(dir);
   const names = [];
   for (let i = 0; i < 20; i++) {
-    const n = `2026-07-03T00-00-${String(i).padStart(2, '0')}-000Z.log`;
+    const n = `2026-07-04T00-00-${String(i).padStart(2, '0')}-000Z.log`;
     names.push(n);
     fs.writeFileSync(path.join(dir, n), 'x');
   }
-  fs.writeFileSync(path.join(dir, 'launchd.out.log'), 'keep-counts-too'); // 21 total *.log
+  // The incident's lexical pile-up: the brain's daily log (YYYY-MM-DD.log) sorts
+  // AFTER same-day run stamps ('.' < 'T'), so the old rotation deleted it. It and
+  // the launchd redirect logs must survive regardless of run-stamp count.
+  fs.writeFileSync(path.join(dir, '2026-07-04.log'), 'brain-stderr-evidence');
+  fs.writeFileSync(path.join(dir, 'launchd.err.log'), 'launchd-err');
+  fs.writeFileSync(path.join(dir, 'launchd.out.log'), 'launchd-out');
   runjob.rotateLogs(dir);
 
-  const remaining = fs.readdirSync(dir).filter((f) => f.endsWith('.log'));
-  assert.equal(remaining.length, 14);
-  // The newest by name are kept; the oldest are gone.
-  assert.ok(remaining.includes(names[19]), 'newest kept');
-  assert.ok(!remaining.includes(names[0]), 'oldest deleted');
+  const remaining = fs.readdirSync(dir);
+  const runStamps = remaining.filter((f) => /Z\.log$/.test(f));
+  assert.equal(runStamps.length, 14, 'exactly 14 run-stamp logs kept');
+  // The newest run stamps are kept; the oldest are gone.
+  assert.ok(runStamps.includes(names[19]), 'newest run stamp kept');
+  assert.ok(!runStamps.includes(names[0]), 'oldest run stamp deleted');
+  // The three non-run-stamp logs are never rotation candidates — all survive.
+  assert.ok(remaining.includes('2026-07-04.log'), 'daily brain log survives the pile-up');
+  assert.ok(remaining.includes('launchd.err.log'), 'launchd.err.log survives');
+  assert.ok(remaining.includes('launchd.out.log'), 'launchd.out.log survives');
 });
 
 // -------------------------------------------------------------------------

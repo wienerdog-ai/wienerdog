@@ -1,7 +1,7 @@
 ---
 id: WP-038
 title: Harden run-job clean env and log rotation; capture brain stderr tail
-status: Ready
+status: In-Review
 model: opus
 size: M
 depends_on: [WP-020]

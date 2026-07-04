@@ -109,3 +109,30 @@ test('dream-brain: spawnBrain runs WIENERDOG_DREAM_CMD and passes the env', asyn
   assert.equal(gotVault, vaultDir);
   assert.equal(gotScratch, scratchDir);
 });
+
+test('dream-brain: spawnBrain done resolves a stderrTail on nonzero exit', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-brain-'));
+  const fakeCmd = path.join(root, 'fake-brain.sh');
+  fs.writeFileSync(
+    fakeCmd,
+    ['#!/bin/sh', 'echo "brain boom: API drop mid-run" 1>&2', 'exit 4', ''].join('\n')
+  );
+  fs.chmodSync(fakeCmd, 0o755);
+
+  const vaultDir = path.join(root, 'vault');
+  const scratchDir = path.join(root, 'scratch');
+  fs.mkdirSync(vaultDir);
+
+  const { done } = spawnBrain({
+    vaultDir,
+    scratchDir,
+    date: '2026-07-04',
+    model: null,
+    env: { ...process.env, WIENERDOG_DREAM_CMD: fakeCmd },
+  });
+
+  const result = await done;
+  assert.equal(result.code, 4);
+  assert.equal(typeof result.stderrTail, 'string');
+  assert.match(result.stderrTail, /brain boom: API drop mid-run/);
+});

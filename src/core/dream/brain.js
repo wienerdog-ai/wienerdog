@@ -4,6 +4,9 @@ const { spawn } = require('node:child_process');
 
 const { defaultLayout, layoutPromptLines, resolveDailyPath } = require('../layout');
 
+/** Cap on the brain-stderr tail attached to spawnBrain's `done` result (bytes). */
+const STDERR_TAIL_MAX = 4096;
+
 /**
  * The prompt that triggers the dream skill and hands it the paths. Bash is off
  * in the sandbox, so the skill cannot read env vars — the paths (and the layout)
@@ -105,7 +108,7 @@ function buildCodexArgs({ vaultDir, scratchDir, date, model, layout }) {
  *          harness?:'claude'|'codex', env?:NodeJS.ProcessEnv,
  *          logStream?:NodeJS.WritableStream}} o
  * @returns {{ child: import('child_process').ChildProcess,
- *             done: Promise<{code:number|null, durationMs:number}> }}
+ *             done: Promise<{code:number|null, durationMs:number, stderrTail:string}> }}
  */
 function spawnBrain(o) {
   const { vaultDir, scratchDir, date, model, harness, env, logStream } = o;
@@ -145,6 +148,16 @@ function spawnBrain(o) {
     env: childEnv,
   });
 
+  // Bounded rolling buffer of the brain's stderr so a failure is diagnosable
+  // without opening the separate daily log (WP-039 surfaces this into the
+  // "dream brain exited N" message). Both consumers get the chunks in flowing mode.
+  let stderrTail = '';
+  if (child.stderr) {
+    child.stderr.on('data', (chunk) => {
+      stderrTail = (stderrTail + chunk.toString('utf8')).slice(-STDERR_TAIL_MAX);
+    });
+  }
+
   // Tee child output to the caller's log stream (do not close it — the caller owns it).
   if (logStream) {
     if (child.stdout) child.stdout.pipe(logStream, { end: false });
@@ -153,7 +166,7 @@ function spawnBrain(o) {
 
   const done = new Promise((resolve, reject) => {
     child.on('error', reject);
-    child.on('close', (code) => resolve({ code, durationMs: Date.now() - startedAt }));
+    child.on('close', (code) => resolve({ code, durationMs: Date.now() - startedAt, stderrTail }));
   });
 
   return { child, done };

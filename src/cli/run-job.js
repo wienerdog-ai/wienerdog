@@ -51,6 +51,18 @@ function tilde(home, p) {
   return p;
 }
 
+/** Resolve the login username for the clean env. claude's Keychain credential
+ *  lookup fails ("Not logged in") without USER. os.userInfo() throws on exotic
+ *  environments (a UID with no passwd entry); fall back to env, then omit.
+ *  @returns {string|null} */
+function resolveUsername() {
+  try {
+    return os.userInfo().username;
+  } catch {
+    return process.env.USER || process.env.LOGNAME || null;
+  }
+}
+
 /**
  * Build the explicit clean env for a job child. launchd/systemd children inherit
  * almost nothing, so we construct PATH (node + common claude/codex dirs) and HOME
@@ -63,10 +75,14 @@ function buildCleanEnv(paths, name) {
   /** @type {NodeJS.ProcessEnv} */
   const env = {
     HOME: paths.home,
-    // claude's Keychain credential lookup fails ("Not logged in") without USER.
-    USER: os.userInfo().username,
     PATH: [
-      path.dirname(process.execPath), // node
+      path.dirname(process.execPath), // node — MUST stay first so the right node resolves
+      path.join(paths.home, '.local/bin'), // Claude Code native installer default (per-user)
+      // A native `curl … | bash` claude install lands in ~/.local/bin and carries
+      // the logged-in subscription credentials ADR-0009 relies on; placing the
+      // per-user native path ahead of Homebrew/system makes that install
+      // authoritative (matching the incident's manual symlink-into-Homebrew
+      // workaround). Absolute path — launchd/systemd do not expand `~`.
       '/opt/homebrew/bin',
       '/usr/local/bin', // common claude/codex install dirs
       '/usr/bin',
@@ -76,6 +92,8 @@ function buildCleanEnv(paths, name) {
     ].join(':'),
     WIENERDOG_JOB: name, // WP-018's send resolves the routine from this
   };
+  const user = resolveUsername();
+  if (user) env.USER = user;
   for (const k of ENV_PASSTHROUGH) {
     if (process.env[k]) env[k] = process.env[k];
   }
@@ -117,17 +135,23 @@ function resolveTimeoutMs(job) {
   return min * 60_000;
 }
 
-/** Keep only the newest LOG_KEEP *.log files in `dir` (ISO stamps sort lexically).
+/** Per-run log basename shape produced by runStamp(): 2026-07-04T08-00-04-514Z.log */
+const RUN_STAMP_LOG_RE = /^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z\.log$/;
+
+/** Keep only the newest LOG_KEEP per-run stamp logs in `dir`. The dream daily log
+ *  (YYYY-MM-DD.log) and launchd.*.log are the brain's error-evidence sink and are
+ *  NEVER rotated (that lexical-sort deletion destroyed evidence mid-incident).
  *  @param {string} dir */
 function rotateLogs(dir) {
   let files;
   try {
-    files = fs.readdirSync(dir).filter((f) => f.endsWith('.log'));
+    files = fs.readdirSync(dir);
   } catch {
     return;
   }
-  files.sort().reverse(); // newest run stamp first
-  for (const f of files.slice(LOG_KEEP)) {
+  const candidates = files.filter((f) => RUN_STAMP_LOG_RE.test(f));
+  candidates.sort().reverse(); // ISO run stamps: lexical == chronological, newest first
+  for (const f of candidates.slice(LOG_KEEP)) {
     try {
       fs.rmSync(path.join(dir, f), { force: true });
     } catch {
@@ -407,6 +431,7 @@ module.exports = {
   runJob,
   catchUp,
   buildCleanEnv,
+  resolveUsername,
   resolveCommand,
   rotateLogs,
   readLogTail,
