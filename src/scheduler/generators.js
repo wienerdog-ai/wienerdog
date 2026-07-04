@@ -23,12 +23,13 @@ function nodePath() {
 }
 
 /**
- * Absolute path to this install's bin/wienerdog.js. Resolved from __dirname so
- * it is never a relative path (launchd/systemd do not resolve cwd).
+ * Absolute path to the STABLE vendored bin (ADR-0013). Survives version bumps:
+ * only the `current` symlink's target changes, so scheduler entries are
+ * version-independent. @param {import('../core/paths').WienerdogPaths} paths
  * @returns {string}
  */
-function wienerdogBin() {
-  return path.resolve(__dirname, '..', '..', 'bin', 'wienerdog.js');
+function wienerdogBin(paths) {
+  return require('../core/vendor').currentBin(paths);
 }
 
 /**
@@ -238,7 +239,7 @@ function ensureCatchup(paths, opts = {}) {
   const loader = opts.loader || defaultCatchupLoader;
   const uid = process.getuid();
   const logDir = path.join(paths.logs, 'catchup');
-  const content = catchupPlist({ node: nodePath(), bin: wienerdogBin(), logDir });
+  const content = catchupPlist({ node: nodePath(), bin: wienerdogBin(paths), logDir });
   const label = 'ai.wienerdog.catchup';
   const plistPath = path.join(launchAgentsDir(paths.home), `${label}.plist`);
   const unload = ['launchctl', 'bootout', `gui/${uid}/${label}`];

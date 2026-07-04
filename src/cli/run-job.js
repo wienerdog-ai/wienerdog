@@ -104,10 +104,11 @@ function buildCleanEnv(paths, name) {
 /**
  * Resolve the child command + args from a job's `run` field. A test may replace
  * the resolved command with WIENERDOG_RUNJOB_CMD (mirrors WP-017's DREAM_CMD).
+ * @param {import('../core/paths').WienerdogPaths} paths
  * @param {{name:string, run:string}} job
  * @returns {{command:string, args:string[], shell:boolean}}
  */
-function resolveCommand(job) {
+function resolveCommand(paths, job) {
   const fake = process.env.WIENERDOG_RUNJOB_CMD;
   if (fake) return { command: fake, args: [], shell: true };
 
@@ -116,7 +117,7 @@ function resolveCommand(job) {
   const rest = sep === -1 ? '' : job.run.slice(sep + 1);
   if (kind === 'builtin') {
     if (rest === 'dream') {
-      return { command: gen.nodePath(), args: [gen.wienerdogBin(), 'dream', '--yes'], shell: false };
+      return { command: gen.nodePath(), args: [gen.wienerdogBin(paths), 'dream', '--yes'], shell: false };
     }
     throw new WienerdogError(`unknown builtin job: ${rest}`);
   }
@@ -189,7 +190,7 @@ function defaultSendAlert(paths, name, subject, body) {
   const env = buildCleanEnv(paths, name);
   const r = spawnSync(
     gen.nodePath(),
-    [gen.wienerdogBin(), 'gws', '_alert', '--subject', subject, '--body', body],
+    [gen.wienerdogBin(paths), 'gws', '_alert', '--subject', subject, '--body', body],
     { env }
   );
   return { status: r.status == null ? 1 : r.status };
@@ -253,7 +254,7 @@ async function runJob(paths, job, opts = {}) {
 
   // 2. Clean env + command.
   const env = buildCleanEnv(paths, name);
-  const { command, args, shell } = resolveCommand(job);
+  const { command, args, shell } = resolveCommand(paths, job);
 
   // 3. Per-run log file (mkdir -p the job's log dir).
   const logDir = path.join(paths.logs, name);

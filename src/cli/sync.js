@@ -143,6 +143,22 @@ async function run(argv) {
   }
 
   const manifest = manifestMod.load(paths);
+
+  // Vendor the running package into the core and write the PATH shim so every
+  // long-lived reference (scheduler entries, self-invocations) targets a stable
+  // app/current bin, and bare `wienerdog` resolves (ADR-0013). Dry-run makes no
+  // writes.
+  const { vendorSelf, writeShim } = require('../core/vendor');
+  if (!dryRun) {
+    const v = vendorSelf(paths, { manifest });
+    const shim = writeShim(paths, { manifest });
+    console.log(`wienerdog: vendored app ${v.version}${v.dev ? ' (dev checkout — linked in place)' : ''}.`);
+    if (!shim.onPath) {
+      console.log(`wienerdog: add ${path.dirname(shim.path)} to your PATH to run \`wienerdog\` directly ` +
+        `(e.g. add 'export PATH="$HOME/.local/bin:$PATH"' to your shell profile).`);
+    }
+  }
+
   /** @type {{changed: string[], unchanged: string[], notices: string[]}} */
   const summary = { changed: [], unchanged: [], notices: [] };
 

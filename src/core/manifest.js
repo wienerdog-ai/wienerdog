@@ -30,6 +30,11 @@ const { spawnSync } = require('node:child_process');
  *                                                     omitted/null when no OS
  *                                                     unregistration is needed.
  *
+ * Vendoring adds one more kind (WP-042):
+ *   {kind:'vendored-tree', path}                    — the vendored app tree
+ *                                                     (~/.wienerdog/app), removed
+ *                                                     recursively on uninstall.
+ *
  * @typedef {{kind: string, path: string, hash?: string, createdFile?: boolean,
  *            commands?: string[], unload?: string[]}} ManifestEntry
  * @typedef {{version: number, createdAt: string, entries: ManifestEntry[]}} Manifest
@@ -210,6 +215,22 @@ function reverseSchedulerEntry(entry, dryRun, removed, skipped, removedSet) {
 }
 
 /**
+ * Reverse a 'vendored-tree' entry: recursively remove the vendored app tree
+ * (entirely Wienerdog-authored, regenerable by `sync`). Adds the path to
+ * removedSet so the enclosing core dir still counts as empty. In dev mode the
+ * tree holds only the `current` symlink; removing it never touches the checkout.
+ * @param {ManifestEntry} entry
+ * @param {boolean} dryRun
+ * @param {string[]} removed @param {string[]} skipped @param {Set<string>} removedSet
+ */
+function reverseVendoredTree(entry, dryRun, removed, skipped, removedSet) {
+  if (!isDir(entry.path)) { skipped.push(entry.path); return; }
+  if (!dryRun) fs.rmSync(entry.path, { recursive: true, force: true });
+  removedSet.add(entry.path);
+  removed.push(entry.path);
+}
+
+/**
  * Load the install manifest. Returns a fresh empty manifest if none exists.
  * Throws (SyntaxError) if the file exists but is not valid JSON — callers that
  * need to distinguish "missing" from "corrupt" should check existence first.
@@ -317,6 +338,8 @@ function reverse(paths, manifest, { dryRun = false } = {}) {
       reverseSettingsEntry(entry, dryRun, removed, skipped, removedSet);
     } else if (entry.kind === 'scheduler-entry') {
       reverseSchedulerEntry(entry, dryRun, removed, skipped, removedSet);
+    } else if (entry.kind === 'vendored-tree') {
+      reverseVendoredTree(entry, dryRun, removed, skipped, removedSet);
     } else {
       process.stderr.write(
         `wienerdog: skipping unknown manifest entry kind '${entry.kind}' (${entry.path})\n`
@@ -328,4 +351,4 @@ function reverse(paths, manifest, { dryRun = false } = {}) {
   return { removed, skipped };
 }
 
-module.exports = { load, record, save, reverse, reverseSchedulerEntry };
+module.exports = { load, record, save, reverse, reverseSchedulerEntry, reverseVendoredTree };

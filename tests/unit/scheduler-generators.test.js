@@ -155,7 +155,14 @@ test('scheduler-generators: path/label helpers', () => {
 
 test('scheduler-generators: nodePath/wienerdogBin are absolute', () => {
   const path = require('node:path');
+  const { getPaths } = require('../../src/core/paths');
+  const paths = getPaths({ HOME: '/home/ada', WIENERDOG_HOME: '/home/ada/.wienerdog' });
   assert.ok(path.isAbsolute(gen.nodePath()));
-  assert.ok(path.isAbsolute(gen.wienerdogBin()));
-  assert.ok(gen.wienerdogBin().endsWith(path.join('bin', 'wienerdog.js')));
+  assert.ok(path.isAbsolute(gen.wienerdogBin(paths)));
+  assert.ok(gen.wienerdogBin(paths).endsWith(path.join('bin', 'wienerdog.js')));
+  // wienerdogBin targets the STABLE app/current entry (ADR-0013), not the running copy.
+  assert.equal(
+    gen.wienerdogBin(paths),
+    path.join('/home/ada/.wienerdog', 'app', 'current', 'bin', 'wienerdog.js')
+  );
 });

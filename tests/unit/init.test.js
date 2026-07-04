@@ -23,6 +23,10 @@ function tempEnv() {
     core,
     env: {
       ...process.env,
+      // Isolate HOME so the PATH shim sync writes (~/.local/bin/wienerdog, WP-042)
+      // lands in the temp tree, never the developer's real ~/.local/bin. Detection
+      // uses the config-dir overrides below, so overriding HOME is safe.
+      HOME: root,
       WIENERDOG_HOME: core,
       WIENERDOG_VAULT: path.join(root, 'vault'),
       CLAUDE_CONFIG_DIR: path.join(root, 'absent-claude'),

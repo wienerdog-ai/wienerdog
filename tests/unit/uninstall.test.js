@@ -19,6 +19,10 @@ function tempEnv() {
     core,
     env: {
       ...process.env,
+      // Isolate HOME so the PATH shim (~/.local/bin/wienerdog, WP-042) is written
+      // to — and removed from — the temp tree, never the developer's real
+      // ~/.local/bin. Detection uses the config-dir overrides below.
+      HOME: root,
       WIENERDOG_HOME: core,
       WIENERDOG_VAULT: path.join(root, 'vault'),
       CLAUDE_CONFIG_DIR: path.join(root, 'absent-claude'),
@@ -78,6 +82,17 @@ test('uninstall --yes removes the entire core', () => {
   const r = run(['uninstall', '--yes'], env);
   assert.equal(r.status, 0);
   assert.match(r.stdout, /Removed/);
+  assert.equal(fs.existsSync(core), false);
+});
+
+test('uninstall --yes removes the PATH shim (WP-042)', () => {
+  const { root, core, env } = tempEnv();
+  run(['init', '--yes'], env);
+  const shim = path.join(root, '.local', 'bin', 'wienerdog');
+  assert.ok(fs.existsSync(shim), 'init wrote the ~/.local/bin/wienerdog shim');
+  const r = run(['uninstall', '--yes'], env);
+  assert.equal(r.status, 0);
+  assert.equal(fs.existsSync(shim), false, 'uninstall removed the shim');
   assert.equal(fs.existsSync(core), false);
 });
 

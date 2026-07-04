@@ -108,6 +108,38 @@ test('reverse reports already-gone entries as skipped', () => {
   assert.equal(fs.existsSync(paths.core), false);
 });
 
+test('reverse removes a vendored-tree recursively and empties the enclosing core', () => {
+  const paths = tempPaths();
+  const manifest = makeInstall(paths);
+  // Build a realistic vendored app tree: app/<version>/{bin,...} + a current symlink.
+  const app = path.join(paths.core, 'app');
+  const versionDir = path.join(app, '0.2.1');
+  fs.mkdirSync(path.join(versionDir, 'bin'), { recursive: true });
+  fs.writeFileSync(path.join(versionDir, 'bin', 'wienerdog.js'), '// vendored\n');
+  fs.symlinkSync(versionDir, path.join(app, 'current'));
+  manifestLib.record(manifest, { kind: 'vendored-tree', path: app });
+  manifestLib.save(paths, manifest);
+
+  const { removed, skipped } = manifestLib.reverse(paths, manifest, {});
+  assert.equal(fs.existsSync(app), false, 'the vendored app tree is removed recursively');
+  assert.ok(removed.includes(app));
+  // Empties the core so the enclosing core dir is still removed.
+  assert.equal(fs.existsSync(paths.core), false);
+  assert.ok(removed.includes(paths.core));
+  assert.equal(skipped.length, 0);
+});
+
+test('reverse skips a vendored-tree entry that is already gone', () => {
+  const paths = tempPaths();
+  const manifest = makeInstall(paths);
+  const app = path.join(paths.core, 'app');
+  manifestLib.record(manifest, { kind: 'vendored-tree', path: app });
+  manifestLib.save(paths, manifest);
+  const { skipped } = manifestLib.reverse(paths, manifest, {});
+  assert.ok(skipped.includes(app), 'a missing vendored tree is skipped, not an error');
+  assert.equal(fs.existsSync(paths.core), false);
+});
+
 test('reverse skips unknown entry kinds (forward compat)', () => {
   const paths = tempPaths();
   fs.mkdirSync(paths.core, { recursive: true });

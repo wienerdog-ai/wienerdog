@@ -99,7 +99,7 @@ function ensureEntry(manifest, filePath, content, unload) {
  */
 function ensureCatchup(paths, manifest, loader, uid) {
   const logDir = path.join(paths.logs, 'catchup');
-  const content = gen.catchupPlist({ node: gen.nodePath(), bin: gen.wienerdogBin(), logDir });
+  const content = gen.catchupPlist({ node: gen.nodePath(), bin: gen.wienerdogBin(paths), logDir });
   const label = 'ai.wienerdog.catchup';
   const plistPath = path.join(gen.launchAgentsDir(paths.home), `${label}.plist`);
   const unload = ['launchctl', 'bootout', `gui/${uid}/${label}`];
@@ -118,7 +118,7 @@ function ensureCatchup(paths, manifest, loader, uid) {
  */
 function registerPlatform(paths, manifest, o, loader) {
   const node = gen.nodePath();
-  const bin = gen.wienerdogBin();
+  const bin = gen.wienerdogBin(paths);
 
   if (process.platform === 'darwin') {
     const uid = process.getuid();

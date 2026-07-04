@@ -60,7 +60,7 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 | [WP-039](done/WP-039-dream-precommit-crash-recovery.md) | Dream pre-commit of session edits + crashed-brain vault recovery | M7 | opus | Done | WP-017, WP-038 |
 | [WP-040](done/WP-040-dream-note-update-provenance.md) | Dream skill preserves provenance when updating an existing note | M7 | sonnet | Done | WP-009 |
 | [WP-041](done/WP-041-persistent-failure-alerts.md) | Persistent failure alerts (alerts.jsonl) rendered into the digest | M7 | opus | Done | WP-039 |
-| [WP-042](WP-042-vendored-install.md) | Vendor the package into the core; schedules target a stable app/current entry | M7 | opus | Ready | — |
+| [WP-042](WP-042-vendored-install.md) | Vendor the package into the core; schedules target a stable app/current entry | M7 | opus | In-Review | — |
 | [WP-043](WP-043-sync-repoints-schedules.md) | sync repoints existing schedules to the vendored entry (migration) | M7 | opus | Ready | WP-042 |
 | [WP-044](WP-044-dream-scheduled-by-default.md) | Schedule the nightly dream by default when a vault is created | M7 | opus | Ready | WP-043 |
 | [WP-045](WP-045-update-check-core.md) | Update-availability check — core module + config opt-out | M7 | sonnet | Ready | WP-044 |

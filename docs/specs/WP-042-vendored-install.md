@@ -1,7 +1,7 @@
 ---
 id: WP-042
 title: Vendor the package into the core; schedules target a stable app/current entry
-status: Ready
+status: In-Review
 model: opus
 size: M
 depends_on: []
@@ -73,7 +73,7 @@ function wienerdogBin() {                                   // CHANGE: take path
 `wienerdogBin()` is called (no args today) from:
 
 - `generators.js` `ensureCatchup(paths, opts)` — `bin: wienerdogBin()`.
-- `src/scheduler/schedule.js` `registerPlatform(paths, …)` — `const bin = gen.wienerdogBin();`
+- `src/cli/schedule.js` `registerPlatform(paths, …)` — `const bin = gen.wienerdogBin();`
   and its local `ensureCatchup(paths, …)` — `gen.wienerdogBin()`.
 - `src/cli/run-job.js` `resolveCommand(job)` (builtin dream) — `gen.wienerdogBin()`;
   and `defaultSendAlert(paths, …)` — `gen.wienerdogBin()`.
@@ -105,7 +105,7 @@ right after the manifest load, on non-dry-run only. `init.js` already calls
 | create | src/core/vendor.js | `vendorSelf`, `writeShim`, path helpers, dev detection, atomic repoint |
 | modify | src/core/manifest.js | add `vendored-tree` kind + `reverseVendoredTree` + export + doc comment |
 | modify | src/scheduler/generators.js | `wienerdogBin(paths)`; `ensureCatchup` passes `paths` |
-| modify | src/scheduler/schedule.js | pass `paths` to every `gen.wienerdogBin()` call |
+| modify | src/cli/schedule.js | pass `paths` to every `gen.wienerdogBin()` call |
 | modify | src/cli/run-job.js | `resolveCommand(paths, job)` + call site; `defaultSendAlert` passes `paths` |
 | modify | src/cli/sync.js | call `vendorSelf` + `writeShim` after manifest load (skip on dry-run); PATH note |
 | create | tests/unit/vendor.test.js | prod copy, dev symlink, idempotency, atomic repoint, shim write |
@@ -114,6 +114,10 @@ right after the manifest load, on non-dry-run only. `init.js` already calls
 | modify | tests/unit/scheduler-runjob.test.js | update `resolveCommand(paths, job)` call(s) |
 | modify | tests/unit/init.test.js | isolate `HOME` in `tempEnv` (shim writes to `~/.local/bin`) |
 | modify | tests/unit/uninstall.test.js | isolate `HOME` in `tempEnv`; assert the shim is removed |
+| modify | tests/unit/gws-send.test.js | HOME isolation (shim writes outside the core) |
+| modify | tests/unit/gws-dispatch.test.js | HOME isolation (shim writes outside the core) |
+| modify | tests/unit/gws-grant.test.js | HOME isolation (shim writes outside the core) |
+| modify | tests/unit/doctor.test.js | HOME isolation (shim writes outside the core) |
 
 ### Exact contracts
 
@@ -290,7 +294,7 @@ function wienerdogBin(paths) {
 
 Update `ensureCatchup` in this file: `bin: wienerdogBin(paths)` (it already has `paths`). `nodePath()` is unchanged.
 
-**`src/scheduler/schedule.js`** — replace every `gen.wienerdogBin()` with
+**`src/cli/schedule.js`** — replace every `gen.wienerdogBin()` with
 `gen.wienerdogBin(paths)` (both in `registerPlatform` and the local `ensureCatchup`;
 `paths` is in scope in both).
 
@@ -346,15 +350,19 @@ bin resolves to `/path/to/checkout/bin/wienerdog.js`.
   today; the POSIX symlink is the decided v1 mechanism (ADR-0013). Do not add a
   Windows code path.
 - **HOME isolation (required — the shim writes outside the core).** `sync` now
-  writes `~/.local/bin/wienerdog`. `init.test.js` and `uninstall.test.js` build
-  their `tempEnv()` env WITHOUT `HOME`, so they inherit the real `$HOME` and the
-  shim would land in (and uninstall would delete from) the developer's real
-  `~/.local/bin`. Add `HOME: root` to both `tempEnv()` env objects (they already
-  set `WIENERDOG_HOME`/`WIENERDOG_VAULT`/`CLAUDE_CONFIG_DIR`/`CODEX_HOME`; adding
-  `HOME` is safe — detection uses the config-dir overrides). In `uninstall.test.js`,
-  assert the shim (`<home>/.local/bin/wienerdog`) exists after install and is gone
-  after uninstall. (The integration tests `bootstrap-seam.test.js` and
-  `adopt-e2e.test.js` already set `HOME` to a temp dir — do not touch them.)
+  writes `~/.local/bin/wienerdog`, so **every test that invokes `init`/`sync`
+  non-dry-run must isolate `HOME` to a temp root** — a test that overrides only
+  `WIENERDOG_HOME` inherits the real `$HOME`, and the shim lands in (and
+  uninstall deletes from) the developer's real `~/.local/bin`. Sweep the test
+  tree for such tests and add `HOME: <temp root>` to each env object (they
+  already set `WIENERDOG_HOME`/`WIENERDOG_VAULT`/`CLAUDE_CONFIG_DIR`/`CODEX_HOME`;
+  adding `HOME` is safe — detection uses the config-dir overrides). As of this
+  spec that set is: `init.test.js`, `uninstall.test.js`, `gws-send.test.js`,
+  `gws-dispatch.test.js`, `gws-grant.test.js`, `doctor.test.js`. In
+  `uninstall.test.js`, assert the shim (`<home>/.local/bin/wienerdog`) exists
+  after install and is gone after uninstall. (The integration tests
+  `bootstrap-seam.test.js` and `adopt-e2e.test.js` already set `HOME` to a temp
+  dir — do not touch them.)
 - **Idempotency of the core snapshot is preserved:** init's "already installed"
   path returns before `sync` (no re-vendor/re-shim); `snapshot()` walks with
   `readdirSync(withFileTypes)` and does not recurse into the `current` symlink;
@@ -389,7 +397,9 @@ bin resolves to `/path/to/checkout/bin/wienerdog.js`.
       manifest, and prints a PATH note only when `~/.local/bin` is not on `PATH`;
       `sync --dry-run` writes nothing. The shim is byte-idempotent on re-run.
 - [ ] `uninstall` removes the shim (assert in `uninstall.test.js`).
-- [ ] `npm test` and `npm run lint` pass; no test writes to the real `~/.local/bin`.
+- [ ] Every test that invokes `init`/`sync` non-dry-run isolates `HOME` to a
+      temp root; a full `npm test` leaves the real `~/.local/bin` untouched.
+- [ ] `npm test` and `npm run lint` pass.
 
 ## Verification steps (run these; paste output in the PR)
 

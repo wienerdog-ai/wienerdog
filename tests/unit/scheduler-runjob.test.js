@@ -147,16 +147,19 @@ test('scheduler-runjob: resolveUsername falls back to env when os.userInfo throw
 // -------------------------------------------------------------------------
 
 test('scheduler-runjob: resolveCommand maps builtin:dream, skill:*, and rejects unknown', () => {
+  const { paths } = setup();
   const savedCmd = process.env.WIENERDOG_RUNJOB_CMD;
   delete process.env.WIENERDOG_RUNJOB_CMD;
   try {
-    const d = runjob.resolveCommand({ name: 'dream', run: 'builtin:dream' });
+    const d = runjob.resolveCommand(paths, { name: 'dream', run: 'builtin:dream' });
     assert.deepEqual(d.args.slice(1), ['dream', '--yes']);
-    const s = runjob.resolveCommand({ name: 'x', run: 'skill:wienerdog-daily-digest' });
+    // builtin:dream targets the stable vendored app/current bin (ADR-0013).
+    assert.equal(d.args[0], path.join(paths.core, 'app', 'current', 'bin', 'wienerdog.js'));
+    const s = runjob.resolveCommand(paths, { name: 'x', run: 'skill:wienerdog-daily-digest' });
     assert.equal(s.command, 'claude');
     assert.deepEqual(s.args, ['-p', '/wienerdog-daily-digest']);
-    assert.throws(() => runjob.resolveCommand({ name: 'x', run: 'builtin:frobnicate' }), /unknown builtin/);
-    assert.throws(() => runjob.resolveCommand({ name: 'x', run: 'weird:thing' }), /unknown job run kind/);
+    assert.throws(() => runjob.resolveCommand(paths, { name: 'x', run: 'builtin:frobnicate' }), /unknown builtin/);
+    assert.throws(() => runjob.resolveCommand(paths, { name: 'x', run: 'weird:thing' }), /unknown job run kind/);
   } finally {
     if (savedCmd === undefined) delete process.env.WIENERDOG_RUNJOB_CMD;
     else process.env.WIENERDOG_RUNJOB_CMD = savedCmd;

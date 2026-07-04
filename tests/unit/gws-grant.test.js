@@ -30,6 +30,8 @@ function tempEnv() {
     core,
     env: {
       ...process.env,
+      // Isolate HOME: init runs sync, which writes the PATH shim to ~/.local/bin (WP-042).
+      HOME: root,
       WIENERDOG_HOME: core,
       WIENERDOG_VAULT: path.join(root, 'vault'),
       CLAUDE_CONFIG_DIR: path.join(root, 'absent-claude'),
