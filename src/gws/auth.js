@@ -5,6 +5,7 @@ const http = require('node:http');
 
 const { WienerdogError } = require('../core/errors');
 const { SCOPES, persistToken, persistClientJson } = require('./client');
+const { loadGoogleapis, ensureGoogleapis } = require('./deps');
 
 /**
  * @typedef {import('../core/paths').WienerdogPaths} WienerdogPaths
@@ -46,6 +47,14 @@ async function run(paths, opts = {}) {
   }
   persistClientJson(paths, clientJson);
 
+  // 2b. Ensure Google's client library is installed (on-demand, with consent —
+  // ADR-0013/ADR-0011). No-op if already present; consent seams pass through.
+  await ensureGoogleapis(paths, {
+    yes: opts.yes,
+    confirm: opts.confirm,
+    runInstall: opts.runInstall,
+  });
+
   // 3. Start the loopback listener on an ephemeral port before building the URL.
   const { server, port, waitForCode } = await startLoopback();
 
@@ -55,7 +64,7 @@ async function run(paths, opts = {}) {
     // 2. Build an OAuth2 client (injectable for tests).
     const oauth =
       opts.oauthClient ||
-      new (opts.googleapis || require('googleapis')).google.auth.OAuth2(
+      new (opts.googleapis || loadGoogleapis(paths)).google.auth.OAuth2(
         cfg.client_id,
         cfg.client_secret,
         redirectUri
@@ -81,7 +90,7 @@ async function run(paths, opts = {}) {
     persistToken(paths, token);
 
     // 7. Best-effort account email for the confirmation line.
-    const email = await fetchEmail(oauth, opts);
+    const email = await fetchEmail(oauth, opts, paths);
 
     return { email, tokenPath: require('./client').tokenPath(paths) };
   } finally {
@@ -95,11 +104,12 @@ async function run(paths, opts = {}) {
  * any failure (the confirmation line is cosmetic).
  * @param {object} oauth
  * @param {{googleapis?: object}} opts
+ * @param {WienerdogPaths} paths
  * @returns {Promise<string|null>}
  */
-async function fetchEmail(oauth, opts) {
+async function fetchEmail(oauth, opts, paths) {
   try {
-    const { google } = opts.googleapis || require('googleapis');
+    const { google } = opts.googleapis || loadGoogleapis(paths);
     const gmail = google.gmail({ version: 'v1', auth: oauth });
     const res = await gmail.users.getProfile({ userId: 'me' });
     return (res.data && res.data.emailAddress) || null;

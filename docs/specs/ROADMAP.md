@@ -65,7 +65,7 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 | [WP-044](WP-044-dream-scheduled-by-default.md) | Schedule the nightly dream by default when a vault is created | M7 | opus | Ready | WP-043 |
 | [WP-045](WP-045-update-check-core.md) | Update-availability check — core module + config opt-out | M7 | sonnet | Ready | WP-044 |
 | [WP-046](WP-046-update-check-wiring.md) | Wire the update check into run-job + render in digest/doctor; threat model | M7 | opus | Ready | WP-045 |
-| [WP-047](WP-047-gws-ondemand-googleapis.md) | On-demand googleapis in a core deps dir; gws require-seam + clean setup error | M7 | opus | Ready | WP-042 |
+| [WP-047](WP-047-gws-ondemand-googleapis.md) | On-demand googleapis in a core deps dir; gws require-seam + clean setup error | M7 | opus | In-Review | WP-042 |
 
 > **First-production-night incident (2026-07-04).** WP-038, WP-039 and WP-041 form
 > a serial chain (they edit the shared `run-job.js` / `dream.js` / `validate.js`

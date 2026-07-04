@@ -107,6 +107,12 @@ Downloads folder). Then run, in the shell:
 wienerdog gws auth --client "<path to the downloaded JSON>"
 ```
 
+The very first time this runs, Wienerdog needs Google's own software library
+(it isn't bundled, to keep the install small for people who never connect
+Google). So before the browser opens, the command shows the exact
+`npm install …` line it's about to run and asks to go ahead — just say yes
+(the default). It downloads once, quietly, and future runs skip this step.
+
 Explain what will happen: a browser tab opens to Google's sign-in and
 consent screen. They pick the same Google account, click through the
 "unverified app" warning (click **Advanced**, then **"Go to Wienerdog
@@ -138,6 +144,11 @@ connected and Wienerdog can now read their Gmail, Calendar, and Drive, and
 draft email. If it errors and tells them to run `wienerdog gws auth`,
 something in the steps above didn't finish — walk back through Steps 3
 through 5.
+
+If any Google command ever prints **"Google isn't set up yet — run
+/wienerdog-google-setup"**, it means either that first-time library download
+never happened or the sign-in is missing — just run this setup again from
+Step 5 to fix it.
 
 Close by telling them plainly what's now possible and what isn't yet:
 Wienerdog can read their Gmail/Calendar/Drive and draft email, but it cannot

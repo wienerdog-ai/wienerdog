@@ -1,7 +1,7 @@
 ---
 id: WP-047
 title: On-demand googleapis in a core deps dir; gws require-seam + clean setup error
-status: Ready
+status: In-Review
 model: opus
 size: M
 depends_on: [WP-042]
@@ -34,8 +34,8 @@ Concretely:
   no extra manifest bookkeeping.
 - **Consented install** (ADR-0011 posture): the Google-setup entry
   (`wienerdog gws auth`) installs `googleapis@<pinned-major>` into the deps dir,
-  showing the exact `npm install --prefix …` command first, defaulting to yes,
-  and printing the command as a fallback on decline/failure.
+  showing the exact `npm install --ignore-scripts --prefix …` command first,
+  defaulting to yes, and printing the command as a fallback on decline/failure.
 - **Require-seam**: a shared `loadGoogleapis(paths)` resolves `googleapis` from
   the deps dir via `createRequire`; on failure it throws the plain "Google isn't
   set up yet — run /wienerdog-google-setup" `WienerdogError`. The existing
@@ -109,28 +109,53 @@ const GOOGLEAPIS_SPEC = 'googleapis@^173';
 /** @param {import('../core/paths').WienerdogPaths} paths @returns {string} <core>/app/deps */
 function depsDir(paths) { return path.join(paths.core, 'app', 'deps'); }
 
+/** Resolve googleapis strictly from within the deps dir. `createRequire` anchors
+ *  resolution at app/deps but Node then walks EVERY ancestor node_modules, so a
+ *  copy planted outside the deps dir (e.g. ~/node_modules) could otherwise
+ *  satisfy the lookup — silently bypassing the consented, pinned install
+ *  (ADR-0011/ADR-0013). A resolution outside the deps dir is treated exactly as
+ *  absent.
+ *  @param {import('../core/paths').WienerdogPaths} paths
+ *  @returns {{req:NodeRequire, resolved:string}|null} */
+function resolveFromDeps(paths) {
+  const dir = depsDir(paths);
+  const req = createRequire(path.join(dir, 'noop.js'));
+  const resolved = req.resolve('googleapis');
+  // req.resolve returns a canonical (symlink-resolved) path; canonicalize the
+  // deps dir the same way so a symlinked ancestor (e.g. macOS /var ->
+  // /private/var) does not defeat the containment check.
+  let real = dir;
+  try { real = fs.realpathSync(dir); }
+  catch { /* deps dir absent — resolved can't be inside it; fall through */ }
+  if (!resolved.startsWith(real + path.sep)) return null;
+  return { req, resolved };
+}
+
 /** @param {import('../core/paths').WienerdogPaths} paths @returns {boolean} */
 function isInstalled(paths) {
-  try { createRequire(path.join(depsDir(paths), 'noop.js')).resolve('googleapis'); return true; }
+  try { return resolveFromDeps(paths) !== null; }
   catch { return false; }
 }
 
-/** Resolve googleapis from the deps dir. Throws a plain setup error when absent.
+/** Resolve googleapis from the deps dir (containment-guarded). Throws a plain
+ *  setup error when absent or when resolution lands outside the deps dir.
  *  @param {import('../core/paths').WienerdogPaths} paths @returns {object} */
 function loadGoogleapis(paths) {
-  const req = createRequire(path.join(depsDir(paths), 'noop.js'));
-  try { return req('googleapis'); }
-  catch {
-    throw new WienerdogError(
-      "Google isn't set up yet — run /wienerdog-google-setup to connect Gmail, Calendar, and Drive."
-    );
-  }
+  try {
+    const hit = resolveFromDeps(paths);
+    if (hit) return hit.req(hit.resolved);
+  } catch { /* treated as absent */ }
+  throw new WienerdogError(
+    "Google isn't set up yet — run /wienerdog-google-setup to connect Gmail, Calendar, and Drive."
+  );
 }
 
-/** Default installer: `npm install --prefix <deps> googleapis@<major>` (inherit stdio).
+/** Default installer: `npm install --ignore-scripts --prefix <deps>
+ *  googleapis@<major>` (inherit stdio). `--ignore-scripts` because googleapis is
+ *  pure JS; disabling lifecycle scripts removes a residual supply-chain surface.
  *  @param {string} dir @param {string} spec @returns {{status:number}} */
 function defaultRunInstall(dir, spec) {
-  const r = spawnSync('npm', ['install', '--prefix', dir, spec], { stdio: 'inherit' });
+  const r = spawnSync('npm', ['install', '--ignore-scripts', '--prefix', dir, spec], { stdio: 'inherit' });
   return { status: r.status == null ? 1 : r.status };
 }
 
@@ -146,7 +171,7 @@ function defaultRunInstall(dir, spec) {
 async function ensureGoogleapis(paths, opts = {}) {
   if (isInstalled(paths)) return { installed: false, already: true };
   const dir = depsDir(paths);
-  const cmd = `npm install --prefix ${dir} ${GOOGLEAPIS_SPEC}`;
+  const cmd = `npm install --ignore-scripts --prefix ${dir} ${GOOGLEAPIS_SPEC}`;
   process.stdout.write(`\nWienerdog needs Google's client library. It will run:\n  ${cmd}\n`);
   const ask = opts.confirm || confirm;
   const ok = opts.yes || (await ask('Install it now? [Y/n] '));
@@ -192,7 +217,7 @@ the library or token is missing — re-run this setup.
 $ wienerdog gws auth --client ~/Downloads/client.json
 
 Wienerdog needs Google's client library. It will run:
-  npm install --prefix /Users/ada/.wienerdog/app/deps googleapis@^173
+  npm install --ignore-scripts --prefix /Users/ada/.wienerdog/app/deps googleapis@^173
 Install it now? [Y/n] y
 … (npm output) …
 Open this URL in your browser to authorize Wienerdog: …
@@ -233,9 +258,14 @@ wienerdog: Google isn't set up yet — run /wienerdog-google-setup to connect Gm
       googleapis resolves there.
 - [ ] `ensureGoogleapis`: no-op when installed; on consent-yes runs the injected
       installer and reports `{installed:true}`; on consent-no throws an error
-      whose message contains the exact `npm install --prefix …` command.
+      whose message contains the exact `npm install --ignore-scripts --prefix …`
+      command.
 - [ ] `loadGoogleapis` on a missing library throws the plain "Google isn't set up
       yet — run /wienerdog-google-setup" message (never a raw module error).
+- [ ] Containment guard: with the deps dir absent/empty and a decoy `googleapis`
+      reachable in an ancestor `node_modules`, `isInstalled` is false and
+      `loadGoogleapis` raises the setup error; with the deps dir populated, the
+      deps-dir copy is loaded even when a decoy exists.
 - [ ] `getServices`/`auth.run` resolve googleapis via the deps dir behind the
       existing injection seams; all existing gws unit tests pass unchanged and
       touch no real googleapis.
@@ -246,7 +276,7 @@ wienerdog: Google isn't set up yet — run /wienerdog-google-setup to connect Gm
 ## Verification steps (run these; paste output in the PR)
 
 ```bash
-npm test -- --test-name-pattern 'gws-deps'
+node --test tests/unit/gws-deps.test.js
 npm test -- --test-name-pattern 'gws'
 npm test
 npm run lint

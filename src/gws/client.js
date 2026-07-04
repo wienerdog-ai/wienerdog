@@ -5,6 +5,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 
 const { WienerdogError } = require('../core/errors');
+const { loadGoogleapis } = require('./deps');
 
 /**
  * @typedef {import('../core/paths').WienerdogPaths} WienerdogPaths
@@ -137,7 +138,7 @@ function getServices(paths, opts = {}) {
     return opts.factory(token);
   }
 
-  const { google } = opts.googleapis || require('googleapis');
+  const { google } = opts.googleapis || loadGoogleapis(paths);
   const cfg = client.installed || client.web;
   const oauth = new google.auth.OAuth2(
     cfg.client_id,
