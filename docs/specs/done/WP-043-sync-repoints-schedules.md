@@ -1,7 +1,7 @@
 ---
 id: WP-043
 title: sync repoints existing schedules to the vendored entry (migration)
-status: In-Review
+status: Done
 model: opus
 size: S
 depends_on: [WP-042]
