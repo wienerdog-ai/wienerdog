@@ -1,7 +1,7 @@
 ---
 id: WP-040
 title: Dream skill preserves provenance when updating an existing note
-status: Ready
+status: In-Review
 model: sonnet
 size: S
 depends_on: [WP-009]
@@ -135,7 +135,8 @@ test('dream-skill: existing-note updates preserve original provenance', () => {
     text.includes('Preserve** the existing `origin`, `created`, `id`, and `type`'),
     'preserve-original rule present'
   );
-  assert.ok(text.includes('Append** this run'), 'append-source_sessions rule present');
+  assert.ok(text.includes('Bump** `updated`'), 'bump-updated rule present');
+assert.ok(text.includes('Append** this run'), 'append-source_sessions rule present');
   assert.ok(text.includes('only ever RAISE it toward `true`'), 'raise-only derived_from_untrusted rule present');
 });
 ```

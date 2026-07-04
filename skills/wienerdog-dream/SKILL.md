@@ -159,13 +159,36 @@ derived_from_untrusted: false   # true if content originated in tool results (em
 ---
 ```
 
-- `origin` is always `dream`.
+- `origin` is `dream` on a NEW note you create. On a note that already exists,
+  preserve its existing `origin` — see "Updating an existing note" below.
 - `source_sessions` lists the supporting sessions as `"<harness>:<session_id>"`
   (for example `"claude:sess-abc"`), one entry per distinct supporting session.
 - `updated` is today's date from your prompt. On a new note, `created` is today too.
 - `confidence`, `recurrence`, and `derived_from_untrusted` are the values you
   computed in Phase 2. Do not omit them — a note missing them is treated as failing
   the gate.
+
+### Updating an existing note
+
+When you EDIT a note that already exists (rather than creating a new one), you are
+adding to a record someone else may have authored. Preserve its history — never
+overwrite it:
+
+- **Preserve** the existing `origin`, `created`, `id`, and `type` exactly as they
+  are. Do not restamp `origin: dream` and do not reset `created` to today — those
+  describe where the note came from and when it was first written.
+- **Bump** `updated` to today's date from your prompt.
+- **Append** this run's supporting sessions to the existing `source_sessions`
+  list; keep the entries already there. Do not replace the list.
+- For `confidence` and `recurrence`, use the values you computed in Phase 2 for
+  the merged candidate (which already counts the prior sessions via recurrence).
+- For `derived_from_untrusted`: you may only ever RAISE it toward `true`. If the
+  existing note is already `true`, it stays `true`. If it is `false` and your new
+  supporting text includes any `tool_result`-derived content, set it to `true`.
+  Never lower an existing `true` to `false`.
+
+If a note has no frontmatter yet, treat your edit as creating provenance for it:
+set `created` to today and `origin: dream`.
 
 ## Skill synthesis
 

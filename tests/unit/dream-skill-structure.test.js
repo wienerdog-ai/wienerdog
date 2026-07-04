@@ -72,3 +72,14 @@ test('dream-skill: dream report path and gated-out section are stated', () => {
 test('dream-skill: the provenance rule references tool_result', () => {
   assert.ok(text.includes('tool_result'), 'tool_result missing');
 });
+
+test('dream-skill: existing-note updates preserve original provenance', () => {
+  assert.ok(text.includes('### Updating an existing note'), 'update subsection heading present');
+  assert.ok(
+    text.includes('Preserve** the existing `origin`, `created`, `id`, and `type`'),
+    'preserve-original rule present'
+  );
+  assert.ok(text.includes('Bump** `updated`'), 'bump-updated rule present');
+  assert.ok(text.includes('Append** this run'), 'append-source_sessions rule present');
+  assert.ok(text.includes('only ever RAISE it toward `true`'), 'raise-only derived_from_untrusted rule present');
+});
