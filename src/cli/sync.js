@@ -5,6 +5,7 @@ const path = require('node:path');
 const { getPaths } = require('../core/paths');
 const { WienerdogError } = require('../core/errors');
 const { renderDigest } = require('../core/digest');
+const { readAlerts } = require('../core/alerts');
 const { readVaultLayout } = require('../core/layout');
 const { detectHarnesses } = require('../core/detect');
 const manifestMod = require('../core/manifest');
@@ -149,7 +150,7 @@ async function run(argv) {
   const skipManagedBlock = !vaultPath;
   if (vaultPath) {
     const layout = readVaultLayout(paths.config);
-    const digest = renderDigest(vaultPath, layout);
+    const digest = renderDigest(vaultPath, layout, { alerts: readAlerts(paths) });
     const dest = path.join(paths.state, 'digest.md');
     if (!dryRun) {
       fs.mkdirSync(paths.state, { recursive: true });

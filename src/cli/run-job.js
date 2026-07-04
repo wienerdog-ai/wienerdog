@@ -7,6 +7,7 @@ const { spawn, spawnSync } = require('node:child_process');
 
 const { getPaths } = require('../core/paths');
 const { WienerdogError } = require('../core/errors');
+const { appendAlert, clearAlerts } = require('../core/alerts');
 const { readDreamConfig } = require('../core/dream/config');
 const jobsLib = require('../scheduler/jobs');
 const gen = require('../scheduler/generators');
@@ -195,29 +196,9 @@ function defaultSendAlert(paths, name, subject, body) {
 }
 
 /**
- * Prepend a transient failure banner to the injected session digest so the next
- * session surfaces it. Creates state/digest.md if absent (atomic temp+rename).
- * @param {import('../core/paths').WienerdogPaths} paths @param {string} name @param {string} reason
- */
-function writeDigestBanner(paths, name, reason) {
-  const logHint = `${tilde(paths.home, path.join(paths.logs, name))}/`;
-  const banner = `> [!warning] Wienerdog job "${name}" failed at ${nowIso()} — ${reason}. See ${logHint}.`;
-  fs.mkdirSync(paths.state, { recursive: true });
-  const dest = path.join(paths.state, 'digest.md');
-  let existing = '';
-  try {
-    existing = fs.readFileSync(dest, 'utf8');
-  } catch {
-    existing = '';
-  }
-  const next = existing ? `${banner}\n${existing}` : `${banner}\n`;
-  const tmp = `${dest}.${process.pid}.tmp`;
-  fs.writeFileSync(tmp, next);
-  fs.renameSync(tmp, dest);
-}
-
-/**
- * Fail loud: try the email alert; on any failure fall back to the digest banner.
+ * Fail loud: append a DURABLE alert to state/alerts.jsonl (re-rendered into the
+ * digest until the job next succeeds — ADR-0012 part 3), then attempt the
+ * best-effort email. The durable record is independent of email delivery.
  * Wrapped so it can NEVER throw — the original job failure must stay surfaced.
  * @param {import('../core/paths').WienerdogPaths} paths
  * @param {string} name @param {string} reason @param {string} logTail
@@ -226,18 +207,20 @@ function writeDigestBanner(paths, name, reason) {
  */
 async function failLoud(paths, name, reason, logTail, opts = {}) {
   try {
+    appendAlert(paths, {
+      job: name,
+      at: nowIso(),
+      reason,
+      log_hint: `${tilde(paths.home, path.join(paths.logs, name))}/`,
+    });
     const send = opts.sendAlert || defaultSendAlert;
     const subject = `job ${name} failed`;
     const body = `${reason}\n\n${logTail || ''}`.trim();
-    let sent = false;
     try {
-      const r = send(paths, name, subject, body);
-      sent = !!(r && r.status === 0);
+      send(paths, name, subject, body);
     } catch {
-      sent = false;
+      /* email best-effort */
     }
-    if (sent) return;
-    writeDigestBanner(paths, name, reason);
   } catch {
     // Fail-loud is best-effort; never mask the original failure.
   }
@@ -329,6 +312,7 @@ async function runJob(paths, job, opts = {}) {
   // 6. Success → watermark + (darwin) ensure the catch-up entry exists.
   if (!failure && code === 0) {
     jobsLib.writeScheduleState(paths, name, { last_success: nowIso(), last_status: 'ok' });
+    clearAlerts(paths, name);
     if (process.platform === 'darwin') {
       try {
         gen.ensureCatchup(paths, { loader: opts.loader });
@@ -436,6 +420,5 @@ module.exports = {
   rotateLogs,
   readLogTail,
   failLoud,
-  writeDigestBanner,
   todaysFire,
 };

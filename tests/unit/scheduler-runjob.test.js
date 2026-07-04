@@ -11,6 +11,7 @@ const { getPaths } = require('../../src/core/paths');
 const manifestLib = require('../../src/core/manifest');
 const jobsLib = require('../../src/scheduler/jobs');
 const runjob = require('../../src/cli/run-job');
+const { readAlerts, ALERTS_FILE } = require('../../src/core/alerts');
 
 /** @param {string} c @returns {string} */
 function sha256(c) {
@@ -301,34 +302,54 @@ test('scheduler-runjob: a vault under a protected folder is refused before spawn
 });
 
 // -------------------------------------------------------------------------
-// Fail-loud banner fallback
+// Fail-loud durable alert (alerts.jsonl) — append on failure, clear on success
 // -------------------------------------------------------------------------
 
-test('scheduler-runjob: failLoud with no email prepends a banner to digest.md and never throws', async () => {
+test('scheduler-runjob: failLoud always appends a durable alert and never throws', async () => {
   const { paths } = setup();
-  const digest = path.join(paths.state, 'digest.md');
 
-  // Email fails → banner is created.
-  await runjob.failLoud(paths, 'dream', 'brain exploded', 'tail...', { sendAlert: () => ({ status: 1 }) });
-  let body = fs.readFileSync(digest, 'utf8');
-  assert.match(body, /^> \[!warning\] Wienerdog job "dream" failed at .* — brain exploded\./);
-  assert.match(body, /logs\/dream\/\.$/m);
+  // Email delivered → the durable alert is still recorded (independent of email).
+  await runjob.failLoud(paths, 'dream', 'brain exploded', 'tail...', { sendAlert: () => ({ status: 0 }) });
+  let alerts = readAlerts(paths);
+  assert.equal(alerts.length, 1, 'one durable alert even when the email is delivered');
+  assert.equal(alerts[0].job, 'dream');
+  assert.equal(alerts[0].reason, 'brain exploded');
+  assert.match(alerts[0].log_hint, /logs\/dream\/$/, 'log hint points at the job log dir');
+  assert.match(alerts[0].at, /^\d{4}-\d{2}-\d{2}T/, 'ISO timestamp recorded');
 
-  // A second failure prepends above the first (existing content preserved).
-  fs.writeFileSync(digest, '# Existing digest\n');
+  // A second failure appends (does not overwrite).
   await runjob.failLoud(paths, 'dream', 'again', '', { sendAlert: () => ({ status: 1 }) });
-  body = fs.readFileSync(digest, 'utf8');
-  assert.match(body.split('\n')[0], /Wienerdog job "dream" failed/);
-  assert.ok(body.includes('# Existing digest'), 'existing digest content preserved below the banner');
+  alerts = readAlerts(paths);
+  assert.equal(alerts.length, 2, 'second failure appends');
 
-  // A throwing sendAlert must not escape failLoud (still falls back to banner).
-  fs.rmSync(digest, { force: true });
+  // A throwing sendAlert must not escape failLoud — and the alert is still recorded.
   await runjob.failLoud(paths, 'dream', 'boom', '', {
     sendAlert: () => {
       throw new Error('alert crashed');
     },
   });
-  assert.ok(fs.existsSync(digest), 'banner still written when the alert throws');
+  assert.equal(readAlerts(paths).length, 3, 'alert recorded even when the email throws');
+});
+
+test('scheduler-runjob: a failing run appends exactly one alert; a later success clears it', async () => {
+  const { root, env, paths } = setup();
+  jobsLib.saveJob(paths, { name: 'dream', at: '03:30', run: 'builtin:dream', timeoutMinutes: 20 });
+
+  // 1. A failing run appends exactly one alert (and still fails loud + throws).
+  const fail = writeScript(root, 'fail.sh', ['#!/bin/sh', 'exit 3']);
+  await assert.rejects(
+    withRun(env, { WIENERDOG_RUNJOB_CMD: fail }, ['dream'], { sendAlert: () => ({ status: 0 }), loader: noopLoader }),
+    /exited 3/
+  );
+  const alerts = readAlerts(paths);
+  assert.equal(alerts.length, 1, 'exactly one alert appended on failure');
+  assert.equal(alerts[0].job, 'dream');
+
+  // 2. A subsequent successful run of the same job clears its alerts.
+  const ok = writeScript(root, 'ok.sh', ['#!/bin/sh', 'exit 0']);
+  await withRun(env, { WIENERDOG_RUNJOB_CMD: ok }, ['dream'], { sendAlert: () => ({ status: 0 }), loader: noopLoader });
+  assert.deepEqual(readAlerts(paths), [], 'success cleared the alert');
+  assert.ok(!fs.existsSync(path.join(paths.state, ALERTS_FILE)), 'alerts.jsonl removed when empty');
 });
 
 // -------------------------------------------------------------------------

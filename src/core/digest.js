@@ -187,17 +187,51 @@ function newestDaily(dir) {
 }
 
 /**
+ * Format unresolved failure alerts (state/alerts.jsonl records) into a plain-text
+ * callout block prepended to the digest. Groups by job: one line per failing job
+ * with the count, earliest timestamp, latest reason, and log hint. Declarative
+ * status text only — never an instruction to the model (ADR-0012: it lands in the
+ * injected digest, so it must add no injection surface). Empty list → ''.
+ * @param {Array<{job:string, at:string, reason:string, log_hint:string}>} alerts
+ * @returns {string}
+ */
+function formatAlerts(alerts) {
+  if (!alerts || alerts.length === 0) return '';
+  /** @type {Map<string, {count:number, first:string, lastReason:string, hint:string}>} */
+  const byJob = new Map();
+  for (const a of alerts) {
+    const cur = byJob.get(a.job) || { count: 0, first: a.at, lastReason: a.reason, hint: a.log_hint };
+    cur.count += 1;
+    if (a.at < cur.first) cur.first = a.at;
+    cur.lastReason = a.reason; // alerts are oldest-first → last wins
+    cur.hint = a.log_hint;
+    byJob.set(a.job, cur);
+  }
+  const lines = [];
+  for (const [job, s] of byJob) {
+    const times = s.count === 1 ? 'has failed' : `has failed ${s.count} times since ${s.first}`;
+    lines.push(
+      `> [!warning] Wienerdog: the "${job}" job ${times}. Latest error: ${s.lastReason}. ` +
+        `Details in ${s.hint}. This note clears automatically when the job next succeeds.`
+    );
+  }
+  return lines.join('\n');
+}
+
+/**
  * Render the SessionStart digest from a vault. Deterministic; no model calls.
  * Reads {identity_dir}/{profile,preferences,goals,instructions}.md, the newest
  * daily note under {daily_dir} (found recursively), and {projects_dir}/* directory
  * names — all resolved from `layout` (defaults == today's hardcoded paths). Notes
  * flagged `derived_from_untrusted: true` and blocks whose source is missing/empty
- * are omitted. Output is <=120 lines.
+ * are omitted. Output is <=120 lines. When `opts.alerts` holds unresolved failure
+ * alerts, a plain-text block is prepended (empty/absent → output unchanged).
  * @param {string} vaultDir
  * @param {import('./layout').VaultLayout} [layout]  defaults to defaultLayout()
+ * @param {{alerts?: Array<{job:string, at:string, reason:string, log_hint:string}>}} [opts]
  * @returns {string}
  */
-function renderDigest(vaultDir, layout = defaultLayout()) {
+function renderDigest(vaultDir, layout = defaultLayout(), opts = {}) {
   const idDir = path.join(vaultDir, layout.identity_dir);
   /** @type {[string, string][]} */
   const identity = [
@@ -230,7 +264,9 @@ function renderDigest(vaultDir, layout = defaultLayout()) {
     if (summary) parts.push(`## Latest daily log (${daily.date})\n${summary}`);
   }
 
-  return `${parts.join('\n\n')}\n`;
+  const body = `${parts.join('\n\n')}\n`;
+  const alertBlock = formatAlerts(opts.alerts || []);
+  return alertBlock ? `${alertBlock}\n\n${body}` : body;
 }
 
 module.exports = { renderDigest };
