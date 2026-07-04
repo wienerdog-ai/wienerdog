@@ -1,7 +1,7 @@
 ---
 id: WP-041
 title: Persistent failure alerts (alerts.jsonl) rendered into the digest
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: [WP-039]

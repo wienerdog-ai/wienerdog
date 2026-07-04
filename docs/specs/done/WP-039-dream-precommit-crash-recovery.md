@@ -1,7 +1,7 @@
 ---
 id: WP-039
 title: Dream pre-commit of session edits + crashed-brain vault recovery
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: [WP-017, WP-038]
