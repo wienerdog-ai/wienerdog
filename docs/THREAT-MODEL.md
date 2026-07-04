@@ -123,7 +123,7 @@ not attacker-controlled, and the line is fixed-template — no injection surface
 
 ## Privacy posture
 
-No telemetry. No network calls except the Google APIs the user configured and the harness's own model traffic. All model use goes through the user's own subscription (`claude -p` / `codex exec`) — no third-party relay ever sees transcripts. Transcripts never leave the machine; only the user's chosen harness provider sees what it already saw.
+No telemetry. No network calls except the Google APIs the user configured, the harness's own model traffic, and the once-daily update-availability check against the npm registry (a plain GET carrying no user data; disclosed and opt-out — see T7). All model use goes through the user's own subscription (`claude -p` / `codex exec`) — no third-party relay ever sees transcripts. Transcripts never leave the machine; only the user's chosen harness provider sees what it already saw.
 
 ## Residual risks (accepted, documented)
 
