@@ -1,7 +1,7 @@
 ---
 id: WP-040
 title: Dream skill preserves provenance when updating an existing note
-status: In-Review
+status: Done
 model: sonnet
 size: S
 depends_on: [WP-009]
