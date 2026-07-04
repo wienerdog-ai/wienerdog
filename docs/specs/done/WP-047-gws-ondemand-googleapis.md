@@ -1,7 +1,7 @@
 ---
 id: WP-047
 title: On-demand googleapis in a core deps dir; gws require-seam + clean setup error
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: [WP-042]
