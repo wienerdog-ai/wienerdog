@@ -56,6 +56,19 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 | [WP-035](done/WP-035-ci-linux-test-portability.md) | Linux CI test portability (usr-merge, git identity) | M7 | sonnet | Done | WP-033 |
 | [WP-036](done/WP-036-linux-resolve-bin-hermeticity.md) | Hermetic resolve_bin isolation (Linux CI) | M7 | opus | Done | WP-035 |
 | [WP-037](done/WP-037-macos-runner-hermeticity.md) | Hermetic resolve_bin isolation (macOS CI) | M7 | opus | Done | WP-036 |
+| [WP-038](WP-038-runjob-production-hardening.md) | run-job hardening: clean-env PATH/USER, evidence-preserving log rotation, brain stderr tail | M7 | opus | Ready | WP-020 |
+| [WP-039](WP-039-dream-precommit-crash-recovery.md) | Dream pre-commit of session edits + crashed-brain vault recovery | M7 | opus | Ready | WP-017, WP-038 |
+| [WP-040](WP-040-dream-note-update-provenance.md) | Dream skill preserves provenance when updating an existing note | M7 | sonnet | Ready | WP-009 |
+| [WP-041](WP-041-persistent-failure-alerts.md) | Persistent failure alerts (alerts.jsonl) rendered into the digest | M7 | opus | Ready | WP-039 |
+
+> **First-production-night incident (2026-07-04).** WP-038, WP-039 and WP-041 form
+> a serial chain (they edit the shared `run-job.js` / `dream.js` / `validate.js`
+> cluster); WP-040 branches off the dream skill independently. Together they close
+> the six gaps the first scheduled dream exposed: clean-env PATH/USER (WP-038),
+> log-rotation evidence loss (WP-038), brain-stderr surfacing (WP-038 captures +
+> WP-039 surfaces), dirty-vault starvation and crashed-brain self-starvation
+> (WP-039), transient failure visibility (WP-041), and note-update provenance loss
+> (WP-040).
 
 ## Dependency graph
 
@@ -104,4 +117,9 @@ graph LR
   WP027 --> WP028[WP-028 bootstrap skill registration]
   WP026 --> WP029[WP-029 adopt snapshot robustness]
   WP022 --> WP030[WP-030 digest H1 + adopt invocation]
+  WP020 --> WP038[WP-038 run-job hardening]
+  WP038 --> WP039[WP-039 dream pre-commit + crash recovery]
+  WP017 --> WP039
+  WP039 --> WP041[WP-041 persistent failure alerts]
+  WP009 --> WP040[WP-040 note-update provenance]
 ```

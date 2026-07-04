@@ -17,3 +17,4 @@ Durable decisions live here so they are made once, not re-litigated per session 
 | [0009](0009-subscription-everywhere.md) | Subscription auth everywhere — no Anthropic API keys | Accepted |
 | [0010](0010-vault-adoption-paths.md) | Three vault paths — fresh, guided import, full adoption | Accepted |
 | [0011](0011-consented-dependency-install.md) | Consented dependency auto-install in the curl installer | Accepted (amends 0006) |
+| [0012](0012-dream-run-lifecycle.md) | Dream run lifecycle — pre-commit, crash revert, durable alerts | Accepted |

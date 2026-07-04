@@ -88,7 +88,7 @@ Wienerdog auto-writes persistent memory derived from conversation transcripts, i
 
 **Attack/hazard**: silent hangs (the claude-os 4-hour TCC hang), runaway jobs burning quota, jobs running in unexpected environments.
 
-**Mitigations**: TCC-guard refuses jobs referencing TCC-protected paths; watchdog hard timeout kills and alerts; fail-loud (alert email or digest banner — never silence); explicit clean env construction; per-job logs with rotation.
+**Mitigations**: TCC-guard refuses jobs referencing TCC-protected paths; watchdog hard timeout kills and alerts; fail-loud via durable `state/alerts.jsonl` rendered into the digest until the next successful run (ADR-0012 — replaced the transient banner production falsified) plus best-effort email; explicit clean env construction; per-job logs with rotation (evidence logs excluded from rotation). Dream lifecycle (ADR-0012): session edits are pre-committed as user-state versioning (no model-authored content), and post-crash dirt — brain-authored by construction — is reverted before the lock releases, so a failed run cannot starve future runs.
 
 ## Privacy posture
 
