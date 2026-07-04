@@ -1,6 +1,6 @@
 {
   "name": "wienerdog",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Give your AI a memory, habits, and a daily routine \u2014 with nothing but files. One-line setup for Claude Code and Codex CLI.",
   "license": "MIT",
   "bin": {
