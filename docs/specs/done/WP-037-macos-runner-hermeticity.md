@@ -1,7 +1,7 @@
 ---
 id: WP-037
 title: Hermetic resolve_bin isolation for the macOS CLT consent test
-status: In-Review
+status: Done
 model: opus
 size: S
 depends_on: [WP-036]

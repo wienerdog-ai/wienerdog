@@ -73,3 +73,7 @@ One bullet per lesson, prefixed with WP id (or M0 for foundation work). The drea
 - WP-035: Debian usr-merge (/bin → /usr/bin) silently defeats test PATH curation that includes either dir — symlink only named binaries into a fresh hermetic dir; keep a self-guard probe test asserting git/node unresolvable under it.
 - WP-035: git identity failures can't be reproduced on a normal Mac (getpwuid fallback masks them) — use user.useConfigOnly=true to prove -c identity flags are load-bearing.
 - Process (owner): 8 merges happened on reviewer-APPROVE while the ubuntu CI leg was red — reviewers verify on macOS, so matrix green is a distinct signal the MERGE step must check. Structural fix: branch protection requiring both legs, enabled once CI is green.
+- WP-036/037: resolve_bin's hardcoded dir scans bypass PATH — tests driving ensure_* must override it to PATH-only (command -v); GitHub images ship real node at /usr/local/bin (ubuntu) and real git+node+npx at /opt/homebrew/bin (macOS).
+- WP-037: exit 254 = npm's ENOENT spawn sh — in a "hermetic" test it means a real npx escaped and hit the live registry every CI run (supply-chain surface, not just flakiness).
+- WP-037: bash command -v matches non-executable files; shims building shims must use builtins (printf) or hermetically-provided binaries — a failed `cat >file` redirection still creates the file.
+- Process: fail-fast matrices hide later-listed-OS failures — the macOS leg had NEVER actually run green; fail-fast: false + branch protection requiring both legs is the structural fix.
