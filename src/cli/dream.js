@@ -13,6 +13,7 @@ const { collectExtracts, cleanScratch } = require('../core/dream/scratch');
 const { spawnBrain, buildClaudeArgs } = require('../core/dream/brain');
 const { readVaultLayout } = require('../core/layout');
 const { renderDigest } = require('../core/digest');
+const { renderUpdateLine } = require('../core/update-check');
 const { readAlerts } = require('../core/alerts');
 const {
   validateAndCommit,
@@ -209,7 +210,7 @@ async function run(argv) {
 
     // 10. Regenerate the injected session digest (atomic temp + rename).
     fs.mkdirSync(paths.state, { recursive: true });
-    const digest = renderDigest(vaultDir, layout, { alerts: readAlerts(paths) });
+    const digest = renderDigest(vaultDir, layout, { alerts: readAlerts(paths), updateLine: renderUpdateLine(paths) });
     const digestDest = path.join(paths.state, 'digest.md');
     const digestTmp = path.join(paths.state, `.digest.md.${process.pid}.tmp`);
     fs.writeFileSync(digestTmp, digest);

@@ -7,6 +7,7 @@ const { spawn, spawnSync } = require('node:child_process');
 
 const { getPaths } = require('../core/paths');
 const { WienerdogError } = require('../core/errors');
+const { maybeRefresh } = require('../core/update-check');
 const { appendAlert, clearAlerts } = require('../core/alerts');
 const { readDreamConfig } = require('../core/dream/config');
 const jobsLib = require('../scheduler/jobs');
@@ -394,10 +395,20 @@ async function catchUp(paths, opts = {}) {
  *           was refused by the TCC-guard (WienerdogError, after fail-loud).
  *  @param {string[]} argv
  *  @param {{sendAlert?: typeof defaultSendAlert, loader?: (argv:string[])=>{status:number},
- *           platform?: NodeJS.Platform, now?: Date}} [opts]
+ *           platform?: NodeJS.Platform, now?: Date,
+ *           fetchLatest?: (t:number)=>Promise<string>}} [opts]
  *  @returns {Promise<void>} */
 async function run(argv, opts = {}) {
   const paths = getPaths();
+  // Bounded, once/24h, opt-out, silent on failure (ADR-0015). Never blocks/fails
+  // the job. Fetch seam is injectable for hermetic tests. maybeRefresh already
+  // never throws (WP-045); the try/catch is belt-and-suspenders and must never
+  // alter the job's exit code.
+  try {
+    await maybeRefresh(paths, { fetchLatest: opts.fetchLatest });
+  } catch {
+    /* never affects the job */
+  }
   if (argv[0] === '--catch-up') {
     await catchUp(paths, opts);
     return;

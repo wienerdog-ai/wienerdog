@@ -29,9 +29,14 @@ function setup(vaultRel = 'wienerdog') {
   fs.mkdirSync(paths.state, { recursive: true });
   fs.mkdirSync(paths.logs, { recursive: true });
   fs.mkdirSync(vault, { recursive: true });
+  // update_check: false keeps every run-job test hermetic — run() calls
+  // maybeRefresh at its start, and this opt-out short-circuits it before any
+  // network fetch. The one wiring test below overrides this to true and injects
+  // a fetch seam.
   const config = `# Wienerdog configuration
 version: 1
 vault: ${vault}
+update_check: false
 `;
   fs.writeFileSync(paths.config, config);
   manifestLib.save(paths, {
@@ -446,4 +451,26 @@ test('scheduler-runjob: --catch-up does not abort the batch on a single job fail
 test('scheduler-runjob: run rejects an unknown job name', async () => {
   const { env } = setup();
   await assert.rejects(withRun(env, {}, ['ghost'], {}), /unknown job: ghost/);
+});
+
+// -------------------------------------------------------------------------
+// Update-check wiring (WP-046): run-job refreshes the cache via the injected
+// fetch seam — never the real registry.
+// -------------------------------------------------------------------------
+
+test('scheduler-runjob: with update_check on, run-job refreshes the cache via the injected fetch (no network)', async () => {
+  const { env, vault, paths } = setup();
+  // Opt in to the update check for this test only; keep the vault line intact.
+  fs.writeFileSync(paths.config, `# Wienerdog configuration
+version: 1
+vault: ${vault}
+update_check: true
+`);
+
+  // --catch-up with no jobs is "nothing overdue"; maybeRefresh still runs first.
+  await withRun(env, {}, ['--catch-up'], { fetchLatest: async () => '9.9.9' });
+
+  const cache = JSON.parse(fs.readFileSync(path.join(paths.state, 'update-check.json'), 'utf8'));
+  assert.equal(cache.latest, '9.9.9', 'injected fetch populated the cache');
+  assert.ok(cache.last_check, 'attempt was stamped');
 });

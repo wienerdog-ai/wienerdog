@@ -62,6 +62,22 @@ test('doctor after init --fresh-vault reports the vault ready and exits 0', () =
   assert.match(r.stdout, /vault ready/);
 });
 
+test('doctor prints the cache-only update line when a newer version is cached (no network)', () => {
+  const { core, env } = tempEnv();
+  run(['init', '--yes'], env);
+  // Seed the update-check cache directly with a greater latest — doctor reads the
+  // cache only, so no fetch seam is needed and no registry is contacted.
+  const stateDir = path.join(core, 'state');
+  fs.mkdirSync(stateDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(stateDir, 'update-check.json'),
+    JSON.stringify({ last_check: new Date().toISOString(), current: '0.0.1', latest: '999.0.0' }, null, 2)
+  );
+  const r = run(['doctor'], env);
+  assert.equal(r.status, 0);
+  assert.match(r.stdout, /\[info\] a newer Wienerdog is available \(.* → 999\.0\.0\) — update: npx wienerdog@latest sync/);
+});
+
 test('doctor with a set-but-missing vault fails and exits 1', () => {
   const { core, env } = tempEnv();
   run(['init', '--yes'], env);

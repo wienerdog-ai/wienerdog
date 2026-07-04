@@ -1,7 +1,7 @@
 ---
 id: WP-046
 title: Wire the update check into run-job + render it into digest/doctor; threat model
-status: Ready
+status: In-Review
 model: opus
 size: M
 depends_on: [WP-045]

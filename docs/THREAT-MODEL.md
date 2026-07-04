@@ -31,6 +31,13 @@ Wienerdog auto-writes persistent memory derived from conversation transcripts, i
 - **Code, not the model, enforces the boundary**: the orchestrator validates the post-dream git diff; any write violating tier rules is reverted and flagged in the dream report.
 - **One commit per dream** → `git revert <sha>` undoes an entire night.
 - **Human-readable dream reports** list everything written *and everything gated out and why* — a daily review surface.
+- **Non-vault sources rendered into the digest carry no injection surface**:
+  the only content injected into `state/digest.md` beyond vault notes is the
+  durable-alerts block (`state/alerts.jsonl`) and the update-available line —
+  both are fixed-template, declarative control-plane text computed by code from
+  Wienerdog-authored facts (job status; a validated semver). Neither ever
+  contains transcript/tool-result text or instruction-following framing, so
+  neither widens the injection surface despite landing in the injected digest.
 
 ## T2 — Dream job as confused deputy
 
@@ -89,6 +96,30 @@ Wienerdog auto-writes persistent memory derived from conversation transcripts, i
 **Attack/hazard**: silent hangs (the claude-os 4-hour TCC hang), runaway jobs burning quota, jobs running in unexpected environments.
 
 **Mitigations**: TCC-guard refuses jobs referencing TCC-protected paths; watchdog hard timeout kills and alerts; fail-loud via durable `state/alerts.jsonl` rendered into the digest until the next successful run (ADR-0012 — replaced the transient banner production falsified) plus best-effort email; explicit clean env construction; per-job logs with rotation (evidence logs excluded from rotation). Dream lifecycle (ADR-0012): session edits are pre-committed as user-state versioning (no model-authored content), and post-crash dirt — brain-authored by construction — is reverted before the lock releases, so a failed run cannot starve future runs.
+
+## T7 — Update-availability check (outbound registry call)
+
+**Hazard**: a files-only, no-telemetry tool making an outbound network call
+could look like telemetry; and a malicious/compromised registry response could
+try to inject content into the injected digest.
+
+**Mitigations (ADR-0015)**: the check piggybacks on already-running scheduled
+`run-job` invocations — no new process (ADR-0004). It performs a single HTTPS
+GET to `registry.npmjs.org` for the package's `latest` dist-tag, at most once per
+24h, with a bounded timeout; failure is a silent skip that never blocks or fails
+the job. It sends no user data beyond a standard HTTPS request — no identifiers,
+no vault content. It is opt-out (`update_check: false` in config.yaml; default
+on), documented in plain language. The response is untrusted: the version string
+is validated as semver-shaped before storage, and only a fixed-template
+declarative line is rendered (no registry-supplied text reaches the digest
+verbatim). Wienerdog never auto-updates — it only prints the exact command
+(`npx wienerdog@latest sync`). This is disclosed here as a named, opt-out
+exception to "no network except what you configured"; it is not telemetry.
+
+**Residual (accepted)**: `cmpRelease` compares release cores via `Number()`, so a
+version part beyond ~15 digits loses integer precision; the worst case is a
+cosmetically-bogus "update available" notice (the source is npm's own dist-tags,
+not attacker-controlled, and the line is fixed-template — no injection surface).
 
 ## Privacy posture
 

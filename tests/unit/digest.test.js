@@ -21,6 +21,29 @@ test('renderDigest is deterministic (pure): same input, identical bytes', () => 
   assert.equal(renderDigest(FIXTURE), renderDigest(FIXTURE));
 });
 
+test('renderDigest prepends opts.updateLine; empty leaves the golden byte-identical', () => {
+  const golden = fs.readFileSync(GOLDEN, 'utf8');
+  // No update line (and no alerts) → unchanged from the golden.
+  assert.equal(renderDigest(FIXTURE, undefined, { updateLine: '' }), golden);
+  // A non-empty update line is prepended, then a blank line, then the body.
+  const line = '> [!note] A newer Wienerdog is available (0.2.1 → 0.3.0). Update with: npx wienerdog@latest sync';
+  const withLine = renderDigest(FIXTURE, undefined, { updateLine: line });
+  assert.equal(withLine, `${line}\n\n${golden}`);
+});
+
+test('renderDigest orders the prefix alerts → updateLine → body', () => {
+  const golden = fs.readFileSync(GOLDEN, 'utf8');
+  const line = '> [!note] update available';
+  const alerts = [{ job: 'dream', at: '2026-07-04T03:30:00.000Z', reason: 'boom', log_hint: 'logs/dream/' }];
+  const out = renderDigest(FIXTURE, undefined, { alerts, updateLine: line });
+  const alertIdx = out.indexOf('[!warning]');
+  const lineIdx = out.indexOf(line);
+  const bodyIdx = out.indexOf("# Who you're working with");
+  assert.ok(alertIdx !== -1 && lineIdx !== -1 && bodyIdx !== -1, 'all three blocks present');
+  assert.ok(alertIdx < lineIdx && lineIdx < bodyIdx, 'alerts precede updateLine, which precedes the body');
+  assert.ok(out.endsWith(golden), 'body is the unchanged golden');
+});
+
 test('a note flagged derived_from_untrusted is excluded from the digest', () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-digest-'));
   const idDir = path.join(tmp, '06-Identity');
