@@ -160,7 +160,16 @@ async function run(argv) {
   await require('./sync').run(argv);
 
   if (vaultStep) {
-    console.log('\nwienerdog: installed with a fresh vault. Run `wienerdog doctor` to check the setup.');
+    const { ensureDreamSchedule } = require('./schedule');
+    const d = ensureDreamSchedule(paths);
+    console.log('\nwienerdog: installed with a fresh vault.');
+    if (d.scheduled) {
+      console.log(`Nightly memory (dreaming) is scheduled for ${d.at} to consolidate each day into your vault.`);
+      console.log('Change or turn it off anytime: `wienerdog schedule remove dream`, or the routine menu (/wienerdog-routines).');
+    } else if (d.reason === 'unsupported') {
+      console.log('Nightly dreaming could not be auto-scheduled on this system yet; run `wienerdog dream` manually, or schedule it once supported.');
+    }
+    console.log('Run `wienerdog doctor` to check the setup.');
   } else if (vaultConfigured) {
     console.log('\nwienerdog: installed. Run `wienerdog doctor` to check the setup.');
   } else {

@@ -282,11 +282,25 @@ async function run(argv) {
   // 11. Persist the manifest.
   manifestLib.save(paths, manifest);
 
+  // Ensure the vendored app + PATH shim exist (adopt may run from an npx/temp copy
+  // and does not call sync), then silently schedule the nightly dream (ADR-0014).
+  const { vendorSelf, writeShim } = require('../core/vendor');
+  vendorSelf(paths, { manifest });
+  writeShim(paths, { manifest });
+  manifestLib.save(paths, manifest);
+  const { ensureDreamSchedule } = require('./schedule');
+  const dream = ensureDreamSchedule(paths);
+
   // 12. Next steps.
   console.log('\nwienerdog: adoption complete.');
   console.log(`  Vault:        ${adoptedPath}`);
   console.log(`  Memory mode:  conservative (strict gates for your first week)`);
   console.log(`  Folders made: ${createdDirs.length}, starter notes seeded: ${seededFiles.length}`);
+  if (dream.scheduled) {
+    console.log(`  Nightly dreaming: scheduled for ${dream.at} (change/disable: \`wienerdog schedule remove dream\` or /wienerdog-routines).`);
+  } else if (dream.reason === 'unsupported') {
+    console.log('  Nightly dreaming: could not be auto-scheduled on this system yet — run `wienerdog dream` manually.');
+  }
   if (dirExists(paths.vault)) {
     console.log(`\nThe default vault at ${paths.vault} is now unused — you can delete it if you like.`);
   }

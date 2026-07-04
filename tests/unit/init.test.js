@@ -31,6 +31,10 @@ function tempEnv() {
       WIENERDOG_VAULT: path.join(root, 'vault'),
       CLAUDE_CONFIG_DIR: path.join(root, 'absent-claude'),
       CODEX_HOME: path.join(root, 'absent-codex'),
+      // Neutralize the real OS scheduler (WP-044 auto-schedules the dream on the
+      // fresh-vault path): the default loader no-ops instead of spawning
+      // launchctl/systemctl. Plist/timer files still land under the temp HOME.
+      WIENERDOG_LOADER_NOOP: '1',
     },
   };
 }
@@ -105,6 +109,31 @@ test('init --fresh-vault --yes scaffolds the default vault as a git repo', () =>
     encoding: 'utf8',
   }).trim();
   assert.equal(count, '1', 'vault should be a git repo with exactly one commit');
+});
+
+test('init --fresh-vault schedules the nightly dream and surfaces it (ADR-0014)', () => {
+  const { core, env } = tempEnv();
+  const r = run(['init', '--fresh-vault', '--yes'], env);
+  assert.equal(r.status, 0);
+  // The summary surfaces dreaming — scheduled, or degraded on an unschedulable
+  // platform; either way the user is told.
+  assert.match(r.stdout, /dreaming/i);
+  // The dream job definition landed in config regardless of platform support:
+  // ensureDreamSchedule persists the job before registering the OS entry.
+  const cfg = fs.readFileSync(path.join(core, 'config.yaml'), 'utf8');
+  assert.match(cfg, /wienerdog:jobs/);
+  assert.match(cfg, /name: dream/);
+  assert.match(cfg, /at: "03:30"/);
+  assert.match(cfg, /run: builtin:dream/);
+});
+
+test('plain init (no vault) does NOT schedule a dream', () => {
+  const { core, env } = tempEnv();
+  const r = run(['init', '--yes'], env);
+  assert.equal(r.status, 0);
+  const cfg = fs.readFileSync(path.join(core, 'config.yaml'), 'utf8');
+  assert.ok(!cfg.includes('wienerdog:jobs'), 'no jobs block without a vault');
+  assert.doesNotMatch(r.stdout, /dreaming/i);
 });
 
 test('a second init --fresh-vault makes zero changes and says so', () => {

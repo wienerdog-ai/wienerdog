@@ -26,6 +26,7 @@ const ENV_KEYS = [
   'CODEX_HOME',
   'WIENERDOG_FAKE_TODAY',
   'WIENERDOG_DREAM_CMD',
+  'WIENERDOG_LOADER_NOOP',
 ];
 
 /** @param {string} cwd @param {string[]} args */
@@ -78,6 +79,9 @@ test('adopt-e2e: init → adopt → sync → dream through mapped tiers, one rev
       CODEX_HOME: codex,
       WIENERDOG_FAKE_TODAY: DATE,
       WIENERDOG_DREAM_CMD: FAKE_BRAIN,
+      // WP-044: adopt now auto-schedules the nightly dream. Neutralize the real
+      // OS scheduler so this test never spawns launchctl/systemctl (HOME is temp).
+      WIENERDOG_LOADER_NOOP: '1',
     });
 
     const configPath = path.join(core, 'config.yaml');
@@ -131,6 +135,14 @@ test('adopt-e2e: init → adopt → sync → dream through mapped tiers, one rev
     // 4d. The user's own identity notes were NOT overwritten and no stubs seeded
     //     (identity dir already had notes).
     assert.match(fs.readFileSync(path.join(adopted, '06-Identity/profile.md'), 'utf8'), /Priya Nair/);
+
+    // 4e. WP-044: adopt auto-scheduled the nightly dream. The job definition
+    //     landed in config regardless of whether this platform can register an OS
+    //     entry (ensureDreamSchedule persists the job before it registers), so the
+    //     run completed without failing vault adoption either way.
+    assert.match(cfg, /wienerdog:jobs/, 'adopt wrote the managed jobs block');
+    assert.match(cfg, /name: dream/, 'adopt scheduled the nightly dream');
+    assert.match(cfg, /at: "03:30"/, 'dream scheduled at 03:30');
 
     // 5. sync → digest rendered from the REAL identity notes + nested daily.
     await sync.run([]);

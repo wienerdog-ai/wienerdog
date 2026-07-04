@@ -416,6 +416,59 @@ test('scheduler-schedule: repointSchedules degrades on an unsupported platform (
   }
 });
 
+// -------------------------------------------------------------------------
+// schedule.js: ensureDreamSchedule (ADR-0014) — schedules once at 03:30,
+// idempotent, degrades on an unsupported platform without throwing.
+// -------------------------------------------------------------------------
+
+test('scheduler-schedule: ensureDreamSchedule schedules dream once at 03:30', { skip: !SCHED_SUPPORTED }, () => {
+  const { paths } = setup();
+  /** @type {string[][]} */ const calls = [];
+  const res = schedule.ensureDreamSchedule(paths, { loader: (a) => (calls.push(a), { status: 0 }) });
+
+  assert.deepEqual(res, { scheduled: true, at: '03:30' });
+  // Job persisted with builtin:dream + 20-minute timeout.
+  assert.deepEqual(jobsLib.findJob(paths, 'dream'), {
+    name: 'dream',
+    at: '03:30',
+    run: 'builtin:dream',
+    timeoutMinutes: 20,
+  });
+  // config.yaml gained the managed jobs block.
+  assert.match(fs.readFileSync(paths.config, 'utf8'), /wienerdog:jobs/);
+  // A scheduler-entry was recorded, and the OS loader was called at least once.
+  const manifest = manifestLib.load(paths);
+  assert.ok(manifest.entries.some((e) => e.kind === 'scheduler-entry'), 'scheduler-entry recorded');
+  assert.ok(calls.length >= 1, 'the OS scheduler was invoked');
+});
+
+test('scheduler-schedule: ensureDreamSchedule is idempotent (second call no-ops)', { skip: !SCHED_SUPPORTED }, () => {
+  const { paths } = setup();
+  schedule.ensureDreamSchedule(paths, { loader: () => ({ status: 0 }) });
+  /** @type {string[][]} */ const calls = [];
+  const res = schedule.ensureDreamSchedule(paths, { loader: (a) => (calls.push(a), { status: 0 }) });
+  assert.deepEqual(res, { scheduled: false, reason: 'exists' });
+  assert.equal(calls.length, 0, 'no OS call when the dream job already exists');
+  assert.equal(jobsLib.listJobs(paths).filter((j) => j.name === 'dream').length, 1, 'still exactly one dream job');
+});
+
+test('scheduler-schedule: ensureDreamSchedule degrades on an unsupported platform (no throw)', () => {
+  const { paths } = setup();
+  const orig = Object.getOwnPropertyDescriptor(process, 'platform');
+  Object.defineProperty(process, 'platform', { value: 'sunos', configurable: true });
+  let res;
+  try {
+    res = schedule.ensureDreamSchedule(paths, { loader: () => ({ status: 0 }) });
+  } finally {
+    Object.defineProperty(process, 'platform', orig);
+  }
+  assert.equal(res.scheduled, false);
+  assert.equal(res.reason, 'unsupported');
+  assert.ok(res.message, 'a plain-language reason is surfaced');
+  // The job definition is retained so the user can schedule it later once supported.
+  assert.ok(jobsLib.findJob(paths, 'dream'), 'dream job definition kept despite the unschedulable platform');
+});
+
 test('scheduler-schedule: list --json reports jobs with watermarks', { skip: !SCHED_SUPPORTED }, async () => {
   const { env, paths } = setup();
   await runSchedule(env, ['add', 'dream', '--at', '03:30', '--job', 'dream'], () => ({ status: 0 }));

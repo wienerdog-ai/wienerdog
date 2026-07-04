@@ -207,6 +207,34 @@ function repointSchedules(paths, manifest, opts = {}) {
 }
 
 /**
+ * Silently ensure the nightly dream is scheduled at 03:30 (ADR-0014). Idempotent:
+ * if a `dream` job already exists, no-op. Degrades (no throw) on a platform where
+ * scheduling is unsupported so vault creation never fails.
+ * @param {import('../core/paths').WienerdogPaths} paths
+ * @param {{loader?: (argv:string[])=>{status:number}}} [opts]
+ * @returns {{scheduled:boolean, at?:string, reason?:string, message?:string}}
+ */
+function ensureDreamSchedule(paths, opts = {}) {
+  const loader = opts.loader || defaultLoader;
+  if (jobsLib.findJob(paths, 'dream')) return { scheduled: false, reason: 'exists' };
+  const at = '03:30';
+  const { hour, minute } = gen.parseAt(at);
+  const job = { name: 'dream', at, run: 'builtin:dream', timeoutMinutes: 20 };
+  jobsLib.saveJob(paths, job);
+  const manifest = manifestLib.load(paths);
+  try {
+    registerPlatform(paths, manifest, { name: 'dream', hour, minute }, loader);
+  } catch (err) {
+    // Unsupported platform / non-systemd Linux: keep the job definition, but do
+    // not fail vault creation. The user can schedule later once supported.
+    manifestLib.save(paths, manifest);
+    return { scheduled: false, reason: 'unsupported', message: err.message };
+  }
+  manifestLib.save(paths, manifest);
+  return { scheduled: true, at };
+}
+
+/**
  * schedule add <name> --at HH:MM (--skill <s> | --job <builtin>) [--timeout <min>]
  * @param {string[]} argv
  * @param {(argv:string[])=>{status:number}} loader
@@ -357,4 +385,4 @@ async function run(argv, { loader = defaultLoader } = {}) {
   }
 }
 
-module.exports = { run, defaultLoader, repointSchedules };
+module.exports = { run, defaultLoader, repointSchedules, ensureDreamSchedule };

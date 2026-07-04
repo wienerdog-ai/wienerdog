@@ -1,7 +1,7 @@
 ---
 id: WP-044
 title: Schedule the nightly dream by default when a vault is created
-status: Ready
+status: In-Review
 model: opus
 size: M
 depends_on: [WP-043]
@@ -69,7 +69,7 @@ the `sync` call.
 a "Run wienerdog sync" hint. You add, after step 11, a defensive `vendorSelf` call
 plus a manifest save, then the dream auto-schedule and a summary line.
 
-### `src/scheduler/schedule.js` — registration you will reuse (WP-042/043)
+### `src/cli/schedule.js` — registration you will reuse (WP-042/043)
 
 `add()` builds `{name, at, run, timeoutMinutes}`, calls `jobsLib.saveJob(paths, job)`,
 then `manifestLib.load`, `registerPlatform(paths, manifest, {name, hour, minute}, loader)`,
@@ -81,7 +81,7 @@ platform / non-systemd Linux. `defaultLoader` honors `WIENERDOG_LOADER_NOOP`
 
 | Action | Path | Notes |
 |--------|------|-------|
-| modify | src/scheduler/schedule.js | add `ensureDreamSchedule()` |
+| modify | src/cli/schedule.js | add `ensureDreamSchedule()` |
 | modify | src/cli/init.js | fresh-vault branch: call `ensureDreamSchedule` + summary line |
 | modify | src/cli/adopt.js | after step 11: `vendorSelf` (defensive) + `ensureDreamSchedule` + summary |
 | modify | tests/unit/scheduler-schedule.test.js | `ensureDreamSchedule`: schedules once, idempotent, degrades |
@@ -90,7 +90,7 @@ platform / non-systemd Linux. `defaultLoader` honors `WIENERDOG_LOADER_NOOP`
 
 ### Exact contracts
 
-**`src/scheduler/schedule.js` — `ensureDreamSchedule`.** Idempotent, degrades on
+**`src/cli/schedule.js` — `ensureDreamSchedule`.** Idempotent, degrades on
 unsupported platforms, records the entry exactly like `add`:
 
 ```js
