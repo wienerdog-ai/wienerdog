@@ -1,7 +1,7 @@
 ---
 id: WP-059
 title: Close the watchdog-test pidfile race (bounded poll before asserting the kill)
-status: In-Review
+status: Done
 model: sonnet
 size: S
 depends_on: []
