@@ -183,7 +183,7 @@ install_via_tarball() {
   ver="$(printf '%s' "$meta" | grep -oE '"version"[[:space:]]*:[[:space:]]*"[^"]+"' | head -1 | sed -E 's/.*"([^"]+)"$/\1/')" || true
   integrity="$(printf '%s' "$meta" | grep -oE '"integrity"[[:space:]]*:[[:space:]]*"sha512-[^"]+"' | head -1 | sed -E 's/.*"(sha512-[^"]+)"$/\1/')" || true
 
-  if ! printf '%s' "$ver" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+' || [ -z "$integrity" ]; then
+  if ! printf '%s' "$ver" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$' || [ -z "$integrity" ]; then
     echo "Couldn't read Wienerdog's release info from the npm registry." >&2
     tarball_fallback_note
     exit 1
@@ -326,6 +326,16 @@ npm ships with Node.js — reinstall Node from https://nodejs.org to get it.
       non-zero.
 - [ ] **bad/absent manifest** (curl returns non-JSON / no integrity): "Couldn't
       read … release info" + fallback; exit non-zero; no download attempted.
+- [ ] **malicious manifest version — path traversal** (owner amendment,
+      2026-07-05, from the WP-055 review): a manifest whose `version` is
+      `1.2.3/../../<writable path>` (or any value containing `/` or `..`, or not
+      strict semver) is REJECTED at the validation gate — no `curl`, no `mkdir`,
+      no `mv`, nothing written outside `<core>`, exit non-zero with the fallback
+      note. The version regex must be end-anchored strict semver
+      (`^[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$`); the start-anchored-only
+      form previously prescribed accepted `1.2.3/…` and let the verified tarball
+      `mv` escape `<core>`. Add a test planting a filesystem canary at the
+      traversal target and asserting it never appears.
 - [ ] `npm run lint` passes (shellcheck + shfmt clean); `npm test` passes; no test
       hits the real registry, a real `npx`, or runs a real `init`.
 
