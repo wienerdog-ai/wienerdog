@@ -36,11 +36,44 @@ function tempEnv() {
  */
 function run(args, env) {
   try {
-    const stdout = execFileSync('node', [bin, ...args], { env, encoding: 'utf8' });
+    // Use the running node by absolute path so tests may override PATH (to make
+    // the npx-availability switch deterministic) without losing the interpreter.
+    const stdout = execFileSync(process.execPath, [bin, ...args], { env, encoding: 'utf8' });
     return { status: 0, stdout, stderr: '' };
   } catch (err) {
     return { status: err.status, stdout: err.stdout || '', stderr: err.stderr || '' };
   }
+}
+
+/** A temp dir holding an executable `npx` stub. Host-independent. */
+function dirWithNpx() {
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-npx-'));
+  const name = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+  fs.writeFileSync(path.join(d, name), '#!/bin/sh\nexit 0\n');
+  fs.chmodSync(path.join(d, name), 0o755);
+  return d;
+}
+
+/** Does directory `d` contain an npx-like executable? Mirrors npxAvailable. */
+function npxInDir(d) {
+  const names = process.platform === 'win32' ? ['npx.cmd', 'npx.exe', 'npx'] : ['npx'];
+  return names.some((n) => {
+    try {
+      if (process.platform === 'win32') return fs.existsSync(path.join(d, n));
+      fs.accessSync(path.join(d, n), fs.constants.X_OK);
+      return true;
+    } catch { return false; }
+  });
+}
+
+/** The host PATH with every npx-containing dir stripped out — keeps git/node etc.
+ *  available while guaranteeing `npxAvailable` reports false. */
+function pathWithoutNpx() {
+  return (process.env.PATH || '')
+    .split(path.delimiter)
+    .filter(Boolean)
+    .filter((d) => !npxInDir(d))
+    .join(path.delimiter);
 }
 
 test('doctor after a plain init warns about the deferred vault and exits 0', () => {
@@ -62,20 +95,37 @@ test('doctor after init --fresh-vault reports the vault ready and exits 0', () =
   assert.match(r.stdout, /vault ready/);
 });
 
-test('doctor prints the cache-only update line when a newer version is cached (no network)', () => {
-  const { core, env } = tempEnv();
-  run(['init', '--yes'], env);
-  // Seed the update-check cache directly with a greater latest — doctor reads the
-  // cache only, so no fetch seam is needed and no registry is contacted.
+/** Seed the update-check cache with a greater `latest` (doctor reads cache only,
+ *  no network). @param {string} core */
+function seedNewerVersion(core) {
   const stateDir = path.join(core, 'state');
   fs.mkdirSync(stateDir, { recursive: true });
   fs.writeFileSync(
     path.join(stateDir, 'update-check.json'),
     JSON.stringify({ last_check: new Date().toISOString(), current: '0.0.1', latest: '999.0.0' }, null, 2)
   );
+}
+
+test('doctor prints the npx update command when npx is on PATH (no network)', () => {
+  const { core, env } = tempEnv();
+  run(['init', '--yes'], env);
+  seedNewerVersion(core);
+  // Prepend an npx stub so the availability switch is deterministic regardless of host.
+  env.PATH = `${dirWithNpx()}${path.delimiter}${process.env.PATH || ''}`;
   const r = run(['doctor'], env);
   assert.equal(r.status, 0);
   assert.match(r.stdout, /\[info\] a newer Wienerdog is available \(.* → 999\.0\.0\) — update: npx wienerdog@latest sync/);
+});
+
+test('doctor prints `wienerdog update` when npx is NOT on PATH (no network)', () => {
+  const { core, env } = tempEnv();
+  run(['init', '--yes'], env);
+  seedNewerVersion(core);
+  // Strip npx-containing dirs from PATH; node/git stay available.
+  env.PATH = pathWithoutNpx();
+  const r = run(['doctor'], env);
+  assert.equal(r.status, 0);
+  assert.match(r.stdout, /\[info\] a newer Wienerdog is available \(.* → 999\.0\.0\) — update: wienerdog update/);
 });
 
 test('doctor with a set-but-missing vault fails and exits 1', () => {

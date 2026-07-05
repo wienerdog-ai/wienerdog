@@ -190,7 +190,19 @@ async function installVersion(paths, args) {
     fs.writeFileSync(tgzFile, buf);
     extractTarball(tgzFile, staging, { spawn: args.spawn });
     fs.mkdirSync(app, { recursive: true });
-    fs.renameSync(staging, target); // atomic publish of the version dir
+    // Recovery: the completeness check above fell through, so any target dir that
+    // still exists here is INCOMPLETE (a crash leftover, or the loser of two
+    // same-version installs). Publish is rename-onto-absent-dir, so remove the
+    // partial dir first — otherwise renameSync throws a raw ENOTEMPTY that can
+    // never self-heal (owner amendment, WP-053 review).
+    if (fs.existsSync(target)) {
+      fs.rmSync(target, { recursive: true, force: true });
+    }
+    try {
+      fs.renameSync(staging, target); // atomic publish of the version dir
+    } catch {
+      throw new WienerdogError('could not finish unpacking the update (the version folder could not be published)');
+    }
   } finally {
     try { fs.rmSync(tgzFile, { force: true }); } catch { /* ignore */ }
     try { fs.rmSync(staging, { recursive: true, force: true }); } catch { /* ignore */ }

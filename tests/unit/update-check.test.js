@@ -23,6 +23,20 @@ function setup(configExtra = '') {
   return { root, env, paths };
 }
 
+/** A temp dir containing an executable `npx` stub. Host-independent. */
+function dirWithNpx() {
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-npx-'));
+  const name = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+  fs.writeFileSync(path.join(d, name), '#!/bin/sh\nexit 0\n');
+  fs.chmodSync(path.join(d, name), 0o755);
+  return d;
+}
+
+/** A temp dir with NO npx. */
+function dirWithoutNpx() {
+  return fs.mkdtempSync(path.join(os.tmpdir(), 'wd-nonpx-'));
+}
+
 // -------------------------------------------------------------------------
 // isSemver
 // -------------------------------------------------------------------------
@@ -148,7 +162,8 @@ test('update-check: renderUpdateLine emits the fixed template only when a strict
   const now = Date.parse('2026-07-04T03:30:07.101Z');
   await uc.maybeRefresh(paths, { fetchLatest: async () => '0.3.0', now });
 
-  const line = uc.renderUpdateLine(paths, '0.2.1');
+  // Command is host-dependent now (npx switch); inject an env with npx present.
+  const line = uc.renderUpdateLine(paths, '0.2.1', { PATH: dirWithNpx() });
   assert.equal(
     line,
     '> [!note] A newer Wienerdog is available (0.2.1 → 0.3.0). Update with: npx wienerdog@latest sync'
@@ -156,6 +171,32 @@ test('update-check: renderUpdateLine emits the fixed template only when a strict
 
   const notice = uc.getUpdateNotice(paths, '0.2.1');
   assert.deepEqual(notice, { available: true, current: '0.2.1', latest: '0.3.0' });
+});
+
+// -------------------------------------------------------------------------
+// npxAvailable / updateCommand / renderUpdateLine command switch (WP-054)
+// -------------------------------------------------------------------------
+
+test('update-check: npxAvailable is true when PATH has an executable npx, false otherwise', () => {
+  assert.equal(uc.npxAvailable({ PATH: dirWithNpx() }), true);
+  assert.equal(uc.npxAvailable({ PATH: dirWithoutNpx() }), false);
+  assert.equal(uc.npxAvailable({ PATH: '' }), false, 'empty PATH → false');
+});
+
+test('update-check: updateCommand switches on npx presence', () => {
+  assert.equal(uc.updateCommand({ PATH: dirWithNpx() }), 'npx wienerdog@latest sync');
+  assert.equal(uc.updateCommand({ PATH: dirWithoutNpx() }), 'wienerdog update');
+});
+
+test('update-check: renderUpdateLine quotes `wienerdog update` when npx is absent', async () => {
+  const { paths } = setup();
+  const now = Date.parse('2026-07-04T03:30:07.101Z');
+  await uc.maybeRefresh(paths, { fetchLatest: async () => '0.3.0', now });
+  const line = uc.renderUpdateLine(paths, '0.2.1', { PATH: dirWithoutNpx() });
+  assert.equal(
+    line,
+    '> [!note] A newer Wienerdog is available (0.2.1 → 0.3.0). Update with: wienerdog update'
+  );
 });
 
 test('update-check: renderUpdateLine returns \'\' when cached latest <= current', async () => {

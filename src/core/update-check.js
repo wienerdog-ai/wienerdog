@@ -121,18 +121,43 @@ function getUpdateNotice(paths, current = currentVersion()) {
   return { available, current, latest: available ? latest : null };
 }
 
+/** True iff an `npx` executable resolves on PATH — pure scan, NO spawn, NO
+ *  network. Mirrors what a shell's `command -v npx` decides.
+ *  @param {NodeJS.ProcessEnv} [env] @returns {boolean} */
+function npxAvailable(env = process.env) {
+  const dirs = (env.PATH || '').split(path.delimiter).filter(Boolean);
+  const names = process.platform === 'win32' ? ['npx.cmd', 'npx.exe', 'npx'] : ['npx'];
+  for (const d of dirs) {
+    for (const n of names) {
+      const p = path.join(d, n);
+      try {
+        if (process.platform === 'win32') { if (fs.existsSync(p)) return true; }
+        else { fs.accessSync(p, fs.constants.X_OK); return true; }
+      } catch { /* not here; keep scanning */ }
+    }
+  }
+  return false;
+}
+
+/** The exact update command to quote to the user: npx happy-path when present,
+ *  else the npm-independent verb. @param {NodeJS.ProcessEnv} [env] @returns {string} */
+function updateCommand(env = process.env) {
+  return npxAvailable(env) ? 'npx wienerdog@latest sync' : 'wienerdog update';
+}
+
 /** Fixed-template digest callout, or '' when no newer version is cached.
  *  Declarative control-plane text only (never an instruction) — ADR-0015 / WP-041.
- *  @param {import('./paths').WienerdogPaths} paths @param {string} [current] @returns {string} */
-function renderUpdateLine(paths, current = currentVersion()) {
+ *  @param {import('./paths').WienerdogPaths} paths @param {string} [current]
+ *  @param {NodeJS.ProcessEnv} [env] @returns {string} */
+function renderUpdateLine(paths, current = currentVersion(), env = process.env) {
   const n = getUpdateNotice(paths, current);
   if (!n.available) return '';
   return `> [!note] A newer Wienerdog is available (${n.current} → ${n.latest}). ` +
-    `Update with: npx wienerdog@latest sync`;
+    `Update with: ${updateCommand(env)}`;
 }
 
 module.exports = {
   UPDATE_CHECK_FILE, updateCheckPath, currentVersion, isSemver, cmpRelease,
   isEnabled, readState, writeState, defaultFetchLatest, maybeRefresh,
-  getUpdateNotice, renderUpdateLine,
+  getUpdateNotice, renderUpdateLine, npxAvailable, updateCommand,
 };

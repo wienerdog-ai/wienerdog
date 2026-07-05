@@ -11,6 +11,7 @@ Commands:
   init        Create the Wienerdog core (~/.wienerdog) and detect your AI tools
   adopt       Use an existing vault in place as your Wienerdog vault
   sync        Re-render the session digest from your vault's identity notes
+  update      Update Wienerdog to the latest published version (no npm required)
   dream       Consolidate recent sessions into vault memory (one commit)
   schedule    Add, remove, or list scheduled jobs (dream, routines)
   run-job     Run a scheduled job now (used by the OS scheduler)
@@ -40,6 +41,7 @@ async function main() {
     init: () => require('../src/cli/init'),
     adopt: () => require('../src/cli/adopt'),
     sync: () => require('../src/cli/sync'),
+    update: () => require('../src/cli/update'),
     dream: () => require('../src/cli/dream'),
     schedule: () => require('../src/cli/schedule'),
     'run-job': () => require('../src/cli/run-job'),

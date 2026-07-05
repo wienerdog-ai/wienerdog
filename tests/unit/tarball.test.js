@@ -213,6 +213,25 @@ test('installVersion is idempotent: second call is alreadyPresent with zero new 
   assert.equal(fs.statSync(target).mtimeMs, mtimeBefore, 'version dir untouched');
 });
 
+test('installVersion replaces a pre-existing INCOMPLETE target dir (partial-dir recovery)', async () => {
+  const paths = tempPaths();
+  const { tgz, integrity, binBody } = buildFixtureTarball('0.4.0');
+  // Plant a partial version dir: dir present with stale content, but NO sentinel
+  // bin/wienerdog.js (a crash leftover, or the loser of two same-version installs).
+  const target = path.join(vendor.appDir(paths), '0.4.0');
+  fs.mkdirSync(path.join(target, 'src'), { recursive: true });
+  fs.writeFileSync(path.join(target, 'src', 'stale.js'), '// crash leftover\n');
+  assert.equal(fs.existsSync(path.join(target, 'bin', 'wienerdog.js')), false, 'sentinel absent (partial)');
+
+  const r = await tarball.installVersion(paths, {
+    version: '0.4.0', integrity,
+    downloadBuffer: async () => fs.readFileSync(tgz),
+  });
+  assert.equal(r.alreadyPresent, false, 'partial dir is not treated as present');
+  assert.equal(fs.readFileSync(path.join(target, 'bin', 'wienerdog.js'), 'utf8'), binBody, 'verified tree published');
+  assert.equal(fs.existsSync(path.join(target, 'src', 'stale.js')), false, 'stale partial content replaced');
+});
+
 test('installVersion never repoints current and never writes the manifest', async () => {
   const paths = tempPaths();
   const { tgz, integrity } = buildFixtureTarball('0.4.0');

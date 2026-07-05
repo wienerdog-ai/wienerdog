@@ -3,7 +3,7 @@
 const fs = require('node:fs');
 const { getPaths } = require('../core/paths');
 const { detectHarnesses } = require('../core/detect');
-const { getUpdateNotice } = require('../core/update-check');
+const { getUpdateNotice, updateCommand } = require('../core/update-check');
 const manifestLib = require('../core/manifest');
 
 /** @param {string} p @returns {boolean} */
@@ -108,7 +108,7 @@ async function run(_argv) {
   // Cache-only update notice (no network; does not affect pass/fail). ADR-0015.
   const upd = getUpdateNotice(paths);
   if (upd.available) {
-    console.log(`[info] a newer Wienerdog is available (${upd.current} → ${upd.latest}) — update: npx wienerdog@latest sync`);
+    console.log(`[info] a newer Wienerdog is available (${upd.current} → ${upd.latest}) — update: ${updateCommand(process.env)}`);
   }
 
   if (failed) process.exitCode = 1;
