@@ -55,6 +55,15 @@ function doThing(dir, opts)
 - When uncertain: choose the simpler option and note it in the PR description
   under "Decisions made". Do NOT expand scope to resolve ambiguity.
 
+## Security checklist (delete only if the WP touches no untrusted input)
+
+- [ ] Any untrusted identifier (version, name, path segment, filename) that flows
+      into a filesystem path or a shell command is validated with a **fully
+      anchored** (`^…$`) pattern that rejects `/`, `\`, and `..`, in **every**
+      language it passes through (e.g. JS `isSemver` AND the bash/PowerShell
+      regex). A start-anchored-only check accepts `1.2.3/../../x` and becomes an
+      arbitrary-write primitive (WP-022, WP-055).
+
 ## Acceptance criteria
 
 - [ ] Objective, binary criteria only — each maps to a verification step below.
