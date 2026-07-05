@@ -139,6 +139,31 @@ and WIENERDOG_HOME (copy `tempPaths()` from `tests/unit/vendor.test.js`).
 | create | tests/unit/update.test.js | hermetic; injected seams + fixture tgz + spawn-sync seam |
 | modify | tests/unit/update-check.test.js | `npxAvailable`/`updateCommand` both variants; `renderUpdateLine` both variants |
 | modify | tests/unit/doctor.test.js | make the notice assertion env-deterministic; add npm-absent variant |
+| modify | src/core/tarball.js | partial-dir recovery (owner amendment, see below) |
+| modify | tests/unit/tarball.test.js | partial-dir recovery cases (owner amendment, see below) |
+
+### Owner amendment (2026-07-05, from the WP-053 review)
+
+The WP-053 reviewer found (and reproduced) a recovery gap: a pre-existing
+*partial* `app/<version>/` dir — a crash leftover, or the loser of two
+same-version installs — makes `installVersion`'s final `renameSync` throw a raw
+`ENOTEMPTY` (a stack trace, not a clean message), and the state can never
+self-heal. Root cause: completeness is judged by the sentinel bin file, but
+publish is rename-onto-absent-dir — inconsistent for the partial case.
+
+Amended contract for `installVersion` (both changes, with tests):
+
+1. After the completeness check decides the target is NOT complete (sentinel
+   bin file absent) but the target dir EXISTS, remove the incomplete target
+   dir (`fs.rmSync(target, { recursive: true, force: true })`) before the
+   staging rename — the verified staged tree then publishes normally.
+2. Wrap any residual rename failure in a `WienerdogError` with a
+   plain-language message (never a raw fs stack for this path).
+
+Tests: (a) plant a partial `app/<v>/` (dir present, sentinel bin absent) →
+installVersion succeeds, dir replaced by the verified tree; (b) complete dir
+still short-circuits with `alreadyPresent:true` and zero downloads (existing
+behavior unchanged).
 
 ### Exact contracts
 

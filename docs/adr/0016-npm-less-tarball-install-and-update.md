@@ -112,3 +112,12 @@ Windows bootstrap (`install.ps1`) remains **out of scope** (M6–M7); the
   extraction is tested against a locally-built fixture tarball (built offline with
   `tar`, no `npm pack`, no network); `install.sh` uses its existing consent-harness
   and stub-PATH seams.
+- **Path-traversal safety at extraction rests on system `tar`** (bsdtar / modern
+  GNU tar refuse `..` and absolute entry paths by default) — deliberate, and
+  verified empirically in review on both CI OSes. A malicious registry controls
+  both bytes and integrity, so the sha512 gate does not defend against it; the
+  extraction sandbox does. If a future change swaps the extractor, this reliance
+  must be re-established explicitly.
+- Registry HTTP redirects fail closed (non-200 ⇒ abort to fail-to-print), same
+  as the update check. If npm's CDN ever starts redirecting, npm-less users get
+  the printed fallback rather than a silently followed redirect.
