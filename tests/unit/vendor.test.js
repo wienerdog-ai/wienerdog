@@ -146,6 +146,55 @@ test('vendor: repointCurrent sweeps pre-existing orphan current.tmp.* links', ()
   assert.equal(fs.realpathSync(vendor.currentLink(paths)), fs.realpathSync(newTarget));
 });
 
+test('vendor: repointCurrent no-ops when current already points at targetDir', () => {
+  const paths = tempPaths();
+  fs.mkdirSync(vendor.appDir(paths), { recursive: true });
+  const target = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-target-'));
+  fs.symlinkSync(target, vendor.currentLink(paths));
+  // Plant an orphan from an earlier crashed run — must still be swept.
+  const orphan = path.join(vendor.appDir(paths), 'current.tmp.12345');
+  fs.symlinkSync(target, orphan);
+
+  let calls = 0;
+  const rename = () => { calls += 1; };
+
+  vendor.repointCurrent(paths, target, { rename });
+  assert.equal(calls, 0, 'rename never called when current already points at targetDir');
+  assert.equal(fs.realpathSync(vendor.currentLink(paths)), fs.realpathSync(target), 'current untouched, still correct');
+  assert.equal(fs.existsSync(orphan), false, 'pre-planted orphan still swept on the no-op path');
+});
+
+test('vendor: repointCurrent repairs a broken/mismatched current link', () => {
+  const paths = tempPaths();
+  fs.mkdirSync(vendor.appDir(paths), { recursive: true });
+  const newTarget = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-new-'));
+  // current points elsewhere (a different, still-existing dir).
+  const otherTarget = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-other-'));
+  fs.symlinkSync(otherTarget, vendor.currentLink(paths));
+
+  let calls = 0;
+  const rename = (from, to) => { calls += 1; fs.renameSync(from, to); };
+
+  vendor.repointCurrent(paths, newTarget, { rename });
+  assert.equal(calls, 1, 'rename called once to repoint the mismatched link');
+  assert.equal(fs.realpathSync(vendor.currentLink(paths)), fs.realpathSync(newTarget), 'current now resolves to the new target');
+});
+
+test('vendor: repointCurrent repairs a dangling current link', () => {
+  const paths = tempPaths();
+  fs.mkdirSync(vendor.appDir(paths), { recursive: true });
+  const newTarget = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-new-'));
+  const goneTarget = path.join(os.tmpdir(), 'wd-does-not-exist-xyz');
+  fs.symlinkSync(goneTarget, vendor.currentLink(paths));
+
+  let calls = 0;
+  const rename = (from, to) => { calls += 1; fs.renameSync(from, to); };
+
+  vendor.repointCurrent(paths, newTarget, { rename });
+  assert.equal(calls, 1, 'rename called once to repair the dangling link');
+  assert.equal(fs.realpathSync(vendor.currentLink(paths)), fs.realpathSync(newTarget), 'current now resolves to the new target');
+});
+
 test('vendor: dev mode via WIENERDOG_DEV links current at the checkout, copies nothing', () => {
   const paths = tempPaths();
   const src = fakeSource('9.9.9');
@@ -200,6 +249,36 @@ test('vendor: writeShim writes an executable launcher, records it, and is byte-i
   const r2 = vendor.writeShim(paths, { manifest });
   assert.equal(r2.changed, false, 'a re-run makes zero content changes');
   assert.equal(manifest.entries.filter((e) => e.kind === 'file' && e.path === r.path).length, 1);
+});
+
+test('vendor: writeShim on win32 also writes a .cmd launcher, byte-idempotent', () => {
+  const paths = tempPaths();
+  const manifest = { version: 1, createdAt: '', entries: [] };
+
+  const r = vendor.writeShim(paths, { manifest, platform: 'win32' });
+  const expectedCmdPath = path.join(paths.home, '.local', 'bin', 'wienerdog.cmd');
+  assert.equal(r.cmdPath, expectedCmdPath);
+  assert.equal(r.cmdChanged, true);
+  const cmdContent = fs.readFileSync(r.cmdPath, 'utf8');
+  assert.equal(cmdContent, `@echo off\r\nnode "${vendor.currentBin(paths)}" %*\r\n`, 'exact CRLF content');
+  // Manifest tracks the .cmd as a plain file.
+  const cmdEntries = manifest.entries.filter((e) => e.kind === 'file' && e.path === r.cmdPath);
+  assert.equal(cmdEntries.length, 1);
+  // The bash shim is also written.
+  assert.ok(fs.existsSync(r.path), 'bash shim also written on win32');
+
+  // Second call: byte-identical → no write, manifest not grown.
+  const r2 = vendor.writeShim(paths, { manifest, platform: 'win32' });
+  assert.equal(r2.cmdChanged, false, 'a re-run makes zero content changes to the .cmd');
+  assert.equal(manifest.entries.filter((e) => e.kind === 'file' && e.path === r.cmdPath).length, 1);
+});
+
+test('vendor: writeShim off-Windows writes no .cmd', () => {
+  const paths = tempPaths();
+
+  const r = vendor.writeShim(paths, { platform: 'linux' });
+  assert.equal(r.cmdPath, null);
+  assert.equal(fs.existsSync(path.join(paths.home, '.local', 'bin', 'wienerdog.cmd')), false);
 });
 
 test('vendor: writeShim.onPath reflects whether ~/.local/bin is on PATH', () => {

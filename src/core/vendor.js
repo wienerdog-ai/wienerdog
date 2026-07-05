@@ -44,12 +44,17 @@ function copyTree(srcRoot, destRoot) {
 }
 
 /** Point <core>/app/current at targetDir.
- *  POSIX: `rename` over the existing symlink is atomic. Windows: renaming over
- *  an existing directory symlink throws EPERM/EEXIST/ENOTEMPTY (MoveFileEx will
- *  not replace a reparse point in place) — fall back to remove-old-link then
- *  rename. That fallback has a brief non-atomic window (current momentarily
- *  absent), acceptable under the module's single-writer assumption (ADR-0013).
- *  Also sweeps orphaned `current.tmp.*` symlinks left by earlier crashed runs.
+ *  Fast path: when `current` already points at targetDir, do nothing (skip the
+ *  symlink+rename). This is the common case (every sync re-vendors the SAME
+ *  version) and on Windows the rewrite would needlessly exercise the
+ *  remove-then-rename fallback below — which can self-lock when a node process is
+ *  running from inside app/current (the shim/scheduler invocation path holds the
+ *  reparse point, so rmSync and rename both raise EPERM/EBUSY).
+ *  Otherwise: POSIX `rename` over the existing symlink is atomic; on Windows
+ *  renaming over an existing directory symlink throws EPERM/EEXIST/ENOTEMPTY —
+ *  fall back to remove-old-link then rename (brief non-atomic window, acceptable
+ *  under the module's single-writer assumption, ADR-0013).
+ *  Always sweeps orphaned `current.tmp.*` symlinks left by earlier crashed runs.
  *  @param {import('./paths').WienerdogPaths} paths
  *  @param {string} targetDir
  *  @param {{rename?: (from: string, to: string) => void}} [opts]
@@ -57,23 +62,33 @@ function copyTree(srcRoot, destRoot) {
 function repointCurrent(paths, targetDir, opts = {}) {
   const rename = opts.rename || fs.renameSync;
   const link = currentLink(paths);
-  const tmp = `${link}.tmp.${process.pid}`;
-  try { fs.rmSync(tmp, { recursive: true, force: true }); } catch { /* ignore */ }
-  fs.symlinkSync(targetDir, tmp);
-  try {
-    rename(tmp, link); // atomic on POSIX
-  } catch (err) {
-    if (err && ['EPERM', 'EEXIST', 'ENOTEMPTY'].includes(err.code)) {
-      // Windows: cannot rename over an existing directory symlink. Remove the
-      // old link, then rename into place (brief non-atomic window).
-      fs.rmSync(link, { recursive: true, force: true });
-      rename(tmp, link);
-    } else {
-      throw err;
+  // Read the current stored target (null if `current` is absent or not a symlink).
+  let existing = null;
+  try { existing = fs.readlinkSync(link); } catch { existing = null; }
+  // Compare via path.resolve: our stored targets are always absolute, so resolve
+  // is pure normalization (no cwd dependence) and also reconciles a benign
+  // trailing separator some platforms' readlink may append. Equal → no-op.
+  const same = existing !== null && path.resolve(existing) === path.resolve(targetDir);
+  if (!same) {
+    const tmp = `${link}.tmp.${process.pid}`;
+    try { fs.rmSync(tmp, { recursive: true, force: true }); } catch { /* ignore */ }
+    fs.symlinkSync(targetDir, tmp);
+    try {
+      rename(tmp, link); // atomic on POSIX
+    } catch (err) {
+      if (err && ['EPERM', 'EEXIST', 'ENOTEMPTY'].includes(err.code)) {
+        // Windows: cannot rename over an existing directory symlink. Remove the
+        // old link, then rename into place (brief non-atomic window).
+        fs.rmSync(link, { recursive: true, force: true });
+        rename(tmp, link);
+      } else {
+        throw err;
+      }
     }
   }
   // Self-heal: remove orphaned current.tmp.* from earlier crashed runs (any pid).
-  // Our own tmp has already been renamed away and will not match.
+  // Runs on BOTH the no-op and the rewrite path. Our own tmp (if created) was
+  // already renamed away and will not match.
   let leftovers = [];
   try { leftovers = fs.readdirSync(appDir(paths)); } catch { leftovers = []; }
   for (const name of leftovers) {
@@ -128,15 +143,21 @@ function recordOnce(manifest, entry) {
 }
 
 /**
- * Write the PATH shim ~/.local/bin/wienerdog → the vendored current bin, so bare
- * `wienerdog …` resolves for the brain and the user (ADR-0013). Idempotent (skip
- * when byte-identical). Records a manifest `file` entry (uninstall removes it).
- * Does NOT record/remove the ~/.local/bin dir (may be user-shared).
+ * Write the PATH shim(s) so bare `wienerdog …` resolves for the brain and the
+ * user (ADR-0013). Always writes an executable bash launcher
+ * ~/.local/bin/wienerdog → the vendored current bin. On native Windows (where
+ * cmd.exe/PowerShell cannot run the bash shim) it ADDITIONALLY writes a
+ * ~/.local/bin/wienerdog.cmd that shells out to `node "<current bin>" %*`.
+ * Idempotent (skip each file when byte-identical). Records a manifest `file`
+ * entry per file written (uninstall removes them). Does NOT record/remove the
+ * ~/.local/bin dir (may be user-shared).
  * @param {import('./paths').WienerdogPaths} paths
- * @param {{manifest?: object}} [opts]
- * @returns {{path:string, changed:boolean, onPath:boolean}}
+ * @param {{manifest?: object, platform?: string}} [opts]
+ *   platform defaults to process.platform; tests pass it to exercise both branches.
+ * @returns {{path:string, changed:boolean, onPath:boolean, cmdPath:(string|null), cmdChanged:boolean}}
  */
 function writeShim(paths, opts = {}) {
+  const platform = opts.platform || process.platform;
   const localBin = path.join(paths.home, '.local', 'bin');
   const shimPath = path.join(localBin, 'wienerdog');
   const content =
@@ -153,8 +174,27 @@ function writeShim(paths, opts = {}) {
     changed = true;
   }
   if (opts.manifest) recordOnce(opts.manifest, { kind: 'file', path: shimPath });
+
+  // Native Windows: the bash shim is not runnable by cmd.exe/PowerShell. Write a
+  // .cmd launcher next to it that execs the vendored current bin. CRLF is
+  // canonical for .cmd; the embedded absolute path comes from currentBin(paths).
+  let cmdPath = null;
+  let cmdChanged = false;
+  if (platform === 'win32') {
+    cmdPath = path.join(localBin, 'wienerdog.cmd');
+    const cmdContent = `@echo off\r\nnode "${currentBin(paths)}" %*\r\n`;
+    let cmdSame = false;
+    try { cmdSame = fs.readFileSync(cmdPath, 'utf8') === cmdContent; } catch { cmdSame = false; }
+    if (!cmdSame) {
+      fs.mkdirSync(localBin, { recursive: true });
+      fs.writeFileSync(cmdPath, cmdContent);
+      cmdChanged = true;
+    }
+    if (opts.manifest) recordOnce(opts.manifest, { kind: 'file', path: cmdPath });
+  }
+
   const onPath = (process.env.PATH || '').split(path.delimiter).includes(localBin);
-  return { path: shimPath, changed, onPath };
+  return { path: shimPath, changed, onPath, cmdPath, cmdChanged };
 }
 
 module.exports = {
