@@ -1,7 +1,7 @@
 ---
 id: WP-049
 title: Windows-safe repointCurrent fallback + orphan current.tmp.* cleanup
-status: In-Review
+status: Done
 model: sonnet
 size: S
 depends_on: [WP-042]
