@@ -67,6 +67,8 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 | [WP-046](done/WP-046-update-check-wiring.md) | Wire the update check into run-job + render in digest/doctor; threat model | M7 | opus | Done | WP-045 |
 | [WP-047](done/WP-047-gws-ondemand-googleapis.md) | On-demand googleapis in a core deps dir; gws require-seam + clean setup error | M7 | opus | Done | WP-042 |
 | [WP-048](WP-048-dream-input-capacity-starvation.md) | Fix dream input-capacity starvation (truncate-to-fit + loud capacity alert) | M7 | opus | Ready | WP-039, WP-041 |
+| [WP-049](WP-049-repoint-current-windows-fallback.md) | Windows-safe repointCurrent fallback + orphan current.tmp.* cleanup | M7 | sonnet | Ready | WP-042 |
+| [WP-050](WP-050-skills-copy-fallback.md) | Skills copy-fallback where symlink creation is unpermitted (Windows) | M7 | opus | Ready | WP-006 |
 
 > **First-production-night incident (2026-07-04).** WP-038, WP-039 and WP-041 form
 > a serial chain (they edit the shared `run-job.js` / `dream.js` / `validate.js`
@@ -118,6 +120,28 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 > wedged (nothing-fed) dream **throw** rather than report "nothing new", so
 > `run-job`'s fail-loud records a durable `alerts.jsonl` entry the digest surfaces.
 > Extends ADR-0012 (parts 4–5).
+
+<!-- -->
+
+> **Windows degraded-install defects (2026-07-05).** A high-quality external
+> report (Windows Server 2022, Node 24, published v0.3.0) surfaced two hard gaps
+> in an unconditional code path: (1) `wienerdog sync`/`init` crash with `EPERM`
+> in `repointCurrent` because `fs.renameSync` over an **existing** directory
+> symlink is not permitted on Win32 — the POSIX-atomic-rename assumption ADR-0013
+> made — so every run after the first aborts before writing the digest and
+> orphans a `current.tmp.<pid>` link; and (2) skills are never linked into
+> `~/.claude/skills/` (symlink creation unpermitted), so the `/wienerdog-*`
+> commands never register. Windows scheduling/`install.ps1` stay deferred to
+> M6–M7, but a published crash is a defect regardless of support tier. **WP-049**
+> (independent, `src/core/vendor.js`) adds a remove-then-rename fallback on
+> `EPERM`/`EEXIST`/`ENOTEMPTY` plus an orphan-tmp sweep (brief non-atomic window
+> accepted under the module's single-writer assumption; recorded as a dated
+> ADR-0013 amendment). **WP-050** (independent, `src/adapters/shared.js` +
+> `src/core/manifest.js`) copies each `wienerdog-*` skill folder where symlinks
+> are unpermitted, behind a new reversible `copied-skill` manifest kind. Both are
+> testable on POSIX via injected `rename`/`symlink` seams (no `process.platform`
+> mocking) and can land in parallel — they share no files with each other or with
+> WP-048.
 
 ## Dependency graph
 
@@ -178,4 +202,6 @@ graph LR
   WP044 --> WP045[WP-045 update-check core]
   WP045 --> WP046[WP-046 update-check wiring]
   WP042 --> WP047[WP-047 gws on-demand googleapis]
+  WP042 --> WP049[WP-049 repoint win fallback]
+  WP006 --> WP050[WP-050 skills copy fallback]
 ```
