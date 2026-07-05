@@ -273,18 +273,40 @@ test('scheduler-runjob: a hanging job hits the watchdog, kills the tree, records
   const state = jobsLib.readScheduleState(paths);
   assert.equal(state.dream.last_status, 'error');
 
-  // The child process group was killed — its pid is gone.
-  const pid = Number(fs.readFileSync(pidFile, 'utf8').trim());
-  assert.ok(Number.isInteger(pid) && pid > 0, 'child recorded its pid');
-  await new Promise((r) => setTimeout(r, 100)); // let SIGKILL land
-  let alive;
-  try {
-    process.kill(pid, 0);
-    alive = true; // no error → the process still exists
-  } catch (e) {
-    alive = e.code === 'EPERM'; // EPERM → exists but not ours; ESRCH → gone
+  // The child records its PID (`echo $$ > pidFile`) then `sleep 30`s. Under heavy
+  // CPU contention the 2000 ms watchdog can fire and kill the process group
+  // BEFORE the shell ran that echo, so the pidfile may not exist yet. Poll
+  // briefly for it rather than reading immediately (the old ENOENT-crash race).
+  const pidDeadline = Date.now() + 2000;
+  let pidRaw = '';
+  while (Date.now() < pidDeadline) {
+    try {
+      pidRaw = fs.readFileSync(pidFile, 'utf8').trim();
+      if (pidRaw) break;
+    } catch {
+      /* pidfile not written yet */
+    }
+    await new Promise((r) => setTimeout(r, 25));
   }
-  assert.equal(alive, false, 'no child survives the watchdog timeout');
+
+  if (pidRaw) {
+    // Child started and recorded its PID → assert the watchdog killed it.
+    const pid = Number(pidRaw);
+    assert.ok(Number.isInteger(pid) && pid > 0, 'child recorded its pid');
+    await new Promise((r) => setTimeout(r, 100)); // let SIGKILL land
+    let alive;
+    try {
+      process.kill(pid, 0);
+      alive = true; // no error → the process still exists
+    } catch (e) {
+      alive = e.code === 'EPERM'; // EPERM → exists but not ours; ESRCH → gone
+    }
+    assert.equal(alive, false, 'no child survives the watchdog timeout');
+  }
+  // else: the child never got far enough to record a PID before the watchdog
+  // killed it (rare, only under pathological scheduling). The watchdog firing is
+  // already proven by the /timed out/ rejection and last_status === 'error'
+  // above; there is no PID to assert on, so nothing more to check.
 });
 
 // -------------------------------------------------------------------------
