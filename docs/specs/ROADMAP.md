@@ -66,6 +66,7 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 | [WP-045](done/WP-045-update-check-core.md) | Update-availability check — core module + config opt-out | M7 | sonnet | Done | WP-044 |
 | [WP-046](done/WP-046-update-check-wiring.md) | Wire the update check into run-job + render in digest/doctor; threat model | M7 | opus | Done | WP-045 |
 | [WP-047](done/WP-047-gws-ondemand-googleapis.md) | On-demand googleapis in a core deps dir; gws require-seam + clean setup error | M7 | opus | Done | WP-042 |
+| [WP-048](WP-048-dream-input-capacity-starvation.md) | Fix dream input-capacity starvation (truncate-to-fit + loud capacity alert) | M7 | opus | Ready | WP-039, WP-041 |
 
 > **First-production-night incident (2026-07-04).** WP-038, WP-039 and WP-041 form
 > a serial chain (they edit the shared `run-job.js` / `dream.js` / `validate.js`
@@ -99,6 +100,24 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 > seam with a plain "run /wienerdog-google-setup" error, so gws works from the
 > node_modules-free vendored copy. It shares no files with WP-043→046 and can land
 > in parallel after WP-042.
+
+<!-- -->
+
+> **Second silent-starvation incident (2026-07-05).** The 03:30 dream reported
+> "nothing new to dream" (exit 0) while four fresh Claude sessions existed past
+> the watermark: each extract alone exceeded the 400 000-byte input budget, the
+> newest-first size loop `break`s at the first over-budget session (dropping the
+> smaller ones behind it), and `entries.length === 0` masqueraded as success — so
+> no watermark advanced, no report was written, and the WP-041 durable-alert path
+> (which only fires on a *failing* dream) stayed unreachable. Heavy Claude days
+> starved the dream permanently and invisibly. **WP-048** closes it: raise the
+> default `dream_max_input_bytes` to 8 000 000; replace the break loop with
+> water-filling that **truncates boundary sessions to fit** (keep newest messages,
+> per-session floor 32 768 B) instead of dropping them whole — guaranteeing the
+> newest session is always fed and the watermark always advances; and make a
+> wedged (nothing-fed) dream **throw** rather than report "nothing new", so
+> `run-job`'s fail-loud records a durable `alerts.jsonl` entry the digest surfaces.
+> Extends ADR-0012 (parts 4–5).
 
 ## Dependency graph
 
@@ -151,6 +170,8 @@ graph LR
   WP038 --> WP039[WP-039 dream pre-commit + crash recovery]
   WP017 --> WP039
   WP039 --> WP041[WP-041 persistent failure alerts]
+  WP039 --> WP048[WP-048 dream capacity starvation]
+  WP041 --> WP048
   WP009 --> WP040[WP-040 note-update provenance]
   WP042[WP-042 vendored install] --> WP043[WP-043 sync repoints schedules]
   WP043 --> WP044[WP-044 dream scheduled by default]
