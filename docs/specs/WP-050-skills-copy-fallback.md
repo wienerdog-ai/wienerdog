@@ -1,7 +1,7 @@
 ---
 id: WP-050
 title: Skills copy-fallback where symlink creation is unpermitted (Windows)
-status: Ready
+status: In-Review
 model: opus
 size: M
 depends_on: [WP-006]

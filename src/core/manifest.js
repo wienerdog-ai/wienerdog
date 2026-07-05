@@ -231,6 +231,21 @@ function reverseVendoredTree(entry, dryRun, removed, skipped, removedSet) {
 }
 
 /**
+ * Reverse a 'copied-skill' entry: recursively remove the copied skill folder
+ * (entirely Wienerdog-authored, regenerable by `sync`). Adds the path to
+ * removedSet so the enclosing skills dir still counts as empty.
+ * @param {ManifestEntry} entry
+ * @param {boolean} dryRun
+ * @param {string[]} removed @param {string[]} skipped @param {Set<string>} removedSet
+ */
+function reverseCopiedSkill(entry, dryRun, removed, skipped, removedSet) {
+  if (!isDir(entry.path)) { skipped.push(entry.path); return; }
+  if (!dryRun) fs.rmSync(entry.path, { recursive: true, force: true });
+  removedSet.add(entry.path);
+  removed.push(entry.path);
+}
+
+/**
  * Load the install manifest. Returns a fresh empty manifest if none exists.
  * Throws (SyntaxError) if the file exists but is not valid JSON — callers that
  * need to distinguish "missing" from "corrupt" should check existence first.
@@ -340,6 +355,8 @@ function reverse(paths, manifest, { dryRun = false } = {}) {
       reverseSchedulerEntry(entry, dryRun, removed, skipped, removedSet);
     } else if (entry.kind === 'vendored-tree') {
       reverseVendoredTree(entry, dryRun, removed, skipped, removedSet);
+    } else if (entry.kind === 'copied-skill') {
+      reverseCopiedSkill(entry, dryRun, removed, skipped, removedSet);
     } else {
       process.stderr.write(
         `wienerdog: skipping unknown manifest entry kind '${entry.kind}' (${entry.path})\n`
@@ -351,4 +368,4 @@ function reverse(paths, manifest, { dryRun = false } = {}) {
   return { removed, skipped };
 }
 
-module.exports = { load, record, save, reverse, reverseSchedulerEntry, reverseVendoredTree };
+module.exports = { load, record, save, reverse, reverseSchedulerEntry, reverseVendoredTree, reverseCopiedSkill };

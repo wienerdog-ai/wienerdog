@@ -140,6 +140,39 @@ test('reverse skips a vendored-tree entry that is already gone', () => {
   assert.equal(fs.existsSync(paths.core), false);
 });
 
+test('reverse removes a copied-skill recursively and empties the enclosing skills dir', () => {
+  const paths = tempPaths();
+  const manifest = makeInstall(paths);
+  // Build a realistic copied skill: <claude>/skills/wienerdog-setup/{SKILL.md,sub/ref.md}.
+  const skillsDir = path.join(paths.core, 'harness-skills');
+  const copied = path.join(skillsDir, 'wienerdog-setup');
+  fs.mkdirSync(path.join(copied, 'sub'), { recursive: true });
+  fs.writeFileSync(path.join(copied, 'SKILL.md'), '# skill\n');
+  fs.writeFileSync(path.join(copied, 'sub', 'ref.md'), 'ref\n');
+  manifestLib.record(manifest, { kind: 'dir', path: skillsDir });
+  manifestLib.record(manifest, { kind: 'copied-skill', path: copied });
+  manifestLib.save(paths, manifest);
+
+  const { removed, skipped } = manifestLib.reverse(paths, manifest, {});
+  assert.equal(fs.existsSync(copied), false, 'the copied skill folder is removed recursively');
+  assert.ok(removed.includes(copied));
+  // The now-empty skills dir is removed too (copied path in removedSet).
+  assert.equal(fs.existsSync(skillsDir), false);
+  assert.ok(removed.includes(skillsDir));
+  assert.equal(skipped.length, 0);
+});
+
+test('reverse skips a copied-skill entry that is already gone', () => {
+  const paths = tempPaths();
+  const manifest = makeInstall(paths);
+  const copied = path.join(paths.core, 'harness-skills', 'wienerdog-setup');
+  manifestLib.record(manifest, { kind: 'copied-skill', path: copied });
+  manifestLib.save(paths, manifest);
+  const { skipped } = manifestLib.reverse(paths, manifest, {});
+  assert.ok(skipped.includes(copied), 'a missing copied skill is skipped, not an error');
+  assert.equal(fs.existsSync(paths.core), false);
+});
+
 test('reverse skips unknown entry kinds (forward compat)', () => {
   const paths = tempPaths();
   fs.mkdirSync(paths.core, { recursive: true });

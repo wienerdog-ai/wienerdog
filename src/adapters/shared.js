@@ -173,19 +173,51 @@ function applySettings(settingsPath, events, dryRun, manifest, out) {
   });
 }
 
-/**
- * Step 3 — symlink each core skill dir into a target harness's skills dir.
- * @param {string} skillsDir core skills dir
- * @param {string} targetSkillsDir the harness's skills dir
- * @param {boolean} dryRun
- * @param {object} [manifest]
- * @param {{changed: string[], unchanged: string[], notices: string[]}} out
- */
-function applySkillLinks(skillsDir, targetSkillsDir, dryRun, manifest, out) {
-  if (process.platform === 'win32') {
-    out.notices.push('skill linking unsupported on Windows in v1');
-    return;
+/** Deep-equal two directory trees: identical relative entry set + file bytes.
+ *  @param {string} a @param {string} b @returns {boolean} */
+function dirsEqual(a, b) {
+  const listRel = (root) => {
+    const acc = [];
+    const walk = (dir, prefix) => {
+      let ents = [];
+      try { ents = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+      for (const e of ents.slice().sort((x, y) => x.name.localeCompare(y.name))) {
+        const rp = prefix ? `${prefix}/${e.name}` : e.name;
+        if (e.isDirectory()) { acc.push(`d:${rp}`); walk(path.join(dir, e.name), rp); }
+        else acc.push(`f:${rp}`);
+      }
+    };
+    walk(root, '');
+    return acc;
+  };
+  const ra = listRel(a);
+  const rb = listRel(b);
+  if (ra.length !== rb.length || ra.some((v, i) => v !== rb[i])) return false;
+  for (const entry of ra) {
+    if (!entry.startsWith('f:')) continue;
+    const relParts = entry.slice(2).split('/');
+    if (!fs.readFileSync(path.join(a, ...relParts)).equals(fs.readFileSync(path.join(b, ...relParts)))) {
+      return false;
+    }
   }
+  return true;
+}
+
+/** Step 3 — register each core skill dir into a harness's skills dir. Prefers a
+ *  symlink; where symlink creation is unpermitted (Windows without privilege:
+ *  EPERM/EACCES) falls back to COPYING the folder so /wienerdog-* still
+ *  registers. A copied dir is recorded as `copied-skill` (reversed by recursive
+ *  removal). A prior copy (a wienerdog-* directory at the target) is refreshed
+ *  when its content differs from the source.
+ *  @param {string} skillsDir core skills dir
+ *  @param {string} targetSkillsDir the harness's skills dir
+ *  @param {boolean} dryRun
+ *  @param {object} [manifest]
+ *  @param {{changed: string[], unchanged: string[], notices: string[]}} out
+ *  @param {{symlink?: (target: string, path: string) => void}} [opts]
+ *    test seam only; defaults to fs.symlinkSync. */
+function applySkillLinks(skillsDir, targetSkillsDir, dryRun, manifest, out, opts = {}) {
+  const symlink = opts.symlink || fs.symlinkSync;
 
   let names = [];
   try {
@@ -214,11 +246,7 @@ function applySkillLinks(skillsDir, targetSkillsDir, dryRun, manifest, out) {
       stat = null;
     }
 
-    if (stat === null) {
-      if (!dryRun) fs.symlinkSync(target, linkPath);
-      recordOnce(manifest, { kind: 'symlink', path: linkPath });
-      out.changed.push(linkPath);
-    } else if (stat.isSymbolicLink()) {
+    if (stat !== null && stat.isSymbolicLink()) {
       let currentTarget = null;
       try {
         currentTarget = fs.readlinkSync(linkPath);
@@ -231,14 +259,44 @@ function applySkillLinks(skillsDir, targetSkillsDir, dryRun, manifest, out) {
       } else {
         if (!dryRun) {
           fs.unlinkSync(linkPath);
-          fs.symlinkSync(target, linkPath);
+          symlink(target, linkPath);
         }
         recordOnce(manifest, { kind: 'symlink', path: linkPath });
         out.changed.push(linkPath);
       }
-    } else {
-      // Regular file/dir the user owns — never clobber.
+    } else if (stat !== null && stat.isDirectory()) {
+      // A prior copy in the wienerdog-* namespace — refresh if content differs.
+      if (dirsEqual(target, linkPath)) {
+        out.unchanged.push(linkPath);
+      } else {
+        if (!dryRun) {
+          fs.rmSync(linkPath, { recursive: true, force: true });
+          fs.cpSync(target, linkPath, { recursive: true });
+        }
+        out.changed.push(linkPath);
+      }
+      recordOnce(manifest, { kind: 'copied-skill', path: linkPath });
+    } else if (stat !== null) {
+      // Regular file the user owns — never clobber.
       out.notices.push(`left user file untouched: ${linkPath}`);
+    } else if (dryRun) {
+      // A dry run does not probe symlink permission; report the common case.
+      recordOnce(manifest, { kind: 'symlink', path: linkPath });
+      out.changed.push(linkPath);
+    } else {
+      // Absent: prefer a symlink; copy where symlink creation is unpermitted.
+      try {
+        symlink(target, linkPath);
+        recordOnce(manifest, { kind: 'symlink', path: linkPath });
+      } catch (err) {
+        if (err && (err.code === 'EPERM' || err.code === 'EACCES')) {
+          fs.cpSync(target, linkPath, { recursive: true });
+          recordOnce(manifest, { kind: 'copied-skill', path: linkPath });
+        } else {
+          throw err;
+        }
+      }
+      out.changed.push(linkPath);
     }
   }
 }
