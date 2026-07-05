@@ -59,10 +59,14 @@ function doThing(dir, opts)
 
 - [ ] Any untrusted identifier (version, name, path segment, filename) that flows
       into a filesystem path or a shell command is validated with a **fully
-      anchored** (`^…$`) pattern that rejects `/`, `\`, and `..`, in **every**
-      language it passes through (e.g. JS `isSemver` AND the bash/PowerShell
-      regex). A start-anchored-only check accepts `1.2.3/../../x` and becomes an
-      arbitrary-write primitive (WP-022, WP-055).
+      anchored** pattern that rejects `/`, `\`, and `..`, in **every** language it
+      passes through (e.g. JS `isSemver` AND the bash/PowerShell regex). A
+      start-anchored-only check accepts `1.2.3/../../x` and becomes an
+      arbitrary-write primitive (WP-022, WP-055). **Anchor correctly per engine:**
+      in .NET/PowerShell `^…$` still matches *before* a trailing newline — use
+      `\A…\z`; in JS `$` without the `m` flag is safe; in POSIX `grep` remember it
+      is line-oriented (a multiline value with one valid line matches `^…$`), so
+      confirm the value cannot contain a newline (WP-057).
 
 ## Acceptance criteria
 

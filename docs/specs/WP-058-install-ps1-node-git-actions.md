@@ -90,8 +90,20 @@ the CI `lint` job runs `Invoke-Pester tests/ps`.
 
 | Action | Path | Notes |
 |--------|------|-------|
-| modify | install.ps1 | add Node/git install + elevation + PATH-refresh functions; replace `Main`'s Node-absent branch with `Ensure-Node` (hard gate) and add `Ensure-Git` (soft). No change to WP-057's tarball/consent/detection functions. |
-| modify | tests/ps/install-ps1.Tests.ps1 | add Pester tests for the PURE helpers (LTS/MSI parse, SHASUMS parse, msiexec arg construction, `Test-Elevated` off-Windows). No live network, no real install. |
+| modify | install.ps1 | add Node/git install + elevation + PATH-refresh functions; replace `Main`'s Node-absent branch with `Ensure-Node` (hard gate) and add `Ensure-Git` (soft). No change to WP-057's tarball/consent/detection functions **except the `Test-SemVer` anchor fix below**. |
+| modify | tests/ps/install-ps1.Tests.ps1 | add Pester tests for the PURE helpers (LTS/MSI parse, SHASUMS parse, msiexec arg construction, `Test-Elevated` off-Windows) **and the `Test-SemVer` trailing-newline case**. No live network, no real install. |
+
+### Owner amendment (2026-07-05, from the WP-057 review): `Test-SemVer` anchor
+
+WP-057's `Test-SemVer` uses `^…$`, but in .NET/PowerShell `$` matches **before a
+trailing newline**, so `Test-SemVer "1.2.3\n"` returns `$true`. Not exploitable
+today (the `[0-9.]`-only charset still rejects `/`/`\`/`..`, and a newline-bearing
+version yields a malformed URL that 404s to the fallback), but it defeats the
+"fully anchored" intent of the security-checklist rule. Change the anchors from
+`^…$` to `\A…\z` (the .NET absolute-start/absolute-end anchors) so a trailing
+newline is rejected. Add a Pester case asserting `Test-SemVer` returns `$false`
+for `"1.2.3`<newline>`"` and still `$true` for a bare `1.2.3` and a valid
+prerelease. This supersedes WP-057's now-archived regex.
 
 ### Exact contracts — new functions in `install.ps1`
 
