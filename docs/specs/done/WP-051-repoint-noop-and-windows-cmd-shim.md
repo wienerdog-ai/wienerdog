@@ -1,7 +1,7 @@
 ---
 id: WP-051
 title: repointCurrent same-target no-op + Windows-usable .cmd shim
-status: In-Review
+status: Done
 model: sonnet
 size: S
 depends_on: [WP-042, WP-049]
