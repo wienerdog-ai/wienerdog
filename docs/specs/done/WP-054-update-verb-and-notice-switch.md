@@ -1,7 +1,7 @@
 ---
 id: WP-054
 title: "`wienerdog update` verb + update-notice command switch (npx vs wienerdog update)"
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: [WP-053]
