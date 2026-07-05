@@ -1,6 +1,13 @@
 # ADR-0017: Windows bootstrap (`install.ps1`) — consent surface, elevation, and testing
 
-Status: Proposed (amends ADR-0006, ADR-0011, ADR-0016)
+Status: Accepted (amends ADR-0006, ADR-0011, ADR-0016)
+
+> Owner decision 2026-07-05: **consented UAC elevation** confirmed for the
+> Windows Node install — winget-if-present, else the official signed MSI
+> (SHA256-verified) installed via a per-hop-consented `Start-Process -Verb RunAs`
+> UAC elevation. No nvm-windows / portable-zip fallback in v1 (rejected: expands
+> the trust surface past ADR-0011's signed-official-source rule). A user who
+> declines the UAC prompt gets the exact manual command and a non-zero exit.
 Date: 2026-07-05
 
 ## Context

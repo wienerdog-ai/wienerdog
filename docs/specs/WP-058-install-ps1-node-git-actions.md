@@ -1,7 +1,7 @@
 ---
 id: WP-058
 title: install.ps1 Node/git auto-install (winget → signed MSI + UAC), PATH refresh, manual Windows verification
-status: Draft
+status: Ready
 model: opus
 size: M
 depends_on: [WP-057]
