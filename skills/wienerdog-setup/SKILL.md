@@ -48,8 +48,10 @@ and go straight to Step 1, then Step 3, where the vault gets created or chosen.
 Read `~/.wienerdog/config.yaml` and look at the `vault:` line — that is the
 folder where their notes live.
 
-- **If `config.yaml` itself is missing** → stop; tell them to run
-  `npx wienerdog init` first, then start this skill again.
+- **If `config.yaml` itself is missing** → Wienerdog is not installed yet. Tell
+  them to run `npx wienerdog@latest init` in their terminal (or paste the install
+  prompt from the README so their AI does it), then **restart Claude Code /
+  Codex** so the `/wienerdog-*` commands load, and start this skill again.
 - **If the `vault:` line is empty or `null`, or the folder does not exist yet**
   → this is normal right after install; they have not chosen a vault yet. Treat
   it as a first-time setup and continue to Step 3, where you create or choose

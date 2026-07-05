@@ -1,7 +1,7 @@
 ---
 id: WP-052
 title: Agent-driven install UX — plan-then-install prompt, package trust, restart-to-load note
-status: Ready
+status: In-Review
 model: sonnet
 size: S
 depends_on: []

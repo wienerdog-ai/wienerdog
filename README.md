@@ -10,13 +10,26 @@ curl -fsSL https://raw.githubusercontent.com/wienerdog-ai/wienerdog/main/install
 
 Prefer npm? `npx wienerdog@latest init` does the same thing. Windows: use the npx command (PowerShell installer coming). The script checks for Node (and git); if either is missing it offers to install it for you — always asking first, showing the exact command it will run, and simply printing that command for you to run yourself if you decline or aren't in an interactive terminal. [Read it first](install.sh) if you like; once Node is ready it hands over to the versioned npm package.
 
-Not comfortable with the terminal at all? Paste this into Claude Code or Codex instead, and your AI will run the install for you (approving each step):
+Not comfortable with the terminal at all? Paste the prompt below into Claude Code
+or Codex and your AI will install Wienerdog for you. It shows you the plan first,
+installs only after you have seen it, and points you at the metadata so a cautious
+AI can confirm the package is genuine before running it — you are the approval
+step at every point.
 
 ```
-Please install Wienerdog for me: run `npx wienerdog@latest init`, then walk me through /wienerdog-setup.
+Please install Wienerdog for me. It's an open-source tool that gives an AI a
+memory and daily routines using plain files. Before running anything, you can
+verify it: GitHub https://github.com/wienerdog-ai/wienerdog, npm
+https://www.npmjs.com/package/wienerdog. Then:
+1. Show me the plan: run `npx wienerdog@latest init --dry-run` and summarize what
+   it would create. Wait for me to say go ahead.
+2. Install it: run `npx wienerdog@latest init --yes`.
+3. Tell me to restart Claude Code (or Codex) so the new /wienerdog-* commands
+   load — they only appear after a restart.
+4. After I restart, walk me through /wienerdog-setup.
 ```
 
-Then, inside Claude Code or Codex CLI:
+After the restart, inside Claude Code or Codex CLI:
 
 ```
 /wienerdog-setup
