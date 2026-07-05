@@ -2,6 +2,15 @@
 
 All notable changes to Wienerdog. Format: [Keep a Changelog](https://keepachangelog.com), versioning: SemVer (0.x until the installed file layout stabilizes — ADR-0003).
 
+## [Unreleased] — 0.4.0 (soaking; not yet published)
+
+### Added
+- **Install and update without npm.** Node is the only hard requirement now — where `npx`/`npm` isn't available, `install.sh` downloads the release straight from the npm registry over HTTPS (with a consent prompt showing exactly what and where), verifies its sha512 checksum, and unpacks it. A new `wienerdog update` command upgrades the same way. The "a new version is available" notice quotes `wienerdog update` on npm-less installs and `npx wienerdog@latest sync` where npm is present. (ADR-0016)
+
+### Notes
+- Google features still require npm (the `googleapis` library is installed on demand); everything else works npm-free.
+- 0.4.0 is code-complete on `main` but deliberately unreleased pending real-world soak. Do not `npm publish` from `main` — releases are cut from a tagged commit only (see the release runbook).
+
 ## [0.3.1] — 2026-07-05
 
 ### Fixed
