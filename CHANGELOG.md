@@ -2,6 +2,17 @@
 
 All notable changes to Wienerdog. Format: [Keep a Changelog](https://keepachangelog.com), versioning: SemVer (0.x until the installed file layout stabilizes — ADR-0003).
 
+## [0.3.1] — 2026-07-05
+
+### Fixed
+- **Windows: `sync`/`init` no longer crash after the first run.** Re-pointing the `app/current` link now falls back to remove-then-rename where Windows refuses to rename over an existing directory link, cleans up any `current.tmp.*` leftovers from earlier crashes, and — most importantly — skips the re-point entirely when `current` already points at the right version, so routine runs perform no link operations at all. (Reported by an external Windows tester — thank you.)
+- **Windows: skills now register.** Where symlinks aren't permitted, skill folders are copied into place instead (tracked in the install manifest, fully removed by `wienerdog uninstall`), so the `/wienerdog-*` commands work after restarting your AI tool. A `wienerdog.cmd` launcher is also installed so the `wienerdog` command works in Windows terminals.
+- **Dreaming no longer goes quiet after busy days.** Heavy session days could exceed the dream's input budget, and the run would falsely report "nothing new to dream" — forever. The budget default is now 8 MB, oversized sessions are trimmed to fit (newest messages kept) instead of skipped, and a dream that truly can't fit anything raises a visible alert instead of exiting silently.
+- Dream skill preserves a note's provenance fields when updating it (WP-040, released here).
+
+### Changed
+- The README's "install via your AI" prompt now has the assistant show you the install plan first (`init --dry-run`), wait for your go-ahead, then install (`init --yes`) — with links to verify the package, and a reminder to restart your AI tool so the `/wienerdog-*` commands appear.
+
 ## [0.3.0] — 2026-07-04
 
 ### Added
