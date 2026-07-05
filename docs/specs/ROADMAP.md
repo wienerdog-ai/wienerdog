@@ -74,6 +74,9 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 | [WP-053](done/WP-053-tarball-fetch-verify-unpack.md) | Registry-tarball fetch, sha512 verify, unpack into vendored layout | M7 | opus | Done | — |
 | [WP-054](done/WP-054-update-verb-and-notice-switch.md) | `wienerdog update` verb + npx-aware update-notice command switch | M7 | opus | Done | WP-053 |
 | [WP-055](done/WP-055-install-sh-tarball-fallback.md) | install.sh npm-less tarball fallback (consented curl+verify+tar → node init) | M1/M7 | opus | Done | WP-054 |
+| [WP-056](done/WP-056-windows-install-research-spike.md) | Windows install.ps1 platform research spike (consent surface, Node elevation, CI) | M7 | opus | Done | — |
+| [WP-057](WP-057-install-ps1-core.md) | install.ps1 core — detection, consent, npm-less tarball fallback, CI lint+Pester gate | M7 | opus | Ready | WP-056 |
+| [WP-058](WP-058-install-ps1-node-git-actions.md) | install.ps1 Node/git auto-install (winget → signed MSI + UAC), PATH refresh, manual Windows verification | M7 | opus | Draft | WP-057 |
 | [WP-059](WP-059-watchdog-pidfile-race.md) | Close the watchdog-test pidfile race (bounded poll before asserting the kill) | M7 | sonnet | Ready | — |
 
 > **First-production-night incident (2026-07-04).** WP-038, WP-039 and WP-041 form
@@ -202,6 +205,37 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 > wd-docs follow-up on the google-setup message; no npm-less googleapis path).
 > `install.ps1`/Windows bootstrap remains out of scope.
 
+<!-- -->
+
+> **Windows bootstrap `install.ps1` chain (2026-07-05, ADR-0017).** Pulls the
+> promised PowerShell installer (ADR-0006) forward from M6–M7: `irm <url>/install.ps1
+> | iex` gets a bare Windows Server 2022 / Windows 11 machine to a working
+> `wienerdog init` + skills under `install.sh`'s ADR-0011 trust posture.
+> **WP-056** is a wd-researcher spike (memo
+> `memory/research/2026-07-05-windows-install-ps1.md`) that resolved the two
+> load-bearing unknowns rather than guess them: (a) `irm|iex` is PowerShell's
+> *object* pipeline, so the interactive console stays usable for per-hop
+> `Read-Host` consent — no bash-style `curl|bash` stdin trap; and (b) **Node's
+> official MSI is `ALLUSERS=1` per-machine-only and hard-requires UAC — there is no
+> non-elevated official Node install**, the decisive elevation fork. It also
+> confirmed `ubuntu-latest`/`macos-latest` runners ship `pwsh`+Pester+PSScriptAnalyzer,
+> so the PowerShell script is CI-lintable and pure-function-testable with zero extra
+> runner cost. **WP-057** (Ready) builds the testable core — the `$NonInteractive`
+> detector, `Read-Host` `Confirm-Step` consent, the npm-less registry-tarball
+> fallback (ADR-0016 analog of WP-055, with a fully-anchored semver gate), the `npx`
+> handoff, PSScriptAnalyzer settings + Pester harness + CI wiring — a complete,
+> CI-verified installer for **Node-present** Windows machines; its `Main` prints and
+> exits when Node is missing (placeholder). **WP-058** (Draft) fills that branch with
+> the consented Node/git auto-install: winget-if-present, else the official signed
+> MSI downloaded + SHA256-verified + installed via a UAC elevation (`Start-Process
+> -Verb RunAs`), plus registry PATH refresh — and carries the **mandatory manual
+> Windows VM checklist** (CI has no Windows runner). WP-058 stays **Draft** until the
+> owner confirms ADR-0017's elevation posture (the UAC fork is owner-visible and
+> can't be CI-verified). Windows scheduling / `schtasks` stays deferred; the dream
+> is not scheduled on Windows yet (digest/skills/manual dream still work).
+
+<!-- -->
+
 ## Dependency graph
 
 ```mermaid
@@ -269,5 +303,7 @@ graph LR
   WP042 --> WP053[WP-053 tarball fetch/verify/unpack]
   WP053 --> WP054[WP-054 update verb + notice switch]
   WP054 --> WP055[WP-055 install.sh tarball fallback]
+  WP056[WP-056 Windows install research spike] --> WP057[WP-057 install.ps1 core]
+  WP057 --> WP058[WP-058 install.ps1 Node/git actions + manual verify]
   WP059[WP-059 watchdog pidfile race test-hermeticity]
 ```
