@@ -473,6 +473,110 @@ ensure_git() {
     "git isn't installed — Wienerdog needs it once you create or adopt a vault. Install it with \`$(git_install_cmd)\` before running /wienerdog-setup." >&2
 }
 
+# --- npm-less tarball fallback (ADR-0016) -----------------------------------
+
+# Prints the copy-paste fallback for when the tarball path can't/won't run:
+# the npx command plus how to get npm. To stderr.
+tarball_fallback_note() {
+  printf '%s\n    %s\n%s\n' \
+    "To install Wienerdog yourself, add npm and run:" \
+    "npx wienerdog@latest init" \
+    "npm ships with Node.js — reinstall Node from https://nodejs.org to get it." >&2
+}
+
+# Download the verified tarball for $1=url with sha512 SRI $2=integrity and
+# unpack it into $3=dest (the app/<version> dir). Verifies the checksum with the
+# already-present `node` BEFORE unpacking; a mismatch aborts and unpacks nothing.
+# Atomic-ish: extract into a staging dir, then mv onto dest. Returns 0 on success.
+do_tarball_install() {
+  local url="$1" integrity="$2" dest="$3"
+  local tmp staging calc
+  tmp="$(mktemp -d)" || return 1
+  if ! curl -fSL "$url" -o "$tmp/wd.tgz"; then
+    rm -rf "$tmp"
+    return 1
+  fi
+  # sha512 base64 via node (Node >= 18 is guaranteed by ensure_node). Same digest
+  # the Node verifier (WP-053) computes — no openssl dependency.
+  calc="$(node -e 'const c=require("crypto"),f=require("fs");process.stdout.write("sha512-"+c.createHash("sha512").update(f.readFileSync(process.argv[1])).digest("base64"))' "$tmp/wd.tgz" 2>/dev/null)" || calc=""
+  if [ -z "$calc" ] || [ "$calc" != "$integrity" ]; then
+    echo "Checksum mismatch — refusing to install the download." >&2
+    rm -rf "$tmp"
+    return 1
+  fi
+  staging="${dest}.staging.$$"
+  rm -rf "$staging"
+  mkdir -p "$staging" || {
+    rm -rf "$tmp"
+    return 1
+  }
+  # npm tarballs wrap everything under package/ — strip it so bin/ src/ … land at dest.
+  if ! tar -xzf "$tmp/wd.tgz" --strip-components=1 -C "$staging"; then
+    rm -rf "$tmp" "$staging"
+    return 1
+  fi
+  mkdir -p "$(dirname "$dest")"
+  rm -rf "$dest"
+  if ! mv "$staging" "$dest"; then
+    rm -rf "$tmp" "$staging"
+    return 1
+  fi
+  rm -rf "$tmp"
+  return 0
+}
+
+# The npm-less install path: fetch the registry manifest, validate it, get
+# per-hop consent (showing exactly what/where), download+verify+unpack, then
+# exec `node <dest>/bin/wienerdog.js init`. Exits non-zero (after the fallback
+# note) on any failure/decline/no-tty. "$@" are forwarded to init.
+install_via_tarball() {
+  local core dest ver integrity meta url tty reply
+  core="${WIENERDOG_HOME:-$HOME/.wienerdog}"
+
+  meta="$(curl -fsSL "https://registry.npmjs.org/wienerdog/latest" 2>/dev/null)" || meta=""
+  # `|| true`: a non-matching grep under `set -o pipefail` would otherwise abort.
+  ver="$(printf '%s' "$meta" | grep -oE '"version"[[:space:]]*:[[:space:]]*"[^"]+"' | head -1 | sed -E 's/.*"([^"]+)"$/\1/')" || true
+  integrity="$(printf '%s' "$meta" | grep -oE '"integrity"[[:space:]]*:[[:space:]]*"sha512-[^"]+"' | head -1 | sed -E 's/.*"(sha512-[^"]+)"$/\1/')" || true
+
+  if ! printf '%s' "$ver" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$' || [ -z "$integrity" ]; then
+    echo "Couldn't read Wienerdog's release info from the npm registry." >&2
+    tarball_fallback_note
+    exit 1
+  fi
+  url="https://registry.npmjs.org/wienerdog/-/wienerdog-${ver}.tgz"
+  dest="$core/app/$ver"
+
+  # Idempotent: this version is already unpacked → straight to init.
+  if [ -f "$dest/bin/wienerdog.js" ]; then
+    exec node "$dest/bin/wienerdog.js" init "$@"
+  fi
+
+  # Consent — show exactly what will be downloaded and where it lands.
+  printf '%s\n    from: %s\n    to:   %s\n' \
+    "Wienerdog will download and unpack the app (no npm needed):" "$url" "$dest" >&2
+  tty="${WIENERDOG_TTY:-/dev/tty}"
+  if ! tty_reachable; then
+    echo "No terminal available to confirm — not downloading." >&2
+    tarball_fallback_note
+    exit 1
+  fi
+  printf 'Download and install Wienerdog now? [Y/n] ' >&2
+  reply=""
+  read -r reply <"$tty" || reply=""
+  case "$reply" in
+  [nN]*)
+    tarball_fallback_note
+    exit 1
+    ;;
+  esac
+
+  if do_tarball_install "$url" "$integrity" "$dest"; then
+    exec node "$dest/bin/wienerdog.js" init "$@"
+  fi
+  tarball_fallback_note
+  exit 1
+}
+
 # --- Main dispatcher -------------------------------------------------------
 
 main() {
@@ -490,7 +594,11 @@ main() {
   local node_version
   node_version="$(node -v)"
   echo "Found Node $node_version — handing over to the Wienerdog installer…" >&2
-  exec npx --yes wienerdog@latest init "$@"
+  if command -v npx >/dev/null 2>&1; then
+    exec npx --yes wienerdog@latest init "$@"
+  fi
+  echo "npm/npx isn't available — installing Wienerdog directly from the npm registry…" >&2
+  install_via_tarball "$@"
 }
 
 # --- test seam: allow `source install.sh` to load functions without running

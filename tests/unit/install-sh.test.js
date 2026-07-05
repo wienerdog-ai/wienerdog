@@ -3,6 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { spawnSync } = require('node:child_process');
+const crypto = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -899,4 +900,245 @@ test('install-sh Linux: PM install + NodeSource are reached only via consent_run
   // The real nested curl|bash lives ONLY inside install_node_nodesource, never
   // auto-chained at top level after the distro attempt.
   assert.match(scriptText, /install_node_nodesource\(\)\s*\{/);
+});
+
+// --- WP-055: npm-less registry-tarball fallback (ADR-0016) -------------------
+//
+// These drive the FULL script with an exclusive stub PATH (stubBin + a hermetic
+// coreutils dir), so no real npx/node leaks: `node` is a shim (`-v` → v20.0.0;
+// `-e` → exec the REAL node so the sha512 is genuinely computed over the fixture
+// bytes; anything else → record the handoff argv and exit), `npx` is deliberately
+// ABSENT so `command -v npx` fails and the tarball branch is taken, `curl` is an
+// arg-inspecting stub (serves the manifest JSON for /latest, writes the fixture
+// tarball for a `-o` download), `git`/`uname` are trivial shims, and `tar` +
+// coreutils are the REAL system binaries via hermeticBinDir — so extraction
+// really happens. No test touches the live registry, a real npx, or runs init.
+
+const REAL_NODE =
+  spawnSync(BASH, ['-c', 'command -v node'], { encoding: 'utf8' }).stdout.trim();
+
+// Coreutils the tarball path shells out to (printf/echo are builtins). tar is
+// REAL so the fixture is genuinely extracted; npx/node are never included here.
+// gzip/gunzip: GNU `tar -xzf` on Linux execs `gzip` for decompression (bsdtar on
+// macOS decompresses in-process), so an exclusive PATH must expose it there too.
+const HERMETIC_SYS_BIN_TARBALL = hermeticBinDir([
+  'bash',
+  'mktemp',
+  'grep',
+  'sed',
+  'head',
+  'rm',
+  'mkdir',
+  'mv',
+  'dirname',
+  'cp',
+  'tar',
+  'gzip',
+  'gunzip',
+]);
+
+/** Builds an npm-shaped fixture tarball (package/ prefix) offline; returns {fixture, sri}. */
+function buildFixtureTarball(root, version) {
+  const pkgParent = path.join(root, 'pkg');
+  const pkgDir = path.join(pkgParent, 'package');
+  fs.mkdirSync(path.join(pkgDir, 'bin'), { recursive: true });
+  fs.writeFileSync(
+    path.join(pkgDir, 'bin', 'wienerdog.js'),
+    '#!/usr/bin/env node\n// fixture entrypoint\n'
+  );
+  fs.writeFileSync(
+    path.join(pkgDir, 'package.json'),
+    JSON.stringify({ name: 'wienerdog', version }) + '\n'
+  );
+  const fixture = path.join(root, 'fixture.tgz');
+  const r = spawnSync('tar', ['-czf', fixture, '-C', pkgParent, 'package'], {
+    encoding: 'utf8',
+  });
+  assert.equal(r.status, 0, `fixture tar build failed: ${r.stderr}`);
+  const sri =
+    'sha512-' + crypto.createHash('sha512').update(fs.readFileSync(fixture)).digest('base64');
+  return { fixture, sri };
+}
+
+/**
+ * Drives the full install.sh down the npm-less tarball branch.
+ * @param {{version?:string, manifestVersion?:string, ttyAnswer?:string,
+ *          noTty?:boolean, corrupt?:boolean, badManifest?:boolean,
+ *          preInstalled?:boolean}} opts
+ */
+function runTarballScenario(opts = {}) {
+  const version = opts.version || '0.4.0';
+  // The `version` string the served manifest reports (defaults to the fixture's
+  // version). Decoupled so a test can serve a hostile version (e.g. one with
+  // path-traversal segments) while the fixture tarball + its integrity stay valid.
+  const manifestVersion = opts.manifestVersion || version;
+  const { root, stubBin } = mkStub('wd-tarball-');
+  const { fixture, sri } = buildFixtureTarball(root, version);
+  const core = path.join(root, 'core');
+  const nodeArgv = path.join(root, 'node-argv.txt');
+  const curlArgv = path.join(root, 'curl-argv.txt');
+
+  // Optionally serve bytes whose sha512 != the manifest integrity.
+  let served = fixture;
+  if (opts.corrupt) {
+    served = path.join(root, 'corrupt.tgz');
+    fs.writeFileSync(served, 'not a real tarball\n');
+  }
+
+  writeShimAbs(
+    stubBin,
+    'node',
+    `if [ "$1" = "-v" ]; then echo v20.0.0; exit 0; fi\n` +
+      `if [ "$1" = "-e" ]; then shift; exec "${REAL_NODE}" -e "$@"; fi\n` +
+      `echo "$@" >> "${nodeArgv}"\nexit 0`
+  );
+  writeShimAbs(stubBin, 'git', 'exit 0'); // git present → ensure_git returns at once
+  writeShimAbs(stubBin, 'uname', 'echo Linux');
+
+  const manifest = opts.badManifest
+    ? '{"error":"Not found"}'
+    : `{"version":"${manifestVersion}","dist":{"integrity":"${sri}"}}`;
+  // curl: records argv; a `-o <file>` request writes the served bytes there, a
+  // plain request prints the manifest JSON.
+  writeShimAbs(
+    stubBin,
+    'curl',
+    `echo "$@" >> "${curlArgv}"\n` +
+      `out=""\nprev=""\nfor a in "$@"; do\n  if [ "$prev" = "-o" ]; then out="$a"; fi\n  prev="$a"\ndone\n` +
+      `if [ -n "$out" ]; then cp "${served}" "$out"; exit 0; fi\n` +
+      `printf '%s' '${manifest}'\nexit 0`
+  );
+
+  if (opts.preInstalled) {
+    const binDir = path.join(core, 'app', version, 'bin');
+    fs.mkdirSync(binDir, { recursive: true });
+    fs.writeFileSync(path.join(binDir, 'wienerdog.js'), '// pre-existing\n');
+  }
+
+  const ttyPath = opts.noTty
+    ? path.join(root, 'no-tty')
+    : writeFakeTty(root, opts.ttyAnswer || 'y');
+
+  const r = spawnSync(BASH, [scriptPath, 'init-extra-arg'], {
+    env: {
+      ...process.env,
+      PATH: `${stubBin}:${HERMETIC_SYS_BIN_TARBALL}`,
+      WIENERDOG_HOME: core,
+      WIENERDOG_TTY: ttyPath,
+    },
+    encoding: 'utf8',
+  });
+  return {
+    status: r.status,
+    stdout: r.stdout,
+    stderr: r.stderr,
+    core,
+    version,
+    nodeArgv,
+    curlArgv,
+  };
+}
+
+test('install-sh tarball: npx absent, consent yes → verify+extract, node init handoff, exit 0', () => {
+  const r = runTarballScenario({ ttyAnswer: 'y' });
+  assert.equal(r.status, 0, r.stderr);
+  const entry = path.join(r.core, 'app', r.version, 'bin', 'wienerdog.js');
+  assert.ok(fs.existsSync(entry), 'extracted entrypoint must exist at app/<v>/bin/wienerdog.js');
+  const handoff = readIf(r.nodeArgv);
+  assert.ok(handoff, 'node handoff must have been recorded');
+  assert.match(handoff, new RegExp(`${entry} init init-extra-arg`));
+});
+
+test('install-sh tarball: npx absent, consent no → no download, fallback + exit non-zero', () => {
+  const r = runTarballScenario({ ttyAnswer: 'n' });
+  assert.notEqual(r.status, 0);
+  assert.ok(!fs.existsSync(path.join(r.core, 'app', r.version)), 'app/<v> must not be created');
+  assert.equal(readIf(r.nodeArgv), null); // no init handoff
+  assert.match(r.stderr, /npx wienerdog@latest init/);
+  assert.match(r.stderr, /nodejs\.org/);
+  // The tarball itself was never downloaded (no `-o` curl call).
+  assert.doesNotMatch(readIf(r.curlArgv) || '', /-o /);
+});
+
+test('install-sh tarball: npx absent, no tty → no prompt-read, fallback + exit non-zero', () => {
+  const r = runTarballScenario({ noTty: true });
+  assert.notEqual(r.status, 0);
+  assert.ok(!fs.existsSync(path.join(r.core, 'app', r.version)));
+  assert.equal(readIf(r.nodeArgv), null);
+  assert.match(r.stderr, /No terminal available/);
+  assert.match(r.stderr, /npx wienerdog@latest init/);
+  assert.doesNotMatch(readIf(r.curlArgv) || '', /-o /);
+});
+
+test('install-sh tarball: checksum mismatch → nothing unpacked, fallback + exit non-zero', () => {
+  const r = runTarballScenario({ ttyAnswer: 'y', corrupt: true });
+  assert.notEqual(r.status, 0);
+  assert.match(r.stderr, /Checksum mismatch/);
+  assert.ok(!fs.existsSync(path.join(r.core, 'app', r.version)), 'nothing may be unpacked');
+  assert.equal(readIf(r.nodeArgv), null); // never reached the init handoff
+  assert.match(r.stderr, /npx wienerdog@latest init/);
+});
+
+test('install-sh tarball: bad/absent manifest → "Couldn\'t read" + fallback, no download', () => {
+  const r = runTarballScenario({ ttyAnswer: 'y', badManifest: true });
+  assert.notEqual(r.status, 0);
+  assert.match(r.stderr, /Couldn't read/);
+  assert.match(r.stderr, /npx wienerdog@latest init/);
+  assert.ok(!fs.existsSync(path.join(r.core, 'app', r.version)));
+  assert.doesNotMatch(readIf(r.curlArgv) || '', /-o /); // tarball never fetched
+});
+
+test('install-sh tarball: malicious manifest version with path traversal is rejected at the gate', () => {
+  // Owner amendment (2026-07-05, WP-055 review): a manifest whose `version`
+  // contains `/` or `..` must be REJECTED by the end-anchored strict-semver gate
+  // BEFORE any curl/mkdir/mv, so the verified tarball can never be `mv`d outside
+  // `<core>`. `<core>/app/1.2.3/../../../escaped-pwned` resolves lexically to
+  // `<root>/escaped-pwned` — outside core — so a filesystem canary there proves
+  // (non-vacuously) whether the escape happened. With the fix it never does.
+  const r = runTarballScenario({
+    ttyAnswer: 'y',
+    manifestVersion: '1.2.3/../../../escaped-pwned',
+  });
+  assert.notEqual(r.status, 0);
+  assert.match(r.stderr, /Couldn't read/); // rejected at the validation gate
+  assert.match(r.stderr, /npx wienerdog@latest init/);
+  // Canary: nothing was written to the traversal target OUTSIDE core…
+  const escapeTarget = path.join(r.core, '..', 'escaped-pwned');
+  assert.ok(!fs.existsSync(escapeTarget), 'no file may escape core via `..` in the version');
+  // …and no download/unpack happened at all (no `-o` curl, no app/ tree created).
+  assert.doesNotMatch(readIf(r.curlArgv) || '', /-o /);
+  assert.ok(!fs.existsSync(path.join(r.core, 'app')));
+});
+
+test('install-sh tarball: version already unpacked → straight to init, no re-download', () => {
+  const r = runTarballScenario({ ttyAnswer: 'y', preInstalled: true });
+  assert.equal(r.status, 0, r.stderr);
+  const entry = path.join(r.core, 'app', r.version, 'bin', 'wienerdog.js');
+  assert.match(readIf(r.nodeArgv), new RegExp(`${entry} init init-extra-arg`));
+  // Idempotent short-circuit: no tarball download (no `-o` curl call).
+  assert.doesNotMatch(readIf(r.curlArgv) || '', /-o /);
+});
+
+test('install-sh tarball: npx PRESENT still hands off to npx (tarball branch not taken)', () => {
+  const { root, stubBin } = mkStub('wd-tarball-npx-');
+  writeShimAbs(stubBin, 'uname', 'echo Linux');
+  writeShimAbs(stubBin, 'git', 'exit 0');
+  nodeShimFile(stubBin, 'v20.0.0');
+  const npxArgv = path.join(root, 'npx-argv.txt');
+  const curlArgv = path.join(root, 'curl-argv.txt');
+  writeShimAbs(stubBin, 'npx', `echo "$@" > "${npxArgv}"\nexit 0`);
+  writeShimAbs(stubBin, 'curl', `echo "$@" >> "${curlArgv}"\nexit 0`);
+
+  const r = spawnSync(BASH, [scriptPath], {
+    env: {
+      ...process.env,
+      PATH: `${stubBin}:${HERMETIC_SYS_BIN_TARBALL}`,
+      WIENERDOG_HOME: path.join(root, 'core'),
+      WIENERDOG_TTY: path.join(root, 'no-tty'),
+    },
+    encoding: 'utf8',
+  });
+  assert.equal(r.status, 0);
+  assert.equal(readIf(npxArgv).trim(), '--yes wienerdog@latest init');
+  assert.equal(readIf(curlArgv), null); // registry never consulted on the npx path
 });
