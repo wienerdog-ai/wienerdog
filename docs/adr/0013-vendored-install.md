@@ -99,3 +99,18 @@ long-lived reference at a stable entry path that survives version changes.
   lower-severity concern and is **out of scope** for this ADR.
 - ADR-0004 is unchanged: vendoring copies files and repoints a symlink at
   install/update time; it starts nothing that outlives the job.
+
+## Amendment (2026-07-05, WP-049): Windows repoint fallback
+
+An external user report (Windows Server 2022, Node 24, wienerdog 0.3.0)
+established that `fs.renameSync` over an **existing** directory symlink throws
+`EPERM` on Win32 — the POSIX-atomic-rename assumption above holds only for the
+first `current` creation, so every subsequent `sync`/`init` crashed before
+writing the digest and orphaned a `current.tmp.<pid>` link. `repointCurrent`
+now falls back to **remove-old-link then rename** on `EPERM`/`EEXIST`/
+`ENOTEMPTY`, accepting a brief non-atomic window (`current` momentarily absent)
+under this module's single-writer assumption, and sweeps orphaned
+`current.tmp.*` left by earlier crashed runs. This makes Windows a **working
+degraded install** (vendored app + digest). Full Windows support (scheduling,
+`install.ps1`) remains deferred to M6–M7; the junction/pointer-file mechanism
+noted above is still the someday-atomic approach.

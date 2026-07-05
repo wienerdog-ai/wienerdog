@@ -43,14 +43,44 @@ function copyTree(srcRoot, destRoot) {
   }
 }
 
-/** Atomically point <core>/app/current at targetDir (temp symlink + rename).
- *  @param {import('./paths').WienerdogPaths} paths @param {string} targetDir */
-function repointCurrent(paths, targetDir) {
+/** Point <core>/app/current at targetDir.
+ *  POSIX: `rename` over the existing symlink is atomic. Windows: renaming over
+ *  an existing directory symlink throws EPERM/EEXIST/ENOTEMPTY (MoveFileEx will
+ *  not replace a reparse point in place) — fall back to remove-old-link then
+ *  rename. That fallback has a brief non-atomic window (current momentarily
+ *  absent), acceptable under the module's single-writer assumption (ADR-0013).
+ *  Also sweeps orphaned `current.tmp.*` symlinks left by earlier crashed runs.
+ *  @param {import('./paths').WienerdogPaths} paths
+ *  @param {string} targetDir
+ *  @param {{rename?: (from: string, to: string) => void}} [opts]
+ *    test seam only; defaults to fs.renameSync. */
+function repointCurrent(paths, targetDir, opts = {}) {
+  const rename = opts.rename || fs.renameSync;
   const link = currentLink(paths);
   const tmp = `${link}.tmp.${process.pid}`;
   try { fs.rmSync(tmp, { recursive: true, force: true }); } catch { /* ignore */ }
   fs.symlinkSync(targetDir, tmp);
-  fs.renameSync(tmp, link); // rename over an existing symlink is atomic on POSIX
+  try {
+    rename(tmp, link); // atomic on POSIX
+  } catch (err) {
+    if (err && ['EPERM', 'EEXIST', 'ENOTEMPTY'].includes(err.code)) {
+      // Windows: cannot rename over an existing directory symlink. Remove the
+      // old link, then rename into place (brief non-atomic window).
+      fs.rmSync(link, { recursive: true, force: true });
+      rename(tmp, link);
+    } else {
+      throw err;
+    }
+  }
+  // Self-heal: remove orphaned current.tmp.* from earlier crashed runs (any pid).
+  // Our own tmp has already been renamed away and will not match.
+  let leftovers = [];
+  try { leftovers = fs.readdirSync(appDir(paths)); } catch { leftovers = []; }
+  for (const name of leftovers) {
+    if (name.startsWith('current.tmp.')) {
+      try { fs.rmSync(path.join(appDir(paths), name), { recursive: true, force: true }); } catch { /* ignore */ }
+    }
+  }
 }
 
 /**

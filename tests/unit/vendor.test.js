@@ -94,6 +94,58 @@ test('vendor: an upgrade copies the new version and atomically repoints current'
   );
 });
 
+test('vendor: repointCurrent falls back to remove-then-rename on EPERM', () => {
+  const paths = tempPaths();
+  fs.mkdirSync(vendor.appDir(paths), { recursive: true });
+  const oldTarget = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-old-'));
+  const newTarget = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-new-'));
+  fs.symlinkSync(oldTarget, vendor.currentLink(paths));
+
+  let calls = 0;
+  const rename = (from, to) => {
+    calls += 1;
+    if (calls === 1) {
+      const err = new Error('EPERM: operation not permitted, rename');
+      err.code = 'EPERM';
+      throw err;
+    }
+    fs.renameSync(from, to);
+  };
+
+  vendor.repointCurrent(paths, newTarget, { rename });
+  assert.equal(calls, 2, 'rename retried once after the fallback removed the old link');
+  assert.equal(fs.realpathSync(vendor.currentLink(paths)), fs.realpathSync(newTarget));
+  const leftovers = fs.readdirSync(vendor.appDir(paths)).filter((n) => n.startsWith('current.tmp.'));
+  assert.deepEqual(leftovers, [], 'no current.tmp.* remains under app/');
+});
+
+test('vendor: repointCurrent rethrows non-fallback rename errors', () => {
+  const paths = tempPaths();
+  fs.mkdirSync(vendor.appDir(paths), { recursive: true });
+  const newTarget = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-new-'));
+
+  const rename = () => {
+    const err = new Error('ENOSPC: no space left on device, rename');
+    err.code = 'ENOSPC';
+    throw err;
+  };
+
+  assert.throws(() => vendor.repointCurrent(paths, newTarget, { rename }), /ENOSPC/);
+});
+
+test('vendor: repointCurrent sweeps pre-existing orphan current.tmp.* links', () => {
+  const paths = tempPaths();
+  fs.mkdirSync(vendor.appDir(paths), { recursive: true });
+  const newTarget = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-new-'));
+  const orphan = path.join(vendor.appDir(paths), 'current.tmp.99999');
+  fs.symlinkSync(newTarget, orphan);
+  assert.ok(fs.existsSync(orphan), 'orphan created for the test');
+
+  vendor.repointCurrent(paths, newTarget);
+  assert.equal(fs.existsSync(orphan), false, 'orphan removed after a successful repoint');
+  assert.equal(fs.realpathSync(vendor.currentLink(paths)), fs.realpathSync(newTarget));
+});
+
 test('vendor: dev mode via WIENERDOG_DEV links current at the checkout, copies nothing', () => {
   const paths = tempPaths();
   const src = fakeSource('9.9.9');
