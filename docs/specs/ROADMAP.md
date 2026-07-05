@@ -69,6 +69,8 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 | [WP-048](done/WP-048-dream-input-capacity-starvation.md) | Fix dream input-capacity starvation (truncate-to-fit + loud capacity alert) | M7 | opus | Done | WP-039, WP-041 |
 | [WP-049](done/WP-049-repoint-current-windows-fallback.md) | Windows-safe repointCurrent fallback + orphan current.tmp.* cleanup | M7 | sonnet | Done | WP-042 |
 | [WP-050](done/WP-050-skills-copy-fallback.md) | Skills copy-fallback where symlink creation is unpermitted (Windows) | M7 | opus | Done | WP-006 |
+| [WP-051](WP-051-repoint-noop-and-windows-cmd-shim.md) | repointCurrent same-target no-op + Windows-usable .cmd shim | M7 | sonnet | Ready | WP-042, WP-049 |
+| [WP-052](WP-052-agent-driven-install-ux.md) | Agent-driven install UX — plan-then-install prompt, package trust, restart note | M1/M7 | sonnet | Ready | — |
 
 > **First-production-night incident (2026-07-04).** WP-038, WP-039 and WP-041 form
 > a serial chain (they edit the shared `run-job.js` / `dream.js` / `validate.js`
@@ -143,6 +145,30 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 > mocking) and can land in parallel — they share no files with each other or with
 > WP-048.
 
+<!-- -->
+
+> **Windows agent-driven-install follow-ups (2026-07-05).** After WP-049/050 fixed
+> the two headline Windows crashes, the same from-scratch report (Windows Server
+> 2022, Claude Code driving `npx wienerdog@latest init`) surfaced three further
+> items. **WP-051** (independent of WP-050, on `src/core/vendor.js`) closes two
+> defects on unconditional code paths: (1) `repointCurrent` rewrote the `current`
+> symlink on *every* sync even when it already pointed at the target — needlessly
+> exercising the WP-049 remove-then-rename fallback, which can self-lock on
+> Windows because the invoking `node` runs from inside `app/current` and holds the
+> reparse point; it now no-ops when `current` is already correct (path.resolve
+> compare) while still sweeping orphans; and (2) the bash `~/.local/bin/wienerdog`
+> shim is unusable by cmd.exe/PowerShell, so `writeShim` now additionally writes a
+> `wienerdog.cmd` on win32 (manifest-tracked `kind:'file'`, byte-idempotent, CRLF).
+> Both are POSIX-testable via the existing `opts.rename` seam and a new
+> `opts.platform` seam — no `process.platform` mocking. **WP-052** (docs/skill
+> only, independent) fixes the agent-driven install *instructions*: the README
+> paste-in prompt now tells the driving AI to show the plan (`init --dry-run`)
+> before installing (`init --yes`) — the human-in-chat is the consent surface —
+> hands it the repo + npm URLs so a cautious agent can verify the package, and
+> tells the user to restart the harness so the `/wienerdog-*` commands load;
+> `init`'s own prompting is unchanged. The two WPs share no files and can land in
+> parallel.
+
 ## Dependency graph
 
 ```mermaid
@@ -204,4 +230,7 @@ graph LR
   WP042 --> WP047[WP-047 gws on-demand googleapis]
   WP042 --> WP049[WP-049 repoint win fallback]
   WP006 --> WP050[WP-050 skills copy fallback]
+  WP042 --> WP051[WP-051 repoint no-op + win .cmd shim]
+  WP049 --> WP051
+  WP052[WP-052 agent-driven install UX]
 ```
