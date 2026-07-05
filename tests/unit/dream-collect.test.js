@@ -9,7 +9,7 @@ const path = require('node:path');
 const { getPaths } = require('../../src/core/paths');
 const { readDreamConfig } = require('../../src/core/dream/config');
 const { readWatermarks, writeWatermarks } = require('../../src/core/dream/watermarks');
-const { collectExtracts, cleanScratch } = require('../../src/core/dream/scratch');
+const { collectExtracts, cleanScratch, MIN_TRUNCATE_BYTES } = require('../../src/core/dream/scratch');
 
 /** Fresh temp home + resolved paths. */
 function tempPaths() {
@@ -69,7 +69,7 @@ test('dream-collect: readDreamConfig returns defaults with only a vault', () => 
   const cfg = readDreamConfig(paths.config);
   assert.equal(cfg.vault, '/home/ada/wienerdog');
   assert.equal(cfg.timeoutMs, 20 * 60_000);
-  assert.equal(cfg.maxInputBytes, 400_000);
+  assert.equal(cfg.maxInputBytes, 8_000_000);
   assert.equal(cfg.model, null);
 });
 
@@ -160,6 +160,70 @@ test('dream-collect: drops the oldest sessions past the size cap', () => {
   // Dropped claude → its watermark stays null (won't skip it next run).
   assert.equal(result.maxMtime.claude, null);
   assert.equal(result.maxMtime.codex, xMtime);
+});
+
+test('dream-collect: capacity incident replay — four oversized sessions are all kept truncated (old loop kept 0)', () => {
+  const paths = tempPaths();
+  // Four fresh Claude sessions, each ~205 KB serialized (100 msgs × 2000 chars),
+  // newest→oldest c4..c1. This is the 2026-07-05 starvation set.
+  const m1 = writeClaude(paths, 'c1', 100, 2000, new Date('2026-01-02T00:00:00Z'));
+  const m2 = writeClaude(paths, 'c2', 100, 2000, new Date('2026-01-03T00:00:00Z'));
+  const m3 = writeClaude(paths, 'c3', 100, 2000, new Date('2026-01-04T00:00:00Z'));
+  const m4 = writeClaude(paths, 'c4', 100, 2000, new Date('2026-01-05T00:00:00Z'));
+  const newest = Math.max(m1, m2, m3, m4);
+
+  // Budget admits four equal shares (100 000 each) above the floor but below any
+  // single extract → all four truncated. The OLD break loop kept 0 here.
+  const result = collectExtracts(paths, { claude: null, codex: null }, 400_000);
+
+  assert.equal(result.entries.length, 4);
+  assert.equal(result.droppedForSize, 0);
+  assert.equal(result.dropped.length, 0);
+  assert.equal(result.truncated.length, 4);
+  assert.ok(result.entries.every((e) => e.truncatedToFit === true));
+  // A truncated session advances the watermark (counts as consumed).
+  assert.equal(result.maxMtime.claude, newest);
+
+  // The kept extracts are actually truncated and keep the NEWEST messages.
+  const one = JSON.parse(fs.readFileSync(path.join(result.scratchDir, 'claude-c4.json'), 'utf8'));
+  assert.equal(one.truncated, true);
+  assert.ok(one.messages.length > 0 && one.messages.length < 100);
+});
+
+test('dream-collect: capacity water-fill keeps a fitting session whole behind an oversized newer one (no shadowing)', () => {
+  const paths = tempPaths();
+  // Newest is huge (~205 KB); an OLDER session is tiny and fits its share whole.
+  writeClaude(paths, 'cbig', 100, 2000, new Date('2026-01-05T00:00:00Z'));
+  const smallMtime = writeClaude(paths, 'csmall', 1, 10, new Date('2026-01-02T00:00:00Z'));
+
+  const result = collectExtracts(paths, { claude: null, codex: null }, 100_000);
+
+  assert.equal(result.entries.length, 2);
+  assert.equal(result.dropped.length, 0);
+  // The small older session is kept WHOLE despite the oversized newer one ahead.
+  const small = result.entries.find((e) => e.session_id === 'csmall');
+  assert.ok(small);
+  assert.equal(small.truncatedToFit, false);
+  assert.equal(small.mtimeMs, smallMtime);
+  // The big newer session is truncated to fit.
+  const big = result.entries.find((e) => e.session_id === 'cbig');
+  assert.equal(big.truncatedToFit, true);
+  assert.equal(result.truncated.length, 1);
+});
+
+test('dream-collect: capacity sub-floor budget drops the session whole and does not advance the watermark', () => {
+  const paths = tempPaths();
+  writeClaude(paths, 'c1', 100, 2000, new Date('2026-01-05T00:00:00Z'));
+
+  // Budget below MIN_TRUNCATE_BYTES → no useful share → dropped whole, kept 0.
+  const result = collectExtracts(paths, { claude: null, codex: null }, MIN_TRUNCATE_BYTES - 1);
+
+  assert.equal(result.entries.length, 0);
+  assert.equal(result.dropped.length, 1);
+  assert.equal(result.droppedForSize, 1);
+  assert.equal(result.dropped[0].session_id, 'c1');
+  // Whole-dropped session must NOT advance the watermark (retried next run).
+  assert.equal(result.maxMtime.claude, null);
 });
 
 test('dream-collect: re-running empties stale scratch, cleanScratch removes it', () => {

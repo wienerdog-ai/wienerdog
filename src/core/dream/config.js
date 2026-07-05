@@ -43,6 +43,9 @@ function readScalar(body, key) {
 /**
  * Read the vault path and optional dream knobs from config.yaml.
  * The three `dream_*` keys are OPTIONAL top-level scalars; absent → default.
+ * Defaults: `dream_timeout_minutes` 20, `dream_max_input_bytes` 8_000_000
+ * (raised from 400_000 per ADR-0012 amendment — provisional, revisitable),
+ * `dream_model` null.
  * @param {string} configFile  paths.config
  * @returns {{vault:string, timeoutMs:number, maxInputBytes:number, model:string|null}}
  */
@@ -66,7 +69,7 @@ function readDreamConfig(configFile) {
   return {
     vault,
     timeoutMs: (Number.isFinite(timeoutMinutes) && timeoutMinutes > 0 ? timeoutMinutes : 20) * 60_000,
-    maxInputBytes: Number.isFinite(maxInput) && maxInput > 0 ? maxInput : 400_000,
+    maxInputBytes: Number.isFinite(maxInput) && maxInput > 0 ? maxInput : 8_000_000,
     model: model && model !== '' ? model : null,
   };
 }

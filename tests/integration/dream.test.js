@@ -42,10 +42,30 @@ function commitCount(vault) {
   return Number(git(vault, ['rev-list', '--count', 'HEAD']).trim());
 }
 
+/** Plant an oversized (~205 KB serialized) Claude transcript so the input
+ *  assembly must truncate or drop it. @param {string} claudeDir @param {string} sessionId */
+function plantOversized(claudeDir, sessionId) {
+  const projDir = path.join(claudeDir, 'projects', 'proj');
+  fs.mkdirSync(projDir, { recursive: true });
+  const lines = [];
+  for (let i = 0; i < 100; i++) {
+    lines.push(
+      JSON.stringify({
+        type: 'user',
+        sessionId,
+        cwd: '/home/ada/proj',
+        timestamp: '2026-01-01T10:00:00.000Z',
+        message: { role: 'user', content: 'x'.repeat(2000) },
+      })
+    );
+  }
+  fs.writeFileSync(path.join(projDir, `${sessionId}.jsonl`), lines.join('\n') + '\n');
+}
+
 /**
  * Build a temp home + core + clean vault git repo + config.yaml, and (unless
  * disabled) plant the injection transcript so the pipeline has input to dream on.
- * @param {{timeoutMinutes?:number, withTranscript?:boolean}} [opts]
+ * @param {{timeoutMinutes?:number, withTranscript?:boolean, maxInputBytes?:number, oversized?:string}} [opts]
  */
 function setup(opts = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-dream-int-'));
@@ -68,13 +88,16 @@ function setup(opts = {}) {
   git(vault, ['add', '-A']);
   git(vault, ['commit', '-q', '-m', 'seed']);
 
-  writeFile(core, 'config.yaml', `vault: ${vault}\ndream_timeout_minutes: ${opts.timeoutMinutes ?? 5}\n`);
+  const budgetLine = opts.maxInputBytes ? `dream_max_input_bytes: ${opts.maxInputBytes}\n` : '';
+  writeFile(core, 'config.yaml', `vault: ${vault}\ndream_timeout_minutes: ${opts.timeoutMinutes ?? 5}\n${budgetLine}`);
 
   if (opts.withTranscript !== false) {
     const projDir = path.join(claude, 'projects', 'proj');
     fs.mkdirSync(projDir, { recursive: true });
     fs.copyFileSync(INJ_FIXTURE, path.join(projDir, 'inj.jsonl'));
   }
+
+  if (opts.oversized) plantOversized(claude, opts.oversized);
 
   return { root, home, core, vault, claude, codex };
 }
@@ -292,4 +315,52 @@ test('dream-integration: a stale lock past its deadline is stolen with a warning
   assert.equal(thrown, null, thrown && thrown.message);
   assert.match(output, /stole a stale dream lock/);
   assert.equal(commitCount(ctx.vault), before + 1);
+});
+
+test('dream-integration: a capacity-wedged dream (budget below the floor) throws loud, never "nothing new"', async () => {
+  // Only an oversized session, and a budget below MIN_TRUNCATE_BYTES → nothing
+  // can be fed even after truncation. This must FAIL LOUD (exit 1 → run-job alert),
+  // not report success.
+  const ctx = setup({ withTranscript: false, oversized: 'big', maxInputBytes: 1000 });
+  const before = commitCount(ctx.vault);
+
+  const { output, thrown } = await runDream(ctx, ['--yes']);
+
+  assert.ok(thrown, 'expected a WienerdogError throw');
+  assert.match(thrown.message, /^dream capacity exhausted:/);
+  // It must NOT masquerade as the genuinely-empty case.
+  assert.ok(!/nothing new to dream/.test(output));
+  // Its capacity drop was surfaced plainly.
+  assert.match(output, /capacity: dropped 1 session/);
+  // No commit, watermarks not advanced.
+  assert.equal(commitCount(ctx.vault), before);
+  assert.equal(fs.existsSync(path.join(ctx.core, 'state', 'watermarks.json')), false);
+});
+
+test('dream-integration: capacity truncation logs plainly and the dream still proceeds to a commit', async () => {
+  // An oversized session plus the normal injection fixture, with a budget above
+  // the floor but below the oversized extract → it is truncated to fit and the
+  // dream proceeds (forward progress restored).
+  const ctx = setup({ oversized: 'big', maxInputBytes: 100_000 });
+  const before = commitCount(ctx.vault);
+
+  const { output, thrown } = await runDream(ctx, ['--yes']);
+  assert.equal(thrown, null, thrown && thrown.message);
+
+  // The truncation was surfaced plainly on stdout.
+  assert.match(output, /truncated claude\/big to fit the input budget/);
+  // And the run actually committed (no wedge, no silent stall).
+  assert.match(output, /dream committed/);
+  assert.equal(commitCount(ctx.vault), before + 1);
+});
+
+test('dream-integration: a capacity dry-run diagnoses exhaustion without throwing', async () => {
+  const ctx = setup({ withTranscript: false, oversized: 'big', maxInputBytes: 1000 });
+  const before = commitCount(ctx.vault);
+
+  const { output, thrown } = await runDream(ctx, ['--dry-run']);
+  assert.equal(thrown, null, thrown && thrown.message);
+  assert.match(output, /capacity exhausted: no fresh session fits/);
+  assert.ok(!/nothing new to dream/.test(output));
+  assert.equal(commitCount(ctx.vault), before);
 });

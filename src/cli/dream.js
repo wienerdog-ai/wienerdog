@@ -9,7 +9,7 @@ const { WienerdogError } = require('../core/errors');
 const { readDreamConfig } = require('../core/dream/config');
 const { acquireLock, releaseLock } = require('../core/dream/lock');
 const { readWatermarks, writeWatermarks } = require('../core/dream/watermarks');
-const { collectExtracts, cleanScratch } = require('../core/dream/scratch');
+const { collectExtracts, cleanScratch, MIN_TRUNCATE_BYTES } = require('../core/dream/scratch');
 const { spawnBrain, buildClaudeArgs } = require('../core/dream/brain');
 const { readVaultLayout } = require('../core/layout');
 const { renderDigest } = require('../core/digest');
@@ -68,6 +68,7 @@ function printPlan(sel, cfg, vaultDir, date, layout) {
   }
   console.log(`  total input bytes: ${totalBytes}`);
   console.log(`  dropped for size: ${sel.droppedForSize}`);
+  console.log(`  truncated to fit: ${sel.truncated.length}`);
   const argv = buildClaudeArgs({ vaultDir, scratchDir: sel.scratchDir, date, model: cfg.model, layout });
   console.log(`  brain argv: claude ${argv.join(' ')}`);
 }
@@ -135,14 +136,48 @@ async function run(argv) {
   const wm = readWatermarks(paths.state);
   const sel = collectExtracts(paths, wm, cfg.maxInputBytes);
 
-  // 4. Nothing new → no brain, no commit, no watermark change.
+  // 4. Surface capacity events plainly — a size event must NEVER be silent.
+  for (const t of sel.truncated) {
+    console.log(
+      `wienerdog: dream — truncated ${t.harness}/${t.session_id} to fit the input budget ` +
+        `(kept the newest ${t.keptBytes} of ${t.originalBytes} bytes).`
+    );
+  }
+  if (sel.dropped.length > 0) {
+    const names = sel.dropped.map((d) => `${d.harness}/${d.session_id} (${d.bytes}B)`).join(', ');
+    console.log(
+      `wienerdog: dream — capacity: dropped ${sel.dropped.length} session(s) over ` +
+        `dream_max_input_bytes (${cfg.maxInputBytes}): ${names}.`
+    );
+  }
+
+  // 5. Fresh sessions existed but NONE could be fed → the dream is WEDGED. This is
+  //    a capacity FAILURE, never "nothing new": fail loud so run-job records a
+  //    durable alert (state/alerts.jsonl → digest). Dry-run only diagnoses.
+  if (sel.entries.length === 0 && sel.dropped.length > 0) {
+    cleanScratch(paths.state);
+    if (dryRun) {
+      console.log(
+        'wienerdog: dream plan (dry-run) — capacity exhausted: no fresh session fits ' +
+          `dream_max_input_bytes (${cfg.maxInputBytes}); raise it in config.yaml.`
+      );
+      return;
+    }
+    throw new WienerdogError(
+      `dream capacity exhausted: ${sel.dropped.length} fresh session(s) exceed ` +
+        `dream_max_input_bytes (${cfg.maxInputBytes}) and none fit even after truncation ` +
+        `(per-session floor ${MIN_TRUNCATE_BYTES} bytes) — raise dream_max_input_bytes in config.yaml.`
+    );
+  }
+
+  // 6. Genuinely nothing new (no fresh sessions at all) → no brain, no commit.
   if (sel.entries.length === 0) {
     cleanScratch(paths.state);
     console.log('wienerdog: nothing new to dream.');
     return;
   }
 
-  // 5. Dry-run → print the plan and stop.
+  // 7. Dry-run → print the plan and stop.
   if (dryRun) {
     printPlan(sel, cfg, vaultDir, date, layout);
     cleanScratch(paths.state);

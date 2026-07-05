@@ -1,7 +1,7 @@
 ---
 id: WP-048
 title: Fix dream input-capacity starvation (truncate-to-fit + loud capacity alert)
-status: Ready
+status: In-Review
 model: opus
 size: M
 depends_on: [WP-039, WP-041]
