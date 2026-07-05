@@ -19,6 +19,10 @@ jobs:
         run: npm ci || npm i
       - name: Lint
         run: npm run lint
+      - name: Pester (install.ps1 unit tests)
+        shell: pwsh
+        run: |
+          Invoke-Pester -Path tests/ps -CI
       - name: Check AGENTS.md is in sync with CLAUDE.md
         run: node scripts/gen-agents-md.js --check
 

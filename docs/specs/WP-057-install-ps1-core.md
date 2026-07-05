@@ -1,7 +1,7 @@
 ---
 id: WP-057
 title: install.ps1 core — detection, consent, npm-less tarball fallback, CI lint+Pester gate
-status: Ready
+status: In-Review
 model: opus
 size: M
 depends_on: [WP-056]

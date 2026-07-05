@@ -22,13 +22,13 @@ function run(cmd, args) {
   return result.status === 0;
 }
 
-/** @param {string} dir @param {string[]} acc @returns {string[]} */
-function findShellFiles(dir, acc = []) {
+/** @param {string} dir @param {string} ext @param {string[]} acc @returns {string[]} */
+function findFilesByExt(dir, ext, acc = []) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     if (entry.name === 'node_modules' || entry.name === '.git') continue;
     const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) findShellFiles(full, acc);
-    else if (entry.name.endsWith('.sh')) acc.push(full);
+    if (entry.isDirectory()) findFilesByExt(full, ext, acc);
+    else if (entry.name.endsWith(ext)) acc.push(full);
   }
   return acc;
 }
@@ -63,7 +63,7 @@ function main() {
   }
 
   console.log('--- shellcheck ---');
-  const shellFiles = findShellFiles(root);
+  const shellFiles = findFilesByExt(root, '.sh');
   if (shellFiles.length === 0) {
     console.log('no .sh files found, skipping');
   } else if (!hasBinary('shellcheck')) {
@@ -71,6 +71,23 @@ function main() {
   } else if (!run('shellcheck', shellFiles.map((f) => path.relative(root, f)))) {
     console.error('shellcheck failed');
     failed = true;
+  }
+
+  console.log('--- PSScriptAnalyzer ---');
+  const psFiles = findFilesByExt(root, '.ps1');
+  if (psFiles.length === 0) {
+    console.log('no .ps1 files found, skipping');
+  } else if (!hasBinary('pwsh')) {
+    console.warn('pwsh not found, skipping PSScriptAnalyzer (install PowerShell to run it locally; CI has it)');
+  } else {
+    const script =
+      "$r = Invoke-ScriptAnalyzer -Path . -Recurse -Settings ./PSScriptAnalyzerSettings.psd1 " +
+      "-Severity Warning,Error; $r | Format-Table -AutoSize; " +
+      "if (@($r).Count -gt 0) { exit 1 }";
+    if (!run('pwsh', ['-NoProfile', '-Command', script])) {
+      console.error('PSScriptAnalyzer failed');
+      failed = true;
+    }
   }
 
   console.log('--- frontmatter check ---');
