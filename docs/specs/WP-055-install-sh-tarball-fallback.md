@@ -1,7 +1,7 @@
 ---
 id: WP-055
 title: install.sh npm-less tarball fallback (consented curl+verify+tar → node init)
-status: Draft
+status: Ready
 model: opus
 size: M
 depends_on: [WP-054]

@@ -1,7 +1,7 @@
 ---
 id: WP-053
 title: Registry-tarball fetch, sha512 verify, and unpack into the vendored layout
-status: Draft
+status: Ready
 model: opus
 size: M
 depends_on: []
