@@ -74,6 +74,7 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 | [WP-053](done/WP-053-tarball-fetch-verify-unpack.md) | Registry-tarball fetch, sha512 verify, unpack into vendored layout | M7 | opus | Done | — |
 | [WP-054](done/WP-054-update-verb-and-notice-switch.md) | `wienerdog update` verb + npx-aware update-notice command switch | M7 | opus | Done | WP-053 |
 | [WP-055](done/WP-055-install-sh-tarball-fallback.md) | install.sh npm-less tarball fallback (consented curl+verify+tar → node init) | M1/M7 | opus | Done | WP-054 |
+| [WP-059](WP-059-watchdog-pidfile-race.md) | Close the watchdog-test pidfile race (bounded poll before asserting the kill) | M7 | sonnet | Ready | — |
 
 > **First-production-night incident (2026-07-04).** WP-038, WP-039 and WP-041 form
 > a serial chain (they edit the shared `run-job.js` / `dream.js` / `validate.js`
@@ -268,4 +269,5 @@ graph LR
   WP042 --> WP053[WP-053 tarball fetch/verify/unpack]
   WP053 --> WP054[WP-054 update verb + notice switch]
   WP054 --> WP055[WP-055 install.sh tarball fallback]
+  WP059[WP-059 watchdog pidfile race test-hermeticity]
 ```
