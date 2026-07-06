@@ -119,6 +119,10 @@ test('init --fresh-vault schedules the nightly dream and surfaces it (ADR-0014)'
   // The summary surfaces dreaming — scheduled, or degraded on an unschedulable
   // platform; either way the user is told.
   assert.match(r.stdout, /dreaming/i);
+  // The catch-up reassurance is surfaced alongside the schedule (WP-066): users
+  // must never think they have to leave the machine on overnight. Both CI OSes
+  // (macOS, ubuntu) support scheduling, so d.scheduled is true and this prints.
+  assert.match(r.stdout, /catches up automatically/i);
   // The dream job definition landed in config regardless of platform support:
   // ensureDreamSchedule persists the job before registering the OS entry.
   const cfg = fs.readFileSync(path.join(core, 'config.yaml'), 'utf8');

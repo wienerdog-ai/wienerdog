@@ -1,7 +1,7 @@
 ---
 id: WP-066
 title: Dream catch-up reassurance across CLI summaries + README
-status: Ready
+status: In-Review
 model: sonnet
 size: S
 depends_on: []

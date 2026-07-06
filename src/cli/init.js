@@ -166,6 +166,7 @@ async function run(argv) {
     console.log('\nwienerdog: installed with a fresh vault.');
     if (d.scheduled) {
       console.log(`Nightly memory (dreaming) is scheduled for ${d.at} to consolidate each day into your vault.`);
+      console.log('If your computer is off or asleep at that time, don\'t worry — Wienerdog catches up automatically the next time you\'re back.');
       console.log('Change or turn it off anytime: `wienerdog schedule remove dream`, or the routine menu (/wienerdog-routines).');
     } else if (d.reason === 'unsupported') {
       console.log('Nightly dreaming could not be auto-scheduled on this system yet; run `wienerdog dream` manually, or schedule it once supported.');

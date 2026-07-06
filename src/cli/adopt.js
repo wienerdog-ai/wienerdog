@@ -298,6 +298,7 @@ async function run(argv) {
   console.log(`  Folders made: ${createdDirs.length}, starter notes seeded: ${seededFiles.length}`);
   if (dream.scheduled) {
     console.log(`  Nightly dreaming: scheduled for ${dream.at} (change/disable: \`wienerdog schedule remove dream\` or /wienerdog-routines).`);
+    console.log('  If your computer is off or asleep at that time, don\'t worry — Wienerdog catches up automatically the next time you\'re back.');
   } else if (dream.reason === 'unsupported') {
     console.log('  Nightly dreaming: could not be auto-scheduled on this system yet — run `wienerdog dream` manually.');
   }

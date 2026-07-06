@@ -51,7 +51,7 @@ That's it. Your AI interviews you, builds your memory vault, and starts remember
 
 - **A proper CLAUDE.md / AGENTS.md** — generated from an interview, not a blank page. Your AI knows who you are, how you work, and what you care about, in every session.
 - **A markdown memory vault** — Obsidian-convention PARA structure (works *with* Obsidian if you use it, doesn't require it). Plain files you own, readable by you, versioned in git.
-- **Dreaming** — a nightly job reviews the day's conversations, promotes what matters into long-term memory through quality gates, and turns your repeated workflows into reusable skills. Every night is one git commit; anything can be reverted.
+- **Dreaming** — a nightly job reviews the day's conversations, promotes what matters into long-term memory through quality gates, and turns your repeated workflows into reusable skills. Every night is one git commit; anything can be reverted. If your computer is off or asleep at that time, don't worry — Wienerdog catches up automatically the next time you're back.
 - **Google Workspace senses** *(optional)* — Gmail, Calendar, and Drive access that is read-first and draft-first by design. Your AI can only *send* what you explicitly granted, to recipients you explicitly approved — grants are created by you at the keyboard, never by the AI.
 - **Laptop-friendly routines** *(optional, pick from a catalog)* — after setup, choose from a menu of ready-made scheduled routines (morning digest, inbox triage, weekly review, …) run by your OS's native scheduler (launchd / systemd / Task Scheduler). Laptop was closed at run time? It catches up. No daemon.
 
