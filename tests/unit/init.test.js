@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { execFileSync } = require('node:child_process');
+const { execFileSync, spawnSync } = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -179,6 +179,35 @@ test('init reflects a detected Claude harness in config', () => {
   const cfg = fs.readFileSync(path.join(core, 'config.yaml'), 'utf8');
   assert.match(cfg, /claude: true/);
   assert.match(cfg, /codex: false/);
+});
+
+test('init without --yes proceeds on bare Enter (defaultYes wired)', () => {
+  const { root, core, env } = tempEnv();
+  const tty = path.join(root, 'answer');
+  fs.writeFileSync(tty, '\n'); // empty answered line
+  const r = spawnSync('node', [bin, 'init'], {
+    env: { ...env, WIENERDOG_PROMPT_TTY: tty },
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  assert.equal(r.status, 0);
+  assert.match(r.stderr, /Proceed\? \[Y\/n\]/); // label shown, on stderr in mode 2
+  assert.doesNotMatch(r.stdout, /Aborted\./);
+  assert.match(r.stdout, /core installed/); // it actually installed
+  assert.ok(fs.existsSync(path.join(core, 'config.yaml')));
+});
+
+test('init without --yes aborts on explicit n', () => {
+  const { root, core, env } = tempEnv();
+  const tty = path.join(root, 'answer');
+  fs.writeFileSync(tty, 'n\n');
+  const r = spawnSync('node', [bin, 'init'], {
+    env: { ...env, WIENERDOG_PROMPT_TTY: tty },
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  assert.match(r.stdout, /Aborted\./);
+  assert.ok(!fs.existsSync(path.join(core, 'config.yaml')));
 });
 
 test('an unknown command prints usage and exits 2', () => {

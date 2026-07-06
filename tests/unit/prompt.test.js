@@ -143,3 +143,79 @@ test('mode 3: not a TTY, no tty reachable -> abort loudly, false', async () => {
     });
   });
 });
+
+test('defaultYes mode 1: bare Enter -> true', async () => {
+  await withFakeTTYStdin(async (fake) => {
+    const p = confirm('Proceed? ', { defaultYes: true });
+    fake.write('\n');
+    assert.equal(await p, true);
+  });
+});
+
+test('defaultYes mode 1: explicit n overrides -> false', async () => {
+  await withFakeTTYStdin(async (fake) => {
+    const p = confirm('Proceed? ', { defaultYes: true });
+    fake.write('n\n');
+    assert.equal(await p, false);
+  });
+});
+
+test('defaultYes mode 2: fixture empty line -> true', async () => {
+  await withStdinTTY(false, async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-prompt-'));
+    const tty = path.join(dir, 'tty');
+    fs.writeFileSync(tty, '\n');
+    await withPromptTty(tty, async () => {
+      assert.equal(await confirm('Proceed? ', { defaultYes: true }), true);
+    });
+  });
+});
+
+test('defaultYes mode 2: fixture "n" -> false', async () => {
+  await withStdinTTY(false, async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-prompt-'));
+    const tty = path.join(dir, 'tty');
+    fs.writeFileSync(tty, 'n\n');
+    await withPromptTty(tty, async () => {
+      assert.equal(await confirm('Proceed? ', { defaultYes: true }), false);
+    });
+  });
+});
+
+test('defaultYes does NOT rescue mode 2 EOF (zero bytes) -> false + loud abort', async () => {
+  await withStdinTTY(false, async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-prompt-'));
+    const tty = path.join(dir, 'tty');
+    fs.writeFileSync(tty, ''); // stream ends before any line: EOF, not a bare Enter
+    await withPromptTty(tty, async () => {
+      const stderr = await captureStderr(async () => {
+        assert.equal(await confirm('Proceed? ', { defaultYes: true }), false);
+      });
+      assert.match(stderr, /can't ask for confirmation here/);
+    });
+  });
+});
+
+test('defaultYes does NOT rescue mode 3 (no tty) -> false + loud abort', async () => {
+  await withStdinTTY(false, async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-prompt-'));
+    const missing = path.join(dir, 'does-not-exist');
+    await withPromptTty(missing, async () => {
+      const stderr = await captureStderr(async () => {
+        assert.equal(await confirm('Proceed? ', { defaultYes: true }), false);
+      });
+      assert.match(stderr, /can't ask for confirmation here \(no terminal\)/);
+    });
+  });
+});
+
+test('regression: no opts still defaults to no on an empty line', async () => {
+  await withStdinTTY(false, async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-prompt-'));
+    const tty = path.join(dir, 'tty');
+    fs.writeFileSync(tty, '\n');
+    await withPromptTty(tty, async () => {
+      assert.equal(await confirm('Proceed? '), false);
+    });
+  });
+});

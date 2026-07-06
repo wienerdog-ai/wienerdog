@@ -114,7 +114,7 @@ async function run(argv) {
   }
 
   if (!yes) {
-    const ok = await confirm('\nProceed? [y/N] ');
+    const ok = await confirm('\nProceed? [Y/n] ', { defaultYes: true });
     if (!ok) {
       console.log('Aborted.');
       return;

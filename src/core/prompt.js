@@ -11,6 +11,11 @@ function isYes(answer) {
   return /^y(es)?$/i.test(answer.trim());
 }
 
+/** @param {string} answer @param {boolean} defaultYes @returns {boolean} */
+function interpret(answer, defaultYes) {
+  return answer.trim() === '' ? defaultYes === true : isYes(answer);
+}
+
 /**
  * Ask one yes/no question over a given input/output pair.
  * @param {NodeJS.ReadableStream} input
@@ -18,9 +23,11 @@ function isYes(answer) {
  * @param {string} question
  * @param {() => void} closeInput Releases the input stream once done (fd cleanup).
  * @param {(() => void)|undefined} onEof Called if input closes with no answer given.
+ * @param {boolean} [defaultYes] When true, an *answered* empty line (bare Enter)
+ *   resolves true instead of false. Never affects the onEof path.
  * @returns {Promise<boolean>}
  */
-function ask(input, output, question, closeInput, onEof) {
+function ask(input, output, question, closeInput, onEof, defaultYes) {
   const rl = readline.createInterface({ input, output });
   // readline re-emits input stream errors on the Interface itself; without a
   // listener here that would crash the process. The input's own 'error'
@@ -32,7 +39,7 @@ function ask(input, output, question, closeInput, onEof) {
       answered = true;
       rl.close();
       closeInput();
-      resolve(isYes(answer));
+      resolve(interpret(answer, defaultYes));
     });
     rl.on('close', () => {
       if (!answered) {
@@ -56,13 +63,20 @@ function ask(input, output, question, closeInput, onEof) {
  * WIENERDOG_PROMPT_TTY overrides the '/dev/tty' path for tests (mirrors
  * install.sh's WIENERDOG_TTY test seam).
  * @param {string} question
+ * @param {{defaultYes?: boolean}} [opts] When opts.defaultYes is true, an
+ *   *answered* empty line (bare Enter) resolves true. Default (omitted/false)
+ *   keeps the historical default-no for every existing caller. defaultYes NEVER
+ *   changes an abort path: EOF / stream-close with no answer (mode 1 & 2) and the
+ *   no-terminal case (mode 3) still resolve false regardless of defaultYes.
  * @returns {Promise<boolean>}
  */
-function confirm(question) {
+function confirm(question, opts) {
+  const defaultYes = !!(opts && opts.defaultYes);
+
   if (process.stdin.isTTY) {
     // EOF (Ctrl-D) at an interactive prompt resolves false — never hangs.
     return new Promise((resolve) => {
-      ask(process.stdin, process.stdout, question, () => {}, () => resolve(false)).then(resolve);
+      ask(process.stdin, process.stdout, question, () => {}, () => resolve(false), defaultYes).then(resolve);
     });
   }
 
@@ -81,7 +95,7 @@ function confirm(question) {
 
     input.once('error', abort);
 
-    ask(input, process.stderr, question, () => input.destroy(), abort).then((answer) => {
+    ask(input, process.stderr, question, () => input.destroy(), abort, defaultYes).then((answer) => {
       if (settled) return;
       settled = true;
       resolve(answer);
