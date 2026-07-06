@@ -35,6 +35,34 @@ const ENV_PASSTHROUGH = [
   'ANTHROPIC_API_KEY',
 ];
 
+/** Windows-essential env vars carried through (on win32 only) in addition to
+ *  ENV_PASSTHROUGH. A Task-Scheduler child gets almost nothing; the Claude brain
+ *  needs USERPROFILE/APPDATA for its config+credentials, os.homedir() needs
+ *  USERPROFILE, and PowerShell/Git-Bash tools need SystemRoot/ComSpec/PATHEXT.
+ *  USERPROFILE is deliberately absent — buildCleanEnv sets it explicitly to
+ *  paths.home so the passthrough can never overwrite the deterministic homedir. */
+const WIN_ENV_PASSTHROUGH = [
+  'APPDATA',
+  'LOCALAPPDATA',
+  'SystemRoot',
+  'windir',
+  'TEMP',
+  'TMP',
+  'PATHEXT',
+  'ComSpec',
+  'SystemDrive',
+  'HOMEDRIVE',
+  'HOMEPATH',
+  'ProgramData',
+  'ProgramFiles',
+  'ProgramFiles(x86)',
+  'PUBLIC',
+  'USERNAME',
+  'USERDOMAIN',
+  'PROCESSOR_ARCHITECTURE',
+  'NUMBER_OF_PROCESSORS',
+];
+
 /** @returns {string} ISO timestamp for right now. */
 function nowIso() {
   return new Date().toISOString();
@@ -71,9 +99,37 @@ function resolveUsername() {
  * from scratch and carry through only a small allowlist (claude-os L5/L6 lesson).
  * @param {import('../core/paths').WienerdogPaths} paths
  * @param {string} name
+ * @param {NodeJS.Platform} [platform] the run's platform (never mock process.platform)
  * @returns {NodeJS.ProcessEnv}
  */
-function buildCleanEnv(paths, name) {
+function buildCleanEnv(paths, name, platform = process.platform) {
+  if (platform === 'win32') {
+    /** @type {NodeJS.ProcessEnv} */
+    const env = {
+      HOME: paths.home, // harmless on Windows; Git-Bash respects it
+      USERPROFILE: paths.home, // deterministic homedir for children / os.homedir()
+      PATH: [
+        path.dirname(process.execPath), // node — MUST stay first
+        path.join(paths.home, '.local', 'bin'), // Claude Code native install (Windows)
+        // npm-global claude.cmd lives under %APPDATA%\npm.
+        path.join(process.env.APPDATA || path.join(paths.home, 'AppData', 'Roaming'), 'npm'),
+        path.join(process.env.SystemRoot || 'C:\\Windows', 'System32'),
+        process.env.SystemRoot || 'C:\\Windows',
+        path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0'),
+      ].join(';'),
+      WIENERDOG_JOB: name,
+    };
+    // USERPROFILE is set explicitly above and absent from WIN_ENV_PASSTHROUGH, so
+    // neither passthrough loop overwrites the deterministic homedir. No USER on
+    // win32 (that's a POSIX/Keychain concern); USERNAME/USERDOMAIN pass through.
+    for (const k of WIN_ENV_PASSTHROUGH) {
+      if (process.env[k]) env[k] = process.env[k];
+    }
+    for (const k of ENV_PASSTHROUGH) {
+      if (process.env[k]) env[k] = process.env[k];
+    }
+    return env;
+  }
   /** @type {NodeJS.ProcessEnv} */
   const env = {
     HOME: paths.home,
@@ -100,6 +156,27 @@ function buildCleanEnv(paths, name) {
     if (process.env[k]) env[k] = process.env[k];
   }
   return env;
+}
+
+/** Kill a job's child process tree. POSIX: signal the process GROUP (negative
+ *  pid). Windows: taskkill /PID <pid> /T /F (no POSIX process groups exist, and
+ *  a negative-PID kill throws EINVAL/ESRCH there). Best-effort — never throws
+ *  (the child may already be gone).
+ *  @param {number} pid child.pid
+ *  @param {NodeJS.Platform} platform
+ *  @param {{kill?: typeof process.kill, spawnSync?: typeof spawnSync}} [seams] test injection */
+function killProcessTree(pid, platform, seams = {}) {
+  const kill = seams.kill || process.kill;
+  const sspawn = seams.spawnSync || spawnSync;
+  try {
+    if (platform === 'win32') {
+      sspawn('taskkill', ['/PID', String(pid), '/T', '/F']);
+    } else {
+      kill(-pid, 'SIGKILL'); // kill the process GROUP → whole tree
+    }
+  } catch {
+    // already gone / not killable — best-effort
+  }
 }
 
 /**
@@ -239,6 +316,7 @@ async function failLoud(paths, name, reason, logTail, opts = {}) {
  */
 async function runJob(paths, job, opts = {}) {
   const name = job.name;
+  const platform = opts.platform || process.platform;
   const vaultDir = readDreamConfig(paths.config).vault; // throws if no vault configured
   const cwd = vaultDir;
 
@@ -254,7 +332,7 @@ async function runJob(paths, job, opts = {}) {
   }
 
   // 2. Clean env + command.
-  const env = buildCleanEnv(paths, name);
+  const env = buildCleanEnv(paths, name, platform);
   const { command, args, shell } = resolveCommand(paths, job);
 
   // 3. Per-run log file (mkdir -p the job's log dir).
@@ -272,7 +350,12 @@ async function runJob(paths, job, opts = {}) {
   try {
     const child = spawn(command, args, {
       cwd,
-      detached: true,
+      // POSIX: detach into its own process group so the watchdog can kill the
+      // whole tree via a negative-PID signal. Windows has no process groups —
+      // detached only spawns a visible console window and buys nothing (the
+      // tree-kill uses taskkill's PID table); windowsHide suppresses the flash.
+      detached: platform !== 'win32',
+      windowsHide: true,
       stdio: ['ignore', 'pipe', 'pipe'],
       env,
       shell,
@@ -287,11 +370,7 @@ async function runJob(paths, job, opts = {}) {
     let timer = null;
     const watchdog = new Promise((_resolve, reject) => {
       timer = setTimeout(() => {
-        try {
-          process.kill(-child.pid, 'SIGKILL'); // kill the process GROUP → whole tree
-        } catch {
-          // already gone
-        }
+        killProcessTree(child.pid, platform, opts); // POSIX group-kill / win32 taskkill /T /F
         reject(new WienerdogError(`job "${name}" timed out after ${job.timeoutMinutes} min`));
       }, timeoutMs);
     });
@@ -427,6 +506,7 @@ module.exports = {
   runJob,
   catchUp,
   buildCleanEnv,
+  killProcessTree,
   resolveUsername,
   resolveCommand,
   rotateLogs,

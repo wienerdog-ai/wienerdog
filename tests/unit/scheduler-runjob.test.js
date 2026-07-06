@@ -147,6 +147,128 @@ test('scheduler-runjob: resolveUsername falls back to env when os.userInfo throw
   }
 });
 
+test('scheduler-runjob: buildCleanEnv(win32) builds the ;-PATH Windows shape, USERPROFILE, no USER', () => {
+  const { paths } = setup();
+  // Inject the Windows env vars the win32 branch reads/passes through. Saved and
+  // restored so no other test observes them (we run on a POSIX host).
+  const keys = ['APPDATA', 'SystemRoot', 'LOCALAPPDATA', 'USERNAME', 'PATHEXT', 'WIENERDOG_SECRET_TEST'];
+  const saved = {};
+  for (const k of keys) saved[k] = process.env[k];
+  process.env.APPDATA = 'C:\\Users\\Ada\\AppData\\Roaming';
+  process.env.SystemRoot = 'C:\\Windows';
+  process.env.LOCALAPPDATA = 'C:\\Users\\Ada\\AppData\\Local';
+  process.env.USERNAME = 'Ada';
+  process.env.PATHEXT = '.COM;.EXE;.BAT;.CMD';
+  process.env.WIENERDOG_SECRET_TEST = 'leak-me';
+  try {
+    const clean = runjob.buildCleanEnv(paths, 'dream', 'win32');
+
+    // Homedir is deterministic and explicit; HOME kept too (Git-Bash respects it).
+    assert.equal(clean.USERPROFILE, paths.home);
+    assert.equal(clean.HOME, paths.home);
+    assert.equal(clean.WIENERDOG_JOB, 'dream');
+    assert.ok(!('USER' in clean), 'no USER on win32 (Keychain is a POSIX concern)');
+
+    // PATH is ;-separated, node dir first, then ~/.local/bin, then %APPDATA%\npm.
+    const pathDirs = clean.PATH.split(';');
+    assert.equal(pathDirs[0], path.dirname(process.execPath), 'node dir stays first');
+    assert.equal(pathDirs[1], path.join(paths.home, '.local', 'bin'));
+    assert.equal(pathDirs[2], path.join(process.env.APPDATA, 'npm'));
+    assert.equal(pathDirs[3], path.join(process.env.SystemRoot, 'System32'));
+    assert.equal(pathDirs[4], process.env.SystemRoot);
+    assert.equal(pathDirs[5], path.join(process.env.SystemRoot, 'System32', 'WindowsPowerShell', 'v1.0'));
+    assert.equal(pathDirs.length, 6, 'exactly the six win32 PATH entries — no POSIX dirs appended');
+
+    // Windows-essential passthrough vars carried when present.
+    assert.equal(clean.APPDATA, 'C:\\Users\\Ada\\AppData\\Roaming');
+    assert.equal(clean.LOCALAPPDATA, 'C:\\Users\\Ada\\AppData\\Local');
+    assert.equal(clean.SystemRoot, 'C:\\Windows');
+    assert.equal(clean.USERNAME, 'Ada');
+    assert.equal(clean.PATHEXT, '.COM;.EXE;.BAT;.CMD');
+    // The explicit USERPROFILE is not overwritten (it is not in the passthrough).
+    assert.equal(clean.USERPROFILE, paths.home);
+    // Non-allowlisted vars still do not leak.
+    assert.equal(clean.WIENERDOG_SECRET_TEST, undefined, 'non-allowlisted vars are not carried through');
+  } finally {
+    for (const k of keys) {
+      if (saved[k] === undefined) delete process.env[k];
+      else process.env[k] = saved[k];
+    }
+  }
+});
+
+test('scheduler-runjob: buildCleanEnv(win32) falls back to defaults when APPDATA/SystemRoot are unset', () => {
+  const { paths } = setup();
+  const keys = ['APPDATA', 'SystemRoot'];
+  const saved = {};
+  for (const k of keys) saved[k] = process.env[k];
+  delete process.env.APPDATA;
+  delete process.env.SystemRoot;
+  try {
+    const clean = runjob.buildCleanEnv(paths, 'dream', 'win32');
+    const pathDirs = clean.PATH.split(';');
+    assert.equal(pathDirs[2], path.join(path.join(paths.home, 'AppData', 'Roaming'), 'npm'), 'APPDATA fallback');
+    assert.equal(pathDirs[3], path.join('C:\\Windows', 'System32'), 'SystemRoot fallback');
+    assert.ok(!('APPDATA' in clean), 'unset APPDATA is not carried through');
+    assert.ok(!('SystemRoot' in clean), 'unset SystemRoot is not carried through');
+  } finally {
+    for (const k of keys) {
+      if (saved[k] === undefined) delete process.env[k];
+      else process.env[k] = saved[k];
+    }
+  }
+});
+
+test('scheduler-runjob: buildCleanEnv POSIX shape is byte-identical for the 2-arg call and explicit linux/darwin', () => {
+  const { paths } = setup();
+  const base = runjob.buildCleanEnv(paths, 'dream'); // default platform = process.platform (POSIX on CI)
+  assert.deepEqual(runjob.buildCleanEnv(paths, 'dream', 'linux'), base, 'linux == default POSIX shape');
+  assert.deepEqual(runjob.buildCleanEnv(paths, 'dream', 'darwin'), base, 'darwin == default POSIX shape');
+  assert.ok(base.PATH.includes(':'), 'POSIX PATH is :-separated');
+  assert.ok(base.PATH.includes('/opt/homebrew/bin'), 'POSIX PATH keeps its dirs');
+});
+
+// -------------------------------------------------------------------------
+// killProcessTree — POSIX group-kill vs win32 taskkill (both CI-testable via seams)
+// -------------------------------------------------------------------------
+
+test('scheduler-runjob: killProcessTree(win32) invokes taskkill /PID <pid> /T /F and nothing else', () => {
+  /** @type {any[]} */ const spawnCalls = [];
+  /** @type {any[]} */ const killCalls = [];
+  const seams = {
+    spawnSync: (cmd, args) => (spawnCalls.push([cmd, args]), { status: 0 }),
+    kill: (...a) => (killCalls.push(a), undefined),
+  };
+  runjob.killProcessTree(4242, 'win32', seams);
+  assert.deepEqual(spawnCalls, [['taskkill', ['/PID', '4242', '/T', '/F']]], 'taskkill argv');
+  assert.equal(killCalls.length, 0, 'never signals a POSIX process group on win32');
+});
+
+test('scheduler-runjob: killProcessTree(POSIX) signals the process GROUP and never taskkill', () => {
+  for (const platform of ['linux', 'darwin']) {
+    /** @type {any[]} */ const spawnCalls = [];
+    /** @type {any[]} */ const killCalls = [];
+    const seams = {
+      spawnSync: (cmd, args) => (spawnCalls.push([cmd, args]), { status: 0 }),
+      kill: (...a) => (killCalls.push(a), undefined),
+    };
+    runjob.killProcessTree(4242, platform, seams);
+    assert.deepEqual(killCalls, [[-4242, 'SIGKILL']], `${platform}: negative-PID group SIGKILL`);
+    assert.equal(spawnCalls.length, 0, `${platform}: never shells out to taskkill`);
+  }
+});
+
+test('scheduler-runjob: killProcessTree never throws when its seam throws (child already gone)', () => {
+  const throwingKill = () => {
+    throw Object.assign(new Error('no such process'), { code: 'ESRCH' });
+  };
+  const throwingSpawn = () => {
+    throw new Error('taskkill missing');
+  };
+  assert.doesNotThrow(() => runjob.killProcessTree(1, 'linux', { kill: throwingKill }));
+  assert.doesNotThrow(() => runjob.killProcessTree(1, 'win32', { spawnSync: throwingSpawn }));
+});
+
 // -------------------------------------------------------------------------
 // resolveCommand
 // -------------------------------------------------------------------------
