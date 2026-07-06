@@ -1,7 +1,7 @@
 ---
 id: WP-067
 title: Windows .cmd shim single-parser-block (survive self-deletion on uninstall)
-status: Ready
+status: In-Review
 model: sonnet
 size: S
 depends_on: []

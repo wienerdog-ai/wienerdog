@@ -178,11 +178,22 @@ function writeShim(paths, opts = {}) {
   // Native Windows: the bash shim is not runnable by cmd.exe/PowerShell. Write a
   // .cmd launcher next to it that execs the vendored current bin. CRLF is
   // canonical for .cmd; the embedded absolute path comes from currentBin(paths).
+  // Single-parser-block form (WP-067, supersedes WP-051): cmd.exe re-opens the
+  // batch file after each line executes, so a two-line `@echo off` / `node …`
+  // launcher crashes with "The batch file cannot be found." if the invoked
+  // command (e.g. `wienerdog uninstall`) deletes this .cmd mid-run — cmd tries
+  // to re-open the file for the next line and it's gone. Fix: put the node
+  // invocation and the batch-terminating `exit /b` on ONE line, which cmd reads
+  // into memory before `node` runs, so mid-run self-deletion can't affect what
+  // cmd does next. `&` (never `&&`) runs `exit /b` unconditionally — including
+  // on node's failure path — and `exit /b` with no code ends batch processing
+  // from memory (no re-open) while leaving ERRORLEVEL as node set it, so the
+  // shim's exit code still reflects node's.
   let cmdPath = null;
   let cmdChanged = false;
   if (platform === 'win32') {
     cmdPath = path.join(localBin, 'wienerdog.cmd');
-    const cmdContent = `@echo off\r\nnode "${currentBin(paths)}" %*\r\n`;
+    const cmdContent = `@node "${currentBin(paths)}" %* & exit /b\r\n`;
     let cmdSame = false;
     try { cmdSame = fs.readFileSync(cmdPath, 'utf8') === cmdContent; } catch { cmdSame = false; }
     if (!cmdSame) {

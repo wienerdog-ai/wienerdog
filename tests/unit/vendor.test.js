@@ -260,12 +260,22 @@ test('vendor: writeShim on win32 also writes a .cmd launcher, byte-idempotent', 
   assert.equal(r.cmdPath, expectedCmdPath);
   assert.equal(r.cmdChanged, true);
   const cmdContent = fs.readFileSync(r.cmdPath, 'utf8');
-  assert.equal(cmdContent, `@echo off\r\nnode "${vendor.currentBin(paths)}" %*\r\n`, 'exact CRLF content');
+  assert.equal(cmdContent, `@node "${vendor.currentBin(paths)}" %* & exit /b\r\n`, 'exact CRLF content');
   // Manifest tracks the .cmd as a plain file.
   const cmdEntries = manifest.entries.filter((e) => e.kind === 'file' && e.path === r.cmdPath);
   assert.equal(cmdEntries.length, 1);
   // The bash shim is also written.
   assert.ok(fs.existsSync(r.path), 'bash shim also written on win32');
+
+  // Single-parser-block invariant (WP-067): the node invocation and the
+  // batch-terminating `exit /b` share ONE line that cmd.exe reads into memory
+  // before `node` runs — so the shim survives node deleting the .cmd mid-run
+  // (e.g. during `wienerdog uninstall`), which the prior two-line
+  // `@echo off` / `node …` template did not.
+  const lines = cmdContent.split('\r\n').filter((_, i, arr) => !(i === arr.length - 1 && arr[i] === ''));
+  assert.equal(lines.length, 1, 'single logical line');
+  assert.ok(lines[0].endsWith('& exit /b'), 'ends with unconditional & exit /b (not &&)');
+  assert.ok(lines[0].includes('%*'), 'forwards all args via %*');
 
   // Second call: byte-identical → no write, manifest not grown.
   const r2 = vendor.writeShim(paths, { manifest, platform: 'win32' });
