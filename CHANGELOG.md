@@ -2,6 +2,19 @@
 
 All notable changes to Wienerdog. Format: [Keep a Changelog](https://keepachangelog.com), versioning: SemVer (0.x until the installed file layout stabilizes — ADR-0003).
 
+## [0.5.0] — 2026-07-06
+
+### Added
+- **Windows installer (`install.ps1`).** Windows now has a one-line install to match macOS/Linux: `irm https://…/install.ps1 | iex`. On a bare machine it detects a missing or too-old Node and offers to install the official signed Node LTS — via winget where present, otherwise the official signed `.msi` (SHA256-verified) through a consent-gated Windows elevation (UAC) prompt. git is offered the same way (never required to finish). After Node is in place it installs Wienerdog (npm-less tarball path where npm is absent) and hands off to `wienerdog init`. Node is the only hard requirement; every step shows exactly what it will run and falls back to printing the command if you decline. (ADR-0017)
+
+### Changed
+- **`wienerdog init` now defaults to "yes"** at its final "Proceed?" confirmation — pressing Enter proceeds. (Deletion prompts like `uninstall` still default to "no".)
+- The Windows installer keeps your PowerShell window open and prints a clear "installed" confirmation at the end, instead of the window closing before you can read it.
+
+### Notes
+- Google features still require npm (the `googleapis` library is installed on demand); everything else works npm-free on all three OSes.
+- Windows scheduling (the nightly dream on a timer) is not yet built — the digest, skills, and manual dreaming work; scheduled dreaming remains macOS/Linux-only for now.
+
 ## [0.4.0] — 2026-07-05
 
 ### Added
