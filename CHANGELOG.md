@@ -2,6 +2,13 @@
 
 All notable changes to Wienerdog. Format: [Keep a Changelog](https://keepachangelog.com), versioning: SemVer (0.x until the installed file layout stabilizes — ADR-0003).
 
+## [0.6.2] — 2026-07-06
+
+### Fixed
+- **Uninstall now finishes what it says.** Wienerdog's own working files (`state/`, `logs/`, `schedules/`, `secrets/` — including the Google sign-in token, which you can always re-create later) are fully removed, so `~/.wienerdog` is genuinely gone after uninstall instead of lingering half-empty.
+- **Your vault's preservation is now said properly.** Instead of a confusing "skipping unknown manifest entry" warning for every vault file, uninstall prints one clear line: your memory vault was left untouched — your notes are yours. (And if your vault somehow lives *inside* Wienerdog's own folder, uninstall now detects that, refuses to touch it, and tells you honestly — while `adopt` no longer allows choosing such a location in the first place.)
+- **Windows: uninstall no longer ends with "The batch file cannot be found."** The `wienerdog.cmd` launcher now survives deleting itself mid-run, so a successful uninstall reports success. Existing installs pick up the fixed launcher automatically on their next `sync` or update.
+
 ## [0.6.1] — 2026-07-06
 
 ### Changed
