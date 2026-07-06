@@ -212,3 +212,54 @@ test('applyGitignore: second run is a no-op (idempotent — no duplicate lines)'
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('adopt refuses a vault inside the canonical core (ADR-0019) with zero writes', async () => {
+  const adopt = require('../../src/cli/adopt');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-adopt-incore-'));
+  const core = path.join(root, 'wd');
+  const nested = path.join(core, 'state', 'mynotes');
+  const configPath = path.join(core, 'config.yaml');
+
+  const ENV_KEYS = ['HOME', 'WIENERDOG_HOME', 'WIENERDOG_VAULT', 'CLAUDE_CONFIG_DIR', 'CODEX_HOME'];
+  const saved = {};
+  for (const k of ENV_KEYS) saved[k] = process.env[k];
+
+  try {
+    fs.mkdirSync(nested, { recursive: true });
+    fs.writeFileSync(path.join(nested, 'note.md'), '# note\n');
+    const configBefore = 'version: 1\nvault: null\nmemory_mode: standard\n';
+    fs.writeFileSync(configPath, configBefore);
+    fs.writeFileSync(
+      path.join(core, 'install-manifest.json'),
+      JSON.stringify({ version: 1, createdAt: 'x', entries: [{ kind: 'file', path: configPath, hash: 'x' }] })
+    );
+    Object.assign(process.env, { HOME: root, WIENERDOG_HOME: core });
+    for (const k of ['WIENERDOG_VAULT', 'CLAUDE_CONFIG_DIR', 'CODEX_HOME']) delete process.env[k];
+
+    // Direct nested path: refused in plain language.
+    await assert.rejects(
+      () => adopt.run([nested, '--yes']),
+      (err) => {
+        assert.ok(err instanceof WienerdogError);
+        assert.match(err.message, /can't live inside Wienerdog's own folder/);
+        assert.match(err.message, /pick a location of your own/);
+        return true;
+      }
+    );
+
+    // A symlink that resolves INTO the core is refused too (realpath compare).
+    const link = path.join(root, 'sneaky-link');
+    fs.symlinkSync(nested, link);
+    await assert.rejects(() => adopt.run([link, '--yes']), /can't live inside Wienerdog's own folder/);
+
+    // Zero writes: config untouched, nested dir untouched (no git init, no scaffold).
+    assert.equal(fs.readFileSync(configPath, 'utf8'), configBefore, 'config unchanged');
+    assert.deepEqual(fs.readdirSync(nested).sort(), ['note.md'], 'nested dir unchanged');
+  } finally {
+    for (const k of ENV_KEYS) {
+      if (saved[k] === undefined) delete process.env[k];
+      else process.env[k] = saved[k];
+    }
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});

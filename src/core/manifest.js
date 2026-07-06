@@ -295,11 +295,12 @@ function save(paths, manifest) {
  * @param {import('./paths').WienerdogPaths} paths
  * @param {Manifest} manifest
  * @param {{dryRun?: boolean}} [opts]
- * @returns {{removed: string[], skipped: string[]}}
+ * @returns {{removed: string[], skipped: string[], preserved: string[]}}
  */
 function reverse(paths, manifest, { dryRun = false } = {}) {
   /** @type {string[]} */ const removed = [];
   /** @type {string[]} */ const skipped = [];
+  /** @type {string[]} */ const preserved = [];
   // The manifest file is our own bookkeeping: treat it as (virtually) removed
   // so the core dir counts as empty, and delete it for real on a live run.
   const removedSet = new Set([paths.manifest]);
@@ -357,6 +358,12 @@ function reverse(paths, manifest, { dryRun = false } = {}) {
       reverseVendoredTree(entry, dryRun, removed, skipped, removedSet);
     } else if (entry.kind === 'copied-skill') {
       reverseCopiedSkill(entry, dryRun, removed, skipped, removedSet);
+    } else if (entry.kind === 'vault-file' || entry.kind === 'vault-dir') {
+      // The vault is the user's treasure — always preserved (ADR-0010, ADR-0019).
+      // No filesystem action; NOT added to removedSet (it lives outside the core).
+      // Counted so uninstall can print ONE plain-language reassurance line
+      // instead of the former per-file 'unknown kind' stderr warnings.
+      preserved.push(entry.path);
     } else {
       process.stderr.write(
         `wienerdog: skipping unknown manifest entry kind '${entry.kind}' (${entry.path})\n`
@@ -365,7 +372,91 @@ function reverse(paths, manifest, { dryRun = false } = {}) {
     }
   }
 
-  return { removed, skipped };
+  return { removed, skipped, preserved };
 }
 
-module.exports = { load, record, save, reverse, reverseSchedulerEntry, reverseVendoredTree, reverseCopiedSkill };
+/**
+ * True when `inner` is `outer` or lives inside it. Both sides are
+ * realpath-canonicalized before comparing (a symlinked tmpdir or home would
+ * otherwise false-negative — path.relative needs one symlink domain). An
+ * unresolvable side means containment cannot be established.
+ * @param {string} outer @param {string} inner @returns {boolean}
+ */
+function contains(outer, inner) {
+  let o;
+  let i;
+  try {
+    o = fs.realpathSync(outer);
+    i = fs.realpathSync(inner);
+  } catch {
+    return false;
+  }
+  const rel = path.relative(o, i);
+  return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+}
+
+/**
+ * Dispose the canonical core's machine-generated-mechanics subdirs after a
+ * manifest replay, then remove the now-empty core (ADR-0019). state/, logs/,
+ * schedules/, secrets/ hold only Wienerdog-authored runtime artifacts (digest,
+ * watermarks, alerts, update-check, schedule.json, scratch, run-job logs,
+ * Windows Task Scheduler XML, OAuth tokens) — none manifest-tracked, none
+ * user-authored. Remove each recursively, then remove the now-empty core dir
+ * itself (best-effort; a core that is itself a symlink has its link unlinked,
+ * leaving the emptied target dir in place). A user-modified config.yaml (kept
+ * by reverse) keeps the core alive — the sole exception to "uninstall leaves
+ * only the vault". Idempotent: subdirs already gone are skipped. In dry-run
+ * nothing is removed (the caller lists what it reports).
+ *
+ * Containment guard (defense in depth): `adopt` refuses a vault inside the
+ * core, but this deleter does not trust that invariant — a legacy or
+ * hand-edited install may have nested the vault under a mechanics dir. Any
+ * swept dir that equals or contains the resolved `vaultPath` is skipped and
+ * reported in `skippedForVault` so the caller can tell the truth about it.
+ * @param {import('./paths').WienerdogPaths} paths
+ * @param {{dryRun?: boolean, vaultPath?: string|null}} [opts]
+ * @returns {{removed: string[], skippedForVault: string[]}} dirs recursively
+ *   removed (+ the core if removed), and dirs left alive to protect the vault.
+ */
+function disposeCoreMechanics(paths, { dryRun = false, vaultPath = null } = {}) {
+  /** @type {string[]} */ const removed = [];
+  /** @type {string[]} */ const skippedForVault = [];
+  const mechanics = [
+    paths.state,
+    paths.logs,
+    path.join(paths.core, 'schedules'),
+    paths.secrets,
+  ];
+  for (const dir of mechanics) {
+    if (!isDir(dir)) continue;
+    if (vaultPath && contains(dir, vaultPath)) {
+      skippedForVault.push(dir);
+      continue;
+    }
+    if (!dryRun) fs.rmSync(dir, { recursive: true, force: true });
+    removed.push(dir);
+  }
+  let children = null;
+  try {
+    children = fs.readdirSync(paths.core);
+  } catch {
+    children = null; // core (or its symlink target) is gone / unreadable
+  }
+  if (children !== null && children.length === 0) {
+    // Best-effort: never let this final cosmetic step crash the uninstall.
+    // A core that is itself a symlink would make rmdirSync throw ENOTDIR —
+    // unlink the user's link instead (the emptied target dir remains theirs).
+    try {
+      if (!dryRun) {
+        if (isSymlink(paths.core)) fs.unlinkSync(paths.core);
+        else fs.rmdirSync(paths.core);
+      }
+      removed.push(paths.core);
+    } catch {
+      /* ignore — leaving an empty core behind beats a nonzero uninstall */
+    }
+  }
+  return { removed, skippedForVault };
+}
+
+module.exports = { load, record, save, reverse, disposeCoreMechanics, reverseSchedulerEntry, reverseVendoredTree, reverseCopiedSkill };

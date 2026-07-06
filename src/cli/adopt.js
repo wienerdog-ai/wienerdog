@@ -136,6 +136,25 @@ async function run(argv) {
   }
   const adoptedPath = fs.realpathSync(absPath);
 
+  // 3a. The vault must never live inside the canonical core (ADR-0019):
+  //     uninstall recursively disposes the core's machine-generated subdirs,
+  //     so a vault nested there would be deleted. Realpath-canonicalize BOTH
+  //     sides (adoptedPath already is) so a symlinked core cannot slip past
+  //     the path.relative comparison.
+  let coreReal;
+  try {
+    coreReal = fs.realpathSync(paths.core);
+  } catch {
+    coreReal = path.resolve(paths.core);
+  }
+  const relToCore = path.relative(coreReal, adoptedPath);
+  if (relToCore === '' || (!relToCore.startsWith('..') && !path.isAbsolute(relToCore))) {
+    throw new WienerdogError(
+      "Your vault can't live inside Wienerdog's own folder (~/.wienerdog) — " +
+        'pick a location of your own, like ~/wienerdog or your Documents.'
+    );
+  }
+
   // 4. Refuse re-adoption (raw-text check keeps the config rewrite atomic).
   const configText = fs.readFileSync(paths.config, 'utf8');
   if (/^vault_layout:/m.test(configText)) {

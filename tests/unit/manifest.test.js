@@ -186,3 +186,178 @@ test('reverse skips unknown entry kinds (forward compat)', () => {
   assert.deepEqual(removed, []);
   assert.ok(skipped.includes('some/config/key'));
 });
+
+test('reverse preserves vault-file/vault-dir entries (never removed, never skipped, no warning)', () => {
+  const paths = tempPaths();
+  const manifest = makeInstall(paths);
+  // A vault living OUTSIDE the core, with seeded notes + an ensured dir.
+  const vaultDir = path.join(path.dirname(paths.core), 'vault');
+  const daily = path.join(vaultDir, '05-Daily');
+  const note = path.join(daily, 'note.md');
+  fs.mkdirSync(daily, { recursive: true });
+  fs.writeFileSync(note, '# my note\n');
+  manifestLib.record(manifest, { kind: 'vault-dir', path: daily });
+  manifestLib.record(manifest, { kind: 'vault-file', path: note });
+  manifestLib.save(paths, manifest);
+
+  // Capture stderr to prove no unknown-kind warning for a known kind.
+  const origWrite = process.stderr.write.bind(process.stderr);
+  let err = '';
+  process.stderr.write = (chunk) => { err += chunk; return true; };
+  let result;
+  try {
+    result = manifestLib.reverse(paths, manifest, {});
+  } finally {
+    process.stderr.write = origWrite;
+  }
+
+  assert.deepEqual(result.preserved.sort(), [daily, note].sort());
+  assert.ok(!result.removed.includes(note) && !result.removed.includes(daily));
+  assert.ok(!result.skipped.includes(note) && !result.skipped.includes(daily));
+  assert.doesNotMatch(err, /unknown manifest entry kind 'vault-file'/);
+  assert.doesNotMatch(err, /unknown manifest entry kind 'vault-dir'/);
+  // The vault files are left untouched on disk.
+  assert.equal(fs.readFileSync(note, 'utf8'), '# my note\n');
+  assert.equal(fs.existsSync(daily), true);
+});
+
+test('disposeCoreMechanics recursively removes the four subdirs then rmdirs the empty core', () => {
+  const paths = tempPaths();
+  fs.mkdirSync(paths.core, { recursive: true });
+  // Non-empty machine-generated subdirs (untracked runtime artifacts).
+  fs.mkdirSync(path.join(paths.state, 'scratch'), { recursive: true });
+  fs.writeFileSync(path.join(paths.state, 'digest.md'), '# digest\n');
+  fs.mkdirSync(paths.logs, { recursive: true });
+  fs.writeFileSync(path.join(paths.logs, 'dream.log'), 'run\n');
+  const schedules = path.join(paths.core, 'schedules');
+  fs.mkdirSync(schedules, { recursive: true });
+  fs.writeFileSync(path.join(schedules, 'wienerdog-dream.xml'), '<Task/>\n');
+  fs.mkdirSync(paths.secrets, { recursive: true, mode: 0o700 });
+  fs.writeFileSync(path.join(paths.secrets, 'google-token.json'), '{}\n');
+
+  const { removed } = manifestLib.disposeCoreMechanics(paths, {});
+  assert.ok(removed.includes(paths.state));
+  assert.ok(removed.includes(paths.logs));
+  assert.ok(removed.includes(schedules));
+  assert.ok(removed.includes(paths.secrets));
+  assert.ok(removed.includes(paths.core));
+  assert.equal(fs.existsSync(paths.core), false);
+});
+
+test('disposeCoreMechanics is idempotent — a second run is a no-op', () => {
+  const paths = tempPaths();
+  fs.mkdirSync(paths.core, { recursive: true });
+  fs.mkdirSync(paths.state, { recursive: true });
+  fs.writeFileSync(path.join(paths.state, 'digest.md'), '# d\n');
+  const first = manifestLib.disposeCoreMechanics(paths, {});
+  assert.ok(first.removed.includes(paths.state));
+  assert.equal(fs.existsSync(paths.core), false);
+  const second = manifestLib.disposeCoreMechanics(paths, {});
+  assert.deepEqual(second.removed, []);
+});
+
+test('disposeCoreMechanics keeps the core alive when config.yaml remains', () => {
+  const paths = tempPaths();
+  fs.mkdirSync(paths.core, { recursive: true });
+  fs.mkdirSync(paths.state, { recursive: true });
+  fs.writeFileSync(path.join(paths.state, 'digest.md'), '# d\n');
+  // A kept (user-modified) config.yaml sits in the core root, not a swept subdir.
+  fs.writeFileSync(paths.config, 'user edited this\n');
+  const { removed } = manifestLib.disposeCoreMechanics(paths, {});
+  assert.ok(removed.includes(paths.state));
+  assert.ok(!removed.includes(paths.core), 'core kept while config.yaml remains');
+  assert.equal(fs.existsSync(paths.core), true);
+  assert.equal(fs.existsSync(paths.config), true);
+});
+
+test('disposeCoreMechanics skips a mechanics dir that contains the vault (containment guard)', () => {
+  const paths = tempPaths();
+  fs.mkdirSync(paths.core, { recursive: true });
+  // Legacy/hand-edited install: the vault was nested INSIDE state/.
+  const nestedVault = path.join(paths.state, 'mynotes');
+  fs.mkdirSync(nestedVault, { recursive: true });
+  fs.writeFileSync(path.join(nestedVault, 'precious-note.md'), '# precious\n');
+  fs.mkdirSync(paths.logs, { recursive: true });
+  fs.writeFileSync(path.join(paths.logs, 'run.log'), 'x\n');
+
+  const { removed, skippedForVault } = manifestLib.disposeCoreMechanics(paths, {
+    vaultPath: nestedVault,
+  });
+  // state/ (the dir containing the vault) is skipped; logs/ is still swept.
+  assert.deepEqual(skippedForVault, [paths.state]);
+  assert.ok(!removed.includes(paths.state));
+  assert.ok(removed.includes(paths.logs));
+  assert.ok(!removed.includes(paths.core), 'core kept alive — it still holds the vault');
+  assert.equal(
+    fs.readFileSync(path.join(nestedVault, 'precious-note.md'), 'utf8'),
+    '# precious\n',
+    'the nested vault survives byte-identical'
+  );
+});
+
+test('disposeCoreMechanics containment guard is realpath-based (symlinked vault path)', () => {
+  const paths = tempPaths();
+  fs.mkdirSync(paths.core, { recursive: true });
+  const nestedVault = path.join(paths.state, 'mynotes');
+  fs.mkdirSync(nestedVault, { recursive: true });
+  fs.writeFileSync(path.join(nestedVault, 'note.md'), 'n\n');
+  // The configured vault path reaches the nested dir through a symlink.
+  const link = path.join(path.dirname(paths.core), 'vault-link');
+  fs.symlinkSync(nestedVault, link);
+
+  const { skippedForVault } = manifestLib.disposeCoreMechanics(paths, { vaultPath: link });
+  assert.deepEqual(skippedForVault, [paths.state], 'symlinked vault path still detected inside state/');
+  assert.equal(fs.existsSync(path.join(nestedVault, 'note.md')), true);
+});
+
+test('disposeCoreMechanics with a vault safely outside the core sweeps everything (guard inert)', () => {
+  const paths = tempPaths();
+  fs.mkdirSync(paths.core, { recursive: true });
+  fs.mkdirSync(paths.state, { recursive: true });
+  fs.writeFileSync(path.join(paths.state, 'digest.md'), '# d\n');
+  const outsideVault = path.join(path.dirname(paths.core), 'vault');
+  fs.mkdirSync(outsideVault, { recursive: true });
+
+  const { removed, skippedForVault } = manifestLib.disposeCoreMechanics(paths, {
+    vaultPath: outsideVault,
+  });
+  assert.deepEqual(skippedForVault, []);
+  assert.ok(removed.includes(paths.state));
+  assert.ok(removed.includes(paths.core));
+  assert.equal(fs.existsSync(paths.core), false);
+  assert.equal(fs.existsSync(outsideVault), true);
+});
+
+test('disposeCoreMechanics on a symlinked core unlinks the link, keeps the target, never throws', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-manifest-symcore-'));
+  const realCore = path.join(root, 'real-core');
+  const linkCore = path.join(root, 'wd');
+  fs.mkdirSync(path.join(realCore, 'state'), { recursive: true });
+  fs.writeFileSync(path.join(realCore, 'state', 'digest.md'), '# d\n');
+  fs.symlinkSync(realCore, linkCore);
+  const paths = getPaths({ HOME: root, WIENERDOG_HOME: linkCore });
+
+  const { removed } = manifestLib.disposeCoreMechanics(paths, {});
+  assert.ok(removed.includes(paths.state), 'mechanics swept through the symlink');
+  assert.ok(removed.includes(linkCore), 'the core link itself reported removed');
+  assert.equal(fs.lstatSync(realCore).isDirectory(), true, 'the real target dir remains');
+  assert.deepEqual(fs.readdirSync(realCore), [], 'target dir was emptied of mechanics');
+  assert.equal(fs.existsSync(linkCore), false, 'the symlink was unlinked, not rmdir-crashed');
+});
+
+test('disposeCoreMechanics dry-run changes nothing on disk', () => {
+  const paths = tempPaths();
+  fs.mkdirSync(paths.core, { recursive: true });
+  fs.mkdirSync(paths.state, { recursive: true });
+  fs.writeFileSync(path.join(paths.state, 'digest.md'), '# d\n');
+  fs.mkdirSync(paths.secrets, { recursive: true });
+  fs.writeFileSync(path.join(paths.secrets, 'google-token.json'), '{}\n');
+  const { removed } = manifestLib.disposeCoreMechanics(paths, { dryRun: true });
+  assert.ok(removed.includes(paths.state));
+  assert.ok(removed.includes(paths.secrets));
+  // Nothing actually deleted; core is non-empty so it is NOT reported removed.
+  assert.ok(!removed.includes(paths.core));
+  assert.equal(fs.existsSync(paths.state), true);
+  assert.equal(fs.existsSync(paths.secrets), true);
+  assert.equal(fs.existsSync(paths.core), true);
+});

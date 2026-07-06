@@ -1,7 +1,7 @@
 ---
 id: WP-068
 title: Uninstall vault-preserve handler + machine-generated core disposal
-status: Ready
+status: In-Review
 model: opus
 size: M
 depends_on: []
@@ -20,10 +20,13 @@ removing exactly what the installer wrote. The **canonical core** is
 **logs**, **schedules**, manifest) — vendor-neutral mechanics. The **vault** is
 the user's markdown memory at `~/wienerdog/` (or an adopted vault at a path the
 user chose) — the sole long-term store and the one thing uninstall must **never**
-touch. The vault is **always outside the core** by construction (default core
-`~/.wienerdog` vs default vault `~/wienerdog`; `adopt` refuses a vault inside the
-core). This preservation is by design and is **never** to be weakened — the M7
-release criterion is *"install → use → uninstall leaves only the vault."*
+touch. The vault is kept outside the core (default core `~/.wienerdog` vs default
+vault `~/wienerdog`); **as of this WP** `adopt` refuses a vault inside the core
+(realpath-canonicalized check), and the core-disposal sweep independently guards
+against a nested vault (defense in depth — see the Review amendment below; the
+original claim that adopt already refused this was false). This preservation is
+by design and is **never** to be weakened — the M7 release criterion is
+*"install → use → uninstall leaves only the vault."*
 
 A real Windows uninstall (v0.6.0) surfaced **two broken mechanics around** that
 correct preservation:
@@ -65,10 +68,12 @@ orphaned — the M7 criterion fails.
 The fix (ADR-0019, this WP): after replaying the manifest, `uninstall`
 **recursively removes the core's machine-generated-mechanics subdirs** —
 `state/`, `logs/`, `schedules/`, `secrets/` — and then removes the now-empty
-core. This is provably safe because **nothing user-authored is ever written
-under the core** (the vault is always outside it — ADR-0019); these four subdirs
-hold only Wienerdog-authored disposable mechanics (GLOSSARY: the core is the
-"source of truth for *mechanics* (not user knowledge)"). Removing `secrets/`
+core. This is safe because these four subdirs hold only Wienerdog-authored
+disposable mechanics (GLOSSARY: the core is the "source of truth for
+*mechanics* (not user knowledge)") **and** the sweep is doubly guarded: `adopt`
+now refuses a vault inside the core, and `disposeCoreMechanics` itself skips
+any swept dir that equals or contains the resolved vault path (see the Review
+amendment) — the deleter never trusts the outside-the-core invariant alone. Removing `secrets/`
 deletes the Google OAuth token on uninstall — intended: it is a Wienerdog-created
 disposable credential re-obtainable via `/wienerdog-google-setup`, and leaving it
 orphaned would both violate leave-only-the-vault and strand a live credential.
@@ -171,10 +176,44 @@ kept, already-gone exit 0, no-install exit 1), with a `tempEnv()` helper isolati
 | modify | tests/unit/uninstall.test.js | seeded-vault uninstall prints the one vault line + does NOT list each vault file + core gone + vault dir present; planted untracked `state`/`logs`/`secrets`/`schedules` files are all swept; dry-run lists the recursive cleanup. |
 | create | tests/integration/uninstall-core-e2e.test.js | init `--fresh-vault` → sync → plant secrets/logs/schedules artifacts → sha the vault tree → `uninstall --yes` → assert `~/.wienerdog` GONE and the vault tree byte-identical (the treasure invariant). |
 | create | docs/adr/0019-uninstall-disposes-core-mechanics.md | ALREADY CREATED by the architect in this spec's commit — do not author it; it is listed so the boundary check permits its presence. Do not modify it. |
+| modify | src/cli/adopt.js | *(review amendment)* reject a vault path equal to or inside `paths.core` with a plain-language `WienerdogError`; realpath-canonicalized comparison. |
+| modify | tests/unit/adopt-git.test.js | *(review amendment)* adopt vault-inside-core rejection test (direct path + symlink-into-core, zero writes). |
 
 > The ADR row is bookkeeping: `docs/adr/0019-*.md` is committed alongside this
 > spec. It appears here only so CI's touched-files boundary allows it. Do not
 > edit it.
+
+## Review amendment (2026-07-06, owner-authorized)
+
+wd-reviewer reproduced a blocking data-loss regression: the sweep's original
+"provably safe — the vault is always outside the core" premise was **false**
+(`adopt` had no vault-inside-core rejection). Adopting a vault under
+`~/.wienerdog/state/…` then uninstalling recursively deleted the vault while
+printing the reassurance line. Amended contracts (all three, defense in depth):
+
+1. **Containment guard in the deleter.** `disposeCoreMechanics(paths, {dryRun,
+   vaultPath})` takes the vault path the caller captured before `reverse()`.
+   Before sweeping each mechanics dir it skips any dir that equals or contains
+   the resolved vault (`path.relative` on **realpaths of both sides** —
+   symlinked tmpdirs/homes false-negative otherwise; an unresolvable vault path
+   means no guard needed). Returns `{removed, skippedForVault}`.
+2. **Honest summary in the guarded case.** When a mechanics dir was skipped for
+   the vault, uninstall prints the truthful variant (frozen), never the plain
+   reassurance alone: `Your memory vault at <path> was left untouched (N files)
+   — your notes are yours. Note: it sits inside Wienerdog's own folder (<dir>),
+   which was therefore left in place — consider moving it somewhere of your
+   own.` The final line becomes `Kept <core> (your memory vault still lives
+   inside it).`
+3. **Front door closed.** `adopt` rejects a vault path equal to or inside
+   `paths.core` (realpath-canonicalized): *"Your vault can't live inside
+   Wienerdog's own folder (~/.wienerdog) — pick a location of your own, like
+   ~/wienerdog or your Documents."*
+
+Also (reviewer non-blocking): the final core removal is best-effort and
+symlink-aware — a core that is itself a symlink is `unlinkSync`'d (the emptied
+target dir remains the user's), and the step never makes uninstall exit
+nonzero. Tests: nested-vault-under-state regression (survives + honest note +
+no false plain reassurance), adopt rejection, symlinked-core uninstall exit 0.
 
 ### Exact contract — `src/core/manifest.js`
 
