@@ -16,7 +16,7 @@ detect_os() {
   *)
     echo "Wienerdog's curl installer supports macOS and Linux only." >&2
     echo "Prefer npm? \`npx wienerdog@latest init\` does the same thing." >&2
-    echo "Windows: use the npx command above (PowerShell installer coming)." >&2
+    echo "Windows: run 'irm https://raw.githubusercontent.com/wienerdog-ai/wienerdog/main/install.ps1 | iex' in PowerShell, or use the npx command above." >&2
     exit 1
     ;;
   esac

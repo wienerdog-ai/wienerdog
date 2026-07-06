@@ -8,7 +8,15 @@ You already pay for a great AI model. Wienerdog makes it *feel* dramatically sma
 curl -fsSL https://raw.githubusercontent.com/wienerdog-ai/wienerdog/main/install.sh | bash
 ```
 
-Prefer npm? `npx wienerdog@latest init` does the same thing. Windows: use the npx command (PowerShell installer coming). The script checks for Node (and git); if either is missing it offers to install it for you — always asking first, showing the exact command it will run, and simply printing that command for you to run yourself if you decline or aren't in an interactive terminal. [Read it first](install.sh) if you like; once Node is ready it hands over to the versioned npm package.
+**On Windows**, open PowerShell and run:
+
+```
+irm https://raw.githubusercontent.com/wienerdog-ai/wienerdog/main/install.ps1 | iex
+```
+
+Prefer npm? `npx wienerdog@latest init` does the same thing on any OS. Either script checks for Node (and git); if either is missing it offers to install it for you — always asking first and showing the exact command it will run, and simply printing that command for you to run yourself if you decline or aren't in an interactive terminal. On Windows, installing Node this way may pop up a one-time admin (UAC) prompt — that's Windows asking permission, not Wienerdog; decline it and you get the same command to run yourself instead. The window stays open and tells you when it's done. [Read install.sh](install.sh) or [install.ps1](install.ps1) first if you like; once Node is ready either one hands over to the versioned npm package.
+
+> **Windows today:** your memory vault, skills, and manual dreaming (`wienerdog run-job dream`) all work. Scheduled nightly dreaming (the kind that runs itself on a timer) isn't built for Windows yet.
 
 Not comfortable with the terminal at all? Paste the prompt below into Claude Code
 or Codex and your AI will install Wienerdog for you. It shows you the plan first,
