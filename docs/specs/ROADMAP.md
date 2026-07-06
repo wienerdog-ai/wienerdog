@@ -84,7 +84,7 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 | [WP-063](done/WP-063-windows-task-scheduler-generators.md) | Windows Task Scheduler XML generators (pure renderers + helpers) | M6 | opus | Done | — |
 | [WP-064](done/WP-064-schedule-win32-dispatch-and-manual-verify.md) | schedule.js win32 dispatch — register dream + catch-up via schtasks; owner VPS verify | M6 | opus | Done | WP-062, WP-063 |
 | [WP-065](WP-065-setup-structured-questions.md) | Structured closed-choice interview questions + dream reassurance in setup skill | M7 | sonnet | Ready | — |
-| [WP-066](WP-066-dream-schedule-catchup-reassurance.md) | Dream catch-up reassurance across CLI summaries + README | M7 | sonnet | Ready | — |
+| [WP-066](done/WP-066-dream-schedule-catchup-reassurance.md) | Dream catch-up reassurance across CLI summaries + README | M7 | sonnet | Ready | — |
 
 > **First-production-night incident (2026-07-04).** WP-038, WP-039 and WP-041 form
 > a serial chain (they edit the shared `run-job.js` / `dream.js` / `validate.js`
