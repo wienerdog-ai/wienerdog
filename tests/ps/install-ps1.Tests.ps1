@@ -310,3 +310,57 @@ Describe 'Dot-source guard' {
             Should -BeNullOrEmpty
     }
 }
+
+Describe 'Write-CompletionBanner' {
+    It 'emits the installed confirmation and next steps' {
+        $out = Write-CompletionBanner 6>&1 | Out-String
+        $out | Should -Match 'Wienerdog is installed'
+        $out | Should -Match 'Restart your AI tool'
+        $out | Should -Match '/wienerdog-setup'
+    }
+    It 'is pure ASCII' {
+        $out = Write-CompletionBanner 6>&1 | Out-String
+        ($out.ToCharArray() | Where-Object { [int]$_ -gt 127 }).Count | Should -Be 0
+    }
+}
+
+Describe 'Main' {
+    BeforeEach {
+        Mock Ensure-Node {}
+        Mock Ensure-Git {}
+        Mock Write-CompletionBanner {}
+        Mock Start-WienerdogNpx {}
+        Mock Install-ViaTarball { 0 }
+    }
+    # Main sets $script:MainRan; clear it so the 'Dot-source guard' Describe still
+    # sees it unset regardless of Describe execution order.
+    AfterEach {
+        Remove-Variable -Name MainRan -Scope Script -ErrorAction SilentlyContinue
+    }
+
+    It 'success via npx: returns 0 and shows the banner (a returning Main proves it did not exit)' {
+        Mock Get-NodeMajor { 20 }
+        Mock Test-NpxAvailable { $true }
+        Mock Start-WienerdogNpx { $global:LASTEXITCODE = 0 }
+        Main -ForwardArgs @() | Should -Be 0
+        Should -Invoke Start-WienerdogNpx -Times 1
+        Should -Invoke Write-CompletionBanner -Times 1
+    }
+
+    It 'success via tarball (no npx): returns 0 and shows the banner' {
+        Mock Get-NodeMajor { 20 }
+        Mock Test-NpxAvailable { $false }
+        Mock Install-ViaTarball { 0 }
+        Main -ForwardArgs @() | Should -Be 0
+        Should -Invoke Install-ViaTarball -Times 1
+        Should -Invoke Write-CompletionBanner -Times 1
+    }
+
+    It 'node hard-gate unmet: returns 1, no banner, no handoff' {
+        Mock Get-NodeMajor { 0 }
+        Mock Test-NpxAvailable { throw 'no handoff expected when Node is missing' }
+        Main -ForwardArgs @() | Should -Be 1
+        Should -Invoke Write-CompletionBanner -Times 0
+        Should -Invoke Start-WienerdogNpx -Times 0
+    }
+}

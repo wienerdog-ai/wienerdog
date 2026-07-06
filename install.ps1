@@ -103,6 +103,22 @@ function Write-Tarball-Fallback {
     Write-Host "npm ships with Node.js - reinstall Node from https://nodejs.org to get it."
 }
 
+# Success banner. Printed by Main only when the install handoff returned 0. A
+# separate function so Pester can assert it fires on success (not on failure) and
+# can check its text. Pure ASCII (WP-057: non-ASCII risks the BOM analyzer + a
+# PS 5.1 mis-decode under irm|iex).
+function Write-CompletionBanner {
+    Write-Host ""
+    Write-Host "==================================================================="
+    Write-Host "  Wienerdog is installed."
+    Write-Host ""
+    Write-Host "  Restart your AI tool (Claude Code or Codex) so the new"
+    Write-Host "  /wienerdog-* commands load, then run  /wienerdog-setup  to begin."
+    Write-Host "==================================================================="
+    Write-Host ""
+    Write-Host "You can close this window whenever you're ready."
+}
+
 # Download the tarball at $Url, verify its sha512 == $Integrity BEFORE unpacking,
 # extract with `tar --strip-components=1` into $Dest. Verify-before-unpack is
 # structural: a mismatch aborts and unpacks nothing. Extract into a staging dir,
@@ -186,6 +202,12 @@ function Get-NodeMajor {
     $v = (& node -v) 2>$null            # e.g. "v20.11.1"
     if ($v -match '^v?([0-9]+)\.') { return [int]$Matches[1] }
     return 0
+}
+
+# Thin seam so Main's npx-vs-tarball branch is Pester-mockable without mocking the
+# built-in Get-Command.
+function Test-NpxAvailable {
+    return [bool](Get-Command npx -ErrorAction SilentlyContinue)
 }
 
 # --- Elevation + session PATH (Windows) -------------------------------------
@@ -369,7 +391,7 @@ function Ensure-Node {
             }
         }
         Write-Host "Or install Node LTS from https://nodejs.org."
-        exit 1
+        return
     }
 
     $arch = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'arm64' } else { 'x64' }
@@ -380,7 +402,7 @@ function Ensure-Node {
     if (-not $msi) {
         Write-Host "Couldn't determine the current Node LTS from nodejs.org."
         Write-Host "Install Node LTS from https://nodejs.org, then re-run this installer."
-        exit 1
+        return
     }
     Write-Host "About to download and install the official signed Node LTS (needs admin):"
     Write-Host "    from: $($msi.MsiUrl)"
@@ -393,7 +415,7 @@ function Ensure-Node {
         }
     }
     Write-Host "Or install Node LTS from https://nodejs.org."
-    exit 1
+    return
 }
 
 # NON-BLOCKING. If git is missing, offer a consented install (winget, else the
@@ -437,21 +459,37 @@ function Ensure-Git {
 function Main {
     param([string[]]$ForwardArgs)
     $script:MainRan = $true
-    Ensure-Node                     # hard gate: returns only if Node >= 18 is (now) present
+    Ensure-Node                     # consented Node install attempt; never exits now
+    if ((Get-NodeMajor) -lt 18) { return 1 }   # hard gate unmet; Ensure-Node already printed guidance
     Ensure-Git                      # soft: prints a note if git is missing, then proceeds
     Write-Host "Found Node $((& node -v)) - handing over to the Wienerdog installer..."
-    if (Get-Command npx -ErrorAction SilentlyContinue) {
+    if (Test-NpxAvailable) {
         Start-WienerdogNpx -ForwardArgs $ForwardArgs
-        exit $LASTEXITCODE
+        $code = $LASTEXITCODE
     }
-    Write-Host "npm/npx isn't available - installing Wienerdog directly from the npm registry..."
-    exit (Install-ViaTarball -ForwardArgs $ForwardArgs)
+    else {
+        Write-Host "npm/npx isn't available - installing Wienerdog directly from the npm registry..."
+        $code = Install-ViaTarball -ForwardArgs $ForwardArgs
+    }
+    if ($code -eq 0) { Write-CompletionBanner }
+    return $code
 }
 
 # Dot-source guard (WP-056): runs Main on direct execution AND under irm|iex
 # (InvocationName is '' there, which is -ne '.'), but NOT when dot-sourced for
-# tests (InvocationName is '.'). The env seam mirrors install.sh's
-# WIENERDOG_INSTALL_LIB for defense-in-depth / forced library mode.
+# tests (InvocationName is '.'). Main returns an exit code; how we dispose of it
+# depends on context (ADR-0017 iex-safe exit discipline / WP-061):
 if ($MyInvocation.InvocationName -ne '.' -and -not $env:WIENERDOG_INSTALL_LIB) {
-    Main -ForwardArgs $args
+    $exitCode = Main -ForwardArgs $args
+    if ($MyInvocation.InvocationName -eq '') {
+        # irm | iex (or any in-memory eval): the script body runs INSIDE the user's
+        # live PowerShell host. `exit` here closes their window - hiding the banner
+        # on success and the error on failure. Set the code and fall through so the
+        # session survives.
+        $global:LASTEXITCODE = $exitCode
+    }
+    else {
+        # Real script file (.\install.ps1 / powershell -File): its own process; exit.
+        exit $exitCode
+    }
 }

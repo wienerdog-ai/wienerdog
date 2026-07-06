@@ -1,7 +1,7 @@
 ---
 id: WP-061
 title: install.ps1 stays open with a completion banner (iex-safe return-not-exit)
-status: Ready
+status: In-Review
 model: opus
 size: S
 depends_on: []
