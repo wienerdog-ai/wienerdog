@@ -1,7 +1,7 @@
 ---
 id: WP-060
 title: init "Proceed?" defaults to yes (per-call defaultYes in shared confirm)
-status: In-Review
+status: Done
 model: sonnet
 size: S
 depends_on: []
