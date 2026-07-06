@@ -2,6 +2,15 @@
 
 All notable changes to Wienerdog. Format: [Keep a Changelog](https://keepachangelog.com), versioning: SemVer (0.x until the installed file layout stabilizes — ADR-0003).
 
+## [0.6.0] — 2026-07-06
+
+### Added
+- **Scheduled nightly dreaming on Windows.** Creating or adopting a vault on Windows now schedules the 03:30 dream in Task Scheduler, just like macOS and Linux — no admin rights needed (tasks are registered for your own user), and a companion catch-up task runs missed dreams shortly after you log back in when the machine was off or asleep at 03:30. Laptop-friendly: the tasks are explicitly configured to run on battery. `wienerdog uninstall` removes both tasks. This completes scheduled dreaming on all three OSes. (ADR-0018)
+- Scheduled jobs on Windows get a properly shaped environment (PATH, HOME/USERPROFILE), and a job that hangs is now killed cleanly with its whole process tree.
+
+### Notes
+- This is the first release carrying Windows scheduling — it is fully covered by automated tests up to the Task Scheduler boundary, and its live behavior (registration, nightly runs, catch-up) is being verified in field testing now. If a scheduled dream misbehaves on your Windows machine, please open an issue: failures are recorded in `state/alerts.jsonl` and shown in your next session's briefing.
+
 ## [0.5.0] — 2026-07-06
 
 ### Added
