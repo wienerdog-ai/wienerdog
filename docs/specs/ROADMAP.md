@@ -83,6 +83,8 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 | [WP-062](done/WP-062-runjob-windows-clean-env-and-watchdog.md) | run-job Windows reliability — win32 clean env + taskkill watchdog kill-tree | M6 | opus | Done | — |
 | [WP-063](done/WP-063-windows-task-scheduler-generators.md) | Windows Task Scheduler XML generators (pure renderers + helpers) | M6 | opus | Done | — |
 | [WP-064](done/WP-064-schedule-win32-dispatch-and-manual-verify.md) | schedule.js win32 dispatch — register dream + catch-up via schtasks; owner VPS verify | M6 | opus | Done | WP-062, WP-063 |
+| [WP-065](WP-065-setup-structured-questions.md) | Structured closed-choice interview questions + dream reassurance in setup skill | M7 | sonnet | Ready | — |
+| [WP-066](WP-066-dream-schedule-catchup-reassurance.md) | Dream catch-up reassurance across CLI summaries + README | M7 | sonnet | Ready | — |
 
 > **First-production-night incident (2026-07-04).** WP-038, WP-039 and WP-041 form
 > a serial chain (they edit the shared `run-job.js` / `dream.js` / `validate.js`
@@ -306,6 +308,30 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 
 <!-- -->
 
+> **Post-setup UX polish (2026-07-06, two parallel S WPs).** A full
+> `/wienerdog-setup` on Windows produced two platform-agnostic UX asks. **WP-065**
+> (setup skill only) makes the interview's closed-choice items — the Step 0
+> adjust-menu, preferred tone, the fresh/import/adopt vault choice, and memory
+> eagerness — ask via a **structured multiple-choice question where the harness
+> provides one** (Claude Code's `AskUserQuestion`) and via a plain **numbered
+> list where it does not** (Codex CLI), with the binding invariant that the user
+> can always type a custom answer (Claude Code's `AskUserQuestion` supplies the
+> free-text "Other" automatically). Genuinely open items (role, projects, tools,
+> goals, standing rules) stay free-text — exactly four `(closed-choice)` markers,
+> no over-structuring. **WP-066** adds a frozen one-sentence **dream catch-up
+> reassurance** to every surface that discloses the 03:30 schedule — `init.js`
+> and `adopt.js` summaries and the README Dreaming bullet — so users never think
+> they must leave the machine on overnight; it *extends* ADR-0014's plain
+> disclosure (the 03:30 time still stated), it does not weaken it. The two WPs
+> share **no files** (WP-065 owns `skills/wienerdog-setup/SKILL.md` outright,
+> including that skill's copy of the reassurance, so the CLI/README changes in
+> WP-066 never collide with it) and carry no dependency — they land in parallel.
+> Neither needs a new ADR: the reassurance surfaces a behavior ADR-0014 already
+> guarantees (WP-020 catch-up), and vendor-neutral graceful degradation is a
+> local skill-authoring choice.
+
+<!-- -->
+
 ## Dependency graph
 
 ```mermaid
@@ -382,4 +408,6 @@ graph LR
   WP063[WP-063 Windows Task Scheduler XML generators]
   WP062 --> WP064[WP-064 schedule win32 dispatch + owner VPS verify]
   WP063 --> WP064
+  WP065[WP-065 setup structured closed-choice questions + dream reassurance]
+  WP066[WP-066 dream catch-up reassurance in CLI summaries + README]
 ```
