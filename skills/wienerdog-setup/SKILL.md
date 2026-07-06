@@ -43,8 +43,8 @@ and go straight to Step 1, then Step 3, where the vault gets created or chosen.
   Update only the section(s) they pick, then jump to Step 5 and Step 6 to save
   and refresh. Leave everything else exactly as it is.
 
-  Ask this as a closed-choice question — see "Asking closed-choice questions"
-  below; offer those five items as the presets.
+  Ask this as a closed-choice question **(closed-choice)** — see "Asking
+  closed-choice questions" below; offer those five items as the presets.
 
 ## Step 1 — Find the vault
 

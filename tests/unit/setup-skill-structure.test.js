@@ -84,8 +84,14 @@ test('setup-skill: closed-choice questions degrade gracefully across harnesses',
 });
 
 test('setup-skill: exactly the four intended questions are marked closed-choice', () => {
+  // 5 literal markers = the instruction block's own mention + the four tagged
+  // questions (Step 0 adjust-menu, Step 2 tone, Step 3 vault, Step 4 memory).
+  // Per-location assertions below pin WHICH sections carry the tag, so a
+  // dropped marker can't hide behind the count.
   const count = (text.match(/\(closed-choice\)/g) || []).length;
-  assert.equal(count, 4, `expected 4 (closed-choice) markers, found ${count}`);
+  assert.equal(count, 5, `expected 5 (closed-choice) markers, found ${count}`);
+  const step0 = text.slice(text.indexOf('adjust'), text.indexOf('## Step 1'));
+  assert.ok(step0.includes('(closed-choice)'), 'Step 0 adjust-menu carries the marker');
 });
 
 test('setup-skill: Step 6 relays the dream catch-up reassurance (ADR-0014)', () => {
