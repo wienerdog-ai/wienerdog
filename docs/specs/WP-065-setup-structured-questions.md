@@ -1,7 +1,7 @@
 ---
 id: WP-065
 title: Structured closed-choice interview questions + dream catch-up reassurance in the setup skill
-status: Ready
+status: In-Review
 model: sonnet
 size: S
 depends_on: []

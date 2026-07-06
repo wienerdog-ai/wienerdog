@@ -43,6 +43,9 @@ and go straight to Step 1, then Step 3, where the vault gets created or chosen.
   Update only the section(s) they pick, then jump to Step 5 and Step 6 to save
   and refresh. Leave everything else exactly as it is.
 
+  Ask this as a closed-choice question — see "Asking closed-choice questions"
+  below; offer those five items as the presets.
+
 ## Step 1 — Find the vault
 
 Read `~/.wienerdog/config.yaml` and look at the `vault:` line — that is the
@@ -59,6 +62,31 @@ folder where their notes live.
 - **If it points at an existing folder with real identity content** → this is
   the settings-panel case; use the Step 0 menu.
 
+## Asking closed-choice questions
+
+A few of the questions below have a small, fixed set of sensible answers (for
+example a tone, or one of three vault choices). Ask those as a **structured
+multiple-choice question** so the person can pick with one tap instead of
+typing:
+
+- **Where your environment provides a structured multiple-choice question tool**
+  — in Claude Code this is the `AskUserQuestion` tool — use it for these items
+  and offer the listed presets as the choices.
+- **Where it does not** — for example Codex CLI — present exactly the same
+  options as a short numbered list in plain text and let them reply with a
+  number.
+
+Never depend on any one tool by name; always degrade gracefully to the numbered
+list. Whichever way you ask, one thing is always true: **the person can always
+type their own answer instead of picking a preset** — a closed-choice question
+is a shortcut, never a cage. (In Claude Code the `AskUserQuestion` tool already
+offers a free-text "Other" choice automatically, so you do not need to add one;
+just make sure that, however you ask, a custom typed answer is always accepted.)
+
+Only the questions marked **(closed-choice)** below are asked this way.
+Everything else in the interview is open — ask it as a normal, free-text
+conversation and let the person answer in their own words.
+
 ## Step 2 — The interview
 
 Talk them through these topics, one at a time. Listen more than you type. It is
@@ -66,8 +94,11 @@ fine to skip a topic if they have nothing to say.
 
 - **Role and background** — what they do, and the experience behind it.
 - **Current projects and responsibilities** — what is on their plate right now.
-- **Communication preferences** — how they like answers: how much detail, what
-  tone, and what format (bullets, prose, tables).
+- **Communication preferences** — how they like answers: how much detail and
+  what format (bullets, prose, tables).
+- **Preferred tone** **(closed-choice)** — ask which tone they want, offering
+  these presets: `Direct and concise`, `Warm and conversational`, `Neutral and
+  professional`.
 - **Tools they live in** — the apps and systems they use every day.
 - **Goals** — what they are working toward now, and over the next year.
 - **Anything their AI should always know or never do** — standing rules,
@@ -78,7 +109,7 @@ fine to skip a topic if they have nothing to say.
 Ask whether they already keep an Obsidian vault or another notes system, and
 where it lives.
 
-If they do, offer them three choices in plain language:
+If they do, offer them three choices **(closed-choice)** in plain language:
 
 1. **Start fresh** — create a brand-new, empty vault and do nothing with the
    old one. This is the default if they are not sure. To create it, run
@@ -142,8 +173,8 @@ rule: that command writes only to the vault and `config.yaml`.
 
 ## Step 4 — How much should the AI remember?
 
-Ask how eagerly they want their AI to remember things, and explain the choices
-in plain terms:
+Ask how eagerly they want their AI to remember things **(closed-choice)**, and
+explain the choices in plain terms:
 
 - **conservative** — the AI suggests what to remember, keeps less, and checks
   with you more often.
@@ -177,3 +208,10 @@ Then tell them, in a sentence or two, what their AI now knows about them, and
 quote a few lines of the fresh digest (`~/.wienerdog/state/digest.md`) so they
 can see it for themselves. Invite them to run this setup again any time they
 want to change something.
+
+Finally, mention the nightly dream so it is never a surprise: tell them
+Wienerdog has scheduled a quiet nightly memory pass ("dreaming") at 03:30 that
+folds each day's work into their vault, and relay this reassurance in plain
+words — "If your computer is off or asleep at that time, don't worry — Wienerdog
+catches up automatically the next time you're back." They never need to leave
+the machine on overnight.

@@ -73,3 +73,25 @@ test('setup-skill: Step 6 still references wienerdog sync', () => {
 test('setup-skill: Step 3 shows the from-repo adopt invocation too', () => {
   assert.ok(text.includes('bin/wienerdog.js adopt'), 'from-repo adopt invocation form missing');
 });
+
+test('setup-skill: closed-choice questions degrade gracefully across harnesses', () => {
+  assert.ok(text.includes('AskUserQuestion'), 'names Claude Code AskUserQuestion tool');
+  assert.ok(lower.includes('numbered list'), 'Codex fallback (numbered list) missing');
+  assert.ok(
+    lower.includes('type their own answer') || lower.includes('a custom typed answer is always accepted'),
+    'type-your-own invariant missing'
+  );
+});
+
+test('setup-skill: exactly the four intended questions are marked closed-choice', () => {
+  const count = (text.match(/\(closed-choice\)/g) || []).length;
+  assert.equal(count, 4, `expected 4 (closed-choice) markers, found ${count}`);
+});
+
+test('setup-skill: Step 6 relays the dream catch-up reassurance (ADR-0014)', () => {
+  assert.ok(text.includes('03:30'), 'schedule still plainly disclosed (03:30)');
+  assert.ok(
+    text.includes("catches up automatically the next time you're back"),
+    'canonical catch-up reassurance sentence missing'
+  );
+});
