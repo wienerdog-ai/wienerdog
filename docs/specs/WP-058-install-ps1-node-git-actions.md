@@ -1,7 +1,7 @@
 ---
 id: WP-058
 title: install.ps1 Node/git auto-install (winget → signed MSI + UAC), PATH refresh, manual Windows verification
-status: Ready
+status: In-Review
 model: opus
 size: M
 depends_on: [WP-057]
@@ -11,15 +11,15 @@ branch: wp/058-install-ps1-node-git-actions
 
 # WP-058: `install.ps1` Node/git auto-install + PATH refresh + manual Windows verification
 
-> **Status = Draft, on purpose.** This WP fires the Windows elevation decision from
-> ADR-0017 (§Decision 2): Node's official MSI is **per-machine-only and
-> hard-requires UAC** — there is no non-elevated official install. ADR-0017 chose
-> "winget-if-present → else signed MSI installed via a consent-gated UAC
-> elevation; no nvm/portable-zip in v1." Because that is an owner-visible
-> architectural fork **and** this WP cannot be verified by CI (its behavior is
-> real Windows elevation/MSI/registry, covered only by the manual checklist
-> below), it stays Draft until the owner confirms ADR-0017's elevation posture.
-> Do not implement while Draft.
+> **Elevation posture confirmed (owner, 2026-07-05).** ADR-0017 is **Accepted**:
+> Node's official MSI is per-machine-only and hard-requires UAC — there is no
+> non-elevated official install — so this WP uses "winget-if-present → else the
+> signed MSI, SHA256-verified, installed via a consent-gated `Start-Process -Verb
+> RunAs` UAC elevation; no nvm/portable-zip in v1." That fork is owner-visible and
+> **cannot be fully verified by CI** (real Windows elevation/MSI/registry): its
+> automatable parts (pure helpers + the SHA-mismatch/elevation-failure *handling*
+> via mocked seams) are Pester-covered; the real UAC/MSI/registry paths are covered
+> by the **mandatory manual checklist** in the Definition of Done.
 
 ## Context (read this, nothing else)
 
@@ -238,7 +238,9 @@ function Ensure-Node {
 
     if (Get-Command winget -ErrorAction SilentlyContinue) {
         Write-Host "About to run:"
-        Write-Host "    winget install --id OpenJS.NodeJS.LTS -e"
+        # display == exec: show the FULL argv that Install-NodeViaWinget runs,
+        # including the --accept-*-agreements flags (ADR-0011 rule 1, byte-for-byte).
+        Write-Host "    winget install --id OpenJS.NodeJS.LTS -e --accept-source-agreements --accept-package-agreements"
         if (Confirm-Step "Install Node LTS with winget now? (may prompt for admin)") {
             if ((Install-NodeViaWinget) ) {
                 Update-SessionPath
@@ -320,10 +322,22 @@ function Main {
 - **Get-MsiexecArgs**: `'C:\t\x.msi'` → `@('/i','C:\t\x.msi','/qn','/norestart')`.
 - **Test-Elevated**: on the Linux/macOS CI runner returns `$false` (WindowsIdentity
   unsupported) without throwing.
+- **Install-NodeViaMsi security branches** (via the `Invoke-WebRequest` +
+  `Start-Process` mock seams — no live network, no real msiexec/UAC): (i) a
+  downloaded-bytes fixture whose SHA256 ≠ the value in the (mocked) `SHASUMS256.txt`
+  → returns `$false` **and `Start-Process` is invoked ZERO times** (tamper-abort
+  before any install); (ii) a matching checksum but a non-zero elevated exit code
+  (UAC-cancel `1223`) → returns `$false` (failed/cancelled-elevation HANDLING);
+  (iii) matching checksum + exit `0` → returns `$true` (pass path). These unit-cover
+  the two security branches the reviewer flagged; the real UAC dialog and a real MSI
+  install stay on the manual checklist.
 
-Do **not** Pester-test `Install-NodeViaMsi`/`Install-NodeViaWinget`/`Ensure-Node`
-end-to-end (they require real Windows elevation/registry) — those are the manual
-checklist's job. Mocking `Start-Process`/`msiexec`/UAC would assert nothing real.
+Do **not** Pester-test `Ensure-Node` end-to-end — it `exit`s on the hard gate, which
+would terminate the Pester run, and it needs real Windows elevation/registry. Its
+call into `Install-NodeViaMsi` **is** unit-covered above through Pester's
+`Start-Process`/`Invoke-WebRequest` mock seams (no refactor needed — those cmdlets
+are already the injectable seam, mirroring the tarball tests); the `exit 1` +
+fail-to-print itself stays on the manual checklist.
 
 ## Implementation notes & constraints
 
@@ -356,12 +370,26 @@ checklist's job. Mocking `Start-Process`/`msiexec`/UAC would assert nothing real
 - [ ] `Main` gates on Node via `Ensure-Node` (hard) and offers git via `Ensure-Git`
       (soft) before the handoff; the WP-057 tarball/npx handoff is unchanged.
 - [ ] Pure helpers (`Get-LtsMsiInfo`, `Get-ShaFromSums`, `Get-MsiexecArgs`,
-      `Test-Elevated`) pass their Pester tests on the Linux CI runner.
+      `Test-Elevated`, `Get-GitForWindowsAssetUrl`, `Get-GitSilentArgs`) pass their
+      Pester tests on the Linux CI runner.
+- [ ] `Install-NodeViaMsi`'s tamper-abort (SHA256 mismatch → no `Start-Process`) and
+      failed/cancelled-elevation handling (non-zero exit → `$false`) pass their Pester
+      tests via the mocked seams.
 - [ ] `npm run lint` (PSScriptAnalyzer) and `Invoke-Pester tests/ps` stay green.
 - [ ] **Manual Windows verification checklist below is completed and its output
       pasted into the PR** (this is the primary verification — CI cannot cover it).
 
 ### Manual Windows verification checklist (DoD — run on real Windows, paste results)
+
+**Coverage split (be honest about what CI proves).** CI has **no Windows runner**.
+Now **CI-covered** (Pester, mocked seams — no real Windows): the SHA256 tamper-abort
+(mismatch → nothing installed, `Start-Process` invoked 0 times) and the
+failed/cancelled-elevation *handling* (non-zero/UAC-cancel exit → `Install-NodeViaMsi`
+returns `$false`). Still **owner-manual** (genuinely un-automatable without a real
+Windows box): the real UAC dialog accept **and** cancel, a real MSI install, the
+registry-PATH-refresh-without-a-new-shell, the git-accept live path, the true
+interactive-console `IsInputRedirected=$false` prompt, and end-to-end `irm|iex` →
+working `init` + skills.
 
 Run on **both** a bare Windows Server 2022 (no winget, no Node — exercises the MSI
 path) **and** a Windows 11 box (winget present — exercises the winget path), in
@@ -371,23 +399,33 @@ parity is confirmed here):
 1. **Bare-machine happy path (MSI):** `irm <staged-url>/install.ps1 | iex` in a
    **non-elevated interactive** PowerShell window → the Node `[Y/n]` prompt shows
    the exact nodejs.org URL + msiexec command → accept → a **UAC prompt appears** →
-   MSI installs → PATH refreshes in-session → handoff runs → `wienerdog init`
-   completes → `/wienerdog-*` skills are registered (restart the harness, confirm
-   the slash commands load).
-2. **Decline:** answer `n` to the Node prompt → the exact manual command +
+   click **Yes** → MSI installs → PATH refreshes in-session → handoff runs →
+   `wienerdog init` completes → `/wienerdog-*` skills are registered (restart the
+   harness, confirm the slash commands load).
+2. **Real UAC cancel:** accept our `[Y/n]` prompt, then click **Cancel/No** on the
+   actual Windows UAC dialog → the exact manual command + `https://nodejs.org`
+   printed, non-zero exit, **nothing installed**. (The branch logic — non-zero exit
+   → `$false` — is now unit-tested in 2b; this confirms the real DIALOG's cancel
+   maps onto it.)
+3. **Decline:** answer `n` to the Node prompt → the exact manual command +
    `https://nodejs.org` printed, non-zero exit, **nothing installed**.
-3. **Non-interactive:** `powershell -NonInteractive -Command "iex (irm <url>)"` (and
+4. **Non-interactive:** `powershell -NonInteractive -Command "iex (irm <url>)"` (and
    separately a stdin-piped invocation) → **no prompt**, the fallback printed,
    non-zero exit, nothing installed. (Confirms the `[Console]::IsInputRedirected`
    detector.)
-4. **Idempotent re-run:** run the one-liner again on the now-Node-present machine →
+5. **Idempotent re-run:** run the one-liner again on the now-Node-present machine →
    no Node re-install, straight handoff; a second `init` is a no-op.
-5. **winget path (Win 11):** on a machine with winget, the Node install goes through
-   `winget install --id OpenJS.NodeJS.LTS -e` (still UAC-elevated).
-6. **git:** on a Codex/bare machine (no Git Bash), the git offer appears and is
-   soft (declining still proceeds to the handoff); on a Claude Code machine, git is
-   already present and the offer is skipped.
-7. **Interactive-console prompt actually reads input** (the `IsInputRedirected=$false`
+6. **winget path (Win 11):** on a machine with winget, the Node install goes through
+   `winget install --id OpenJS.NodeJS.LTS -e --accept-source-agreements --accept-package-agreements`
+   (the exact string the `[Y/n]` line displays — still UAC-elevated).
+7. **git — decline:** on a Codex/bare machine (no Git Bash), the git offer appears
+   and is soft (declining still proceeds to the handoff); on a Claude Code machine,
+   git is already present and the offer is skipped.
+8. **git — accept:** on a bare machine, accept the git offer → `Get-GitForWindowsAssetUrl`
+   hits the live GitHub releases API, the signed `.exe` downloads and installs
+   silently, and `git` resolves afterward. (The winget-flavored accept, on Win 11,
+   goes through the displayed `winget install --id Git.Git -e --accept-source-agreements --accept-package-agreements`.)
+9. **Interactive-console prompt actually reads input** (the `IsInputRedirected=$false`
    branch the research could not observe in its sandbox — confirm the `[Y/n]` prompt
    genuinely waits for and reads your keystroke).
 
@@ -419,5 +457,5 @@ pwsh -NoProfile -Command "Invoke-Pester -Path tests/ps -Output Detailed -CI"
    `feat(install): install.ps1 consented Node/git auto-install + PATH refresh (WP-058)`.
 3. PR template filled, including "Decisions made" (or "none") and `Generated-by:`.
 4. This spec's `status:` flipped to `In-Review` in the same PR.
-5. **Owner has confirmed ADR-0017's elevation posture** (moving this spec from
-   Draft → Ready) before implementation begins.
+5. Owner confirmed ADR-0017's elevation posture (2026-07-05, ADR Accepted) — done;
+   this precondition is satisfied.

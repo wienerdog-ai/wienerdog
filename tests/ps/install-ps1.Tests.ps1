@@ -36,6 +36,16 @@ Describe 'Test-SemVer' {
         param($v)
         Test-SemVer $v | Should -BeFalse
     }
+
+    # WP-058 owner amendment: \A...\z (not ^...$) so a trailing newline is rejected
+    # ('$' matches before a trailing newline in .NET/PowerShell).
+    It 'rejects a value with a trailing newline (\A...\z anchors)' {
+        Test-SemVer "1.2.3`n" | Should -BeFalse
+    }
+    It 'still accepts a bare version and a valid prerelease' {
+        Test-SemVer '1.2.3' | Should -BeTrue
+        Test-SemVer '1.2.3-rc.1' | Should -BeTrue
+    }
 }
 
 Describe 'Get-TarballUrl' {
@@ -142,6 +152,155 @@ Describe 'Install-ViaTarball' {
 
         Install-ViaTarball -ForwardArgs @() | Should -Be 1
         Should -Invoke Invoke-WebRequest -Times 0
+    }
+}
+
+# --- WP-058: Node/git auto-install pure helpers (no live network, no install) --
+
+Describe 'Get-LtsMsiInfo' {
+    BeforeAll {
+        # Date-descending fixture: a leading Current (lts:$false) then the LTS line.
+        $script:Index = @(
+            [pscustomobject]@{ version = 'v25.0.0'; lts = $false }
+            [pscustomobject]@{ version = 'v24.18.0'; lts = 'Krypton' }
+            [pscustomobject]@{ version = 'v24.17.0'; lts = 'Krypton' }
+        )
+    }
+
+    It 'returns the first LTS entry as x64 MSI info by default' {
+        $info = Get-LtsMsiInfo -Index $script:Index
+        $info.Version | Should -Be '24.18.0'
+        $info.MsiName | Should -Be 'node-v24.18.0-x64.msi'
+        $info.MsiUrl | Should -Be 'https://nodejs.org/dist/v24.18.0/node-v24.18.0-x64.msi'
+        $info.ShaSumsUrl | Should -Be 'https://nodejs.org/dist/v24.18.0/SHASUMS256.txt'
+    }
+
+    It 'builds an arm64 MSI name/URL when -Arch arm64' {
+        $info = Get-LtsMsiInfo -Index $script:Index -Arch 'arm64'
+        $info.MsiName | Should -Be 'node-v24.18.0-arm64.msi'
+        $info.MsiUrl | Should -Be 'https://nodejs.org/dist/v24.18.0/node-v24.18.0-arm64.msi'
+    }
+
+    It 'returns $null when no entry is LTS (all lts:$false)' {
+        $current = @([pscustomobject]@{ version = 'v25.0.0'; lts = $false })
+        Get-LtsMsiInfo -Index $current | Should -BeNullOrEmpty
+    }
+
+    It 'skips an LTS entry whose version is not strict semver (path-safety)' {
+        $bad = @(
+            [pscustomobject]@{ version = 'v24.18.0/../x'; lts = 'Krypton' }
+            [pscustomobject]@{ version = 'v24.18.0'; lts = 'Krypton' }
+        )
+        (Get-LtsMsiInfo -Index $bad).Version | Should -Be '24.18.0'
+    }
+}
+
+Describe 'Get-ShaFromSums' {
+    BeforeAll {
+        $script:Sums = @(
+            'aaa111  node-v24.18.0-arm64.msi'
+            'BBB222  node-v24.18.0-x64.msi'
+            'ccc333  node-v24.18.0.tar.gz'
+        ) -join "`n"
+    }
+
+    It 'returns the lowercase hex for the requested file name' {
+        Get-ShaFromSums -SumsText $script:Sums -FileName 'node-v24.18.0-x64.msi' |
+            Should -Be 'bbb222'
+    }
+
+    It "returns '' when the file name is absent" {
+        Get-ShaFromSums -SumsText $script:Sums -FileName 'node-v99.0.0-x64.msi' |
+            Should -Be ''
+    }
+}
+
+Describe 'Get-MsiexecArgs' {
+    It 'is the quiet, no-restart per-machine install arg list' {
+        Get-MsiexecArgs -MsiPath 'C:\t\x.msi' |
+            Should -Be @('/i', 'C:\t\x.msi', '/qn', '/norestart')
+    }
+}
+
+Describe 'Test-Elevated' {
+    It 'returns $false off-Windows without throwing (WindowsIdentity unsupported)' {
+        Test-Elevated | Should -BeFalse
+    }
+}
+
+# Install-NodeViaMsi's SECURITY branches, unit-covered via the Invoke-WebRequest +
+# Start-Process seams (no live network, no real msiexec/UAC). These move the
+# tamper-abort and the failed/cancelled-elevation HANDLING from "manual, maybe" to
+# CI. The real UAC dialog (accept/cancel) and a real MSI stay on the manual checklist.
+Describe 'Install-NodeViaMsi (security branches)' {
+    BeforeEach {
+        # Deterministic fake MSI bytes + their real SHA256 (lowercase hex).
+        $script:MsiBytes = [byte[]](1..64)
+        $sha = [System.Security.Cryptography.SHA256]::Create()
+        try { $script:MsiHash = (($sha.ComputeHash($script:MsiBytes) | ForEach-Object { $_.ToString('x2') }) -join '') }
+        finally { $sha.Dispose() }
+
+        $script:Msi = @{
+            Version    = '24.18.0'
+            MsiName    = 'node-v24.18.0-x64.msi'
+            MsiUrl     = 'https://nodejs.org/dist/v24.18.0/node-v24.18.0-x64.msi'
+            ShaSumsUrl = 'https://nodejs.org/dist/v24.18.0/SHASUMS256.txt'
+        }
+        # One mock for both calls: -OutFile branch writes the fake MSI; the other
+        # returns the SHASUMS text (set per-test in $script:SumsText).
+        Mock Invoke-WebRequest {
+            if ($OutFile) { [System.IO.File]::WriteAllBytes($OutFile, $script:MsiBytes); return }
+            [pscustomobject]@{ Content = $script:SumsText }
+        }
+    }
+
+    It 'aborts before install on a checksum mismatch (no msiexec/Start-Process)' {
+        $script:SumsText = "deadbeefdeadbeef  node-v24.18.0-x64.msi`n"   # wrong hash
+        Mock Start-Process { throw 'Start-Process must not run on a checksum mismatch' }
+
+        Install-NodeViaMsi -Msi $script:Msi | Should -BeFalse
+        Should -Invoke Start-Process -Times 0
+    }
+
+    It 'returns $false when the (elevated) install exits non-zero (UAC cancel = 1223)' {
+        $script:SumsText = "$script:MsiHash  node-v24.18.0-x64.msi`n"    # matching hash
+        Mock Start-Process { [pscustomobject]@{ ExitCode = 1223 } }      # 1223 = ERROR_CANCELLED
+
+        Install-NodeViaMsi -Msi $script:Msi | Should -BeFalse
+        Should -Invoke Start-Process -Times 1
+    }
+
+    It 'returns $true when the install completes (exit 0), proving the pass path' {
+        $script:SumsText = "$script:MsiHash  node-v24.18.0-x64.msi`n"    # matching hash
+        Mock Start-Process { [pscustomobject]@{ ExitCode = 0 } }
+
+        Install-NodeViaMsi -Msi $script:Msi | Should -BeTrue
+    }
+}
+
+Describe 'Get-GitForWindowsAssetUrl' {
+    BeforeAll {
+        $script:Release = [pscustomobject]@{ assets = @(
+                [pscustomobject]@{ name = 'Git-2.55.0-32-bit.exe'; browser_download_url = 'https://example/32.exe' }
+                [pscustomobject]@{ name = 'Git-2.55.0-64-bit.exe'; browser_download_url = 'https://example/64.exe' }
+                [pscustomobject]@{ name = 'PortableGit-2.55.0-64-bit.7z.exe'; browser_download_url = 'https://example/portable' }
+            ) }
+    }
+
+    It 'returns the standard 64-bit installer .exe URL by default' {
+        Get-GitForWindowsAssetUrl -Release $script:Release | Should -Be 'https://example/64.exe'
+    }
+
+    It "returns '' when no matching asset exists" {
+        $r = [pscustomobject]@{ assets = @([pscustomobject]@{ name = 'notes.txt'; browser_download_url = 'x' }) }
+        Get-GitForWindowsAssetUrl -Release $r | Should -Be ''
+    }
+}
+
+Describe 'Get-GitSilentArgs' {
+    It 'is the documented Git-for-Windows silent-install arg list' {
+        Get-GitSilentArgs |
+            Should -Be @('/VERYSILENT', '/NORESTART', '/NOCANCEL', '/SP-', '/SUPPRESSMSGBOXES')
     }
 }
 
