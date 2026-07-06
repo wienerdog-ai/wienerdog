@@ -2,6 +2,12 @@
 
 All notable changes to Wienerdog. Format: [Keep a Changelog](https://keepachangelog.com), versioning: SemVer (0.x until the installed file layout stabilizes — ADR-0003).
 
+## [0.6.1] — 2026-07-06
+
+### Changed
+- **Smoother setup interview.** The four multiple-choice moments (what to adjust, preferred tone, vault choice, memory eagerness) are now asked as structured pick-one questions where your AI tool supports them — with a type-your-own answer always available. Open questions (who you are, your goals, your tools) stay conversational.
+- **No overnight anxiety.** Everywhere Wienerdog mentions the 03:30 nightly dream — install summary, adoption summary, setup, README — it now also says plainly: if your computer is off or asleep at that time, don't worry, Wienerdog catches up automatically the next time you're back. That flexibility has always been how it works; now it's said out loud.
+
 ## [0.6.0] — 2026-07-06
 
 ### Added
