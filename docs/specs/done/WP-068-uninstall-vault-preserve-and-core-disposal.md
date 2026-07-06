@@ -1,7 +1,7 @@
 ---
 id: WP-068
 title: Uninstall vault-preserve handler + machine-generated core disposal
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: []

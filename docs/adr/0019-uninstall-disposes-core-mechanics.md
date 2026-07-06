@@ -67,3 +67,14 @@ code. No WP may write user knowledge under `~/.wienerdog`.
 - IRON RULE (ADR-0004) intact: this is deletion of files, not a process.
 - `--dry-run` must disclose the recursive core cleanup plainly, preserving the
   M1 dry-run-exactness guarantee.
+
+> Amendment (2026-07-06, from the WP-068 review): the "provably safe" premise
+> was corrected — the vault-outside-core invariant is now ENFORCED (adopt
+> rejects vault paths inside the core) AND independently guarded in
+> `disposeCoreMechanics` (realpath containment check; a mechanics dir holding
+> the vault is skipped with an honest summary instead of the standard
+> reassurance). Load-bearing subtlety: `init` records a `dir` manifest entry
+> only for a core it CREATES — a pre-existing symlinked core is never recorded,
+> which is why `reverse()`'s rmdir-on-dir-entry never meets a symlink. A future
+> change that records the core dir unconditionally would reintroduce that
+> crash; don't.
