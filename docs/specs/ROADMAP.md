@@ -78,6 +78,8 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 | [WP-057](done/WP-057-install-ps1-core.md) | install.ps1 core — detection, consent, npm-less tarball fallback, CI lint+Pester gate | M7 | opus | Done | WP-056 |
 | [WP-058](done/WP-058-install-ps1-node-git-actions.md) | install.ps1 Node/git auto-install (winget → signed MSI + UAC), PATH refresh, manual Windows verification | M7 | opus | Done | WP-057 |
 | [WP-059](done/WP-059-watchdog-pidfile-race.md) | Close the watchdog-test pidfile race (bounded poll before asserting the kill) | M7 | sonnet | Done | — |
+| [WP-060](WP-060-init-proceed-default-yes.md) | init "Proceed?" defaults to yes (per-call defaultYes in shared confirm) | M7 | sonnet | Ready | — |
+| [WP-061](WP-061-install-ps1-completion-banner.md) | install.ps1 stays open with a completion banner (iex-safe return-not-exit) | M7 | opus | Ready | — |
 
 > **First-production-night incident (2026-07-04).** WP-038, WP-039 and WP-041 form
 > a serial chain (they edit the shared `run-job.js` / `dream.js` / `validate.js`
@@ -237,6 +239,30 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 
 <!-- -->
 
+> **Windows-VPS post-install UX (2026-07-06).** The owner's real Windows Server
+> 2022 `irm .../install.ps1 | iex` install worked end-to-end (Node MSI, UAC accept,
+> PATH refresh, handoff to `npx wienerdog@latest init`) and surfaced two
+> post-install UX asks. **WP-060** (JS, independent) flips `init`'s
+> plan-confirmation to default-yes: the shared `confirm()` in `src/core/prompt.js`
+> gains a **per-call** `{defaultYes}` opt (default false — every existing caller,
+> incl. `uninstall`'s destructive `Proceed with removal?`, byte-for-byte
+> unchanged), and ONLY `init`'s "Proceed?" passes `{defaultYes:true}` + `[Y/n]`.
+> The default-yes is scoped to the interactive empty-Enter case only: EOF /
+> no-terminal (mode 3) still abort loudly, and `--yes` still bypasses — aligning
+> init with ADR-0011's `[Y/n]`-default-yes install-hop norm. `adopt`'s four prompts
+> are untouched: it uses its OWN local `confirm`, not `src/core/prompt`. **WP-061**
+> (PowerShell, independent) makes `install.ps1` survive `iex`: under `irm|iex` the
+> script runs inside the user's live host, so `Main`'s `exit` closed the window the
+> instant the install succeeded. `Main` now **returns** an exit code (never
+> `exit`), prints a plain completion banner on success, and the dot-source guard
+> `exit`s only for a real script file (`InvocationName` non-empty) while setting
+> `$global:LASTEXITCODE` + returning under `iex` (`''`). Frozen as an ADR-0017
+> amendment (iex-safe exit discipline); the no-exit/banner logic is CI-covered by
+> Pester `Main` tests (a returning `Main` proves it did not `exit`). The two WPs
+> share no files and carry no dependency — they can land in parallel.
+
+<!-- -->
+
 ## Dependency graph
 
 ```mermaid
@@ -307,4 +333,6 @@ graph LR
   WP056[WP-056 Windows install research spike] --> WP057[WP-057 install.ps1 core]
   WP057 --> WP058[WP-058 install.ps1 Node/git actions + manual verify]
   WP059[WP-059 watchdog pidfile race test-hermeticity]
+  WP060[WP-060 init Proceed default-yes]
+  WP061[WP-061 install.ps1 completion banner + iex-safe exit]
 ```

@@ -173,3 +173,34 @@ daemon.
 - The README's Windows one-liner and `install.sh`'s "PowerShell installer coming"
   note become stale once `install.ps1` ships — a wd-docs follow-up, out of scope
   for the install WPs themselves.
+
+## Amendment — iex-safe exit discipline (2026-07-06, WP-061)
+
+Field follow-up from the owner's real Windows Server 2022 install
+(`irm .../install.ps1 | iex`, end-to-end success): under `iex` the script body is
+evaluated **inside the user's live PowerShell host**, so any `exit` in the script —
+including `Main`'s success `exit 0` and `Ensure-Node`'s hard-gate `exit 1` —
+terminates the **host session** and closes the window. On success that erased the
+just-completed install before the user could read it; on failure it would hide the
+guidance the user needs.
+
+Binding rule for `install.ps1` and all future Windows-installer work on this file
+(including the deferred M6–M7 Windows scheduling):
+
+1. **`Main` returns an `[int]` exit code; it never calls `exit`.** Dependency gates
+   (`Ensure-Node`) signal failure by returning to `Main` (which re-checks
+   `Get-NodeMajor` and returns non-zero), never by `exit`.
+2. **On the success path `Main` prints a plain-language completion banner**
+   (`Write-CompletionBanner`) so an `irm|iex` window visibly confirms the install
+   and points at restart + `/wienerdog-setup`.
+3. **Only the bottom-of-file dot-source guard decides process disposition**, using
+   the same `$MyInvocation.InvocationName` signal §7 relies on: `''` ⇒ `irm|iex`
+   / in-memory eval ⇒ set `$global:LASTEXITCODE` and return (never `exit`, so the
+   host survives); a non-empty, non-`.` name ⇒ a real script file in its own
+   process ⇒ `exit $code` is safe; `.` ⇒ library/dot-source (Pester), `Main` not
+   run.
+
+CI-testable on the Linux/macOS runners at the `Main` + `Write-CompletionBanner`
+level (a Pester `Main` test that returns a value is itself proof `Main` did not
+`exit` — an `exit` would kill the Pester process). The `irm|iex` window-survival
+itself stays a one-line item on the manual Windows checklist (§7), not a blocker.
