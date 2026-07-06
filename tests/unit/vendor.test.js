@@ -274,7 +274,11 @@ test('vendor: writeShim on win32 also writes a .cmd launcher, byte-idempotent', 
   // `@echo off` / `node …` template did not.
   const lines = cmdContent.split('\r\n').filter((_, i, arr) => !(i === arr.length - 1 && arr[i] === ''));
   assert.equal(lines.length, 1, 'single logical line');
-  assert.ok(lines[0].endsWith('& exit /b'), 'ends with unconditional & exit /b (not &&)');
+  assert.ok(lines[0].endsWith('& exit /b'), 'ends with & exit /b');
+  // endsWith('& exit /b') also matches '&& exit /b' (string suffix) — pin the
+  // unconditional form explicitly: '&&' would skip exit /b on node's failure
+  // path and reintroduce the self-deletion crash exactly when exit codes matter.
+  assert.ok(!lines[0].includes('&&'), 'separator is unconditional & (never &&)');
   assert.ok(lines[0].includes('%*'), 'forwards all args via %*');
 
   // Second call: byte-identical → no write, manifest not grown.
