@@ -80,6 +80,9 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 | [WP-059](done/WP-059-watchdog-pidfile-race.md) | Close the watchdog-test pidfile race (bounded poll before asserting the kill) | M7 | sonnet | Done | — |
 | [WP-060](done/WP-060-init-proceed-default-yes.md) | init "Proceed?" defaults to yes (per-call defaultYes in shared confirm) | M7 | sonnet | Done | — |
 | [WP-061](done/WP-061-install-ps1-completion-banner.md) | install.ps1 stays open with a completion banner (iex-safe return-not-exit) | M7 | opus | Done | — |
+| [WP-062](WP-062-runjob-windows-clean-env-and-watchdog.md) | run-job Windows reliability — win32 clean env + taskkill watchdog kill-tree | M6 | opus | Ready | — |
+| [WP-063](WP-063-windows-task-scheduler-generators.md) | Windows Task Scheduler XML generators (pure renderers + helpers) | M6 | opus | Ready | — |
+| [WP-064](WP-064-schedule-win32-dispatch-and-manual-verify.md) | schedule.js win32 dispatch — register dream + catch-up via schtasks; owner VPS verify | M6 | opus | Ready | WP-062, WP-063 |
 
 > **First-production-night incident (2026-07-04).** WP-038, WP-039 and WP-041 form
 > a serial chain (they edit the shared `run-job.js` / `dream.js` / `validate.js`
@@ -263,6 +266,46 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 
 <!-- -->
 
+> **Windows scheduled dreaming chain (2026-07-06, ADR-0018).** Closes the last
+> platform gap: a Windows install now auto-schedules the nightly dream at 03:30
+> at vault creation (ADR-0014, which had carved Windows out as "unsupported"),
+> with laptop-off / logged-off catch-up, watchdog/fail-loud, `schedule`
+> add/remove/list parity, manifest-tracked reversibility, IRON RULE intact
+> (OS-native Task Scheduler tasks, no daemon). The research spike
+> (`memory/research/2026-07-06-windows-scheduled-dreaming.md`) resolved the
+> load-bearing facts from primary sources: a standard user registers a per-user
+> task with **no elevation** via `schtasks /create … /it` at the default
+> `/rl LIMITED`; **`StartWhenAvailable` is XML-only**, so registration uses
+> `schtasks /create /tn <name> /xml <file> /f` (an XML *renderer*, the
+> launchd/systemd analog); an interactive per-user task does not run while logged
+> off, so an **ONLOGON + hourly catch-up task** is required exactly as on macOS;
+> `paths.js` is **already Windows-safe** (`env.HOME || os.homedir()`) so the
+> feared HOME-fix WP does not exist; and the watchdog's negative-PID
+> process-group kill is **POSIX-only** (Windows needs `taskkill /T /F`). Two
+> Task-Scheduler XML settings default to `true` and would silently skip/kill the
+> dream on an unplugged laptop — the generator forces
+> `DisallowStartIfOnBatteries`/`StopIfGoingOnBatteries` to `false`. **WP-062**
+> (independent, `run-job.js`) adds the two reliability-critical win32 branches —
+> Windows-shaped clean env (`;`-PATH + `USERPROFILE`/`APPDATA`/… so the dream
+> brain is findable + credential-bearing) and `taskkill /T /F` tree-kill — the
+> Windows twin of the launchd USER/PATH incident; both testable on POSIX via an
+> injected `platform` + kill/spawn seams (never `process.platform` mocking).
+> **WP-063** (independent, `generators.js`) adds the pure XML renderers
+> (`windowsDreamTaskXml`, `windowsCatchupTaskXml`) + name/path/escape helpers,
+> fully golden-testable in CI. **WP-064** (the capstone, `schedule.js`, depends
+> on both) adds the `registerPlatform` win32 branch (write XML via `ensureEntry`,
+> register via the injected loader, `WIENERDOG_LOADER_NOOP` honored), the Windows
+> catch-up ensure, the `remove()` basename, and a `platform` test seam so the
+> whole dispatch is CI-covered on POSIX — plus a **mandatory owner Windows-VPS
+> checklist** (no Windows CI runner; the physical UAC-free registration,
+> missed-run catch-up, live dream, and uninstall cleanliness gate merge, WP-058
+> precedent). `manifest.js` needs no change (reversal is already generic);
+> `init`/`adopt` already reach `ensureDreamSchedule`, which stops degrading
+> Windows once the branch exists. Serial only where they share files: WP-062 and
+> WP-063 land in parallel; WP-064 after both.
+
+<!-- -->
+
 ## Dependency graph
 
 ```mermaid
@@ -335,4 +378,8 @@ graph LR
   WP059[WP-059 watchdog pidfile race test-hermeticity]
   WP060[WP-060 init Proceed default-yes]
   WP061[WP-061 install.ps1 completion banner + iex-safe exit]
+  WP062[WP-062 run-job Windows clean-env + taskkill watchdog]
+  WP063[WP-063 Windows Task Scheduler XML generators]
+  WP062 --> WP064[WP-064 schedule win32 dispatch + owner VPS verify]
+  WP063 --> WP064
 ```
