@@ -203,6 +203,16 @@ Second identical call: no file rewrite, `changed:false`, **zero** loader calls.
 
 ## Acceptance criteria
 
+- [ ] **Validator-before-renderer invariant (owner amendment, 2026-07-06, from
+      the WP-063 review):** every job name the win32 dispatch passes to
+      `windowsDreamTaskXml`/`windowsCatchupTaskXml` MUST first pass through
+      `windowsTaskName` (which validates `^[a-z0-9][a-z0-9-]*$` and throws on
+      anything else). The renderers embed the name raw by design — validated
+      names byte-match the schtasks task path; an unvalidated name would only
+      fail closed as malformed XML, but the dispatch must never rely on that.
+      Add a test asserting a hostile job name (e.g. `foo&<bar>`) is rejected by
+      the dispatch with a `WienerdogError` BEFORE any XML is rendered or file
+      written.
 - [ ] `registerPlatform(..., 'win32')` writes both XML files under
       `<core>/schedules/`, records two reversible `scheduler-entry` entries with
       the correct `schtasks /delete` unload argv, calls the loader with the two
