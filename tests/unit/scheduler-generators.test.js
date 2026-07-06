@@ -85,6 +85,92 @@ Type=oneshot
 ExecStart=/usr/bin/node /opt/wienerdog/bin/wienerdog.js run-job daily-digest
 `;
 
+const EXPECTED_DREAM = `<?xml version="1.0" encoding="UTF-8"?>
+<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <Author>Wienerdog</Author>
+    <Description>Wienerdog nightly dream (memory consolidation).</Description>
+    <URI>\\Wienerdog\\dream</URI>
+  </RegistrationInfo>
+  <Triggers>
+    <CalendarTrigger>
+      <StartBoundary>2020-01-01T03:30:00</StartBoundary>
+      <Enabled>true</Enabled>
+      <ScheduleByDay>
+        <DaysInterval>1</DaysInterval>
+      </ScheduleByDay>
+    </CalendarTrigger>
+  </Triggers>
+  <Principals>
+    <Principal id="Author">
+      <UserId>WS\\ada</UserId>
+      <LogonType>InteractiveToken</LogonType>
+      <RunLevel>LeastPrivilege</RunLevel>
+    </Principal>
+  </Principals>
+  <Settings>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <StartWhenAvailable>true</StartWhenAvailable>
+    <Enabled>true</Enabled>
+    <ExecutionTimeLimit>PT1H</ExecutionTimeLimit>
+    <Priority>7</Priority>
+  </Settings>
+  <Actions Context="Author">
+    <Exec>
+      <Command>C:\\Program Files\\nodejs\\node.exe</Command>
+      <Arguments>"C:\\Users\\John Smith\\.wienerdog\\app\\current\\bin\\wienerdog.js" run-job dream</Arguments>
+    </Exec>
+  </Actions>
+</Task>
+`;
+
+const EXPECTED_WIN_CATCHUP = `<?xml version="1.0" encoding="UTF-8"?>
+<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <Author>Wienerdog</Author>
+    <Description>Wienerdog catch-up: runs any dream missed while off or logged off.</Description>
+    <URI>\\Wienerdog\\catchup</URI>
+  </RegistrationInfo>
+  <Triggers>
+    <LogonTrigger>
+      <Enabled>true</Enabled>
+    </LogonTrigger>
+    <TimeTrigger>
+      <StartBoundary>2020-01-01T00:00:00</StartBoundary>
+      <Enabled>true</Enabled>
+      <Repetition>
+        <Interval>PT1H</Interval>
+        <StopAtDurationEnd>false</StopAtDurationEnd>
+      </Repetition>
+    </TimeTrigger>
+  </Triggers>
+  <Principals>
+    <Principal id="Author">
+      <UserId>WS\\ada</UserId>
+      <LogonType>InteractiveToken</LogonType>
+      <RunLevel>LeastPrivilege</RunLevel>
+    </Principal>
+  </Principals>
+  <Settings>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <StartWhenAvailable>true</StartWhenAvailable>
+    <Enabled>true</Enabled>
+    <ExecutionTimeLimit>PT1H</ExecutionTimeLimit>
+    <Priority>7</Priority>
+  </Settings>
+  <Actions Context="Author">
+    <Exec>
+      <Command>C:\\Program Files\\nodejs\\node.exe</Command>
+      <Arguments>"C:\\Users\\John Smith\\.wienerdog\\app\\current\\bin\\wienerdog.js" run-job --catch-up</Arguments>
+    </Exec>
+  </Actions>
+</Task>
+`;
+
 test('scheduler-generators: launchdPlist matches the golden byte-for-byte', () => {
   const out = gen.launchdPlist({
     name: 'daily-digest',
@@ -165,4 +251,86 @@ test('scheduler-generators: nodePath/wienerdogBin are absolute', () => {
     gen.wienerdogBin(paths),
     path.join('/home/ada/.wienerdog', 'app', 'current', 'bin', 'wienerdog.js')
   );
+});
+
+test('scheduler-generators: windowsTaskName namespaces and validates', () => {
+  assert.equal(gen.windowsTaskName('dream'), '\\Wienerdog\\dream');
+  assert.equal(gen.windowsTaskName('catchup'), '\\Wienerdog\\catchup');
+  assert.equal(gen.windowsTaskName('a-b0'), '\\Wienerdog\\a-b0');
+  for (const bad of ['a_b', '../x', 'A', '-a', '', 'a b', 'a\\b', 'a/b', 'a.b', '..']) {
+    assert.throws(() => gen.windowsTaskName(bad), WienerdogError, `expected throw for ${JSON.stringify(bad)}`);
+  }
+});
+
+test('scheduler-generators: windows path helpers', () => {
+  const path = require('node:path');
+  const { getPaths } = require('../../src/core/paths');
+  const paths = getPaths({ HOME: '/home/ada', WIENERDOG_HOME: '/home/ada/.wienerdog' });
+  assert.equal(gen.windowsTaskFileName('dream'), 'wienerdog-dream.xml');
+  assert.equal(gen.windowsTasksDir(paths), path.join(paths.core, 'schedules'));
+  const f = gen.windowsTaskFile(paths, 'dream');
+  assert.ok(f.startsWith(paths.core), 'task file is under paths.core');
+  assert.ok(f.endsWith(path.join('schedules', 'wienerdog-dream.xml')), f);
+});
+
+test('scheduler-generators: windowsCurrentUserId prefers domain-qualified form', () => {
+  assert.equal(gen.windowsCurrentUserId({ USERDOMAIN: 'WS', USERNAME: 'ada' }), 'WS\\ada');
+  assert.equal(gen.windowsCurrentUserId({ USERNAME: 'ada' }), 'ada');
+  assert.equal(gen.windowsCurrentUserId({ USERDOMAIN: 'WS' }), '');
+  assert.equal(gen.windowsCurrentUserId({}), '');
+});
+
+test('scheduler-generators: windowsXmlEscape escapes the five entities and keeps spaces intact', () => {
+  assert.equal(gen.windowsXmlEscape('a & b < c > d " e \' f'), 'a &amp; b &lt; c &gt; d &quot; e &apos; f');
+  // a space-containing path is embedded intact (only the five metacharacters change).
+  assert.equal(
+    gen.windowsXmlEscape('C:\\Users\\John Smith\\.wienerdog'),
+    'C:\\Users\\John Smith\\.wienerdog'
+  );
+});
+
+test('scheduler-generators: windowsDreamTaskXml matches the golden byte-for-byte', () => {
+  const out = gen.windowsDreamTaskXml({
+    name: 'dream',
+    hour: 3,
+    minute: 30,
+    node: 'C:\\Program Files\\nodejs\\node.exe',
+    bin: 'C:\\Users\\John Smith\\.wienerdog\\app\\current\\bin\\wienerdog.js',
+    userId: 'WS\\ada',
+  });
+  assert.equal(out, EXPECTED_DREAM);
+  // battery + missed-run settings the dream depends on (ADR-0018).
+  assert.match(out, /<DisallowStartIfOnBatteries>false<\/DisallowStartIfOnBatteries>/);
+  assert.match(out, /<StopIfGoingOnBatteries>false<\/StopIfGoingOnBatteries>/);
+  assert.match(out, /<StartWhenAvailable>true<\/StartWhenAvailable>/);
+});
+
+test('scheduler-generators: windowsDreamTaskXml zero-pads hour/minute and XML-escapes interpolations', () => {
+  const out = gen.windowsDreamTaskXml({
+    name: 'dream',
+    hour: 3,
+    minute: 5,
+    node: 'C:\\node.exe',
+    bin: 'C:\\a & b\\wienerdog.js',
+    userId: 'WS\\a<d>a',
+  });
+  assert.match(out, /<StartBoundary>2020-01-01T03:05:00<\/StartBoundary>/);
+  assert.match(out, /<Arguments>"C:\\a &amp; b\\wienerdog.js" run-job dream<\/Arguments>/);
+  assert.match(out, /<UserId>WS\\a&lt;d&gt;a<\/UserId>/);
+});
+
+test('scheduler-generators: windowsCatchupTaskXml matches the golden byte-for-byte', () => {
+  const out = gen.windowsCatchupTaskXml({
+    node: 'C:\\Program Files\\nodejs\\node.exe',
+    bin: 'C:\\Users\\John Smith\\.wienerdog\\app\\current\\bin\\wienerdog.js',
+    userId: 'WS\\ada',
+  });
+  assert.equal(out, EXPECTED_WIN_CATCHUP);
+  // both trigger shapes present + the missed-run/battery settings.
+  assert.match(out, /<LogonTrigger>/);
+  assert.match(out, /<Interval>PT1H<\/Interval>/);
+  assert.match(out, /run-job --catch-up/);
+  assert.match(out, /<DisallowStartIfOnBatteries>false<\/DisallowStartIfOnBatteries>/);
+  assert.match(out, /<StopIfGoingOnBatteries>false<\/StopIfGoingOnBatteries>/);
+  assert.match(out, /<StartWhenAvailable>true<\/StartWhenAvailable>/);
 });

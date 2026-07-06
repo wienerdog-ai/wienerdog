@@ -202,6 +202,180 @@ ExecStart=${o.node} ${o.bin} run-job ${o.name}
 `;
 }
 
+/**
+ * Namespaced Task Scheduler path for a job. 'dream' → '\Wienerdog\dream'.
+ * Validates `name` (defense in depth — it flows into schtasks argv and the XML
+ * <URI>): must match /^[a-z0-9][a-z0-9-]*$/, else throw WienerdogError, so `/`,
+ * `\`, `..`, spaces, and quotes can never reach the task path or argv.
+ * @param {string} name
+ * @returns {string} e.g. '\\Wienerdog\\dream' (single backslash separators)
+ */
+function windowsTaskName(name) {
+  if (typeof name !== 'string' || !/^[a-z0-9][a-z0-9-]*$/.test(name)) {
+    throw new WienerdogError(`invalid task name ${JSON.stringify(name)} — expected /^[a-z0-9][a-z0-9-]*$/`);
+  }
+  return `\\Wienerdog\\${name}`;
+}
+
+/**
+ * Directory holding the Task Scheduler XML artifacts (manifest-tracked; reversed
+ * with the entry).
+ * @param {import('../core/paths').WienerdogPaths} paths
+ * @returns {string} <core>/schedules
+ */
+function windowsTasksDir(paths) {
+  return path.join(paths.core, 'schedules');
+}
+
+/**
+ * Basename of the XML artifact for a job (WP-064's remove() matches on this).
+ * @param {string} name
+ * @returns {string} e.g. 'wienerdog-dream.xml'
+ */
+function windowsTaskFileName(name) {
+  return `wienerdog-${name}.xml`;
+}
+
+/**
+ * Absolute path to the XML artifact for a job.
+ * @param {import('../core/paths').WienerdogPaths} paths
+ * @param {string} name
+ * @returns {string}
+ */
+function windowsTaskFile(paths, name) {
+  return path.join(windowsTasksDir(paths), windowsTaskFileName(name));
+}
+
+/**
+ * The XML <UserId> for the current user: 'DOMAIN\\user' when both USERDOMAIN and
+ * USERNAME are present, else the bare USERNAME (Task Scheduler resolves a bare
+ * username to the local account; the domain-qualified form is preferred).
+ * @param {NodeJS.ProcessEnv} env
+ * @returns {string}
+ */
+function windowsCurrentUserId(env = process.env) {
+  if (env.USERDOMAIN && env.USERNAME) return `${env.USERDOMAIN}\\${env.USERNAME}`;
+  return env.USERNAME || '';
+}
+
+/**
+ * Escape XML text/attribute content. Apply to every interpolated path, user id,
+ * and description before it enters the XML.
+ * @param {string} s
+ * @returns {string}
+ */
+function windowsXmlEscape(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
+/**
+ * Render the daily Windows dream task XML. All interpolated paths/userId are
+ * XML-escaped; the bin path is additionally double-quoted inside <Arguments>.
+ * @param {{name:string, hour:number, minute:number, node:string, bin:string,
+ *          userId:string}} o
+ * @returns {string} the full Task Scheduler XML
+ */
+function windowsDreamTaskXml(o) {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <Author>Wienerdog</Author>
+    <Description>Wienerdog nightly dream (memory consolidation).</Description>
+    <URI>\\Wienerdog\\${o.name}</URI>
+  </RegistrationInfo>
+  <Triggers>
+    <CalendarTrigger>
+      <StartBoundary>2020-01-01T${pad2(o.hour)}:${pad2(o.minute)}:00</StartBoundary>
+      <Enabled>true</Enabled>
+      <ScheduleByDay>
+        <DaysInterval>1</DaysInterval>
+      </ScheduleByDay>
+    </CalendarTrigger>
+  </Triggers>
+  <Principals>
+    <Principal id="Author">
+      <UserId>${windowsXmlEscape(o.userId)}</UserId>
+      <LogonType>InteractiveToken</LogonType>
+      <RunLevel>LeastPrivilege</RunLevel>
+    </Principal>
+  </Principals>
+  <Settings>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <StartWhenAvailable>true</StartWhenAvailable>
+    <Enabled>true</Enabled>
+    <ExecutionTimeLimit>PT1H</ExecutionTimeLimit>
+    <Priority>7</Priority>
+  </Settings>
+  <Actions Context="Author">
+    <Exec>
+      <Command>${windowsXmlEscape(o.node)}</Command>
+      <Arguments>"${windowsXmlEscape(o.bin)}" run-job ${o.name}</Arguments>
+    </Exec>
+  </Actions>
+</Task>
+`;
+}
+
+/**
+ * Render the Windows catch-up task XML (ONLOGON + hourly). Invokes
+ * `wienerdog run-job --catch-up`. Task name is the fixed literal 'catchup'.
+ * @param {{node:string, bin:string, userId:string}} o
+ * @returns {string} the full Task Scheduler XML
+ */
+function windowsCatchupTaskXml(o) {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <Author>Wienerdog</Author>
+    <Description>Wienerdog catch-up: runs any dream missed while off or logged off.</Description>
+    <URI>\\Wienerdog\\catchup</URI>
+  </RegistrationInfo>
+  <Triggers>
+    <LogonTrigger>
+      <Enabled>true</Enabled>
+    </LogonTrigger>
+    <TimeTrigger>
+      <StartBoundary>2020-01-01T00:00:00</StartBoundary>
+      <Enabled>true</Enabled>
+      <Repetition>
+        <Interval>PT1H</Interval>
+        <StopAtDurationEnd>false</StopAtDurationEnd>
+      </Repetition>
+    </TimeTrigger>
+  </Triggers>
+  <Principals>
+    <Principal id="Author">
+      <UserId>${windowsXmlEscape(o.userId)}</UserId>
+      <LogonType>InteractiveToken</LogonType>
+      <RunLevel>LeastPrivilege</RunLevel>
+    </Principal>
+  </Principals>
+  <Settings>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <StartWhenAvailable>true</StartWhenAvailable>
+    <Enabled>true</Enabled>
+    <ExecutionTimeLimit>PT1H</ExecutionTimeLimit>
+    <Priority>7</Priority>
+  </Settings>
+  <Actions Context="Author">
+    <Exec>
+      <Command>${windowsXmlEscape(o.node)}</Command>
+      <Arguments>"${windowsXmlEscape(o.bin)}" run-job --catch-up</Arguments>
+    </Exec>
+  </Actions>
+</Task>
+`;
+}
+
 /** @param {string} p @returns {boolean} */
 function isFile(p) {
   try {
@@ -276,5 +450,13 @@ module.exports = {
   catchupPlist,
   systemdTimer,
   systemdService,
+  windowsTaskName,
+  windowsTasksDir,
+  windowsTaskFileName,
+  windowsTaskFile,
+  windowsCurrentUserId,
+  windowsXmlEscape,
+  windowsDreamTaskXml,
+  windowsCatchupTaskXml,
   ensureCatchup,
 };
