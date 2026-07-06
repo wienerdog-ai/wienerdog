@@ -1,7 +1,7 @@
 ---
 id: WP-064
 title: schedule.js win32 dispatch — register dream + catch-up via schtasks; owner VPS verification
-status: Ready
+status: In-Review
 model: opus
 size: M
 depends_on: [WP-062, WP-063]

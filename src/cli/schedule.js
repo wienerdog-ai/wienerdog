@@ -114,18 +114,39 @@ function ensureCatchup(paths, manifest, loader, uid) {
 }
 
 /**
- * Register the per-job OS entry(ies) for the current platform.
+ * Ensure the Windows catch-up task XML exists and is registered (once,
+ * idempotent). The Task Scheduler analog of `ensureCatchup`: ONLOGON + hourly
+ * `run-job --catch-up`, the missed-run mechanism mirroring macOS.
+ * @param {import('../core/paths').WienerdogPaths} paths
+ * @param {import('../core/manifest').Manifest} manifest
+ * @param {(argv:string[])=>{status:number}} loader
+ */
+function ensureWindowsCatchup(paths, manifest, loader) {
+  const userId = gen.windowsCurrentUserId();
+  const content = gen.windowsCatchupTaskXml({ node: gen.nodePath(), bin: gen.wienerdogBin(paths), userId });
+  const xmlPath = gen.windowsTaskFile(paths, 'catchup');
+  const taskName = gen.windowsTaskName('catchup'); // '\Wienerdog\catchup'
+  const unload = ['schtasks', '/delete', '/tn', taskName, '/f'];
+  if (ensureEntry(manifest, xmlPath, content, unload)) {
+    loader(['schtasks', '/create', '/tn', taskName, '/xml', xmlPath, '/f']);
+  }
+}
+
+/**
+ * Register the per-job OS entry(ies) for the given platform.
  * @param {import('../core/paths').WienerdogPaths} paths
  * @param {import('../core/manifest').Manifest} manifest
  * @param {{name:string, hour:number, minute:number}} o
  * @param {(argv:string[])=>{status:number}} loader
+ * @param {NodeJS.Platform} [platform=process.platform]  injected for testability
+ *   (WP-049/051/038 rule: never mock process.platform).
  * @returns {{platform:string, changed:boolean}}
  */
-function registerPlatform(paths, manifest, o, loader) {
+function registerPlatform(paths, manifest, o, loader, platform = process.platform) {
   const node = gen.nodePath();
   const bin = gen.wienerdogBin(paths);
 
-  if (process.platform === 'darwin') {
+  if (platform === 'darwin') {
     const uid = process.getuid();
     const logDir = path.join(paths.logs, o.name);
     const label = gen.launchdLabel(o.name);
@@ -139,7 +160,7 @@ function registerPlatform(paths, manifest, o, loader) {
     return { platform: 'launchd', changed };
   }
 
-  if (process.platform === 'linux') {
+  if (platform === 'linux') {
     if (!hasSystemd()) {
       throw new WienerdogError(
         'this Linux system does not run systemd — scheduling needs systemd user timers (non-systemd fallback is not yet supported)'
@@ -165,8 +186,33 @@ function registerPlatform(paths, manifest, o, loader) {
     return { platform: 'systemd', changed };
   }
 
+  if (platform === 'win32') {
+    // Owner amendment (2026-07-06, WP-063 review): the job name MUST pass through
+    // windowsTaskName — which validates ^[a-z0-9][a-z0-9-]*$ and throws on
+    // anything else — BEFORE any XML is rendered or file written. The renderers
+    // embed the name raw by design; we never rely on a bad name only failing
+    // closed as malformed XML. A hostile name fails here, before any side effect.
+    const taskName = gen.windowsTaskName(o.name); // '\Wienerdog\<name>'
+    const userId = gen.windowsCurrentUserId();
+    const dreamXmlPath = gen.windowsTaskFile(paths, o.name);
+    const content = gen.windowsDreamTaskXml({
+      name: o.name,
+      hour: o.hour,
+      minute: o.minute,
+      node,
+      bin,
+      userId,
+    });
+    const unload = ['schtasks', '/delete', '/tn', taskName, '/f'];
+    const changed = ensureEntry(manifest, dreamXmlPath, content, unload);
+    if (changed) loader(['schtasks', '/create', '/tn', taskName, '/xml', dreamXmlPath, '/f']);
+    // Catch-up task (ONLOGON + hourly): the missed-run mechanism, mirroring macOS.
+    ensureWindowsCatchup(paths, manifest, loader);
+    return { platform: 'schtasks', changed };
+  }
+
   throw new WienerdogError(
-    `scheduling is not supported on ${process.platform} yet (macOS and systemd Linux only)`
+    `scheduling is not supported on ${platform} yet (macOS and systemd Linux only)`
   );
 }
 
@@ -211,7 +257,7 @@ function repointSchedules(paths, manifest, opts = {}) {
  * if a `dream` job already exists, no-op. Degrades (no throw) on a platform where
  * scheduling is unsupported so vault creation never fails.
  * @param {import('../core/paths').WienerdogPaths} paths
- * @param {{loader?: (argv:string[])=>{status:number}}} [opts]
+ * @param {{loader?: (argv:string[])=>{status:number}, platform?: NodeJS.Platform}} [opts]
  * @returns {{scheduled:boolean, at?:string, reason?:string, message?:string}}
  */
 function ensureDreamSchedule(paths, opts = {}) {
@@ -223,7 +269,7 @@ function ensureDreamSchedule(paths, opts = {}) {
   jobsLib.saveJob(paths, job);
   const manifest = manifestLib.load(paths);
   try {
-    registerPlatform(paths, manifest, { name: 'dream', hour, minute }, loader);
+    registerPlatform(paths, manifest, { name: 'dream', hour, minute }, loader, opts.platform || process.platform);
   } catch (err) {
     // Unsupported platform / non-systemd Linux: keep the job definition, but do
     // not fail vault creation. The user can schedule later once supported.
@@ -285,7 +331,7 @@ function add(argv, loader) {
     process.stdout.write(`wienerdog: "${name}" already scheduled at ${flags.at} — unchanged.\n`);
     return;
   }
-  const suffix = platform === 'launchd' && process.platform === 'darwin' ? '; catch-up ensured.' : '.';
+  const suffix = platform === 'launchd' || platform === 'schtasks' ? '; catch-up ensured.' : '.';
   process.stdout.write(`wienerdog: scheduled "${name}" (${run}) at ${flags.at} via ${platform}${suffix}\n`);
 }
 
@@ -305,6 +351,7 @@ function remove(argv, loader) {
     `${gen.launchdLabel(name)}.plist`,
     `${gen.systemdUnitBase(name)}.timer`,
     `${gen.systemdUnitBase(name)}.service`,
+    gen.windowsTaskFileName(name), // 'wienerdog-<name>.xml'
   ]);
   const matched = manifest.entries.filter(
     (e) => e.kind === 'scheduler-entry' && basenames.has(path.basename(e.path))
@@ -385,4 +432,4 @@ async function run(argv, { loader = defaultLoader } = {}) {
   }
 }
 
-module.exports = { run, defaultLoader, repointSchedules, ensureDreamSchedule };
+module.exports = { run, defaultLoader, repointSchedules, ensureDreamSchedule, registerPlatform };

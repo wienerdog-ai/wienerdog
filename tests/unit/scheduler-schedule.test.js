@@ -9,6 +9,7 @@ const crypto = require('node:crypto');
 const { spawnSync } = require('node:child_process');
 
 const { getPaths } = require('../../src/core/paths');
+const { WienerdogError } = require('../../src/core/errors');
 const manifestLib = require('../../src/core/manifest');
 const jobsLib = require('../../src/scheduler/jobs');
 const gen = require('../../src/scheduler/generators');
@@ -340,6 +341,139 @@ test('scheduler-schedule: remove runs the unload, deletes files, drops entries a
 test('scheduler-schedule: remove of an unknown job is a no-op notice', async () => {
   const { env } = setup();
   await runSchedule(env, ['remove', 'nope'], () => ({ status: 0 })); // must not throw
+});
+
+// -------------------------------------------------------------------------
+// schedule.js: win32 dispatch via the injected `platform` seam (no real
+// schtasks; POSIX-runnable). Covers the owner amendment (validator-before-
+// renderer), the two-task registration/argv, idempotency, and remove().
+// -------------------------------------------------------------------------
+
+test('scheduler-schedule: win32 dispatch rejects a hostile job name BEFORE rendering XML or writing a file', () => {
+  const { paths } = setup();
+  const manifest = manifestLib.load(paths);
+  /** @type {string[][]} */ const calls = [];
+  const loader = (a) => (calls.push(a), { status: 0 });
+  const schedulesDir = gen.windowsTasksDir(paths);
+
+  assert.throws(
+    () => schedule.registerPlatform(paths, manifest, { name: 'foo&<bar>', hour: 3, minute: 30 }, loader, 'win32'),
+    (err) => err instanceof WienerdogError
+  );
+  // Validator ran before any side effect: no XML written, no manifest entry, no loader call.
+  const wrote = fs.existsSync(schedulesDir) && fs.readdirSync(schedulesDir).length > 0;
+  assert.ok(!wrote, 'no XML file was written for the hostile name');
+  assert.equal(
+    manifest.entries.filter((e) => e.kind === 'scheduler-entry').length,
+    0,
+    'no scheduler-entry recorded for the hostile name'
+  );
+  assert.equal(calls.length, 0, 'the loader was never invoked');
+});
+
+test('scheduler-schedule: win32 dispatch writes both XMLs, records reversible entries, calls loader, returns schtasks', () => {
+  const { paths } = setup();
+  const manifest = manifestLib.load(paths);
+  /** @type {string[][]} */ const calls = [];
+  const loader = (a) => (calls.push(a), { status: 0 });
+
+  const res = schedule.registerPlatform(paths, manifest, { name: 'dream', hour: 3, minute: 30 }, loader, 'win32');
+  assert.deepEqual(res, { platform: 'schtasks', changed: true });
+
+  const dreamXml = gen.windowsTaskFile(paths, 'dream');
+  const catchupXml = gen.windowsTaskFile(paths, 'catchup');
+  assert.equal(path.dirname(dreamXml), gen.windowsTasksDir(paths));
+  assert.ok(fs.existsSync(dreamXml) && fs.existsSync(catchupXml), 'both XML artifacts written under <core>/schedules');
+  assert.ok(fs.readFileSync(dreamXml, 'utf8').includes('<URI>\\Wienerdog\\dream</URI>'));
+  assert.ok(fs.readFileSync(catchupXml, 'utf8').includes('run-job --catch-up'));
+
+  const schedEntries = manifest.entries.filter((e) => e.kind === 'scheduler-entry');
+  const dreamEntry = schedEntries.find((e) => e.path === dreamXml);
+  const catchupEntry = schedEntries.find((e) => e.path === catchupXml);
+  assert.ok(dreamEntry && catchupEntry, 'two scheduler entries recorded');
+  assert.deepEqual(dreamEntry.unload, ['schtasks', '/delete', '/tn', '\\Wienerdog\\dream', '/f']);
+  assert.deepEqual(catchupEntry.unload, ['schtasks', '/delete', '/tn', '\\Wienerdog\\catchup', '/f']);
+
+  assert.deepEqual(calls, [
+    ['schtasks', '/create', '/tn', '\\Wienerdog\\dream', '/xml', dreamXml, '/f'],
+    ['schtasks', '/create', '/tn', '\\Wienerdog\\catchup', '/xml', catchupXml, '/f'],
+  ]);
+});
+
+test('scheduler-schedule: a second identical win32 dispatch is idempotent (no rewrite, no loader call)', () => {
+  const { paths } = setup();
+  const manifest = manifestLib.load(paths);
+  schedule.registerPlatform(paths, manifest, { name: 'dream', hour: 3, minute: 30 }, () => ({ status: 0 }), 'win32');
+  manifestLib.save(paths, manifest);
+
+  const dreamXml = gen.windowsTaskFile(paths, 'dream');
+  const mtimeBefore = fs.statSync(dreamXml).mtimeMs;
+
+  /** @type {string[][]} */ const calls = [];
+  const manifest2 = manifestLib.load(paths);
+  const res = schedule.registerPlatform(
+    paths,
+    manifest2,
+    { name: 'dream', hour: 3, minute: 30 },
+    (a) => (calls.push(a), { status: 0 }),
+    'win32'
+  );
+  assert.equal(res.changed, false, 'unchanged re-register reports changed:false');
+  assert.equal(calls.length, 0, 'no loader calls on an unchanged re-register');
+  assert.equal(fs.statSync(dreamXml).mtimeMs, mtimeBefore, 'the XML file was not rewritten');
+});
+
+test('scheduler-schedule: ensureDreamSchedule(platform:win32) schedules the dream (not "unsupported")', () => {
+  const { paths } = setup();
+  /** @type {string[][]} */ const calls = [];
+  const res = schedule.ensureDreamSchedule(paths, { loader: (a) => (calls.push(a), { status: 0 }), platform: 'win32' });
+  assert.deepEqual(res, { scheduled: true, at: '03:30' });
+  assert.deepEqual(jobsLib.findJob(paths, 'dream'), {
+    name: 'dream',
+    at: '03:30',
+    run: 'builtin:dream',
+    timeoutMinutes: 20,
+  });
+  const manifest = manifestLib.load(paths);
+  const schedEntries = manifest.entries.filter((e) => e.kind === 'scheduler-entry');
+  assert.ok(schedEntries.some((e) => e.path === gen.windowsTaskFile(paths, 'dream')), 'dream task registered');
+  assert.ok(schedEntries.some((e) => e.path === gen.windowsTaskFile(paths, 'catchup')), 'catch-up task registered');
+  assert.ok(calls.length >= 2, 'both schtasks /create argvs issued');
+
+  // Second call is idempotent at the job level.
+  const res2 = schedule.ensureDreamSchedule(paths, { loader: () => ({ status: 0 }), platform: 'win32' });
+  assert.deepEqual(res2, { scheduled: false, reason: 'exists' });
+});
+
+test('scheduler-schedule: remove after a win32 register reverses the dream entry, leaves the shared catch-up', async () => {
+  const { env, paths, root } = setup();
+  const manifest = manifestLib.load(paths);
+  schedule.registerPlatform(paths, manifest, { name: 'dream', hour: 3, minute: 30 }, () => ({ status: 0 }), 'win32');
+  manifestLib.save(paths, manifest);
+  jobsLib.saveJob(paths, { name: 'dream', at: '03:30', run: 'builtin:dream', timeoutMinutes: 20 });
+
+  const dreamXml = gen.windowsTaskFile(paths, 'dream');
+  const catchupXml = gen.windowsTaskFile(paths, 'catchup');
+
+  // Swap the dream entry's unload for a marker so remove never spawns a real schtasks.
+  const marker = path.join(root, 'win32-remove-unload-ran');
+  const m2 = manifestLib.load(paths);
+  for (const e of m2.entries) {
+    if (e.kind === 'scheduler-entry' && e.path === dreamXml) {
+      e.unload = [process.execPath, '-e', `require('fs').appendFileSync(${JSON.stringify(marker)}, 'x')`];
+    }
+  }
+  manifestLib.save(paths, m2);
+
+  await runSchedule(env, ['remove', 'dream'], () => ({ status: 0 }));
+
+  assert.ok(fs.existsSync(marker), 'the stored schtasks-delete unload ran during remove');
+  assert.ok(!fs.existsSync(dreamXml), 'the dream XML was deleted');
+  assert.ok(fs.existsSync(catchupXml), 'the shared catch-up XML remains until uninstall');
+  assert.equal(jobsLib.findJob(paths, 'dream'), null, 'the dream job was dropped from config');
+  const after = manifestLib.load(paths);
+  assert.ok(!after.entries.some((e) => e.kind === 'scheduler-entry' && e.path === dreamXml), 'dream entry gone');
+  assert.ok(after.entries.some((e) => e.kind === 'scheduler-entry' && e.path === catchupXml), 'catch-up entry kept');
 });
 
 // -------------------------------------------------------------------------
