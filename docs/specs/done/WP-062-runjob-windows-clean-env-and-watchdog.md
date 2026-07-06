@@ -1,7 +1,7 @@
 ---
 id: WP-062
 title: run-job Windows reliability — win32 clean env + taskkill watchdog kill-tree
-status: Ready
+status: Done
 model: opus
 size: M
 depends_on: []
