@@ -97,3 +97,75 @@ sessions at all).
   already-redacted whole messages before the single pristine scratch write, and
   the wedged-dream alert reuses the part-3 durable path (control-plane strings
   only, outside the vault). ADR-0004 (just files) intact.
+
+## Amendment (2026-07-07): overlapping dreams + watermark-consolidation safety — WP-069
+
+### Context
+
+A third silent-loss incident (production dogfooding, 2026-07-07). Two dreams
+overlapped — the long 03:30 daily run and the hourly catch-up, which fires
+because `last_success` is not yet written while the daily run is still going, so
+this is reachable on an ordinary user machine, not just under manual invocation.
+Dream **A** had written 5 extracts to the shared `state/dream-scratch`, held the
+lock, and its brain was mid-read. Dream **B** started ~26 s later and (1) its
+`collectExtracts` ran **before** it tried the lock, rebuilding the shared scratch
+dir (`rm -rf` + `mkdir`) — destroying A's live inputs — and then (2), after
+failing to acquire A's lock, called `cleanScratch` on the lock-loss backoff path —
+a second deletion. Brain A found its scratch gone, wrote only failure-doc notes,
+and exited **0**; orchestrator A committed those notes and **advanced its
+watermark past all 5 extracts, 3 of which no dream had ever consolidated** — a
+silent, permanent drop (the WP-048 capacity-starvation outcome via a new cause).
+
+Two root causes: (1) `state/dream-scratch` is shared mutable state but the lock
+was acquired *after* it was written, and the lock-loser deleted it; (2) watermark
+advancement was gated only on a successful commit, not on whether the brain
+actually consumed the extracts.
+
+### Decision (adds parts 6 and 7 to this ADR)
+
+**Part 6 — the scratch dir is lock-protected shared state; the lock-loser is a
+pure no-op.** The single-run lock is acquired **before** any scratch collect or
+write, and `state/dream-scratch` is mutated only while the lock is held. A dream
+that does not acquire the lock performs **no filesystem mutation whatsoever** — no
+collect, no `cleanScratch`, no lock write — it prints "another dream is in
+progress" and returns. Therefore a second concurrent dream can **never** delete or
+overwrite the inputs of the dream that holds the lock. Teardown (clean scratch +
+release lock) runs only when the process **still owns** the lock (`ownsLock`, a
+pid check): a process superseded by a legitimate stale-lock *steal* touches
+neither the stealer's scratch nor its lock. The lock's steal deadline
+(`now + timeoutMs`) equals the brain watchdog timeout, so a stealable lock implies
+the prior holder's brain is already dead; the remaining microsecond-scale race
+(a superseded holder finishing post-brain git work) is accepted, mirroring the
+WP-029 stale-lock tradeoff. Design fork resolved in favour of the **single shared
+scratch dir + strict lock ordering** over per-run `dream-scratch-<pid>` isolation:
+lock-first ordering already makes the loser never touch scratch, so per-run dirs
+would only help the rare steal case (already covered by the pid-guarded teardown)
+at the cost of an orphan-sweep and a scratch contract spread across three modules.
+Revisitable.
+
+**Part 7 — the watermark advances iff the extracts were actually consumed by a
+successful consolidation.** The per-harness watermark advances **iff** (a) the
+brain exited 0, (b) every input extract that defines the new watermark was still
+present and byte-identical to its pre-brain baseline when the brain finished
+(proving the inputs were available and unmodified for the whole run), and (c) the
+validating commit succeeded. A run whose brain exits 0 but whose inputs
+vanished/changed mid-run is degraded: the orchestrator restores the vault
+(discarding the brain's failure-doc writes), advances **no** watermark, and throws
+so `run-job` records a durable `state/alerts.jsonl` entry — those sessions are
+retried next run. This closes the gap left by part 2 (which handled only the
+*nonzero-exit* crash): the "brain exited 0 but consolidated nothing because its
+inputs disappeared" path. The check lives in the orchestrator because
+`validateAndCommit`'s scratch-integrity scan iterates only files that *exist* and
+so is blind to total scratch deletion.
+
+### Consequences
+
+- Overlapping dreams are now safe by construction: the loser is a no-op and the
+  winner's inputs are inviolable. The lock is held slightly earlier (across the
+  input-selection read), which is strictly more correct.
+- No exit-0 path can advance the watermark without the brain's inputs having been
+  present and intact — the silent-drop class this and the WP-048 incident share is
+  closed structurally, independent of the part-6 concurrency fix.
+- The fail-loud `reason` for the vanished-inputs case is a fixed control-plane
+  string (no brain stderr, no session content), consistent with part-3 / WP-041
+  separation; ADR-0004 (just files) and the brain sandbox are unchanged.
