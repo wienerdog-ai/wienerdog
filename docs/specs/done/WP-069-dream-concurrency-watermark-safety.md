@@ -1,7 +1,7 @@
 ---
 id: WP-069
 title: Dream concurrency + watermark-consolidation safety (lock-first scratch, no-op loser, consumed-only watermark)
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: [WP-048]
