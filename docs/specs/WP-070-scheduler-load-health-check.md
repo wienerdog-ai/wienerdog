@@ -351,10 +351,15 @@ function renderSchedulerStatusLine(paths) {
   const missing = readSchedulerStatus(paths).entries.filter((e) => e.status === 'missing').map((e) => e.name);
   if (missing.length === 0) return '';
   const names = missing.map((n) => `"${n}"`).join(', ');
+  // Amendment (2026-07-07, from the WP-070 review): select whole words for the
+  // noun/verb/pronoun so pluralization can't drift on spacing. The prior
+  // `job ${''|'s'}${names}` produced the broken `job s"dream", "catchup"`.
+  const noun = missing.length === 1 ? 'job' : 'jobs';
   const verb = missing.length === 1 ? 'is' : 'are';
-  return `> [!warning] Wienerdog: the scheduled job ${missing.length === 1 ? '' : 's'}${names} ${verb} ` +
+  const pronoun = missing.length === 1 ? 'it' : 'them';
+  return `> [!warning] Wienerdog: the scheduled ${noun} ${names} ${verb} ` +
     `set up but not currently active in your computer's scheduler. Run 'wienerdog sync' to reactivate ` +
-    `${missing.length === 1 ? 'it' : 'them'}. (This can happen after some system updates.)`;
+    `${pronoun}. (This can happen after some system updates.)`;
 }
 
 /**
