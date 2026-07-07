@@ -9,6 +9,7 @@ const { WienerdogError } = require('../core/errors');
 const manifestLib = require('../core/manifest');
 const jobsLib = require('../scheduler/jobs');
 const gen = require('../scheduler/generators');
+const { schedulerSpawn } = require('../scheduler/spawn');
 
 /**
  * Loader seam: the ONE place that registers/loads entries with the OS scheduler.
@@ -17,13 +18,7 @@ const gen = require('../scheduler/generators');
  * @returns {{status:number}} real impl: spawnSync(argv[0], argv.slice(1)).
  */
 function defaultLoader(argv) {
-  // Test/CI kill-switch (ADR-0013): higher-level flows that repoint schedules
-  // (sync, and WP-044's init/adopt) must never spawn the real scheduler.
-  // Injected loaders passed via opts.loader are unaffected — this only
-  // neutralizes the real-spawn default.
-  if (process.env.WIENERDOG_LOADER_NOOP) return { status: 0 };
-  const r = spawnSync(argv[0], argv.slice(1));
-  return { status: r.status == null ? 1 : r.status };
+  return schedulerSpawn(argv);
 }
 
 /** @param {string} p @returns {boolean} */

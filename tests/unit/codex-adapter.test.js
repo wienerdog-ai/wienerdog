@@ -226,7 +226,10 @@ test('Codex-only machine: full setup + working dream from rollout files alone', 
   fs.mkdirSync(home, { recursive: true });
   fs.mkdirSync(codexHome, { recursive: true });
 
-  const subprocessEnv = { ...process.env, HOME: home, WIENERDOG_HOME: core, WIENERDOG_VAULT: vault, CODEX_HOME: codexHome };
+  // WIENERDOG_LOADER_NOOP: `init --fresh-vault` schedules the nightly dream via
+  // real launchd; its label is per-user-global (NOT HOME-scoped), so a temp-HOME
+  // run would mutate the developer's real agent (WP-071).
+  const subprocessEnv = { ...process.env, WIENERDOG_LOADER_NOOP: '1', HOME: home, WIENERDOG_HOME: core, WIENERDOG_VAULT: vault, CODEX_HOME: codexHome };
   delete subprocessEnv.CLAUDE_CONFIG_DIR;
 
   // 1. `wienerdog init --fresh-vault --yes` — Claude absent (no CLAUDE_CONFIG_DIR, no

@@ -2,10 +2,10 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const { spawnSync } = require('node:child_process');
 
 const { WienerdogError } = require('../core/errors');
 const manifestLib = require('../core/manifest');
+const { schedulerSpawn } = require('./spawn');
 
 /**
  * Pure text renderers and path helpers for the OS-native scheduler entries.
@@ -392,11 +392,7 @@ function isFile(p) {
  * @returns {{status:number}}
  */
 function defaultCatchupLoader(argv) {
-  // Test/CI kill-switch (ADR-0013): higher-level flows that repoint schedules
-  // must never spawn the real scheduler. Injected loaders are unaffected.
-  if (process.env.WIENERDOG_LOADER_NOOP) return { status: 0 };
-  const r = spawnSync(argv[0], argv.slice(1));
-  return { status: r.status == null ? 1 : r.status };
+  return schedulerSpawn(argv);
 }
 
 /**
@@ -459,4 +455,5 @@ module.exports = {
   windowsDreamTaskXml,
   windowsCatchupTaskXml,
   ensureCatchup,
+  defaultCatchupLoader,
 };

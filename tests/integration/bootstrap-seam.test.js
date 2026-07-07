@@ -42,6 +42,11 @@ test('Claude present, plain init: skills + hooks registered, NO memory', () => {
   const claudeDir = path.join(root, 'claude');
   const env = {
     ...process.env,
+    // Never touch the real OS scheduler: `init --fresh-vault` registers the
+    // nightly dream via real launchd, whose label is per-user-global (NOT
+    // HOME-scoped) — a temp-HOME run would still mutate the developer's real
+    // agent (WP-071). Uniform across the init variants here.
+    WIENERDOG_LOADER_NOOP: '1',
     HOME: root,
     WIENERDOG_HOME: wd,
     WIENERDOG_VAULT: path.join(root, 'vault'),
@@ -78,6 +83,11 @@ test('Claude present, init --fresh-vault: everything incl. digest + managed bloc
   const claudeDir = path.join(root, 'claude');
   const env = {
     ...process.env,
+    // Never touch the real OS scheduler: `init --fresh-vault` registers the
+    // nightly dream via real launchd, whose label is per-user-global (NOT
+    // HOME-scoped) — a temp-HOME run would still mutate the developer's real
+    // agent (WP-071). Uniform across the init variants here.
+    WIENERDOG_LOADER_NOOP: '1',
     HOME: root,
     WIENERDOG_HOME: wd,
     WIENERDOG_VAULT: vault,
@@ -116,6 +126,11 @@ test('Codex present, plain init: skills + hooks under .agents, NO memory', () =>
   const codexDir = path.join(root, 'codex');
   const env = {
     ...process.env,
+    // Never touch the real OS scheduler: `init --fresh-vault` registers the
+    // nightly dream via real launchd, whose label is per-user-global (NOT
+    // HOME-scoped) — a temp-HOME run would still mutate the developer's real
+    // agent (WP-071). Uniform across the init variants here.
+    WIENERDOG_LOADER_NOOP: '1',
     HOME: root,
     WIENERDOG_HOME: wd,
     WIENERDOG_VAULT: path.join(root, 'vault'),

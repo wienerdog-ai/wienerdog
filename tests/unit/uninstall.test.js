@@ -19,6 +19,11 @@ function tempEnv() {
     core,
     env: {
       ...process.env,
+      // Never touch the real OS scheduler: init/uninstall here register+unload
+      // launchd agents, whose labels are per-user-global (NOT HOME-scoped) — a
+      // temp-HOME run would still bootout the developer's real dream agent
+      // (WP-071). NOOP neutralizes the loader AND the uninstall unload spawn.
+      WIENERDOG_LOADER_NOOP: '1',
       // Isolate HOME so the PATH shim (~/.local/bin/wienerdog, WP-042) is written
       // to — and removed from — the temp tree, never the developer's real
       // ~/.local/bin. Detection uses the config-dir overrides below.

@@ -75,6 +75,26 @@ async function runSchedule(env, argv, loader) {
   }
 }
 
+/**
+ * Run `fn` with WP-071's suite-wide hard scheduler guard
+ * (WIENERDOG_TEST_NO_REAL_SCHEDULER) cleared, restoring it afterwards. The
+ * marker-based reverse/remove tests below deliberately swap a benign in-process
+ * `node -e` command in as the entry's `unload`, then assert it EXECUTED — so they
+ * must let schedulerSpawn actually spawn (never a real launchctl/systemctl/schtasks
+ * command). Await it even for synchronous `fn`.
+ * @template T @param {() => (T | Promise<T>)} fn @returns {Promise<T>}
+ */
+async function withUnloadSpawnAllowed(fn) {
+  const saved = process.env.WIENERDOG_TEST_NO_REAL_SCHEDULER;
+  delete process.env.WIENERDOG_TEST_NO_REAL_SCHEDULER;
+  try {
+    return await fn();
+  } finally {
+    if (saved === undefined) delete process.env.WIENERDOG_TEST_NO_REAL_SCHEDULER;
+    else process.env.WIENERDOG_TEST_NO_REAL_SCHEDULER = saved;
+  }
+}
+
 // Whether `schedule add` can register on this host (skip integration otherwise).
 const SCHED_SUPPORTED =
   process.platform === 'darwin' ||
@@ -160,7 +180,7 @@ test('scheduler-schedule: schedule.json watermark read/write', () => {
 // manifest.js: scheduler-entry reverse (harmless marker command as the "spy")
 // -------------------------------------------------------------------------
 
-test('scheduler-schedule: reverseSchedulerEntry runs the stored unload then removes the file', () => {
+test('scheduler-schedule: reverseSchedulerEntry runs the stored unload then removes the file', async () => {
   const { root } = setup();
   const file = path.join(root, 'ai.wienerdog.x.plist');
   fs.writeFileSync(file, '<plist/>');
@@ -172,7 +192,9 @@ test('scheduler-schedule: reverseSchedulerEntry runs the stored unload then remo
   };
   const removed = [];
   const skipped = [];
-  manifestLib.reverseSchedulerEntry(entry, false, removed, skipped, new Set());
+  await withUnloadSpawnAllowed(() =>
+    manifestLib.reverseSchedulerEntry(entry, false, removed, skipped, new Set())
+  );
   assert.ok(fs.existsSync(marker), 'unload argv was executed');
   assert.ok(!fs.existsSync(file), 'file removed');
   assert.deepEqual(removed, [file]);
@@ -195,7 +217,7 @@ test('scheduler-schedule: reverseSchedulerEntry --dry-run runs nothing but repor
   assert.deepEqual(removed, [file]);
 });
 
-test('scheduler-schedule: manifest.reverse handles scheduler-entry (unload + rm)', () => {
+test('scheduler-schedule: manifest.reverse handles scheduler-entry (unload + rm)', async () => {
   const { paths, root } = setup();
   const file = path.join(root, 'ai.wienerdog.z.plist');
   fs.writeFileSync(file, '<plist/>');
@@ -207,7 +229,9 @@ test('scheduler-schedule: manifest.reverse handles scheduler-entry (unload + rm)
     unload: [process.execPath, '-e', `require('fs').writeFileSync(${JSON.stringify(marker)}, 'ran')`],
   });
   manifestLib.save(paths, manifest);
-  const { removed } = manifestLib.reverse(paths, manifestLib.load(paths));
+  const { removed } = await withUnloadSpawnAllowed(() =>
+    manifestLib.reverse(paths, manifestLib.load(paths))
+  );
   assert.ok(fs.existsSync(marker), 'reverse ran the stored unload');
   assert.ok(!fs.existsSync(file), 'reverse removed the entry file');
   assert.ok(removed.includes(file));
@@ -326,7 +350,7 @@ test('scheduler-schedule: remove runs the unload, deletes files, drops entries a
   }
   manifestLib.save(paths, manifest);
 
-  await runSchedule(env, ['remove', 'dream'], () => ({ status: 0 }));
+  await withUnloadSpawnAllowed(() => runSchedule(env, ['remove', 'dream'], () => ({ status: 0 })));
 
   assert.ok(fs.existsSync(marker), 'stored unload ran during remove');
   for (const f of jobFiles) assert.ok(!fs.existsSync(f), `${f} deleted`);
@@ -465,7 +489,7 @@ test('scheduler-schedule: remove after a win32 register reverses the dream entry
   }
   manifestLib.save(paths, m2);
 
-  await runSchedule(env, ['remove', 'dream'], () => ({ status: 0 }));
+  await withUnloadSpawnAllowed(() => runSchedule(env, ['remove', 'dream'], () => ({ status: 0 })));
 
   assert.ok(fs.existsSync(marker), 'the stored schtasks-delete unload ran during remove');
   assert.ok(!fs.existsSync(dreamXml), 'the dream XML was deleted');

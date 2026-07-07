@@ -19,7 +19,7 @@
     "googleapis": "^173.0.0"
   },
   "scripts": {
-    "test": "node --test",
+    "test": "node tests/run.js",
     "lint": "node scripts/lint.js",
     "gen:agents": "node scripts/gen-agents-md.js",
     "scenarios": "node tests/scenarios/run-scenarios.js"

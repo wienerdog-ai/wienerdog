@@ -1,7 +1,7 @@
 ---
 id: WP-071
 title: Hard test guard against real scheduler mutation (the root-cause structural fix)
-status: Ready
+status: In-Review
 model: opus
 size: M
 depends_on: [WP-070]
@@ -175,6 +175,7 @@ mutation points through it.
 | modify | tests/unit/codex-adapter.test.js | add `WIENERDOG_LOADER_NOOP: '1'` to its subprocess env |
 | modify | tests/unit/uninstall.test.js | add `WIENERDOG_LOADER_NOOP: '1'` to its `tempEnv()` (the smoking-gun test) |
 | modify | tests/integration/bootstrap-seam.test.js | add `WIENERDOG_LOADER_NOOP: '1'` to its subprocess env |
+| modify | tests/unit/scheduler-schedule.test.js | DISCOVERED (WP-071 impl): the spec's "safe under the guard" claim missed that its marker-based reverse/remove tests assert the stored `unload` argv EXECUTES (via a benign in-process `node -e` marker, never a real scheduler call), and the remove path runs the stored unload directly, NOT through the injected loader. NOOP cannot satisfy them (it skips the spawn); they clear the guard locally around the benign marker spawn via a `withUnloadSpawnAllowed` helper. |
 
 **Do NOT modify** `src/cli/dream.js`, `tests/integration/dream.test.js`,
 `src/scheduler/status.js` (WP-070's — its `defaultProbe` already self-guards),

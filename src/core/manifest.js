@@ -3,7 +3,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
-const { spawnSync } = require('node:child_process');
 
 /**
  * install-manifest.json shape:
@@ -197,9 +196,11 @@ function reverseSchedulerEntry(entry, dryRun, removed, skipped, removedSet) {
       process.stdout.write(`wienerdog: would run: ${entry.unload.join(' ')}\n`);
     } else {
       // Best-effort: the entry may already be unloaded. Ignore non-zero/errors;
-      // the goal is the file removal below.
+      // the goal is the file removal below. Routes through the single scheduler
+      // mutation chokepoint (WP-071) so the test guard covers this path too.
+      // Required lazily to keep manifest.js free of a static scheduler dependency.
       try {
-        spawnSync(entry.unload[0], entry.unload.slice(1));
+        require('../scheduler/spawn').schedulerSpawn(entry.unload);
       } catch {
         /* ignore — unregistration is best-effort */
       }
