@@ -1,7 +1,7 @@
 ---
 id: WP-071
 title: Hard test guard against real scheduler mutation (the root-cause structural fix)
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: [WP-070]

@@ -89,7 +89,7 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 | [WP-068](done/WP-068-uninstall-vault-preserve-and-core-disposal.md) | Uninstall vault-preserve handler + machine-generated core disposal | M7 | opus | Done | — |
 | [WP-069](done/WP-069-dream-concurrency-watermark-safety.md) | Dream concurrency + watermark-consolidation safety (lock-first scratch, no-op loser, consumed-only watermark) | M7 | opus | Done | WP-048 |
 | [WP-070](done/WP-070-scheduler-load-health-check.md) | Scheduler-load health check — doctor + digest surface "configured but not loaded"; sync heals | M7 | opus | Done | — |
-| [WP-071](WP-071-test-guard-real-scheduler.md) | Hard test guard against real scheduler mutation (per-user-global labels) | M7 | opus | In-Review | WP-070 |
+| [WP-071](done/WP-071-test-guard-real-scheduler.md) | Hard test guard against real scheduler mutation (per-user-global labels) | M7 | opus | Done | WP-070 |
 
 > **First-production-night incident (2026-07-04).** WP-038, WP-039 and WP-041 form
 > a serial chain (they edit the shared `run-job.js` / `dream.js` / `validate.js`
