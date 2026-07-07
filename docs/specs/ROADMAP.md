@@ -90,6 +90,7 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 | [WP-069](done/WP-069-dream-concurrency-watermark-safety.md) | Dream concurrency + watermark-consolidation safety (lock-first scratch, no-op loser, consumed-only watermark) | M7 | opus | Done | WP-048 |
 | [WP-070](done/WP-070-scheduler-load-health-check.md) | Scheduler-load health check — doctor + digest surface "configured but not loaded"; sync heals | M7 | opus | Done | — |
 | [WP-071](done/WP-071-test-guard-real-scheduler.md) | Hard test guard against real scheduler mutation (per-user-global labels) | M7 | opus | Done | WP-070 |
+| [WP-072](WP-072-install-ps1-noninteractive-init-handoff.md) | install.ps1 hands off to init non-interactively (fix Windows irm\|iex hang) | M7 | opus | Draft | — |
 
 > **First-production-night incident (2026-07-04).** WP-038, WP-039 and WP-041 form
 > a serial chain (they edit the shared `run-job.js` / `dream.js` / `validate.js`
@@ -428,6 +429,35 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 
 <!-- -->
 
+> **Windows irm|iex init-handoff hang (2026-07-07, credit: owner field report,
+> Node-present Windows machine).** `irm .../install.ps1 | iex` printed
+> "Found Node v24.18.0 - handing over ..." then **hung forever** — no plan, no
+> prompt. Root cause (verified from code): the handoff ran
+> `npx --yes wienerdog@latest init`, where `--yes` is **npx's** package-prompt flag
+> (it precedes `wienerdog@latest`), NOT passed to `init` — so `init` reached its own
+> `[Y/n]` confirm (`init.js:117`) and blocked on stdin. POSIX survives via
+> `confirm()`'s `/dev/tty` fallback (WP-034); Windows has no `/dev/tty` and under
+> `irm|iex` the init child's stdin is tangled in PowerShell's object pipeline, so
+> the plan+prompt never surface and it hangs — the WP-061 iex-handoff fragility
+> class. **WP-072** (opus S, independent) makes the handoff **non-interactive**:
+> `Main` builds the forwarded argv once as `$ForwardArgs + --yes` (de-duped,
+> null-safe) and passes it to BOTH the `npx` branch and the `Install-ViaTarball`
+> branch, so init skips its blocking confirm while still PRINTING its full plan
+> (transparency intact; the installer one-liner + printed plan are the consent
+> surface per ADR-0011/0017/WP-052). The two handoff seams
+> (`Start-WienerdogNpx`/`Start-WienerdogInit`) are untouched — the npx `--yes` stays
+> where it is; init's `--yes` arrives via `@ForwardArgs`. **POSIX is left
+> interactive on purpose** (the `/dev/tty` prompt works and is the designed UX — fix
+> only what's broken); WP-060's default-yes cannot save the iex case (tangled stdin
+> delivers no line at all). Frozen as an **ADR-0017 amendment (non-interactive init
+> handoff)**. CI-covered by Pester `Main` argv assertions on the mocked seams; the
+> real no-hang reproduction on the Node-present Windows box is the owner manual gate
+> (WP-058/061 precedent). Residual init.js mode-1 readline hang (Windows
+> stdin.isTTY-true-but-unreadable) is noted out-of-scope: removed from the installer
+> path by `--yes`, and no safe non-heuristic guard exists.
+
+<!-- -->
+
 ## Dependency graph
 
 ```mermaid
@@ -511,4 +541,5 @@ graph LR
   WP066[WP-066 dream catch-up reassurance in CLI summaries + README]
   WP067[WP-067 Windows .cmd shim single-parser-block]
   WP068[WP-068 uninstall vault-preserve + machine-generated core disposal]
+  WP072[WP-072 install.ps1 non-interactive init handoff]
 ```
