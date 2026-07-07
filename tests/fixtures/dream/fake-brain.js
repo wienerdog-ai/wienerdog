@@ -36,6 +36,16 @@ if (process.env.WIENERDOG_FAKE_BRAIN_MODE === 'crash') {
   process.exit(1);
 }
 
+// Concurrency test (2026-07-07 incident): a second dream deleted this run's live
+// scratch mid-read, so the brain found its inputs gone and — degrading gracefully —
+// wrote only a failure-documentation note, then exited 0. The orchestrator's
+// watermark-safety gate must catch that the inputs vanished and refuse to advance.
+if (process.env.WIENERDOG_FAKE_BRAIN_MODE === 'vanish-scratch') {
+  if (scratch) fs.rmSync(scratch, { recursive: true, force: true });
+  write('00-Inbox/dream-failure-note.md', '---\ntype: note\n---\n\nInputs disappeared mid-run; nothing to consolidate.\n');
+  process.exit(0);
+}
+
 // 1. Valid Tier-2 note — not code-gated (Tier-2 path); must survive.
 write(
   '03-Resources/valid-note.md',

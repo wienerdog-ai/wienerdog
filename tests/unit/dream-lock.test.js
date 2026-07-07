@@ -6,7 +6,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const { acquireLock, releaseLock } = require('../../src/core/dream/lock');
+const { acquireLock, releaseLock, ownsLock } = require('../../src/core/dream/lock');
 
 /** Fresh temp state dir. @returns {string} */
 function tempState() {
@@ -65,4 +65,30 @@ test('dream-lock: releaseLock leaves another process lock intact', () => {
 test('dream-lock: releaseLock is a no-op when absent', () => {
   const state = tempState();
   assert.doesNotThrow(() => releaseLock(state));
+});
+
+test('dream-lock: ownsLock is true for our own live lock', () => {
+  const state = tempState();
+  acquireLock(state, 60_000);
+  assert.equal(ownsLock(state), true);
+});
+
+test('dream-lock: ownsLock is false for a foreign-pid lock (superseded holder)', () => {
+  const state = tempState();
+  fs.mkdirSync(state, { recursive: true });
+  const other = JSON.stringify({ pid: process.pid + 99999, host: 'x', startedAt: 'now', deadline: Date.now() + 60_000 });
+  fs.writeFileSync(path.join(state, 'dream.lock'), other);
+  assert.equal(ownsLock(state), false);
+});
+
+test('dream-lock: ownsLock is false when the lock is absent', () => {
+  const state = tempState();
+  assert.equal(ownsLock(state), false);
+});
+
+test('dream-lock: ownsLock is false when the lock is unparseable', () => {
+  const state = tempState();
+  fs.mkdirSync(state, { recursive: true });
+  fs.writeFileSync(path.join(state, 'dream.lock'), 'not json');
+  assert.equal(ownsLock(state), false);
 });

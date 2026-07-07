@@ -68,4 +68,22 @@ function releaseLock(stateDir) {
   }
 }
 
-module.exports = { acquireLock, releaseLock };
+/**
+ * True IFF state/dream.lock currently exists and its pid is THIS process — i.e.
+ * we still hold the lock and were not superseded by a stale-lock steal. Used by
+ * the dream teardown to decide whether cleaning scratch / releasing the lock is
+ * safe: a superseded process must touch NEITHER (the stealer now owns both).
+ * Never throws.
+ * @param {string} stateDir
+ * @returns {boolean}
+ */
+function ownsLock(stateDir) {
+  try {
+    const existing = JSON.parse(fs.readFileSync(lockPath(stateDir), 'utf8'));
+    return existing.pid === process.pid;
+  } catch {
+    return false; // absent or unparseable → we do not own it
+  }
+}
+
+module.exports = { acquireLock, releaseLock, ownsLock };

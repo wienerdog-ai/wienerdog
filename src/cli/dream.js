@@ -7,7 +7,7 @@ const crypto = require('node:crypto');
 const { getPaths } = require('../core/paths');
 const { WienerdogError } = require('../core/errors');
 const { readDreamConfig } = require('../core/dream/config');
-const { acquireLock, releaseLock } = require('../core/dream/lock');
+const { acquireLock, releaseLock, ownsLock } = require('../core/dream/lock');
 const { readWatermarks, writeWatermarks } = require('../core/dream/watermarks');
 const { collectExtracts, cleanScratch, MIN_TRUNCATE_BYTES } = require('../core/dream/scratch');
 const { spawnBrain, buildClaudeArgs } = require('../core/dream/brain');
@@ -45,6 +45,29 @@ function hashScratch(files) {
     }
   }
   return out;
+}
+
+/**
+ * True IFF every expected extract still exists AND byte-matches its pre-brain
+ * baseline — proof the brain's inputs were present and unchanged for the whole
+ * run. A false result means the inputs vanished or changed mid-run (the
+ * 2026-07-07 concurrency incident): the brain could not have consolidated them.
+ * @param {string[]} wrote  the extract paths collectExtracts wrote (sel.wrote)
+ * @param {Record<string,string>} baseline  {absPath: sha256} from hashScratch()
+ * @returns {boolean}
+ */
+function scratchIntact(wrote, baseline) {
+  for (const f of wrote) {
+    const abs = path.resolve(f);
+    let h;
+    try {
+      h = crypto.createHash('sha256').update(fs.readFileSync(abs)).digest('hex');
+    } catch {
+      return false; // missing → vanished
+    }
+    if (baseline[abs] !== h) return false; // present but changed
+  }
+  return true;
 }
 
 /** Print the dry-run plan: session counts, bytes, drops, vault, resolved argv. */
@@ -128,85 +151,81 @@ async function run(argv) {
   const layout = readVaultLayout(paths.config);
   const date = resolveDate();
 
-  // 2. Vault must be a git repo. (Uncommitted session edits are handled by the
-  //    pre-commit below, after the lock — no clean-tree precondition here.)
+  // 2. Vault must be a git repo (read-only check; fail fast without the lock).
   assertGitRepo(vaultDir);
 
-  // 3. Collect the fresh transcripts into scratch.
-  const wm = readWatermarks(paths.state);
-  const sel = collectExtracts(paths, wm, cfg.maxInputBytes);
-
-  // 4. Surface capacity events plainly — a size event must NEVER be silent.
-  for (const t of sel.truncated) {
-    console.log(
-      `wienerdog: dream — truncated ${t.harness}/${t.session_id} to fit the input budget ` +
-        `(kept the newest ${t.keptBytes} of ${t.originalBytes} bytes).`
-    );
-  }
-  if (sel.dropped.length > 0) {
-    const names = sel.dropped.map((d) => `${d.harness}/${d.session_id} (${d.bytes}B)`).join(', ');
-    console.log(
-      `wienerdog: dream — capacity: dropped ${sel.dropped.length} session(s) over ` +
-        `dream_max_input_bytes (${cfg.maxInputBytes}): ${names}.`
-    );
-  }
-
-  // 5. Fresh sessions existed but NONE could be fed → the dream is WEDGED. This is
-  //    a capacity FAILURE, never "nothing new": fail loud so run-job records a
-  //    durable alert (state/alerts.jsonl → digest). Dry-run only diagnoses.
-  if (sel.entries.length === 0 && sel.dropped.length > 0) {
-    cleanScratch(paths.state);
-    if (dryRun) {
-      console.log(
-        'wienerdog: dream plan (dry-run) — capacity exhausted: no fresh session fits ' +
-          `dream_max_input_bytes (${cfg.maxInputBytes}); raise it in config.yaml.`
-      );
-      return;
-    }
-    throw new WienerdogError(
-      `dream capacity exhausted: ${sel.dropped.length} fresh session(s) exceed ` +
-        `dream_max_input_bytes (${cfg.maxInputBytes}) and none fit even after truncation ` +
-        `(per-session floor ${MIN_TRUNCATE_BYTES} bytes) — raise dream_max_input_bytes in config.yaml.`
-    );
-  }
-
-  // 6. Genuinely nothing new (no fresh sessions at all) → no brain, no commit.
-  if (sel.entries.length === 0) {
-    cleanScratch(paths.state);
-    console.log('wienerdog: nothing new to dream.');
-    return;
-  }
-
-  // 7. Dry-run → print the plan and stop.
-  if (dryRun) {
-    printPlan(sel, cfg, vaultDir, date, layout);
-    cleanScratch(paths.state);
-    return;
-  }
-
-  // Baseline the scratch files while they are still pristine (before the brain).
-  const scratchBaseline = hashScratch(sel.wrote);
-
-  // 6. Acquire the single-run lock.
+  // 3. Acquire the single-run lock BEFORE any scratch collect/write. state/
+  //    dream-scratch is shared mutable state; collectExtracts rebuilds it
+  //    (rm + mkdir + write). Locking first is what guarantees a concurrent dream
+  //    can never destroy the holder's live inputs (2026-07-07 incident). A dream
+  //    that does NOT get the lock touches NOTHING and returns — a pure no-op.
   const lock = acquireLock(paths.state, cfg.timeoutMs);
   if (!lock.acquired) {
-    cleanScratch(paths.state);
     console.log('wienerdog: another dream is in progress.');
-    return;
+    return; // no collect, no cleanScratch, no lock write.
   }
   if (lock.stolen) {
     console.warn('wienerdog: warning — stole a stale dream lock from a prior run that never released it.');
   }
 
-  // 7. Run the brain under the watchdog, then validate + commit.
   try {
-    // Commit the user's own uncommitted session edits so the post-brain diff is
-    // exactly the brain's writes (fixes dirty-vault starvation).
+    // 4. Collect the fresh transcripts into scratch (now safely under the lock).
+    const wm = readWatermarks(paths.state);
+    const sel = collectExtracts(paths, wm, cfg.maxInputBytes);
+
+    // 5. Surface capacity events plainly — a size event must NEVER be silent.
+    for (const t of sel.truncated) {
+      console.log(
+        `wienerdog: dream — truncated ${t.harness}/${t.session_id} to fit the input budget ` +
+          `(kept the newest ${t.keptBytes} of ${t.originalBytes} bytes).`
+      );
+    }
+    if (sel.dropped.length > 0) {
+      const names = sel.dropped.map((d) => `${d.harness}/${d.session_id} (${d.bytes}B)`).join(', ');
+      console.log(
+        `wienerdog: dream — capacity: dropped ${sel.dropped.length} session(s) over ` +
+          `dream_max_input_bytes (${cfg.maxInputBytes}): ${names}.`
+      );
+    }
+
+    // 6. Fresh sessions existed but NONE could be fed → capacity WEDGE: fail loud
+    //    (run-job records a durable alert). Dry-run only diagnoses.
+    if (sel.entries.length === 0 && sel.dropped.length > 0) {
+      if (dryRun) {
+        console.log(
+          'wienerdog: dream plan (dry-run) — capacity exhausted: no fresh session fits ' +
+            `dream_max_input_bytes (${cfg.maxInputBytes}); raise it in config.yaml.`
+        );
+        return;
+      }
+      throw new WienerdogError(
+        `dream capacity exhausted: ${sel.dropped.length} fresh session(s) exceed ` +
+          `dream_max_input_bytes (${cfg.maxInputBytes}) and none fit even after truncation ` +
+          `(per-session floor ${MIN_TRUNCATE_BYTES} bytes) — raise dream_max_input_bytes in config.yaml.`
+      );
+    }
+
+    // 7. Genuinely nothing new → no brain, no commit.
+    if (sel.entries.length === 0) {
+      console.log('wienerdog: nothing new to dream.');
+      return;
+    }
+
+    // 8. Dry-run → print the plan and stop.
+    if (dryRun) {
+      printPlan(sel, cfg, vaultDir, date, layout);
+      return;
+    }
+
+    // 9. Baseline the scratch files while they are still pristine (before brain).
+    const scratchBaseline = hashScratch(sel.wrote);
+
+    // 10. Pre-commit the user's own uncommitted session edits so the post-brain
+    //     diff is exactly the brain's writes; after it the tree MUST be clean.
     precommitSessionEdits(vaultDir);
-    // After the pre-commit the tree MUST be clean. If it is not, dirt appeared
-    // while the lock was held (a race, not session edits) — refuse (pathological).
     assertCleanTree(vaultDir);
 
+    // 11. Run the brain under the watchdog.
     const logDir = path.join(paths.logs, 'dream');
     fs.mkdirSync(logDir, { recursive: true });
     const logStream = fs.createWriteStream(path.join(logDir, `${date}.log`), { flags: 'a' });
@@ -221,16 +240,29 @@ async function run(argv) {
         logStream,
       });
     } catch (err) {
-      // Brain failed/timed out: discard its partial, unvalidated writes (all dirt
-      // is brain-authored by construction after the pre-commit) before releasing
-      // the lock. Still fail: run-job records the error + fails loud.
+      // Brain failed/timed out: discard its partial, unvalidated writes, then fail.
       restoreVaultToHead(vaultDir);
       throw err;
     } finally {
       logStream.end();
     }
 
-    // 8. Validate the writes and make exactly one commit.
+    // 12. WATERMARK-SAFETY GATE. The brain exited 0 — but only trust that as a
+    //     consolidation if its inputs were AVAILABLE and UNCHANGED for the whole
+    //     run. If any expected extract vanished or changed (2026-07-07: a second
+    //     dream deleted this run's live scratch, so the brain wrote only
+    //     failure-doc notes on empty inputs), the brain consolidated NOTHING:
+    //     restore the vault, advance NO watermark, and fail loud so run-job
+    //     records a durable alert. The sessions are retried next run.
+    if (!scratchIntact(sel.wrote, scratchBaseline)) {
+      restoreVaultToHead(vaultDir);
+      throw new WienerdogError(
+        'dream aborted: the input extracts vanished or changed mid-run — no session ' +
+          'was consolidated, so the watermark is not advanced (these sessions will be retried next run).'
+      );
+    }
+
+    // 13. Validate the writes and make exactly one commit.
     const res = validateAndCommit({
       vaultDir,
       scratchDir: sel.scratchDir,
@@ -240,10 +272,10 @@ async function run(argv) {
       layout,
     });
 
-    // 9. Advance the watermarks — ONLY after a successful commit.
+    // 14. Advance the watermarks — only now: brain 0 + inputs intact + commit ok.
     writeWatermarks(paths.state, { claude: sel.maxMtime.claude, codex: sel.maxMtime.codex });
 
-    // 10. Regenerate the injected session digest (atomic temp + rename).
+    // 15. Regenerate the injected session digest (atomic temp + rename).
     fs.mkdirSync(paths.state, { recursive: true });
     const digest = renderDigest(vaultDir, layout, { alerts: readAlerts(paths), updateLine: renderUpdateLine(paths) });
     const digestDest = path.join(paths.state, 'digest.md');
@@ -251,16 +283,22 @@ async function run(argv) {
     fs.writeFileSync(digestTmp, digest);
     fs.renameSync(digestTmp, digestDest);
 
-    // 11. Summary.
+    // 16. Summary.
     const shaShort = res.sha ? res.sha.slice(0, 7) : '(none)';
     console.log(
       `wienerdog: dream committed ${shaShort} — ${res.counts.notes} notes, ${res.counts.skills} skills; ` +
         `${res.reverted.length} reverted, ${res.outOfVault.length} out-of-vault.`
     );
   } finally {
-    // 12. Always release the lock and wipe scratch (success, error, or timeout).
-    releaseLock(paths.state);
-    cleanScratch(paths.state);
+    // 17. Teardown: clean scratch + release the lock ONLY if we still hold it. If
+    //     we were superseded by a stale-lock steal, the stealer now owns both the
+    //     lock and the rebuilt scratch — touch NEITHER. Clean before release so no
+    //     newly-starting dream can acquire the freed lock and have its fresh
+    //     scratch wiped by our cleanup (TOCTOU).
+    if (ownsLock(paths.state)) {
+      cleanScratch(paths.state);
+      releaseLock(paths.state);
+    }
   }
 }
 

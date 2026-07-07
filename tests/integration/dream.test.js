@@ -364,3 +364,76 @@ test('dream-integration: a capacity dry-run diagnoses exhaustion without throwin
   assert.ok(!/nothing new to dream/.test(output));
   assert.equal(commitCount(ctx.vault), before);
 });
+
+// ── WP-069: concurrency + watermark-consolidation safety ────────────────────
+
+test('dream-integration: a lock-losing dream is a pure no-op that leaves the winner\'s live scratch byte-for-byte untouched', async () => {
+  // The winner (dream A) holds the lock and has live extracts in the shared
+  // scratch dir mid-read. A concurrent loser (this run) must NOT collect, must
+  // NOT cleanScratch — it must leave A's inputs inviolate. On pre-WP-069 code
+  // collectExtracts (rm+mkdir) ran before the lock and the lock-loss path called
+  // cleanScratch, so A's extracts were destroyed twice: this test FAILS there.
+  const ctx = setup();
+  const before = commitCount(ctx.vault);
+  const state = path.join(ctx.core, 'state');
+  const scratch = path.join(state, 'dream-scratch');
+  fs.mkdirSync(scratch, { recursive: true });
+
+  // Winner A's live extracts (sentinels) — record their exact bytes.
+  const sentinels = {
+    'claude__sess-1.md': '# extract 1\nnever-consolidated session A\n',
+    'claude__sess-2.md': '# extract 2\nanother of A\'s live inputs\n',
+  };
+  for (const [name, body] of Object.entries(sentinels)) {
+    fs.writeFileSync(path.join(scratch, name), body);
+  }
+
+  // Winner A holds a live foreign lock (future deadline, different pid).
+  fs.writeFileSync(
+    path.join(state, 'dream.lock'),
+    JSON.stringify({ pid: process.pid + 99999, host: 'other', startedAt: new Date().toISOString(), deadline: Date.now() + 600000 })
+  );
+
+  const { output, thrown } = await runDream(ctx, ['--yes']);
+
+  assert.equal(thrown, null);
+  assert.match(output, /another dream is in progress/);
+  // No commit, no watermark advanced.
+  assert.equal(commitCount(ctx.vault), before);
+  assert.equal(fs.existsSync(path.join(state, 'watermarks.json')), false);
+  // A's lock is intact.
+  assert.equal(fs.existsSync(path.join(state, 'dream.lock')), true);
+  // A's scratch is byte-for-byte untouched — no extra files, no deletions.
+  assert.deepEqual(fs.readdirSync(scratch).sort(), Object.keys(sentinels).sort());
+  for (const [name, body] of Object.entries(sentinels)) {
+    assert.equal(fs.readFileSync(path.join(scratch, name), 'utf8'), body);
+  }
+});
+
+test('dream-integration: a brain whose inputs vanish mid-run advances no watermark, makes no commit, and fails loud', async () => {
+  // The brain exits 0 but its scratch inputs disappeared mid-read (the 2026-07-07
+  // concurrency incident), so it consolidated nothing and wrote only a failure-doc
+  // note. run() must catch that the inputs vanished, restore the vault (dropping
+  // the failure-doc note), advance NO watermark, and throw. On pre-WP-069 code
+  // there is no such gate: it commits the failure note and advances the watermark,
+  // so this test FAILS there.
+  const ctx = setup();
+  const before = commitCount(ctx.vault);
+
+  const { output, thrown } = await runDream(ctx, ['--yes'], { WIENERDOG_FAKE_BRAIN_MODE: 'vanish-scratch' });
+
+  // Fail loud.
+  assert.ok(thrown, 'expected a WienerdogError throw');
+  assert.match(thrown.message, /input extracts vanished or changed mid-run/);
+  // No dream commit; the brain's failure-doc note was restored away.
+  assert.equal(commitCount(ctx.vault), before);
+  assert.equal(fs.existsSync(path.join(ctx.vault, '00-Inbox/dream-failure-note.md')), false);
+  assert.equal(git(ctx.vault, ['status', '--porcelain']).trim(), '');
+  // Watermark NOT advanced — the sessions are retried next run.
+  assert.equal(fs.existsSync(path.join(ctx.core, 'state', 'watermarks.json')), false);
+  // Never reported success.
+  assert.ok(!/dream committed/.test(output));
+  // Teardown still ran: lock released, scratch gone.
+  assert.equal(fs.existsSync(path.join(ctx.core, 'state', 'dream.lock')), false);
+  assert.equal(fs.existsSync(path.join(ctx.core, 'state', 'dream-scratch')), false);
+});
