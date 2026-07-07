@@ -1,7 +1,7 @@
 ---
 id: WP-072
 title: install.ps1 hands off to init non-interactively (fix Windows irm|iex hang)
-status: In-Review
+status: Done
 model: opus
 size: S
 depends_on: []
