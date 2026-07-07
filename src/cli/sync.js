@@ -166,6 +166,17 @@ async function run(argv, opts = {}) {
     const r = repointSchedules(paths, manifest, { loader: opts.loader });
     if (r.changed > 0) console.log(`wienerdog: repointed ${r.changed} schedule(s) to the vendored app.`);
     for (const n of r.notices) console.log(`  note: ${n}`);
+
+    // Heal any registered scheduler entry the OS silently lost (repoint no-ops on
+    // identical files, so it never reloads a bootout'd-but-file-intact entry), then
+    // refresh the cache so the digest reflects the post-heal, clean state. Heal
+    // BEFORE refresh. The ONLY scheduler mutation in the read/heal split (ADR-0018).
+    const status = require('../scheduler/status');
+    const heal = status.reloadMissing(paths, { loader: opts.loader });
+    if (heal.reloaded.length > 0) {
+      console.log(`wienerdog: reloaded ${heal.reloaded.length} scheduled job(s) the OS had dropped: ${heal.reloaded.join(', ')}.`);
+    }
+    status.refreshSchedulerStatus(paths);
   }
 
   /** @type {{changed: string[], unchanged: string[], notices: string[]}} */
@@ -175,7 +186,11 @@ async function run(argv, opts = {}) {
   const skipManagedBlock = !vaultPath;
   if (vaultPath) {
     const layout = readVaultLayout(paths.config);
-    const digest = renderDigest(vaultPath, layout, { alerts: readAlerts(paths), updateLine: renderUpdateLine(paths) });
+    const digest = renderDigest(vaultPath, layout, {
+      alerts: readAlerts(paths),
+      schedulerLine: require('../scheduler/status').renderSchedulerStatusLine(paths),
+      updateLine: renderUpdateLine(paths),
+    });
     const dest = path.join(paths.state, 'digest.md');
     if (!dryRun) {
       fs.mkdirSync(paths.state, { recursive: true });

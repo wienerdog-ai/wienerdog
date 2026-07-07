@@ -31,16 +31,29 @@ test('renderDigest prepends opts.updateLine; empty leaves the golden byte-identi
   assert.equal(withLine, `${line}\n\n${golden}`);
 });
 
-test('renderDigest orders the prefix alerts → updateLine → body', () => {
+test('renderDigest prepends opts.schedulerLine; empty leaves the golden byte-identical', () => {
   const golden = fs.readFileSync(GOLDEN, 'utf8');
-  const line = '> [!note] update available';
+  // No scheduler line (and no alerts/update) → unchanged from the golden.
+  assert.equal(renderDigest(FIXTURE, undefined, { schedulerLine: '' }), golden);
+  // A non-empty scheduler line is prepended, then a blank line, then the body.
+  const line = "> [!warning] Wienerdog: the scheduled job \"dream\" is set up but not currently active in your computer's scheduler. Run 'wienerdog sync' to reactivate it. (This can happen after some system updates.)";
+  const withLine = renderDigest(FIXTURE, undefined, { schedulerLine: line });
+  assert.equal(withLine, `${line}\n\n${golden}`);
+});
+
+test('renderDigest orders the prefix alerts → schedulerLine → updateLine → body', () => {
+  const golden = fs.readFileSync(GOLDEN, 'utf8');
+  const schedulerLine = '> [!warning] Wienerdog: the scheduled job "dream" is set up but not currently active';
+  const updateLine = '> [!note] update available';
   const alerts = [{ job: 'dream', at: '2026-07-04T03:30:00.000Z', reason: 'boom', log_hint: 'logs/dream/' }];
-  const out = renderDigest(FIXTURE, undefined, { alerts, updateLine: line });
-  const alertIdx = out.indexOf('[!warning]');
-  const lineIdx = out.indexOf(line);
+  const out = renderDigest(FIXTURE, undefined, { alerts, schedulerLine, updateLine });
+  const alertIdx = out.indexOf('has failed'); // alert block body (distinct from scheduler warning)
+  const schedIdx = out.indexOf(schedulerLine);
+  const updIdx = out.indexOf(updateLine);
   const bodyIdx = out.indexOf("# Who you're working with");
-  assert.ok(alertIdx !== -1 && lineIdx !== -1 && bodyIdx !== -1, 'all three blocks present');
-  assert.ok(alertIdx < lineIdx && lineIdx < bodyIdx, 'alerts precede updateLine, which precedes the body');
+  assert.ok(alertIdx !== -1 && schedIdx !== -1 && updIdx !== -1 && bodyIdx !== -1, 'all four blocks present');
+  assert.ok(alertIdx < schedIdx && schedIdx < updIdx && updIdx < bodyIdx,
+    'order is alerts → schedulerLine → updateLine → body');
   assert.ok(out.endsWith(golden), 'body is the unchanged golden');
 });
 

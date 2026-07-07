@@ -88,7 +88,7 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 | [WP-067](done/WP-067-cmd-shim-single-parser-block.md) | Windows .cmd shim single-parser-block (survive self-deletion on uninstall) | M7 | sonnet | Done | — |
 | [WP-068](done/WP-068-uninstall-vault-preserve-and-core-disposal.md) | Uninstall vault-preserve handler + machine-generated core disposal | M7 | opus | Done | — |
 | [WP-069](done/WP-069-dream-concurrency-watermark-safety.md) | Dream concurrency + watermark-consolidation safety (lock-first scratch, no-op loser, consumed-only watermark) | M7 | opus | Done | WP-048 |
-| [WP-070](WP-070-scheduler-load-health-check.md) | Scheduler-load health check — doctor + digest surface "configured but not loaded"; sync heals | M7 | opus | Ready | — |
+| [WP-070](WP-070-scheduler-load-health-check.md) | Scheduler-load health check — doctor + digest surface "configured but not loaded"; sync heals | M7 | opus | In-Review | — |
 | [WP-071](WP-071-test-guard-real-scheduler.md) | Hard test guard against real scheduler mutation (per-user-global labels) | M7 | opus | Ready | WP-070 |
 
 > **First-production-night incident (2026-07-04).** WP-038, WP-039 and WP-041 form

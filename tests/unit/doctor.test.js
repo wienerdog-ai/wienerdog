@@ -25,6 +25,10 @@ function tempEnv() {
       WIENERDOG_VAULT: path.join(root, 'vault'),
       CLAUDE_CONFIG_DIR: path.join(root, 'absent-claude'),
       CODEX_HOME: path.join(root, 'absent-codex'),
+      // Hermeticity (WP-070): init runs sync, whose scheduling touches the loader.
+      // NOOP neutralizes any real launchctl/systemctl spawn under this temp HOME —
+      // the incident vector (a bootout of the real per-user-global agent).
+      WIENERDOG_LOADER_NOOP: '1',
     },
   };
 }
@@ -126,6 +130,42 @@ test('doctor prints `wienerdog update` when npx is NOT on PATH (no network)', ()
   const r = run(['doctor'], env);
   assert.equal(r.status, 0);
   assert.match(r.stdout, /\[info\] a newer Wienerdog is available \(.* → 999\.0\.0\) — update: wienerdog update/);
+});
+
+/** Inject a launchd-style scheduler-entry into the install manifest so doctor has
+ *  a registered entry to probe. describeEntry recognizes the `launchctl bootout`
+ *  shape regardless of host platform; the WIENERDOG_SCHEDULER_PROBE map overrides
+ *  the status by name, so NO real launchctl is ever spawned. @param {string} core */
+function injectSchedulerEntry(core, home) {
+  const manifestPath = path.join(core, 'install-manifest.json');
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  manifest.entries.push({
+    kind: 'scheduler-entry',
+    path: path.join(home, 'Library', 'LaunchAgents', 'ai.wienerdog.dream.plist'),
+    unload: ['launchctl', 'bootout', 'gui/501/ai.wienerdog.dream'],
+  });
+  fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+}
+
+test('doctor warns (exit 0) when a registered scheduler entry probes not-loaded', () => {
+  const { root, core, env } = tempEnv();
+  run(['init', '--yes'], env);
+  injectSchedulerEntry(core, root);
+  // Force the read-only probe result by name — no real scheduler is touched.
+  env.WIENERDOG_SCHEDULER_PROBE = JSON.stringify({ dream: 'missing' });
+  const r = run(['doctor'], env);
+  assert.equal(r.status, 0, 'a not-loaded job is a warn, not a hard fail');
+  assert.match(r.stdout, /\[warn\] scheduled job 'dream' is configured but NOT loaded in launchd — run 'wienerdog sync' to reload it/);
+});
+
+test('doctor reports [ok] when a registered scheduler entry probes loaded', () => {
+  const { root, core, env } = tempEnv();
+  run(['init', '--yes'], env);
+  injectSchedulerEntry(core, root);
+  env.WIENERDOG_SCHEDULER_PROBE = JSON.stringify({ dream: 'loaded' });
+  const r = run(['doctor'], env);
+  assert.equal(r.status, 0);
+  assert.match(r.stdout, /\[ok\] scheduled job 'dream' is loaded \(launchd\)/);
 });
 
 test('doctor with a set-but-missing vault fails and exits 1', () => {

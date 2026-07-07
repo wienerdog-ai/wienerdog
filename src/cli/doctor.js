@@ -105,6 +105,12 @@ async function run(_argv) {
       `Codex CLI: ${harnesses.codex.present ? 'found' : 'not found'}`
   );
 
+  // Scheduler-load health: one line per registered entry via a LIVE read-only
+  // probe (authoritative — catches even the all-jobs-unloaded case). A missing
+  // entry is a warn (actionable), never a hard fail; doctor never mutates.
+  const { doctorSchedulerChecks } = require('../scheduler/status');
+  for (const c of doctorSchedulerChecks(paths)) check(c.status, c.msg);
+
   // Cache-only update notice (no network; does not affect pass/fail). ADR-0015.
   const upd = getUpdateNotice(paths);
   if (upd.available) {

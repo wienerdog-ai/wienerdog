@@ -488,6 +488,14 @@ async function run(argv, opts = {}) {
   } catch {
     /* never affects the job */
   }
+  // Keep the scheduler-load cache fresh on every run (esp. the hourly catch-up) so
+  // the digest can surface a configured-but-not-loaded job. Read-only probe;
+  // bounded, swallows its own errors — MUST never alter the job's exit code.
+  try {
+    require('../scheduler/status').refreshSchedulerStatus(paths, { probe: opts.probe });
+  } catch {
+    /* never affects the job */
+  }
   if (argv[0] === '--catch-up') {
     await catchUp(paths, opts);
     return;

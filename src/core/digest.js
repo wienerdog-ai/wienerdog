@@ -228,10 +228,13 @@ function formatAlerts(alerts) {
  * alerts, a plain-text block is prepended (empty/absent → output unchanged).
  * When `opts.updateLine` is a non-empty fixed-template "update available" line, it
  * is prepended after any alert block (empty/absent → output unchanged).
+ * When `opts.schedulerLine` is a non-empty fixed-template "configured but not
+ * loaded" line, it is prepended between the alert block and the update line
+ * (empty/absent → output unchanged).
  * @param {string} vaultDir
  * @param {import('./layout').VaultLayout} [layout]  defaults to defaultLayout()
  * @param {{alerts?: Array<{job:string, at:string, reason:string, log_hint:string}>,
- *          updateLine?: string}} [opts]
+ *          schedulerLine?: string, updateLine?: string}} [opts]
  * @returns {string}
  */
 function renderDigest(vaultDir, layout = defaultLayout(), opts = {}) {
@@ -268,10 +271,11 @@ function renderDigest(vaultDir, layout = defaultLayout(), opts = {}) {
   }
 
   const body = `${parts.join('\n\n')}\n`;
-  // Prefix order = alerts, then updateLine (failures are more urgent than an
-  // available update). Both are fixed-template control-plane text; when both are
-  // empty the byte output is unchanged (golden-frozen).
-  const prefix = [formatAlerts(opts.alerts || []), opts.updateLine || '']
+  // Prefix order = alerts, then schedulerLine, then updateLine (an active failure
+  // is most urgent; a configured-but-not-loaded job is more urgent than an
+  // available update). All fixed-template control-plane text; when all are empty
+  // the byte output is unchanged (golden-frozen).
+  const prefix = [formatAlerts(opts.alerts || []), opts.schedulerLine || '', opts.updateLine || '']
     .filter((s) => s !== '')
     .join('\n\n');
   return prefix ? `${prefix}\n\n${body}` : body;
