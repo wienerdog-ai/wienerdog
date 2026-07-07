@@ -2,6 +2,11 @@
 
 All notable changes to Wienerdog. Format: [Keep a Changelog](https://keepachangelog.com), versioning: SemVer (0.x until the installed file layout stabilizes — ADR-0003).
 
+## [0.6.4] — 2026-07-07
+
+### Fixed
+- **Windows one-line install no longer hangs when Node is already present.** The `irm …/install.ps1 | iex` installer now completes the setup step on its own instead of stopping to ask a question it couldn't display — you still see the plan of what it will create, it just proceeds. (Reported from a real Windows install.)
+
 ## [0.6.3] — 2026-07-07
 
 ### Fixed
