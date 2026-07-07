@@ -1,7 +1,7 @@
 ---
 id: WP-070
 title: Scheduler-load health check — doctor + digest surface "configured but not loaded", sync heals
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: []
