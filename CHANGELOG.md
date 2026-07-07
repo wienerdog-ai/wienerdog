@@ -2,6 +2,15 @@
 
 All notable changes to Wienerdog. Format: [Keep a Changelog](https://keepachangelog.com), versioning: SemVer (0.x until the installed file layout stabilizes — ADR-0003).
 
+## [0.6.3] — 2026-07-07
+
+### Fixed
+- **Two nightly dreams can no longer corrupt each other.** If a dream is running and a second one starts (for example the daily run overlapping the hourly catch-up), the second now backs off completely without touching the first one's work-in-progress. Previously the second run could delete the first's inputs mid-consolidation.
+- **A dream can no longer "skip" your day silently.** Wienerdog now only marks a day's conversations as consolidated when the dream actually finished consolidating them — so an interrupted run re-processes that day next time instead of quietly moving past it.
+
+### Added
+- **Your scheduler's health is now visible.** If a scheduled job (like the nightly dream) is set up but not actually active in your computer's scheduler — which can happen after some system updates — `wienerdog doctor` and your session briefing now say so plainly, and `wienerdog sync` reactivates it. Previously a dropped schedule failed invisibly: no run, no warning.
+
 ## [0.6.2] — 2026-07-06
 
 ### Fixed
