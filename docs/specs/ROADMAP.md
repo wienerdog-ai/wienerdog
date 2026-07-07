@@ -88,6 +88,8 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 | [WP-067](done/WP-067-cmd-shim-single-parser-block.md) | Windows .cmd shim single-parser-block (survive self-deletion on uninstall) | M7 | sonnet | Done | — |
 | [WP-068](done/WP-068-uninstall-vault-preserve-and-core-disposal.md) | Uninstall vault-preserve handler + machine-generated core disposal | M7 | opus | Done | — |
 | [WP-069](done/WP-069-dream-concurrency-watermark-safety.md) | Dream concurrency + watermark-consolidation safety (lock-first scratch, no-op loser, consumed-only watermark) | M7 | opus | Done | WP-048 |
+| [WP-070](WP-070-scheduler-load-health-check.md) | Scheduler-load health check — doctor + digest surface "configured but not loaded"; sync heals | M7 | opus | Ready | — |
+| [WP-071](WP-071-test-guard-real-scheduler.md) | Hard test guard against real scheduler mutation (per-user-global labels) | M7 | opus | Ready | WP-070 |
 
 > **First-production-night incident (2026-07-04).** WP-038, WP-039 and WP-041 form
 > a serial chain (they edit the shared `run-job.js` / `dream.js` / `validate.js`
@@ -393,6 +395,39 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 
 <!-- -->
 
+> **Silent scheduler-unload incident (2026-07-07, ADR-0018 amendment).** The
+> launchd **dream and catchup agents were silently UNLOADED** — plists intact on
+> disk, but `launchctl` had no record (exit 113 on `launchctl print`) — so 03:30
+> fired nothing, no run, **no alert** (fail-loud only triggers on a job that runs
+> and fails), discovered only by a missing report. Two owner-approved hardening WPs.
+> **WP-070** (opus M, independent) makes the invisible-failure class **visible**:
+> `wienerdog doctor` and the injected session digest surface any registered
+> `scheduler-entry` (manifest — includes the **catchup** agent, not just `jobs:`)
+> whose OS record is missing, via a **read-only** per-OS probe derived from the
+> stored `unload` argv (launchd `launchctl print`, systemd `systemctl --user
+> is-active <unit>.timer`, Windows `schtasks /query`; exit 0 = loaded). The digest
+> mirrors the ADR-0015 **cache-then-render** split (probe in `sync`/`run-job` writes
+> `state/scheduler-status.json`; the SessionStart hook only `cat`s the pre-rendered
+> digest); `doctor` probes **live** (catches even the all-jobs-unloaded case). A
+> missing entry is an actionable WARN, not a fail. The honest remediation is made
+> true: `sync` now **heals** (reloads any entry the OS lost — plain re-registration
+> previously no-op'd on identical files). doctor/digest never mutate. **WP-071**
+> (opus M, depends WP-070) fixes the **root cause**: launchd/systemd/schtasks
+> identifiers are **per-user-global, NOT HOME-scoped**, so a scheduler test under a
+> temp `HOME` still `bootout`'d the real agent (confirmed: `uninstall.test.js`
+> `init --fresh-vault` → `uninstall` unloaded the real dream agent). All real
+> scheduler **mutations** route through one `schedulerSpawn` chokepoint; a suite-wide
+> guard (`WIENERDOG_TEST_NO_REAL_SCHEDULER`, set by a zero-dep `tests/run.js`) makes
+> it **throw loudly** when a test reaches it without a seam — the belt to the
+> injected-loader / `WIENERDOG_LOADER_NOOP` suspenders. Depends on WP-070 (which
+> makes `doctor.test.js` hermetic and ships the self-guarding probe), so the two
+> share no test file. **Follow-up (unblocked, now that WP-069 merged):** wiring the
+> identical `schedulerLine` into `dream.js`'s digest render (step 15) is a 1-line
+> change deferred out of WP-070; the passive digest surface is `sync`-carried until
+> then, and `doctor` (live) is authoritative meanwhile. Amends ADR-0018.
+
+<!-- -->
+
 ## Dependency graph
 
 ```mermaid
@@ -448,6 +483,8 @@ graph LR
   WP041 --> WP048
   WP009 --> WP040[WP-040 note-update provenance]
   WP048 --> WP069[WP-069 dream concurrency + watermark-consolidation safety]
+  WP070[WP-070 scheduler-load health check: doctor + digest + sync heal]
+  WP070 --> WP071[WP-071 hard test guard vs real scheduler mutation]
   WP042[WP-042 vendored install] --> WP043[WP-043 sync repoints schedules]
   WP043 --> WP044[WP-044 dream scheduled by default]
   WP044 --> WP045[WP-045 update-check core]

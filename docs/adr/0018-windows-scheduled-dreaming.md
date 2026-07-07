@@ -129,3 +129,50 @@ catalog, unchanged.
   behavior are recalled, not executed — the VPS/laptop checklist confirms them.
   If they disappoint, the ONLOGON+hourly catch-up is the real safety net and is
   independent of them.
+
+## Amendment (2026-07-07): scheduler-load health check + the per-user-global-labels test invariant
+
+Status: Accepted. Born from a confirmed production incident (2026-07-07): the
+user's launchd **dream and catchup agents were silently UNLOADED** — the `.plist`
+files stayed on disk, but `launchctl` had no record of them (exit 113 on
+`launchctl print`), so 03:30 fired nothing, no run happened, and **no failure
+alert was raised** (the fail-loud path only triggers on a job that *runs* and
+*fails*). It was discovered only by a missing morning report. Two decisions follow.
+
+1. **A configured-but-not-loaded scheduled job is a first-class, surfaced health
+   state (WP-070).** `wienerdog doctor` and the injected session digest detect and
+   surface any registered scheduler entry (`scheduler-entry` in the install
+   manifest — which includes the **catchup** agent, not just `jobs:` entries) whose
+   OS record is missing. The detection is **strictly read-only** from doctor and
+   the digest — a **per-OS read-only probe** derived from each entry's stored
+   `unload` argv: launchd `launchctl print gui/<uid>/<label>`, systemd
+   `systemctl --user is-active <unit>.timer`, Windows `schtasks /query /tn
+   "\Wienerdog\<name>"` (exit 0 = loaded; anything else = not loaded). A missing
+   entry is an **actionable WARN**, never a hard fail. The **only** command that
+   *reloads* an unloaded entry is `wienerdog sync` (which now heals: it re-loads any
+   registered entry the OS has lost — plain re-registration previously no-op'd on
+   identical files and did not reload). doctor/digest never mutate the scheduler.
+
+   The digest follows the **cache-then-render** split already used for the
+   update-availability notice (ADR-0015): the probe (a subprocess) runs inside
+   `sync`/`run-job` and writes `state/scheduler-status.json`; the SessionStart hook
+   only `cat`s the pre-rendered `state/digest.md`, so it stays <200ms with no
+   subprocess budget. `doctor` (interactive, not on the SessionStart budget) probes
+   **live**, so it catches even the all-jobs-unloaded case where nothing re-renders
+   the digest — doctor is the authoritative surface, the digest the passive nudge.
+
+2. **launchd/systemd/schtasks identifiers are per-user-global, NOT HOME-scoped —
+   so tests must never invoke the real OS scheduler (WP-071).** The probable
+   *cause* of the incident was a scheduler test running under a temp `HOME` that
+   still `launchctl bootout`'d the real agent: setting `HOME=<tempdir>` changes only
+   where the plist *file* is written, while `launchctl bootout gui/<uid>/ai.wienerdog.dream`
+   targets the label in the user's **global** launchd domain. The structural fix: all
+   real scheduler **mutations** route through one chokepoint (`schedulerSpawn`), and
+   a suite-wide guard (`WIENERDOG_TEST_NO_REAL_SCHEDULER`, set by the test runner)
+   makes that chokepoint **throw loudly** rather than mutate when a test reached it
+   without neutralizing the scheduler (injected loader or `WIENERDOG_LOADER_NOOP`).
+   Read-only probes are exempt (they cannot corrupt state). This is the binding
+   invariant: **every scheduler mutation goes through `schedulerSpawn`; every
+   scheduler test uses a seam AND is backstopped by the suite guard.** It amends the
+   ADR-0018 "Testing gap made explicit" note — the POSIX fleet's scheduler tests are
+   now provably incapable of touching the real per-user scheduler.
