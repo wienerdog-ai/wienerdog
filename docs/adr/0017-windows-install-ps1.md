@@ -204,3 +204,35 @@ CI-testable on the Linux/macOS runners at the `Main` + `Write-CompletionBanner`
 level (a Pester `Main` test that returns a value is itself proof `Main` did not
 `exit` — an `exit` would kill the Pester process). The `irm|iex` window-survival
 itself stays a one-line item on the manual Windows checklist (§7), not a blocker.
+
+## Amendment - non-interactive init handoff (2026-07-07, WP-072)
+
+P1 field bug from a real Windows machine with Node already installed:
+`irm .../install.ps1 | iex` printed "Found Node ... - handing over ..." and then
+**hung forever**. Root cause: the handoff ran `npx --yes wienerdog@latest init`,
+where `--yes` is **npx's** package-prompt flag (it precedes `wienerdog@latest`), not
+passed to `init`. So `init` reached its own `[Y/n]` confirm and blocked on stdin. On
+POSIX that survives via `confirm()`'s `/dev/tty` fallback (WP-034); on Windows there
+is no `/dev/tty` and under `irm|iex` the init child's stdin is tangled in
+PowerShell's object pipeline, so init's plan and prompt never surface and it blocks
+on stdin indefinitely - the same iex-handoff fragility class as WP-061.
+
+Binding rule for `install.ps1` and all future Windows-installer work on this file:
+
+1. **The bootstrapper hands off to `init` non-interactively.** `Main` passes `--yes`
+   to the **init** command (built once into the forwarded argv and used for both the
+   `npx` and the tarball branch), so `init` never reaches a blocking confirm. init
+   still PRINTS its full plan before proceeding, preserving transparency; the
+   installer one-liner + the printed plan are the consent surface (ADR-0011/0017,
+   WP-052). The `--yes` is de-duped (idempotent - init reads `argv.includes('--yes')`).
+2. **POSIX asymmetry is deliberate.** `install.sh` does NOT pass `--yes` to init: on
+   POSIX the `/dev/tty` prompt actually works and shows the plan interactively (the
+   designed UX with no downside). We keep the working interactive confirmation where
+   it works and make the handoff non-interactive only where it cannot (Windows/iex).
+   Making POSIX symmetric (or making Windows somehow prompt) would be a future
+   amendment, not an oversight.
+
+CI-testable on the Linux/macOS runners at the `Main` level: Pester asserts the
+handoff argv contains exactly one `--yes` (via the mocked `Start-WienerdogNpx` /
+`Install-ViaTarball` seams). The real no-hang behavior under `irm|iex` on a
+Node-present Windows box stays a one-line manual-checklist item (§7), not a blocker.

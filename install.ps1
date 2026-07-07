@@ -463,13 +463,26 @@ function Main {
     if ((Get-NodeMajor) -lt 18) { return 1 }   # hard gate unmet; Ensure-Node already printed guidance
     Ensure-Git                      # soft: prints a note if git is missing, then proceeds
     Write-Host "Found Node $((& node -v)) - handing over to the Wienerdog installer..."
+    # The installer IS the consent surface (ADR-0011/0017): a user who ran
+    # `irm .../install.ps1 | iex` already opted in, and init still PRINTS its full
+    # plan before doing anything (transparency). But init's interactive confirm must
+    # not BLOCK the handoff: under irm|iex on Windows there is no /dev/tty and the
+    # init child's stdin is tangled in PowerShell's pipeline, so its prompt never
+    # surfaces and it hangs on stdin forever. Hand off NON-INTERACTIVELY by passing
+    # --yes to the INIT command. (The --yes already in Start-WienerdogNpx is npx's
+    # own package-prompt flag, before `wienerdog@latest`; this one lands after
+    # `init`.) Idempotent: init reads argv.includes('--yes'), so a duplicate is
+    # harmless - we de-dup only to keep the forwarded argv clean.
+    $initArgs = if ($null -eq $ForwardArgs) { @('--yes') }
+                elseif ($ForwardArgs -contains '--yes') { $ForwardArgs }
+                else { $ForwardArgs + '--yes' }
     if (Test-NpxAvailable) {
-        Start-WienerdogNpx -ForwardArgs $ForwardArgs
+        Start-WienerdogNpx -ForwardArgs $initArgs
         $code = $LASTEXITCODE
     }
     else {
         Write-Host "npm/npx isn't available - installing Wienerdog directly from the npm registry..."
-        $code = Install-ViaTarball -ForwardArgs $ForwardArgs
+        $code = Install-ViaTarball -ForwardArgs $initArgs
     }
     if ($code -eq 0) { Write-CompletionBanner }
     return $code

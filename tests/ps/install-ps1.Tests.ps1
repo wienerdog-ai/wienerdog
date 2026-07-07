@@ -338,22 +338,42 @@ Describe 'Main' {
         Remove-Variable -Name MainRan -Scope Script -ErrorAction SilentlyContinue
     }
 
-    It 'success via npx: returns 0 and shows the banner (a returning Main proves it did not exit)' {
+    It 'success via npx: returns 0, shows the banner, hands off with --yes' {
         Mock Get-NodeMajor { 20 }
         Mock Test-NpxAvailable { $true }
         Mock Start-WienerdogNpx { $global:LASTEXITCODE = 0 }
         Main -ForwardArgs @() | Should -Be 0
-        Should -Invoke Start-WienerdogNpx -Times 1
+        Should -Invoke Start-WienerdogNpx -Times 1 -ParameterFilter { $ForwardArgs -contains '--yes' }
         Should -Invoke Write-CompletionBanner -Times 1
     }
 
-    It 'success via tarball (no npx): returns 0 and shows the banner' {
+    It 'success via tarball (no npx): returns 0, shows the banner, hands off with --yes' {
         Mock Get-NodeMajor { 20 }
         Mock Test-NpxAvailable { $false }
         Mock Install-ViaTarball { 0 }
         Main -ForwardArgs @() | Should -Be 0
-        Should -Invoke Install-ViaTarball -Times 1
+        Should -Invoke Install-ViaTarball -Times 1 -ParameterFilter { $ForwardArgs -contains '--yes' }
         Should -Invoke Write-CompletionBanner -Times 1
+    }
+
+    It 'does not pass a duplicate --yes when the caller already did' {
+        Mock Get-NodeMajor { 20 }
+        Mock Test-NpxAvailable { $true }
+        Mock Start-WienerdogNpx { $global:LASTEXITCODE = 0 }
+        Main -ForwardArgs @('--yes') | Should -Be 0
+        Should -Invoke Start-WienerdogNpx -Times 1 -ParameterFilter {
+            (@($ForwardArgs) | Where-Object { $_ -eq '--yes' }).Count -eq 1
+        }
+    }
+
+    It 'appends --yes while preserving other forwarded args' {
+        Mock Get-NodeMajor { 20 }
+        Mock Test-NpxAvailable { $true }
+        Mock Start-WienerdogNpx { $global:LASTEXITCODE = 0 }
+        Main -ForwardArgs @('--fresh-vault') | Should -Be 0
+        Should -Invoke Start-WienerdogNpx -Times 1 -ParameterFilter {
+            ($ForwardArgs -contains '--fresh-vault') -and ($ForwardArgs -contains '--yes')
+        }
     }
 
     It 'node hard-gate unmet: returns 1, no banner, no handoff' {
