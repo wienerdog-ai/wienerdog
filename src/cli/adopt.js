@@ -320,6 +320,8 @@ async function run(argv) {
     console.log('  If your computer is off or asleep at that time, don\'t worry — Wienerdog catches up automatically the next time you\'re back.');
   } else if (dream.reason === 'unsupported') {
     console.log('  Nightly dreaming: could not be auto-scheduled on this system yet — run `wienerdog dream` manually.');
+  } else if (dream.reason === 'load-failed') {
+    console.log('  Nightly dreaming: was set up but your computer\'s scheduler did not accept it yet — run `wienerdog doctor` to see why, then `wienerdog sync` to retry.');
   }
   if (dirExists(paths.vault)) {
     console.log(`\nThe default vault at ${paths.vault} is now unused — you can delete it if you like.`);

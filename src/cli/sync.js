@@ -176,6 +176,9 @@ async function run(argv, opts = {}) {
     if (heal.reloaded.length > 0) {
       console.log(`wienerdog: reloaded ${heal.reloaded.length} scheduled job(s) the OS had dropped: ${heal.reloaded.join(', ')}.`);
     }
+    if (heal.failed.length > 0) {
+      console.log(`wienerdog: WARNING — could not reload ${heal.failed.length} scheduled job(s): ${heal.failed.join(', ')}. Run 'wienerdog doctor' for details.`);
+    }
     status.refreshSchedulerStatus(paths);
   }
 

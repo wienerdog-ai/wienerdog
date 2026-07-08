@@ -264,5 +264,15 @@ test('reloadMissing never throws when the loader throws (best-effort heal)', () 
   const loader = () => { throw new Error('boom'); };
   let res;
   assert.doesNotThrow(() => { res = status.reloadMissing(paths, { loader, probe: () => 'missing' }); });
-  assert.deepEqual(res.reloaded, []); // push happens only after a successful loader call
+  assert.deepEqual(res.reloaded, []); // a throw is treated as status 1 → not reloaded
+  assert.deepEqual(res.failed, ['dream']); // it is surfaced as a failed heal, not hidden
+});
+
+test('reloadMissing splits reloaded vs failed on the loader exit status', () => {
+  const { paths } = setup((home) => [launchdEntry(home, 'dream'), launchdEntry(home, 'catchup')]);
+  // Both probe missing; the loader rejects dream (status 1) but accepts catchup.
+  const loader = (argv) => ({ status: argv[argv.length - 1].endsWith('dream.plist') ? 1 : 0 });
+  const res = status.reloadMissing(paths, { loader, probe: () => 'missing' });
+  assert.deepEqual(res.reloaded, ['catchup']);
+  assert.deepEqual(res.failed, ['dream']);
 });

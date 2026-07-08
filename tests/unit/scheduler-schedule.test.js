@@ -402,7 +402,7 @@ test('scheduler-schedule: win32 dispatch writes both XMLs, records reversible en
   const loader = (a) => (calls.push(a), { status: 0 });
 
   const res = schedule.registerPlatform(paths, manifest, { name: 'dream', hour: 3, minute: 30 }, loader, 'win32');
-  assert.deepEqual(res, { platform: 'schtasks', changed: true });
+  assert.deepEqual(res, { platform: 'schtasks', changed: true, loaded: true });
 
   const dreamXml = gen.windowsTaskFile(paths, 'dream');
   const catchupXml = gen.windowsTaskFile(paths, 'catchup');
@@ -479,6 +479,34 @@ test('scheduler-schedule: ensureDreamSchedule(platform:win32) schedules the drea
   // Second call is idempotent at the job level.
   const res2 = schedule.ensureDreamSchedule(paths, { loader: () => ({ status: 0 }), platform: 'win32' });
   assert.deepEqual(res2, { scheduled: false, reason: 'exists' });
+});
+
+test('scheduler-schedule: registerPlatform reports loaded:false when the schtasks /create is rejected', () => {
+  const { paths } = setup();
+  const manifest = manifestLib.load(paths);
+  // Reject only the PRIMARY create (dream); the catch-up create succeeds — loaded
+  // must still be false because ONE mutation failed.
+  const loader = (a) => ({ status: a.includes('\\Wienerdog\\dream') ? 1 : 0 });
+  const res = schedule.registerPlatform(paths, manifest, { name: 'dream', hour: 3, minute: 30 }, loader, 'win32');
+  assert.deepEqual(res, { platform: 'schtasks', changed: true, loaded: false });
+});
+
+test('scheduler-schedule: ensureDreamSchedule returns reason:load-failed when the OS scheduler rejects the task', () => {
+  const { paths } = setup();
+  const loader = () => ({ status: 1 }); // every schtasks /create is rejected
+  const res = schedule.ensureDreamSchedule(paths, { loader, platform: 'win32' });
+  assert.deepEqual(res, { scheduled: false, reason: 'load-failed', at: '03:30' });
+  // The job definition is still persisted (it can be retried via sync/doctor).
+  assert.ok(jobsLib.findJob(paths, 'dream'), 'dream job persisted despite the load failure');
+});
+
+test('scheduler-schedule: add fails loud (throws) when the OS scheduler rejects the new task', { skip: !SCHED_SUPPORTED }, async () => {
+  const { env } = setup();
+  const loader = () => ({ status: 1 }); // schtasks/launchctl/systemctl rejects it
+  await assert.rejects(
+    runSchedule(env, ['add', 'daily-digest', '--at', '07:00', '--skill', 'wienerdog-daily-digest'], loader),
+    (err) => err instanceof WienerdogError && /NOT active/.test(err.message)
+  );
 });
 
 test('scheduler-schedule: remove after a win32 register reverses the dream entry, leaves the shared catch-up', async () => {

@@ -103,6 +103,8 @@ function ensureEntry(manifest, filePath, content, unload) {
  * @param {import('../core/manifest').Manifest} manifest
  * @param {(argv:string[])=>{status:number}} loader
  * @param {number} uid
+ * @returns {{loaded:boolean}} loaded=true when nothing needed loading, else the
+ *   status===0 of the bootstrap call.
  */
 function ensureCatchup(paths, manifest, loader, uid) {
   const logDir = path.join(paths.logs, 'catchup');
@@ -111,8 +113,9 @@ function ensureCatchup(paths, manifest, loader, uid) {
   const plistPath = path.join(gen.launchAgentsDir(paths.home), `${label}.plist`);
   const unload = ['launchctl', 'bootout', `gui/${uid}/${label}`];
   if (ensureEntry(manifest, plistPath, content, unload)) {
-    loader(['launchctl', 'bootstrap', `gui/${uid}`, plistPath]);
+    return { loaded: loader(['launchctl', 'bootstrap', `gui/${uid}`, plistPath]).status === 0 };
   }
+  return { loaded: true };
 }
 
 /**
@@ -122,6 +125,8 @@ function ensureCatchup(paths, manifest, loader, uid) {
  * @param {import('../core/paths').WienerdogPaths} paths
  * @param {import('../core/manifest').Manifest} manifest
  * @param {(argv:string[])=>{status:number}} loader
+ * @returns {{loaded:boolean}} loaded=true when nothing needed loading, else the
+ *   status===0 of the schtasks /create call.
  */
 function ensureWindowsCatchup(paths, manifest, loader) {
   const userId = gen.windowsCurrentUserId();
@@ -132,8 +137,9 @@ function ensureWindowsCatchup(paths, manifest, loader) {
   const taskName = gen.windowsTaskName('catchup'); // '\Wienerdog\catchup'
   const unload = ['schtasks', '/delete', '/tn', taskName, '/f'];
   if (ensureEntry(manifest, xmlPath, content, unload)) {
-    loader(['schtasks', '/create', '/tn', taskName, '/xml', xmlPath, '/f']);
+    return { loaded: loader(['schtasks', '/create', '/tn', taskName, '/xml', xmlPath, '/f']).status === 0 };
   }
+  return { loaded: true };
 }
 
 /**
@@ -144,7 +150,9 @@ function ensureWindowsCatchup(paths, manifest, loader) {
  * @param {(argv:string[])=>{status:number}} loader
  * @param {NodeJS.Platform} [platform=process.platform]  injected for testability
  *   (WP-049/051/038 rule: never mock process.platform).
- * @returns {{platform:string, changed:boolean}}
+ * @returns {{platform:string, changed:boolean, loaded:boolean}} loaded=true when
+ *   every mutation exited 0 (or nothing needed loading); false when a `changed`
+ *   registration's primary loader call returned nonzero.
  */
 function registerPlatform(paths, manifest, o, loader, platform = process.platform) {
   const node = gen.nodePath();
@@ -157,11 +165,12 @@ function registerPlatform(paths, manifest, o, loader, platform = process.platfor
     const plistPath = path.join(gen.launchAgentsDir(paths.home), `${label}.plist`);
     const content = gen.launchdPlist({ ...o, node, bin, logDir });
     const unload = ['launchctl', 'bootout', `gui/${uid}/${label}`];
+    let loaded = true;
     let changed = ensureEntry(manifest, plistPath, content, unload);
-    if (changed) loader(['launchctl', 'bootstrap', `gui/${uid}`, plistPath]);
+    if (changed) loaded = loader(['launchctl', 'bootstrap', `gui/${uid}`, plistPath]).status === 0;
     // Catch-up entry: login + hourly (macOS StartCalendarInterval misses power-off).
-    ensureCatchup(paths, manifest, loader, uid);
-    return { platform: 'launchd', changed };
+    const cu = ensureCatchup(paths, manifest, loader, uid);
+    return { platform: 'launchd', changed, loaded: loaded && cu.loaded };
   }
 
   if (platform === 'linux') {
@@ -180,14 +189,16 @@ function registerPlatform(paths, manifest, o, loader, platform = process.platfor
     const timerChanged = ensureEntry(manifest, timerPath, timerText, timerUnload);
     const serviceChanged = ensureEntry(manifest, servicePath, serviceText, null);
     const changed = timerChanged || serviceChanged;
+    let loaded = true;
     if (changed) {
+      // Best-effort daemon-reload/linger are not gated; only `enable --now` counts.
       loader(['systemctl', '--user', 'daemon-reload']);
-      loader(['systemctl', '--user', 'enable', '--now', `${unitBase}.timer`]);
+      loaded = loader(['systemctl', '--user', 'enable', '--now', `${unitBase}.timer`]).status === 0;
       // Best-effort: let timers fire when the user is logged out.
       const user = process.env.USER || process.env.LOGNAME || '';
       if (user) loader(['loginctl', 'enable-linger', user]);
     }
-    return { platform: 'systemd', changed };
+    return { platform: 'systemd', changed, loaded };
   }
 
   if (platform === 'win32') {
@@ -211,10 +222,11 @@ function registerPlatform(paths, manifest, o, loader, platform = process.platfor
     );
     const unload = ['schtasks', '/delete', '/tn', taskName, '/f'];
     const changed = ensureEntry(manifest, dreamXmlPath, content, unload);
-    if (changed) loader(['schtasks', '/create', '/tn', taskName, '/xml', dreamXmlPath, '/f']);
+    let loaded = true;
+    if (changed) loaded = loader(['schtasks', '/create', '/tn', taskName, '/xml', dreamXmlPath, '/f']).status === 0;
     // Catch-up task (ONLOGON + hourly): the missed-run mechanism, mirroring macOS.
-    ensureWindowsCatchup(paths, manifest, loader);
-    return { platform: 'schtasks', changed };
+    const cu = ensureWindowsCatchup(paths, manifest, loader);
+    return { platform: 'schtasks', changed, loaded: loaded && cu.loaded };
   }
 
   throw new WienerdogError(
@@ -251,6 +263,9 @@ function repointSchedules(paths, manifest, opts = {}) {
       const res = registerPlatform(paths, manifest, { name: job.name, hour: hm.hour, minute: hm.minute }, loader);
       repointed += 1;
       if (res.changed) changed += 1;
+      if (res.changed && !res.loaded) {
+        notices.push(`"${job.name}" schedule file written but the OS scheduler did not accept it — run 'wienerdog doctor'.`);
+      }
     } catch (err) {
       notices.push(`could not repoint "${job.name}": ${err.message}`);
     }
@@ -274,8 +289,9 @@ function ensureDreamSchedule(paths, opts = {}) {
   const job = { name: 'dream', at, run: 'builtin:dream', timeoutMinutes: 20 };
   jobsLib.saveJob(paths, job);
   const manifest = manifestLib.load(paths);
+  let res;
   try {
-    registerPlatform(paths, manifest, { name: 'dream', hour, minute }, loader, opts.platform || process.platform);
+    res = registerPlatform(paths, manifest, { name: 'dream', hour, minute }, loader, opts.platform || process.platform);
   } catch (err) {
     // Unsupported platform / non-systemd Linux: keep the job definition, but do
     // not fail vault creation. The user can schedule later once supported.
@@ -283,6 +299,8 @@ function ensureDreamSchedule(paths, opts = {}) {
     return { scheduled: false, reason: 'unsupported', message: err.message };
   }
   manifestLib.save(paths, manifest);
+  // The schedule file is written but the OS scheduler rejected it: surface truthfully.
+  if (res.changed && !res.loaded) return { scheduled: false, reason: 'load-failed', at };
   return { scheduled: true, at };
 }
 
@@ -330,9 +348,15 @@ function add(argv, loader) {
   jobsLib.saveJob(paths, job);
 
   const manifest = manifestLib.load(paths);
-  const { platform, changed } = registerPlatform(paths, manifest, { name, hour, minute }, loader);
+  const { platform, changed, loaded } = registerPlatform(paths, manifest, { name, hour, minute }, loader);
   manifestLib.save(paths, manifest);
 
+  if (changed && !loaded) {
+    throw new WienerdogError(
+      `wienerdog: registered "${name}"'s schedule file but the OS scheduler (${platform}) rejected it — ` +
+      `it is NOT active. Run 'wienerdog doctor' for details.`
+    );
+  }
   if (!changed) {
     process.stdout.write(`wienerdog: "${name}" already scheduled at ${flags.at} — unchanged.\n`);
     return;

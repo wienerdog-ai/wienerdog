@@ -170,6 +170,8 @@ async function run(argv) {
       console.log('Change or turn it off anytime: `wienerdog schedule remove dream`, or the routine menu (/wienerdog-routines).');
     } else if (d.reason === 'unsupported') {
       console.log('Nightly dreaming could not be auto-scheduled on this system yet; run `wienerdog dream` manually, or schedule it once supported.');
+    } else if (d.reason === 'load-failed') {
+      console.log('Nightly dreaming was set up but your computer\'s scheduler did not accept it yet — run `wienerdog doctor` to see why, then `wienerdog sync` to retry.');
     }
     console.log('Run `wienerdog doctor` to check the setup.');
   } else if (vaultConfigured) {

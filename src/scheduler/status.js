@@ -180,7 +180,7 @@ function doctorSchedulerChecks(paths, opts = {}) {
  * @param {import('../core/paths').WienerdogPaths} paths
  * @param {{loader?: (argv:string[])=>{status:number},
  *          probe?: (argv:string[])=>('loaded'|'missing'|'unknown')}} [opts]
- * @returns {{reloaded:string[]}}
+ * @returns {{reloaded:string[], failed:string[]}}
  */
 function reloadMissing(paths, opts = {}) {
   const loader = opts.loader || require('../cli/schedule').defaultLoader;
@@ -188,17 +188,21 @@ function reloadMissing(paths, opts = {}) {
   let envMap = null;
   try { envMap = JSON.parse(process.env.WIENERDOG_SCHEDULER_PROBE || 'null'); } catch { envMap = null; }
   /** @type {string[]} */ const reloaded = [];
+  /** @type {string[]} */ const failed = [];
   let manifest;
-  try { manifest = manifestLib.load(paths); } catch { return { reloaded }; }
+  try { manifest = manifestLib.load(paths); } catch { return { reloaded, failed }; }
   for (const e of manifest.entries || []) {
     if (e.kind !== 'scheduler-entry') continue;
     const d = describeEntry(e);
     if (!d) continue;
     const status = envMap && Object.prototype.hasOwnProperty.call(envMap, d.name) ? envMap[d.name] : probe(d.probe);
     if (status !== 'missing') continue;
-    try { loader(d.reload); reloaded.push(d.name); } catch { /* best-effort heal */ }
+    let r;
+    try { r = loader(d.reload); } catch { r = { status: 1 }; }
+    if (r && r.status === 0) reloaded.push(d.name);
+    else failed.push(d.name);
   }
-  return { reloaded };
+  return { reloaded, failed };
 }
 
 module.exports = {
