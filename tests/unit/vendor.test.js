@@ -195,6 +195,74 @@ test('vendor: repointCurrent repairs a dangling current link', () => {
   assert.equal(fs.realpathSync(vendor.currentLink(paths)), fs.realpathSync(newTarget), 'current now resolves to the new target');
 });
 
+test('vendor: repointCurrent creates the tmp reparse point as a junction on win32', () => {
+  const paths = tempPaths();
+  fs.mkdirSync(vendor.appDir(paths), { recursive: true });
+  const newTarget = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-new-'));
+
+  let symlinkArgs = null;
+  // Spy creates a real POSIX symlink (dropping the type) so the subsequent
+  // rename + readlink + no-op assertions still work on non-Windows CI.
+  const symlink = (target, tmp, type) => {
+    symlinkArgs = [target, tmp, type];
+    fs.symlinkSync(target, tmp);
+  };
+
+  vendor.repointCurrent(paths, newTarget, { platform: 'win32', symlink });
+  assert.deepEqual(symlinkArgs, [newTarget, `${vendor.currentLink(paths)}.tmp.${process.pid}`, 'junction']);
+  assert.equal(fs.realpathSync(vendor.currentLink(paths)), fs.realpathSync(newTarget));
+});
+
+test('vendor: repointCurrent creates the tmp reparse point as a plain symlink off win32', () => {
+  const paths = tempPaths();
+  fs.mkdirSync(vendor.appDir(paths), { recursive: true });
+  const newTarget = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-new-'));
+
+  let symlinkArgs = null;
+  const symlink = (target, tmp, type) => {
+    symlinkArgs = [target, tmp, type];
+    fs.symlinkSync(target, tmp);
+  };
+
+  vendor.repointCurrent(paths, newTarget, { platform: 'linux', symlink });
+  assert.deepEqual(symlinkArgs, [newTarget, `${vendor.currentLink(paths)}.tmp.${process.pid}`, undefined]);
+  assert.equal(fs.realpathSync(vendor.currentLink(paths)), fs.realpathSync(newTarget));
+});
+
+test('vendor: repointCurrent same-target no-op holds on win32 (no symlink/rename call)', () => {
+  const paths = tempPaths();
+  fs.mkdirSync(vendor.appDir(paths), { recursive: true });
+  const target = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-target-'));
+  fs.symlinkSync(target, vendor.currentLink(paths));
+  const orphan = path.join(vendor.appDir(paths), 'current.tmp.12345');
+  fs.symlinkSync(target, orphan);
+
+  let symlinkCalls = 0;
+  let renameCalls = 0;
+  const symlink = () => { symlinkCalls += 1; };
+  const rename = () => { renameCalls += 1; };
+
+  vendor.repointCurrent(paths, target, { platform: 'win32', symlink, rename });
+  assert.equal(symlinkCalls, 0, 'no symlink call on the no-op path');
+  assert.equal(renameCalls, 0, 'no rename call on the no-op path');
+  assert.equal(fs.realpathSync(vendor.currentLink(paths)), fs.realpathSync(target));
+  assert.equal(fs.existsSync(orphan), false, 'orphan still swept on the win32 no-op path');
+});
+
+test('vendor: repointCurrent rewrite path runs the orphan sweep on win32', () => {
+  const paths = tempPaths();
+  fs.mkdirSync(vendor.appDir(paths), { recursive: true });
+  const newTarget = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-new-'));
+  const orphan = path.join(vendor.appDir(paths), 'current.tmp.99999');
+  fs.symlinkSync(newTarget, orphan);
+
+  const symlink = (target, tmp) => { fs.symlinkSync(target, tmp); };
+
+  vendor.repointCurrent(paths, newTarget, { platform: 'win32', symlink });
+  assert.equal(fs.existsSync(orphan), false, 'orphan removed after a successful win32 repoint');
+  assert.equal(fs.realpathSync(vendor.currentLink(paths)), fs.realpathSync(newTarget));
+});
+
 test('vendor: dev mode via WIENERDOG_DEV links current at the checkout, copies nothing', () => {
   const paths = tempPaths();
   const src = fakeSource('9.9.9');

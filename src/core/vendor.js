@@ -55,12 +55,20 @@ function copyTree(srcRoot, destRoot) {
  *  fall back to remove-old-link then rename (brief non-atomic window, acceptable
  *  under the module's single-writer assumption, ADR-0013).
  *  Always sweeps orphaned `current.tmp.*` symlinks left by earlier crashed runs.
+ *  On win32 the tmp reparse point is created as a directory JUNCTION (type
+ *  'junction'), which a non-elevated user can always create for an ABSOLUTE
+ *  target — unlike a symlink, which needs Developer Mode or elevation. Our
+ *  targets are always absolute directories (ADR-0013), so a junction is valid.
  *  @param {import('./paths').WienerdogPaths} paths
  *  @param {string} targetDir
- *  @param {{rename?: (from: string, to: string) => void}} [opts]
- *    test seam only; defaults to fs.renameSync. */
+ *  @param {{rename?: (from: string, to: string) => void,
+ *           symlink?: (target: string, path: string, type?: string) => void,
+ *           platform?: string}} [opts]
+ *    test seams only; default fs.renameSync / fs.symlinkSync / process.platform. */
 function repointCurrent(paths, targetDir, opts = {}) {
   const rename = opts.rename || fs.renameSync;
+  const symlink = opts.symlink || fs.symlinkSync;
+  const platform = opts.platform || process.platform;
   const link = currentLink(paths);
   // Read the current stored target (null if `current` is absent or not a symlink).
   let existing = null;
@@ -72,7 +80,8 @@ function repointCurrent(paths, targetDir, opts = {}) {
   if (!same) {
     const tmp = `${link}.tmp.${process.pid}`;
     try { fs.rmSync(tmp, { recursive: true, force: true }); } catch { /* ignore */ }
-    fs.symlinkSync(targetDir, tmp);
+    if (platform === 'win32') symlink(targetDir, tmp, 'junction');
+    else symlink(targetDir, tmp);
     try {
       rename(tmp, link); // atomic on POSIX
     } catch (err) {

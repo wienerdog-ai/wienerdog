@@ -1,7 +1,7 @@
 ---
 id: WP-073
 title: repointCurrent uses a junction on Windows (unprivileged install no longer EPERM-crashes)
-status: Draft
+status: In-Review
 model: sonnet
 size: S
 depends_on: []
