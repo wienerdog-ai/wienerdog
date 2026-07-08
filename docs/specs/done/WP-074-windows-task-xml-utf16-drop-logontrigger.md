@@ -369,4 +369,12 @@ gate waived at merge** (WP-058/064 precedent): the named field tester's
 post-publish update run — `sync` rewriting his on-disk UTF-8 XML to
 UTF-16 LE + BOM and re-registering both tasks (catchup without LogonTrigger) unprivileged
 over his hand-registered ones — is the confirming reproduction on hu-HU; confirm
-en-US separately if a machine is available. Record console output here.
+en-US separately if a machine is available.
+
+**Gate CLOSED 2026-07-08** (`userreports/wienerdog-sync-and-tasks-2026-07-08.md`):
+the tester's 0.6.4→0.6.5 `sync` (hu-HU, non-elevated) re-rendered both task XMLs
+(byte-compare vs his on-disk UTF-8 originals → rewrite as UTF-16 LE + BOM) and
+re-registered both via `schtasks /create /f` with zero WP-075 notices — i.e.
+schtasks accepted the UTF-16 files and the no-LogonTrigger catchup registered
+unprivileged. `schtasks /query /v` confirms both tasks `Ready` under `\Wienerdog`,
+catchup hourly-only, dream daily 03:30. en-US still unverified (no machine).

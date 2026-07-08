@@ -222,4 +222,8 @@ findings (junction-type assertion mutation-tested). **Manual Windows gate waived
 at merge** (WP-058/064 precedent): CI has no Windows runner; the named field
 tester's post-publish update run on his stock non-elevated Windows 11 machine —
 repointing over an existing manual junction — is the confirming reproduction.
-Record his console output here when it lands.
+**Gate CLOSED 2026-07-08** (`userreports/wienerdog-sync-and-tasks-2026-07-08.md`):
+on the tester's stock Windows 11 machine (non-elevated, Developer Mode off),
+`npx wienerdog@latest sync` vendored 0.6.5 and repointed `app\current` over his
+pre-existing manual junction with no EPERM — `wienerdog: vendored app 0.6.5.` /
+`repointed 1 schedule(s)` / clean exit.
