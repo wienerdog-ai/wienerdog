@@ -91,6 +91,9 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 | [WP-070](done/WP-070-scheduler-load-health-check.md) | Scheduler-load health check — doctor + digest surface "configured but not loaded"; sync heals | M7 | opus | Done | — |
 | [WP-071](done/WP-071-test-guard-real-scheduler.md) | Hard test guard against real scheduler mutation (per-user-global labels) | M7 | opus | Done | WP-070 |
 | [WP-072](done/WP-072-install-ps1-noninteractive-init-handoff.md) | install.ps1 hands off to init non-interactively (fix Windows irm\|iex hang) | M7 | opus | Done | — |
+| [WP-073](WP-073-vendor-junction-repoint.md) | repointCurrent uses a junction on Windows (unprivileged install no longer EPERM-crashes) | M7 | sonnet | Draft | — |
+| [WP-074](WP-074-windows-task-xml-utf16-drop-logontrigger.md) | Windows task XML UTF-16 LE + drop unprivileged LogonTrigger | M6 | opus | Draft | — |
+| [WP-075](WP-075-scheduler-fail-loud-on-load-failure.md) | Fail loud when a scheduler mutation is rejected (no false scheduled/reloaded) | M6/M7 | opus | Draft | WP-074 |
 
 > **First-production-night incident (2026-07-04).** WP-038, WP-039 and WP-041 form
 > a serial chain (they edit the shared `run-job.js` / `dream.js` / `validate.js`
@@ -458,6 +461,40 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 
 <!-- -->
 
+> **First external-tester Windows report (2026-07-08, credit: Peter — Windows 11 Pro
+> hu-HU, non-elevated, Developer Mode OFF, wienerdog 0.6.4 via `npx wienerdog@latest
+> init`).** Our first outside install surfaced three verified defects on stock Windows,
+> split into three WPs by code region (all findings confirmed against main). **WP-073**
+> (S, sonnet, independent, `src/core/vendor.js`): `repointCurrent` created `app/current`
+> with `fs.symlinkSync` — a **privileged** op on Windows without Developer Mode/elevation
+> — so init EPERM-crashed mid-install (app tree vendored, `current` missing, re-run said
+> "already installed"). Fix: create the tmp reparse point as a **directory junction**
+> (`symlink(target, tmp, 'junction')`) on win32 — always creatable unprivileged for an
+> absolute target — via new `opts.symlink`/`opts.platform` seams (WP-050/051 precedent,
+> POSIX-testable, no `process.platform` mocking). **WP-074** (M, opus, independent,
+> `generators.js` + `schedule.js` + ADR-0018 amendment): two Task-Scheduler XML defects —
+> (a) files were UTF-8 with `encoding="UTF-8"`, which `schtasks /create /xml` rejects
+> (`(1,40) cannot convert the encoding`, hu-HU) since Task Scheduler's canonical XML is
+> UTF-16 → write **UTF-16 LE + BOM** with a matching declaration (new
+> `windowsTaskXmlBytes` helper; `ensureEntry` made Buffer-aware, byte-neutral for the
+> UTF-8 string callers); and (b) the catchup task's `<LogonTrigger>` needs **admin** to
+> register (0x80070005) → **drop it**, relying on the retained hourly TimeTrigger +
+> `StartWhenAvailable` (≤1h post-logon catch-up, within the advertised guarantee).
+> **WP-075** (M, opus, depends WP-074 — shares `schedule.js`): the fail-loud gap
+> (THREAT-MODEL T6). `schedulerSpawn` returns `{status}` but **never throws** on nonzero,
+> and every loader call site discarded it — so a failed `schtasks /create` still printed
+> `reloaded 2 scheduled job(s)…` / `Nightly … is scheduled` and exited 0. Audit ALL
+> mutation call sites (`reloadMissing`, `registerPlatform` ×3 platforms, the two
+> `ensureCatchup`s) so a nonzero status is reported as a WARNING/thrown error, never
+> success; `sync` stays exit-0 (the after-the-fact "not loaded" state is already surfaced
+> by WP-070's doctor/digest health probe). **Update-safety (all three):** after the fixes
+> ship, `wienerdog sync` on the tester's hand-patched machine converges his state to the
+> shipped one — the manual junction at `app\current` no-ops via the readlink fast path,
+> and the hand-registered `\Wienerdog\dream`/`catchup` tasks are re-registered with `/f`
+> to the UTF-16, no-LogonTrigger shipped XML (his hand-stripped catchup already matches).
+
+<!-- -->
+
 ## Dependency graph
 
 ```mermaid
@@ -542,4 +579,7 @@ graph LR
   WP067[WP-067 Windows .cmd shim single-parser-block]
   WP068[WP-068 uninstall vault-preserve + machine-generated core disposal]
   WP072[WP-072 install.ps1 non-interactive init handoff]
+  WP073[WP-073 repointCurrent junction on Windows]
+  WP074[WP-074 Windows task XML UTF-16 + drop LogonTrigger]
+  WP074 --> WP075[WP-075 fail loud on scheduler mutation reject]
 ```
