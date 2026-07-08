@@ -2,6 +2,13 @@
 
 All notable changes to Wienerdog. Format: [Keep a Changelog](https://keepachangelog.com), versioning: SemVer (0.x until the installed file layout stabilizes — ADR-0003).
 
+## [0.6.5] — 2026-07-08
+
+### Fixed
+- **Windows: installing without admin rights now works on a stock machine.** Wienerdog's internal "current version" pointer is now created as an NTFS junction instead of a symlink, so it no longer needs Developer Mode or an elevated shell. (Reported by our first external Windows tester — thank you.)
+- **Windows: the nightly dream and its catch-up now actually land in Task Scheduler.** The task files are now written in the encoding Task Scheduler expects (UTF-16), which it previously rejected. The catch-up task also no longer uses a logon trigger — the one part of scheduling that silently required admin rights; it relies on its hourly check instead, so a missed dream still catches up within the hour, with no elevation needed anywhere.
+- **A failed scheduling step is now reported honestly.** Previously, if your computer's scheduler rejected a job, Wienerdog could still print a success message. Now `wienerdog sync` prints a clear warning naming the affected jobs, `wienerdog schedule add` reports the error and exits nonzero, and install/adopt say plainly when nightly dreaming could not be activated.
+
 ## [0.6.4] — 2026-07-07
 
 ### Fixed
