@@ -1,7 +1,7 @@
 ---
 id: WP-074
 title: Windows task XML — write UTF-16 LE so schtasks accepts it; drop the LogonTrigger it can't register unprivileged
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: []
@@ -359,3 +359,14 @@ both hu-HU and, if available, en-US.)
    `fix(scheduler): Windows task XML UTF-16 + drop unprivileged LogonTrigger (WP-074)`.
 3. PR template filled, including "Decisions made" (or "none") and `Generated-by:`.
 4. This spec's `status:` flipped to `In-Review` in the same PR.
+
+## Done record (2026-07-08)
+
+Merged to main as `1d962eb` (PR #74, squash). Reviewer verdict: approve, zero
+findings (BOM tamper-tested; `ensureEntry` convergence edge cases verified;
+ADR-0018 amendment byte-identical to this spec). **Manual Windows `schtasks`
+gate waived at merge** (WP-058/064 precedent): the named field tester's
+post-publish update run — `sync` rewriting his on-disk UTF-8 XML to
+UTF-16 LE + BOM and re-registering both tasks (catchup without LogonTrigger) unprivileged
+over his hand-registered ones — is the confirming reproduction on hu-HU; confirm
+en-US separately if a machine is available. Record console output here.

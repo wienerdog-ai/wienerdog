@@ -1,7 +1,7 @@
 ---
 id: WP-075
 title: Fail loud on failed scheduler mutations (never report an unloaded job as scheduled/reloaded)
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: [WP-074]
@@ -303,3 +303,10 @@ npm run lint
    `fix(scheduler): fail loud when a scheduler mutation is rejected (WP-075)`.
 3. PR template filled, including "Decisions made" (or "none") and `Generated-by:`.
 4. This spec's `status:` flipped to `In-Review` in the same PR.
+
+## Done record (2026-07-08)
+
+Merged to main as `871815a` (PR #75, squash; stacked on #74, retargeted after
+its merge). Reviewer verdict: approve, zero findings (`SCHED_SUPPORTED` guard
+verified live on both CI runners; throw-coercion checked safe for the
+uninstall/bootout path). No manual gate — fully covered by seam-injected tests.

@@ -1,7 +1,7 @@
 ---
 id: WP-073
 title: repointCurrent uses a junction on Windows (unprivileged install no longer EPERM-crashes)
-status: In-Review
+status: Done
 model: sonnet
 size: S
 depends_on: []
@@ -214,3 +214,12 @@ Paste the console/`Get-Item` output into the PR under "Manual verification".
    `fix(vendor): repointCurrent uses a junction on Windows (WP-073)`.
 3. PR template filled, including "Decisions made" (or "none") and `Generated-by:`.
 4. This spec's `status:` flipped to `In-Review` in the same PR.
+
+## Done record (2026-07-08)
+
+Merged to main as `c1cc59a` (PR #73, squash). Reviewer verdict: approve, zero
+findings (junction-type assertion mutation-tested). **Manual Windows gate waived
+at merge** (WP-058/064 precedent): CI has no Windows runner; the named field
+tester's post-publish update run on his stock non-elevated Windows 11 machine —
+repointing over an existing manual junction — is the confirming reproduction.
+Record his console output here when it lands.
