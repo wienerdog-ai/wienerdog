@@ -85,7 +85,7 @@ Type=oneshot
 ExecStart=/usr/bin/node /opt/wienerdog/bin/wienerdog.js run-job daily-digest
 `;
 
-const EXPECTED_DREAM = `<?xml version="1.0" encoding="UTF-8"?>
+const EXPECTED_DREAM = `<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <RegistrationInfo>
     <Author>Wienerdog</Author>
@@ -126,7 +126,7 @@ const EXPECTED_DREAM = `<?xml version="1.0" encoding="UTF-8"?>
 </Task>
 `;
 
-const EXPECTED_WIN_CATCHUP = `<?xml version="1.0" encoding="UTF-8"?>
+const EXPECTED_WIN_CATCHUP = `<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <RegistrationInfo>
     <Author>Wienerdog</Author>
@@ -134,9 +134,6 @@ const EXPECTED_WIN_CATCHUP = `<?xml version="1.0" encoding="UTF-8"?>
     <URI>\\Wienerdog\\catchup</URI>
   </RegistrationInfo>
   <Triggers>
-    <LogonTrigger>
-      <Enabled>true</Enabled>
-    </LogonTrigger>
     <TimeTrigger>
       <StartBoundary>2020-01-01T00:00:00</StartBoundary>
       <Enabled>true</Enabled>
@@ -326,11 +323,34 @@ test('scheduler-generators: windowsCatchupTaskXml matches the golden byte-for-by
     userId: 'WS\\ada',
   });
   assert.equal(out, EXPECTED_WIN_CATCHUP);
-  // both trigger shapes present + the missed-run/battery settings.
-  assert.match(out, /<LogonTrigger>/);
+  // no LogonTrigger (it needs admin to register); hourly TimeTrigger is the sole
+  // trigger + the missed-run/battery settings (WP-074 / ADR-0018 amendment).
+  assert.doesNotMatch(out, /<LogonTrigger>/);
   assert.match(out, /<Interval>PT1H<\/Interval>/);
   assert.match(out, /run-job --catch-up/);
   assert.match(out, /<DisallowStartIfOnBatteries>false<\/DisallowStartIfOnBatteries>/);
   assert.match(out, /<StopIfGoingOnBatteries>false<\/StopIfGoingOnBatteries>/);
   assert.match(out, /<StartWhenAvailable>true<\/StartWhenAvailable>/);
+});
+
+test('scheduler-generators: windowsTaskXmlBytes prepends the UTF-16 LE BOM and round-trips', () => {
+  const xml = gen.windowsDreamTaskXml({
+    name: 'dream',
+    hour: 3,
+    minute: 30,
+    node: 'C:\\Program Files\\nodejs\\node.exe',
+    bin: 'C:\\Users\\John Smith\\.wienerdog\\app\\current\\bin\\wienerdog.js',
+    userId: 'WS\\ada',
+  });
+  const buf = gen.windowsTaskXmlBytes(xml);
+  assert.ok(Buffer.isBuffer(buf));
+  // Leading BOM (0xFF 0xFE) then '<' encoded as UTF-16 LE (0x3C 0x00).
+  assert.equal(buf[0], 0xff);
+  assert.equal(buf[1], 0xfe);
+  assert.equal(buf[2], 0x3c);
+  assert.equal(buf[3], 0x00);
+  // Every byte after the BOM decodes back to the exact renderer string.
+  assert.equal(buf.slice(2).toString('utf16le'), xml);
+  // Byte length: 2 (BOM) + 2 per UTF-16 code unit.
+  assert.equal(buf.length, 2 + xml.length * 2);
 });

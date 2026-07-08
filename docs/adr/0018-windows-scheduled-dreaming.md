@@ -176,3 +176,23 @@ alert was raised** (the fail-loud path only triggers on a job that *runs* and
    scheduler test uses a seam AND is backstopped by the suite guard.** It amends the
    ADR-0018 "Testing gap made explicit" note — the POSIX fleet's scheduler tests are
    now provably incapable of touching the real per-user scheduler.
+
+## Amendment (2026-07-08): unprivileged catchup (no LogonTrigger) + UTF-16 file encoding
+
+Status: Accepted (amends decision points 1–2). Born from the first external Windows
+tester's report (Windows 11 Pro, hu-HU, non-elevated, Developer Mode off, v0.6.4).
+
+1. **The Windows task XML file is written as UTF-16 LE with a BOM**, declaration
+   `encoding="UTF-16"`. `schtasks /create /xml <file>` reads the file's bytes and
+   rejects UTF-8 (`(1,40): cannot convert the encoding`, reproduced on hu-HU) — Task
+   Scheduler's canonical task XML is UTF-16. launchd/systemd files stay UTF-8.
+
+2. **The `\Wienerdog\catchup` task drops its `<LogonTrigger>`; the hourly `TimeTrigger`
+   (PT1H) with `StartWhenAvailable=true` is retained as the sole trigger.** A
+   logon-trigger task requires **admin rights** to register (0x80070005 Access denied
+   from a standard shell), which breaks the elevation-free install promise. The hourly
+   trigger + StartWhenAvailable already recovers a dream missed by power-off or logoff
+   shortly after the machine/user is next available; the accepted cost is that
+   post-logon catch-up can lag up to ~1h (the next hourly tick) instead of firing at
+   logon — within Wienerdog's existing "within an hour" catch-up guarantee. This
+   supersedes decision point 2's "ONLOGON trigger + hourly" for Windows.

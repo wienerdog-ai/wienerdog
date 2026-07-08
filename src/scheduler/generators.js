@@ -281,7 +281,7 @@ function windowsXmlEscape(s) {
  * @returns {string} the full Task Scheduler XML
  */
 function windowsDreamTaskXml(o) {
-  return `<?xml version="1.0" encoding="UTF-8"?>
+  return `<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <RegistrationInfo>
     <Author>Wienerdog</Author>
@@ -330,7 +330,7 @@ function windowsDreamTaskXml(o) {
  * @returns {string} the full Task Scheduler XML
  */
 function windowsCatchupTaskXml(o) {
-  return `<?xml version="1.0" encoding="UTF-8"?>
+  return `<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <RegistrationInfo>
     <Author>Wienerdog</Author>
@@ -338,9 +338,6 @@ function windowsCatchupTaskXml(o) {
     <URI>\\Wienerdog\\catchup</URI>
   </RegistrationInfo>
   <Triggers>
-    <LogonTrigger>
-      <Enabled>true</Enabled>
-    </LogonTrigger>
     <TimeTrigger>
       <StartBoundary>2020-01-01T00:00:00</StartBoundary>
       <Enabled>true</Enabled>
@@ -374,6 +371,13 @@ function windowsCatchupTaskXml(o) {
   </Actions>
 </Task>
 `;
+}
+
+/** Encode a Task Scheduler XML string as the bytes schtasks accepts from a file:
+ *  UTF-16 LE with a leading BOM (0xFF 0xFE). The declaration must already read
+ *  encoding="UTF-16". @param {string} xml @returns {Buffer} */
+function windowsTaskXmlBytes(xml) {
+  return Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(xml, 'utf16le')]);
 }
 
 /** @param {string} p @returns {boolean} */
@@ -454,6 +458,7 @@ module.exports = {
   windowsXmlEscape,
   windowsDreamTaskXml,
   windowsCatchupTaskXml,
+  windowsTaskXmlBytes,
   ensureCatchup,
   defaultCatchupLoader,
 };

@@ -69,18 +69,25 @@ function hasSystemd() {
  * manifest entry already tracks it, nothing is written and false is returned.
  * @param {import('../core/manifest').Manifest} manifest
  * @param {string} filePath
- * @param {string} content
+ * @param {string|Buffer} content  string (UTF-8) or raw bytes (e.g. UTF-16 LE
+ *   Windows task XML); compared and written byte-wise.
  * @param {string[]|null} unload  argv that unregisters the entry, or null.
  * @returns {boolean} true if the file was (re)written (i.e. an OS reload is due).
  */
 function ensureEntry(manifest, filePath, content, unload) {
-  const identical = isFile(filePath) && fs.readFileSync(filePath, 'utf8') === content;
+  const buf = Buffer.isBuffer(content) ? content : Buffer.from(content);
+  let onDiskMatches = false;
+  try {
+    onDiskMatches = fs.readFileSync(filePath).equals(buf);
+  } catch {
+    onDiskMatches = false;
+  }
   const hasEntry = manifest.entries.some(
     (e) => e.kind === 'scheduler-entry' && e.path === filePath
   );
-  if (identical && hasEntry) return false;
+  if (onDiskMatches && hasEntry) return false;
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  fs.writeFileSync(filePath, content);
+  fs.writeFileSync(filePath, buf);
   if (!hasEntry) {
     /** @type {import('../core/manifest').ManifestEntry} */
     const entry = { kind: 'scheduler-entry', path: filePath };
@@ -118,7 +125,9 @@ function ensureCatchup(paths, manifest, loader, uid) {
  */
 function ensureWindowsCatchup(paths, manifest, loader) {
   const userId = gen.windowsCurrentUserId();
-  const content = gen.windowsCatchupTaskXml({ node: gen.nodePath(), bin: gen.wienerdogBin(paths), userId });
+  const content = gen.windowsTaskXmlBytes(
+    gen.windowsCatchupTaskXml({ node: gen.nodePath(), bin: gen.wienerdogBin(paths), userId })
+  );
   const xmlPath = gen.windowsTaskFile(paths, 'catchup');
   const taskName = gen.windowsTaskName('catchup'); // '\Wienerdog\catchup'
   const unload = ['schtasks', '/delete', '/tn', taskName, '/f'];
@@ -190,14 +199,16 @@ function registerPlatform(paths, manifest, o, loader, platform = process.platfor
     const taskName = gen.windowsTaskName(o.name); // '\Wienerdog\<name>'
     const userId = gen.windowsCurrentUserId();
     const dreamXmlPath = gen.windowsTaskFile(paths, o.name);
-    const content = gen.windowsDreamTaskXml({
-      name: o.name,
-      hour: o.hour,
-      minute: o.minute,
-      node,
-      bin,
-      userId,
-    });
+    const content = gen.windowsTaskXmlBytes(
+      gen.windowsDreamTaskXml({
+        name: o.name,
+        hour: o.hour,
+        minute: o.minute,
+        node,
+        bin,
+        userId,
+      })
+    );
     const unload = ['schtasks', '/delete', '/tn', taskName, '/f'];
     const changed = ensureEntry(manifest, dreamXmlPath, content, unload);
     if (changed) loader(['schtasks', '/create', '/tn', taskName, '/xml', dreamXmlPath, '/f']);

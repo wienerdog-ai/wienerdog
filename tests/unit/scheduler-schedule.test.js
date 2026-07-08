@@ -408,8 +408,20 @@ test('scheduler-schedule: win32 dispatch writes both XMLs, records reversible en
   const catchupXml = gen.windowsTaskFile(paths, 'catchup');
   assert.equal(path.dirname(dreamXml), gen.windowsTasksDir(paths));
   assert.ok(fs.existsSync(dreamXml) && fs.existsSync(catchupXml), 'both XML artifacts written under <core>/schedules');
-  assert.ok(fs.readFileSync(dreamXml, 'utf8').includes('<URI>\\Wienerdog\\dream</URI>'));
-  assert.ok(fs.readFileSync(catchupXml, 'utf8').includes('run-job --catch-up'));
+  // Both files are UTF-16 LE with a BOM (schtasks rejects UTF-8): leading 0xFF 0xFE.
+  const dreamBytes = fs.readFileSync(dreamXml);
+  const catchupBytes = fs.readFileSync(catchupXml);
+  assert.equal(dreamBytes[0], 0xff);
+  assert.equal(dreamBytes[1], 0xfe);
+  assert.equal(catchupBytes[0], 0xff);
+  assert.equal(catchupBytes[1], 0xfe);
+  // Decoding past the BOM yields the renderer strings (UTF-16 declaration, no LogonTrigger).
+  const dreamText = dreamBytes.slice(2).toString('utf16le');
+  const catchupText = catchupBytes.slice(2).toString('utf16le');
+  assert.ok(dreamText.startsWith('<?xml version="1.0" encoding="UTF-16"?>'));
+  assert.ok(dreamText.includes('<URI>\\Wienerdog\\dream</URI>'));
+  assert.ok(catchupText.includes('run-job --catch-up'));
+  assert.ok(!catchupText.includes('<LogonTrigger>'), 'catchup task carries no LogonTrigger');
 
   const schedEntries = manifest.entries.filter((e) => e.kind === 'scheduler-entry');
   const dreamEntry = schedEntries.find((e) => e.path === dreamXml);

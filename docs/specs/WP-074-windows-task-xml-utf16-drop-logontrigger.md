@@ -1,7 +1,7 @@
 ---
 id: WP-074
 title: Windows task XML — write UTF-16 LE so schtasks accepts it; drop the LogonTrigger it can't register unprivileged
-status: Draft
+status: In-Review
 model: opus
 size: M
 depends_on: []
