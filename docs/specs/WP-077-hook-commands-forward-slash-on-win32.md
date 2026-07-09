@@ -1,7 +1,7 @@
 ---
 id: WP-077
 title: Register hook commands with forward-slash paths (Windows SessionEnd no longer ENOENTs)
-status: Draft
+status: In-Review
 model: opus
 size: M
 depends_on: []

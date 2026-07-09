@@ -97,6 +97,48 @@ test('settings.json merge preserves existing hooks and dedups', () => {
   assert.ok(allCommands('SessionStart').includes('/usr/local/bin/other.sh'));
 });
 
+test('backslash-seeded SessionEnd converges to exactly one forward-slash entry (WP-077)', () => {
+  const paths = setup();
+  const settingsPath = path.join(paths.claudeDir, 'settings.json');
+  const endAbs = path.join(paths.core, 'bin', 'session-end.sh');
+  // Simulate a stock-broken 0.6.5 Windows machine: the SessionEnd command was
+  // registered with backslash separators (path.join on win32).
+  const winEnd = endAbs.replace(/\//g, '\\');
+  const preExisting = {
+    hooks: {
+      SessionEnd: [
+        { matcher: '*', hooks: [{ type: 'command', command: winEnd, timeout: 10 }] },
+      ],
+      SessionStart: [
+        { matcher: '*', hooks: [{ type: 'command', command: '/usr/local/bin/other.sh', timeout: 5 }] },
+      ],
+    },
+  };
+  fs.writeFileSync(settingsPath, `${JSON.stringify(preExisting, null, 2)}\n`);
+  const manifest = freshManifest();
+
+  applyClaudeAdapter(paths, { manifest });
+  let settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+  const allCommands = (event) =>
+    (settings.hooks[event] || []).flatMap((g) => g.hooks.map((h) => h.command));
+
+  // Exactly one SessionEnd entry, forward-slash, no backslash variant remaining.
+  assert.deepEqual(allCommands('SessionEnd'), [endAbs]);
+  assert.ok(!allCommands('SessionEnd')[0].includes('\\'), 'no backslash in the command');
+  // Unrelated user hook survives untouched.
+  assert.ok(allCommands('SessionStart').includes('/usr/local/bin/other.sh'), 'unrelated hook survives');
+
+  // Recorded manifest commands are the forward-slash forms.
+  const entry = manifest.entries.find((e) => e.kind === 'settings-entry' && e.path === settingsPath);
+  assert.ok(entry.commands.every((c) => !c.includes('\\')), 'manifest records forward-slash commands');
+
+  // Second apply is a no-op: settings file reported unchanged, still one entry.
+  const res = applyClaudeAdapter(paths, { manifest });
+  assert.ok(res.unchanged.includes(settingsPath), 'idempotent second run leaves settings unchanged');
+  settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+  assert.deepEqual(allCommands('SessionEnd'), [endAbs]);
+});
+
 test('hook scripts are copied to core/bin mode 0755', () => {
   const paths = setup();
   applyClaudeAdapter(paths, { manifest: freshManifest() });

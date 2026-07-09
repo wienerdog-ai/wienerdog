@@ -112,6 +112,19 @@ function copyHookScript(src, dest, dryRun, manifest, out) {
   recordOnce(manifest, { kind: 'file', path: dest });
 }
 
+/** Normalize a hook command's path separators to forward slashes. Claude Code and
+ *  Codex run command hooks through bash on Windows, where an unquoted backslash is an
+ *  escape char (C:\Users\… collapses to C:Users…, ENOENT). Forward slashes are valid
+ *  for bash AND the Windows API, so we register the forward-slash form on EVERY
+ *  platform — a no-op on POSIX, where paths already use '/'. One code path, no
+ *  platform branch (WP-077).
+ *  @param {string} command
+ *  @returns {string}
+ */
+function toPosixCommand(command) {
+  return String(command).replace(/\\/g, '/');
+}
+
 /**
  * Merge command hooks into a JSON file's `.hooks`, dedup by command path.
  * @param {string} settingsPath  target JSON file (Claude settings.json OR Codex hooks.json)
@@ -142,8 +155,34 @@ function applySettings(settingsPath, events, dryRun, manifest, out) {
   }
 
   let changed = false;
-  for (const [event, command] of events) {
+  for (const [event, rawCommand] of events) {
+    const command = toPosixCommand(rawCommand);
     if (!Array.isArray(settings.hooks[event])) settings.hooks[event] = [];
+
+    // Prune stale separator-variants of OUR command (e.g. a broken backslash entry
+    // written by a pre-fix version). Match strictly on the normalized path being ours
+    // while the raw string differs — a user's unrelated hook never normalizes to our
+    // path, so it is never touched. Drop a group whose hooks array is emptied.
+    const before = settings.hooks[event];
+    const pruned = [];
+    for (const group of before) {
+      if (!group || !Array.isArray(group.hooks)) {
+        pruned.push(group);
+        continue;
+      }
+      const keptHooks = group.hooks.filter(
+        (h) => !(h && toPosixCommand(h.command) === command && h.command !== command)
+      );
+      if (keptHooks.length !== group.hooks.length) {
+        changed = true;
+        if (keptHooks.length === 0) continue; // drop the emptied group
+        pruned.push({ ...group, hooks: keptHooks });
+      } else {
+        pruned.push(group);
+      }
+    }
+    settings.hooks[event] = pruned;
+
     const present = settings.hooks[event].some(
       (group) =>
         group &&
@@ -169,7 +208,7 @@ function applySettings(settingsPath, events, dryRun, manifest, out) {
     kind: 'settings-entry',
     path: settingsPath,
     createdFile,
-    commands: events.map(([, command]) => command),
+    commands: events.map(([, c]) => toPosixCommand(c)),
   });
 }
 
@@ -301,4 +340,4 @@ function applySkillLinks(skillsDir, targetSkillsDir, dryRun, manifest, out, opts
   }
 }
 
-module.exports = { recordOnce, buildBlock, applyManagedBlock, copyHookScript, applySettings, applySkillLinks };
+module.exports = { recordOnce, buildBlock, applyManagedBlock, copyHookScript, toPosixCommand, applySettings, applySkillLinks };

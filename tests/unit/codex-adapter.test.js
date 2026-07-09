@@ -111,6 +111,49 @@ test('hooks.json merge preserves existing hooks and dedups; /hooks trust notice 
   assert.ok(allCommands('Stop').includes('/usr/local/bin/other-stop.sh'));
 });
 
+test('backslash-seeded Stop converges to exactly one forward-slash entry (WP-077)', () => {
+  const paths = setup();
+  const hooksPath = path.join(paths.codexDir, 'hooks.json');
+  const stopAbs = path.join(paths.core, 'bin', 'codex-session-end.sh');
+  // Simulate a stock-broken 0.6.5 Windows machine: the Stop command was registered
+  // with backslash separators (path.join on win32).
+  const winStop = stopAbs.replace(/\//g, '\\');
+  const preExisting = {
+    hooks: {
+      Stop: [
+        { hooks: [{ type: 'command', command: winStop, timeout: 10 }] },
+        { hooks: [{ type: 'command', command: '/usr/local/bin/other-stop.sh', timeout: 30 }] },
+      ],
+    },
+  };
+  fs.writeFileSync(hooksPath, `${JSON.stringify(preExisting, null, 2)}\n`);
+  const manifest = freshManifest();
+
+  applyCodexAdapter(paths, { manifest });
+  let hooks = JSON.parse(fs.readFileSync(hooksPath, 'utf8'));
+  const startAbs = path.join(paths.core, 'bin', 'session-start.sh');
+  const allCommands = (event) => (hooks.hooks[event] || []).flatMap((g) => g.hooks.map((h) => h.command));
+
+  // Exactly one Stop command for our path, forward-slash, no backslash variant left.
+  assert.equal(allCommands('Stop').filter((c) => c === stopAbs).length, 1);
+  assert.ok(!allCommands('Stop').some((c) => c.includes('\\')), 'no backslash in any Stop command');
+  // Unrelated user hook survives untouched.
+  assert.ok(allCommands('Stop').includes('/usr/local/bin/other-stop.sh'), 'unrelated Stop hook survives');
+  // SessionStart registered with forward slashes.
+  assert.ok(allCommands('SessionStart').includes(startAbs), 'SessionStart forward-slash command present');
+  assert.ok(!allCommands('SessionStart').some((c) => c.includes('\\')), 'no backslash in any SessionStart command');
+
+  // Recorded manifest commands are the forward-slash forms.
+  const entry = manifest.entries.find((e) => e.kind === 'settings-entry' && e.path === hooksPath);
+  assert.ok(entry.commands.every((c) => !c.includes('\\')), 'manifest records forward-slash commands');
+
+  // Second apply is a no-op: hooks file reported unchanged, still one Stop entry for us.
+  const res = applyCodexAdapter(paths, { manifest });
+  assert.ok(res.unchanged.includes(hooksPath), 'idempotent second run leaves hooks unchanged');
+  hooks = JSON.parse(fs.readFileSync(hooksPath, 'utf8'));
+  assert.equal(allCommands('Stop').filter((c) => c === stopAbs).length, 1);
+});
+
 test('skills symlink into .agents/skills points at the core skill dir', () => {
   const paths = setup();
   const coreSkill = path.join(paths.core, 'skills', 'wienerdog-setup');
