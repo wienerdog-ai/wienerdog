@@ -2,6 +2,12 @@
 
 All notable changes to Wienerdog. Format: [Keep a Changelog](https://keepachangelog.com), versioning: SemVer (0.x until the installed file layout stabilizes — ADR-0003).
 
+## [0.6.6] — 2026-07-09
+
+### Fixed
+- **Windows: the nightly dream can now find git.** Scheduled jobs run with a deliberately minimal environment, and on Windows that environment didn't include git's folder — so every nightly dream failed before it could save your memories. The standard Git for Windows locations are now always included. If git still can't be found, the error now says so in plain language instead of a cryptic code. (Reported by our external Windows tester — this unblocked his first successful nightly dream.)
+- **Windows: session-end hooks no longer fail after every Claude Code session.** Hook commands were registered with Windows-style backslash paths, which the shell that runs them misreads. They are now written with forward slashes (which Windows accepts too), and an update cleanly repairs existing entries — including ones you may have fixed by hand.
+
 ## [0.6.5] — 2026-07-08
 
 ### Fixed
