@@ -1,7 +1,7 @@
 ---
 id: WP-077
 title: Register hook commands with forward-slash paths (Windows SessionEnd no longer ENOENTs)
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: []
@@ -290,3 +290,15 @@ the WP-073/074 precedent).
    `fix(adapters): register hook commands with forward-slash paths (WP-077)`.
 3. PR template filled, including "Decisions made" (or "none") and `Generated-by:`.
 4. This spec's `status:` flipped to `In-Review` in the same PR.
+
+## Done record (2026-07-09)
+
+Merged to main as `4434667` (PR #77, squash). Reviewer verdict: approve, zero
+findings (four-state convergence table verified against the code; prune
+predicate scoped to Wienerdog's own core/bin paths; dry-run non-mutating).
+**Manual Windows gate waived at merge**: the field tester's post-0.6.6 `sync`
+converging his hand-fixed forward-slash entries (idempotent no-op) plus a clean
+SessionEnd is the confirming reproduction. Open residual (owner-accepted, out of
+scope here): pre-0.6.6 installs keep backslash commands in the uninstall
+manifest — a later uninstall leaves one stray working hook line; durable fix
+would normalize matching in manifest.js reverseSettingsEntry.

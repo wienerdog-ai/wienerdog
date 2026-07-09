@@ -1,7 +1,7 @@
 ---
 id: WP-076
 title: win32 clean-env PATH includes git (nightly dream no longer ENOENTs) — ship-blocker
-status: In-Review
+status: Done
 model: sonnet
 size: S
 depends_on: []
@@ -265,3 +265,12 @@ defer to the owner/tester with these steps, per the WP-073/074 precedent).
    `fix(run-job): win32 clean-env PATH includes git (WP-076)`.
 3. PR template filled, including "Decisions made" (or "none") and `Generated-by:`.
 4. This spec's `status:` flipped to `In-Review` in the same PR.
+
+## Done record (2026-07-09)
+
+Merged to main as `167700a` (PR #76, squash). Reviewer verdict: approve, zero
+findings (contracts byte-matched; index/length assertions verified non-vacuous;
+verification independently re-run). **Manual Windows gate waived at merge**
+(WP-073/074 precedent): the field tester's post-0.6.6 update replaces his
+locally patched vendored 0.6.5 app; his next scheduled dream exiting 0 on stock
+code is the confirming reproduction. Record his log line here when it lands.

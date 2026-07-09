@@ -94,8 +94,8 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 | [WP-073](done/WP-073-vendor-junction-repoint.md) | repointCurrent uses a junction on Windows (unprivileged install no longer EPERM-crashes) | M7 | sonnet | Done | — |
 | [WP-074](done/WP-074-windows-task-xml-utf16-drop-logontrigger.md) | Windows task XML UTF-16 LE + drop unprivileged LogonTrigger | M6 | opus | Done | — |
 | [WP-075](done/WP-075-scheduler-fail-loud-on-load-failure.md) | Fail loud when a scheduler mutation is rejected (no false scheduled/reloaded) | M6/M7 | opus | Done | WP-074 |
-| [WP-076](WP-076-runjob-win32-git-on-clean-path.md) | win32 clean-env PATH includes git (nightly dream no longer ENOENTs) — ship-blocker | M6/M7 | sonnet | Draft | — |
-| [WP-077](WP-077-hook-commands-forward-slash-on-win32.md) | Register hook commands with forward-slash paths (Windows SessionEnd no longer ENOENTs) | M7 | opus | Draft | — |
+| [WP-076](done/WP-076-runjob-win32-git-on-clean-path.md) | win32 clean-env PATH includes git (nightly dream no longer ENOENTs) — ship-blocker | M6/M7 | sonnet | Done | — |
+| [WP-077](done/WP-077-hook-commands-forward-slash-on-win32.md) | Register hook commands with forward-slash paths (Windows SessionEnd no longer ENOENTs) | M7 | opus | Done | — |
 
 > **First-production-night incident (2026-07-04).** WP-038, WP-039 and WP-041 form
 > a serial chain (they edit the shared `run-job.js` / `dream.js` / `validate.js`
