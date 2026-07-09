@@ -1,7 +1,7 @@
 ---
 id: WP-076
 title: win32 clean-env PATH includes git (nightly dream no longer ENOENTs) — ship-blocker
-status: Draft
+status: In-Review
 model: sonnet
 size: S
 depends_on: []

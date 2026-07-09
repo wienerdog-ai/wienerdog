@@ -151,7 +151,15 @@ test('scheduler-runjob: buildCleanEnv(win32) builds the ;-PATH Windows shape, US
   const { paths } = setup();
   // Inject the Windows env vars the win32 branch reads/passes through. Saved and
   // restored so no other test observes them (we run on a POSIX host).
-  const keys = ['APPDATA', 'SystemRoot', 'LOCALAPPDATA', 'USERNAME', 'PATHEXT', 'WIENERDOG_SECRET_TEST'];
+  const keys = [
+    'APPDATA',
+    'SystemRoot',
+    'LOCALAPPDATA',
+    'USERNAME',
+    'PATHEXT',
+    'WIENERDOG_SECRET_TEST',
+    'ProgramFiles',
+  ];
   const saved = {};
   for (const k of keys) saved[k] = process.env[k];
   process.env.APPDATA = 'C:\\Users\\Ada\\AppData\\Roaming';
@@ -160,6 +168,7 @@ test('scheduler-runjob: buildCleanEnv(win32) builds the ;-PATH Windows shape, US
   process.env.USERNAME = 'Ada';
   process.env.PATHEXT = '.COM;.EXE;.BAT;.CMD';
   process.env.WIENERDOG_SECRET_TEST = 'leak-me';
+  process.env.ProgramFiles = 'C:\\Program Files';
   try {
     const clean = runjob.buildCleanEnv(paths, 'dream', 'win32');
 
@@ -177,7 +186,12 @@ test('scheduler-runjob: buildCleanEnv(win32) builds the ;-PATH Windows shape, US
     assert.equal(pathDirs[3], path.join(process.env.SystemRoot, 'System32'));
     assert.equal(pathDirs[4], process.env.SystemRoot);
     assert.equal(pathDirs[5], path.join(process.env.SystemRoot, 'System32', 'WindowsPowerShell', 'v1.0'));
-    assert.equal(pathDirs.length, 6, 'exactly the six win32 PATH entries — no POSIX dirs appended');
+    assert.equal(pathDirs[6], path.join(process.env.ProgramFiles, 'Git', 'cmd'));
+    assert.equal(
+      pathDirs[7],
+      path.join(process.env.LOCALAPPDATA, 'Programs', 'Git', 'cmd')
+    );
+    assert.equal(pathDirs.length, 8, 'six base win32 entries + two Git-for-Windows dirs');
 
     // Windows-essential passthrough vars carried when present.
     assert.equal(clean.APPDATA, 'C:\\Users\\Ada\\AppData\\Roaming');

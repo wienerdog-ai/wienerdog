@@ -116,6 +116,21 @@ function buildCleanEnv(paths, name, platform = process.platform) {
         path.join(process.env.SystemRoot || 'C:\\Windows', 'System32'),
         process.env.SystemRoot || 'C:\\Windows',
         path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0'),
+        // git — the clean PATH must cover EVERY binary Wienerdog itself spawns (node,
+        // claude, powershell, git). Windows has no standard bin dir, so name git's install
+        // dirs explicitly: an all-users (admin) Git-for-Windows install lands in
+        // %ProgramFiles%\Git\cmd; a per-user ("only for me") install lands in
+        // %LOCALAPPDATA%\Programs\Git\cmd. Without these the nightly dream's
+        // spawnSync('git', …) ENOENTs and every dream exits 1 (WP-076). A PATH dir that
+        // doesn't exist on a given machine is simply ignored by the OS, so listing both is
+        // safe. The POSIX branch already covers git via /usr/bin, /opt/homebrew/bin, etc.
+        path.join(process.env.ProgramFiles || 'C:\\Program Files', 'Git', 'cmd'),
+        path.join(
+          process.env.LOCALAPPDATA || path.join(paths.home, 'AppData', 'Local'),
+          'Programs',
+          'Git',
+          'cmd'
+        ),
       ].join(';'),
       WIENERDOG_JOB: name,
     };

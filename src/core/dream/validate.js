@@ -29,7 +29,12 @@ const MIN_RECURRENCE = 3;
 function git(vaultDir, args, opts = {}) {
   const res = spawnSync('git', ['-C', vaultDir, ...args], { encoding: 'utf8' });
   if (res.error) {
-    throw new WienerdogError(`git could not run (${args[0]}): ${res.error.message}`);
+    const hint =
+      res.error.code === 'ENOENT'
+        ? ' — git was not found on the job PATH. Install git (https://git-scm.com/downloads)' +
+          ' or make sure it is on your PATH, then re-run the dream.'
+        : '';
+    throw new WienerdogError(`git could not run (${args[0]}): ${res.error.message}${hint}`);
   }
   if (!opts.allowFail && res.status !== 0) {
     throw new WienerdogError(`git ${args[0]} failed: ${(res.stderr || '').trim()}`);
