@@ -2,6 +2,14 @@
 
 All notable changes to Wienerdog. Format: [Keep a Changelog](https://keepachangelog.com), versioning: SemVer (0.x until the installed file layout stabilizes — ADR-0003).
 
+## [0.6.7] — 2026-07-10
+
+### Fixed
+- **Codex CLI can now actually see Wienerdog's skills.** Skills were linked into a folder Codex's documentation mentions but shipped versions never read (`~/.agents/skills`). They are now linked where current Codex really looks (`~/.codex/skills`). If you had worked around this by linking skills there yourself, the next `wienerdog sync` adopts your links so a later uninstall still cleans up everything. Setup output now also explains that Codex starts skills differently from Claude Code: type `/skills` to see them, then `$wienerdog-setup` — or just ask in plain words. There is no `/wienerdog-setup` command in Codex. (Found the day Codex CLI was added to the maintainer's own machine.)
+
+### Added
+- **`wienerdog doctor` now checks your Codex skills.** If Codex is installed but the skills aren't registered where Codex looks, doctor says so plainly and points you to `wienerdog sync` — so if Codex ever moves this folder again, you hear it from doctor instead of noticing your skills quietly vanished.
+
 ## [0.6.6] — 2026-07-09
 
 ### Fixed
