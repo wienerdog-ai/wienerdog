@@ -97,7 +97,7 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 | [WP-076](done/WP-076-runjob-win32-git-on-clean-path.md) | win32 clean-env PATH includes git (nightly dream no longer ENOENTs) — ship-blocker | M6/M7 | sonnet | Done | — |
 | [WP-077](done/WP-077-hook-commands-forward-slash-on-win32.md) | Register hook commands with forward-slash paths (Windows SessionEnd no longer ENOENTs) | M7 | opus | Done | — |
 | [WP-078](done/WP-078-codex-skills-in-codex-home.md) | Link Codex skills into $CODEX_HOME/skills (0.144.x discovery root), not ~/.agents/skills | M4 | sonnet | Done | — |
-| [WP-079](WP-079-doctor-codex-skill-links.md) | doctor check — Codex skill links exist under $CODEX_HOME/skills when Codex detected | M4 | sonnet | Draft | WP-078 |
+| [WP-079](WP-079-doctor-codex-skill-links.md) | doctor check — Codex skill links exist under $CODEX_HOME/skills when Codex detected | M4 | sonnet | Ready | WP-078 |
 
 > **First-production-night incident (2026-07-04).** WP-038, WP-039 and WP-041 form
 > a serial chain (they edit the shared `run-job.js` / `dream.js` / `validate.js`
