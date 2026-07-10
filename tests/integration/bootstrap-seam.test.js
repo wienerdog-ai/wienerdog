@@ -120,7 +120,7 @@ test('Claude present, init --fresh-vault: everything incl. digest + managed bloc
   }
 });
 
-test('Codex present, plain init: skills + hooks under .agents, NO memory', () => {
+test('Codex present, plain init: skills + hooks under <CODEX_HOME>/skills, NO memory', () => {
   const root = tempRoot();
   const wd = path.join(root, 'wd');
   const codexDir = path.join(root, 'codex');
@@ -153,7 +153,7 @@ test('Codex present, plain init: skills + hooks under .agents, NO memory', () =>
   );
 
   if (process.platform !== 'win32') {
-    const link = path.join(root, '.agents', 'skills', 'wienerdog-setup');
+    const link = path.join(codexDir, 'skills', 'wienerdog-setup');
     assert.ok(fs.lstatSync(link).isSymbolicLink(), 'setup skill symlinked under .agents');
   }
 });

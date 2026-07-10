@@ -191,3 +191,22 @@ test('dry-run records a symlink entry and reports the change without writing', (
     [{ kind: 'symlink', path: linkPath }]
   );
 });
+
+test('a pre-existing correct symlink is adopted into the manifest (recorded, reported unchanged)', () => {
+  if (process.platform === 'win32') return;
+  const { skillsDir, targetSkillsDir, coreSkill } = setup();
+  fs.mkdirSync(targetSkillsDir, { recursive: true });
+  const linkPath = path.join(targetSkillsDir, 'wienerdog-setup');
+  fs.symlinkSync(coreSkill, linkPath);
+
+  const out = freshOut();
+  const manifest = freshManifest();
+  shared.applySkillLinks(skillsDir, targetSkillsDir, false, manifest, out);
+
+  assert.ok(out.unchanged.includes(linkPath));
+  assert.ok(!out.changed.includes(linkPath));
+  assert.deepEqual(
+    manifest.entries.filter((e) => e.path === linkPath),
+    [{ kind: 'symlink', path: linkPath }]
+  );
+});

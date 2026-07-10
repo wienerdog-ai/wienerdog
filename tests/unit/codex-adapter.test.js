@@ -22,7 +22,8 @@ const GOLDEN = path.join(__dirname, '..', 'golden', 'codex-adapter', 'AGENTS.md'
 
 /**
  * Fresh temp core + codex dir, with the fixed digest already written to
- * <state>/digest.md. Never touches the real $HOME, ~/.codex or ~/.agents.
+ * <state>/digest.md. Never touches the real $HOME or ~/.codex — skills now
+ * live under ~/.codex/skills, not ~/.agents/skills.
  * CLAUDE_CONFIG_DIR is left unset with no <HOME>/.claude, so Claude is absent.
  * @returns {import('../../src/core/paths').WienerdogPaths}
  */
@@ -102,6 +103,10 @@ test('hooks.json merge preserves existing hooks and dedups; /hooks trust notice 
   assert.equal(allCommands('SessionStart').filter((c) => c === startAbs).length, 1);
   assert.equal(allCommands('Stop').filter((c) => c === stopAbs).length, 1);
   assert.ok(res.notices.some((n) => n.includes('/hooks')), 'expected the /hooks trust notice');
+  assert.ok(
+    res.notices.some((n) => n.includes('/skills') && n.includes('$wienerdog-setup')),
+    'expected the Codex skill-invocation notice'
+  );
 
   // Second run: no duplicates.
   applyCodexAdapter(paths, { manifest });
@@ -154,7 +159,7 @@ test('backslash-seeded Stop converges to exactly one forward-slash entry (WP-077
   assert.equal(allCommands('Stop').filter((c) => c === stopAbs).length, 1);
 });
 
-test('skills symlink into .agents/skills points at the core skill dir', () => {
+test('skills symlink into <codexDir>/skills points at the core skill dir', () => {
   const paths = setup();
   const coreSkill = path.join(paths.core, 'skills', 'wienerdog-setup');
   fs.mkdirSync(coreSkill, { recursive: true });
@@ -162,7 +167,7 @@ test('skills symlink into .agents/skills points at the core skill dir', () => {
 
   applyCodexAdapter(paths, { manifest: freshManifest() });
 
-  const linkPath = path.join(paths.home, '.agents', 'skills', 'wienerdog-setup');
+  const linkPath = path.join(paths.codexDir, 'skills', 'wienerdog-setup');
   if (process.platform === 'win32') return; // symlinking skipped on Windows in v1
   assert.ok(fs.lstatSync(linkPath).isSymbolicLink());
   assert.equal(fs.readlinkSync(linkPath), coreSkill);
@@ -207,7 +212,7 @@ test('uninstall reverses everything, keeping unrelated hooks and user content', 
   fs.writeFileSync(paths.manifest, `${JSON.stringify(manifest, null, 2)}\n`);
   fs.mkdirSync(paths.core, { recursive: true });
 
-  const linkPath = path.join(paths.home, '.agents', 'skills', 'wienerdog-setup');
+  const linkPath = path.join(paths.codexDir, 'skills', 'wienerdog-setup');
 
   manifestLib.reverse(paths, manifest, { dryRun: false });
 
@@ -322,7 +327,7 @@ test('Codex-only machine: full setup + working dream from rollout files alone', 
   assert.ok(sessionStartCmds.includes(startAbs));
   assert.ok(stopCmds.includes(stopAbs));
 
-  const skillLink = path.join(home, '.agents', 'skills', 'wienerdog-setup');
+  const skillLink = path.join(codexHome, 'skills', 'wienerdog-setup');
   if (process.platform !== 'win32') {
     assert.ok(fs.lstatSync(skillLink).isSymbolicLink());
   }
