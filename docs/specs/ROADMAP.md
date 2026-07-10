@@ -96,7 +96,7 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 | [WP-075](done/WP-075-scheduler-fail-loud-on-load-failure.md) | Fail loud when a scheduler mutation is rejected (no false scheduled/reloaded) | M6/M7 | opus | Done | WP-074 |
 | [WP-076](done/WP-076-runjob-win32-git-on-clean-path.md) | win32 clean-env PATH includes git (nightly dream no longer ENOENTs) — ship-blocker | M6/M7 | sonnet | Done | — |
 | [WP-077](done/WP-077-hook-commands-forward-slash-on-win32.md) | Register hook commands with forward-slash paths (Windows SessionEnd no longer ENOENTs) | M7 | opus | Done | — |
-| [WP-078](WP-078-codex-skills-in-codex-home.md) | Link Codex skills into $CODEX_HOME/skills (0.144.x discovery root), not ~/.agents/skills | M4 | sonnet | Ready | — |
+| [WP-078](done/WP-078-codex-skills-in-codex-home.md) | Link Codex skills into $CODEX_HOME/skills (0.144.x discovery root), not ~/.agents/skills | M4 | sonnet | Done | — |
 | [WP-079](WP-079-doctor-codex-skill-links.md) | doctor check — Codex skill links exist under $CODEX_HOME/skills when Codex detected | M4 | sonnet | Draft | WP-078 |
 
 > **First-production-night incident (2026-07-04).** WP-038, WP-039 and WP-041 form
@@ -550,7 +550,7 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 > Verified: symlinks in `~/.codex/skills/` ARE followed (`codex debug prompt-input`
 > lists all seven skills); no copy fallback needed on macOS; `~/.codex/skills/`
 > already holds Codex's own `.system/` (only `wienerdog-*` entries may be touched).
-> **WP-078** (S, sonnet, Ready) retargets the adapter's one skill-link dir from
+> **WP-078** (S, sonnet, Done — merged e90b948, PR #78) retargets the adapter's one skill-link dir from
 > `path.join(paths.home,'.agents','skills')` to `path.join(paths.codexDir,'skills')`,
 > repoints the pinning tests, and adds ONE plain-language notice that Codex skills are
 > not slash commands — `/skills` lists them, `$wienerdog-setup` (or plain words) starts

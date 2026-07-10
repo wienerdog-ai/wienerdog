@@ -1,7 +1,7 @@
 ---
 id: WP-078
 title: Link Codex skills into $CODEX_HOME/skills (0.144.x discovery root), not ~/.agents/skills
-status: In-Review
+status: Done
 model: sonnet
 size: S
 depends_on: []
@@ -374,3 +374,19 @@ the owner/tester, WP-073/077 precedent).
    `fix(adapters): link Codex skills into $CODEX_HOME/skills (WP-078)`.
 3. PR template filled, including "Decisions made" (or "none") and `Generated-by:`.
 4. This spec's `status:` flipped to `In-Review` in the same PR.
+
+## Done record (2026-07-10)
+
+Merged to main as `e90b948` (PR #78, squash). Reviewer verdict: approve —
+boundary, contracts (notice byte-match incl. `/skills` + `$wienerdog-setup`
+substrings), and the adoption regression test all verified independently on the
+branch; 572/572 tests + lint green. **Manual macOS gate satisfied same-day on
+the field machine (Gyula, Codex 0.144.1)**: `codex debug prompt-input` lists
+all seven `wienerdog-*` skills in `### Available skills` with symlinks resolved,
+and interactive invocation via `$wienerdog-setup` confirmed working (the
+original "skill not detected" report turned out to be the slash-command
+expectation the new notice now addresses). Non-blocking cosmetic residual: the
+assertion-failure *message* at `tests/integration/bootstrap-seam.test.js:157`
+still says ".agents" though the assertion is repointed — future cleanup only.
+Watch item stands: if a future Codex makes `~/.agents/skills` primary again,
+machines carrying legacy links may double-list skills.
