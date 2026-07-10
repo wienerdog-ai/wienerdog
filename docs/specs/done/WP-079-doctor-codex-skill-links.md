@@ -1,7 +1,7 @@
 ---
 id: WP-079
 title: doctor check — Codex skill links exist under $CODEX_HOME/skills when Codex is detected
-status: In-Review
+status: Done
 model: sonnet
 size: S
 depends_on: [WP-078]
@@ -215,3 +215,16 @@ npm run lint
    `feat(doctor): flag missing Codex skill links under $CODEX_HOME/skills (WP-079)`.
 3. PR template filled, including "Decisions made" (or "none") and `Generated-by:`.
 4. This spec's `status:` flipped to `In-Review` in the same PR.
+
+## Done record (2026-07-10)
+
+Merged to main as `48d9f51` (PR #79, squash). Reviewer verdict: approve —
+message strings byte-match the spec literals; warn-never-fail semantics
+verified (missing skill cannot flip doctor's exit code); silent when Codex is
+absent. The implementer's `existsSync` simplification (dropping the spec's
+separate lstat branch) was empirically proven equivalent across all four
+registration states (valid link / dangling link / copied dir / absent) — the
+dangling state correctly reads as not-registered. Non-blocking residual: the
+"link removed" test covers the absent state, not the dangling state; dangling
+behavior verified out of band only — future test-hardening candidate. Ships to
+users with the next release (0.6.7).
