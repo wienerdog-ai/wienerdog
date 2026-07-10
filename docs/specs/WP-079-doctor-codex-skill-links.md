@@ -1,7 +1,7 @@
 ---
 id: WP-079
 title: doctor check — Codex skill links exist under $CODEX_HOME/skills when Codex is detected
-status: Ready
+status: In-Review
 model: sonnet
 size: S
 depends_on: [WP-078]

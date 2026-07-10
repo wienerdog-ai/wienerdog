@@ -1,6 +1,7 @@
 'use strict';
 
 const fs = require('node:fs');
+const path = require('node:path');
 const { getPaths } = require('../core/paths');
 const { detectHarnesses } = require('../core/detect');
 const { getUpdateNotice, updateCommand } = require('../core/update-check');
@@ -36,6 +37,42 @@ function readVaultPath(configPath) {
   if (!m) return null;
   const value = m[1].split('#')[0].trim();
   return value === '' || value === 'null' ? null : value;
+}
+
+/** Verify each shipped wienerdog-* skill is registered under <codexDir>/skills/
+ *  (a symlink OR a copied dir — both count; WP-050). Read-only; a missing/broken
+ *  link is a WARN (remediation: 'wienerdog sync'), never a fail. Empty array when
+ *  Codex is not detected. Codex's own <codexDir>/skills/.system/ is ignored.
+ *  @param {import('../core/paths').WienerdogPaths} paths
+ *  @param {{codex:{present:boolean}}} harnesses
+ *  @returns {{status:'ok'|'warn', msg:string}[]} */
+function codexSkillChecks(paths, harnesses) {
+  if (!harnesses.codex.present) return [];
+
+  const coreSkillsDir = path.join(paths.core, 'skills');
+  let entries;
+  try {
+    entries = fs.readdirSync(coreSkillsDir, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  const names = entries
+    .filter((e) => e.name.startsWith('wienerdog-') && (e.isDirectory() || e.isSymbolicLink()))
+    .map((e) => e.name);
+  if (names.length === 0) return [];
+
+  const codexSkillsDir = path.join(paths.codexDir, 'skills');
+  const missing = names.filter((name) => !fs.existsSync(path.join(codexSkillsDir, name)));
+
+  if (missing.length === 0) {
+    return [{ status: 'ok', msg: `Codex skills registered (${names.length}) under ${codexSkillsDir}` }];
+  }
+  return [
+    {
+      status: 'warn',
+      msg: `Codex skills NOT registered under ${codexSkillsDir}: ${missing.join(', ')} — run 'wienerdog sync' to (re)link them`,
+    },
+  ];
 }
 
 /**
@@ -110,6 +147,10 @@ async function run(_argv) {
   // entry is a warn (actionable), never a hard fail; doctor never mutates.
   const { doctorSchedulerChecks } = require('../scheduler/status');
   for (const c of doctorSchedulerChecks(paths)) check(c.status, c.msg);
+
+  // Codex skill-link health: shipped skills registered under $CODEX_HOME/skills/.
+  // Read-only; missing links are a warn (remediation: 'wienerdog sync').
+  for (const c of codexSkillChecks(paths, harnesses)) check(c.status, c.msg);
 
   // Cache-only update notice (no network; does not affect pass/fail). ADR-0015.
   const upd = getUpdateNotice(paths);

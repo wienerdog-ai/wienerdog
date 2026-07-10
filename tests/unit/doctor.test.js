@@ -168,6 +168,37 @@ test('doctor reports [ok] when a registered scheduler entry probes loaded', () =
   assert.match(r.stdout, /\[ok\] scheduled job 'dream' is loaded \(launchd\)/);
 });
 
+test('doctor reports [ok] Codex skills registered when Codex is present and links intact', () => {
+  const { root, env } = tempEnv();
+  const codexHome = path.join(root, 'codex');
+  fs.mkdirSync(codexHome, { recursive: true });
+  env.CODEX_HOME = codexHome;
+  run(['init', '--yes'], env);
+  const r = run(['doctor'], env);
+  assert.equal(r.status, 0);
+  assert.match(r.stdout, /\[ok\] Codex skills registered \(\d+\)/);
+});
+
+test('doctor warns (exit 0) when a Codex skill link is removed', () => {
+  const { root, env } = tempEnv();
+  const codexHome = path.join(root, 'codex');
+  fs.mkdirSync(codexHome, { recursive: true });
+  env.CODEX_HOME = codexHome;
+  run(['init', '--yes'], env);
+  fs.rmSync(path.join(codexHome, 'skills', 'wienerdog-setup'), { recursive: true, force: true });
+  const r = run(['doctor'], env);
+  assert.equal(r.status, 0);
+  assert.match(r.stdout, /\[warn\] Codex skills NOT registered .*wienerdog-setup/);
+});
+
+test('doctor prints no Codex-skill line when Codex is not detected', () => {
+  const { env } = tempEnv();
+  run(['init', '--yes'], env);
+  const r = run(['doctor'], env);
+  assert.equal(r.status, 0);
+  assert.doesNotMatch(r.stdout, /Codex skills/);
+});
+
 test('doctor with a set-but-missing vault fails and exits 1', () => {
   const { core, env } = tempEnv();
   run(['init', '--yes'], env);
