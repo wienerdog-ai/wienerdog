@@ -2,6 +2,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const { hashDir } = require('../core/manifest');
 
 const BEGIN = '<!-- wienerdog:begin -->';
 const END = '<!-- wienerdog:end -->';
@@ -17,6 +18,25 @@ function recordOnce(manifest, entry) {
   if (!Array.isArray(manifest.entries)) manifest.entries = [];
   const exists = manifest.entries.some((e) => e.kind === entry.kind && e.path === entry.path);
   if (!exists) manifest.entries.push(entry);
+}
+
+/** Record — or UPSERT — a copied-skill manifest entry, refreshing its content
+ *  fingerprint. Unlike recordOnce (which no-ops when a same-kind+path entry
+ *  exists), this updates the recorded `hash` so a legitimately refreshed copy
+ *  carries its CURRENT fingerprint. When `hash` is null (hashDir could not read
+ *  the tree) the entry is recorded WITHOUT a `hash` field — NEVER persist null/''
+ *  (a hash-less entry is treated as unverifiable → preserved, the safe direction).
+ *  @param {object} [manifest] @param {string} linkPath @param {string|null} hash */
+function recordCopiedSkill(manifest, linkPath, hash) {
+  if (!manifest) return;
+  if (!Array.isArray(manifest.entries)) manifest.entries = [];
+  const existing = manifest.entries.find(
+    (e) => e.kind === 'copied-skill' && e.path === linkPath
+  );
+  const entry = existing || { kind: 'copied-skill', path: linkPath };
+  if (typeof hash === 'string') entry.hash = hash;
+  else delete entry.hash;
+  if (!existing) manifest.entries.push(entry);
 }
 
 /**
@@ -304,17 +324,37 @@ function applySkillLinks(skillsDir, targetSkillsDir, dryRun, manifest, out, opts
         out.changed.push(linkPath);
       }
     } else if (stat !== null && stat.isDirectory()) {
-      // A prior copy in the wienerdog-* namespace — refresh if content differs.
-      if (dirsEqual(target, linkPath)) {
-        out.unchanged.push(linkPath);
-      } else {
-        if (!dryRun) {
-          fs.rmSync(linkPath, { recursive: true, force: true });
-          fs.cpSync(target, linkPath, { recursive: true });
+      // A directory in the wienerdog-* namespace. Refresh it ONLY when its on-disk
+      // fingerprint still matches the hash WE recorded for it (proof it is our own
+      // unmodified copy). A mismatch — the user edited/replaced it — or a directory
+      // we never recorded (a pre-existing user dir; a legacy hash-less entry) is NOT
+      // provably ours, so PRESERVE it untouched with a notice; NEVER rmSync+recopy
+      // (that was the destroy-user-edits P0).
+      const recorded =
+        manifest && Array.isArray(manifest.entries)
+          ? manifest.entries.find((e) => e.kind === 'copied-skill' && e.path === linkPath)
+          : null;
+      const onDisk = hashDir(linkPath);
+      if (recorded && typeof recorded.hash === 'string' && onDisk !== null && onDisk === recorded.hash) {
+        // Provably our own unmodified copy → converge it to the current source.
+        const sourceHash = hashDir(target);
+        if (sourceHash !== null && sourceHash !== onDisk) {
+          if (!dryRun) {
+            fs.rmSync(linkPath, { recursive: true, force: true });
+            fs.cpSync(target, linkPath, { recursive: true });
+          }
+          out.changed.push(linkPath);
+          recordCopiedSkill(manifest, linkPath, sourceHash);
+        } else {
+          // Source unchanged (or momentarily unreadable) → leave our copy in place.
+          out.unchanged.push(linkPath);
+          recordCopiedSkill(manifest, linkPath, onDisk);
         }
-        out.changed.push(linkPath);
+      } else {
+        out.notices.push(
+          `left skill directory untouched (not a recorded Wienerdog copy, or modified since — delete it to let sync re-copy): ${linkPath}`
+        );
       }
-      recordOnce(manifest, { kind: 'copied-skill', path: linkPath });
     } else if (stat !== null) {
       // Regular file the user owns — never clobber.
       out.notices.push(`left user file untouched: ${linkPath}`);
@@ -330,7 +370,7 @@ function applySkillLinks(skillsDir, targetSkillsDir, dryRun, manifest, out, opts
       } catch (err) {
         if (err && (err.code === 'EPERM' || err.code === 'EACCES')) {
           fs.cpSync(target, linkPath, { recursive: true });
-          recordOnce(manifest, { kind: 'copied-skill', path: linkPath });
+          recordCopiedSkill(manifest, linkPath, hashDir(linkPath));
         } else {
           throw err;
         }

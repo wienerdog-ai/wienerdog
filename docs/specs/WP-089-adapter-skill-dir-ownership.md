@@ -1,7 +1,7 @@
 ---
 id: WP-089
 title: Adapter skill-dir ownership — never recursively delete a user directory in the wienerdog-* namespace (content-fingerprint guard)
-status: Draft
+status: In-Review
 model: sonnet
 size: S
 depends_on: []
