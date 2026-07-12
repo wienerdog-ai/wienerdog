@@ -35,7 +35,24 @@ function truncateExtractToFit(extract, targetBytes) {
   const msgs = extract.messages;
   const build = (k) => {
     const keptMsgs = k === 0 ? [] : msgs.slice(msgs.length - k);
-    return { ...extract, truncated: true, started: keptMsgs.length ? keptMsgs[0].ts : null, messages: keptMsgs };
+    const dropped = msgs.length - keptMsgs.length; // leading messages removed
+    const out = { ...extract, truncated: true, started: keptMsgs.length ? keptMsgs[0].ts : null, messages: keptMsgs };
+    if (Array.isArray(extract.skill_invocations)) {
+      // Front-truncation: subtract the dropped-leading count from index/resultIndex
+      // and drop any invocation whose window fell into the removed prefix. Same
+      // helper WP-080 uses under the message COUNT cap — keeping the two truncation
+      // paths consistent so security-load-bearing indices always match `messages`.
+      // Then apply the SAME right-edge (upper-bound) filter the count-cap path uses
+      // at transcripts/index.js:135-136: a trailing invocation whose raw index ===
+      // messages.length rebases to keptMsgs.length (one past the end) and must be
+      // dropped — rebaseInvocations only checks the lower bound (>= 0).
+      out.skill_invocations = transcripts
+        .rebaseInvocations(extract.skill_invocations, dropped)
+        .filter(
+          (si) => si.index < keptMsgs.length && (si.resultIndex === null || si.resultIndex < keptMsgs.length),
+        );
+    }
+    return out;
   };
   let lo = 0,
     hi = msgs.length,

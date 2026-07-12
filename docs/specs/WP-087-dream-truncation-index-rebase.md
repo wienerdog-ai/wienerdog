@@ -1,7 +1,7 @@
 ---
 id: WP-087
 title: Rebase skill-invocation indices when a dream extract is byte-budget truncated
-status: Draft
+status: In-Review
 model: sonnet
 size: S
 depends_on: []

@@ -10,6 +10,7 @@ const { getPaths } = require('../../src/core/paths');
 const { readDreamConfig } = require('../../src/core/dream/config');
 const { readWatermarks, writeWatermarks } = require('../../src/core/dream/watermarks');
 const { collectExtracts, cleanScratch, MIN_TRUNCATE_BYTES } = require('../../src/core/dream/scratch');
+const { MAX_MESSAGES } = require('../../src/core/transcripts');
 
 /** Fresh temp home + resolved paths. */
 function tempPaths() {
@@ -224,6 +225,176 @@ test('dream-collect: capacity sub-floor budget drops the session whole and does 
   assert.equal(result.dropped[0].session_id, 'c1');
   // Whole-dropped session must NOT advance the watermark (retried next run).
   assert.equal(result.maxMtime.claude, null);
+});
+
+// ---- byte-budget truncation rebases skill_invocations (WP-087) ----
+
+test('dream-collect: byte-budget truncation rebases skill_invocations and drops ones fallen into the removed prefix', () => {
+  const paths = tempPaths();
+  const sessionId = 'sk1';
+  const dir = path.join(paths.claudeDir, 'projects', 'proj');
+  fs.mkdirSync(dir, { recursive: true });
+  const file = path.join(dir, `${sessionId}.jsonl`);
+  const ts = '2026-01-01T10:00:00.000Z';
+  const big = 'x'.repeat(4000); // at MAX_MSG_CHARS so capMessage doesn't shrink it
+  const lines = [];
+  for (let i = 0; i < 30; i++) {
+    lines.push(JSON.stringify({ type: 'user', sessionId, cwd: '/p', timestamp: ts, message: { role: 'user', content: big } }));
+  }
+  lines.push(
+    JSON.stringify({
+      type: 'assistant',
+      sessionId,
+      cwd: '/p',
+      timestamp: ts,
+      message: { role: 'assistant', content: [{ type: 'text', text: 'look' }, { type: 'tool_use', id: 'toolu_early', name: 'Skill', input: { skill: 'early' } }] },
+    })
+  );
+  lines.push(
+    JSON.stringify({
+      type: 'user',
+      sessionId,
+      cwd: '/p',
+      timestamp: ts,
+      message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'toolu_early', is_error: false, content: [{ type: 'text', text: 'done-early' }] }] },
+    })
+  );
+  for (let i = 0; i < 30; i++) {
+    lines.push(JSON.stringify({ type: 'user', sessionId, cwd: '/p', timestamp: ts, message: { role: 'user', content: big } }));
+  }
+  // 'late' is the LAST raw event in the file, so it survives any byte truncation
+  // that keeps at least one message (k >= 1) — robust regardless of exact k.
+  lines.push(
+    JSON.stringify({
+      type: 'assistant',
+      sessionId,
+      cwd: '/p',
+      timestamp: ts,
+      message: { role: 'assistant', content: [{ type: 'text', text: 'run-late' }, { type: 'tool_use', id: 'toolu_late', name: 'Skill', input: { skill: 'late' } }] },
+    })
+  );
+  lines.push(
+    JSON.stringify({
+      type: 'user',
+      sessionId,
+      cwd: '/p',
+      timestamp: ts,
+      message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'toolu_late', is_error: false, content: [{ type: 'text', text: 'done-late' }] }] },
+    })
+  );
+  fs.writeFileSync(file, lines.join('\n') + '\n');
+  const when = new Date('2026-01-05T00:00:00Z');
+  fs.utimesSync(file, when, when);
+
+  // ~240KB+ of padding vs. a 60KB budget forces truncation to a small newest-suffix.
+  const result = collectExtracts(paths, { claude: null, codex: null }, 60_000);
+
+  assert.equal(result.entries.length, 1);
+  assert.equal(result.entries[0].truncatedToFit, true);
+  const extract = JSON.parse(fs.readFileSync(path.join(result.scratchDir, `claude-${sessionId}.json`), 'utf8'));
+  assert.ok(extract.messages.length < 64);
+
+  const skills = extract.skill_invocations.map((si) => si.skill);
+  assert.ok(!skills.includes('early')); // window fell entirely in the dropped prefix
+
+  const late = extract.skill_invocations.find((si) => si.skill === 'late');
+  assert.ok(late, 'late invocation must survive truncation');
+  assert.ok(late.index >= 0 && late.index < extract.messages.length);
+  assert.ok(late.resultIndex >= 0 && late.resultIndex < extract.messages.length);
+  assert.equal(extract.messages[late.resultIndex].text, 'done-late');
+});
+
+test('dream-collect: byte-budget truncation drops a trailing invocation whose rebased index would equal messages.length (right edge)', () => {
+  const paths = tempPaths();
+  const sessionId = 'sk2';
+  const dir = path.join(paths.claudeDir, 'projects', 'proj');
+  fs.mkdirSync(dir, { recursive: true });
+  const file = path.join(dir, `${sessionId}.jsonl`);
+  const ts = '2026-01-01T10:00:00.000Z';
+  const big = 'x'.repeat(4000);
+  const lines = [];
+  for (let i = 0; i < 30; i++) {
+    lines.push(JSON.stringify({ type: 'user', sessionId, cwd: '/p', timestamp: ts, message: { role: 'user', content: big } }));
+  }
+  // Final raw event: an assistant turn carrying a Skill tool_use with nothing after
+  // it (no paired tool_result, no later message). Its raw index === raw messages
+  // count, so after rebasing it lands on keptMsgs.length — one past the last valid
+  // slot — and must be dropped by the upper-bound filter.
+  lines.push(
+    JSON.stringify({
+      type: 'assistant',
+      sessionId,
+      cwd: '/p',
+      timestamp: ts,
+      message: { role: 'assistant', content: [{ type: 'text', text: 'tail' }, { type: 'tool_use', id: 'toolu_bar', name: 'Skill', input: { skill: 'bar' } }] },
+    })
+  );
+  fs.writeFileSync(file, lines.join('\n') + '\n');
+  const when = new Date('2026-01-05T00:00:00Z');
+  fs.utimesSync(file, when, when);
+
+  const result = collectExtracts(paths, { claude: null, codex: null }, 60_000);
+
+  assert.equal(result.entries.length, 1);
+  assert.equal(result.entries[0].truncatedToFit, true);
+  const extract = JSON.parse(fs.readFileSync(path.join(result.scratchDir, `claude-${sessionId}.json`), 'utf8'));
+  assert.deepEqual(extract.skill_invocations, []);
+});
+
+test('dream-collect: a session hitting the MAX_MESSAGES count cap in parse() AND THEN byte-budget truncation keeps its invocation in range', () => {
+  const paths = tempPaths();
+  const sessionId = 'sk3';
+  const dir = path.join(paths.claudeDir, 'projects', 'proj');
+  fs.mkdirSync(dir, { recursive: true });
+  const file = path.join(dir, `${sessionId}.jsonl`);
+  const ts = '2026-01-01T10:00:00.000Z';
+  const lines = [];
+  // Enough small padding messages that, once the invocation + result are appended,
+  // parse() applies its MAX_MESSAGES count cap FIRST (front-truncating and
+  // rebasing — WP-080, untouched by this WP).
+  const padCount = MAX_MESSAGES + 50;
+  for (let i = 0; i < padCount; i++) {
+    lines.push(JSON.stringify({ type: 'user', sessionId, cwd: '/p', timestamp: ts, message: { role: 'user', content: `pad${i}` } }));
+  }
+  // The invocation + its result are the LAST raw messages: they survive parse()'s
+  // count cap as the newest tail, remaining the last two messages of the capped
+  // extract, so they also survive any further byte-budget truncation (k2 >= 1).
+  lines.push(
+    JSON.stringify({
+      type: 'assistant',
+      sessionId,
+      cwd: '/p',
+      timestamp: ts,
+      message: { role: 'assistant', content: [{ type: 'text', text: 'run-mid' }, { type: 'tool_use', id: 'toolu_mid', name: 'Skill', input: { skill: 'mid' } }] },
+    })
+  );
+  lines.push(
+    JSON.stringify({
+      type: 'user',
+      sessionId,
+      cwd: '/p',
+      timestamp: ts,
+      message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'toolu_mid', is_error: false, content: [{ type: 'text', text: 'done-mid' }] }] },
+    })
+  );
+  fs.writeFileSync(file, lines.join('\n') + '\n');
+  const when = new Date('2026-01-05T00:00:00Z');
+  fs.utimesSync(file, when, when);
+
+  // Budget well below the ~2000-message capped extract's serialized size, but above
+  // MIN_TRUNCATE_BYTES → forces a SECOND (byte) truncation on top of the count cap.
+  const result = collectExtracts(paths, { claude: null, codex: null }, 50_000);
+
+  assert.equal(result.entries.length, 1);
+  assert.equal(result.entries[0].truncatedToFit, true);
+  const extract = JSON.parse(fs.readFileSync(path.join(result.scratchDir, `claude-${sessionId}.json`), 'utf8'));
+  assert.ok(extract.messages.length < MAX_MESSAGES);
+  assert.equal(extract.skill_invocations.length, 1);
+  const mid = extract.skill_invocations[0];
+  assert.equal(mid.skill, 'mid');
+  assert.ok(mid.index >= 0 && mid.index < extract.messages.length);
+  assert.ok(mid.resultIndex >= 0 && mid.resultIndex < extract.messages.length);
+  assert.equal(extract.messages[mid.resultIndex].text, 'done-mid');
 });
 
 test('dream-collect: re-running empties stale scratch, cleanScratch removes it', () => {
