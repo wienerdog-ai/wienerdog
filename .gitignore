@@ -15,7 +15,9 @@ tests/.scratch/
 # Agent worktrees (local)
 .claude/worktrees/
 
-# Marketing plans and raw field reports stay local (may contain
-# unreleased plans / reporter-identifiable details)
+# Marketing plans, raw field reports, and research memos stay local
+# (may contain unreleased plans, reporter-identifiable details, or
+# unedited agent phrasing not meant for publication)
 docs/marketing/
 userreports/
+memory/research/

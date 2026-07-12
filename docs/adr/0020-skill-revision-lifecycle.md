@@ -12,14 +12,15 @@ The nightly dream already **creates** skills from recurring task patterns
 The next step is closing the loop: the dream should learn from how those skills
 actually perform and **revise** them over time.
 
-Competitor research (`memory/research/2026-07-11-skill-self-improvement-hermes-openclaw.md`)
-found two products chasing this (Hermes Agent, OpenClaw). The single idea worth
-copying is Hermes's **provenance scoping**: an autonomous revision process may
+Competitor research (local memo, 2026-07-11) looked at two projects exploring
+this space (Hermes Agent, OpenClaw). The single idea worth
+adopting is Hermes's **provenance scoping**: an autonomous revision process may
 only ever touch skills *it itself created*, tracked by an explicit write-origin
-marker. Neither competitor solves **transcript-poisoning** of skills — an
+marker. In the versions we reviewed (July 2026) we did not find a defense
+against **transcript-poisoning** of skills — an
 attacker plants text in a `tool_result` (email body, web page) that, if the
 consolidation pass obeyed it, would get instructions written into a skill that
-every future session then loads. That gap is ours to close, not to inherit.
+every future session then loads. Closing that gap is a design goal of this ADR.
 
 This ADR records the design (owner-approved 2026-07-11; hardened 2026-07-12 after
 an adversarial review — see the Revision section) for how the dream accumulates
@@ -165,8 +166,8 @@ ownership registry), WP-081 (learnings accumulation + ledger validator), WP-084
    attempt appears under the report's exact `## Gated out (and why)` section keyed
    by the injection's **stable payload marker** (e.g. `attacker@evil.com`) — never
    a generic skill-name mention, which produced false passes in the original
-   design. This is the novel defense neither competitor ships; neither layer may
-   regress.
+   design. This is a defense we did not find in the projects we reviewed
+   (July 2026); neither layer may regress.
 
 This lifecycle adds no process. It is entirely files plus the already-scheduled
 nightly dream (ADR-0004: Wienerdog is just files). Revisions ride the existing
