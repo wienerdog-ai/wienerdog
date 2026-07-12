@@ -1,7 +1,7 @@
 ---
 id: WP-092
 title: init only chmods the secrets dir it created — never a pre-existing user path
-status: Draft
+status: In-Review
 model: sonnet
 size: S
 depends_on: []
