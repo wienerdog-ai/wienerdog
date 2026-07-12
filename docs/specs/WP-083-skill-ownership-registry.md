@@ -1,7 +1,7 @@
 ---
 id: WP-083
 title: Skill ownership registry — tamper-proof write-origin marker for dream-created skills
-status: Ready
+status: In-Review
 model: opus
 size: S
 depends_on: []

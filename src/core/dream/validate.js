@@ -7,6 +7,7 @@ const { spawnSync } = require('node:child_process');
 
 const { WienerdogError } = require('../errors');
 const { defaultLayout } = require('../layout');
+const { recordSkills } = require('./skill-registry');
 
 // Tier-3 code floor. FIXED — never tuned by memory_mode (see WP-017 spec). A
 // change under one of the Tier-3 directories (the layout's mapped identity_dir +
@@ -197,6 +198,20 @@ function tier3Decision(vaultDir, rel) {
 }
 
 /**
+ * A NEW skill draft eligible for the ownership registry: an untracked SKILL.md
+ * under the skills dir whose folder is NOT a shipped `wienerdog-*` skill.
+ * @param {string} rel  vault-relative path
+ * @param {import('../layout').VaultLayout} layout
+ * @returns {boolean}
+ */
+function isNewSkillDraft(rel, layout) {
+  const skillsPrefix = layout.skills_dir + '/';
+  if (!rel.startsWith(skillsPrefix) || path.basename(rel) !== 'SKILL.md') return false;
+  const folder = rel.slice(skillsPrefix.length).split('/')[0] || '';
+  return !/^wienerdog-/.test(folder);
+}
+
+/**
  * Resolve a vault-relative changed path and test containment (catches symlink
  * and `..` escapes). Works for files that no longer exist (deleted) by resolving
  * the deepest existing ancestor.
@@ -306,8 +321,11 @@ function changedPaths(vaultDir) {
  * report, and make exactly ONE commit.
  *
  * @param {{ vaultDir:string, scratchDir:string, date:string, expectedScratch:string[],
- *           scratchBaseline?:Record<string,string>,
+ *           scratchBaseline?:Record<string,string>, stateDir?:string,
  *           layout?:import('../layout').VaultLayout }} o
+ *   stateDir = the core `state/` dir; when provided, newly-accepted dream-created
+ *     skills are recorded in `state/skill-registry.json` after the commit (ADR-0020).
+ *     Omitted → no registry write (older direct callers / integration tests).
  *   layout = the vault layout (WP-022). Defaults to defaultLayout() when absent, so
  *     direct-call/integration tests that omit it keep the current behavior. Only the
  *     Tier-3 directories and the report location follow the layout; the floor does not.
@@ -323,7 +341,7 @@ function changedPaths(vaultDir) {
  *             outOfVault:string[], sha:string|null, counts:{notes:number,skills:number} }}
  */
 function validateAndCommit(o) {
-  const { vaultDir, scratchDir, date, expectedScratch, scratchBaseline } = o;
+  const { vaultDir, scratchDir, date, expectedScratch, scratchBaseline, stateDir } = o;
   const layout = o.layout || defaultLayout();
 
   // Tier-3 directories resolve from the layout (mapped identity + skills dirs);
@@ -339,6 +357,8 @@ function validateAndCommit(o) {
   const reverted = [];
   /** @type {Array<{path:string, reason:string}>} */
   const outOfVaultDetailed = [];
+  /** @type {Array<{rel:string, created:string, id:string}>} */
+  const newSkills = [];
 
   // ── Step 1: OUT-OF-VAULT (scratch integrity) ─────────────────────────────
   // The brain is granted read+write to scratchDir by --add-dir (WP-008) but must
@@ -381,6 +401,13 @@ function validateAndCommit(o) {
       if (!decision.ok) {
         revertPath(vaultDir, rel, change.untracked);
         reverted.push({ path: rel, reason: decision.reason });
+        continue;
+      }
+      // Accepted. If it is a NEW (untracked) dream-created skill draft, remember it
+      // for the ownership registry (written after the commit — Step 6).
+      if (change.untracked && isNewSkillDraft(rel, layout)) {
+        const fm = parseFrontmatter(fs.readFileSync(path.join(vaultDir, rel), 'utf8'));
+        newSkills.push({ rel, id: String(fm.id || ''), created: String(fm.created || date) });
       }
       continue;
     }
@@ -435,6 +462,13 @@ function validateAndCommit(o) {
     `dream: ${date} — ${notes} notes, ${skills} skills`,
   ]);
   const sha = git(vaultDir, ['rev-parse', 'HEAD']).stdout.trim();
+
+  // ── Step 6: record newly-accepted dream-created skills in the ownership registry
+  //     (ADR-0020). AFTER the commit so the registry only ever references committed
+  //     skills. A crash between the commit and here leaves a committed-but-
+  //     unregistered (never-revisable) skill — fail closed, no backfill. Skipped
+  //     when no stateDir is provided (older direct callers / integration tests).
+  if (stateDir && newSkills.length > 0) recordSkills(stateDir, newSkills);
 
   return {
     committed,

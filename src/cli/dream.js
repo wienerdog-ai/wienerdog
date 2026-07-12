@@ -270,6 +270,7 @@ async function run(argv) {
       expectedScratch: sel.wrote,
       scratchBaseline,
       layout,
+      stateDir: paths.state,
     });
 
     // 14. Advance the watermarks — only now: brain 0 + inputs intact + commit ok.

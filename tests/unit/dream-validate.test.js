@@ -15,6 +15,7 @@ const {
   restoreVaultToHead,
 } = require('../../src/core/dream/validate');
 const { defaultLayout } = require('../../src/core/layout');
+const { readRegistry } = require('../../src/core/dream/skill-registry');
 
 /** @param {string} cwd @param {string[]} args */
 function git(cwd, args) {
@@ -290,5 +291,52 @@ test('dream-validate: always commits (report append) even with only reverts', ()
   assert.equal(Number(after), Number(before) + 1);
   assert.equal(res.counts.notes, 0);
   assert.equal(res.counts.skills, 0);
+  assert.ok(res.sha);
+});
+
+// ── skill ownership registry (WP-083) ───────────────────────────────────────
+
+const OK_SKILL = {
+  type: 'skill',
+  id: 'newone',
+  created: '2026-07-11',
+  origin: 'dream',
+  confidence: '0.9',
+  recurrence: '3',
+  derived_from_untrusted: 'false',
+};
+
+test('dream-validate: a NEW dream-created skill is recorded in the registry', () => {
+  const { root, vault, scratch } = tempVault();
+  const stateDir = path.join(root, 'state');
+  writeVault(vault, '05-Skills/newone/SKILL.md', FM(OK_SKILL));
+  validateAndCommit({ vaultDir: vault, scratchDir: scratch, date: '2026-07-11', expectedScratch: [], stateDir });
+  const reg = readRegistry(stateDir);
+  assert.deepEqual(reg.skills['05-Skills/newone/SKILL.md'], { created: '2026-07-11', id: 'newone' });
+});
+
+test('dream-validate: a below-floor new skill is reverted and NOT registered', () => {
+  const { root, vault, scratch } = tempVault();
+  const stateDir = path.join(root, 'state');
+  writeVault(vault, '05-Skills/weak/SKILL.md',
+    FM({ ...OK_SKILL, id: 'weak', confidence: '0.4', recurrence: '1' }));
+  validateAndCommit({ vaultDir: vault, scratchDir: scratch, date: '2026-07-11', expectedScratch: [], stateDir });
+  assert.equal(readRegistry(stateDir).skills['05-Skills/weak/SKILL.md'], undefined);
+});
+
+test('dream-validate: a shipped wienerdog-* new skill is NOT registered', () => {
+  const { root, vault, scratch } = tempVault();
+  const stateDir = path.join(root, 'state');
+  writeVault(vault, '05-Skills/wienerdog-foo/SKILL.md', FM({ ...OK_SKILL, id: 'wienerdog-foo' }));
+  validateAndCommit({ vaultDir: vault, scratchDir: scratch, date: '2026-07-11', expectedScratch: [], stateDir });
+  assert.equal(readRegistry(stateDir).skills['05-Skills/wienerdog-foo/SKILL.md'], undefined);
+});
+
+test('dream-validate: omitting stateDir writes no registry (no crash)', () => {
+  const { vault, scratch } = tempVault();
+  writeVault(vault, '05-Skills/newone/SKILL.md', FM(OK_SKILL));
+  // No stateDir — must not throw; behavior otherwise unchanged.
+  const res = validateAndCommit({ vaultDir: vault, scratchDir: scratch, date: '2026-07-11', expectedScratch: [] });
+  assert.ok(fs.existsSync(path.join(vault, '05-Skills/newone/SKILL.md')));
   assert.ok(res.sha);
 });
