@@ -65,6 +65,40 @@ function sha256File(p) {
   return crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex');
 }
 
+/** Deterministic sha256 fingerprint of a directory tree, over RAW BYTES.
+ *  Every field is length-framed; node type is a 1-byte tag (d/f/l/s) from the
+ *  Dirent (lstat semantics — never dereferenced). Any traversal/read error →
+ *  return null (fail closed; null can never equal a recorded string hash).
+ *  @param {string} root @returns {string|null} hex digest, or null if unreadable */
+function hashDir(root) {
+  const h = crypto.createHash('sha256');
+  const SEP = Buffer.from('/'); // 0x2F — path join AND framed-path separator (raw byte)
+  const walk = (dirBuf, prefixBuf) => {
+    const ents = fs.readdirSync(dirBuf, { withFileTypes: true, encoding: 'buffer' });
+    ents.sort((x, y) => Buffer.compare(x.name, y.name)); // deterministic byte-wise order
+    for (const e of ents) {
+      const nameBuf = e.name;                                  // RAW entry-name bytes (Buffer)
+      const rpBuf = prefixBuf ? Buffer.concat([prefixBuf, SEP, nameBuf]) : nameBuf;
+      const fullBuf = Buffer.concat([dirBuf, SEP, nameBuf]);   // Buffer path for on-disk reads
+      if (e.isDirectory()) {
+        h.update('d'); h.update(`${rpBuf.length}:`); h.update(rpBuf); walk(fullBuf, rpBuf);
+      } else if (e.isFile()) {
+        const dataBuf = fs.readFileSync(fullBuf);
+        h.update('f'); h.update(`${rpBuf.length}:`); h.update(rpBuf);
+        h.update(`${dataBuf.length}:`); h.update(dataBuf);
+      } else if (e.isSymbolicLink()) {
+        const linkBuf = fs.readlinkSync(fullBuf, { encoding: 'buffer' });
+        h.update('l'); h.update(`${rpBuf.length}:`); h.update(rpBuf);
+        h.update(`${linkBuf.length}:`); h.update(linkBuf);
+      } else {
+        h.update('s'); h.update(`${rpBuf.length}:`); h.update(rpBuf);
+      }
+    }
+  };
+  try { walk(Buffer.from(root), null); } catch { return null; }
+  return h.digest('hex');
+}
+
 /** @param {string} p @returns {boolean} true if p is an existing symlink. */
 function isSymlink(p) {
   try {
@@ -460,4 +494,4 @@ function disposeCoreMechanics(paths, { dryRun = false, vaultPath = null } = {}) 
   return { removed, skippedForVault };
 }
 
-module.exports = { load, record, save, reverse, disposeCoreMechanics, reverseSchedulerEntry, reverseVendoredTree, reverseCopiedSkill };
+module.exports = { load, record, save, reverse, disposeCoreMechanics, reverseSchedulerEntry, reverseVendoredTree, reverseCopiedSkill, hashDir };

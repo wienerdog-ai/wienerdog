@@ -40,6 +40,121 @@ function makeInstall(paths) {
   return manifest;
 }
 
+const { hashDir } = manifestLib;
+
+/** Fresh empty temp dir. */
+function tempDir(tag) {
+  return fs.mkdtempSync(path.join(os.tmpdir(), `wd-hashdir-${tag}-`));
+}
+
+const isPosix = process.platform !== 'win32';
+const isRoot = typeof process.getuid === 'function' && process.getuid() === 0;
+
+test('hashDir is deterministic: two independently-built identical trees hash equal', () => {
+  const a = tempDir('detA');
+  const b = tempDir('detB');
+  for (const root of [a, b]) {
+    fs.mkdirSync(path.join(root, 'sub'));
+    fs.writeFileSync(path.join(root, 'top.md'), 'hello\n');
+    fs.writeFileSync(path.join(root, 'sub', 'ref.md'), 'world\n');
+  }
+  const ha = hashDir(a);
+  assert.equal(typeof ha, 'string');
+  assert.match(ha, /^[0-9a-f]{64}$/);
+  assert.equal(ha, hashDir(b), 'identical trees at different roots hash equal');
+});
+
+test('hashDir changes when a single content byte changes', () => {
+  const a = tempDir('byteA');
+  const b = tempDir('byteB');
+  fs.writeFileSync(path.join(a, 'f'), 'abc');
+  fs.writeFileSync(path.join(b, 'f'), 'abd');
+  assert.notEqual(hashDir(a), hashDir(b));
+});
+
+test('hashDir returns null for a non-existent root', () => {
+  assert.equal(hashDir(path.join(os.tmpdir(), 'wd-does-not-exist-xyz-123')), null);
+});
+
+test('hashDir returns null for an unreadable subtree, which never equals an empty tree', (t) => {
+  if (!isPosix || isRoot) return t.skip('needs POSIX permission enforcement (non-root)');
+  const root = tempDir('unread');
+  const locked = path.join(root, 'locked');
+  fs.mkdirSync(locked);
+  fs.writeFileSync(path.join(locked, 'secret'), 'x\n');
+  fs.chmodSync(locked, 0o000);
+  try {
+    const h = hashDir(root);
+    assert.equal(h, null, 'a tree containing an unreadable subtree fails closed to null');
+    const empty = tempDir('empty');
+    assert.notEqual(h, hashDir(empty), 'null (unreadable) never equals an empty-tree digest');
+  } finally {
+    fs.chmodSync(locked, 0o700); // restore so tmp cleanup can proceed
+  }
+});
+
+test('hashDir length-framing: two sibling files vs one file whose content mimics the naive stream', () => {
+  // {a:"", b:""} would, under an unframed `f:<path>\n<content>\n` serializer,
+  // emit the same bytes as a single file `a` whose content is "\nf:b\n".
+  const two = tempDir('collideTwo');
+  fs.writeFileSync(path.join(two, 'a'), '');
+  fs.writeFileSync(path.join(two, 'b'), '');
+  const one = tempDir('collideOne');
+  fs.writeFileSync(path.join(one, 'a'), '\nf:b\n');
+  assert.notEqual(hashDir(two), hashDir(one), 'length-framing keeps the naive-collision pair distinct');
+});
+
+test('hashDir length-framing: empty dir x + empty file y vs one dir whose name holds a newline', (t) => {
+  if (!isPosix) return t.skip('newline in filename is not creatable on Windows');
+  const sep = tempDir('sepEntries');
+  fs.mkdirSync(path.join(sep, 'x'));
+  fs.writeFileSync(path.join(sep, 'y'), '');
+  const merged = tempDir('mergedName');
+  fs.mkdirSync(path.join(merged, 'x\ny')); // a single directory whose name contains a newline
+  assert.notEqual(hashDir(sep), hashDir(merged), 'a newline in a dir name never folds into a sibling');
+});
+
+test('hashDir distinguishes a regular file from a symlink with byte-identical name/target', (t) => {
+  if (!isPosix) return t.skip('symlink creation may be unavailable');
+  const fileTree = tempDir('nodeFile');
+  fs.writeFileSync(path.join(fileTree, 'a'), 'target');
+  const linkTree = tempDir('nodeLink');
+  fs.symlinkSync('target', path.join(linkTree, 'a')); // link target "target" == the file's content
+  assert.notEqual(hashDir(fileTree), hashDir(linkTree), 'the d/f/l node-type tag separates file from symlink');
+});
+
+test('hashDir distinguishes a regular file from a same-name FIFO/special node', (t) => {
+  if (!isPosix) return t.skip('FIFO creation needs POSIX mkfifo');
+  const cp = require('node:child_process');
+  const fifoTree = tempDir('nodeFifo');
+  try {
+    cp.execFileSync('mkfifo', [path.join(fifoTree, 'a')]);
+  } catch {
+    return t.skip('mkfifo unavailable');
+  }
+  const fileTree = tempDir('nodeFileB');
+  fs.writeFileSync(path.join(fileTree, 'a'), '');
+  const hFifo = hashDir(fifoTree);
+  assert.equal(typeof hFifo, 'string', 'a special node hashes to the "s" branch without reading it (no block)');
+  assert.notEqual(hFifo, hashDir(fileTree), 'the special-node "s" tag differs from a regular file');
+});
+
+test('hashDir distinguishes raw-byte names 0x80 vs 0x81 (no UTF-8 folding)', (t) => {
+  if (!isPosix) return t.skip('raw-byte filenames are not creatable on Windows');
+  const t80 = tempDir('raw80');
+  const t81 = tempDir('raw81');
+  try {
+    // Some filesystems (e.g. APFS/HFS+ on macOS) enforce UTF-8 names and reject
+    // raw high bytes with EILSEQ; ext4 and friends accept them.
+    fs.writeFileSync(Buffer.concat([Buffer.from(t80), Buffer.from('/'), Buffer.from([0x80])]), '');
+    fs.writeFileSync(Buffer.concat([Buffer.from(t81), Buffer.from('/'), Buffer.from([0x81])]), '');
+  } catch (err) {
+    if (err && err.code === 'EILSEQ') return t.skip('filesystem forbids non-UTF-8 filenames');
+    throw err;
+  }
+  assert.notEqual(hashDir(t80), hashDir(t81), 'raw Buffer names keep 0x80 and 0x81 distinct');
+});
+
 test('load returns an empty manifest when none exists', () => {
   const paths = tempPaths();
   const manifest = manifestLib.load(paths);
