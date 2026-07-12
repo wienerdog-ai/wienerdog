@@ -21,3 +21,4 @@ Durable decisions live here so they are made once, not re-litigated per session 
 | [0013](0013-vendored-install.md) | Vendored install — stable app copy, `sync` as update command | Accepted (amends 0003, 0006) |
 | [0014](0014-dream-scheduled-by-default.md) | Dreaming is scheduled by default on vault creation | Accepted (amends 0008) |
 | [0015](0015-update-availability-check.md) | Update-availability check — bounded, cache-rendered, opt-out | Accepted |
+| [0020](0020-skill-revision-lifecycle.md) | Skill revision lifecycle — dream-created-only, recurrence-gated, quarantined learnings | Accepted |

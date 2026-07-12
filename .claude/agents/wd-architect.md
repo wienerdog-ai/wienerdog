@@ -22,3 +22,5 @@ Rules:
 - Use GLOSSARY.md terms exactly.
 
 You may stub interface files only when a WP's contract requires a checked-in schema. Only you or the owner move a spec to `Ready`.
+
+Expect an adversarial design review of every draft: the orchestrator runs a Codex review loop on your specs/ADRs before they can move to `Ready` (`docs/runbooks/codex-review.md`), and you apply its accepted findings in a revision pass. Treat its findings like wd-reviewer's: fix or explicitly disposition, never silently drop.
