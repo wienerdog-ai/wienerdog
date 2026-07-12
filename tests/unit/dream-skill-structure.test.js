@@ -90,6 +90,17 @@ test('dream-skill: skill-learnings binds counted sessions to invocations with wi
   assert.ok(/Codex sessions do not authorize/i.test(text), 'Codex v1 scope limit present');
 });
 
+test('dream-skill: skill-revision section is recurrence-gated and provenance-scoped', () => {
+  assert.ok(text.includes('## Skill revision'), 'skill revision section present');
+  assert.ok(/Recurrence ≥ 3 distinct sessions/.test(text), 'recurrence gate present');
+  assert.ok(text.includes('0.85'), 'confidence gate present');
+  assert.ok(/not.*untrusted-derived/i.test(text), 'untrusted exclusion present');
+  assert.ok(text.includes('origin: dream'), 'dream-created scope present');
+  assert.ok(text.includes('revision_pattern_key'), 'authorizing-learning binding present');
+  assert.ok(/smallest edit/i.test(text), 'patch-over-rewrite present');
+  assert.ok(text.includes('Reverted by orchestrator'), 'code-backstop mention present');
+});
+
 test('dream-skill: existing-note updates preserve original provenance', () => {
   assert.ok(text.includes('### Updating an existing note'), 'update subsection heading present');
   assert.ok(

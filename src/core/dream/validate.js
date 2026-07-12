@@ -197,6 +197,59 @@ function tier3Decision(vaultDir, rel) {
   };
 }
 
+/** Return the text AFTER the leading `--- … ---` frontmatter block (the body).
+ *  No/mangled frontmatter → the whole text. @param {string} text @returns {string} */
+function skillBody(text) {
+  const lines = String(text).split('\n');
+  if (lines[0] !== '---') return String(text);
+  for (let i = 1; i < lines.length; i++) if (lines[i] === '---') return lines.slice(i + 1).join('\n');
+  return String(text);
+}
+
+/**
+ * Parse the INLINE-ARRAY frontmatter form `["claude:a","claude:b"]` (the form the
+ * dream writes) into session ids. Rejects a non-array container or any element that
+ * is not a complete, anchored `<harness>:<session_id>` — so `garbage claude:a` or a
+ * bare scalar fails (finding: no unanchored substring matching).
+ * @param {string} raw @returns {{ok:boolean, ids:string[]}}
+ */
+function parseSessionArray(raw) {
+  const s = String(raw == null ? '' : raw).trim();
+  if (!s.startsWith('[') || !s.endsWith(']')) return { ok: false, ids: [] };
+  const inner = s.slice(1, -1).trim();
+  if (inner === '') return { ok: true, ids: [] };
+  const ids = [];
+  for (const part of inner.split(',')) {
+    const t = part.trim().replace(/^["']|["']$/g, ''); // strip one optional quote pair
+    if (!/^[a-z0-9]+:[A-Za-z0-9_-]+$/.test(t)) return { ok: false, ids: [] };
+    ids.push(t);
+  }
+  return { ok: true, ids };
+}
+
+/**
+ * Value-check an allowlisted bare-promotion field change (ADR-0020): `status` must
+ * advance incubating→active; `updated` must be stamped to the run date (WP-040);
+ * `source_sessions` must stay an append-only superset of HEAD's ids (well-formed,
+ * unique). Any other field, or a value failing these, is NOT a bare promotion.
+ * @param {string} k @param {Record<string,any>} head @param {Record<string,any>} cur
+ * @param {string} date  the dream run date
+ * @returns {boolean}
+ */
+function promotionFieldOk(k, head, cur, date) {
+  if (k === 'status') return head.status === 'incubating' && cur.status === 'active';
+  if (k === 'updated') return cur.updated === date; // WP-040: bump `updated` to today
+  if (k === 'source_sessions') {
+    const cu = parseSessionArray(cur.source_sessions);
+    const hd = parseSessionArray(head.source_sessions);
+    if (!cu.ok || !hd.ok) return false; // malformed container/element
+    const cset = new Set(cu.ids);
+    if (cset.size !== cu.ids.length) return false; // unique
+    return hd.ids.every((t) => cset.has(t)); // append-only superset
+  }
+  return false;
+}
+
 /**
  * A NEW skill draft eligible for the ownership registry: an untracked SKILL.md
  * under the skills dir whose folder is NOT a shipped `wienerdog-*` skill.
@@ -209,6 +262,109 @@ function isNewSkillDraft(rel, layout) {
   if (!rel.startsWith(skillsPrefix) || path.basename(rel) !== 'SKILL.md') return false;
   const folder = rel.slice(skillsPrefix.length).split('/')[0] || '';
   return !/^wienerdog-/.test(folder);
+}
+
+/**
+ * Skill-body revision guard (ADR-0020). Returns a revert-reason string if `rel`
+ * is a SKILL.md modification outside the dream's revision scope, that altered
+ * protected provenance, or whose BODY changed without a qualifying committed
+ * learning authorizing it. Returns null otherwise — identity notes, other
+ * skills-dir files, new-skill ADDs, promotions (body unchanged, provenance kept),
+ * and compliant authorized revisions all return null and fall through to the
+ * Tier-3 numeric floor.
+ * @param {string} vaultDir @param {string} rel @param {{untracked:boolean}} change
+ * @param {import('../layout').VaultLayout} layout @param {{skills:Object}} registry
+ * @param {string} date  the dream run date (for the bare-promotion `updated` check)
+ * @returns {string|null}
+ */
+function skillBodyViolation(vaultDir, rel, change, layout, registry, date) {
+  const skillsPrefix = layout.skills_dir + '/';
+  if (!rel.startsWith(skillsPrefix) || path.basename(rel) !== 'SKILL.md') return null;
+
+  // Shipped wienerdog-* skills are permanently out of scope (defense in depth;
+  // they are never registered either).
+  const folder = rel.slice(skillsPrefix.length).split('/')[0] || '';
+  if (/^wienerdog-/.test(folder)) {
+    return 'skill-body change on a shipped wienerdog-* skill (out of revision scope)';
+  }
+
+  // A newly-added SKILL.md is skill synthesis, not a revision — the Tier-3 floor
+  // governs it, and WP-083 registers it after the commit.
+  if (change.untracked) return null;
+
+  // ELIGIBILITY: a modification is allowed only on a skill in the ownership
+  // registry (tamper-proof write-origin marker; HEAD frontmatter is forgeable).
+  const entry = registry.skills[rel];
+  if (!entry) return 'skill-body change on a skill not in the ownership registry (fail closed)';
+
+  const headRes = git(vaultDir, ['show', `HEAD:${rel}`], { allowFail: true });
+  if (headRes.status !== 0) return 'skill body modified but its committed version is unreadable';
+  const head = parseFrontmatter(headRes.stdout);
+
+  let curText;
+  try {
+    curText = fs.readFileSync(path.join(vaultDir, rel), 'utf8');
+  } catch {
+    return 'skill body unreadable after revision';
+  }
+  const cur = parseFrontmatter(curText);
+
+  // PRESERVATION: registry id match (catch path reuse) + WP-040 immutables.
+  if (cur.id !== entry.id) return 'skill id does not match the ownership registry (path reuse)';
+  if (cur.origin !== head.origin) return 'skill revision changed origin (must be preserved)';
+  if (cur.created !== head.created) return 'skill revision changed created (must be preserved)';
+  if (cur.id !== head.id) return 'skill revision changed id (must be preserved)';
+  if (head.derived_from_untrusted === true && cur.derived_from_untrusted !== true) {
+    return 'skill revision lowered derived_from_untrusted (raise-only)';
+  }
+
+  // AUTHORIZATION. A body change ALWAYS needs a qualifying committed learning. A
+  // frontmatter-only change is a bare PROMOTION needing no learning ONLY if its
+  // sole differences are on the enumerated allowlist (status incubating→active, the
+  // updated bump, a source_sessions append). ANY other frontmatter change
+  // (confidence, recurrence, description, tags, revision_pattern_key, a status
+  // regression, …) requires learning authorization too — closing the
+  // "promotion exemption is too broad" gap.
+  let needsAuth = skillBody(curText) !== skillBody(headRes.stdout);
+  if (!needsAuth) {
+    // The ONLY unauthorized-exempt frontmatter change is a REAL promotion: `status`
+    // must actually advance incubating→active. Without that exact transition — an
+    // updated-only or source_sessions-only edit, etc. — a qualifying learning is
+    // required. (The exemption is the promotion, not "any unchanged-body change.")
+    const promoting = head.status === 'incubating' && cur.status === 'active';
+    if (!promoting) {
+      needsAuth = true;
+    } else {
+      const PROMOTION_ALLOW = new Set(['status', 'updated', 'source_sessions']);
+      for (const k of new Set([...Object.keys(head), ...Object.keys(cur)])) {
+        if (head[k] === cur[k]) continue;
+        // An allowlisted field must ALSO pass its value check (status direction,
+        // updated stamped to today, source_sessions append-only superset).
+        if (!PROMOTION_ALLOW.has(k) || !promotionFieldOk(k, head, cur, date)) { needsAuth = true; break; }
+      }
+    }
+  }
+  if (needsAuth) {
+    const key = cur.revision_pattern_key;
+    if (typeof key !== 'string' || !/^[a-z0-9][a-z0-9.-]{0,63}$/.test(key)) {
+      return 'skill change needs a qualifying learning but has no valid revision_pattern_key';
+    }
+    const ledgerRel = path.join(path.dirname(rel), 'LEARNINGS.md');
+    const ledRes = git(vaultDir, ['show', `HEAD:${ledgerRel}`], { allowFail: true });
+    if (ledRes.status !== 0) return 'skill change needs a qualifying learning but no committed ledger authorizes it';
+    const learning = parseLedgerEntries(ledRes.stdout)[key];
+    if (!learning) return `revision_pattern_key ${key} not found in the committed learnings ledger`;
+    if (learning.untrusted !== false) return `authorizing learning ${key} is untrusted-derived (never promotable)`;
+    // Only CLAUDE sessions authorize: WP-084 invocation-binds + window-verifies them.
+    // Codex sessions have no structured invocation signal, so they accumulate but
+    // never count toward authorization (ADR-0020 v1 scope limit).
+    const distinct = new Set(learning.sessionIds.filter((s) => s.startsWith('claude:'))).size;
+    if (distinct < 3) {
+      return `authorizing learning ${key} has ${distinct} distinct Claude-invoked sessions ` +
+        `(needs >= 3 distinct sessions; Codex sessions do not authorize in v1)`;
+    }
+  }
+  return null;
 }
 
 /**
@@ -625,6 +781,14 @@ function validateAndCommit(o) {
       continue;
     }
     if (isTier3(rel)) {
+      // b0. Skill-body revision guard (ADR-0020) runs BEFORE the numeric floor so a
+      //     scope/preservation/authorization violation reports a precise reason.
+      const skillReason = skillBodyViolation(vaultDir, rel, change, layout, registry, date);
+      if (skillReason) {
+        revertPath(vaultDir, rel, change.untracked);
+        reverted.push({ path: rel, reason: skillReason });
+        continue;
+      }
       // b. Tier-3 gate.
       const decision = tier3Decision(vaultDir, rel);
       if (!decision.ok) {
