@@ -1,7 +1,7 @@
 ---
 id: WP-084
 title: Bind ledger learnings to skill invocations — window-based mechanical trust
-status: Ready
+status: In-Review
 model: opus
 size: M
 depends_on: [WP-080, WP-081, WP-083]

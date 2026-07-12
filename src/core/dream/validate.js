@@ -271,15 +271,48 @@ function ledgerEntrySchemaViolation(key, e) {
 }
 
 /**
+ * Is any of `parentSkill`'s invocation windows in this extract tainted by an
+ * EXTERNAL tool_result? Window = [inv.index, next-invocation-index or
+ * messages.length). The invocation's OWN paired result is the message at
+ * `inv.resultIndex` (WP-080's id-pairing, NOT positional) and is EXCLUDED — it is
+ * the registered skill's own Tier-3-gated body output. Every OTHER tool_result in
+ * the window (Bash output, web content, file reads) taints. FAILS CLOSED (returns
+ * true = tainted) on any malformed geometry: index out of range, or resultIndex
+ * null / non-integer / outside the window.
+ * @param {{messages?:Array, skill_invocations?:Array}} extract
+ * @param {string} parentSkill
+ * @returns {boolean}
+ */
+function invocationWindowTainted(extract, parentSkill) {
+  const msgs = Array.isArray(extract.messages) ? extract.messages : [];
+  const invs = Array.isArray(extract.skill_invocations) ? extract.skill_invocations : [];
+  const starts = invs.map((si) => si.index).filter((n) => Number.isInteger(n)).sort((a, b) => a - b);
+  for (const inv of invs) {
+    if (inv.skill !== parentSkill) continue;
+    if (!Number.isInteger(inv.index) || inv.index < 0 || inv.index >= msgs.length) return true; // fail closed
+    const next = starts.find((n) => n > inv.index);
+    const end = next === undefined ? msgs.length : next;
+    const ri = inv.resultIndex;
+    if (!Number.isInteger(ri) || ri < inv.index || ri >= end) return true; // null/out-of-window own result → fail closed
+    for (let i = inv.index; i < end; i++) {
+      if (i === ri) continue;                                    // the invocation's own paired result — excluded
+      if (msgs[i] && msgs[i].role === 'tool_result') return true; // any OTHER tool_result → taint
+    }
+  }
+  return false;
+}
+
+/**
  * Ledger validator (ADR-0020). Returns a revert-reason string if `rel` is a
  * LEARNINGS.md whose write is invalid, else null. `registry` is readRegistry()'s
  * result (or {skills:{}} when no stateDir → every ledger fails the registered
  * check, fail closed).
  * @param {string} vaultDir @param {string} rel @param {{untracked:boolean}} change
  * @param {import('../layout').VaultLayout} layout @param {{skills:Object}} registry
+ * @param {Map<string,object>} extractsBySession  this run's extracts keyed by `<harness>:<session_id>` (WP-084)
  * @returns {string|null}
  */
-function ledgerViolation(vaultDir, rel, change, layout, registry) {
+function ledgerViolation(vaultDir, rel, change, layout, registry, extractsBySession) {
   // (a) parent dir must hold a REGISTERED skill whose CURRENT SKILL.md still
   //     matches the registry entry — guard against a stale registry path (a
   //     deleted skill, or a different skill hand-authored at the same path). This
@@ -313,13 +346,14 @@ function ledgerViolation(vaultDir, rel, change, layout, registry) {
   // (c) append-only + raise-only vs HEAD (tracked modifications only). A tracked
   //     ledger whose committed version is unreadable FAILS CLOSED — never skip the
   //     history comparison (skipping it was a fail-open gap).
+  let headEntries = {};
   if (!change.untracked) {
     const headRes = git(vaultDir, ['show', `HEAD:${rel}`], { allowFail: true });
     if (headRes.status !== 0) {
       return 'learnings ledger is tracked but its committed version is unreadable (cannot verify append-only)';
     }
-    const head = parseLedgerEntries(headRes.stdout);
-    for (const [key, he] of Object.entries(head)) {
+    headEntries = parseLedgerEntries(headRes.stdout);
+    for (const [key, he] of Object.entries(headEntries)) {
       const ce = cur[key];
       if (!ce) return `learnings ledger deleted an existing entry (${key}); ledger is append-only`;
       if (ce.firstSeen !== he.firstSeen) return `learnings ledger changed First-Seen of ${key} (immutable)`;
@@ -345,6 +379,30 @@ function ledgerViolation(vaultDir, rel, change, layout, registry) {
       if (ce.status !== he.status && !(he.status === 'open' && /^resolved\b/.test(ce.status))) {
         return `learnings ledger made an unauthorized Status change on ${key} (only open → resolved is allowed)`;
       }
+    }
+  }
+
+  // (h) Bind newly-counted Claude sessions to real invocations of THIS skill, and
+  //     derive trust from the invocation window (WP-084). Codex sessions are not
+  //     verified here and never authorize (WP-082 counts Claude sessions only).
+  const parentSkill = path.basename(path.dirname(rel)); // dream-created folder == skill name
+  for (const [key, ce] of Object.entries(cur)) {
+    const he = headEntries[key];
+    const headSessions = new Set(he ? he.sessionIds : []);
+    let derivedUntrusted = false;
+    for (const sid of ce.sessionIds) {
+      if (headSessions.has(sid)) continue;      // preserved — verified when it was added
+      if (!sid.startsWith('claude:')) continue; // Codex: loose accumulation, never authorizes (v1)
+      const extract = extractsBySession.get(sid);
+      if (!extract) return `learnings ledger entry ${key}: new session ${sid} is not among this run's processed extracts`;
+      const invs = Array.isArray(extract.skill_invocations) ? extract.skill_invocations : [];
+      if (!invs.some((si) => si.skill === parentSkill)) {
+        return `learnings ledger entry ${key}: session ${sid} did not invoke skill ${parentSkill}`;
+      }
+      if (invocationWindowTainted(extract, parentSkill)) derivedUntrusted = true;
+    }
+    if (derivedUntrusted && ce.untrusted !== true) {
+      return `learnings ledger entry ${key}: derived_from_untrusted asserted lower than derived (an invocation window contains a tool_result)`;
     }
   }
   return null;
@@ -528,6 +586,18 @@ function validateAndCommit(o) {
     }
   }
 
+  // WP-084: index this run's processed extracts so the ledger validator can bind
+  // counted sessions to real invocations and derive trust from the invocation
+  // window. expectedScratch are collectExtracts' outputs (WP-008); Step-1's
+  // scratch-integrity check guarantees they are byte-unmodified.
+  const extractsBySession = new Map();
+  for (const p of (expectedScratch || [])) {
+    try {
+      const ex = JSON.parse(fs.readFileSync(p, 'utf8'));
+      if (ex && ex.harness && ex.session_id) extractsBySession.set(`${ex.harness}:${ex.session_id}`, ex);
+    } catch { /* unreadable extract → its sessions won't verify → fail closed in (h) */ }
+  }
+
   // ── Step 2: classify each vault change ───────────────────────────────────
   for (const change of changedPaths(vaultDir)) {
     const rel = change.path;
@@ -540,7 +610,7 @@ function validateAndCommit(o) {
     }
     if (isLearningsLedger(rel)) {
       // Quarantined ledger: validated (not numeric-floored). Keep iff it passes.
-      const reason = ledgerViolation(vaultDir, rel, change, layout, registry);
+      const reason = ledgerViolation(vaultDir, rel, change, layout, registry, extractsBySession);
       if (reason) {
         // Revert safely even when HEAD has no version of this path (untracked add, or
         // a staged/never-committed file whose `git checkout HEAD -- rel` would fail):

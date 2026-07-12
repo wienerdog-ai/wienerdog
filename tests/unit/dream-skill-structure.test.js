@@ -83,6 +83,13 @@ test('dream-skill: skill-learnings section accumulates quarantined per-skill obs
   assert.ok(/append-only/i.test(text), 'append-only discipline present');
 });
 
+test('dream-skill: skill-learnings binds counted sessions to invocations with window trust', () => {
+  assert.ok(/skill_invocations/.test(text), 'invocation-binding prose present');
+  assert.ok(/window/i.test(text), 'invocation-window trust prose present');
+  assert.ok(/tool result/i.test(text), 'tool-result taint rule present');
+  assert.ok(/Codex sessions do not authorize/i.test(text), 'Codex v1 scope limit present');
+});
+
 test('dream-skill: existing-note updates preserve original provenance', () => {
   assert.ok(text.includes('### Updating an existing note'), 'update subsection heading present');
   assert.ok(

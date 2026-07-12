@@ -371,14 +371,28 @@ const seedReg = (root, rel = '05-Skills/foo/SKILL.md', id = 'foo', created = '20
   recordSkills(stateDir, [{ rel, created, id }]);
   return stateDir;
 };
-const run = (vault, scratch, stateDir) =>
-  validateAndCommit({ vaultDir: vault, scratchDir: scratch, date: '2026-07-11', expectedScratch: [], stateDir });
+// specs: [{ session, messages:[role,…], invocations:[{skill,index,resultIndex,errored}] }]
+function seedExtracts(root, specs) {
+  const dir = path.join(root, 'extracts');
+  fs.mkdirSync(dir, { recursive: true });
+  return specs.map(({ session, messages = [], invocations = [] }) => {
+    const [harness, session_id] = session.split(':');
+    const p = path.join(dir, `${harness}-${session_id}.json`);
+    fs.writeFileSync(p, JSON.stringify({ harness, session_id, messages: messages.map((role, i) => ({ role, text: `m${i}`, ts: null })), skill_invocations: invocations }));
+    return p;
+  });
+}
+const run = (vault, scratch, stateDir, expectedScratch = []) =>
+  validateAndCommit({ vaultDir: vault, scratchDir: scratch, date: '2026-07-11', expectedScratch, stateDir });
+// A clean bound session: its ONLY window message is the skill's own paired result.
+const clean = (session) => ({ session, messages: ['tool_result'], invocations: [{ skill: 'foo', index: 0, resultIndex: 0 }] });
 
 test('dream-validate: a valid ledger beside a REGISTERED skill is kept (no numeric floor)', () => {
   const { root, vault, scratch } = tempVault({ '05-Skills/foo/SKILL.md': SKILL });
   const stateDir = seedReg(root);
   writeVault(vault, '05-Skills/foo/LEARNINGS.md', LEDGER);
-  const res = run(vault, scratch, stateDir);
+  const es = seedExtracts(root, [clean('claude:sess-a'), clean('claude:sess-b')]);
+  const res = run(vault, scratch, stateDir, es);
   assert.ok(!res.reverted.some((r) => r.path === '05-Skills/foo/LEARNINGS.md'), 'ledger kept');
   assert.ok(fs.existsSync(path.join(vault, '05-Skills/foo/LEARNINGS.md')), 'ledger present');
 });
@@ -497,4 +511,113 @@ test('dream-validate: a SKILL.md under skills dir is still Tier-3 gated (validat
   const res = run(vault, scratch, stateDir);
   assert.ok(res.reverted.some((r) => r.path === '05-Skills/foo/SKILL.md'), 'below-floor skill reverted');
   assert.ok(!fs.existsSync(path.join(vault, '05-Skills/foo/SKILL.md')), 'reverted skill removed');
+});
+
+// ── invocation binding + window-based trust (WP-084) ─────────────────────────
+
+test('dream-validate: a ledger counting a session that did NOT invoke the skill is reverted (relevance)', () => {
+  const { root, vault, scratch } = tempVault({ '05-Skills/foo/SKILL.md': SKILL });
+  const stateDir = seedReg(root);
+  writeVault(vault, '05-Skills/foo/LEARNINGS.md', LEDGER); // counts sess-a, sess-b
+  const es = seedExtracts(root, [
+    clean('claude:sess-a'),
+    { session: 'claude:sess-b', messages: ['tool_result'], invocations: [{ skill: 'bar', index: 0, resultIndex: 0 }] }, // invoked a DIFFERENT skill
+  ]);
+  const res = run(vault, scratch, stateDir, es);
+  assert.ok(res.reverted.some((r) => r.path === '05-Skills/foo/LEARNINGS.md' && /did not invoke skill foo/.test(r.reason)));
+});
+
+test('dream-validate: a counted session absent from this runs extracts is reverted (fail closed)', () => {
+  const { root, vault, scratch } = tempVault({ '05-Skills/foo/SKILL.md': SKILL });
+  const stateDir = seedReg(root);
+  writeVault(vault, '05-Skills/foo/LEARNINGS.md', LEDGER);
+  const es = seedExtracts(root, [clean('claude:sess-a')]); // sess-b missing
+  const res = run(vault, scratch, stateDir, es);
+  assert.ok(res.reverted.some((r) => r.path === '05-Skills/foo/LEARNINGS.md' && /not among this run/.test(r.reason)));
+});
+
+test('dream-validate: a batched EXTERNAL tool result before the skill result taints (own matched by id, not position)', () => {
+  const { root, vault, scratch } = tempVault({ '05-Skills/foo/SKILL.md': SKILL });
+  const stateDir = seedReg(root);
+  writeVault(vault, '05-Skills/foo/LEARNINGS.md', LEDGER); // asserts derived_from_untrusted: false
+  const es = seedExtracts(root, [
+    // A Read batched BEFORE Skill: messages[0] = the (attacker-influenceable) Read result,
+    // messages[1] = the skill's OWN result. resultIndex=1 excludes only messages[1], so the
+    // Read result (messages[0]) taints — a positional "first tool_result" rule would miss it.
+    { session: 'claude:sess-a', messages: ['tool_result', 'tool_result'], invocations: [{ skill: 'foo', index: 0, resultIndex: 1 }] },
+    clean('claude:sess-b'),
+  ]);
+  const res = run(vault, scratch, stateDir, es);
+  assert.ok(res.reverted.some((r) => r.path === '05-Skills/foo/LEARNINGS.md' && /asserted lower than derived/.test(r.reason)));
+});
+
+test('dream-validate: an invocation with a null resultIndex fails closed (untrusted)', () => {
+  const { root, vault, scratch } = tempVault({ '05-Skills/foo/SKILL.md': SKILL });
+  const stateDir = seedReg(root);
+  writeVault(vault, '05-Skills/foo/LEARNINGS.md', LEDGER); // asserts derived_from_untrusted: false
+  const es = seedExtracts(root, [
+    { session: 'claude:sess-a', messages: ['assistant'], invocations: [{ skill: 'foo', index: 0, resultIndex: null }] }, // no captured result
+    clean('claude:sess-b'),
+  ]);
+  const res = run(vault, scratch, stateDir, es);
+  assert.ok(res.reverted.some((r) => r.path === '05-Skills/foo/LEARNINGS.md' && /asserted lower than derived/.test(r.reason)));
+});
+
+test('dream-validate: a window with ONLY the own paired result is clean (trusted) and kept', () => {
+  const { root, vault, scratch } = tempVault({ '05-Skills/foo/SKILL.md': SKILL });
+  const stateDir = seedReg(root);
+  writeVault(vault, '05-Skills/foo/LEARNINGS.md', LEDGER); // asserts derived_from_untrusted: false
+  const es = seedExtracts(root, [clean('claude:sess-a'), clean('claude:sess-b')]);
+  const res = run(vault, scratch, stateDir, es);
+  assert.ok(!res.reverted.some((r) => r.path === '05-Skills/foo/LEARNINGS.md'), 'own-result-only window is trusted');
+});
+
+test('dream-validate: back-to-back invocations — the next skill\'s result is not attributed to the first', () => {
+  const { root, vault, scratch } = tempVault({ '05-Skills/foo/SKILL.md': SKILL });
+  const stateDir = seedReg(root);
+  writeVault(vault, '05-Skills/foo/LEARNINGS.md', LEDGER); // asserts derived_from_untrusted: false
+  const es = seedExtracts(root, [
+    // foo@0 (own result messages[0]) then bar@1 (result messages[1]). foo's window is [0,1),
+    // so bar's result must NOT be in it → foo stays clean/trusted.
+    { session: 'claude:sess-a', messages: ['tool_result', 'tool_result'], invocations: [{ skill: 'foo', index: 0, resultIndex: 0 }, { skill: 'bar', index: 1, resultIndex: 1 }] },
+    clean('claude:sess-b'),
+  ]);
+  const res = run(vault, scratch, stateDir, es);
+  assert.ok(!res.reverted.some((r) => r.path === '05-Skills/foo/LEARNINGS.md'), 'foo window bounded by bar invocation');
+});
+
+test('dream-validate: a tainted window honestly asserted untrusted:true is kept', () => {
+  const { root, vault, scratch } = tempVault({ '05-Skills/foo/SKILL.md': SKILL });
+  const stateDir = seedReg(root);
+  writeVault(vault, '05-Skills/foo/LEARNINGS.md', LEDGER.replace('- derived_from_untrusted: false', '- derived_from_untrusted: true'));
+  const es = seedExtracts(root, [ // Read-before-Skill taint (messages[0]), asserted true → honest
+    { session: 'claude:sess-a', messages: ['tool_result', 'tool_result'], invocations: [{ skill: 'foo', index: 0, resultIndex: 1 }] },
+    clean('claude:sess-b'),
+  ]);
+  const res = run(vault, scratch, stateDir, es);
+  assert.ok(!res.reverted.some((r) => r.path === '05-Skills/foo/LEARNINGS.md'), 'honest untrusted:true kept');
+});
+
+test('dream-validate: a fully-bound entry with only clean windows is kept', () => {
+  const { root, vault, scratch } = tempVault({ '05-Skills/foo/SKILL.md': SKILL });
+  const stateDir = seedReg(root);
+  writeVault(vault, '05-Skills/foo/LEARNINGS.md', LEDGER);
+  const es = seedExtracts(root, [
+    { session: 'claude:sess-a', messages: ['tool_result', 'user'], invocations: [{ skill: 'foo', index: 0, resultIndex: 0 }] }, // own result + a user turn
+    clean('claude:sess-b'),
+  ]);
+  const res = run(vault, scratch, stateDir, es);
+  assert.ok(!res.reverted.some((r) => r.path === '05-Skills/foo/LEARNINGS.md'), 'verified trusted ledger kept');
+});
+
+test('dream-validate: a Codex session in Session-IDs is not invocation-checked (loose accumulation)', () => {
+  const { root, vault, scratch } = tempVault({ '05-Skills/foo/SKILL.md': SKILL });
+  const stateDir = seedReg(root);
+  const codexLedger = LEDGER
+    .replace('- Recurrence: 2', '- Recurrence: 3')
+    .replace('- Session-IDs: claude:sess-a, claude:sess-b', '- Session-IDs: claude:sess-a, claude:sess-b, codex:sess-c');
+  writeVault(vault, '05-Skills/foo/LEARNINGS.md', codexLedger);
+  const es = seedExtracts(root, [clean('claude:sess-a'), clean('claude:sess-b')]); // NO extract for codex:sess-c
+  const res = run(vault, scratch, stateDir, es);
+  assert.ok(!res.reverted.some((r) => r.path === '05-Skills/foo/LEARNINGS.md'), 'codex session accumulates without invocation check');
 });

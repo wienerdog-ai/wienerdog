@@ -314,6 +314,28 @@ Then one `##` section per learning, keyed by a **Pattern-Key**:
 List the learnings you recorded this run under a `## Skill learnings` heading in
 the dream report: for each, the skill name, the Pattern-Key, and its recurrence.
 
+### Which sessions count, and trust
+
+Only count a session in an entry's `Session-IDs` if that session genuinely used
+this skill. For a **Claude** session that means its extract `skill_invocations`
+names this skill; the orchestrator re-checks this and reverts an entry that counts
+a Claude session which did not invoke the skill.
+
+You still write `derived_from_untrusted`, but the orchestrator DERIVES it from each
+counted session's invocation **window** — the messages from where this skill was
+invoked up to the next skill invocation (or the end of the session). If any tool
+result OTHER than this skill's own result appears in that window (external tool
+output — a shell command, a fetched page, a file read), the session is
+untrusted-derived, and the orchestrator RAISES your flag to `true` (it never accepts
+a value LOWER than the derived one). So mislabeling can only make an entry more
+untrusted, never less.
+
+**Codex sessions do not authorize revisions (v1).** Codex has no structured
+invocation signal, so a Codex session may be recorded as a quarantined learning but
+never counts toward the ≥ 3 sessions that let a later dream revise a skill body. A
+Codex-only install still gets skill creation and learnings; autonomous body revision
+needs Claude invocation evidence.
+
 ## Dream report
 
 Write a report under the mapped reports directory (`reports/dreams/` by default)
