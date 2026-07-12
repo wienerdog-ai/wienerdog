@@ -154,13 +154,39 @@ function extractTarball(tgzFile, destDir, opts = {}) {
   }
 }
 
+/** Reject an archive that contains an absolute member or a `..` path segment.
+ *  Name-based containment (portable across tar variants via `tar -tzf`). Throws
+ *  WienerdogError on any unsafe member. @param {string} tgzFile @param {typeof spawnSync} spawn */
+function preflightMembers(tgzFile, spawn) {
+  const r = spawn('tar', ['-tzf', tgzFile]);
+  if (r.error || r.status !== 0) {
+    throw new WienerdogError('could not read the download archive (is `tar` installed?)');
+  }
+  const names = String(r.stdout || '').split('\n').map((s) => s.trim()).filter(Boolean);
+  for (const name of names) {
+    if (path.isAbsolute(name) || name.startsWith('/') || name.startsWith('\\')) {
+      throw new WienerdogError(`refusing to unpack: archive member has an absolute path (${name})`);
+    }
+    if (name.split(/[\\/]/).some((seg) => seg === '..')) {
+      throw new WienerdogError(`refusing to unpack: archive member escapes staging (${name})`);
+    }
+  }
+}
+
+/** Marker file written into a version dir only after a fully verified publish.
+ *  Presence gates the installVersion short-circuit (replaces the old
+ *  bin/wienerdog.js-exists check, which trusted a lone leftover file). */
+const COMPLETE_MARKER = '.wienerdog-complete';
+
 /**
  * Ensure app/<version>/ exists by fetching+verifying+unpacking the tarball.
- * Idempotent: if app/<version>/bin/wienerdog.js already exists, do NOTHING and
- * return {version, target, alreadyPresent:true}. Otherwise: download+verify,
- * write the bytes to a temp .tgz, extract into a per-pid STAGING dir
- * (app/<version>.staging.<pid>), then fs.renameSync it onto app/<version>
- * (atomic publish; mirror vendorSelf). Cleans up the temp .tgz and any leftover
+ * Idempotent: if app/<version>/.wienerdog-complete already exists, do NOTHING
+ * and return {version, target, alreadyPresent:true}. Otherwise: download+verify,
+ * write the bytes to a private temp dir (mkdtemp, 0700) as an exclusive
+ * owner-only .tgz, preflight member names (reject absolute/`..` members),
+ * extract into a per-pid STAGING dir (app/<version>.staging.<pid>), write the
+ * completeness marker into staging, then fs.renameSync it onto app/<version>
+ * (atomic publish; mirror vendorSelf). Cleans up the temp dir and any leftover
  * staging dir. Does NOT repoint `current` and does NOT touch the manifest.
  * @param {import('./paths').WienerdogPaths} paths
  * @param {{version:string, integrity:string,
@@ -174,7 +200,7 @@ async function installVersion(paths, args) {
   if (!isSemver(version)) throw new WienerdogError('registry returned an invalid version');
   const app = appDir(paths);
   const target = path.join(app, version);
-  if (fs.existsSync(path.join(target, 'bin', 'wienerdog.js'))) {
+  if (fs.existsSync(path.join(target, COMPLETE_MARKER))) {
     return { version, target, alreadyPresent: true };
   }
 
@@ -182,13 +208,24 @@ async function installVersion(paths, args) {
     downloadBuffer: args.downloadBuffer,
   });
 
+  const spawn = args.spawn || spawnSync;
   const staging = `${target}.staging.${process.pid}`;
-  const tgzFile = path.join(os.tmpdir(), `wd-tarball-${process.pid}-${Date.now()}.tgz`);
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-tarball-'));
+  const tgzFile = path.join(tmpDir, 'pkg.tgz');
   try {
+    fs.writeFileSync(tgzFile, buf, { mode: 0o600, flag: 'wx' }); // exclusive create, owner-only
+    preflightMembers(tgzFile, spawn);
     fs.rmSync(staging, { recursive: true, force: true });
     fs.mkdirSync(staging, { recursive: true });
-    fs.writeFileSync(tgzFile, buf);
     extractTarball(tgzFile, staging, { spawn: args.spawn });
+    // The archive may have planted a symlink at the marker path (member NAME
+    // is safe so preflightMembers lets it through — the escape is the link
+    // TARGET). rmSync unlinks a symlink WITHOUT following it; the subsequent
+    // exclusive create then cannot follow a link either, since the path is
+    // gone (WP-093 review: link-following write escape).
+    const markerPath = path.join(staging, COMPLETE_MARKER);
+    fs.rmSync(markerPath, { force: true });
+    fs.writeFileSync(markerPath, `${version}\n`, { flag: 'wx' });
     fs.mkdirSync(app, { recursive: true });
     // Recovery: the completeness check above fell through, so any target dir that
     // still exists here is INCOMPLETE (a crash leftover, or the loser of two
@@ -199,12 +236,12 @@ async function installVersion(paths, args) {
       fs.rmSync(target, { recursive: true, force: true });
     }
     try {
-      fs.renameSync(staging, target); // atomic publish of the version dir
+      fs.renameSync(staging, target); // atomic publish of the version dir (marker included)
     } catch {
       throw new WienerdogError('could not finish unpacking the update (the version folder could not be published)');
     }
   } finally {
-    try { fs.rmSync(tgzFile, { force: true }); } catch { /* ignore */ }
+    try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* ignore */ }
     try { fs.rmSync(staging, { recursive: true, force: true }); } catch { /* ignore */ }
   }
   return { version, target, alreadyPresent: false };
@@ -213,5 +250,5 @@ async function installVersion(paths, args) {
 module.exports = {
   REGISTRY, PKG, latestManifestUrl, tarballUrl, parseManifest,
   fetchLatestManifest, downloadVerified, verifyIntegrity, extractTarball,
-  installVersion,
+  preflightMembers, COMPLETE_MARKER, installVersion,
 };
