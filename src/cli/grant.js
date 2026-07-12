@@ -1,5 +1,6 @@
 'use strict';
 
+const fs = require('node:fs');
 const readline = require('node:readline');
 const { getPaths } = require('../core/paths');
 const { WienerdogError } = require('../core/errors');
@@ -7,24 +8,50 @@ const grantLib = require('../gws/grant');
 
 /**
  * `wienerdog grant send` — the ONLY way a send grant is created (ADR-0007).
- * The typed-word confirmation is the security boundary: it is driven by real
- * stdin and `--yes` does NOT bypass it, so no skill, hook, dream, or headless
- * job (nothing scriptable via `--yes`) can mint or widen a grant.
+ * The typed-word confirmation is the security boundary: it is read from a real
+ * controlling terminal (never a piped/redirected stdin) and `--yes` does NOT
+ * bypass it, so no skill, hook, dream, or headless job (nothing scriptable via
+ * `--yes` or a plain pipe) can mint or widen a grant.
  */
 
-/**
- * Default prompt: read one line from stdin. Injectable so the CLI is unit
- * testable without a real TTY.
- * @param {string} question
- * @returns {Promise<string>}
- */
-function defaultPrompt(question) {
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+const NO_TTY_GRANT_MESSAGE =
+  'wienerdog: a send grant can only be created at a real terminal (no terminal here). ' +
+  'Run `wienerdog grant send …` in an interactive shell.';
+
+/** Read the typed-word confirmation from a real controlling terminal. When stdin
+ *  is a TTY, read it directly; otherwise open the controlling terminal (/dev/tty).
+ *  There is NO environment override — a headless process must not be able to point
+ *  this at a regular file and script the confirmation (ADR-0007). `openTty` is a
+ *  code-level test seam only: tests pass a fake stream factory; production uses the
+ *  literal /dev/tty. On no reachable terminal (piped/redirected/EOF/error) it prints
+ *  a refusal and resolves to '' — which can never equal the confirmation word.
+ *  @param {string} question
+ *  @param {{openTty?:() => NodeJS.ReadableStream}} [opts]
+ *  @returns {Promise<string>} */
+function defaultPrompt(question, opts = {}) {
+  if (process.stdin.isTTY) {
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    return new Promise((resolve) => rl.question(question, (a) => { rl.close(); resolve(a); }));
+  }
+  const openTty = opts.openTty || (() => fs.createReadStream('/dev/tty'));
   return new Promise((resolve) => {
-    rl.question(question, (answer) => {
-      rl.close();
-      resolve(answer);
+    let input;
+    try { input = openTty(); } catch { process.stderr.write(`${NO_TTY_GRANT_MESSAGE}\n`); resolve(''); return; }
+    let settled = false;
+    const refuse = () => {
+      if (settled) return; settled = true;
+      try { input.destroy(); } catch { /* ignore */ }
+      process.stderr.write(`${NO_TTY_GRANT_MESSAGE}\n`); resolve('');
+    };
+    input.once('error', refuse);
+    const rl = readline.createInterface({ input, output: process.stderr });
+    rl.on('error', () => {}); // readline re-emits stream errors; `input`'s handler drives the abort
+    rl.question(question, (a) => {
+      if (settled) return; settled = true;
+      rl.close(); try { input.destroy(); } catch { /* ignore */ }
+      resolve(a);
     });
+    rl.on('close', () => { if (!settled) refuse(); });
   });
 }
 
@@ -123,4 +150,4 @@ async function run(argv, opts = {}) {
   out.write(`wienerdog: granted "${parsed.routine}" → ${recipients.join(', ')}.\n`);
 }
 
-module.exports = { run };
+module.exports = { run, defaultPrompt };
