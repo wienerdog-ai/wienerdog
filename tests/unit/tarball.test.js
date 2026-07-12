@@ -175,6 +175,32 @@ test('extractTarball throws WienerdogError when tar exits non-zero', () => {
 });
 
 // ---------------------------------------------------------------------------
+// preflightMembers
+// ---------------------------------------------------------------------------
+
+test('preflightMembers rejects a `..`-escaping member name', () => {
+  const spawn = () => ({ status: 0, stdout: 'package/bin/x.js\n../evil\n' });
+  assert.throws(() => tarball.preflightMembers('/whatever.tgz', spawn), WienerdogError);
+});
+
+test('preflightMembers rejects an absolute member name', () => {
+  const spawn = () => ({ status: 0, stdout: 'package/bin/x.js\n/etc/passwd\n' });
+  assert.throws(() => tarball.preflightMembers('/whatever.tgz', spawn), WienerdogError);
+});
+
+test('preflightMembers passes an archive with only safe relative names', () => {
+  const spawn = () => ({ status: 0, stdout: 'package/bin/x.js\npackage/src/y.js\n' });
+  assert.doesNotThrow(() => tarball.preflightMembers('/whatever.tgz', spawn));
+});
+
+test('preflightMembers throws WienerdogError when `tar -tzf` fails', () => {
+  assert.throws(
+    () => tarball.preflightMembers('/whatever.tgz', () => ({ error: new Error('ENOENT') })),
+    WienerdogError,
+  );
+});
+
+// ---------------------------------------------------------------------------
 // installVersion
 // ---------------------------------------------------------------------------
 
@@ -265,6 +291,151 @@ test('installVersion rejects a non-semver version before any download', async ()
     WienerdogError,
   );
   assert.equal(called, false, 'no download attempted for an invalid version');
+});
+
+test('installVersion rejects an archive with an unsafe member and extracts nothing', async () => {
+  const paths = tempPaths();
+  const { tgz, integrity } = buildFixtureTarball('0.4.0');
+  let extractCalled = false;
+  const spawn = (cmd, spawnArgs) => {
+    if (spawnArgs[0] === '-tzf') return { status: 0, stdout: 'package/bin/x.js\n../evil\n' };
+    if (spawnArgs[0] === '-xzf') { extractCalled = true; return { status: 0 }; }
+    return { error: new Error('unexpected tar invocation') };
+  };
+  await assert.rejects(
+    () => tarball.installVersion(paths, {
+      version: '0.4.0', integrity,
+      downloadBuffer: async () => fs.readFileSync(tgz),
+      spawn,
+    }),
+    WienerdogError,
+  );
+  assert.equal(extractCalled, false, 'extraction never runs after a failed member preflight');
+  assert.equal(fs.existsSync(path.join(vendor.appDir(paths), '0.4.0')), false, 'nothing published');
+});
+
+test('installVersion short-circuits only on the .wienerdog-complete marker, not a lone bin/wienerdog.js', async () => {
+  const paths = tempPaths();
+  const { tgz, integrity, binBody } = buildFixtureTarball('0.4.0');
+  const target = path.join(vendor.appDir(paths), '0.4.0');
+  // Plant a version dir with bin/wienerdog.js but NO completeness marker — the
+  // "lone file" scenario the old short-circuit incorrectly trusted.
+  fs.mkdirSync(path.join(target, 'bin'), { recursive: true });
+  fs.writeFileSync(path.join(target, 'bin', 'wienerdog.js'), '// stale, unverified\n');
+  assert.equal(fs.existsSync(path.join(target, tarball.COMPLETE_MARKER)), false, 'marker absent (partial)');
+
+  let downloaded = false;
+  const r = await tarball.installVersion(paths, {
+    version: '0.4.0', integrity,
+    downloadBuffer: async () => { downloaded = true; return fs.readFileSync(tgz); },
+  });
+  assert.equal(downloaded, true, 'proceeds to download+verify despite a lone bin/wienerdog.js');
+  assert.equal(r.alreadyPresent, false);
+  assert.equal(fs.readFileSync(path.join(target, 'bin', 'wienerdog.js'), 'utf8'), binBody, 'stale file replaced');
+});
+
+test('installVersion writes .wienerdog-complete with the version after publish; re-run is a no-op via the marker', async () => {
+  const paths = tempPaths();
+  const { tgz, integrity } = buildFixtureTarball('0.4.0');
+  const target = path.join(vendor.appDir(paths), '0.4.0');
+
+  await tarball.installVersion(paths, { version: '0.4.0', integrity, downloadBuffer: async () => fs.readFileSync(tgz) });
+  assert.equal(fs.readFileSync(path.join(target, tarball.COMPLETE_MARKER), 'utf8'), '0.4.0\n');
+
+  let called = false;
+  const r2 = await tarball.installVersion(paths, {
+    version: '0.4.0', integrity,
+    downloadBuffer: async () => { called = true; return fs.readFileSync(tgz); },
+  });
+  assert.equal(r2.alreadyPresent, true, 'gated on the marker, not the bin file');
+  assert.equal(called, false, 'no download on the marker-gated idempotent path');
+});
+
+test('installVersion writes the tgz under a private mkdtemp dir, mode 0600, and cleans it up', async () => {
+  const paths = tempPaths();
+  const { tgz, integrity } = buildFixtureTarball('0.4.0');
+  const buf = fs.readFileSync(tgz);
+
+  // tempPaths() itself mkdtemps a `wd-tarball-*` dir (as the fake HOME root) —
+  // snapshot before the install so we only assert on installVersion's OWN temp
+  // dir, not that pre-existing one.
+  const before = new Set(fs.readdirSync(os.tmpdir()).filter((n) => n.startsWith('wd-tarball-')));
+
+  let observedTgzPath;
+  let observedMode;
+  const spawn = (cmd, spawnArgs) => {
+    if (spawnArgs[0] === '-tzf') {
+      observedTgzPath = spawnArgs[1];
+      // Observed DURING the call: the tgz must already exist, mode 0600, under
+      // an unpredictable wd-tarball-* dir in os.tmpdir().
+      const st = fs.statSync(observedTgzPath);
+      observedMode = st.mode & 0o777;
+      return spawnSync('tar', spawnArgs);
+    }
+    if (spawnArgs[0] === '-xzf') {
+      return spawnSync('tar', spawnArgs);
+    }
+    return { error: new Error('unexpected tar invocation') };
+  };
+
+  const r = await tarball.installVersion(paths, {
+    version: '0.4.0', integrity,
+    downloadBuffer: async () => buf,
+    spawn,
+  });
+
+  assert.equal(r.alreadyPresent, false);
+  assert.ok(observedTgzPath, 'spawn observed the tgz path via argv');
+  assert.equal(path.basename(observedTgzPath), 'pkg.tgz');
+  assert.match(path.basename(path.dirname(observedTgzPath)), /^wd-tarball-/);
+  assert.equal(path.dirname(path.dirname(observedTgzPath)), os.tmpdir());
+  assert.equal(observedMode, 0o600, 'tgz written owner-only, exclusive create (0600)');
+
+  const after = fs.readdirSync(os.tmpdir()).filter((n) => n.startsWith('wd-tarball-'));
+  const newDirs = after.filter((n) => !before.has(n));
+  for (const d of newDirs) {
+    assert.equal(fs.existsSync(path.join(os.tmpdir(), d)), false, `temp dir ${d} cleaned up after installVersion`);
+  }
+});
+
+test('installVersion is not fooled by a malicious archive planting .wienerdog-complete as a symlink to an external file (WP-093 P1)', async () => {
+  const paths = tempPaths();
+  const { tgz, integrity, binBody } = buildFixtureTarball('0.4.0');
+
+  // A file OUTSIDE staging that a hostile archive tries to clobber by making
+  // the marker a symlink pointing at it. The member NAME (".wienerdog-complete")
+  // is safe, so preflightMembers lets it through — the escape is the link TARGET.
+  const externalFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'wd-external-')), 'victim.txt');
+  const externalBody = 'do-not-touch\n';
+  fs.writeFileSync(externalFile, externalBody);
+
+  const spawn = (cmd, spawnArgs) => {
+    if (spawnArgs[0] === '-tzf') return spawnSync('tar', spawnArgs);
+    if (spawnArgs[0] === '-xzf') {
+      const r = spawnSync('tar', spawnArgs);
+      // simulate the real extraction step ALSO planting a symlinked marker,
+      // as a malicious tarball member would.
+      const destDir = spawnArgs[spawnArgs.indexOf('-C') + 1];
+      fs.symlinkSync(externalFile, path.join(destDir, tarball.COMPLETE_MARKER));
+      return r;
+    }
+    return { error: new Error('unexpected tar invocation') };
+  };
+
+  const target = path.join(vendor.appDir(paths), '0.4.0');
+  const r = await tarball.installVersion(paths, {
+    version: '0.4.0', integrity,
+    downloadBuffer: async () => fs.readFileSync(tgz),
+    spawn,
+  });
+
+  assert.equal(r.alreadyPresent, false);
+  assert.equal(fs.readFileSync(externalFile, 'utf8'), externalBody, 'external file NOT modified/truncated');
+  const markerPath = path.join(target, tarball.COMPLETE_MARKER);
+  const st = fs.lstatSync(markerPath);
+  assert.equal(st.isSymbolicLink(), false, 'published marker is a regular file, not a symlink');
+  assert.equal(fs.readFileSync(markerPath, 'utf8'), '0.4.0\n', 'published marker contains the version');
+  assert.equal(fs.readFileSync(path.join(target, 'bin', 'wienerdog.js'), 'utf8'), binBody, 'legit tree still published');
 });
 
 // ---------------------------------------------------------------------------

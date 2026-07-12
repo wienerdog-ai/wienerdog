@@ -1,7 +1,7 @@
 ---
 id: WP-093
 title: Tarball install hardening — secure temp file, member-name preflight, trustworthy completeness marker
-status: Draft
+status: In-Review
 model: opus
 size: M
 depends_on: []
