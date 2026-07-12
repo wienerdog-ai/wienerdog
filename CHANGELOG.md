@@ -2,6 +2,14 @@
 
 All notable changes to Wienerdog. Format: [Keep a Changelog](https://keepachangelog.com), versioning: SemVer (0.x until the installed file layout stabilizes — ADR-0003).
 
+## [0.7.1] — 2026-07-12
+
+### Changed
+- **Documentation only — no behavior changes; the installed files are identical to 0.7.0.**
+- README's setup steps no longer tell Codex users to run `/wienerdog-setup` (that command only exists in Claude Code); the Codex way — `/skills`, then `$wienerdog-setup`, or just asking in plain words — is now spelled out, matching what setup itself has printed since 0.6.7.
+- README's feature list now describes what 0.7.0 actually shipped: skills Wienerdog created keep learning from real use and are carefully revised over time, with your own skills remaining off limits.
+- Security wording tightened to match the threat model: "no new attack surface" became the precise claim (nothing listens, nothing serves, nothing phones home), and the threat model now documents the skill-revision surface introduced in 0.7.0 (ADR-0020) — including that v1 has no human approval gate; the dream report and git revert are the undo story.
+
 ## [0.7.0] — 2026-07-12
 
 ### Added
