@@ -2,8 +2,12 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
 
 const gmail = require('../../src/gws/gmail');
+const alert = require('../../src/gws/alert');
 
 /** base64url-encode a plain string the way Gmail returns body data. */
 function b64url(s) {
@@ -166,4 +170,102 @@ test('buildMime produces base64url with To/Subject/Content-Type headers and body
     'From: f@x.com\r\nTo: t@x.com\r\nSubject: S\r\n' +
       'Content-Type: text/plain; charset="UTF-8"\r\n\r\nB'
   );
+});
+
+test('buildMime throws WienerdogError when subject contains a CRLF (header injection)', () => {
+  assert.throws(
+    () => gmail.buildMime({ to: 'a@b.com', subject: 'x\r\nBcc: evil@evil.com', body: 'hi' }),
+    (err) => err.name === 'WienerdogError' && /Subject/.test(err.message)
+  );
+});
+
+test('buildMime throws WienerdogError when to contains a bare LF', () => {
+  assert.throws(
+    () => gmail.buildMime({ to: 'a@b.com\nBcc: evil@evil.com', subject: 'x', body: 'hi' }),
+    (err) => err.name === 'WienerdogError' && /To/.test(err.message)
+  );
+});
+
+test('buildMime throws WienerdogError when from contains a CR', () => {
+  assert.throws(
+    () => gmail.buildMime({ from: 'a@b.com\rBcc: evil@evil.com', to: 'c@d.com', subject: 'x', body: 'hi' }),
+    (err) => err.name === 'WienerdogError' && /From/.test(err.message)
+  );
+});
+
+/** Write a minimal config.yaml granting `routine` to send to `to`, and return
+ *  a paths-shaped object exposing only the `config` field `gmail.send` reads. */
+function grantedPaths(routine, to) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-gmail-grant-'));
+  const config = path.join(dir, 'config.yaml');
+  fs.writeFileSync(
+    config,
+    '# --- wienerdog:grants (managed by `wienerdog grant`; do not edit by hand) ---\n' +
+      'grants:\n' +
+      `  - routine: ${routine}\n` +
+      '    to:\n' +
+      `      - ${to}\n` +
+      '# --- end wienerdog:grants ---\n'
+  );
+  return { config };
+}
+
+test('send with a granted recipient but a CRLF-bearing subject throws and never calls messages.send', async () => {
+  const paths = grantedPaths('daily-digest', 'a@b.com');
+  const calls = { send: [], drafts: [] };
+  const services = {
+    gmail: {
+      users: {
+        messages: {
+          send: async (args) => {
+            calls.send.push(args);
+            return { data: { id: 'sent-1' } };
+          },
+        },
+        drafts: {
+          create: async (args) => {
+            calls.drafts.push(args);
+            return { data: { id: 'r-1', message: { id: 'm-1' } } };
+          },
+        },
+      },
+    },
+  };
+
+  await assert.rejects(
+    () =>
+      gmail.send(services, {
+        to: 'a@b.com',
+        subject: 'x\r\nBcc: evil@evil.com',
+        body: 'hi',
+        routine: 'daily-digest',
+        paths,
+      }),
+    (err) => err.name === 'WienerdogError' && /Subject/.test(err.message)
+  );
+  assert.equal(calls.send.length, 0);
+  assert.equal(calls.drafts.length, 0);
+});
+
+test('_alert (via alert.run) throws when opts.subject contains a CRLF', async () => {
+  const calls = { send: 0 };
+  const services = {
+    gmail: {
+      users: {
+        getProfile: async () => ({ data: { emailAddress: 'owner@example.com' } }),
+        messages: {
+          send: async () => {
+            calls.send++;
+            return { data: { id: 'x' } };
+          },
+        },
+      },
+    },
+  };
+
+  await assert.rejects(
+    () => alert.run(services, { subject: 'watchdog failed\r\nBcc: evil@evil.com', body: 'job X crashed' }),
+    (err) => err.name === 'WienerdogError' && /Subject/.test(err.message)
+  );
+  assert.equal(calls.send, 0);
 });

@@ -1,10 +1,26 @@
 'use strict';
 
+const { WienerdogError } = require('../core/errors');
+
 /**
  * Gmail verb functions. Each takes `(services, opts)` and returns plain data;
  * they perform no console I/O (that is index.js's job). `services` is the
  * object from getServices; tests pass a stub with just the methods used.
  */
+
+/** Reject a header field value that contains a CR or LF (RFC-2822 header
+ *  injection — a bare/paired CR/LF would smuggle an extra header such as Bcc:,
+ *  defeating the send-grant allowlist, ADR-0007). Header fields are single-line
+ *  by construction (addresses, a subject); a legitimate value never contains a
+ *  line break, so rejecting is safe and is the fail-closed choice.
+ *  @param {string} value @param {string} field  e.g. 'Subject'
+ *  @returns {string} the value unchanged when safe; throws otherwise. */
+function assertHeaderSafe(value, field) {
+  if (/[\r\n]/.test(String(value))) {
+    throw new WienerdogError(`refusing to build email: ${field} contains a line break (possible header injection)`);
+  }
+  return String(value);
+}
 
 /**
  * Pull a header value (case-insensitive) from a Gmail headers array.
@@ -174,12 +190,12 @@ async function send(services, opts) {
  */
 function buildMime(m) {
   const lines = [];
-  if (m.from) lines.push(`From: ${m.from}`);
-  lines.push(`To: ${m.to}`);
-  lines.push(`Subject: ${m.subject}`);
+  if (m.from) lines.push(`From: ${assertHeaderSafe(m.from, 'From')}`);
+  lines.push(`To: ${assertHeaderSafe(m.to, 'To')}`);
+  lines.push(`Subject: ${assertHeaderSafe(m.subject, 'Subject')}`);
   lines.push('Content-Type: text/plain; charset="UTF-8"');
   lines.push('');
-  lines.push(m.body);
+  lines.push(m.body);           // body unchanged — content, not a header
   const mime = lines.join('\r\n');
   return Buffer.from(mime).toString('base64url');
 }

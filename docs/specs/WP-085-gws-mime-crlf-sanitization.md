@@ -1,7 +1,7 @@
 ---
 id: WP-085
 title: Reject CR/LF in Gmail MIME header fields (close the send-grant header-injection bypass)
-status: Draft
+status: In-Review
 model: sonnet
 size: S
 depends_on: []
