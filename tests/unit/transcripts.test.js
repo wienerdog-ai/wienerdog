@@ -6,7 +6,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const { discover, parse, redact } = require('../../src/core/transcripts');
+const { discover, parse, redact, rebaseInvocations, MAX_MESSAGES } = require('../../src/core/transcripts');
 
 const fixturesDir = path.join(__dirname, '..', 'fixtures', 'transcripts');
 
@@ -22,6 +22,16 @@ test('parse: Claude golden extract matches fixture', () => {
 
   const extract = parse({ harness: 'claude', path: inputPath });
 
+  assert.deepEqual(withoutSourcePath(extract), expected);
+  assert.equal(extract.source_path, inputPath);
+});
+
+test('parse: Claude skill-invocation extract matches fixture', () => {
+  const inputPath = path.join(fixturesDir, 'claude-skill-invocation.jsonl');
+  const expected = JSON.parse(
+    fs.readFileSync(path.join(fixturesDir, 'claude-skill-invocation.expected.json'), 'utf8'),
+  );
+  const extract = parse({ harness: 'claude', path: inputPath });
   assert.deepEqual(withoutSourcePath(extract), expected);
   assert.equal(extract.source_path, inputPath);
 });
@@ -135,4 +145,69 @@ test('discover: finds files under both harness layouts, honors since, missing di
 
   const missing = discover({ claudeDir: path.join(root, 'nope-claude'), codexDir: path.join(root, 'nope-codex') }, { since: null });
   assert.deepEqual(missing, []);
+});
+
+test('rebaseInvocations: shifts survivors and drops fallen-off invocations', () => {
+  const inv = [
+    { skill: 'a', index: 1, resultIndex: 2, errored: false },   // dropped: 1-5 < 0
+    { skill: 'b', index: 7, resultIndex: 8, errored: false },   // survives → 2, 3
+    { skill: 'c', index: 9, resultIndex: null, errored: false },// survives → 4, null result kept
+  ];
+  assert.deepEqual(rebaseInvocations(inv, 5), [
+    { skill: 'b', index: 2, resultIndex: 3, errored: false },
+    { skill: 'c', index: 4, resultIndex: null, errored: false },
+  ]);
+});
+
+test('parse: skill_invocations are rebased to the retained messages under the cap', () => {
+  // Build a transcript with >MAX_MESSAGES leading text turns, then ONE Skill
+  // invocation + its result as the final events. After the front-truncation the
+  // surviving invocation's index/resultIndex must point at the retained tail.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-cap-'));
+  const p = path.join(dir, 'big.jsonl');
+  const lines = [];
+  const pad = MAX_MESSAGES + 5; // this many leading user text messages
+  for (let i = 0; i < pad; i++) {
+    lines.push(JSON.stringify({ type: 'user', sessionId: 's', cwd: '/x', timestamp: '2026-02-01T00:00:00.000Z', message: { role: 'user', content: `pad ${i}` } }));
+  }
+  lines.push(JSON.stringify({ type: 'assistant', sessionId: 's', cwd: '/x', timestamp: '2026-02-01T00:00:01.000Z', message: { role: 'assistant', content: [{ type: 'text', text: 'run it' }, { type: 'tool_use', id: 'toolu_z', name: 'Skill', input: { skill: 'foo' } }] } }));
+  lines.push(JSON.stringify({ type: 'user', sessionId: 's', cwd: '/x', timestamp: '2026-02-01T00:00:02.000Z', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'toolu_z', is_error: false, content: [{ type: 'text', text: 'done' }] }] } }));
+  fs.writeFileSync(p, lines.join('\n') + '\n');
+  const extract = parse({ harness: 'claude', path: p });
+  assert.equal(extract.messages.length, MAX_MESSAGES);
+  assert.equal(extract.skill_invocations.length, 1);
+  const si = extract.skill_invocations[0];
+  // Rebased onto the retained tail: index/resultIndex are in-range and the paired
+  // result lands on the real 'done' tool_result (not a stale raw offset).
+  assert.ok(Number.isInteger(si.index) && si.index >= 0 && si.index < MAX_MESSAGES);
+  assert.ok(Number.isInteger(si.resultIndex) && si.resultIndex < MAX_MESSAGES);
+  assert.equal(extract.messages[si.resultIndex].text, 'done');
+});
+
+test('parse: under the cap, a trailing Skill invocation with no later message is dropped (right edge)', () => {
+  // A transcript exceeding MAX_MESSAGES whose FINAL raw event is a Skill
+  // tool_use (no paired result, no later message): its raw index equals the
+  // raw messages length, so after rebasing it would equal MAX_MESSAGES —
+  // outside the retained array. It must be dropped while an earlier rebased
+  // invocation survives.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-cap-edge-'));
+  const p = path.join(dir, 'edge.jsonl');
+  const lines = [];
+  const pad = MAX_MESSAGES + 5;
+  for (let i = 0; i < pad; i++) {
+    lines.push(JSON.stringify({ type: 'user', sessionId: 's', cwd: '/x', timestamp: '2026-02-01T00:00:00.000Z', message: { role: 'user', content: `pad ${i}` } }));
+  }
+  lines.push(JSON.stringify({ type: 'assistant', sessionId: 's', cwd: '/x', timestamp: '2026-02-01T00:00:01.000Z', message: { role: 'assistant', content: [{ type: 'text', text: 'run it' }, { type: 'tool_use', id: 'toolu_z', name: 'Skill', input: { skill: 'foo' } }] } }));
+  lines.push(JSON.stringify({ type: 'user', sessionId: 's', cwd: '/x', timestamp: '2026-02-01T00:00:02.000Z', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'toolu_z', is_error: false, content: [{ type: 'text', text: 'done' }] }] } }));
+  // Final event: assistant turn carrying a Skill tool_use, nothing after it.
+  lines.push(JSON.stringify({ type: 'assistant', sessionId: 's', cwd: '/x', timestamp: '2026-02-01T00:00:03.000Z', message: { role: 'assistant', content: [{ type: 'text', text: 'tail' }, { type: 'tool_use', id: 'toolu_y', name: 'Skill', input: { skill: 'bar' } }] } }));
+  fs.writeFileSync(p, lines.join('\n') + '\n');
+  const extract = parse({ harness: 'claude', path: p });
+  assert.equal(extract.messages.length, MAX_MESSAGES);
+  // Only 'foo' survives; the trailing 'bar' (rebased index === MAX_MESSAGES) is dropped.
+  assert.deepEqual(extract.skill_invocations.map((si) => si.skill), ['foo']);
+  const si = extract.skill_invocations[0];
+  assert.ok(si.index >= 0 && si.index < MAX_MESSAGES);
+  assert.ok(si.resultIndex >= 0 && si.resultIndex < MAX_MESSAGES);
+  assert.equal(extract.messages[si.resultIndex].text, 'done');
 });

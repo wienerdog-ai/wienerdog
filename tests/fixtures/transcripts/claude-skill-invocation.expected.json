@@ -1,0 +1,19 @@
+{
+  "harness": "claude",
+  "session_id": "sess-skill",
+  "started": "2026-02-01T09:00:00.000Z",
+  "cwd": "/home/ada/proj",
+  "truncated": false,
+  "messages": [
+    { "role": "user", "text": "set up my memory", "ts": "2026-02-01T09:00:00.000Z" },
+    { "role": "assistant", "text": "Starting setup.", "ts": "2026-02-01T09:00:02.000Z" },
+    { "role": "tool_result", "text": "setup complete", "ts": "2026-02-01T09:00:03.000Z" },
+    { "role": "assistant", "text": "Now the digest.", "ts": "2026-02-01T09:00:05.000Z" },
+    { "role": "tool_result", "text": "no google grant", "ts": "2026-02-01T09:00:06.000Z" },
+    { "role": "assistant", "text": "Trying a variant.", "ts": "2026-02-01T09:00:08.000Z" }
+  ],
+  "skill_invocations": [
+    { "skill": "wienerdog-setup", "index": 2, "resultIndex": 2, "errored": false },
+    { "skill": "daily-digest", "index": 4, "resultIndex": 4, "errored": true }
+  ]
+}

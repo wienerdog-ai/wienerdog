@@ -62,6 +62,13 @@ function flattenToolResultContent(content) {
   return '';
 }
 
+// Strict control-plane identifier grammar for skill names (fully anchored,
+// JS `$` needs no `m` flag): lowercase kebab, 1-64 chars. Verified against a
+// live Claude Code transcript (~/.claude/projects/…): a Skill invocation is
+// an assistant tool_use block `{"name":"Skill","input":{"skill":"<name>"}}`,
+// and its paired user-message tool_result carries `tool_use_id` + `is_error`.
+const SKILL_NAME_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
+
 /**
  * Parse one Claude JSONL file into a RAW (un-redacted, un-capped) Extract.
  * @param {string} filePath
@@ -77,6 +84,8 @@ function parseClaudeTranscript(filePath) {
 
   const lines = raw.split('\n');
   const messages = [];
+  const skillInvocations = [];
+  const pendingByToolUseId = new Map(); // tool_use_id -> index in skillInvocations
   let sessionId = null;
   let cwd = null;
 
@@ -107,6 +116,14 @@ function parseClaudeTranscript(filePath) {
               text: flattenToolResultContent(block.content),
               ts: obj.timestamp || null,
             });
+            const pos = pendingByToolUseId.get(block.tool_use_id);
+            if (pos !== undefined) {
+              // The paired result's OWN message index (just pushed) — WP-084
+              // excludes exactly this message from window-taint. Id-pairing,
+              // not position, is authoritative.
+              skillInvocations[pos].resultIndex = messages.length - 1;
+              if (block.is_error === true) skillInvocations[pos].errored = true;
+            }
           }
         }
       }
@@ -119,6 +136,22 @@ function parseClaudeTranscript(filePath) {
           .join('\n\n');
         if (text !== '') {
           messages.push({ role: 'assistant', text, ts: obj.timestamp || null });
+        }
+        for (const block of content) {
+          if (block && block.type === 'tool_use' && block.name === 'Skill') {
+            const input = block.input || {};
+            // Emit ONLY a grammar-conforming input.skill. No input.command
+            // fallback, no "unknown" placeholder — a bad/absent name means no
+            // entry for this block.
+            if (typeof input.skill !== 'string' || !SKILL_NAME_RE.test(input.skill)) continue;
+            // index = the invocation's place in the message timeline (0-based
+            // position of the first message emitted after this assistant
+            // turn). resultIndex is filled in above, when the paired
+            // tool_result is pushed.
+            const pos =
+              skillInvocations.push({ skill: input.skill, index: messages.length, resultIndex: null, errored: false }) - 1;
+            if (block.id) pendingByToolUseId.set(block.id, pos);
+          }
         }
       }
     }
@@ -138,6 +171,7 @@ function parseClaudeTranscript(filePath) {
     source_path: path.resolve(filePath),
     truncated: false,
     messages,
+    skill_invocations: skillInvocations,
   };
 }
 

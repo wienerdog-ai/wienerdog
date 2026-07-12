@@ -1,7 +1,7 @@
 ---
 id: WP-080
 title: Transcript extracts retain a skill-invocation signal (Claude parser)
-status: Ready
+status: In-Review
 model: sonnet
 size: M
 depends_on: []

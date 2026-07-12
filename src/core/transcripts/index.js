@@ -12,6 +12,7 @@ const { discoverCodex, parseCodexTranscript } = require('./codex');
  *  @property {string}      source_path  // absolute path of the transcript file
  *  @property {boolean}     truncated    // true if any size cap was applied
  *  @property {Array<{role:'user'|'assistant'|'tool_result', text:string, ts:string|null}>} messages
+ *  @property {Array<{skill:string, index:number, resultIndex:number|null, errored:boolean}>} [skill_invocations]  // Claude only; each Skill tool_use: name, timeline index, its paired result's index (null if uncaptured), whether it errored
  */
 
 const MAX_MSG_CHARS = 4000;
@@ -87,6 +88,20 @@ function capMessage(message) {
 }
 
 /**
+ * Rebase skill_invocations after `dropped` leading messages were removed: subtract
+ * `dropped` from index and resultIndex, and DROP any invocation whose window is no
+ * longer fully retained (its index fell below 0; a non-null result fell below 0).
+ * @param {Array<{skill:string,index:number,resultIndex:number|null,errored:boolean}>} invocations
+ * @param {number} dropped
+ * @returns {typeof invocations}
+ */
+function rebaseInvocations(invocations, dropped) {
+  return invocations
+    .map((si) => ({ ...si, index: si.index - dropped, resultIndex: si.resultIndex == null ? null : si.resultIndex - dropped }))
+    .filter((si) => si.index >= 0 && (si.resultIndex === null || si.resultIndex >= 0));
+}
+
+/**
  * Parse + redact + size-cap one discovered entry.
  * @param {{harness:'claude'|'codex', path:string}} entry
  * @returns {Extract}
@@ -101,12 +116,31 @@ function parse(entry) {
     return capped;
   });
 
+  // Capping invariant: after capping, every emitted index/resultIndex refers to
+  // the exact `messages` array written to the extract; front-truncation
+  // subtracts the dropped-leading count from both, and any invocation whose
+  // window (invocation through its paired result) is not fully retained is
+  // dropped.
+  let rebased; // set only when the count cap fires
   if (messages.length > MAX_MESSAGES) {
-    messages = messages.slice(messages.length - MAX_MESSAGES);
+    const dropped = messages.length - MAX_MESSAGES;
+    messages = messages.slice(dropped);
     truncated = true;
+    if (Array.isArray(raw.skill_invocations)) {
+      // Right-edge guard: a trailing Skill tool_use with no later emitted
+      // message has raw index === raw messages length; after rebasing it
+      // would equal the retained count — outside the emitted array. Drop it
+      // (and, defensively, any out-of-range resultIndex) so the capping
+      // invariant holds on both edges.
+      rebased = rebaseInvocations(raw.skill_invocations, dropped).filter(
+        (si) => si.index < messages.length && (si.resultIndex === null || si.resultIndex < messages.length),
+      );
+    }
   }
 
-  return { ...raw, truncated, messages };
+  const out = { ...raw, truncated, messages };
+  if (rebased !== undefined) out.skill_invocations = rebased; // else `...raw` carries the untouched array (or none for Codex)
+  return out;
 }
 
-module.exports = { discover, parse, redact, MAX_MSG_CHARS, MAX_MESSAGES };
+module.exports = { discover, parse, redact, rebaseInvocations, MAX_MSG_CHARS, MAX_MESSAGES };
