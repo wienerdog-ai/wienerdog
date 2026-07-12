@@ -46,6 +46,13 @@ function freshManifest() {
   return { version: 1, createdAt: new Date().toISOString(), entries: [] };
 }
 
+/** Mirror of shared.js's shellQuoteCommand (WP-090), for building the expected
+ *  stored/recorded command string in assertions without importing an internal.
+ *  @param {string} p @returns {string} */
+function q(p) {
+  return `'${String(p).replace(/\\/g, '/').replace(/'/g, `'\\''`)}'`;
+}
+
 test('AGENTS.md managed block, new file: matches the golden byte-for-byte', () => {
   const paths = setup();
   const agentsMd = path.join(paths.codexDir, 'AGENTS.md');
@@ -100,8 +107,8 @@ test('hooks.json merge preserves existing hooks and dedups; /hooks trust notice 
 
   const allCommands = (event) => (hooks.hooks[event] || []).flatMap((g) => g.hooks.map((h) => h.command));
   assert.ok(allCommands('Stop').includes('/usr/local/bin/other-stop.sh'), 'unrelated hook survives');
-  assert.equal(allCommands('SessionStart').filter((c) => c === startAbs).length, 1);
-  assert.equal(allCommands('Stop').filter((c) => c === stopAbs).length, 1);
+  assert.equal(allCommands('SessionStart').filter((c) => c === q(startAbs)).length, 1);
+  assert.equal(allCommands('Stop').filter((c) => c === q(stopAbs)).length, 1);
   assert.ok(res.notices.some((n) => n.includes('/hooks')), 'expected the /hooks trust notice');
   assert.ok(
     res.notices.some((n) => n.includes('/skills') && n.includes('$wienerdog-setup')),
@@ -111,8 +118,8 @@ test('hooks.json merge preserves existing hooks and dedups; /hooks trust notice 
   // Second run: no duplicates.
   applyCodexAdapter(paths, { manifest });
   hooks = JSON.parse(fs.readFileSync(hooksPath, 'utf8'));
-  assert.equal(allCommands('SessionStart').filter((c) => c === startAbs).length, 1);
-  assert.equal(allCommands('Stop').filter((c) => c === stopAbs).length, 1);
+  assert.equal(allCommands('SessionStart').filter((c) => c === q(startAbs)).length, 1);
+  assert.equal(allCommands('Stop').filter((c) => c === q(stopAbs)).length, 1);
   assert.ok(allCommands('Stop').includes('/usr/local/bin/other-stop.sh'));
 });
 
@@ -139,24 +146,84 @@ test('backslash-seeded Stop converges to exactly one forward-slash entry (WP-077
   const startAbs = path.join(paths.core, 'bin', 'session-start.sh');
   const allCommands = (event) => (hooks.hooks[event] || []).flatMap((g) => g.hooks.map((h) => h.command));
 
-  // Exactly one Stop command for our path, forward-slash, no backslash variant left.
-  assert.equal(allCommands('Stop').filter((c) => c === stopAbs).length, 1);
+  // Exactly one Stop command for our path, forward-slash AND shell-quoted, no
+  // backslash variant left (WP-090 converges the WP-077 bare form too).
+  assert.equal(allCommands('Stop').filter((c) => c === q(stopAbs)).length, 1);
   assert.ok(!allCommands('Stop').some((c) => c.includes('\\')), 'no backslash in any Stop command');
   // Unrelated user hook survives untouched.
   assert.ok(allCommands('Stop').includes('/usr/local/bin/other-stop.sh'), 'unrelated Stop hook survives');
-  // SessionStart registered with forward slashes.
-  assert.ok(allCommands('SessionStart').includes(startAbs), 'SessionStart forward-slash command present');
+  // SessionStart registered with forward slashes, shell-quoted.
+  assert.ok(allCommands('SessionStart').includes(q(startAbs)), 'SessionStart quoted forward-slash command present');
   assert.ok(!allCommands('SessionStart').some((c) => c.includes('\\')), 'no backslash in any SessionStart command');
 
-  // Recorded manifest commands are the forward-slash forms.
+  // Recorded manifest commands are the quoted forward-slash forms.
   const entry = manifest.entries.find((e) => e.kind === 'settings-entry' && e.path === hooksPath);
   assert.ok(entry.commands.every((c) => !c.includes('\\')), 'manifest records forward-slash commands');
+  assert.ok(entry.commands.includes(q(stopAbs)), 'manifest records the quoted Stop command');
 
   // Second apply is a no-op: hooks file reported unchanged, still one Stop entry for us.
   const res = applyCodexAdapter(paths, { manifest });
   assert.ok(res.unchanged.includes(hooksPath), 'idempotent second run leaves hooks unchanged');
   hooks = JSON.parse(fs.readFileSync(hooksPath, 'utf8'));
-  assert.equal(allCommands('Stop').filter((c) => c === stopAbs).length, 1);
+  assert.equal(allCommands('Stop').filter((c) => c === q(stopAbs)).length, 1);
+});
+
+test('an install root containing a space registers shell-quoted hooks end-to-end (WP-090)', () => {
+  // WIENERDOG_HOME with a space in it (e.g. "My Files"), exercising the real
+  // adapter rather than calling applySettings directly.
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-codex-'));
+  const env = {
+    HOME: root,
+    WIENERDOG_HOME: path.join(root, 'My Files', 'wd'),
+    CODEX_HOME: path.join(root, 'codex'),
+  };
+  const paths = getPaths(env);
+  fs.mkdirSync(paths.state, { recursive: true });
+  fs.mkdirSync(paths.codexDir, { recursive: true });
+  fs.writeFileSync(path.join(paths.state, 'digest.md'), FIXED_DIGEST);
+
+  const hooksPath = path.join(paths.codexDir, 'hooks.json');
+  const startAbs = path.join(paths.core, 'bin', 'session-start.sh');
+  const manifest = freshManifest();
+
+  applyCodexAdapter(paths, { manifest });
+  const hooks = JSON.parse(fs.readFileSync(hooksPath, 'utf8'));
+  const allCommands = (event) => (hooks.hooks[event] || []).flatMap((g) => g.hooks.map((h) => h.command));
+
+  assert.deepEqual(allCommands('SessionStart'), [q(startAbs)], 'quoted single-argument command');
+
+  // Second run: idempotent, no-op.
+  const res = applyCodexAdapter(paths, { manifest });
+  assert.ok(res.unchanged.includes(hooksPath), 'idempotent second run leaves hooks unchanged');
+});
+
+test('applySettings converges a pre-existing bare (unquoted) Codex entry to exactly one quoted entry, leaving unrelated hooks untouched', () => {
+  const { applySettings } = require('../../src/adapters/shared');
+  const paths = setup();
+  const hooksPath = path.join(paths.codexDir, 'hooks.json');
+  const stopAbs = path.join(paths.core, 'bin', 'codex-session-end.sh');
+  const preExisting = {
+    hooks: {
+      Stop: [
+        { hooks: [{ type: 'command', command: stopAbs, timeout: 10 }] },
+        { hooks: [{ type: 'command', command: '/usr/local/bin/other-stop.sh', timeout: 30 }] },
+      ],
+    },
+  };
+  fs.writeFileSync(hooksPath, `${JSON.stringify(preExisting, null, 2)}\n`);
+  const manifest = freshManifest();
+  const out = { changed: [], unchanged: [], notices: [] };
+
+  applySettings(hooksPath, [['Stop', stopAbs]], false, manifest, out);
+  const hooks = JSON.parse(fs.readFileSync(hooksPath, 'utf8'));
+  const allCommands = (event) => (hooks.hooks[event] || []).flatMap((g) => g.hooks.map((h) => h.command));
+
+  assert.deepEqual(
+    allCommands('Stop').filter((c) => c === stopAbs || c === q(stopAbs)),
+    [q(stopAbs)],
+    'bare entry pruned; exactly one quoted entry remains'
+  );
+  assert.ok(allCommands('Stop').includes('/usr/local/bin/other-stop.sh'), 'unrelated user hook untouched');
 });
 
 test('skills symlink into <codexDir>/skills points at the core skill dir', () => {
@@ -324,8 +391,8 @@ test('Codex-only machine: full setup + working dream from rollout files alone', 
   const stopAbs = path.join(core, 'bin', 'codex-session-end.sh');
   const sessionStartCmds = (hooks.hooks.SessionStart || []).flatMap((g) => g.hooks.map((h) => h.command));
   const stopCmds = (hooks.hooks.Stop || []).flatMap((g) => g.hooks.map((h) => h.command));
-  assert.ok(sessionStartCmds.includes(startAbs));
-  assert.ok(stopCmds.includes(stopAbs));
+  assert.ok(sessionStartCmds.includes(q(startAbs)));
+  assert.ok(stopCmds.includes(q(stopAbs)));
 
   const skillLink = path.join(codexHome, 'skills', 'wienerdog-setup');
   if (process.platform !== 'win32') {
