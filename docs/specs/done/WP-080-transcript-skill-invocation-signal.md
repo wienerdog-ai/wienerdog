@@ -1,7 +1,7 @@
 ---
 id: WP-080
 title: Transcript extracts retain a skill-invocation signal (Claude parser)
-status: In-Review
+status: Done
 model: sonnet
 size: M
 depends_on: []
@@ -473,3 +473,21 @@ npm run lint
    PR titled `feat(transcripts): retain skill-invocation signal (WP-080)`.
 3. PR template filled, including "Decisions made" (or "none") and `Generated-by:`.
 4. This spec's `status:` flipped to `In-Review` in the same PR.
+
+## Done record (2026-07-12)
+
+Merged to main as `40ba34e` (PR #80, squash) + fix `6b69053`. Double gate per
+docs/runbooks/codex-review.md: wd-reviewer APPROVE (fixture byte-matches the
+spec's literal JSON; grammar constant, id-based resultIndex pairing, and
+no-new-injection-surface all verified); Codex PR review found one real P1 —
+the spec's own pinned `rebaseInvocations` sketch filtered only the left edge,
+so an invocation as the final raw event of an over-cap transcript survived
+with `index === MAX_MESSAGES` (out of range). Fixed at the call site (the
+spec-pinned helper kept byte-identical), regression test added. Codex
+re-review's P2 (keep capped trailing invocations as null-result markers) was
+REJECTED against the spec's explicit drop rule — disposition recorded on the
+PR. Spec correction note: the pinned sketch carried the P1; it survived seven
+design-review rounds and was caught only at PR review — boundary-check pinned
+code sketches in both roles. Live-transcript verification confirmed
+`tool_use.name === "Skill"` / `input.skill` / `tool_use_id` pairing on real
+sessions before coding.

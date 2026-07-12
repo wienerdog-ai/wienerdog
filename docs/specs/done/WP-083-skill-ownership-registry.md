@@ -1,7 +1,7 @@
 ---
 id: WP-083
 title: Skill ownership registry — tamper-proof write-origin marker for dream-created skills
-status: In-Review
+status: Done
 model: opus
 size: S
 depends_on: []
@@ -424,3 +424,13 @@ npm run lint
    PR titled `feat(dream): skill ownership registry (WP-083)`.
 3. PR template filled, including "Decisions made" (or "none") and `Generated-by:`.
 4. This spec's `status:` flipped to `In-Review` in the same PR.
+
+## Done record (2026-07-12)
+
+Merged to main as `fff7f86` (PR #81, squash). Double gate: wd-reviewer APPROVE
+zero findings (post-commit registry write ordering, fail-closed no-backfill
+crash semantics, atomic temp+rename, and brain-sandbox unreachability all
+byte-verified); Codex PR review clean first pass. The implementer's
+`Array.isArray`/null guard in `readRegistry` (a JSON array passes
+`typeof === 'object'`) was judged necessary hardening within the contract —
+caught by the implementer's own malformed-input test pre-ship.

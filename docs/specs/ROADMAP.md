@@ -98,11 +98,11 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 | [WP-077](done/WP-077-hook-commands-forward-slash-on-win32.md) | Register hook commands with forward-slash paths (Windows SessionEnd no longer ENOENTs) | M7 | opus | Done | — |
 | [WP-078](done/WP-078-codex-skills-in-codex-home.md) | Link Codex skills into $CODEX_HOME/skills (0.144.x discovery root), not ~/.agents/skills | M4 | sonnet | Done | — |
 | [WP-079](done/WP-079-doctor-codex-skill-links.md) | doctor check — Codex skill links exist under $CODEX_HOME/skills when Codex detected | M4 | sonnet | Done | WP-078 |
-| [WP-080](WP-080-transcript-skill-invocation-signal.md) | Transcript extracts retain a skill-invocation signal (Claude parser) | M3 | sonnet | Draft | — |
-| [WP-081](WP-081-dream-skill-learnings.md) | Dream accumulates per-skill learnings in a validated quarantined ledger | M3 | opus | Draft | WP-080, WP-083 |
-| [WP-082](WP-082-recurrence-gated-skill-revision.md) | Recurrence-gated skill-body revision with registry-scoped code backstop | M3 | opus | Draft | WP-081, WP-083, WP-084 |
-| [WP-083](WP-083-skill-ownership-registry.md) | Skill ownership registry — tamper-proof write-origin marker for dream-created skills | M3 | opus | Draft | — |
-| [WP-084](WP-084-ledger-evidence-trust-derivation.md) | Bind ledger learnings to skill invocations — window-based mechanical trust | M3 | opus | Draft | WP-080, WP-081, WP-083 |
+| [WP-080](done/WP-080-transcript-skill-invocation-signal.md) | Transcript extracts retain a skill-invocation signal (Claude parser) | M3 | sonnet | Done | — |
+| [WP-081](done/WP-081-dream-skill-learnings.md) | Dream accumulates per-skill learnings in a validated quarantined ledger | M3 | opus | Done | WP-080, WP-083 |
+| [WP-082](done/WP-082-recurrence-gated-skill-revision.md) | Recurrence-gated skill-body revision with registry-scoped code backstop | M3 | opus | Done | WP-081, WP-083, WP-084 |
+| [WP-083](done/WP-083-skill-ownership-registry.md) | Skill ownership registry — tamper-proof write-origin marker for dream-created skills | M3 | opus | Done | — |
+| [WP-084](done/WP-084-ledger-evidence-trust-derivation.md) | Bind ledger learnings to skill invocations — window-based mechanical trust | M3 | opus | Done | WP-080, WP-081, WP-083 |
 
 > **First-production-night incident (2026-07-04).** WP-038, WP-039 and WP-041 form
 > a serial chain (they edit the shared `run-job.js` / `dream.js` / `validate.js`

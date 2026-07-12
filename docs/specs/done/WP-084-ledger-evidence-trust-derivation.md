@@ -1,7 +1,7 @@
 ---
 id: WP-084
 title: Bind ledger learnings to skill invocations — window-based mechanical trust
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: [WP-080, WP-081, WP-083]
@@ -527,3 +527,16 @@ npm run lint
    PR titled `feat(dream): bind ledger learnings to skill invocations (WP-084)`.
 3. PR template filled, including "Decisions made" (or "none") and `Generated-by:`.
 4. This spec's `status:` flipped to `In-Review` in the same PR.
+
+## Done record (2026-07-12)
+
+Merged to main as `3d2f51e` (PR #83, squash). Double gate: wd-reviewer APPROVE
+(invocationWindowTainted and the binding loop byte-match; SKILL.md prose
+byte-exact; all four adversarial tests present — batched-external-result
+taints, back-to-back invocations don't cross-attribute, null resultIndex fails
+closed, Codex accumulation-without-authorization); Codex PR review clean.
+The headEntries hoist and extended ledgerViolation signature were verified
+behavior-neutral (82 prior dream-validate tests unmodified except the one
+spec-authorized patch). Spec correction note: the part-(a) sketch's comment
+labeled the binding loop `(c)` while part-(c) labels it `(h)` — implementer
+correctly harmonized to `(h)`.

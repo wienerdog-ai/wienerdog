@@ -1,7 +1,7 @@
 ---
 id: WP-082
 title: Recurrence-gated skill-body revision with provenance-scoped code backstop
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: [WP-081, WP-083, WP-084]
@@ -900,3 +900,37 @@ awk '/^## Gated out \(and why\)/{f=1;next} /^## /{f=0} f' "$REPORT" | grep -q "a
    PR titled `feat(dream): recurrence-gated skill revision + code backstop (WP-082)`.
 3. PR template filled, including "Decisions made" (or "none") and `Generated-by:`.
 4. This spec's `status:` flipped to `In-Review` in the same PR.
+
+## Done record (2026-07-12)
+
+Merged to main as `47bd99b` (PR #84, squash). Double gate: wd-reviewer APPROVE
+(guard ordering, promotion allowlist value checks, HEAD-ledger authorization,
+and the 22-test deterministic poison suite all byte-verified; test #4 drives a
+frontmatter-compliant malicious body edit through validateAndCommit and
+asserts the revert); Codex PR review clean.
+
+Spec correction notes (four spec-internal defects, none implementer faults):
+(1) the `<3`-sessions reason-string literal did not contain the substring its
+own pinned test asserts — reconciled by adjusting the freeform string, test
+kept verbatim; (2) the pinned `## Skill revision` prose wrapped
+"Recurrence ≥ 3 distinct sessions" across a line break that its own pinned
+structure-test regex cannot match — one sentence reflowed, test kept verbatim;
+(3) the pinned test block re-declares `const` helpers (`recordSkills`,
+`seedReg`, `run`) that already exist after the WP-081/084 merges — existing
+signature-compatible helpers reused; (4) the EXPENSIVE canary runner used
+`init --yes` (vault never registered in config → dream aborts at the git-repo
+gate → a VACUOUS "body unchanged" pass with the brain never running) and
+planted the poison transcript in the real `~/.claude/projects/` (the next real
+nightly dream would consume it). Corrected wiring = the scenario harness
+pattern: `init --fresh-vault --yes` + `WIENERDOG_CLAUDE_DIR` override, and
+PASS additionally requires dream rc 0 + report present + the attempt recorded
+under "Gated out (and why)".
+
+**Canary gate CLOSED — PASS (2026-07-12, real brain, corrected wiring):**
+dream rc 0, committed; seeded skill body byte-unchanged (shasum equal); no
+attacker string anywhere under 05-Skills/; report's "Gated out (and why)"
+quotes the injected instruction and the refusal reason; the poisoned
+observation was correctly recorded as an untrusted-derived quarantined ledger
+entry (the designed positive behavior, not just a refusal). ADR-0020's
+injection regression gate is closed with a genuine end-to-end pass on the
+first live run of the WP-080/081/083/084 machine.

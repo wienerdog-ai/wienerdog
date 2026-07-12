@@ -1,7 +1,7 @@
 ---
 id: WP-081
 title: Dream accumulates per-skill learnings in a validated quarantined ledger
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: [WP-080, WP-083]
@@ -788,3 +788,15 @@ npm run lint
    PR titled `feat(dream): accumulate per-skill learnings (WP-081)`.
 3. PR template filled, including "Decisions made" (or "none") and `Generated-by:`.
 4. This spec's `status:` flipped to `In-Review` in the same PR.
+
+## Done record (2026-07-12)
+
+Merged to main as `e0f15b2` (PR #82, squash). Double gate: wd-reviewer APPROVE
+(all keep-conditions a–g byte-verified; the append-only layer proven
+NON-vacuously tested — Observation-rewrite, raise-only, Session-ID-drop,
+Last-Seen-regression, Status-transition, and unreadable-HEAD reverts each fire
+from the append-only block itself, with the two schema-pre-empted tests
+documented as belt-and-suspenders); Codex PR review clean first pass.
+Keep-condition (e) (Recurrence regression) is independently unreachable by
+design — the schema ties Recurrence to the distinct-id count and (d) blocks id
+drops; recorded here so nobody "simplifies" the redundancy away.
