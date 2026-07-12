@@ -123,14 +123,17 @@ async function run(argv) {
 
   const manifest = manifestLib.load(paths);
 
+  let createdSecrets = false;
   for (const d of dirs) {
     if (!dirExists(d)) {
       fs.mkdirSync(d, { recursive: true, mode: d === paths.secrets ? 0o700 : undefined });
       manifestLib.record(manifest, { kind: 'dir', path: d });
+      if (d === paths.secrets) createdSecrets = true;
     }
   }
-  // Enforce 0700 on secrets even if umask reduced the create-time mode.
-  fs.chmodSync(paths.secrets, 0o700);
+  // Enforce 0700 only on a secrets dir WE created (defeats a restrictive umask on the
+  // fresh dir). A pre-existing user path is never re-permissioned by init.
+  if (createdSecrets) fs.chmodSync(paths.secrets, 0o700);
 
   if (needConfig) {
     const content = renderConfig(harnesses);

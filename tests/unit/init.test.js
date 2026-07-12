@@ -156,6 +156,27 @@ test('secrets directory is created with mode 0700', { skip: process.platform ===
   run(['init', '--yes'], env);
   const mode = fs.statSync(path.join(core, 'secrets')).mode & 0o777;
   assert.equal(mode, 0o700);
+  const manifest = JSON.parse(fs.readFileSync(path.join(core, 'install-manifest.json'), 'utf8'));
+  assert.ok(
+    manifest.entries.some((e) => e.kind === 'dir' && e.path === path.join(core, 'secrets')),
+    'manifest should record the freshly-created secrets dir'
+  );
+});
+
+test('a pre-existing secrets directory is left at its own mode (never chmod\'d)', { skip: process.platform === 'win32' }, () => {
+  const { core, env } = tempEnv();
+  const secrets = path.join(core, 'secrets');
+  fs.mkdirSync(secrets, { recursive: true });
+  fs.chmodSync(secrets, 0o755);
+  const r = run(['init', '--yes'], env);
+  assert.equal(r.status, 0);
+  const mode = fs.statSync(secrets).mode & 0o777;
+  assert.equal(mode, 0o755, 'init must not re-permission a secrets dir it did not create');
+  const manifest = JSON.parse(fs.readFileSync(path.join(core, 'install-manifest.json'), 'utf8'));
+  assert.ok(
+    !manifest.entries.some((e) => e.kind === 'dir' && e.path === secrets),
+    'manifest should not record a dir entry for a pre-existing secrets dir'
+  );
 });
 
 test('a second init makes zero changes and says so', () => {
