@@ -7,7 +7,7 @@ const { spawnSync } = require('node:child_process');
 
 const { WienerdogError } = require('../errors');
 const { defaultLayout } = require('../layout');
-const { recordSkills } = require('./skill-registry');
+const { recordSkills, readRegistry } = require('./skill-registry');
 
 // Tier-3 code floor. FIXED — never tuned by memory_mode (see WP-017 spec). A
 // change under one of the Tier-3 directories (the layout's mapped identity_dir +
@@ -212,6 +212,145 @@ function isNewSkillDraft(rel, layout) {
 }
 
 /**
+ * Parse a LEARNINGS.md ledger into { <patternKey>: entry }. Line-based, mirroring
+ * parseFrontmatter's approach. Backticks around the Pattern-Key value are stripped.
+ * @param {string} text
+ * @returns {Record<string, {key:string, patternKey:string|null, status:string|null,
+ *   recurrence:string|null, sessionIds:string[], firstSeen:string|null,
+ *   lastSeen:string|null, untrusted:boolean|null, observation:string|null}>}
+ */
+function parseLedgerEntries(text) {
+  /** @type {Record<string, any>} */ const entries = {};
+  let cur = null;
+  for (const raw of String(text).split('\n')) {
+    const h = raw.match(/^##\s+(.+?)\s*$/);
+    if (h) {
+      cur = { key: h[1], patternKey: null, status: null, recurrence: null,
+        sessionIds: [], firstSeen: null, lastSeen: null, untrusted: null, observation: null };
+      entries[h[1]] = cur;
+      continue;
+    }
+    if (!cur) continue;
+    const b = raw.match(/^-\s*([A-Za-z_-]+):\s*(.*)$/);
+    if (!b) continue;
+    const field = b[1].toLowerCase();
+    const val = b[2].trim();
+    if (field === 'pattern-key') cur.patternKey = val.replace(/^`|`$/g, '');
+    else if (field === 'status') cur.status = val;
+    else if (field === 'recurrence') cur.recurrence = val;
+    else if (field === 'session-ids') cur.sessionIds = val.split(',').map((s) => s.trim()).filter(Boolean);
+    else if (field === 'first-seen') cur.firstSeen = val;
+    else if (field === 'last-seen') cur.lastSeen = val;
+    else if (field === 'derived_from_untrusted') cur.untrusted = val === 'true';
+    else if (field === 'observation') cur.observation = val;
+  }
+  return entries;
+}
+
+const SID_RE = /^[a-z0-9]+:[A-Za-z0-9_-]+$/;
+const PATTERN_KEY_RE = /^[a-z0-9][a-z0-9.-]{0,63}$/;
+
+/** @returns {string|null} a reason if entry `e` (heading `key`) is malformed, else null. */
+function ledgerEntrySchemaViolation(key, e) {
+  if (!PATTERN_KEY_RE.test(key)) return 'Pattern-Key heading is not a valid area.symptom slug';
+  if (e.patternKey !== key) return 'Pattern-Key bullet does not match the heading';
+  if (!e.status) return 'missing Status';
+  if (e.status !== 'open' && !/^resolved\b/.test(e.status)) return 'Status must be open or resolved';
+  if (!e.observation) return 'missing Observation';
+  if (!e.firstSeen || !e.lastSeen) return 'missing First-Seen/Last-Seen';
+  if (typeof e.untrusted !== 'boolean') return 'missing/invalid derived_from_untrusted';
+  if (e.sessionIds.length === 0) return 'no Session-IDs';
+  const seen = new Set();
+  for (const id of e.sessionIds) {
+    if (!SID_RE.test(id)) return `malformed Session-ID (${id})`;
+    if (seen.has(id)) return `duplicate Session-ID (${id})`;
+    seen.add(id);
+  }
+  if (Number(e.recurrence) !== seen.size) return 'Recurrence != distinct Session-ID count';
+  return null;
+}
+
+/**
+ * Ledger validator (ADR-0020). Returns a revert-reason string if `rel` is a
+ * LEARNINGS.md whose write is invalid, else null. `registry` is readRegistry()'s
+ * result (or {skills:{}} when no stateDir → every ledger fails the registered
+ * check, fail closed).
+ * @param {string} vaultDir @param {string} rel @param {{untracked:boolean}} change
+ * @param {import('../layout').VaultLayout} layout @param {{skills:Object}} registry
+ * @returns {string|null}
+ */
+function ledgerViolation(vaultDir, rel, change, layout, registry) {
+  // (a) parent dir must hold a REGISTERED skill whose CURRENT SKILL.md still
+  //     matches the registry entry — guard against a stale registry path (a
+  //     deleted skill, or a different skill hand-authored at the same path). This
+  //     is the same trust input WP-082 cross-checks; apply it to the ledger too.
+  const skillRel = path.join(path.dirname(rel), 'SKILL.md');
+  const regEntry = registry.skills[skillRel];
+  if (!regEntry) return 'learnings ledger beside a skill not in the ownership registry (fail closed)';
+  let skillText;
+  try {
+    skillText = fs.readFileSync(path.join(vaultDir, skillRel), 'utf8');
+  } catch {
+    return 'learnings ledger beside a registered skill whose SKILL.md is missing (fail closed)';
+  }
+  const skillFm = parseFrontmatter(skillText);
+  if (skillFm.id !== regEntry.id) return 'learnings ledger parent skill id does not match the registry (path reuse)';
+  if (skillFm.created !== regEntry.created) return 'learnings ledger parent skill created does not match the registry (path reuse)';
+
+  let curText;
+  try {
+    curText = fs.readFileSync(path.join(vaultDir, rel), 'utf8');
+  } catch {
+    return 'learnings ledger unreadable';
+  }
+  const cur = parseLedgerEntries(curText);
+  if (Object.keys(cur).length === 0) return 'learnings ledger has no valid entries';
+  // (b) every entry validates against the schema.
+  for (const [key, e] of Object.entries(cur)) {
+    const reason = ledgerEntrySchemaViolation(key, e);
+    if (reason) return `learnings ledger entry ${key}: ${reason}`;
+  }
+  // (c) append-only + raise-only vs HEAD (tracked modifications only). A tracked
+  //     ledger whose committed version is unreadable FAILS CLOSED — never skip the
+  //     history comparison (skipping it was a fail-open gap).
+  if (!change.untracked) {
+    const headRes = git(vaultDir, ['show', `HEAD:${rel}`], { allowFail: true });
+    if (headRes.status !== 0) {
+      return 'learnings ledger is tracked but its committed version is unreadable (cannot verify append-only)';
+    }
+    const head = parseLedgerEntries(headRes.stdout);
+    for (const [key, he] of Object.entries(head)) {
+      const ce = cur[key];
+      if (!ce) return `learnings ledger deleted an existing entry (${key}); ledger is append-only`;
+      if (ce.firstSeen !== he.firstSeen) return `learnings ledger changed First-Seen of ${key} (immutable)`;
+      if (ce.observation !== he.observation) return `learnings ledger rewrote the Observation of ${key} (immutable)`;
+      if (he.untrusted === true && ce.untrusted !== true) {
+        return `learnings ledger lowered derived_from_untrusted of ${key} (raise-only)`;
+      }
+      // (d) Session-IDs are append-only: every committed id must remain present, so
+      //     a brain cannot REPLACE ids with invented ones to mint recurrence.
+      const curIds = new Set(ce.sessionIds);
+      for (const id of he.sessionIds) {
+        if (!curIds.has(id)) return `learnings ledger dropped a committed Session-ID (${id}) of ${key} (append-only)`;
+      }
+      // (e) Recurrence must not regress (schema already ties it to the distinct-id
+      //     count, so with (d) it can only grow via genuinely-new ids).
+      if (Number(ce.recurrence) < Number(he.recurrence)) {
+        return `learnings ledger decreased Recurrence of ${key} (must not regress)`;
+      }
+      // (f) Last-Seen must not move backward (ISO YYYY-MM-DD compares lexically).
+      if (ce.lastSeen < he.lastSeen) return `learnings ledger moved Last-Seen of ${key} backward`;
+      // (g) Status may only advance open → resolved (the WP-082 resolution path);
+      //     never resolved → open, and never any other transition.
+      if (ce.status !== he.status && !(he.status === 'open' && /^resolved\b/.test(ce.status))) {
+        return `learnings ledger made an unauthorized Status change on ${key} (only open → resolved is allowed)`;
+      }
+    }
+  }
+  return null;
+}
+
+/**
  * Resolve a vault-relative changed path and test containment (catches symlink
  * and `..` escapes). Works for files that no longer exist (deleted) by resolving
  * the deepest existing ancestor.
@@ -352,6 +491,10 @@ function validateAndCommit(o) {
   // Preconditions (the caller checks these before the brain runs; re-assert).
   assertGitRepo(vaultDir);
   const vaultReal = fs.realpathSync(vaultDir);
+  const registry = stateDir ? readRegistry(stateDir) : { version: 1, skills: {} };
+
+  const isLearningsLedger = (rel) =>
+    rel.startsWith(layout.skills_dir + '/') && path.basename(rel) === 'LEARNINGS.md';
 
   /** @type {Array<{path:string, reason:string}>} */
   const reverted = [];
@@ -393,6 +536,22 @@ function validateAndCommit(o) {
       // a. symlink / `..` escape out of the vault → restore + record.
       revertPath(vaultDir, rel, change.untracked);
       outOfVaultDetailed.push({ path: rel, reason: 'change resolved outside the vault (symlink or `..` escape); reverted' });
+      continue;
+    }
+    if (isLearningsLedger(rel)) {
+      // Quarantined ledger: validated (not numeric-floored). Keep iff it passes.
+      const reason = ledgerViolation(vaultDir, rel, change, layout, registry);
+      if (reason) {
+        // Revert safely even when HEAD has no version of this path (untracked add, or
+        // a staged/never-committed file whose `git checkout HEAD -- rel` would fail):
+        // remove it; restore from HEAD only when a committed version exists.
+        if (git(vaultDir, ['cat-file', '-e', `HEAD:${rel}`], { allowFail: true }).status === 0) {
+          revertPath(vaultDir, rel, false);
+        } else {
+          fs.rmSync(path.join(vaultDir, rel), { force: true, recursive: true });
+        }
+        reverted.push({ path: rel, reason });
+      }
       continue;
     }
     if (isTier3(rel)) {

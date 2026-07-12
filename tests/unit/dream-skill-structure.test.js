@@ -73,6 +73,16 @@ test('dream-skill: the provenance rule references tool_result', () => {
   assert.ok(text.includes('tool_result'), 'tool_result missing');
 });
 
+test('dream-skill: skill-learnings section accumulates quarantined per-skill observations', () => {
+  assert.ok(text.includes('## Skill learnings'), 'skill learnings section present');
+  assert.ok(text.includes('LEARNINGS.md'), 'ledger filename present');
+  assert.ok(text.includes('Pattern-Key'), 'pattern-key present');
+  assert.ok(text.includes('origin: dream'), 'dream-created-only scope present');
+  assert.ok(text.includes('quarantined'), 'quarantine framing present');
+  assert.ok(text.includes('skill_invocations'), 'Claude signal referenced');
+  assert.ok(/append-only/i.test(text), 'append-only discipline present');
+});
+
 test('dream-skill: existing-note updates preserve original provenance', () => {
   assert.ok(text.includes('### Updating an existing note'), 'update subsection heading present');
   assert.ok(
