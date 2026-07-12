@@ -1,7 +1,7 @@
 ---
 id: WP-090
 title: Shell-quote hook command paths so an install path with spaces/metacharacters produces valid hooks
-status: Draft
+status: In-Review
 model: opus
 size: M
 depends_on: [WP-089]
@@ -86,6 +86,7 @@ The adapters pass the raw path in `events`, e.g. `claude.js`:
 | modify | src/adapters/shared.js | add `shellQuoteCommand`; store the quoted command; prune prior unquoted/separator-variants of our command; record the quoted string in the manifest `commands` |
 | modify | tests/unit/claude-adapter.test.js | test: a path with a space registers ONE quoted hook; a second run is a no-op; a prior bare entry is converged |
 | modify | tests/unit/codex-adapter.test.js | same for the Codex adapter path |
+| modify | tests/integration/bootstrap-seam.test.js | its 3 bare-path hook-command assertions (SessionStart under Claude settings.json / Codex hooks.json) are updated to expect the quoted canonical form — a direct, mechanical consequence of the always-quote contract below (orchestrator-authorized scope addition; see Implementation notes) |
 
 ### Exact contracts
 
@@ -163,7 +164,14 @@ Crucial consistency requirements:
   the bare hook, which this same-session quoted entry supersedes only after a
   `sync`). Flag this pre-existing-manifest residual under "Decisions made" — do not
   attempt a manifest migration here.
-- No golden fixture pins the hook command string; `bootstrap-seam` must still pass.
+- No golden fixture pins the hook command string. However, the always-quote
+  contract necessarily changes the canonical stored command from the bare path to
+  the single-quoted form, so `tests/integration/bootstrap-seam.test.js`'s three
+  bare-path hook-command assertions (SessionStart under Claude `settings.json` and
+  Codex `hooks.json`) must be updated to expect the quoted form — the same `q()`
+  mirror-helper pattern used in the two unit test files. This is an
+  orchestrator-authorized scope addition (that file is added to the Deliverables
+  table); do NOT weaken the contract to conditional quoting to avoid it.
 
 ## Security checklist
 

@@ -145,6 +145,18 @@ function toPosixCommand(command) {
   return String(command).replace(/\\/g, '/');
 }
 
+/** Wrap a (forward-slash-normalized) script path so bash runs it as ONE argument
+ *  even when it contains spaces or shell metacharacters. Single-quotes are the
+ *  strongest bash quoting (no interpolation); an embedded ' is closed, escaped,
+ *  reopened. Valid on POSIX bash AND the bash the Windows harnesses shell out to
+ *  (WP-077). Idempotent input → identical output, so prune/present comparisons and
+ *  the recorded manifest command all use this one canonical form.
+ *  @param {string} rawCommand @returns {string} */
+function shellQuoteCommand(rawCommand) {
+  const p = toPosixCommand(rawCommand);
+  return `'${p.replace(/'/g, `'\\''`)}'`;
+}
+
 /**
  * Merge command hooks into a JSON file's `.hooks`, dedup by command path.
  * @param {string} settingsPath  target JSON file (Claude settings.json OR Codex hooks.json)
@@ -176,13 +188,16 @@ function applySettings(settingsPath, events, dryRun, manifest, out) {
 
   let changed = false;
   for (const [event, rawCommand] of events) {
-    const command = toPosixCommand(rawCommand);
+    const command = shellQuoteCommand(rawCommand);
     if (!Array.isArray(settings.hooks[event])) settings.hooks[event] = [];
 
-    // Prune stale separator-variants of OUR command (e.g. a broken backslash entry
-    // written by a pre-fix version). Match strictly on the normalized path being ours
-    // while the raw string differs — a user's unrelated hook never normalizes to our
-    // path, so it is never touched. Drop a group whose hooks array is emptied.
+    // Prune stale variants of OUR command (a bare, backslash, or forward-slash-
+    // unquoted entry written by a pre-fix version). Match strictly on the
+    // re-quoted path being ours while the raw string differs — a user's
+    // unrelated hook never re-quotes to our path, so it is never touched. An
+    // already-canonical entry re-quotes to itself, so `h.command !== command`
+    // excludes it here; it is picked up by the `present` check below instead.
+    // Drop a group whose hooks array is emptied.
     const before = settings.hooks[event];
     const pruned = [];
     for (const group of before) {
@@ -191,7 +206,7 @@ function applySettings(settingsPath, events, dryRun, manifest, out) {
         continue;
       }
       const keptHooks = group.hooks.filter(
-        (h) => !(h && toPosixCommand(h.command) === command && h.command !== command)
+        (h) => !(h && shellQuoteCommand(h.command) === command && h.command !== command)
       );
       if (keptHooks.length !== group.hooks.length) {
         changed = true;
@@ -228,7 +243,7 @@ function applySettings(settingsPath, events, dryRun, manifest, out) {
     kind: 'settings-entry',
     path: settingsPath,
     createdFile,
-    commands: events.map(([, c]) => toPosixCommand(c)),
+    commands: events.map(([, c]) => shellQuoteCommand(c)),
   });
 }
 

@@ -36,6 +36,13 @@ function hookCommands(filePath, event) {
   return (parsed.hooks[event] || []).flatMap((g) => g.hooks.map((h) => h.command));
 }
 
+/** Mirror of shared.js's shellQuoteCommand (WP-090): hook commands are stored
+ *  shell-quoted so a path with a space/metacharacter is one bash argument.
+ *  @param {string} p @returns {string} */
+function q(p) {
+  return `'${String(p).replace(/\\/g, '/').replace(/'/g, `'\\''`)}'`;
+}
+
 test('Claude present, plain init: skills + hooks registered, NO memory', () => {
   const root = tempRoot();
   const wd = path.join(root, 'wd');
@@ -66,7 +73,7 @@ test('Claude present, plain init: skills + hooks registered, NO memory', () => {
 
   const startAbs = path.join(wd, 'bin', 'session-start.sh');
   assert.ok(
-    hookCommands(path.join(claudeDir, 'settings.json'), 'SessionStart').includes(startAbs),
+    hookCommands(path.join(claudeDir, 'settings.json'), 'SessionStart').includes(q(startAbs)),
     'session-start.sh registered'
   );
 
@@ -111,7 +118,7 @@ test('Claude present, init --fresh-vault: everything incl. digest + managed bloc
 
   const startAbs = path.join(wd, 'bin', 'session-start.sh');
   assert.ok(
-    hookCommands(path.join(claudeDir, 'settings.json'), 'SessionStart').includes(startAbs),
+    hookCommands(path.join(claudeDir, 'settings.json'), 'SessionStart').includes(q(startAbs)),
     'session-start.sh registered'
   );
   if (process.platform !== 'win32') {
@@ -148,7 +155,7 @@ test('Codex present, plain init: skills + hooks under <CODEX_HOME>/skills, NO me
 
   const startAbs = path.join(wd, 'bin', 'session-start.sh');
   assert.ok(
-    hookCommands(path.join(codexDir, 'hooks.json'), 'SessionStart').includes(startAbs),
+    hookCommands(path.join(codexDir, 'hooks.json'), 'SessionStart').includes(q(startAbs)),
     'session-start.sh registered in hooks.json'
   );
 

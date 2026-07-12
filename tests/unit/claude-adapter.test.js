@@ -38,6 +38,13 @@ function freshManifest() {
   return { version: 1, createdAt: new Date().toISOString(), entries: [] };
 }
 
+/** Mirror of shared.js's shellQuoteCommand (WP-090), for building the expected
+ *  stored/recorded command string in assertions without importing an internal.
+ *  @param {string} p @returns {string} */
+function q(p) {
+  return `'${String(p).replace(/\\/g, '/').replace(/'/g, `'\\''`)}'`;
+}
+
 test('managed block, new file: matches the golden byte-for-byte', () => {
   const paths = setup();
   const claudeMd = path.join(paths.claudeDir, 'CLAUDE.md');
@@ -86,14 +93,14 @@ test('settings.json merge preserves existing hooks and dedups', () => {
   const allCommands = (event) =>
     (settings.hooks[event] || []).flatMap((g) => g.hooks.map((h) => h.command));
   assert.ok(allCommands('SessionStart').includes('/usr/local/bin/other.sh'), 'unrelated hook survives');
-  assert.equal(allCommands('SessionStart').filter((c) => c === startAbs).length, 1);
-  assert.equal(allCommands('SessionEnd').filter((c) => c === endAbs).length, 1);
+  assert.equal(allCommands('SessionStart').filter((c) => c === q(startAbs)).length, 1);
+  assert.equal(allCommands('SessionEnd').filter((c) => c === q(endAbs)).length, 1);
 
   // Second run: no duplicates.
   applyClaudeAdapter(paths, { manifest });
   settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
-  assert.equal(allCommands('SessionStart').filter((c) => c === startAbs).length, 1);
-  assert.equal(allCommands('SessionEnd').filter((c) => c === endAbs).length, 1);
+  assert.equal(allCommands('SessionStart').filter((c) => c === q(startAbs)).length, 1);
+  assert.equal(allCommands('SessionEnd').filter((c) => c === q(endAbs)).length, 1);
   assert.ok(allCommands('SessionStart').includes('/usr/local/bin/other.sh'));
 });
 
@@ -122,21 +129,110 @@ test('backslash-seeded SessionEnd converges to exactly one forward-slash entry (
   const allCommands = (event) =>
     (settings.hooks[event] || []).flatMap((g) => g.hooks.map((h) => h.command));
 
-  // Exactly one SessionEnd entry, forward-slash, no backslash variant remaining.
-  assert.deepEqual(allCommands('SessionEnd'), [endAbs]);
+  // Exactly one SessionEnd entry, forward-slash AND shell-quoted, no backslash
+  // variant remaining (WP-090 converges the WP-077 bare forward-slash form too).
+  assert.deepEqual(allCommands('SessionEnd'), [q(endAbs)]);
   assert.ok(!allCommands('SessionEnd')[0].includes('\\'), 'no backslash in the command');
   // Unrelated user hook survives untouched.
   assert.ok(allCommands('SessionStart').includes('/usr/local/bin/other.sh'), 'unrelated hook survives');
 
-  // Recorded manifest commands are the forward-slash forms.
+  // Recorded manifest commands are the quoted forward-slash forms.
   const entry = manifest.entries.find((e) => e.kind === 'settings-entry' && e.path === settingsPath);
   assert.ok(entry.commands.every((c) => !c.includes('\\')), 'manifest records forward-slash commands');
+  assert.ok(entry.commands.includes(q(endAbs)), 'manifest records the quoted canonical SessionEnd command');
 
   // Second apply is a no-op: settings file reported unchanged, still one entry.
   const res = applyClaudeAdapter(paths, { manifest });
   assert.ok(res.unchanged.includes(settingsPath), 'idempotent second run leaves settings unchanged');
   settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
-  assert.deepEqual(allCommands('SessionEnd'), [endAbs]);
+  assert.deepEqual(allCommands('SessionEnd'), [q(endAbs)]);
+});
+
+test('an install root containing a space registers shell-quoted hooks end-to-end (WP-090)', () => {
+  // WIENERDOG_HOME with a space in it (e.g. "My Files"), exercising the real
+  // adapter rather than calling applySettings directly.
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-claude-'));
+  const env = {
+    HOME: root,
+    WIENERDOG_HOME: path.join(root, 'My Files', 'wd'),
+    CLAUDE_CONFIG_DIR: path.join(root, 'claude'),
+  };
+  const paths = getPaths(env);
+  fs.mkdirSync(paths.state, { recursive: true });
+  fs.mkdirSync(paths.claudeDir, { recursive: true });
+  fs.writeFileSync(path.join(paths.state, 'digest.md'), FIXED_DIGEST);
+
+  const settingsPath = path.join(paths.claudeDir, 'settings.json');
+  const startAbs = path.join(paths.core, 'bin', 'session-start.sh');
+  const manifest = freshManifest();
+
+  applyClaudeAdapter(paths, { manifest });
+  const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+  const allCommands = (event) =>
+    (settings.hooks[event] || []).flatMap((g) => g.hooks.map((h) => h.command));
+
+  assert.deepEqual(allCommands('SessionStart'), [q(startAbs)], 'quoted single-argument command');
+
+  // Second run: idempotent, no-op.
+  const res = applyClaudeAdapter(paths, { manifest });
+  assert.ok(res.unchanged.includes(settingsPath), 'idempotent second run leaves settings unchanged');
+});
+
+test('applySettings shell-quotes a hook command whose path contains a space; second run is a no-op', () => {
+  const { applySettings } = require('../../src/adapters/shared');
+  const paths = setup();
+  const settingsPath = path.join(paths.claudeDir, 'settings.json');
+  const spacedAbs = path.join(paths.core, 'My Files', 'bin', 'session-start.sh');
+  const manifest = freshManifest();
+  const out = { changed: [], unchanged: [], notices: [] };
+
+  applySettings(settingsPath, [['SessionStart', spacedAbs]], false, manifest, out);
+  let settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+  const allCommands = (event) =>
+    (settings.hooks[event] || []).flatMap((g) => g.hooks.map((h) => h.command));
+
+  assert.deepEqual(allCommands('SessionStart'), [q(spacedAbs)], 'single quoted, single-argument command');
+  assert.ok(allCommands('SessionStart')[0].startsWith("'") && allCommands('SessionStart')[0].endsWith("'"));
+
+  const entry = manifest.entries.find((e) => e.kind === 'settings-entry' && e.path === settingsPath);
+  assert.deepEqual(entry.commands, [q(spacedAbs)], 'manifest records the quoted command');
+
+  // Second run: idempotent, no-op.
+  const out2 = { changed: [], unchanged: [], notices: [] };
+  applySettings(settingsPath, [['SessionStart', spacedAbs]], false, manifest, out2);
+  assert.ok(out2.unchanged.includes(settingsPath), 'second run reports unchanged');
+  settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+  assert.deepEqual(allCommands('SessionStart'), [q(spacedAbs)], 'still exactly one quoted entry');
+});
+
+test('applySettings converges a pre-existing bare (unquoted) entry to exactly one quoted entry, leaving unrelated hooks untouched', () => {
+  const { applySettings } = require('../../src/adapters/shared');
+  const paths = setup();
+  const settingsPath = path.join(paths.claudeDir, 'settings.json');
+  const startAbs = path.join(paths.core, 'bin', 'session-start.sh');
+  const preExisting = {
+    hooks: {
+      SessionStart: [
+        { matcher: '*', hooks: [{ type: 'command', command: startAbs, timeout: 10 }] },
+        { matcher: '*', hooks: [{ type: 'command', command: '/usr/local/bin/other.sh', timeout: 5 }] },
+      ],
+    },
+  };
+  fs.writeFileSync(settingsPath, `${JSON.stringify(preExisting, null, 2)}\n`);
+  const manifest = freshManifest();
+  const out = { changed: [], unchanged: [], notices: [] };
+
+  applySettings(settingsPath, [['SessionStart', startAbs]], false, manifest, out);
+  const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+  const allCommands = (event) =>
+    (settings.hooks[event] || []).flatMap((g) => g.hooks.map((h) => h.command));
+
+  assert.deepEqual(
+    allCommands('SessionStart').filter((c) => c === startAbs || c === q(startAbs)),
+    [q(startAbs)],
+    'bare entry pruned; exactly one quoted entry remains'
+  );
+  assert.ok(allCommands('SessionStart').includes('/usr/local/bin/other.sh'), 'unrelated user hook untouched');
 });
 
 test('hook scripts are copied to core/bin mode 0755', () => {
