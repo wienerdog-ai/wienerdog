@@ -7,6 +7,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const { PassThrough } = require('node:stream');
 
 const grant = require('../../src/gws/grant');
 const grantCli = require('../../src/cli/grant');
@@ -44,6 +45,17 @@ function tempEnv() {
 function initPaths(env) {
   execFileSync('node', [bin, 'init', '--yes'], { env, stdio: 'ignore' });
   return getPaths(env);
+}
+
+/** Runs fn with process.stdin.isTTY forced to `value`, restoring it after. */
+async function withStdinTTY(value, fn) {
+  const original = process.stdin.isTTY;
+  process.stdin.isTTY = value;
+  try {
+    await fn();
+  } finally {
+    process.stdin.isTTY = original;
+  }
 }
 
 const BASE_CONFIG =
@@ -90,6 +102,20 @@ test('isSendAllowed allows only when every recipient is granted (case-insensitiv
   // No wildcards / no domain grants.
   assert.equal(grant.isSendAllowed({ routine: 'r', to: ['*@x.com'] }, ['z@x.com']).allowed, false);
   assert.equal(grant.isSendAllowed({ routine: 'r', to: ['x.com'] }, ['z@x.com']).allowed, false);
+});
+
+test('isSendAllowed FAILS CLOSED on an empty or whitespace-only recipient list (WP-086)', () => {
+  const g = { routine: 'r', to: ['a@x.com'] };
+  const empty = grant.isSendAllowed(g, []);
+  assert.equal(empty.allowed, false);
+  assert.match(empty.reason, /empty list/);
+
+  const blank = grant.isSendAllowed(g, ['   ']);
+  assert.equal(blank.allowed, false);
+  assert.match(blank.reason, /empty list/);
+
+  // A valid non-empty allowlisted list is unaffected.
+  assert.equal(grant.isSendAllowed(g, ['a@x.com']).allowed, true);
 });
 
 test('findGrant returns null for a null routine', () => {
@@ -199,6 +225,63 @@ test('grant CLI warns about third-party recipients before prompting', async () =
     process.stdout.write = orig;
   }
   assert.match(lines.join(''), /third-party addresses/);
+});
+
+// --- defaultPrompt controlling-terminal boundary (WP-086) --------------------
+
+test('defaultPrompt: no controlling terminal reachable (openTty errors) refuses and resolves "" — never "grant"', async () => {
+  await withStdinTTY(false, async () => {
+    const openTty = () => {
+      const s = new PassThrough();
+      process.nextTick(() => s.emit('error', new Error("ENXIO: no such device or address, open '/dev/tty'")));
+      return s;
+    };
+    const stderrOrig = process.stderr.write;
+    let stderr = '';
+    process.stderr.write = (chunk, ...rest) => { stderr += chunk.toString(); return stderrOrig.call(process.stderr, chunk, ...rest); };
+    let answer;
+    try {
+      answer = await grantCli.defaultPrompt('Type the word "grant" to confirm: ', { openTty });
+    } finally {
+      process.stderr.write = stderrOrig;
+    }
+    assert.equal(answer, '');
+    assert.match(stderr, /a send grant can only be created at a real terminal/);
+  });
+});
+
+test('defaultPrompt: a real controlling terminal (injected via openTty) can supply "grant"', async () => {
+  await withStdinTTY(false, async () => {
+    const openTty = () => {
+      const s = new PassThrough();
+      s.end('grant\n');
+      return s;
+    };
+    const answer = await grantCli.defaultPrompt('Type the word "grant" to confirm: ', { openTty });
+    assert.equal(answer, 'grant');
+  });
+});
+
+test('grant CLI: a piped/redirected/closed stdin cannot mint a grant (no controlling terminal reachable)', async () => {
+  const { env } = tempEnv();
+  const paths = initPaths(env);
+  await withStdinTTY(false, async () => {
+    const openTty = () => {
+      const s = new PassThrough();
+      process.nextTick(() => s.emit('error', new Error('ENXIO')));
+      return s;
+    };
+    // promptFn wired to the real defaultPrompt (with the injected openTty seam),
+    // simulating `printf 'grant\n' | wienerdog grant send …` from a headless shell:
+    // the piped stdin is never read by the non-TTY branch, so it cannot supply
+    // the confirmation word regardless of its contents.
+    await grantCli.run(['send', '--routine', 'daily-digest', '--to', 'attacker@evil.com'], {
+      paths,
+      promptFn: (q) => grantCli.defaultPrompt(q, { openTty }),
+    });
+  });
+  assert.equal(grant.findGrant(paths, 'daily-digest'), null);
+  assert.doesNotMatch(fs.readFileSync(paths.config, 'utf8'), /wienerdog:grants/);
 });
 
 test('grant CLI rejects a bad address and a missing flag', async () => {

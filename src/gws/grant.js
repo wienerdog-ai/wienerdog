@@ -185,11 +185,14 @@ function isSendAllowed(grant, recipients) {
   if (!grant) {
     return { allowed: false, reason: 'no send grant for this routine' };
   }
+  const list = (recipients || []).map((r) => String(r).trim()).filter(Boolean);
+  if (list.length === 0) {
+    return { allowed: false, reason: 'no recipient to check (empty list)' };
+  }
   const allow = new Set((grant.to || []).map((a) => String(a).trim().toLowerCase()));
-  for (const r of recipients) {
-    const norm = String(r).trim().toLowerCase();
-    if (!allow.has(norm)) {
-      return { allowed: false, reason: `recipient ${String(r).trim()} not in allowlist` };
+  for (const r of list) {
+    if (!allow.has(r.toLowerCase())) {
+      return { allowed: false, reason: `recipient ${r} not in allowlist` };
     }
   }
   return { allowed: true, reason: 'all recipients granted' };

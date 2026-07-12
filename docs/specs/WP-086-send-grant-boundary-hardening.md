@@ -1,7 +1,7 @@
 ---
 id: WP-086
 title: Harden the send-grant boundary — require a terminal to mint a grant; fail closed on an empty recipient list
-status: Draft
+status: In-Review
 model: sonnet
 size: S
 depends_on: []
