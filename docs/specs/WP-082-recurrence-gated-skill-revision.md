@@ -1,7 +1,7 @@
 ---
 id: WP-082
 title: Recurrence-gated skill-body revision with provenance-scoped code backstop
-status: Draft
+status: Ready
 model: opus
 size: M
 depends_on: [WP-081, WP-083, WP-084]
