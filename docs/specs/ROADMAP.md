@@ -103,6 +103,21 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 | [WP-082](done/WP-082-recurrence-gated-skill-revision.md) | Recurrence-gated skill-body revision with registry-scoped code backstop | M3 | opus | Done | WP-081, WP-083, WP-084 |
 | [WP-083](done/WP-083-skill-ownership-registry.md) | Skill ownership registry — tamper-proof write-origin marker for dream-created skills | M3 | opus | Done | — |
 | [WP-084](done/WP-084-ledger-evidence-trust-derivation.md) | Bind ledger learnings to skill invocations — window-based mechanical trust | M3 | opus | Done | WP-080, WP-081, WP-083 |
+| [WP-085](WP-085-gws-mime-crlf-sanitization.md) | Reject CR/LF in Gmail MIME header fields (close the send-grant header-injection bypass) | M7 | sonnet | Draft | — |
+| [WP-086](WP-086-send-grant-boundary-hardening.md) | Harden the send-grant boundary — require a terminal to mint a grant; fail closed on empty recipients | M7 | sonnet | Draft | — |
+| [WP-087](WP-087-dream-truncation-index-rebase.md) | Rebase skill-invocation indices under byte-budget truncation | M3 | sonnet | Draft | — |
+| [WP-088](WP-088-manifest-reverse-crash-safety.md) | Uninstall crash-safety — delete manifest last, hash-guard file deletes, contain tree removal (delete copied skill only if it fingerprints to the recorded hash) | M7 | opus | Draft | WP-089 |
+| [WP-089](WP-089-adapter-skill-dir-ownership.md) | Adapter skill-dir ownership — fingerprint-guard skill-dir refresh instead of blind rmSync | M7 | sonnet | Draft | — |
+| [WP-090](WP-090-hook-command-shell-quoting.md) | Shell-quote hook command paths (space/metachar install paths produce valid hooks) | M7 | opus | Draft | WP-089 |
+| [WP-091](WP-091-managed-block-line-anchoring.md) | Anchor managed-block sentinels to full lines; fail closed on ambiguous markers | M7 | opus | Draft | WP-088, WP-090 |
+| [WP-092](WP-092-init-secrets-chmod-guard.md) | init only chmods the secrets dir it created (never a pre-existing user path) | M7 | sonnet | Draft | — |
+| [WP-093](WP-093-tarball-extraction-containment.md) | Tarball install hardening — secure temp, member-name preflight, completeness marker | M7 | opus | Draft | — |
+| [WP-094](WP-094-install-sh-network-hardening.md) | install.sh network hardening — pin curl to HTTPS, exact Node URL before consent, gate TTY seam | M7 | opus | Draft | — |
+| [WP-095](WP-095-tccguard-realpath-resolution.md) | Realpath-resolve the vault before the TCC guard (symlinked-vault hang) | M7 | sonnet | Draft | — |
+| [WP-096](WP-096-alerts-bounded-schema-capped.md) | Bound alerts.jsonl growth and cap alert field sizes | M7 | sonnet | Draft | — |
+| [WP-097](WP-097-scheduler-generator-path-escaping.md) | XML-escape launchd plist values and quote systemd ExecStart paths | M7 | sonnet | Draft | — |
+| [WP-098](WP-098-scheduler-secondary-call-fail-loud.md) | Surface best-effort systemd-call failures; report schedule-removal truthfully | M7 | sonnet | Draft | — |
+| [WP-099](WP-099-install-ps1-git-url-validation.md) | Validate the Git-for-Windows asset URL is HTTPS on a GitHub host before download | M7 | sonnet | Draft | — |
 
 > **First-production-night incident (2026-07-04).** WP-038, WP-039 and WP-041 form
 > a serial chain (they edit the shared `run-job.js` / `dream.js` / `validate.js`
@@ -653,6 +668,91 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 
 <!-- -->
 
+> **Codex adversarial audit of foundational code (2026-07-12, WP-085→099).** Six
+> read-only Codex reviews of already-merged foundational code (installer core,
+> dream, gws, installers, adapters, scheduler) were triaged, verified against
+> current code + prior Done WPs, and turned into fifteen Draft WPs grouped by code
+> region (repo norm: small, single-region WPs; chain only where files are shared).
+> Findings already closed by prior WPs were dropped (scheduler primary-mutation
+> fail-loud is WP-075; dream lock/watermark is WP-069; WP-080's `rebaseInvocations`
+> is reused by WP-087). **Tier 1 (security-critical, land first):** **WP-085**
+> rejects CR/LF in Gmail MIME header fields — the subject-based header-injection
+> that smuggled a `Bcc:` past the ADR-0007 send-grant allowlist (also fixes the
+> `_alert` "fixed-template" claim); **WP-086** hardens the send-grant boundary — the
+> `grant` CLI now requires a real terminal (a piped `printf 'grant' |` could mint a
+> grant headlessly) and `isSendAllowed` fails closed on an empty recipient list;
+> **WP-087** rebases `skill_invocations` indices when a dream extract is
+> byte-budget-truncated (the WP-048 path never got WP-080's cap-path rebase, so a
+> padded session could mis-window an invocation and treat an untrusted learning as
+> trusted — ADR-0020 bypass). WP-085/086/087 are independent and parallel.
+> **Tier 2 (reversibility / robustness):** **WP-089** (shared.js + manifest.js) stops
+> `applySkillLinks` recursively deleting a directory in the `wienerdog-*` namespace on
+> content drift with **no ownership proof** (the destroy-user-edits P0). It records a
+> raw-byte, length-framed, node-type-tagged sha256 tree fingerprint (`hashDir`,
+> defined once and exported from `manifest.js`) on each `copied-skill` entry, and
+> refreshes a namespace directory only when its on-disk fingerprint still equals the
+> hash WE recorded for that exact path (proof it is our own unmodified copy) —
+> otherwise it is left untouched with a notice, never `rmSync`+recopied. This keeps
+> auto-refresh working for our own copies across version bumps while never deleting a
+> directory that is not provably ours. **WP-088** (manifest.js + uninstall.js) deletes
+> the uninstall manifest LAST — in `uninstall.js`, only after BOTH the reversal loop
+> and the mechanics sweep succeed (round-2 fix: end-of-`reverse()` was insufficient) —
+> generalizes the config-only per-FILE `sha256File` hash-guard so any hashed file
+> modified since install is preserved not deleted (un-hashed shims/hooks remain a
+> follow-up), contains vendored-tree removal to the app root `core/app` (rejecting the
+> equal-to-`core` P0), and contains copied-skill removal to the harness skills root +
+> `wienerdog-*` namespace, deleting a copied skill **only if its on-disk tree still
+> fingerprints (via WP-089's exported `hashDir`) to the `hash` recorded on the
+> `copied-skill` entry** — a hash-less/legacy entry, a fingerprint mismatch, or an
+> unreadable tree (`hashDir` → `null`) is preserved with a notice (round-2 fix: NOT
+> core-containment, which lives outside the core). The shared, exported `hashDir` means
+> the forward recorder (WP-089) and the reverse checker (WP-088) use one identical
+> serializer, so a copy adopted on the forward path is the same object the reverse path
+> agrees to delete. The fingerprint took rounds 3/5/7/8/9 of adversarial review to
+> harden against serialization collisions (partial framing, invalid-UTF-8 folding,
+> file→symlink node-type swaps, fail-open on unreadable subtrees, raw-byte name
+> collisions) and was verified Codex-clean at round 10. **A "compare-to-live-source"
+> simplification (drop `hashDir`, use a live `dirsEqual(source, on-disk)` instead) was
+> evaluated and REJECTED (2026-07-12):** `dirsEqual` re-opened the file↔symlink/special
+> node-type collision, failed OPEN on unreadable trees, and on the reverse path
+> introduced a manifest-ordering false-delete (a historical `copied-skill` entry sits
+> before newer staged-skill entries, so `reverse()` could prune the live source before
+> comparing and delete an edited user copy) while relaxing the "leave only the vault"
+> guarantee. Because both WPs share `manifest.js` (WP-089 defines+exports `hashDir`;
+> WP-088 calls it and reads the `hash` field WP-089 writes), **WP-088 `depends_on:
+> [WP-089]`.** **WP-090** shell-quotes hook command paths (space/metachar install paths
+> broke every hook) — depends WP-089 (shared `shared.js`); **WP-091** anchors
+> managed-block sentinels to full lines and fails closed on ambiguous markers
+> (substring `indexOf` could swallow user prose) — depends WP-088 + WP-090 (shared
+> `manifest.js`/`shared.js`); **WP-092** stops `init` chmod-ing a pre-existing
+> `secrets/`; **WP-093** hardens the JS tarball install (mkdtemp+0600+`wx` temp,
+> `tar -tzf` member-name preflight, a `.wienerdog-complete` marker replacing the
+> lone-`bin/wienerdog.js` completeness shortcut). WP-092/093 are independent; the
+> shared-file chains are `shared.js`: WP-089 → WP-090 → WP-091, and `manifest.js`:
+> WP-089 → WP-088 → WP-091 (WP-091 sequences after WP-088 + WP-090).
+> **Tier 3 (lower-priority hardening):** **WP-094** (install.sh) pins curl to HTTPS
+> (`--proto`), shows the exact Node `.pkg` URL before consent, and REMOVES the
+> `WIENERDOG_TTY` env seam entirely (round-2: an env override — even marker-gated —
+> stays attacker-settable; production reads only `/dev/tty`, tests redefine a sourced
+> `tty_dev` function); **WP-095** realpath-resolves the vault AND home (matching
+> domains) before the TCC guard (a symlinked vault — or a symlinked home component —
+> reintroduced the unattended-hang class); **WP-096** bounds `alerts.jsonl` growth by
+> record-count AND bytes, caps field sizes, and null-guards the sanitizer against
+> valid-JSON primitives; **WP-097** XML-escapes launchd plist values and quotes +
+> `%`-escapes (`%%`) systemd ExecStart paths; **WP-098** surfaces best-effort
+> systemd-call (`daemon-reload`/`enable-linger`) failures (incl. missing results) and
+> makes `schedule remove` report truthfully (no unverifiable "unloaded" claim);
+> **WP-099** (install.ps1) requires the Git-for-Windows asset URL to be HTTPS on
+> `github.com` under the official release path AND validates the final redirected URI
+> before download. Accepted residuals NOT spec'd (still match THREAT-MODEL "Residual
+> risks"): dream Tier-3 frontmatter trust, skill-registry non-cryptographic
+> tamper-proofing, config.yaml-writable grants / exported `saveGrant` convention
+> boundary, symlink/hardlink tar-member defense (needs a cross-tar research spike),
+> and Windows self-run-while-elevated (accepted under ADR-0017). All fifteen are
+> **Draft** pending a Codex round-2 review before Ready.
+
+<!-- -->
+
 ## Dependency graph
 
 ```mermaid
@@ -756,4 +856,20 @@ graph LR
   WP083 --> WP082
   WP084 --> WP082
   WP040 -.retrofits.-> WP082
+  WP085[WP-085 gws MIME CR/LF sanitization]
+  WP086[WP-086 send-grant boundary hardening]
+  WP087[WP-087 dream truncation index rebase]
+  WP089[WP-089 adapter skill-dir ownership: fingerprint-guard refresh]
+  WP089 --> WP088[WP-088 manifest reverse crash-safety + hash-guard + fingerprint-guard copied-skill delete]
+  WP089 --> WP090[WP-090 hook command shell-quoting]
+  WP088 --> WP091[WP-091 managed-block full-line anchoring]
+  WP090 --> WP091
+  WP092[WP-092 init secrets chmod guard]
+  WP093[WP-093 tarball secure-temp + member preflight + completeness marker]
+  WP094[WP-094 install.sh network/consent hardening]
+  WP095[WP-095 TCC-guard realpath resolution]
+  WP096[WP-096 alerts.jsonl bounded + schema-capped]
+  WP097[WP-097 scheduler generator path escaping]
+  WP098[WP-098 scheduler secondary-call fail-loud + truthful remove]
+  WP099[WP-099 install.ps1 Git-asset URL host/HTTPS validation]
 ```
