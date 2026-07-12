@@ -320,7 +320,7 @@ Behavior:
       one-byte file-content change changes the hash.
 - [ ] Returns `null` for a non-existent root and for an unreadable subtree; a tree
       containing an unreadable subtree does not hash-equal an empty tree (it hashes
-      to `null`, which `!== ` any digest).
+      to `null`, which is `!==` any digest).
 - [ ] Collision pairs hash **differently**: `{a, b}` (two sibling files) vs a
       single file `a` whose content is `0\nf:b`-style bytes that would collide under
       naive `type:path` concatenation; an empty directory `x/` plus an empty file
