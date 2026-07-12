@@ -14,3 +14,8 @@ tests/.scratch/
 
 # Agent worktrees (local)
 .claude/worktrees/
+
+# Marketing plans and raw field reports stay local (may contain
+# unreleased plans / reporter-identifiable details)
+docs/marketing/
+userreports/
