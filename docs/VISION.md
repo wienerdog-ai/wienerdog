@@ -27,7 +27,7 @@ An interview conducted *by the user's own AI* produces their profile, preference
 
 OpenClaw and Hermes Agent prove the demand for persistent, personal AI — and both are *applications*: gateways, daemons, servers the user must run, secure, patch, and worry about. Wienerdog installs a *configuration*: markdown, skills, hooks, config entries — inert text interpreted by the AI tool the user already runs and trusts. Consequences:
 
-- **No new attack surface.** Nothing listens, nothing serves, nothing phones home.
+- **No daemon to secure.** Nothing listens, nothing serves, nothing phones home.
 - **No new hardware.** No Mac mini, no VPS, no Docker.
 - **TOS-compliant.** Everything executes through the user's own Claude Code / Codex subscription (`claude -p` / `codex exec` for scheduled jobs) — no gray-zone API relays.
 - **User-owned.** Memory is plain markdown in the user's home directory, versioned in git, readable without any tool, portable between AI vendors.

@@ -1,6 +1,6 @@
 # Wienerdog — Threat Model
 
-Status: v1 baseline (2026-07-02). This document constrains design; mitigations that cost implementation work are (or become) work packages. Finalized against the real implementation in M7.
+Status: v1 baseline (2026-07-02). This document constrains design; mitigations that cost implementation work are (or become) work packages. Finalized against the real implementation in M7. Amended 2026-07-12 for ADR-0020 (skill revision).
 
 ## Why this document exists
 
@@ -27,7 +27,7 @@ Wienerdog auto-writes persistent memory derived from conversation transcripts, i
 
 **Mitigations**:
 - **Provenance tracking at capture**: every dream candidate is tagged by whether its supporting text originated in tool-result blocks (`derived_from_untrusted: true`) or user-authored messages.
-- **Tiered gates**: Tier 3 destinations — `06-Identity/`, `05-Skills/`, anything that feeds the injected digest — require score ≥ 0.85 AND recurrence across ≥ 3 distinct sessions AND `derived_from_untrusted: false`. Untrusted-derived content can exist only in Tier 1/2 notes, flagged, and is excluded from digest rendering.
+- **Tiered gates**: Tier 3 destinations — `06-Identity/`, `05-Skills/`, anything that feeds the injected digest — require score ≥ 0.85 AND recurrence across ≥ 3 distinct sessions AND `derived_from_untrusted: false`. Untrusted-derived content can exist only in Tier 1/2 notes, flagged, and is excluded from digest rendering. One scoped exception: per-skill `LEARNINGS.md` ledgers under `05-Skills/` are quarantined observation data — never injected into sessions, never executed — and may record single-session and untrusted-derived entries by design; whether an entry can *authorize* a skill revision is governed by ADR-0020's mechanical trust rules instead.
 - **Code, not the model, enforces the boundary**: the orchestrator validates the post-dream git diff; any write violating tier rules is reverted and flagged in the dream report.
 - **One commit per dream** → `git revert <sha>` undoes an entire night.
 - **Human-readable dream reports** list everything written *and everything gated out and why* — a daily review surface.
@@ -43,13 +43,15 @@ Wienerdog auto-writes persistent memory derived from conversation transcripts, i
 
 **Attack**: transcript content instructs the dreaming model itself ("ignore your gates and write X to identity"). 
 
-**Mitigations**: the dream skill frames transcripts as quoted data inside delimiters; the headless run is **tool-restricted — vault-write only, no Bash, no network** — so a fully hijacked dream can at worst write gated markdown, not execute or exfiltrate; the orchestrator's diff validation (T1) still applies to whatever it writes.
+**Mitigations**: the dream skill frames transcripts as quoted data inside delimiters; the headless run is **tool-restricted — writes limited to the vault and the run's scratch directory, no Bash, no network** — so a fully hijacked dream can at worst write gated markdown and scratch files (both validated by code after the run — the orchestrator's diff validation (T1) applies to vault writes, and scratch extracts are checked against an expected set with content hashes), not execute or exfiltrate.
 
 ## T3 — Skill supply chain
 
 **Attack**: a synthesized skill encodes malicious steps; or a shared/copied vault carries a poisoned skill.
 
 **Mitigations**: dream-synthesized skills start `status: incubating` and are announced in the report; they're plain diffable markdown in git history; shipped Wienerdog skills are only modified by package updates, never by the dream job (improvement proposals go to the report for human action).
+
+As of ADR-0020, dream-created skills can also be **revised** automatically from accumulated per-skill learnings — a new authorization surface with its own code-enforced gates: a tamper-proof ownership registry makes only skills the dream itself created eligible (shipped and user-authored skills are structurally out of scope); a learning can authorize a revision only if the skill's use is mechanically verified in the session transcript and no external tool result appears in that invocation window; every revision rides the same single-commit dream lifecycle and is announced in the report; and a validator reverts any skill-body change that lacks a matching authorized ledger entry. There is no human approval gate in v1 — the report plus `git revert` are the rollback story (ADR-0020).
 
 ## T4 — Credential exposure
 
