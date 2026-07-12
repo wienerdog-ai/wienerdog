@@ -1,7 +1,7 @@
 ---
 id: WP-081
 title: Dream accumulates per-skill learnings in a validated quarantined ledger
-status: Draft
+status: Ready
 model: opus
 size: M
 depends_on: [WP-080, WP-083]
