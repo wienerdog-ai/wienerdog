@@ -2,6 +2,15 @@
 
 All notable changes to Wienerdog. Format: [Keep a Changelog](https://keepachangelog.com), versioning: SemVer (0.x until the installed file layout stabilizes — ADR-0003).
 
+## [0.7.0] — 2026-07-12
+
+### Added
+- **Skills now learn from being used.** Until now, the nightly dream could create a new skill when it noticed you doing the same kind of task again and again — but a skill, once written, never got better. Now the dream also watches how its skills perform in your real sessions: when one stumbles, needs a workaround, or you correct it, that observation is written down in a small log next to the skill. Once the same lesson has shown up in at least three different sessions, the dream may carefully revise the skill's instructions — and every revision is listed in the dream report, with your vault's git history as the undo button.
+- **Strict safety rails around skill revisions, checked by code — not by trust.** Only skills Wienerdog itself created can ever be revised (your own skills and Wienerdog's built-in ones are permanently off limits, enforced by a tamper-proof ownership registry). A lesson only counts if the skill was genuinely used in a session — verified against the session recording itself — and anything that came from tool output (web pages, files, command results) is treated as untrusted and can never authorize a revision. We verified this end to end: a planted attack that tried to talk the nightly dream into poisoning a skill was refused, logged, and quarantined on a live run.
+
+### Notes
+- On Codex-only setups, skills are created and lessons are collected, but automatic revision stays off for now — it needs a usage signal that only Claude Code sessions currently provide.
+
 ## [0.6.7] — 2026-07-10
 
 ### Fixed
