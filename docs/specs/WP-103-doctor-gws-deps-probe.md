@@ -161,7 +161,9 @@ function googleReadinessChecks(paths) {
   //                        (WP-102's isInstalled gate is true), so promising an
   //                        offer would be false — require a manual reinstall.
   const dir = deps.depsDir(paths);
-  const cmd = `npm install --ignore-scripts --prefix ${dir} ${deps.GOOGLEAPIS_SPEC}`;
+  // Quote the prefix (P2-A): a home path with spaces would split the argument when
+  // the user pastes the command. Double quotes work in POSIX shells, cmd, PowerShell.
+  const cmd = `npm install --ignore-scripts --prefix "${dir}" ${deps.GOOGLEAPIS_SPEC}`;
   if (deps.isInstalled(paths)) {
     // Round-4 Finding — a bare `npm install` can NO-OP over a corrupt-but-
     // resolvable tree (npm compares tree metadata, not file contents), so the
@@ -400,3 +402,10 @@ npm run lint
   prose in parity with WP-102's `loadGoogleapis` broken message. The
   `plantCorruptDeps` case now asserts the `delete the folder …` wording. Absent-state
   message, token validation, and load probe unchanged.
+- **2026-07-13 — PR-gate review (Codex PR review; P2-A, WP-102 + WP-103 mirror).**
+  The npm command in both warn messages interpolated the deps dir **unquoted**
+  (`--prefix ${dir}`), so a home path with spaces splits the argument when pasted.
+  Quoted the prefix in the helper's `cmd` template (`--prefix "${dir}"`), matching
+  WP-102. Existing test assertions are unaffected (they pin the message text and the
+  `delete the folder <path>` fragment, not the `--prefix` portion); no test change
+  required here.
