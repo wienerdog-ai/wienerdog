@@ -2,6 +2,7 @@
 
 const fs = require('node:fs');
 const http = require('node:http');
+const crypto = require('node:crypto');
 
 const { WienerdogError } = require('../core/errors');
 const { SCOPES, persistToken, persistClientJson } = require('./client');
@@ -16,11 +17,16 @@ const CLOSE_PAGE =
   '<h2>Wienerdog is connected.</h2><p>You can close this tab and return to your terminal.</p>' +
   '</body></html>';
 
+// 5 min — a generous OAuth-consent window. Injectable so tests can drive the
+// abort path with a tiny value instead of waiting on the real default.
+const CONSENT_TIMEOUT_MS = 5 * 60 * 1000;
+
 /**
  * Run the interactive OAuth loopback flow and persist the token.
  * @param {WienerdogPaths} paths
  * @param {{clientPath?: string, googleapis?: object, oauthClient?: object,
- *          openBrowser?: (url:string)=>void}} opts
+ *          openBrowser?: (url:string)=>void,
+ *          startLoopback?: (expectedState:string, timeoutMs?:number)=>Promise<{server:object,port:number,waitForCode:Promise<string>}>}} opts
  * @returns {Promise<{email:string|null, tokenPath:string}>}
  */
 async function run(paths, opts = {}) {
@@ -55,8 +61,13 @@ async function run(paths, opts = {}) {
     runInstall: opts.runInstall,
   });
 
+  // A random, high-entropy state correlates the callback to the request we made.
+  const state = crypto.randomBytes(32).toString('base64url');
+
   // 3. Start the loopback listener on an ephemeral port before building the URL.
-  const { server, port, waitForCode } = await startLoopback();
+  // Loopback listener verifies `state`; injectable for tests.
+  const startLoopbackFn = opts.startLoopback || startLoopback;
+  const { server, port, waitForCode } = await startLoopbackFn(state);
 
   try {
     const redirectUri = `http://127.0.0.1:${port}/`;
@@ -70,11 +81,17 @@ async function run(paths, opts = {}) {
         redirectUri
       );
 
+    // PKCE (RFC 8252 MUST for this client shape). Opt-in in google-auth-library.
+    const { codeVerifier, codeChallenge } = await oauth.generateCodeVerifierAsync();
+
     // 4. Generate + present the consent URL.
     const authUrl = oauth.generateAuthUrl({
       access_type: 'offline',
       prompt: 'consent',
       scope: SCOPES,
+      state,
+      code_challenge: codeChallenge,
+      code_challenge_method: 'S256',
     });
     process.stdout.write(
       `\nOpen this URL in your browser to authorize Wienerdog:\n\n${authUrl}\n\n`
@@ -85,7 +102,7 @@ async function run(paths, opts = {}) {
     const code = await waitForCode;
 
     // 6. Exchange the code for tokens and persist them.
-    const token = (await oauth.getToken(code)).tokens;
+    const token = (await oauth.getToken({ code, codeVerifier })).tokens;
     oauth.setCredentials(token);
     persistToken(paths, token);
 
@@ -119,37 +136,44 @@ async function fetchEmail(oauth, opts, paths) {
 }
 
 /**
- * Start a one-shot loopback HTTP listener on 127.0.0.1:0. Resolves the code
- * from the first request's `?code=` query param; the listener is closed by the
- * caller's finally block.
- * @returns {Promise<{server:import('node:http').Server, port:number,
- *   waitForCode:Promise<string>}>}
+ * One-shot loopback listener on 127.0.0.1:0. Resolves the `code` ONLY from a
+ * request whose `state` matches `expectedState`; a request with a missing or
+ * mismatched `state` is answered with the close page but IGNORED (the listener
+ * keeps waiting for the correct one) — this drops a raced/CSRF callback instead
+ * of failing on it. An `error=` is honored only when its `state` matches. After
+ * `timeoutMs` with no matching callback the flow ABORTS: `waitForCode` rejects
+ * with a plain-language error (the caller's `finally` closes the server).
+ * @param {string} expectedState
+ * @param {number} [timeoutMs]
+ * @returns {Promise<{server:import('node:http').Server, port:number, waitForCode:Promise<string>}>}
  */
-function startLoopback() {
+function startLoopback(expectedState, timeoutMs = CONSENT_TIMEOUT_MS) {
   return new Promise((resolve, reject) => {
-    let resolveCode;
-    let rejectCode;
+    let resolveCode; let rejectCode; let timer;
     const waitForCode = new Promise((res, rej) => {
-      resolveCode = res;
-      rejectCode = rej;
+      resolveCode = (v) => { clearTimeout(timer); res(v); };
+      rejectCode = (e) => { clearTimeout(timer); rej(e); };
     });
-
     const server = http.createServer((req, res) => {
       const url = new URL(req.url, 'http://127.0.0.1');
+      const state = url.searchParams.get('state');
       const code = url.searchParams.get('code');
       const error = url.searchParams.get('error');
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
       res.end(CLOSE_PAGE);
+      if (state !== expectedState) return; // ignore raced/unrelated callbacks; keep listening
       if (error) rejectCode(new WienerdogError(`Google denied authorization: ${error}`));
       else if (code) resolveCode(code);
     });
-
+    timer = setTimeout(() => {
+      rejectCode(new WienerdogError(
+        'Timed out waiting for Google authorization. Re-run `wienerdog gws auth` and complete the consent in your browser.'
+      ));
+    }, timeoutMs);
+    if (typeof timer.unref === 'function') timer.unref();
     server.on('error', reject);
-    server.listen(0, '127.0.0.1', () => {
-      const port = server.address().port;
-      resolve({ server, port, waitForCode });
-    });
+    server.listen(0, '127.0.0.1', () => resolve({ server, port: server.address().port, waitForCode }));
   });
 }
 
-module.exports = { run };
+module.exports = { run, startLoopback };
