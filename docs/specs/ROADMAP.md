@@ -120,6 +120,9 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 | [WP-099](WP-099-install-ps1-git-url-validation.md) | Validate the Git-for-Windows asset URL is HTTPS on a GitHub host before download | M7 | sonnet | Done | — |
 | [WP-100](WP-100-codex-tool-output-and-fail-closed-roles.md) | Codex transcript parser — recognize the current tool-output item type (`custom_tool_call_output` + variants) and fail closed on unknown roles | M7 | sonnet | Done | — |
 | [WP-101](WP-101-gws-oauth-state-pkce.md) | gws OAuth loopback — add `state` + PKCE (RFC 8252) | M7 | sonnet | Done | — |
+| [WP-102](WP-102-gws-deps-self-heal.md) | gws read-path self-heal + disambiguated deps error (fix the post-upgrade dead-end) | M5/M7 | sonnet | Ready | — |
+| [WP-103](WP-103-doctor-gws-deps-probe.md) | doctor probe — connected Google account with a missing client library | M5/M7 | sonnet | Ready | WP-102 |
+| [WP-104](WP-104-gws-drive-search-friendly-query.md) | gws drive search — friendly term search by default, `--raw` for Drive query language | M5 | sonnet | Ready | — |
 
 > **First-production-night incident (2026-07-04).** WP-038, WP-039 and WP-041 form
 > a serial chain (they edit the shared `run-job.js` / `dream.js` / `validate.js`
@@ -789,6 +792,45 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 
 <!-- -->
 
+> **gws post-upgrade dead-end (2026-07-13, `BUG-gws-deps-missing-after-upgrade.md`,
+> credit: owner dogfooding).** A user who connected Google **before** WP-047's
+> on-demand `googleapis` deps-dir scheme has a **valid token** but an **absent**
+> `~/.wienerdog/app/deps/`; after `wienerdog update` across that boundary, every
+> gws read fails with the misleading `Google isn't set up yet — run
+> /wienerdog-google-setup` — a **permanent dead-end** (nothing on the read path
+> backfills `app/deps`) that also silently breaks headless routines (digest,
+> inbox triage). Root cause: `loadGoogleapis` (read path) only *throws*, never
+> installs; the installer `ensureGoogleapis` is called **only** by `gws auth`.
+> Three WPs close it, split by surface. **WP-102** (S, sonnet, `src/gws/deps.js` +
+> `src/gws/index.js` + its test) is the fix: a read command with a valid token but
+> absent deps now **self-heals** — `ensureGoogleReady()` runs the same consented
+> `ensureGoogleapis` install on first read (interactive: consent prompt like first
+> auth; non-TTY/headless: fails to the accurate, browser-free `npm install`
+> remedy, no worse than today); an **unauthed** user (no token) is a no-op and
+> keeps the existing connect-Google flow. `loadGoogleapis` — the sole emit site of
+> the misleading string — is made **token-aware** (no token → unchanged connect
+> message; token present → accurate "Google is connected, but its client library
+> needs a one-time install"), the defensive backstop for any direct caller. The
+> containment guard (`resolveFromDeps`) is untouched. The existing no-token test
+> assertions stay valid (they exercise the unchanged branch) and are **not**
+> modified. **WP-103** (S, sonnet, depends WP-102 — remedy-wording coherence only,
+> no code dep — `src/cli/doctor.js` + its test) adds the matching visibility: a
+> read-only `doctor` probe that reports **token present + `googleapis`
+> unresolvable from `app/deps`** as a WARN with the one-line remedy (silent when
+> Google is not connected; never a fail). **The report's fix 3 (update-time
+> migration/backfill) is deliberately SKIPPED** — once self-heal-on-read exists it
+> adds a consent/network dependency to the `update` path for no extra coverage
+> (the first read heals it). No new ADR: this implements the existing
+> ADR-0011/0013 on-demand-consented-install design on a code path (read) that WP-047
+> missed; no architectural decision changes. **WP-104** (S, sonnet, independent)
+> captures the report's separate appendix papercut: `gws drive search` passes its
+> arg verbatim as Drive `q`, so a bare word (`budget`) hits `Invalid Value`; the
+> fix wraps a plain term as `fullText contains '…'` by default and adds `--raw`
+> for literal Drive query language — a **default-behavior change the owner
+> confirmed (option B) on 2026-07-13**.
+
+<!-- -->
+
 ## Dependency graph
 
 ```mermaid
@@ -910,4 +952,7 @@ graph LR
   WP099[WP-099 install.ps1 Git-asset URL host/HTTPS validation]
   WP100[WP-100 Codex tool-output recognition + fail-closed roles]
   WP101[WP-101 gws OAuth loopback state + PKCE]
+  WP102[WP-102 gws read-path self-heal + disambiguated deps error]
+  WP102 --> WP103[WP-103 doctor: connected Google + missing client library]
+  WP104[WP-104 gws drive search friendly term + --raw]
 ```
