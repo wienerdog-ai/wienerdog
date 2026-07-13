@@ -1,7 +1,7 @@
 ---
 id: WP-100
 title: Codex transcript parser — recognize the current tool-output item type and fail-closed role classification
-status: Draft
+status: In-Review
 model: sonnet
 size: S
 depends_on: []
