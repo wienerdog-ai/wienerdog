@@ -7,6 +7,8 @@
   "messages": [
     { "role": "user", "text": "List my TODOs", "ts": null },
     { "role": "assistant", "text": "Here are your TODOs.", "ts": null },
-    { "role": "tool_result", "text": "file contents: password=[REDACTED:generic-secret]", "ts": null }
+    { "role": "tool_result", "text": "file contents: password=[REDACTED:generic-secret]", "ts": null },
+    { "role": "user", "text": "Filesystem sandboxing is read-only.", "ts": null },
+    { "role": "tool_result", "text": "exec stdout: 3 files", "ts": null }
   ]
 }

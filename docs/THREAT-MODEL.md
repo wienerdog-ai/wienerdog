@@ -27,6 +27,19 @@ Wienerdog auto-writes persistent memory derived from conversation transcripts, i
 
 **Mitigations**:
 - **Provenance tracking at capture**: every dream candidate is tagged by whether its supporting text originated in tool-result blocks (`derived_from_untrusted: true`) or user-authored messages.
+- **Parser-level provenance dependency (Codex).** The `derived_from_untrusted`
+  tagging above is only correct if each transcript parser (a) recognizes the
+  harness's *current* tool-output item type and routes it to `role:'tool_result'`,
+  and (b) classifies `message` roles by an explicit **trusted-role allowlist**,
+  dropping any unrecognized role rather than defaulting it to trusted `user`.
+  For Codex this is load-bearing because upstream `Message.role` is an **untyped
+  string** with no schema enforcement (verified against codex-cli 0.144.1 and
+  `openai/codex` source, WP-100 / memo 2026-07-13): a future protocol change
+  that routed tool/external content through a novel `message` role would
+  otherwise be silently absorbed as trusted user text. **Residual (accepted):**
+  a Codex CLI version bump can rename or add tool-output item types; the golden
+  fixture (WP-100) catches a drop of the *known* types in CI, but a genuinely
+  new type must be re-verified on the next Codex pin bump.
 - **Tiered gates**: Tier 3 destinations — `06-Identity/`, `05-Skills/`, anything that feeds the injected digest — require score ≥ 0.85 AND recurrence across ≥ 3 distinct sessions AND `derived_from_untrusted: false`. Untrusted-derived content can exist only in Tier 1/2 notes, flagged, and is excluded from digest rendering. One scoped exception: per-skill `LEARNINGS.md` ledgers under `05-Skills/` are quarantined observation data — never injected into sessions, never executed — and may record single-session and untrusted-derived entries by design; whether an entry can *authorize* a skill revision is governed by ADR-0020's mechanical trust rules instead.
 - **Code, not the model, enforces the boundary**: the orchestrator validates the post-dream git diff; any write violating tier rules is reverted and flagged in the dream report.
 - **One commit per dream** → `git revert <sha>` undoes an entire night.

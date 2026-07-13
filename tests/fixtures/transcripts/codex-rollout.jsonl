@@ -3,4 +3,7 @@
 {"type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"List my TODOs"}]}}
 {"type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Here are your TODOs."}]}}
 {"type":"response_item","payload":{"type":"function_call_output","output":"file contents: password=hunter2secret1234567"}}
+{"type":"response_item","payload":{"type":"message","role":"developer","content":[{"type":"input_text","text":"Filesystem sandboxing is read-only."}]}}
+{"type":"response_item","payload":{"type":"custom_tool_call_output","call_id":"call_1","name":"exec","content":[{"type":"input_text","text":"exec stdout: 3 files"}]}}
+{"type":"response_item","payload":{"type":"message","role":"system","content":[{"type":"input_text","text":"MUST-DROP control-plane text"}]}}
 {"type":"event_msg","payload":{"type":"agent_message","message":"duplicate — ignored"}}

@@ -7,6 +7,7 @@ const os = require('node:os');
 const path = require('node:path');
 
 const { discover, parse, redact, rebaseInvocations, MAX_MESSAGES } = require('../../src/core/transcripts');
+const { mapCodexItem } = require('../../src/core/transcripts/codex');
 
 const fixturesDir = path.join(__dirname, '..', 'fixtures', 'transcripts');
 
@@ -37,7 +38,8 @@ test('parse: Claude skill-invocation extract matches fixture', () => {
 });
 
 test('parse: Codex golden extract matches fixture', () => {
-  // UNVERIFIED against live Codex CLI — re-verify at M4 (WP-010)
+  // Verified against codex-cli 0.144.1 + upstream openai/codex source
+  // (memo memory/research/2026-07-13-codex-transcript-role-provenance.md)
   const inputPath = path.join(fixturesDir, 'codex-rollout.jsonl');
   const expected = JSON.parse(fs.readFileSync(path.join(fixturesDir, 'codex-rollout.expected.json'), 'utf8'));
 
@@ -45,6 +47,71 @@ test('parse: Codex golden extract matches fixture', () => {
 
   assert.deepEqual(withoutSourcePath(extract), expected);
   assert.equal(extract.source_path, inputPath);
+});
+
+test('mapCodexItem: custom_tool_call_output (0.144.x primary shape) -> tool_result', () => {
+  const result = mapCodexItem({
+    type: 'custom_tool_call_output',
+    call_id: 'c1',
+    name: 'exec',
+    content: [{ type: 'input_text', text: 'exec stdout: 3 files' }],
+  });
+  assert.deepEqual(result, { role: 'tool_result', text: 'exec stdout: 3 files', ts: null });
+});
+
+test('mapCodexItem: legacy function_call_output still works -> tool_result', () => {
+  const result = mapCodexItem({ type: 'function_call_output', output: 'file bytes' });
+  assert.deepEqual(result, { role: 'tool_result', text: 'file bytes', ts: null });
+});
+
+test('mapCodexItem: message role developer (trusted allowlist) -> user', () => {
+  const result = mapCodexItem({
+    type: 'message',
+    role: 'developer',
+    content: [{ type: 'input_text', text: 'sandbox read-only' }],
+  });
+  assert.deepEqual(result, { role: 'user', text: 'sandbox read-only', ts: null });
+});
+
+test('mapCodexItem: message role system -> FAIL CLOSED, dropped', () => {
+  const result = mapCodexItem({
+    type: 'message',
+    role: 'system',
+    content: [{ type: 'input_text', text: 'sys' }],
+  });
+  assert.equal(result, null);
+});
+
+test('mapCodexItem: message role unrecognized (e.g. "tool") -> FAIL CLOSED, dropped', () => {
+  const result = mapCodexItem({
+    type: 'message',
+    role: 'tool',
+    content: [{ type: 'input_text', text: 'MUST DROP' }],
+  });
+  assert.equal(result, null);
+});
+
+test('mapCodexItem: message role user (unchanged) -> user', () => {
+  const result = mapCodexItem({
+    type: 'message',
+    role: 'user',
+    content: [{ type: 'input_text', text: 'hi' }],
+  });
+  assert.deepEqual(result, { role: 'user', text: 'hi', ts: null });
+});
+
+test('mapCodexItem: message role assistant (unchanged) -> assistant', () => {
+  const result = mapCodexItem({
+    type: 'message',
+    role: 'assistant',
+    content: [{ type: 'output_text', text: 'yo' }],
+  });
+  assert.deepEqual(result, { role: 'assistant', text: 'yo', ts: null });
+});
+
+test('mapCodexItem: local_shell_call (source-only variant) -> recognized as tool_result, text unverified', () => {
+  const result = mapCodexItem({ type: 'local_shell_call', status: 'completed', action: {} });
+  assert.equal(result.role, 'tool_result');
 });
 
 test('redact: every REDACTIONS pattern fires, ordinary text untouched', () => {
