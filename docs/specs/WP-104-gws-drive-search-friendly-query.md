@@ -1,7 +1,7 @@
 ---
 id: WP-104
 title: gws drive search — friendly term search by default, --raw for Drive query language
-status: Ready
+status: In-Review
 model: sonnet
 size: S
 depends_on: []
