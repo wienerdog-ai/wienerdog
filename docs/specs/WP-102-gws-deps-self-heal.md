@@ -70,11 +70,11 @@ outlives the command. The on-demand install is **consented** (ADR-0011/0013):
 show the exact command, prompt (default yes), fail-to-print on decline. Zero new
 runtime dependencies; plain Node ≥ 18; JSDoc types only (CLAUDE.md).
 
-**Out of scope by explicit decision:** an `update`-time migration/backfill
-(report fix 3). Once self-heal-on-read exists it is redundant, and adding a
-consent/network dependency to the `update` path buys no extra coverage. Recorded
-under "Out of scope" below. The `doctor` probe (report fix 4) is a **separate**
-WP (WP-103) because it touches a different surface (`src/cli/doctor.js`).
+**Not in this WP (separate WPs):** the `doctor` probe (report fix 4) is **WP-103**
+(a different surface, `src/cli/doctor.js`); the interactive `sync`/`update`-time
+**backfill** (report fix 3) is **WP-105** (`src/cli/sync.js`). Fix 3 is NOT
+skipped — after the Codex review it was reinstated for headless-only users; see
+"Out of scope" below for the corrected rationale.
 
 ## Current state
 
@@ -231,7 +231,7 @@ function loadGoogleapis(paths) {
     const cmd = `npm install --ignore-scripts --prefix ${depsDir(paths)} ${GOOGLEAPIS_SPEC}`;
     throw new WienerdogError(
       'Google is connected, but its client library needs a one-time install. ' +
-        'Run `wienerdog gws auth` to finish setup (no browser needed if your sign-in is still valid), or run:\n  ' +
+        'The next `wienerdog gws` command will offer to install it, or run:\n  ' +
         cmd
     );
   }
@@ -244,7 +244,19 @@ function loadGoogleapis(paths) {
 The token-present message MUST contain the literal substring `Google is
 connected, but its client library needs a one-time install` AND the exact
 `npm install --ignore-scripts --prefix <deps> googleapis@^173` command, and MUST
-NOT contain `/wienerdog-google-setup`. The no-token branch is unchanged.
+NOT contain `/wienerdog-google-setup`, `gws auth`, or any "no browser" claim
+(Codex Finding 3: recommending `wienerdog gws auth` here is factually wrong —
+`auth.run` throws without `--client <path>` and always opens the full browser
+OAuth loopback with it; the self-heal + the npm one-liner are the accurate
+remedies). The no-token branch is unchanged.
+
+This same message is also emitted when `googleapis` is **resolvable but
+un-loadable** (a corrupt/partial install whose `require` throws): the require in
+`loadGoogleapis` is inside the same `try`, so a load failure is caught and falls
+through to this token-aware throw. The `npm install` one-liner is the universal
+remedy for both the absent and the corrupt case; the self-heal sentence is
+accurate for the (dominant) absent case and harmless for the corrupt case (see
+the Finding-1(b) residual in Implementation notes).
 
 **3. `ensureGoogleReady(paths, opts)` — new, exported.** The read-path self-heal.
 
@@ -318,7 +330,8 @@ function plantToken(paths) {
   throws a `WienerdogError` whose message matches `/Google is connected, but its
   client library needs a one-time install/`, **includes** `npm install
   --ignore-scripts --prefix ${deps.depsDir(paths)} ${deps.GOOGLEAPIS_SPEC}`, does
-  **not** match `/\/wienerdog-google-setup/`, and does **not** match
+  **not** match `/\/wienerdog-google-setup/`, does **not** match `/gws auth/`,
+  does **not** match `/no browser/i` (Finding 3), and does **not** match
   `/MODULE_NOT_FOUND/`.
 - **(b) ensureGoogleReady — token present + deps absent + consent-yes →
   installs.** `plantToken`; `await ensureGoogleReady(paths, {confirm: async () =>
@@ -369,6 +382,27 @@ unchanged**. Do not touch them.
   deliberate supply-chain control locked by the existing tests. Self-heal
   populates the deps dir *through* the guard's install path; it never bypasses
   the guard.
+- **Accepted residual — the read path keeps the cheap resolve-only check
+  (Codex Finding 1b).** `ensureGoogleReady` gates on `isInstalled`, which only
+  *resolves* `googleapis` (via `resolveFromDeps`), it does not *load* it. So a
+  **corrupt/partial** install (interrupted `npm`, missing transitive dep, broken
+  entry point) that still resolves reads as installed → self-heal no-ops. This is
+  a **deliberate, accepted residual on the read path** (loading the heavy
+  `googleapis` on every read to detect corruption is not worth it): the user is
+  not stranded, because `getServices` → `loadGoogleapis` then *loads* the module,
+  fails, and its token-present message delivers the working `npm install` remedy
+  (a manual reinstall overwrites the corrupt copy). The `doctor` probe (WP-103)
+  uses a full **load** probe to surface this state actively. Do NOT change the
+  read-path `isInstalled` check to a load probe here.
+- **`hasToken` stays existence-only (Codex Finding 4 asymmetry).** `hasToken`
+  checks only that `google-token.json` *exists*, not that it is valid JSON with a
+  `refresh_token`. This asymmetry with `doctor`'s minimal token validation
+  (WP-103) is deliberate: on the read/self-heal path the worst case of a
+  zero-byte/damaged token is a **benign consented install offer** (the user is
+  prompted to install `googleapis`; the damaged token then surfaces its own error
+  downstream in `getServices` → `loadToken`), whereas `doctor` is a diagnostic
+  surface where a damaged token must not read as healthy. Do not add token
+  parsing to `hasToken`.
 - **`_alert` is included in the self-heal gate** (`key !== 'auth'` covers it).
   `_alert` is internal and headless-only in practice: with deps absent it fails
   today too (via `loadGoogleapis`), and run-job's fail-loud already falls back to
@@ -428,11 +462,16 @@ npm run lint
 
 ## Out of scope (do NOT do these)
 
-- **Update-time migration/backfill (report fix 3) — deliberately skipped.** Once
-  self-heal-on-read exists, an install during `wienerdog update` adds a
-  consent/network dependency to the update path for **no extra coverage** (the
-  first read heals it anyway). Do not add any `app/deps` creation to
-  `src/cli/update.js` or `src/core/vendor.js`.
+- **Update/sync-time backfill (report fix 3) — moved to a SEPARATE WP (WP-105),
+  not skipped.** The original "no extra coverage" rationale was **wrong for
+  headless-only (routines-only) users** (Codex Finding 2, owner disposition ADD
+  BACKFILL): such a user never reaches an *interactive* read to self-heal (a
+  non-TTY read declines the consented install by design), so their `app/deps` is
+  never populated by this WP alone. **WP-105** reinstates a **consented,
+  interactive-only** backfill in the `sync` flow (which `wienerdog update` hands
+  off to). This WP still adds **no** `app/deps` creation to `src/cli/update.js`
+  or `src/core/vendor.js` — the backfill lives in `src/cli/sync.js` and belongs to
+  WP-105, not here.
 - **The `doctor` probe (report fix 4)** — that is **WP-103**
   (`src/cli/doctor.js` plus its test), a separate surface.
 - Any change to the containment guard `resolveFromDeps`, to `GOOGLEAPIS_SPEC`, or
@@ -446,3 +485,28 @@ npm run lint
    `fix(gws): self-heal googleapis on read + disambiguate the deps error (WP-102)`.
 3. PR template filled, including "Decisions made" (or "none") and `Generated-by:`.
 4. This spec's `status:` flipped to `In-Review` in the same PR.
+
+## Revision log
+
+- **2026-07-13 — Codex round-1 review + owner dispositions.** Applied after the
+  implementer had already coded this spec verbatim (PR #105); the deltas below are
+  surgical patches to the same branch.
+  - **Finding 3 (MUST FIX).** The `loadGoogleapis` token-present message told users
+    to run `wienerdog gws auth` "(no browser needed if your sign-in is still
+    valid)" — factually false (`auth.run` throws without `--client <path>` and
+    always runs the full browser OAuth loopback with it). Message rewritten to lead
+    with the accurate remedies (self-heal + the npm one-liner) and drop the bare
+    `gws auth` suggestion and the browser-free claim. Test (a) gained
+    `!/gws auth/` and `!/no browser/i` negative assertions. Kept consistent with
+    WP-103's doctor message.
+  - **Finding 1 (owner: TARGETED).** The read-path `isInstalled` (resolve-only)
+    check is **kept**; the corrupt-but-resolvable case is recorded as an accepted
+    residual (the token-present `loadGoogleapis` message still delivers the working
+    npm remedy). The active detection of that state is WP-103's load probe.
+  - **Finding 2 (owner: ADD BACKFILL).** The fix-3 "skip" was reversed: the
+    "Out of scope" rationale is corrected and the interactive backfill is spec'd as
+    the new **WP-105** (`src/cli/sync.js`), not folded here (WP-102 is already
+    implemented; its Deliverables stay honest).
+  - **Finding 4 (owner: MINIMAL VALIDATION).** No change to `hasToken` (stays
+    existence-only); the deliberate asymmetry with WP-103's token validation is now
+    documented in Implementation notes.

@@ -42,9 +42,9 @@ its tests; it changes no adapter, no `sync`, no `gws` code, no manifest.
 outlives its job (ADR-0004). This WP only reads the filesystem and prints lines.
 
 **Dependency on WP-102.** WP-103 depends on WP-102 for **coherence of the remedy
-wording**, not for code: the warn line tells the user the next `gws` read will
+wording**, not for code: the warn line tells the user the next `gws` command will
 offer to install the library (WP-102's self-heal), so WP-102 must land first for
-that sentence to be true. The APIs this probe calls (`deps.isInstalled`,
+that sentence to be true. The APIs this probe calls (`deps.loadGoogleapis`,
 `deps.depsDir`, `deps.GOOGLEAPIS_SPEC`, `client.tokenPath`) all exist on main
 today.
 
@@ -76,12 +76,19 @@ if (failed) process.exitCode = 1;
 lazily inside `run` already exists (`require('../scheduler/status')`).
 
 **gws helpers this probe uses (all exported on main today):**
-- `require('../gws/deps').isInstalled(paths)` → `boolean` — whether `googleapis`
-  resolves from inside `<core>/app/deps` (containment-guarded).
-- `require('../gws/deps').depsDir(paths)` → `<core>/app/deps`.
-- `require('../gws/deps').GOOGLEAPIS_SPEC` → `'googleapis@^173'`.
+- `require('../gws/deps').loadGoogleapis(paths)` → the loaded `googleapis` module,
+  or **throws** a `WienerdogError`. It resolves via the containment guard AND
+  `require`s the module inside its own `try/catch`, so it is a full **LOAD** probe
+  — a corrupt/partial install that resolves but fails to `require` throws here.
+  Use this (in a `try/catch`), **not** `isInstalled` (which only resolves), so the
+  probe warns on a corrupt-but-resolvable install instead of falsely reading
+  `[ok]` (Codex Finding 1a).
+- `require('../gws/deps').depsDir(paths)` → `<core>/app/deps` (for the remedy).
+- `require('../gws/deps').GOOGLEAPIS_SPEC` → `'googleapis@^173'` (for the remedy).
 - `require('../gws/client').tokenPath(paths)` → `path.join(paths.secrets,
-  'google-token.json')` — the canonical token path.
+  'google-token.json')` — the canonical token path. The probe reads + JSON-parses
+  it (read-only) and requires a `refresh_token`, so a zero-byte/malformed/
+  incomplete token warns as "damaged" and never reads `[ok]` (Codex Finding 4).
 
 **`tests/unit/doctor.test.js`** drives `doctor` as a subprocess
 (`node bin/wienerdog.js doctor`) against an isolated temp `HOME`/`WIENERDOG_HOME`
@@ -110,15 +117,35 @@ pattern), so `doctor` doesn't load gws for a run that never reaches this check.
 
 ```js
 /** Report Google client-library readiness for a CONNECTED account. Read-only;
- *  never fails (a missing library is actionable, so a WARN). Emits NOTHING when
- *  Google is not connected (no token) — the normal state. WP-103 / BUG-gws-deps-missing.
+ *  never fails (WARN, not fail). Emits NOTHING when Google is not connected (no
+ *  token). A damaged token warns separately (never [ok]). Uses a containment-
+ *  guarded LOAD probe (not just resolve) so a corrupt/partial install warns.
+ *  WP-103 / BUG-gws-deps-missing.
  *  @param {import('../core/paths').WienerdogPaths} paths
  *  @returns {{status:'ok'|'warn', msg:string}[]} */
 function googleReadinessChecks(paths) {
   const { tokenPath } = require('../gws/client');
   const deps = require('../gws/deps');
-  if (!fileExists(tokenPath(paths))) return []; // Google not connected — nothing to check (normal)
-  if (deps.isInstalled(paths)) {
+  const tp = tokenPath(paths);
+  if (!fileExists(tp)) return []; // Google not connected — nothing to check (normal)
+
+  // Finding 4 — minimal, read-only token validation: a zero-byte / malformed /
+  // incomplete token must never read as a healthy [ok]. Require valid JSON with a
+  // refresh_token; anything else is a separate "damaged" warn.
+  let token = null;
+  try { token = JSON.parse(fs.readFileSync(tp, 'utf8')); } catch { token = null; }
+  if (!token || typeof token !== 'object' || !token.refresh_token) {
+    return [{ status: 'warn', msg: 'Google sign-in file looks damaged — reconnect with /wienerdog-google-setup' }];
+  }
+
+  // Finding 1(a) — containment-guarded LOAD probe: actually require the resolved
+  // module so a resolvable-but-unloadable (corrupt/partial) install warns instead
+  // of falsely reading [ok]. loadGoogleapis resolves via the containment guard
+  // AND requires the module inside its try/catch, so a broken entry point throws a
+  // WienerdogError we catch here. doctor runs rarely, so the load cost is fine.
+  let usable = false;
+  try { deps.loadGoogleapis(paths); usable = true; } catch { usable = false; }
+  if (usable) {
     return [{ status: 'ok', msg: 'Google connected and its client library is installed' }];
   }
   const cmd = `npm install --ignore-scripts --prefix ${deps.depsDir(paths)} ${deps.GOOGLEAPIS_SPEC}`;
@@ -126,16 +153,21 @@ function googleReadinessChecks(paths) {
     {
       status: 'warn',
       msg:
-        'Google is connected but its client library is missing — the next `wienerdog gws` ' +
-        'command will offer to install it, or run `wienerdog gws auth`, or: ' + cmd,
+        'Google is connected but its client library is missing or broken — the next `wienerdog gws` ' +
+        'command will offer to install it, or run: ' + cmd,
     },
   ];
 }
 ```
 
-Use the file's existing `fileExists(p)` helper (already defined in `doctor.js`)
-for the token check. Return **one** line (not one per state); keep `doctor`
-output compact and consistent with the scheduler/Codex checks.
+Use the file's existing `fileExists(p)` helper and its top-level `fs` for the
+token read. Return **one** line (not one per state); keep `doctor` output compact.
+The warn message drops the `wienerdog gws auth` suggestion (Codex Finding 3 —
+`gws auth` cannot fix this without re-opening browser consent), and stays worded
+consistently with WP-102's `loadGoogleapis` message. It says "missing **or
+broken**" because the LOAD probe warns on both the absent and the
+corrupt-but-resolvable case; the `npm install` one-liner is the universal remedy
+for both.
 
 **2. Wire into `run`.** Immediately **after** the `codexSkillChecks` loop and
 **before** the update-notice block, add:
@@ -146,13 +178,13 @@ for (const c of googleReadinessChecks(paths)) check(c.status, c.msg);
 
 `paths` is already in scope. No other change to `run`.
 
-**3. Tests (`tests/unit/doctor.test.js`).** Add a small plant helper and three
-cases using the existing `run`/`tempEnv` helpers. Plant a token by writing
-`<core>/secrets/google-token.json`; plant the library the same way
-`gws-deps.test.js` does:
+**3. Tests (`tests/unit/doctor.test.js`).** Add the plant helpers and the cases
+below using the existing `run`/`tempEnv` helpers. Plant a token by writing
+`<core>/secrets/google-token.json`; plant the library under `<core>/app/deps`
+(the containment-guarded location — do NOT plant it elsewhere):
 
 ```js
-/** Plant a fake googleapis under <core>/app/deps so isInstalled() is true (no network). */
+/** Plant a WORKING fake googleapis under <core>/app/deps (resolves AND loads). */
 function plantDeps(core) {
   const pkgDir = path.join(core, 'app', 'deps', 'node_modules', 'googleapis');
   fs.mkdirSync(pkgDir, { recursive: true });
@@ -160,41 +192,69 @@ function plantDeps(core) {
     JSON.stringify({ name: 'googleapis', version: '173.0.0', main: 'index.js' }));
   fs.writeFileSync(path.join(pkgDir, 'index.js'), 'module.exports = { google: {} };\n');
 }
-/** Plant a valid-looking token so the core reads as "connected". */
+/** Plant a CORRUPT fake googleapis: resolves fine, but its entry point throws on require. */
+function plantCorruptDeps(core) {
+  const pkgDir = path.join(core, 'app', 'deps', 'node_modules', 'googleapis');
+  fs.mkdirSync(pkgDir, { recursive: true });
+  fs.writeFileSync(path.join(pkgDir, 'package.json'),
+    JSON.stringify({ name: 'googleapis', version: '173.0.0', main: 'index.js' }));
+  fs.writeFileSync(path.join(pkgDir, 'index.js'), "throw new Error('corrupt googleapis entry point');\n");
+}
+/** Plant a VALID token (JSON + refresh_token) so the core reads as "connected". */
 function plantToken(core) {
   const secrets = path.join(core, 'secrets');
   fs.mkdirSync(secrets, { recursive: true });
   fs.writeFileSync(path.join(secrets, 'google-token.json'),
     JSON.stringify({ access_token: 'a', refresh_token: 'r' }));
 }
+/** Plant a DAMAGED token file (malformed / missing refresh_token). */
+function plantDamagedToken(core, content) {
+  const secrets = path.join(core, 'secrets');
+  fs.mkdirSync(secrets, { recursive: true });
+  fs.writeFileSync(path.join(secrets, 'google-token.json'), content);
+}
 ```
 
 - **Google not connected → no Google-readiness line.** Default `tempEnv()`;
-  `run(['init','--yes'], env)` then `run(['doctor'], env)`. Assert
-  `r.stdout` does **not** match `/Google connected|Google is connected but/` and
-  `r.status === 0`.
+  `run(['init','--yes'], env)` then `run(['doctor'], env)`. Assert `r.stdout` does
+  **not** match `/Google connected|Google is connected but|Google sign-in file/`
+  and `r.status === 0`.
+- **Damaged token → `[warn]` "looks damaged", never `[ok]` (Finding 4).** `init`;
+  `plantDamagedToken(core, 'not json')`; `doctor`. Assert `r.stdout` matches
+  `/\[warn\] Google sign-in file looks damaged/`, does **not** match
+  `/\[ok\] Google connected/`, and `r.status === 0`. Add a second variant with a
+  well-formed but incomplete token: `plantDamagedToken(core,
+  JSON.stringify({access_token:'a'}))` (no `refresh_token`) → same `[warn]`.
 - **Connected + library missing → `[warn]`, exit 0.** `init`; `plantToken(core)`
-  (no `plantDeps`); `doctor`. Assert `r.stdout` matches `/\[warn\] Google is
-  connected but its client library is missing/` and `r.status === 0` (warn, not
-  fail).
-- **Connected + library present → `[ok]`.** `init`; `plantToken(core)`;
-  `plantDeps(core)`; `doctor`. Assert `r.stdout` matches `/\[ok\] Google connected
-  and its client library is installed/` and `r.status === 0`.
+  (no deps planted); `doctor`. Assert `r.stdout` matches `/\[warn\] Google is
+  connected but its client library is missing or broken/`, does **not** match
+  `/gws auth/` (Finding 3), and `r.status === 0` (warn, not fail).
+- **Connected + library corrupt (resolvable but throws on load) → `[warn]`, exit 0
+  (Finding 1a).** `init`; `plantToken(core)`; `plantCorruptDeps(core)`; `doctor`.
+  Assert `r.stdout` matches `/\[warn\] Google is connected but its client library
+  is missing or broken/`, does **not** match `/\[ok\] Google connected/`, and
+  `r.status === 0`. (This is the case a resolve-only check would falsely pass.)
+- **Connected + library present and loadable → `[ok]`.** `init`;
+  `plantToken(core)`; `plantDeps(core)`; `doctor`. Assert `r.stdout` matches
+  `/\[ok\] Google connected and its client library is installed/` and
+  `r.status === 0`.
 
 (Whichever of `tempEnv`'s return fields exposes the core dir — e.g. `core` — pass
-it to `plantToken`/`plantDeps`. Read the helper at the top of the file.)
+it to the plant helpers. Read the helper at the top of the file.)
 
 ## Implementation notes & constraints
 
 - **Read-only, warn-not-fail.** `doctor` must never create, install, or repair
-  anything. A missing library is a `warn`; the printed remedies are the WP-102
-  self-heal (next `gws` command), `wienerdog gws auth`, or the exact npm command.
+  anything. A missing/broken library is a `warn`; the printed remedies are the
+  WP-102 self-heal (the next `gws` command) and the exact npm one-liner. Do **not**
+  print a `wienerdog gws auth` suggestion (Codex Finding 3 — it cannot fix this
+  without re-opening browser consent).
 - **Silent when unconnected.** Drive the check off token presence: no token →
   empty array → no line. This keeps `doctor` clean for the majority of users.
-- **The `isInstalled` probe respects the containment guard** — it returns true
-  only when `googleapis` resolves from **inside** `<core>/app/deps` (WP-047), so a
-  stray `googleapis` elsewhere on the machine does not read as installed. The
-  planted-under-`app/deps` test fixture satisfies the guard; do not plant it
+- **The LOAD probe respects the containment guard** — `loadGoogleapis` resolves
+  `googleapis` only from **inside** `<core>/app/deps` (WP-047) and then requires
+  it, so a stray or corrupt copy does not read as usable. The
+  planted-under-`app/deps` test fixtures satisfy the guard; do not plant them
   anywhere else.
 - Zero new dependencies; no build step. Do not touch `gws`, adapters, `sync`,
   `detect`, or the manifest.
@@ -203,19 +263,27 @@ it to `plantToken`/`plantDeps`. Read the helper at the top of the file.)
 ## Security checklist
 
 - [ ] No untrusted input. The token path comes from `client.tokenPath(paths)`
-      (env-derived core, already trusted); the check only `stat`s it and prints
-      strings. The npm command in the warn message is the pre-existing pinned
-      `deps.depsDir`/`deps.GOOGLEAPIS_SPEC` constant — no user value is
-      interpolated. No value flows into a shell command or a mutation.
+      (env-derived core, already trusted); the check reads + JSON-parses it and
+      prints strings. The **load probe** `require`s `googleapis` only from inside
+      the containment-guarded `<core>/app/deps` (via `loadGoogleapis`) — the same
+      copy, from the same guarded location, that every `gws` command already loads,
+      so it introduces no new code-execution surface. The npm command in the warn
+      message is the pre-existing pinned `deps.depsDir`/`deps.GOOGLEAPIS_SPEC`
+      constant — no user value is interpolated. No value flows into a shell command
+      or a mutation.
 
 ## Acceptance criteria
 
-- [ ] When Google is connected (token present) and `googleapis` resolves from
+- [ ] When Google is connected (valid token) and `googleapis` **loads** from
       `<core>/app/deps`, `doctor` prints one `[ok] Google connected and its client
       library is installed` line and exits 0.
-- [ ] When Google is connected but `googleapis` does not resolve from
-      `<core>/app/deps`, `doctor` prints one `[warn] Google is connected but its
-      client library is missing …` line with the remedy and **still exits 0**.
+- [ ] When Google is connected but `googleapis` is **absent OR resolvable-but-
+      un-loadable** (corrupt), `doctor` prints one `[warn] Google is connected but
+      its client library is missing or broken …` line with the npm remedy (no
+      `gws auth` suggestion) and **still exits 0**.
+- [ ] When the token file is present but damaged (zero-byte / malformed JSON /
+      missing `refresh_token`), `doctor` prints one `[warn] Google sign-in file
+      looks damaged …` line and never `[ok]`; exit 0.
 - [ ] When Google is not connected (no token), `doctor` prints **no** Google line.
 - [ ] `doctor` performs no filesystem mutation in any of these paths.
 - [ ] `npm test` and `npm run lint` pass.
@@ -233,7 +301,7 @@ npm run lint
 - The read-path self-heal + disambiguated error — that is **WP-102** (this WP
   depends on it for the remedy wording).
 - Any auto-repair from `doctor` (remediation is the next `gws` command's
-  self-heal, or `gws auth`).
+  self-heal, or the printed npm one-liner).
 - Surfacing this in the session digest — a separate concern (the digest's
   cache-then-render split), not scoped here.
 
@@ -244,3 +312,24 @@ npm run lint
    `feat(doctor): flag a connected Google account with a missing client library (WP-103)`.
 3. PR template filled, including "Decisions made" (or "none") and `Generated-by:`.
 4. This spec's `status:` flipped to `In-Review` in the same PR.
+
+## Revision log
+
+- **2026-07-13 — Codex round-1 review + owner dispositions.** Applied after the
+  implementer had already coded this spec verbatim (PR #104); the deltas below are
+  surgical patches to the same branch.
+  - **Finding 1 (owner: TARGETED).** The probe now uses a containment-guarded
+    **LOAD** probe (`deps.loadGoogleapis` in a `try/catch`) instead of the
+    resolve-only `deps.isInstalled`, so a corrupt/partial install that resolves but
+    fails to `require` warns (not `[ok]`). Warn wording became "missing **or
+    broken**"; a `plantCorruptDeps` fixture (entry point throws on require) was
+    added.
+  - **Finding 3 (MUST FIX).** The warn message dropped the `wienerdog gws auth`
+    suggestion (it cannot fix this without re-opening browser consent), leaving the
+    self-heal + the exact npm one-liner — kept consistent with WP-102's message. A
+    `!/gws auth/` negative assertion was added to the missing-library test.
+  - **Finding 4 (owner: MINIMAL VALIDATION).** The probe now JSON-parses the token
+    (read-only) and requires a `refresh_token`; a zero-byte / malformed / incomplete
+    token yields a separate `[warn] Google sign-in file looks damaged …` and never
+    `[ok]`. Damaged-token fixtures/cases were added. (WP-102's `hasToken` stays
+    existence-only by design — the documented asymmetry.)
