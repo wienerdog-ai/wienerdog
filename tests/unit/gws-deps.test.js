@@ -57,6 +57,19 @@ function plantToken(paths) {
   );
 }
 
+/** Plant a CORRUPT googleapis in the deps dir: it RESOLVES (containment guard
+ *  passes) but its entry point THROWS on require — the corrupt/partial-install
+ *  state (WP-102 broken branch). */
+function plantCorruptDeps(paths) {
+  const pkgDir = path.join(deps.depsDir(paths), 'node_modules', 'googleapis');
+  fs.mkdirSync(pkgDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(pkgDir, 'package.json'),
+    JSON.stringify({ name: 'googleapis', version: '173.0.0', main: 'index.js' })
+  );
+  fs.writeFileSync(path.join(pkgDir, 'index.js'), "throw new Error('corrupt googleapis entry point');\n");
+}
+
 /**
  * Run one resolution case in a FRESH child process. A single process caches
  * successful resolutions (Module._pathCache keys on request+lookup-paths), so
@@ -246,12 +259,46 @@ test('loadGoogleapis with a token present + deps absent throws the "client libra
     (err) =>
       err instanceof WienerdogError &&
       /Google is connected, but its client library needs a one-time install/.test(err.message) &&
+      /will offer to install it/.test(err.message) &&
       err.message.includes(
         `npm install --ignore-scripts --prefix ${deps.depsDir(paths)} ${deps.GOOGLEAPIS_SPEC}`
       ) &&
       !/\/wienerdog-google-setup/.test(err.message) &&
+      !/gws auth/.test(err.message) &&
+      !/no browser/i.test(err.message) &&
       !/MODULE_NOT_FOUND/.test(err.message)
   );
+});
+
+test('loadGoogleapis with a token present + a corrupt (resolvable-but-unloadable) install throws the "broken" message; delete-then-reinstall repairs it', () => {
+  const paths = tempPaths();
+  plantToken(paths);
+  plantCorruptDeps(paths);
+  assert.throws(
+    () => deps.loadGoogleapis(paths),
+    (err) =>
+      err instanceof WienerdogError &&
+      /Google is connected, but its client library is broken \(installed but not loadable\)/.test(
+        err.message
+      ) &&
+      /delete the folder/.test(err.message) &&
+      err.message.includes(deps.depsDir(paths)) &&
+      err.message.includes(
+        `npm install --ignore-scripts --prefix ${deps.depsDir(paths)} ${deps.GOOGLEAPIS_SPEC}`
+      ) &&
+      !/will offer to install/.test(err.message) &&
+      !/\/wienerdog-google-setup/.test(err.message) &&
+      !/gws auth/.test(err.message)
+  );
+  // Execute the prescribed repair flow: delete the deps folder, then reinstall.
+  // The fake install seam proves the FLOW SHAPE (remove → reinstall → loadable);
+  // real npm's metadata-vs-content no-op behavior is out of unit-test reach —
+  // the delete-first instruction exists precisely to defeat it. (Node does not
+  // cache a module that throws at load, so this runs in-process.)
+  fs.rmSync(deps.depsDir(paths), { recursive: true, force: true });
+  fakeInstall(deps.depsDir(paths));
+  const g = deps.loadGoogleapis(paths);
+  assert.equal(g.google.FAKE, true);
 });
 
 test('ensureGoogleReady with a token present + deps absent + consent-yes installs', async () => {

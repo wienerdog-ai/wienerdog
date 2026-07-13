@@ -85,20 +85,40 @@ function hasToken(paths) {
  * @returns {object}
  */
 function loadGoogleapis(paths) {
+  let resolvable = false;
   try {
     const hit = resolveFromDeps(paths);
-    if (hit) return hit.req(hit.resolved);
+    if (hit) {
+      resolvable = true; // resolves from inside the deps dir (== isInstalled)...
+      return hit.req(hit.resolved); // ...but a corrupt/partial install can still throw on require
+    }
   } catch {
-    /* treated as absent */
+    /* resolve failed (absent), OR require threw (corrupt); `resolvable` tells them apart */
   }
-  // Disambiguate the two states that share this failure (BUG-gws-deps-missing):
-  // a CONNECTED account (token present) needs only the client library, NOT a
-  // reconnect; an unauthed user needs the full connect flow.
+  // Disambiguate the states that share this failure (BUG-gws-deps-missing):
   if (hasToken(paths)) {
-    const cmd = `npm install --ignore-scripts --prefix ${depsDir(paths)} ${GOOGLEAPIS_SPEC}`;
+    const dir = depsDir(paths);
+    const cmd = `npm install --ignore-scripts --prefix ${dir} ${GOOGLEAPIS_SPEC}`;
+    if (resolvable) {
+      // CONNECTED but the library is installed-yet-unloadable (corrupt/partial):
+      // the read-path self-heal NO-OPs here (isInstalled is true), so promising an
+      // "offer to install" would make the user loop on a contradictory message.
+      // A plain reinstall can NO-OP too: npm compares tree metadata (recorded
+      // version/integrity), NOT file contents, so a corrupt-but-resolvable tree
+      // reads as "up to date" and stays broken (round-4 Finding). The corrupt tree
+      // must be REMOVED first. The deps dir is single-purpose (it exists solely to
+      // hold the consented googleapis tree), so deleting it wholesale is safe.
+      // Platform-neutral prose (not a per-OS rm/Remove-Item one-liner) — plain
+      // language for knowledge workers, CLAUDE.md.
+      throw new WienerdogError(
+        'Google is connected, but its client library is broken (installed but not loadable). ' +
+          `To repair it, delete the folder ${dir}, then reinstall it:\n  ${cmd}`
+      );
+    }
+    // CONNECTED and the library is ABSENT: the next gws read WILL self-heal.
     throw new WienerdogError(
       'Google is connected, but its client library needs a one-time install. ' +
-        'Run `wienerdog gws auth` to finish setup (no browser needed if your sign-in is still valid), or run:\n  ' +
+        'The next `wienerdog gws` command will offer to install it, or run:\n  ' +
         cmd
     );
   }
