@@ -120,7 +120,12 @@ function stageSkills(paths, dryRun, manifest, out) {
  * adapter (Claude Code in this WP). Idempotent and manifest-tracked; a second
  * run with unchanged inputs makes zero changes.
  * @param {string[]} argv
- * @param {{loader?: (argv:string[])=>{status:number}}} [opts]  scheduler loader seam
+ * @param {{loader?: (argv:string[])=>{status:number},
+ *          interactive?: boolean,
+ *          ensureGoogleReady?: (paths:import('../core/paths').WienerdogPaths)=>Promise<void>}} [opts]
+ *   `loader`: scheduler loader seam. `interactive`: overrides terminal detection
+ *   (tests); default `!!process.stdin.isTTY`. `ensureGoogleReady`: inject the
+ *   googleapis self-heal fn (tests); default `require('../gws/deps').ensureGoogleReady`.
  * @returns {Promise<void>}
  */
 async function run(argv, opts = {}) {
@@ -238,6 +243,27 @@ async function run(argv, opts = {}) {
     `wienerdog: ${summary.changed.length} changed, ${summary.unchanged.length} unchanged.`
   );
   for (const n of summary.notices) console.log(`  note: ${n}`);
+
+  // Interactive backfill of the on-demand googleapis install (BUG-gws-deps-missing).
+  // A routines-only (headless) user who connected Google before WP-047 never
+  // reaches an interactive read to self-heal — their non-TTY routines decline the
+  // consented install by design, so app/deps is never populated. When a PERSON runs
+  // sync (or update/init hands off with the terminal attached) and a token exists
+  // but the deps dir is absent, offer the same consented install here so their
+  // routines then work. No-op when already installed or unauthed (ensureGoogleReady
+  // handles both). RUN LAST — after manifestMod.save — so a Ctrl-C at the prompt or
+  // a kill during npm leaves a fully persisted, consistent sync (the install is not
+  // manifest-tracked). Best-effort: a decline/failure prints a note and NEVER fails
+  // sync. A non-TTY (or dry-run) sync stays mutation-free (no prompt, no install). WP-105.
+  const interactive = opts.interactive !== undefined ? opts.interactive : !!process.stdin.isTTY;
+  if (!dryRun && interactive) {
+    const ensureGoogleReady = opts.ensureGoogleReady || require('../gws/deps').ensureGoogleReady;
+    try {
+      await ensureGoogleReady(paths);
+    } catch (e) {
+      console.log(`wienerdog: Google's client library was not installed — ${e.message}`);
+    }
+  }
 }
 
 module.exports = { run };
