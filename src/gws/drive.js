@@ -71,6 +71,20 @@ async function read(services, opts) {
 }
 
 /**
+ * Build the Drive `q` from a user argument. By default a plain term is wrapped
+ * as a full-text search; --raw passes the argument as literal Drive query
+ * language. Drive string literals are single-quoted with `\` and `'` escaped.
+ * @param {string} term
+ * @param {{raw?:boolean}} [opts]
+ * @returns {string}
+ */
+function buildDriveQuery(term, opts = {}) {
+  if (opts.raw) return term;
+  const escaped = term.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  return `fullText contains '${escaped}'`;
+}
+
+/**
  * Require a flag to be present, else throw a WienerdogError naming it.
  * @param {*} value
  * @param {string} name
@@ -109,8 +123,11 @@ function parseVerbFlags(tokens) {
 async function run(services, flags) {
   const [verb, ...rest] = flags.positionals;
   switch (verb) {
-    case 'search':
-      return search(services, { query: require_(rest[0], '<query>'), max: flags.max });
+    case 'search': {
+      const raw = rest.includes('--raw');
+      const term = require_(rest.find((t) => t !== '--raw'), '<query>');
+      return search(services, { query: buildDriveQuery(term, { raw }), max: flags.max });
+    }
     case 'read': {
       const sub = parseVerbFlags(rest);
       return read(services, { id: require_(sub.id, '--id') });

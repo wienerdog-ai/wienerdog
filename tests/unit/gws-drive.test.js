@@ -141,6 +141,33 @@ test('run: drive search requires the positional <query>', async () => {
   );
 });
 
+test('run: drive search wraps a bare term as a full-text search by default', async () => {
+  let seen;
+  const services = {
+    drive: { files: { list: async (args) => { seen = args; return { data: { files: [] } }; } } },
+  };
+  await drive.run(services, { positionals: ['search', 'budget'] });
+  assert.equal(seen.q, "fullText contains 'budget'");
+});
+
+test('run: drive search --raw passes the query to Drive verbatim', async () => {
+  let seen;
+  const services = {
+    drive: { files: { list: async (args) => { seen = args; return { data: { files: [] } }; } } },
+  };
+  await drive.run(services, { positionals: ['search', "name contains 'Q3'", '--raw'] });
+  assert.equal(seen.q, "name contains 'Q3'");
+});
+
+test('run: drive search escapes a single quote in the term', async () => {
+  let seen;
+  const services = {
+    drive: { files: { list: async (args) => { seen = args; return { data: { files: [] } }; } } },
+  };
+  await drive.run(services, { positionals: ['search', "o'brien"] });
+  assert.equal(seen.q, "fullText contains 'o\\'brien'");
+});
+
 test('run: drive read requires --id', async () => {
   const services = { drive: {} };
   await assert.rejects(
