@@ -63,11 +63,14 @@ function ask(input, output, question, closeInput, onEof, defaultYes) {
  * WIENERDOG_PROMPT_TTY overrides the '/dev/tty' path for tests (mirrors
  * install.sh's WIENERDOG_TTY test seam).
  * @param {string} question
- * @param {{defaultYes?: boolean}} [opts] When opts.defaultYes is true, an
- *   *answered* empty line (bare Enter) resolves true. Default (omitted/false)
- *   keeps the historical default-no for every existing caller. defaultYes NEVER
- *   changes an abort path: EOF / stream-close with no answer (mode 1 & 2) and the
- *   no-terminal case (mode 3) still resolve false regardless of defaultYes.
+ * @param {{defaultYes?: boolean, output?: NodeJS.WritableStream}} [opts] When
+ *   opts.defaultYes is true, an *answered* empty line (bare Enter) resolves true.
+ *   Default (omitted/false) keeps the historical default-no for every existing
+ *   caller. defaultYes NEVER changes an abort path: EOF / stream-close with no
+ *   answer (mode 1 & 2) and the no-terminal case (mode 3) still resolve false
+ *   regardless of defaultYes. opts.output is the mode-1 prompt output stream
+ *   (default process.stdout); modes 2 and 3 are unaffected (mode 2 already
+ *   prompts on process.stderr).
  * @returns {Promise<boolean>}
  */
 function confirm(question, opts) {
@@ -75,8 +78,9 @@ function confirm(question, opts) {
 
   if (process.stdin.isTTY) {
     // EOF (Ctrl-D) at an interactive prompt resolves false — never hangs.
+    const output = (opts && opts.output) || process.stdout;
     return new Promise((resolve) => {
-      ask(process.stdin, process.stdout, question, () => {}, () => resolve(false), defaultYes).then(resolve);
+      ask(process.stdin, output, question, () => {}, () => resolve(false), defaultYes).then(resolve);
     });
   }
 
