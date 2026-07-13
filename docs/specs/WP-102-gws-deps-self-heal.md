@@ -444,8 +444,8 @@ function plantCorruptDeps(paths) {
   with `confirm: async () => false` and a spying `runInstall` (sets `ran = true`).
   Assert via `assert.rejects` that it throws a `WienerdogError` whose message
   includes the exact quoted-prefix command `npm install --ignore-scripts --prefix
-  "<depsDir>" googleapis@^173` (build the expectation as `\`npm install
-  --ignore-scripts --prefix "${deps.depsDir(paths)}" ${deps.GOOGLEAPIS_SPEC}\``,
+  "<depsDir>" googleapis@^173` (build the expectation as the template literal
+  `` `npm install --ignore-scripts --prefix "${deps.depsDir(paths)}" ${deps.GOOGLEAPIS_SPEC}` ``,
   with the double quotes — P2-A); then assert `ran === false` and
   `deps.isInstalled(paths) === false`. (This is the headless-equivalent: the real
   `confirm` returns false on a non-TTY, so the same throw fires.)

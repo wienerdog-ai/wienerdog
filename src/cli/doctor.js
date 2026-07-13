@@ -117,7 +117,9 @@ function googleReadinessChecks(paths) {
   //                        (WP-102's isInstalled gate is true), so promising an
   //                        offer would be false — require a manual reinstall.
   const dir = deps.depsDir(paths);
-  const cmd = `npm install --ignore-scripts --prefix ${dir} ${deps.GOOGLEAPIS_SPEC}`;
+  // Quote the prefix (P2-A): a home path with spaces would split the argument when
+  // the user pastes the command. Double quotes work in POSIX shells, cmd, PowerShell.
+  const cmd = `npm install --ignore-scripts --prefix "${dir}" ${deps.GOOGLEAPIS_SPEC}`;
   if (deps.isInstalled(paths)) {
     // Round-4 Finding — a bare `npm install` can NO-OP over a corrupt-but-
     // resolvable tree (npm compares tree metadata, not file contents), so the
