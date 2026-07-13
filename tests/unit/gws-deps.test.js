@@ -48,6 +48,15 @@ function fakeInstall(dir /*, spec */) {
   return { status: 0 };
 }
 
+/** Write a valid-looking Google token so hasToken()/self-heal see a connected core. */
+function plantToken(paths) {
+  fs.mkdirSync(paths.secrets, { recursive: true });
+  fs.writeFileSync(
+    path.join(paths.secrets, 'google-token.json'),
+    JSON.stringify({ access_token: 'a', refresh_token: 'r' })
+  );
+}
+
 /**
  * Run one resolution case in a FRESH child process. A single process caches
  * successful resolutions (Module._pathCache keys on request+lookup-paths), so
@@ -227,6 +236,106 @@ test('containment guard: the deps-dir copy is loaded even when an ancestor decoy
   const load = probeInChild(paths, 'loadGoogleapis');
   assert.equal(load.ok, true);
   assert.equal(load.which, 'deps', 'must load the deps-dir copy, not the decoy');
+});
+
+test('loadGoogleapis with a token present + deps absent throws the "client library" message', () => {
+  const paths = tempPaths();
+  plantToken(paths);
+  assert.throws(
+    () => deps.loadGoogleapis(paths),
+    (err) =>
+      err instanceof WienerdogError &&
+      /Google is connected, but its client library needs a one-time install/.test(err.message) &&
+      err.message.includes(
+        `npm install --ignore-scripts --prefix ${deps.depsDir(paths)} ${deps.GOOGLEAPIS_SPEC}`
+      ) &&
+      !/\/wienerdog-google-setup/.test(err.message) &&
+      !/MODULE_NOT_FOUND/.test(err.message)
+  );
+});
+
+test('ensureGoogleReady with a token present + deps absent + consent-yes installs', async () => {
+  const paths = tempPaths();
+  plantToken(paths);
+  let ran = false;
+  await deps.ensureGoogleReady(paths, {
+    confirm: async () => true,
+    runInstall: (dir, spec) => {
+      ran = true;
+      return fakeInstall(dir, spec);
+    },
+  });
+  assert.equal(ran, true, 'the injected installer must run');
+  assert.equal(deps.isInstalled(paths), true);
+});
+
+test('ensureGoogleReady on consent-no throws the exact npm command and installs nothing', async () => {
+  const paths = tempPaths();
+  plantToken(paths);
+  let ran = false;
+  await assert.rejects(
+    () =>
+      deps.ensureGoogleReady(paths, {
+        confirm: async () => false,
+        runInstall: () => {
+          ran = true;
+          return { status: 0 };
+        },
+      }),
+    (err) =>
+      err instanceof WienerdogError &&
+      err.message.includes(
+        `npm install --ignore-scripts --prefix ${deps.depsDir(paths)} ${deps.GOOGLEAPIS_SPEC}`
+      )
+  );
+  assert.equal(ran, false, 'installer must not run when consent is declined');
+  assert.equal(deps.isInstalled(paths), false);
+});
+
+test('ensureGoogleReady with NO token is a no-op (unauthed path unchanged)', async () => {
+  const paths = tempPaths();
+  let ran = false;
+  const res = await deps.ensureGoogleReady(paths, {
+    confirm: async () => true,
+    runInstall: () => {
+      ran = true;
+      return { status: 0 };
+    },
+  });
+  assert.equal(res, undefined);
+  assert.equal(ran, false, 'installer must not run for an unauthed user');
+  assert.equal(deps.isInstalled(paths), false);
+});
+
+test('ensureGoogleReady is a no-op when googleapis is already installed', async () => {
+  const paths = tempPaths();
+  plantToken(paths);
+  fakeInstall(deps.depsDir(paths));
+  let ran = false;
+  await deps.ensureGoogleReady(paths, {
+    confirm: async () => true,
+    runInstall: () => {
+      ran = true;
+      return { status: 0 };
+    },
+  });
+  assert.equal(ran, false, 'installer must not run when already installed');
+});
+
+test('ensureGoogleReady with opts.yes installs without prompting', async () => {
+  const paths = tempPaths();
+  plantToken(paths);
+  let asked = false;
+  await deps.ensureGoogleReady(paths, {
+    yes: true,
+    confirm: async () => {
+      asked = true;
+      return false;
+    },
+    runInstall: fakeInstall,
+  });
+  assert.equal(asked, false, 'opts.yes must not prompt');
+  assert.equal(deps.isInstalled(paths), true);
 });
 
 test('GOOGLEAPIS_SPEC tracks package.json googleapis major', () => {

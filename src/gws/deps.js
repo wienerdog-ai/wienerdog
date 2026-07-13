@@ -67,6 +67,17 @@ function isInstalled(paths) {
 }
 
 /**
+ * Whether a Google sign-in token exists on disk. Lazy require avoids a
+ * load-time cycle with client.js (which requires this module at top level).
+ * @param {WienerdogPaths} paths
+ * @returns {boolean}
+ */
+function hasToken(paths) {
+  const { tokenPath } = require('./client');
+  return fs.existsSync(tokenPath(paths));
+}
+
+/**
  * Resolve googleapis from the deps dir (containment-guarded). Throws a plain
  * setup error when absent or when resolution lands outside the deps dir
  * (never a raw MODULE_NOT_FOUND).
@@ -79,6 +90,17 @@ function loadGoogleapis(paths) {
     if (hit) return hit.req(hit.resolved);
   } catch {
     /* treated as absent */
+  }
+  // Disambiguate the two states that share this failure (BUG-gws-deps-missing):
+  // a CONNECTED account (token present) needs only the client library, NOT a
+  // reconnect; an unauthed user needs the full connect flow.
+  if (hasToken(paths)) {
+    const cmd = `npm install --ignore-scripts --prefix ${depsDir(paths)} ${GOOGLEAPIS_SPEC}`;
+    throw new WienerdogError(
+      'Google is connected, but its client library needs a one-time install. ' +
+        'Run `wienerdog gws auth` to finish setup (no browser needed if your sign-in is still valid), or run:\n  ' +
+        cmd
+    );
   }
   throw new WienerdogError(
     "Google isn't set up yet — run /wienerdog-google-setup to connect Gmail, Calendar, and Drive."
@@ -126,11 +148,32 @@ async function ensureGoogleapis(paths, opts = {}) {
   return { installed: true };
 }
 
+/**
+ * Self-heal the on-demand googleapis install on the READ path. When a Google
+ * sign-in token exists but the client library is absent (the post-WP-047-upgrade
+ * dead-end, BUG-gws-deps-missing), install it once — with consent, exactly like
+ * first auth (ADR-0011/ADR-0013). No-op when already installed, or when no token
+ * exists (an unauthed user; getServices()'s loadToken then surfaces the
+ * connect-Google flow unchanged). Consent seams pass straight through to
+ * ensureGoogleapis: interactive → a [Y/n] prompt; non-TTY/headless →
+ * ensureGoogleapis throws the accurate, browser-free npm-install remedy.
+ * @param {WienerdogPaths} paths
+ * @param {{yes?:boolean, confirm?:(q:string)=>Promise<boolean>,
+ *          runInstall?:(dir:string,spec:string)=>{status:number}}} [opts]
+ * @returns {Promise<void>}
+ */
+async function ensureGoogleReady(paths, opts = {}) {
+  if (isInstalled(paths)) return; // already present — nothing to do
+  if (!hasToken(paths)) return; // unauthed — do not install; let loadToken surface the connect flow
+  await ensureGoogleapis(paths, opts);
+}
+
 module.exports = {
   GOOGLEAPIS_SPEC,
   depsDir,
   isInstalled,
   loadGoogleapis,
   ensureGoogleapis,
+  ensureGoogleReady,
   defaultRunInstall,
 };

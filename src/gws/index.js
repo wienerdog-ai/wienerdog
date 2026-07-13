@@ -3,6 +3,7 @@
 const { getPaths } = require('../core/paths');
 const { WienerdogError } = require('../core/errors');
 const { getServices } = require('./client');
+const { ensureGoogleReady } = require('./deps');
 
 /**
  * Parse `gws` flags out of an argv tail, returning flags plus leftover
@@ -199,6 +200,12 @@ async function run(argv) {
 
   const flags = parseFlags(rest);
   const paths = getPaths();
+  // Self-heal the on-demand googleapis install (BUG-gws-deps-missing): a user who
+  // connected Google before WP-047's deps-dir scheme has a valid token but no
+  // app/deps, so every read dead-ends. Install it once, with consent, on first
+  // read — never for `auth` (it installs deps itself), and a no-op for unauthed
+  // users (getServices then surfaces the connect-Google flow). WP-102.
+  if (key !== 'auth') await ensureGoogleReady(paths);
   // Build services lazily so `auth` (which needs no token) never loads one.
   let cached;
   const services = () => (cached || (cached = getServices(paths)));
