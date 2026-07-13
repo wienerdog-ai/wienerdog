@@ -217,6 +217,17 @@ function plantCorruptDeps(core) {
   fs.writeFileSync(path.join(pkgDir, 'index.js'), "throw new Error('corrupt googleapis entry point');\n");
 }
 
+/** Plant a SHAPE-BROKEN fake googleapis: resolves AND requires cleanly, but exports
+ *  no `.google` (zero-byte / stub index.js → {}). The false-[ok] case the WP-102
+ *  load-probe shape check must catch (PR-gate P2). */
+function plantShapelessDeps(core) {
+  const pkgDir = path.join(core, 'app', 'deps', 'node_modules', 'googleapis');
+  fs.mkdirSync(pkgDir, { recursive: true });
+  fs.writeFileSync(path.join(pkgDir, 'package.json'),
+    JSON.stringify({ name: 'googleapis', version: '173.0.0', main: 'index.js' }));
+  fs.writeFileSync(path.join(pkgDir, 'index.js'), 'module.exports = {};\n');
+}
+
 /** Plant a VALID token (JSON + refresh_token) so the core reads as "connected". */
 function plantToken(core) {
   const secrets = path.join(core, 'secrets');
@@ -288,6 +299,49 @@ test('doctor warns (exit 0) when the client library is broken (resolves but fail
   assert.doesNotMatch(r.stdout, /will offer to install/, 'the broken state does not self-heal');
   assert.doesNotMatch(r.stdout, /\[ok\] Google connected/);
 });
+
+/**
+ * ORDERING NOTE (closing PR-gate, WP-102 + WP-103): the shape-broken fix lives in
+ * WP-102's deps.js — loadGoogleapis there rejects a module with no truthy `.google`
+ * — and the doctor probe merely INHERITS it (no doctor.js change). This branch
+ * still carries main's deps.js, where the shapeless stub requires cleanly and
+ * reads as usable, so the case below would falsely FAIL standalone here; it only
+ * turns green once WP-102 merges. Probe the behavior (not the branch): plant a
+ * shapeless module in a throwaway core and see whether loadGoogleapis rejects it.
+ */
+function depsShapeCheckPresent() {
+  const deps = require('../../src/gws/deps');
+  const probeCore = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-shape-probe-'));
+  try {
+    plantShapelessDeps(probeCore);
+    try {
+      deps.loadGoogleapis({ core: probeCore, secrets: path.join(probeCore, 'secrets') });
+      return false; // shapeless module returned as usable → pre-WP-102 deps.js
+    } catch {
+      return true; // rejected → WP-102's shape check is in place
+    }
+  } finally {
+    fs.rmSync(probeCore, { recursive: true, force: true });
+  }
+}
+
+test(
+  'doctor warns (exit 0) when the client library is shape-broken (loads but exports no google)',
+  { skip: depsShapeCheckPresent() ? false : 'needs WP-102 deps.js shape check — valid only post-WP-102 merge' },
+  () => {
+    const { core, env } = tempEnv();
+    run(['init', '--yes'], env);
+    plantToken(core);
+    plantShapelessDeps(core);
+    const r = run(['doctor'], env);
+    assert.equal(r.status, 0, 'a shape-broken library is a warn, not a hard fail');
+    assert.match(
+      r.stdout,
+      /\[warn\] Google is connected but its client library is broken \(installed but not loadable\)/
+    );
+    assert.doesNotMatch(r.stdout, /\[ok\] Google connected/);
+  }
+);
 
 test('doctor reports [ok] when Google is connected and the client library is installed', () => {
   const { core, env } = tempEnv();
