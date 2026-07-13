@@ -1,7 +1,7 @@
 ---
 id: WP-094
 title: install.sh network-integrity hardening — pin curl to HTTPS, show the exact Node URL before consent, gate the TTY test seam
-status: Draft
+status: In-Review
 model: opus
 size: M
 depends_on: []

@@ -61,14 +61,24 @@ detect_sudo_mode() {
   fi
 }
 
+# The controlling-terminal device. ALWAYS /dev/tty in production — there is NO
+# environment override, because an ambient variable must never be able to
+# redirect the consent prompt to an attacker-prepared readable file (that would
+# defeat the no-controlling-terminal guard for a headless attacker). Tests SOURCE
+# this script (WIENERDOG_INSTALL_LIB=1, so main does not run) and REDEFINE this
+# function to point at a fake tty; redefining a function requires executing code
+# (sourcing the library), which a settable environment variable cannot do.
+tty_dev() {
+  printf '%s' "/dev/tty"
+}
+
 # True (returns 0) iff the controlling terminal can be opened for reading.
 # Do NOT use `[ -t 0 ]` — under curl|bash stdin is the piped script, so `[ -t 0 ]`
 # is always false even when a real terminal is attached. The operative signal is
 # whether opening the terminal device succeeds.
-# WIENERDOG_TTY is a test-only seam — a real user never sets it (defaults to
-# /dev/tty).
 tty_reachable() {
-  local tty="${WIENERDOG_TTY:-/dev/tty}"
+  local tty
+  tty="$(tty_dev)"
   [ -e "$tty" ] || return 1
   { exec 3<"$tty"; } 2>/dev/null || return 1
   exec 3<&-
@@ -140,7 +150,8 @@ print_fallback() {
 consent_run() {
   local prompt="$1" display="$2" exec_fn="$3"
   shift 3
-  local tty="${WIENERDOG_TTY:-/dev/tty}"
+  local tty
+  tty="$(tty_dev)"
   if ! tty_reachable; then
     print_fallback "$display"
     return 1
@@ -216,19 +227,36 @@ install_node_brew() {
   brew install node
 }
 
-# Downloads the latest official signed nodejs.org .pkg and installs it with
-# sudo (the .pkg installs into /usr/local and always needs root; there is no
-# non-sudo variant). Returns 0 on success, non-0 on any download/install
-# failure. The DISPLAY_CMD the caller shows names both https://nodejs.org and
-# the `sudo installer -pkg … -target /` step, matching what this runs.
+# Scrapes nodejs.org/dist/latest for the current signed .pkg and echoes its full
+# URL (nothing on failure, still returning 0 so a missing/failed fetch never
+# aborts the caller under `set -e`). A read-only index GET, HTTPS-pinned like
+# every other remote fetch. Called BEFORE consent so ensure_node can show the
+# EXACT URL that will download and run (ADR-0011 rule 1: displayed == executed).
+resolve_node_pkg_url() {
+  local index file
+  index="$(curl --proto '=https' --proto-redir '=https' -fsSL https://nodejs.org/dist/latest/ 2>/dev/null)" || return 0
+  file="$(printf '%s' "$index" | grep -o 'node-v[0-9][0-9.]*\.pkg' | head -1)" || true
+  [ -n "$file" ] || return 0
+  printf '%s' "https://nodejs.org/dist/latest/$file"
+}
+
+# Installs Node from the official signed nodejs.org .pkg at URL $1, in the two
+# steps macOS actually requires: create a private temp dir, HTTPS-pin-download the
+# exact URL to a LOCAL file there, then `sudo installer -pkg <that local file>`
+# (the .pkg installs into /usr/local and always needs root; there is no non-sudo
+# variant). `installer -pkg` takes a LOCAL path, never a URL. This owns its own
+# temp entirely — the consent line shows an equivalent SELF-CONTAINED command that
+# makes its own temp, so nothing displayed depends on this function's internals
+# (displayed == executed semantically: mktemp → https-pinned curl → installer on
+# the local file). The `|| return 1` on mktemp keeps a temp-creation failure a
+# clean non-zero return (→ consent_run prints the fallback), never an abort.
+# Returns 0 on success, non-0 on any temp/download/install failure or a missing URL.
 install_node_pkg() {
-  local dir file url pkg
-  dir="$(mktemp -d)"
-  file="$(curl -fsSL https://nodejs.org/dist/latest/ | grep -o 'node-v[0-9][0-9.]*\.pkg' | head -1)"
-  [ -n "$file" ] || return 1
-  url="https://nodejs.org/dist/latest/$file"
-  pkg="$dir/$file"
-  curl -fSL "$url" -o "$pkg" || return 1
+  local url="$1" dir pkg
+  [ -n "$url" ] || return 1
+  dir="$(mktemp -d)" || return 1
+  pkg="$dir/${url##*/}"
+  curl --proto '=https' --proto-redir '=https' -fSL -o "$pkg" "$url" || return 1
   sudo installer -pkg "$pkg" -target / || return 1
   rm -f "$pkg"
   rmdir "$dir" 2>/dev/null || true
@@ -360,11 +388,27 @@ ensure_node() {
       echo "Or install Node LTS from https://nodejs.org." >&2
       exit 1
     fi
-    # No brew → official signed nodejs.org .pkg (needs sudo). This DISPLAY_CMD
-    # names the source and the sudo step, matching what install_node_pkg runs.
-    local pkg_cmd="sudo installer -pkg <official nodejs.org .pkg> -target /   (downloaded from https://nodejs.org)"
+    # No brew → official signed nodejs.org .pkg (needs sudo). Resolve the EXACT
+    # .pkg URL FIRST so consent can name precisely what will download and run.
+    # `installer -pkg` takes a LOCAL file, not a URL, so the shown command is the
+    # real two-step operation: HTTPS-pinned download of that URL to a local file,
+    # then installer on that file. The displayed command is SELF-CONTAINED — it
+    # makes its OWN temp via `mktemp` and quotes the dynamic path as "$f" — so it
+    # is copy-paste-usable regardless of the script's own temp lifecycle and never
+    # references a script-internal path that may already be cleaned up. It matches
+    # install_node_pkg semantically (mktemp → https-pinned curl → installer on the
+    # local file): displayed == executed. If we can't resolve the URL, print-only:
+    # never prompt to run a URL we can't name.
+    local pkg_url pkg_cmd
+    pkg_url="$(resolve_node_pkg_url)"
+    if [ -z "$pkg_url" ]; then
+      print_fallback "download the latest Node .pkg from https://nodejs.org and run: sudo installer -pkg <that .pkg> -target /"
+      echo "Or install Node LTS from https://nodejs.org." >&2
+      exit 1
+    fi
+    pkg_cmd="f=\"\$(mktemp -d)/${pkg_url##*/}\" && curl --proto '=https' --proto-redir '=https' -fSL -o \"\$f\" \"$pkg_url\" && sudo installer -pkg \"\$f\" -target /"
     if consent_run "Install Node 18+ from the official nodejs.org installer (needs your password)?" \
-      "$pkg_cmd" install_node_pkg; then
+      "$pkg_cmd" install_node_pkg "$pkg_url"; then
       if resolve_bin node /opt/homebrew/bin /usr/local/bin >/dev/null; then
         echo "Node installed. If a later step can't find it, open a new terminal so /usr/local/bin is on your PATH." >&2
         return 0
@@ -492,7 +536,7 @@ do_tarball_install() {
   local url="$1" integrity="$2" dest="$3"
   local tmp staging calc
   tmp="$(mktemp -d)" || return 1
-  if ! curl -fSL "$url" -o "$tmp/wd.tgz"; then
+  if ! curl --proto '=https' --proto-redir '=https' -fSL "$url" -o "$tmp/wd.tgz"; then
     rm -rf "$tmp"
     return 1
   fi
@@ -533,7 +577,7 @@ install_via_tarball() {
   local core dest ver integrity meta url tty reply
   core="${WIENERDOG_HOME:-$HOME/.wienerdog}"
 
-  meta="$(curl -fsSL "https://registry.npmjs.org/wienerdog/latest" 2>/dev/null)" || meta=""
+  meta="$(curl --proto '=https' --proto-redir '=https' -fsSL "https://registry.npmjs.org/wienerdog/latest" 2>/dev/null)" || meta=""
   # `|| true`: a non-matching grep under `set -o pipefail` would otherwise abort.
   ver="$(printf '%s' "$meta" | grep -oE '"version"[[:space:]]*:[[:space:]]*"[^"]+"' | head -1 | sed -E 's/.*"([^"]+)"$/\1/')" || true
   integrity="$(printf '%s' "$meta" | grep -oE '"integrity"[[:space:]]*:[[:space:]]*"sha512-[^"]+"' | head -1 | sed -E 's/.*"(sha512-[^"]+)"$/\1/')" || true
@@ -554,7 +598,7 @@ install_via_tarball() {
   # Consent — show exactly what will be downloaded and where it lands.
   printf '%s\n    from: %s\n    to:   %s\n' \
     "Wienerdog will download and unpack the app (no npm needed):" "$url" "$dest" >&2
-  tty="${WIENERDOG_TTY:-/dev/tty}"
+  tty="$(tty_dev)"
   if ! tty_reachable; then
     echo "No terminal available to confirm — not downloading." >&2
     tarball_fallback_note

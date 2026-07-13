@@ -58,25 +58,58 @@ function runInstallSh(stubBin, args = [], extraEnv = {}) {
   return { status: result.status, stdout: result.stdout, stderr: result.stderr };
 }
 
+// Bash snippet that REDEFINES tty_dev to point at `ttyPath`. This is the ONLY
+// way tests inject a fake terminal now that the WIENERDOG_TTY env seam is gone
+// (WP-094): production tty_dev returns the literal /dev/tty and consults no
+// environment, so a fake tty can only be introduced by executing code that
+// redefines the function after sourcing the library — an ambient variable
+// cannot. Prepended to the sourced body by sourceAndRun/sourceAndMain.
+const ttyDevRedef = (ttyPath) => `tty_dev() { printf '%s' "${ttyPath}"; }\n`;
+
 /**
  * Sources install.sh with WIENERDOG_INSTALL_LIB=1 (so `main` does NOT run),
  * then evaluates `body` (which drives one engine function). Returns the spawn
- * result. `env` is merged over a base that includes the stub PATH.
+ * result. `env` is merged over a base that includes the stub PATH. When
+ * `ttyDev` is given, a tty_dev redefinition pointing at it is prepended to the
+ * body (fake-terminal injection without any env seam).
  * @param {string} body
- * @param {{ pathPrefix?: string, exclusivePath?: string, env?: object }} [opts]
+ * @param {{ pathPrefix?: string, exclusivePath?: string, env?: object, ttyDev?: string }} [opts]
  */
 function sourceAndRun(body, opts = {}) {
   const pathValue = opts.exclusivePath
     ? opts.exclusivePath
     : `${opts.pathPrefix ? opts.pathPrefix + ':' : ''}${process.env.PATH}`;
+  const fullBody = (opts.ttyDev ? ttyDevRedef(opts.ttyDev) : '') + body;
   const result = spawnSync(
     BASH,
-    ['-c', `WIENERDOG_INSTALL_LIB=1 source "${scriptPath}"\n${body}`],
+    ['-c', `WIENERDOG_INSTALL_LIB=1 source "${scriptPath}"\n${fullBody}`],
     {
       env: { ...process.env, PATH: pathValue, ...(opts.env || {}) },
       encoding: 'utf8',
     }
   );
+  return { status: result.status, stdout: result.stdout, stderr: result.stderr };
+}
+
+/**
+ * Drives the WHOLE script via the sourcing seam: source the library (main does
+ * NOT auto-run under WIENERDOG_INSTALL_LIB=1), redefine tty_dev to point at
+ * `ttyDev` (fake terminal, or a nonexistent path to force no-tty), then call
+ * `main "$@"`. This replaces `bash install.sh …` for full-script tests now that
+ * the WIENERDOG_TTY env seam is gone: the terminal source can only be injected
+ * by executing code, never by an environment variable.
+ * @param {string[]} args positional args forwarded to main
+ * @param {{ pathValue: string, ttyDev?: string, env?: object }} opts
+ */
+function sourceAndMain(args = [], opts = {}) {
+  const body =
+    `WIENERDOG_INSTALL_LIB=1 source "${scriptPath}"\n` +
+    (opts.ttyDev ? ttyDevRedef(opts.ttyDev) : '') +
+    'main "$@"';
+  const result = spawnSync(BASH, ['-c', body, 'bash', ...args], {
+    env: { ...process.env, PATH: opts.pathValue, ...(opts.env || {}) },
+    encoding: 'utf8',
+  });
   return { status: result.status, stdout: result.stdout, stderr: result.stderr };
 }
 
@@ -132,16 +165,21 @@ test('install-sh test harness: hermeticBinDir cannot resolve git or node (usr-me
 test('install-sh: missing/old Node exits 1 with nodejs.org guidance (idempotent)', () => {
   const { root, stubBin } = mkStub('wd-install-old-');
   writeShim(stubBin, 'node', 'if [ "$1" = "-v" ]; then echo "v16.0.0"; exit 0; fi\nexit 1');
-  // Force no-tty so the (now consented) macOS/Linux install path deterministically
-  // falls through to print-the-command and never blocks on /dev/tty.
-  const noTty = { WIENERDOG_TTY: path.join(root, 'no-tty') };
+  // Force no-tty (tty_dev → a nonexistent path) so the (now consented) macOS/
+  // Linux install path deterministically falls through to print-the-command and
+  // never blocks on the real /dev/tty.
+  const run = () =>
+    sourceAndMain([], {
+      pathValue: `${stubBin}:${process.env.PATH}`,
+      ttyDev: path.join(root, 'no-tty'),
+    });
 
-  const r = runInstallSh(stubBin, [], noTty);
+  const r = run();
   assert.equal(r.status, 1);
   assert.match(r.stderr, /nodejs\.org/);
 
   // Idempotency: a second run with the same environment exits identically.
-  const r2 = runInstallSh(stubBin, [], noTty);
+  const r2 = run();
   assert.equal(r2.status, 1);
   assert.match(r2.stderr, /nodejs\.org/);
 });
@@ -178,11 +216,11 @@ test('install-sh: missing git prints a note but still hands off (exit 0)', () =>
   const argvFile = path.join(root, 'npx-argv.txt');
   writeShimAbs(stubBin, 'npx', `echo "$@" > "${argvFile}"\nexit 0`);
 
-  // No-tty so the (now consented) CLT offer declines to print-and-proceed
-  // rather than blocking on /dev/tty.
-  const result = spawnSync(BASH, [scriptPath], {
-    env: { ...process.env, PATH: stubBin, WIENERDOG_TTY: path.join(root, 'no-tty') },
-    encoding: 'utf8',
+  // No-tty (tty_dev → a nonexistent path) so the (now consented) CLT offer
+  // declines to print-and-proceed rather than blocking on /dev/tty.
+  const result = sourceAndMain([], {
+    pathValue: stubBin,
+    ttyDev: path.join(root, 'no-tty'),
   });
   assert.equal(result.status, 0);
   assert.equal(fs.readFileSync(argvFile, 'utf8').trim(), '--yes wienerdog@latest init');
@@ -198,6 +236,44 @@ test('install-sh: missing git prints a note but still hands off (exit 0)', () =>
 // never pipes a password to sudo (never `sudo -S`).
 test('install-sh: never captures a password (no `sudo -S`)', () => {
   assert.doesNotMatch(scriptText, /sudo\s+-S\b/);
+});
+
+// --- WP-094: network-integrity hardening (grep-assertable on the script text) --
+
+// Every remote curl that fetches registry metadata, the tarball, or nodejs.org
+// content pins the scheme with `--proto '=https' --proto-redir '=https'`, so a
+// redirect to a non-HTTPS URL fails instead of enabling a checksum-valid
+// downgrade. (The NodeSource nested-script hop is out of scope — WP-094.)
+test('install-sh: registry/tarball/nodejs.org curls are pinned to HTTPS (--proto/--proto-redir)', () => {
+  // The nodejs.org index scrape (resolve_node_pkg_url).
+  assert.match(
+    scriptText,
+    /curl --proto '=https' --proto-redir '=https' -fsSL https:\/\/nodejs\.org\/dist\/latest\//
+  );
+  // The Node .pkg download (install_node_pkg) — to a LOCAL file, then installer.
+  assert.match(
+    scriptText,
+    /curl --proto '=https' --proto-redir '=https' -fSL -o "\$pkg" "\$url"/
+  );
+  // The registry-tarball download (do_tarball_install).
+  assert.match(
+    scriptText,
+    /curl --proto '=https' --proto-redir '=https' -fSL "\$url" -o "\$tmp\/wd\.tgz"/
+  );
+  // The registry metadata fetch (install_via_tarball).
+  assert.match(
+    scriptText,
+    /curl --proto '=https' --proto-redir '=https' -fsSL "https:\/\/registry\.npmjs\.org\/wienerdog\/latest"/
+  );
+});
+
+// The WIENERDOG_TTY env seam is GONE from the production script: tty_dev returns
+// the literal /dev/tty and consults no environment, so no ambient variable can
+// redirect the consent-prompt read to an attacker-prepared file.
+test('install-sh: no WIENERDOG_TTY env seam remains; tty_dev returns literal /dev/tty', () => {
+  assert.doesNotMatch(scriptText, /WIENERDOG_TTY/);
+  assert.match(scriptText, /tty_dev\(\)\s*\{/);
+  assert.match(scriptText, /printf '%s' "\/dev\/tty"/);
 });
 
 // --- consent_run branch matrix (fake tty + fake executor via sourcing seam) ---
@@ -223,7 +299,7 @@ function driveConsentRun({ answer, execRc, noTty }) {
   ].join('\n');
   const r = sourceAndRun(body, {
     pathPrefix: stubBin,
-    env: { WIENERDOG_TTY: ttyPath },
+    ttyDev: ttyPath,
   });
   return { ...r, ranExec: fs.existsSync(marker) };
 }
@@ -299,18 +375,29 @@ test('install-sh detect_sudo_mode: none when sudo is absent from PATH', () => {
 
 // --- tty_reachable -----------------------------------------------------------
 
-test('install-sh tty_reachable: regular-file WIENERDOG_TTY returns 0; nonexistent returns 1', () => {
+test('install-sh tty_reachable: a redefined tty_dev pointing at a regular file returns 0; nonexistent returns 1', () => {
   const { root } = mkStub('wd-tty-');
   const ttyPath = writeFakeTty(root, 'y');
   const reachable = sourceAndRun('if tty_reachable; then echo YES; else echo NO; fi', {
-    env: { WIENERDOG_TTY: ttyPath },
+    ttyDev: ttyPath,
   });
   assert.match(reachable.stdout, /YES/);
 
   const missing = sourceAndRun('if tty_reachable; then echo YES; else echo NO; fi', {
-    env: { WIENERDOG_TTY: path.join(root, 'nope') },
+    ttyDev: path.join(root, 'nope'),
   });
   assert.match(missing.stdout, /NO/);
+});
+
+// WP-094: production tty_dev consults NO environment — an ambient WIENERDOG_TTY
+// (or any env var) can never redirect the consent-prompt read away from the real
+// controlling terminal. Setting it here must have zero effect: tty_dev still
+// prints the literal /dev/tty.
+test('install-sh tty_dev: ignores any ambient WIENERDOG_TTY and returns literal /dev/tty', () => {
+  const r = sourceAndRun('tty_dev; echo', {
+    env: { WIENERDOG_TTY: path.join(os.tmpdir(), 'attacker-tty') },
+  });
+  assert.equal(r.stdout.trim(), '/dev/tty');
 });
 
 // --- resolve_bin -------------------------------------------------------------
@@ -341,12 +428,12 @@ test('install-sh resolve_bin: returns non-zero when NAME is nowhere', () => {
 // a minimal system path for real coreutils (mktemp/grep/head/rm/sleep). No test
 // invokes real sudo/installer/xcode-select/brew or a real terminal.
 
-/** Runs install.sh with `stubBin:sysPath`; injects WIENERDOG_TTY when given. */
+/**
+ * Runs install.sh with `stubBin:sysPath`; injects a fake terminal by redefining
+ * tty_dev to `tty` (via the sourcing seam), so no WIENERDOG_TTY env seam is used.
+ */
 function runMacInstall(stubBin, sysPath, { tty, env = {} } = {}) {
-  const finalEnv = { ...process.env, PATH: `${stubBin}:${sysPath}`, ...env };
-  if (tty !== undefined) finalEnv.WIENERDOG_TTY = tty;
-  const r = spawnSync(BASH, [scriptPath], { env: finalEnv, encoding: 'utf8' });
-  return { status: r.status, stdout: r.stdout, stderr: r.stderr };
+  return sourceAndMain([], { pathValue: `${stubBin}:${sysPath}`, ttyDev: tty, env });
 }
 
 /** Shell snippet (for embedding in another shim) that writes a `node` shim. */
@@ -400,11 +487,14 @@ test('install-sh macOS: Node via .pkg, consent yes → sudo installer -pkg … -
   const { root, stubBin } = mkStub('wd-mac-pkg-yes-');
   const installerArgv = path.join(root, 'installer-argv.txt');
   const sudoArgv = path.join(root, 'sudo-argv.txt');
-  // curl: with -o it "downloads" (creates the target); else it lists one .pkg.
+  const curlArgv = path.join(root, 'curl-argv.txt');
+  // curl: records argv; with -o it "downloads" (creates the target); else it
+  // lists one .pkg (the index scrape resolve_node_pkg_url parses).
   writeShim(
     stubBin,
     'curl',
-    'dl=""\nprev=""\nfor a in "$@"; do\n  if [ "$prev" = "-o" ]; then : > "$a"; dl=1; fi\n  prev="$a"\ndone\nif [ -n "$dl" ]; then exit 0; fi\necho "node-v26.4.0.pkg"'
+    `echo "$@" >> "${curlArgv}"\n` +
+      'dl=""\nprev=""\nfor a in "$@"; do\n  if [ "$prev" = "-o" ]; then : > "$a"; dl=1; fi\n  prev="$a"\ndone\nif [ -n "$dl" ]; then exit 0; fi\necho "node-v26.4.0.pkg"'
   );
   writeShim(stubBin, 'sudo', `echo "$@" >> "${sudoArgv}"\nexec "$@"`);
   writeShim(
@@ -417,14 +507,36 @@ test('install-sh macOS: Node via .pkg, consent yes → sudo installer -pkg … -
   // Exclusive PATH: stubBin (fakes) + coreutils; no brew → the .pkg branch.
   const r = sourceAndRun('os=Darwin\nif ensure_node; then echo RC=0; else echo RC=$?; fi', {
     exclusivePath: `${stubBin}:${HERMETIC_SYS_BIN_NODE}`,
-    env: { WIENERDOG_TTY: tty },
+    ttyDev: tty,
   });
   assert.match(r.stdout, /RC=0/); // install succeeded, node resolved
+  // WP-094 (+P2 round 2): the consent line is a SELF-CONTAINED, copy-paste-usable
+  // two-step command — it makes its OWN temp via `mktemp`, quotes the dynamic path
+  // as "$f" (so a whitespace/metachar TMPDIR is safe), quotes the resolved URL,
+  // and references NO script-internal path that could already be cleaned up.
+  // `installer -pkg` is fed a LOCAL file ("$f"), never a URL.
+  const resolvedUrl = 'https://nodejs.org/dist/latest/node-v26.4.0.pkg';
+  const urlRe = resolvedUrl.replace(/[./]/g, (c) => '\\' + c);
+  // Self-contained temp creation with the resolved basename:
+  assert.match(r.stderr, /f="\$\(mktemp -d\)\/node-v26\.4\.0\.pkg"/);
+  // HTTPS-pinned download to the QUOTED "$f" from the QUOTED resolved URL:
+  assert.match(
+    r.stderr,
+    new RegExp(`curl --proto '=https' --proto-redir '=https' -fSL -o "\\$f" "${urlRe}"`)
+  );
+  // installer runs on the LOCAL quoted "$f", never a URL, no leftover placeholder,
+  // and no reference to the old script-internal pkg_file path:
+  assert.match(r.stderr, /sudo installer -pkg "\$f" -target \//);
+  assert.doesNotMatch(r.stderr, /installer -pkg https?:\/\//);
+  assert.doesNotMatch(r.stderr, /pkg_file/);
+  assert.doesNotMatch(r.stderr, /<official nodejs\.org/);
   const inst = readIf(installerArgv);
   assert.ok(inst, 'installer must have been invoked');
-  assert.match(inst, /-pkg/);
-  assert.match(inst, /-target \//);
+  assert.match(inst, /-pkg \S*\/node-v26\.4\.0\.pkg -target \//); // installed a LOCAL file
+  assert.doesNotMatch(inst, /-pkg https?:\/\//); // never handed installer a URL
   assert.match(readIf(sudoArgv) || '', /installer/); // sudo carried the installer
+  // …and the actual download fetched exactly the resolved URL into a local file.
+  assert.match(readIf(curlArgv) || '', new RegExp(`-o \\S*/node-v26\\.4\\.0\\.pkg ${urlRe}`));
 });
 
 test('install-sh macOS: Node via .pkg, consent no → installer NOT run, fallback + exit 1', () => {
@@ -476,7 +588,7 @@ test('install-sh macOS: Node via brew when brew present → `brew install node`,
 
   const r = sourceAndRun('os=Darwin\nif ensure_node; then echo RC=0; else echo RC=$?; fi', {
     exclusivePath: `${stubBin}:${HERMETIC_SYS_BIN_NODE}`,
-    env: { WIENERDOG_TTY: tty },
+    ttyDev: tty,
   });
   assert.match(r.stdout, /RC=0/);
   assert.match(readIf(brewArgv), /install node/);
@@ -536,7 +648,8 @@ test('install-sh macOS: git via CLT, consent yes, install completes → git reso
       'os=Darwin\nif ensure_git; then echo RC=0; else echo RC=$?; fi\ncommand -v git',
     {
       exclusivePath: `${stubBin}:${hermeticBinDir(['chmod'])}`,
-      env: { WIENERDOG_TTY: tty, WIENERDOG_CLT_POLL: '1', WIENERDOG_CLT_TIMEOUT: '5' },
+      ttyDev: tty,
+      env: { WIENERDOG_CLT_POLL: '1', WIENERDOG_CLT_TIMEOUT: '5' },
     }
   );
   assert.match(r.stdout, /RC=0/);
@@ -569,16 +682,43 @@ test('install-sh macOS: git via CLT times out → note printed, still hands off 
 
 // --- unit-drive the EXEC_FNs directly (failure branches) via the sourcing seam
 
-test('install-sh macOS install_node_pkg: empty listing → returns non-zero, installer not run', () => {
+test('install-sh macOS resolve_node_pkg_url: empty listing → no URL; install_node_pkg with no URL → non-zero', () => {
   const { root, stubBin } = mkStub('wd-mac-pkg-unit-');
   const installerArgv = path.join(root, 'installer-argv.txt');
-  writeShim(stubBin, 'curl', 'exit 0'); // lists nothing → no .pkg found
+  writeShim(stubBin, 'curl', 'exit 0'); // index lists nothing → no .pkg found
   writeShim(stubBin, 'installer', `echo ran >> "${installerArgv}"\nexit 0`);
-  const r = sourceAndRun('if install_node_pkg; then echo RC=0; else echo RC=$?; fi', {
+  // The resolver yields no URL when the index has no .pkg…
+  const resolved = sourceAndRun('printf "[%s]" "$(resolve_node_pkg_url)"', { pathPrefix: stubBin });
+  assert.match(resolved.stdout, /\[\]/);
+  // …and install_node_pkg refuses (returns non-zero) when handed no URL, never
+  // reaching sudo installer.
+  const r = sourceAndRun('if install_node_pkg ""; then echo RC=0; else echo RC=$?; fi', {
     pathPrefix: stubBin,
   });
   assert.match(r.stdout, /RC=1/);
   assert.equal(readIf(installerArgv), null); // never reached sudo installer
+});
+
+// WP-094 P2 round 2 (#3): a `mktemp -d` failure during the .pkg install must NOT
+// abort the script (set -e); install_node_pkg returns non-zero, so consent_run
+// prints the self-contained manual fallback and ensure_node exits 1 cleanly.
+test('install-sh macOS: mktemp failure during .pkg install → self-contained fallback, no abort, installer not run', () => {
+  const { root, stubBin } = mkStub('wd-mac-pkg-mktemp-fail-');
+  const installerArgv = path.join(root, 'installer-argv.txt');
+  writeShim(stubBin, 'curl', 'echo "node-v26.4.0.pkg"'); // index scrape resolves the URL
+  writeShim(stubBin, 'mktemp', 'exit 1'); // temp creation fails → install_node_pkg returns 1
+  writeShim(stubBin, 'installer', `echo ran >> "${installerArgv}"\nexit 0`);
+  const tty = writeFakeTty(root, 'y');
+
+  const r = sourceAndRun('os=Darwin\nensure_node', {
+    exclusivePath: `${stubBin}:${HERMETIC_SYS_BIN_NODE}`,
+    ttyDev: tty,
+  });
+  assert.equal(r.status, 1); // printed the fallback and exited 1, did NOT abort abruptly
+  // The printed fallback is the SELF-CONTAINED manual command (its own mktemp)…
+  assert.match(r.stderr, /f="\$\(mktemp -d\)\/node-v26\.4\.0\.pkg"/);
+  assert.match(r.stderr, /sudo installer -pkg "\$f" -target \//);
+  assert.equal(readIf(installerArgv), null); // temp failed before any install
 });
 
 test('install-sh macOS install_git_macos: poll times out → returns 1 (bounded, no hang)', () => {
@@ -705,7 +845,7 @@ test('install-sh Linux: apt Node install, consent yes, repo ≥ 18 → PM instal
 
   const r = sourceAndRun(HERMETIC_RESOLVE_BIN + 'os=Linux\nif ensure_node; then echo RC=0; else echo RC=$?; fi', {
     exclusivePath: stubBin,
-    env: { WIENERDOG_TTY: tty },
+    ttyDev: tty,
   });
   assert.match(r.stdout, /RC=0/);
   assert.match(readIf(aptArgv), /install -y nodejs npm/);
@@ -740,7 +880,7 @@ test('install-sh Linux: apt repo Node < 18 → NodeSource offered as a separate 
 
   const r = sourceAndRun(HERMETIC_RESOLVE_BIN + 'os=Linux\nif ensure_node; then echo RC=0; else echo RC=$?; fi', {
     exclusivePath: stubBin,
-    env: { WIENERDOG_TTY: tty },
+    ttyDev: tty,
   });
   assert.match(r.stdout, /RC=0/);
   // The pinned NodeSource URL was shown before the second consent…
@@ -759,13 +899,16 @@ test('install-sh Linux: NodeSource hop declined → curl NOT run, fallback print
   const verFile = path.join(root, 'node-ver.txt');
   writeNodeTemplate(stubBin, verFile);
   writeLinuxSudo(stubBin, sudoArgv);
-  // 1st (and only) apt install → old Node; then flip the tty answer to "n" so the
-  // *second* hop (NodeSource) is declined while the first was accepted.
+  // 1st (and only) apt install → old Node; then flip the fake-tty answer to "n"
+  // so the *second* hop (NodeSource) is declined while the first was accepted.
+  // The shim learns the fake-tty path from WD_FAKE_TTY — a test-only variable the
+  // production script never reads (tty_dev, redefined below, is what routes the
+  // prompt to this file).
   writeShimAbs(
     stubBin,
     'apt-get',
     `echo "$@" >> "${aptArgv}"\n` +
-      `if [ "$1" = "install" ]; then printf 'v12.22.0\\n' > "${verFile}"; printf 'n\\n' > "$WIENERDOG_TTY"; fi\n` +
+      `if [ "$1" = "install" ]; then printf 'v12.22.0\\n' > "${verFile}"; printf 'n\\n' > "$WD_FAKE_TTY"; fi\n` +
       `exit 0`
   );
   writeShimAbs(stubBin, 'curl', `echo "$@" >> "${curlArgv}"\nexit 0`);
@@ -773,7 +916,8 @@ test('install-sh Linux: NodeSource hop declined → curl NOT run, fallback print
 
   const r = sourceAndRun(HERMETIC_RESOLVE_BIN + 'os=Linux\nif ensure_node; then echo RC=0; else echo RC=$?; fi', {
     exclusivePath: stubBin,
-    env: { WIENERDOG_TTY: tty },
+    ttyDev: tty,
+    env: { WD_FAKE_TTY: tty },
   });
   assert.equal(r.status, 1);
   assert.equal(readIf(curlArgv), null); // NodeSource script never fetched
@@ -794,10 +938,7 @@ test('install-sh Linux: git via PM, consent yes → PM install of git, then npx 
   const tty = writeFakeTty(root, 'y');
 
   // Exclusive stub PATH: no real git/npx can leak in.
-  const r = spawnSync(BASH, [scriptPath], {
-    env: { ...process.env, PATH: stubBin, WIENERDOG_TTY: tty },
-    encoding: 'utf8',
-  });
+  const r = sourceAndMain([], { pathValue: stubBin, ttyDev: tty });
   assert.equal(r.status, 0);
   assert.match(readIf(aptArgv), /install -y git/);
   assert.equal(readIf(npxArgv).trim(), '--yes wienerdog@latest init');
@@ -815,10 +956,7 @@ test('install-sh Linux: git missing, consent no → note printed, still hands of
   writeLinuxSudo(stubBin, sudoArgv);
   const tty = writeFakeTty(root, 'n'); // decline the git hop
 
-  const r = spawnSync(BASH, [scriptPath], {
-    env: { ...process.env, PATH: stubBin, WIENERDOG_TTY: tty },
-    encoding: 'utf8',
-  });
+  const r = sourceAndMain([], { pathValue: stubBin, ttyDev: tty });
   assert.equal(r.status, 0); // git alone NEVER causes exit 1
   assert.equal(readIf(npxArgv).trim(), '--yes wienerdog@latest init');
   assert.match(r.stderr, /isn't installed/);
@@ -833,10 +971,7 @@ test('install-sh Linux: git missing, no package manager → note printed, hands 
   writeShimAbs(stubBin, 'npx', `echo "$@" > "${npxArgv}"\nexit 0`);
   // No PM, no sudo on the exclusive stub PATH → CAN_INSTALL is false.
 
-  const r = spawnSync(BASH, [scriptPath], {
-    env: { ...process.env, PATH: stubBin, WIENERDOG_TTY: path.join(root, 'no-tty') },
-    encoding: 'utf8',
-  });
+  const r = sourceAndMain([], { pathValue: stubBin, ttyDev: path.join(root, 'no-tty') });
   assert.equal(r.status, 0);
   assert.equal(readIf(npxArgv).trim(), '--yes wienerdog@latest init');
   assert.match(r.stderr, /isn't installed/);
@@ -882,7 +1017,7 @@ test('install-sh Linux: non-apt/dnf PM (pacman) with old repo Node → NodeSourc
 
   const r = sourceAndRun(HERMETIC_RESOLVE_BIN + 'os=Linux\nif ensure_node; then echo RC=0; else echo RC=$?; fi', {
     exclusivePath: stubBin,
-    env: { WIENERDOG_TTY: tty },
+    ttyDev: tty,
   });
   assert.equal(r.status, 1);
   assert.equal(readIf(curlArgv), null); // NodeSource (wrong family) never reached
@@ -1019,14 +1154,10 @@ function runTarballScenario(opts = {}) {
     ? path.join(root, 'no-tty')
     : writeFakeTty(root, opts.ttyAnswer || 'y');
 
-  const r = spawnSync(BASH, [scriptPath, 'init-extra-arg'], {
-    env: {
-      ...process.env,
-      PATH: `${stubBin}:${HERMETIC_SYS_BIN_TARBALL}`,
-      WIENERDOG_HOME: core,
-      WIENERDOG_TTY: ttyPath,
-    },
-    encoding: 'utf8',
+  const r = sourceAndMain(['init-extra-arg'], {
+    pathValue: `${stubBin}:${HERMETIC_SYS_BIN_TARBALL}`,
+    ttyDev: ttyPath,
+    env: { WIENERDOG_HOME: core },
   });
   return {
     status: r.status,
@@ -1129,14 +1260,10 @@ test('install-sh tarball: npx PRESENT still hands off to npx (tarball branch not
   writeShimAbs(stubBin, 'npx', `echo "$@" > "${npxArgv}"\nexit 0`);
   writeShimAbs(stubBin, 'curl', `echo "$@" >> "${curlArgv}"\nexit 0`);
 
-  const r = spawnSync(BASH, [scriptPath], {
-    env: {
-      ...process.env,
-      PATH: `${stubBin}:${HERMETIC_SYS_BIN_TARBALL}`,
-      WIENERDOG_HOME: path.join(root, 'core'),
-      WIENERDOG_TTY: path.join(root, 'no-tty'),
-    },
-    encoding: 'utf8',
+  const r = sourceAndMain([], {
+    pathValue: `${stubBin}:${HERMETIC_SYS_BIN_TARBALL}`,
+    ttyDev: path.join(root, 'no-tty'),
+    env: { WIENERDOG_HOME: path.join(root, 'core') },
   });
   assert.equal(r.status, 0);
   assert.equal(readIf(npxArgv).trim(), '--yes wienerdog@latest init');
