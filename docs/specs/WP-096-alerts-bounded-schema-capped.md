@@ -1,7 +1,7 @@
 ---
 id: WP-096
 title: Bound alerts.jsonl growth and cap alert field sizes so the durable-failure log can't grow or corrupt unboundedly
-status: Draft
+status: In-Review
 model: sonnet
 size: S
 depends_on: []
@@ -299,6 +299,16 @@ npm run lint
   heavier than warranted; in practice the dream lock serializes the dream and each
   job clears only its own alerts. Note it as an accepted residual under "Decisions
   made".
+- **Compaction concurrent-writer residual (accepted):** the compaction step's
+  read-rewrite-rename shares the accepted concurrent-writer residual — a compaction
+  rewrite by one `run-job` can drop a record a DIFFERENT `run-job` appended in the
+  same window (once `MAX_ALERTS`/`MAX_FILE_BYTES` is reached, every append takes this
+  path). Full cross-process locking is deliberately OUT OF SCOPE for a files-only /
+  no-daemon product (ADR-0004), and `run-job` overlap is rare. Mitigation: each writer
+  appends its OWN record ATOMICALLY (`fs.appendFileSync`, O_APPEND — atomic for a
+  single small line) BEFORE the compaction rewrite, so the appending process never
+  loses its own fail-loud alert; only a concurrently-appended OTHER record can be lost.
+  This matches the wd-reviewer's note that concurrency is spec-accepted.
 - Changing the digest alert renderer (a different module) or the alert record shape
   produced by `run-job.js`.
 
