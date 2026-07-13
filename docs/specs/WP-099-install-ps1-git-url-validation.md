@@ -270,7 +270,7 @@ Behavior:
 
 ```bash
 pwsh -c "Invoke-Pester tests/ps/install-ps1.Tests.ps1"
-pwsh -c "Invoke-ScriptAnalyzer -Path install.ps1 -Settings tests/ps/PSScriptAnalyzerSettings.psd1"
+pwsh -c "Invoke-ScriptAnalyzer -Path install.ps1 -Settings ./PSScriptAnalyzerSettings.psd1"
 npm run lint
 ```
 

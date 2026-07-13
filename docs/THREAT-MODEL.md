@@ -65,6 +65,8 @@ As of ADR-0020, dream-created skills can also be **revised** automatically from 
 
 **Mitigations (ADR-0007)**: sending executes only under a **send grant** scoped to `(routine, recipient allowlist)`; grants live in `~/.wienerdog/config.yaml` (mechanics — no model-writable surface) and are created only by the interactive CLI with a typed confirmation naming routine and recipients — no skill, hook, dream, or headless job can create or widen one; ungranted sends degrade to draft + notice (fail-safe, fail-visible); third-party-recipient grants carry an extra plain-language warning; the dream job has no `gws` access at all; `_alert` remains a fixed-template self-send.
 
+**Residual (accepted, v1)**: the CLI typed-confirmation defends only against *model/headless* grant creation — any local process able to write `config.yaml` directly (or to load the project modules and call the exported `saveGrant`) can forge a send grant, since a grant is an unauthenticated YAML fact with no provenance or signature marker. This is the same OS-user file-permission boundary that guards the OAuth tokens (T4); a provenance/signature marker on grants is deliberately **not** built in v1 (it would not raise the boundary above file permissions an already-local attacker has cleared). Accepted; revisit if grants ever move outside a single-user-machine trust model.
+
 ## T5a — curl|bash entry point
 
 **Hazard**: the default install is `curl … | bash` (ADR-0006), a pattern users are right to be wary of.
@@ -86,6 +88,8 @@ As of ADR-0020, dream-created skills can also be **revised** automatically from 
 - **No root self-run.** The script still refuses `EUID 0`; installs go through per-action `sudo`, not a root-run script.
 
 **Residual risk (accepted)**: a compromised upstream package index or nested script could serve a malicious package that a consenting user installs as root — the same trust a user places in their OS package manager every day. Wienerdog adds no signature verification beyond what the OS package manager, the signed `.pkg`, and TLS already provide; it minimizes exposure by preferring signed sources and showing every command, but does not eliminate the inherent trust in installing software. This is the explicit cost of a one-line install for no-dependency users; a user who wants zero auto-install can decline every prompt (or run in a non-tty context) and follow the printed commands.
+
+**Residual risk — tar LINK-MEMBER extraction escape (accepted, spike pending)**: the npm-less registry-tarball channel (ADR-0016) unpacks a downloaded tarball into the vendored `app/` layout. WP-093's member-name preflight covers **name-based** escapes only — a member whose *name* contains `../` or an absolute path — plus the secure-temp / completeness-marker TOCTOU. It does **not** yet defend the **symlink/hardlink LINK-MEMBER vector**: a tar member with a perfectly safe name (`app/x`) that is itself a symlink or hardlink whose *link target* escapes the extraction root, so a later member written "through" it lands outside `app/`. This is a named, deliberately-deferred residual pending a wd-researcher spike on cross-tar (BSD/GNU/`node-tar`) link-member handling before a fix is spec'd; the sha512-SRI verification (ADR-0016) still gates the whole tarball's integrity against the pinned registry manifest, so exploitation requires a compromised registry AND a crafted link member.
 
 ## T5 — Installer / uninstaller overreach
 
