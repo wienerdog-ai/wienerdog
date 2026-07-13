@@ -2,6 +2,24 @@
 
 All notable changes to Wienerdog. Format: [Keep a Changelog](https://keepachangelog.com), versioning: SemVer (0.x until the installed file layout stabilizes — ADR-0003).
 
+## [0.8.1] — 2026-07-13
+
+This release fixes a dead-end that could hit anyone who connected Google before July 4 and then updated: the Google connection itself was fine, but every Gmail, Calendar, and Drive command failed with a message wrongly telling you to set Google up again.
+
+### Fixed
+- **Your Google connection heals itself after an update.** If Wienerdog finds your Google sign-in intact but its Google client library missing (the state older installs land in after updating), any Google command now offers to install the library on the spot — one consent, no browser, no re-connecting. Scheduled jobs that can't ask (like the morning digest) fail with a short, accurate note naming the one command to run, instead of the misleading "Google isn't set up yet."
+- **Error messages about Google now tell the truth.** Wienerdog distinguishes "not connected," "connected but the library needs its one-time install," "the library is installed but damaged" (with the exact repair: delete its folder, then reinstall — a plain reinstall can falsely report "up to date"), and "your sign-in file looks damaged" — and never sends you back through full Google setup when you don't need it.
+- **Pressing Enter at the install prompt now means Yes**, as its `[Y/n]` wording always claimed. (It had silently counted as No since the prompt was introduced.)
+- **`--json` output stays clean JSON.** Install notices, consent prompts, and installer output go to the error stream, so piping a Google command's JSON into another tool can't be corrupted mid-install.
+- The suggested repair command now works for folder paths containing spaces (the path is quoted).
+
+### Added
+- **`wienerdog doctor` now checks your Google connection.** One line tells you whether Google is connected and whether its library is healthy, missing, or damaged — with the exact remedy. Doctor stays silent if you never connected Google, and it validates the sign-in file itself instead of assuming any file means "connected."
+- **Updates repair the library for you.** Running `wienerdog sync` (or an update) in a terminal offers the same one-time library install when your connection needs it — so machines that only run scheduled jobs get fixed the next time you touch them, without waiting for an interactive Google command.
+
+### Security & hardening
+- **Stronger containment for the on-demand Google library.** The check that trusts only the copy Wienerdog installed now constructs its path directly instead of searching upward — a copy of the library anywhere else on your machine is never even considered, and a subtle Node caching quirk can no longer make a freshly installed copy invisible until the next run.
+
 ## [0.8.0] — 2026-07-13
 
 This release put Wienerdog's older, foundational parts through the same adversarial security review its newer features already get. Seventeen hardening changes came out of it. None of them change how Wienerdog works day to day — they close edge cases that would only matter if something (a downloaded file, a web page captured in a session recording, an interrupted uninstall) were hostile or malformed.
