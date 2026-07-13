@@ -1,7 +1,7 @@
 ---
 id: WP-103
 title: doctor probe — connected Google account with a missing client library
-status: Ready
+status: In-Review
 model: sonnet
 size: S
 depends_on: [WP-102]

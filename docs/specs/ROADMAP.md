@@ -121,7 +121,7 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 | [WP-100](WP-100-codex-tool-output-and-fail-closed-roles.md) | Codex transcript parser — recognize the current tool-output item type (`custom_tool_call_output` + variants) and fail closed on unknown roles | M7 | sonnet | Done | — |
 | [WP-101](WP-101-gws-oauth-state-pkce.md) | gws OAuth loopback — add `state` + PKCE (RFC 8252) | M7 | sonnet | Done | — |
 | [WP-102](WP-102-gws-deps-self-heal.md) | gws read-path self-heal + disambiguated deps error (fix the post-upgrade dead-end) | M5/M7 | sonnet | Ready | — |
-| [WP-103](WP-103-doctor-gws-deps-probe.md) | doctor probe — connected Google account with a missing client library | M5/M7 | sonnet | Ready | WP-102 |
+| [WP-103](WP-103-doctor-gws-deps-probe.md) | doctor probe — connected Google account with a missing client library | M5/M7 | sonnet | In-Review | WP-102 |
 | [WP-104](WP-104-gws-drive-search-friendly-query.md) | gws drive search — friendly term search by default, `--raw` for Drive query language | M5 | sonnet | Ready | — |
 
 > **First-production-night incident (2026-07-04).** WP-038, WP-039 and WP-041 form

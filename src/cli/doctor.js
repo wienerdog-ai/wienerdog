@@ -75,6 +75,29 @@ function codexSkillChecks(paths, harnesses) {
   ];
 }
 
+/** Report Google client-library readiness for a CONNECTED account. Read-only;
+ *  never fails (a missing library is actionable, so a WARN). Emits NOTHING when
+ *  Google is not connected (no token) — the normal state. WP-103 / BUG-gws-deps-missing.
+ *  @param {import('../core/paths').WienerdogPaths} paths
+ *  @returns {{status:'ok'|'warn', msg:string}[]} */
+function googleReadinessChecks(paths) {
+  const { tokenPath } = require('../gws/client');
+  const deps = require('../gws/deps');
+  if (!fileExists(tokenPath(paths))) return []; // Google not connected — nothing to check (normal)
+  if (deps.isInstalled(paths)) {
+    return [{ status: 'ok', msg: 'Google connected and its client library is installed' }];
+  }
+  const cmd = `npm install --ignore-scripts --prefix ${deps.depsDir(paths)} ${deps.GOOGLEAPIS_SPEC}`;
+  return [
+    {
+      status: 'warn',
+      msg:
+        'Google is connected but its client library is missing — the next `wienerdog gws` ' +
+        'command will offer to install it, or run `wienerdog gws auth`, or: ' + cmd,
+    },
+  ];
+}
+
 /**
  * Report on an existing install. Prints one `ok`/`warn`/`fail` line per check;
  * exits 1 (via process.exitCode) if any check fails.
@@ -151,6 +174,10 @@ async function run(_argv) {
   // Codex skill-link health: shipped skills registered under $CODEX_HOME/skills/.
   // Read-only; missing links are a warn (remediation: 'wienerdog sync').
   for (const c of codexSkillChecks(paths, harnesses)) check(c.status, c.msg);
+
+  // Google client-library readiness for a connected account (WP-103).
+  // Read-only; silent when Google is not connected; a missing library is a warn.
+  for (const c of googleReadinessChecks(paths)) check(c.status, c.msg);
 
   // Cache-only update notice (no network; does not affect pass/fail). ADR-0015.
   const upd = getUpdateNotice(paths);
