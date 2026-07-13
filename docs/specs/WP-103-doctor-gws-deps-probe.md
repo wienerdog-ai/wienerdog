@@ -81,10 +81,13 @@ lazily inside `run` already exists (`require('../scheduler/status')`).
   `require`s the module inside its own `try/catch`, so it is a full **LOAD** probe
   — a corrupt/partial install that resolves but fails to `require` throws here.
   Use this (in a `try/catch`) as the primary usability check (Codex Finding 1a).
-- `require('../gws/deps').isInstalled(paths)` → `boolean` (resolve-only). Used
-  **only after a failed load** to distinguish ABSENT (`false` → self-heal will
-  fire) from BROKEN (`true` → resolvable-but-un-loadable, self-heal no-ops), so the
-  two get distinct remedies (round-2 Finding 2).
+- `require('../gws/deps').depsPresent(paths)` → `boolean` (physical presence — the
+  deps-dir `googleapis/package.json` exists). Used **only after a failed load** to
+  distinguish ABSENT (`false` → self-heal will fire) from BROKEN (`true` → a deps
+  tree exists but isn't usable, self-heal no-ops), so the two get distinct remedies
+  (round-2 Finding 2, re-keyed round-6 P2). Do NOT use `isInstalled` here — it is
+  `false` for a package.json-present-but-unresolvable (missing-main) tree, which
+  would mis-label that BROKEN state as "missing".
 - `require('../gws/deps').depsDir(paths)` → `<core>/app/deps` (for the remedy).
 - `require('../gws/deps').GOOGLEAPIS_SPEC` → `'googleapis@^173'` (for the remedy).
 - `require('../gws/client').tokenPath(paths)` → `path.join(paths.secrets,
@@ -154,17 +157,20 @@ function googleReadinessChecks(paths) {
   if (usable) {
     return [{ status: 'ok', msg: 'Google connected and its client library is installed' }];
   }
-  // Round-2 Finding 2 — DISTINGUISH the two failed-load states, because the
-  // self-heal promise is only true for one of them:
-  //   isInstalled false → ABSENT: the next read WILL self-heal (WP-102).
-  //   isInstalled true  → BROKEN (resolves but won't load): self-heal NO-OPs
-  //                        (WP-102's isInstalled gate is true), so promising an
-  //                        offer would be false — require a manual reinstall.
+  // Round-2 Finding 2 — DISTINGUISH the two failed-load states, keyed on PHYSICAL
+  // PRESENCE (round-6 P2), NOT isInstalled/resolvability:
+  //   depsPresent false → ABSENT: the next read WILL self-heal (WP-102).
+  //   depsPresent true  → BROKEN (a deps tree exists but won't load — bad main /
+  //                       corrupt entry / no .google / symlink-out): self-heal
+  //                       NO-OPs (WP-102 gates on depsPresent), so promising an
+  //                       offer would be false — require a manual delete+reinstall.
+  // NOTE: `deps.isInstalled` is FALSE for a package.json-present-but-unresolvable
+  // (missing-main) tree, so keying on it would mis-label that state "missing".
   const dir = deps.depsDir(paths);
   // Quote the prefix (P2-A): a home path with spaces would split the argument when
   // the user pastes the command. Double quotes work in POSIX shells, cmd, PowerShell.
   const cmd = `npm install --ignore-scripts --prefix "${dir}" ${deps.GOOGLEAPIS_SPEC}`;
-  if (deps.isInstalled(paths)) {
+  if (deps.depsPresent(paths)) {
     // Round-4 Finding — a bare `npm install` can NO-OP over a corrupt-but-
     // resolvable tree (npm compares tree metadata, not file contents), so the
     // corrupt tree must be DELETED first. Deps dir is single-purpose → safe to
@@ -190,11 +196,12 @@ function googleReadinessChecks(paths) {
 
 Use the file's existing `fileExists(p)` helper and its top-level `fs` for the
 token read. Both warn branches drop the `wienerdog gws auth` suggestion (Codex
-Finding 3). Two distinct messages (round-2 Finding 2): the **absent** message
-keeps the self-heal promise + npm command; the **broken** (resolvable-but-
-un-loadable) message must NOT claim the next-command offer — WP-102's self-heal
-no-ops on a resolvable install — and prescribes **delete-the-folder-then-reinstall**
-(round-4 Finding: a bare `npm install` can no-op over a corrupt-but-resolvable
+Finding 3). Two distinct messages (round-2 Finding 2), keyed on
+`deps.depsPresent` (round-6 P2): the **absent** message (`depsPresent === false`)
+keeps the self-heal promise + npm command; the **broken** message (`depsPresent ===
+true` but not usable) must NOT claim the next-command offer — WP-102's self-heal
+no-ops on any present tree — and prescribes **delete-the-folder-then-reinstall**
+(round-4 Finding: a bare `npm install` can no-op over a present-but-corrupt
 tree). Same **delete-then-reinstall** remedy as WP-102's `loadGoogleapis` broken
 message (worded for the single-line doctor warn — no newline; WP-102's is a thrown
 error), so the two surfaces prescribe an identical repair. The `npm install`
@@ -241,6 +248,16 @@ function plantShapelessDeps(core) {
   fs.writeFileSync(path.join(pkgDir, 'package.json'),
     JSON.stringify({ name: 'googleapis', version: '173.0.0', main: 'index.js' }));
   fs.writeFileSync(path.join(pkgDir, 'index.js'), 'module.exports = {};\n');
+}
+/** Plant a MAINLESS fake googleapis: package.json present but NO index.js —
+ *  depsPresent true, but req.resolve throws. isInstalled would read FALSE here;
+ *  the probe must still label it BROKEN, not missing (round-6 P2). */
+function plantMainlessDeps(core) {
+  const pkgDir = path.join(core, 'app', 'deps', 'node_modules', 'googleapis');
+  fs.mkdirSync(pkgDir, { recursive: true });
+  fs.writeFileSync(path.join(pkgDir, 'package.json'),
+    JSON.stringify({ name: 'googleapis', version: '173.0.0', main: 'index.js' }));
+  // deliberately NO index.js
 }
 /** Plant a VALID token (JSON + refresh_token) so the core reads as "connected". */
 function plantToken(core) {
@@ -293,6 +310,13 @@ function plantDamagedToken(core, content) {
   the false-`[ok]` is closed end-to-end: the load probe (`deps.loadGoogleapis`) now
   shape-checks (WP-102), so a stub module that requires cleanly no longer reads as
   usable. (No `doctor.js` change — the probe inherits WP-102's fix.)
+- **Connected + library MAINLESS (package.json but no main; `isInstalled` FALSE)
+  → `[warn]` "broken", not "missing" (round-6 P2).** `init`; `plantToken(core)`;
+  `plantMainlessDeps(core)`; `doctor`. Assert `r.stdout` matches `/\[warn\] Google
+  is connected but its client library is broken \(installed but not loadable\)/`,
+  **does NOT match** `/is missing/`, does **not** match `/\[ok\] Google connected/`,
+  and `r.status === 0`. This is the state whose `deps.isInstalled` is `false`: keying
+  the split on `depsPresent` (not `isInstalled`) is what labels it broken.
 - **Connected + library present and loadable → `[ok]`.** `init`;
   `plantToken(core)`; `plantDeps(core)`; `doctor`. Assert `r.stdout` matches
   `/\[ok\] Google connected and its client library is installed/` and
@@ -339,12 +363,15 @@ it to the plant helpers. Read the helper at the top of the file.)
 - [ ] When Google is connected but `googleapis` is **absent** (not resolvable),
       `doctor` prints one `[warn] … client library is missing — the next \`wienerdog
       gws\` command will offer to install it …` line and exits 0.
-- [ ] When Google is connected but `googleapis` is **resolvable-but-un-loadable**
-      (corrupt), `doctor` prints one `[warn] … client library is broken (installed
-      but not loadable) — delete the folder <depsDir>, then reinstall it: <npm>`
-      line (naming the deps folder, delete-first because a bare `npm install` can
-      no-op over a corrupt tree) that does **NOT** claim the next-command offer, and
-      exits 0. Neither warn suggests `gws auth`.
+- [ ] When Google is connected but a deps tree is **present yet not usable**
+      (`depsPresent` true — corrupt entry, shape-broken, symlink-out, OR
+      package.json-present-but-unresolvable/missing-main), `doctor` prints one
+      `[warn] … client library is broken (installed but not loadable) — delete the
+      folder <depsDir>, then reinstall it: <npm>` line (naming the deps folder,
+      delete-first because a bare `npm install` can no-op over it) that does **NOT**
+      claim the next-command offer, and exits 0. The split keys on `depsPresent`, so
+      the missing-main tree (where `isInstalled` is false) still reads broken, not
+      missing. Neither warn suggests `gws auth`.
 - [ ] When the token file is present but damaged (zero-byte / malformed JSON /
       missing / wrong-type / whitespace-only `refresh_token`), `doctor` prints one
       `[warn] Google sign-in file looks damaged …` line and never `[ok]`; exit 0.
@@ -436,3 +463,14 @@ npm run lint
   (it calls `loadGoogleapis`) — **no `doctor.js` code change**. Added a doctor test
   case: `plantToken` + `plantShapelessDeps` (`module.exports = {}`) → `[warn]`
   broken, never `[ok]`, proving the false-`[ok]` is closed end-to-end.
+- **2026-07-13 — closing Codex PR pass, round-6 (P2 reconciliation; one-word
+  doctor code change).** WP-102 re-keyed its absent/broken split onto physical
+  presence (`depsPresent`) rather than resolvability, because a
+  package.json-present-but-unresolvable (missing-main) tree makes `resolveFromDeps`
+  throw → `isInstalled` false. This probe keyed broken-vs-missing on
+  `deps.isInstalled` after a failed load, which would mis-label that state
+  "missing". Swapped the key to **`deps.depsPresent`** (newly exported from
+  `deps.js`), so a missing-main tree reads BROKEN. Added a doctor test case:
+  `plantToken` + `plantMainlessDeps` (package.json, no `index.js`) → `[warn]`
+  broken, NOT `/is missing/`. The load probe, token validation, and all message
+  strings are otherwise unchanged.
