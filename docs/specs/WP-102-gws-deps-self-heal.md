@@ -61,15 +61,16 @@ the same misleading error and cannot self-heal (they can't run interactive
    than today). An **unauthed** user (no token) is untouched — they still get the
    existing "connect Google" flow.
 2. **Disambiguate the error.** `loadGoogleapis` (the sole emit site of the
-   misleading string) branches on token presence and then on resolvability: no
-   token → the current connect-Google message (unchanged); token present + library
-   **absent** → "needs a one-time install … the next `wienerdog gws` command will
-   offer to install it"; token present + library **resolvable-but-unloadable**
-   (corrupt) → "broken (installed but not loadable) — delete the folder `<depsDir>`,
-   then reinstall it", with no offer claim (the self-heal cannot fire on a
-   resolvable install, and a bare `npm install` can no-op on a corrupt tree — see
-   round-4 below). Both name the concrete npm remedy. This is the defensive backstop
-   for any caller that reaches `loadGoogleapis` without going through the self-heal
+   misleading string) branches on token presence and then on **physical presence**
+   of the deps tree (`depsPresent`): no token → the current connect-Google message
+   (unchanged); token present + **no deps tree** → "needs a one-time install … the
+   next `wienerdog gws` command will offer to install it"; token present + a **deps
+   tree present but not usable** (corrupt entry, missing/malformed main, no
+   `.google`, or symlink-out) → "broken (installed but not loadable) — delete the
+   folder `<depsDir>`, then reinstall it", with no offer claim (the self-heal cannot
+   fire on a present tree, and a bare `npm install` can no-op on a corrupt tree — see
+   round-4/round-6 below). Both name the concrete npm remedy. This is the defensive
+   backstop for any caller that reaches `loadGoogleapis` without going through the self-heal
    wrapper, and it mirrors WP-103's doctor split exactly.
 
 **Product invariants that bound this WP.** Wienerdog is just files (ADR-0004): the
@@ -207,9 +208,11 @@ cases — see "Do NOT modify these" below.
 
 | Action | Path | Notes |
 |--------|------|-------|
-| modify | src/gws/deps.js | (0) **rewrite `resolveFromDeps` to direct-path construction** (owner-approved guard change, contract §0 — cache-poisoning fix); (a) make `loadGoogleapis` token-aware + state-aware + shape-check per the Exact contract; (b) add + export `ensureGoogleReady(paths, opts)`; (c) add an internal `hasToken(paths)` helper (lazy `require('./client')`); (d) two one-line edits to `ensureGoogleapis` — quote the `--prefix` in its `cmd` string (P2-A) and pass `{defaultYes:true}` to the confirm call (P2-B), per contract §3b. |
-| modify | src/gws/index.js | import `ensureGoogleReady` from `./deps`; call `await ensureGoogleReady(paths)` for every non-`auth` command, before services are built. |
-| modify | tests/unit/gws-deps.test.js | add the `plantToken`/`plantCorruptDeps`/`plantShapelessDeps` helpers + the new cases below (incl. the §0 cache-regression case **(a4)**). Do NOT modify the existing no-token / containment assertions (they stay byte-identical — behavior is unchanged). |
+| modify | src/gws/deps.js | (0) **rewrite `resolveFromDeps` to direct-path construction** + add & export **`depsPresent`** (§0, cache-poisoning + presence-key); (a) `loadGoogleapis` token-aware + **presence-keyed** absent/broken split + shape-check (§2); (b) add + export `ensureGoogleReady`, **gated on `depsPresent`** (§3); (c) internal `hasToken` (lazy `require('./client')`) (§1); (d) `ensureGoogleapis` — quote `--prefix` (P2-A), `{defaultYes:true}` confirm (P2-B), notice+prompt → **stderr** (P1), + a present-but-broken **fail-to-print** guard (round-6 P2); (e) `defaultRunInstall` stdio → `['inherit', 2, 2]` (npm output → stderr, P1). Per contract §0/§2/§3/§3b. |
+| modify | src/gws/index.js | import `ensureGoogleReady` from `./deps`; call `await ensureGoogleReady(paths)` for every non-`auth` command, before services are built. (No P1/P2 change — chatter routing is entirely in deps.js/prompt.js.) |
+| modify | src/core/prompt.js | add `opts.output` to `confirm` (mode-1 prompt output stream; default `process.stdout`), per §3c. Backward-compatible; mode 2/3 unchanged. |
+| modify | tests/unit/gws-deps.test.js | add the `plantToken`/`plantCorruptDeps`/`plantShapelessDeps`/`plantMainlessDeps` helpers + the new cases below (incl. §0 cache-regression **(a4)**, §2 missing-main **(a5)**, ensureGoogleReady present-no-op **(h)**, ensureGoogleapis present-broken throw **(i)**, stdout-hygiene **(j)**). Do NOT modify the existing no-token / containment assertions (they stay byte-identical). |
+| modify | tests/unit/prompt.test.js | add one case: mode-1 `opts.output` routes the prompt to the given stream (keeps `process.stdout` clean); existing cases unchanged. |
 
 ### Exact contracts
 
@@ -233,15 +236,30 @@ exists for (a machine with a global/ancestor `googleapis`).
 resolve it absolutely:
 
 ```js
+/** Whether a googleapis tree is PHYSICALLY present in the deps dir (its own
+ *  package.json exists). This — NOT resolvability — is the absent/broken key and
+ *  the self-heal gate (see §2 and §3/§3b + round-6 P2): a present-but-unresolvable
+ *  tree (missing/malformed main, or a symlink pointing outside) must read BROKEN,
+ *  and self-heal must NOT `npm` over it (arborist can no-op). `existsSync` follows
+ *  symlinks, so a symlinked-inside copy counts as present and is then rejected as
+ *  broken by resolveFromDeps's containment check. Exported (doctor/WP-103 uses it). */
+function depsPresent(paths) {
+  return fs.existsSync(path.join(depsDir(paths), 'node_modules', 'googleapis', 'package.json'));
+}
+
 function resolveFromDeps(paths) {
   const dir = depsDir(paths);
+  // (1) Absent unless the deps-dir copy is physically present (its own package.json
+  //     exists). Pure existence check — no resolution, so nothing is looked up in
+  //     ancestors or cached.
+  if (!depsPresent(paths)) return null;
   const candidate = path.join(dir, 'node_modules', 'googleapis');
-  // (1) Absent unless the deps-dir copy's OWN package.json exists. Pure existence
-  //     check — no resolution, so nothing is looked up in ancestors or cached.
-  if (!fs.existsSync(path.join(candidate, 'package.json'))) return null;
   // (2) Resolve the ABSOLUTE candidate path (never the bare 'googleapis' request),
   //     so resolution targets exactly this dir, never walks ancestors, and is not
   //     served from Module._pathCache (the bare-request cache key is never used).
+  //     NOTE: this can THROW when the tree is present but its main is missing/
+  //     malformed — callers treat a throw as "present but broken" (§2/§3b), never
+  //     as absent.
   const req = createRequire(path.join(dir, 'noop.js'));
   const resolved = req.resolve(candidate);
   // (3) RETAIN the realpath containment check — the resolved entry must live inside
@@ -261,9 +279,12 @@ deps-dir copy's own `package.json`; step 2 resolves only the absolute in-dir pat
 The **symlink defense is unchanged**: step 3's realpath containment still rejects a
 symlinked-inside copy that points outside the deps dir. The walk had to go because
 it was the source of the `Module._pathCache` poisoning above; direct-path
-resolution is simpler and cache-immune. `isInstalled` and `loadGoogleapis` above
-the resolver are **unchanged** (they still call `resolveFromDeps` and branch on
-non-null / null).
+resolution is simpler and cache-immune. `isInstalled` is **unchanged** (still
+`resolveFromDeps(paths) !== null`); `loadGoogleapis`, `ensureGoogleReady`, and
+`ensureGoogleapis` are re-keyed onto `depsPresent` (physical presence) rather than
+resolvability — see §2 / §3 / §3b (round-6 P2): a present-but-unresolvable tree
+(missing/malformed main, or a symlink-out) must classify **broken**, and self-heal
+must never `npm`-install over a present tree.
 
 **1. `hasToken(paths)` — new internal helper in `deps.js`.** Lazy-require
 `./client` to avoid a load-time cycle (`client.js` requires `deps.js` at top
@@ -283,34 +304,34 @@ function hasToken(paths) {
 }
 ```
 
-**2. `loadGoogleapis(paths)` — branch on token presence, then on resolvability.**
-Keep the resolve attempt and the no-token message byte-for-byte; add the
-token-present branch, split into **absent** vs **broken** exactly as WP-103's
-doctor probe does (Codex round-3 Finding). Capture resolvability from the resolve
-attempt already made — `resolveFromDeps` returns non-null iff `googleapis` resolves
-from **inside** the deps dir (== `isInstalled`), and the require can still throw
-afterward for a corrupt install — so a single `resolvable` flag set **before** the
-require distinguishes the two failure modes without a second resolve:
+**2. `loadGoogleapis(paths)` — branch on token presence, then on PHYSICAL
+PRESENCE (`depsPresent`), not resolvability.** Keep the no-token message
+byte-for-byte; the token-present branch splits **absent** vs **broken** on
+`depsPresent(paths)` (round-6 P2). **Why presence, not resolvability:** a tree
+whose `package.json` exists but whose main is missing/malformed makes
+`resolveFromDeps` *throw* (→ `null`/absent under the old resolvable key), which
+would mis-classify it ABSENT → self-heal would `npm`-over-corrupt → arborist can
+no-op → permanent loop. Keying on physical presence makes **every** present-yet-
+unusable state — resolve-throw (bad main), require-throw (corrupt entry point),
+shape-fail (no `.google`), and symlink-out (containment reject) — classify BROKEN:
 
 ```js
 function loadGoogleapis(paths) {
-  let resolvable = false;
-  try {
-    const hit = resolveFromDeps(paths);
-    if (hit) {
-      resolvable = true;                 // resolves from inside the deps dir (== isInstalled)...
-      const mod = hit.req(hit.resolved); // ...but the require can throw (corrupt), or...
-      // ...load a SHAPE-BROKEN module: a zero-byte / stub `index.js` requires to
-      // `{}` (valid JS, no throw) but has no `.google`, so getServices would later
-      // crash with a raw TypeError at `new google.auth.OAuth2`. Validate the shape
-      // here and treat a missing `.google` object exactly as the BROKEN state
-      // (resolvable is already true), so both the read path and doctor get the
-      // friendly broken message instead of a TypeError (PR-gate P2).
-      if (mod && typeof mod.google === 'object' && mod.google) return mod;
-      // else: shape-broken — fall through to the BROKEN classification below.
+  const present = depsPresent(paths);   // physical presence — the classification key (round-6 P2)
+  if (present) {
+    try {
+      const hit = resolveFromDeps(paths);   // may THROW (bad main) or return null (symlink-out)
+      if (hit) {
+        const mod = hit.req(hit.resolved);   // may THROW (corrupt entry point)
+        // SHAPE check: a zero-byte / stub `index.js` requires to `{}` without
+        // throwing but has no `.google`, so getServices would later crash with a
+        // raw TypeError at `new google.auth.OAuth2`. Require a truthy `.google`.
+        if (mod && typeof mod.google === 'object' && mod.google) return mod;   // healthy
+      }
+      // hit === null (symlink-out) or shape-fail → present-but-broken; fall through.
+    } catch {
+      /* resolve-throw (bad main) or require-throw (corrupt) — present-but-broken */
     }
-  } catch {
-    /* resolve failed (absent), OR require threw (corrupt); `resolvable` tells them apart */
   }
   // Disambiguate the states that share this failure (BUG-gws-deps-missing):
   if (hasToken(paths)) {
@@ -319,23 +340,20 @@ function loadGoogleapis(paths) {
     // C:\Users\John Smith\...) would otherwise split the argument when the user
     // pastes the command. Double quotes work in POSIX shells, cmd, and PowerShell.
     const cmd = `npm install --ignore-scripts --prefix "${dir}" ${GOOGLEAPIS_SPEC}`;
-    if (resolvable) {
-      // CONNECTED but the library is installed-yet-unloadable (corrupt/partial):
-      // the read-path self-heal NO-OPs here (isInstalled is true), so promising an
-      // "offer to install" would make the user loop on a contradictory message.
-      // A plain reinstall can NO-OP too: npm compares tree metadata (recorded
-      // version/integrity), NOT file contents, so a corrupt-but-resolvable tree
-      // reads as "up to date" and stays broken (round-4 Finding). The corrupt tree
-      // must be REMOVED first. The deps dir is single-purpose (it exists solely to
-      // hold the consented googleapis tree), so deleting it wholesale is safe.
-      // Platform-neutral prose (not a per-OS rm/Remove-Item one-liner) — plain
-      // language for knowledge workers, CLAUDE.md.
+    if (present) {
+      // CONNECTED but a deps tree is physically present yet not usable
+      // (bad main / corrupt entry / no `.google` / symlink-out): the read-path
+      // self-heal NO-OPs here (depsPresent is true), and a plain reinstall can
+      // NO-OP too — npm compares tree metadata (recorded version/integrity), NOT
+      // file contents (round-4 Finding). The tree must be REMOVED first. The deps
+      // dir is single-purpose, so deleting it wholesale is safe. Platform-neutral
+      // prose (not a per-OS rm/Remove-Item one-liner) — CLAUDE.md.
       throw new WienerdogError(
         'Google is connected, but its client library is broken (installed but not loadable). ' +
           `To repair it, delete the folder ${dir}, then reinstall it:\n  ${cmd}`
       );
     }
-    // CONNECTED and the library is ABSENT: the next gws read WILL self-heal.
+    // CONNECTED and the library is ABSENT (no deps tree): the next gws read WILL self-heal.
     throw new WienerdogError(
       'Google is connected, but its client library needs a one-time install. ' +
         'The next `wienerdog gws` command will offer to install it, or run:\n  ' +
@@ -353,20 +371,22 @@ The exact npm command in every message is the **quoted-prefix** form
 below).
 
 Message contract (parity with WP-103's two warns):
-- **Absent** (token present, not resolvable): MUST contain `Google is connected,
-  but its client library needs a one-time install` AND `The next \`wienerdog gws\`
-  command will offer to install it` AND the exact quoted-prefix npm command.
-- **Broken** (token present, resolvable but the require threw **OR** the loaded
-  module is shape-invalid — no truthy `.google` object): MUST contain `Google is
-  connected, but its client library is broken (installed but not loadable)` AND
-  `delete the folder <depsDir>` AND the exact quoted-prefix npm command, and MUST
-  **NOT** contain `will offer to install` (the self-heal cannot fire — `isInstalled`
-  is true). The **delete-first** instruction is load-bearing: a bare `npm install`
-  over a corrupt-but-resolvable tree can no-op (npm compares tree metadata, not file
-  contents), leaving the user looping (round-4 Finding). The **shape check** (a
-  zero-byte / stub `index.js` requires to `{}` without throwing) routes here too,
-  so a shape-broken install yields this friendly message rather than a raw
-  TypeError from `getServices` (PR-gate P2).
+- **Absent** (token present, `depsPresent === false` — no deps tree): MUST contain
+  `Google is connected, but its client library needs a one-time install` AND `The
+  next \`wienerdog gws\` command will offer to install it` AND the exact
+  quoted-prefix npm command.
+- **Broken** (token present, `depsPresent === true` but the tree is not usable —
+  bad main resolve-throw, corrupt entry require-throw, shape-fail with no truthy
+  `.google`, or symlink-out): MUST contain `Google is connected, but its client
+  library is broken (installed but not loadable)` AND `delete the folder <depsDir>`
+  AND the exact quoted-prefix npm command, and MUST **NOT** contain `will offer to
+  install` (the self-heal cannot fire — `depsPresent` is true). The **delete-first**
+  instruction is load-bearing: a bare `npm install` over a present-but-corrupt tree
+  can no-op (npm compares tree metadata, not file contents), leaving the user
+  looping (round-4 Finding). Both the shape-broken (`{}`) and the missing-main
+  (resolve-throw) trees route here, so they yield this friendly message rather than
+  a raw TypeError (PR-gate) or a mis-classified "will offer to install" loop
+  (round-6 P2).
 - **Both** branches MUST NOT contain `/wienerdog-google-setup`, `gws auth`, or any
   "no browser" claim (Codex Finding 3: recommending `wienerdog gws auth` here is
   factually wrong — `auth.run` throws without `--client <path>` and always opens
@@ -375,63 +395,129 @@ Message contract (parity with WP-103's two warns):
 - The **no-token** branch is unchanged (byte-for-byte the same
   `/wienerdog-google-setup` message).
 
-`resolvable` is captured from the resolve attempt already performed (cheaper than
-and equivalent to a second `isInstalled(paths)` call, since both mean
-"`resolveFromDeps` returned non-null"); keep the predicate explicit as shown. A
-shape-broken module (loaded but no `.google`) implies `resolvable === true` by
-construction — it resolved and required — so it falls through to the **broken**
-classification automatically; no separate flag is needed.
+`present` is the single classification key. It is `depsPresent(paths)` — physical
+presence of the deps-dir `googleapis/package.json` — evaluated ONCE, before any
+resolve. Every present-yet-unusable sub-state (resolve-throw, require-throw,
+shape-fail, symlink-out) falls through to the **broken** classification; only a
+truly absent tree (`present === false`) is **absent**. Do NOT re-key this on
+`isInstalled`/resolvability (that reintroduces the round-6 mis-classification of a
+missing-main tree as absent → `npm`-over-corrupt loop).
 
 **3. `ensureGoogleReady(paths, opts)` — new, exported.** The read-path self-heal.
+**Gate on `depsPresent`, not `isInstalled`** (round-6 P2): if any deps tree is
+physically present — healthy OR broken — self-heal must NOT run (it must never
+`npm`-install over a present tree; `loadGoogleapis` surfaces broken-vs-healthy).
 
 ```js
 /**
  * Self-heal the on-demand googleapis install on the READ path. When a Google
- * sign-in token exists but the client library is absent (the post-WP-047-upgrade
+ * sign-in token exists but NO deps tree is present (the post-WP-047-upgrade
  * dead-end, BUG-gws-deps-missing), install it once — with consent, exactly like
- * first auth (ADR-0011/ADR-0013). No-op when already installed, or when no token
- * exists (an unauthed user; getServices()'s loadToken then surfaces the
- * connect-Google flow unchanged). Consent seams pass straight through to
- * ensureGoogleapis: interactive → a [Y/n] prompt; non-TTY/headless →
- * ensureGoogleapis throws the accurate, browser-free npm-install remedy.
+ * first auth (ADR-0011/ADR-0013). No-op when a deps tree is already PRESENT
+ * (healthy or broken — never install over it), or when no token exists (an
+ * unauthed user; getServices()'s loadToken then surfaces the connect-Google flow
+ * unchanged). Consent seams pass straight through to ensureGoogleapis: interactive
+ * → a [Y/n] prompt (on stderr); non-TTY/headless → ensureGoogleapis throws the
+ * accurate, browser-free npm-install remedy.
  * @param {WienerdogPaths} paths
  * @param {{yes?:boolean, confirm?:(q:string)=>Promise<boolean>,
  *          runInstall?:(dir:string,spec:string)=>{status:number}}} [opts]
  * @returns {Promise<void>}
  */
 async function ensureGoogleReady(paths, opts = {}) {
-  if (isInstalled(paths)) return;   // already present — nothing to do
+  if (depsPresent(paths)) return;   // a deps tree is present (healthy or broken) — never install over it
   if (!hasToken(paths)) return;     // unauthed — do not install; let loadToken surface the connect flow
   await ensureGoogleapis(paths, opts);
 }
 ```
 
-Add `ensureGoogleReady` to `module.exports` (keep the existing exports).
+Add `ensureGoogleReady` and `depsPresent` to `module.exports` (keep the existing
+exports).
 
-**3b. `ensureGoogleapis` — two one-line changes (PR-gate P2-A + P2-B).** The
-existing WP-047 installer body gets exactly two edits; nothing else in it changes:
+**3b. `ensureGoogleapis` + `defaultRunInstall` — changes (PR-gate P2-A/P2-B + the
+round-6 P1 stdout-hygiene + P2 present-but-broken fixes).** The target
+`ensureGoogleapis` body:
 
-- **P2-A — quote the prefix in its `cmd` template** (same reason and form as
-  `loadGoogleapis`; leaving it unquoted breaks parity — this `cmd` is what its
-  prompt line and its decline / install-failed messages show the user):
-  - OLD: `` const cmd = `npm install --ignore-scripts --prefix ${dir} ${GOOGLEAPIS_SPEC}`; ``
-  - NEW: `` const cmd = `npm install --ignore-scripts --prefix "${dir}" ${GOOGLEAPIS_SPEC}`; ``
-- **P2-B — pass `{ defaultYes: true }` to the production confirm** so pressing
-  Enter at the `[Y/n]` prompt ACCEPTS (the prompt, the function's own doc comment,
-  and ADR-0011's posture all advertise default-yes, but `src/core/prompt.js`
-  `confirm(question, opts)` defaults `defaultYes` **false**, so today Enter
-  *declines* — a latent WP-047 defect that WP-102's self-heal makes the primary
-  recovery path, so it is in-scope here):
-  - OLD: `const ok = opts.yes || (await ask('Install it now? [Y/n] '));`
-  - NEW: `const ok = opts.yes || (await ask('Install it now? [Y/n] ', { defaultYes: true }));`
-  - `ask = opts.confirm || confirm`; production `confirm` accepts `(question,
-    opts)`. Do **NOT** use `opts.yes` for this (that bypasses consent entirely).
-    The injected test seams have signature `(q) => Promise<boolean>`; passing a
-    second arg to them is harmless.
+```js
+async function ensureGoogleapis(paths, opts = {}) {
+  if (isInstalled(paths)) return { installed: false, already: true };   // healthy → no-op
+  const dir = depsDir(paths);
+  // P2-A: quote the prefix (space-safe home paths); same form as loadGoogleapis.
+  const cmd = `npm install --ignore-scripts --prefix "${dir}" ${GOOGLEAPIS_SPEC}`;
+  // round-6 P2 (auth path): a deps tree is physically present but NOT usable
+  // (isInstalled false, e.g. bad main / symlink-out). A plain reinstall may no-op
+  // over it (arborist metadata compare), so fail to the HONEST delete-then-reinstall
+  // remedy instead of npm-over-corrupt — never auto-repair (owner disposition).
+  if (depsPresent(paths)) {
+    throw new WienerdogError(
+      `Google's client library is installed but not loadable. Delete the folder ${dir}, then reinstall it:\n  ${cmd}`
+    );
+  }
+  // Truly absent → consented install. round-6 P1: ALL chatter goes to STDERR so a
+  // piped read (`gws … --json | jq`) keeps clean stdout.
+  process.stderr.write(`\nWienerdog needs Google's client library. It will run:\n  ${cmd}\n`);
+  const ask = opts.confirm || confirm;
+  // P2-B: {defaultYes:true} so Enter ACCEPTS. round-6 P1: output:process.stderr so
+  // the prompt question is visible (and not written into a piped stdout).
+  const ok = opts.yes || (await ask('Install it now? [Y/n] ', { defaultYes: true, output: process.stderr }));
+  if (!ok) throw new WienerdogError(`declined — run this yourself, then retry:\n  ${cmd}`);
+  fs.mkdirSync(dir, { recursive: true });
+  const run = opts.runInstall || defaultRunInstall;
+  const r = run(dir, GOOGLEAPIS_SPEC);
+  if (r.status !== 0) throw new WienerdogError(`install failed — run it yourself, then retry:\n  ${cmd}`);
+  return { installed: true };
+}
+```
 
-`defaultRunInstall`'s `spawnSync` arg array is **unchanged** — it invokes `npm`
-with an argv array (no shell), so the prefix needs no quoting there; only the
-human-facing command STRINGS are quoted.
+Change summary versus the WP-047 body:
+- **P2-A** — quote `--prefix "${dir}"` in `cmd` (space-safe home paths).
+- **P2-B** — `{ defaultYes: true }` on the confirm call so Enter ACCEPTS. Do **NOT**
+  use `opts.yes` (that bypasses consent). Injected `(q)=>Promise<boolean>` seams
+  ignore the 2nd arg harmlessly.
+- **round-6 P1 (stdout hygiene)** — the "Wienerdog needs Google's client library…"
+  notice moves from `process.stdout.write` to **`process.stderr.write`**, and the
+  confirm call passes **`output: process.stderr`** so the prompt renders on stderr.
+  Rationale: a connected user running `gws gmail search --json | jq` (stdout piped,
+  stdin a TTY) must NOT get the notice/prompt/npm output mixed into the JSON on
+  stdout — today it corrupts every piped consumer, and the prompt question is even
+  written *into the pipe* (invisible) while it waits.
+- **round-6 P2 (auth path)** — the new `if (depsPresent(paths)) throw …` guard: for
+  a present-but-broken tree, fail to the honest delete-then-reinstall remedy instead
+  of `npm`-installing over it. Only reachable via `auth.js` (ensureGoogleReady gates
+  on `depsPresent` and returns before calling here); healthy trees still no-op via
+  `isInstalled`. auth's own meaningful stdout (the authorization URL) is written by
+  `auth.js`, not here, and is unchanged.
+
+**`defaultRunInstall` — route npm's output to stderr (round-6 P1).**
+- OLD: `spawnSync('npm', [...], { stdio: 'inherit' })`
+- NEW: `spawnSync('npm', [...], { stdio: ['inherit', 2, 2] })` — child stdin inherits
+  from the parent; child stdout AND stderr both go to the parent's **stderr** (fd 2),
+  so npm's progress never lands on the piped stdout. The argv array is otherwise
+  unchanged (no shell — the prefix needs no quoting here; only the human-facing
+  command STRINGS are quoted).
+
+**If any existing test pins the `ensureGoogleapis` notice/prompt on stdout**, move
+that assertion to stderr. (None do today — the current gws-deps ensureGoogleapis
+tests assert on return values / thrown messages, not captured stdout.)
+
+**3c. `src/core/prompt.js` — add `opts.output` to `confirm` (round-6 P1;
+backward-compatible).** Today the mode-1 (stdin-is-a-TTY) branch renders the
+prompt to a hardcoded `process.stdout`; the mode-2 (`/dev/tty`) branch already
+uses `process.stderr`. Add an `opts.output` that overrides the **mode-1** output
+stream (default stays `process.stdout`), so `ensureGoogleapis` can route the
+consent prompt to stderr:
+
+- OLD (mode-1 branch): `ask(process.stdin, process.stdout, question, () => {}, () => resolve(false), defaultYes)`
+- NEW: `const output = (opts && opts.output) || process.stdout;` then
+  `ask(process.stdin, output, question, () => {}, () => resolve(false), defaultYes)`
+
+Constraints:
+- **Mode 2 and mode 3 are unchanged** (mode 2 already prompts on `process.stderr`;
+  mode 3 aborts). `opts.output` affects only the mode-1 default-stdout path.
+- **Backward-compatible**: every existing caller (no `opts.output`) still renders
+  on `process.stdout` in mode 1. `defaultYes` handling is unchanged.
+- Update `confirm`'s JSDoc `@param opts` to document `output?: NodeJS.WritableStream`
+  ("mode-1 prompt output stream; default process.stdout").
 
 **4. `src/gws/index.js` wiring.** Add the import near the existing requires:
 
@@ -460,8 +546,8 @@ against `ensureGoogleReady` (§5); the index wiring is this thin call.
 build services. If a future gws verb is added that needs no services, it must be
 excluded from this gate too (note it then).
 
-**5. Tests (`tests/unit/gws-deps.test.js`).** Add three helpers and ten cases
-(a, a2, a3, a4, b–g). Reuse the existing `tempPaths()`, `fakeInstall`,
+**5. Tests (`tests/unit/gws-deps.test.js`).** Add four helpers and fourteen cases
+(a, a2, a3, a4, a5, b–j). Reuse the existing `tempPaths()`, `fakeInstall`,
 `plantGoogleapis(base, which)` (already in the file — used by (a4) for the ancestor
 copy), `deps`, `WienerdogError`, `path`, `fs`.
 
@@ -493,6 +579,16 @@ function plantShapelessDeps(paths) {
   fs.writeFileSync(path.join(pkgDir, 'package.json'),
     JSON.stringify({ name: 'googleapis', version: '173.0.0', main: 'index.js' }));
   fs.writeFileSync(path.join(pkgDir, 'index.js'), 'module.exports = {};\n');
+}
+/** Plant a MAINLESS googleapis: package.json present (main: index.js) but NO
+ *  index.js — present (package.json exists) yet req.resolve THROWS. The round-6 P2
+ *  case that must classify BROKEN, not absent. */
+function plantMainlessDeps(paths) {
+  const pkgDir = path.join(deps.depsDir(paths), 'node_modules', 'googleapis');
+  fs.mkdirSync(pkgDir, { recursive: true });
+  fs.writeFileSync(path.join(pkgDir, 'package.json'),
+    JSON.stringify({ name: 'googleapis', version: '173.0.0', main: 'index.js' }));
+  // deliberately NO index.js — req.resolve(candidate) throws (main missing)
 }
 ```
 
@@ -553,6 +649,14 @@ function plantShapelessDeps(paths) {
   `loadGoogleapis` cache-hits the ancestor and throws "needs a one-time install")
   **and passes on the §0 direct-path guard.** Run **in-process** (the whole point is
   the intra-process cache) — do NOT use `probeInChild` here.
+- **(a5) loadGoogleapis — token present + MAINLESS tree (package.json but no main)
+  → BROKEN, not absent (round-6 P2).** `plantToken(paths)` **and**
+  `plantMainlessDeps(paths)` on a fresh `tempPaths()`; assert `loadGoogleapis`
+  throws a `WienerdogError` matching `/broken \(installed but not loadable\)/` and
+  `/delete the folder/`, and does **NOT** match `/needs a one-time install/`, NOT
+  `/will offer to install/`, NOT `/\/wienerdog-google-setup/`. Also assert
+  `deps.depsPresent(paths) === true` and `deps.isInstalled(paths) === false` (the
+  exact state that mis-classified as absent under the old resolvable key).
 - **(b) ensureGoogleReady — token present + deps absent + consent-yes →
   installs.** `plantToken`; `await ensureGoogleReady(paths, {confirm: async () =>
   true, runInstall: (dir, spec) => fakeInstall(dir, spec)})`; assert the injected
@@ -573,22 +677,46 @@ function plantShapelessDeps(paths) {
   true, runInstall: () => {ran = true; return {status:0};}})`. Assert `res ===
   undefined`, `ran === false` (the consent seam was never consulted), and
   `deps.isInstalled(paths) === false`.
-- **(e) ensureGoogleReady — already installed → no-op.** `plantToken` **and**
+- **(e) ensureGoogleReady — a PRESENT (healthy) tree → no-op.** `plantToken` **and**
   `fakeInstall(deps.depsDir(paths))`; `await ensureGoogleReady(paths, {confirm:
   async () => true, runInstall: () => {ran = true; return {status:0};}})`; assert
-  `ran === false` (installer must not run when already present).
+  `ran === false` (installer must not run when a tree is present; now via the
+  `depsPresent` gate).
 - **(f) ensureGoogleReady with opts.yes — token present + deps absent → installs
   without prompting.** `plantToken`; `await ensureGoogleReady(paths, {yes: true,
   confirm: async () => {asked = true; return false;}, runInstall: fakeInstall})`;
   assert `asked === false` and `deps.isInstalled(paths) === true`.
-- **(g) ensureGoogleapis passes `{ defaultYes: true }` to confirm (P2-B — locks
-  the default against regression).** On a fresh `tempPaths()` (deps absent, so the
-  prompt/install path runs), `let seenQ, seenOpts; await deps.ensureGoogleapis(
-  paths, {confirm: async (q, opts) => { seenQ = q; seenOpts = opts; return true; },
-  runInstall: fakeInstall});` then `assert.equal(seenQ, 'Install it now? [Y/n] ');
-  assert.deepEqual(seenOpts, { defaultYes: true });`. (Tested directly on
-  `ensureGoogleapis`, the sole consent site; `ensureGoogleReady` passes the same
-  seam straight through.)
+- **(g) ensureGoogleapis passes `{ defaultYes: true, output: process.stderr }` to
+  confirm (P2-B + P1 — locks the default-yes AND the stderr routing).** On a fresh
+  `tempPaths()` (deps absent, so the prompt/install path runs), `let seenQ,
+  seenOpts; await deps.ensureGoogleapis(paths, {confirm: async (q, opts) => { seenQ
+  = q; seenOpts = opts; return true; }, runInstall: fakeInstall});` then
+  `assert.equal(seenQ, 'Install it now? [Y/n] '); assert.equal(seenOpts.defaultYes,
+  true); assert.equal(seenOpts.output, process.stderr);` (identity check on the
+  stream, not `deepEqual` — a stream is not structurally comparable).
+- **(h) ensureGoogleReady — a PRESENT-but-BROKEN tree → NO-OP, seams never
+  consulted (round-6 P2).** `plantToken(paths)` **and** `plantMainlessDeps(paths)`;
+  `let ran = false; const res = await deps.ensureGoogleReady(paths, {confirm: async
+  () => { ran = true; return true; }, runInstall: () => { ran = true; return
+  {status:0}; }});` assert `res === undefined` and `ran === false` (self-heal must
+  NOT `npm` over a present-but-broken tree — it returns via the `depsPresent` gate).
+- **(i) ensureGoogleapis — a PRESENT-but-BROKEN tree → throws the delete-then-
+  reinstall remedy, no install (round-6 P2, auth path).** `plantMainlessDeps(paths)`
+  on a fresh `tempPaths()`; `let ran = false; await assert.rejects(() =>
+  deps.ensureGoogleapis(paths, {confirm: async () => true, runInstall: () => { ran =
+  true; return {status:0}; }}), (e) => e instanceof WienerdogError && /Delete the
+  folder/.test(e.message) && e.message.includes(\`npm install --ignore-scripts
+  --prefix "${deps.depsDir(paths)}" ${deps.GOOGLEAPIS_SPEC}\`)); assert.equal(ran,
+  false);` (never `npm`-over-corrupt; fail to the honest remedy).
+- **(j) ensureGoogleapis writes NOTHING to stdout on the yes-path; the notice goes
+  to stderr (round-6 P1).** On a fresh `tempPaths()` (deps absent), capture
+  `process.stdout.write` and `process.stderr.write` around `await
+  deps.ensureGoogleapis(paths, {confirm: async () => true, runInstall:
+  fakeInstall})`; assert the captured **stdout is empty** and the captured
+  **stderr contains** `Wienerdog needs Google's client library`. (The injected
+  `confirm` seam does not touch streams, so this asserts the notice routing; the
+  prompt-stream routing is covered by the prompt.test.js case. Restore both
+  `write`s in a `finally`.)
 
 ### Update these existing `ensureGoogleapis` assertions to the quoted command (P2-A)
 
@@ -619,6 +747,27 @@ handled exactly as before (loaded if inside `realpath(depsDir)`, rejected if the
 symlink points outside). So the `probeInChild` ancestor-decoy cases (:205–230)
 still pass verbatim; only the NEW in-process case (a4) distinguishes old from new.
 
+**5b. Test (`tests/unit/prompt.test.js`) — mode-1 `opts.output` routes the prompt
+(round-6 P1).** Reuse the file's existing `withFakeTTYStdin` helper (it installs a
+fake TTY `PassThrough` as `process.stdin`). Add:
+
+```js
+test('mode 1: opts.output routes the prompt to the given stream (keeps stdout clean)', async () => {
+  await withFakeTTYStdin(async (fake) => {
+    const out = new PassThrough();          // PassThrough is already imported in this file
+    let written = '';
+    out.on('data', (c) => { written += c.toString(); });
+    const p = confirm('Install it now? [Y/n] ', { defaultYes: true, output: out });
+    fake.write('\n');                        // bare Enter → true (defaultYes)
+    assert.equal(await p, true);
+    assert.match(written, /Install it now\?/);   // the prompt went to opts.output, not stdout
+  });
+});
+```
+
+Do NOT change the existing prompt cases — they pass no `opts.output`, so mode 1
+still renders on `process.stdout` (backward-compat).
+
 ## Implementation notes & constraints
 
 - **Zero new dependencies.** No new require beyond the lazy `require('./client')`
@@ -633,25 +782,20 @@ still pass verbatim; only the NEW in-process case (a4) distinguishes old from ne
   cache-immune while preserving the symlink defense. Self-heal still populates the
   deps dir *through* the guard's install path and never bypasses it. Do not
   reintroduce the bare-`googleapis` ancestor walk.
-- **Accepted residual — self-heal SKIPS the corrupt state (Codex Finding 1b;
-  narrowed in round-3).** `ensureGoogleReady` gates on `isInstalled`, which only
-  *resolves* `googleapis` (via `resolveFromDeps`), it does not *load* it. So a
-  **corrupt/partial** install (interrupted `npm`, missing transitive dep, broken
-  entry point) that still resolves reads as installed → self-heal no-ops. Keeping
-  the resolve-only check on the read path is deliberate (loading the heavy
-  `googleapis` on every read to detect corruption is not worth it). **The residual
-  is now ONLY that self-heal does not auto-repair a corrupt install — the MESSAGE
-  is no longer misleading:** since round-3, `loadGoogleapis` detects this exact
-  state (resolvable + require threw) and emits the **broken** message, which makes
-  no self-heal promise and points to the repair that actually fixes it. Since
-  round-4 that repair is **delete the folder `<depsDir>`, then reinstall** — a bare
-  `npm install` can no-op over a corrupt-but-resolvable tree (npm compares tree
-  metadata, not file contents), so the corrupt tree must be removed first (the deps
-  dir is single-purpose). So a user in this state gets an accurate, actionable
-  message and never loops. The `doctor` probe (WP-103) surfaces the same state with
-  the same delete-then-reinstall remedy. Do NOT change the read-path `isInstalled`
-  check to a load probe here — the accurate message, not auto-repair, is what
-  closes the loop.
+- **Accepted residual — self-heal SKIPS the present-but-broken state (Codex
+  Finding 1b; narrowed round-3; re-keyed round-6).** `ensureGoogleReady` gates on
+  `depsPresent` — physical presence of the deps tree — and no-ops whenever a tree is
+  present, healthy OR broken. So a **corrupt/partial** install (interrupted `npm`,
+  missing transitive dep, missing/malformed main, broken entry point, symlink-out)
+  is never auto-repaired. Keeping self-heal to the truly-absent case is deliberate
+  (owner disposition: no auto-repair of a present tree; a plain reinstall can no-op
+  anyway). **The residual is ONLY that self-heal does not auto-repair — the MESSAGE
+  is accurate:** `loadGoogleapis` keys the same `depsPresent` split, so a
+  present-but-broken tree emits the **broken** message (delete the folder
+  `<depsDir>`, then reinstall — round-4), never a "will offer to install" loop
+  (round-6 P2 closed the missing-main mis-classification). The `doctor` probe
+  (WP-103) surfaces the same state with the same remedy. Do NOT re-key the read gate
+  onto `isInstalled`/resolvability — that reopens the missing-main-tree loop.
 - **The shape check is minimal (PR-gate P2).** `loadGoogleapis` validates only that
   the required module exposes a truthy `.google` object — enough to catch the
   canonical shape-broken case (a zero-byte / stub `index.js` → `{}`) and convert it
@@ -689,6 +833,13 @@ still pass verbatim; only the NEW in-process case (a4) distinguishes old from ne
   `defaultYes` and returns false), so headless installs are never silently
   performed. Every user-facing command string is quoted (`--prefix "<dir>"`, P2-A);
   `defaultRunInstall`'s argv array is untouched (no shell).
+- **stdout hygiene (round-6 P1).** ALL self-heal chatter goes to **stderr**: the
+  "Wienerdog needs Google's client library…" notice (`process.stderr.write`), the
+  consent prompt (confirm `output: process.stderr`, via the mode-1 `opts.output`
+  seam in `prompt.js`), and npm's own output (`defaultRunInstall` `stdio:
+  ['inherit', 2, 2]`). So a connected user's `gws … --json | jq` keeps a clean
+  stdout even when the first read triggers a consented install. `index.js` needs no
+  change — the routing lives entirely in `deps.js` + `prompt.js`.
 - When uncertain: choose the simpler option and record it under "Decisions made".
   Do NOT expand scope (no update-time backfill — see Out of scope; no keyring; no
   changes to token/client persistence, scopes, or the containment guard).
@@ -721,12 +872,12 @@ still pass verbatim; only the NEW in-process case (a4) distinguishes old from ne
 - [ ] `loadGoogleapis` with a token present + deps **absent** throws the "Google is
       connected, but its client library needs a one-time install … will offer to
       install it" message with the npm command, not `/wienerdog-google-setup`.
-- [ ] `loadGoogleapis` with a token present + a **resolvable-but-unloadable**
-      (corrupt) install throws the "broken (installed but not loadable) — delete the
-      folder `<depsDir>`, then reinstall it" message naming the deps folder and the
-      npm command, with **no** "will offer to install" claim; and the prescribed
-      delete-then-reinstall flow makes the library loadable again (verified with the
-      test seams).
+- [ ] `loadGoogleapis` with a token present + a **present-but-unusable** deps tree
+      (corrupt entry, or missing-main) throws the "broken (installed but not
+      loadable) — delete the folder `<depsDir>`, then reinstall it" message naming the
+      deps folder and the npm command, with **no** "will offer to install" claim; and
+      the prescribed delete-then-reinstall flow makes the library loadable again
+      (verified with the test seams, case a2).
 - [ ] An **unauthed** user (no token) is unaffected: `ensureGoogleReady` is a
       no-op and the existing "no Google sign-in found — run `wienerdog gws auth`
       first" / connect flow is unchanged.
@@ -739,15 +890,24 @@ still pass verbatim; only the NEW in-process case (a4) distinguishes old from ne
       [Y/n]` ACCEPTS (`{ defaultYes: true }` on the production confirm), while a
       non-TTY still aborts and installs nothing (P2-B).
 - [ ] Running a read twice after a successful self-heal is idempotent (second run:
-      `isInstalled` true → no install attempted).
+      `depsPresent` true → `ensureGoogleReady` no-ops, no install attempted).
 - [ ] `resolveFromDeps` uses direct-path construction (no ancestor walk): on a
       machine with an ancestor/global `googleapis`, a consented self-heal in the
       **same process** succeeds — the post-install read loads the deps-dir copy, not
       the cached ancestor (§0; case (a4)). Ancestor-only stays classified absent;
       a symlinked-inside copy pointing outside the deps dir stays rejected.
+- [ ] A **present-but-broken** deps tree (package.json but missing/malformed main)
+      classifies **broken**, not absent: `loadGoogleapis` throws the delete-then-
+      reinstall message (case a5), `ensureGoogleReady` no-ops (case h), and
+      `ensureGoogleapis` fails to the honest remedy instead of `npm`-over-corrupt
+      (case i) — no permanent loop (round-6 P2).
+- [ ] Self-heal chatter never lands on stdout: `ensureGoogleapis`'s notice + prompt
+      go to stderr and npm's output is routed to stderr, so `gws … --json | jq`
+      keeps clean stdout after a consented install (round-6 P1; cases g, j, and the
+      prompt.test.js `opts.output` case).
 - [ ] The existing no-token AND containment (:205–230) assertions in
-      `gws-deps.test.js` are byte-unchanged and still pass. `npm test` and
-      `npm run lint` are green.
+      `gws-deps.test.js` are byte-unchanged and still pass; existing `prompt.test.js`
+      cases are unchanged. `npm test` and `npm run lint` are green.
 
 ## Verification steps (run these; paste output in the PR)
 
@@ -900,3 +1060,30 @@ npm run lint
   same-process `loadGoogleapis` loads the deps copy — FAILS on the old walk, passes
   on the rewrite. Documented the preserved-or-strengthened threat posture and why
   the walk had to go.
+- **2026-07-13 — closing Codex PR pass, round-6 (two findings; deps.js +
+  prompt.js + doctor.js/WP-103).**
+  - **P1 (high user-visibility — stdout hygiene).** The self-heal wrote its notice,
+    consent prompt, and npm output to STDOUT, so a connected user's `gws … --json |
+    jq` got invalid JSON (and, with stdout piped + a TTY stdin, the prompt question
+    was written into the pipe, invisible, while it waited). Routed ALL chatter to
+    stderr: the notice → `process.stderr.write`; npm → `defaultRunInstall` `stdio:
+    ['inherit', 2, 2]`; the prompt → a new backward-compatible `opts.output` on
+    `confirm` (mode-1 output stream, default `process.stdout`) that `ensureGoogleapis`
+    sets to `process.stderr`. Grew Deliverables by `src/core/prompt.js` + its test.
+    `index.js` unchanged. auth's meaningful stdout (the authorization URL) is
+    separate and unchanged.
+  - **P2 (classification gap the §0 rewrite opened).** A tree whose `package.json`
+    exists but is unresolvable (missing/malformed main) made `resolveFromDeps` throw
+    → `isInstalled` false → classified ABSENT → self-heal `npm`-over-corrupt →
+    arborist no-op → permanent loop. Re-keyed the absent/broken split AND the
+    self-heal gate onto **physical presence** (`depsPresent`, the §0 step-1 existence
+    check, now extracted + exported): `loadGoogleapis` sets `present` before any
+    resolve so resolve-throw/require-throw/shape-fail/symlink-out all classify
+    BROKEN; `ensureGoogleReady` gates on `depsPresent` (never install over a present
+    tree); and `ensureGoogleapis` gained a `if (depsPresent(paths)) throw <delete-
+    then-reinstall remedy>` guard so the **auth** path fails honestly instead of
+    `npm`-over-corrupt (owner's no-auto-repair disposition). WP-103's doctor probe
+    swaps its broken-vs-missing key from `isInstalled` to `depsPresent`. New tests:
+    a5 (missing-main → broken), h (ensureGoogleReady no-op on present), i
+    (ensureGoogleapis present-broken throw), j (no stdout on yes-path); a2/a3/a4 and
+    the containment probes stay green.
