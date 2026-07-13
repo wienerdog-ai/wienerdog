@@ -1060,8 +1060,8 @@ npm run lint
   same-process `loadGoogleapis` loads the deps copy — FAILS on the old walk, passes
   on the rewrite. Documented the preserved-or-strengthened threat posture and why
   the walk had to go.
-- **2026-07-13 — closing Codex PR pass, round-6 (two findings; deps.js + prompt.js
-  + doctor.js/WP-103).**
+- **2026-07-13 — closing Codex PR pass, round-6 (two findings; deps.js +
+  prompt.js + doctor.js/WP-103).**
   - **P1 (high user-visibility — stdout hygiene).** The self-heal wrote its notice,
     consent prompt, and npm output to STDOUT, so a connected user's `gws … --json |
     jq` got invalid JSON (and, with stdout piped + a TTY stdin, the prompt question

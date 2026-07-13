@@ -84,6 +84,19 @@ function plantShapelessDeps(paths) {
   fs.writeFileSync(path.join(pkgDir, 'index.js'), 'module.exports = {};\n');
 }
 
+/** Plant a MAINLESS googleapis: package.json present (main: index.js) but NO
+ *  index.js — present (package.json exists) yet req.resolve THROWS. The round-6 P2
+ *  case that must classify BROKEN, not absent. */
+function plantMainlessDeps(paths) {
+  const pkgDir = path.join(deps.depsDir(paths), 'node_modules', 'googleapis');
+  fs.mkdirSync(pkgDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(pkgDir, 'package.json'),
+    JSON.stringify({ name: 'googleapis', version: '173.0.0', main: 'index.js' })
+  );
+  // deliberately NO index.js — req.resolve(candidate) throws (main missing)
+}
+
 /**
  * Run one resolution case in a FRESH child process. A single process caches
  * successful resolutions (Module._pathCache keys on request+lookup-paths), so
@@ -331,6 +344,29 @@ test('loadGoogleapis with a token present + a shape-broken (loads-to-{}) install
   );
 });
 
+test('loadGoogleapis with a token present + a mainless tree (package.json but no main) throws the "broken" message, not absent', () => {
+  // round-6 P2: req.resolve THROWS on a missing main, so a resolvable key would
+  // mis-classify this tree ABSENT ("will offer to install") → self-heal would
+  // npm-over-corrupt → arborist can no-op → permanent loop. Physical presence
+  // (depsPresent) keys it BROKEN instead.
+  const paths = tempPaths();
+  plantToken(paths);
+  plantMainlessDeps(paths);
+  assert.throws(
+    () => deps.loadGoogleapis(paths),
+    (err) =>
+      err instanceof WienerdogError &&
+      /broken \(installed but not loadable\)/.test(err.message) &&
+      /delete the folder/.test(err.message) &&
+      !/needs a one-time install/.test(err.message) &&
+      !/will offer to install/.test(err.message) &&
+      !/\/wienerdog-google-setup/.test(err.message)
+  );
+  // The exact state that mis-classified as absent under the old resolvable key:
+  assert.equal(deps.depsPresent(paths), true);
+  assert.equal(deps.isInstalled(paths), false);
+});
+
 test('resolveFromDeps is cache-immune: an ancestor googleapis never satisfies the guard, and a deps-dir install loads in the SAME process', () => {
   // §0 regression (WP-102). The OLD ancestor-walk guard resolved the bare
   // 'googleapis' request: an ancestor copy resolved (then was correctly
@@ -445,7 +481,28 @@ test('ensureGoogleReady with opts.yes installs without prompting', async () => {
   assert.equal(deps.isInstalled(paths), true);
 });
 
-test('ensureGoogleapis passes { defaultYes: true } to confirm (Enter accepts)', async () => {
+test('ensureGoogleReady with a PRESENT-but-BROKEN tree is a no-op, seams never consulted', async () => {
+  // round-6 P2: self-heal must NOT `npm` over a present-but-broken tree — it
+  // returns via the depsPresent gate; loadGoogleapis surfaces broken-vs-healthy.
+  const paths = tempPaths();
+  plantToken(paths);
+  plantMainlessDeps(paths);
+  let ran = false;
+  const res = await deps.ensureGoogleReady(paths, {
+    confirm: async () => {
+      ran = true;
+      return true;
+    },
+    runInstall: () => {
+      ran = true;
+      return { status: 0 };
+    },
+  });
+  assert.equal(res, undefined);
+  assert.equal(ran, false, 'neither seam may run on a present-but-broken tree');
+});
+
+test('ensureGoogleapis passes { defaultYes: true, output: process.stderr } to confirm (Enter accepts; prompt on stderr)', async () => {
   const paths = tempPaths();
   let seenQ, seenOpts;
   await deps.ensureGoogleapis(paths, {
@@ -457,8 +514,63 @@ test('ensureGoogleapis passes { defaultYes: true } to confirm (Enter accepts)', 
     runInstall: fakeInstall,
   });
   assert.equal(seenQ, 'Install it now? [Y/n] ');
-  assert.deepEqual(seenOpts, { defaultYes: true });
+  assert.equal(seenOpts.defaultYes, true);
+  // Identity check on the stream, not deepEqual — a stream is not structurally
+  // comparable (round-6 P1: the prompt must render on stderr).
+  assert.equal(seenOpts.output, process.stderr);
   assert.equal(deps.isInstalled(paths), true, 'the install must have run');
+});
+
+test('ensureGoogleapis with a PRESENT-but-BROKEN tree throws the delete-then-reinstall remedy, no install', async () => {
+  // round-6 P2 (auth path): never npm-over-corrupt; fail to the honest remedy.
+  const paths = tempPaths();
+  plantMainlessDeps(paths);
+  let ran = false;
+  await assert.rejects(
+    () =>
+      deps.ensureGoogleapis(paths, {
+        confirm: async () => true,
+        runInstall: () => {
+          ran = true;
+          return { status: 0 };
+        },
+      }),
+    (err) =>
+      err instanceof WienerdogError &&
+      /Delete the folder/.test(err.message) &&
+      err.message.includes(
+        `npm install --ignore-scripts --prefix "${deps.depsDir(paths)}" ${deps.GOOGLEAPIS_SPEC}`
+      )
+  );
+  assert.equal(ran, false, 'installer must not run over a present-but-broken tree');
+});
+
+test('ensureGoogleapis writes NOTHING to stdout on the yes-path; the notice goes to stderr', async () => {
+  // round-6 P1: a piped read (`gws … --json | jq`) must keep clean stdout even
+  // when the first read triggers a consented install. The injected confirm seam
+  // does not touch streams, so this asserts the notice routing; the prompt-stream
+  // routing is covered by the prompt.test.js opts.output case.
+  const paths = tempPaths();
+  const origOut = process.stdout.write;
+  const origErr = process.stderr.write;
+  let out = '';
+  let err = '';
+  process.stdout.write = (chunk) => {
+    out += chunk.toString();
+    return true;
+  };
+  process.stderr.write = (chunk) => {
+    err += chunk.toString();
+    return true;
+  };
+  try {
+    await deps.ensureGoogleapis(paths, { confirm: async () => true, runInstall: fakeInstall });
+  } finally {
+    process.stdout.write = origOut;
+    process.stderr.write = origErr;
+  }
+  assert.equal(out, '', 'stdout must stay clean');
+  assert.match(err, /Wienerdog needs Google's client library/);
 });
 
 test('GOOGLEAPIS_SPEC tracks package.json googleapis major', () => {
