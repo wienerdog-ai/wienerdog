@@ -219,3 +219,17 @@ test('regression: no opts still defaults to no on an empty line', async () => {
     });
   });
 });
+
+test('mode 1: opts.output routes the prompt to the given stream (keeps stdout clean)', async () => {
+  await withFakeTTYStdin(async (fake) => {
+    const out = new PassThrough();
+    let written = '';
+    out.on('data', (c) => {
+      written += c.toString();
+    });
+    const p = confirm('Install it now? [Y/n] ', { defaultYes: true, output: out });
+    fake.write('\n'); // bare Enter → true (defaultYes)
+    assert.equal(await p, true);
+    assert.match(written, /Install it now\?/); // the prompt went to opts.output, not stdout
+  });
+});
