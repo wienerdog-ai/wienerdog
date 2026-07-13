@@ -50,6 +50,34 @@ update_check: false
   return { root, env, paths, vault };
 }
 
+/** Build an isolated temp core (config+manifest) pointed at a caller-supplied vault
+ *  path (e.g. a symlink) that already exists — unlike setup(), this never mkdirs the
+ *  vault itself, so a test can pre-construct a symlinked vault or home before calling.
+ *  @param {string} home value used for $HOME (may itself be a symlink)
+ *  @param {string} vault absolute vault path to write into config.yaml */
+function setupCoreWithVault(home, vault) {
+  const env = { HOME: home, WIENERDOG_HOME: path.join(home, 'wd') };
+  const paths = getPaths(env);
+  fs.mkdirSync(paths.core, { recursive: true });
+  fs.mkdirSync(paths.state, { recursive: true });
+  fs.mkdirSync(paths.logs, { recursive: true });
+  const config = `# Wienerdog configuration
+version: 1
+vault: ${vault}
+update_check: false
+`;
+  fs.writeFileSync(paths.config, config);
+  manifestLib.save(paths, {
+    version: 1,
+    createdAt: new Date().toISOString(),
+    entries: [
+      { kind: 'dir', path: paths.core },
+      { kind: 'file', path: paths.config, hash: sha256(config) },
+    ],
+  });
+  return { env, paths };
+}
+
 /** Write an executable shell script and return its path. */
 function writeScript(dir, name, lines) {
   const p = path.join(dir, name);
@@ -465,6 +493,388 @@ test('scheduler-runjob: a vault under a protected folder is refused before spawn
   assert.deepEqual(alerts, ['job digest failed'], 'refusal fails loud');
   // No brain was spawned → no per-job log dir was created.
   assert.ok(!fs.existsSync(path.join(paths.logs, 'digest')), 'the job never spawned');
+});
+
+// These cases build real symlinks; stock Windows (no Developer Mode) throws EPERM on
+// symlink creation, so they are skipped there. The darwin TCC-guard logic itself is
+// exercised on every platform via the platform:'darwin' opt in the non-symlink
+// "a vault under a protected folder is refused" test above.
+const SKIP_WIN32_SYMLINK = process.platform === 'win32' && 'POSIX symlink semantics (Windows lacks unprivileged symlinks)';
+
+test(
+  'scheduler-runjob: a vault whose FINAL component symlinks into a protected folder is refused (WP-095)',
+  { skip: SKIP_WIN32_SYMLINK },
+  async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-runjob-symvault-'));
+  const protectedDir = path.join(root, 'Documents', 'vault');
+  fs.mkdirSync(protectedDir, { recursive: true });
+  // Literal vault path is NOT under a protected prefix — only following the symlink
+  // reveals it sits under Documents (scheduler #3: the defect this WP closes). The
+  // component-wise walk reads the link target and guards it before any stat, never
+  // realpath, so guarding it never stats inside Documents and can't trigger the TCC prompt.
+  const vaultLink = path.join(root, 'vault');
+  fs.symlinkSync(protectedDir, vaultLink);
+  const { env, paths } = setupCoreWithVault(root, vaultLink);
+  jobsLib.saveJob(paths, { name: 'digest', at: '07:00', run: 'skill:wienerdog-daily-digest', timeoutMinutes: 15 });
+  /** @type {any[]} */ const alerts = [];
+  const sendAlert = (_p, _n, subject) => (alerts.push(subject), { status: 0 });
+
+  await assert.rejects(
+    withRun(env, {}, ['digest'], { platform: 'darwin', sendAlert, loader: noopLoader }),
+    /macOS protected folder \(Documents\)/
+  );
+
+  const state = jobsLib.readScheduleState(paths);
+  assert.equal(state.digest.last_status, 'error');
+  assert.deepEqual(alerts, ['job digest failed'], 'refusal fails loud');
+  assert.ok(!fs.existsSync(path.join(paths.logs, 'digest')), 'the job never spawned');
+});
+
+test(
+  'scheduler-runjob: a symlinked vault is refused even when home itself is reached via a symlinked component (WP-095)',
+  { skip: SKIP_WIN32_SYMLINK },
+  async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-runjob-symhome-'));
+  const realHome = path.join(root, 'realhome');
+  fs.mkdirSync(realHome, { recursive: true });
+  // home is itself a symlink (e.g. a real /var/home -> /home shape). The component-wise
+  // walk canonicalizes both the vault and home, and guards each vault component against
+  // BOTH the literal- and resolved-home domains, so the resolved Documents/vault is
+  // caught even though home is reached via a symlinked component (round-2 domain-matched
+  // intent — kept here via the check-before-access walk, never realpath).
+  const home = path.join(root, 'home');
+  fs.symlinkSync(realHome, home);
+  const protectedDir = path.join(realHome, 'Documents', 'vault');
+  fs.mkdirSync(protectedDir, { recursive: true });
+  // Literal vault path (via the symlinked home) is NOT under a protected prefix.
+  const vaultLink = path.join(home, 'vault');
+  fs.symlinkSync(path.join(home, 'Documents', 'vault'), vaultLink);
+  const { env, paths } = setupCoreWithVault(home, vaultLink);
+  jobsLib.saveJob(paths, { name: 'digest', at: '07:00', run: 'skill:wienerdog-daily-digest', timeoutMinutes: 15 });
+  /** @type {any[]} */ const alerts = [];
+  const sendAlert = (_p, _n, subject) => (alerts.push(subject), { status: 0 });
+
+  await assert.rejects(
+    withRun(env, {}, ['digest'], { platform: 'darwin', sendAlert, loader: noopLoader }),
+    /macOS protected folder \(Documents\)/
+  );
+
+  const state = jobsLib.readScheduleState(paths);
+  assert.equal(state.digest.last_status, 'error');
+  assert.deepEqual(alerts, ['job digest failed'], 'refusal fails loud');
+  assert.ok(!fs.existsSync(path.join(paths.logs, 'digest')), 'the job never spawned');
+});
+
+test(
+  'scheduler-runjob: a symlinked ANCESTOR into a protected folder is refused WITHOUT stat-ing inside it (WP-095)',
+  { skip: SKIP_WIN32_SYMLINK },
+  async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-runjob-ancestor-'));
+  // alias -> Documents (a symlinked ANCESTOR). Vault is configured as ~/alias/vault.
+  // A whole-path lstat(~/alias/vault) would traverse `alias` INTO Documents to stat
+  // `vault` — touching the protected dir before any guard runs (the 2nd defect this WP
+  // closes). The component-wise walk resolves `alias` to Documents and refuses BEFORE
+  // ever stat-ing Documents.
+  const documents = path.join(root, 'Documents');
+  fs.mkdirSync(path.join(documents, 'vault'), { recursive: true });
+  fs.symlinkSync(documents, path.join(root, 'alias'));
+  const vaultCfg = path.join(root, 'alias', 'vault');
+  const { env, paths } = setupCoreWithVault(root, vaultCfg);
+  jobsLib.saveJob(paths, { name: 'digest', at: '07:00', run: 'skill:wienerdog-daily-digest', timeoutMinutes: 15 });
+  const sendAlert = () => ({ status: 0 });
+
+  // Spy on fs.lstatSync (the module under test uses this same fs object) and assert the
+  // guard never stat-ed a path inside the protected Documents dir (either spelling —
+  // macOS tmp resolves through /private/var). readlink of `alias` in home is fine; a
+  // stat INSIDE Documents is the failure we prove absent.
+  const realLstat = fs.lstatSync;
+  const realDocuments = fs.realpathSync(documents);
+  /** @type {string[]} */ const statted = [];
+  fs.lstatSync = (p, ...a) => {
+    statted.push(String(p));
+    return realLstat.call(fs, p, ...a);
+  };
+  try {
+    await assert.rejects(
+      withRun(env, {}, ['digest'], { platform: 'darwin', sendAlert, loader: noopLoader }),
+      /macOS protected folder \(Documents\)/
+    );
+  } finally {
+    fs.lstatSync = realLstat;
+  }
+
+  const under = (p, base) => p === base || p.startsWith(base + path.sep);
+  const insideProtected = statted.filter((p) => under(p, documents) || under(p, realDocuments));
+  assert.deepEqual(insideProtected, [], 'guard never stats inside the protected Documents dir');
+  assert.equal(jobsLib.readScheduleState(paths).digest.last_status, 'error');
+  assert.ok(!fs.existsSync(path.join(paths.logs, 'digest')), 'the job never spawned');
+});
+
+test(
+  'scheduler-runjob: a LOWERCASE-cased symlink target of a protected dir is refused, no stat inside it (WP-095)',
+  { skip: SKIP_WIN32_SYMLINK },
+  async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-runjob-case-'));
+  // The real protected dir is canonically-cased ~/Documents/vault. The vault symlink's
+  // target is spelled LOWERCASE (~/documents/vault). On macOS's default case-insensitive
+  // FS the OS resolves `documents` to the same inode as `Documents`, so a case-SENSITIVE
+  // guard would pass `documents` and then lstat it — hitting the real protected dir (the
+  // 3rd defect this WP closes). checkPath now compares protected prefixes case-
+  // insensitively, so the walk refuses `~/documents` BEFORE stat-ing it.
+  const documents = path.join(root, 'Documents');
+  fs.mkdirSync(path.join(documents, 'vault'), { recursive: true });
+  fs.symlinkSync(path.join(root, 'documents', 'vault'), path.join(root, 'link'));
+  const { env, paths } = setupCoreWithVault(root, path.join(root, 'link'));
+  jobsLib.saveJob(paths, { name: 'digest', at: '07:00', run: 'skill:wienerdog-daily-digest', timeoutMinutes: 15 });
+  const sendAlert = () => ({ status: 0 });
+
+  const realLstat = fs.lstatSync;
+  const realDocuments = fs.realpathSync(documents);
+  /** @type {string[]} */ const statted = [];
+  fs.lstatSync = (p, ...a) => {
+    statted.push(String(p));
+    return realLstat.call(fs, p, ...a);
+  };
+  try {
+    await assert.rejects(
+      withRun(env, {}, ['digest'], { platform: 'darwin', sendAlert, loader: noopLoader }),
+      /macOS protected folder \(Documents\)/
+    );
+  } finally {
+    fs.lstatSync = realLstat;
+  }
+
+  // Case-INSENSITIVE containment check: prove no stat landed inside the protected dir
+  // under EITHER the 'Documents' or 'documents' spelling (same inode on this FS).
+  const underCI = (p, base) => {
+    const P = p.toLowerCase();
+    const B = base.toLowerCase();
+    return P === B || P.startsWith(B + path.sep);
+  };
+  const insideProtected = statted.filter((p) => underCI(p, documents) || underCI(p, realDocuments));
+  assert.deepEqual(insideProtected, [], 'guard never stats inside the protected dir (any casing)');
+  assert.equal(jobsLib.readScheduleState(paths).digest.last_status, 'error');
+  assert.ok(!fs.existsSync(path.join(paths.logs, 'digest')), 'the job never spawned');
+});
+
+test(
+  'scheduler-runjob: a symlink target that varies a HOME component casing is refused, no stat inside the protected dir (WP-095)',
+  { skip: SKIP_WIN32_SYMLINK },
+  async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-runjob-homecase-'));
+  const documents = path.join(root, 'Documents');
+  fs.mkdirSync(path.join(documents, 'vault'), { recursive: true });
+  // The vault symlink's target varies the CASING of a HOME component: flip the case of
+  // every letter in root's basename (same dir on macOS's case-insensitive FS, a distinct
+  // non-existent path on a case-sensitive one). A case-SENSITIVE path.relative(home, p)
+  // then classifies the target as OUTSIDE home and the prefix check never runs → the
+  // walker would lstat the (case-insensitively real) protected Documents (the 4th defect
+  // this WP closes). The now case-insensitive containment refuses it before any lstat.
+  const flipCase = (s) =>
+    [...s].map((ch) => (ch === ch.toLowerCase() ? ch.toUpperCase() : ch.toLowerCase())).join('');
+  const homeVariant = path.join(path.dirname(root), flipCase(path.basename(root)));
+  assert.notEqual(homeVariant, root, 'the variant must differ in case to exercise the gap');
+  const targetVariant = path.join(homeVariant, 'Documents', 'vault');
+  fs.symlinkSync(targetVariant, path.join(root, 'link'));
+  const { env, paths } = setupCoreWithVault(root, path.join(root, 'link'));
+  jobsLib.saveJob(paths, { name: 'digest', at: '07:00', run: 'skill:wienerdog-daily-digest', timeoutMinutes: 15 });
+  const sendAlert = () => ({ status: 0 });
+
+  const realLstat = fs.lstatSync;
+  const realDocuments = fs.realpathSync(documents);
+  /** @type {string[]} */ const statted = [];
+  fs.lstatSync = (p, ...a) => {
+    statted.push(String(p));
+    return realLstat.call(fs, p, ...a);
+  };
+  try {
+    await assert.rejects(
+      withRun(env, {}, ['digest'], { platform: 'darwin', sendAlert, loader: noopLoader }),
+      /macOS protected folder \(Documents\)/
+    );
+  } finally {
+    fs.lstatSync = realLstat;
+  }
+
+  const underCI = (p, base) => {
+    const P = p.toLowerCase();
+    const B = base.toLowerCase();
+    return P === B || P.startsWith(B + path.sep);
+  };
+  const insideProtected = statted.filter((p) => underCI(p, documents) || underCI(p, realDocuments));
+  assert.deepEqual(insideProtected, [], 'guard never stats inside the protected dir (home-casing variant)');
+  assert.equal(jobsLib.readScheduleState(paths).digest.last_status, 'error');
+  assert.ok(!fs.existsSync(path.join(paths.logs, 'digest')), 'the job never spawned');
+});
+
+test(
+  'scheduler-runjob: a symlink target using the APFS Data-volume firmlink spelling is refused, no stat inside the protected dir (WP-095)',
+  { skip: SKIP_WIN32_SYMLINK },
+  async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-runjob-firmlink-'));
+  const documents = path.join(root, 'Documents');
+  fs.mkdirSync(path.join(documents, 'vault'), { recursive: true });
+  // The vault symlink's target uses the Data-volume FIRMLINK spelling of the protected
+  // dir: /System/Volumes/Data + <root>/Documents/vault. On macOS this names the same
+  // inode as <root>/Documents/vault, so a guard that only knows the plain spelling sees
+  // it as outside home and the walker lstats the real protected dir (the 5th defect this
+  // WP closes). checkPath strips the firmlink prefix, so the walk refuses it before lstat.
+  const firmlinkTarget = '/System/Volumes/Data' + path.join(root, 'Documents', 'vault');
+  fs.symlinkSync(firmlinkTarget, path.join(root, 'link'));
+  const { env, paths } = setupCoreWithVault(root, path.join(root, 'link'));
+  jobsLib.saveJob(paths, { name: 'digest', at: '07:00', run: 'skill:wienerdog-daily-digest', timeoutMinutes: 15 });
+  const sendAlert = () => ({ status: 0 });
+
+  const realLstat = fs.lstatSync;
+  const realDocuments = fs.realpathSync(documents);
+  /** @type {string[]} */ const statted = [];
+  fs.lstatSync = (p, ...a) => {
+    statted.push(String(p));
+    return realLstat.call(fs, p, ...a);
+  };
+  try {
+    await assert.rejects(
+      withRun(env, {}, ['digest'], { platform: 'darwin', sendAlert, loader: noopLoader }),
+      /macOS protected folder \(Documents\)/
+    );
+  } finally {
+    fs.lstatSync = realLstat;
+  }
+
+  // Normalize statted paths the SAME way the guard does (strip firmlink → NFC → lower)
+  // so a stat under ANY spelling of the protected dir is caught.
+  const stripData = (s) =>
+    s === '/System/Volumes/Data' ? '/' : s.startsWith('/System/Volumes/Data/') ? s.slice('/System/Volumes/Data'.length) : s;
+  const norm = (s) => stripData(s).normalize('NFC').toLowerCase();
+  const underN = (p, base) => {
+    const P = norm(p);
+    const B = norm(base);
+    return P === B || P.startsWith(B + path.sep);
+  };
+  const insideProtected = statted.filter((p) => underN(p, documents) || underN(p, realDocuments));
+  assert.deepEqual(insideProtected, [], 'guard never stats inside the protected dir (firmlink spelling)');
+  assert.equal(jobsLib.readScheduleState(paths).digest.last_status, 'error');
+  assert.ok(!fs.existsSync(path.join(paths.logs, 'digest')), 'the job never spawned');
+});
+
+test(
+  'scheduler-runjob: a CASE-VARIANT firmlink-prefix target is refused, no stat inside the protected dir (WP-095)',
+  { skip: SKIP_WIN32_SYMLINK },
+  async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-runjob-fwcase-'));
+  const documents = path.join(root, 'Documents');
+  fs.mkdirSync(path.join(documents, 'vault'), { recursive: true });
+  // The Data-volume firmlink prefix itself is spelled in LOWERCASE (/system/volumes/data).
+  // Without folding case BEFORE the firmlink strip, checkPath fails to strip it → the
+  // target lands outside the lowercased home → the walker lstats the real protected dir
+  // (the round-6 ordering bug). The reordered pipeline strips it and refuses before lstat.
+  const firmlinkTarget = '/system/volumes/data' + path.join(root, 'Documents', 'vault');
+  fs.symlinkSync(firmlinkTarget, path.join(root, 'link'));
+  const { env, paths } = setupCoreWithVault(root, path.join(root, 'link'));
+  jobsLib.saveJob(paths, { name: 'digest', at: '07:00', run: 'skill:wienerdog-daily-digest', timeoutMinutes: 15 });
+  const sendAlert = () => ({ status: 0 });
+
+  const realLstat = fs.lstatSync;
+  const realDocuments = fs.realpathSync(documents);
+  /** @type {string[]} */ const statted = [];
+  fs.lstatSync = (p, ...a) => {
+    statted.push(String(p));
+    return realLstat.call(fs, p, ...a);
+  };
+  try {
+    await assert.rejects(
+      withRun(env, {}, ['digest'], { platform: 'darwin', sendAlert, loader: noopLoader }),
+      /macOS protected folder \(Documents\)/
+    );
+  } finally {
+    fs.lstatSync = realLstat;
+  }
+
+  // Normalize statted paths the same way the guard does (case → firmlink → NFC) so a
+  // stat inside the protected dir is caught under any spelling (incl. lowercase firmlink).
+  const norm = (s) => {
+    const lc = s.normalize('NFC').toLowerCase();
+    const fw = '/system/volumes/data';
+    return lc === fw ? '/' : lc.startsWith(fw + '/') ? lc.slice(fw.length) : lc;
+  };
+  const underN = (p, base) => {
+    const P = norm(p);
+    const B = norm(base);
+    return P === B || P.startsWith(B + path.sep);
+  };
+  const insideProtected = statted.filter((p) => underN(p, documents) || underN(p, realDocuments));
+  assert.deepEqual(insideProtected, [], 'guard never stats inside the protected dir (case-variant firmlink)');
+  assert.equal(jobsLib.readScheduleState(paths).digest.last_status, 'error');
+  assert.ok(!fs.existsSync(path.join(paths.logs, 'digest')), 'the job never spawned');
+});
+
+test(
+  'scheduler-runjob: a final symlink with a TRAILING SLASH into a protected folder is refused (WP-095)',
+  { skip: SKIP_WIN32_SYMLINK },
+  async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-runjob-trailing-'));
+  const protectedDir = path.join(root, 'Documents', 'vault');
+  fs.mkdirSync(protectedDir, { recursive: true });
+  fs.symlinkSync(protectedDir, path.join(root, 'vault'));
+  // Configured vault carries a trailing separator (~/vault/) — the walk must strip it
+  // and still follow the final symlink into Documents.
+  const vaultCfg = path.join(root, 'vault') + path.sep;
+  const { env, paths } = setupCoreWithVault(root, vaultCfg);
+  jobsLib.saveJob(paths, { name: 'digest', at: '07:00', run: 'skill:wienerdog-daily-digest', timeoutMinutes: 15 });
+  const sendAlert = () => ({ status: 0 });
+
+  await assert.rejects(
+    withRun(env, {}, ['digest'], { platform: 'darwin', sendAlert, loader: noopLoader }),
+    /macOS protected folder \(Documents\)/
+  );
+  assert.equal(jobsLib.readScheduleState(paths).digest.last_status, 'error');
+  assert.ok(!fs.existsSync(path.join(paths.logs, 'digest')), 'the job never spawned');
+});
+
+test(
+  'scheduler-runjob: a CHAINED symlink (a -> b -> protected) is refused (WP-095)',
+  { skip: SKIP_WIN32_SYMLINK },
+  async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-runjob-chain-'));
+  const protectedDir = path.join(root, 'Documents', 'vault');
+  fs.mkdirSync(protectedDir, { recursive: true });
+  // a -> b, b -> Documents/vault. Vault configured as ~/a.
+  fs.symlinkSync(path.join(root, 'b'), path.join(root, 'a'));
+  fs.symlinkSync(protectedDir, path.join(root, 'b'));
+  const { env, paths } = setupCoreWithVault(root, path.join(root, 'a'));
+  jobsLib.saveJob(paths, { name: 'digest', at: '07:00', run: 'skill:wienerdog-daily-digest', timeoutMinutes: 15 });
+  const sendAlert = () => ({ status: 0 });
+
+  await assert.rejects(
+    withRun(env, {}, ['digest'], { platform: 'darwin', sendAlert, loader: noopLoader }),
+    /macOS protected folder \(Documents\)/
+  );
+  assert.equal(jobsLib.readScheduleState(paths).digest.last_status, 'error');
+  assert.ok(!fs.existsSync(path.join(paths.logs, 'digest')), 'the job never spawned');
+});
+
+test(
+  'scheduler-runjob: a legitimately non-protected symlinked vault still runs (WP-095)',
+  { skip: SKIP_WIN32_SYMLINK },
+  async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-runjob-oksym-'));
+  // link -> projects/vault (NOT under a protected prefix) → must run normally.
+  const realVault = path.join(root, 'projects', 'vault');
+  fs.mkdirSync(realVault, { recursive: true });
+  fs.symlinkSync(realVault, path.join(root, 'link'));
+  const { env, paths } = setupCoreWithVault(root, path.join(root, 'link'));
+  jobsLib.saveJob(paths, { name: 'dream', at: '03:30', run: 'builtin:dream', timeoutMinutes: 20 });
+  const fake = writeScript(root, 'ok.sh', ['#!/bin/sh', 'exit 0']);
+
+  await withRun(env, { WIENERDOG_RUNJOB_CMD: fake }, ['dream'], {
+    platform: 'darwin',
+    sendAlert: () => ({ status: 0 }),
+    loader: noopLoader,
+  });
+
+  const state = jobsLib.readScheduleState(paths);
+  assert.equal(state.dream.last_status, 'ok', 'non-protected symlinked vault runs');
+  assert.ok(state.dream.last_success, 'watermark set');
 });
 
 // -------------------------------------------------------------------------

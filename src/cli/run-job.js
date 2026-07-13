@@ -320,6 +320,88 @@ async function failLoud(paths, name, reason, logTail, opts = {}) {
   }
 }
 
+/** Split an absolute path into its non-empty components, keeping '.' and '..'.
+ *  @param {string} p @returns {{root:string, comps:string[]}} */
+function splitAbsolute(p) {
+  const root = path.parse(p).root || path.sep;
+  const comps = p.slice(root.length).split(path.sep).filter((s) => s.length > 0);
+  return { root, comps };
+}
+
+/**
+ * Fully resolve a path's symlinks with a component-wise, check-BEFORE-access walk, so
+ * NO path that lexically resolves into a protected dir is ever stat-ed. This is the
+ * definitive TCC-safe resolver: a single fs.lstatSync/fs.realpathSync on the whole
+ * vault path lets the OS traverse a symlinked ANCESTOR (e.g. ~/alias/vault where
+ * `alias -> ~/Documents`) or a trailing-slash final symlink INTO the protected folder
+ * before any guard runs — the exact hang this guard exists to prevent. Here we walk one
+ * component at a time from the root: `resolved` is the fully-real, already-guarded
+ * prefix built so far (invariant: never an unresolved symlink, never protected), and
+ * each next component is guarded LEXICALLY (pure path.relative, no FS) BEFORE it is ever
+ * lstat-ed. Because every ancestor of a candidate is already real, lstat can never
+ * traverse an unresolved symlink into a protected dir, and a candidate that lexically
+ * lands in one is refused before the lstat happens. Symlinks (ancestor, final, chained,
+ * absolute or relative target) are expanded by pushing the target's components back onto
+ * the work queue and re-walking them; a symlink-hop cap fails CLOSED on a cycle.
+ * Best-effort: an lstat error on a candidate that is not protected treats it as a plain
+ * (non-symlink) component, so a missing/odd vault never crashes the guard.
+ * @param {string} input           absolute path to resolve
+ * @param {(candidate:string) => ({offending:string, prefix:string}|null)} guard
+ *        called on each candidate BEFORE any lstat; return a hit to refuse, else null
+ * @param {number} [hopCap=40]      max symlink resolutions (ELOOP-style, fail closed)
+ * @returns {{ok:true, resolved:string} | {ok:false, offending:string, prefix:string}}
+ */
+function safeResolvePath(input, guard, hopCap = 40) {
+  let { root: resolved, comps } = splitAbsolute(input);
+  /** @type {string[]} */
+  const queue = comps;
+  let hops = 0;
+  while (queue.length > 0) {
+    const component = queue.shift();
+    if (component === '.') continue;
+    if (component === '..') {
+      resolved = path.dirname(resolved);
+      continue;
+    }
+    const candidate = path.join(resolved, component);
+    // GUARD BEFORE ANY FS ACCESS: never lstat a path that lexically resolves into a
+    // protected dir (its ancestors are all already real, so this is exact).
+    const hit = guard(candidate);
+    if (hit) return { ok: false, offending: hit.offending, prefix: hit.prefix };
+    let st;
+    try {
+      st = fs.lstatSync(candidate); // safe: ancestors are real, candidate is not protected
+    } catch {
+      resolved = candidate; // absent/odd → treat as a plain component (best-effort)
+      continue;
+    }
+    if (!st.isSymbolicLink()) {
+      resolved = candidate;
+      continue;
+    }
+    if (++hops > hopCap) {
+      // Probable symlink cycle → fail closed rather than resolve indefinitely.
+      return { ok: false, offending: input, prefix: 'unresolved symlink chain' };
+    }
+    let target;
+    try {
+      target = fs.readlinkSync(candidate); // reads the link node, not the target's contents
+    } catch {
+      resolved = candidate;
+      continue;
+    }
+    if (path.isAbsolute(target)) {
+      const t = splitAbsolute(target);
+      resolved = t.root; // restart at the target's root; re-walk its components + the rest
+      queue.unshift(...t.comps);
+    } else {
+      // Relative target resolves from the LINK's own dir (= resolved); re-walk from here.
+      queue.unshift(...target.split(path.sep).filter((s) => s.length > 0));
+    }
+  }
+  return { ok: true, resolved };
+}
+
 /**
  * Run ONE job now: clean env, TCC-guard, watchdog, teed+rotated logs, fail-loud,
  * watermark. Throws WienerdogError (→ exit 1) on failure/timeout/guard-refusal.
@@ -336,7 +418,42 @@ async function runJob(paths, job, opts = {}) {
   const cwd = vaultDir;
 
   // 1. TCC-guard: refuse (fail-loud) rather than hang on a protected folder.
-  const g = tccguard.guard([vaultDir, cwd], paths.home, opts.platform);
+  //
+  // Order matters for TCC-safety. Run the LITERAL guard FIRST: tccguard.checkPath is
+  // pure string arithmetic (path.relative) with ZERO filesystem access, so a
+  // directly-configured protected vault (~/Documents/vault) is refused without ever
+  // touching the disk. Only if the literal path is clean do we resolve symlinks — via a
+  // component-wise, check-BEFORE-access walk (safeResolvePath), NEVER fs.realpathSync or
+  // a whole-path fs.lstatSync: both let the OS traverse a symlinked ANCESTOR (or a
+  // trailing-slash final symlink) INTO a protected folder before any guard runs, which
+  // could trigger the exact TCC prompt this guard exists to prevent (scheduler #3, the
+  // "4-hour hang"). The walk guards each component before it is ever stat-ed.
+  const gLiteral = tccguard.guard([vaultDir, cwd], paths.home, platform);
+  let g = gLiteral;
+  if (g.ok) {
+    // Canonicalize home the same safe way (home is never TCC-protected, so its walk
+    // never refuses) so a symlinked home component (e.g. a real /var/home -> /home) is
+    // followed too; the vault is then compared in BOTH the literal-home and resolved-
+    // home domains, catching a symlink target spelled through either home.
+    const homeRes = safeResolvePath(paths.home, () => null);
+    const resolvedHome = homeRes.ok ? homeRes.resolved : paths.home;
+    const vaultGuard = (candidate) => {
+      for (const h of [paths.home, resolvedHome]) {
+        const c = tccguard.checkPath(candidate, h, platform);
+        if (c.protected) return { offending: candidate, prefix: c.prefix };
+      }
+      return null;
+    };
+    const r = safeResolvePath(vaultDir, vaultGuard);
+    if (!r.ok) {
+      g = { ok: false, offending: r.offending, prefix: r.prefix };
+    } else {
+      // Redundant with the per-component guards, but keep the final belt-and-suspenders
+      // check on the fully-resolved vault in both home domains.
+      g = tccguard.guard([r.resolved], paths.home, platform);
+      if (g.ok) g = tccguard.guard([r.resolved], resolvedHome, platform);
+    }
+  }
   if (!g.ok) {
     const reason =
       `refused: ${g.offending} is under a macOS protected folder (${g.prefix}) — ` +
