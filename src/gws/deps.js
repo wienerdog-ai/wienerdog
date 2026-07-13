@@ -90,7 +90,11 @@ function loadGoogleapis(paths) {
     const hit = resolveFromDeps(paths);
     if (hit) {
       resolvable = true; // resolves from inside the deps dir (== isInstalled)...
-      return hit.req(hit.resolved); // ...but a corrupt/partial install can still throw on require
+      const mod = hit.req(hit.resolved); // ...but a corrupt/partial install can still throw on require
+      // Shape check (closing PR-gate): a require that succeeds but yields no
+      // `google` API object (e.g. an empty/zero-byte entry point) is just as
+      // unusable — fall through so it is classified broken, not returned.
+      if (mod && typeof mod.google === 'object' && mod.google) return mod;
     }
   } catch {
     /* resolve failed (absent), OR require threw (corrupt); `resolvable` tells them apart */

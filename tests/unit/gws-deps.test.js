@@ -70,6 +70,20 @@ function plantCorruptDeps(paths) {
   fs.writeFileSync(path.join(pkgDir, 'index.js'), "throw new Error('corrupt googleapis entry point');\n");
 }
 
+/** Plant a SHAPE-BROKEN googleapis in the deps dir: it resolves AND requires
+ *  cleanly but exports no `google` API object (canonical: zero-byte entry
+ *  point) — must be classified broken, not returned as usable (WP-102
+ *  closing-PR-gate shape check). */
+function plantShapelessDeps(paths) {
+  const pkgDir = path.join(deps.depsDir(paths), 'node_modules', 'googleapis');
+  fs.mkdirSync(pkgDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(pkgDir, 'package.json'),
+    JSON.stringify({ name: 'googleapis', version: '173.0.0', main: 'index.js' })
+  );
+  fs.writeFileSync(path.join(pkgDir, 'index.js'), 'module.exports = {};\n');
+}
+
 /**
  * Run one resolution case in a FRESH child process. A single process caches
  * successful resolutions (Module._pathCache keys on request+lookup-paths), so
@@ -299,6 +313,22 @@ test('loadGoogleapis with a token present + a corrupt (resolvable-but-unloadable
   fakeInstall(deps.depsDir(paths));
   const g = deps.loadGoogleapis(paths);
   assert.equal(g.google.FAKE, true);
+});
+
+test('loadGoogleapis with a token present + a shape-broken (loads-to-{}) install throws the "broken" message, not a TypeError', () => {
+  const paths = tempPaths();
+  plantToken(paths);
+  plantShapelessDeps(paths);
+  assert.throws(
+    () => deps.loadGoogleapis(paths),
+    (err) =>
+      err instanceof WienerdogError &&
+      !(err instanceof TypeError) &&
+      /broken \(installed but not loadable\)/.test(err.message) &&
+      /delete the folder/.test(err.message) &&
+      !/will offer to install/.test(err.message) &&
+      !/wienerdog-google-setup/.test(err.message)
+  );
 });
 
 test('ensureGoogleReady with a token present + deps absent + consent-yes installs', async () => {

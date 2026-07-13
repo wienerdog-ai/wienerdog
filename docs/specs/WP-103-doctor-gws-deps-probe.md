@@ -232,6 +232,16 @@ function plantCorruptDeps(core) {
     JSON.stringify({ name: 'googleapis', version: '173.0.0', main: 'index.js' }));
   fs.writeFileSync(path.join(pkgDir, 'index.js'), "throw new Error('corrupt googleapis entry point');\n");
 }
+/** Plant a SHAPE-BROKEN fake googleapis: resolves AND requires cleanly, but exports
+ *  no `.google` (zero-byte / stub index.js → {}). The false-[ok] case the WP-102
+ *  load-probe shape check must catch (PR-gate P2). */
+function plantShapelessDeps(core) {
+  const pkgDir = path.join(core, 'app', 'deps', 'node_modules', 'googleapis');
+  fs.mkdirSync(pkgDir, { recursive: true });
+  fs.writeFileSync(path.join(pkgDir, 'package.json'),
+    JSON.stringify({ name: 'googleapis', version: '173.0.0', main: 'index.js' }));
+  fs.writeFileSync(path.join(pkgDir, 'index.js'), 'module.exports = {};\n');
+}
 /** Plant a VALID token (JSON + refresh_token) so the core reads as "connected". */
 function plantToken(core) {
   const secrets = path.join(core, 'secrets');
@@ -275,6 +285,14 @@ function plantDamagedToken(core, content) {
   Google connected/`, and `r.status === 0`. (This is the case a resolve-only check
   would falsely pass; its remedy must delete the tree first, since a bare `npm
   install` can no-op over it — round-4 Finding.)
+- **Connected + library SHAPE-BROKEN (loads to `{}`, no `.google`) → `[warn]`
+  "broken", exit 0 (PR-gate P2).** `init`; `plantToken(core)`;
+  `plantShapelessDeps(core)`; `doctor`. Assert `r.stdout` matches `/\[warn\] Google
+  is connected but its client library is broken \(installed but not loadable\)/`,
+  **does NOT match** `/\[ok\] Google connected/`, and `r.status === 0`. This proves
+  the false-`[ok]` is closed end-to-end: the load probe (`deps.loadGoogleapis`) now
+  shape-checks (WP-102), so a stub module that requires cleanly no longer reads as
+  usable. (No `doctor.js` change — the probe inherits WP-102's fix.)
 - **Connected + library present and loadable → `[ok]`.** `init`;
   `plantToken(core)`; `plantDeps(core)`; `doctor`. Assert `r.stdout` matches
   `/\[ok\] Google connected and its client library is installed/` and
@@ -409,3 +427,12 @@ npm run lint
   WP-102. Existing test assertions are unaffected (they pin the message text and the
   `delete the folder <path>` fragment, not the `--prefix` portion); no test change
   required here.
+- **2026-07-13 — closing PR-gate (Codex PR review; P2 fixed in WP-102's `deps.js`,
+  verified here).** The load probe treated any successfully-required module as
+  usable, so a shape-broken install (`index.js` → `{}`, canonically a zero-byte
+  entry point) passed → `doctor` falsely reported `[ok]` and the next gws read
+  crashed with a raw `TypeError`. WP-102's `loadGoogleapis` now shape-checks
+  (rejects a module with no truthy `.google`), and this probe **inherits** the fix
+  (it calls `loadGoogleapis`) — **no `doctor.js` code change**. Added a doctor test
+  case: `plantToken` + `plantShapelessDeps` (`module.exports = {}`) → `[warn]`
+  broken, never `[ok]`, proving the false-`[ok]` is closed end-to-end.
