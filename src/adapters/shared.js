@@ -3,9 +3,40 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { hashDir } = require('../core/manifest');
+const { WienerdogError } = require('../core/errors');
 
 const BEGIN = '<!-- wienerdog:begin -->';
 const END = '<!-- wienerdog:end -->';
+
+/** Locate the SINGLE managed block by FULL-LINE sentinel match (a line whose
+ *  trimmed content equals the sentinel). Returns {begin, end} character offsets
+ *  where `begin` = start of the BEGIN line and `end` = position just past the END
+ *  sentinel text on its line (matching the historical slice offsets), OR null when
+ *  no sentinel line exists. Throws WienerdogError when the markers are AMBIGUOUS:
+ *  more than one BEGIN or END line, or an END line before the BEGIN line, or exactly
+ *  one of the two present — refuse to edit rather than guess and swallow user text.
+ *  @param {string} content @param {string} what  file path, for the error message
+ *  @returns {{begin:number, end:number}|null} */
+function locateManagedBlock(content, what) {
+  const lines = content.split('\n');
+  const starts = []; let off = 0;
+  for (const l of lines) { starts.push(off); off += l.length + 1; }
+  const begins = []; const ends = [];
+  for (let i = 0; i < lines.length; i++) {
+    const t = lines[i].trim();
+    if (t === BEGIN) begins.push(i);
+    else if (t === END) ends.push(i);
+  }
+  if (begins.length === 0 && ends.length === 0) return null;
+  if (begins.length !== 1 || ends.length !== 1 || ends[0] < begins[0]) {
+    throw new WienerdogError(`ambiguous wienerdog managed-block markers in ${what} — refusing to edit (resolve by hand)`);
+  }
+  const b = begins[0], e = ends[0];
+  // `end` = right after the END sentinel text on its line (excludes trailing \n),
+  // matching the historical `indexOf(END) + END.length` for a clean written block.
+  const end = starts[e] + lines[e].indexOf(END) + END.length;
+  return { begin: starts[b], end };
+}
 
 /**
  * Record a manifest entry only if one with the same kind+path is not already
@@ -40,12 +71,27 @@ function recordCopiedSkill(manifest, linkPath, hash) {
 }
 
 /**
- * Build the sentinel-delimited managed block from a digest string.
+ * Build the sentinel-delimited managed block from a digest string. Neutralize any
+ * digest LINE that trims exactly to a sentinel so the emitted block always has
+ * exactly ONE begin/end pair — otherwise a self-wedge: the next sync/uninstall
+ * would see two markers, hit the single-pair invariant, and fail closed on
+ * Wienerdog's own output. Only a full-line sentinel is touched (colon → space);
+ * inline mentions are already safe under full-line matching, and a normal digest
+ * is unchanged (golden output stays byte-identical).
  * @param {string} digest
- * @returns {string} begin sentinel + digest.trimEnd() + end sentinel, no trailing newline.
+ * @returns {string} begin sentinel + neutralized digest.trimEnd() + end sentinel, no trailing newline.
  */
 function buildBlock(digest) {
-  return `${BEGIN}\n${digest.trimEnd()}\n${END}`;
+  const safeDigest = digest
+    .split('\n')
+    .map((line) => {
+      const t = line.trim();
+      if (t === BEGIN) return line.replace(BEGIN, '<!-- wienerdog begin -->'); // colon → space: no longer a sentinel
+      if (t === END) return line.replace(END, '<!-- wienerdog end -->');
+      return line;
+    })
+    .join('\n');
+  return `${BEGIN}\n${safeDigest.trimEnd()}\n${END}`;
 }
 
 /**
@@ -78,12 +124,11 @@ function applyManagedBlock(mdPath, digest, dryRun, manifest, out) {
     return;
   }
 
-  const begin = current.indexOf(BEGIN);
-  const end = current.indexOf(END);
-  if (begin !== -1 && end !== -1 && end > begin) {
+  const span = locateManagedBlock(current, mdPath); // may throw on ambiguous markers
+  if (span) {
     // Replace everything from begin sentinel through end sentinel (inclusive).
-    const before = current.slice(0, begin);
-    const after = current.slice(end + END.length);
+    const before = current.slice(0, span.begin);
+    const after = current.slice(span.end);
     const next = `${before}${block}${after}`;
     if (next === current) {
       out.unchanged.push(mdPath);

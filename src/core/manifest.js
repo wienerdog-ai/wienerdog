@@ -3,6 +3,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const { WienerdogError } = require('./errors');
 
 /**
  * install-manifest.json shape:
@@ -41,6 +42,38 @@ const crypto = require('node:crypto');
 
 const BEGIN_SENTINEL = '<!-- wienerdog:begin -->';
 const END_SENTINEL = '<!-- wienerdog:end -->';
+
+/** Locate the SINGLE managed block by FULL-LINE sentinel match (a line whose
+ *  trimmed content equals the sentinel). Returns {begin, end} character offsets
+ *  where `begin` = start of the BEGIN line and `end` = position just past the END
+ *  sentinel text on its line (matching the historical slice offsets), OR null when
+ *  no sentinel line exists. Throws WienerdogError when the markers are AMBIGUOUS:
+ *  more than one BEGIN or END line, or an END line before the BEGIN line, or exactly
+ *  one of the two present — refuse to edit rather than guess and swallow user text.
+ *  Deliberately duplicated in src/adapters/shared.js — the two modules must not
+ *  cross-depend (manifest.js is core; adapters/ sits above it).
+ *  @param {string} content @param {string} what  file path, for the error message
+ *  @returns {{begin:number, end:number}|null} */
+function locateManagedBlock(content, what) {
+  const lines = content.split('\n');
+  const starts = []; let off = 0;
+  for (const l of lines) { starts.push(off); off += l.length + 1; }
+  const begins = []; const ends = [];
+  for (let i = 0; i < lines.length; i++) {
+    const t = lines[i].trim();
+    if (t === BEGIN_SENTINEL) begins.push(i);
+    else if (t === END_SENTINEL) ends.push(i);
+  }
+  if (begins.length === 0 && ends.length === 0) return null;
+  if (begins.length !== 1 || ends.length !== 1 || ends[0] < begins[0]) {
+    throw new WienerdogError(`ambiguous wienerdog managed-block markers in ${what} — refusing to edit (resolve by hand)`);
+  }
+  const b = begins[0], e = ends[0];
+  // `end` = right after the END sentinel text on its line (excludes trailing \n),
+  // matching the historical `indexOf(END) + END.length` for a clean written block.
+  const end = starts[e] + lines[e].indexOf(END_SENTINEL) + END_SENTINEL.length;
+  return { begin: starts[b], end };
+}
 
 /** @param {string} p @returns {boolean} */
 function isFile(p) {
@@ -145,15 +178,23 @@ function reverseManagedBlock(entry, dryRun, removed, skipped, removedSet) {
     skipped.push(entry.path);
     return;
   }
-  const begin = content.indexOf(BEGIN_SENTINEL);
-  const end = content.indexOf(END_SENTINEL);
-  if (begin === -1 || end === -1 || end < begin) {
+  let span;
+  try {
+    span = locateManagedBlock(content, entry.path); // may throw on ambiguity
+  } catch (err) {
+    // Ambiguous markers → do NOT guess and delete user text; skip this entry and
+    // keep the uninstall going (the reverse loop has no try/catch of its own).
+    process.stderr.write(`wienerdog: ${err.message}; leaving ${entry.path} in place\n`);
+    skipped.push(entry.path);
+    return;
+  }
+  if (span === null) {
     // User removed the block themselves — nothing to reverse.
     skipped.push(entry.path);
     return;
   }
-  let before = content.slice(0, begin);
-  let after = content.slice(end + END_SENTINEL.length);
+  let before = content.slice(0, span.begin);
+  let after = content.slice(span.end);
   // The forward step wrote '\n' + block + '\n' after the prior content's own
   // trailing newline: one newline forming the blank-line separator, one
   // terminating the end sentinel. Remove exactly those two characters along
