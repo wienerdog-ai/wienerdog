@@ -199,7 +199,7 @@ test('doctor prints no Codex-skill line when Codex is not detected', () => {
   assert.doesNotMatch(r.stdout, /Codex skills/);
 });
 
-/** Plant a fake googleapis under <core>/app/deps so isInstalled() is true (no network). */
+/** Plant a WORKING fake googleapis under <core>/app/deps (resolves AND loads). */
 function plantDeps(core) {
   const pkgDir = path.join(core, 'app', 'deps', 'node_modules', 'googleapis');
   fs.mkdirSync(pkgDir, { recursive: true });
@@ -208,7 +208,16 @@ function plantDeps(core) {
   fs.writeFileSync(path.join(pkgDir, 'index.js'), 'module.exports = { google: {} };\n');
 }
 
-/** Plant a valid-looking token so the core reads as "connected". */
+/** Plant a CORRUPT fake googleapis: resolves fine, but its entry point throws on require. */
+function plantCorruptDeps(core) {
+  const pkgDir = path.join(core, 'app', 'deps', 'node_modules', 'googleapis');
+  fs.mkdirSync(pkgDir, { recursive: true });
+  fs.writeFileSync(path.join(pkgDir, 'package.json'),
+    JSON.stringify({ name: 'googleapis', version: '173.0.0', main: 'index.js' }));
+  fs.writeFileSync(path.join(pkgDir, 'index.js'), "throw new Error('corrupt googleapis entry point');\n");
+}
+
+/** Plant a VALID token (JSON + refresh_token) so the core reads as "connected". */
 function plantToken(core) {
   const secrets = path.join(core, 'secrets');
   fs.mkdirSync(secrets, { recursive: true });
@@ -216,13 +225,40 @@ function plantToken(core) {
     JSON.stringify({ access_token: 'a', refresh_token: 'r' }));
 }
 
+/** Plant a DAMAGED token file (malformed / missing refresh_token). */
+function plantDamagedToken(core, content) {
+  const secrets = path.join(core, 'secrets');
+  fs.mkdirSync(secrets, { recursive: true });
+  fs.writeFileSync(path.join(secrets, 'google-token.json'), content);
+}
+
 test('doctor prints no Google-readiness line when Google is not connected', () => {
   const { env } = tempEnv();
   run(['init', '--yes'], env);
   const r = run(['doctor'], env);
   assert.equal(r.status, 0);
-  assert.doesNotMatch(r.stdout, /Google connected|Google is connected but/);
+  assert.doesNotMatch(r.stdout, /Google connected|Google is connected but|Google sign-in file/);
 });
+
+const damagedTokenVariants = [
+  ['malformed JSON', 'not json'],
+  ['missing refresh_token', JSON.stringify({ access_token: 'a' })],
+  ['wrong-type refresh_token', JSON.stringify({ refresh_token: true })],
+  ['whitespace-only refresh_token', JSON.stringify({ refresh_token: '   ' })],
+  ['zero-byte file', ''],
+];
+
+for (const [label, content] of damagedTokenVariants) {
+  test(`doctor warns (exit 0) on a damaged Google token: ${label}`, () => {
+    const { core, env } = tempEnv();
+    run(['init', '--yes'], env);
+    plantDamagedToken(core, content);
+    const r = run(['doctor'], env);
+    assert.equal(r.status, 0, 'a damaged token is a warn, not a hard fail');
+    assert.match(r.stdout, /\[warn\] Google sign-in file looks damaged/);
+    assert.doesNotMatch(r.stdout, /\[ok\] Google connected/);
+  });
+}
 
 test('doctor warns (exit 0) when Google is connected but the client library is missing', () => {
   const { core, env } = tempEnv();
@@ -230,7 +266,27 @@ test('doctor warns (exit 0) when Google is connected but the client library is m
   plantToken(core);
   const r = run(['doctor'], env);
   assert.equal(r.status, 0, 'a missing library is a warn, not a hard fail');
-  assert.match(r.stdout, /\[warn\] Google is connected but its client library is missing/);
+  assert.match(
+    r.stdout,
+    /\[warn\] Google is connected but its client library is missing — the next .?wienerdog gws.? command will offer to install it/
+  );
+  assert.doesNotMatch(r.stdout, /gws auth/);
+});
+
+test('doctor warns (exit 0) when the client library is broken (resolves but fails to load)', () => {
+  const { core, env } = tempEnv();
+  run(['init', '--yes'], env);
+  plantToken(core);
+  plantCorruptDeps(core);
+  const r = run(['doctor'], env);
+  assert.equal(r.status, 0, 'a broken library is a warn, not a hard fail');
+  assert.match(
+    r.stdout,
+    /\[warn\] Google is connected but its client library is broken \(installed but not loadable\) — delete the folder /
+  );
+  assert.ok(r.stdout.includes(path.join(core, 'app', 'deps')), 'names the deps folder');
+  assert.doesNotMatch(r.stdout, /will offer to install/, 'the broken state does not self-heal');
+  assert.doesNotMatch(r.stdout, /\[ok\] Google connected/);
 });
 
 test('doctor reports [ok] when Google is connected and the client library is installed', () => {

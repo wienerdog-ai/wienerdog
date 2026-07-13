@@ -76,24 +76,67 @@ function codexSkillChecks(paths, harnesses) {
 }
 
 /** Report Google client-library readiness for a CONNECTED account. Read-only;
- *  never fails (a missing library is actionable, so a WARN). Emits NOTHING when
- *  Google is not connected (no token) — the normal state. WP-103 / BUG-gws-deps-missing.
+ *  never fails (WARN, not fail). Emits NOTHING when Google is not connected (no
+ *  token). A damaged token warns separately (never [ok]). Uses a containment-
+ *  guarded LOAD probe (not just resolve) so a corrupt/partial install warns.
+ *  WP-103 / BUG-gws-deps-missing.
  *  @param {import('../core/paths').WienerdogPaths} paths
  *  @returns {{status:'ok'|'warn', msg:string}[]} */
 function googleReadinessChecks(paths) {
   const { tokenPath } = require('../gws/client');
   const deps = require('../gws/deps');
-  if (!fileExists(tokenPath(paths))) return []; // Google not connected — nothing to check (normal)
-  if (deps.isInstalled(paths)) {
+  const tp = tokenPath(paths);
+  if (!fileExists(tp)) return []; // Google not connected — nothing to check (normal)
+
+  // Finding 4 + round-2 Finding 3 — minimal, read-only token validation: a
+  // zero-byte / malformed / incomplete token must never read as a healthy [ok].
+  // Require valid JSON with a NON-EMPTY STRING refresh_token (a truthiness-only
+  // check would let {"refresh_token":true} or a whitespace value pass). Anything
+  // else is a separate "damaged" warn.
+  let token = null;
+  try { token = JSON.parse(fs.readFileSync(tp, 'utf8')); } catch { token = null; }
+  if (!token || typeof token !== 'object' ||
+      typeof token.refresh_token !== 'string' || token.refresh_token.trim() === '') {
+    return [{ status: 'warn', msg: 'Google sign-in file looks damaged — reconnect with /wienerdog-google-setup' }];
+  }
+
+  // Finding 1(a) — containment-guarded LOAD probe: actually require the resolved
+  // module so a resolvable-but-unloadable (corrupt/partial) install warns instead
+  // of falsely reading [ok]. loadGoogleapis resolves via the containment guard
+  // AND requires the module inside its try/catch, so a broken entry point throws a
+  // WienerdogError we catch here. doctor runs rarely, so the load cost is fine.
+  let usable = false;
+  try { deps.loadGoogleapis(paths); usable = true; } catch { usable = false; }
+  if (usable) {
     return [{ status: 'ok', msg: 'Google connected and its client library is installed' }];
   }
-  const cmd = `npm install --ignore-scripts --prefix ${deps.depsDir(paths)} ${deps.GOOGLEAPIS_SPEC}`;
+  // Round-2 Finding 2 — DISTINGUISH the two failed-load states, because the
+  // self-heal promise is only true for one of them:
+  //   isInstalled false → ABSENT: the next read WILL self-heal (WP-102).
+  //   isInstalled true  → BROKEN (resolves but won't load): self-heal NO-OPs
+  //                        (WP-102's isInstalled gate is true), so promising an
+  //                        offer would be false — require a manual reinstall.
+  const dir = deps.depsDir(paths);
+  const cmd = `npm install --ignore-scripts --prefix ${dir} ${deps.GOOGLEAPIS_SPEC}`;
+  if (deps.isInstalled(paths)) {
+    // Round-4 Finding — a bare `npm install` can NO-OP over a corrupt-but-
+    // resolvable tree (npm compares tree metadata, not file contents), so the
+    // corrupt tree must be DELETED first. Deps dir is single-purpose → safe to
+    // remove wholesale. Platform-neutral prose (parity with WP-102).
+    return [
+      {
+        status: 'warn',
+        msg:
+          `Google is connected but its client library is broken (installed but not loadable) — delete the folder ${dir}, then reinstall it: ` + cmd,
+      },
+    ];
+  }
   return [
     {
       status: 'warn',
       msg:
         'Google is connected but its client library is missing — the next `wienerdog gws` ' +
-        'command will offer to install it, or run `wienerdog gws auth`, or: ' + cmd,
+        'command will offer to install it, or run: ' + cmd,
     },
   ];
 }
