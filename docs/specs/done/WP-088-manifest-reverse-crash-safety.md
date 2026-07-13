@@ -1,7 +1,7 @@
 ---
 id: WP-088
 title: Uninstall crash-safety — defer the deferred-deletion set (manifest, core, config.yaml) until the sweep succeeds; hash-guard file deletes; contain vendored-tree removal; fingerprint-guard copied-skill removal
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: [WP-089]
@@ -1123,3 +1123,7 @@ Fingerprint (copied-skill ownership) dispositions (in force):
 3. PR template filled, including "Decisions made" (or "none") and `Generated-by:`.
 4. This spec's `status:` flipped to `In-Review` in the same PR.
 </content>
+
+## Done record (2026-07-13)
+
+Merged to main as `c314317` (PR #92, squash). The hardest WP of the batch: **6 spec-review rounds + 2 implementation P2 rounds** (architect holistic redesign after a second P1). Converged on a deferred-deletion set (manifest + core + config.yaml when unmodified), a global `reverse()` guard, and an rmSync-outcome confirmation gate (config deleted only once the manifest is verifiably gone — `existsSync` was rejected because it conflates "gone" with "could-not-verify"). The scheduler-`unload` residual is documented out-of-scope with a defensible invariant. Double gate: wd-reviewer APPROVE + Codex clean; CI green. Shipped in v0.8.0.

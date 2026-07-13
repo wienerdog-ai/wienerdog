@@ -1,7 +1,7 @@
 ---
 id: WP-101
 title: gws OAuth loopback — add state + PKCE (RFC 8252)
-status: In-Review
+status: Done
 model: sonnet
 size: S
 depends_on: []
@@ -420,3 +420,7 @@ npm run lint
 3. PR template filled, including "Decisions made" (or "none") and `Generated-by:`.
 4. This spec's `status:` flipped to `In-Review` in the same PR.
 </content>
+
+## Done record (2026-07-13)
+
+Merged to main as `37b4712` (PR #102, squash). Post-audit wd-researcher check that found a real gap: the GWS OAuth loopback flow gained a random 256-bit `state` verified on callback (mismatched/absent → keep listening), a bounded 5-minute consent timeout (was: hang forever), and PKCE (`generateCodeVerifierAsync()` → `code_challenge`/S256, `codeVerifier` on token exchange — RFC 8252 §6). New THREAT-MODEL **T4b** documents the handshake. Double gate: wd-reviewer APPROVE + Codex clean; CI green. Shipped in v0.8.0.

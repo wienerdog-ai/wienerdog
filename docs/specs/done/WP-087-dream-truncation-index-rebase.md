@@ -1,7 +1,7 @@
 ---
 id: WP-087
 title: Rebase skill-invocation indices when a dream extract is byte-budget truncated
-status: In-Review
+status: Done
 model: sonnet
 size: S
 depends_on: []
@@ -233,3 +233,7 @@ npm run lint
    `fix(dream): rebase skill-invocation indices under byte-budget truncation (WP-087)`.
 3. PR template filled, including "Decisions made" (or "none") and `Generated-by:`.
 4. This spec's `status:` flipped to `In-Review` in the same PR.
+
+## Done record (2026-07-13)
+
+Merged to main as `53bd937` (PR #87, squash). Double gate: wd-reviewer APPROVE + Codex clean; CI green. Skill-invocation indices are rebased when a dream extract is truncated to the byte budget, so the ADR-0020 authorization signal stays correctly aligned. Shipped in v0.8.0.

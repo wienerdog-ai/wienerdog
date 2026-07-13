@@ -1,7 +1,7 @@
 ---
 id: WP-095
 title: Resolve the vault path's symlinks component-wise before the TCC guard so a symlinked vault can't reintroduce the unattended hang
-status: In-Review
+status: Done
 model: sonnet
 size: S
 depends_on: []
@@ -383,3 +383,7 @@ npm run lint
    `fix(run-job): resolve the vault's symlinks component-wise before the TCC guard (WP-095)` (the design deliberately AVOIDS `fs.realpathSync` — see the Exact contracts).
 3. PR template filled, including "Decisions made" (or "none") and `Generated-by:`.
 4. This spec's `status:` flipped to `In-Review` in the same PR.
+
+## Done record (2026-07-13)
+
+Merged to main as `c0cc0d1` (PR #95, squash). The audit's "tar-pit": **7 review rounds, each closing a distinct macOS path-canonicalization bypass** (realpath-access → readlink-final → ancestor-symlinks → prefix/home case → firmlink+NFC → normalization-ordering). Converged on a component-wise check-before-access walk with `normalizeForCompare` (NFC → toLowerCase → firmlink-strip) in `tccguard.checkPath`. Residual — exotic Unicode case-folding (Greek final sigma, ß, Turkish ı) — accepted and documented (zero-dep wall). Double gate + CI green. Shipped in v0.8.0.

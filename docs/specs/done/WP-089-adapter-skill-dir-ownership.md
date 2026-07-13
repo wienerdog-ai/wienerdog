@@ -1,7 +1,7 @@
 ---
 id: WP-089
 title: Adapter skill-dir ownership — never recursively delete a user directory in the wienerdog-* namespace (content-fingerprint guard)
-status: In-Review
+status: Done
 model: sonnet
 size: S
 depends_on: []
@@ -411,3 +411,7 @@ converged to Ready-clean").
 4. This spec's `status:` flipped to `In-Review` in the same PR.
 </content>
 </invoke>
+
+## Done record (2026-07-13)
+
+Merged to main as `02748ca` (PR #88, squash). Skill-dir refresh now deletes a copied skill only if it fingerprints (`hashDir`) to the recorded hash, instead of a blind `rmSync`. The "simpler" flat-compare alternative was tried and reverted — Codex round 10 showed it carried the same flaw plus one — so the fingerprint approach was kept (Gyula's call, validated). Double gate: wd-reviewer APPROVE + Codex clean; CI green. Shipped in v0.8.0.

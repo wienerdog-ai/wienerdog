@@ -1,7 +1,7 @@
 ---
 id: WP-096
 title: Bound alerts.jsonl growth and cap alert field sizes so the durable-failure log can't grow or corrupt unboundedly
-status: In-Review
+status: Done
 model: sonnet
 size: S
 depends_on: []
@@ -356,3 +356,7 @@ npm run lint
    `fix(alerts): bound growth and cap field sizes (WP-096)`.
 3. PR template filled, including "Decisions made" (or "none") and `Generated-by:`.
 4. This spec's `status:` flipped to `In-Review` in the same PR.
+
+## Done record (2026-07-13)
+
+Merged to main as `2a1c4b0` (PR #96, squash). `alerts.jsonl` growth is bounded and individual alert field sizes are capped, with valid-JSON primitives preserved. Review caught a `readAlerts` regression and an empty-snapshot compaction case. Double gate: wd-reviewer APPROVE + Codex clean; CI green. Shipped in v0.8.0.

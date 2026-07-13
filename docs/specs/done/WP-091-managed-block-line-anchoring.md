@@ -1,7 +1,7 @@
 ---
 id: WP-091
 title: Anchor managed-block sentinels to full lines and fail closed on ambiguous markers
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: [WP-088, WP-090]
@@ -324,3 +324,7 @@ npm run lint
    `fix(managed-block): anchor sentinels to full lines, fail closed on ambiguity (WP-091)`.
 3. PR template filled, including "Decisions made" (or "none") and `Generated-by:`.
 4. This spec's `status:` flipped to `In-Review` in the same PR.
+
+## Done record (2026-07-13)
+
+Merged to main as `fcd6b53` (PR #93, squash). Managed-block sentinels are anchored to full lines (substring `indexOf` could swallow user prose); an ambiguous marker is caught and skipped as a `WienerdogError` (not a `ReferenceError`) and uninstall continues. Double gate: wd-reviewer APPROVE + Codex clean; CI green. Shipped in v0.8.0.

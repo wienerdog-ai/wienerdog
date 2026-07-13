@@ -1,7 +1,7 @@
 ---
 id: WP-100
 title: Codex transcript parser — recognize the current tool-output item type and fail-closed role classification
-status: In-Review
+status: Done
 model: sonnet
 size: S
 depends_on: []
@@ -341,3 +341,7 @@ npm run lint
 4. This spec's `status:` flipped to `In-Review` in the same PR.
 </content>
 </invoke>
+
+## Done record (2026-07-13)
+
+Merged to main as `bf3c9c2` (PR #101, squash). Post-audit wd-researcher check that found a real bug: `mapCodexItem` was silently dropping ~18% of Codex content (unrecognized tool-output item types) and defaulting unknown roles. Rewrote it to a fail-closed allowlist (`TRUSTED_MESSAGE_ROLES = {user, developer}`; `system`/unknown → dropped) and to recognize `custom_tool_call_output` + 4 variants → `role:'tool_result'` (untrusted), so Codex tool output drives `derived_from_untrusted` exactly like Claude. THREAT-MODEL T1 gained a parser-level provenance note. Double gate: wd-reviewer APPROVE + Codex clean; CI green. Shipped in v0.8.0.

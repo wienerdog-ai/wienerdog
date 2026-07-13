@@ -1,7 +1,7 @@
 ---
 id: WP-097
 title: XML-escape launchd plist values and quote systemd ExecStart paths so a special-character install path can't break registration
-status: In-Review
+status: Done
 model: sonnet
 size: S
 depends_on: []
@@ -189,3 +189,7 @@ npm run lint
    titled `fix(scheduler): escape plist and systemd path values (WP-097)`.
 3. PR template filled, including "Decisions made" (or "none") and `Generated-by:`.
 4. This spec's `status:` flipped to `In-Review` in the same PR.
+
+## Done record (2026-07-13)
+
+Merged to main as `caa3645` (PR #94, squash). launchd plist values are XML-escaped and systemd `ExecStart`/path values are quoted+escaped, so special characters in install paths can't corrupt or inject into the schedule files. Double gate: wd-reviewer APPROVE + Codex clean; CI green. Shipped in v0.8.0.

@@ -1,7 +1,7 @@
 ---
 id: WP-086
 title: Harden the send-grant boundary — require a terminal to mint a grant; fail closed on an empty recipient list
-status: In-Review
+status: Done
 model: sonnet
 size: S
 depends_on: []
@@ -311,3 +311,7 @@ npm run lint
    `fix(gws): require a terminal to mint a grant; fail closed on empty recipients (WP-086)`.
 3. PR template filled, including "Decisions made" (or "none") and `Generated-by:`.
 4. This spec's `status:` flipped to `In-Review` in the same PR.
+
+## Done record (2026-07-13)
+
+Merged to main as `966282f` (PR #86, squash). Double gate: wd-reviewer APPROVE + Codex clean; CI green. Minting a send grant now requires a terminal (headless/piped mint refused), and an empty recipient can never be treated as allowed (fail closed). Shipped in v0.8.0.

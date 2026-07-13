@@ -1,7 +1,7 @@
 ---
 id: WP-092
 title: init only chmods the secrets dir it created — never a pre-existing user path
-status: In-Review
+status: Done
 model: sonnet
 size: S
 depends_on: []
@@ -128,3 +128,7 @@ npm run lint
    `fix(init): only chmod a secrets dir we created (WP-092)`.
 3. PR template filled, including "Decisions made" (or "none") and `Generated-by:`.
 4. This spec's `status:` flipped to `In-Review` in the same PR.
+
+## Done record (2026-07-13)
+
+Merged to main as `df1f5c1` (PR #89, squash). `init` chmods the `secrets/` directory only when it created it, never a pre-existing user path. Double gate: wd-reviewer APPROVE + Codex clean; CI green. Shipped in v0.8.0.

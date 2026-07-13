@@ -1,7 +1,7 @@
 ---
 id: WP-099
 title: Validate the Git-for-Windows asset URL is HTTPS on a GitHub host before download
-status: In-Review
+status: Done
 model: sonnet
 size: S
 depends_on: []
@@ -318,3 +318,7 @@ npm run lint
    `fix(install.ps1): require HTTPS GitHub host for the Git asset URL (WP-099)`.
 3. PR template filled, including "Decisions made" (or "none") and `Generated-by:`.
 4. This spec's `status:` flipped to `In-Review` in the same PR.
+
+## Done record (2026-07-13)
+
+Merged to main as `e296cf9` (PR #97, squash). install.ps1 validates that the Git-for-Windows asset URL is HTTPS on a GitHub host before download; an empty URL aborts the bootstrap. Double gate: wd-reviewer APPROVE + Codex clean; CI green. Shipped in v0.8.0.

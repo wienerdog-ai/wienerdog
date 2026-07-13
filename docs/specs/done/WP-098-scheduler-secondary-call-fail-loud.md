@@ -1,7 +1,7 @@
 ---
 id: WP-098
 title: Surface failures of best-effort systemd calls and report schedule-removal truthfully
-status: In-Review
+status: Done
 model: sonnet
 size: S
 depends_on: []
@@ -240,3 +240,7 @@ npm run lint
    titled `fix(scheduler): surface best-effort systemd failures and report remove truthfully (WP-098)`.
 3. PR template filled, including "Decisions made" (or "none") and `Generated-by:`.
 4. This spec's `status:` flipped to `In-Review` in the same PR.
+
+## Done record (2026-07-13)
+
+Merged to main as `3a631ba` (PR #98, squash). Best-effort systemd-call failures are now surfaced and schedule removal is reported truthfully instead of always claiming success. Review caught a nullish-status CI failure. Double gate: wd-reviewer APPROVE + Codex clean; CI green. Shipped in v0.8.0.

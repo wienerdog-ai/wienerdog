@@ -103,23 +103,23 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 | [WP-082](done/WP-082-recurrence-gated-skill-revision.md) | Recurrence-gated skill-body revision with registry-scoped code backstop | M3 | opus | Done | WP-081, WP-083, WP-084 |
 | [WP-083](done/WP-083-skill-ownership-registry.md) | Skill ownership registry — tamper-proof write-origin marker for dream-created skills | M3 | opus | Done | — |
 | [WP-084](done/WP-084-ledger-evidence-trust-derivation.md) | Bind ledger learnings to skill invocations — window-based mechanical trust | M3 | opus | Done | WP-080, WP-081, WP-083 |
-| [WP-085](WP-085-gws-mime-crlf-sanitization.md) | Reject CR/LF in Gmail MIME header fields (close the send-grant header-injection bypass) | M7 | sonnet | Draft | — |
-| [WP-086](WP-086-send-grant-boundary-hardening.md) | Harden the send-grant boundary — require a terminal to mint a grant; fail closed on empty recipients | M7 | sonnet | Draft | — |
-| [WP-087](WP-087-dream-truncation-index-rebase.md) | Rebase skill-invocation indices under byte-budget truncation | M3 | sonnet | Draft | — |
-| [WP-088](WP-088-manifest-reverse-crash-safety.md) | Uninstall crash-safety — defer the deferred-deletion set (manifest, core, config.yaml) until the sweep succeeds; hash-guard file deletes; contain tree removal (delete copied skill only if it fingerprints to the recorded hash) | M7 | opus | In-Review | WP-089 |
-| [WP-089](WP-089-adapter-skill-dir-ownership.md) | Adapter skill-dir ownership — fingerprint-guard skill-dir refresh instead of blind rmSync | M7 | sonnet | Draft | — |
-| [WP-090](WP-090-hook-command-shell-quoting.md) | Shell-quote hook command paths (space/metachar install paths produce valid hooks) | M7 | opus | Draft | WP-089 |
-| [WP-091](WP-091-managed-block-line-anchoring.md) | Anchor managed-block sentinels to full lines; fail closed on ambiguous markers | M7 | opus | Draft | WP-088, WP-090 |
-| [WP-092](WP-092-init-secrets-chmod-guard.md) | init only chmods the secrets dir it created (never a pre-existing user path) | M7 | sonnet | Draft | — |
-| [WP-093](WP-093-tarball-extraction-containment.md) | Tarball install hardening — secure temp, member-name preflight, completeness marker | M7 | opus | Draft | — |
-| [WP-094](WP-094-install-sh-network-hardening.md) | install.sh network hardening — pin curl to HTTPS, exact Node URL before consent, gate TTY seam | M7 | opus | Draft | — |
-| [WP-095](WP-095-tccguard-realpath-resolution.md) | Realpath-resolve the vault before the TCC guard (symlinked-vault hang) | M7 | sonnet | Draft | — |
-| [WP-096](WP-096-alerts-bounded-schema-capped.md) | Bound alerts.jsonl growth and cap alert field sizes | M7 | sonnet | Draft | — |
-| [WP-097](WP-097-scheduler-generator-path-escaping.md) | XML-escape launchd plist values and quote systemd ExecStart paths | M7 | sonnet | Draft | — |
-| [WP-098](WP-098-scheduler-secondary-call-fail-loud.md) | Surface best-effort systemd-call failures; report schedule-removal truthfully | M7 | sonnet | Draft | — |
-| [WP-099](WP-099-install-ps1-git-url-validation.md) | Validate the Git-for-Windows asset URL is HTTPS on a GitHub host before download | M7 | sonnet | Draft | — |
-| [WP-100](WP-100-codex-tool-output-and-fail-closed-roles.md) | Codex transcript parser — recognize the current tool-output item type (`custom_tool_call_output` + variants) and fail closed on unknown roles | M7 | sonnet | Draft | — |
-| [WP-101](WP-101-gws-oauth-state-pkce.md) | gws OAuth loopback — add `state` + PKCE (RFC 8252) | M7 | sonnet | Draft | — |
+| [WP-085](WP-085-gws-mime-crlf-sanitization.md) | Reject CR/LF in Gmail MIME header fields (close the send-grant header-injection bypass) | M7 | sonnet | Done | — |
+| [WP-086](WP-086-send-grant-boundary-hardening.md) | Harden the send-grant boundary — require a terminal to mint a grant; fail closed on empty recipients | M7 | sonnet | Done | — |
+| [WP-087](WP-087-dream-truncation-index-rebase.md) | Rebase skill-invocation indices under byte-budget truncation | M3 | sonnet | Done | — |
+| [WP-088](WP-088-manifest-reverse-crash-safety.md) | Uninstall crash-safety — defer the deferred-deletion set (manifest, core, config.yaml) until the sweep succeeds; hash-guard file deletes; contain tree removal (delete copied skill only if it fingerprints to the recorded hash) | M7 | opus | Done | WP-089 |
+| [WP-089](WP-089-adapter-skill-dir-ownership.md) | Adapter skill-dir ownership — fingerprint-guard skill-dir refresh instead of blind rmSync | M7 | sonnet | Done | — |
+| [WP-090](WP-090-hook-command-shell-quoting.md) | Shell-quote hook command paths (space/metachar install paths produce valid hooks) | M7 | opus | Done | WP-089 |
+| [WP-091](WP-091-managed-block-line-anchoring.md) | Anchor managed-block sentinels to full lines; fail closed on ambiguous markers | M7 | opus | Done | WP-088, WP-090 |
+| [WP-092](WP-092-init-secrets-chmod-guard.md) | init only chmods the secrets dir it created (never a pre-existing user path) | M7 | sonnet | Done | — |
+| [WP-093](WP-093-tarball-extraction-containment.md) | Tarball install hardening — secure temp, member-name preflight, completeness marker | M7 | opus | Done | — |
+| [WP-094](WP-094-install-sh-network-hardening.md) | install.sh network hardening — pin curl to HTTPS, exact Node URL before consent, gate TTY seam | M7 | opus | Done | — |
+| [WP-095](WP-095-tccguard-realpath-resolution.md) | Realpath-resolve the vault before the TCC guard (symlinked-vault hang) | M7 | sonnet | Done | — |
+| [WP-096](WP-096-alerts-bounded-schema-capped.md) | Bound alerts.jsonl growth and cap alert field sizes | M7 | sonnet | Done | — |
+| [WP-097](WP-097-scheduler-generator-path-escaping.md) | XML-escape launchd plist values and quote systemd ExecStart paths | M7 | sonnet | Done | — |
+| [WP-098](WP-098-scheduler-secondary-call-fail-loud.md) | Surface best-effort systemd-call failures; report schedule-removal truthfully | M7 | sonnet | Done | — |
+| [WP-099](WP-099-install-ps1-git-url-validation.md) | Validate the Git-for-Windows asset URL is HTTPS on a GitHub host before download | M7 | sonnet | Done | — |
+| [WP-100](WP-100-codex-tool-output-and-fail-closed-roles.md) | Codex transcript parser — recognize the current tool-output item type (`custom_tool_call_output` + variants) and fail closed on unknown roles | M7 | sonnet | Done | — |
+| [WP-101](WP-101-gws-oauth-state-pkce.md) | gws OAuth loopback — add `state` + PKCE (RFC 8252) | M7 | sonnet | Done | — |
 
 > **First-production-night incident (2026-07-04).** WP-038, WP-039 and WP-041 form
 > a serial chain (they edit the shared `run-job.js` / `dream.js` / `validate.js`

@@ -1,7 +1,7 @@
 ---
 id: WP-093
 title: Tarball install hardening — secure temp file, member-name preflight, trustworthy completeness marker
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: []
@@ -271,3 +271,7 @@ npm run lint
    `fix(tarball): secure temp, member preflight, completeness marker (WP-093)`.
 3. PR template filled, including "Decisions made" (or "none") and `Generated-by:`.
 4. This spec's `status:` flipped to `In-Review` in the same PR.
+
+## Done record (2026-07-13)
+
+Merged to main as `20c9be4` (PR #90, squash). JS tarball install hardened: `mkdtemp` + `0600` + `wx` secure temp, member-name preflight (containment), and a completeness marker replacing the lone-`bin/wienerdog.js` shortcut. **Codex caught a P1 symlink-following marker-write AFTER wd-reviewer had approved** — concrete evidence the two gates catch disjoint bug classes. CI green. Shipped in v0.8.0.

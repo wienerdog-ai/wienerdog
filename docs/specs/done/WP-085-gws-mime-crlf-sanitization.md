@@ -1,7 +1,7 @@
 ---
 id: WP-085
 title: Reject CR/LF in Gmail MIME header fields (close the send-grant header-injection bypass)
-status: In-Review
+status: Done
 model: sonnet
 size: S
 depends_on: []
@@ -196,3 +196,7 @@ npm run lint
    `fix(gws): reject CR/LF in MIME header fields (WP-085)`.
 3. PR template filled, including "Decisions made" (or "none") and `Generated-by:`.
 4. This spec's `status:` flipped to `In-Review` in the same PR.
+
+## Done record (2026-07-13)
+
+Merged to main as `9a0de14` (PR #85, squash). Double gate: wd-reviewer APPROVE + Codex `/codex:review` clean; CI green. **Headline find of the audit** — a crafted subject line or contact name could smuggle a hidden `Bcc:` past the approved send allowlist via header injection; CR/LF is now rejected in Gmail MIME header fields. Shipped in v0.8.0.

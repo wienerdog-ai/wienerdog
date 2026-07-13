@@ -1,7 +1,7 @@
 ---
 id: WP-094
 title: install.sh network-integrity hardening — pin curl to HTTPS, show the exact Node URL before consent, gate the TTY test seam
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: []
@@ -247,3 +247,7 @@ npm test
    `fix(install.sh): pin curl to HTTPS, show exact Node URL, gate TTY seam (WP-094)`.
 3. PR template filled, including "Decisions made" (or "none") and `Generated-by:`.
 4. This spec's `status:` flipped to `In-Review` in the same PR.
+
+## Done record (2026-07-13)
+
+Merged to main as `1a67e45` (PR #99, squash). install.sh pins curl to HTTPS, shows the exact Node download URL before consent, and drops the TTY env seam. Double gate: wd-reviewer APPROVE + Codex clean; CI green. (Process note: the pr-title scope had to be `install-sh` — a dot in the scope fails the `[a-z0-9-]+` check.) Shipped in v0.8.0.

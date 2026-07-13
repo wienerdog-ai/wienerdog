@@ -1,7 +1,7 @@
 ---
 id: WP-090
 title: Shell-quote hook command paths so an install path with spaces/metacharacters produces valid hooks
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: [WP-089]
@@ -218,3 +218,7 @@ npm run lint
    `fix(adapters): shell-quote hook command paths (WP-090)`.
 3. PR template filled, including "Decisions made" (or "none") and `Generated-by:`.
 4. This spec's `status:` flipped to `In-Review` in the same PR.
+
+## Done record (2026-07-13)
+
+Merged to main as `817a7e3` (PR #91, squash). Hook command paths are shell-quoted, so install paths containing spaces or shell metacharacters produce valid hooks. Double gate: wd-reviewer APPROVE + Codex clean; CI green. Shipped in v0.8.0.
