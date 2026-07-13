@@ -249,17 +249,38 @@ function reverseSchedulerEntry(entry, dryRun, removed, skipped, removedSet) {
   removed.push(entry.path);
 }
 
+/** True iff `a` and `b` resolve (via realpath) to the SAME directory. Fail-closed
+ *  when either side is unresolvable. @param {string} a @param {string} b
+ *  @returns {boolean} */
+function sameResolvedDir(a, b) {
+  try {
+    return fs.realpathSync(a) === fs.realpathSync(b);
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Reverse a 'vendored-tree' entry: recursively remove the vendored app tree
- * (entirely Wienerdog-authored, regenerable by `sync`). Adds the path to
- * removedSet so the enclosing core dir still counts as empty. In dev mode the
- * tree holds only the `current` symlink; removing it never touches the checkout.
+ * (entirely Wienerdog-authored, regenerable by `sync`) ONLY when the target
+ * resolves EQUAL to the app root `paths.core/app` — the sole value `vendorSelf`
+ * ever records. Equality rejects the equal-to-core case (core is app's PARENT,
+ * never equal to app) and any manipulated descendant; anything else is preserved
+ * with a refusal notice. Adds the path to removedSet so the enclosing core dir
+ * still counts as empty. In dev mode the tree holds only the `current` symlink;
+ * removing it never touches the checkout.
  * @param {ManifestEntry} entry
  * @param {boolean} dryRun
  * @param {string[]} removed @param {string[]} skipped @param {Set<string>} removedSet
+ * @param {string} appRoot the app root `paths.core/app`
  */
-function reverseVendoredTree(entry, dryRun, removed, skipped, removedSet) {
+function reverseVendoredTree(entry, dryRun, removed, skipped, removedSet, appRoot) {
   if (!isDir(entry.path)) { skipped.push(entry.path); return; }
+  if (!sameResolvedDir(entry.path, appRoot)) {
+    process.stderr.write(`wienerdog: refusing to remove ${entry.path} — not the Wienerdog app tree\n`);
+    skipped.push(entry.path);
+    return;
+  }
   if (!dryRun) fs.rmSync(entry.path, { recursive: true, force: true });
   removedSet.add(entry.path);
   removed.push(entry.path);
@@ -267,14 +288,51 @@ function reverseVendoredTree(entry, dryRun, removed, skipped, removedSet) {
 
 /**
  * Reverse a 'copied-skill' entry: recursively remove the copied skill folder
- * (entirely Wienerdog-authored, regenerable by `sync`). Adds the path to
- * removedSet so the enclosing skills dir still counts as empty.
+ * ONLY when ALL of (a) its PARENT resolves equal to a harness skills root (a
+ * strict child — not merely a descendant), (b) its basename is `wienerdog-*`,
+ * (c) the path is itself a REAL directory (an `lstat`, which does NOT follow
+ * symlinks — a symlink at this path is definitionally not the directory we
+ * copied, even if it points at an identical tree), and (d) the on-disk tree
+ * still fingerprints (via the shared `hashDir`) to the `hash` recorded at copy
+ * time. A hash-less (legacy) entry, a fingerprint mismatch (user edited/replaced
+ * our copy), an unreadable tree (`hashDir` → null, which can never === a recorded
+ * string), or a symlink-at-the-path is PRESERVED with a notice, never deleted.
+ * Adds the path to removedSet so the enclosing skills dir still counts as empty.
  * @param {ManifestEntry} entry
  * @param {boolean} dryRun
  * @param {string[]} removed @param {string[]} skipped @param {Set<string>} removedSet
+ * @param {string[]} skillsRoots the harness skills roots
  */
-function reverseCopiedSkill(entry, dryRun, removed, skipped, removedSet) {
+function reverseCopiedSkill(entry, dryRun, removed, skipped, removedSet, skillsRoots) {
   if (!isDir(entry.path)) { skipped.push(entry.path); return; }
+  const base = path.basename(entry.path);
+  const parentIsRoot = skillsRoots.some((root) => sameResolvedDir(path.dirname(entry.path), root));
+  if (!base.startsWith('wienerdog-') || !parentIsRoot) {
+    process.stderr.write(`wienerdog: refusing to remove ${entry.path} — not a Wienerdog skill directly under a harness skills dir\n`);
+    skipped.push(entry.path);
+    return;
+  }
+  // Tighten the ownership proof: the root must be a REAL directory. isDir() above
+  // FOLLOWS symlinks, so a user who moved our copied skill elsewhere and left a
+  // SYMLINK to an identical tree at this path would otherwise pass the fingerprint
+  // check (hashDir follows the link to the matching target) and have their symlink
+  // deleted. lstat does NOT follow the link — a symlink here is not our directory.
+  let isRealDir = false;
+  try {
+    isRealDir = fs.lstatSync(entry.path).isDirectory();
+  } catch {
+    isRealDir = false;
+  }
+  if (!isRealDir) {
+    process.stderr.write(`wienerdog: keeping ${entry.path} — not the Wienerdog skill we recorded (modified, replaced, or unverifiable)\n`);
+    skipped.push(entry.path);
+    return;
+  }
+  if (typeof entry.hash !== 'string' || hashDir(entry.path) !== entry.hash) {
+    process.stderr.write(`wienerdog: keeping ${entry.path} — not the Wienerdog skill we recorded (modified, replaced, or unverifiable)\n`);
+    skipped.push(entry.path);
+    return;
+  }
   if (!dryRun) fs.rmSync(entry.path, { recursive: true, force: true });
   removedSet.add(entry.path);
   removed.push(entry.path);
@@ -322,42 +380,113 @@ function save(paths, manifest) {
 
 /**
  * Reverse the manifest: remove files we created (kind 'file'), then dirs (kind
- * 'dir', only if empty), in reverse order. Files that changed since install are
- * still ours to remove EXCEPT config.yaml, which is kept with a notice when it
- * was modified after install (recorded hash mismatch). Unknown kinds are
- * skipped with a warning (forward compat for later WPs). The manifest file
- * itself is removed as bookkeeping.
+ * 'dir', only if empty), in reverse order. A `kind:'file'` entry that carries a
+ * recorded `hash` which no longer matches on-disk content is kept with a notice
+ * (prove-before-delete); hash-less entries keep the plain delete behavior.
+ * Unknown kinds are skipped with a warning (forward compat for later WPs).
+ *
+ * The three deferred-deletion-set members — the manifest, the canonical core dir,
+ * and config.yaml — are NEVER deleted/damaged here, enforced by a SINGLE GLOBAL
+ * GUARD at the top of the entry loop, BEFORE the kind dispatch, so no reverser of
+ * ANY kind can touch them via `entry.path` (realpath-aware, so a symlinked or
+ * normalized alias is caught too). The manifest and core are deferred to
+ * uninstall.js; an UNMODIFIED config.yaml is returned in `deferredConfig` (deleted
+ * LAST by uninstall.js, after the manifest); a CUSTOMIZED config is kept forever
+ * (ADR-0019). A crash at any point therefore leaves a replayable recovery ledger
+ * AND the config.yaml `vault:` source a retry needs to protect a nested vault.
+ *
+ * `deferredConfigHash` carries the recorded hash forward so uninstall.js can
+ * RE-VERIFY it immediately before the deferred delete (prove-before-delete at the
+ * delete site): config was proven unmodified HERE, but is deleted much later —
+ * after the mechanics sweep — so a user edit during that window must abort the
+ * delete. Both are null when there is no deferred (unmodified) config.
  * @param {import('./paths').WienerdogPaths} paths
  * @param {Manifest} manifest
  * @param {{dryRun?: boolean}} [opts]
- * @returns {{removed: string[], skipped: string[], preserved: string[]}}
+ * @returns {{removed: string[], skipped: string[], preserved: string[], deferredConfig: string|null, deferredConfigHash: string|null}}
  */
 function reverse(paths, manifest, { dryRun = false } = {}) {
   /** @type {string[]} */ const removed = [];
   /** @type {string[]} */ const skipped = [];
   /** @type {string[]} */ const preserved = [];
-  // The manifest file is our own bookkeeping: treat it as (virtually) removed
-  // so the core dir counts as empty, and delete it for real on a live run.
+  /** @type {string|null} */ let deferredConfig = null; // unmodified config.yaml → deleted last by uninstall.js
+  /** @type {string|null} */ let deferredConfigHash = null; // its recorded hash → re-verified before that delete
+  // Seed with the manifest path so the core dir still counts as (virtually)
+  // empty. The manifest FILE is NOT touched here — uninstall.js deletes it only
+  // after the whole uninstall (reversal loop + mechanics sweep) has succeeded,
+  // so a crash at any point leaves a replayable ledger (uninstall refuses
+  // without it).
   const removedSet = new Set([paths.manifest]);
-  if (!dryRun) {
-    try {
-      fs.rmSync(paths.manifest, { force: true });
-    } catch {
-      /* ignore — already gone */
-    }
-  }
+  // Containment anchors for the recursive-tree removers, computed inline from
+  // `paths` (no vendor.js/adapter import — wrong dependency direction).
+  const appRoot = path.join(paths.core, 'app');
+  const skillsRoots = [path.join(paths.claudeDir, 'skills'), path.join(paths.codexDir, 'skills')];
+  // Realpath-aware equality (string fallback when a side is unresolvable): true
+  // iff `p` is `target` or resolves to it. Applies to files and dirs
+  // (`sameResolvedDir` is just realpath equality). Catches symlinked/normalized
+  // aliases of any deferred member.
+  const resolvesTo = (p, target) => p === target || sameResolvedDir(p, target);
 
   for (const entry of [...manifest.entries].reverse()) {
+    // ── GLOBAL DEFERRED-MEMBER GUARD (before kind dispatch) ──────────────────
+    // reverse() must NEVER delete/damage the three deferred members — the
+    // manifest, the core dir, and config.yaml — regardless of entry KIND or path
+    // normalization. A malformed/hand-edited/adversarial manifest can point ANY
+    // kind at a deferred member (e.g. {kind:'scheduler-entry', path: manifest}
+    // deletes the ledger; a {kind:'file', path:'<core>/./config.yaml'} normalized
+    // alias bypasses an exact-string config check; a symlink/managed-block/
+    // settings-entry can unlink/rewrite one). This single guard blocks every
+    // PATH-based route for every kind at once. (It does NOT police INDIRECT side
+    // effects — e.g. a scheduler-entry's executable `unload` argv — which is an
+    // out-of-scope, pre-existing residual; see the WP-088 spec Non-goals.)
+    if (resolvesTo(entry.path, paths.manifest) || resolvesTo(entry.path, paths.core)) {
+      // Manifest → retry ledger (uninstall.js deletes it LAST via the
+      // rmSync-outcome gate); core → deferred to disposeCoreMechanics. Never
+      // touched here by any kind. (removedSet already holds paths.manifest; a
+      // normal manifest's sole core entry is {kind:'dir', path: paths.core} —
+      // this is where it is skipped.)
+      skipped.push(entry.path);
+      continue;
+    }
+    if (resolvesTo(entry.path, paths.config)) {
+      // config.yaml is deferred/kept here for EVERY kind — its `vault:` line is
+      // what disposeCoreMechanics reads on every retry to protect a nested vault;
+      // reverse() never deletes it. Decide defer-vs-keep from the recorded hash of
+      // the LEGITIMATE file entry (Wienerdog records config only as
+      // {kind:'file', path, hash}):
+      if (entry.kind === 'file' && isFile(entry.path) && entry.hash) {
+        if (sha256File(entry.path) === entry.hash) {
+          // UNMODIFIED → deferred: uninstall.js deletes it LAST (after the sweep,
+          // after the manifest). Store the CANONICAL path (not a normalized
+          // alias); add to removedSet so the core still counts as empty. Carry the
+          // recorded hash forward so uninstall.js can re-prove it unmodified at the
+          // (much later) delete site — a user edit during the sweep aborts the delete.
+          deferredConfig = paths.config;
+          deferredConfigHash = entry.hash;
+          removedSet.add(paths.config);
+          continue; // the deferred member — not in removed/skipped
+        }
+        // CUSTOMIZED (hash mismatch) → kept forever (ADR-0019). Keeps the core alive.
+        process.stderr.write(`wienerdog: keeping ${entry.path} — modified since install\n`);
+      }
+      // Customized config, OR any non-file/hash-less/adversarial entry targeting
+      // config → PROTECT it: never delete/rewrite. (deferredConfig is set only by
+      // the legitimate unmodified file entry above; if the manifest is too corrupt
+      // to have one, config simply stays — safe, uninstall.js keeps the core.)
+      skipped.push(entry.path);
+      continue;
+    }
+    // ── end global guard ─────────────────────────────────────────────────────
     if (entry.kind === 'file') {
+      // (manifest/config already handled by the global guard above.)
       if (!isFile(entry.path)) {
         skipped.push(entry.path);
         continue;
       }
-      if (
-        entry.path === paths.config &&
-        entry.hash &&
-        sha256File(entry.path) !== entry.hash
-      ) {
+      if (entry.hash && sha256File(entry.path) !== entry.hash) {
+        // We recorded this file's content at write time; it differs now → the
+        // user (or another writer) changed it. Prove-before-delete: keep it,
+        // don't destroy an edit.
         process.stderr.write(`wienerdog: keeping ${entry.path} — modified since install\n`);
         skipped.push(entry.path);
         continue;
@@ -366,6 +495,7 @@ function reverse(paths, manifest, { dryRun = false } = {}) {
       removedSet.add(entry.path);
       removed.push(entry.path);
     } else if (entry.kind === 'dir') {
+      // (The core is handled by the global guard above and never reaches here.)
       if (!isDir(entry.path)) {
         skipped.push(entry.path);
         continue;
@@ -390,9 +520,9 @@ function reverse(paths, manifest, { dryRun = false } = {}) {
     } else if (entry.kind === 'scheduler-entry') {
       reverseSchedulerEntry(entry, dryRun, removed, skipped, removedSet);
     } else if (entry.kind === 'vendored-tree') {
-      reverseVendoredTree(entry, dryRun, removed, skipped, removedSet);
+      reverseVendoredTree(entry, dryRun, removed, skipped, removedSet, appRoot);
     } else if (entry.kind === 'copied-skill') {
-      reverseCopiedSkill(entry, dryRun, removed, skipped, removedSet);
+      reverseCopiedSkill(entry, dryRun, removed, skipped, removedSet, skillsRoots);
     } else if (entry.kind === 'vault-file' || entry.kind === 'vault-dir') {
       // The vault is the user's treasure — always preserved (ADR-0010, ADR-0019).
       // No filesystem action; NOT added to removedSet (it lives outside the core).
@@ -407,7 +537,7 @@ function reverse(paths, manifest, { dryRun = false } = {}) {
     }
   }
 
-  return { removed, skipped, preserved };
+  return { removed, skipped, preserved, deferredConfig, deferredConfigHash };
 }
 
 /**
@@ -494,4 +624,4 @@ function disposeCoreMechanics(paths, { dryRun = false, vaultPath = null } = {}) 
   return { removed, skippedForVault };
 }
 
-module.exports = { load, record, save, reverse, disposeCoreMechanics, reverseSchedulerEntry, reverseVendoredTree, reverseCopiedSkill, hashDir };
+module.exports = { load, record, save, reverse, disposeCoreMechanics, reverseSchedulerEntry, reverseVendoredTree, reverseCopiedSkill, hashDir, sha256File };

@@ -159,11 +159,16 @@ test('saveGrant upserts by routine and re-syncs the manifest hash (uninstall sta
   assert.equal(grant.parseGrants(cfg).length, 2);
 
   // The manifest hash was re-synced, so uninstall removes config.yaml cleanly.
+  // WP-088: config.yaml is now a deferred-deletion-set member — reverse() defers
+  // it (returns it in deferredConfig) rather than deleting it inline; uninstall.js
+  // deletes it LAST. A re-synced hash means it is recognized as our own unmodified
+  // file (deferred), NOT kept as a customized edit.
   const manifest = manifestLib.load(paths);
   const entry = manifest.entries.find((e) => e.kind === 'file' && e.path === paths.config);
   assert.equal(entry.hash, sha256(cfg));
-  manifestLib.reverse(paths, manifest);
-  assert.equal(fs.existsSync(paths.config), false);
+  const { deferredConfig } = manifestLib.reverse(paths, manifest);
+  assert.equal(deferredConfig, paths.config, 'unmodified config is deferred for clean removal, not kept as a user edit');
+  assert.ok(fs.existsSync(paths.config), 'reverse() defers config.yaml; uninstall.js removes it last');
 });
 
 // --- CLI confirmation gating -------------------------------------------------
