@@ -85,6 +85,15 @@ function parseAt(at) {
   return { hour: Number(h), minute: Number(m) };
 }
 
+/** Escape a value for insertion into XML character data (plist <string>). Order
+ *  matters: & first. @param {string} s @returns {string} */
+function xmlEscape(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
 /**
  * Render a per-job launchd plist. All paths ABSOLUTE (no $HOME/~).
  * @param {{name:string, hour:number, minute:number, node:string, bin:string,
@@ -100,8 +109,8 @@ function launchdPlist(o) {
   <string>${launchdLabel(o.name)}</string>
   <key>ProgramArguments</key>
   <array>
-    <string>${o.node}</string>
-    <string>${o.bin}</string>
+    <string>${xmlEscape(o.node)}</string>
+    <string>${xmlEscape(o.bin)}</string>
     <string>run-job</string>
     <string>${o.name}</string>
   </array>
@@ -113,9 +122,9 @@ function launchdPlist(o) {
     <integer>${o.minute}</integer>
   </dict>
   <key>StandardOutPath</key>
-  <string>${path.join(o.logDir, 'launchd.out.log')}</string>
+  <string>${xmlEscape(path.join(o.logDir, 'launchd.out.log'))}</string>
   <key>StandardErrorPath</key>
-  <string>${path.join(o.logDir, 'launchd.err.log')}</string>
+  <string>${xmlEscape(path.join(o.logDir, 'launchd.err.log'))}</string>
   <key>ProcessType</key>
   <string>Background</string>
 </dict>
@@ -138,8 +147,8 @@ function catchupPlist(o) {
   <string>ai.wienerdog.catchup</string>
   <key>ProgramArguments</key>
   <array>
-    <string>${o.node}</string>
-    <string>${o.bin}</string>
+    <string>${xmlEscape(o.node)}</string>
+    <string>${xmlEscape(o.bin)}</string>
     <string>run-job</string>
     <string>--catch-up</string>
   </array>
@@ -151,9 +160,9 @@ function catchupPlist(o) {
     <integer>0</integer>
   </dict>
   <key>StandardOutPath</key>
-  <string>${path.join(o.logDir, 'launchd.out.log')}</string>
+  <string>${xmlEscape(path.join(o.logDir, 'launchd.out.log'))}</string>
   <key>StandardErrorPath</key>
-  <string>${path.join(o.logDir, 'launchd.err.log')}</string>
+  <string>${xmlEscape(path.join(o.logDir, 'launchd.err.log'))}</string>
   <key>ProcessType</key>
   <string>Background</string>
 </dict>
@@ -187,6 +196,14 @@ WantedBy=timers.target
 `;
 }
 
+/** Quote a path as a single systemd ExecStart argument: escape the systemd
+ *  specifier char (% → %%) so a literal % is not expanded, then double-quote,
+ *  escaping \ and ". Order: \ first (so added \" is not re-escaped), then %, then ".
+ *  @param {string} s @returns {string} */
+function systemdQuote(s) {
+  return `"${String(s).replace(/\\/g, '\\\\').replace(/%/g, '%%').replace(/"/g, '\\"')}"`;
+}
+
 /**
  * Render a systemd oneshot .service unit. All paths ABSOLUTE.
  * @param {{name:string, node:string, bin:string}} o
@@ -198,7 +215,7 @@ Description=Wienerdog job: ${o.name}
 
 [Service]
 Type=oneshot
-ExecStart=${o.node} ${o.bin} run-job ${o.name}
+ExecStart=${systemdQuote(o.node)} ${systemdQuote(o.bin)} run-job ${o.name}
 `;
 }
 
@@ -446,10 +463,12 @@ module.exports = {
   launchdLabel,
   systemdUnitBase,
   parseAt,
+  xmlEscape,
   launchdPlist,
   catchupPlist,
   systemdTimer,
   systemdService,
+  systemdQuote,
   windowsTaskName,
   windowsTasksDir,
   windowsTaskFileName,

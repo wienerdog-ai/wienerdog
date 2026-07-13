@@ -82,7 +82,7 @@ Description=Wienerdog job: daily-digest
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/node /opt/wienerdog/bin/wienerdog.js run-job daily-digest
+ExecStart="/usr/bin/node" "/opt/wienerdog/bin/wienerdog.js" run-job daily-digest
 `;
 
 const EXPECTED_DREAM = `<?xml version="1.0" encoding="UTF-16"?>
@@ -194,6 +194,89 @@ test('scheduler-generators: systemdTimer matches the golden byte-for-byte', () =
 });
 
 test('scheduler-generators: systemdService matches the golden byte-for-byte', () => {
+  assert.equal(
+    gen.systemdService({
+      name: 'daily-digest',
+      node: '/usr/bin/node',
+      bin: '/opt/wienerdog/bin/wienerdog.js',
+    }),
+    EXPECTED_SERVICE
+  );
+});
+
+test('scheduler-generators: xmlEscape escapes & < > in that order', () => {
+  assert.equal(gen.xmlEscape('a & b < c > d'), 'a &amp; b &lt; c &gt; d');
+  // a bare & must become &amp; and not be re-mangled by the later </> passes.
+  assert.equal(gen.xmlEscape('&<>'), '&amp;&lt;&gt;');
+});
+
+test('scheduler-generators: launchdPlist XML-escapes node/bin/logDir path values', () => {
+  const out = gen.launchdPlist({
+    name: 'daily-digest',
+    hour: 7,
+    minute: 0,
+    node: '/opt/a&b/node',
+    bin: '/opt/<wienerdog>/wienerdog.js',
+    logDir: '/var/log/a&b<c>d',
+  });
+  assert.match(out, /<string>\/opt\/a&amp;b\/node<\/string>/);
+  assert.match(out, /<string>\/opt\/&lt;wienerdog&gt;\/wienerdog\.js<\/string>/);
+  assert.match(out, /<string>\/var\/log\/a&amp;b&lt;c&gt;d\/launchd\.out\.log<\/string>/);
+  assert.match(out, /<string>\/var\/log\/a&amp;b&lt;c&gt;d\/launchd\.err\.log<\/string>/);
+  // well-formed: every & is part of a recognized entity, and no bare < or > remain
+  // outside of the plist's own tags (the interpolated values contain none).
+  assert.doesNotMatch(out, /&(?!amp;|lt;|gt;)/);
+});
+
+test('scheduler-generators: catchupPlist XML-escapes node/bin/logDir path values', () => {
+  const out = gen.catchupPlist({
+    node: '/opt/a&b/node',
+    bin: '/opt/<wienerdog>/wienerdog.js',
+    logDir: '/var/log/a&b<c>d',
+  });
+  assert.match(out, /<string>\/opt\/a&amp;b\/node<\/string>/);
+  assert.match(out, /<string>\/opt\/&lt;wienerdog&gt;\/wienerdog\.js<\/string>/);
+  assert.match(out, /<string>\/var\/log\/a&amp;b&lt;c&gt;d\/launchd\.out\.log<\/string>/);
+  assert.match(out, /<string>\/var\/log\/a&amp;b&lt;c&gt;d\/launchd\.err\.log<\/string>/);
+  assert.doesNotMatch(out, /&(?!amp;|lt;|gt;)/);
+});
+
+test('scheduler-generators: launchdPlist is byte-identical to the golden for a normal path (no special chars)', () => {
+  const out = gen.launchdPlist({
+    name: 'daily-digest',
+    hour: 7,
+    minute: 0,
+    node: '/usr/local/bin/node',
+    bin: '/opt/wienerdog/bin/wienerdog.js',
+    logDir: '/Users/ada/.wienerdog/logs/daily-digest',
+  });
+  assert.equal(out, EXPECTED_PLIST);
+});
+
+test('scheduler-generators: systemdQuote double-quotes and escapes \\, %, and " (order: \\ before ")', () => {
+  assert.equal(gen.systemdQuote('/opt/wienerdog/bin/wienerdog.js'), '"/opt/wienerdog/bin/wienerdog.js"');
+  assert.equal(gen.systemdQuote('/opt/with space/node'), '"/opt/with space/node"');
+  assert.equal(gen.systemdQuote('/opt/100%dir/node'), '"/opt/100%%dir/node"');
+  assert.equal(gen.systemdQuote('C:\\path\\node.exe'), '"C:\\\\path\\\\node.exe"');
+  assert.equal(gen.systemdQuote('/opt/"quoted"/node'), '"/opt/\\"quoted\\"/node"');
+  // kitchen sink: space + % + backslash + " all in one path.
+  const rawPath = '/opt/wien er/100%\\path"quote';
+  const expectedQuoted = '"/opt/wien er/100%%\\\\path\\"quote"';
+  assert.equal(gen.systemdQuote(rawPath), expectedQuoted);
+});
+
+test('scheduler-generators: systemdService quotes ExecStart paths and escapes %, \\, ", and spaces', () => {
+  const node = '/opt/with space/100%node\\path"x';
+  const bin = '/opt/wienerdog/bin/wienerdog.js';
+  const out = gen.systemdService({ name: 'daily-digest', node, bin });
+  const expectedExecStart = `ExecStart=${gen.systemdQuote(node)} ${gen.systemdQuote(bin)} run-job daily-digest`;
+  assert.ok(out.includes(expectedExecStart), out);
+  // the literal % must render doubled (%%), never a bare specifier-expandable %.
+  assert.match(out, /100%%node/);
+  assert.doesNotMatch(out, /100%node/);
+});
+
+test('scheduler-generators: systemdService ExecStart matches the golden (quoted form) for a normal path', () => {
   assert.equal(
     gen.systemdService({
       name: 'daily-digest',
