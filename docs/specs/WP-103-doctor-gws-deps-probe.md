@@ -160,14 +160,18 @@ function googleReadinessChecks(paths) {
   //   isInstalled true  → BROKEN (resolves but won't load): self-heal NO-OPs
   //                        (WP-102's isInstalled gate is true), so promising an
   //                        offer would be false — require a manual reinstall.
-  // Same npm command repairs both (install over the corrupt dir overwrites it).
-  const cmd = `npm install --ignore-scripts --prefix ${deps.depsDir(paths)} ${deps.GOOGLEAPIS_SPEC}`;
+  const dir = deps.depsDir(paths);
+  const cmd = `npm install --ignore-scripts --prefix ${dir} ${deps.GOOGLEAPIS_SPEC}`;
   if (deps.isInstalled(paths)) {
+    // Round-4 Finding — a bare `npm install` can NO-OP over a corrupt-but-
+    // resolvable tree (npm compares tree metadata, not file contents), so the
+    // corrupt tree must be DELETED first. Deps dir is single-purpose → safe to
+    // remove wholesale. Platform-neutral prose (parity with WP-102).
     return [
       {
         status: 'warn',
         msg:
-          'Google is connected but its client library is broken (installed but not loadable) — reinstall it: ' + cmd,
+          `Google is connected but its client library is broken (installed but not loadable) — delete the folder ${dir}, then reinstall it: ` + cmd,
       },
     ];
   }
@@ -187,11 +191,13 @@ token read. Both warn branches drop the `wienerdog gws auth` suggestion (Codex
 Finding 3). Two distinct messages (round-2 Finding 2): the **absent** message
 keeps the self-heal promise + npm command; the **broken** (resolvable-but-
 un-loadable) message must NOT claim the next-command offer — WP-102's self-heal
-no-ops on a resolvable install — and points only to the npm reinstall (the same
-command repairs it). Consistent with WP-102's `loadGoogleapis` message, whose
-single string is an error (not a status) and always carries the npm one-liner. The
-`npm install` one-liner is the universal remedy
-for both.
+no-ops on a resolvable install — and prescribes **delete-the-folder-then-reinstall**
+(round-4 Finding: a bare `npm install` can no-op over a corrupt-but-resolvable
+tree). Same **delete-then-reinstall** remedy as WP-102's `loadGoogleapis` broken
+message (worded for the single-line doctor warn — no newline; WP-102's is a thrown
+error), so the two surfaces prescribe an identical repair. The `npm install`
+one-liner is the remedy the delete precedes for the broken state, and the direct
+remedy for the absent state.
 
 **2. Wire into `run`.** Immediately **after** the `codexSkillChecks` loop and
 **before** the update-notice block, add:
@@ -258,13 +264,15 @@ function plantDamagedToken(core, content) {
   `/\[warn\] Google is connected but its client library is missing — the next .?wienerdog gws.? command will offer to install it/`,
   does **not** match `/gws auth/` (Finding 3), and `r.status === 0` (warn, not fail).
 - **Connected + library BROKEN (resolvable but throws on load) → `[warn]`
-  "broken", exit 0 (Finding 1a + round-2 Finding 2).** `init`; `plantToken(core)`;
-  `plantCorruptDeps(core)`; `doctor`. Assert `r.stdout` matches `/\[warn\] Google
-  is connected but its client library is broken \(installed but not loadable\)/`,
-  **does NOT match** `/will offer to install/` (the broken state does not
-  self-heal — round-2 Finding 2), does **not** match `/\[ok\] Google connected/`,
-  and `r.status === 0`. (This is the case a resolve-only check would falsely pass,
-  and the case whose remedy must not promise the next-command offer.)
+  "broken" with the delete-then-reinstall remedy, exit 0 (Finding 1a + round-2
+  Finding 2 + round-4 Finding).** `init`; `plantToken(core)`; `plantCorruptDeps(core)`;
+  `doctor`. Assert `r.stdout` matches `/\[warn\] Google is connected but its client
+  library is broken \(installed but not loadable\) — delete the folder /`, contains
+  the `<core>/app/deps` path, **does NOT match** `/will offer to install/` (the
+  broken state does not self-heal — round-2 Finding 2), does **not** match `/\[ok\]
+  Google connected/`, and `r.status === 0`. (This is the case a resolve-only check
+  would falsely pass; its remedy must delete the tree first, since a bare `npm
+  install` can no-op over it — round-4 Finding.)
 - **Connected + library present and loadable → `[ok]`.** `init`;
   `plantToken(core)`; `plantDeps(core)`; `doctor`. Assert `r.stdout` matches
   `/\[ok\] Google connected and its client library is installed/` and
@@ -313,8 +321,10 @@ it to the plant helpers. Read the helper at the top of the file.)
       gws\` command will offer to install it …` line and exits 0.
 - [ ] When Google is connected but `googleapis` is **resolvable-but-un-loadable**
       (corrupt), `doctor` prints one `[warn] … client library is broken (installed
-      but not loadable) — reinstall it: <npm>` line that does **NOT** claim the
-      next-command offer, and exits 0. Neither warn suggests `gws auth`.
+      but not loadable) — delete the folder <depsDir>, then reinstall it: <npm>`
+      line (naming the deps folder, delete-first because a bare `npm install` can
+      no-op over a corrupt tree) that does **NOT** claim the next-command offer, and
+      exits 0. Neither warn suggests `gws auth`.
 - [ ] When the token file is present but damaged (zero-byte / malformed JSON /
       missing / wrong-type / whitespace-only `refresh_token`), `doctor` prints one
       `[warn] Google sign-in file looks damaged …` line and never `[ok]`; exit 0.
@@ -382,3 +392,11 @@ npm run lint
     so `{"refresh_token":true}` or a whitespace value passed → possible false
     `[ok]`. Tightened to `typeof … === 'string' && .trim() !== ''`; added
     wrong-type and whitespace-only damaged-token fixtures.
+- **2026-07-13 — Codex round-4 review (WP-102 + WP-103 mirror).** The broken-state
+  remedy `npm install --prefix <deps> …` can **no-op** on a corrupt install (npm
+  compares tree metadata, not file contents), leaving the user looping. The broken
+  warn now prescribes **delete the folder `<depsDir>`, then reinstall it: <npm>**
+  (the deps dir is single-purpose → safe to remove wholesale), platform-neutral
+  prose in parity with WP-102's `loadGoogleapis` broken message. The
+  `plantCorruptDeps` case now asserts the `delete the folder …` wording. Absent-state
+  message, token validation, and load probe unchanged.

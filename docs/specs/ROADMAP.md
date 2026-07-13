@@ -813,8 +813,8 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 > unchanged connect message; token present + library absent → "needs a one-time
 > install … the next `wienerdog gws` command will offer to install it"; token
 > present + library resolvable-but-unloadable → "broken (installed but not
-> loadable) — reinstall it", no offer claim, mirroring WP-103), the defensive
-> backstop for any direct caller. The
+> loadable) — delete the folder `<depsDir>`, then reinstall it", no offer claim,
+> mirroring WP-103), the defensive backstop for any direct caller. The
 > containment guard (`resolveFromDeps`) is untouched. The existing no-token test
 > assertions stay valid (they exercise the unchanged branch) and are **not**
 > modified. **WP-103** (S, sonnet, depends WP-102, `src/cli/doctor.js` + its test)
@@ -870,6 +870,16 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 > state-aware (same absent/broken split as WP-103's warns), keyed on a `resolvable`
 > flag reused from the resolve attempt already made; added a corrupt-deps
 > `loadGoogleapis` test. WP-103/104/105 untouched.
+> **Codex round-4 spec review (2026-07-13, one finding, WP-102 + WP-103 mirror):**
+> the broken-state remedy `npm install --prefix <deps> …` can **no-op** on a corrupt
+> install — npm/arborist compares tree metadata, not file contents, so a
+> resolvable-but-corrupt `googleapis` reads as "up to date" and stays unloadable.
+> Both broken messages now prescribe a **clean reinstall — delete the folder
+> `<depsDir>` first, then install** (platform-neutral prose; the deps dir is
+> single-purpose so wholesale removal is safe). WP-102's corrupt test now also
+> executes the repair (rmSync + fake install) and asserts `loadGoogleapis` succeeds,
+> proving the flow shape (real npm no-op semantics are out of unit-test reach).
+> WP-104/105 untouched.
 
 <!-- -->
 
