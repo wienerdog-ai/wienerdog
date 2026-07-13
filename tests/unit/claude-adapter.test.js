@@ -360,6 +360,97 @@ test('a user-relocated mid-file block uninstalls to exactly one blank line', () 
   );
 });
 
+// ── WP-091: full-line sentinel anchoring + single-block invariant (forward) ──
+
+test('WP-091 forward: an inline sentinel in prose is NOT a marker; only the real full-line block is edited', () => {
+  const { applyManagedBlock } = require('../../src/adapters/shared');
+  const paths = setup();
+  const mdPath = path.join(paths.claudeDir, 'CLAUDE.md');
+  const prose = 'Docs mention <!-- wienerdog:begin --> inline as an example.';
+  const original = `# Notes\n${prose}\n\n<!-- wienerdog:begin -->\nold body\n<!-- wienerdog:end -->\n`;
+  fs.writeFileSync(mdPath, original);
+  const out = { changed: [], unchanged: [], notices: [] };
+
+  applyManagedBlock(mdPath, 'new body', false, freshManifest(), out);
+  const content = fs.readFileSync(mdPath, 'utf8');
+  assert.ok(content.includes(prose), 'the inline mention is preserved verbatim');
+  assert.ok(content.includes('new body'), 'the real full-line block was updated');
+  assert.ok(!content.includes('old body'), 'the old block body was replaced');
+  assert.equal((content.match(/^<!-- wienerdog:begin -->$/gm) || []).length, 1, 'exactly one full-line begin');
+});
+
+test('WP-091 forward: duplicate/half-written/reversed markers FAIL CLOSED (WienerdogError, no write)', () => {
+  const { applyManagedBlock } = require('../../src/adapters/shared');
+  const { WienerdogError } = require('../../src/core/errors');
+  const paths = setup();
+  const mdPath = path.join(paths.claudeDir, 'CLAUDE.md');
+  const cases = {
+    'two begins': `<!-- wienerdog:begin -->\na\n<!-- wienerdog:end -->\n\n<!-- wienerdog:begin -->\nb\n<!-- wienerdog:end -->\n`,
+    'end before begin': `<!-- wienerdog:end -->\nx\n<!-- wienerdog:begin -->\n`,
+    'only a begin': `# notes\n<!-- wienerdog:begin -->\nhalf-written\n`,
+    'only an end': `# notes\n<!-- wienerdog:end -->\n`,
+  };
+  for (const [label, original] of Object.entries(cases)) {
+    fs.writeFileSync(mdPath, original);
+    const out = { changed: [], unchanged: [], notices: [] };
+    assert.throws(
+      () => applyManagedBlock(mdPath, 'new body', false, freshManifest(), out),
+      (err) => err instanceof WienerdogError && !(err instanceof ReferenceError),
+      `${label} must throw a WienerdogError (proves the ../core/errors import), not a ReferenceError`
+    );
+    assert.equal(fs.readFileSync(mdPath, 'utf8'), original, `${label}: the ambiguous file is left byte-identical`);
+  }
+});
+
+test('WP-091 forward: a user-authored line equal to a sentinel with no matching pair fails closed, never swallows content', () => {
+  const { applyManagedBlock } = require('../../src/adapters/shared');
+  const { WienerdogError } = require('../../src/core/errors');
+  const paths = setup();
+  const mdPath = path.join(paths.claudeDir, 'CLAUDE.md');
+  // The user happened to write a bare begin sentinel line in their own prose.
+  const original = `# My notes\n\n<!-- wienerdog:begin -->\n\nmore user text\n`;
+  fs.writeFileSync(mdPath, original);
+  const out = { changed: [], unchanged: [], notices: [] };
+  assert.throws(
+    () => applyManagedBlock(mdPath, 'digest', false, freshManifest(), out),
+    WienerdogError
+  );
+  assert.equal(fs.readFileSync(mdPath, 'utf8'), original, 'the user file is untouched');
+});
+
+test('WP-091 buildBlock neutralizes a digest line that trims exactly to a sentinel (single pair only)', () => {
+  const { buildBlock } = require('../../src/adapters/shared');
+  const digest = ['intro', '<!-- wienerdog:begin -->', 'middle', '   <!-- wienerdog:end -->  ', 'tail'].join('\n');
+  const block = buildBlock(digest);
+  const lines = block.split('\n');
+  assert.equal(lines.filter((l) => l.trim() === '<!-- wienerdog:begin -->').length, 1, 'only the wrapper begin remains');
+  assert.equal(lines.filter((l) => l.trim() === '<!-- wienerdog:end -->').length, 1, 'only the wrapper end remains');
+  assert.ok(block.includes('<!-- wienerdog begin -->'), 'the embedded begin was neutralized (colon → space)');
+  assert.ok(block.includes('<!-- wienerdog end -->'), 'the embedded end was neutralized (colon → space)');
+  // A normal digest (no full-line sentinel) is unchanged → golden output stays byte-identical.
+  assert.equal(buildBlock('a\nb\n'), '<!-- wienerdog:begin -->\na\nb\n<!-- wienerdog:end -->');
+});
+
+test('WP-091: a digest containing a full-line sentinel round-trips — the written block locates without hitting fail-closed', () => {
+  const { applyManagedBlock } = require('../../src/adapters/shared');
+  const paths = setup();
+  const mdPath = path.join(paths.claudeDir, 'CLAUDE.md');
+  const digest = ['line one', '<!-- wienerdog:begin -->', 'line two'].join('\n');
+  const manifest = freshManifest();
+  const out1 = { changed: [], unchanged: [], notices: [] };
+
+  applyManagedBlock(mdPath, digest, false, manifest, out1);
+  const written = fs.readFileSync(mdPath, 'utf8');
+  assert.equal((written.match(/^<!-- wienerdog:begin -->$/gm) || []).length, 1, 'exactly one begin line in the written file');
+  assert.equal((written.match(/^<!-- wienerdog:end -->$/gm) || []).length, 1, 'exactly one end line in the written file');
+
+  // A second apply must NOT throw (no self-wedge) and must be a no-op — proving
+  // locateManagedBlock found the single block in Wienerdog's own output.
+  const out2 = { changed: [], unchanged: [], notices: [] };
+  assert.doesNotThrow(() => applyManagedBlock(mdPath, digest, false, manifest, out2));
+  assert.ok(out2.unchanged.includes(mdPath), 'the second apply is unchanged (single-pair invariant self-consistent)');
+});
+
 test('uninstall reverses everything, keeping unrelated hooks and user content', () => {
   const paths = setup();
   const coreSkill = path.join(paths.core, 'skills', 'wienerdog-setup');

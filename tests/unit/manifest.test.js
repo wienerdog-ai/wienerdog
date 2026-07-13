@@ -826,6 +826,70 @@ test('disposeCoreMechanics on a symlinked core unlinks the link, keeps the targe
   assert.equal(fs.existsSync(linkCore), false, 'the symlink was unlinked, not rmdir-crashed');
 });
 
+// ── WP-091: reverse-side full-line anchoring + fail-closed (caught internally) ──
+
+test('WP-091 reverse: an inline sentinel in prose is NOT a marker; a real full-line block round-trips byte-identically', () => {
+  const paths = tempPaths();
+  const manifest = makeInstall(paths);
+  const md = path.join(paths.claudeDir, 'CLAUDE.md');
+  fs.mkdirSync(paths.claudeDir, { recursive: true });
+  const prose = 'See <!-- wienerdog:begin --> mentioned inline as an example.';
+  // The pre-existing user file (what a byte-identical round-trip must restore).
+  const original = `# notes\n${prose}\n\ntail\n`;
+  // The forward step appends exactly '\n\n' + block + '\n' after trimming trailing newlines.
+  const block = `${MB_BEGIN}\nbody\n${MB_END}`;
+  const withBlock = `${original.replace(/\n+$/, '')}\n\n${block}\n`;
+  fs.writeFileSync(md, withBlock);
+  manifestLib.record(manifest, { kind: 'managed-block', path: md, createdFile: false });
+  manifestLib.save(paths, manifest);
+  const reloaded = manifestLib.load(paths);
+
+  const { removed } = manifestLib.reverse(paths, reloaded, {});
+  assert.ok(removed.includes(md));
+  assert.equal(
+    fs.readFileSync(md, 'utf8'),
+    original,
+    'reverse strips ONLY the real full-line block; the inline mention is preserved byte-identically'
+  );
+});
+
+test('WP-091 reverse: an ambiguous managed-block entry is caught+skipped (WienerdogError, not ReferenceError) and uninstall CONTINUES', () => {
+  const paths = tempPaths();
+  const manifest = makeInstall(paths);
+  fs.mkdirSync(paths.claudeDir, { recursive: true });
+  // A user-owned file with TWO full-line begin markers → ambiguous.
+  const md = path.join(paths.claudeDir, 'CLAUDE.md');
+  const ambiguous = `# notes\n\n${MB_BEGIN}\na\n${MB_END}\n\n${MB_BEGIN}\nb\n${MB_END}\n`;
+  fs.writeFileSync(md, ambiguous);
+  manifestLib.record(manifest, { kind: 'managed-block', path: md, createdFile: false });
+  // Another removable entry recorded AFTER the block → reversed BEFORE it, so the
+  // ambiguity throw must not abort the loop before OR after it either way.
+  const extra = path.join(paths.core, 'notes.md');
+  fs.writeFileSync(extra, '# x\n');
+  manifestLib.record(manifest, { kind: 'file', path: extra });
+  manifestLib.save(paths, manifest);
+  const reloaded = manifestLib.load(paths);
+
+  // Capture stderr to prove the CAUGHT WienerdogError message was reported. A
+  // missing import would instead surface "WienerdogError is not defined" here.
+  const origWrite = process.stderr.write.bind(process.stderr);
+  let err = '';
+  process.stderr.write = (chunk) => { err += chunk; return true; };
+  let result;
+  try {
+    assert.doesNotThrow(() => { result = manifestLib.reverse(paths, reloaded, {}); },
+      'an ambiguous managed-block must NOT abort the whole uninstall');
+  } finally {
+    process.stderr.write = origWrite;
+  }
+  assert.match(err, /ambiguous wienerdog managed-block markers/, 'the caught WienerdogError message was written (not a ReferenceError)');
+  assert.doesNotMatch(err, /is not defined/, 'no ReferenceError leaked — WienerdogError is imported');
+  assert.ok(result.skipped.includes(md), 'the ambiguous file is skipped');
+  assert.equal(fs.readFileSync(md, 'utf8'), ambiguous, 'the ambiguous file is left byte-identical (no user content swallowed)');
+  assert.ok(result.removed.includes(extra), 'the OTHER removable entry is still reversed — the loop continued');
+  assert.equal(fs.existsSync(extra), false, 'uninstall did not abort');
+});
+
 test('disposeCoreMechanics dry-run changes nothing on disk', () => {
   const paths = tempPaths();
   fs.mkdirSync(paths.core, { recursive: true });

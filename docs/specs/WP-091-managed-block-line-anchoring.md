@@ -1,7 +1,7 @@
 ---
 id: WP-091
 title: Anchor managed-block sentinels to full lines and fail closed on ambiguous markers
-status: Draft
+status: In-Review
 model: opus
 size: M
 depends_on: [WP-088, WP-090]
