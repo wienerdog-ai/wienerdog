@@ -233,8 +233,16 @@ function loadGoogleapis(paths) {
   try {
     const hit = resolveFromDeps(paths);
     if (hit) {
-      resolvable = true;              // resolves from inside the deps dir (== isInstalled)...
-      return hit.req(hit.resolved);   // ...but a corrupt/partial install can still throw on require
+      resolvable = true;                 // resolves from inside the deps dir (== isInstalled)...
+      const mod = hit.req(hit.resolved); // ...but the require can throw (corrupt), or...
+      // ...load a SHAPE-BROKEN module: a zero-byte / stub `index.js` requires to
+      // `{}` (valid JS, no throw) but has no `.google`, so getServices would later
+      // crash with a raw TypeError at `new google.auth.OAuth2`. Validate the shape
+      // here and treat a missing `.google` object exactly as the BROKEN state
+      // (resolvable is already true), so both the read path and doctor get the
+      // friendly broken message instead of a TypeError (PR-gate P2).
+      if (mod && typeof mod.google === 'object' && mod.google) return mod;
+      // else: shape-broken — fall through to the BROKEN classification below.
     }
   } catch {
     /* resolve failed (absent), OR require threw (corrupt); `resolvable` tells them apart */
@@ -283,13 +291,17 @@ Message contract (parity with WP-103's two warns):
 - **Absent** (token present, not resolvable): MUST contain `Google is connected,
   but its client library needs a one-time install` AND `The next \`wienerdog gws\`
   command will offer to install it` AND the exact quoted-prefix npm command.
-- **Broken** (token present, resolvable but the require threw): MUST contain
-  `Google is connected, but its client library is broken (installed but not
-  loadable)` AND `delete the folder <depsDir>` AND the exact quoted-prefix npm
-  command, and MUST **NOT** contain `will offer to install` (the self-heal cannot
-  fire — `isInstalled` is true). The **delete-first** instruction is load-bearing:
-  a bare `npm install` over a corrupt-but-resolvable tree can no-op (npm compares
-  tree metadata, not file contents), leaving the user looping (round-4 Finding).
+- **Broken** (token present, resolvable but the require threw **OR** the loaded
+  module is shape-invalid — no truthy `.google` object): MUST contain `Google is
+  connected, but its client library is broken (installed but not loadable)` AND
+  `delete the folder <depsDir>` AND the exact quoted-prefix npm command, and MUST
+  **NOT** contain `will offer to install` (the self-heal cannot fire — `isInstalled`
+  is true). The **delete-first** instruction is load-bearing: a bare `npm install`
+  over a corrupt-but-resolvable tree can no-op (npm compares tree metadata, not file
+  contents), leaving the user looping (round-4 Finding). The **shape check** (a
+  zero-byte / stub `index.js` requires to `{}` without throwing) routes here too,
+  so a shape-broken install yields this friendly message rather than a raw
+  TypeError from `getServices` (PR-gate P2).
 - **Both** branches MUST NOT contain `/wienerdog-google-setup`, `gws auth`, or any
   "no browser" claim (Codex Finding 3: recommending `wienerdog gws auth` here is
   factually wrong — `auth.run` throws without `--client <path>` and always opens
@@ -300,7 +312,10 @@ Message contract (parity with WP-103's two warns):
 
 `resolvable` is captured from the resolve attempt already performed (cheaper than
 and equivalent to a second `isInstalled(paths)` call, since both mean
-"`resolveFromDeps` returned non-null"); keep the predicate explicit as shown.
+"`resolveFromDeps` returned non-null"); keep the predicate explicit as shown. A
+shape-broken module (loaded but no `.google`) implies `resolvable === true` by
+construction — it resolved and required — so it falls through to the **broken**
+classification automatically; no separate flag is needed.
 
 **3. `ensureGoogleReady(paths, opts)` — new, exported.** The read-path self-heal.
 
@@ -380,7 +395,7 @@ against `ensureGoogleReady` (§5); the index wiring is this thin call.
 build services. If a future gws verb is added that needs no services, it must be
 excluded from this gate too (note it then).
 
-**5. Tests (`tests/unit/gws-deps.test.js`).** Add two helpers and seven cases.
+**5. Tests (`tests/unit/gws-deps.test.js`).** Add three helpers and eight cases.
 Reuse the existing `tempPaths()`, `fakeInstall`, `deps`, `WienerdogError`, `path`,
 `fs`.
 
@@ -402,6 +417,16 @@ function plantCorruptDeps(paths) {
   fs.writeFileSync(path.join(pkgDir, 'package.json'),
     JSON.stringify({ name: 'googleapis', version: '173.0.0', main: 'index.js' }));
   fs.writeFileSync(path.join(pkgDir, 'index.js'), "throw new Error('corrupt googleapis entry point');\n");
+}
+/** Plant a SHAPE-BROKEN googleapis: it resolves AND requires cleanly, but exports
+ *  no `.google` (a zero-byte / stub index.js → `{}`). The canonical false-[ok]
+ *  case the load-probe shape check must catch (PR-gate P2). */
+function plantShapelessDeps(paths) {
+  const pkgDir = path.join(deps.depsDir(paths), 'node_modules', 'googleapis');
+  fs.mkdirSync(pkgDir, { recursive: true });
+  fs.writeFileSync(path.join(pkgDir, 'package.json'),
+    JSON.stringify({ name: 'googleapis', version: '173.0.0', main: 'index.js' }));
+  fs.writeFileSync(path.join(pkgDir, 'index.js'), 'module.exports = {};\n');
 }
 ```
 
@@ -434,6 +459,17 @@ function plantCorruptDeps(paths) {
   *flow shape* (remove → reinstall → loadable); real npm's metadata-vs-content
   no-op behavior is out of unit-test reach — the delete-first instruction exists
   precisely to defeat it.)
+- **(a3) loadGoogleapis — token present + deps SHAPE-BROKEN (loads to `{}`) → the
+  broken message, NOT a TypeError (PR-gate P2).** `plantToken(paths)` **and**
+  `plantShapelessDeps(paths)` on a fresh `tempPaths()`; assert `loadGoogleapis`
+  throws — and that the thrown value **`instanceof WienerdogError`** (proving the
+  shape check fired, not a raw `TypeError`) — whose message matches `/Google is
+  connected, but its client library is broken \(installed but not loadable\)/`,
+  matches `/delete the folder/`, does **NOT** match `/will offer to install/`, and
+  does **not** match `/\/wienerdog-google-setup/`. This is the canonical false-`[ok]`
+  case: a zero-byte/stub entry point requires cleanly but has no `.google`, so
+  without the shape check `getServices` would later crash at `new
+  google.auth.OAuth2`.
 - **(b) ensureGoogleReady — token present + deps absent + consent-yes →
   installs.** `plantToken`; `await ensureGoogleReady(paths, {confirm: async () =>
   true, runInstall: (dir, spec) => fakeInstall(dir, spec)})`; assert the injected
@@ -523,6 +559,14 @@ unchanged**. Do not touch them.
   the same delete-then-reinstall remedy. Do NOT change the read-path `isInstalled`
   check to a load probe here — the accurate message, not auto-repair, is what
   closes the loop.
+- **The shape check is minimal (PR-gate P2).** `loadGoogleapis` validates only that
+  the required module exposes a truthy `.google` object — enough to catch the
+  canonical shape-broken case (a zero-byte / stub `index.js` → `{}`) and convert it
+  from a raw downstream `TypeError` into the friendly broken message. It is **not** a
+  full API-surface validation: a module with `.google` present but internally
+  corrupt (e.g. missing `google.auth.OAuth2`) still surfaces at call time. That
+  deeper corruption is an **accepted residual** — validating the full surface on
+  every load is not worth it, and the remedy (delete + reinstall) is identical.
 - **`hasToken` stays existence-only (Codex Finding 4 asymmetry).** `hasToken`
   checks only that `google-token.json` *exists*, not that it is valid JSON with a
   `refresh_token`. This asymmetry with `doctor`'s minimal token validation
@@ -711,3 +755,21 @@ npm run lint
     { defaultYes: true })` (NOT `opts.yes`, which would bypass consent). Added
     test (g): a confirm seam captures its 2nd arg and asserts it deep-equals
     `{ defaultYes: true }`. Existing accept/decline consent tests unchanged.
+- **2026-07-13 — closing PR-gate (Codex PR review; one P2, WP-102 fix serves
+  WP-103 too).** The load probe treated **any** successfully-required module as
+  usable, so a shape-broken install whose `index.js` requires to `{}` (canonical:
+  zero-byte entry point) passed `loadGoogleapis` → `doctor` reported `[ok]` and the
+  next gws read crashed with a raw `TypeError` at `new google.auth.OAuth2` in
+  `getServices`. Fix (single point in `loadGoogleapis`): after a successful require,
+  validate the module shape — `if (mod && typeof mod.google === 'object' &&
+  mod.google) return mod;` else fall through to the existing classification. A
+  shape-fail implies `resolvable === true` (it resolved and loaded), so it is
+  classified **broken** automatically — the read path gets the friendly broken
+  message, and `doctor` inherits the fix (its probe calls `loadGoogleapis`).
+  `ensureGoogleReady`/`isInstalled` unchanged (owner's targeted disposition: the
+  resolve-only read gate stays; a shape-broken install is manual-remedy). Added test
+  (a3): `plantShapelessDeps` (`module.exports = {}`) → `loadGoogleapis` throws a
+  `WienerdogError` (asserted `instanceof`, NOT a `TypeError`) with the broken
+  message and no offer claim. Recorded the accepted residual: the check is minimal
+  (presence of a truthy `.google`), not a full API-surface validation — deeper
+  corruption still surfaces at call time.
