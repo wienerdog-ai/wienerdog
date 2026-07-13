@@ -194,7 +194,7 @@ cases — see "Do NOT modify these" below.
 
 | Action | Path | Notes |
 |--------|------|-------|
-| modify | src/gws/deps.js | (a) make `loadGoogleapis` token-aware per the Exact contract; (b) add + export `ensureGoogleReady(paths, opts)`; (c) add an internal `hasToken(paths)` helper (lazy `require('./client')`). |
+| modify | src/gws/deps.js | (a) make `loadGoogleapis` token-aware + state-aware per the Exact contract; (b) add + export `ensureGoogleReady(paths, opts)`; (c) add an internal `hasToken(paths)` helper (lazy `require('./client')`); (d) two one-line edits to `ensureGoogleapis` — quote the `--prefix` in its `cmd` string (P2-A) and pass `{defaultYes:true}` to the confirm call (P2-B), per contract §3b. |
 | modify | src/gws/index.js | import `ensureGoogleReady` from `./deps`; call `await ensureGoogleReady(paths)` for every non-`auth` command, before services are built. |
 | modify | tests/unit/gws-deps.test.js | add a `plantToken(paths)` helper + the six new cases below. Do NOT modify the existing no-token assertions. |
 
@@ -242,7 +242,10 @@ function loadGoogleapis(paths) {
   // Disambiguate the states that share this failure (BUG-gws-deps-missing):
   if (hasToken(paths)) {
     const dir = depsDir(paths);
-    const cmd = `npm install --ignore-scripts --prefix ${dir} ${GOOGLEAPIS_SPEC}`;
+    // Quote the prefix (P2-A): a home path with spaces (e.g. Windows
+    // C:\Users\John Smith\...) would otherwise split the argument when the user
+    // pastes the command. Double quotes work in POSIX shells, cmd, and PowerShell.
+    const cmd = `npm install --ignore-scripts --prefix "${dir}" ${GOOGLEAPIS_SPEC}`;
     if (resolvable) {
       // CONNECTED but the library is installed-yet-unloadable (corrupt/partial):
       // the read-path self-heal NO-OPs here (isInstalled is true), so promising an
@@ -272,17 +275,21 @@ function loadGoogleapis(paths) {
 }
 ```
 
+The exact npm command in every message is the **quoted-prefix** form
+`npm install --ignore-scripts --prefix "<depsDir>" googleapis@^173` (P2-A — see
+below).
+
 Message contract (parity with WP-103's two warns):
 - **Absent** (token present, not resolvable): MUST contain `Google is connected,
   but its client library needs a one-time install` AND `The next \`wienerdog gws\`
-  command will offer to install it` AND the exact npm command.
+  command will offer to install it` AND the exact quoted-prefix npm command.
 - **Broken** (token present, resolvable but the require threw): MUST contain
   `Google is connected, but its client library is broken (installed but not
-  loadable)` AND `delete the folder <depsDir>` AND the exact npm command, and MUST
-  **NOT** contain `will offer to install` (the self-heal cannot fire —
-  `isInstalled` is true). The **delete-first** instruction is load-bearing: a bare
-  `npm install` over a corrupt-but-resolvable tree can no-op (npm compares tree
-  metadata, not file contents), leaving the user looping (round-4 Finding).
+  loadable)` AND `delete the folder <depsDir>` AND the exact quoted-prefix npm
+  command, and MUST **NOT** contain `will offer to install` (the self-heal cannot
+  fire — `isInstalled` is true). The **delete-first** instruction is load-bearing:
+  a bare `npm install` over a corrupt-but-resolvable tree can no-op (npm compares
+  tree metadata, not file contents), leaving the user looping (round-4 Finding).
 - **Both** branches MUST NOT contain `/wienerdog-google-setup`, `gws auth`, or any
   "no browser" claim (Codex Finding 3: recommending `wienerdog gws auth` here is
   factually wrong — `auth.run` throws without `--client <path>` and always opens
@@ -320,6 +327,31 @@ async function ensureGoogleReady(paths, opts = {}) {
 ```
 
 Add `ensureGoogleReady` to `module.exports` (keep the existing exports).
+
+**3b. `ensureGoogleapis` — two one-line changes (PR-gate P2-A + P2-B).** The
+existing WP-047 installer body gets exactly two edits; nothing else in it changes:
+
+- **P2-A — quote the prefix in its `cmd` template** (same reason and form as
+  `loadGoogleapis`; leaving it unquoted breaks parity — this `cmd` is what its
+  prompt line and its decline / install-failed messages show the user):
+  - OLD: `` const cmd = `npm install --ignore-scripts --prefix ${dir} ${GOOGLEAPIS_SPEC}`; ``
+  - NEW: `` const cmd = `npm install --ignore-scripts --prefix "${dir}" ${GOOGLEAPIS_SPEC}`; ``
+- **P2-B — pass `{ defaultYes: true }` to the production confirm** so pressing
+  Enter at the `[Y/n]` prompt ACCEPTS (the prompt, the function's own doc comment,
+  and ADR-0011's posture all advertise default-yes, but `src/core/prompt.js`
+  `confirm(question, opts)` defaults `defaultYes` **false**, so today Enter
+  *declines* — a latent WP-047 defect that WP-102's self-heal makes the primary
+  recovery path, so it is in-scope here):
+  - OLD: `const ok = opts.yes || (await ask('Install it now? [Y/n] '));`
+  - NEW: `const ok = opts.yes || (await ask('Install it now? [Y/n] ', { defaultYes: true }));`
+  - `ask = opts.confirm || confirm`; production `confirm` accepts `(question,
+    opts)`. Do **NOT** use `opts.yes` for this (that bypasses consent entirely).
+    The injected test seams have signature `(q) => Promise<boolean>`; passing a
+    second arg to them is harmless.
+
+`defaultRunInstall`'s `spawnSync` arg array is **unchanged** — it invokes `npm`
+with an argv array (no shell), so the prefix needs no quoting there; only the
+human-facing command STRINGS are quoted.
 
 **4. `src/gws/index.js` wiring.** Add the import near the existing requires:
 
@@ -377,8 +409,9 @@ function plantCorruptDeps(paths) {
   install" message with the self-heal offer.** `plantToken(paths)` on a fresh
   `tempPaths()`; assert `loadGoogleapis` throws a `WienerdogError` whose message
   matches `/Google is connected, but its client library needs a one-time install/`,
-  matches `/will offer to install it/`, **includes** `npm install --ignore-scripts
-  --prefix ${deps.depsDir(paths)} ${deps.GOOGLEAPIS_SPEC}`, does **not** match
+  matches `/will offer to install it/`, **includes** the quoted-prefix command
+  `npm install --ignore-scripts --prefix "${deps.depsDir(paths)}" ${deps.GOOGLEAPIS_SPEC}`
+  (note the double quotes around the prefix — P2-A), does **not** match
   `/\/wienerdog-google-setup/`, does **not** match `/gws auth/`, does **not** match
   `/no browser/i` (Finding 3), and does **not** match `/MODULE_NOT_FOUND/`.
 - **(a2) loadGoogleapis — token present + deps RESOLVABLE-BUT-BROKEN → the
@@ -410,9 +443,10 @@ function plantCorruptDeps(paths) {
   npm command, no install.** `plantToken`; call `ensureGoogleReady(paths, ...)`
   with `confirm: async () => false` and a spying `runInstall` (sets `ran = true`).
   Assert via `assert.rejects` that it throws a `WienerdogError` whose message
-  includes the exact `npm install --ignore-scripts --prefix <depsDir>
-  googleapis@^173` command (build the expectation from `deps.depsDir(paths)` and
-  `deps.GOOGLEAPIS_SPEC`); then assert `ran === false` and
+  includes the exact quoted-prefix command `npm install --ignore-scripts --prefix
+  "<depsDir>" googleapis@^173` (build the expectation as
+  `` `npm install --ignore-scripts --prefix "${deps.depsDir(paths)}" ${deps.GOOGLEAPIS_SPEC}` ``,
+  with the double quotes — P2-A); then assert `ran === false` and
   `deps.isInstalled(paths) === false`. (This is the headless-equivalent: the real
   `confirm` returns false on a non-TTY, so the same throw fires.)
 - **(d) ensureGoogleReady — NO token → no-op (unauthed path unchanged).** No
@@ -428,6 +462,26 @@ function plantCorruptDeps(paths) {
   without prompting.** `plantToken`; `await ensureGoogleReady(paths, {yes: true,
   confirm: async () => {asked = true; return false;}, runInstall: fakeInstall})`;
   assert `asked === false` and `deps.isInstalled(paths) === true`.
+- **(g) ensureGoogleapis passes `{ defaultYes: true }` to confirm (P2-B — locks
+  the default against regression).** On a fresh `tempPaths()` (deps absent, so the
+  prompt/install path runs), `let seenQ, seenOpts; await deps.ensureGoogleapis(
+  paths, {confirm: async (q, opts) => { seenQ = q; seenOpts = opts; return true; },
+  runInstall: fakeInstall});` then `assert.equal(seenQ, 'Install it now? [Y/n] ');
+  assert.deepEqual(seenOpts, { defaultYes: true });`. (Tested directly on
+  `ensureGoogleapis`, the sole consent site; `ensureGoogleReady` passes the same
+  seam straight through.)
+
+### Update these existing `ensureGoogleapis` assertions to the quoted command (P2-A)
+
+Two pre-existing WP-047 tests pin the **unquoted** command and MUST be updated to
+the quoted-prefix form (same file, a WP-102 deliverable): the consent-**decline**
+test (`ensureGoogleapis on consent-no throws with the exact npm install command`,
+~lines 167–187) and the installer-**failure** test (`ensureGoogleapis surfaces a
+non-zero installer status with the command`, ~lines 189–203). In both, change the
+pinned `` `npm install --ignore-scripts --prefix ${deps.depsDir(paths)}
+${deps.GOOGLEAPIS_SPEC}` `` expectation to `` `npm install --ignore-scripts
+--prefix "${deps.depsDir(paths)}" ${deps.GOOGLEAPIS_SPEC}` `` (add the double
+quotes). No other change to those tests.
 
 ### Do NOT modify these existing tests (answer to the report's fix-5 question)
 
@@ -491,6 +545,13 @@ unchanged**. Do not touch them.
   fix-2 "Google is connected, but…" wording is delivered by `loadGoogleapis` for
   any caller that reaches it directly (the defensive backstop); the two messages
   are consistent (both name the connected-account remedy).
+- **Consent stays intact under the P2-B default-yes fix.** The self-heal prompt
+  now honors ADR-0011's default-yes (Enter accepts) via `{ defaultYes: true }` on
+  the `confirm` call — NOT via `opts.yes`, which would skip the prompt entirely and
+  break consent. A non-TTY still aborts (mode 3 in `src/core/prompt.js` ignores
+  `defaultYes` and returns false), so headless installs are never silently
+  performed. Every user-facing command string is quoted (`--prefix "<dir>"`, P2-A);
+  `defaultRunInstall`'s argv array is untouched (no shell).
 - When uncertain: choose the simpler option and record it under "Decisions made".
   Do NOT expand scope (no update-time backfill — see Out of scope; no keyring; no
   changes to token/client persistence, scopes, or the containment guard).
@@ -528,6 +589,13 @@ unchanged**. Do not touch them.
       no-op and the existing "no Google sign-in found — run `wienerdog gws auth`
       first" / connect flow is unchanged.
 - [ ] `ensureGoogleReady` is a no-op when `googleapis` is already installed.
+- [ ] Every user-facing npm command string quotes the prefix (`--prefix
+      "<depsDir>"`) in `loadGoogleapis` (both branches) and `ensureGoogleapis`
+      (prompt line + decline + install-failed) so a home path with spaces is not
+      split when pasted (P2-A).
+- [ ] The self-heal prompt honors default-yes: pressing Enter at `Install it now?
+      [Y/n]` ACCEPTS (`{ defaultYes: true }` on the production confirm), while a
+      non-TTY still aborts and installs nothing (P2-B).
 - [ ] Running a read twice after a successful self-heal is idempotent (second run:
       `isInstalled` true → no install attempted).
 - [ ] The existing no-token assertions in `gws-deps.test.js` are unchanged and
@@ -624,3 +692,22 @@ npm run lint
   proving the flow shape end-to-end (real npm metadata-vs-content no-op behavior is
   out of unit-test reach, noted honestly). Absent-state message, self-heal contract,
   `ensureGoogleapis`/`ensureGoogleReady` logic, no-token branch all unchanged.
+- **2026-07-13 — PR-gate review (Codex PR review; two P2s, WP-102).**
+  - **P2-A (also WP-103).** Every emitted npm command interpolated the deps dir
+    **unquoted** (`--prefix ${dir}`), so a home path with spaces (common on Windows:
+    `C:\Users\John Smith\…`) splits the argument when pasted. Quoted the prefix in
+    every user-facing command STRING — `loadGoogleapis`'s two token-present messages
+    AND `ensureGoogleapis`'s prompt line + decline + install-failed messages (same
+    `cmd` template; leaving those unquoted would break parity). `defaultRunInstall`'s
+    `spawnSync` argv array is unchanged (no shell). Updated the pinned assertions in
+    new cases (a)/(a2)/(c) and the two pre-existing `ensureGoogleapis`
+    decline/failure tests.
+  - **P2-B (WP-102).** `ensureGoogleapis`'s prompt advertises default-yes
+    (`[Y/n]`, its doc comment, ADR-0011) but called the production `confirm`
+    WITHOUT `{ defaultYes: true }` — `src/core/prompt.js` defaults it false, so
+    pressing Enter *declined*. A latent WP-047 defect made in-scope because WP-102's
+    self-heal makes this prompt the primary recovery path (and `deps.js` is a WP-102
+    deliverable). Fixed the one line to `await ask('Install it now? [Y/n] ',
+    { defaultYes: true })` (NOT `opts.yes`, which would bypass consent). Added
+    test (g): a confirm seam captures its 2nd arg and asserts it deep-equals
+    `{ defaultYes: true }`. Existing accept/decline consent tests unchanged.
