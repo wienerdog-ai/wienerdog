@@ -58,11 +58,15 @@ the same misleading error and cannot self-heal (they can't run interactive
    than today). An **unauthed** user (no token) is untouched — they still get the
    existing "connect Google" flow.
 2. **Disambiguate the error.** `loadGoogleapis` (the sole emit site of the
-   misleading string) branches on token presence: no token → the current
-   connect-Google message (unchanged); token present → an accurate "Google is
-   connected, but its client library needs a one-time install" message naming the
-   concrete remedy. This is the defensive backstop for any caller that reaches
-   `loadGoogleapis` without going through the self-heal wrapper.
+   misleading string) branches on token presence and then on resolvability: no
+   token → the current connect-Google message (unchanged); token present + library
+   **absent** → "needs a one-time install … the next `wienerdog gws` command will
+   offer to install it"; token present + library **resolvable-but-unloadable**
+   (corrupt) → "broken (installed but not loadable) — reinstall it", with no
+   offer claim (the self-heal cannot fire on a resolvable install). Both name the
+   concrete npm remedy. This is the defensive backstop for any caller that reaches
+   `loadGoogleapis` without going through the self-heal wrapper, and it mirrors
+   WP-103's doctor split exactly.
 
 **Product invariants that bound this WP.** Wienerdog is just files (ADR-0004): the
 self-heal runs `npm install` synchronously and returns; it starts nothing that
@@ -213,22 +217,41 @@ function hasToken(paths) {
 }
 ```
 
-**2. `loadGoogleapis(paths)` — branch on token presence.** Keep the resolve
-attempt and the no-token message byte-for-byte; add the token-present branch:
+**2. `loadGoogleapis(paths)` — branch on token presence, then on resolvability.**
+Keep the resolve attempt and the no-token message byte-for-byte; add the
+token-present branch, split into **absent** vs **broken** exactly as WP-103's
+doctor probe does (Codex round-3 Finding). Capture resolvability from the resolve
+attempt already made — `resolveFromDeps` returns non-null iff `googleapis` resolves
+from **inside** the deps dir (== `isInstalled`), and the require can still throw
+afterward for a corrupt install — so a single `resolvable` flag set **before** the
+require distinguishes the two failure modes without a second resolve:
 
 ```js
 function loadGoogleapis(paths) {
+  let resolvable = false;
   try {
     const hit = resolveFromDeps(paths);
-    if (hit) return hit.req(hit.resolved);
+    if (hit) {
+      resolvable = true;              // resolves from inside the deps dir (== isInstalled)...
+      return hit.req(hit.resolved);   // ...but a corrupt/partial install can still throw on require
+    }
   } catch {
-    /* treated as absent */
+    /* resolve failed (absent), OR require threw (corrupt); `resolvable` tells them apart */
   }
-  // Disambiguate the two states that share this failure (BUG-gws-deps-missing):
-  // a CONNECTED account (token present) needs only the client library, NOT a
-  // reconnect; an unauthed user needs the full connect flow.
+  // Disambiguate the states that share this failure (BUG-gws-deps-missing):
   if (hasToken(paths)) {
     const cmd = `npm install --ignore-scripts --prefix ${depsDir(paths)} ${GOOGLEAPIS_SPEC}`;
+    if (resolvable) {
+      // CONNECTED but the library is installed-yet-unloadable (corrupt/partial):
+      // the read-path self-heal NO-OPs here (isInstalled is true), so promising an
+      // "offer to install" would make the user loop on a contradictory message.
+      // Reinstall only — the same npm command overwrites the corrupt copy.
+      throw new WienerdogError(
+        'Google is connected, but its client library is broken (installed but not loadable) — reinstall it:\n  ' +
+          cmd
+      );
+    }
+    // CONNECTED and the library is ABSENT: the next gws read WILL self-heal.
     throw new WienerdogError(
       'Google is connected, but its client library needs a one-time install. ' +
         'The next `wienerdog gws` command will offer to install it, or run:\n  ' +
@@ -241,22 +264,25 @@ function loadGoogleapis(paths) {
 }
 ```
 
-The token-present message MUST contain the literal substring `Google is
-connected, but its client library needs a one-time install` AND the exact
-`npm install --ignore-scripts --prefix <deps> googleapis@^173` command, and MUST
-NOT contain `/wienerdog-google-setup`, `gws auth`, or any "no browser" claim
-(Codex Finding 3: recommending `wienerdog gws auth` here is factually wrong —
-`auth.run` throws without `--client <path>` and always opens the full browser
-OAuth loopback with it; the self-heal + the npm one-liner are the accurate
-remedies). The no-token branch is unchanged.
+Message contract (parity with WP-103's two warns):
+- **Absent** (token present, not resolvable): MUST contain `Google is connected,
+  but its client library needs a one-time install` AND `The next \`wienerdog gws\`
+  command will offer to install it` AND the exact npm command.
+- **Broken** (token present, resolvable but the require threw): MUST contain
+  `Google is connected, but its client library is broken (installed but not
+  loadable) — reinstall it` AND the exact npm command, and MUST **NOT** contain
+  `will offer to install` (the self-heal cannot fire — `isInstalled` is true).
+- **Both** branches MUST NOT contain `/wienerdog-google-setup`, `gws auth`, or any
+  "no browser" claim (Codex Finding 3: recommending `wienerdog gws auth` here is
+  factually wrong — `auth.run` throws without `--client <path>` and always opens
+  the full browser OAuth loopback with it; the accurate remedies are the self-heal
+  / the npm one-liner).
+- The **no-token** branch is unchanged (byte-for-byte the same
+  `/wienerdog-google-setup` message).
 
-This same message is also emitted when `googleapis` is **resolvable but
-un-loadable** (a corrupt/partial install whose `require` throws): the require in
-`loadGoogleapis` is inside the same `try`, so a load failure is caught and falls
-through to this token-aware throw. The `npm install` one-liner is the universal
-remedy for both the absent and the corrupt case; the self-heal sentence is
-accurate for the (dominant) absent case and harmless for the corrupt case (see
-the Finding-1(b) residual in Implementation notes).
+`resolvable` is captured from the resolve attempt already performed (cheaper than
+and equivalent to a second `isInstalled(paths)` call, since both mean
+"`resolveFromDeps` returned non-null"); keep the predicate explicit as shown.
 
 **3. `ensureGoogleReady(paths, opts)` — new, exported.** The read-path self-heal.
 
@@ -311,8 +337,9 @@ against `ensureGoogleReady` (§5); the index wiring is this thin call.
 build services. If a future gws verb is added that needs no services, it must be
 excluded from this gate too (note it then).
 
-**5. Tests (`tests/unit/gws-deps.test.js`).** Add a helper and six cases. Reuse
-the existing `tempPaths()`, `fakeInstall`, `WienerdogError`, `path`, `fs`.
+**5. Tests (`tests/unit/gws-deps.test.js`).** Add two helpers and seven cases.
+Reuse the existing `tempPaths()`, `fakeInstall`, `deps`, `WienerdogError`, `path`,
+`fs`.
 
 ```js
 /** Write a valid-looking Google token so hasToken()/self-heal see a connected core. */
@@ -323,16 +350,36 @@ function plantToken(paths) {
     JSON.stringify({ access_token: 'a', refresh_token: 'r' })
   );
 }
+/** Plant a CORRUPT googleapis in the deps dir: it RESOLVES (containment guard
+ *  passes) but its entry point THROWS on require — the corrupt/partial-install
+ *  state (WP-102 broken branch). */
+function plantCorruptDeps(paths) {
+  const pkgDir = path.join(deps.depsDir(paths), 'node_modules', 'googleapis');
+  fs.mkdirSync(pkgDir, { recursive: true });
+  fs.writeFileSync(path.join(pkgDir, 'package.json'),
+    JSON.stringify({ name: 'googleapis', version: '173.0.0', main: 'index.js' }));
+  fs.writeFileSync(path.join(pkgDir, 'index.js'), "throw new Error('corrupt googleapis entry point');\n");
+}
 ```
 
-- **(a) loadGoogleapis — token present + deps absent → the "client library"
-  message.** `plantToken(paths)` on a fresh `tempPaths()`; assert `loadGoogleapis`
-  throws a `WienerdogError` whose message matches `/Google is connected, but its
-  client library needs a one-time install/`, **includes** `npm install
-  --ignore-scripts --prefix ${deps.depsDir(paths)} ${deps.GOOGLEAPIS_SPEC}`, does
-  **not** match `/\/wienerdog-google-setup/`, does **not** match `/gws auth/`,
-  does **not** match `/no browser/i` (Finding 3), and does **not** match
-  `/MODULE_NOT_FOUND/`.
+- **(a) loadGoogleapis — token present + deps ABSENT → the "needs a one-time
+  install" message with the self-heal offer.** `plantToken(paths)` on a fresh
+  `tempPaths()`; assert `loadGoogleapis` throws a `WienerdogError` whose message
+  matches `/Google is connected, but its client library needs a one-time install/`,
+  matches `/will offer to install it/`, **includes** `npm install --ignore-scripts
+  --prefix ${deps.depsDir(paths)} ${deps.GOOGLEAPIS_SPEC}`, does **not** match
+  `/\/wienerdog-google-setup/`, does **not** match `/gws auth/`, does **not** match
+  `/no browser/i` (Finding 3), and does **not** match `/MODULE_NOT_FOUND/`.
+- **(a2) loadGoogleapis — token present + deps RESOLVABLE-BUT-BROKEN → the
+  "reinstall it" message, NO offer claim (round-3 Finding).** `plantToken(paths)`
+  **and** `plantCorruptDeps(paths)` on a fresh `tempPaths()`; assert
+  `loadGoogleapis` throws a `WienerdogError` whose message matches `/Google is
+  connected, but its client library is broken \(installed but not loadable\) —
+  reinstall it/`, **includes** the exact npm command (as in (a)), does **NOT**
+  match `/will offer to install/`, does **not** match `/\/wienerdog-google-setup/`,
+  and does **not** match `/gws auth/`. (Node does not cache a module that throws at
+  load, and each case uses a fresh `tempPaths()`, so run this in-process like (a) —
+  no child process needed.)
 - **(b) ensureGoogleReady — token present + deps absent + consent-yes →
   installs.** `plantToken`; `await ensureGoogleReady(paths, {confirm: async () =>
   true, runInstall: (dir, spec) => fakeInstall(dir, spec)})`; assert the injected
@@ -382,18 +429,22 @@ unchanged**. Do not touch them.
   deliberate supply-chain control locked by the existing tests. Self-heal
   populates the deps dir *through* the guard's install path; it never bypasses
   the guard.
-- **Accepted residual — the read path keeps the cheap resolve-only check
-  (Codex Finding 1b).** `ensureGoogleReady` gates on `isInstalled`, which only
+- **Accepted residual — self-heal SKIPS the corrupt state (Codex Finding 1b;
+  narrowed in round-3).** `ensureGoogleReady` gates on `isInstalled`, which only
   *resolves* `googleapis` (via `resolveFromDeps`), it does not *load* it. So a
   **corrupt/partial** install (interrupted `npm`, missing transitive dep, broken
-  entry point) that still resolves reads as installed → self-heal no-ops. This is
-  a **deliberate, accepted residual on the read path** (loading the heavy
-  `googleapis` on every read to detect corruption is not worth it): the user is
-  not stranded, because `getServices` → `loadGoogleapis` then *loads* the module,
-  fails, and its token-present message delivers the working `npm install` remedy
-  (a manual reinstall overwrites the corrupt copy). The `doctor` probe (WP-103)
-  uses a full **load** probe to surface this state actively. Do NOT change the
-  read-path `isInstalled` check to a load probe here.
+  entry point) that still resolves reads as installed → self-heal no-ops. Keeping
+  the resolve-only check on the read path is deliberate (loading the heavy
+  `googleapis` on every read to detect corruption is not worth it). **The residual
+  is now ONLY that self-heal does not auto-repair a corrupt install — the MESSAGE
+  is no longer misleading:** since round-3, `loadGoogleapis` detects this exact
+  state (resolvable + require threw) and emits the **broken** message ("installed
+  but not loadable — reinstall it: <npm>"), which makes no self-heal promise and
+  points to the reinstall that actually fixes it (a manual `npm install` overwrites
+  the corrupt copy). So a user in this state gets an accurate, actionable message
+  and never loops. The `doctor` probe (WP-103) surfaces the same state with the
+  same split. Do NOT change the read-path `isInstalled` check to a load probe here
+  — the accurate message, not auto-repair, is what closes the loop.
 - **`hasToken` stays existence-only (Codex Finding 4 asymmetry).** `hasToken`
   checks only that `google-token.json` *exists*, not that it is valid JSON with a
   `refresh_token`. This asymmetry with `doctor`'s minimal token validation
@@ -440,9 +491,12 @@ unchanged**. Do not touch them.
       token — no re-auth, no browser (self-heal).
 - [ ] The same on a non-TTY fails with the accurate npm-install remedy (naming the
       exact command), never the misleading "isn't set up yet".
-- [ ] `loadGoogleapis` with a token present + deps absent throws the "Google is
-      connected, but its client library needs a one-time install" message with the
-      npm command, not `/wienerdog-google-setup`.
+- [ ] `loadGoogleapis` with a token present + deps **absent** throws the "Google is
+      connected, but its client library needs a one-time install … will offer to
+      install it" message with the npm command, not `/wienerdog-google-setup`.
+- [ ] `loadGoogleapis` with a token present + a **resolvable-but-unloadable**
+      (corrupt) install throws the "broken (installed but not loadable) — reinstall
+      it" message with the npm command and **no** "will offer to install" claim.
 - [ ] An **unauthed** user (no token) is unaffected: `ensureGoogleReady` is a
       no-op and the existing "no Google sign-in found — run `wienerdog gws auth`
       first" / connect flow is unchanged.
@@ -510,3 +564,21 @@ npm run lint
   - **Finding 4 (owner: MINIMAL VALIDATION).** No change to `hasToken` (stays
     existence-only); the deliberate asymmetry with WP-103's token validation is now
     documented in Implementation notes.
+- **2026-07-13 — Codex round-3 review (one finding, WP-102 only — the mirror of
+  round-2 Finding 2).** The token-present `loadGoogleapis` message was still a
+  single string claiming "The next `wienerdog gws` command will offer to install
+  it" for BOTH the absent and the corrupt-but-resolvable case — but for the corrupt
+  case the read-path self-heal has just no-op'd (accepted residual), so the offer
+  can never occur and the user loops on a contradictory message (while WP-103's
+  broken warn correctly says reinstall-only). Fix: the token-present branch is now
+  **state-aware** (same split as WP-103), keyed on a `resolvable` flag captured from
+  the resolve attempt already made (== `isInstalled`, no second resolve): **absent**
+  (`resolvable` false) keeps the "needs a one-time install … will offer to install
+  it" message; **broken** (`resolvable` true, require threw) emits "broken
+  (installed but not loadable) — reinstall it: <npm>", with no offer claim. Added
+  test (a2): plant a corrupt googleapis in the deps dir (throws on require) + a
+  token, assert the broken message includes the exact npm command and does NOT match
+  `/will offer to install/` or `/wienerdog-google-setup/`. The Finding-1(b) residual
+  note was narrowed — the residual is now ONLY that self-heal skips the corrupt
+  state; the message is accurate. No-token branch and all previously pinned
+  assertions untouched.

@@ -809,9 +809,12 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 > auth; non-TTY/headless: fails to the accurate, browser-free `npm install`
 > remedy, no worse than today); an **unauthed** user (no token) is a no-op and
 > keeps the existing connect-Google flow. `loadGoogleapis` — the sole emit site of
-> the misleading string — is made **token-aware** (no token → unchanged connect
-> message; token present → accurate "Google is connected, but its client library
-> needs a one-time install"), the defensive backstop for any direct caller. The
+> the misleading string — is made **token-aware and state-aware** (no token →
+> unchanged connect message; token present + library absent → "needs a one-time
+> install … the next `wienerdog gws` command will offer to install it"; token
+> present + library resolvable-but-unloadable → "broken (installed but not
+> loadable) — reinstall it", no offer claim, mirroring WP-103), the defensive
+> backstop for any direct caller. The
 > containment guard (`resolveFromDeps`) is untouched. The existing no-token test
 > assertions stay valid (they exercise the unchanged branch) and are **not**
 > modified. **WP-103** (S, sonnet, depends WP-102, `src/cli/doctor.js` + its test)
@@ -859,6 +862,14 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 > keeps the offer, **broken** points only to `npm` reinstall. (3, medium, WP-103)
 > `refresh_token` validation was truthiness-only — tightened to a non-empty string.
 > Revision logs on WP-103/105 record the deltas; WP-104 untouched.
+> **Codex round-3 spec review (2026-07-13, one localized finding, WP-102 only —
+> the mirror of round-2 Finding 2):** WP-102's token-present `loadGoogleapis` error
+> still claimed the next `wienerdog gws` command "will offer to install it" for the
+> corrupt-but-resolvable case, where the read-path self-heal has just no-op'd — so
+> the user would loop on a contradictory message. Fixed by making that branch
+> state-aware (same absent/broken split as WP-103's warns), keyed on a `resolvable`
+> flag reused from the resolve attempt already made; added a corrupt-deps
+> `loadGoogleapis` test. WP-103/104/105 untouched.
 
 <!-- -->
 
