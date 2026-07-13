@@ -313,7 +313,7 @@ test('scheduler-schedule: a second identical add is idempotent (no OS call)', { 
   assert.equal(calls2.length, 0, 'no loader calls on an unchanged re-add');
 });
 
-test('scheduler-schedule: add then manifest.reverse still removes config.yaml (hash re-synced)', { skip: !SCHED_SUPPORTED }, async () => {
+test('scheduler-schedule: add then manifest.reverse DEFERS config.yaml (hash re-synced, not mistaken for a user edit) (WP-088)', { skip: !SCHED_SUPPORTED }, async () => {
   const { env, paths } = setup();
   await runSchedule(env, ['add', 'dream', '--at', '03:30', '--job', 'dream'], () => ({ status: 0 }));
   assert.ok(fs.existsSync(paths.config));
@@ -323,8 +323,13 @@ test('scheduler-schedule: add then manifest.reverse still removes config.yaml (h
     if (e.kind === 'scheduler-entry') e.unload = [process.execPath, '-e', '0'];
   }
   manifestLib.save(paths, manifest);
-  manifestLib.reverse(paths, manifestLib.load(paths));
-  assert.ok(!fs.existsSync(paths.config), 'config.yaml removed — not mistaken for a user edit');
+  // WP-088: config.yaml is a deferred-deletion-set member — reverse() NO LONGER
+  // deletes it. A re-synced (unmodified) hash means it is recognized as our own
+  // file and returned in deferredConfig (uninstall.js deletes it LAST), NOT kept
+  // as a customized edit.
+  const { deferredConfig } = manifestLib.reverse(paths, manifestLib.load(paths));
+  assert.equal(deferredConfig, paths.config, 'unmodified config is deferred (recognized), not mistaken for a user edit');
+  assert.ok(fs.existsSync(paths.config), 'reverse() defers config.yaml; uninstall.js deletes it last');
 });
 
 test('scheduler-schedule: remove runs the unload, deletes files, drops entries and the job', { skip: !SCHED_SUPPORTED }, async () => {

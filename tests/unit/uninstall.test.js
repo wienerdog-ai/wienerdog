@@ -227,6 +227,256 @@ test('uninstall never deletes a vault nested inside state/ — survives with the
   assert.doesNotMatch(r.stdout, /fully removed/);
 });
 
+test('a clean uninstall deletes the manifest last, then the unmodified config, and removes the empty core', () => {
+  const { core, env } = tempEnv();
+  run(['init', '--yes'], env);
+  assert.ok(fs.existsSync(path.join(core, 'install-manifest.json')), 'init wrote the manifest');
+  assert.ok(fs.existsSync(path.join(core, 'config.yaml')), 'init wrote config.yaml');
+  const r = run(['uninstall', '--yes'], env);
+  assert.equal(r.status, 0);
+  assert.match(r.stdout, /fully removed/);
+  // Manifest + the unmodified config gone WITH the emptied core (deleted last,
+  // then the core swept).
+  assert.equal(fs.existsSync(path.join(core, 'config.yaml')), false, 'the unmodified config is deleted');
+  assert.equal(fs.existsSync(core), false, 'the empty core is removed');
+});
+
+test('a clean uninstall summary does not list the swept core/state under "Skipped" (consistent with "fully removed")', () => {
+  const { core, env } = tempEnv();
+  run(['init', '--yes'], env);
+  const r = run(['uninstall', '--yes'], env);
+  assert.equal(r.status, 0);
+  assert.match(r.stdout, /fully removed/);
+  // The core and its state dir were swept — they must NOT be reported as skipped,
+  // which would contradict "fully removed".
+  const skippedSection = r.stdout.includes('Skipped') ? r.stdout.slice(r.stdout.indexOf('Skipped')) : '';
+  assert.doesNotMatch(skippedSection, new RegExp(`${core}(\\s|$)`), 'the swept core is not listed under Skipped');
+  assert.doesNotMatch(skippedSection, new RegExp(path.join(core, 'state')), 'the swept state dir is not listed under Skipped');
+  // On a fully-clean uninstall nothing is preserved, so no Skipped section at all.
+  assert.doesNotMatch(r.stdout, /Skipped \d+ item/);
+});
+
+test('uninstall keeps the manifest when disposeCoreMechanics throws mid-sweep (recovery ledger intact)', async () => {
+  const { core, env } = tempEnv();
+  // Build a real install via the CLI (subprocess), then drive run() IN-PROCESS so
+  // we can inject a throwing disposeCoreMechanics between reverse() and the
+  // manifest deletion — proving a crash there leaves a replayable ledger.
+  run(['init', '--yes'], env);
+  const manifestPath = path.join(core, 'install-manifest.json');
+  assert.ok(fs.existsSync(manifestPath));
+
+  const manifestLib = require('../../src/core/manifest');
+  const { run: runUninstall } = require('../../src/cli/uninstall');
+  const origDispose = manifestLib.disposeCoreMechanics;
+  const savedEnv = { ...process.env };
+  Object.assign(process.env, env); // getPaths() reads env at call time
+  manifestLib.disposeCoreMechanics = () => {
+    throw new Error('boom mid-sweep');
+  };
+  let threw = false;
+  try {
+    await runUninstall(['--yes']);
+  } catch {
+    threw = true;
+  } finally {
+    manifestLib.disposeCoreMechanics = origDispose;
+    for (const k of Object.keys(env)) delete process.env[k];
+    Object.assign(process.env, savedEnv);
+  }
+  assert.ok(threw, 'the injected dispose throw propagates out of run()');
+  assert.equal(
+    fs.existsSync(manifestPath),
+    true,
+    'the manifest ledger survives a crash during the mechanics sweep — uninstall can be re-run'
+  );
+  assert.equal(
+    fs.existsSync(path.join(core, 'config.yaml')),
+    true,
+    'config.yaml also survives the crash — its vault: line is the retry vault-path source'
+  );
+});
+
+/**
+ * Nest a vault INSIDE the core's state/ dir, point config.yaml at it, re-sync the
+ * manifest hash (so the rewrite is not mistaken for a user edit), and record a
+ * vault-file entry. Mirrors the legacy/hand-edited install the regression guards.
+ * @param {string} core @returns {{nestedVault:string, precious:string}}
+ */
+function nestVaultInState(core) {
+  const crypto = require('node:crypto');
+  const nestedVault = path.join(core, 'state', 'mynotes');
+  fs.mkdirSync(nestedVault, { recursive: true });
+  const precious = path.join(nestedVault, 'precious-note.md');
+  fs.writeFileSync(precious, '# precious\n');
+  const configPath = path.join(core, 'config.yaml');
+  const cfg = fs.readFileSync(configPath, 'utf8').replace(/^vault:.*$/m, `vault: ${nestedVault}`);
+  fs.writeFileSync(configPath, cfg);
+  const manifestPath = path.join(core, 'install-manifest.json');
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  const cfgEntry = manifest.entries.find((e) => e.kind === 'file' && e.path === configPath);
+  cfgEntry.hash = crypto.createHash('sha256').update(cfg).digest('hex');
+  manifest.entries.push({ kind: 'vault-file', path: precious });
+  fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+  return { nestedVault, precious };
+}
+
+test('crashed-then-retried uninstall with a NESTED vault: retry re-reads config.yaml and the nested vault survives (config-deferral regression)', async () => {
+  const { core, env } = tempEnv();
+  run(['init', '--yes'], env);
+  const { precious } = nestVaultInState(core);
+  const manifestPath = path.join(core, 'install-manifest.json');
+  const configPath = path.join(core, 'config.yaml');
+
+  const manifestLib = require('../../src/core/manifest');
+  const { run: runUninstall } = require('../../src/cli/uninstall');
+  const origDispose = manifestLib.disposeCoreMechanics;
+  const savedEnv = { ...process.env };
+  Object.assign(process.env, env); // getPaths() reads env at call time
+  try {
+    // ── Attempt 1: crash INSIDE disposeCoreMechanics (before it sweeps). ──
+    manifestLib.disposeCoreMechanics = () => {
+      throw new Error('boom mid-sweep');
+    };
+    let threw = false;
+    try {
+      await runUninstall(['--yes']);
+    } catch {
+      threw = true;
+    }
+    manifestLib.disposeCoreMechanics = origDispose; // real dispose for the retry
+    assert.ok(threw, 'attempt 1 crashes in the sweep');
+    // The deferred set + the nested vault all survive the crash → a retry is safe.
+    assert.equal(fs.existsSync(manifestPath), true, 'ledger survives the crash');
+    assert.equal(fs.existsSync(configPath), true, 'config.yaml (vault-path source) survives the crash');
+    assert.equal(fs.readFileSync(precious, 'utf8'), '# precious\n', 'nested vault untouched after the crash');
+
+    // ── Attempt 2: a REAL retry re-reads the surviving config.yaml. ──
+    const logs = [];
+    const origLog = console.log;
+    console.log = (...a) => logs.push(a.join(' '));
+    try {
+      await runUninstall(['--yes']);
+    } finally {
+      console.log = origLog;
+    }
+    const out = logs.join('\n');
+    // The nested vault SURVIVES the crashed-then-retried uninstall (skippedForVault).
+    assert.equal(
+      fs.readFileSync(precious, 'utf8'),
+      '# precious\n',
+      'the nested vault survives the crashed-then-retried uninstall'
+    );
+    assert.match(out, /left in place|still lives inside it/, 'the retry reports the vault was protected (skippedForVault)');
+    assert.equal(fs.existsSync(core), true, 'core kept — it still holds the nested vault');
+  } finally {
+    manifestLib.disposeCoreMechanics = origDispose;
+    for (const k of Object.keys(env)) delete process.env[k];
+    Object.assign(process.env, savedEnv);
+  }
+});
+
+test('manifest-delete FAILURE injection: run() aborts with WienerdogError, config NOT deleted, and a real retry keeps a nested vault', async () => {
+  const { core, env } = tempEnv();
+  run(['init', '--yes'], env);
+  const { precious } = nestVaultInState(core);
+  const manifestPath = path.join(core, 'install-manifest.json');
+  const configPath = path.join(core, 'config.yaml');
+  const configContent = fs.readFileSync(configPath, 'utf8');
+
+  const { run: runUninstall } = require('../../src/cli/uninstall');
+  const { WienerdogError } = require('../../src/core/errors');
+  const savedEnv = { ...process.env };
+  Object.assign(process.env, env);
+  const origRmSync = fs.rmSync;
+  try {
+    // ── Stub ONLY the manifest deletion to throw (real err.code), delegate every
+    //    other rmSync to the real filesystem (no verification is stubbed — the
+    //    gate is rmSync's own outcome). ──
+    fs.rmSync = (target, opts) => {
+      if (target === manifestPath) {
+        const err = new Error('permission denied');
+        err.code = 'EACCES';
+        throw err;
+      }
+      return origRmSync(target, opts);
+    };
+    let caught = null;
+    try {
+      await runUninstall(['--yes']);
+    } catch (e) {
+      caught = e;
+    }
+    fs.rmSync = origRmSync; // lift the stub before observing / retrying
+
+    assert.ok(caught instanceof WienerdogError, 'run() rejects with WienerdogError on a manifest-delete failure');
+    assert.match(caught.message, /could not remove the install manifest \(EACCES\)/);
+    // The manifest is still present (delete threw) and config was NOT deleted →
+    // manifest-present + config-present, so a retry stays vault-safe.
+    assert.equal(fs.existsSync(manifestPath), true, 'the ledger remains after the failed delete');
+    assert.equal(fs.existsSync(configPath), true, 'config.yaml was NOT deleted after the manifest-delete failure');
+    assert.equal(fs.readFileSync(configPath, 'utf8'), configContent, 'config.yaml is untouched on disk');
+    assert.equal(fs.readFileSync(precious, 'utf8'), '# precious\n', 'nested vault intact on the delete-failure path');
+
+    // ── A subsequent REAL retry (stub lifted) completes and keeps the nested vault. ──
+    await runUninstall(['--yes']);
+    assert.equal(
+      fs.readFileSync(precious, 'utf8'),
+      '# precious\n',
+      'the nested vault survives the retry after the delete-failure abort'
+    );
+    assert.equal(fs.existsSync(core), true, 'core kept — it still holds the nested vault');
+  } finally {
+    fs.rmSync = origRmSync;
+    for (const k of Object.keys(env)) delete process.env[k];
+    Object.assign(process.env, savedEnv);
+  }
+});
+
+test('deferred config re-verify (TOCTOU): a config.yaml edited DURING the sweep is PRESERVED, not deleted', async () => {
+  const { core, env } = tempEnv();
+  run(['init', '--yes'], env);
+  const configPath = path.join(core, 'config.yaml');
+
+  const manifestLib = require('../../src/core/manifest');
+  const { run: runUninstall } = require('../../src/cli/uninstall');
+  const origDispose = manifestLib.disposeCoreMechanics;
+  const savedEnv = { ...process.env };
+  Object.assign(process.env, env);
+  // Capture the keep-notice emitted at the delete site.
+  const origErrWrite = process.stderr.write.bind(process.stderr);
+  let errOut = '';
+  const editedContent = 'user edited config DURING uninstall\n';
+  let calls = 0;
+  // reverse() proves config unmodified and defers it. The FIRST disposeCoreMechanics
+  // runs BETWEEN reverse() and the deferred config delete — the exact TOCTOU window.
+  // Mutate config there to simulate the user editing it mid-uninstall, then delegate
+  // to the real sweep.
+  manifestLib.disposeCoreMechanics = (p, opts) => {
+    calls += 1;
+    if (calls === 1) fs.writeFileSync(configPath, editedContent);
+    return origDispose(p, opts);
+  };
+  process.stderr.write = (chunk) => {
+    errOut += chunk;
+    return true;
+  };
+  try {
+    await runUninstall(['--yes']);
+  } finally {
+    manifestLib.disposeCoreMechanics = origDispose;
+    process.stderr.write = origErrWrite;
+    for (const k of Object.keys(env)) delete process.env[k];
+    Object.assign(process.env, savedEnv);
+  }
+  // The re-verify at the delete site sees the mismatched hash → PRESERVE. The user's
+  // mid-uninstall edit survives byte-identical; it is NOT deleted.
+  assert.equal(fs.existsSync(configPath), true, 'the edited config is preserved, not deleted');
+  assert.equal(fs.readFileSync(configPath, 'utf8'), editedContent, 'the user edit survives byte-identical');
+  assert.match(errOut, /keeping .*config\.yaml — modified since install/, 'a keep-notice is emitted at the delete site');
+  // A now-customized config keeps the core alive (core non-empty).
+  assert.equal(fs.existsSync(core), true, 'core kept — the edited config remains in it');
+});
+
 test('uninstall --yes with a symlinked core exits 0 and unlinks the link (target dir kept)', () => {
   const { root, env } = tempEnv();
   // The core path is a symlink to a real dir the user made themselves.

@@ -60,12 +60,20 @@ async function run(argv) {
   for (const entry of manifest.entries) console.log(`  [${entry.kind}] ${entry.path}`);
 
   if (dryRun) {
-    const { removed, skipped, preserved } = manifestLib.reverse(paths, manifest, { dryRun: true });
+    const { removed, skipped, preserved, deferredConfig } = manifestLib.reverse(paths, manifest, {
+      dryRun: true,
+    });
     const { removed: mech, skippedForVault } = manifestLib.disposeCoreMechanics(paths, {
       dryRun: true,
       vaultPath,
     });
-    console.log(`\n--dry-run: ${removed.length} item(s) would be removed, ${skipped.length} skipped.`);
+    // The unmodified config moved out of reverse()'s `removed` into deferredConfig
+    // (uninstall.js deletes it live), so include it in the headline "would be
+    // removed" count — otherwise it is silently dropped from the plan. The
+    // mechanics dirs and the core stay separate disclosure lines (ADR-0019), so
+    // this headline is NOT claimed to equal the live `Removed N` total.
+    const headline = removed.length + (deferredConfig ? 1 : 0);
+    console.log(`\n--dry-run: ${headline} item(s) would be removed, ${skipped.length} skipped.`);
     if (preserved.length > 0) {
       const vaultFiles = manifest.entries.filter((e) => e.kind === 'vault-file').length;
       if (skippedForVault.length > 0) {
@@ -90,12 +98,82 @@ async function run(argv) {
     }
   }
 
-  const { removed, skipped, preserved } = manifestLib.reverse(paths, manifest, { dryRun: false });
+  const { removed, skipped, preserved, deferredConfig, deferredConfigHash } = manifestLib.reverse(
+    paths,
+    manifest,
+    { dryRun: false }
+  );
+  // First sweep: removes state/logs/schedules/secrets, protecting a nested vault
+  // via vaultPath (read from the STILL-PRESENT config.yaml at line 57). The core
+  // is NOT removed yet — the manifest + config.yaml still sit in it, so its
+  // emptiness check fails (correct). The recovery ledger has survived every
+  // crash-prone step above.
   const { removed: mech, skippedForVault } = manifestLib.disposeCoreMechanics(paths, {
     dryRun: false,
     vaultPath,
   });
-  console.log(`\nRemoved ${removed.length + mech.length} item(s).`);
+  // Delete the deferred set LAST — MANIFEST FIRST, then config.yaml. Every
+  // crash-prone step above has completed. Manifest-before-config is load-bearing:
+  // a retry proceeds only while the manifest exists, and a retry that reaches a
+  // sweep needs config.yaml for the nested-vault path, so config.yaml must exist
+  // at every point the manifest still does ("manifest-present ⟹ config-present").
+  // The manifest delete must be CONFIRMED before config is touched. The
+  // confirmation is rmSync's OWN outcome: `{force:true}` does NOT throw on ENOENT
+  // (already-gone = success) but DOES throw on a real failure (EACCES/EPERM/IO).
+  // So "rmSync returned without throwing" proves the manifest is gone — no
+  // post-hoc existence check (which fs.existsSync makes ambiguous: it returns
+  // false on a LOOKUP error too, which would reopen the P1 nested-vault window).
+  try {
+    fs.rmSync(paths.manifest, { force: true });
+  } catch (e) {
+    // Real deletion failure, manifest still present → ABORT before touching
+    // config, leaving BOTH files present so every retry stays vault-safe.
+    throw new WienerdogError(
+      `could not remove the install manifest (${e?.code || 'unknown error'}) — uninstall partially completed; ` +
+        `left config.yaml and ${paths.core} in place so a retry stays safe. ` +
+        `Fix the permission/IO issue, then re-run: npx wienerdog@latest uninstall`
+    );
+  }
+  // rmSync returned without throwing ⇒ the manifest is gone (or was already
+  // absent). The retry gate is now closed → only now is it safe to delete an
+  // unmodified config.
+  let configDeleted = false;
+  if (deferredConfig) {
+    // Prove-before-delete AT THE DELETE SITE: config was proven unmodified back in
+    // reverse(), but it is deleted here, AFTER the (potentially slow, recursive)
+    // mechanics sweep. If the user EDITED config.yaml during that window it is now
+    // customized — deleting it would destroy their edit (a TOCTOU the deferral
+    // opened). Re-verify the carried-forward hash; delete only if it STILL matches,
+    // else PRESERVE with a keep-notice. A missing/unreadable file also aborts the
+    // delete (nothing to prove → keep).
+    let currentHash = null;
+    try {
+      currentHash = manifestLib.sha256File(deferredConfig);
+    } catch {
+      currentHash = null;
+    }
+    if (currentHash !== null && currentHash === deferredConfigHash) {
+      try {
+        fs.rmSync(deferredConfig, { force: true });
+        configDeleted = true;
+      } catch {
+        /* best-effort */
+      }
+    } else {
+      process.stderr.write(`wienerdog: keeping ${deferredConfig} — modified since install\n`);
+    }
+  }
+  // Second sweep: mechanics are already gone (idempotent); with the manifest +
+  // unmodified config deleted the core is now empty, so this removes it
+  // (symlink-aware, vault-aware). A kept CUSTOMIZED config leaves the core
+  // non-empty → core preserved (unchanged).
+  const { removed: coreSwept } = manifestLib.disposeCoreMechanics(paths, {
+    dryRun: false,
+    vaultPath,
+  });
+  console.log(
+    `\nRemoved ${removed.length + mech.length + coreSwept.length + (configDeleted ? 1 : 0)} item(s).`
+  );
   if (preserved.length > 0) {
     const vaultFiles = manifest.entries.filter((e) => e.kind === 'vault-file').length;
     if (skippedForVault.length > 0) {
@@ -107,9 +185,15 @@ async function run(argv) {
       console.log(`\nYour memory vault at ${vaultPath} was left untouched (${vaultFiles} files) — your notes are yours.`);
     }
   }
-  if (skipped.length > 0) {
-    console.log(`Skipped ${skipped.length} item(s) (already gone or a customized config kept):`);
-    for (const s of skipped) console.log(`  ${s}`);
+  // reverse() now defers core/state removal to disposeCoreMechanics, so its
+  // `skipped` array carries <core> and <core>/state — items the sweep above has
+  // since removed. Report as "skipped" only what genuinely REMAINS on disk after
+  // the whole uninstall, so the summary never contradicts "fully removed" below.
+  // A kept customized config.yaml or a preserved skill still exists → still shown.
+  const skippedShown = skipped.filter((s) => fs.existsSync(s));
+  if (skippedShown.length > 0) {
+    console.log(`Skipped ${skippedShown.length} item(s) (a customized config or other file kept in place):`);
+    for (const s of skippedShown) console.log(`  ${s}`);
   }
   if (!fs.existsSync(paths.core)) {
     console.log(`\nWienerdog is fully removed — the canonical core (${paths.core}) is gone.`);

@@ -106,7 +106,7 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 | [WP-085](WP-085-gws-mime-crlf-sanitization.md) | Reject CR/LF in Gmail MIME header fields (close the send-grant header-injection bypass) | M7 | sonnet | Draft | — |
 | [WP-086](WP-086-send-grant-boundary-hardening.md) | Harden the send-grant boundary — require a terminal to mint a grant; fail closed on empty recipients | M7 | sonnet | Draft | — |
 | [WP-087](WP-087-dream-truncation-index-rebase.md) | Rebase skill-invocation indices under byte-budget truncation | M3 | sonnet | Draft | — |
-| [WP-088](WP-088-manifest-reverse-crash-safety.md) | Uninstall crash-safety — delete manifest last, hash-guard file deletes, contain tree removal (delete copied skill only if it fingerprints to the recorded hash) | M7 | opus | Draft | WP-089 |
+| [WP-088](WP-088-manifest-reverse-crash-safety.md) | Uninstall crash-safety — defer the deferred-deletion set (manifest, core, config.yaml) until the sweep succeeds; hash-guard file deletes; contain tree removal (delete copied skill only if it fingerprints to the recorded hash) | M7 | opus | In-Review | WP-089 |
 | [WP-089](WP-089-adapter-skill-dir-ownership.md) | Adapter skill-dir ownership — fingerprint-guard skill-dir refresh instead of blind rmSync | M7 | sonnet | Draft | — |
 | [WP-090](WP-090-hook-command-shell-quoting.md) | Shell-quote hook command paths (space/metachar install paths produce valid hooks) | M7 | opus | Draft | WP-089 |
 | [WP-091](WP-091-managed-block-line-anchoring.md) | Anchor managed-block sentinels to full lines; fail closed on ambiguous markers | M7 | opus | Draft | WP-088, WP-090 |
@@ -694,10 +694,15 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 > hash WE recorded for that exact path (proof it is our own unmodified copy) —
 > otherwise it is left untouched with a notice, never `rmSync`+recopied. This keeps
 > auto-refresh working for our own copies across version bumps while never deleting a
-> directory that is not provably ours. **WP-088** (manifest.js + uninstall.js) deletes
-> the uninstall manifest LAST — in `uninstall.js`, only after BOTH the reversal loop
-> and the mechanics sweep succeed (round-2 fix: end-of-`reverse()` was insufficient) —
-> generalizes the config-only per-FILE `sha256File` hash-guard so any hashed file
+> directory that is not provably ours. **WP-088** (manifest.js + uninstall.js) defers a
+> **deferred-deletion set** — the uninstall manifest, the core dir, AND config.yaml —
+> deleting them LAST in `uninstall.js`, only after BOTH the reversal loop and the
+> mechanics sweep succeed (round-2 fix: end-of-`reverse()` was insufficient; 2026-07-13
+> redesign added config.yaml after a P1 where deleting it early made a retry lose the
+> nested-vault path and recursively delete the user's nested vault — manifest is now
+> deleted BEFORE config.yaml so "manifest-present ⟹ config-present" holds at every crash
+> point, and a matching P1 where `reverse()` rmdir'd the core → ENOTEMPTY wedged the
+> retry). It also generalizes the config-only per-FILE `sha256File` hash-guard so any hashed file
 > modified since install is preserved not deleted (un-hashed shims/hooks remain a
 > follow-up), contains vendored-tree removal to the app root `core/app` (rejecting the
 > equal-to-`core` P0), and contains copied-skill removal to the harness skills root +
@@ -860,7 +865,7 @@ graph LR
   WP086[WP-086 send-grant boundary hardening]
   WP087[WP-087 dream truncation index rebase]
   WP089[WP-089 adapter skill-dir ownership: fingerprint-guard refresh]
-  WP089 --> WP088[WP-088 manifest reverse crash-safety + hash-guard + fingerprint-guard copied-skill delete]
+  WP089 --> WP088[WP-088 manifest reverse crash-safety: defer manifest+core+config.yaml + hash-guard + fingerprint-guard copied-skill delete]
   WP089 --> WP090[WP-090 hook command shell-quoting]
   WP088 --> WP091[WP-091 managed-block full-line anchoring]
   WP090 --> WP091
