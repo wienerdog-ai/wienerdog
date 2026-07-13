@@ -168,6 +168,15 @@ test('run: drive search escapes a single quote in the term', async () => {
   assert.equal(seen.q, "fullText contains 'o\\'brien'");
 });
 
+test('run: drive search escapes a backslash in the term', async () => {
+  let seen;
+  const services = {
+    drive: { files: { list: async (args) => { seen = args; return { data: { files: [] } }; } } },
+  };
+  await drive.run(services, { positionals: ['search', String.raw`path\file`] });
+  assert.equal(seen.q, String.raw`fullText contains 'path\\file'`);
+});
+
 test('run: drive read requires --id', async () => {
   const services = { drive: {} };
   await assert.rejects(
