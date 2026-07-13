@@ -1,6 +1,6 @@
 ---
 id: WP-095
-title: Realpath-resolve the vault path before the TCC guard so a symlinked vault can't reintroduce the unattended hang
+title: Resolve the vault path's symlinks component-wise before the TCC guard so a symlinked vault can't reintroduce the unattended hang
 status: In-Review
 model: sonnet
 size: S
@@ -9,7 +9,7 @@ adrs: []
 branch: wp/095-tccguard-realpath-resolution
 ---
 
-# WP-095: TCC-guard realpath resolution
+# WP-095: TCC-guard component-wise symlink resolution
 
 ## Context (read this, nothing else)
 
@@ -380,6 +380,6 @@ npm run lint
 
 1. All verification steps pass locally; output pasted into the PR body.
 2. Branch `wp/095-tccguard-realpath-resolution`; conventional commits; PR titled
-   `fix(run-job): realpath-resolve the vault before the TCC guard (WP-095)`.
+   `fix(run-job): resolve the vault's symlinks component-wise before the TCC guard (WP-095)` (the design deliberately AVOIDS `fs.realpathSync` — see the Exact contracts).
 3. PR template filled, including "Decisions made" (or "none") and `Generated-by:`.
 4. This spec's `status:` flipped to `In-Review` in the same PR.
