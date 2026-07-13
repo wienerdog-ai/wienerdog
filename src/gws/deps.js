@@ -98,7 +98,7 @@ function loadGoogleapis(paths) {
   // Disambiguate the states that share this failure (BUG-gws-deps-missing):
   if (hasToken(paths)) {
     const dir = depsDir(paths);
-    const cmd = `npm install --ignore-scripts --prefix ${dir} ${GOOGLEAPIS_SPEC}`;
+    const cmd = `npm install --ignore-scripts --prefix "${dir}" ${GOOGLEAPIS_SPEC}`;
     if (resolvable) {
       // CONNECTED but the library is installed-yet-unloadable (corrupt/partial):
       // the read-path self-heal NO-OPs here (isInstalled is true), so promising an
@@ -156,10 +156,10 @@ function defaultRunInstall(dir, spec) {
 async function ensureGoogleapis(paths, opts = {}) {
   if (isInstalled(paths)) return { installed: false, already: true };
   const dir = depsDir(paths);
-  const cmd = `npm install --ignore-scripts --prefix ${dir} ${GOOGLEAPIS_SPEC}`;
+  const cmd = `npm install --ignore-scripts --prefix "${dir}" ${GOOGLEAPIS_SPEC}`;
   process.stdout.write(`\nWienerdog needs Google's client library. It will run:\n  ${cmd}\n`);
   const ask = opts.confirm || confirm;
-  const ok = opts.yes || (await ask('Install it now? [Y/n] '));
+  const ok = opts.yes || (await ask('Install it now? [Y/n] ', { defaultYes: true }));
   if (!ok) throw new WienerdogError(`declined — run this yourself, then retry:\n  ${cmd}`);
   fs.mkdirSync(dir, { recursive: true });
   const run = opts.runInstall || defaultRunInstall;

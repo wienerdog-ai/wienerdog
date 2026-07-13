@@ -201,7 +201,7 @@ test('ensureGoogleapis on consent-no throws with the exact npm install command',
     (err) =>
       err instanceof WienerdogError &&
       err.message.includes(
-        `npm install --ignore-scripts --prefix ${deps.depsDir(paths)} ${deps.GOOGLEAPIS_SPEC}`
+        `npm install --ignore-scripts --prefix "${deps.depsDir(paths)}" ${deps.GOOGLEAPIS_SPEC}`
       )
   );
   assert.equal(ran, false, 'installer must not run when consent is declined');
@@ -219,7 +219,7 @@ test('ensureGoogleapis surfaces a non-zero installer status with the command', a
     (err) =>
       err instanceof WienerdogError &&
       err.message.includes(
-        `npm install --ignore-scripts --prefix ${deps.depsDir(paths)} ${deps.GOOGLEAPIS_SPEC}`
+        `npm install --ignore-scripts --prefix "${deps.depsDir(paths)}" ${deps.GOOGLEAPIS_SPEC}`
       )
   );
 });
@@ -261,7 +261,7 @@ test('loadGoogleapis with a token present + deps absent throws the "client libra
       /Google is connected, but its client library needs a one-time install/.test(err.message) &&
       /will offer to install it/.test(err.message) &&
       err.message.includes(
-        `npm install --ignore-scripts --prefix ${deps.depsDir(paths)} ${deps.GOOGLEAPIS_SPEC}`
+        `npm install --ignore-scripts --prefix "${deps.depsDir(paths)}" ${deps.GOOGLEAPIS_SPEC}`
       ) &&
       !/\/wienerdog-google-setup/.test(err.message) &&
       !/gws auth/.test(err.message) &&
@@ -284,7 +284,7 @@ test('loadGoogleapis with a token present + a corrupt (resolvable-but-unloadable
       /delete the folder/.test(err.message) &&
       err.message.includes(deps.depsDir(paths)) &&
       err.message.includes(
-        `npm install --ignore-scripts --prefix ${deps.depsDir(paths)} ${deps.GOOGLEAPIS_SPEC}`
+        `npm install --ignore-scripts --prefix "${deps.depsDir(paths)}" ${deps.GOOGLEAPIS_SPEC}`
       ) &&
       !/will offer to install/.test(err.message) &&
       !/\/wienerdog-google-setup/.test(err.message) &&
@@ -332,7 +332,7 @@ test('ensureGoogleReady on consent-no throws the exact npm command and installs 
     (err) =>
       err instanceof WienerdogError &&
       err.message.includes(
-        `npm install --ignore-scripts --prefix ${deps.depsDir(paths)} ${deps.GOOGLEAPIS_SPEC}`
+        `npm install --ignore-scripts --prefix "${deps.depsDir(paths)}" ${deps.GOOGLEAPIS_SPEC}`
       )
   );
   assert.equal(ran, false, 'installer must not run when consent is declined');
@@ -383,6 +383,22 @@ test('ensureGoogleReady with opts.yes installs without prompting', async () => {
   });
   assert.equal(asked, false, 'opts.yes must not prompt');
   assert.equal(deps.isInstalled(paths), true);
+});
+
+test('ensureGoogleapis passes { defaultYes: true } to confirm (Enter accepts)', async () => {
+  const paths = tempPaths();
+  let seenQ, seenOpts;
+  await deps.ensureGoogleapis(paths, {
+    confirm: async (q, opts) => {
+      seenQ = q;
+      seenOpts = opts;
+      return true;
+    },
+    runInstall: fakeInstall,
+  });
+  assert.equal(seenQ, 'Install it now? [Y/n] ');
+  assert.deepEqual(seenOpts, { defaultYes: true });
+  assert.equal(deps.isInstalled(paths), true, 'the install must have run');
 });
 
 test('GOOGLEAPIS_SPEC tracks package.json googleapis major', () => {
