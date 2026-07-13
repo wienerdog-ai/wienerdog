@@ -121,8 +121,9 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 | [WP-100](WP-100-codex-tool-output-and-fail-closed-roles.md) | Codex transcript parser — recognize the current tool-output item type (`custom_tool_call_output` + variants) and fail closed on unknown roles | M7 | sonnet | Done | — |
 | [WP-101](WP-101-gws-oauth-state-pkce.md) | gws OAuth loopback — add `state` + PKCE (RFC 8252) | M7 | sonnet | Done | — |
 | [WP-102](WP-102-gws-deps-self-heal.md) | gws read-path self-heal + disambiguated deps error (fix the post-upgrade dead-end) | M5/M7 | sonnet | In-Review | — |
-| [WP-103](WP-103-doctor-gws-deps-probe.md) | doctor probe — connected Google account with a missing client library | M5/M7 | sonnet | Ready | WP-102 |
+| [WP-103](WP-103-doctor-gws-deps-probe.md) | doctor probe — connected Google account with a missing/broken client library | M5/M7 | sonnet | Ready | WP-102 |
 | [WP-104](WP-104-gws-drive-search-friendly-query.md) | gws drive search — friendly term search by default, `--raw` for Drive query language | M5 | sonnet | Ready | — |
+| [WP-105](WP-105-sync-interactive-gws-backfill.md) | sync interactive backfill of the on-demand googleapis install (headless-only users) | M5/M7 | sonnet | Draft | WP-102 |
 
 > **First-production-night incident (2026-07-04).** WP-038, WP-039 and WP-041 form
 > a serial chain (they edit the shared `run-job.js` / `dream.js` / `validate.js`
@@ -808,26 +809,77 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 > auth; non-TTY/headless: fails to the accurate, browser-free `npm install`
 > remedy, no worse than today); an **unauthed** user (no token) is a no-op and
 > keeps the existing connect-Google flow. `loadGoogleapis` — the sole emit site of
-> the misleading string — is made **token-aware** (no token → unchanged connect
-> message; token present → accurate "Google is connected, but its client library
-> needs a one-time install"), the defensive backstop for any direct caller. The
+> the misleading string — is made **token-aware and state-aware** (no token →
+> unchanged connect message; token present + library absent → "needs a one-time
+> install … the next `wienerdog gws` command will offer to install it"; token
+> present + library resolvable-but-unloadable → "broken (installed but not
+> loadable) — delete the folder `<depsDir>`, then reinstall it", no offer claim,
+> mirroring WP-103), the defensive backstop for any direct caller. The
 > containment guard (`resolveFromDeps`) is untouched. The existing no-token test
 > assertions stay valid (they exercise the unchanged branch) and are **not**
-> modified. **WP-103** (S, sonnet, depends WP-102 — remedy-wording coherence only,
-> no code dep — `src/cli/doctor.js` + its test) adds the matching visibility: a
-> read-only `doctor` probe that reports **token present + `googleapis`
-> unresolvable from `app/deps`** as a WARN with the one-line remedy (silent when
-> Google is not connected; never a fail). **The report's fix 3 (update-time
-> migration/backfill) is deliberately SKIPPED** — once self-heal-on-read exists it
-> adds a consent/network dependency to the `update` path for no extra coverage
-> (the first read heals it). No new ADR: this implements the existing
-> ADR-0011/0013 on-demand-consented-install design on a code path (read) that WP-047
-> missed; no architectural decision changes. **WP-104** (S, sonnet, independent)
-> captures the report's separate appendix papercut: `gws drive search` passes its
-> arg verbatim as Drive `q`, so a bare word (`budget`) hits `Invalid Value`; the
-> fix wraps a plain term as `fullText contains '…'` by default and adds `--raw`
-> for literal Drive query language — a **default-behavior change the owner
-> confirmed (option B) on 2026-07-13**.
+> modified. **WP-103** (S, sonnet, depends WP-102, `src/cli/doctor.js` + its test)
+> adds the matching visibility: a read-only `doctor` probe that reports a connected
+> account whose client library is missing **or broken** as a WARN with the one-line
+> npm remedy (silent when Google is not connected; never a fail). Per the Codex
+> round-1 review it uses a containment-guarded **LOAD** probe (`loadGoogleapis` in
+> try/catch — not resolve-only, so a corrupt/partial install warns instead of
+> falsely reading `[ok]`) and minimally validates the token (valid JSON +
+> `refresh_token`, else a separate "sign-in file looks damaged" warn). No new ADR:
+> this implements the existing ADR-0011/0013 on-demand-consented-install design on
+> the read path that WP-047 missed. **WP-105** (S, sonnet, depends WP-102, Draft,
+> `src/cli/sync.js` + a new test) **reverses the report's fix-3 "skip"** after the
+> Codex review showed it was wrong for **headless-only (routines-only) users**:
+> their routines run non-TTY and decline the consented install by design, so the
+> read-path self-heal never populates their `app/deps`. WP-105 adds a **consented,
+> interactive-only** backfill in the `sync` flow (which `wienerdog update` hands
+> off to with `stdio: 'inherit'`); a non-TTY `sync` stays mutation-free, and the
+> backfill is best-effort (a decline/failure never fails `sync`). **WP-104** (S,
+> sonnet, independent) captures the report's separate appendix papercut: `gws drive
+> search` passes its arg verbatim as Drive `q`, so a bare word (`budget`) hits
+> `Invalid Value`; the fix wraps a plain term as `fullText contains '…'` by default
+> and adds `--raw` for literal Drive query language — a **default-behavior change
+> the owner confirmed (option B) on 2026-07-13**.
+> **Codex round-1 spec review (2026-07-13, 4 findings, all owner-dispositioned;
+> WP-102/103 already implemented so the revisions land as surgical patches):**
+> Finding 3 (MUST FIX) — WP-102/103 messages wrongly told users to run `wienerdog
+> gws auth` "(no browser needed …)"; `auth.run` throws without `--client <path>`
+> and always opens the full browser OAuth loopback with it. Both messages now lead
+> with the self-heal + the exact npm one-liner and drop the `gws auth` / browser-
+> free claim. Finding 1 (TARGETED) — WP-103 upgraded to a load probe (above); WP-102
+> keeps its cheap resolve-only read-path check with the corrupt-install case
+> recorded as an accepted residual. Finding 2 (ADD BACKFILL) — became WP-105.
+> Finding 4 (MINIMAL VALIDATION) — WP-103 validates the token; WP-102's `hasToken`
+> stays existence-only (documented asymmetry — worst case there is a benign
+> consented install offer).
+> **Codex round-2 spec review (2026-07-13, 3 new defects in the revised material,
+> all inside the already-approved dispositions):** (1, high, WP-105) the backfill
+> insertion sat between sync's disk mutations and `manifestMod.save`, so an
+> interrupt at the prompt / during npm could strand unpersisted manifest entries —
+> moved to run **after** the manifest save, the final statement of `run()` (the
+> install is not manifest-tracked). (2, medium, WP-103) the single "missing or
+> broken" warn falsely promised self-heal for the corrupt-but-resolvable case
+> (self-heal no-ops there) — split into two messages via `isInstalled`: **absent**
+> keeps the offer, **broken** points only to `npm` reinstall. (3, medium, WP-103)
+> `refresh_token` validation was truthiness-only — tightened to a non-empty string.
+> Revision logs on WP-103/105 record the deltas; WP-104 untouched.
+> **Codex round-3 spec review (2026-07-13, one localized finding, WP-102 only —
+> the mirror of round-2 Finding 2):** WP-102's token-present `loadGoogleapis` error
+> still claimed the next `wienerdog gws` command "will offer to install it" for the
+> corrupt-but-resolvable case, where the read-path self-heal has just no-op'd — so
+> the user would loop on a contradictory message. Fixed by making that branch
+> state-aware (same absent/broken split as WP-103's warns), keyed on a `resolvable`
+> flag reused from the resolve attempt already made; added a corrupt-deps
+> `loadGoogleapis` test. WP-103/104/105 untouched.
+> **Codex round-4 spec review (2026-07-13, one finding, WP-102 + WP-103 mirror):**
+> the broken-state remedy `npm install --prefix <deps> …` can **no-op** on a corrupt
+> install — npm/arborist compares tree metadata, not file contents, so a
+> resolvable-but-corrupt `googleapis` reads as "up to date" and stays unloadable.
+> Both broken messages now prescribe a **clean reinstall — delete the folder
+> `<depsDir>` first, then install** (platform-neutral prose; the deps dir is
+> single-purpose so wholesale removal is safe). WP-102's corrupt test now also
+> executes the repair (rmSync + fake install) and asserts `loadGoogleapis` succeeds,
+> proving the flow shape (real npm no-op semantics are out of unit-test reach).
+> WP-104/105 untouched.
 
 <!-- -->
 
@@ -953,6 +1005,7 @@ graph LR
   WP100[WP-100 Codex tool-output recognition + fail-closed roles]
   WP101[WP-101 gws OAuth loopback state + PKCE]
   WP102[WP-102 gws read-path self-heal + disambiguated deps error]
-  WP102 --> WP103[WP-103 doctor: connected Google + missing client library]
+  WP102 --> WP103[WP-103 doctor: connected Google + missing/broken client library]
+  WP102 --> WP105[WP-105 sync interactive backfill — headless-only users, Draft]
   WP104[WP-104 gws drive search friendly term + --raw]
 ```
