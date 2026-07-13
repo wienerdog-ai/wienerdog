@@ -80,15 +80,18 @@ lazily inside `run` already exists (`require('../scheduler/status')`).
   or **throws** a `WienerdogError`. It resolves via the containment guard AND
   `require`s the module inside its own `try/catch`, so it is a full **LOAD** probe
   — a corrupt/partial install that resolves but fails to `require` throws here.
-  Use this (in a `try/catch`), **not** `isInstalled` (which only resolves), so the
-  probe warns on a corrupt-but-resolvable install instead of falsely reading
-  `[ok]` (Codex Finding 1a).
+  Use this (in a `try/catch`) as the primary usability check (Codex Finding 1a).
+- `require('../gws/deps').isInstalled(paths)` → `boolean` (resolve-only). Used
+  **only after a failed load** to distinguish ABSENT (`false` → self-heal will
+  fire) from BROKEN (`true` → resolvable-but-un-loadable, self-heal no-ops), so the
+  two get distinct remedies (round-2 Finding 2).
 - `require('../gws/deps').depsDir(paths)` → `<core>/app/deps` (for the remedy).
 - `require('../gws/deps').GOOGLEAPIS_SPEC` → `'googleapis@^173'` (for the remedy).
 - `require('../gws/client').tokenPath(paths)` → `path.join(paths.secrets,
   'google-token.json')` — the canonical token path. The probe reads + JSON-parses
-  it (read-only) and requires a `refresh_token`, so a zero-byte/malformed/
-  incomplete token warns as "damaged" and never reads `[ok]` (Codex Finding 4).
+  it (read-only) and requires a **non-empty string** `refresh_token`, so a
+  zero-byte / malformed / incomplete / wrong-type / whitespace-only token warns as
+  "damaged" and never reads `[ok]` (Codex Finding 4 + round-2 Finding 3).
 
 **`tests/unit/doctor.test.js`** drives `doctor` as a subprocess
 (`node bin/wienerdog.js doctor`) against an isolated temp `HOME`/`WIENERDOG_HOME`
@@ -129,12 +132,15 @@ function googleReadinessChecks(paths) {
   const tp = tokenPath(paths);
   if (!fileExists(tp)) return []; // Google not connected — nothing to check (normal)
 
-  // Finding 4 — minimal, read-only token validation: a zero-byte / malformed /
-  // incomplete token must never read as a healthy [ok]. Require valid JSON with a
-  // refresh_token; anything else is a separate "damaged" warn.
+  // Finding 4 + round-2 Finding 3 — minimal, read-only token validation: a
+  // zero-byte / malformed / incomplete token must never read as a healthy [ok].
+  // Require valid JSON with a NON-EMPTY STRING refresh_token (a truthiness-only
+  // check would let {"refresh_token":true} or a whitespace value pass). Anything
+  // else is a separate "damaged" warn.
   let token = null;
   try { token = JSON.parse(fs.readFileSync(tp, 'utf8')); } catch { token = null; }
-  if (!token || typeof token !== 'object' || !token.refresh_token) {
+  if (!token || typeof token !== 'object' ||
+      typeof token.refresh_token !== 'string' || token.refresh_token.trim() === '') {
     return [{ status: 'warn', msg: 'Google sign-in file looks damaged — reconnect with /wienerdog-google-setup' }];
   }
 
@@ -148,12 +154,28 @@ function googleReadinessChecks(paths) {
   if (usable) {
     return [{ status: 'ok', msg: 'Google connected and its client library is installed' }];
   }
+  // Round-2 Finding 2 — DISTINGUISH the two failed-load states, because the
+  // self-heal promise is only true for one of them:
+  //   isInstalled false → ABSENT: the next read WILL self-heal (WP-102).
+  //   isInstalled true  → BROKEN (resolves but won't load): self-heal NO-OPs
+  //                        (WP-102's isInstalled gate is true), so promising an
+  //                        offer would be false — require a manual reinstall.
+  // Same npm command repairs both (install over the corrupt dir overwrites it).
   const cmd = `npm install --ignore-scripts --prefix ${deps.depsDir(paths)} ${deps.GOOGLEAPIS_SPEC}`;
+  if (deps.isInstalled(paths)) {
+    return [
+      {
+        status: 'warn',
+        msg:
+          'Google is connected but its client library is broken (installed but not loadable) — reinstall it: ' + cmd,
+      },
+    ];
+  }
   return [
     {
       status: 'warn',
       msg:
-        'Google is connected but its client library is missing or broken — the next `wienerdog gws` ' +
+        'Google is connected but its client library is missing — the next `wienerdog gws` ' +
         'command will offer to install it, or run: ' + cmd,
     },
   ];
@@ -161,12 +183,14 @@ function googleReadinessChecks(paths) {
 ```
 
 Use the file's existing `fileExists(p)` helper and its top-level `fs` for the
-token read. Return **one** line (not one per state); keep `doctor` output compact.
-The warn message drops the `wienerdog gws auth` suggestion (Codex Finding 3 —
-`gws auth` cannot fix this without re-opening browser consent), and stays worded
-consistently with WP-102's `loadGoogleapis` message. It says "missing **or
-broken**" because the LOAD probe warns on both the absent and the
-corrupt-but-resolvable case; the `npm install` one-liner is the universal remedy
+token read. Both warn branches drop the `wienerdog gws auth` suggestion (Codex
+Finding 3). Two distinct messages (round-2 Finding 2): the **absent** message
+keeps the self-heal promise + npm command; the **broken** (resolvable-but-
+un-loadable) message must NOT claim the next-command offer — WP-102's self-heal
+no-ops on a resolvable install — and points only to the npm reinstall (the same
+command repairs it). Consistent with WP-102's `loadGoogleapis` message, whose
+single string is an error (not a status) and always carries the npm one-liner. The
+`npm install` one-liner is the universal remedy
 for both.
 
 **2. Wire into `run`.** Immediately **after** the `codexSkillChecks` loop and
@@ -219,21 +243,28 @@ function plantDamagedToken(core, content) {
   `run(['init','--yes'], env)` then `run(['doctor'], env)`. Assert `r.stdout` does
   **not** match `/Google connected|Google is connected but|Google sign-in file/`
   and `r.status === 0`.
-- **Damaged token → `[warn]` "looks damaged", never `[ok]` (Finding 4).** `init`;
-  `plantDamagedToken(core, 'not json')`; `doctor`. Assert `r.stdout` matches
-  `/\[warn\] Google sign-in file looks damaged/`, does **not** match
-  `/\[ok\] Google connected/`, and `r.status === 0`. Add a second variant with a
-  well-formed but incomplete token: `plantDamagedToken(core,
-  JSON.stringify({access_token:'a'}))` (no `refresh_token`) → same `[warn]`.
-- **Connected + library missing → `[warn]`, exit 0.** `init`; `plantToken(core)`
-  (no deps planted); `doctor`. Assert `r.stdout` matches `/\[warn\] Google is
-  connected but its client library is missing or broken/`, does **not** match
-  `/gws auth/` (Finding 3), and `r.status === 0` (warn, not fail).
-- **Connected + library corrupt (resolvable but throws on load) → `[warn]`, exit 0
-  (Finding 1a).** `init`; `plantToken(core)`; `plantCorruptDeps(core)`; `doctor`.
-  Assert `r.stdout` matches `/\[warn\] Google is connected but its client library
-  is missing or broken/`, does **not** match `/\[ok\] Google connected/`, and
-  `r.status === 0`. (This is the case a resolve-only check would falsely pass.)
+- **Damaged token → `[warn]` "looks damaged", never `[ok]` (Finding 4 + round-2
+  Finding 3).** For **each** of these damaged variants, `init`;
+  `plantDamagedToken(core, <content>)`; `doctor`; assert `r.stdout` matches
+  `/\[warn\] Google sign-in file looks damaged/`, does **not** match `/\[ok\]
+  Google connected/`, and `r.status === 0`:
+  - malformed JSON: `'not json'`
+  - missing `refresh_token`: `JSON.stringify({access_token:'a'})`
+  - **wrong-type** `refresh_token` (round-2 Finding 3): `JSON.stringify({refresh_token:true})`
+  - **whitespace-only** `refresh_token` (round-2 Finding 3): `JSON.stringify({refresh_token:'   '})`
+  - zero-byte: `''`
+- **Connected + library ABSENT → `[warn]` "missing", exit 0.** `init`;
+  `plantToken(core)` (no deps planted); `doctor`. Assert `r.stdout` matches
+  `/\[warn\] Google is connected but its client library is missing — the next .?wienerdog gws.? command will offer to install it/`,
+  does **not** match `/gws auth/` (Finding 3), and `r.status === 0` (warn, not fail).
+- **Connected + library BROKEN (resolvable but throws on load) → `[warn]`
+  "broken", exit 0 (Finding 1a + round-2 Finding 2).** `init`; `plantToken(core)`;
+  `plantCorruptDeps(core)`; `doctor`. Assert `r.stdout` matches `/\[warn\] Google
+  is connected but its client library is broken \(installed but not loadable\)/`,
+  **does NOT match** `/will offer to install/` (the broken state does not
+  self-heal — round-2 Finding 2), does **not** match `/\[ok\] Google connected/`,
+  and `r.status === 0`. (This is the case a resolve-only check would falsely pass,
+  and the case whose remedy must not promise the next-command offer.)
 - **Connected + library present and loadable → `[ok]`.** `init`;
   `plantToken(core)`; `plantDeps(core)`; `doctor`. Assert `r.stdout` matches
   `/\[ok\] Google connected and its client library is installed/` and
@@ -277,13 +308,16 @@ it to the plant helpers. Read the helper at the top of the file.)
 - [ ] When Google is connected (valid token) and `googleapis` **loads** from
       `<core>/app/deps`, `doctor` prints one `[ok] Google connected and its client
       library is installed` line and exits 0.
-- [ ] When Google is connected but `googleapis` is **absent OR resolvable-but-
-      un-loadable** (corrupt), `doctor` prints one `[warn] Google is connected but
-      its client library is missing or broken …` line with the npm remedy (no
-      `gws auth` suggestion) and **still exits 0**.
+- [ ] When Google is connected but `googleapis` is **absent** (not resolvable),
+      `doctor` prints one `[warn] … client library is missing — the next \`wienerdog
+      gws\` command will offer to install it …` line and exits 0.
+- [ ] When Google is connected but `googleapis` is **resolvable-but-un-loadable**
+      (corrupt), `doctor` prints one `[warn] … client library is broken (installed
+      but not loadable) — reinstall it: <npm>` line that does **NOT** claim the
+      next-command offer, and exits 0. Neither warn suggests `gws auth`.
 - [ ] When the token file is present but damaged (zero-byte / malformed JSON /
-      missing `refresh_token`), `doctor` prints one `[warn] Google sign-in file
-      looks damaged …` line and never `[ok]`; exit 0.
+      missing / wrong-type / whitespace-only `refresh_token`), `doctor` prints one
+      `[warn] Google sign-in file looks damaged …` line and never `[ok]`; exit 0.
 - [ ] When Google is not connected (no token), `doctor` prints **no** Google line.
 - [ ] `doctor` performs no filesystem mutation in any of these paths.
 - [ ] `npm test` and `npm run lint` pass.
@@ -333,3 +367,18 @@ npm run lint
     token yields a separate `[warn] Google sign-in file looks damaged …` and never
     `[ok]`. Damaged-token fixtures/cases were added. (WP-102's `hasToken` stays
     existence-only by design — the documented asymmetry.)
+- **2026-07-13 — Codex round-2 review.** Two correctness deltas on the round-1
+  material:
+  - **Round-2 Finding 2 (medium).** The single "missing **or** broken" warn falsely
+    promised the next `wienerdog gws` command "will offer to install it" for the
+    **broken** (resolvable-but-un-loadable) case — WP-102's self-heal no-ops there
+    (`isInstalled` true). The probe now splits the two failed-load states via
+    `deps.isInstalled`: **absent** (`false`) keeps the self-heal promise; **broken**
+    (`true`) gets a distinct message ("broken (installed but not loadable) —
+    reinstall it: <npm>") that makes no offer claim. Same npm command repairs both.
+    The `plantCorruptDeps` case now asserts the broken message and `!/will offer to
+    install/`.
+  - **Round-2 Finding 3 (medium).** `refresh_token` validation was truthiness-only,
+    so `{"refresh_token":true}` or a whitespace value passed → possible false
+    `[ok]`. Tightened to `typeof … === 'string' && .trim() !== ''`; added
+    wrong-type and whitespace-only damaged-token fixtures.
