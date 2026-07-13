@@ -110,17 +110,25 @@ function googleReadinessChecks(paths) {
   if (usable) {
     return [{ status: 'ok', msg: 'Google connected and its client library is installed' }];
   }
-  // Round-2 Finding 2 — DISTINGUISH the two failed-load states, because the
-  // self-heal promise is only true for one of them:
-  //   isInstalled false → ABSENT: the next read WILL self-heal (WP-102).
-  //   isInstalled true  → BROKEN (resolves but won't load): self-heal NO-OPs
-  //                        (WP-102's isInstalled gate is true), so promising an
-  //                        offer would be false — require a manual reinstall.
+  // Round-2 Finding 2 — DISTINGUISH the two failed-load states, keyed on PHYSICAL
+  // PRESENCE (round-6 P2), NOT isInstalled/resolvability:
+  //   depsPresent false → ABSENT: the next read WILL self-heal (WP-102).
+  //   depsPresent true  → BROKEN (a deps tree exists but won't load — bad main /
+  //                       corrupt entry / no .google / symlink-out): self-heal
+  //                       NO-OPs (WP-102 gates on depsPresent), so promising an
+  //                       offer would be false — require a manual delete+reinstall.
+  // NOTE: `deps.isInstalled` is FALSE for a package.json-present-but-unresolvable
+  // (missing-main) tree, so keying on it would mis-label that state "missing".
   const dir = deps.depsDir(paths);
   // Quote the prefix (P2-A): a home path with spaces would split the argument when
   // the user pastes the command. Double quotes work in POSIX shells, cmd, PowerShell.
   const cmd = `npm install --ignore-scripts --prefix "${dir}" ${deps.GOOGLEAPIS_SPEC}`;
-  if (deps.isInstalled(paths)) {
+  // `depsPresent` is exported by WP-102's deps.js and lands here when that branch
+  // merges; until then, fall back to `isInstalled` so this branch runs standalone.
+  // The typeof guard is dead code post-merge.
+  const present =
+    typeof deps.depsPresent === 'function' ? deps.depsPresent(paths) : deps.isInstalled(paths);
+  if (present) {
     // Round-4 Finding — a bare `npm install` can NO-OP over a corrupt-but-
     // resolvable tree (npm compares tree metadata, not file contents), so the
     // corrupt tree must be DELETED first. Deps dir is single-purpose → safe to

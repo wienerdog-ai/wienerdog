@@ -228,6 +228,17 @@ function plantShapelessDeps(core) {
   fs.writeFileSync(path.join(pkgDir, 'index.js'), 'module.exports = {};\n');
 }
 
+/** Plant a MAINLESS fake googleapis: package.json present but NO index.js —
+ *  depsPresent true, but req.resolve throws. isInstalled would read FALSE here;
+ *  the probe must still label it BROKEN, not missing (round-6 P2). */
+function plantMainlessDeps(core) {
+  const pkgDir = path.join(core, 'app', 'deps', 'node_modules', 'googleapis');
+  fs.mkdirSync(pkgDir, { recursive: true });
+  fs.writeFileSync(path.join(pkgDir, 'package.json'),
+    JSON.stringify({ name: 'googleapis', version: '173.0.0', main: 'index.js' }));
+  // deliberately NO index.js
+}
+
 /** Plant a VALID token (JSON + refresh_token) so the core reads as "connected". */
 function plantToken(core) {
   const secrets = path.join(core, 'secrets');
@@ -339,6 +350,47 @@ test(
       r.stdout,
       /\[warn\] Google is connected but its client library is broken \(installed but not loadable\)/
     );
+    assert.doesNotMatch(r.stdout, /\[ok\] Google connected/);
+  }
+);
+
+/**
+ * ORDERING NOTE (round-6 P2, WP-102 + WP-103): `depsPresent` is exported by
+ * WP-102's deps.js and lands here only when that branch merges. This branch
+ * still carries main's deps.js, so the doctor probe falls back to `isInstalled`,
+ * which reads FALSE for a mainless tree (package.json present, no entry point) —
+ * the case below would falsely report "missing" and FAIL standalone here; it
+ * only turns green once WP-102 merges. Probe the behavior (not the branch):
+ * check that deps.js exports `depsPresent` AND that it reads a mainless tree as
+ * physically present.
+ */
+function depsPresenceKeyAvailable() {
+  const deps = require('../../src/gws/deps');
+  if (typeof deps.depsPresent !== 'function') return false;
+  const probeCore = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-presence-probe-'));
+  try {
+    plantMainlessDeps(probeCore);
+    return deps.depsPresent({ core: probeCore, secrets: path.join(probeCore, 'secrets') }) === true;
+  } finally {
+    fs.rmSync(probeCore, { recursive: true, force: true });
+  }
+}
+
+test(
+  'doctor warns broken, not missing, when the library tree is present but mainless',
+  { skip: depsPresenceKeyAvailable() ? false : 'needs WP-102 deps.js depsPresent — valid only post-WP-102 merge' },
+  () => {
+    const { core, env } = tempEnv();
+    run(['init', '--yes'], env);
+    plantToken(core);
+    plantMainlessDeps(core);
+    const r = run(['doctor'], env);
+    assert.equal(r.status, 0, 'a mainless library tree is a warn, not a hard fail');
+    assert.match(
+      r.stdout,
+      /\[warn\] Google is connected but its client library is broken \(installed but not loadable\)/
+    );
+    assert.doesNotMatch(r.stdout, /is missing/, 'a present-but-mainless tree is broken, not missing');
     assert.doesNotMatch(r.stdout, /\[ok\] Google connected/);
   }
 );
