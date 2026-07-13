@@ -1,7 +1,7 @@
 ---
 id: WP-099
 title: Validate the Git-for-Windows asset URL is HTTPS on a GitHub host before download
-status: Draft
+status: In-Review
 model: sonnet
 size: S
 depends_on: []

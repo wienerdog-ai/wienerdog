@@ -283,17 +283,75 @@ function Get-MsiexecArgs {
 
 # --- Git-for-Windows discovery (PURE - Pester-tested with fixtures) ---------
 
+# Official Git-for-Windows release-asset origin: HTTPS on github.com under the
+# canonical repository release-download path. Host alone is insufficient - a
+# github.com URL under any OTHER repo path is not the official project.
+$script:GitForWindowsAssetPathPrefix = '/git-for-windows/git/releases/download/'
+
+# HTTPS + host github.com + the official Git-for-Windows release path. PURE.
+function Test-GitHubAssetUrl {
+    param([Parameter(Mandatory)][string]$Url)
+    try { $u = [System.Uri]$Url } catch { return $false }
+    if ($u.Scheme -ne 'https') { return $false }
+    if ($u.Host -ne 'github.com') { return $false }
+    return $u.AbsolutePath.StartsWith($script:GitForWindowsAssetPathPrefix, [System.StringComparison]::Ordinal)
+}
+
 # From a PARSED GitHub releases 'latest' object, return the download URL of the
 # standard $Arch-bit Git-for-Windows installer .exe (e.g. Git-2.55.0-64-bit.exe),
-# or '' if none. PURE. The '^Git-' anchor skips PortableGit/MinGit assets.
+# or '' if none. PURE. The '^Git-' anchor skips PortableGit/MinGit assets; a
+# matching name whose URL fails Test-GitHubAssetUrl (wrong scheme/host/repo
+# path) is skipped rather than trusted on filename alone. A matching name with a
+# missing/empty browser_download_url is skipped here (guarded BEFORE the call) -
+# an empty string cannot bind Test-GitHubAssetUrl's Mandatory param, and letting
+# that throw would abort the bootstrap even though Git is optional.
 function Get-GitForWindowsAssetUrl {
     param([Parameter(Mandatory)]$Release, [string]$Arch = '64')
     foreach ($asset in $Release.assets) {
         if (([string]$asset.name) -match "^Git-.*-$Arch-bit\.exe$") {
-            return [string]$asset.browser_download_url
+            $url = [string]$asset.browser_download_url
+            if ($url -and (Test-GitHubAssetUrl $url)) { return $url }
         }
     }
     return ''
+}
+
+# Hosts allowed as the FINAL download URI after redirects: github.com and its
+# release-asset CDN (objects.githubusercontent.com etc.). HTTPS required. PURE.
+function Test-GitHubDownloadUri {
+    param([Parameter(Mandatory)][System.Uri]$Uri)
+    if ($Uri.Scheme -ne 'https') { return $false }
+    return ($Uri.Host -eq 'github.com' -or $Uri.Host.EndsWith('.githubusercontent.com', [System.StringComparison]::Ordinal))
+}
+
+# PINNED cross-edition accessor for the FINAL (post-redirect) request URI of an
+# Invoke-WebRequest -PassThru response. PowerShell 7+ (HttpClient) exposes it as
+# BaseResponse.RequestMessage.RequestUri; Windows PowerShell 5.1 (HttpWebRequest) as
+# BaseResponse.ResponseUri. PREFER the 7+ shape when present (it is the actual final
+# URI on modern runtimes). Returns $null when neither is available - the caller then
+# REFUSES. PURE: takes an object, does no network, so Pester drives it with mocks.
+function Get-ResponseFinalUri {
+    param([Parameter(Mandatory)]$Response)
+    $base = $Response.BaseResponse
+    if ($null -eq $base) { return $null }
+    if ($base.PSObject.Properties['RequestMessage'] -and $base.RequestMessage -and $base.RequestMessage.RequestUri) {
+        return [System.Uri]$base.RequestMessage.RequestUri     # PowerShell 7+
+    }
+    if ($base.PSObject.Properties['ResponseUri'] -and $base.ResponseUri) {
+        return [System.Uri]$base.ResponseUri                   # Windows PowerShell 5.1
+    }
+    return $null
+}
+
+# Whole redirect decision as one PURE predicate over a response object: is the FINAL
+# URI a GitHub-owned HTTPS host? $false when the final URI is absent (neither accessor
+# present) or off-host. Composing the two helpers here makes the redirect-validation
+# decision unit-testable with a mocked response, independent of a live network.
+function Test-GitHubResponseFinalUri {
+    param([Parameter(Mandatory)]$Response)
+    $final = Get-ResponseFinalUri $Response
+    if ($null -eq $final) { return $false }
+    return Test-GitHubDownloadUri $final
 }
 
 # The documented Git-for-Windows (Inno Setup) silent-install arg list. PURE.
@@ -350,16 +408,26 @@ function Install-GitViaWinget {
     return ($LASTEXITCODE -eq 0)
 }
 
-# Official signed Git-for-Windows .exe path: download $Url and run it with the
-# documented silent flags (invoking the .exe directly, not `winget --silent`,
-# which maps to /SILENT not /VERYSILENT). Returns $true on a completed install.
+# Official signed Git-for-Windows .exe path: validate the origin URL's provenance,
+# download $Url, then validate the FINAL redirected URI before running the .exe with
+# the documented silent flags (invoking it directly, not `winget --silent`, which
+# maps to /SILENT not /VERYSILENT). Returns $true on a completed install; refuses
+# (deletes the file, returns $false, never runs it) on a failed origin/redirect check.
 function Install-GitViaExe {
     param([Parameter(Mandatory)][string]$Url)
+    if (-not (Test-GitHubAssetUrl $Url)) { Write-Host 'Refusing: Git asset URL failed provenance validation.'; return $false }
     $tmp = Join-Path ([System.IO.Path]::GetTempPath()) ("wd-git-" + [System.Guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path $tmp -Force | Out-Null
     try {
         $exe = Join-Path $tmp 'git-for-windows.exe'
-        Invoke-WebRequest -Uri $Url -OutFile $exe -UseBasicParsing
+        # -PassThru returns the response so we can inspect the FINAL URI after redirects.
+        $resp = Invoke-WebRequest -Uri $Url -OutFile $exe -UseBasicParsing -PassThru
+        if (-not (Test-GitHubResponseFinalUri $resp)) {
+            Remove-Item -Force $exe -ErrorAction SilentlyContinue
+            $shown = Get-ResponseFinalUri $resp
+            Write-Host "Refusing: Git download redirected to an untrusted or unknown URL ($shown)."
+            return $false
+        }
         $p = Start-Process $exe -ArgumentList (Get-GitSilentArgs) -Wait -PassThru
         return ($p.ExitCode -eq 0)
     }

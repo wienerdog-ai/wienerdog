@@ -278,22 +278,227 @@ Describe 'Install-NodeViaMsi (security branches)' {
     }
 }
 
-Describe 'Get-GitForWindowsAssetUrl' {
-    BeforeAll {
-        $script:Release = [pscustomobject]@{ assets = @(
-                [pscustomobject]@{ name = 'Git-2.55.0-32-bit.exe'; browser_download_url = 'https://example/32.exe' }
-                [pscustomobject]@{ name = 'Git-2.55.0-64-bit.exe'; browser_download_url = 'https://example/64.exe' }
-                [pscustomobject]@{ name = 'PortableGit-2.55.0-64-bit.7z.exe'; browser_download_url = 'https://example/portable' }
-            ) }
+Describe 'Test-GitHubAssetUrl' {
+    It 'accepts the canonical git-for-windows release-download URL' {
+        Test-GitHubAssetUrl 'https://github.com/git-for-windows/git/releases/download/v2.55.0.windows.1/Git-2.55.0-64-bit.exe' |
+            Should -BeTrue
     }
 
-    It 'returns the standard 64-bit installer .exe URL by default' {
-        Get-GitForWindowsAssetUrl -Release $script:Release | Should -Be 'https://example/64.exe'
+    It 'rejects a non-HTTPS URL' {
+        Test-GitHubAssetUrl 'http://github.com/git-for-windows/git/releases/download/v2.55.0/Git-2.55.0-64-bit.exe' |
+            Should -BeFalse
+    }
+
+    It 'rejects a non-github.com host' {
+        Test-GitHubAssetUrl 'https://evil.example.com/Git-2.55.0-64-bit.exe' | Should -BeFalse
+    }
+
+    It 'rejects a github.com URL under a different repository path' {
+        Test-GitHubAssetUrl 'https://github.com/attacker/repo/releases/download/v1/Git-2.55.0-64-bit.exe' |
+            Should -BeFalse
+    }
+
+    It 'rejects an unparseable URL' {
+        Test-GitHubAssetUrl 'not a url' | Should -BeFalse
+    }
+}
+
+Describe 'Get-GitForWindowsAssetUrl' {
+    BeforeAll {
+        $script:GoodUrl = 'https://github.com/git-for-windows/git/releases/download/v2.55.0.windows.1/Git-2.55.0-64-bit.exe'
+    }
+
+    It 'returns the standard 64-bit installer .exe URL when it passes provenance validation' {
+        $release = [pscustomobject]@{ assets = @(
+                [pscustomobject]@{ name = 'Git-2.55.0-32-bit.exe'; browser_download_url = 'https://example/32.exe' }
+                [pscustomobject]@{ name = 'Git-2.55.0-64-bit.exe'; browser_download_url = $script:GoodUrl }
+                [pscustomobject]@{ name = 'PortableGit-2.55.0-64-bit.7z.exe'; browser_download_url = 'https://example/portable' }
+            ) }
+        Get-GitForWindowsAssetUrl -Release $release | Should -Be $script:GoodUrl
     }
 
     It "returns '' when no matching asset exists" {
         $r = [pscustomobject]@{ assets = @([pscustomobject]@{ name = 'notes.txt'; browser_download_url = 'x' }) }
         Get-GitForWindowsAssetUrl -Release $r | Should -Be ''
+    }
+
+    It "returns '' when the matching-name asset's URL is http (non-HTTPS)" {
+        $r = [pscustomobject]@{ assets = @(
+                [pscustomobject]@{ name = 'Git-2.55.0-64-bit.exe'; browser_download_url = 'http://github.com/git-for-windows/git/releases/download/v1/Git-2.55.0-64-bit.exe' }
+            ) }
+        Get-GitForWindowsAssetUrl -Release $r | Should -Be ''
+    }
+
+    It "returns '' when the matching-name asset's URL is a non-github.com host" {
+        $r = [pscustomobject]@{ assets = @(
+                [pscustomobject]@{ name = 'Git-2.55.0-64-bit.exe'; browser_download_url = 'https://evil.example.com/Git-2.55.0-64-bit.exe' }
+            ) }
+        Get-GitForWindowsAssetUrl -Release $r | Should -Be ''
+    }
+
+    It "returns '' when the matching-name asset's URL is a wrong-repo github.com path" {
+        $r = [pscustomobject]@{ assets = @(
+                [pscustomobject]@{ name = 'Git-2.55.0-64-bit.exe'; browser_download_url = 'https://github.com/attacker/repo/releases/download/v1/Git-2.55.0-64-bit.exe' }
+            ) }
+        Get-GitForWindowsAssetUrl -Release $r | Should -Be ''
+    }
+
+    It "returns '' without throwing when a matching asset has an empty browser_download_url" {
+        $r = [pscustomobject]@{ assets = @(
+                [pscustomobject]@{ name = 'Git-2.55.0-64-bit.exe'; browser_download_url = '' }
+            ) }
+        { Get-GitForWindowsAssetUrl -Release $r } | Should -Not -Throw
+        Get-GitForWindowsAssetUrl -Release $r | Should -Be ''
+    }
+
+    It "returns '' without throwing when a matching asset omits browser_download_url (null)" {
+        $r = [pscustomobject]@{ assets = @(
+                [pscustomobject]@{ name = 'Git-2.55.0-64-bit.exe' }   # no browser_download_url property -> null
+            ) }
+        { Get-GitForWindowsAssetUrl -Release $r } | Should -Not -Throw
+        Get-GitForWindowsAssetUrl -Release $r | Should -Be ''
+    }
+}
+
+Describe 'Test-GitHubDownloadUri' {
+    It 'accepts https github.com' {
+        Test-GitHubDownloadUri ([System.Uri]'https://github.com/x/y') | Should -BeTrue
+    }
+    It 'accepts https *.githubusercontent.com' {
+        Test-GitHubDownloadUri ([System.Uri]'https://objects.githubusercontent.com/x/y') | Should -BeTrue
+    }
+    It 'rejects http' {
+        Test-GitHubDownloadUri ([System.Uri]'http://github.com/x/y') | Should -BeFalse
+    }
+    It 'rejects a non-GitHub host' {
+        Test-GitHubDownloadUri ([System.Uri]'https://evil.example.com/x/y') | Should -BeFalse
+    }
+}
+
+Describe 'Get-ResponseFinalUri' {
+    It 'returns the URI from a 5.1-shaped response (BaseResponse.ResponseUri, no RequestMessage)' {
+        $resp = [pscustomobject]@{
+            BaseResponse = [pscustomobject]@{ ResponseUri = [System.Uri]'https://objects.githubusercontent.com/a/b' }
+        }
+        Get-ResponseFinalUri $resp | Should -Be ([System.Uri]'https://objects.githubusercontent.com/a/b')
+    }
+
+    It 'returns the URI from a 7+-shaped response (BaseResponse.RequestMessage.RequestUri)' {
+        $resp = [pscustomobject]@{
+            BaseResponse = [pscustomobject]@{
+                RequestMessage = [pscustomobject]@{ RequestUri = [System.Uri]'https://github.com/a/b' }
+            }
+        }
+        Get-ResponseFinalUri $resp | Should -Be ([System.Uri]'https://github.com/a/b')
+    }
+
+    It 'prefers the 7+ shape when both accessors are present' {
+        $resp = [pscustomobject]@{
+            BaseResponse = [pscustomobject]@{
+                RequestMessage = [pscustomobject]@{ RequestUri = [System.Uri]'https://github.com/seven' }
+                ResponseUri    = [System.Uri]'https://github.com/five-one'
+            }
+        }
+        Get-ResponseFinalUri $resp | Should -Be ([System.Uri]'https://github.com/seven')
+    }
+
+    It 'returns $null when neither accessor is present' {
+        $resp = [pscustomobject]@{ BaseResponse = [pscustomobject]@{} }
+        Get-ResponseFinalUri $resp | Should -BeNullOrEmpty
+    }
+
+    It 'returns $null when BaseResponse itself is absent' {
+        $resp = [pscustomobject]@{ BaseResponse = $null }
+        Get-ResponseFinalUri $resp | Should -BeNullOrEmpty
+    }
+}
+
+Describe 'Test-GitHubResponseFinalUri' {
+    It 'accepts a mock whose final URI is https objects.githubusercontent.com' {
+        $resp = [pscustomobject]@{
+            BaseResponse = [pscustomobject]@{ ResponseUri = [System.Uri]'https://objects.githubusercontent.com/a/b' }
+        }
+        Test-GitHubResponseFinalUri $resp | Should -BeTrue
+    }
+
+    It 'rejects a mock whose final URI is http' {
+        $resp = [pscustomobject]@{
+            BaseResponse = [pscustomobject]@{ ResponseUri = [System.Uri]'http://objects.githubusercontent.com/a/b' }
+        }
+        Test-GitHubResponseFinalUri $resp | Should -BeFalse
+    }
+
+    It 'rejects a mock whose final URI is an off-host https URL' {
+        $resp = [pscustomobject]@{
+            BaseResponse = [pscustomobject]@{ ResponseUri = [System.Uri]'https://evil.example.com/a/b' }
+        }
+        Test-GitHubResponseFinalUri $resp | Should -BeFalse
+    }
+
+    It 'rejects a mock with neither accessor present (refuse fail-closed)' {
+        $resp = [pscustomobject]@{ BaseResponse = [pscustomobject]@{} }
+        Test-GitHubResponseFinalUri $resp | Should -BeFalse
+    }
+}
+
+Describe 'Install-GitViaExe' {
+    BeforeAll {
+        $script:GoodOrigin = 'https://github.com/git-for-windows/git/releases/download/v2.55.0.windows.1/Git-2.55.0-64-bit.exe'
+    }
+
+    It 'refuses an off-host origin URL without downloading' {
+        Mock Invoke-WebRequest { throw 'Invoke-WebRequest must not be called for a bad origin URL' }
+        Mock Start-Process { throw 'Start-Process must not run when the origin is refused' }
+        Install-GitViaExe -Url 'https://evil.example.com/Git-2.55.0-64-bit.exe' | Should -BeFalse
+        Should -Invoke Invoke-WebRequest -Times 0
+        Should -Invoke Start-Process -Times 0
+    }
+
+    It 'refuses, deletes the file, and never runs Start-Process on an off-host FINAL (redirected) URI' {
+        Mock Invoke-WebRequest {
+            [System.IO.File]::WriteAllBytes($OutFile, [byte[]](1, 2, 3))
+            [pscustomobject]@{
+                BaseResponse = [pscustomobject]@{ ResponseUri = [System.Uri]'https://evil.example.com/redirected.exe' }
+            }
+        }
+        Mock Start-Process { throw 'Start-Process must not run on an off-host final URI' }
+
+        Install-GitViaExe -Url $script:GoodOrigin | Should -BeFalse
+        Should -Invoke Start-Process -Times 0
+    }
+
+    It 'downloads and runs when the origin and final URI both validate' {
+        Mock Invoke-WebRequest {
+            [System.IO.File]::WriteAllBytes($OutFile, [byte[]](1, 2, 3))
+            [pscustomobject]@{
+                BaseResponse = [pscustomobject]@{ ResponseUri = [System.Uri]'https://objects.githubusercontent.com/redirected.exe' }
+            }
+        }
+        Mock Start-Process { [pscustomobject]@{ ExitCode = 0 } }
+
+        Install-GitViaExe -Url $script:GoodOrigin | Should -BeTrue
+        Should -Invoke Start-Process -Times 1
+    }
+}
+
+Describe 'Ensure-Git (optional-Git fallback)' {
+    It 'continues without throwing or running Start-Process when the release asset URL is empty/missing' {
+        # git absent (so it proceeds), winget absent (so it hits the release path).
+        Mock Get-Command { $null } -ParameterFilter { $Name -eq 'git' }
+        Mock Get-Command { $null } -ParameterFilter { $Name -eq 'winget' }
+        # Compromised/malformed response: matching asset NAME but empty download URL.
+        Mock Invoke-RestMethod {
+            [pscustomobject]@{ assets = @(
+                    [pscustomobject]@{ name = 'Git-2.55.0-64-bit.exe'; browser_download_url = '' }
+                ) }
+        }
+        Mock Confirm-Step { throw 'Confirm-Step must not be reached when there is no valid asset URL' }
+        Mock Install-GitViaExe { throw 'Install-GitViaExe must not run without a valid asset URL' }
+        Mock Start-Process { throw 'Start-Process must not run' }
+
+        { Ensure-Git } | Should -Not -Throw
+        Should -Invoke Install-GitViaExe -Times 0
+        Should -Invoke Start-Process -Times 0
     }
 }
 
