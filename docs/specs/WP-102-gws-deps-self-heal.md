@@ -221,8 +221,8 @@ status. **Owner sign-off recorded 2026-07-13.**
 request via `createRequire(depsDir/noop.js).resolve('googleapis')`, which walks
 **every** ancestor `node_modules`. When an ancestor has `googleapis` and the deps
 dir is empty, `isInstalled()` resolves the ancestor and correctly rejects it — but
-Node caches that **successful** resolution in `Module._pathCache` (keyed by request
-+ lookup-path list). The consented self-heal then installs into the deps dir, and
+Node caches that **successful** resolution in `Module._pathCache` (keyed by
+request + lookup-path list). The consented self-heal then installs into the deps dir, and
 `loadGoogleapis()` **in the same process** re-resolves the bare request → gets the
 **cached ancestor path** → rejects again → throws "needs a one-time install"
 *immediately after* the user consented and `npm` succeeded. It self-corrects next
