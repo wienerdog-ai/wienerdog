@@ -1,7 +1,7 @@
 ---
 id: WP-098
 title: Surface failures of best-effort systemd calls and report schedule-removal truthfully
-status: Draft
+status: In-Review
 model: sonnet
 size: S
 depends_on: []

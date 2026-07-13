@@ -192,11 +192,26 @@ function registerPlatform(paths, manifest, o, loader, platform = process.platfor
     let loaded = true;
     if (changed) {
       // Best-effort daemon-reload/linger are not gated; only `enable --now` counts.
-      loader(['systemctl', '--user', 'daemon-reload']);
+      const reload = loader(['systemctl', '--user', 'daemon-reload']);
+      // Treat a MISSING result (undefined result OR a nullish status) as a failure too —
+      // absence of a result is not success. `!= null` catches both undefined and null, so
+      // a `{status:null}` result warns and prints 'no result', never 'null'.
+      if (!reload || reload.status == null || reload.status !== 0) {
+        const s = reload && reload.status != null ? reload.status : 'no result';
+        process.stderr.write(`wienerdog: warning — 'systemctl --user daemon-reload' returned ${s}; the timer may load from stale units. Run 'wienerdog doctor'.\n`);
+      }
       loaded = loader(['systemctl', '--user', 'enable', '--now', `${unitBase}.timer`]).status === 0;
       // Best-effort: let timers fire when the user is logged out.
       const user = process.env.USER || process.env.LOGNAME || '';
-      if (user) loader(['loginctl', 'enable-linger', user]);
+      if (user) {
+        const linger = loader(['loginctl', 'enable-linger', user]);
+        // Same nullish handling as daemon-reload: a `{status:null}` result warns and
+        // prints 'no result', never 'null'.
+        if (!linger || linger.status == null || linger.status !== 0) {
+          const s = linger && linger.status != null ? linger.status : 'no result';
+          process.stderr.write(`wienerdog: warning — 'loginctl enable-linger ${user}' returned ${s}; scheduled jobs may not run while you are logged out.\n`);
+        }
+      }
     }
     return { platform: 'systemd', changed, loaded };
   }
@@ -403,7 +418,21 @@ function remove(argv, loader) {
   manifestLib.save(paths, manifest);
   jobsLib.removeJob(paths, name);
 
-  process.stdout.write(`wienerdog: removed "${name}" (unloaded and deleted its schedule entry).\n`);
+  if (removed.length === 0) {
+    // No schedule FILE was present to delete (already removed, or never registered).
+    // But reverseSchedulerEntry runs any recorded `unload` argv BEFORE checking the
+    // file (manifest.js:193 — unload, then the isFile() guard), so a best-effort
+    // OS-unregister command may still have RUN even with zero file deletions. Report
+    // the count (0) AND the same best-effort qualifier as the non-empty branch; do NOT
+    // assert the OS entry was "already gone" — that is not known here.
+    process.stdout.write(`wienerdog: removed "${name}" from Wienerdog's schedule — deleted 0 schedule files and ran any recorded OS-unregister command(s) best-effort (no schedule file was present to delete).\n`);
+  } else {
+    const fileWord = removed.length === 1 ? 'file' : 'files';
+    const absentTail = skipped.length > 0
+      ? `; ${skipped.length} file${skipped.length === 1 ? ' was' : 's were'} already absent`
+      : '';
+    process.stdout.write(`wienerdog: removed "${name}" from Wienerdog's schedule — deleted ${removed.length} schedule ${fileWord} and ran any recorded OS-unregister command(s) best-effort${absentTail}.\n`);
+  }
 }
 
 /**

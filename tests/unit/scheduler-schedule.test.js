@@ -101,6 +101,14 @@ const SCHED_SUPPORTED =
   (process.platform === 'linux' &&
     (fs.existsSync('/run/systemd/system') || !spawnSync('systemctl', ['--version']).error));
 
+// Mirrors schedule.js's internal (unexported) hasSystemd() probe: registerPlatform's
+// Linux branch throws on a host without systemd regardless of the injected `platform`
+// param, so the WP-098 secondary-call-warning tests (which force platform:'linux' to
+// exercise that branch directly) only run where the real host actually has systemd.
+const LINUX_SYSTEMD =
+  process.platform === 'linux' &&
+  (fs.existsSync('/run/systemd/system') || !spawnSync('systemctl', ['--version']).error);
+
 // -------------------------------------------------------------------------
 // jobs.js: parseJobs / renderConfigWithJobs round-trip + coexistence
 // -------------------------------------------------------------------------
@@ -370,6 +378,167 @@ test('scheduler-schedule: remove runs the unload, deletes files, drops entries a
 test('scheduler-schedule: remove of an unknown job is a no-op notice', async () => {
   const { env } = setup();
   await runSchedule(env, ['remove', 'nope'], () => ({ status: 0 })); // must not throw
+});
+
+// -------------------------------------------------------------------------
+// WP-098: secondary systemd calls (daemon-reload / enable-linger) warn to
+// stderr on a nonzero OR missing result, without affecting `loaded` (still
+// gated only on `enable --now`).
+// -------------------------------------------------------------------------
+
+/**
+ * Capture process.stderr.write during `fn`, restoring it afterwards.
+ * @template T @param {() => T} fn @returns {{result:T, stderr:string}}
+ */
+function captureStderr(fn) {
+  let out = '';
+  const orig = process.stderr.write.bind(process.stderr);
+  process.stderr.write = (s) => ((out += s), true);
+  try {
+    return { result: fn(), stderr: out };
+  } finally {
+    process.stderr.write = orig;
+  }
+}
+
+test('scheduler-schedule: registerPlatform warns on a NONZERO daemon-reload and a MISSING (undefined) enable-linger result', { skip: !LINUX_SYSTEMD }, () => {
+  const { paths } = setup();
+  const manifest = manifestLib.load(paths);
+  const savedUser = process.env.USER;
+  process.env.USER = 'ada';
+  try {
+    const loader = (argv) => {
+      if (argv[0] === 'systemctl' && argv.includes('daemon-reload')) return { status: 1 }; // nonzero
+      if (argv[0] === 'systemctl' && argv.includes('enable')) return { status: 0 }; // primary succeeds
+      if (argv[0] === 'loginctl') return undefined; // MISSING result
+      return { status: 0 };
+    };
+    const { result: res, stderr } = captureStderr(() =>
+      schedule.registerPlatform(paths, manifest, { name: 'dream', hour: 3, minute: 30 }, loader, 'linux')
+    );
+    assert.equal(res.loaded, true, '`loaded` stays gated only on `enable --now`, which returned status 0');
+    assert.match(stderr, /'systemctl --user daemon-reload' returned 1/, 'nonzero daemon-reload warns with its status');
+    assert.match(stderr, /'loginctl enable-linger ada' returned no result/, 'a MISSING (undefined) result warns as "no result", not silence');
+  } finally {
+    if (savedUser === undefined) delete process.env.USER;
+    else process.env.USER = savedUser;
+  }
+});
+
+test('scheduler-schedule: registerPlatform warns on a MISSING ({status:null}) daemon-reload and a NONZERO enable-linger result', { skip: !LINUX_SYSTEMD }, () => {
+  const { paths } = setup();
+  const manifest = manifestLib.load(paths);
+  const savedUser = process.env.USER;
+  process.env.USER = 'ada';
+  try {
+    const loader = (argv) => {
+      if (argv[0] === 'systemctl' && argv.includes('daemon-reload')) return { status: null }; // MISSING (null status)
+      if (argv[0] === 'systemctl' && argv.includes('enable')) return { status: 0 }; // primary succeeds
+      if (argv[0] === 'loginctl') return { status: 2 }; // nonzero
+      return { status: 0 };
+    };
+    const { result: res, stderr } = captureStderr(() =>
+      schedule.registerPlatform(paths, manifest, { name: 'dream', hour: 3, minute: 30 }, loader, 'linux')
+    );
+    assert.equal(res.loaded, true, '`loaded` stays gated only on `enable --now`, which returned status 0');
+    assert.match(stderr, /'systemctl --user daemon-reload' returned no result/, 'a {status:null} result warns as "no result", not success');
+    assert.match(stderr, /'loginctl enable-linger ada' returned 2/, 'nonzero enable-linger warns with its status');
+  } finally {
+    if (savedUser === undefined) delete process.env.USER;
+    else process.env.USER = savedUser;
+  }
+});
+
+test('scheduler-schedule: registerPlatform emits no secondary-call warnings when daemon-reload and enable-linger both succeed', { skip: !LINUX_SYSTEMD }, () => {
+  const { paths } = setup();
+  const manifest = manifestLib.load(paths);
+  const savedUser = process.env.USER;
+  process.env.USER = 'ada';
+  try {
+    const { stderr } = captureStderr(() =>
+      schedule.registerPlatform(paths, manifest, { name: 'dream', hour: 3, minute: 30 }, () => ({ status: 0 }), 'linux')
+    );
+    assert.equal(stderr, '', 'no warnings when every secondary call reports status 0');
+  } finally {
+    if (savedUser === undefined) delete process.env.USER;
+    else process.env.USER = savedUser;
+  }
+});
+
+// -------------------------------------------------------------------------
+// WP-098: `remove()` reports the truthful outcome — removed.length in every
+// branch, and a qualified "ran any recorded OS-unregister command(s)
+// best-effort" statement, never "unloaded" / "already gone".
+// -------------------------------------------------------------------------
+
+test('scheduler-schedule: remove reports the zero-removal wording (count + best-effort unregister, no "unloaded"/"already gone") when the schedule file is already gone', async () => {
+  const { env, paths, root } = setup();
+  const manifest = manifestLib.load(paths);
+  // A recorded scheduler-entry whose FILE was never written (or already removed) —
+  // reverseSchedulerEntry still runs its `unload` argv best-effort before checking
+  // the file, so removed.length stays 0 while a command may still have run.
+  const file = path.join(root, `${gen.launchdLabel('ghost-job')}.plist`);
+  const marker = path.join(root, 'zero-removal-unload-ran');
+  manifestLib.record(manifest, {
+    kind: 'scheduler-entry',
+    path: file,
+    unload: [process.execPath, '-e', `require('fs').writeFileSync(${JSON.stringify(marker)}, 'ran')`],
+  });
+  manifestLib.save(paths, manifest);
+  jobsLib.saveJob(paths, { name: 'ghost-job', at: '03:30', run: 'builtin:dream', timeoutMinutes: 20 });
+
+  let out = '';
+  const origOut = process.stdout.write.bind(process.stdout);
+  process.stdout.write = (s) => ((out += s), true);
+  try {
+    await withUnloadSpawnAllowed(() => runSchedule(env, ['remove', 'ghost-job'], () => ({ status: 0 })));
+  } finally {
+    process.stdout.write = origOut;
+  }
+
+  assert.ok(fs.existsSync(marker), 'the recorded unload argv ran best-effort even though the file was absent');
+  assert.match(
+    out,
+    /deleted 0 schedule files and ran any recorded OS-unregister command\(s\) best-effort \(no schedule file was present to delete\)/
+  );
+  assert.ok(!/unloaded/.test(out), 'never claims "unloaded"');
+  assert.ok(!/already gone/i.test(out), 'never claims the OS entry was "already gone"');
+  assert.equal(jobsLib.findJob(paths, 'ghost-job'), null, 'job definition still dropped');
+});
+
+test('scheduler-schedule: a normal removal reports removed.length (N=2), not the singular "its schedule file"', async () => {
+  const { env, paths, root } = setup();
+  const manifest = manifestLib.load(paths);
+  // Two scheduler-entries (mirrors the Linux timer+service pair) whose files
+  // actually exist on disk, portable regardless of the real host platform.
+  const timerPath = path.join(root, `${gen.systemdUnitBase('two-files')}.timer`);
+  const servicePath = path.join(root, `${gen.systemdUnitBase('two-files')}.service`);
+  fs.writeFileSync(timerPath, '[Timer]\n');
+  fs.writeFileSync(servicePath, '[Service]\n');
+  const marker = path.join(root, 'two-files-unload-ran');
+  manifestLib.record(manifest, {
+    kind: 'scheduler-entry',
+    path: timerPath,
+    unload: [process.execPath, '-e', `require('fs').writeFileSync(${JSON.stringify(marker)}, 'ran')`],
+  });
+  manifestLib.record(manifest, { kind: 'scheduler-entry', path: servicePath, unload: null });
+  manifestLib.save(paths, manifest);
+  jobsLib.saveJob(paths, { name: 'two-files', at: '03:30', run: 'builtin:dream', timeoutMinutes: 20 });
+
+  let out = '';
+  const origOut = process.stdout.write.bind(process.stdout);
+  process.stdout.write = (s) => ((out += s), true);
+  try {
+    await withUnloadSpawnAllowed(() => runSchedule(env, ['remove', 'two-files'], () => ({ status: 0 })));
+  } finally {
+    process.stdout.write = origOut;
+  }
+
+  assert.ok(fs.existsSync(marker), 'the recorded unload argv ran');
+  assert.ok(!fs.existsSync(timerPath) && !fs.existsSync(servicePath), 'both files deleted');
+  assert.match(out, /deleted 2 schedule files and ran any recorded OS-unregister command\(s\) best-effort/);
+  assert.ok(!/its schedule file/.test(out), 'does not misreport with the singular "its schedule file"');
+  assert.ok(!/unloaded/.test(out), 'never claims "unloaded"');
 });
 
 // -------------------------------------------------------------------------
