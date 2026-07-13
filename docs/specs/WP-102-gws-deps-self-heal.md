@@ -22,7 +22,10 @@ the vendored app copy carries no `node_modules`, so `googleapis` is installed
 remove it). This was WP-047. A **containment guard** (`resolveFromDeps` in
 `src/gws/deps.js`) then resolves `googleapis` strictly from inside that deps dir
 and treats any copy resolving outside it as absent — a deliberate supply-chain
-guard. **Keep that guard exactly as-is.**
+guard. **This WP rewrites that guard** (contract §0, owner-approved 2026-07-13) to
+close a `Module._pathCache` cache-poisoning P2 — its accept/reject semantics are
+**preserved-or-strengthened** (ancestor copies never considered; symlink defense
+kept); it is not weakened.
 
 **The bug this WP fixes (`userreports/BUG-gws-deps-missing-after-upgrade.md`).**
 The library-presence check and the installer live on **different code paths, and
@@ -91,10 +94,20 @@ const GOOGLEAPIS_SPEC = 'googleapis@^173';
 /** <core>/app/deps */
 function depsDir(paths) { return path.join(paths.core, 'app', 'deps'); }
 
-/** Resolve googleapis strictly from within the deps dir (containment-guarded);
- *  a copy resolving outside the deps dir is treated as absent. Returns
- *  {req, resolved} | null. DO NOT CHANGE. */
-function resolveFromDeps(paths) { /* ... */ }
+/** CURRENT (ancestor-walk) implementation — BEING REPLACED by contract §0 (the
+ *  cache-poisoning fix). Shown so you know what you are replacing. Resolves the
+ *  BARE `googleapis` request, which walks EVERY ancestor node_modules, then
+ *  rejects out-of-dir hits — but Node caches that successful ancestor resolution
+ *  in Module._pathCache, which is the P2 §0 fixes. */
+function resolveFromDeps(paths) {
+  const dir = depsDir(paths);
+  const req = createRequire(path.join(dir, 'noop.js'));
+  const resolved = req.resolve('googleapis');   // <-- ancestor-walk; cache-poisoning source
+  let real = dir;
+  try { real = fs.realpathSync(dir); } catch { /* deps dir absent */ }
+  if (!resolved.startsWith(real + path.sep)) return null;
+  return { req, resolved };
+}
 
 /** Whether googleapis resolves from within the deps dir. */
 function isInstalled(paths) {
@@ -194,11 +207,63 @@ cases — see "Do NOT modify these" below.
 
 | Action | Path | Notes |
 |--------|------|-------|
-| modify | src/gws/deps.js | (a) make `loadGoogleapis` token-aware + state-aware per the Exact contract; (b) add + export `ensureGoogleReady(paths, opts)`; (c) add an internal `hasToken(paths)` helper (lazy `require('./client')`); (d) two one-line edits to `ensureGoogleapis` — quote the `--prefix` in its `cmd` string (P2-A) and pass `{defaultYes:true}` to the confirm call (P2-B), per contract §3b. |
+| modify | src/gws/deps.js | (0) **rewrite `resolveFromDeps` to direct-path construction** (owner-approved guard change, contract §0 — cache-poisoning fix); (a) make `loadGoogleapis` token-aware + state-aware + shape-check per the Exact contract; (b) add + export `ensureGoogleReady(paths, opts)`; (c) add an internal `hasToken(paths)` helper (lazy `require('./client')`); (d) two one-line edits to `ensureGoogleapis` — quote the `--prefix` in its `cmd` string (P2-A) and pass `{defaultYes:true}` to the confirm call (P2-B), per contract §3b. |
 | modify | src/gws/index.js | import `ensureGoogleReady` from `./deps`; call `await ensureGoogleReady(paths)` for every non-`auth` command, before services are built. |
-| modify | tests/unit/gws-deps.test.js | add a `plantToken(paths)` helper + the six new cases below. Do NOT modify the existing no-token assertions. |
+| modify | tests/unit/gws-deps.test.js | add the `plantToken`/`plantCorruptDeps`/`plantShapelessDeps` helpers + the new cases below (incl. the §0 cache-regression case **(a4)**). Do NOT modify the existing no-token / containment assertions (they stay byte-identical — behavior is unchanged). |
 
 ### Exact contracts
+
+**0. Rewrite `resolveFromDeps(paths)` — direct-path construction (owner-approved
+guard change; land this first).** This reverses the guard's former "DO NOT CHANGE"
+status. **Owner sign-off recorded 2026-07-13.**
+
+*The defect (PR-gate P2).* The current guard resolves the **bare** `googleapis`
+request via `createRequire(depsDir/noop.js).resolve('googleapis')`, which walks
+**every** ancestor `node_modules`. When an ancestor has `googleapis` and the deps
+dir is empty, `isInstalled()` resolves the ancestor and correctly rejects it — but
+Node caches that **successful** resolution in `Module._pathCache` (keyed by
+request + lookup-path list). The consented self-heal then installs into the deps dir, and
+`loadGoogleapis()` **in the same process** re-resolves the bare request → gets the
+**cached ancestor path** → rejects again → throws "needs a one-time install"
+*immediately after* the user consented and `npm` succeeded. It self-corrects next
+process, but that is a first-run UX failure in exactly the environment the guard
+exists for (a machine with a global/ancestor `googleapis`).
+
+*The fix — no ancestor walk at all.* Construct the deps-dir path directly and
+resolve it absolutely:
+
+```js
+function resolveFromDeps(paths) {
+  const dir = depsDir(paths);
+  const candidate = path.join(dir, 'node_modules', 'googleapis');
+  // (1) Absent unless the deps-dir copy's OWN package.json exists. Pure existence
+  //     check — no resolution, so nothing is looked up in ancestors or cached.
+  if (!fs.existsSync(path.join(candidate, 'package.json'))) return null;
+  // (2) Resolve the ABSOLUTE candidate path (never the bare 'googleapis' request),
+  //     so resolution targets exactly this dir, never walks ancestors, and is not
+  //     served from Module._pathCache (the bare-request cache key is never used).
+  const req = createRequire(path.join(dir, 'noop.js'));
+  const resolved = req.resolve(candidate);
+  // (3) RETAIN the realpath containment check — the resolved entry must live inside
+  //     realpath(depsDir). `req.resolve` returns a symlink-resolved path, so a
+  //     planted symlink deps/node_modules/googleapis -> elsewhere resolves OUTSIDE
+  //     and is still rejected exactly as today (symlink defense preserved).
+  let real = dir;
+  try { real = fs.realpathSync(dir); } catch { /* deps dir absent — handled at (1) */ }
+  if (!resolved.startsWith(real + path.sep)) return null;
+  return { req, resolved };
+}
+```
+
+*Threat posture: preserved-or-strengthened.* Containment is **strictly stronger** —
+an ancestor/global `googleapis` is now never even considered (step 1 gates on the
+deps-dir copy's own `package.json`; step 2 resolves only the absolute in-dir path).
+The **symlink defense is unchanged**: step 3's realpath containment still rejects a
+symlinked-inside copy that points outside the deps dir. The walk had to go because
+it was the source of the `Module._pathCache` poisoning above; direct-path
+resolution is simpler and cache-immune. `isInstalled` and `loadGoogleapis` above
+the resolver are **unchanged** (they still call `resolveFromDeps` and branch on
+non-null / null).
 
 **1. `hasToken(paths)` — new internal helper in `deps.js`.** Lazy-require
 `./client` to avoid a load-time cycle (`client.js` requires `deps.js` at top
@@ -395,9 +460,10 @@ against `ensureGoogleReady` (§5); the index wiring is this thin call.
 build services. If a future gws verb is added that needs no services, it must be
 excluded from this gate too (note it then).
 
-**5. Tests (`tests/unit/gws-deps.test.js`).** Add three helpers and eight cases.
-Reuse the existing `tempPaths()`, `fakeInstall`, `deps`, `WienerdogError`, `path`,
-`fs`.
+**5. Tests (`tests/unit/gws-deps.test.js`).** Add three helpers and ten cases
+(a, a2, a3, a4, b–g). Reuse the existing `tempPaths()`, `fakeInstall`,
+`plantGoogleapis(base, which)` (already in the file — used by (a4) for the ancestor
+copy), `deps`, `WienerdogError`, `path`, `fs`.
 
 ```js
 /** Write a valid-looking Google token so hasToken()/self-heal see a connected core. */
@@ -470,6 +536,23 @@ function plantShapelessDeps(paths) {
   case: a zero-byte/stub entry point requires cleanly but has no `.google`, so
   without the shape check `getServices` would later crash at `new
   google.auth.OAuth2`.
+- **(a4) `resolveFromDeps` is cache-immune — an ANCESTOR googleapis never
+  satisfies the guard, and a deps-dir install loads in the SAME process (§0
+  regression).** On a fresh `tempPaths()`, plant an ancestor copy
+  `plantGoogleapis(paths.home, 'ancestor')` (`paths.home` is an ancestor of
+  `<core>/app/deps`, so the OLD ancestor walk would find it) and
+  `plantToken(paths)`. **Ancestor-alone → absent, end-to-end:** assert
+  `deps.isInstalled(paths) === false`, and `loadGoogleapis` throws a
+  `WienerdogError` matching `/needs a one-time install/` (the ABSENT message — deps
+  dir empty), NOT `/broken/`. **Then install into the deps dir and re-check in the
+  SAME process:** `fakeInstall(deps.depsDir(paths)); assert.equal(deps.isInstalled(
+  paths), true); const g = deps.loadGoogleapis(paths); assert.equal(g.google.WHICH,
+  'deps');` — it loads the deps-dir copy, not the ancestor. **This case FAILS on the
+  old ancestor-walk implementation** (the first `isInstalled`/`loadGoogleapis`
+  caches the ancestor resolution in `Module._pathCache`, so the post-install
+  `loadGoogleapis` cache-hits the ancestor and throws "needs a one-time install")
+  **and passes on the §0 direct-path guard.** Run **in-process** (the whole point is
+  the intra-process cache) — do NOT use `probeInChild` here.
 - **(b) ensureGoogleReady — token present + deps absent + consent-yes →
   installs.** `plantToken`; `await ensureGoogleReady(paths, {confirm: async () =>
   true, runInstall: (dir, spec) => fakeInstall(dir, spec)})`; assert the injected
@@ -528,6 +611,14 @@ the no-token branch of `loadGoogleapis` still emits the identical
 `/wienerdog-google-setup` message, so those tests remain valid and **must stay
 unchanged**. Do not touch them.
 
+**The §0 `resolveFromDeps` rewrite keeps these byte-identical** — its external
+behavior is unchanged: an ancestor/out-of-dir `googleapis` still classifies as
+**absent** (`null`) — now by construction (step 1's `package.json` gate) rather
+than by resolve-then-reject — and a deps-dir copy (real or symlinked-inside) is
+handled exactly as before (loaded if inside `realpath(depsDir)`, rejected if the
+symlink points outside). So the `probeInChild` ancestor-decoy cases (:205–230)
+still pass verbatim; only the NEW in-process case (a4) distinguishes old from new.
+
 ## Implementation notes & constraints
 
 - **Zero new dependencies.** No new require beyond the lazy `require('./client')`
@@ -536,10 +627,12 @@ unchanged**. Do not touch them.
   `deps.js` must reference `./client` **only** lazily (inside `hasToken`, at call
   time). Do not add a top-level `require('./client')` to `deps.js` — it would
   create a load-time cycle and `tokenPath` could be `undefined`.
-- **Keep the containment guard (`resolveFromDeps`) unchanged** — it is a
-  deliberate supply-chain control locked by the existing tests. Self-heal
-  populates the deps dir *through* the guard's install path; it never bypasses
-  the guard.
+- **The containment guard (`resolveFromDeps`) is rewritten, not bypassed
+  (contract §0, owner-approved).** It stays a deliberate supply-chain control —
+  the rewrite makes it **stricter** (ancestor copies never considered) and
+  cache-immune while preserving the symlink defense. Self-heal still populates the
+  deps dir *through* the guard's install path and never bypasses it. Do not
+  reintroduce the bare-`googleapis` ancestor walk.
 - **Accepted residual — self-heal SKIPS the corrupt state (Codex Finding 1b;
   narrowed in round-3).** `ensureGoogleReady` gates on `isInstalled`, which only
   *resolves* `googleapis` (via `resolveFromDeps`), it does not *load* it. So a
@@ -612,6 +705,11 @@ unchanged**. Do not touch them.
       printed remedy and installs nothing.
 - [ ] No process outlives the command (ADR-0004): `ensureGoogleapis` runs
       `npm install` synchronously and returns.
+- [ ] The §0 guard rewrite does not weaken the supply-chain control: `googleapis`
+      is still loaded ONLY from inside `realpath(<core>/app/deps)`; an
+      ancestor/global copy is now rejected **by construction** (never resolved), and
+      a symlinked-inside copy pointing outside the deps dir is still rejected by the
+      retained realpath check.
 
 ## Acceptance criteria
 
@@ -642,8 +740,14 @@ unchanged**. Do not touch them.
       non-TTY still aborts and installs nothing (P2-B).
 - [ ] Running a read twice after a successful self-heal is idempotent (second run:
       `isInstalled` true → no install attempted).
-- [ ] The existing no-token assertions in `gws-deps.test.js` are unchanged and
-      still pass. `npm test` and `npm run lint` are green.
+- [ ] `resolveFromDeps` uses direct-path construction (no ancestor walk): on a
+      machine with an ancestor/global `googleapis`, a consented self-heal in the
+      **same process** succeeds — the post-install read loads the deps-dir copy, not
+      the cached ancestor (§0; case (a4)). Ancestor-only stays classified absent;
+      a symlinked-inside copy pointing outside the deps dir stays rejected.
+- [ ] The existing no-token AND containment (:205–230) assertions in
+      `gws-deps.test.js` are byte-unchanged and still pass. `npm test` and
+      `npm run lint` are green.
 
 ## Verification steps (run these; paste output in the PR)
 
@@ -667,8 +771,9 @@ npm run lint
   WP-105, not here.
 - **The `doctor` probe (report fix 4)** — that is **WP-103**
   (`src/cli/doctor.js` plus its test), a separate surface.
-- Any change to the containment guard `resolveFromDeps`, to `GOOGLEAPIS_SPEC`, or
-  to token/client persistence, scopes, or the OAuth flow.
+- Beyond the §0 direct-path rewrite, any *behavioral* change to the containment
+  guard `resolveFromDeps` (its accept/reject semantics stay identical), and any
+  change to `GOOGLEAPIS_SPEC`, token/client persistence, scopes, or the OAuth flow.
 - The `gws drive search` bare-term query papercut — separate backlog WP-104.
 
 ## Definition of done
@@ -773,3 +878,25 @@ npm run lint
   message and no offer claim. Recorded the accepted residual: the check is minimal
   (presence of a truthy `.google`), not a full API-surface validation — deeper
   corruption still surfaces at call time.
+- **2026-07-13 — post-approval containment-guard rewrite (owner sign-off recorded
+  2026-07-13; reverses the guard's former DO-NOT-CHANGE status).** The closing
+  Codex review found a real P2 in the self-heal flow: `resolveFromDeps` resolved the
+  **bare** `googleapis` request (ancestor walk), so on a machine with an
+  ancestor/global `googleapis` + empty deps dir, `isInstalled()` resolved+rejected
+  the ancestor but Node cached that resolution in `Module._pathCache`; the consented
+  self-heal then installed into the deps dir, and same-process `loadGoogleapis()`
+  re-resolved to the **cached ancestor** → rejected → threw "needs a one-time
+  install" right after the user consented and `npm` succeeded (first-run UX failure
+  in exactly the environment the guard exists for). Fix (contract §0): rewrite
+  `resolveFromDeps` to **direct-path construction** — gate on the deps-dir copy's
+  own `package.json` (existence, no resolution), resolve the **absolute** in-dir
+  candidate (never the bare request, so no ancestor walk and no `_pathCache`
+  poisoning), and **retain** the realpath containment check (symlink defense
+  preserved). Net: strictly stronger containment (ancestor copies never considered),
+  simpler, cache-immune. `isInstalled`/`loadGoogleapis`/`ensureGoogleReady`/
+  `ensureGoogleapis` above the resolver unchanged. Containment tests (:205–230) stay
+  byte-identical (behavior unchanged); NEW in-process case (a4) plants an ancestor
+  copy, asserts `isInstalled === false`, then `fakeInstall`s the deps dir and asserts
+  same-process `loadGoogleapis` loads the deps copy — FAILS on the old walk, passes
+  on the rewrite. Documented the preserved-or-strengthened threat posture and why
+  the walk had to go.

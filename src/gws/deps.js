@@ -27,27 +27,37 @@ function depsDir(paths) {
 }
 
 /**
- * Resolve googleapis strictly from within the deps dir. `createRequire` anchors
- * resolution at app/deps but Node then walks EVERY ancestor node_modules, so a
- * copy planted outside the deps dir (e.g. ~/node_modules) could otherwise
- * satisfy the lookup — silently bypassing the consented, pinned install
- * (ADR-0011/ADR-0013). A resolution outside the deps dir is treated exactly as
- * absent.
+ * Resolve googleapis strictly from within the deps dir, by DIRECT-PATH
+ * construction — no ancestor walk (WP-102 §0, owner-approved guard rewrite).
+ * The former bare-request resolve walked every ancestor node_modules; a
+ * successful ancestor hit (correctly rejected by containment) was cached in
+ * Module._pathCache, so a consented deps-dir install in the SAME process still
+ * re-resolved the cached ancestor and read as absent. Direct-path resolution
+ * never considers ancestors and is cache-immune, while the realpath
+ * containment check preserves the symlink defense (ADR-0011/ADR-0013).
  * @param {WienerdogPaths} paths
  * @returns {{req:NodeRequire, resolved:string}|null}
  */
 function resolveFromDeps(paths) {
   const dir = depsDir(paths);
+  const candidate = path.join(dir, 'node_modules', 'googleapis');
+  // (1) Absent unless the deps-dir copy's OWN package.json exists. Pure existence
+  //     check — no resolution, so nothing is looked up in ancestors or cached.
+  if (!fs.existsSync(path.join(candidate, 'package.json'))) return null;
+  // (2) Resolve the ABSOLUTE candidate path (never the bare 'googleapis' request),
+  //     so resolution targets exactly this dir, never walks ancestors, and is not
+  //     served from Module._pathCache (the bare-request cache key is never used).
   const req = createRequire(path.join(dir, 'noop.js'));
-  const resolved = req.resolve('googleapis');
-  // req.resolve returns a canonical (symlink-resolved) path; canonicalize the
-  // deps dir the same way so a symlinked ancestor (e.g. macOS /var ->
-  // /private/var) does not defeat the containment check.
+  const resolved = req.resolve(candidate);
+  // (3) RETAIN the realpath containment check — the resolved entry must live inside
+  //     realpath(depsDir). `req.resolve` returns a symlink-resolved path, so a
+  //     planted symlink deps/node_modules/googleapis -> elsewhere resolves OUTSIDE
+  //     and is still rejected exactly as today (symlink defense preserved).
   let real = dir;
   try {
     real = fs.realpathSync(dir);
   } catch {
-    /* deps dir absent — resolved can't be inside it; fall through */
+    /* deps dir absent — handled at (1) */
   }
   if (!resolved.startsWith(real + path.sep)) return null;
   return { req, resolved };

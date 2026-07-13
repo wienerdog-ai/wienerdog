@@ -331,6 +331,36 @@ test('loadGoogleapis with a token present + a shape-broken (loads-to-{}) install
   );
 });
 
+test('resolveFromDeps is cache-immune: an ancestor googleapis never satisfies the guard, and a deps-dir install loads in the SAME process', () => {
+  // §0 regression (WP-102). The OLD ancestor-walk guard resolved the bare
+  // 'googleapis' request: an ancestor copy resolved (then was correctly
+  // rejected), but Node cached that successful resolution in Module._pathCache,
+  // so a deps-dir install in the SAME process still read as absent. The
+  // direct-path guard never considers ancestors, so this MUST run in-process
+  // (the whole point is the intra-process cache) — do NOT use probeInChild.
+  const paths = tempPaths();
+  plantGoogleapis(paths.home, 'ancestor'); // paths.home is an ancestor of <core>/app/deps
+  plantToken(paths);
+
+  // Ancestor-alone → absent, end-to-end.
+  assert.equal(deps.isInstalled(paths), false);
+  assert.throws(
+    () => deps.loadGoogleapis(paths),
+    (err) =>
+      err instanceof WienerdogError &&
+      /needs a one-time install/.test(err.message) &&
+      !/broken/.test(err.message)
+  );
+
+  // Install into the deps dir and re-check in the SAME process: it must load
+  // the deps-dir copy, not the (previously seen) ancestor. Fails on the old
+  // ancestor-walk implementation, which cache-hits the ancestor here.
+  fakeInstall(deps.depsDir(paths));
+  assert.equal(deps.isInstalled(paths), true);
+  const g = deps.loadGoogleapis(paths);
+  assert.equal(g.google.WHICH, 'deps');
+});
+
 test('ensureGoogleReady with a token present + deps absent + consent-yes installs', async () => {
   const paths = tempPaths();
   plantToken(paths);
