@@ -2,6 +2,21 @@
 
 All notable changes to Wienerdog. Format: [Keep a Changelog](https://keepachangelog.com), versioning: SemVer (0.x until the installed file layout stabilizes — ADR-0003).
 
+## [0.8.0] — 2026-07-13
+
+This release put Wienerdog's older, foundational parts through the same adversarial security review its newer features already get. Seventeen hardening changes came out of it. None of them change how Wienerdog works day to day — they close edge cases that would only matter if something (a downloaded file, a web page captured in a session recording, an interrupted uninstall) were hostile or malformed.
+
+### Added
+- **Connecting Google is more secure — and no longer hangs.** Google sign-in now uses PKCE and a one-time anti-forgery token (the industry standard for this kind of on-your-own-computer sign-in, RFC 8252), so another program sharing your machine can't slip into the handshake. And if you close the browser without finishing, sign-in now gives up after five minutes with a clear message instead of waiting forever.
+
+### Security & hardening
+- **Sending email stays inside the permission you granted — no header tricks.** A crafted subject line or contact name can no longer smuggle an extra, hidden recipient past the send permission you approved. Send permissions are also confirmed correctly when Wienerdog is run non-interactively, and an empty recipient is never treated as "allowed."
+- **An interrupted uninstall is always safe to run again.** If uninstall is stopped partway (a crash, a closed laptop), it now leaves things so that simply running it again finishes the job — and on that retry it can never delete a vault you keep inside Wienerdog's own folder.
+- **Downloads and installs are verified before they're trusted.** The version Wienerdog vendors is unpacked through a containment check (no file can escape its folder via a crafted path or symlink), the macOS/Linux installer pins HTTPS and shows you the exact Node download it will run, and the Windows installer refuses any non-HTTPS Git download address.
+- **The uninstaller's "your notes are yours" guard resists path trickery on macOS.** The check that stops uninstall from touching anything outside its own area now correctly handles symlinks, Apple's firmlinks, and Unicode/upper-lower-case variations of your home-folder path, so a lookalike path can't slip past it.
+- **Scheduling handles awkward file paths and never fails silently.** Schedule files now correctly escape special characters in paths, and if the system scheduler refuses a change, Wienerdog says so plainly instead of reporting success it didn't achieve.
+- **Assorted internal hardening.** Session recordings from Codex are now read with the same "anything that came from a tool or a web page is untrusted" rule that Claude sessions already use (some of that content was previously dropped); the nightly dream keeps its skill-usage bookkeeping correct even when a recording is trimmed for length; skill folders are refreshed by verified ownership instead of a blind delete; hook commands and memory "managed blocks" are written and matched more strictly; the secrets folder is locked down only if Wienerdog created it; and the internal alerts log can no longer grow without bound.
+
 ## [0.7.1] — 2026-07-12
 
 ### Changed
