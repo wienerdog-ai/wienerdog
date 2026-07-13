@@ -1,7 +1,7 @@
 ---
 id: WP-101
 title: gws OAuth loopback — add state + PKCE (RFC 8252)
-status: Draft
+status: In-Review
 model: sonnet
 size: S
 depends_on: []

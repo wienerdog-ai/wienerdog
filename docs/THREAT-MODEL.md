@@ -80,6 +80,38 @@ As of ADR-0020, dream-created skills can also be **revised** automatically from 
 
 **Residual (accepted, v1)**: the CLI typed-confirmation defends only against *model/headless* grant creation — any local process able to write `config.yaml` directly (or to load the project modules and call the exported `saveGrant`) can forge a send grant, since a grant is an unauthenticated YAML fact with no provenance or signature marker. This is the same OS-user file-permission boundary that guards the OAuth tokens (T4); a provenance/signature marker on grants is deliberately **not** built in v1 (it would not raise the boundary above file permissions an already-local attacker has cleared). Accepted; revisit if grants ever move outside a single-user-machine trust model.
 
+## T4b — OAuth handshake integrity (loopback state + PKCE)
+
+**Attack/hazard**: the `gws auth` loopback listener accepts a callback on an
+ephemeral `127.0.0.1` port. A co-resident process can enumerate loopback
+listeners without privilege and race a callback into the one-shot listener
+(RFC 8252 §8.1: the loopback redirect "may be susceptible to interception by
+other apps accessing the same loopback interface").
+
+**Mitigations (WP-101)**: the auth request carries a high-entropy `state`; the
+listener resolves ONLY on a callback whose `state` matches, ignoring
+(keep-listening on) any raced/unrelated request. `state` is a **partial**
+mitigation: it is printed in the authorization URL, so it defends the BLIND
+co-resident race (an attacker guessing the ephemeral port WITHOUT seeing the URL)
+and provides CSRF correlation — it does **NOT** defend against an attacker who can
+OBSERVE the printed URL (same terminal/environment), who can craft a
+matching-`state` callback. **PKCE** (`code_challenge`/`S256` on the auth URL,
+`code_verifier` on the token exchange, RFC 8252 §6 MUST) is the real defense
+against authorization-code injection: an intercepted code is not redeemable
+without the verifier (RFC 7636), which never appears in the URL. A bounded
+**listener timeout** (5 min) backstops both a mismatched-`state` flood and an
+abandoned consent, so neither can wedge the `auth` command.
+
+**Residual (accepted)**: a same-terminal / URL-observing attacker is out of
+scope — they already hold the user's session. And in the current
+per-user-client model the
+*credential-hijack* variant (an attacker redeeming their OWN valid code) already
+requires read access to the 0600 `client_id` — the same file-permission boundary
+that guards the token itself (T4) — so state/PKCE are defense-in-depth there, not
+the primary control. A future shared/multi-user client model would remove that
+file-permission mitigation and make PKCE load-bearing; it must not ship
+without state + PKCE.
+
 ## T5a — curl|bash entry point
 
 **Hazard**: the default install is `curl … | bash` (ADR-0006), a pattern users are right to be wary of.
