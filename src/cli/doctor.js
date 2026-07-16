@@ -148,6 +148,85 @@ function skillLinkChecks(paths, harnessSkillsDir, label) {
   ];
 }
 
+// The EXACT (event → script basename) pairs Wienerdog registers, per settings file.
+// A generic filename alone is NOT enough — a user's own SessionEnd hook could be named
+// session-end.sh — so a hook is Wienerdog-shaped ONLY when BOTH the event AND the basename
+// match a pair the corresponding adapter actually writes (src/adapters/{claude,codex}.js).
+const WD_HOOK_PAIRS = {
+  claude: { SessionStart: 'session-start.sh', SessionEnd: 'session-end.sh' },
+  codex: { SessionStart: 'session-start.sh', Stop: 'codex-session-end.sh' },
+};
+
+/** Recover the script path from a hook command. Wienerdog writes single-quoted
+ *  forward-slash paths (shellQuoteCommand); undo that. A bare/unquoted command (older
+ *  or foreign) is returned as-is. @param {string} command @returns {string} */
+function unquoteCommand(command) {
+  const c = String(command).trim();
+  if (c.length >= 2 && c.startsWith("'") && c.endsWith("'")) {
+    return c.slice(1, -1).replace(/'\\''/g, "'");
+  }
+  return c;
+}
+
+/** Detect a Wienerdog-SHAPED session hook whose target SCRIPT no longer exists — the
+ *  2026-07-12 demo-sandbox residue: a second SessionStart/SessionEnd pair was merged into
+ *  the real ~/.claude/settings.json pointing at a temp core the OS later purged, so every
+ *  session logged "SessionEnd hook failed". applySettings only prunes variants of its OWN
+ *  current command path, so a foreign-path wienerdog hook survives forever. A match
+ *  requires the EXACT (event, basename) pair Wienerdog registers for that harness AND a
+ *  missing script — this refuses to claim a user's unrelated hook (a session-end.sh under
+ *  PreToolUse, or a session-start.sh under SessionEnd, is NOT ours). Ownership still can't
+ *  be PROVEN (the path is foreign/unrecorded), so the WARN is HEDGED ("possible leftover …
+ *  if you didn't add this yourself"), and NEVER auto-removed (reversibility, ADR-0004).
+ *  Read-only; never throws.
+ *  @param {import('../core/paths').WienerdogPaths} paths
+ *  @param {{claude:{present:boolean}, codex:{present:boolean}}} harnesses
+ *  @returns {{status:'warn', msg:string}[]} */
+function staleHookChecks(paths, harnesses) {
+  const targets = [];
+  if (harnesses.claude.present) {
+    targets.push({ settingsPath: path.join(paths.claudeDir, 'settings.json'), pairs: WD_HOOK_PAIRS.claude });
+  }
+  if (harnesses.codex.present) {
+    targets.push({ settingsPath: path.join(paths.codexDir, 'hooks.json'), pairs: WD_HOOK_PAIRS.codex });
+  }
+
+  const findings = [];
+  for (const { settingsPath, pairs } of targets) {
+    let settings;
+    try {
+      settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+    } catch {
+      continue;
+    }
+    const hooks = settings && settings.hooks;
+    if (hooks === null || typeof hooks !== 'object' || Array.isArray(hooks)) continue;
+
+    for (const [event, groups] of Object.entries(hooks)) {
+      const expectedBase = pairs[event];
+      if (!expectedBase) continue;
+      if (!Array.isArray(groups)) continue;
+      for (const group of groups) {
+        if (!group || !Array.isArray(group.hooks)) continue;
+        for (const h of group.hooks) {
+          if (!h || typeof h.command !== 'string') continue;
+          const scriptPath = unquoteCommand(h.command);
+          const base = scriptPath.replace(/\\/g, '/').split('/').pop();
+          if (base !== expectedBase) continue;
+          if (fs.existsSync(scriptPath)) continue;
+          findings.push({
+            status: 'warn',
+            msg:
+              `possible leftover Wienerdog session hook in ${settingsPath} (${event}): its script is gone, ` +
+              `so it fails every session — if you didn't add this hook yourself, remove this entry: ${h.command}`,
+          });
+        }
+      }
+    }
+  }
+  return findings;
+}
+
 /** Report Google client-library readiness for a CONNECTED account. Read-only;
  *  never fails (WARN, not fail). Emits NOTHING when Google is not connected (no
  *  token). A damaged token warns separately (never [ok]). Uses a containment-
@@ -306,6 +385,11 @@ async function run(_argv) {
   if (harnesses.codex.present) {
     for (const c of skillLinkChecks(paths, path.join(paths.codexDir, 'skills'), 'Codex')) check(c.status, c.msg);
   }
+
+  // Stale/foreign Wienerdog session hooks: a wienerdog-shaped hook whose target script no
+  // longer exists (e.g. a since-purged temp core merged into the real settings). Read-only;
+  // warn with a manual-removal hint — we never edit a settings file we did not record.
+  for (const c of staleHookChecks(paths, harnesses)) check(c.status, c.msg);
 
   // Google client-library readiness for a connected account (WP-103).
   // Read-only; silent when Google is not connected; a missing library is a warn.
