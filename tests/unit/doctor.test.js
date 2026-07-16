@@ -188,7 +188,7 @@ test('doctor warns (exit 0) when a Codex skill link is removed', () => {
   fs.rmSync(path.join(codexHome, 'skills', 'wienerdog-setup'), { recursive: true, force: true });
   const r = run(['doctor'], env);
   assert.equal(r.status, 0);
-  assert.match(r.stdout, /\[warn\] Codex skills NOT registered .*wienerdog-setup/);
+  assert.match(r.stdout, /\[warn\] Codex skills need attention .*wienerdog-setup/);
 });
 
 test('doctor prints no Codex-skill line when Codex is not detected', () => {
@@ -197,6 +197,112 @@ test('doctor prints no Codex-skill line when Codex is not detected', () => {
   const r = run(['doctor'], env);
   assert.equal(r.status, 0);
   assert.doesNotMatch(r.stdout, /Codex skills/);
+});
+
+test('doctor reports [ok] Claude Code skills registered when Claude is present and links intact', () => {
+  const { root, env } = tempEnv();
+  const claudeHome = path.join(root, 'claude');
+  fs.mkdirSync(claudeHome, { recursive: true });
+  env.CLAUDE_CONFIG_DIR = claudeHome;
+  run(['init', '--yes'], env);
+  const r = run(['doctor'], env);
+  assert.equal(r.status, 0);
+  assert.match(r.stdout, /\[ok\] Claude Code skills registered \(\d+\)/);
+});
+
+test(
+  'doctor warns (exit 0) when a Claude skill link is repointed at a foreign core',
+  { skip: process.platform === 'win32' ? 'symlink-target test is POSIX-only' : false },
+  () => {
+    const { root, env } = tempEnv();
+    const claudeHome = path.join(root, 'claude');
+    fs.mkdirSync(claudeHome, { recursive: true });
+    env.CLAUDE_CONFIG_DIR = claudeHome;
+    run(['init', '--yes'], env);
+    const foreign = path.join(root, 'foreign', 'wienerdog-setup');
+    fs.mkdirSync(foreign, { recursive: true });
+    fs.writeFileSync(path.join(foreign, 'SKILL.md'), 'x');
+    const link = path.join(claudeHome, 'skills', 'wienerdog-setup');
+    fs.rmSync(link, { recursive: true, force: true });
+    fs.symlinkSync(foreign, link);
+    const r = run(['doctor'], env);
+    assert.equal(r.status, 0);
+    assert.match(r.stdout, /\[warn\] Claude Code skills need attention .*wienerdog-setup \(points outside this install/);
+  }
+);
+
+test(
+  'doctor warns (exit 0) when a Claude skill link is dangling',
+  { skip: process.platform === 'win32' ? 'symlink-target test is POSIX-only' : false },
+  () => {
+    const { root, env } = tempEnv();
+    const claudeHome = path.join(root, 'claude');
+    fs.mkdirSync(claudeHome, { recursive: true });
+    env.CLAUDE_CONFIG_DIR = claudeHome;
+    run(['init', '--yes'], env);
+    const link = path.join(claudeHome, 'skills', 'wienerdog-dream');
+    fs.rmSync(link, { recursive: true, force: true });
+    fs.symlinkSync(path.join(root, 'gone', 'wienerdog-dream'), link);
+    const r = run(['doctor'], env);
+    assert.equal(r.status, 0);
+    assert.match(r.stdout, /\[warn\] Claude Code skills need attention .*wienerdog-dream \(broken link/);
+  }
+);
+
+test(
+  'doctor warns (exit 0) when a Claude skill symlink resolves but the core copy lost its SKILL.md',
+  { skip: process.platform === 'win32' ? 'symlink SKILL.md test is POSIX-only' : false },
+  () => {
+    const { root, core, env } = tempEnv();
+    const claudeHome = path.join(root, 'claude');
+    fs.mkdirSync(claudeHome, { recursive: true });
+    env.CLAUDE_CONFIG_DIR = claudeHome;
+    run(['init', '--yes'], env);
+    fs.rmSync(path.join(core, 'skills', 'wienerdog-routines', 'SKILL.md'), { force: true });
+    const r = run(['doctor'], env);
+    assert.equal(r.status, 0);
+    assert.match(r.stdout, /\[warn\] Claude Code skills need attention .*wienerdog-routines/);
+  }
+);
+
+test('doctor: copied-directory branch — real dir without SKILL.md warns; with SKILL.md registers', () => {
+  const { root, env } = tempEnv();
+  const claudeHome = path.join(root, 'claude');
+  fs.mkdirSync(claudeHome, { recursive: true });
+  env.CLAUDE_CONFIG_DIR = claudeHome;
+  run(['init', '--yes'], env);
+  const link = path.join(claudeHome, 'skills', 'wienerdog-dream');
+  fs.rmSync(link, { recursive: true, force: true });
+  fs.mkdirSync(link, { recursive: true });
+  let r = run(['doctor'], env);
+  assert.equal(r.status, 0);
+  assert.match(r.stdout, /\[warn\] Claude Code skills need attention .*wienerdog-dream \(no SKILL\.md/);
+
+  fs.writeFileSync(path.join(link, 'SKILL.md'), 'x');
+  r = run(['doctor'], env);
+  assert.equal(r.status, 0);
+  assert.doesNotMatch(r.stdout, /wienerdog-dream \(no SKILL\.md/);
+  assert.match(r.stdout, /\[ok\] Claude Code skills registered/);
+});
+
+test('doctor: a deleted staged core skill is reported, not silently dropped', () => {
+  const { root, core, env } = tempEnv();
+  const claudeHome = path.join(root, 'claude');
+  fs.mkdirSync(claudeHome, { recursive: true });
+  env.CLAUDE_CONFIG_DIR = claudeHome;
+  run(['init', '--yes'], env);
+  fs.rmSync(path.join(core, 'skills', 'wienerdog-routines'), { recursive: true, force: true });
+  const r = run(['doctor'], env);
+  assert.equal(r.status, 0);
+  assert.match(r.stdout, /\[warn\] Claude Code skills need attention .*wienerdog-routines \(core copy missing/);
+});
+
+test('doctor prints no Claude-skill line when Claude is not detected', () => {
+  const { env } = tempEnv();
+  run(['init', '--yes'], env);
+  const r = run(['doctor'], env);
+  assert.equal(r.status, 0);
+  assert.doesNotMatch(r.stdout, /Claude Code skills/);
 });
 
 /** Plant a WORKING fake googleapis under <core>/app/deps (resolves AND loads). */

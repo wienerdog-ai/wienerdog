@@ -1,7 +1,7 @@
 ---
 id: WP-106
 title: doctor validates skill-link targets (Claude + Codex), not just presence
-status: Ready
+status: In-Review
 model: sonnet
 size: M
 depends_on: []

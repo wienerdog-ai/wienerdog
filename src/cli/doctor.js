@@ -39,38 +39,111 @@ function readVaultPath(configPath) {
   return value === '' || value === 'null' ? null : value;
 }
 
-/** Verify each shipped wienerdog-* skill is registered under <codexDir>/skills/
- *  (a symlink OR a copied dir — both count; WP-050). Read-only; a missing/broken
- *  link is a WARN (remediation: 'wienerdog sync'), never a fail. Empty array when
- *  Codex is not detected. Codex's own <codexDir>/skills/.system/ is ignored.
+/** Validate that each SHIPPED wienerdog-* skill is CORRECTLY registered under a
+ *  harness's skills dir — not merely present (WP-079 checked only existence, which
+ *  let a symlink repointed at a foreign/ephemeral core read as healthy until it went
+ *  dangling; the 2026-07-12 demo-sandbox incident). The shipped inventory is read from
+ *  the PACKAGED source (path.resolve(__dirname,'..','..','skills')), NOT the mutable
+ *  <core>/skills, so a deleted staged skill is a reported problem, never a smaller
+ *  count.
+ *  For each shipped name:
+ *    - staged core copy <core>/skills/<name> absent / no SKILL.md → 'core copy missing'
+ *      (and the harness sub-check is skipped — sync re-stages).
+ *    - else the harness entry:
+ *      · SYMLINK: fs.realpathSync(linkPath) must resolve (else 'broken link') AND
+ *        equal fs.realpathSync(<core>/skills/<name>) (else 'points outside this install')
+ *        AND the resolved dir must contain SKILL.md (else 'no SKILL.md').
+ *      · real DIRECTORY (copied skill, WP-050): DISCOVERABILITY only — must contain
+ *        SKILL.md (else 'no SKILL.md'); NOT an ownership check (a user-modified/unrecorded
+ *        dir with SKILL.md reads as discoverable; ownership is WP-088/089's job).
+ *      · absent / a plain file: 'missing' / 'a file is in the way'.
+ *  Read-only; every problem is a WARN with the `wienerdog sync` remediation, never a
+ *  fail. Returns [] when the packaged source is unreadable or ships no wienerdog-* skills.
+ *  Callers gate on harness presence.
  *  @param {import('../core/paths').WienerdogPaths} paths
- *  @param {{codex:{present:boolean}}} harnesses
+ *  @param {string} harnessSkillsDir  e.g. path.join(paths.claudeDir, 'skills')
+ *  @param {string} label             e.g. 'Claude Code' | 'Codex'
  *  @returns {{status:'ok'|'warn', msg:string}[]} */
-function codexSkillChecks(paths, harnesses) {
-  if (!harnesses.codex.present) return [];
-
-  const coreSkillsDir = path.join(paths.core, 'skills');
+function skillLinkChecks(paths, harnessSkillsDir, label) {
+  const pkgSkillsRoot = path.resolve(__dirname, '..', '..', 'skills');
   let entries;
   try {
-    entries = fs.readdirSync(coreSkillsDir, { withFileTypes: true });
+    entries = fs.readdirSync(pkgSkillsRoot, { withFileTypes: true });
   } catch {
     return [];
   }
-  const names = entries
-    .filter((e) => e.name.startsWith('wienerdog-') && (e.isDirectory() || e.isSymbolicLink()))
+  const shippedNames = entries
+    .filter((e) => e.isDirectory() && e.name.startsWith('wienerdog-'))
     .map((e) => e.name);
-  if (names.length === 0) return [];
+  if (shippedNames.length === 0) return [];
 
-  const codexSkillsDir = path.join(paths.codexDir, 'skills');
-  const missing = names.filter((name) => !fs.existsSync(path.join(codexSkillsDir, name)));
+  const problems = [];
+  for (const name of shippedNames) {
+    const coreSkill = path.join(paths.core, 'skills', name);
+    let coreIsDir = false;
+    try {
+      coreIsDir = fs.statSync(coreSkill).isDirectory();
+    } catch {
+      coreIsDir = false;
+    }
+    if (!coreIsDir || !fs.existsSync(path.join(coreSkill, 'SKILL.md'))) {
+      problems.push({ name, reason: "core copy missing — run 'wienerdog sync'" });
+      continue;
+    }
 
-  if (missing.length === 0) {
-    return [{ status: 'ok', msg: `Codex skills registered (${names.length}) under ${codexSkillsDir}` }];
+    const linkPath = path.join(harnessSkillsDir, name);
+    let lstat;
+    try {
+      lstat = fs.lstatSync(linkPath);
+    } catch {
+      problems.push({ name, reason: 'missing' });
+      continue;
+    }
+
+    if (lstat.isSymbolicLink()) {
+      let real = null;
+      try {
+        real = fs.realpathSync(linkPath);
+      } catch {
+        real = null;
+      }
+      if (real === null) {
+        problems.push({ name, reason: 'broken link (target is gone)' });
+        continue;
+      }
+      let expectedReal = coreSkill;
+      try {
+        expectedReal = fs.realpathSync(coreSkill);
+      } catch {
+        // fall back to the literal expected path — coreSkill was already
+        // verified to exist above, so realpathSync should not throw here;
+        // this guards only against a race, not a real gap.
+      }
+      if (real !== expectedReal) {
+        problems.push({ name, reason: `points outside this install → ${real}` });
+        continue;
+      }
+      if (!fs.existsSync(path.join(real, 'SKILL.md'))) {
+        problems.push({ name, reason: `no SKILL.md at ${real}` });
+      }
+    } else if (lstat.isDirectory()) {
+      if (!fs.existsSync(path.join(linkPath, 'SKILL.md'))) {
+        problems.push({ name, reason: 'no SKILL.md' });
+      }
+    } else {
+      problems.push({ name, reason: 'a file is in the way' });
+    }
+  }
+
+  if (problems.length === 0) {
+    return [{ status: 'ok', msg: `${label} skills registered (${shippedNames.length}) under ${harnessSkillsDir}` }];
   }
   return [
     {
       status: 'warn',
-      msg: `Codex skills NOT registered under ${codexSkillsDir}: ${missing.join(', ')} — run 'wienerdog sync' to (re)link them`,
+      msg:
+        `${label} skills need attention under ${harnessSkillsDir}: ` +
+        `${problems.map((p) => `${p.name} (${p.reason})`).join(', ')} — run 'wienerdog sync' to re-link them`,
     },
   ];
 }
@@ -224,9 +297,15 @@ async function run(_argv) {
   const { doctorSchedulerChecks } = require('../scheduler/status');
   for (const c of doctorSchedulerChecks(paths)) check(c.status, c.msg);
 
-  // Codex skill-link health: shipped skills registered under $CODEX_HOME/skills/.
-  // Read-only; missing links are a warn (remediation: 'wienerdog sync').
-  for (const c of codexSkillChecks(paths, harnesses)) check(c.status, c.msg);
+  // Skill-link health: each shipped wienerdog-* skill is registered — and its symlink
+  // points at THIS install's core (not a stale/foreign one) — under each present
+  // harness's skills dir. Read-only; problems are warns (remediation: 'wienerdog sync').
+  if (harnesses.claude.present) {
+    for (const c of skillLinkChecks(paths, path.join(paths.claudeDir, 'skills'), 'Claude Code')) check(c.status, c.msg);
+  }
+  if (harnesses.codex.present) {
+    for (const c of skillLinkChecks(paths, path.join(paths.codexDir, 'skills'), 'Codex')) check(c.status, c.msg);
+  }
 
   // Google client-library readiness for a connected account (WP-103).
   // Read-only; silent when Google is not connected; a missing library is a warn.
