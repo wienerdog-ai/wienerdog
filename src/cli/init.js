@@ -108,6 +108,10 @@ async function run(argv) {
   console.log(`  Claude Code: ${harnesses.claude.present ? 'found' : 'not found'} (${harnesses.claude.dir})`);
   console.log(`  Codex CLI:   ${harnesses.codex.present ? 'found' : 'not found'} (${harnesses.codex.dir})`);
 
+  const { sandboxMismatchWarning } = require('../core/sandbox-guard');
+  const sandboxWarning = sandboxMismatchWarning(paths, process.env, harnesses);
+  if (sandboxWarning) console.log(`\n${sandboxWarning}`);
+
   if (dryRun) {
     console.log('\n--dry-run: no changes made.');
     return;
@@ -161,7 +165,7 @@ async function run(argv) {
   // is live the moment init finishes. sync is idempotent; with no vault it installs
   // skills + hooks and defers memory features (exit 0). Passing our argv is safe —
   // sync only reads --dry-run from it, and we never reach here on a dry-run.
-  await require('./sync').run(argv);
+  await require('./sync').run(argv, { suppressSandboxWarning: true, harnesses });
 
   if (vaultStep) {
     const { ensureDreamSchedule } = require('./schedule');

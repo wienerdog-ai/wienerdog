@@ -1,7 +1,7 @@
 ---
 id: WP-108
 title: half-sandbox guard — warn when WIENERDOG_HOME is redirected but harness configs are not
-status: Ready
+status: In-Review
 model: sonnet
 size: M
 depends_on: []
