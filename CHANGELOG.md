@@ -2,6 +2,18 @@
 
 All notable changes to Wienerdog. Format: [Keep a Changelog](https://keepachangelog.com), versioning: SemVer (0.x until the installed file layout stabilizes — ADR-0003).
 
+## [0.9.0] — 2026-07-16
+
+This release exists because Wienerdog's own health check failed its maintainer. A demo recording accidentally ran the installer "half-sandboxed" — its own folder redirected to a temporary location, but the real Claude Code settings left in place. The install quietly rewired the live setup to point at that temporary folder; three days later macOS purged it, every `/wienerdog-*` command vanished, session hooks failed on every start, and `wienerdog doctor` said everything was fine. All three gaps are now closed — and the new checks proved themselves immediately by finding a piece of that incident's residue the manual cleanup had missed.
+
+### Added
+- **`doctor` now verifies your skills are truly wired up, not just present.** For both Claude Code and Codex, every skill registration must point into the current install and contain its skill file. A link pointing at a vanished or foreign location, a leftover empty folder, or a damaged install copy gets a clear warning naming the skill and the fix (`wienerdog sync`). Previously, a completely broken setup could show all-green.
+- **`doctor` now spots leftover session hooks.** A hook that matches Wienerdog's exact shape but whose script no longer exists — the thing that silently logs "hook failed" at every session start, forever — is flagged with the exact settings file and entry to remove. Notice-only: doctor never edits your settings, because a hook at a foreign path can't be proven to be Wienerdog's own.
+- **`init` and `sync` warn about a half-sandbox before writing anything.** If `WIENERDOG_HOME` points somewhere custom while your real Claude Code or Codex settings would still be modified, you now get a loud warning naming the exposed tool — with stronger wording when the custom location looks temporary. It warns and never blocks, so deliberate custom setups keep working.
+
+### Changed
+- **`sync` decides which AI tools to write into once per run.** It takes a single snapshot of which tools are present, warns from that snapshot, and rechecks each tool still exists at the last moment before writing into it. A tool appearing or disappearing mid-run can no longer be written into without warning or crash the run partway through.
+
 ## [0.8.1] — 2026-07-13
 
 This release fixes a dead-end that could hit anyone who connected Google before July 4 and then updated: the Google connection itself was fine, but every Gmail, Calendar, and Drive command failed with a message wrongly telling you to set Google up again.
