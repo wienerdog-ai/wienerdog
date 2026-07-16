@@ -122,16 +122,31 @@ function stageSkills(paths, dryRun, manifest, out) {
  * @param {string[]} argv
  * @param {{loader?: (argv:string[])=>{status:number},
  *          interactive?: boolean,
- *          ensureGoogleReady?: (paths:import('../core/paths').WienerdogPaths)=>Promise<void>}} [opts]
+ *          ensureGoogleReady?: (paths:import('../core/paths').WienerdogPaths)=>Promise<void>,
+ *          suppressSandboxWarning?: boolean,
+ *          harnesses?: {claude:{present:boolean,dir:string}, codex:{present:boolean,dir:string}}}} [opts]
  *   `loader`: scheduler loader seam. `interactive`: overrides terminal detection
  *   (tests); default `!!process.stdin.isTTY`. `ensureGoogleReady`: inject the
  *   googleapis self-heal fn (tests); default `require('../gws/deps').ensureGoogleReady`.
+ *   `suppressSandboxWarning`: skip the half-sandbox warning print (init already
+ *   printed it). `harnesses`: a pre-computed harness snapshot (init passes its
+ *   plan-time snapshot); a standalone sync detects once here when omitted.
  * @returns {Promise<void>}
  */
 async function run(argv, opts = {}) {
   const dryRun = argv.includes('--dry-run');
   const paths = getPaths();
   const vaultPath = readVaultPath(paths.config);
+  // One harness snapshot for the whole run: the guard warns about the harnesses the adapters
+  // below MAY write into (they write a subset — those still present at revalidation). From init
+  // this is init's snapshot (opts.harnesses); a standalone sync detects once here. A harness
+  // that appears mid-run is not in the snapshot → not written unwarned (round-7).
+  const harnesses = opts.harnesses || detectHarnesses(process.env);
+  if (!opts.suppressSandboxWarning) {
+    const { sandboxMismatchWarning } = require('../core/sandbox-guard');
+    const w = sandboxMismatchWarning(paths, process.env, harnesses);
+    if (w) console.log(w);
+  }
 
   // A configured vault MUST exist on disk. An UNSET vault is a valid first-time
   // state (WP-027): we still install skills + hooks, we just defer memory.
@@ -220,19 +235,33 @@ async function run(argv, opts = {}) {
 
   // 3. Apply each present harness adapter — ALWAYS. They install skills + hooks
   //    and only skip the managed block when skipManagedBlock is true.
-  if (detectHarnesses(process.env).claude.present) {
+  // The initial snapshot is an AUTHORIZATION UPPER BOUND, not a promise the dir still exists.
+  // Adapter set = { snapshot.present harnesses whose dir is STILL a directory at this check } —
+  // the intersection of the snapshot and on-disk state at revalidation time. It does not grow
+  // past the snapshot: a harness that APPEARED mid-run is not in the snapshot → not written
+  // unwarned (round-7); a harness whose disappearance is OBSERVABLE here fails revalidation →
+  // skipped (round-8). A removal/symlink-retarget in the window AFTER this check and before the
+  // adapter's write is an inherent non-atomic-fs micro-race (accepted residual — see
+  // Implementation notes). fs is already required at the top of sync.js.
+  const isDir = (p) => { try { return fs.statSync(p).isDirectory(); } catch { return false; } };
+
+  if (harnesses.claude.present && isDir(harnesses.claude.dir)) {
     const res = applyClaudeAdapter(paths, { dryRun, manifest, skipManagedBlock });
     summary.changed.push(...res.changed);
     summary.unchanged.push(...res.unchanged);
     summary.notices.push(...res.notices);
+  } else if (harnesses.claude.present) {
+    console.log('Claude Code config is no longer present; skipping adapter (it will be applied on the next `wienerdog sync`).');
   } else {
     console.log('Claude Code not detected; skipping adapter.');
   }
-  if (detectHarnesses(process.env).codex.present) {
+  if (harnesses.codex.present && isDir(harnesses.codex.dir)) {
     const res = applyCodexAdapter(paths, { dryRun, manifest, skipManagedBlock });
     summary.changed.push(...res.changed);
     summary.unchanged.push(...res.unchanged);
     summary.notices.push(...res.notices);
+  } else if (harnesses.codex.present) {
+    console.log('Codex CLI config is no longer present; skipping adapter (it will be applied on the next `wienerdog sync`).');
   } else {
     console.log('Codex CLI not detected; skipping adapter.');
   }

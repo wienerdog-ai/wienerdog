@@ -1,7 +1,7 @@
 ---
 id: WP-108
 title: half-sandbox guard — warn when WIENERDOG_HOME is redirected but harness configs are not
-status: Ready
+status: In-Review
 model: sonnet
 size: M
 depends_on: []
@@ -106,7 +106,7 @@ There is no existing "sandbox guard" module. Test harnesses that set `WIENERDOG_
 
 | Action | Path | Notes |
 |--------|------|-------|
-| create | src/core/sandbox-guard.js | pure `sandboxMismatchWarning(paths, env, harnesses)` → `string|null` |
+| create | src/core/sandbox-guard.js | pure `sandboxMismatchWarning(paths, env, harnesses)` → `string\|null` |
 | modify | src/cli/init.js | print the warning in the plan (before the `Proceed?` confirm); pass `{ suppressSandboxWarning: true, harnesses }` (init's snapshot) to its `sync` call |
 | modify | src/cli/sync.js | compute ONE harness snapshot per run (`opts.harnesses \|\| detectHarnesses(process.env)`); print the warning near the top of `run` unless `opts.suppressSandboxWarning`; gate each adapter on `snapshot.present ∧ isDir(dir)` — snapshot upper bound + pre-write revalidation (replace the two inline `detectHarnesses` calls); document `opts.suppressSandboxWarning` + `opts.harnesses` |
 | create | tests/unit/sandbox-guard.test.js | unit-test the pure function across all branches, plus subprocess integration for `init --dry-run` (warns / silent) and `sync` (warns), and the snapshot-consistency race test |
