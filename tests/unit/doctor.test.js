@@ -511,6 +511,111 @@ test('doctor reports [ok] when Google is connected and the client library is ins
   assert.match(r.stdout, /\[ok\] Google connected and its client library is installed/);
 });
 
+/** Append a hook group to a harness settings file. @param {string} settingsPath
+ *  @param {string} event @param {string} command */
+function appendHook(settingsPath, event, command) {
+  const s = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+  s.hooks = s.hooks || {};
+  s.hooks[event] = s.hooks[event] || [];
+  s.hooks[event].push({ matcher: '*', hooks: [{ type: 'command', command, timeout: 10 }] });
+  fs.writeFileSync(settingsPath, `${JSON.stringify(s, null, 2)}\n`);
+}
+
+test('doctor: valid current hooks only → no leftover-hook warn', () => {
+  const { root, env } = tempEnv();
+  const claudeHome = path.join(root, 'claude');
+  fs.mkdirSync(claudeHome, { recursive: true });
+  env.CLAUDE_CONFIG_DIR = claudeHome;
+  run(['init', '--yes'], env);
+  const r = run(['doctor'], env);
+  assert.equal(r.status, 0);
+  assert.doesNotMatch(r.stdout, /possible leftover Wienerdog session hook/);
+});
+
+test('doctor warns (exit 0) on a foreign Wienerdog hook (correct pair) whose script is gone', () => {
+  const { root, env } = tempEnv();
+  const claudeHome = path.join(root, 'claude');
+  fs.mkdirSync(claudeHome, { recursive: true });
+  env.CLAUDE_CONFIG_DIR = claudeHome;
+  run(['init', '--yes'], env);
+  const settingsPath = path.join(claudeHome, 'settings.json');
+  appendHook(settingsPath, 'SessionEnd', `'${path.join(root, 'gone-temp', 'wd', 'bin', 'session-end.sh')}'`);
+  const r = run(['doctor'], env);
+  assert.equal(r.status, 0);
+  assert.match(
+    r.stdout,
+    /\[warn\] possible leftover Wienerdog session hook in .*settings\.json \(SessionEnd\): its script is gone/
+  );
+});
+
+test('doctor: unrelated basename with a missing script is NOT flagged', () => {
+  const { root, env } = tempEnv();
+  const claudeHome = path.join(root, 'claude');
+  fs.mkdirSync(claudeHome, { recursive: true });
+  env.CLAUDE_CONFIG_DIR = claudeHome;
+  run(['init', '--yes'], env);
+  const settingsPath = path.join(claudeHome, 'settings.json');
+  appendHook(settingsPath, 'SessionEnd', `'${path.join(root, 'gone', 'my-hook.sh')}'`);
+  const r = run(['doctor'], env);
+  assert.equal(r.status, 0);
+  assert.doesNotMatch(r.stdout, /possible leftover Wienerdog session hook/);
+});
+
+test('doctor: right basename under an event Wienerdog never registers is NOT flagged', () => {
+  const { root, env } = tempEnv();
+  const claudeHome = path.join(root, 'claude');
+  fs.mkdirSync(claudeHome, { recursive: true });
+  env.CLAUDE_CONFIG_DIR = claudeHome;
+  run(['init', '--yes'], env);
+  const settingsPath = path.join(claudeHome, 'settings.json');
+  appendHook(settingsPath, 'PreToolUse', `'${path.join(root, 'gone', 'x', 'session-end.sh')}'`);
+  const r = run(['doctor'], env);
+  assert.equal(r.status, 0);
+  assert.doesNotMatch(r.stdout, /possible leftover Wienerdog session hook/);
+});
+
+test('doctor: right basename under the wrong event for that basename is NOT flagged', () => {
+  const { root, env } = tempEnv();
+  const claudeHome = path.join(root, 'claude');
+  fs.mkdirSync(claudeHome, { recursive: true });
+  env.CLAUDE_CONFIG_DIR = claudeHome;
+  run(['init', '--yes'], env);
+  const settingsPath = path.join(claudeHome, 'settings.json');
+  appendHook(settingsPath, 'SessionEnd', `'${path.join(root, 'gone', 'x', 'session-start.sh')}'`);
+  const r = run(['doctor'], env);
+  assert.equal(r.status, 0);
+  assert.doesNotMatch(r.stdout, /possible leftover Wienerdog session hook/);
+});
+
+test('doctor warns (exit 0) on a Codex-side stale hook (Stop → codex-session-end.sh)', () => {
+  const { root, env } = tempEnv();
+  const codexHome = path.join(root, 'codex');
+  fs.mkdirSync(codexHome, { recursive: true });
+  env.CODEX_HOME = codexHome;
+  run(['init', '--yes'], env);
+  const hooksPath = path.join(codexHome, 'hooks.json');
+  appendHook(hooksPath, 'Stop', `'${path.join(root, 'gone', 'bin', 'codex-session-end.sh')}'`);
+  const r = run(['doctor'], env);
+  assert.equal(r.status, 0);
+  assert.match(
+    r.stdout,
+    /\[warn\] possible leftover Wienerdog session hook in .*hooks\.json \(Stop\)/
+  );
+});
+
+test('doctor: Codex wrong pair (Stop → session-end.sh) is NOT flagged', () => {
+  const { root, env } = tempEnv();
+  const codexHome = path.join(root, 'codex');
+  fs.mkdirSync(codexHome, { recursive: true });
+  env.CODEX_HOME = codexHome;
+  run(['init', '--yes'], env);
+  const hooksPath = path.join(codexHome, 'hooks.json');
+  appendHook(hooksPath, 'Stop', `'${path.join(root, 'gone', 'session-end.sh')}'`);
+  const r = run(['doctor'], env);
+  assert.equal(r.status, 0);
+  assert.doesNotMatch(r.stdout, /possible leftover Wienerdog session hook/);
+});
+
 test('doctor with a set-but-missing vault fails and exits 1', () => {
   const { core, env } = tempEnv();
   run(['init', '--yes'], env);
