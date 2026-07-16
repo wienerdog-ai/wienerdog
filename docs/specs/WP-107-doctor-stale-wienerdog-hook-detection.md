@@ -155,7 +155,7 @@ Behavior:
    - If `fs.existsSync(scriptPath)` → skip (the script is present — a healthy hook,
      including our current one; we only flag a hook whose target is GONE).
    - Else → **flag**: push
-     `{status:'warn', msg:\`possible leftover Wienerdog session hook in ${settingsPath} (${event}): its script is gone, so it fails every session — if you didn't add this hook yourself, remove this entry: ${h.command}\`}`.
+     ``{status:'warn', msg:`possible leftover Wienerdog session hook in ${settingsPath} (${event}): its script is gone, so it fails every session — if you didn't add this hook yourself, remove this entry: ${h.command}`}``.
 4. Return all findings (possibly empty).
 
 `unquoteCommand(command)` — inverse of `shellQuoteCommand`:
@@ -205,21 +205,21 @@ function appendHook(settingsPath, event, command) {
   `/possible leftover Wienerdog session hook/`.
 - **Foreign wienerdog hook, correct pair, missing script → `[warn]`, exit 0.** After
   `init`, append a stale entry pointing at a non-existent temp core:
-  `appendHook(path.join(claudeHome,'settings.json'), 'SessionEnd',
-  \`'\${path.join(root,'gone-temp','wd','bin','session-end.sh')}'\`)` (the exact
+  ``appendHook(path.join(claudeHome,'settings.json'), 'SessionEnd',
+  `'${path.join(root,'gone-temp','wd','bin','session-end.sh')}'`)`` (the exact
   Claude `SessionEnd → session-end.sh` pair). Run `doctor`; assert `r.status === 0` and
   `r.stdout` matches
   `/\[warn\] possible leftover Wienerdog session hook in .*settings\.json \(SessionEnd\): its script is gone/`.
 - **Unrelated basename (my-hook.sh), missing → NOT flagged.** Append
-  `appendHook(..., 'SessionEnd', \`'\${path.join(root,'gone','my-hook.sh')}'\`)`. Run
+  ``appendHook(..., 'SessionEnd', `'${path.join(root,'gone','my-hook.sh')}'`)``. Run
   `doctor`; assert `r.stdout` does **not** match `/possible leftover Wienerdog session hook/`.
 - **Right basename, WRONG event → NOT flagged (pair boundary; Finding 3).** Append
-  `appendHook(..., 'PreToolUse', \`'\${path.join(root,'gone','x','session-end.sh')}'\`)` —
+  ``appendHook(..., 'PreToolUse', `'${path.join(root,'gone','x','session-end.sh')}'`)`` —
   `session-end.sh` is ours, but Wienerdog never registers a `PreToolUse` hook, so a user's
   missing `PreToolUse/session-end.sh` must NOT be claimed. Run `doctor`; assert `r.stdout`
   does **not** match `/possible leftover Wienerdog session hook/`.
 - **Wrong basename for the event → NOT flagged (pair boundary; Finding 3).** Append
-  `appendHook(..., 'SessionEnd', \`'\${path.join(root,'gone','x','session-start.sh')}'\`)`
+  ``appendHook(..., 'SessionEnd', `'${path.join(root,'gone','x','session-start.sh')}'`)``
   — `session-start.sh` under `SessionEnd` is not a pair Wienerdog writes. Assert `r.stdout`
   does **not** match `/possible leftover Wienerdog session hook/`.
 - **Codex-side stale hook (Stop → codex-session-end.sh), missing → `[warn]`, exit 0.**
