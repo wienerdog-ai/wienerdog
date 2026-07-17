@@ -148,21 +148,22 @@ Given the clean default fixtures: `renderDigest` is **byte-identical** to
 
 ## OWNER-APPROVED (2026-07-17) — DECISION NEEDED, resolve in the walkthrough
 
-- **DECISION NEEDED — one banner or two.** Fold secret-omitted identity sections into the
-  existing `identityWarn` banner (with a new reason string), or add a dedicated
-  `secretExclusionLine` for all secret-omitted sections (identity + projects + daily)?
-  **Recommendation: extend `identityWarn` for identity sections** (the user knows that banner)
-  and add the projects/daily cases to the same list with code-owned labels — one banner, one
-  code path. Confirm.
-- **DECISION NEEDED — "last known-good digest remains" (item 6), strong vs weak reading.**
-  **Weak (recommended, this WP):** the offending section is omitted and the rest renders, so
-  the injected context is always the safe subset — the digest is never blocked wholesale, and
-  the previous session's context minus the bad section remains. **Strong:** if a section that
-  was present last render would now be dropped, the *writer* (dream.js/sync.js) keeps the prior
-  `digest.md` on disk rather than replacing it. The strong reading requires touching the digest
-  **writers** (out of this WP's `digest.js`-only footprint) and risks pinning a stale digest
-  forever. Recommendation: ship the weak reading here; if the owner wants the strong guard, spec
-  it as a follow-up touching the writers. Confirm.
+- **OWNER-APPROVED (2026-07-17) — one banner: extend `identityWarn`.** Secret-omitted
+  identity sections join the existing exclusion list with the code-owned reason
+  `'appears to contain a secret'`; the projects/daily cases join the same list under the
+  fixed labels `active-projects`/`daily-summary`. One code path, one surface the user
+  already knows, and no extra never-truncated prefix line eating the context budget — the
+  severity distinction is carried by the per-entry reason text, which the banner already
+  prints next to each name. (The separate staged-output quarantine pending-review banner of
+  contract 5 is unaffected — that one is state-driven, not an exclusion.)
+- **OWNER-APPROVED (2026-07-17) — "last known-good digest remains": weak reading, and the
+  strong writer-guard is REJECTED (no follow-up).** Section-level fail-closed: the offending
+  section is omitted, the rest renders — the injected context is always the safe subset and
+  the digest is never blocked wholesale. The strong reading (writers keep the prior
+  `digest.md` on disk when a previously-present section would drop) is not wanted, now or
+  later: it would pin a stale digest indefinitely on exactly the day a secret entered a note,
+  it touches the writers, and its marginal benefit over weak-reading + exclusion banner +
+  next-sync recovery is negligible. Not a deferred item — closed.
 
 ## Implementation notes & constraints
 
@@ -227,8 +228,8 @@ git diff --exit-code tests/golden/digest-default.md && echo "golden unchanged �
 
 - The shared detector — **WP-122**. The staged-commit gate — **WP-123**. The log/alert/email
   sanitizing — **WP-124**.
-- The "strong" last-known-good writer guard (keeping the prior `digest.md` on disk) — a deferred
-  follow-up, if the owner wants it (touches the digest writers, not `digest.js`).
+- The "strong" last-known-good writer guard (keeping the prior `digest.md` on disk) —
+  REJECTED by the owner (see the OWNER-APPROVED ruling above); do not build it.
 - The digest line/byte caps (WP-120, already shipped) — do not change `capDigest` or
   `DigestCaps`. **0700/0600 modes** on `digest.md` — **WP-126**.
 - Re-enabling or changing the frozen daily-summary injection; any change to
