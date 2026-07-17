@@ -32,8 +32,8 @@ content) and they flow to **three durable/injected sinks**:
    `` `${reason}\n\n${logTail}` `` — where `logTail` is the last 2 KB of the raw run log
    (`readLogTail`) — and sends it via `gws _alert`.
 
-A 2026-07-15 security audit (action **A5**, deep-dive `05-secret-lifecycle.md`, item 4 point 3
-+ item 7) found that **none of these three sinks re-checks for a secret**. A key the brain
+A 2026-07-15 security audit (action **A5**, deep-dive `05-secret-lifecycle.md`, item 4
+point 3 and item 7) found that **none of these three sinks re-checks for a secret**. A key the brain
 printed to stderr lands raw in the log (durable, `0644` today), in `alerts.jsonl`, in the
 digest banner, in the managed block, **and is emailed to the user's inbox as a raw log tail**.
 

@@ -87,7 +87,10 @@ only the single-redaction-pass claim):
   scratch) are **`0600`/`0700`, independent of umask**, repaired on `sync`/`doctor` (POSIX;
   Windows relies on the per-user profile).
 - **State the limit honestly**: detection is best-effort — encoded, split, or novel secrets can
-  pass; **a scanner is never the external-effect boundary**. What actually contains a missed
+  pass; name the chunk-boundary case explicitly (the per-chunk scrub of the brain's output
+  stream redacts a secret split across two chunks only best-effort at the boundary — the
+  WP-124 OWNER-APPROVED limitation, accepted instead of an unbounded reassembly buffer);
+  **a scanner is never the external-effect boundary**. What actually contains a missed
   secret is the runtime containment (A1 — no network/Bash for the dream brain) and the send
   broker (A2 — the model cannot self-authorize an external send). Cross-reference T1/T4a.
 

@@ -140,6 +140,12 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 | [WP-119](WP-119-transcript-quarantine-ledger.md) | Per-file transcript quarantine ledger replaces the scalar watermark (audit A6) | M7 | opus | Done | WP-118 |
 | [WP-120](WP-120-digest-line-and-byte-caps.md) | Enforce digest line + byte caps, bounded note reads and project counts (audit A6) | M7 | sonnet | Done | WP-119 |
 | [WP-121](WP-121-hook-fail-open-hardening.md) | Make the three shipped session hooks genuinely fail-open + a hook fail-open harness (audit A6) | M7 | opus | Done | — |
+| [WP-122](WP-122-shared-secret-detector.md) | Shared scanAndRedact secret detector + regression corpus + pre-brain input hardening (audit A5) | M7 | opus | Draft | — |
+| [WP-123](WP-123-staged-output-secret-gate.md) | Staged brain-output secret gate — scan pre-commit added content, revert on a hard finding (audit A5) | M7 | opus | Draft | WP-122 |
+| [WP-124](WP-124-durable-output-sanitizing.md) | Durable output sanitizing — bounded secret-scrub of brain stdout/stderr, logs, alerts, and alert email (audit A5) | M7 | opus | Draft | WP-122 |
+| [WP-125](WP-125-digest-section-secret-gate.md) | Per-section digest secret gate — omit a section that would inject a secret, keep the rest (audit A5) | M7 | sonnet | Draft | WP-122 |
+| [WP-126](WP-126-private-artifact-modes.md) | Private-by-default artifact modes — 0700 dirs / 0600 sensitive files on create + sync/doctor repair (audit A5) | M7 | opus | Draft | WP-124, WP-125 |
+| [WP-127](WP-127-a5-secret-lifecycle-docs.md) | A5 documentation — secret-detection limits, quarantine/incident runbook, vault-local no-auto-push (audit A5) | M7 | sonnet | Draft | WP-122, WP-123, WP-124, WP-125, WP-126 |
 
 > **First-production-night incident (2026-07-04).** WP-038, WP-039 and WP-041 form
 > a serial chain (they edit the shared `run-job.js` / `dream.js` / `validate.js`
@@ -1136,6 +1142,51 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 
 <!-- -->
 
+> **Audit A5 — layered secret lifecycle with fail-closed persistence gates
+> (2026-07-17, ADR-0024).** With A6 shipped, A5 closes the secret-lifecycle surface
+> (deep-dive `05-secret-lifecycle.md`): today a SINGLE best-effort `redact()` pass at
+> transcript ingest is treated as if it were airtight, so any pattern it misses becomes a
+> committed note, a durable log line, a digest banner, a managed block, or a fail-loud email.
+> **The design is ADR-0024** (Accepted 2026-07-17; the per-ticket owner walkthrough ratified
+> every seeded value and `DECISION NEEDED` marker — the rulings are recorded as dated
+> `OWNER-APPROVED` blocks in the specs, including the WP-123 quarantine-preserve amendment,
+> the WP-125 state-driven pending-review banner, and the WP-126 insecure-modes banner). A5 splits into a detector foundation, four independent enforcement-point
+> WPs, a private-modes WP, and a docs WP, so every step has literal verification commands and a
+> tight, adversarially-reviewable Deliverables table. **WP-122** builds the ONE shared detector
+> `src/core/secret-scan.js` — `scanAndRedact(text) → {text, findings}`, metadata-only findings
+> (never the raw secret), bounded/linear-time, **total and fail-closed** (an oversized/failed
+> scan withholds content, never emits raw text) — with the regression corpus (uppercase keys,
+> Google refresh-token/OpenAI/GitHub/Google/Stripe/AWS forms, JSON, quotes, `/+=`, a token glued
+> to a word char) and migrates the pre-brain `redact` onto it (EP1), also bounding the extract's
+> `source_path`/`cwd`. The four enforcement points are independent WPs on disjoint files, each
+> depending only on WP-122: **WP-123** scans the dream's **staged brain output** before the
+> commit and, on a hard finding, **preserves the file into `state/quarantine/` then reverts
+> it** (recoverable by the owner; never silently commits `[REDACTED]` prose) in `validate.js`;
+> **WP-124** puts the brain's **stdout/stderr** through a bounded sanitizing
+> transform before it reaches the durable log / stderr-tail / `alerts.jsonl` / digest and drops
+> the **raw log tail from the fail-loud email** (brain.js + alerts.js + run-job.js); **WP-125**
+> scans **each digest section** before injection and **omits** a section with a hard finding,
+> bannering the exclusion via the existing `identityWarn` list, plus renders the state-driven
+> **pending-review banner** while `state/quarantine/` is non-empty (digest.js, golden
+> byte-unchanged). **WP-126** (depends WP-124 + WP-125 to serialize the shared `alerts.js` /
+> `digest.js` edits) makes the secret-lifecycle artifacts **private by
+> default** — `core`/`state`/`logs`/scratch/quarantine at `0700`, `digest.md`/`alerts.jsonl`/
+> ledger/approvals/logs/scratch-extracts at `0600`, independent of umask, repaired on attended
+> `sync` only (doctor reports; the nightly path never chmods) with a state-driven
+> **insecure-modes digest banner** for awareness,
+> via a new `src/core/private-fs.js` helper; it explicitly does NOT touch `secrets/`, tokens,
+> grants, or log rotation (the **A5/A9 boundary** — those are A9). **WP-127** (depends all)
+> writes the docs: THREAT-MODEL T4 corrected to the four-gate mechanism + the residual, a
+> **secret-incident runbook** (stop schedules → revoke/rotate → purge digest/managed block →
+> clean git history → re-authorize), and the vault-local/no-auto-push posture. **A5 opens NO
+> capability gate** — `wienerdog safety` shows all five gates BLOCKED after every WP. **The A5
+> residual is load-bearing and stays visible (ADR-0024): a scanner is never the external-effect
+> boundary; A1/A2 contain a miss.** Chain: 122 → {123, 124, 125}; 126 → {124, 125}; 127 → all.
+> The three enforcement WPs after WP-122 share no files with each other, so they can land in
+> any order (serialized on `main` per the fork flow); WP-126 lands after WP-124 and WP-125.
+
+<!-- -->
+
 ## Dependency graph
 
 ```mermaid
@@ -1281,4 +1332,15 @@ graph LR
   WP118 --> WP119[WP-119 per-file quarantine ledger replaces the scalar watermark + durable quarantine banner — audit A6, ADR-0023]
   WP119 --> WP120[WP-120 enforce digest line + byte caps + bounded note reads — audit A6]
   WP121[WP-121 make the three session hooks genuinely fail-open + harness — audit A6]
+  WP122[WP-122 shared scanAndRedact secret detector + corpus + pre-brain input hardening — audit A5, ADR-0024]
+  WP122 --> WP123[WP-123 staged brain-output secret gate — scan pre-commit added content, revert on hard finding — audit A5]
+  WP122 --> WP124[WP-124 durable output sanitizing — brain stdout/stderr/log/alert scrub + no raw log tail in email — audit A5]
+  WP122 --> WP125[WP-125 per-section digest secret gate — omit a section that would inject a secret — audit A5]
+  WP124 --> WP126[WP-126 private-by-default artifact modes — 0700/0600 on create + sync/doctor repair — audit A5]
+  WP125 --> WP126
+  WP122 --> WP127[WP-127 A5 docs — secret-detection limits + secret-incident runbook + vault-local no-auto-push]
+  WP123 --> WP127
+  WP124 --> WP127
+  WP125 --> WP127
+  WP126 --> WP127
 ```

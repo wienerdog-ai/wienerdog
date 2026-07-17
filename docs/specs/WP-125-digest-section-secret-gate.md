@@ -23,8 +23,8 @@ compiled into the `CLAUDE.md`/`AGENTS.md` **managed block**. Its body sections a
 the four **identity notes** (`profile/preferences/goals/instructions.md`), the active-project
 directory names, and (when unfrozen) a daily summary.
 
-A 2026-07-15 security audit (action **A5**, deep-dive `05-secret-lifecycle.md`, item 4 point 4
-+ item 6) found the digest has **no secret gate**. Identity notes are trust-gated (A3 exact-byte
+A 2026-07-15 security audit (action **A5**, deep-dive `05-secret-lifecycle.md`, item 4
+point 4 and item 6) found the digest has **no secret gate**. Identity notes are trust-gated (A3 exact-byte
 hash, A4 provenance) and size-capped (A6/WP-120), but **a human can approve an identity note
 that happens to contain a secret** (a `preferences.md` that pastes an API key into a "my tools"
 note), and that section is then injected into every session and written into the managed block —
@@ -52,11 +52,12 @@ persistence gates of **ADR-0024**.
 - the `## Active projects` block (capped to `MAX_PROJECTS`);
 - (frozen in production) the daily `## Summary`.
 
-Then `const body = `${parts.join('\n\n')}\n`;`, a control-plane **`prefix`** is assembled from
-the fixed banner lines (identity-exclusion, alerts, quarantine, scheduler, update — all
-code-owned, secret-free), `const assembled = prefix ? `${prefix}\n\n${body}` : body;` and
-`return capDigest(assembled, prefix);` (WP-120's line/byte cap, which always preserves the
-`prefix`). `renderDigest` is **pure and total** (never throws). The identity-exclusion
+Then the body is assembled by joining `parts` with blank lines (plus a trailing newline), a
+control-plane **`prefix`** is assembled from the fixed banner lines (identity-exclusion,
+alerts, quarantine, scheduler, update — all code-owned, secret-free), the prefix (when
+non-empty) is prepended to the body with a blank line between them, and the result is
+returned via `return capDigest(assembled, prefix);` (WP-120's line/byte cap, which always
+preserves the `prefix`). `renderDigest` is **pure and total** (never throws). The identity-exclusion
 **banner** pattern (`identityWarn`) is the established way to surface a fail-closed omission:
 
 ```js
