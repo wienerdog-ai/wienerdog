@@ -6,6 +6,9 @@ const { defaultLayout } = require('./layout');
 const { isCapabilityAllowed, CAPABILITY } = require('./safety-profile');
 const { parse, readBool, INVALID } = require('./frontmatter');
 const { hashBytes, foldKey } = require('./identity-approvals');
+// Module-object require (not destructured): EP4's test seam stubs
+// secretScan.scanAndRedact to prove a failing scanner omits, never throws.
+const secretScan = require('./secret-scan');
 
 /**
  * @typedef {{data: Record<string,string>, body: string}} Note
@@ -344,6 +347,7 @@ function capDigest(assembled, prefix) {
  * @param {import('./layout').VaultLayout} [layout]  defaults to defaultLayout()
  * @param {{alerts?: Array<{job:string, at:string, reason:string, log_hint:string}>,
  *          quarantineLine?: string,
+ *          secretQuarantine?: string[],
  *          schedulerLine?: string, updateLine?: string,
  *          profile?: Record<string,string>,
  *          identityApprovals?: Record<string,string>}} [opts]
@@ -401,7 +405,20 @@ function renderDigest(vaultDir, layout = defaultLayout(), opts = {}) {
     // marker, appended below if anything is dropped anywhere, covers it).
     const content = capBytesAtLineBoundary(compact(r.note.body), DigestCaps.MAX_NOTE_BYTES);
     if (!content) continue;
-    parts.push(`${header}\n${content}`);
+    // EP4 secret gate (audit A5, ADR-0024, WP-125): the LAST filter before a
+    // section joins the digest — runs after the A3 hash gate and A4 provenance
+    // gate, so only an approved+trusted note reaches it. ANY detector finding
+    // (`findings.length > 0`, either severity — OWNER-APPROVED 2026-07-17)
+    // omits the WHOLE section; the redacted `.text` is discarded, never
+    // injected. A false positive is a visible banner entry, not a mutated
+    // identity. scanAndRedact is total (WP-122), so a scan error yields a
+    // scan-error finding → omission (fail closed), never a throw.
+    const section = `${header}\n${content}`;
+    if (secretScan.scanAndRedact(section).findings.length > 0) {
+      identityExclusions.push({ file, reason: 'appears to contain a secret' });
+      continue;
+    }
+    parts.push(section);
   }
 
   const allProjects = listProjectDirs(path.join(vaultDir, layout.projects_dir));
@@ -410,7 +427,13 @@ function renderDigest(vaultDir, layout = defaultLayout(), opts = {}) {
     const overflow = allProjects.length - projects.length;
     const projectLines = projects.map((n) => `- ${n}`);
     if (overflow > 0) projectLines.push(`- …and ${overflow} more`);
-    parts.push(`## Active projects\n${projectLines.join('\n')}`);
+    // EP4: same one-banner exclusion list, fixed code-owned label (owner ruling).
+    const projectsSection = `## Active projects\n${projectLines.join('\n')}`;
+    if (secretScan.scanAndRedact(projectsSection).findings.length > 0) {
+      identityExclusions.push({ file: 'active-projects', reason: 'appears to contain a secret' });
+    } else {
+      parts.push(projectsSection);
+    }
   }
 
   const daily = newestDaily(path.join(vaultDir, layout.daily_dir));
@@ -420,7 +443,15 @@ function renderDigest(vaultDir, layout = defaultLayout(), opts = {}) {
   if (daily && isCapabilityAllowed(CAPABILITY.DAILY_SUMMARY_INJECTION, opts.profile)) {
     const r = readNote(daily.path);
     const summary = r.note && extractSection(r.note.body, 'Summary');
-    if (summary) parts.push(`## Latest daily log (${daily.date})\n${summary}`);
+    if (summary) {
+      // EP4: same one-banner exclusion list, fixed code-owned label (owner ruling).
+      const dailySection = `## Latest daily log (${daily.date})\n${summary}`;
+      if (secretScan.scanAndRedact(dailySection).findings.length > 0) {
+        identityExclusions.push({ file: 'daily-summary', reason: 'appears to contain a secret' });
+      } else {
+        parts.push(dailySection);
+      }
+    }
   }
 
   const body = `${parts.join('\n\n')}\n`;
@@ -437,12 +468,46 @@ function renderDigest(vaultDir, layout = defaultLayout(), opts = {}) {
   // configured-but-not-loaded job, which is more urgent than an available
   // update). All fixed-template control-plane text; when all are empty the byte
   // output is unchanged (golden-frozen).
+  // Staged-output quarantine pending-review banner (EP4 companion, WP-125
+  // contract 5, OWNER-APPROVED in the WP-124 walkthrough): STATE-DRIVEN — it
+  // renders while state/quarantine/ is non-empty and clears itself once the
+  // owner empties the directory. Sanitized basenames only (the caller applies
+  // displayName; re-whitelisted here as defense in depth) — the quarantined
+  // files hold raw secrets and their CONTENT is never read or rendered.
+  const quarantined = (Array.isArray(opts.secretQuarantine) ? opts.secretQuarantine : [])
+    .map((n) => String(n).replace(/[^A-Za-z0-9._-]/g, '_'));
+  const secretQuarantineWarn = quarantined.length > 0
+    ? `> [!warning] Wienerdog: ${quarantined.length} dream note(s) were withheld from your vault because they ` +
+      `appear to contain a secret — ${quarantined.join(', ')}. Review the copies in state/quarantine/: restore ` +
+      'what you meant to keep, delete the rest; this notice clears when the folder is empty.'
+    : '';
   const prefix = [identityWarn, formatAlerts(opts.alerts || []), opts.quarantineLine || '',
-    opts.schedulerLine || '', opts.updateLine || '']
+    secretQuarantineWarn, opts.schedulerLine || '', opts.updateLine || '']
     .filter((s) => s !== '')
     .join('\n\n');
   const assembled = prefix ? `${prefix}\n\n${body}` : body;
   return capDigest(assembled, prefix);
 }
 
-module.exports = { renderDigest, DigestCaps };
+/**
+ * Sanitized basenames of the files currently in `<stateDir>/quarantine/`
+ * (WP-123's staged-output quarantine), for `opts.secretQuarantine`. Reads the
+ * DIRECTORY LISTING only — never file contents (they hold raw secrets).
+ * Dot-prefixed entries (atomic-write temp files) are excluded. Missing or
+ * unreadable dir → []. Sorted for a deterministic banner.
+ * @param {string} stateDir
+ * @returns {string[]}
+ */
+function listSecretQuarantine(stateDir) {
+  try {
+    return fs
+      .readdirSync(path.join(stateDir, 'quarantine'))
+      .filter((n) => !n.startsWith('.'))
+      .map((n) => n.replace(/[^A-Za-z0-9._-]/g, '_'))
+      .sort();
+  } catch {
+    return [];
+  }
+}
+
+module.exports = { renderDigest, listSecretQuarantine, DigestCaps };

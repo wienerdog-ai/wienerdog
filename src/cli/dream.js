@@ -12,7 +12,7 @@ const ledgerLib = require('../core/dream/ledger');
 const { collectExtracts, cleanScratch, MIN_TRUNCATE_BYTES } = require('../core/dream/scratch');
 const { spawnBrain, buildClaudeArgs } = require('../core/dream/brain');
 const { readVaultLayout } = require('../core/layout');
-const { renderDigest } = require('../core/digest');
+const { renderDigest, listSecretQuarantine } = require('../core/digest');
 const identityApprovals = require('../core/identity-approvals');
 const { renderUpdateLine } = require('../core/update-check');
 const { readAlerts } = require('../core/alerts');
@@ -209,6 +209,7 @@ async function run(argv) {
         updateLine: renderUpdateLine(paths),
         identityApprovals: identityApprovals.approvalsMap(idReg),
         quarantineLine,
+        secretQuarantine: listSecretQuarantine(paths.state), // EP4 pending-review banner (WP-125)
       });
       const digestDest = path.join(paths.state, 'digest.md');
       const digestTmp = path.join(paths.state, `.digest.md.${process.pid}.tmp`);

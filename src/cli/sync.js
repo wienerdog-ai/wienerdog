@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { getPaths } = require('../core/paths');
 const { WienerdogError } = require('../core/errors');
-const { renderDigest } = require('../core/digest');
+const { renderDigest, listSecretQuarantine } = require('../core/digest');
 const identityApprovals = require('../core/identity-approvals');
 const { renderUpdateLine } = require('../core/update-check');
 const { readAlerts } = require('../core/alerts');
@@ -221,6 +221,7 @@ async function run(argv, opts = {}) {
       schedulerLine: require('../scheduler/status').renderSchedulerStatusLine(paths),
       updateLine: renderUpdateLine(paths),
       identityApprovals: identityApprovals.approvalsMap(idReg),
+      secretQuarantine: listSecretQuarantine(paths.state), // EP4 pending-review banner (WP-125)
     });
     const dest = path.join(paths.state, 'digest.md');
     if (!dryRun) {

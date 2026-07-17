@@ -1,7 +1,7 @@
 ---
 id: WP-125
 title: Per-section digest secret gate — omit a section that would inject a secret, keep the rest (audit A5)
-status: Ready
+status: In-Review
 model: sonnet
 size: S
 depends_on: [WP-122]

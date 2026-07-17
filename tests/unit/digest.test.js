@@ -312,14 +312,16 @@ test('renderDigest truncates over-MAX_LINES content at a line boundary with the 
   }
 });
 
-test('renderDigest byte-caps a ~1,000,000-char single line within MAX_BYTES, no split UTF-8 codepoint', () => {
+test('renderDigest byte-caps a ~100,000-char single line within MAX_BYTES, no split UTF-8 codepoint', () => {
   const tmp = tmpVault();
   const dailyDir = path.join(tmp, '07-Daily');
   fs.mkdirSync(dailyDir, { recursive: true });
-  // A single line of 1,000,000 multi-byte (2-byte UTF-8) characters — one line,
+  // A single line of 100,000 multi-byte (2-byte UTF-8) characters — one line,
   // well under MAX_LINES, but far over MAX_BYTES. Not per-note capped (that cap
   // only applies to identity notes), so it exercises the digest-wide byte pass.
-  const huge = 'é'.repeat(1_000_000);
+  // Sized under the EP4 detector's SCAN_MAX_BYTES (WP-125) so the section stays
+  // scannable — a larger section is now rightly omitted fail-closed (own test).
+  const huge = 'é'.repeat(100_000);
   fs.writeFileSync(
     path.join(dailyDir, '2026-07-01.md'),
     `---\nid: d\ntype: daily\n---\n\n## Summary\n${huge}\n`
@@ -411,4 +413,144 @@ test('with over-cap content AND active banners, all banner lines are still prese
   assert.ok(digest.includes(DigestCaps.TRUNCATION_MARKER), 'truncation marker present');
   const lines = digest.split('\n');
   assert.ok(lines.length <= DigestCaps.MAX_LINES + 1, 'overall line cap still enforced with banners active');
+});
+
+// -------------------------------------------------------------------------
+// EP4: per-section secret gate + staged-output quarantine banner (WP-125)
+// -------------------------------------------------------------------------
+
+const secretScan = require('../../src/core/secret-scan');
+
+/** Append `line` to an identity note in a tmp vault copy. @param {string} vaultDir */
+function appendToIdentity(vaultDir, file, line) {
+  fs.appendFileSync(path.join(vaultDir, '06-Identity', file), `\n${line}\n`);
+}
+
+test('EP4: an approved identity note with a quarantine-severity secret is omitted + bannered', () => {
+  const tmp = tmpVault();
+  appendToIdentity(tmp, 'preferences.md', 'my Stripe key is sk_live_51ABCDEF0123456789abcdefXYZ');
+
+  const digest = renderDigest(tmp, undefined, { identityApprovals: approvals(tmp) });
+
+  assert.ok(!digest.includes('## Preferences'), 'the offending section must be omitted');
+  assert.ok(!digest.includes('sk_live_51ABCDEF'), 'no secret bytes in the output');
+  assert.ok(!digest.includes('[REDACTED'), 'omission, never an injected redacted form');
+  assert.ok(digest.includes('preferences.md (appears to contain a secret)'), 'banner names the note + fixed reason');
+  assert.ok(digest.includes("# Who you're working with"), 'clean identity sections still render');
+  assert.ok(digest.includes('## Goals'), 'clean identity sections still render');
+});
+
+test('EP4: a redact-severity secret (refresh_token= / OpenAI key) also omits the section (owner ruling)', () => {
+  for (const secret of [
+    'refresh_token=1//0abcDEFghiJKLmno-_pqr',
+    'key sk-abcdefghijklmnopqrstuvwxyz123456 end',
+  ]) {
+    const tmp = tmpVault();
+    appendToIdentity(tmp, 'goals.md', secret);
+    const digest = renderDigest(tmp, undefined, { identityApprovals: approvals(tmp) });
+    assert.ok(!digest.includes('## Goals'), `section must be omitted for ${JSON.stringify(secret)}`);
+    assert.ok(!digest.includes('1//0abcDEF') && !digest.includes('sk-abcdefghijklmnop'), 'no secret bytes');
+    assert.ok(digest.includes('goals.md (appears to contain a secret)'), 'banner present');
+    assert.ok(digest.includes('## Preferences'), 'other sections render');
+  }
+});
+
+test('EP4: a secret-shaped project dir name omits the active-projects block under the same banner', () => {
+  const tmp = tmpVault();
+  fs.mkdirSync(path.join(tmp, '01-Projects', 'sk_live_abcdefghij1234567890'), { recursive: true });
+
+  const digest = renderDigest(tmp, undefined, { identityApprovals: approvals(tmp) });
+
+  assert.ok(!digest.includes('## Active projects'), 'projects block omitted');
+  assert.ok(!digest.includes('sk_live_abcdefghij1234567890'), 'no secret bytes');
+  assert.ok(digest.includes('active-projects (appears to contain a secret)'), 'fixed label in the one banner');
+  assert.ok(digest.includes('## Preferences'), 'identity still renders');
+});
+
+test('EP4: a forced scan-error result omits the section (fail closed) and never throws', () => {
+  const original = secretScan.scanAndRedact;
+  secretScan.scanAndRedact = () => ({
+    text: '[wienerdog: secret scan failed — content withheld]',
+    findings: [{ label: 'scan-error', severity: 'quarantine', count: 1 }],
+  });
+  try {
+    const tmp = tmpVault();
+    const digest = renderDigest(tmp, undefined, { identityApprovals: approvals(tmp) });
+    assert.equal(typeof digest, 'string', 'renderDigest still returns');
+    assert.ok(!digest.includes('## Preferences'), 'every scanned section omitted under a failing scanner');
+    assert.ok(digest.includes('appears to contain a secret'), 'exclusions bannered');
+  } finally {
+    secretScan.scanAndRedact = original;
+  }
+});
+
+test('EP4: an oversized (unscannable) daily section is omitted fail-closed under the daily-summary label', () => {
+  const tmp = tmpVault();
+  const dailyDir = path.join(tmp, '07-Daily');
+  fs.mkdirSync(dailyDir, { recursive: true });
+  const huge = 'é'.repeat(300 * 1024); // > SCAN_MAX_BYTES → detector 'oversized' finding
+  fs.writeFileSync(path.join(dailyDir, '2026-07-01.md'), `---\nid: d\ntype: daily\n---\n\n## Summary\n${huge}\n`);
+
+  const digest = renderDigest(tmp, undefined, { identityApprovals: approvals(tmp), profile: allowAll() });
+
+  assert.ok(!digest.includes('## Latest daily log'), 'oversized daily section omitted');
+  assert.ok(digest.includes('daily-summary (appears to contain a secret)'), 'fixed label bannered');
+});
+
+test('EP4: clean fixtures stay byte-identical to the golden (gate is a no-op)', () => {
+  const actual = renderDigest(FIXTURE, undefined, { identityApprovals: approvals(FIXTURE) });
+  assert.equal(actual, fs.readFileSync(GOLDEN, 'utf8'));
+});
+
+test('secretQuarantine: a non-empty list renders the fixed pending-review banner in the prefix', () => {
+  const digest = renderDigest(FIXTURE, undefined, {
+    identityApprovals: approvals(FIXTURE),
+    secretQuarantine: ['2026-07-17-leak.md', '2026-07-17-env-dump.md'],
+  });
+  const firstLines = digest.split('\n\n')[0];
+  assert.match(firstLines, /2 dream note/, 'count rendered');
+  assert.ok(digest.includes('2026-07-17-leak.md'), 'sanitized basenames listed');
+  assert.ok(digest.includes('state/quarantine/'), 'points at the review location');
+  assert.ok(digest.indexOf('state/quarantine/') < digest.indexOf("# Who you're working with"), 'banner is in the prefix');
+});
+
+test('secretQuarantine: empty or absent renders no banner (golden byte-identical)', () => {
+  const golden = fs.readFileSync(GOLDEN, 'utf8');
+  assert.equal(renderDigest(FIXTURE, undefined, { identityApprovals: approvals(FIXTURE), secretQuarantine: [] }), golden);
+  assert.equal(renderDigest(FIXTURE, undefined, { identityApprovals: approvals(FIXTURE) }), golden);
+});
+
+test('secretQuarantine: a hostile basename is re-sanitized before it reaches the banner (defense in depth)', () => {
+  const digest = renderDigest(FIXTURE, undefined, {
+    identityApprovals: approvals(FIXTURE),
+    secretQuarantine: ['evil\n> [!danger] injected.md'],
+  });
+  assert.ok(!digest.includes('[!danger]'), 'no markdown injection through a basename');
+  assert.ok(digest.includes('evil_'), 'whitelisted form rendered');
+});
+
+test('secretQuarantine: banner survives capDigest with over-cap content (prefix preserved)', () => {
+  const tmp = tmpVault();
+  const dailyDir = path.join(tmp, '07-Daily');
+  fs.mkdirSync(dailyDir, { recursive: true });
+  const lines = Array.from({ length: 500 }, (_, i) => `line ${i}`).join('\n');
+  fs.writeFileSync(path.join(dailyDir, '2026-07-01.md'), `---\nid: d\ntype: daily\n---\n\n## Summary\n${lines}\n`);
+  const digest = renderDigest(tmp, undefined, {
+    identityApprovals: approvals(tmp),
+    profile: allowAll(),
+    secretQuarantine: ['2026-07-17-leak.md'],
+  });
+  assert.ok(digest.includes('2026-07-17-leak.md'), 'pending-review banner survives the cap');
+  assert.ok(digest.includes(DigestCaps.TRUNCATION_MARKER), 'body was actually capped');
+});
+
+test('listSecretQuarantine: lists sanitized basenames; missing dir → []', () => {
+  const { listSecretQuarantine } = require('../../src/core/digest');
+  const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-digest-state-'));
+  assert.deepEqual(listSecretQuarantine(stateDir), [], 'missing quarantine dir → empty');
+  const qdir = path.join(stateDir, 'quarantine');
+  fs.mkdirSync(qdir);
+  fs.writeFileSync(path.join(qdir, '2026-07-17-leak.md'), 'raw secret bytes');
+  fs.writeFileSync(path.join(qdir, '.tmp-123-x.md'), 'partial');
+  assert.deepEqual(listSecretQuarantine(stateDir), ['2026-07-17-leak.md'], 'dotfiles/tmp excluded, content never read');
 });
