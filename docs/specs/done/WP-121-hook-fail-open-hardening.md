@@ -1,7 +1,7 @@
 ---
 id: WP-121
 title: Make the three shipped session hooks genuinely fail-open + a hook fail-open harness (audit A6)
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: []
