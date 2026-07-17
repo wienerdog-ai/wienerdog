@@ -72,9 +72,11 @@ selected/parsed and what is returned* changes.
 
 WP-118 changed `transcripts.discover` to return `{harness, path, mtimeMs, size, dev, ino}`,
 kept `transcripts.parse(entry)` → `Extract` (back-compat), added
-`transcripts.parseWithOutcome(entry, budget)` → `{extract, parse:{outcome, oversizedRecords}}`
-with `outcome ∈ 'ok'|'over-ceiling'|'too-many-lines'|'read-error'`, and exported `Limits`
-(incl. `PRE_READ_CEILING_BYTES`) and `newRunBudget()`.
+`transcripts.parseWithOutcome(entry, budget)` →
+`{extract, parse:{outcome, oversizedRecords, runExhausted}}`
+with `outcome ∈ 'ok'|'over-ceiling'|'too-many-lines'|'read-error'` (`runExhausted:true` on a
+budget-drained mid-file read; as landed, exact-EOF exhaustion is a normal full read), and
+exported `Limits` (incl. `PRE_READ_CEILING_BYTES`) and `newRunBudget()`.
 
 **`src/cli/dream.js run(argv)`** (the flow; keep every step except the state-advance):
 acquire lock (WP-069 lock-first) → `const wm = readWatermarks(paths.state)` →
@@ -230,6 +232,13 @@ Selection table (assert in `ledger.test.js`):
    `const { extract, parse } = transcripts.parseWithOutcome(d, budget);`
    - `parse.outcome` `'over-ceiling'`/`'too-many-lines'`/`'read-error'` → add to
      `newlyQuarantined` with that reason; write no scratch file.
+   - `parse.runExhausted === true` (the shared run budget drained mid-file) → **discard the
+     partial extract, write no scratch file, and treat the file as capacity-deferred** (add
+     to `deferred`, record nothing in the ledger). Per ADR-0023 a partially-read file must
+     never be recorded `processed` — its unread tail would be silently lost (the WP-048/069
+     class); with no record it is naturally retried next run. Stop granting further
+     candidates once the run budget is exhausted (they are likewise deferred). *Amended
+     2026-07-17 after the WP-118 review surfaced `runExhausted` on the parse outcome.*
    - else `truncateExtractToFit` if the serialized extract exceeds its grant (unchanged),
      write the scratch file immediately, then **drop the parsed extract object** (keep only its
      metadata entry). At no point is every parsed extract resident (the F1 fix).

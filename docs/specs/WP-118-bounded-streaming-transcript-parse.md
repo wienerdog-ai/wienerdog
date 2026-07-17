@@ -220,7 +220,10 @@ module.exports = { Limits, newRunBudget, streamLines, maxJsonDepth, OVERSIZED_RE
     emits none today), so no rebasing is introduced here.
 - **Return shape:** `parseClaudeTranscript(filePath, sizeBytes, budget)` returns
   `{ extract, parse }` where `extract` is the same `Extract` as today and `parse` is
-  `{ outcome: StreamOutcome, oversizedRecords: number }` (from the `StreamResult`). When
+  `{ outcome: StreamOutcome, oversizedRecords: number, runExhausted: boolean }` (read
+  verbatim off the `StreamResult`). *Amended 2026-07-17 after review: the original
+  enumeration omitted `runExhausted`, which WP-119's capacity-deferral semantics require
+  — without it a clean `'ok'` and a budget-drained `'ok'` are indistinguishable.* When
   `streamLines` returned `over-ceiling` / `too-many-lines` / `read-error`, `extract` is a
   **valid but empty** extract (no messages, `session_id` = the file basename,
   `truncated:true`) and `parse.outcome` carries the quarantine reason. `truncated` becomes
