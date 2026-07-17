@@ -270,9 +270,15 @@ every other step (lock-first, scratch-intact gate, commit, digest write) intact.
   let ledger = ledgerLib.readLedger(paths.state);
   const mig = ledgerLib.migrateFromWatermarks(paths.state, ledger);
   ledger = mig.ledger;
-  if (mig.migrated) ledgerLib.writeLedger(paths.state, ledger);
+  if (mig.migrated && !dryRun) ledgerLib.writeLedger(paths.state, ledger);
   const sel = collectExtracts(paths, ledger, cfg.maxInputBytes);
   ```
+  *Amended 2026-07-17 (second review round): the one-time migration write is ALSO
+  dry-run-guarded — the owner's "a preview run must not permanently mutate state" ruling
+  names the file, not a kind of write, and the upgrade path (watermarks.json present, no
+  ledger yet) is exactly the first state every existing user dry-runs from. On dry-run the
+  migrated ledger is used in-memory only; migration is idempotent, so the next real run
+  re-migrates identically. Nothing is lost.*
 - Capacity console messages unchanged. ADD a per-newly-quarantined line (secret-free —
   sanitized basename + reason only, derived through the SAME sanitizer as
   `activeQuarantines` for consistency):
@@ -432,7 +438,10 @@ implementer.
 - [ ] A quarantined file that CHANGES (new fingerprint) is retried next run.
 - [ ] `--dry-run` with an over-ceiling candidate reports it to the console ("would
       quarantine") but writes NEITHER `transcript-ledger.json` NOR `digest.md`
-      (2026-07-17 amendment).
+      (2026-07-17 amendment) — INCLUDING when `state/watermarks.json` exists and the
+      one-time migration fires (the migration write is dry-run-guarded too; a
+      watermarks-present dry-run integration test is required, since the fresh-state
+      test cannot trigger migration).
 - [ ] A hostile basename (newline / markdown control chars) reaches the banner and console
       only in sanitized form (2026-07-17 amendment).
 - [ ] A capacity-deferred valid file is recorded in NEITHER `processed` nor `quarantined` and is
