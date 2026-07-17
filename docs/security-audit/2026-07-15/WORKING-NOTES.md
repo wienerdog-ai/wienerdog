@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-07-17
 
-## Status: A0, A4, and A3 are COMPLETE (2026-07-17)
+## Status: A0, A4, A3, and A6 are COMPLETE (2026-07-17)
 
 Audit action A0 landed as five reviewed work packages, WP-109..WP-113 (specs in
 `docs/specs/done/`): the code-owned safety profile (`src/core/safety-profile.js`,
@@ -33,7 +33,25 @@ CLI (grant-model: no `--yes`/env/headless bypass). No capability gate opened —
 0 fail). Tracked follow-up from review: unify `sync.js`'s private
 `readVaultPath` onto the shared `readScalar` (see ROADMAP note).
 
-Next per the sequence below: **A6** (bounded streaming parser / digest / hooks).
+Audit action **A6** landed as WP-118..WP-121, all reviewer-approved (specs in
+`docs/specs/done/`, boundary in **ADR-0023**, Accepted): transcript intake is
+bounded and streaming (`src/core/transcripts/stream.js` — 50 MB pre-read
+ceiling, 1 MB line cap, 500k lines, fixed 200 MB run budget, depth 64; zero
+`readFileSync` in transcripts/), the scalar watermark is replaced by the
+per-file quarantine ledger (`state/transcript-ledger.json`, 0600, fail-safe
+skip semantics, no-negative-record capacity deferral — the WP-048/069
+starvation-class fix; `watermarks.json` migrated once, retired but not
+deleted), the digest is capped for real (120 lines / 32 KB / 8 KB per note /
+50 projects, control-plane banner prefix never truncated), and all three
+session hooks are code-enforced fail-open (22-case subprocess harness, 1 MB
+stdin bound). Review rounds fixed, test-first: an exact-EOF budget boundary
+bug, a hostile-basename markdown injection into the digest banner (shared
+`displayName` whitelist sanitizer), and two dry-run persistence leaks
+(quarantine record + one-time migration — owner ruling: a preview run must
+not permanently mutate state). No capability gate opened — `wienerdog
+safety` still shows all five BLOCKED. Full suite green (1002 tests, 0 fail).
+
+Next per the sequence below: **A5** (secret lifecycle + private modes).
 
 This file is the durable, cross-session context for the security remediation
 work. A session that starts here with no chat history should read this first,
