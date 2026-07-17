@@ -75,9 +75,12 @@ calls. Its contract:
   (`client_secret`, `refresh_token`, `access_token`, `password`, `credentials`,
   AWS variants) case-insensitively; structured JSON/env values including
   quoted/base64/URL value characters (`/ + =`); current provider prefixes without
-  brittle exact lengths; private-key blocks; contextual high entropy at
-  `quarantine` severity; and the exact values of Wienerdog-known OAuth/client
-  credentials.
+  brittle exact lengths; private-key blocks; and contextual high entropy at
+  `quarantine` severity. *(Amended, OWNER-APPROVED 2026-07-17, WP-122 walkthrough:
+  exact-value matching of Wienerdog-known OAuth/client credentials is deferred to
+  A2 — the GWS broker, the one component that legitimately holds those bytes,
+  applies it on its own output path; the detector stays a pure module with no
+  secrets-read surface.)*
 - **Bounded and fail-closed.** Input is size-bounded before any regex runs
   (oversized records are omitted, not scanned — no ReDoS surface); the patterns
   are linear-time (no catastrophic backtracking); and the module is **total** —
