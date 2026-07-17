@@ -25,6 +25,8 @@ Canonical names. Use these exact terms in code, docs, specs, and prompts — nev
 - **manifest** — `install-manifest.json`: every file/entry the installer touched; uninstall replays it in reverse.
 - **gws** — the `wienerdog gws` Google Workspace CLI (gmail/cal/drive). Read-first, draft-first; outbound verbs execute only under a send grant.
 - **send grant** — a `(routine, recipient allowlist)` permission in config.yaml allowing outbound sending; created only by the interactive CLI with typed confirmation, never by any model-driven process (ADR-0007).
+- **identity trust registry** — the code-owned, 0600 record (`~/.wienerdog/state/identity-approvals.json`) of the exact-byte `sha256` a human ratified for each injected identity file. The digest injects an identity file only when its current bytes match its record; a mismatch fails closed (ADR-0021). Path identity is case-folded; content identity is byte-exact.
+- **memory approve** — the interactive, terminal-only command (`wienerdog memory approve <file>`) that ratifies the current exact bytes of an injected identity note into the identity trust registry. The only way to change an approved identity note; no model-driven or headless process can run it (ADR-0021).
 - **safety profile** — the code-owned, fail-closed record of which powerful
   capabilities are cleared for use (`src/core/safety-profile.js`). Every
   capability is BLOCKED until its security gate is opened by a reviewed release;

@@ -4,6 +4,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 
+const { WienerdogError } = require('./errors');
+
 // The identity trust registry (audit A3, ADR-0021): a code-owned 0600 JSON file
 // recording, per injected identity file, the sha256 of the EXACT bytes a human
 // ratified. The digest injects an identity file only when its current bytes
@@ -156,6 +158,27 @@ function seedApprovals(stateDir, vaultDir, layout) {
 }
 
 /**
+ * Record (or overwrite) the approval for one injected identity file, hashing its
+ * CURRENT exact bytes. Unlike seedApprovals, this DOES overwrite an existing
+ * record — it is the human ratification path (`wienerdog memory approve`,
+ * WP-117, only reachable behind the TTY-confirmation boundary). Persists at 0600.
+ * @param {string} stateDir @param {string} vaultDir
+ * @param {string} rel  vault-relative POSIX path of the identity file
+ * @param {'setup'|'approved'} source
+ * @returns {{foldedRel: string, hash: string}}
+ * @throws {WienerdogError} when the file is unreadable/absent.
+ */
+function recordApproval(stateDir, vaultDir, rel, source) {
+  const hash = fileHash(vaultDir, rel);
+  if (!hash) throw new WienerdogError(`cannot read identity file to approve: ${rel}`);
+  const registry = readRegistry(stateDir);
+  const foldedRel = foldKey(rel);
+  registry.approvals[foldedRel] = { approved_blob_hash: hash, approved_at: new Date().toISOString(), source };
+  writeRegistry(stateDir, registry);
+  return { foldedRel, hash };
+}
+
+/**
  * Classify each injected identity file for a caller. status ∈
  * 'ok' (approved & matches) | 'mismatch' (record exists, bytes differ) |
  * 'unapproved' (present, no record) | 'absent' (not on disk).
@@ -180,5 +203,5 @@ function identityStatus(vaultDir, layout, registry) {
 module.exports = {
   REGISTRY_BASENAME, INJECTED_IDENTITY_FILES, foldKey, hashBytes, registryPath,
   injectedIdentityRels, fileHash, readRegistry, writeRegistry, approvalsMap,
-  approvalsFromVault, seedApprovals, identityStatus,
+  approvalsFromVault, seedApprovals, recordApproval, identityStatus,
 };

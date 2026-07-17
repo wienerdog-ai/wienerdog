@@ -1,7 +1,7 @@
 ---
 id: WP-117
 title: "`wienerdog memory approve` — TTY-only exact-byte identity ratification (audit A3)"
-status: Ready
+status: In-Review
 model: opus
 size: M
 depends_on: [WP-116]

@@ -19,6 +19,7 @@ Commands:
   uninstall   Remove everything Wienerdog created (reverses the install)
   gws         Read Gmail/Calendar/Drive and draft mail (Google Workspace)
   grant       Authorize a routine to send email (typed confirmation required)
+  memory      Approve identity-note changes so they inject into your session (typed confirmation)
   safety      Show the pre-use security gates (all disabled until reviewed)
 
 Global options:
@@ -50,6 +51,7 @@ async function main() {
     uninstall: () => require('../src/cli/uninstall'),
     gws: () => require('../src/gws/index'),
     grant: () => require('../src/cli/grant'),
+    memory: () => require('../src/cli/memory'),
     safety: () => require('../src/cli/safety'),
   };
 
