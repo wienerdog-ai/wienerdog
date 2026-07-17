@@ -191,8 +191,9 @@ function recordProcessed(ledger, disc) { /* implement */ }
  *  @param {Ledger} ledger @param {object} disc @param {string} reason @returns {Ledger} */
 function recordQuarantined(ledger, disc, reason) { /* implement */ }
 
-/** The active quarantines for the durable banner. Basenames + reason only — never a full
- *  path, never content. @param {Ledger} ledger @returns {Array<{file:string, reason:string, harness:string}>} */
+/** The active quarantines for the durable banner. SANITIZED basenames (whitelist
+ *  `[A-Za-z0-9._-]`; other bytes → `_`) + reason only — never a full path, never content.
+ *  @param {Ledger} ledger @returns {Array<{file:string, reason:string, harness:string}>} */
 function activeQuarantines(ledger) { /* map files with outcome==='quarantined' → basename+reason+harness */ }
 
 module.exports = { LEDGER_BASENAME, foldKey, fingerprint, ledgerPath, readLedger, writeLedger,
@@ -273,7 +274,8 @@ every other step (lock-first, scratch-intact gate, commit, digest write) intact.
   const sel = collectExtracts(paths, ledger, cfg.maxInputBytes);
   ```
 - Capacity console messages unchanged. ADD a per-newly-quarantined line (secret-free —
-  basename + reason only):
+  sanitized basename + reason only, derived through the SAME sanitizer as
+  `activeQuarantines` for consistency):
   ```js
   for (const q of sel.newlyQuarantined) {
     console.log(`wienerdog: dream — quarantined ${q.harness}/${path.basename(q.path)} (${q.reason}); it will not be retried until it changes.`);
@@ -290,6 +292,11 @@ every other step (lock-first, scratch-intact gate, commit, digest write) intact.
     regenerateDigest(); // factor the existing digest-write block into a local helper; passes quarantineLine (below)
   }
   ```
+  *Amended 2026-07-17 (OWNER-APPROVED): this block is dry-run-guarded. On `--dry-run` the
+  newly-quarantined files are reported to the console only ("would quarantine …"); the
+  ledger write and the digest regeneration are SKIPPED — a preview run must not permanently
+  mutate `transcript-ledger.json` or the injected `digest.md`. This matches the existing
+  dry-run carve-out of the capacity-wedge diagnostics block.*
   The capacity-wedge throw (`sel.entries.length === 0 && sel.dropped.length > 0`) and the
   `nothing new` return are UNCHANGED (`dropped` aliases `deferred`).
 - After the successful `validateAndCommit`, **replace `writeWatermarks(...)`** with:
@@ -310,8 +317,12 @@ every other step (lock-first, scratch-intact gate, commit, digest write) intact.
     : '';
   const digest = renderDigest(vaultDir, layout, { …existing opts…, quarantineLine });
   ```
-  `activeQuarantines` returns basenames + a code-owned reason enum only — never content, never a
-  full path — so no untrusted bytes reach the digest (same rule as `formatAlerts`). The banner is
+  `activeQuarantines` returns **sanitized** basenames (whitelist `[A-Za-z0-9._-]`; any other
+  byte, including newlines and markdown control characters, is replaced with `_`) + a
+  code-owned reason enum only — never content, never a full path. *Amended 2026-07-17 after
+  review (owner ack): a raw basename is attacker-influenceable, unlike `formatAlerts`' fully
+  code-owned inputs — the whitelist is what actually enforces the no-untrusted-bytes
+  invariant.* The banner is
   durable because it is re-derived from the ledger every render; it disappears the run after the
   file leaves quarantine.
 
@@ -395,9 +406,11 @@ implementer.
 ## Security checklist
 
 - [ ] Ledger keys are folded absolute paths from `discover` (not content); the banner + console
-      lines expose only `path.basename` + a code-owned reason enum, never content or a full
-      path, so no attacker-controlled bytes reach the injected digest (same rule as
-      `formatAlerts`). The pre-read ceiling quarantines an oversized file **before it is
+      lines expose only a **sanitized** `path.basename` (whitelist `[A-Za-z0-9._-]`) + a
+      code-owned reason enum, never content or a full path, so no attacker-controlled bytes
+      reach the injected digest (a raw basename IS attacker-influenceable, unlike
+      `formatAlerts`' code-owned inputs — the whitelist enforces the invariant; amended
+      2026-07-17). The pre-read ceiling quarantines an oversized file **before it is
       opened**; parse-time quarantine outcomes write no scratch. State advances per-file only
       for files consolidated into a committed run with scratch intact (no scalar jump past
       unconsolidated sessions). One-file-at-a-time materialization bounds memory on a fully
@@ -417,6 +430,11 @@ implementer.
 - [ ] A run whose ONLY fresh input is a quarantined file records it, writes the banner, exits 0,
       and does NOT re-quarantine on the next unchanged run (`selectState` → `skip-quarantined`).
 - [ ] A quarantined file that CHANGES (new fingerprint) is retried next run.
+- [ ] `--dry-run` with an over-ceiling candidate reports it to the console ("would
+      quarantine") but writes NEITHER `transcript-ledger.json` NOR `digest.md`
+      (2026-07-17 amendment).
+- [ ] A hostile basename (newline / markdown control chars) reaches the banner and console
+      only in sanitized form (2026-07-17 amendment).
 - [ ] A capacity-deferred valid file is recorded in NEITHER `processed` nor `quarantined` and is
       selected on a subsequent larger-budget run (no watermark gap).
 - [ ] No code path calls `writeWatermarks` (grep in `dream.js` returns nothing).
