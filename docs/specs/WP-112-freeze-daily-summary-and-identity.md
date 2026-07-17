@@ -1,7 +1,7 @@
 ---
 id: WP-112
 title: Freeze daily-Summary injection and automatic identity activation
-status: Ready
+status: In-Review
 model: sonnet
 size: M
 depends_on: [WP-109]
@@ -102,6 +102,15 @@ only, never env/argv.
 | modify | tests/golden/digest-default.md | drop the daily-log section (freeze removes it from production output) |
 | modify | tests/unit/digest.test.js | add an allow-all test proving the daily block renders when allowed |
 | modify | tests/unit/dream-validate.test.js | add frozen (reverted) + allow-all (Tier-3-governed) identity cases |
+| modify | tests/unit/layout.test.js | update the power-user daily assertion to the frozen default (daily block omitted); keep coverage by asserting it renders under `allowAll()` |
+| modify | tests/integration/adopt-e2e.test.js | update the nested-daily digest assertion to the frozen default (no daily block in production digest) |
+
+> **Amendment (2026-07-17, owner).** The original Deliverables table missed two
+> non-golden tests that assert the daily `## Summary` through different fixtures
+> (`layout.test.js` power-user layout, `adopt-e2e.test.js` adopt flow). The
+> implementer correctly reported this as a spec gap instead of fixing out of
+> boundary; the two rows above authorize the fix. Lesson: grep the whole tree
+> for the frozen behavior, not just the files named in "Current state".
 
 ### Exact contracts
 
@@ -257,6 +266,9 @@ and their assertions unchanged.
       restored to HEAD under the frozen profile.
 - [ ] Existing `dream-validate` identity-note cases (non-injected files) and the
       digest prefix tests still pass unchanged.
+- [ ] `tests/unit/layout.test.js` and `tests/integration/adopt-e2e.test.js`
+      assert the frozen default (no daily block); the layout test additionally
+      proves the block renders under `allowAll()` (gate, not removal).
 - [ ] `npm test` and `npm run lint` pass.
 
 ## Verification steps (run these; paste output in the PR)

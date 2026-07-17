@@ -8,6 +8,28 @@ const { spawnSync } = require('node:child_process');
 const { WienerdogError } = require('../errors');
 const { defaultLayout } = require('../layout');
 const { recordSkills, readRegistry } = require('./skill-registry');
+const { isCapabilityAllowed, CAPABILITY } = require('../safety-profile');
+
+// The four identity files the digest injects (direct children of identity_dir).
+// A0 pre-use freeze (WP-109): the dream may not auto-change these until a
+// human-ratified exact-byte registry exists (audit A3) — see the Tier-3 branch
+// of validateAndCommit below.
+const INJECTED_IDENTITY_FILES = ['profile.md', 'preferences.md', 'goals.md', 'instructions.md'];
+
+/**
+ * Is `rel` one of the four injected identity files (direct child of
+ * layout.identity_dir)? Other Tier-3 identity notes (e.g. a hand-authored
+ * `06-Identity/valid-identity.md`) are NOT injected identity, so they return false
+ * and remain governed by the ordinary Tier-3 numeric floor.
+ * @param {string} rel  vault-relative path
+ * @param {import('../layout').VaultLayout} layout
+ * @returns {boolean}
+ */
+function isInjectedIdentity(rel, layout) {
+  const prefix = layout.identity_dir + '/';
+  if (!rel.startsWith(prefix)) return false;
+  return INJECTED_IDENTITY_FILES.includes(rel.slice(prefix.length)); // direct child only
+}
 
 // Tier-3 code floor. FIXED — never tuned by memory_mode (see WP-017 spec). A
 // change under one of the Tier-3 directories (the layout's mapped identity_dir +
@@ -675,10 +697,14 @@ function changedPaths(vaultDir) {
  *
  * @param {{ vaultDir:string, scratchDir:string, date:string, expectedScratch:string[],
  *           scratchBaseline?:Record<string,string>, stateDir?:string,
- *           layout?:import('../layout').VaultLayout }} o
+ *           layout?:import('../layout').VaultLayout, profile?:Record<string,string> }} o
  *   stateDir = the core `state/` dir; when provided, newly-accepted dream-created
  *     skills are recorded in `state/skill-registry.json` after the commit (ADR-0020).
  *     Omitted → no registry write (older direct callers / integration tests).
+ *   profile = A0 pre-use freeze (WP-109) code-level test seam ONLY (never env/argv).
+ *     Omitted → the frozen profile, so a dream write to an injected identity file
+ *     (profile/preferences/goals/instructions.md) is reverted even when it clears
+ *     the Tier-3 numeric floor; pass `allowAll()` to make it Tier-3-governed again.
  *   layout = the vault layout (WP-022). Defaults to defaultLayout() when absent, so
  *     direct-call/integration tests that omit it keep the current behavior. Only the
  *     Tier-3 directories and the report location follow the layout; the floor does not.
@@ -696,6 +722,9 @@ function changedPaths(vaultDir) {
 function validateAndCommit(o) {
   const { vaultDir, scratchDir, date, expectedScratch, scratchBaseline, stateDir } = o;
   const layout = o.layout || defaultLayout();
+  // A0 pre-use freeze (WP-109): a code-level test seam only. Production callers
+  // (dream.js) pass no profile → frozen → identity-auto-activation stays blocked.
+  const profile = o.profile;
 
   // Tier-3 directories resolve from the layout (mapped identity + skills dirs);
   // the floor thresholds above are layout-independent.
@@ -781,6 +810,20 @@ function validateAndCommit(o) {
       continue;
     }
     if (isTier3(rel)) {
+      // A0 pre-use freeze (WP-109): the dream may not auto-change the injected
+      // identity files until a human-ratified exact-byte registry exists (audit A3).
+      // Revert any add/modify/delete of profile/preferences/goals/instructions.md.
+      // The human setup interview writes these OUTSIDE this path, so it is unaffected.
+      if (isInjectedIdentity(rel, layout) && !isCapabilityAllowed(CAPABILITY.IDENTITY_AUTO_ACTIVATION, profile)) {
+        revertPath(vaultDir, rel, change.untracked);
+        reverted.push({
+          path: rel,
+          reason:
+            'automatic identity activation is frozen (safety profile); the dream may not change the ' +
+            'injected identity files — run `wienerdog safety`',
+        });
+        continue;
+      }
       // b0. Skill-body revision guard (ADR-0020) runs BEFORE the numeric floor so a
       //     scope/preservation/authorization violation reports a precise reason.
       const skillReason = skillBodyViolation(vaultDir, rel, change, layout, registry, date);

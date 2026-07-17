@@ -13,6 +13,7 @@ const {
   layoutPromptLines,
 } = require('../../src/core/layout');
 const { renderDigest } = require('../../src/core/digest');
+const { allowAll } = require('../../src/core/safety-profile');
 
 const POWERUSER_FIXTURE = path.join(__dirname, '..', 'fixtures', 'poweruser-vault');
 
@@ -193,7 +194,7 @@ test('layoutPromptLines names the daily path and identity dir', () => {
   assert.ok(lines.some((l) => /identity/i.test(l) && l.includes('06-Identity')));
 });
 
-test('renderDigest with the power-user layout finds nested daily, identity, and project', () => {
+test('renderDigest with the power-user layout: frozen default omits the nested daily (identity + project still render)', () => {
   const powerUser = { ...defaultLayout(), daily_dir: '05-Daily', daily_filename: 'YYYY/MM/YYYY-MM-DD.md' };
   const digest = renderDigest(POWERUSER_FIXTURE, powerUser);
   // Identity content (distinct persona, cannot match the default golden).
@@ -201,12 +202,23 @@ test('renderDigest with the power-user layout finds nested daily, identity, and 
   assert.ok(digest.includes('## Preferences'), 'preferences section header present');
   // Project listed under Active projects.
   assert.ok(digest.includes('- field-study'), 'project listed');
-  // Nested daily summary found via the recursive walk.
+  // A0 pre-use freeze (WP-109/WP-112): daily-summary-injection is blocked by
+  // default, even though the recursive walk would otherwise find this nested daily.
+  assert.ok(
+    !digest.includes('Interviewed two coastal-town planners'),
+    'nested daily summary omitted under the frozen default'
+  );
+  assert.ok(!digest.includes('## Latest daily log'), 'daily block omitted under the frozen default');
+});
+
+test('renderDigest with the power-user layout + { profile: allowAll() } finds the nested daily (gate, not removal)', () => {
+  const powerUser = { ...defaultLayout(), daily_dir: '05-Daily', daily_filename: 'YYYY/MM/YYYY-MM-DD.md' };
+  const digest = renderDigest(POWERUSER_FIXTURE, powerUser, { profile: allowAll() });
   assert.ok(
     digest.includes('Interviewed two coastal-town planners'),
-    'nested daily summary present'
+    'nested daily summary present when the gate is allowed'
   );
-  assert.ok(digest.includes('## Latest daily log (2026-07-02)'), 'daily date header present');
+  assert.ok(digest.includes('## Latest daily log (2026-07-02)'), 'daily date header present when allowed');
 });
 
 test('renderDigest with the default layout omits the nested daily (layout routes the lookup)', () => {

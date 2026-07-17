@@ -3,6 +3,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { defaultLayout } = require('./layout');
+const { isCapabilityAllowed, CAPABILITY } = require('./safety-profile');
 
 // Minimal, inlined frontmatter reader. We only need to (a) separate the YAML
 // block from the body and (b) read the single flat flag `derived_from_untrusted`.
@@ -231,10 +232,17 @@ function formatAlerts(alerts) {
  * When `opts.schedulerLine` is a non-empty fixed-template "configured but not
  * loaded" line, it is prepended between the alert block and the update line
  * (empty/absent → output unchanged).
+ * A0 pre-use freeze (WP-109): the daily note's `## Summary` block is injected
+ * only when the `daily-summary-injection` capability gate is allowed. Production
+ * callers pass no `opts.profile`, so the frozen profile blocks it and the block is
+ * silently omitted (never thrown) — `renderDigest` stays pure and total.
  * @param {string} vaultDir
  * @param {import('./layout').VaultLayout} [layout]  defaults to defaultLayout()
  * @param {{alerts?: Array<{job:string, at:string, reason:string, log_hint:string}>,
- *          schedulerLine?: string, updateLine?: string}} [opts]
+ *          schedulerLine?: string, updateLine?: string,
+ *          profile?: Record<string,string>}} [opts]
+ *   profile = a code-level test seam only (never env/argv); passing `allowAll()`
+ *     re-enables the daily block.
  * @returns {string}
  */
 function renderDigest(vaultDir, layout = defaultLayout(), opts = {}) {
@@ -264,7 +272,10 @@ function renderDigest(vaultDir, layout = defaultLayout(), opts = {}) {
   }
 
   const daily = newestDaily(path.join(vaultDir, layout.daily_dir));
-  if (daily) {
+  // A0 pre-use freeze (WP-109): the daily-note Summary is NOT injected until
+  // entry-level provenance exists (audit A4). opts.profile is a code seam for tests
+  // only (never env/argv); production callers pass none → blocked → omitted.
+  if (daily && isCapabilityAllowed(CAPABILITY.DAILY_SUMMARY_INJECTION, opts.profile)) {
     const note = readNote(daily.path);
     const summary = note && extractSection(note.body, 'Summary');
     if (summary) parts.push(`## Latest daily log (${daily.date})\n${summary}`);

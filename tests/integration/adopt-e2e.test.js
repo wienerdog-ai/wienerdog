@@ -144,11 +144,18 @@ test('adopt-e2e: init → adopt → sync → dream through mapped tiers, one rev
     assert.match(cfg, /name: dream/, 'adopt scheduled the nightly dream');
     assert.match(cfg, /at: "03:30"/, 'dream scheduled at 03:30');
 
-    // 5. sync → digest rendered from the REAL identity notes + nested daily.
+    // 5. sync → digest rendered from the REAL identity notes. A0 pre-use freeze
+    //    (WP-109/WP-112): daily-summary-injection is blocked in production — sync
+    //    calls renderDigest with no profile, so the nested daily Summary is NOT
+    //    injected even though it exists in the adopted vault.
     await sync.run([]);
     const digest = fs.readFileSync(path.join(core, 'state', 'digest.md'), 'utf8');
     assert.match(digest, /Priya Nair/, 'digest reflects the real identity profile');
-    assert.match(digest, /Interviewed two coastal-town planners/, 'digest reflects the nested daily Summary');
+    assert.doesNotMatch(
+      digest,
+      /Interviewed two coastal-town planners/,
+      'nested daily Summary is NOT injected under the frozen default'
+    );
 
     // 6. dream → writes through the mapped tiers, exactly one new commit.
     const before = commitCount(adopted);

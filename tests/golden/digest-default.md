@@ -43,6 +43,3 @@ customers on my behalf. Flag assumptions explicitly.
 
 ## Active projects
 - onboarding-redesign
-
-## Latest daily log (2026-07-01)
-Kicked off the onboarding redesign and aligned with design on the new flow.

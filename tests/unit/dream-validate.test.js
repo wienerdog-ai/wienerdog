@@ -16,6 +16,7 @@ const {
 } = require('../../src/core/dream/validate');
 const { defaultLayout } = require('../../src/core/layout');
 const { readRegistry, recordSkills } = require('../../src/core/dream/skill-registry');
+const { allowAll } = require('../../src/core/safety-profile');
 
 /** @param {string} cwd @param {string[]} args */
 function git(cwd, args) {
@@ -148,6 +149,46 @@ test('dream-validate: missing provenance frontmatter on a Tier-3 path is reverte
   assert.equal(fs.existsSync(path.join(vault, '06-Identity/nofm.md')), false);
   assert.equal(res.reverted.length, 1);
   assert.match(res.reverted[0].reason, /missing provenance frontmatter/);
+});
+
+// ── identity-auto-activation freeze (WP-112 / audit A3) ──────────────────────
+
+test('dream-validate: a frozen add of an injected identity file is reverted even when it passes the Tier-3 floor', () => {
+  const { vault, scratch } = tempVault();
+  // Passes the Tier-3 numeric floor — proving the freeze overrides it.
+  writeVault(vault, '06-Identity/profile.md', FM({ confidence: '0.9', recurrence: '3', derived_from_untrusted: 'false' }));
+  const res = validateAndCommit({ vaultDir: vault, scratchDir: scratch, date: '2026-07-02', expectedScratch: [] });
+  assert.equal(fs.existsSync(path.join(vault, '06-Identity/profile.md')), false, 'reverted, not committed');
+  assert.ok(
+    res.reverted.some((r) => r.path === '06-Identity/profile.md' && /identity activation is frozen/.test(r.reason)),
+    'recorded as reverted with the identity-frozen reason'
+  );
+});
+
+test('dream-validate: a frozen modification of an existing injected identity file is restored to HEAD bytes', () => {
+  const original = 'human-authored preferences\n';
+  const { vault, scratch } = tempVault({ '06-Identity/preferences.md': original });
+  // Brain overwrites the human-authored file, even with a floor-passing rewrite.
+  writeVault(vault, '06-Identity/preferences.md', FM({ confidence: '0.95', recurrence: '5', derived_from_untrusted: 'false' }));
+  const res = validateAndCommit({ vaultDir: vault, scratchDir: scratch, date: '2026-07-02', expectedScratch: [] });
+  assert.equal(fs.readFileSync(path.join(vault, '06-Identity/preferences.md'), 'utf8'), original, 'restored to original bytes');
+  assert.ok(
+    res.reverted.some((r) => r.path === '06-Identity/preferences.md' && /identity activation is frozen/.test(r.reason))
+  );
+});
+
+test('dream-validate: passing { profile: allowAll() } keeps a floor-passing injected identity write (Tier-3-governed, not a blanket ban)', () => {
+  const { vault, scratch } = tempVault();
+  writeVault(vault, '06-Identity/profile.md', FM({ confidence: '0.9', recurrence: '3', derived_from_untrusted: 'false' }));
+  const res = validateAndCommit({
+    vaultDir: vault,
+    scratchDir: scratch,
+    date: '2026-07-02',
+    expectedScratch: [],
+    profile: allowAll(),
+  });
+  assert.ok(fs.existsSync(path.join(vault, '06-Identity/profile.md')), 'kept — governed by the Tier-3 floor again');
+  assert.ok(!res.reverted.some((r) => r.path === '06-Identity/profile.md'));
 });
 
 test('dream-validate: detects content mutation of an expected scratch file when a baseline is given', () => {

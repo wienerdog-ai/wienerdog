@@ -7,14 +7,21 @@ const os = require('node:os');
 const path = require('node:path');
 
 const { renderDigest } = require('../../src/core/digest');
+const { allowAll } = require('../../src/core/safety-profile');
 
 const FIXTURE = path.join(__dirname, '..', 'fixtures', 'identity-filled');
 const GOLDEN = path.join(__dirname, '..', 'golden', 'digest-default.md');
 
-test('renderDigest on the fixture equals the golden byte-for-byte', () => {
+test('renderDigest on the fixture equals the golden byte-for-byte (frozen: no daily block)', () => {
   const actual = renderDigest(FIXTURE);
   const golden = fs.readFileSync(GOLDEN, 'utf8');
   assert.equal(actual, golden);
+  assert.ok(!actual.includes('## Latest daily log'), 'daily-summary-injection gate is frozen by default');
+});
+
+test('renderDigest with { profile: allowAll() } re-enables the daily Summary block', () => {
+  const out = renderDigest(FIXTURE, undefined, { profile: allowAll() });
+  assert.match(out, /## Latest daily log \(2026-07-01\)/);
 });
 
 test('renderDigest is deterministic (pure): same input, identical bytes', () => {
