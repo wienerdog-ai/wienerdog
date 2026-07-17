@@ -18,8 +18,8 @@ const { parseFrontmatter } = require('../../src/core/dream/validate');
 // is not-trusted on both sides.
 const CORPUS = ['false', 'true', 'True', 'TRUE', 'False', '"true"', "'false'",
   ' true', ' false', 'false ', 'true ', 'true # note', 'no', '0', '1', 'yes',
-  'FALSE', ''];
-const TRUSTED = new Set(['false', ' false', 'false ']);
+  'FALSE', '', 'false\r', 'true\r'];
+const TRUSTED = new Set(['false', ' false', 'false ', 'false\r']);
 
 /** @param {string} noteText @returns {boolean} digest-side: trusted iff provably false */
 function digestTrusts(noteText) {
