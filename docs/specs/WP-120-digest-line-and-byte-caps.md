@@ -77,7 +77,7 @@ array, in a region separate from the truncation logic this WP adds. **Land after
 **1. `DigestCaps` constants (top of `digest.js`).** Named so tests import ONE definition.
 
 ```js
-/** Digest size caps (audit A6, F3/F5). Values are OWNER-DECISION pending — see the spec. */
+/** Digest size caps (audit A6, F3/F5). Values OWNER-APPROVED 2026-07-17 — see the spec. */
 const DigestCaps = {
   MAX_LINES: 120,             // the historically-claimed line cap, now enforced
   MAX_BYTES: 32 * 1024,       // hard byte ceiling on the injected digest
@@ -139,10 +139,13 @@ Rules for `capDigest`:
 control-plane banner prefix always preserved; over-cap content is truncated at a line boundary
 with a fixed marker").
 
-## OWNER-DECISION (pending) — the cap values
+## OWNER-APPROVED (2026-07-17) — the cap values
 
-Seeded with recommendations; the owner walkthrough ratifies each into a dated
-`OWNER-APPROVED` line.
+The owner walkthrough ratified **all four recommended values as seeded**
+(120 lines / 32 KB / 8 KB per note / 50 projects). The internal consistency
+was part of the call: 4 notes × 8 KB + projects + banners sits under the
+32 KB ceiling in the typical case, and the ceiling catches the exceptions.
+The original recommendations are kept below for the implementer.
 
 - **MAX_LINES — recommend `120`** (makes the long-standing documented claim true). *Alt:*
   raise to `200` if 120 clips a legitimately rich identity in practice.
