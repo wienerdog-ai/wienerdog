@@ -1,7 +1,7 @@
 ---
 id: WP-109
 title: Fail-closed safety-profile capability state + `wienerdog safety` preflight
-status: Ready
+status: In-Review
 model: sonnet
 size: M
 depends_on: []

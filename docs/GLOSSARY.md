@@ -25,6 +25,14 @@ Canonical names. Use these exact terms in code, docs, specs, and prompts — nev
 - **manifest** — `install-manifest.json`: every file/entry the installer touched; uninstall replays it in reverse.
 - **gws** — the `wienerdog gws` Google Workspace CLI (gmail/cal/drive). Read-first, draft-first; outbound verbs execute only under a send grant.
 - **send grant** — a `(routine, recipient allowlist)` permission in config.yaml allowing outbound sending; created only by the interactive CLI with typed confirmation, never by any model-driven process (ADR-0007).
+- **safety profile** — the code-owned, fail-closed record of which powerful
+  capabilities are cleared for use (`src/core/safety-profile.js`). Every
+  capability is BLOCKED until its security gate is opened by a reviewed release;
+  there is no runtime/env/flag override. Inspect it with `wienerdog safety`. (Not
+  a "sandbox" — that word means the unrelated `WIENERDOG_HOME` redirect guard.)
+- **capability gate** — one named on/off switch in the safety profile
+  (e.g. `gws-use`, `external-content-routine`). A blocked gate makes its feature
+  fail closed before any side effect (no model spawn, no credential load).
 - **routine catalog** — the opt-in post-setup menu of ready-made routines (`/wienerdog-routines`); nothing is scheduled by default (ADR-0008).
 - **interview** — the `/wienerdog-setup` conversation that produces `06-Identity/` notes, from which CLAUDE.md/AGENTS.md managed blocks are rendered.
 - **memory_mode** — user preset for gate strictness: conservative | standard | eager.
