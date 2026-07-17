@@ -132,7 +132,7 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 | [WP-111](WP-111-freeze-external-content-routines.md) | Freeze external-content `skill:` schedules behind the safety profile (A0) | M7 | sonnet | Done | WP-109 |
 | [WP-112](WP-112-freeze-daily-summary-and-identity.md) | Freeze daily-Summary injection + automatic identity activation (A0) | M7 | sonnet | Done | WP-109 |
 | [WP-113](WP-113-a0-threat-boundary-docs.md) | Document the A0 pre-use safety freeze (threat-boundary docs) | M7 | sonnet | Done | WP-109, WP-110, WP-111, WP-112 |
-| [WP-114](WP-114-strict-frontmatter-parser-digest-gate.md) | Strict shared frontmatter parser + close the digest trust-gate fail-open (audit A4) | M7 | opus | Draft | WP-112 |
+| [WP-114](WP-114-strict-frontmatter-parser-digest-gate.md) | Strict shared frontmatter parser + close the digest trust-gate fail-open (audit A4) | M7 | opus | Done | WP-112 |
 | [WP-115](WP-115-unify-frontmatter-consumers.md) | Unify the validator + config frontmatter consumers onto the shared strict parser (audit A4) | M7 | opus | Draft | WP-114 |
 | [WP-116](WP-116-identity-trust-registry-digest-hashgate.md) | Exact-byte identity trust registry + fail-closed digest hash-gate (audit A3) | M7 | opus | Draft | WP-112, WP-114 |
 | [WP-117](WP-117-memory-approve-cli.md) | `wienerdog memory approve` — TTY-only exact-byte identity ratification (audit A3) | M7 | opus | Draft | WP-116 |
