@@ -51,7 +51,7 @@ record the metadata a later ledger needs. It does exactly three things and nothi
    and enforce the pre-read ceiling before opening it.
 
 The **per-file quarantine ledger** that consumes these outcomes and replaces the scalar
-watermark is **WP-119 + WP-120** (this WP leaves `scratch.js`, `dream.js`, and
+watermark is **WP-119** (this WP leaves `scratch.js`, `dream.js`, and
 `watermarks.js` untouched — it only produces the richer discovery metadata and the
 quarantine *signal*). This WP implements the intake half of **ADR-0023**.
 
@@ -125,8 +125,8 @@ argv, no network. Synchronous (the dream path is synchronous under a single-run 
 const fs = require('node:fs');
 
 /**
- * Bounded-intake limits (audit A6, ADR-0023). All are OWNER-DECISION values pending
- * the walkthrough — see the spec's OWNER-DECISION block. Keep them here as named
+ * Bounded-intake limits (audit A6, ADR-0023). All values OWNER-APPROVED 2026-07-17
+ * — see the spec's OWNER-APPROVED block. Keep them here as named
  * constants so the ledger (WP-119) and the tests import ONE definition.
  */
 const Limits = {
@@ -269,12 +269,15 @@ onLine calls: []   (file never opened)
 result: { outcome:'over-ceiling', lines:0, oversizedRecords:0, runExhausted:false }
 ```
 
-## OWNER-DECISION (pending) — the bounded-intake limit values
+## OWNER-APPROVED (2026-07-17) — the bounded-intake limit values
 
-The concrete values in `Limits` are the load-bearing tuning knobs of A6. They are seeded
-below with a recommendation + rationale; the owner walkthrough ratifies or adjusts each and
-this block becomes a dated `OWNER-APPROVED` record (these numbers then also anchor
-ADR-0023). Implement with the recommended values unless the owner changes them here first.
+The owner walkthrough ratified **all five recommended values as seeded** (50 MB /
+1 MB / 500 000 / 200 MB / 64). On `MAX_RUN_BYTES` the fixed `200 MB` was explicitly
+chosen over the tie-to-`dream_max_input_bytes` alternative: the two caps bound
+different pipeline stages (raw intake I/O vs. bytes fed to the brain), so coupling
+them would let a brain-input tuning silently move the nightly I/O plafond. These
+numbers anchor ADR-0023. The original recommendations + rationale are kept below
+for the implementer.
 
 - **PRE_READ_CEILING_BYTES — recommend `50 MB`.** Real transcripts are typically well under
   a few MB; 50 MB is far above any legitimate single session yet bounded. *Alt:* `25 MB`
@@ -294,8 +297,8 @@ ADR-0023). Implement with the recommended values unless the owner changes them h
 ## Implementation notes & constraints
 
 - **This implements the intake half of ADR-0023** (reference it in `stream.js`'s header).
-  The ledger/quarantine half is WP-119 (`scratch.js` + a new ledger module) and WP-120
-  (`dream.js`). Do NOT touch `scratch.js`, `dream.js`, or `watermarks.js` here — this WP
+  The ledger/quarantine half is WP-119 (`scratch.js` + `dream.js` + a new ledger module);
+  the digest caps are WP-120. Do NOT touch `scratch.js`, `dream.js`, or `watermarks.js` here — this WP
   only produces the richer discovery metadata (`size`/`dev`/`ino`) and the per-file
   `parse.outcome` those WPs consume.
 - **Never `readFileSync` a transcript again.** After this WP a `grep` for `readFileSync`
