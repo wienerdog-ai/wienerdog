@@ -51,7 +51,14 @@ bug, a hostile-basename markdown injection into the digest banner (shared
 not permanently mutate state). No capability gate opened — `wienerdog
 safety` still shows all five BLOCKED. Full suite green (1002 tests, 0 fail).
 
-Next per the sequence below: **A5** (secret lifecycle + private modes).
+**A5 spec phase is COMPLETE (2026-07-17):** **ADR-0024** is Accepted and the six
+specs **WP-122..127** are owner-ratified — every `DECISION NEEDED` resolved as a
+dated `OWNER-APPROVED` block in the specs (notable walkthrough amendments: the
+WP-123 quarantine-preserve into `state/quarantine/`, the WP-125 state-driven
+pending-review digest banner, the WP-126 insecure-modes digest banner + the
+WP-124/125 serialization dependency). No code yet. Next: the **implementation
+phase**, sequentially from **WP-122** (Ready flip → TDD → review per the
+lifecycle below).
 
 This file is the durable, cross-session context for the security remediation
 work. A session that starts here with no chat history should read this first,
