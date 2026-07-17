@@ -9,6 +9,7 @@ const { WienerdogError } = require('../errors');
 const { defaultLayout } = require('../layout');
 const { recordSkills, readRegistry } = require('./skill-registry');
 const { isCapabilityAllowed, CAPABILITY } = require('../safety-profile');
+const { parse, coerceScalar } = require('../frontmatter');
 
 // The four identity files the digest injects (direct children of identity_dir).
 // A0 pre-use freeze (WP-109): the dream may not auto-change these until a
@@ -131,55 +132,31 @@ function restoreVaultToHead(vaultDir) {
 }
 
 /**
- * Minimal frontmatter reader: a leading `--- ... ---` block of flat `key: value`
- * scalars. Unquoted `true`/`false` become booleans; quoted values stay strings;
- * everything else is a trimmed string. Missing/mangled block → {}. Same
- * line-based approach as the digest renderer (future extraction into a shared
- * module is fine when a third consumer appears — noted in the PR).
+ * Frontmatter reader for the validator: a leading `--- ... ---` block of flat
+ * `key: value` scalars, lexed by the ONE shared strict parser
+ * (`src/core/frontmatter.js`, audit A4 / ADR-0022 / WP-115) and coerced by the
+ * one shared scalar coercer. Unquoted `true`/`false` become booleans; quoted
+ * values stay strings; everything else is a trimmed string. Missing/mangled
+ * block → {}.
  * @param {string} fileText
  * @returns {Record<string, string|boolean>}
  */
 function parseFrontmatter(fileText) {
   if (typeof fileText !== 'string') return {};
-  const lines = fileText.split('\n');
-  if (lines[0] !== '---') return {};
-  let end = -1;
-  for (let i = 1; i < lines.length; i++) {
-    if (lines[i] === '---') {
-      end = i;
-      break;
-    }
-  }
-  if (end === -1) return {};
+  const fm = parse(fileText); // shared lexer: delimiters + key-line rules
   /** @type {Record<string, string|boolean>} */
   const data = {};
-  for (const raw of lines.slice(1, end)) {
-    if (/^\s/.test(raw)) continue; // top-level scalars only (ignore nested)
-    const trimmed = raw.trim();
-    if (trimmed === '' || trimmed.startsWith('#')) continue;
-    const m = trimmed.match(/^([A-Za-z0-9_-]+):\s*(.*)$/);
-    if (!m) continue;
-    let value = m[2].trim();
-    const quoted =
-      value.length >= 2 &&
-      ((value[0] === '"' && value[value.length - 1] === '"') ||
-        (value[0] === "'" && value[value.length - 1] === "'"));
-    if (quoted) {
-      value = value.slice(1, -1);
-    } else {
-      // Drop an inline comment on unquoted values, then coerce booleans.
-      const hash = value.indexOf(' #');
-      if (hash !== -1) value = value.slice(0, hash).trim();
-      if (value === 'true') {
-        data[m[1]] = true;
-        continue;
-      }
-      if (value === 'false') {
-        data[m[1]] = false;
-        continue;
-      }
+  for (const [k, raw] of fm.fields) {
+    const { value, quoted } = coerceScalar(raw);
+    if (!quoted && value === 'true') {
+      data[k] = true;
+      continue;
     }
-    data[m[1]] = value;
+    if (!quoted && value === 'false') {
+      data[k] = false;
+      continue;
+    }
+    data[k] = value;
   }
   return data;
 }
@@ -220,12 +197,11 @@ function tier3Decision(vaultDir, rel) {
 }
 
 /** Return the text AFTER the leading `--- … ---` frontmatter block (the body).
- *  No/mangled frontmatter → the whole text. @param {string} text @returns {string} */
+ *  No/mangled frontmatter → the whole text. Delegated to the ONE shared parser's
+ *  body rule (`frontmatter.parse`, audit A4 / WP-115 — byte-identical semantics).
+ *  @param {string} text @returns {string} */
 function skillBody(text) {
-  const lines = String(text).split('\n');
-  if (lines[0] !== '---') return String(text);
-  for (let i = 1; i < lines.length; i++) if (lines[i] === '---') return lines.slice(i + 1).join('\n');
-  return String(text);
+  return parse(String(text)).body;
 }
 
 /**

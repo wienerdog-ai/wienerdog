@@ -69,6 +69,33 @@ function parse(text) {
   return { delimited: true, malformed, fields, body: lines.slice(end + 1).join('\n') };
 }
 
+/**
+ * Coerce ONE raw scalar value string (as stored by `parse`, or the raw text
+ * after `key:` in a bare config line) to its config/validator string value.
+ * The single place a scalar value acquires meaning (WP-115): quote-pair
+ * stripping and space-`#` inline-comment stripping live here and nowhere else.
+ * NOT boolean coercion — the caller decides whether to further map
+ * `true`/`false`.
+ *  - Trim surrounding whitespace first.
+ *  - If the trimmed value is wrapped in a single matching `"…"` or `'…'` pair,
+ *    return the inner text verbatim with quoted=true (NO comment stripping
+ *    inside).
+ *  - Otherwise strip a space-`#` (space-hash) inline comment and re-trim;
+ *    quoted=false.
+ * @param {string} raw
+ * @returns {{value: string, quoted: boolean}}
+ */
+function coerceScalar(raw) {
+  let value = String(raw).trim();
+  const quoted = value.length >= 2 &&
+    ((value[0] === '"' && value[value.length - 1] === '"') ||
+     (value[0] === "'" && value[value.length - 1] === "'"));
+  if (quoted) return { value: value.slice(1, -1), quoted: true };
+  const hash = value.indexOf(' #');
+  if (hash !== -1) value = value.slice(0, hash).trim();
+  return { value, quoted: false };
+}
+
 /** Sentinel: the field is present but its value is not an exact literal of the
  *  requested type (quoted, case-varied, commented, or junk). A security consumer
  *  treats INVALID exactly like `true` — i.e. untrusted / fail closed. (A
@@ -109,4 +136,4 @@ function readNumber(fields, key) {
   return Number(raw);
 }
 
-module.exports = { parse, readBool, readNumber, INVALID };
+module.exports = { parse, coerceScalar, readBool, readNumber, INVALID };

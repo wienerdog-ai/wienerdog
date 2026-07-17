@@ -3,12 +3,15 @@
 const fs = require('node:fs');
 
 const { WienerdogError } = require('../errors');
+const { coerceScalar } = require('../frontmatter');
 
 /**
  * Read one top-level scalar from a config.yaml body. Minimal line-based reader
- * (no YAML dependency — same approach the digest renderer used in WP-005): only
- * matches un-indented `key: value` lines, ignores comments and blanks, strips a
- * single layer of surrounding quotes. Returns null when the key is absent.
+ * (no YAML dependency): config.yaml is NOT frontmatter (no `---` delimiters),
+ * so this keeps its own un-indented `key: value` line scan, but the VALUE is
+ * coerced by the one shared scalar coercer (`frontmatter.coerceScalar`, audit
+ * A4 / WP-115) — quote-pair and space-`#`-comment handling live there and
+ * nowhere else. Returns null when the key is absent.
  * @param {string} body
  * @param {string} key
  * @returns {string|null}
@@ -22,20 +25,7 @@ function readScalar(body, key) {
     if (trimmed === '' || trimmed.startsWith('#')) continue;
     const match = trimmed.match(/^([A-Za-z0-9_]+):\s*(.*)$/);
     if (!match || match[1] !== key) continue;
-    let value = match[2].trim();
-    // Drop an inline comment on unquoted values.
-    if (value !== '' && value[0] !== '"' && value[0] !== "'") {
-      const hash = value.indexOf(' #');
-      if (hash !== -1) value = value.slice(0, hash).trim();
-    }
-    if (
-      value.length >= 2 &&
-      ((value[0] === '"' && value[value.length - 1] === '"') ||
-        (value[0] === "'" && value[value.length - 1] === "'"))
-    ) {
-      value = value.slice(1, -1);
-    }
-    return value;
+    return coerceScalar(match[2]).value;
   }
   return null;
 }
@@ -74,4 +64,4 @@ function readDreamConfig(configFile) {
   };
 }
 
-module.exports = { readDreamConfig };
+module.exports = { readDreamConfig, readScalar };

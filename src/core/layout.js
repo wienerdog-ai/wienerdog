@@ -2,6 +2,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const { coerceScalar } = require('./frontmatter');
 
 /**
  * @typedef {Object} VaultLayout
@@ -42,25 +43,13 @@ function defaultLayout() {
 
 /**
  * Strip an inline comment (unquoted only) and one layer of surrounding quotes
- * from a scalar value — same rules as dream/config.js readScalar.
+ * from a scalar value — delegated to the ONE shared scalar coercer
+ * (`frontmatter.coerceScalar`, audit A4 / WP-115).
  * @param {string} raw
  * @returns {string}
  */
 function cleanValue(raw) {
-  let value = raw.trim();
-  // Drop an inline comment on unquoted values (a space followed by `#`).
-  if (value !== '' && value[0] !== '"' && value[0] !== "'") {
-    const hash = value.indexOf(' #');
-    if (hash !== -1) value = value.slice(0, hash).trim();
-  }
-  if (
-    value.length >= 2 &&
-    ((value[0] === '"' && value[value.length - 1] === '"') ||
-      (value[0] === "'" && value[value.length - 1] === "'"))
-  ) {
-    value = value.slice(1, -1);
-  }
-  return value;
+  return coerceScalar(raw).value;
 }
 
 /**
