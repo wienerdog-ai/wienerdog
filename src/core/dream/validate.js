@@ -10,6 +10,8 @@ const { defaultLayout } = require('../layout');
 const { recordSkills, readRegistry } = require('./skill-registry');
 const { isCapabilityAllowed, CAPABILITY } = require('../safety-profile');
 const { parse, coerceScalar } = require('../frontmatter');
+const { scanAndRedact } = require('../secret-scan');
+const { displayName } = require('./ledger');
 
 // The four identity files the digest injects (direct children of identity_dir).
 // A0 pre-use freeze (WP-109): the dream may not auto-change these until a
@@ -621,6 +623,48 @@ function revertPath(vaultDir, rel, untracked) {
   }
 }
 
+/**
+ * Preserve the current working-tree bytes of a flagged vault file into the
+ * staged-output quarantine directory `<stateDir>/quarantine/` (audit A5,
+ * WP-123 OWNER-APPROVED): dir 0700, file 0600, atomic write (tmp + rename),
+ * name `<date>-<sanitized-basename>` with a numeric suffix before the
+ * extension on collision. Best-effort: any failure (including a missing
+ * stateDir) returns false — the caller still reverts the vault file (fail
+ * closed on the commit) and notes the failed copy in the reason string.
+ * @param {string|undefined} stateDir
+ * @param {string} vaultDir
+ * @param {string} rel  vault-relative path of the flagged file
+ * @param {string} date  the dream run date (YYYY-MM-DD)
+ * @returns {boolean} true iff the quarantine copy was written
+ */
+function quarantinePreserve(stateDir, vaultDir, rel, date) {
+  let tmp = null;
+  try {
+    if (!stateDir) return false;
+    const content = fs.readFileSync(path.join(vaultDir, rel)); // Buffer → byte-identical copy
+    const qdir = path.join(stateDir, 'quarantine');
+    fs.mkdirSync(qdir, { recursive: true, mode: 0o700 });
+    fs.chmodSync(qdir, 0o700);
+    const base = displayName(rel); // shared attacker-safe basename sanitizer (WP-119/120)
+    const ext = path.extname(base);
+    const stem = base.slice(0, base.length - ext.length);
+    let dest = path.join(qdir, `${date}-${stem}${ext}`);
+    for (let n = 1; fs.existsSync(dest); n += 1) {
+      dest = path.join(qdir, `${date}-${stem}-${n}${ext}`);
+    }
+    tmp = path.join(qdir, `.tmp-${process.pid}-${stem}${ext}`);
+    fs.writeFileSync(tmp, content, { mode: 0o600 });
+    fs.chmodSync(tmp, 0o600);
+    fs.renameSync(tmp, dest);
+    return true;
+  } catch {
+    try {
+      if (tmp) fs.rmSync(tmp, { force: true });
+    } catch { /* best-effort tmp cleanup; the caller reverts regardless */ }
+    return false;
+  }
+}
+
 /** @param {string} dir @returns {string[]} absolute file paths under dir, recursively. */
 function listFilesRecursive(dir) {
   /** @type {string[]} */
@@ -698,7 +742,10 @@ function changedPaths(vaultDir) {
  *     is additive because content-change cannot be detected from paths alone
  *     (see the PR "Decisions made").
  * @returns {{ committed:string[], reverted:Array<{path:string,reason:string}>,
- *             outOfVault:string[], sha:string|null, counts:{notes:number,skills:number} }}
+ *             outOfVault:string[], sha:string|null, counts:{notes:number,skills:number},
+ *             secretReverts:number }}
+ *   secretReverts = files reverted by the EP2 staged-output secret gate
+ *   (WP-123); additive — these entries also appear in `reverted[]`.
  */
 function validateAndCommit(o) {
   const { vaultDir, scratchDir, date, expectedScratch, scratchBaseline, stateDir } = o;
@@ -828,11 +875,61 @@ function validateAndCommit(o) {
       }
       continue;
     }
-    // c. Tier-1/2 note, daily log, or report → keep.
+    // c. Tier-1/2 note, daily log, or report → keep (EP2 below still scans it).
+  }
+
+  // ── Step 3: EP2 staged-output secret gate (audit A5, ADR-0024, WP-123) ───
+  // Stage the surviving changes and scan the git-computed staged ADDED lines of
+  // every file — exactly the bytes THIS run is responsible for (a secret the
+  // human already committed in HEAD is not re-flagged). ANY detector finding
+  // (`findings.length > 0`, either severity — OWNER-APPROVED 2026-07-17)
+  // quarantine-preserves the working-tree file, then reverts it; the sanitized
+  // `.text` is never written back (revert, never rewrite).
+  git(vaultDir, ['add', '-A']);
+  let secretReverts = 0;
+  /** @type {Set<string>} rels reverted by this gate (excluded from registration) */
+  const secretReverted = new Set();
+  const scanTokens = git(vaultDir, ['diff', '--cached', '--name-status', '-z']).stdout.split('\0');
+  for (let i = 0; i < scanTokens.length; i++) {
+    const status = scanTokens[i];
+    if (status === '') continue;
+    let rel = scanTokens[++i];
+    if (status[0] === 'R' || status[0] === 'C') rel = scanTokens[++i];
+    if (status[0] === 'D') continue; // a deletion has no added content
+    const diff = git(vaultDir, ['diff', '--cached', '-U0', '--', rel]).stdout;
+    const added = diff
+      .split('\n')
+      .filter((l) => l.startsWith('+') && !l.startsWith('+++'))
+      .map((l) => l.slice(1))
+      .join('\n');
+    if (added === '') continue;
+    const { findings } = scanAndRedact(added);
+    if (findings.length === 0) continue;
+    // Metadata-only reason: distinct code-owned labels, never the matched bytes.
+    const labels = findings.map((f) => f.label);
+    const preserved = quarantinePreserve(stateDir, vaultDir, rel, date);
+    if (git(vaultDir, ['cat-file', '-e', `HEAD:${rel}`], { allowFail: true }).status === 0) {
+      revertPath(vaultDir, rel, false); // tracked → restore HEAD (index + worktree)
+    } else {
+      fs.rmSync(path.join(vaultDir, rel), { force: true, recursive: true }); // untracked add → remove (Step 5's add -A drops the index entry)
+    }
+    let reason = `reverted: staged content matched a secret pattern (${labels.join(', ')}); not committed`;
+    if (!preserved) reason += ' (quarantine copy failed)';
+    reverted.push({ path: rel, reason });
+    secretReverted.add(rel);
+    secretReverts += 1;
+  }
+  // A gate-reverted new skill must not reach the ownership registry (Step 6).
+  if (secretReverted.size > 0) {
+    for (let i = newSkills.length - 1; i >= 0; i -= 1) {
+      if (secretReverted.has(newSkills[i].rel)) newSkills.splice(i, 1);
+    }
   }
 
   // ── Step 4: append the enforcement section to the dream report ───────────
-  // (Step 3, the revert mechanic, is applied inline above via revertPath.)
+  // (Runs AFTER the EP2 gate so a secret-revert reason lands in the report; a
+  //  gate-reverted report file is recreated header-only by the existsSync
+  //  branch below, so only code-owned metadata reaches the committed report.)
   const reportRel = path.join(layout.reports_dir, `${date}.md`);
   const reportAbs = path.join(vaultDir, reportRel);
   if (!fs.existsSync(reportAbs)) {
@@ -893,6 +990,7 @@ function validateAndCommit(o) {
     outOfVault: outOfVaultDetailed.map((r) => r.path),
     sha,
     counts: { notes, skills },
+    secretReverts,
   };
 }
 

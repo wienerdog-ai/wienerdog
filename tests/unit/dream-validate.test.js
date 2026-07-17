@@ -915,3 +915,177 @@ test('dream-validate: a new (added) dream-created skill is kept and registered (
   assert.ok(!res.reverted.some((r) => r.path === '05-Skills/newone/SKILL.md'), 'new skill synthesis kept');
   assert.ok(fs.existsSync(path.join(vault, '05-Skills/newone/SKILL.md')));
 });
+
+// ── EP2: staged-output secret gate (WP-123, ADR-0024) ────────────────────────
+
+const AWS_LEAK = 'notes about deploys\nAWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY\n';
+
+test('dream-validate: EP2 worked example — leaky note quarantined + reverted, clean neighbour committed', () => {
+  const { root, vault, scratch } = tempVault();
+  const stateDir = path.join(root, 'state');
+  writeVault(vault, '04-Atomic/good.md', 'a perfectly ordinary note\n');
+  writeVault(vault, '04-Atomic/leak.md', AWS_LEAK);
+
+  const res = validateAndCommit({ vaultDir: vault, scratchDir: scratch, date: '2026-07-02', expectedScratch: [], stateDir });
+
+  // leak.md: never committed, gone from the working tree.
+  assert.ok(!res.committed.includes('04-Atomic/leak.md'));
+  assert.equal(fs.existsSync(path.join(vault, '04-Atomic/leak.md')), false);
+  assert.throws(() => git(vault, ['show', 'HEAD:04-Atomic/leak.md']));
+  // clean neighbour committed.
+  assert.ok(res.committed.includes('04-Atomic/good.md'));
+  assert.equal(git(vault, ['show', 'HEAD:04-Atomic/good.md']), 'a perfectly ordinary note\n');
+  // metadata-only reason, exact fixed shape, no secret bytes.
+  const entry = res.reverted.find((r) => r.path === '04-Atomic/leak.md');
+  assert.ok(entry, JSON.stringify(res.reverted));
+  assert.equal(entry.reason, 'reverted: staged content matched a secret pattern (aws_secret_access_key); not committed');
+  assert.ok(!entry.reason.includes('wJalrXUtnFEMI'));
+  assert.equal(res.secretReverts, 1);
+  // quarantine-preserve: byte-identical copy, 0600 file in 0700 dir, outside the vault, never committed.
+  const qdir = path.join(stateDir, 'quarantine');
+  const qfile = path.join(qdir, '2026-07-02-leak.md');
+  assert.equal(fs.readFileSync(qfile, 'utf8'), AWS_LEAK);
+  assert.equal(fs.statSync(qfile).mode & 0o777, 0o600);
+  assert.equal(fs.statSync(qdir).mode & 0o777, 0o700);
+  assert.ok(!res.committed.some((p) => p.includes('quarantine')));
+  // the report enforcement section carries the metadata-only line.
+  const report = fs.readFileSync(path.join(vault, 'reports/dreams/2026-07-02.md'), 'utf8');
+  assert.ok(report.includes('`04-Atomic/leak.md` — reverted: staged content matched a secret pattern (aws_secret_access_key); not committed'));
+  assert.ok(!report.includes('wJalrXUtnFEMI'));
+});
+
+test('dream-validate: EP2 reverts on a redact-severity finding too (refresh_token= assignment; owner ruling)', () => {
+  const { root, vault, scratch } = tempVault();
+  const stateDir = path.join(root, 'state');
+  writeVault(vault, '04-Atomic/env-dump.md', 'config seen today\nrefresh_token=1//0abcDEFghiJKLmno-_pqr\n');
+
+  const res = validateAndCommit({ vaultDir: vault, scratchDir: scratch, date: '2026-07-02', expectedScratch: [], stateDir });
+
+  assert.equal(fs.existsSync(path.join(vault, '04-Atomic/env-dump.md')), false);
+  assert.throws(() => git(vault, ['show', 'HEAD:04-Atomic/env-dump.md']));
+  const entry = res.reverted.find((r) => r.path === '04-Atomic/env-dump.md');
+  assert.ok(entry, JSON.stringify(res.reverted));
+  assert.ok(entry.reason.includes('refresh_token'), entry.reason);
+  assert.ok(!entry.reason.includes('1//0abcDEF'), entry.reason);
+  assert.equal(res.secretReverts, 1);
+});
+
+test('dream-validate: EP2 reverts a private-key block (quarantine severity)', () => {
+  const { root, vault, scratch } = tempVault();
+  const stateDir = path.join(root, 'state');
+  writeVault(vault, '04-Atomic/pem.md', '-----BEGIN RSA PRIVATE KEY-----\nAAAA1234\n-----END RSA PRIVATE KEY-----\n');
+  const res = validateAndCommit({ vaultDir: vault, scratchDir: scratch, date: '2026-07-02', expectedScratch: [], stateDir });
+  assert.equal(fs.existsSync(path.join(vault, '04-Atomic/pem.md')), false);
+  assert.ok(res.reverted.some((r) => r.path === '04-Atomic/pem.md' && r.reason.includes('private-key')));
+  assert.equal(res.secretReverts, 1);
+});
+
+test('dream-validate: EP2 tracked modification is restored to HEAD bytes; quarantine copy holds the leaky version', () => {
+  const headText = '# journal\nan old clean line\n';
+  const { root, vault, scratch } = tempVault({ '01-Journal/2026-07-01.md': headText });
+  const stateDir = path.join(root, 'state');
+  const leaky = `${headText}sk-ant-abcdefghijklmnopqrstuvwx0123 appended by the brain\n`;
+  writeVault(vault, '01-Journal/2026-07-01.md', leaky);
+
+  const res = validateAndCommit({ vaultDir: vault, scratchDir: scratch, date: '2026-07-02', expectedScratch: [], stateDir });
+
+  assert.equal(fs.readFileSync(path.join(vault, '01-Journal/2026-07-01.md'), 'utf8'), headText);
+  assert.equal(git(vault, ['show', 'HEAD:01-Journal/2026-07-01.md']), headText);
+  assert.ok(res.reverted.some((r) => r.path === '01-Journal/2026-07-01.md' && r.reason.includes('anthropic-key')));
+  assert.equal(res.secretReverts, 1);
+  assert.equal(fs.readFileSync(path.join(stateDir, 'quarantine', '2026-07-02-2026-07-01.md'), 'utf8'), leaky);
+});
+
+test('dream-validate: EP2 scans staged ADDED lines only — a pre-existing committed secret is not re-flagged', () => {
+  const headText = 'the human committed this: password=hunter2secret1234567\n';
+  const { root, vault, scratch } = tempVault({ '04-Atomic/existing.md': headText });
+  const stateDir = path.join(root, 'state');
+  writeVault(vault, '04-Atomic/existing.md', `${headText}a clean appended consolidation line\n`);
+
+  const res = validateAndCommit({ vaultDir: vault, scratchDir: scratch, date: '2026-07-02', expectedScratch: [], stateDir });
+
+  assert.ok(res.committed.includes('04-Atomic/existing.md'));
+  assert.ok(git(vault, ['show', 'HEAD:04-Atomic/existing.md']).includes('a clean appended consolidation line'));
+  assert.equal(res.secretReverts, 0);
+  assert.ok(!res.reverted.some((r) => r.path === '04-Atomic/existing.md'));
+});
+
+test('dream-validate: EP2 false positive (high-entropy blob) is a visible quarantined revert, not a silent rewrite', () => {
+  const blobText = 'ref q7PmXz4KvR9tWc2LbN8dYfGh in prose\n';
+  const { root, vault, scratch } = tempVault();
+  const stateDir = path.join(root, 'state');
+  writeVault(vault, '04-Atomic/fp.md', blobText);
+
+  const res = validateAndCommit({ vaultDir: vault, scratchDir: scratch, date: '2026-07-02', expectedScratch: [], stateDir });
+
+  // NOT committed at all — neither raw nor [REDACTED]-mutated.
+  assert.ok(!res.committed.includes('04-Atomic/fp.md'));
+  assert.equal(fs.existsSync(path.join(vault, '04-Atomic/fp.md')), false);
+  assert.throws(() => git(vault, ['show', 'HEAD:04-Atomic/fp.md']));
+  // recoverable: byte-identical quarantine copy.
+  assert.equal(fs.readFileSync(path.join(stateDir, 'quarantine', '2026-07-02-fp.md'), 'utf8'), blobText);
+  assert.ok(res.reverted.some((r) => r.path === '04-Atomic/fp.md' && r.reason.includes('high-entropy')));
+});
+
+test('dream-validate: EP2 quarantine name collision gets a numeric suffix', () => {
+  const { root, vault, scratch } = tempVault();
+  const stateDir = path.join(root, 'state');
+  writeVault(vault, '04-Atomic/leak.md', AWS_LEAK);
+  writeVault(vault, '02-Areas/leak.md', 'other note\nrefresh_token=1//0abcDEFghiJKLmno-_pqr\n');
+
+  const res = validateAndCommit({ vaultDir: vault, scratchDir: scratch, date: '2026-07-02', expectedScratch: [], stateDir });
+
+  assert.equal(res.secretReverts, 2);
+  assert.ok(fs.existsSync(path.join(stateDir, 'quarantine', '2026-07-02-leak.md')));
+  assert.ok(fs.existsSync(path.join(stateDir, 'quarantine', '2026-07-02-leak-1.md')));
+});
+
+test('dream-validate: EP2 fails closed when the quarantine copy cannot be written (still reverts, reason notes it)', () => {
+  const { root, vault, scratch } = tempVault();
+  const stateDir = path.join(root, 'state');
+  fs.mkdirSync(stateDir, { recursive: true });
+  fs.writeFileSync(path.join(stateDir, 'quarantine'), 'a file where the dir must go');
+  writeVault(vault, '04-Atomic/leak.md', AWS_LEAK);
+
+  const res = validateAndCommit({ vaultDir: vault, scratchDir: scratch, date: '2026-07-02', expectedScratch: [], stateDir });
+
+  assert.equal(fs.existsSync(path.join(vault, '04-Atomic/leak.md')), false);
+  assert.throws(() => git(vault, ['show', 'HEAD:04-Atomic/leak.md']));
+  const entry = res.reverted.find((r) => r.path === '04-Atomic/leak.md');
+  assert.ok(entry && entry.reason.includes('quarantine copy failed'), JSON.stringify(entry));
+  assert.equal(res.secretReverts, 1);
+});
+
+test('dream-validate: EP2 without a stateDir still reverts (fail closed) and notes the missing quarantine', () => {
+  const { vault, scratch } = tempVault();
+  writeVault(vault, '04-Atomic/leak.md', AWS_LEAK);
+  const res = validateAndCommit({ vaultDir: vault, scratchDir: scratch, date: '2026-07-02', expectedScratch: [] });
+  assert.equal(fs.existsSync(path.join(vault, '04-Atomic/leak.md')), false);
+  const entry = res.reverted.find((r) => r.path === '04-Atomic/leak.md');
+  assert.ok(entry && entry.reason.includes('quarantine copy failed'), JSON.stringify(entry));
+  assert.equal(res.secretReverts, 1);
+});
+
+test('dream-validate: EP2 a leaky NEW skill is reverted and NOT registered', () => {
+  const { root, vault, scratch } = tempVault();
+  const stateDir = path.join(root, 'state');
+  writeVault(
+    vault,
+    '05-Skills/leaky/SKILL.md',
+    `---\ntype: skill\nid: leaky\ncreated: 2026-07-11\norigin: dream\nconfidence: 0.9\nrecurrence: 3\nderived_from_untrusted: false\n---\n\nsk-ant-abcdefghijklmnopqrstuvwx0123\n`,
+  );
+  const res = validateAndCommit({ vaultDir: vault, scratchDir: scratch, date: '2026-07-02', expectedScratch: [], stateDir });
+  assert.equal(fs.existsSync(path.join(vault, '05-Skills/leaky/SKILL.md')), false);
+  assert.equal(res.secretReverts, 1);
+  assert.deepEqual(readRegistry(stateDir).skills, {});
+});
+
+test('dream-validate: EP2 clean run reports secretReverts 0 and leaves existing surfaces untouched', () => {
+  const { root, vault, scratch } = tempVault();
+  const stateDir = path.join(root, 'state');
+  writeVault(vault, '04-Atomic/clean.md', 'nothing secret at all\n');
+  const res = validateAndCommit({ vaultDir: vault, scratchDir: scratch, date: '2026-07-02', expectedScratch: [], stateDir });
+  assert.equal(res.secretReverts, 0);
+  assert.ok(res.committed.includes('04-Atomic/clean.md'));
+  assert.equal(fs.existsSync(path.join(stateDir, 'quarantine')), false);
+});
