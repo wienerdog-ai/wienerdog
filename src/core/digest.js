@@ -4,59 +4,56 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { defaultLayout } = require('./layout');
 const { isCapabilityAllowed, CAPABILITY } = require('./safety-profile');
-
-// Minimal, inlined frontmatter reader. We only need to (a) separate the YAML
-// block from the body and (b) read the single flat flag `derived_from_untrusted`.
-// A fuller flat-YAML parser already lives in scripts/check-frontmatter.js; it is
-// not in this WP's Deliverables, so rather than import it we inline the ~15
-// lines we need. Future extraction into src/core/frontmatter.js is fine when a
-// second consumer appears (noted in the PR "Decisions made").
+const { parse, readBool, INVALID } = require('./frontmatter');
 
 /**
- * Split a note into its frontmatter map and body text.
- * @param {string} text
- * @returns {{data: Record<string, string>, body: string}}
+ * @typedef {{data: Record<string,string>, body: string}} Note
+ * @typedef {{note: Note|null,
+ *            exclusion: null|'absent'|'untrusted-exact'|'untrusted-invalid'|'malformed'}} ReadNoteResult
  */
-function splitFrontmatter(text) {
-  const lines = text.split('\n');
-  if (lines[0] !== '---') return { data: {}, body: text };
-  let end = -1;
-  for (let i = 1; i < lines.length; i++) {
-    if (lines[i] === '---') {
-      end = i;
-      break;
-    }
-  }
-  if (end === -1) return { data: {}, body: text };
-  /** @type {Record<string, string>} */
-  const data = {};
-  for (const raw of lines.slice(1, end)) {
-    const m = raw.match(/^([A-Za-z0-9_]+):\s*(.*)$/);
-    if (!m) continue;
-    let value = m[2];
-    const hash = value.indexOf('#');
-    if (hash !== -1) value = value.slice(0, hash);
-    data[m[1]] = value.trim();
-  }
-  return { data, body: lines.slice(end + 1).join('\n') };
-}
 
 /**
- * Read a note, honouring the trust gate. Returns null if the file is missing
- * or is flagged `derived_from_untrusted: true` (excluded from Tier-3 digest).
+ * Read a note, honouring the trust gate (audit A4, ADR-0022), and report WHY it
+ * was excluded so the caller can decide whether the exclusion is anomalous
+ * (warn) or normal (silent).
+ *
+ * Exclusion classes:
+ *  - 'absent'           — file missing/unreadable (silent).
+ *  - 'malformed'        — the frontmatter block is malformed (indented line,
+ *                         duplicate key, junk line). Excluded UNCONDITIONALLY —
+ *                         regardless of whether it carries derived_from_untrusted
+ *                         (owner decision 2026-07-17: fail-closed uniformity; a
+ *                         malformed block on a human-authored identity file is a
+ *                         typo, surfaced by the banner, not tolerated). WARN.
+ *  - 'untrusted-invalid'— derived_from_untrusted present but NOT provably `false`
+ *                         (`True`, `TRUE`, `"true"`, commented, junk → INVALID).
+ *                         WARN.
+ *  - 'untrusted-exact'  — derived_from_untrusted is exactly `true`. Normal
+ *                         policy; SILENT.
+ *  - null               — trusted (flag absent, or exactly `false`) → note
+ *                         returned.
+ *
+ * Trusted-by-default: a well-formed note that OMITS the flag (the human identity
+ * notes) still renders.
  * @param {string} filePath
- * @returns {{data: Record<string, string>, body: string}|null}
+ * @returns {ReadNoteResult}
  */
 function readNote(filePath) {
   let text;
   try {
     text = fs.readFileSync(filePath, 'utf8');
   } catch {
-    return null;
+    return { note: null, exclusion: 'absent' };
   }
-  const note = splitFrontmatter(text);
-  if (note.data.derived_from_untrusted === 'true') return null;
-  return note;
+  const fm = parse(text);
+  // Malformed block → exclude unconditionally (fail-closed uniformity), warn.
+  if (fm.malformed) return { note: null, exclusion: 'malformed' };
+  const t = readBool(fm.fields, 'derived_from_untrusted');
+  if (t === true) return { note: null, exclusion: 'untrusted-exact' }; // normal → silent
+  if (t === INVALID) return { note: null, exclusion: 'untrusted-invalid' }; // anomalous → warn
+  // undefined (absent) or exactly false → trusted → render.
+  const data = Object.fromEntries(fm.fields); // shape stability for the return type
+  return { note: { data, body: fm.body }, exclusion: null };
 }
 
 /** @param {string} line @returns {boolean} */
@@ -225,7 +222,11 @@ function formatAlerts(alerts) {
  * daily note under {daily_dir} (found recursively), and {projects_dir}/* directory
  * names — all resolved from `layout` (defaults == today's hardcoded paths). Notes
  * flagged `derived_from_untrusted: true` and blocks whose source is missing/empty
- * are omitted. Output is <=120 lines. When `opts.alerts` holds unresolved failure
+ * are omitted. An ANOMALOUS identity exclusion (malformed frontmatter block, or a
+ * derived_from_untrusted value that is not an exact boolean) is omitted fail-closed
+ * AND surfaced via a fixed warning banner placed first in the prefix (audit A4,
+ * ADR-0022); an exact `true` is normal policy and stays silent.
+ * Output is <=120 lines. When `opts.alerts` holds unresolved failure
  * alerts, a plain-text block is prepended (empty/absent → output unchanged).
  * When `opts.updateLine` is a non-empty fixed-template "update available" line, it
  * is prepended after any alert block (empty/absent → output unchanged).
@@ -258,10 +259,17 @@ function renderDigest(vaultDir, layout = defaultLayout(), opts = {}) {
   /** @type {string[]} */
   const parts = [];
 
+  /** @type {Array<{file:string, reason:string}>} anomalous exclusions to warn about */
+  const identityExclusions = [];
   for (const [file, header] of identity) {
-    const note = readNote(path.join(idDir, file));
-    if (!note) continue;
-    const content = compact(note.body);
+    const r = readNote(path.join(idDir, file));
+    if (!r.note) {
+      if (r.exclusion === 'malformed') identityExclusions.push({ file, reason: 'malformed frontmatter' });
+      else if (r.exclusion === 'untrusted-invalid') identityExclusions.push({ file, reason: 'unclear derived_from_untrusted value' });
+      // 'absent' and 'untrusted-exact' are NORMAL → silent (no banner).
+      continue;
+    }
+    const content = compact(r.note.body);
     if (!content) continue;
     parts.push(`${header}\n${content}`);
   }
@@ -276,17 +284,25 @@ function renderDigest(vaultDir, layout = defaultLayout(), opts = {}) {
   // entry-level provenance exists (audit A4). opts.profile is a code seam for tests
   // only (never env/argv); production callers pass none → blocked → omitted.
   if (daily && isCapabilityAllowed(CAPABILITY.DAILY_SUMMARY_INJECTION, opts.profile)) {
-    const note = readNote(daily.path);
-    const summary = note && extractSection(note.body, 'Summary');
+    const r = readNote(daily.path);
+    const summary = r.note && extractSection(r.note.body, 'Summary');
     if (summary) parts.push(`## Latest daily log (${daily.date})\n${summary}`);
   }
 
   const body = `${parts.join('\n\n')}\n`;
-  // Prefix order = alerts, then schedulerLine, then updateLine (an active failure
-  // is most urgent; a configured-but-not-loaded job is more urgent than an
-  // available update). All fixed-template control-plane text; when all are empty
-  // the byte output is unchanged (golden-frozen).
-  const prefix = [formatAlerts(opts.alerts || []), opts.schedulerLine || '', opts.updateLine || '']
+  // Identity-exclusion banner (audit A4): an identity note silently missing from
+  // the session is the most urgent thing to surface, so it goes FIRST in the
+  // prefix. Fixed, declarative, code-owned filenames only — never note content —
+  // so no untrusted bytes enter the digest (same rule as formatAlerts).
+  const identityWarn = identityExclusions.length > 0
+    ? `> [!warning] Wienerdog: some identity notes were left out of your session context — ${identityExclusions.map((e) => `${e.file} (${e.reason})`).join(', ')}. Fix their frontmatter, then run \`wienerdog sync\`.`
+    : '';
+  // Prefix order = identity banner, then alerts, then schedulerLine, then
+  // updateLine (an active failure is more urgent than a configured-but-not-loaded
+  // job, which is more urgent than an available update). All fixed-template
+  // control-plane text; when all are empty the byte output is unchanged
+  // (golden-frozen).
+  const prefix = [identityWarn, formatAlerts(opts.alerts || []), opts.schedulerLine || '', opts.updateLine || '']
     .filter((s) => s !== '')
     .join('\n\n');
   return prefix ? `${prefix}\n\n${body}` : body;

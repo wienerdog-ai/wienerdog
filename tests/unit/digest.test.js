@@ -64,25 +64,86 @@ test('renderDigest orders the prefix alerts → schedulerLine → updateLine →
   assert.ok(out.endsWith(golden), 'body is the unchanged golden');
 });
 
-test('a note flagged derived_from_untrusted is excluded from the digest', () => {
+/** Copy the four identity fixtures into a fresh tmp vault; return its root. */
+function tmpVault() {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-digest-'));
   const idDir = path.join(tmp, '06-Identity');
   fs.mkdirSync(idDir, { recursive: true });
   for (const f of ['profile.md', 'preferences.md', 'goals.md', 'instructions.md']) {
     fs.copyFileSync(path.join(FIXTURE, '06-Identity', f), path.join(idDir, f));
   }
-  // Taint the profile note.
-  const profilePath = path.join(idDir, 'profile.md');
+  return tmp;
+}
+
+/** Insert a line into profile.md's frontmatter after `status: active`. */
+function taintProfile(vaultDir, line) {
+  const profilePath = path.join(vaultDir, '06-Identity', 'profile.md');
   const tainted = fs
     .readFileSync(profilePath, 'utf8')
-    .replace('status: active', 'status: active\nderived_from_untrusted: true');
+    .replace('status: active', `status: active\n${line}`);
   fs.writeFileSync(profilePath, tainted);
+}
+
+const BANNER = 'some identity notes were left out of your session context';
+
+test('a note flagged derived_from_untrusted: true (exact) is excluded SILENTLY', () => {
+  const tmp = tmpVault();
+  taintProfile(tmp, 'derived_from_untrusted: true');
 
   const digest = renderDigest(tmp);
   assert.ok(!digest.includes("# Who you're working with"), 'profile section header must be omitted');
   assert.ok(!digest.includes('Ada Kovács'), 'tainted profile content must be omitted');
   // Untainted sections still render.
   assert.ok(digest.includes('## Preferences'), 'other identity sections still render');
+  // Exact `true` is normal policy — no banner.
+  assert.ok(!digest.includes(BANNER), 'exact true excludes silently (no banner)');
+});
+
+test('an INVALID derived_from_untrusted form is excluded AND warned (old fail-open closed)', () => {
+  for (const v of ['True', '"true"', "'true'", 'true # x']) {
+    const tmp = tmpVault();
+    taintProfile(tmp, `derived_from_untrusted: ${v}`);
+
+    const digest = renderDigest(tmp);
+    assert.ok(!digest.includes('Ada Kovács'), `content must be omitted for ${JSON.stringify(v)}`);
+    assert.ok(
+      digest.includes('profile.md (unclear derived_from_untrusted value)'),
+      `banner must name profile.md for ${JSON.stringify(v)}`
+    );
+    assert.ok(digest.includes('## Preferences'), 'other identity sections still render');
+  }
+});
+
+test('a malformed frontmatter block WITHOUT the flag is excluded AND warned', () => {
+  const tmp = tmpVault();
+  // An indented line makes the block malformed; no derived_from_untrusted anywhere.
+  taintProfile(tmp, '  nested: x');
+
+  const digest = renderDigest(tmp);
+  assert.ok(!digest.includes('Ada Kovács'), 'malformed profile content must be omitted');
+  assert.ok(digest.includes('profile.md (malformed frontmatter)'), 'banner must name the malformed file');
+  assert.ok(digest.includes('## Preferences'), 'other identity sections still render');
+});
+
+test('derived_from_untrusted: false renders normally with no banner', () => {
+  const tmp = tmpVault();
+  taintProfile(tmp, 'derived_from_untrusted: false');
+
+  const digest = renderDigest(tmp);
+  assert.ok(digest.includes('Ada Kovács'), 'explicitly-false profile renders');
+  assert.ok(!digest.includes(BANNER), 'no banner for a trusted note');
+});
+
+test('the identity-exclusion banner is placed FIRST in the prefix, before alerts', () => {
+  const tmp = tmpVault();
+  taintProfile(tmp, 'derived_from_untrusted: True');
+  const alerts = [{ job: 'dream', at: '2026-07-04T03:30:00.000Z', reason: 'boom', log_hint: 'logs/dream/' }];
+
+  const digest = renderDigest(tmp, undefined, { alerts });
+  const bannerIdx = digest.indexOf(BANNER);
+  const alertIdx = digest.indexOf('has failed');
+  assert.ok(bannerIdx !== -1 && alertIdx !== -1, 'both blocks present');
+  assert.ok(bannerIdx < alertIdx, 'identity banner comes before the alert block');
 });
 
 test('missing identity files are omitted, not errored', () => {
