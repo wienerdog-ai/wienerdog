@@ -3,6 +3,7 @@
 const { spawn } = require('node:child_process');
 
 const { defaultLayout, layoutPromptLines, resolveDailyPath } = require('../layout');
+const { redactOnly } = require('../secret-scan');
 
 /** Cap on the brain-stderr tail attached to spawnBrain's `done` result (bytes). */
 const STDERR_TAIL_MAX = 4096;
@@ -148,20 +149,32 @@ function spawnBrain(o) {
     env: childEnv,
   });
 
+  // EP3 (audit A5, ADR-0024, WP-124): the brain's stdout/stderr is fully
+  // attacker-influenceable, so every chunk is redacted BEFORE it reaches the
+  // durable log or the stderr tail. Per-chunk scanning is bounded (a chunk is
+  // at most the OS pipe buffer; scanAndRedact self-bounds at SCAN_MAX_BYTES).
+  // Known limitation (OWNER-APPROVED 2026-07-17): a secret split across a
+  // chunk boundary may be only partially redacted — deliberately NOT buffered
+  // across chunks, because unbounded reassembly would reopen the WP-118
+  // OOM/DoS surface. The other A5 layers (EP2 whole-file scan, EP4 digest
+  // scan, WP-126 0600 log modes, no log content in email) cover the residual.
+  //
   // Bounded rolling buffer of the brain's stderr so a failure is diagnosable
   // without opening the separate daily log (WP-039 surfaces this into the
-  // "dream brain exited N" message). Both consumers get the chunks in flowing mode.
+  // "dream brain exited N" message). The tee does not close the caller's
+  // stream — the caller owns it (the old pipe's { end:false } semantics).
   let stderrTail = '';
   if (child.stderr) {
     child.stderr.on('data', (chunk) => {
-      stderrTail = (stderrTail + chunk.toString('utf8')).slice(-STDERR_TAIL_MAX);
+      const redacted = redactOnly(chunk.toString('utf8'));
+      stderrTail = (stderrTail + redacted).slice(-STDERR_TAIL_MAX);
+      if (logStream) logStream.write(redacted);
     });
   }
-
-  // Tee child output to the caller's log stream (do not close it — the caller owns it).
-  if (logStream) {
-    if (child.stdout) child.stdout.pipe(logStream, { end: false });
-    if (child.stderr) child.stderr.pipe(logStream, { end: false });
+  if (logStream && child.stdout) {
+    child.stdout.on('data', (chunk) => {
+      logStream.write(redactOnly(chunk.toString('utf8')));
+    });
   }
 
   const done = new Promise((resolve, reject) => {

@@ -3,6 +3,8 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
+const { redactOnly } = require('./secret-scan');
+
 // Append-only durable failure log under state/alerts.jsonl. Replaces the
 // transient digest banner (WP-020) whose regeneration erased it. One JSON object
 // per line; every recorded entry is "unresolved" by construction. ADR-0012 part 3:
@@ -19,15 +21,19 @@ function alertsPath(paths) {
   return path.join(paths.state, ALERTS_FILE);
 }
 
-/** Coerce a record to the known string fields, each length-capped. Requires a
- *  non-null, non-array OBJECT — any other value (null, number, string, array) is
+/** Coerce a record to the known string fields, each length-capped and then
+ *  secret-scrubbed (EP3, audit A5 / ADR-0024 / WP-124): the cap bounds the scan
+ *  input, then `redactOnly` guarantees no secret persists to alerts.jsonl or
+ *  reaches the digest — `at`/`job`/`log_hint` are code-owned no-ops, but
+ *  scanning uniformly is the fail-closed choice. Requires a non-null,
+ *  non-array OBJECT — any other value (null, number, string, array) is
  *  treated as an empty object, so a valid-JSON primitive can't crash the deref.
  *  Drops unknown keys; missing fields become ''.
  *  @param {*} r @returns {{job:string, at:string, reason:string, log_hint:string}} */
 function sanitizeAlert(r) {
   const o = r && typeof r === 'object' && !Array.isArray(r) ? r : {};
-  const cap = (v) => String(v == null ? '' : v).slice(0, MAX_FIELD_CHARS);
-  return { job: cap(o.job), at: cap(o.at), reason: cap(o.reason), log_hint: cap(o.log_hint) };
+  const scrub = (v) => redactOnly(String(v == null ? '' : v).slice(0, MAX_FIELD_CHARS));
+  return { job: scrub(o.job), at: scrub(o.at), reason: scrub(o.reason), log_hint: scrub(o.log_hint) };
 }
 
 /** Append one unresolved failure alert (atomic append; creates state/ if needed).

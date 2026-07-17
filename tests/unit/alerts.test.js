@@ -352,3 +352,31 @@ test('alerts: renderDigest groups multiple failing jobs, one line each, singular
   assert.match(lines[0], /the "dream" job has failed\. Latest error: exited 1\./, 'single failure → singular "has failed"');
   assert.match(lines[1], /the "digest" job has failed\. Latest error: exited 2\./);
 });
+
+// -------------------------------------------------------------------------
+// EP3 secret scrub (WP-124, ADR-0024)
+// -------------------------------------------------------------------------
+
+test('alerts: a reason carrying a secret is stored redacted in alerts.jsonl and reads back redacted (WP-124)', () => {
+  const { paths } = setup();
+  appendAlert(paths, rec('dream', '2026-07-04T01:00:00.000Z',
+    'dream brain exited 1: fatal: OPENAI_API_KEY=sk-proj-ABCDEF0123456789abcdef rejected'));
+
+  const raw = fs.readFileSync(path.join(paths.state, ALERTS_FILE), 'utf8');
+  assert.ok(!raw.includes('sk-proj-ABCDEF0123456789abcdef'), 'raw secret must not persist to disk');
+  assert.ok(raw.includes('[REDACTED:'), raw);
+
+  const got = readAlerts(paths);
+  assert.equal(got.length, 1);
+  assert.ok(!got[0].reason.includes('sk-proj-ABCDEF0123456789abcdef'));
+  assert.ok(got[0].reason.includes('dream brain exited 1'), 'code-owned prefix preserved');
+});
+
+test('alerts: renderDigest built from a secret-bearing alert carries no secret (WP-124)', () => {
+  const { paths } = setup();
+  appendAlert(paths, rec('dream', '2026-07-04T01:00:00.000Z',
+    'dream brain exited 1: token ghp_a1B2a1B2a1B2a1B2a1B2a1B2a1B2a1B2a1B2 invalid'));
+  const out = renderDigest(FIXTURE, undefined, { alerts: readAlerts(paths) });
+  assert.ok(!out.includes('ghp_a1B2a1B2a1B2a1B2a1B2a1B2a1B2a1B2a1B2'), 'digest banner must not carry the secret');
+  assert.ok(out.includes('[REDACTED:'), 'redaction marker visible in the latest-error line');
+});

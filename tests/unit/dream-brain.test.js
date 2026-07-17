@@ -136,3 +136,43 @@ test('dream-brain: spawnBrain done resolves a stderrTail on nonzero exit', async
   assert.equal(typeof result.stderrTail, 'string');
   assert.match(result.stderrTail, /brain boom: API drop mid-run/);
 });
+
+test('dream-brain: a secret in brain output is redacted in the teed log AND stderrTail (WP-124 EP3)', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-brain-'));
+  const fakeCmd = path.join(root, 'fake-brain.sh');
+  fs.writeFileSync(
+    fakeCmd,
+    [
+      '#!/bin/sh',
+      'echo "stdout leak sk-ant-abcdefghijklmnopqrstuvwx0123 end"',
+      'echo "Traceback: OPENAI_API_KEY=sk-proj-ABCDEF0123456789abcdef" 1>&2',
+      'exit 4',
+      '',
+    ].join('\n')
+  );
+  fs.chmodSync(fakeCmd, 0o755);
+  const vaultDir = path.join(root, 'vault');
+  fs.mkdirSync(vaultDir);
+  const logFile = path.join(root, 'run.log');
+  const logStream = fs.createWriteStream(logFile);
+
+  const { done } = spawnBrain({
+    vaultDir,
+    scratchDir: path.join(root, 'scratch'),
+    date: '2026-07-04',
+    model: null,
+    env: { ...process.env, WIENERDOG_DREAM_CMD: fakeCmd },
+    logStream,
+  });
+  const result = await done;
+  await new Promise((resolve) => logStream.end(resolve));
+
+  assert.equal(result.code, 4);
+  const log = fs.readFileSync(logFile, 'utf8');
+  assert.ok(log.includes('[REDACTED:'), log);
+  assert.ok(!log.includes('sk-ant-abcdefghijklmnopqrstuvwx0123'), 'stdout secret must not reach the log');
+  assert.ok(!log.includes('sk-proj-ABCDEF0123456789abcdef'), 'stderr secret must not reach the log');
+  assert.ok(result.stderrTail.includes('[REDACTED:'), result.stderrTail);
+  assert.ok(!result.stderrTail.includes('sk-proj-ABCDEF0123456789abcdef'), 'secret must not reach stderrTail');
+  assert.ok(result.stderrTail.includes('OPENAI_API_KEY='), 'non-secret context is preserved');
+});

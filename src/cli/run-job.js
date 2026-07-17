@@ -9,6 +9,7 @@ const { getPaths } = require('../core/paths');
 const { WienerdogError } = require('../core/errors');
 const { maybeRefresh } = require('../core/update-check');
 const { appendAlert, clearAlerts } = require('../core/alerts');
+const { redactOnly } = require('../core/secret-scan');
 const { readDreamConfig } = require('../core/dream/config');
 const jobsLib = require('../scheduler/jobs');
 const gen = require('../scheduler/generators');
@@ -25,8 +26,6 @@ const { requireCapability, CAPABILITY } = require('../core/safety-profile');
 
 /** How many per-run *.log files to keep in a job's log dir. */
 const LOG_KEEP = 14;
-/** Bytes of the run log to attach to a fail-loud alert. */
-const LOG_TAIL_BYTES = 2048;
 /** Env vars carried through from the launching env into the clean job env. */
 const ENV_PASSTHROUGH = [
   'WIENERDOG_HOME',
@@ -262,16 +261,6 @@ function rotateLogs(dir) {
   }
 }
 
-/** @param {string} file @returns {string} the last ~2 KB of a log file, or ''. */
-function readLogTail(file) {
-  try {
-    const buf = fs.readFileSync(file);
-    return buf.slice(Math.max(0, buf.length - LOG_TAIL_BYTES)).toString('utf8');
-  } catch {
-    return '';
-  }
-}
-
 /** Close a write stream and wait for its flush.
  *  @param {NodeJS.WritableStream} stream @returns {Promise<void>} */
 function endStream(stream) {
@@ -301,22 +290,30 @@ function defaultSendAlert(paths, name, subject, body) {
  * digest until the job next succeeds — ADR-0012 part 3), then attempt the
  * best-effort email. The durable record is independent of email delivery.
  * Wrapped so it can NEVER throw — the original job failure must stay surfaced.
+ *
+ * EP3 (audit A5 / ADR-0024 / WP-124, OWNER-APPROVED 2026-07-17): the email
+ * body is built from code-owned status fields ONLY — the reason (whose
+ * embedded stderr tail is redacted at source in brain.js) plus the log_hint
+ * pointer. NO raw log tail: email leaves the machine and is durably stored by
+ * the mail provider, so a detector miss there would be unrecoverable; the
+ * user opens the local private log for the tail.
  * @param {import('../core/paths').WienerdogPaths} paths
- * @param {string} name @param {string} reason @param {string} logTail
+ * @param {string} name @param {string} reason
  * @param {{sendAlert?: typeof defaultSendAlert}} opts
  * @returns {Promise<void>}
  */
-async function failLoud(paths, name, reason, logTail, opts = {}) {
+async function failLoud(paths, name, reason, opts = {}) {
   try {
+    const logHint = `${tilde(paths.home, path.join(paths.logs, name))}/`;
     appendAlert(paths, {
       job: name,
       at: nowIso(),
       reason,
-      log_hint: `${tilde(paths.home, path.join(paths.logs, name))}/`,
+      log_hint: logHint,
     });
     const send = opts.sendAlert || defaultSendAlert;
     const subject = `job ${name} failed`;
-    const body = `${reason}\n\n${logTail || ''}`.trim();
+    const body = `${reason}\n\nDetails: ${logHint}`.trim();
     try {
       send(paths, name, subject, body);
     } catch {
@@ -466,7 +463,7 @@ async function runJob(paths, job, opts = {}) {
       `refused: ${g.offending} is under a macOS protected folder (${g.prefix}) — ` +
       'move the vault to ~/wienerdog';
     jobsLib.writeScheduleState(paths, name, { last_status: 'error', last_error_at: nowIso() });
-    await failLoud(paths, name, reason, '', opts);
+    await failLoud(paths, name, reason, opts);
     throw new WienerdogError(`job "${name}" ${reason}`);
   }
 
@@ -499,8 +496,21 @@ async function runJob(paths, job, opts = {}) {
       env,
       shell,
     });
-    if (child.stdout) child.stdout.pipe(logStream, { end: false });
-    if (child.stderr) child.stderr.pipe(logStream, { end: false });
+    // EP3 (audit A5 / ADR-0024 / WP-124): redact each chunk before it reaches
+    // the durable run log — the child (a routine brain too) is
+    // attacker-influenceable. Bounded per-chunk scan; a boundary-split secret
+    // may be partially redacted (accepted residual, see brain.js). The tee
+    // never closes the stream (the old pipe's { end:false } semantics).
+    if (child.stdout) {
+      child.stdout.on('data', (chunk) => {
+        logStream.write(redactOnly(chunk.toString('utf8')));
+      });
+    }
+    if (child.stderr) {
+      child.stderr.on('data', (chunk) => {
+        logStream.write(redactOnly(chunk.toString('utf8')));
+      });
+    }
 
     const done = new Promise((resolve, reject) => {
       child.on('error', reject);
@@ -553,7 +563,7 @@ async function runJob(paths, job, opts = {}) {
       : `job "${name}" failed: ${failure.message}`
     : `job "${name}" exited ${code}`;
   jobsLib.writeScheduleState(paths, name, { last_status: 'error', last_error_at: nowIso() });
-  await failLoud(paths, name, reason, readLogTail(logFile), opts);
+  await failLoud(paths, name, reason, opts);
   throw new WienerdogError(reason);
 }
 
@@ -657,7 +667,6 @@ module.exports = {
   resolveUsername,
   resolveCommand,
   rotateLogs,
-  readLogTail,
   failLoud,
   todaysFire,
 };

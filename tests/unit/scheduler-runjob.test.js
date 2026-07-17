@@ -399,12 +399,13 @@ test('scheduler-runjob: a non-zero exit records error, fails loud, throws', asyn
   assert.deepEqual(alerts, ['job dream failed'], 'fail-loud email attempted');
 });
 
-test('scheduler-runjob: a failing child\'s stderr tail reaches the fail-loud alert body', async () => {
+test('scheduler-runjob: the fail-loud email body carries NO raw log tail — code-owned reason + Details pointer only (WP-124)', async () => {
   const { root, env, paths } = setup();
   jobsLib.saveJob(paths, { name: 'dream', at: '03:30', run: 'builtin:dream', timeoutMinutes: 20 });
   const fake = writeScript(root, 'stderr-fail.sh', [
     '#!/bin/sh',
     'echo "brain boom: API drop mid-run" 1>&2',
+    'echo "leaked GITHUB_TOKEN=ghp_a1B2a1B2a1B2a1B2a1B2a1B2a1B2a1B2a1B2" 1>&2',
     'exit 3',
   ]);
   /** @type {string[]} */ const bodies = [];
@@ -416,7 +417,32 @@ test('scheduler-runjob: a failing child\'s stderr tail reaches the fail-loud ale
   );
 
   assert.equal(bodies.length, 1, 'fail-loud email attempted');
-  assert.match(bodies[0], /brain boom: API drop mid-run/, 'the child stderr tail is in the alert body');
+  assert.match(bodies[0], /exited 3/, 'code-owned reason present');
+  assert.match(bodies[0], /Details: .*logs.*dream/, 'log-location pointer present');
+  assert.ok(!bodies[0].includes('brain boom: API drop mid-run'), 'raw log tail must not be in the email body');
+  assert.ok(!bodies[0].includes('ghp_a1B2'), 'no secret bytes in the email body');
+});
+
+test('scheduler-runjob: the run-job log tee redacts a secret in child output (WP-124 EP3)', async () => {
+  const { root, env, paths } = setup();
+  jobsLib.saveJob(paths, { name: 'dream', at: '03:30', run: 'builtin:dream', timeoutMinutes: 20 });
+  const fake = writeScript(root, 'leaky-ok.sh', [
+    '#!/bin/sh',
+    'echo "stdout leak sk-ant-abcdefghijklmnopqrstuvwx0123 end"',
+    'echo "stderr OPENAI_API_KEY=sk-proj-ABCDEF0123456789abcdef" 1>&2',
+    'exit 0',
+  ]);
+  const sendAlert = () => ({ status: 0 });
+
+  await withRun(env, { WIENERDOG_RUNJOB_CMD: fake }, ['dream'], { sendAlert, loader: noopLoader });
+
+  const logDir = path.join(paths.logs, 'dream');
+  const logs = fs.readdirSync(logDir).filter((f) => f.endsWith('.log'));
+  assert.equal(logs.length, 1);
+  const log = fs.readFileSync(path.join(logDir, logs[0]), 'utf8');
+  assert.ok(log.includes('[REDACTED:'), log);
+  assert.ok(!log.includes('sk-ant-abcdefghijklmnopqrstuvwx0123'), 'stdout secret must not reach the run log');
+  assert.ok(!log.includes('sk-proj-ABCDEF0123456789abcdef'), 'stderr secret must not reach the run log');
 });
 
 // -------------------------------------------------------------------------
@@ -893,7 +919,7 @@ test('scheduler-runjob: failLoud always appends a durable alert and never throws
   const { paths } = setup();
 
   // Email delivered → the durable alert is still recorded (independent of email).
-  await runjob.failLoud(paths, 'dream', 'brain exploded', 'tail...', { sendAlert: () => ({ status: 0 }) });
+  await runjob.failLoud(paths, 'dream', 'brain exploded', { sendAlert: () => ({ status: 0 }) });
   let alerts = readAlerts(paths);
   assert.equal(alerts.length, 1, 'one durable alert even when the email is delivered');
   assert.equal(alerts[0].job, 'dream');
@@ -902,12 +928,12 @@ test('scheduler-runjob: failLoud always appends a durable alert and never throws
   assert.match(alerts[0].at, /^\d{4}-\d{2}-\d{2}T/, 'ISO timestamp recorded');
 
   // A second failure appends (does not overwrite).
-  await runjob.failLoud(paths, 'dream', 'again', '', { sendAlert: () => ({ status: 1 }) });
+  await runjob.failLoud(paths, 'dream', 'again', { sendAlert: () => ({ status: 1 }) });
   alerts = readAlerts(paths);
   assert.equal(alerts.length, 2, 'second failure appends');
 
   // A throwing sendAlert must not escape failLoud — and the alert is still recorded.
-  await runjob.failLoud(paths, 'dream', 'boom', '', {
+  await runjob.failLoud(paths, 'dream', 'boom', {
     sendAlert: () => {
       throw new Error('alert crashed');
     },
