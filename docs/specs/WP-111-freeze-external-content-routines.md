@@ -1,7 +1,7 @@
 ---
 id: WP-111
 title: Freeze external-content skill schedules behind the safety profile
-status: Draft
+status: Ready
 model: sonnet
 size: S
 depends_on: [WP-109]

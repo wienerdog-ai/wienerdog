@@ -128,9 +128,9 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 | [WP-107](WP-107-doctor-stale-wienerdog-hook-detection.md) | doctor flags stale/foreign wienerdog session hooks whose script is gone | M7 | sonnet | Ready | WP-106 |
 | [WP-108](WP-108-half-sandbox-guard.md) | half-sandbox guard — warn when WIENERDOG_HOME is redirected but harness configs are not | M7 | sonnet | Ready | — |
 | [WP-109](WP-109-safety-profile-and-preflight.md) | Fail-closed safety-profile capability state + `wienerdog safety` preflight (audit A0) | M7 | sonnet | Done | — |
-| [WP-110](WP-110-freeze-gws.md) | Freeze Google setup + GWS credential use behind the safety profile (A0) | M7 | sonnet | Draft | WP-109 |
-| [WP-111](WP-111-freeze-external-content-routines.md) | Freeze external-content `skill:` schedules behind the safety profile (A0) | M7 | sonnet | Draft | WP-109 |
-| [WP-112](WP-112-freeze-daily-summary-and-identity.md) | Freeze daily-Summary injection + automatic identity activation (A0) | M7 | sonnet | Draft | WP-109 |
+| [WP-110](WP-110-freeze-gws.md) | Freeze Google setup + GWS credential use behind the safety profile (A0) | M7 | sonnet | Ready | WP-109 |
+| [WP-111](WP-111-freeze-external-content-routines.md) | Freeze external-content `skill:` schedules behind the safety profile (A0) | M7 | sonnet | Ready | WP-109 |
+| [WP-112](WP-112-freeze-daily-summary-and-identity.md) | Freeze daily-Summary injection + automatic identity activation (A0) | M7 | sonnet | Ready | WP-109 |
 | [WP-113](WP-113-a0-threat-boundary-docs.md) | Document the A0 pre-use safety freeze (threat-boundary docs) | M7 | sonnet | Draft | WP-109, WP-110, WP-111, WP-112 |
 
 > **First-production-night incident (2026-07-04).** WP-038, WP-039 and WP-041 form
