@@ -122,11 +122,20 @@ function streamLines(filePath, sizeBytes, budget, onLine) {
     return deliver(text, false);
   }
 
+  let bytesConsumed = 0; // cumulative bytes read from THIS file
+
   try {
     for (;;) {
       if (budget.remaining <= 0) {
-        result.runExhausted = true;
-        return result;
+        // A binding budget always lands exactly on 0 (reads are clamped to the
+        // remaining budget), so budget-zero can coincide with EOF. Exhaustion
+        // is only real when unread bytes remain; at exact-EOF this is a normal
+        // full read — fall through to deliver the trailing no-newline line.
+        if (bytesConsumed < sizeBytes) {
+          result.runExhausted = true;
+          return result;
+        }
+        break; // file fully read; not exhaustion
       }
       let bytesRead;
       try {
@@ -136,6 +145,7 @@ function streamLines(filePath, sizeBytes, budget, onLine) {
         return result;
       }
       if (bytesRead === 0) break; // EOF
+      bytesConsumed += bytesRead;
       budget.remaining -= bytesRead;
 
       let start = 0;

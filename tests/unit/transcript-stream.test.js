@@ -154,6 +154,30 @@ test('streamLines: budget is shared across calls — an already-drained budget d
   assert.equal(result.runExhausted, true);
 });
 
+test('streamLines: budget landing exactly on EOF (no trailing newline) → full read, final line delivered, NOT runExhausted', () => {
+  // Review finding (WP-118): a binding budget always lands exactly on 0 because
+  // reads are clamped to the remaining budget. When that coincides with EOF the
+  // file WAS read in full — the trailing no-newline line must still be
+  // delivered and the file must not be reported capacity-deferred.
+  const { p, size } = writeTmp('aa\nbb\ncc'); // 8 bytes, no trailing newline
+  const budget = { remaining: size };
+  const calls = [];
+  const result = streamLines(p, size, budget, (t) => calls.push(t));
+  assert.deepEqual(calls, ['aa', 'bb', 'cc']);
+  assert.deepEqual(result, { outcome: 'ok', lines: 3, oversizedRecords: 0, runExhausted: false });
+  assert.equal(budget.remaining, 0);
+});
+
+test('streamLines: budget landing exactly on EOF (trailing newline) → NOT runExhausted', () => {
+  const { p, size } = writeTmp('aa\nbb\ncc\n');
+  const budget = { remaining: size };
+  const calls = [];
+  const result = streamLines(p, size, budget, (t) => calls.push(t));
+  assert.deepEqual(calls, ['aa', 'bb', 'cc']);
+  assert.deepEqual(result, { outcome: 'ok', lines: 3, oversizedRecords: 0, runExhausted: false });
+  assert.equal(budget.remaining, 0);
+});
+
 test('streamLines: bytes read are subtracted from the shared budget', () => {
   const { p, size } = writeTmp('abc\ndef\n');
   const budget = newRunBudget();
