@@ -1,7 +1,7 @@
 ---
 id: WP-126
 title: Private-by-default artifact modes — 0700 dirs / 0600 sensitive files on create + sync/doctor repair (audit A5)
-status: Draft
+status: Ready
 model: opus
 size: M
 depends_on: [WP-124, WP-125]
