@@ -36,11 +36,15 @@ mid-implementation — see the spec-gap note below):
 - `src/core/layout.js` `cleanValue` — a third copy of the quote + space-`#`-comment
   coercion, for vault-layout scalar values.
 
-This WP is a **structural de-duplication with no observable behavior change**: it
-routes all four consumers through `frontmatter.js` so there is exactly one place that
-lexes a `key: value` line, one place that coerces a scalar value, and one place that
-splits a `---` block body. It does NOT change any gate, threshold, or output. The
-full existing suite (889/0 at amendment time) staying green IS the acceptance signal.
+This WP is a **structural de-duplication with no observable behavior change for any
+well-formed value**: it routes all four consumers through `frontmatter.js` so there
+is exactly one place that lexes a `key: value` line, one place that coerces a scalar
+value, and one place that splits a `---` block body. It changes no gate, threshold,
+or output — with ONE intentional, owner-accepted exception: `config`/`layout` reading
+a *malformed* quote-opened-plus-trailing-comment value (`"…" # c`) now follows the
+validator's quote-first coercion order, because the three old copies genuinely
+disagreed on ordering and unification must pick one (see contract 3b). The full
+existing suite (889/0 at amendment time) staying green IS the acceptance signal.
 
 ## Current state
 
@@ -200,15 +204,24 @@ function cleanValue(raw) { return coerceScalar(raw).value; }
 ```
 
 `cleanValue` stays a private (un-exported) helper; only its body changes.
-`readVaultLayout` (line 125) keeps calling it. **Ordering nuance (record under
-"Decisions made"):** `cleanValue` stripped the comment *before* checking quotes,
-while `coerceScalar` checks quotes *first*. They agree on every well-formed value
-(plain, `"quoted"`, `'quoted'`, `unquoted # comment`); they differ ONLY on a value
-that is quote-opened AND carries a trailing space-`#` comment (`"x" # c`) — and both
-outputs are non-existent paths that `readVaultLayout` already discards, so
-`readVaultLayout`'s observable result is unchanged for every realistic layout value.
-Verify `tests/unit/layout.test.js` stays green; if a fixture exercises that
-pathological form, STOP and report it rather than papering over it.
+`readVaultLayout` (line 125) keeps calling it. **Forced-ordering edge (record under
+"Decisions made"):** the three copies did NOT all share one order — the validator
+checked **quotes first**, while `config`/`layout` stripped the **comment first**.
+Unifying onto one `coerceScalar` forces a single order; this WP adopts the
+validator's **quote-first** order. They agree on every well-formed value (plain,
+`"quoted"`, `'quoted'`, `unquoted # comment`). They diverge ONLY on a malformed value
+that is quote-**opened** AND carries a trailing space-`#` comment (`"x" # c`): old
+comment-first `cleanValue` → `"07-Custom" # note`; new quote-first → `"07-Custom"`.
+Do NOT claim this is unobservable — `readVaultLayout` does **not** check path
+existence (`isSafeRelativePath` rejects only empty/absolute/backslash/`..`), so BOTH
+values pass and are stored; the returned layout value genuinely changes. Both the old
+and new outputs are differently-broken values that retain the literal leading quote
+(neither is the clean `07-Custom`), no well-formed config produces this form, and no
+fixture exercises it — so the OWNER ACCEPTS the convergence onto the validator's
+quote-first order (2026-07-17). The same class reaches `readDreamConfig` via
+`readScalar` (e.g. `vault: "/p" # c`) and is accepted on the same basis. Verify
+`tests/unit/layout.test.js` and the config tests stay green; if a fixture exercises
+the `"…" # c` form, STOP and report it rather than papering over it.
 
 **4. `tests/unit/frontmatter-unify.test.js`.** For a shared corpus of raw values
 (`plain`, `"quoted"`, `'quoted'`, `val # comment`, `"has # inside"`, `true`,
@@ -240,9 +253,14 @@ Cover the two newly-unified consumers too:
 
 ## Implementation notes & constraints
 
-- **No behavior change is the whole point.** If a change here flips any existing
-  assertion, you migrated wrong — the shared helpers must reproduce today's bytes.
-  The full suite green is the gate.
+- **No observable behavior change for any well-formed value; one malformed
+  quoted+commented edge intentionally converges on the validator's quote-first
+  order.** If a change here flips any existing assertion on a well-formed value, you
+  migrated wrong — the shared helpers must reproduce today's bytes. The sole accepted
+  difference is `config`/`layout` reading a malformed `"…" # c` value (quote-opened
+  with a trailing comment): the three old copies did not share one ordering, so
+  unification forces one, and this WP picks the validator's quote-first order (see
+  contract 3b). The full suite green is the gate.
 - **`config.yaml` is NOT frontmatter** (no `---`), so `readScalar` cannot call
   `parse`; it shares only `coerceScalar`. This is faithful to the audit's "same
   lexical parser" intent (one definition of how a scalar value is read) without
@@ -273,8 +291,10 @@ Cover the two newly-unified consumers too:
 - [ ] `validate.parseFrontmatter` returns byte-identical results to its pre-WP
       behavior on the existing `dream-validate.test.js` corpus (booleans for exact
       `true`/`false`, strings otherwise, quotes stripped, space-`#` comments stripped).
-- [ ] `config.readScalar` returns byte-identical results (vault path + dream knobs
-      read the same).
+- [ ] `config.readScalar` returns byte-identical results for every well-formed value
+      (vault path + dream knobs read the same). The one accepted difference is a
+      malformed quote-opened-plus-trailing-comment value (`vault: "/p" # c`), which
+      now follows the validator's quote-first order — no fixture exercises it.
 - [ ] `validate.js` (`parseFrontmatter` + `skillBody`), `config.js`, and `layout.js`
       no longer contain their own `---`/`key: value` lexer, `---` body splitter, or
       quote/comment logic — all route through `frontmatter.js`.
