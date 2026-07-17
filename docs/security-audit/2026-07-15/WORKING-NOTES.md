@@ -1,8 +1,8 @@
 # Security-audit working notes (fork context for future sessions)
 
-**Last updated:** 2026-07-17
+**Last updated:** 2026-07-18
 
-## Status: A0, A4, A3, and A6 are COMPLETE (2026-07-17)
+## Status: A0, A4, A3, A6, and A5 are COMPLETE (2026-07-18)
 
 Audit action A0 landed as five reviewed work packages, WP-109..WP-113 (specs in
 `docs/specs/done/`): the code-owned safety profile (`src/core/safety-profile.js`,
@@ -51,14 +51,33 @@ bug, a hostile-basename markdown injection into the digest banner (shared
 not permanently mutate state). No capability gate opened — `wienerdog
 safety` still shows all five BLOCKED. Full suite green (1002 tests, 0 fail).
 
-**A5 spec phase is COMPLETE (2026-07-17):** **ADR-0024** is Accepted and the six
-specs **WP-122..127** are owner-ratified — every `DECISION NEEDED` resolved as a
-dated `OWNER-APPROVED` block in the specs (notable walkthrough amendments: the
-WP-123 quarantine-preserve into `state/quarantine/`, the WP-125 state-driven
-pending-review digest banner, the WP-126 insecure-modes digest banner + the
-WP-124/125 serialization dependency). No code yet. Next: the **implementation
-phase**, sequentially from **WP-122** (Ready flip → TDD → review per the
-lifecycle below).
+Audit action **A5** landed as WP-122..127, all reviewer-approved (specs in
+`docs/specs/done/`, boundary in **ADR-0024**, Accepted): the ONE shared
+detector (`src/core/secret-scan.js` — `scanAndRedact` → sanitized text +
+metadata-only findings, total/fail-closed, byte-bounded linear-time patterns,
+byte-compatible with the old REDACTIONS list); EP1 pre-brain redaction now
+delegates to it and `source_path`/`cwd` are home-pseudonymized + capped; EP2
+scans each staged file's added lines pre-commit and — per TWO in-flight
+spec-gap rulings (`fa243a1` any-finding, `610a3bd` binary fail-closed) —
+quarantine-preserves into `state/quarantine/` (0700/0600) then reverts on ANY
+finding, never rewriting; EP3 chunk-redacts brain/run-job output into the
+durable log + stderrTail, scrubs alert fields, and the fail-loud email body
+is code-owned (no raw log tail); EP4 omits any digest section with a finding
+into the one identityWarn banner (mirror ruling `b0d978c`) plus the
+state-driven pending-review and insecure-modes banners; WP-126's
+`private-fs.js` makes the A5 artifact set 0700/0600 independent of umask
+(sync repairs, doctor reports, nightly path read-only, symlink-safe sweep,
+secrets/ untouched — A5/A9 boundary held); WP-127 shipped the honest docs
+(T4 rewrite, residual bullet, vault-local/no-auto-push posture,
+`docs/runbooks/secret-incident.md`, glossary terms). `hasHardFinding` is
+exported but no shipped gate branches on it (persistence gates key on
+`findings.length > 0`; EP1/EP3 use `redactOnly`). No capability gate opened
+— `wienerdog safety` shows all five BLOCKED. Full suite green (1077 tests,
+0 fail). Known residuals, all owner-accepted and documented: chunk-boundary
+split secrets (EP3), per-run log FILE creation mode under umask until the
+next sync repair (A9 follow-up), win32 POSIX-modes posture, and the
+pre-existing project-dir-name markdown injection into the digest body
+(future WP, noted in the WP-125 close commit).
 
 This file is the durable, cross-session context for the security remediation
 work. A session that starts here with no chat history should read this first,
