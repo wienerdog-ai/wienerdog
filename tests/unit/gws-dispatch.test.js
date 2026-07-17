@@ -10,6 +10,7 @@ const path = require('node:path');
 const { getPaths } = require('../../src/core/paths');
 const grant = require('../../src/gws/grant');
 const client = require('../../src/gws/client');
+const { allowAll } = require('../../src/core/safety-profile');
 
 const repoRoot = path.join(__dirname, '..', '..');
 const bin = path.join(repoRoot, 'bin', 'wienerdog.js');
@@ -131,7 +132,10 @@ test('gws-dispatch: gmail send without a grant degrades to draft + verbatim noti
 
   const output = await captureStdout(() =>
     withEnv(env, () =>
-      gwsIndex.run(['gmail', 'send', '--to', 'a@b.com', '--subject', 's', '--body', 'b'])
+      gwsIndex.run(
+        ['gmail', 'send', '--to', 'a@b.com', '--subject', 's', '--body', 'b'],
+        { profile: allowAll() }
+      )
     )
   );
 
@@ -151,18 +155,21 @@ test('gws-dispatch: gmail send with a matching --routine grant sends for real', 
 
   await captureStdout(() =>
     withEnv(env, () =>
-      gwsIndex.run([
-        'gmail',
-        'send',
-        '--to',
-        'a@b.com',
-        '--subject',
-        's',
-        '--body',
-        'b',
-        '--routine',
-        'daily-digest',
-      ])
+      gwsIndex.run(
+        [
+          'gmail',
+          'send',
+          '--to',
+          'a@b.com',
+          '--subject',
+          's',
+          '--body',
+          'b',
+          '--routine',
+          'daily-digest',
+        ],
+        { profile: allowAll() }
+      )
     )
   );
 
@@ -182,7 +189,10 @@ test('gws-dispatch: WIENERDOG_JOB env supplies the routine when --routine is abs
   try {
     await captureStdout(() =>
       withEnv(env, () =>
-        gwsIndex.run(['gmail', 'send', '--to', 'a@b.com', '--subject', 's', '--body', 'b'])
+        gwsIndex.run(
+          ['gmail', 'send', '--to', 'a@b.com', '--subject', 's', '--body', 'b'],
+          { profile: allowAll() }
+        )
       )
     );
   } finally {
@@ -201,7 +211,10 @@ test('gws-dispatch: _alert is invoked with exactly {subject, body}', async () =>
 
   await captureStdout(() =>
     withEnv(env, () =>
-      gwsIndex.run(['_alert', '--subject', 'watchdog failed', '--body', 'job X crashed'])
+      gwsIndex.run(
+        ['_alert', '--subject', 'watchdog failed', '--body', 'job X crashed'],
+        { profile: allowAll() }
+      )
     )
   );
 
@@ -219,16 +232,19 @@ test('gws-dispatch: cal draft-event still works through the run() bridge', async
 
   await captureStdout(() =>
     withEnv(env, () =>
-      gwsIndex.run([
-        'cal',
-        'draft-event',
-        '--title',
-        't',
-        '--start',
-        '2026-07-03T09:00:00Z',
-        '--end',
-        '2026-07-03T09:15:00Z',
-      ])
+      gwsIndex.run(
+        [
+          'cal',
+          'draft-event',
+          '--title',
+          't',
+          '--start',
+          '2026-07-03T09:00:00Z',
+          '--end',
+          '2026-07-03T09:15:00Z',
+        ],
+        { profile: allowAll() }
+      )
     )
   );
 
@@ -248,20 +264,23 @@ test('gws-dispatch: repeatable --attendee accumulates through to cal draft-event
 
   await captureStdout(() =>
     withEnv(env, () =>
-      gwsIndex.run([
-        'cal',
-        'draft-event',
-        '--title',
-        't',
-        '--start',
-        '2026-07-03T09:00:00Z',
-        '--end',
-        '2026-07-03T09:15:00Z',
-        '--attendee',
-        'a@x.com',
-        '--attendee',
-        'c@x.com',
-      ])
+      gwsIndex.run(
+        [
+          'cal',
+          'draft-event',
+          '--title',
+          't',
+          '--start',
+          '2026-07-03T09:00:00Z',
+          '--end',
+          '2026-07-03T09:15:00Z',
+          '--attendee',
+          'a@x.com',
+          '--attendee',
+          'c@x.com',
+        ],
+        { profile: allowAll() }
+      )
     )
   );
 
@@ -288,7 +307,45 @@ test('gws dispatch: gmail read accepts --id flag form', async () => {
     },
   };
   await withEnv(env, () =>
-    captureStdout(() => gwsIndex.run(['gmail', 'read', '--id', 'msg-42', '--json']))
+    captureStdout(() =>
+      gwsIndex.run(['gmail', 'read', '--id', 'msg-42', '--json'], { profile: allowAll() })
+    )
   );
   assert.equal(calls[0].id, 'msg-42');
+});
+
+test('gws-dispatch freeze: gmail search fails closed with the gws-use disabled error before any API call', async () => {
+  const calls = { list: [], get: [] };
+  currentServices = {
+    gmail: {
+      users: {
+        messages: {
+          list: async (args) => {
+            calls.list.push(args);
+            return { data: { messages: [] } };
+          },
+          get: async (args) => {
+            calls.get.push(args);
+            return { data: {} };
+          },
+        },
+      },
+    },
+  };
+
+  // No opts passed -> the frozen A0 profile applies; no env/argv override exists.
+  await assert.rejects(gwsIndex.run(['gmail', 'search', 'x']), /disabled in this release/);
+
+  assert.equal(calls.list.length, 0);
+  assert.equal(calls.get.length, 0);
+});
+
+test('gws-dispatch freeze: auth fails closed with the google-setup disabled error before the client JSON is read', async () => {
+  // A path that does not exist: the freeze must throw the "disabled" error
+  // BEFORE the auth handler ever attempts to read it, not a file-read error.
+  await assert.rejects(gwsIndex.run(['auth', '--client', '/nope.json']), (err) => {
+    assert.match(err.message, /disabled in this release/);
+    assert.doesNotMatch(err.message, /could not read the client JSON/);
+    return true;
+  });
 });

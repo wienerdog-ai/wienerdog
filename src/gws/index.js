@@ -4,6 +4,7 @@ const { getPaths } = require('../core/paths');
 const { WienerdogError } = require('../core/errors');
 const { getServices } = require('./client');
 const { ensureGoogleReady } = require('./deps');
+const { requireCapability, CAPABILITY } = require('../core/safety-profile');
 
 /**
  * Parse `gws` flags out of an argv tail, returning flags plus leftover
@@ -177,9 +178,12 @@ function render(key, result, json) {
 /**
  * `wienerdog gws <group> <verb> [flags]`.
  * @param {string[]} argv
+ * @param {{profile?: Record<string,string>}} [opts] `opts.profile` is a code
+ *   seam for tests only (never derived from env/argv); production callers
+ *   (`bin/wienerdog.js`) pass nothing, so the frozen A0 profile applies.
  * @returns {Promise<void>}
  */
-async function run(argv) {
+async function run(argv, opts = {}) {
   const group = argv[0];
   // `auth` and the single-word groups (cal/drive/_alert) key on group alone;
   // gmail keys on "<group> <verb>".
@@ -197,6 +201,12 @@ async function run(argv) {
   if (!handler) {
     throw new WienerdogError(`unknown gws command: ${argv.slice(0, 2).join(' ').trim()}`);
   }
+
+  // A0 pre-use freeze (WP-109): connecting Google and using Google credentials are
+  // disabled until the P0 security gates close. Fail closed HERE — before any token
+  // load, googleapis install, or OAuth browser socket. opts.profile is a code seam
+  // for tests only (never env/argv).
+  requireCapability(key === 'auth' ? CAPABILITY.GOOGLE_SETUP : CAPABILITY.GWS_USE, opts.profile);
 
   const flags = parseFlags(rest);
   const paths = getPaths();
