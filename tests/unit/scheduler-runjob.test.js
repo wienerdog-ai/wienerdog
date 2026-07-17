@@ -12,6 +12,7 @@ const manifestLib = require('../../src/core/manifest');
 const jobsLib = require('../../src/scheduler/jobs');
 const runjob = require('../../src/cli/run-job');
 const { readAlerts, ALERTS_FILE } = require('../../src/core/alerts');
+const { allowAll } = require('../../src/core/safety-profile');
 
 /** @param {string} c @returns {string} */
 function sha256(c) {
@@ -324,11 +325,18 @@ test('scheduler-runjob: resolveCommand maps builtin:dream, skill:*, and rejects 
     assert.deepEqual(d.args.slice(1), ['dream', '--yes']);
     // builtin:dream targets the stable vendored app/current bin (ADR-0013).
     assert.equal(d.args[0], path.join(paths.core, 'app', 'current', 'bin', 'wienerdog.js'));
-    const s = runjob.resolveCommand(paths, { name: 'x', run: 'skill:wienerdog-daily-digest' });
+    const s = runjob.resolveCommand(paths, { name: 'x', run: 'skill:wienerdog-daily-digest' }, allowAll());
     assert.equal(s.command, 'claude');
     assert.deepEqual(s.args, ['-p', '/wienerdog-daily-digest']);
     assert.throws(() => runjob.resolveCommand(paths, { name: 'x', run: 'builtin:frobnicate' }), /unknown builtin/);
     assert.throws(() => runjob.resolveCommand(paths, { name: 'x', run: 'weird:thing' }), /unknown job run kind/);
+    // A0 pre-use freeze (WP-109/111): without a profile, the `skill:` branch is
+    // refused BEFORE returning the `claude` argv — a hand-edited config.yaml
+    // `skill:` job cannot spawn a model.
+    assert.throws(
+      () => runjob.resolveCommand(paths, { name: 'x', run: 'skill:wienerdog-daily-digest' }),
+      /disabled in this release/
+    );
   } finally {
     if (savedCmd === undefined) delete process.env.WIENERDOG_RUNJOB_CMD;
     else process.env.WIENERDOG_RUNJOB_CMD = savedCmd;

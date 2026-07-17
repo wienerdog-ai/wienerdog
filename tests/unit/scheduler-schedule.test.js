@@ -15,6 +15,7 @@ const jobsLib = require('../../src/scheduler/jobs');
 const gen = require('../../src/scheduler/generators');
 const vendor = require('../../src/core/vendor');
 const schedule = require('../../src/cli/schedule');
+const { allowAll } = require('../../src/core/safety-profile');
 
 // Hermeticity: CI sets XDG_CONFIG_HOME to the real ~/.config, which
 // systemdUserDir() prefers over $HOME. Unset it (this file runs in its own
@@ -62,13 +63,15 @@ function setup() {
  * @param {{HOME:string, WIENERDOG_HOME:string}} env
  * @param {string[]} argv
  * @param {(a:string[])=>{status:number}} loader
+ * @param {Record<string,string>} [profile] code seam (see safety-profile.js); a plain
+ *   `undefined` preserves the frozen behavior for every existing caller byte-for-byte.
  */
-async function runSchedule(env, argv, loader) {
+async function runSchedule(env, argv, loader, profile) {
   const saved = { HOME: process.env.HOME, WIENERDOG_HOME: process.env.WIENERDOG_HOME };
   process.env.HOME = env.HOME;
   process.env.WIENERDOG_HOME = env.WIENERDOG_HOME;
   try {
-    await schedule.run(argv, { loader });
+    await schedule.run(argv, { loader, profile });
   } finally {
     process.env.HOME = saved.HOME;
     process.env.WIENERDOG_HOME = saved.WIENERDOG_HOME;
@@ -260,6 +263,28 @@ test('scheduler-schedule: add validates name, --at, and exactly-one-of skill/job
   ); // both
 });
 
+// -------------------------------------------------------------------------
+// A0 pre-use freeze (WP-109/111): `--skill` routines are disabled — a fresh
+// install cannot create or execute an external-content routine headlessly.
+// -------------------------------------------------------------------------
+
+test('scheduler-schedule: add --skill is refused (frozen) — no job written, no OS registration', async () => {
+  const { env, paths } = setup();
+  /** @type {string[][]} */ const calls = [];
+  const loader = (argv) => {
+    calls.push(argv);
+    return { status: 0 };
+  };
+
+  await assert.rejects(
+    runSchedule(env, ['add', 'daily-digest', '--at', '07:00', '--skill', 'x'], loader),
+    /disabled in this release/
+  );
+
+  assert.equal(jobsLib.listJobs(paths).find((j) => j.name === 'daily-digest'), undefined, 'no job was written');
+  assert.equal(calls.length, 0, 'the OS scheduler was never registered');
+});
+
 test('scheduler-schedule: add registers the platform entry, records manifest, saves the job', { skip: !SCHED_SUPPORTED }, async () => {
   const { env, paths } = setup();
   /** @type {string[][]} */ const calls = [];
@@ -268,7 +293,7 @@ test('scheduler-schedule: add registers the platform entry, records manifest, sa
     return { status: 0 };
   };
 
-  await runSchedule(env, ['add', 'daily-digest', '--at', '07:00', '--skill', 'wienerdog-daily-digest'], loader);
+  await runSchedule(env, ['add', 'daily-digest', '--at', '07:00', '--skill', 'wienerdog-daily-digest'], loader, allowAll());
 
   // Job persisted with skill:<...> run and default timeout 15.
   assert.deepEqual(jobsLib.findJob(paths, 'daily-digest'), {
@@ -678,7 +703,7 @@ test('scheduler-schedule: add fails loud (throws) when the OS scheduler rejects 
   const { env } = setup();
   const loader = () => ({ status: 1 }); // schtasks/launchctl/systemctl rejects it
   await assert.rejects(
-    runSchedule(env, ['add', 'daily-digest', '--at', '07:00', '--skill', 'wienerdog-daily-digest'], loader),
+    runSchedule(env, ['add', 'daily-digest', '--at', '07:00', '--skill', 'wienerdog-daily-digest'], loader, allowAll()),
     (err) => err instanceof WienerdogError && /NOT active/.test(err.message)
   );
 });
@@ -844,7 +869,7 @@ test('scheduler-schedule: ensureDreamSchedule degrades on an unsupported platfor
 test('scheduler-schedule: list --json reports jobs with watermarks', { skip: !SCHED_SUPPORTED }, async () => {
   const { env, paths } = setup();
   await runSchedule(env, ['add', 'dream', '--at', '03:30', '--job', 'dream'], () => ({ status: 0 }));
-  await runSchedule(env, ['add', 'daily-digest', '--at', '07:00', '--skill', 'wienerdog-daily-digest'], () => ({ status: 0 }));
+  await runSchedule(env, ['add', 'daily-digest', '--at', '07:00', '--skill', 'wienerdog-daily-digest'], () => ({ status: 0 }), allowAll());
   jobsLib.writeScheduleState(paths, 'dream', { last_success: '2026-07-03T03:30:12.000Z', last_status: 'ok' });
 
   let out = '';

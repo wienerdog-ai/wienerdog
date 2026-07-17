@@ -13,6 +13,7 @@ const { readDreamConfig } = require('../core/dream/config');
 const jobsLib = require('../scheduler/jobs');
 const gen = require('../scheduler/generators');
 const tccguard = require('../scheduler/tccguard');
+const { requireCapability, CAPABILITY } = require('../core/safety-profile');
 
 /**
  * `wienerdog run-job <name>` is the short-lived wrapper the OS scheduler launches
@@ -199,9 +200,11 @@ function killProcessTree(pid, platform, seams = {}) {
  * the resolved command with WIENERDOG_RUNJOB_CMD (mirrors WP-017's DREAM_CMD).
  * @param {import('../core/paths').WienerdogPaths} paths
  * @param {{name:string, run:string}} job
+ * @param {Record<string,string>} [profile] code seam for tests only (see
+ *   safety-profile.js); `runJob` never passes one, so production stays frozen.
  * @returns {{command:string, args:string[], shell:boolean}}
  */
-function resolveCommand(paths, job) {
+function resolveCommand(paths, job, profile) {
   const fake = process.env.WIENERDOG_RUNJOB_CMD;
   if (fake) return { command: fake, args: [], shell: true };
 
@@ -215,6 +218,10 @@ function resolveCommand(paths, job) {
     throw new WienerdogError(`unknown builtin job: ${rest}`);
   }
   if (kind === 'skill') {
+    // A0 pre-use freeze: refuse to spawn a bare `claude -p /<skill>` for an
+    // external-content routine (audit A1) — fail closed BEFORE the model spawn,
+    // even for a hand-edited config.yaml job.
+    requireCapability(CAPABILITY.EXTERNAL_CONTENT_ROUTINE, profile);
     // Claude is the v1 default headless brain for routine skills.
     return { command: 'claude', args: ['-p', `/${rest}`], shell: false };
   }

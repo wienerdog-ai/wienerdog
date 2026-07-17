@@ -10,6 +10,7 @@ const manifestLib = require('../core/manifest');
 const jobsLib = require('../scheduler/jobs');
 const gen = require('../scheduler/generators');
 const { schedulerSpawn } = require('../scheduler/spawn');
+const { requireCapability, CAPABILITY } = require('../core/safety-profile');
 
 /**
  * Loader seam: the ONE place that registers/loads entries with the OS scheduler.
@@ -323,8 +324,10 @@ function ensureDreamSchedule(paths, opts = {}) {
  * schedule add <name> --at HH:MM (--skill <s> | --job <builtin>) [--timeout <min>]
  * @param {string[]} argv
  * @param {(argv:string[])=>{status:number}} loader
+ * @param {Record<string,string>} [profile] code seam for tests only (see safety-profile.js);
+ *   production never passes one, so `--skill` stays frozen.
  */
-function add(argv, loader) {
+function add(argv, loader, profile) {
   const { positionals, flags } = parseArgs(
     argv,
     new Set(['at', 'skill', 'job', 'timeout'])
@@ -345,6 +348,11 @@ function add(argv, loader) {
     throw new WienerdogError('schedule add: provide exactly one of --skill <name> or --job <builtin>');
   }
   const run = hasSkill ? `skill:${flags.skill}` : `builtin:${flags.job}`;
+
+  // A0 pre-use freeze (WP-109): skill-based (external-content) routines are disabled
+  // until code-owned hermetic profiles exist (audit A1). Fail closed BEFORE writing
+  // config.yaml or registering an OS entry. builtin:* (the dream) is unaffected.
+  if (hasSkill) requireCapability(CAPABILITY.EXTERNAL_CONTENT_ROUTINE, profile);
 
   let timeoutMinutes;
   if (typeof flags.timeout === 'string') {
@@ -470,15 +478,15 @@ function list(argv) {
 /**
  * wienerdog schedule <add|remove|list> ...
  * @param {string[]} argv
- * @param {{loader?: (argv:string[])=>{status:number}}} [opts]
+ * @param {{loader?: (argv:string[])=>{status:number}, profile?: Record<string,string>}} [opts]
  * @returns {Promise<void>}
  */
-async function run(argv, { loader = defaultLoader } = {}) {
+async function run(argv, { loader = defaultLoader, profile } = {}) {
   const sub = argv[0];
   const rest = argv.slice(1);
   switch (sub) {
     case 'add':
-      add(rest, loader);
+      add(rest, loader, profile);
       return;
     case 'remove':
       remove(rest, loader);
