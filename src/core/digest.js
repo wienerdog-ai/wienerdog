@@ -348,6 +348,7 @@ function capDigest(assembled, prefix) {
  * @param {{alerts?: Array<{job:string, at:string, reason:string, log_hint:string}>,
  *          quarantineLine?: string,
  *          secretQuarantine?: string[],
+ *          insecureModes?: number,
  *          schedulerLine?: string, updateLine?: string,
  *          profile?: Record<string,string>,
  *          identityApprovals?: Record<string,string>}} [opts]
@@ -481,8 +482,18 @@ function renderDigest(vaultDir, layout = defaultLayout(), opts = {}) {
       `appear to contain a secret — ${quarantined.join(', ')}. Review the copies in state/quarantine/: restore ` +
       'what you meant to keep, delete the rest; this notice clears when the folder is empty.'
     : '';
+  // Insecure-modes awareness banner (WP-126, OWNER-APPROVED 2026-07-17):
+  // state-driven like the quarantine banner above — renders while the
+  // read-only mode scan finds group/world-accessible A5 artifacts, clears
+  // after the fixing `wienerdog sync`. Count + remediation only: no paths, no
+  // content (details live in `wienerdog doctor`).
+  const insecureCount = Number(opts.insecureModes) > 0 ? Number(opts.insecureModes) : 0;
+  const insecureModesWarn = insecureCount > 0
+    ? `> [!warning] Wienerdog: ${insecureCount} private Wienerdog file(s) or folder(s) are readable by other ` +
+      'users on this machine — run `wienerdog sync` to fix the permissions (`wienerdog doctor` lists them).'
+    : '';
   const prefix = [identityWarn, formatAlerts(opts.alerts || []), opts.quarantineLine || '',
-    secretQuarantineWarn, opts.schedulerLine || '', opts.updateLine || '']
+    secretQuarantineWarn, insecureModesWarn, opts.schedulerLine || '', opts.updateLine || '']
     .filter((s) => s !== '')
     .join('\n\n');
   const assembled = prefix ? `${prefix}\n\n${body}` : body;

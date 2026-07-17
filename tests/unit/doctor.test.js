@@ -626,3 +626,27 @@ test('doctor with a set-but-missing vault fails and exits 1', () => {
   assert.equal(r.status, 1);
   assert.match(r.stdout, /\[fail\].*vault/);
 });
+
+test('doctor: WARNs on world-readable A5 artifacts and is clean once private; never mutates (WP-126)', { skip: process.platform === 'win32' }, () => {
+  const { env, core } = tempEnv();
+  run(['init', '--yes'], env);
+  const state = path.join(core, 'state');
+  fs.mkdirSync(state, { recursive: true });
+  fs.writeFileSync(path.join(state, 'digest.md'), 'd', { mode: 0o644 });
+  fs.writeFileSync(path.join(state, 'alerts.jsonl'), '{}\n', { mode: 0o644 });
+  fs.chmodSync(state, 0o755);
+
+  const warned = run(['doctor'], env);
+  assert.match(warned.stdout, /\[warn\] .*digest\.md is readable by other users — run 'wienerdog sync' to harden it/);
+  assert.match(warned.stdout, /\[warn\] .*alerts\.jsonl is readable by other users/);
+  assert.match(warned.stdout, /\[warn\] .*state is readable by other users/);
+  // doctor never mutates (WP-070): modes are unchanged after the run.
+  assert.equal(fs.statSync(path.join(state, 'digest.md')).mode & 0o777, 0o644);
+  assert.equal(fs.statSync(state).mode & 0o777, 0o755);
+
+  fs.chmodSync(state, 0o700);
+  fs.chmodSync(path.join(state, 'digest.md'), 0o600);
+  fs.chmodSync(path.join(state, 'alerts.jsonl'), 0o600);
+  const clean = run(['doctor'], env);
+  assert.ok(!clean.stdout.includes('is readable by other users'), clean.stdout);
+});

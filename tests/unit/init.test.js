@@ -248,3 +248,12 @@ test('help prints usage and exits 0', () => {
   assert.equal(r.status, 0);
   assert.match(r.stdout, /Usage:/);
 });
+
+test('init --yes creates core/state/logs at 0700 under a permissive umask (WP-126)', { skip: process.platform === 'win32' }, () => {
+  const env = tempEnv();
+  run(['init', '--yes'], env.env);
+  for (const d of ['', 'state', 'logs', 'secrets']) {
+    const p = d === '' ? env.core : path.join(env.core, d);
+    assert.equal(fs.statSync(p).mode & 0o777, 0o700, `${p} must be 0700`);
+  }
+});

@@ -128,16 +128,30 @@ async function run(argv) {
   const manifest = manifestLib.load(paths);
 
   let createdSecrets = false;
+  /** @type {string[]} */
+  const createdDirs = [];
   for (const d of dirs) {
     if (!dirExists(d)) {
-      fs.mkdirSync(d, { recursive: true, mode: d === paths.secrets ? 0o700 : undefined });
+      fs.mkdirSync(d, { recursive: true, mode: 0o700 });
       manifestLib.record(manifest, { kind: 'dir', path: d });
+      createdDirs.push(d);
       if (d === paths.secrets) createdSecrets = true;
     }
   }
-  // Enforce 0700 only on a secrets dir WE created (defeats a restrictive umask on the
-  // fresh dir). A pre-existing user path is never re-permissioned by init.
+  // Enforce 0700 on every dir WE created (audit A5, WP-126: core/state/logs are
+  // secret-lifecycle dirs — the explicit chmod defeats a permissive umask, since
+  // mkdir's mode is umask-masked). A pre-existing user path is never
+  // re-permissioned by init — repair of legacy modes is `wienerdog sync`'s job.
   if (createdSecrets) fs.chmodSync(paths.secrets, 0o700);
+  for (const d of createdDirs) {
+    if (d !== paths.secrets) {
+      try {
+        fs.chmodSync(d, 0o700);
+      } catch {
+        /* best-effort (win32 no-op) — init must not fail on a mode */
+      }
+    }
+  }
 
   if (needConfig) {
     const content = renderConfig(harnesses);

@@ -380,3 +380,18 @@ test('alerts: renderDigest built from a secret-bearing alert carries no secret (
   assert.ok(!out.includes('ghp_a1B2a1B2a1B2a1B2a1B2a1B2a1B2a1B2a1B2'), 'digest banner must not carry the secret');
   assert.ok(out.includes('[REDACTED:'), 'redaction marker visible in the latest-error line');
 });
+
+test('alerts: alerts.jsonl ends 0600 after append and after compaction (WP-126)', { skip: process.platform === 'win32' }, () => {
+  const { paths } = setup();
+  appendAlert(paths, rec('dream', '2026-07-04T01:00:00.000Z', 'exited 1'));
+  const file = path.join(paths.state, ALERTS_FILE);
+  assert.equal(fs.statSync(file).mode & 0o777, 0o600, 'first append leaves 0600');
+  assert.equal(fs.statSync(paths.state).mode & 0o777, 0o700, 'state dir is 0700');
+
+  fs.chmodSync(file, 0o644); // legacy mode; the next compaction pass re-hardens
+  for (let i = 0; i < MAX_ALERTS + 1; i += 1) {
+    appendAlert(paths, rec('dream', `2026-07-04T01:00:${String(i % 60).padStart(2, '0')}.000Z`, 'exited 1'));
+  }
+  assert.equal(fs.statSync(file).mode & 0o777, 0o600, 'compaction rewrite leaves 0600');
+  assert.equal(readAlerts(paths).length, MAX_ALERTS, 'compaction bound unchanged');
+});

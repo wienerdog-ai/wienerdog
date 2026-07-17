@@ -13,6 +13,7 @@ const { collectExtracts, cleanScratch, MIN_TRUNCATE_BYTES } = require('../core/d
 const { spawnBrain, buildClaudeArgs } = require('../core/dream/brain');
 const { readVaultLayout } = require('../core/layout');
 const { renderDigest, listSecretQuarantine } = require('../core/digest');
+const { writeFilePrivate, scanPrivateModes } = require('../core/private-fs');
 const identityApprovals = require('../core/identity-approvals');
 const { renderUpdateLine } = require('../core/update-check');
 const { readAlerts } = require('../core/alerts');
@@ -210,11 +211,12 @@ async function run(argv) {
         identityApprovals: identityApprovals.approvalsMap(idReg),
         quarantineLine,
         secretQuarantine: listSecretQuarantine(paths.state), // EP4 pending-review banner (WP-125)
+        // Insecure-modes awareness banner (WP-126, OWNER-APPROVED): the nightly
+        // path only READS modes — repair is sync's attended job, never here.
+        insecureModes: scanPrivateModes(paths).insecure,
       });
       const digestDest = path.join(paths.state, 'digest.md');
-      const digestTmp = path.join(paths.state, `.digest.md.${process.pid}.tmp`);
-      fs.writeFileSync(digestTmp, digest);
-      fs.renameSync(digestTmp, digestDest);
+      writeFilePrivate(digestDest, digest); // atomic 0600 (audit A5, WP-126)
     };
 
     // 5. Surface capacity events plainly — a size event must NEVER be silent.

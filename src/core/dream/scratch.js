@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const transcripts = require('../transcripts');
+const { mkdirPrivate, writeFilePrivate } = require('../private-fs');
 const ledgerLib = require('./ledger');
 
 /** Minimum bytes a *truncated* extract must be granted to be worth feeding. A
@@ -159,7 +160,7 @@ function collectExtracts(paths, ledger, maxInputBytes) {
   // 5. (Re)create an empty scratch dir BEFORE the parse/write loop.
   const scratchDir = scratchDirOf(paths.state);
   fs.rmSync(scratchDir, { recursive: true, force: true });
-  fs.mkdirSync(scratchDir, { recursive: true });
+  mkdirPrivate(scratchDir); // 0700 independent of umask (audit A5, WP-126)
 
   // 6. Parse + materialize ONE file at a time, newest-first grant order, under
   //    ONE shared run budget: parse → (maybe truncate) → write → drop the
@@ -211,7 +212,7 @@ function collectExtracts(paths, ledger, maxInputBytes) {
       });
     }
     const scratchFile = path.join(scratchDir, `${d.harness}-${sanitize(extract.session_id)}.json`);
-    fs.writeFileSync(scratchFile, JSON.stringify(extract, null, 2));
+    writeFilePrivate(scratchFile, JSON.stringify(extract, null, 2)); // 0600 (audit A5, WP-126)
     entries.push({
       harness: d.harness,
       session_id: extract.session_id,

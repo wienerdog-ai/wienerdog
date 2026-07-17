@@ -362,6 +362,18 @@ async function run(_argv) {
     else check('warn', `secrets directory permissions are ${mode.toString(8)} (expected 700)`);
   }
 
+  // A5 private-modes check (WP-126, ADR-0024): READ-ONLY — doctor never
+  // mutates (WP-070 invariant); `wienerdog sync` is the fixer. Same predicate
+  // as sync --dry-run and the digest banner (private-fs.insecureEntries), so
+  // the three surfaces can never disagree. Skipped on win32 (no POSIX modes;
+  // owner-approved posture — per-user profile ACLs carry Windows).
+  if (process.platform !== 'win32') {
+    const { insecureEntries } = require('../core/private-fs');
+    for (const p of insecureEntries(paths)) {
+      check('warn', `${p} is readable by other users — run 'wienerdog sync' to harden it`);
+    }
+  }
+
   // Harness detection summary (informational).
   const harnesses = detectHarnesses();
   check(

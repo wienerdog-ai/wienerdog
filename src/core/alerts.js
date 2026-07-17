@@ -4,6 +4,18 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const { redactOnly } = require('./secret-scan');
+const { mkdirPrivate } = require('./private-fs');
+
+/** Best-effort 0600 on the alerts file (audit A5, WP-126): a first append
+ *  otherwise inherits umask; win32/vanished-file is a silent no-op.
+ *  @param {string} file */
+function chmodAlerts(file) {
+  try {
+    if (process.platform !== 'win32') fs.chmodSync(file, 0o600);
+  } catch {
+    /* best-effort — never mask the append/compaction result */
+  }
+}
 
 // Append-only durable failure log under state/alerts.jsonl. Replaces the
 // transient digest banner (WP-020) whose regeneration erased it. One JSON object
@@ -42,7 +54,7 @@ function sanitizeAlert(r) {
  *  @param {import('./paths').WienerdogPaths} paths
  *  @param {{job:string, at:string, reason:string, log_hint:string}} record */
 function appendAlert(paths, record) {
-  fs.mkdirSync(paths.state, { recursive: true });
+  mkdirPrivate(paths.state); // 0700 independent of umask (audit A5, WP-126)
   const file = alertsPath(paths);
   // Separator guard: if the existing file does NOT end in a newline (e.g. a
   // truncated/oversized malformed tail with no terminator), a bare append would FUSE
@@ -74,6 +86,7 @@ function appendAlert(paths, record) {
   // run-job can still drop a record a DIFFERENT run-job appended in the same window;
   // that residual is accepted — full cross-process locking is out of scope per ADR-0004.)
   fs.appendFileSync(file, `${sep}${JSON.stringify(sanitizeAlert(record))}\n`);
+  chmodAlerts(file); // the atomic first append may have CREATED the file under umask
   let size = 0;
   try {
     size = fs.statSync(file).size;
@@ -101,8 +114,9 @@ function appendAlert(paths, record) {
       text = serialize(kept);
     }
     const tmp = `${file}.${process.pid}.tmp`;
-    fs.writeFileSync(tmp, text);
+    fs.writeFileSync(tmp, text, { mode: 0o600 });
     fs.renameSync(tmp, file); // atomic replace (mirrors clearAlerts)
+    chmodAlerts(file);
   }
 }
 

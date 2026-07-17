@@ -5,6 +5,7 @@ const path = require('node:path');
 const { getPaths } = require('../core/paths');
 const { WienerdogError } = require('../core/errors');
 const { renderDigest, listSecretQuarantine } = require('../core/digest');
+const { writeFilePrivate, repairPrivateModes, scanPrivateModes } = require('../core/private-fs');
 const identityApprovals = require('../core/identity-approvals');
 const { renderUpdateLine } = require('../core/update-check');
 const { readAlerts } = require('../core/alerts');
@@ -206,6 +207,19 @@ async function run(argv, opts = {}) {
   /** @type {{changed: string[], unchanged: string[], notices: string[]}} */
   const summary = { changed: [], unchanged: [], notices: [] };
 
+  // 0. Private-modes repair (audit A5, WP-126, OWNER-APPROVED: sync is THE
+  //    attended fixer; doctor reports, the nightly path only reads). Runs
+  //    BEFORE the digest render so a repairing sync's own digest carries no
+  //    stale insecure-modes banner. Dry-run never chmods — it reports the
+  //    would-repair count from the read-only scan.
+  if (dryRun) {
+    const { insecure } = scanPrivateModes(paths);
+    if (insecure > 0) console.log(`wienerdog: would harden ${insecure} artifact permission(s).`);
+  } else {
+    const { changed } = repairPrivateModes(paths);
+    if (changed > 0) console.log(`wienerdog: hardened ${changed} artifact permission(s).`);
+  }
+
   // 1. Digest + managed block need a vault. Skip both when unset (exit 0).
   const skipManagedBlock = !vaultPath;
   if (vaultPath) {
@@ -222,13 +236,11 @@ async function run(argv, opts = {}) {
       updateLine: renderUpdateLine(paths),
       identityApprovals: identityApprovals.approvalsMap(idReg),
       secretQuarantine: listSecretQuarantine(paths.state), // EP4 pending-review banner (WP-125)
+      insecureModes: scanPrivateModes(paths).insecure, // post-repair on a real sync (WP-126)
     });
     const dest = path.join(paths.state, 'digest.md');
     if (!dryRun) {
-      fs.mkdirSync(paths.state, { recursive: true });
-      const tmp = path.join(paths.state, `.digest.md.${process.pid}.tmp`);
-      fs.writeFileSync(tmp, digest);
-      fs.renameSync(tmp, dest);
+      writeFilePrivate(dest, digest); // atomic 0600, parent 0700 (audit A5, WP-126)
     }
     console.log(
       `wienerdog: ${dryRun ? 'would write' : 'wrote'} ${dest} (${Buffer.byteLength(digest)} bytes).`

@@ -554,3 +554,18 @@ test('listSecretQuarantine: lists sanitized basenames; missing dir → []', () =
   fs.writeFileSync(path.join(qdir, '.tmp-123-x.md'), 'partial');
   assert.deepEqual(listSecretQuarantine(stateDir), ['2026-07-17-leak.md'], 'dotfiles/tmp excluded, content never read');
 });
+
+test('insecureModes: a positive count renders the fixed banner in the prefix; 0/absent stay golden (WP-126)', () => {
+  const golden = fs.readFileSync(GOLDEN, 'utf8');
+  const withBanner = renderDigest(FIXTURE, undefined, { identityApprovals: approvals(FIXTURE), insecureModes: 3 });
+  assert.ok(
+    withBanner.includes('3 private Wienerdog file(s) or folder(s) are readable by other users'),
+    withBanner.split('\n')[0]
+  );
+  assert.ok(withBanner.includes('run `wienerdog sync` to fix the permissions'), 'remediation present');
+  assert.ok(withBanner.indexOf('readable by other users') < withBanner.indexOf("# Who you're working with"), 'banner is in the prefix');
+  const bannerLine = withBanner.split('\n').find((l) => l.includes('readable by other users'));
+  assert.ok(bannerLine && !/[/\\]/.test(bannerLine.replace('`wienerdog sync`', '').replace('`wienerdog doctor`', '')), 'no paths in the banner line');
+  assert.equal(renderDigest(FIXTURE, undefined, { identityApprovals: approvals(FIXTURE), insecureModes: 0 }), golden);
+  assert.equal(renderDigest(FIXTURE, undefined, { identityApprovals: approvals(FIXTURE) }), golden);
+});

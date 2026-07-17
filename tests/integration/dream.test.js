@@ -679,3 +679,30 @@ test('dream-integration: --dry-run on the upgrade path (watermarks.json present,
   assert.equal(ledgerRecord(ledger, 'huge.jsonl').outcome, 'quarantined');
   assert.ok(fs.readFileSync(path.join(state, 'digest.md'), 'utf8').includes('huge.jsonl (over-ceiling)'), 'banner written by the real run');
 });
+
+test('dream-integration: A5 private modes — digest.md 0600 after a dream; scratch dir 0700 with 0600 extracts (WP-126)', { skip: process.platform === 'win32' }, async () => {
+  const ctx = setup();
+  idApprovals.seedApprovals(path.join(ctx.core, 'state'), ctx.vault, defaultLayout());
+
+  const { thrown } = await runDream(ctx, ['--yes']);
+  assert.equal(thrown, null, thrown && thrown.message);
+
+  const digestMode = fs.statSync(path.join(ctx.core, 'state', 'digest.md')).mode & 0o777;
+  assert.equal(digestMode, 0o600, 'digest.md must be private after a dream');
+
+  // The dream wipes scratch on exit, so probe the collector directly (the same
+  // code path the dream ran): the scratch dir must be 0700, every extract 0600.
+  const { collectExtracts, cleanScratch } = require('../../src/core/dream/scratch');
+  const paths = { state: path.join(ctx.core, 'state'), claudeDir: ctx.claude, codexDir: ctx.codex };
+  // A fresh empty ledger re-selects the fixture transcript, so extracts are written.
+  const sel = collectExtracts(paths, { version: 1, files: {}, baseline_mtime: {} }, 1024 * 1024);
+  try {
+    assert.equal(fs.statSync(sel.scratchDir).mode & 0o777, 0o700, 'scratch dir must be 0700');
+    assert.ok(sel.wrote.length > 0, 'the probe must materialize at least one extract');
+    for (const f of sel.wrote) {
+      assert.equal(fs.statSync(f).mode & 0o777, 0o600, `extract ${f} must be 0600`);
+    }
+  } finally {
+    cleanScratch(paths.state);
+  }
+});
