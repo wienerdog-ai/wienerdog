@@ -896,24 +896,37 @@ function validateAndCommit(o) {
     let rel = scanTokens[++i];
     if (status[0] === 'R' || status[0] === 'C') rel = scanTokens[++i];
     if (status[0] === 'D') continue; // a deletion has no added content
-    const diff = git(vaultDir, ['diff', '--cached', '-U0', '--', rel]).stdout;
-    const added = diff
-      .split('\n')
-      .filter((l) => l.startsWith('+') && !l.startsWith('+++'))
-      .map((l) => l.slice(1))
-      .join('\n');
-    if (added === '') continue;
-    const { findings } = scanAndRedact(added);
-    if (findings.length === 0) continue;
-    // Metadata-only reason: distinct code-owned labels, never the matched bytes.
-    const labels = findings.map((f) => f.label);
+    // Binary staged content is unscannable → fail closed (spec-gap amendment,
+    // 2026-07-17 review round 1): git's own binary signal is numstat reporting
+    // `-` for both counts. A NUL in the first ~8 KB is attacker-influenceable,
+    // so an unscannable file is withheld exactly like a finding — never
+    // committed raw. Text changes with no `+` lines (pure deletions,
+    // mode-only) added no bytes this run and stay skipped.
+    const numstat = git(vaultDir, ['diff', '--cached', '--numstat', '-z', '--', rel]).stdout;
+    const isBinary = /^-\t-\t/.test(numstat);
+    let reason;
+    if (isBinary) {
+      reason = 'reverted: staged content is binary and cannot be secret-scanned; not committed';
+    } else {
+      const diff = git(vaultDir, ['diff', '--cached', '-U0', '--', rel]).stdout;
+      const added = diff
+        .split('\n')
+        .filter((l) => l.startsWith('+') && !l.startsWith('+++'))
+        .map((l) => l.slice(1))
+        .join('\n');
+      if (added === '') continue;
+      const { findings } = scanAndRedact(added);
+      if (findings.length === 0) continue;
+      // Metadata-only reason: distinct code-owned labels, never the matched bytes.
+      const labels = findings.map((f) => f.label);
+      reason = `reverted: staged content matched a secret pattern (${labels.join(', ')}); not committed`;
+    }
     const preserved = quarantinePreserve(stateDir, vaultDir, rel, date);
     if (git(vaultDir, ['cat-file', '-e', `HEAD:${rel}`], { allowFail: true }).status === 0) {
       revertPath(vaultDir, rel, false); // tracked → restore HEAD (index + worktree)
     } else {
       fs.rmSync(path.join(vaultDir, rel), { force: true, recursive: true }); // untracked add → remove (Step 5's add -A drops the index entry)
     }
-    let reason = `reverted: staged content matched a secret pattern (${labels.join(', ')}); not committed`;
     if (!preserved) reason += ' (quarantine copy failed)';
     reverted.push({ path: rel, reason });
     secretReverted.add(rel);

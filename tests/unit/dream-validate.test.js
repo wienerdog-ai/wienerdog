@@ -1089,3 +1089,64 @@ test('dream-validate: EP2 clean run reports secretReverts 0 and leaves existing 
   assert.ok(res.committed.includes('04-Atomic/clean.md'));
   assert.equal(fs.existsSync(path.join(stateDir, 'quarantine')), false);
 });
+
+test('dream-validate: EP2 a NUL-prefixed (binary-classified) note with a planted secret fails closed', () => {
+  const { root, vault, scratch } = tempVault();
+  const stateDir = path.join(root, 'state');
+  const bytes = Buffer.concat([
+    Buffer.from([0]),
+    Buffer.from('# note\nAWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY\n'),
+  ]);
+  fs.mkdirSync(path.join(vault, '04-Atomic'), { recursive: true });
+  fs.writeFileSync(path.join(vault, '04-Atomic/nul-note.md'), bytes);
+
+  const res = validateAndCommit({ vaultDir: vault, scratchDir: scratch, date: '2026-07-02', expectedScratch: [], stateDir });
+
+  assert.ok(!res.committed.includes('04-Atomic/nul-note.md'));
+  assert.equal(fs.existsSync(path.join(vault, '04-Atomic/nul-note.md')), false);
+  assert.throws(() => git(vault, ['show', 'HEAD:04-Atomic/nul-note.md']));
+  const entry = res.reverted.find((r) => r.path === '04-Atomic/nul-note.md');
+  assert.ok(entry, JSON.stringify(res.reverted));
+  assert.equal(entry.reason, 'reverted: staged content is binary and cannot be secret-scanned; not committed');
+  assert.ok(!entry.reason.includes('wJalrXUtnFEMI'));
+  assert.equal(res.secretReverts, 1);
+  // byte-identical quarantine copy (mode 0600).
+  const qfile = path.join(stateDir, 'quarantine', '2026-07-02-nul-note.md');
+  assert.deepEqual(fs.readFileSync(qfile), bytes);
+  assert.equal(fs.statSync(qfile).mode & 0o777, 0o600);
+});
+
+test('dream-validate: EP2 a pure binary blob with an embedded secret fails closed', () => {
+  const { root, vault, scratch } = tempVault();
+  const stateDir = path.join(root, 'state');
+  const blob = Buffer.concat([
+    crypto.randomBytes(64),
+    Buffer.from([0, 0, 0]),
+    Buffer.from('sk-ant-abcdefghijklmnopqrstuvwx0123'),
+    crypto.randomBytes(64),
+  ]);
+  fs.mkdirSync(path.join(vault, '04-Atomic'), { recursive: true });
+  fs.writeFileSync(path.join(vault, '04-Atomic/blob.bin'), blob);
+
+  const res = validateAndCommit({ vaultDir: vault, scratchDir: scratch, date: '2026-07-02', expectedScratch: [], stateDir });
+
+  assert.equal(fs.existsSync(path.join(vault, '04-Atomic/blob.bin')), false);
+  assert.throws(() => git(vault, ['show', 'HEAD:04-Atomic/blob.bin']));
+  const entry = res.reverted.find((r) => r.path === '04-Atomic/blob.bin');
+  assert.ok(entry && entry.reason === 'reverted: staged content is binary and cannot be secret-scanned; not committed');
+  assert.equal(res.secretReverts, 1);
+  assert.deepEqual(fs.readFileSync(path.join(stateDir, 'quarantine', '2026-07-02-blob.bin')), blob);
+});
+
+test('dream-validate: EP2 a text change with only deleted lines is still skipped (no bytes added this run)', () => {
+  const headText = 'keep this line\nand drop this one\n';
+  const { root, vault, scratch } = tempVault({ '04-Atomic/shrink.md': headText });
+  const stateDir = path.join(root, 'state');
+  writeVault(vault, '04-Atomic/shrink.md', 'keep this line\n');
+
+  const res = validateAndCommit({ vaultDir: vault, scratchDir: scratch, date: '2026-07-02', expectedScratch: [], stateDir });
+
+  assert.ok(res.committed.includes('04-Atomic/shrink.md'));
+  assert.equal(git(vault, ['show', 'HEAD:04-Atomic/shrink.md']), 'keep this line\n');
+  assert.equal(res.secretReverts, 0);
+});
