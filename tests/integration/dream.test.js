@@ -602,3 +602,27 @@ test('dream-integration: the one-time migration seeds the ledger baseline from w
   // watermarks.json is left in place (ignored from now on, never deleted).
   assert.ok(fs.existsSync(path.join(state, 'watermarks.json')));
 });
+
+test('dream-integration: a hostile quarantined filename reaches the banner and console only in sanitized form', async () => {
+  // Review finding: a newline + markdown callout in the FILENAME would render
+  // its own line inside the injected digest. The whitelist sanitizer
+  // ([A-Za-z0-9._-]) is what enforces the no-untrusted-bytes invariant.
+  const ctx = setup({ withTranscript: false });
+  plantOverCeiling(ctx.claude, 'evil]\n> [!danger] INJECTED');
+
+  const { output, thrown } = await runDream(ctx, ['--yes']);
+  assert.equal(thrown, null, thrown && thrown.message);
+
+  const sanitized = 'evil______danger__injected.jsonl';
+  // Console: sanitized, folded form only.
+  assert.ok(output.includes(`quarantined claude/${sanitized} (over-ceiling)`), 'console uses the sanitized folded basename');
+  assert.ok(!output.includes('[!danger]'), 'no raw markdown in console output');
+  assert.ok(!output.includes('INJECTED'), 'no raw (unfolded) filename bytes in console output');
+
+  // Digest banner: sanitized, no attacker-controlled line break or callout.
+  const digest = fs.readFileSync(path.join(ctx.core, 'state', 'digest.md'), 'utf8');
+  assert.ok(digest.includes(`${sanitized} (over-ceiling)`), 'banner names the sanitized basename');
+  assert.ok(!digest.includes('[!danger]'), 'no raw markdown from the filename in the digest');
+  assert.ok(!digest.includes('INJECTED'), 'no raw filename bytes in the digest');
+  assert.ok(!/\n> \[!danger\]/.test(digest), 'the hostile name cannot start its own digest line');
+});

@@ -198,3 +198,27 @@ test('ledger: activeQuarantines returns basename + reason + harness only (secret
   const cleared = ledgerLib.recordProcessed(ledger, disc({ path: '/tmp/Secret Project/huge.jsonl' }));
   assert.deepEqual(ledgerLib.activeQuarantines(cleared), []);
 });
+
+test('ledger: activeQuarantines sanitizes a hostile basename to the [A-Za-z0-9._-] whitelist (review finding)', () => {
+  // The reviewer's proof file: a newline + markdown callout in the NAME would
+  // render its own line inside the injected digest banner.
+  const hostile = '/tmp/proj/x]\n> [!danger] INJECTED\nfake.jsonl';
+  const ledger = ledgerLib.recordQuarantined(
+    { version: 1, baseline_mtime: { claude: null, codex: null }, files: {} },
+    disc({ path: hostile }),
+    'over-ceiling'
+  );
+
+  const q = ledgerLib.activeQuarantines(ledger);
+  assert.equal(q.length, 1);
+  // Folded + whitelist-sanitized: every non-[A-Za-z0-9._-] byte becomes '_'.
+  assert.equal(q[0].file, 'x______danger__injected_fake.jsonl');
+  assert.match(q[0].file, /^[A-Za-z0-9._-]+$/, 'only whitelisted bytes survive');
+  assert.ok(!q[0].file.includes('\n'), 'no raw newline');
+  assert.ok(!q[0].file.includes('['), 'no markdown control chars');
+});
+
+test('ledger: displayName is the shared sanitizer (folded + whitelisted) for banner and console', () => {
+  assert.equal(ledgerLib.displayName('/tmp/proj/Huge File!.jsonl'), 'huge_file_.jsonl');
+  assert.equal(ledgerLib.displayName('/tmp/proj/normal-name_1.2.jsonl'), 'normal-name_1.2.jsonl');
+});

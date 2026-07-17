@@ -224,10 +224,12 @@ async function run(argv) {
           `dream_max_input_bytes (${cfg.maxInputBytes}): ${names}.`
       );
     }
-    // Per-quarantine console line: secret-free — basename + reason enum only.
+    // Per-quarantine console line: secret-free — SANITIZED folded basename +
+    // reason enum only, through the SAME sanitizer as the digest banner
+    // (ledger.displayName; review finding, amended 2026-07-17).
     for (const q of sel.newlyQuarantined) {
       console.log(
-        `wienerdog: dream — quarantined ${q.harness}/${path.basename(q.path)} (${q.reason}); ` +
+        `wienerdog: dream — quarantined ${q.harness}/${ledgerLib.displayName(q.path)} (${q.reason}); ` +
           'it will not be retried until it changes.'
       );
     }

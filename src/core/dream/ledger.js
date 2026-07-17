@@ -161,14 +161,26 @@ function recordQuarantined(ledger, disc, reason) {
   });
 }
 
-/** The active quarantines for the durable banner. Basenames + code-owned reason enum only —
- *  never a full path, never content. Sorted by basename for a deterministic banner.
+/** Sanitized, case-folded basename for the banner and console lines. A raw
+ *  basename is ATTACKER-INFLUENCEABLE (a newline + markdown callout in the
+ *  filename would render its own line inside the injected digest — review
+ *  finding, amended 2026-07-17): whitelist `[A-Za-z0-9._-]`, any other byte →
+ *  `_`. The SAME sanitizer serves both surfaces so they always agree.
+ *  @param {string} absPath @returns {string} */
+function displayName(absPath) {
+  return path.basename(foldKey(absPath)).replace(/[^A-Za-z0-9._-]/g, '_');
+}
+
+/** The active quarantines for the durable banner. SANITIZED basenames
+ *  (whitelist `[A-Za-z0-9._-]`; other bytes → `_`) + code-owned reason enum
+ *  only — never a full path, never content. Sorted by basename for a
+ *  deterministic banner.
  *  @param {Ledger} ledger @returns {Array<{file:string, reason:string, harness:string}>} */
 function activeQuarantines(ledger) {
   const out = [];
   for (const [key, rec] of Object.entries(ledger.files || {})) {
     if (rec && rec.outcome === 'quarantined') {
-      out.push({ file: path.basename(key), reason: String(rec.reason || 'unreadable'), harness: rec.harness });
+      out.push({ file: displayName(key), reason: String(rec.reason || 'unreadable'), harness: rec.harness });
     }
   }
   out.sort((a, b) => (a.file < b.file ? -1 : a.file > b.file ? 1 : 0));
@@ -179,6 +191,7 @@ module.exports = {
   LEDGER_BASENAME,
   foldKey,
   fingerprint,
+  displayName,
   ledgerPath,
   readLedger,
   writeLedger,
