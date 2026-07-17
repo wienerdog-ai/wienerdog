@@ -26,6 +26,16 @@ function withoutSourcePath(extract) {
   return rest;
 }
 
+/** Independent oracle for the WP-122 extract-path bounding rule: home prefix
+ *  pseudonymized to `~`, remainder capped at 160 chars with a `…` marker.
+ *  @param {string} p @returns {string} */
+function boundedPath(p) {
+  const home = os.homedir();
+  let bounded = p === home || p.startsWith(home + path.sep) ? `~${p.slice(home.length)}` : p;
+  if (bounded.length > 160) bounded = `${bounded.slice(0, 160)}…`;
+  return bounded;
+}
+
 test('parse: Claude golden extract matches fixture', () => {
   const inputPath = path.join(fixturesDir, 'claude-session.jsonl');
   const expected = JSON.parse(fs.readFileSync(path.join(fixturesDir, 'claude-session.expected.json'), 'utf8'));
@@ -33,7 +43,7 @@ test('parse: Claude golden extract matches fixture', () => {
   const extract = parse({ harness: 'claude', path: inputPath });
 
   assert.deepEqual(withoutSourcePath(extract), expected);
-  assert.equal(extract.source_path, inputPath);
+  assert.equal(extract.source_path, boundedPath(inputPath));
 });
 
 test('parse: Claude skill-invocation extract matches fixture', () => {
@@ -43,7 +53,7 @@ test('parse: Claude skill-invocation extract matches fixture', () => {
   );
   const extract = parse({ harness: 'claude', path: inputPath });
   assert.deepEqual(withoutSourcePath(extract), expected);
-  assert.equal(extract.source_path, inputPath);
+  assert.equal(extract.source_path, boundedPath(inputPath));
 });
 
 test('parse: Codex golden extract matches fixture', () => {
@@ -55,7 +65,7 @@ test('parse: Codex golden extract matches fixture', () => {
   const extract = parse({ harness: 'codex', path: inputPath });
 
   assert.deepEqual(withoutSourcePath(extract), expected);
-  assert.equal(extract.source_path, inputPath);
+  assert.equal(extract.source_path, boundedPath(inputPath));
 });
 
 test('mapCodexItem: custom_tool_call_output (0.144.x primary shape) -> tool_result', () => {
@@ -150,6 +160,90 @@ test('redact: catches space-separated Authorization Bearer headers', () => {
   assert.ok(!out.includes('myFreshBearerTokenValue12345'), out);
   assert.ok(out.includes('[REDACTED:bearer-token]'), out);
   assert.equal(redact('the bearer of this letter is trusted'), 'the bearer of this letter is trusted');
+});
+
+test('redact: delegates to the shared detector — redact(text) === scanAndRedact(text).text (WP-122)', () => {
+  const { scanAndRedact } = require('../../src/core/secret-scan');
+  const inputs = [
+    'password=hunter2secret1234567',
+    'key=sk-ant-abc123defghijklmnopqrstuvwx',
+    'noise xsk-ant-0123456789abcdef0123 tail',
+    'export CLIENT_SECRET=GOCSPX-abcd1234efgh5678ijkl',
+    'the weather is nice today, nothing secret here',
+  ];
+  for (const input of inputs) {
+    assert.equal(redact(input), scanAndRedact(input).text);
+  }
+});
+
+test('redact: WP-122 upgraded coverage reaches the pre-brain pass (EP1)', () => {
+  // uppercase assignment key the old local list missed
+  const upper = redact('export CLIENT_SECRET=GOCSPX-abcd1234efgh5678ijkl');
+  assert.ok(!upper.includes('GOCSPX-abcd1234'), upper);
+  assert.ok(upper.includes('CLIENT_SECRET='), upper);
+  // token glued to a preceding word character (the audit's \b bypass)
+  const glued = redact('noise xsk-ant-0123456789abcdef0123 tail');
+  assert.ok(!glued.includes('sk-ant-0123456789abcdef0123'), glued);
+  // JSON string value under a sensitive key
+  const json = redact('{"refresh_token":"1//0abcDEF-_ghiJKL=="}');
+  assert.ok(!json.includes('1//0abcDEF-_ghiJKL=='), json);
+});
+
+test('parseWithOutcome: cwd home prefix is pseudonymized to ~ before the extract (WP-122)', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-transcripts-'));
+  const filePath = path.join(dir, 'home-cwd.jsonl');
+  const homeCwd = path.join(os.homedir(), 'dev', 'proj');
+  const line = JSON.stringify({
+    type: 'user',
+    sessionId: 'sess-home',
+    cwd: homeCwd,
+    timestamp: '2026-01-01T10:00:00.000Z',
+    message: { role: 'user', content: 'hello' },
+  });
+  fs.writeFileSync(filePath, `${line}\n`);
+
+  const extract = parse({ harness: 'claude', path: filePath });
+
+  assert.equal(extract.cwd, `~${path.sep}dev${path.sep}proj`);
+  assert.ok(!extract.cwd.includes(os.homedir()), extract.cwd);
+});
+
+test('parseWithOutcome: an over-long source_path is capped at 160 chars (WP-122)', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-transcripts-'));
+  const longDir = path.join(dir, 'x'.repeat(180));
+  fs.mkdirSync(longDir);
+  const filePath = path.join(longDir, 'long.jsonl');
+  const line = JSON.stringify({
+    type: 'user',
+    sessionId: 'sess-long',
+    cwd: '/p',
+    timestamp: '2026-01-01T10:00:00.000Z',
+    message: { role: 'user', content: 'hello' },
+  });
+  fs.writeFileSync(filePath, `${line}\n`);
+
+  const extract = parse({ harness: 'claude', path: filePath });
+
+  assert.equal(extract.source_path, `${filePath.slice(0, 160)}…`);
+  assert.equal(extract.source_path.length, 161);
+});
+
+test('parseWithOutcome: non-home, in-bounds cwd and source_path pass through unchanged (WP-122)', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-transcripts-'));
+  const filePath = path.join(dir, 'plain.jsonl');
+  const line = JSON.stringify({
+    type: 'user',
+    sessionId: 'sess-plain',
+    cwd: '/home/ada/proj',
+    timestamp: '2026-01-01T10:00:00.000Z',
+    message: { role: 'user', content: 'hello' },
+  });
+  fs.writeFileSync(filePath, `${line}\n`);
+
+  const extract = parse({ harness: 'claude', path: filePath });
+
+  assert.equal(extract.cwd, '/home/ada/proj');
+  assert.equal(extract.source_path, filePath);
 });
 
 test('parse: per-message char cap truncates and sets truncated', () => {

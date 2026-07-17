@@ -1,9 +1,11 @@
 'use strict';
 
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const { discoverClaude, parseClaudeTranscript } = require('./claude');
 const { discoverCodex, parseCodexTranscript } = require('./codex');
+const { redactOnly } = require('../secret-scan');
 const { Limits, newRunBudget, OVERSIZED_RECORD_MARKER } = require('./stream');
 
 /** @typedef {Object} Extract
@@ -28,39 +30,41 @@ const { Limits, newRunBudget, OVERSIZED_RECORD_MARKER } = require('./stream');
 
 const MAX_MSG_CHARS = 4000;
 const MAX_MESSAGES = 2000;
+const MAX_EXTRACT_PATH_CHARS = 160;
 
-// Redact secret-looking substrings. Applied in order; each replacement is
-// literal `[REDACTED:<label>]` unless a function is shown.
-const REDACTIONS = [
-  [/-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g, '[REDACTED:private-key]'],
-  [/\bsk-ant-[A-Za-z0-9\-_]{20,}\b/g, '[REDACTED:anthropic-key]'],
-  [/\bsk-[A-Za-z0-9]{20,}\b/g, '[REDACTED:openai-key]'],
-  [/\bAKIA[0-9A-Z]{16}\b/g, '[REDACTED:aws-key]'],
-  [/\bgh[pousr]_[A-Za-z0-9]{36,}\b/g, '[REDACTED:github-token]'],
-  [/\bxox[baprs]-[A-Za-z0-9-]{10,}\b/g, '[REDACTED:slack-token]'],
-  [/\bya29\.[A-Za-z0-9\-_]+/g, '[REDACTED:google-oauth]'],
-  [/\beyJ[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}\b/g, '[REDACTED:jwt]'],
-  // HTTP auth headers: "Authorization: Bearer <token>" (space-separated form)
-  [/\b(bearer)\s+([A-Za-z0-9_\-.~+/]{12,}=*)/gi, (_m, kw) => `${kw} [REDACTED:bearer-token]`],
-  // sensitive key=value / key: value assignments (keeps the key, redacts the value)
-  [
-    /\b(api[_-]?key|secret|token|password|passwd|bearer)(["']?\s*[:=]\s*["']?)[A-Za-z0-9_\-]{12,}/gi,
-    (_m, key, sep) => `${key}${sep}[REDACTED:generic-secret]`,
-  ],
-];
+/**
+ * Bound an extract metadata path before it reaches scratch/brain (audit A5,
+ * WP-122 OWNER-APPROVED): pseudonymize the home prefix to `~` so the username
+ * and absolute home structure are never exposed to the brain, then cap the
+ * result at MAX_EXTRACT_PATH_CHARS (a `…` marks the cut). Non-string values
+ * (a null cwd) pass through untouched.
+ * @param {string|null|undefined} value
+ * @returns {string|null|undefined}
+ */
+function boundExtractPath(value) {
+  if (typeof value !== 'string' || value.length === 0) return value;
+  const home = os.homedir();
+  let bounded = value;
+  if (home && (value === home || value.startsWith(home + path.sep))) {
+    bounded = `~${value.slice(home.length)}`;
+  }
+  if (bounded.length > MAX_EXTRACT_PATH_CHARS) {
+    bounded = `${bounded.slice(0, MAX_EXTRACT_PATH_CHARS)}…`;
+  }
+  return bounded;
+}
 
 /**
  * Redact secret-looking substrings. Exported so the dream orchestrator
- * (WP-008) reuses the SAME pass instead of re-implementing it.
+ * (WP-008) reuses the SAME pass instead of re-implementing it. Since WP-122
+ * this delegates to the ONE shared detector (`src/core/secret-scan.js`,
+ * ADR-0024) — byte-compatible for everything the old local list covered,
+ * with the A5 upgraded coverage and fail-closed semantics on top.
  * @param {string} text
  * @returns {string}
  */
 function redact(text) {
-  let result = text;
-  for (const [pattern, replacement] of REDACTIONS) {
-    result = result.replace(pattern, replacement);
-  }
-  return result;
+  return redactOnly(text);
 }
 
 /**
@@ -176,6 +180,11 @@ function parseWithOutcome(entry, budget) {
 
   const out = { ...raw, truncated, messages };
   if (rebased !== undefined) out.skill_invocations = rebased; // else `...raw` carries the untouched array (or none for Codex)
+  // Bound metadata paths before the extract reaches scratch/brain (audit A5):
+  // home prefix → `~`, remainder capped. `session_id` is left alone — it is
+  // already filename-sanitized downstream (scratch.js).
+  out.source_path = boundExtractPath(out.source_path);
+  out.cwd = boundExtractPath(out.cwd);
   return { extract: out, parse: outcome };
 }
 
