@@ -1,7 +1,7 @@
 ---
 id: WP-124
 title: Durable output sanitizing — bounded secret-scrub of brain stdout/stderr, logs, alerts, and alert email (audit A5)
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: [WP-122]
