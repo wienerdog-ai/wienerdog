@@ -1,8 +1,10 @@
 'use strict';
 
+const fs = require('node:fs');
 const path = require('node:path');
 const { discoverClaude, parseClaudeTranscript } = require('./claude');
 const { discoverCodex, parseCodexTranscript } = require('./codex');
+const { Limits, newRunBudget, OVERSIZED_RECORD_MARKER } = require('./stream');
 
 /** @typedef {Object} Extract
  *  @property {'claude'|'codex'} harness
@@ -13,7 +15,16 @@ const { discoverCodex, parseCodexTranscript } = require('./codex');
  *  @property {boolean}     truncated    // true if any size cap was applied
  *  @property {Array<{role:'user'|'assistant'|'tool_result', text:string, ts:string|null}>} messages
  *  @property {Array<{skill:string, index:number, resultIndex:number|null, errored:boolean}>} [skill_invocations]  // Claude only; each Skill tool_use: name, timeline index, its paired result's index (null if uncaptured), whether it errored
+ *
+ *  NOTE (WP-118): `size`/`dev`/`ino` are NOT on the extract — they ride the
+ *  discovery record (see `discover`), so the quarantine ledger (WP-119) can
+ *  fingerprint a file and enforce the pre-read ceiling before opening it.
  */
+
+/** @typedef {import('./stream').StreamOutcome} ParseOutcome
+ *  Mirrors StreamOutcome: 'ok' | 'over-ceiling' | 'too-many-lines' | 'read-error'.
+ *  Non-'ok' values are the per-file quarantine signal WP-119 consumes; a
+ *  runExhausted 'ok' is capacity-deferred (retried next run), NOT quarantined. */
 
 const MAX_MSG_CHARS = 4000;
 const MAX_MESSAGES = 2000;
@@ -53,21 +64,28 @@ function redact(text) {
 }
 
 /**
- * Discover across both harnesses.
+ * Discover across both harnesses. size/dev/ino ride the discovery record for
+ * the quarantine ledger (WP-119) and the pre-read ceiling (ADR-0023).
  * @param {ReturnType<import('../paths').getPaths>} paths
  * @param {{since:number|null}} opts
- * @returns {Array<{harness:'claude'|'codex', path:string, mtimeMs:number}>}
+ * @returns {Array<{harness:'claude'|'codex', path:string, mtimeMs:number, size:number, dev:number, ino:number}>}
  */
 function discover(paths, opts) {
   const claudeEntries = discoverClaude(path.join(paths.claudeDir, 'projects'), opts).map((e) => ({
     harness: 'claude',
     path: e.path,
     mtimeMs: e.mtimeMs,
+    size: e.size,
+    dev: e.dev,
+    ino: e.ino,
   }));
   const codexEntries = discoverCodex(path.join(paths.codexDir, 'sessions'), opts).map((e) => ({
     harness: 'codex',
     path: e.path,
     mtimeMs: e.mtimeMs,
+    size: e.size,
+    dev: e.dev,
+    ino: e.ino,
   }));
   return [...claudeEntries, ...codexEntries].sort((a, b) => a.mtimeMs - b.mtimeMs);
 }
@@ -102,14 +120,32 @@ function rebaseInvocations(invocations, dropped) {
 }
 
 /**
- * Parse + redact + size-cap one discovered entry.
- * @param {{harness:'claude'|'codex', path:string}} entry
- * @returns {Extract}
+ * Parse + redact + size-cap one discovered entry, reporting the streaming
+ * outcome. This is the export the quarantine ledger (WP-119) consumes: the
+ * shared run `budget` bounds aggregate intake I/O across the whole run, and
+ * `parse.outcome` carries the per-file quarantine signal.
+ * @param {{harness:'claude'|'codex', path:string, size?:number}} entry
+ * @param {{remaining:number}} budget  shared run budget from newRunBudget()
+ * @returns {{extract: Extract, parse: {outcome: ParseOutcome, oversizedRecords: number, runExhausted: boolean}}}
  */
-function parse(entry) {
-  const raw = entry.harness === 'codex' ? parseCodexTranscript(entry.path) : parseClaudeTranscript(entry.path);
+function parseWithOutcome(entry, budget) {
+  let sizeBytes = entry.size;
+  if (typeof sizeBytes !== 'number') {
+    // Back-compat seam for pre-WP-118 callers whose entries lack `size`
+    // (discover now records it). A failed stat falls through to the parser,
+    // whose open fails the same way → 'read-error' quarantine signal.
+    try {
+      sizeBytes = fs.statSync(entry.path).size;
+    } catch {
+      sizeBytes = 0;
+    }
+  }
+  const { extract: raw, parse: outcome } =
+    entry.harness === 'codex'
+      ? parseCodexTranscript(entry.path, sizeBytes, budget)
+      : parseClaudeTranscript(entry.path, sizeBytes, budget);
 
-  let truncated = false;
+  let truncated = raw.truncated;
   let messages = raw.messages.map((message) => {
     const { message: capped, capped: wasCapped } = capMessage(message);
     if (wasCapped) truncated = true;
@@ -140,7 +176,29 @@ function parse(entry) {
 
   const out = { ...raw, truncated, messages };
   if (rebased !== undefined) out.skill_invocations = rebased; // else `...raw` carries the untouched array (or none for Codex)
-  return out;
+  return { extract: out, parse: outcome };
 }
 
-module.exports = { discover, parse, redact, rebaseInvocations, MAX_MSG_CHARS, MAX_MESSAGES };
+/**
+ * Parse + redact + size-cap one discovered entry. BACKWARD-COMPATIBLE wrapper
+ * (scratch.js and pre-WP-118 callers): bare Extract, fresh per-call run budget.
+ * `parse(entry)` === `parseWithOutcome(entry, newRunBudget()).extract`.
+ * @param {{harness:'claude'|'codex', path:string, size?:number}} entry
+ * @returns {Extract}
+ */
+function parse(entry) {
+  return parseWithOutcome(entry, newRunBudget()).extract;
+}
+
+module.exports = {
+  discover,
+  parse,
+  parseWithOutcome,
+  redact,
+  rebaseInvocations,
+  MAX_MSG_CHARS,
+  MAX_MESSAGES,
+  Limits,
+  newRunBudget,
+  OVERSIZED_RECORD_MARKER,
+};

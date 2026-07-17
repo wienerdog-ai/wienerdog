@@ -6,7 +6,16 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const { discover, parse, redact, rebaseInvocations, MAX_MESSAGES } = require('../../src/core/transcripts');
+const {
+  discover,
+  parse,
+  parseWithOutcome,
+  redact,
+  rebaseInvocations,
+  MAX_MESSAGES,
+  Limits,
+  newRunBudget,
+} = require('../../src/core/transcripts');
 const { mapCodexItem } = require('../../src/core/transcripts/codex');
 
 const fixturesDir = path.join(__dirname, '..', 'fixtures', 'transcripts');
@@ -277,4 +286,145 @@ test('parse: under the cap, a trailing Skill invocation with no later message is
   assert.ok(si.index >= 0 && si.index < MAX_MESSAGES);
   assert.ok(si.resultIndex >= 0 && si.resultIndex < MAX_MESSAGES);
   assert.equal(extract.messages[si.resultIndex].text, 'done');
+});
+
+// ── WP-118: bounded streaming intake ────────────────────────────────────────
+
+test('parseWithOutcome: oversized record → no message, session kept, truncated (Claude)', () => {
+  // Tiny checked-in fixture; the test expands the @@PAD@@ placeholder past
+  // MAX_LINE_BYTES at write time so the repo stays lean (spec fixtures note).
+  const template = fs.readFileSync(path.join(fixturesDir, 'claude-oversized-record.jsonl'), 'utf8');
+  const expanded = template.replace('@@PAD@@', 'x'.repeat(Limits.MAX_LINE_BYTES));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-oversize-'));
+  const p = path.join(dir, 'oversize.jsonl');
+  fs.writeFileSync(p, expanded);
+  const size = fs.statSync(p).size;
+
+  const { extract, parse: outcome } = parseWithOutcome({ harness: 'claude', path: p, size }, newRunBudget());
+
+  assert.equal(outcome.outcome, 'ok');
+  assert.equal(outcome.oversizedRecords, 1);
+  assert.equal(extract.truncated, true);
+  assert.deepEqual(
+    extract.messages.map((m) => m.text),
+    ['before the bomb', 'after the bomb'],
+  );
+  assert.deepEqual(extract.skill_invocations, []);
+});
+
+test('parseWithOutcome: oversized record → no message, session kept, truncated (Codex)', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-oversize-cx-'));
+  const p = path.join(dir, 'rollout-oversize.jsonl');
+  const pad = 'x'.repeat(Limits.MAX_LINE_BYTES);
+  const lines = [
+    JSON.stringify({ type: 'session_meta', payload: { id: 'cx-1', timestamp: '2026-01-02T00:00:00.000Z', cwd: '/w' } }),
+    JSON.stringify({ type: 'response_item', payload: { type: 'message', role: 'user', content: [{ type: 'input_text', text: 'hi codex' }] } }),
+    JSON.stringify({ type: 'response_item', payload: { type: 'custom_tool_call_output', content: [{ type: 'input_text', text: pad }] } }),
+    JSON.stringify({ type: 'response_item', payload: { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'done codex' }] } }),
+  ];
+  fs.writeFileSync(p, `${lines.join('\n')}\n`);
+  const size = fs.statSync(p).size;
+
+  const { extract, parse: outcome } = parseWithOutcome({ harness: 'codex', path: p, size }, newRunBudget());
+
+  assert.equal(outcome.outcome, 'ok');
+  assert.equal(outcome.oversizedRecords, 1);
+  assert.equal(extract.truncated, true);
+  assert.equal(extract.session_id, 'cx-1');
+  assert.deepEqual(
+    extract.messages.map((m) => m.text),
+    ['hi codex', 'done codex'],
+  );
+});
+
+test('parseWithOutcome: over-ceiling file → valid empty extract + quarantine signal, never read', () => {
+  // The path does not exist: any open attempt would yield read-error, so the
+  // over-ceiling outcome proves the file was never opened.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-ceiling-'));
+  const ghost = path.join(dir, 'ghost.jsonl');
+  const entry = { harness: 'claude', path: ghost, size: Limits.PRE_READ_CEILING_BYTES + 1 };
+
+  const { extract, parse: outcome } = parseWithOutcome(entry, newRunBudget());
+
+  assert.equal(outcome.outcome, 'over-ceiling');
+  assert.deepEqual(extract.messages, []);
+  assert.equal(extract.truncated, true);
+  assert.equal(extract.session_id, 'ghost');
+  assert.equal(extract.harness, 'claude');
+});
+
+test('parseWithOutcome: drained run budget → deferred (outcome ok), not quarantine', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-budget-'));
+  const p = path.join(dir, 'a.jsonl');
+  fs.writeFileSync(
+    p,
+    `${JSON.stringify({ type: 'user', sessionId: 's', message: { role: 'user', content: 'hello' } })}\n`,
+  );
+  const entry = { harness: 'claude', path: p, size: fs.statSync(p).size };
+
+  const { extract, parse: outcome } = parseWithOutcome(entry, { remaining: 0 });
+
+  assert.equal(outcome.outcome, 'ok');
+  assert.equal(outcome.runExhausted, true);
+  assert.deepEqual(extract.messages, []);
+  assert.equal(extract.truncated, true);
+});
+
+test('parse: deeply-nested JSON line is skipped, surrounding lines still parse, no throw', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-deep-'));
+  const p = path.join(dir, 'deep.jsonl');
+  const deep = '['.repeat(Limits.MAX_JSON_DEPTH + 36) + ']'.repeat(Limits.MAX_JSON_DEPTH + 36);
+  const lines = [
+    JSON.stringify({ type: 'user', sessionId: 's', message: { role: 'user', content: 'one' } }),
+    deep,
+    JSON.stringify({ type: 'user', sessionId: 's', message: { role: 'user', content: 'two' } }),
+  ];
+  fs.writeFileSync(p, `${lines.join('\n')}\n`);
+
+  const extract = parse({ harness: 'claude', path: p }); // no size → back-compat stat path
+
+  assert.deepEqual(extract.messages.map((m) => m.text), ['one', 'two']);
+});
+
+test('parse: invalid-UTF-8 line is skipped, surrounding lines still parse, no throw', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-utf8-'));
+  const p = path.join(dir, 'bad.jsonl');
+  const good1 = Buffer.from(`${JSON.stringify({ type: 'user', sessionId: 's', message: { role: 'user', content: 'one' } })}\n`);
+  const garbage = Buffer.from([0xff, 0xfe, 0x80, 0x81]);
+  const good2 = Buffer.from(`\n${JSON.stringify({ type: 'user', sessionId: 's', message: { role: 'user', content: 'two' } })}\n`);
+  fs.writeFileSync(p, Buffer.concat([good1, garbage, good2]));
+
+  const extract = parse({ harness: 'claude', path: p });
+
+  assert.deepEqual(extract.messages.map((m) => m.text), ['one', 'two']);
+});
+
+test('discover: records size, dev, ino on every entry (both harnesses)', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-disc-meta-'));
+  const claudeDir = path.join(root, 'claude');
+  const codexDir = path.join(root, 'codex');
+  fs.mkdirSync(path.join(claudeDir, 'projects', 'p1'), { recursive: true });
+  fs.writeFileSync(path.join(claudeDir, 'projects', 'p1', 'a.jsonl'), '{}\n');
+  fs.mkdirSync(path.join(codexDir, 'sessions', '2026', '01', '01'), { recursive: true });
+  fs.writeFileSync(path.join(codexDir, 'sessions', '2026', '01', '01', 'rollout-x.jsonl'), '{}\n');
+
+  const all = discover({ claudeDir, codexDir }, { since: null });
+
+  assert.equal(all.length, 2);
+  for (const e of all) {
+    assert.ok(Number.isFinite(e.size) && e.size > 0, `size on ${e.harness}`);
+    assert.ok(Number.isFinite(e.dev), `dev on ${e.harness}`);
+    assert.ok(Number.isFinite(e.ino) && e.ino > 0, `ino on ${e.harness}`);
+  }
+  const claudeEntry = all.find((e) => e.harness === 'claude');
+  assert.equal(claudeEntry.size, 3); // '{}\n'
+});
+
+test('parse: back-compat — equals parseWithOutcome(entry, fresh budget).extract', () => {
+  const inputPath = path.join(fixturesDir, 'claude-session.jsonl');
+  const viaOld = parse({ harness: 'claude', path: inputPath });
+  const viaNew = parseWithOutcome({ harness: 'claude', path: inputPath }, newRunBudget());
+  assert.deepEqual(viaOld, viaNew.extract);
+  assert.equal(viaNew.parse.outcome, 'ok');
+  assert.equal(viaOld.parse, undefined); // parse() returns a bare Extract
 });

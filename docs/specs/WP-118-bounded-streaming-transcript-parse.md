@@ -1,7 +1,7 @@
 ---
 id: WP-118
 title: Bounded streaming transcript parsing + pre-read file ceiling + oversized-record markers (audit A6)
-status: Ready
+status: In-Review
 model: opus
 size: M
 depends_on: []

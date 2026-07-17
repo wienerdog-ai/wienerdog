@@ -2,14 +2,17 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const { Limits, streamLines, maxJsonDepth, OVERSIZED_RECORD_MARKER } = require('./stream');
 
 /**
  * Discover Codex rollout files modified after `since`.
  * Layout: sessionsDir/YYYY/MM/DD/rollout-*.jsonl (recurse; match rollout-*.jsonl).
  * Missing sessionsDir → []. Sorted ascending by mtimeMs. Never throws on IO.
+ * Records size/dev/ino so the quarantine ledger (WP-119/120) can fingerprint a
+ * file and enforce the pre-read ceiling before opening it (ADR-0023).
  * @param {string} sessionsDir
  * @param {{since:number|null}} opts
- * @returns {Array<{path:string,mtimeMs:number}>}
+ * @returns {Array<{path:string,mtimeMs:number,size:number,dev:number,ino:number}>}
  */
 function discoverCodex(sessionsDir, opts) {
   const since = opts && opts.since != null ? opts.since : null;
@@ -35,7 +38,7 @@ function discoverCodex(sessionsDir, opts) {
           continue;
         }
         if (since != null && stat.mtimeMs <= since) continue;
-        results.push({ path: entryPath, mtimeMs: stat.mtimeMs });
+        results.push({ path: entryPath, mtimeMs: stat.mtimeMs, size: stat.size, dev: stat.dev, ino: stat.ino });
       }
     }
   }
@@ -116,33 +119,53 @@ function mapCodexItem(payload) {
   return null;
 }
 
+/** A valid but EMPTY extract for quarantine outcomes (over-ceiling /
+ *  too-many-lines / read-error): no messages, basename session id, truncated.
+ *  @param {string} filePath @returns {import('./index').Extract} */
+function emptyCodexExtract(filePath) {
+  return {
+    harness: 'codex',
+    session_id: path.basename(filePath, '.jsonl'),
+    started: null,
+    cwd: null,
+    source_path: path.resolve(filePath),
+    truncated: true,
+    messages: [],
+  };
+}
+
 /**
- * Parse one Codex rollout file into a RAW Extract, per the Codex rules.
+ * Parse one Codex rollout file into a RAW Extract, per the Codex rules, via
+ * the bounded streaming reader (audit A6, ADR-0023) — never reads the whole
+ * file into memory, and a file over the pre-read ceiling is never opened.
  * UNVERIFIED against live Codex CLI — re-verify at M4 (WP-010).
  * @param {string} filePath
- * @returns {import('./index').Extract}
+ * @param {number} sizeBytes  discovery-recorded fs size
+ * @param {{remaining:number}} budget  shared run budget from newRunBudget()
+ * @returns {{extract: import('./index').Extract,
+ *            parse: {outcome: import('./stream').StreamOutcome, oversizedRecords: number, runExhausted: boolean}}}
  */
-function parseCodexTranscript(filePath) {
-  let raw = '';
-  try {
-    raw = fs.readFileSync(filePath, 'utf8');
-  } catch {
-    raw = '';
-  }
-
-  const lines = raw.split('\n');
+function parseCodexTranscript(filePath, sizeBytes, budget) {
   const messages = [];
   let sessionId = null;
   let cwd = null;
   let started = null;
+  let truncated = false;
 
-  for (const line of lines) {
-    if (line.trim() === '') continue;
+  /** Exactly the old per-line loop body; an oversized record emits no message.
+   *  @param {string} line */
+  const onLine = (line) => {
+    if (line === OVERSIZED_RECORD_MARKER) {
+      truncated = true; // a real item was dropped — skip mapCodexItem
+      return;
+    }
+    if (line.trim() === '') return;
+    if (maxJsonDepth(line) > Limits.MAX_JSON_DEPTH) return; // nesting bomb → skip
     let obj;
     try {
       obj = JSON.parse(line);
     } catch {
-      continue;
+      return;
     }
 
     if (obj.type === 'session_meta') {
@@ -150,27 +173,42 @@ function parseCodexTranscript(filePath) {
       if (sessionId === null) sessionId = payload.id || null;
       if (started === null) started = payload.timestamp || null;
       if (cwd === null) cwd = payload.cwd || null;
-      continue;
+      return;
     }
 
-    if (obj.type !== 'response_item') continue;
+    if (obj.type !== 'response_item') return;
 
     const mapped = mapCodexItem(obj.payload);
     if (mapped) messages.push(mapped);
+  };
+
+  const streamed = streamLines(filePath, sizeBytes, budget, onLine);
+  const parseOutcome = {
+    outcome: streamed.outcome,
+    oversizedRecords: streamed.oversizedRecords,
+    runExhausted: streamed.runExhausted,
+  };
+
+  if (streamed.outcome !== 'ok') {
+    return { extract: emptyCodexExtract(filePath), parse: parseOutcome };
   }
+  if (streamed.runExhausted) truncated = true; // file cut mid-way (deferred, not quarantined)
 
   if (sessionId === null) {
     sessionId = path.basename(filePath, '.jsonl');
   }
 
   return {
-    harness: 'codex',
-    session_id: sessionId,
-    started,
-    cwd,
-    source_path: path.resolve(filePath),
-    truncated: false,
-    messages,
+    extract: {
+      harness: 'codex',
+      session_id: sessionId,
+      started,
+      cwd,
+      source_path: path.resolve(filePath),
+      truncated,
+      messages,
+    },
+    parse: parseOutcome,
   };
 }
 

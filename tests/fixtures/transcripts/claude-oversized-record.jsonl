@@ -1,0 +1,3 @@
+{"type":"user","sessionId":"sess-oversize","cwd":"/home/ada/proj","timestamp":"2026-01-01T10:00:00.000Z","message":{"role":"user","content":"before the bomb"}}
+{"type":"user","sessionId":"sess-oversize","cwd":"/home/ada/proj","timestamp":"2026-01-01T10:00:05.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_big","is_error":false,"content":[{"type":"text","text":"@@PAD@@"}]}]}}
+{"type":"assistant","sessionId":"sess-oversize","cwd":"/home/ada/proj","timestamp":"2026-01-01T10:00:10.000Z","message":{"role":"assistant","content":[{"type":"text","text":"after the bomb"}]}}
