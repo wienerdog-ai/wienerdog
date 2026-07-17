@@ -81,9 +81,9 @@ the export the OTHER gates (EP1/EP3/EP4) use; EP2 does not call it.**
 
 | Action | Path | Notes |
 |--------|------|-------|
-| modify | src/core/dream/validate.js | scan the staged added content of every kept change; on any finding (`findings.length > 0`, either severity) preserve the file into `state/quarantine/` then revert it; record a metadata-only reason; expose the secret-revert count on the result |
+| modify | src/core/dream/validate.js | scan the staged added content of every kept change; on any finding (`findings.length > 0`, either severity) preserve the file into `state/quarantine/` then revert it; record a metadata-only reason; expose the secret-revert count on the result. A staged Added/Modified file git reports as **binary** (numstat `-`/`-`) is unscannable → treated as a finding and failed closed the same way (fixed binary reason) — spec-gap amendment 2026-07-17 |
 | modify | src/cli/dream.js | ONLY if the quarantine root must be plumbed into `validateAndCommit` — a one-line call-site change (record it) |
-| modify | tests/unit/dream-validate.test.js | a note/daily-log with a planted secret → quarantined + reverted (uncommitted), metadata-only reason, valid neighbour still committed; a false positive is a visible recoverable quarantine not a silent rewrite; identity/skill paths still gated as before |
+| modify | tests/unit/dream-validate.test.js | a note/daily-log with a planted secret → quarantined + reverted (uncommitted), metadata-only reason, valid neighbour still committed; a false positive is a visible recoverable quarantine not a silent rewrite; identity/skill paths still gated as before; a **binary** (NUL-containing) staged file with a planted secret → quarantined + reverted, never committed, with the fixed binary reason |
 
 > If `tests/unit/dream-validate.test.js` does not exist under that exact name, use the
 > existing validate unit test file (`grep -l validateAndCommit tests/unit`) and record the
@@ -105,6 +105,18 @@ placements — pick the simpler and record it:
   git-computed diff, so an append to an existing note only scans the NEW lines (a
   pre-existing secret already in HEAD is not re-flagged — it was the human's, and re-reverting
   it would fight the user).
+  **Binary / unscannable staged content fails closed** (spec-gap amendment, 2026-07-17, WP-123
+  review round 1 — see the OWNER-APPROVED section). A file git classifies as binary emits
+  `Binary files … differ` with **no `+` lines**, so its added text is empty and the scan above
+  would silently skip it — committing raw bytes. Therefore, before reading `+` lines, read
+  git's own binary signal from `git diff --cached --numstat -z -- <rel>`: a staged
+  **Added/Modified** file that reports `-` for both its added and deleted counts (record
+  `-\t-\t<path>`) is **binary → unscannable**, and is treated exactly like a finding —
+  quarantine-preserve, then revert — with the **fixed metadata-only** reason
+  `reverted: staged content is binary and cannot be secret-scanned; not committed` (append the
+  space-prefixed suffix `(quarantine copy failed)` when the preserve step fails). A **text** file whose `-U0` diff
+  has no `+` lines (a pure deletion, a mode-only change, or a rename without content change)
+  added no bytes and is **skipped as before** — this run answers only for bytes it added.
 - **(B) Inside the Step-2 loop** for the "kept Tier-1/2 note / daily log / report" branch:
   read the file's current content, scan it, revert on any finding (`findings.length > 0`).
   Simpler but scans the
@@ -116,7 +128,10 @@ authored content into** — Tier-1/2 notes, the daily log, and the dream report 
 identity/skill Tier-3 paths and the LEARNINGS ledger are ALREADY gated above; scanning them
 too is harmless defense-in-depth (any finding there reverts them the same way) — do it
 uniformly rather than special-casing, so no authored file escapes. **Do not scan the reverted
-paths** (already gone) or paths outside the vault (already reverted).
+paths** (already gone) or paths outside the vault (already reverted). **A staged Added/Modified
+file git classifies as binary is unscannable and fails closed** (reverted like a finding — see
+option (A) and the OWNER-APPROVED spec-gap amendment): no authored file may pass this gate
+without the detector having read the bytes it added.
 
 **On any finding (`findings.length > 0`) — quarantine-preserve, then revert; never rewrite.**
 - **First preserve** (OWNER-APPROVED 2026-07-17): copy the offending working-tree file's
@@ -223,6 +238,40 @@ containing `AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY`. Aft
   the directory to the A5 private-mode set. The quarantine root comes from the options
   `validateAndCommit` already receives; if a field must be plumbed from the call site, that
   one-line `dream.js` change is in scope — record it under "Decisions made".
+- **Spec-gap amendment (2026-07-17, WP-123 review round 1) — binary / unscannable staged
+  content fails closed. Derived from the existing 2026-07-17 OWNER-APPROVED rulings above;
+  NOT a new owner decision.** *Trigger:* wd-reviewer, reviewing the option-(A) implementation
+  (commit `10f77a8`) via the spec-gap protocol, found a bypass rooted in the gate's own
+  mechanism. Option (A) scans only the `+` lines of `git diff --cached -U0 -- <rel>`. For any
+  staged file git classifies as **binary** (a NUL byte in the first ~8 KB — fully
+  attacker-influenceable by the prompt-injected / `workspace-write` brain EP2 distrusts), that
+  diff emits `Binary files … differ` with **no `+` lines**, so the gate sees no scannable added
+  text and skips the file (`added === ''`). A raw secret planted in a NUL-prefixed `.md`
+  (verified reproduction) or any binary blob is therefore committed raw — violating this WP's
+  own "zero raw secret bytes reach the commit" guarantee. *Ruling (derived, not new):* the
+  2026-07-17 any-finding ruling already fixed the posture "EP2 may not rewrite; the only safe
+  action on content the detector cannot vouch for is withhold-the-whole-file," and the WP-122
+  detector itself already fails closed on unscannable input (its oversized-record rule withholds
+  content and returns a `scan-error` quarantine finding rather than emitting the raw text). A
+  brain-authored **binary** write into the vault has **no legitimate flow** — the brain writes
+  markdown notes; human binaries already in HEAD are precommitted by `precommitSessionEdits` and
+  never appear in the staged brain diff. Therefore a staged **Added/Modified** file whose staged
+  content git reports as **binary is treated as unscannable → quarantine-preserve, then revert**
+  — the same mechanics as a finding-revert — with a **fixed, metadata-only** reason:
+  `reverted: staged content is binary and cannot be secret-scanned; not committed` (with the
+  existing space-prefixed `(quarantine copy failed)` suffix appended when the preserve step fails). *Detection
+  (recommended):* read git's own binary signal from `git diff --cached --numstat -z -- <rel>` —
+  a binary file reports `-` for both the added and deleted counts (record `-\t-\t<path>`); no
+  content sniffing or heuristic is introduced. *Text files whose `-U0` diff legitimately has no
+  `+` lines stay skipped:* a pure deletion, a mode-only change, or a rename without content
+  change added no bytes, so this run has nothing to answer for there — unchanged behavior.
+  *Rejected alternative — scan the raw working-tree bytes as a fallback when the diff shows no
+  `+` lines:* rejected because scanning the whole working-tree file would re-flag a
+  **pre-existing human-committed secret** already present in HEAD (that file's prior content),
+  directly contradicting the standing OWNER-APPROVED "staged **added** lines only" ruling above —
+  the gate would then revert the user's own history every night. Reading git's binary flag keeps
+  the gate scoped to exactly the bytes this run added while still failing closed on content the
+  detector cannot read.
 
 ## Implementation notes & constraints
 
@@ -243,6 +292,16 @@ containing `AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY`. Aft
   severity); do NOT call `hasHardFinding` here (it is the export the other EP gates use). Reuse
   `revertPath` and the `git` helper verbatim. Zero deps, JSDoc only. When uncertain, choose
   simpler + record it.
+- **Binary staged content is unscannable → fail closed** (spec-gap amendment, 2026-07-17, WP-123
+  review round 1). `git diff --cached -U0` yields no `+` lines for a binary file, so the added
+  text would be empty and the file silently skipped. Read git's binary signal from
+  `git diff --cached --numstat -z -- <rel>` (a binary Added/Modified file reports `-`/`-` for its
+  counts) and treat it as a finding: quarantine-preserve, then revert, with the fixed reason
+  `reverted: staged content is binary and cannot be secret-scanned; not committed` (space-prefixed
+  `(quarantine copy failed)` appended on preserve failure). Do NOT fall back to scanning raw working-tree bytes
+  — that would re-flag a pre-existing human-committed secret in HEAD, contradicting the
+  staged-added-lines-only ruling. A text file with no `+` lines (pure deletion, mode-only change,
+  rename without content change) added nothing and is skipped.
 
 ## Security checklist
 
@@ -254,6 +313,12 @@ containing `AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY`. Aft
       the matched bytes). The `[REDACTED]`-mutated text is never written back (a false positive
       is a visible revert, not a silent rewrite). No untrusted identifier flows into a path or
       shell — git args stay arrays, paths come from `changedPaths`/`git diff`, not content.
+- [ ] A staged Added/Modified file git classifies as **binary** (empty `-U0` added text;
+      numstat `-`/`-`) is **unscannable** and fails closed: quarantine-preserved, then reverted,
+      with the fixed metadata-only reason
+      `reverted: staged content is binary and cannot be secret-scanned; not committed` — never
+      committed. The gate does NOT fall back to scanning raw working-tree bytes (which would
+      re-flag a pre-existing human-committed secret already in HEAD).
 
 ## Acceptance criteria
 
@@ -270,6 +335,11 @@ containing `AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY`. Aft
 - [ ] A false positive (e.g. a legitimate high-entropy string) is a **quarantined revert with
       a metadata reason**, not a silently-redacted committed note (assert the file is absent
       from the commit, not committed-with-`[REDACTED]`).
+- [ ] A staged Added/Modified file git reports as **binary** — a NUL-prefixed `.md` with a
+      planted secret, and/or a pure binary blob with an embedded secret — is
+      **quarantine-preserved and reverted, never committed** (`git show HEAD:<path>` fails), with
+      the fixed reason `reverted: staged content is binary and cannot be secret-scanned; not
+      committed`; a clean text neighbour in the same run is still committed.
 - [ ] The quarantined copy exists under `state/quarantine/` with mode `0600` (dir `0700`) and
       byte-identical content; it is never staged/committed; an unwritable quarantine dir still
       reverts the vault file (fail closed) with the failure noted in the reason.
