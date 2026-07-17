@@ -187,7 +187,11 @@ Use `paths` helpers only for the repo-relative hook location (`templates/hooks/*
 test manufactures its own temp `WIENERDOG_HOME`. Skip the whole file cleanly on win32 (bash
 hooks are POSIX; note it) — `process.platform === 'win32'` → `test.skip`.
 
-## OWNER-DECISION (pending) — the stdin bound
+## OWNER-APPROVED (2026-07-17) — the stdin bound
+
+The owner walkthrough ratified the recommended `1 MB` (`1048576` bytes) —
+consistent with WP-118's `MAX_LINE_BYTES` (one message's worth of data caps
+at 1 MB across the system). Original recommendation kept below.
 
 - **HOOK_STDIN_MAX — recommend `1 MB` (`1048576` bytes).** The hook JSON
   (`{session_id, transcript_path, cwd, …}`) is a few hundred bytes; 1 MB is orders of
