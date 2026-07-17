@@ -32,10 +32,11 @@ brain writes is `git add -A`'d and committed verbatim: a **secret becomes a comm
 git-tracked note**, and (if it lands in an identity file) is later injected into every session.
 
 This WP adds the **second A5 enforcement point (EP2): scan the staged, about-to-be-committed
-added content** and, on a **hard finding** (a `quarantine`-severity hit from the shared
-detector), **revert that whole file** — never silently commit `[REDACTED]`-mutated prose — and
-record a fixed, metadata-only reason. It touches only `src/core/dream/validate.js` and its
-tests. This is one of the four persistence gates of **ADR-0024**.
+added content** and, on **any finding** (`findings.length > 0` from the shared detector — both
+`redact` and `quarantine` severities; OWNER-APPROVED 2026-07-17, see below), **revert that
+whole file** — never silently commit `[REDACTED]`-mutated prose — and record a fixed,
+metadata-only reason. It touches only `src/core/dream/validate.js` and its tests. This is one
+of the four persistence gates of **ADR-0024**.
 
 **A5 opens NO capability gate.** `wienerdog safety` must still show all five gates
 (`google-setup`, `gws-use`, `external-content-routine`, `daily-summary-injection`,
@@ -66,8 +67,13 @@ report is written/`appendFileSync`'d in Step 4; `reverted` flows into it AND int
 value (dream.js prints `${res.reverted.length} reverted`).
 
 WP-122 shipped `src/core/secret-scan.js` exporting `scanAndRedact(text) → {text, findings}`,
-`hasHardFinding(findings)`, and `SEVERITY`. A `quarantine`-severity finding is the signal "a
-secret is present and there is no safe partial form — withhold/revert the whole artifact."
+`hasHardFinding(findings)`, and `SEVERITY`. `findings` is a metadata-only array
+(`{label, severity, count}` per matched class, never the raw bytes): a `redact`-severity
+finding means "a secret with a safe inline partial form"; a `quarantine`-severity finding
+means "no safe partial form — withhold/revert the whole artifact." **This gate (EP2) consumes
+the `findings` array directly and reverts on ANY finding (`findings.length > 0`), regardless
+of severity — NOT only a hard one (OWNER-APPROVED 2026-07-17, see below). `hasHardFinding` is
+the export the OTHER gates (EP1/EP3/EP4) use; EP2 does not call it.**
 
 ## Deliverables (permission boundary — touch ONLY these)
 
@@ -75,7 +81,7 @@ secret is present and there is no safe partial form — withhold/revert the whol
 
 | Action | Path | Notes |
 |--------|------|-------|
-| modify | src/core/dream/validate.js | scan the staged added content of every kept change; on a hard finding preserve the file into `state/quarantine/` then revert it; record a metadata-only reason; expose the secret-revert count on the result |
+| modify | src/core/dream/validate.js | scan the staged added content of every kept change; on any finding (`findings.length > 0`, either severity) preserve the file into `state/quarantine/` then revert it; record a metadata-only reason; expose the secret-revert count on the result |
 | modify | src/cli/dream.js | ONLY if the quarantine root must be plumbed into `validateAndCommit` — a one-line call-site change (record it) |
 | modify | tests/unit/dream-validate.test.js | a note/daily-log with a planted secret → quarantined + reverted (uncommitted), metadata-only reason, valid neighbour still committed; a false positive is a visible recoverable quarantine not a silent rewrite; identity/skill paths still gated as before |
 
@@ -92,25 +98,27 @@ placements — pick the simpler and record it:
 - **(A, recommended) After Step 2, before Step 5's commit**, over the surviving changes:
   `git add -A` first, then for each staged file read its **added lines** via
   `git diff --cached -U0 -- <rel>` (lines starting with `+`, excluding the `+++` header) and
-  `scanAndRedact(addedText)`. A `hasHardFinding` → **revert the file** (`revertPath` for an
-  untracked add; for a tracked modification restore HEAD via `git checkout HEAD -- rel`), then
+  `scanAndRedact(addedText)`. **Any finding** (`findings.length > 0`, either severity) →
+  **revert the file** (`revertPath` for an untracked add; for a tracked modification restore
+  HEAD via `git checkout HEAD -- rel`), then
   re-stage (`git add -A`) so the reverted state is what gets committed. This scans a
   git-computed diff, so an append to an existing note only scans the NEW lines (a
   pre-existing secret already in HEAD is not re-flagged — it was the human's, and re-reverting
   it would fight the user).
 - **(B) Inside the Step-2 loop** for the "kept Tier-1/2 note / daily log / report" branch:
-  read the file's current content, scan it, revert on a hard finding. Simpler but scans the
+  read the file's current content, scan it, revert on any finding (`findings.length > 0`).
+  Simpler but scans the
   WHOLE file (re-flags a pre-existing secret the human already committed). Rejected unless the
   diff approach proves impractical — record the choice.
 
 **Scope of the scan.** Apply the gate to **every kept vault change that is a file the brain
 authored content into** — Tier-1/2 notes, the daily log, and the dream report itself. The
 identity/skill Tier-3 paths and the LEARNINGS ledger are ALREADY gated above; scanning them
-too is harmless defense-in-depth (a hard finding there reverts them the same way) — do it
+too is harmless defense-in-depth (any finding there reverts them the same way) — do it
 uniformly rather than special-casing, so no authored file escapes. **Do not scan the reverted
 paths** (already gone) or paths outside the vault (already reverted).
 
-**On a hard finding — quarantine-preserve, then revert; never rewrite.**
+**On any finding (`findings.length > 0`) — quarantine-preserve, then revert; never rewrite.**
 - **First preserve** (OWNER-APPROVED 2026-07-17): copy the offending working-tree file's
   current content to `state/quarantine/<YYYY-MM-DD>-<sanitized-basename>` (dir `0700`,
   file `0600`, atomic write, numeric suffix on name collision; reuse the shared basename
@@ -157,6 +165,29 @@ containing `AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY`. Aft
 
 ## OWNER-APPROVED (2026-07-17) — DECISION NEEDED, resolve in the walkthrough
 
+- **OWNER-APPROVED (2026-07-17) — EP2 gate condition: revert on ANY detector finding, not
+  only a hard finding.** *Trigger:* the WP-123 implementer raised a spec-gap via the spec-gap
+  protocol. The "Exact contracts" section reverted a file only on a **hard** finding (a
+  `quarantine`-severity hit / `hasHardFinding`), but the Acceptance criteria require a planted
+  `refresh_token=` assignment — a `redact`-severity finding per the WP-122 owner-approved
+  severity table — to be "reverted and never committed." Under the hard-only contract that
+  file would be committed raw. Worse, the audit's flagship EP2 scenario (a Codex
+  `workspace-write` brain reads a live `.env` and writes `API_KEY=…`/`refresh_token=…` into a
+  note) produces exactly those `redact`-severity **assignment** findings, so a hard-only gate
+  would miss the motivating attack. *Ruling:* **at EP2 the gate reverts (quarantine-preserve,
+  then revert) on ANY finding from the shared detector — both `redact` and `quarantine`
+  severities. The condition is `findings.length > 0`, NOT `hasHardFinding`.** *Rationale:*
+  EP2's input is brain output whose inputs EP1 already redacted, so any secret-shaped string
+  in the staged **added** content is anomalous **re-materialization** — a value the brain
+  copied out of an extract that redaction under-matched, or the live-`.env`-read case.
+  Rewriting is forbidden at this gate (revert, never rewrite), so the only safe action on any
+  finding is **withhold-the-whole-file**. The increased false-positive withholds are
+  **accepted**: they are visible, quarantine-preserved (recoverable by the owner the next day
+  from `state/quarantine/`), and surfaced by the WP-125 pending-review digest banner. *The
+  WP-122 severity table is NOT reopened:* `severity` continues to distinguish
+  inline-redactable matches from no-safe-partial-form matches for the OTHER enforcement points
+  (EP1/EP3/EP4), and `hasHardFinding` remains a WP-122 export those gates use; EP2 simply
+  consumes the `scanAndRedact` `findings` array directly and keys on `findings.length > 0`.
 - **OWNER-APPROVED (2026-07-17) — durable-alert channel: report + counts only in this WP.**
   A staged secret revert is a *closed event* (the file was reverted, no secret was committed,
   no ongoing unsafe state) — unlike a transcript quarantine, which persists nightly and
@@ -175,9 +206,9 @@ containing `AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY`. Aft
   gate's. Fallback (B, whole-file scan) is allowed only if diff parsing proves impractical,
   recorded under "Decisions made".
 - **OWNER-APPROVED (2026-07-17) — false-positive posture accepted, AMENDED to
-  quarantine-preserve instead of destructive revert.** The owner accepts that a hard finding
-  (including a high-entropy false positive) visibly withholds the file from the commit with a
-  metadata-only reason — but asked "can I manually allow it the next day?", and under the
+  quarantine-preserve instead of destructive revert.** The owner accepts that any finding
+  (`findings.length > 0`; including a high-entropy false positive) visibly withholds the file
+  from the commit with a metadata-only reason — but asked "can I manually allow it the next day?", and under the
   original contract the answer was no (an untracked add was deleted; the brain's text was
   unrecoverable). Ruling: **before reverting the vault state, preserve the offending
   working-tree file's content into the staged-output quarantine directory
@@ -202,29 +233,34 @@ containing `AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY`. Aft
 - **Metadata-only reasons.** The reason string names finding **labels** (code-owned enum) and
   nothing else — no matched bytes, no offsets, no surrounding line. It lands in the committed
   report and the console summary, both of which must stay secret-free.
-- **Per-item, never abort.** A hard finding reverts ONE file; every clean file is still
+- **Per-item, never abort.** Any finding reverts ONE file; every clean file is still
   committed. The run exits normally (the gate is not a failure). This matches every existing
   revert in `validateAndCommit`.
 - **Preserve every existing gate and the single-commit invariant.** The secret scan is an
   ADDITIONAL revert reason layered onto Step 2/Step 5; do not reorder the identity freeze,
   Tier-3 floor, skill-body/ledger gates, or the one-commit step.
-- Reuse `scanAndRedact`/`hasHardFinding` from `secret-scan`, `revertPath`, and the `git`
-  helper verbatim. Zero deps, JSDoc only. When uncertain, choose simpler + record it.
+- Reuse `scanAndRedact` from `secret-scan` — this gate keys on `findings.length > 0` (either
+  severity); do NOT call `hasHardFinding` here (it is the export the other EP gates use). Reuse
+  `revertPath` and the `git` helper verbatim. Zero deps, JSDoc only. When uncertain, choose
+  simpler + record it.
 
 ## Security checklist
 
 - [ ] Every file the brain authored content into is scanned with the shared detector on its
-      staged **added** bytes before the commit; a `quarantine`-severity finding reverts the
-      whole file (untracked add removed, tracked mod restored to HEAD) so **zero raw secret
-      bytes reach the commit**, and the recorded reason is metadata-only (finding labels, never
+      staged **added** bytes before the commit; **any** finding (`findings.length > 0`, either
+      severity) reverts the whole file (untracked add removed, tracked mod restored to HEAD) so
+      **zero raw secret bytes reach the commit**, and the recorded reason is metadata-only
+      (finding labels, never
       the matched bytes). The `[REDACTED]`-mutated text is never written back (a false positive
       is a visible revert, not a silent rewrite). No untrusted identifier flows into a path or
       shell — git args stay arrays, paths come from `changedPaths`/`git diff`, not content.
 
 ## Acceptance criteria
 
-- [ ] A note/daily-log the brain wrote containing a planted secret (AWS secret key, a private
-      key block, a `refresh_token=` assignment) is **reverted and never committed**
+- [ ] A note/daily-log the brain wrote containing a planted secret is **reverted and never
+      committed** on **ANY** detector finding (`findings.length > 0`), regardless of severity —
+      both a `quarantine`-severity hit (an AWS secret key, a private-key block) AND a
+      `redact`-severity hit (a `refresh_token=` assignment) revert the file
       (`git show HEAD:<path>` fails / the committed bytes do not contain the secret); a clean
       neighbour note in the same run IS committed.
 - [ ] The revert reason is present in `reverted[]` and the report enforcement section, names
@@ -253,7 +289,8 @@ node bin/wienerdog.js safety   # all five gates BLOCKED
 
 ## Out of scope (do NOT do these)
 
-- The shared detector itself — **WP-122** (this WP consumes `scanAndRedact`/`hasHardFinding`).
+- The shared detector itself — **WP-122** (this WP consumes the `scanAndRedact` `findings`
+  array; `hasHardFinding` is the export the other EP gates use, not EP2).
 - The durable **log/stderr/alert/email** sanitizing — **WP-124** (incl. any durable "secret
   caught in output" banner the DECISION NEEDED defers there).
 - The **digest section** gate — **WP-125**.
@@ -264,7 +301,7 @@ node bin/wienerdog.js safety   # all five gates BLOCKED
 
 1. All verification steps pass locally; output pasted into the PR body.
 2. Branch `wp/123-staged-output-secret-gate`; conventional commits; PR titled
-   `feat(dream): scan staged brain output, revert on a hard secret finding (WP-123)`.
+   `feat(dream): scan staged brain output, revert on a secret finding (WP-123)`.
 3. PR template filled, including "Decisions made" (or "none") and `Generated-by:`.
 4. This spec's `status:` flipped to `In-Review` in the same PR.
 

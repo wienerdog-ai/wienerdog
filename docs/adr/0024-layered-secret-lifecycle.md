@@ -101,11 +101,17 @@ scanner is applied:
    source paths, cwd, and session identifiers are additionally bounded/pseudonymized
    before brain exposure.
 2. **Staged brain output / pre-commit (WP-123).** Before the dream's single commit,
-   the staged **added** content of every kept vault change is scanned. A hard
+   the staged **added** content of every kept vault change is scanned. **Any**
    finding **reverts/quarantines that file** (per-item, never aborting the run) and
    records a fixed, metadata-only reason. **The `[REDACTED]`-mutated prose is never
    silently committed** — a false positive is a visible revert, not a silent
-   rewrite.
+   rewrite. *(Amended, OWNER-APPROVED 2026-07-17, WP-123 spec-gap walkthrough: this
+   gate reverts on ANY detector finding — both `redact` and `quarantine` severities,
+   condition `findings.length > 0` — not only a hard finding. EP2's input is
+   already-EP1-redacted brain output, so any secret-shaped string in staged added
+   content is anomalous re-materialization; rewriting is forbidden here, so the only
+   safe action on any finding is withhold-the-whole-file. The WP-122 severity table
+   is unchanged — `severity` and `hasHardFinding` still drive EP1/EP3/EP4.)*
 3. **Durable stdout/stderr/log/alert path (WP-124).** The brain's stdout/stderr is
    passed through a **bounded sanitizing transform** before it is teed to the log or
    captured as a stderr tail; the fail-loud **email carries no raw log tail**; and
