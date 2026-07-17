@@ -99,6 +99,7 @@ that enforces this (`digest.js:57`) is an **exact, case-sensitive, quote-blind s
 the literal `'true'`. It fails to exclude a note whose flag is written in any non-canonical form:
 - `derived_from_untrusted: "true"` → value is `"true"` (quotes intact — this parser doesn't strip them) → `!== 'true'` → **rendered**
 - `derived_from_untrusted: True` / `TRUE` / `yes` → **rendered**
+<!-- markdownlint-disable-next-line MD038 -- the leading space inside the code span is the point (indented flag) -->
 - an indented/nested flag (` derived_from_untrusted: true`) → key regex is column-0 anchored → parsed as absent → **rendered**
 
 Crucially, `renderDigest` injects the **Summary section of the newest daily note** (`digest.js:266-271`),
@@ -208,6 +209,8 @@ to a single audited parser would remove the class of bug F2 belongs to.
 
 ## Solid controls worth crediting
 
+<!-- markdownlint-disable MD038 -- the quoted regex literal contains a meaningful trailing space -->
+
 - **Redaction regexes are not a ReDoS vector.** `src/core/transcripts/index.js:23-39` — every pattern
   is linear/near-linear: no nested quantifiers (no `(a+)+`-style constructs). The private-key pattern
   `-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END …` uses a lazy `[\s\S]*?` and a single `[A-Z ]*`
@@ -216,6 +219,8 @@ to a single audited parser would remove the class of bug F2 belongs to.
   Crafted input cannot hang the nightly job via these regexes. (Caveat noted in F1: redaction still
   runs over *untruncated* message text, so it is a CPU cost that scales with F1's unbounded input, not
   a hang in itself.)
+
+<!-- markdownlint-enable MD038 -->
 
 - **Managed-block sentinel self-wedge is defended.** `src/adapters/shared.js:84-95` (`buildBlock`)
   neutralizes any digest line that trims exactly to `<!-- wienerdog:begin -->` / `<!-- wienerdog:end -->`
