@@ -1078,6 +1078,17 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 
 <!-- -->
 
+> **Follow-up (tracked, unscheduled) — unify vault-path reading (from WP-117 review,
+> 2026-07-17).** `sync.js` still has a private `readVaultPath` using a `.split('#')`
+> read, while `memory approve` (WP-117), the digest gate, and `readDreamConfig` use the
+> shared `config.js` `readScalar`. For an exotic config (`vault: /home/u/my#vault`, a
+> quoted value) the two readers can resolve different paths. This is **fail-closed
+> today** (a different resolved vault ⇒ different identity bytes ⇒ hash mismatch ⇒
+> nothing unapproved injected), so it is a consistency cleanup, not a security fix:
+> migrate `sync.js`'s `readVaultPath` onto the shared `readScalar` in a small future WP.
+
+<!-- -->
+
 ## Dependency graph
 
 ```mermaid

@@ -60,9 +60,11 @@ else from `/dev/tty`; on no reachable terminal it prints a refusal and resolves 
 
 **`bin/wienerdog.js`** dispatches subcommands via a `commands` map (each module
 exports `run(rest)`) and prints a `USAGE` block. `src/core/paths.js` `getPaths()`
-gives `{state, vault, config, …}`. The vault path is read from `config.yaml`
-(`sync.js` `readVaultPath`) and the layout via `readVaultLayout(paths.config)`
-(`src/core/layout.js`).
+gives `{state, vault, config, …}`. The vault path is read from `config.yaml` via the
+shared `src/core/dream/config.js` `readScalar(body, 'vault')` (the WP-115 one-coercer
+convention — `''`/`null`/absent ⇒ not configured), and the layout via
+`readVaultLayout(paths.config)` (`src/core/layout.js`). (`sync.js` has its own private
+`readVaultPath`, NOT exported and NOT in this WP's scope — do not use it.)
 
 **`src/core/frontmatter.js`** (WP-114) exports `parse(text) →
 {delimited, malformed, fields:Map, body}` for reading a note's provenance fields.
@@ -139,9 +141,22 @@ const KNOWN = { profile: 'profile.md', preferences: 'preferences.md', goals: 'go
 - `argv[1]` is the file: accept a short name (`profile`) or a basename
   (`profile.md`); map through `KNOWN`; reject anything not one of the four with
   `throw new WienerdogError('approve which identity note? one of: profile, preferences, goals, instructions')`.
-- Resolve the vault + layout (read `config.yaml` for the vault path — reuse the same
-  read `sync.js` uses; if no vault configured, `throw new WienerdogError('no vault
-  configured — run /wienerdog-setup first')`). Build `rel = \`${layout.identity_dir}/${basename}\``.
+- Resolve the vault + layout. Read the vault path via the **shared** config reader
+  `config.js` `readScalar(fs.readFileSync(paths.config,'utf8'), 'vault')` (the WP-115
+  one-coercer convention) — `''` / `null` / absent ⇒ not configured ⇒
+  `throw new WienerdogError('no vault configured — run /wienerdog-setup first')`. Read
+  the layout via `readVaultLayout(paths.config)`. Build
+  `rel = \`${layout.identity_dir}/${basename}\``.
+
+  > **Resolution of a spec contradiction (2026-07-17, canonical).** The original
+  > wording said "reuse the same read `sync.js` uses", but `sync.js`'s `readVaultPath`
+  > is NOT exported and `sync.js` is NOT in this WP's Deliverables — self-contradictory.
+  > The canonical instruction is the shared `readScalar` read above. It is safe (and
+  > arguably more correct than sync's `.split('#')`): any divergence between the two
+  > readers on an exotic config (`vault: /home/u/my#vault`, a quoted value) fails
+  > **closed** — a different resolved vault ⇒ different identity bytes ⇒ hash mismatch
+  > ⇒ nothing unapproved is injected. Making both readers identical is a tracked
+  > follow-up (see Out of scope), explicitly outside this WP's boundary.
 - Read the file's current bytes; if absent →
   `throw new WienerdogError(\`identity file not found: ${rel}\`)`.
 - **Idempotent:** if the current hash already equals the registry's approved hash for
@@ -270,6 +285,13 @@ npm run lint
 - Making the dream emit non-injected identity **proposals** (a later dream-skill WP).
 - A `memory` verb other than `approve` (e.g. `revoke`, `list`) — not in this WP.
 - Any `--yes`/env path to approve — forbidden by ADR-0007/ADR-0021.
+- **Follow-up (tracked, NOT this WP — reviewer recommendation 2026-07-17):** migrate
+  `sync.js`'s private `readVaultPath` (which uses a `.split('#')` read) onto the shared
+  `config.js` `readScalar`, so the ratifier (`memory approve`), the digest gate
+  (`sync`), and `readDreamConfig` resolve the vault identically for exotic configs (a
+  `#` in the path, quoted values). Divergence is fail-closed today (mismatched vault ⇒
+  hash mismatch ⇒ nothing injected), so this is a consistency cleanup, not a security
+  fix. A small future WP; see the ROADMAP follow-up note.
 
 ## Definition of done
 
