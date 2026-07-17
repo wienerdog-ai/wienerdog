@@ -136,6 +136,10 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 | [WP-115](WP-115-unify-frontmatter-consumers.md) | Unify the validator + config frontmatter consumers onto the shared strict parser (audit A4) | M7 | opus | Done | WP-114 |
 | [WP-116](WP-116-identity-trust-registry-digest-hashgate.md) | Exact-byte identity trust registry + fail-closed digest hash-gate (audit A3) | M7 | opus | Done | WP-112, WP-114 |
 | [WP-117](WP-117-memory-approve-cli.md) | `wienerdog memory approve` — TTY-only exact-byte identity ratification (audit A3) | M7 | opus | Done | WP-116 |
+| [WP-118](WP-118-bounded-streaming-transcript-parse.md) | Bounded streaming transcript parsing + pre-read file ceiling + oversized-record markers (audit A6) | M7 | opus | Draft | — |
+| [WP-119](WP-119-transcript-quarantine-ledger.md) | Per-file transcript quarantine ledger replaces the scalar watermark (audit A6) | M7 | opus | Draft | WP-118 |
+| [WP-120](WP-120-digest-line-and-byte-caps.md) | Enforce digest line + byte caps, bounded note reads and project counts (audit A6) | M7 | sonnet | Draft | WP-119 |
+| [WP-121](WP-121-hook-fail-open-hardening.md) | Make the three shipped session hooks genuinely fail-open + a hook fail-open harness (audit A6) | M7 | opus | Draft | — |
 
 > **First-production-night incident (2026-07-04).** WP-038, WP-039 and WP-041 form
 > a serial chain (they edit the shared `run-job.js` / `dream.js` / `validate.js`
@@ -1089,6 +1093,49 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 
 <!-- -->
 
+> **Audit A6 — bounded transcript intake, quarantine ledger, digest/hook bounds
+> (2026-07-17, ADR-0023).** With A4/A3 shipped, A6 closes the parsing/DoS surface
+> (deep-dive `07-parsing-dos.md`). It splits into a 2-WP ledger chain plus two hardening
+> WPs, so every step has literal verification commands and a tight, adversarially-reviewable
+> Deliverables table. **The intake/ledger design is ADR-0023** (Proposed — pending the owner
+> walkthrough that resolves the seeded limit values into dated OWNER-APPROVED numbers).
+> **WP-118** makes transcript *parsing* streaming and bounded: a shared synchronous
+> fixed-chunk line reader (`transcripts/stream.js`) with a per-line byte cap, line-count cap,
+> per-run aggregate cap and a nesting-depth guard replaces `fs.readFileSync` + `split('\n')`
+> (finding F1/F6); a single oversized record becomes a fixed marker (the session is still
+> parsed), a file over a hard pre-read ceiling is quarantined without being opened, and
+> discovery now records `size`/`dev`/`ino`. It keeps `transcripts.parse(entry)` back-compat
+> (adds `parseWithOutcome`) so `scratch.js` is untouched and the suite stays green when it
+> lands. **WP-119** (depends WP-118) is the architectural swap and MUST land atomically (it
+> spans `scratch.js` + `dream.js`): the **per-file quarantine ledger**
+> (`state/transcript-ledger.json`) replaces the scalar `watermarks.json` — a
+> content-independent fingerprint + `processed`/`quarantined` outcome + a per-harness
+> baseline migrated once from the old watermark; `collectExtracts` selects from the ledger
+> and materializes **one file at a time** (removing the parse-all-at-once OOM path); `dream.js`
+> records per-file `processed` outcomes instead of advancing a scalar and surfaces
+> newly-quarantined files through a **durable, secret-free digest banner** (basenames +
+> reason enum only), consolidating valid files beside a quarantine. It distinguishes
+> permanent quarantine (not retried unless the file changes) from capacity-deferred work
+> (no negative record → always retried) — the structural fix for the WP-048/069
+> silent-starvation class. The ledger swap is one WP, not two, because splitting the
+> `collectExtracts` producer from its `dream.js` consumer would leave the suite red at the
+> seam. **WP-120** (depends WP-119 only to serialize a disjoint `digest.js` edit) makes the
+> long-claimed "digest ≤ 120 lines" cap real — a line AND a byte cap with bounded per-note
+> reads, a bounded project count, deterministic section priority and boundary-safe
+> truncation, always preserving the control-plane banner prefix (finding F3/F5). **WP-121**
+> (independent) makes the three shipped session hooks **genuinely fail-open** (finding F4,
+> extended to all hooks): drop the `set -e` that defeated the `exit 0` guarantee, guard
+> HOME/node/state, bound stdin, keep the injection-safe `JSON.stringify` encoders, and add a
+> subprocess harness proving exit 0 under missing-HOME/node, TOCTOU/unreadable digest,
+> unwritable state, and malformed/oversized stdin. **A6 opens NO capability gate** —
+> `wienerdog safety` shows all five gates BLOCKED after every WP. The chain 118→119→120 is
+> serial because each builds the prior's contract (120 behind 119 only to keep the two
+> `digest.js` edits in disjoint regions on `main`); WP-121 shares no files and lands in
+> parallel. **Finding F2 (the digest trust-gate fail-open) is already closed** by the A4/A3
+> work (WP-114/WP-116), so A6's digest WP is scoped to size caps only, not the trust gate.
+
+<!-- -->
+
 ## Dependency graph
 
 ```mermaid
@@ -1230,4 +1277,8 @@ graph LR
   WP112 --> WP116[WP-116 exact-byte identity trust registry + fail-closed digest hash-gate — audit A3, ADR-0021]
   WP114 --> WP116
   WP116 --> WP117[WP-117 wienerdog memory approve — TTY-only identity ratification — audit A3]
+  WP118[WP-118 bounded streaming transcript parse + pre-read ceiling + oversized-record markers — audit A6, ADR-0023]
+  WP118 --> WP119[WP-119 per-file quarantine ledger replaces the scalar watermark + durable quarantine banner — audit A6, ADR-0023]
+  WP119 --> WP120[WP-120 enforce digest line + byte caps + bounded note reads — audit A6]
+  WP121[WP-121 make the three session hooks genuinely fail-open + harness — audit A6]
 ```
