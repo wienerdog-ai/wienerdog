@@ -1,7 +1,7 @@
 ---
 id: WP-119
 title: Per-file transcript quarantine ledger replaces the scalar watermark (audit A6)
-status: Draft
+status: Ready
 model: opus
 size: M
 depends_on: [WP-118]
