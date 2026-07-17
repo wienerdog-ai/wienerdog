@@ -1,7 +1,7 @@
 ---
 id: WP-120
 title: Enforce digest line + byte caps, bounded note reads and project counts (audit A6)
-status: Draft
+status: Ready
 model: sonnet
 size: S
 depends_on: [WP-119]
