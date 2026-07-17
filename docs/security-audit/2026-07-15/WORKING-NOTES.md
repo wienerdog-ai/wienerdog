@@ -70,6 +70,45 @@ vulnerability reporting). Hence: private repo only.
   `v0.9.0`; our audit import sits on top.)
 - Repo content is English; chat may be Hungarian.
 
+### WP lifecycle in this fork (proven on WP-114..117, 2026-07-17)
+
+The A4+A3 run established this flow; follow it for the remaining actions
+(A6, A5, A1, A2, A7–A10) unless the owner says otherwise.
+
+1. **Spec phase (wd-architect).** The architect turns the next audit action into
+   WP specs (+ ADR when a durable boundary is being decided), following the
+   format of `docs/specs/done/WP-114..117`. Then a **per-ticket owner
+   walkthrough**: for each WP, the session gives the owner a self-contained
+   explanation (no pointer-chasing), surfaces every decision point, and the
+   owner's calls are recorded IN the spec/ADR as dated `OWNER-APPROVED`
+   decisions — never left only in chat. One ticket open at a time; ADRs are
+   discussed as their own item.
+2. **Implementation phase (per WP, sequentially).**
+   `chore(specs): mark WP-XXX Ready` commit → TDD (tests first, red, then
+   implement) → full `npm test` + `npm run lint` + `node bin/wienerdog.js
+   safety` green → one `feat`/`refactor` commit containing the implementation
+   AND the spec's `In-Review` flip, with "Decisions made" and `Generated-by:`
+   in the commit body.
+3. **Review phase (wd-reviewer).** Review the implementation commit strictly
+   against the spec's Deliverables table / contracts / acceptance criteria,
+   re-running all verification commands and probing adversarially. Findings are
+   fixed test-first in follow-up commits and re-verified by the SAME reviewer
+   before closing.
+4. **Close.** `status: Done` flip + `git mv` of the spec to `docs/specs/done/`
+   (run an explicit `git add` on the moved file after the edit — `git mv` stages
+   the pre-edit index blob) + ROADMAP row → Done, in one `chore(specs)` commit.
+   When an audit ACTION completes (all its WPs done), update this file's Status
+   section in a `docs(security)` commit.
+5. **Spec-gap protocol.** If implementation surfaces a spec error (grep gate
+   catching unknown files, a missing deliverable, a self-contradictory
+   instruction), the implementer does NOT cross the deliverables boundary —
+   the gap goes back to wd-architect for a dated amendment (owner in the loop),
+   and only then does implementation continue. This fired three times in the
+   A4+A3 run and worked each time.
+6. **Lessons.** At session end the owner-side session appends the run's lessons
+   to `memory/lessons/inbox.md` on main (one bullet per lesson, WP-prefixed)
+   and pushes.
+
 ## Baseline & upstream delta (as of 2026-07-17)
 
 - Audit was performed against upstream commit `405afdd`.
