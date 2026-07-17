@@ -35,6 +35,23 @@ Canonical names. Use these exact terms in code, docs, specs, and prompts — nev
 - **capability gate** — one named on/off switch in the safety profile
   (e.g. `gws-use`, `external-content-routine`). A blocked gate makes its feature
   fail closed before any side effect (no model spawn, no credential load).
+- **secret scan / `scanAndRedact`** — the single shared secret detector
+  (`src/core/secret-scan.js`), called independently at four fail-closed
+  persistence points in the dream lifecycle: transcript input, the brain's
+  staged output, the durable log/alert/email path, and each digest section
+  (ADR-0024). Returns sanitized text plus metadata-only findings (`{label,
+  severity, count}`) — a finding never stores the matched secret bytes. Two
+  severities, `redact` and `quarantine`, but the *persistence* gates (staged
+  output, digest section) withhold on **any** finding of either severity;
+  `hasHardFinding` (quarantine-severity only) drives the other consumers.
+  (Not: "filter", "scrubber", "DLP".)
+- **secret quarantine** — the fail-closed outcome when a persistence gate that
+  cannot safely rewrite an artifact gets any `scanAndRedact` finding: the
+  brain's staged output is preserved into `state/quarantine/` (0700 dir, 0600
+  file, raw bytes intact, for the owner to review or restore) and reverted
+  rather than committed; a digest section with a finding is omitted rather
+  than injected redacted. Never a silent `[REDACTED]` rewrite of the user's
+  own text. See `docs/runbooks/secret-incident.md` for recovery.
 - **routine catalog** — the opt-in post-setup menu of ready-made routines (`/wienerdog-routines`); nothing is scheduled by default (ADR-0008).
 - **interview** — the `/wienerdog-setup` conversation that produces `06-Identity/` notes, from which CLAUDE.md/AGENTS.md managed blocks are rendered.
 - **memory_mode** — user preset for gate strictness: conservative | standard | eager.
