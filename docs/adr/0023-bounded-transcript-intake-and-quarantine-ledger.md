@@ -3,11 +3,13 @@
 Status: Proposed
 Date: 2026-07-17
 
-> **Draft pending the owner walkthrough.** This ADR records the design the audit-A6
-> specs (WP-118 + WP-119) implement. Several concrete limits are still
-> `OWNER-DECISION (pending)` in those specs; the owner walkthrough resolves them into
-> dated `OWNER-APPROVED` entries and flips this ADR to Accepted. Do not treat any
-> number here as final until then.
+> **The design below is OWNER-APPROVED (2026-07-17)** — the owner walkthrough
+> ratified all three pillars as written: bounded streaming intake, the per-file
+> quarantine ledger replacing the scalar watermark (fail-safe skip semantics,
+> no-negative-record capacity deferral), and the secret-free digest banner as the
+> quarantine surface. Several concrete limits are still `OWNER-DECISION (pending)`
+> in the WP-118/WP-119 specs; resolving them in the per-ticket walkthroughs flips
+> this ADR to Accepted. Do not treat any number here as final until then.
 
 ## Context
 
