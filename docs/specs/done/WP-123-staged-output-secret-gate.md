@@ -1,7 +1,7 @@
 ---
 id: WP-123
 title: Staged brain-output secret gate — scan pre-commit added content, revert on a secret finding (audit A5)
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: [WP-122]
