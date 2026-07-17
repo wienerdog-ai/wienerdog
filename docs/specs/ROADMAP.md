@@ -1097,8 +1097,8 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 > (2026-07-17, ADR-0023).** With A4/A3 shipped, A6 closes the parsing/DoS surface
 > (deep-dive `07-parsing-dos.md`). It splits into a 2-WP ledger chain plus two hardening
 > WPs, so every step has literal verification commands and a tight, adversarially-reviewable
-> Deliverables table. **The intake/ledger design is ADR-0023** (Proposed — pending the owner
-> walkthrough that resolves the seeded limit values into dated OWNER-APPROVED numbers).
+> Deliverables table. **The intake/ledger design is ADR-0023** (Accepted 2026-07-17 — the owner
+> walkthrough ratified the design and resolved every seeded limit into dated OWNER-APPROVED numbers).
 > **WP-118** makes transcript *parsing* streaming and bounded: a shared synchronous
 > fixed-chunk line reader (`transcripts/stream.js`) with a per-line byte cap, line-count cap,
 > per-run aggregate cap and a nesting-depth guard replaces `fs.readFileSync` + `split('\n')`

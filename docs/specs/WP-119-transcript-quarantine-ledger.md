@@ -329,10 +329,17 @@ quarantines).
 > In the fork's sequential-on-`main` flow, **land WP-119 before WP-120** so WP-120's cap pass
 > wraps the already-present banner.
 
-## OWNER-DECISION (pending) — ledger design calls
+## OWNER-APPROVED (2026-07-17) — ledger design calls
 
-Seeded with recommendations; the owner walkthrough ratifies each into a dated `OWNER-APPROVED`
-line (also anchoring ADR-0023 §2).
+The owner walkthrough ratified **all four recommendations as seeded**: the
+`size:mtimeMs:dev:ino` fingerprint, the `0600` ledger file (state dir `0700`,
+atomic temp+rename), the ledger-derived **digest banner** as the quarantine
+surface (Alt A `alerts.jsonl` explicitly rejected — run-job's success path
+`clearAlerts` would wipe the alert the same night; Alt B doctor-only rejected
+as sole channel), and `since:null` discovery with the ledger as the sole
+authority. These calls anchor ADR-0023 §2 (flipped to Accepted with this
+approval). The original recommendations + rationale are kept below for the
+implementer.
 
 - **Fingerprint components — recommend `size:mtimeMs:dev:ino`.** `dev`+`ino` catch a
   same-size/same-mtime replacement; they differ harmlessly across a restore/cross-device move,

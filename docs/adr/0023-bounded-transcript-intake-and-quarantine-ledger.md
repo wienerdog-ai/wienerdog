@@ -1,15 +1,18 @@
 # ADR-0023: Bounded streaming transcript intake and a per-file quarantine ledger
 
-Status: Proposed
+Status: Accepted
 Date: 2026-07-17
 
-> **The design below is OWNER-APPROVED (2026-07-17)** — the owner walkthrough
-> ratified all three pillars as written: bounded streaming intake, the per-file
-> quarantine ledger replacing the scalar watermark (fail-safe skip semantics,
-> no-negative-record capacity deferral), and the secret-free digest banner as the
-> quarantine surface. Several concrete limits are still `OWNER-DECISION (pending)`
-> in the WP-118/WP-119 specs; resolving them in the per-ticket walkthroughs flips
-> this ADR to Accepted. Do not treat any number here as final until then.
+> **OWNER-APPROVED (2026-07-17).** The owner walkthrough ratified all three
+> pillars as written — bounded streaming intake, the per-file quarantine ledger
+> replacing the scalar watermark (fail-safe skip semantics, no-negative-record
+> capacity deferral), and the secret-free digest banner as the quarantine
+> surface — and then resolved every anchoring value: the WP-118 intake limits
+> (50 MB pre-read ceiling, 1 MB line cap, 500 000 lines, fixed 200 MB run
+> budget, JSON depth 64) and the WP-119 ledger calls (`size:mtimeMs:dev:ino`
+> fingerprint, 0600 ledger file, digest banner as the quarantine channel,
+> `since:null` discovery). The dated `OWNER-APPROVED` blocks in the WP-118 and
+> WP-119 specs are the per-decision record.
 
 ## Context
 
