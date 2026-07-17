@@ -172,11 +172,17 @@ async function run(argv) {
   try {
     // 4. Read + one-time-migrate the per-file quarantine ledger (audit A6,
     //    ADR-0023 — replaces the scalar watermark), then collect the fresh
-    //    transcripts into scratch (now safely under the lock).
+    //    transcripts into scratch (now safely under the lock). The migration
+    //    write is ALSO dry-run-guarded (OWNER-APPROVED 2026-07-17, second
+    //    review round): the upgrade path — watermarks.json present, no ledger
+    //    yet — is exactly the state every existing user first dry-runs from,
+    //    and a preview run must not permanently mutate state. On dry-run the
+    //    migrated ledger is used in-memory only; migration is idempotent, so
+    //    the next real run re-migrates identically.
     let ledger = ledgerLib.readLedger(paths.state);
     const mig = ledgerLib.migrateFromWatermarks(paths.state, ledger);
     ledger = mig.ledger;
-    if (mig.migrated) ledgerLib.writeLedger(paths.state, ledger);
+    if (mig.migrated && !dryRun) ledgerLib.writeLedger(paths.state, ledger);
     const sel = collectExtracts(paths, ledger, cfg.maxInputBytes);
 
     // Regenerate the injected session digest from the CURRENT ledger (atomic

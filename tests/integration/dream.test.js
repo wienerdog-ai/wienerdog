@@ -649,3 +649,33 @@ test('dream-integration: --dry-run reports a would-be quarantine but persists ne
   assert.equal(ledgerRecord(ledger, 'huge.jsonl').outcome, 'quarantined');
   assert.ok(fs.readFileSync(path.join(ctx.core, 'state', 'digest.md'), 'utf8').includes('huge.jsonl (over-ceiling)'));
 });
+
+test('dream-integration: --dry-run on the upgrade path (watermarks.json present, no ledger) persists nothing', async () => {
+  // Second review round (2026-07-17 amendment): the universal first-adoption
+  // state is watermarks.json present + no ledger. The fresh-state dry-run test
+  // never fires the one-time migration, so it could not catch the migration
+  // write persisting transcript-ledger.json on a preview run.
+  const ctx = setup({ withTranscript: false, overCeiling: 'huge' });
+  const state = path.join(ctx.core, 'state');
+  fs.mkdirSync(state, { recursive: true });
+  fs.writeFileSync(path.join(state, 'watermarks.json'), JSON.stringify({ version: 1, claude: 1, codex: null }));
+  const before = commitCount(ctx.vault);
+
+  const dry = await runDream(ctx, ['--dry-run']);
+  assert.equal(dry.thrown, null, dry.thrown && dry.thrown.message);
+  assert.match(dry.output, /would quarantine claude\/huge\.jsonl \(over-ceiling\)/);
+  assert.equal(commitCount(ctx.vault), before);
+  assert.equal(fs.existsSync(path.join(state, 'transcript-ledger.json')), false, 'no migration write on dry-run');
+  assert.equal(fs.existsSync(path.join(state, 'digest.md')), false, 'no digest write on dry-run');
+
+  // Migration is idempotent: the next REAL run re-migrates identically, records
+  // the quarantine, and writes the banner.
+  const real = await runDream(ctx, ['--yes']);
+  assert.equal(real.thrown, null, real.thrown && real.thrown.message);
+  assert.match(real.output, /quarantined claude\/huge\.jsonl \(over-ceiling\)/);
+  const ledger = readLedgerFile(ctx.core);
+  assert.ok(ledger, 'real run persists the migrated ledger');
+  assert.equal(ledger.baseline_mtime.claude, 1, 'baseline seeded from watermarks.json');
+  assert.equal(ledgerRecord(ledger, 'huge.jsonl').outcome, 'quarantined');
+  assert.ok(fs.readFileSync(path.join(state, 'digest.md'), 'utf8').includes('huge.jsonl (over-ceiling)'), 'banner written by the real run');
+});
