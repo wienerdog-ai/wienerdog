@@ -32,10 +32,11 @@ a durable, cross-session secret leak. The other three A5 gates (WP-122..124) do 
 path: the identity note bytes come straight from the vault, not from a brain output or a log.
 
 This WP adds the **fourth A5 enforcement point (EP4): scan each digest section before it joins
-the output**; a section with a **hard finding** is **omitted** (fail closed) and surfaced by a
-fixed control-plane banner, so the rest of the digest (and the last known-good context) still
-renders. It touches only `src/core/digest.js` and its test. This is the last of the four
-persistence gates of **ADR-0024**.
+the output**; a section with **any finding** (`findings.length > 0` from the shared detector —
+both `redact` and `quarantine` severities; OWNER-APPROVED 2026-07-17, see below) is **omitted**
+(fail closed) and surfaced by a fixed control-plane banner, so the rest of the digest (and the
+last known-good context) still renders. It touches only `src/core/digest.js` and its test. This
+is the last of the four persistence gates of **ADR-0024**.
 
 **A5 opens NO capability gate.** `wienerdog safety` must still show all five gates
 (`google-setup`, `gws-use`, `external-content-routine`, `daily-summary-injection`,
@@ -69,7 +70,10 @@ const identityWarn = identityExclusions.length > 0
 The golden `tests/golden/digest-default.md` is produced from clean fixtures containing no
 secret, so adding the gate must leave it **byte-unchanged**. WP-122 shipped
 `src/core/secret-scan.js` exporting `scanAndRedact(text) → {text, findings}` and
-`hasHardFinding(findings)`.
+`hasHardFinding(findings)`. This gate (EP4) consumes the `scanAndRedact` `findings`
+array directly and omits a section on **any** finding (`findings.length > 0`, either
+severity) — NOT only a hard one (OWNER-APPROVED 2026-07-17, see below);
+`hasHardFinding` stays the export the OTHER gates use.
 
 ## Deliverables (permission boundary — touch ONLY these)
 
@@ -77,7 +81,7 @@ secret, so adding the gate must leave it **byte-unchanged**. WP-122 shipped
 
 | Action | Path | Notes |
 |--------|------|-------|
-| modify | src/core/digest.js | scan each identity/project/daily section before it joins `parts[]`; omit a section with a hard finding; add a fixed secret-exclusion banner to the prefix; render the staged-output quarantine pending-review banner from `opts` |
+| modify | src/core/digest.js | scan each identity/project/daily section before it joins `parts[]`; omit a section on any finding (`findings.length > 0`, either severity); add a fixed secret-exclusion banner to the prefix; render the staged-output quarantine pending-review banner from `opts` |
 | modify | src/cli/dream.js | one-line call-site: list `state/quarantine/` basenames into the `renderDigest` opts (see contract 5) |
 | modify | src/cli/sync.js | same one-line call-site as dream.js |
 | modify | tests/unit/digest.test.js | identity note containing a secret → its section omitted + banner present + secret absent from output; clean fixtures → golden byte-unchanged; a false positive is an omission, not a `[REDACTED]` injection; non-empty quarantine list → pending-review banner, empty → no banner |
@@ -86,7 +90,8 @@ secret, so adding the gate must leave it **byte-unchanged**. WP-122 shipped
 
 **1. Scan each section before it is pushed to `parts[]`.** For each candidate section string
 (the identity `` `${header}\n${content}` ``, the `## Active projects` block, and the daily
-`## Summary` block if unfrozen), call `scanAndRedact(section)`; if `hasHardFinding(findings)`,
+`## Summary` block if unfrozen), call `scanAndRedact(section)`; on **any finding**
+(`findings.length > 0`, either `redact` or `quarantine` severity — NOT only `hasHardFinding`),
 **do NOT push the section** (omit it) and instead record a fixed exclusion entry naming the
 section by its **fixed, code-owned identity** (the identity FILE name for an identity section,
 or the literal `active-projects` / `daily-summary` for the other two) — never the section
@@ -99,10 +104,11 @@ content, never the matched bytes.
   the detector): add them to the SAME or a parallel exclusion list with a code-owned label.
   Keeping one banner is simpler; record the choice.
 
-**2. Never inject the `[REDACTED]`-mutated section.** As in WP-123, a hard finding **omits the
-whole section** — do NOT push `scanAndRedact(section).text` (the redacted form). A false
-positive is a **visible omission with a metadata banner**, not a silently-`[REDACTED]`
-identity note injected into every session. (Discard the `.text`; use only the `findings`.)
+**2. Never inject the `[REDACTED]`-mutated section.** As in WP-123, **any finding**
+(`findings.length > 0`, either severity) **omits the whole section** — do NOT push
+`scanAndRedact(section).text` (the redacted form). A false positive is a **visible omission
+with a metadata banner**, not a silently-`[REDACTED]` identity note injected into every
+session. (Discard the `.text`; use only the `findings`.)
 
 **3. The banner.** When any section was omitted for a secret, the prefix carries a fixed,
 code-owned line — either the existing `identityWarn` (with the new reason) or a dedicated
@@ -149,6 +155,29 @@ Given the clean default fixtures: `renderDigest` is **byte-identical** to
 
 ## OWNER-APPROVED (2026-07-17) — DECISION NEEDED, resolve in the walkthrough
 
+- **OWNER-APPROVED (2026-07-17) — EP4 gate condition: omit a section on ANY detector finding,
+  not only a hard finding.** *Trigger:* the same contract/acceptance contradiction class the
+  WP-123 implementer surfaced (mirrors the EP2 ruling, commit `fa243a1`), raised
+  pre-implementation via the spec-gap protocol. The "Exact contracts" omitted a section only on
+  a **hard** finding (`hasHardFinding` — `quarantine` severity), but the Acceptance criteria
+  require an OpenAI key and a `refresh_token=` assignment in an approved identity note to be
+  omitted — both `redact`-severity findings per the WP-122 owner-approved severity table. Under
+  the hard-only contract a real pasted OpenAI key or refresh token in an approved
+  `preferences.md` would be injected **raw** into every session and into the
+  `CLAUDE.md`/`AGENTS.md` managed block — the exact durable cross-session leak A5 item 6 names.
+  *Ruling:* **at EP4 the gate omits a section on ANY finding from the shared detector — both
+  `redact` and `quarantine` severities. The condition is `findings.length > 0`, NOT
+  `hasHardFinding`.** *Rationale:* EP4, like EP2, is a gate that **may not rewrite** (it never
+  injects the `[REDACTED]`-mutated section), so the only safe action on any finding is
+  **omit-the-whole-section**. Unlike EP2, the input is **human-authored** — an approved
+  identity note the owner wrote — so the extra false-positive omissions are an **availability
+  trade-off on the owner's own context**. That trade-off is **accepted**: the omission is
+  visible (the extended `identityWarn` banner names the note + the "appears to contain a secret"
+  reason) and it is the **easiest of the four gates to recover** — the owner edits their own
+  note and re-syncs. *The WP-122 severity table is NOT reopened:* `severity` and
+  `hasHardFinding` remain the WP-122 export the OTHER gates use; EP4 simply consumes the
+  `scanAndRedact` `findings` array directly and keys on `findings.length > 0`. This mirrors the
+  WP-123 EP2 amendment (commit `fa243a1`).
 - **OWNER-APPROVED (2026-07-17) — one banner: extend `identityWarn`.** Secret-omitted
   identity sections join the existing exclusion list with the code-owned reason
   `'appears to contain a secret'`; the projects/daily cases join the same list under the
@@ -169,9 +198,9 @@ Given the clean default fixtures: `renderDigest` is **byte-identical** to
 ## Implementation notes & constraints
 
 - **This is EP4 of ADR-0024.** Reference it where the section scan is wired.
-- **Omit, never inject the redacted form.** The single invariant: a hard finding drops the
-  whole section; the `.text` (redacted) is discarded. A false positive is a visible banner, not
-  a silently-mutated injected identity.
+- **Omit, never inject the redacted form.** The single invariant: **any finding**
+  (`findings.length > 0`, either severity) drops the whole section; the `.text` (redacted) is
+  discarded. A false positive is a visible banner, not a silently-mutated injected identity.
 - **Golden byte-unchanged.** The clean fixtures contain no secret, so
   `tests/golden/digest-default.md` MUST NOT change. If it would, the detector is firing on
   in-cap clean content — that is a bug in the wiring, not a golden update.
@@ -182,25 +211,29 @@ Given the clean default fixtures: `renderDigest` is **byte-identical** to
   `parts[]` — it never overrides the A3 hash gate or A4 provenance (those already excluded
   their failures); it only removes an approved+trusted section that nonetheless carries a
   secret.
-- Reuse `scanAndRedact`/`hasHardFinding` from `secret-scan`. Zero deps, JSDoc only. When
-  uncertain, choose simpler + record it.
+- Reuse `scanAndRedact` from `secret-scan` and key on `findings.length > 0` (either severity) —
+  EP4 does **not** call `hasHardFinding` (that export drives the other gates). Zero deps, JSDoc
+  only. When uncertain, choose simpler + record it.
 
 ## Security checklist
 
 - [ ] Every digest section (identity notes, projects, daily summary) is scanned with the shared
-      detector before it is injected; a `quarantine`-severity finding **omits the whole
-      section** (the `[REDACTED]` form is never injected) and is surfaced by a fixed,
-      code-owned banner naming only the section identifier + reason — no matched bytes, no
-      content reach the injected digest / managed block. The scan runs after the A3/A4 trust
-      gates and is fail-closed (a scan error omits). No untrusted identifier flows into a path
-      or shell (pure text filtering).
+      detector before it is injected; **any finding** (`findings.length > 0`, either `redact` or
+      `quarantine` severity) **omits the whole section** (the `[REDACTED]` form is never
+      injected) and is surfaced by a fixed, code-owned banner naming only the section identifier
+      + reason — no matched bytes, no content reach the injected digest / managed block. The scan
+      runs after the A3/A4 trust gates and is fail-closed (a scan error omits). No untrusted
+      identifier flows into a path or shell (pure text filtering).
 
 ## Acceptance criteria
 
-- [ ] An approved+trusted identity note containing a secret (Stripe/OpenAI key, private-key
-      block, `refresh_token=`) has its section **omitted** from `renderDigest`'s output — the
-      secret bytes appear nowhere in the output — and a banner names the note with a code-owned
-      "appears to contain a secret" reason.
+- [ ] An approved+trusted identity note containing a secret has its section **omitted** from
+      `renderDigest`'s output on **ANY** detector finding (`findings.length > 0`), regardless of
+      severity — the secret bytes appear nowhere in the output — and a banner names the note with
+      a code-owned "appears to contain a secret" reason. This MUST hold for both a `quarantine`
+      (hard) case (a Stripe key, a private-key block) **and** a `redact`-severity case (an OpenAI
+      key, a `refresh_token=` assignment) — under a hard-only gate the `redact` cases would be
+      injected raw, which is the leak this WP closes.
 - [ ] The other (clean) identity sections and the projects block still render in the same
       output.
 - [ ] A false positive is an **omission + banner**, not an injected `[REDACTED]` section

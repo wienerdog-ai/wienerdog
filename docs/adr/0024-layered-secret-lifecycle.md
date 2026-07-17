@@ -121,6 +121,19 @@ scanner is applied:
    **section** is scanned before it joins the output. A section with a hard finding
    is **omitted** (fail closed) and surfaced by a fixed control-plane banner; the
    rest of the digest still renders, so the last known-good context remains.
+   *(Amended, OWNER-APPROVED 2026-07-17, WP-125 spec-gap walkthrough: this gate
+   omits a section on ANY detector finding — both `redact` and `quarantine`
+   severities, condition `findings.length > 0` — not only a hard finding. Like EP2,
+   EP4 may not rewrite (it never injects the `[REDACTED]`-mutated section), so the
+   only safe action on any finding is omit-the-whole-section; unlike EP2 the input
+   is a human-authored approved identity note, so the extra false-positive omissions
+   are an availability trade-off on the owner's own context — accepted because the
+   omission is visible (the identity-exclusion banner names the note + reason) and is
+   the easiest of the four gates to recover (the owner edits the note and re-syncs).
+   The WP-122 severity table is unchanged; `hasHardFinding` stays a WP-122 export,
+   now driving EP1/EP3 (this supersedes the EP2-amendment aside above that also
+   listed EP4 among the `hasHardFinding`-driven gates). EP4 consumes the
+   `scanAndRedact` `findings` array directly and keys on `findings.length > 0`.)*
 
 ### 3. Private-by-default artifact modes (WP-126)
 
