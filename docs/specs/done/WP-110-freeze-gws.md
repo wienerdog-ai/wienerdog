@@ -1,7 +1,7 @@
 ---
 id: WP-110
 title: Freeze Google setup and GWS credential use behind the safety profile
-status: In-Review
+status: Done
 model: sonnet
 size: S
 depends_on: [WP-109]

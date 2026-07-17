@@ -1,7 +1,7 @@
 ---
 id: WP-112
 title: Freeze daily-Summary injection and automatic identity activation
-status: In-Review
+status: Done
 model: sonnet
 size: M
 depends_on: [WP-109]
