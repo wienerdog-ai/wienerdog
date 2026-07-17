@@ -141,7 +141,7 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 | [WP-120](WP-120-digest-line-and-byte-caps.md) | Enforce digest line + byte caps, bounded note reads and project counts (audit A6) | M7 | sonnet | Done | WP-119 |
 | [WP-121](WP-121-hook-fail-open-hardening.md) | Make the three shipped session hooks genuinely fail-open + a hook fail-open harness (audit A6) | M7 | opus | Done | — |
 | [WP-122](WP-122-shared-secret-detector.md) | Shared scanAndRedact secret detector + regression corpus + pre-brain input hardening (audit A5) | M7 | opus | Done | — |
-| [WP-123](WP-123-staged-output-secret-gate.md) | Staged brain-output secret gate — scan pre-commit added content, revert on a hard finding (audit A5) | M7 | opus | Draft | WP-122 |
+| [WP-123](WP-123-staged-output-secret-gate.md) | Staged brain-output secret gate — scan pre-commit added content, revert on a secret finding (audit A5) | M7 | opus | Draft | WP-122 |
 | [WP-124](WP-124-durable-output-sanitizing.md) | Durable output sanitizing — bounded secret-scrub of brain stdout/stderr, logs, alerts, and alert email (audit A5) | M7 | opus | Draft | WP-122 |
 | [WP-125](WP-125-digest-section-secret-gate.md) | Per-section digest secret gate — omit a section that would inject a secret, keep the rest (audit A5) | M7 | sonnet | Draft | WP-122 |
 | [WP-126](WP-126-private-artifact-modes.md) | Private-by-default artifact modes — 0700 dirs / 0600 sensitive files on create + sync/doctor repair (audit A5) | M7 | opus | Draft | WP-124, WP-125 |
@@ -1333,7 +1333,7 @@ graph LR
   WP119 --> WP120[WP-120 enforce digest line + byte caps + bounded note reads — audit A6]
   WP121[WP-121 make the three session hooks genuinely fail-open + harness — audit A6]
   WP122[WP-122 shared scanAndRedact secret detector + corpus + pre-brain input hardening — audit A5, ADR-0024]
-  WP122 --> WP123[WP-123 staged brain-output secret gate — scan pre-commit added content, revert on hard finding — audit A5]
+  WP122 --> WP123[WP-123 staged brain-output secret gate — scan pre-commit added content, revert on a secret finding — audit A5]
   WP122 --> WP124[WP-124 durable output sanitizing — brain stdout/stderr/log/alert scrub + no raw log tail in email — audit A5]
   WP122 --> WP125[WP-125 per-section digest secret gate — omit a section that would inject a secret — audit A5]
   WP124 --> WP126[WP-126 private-by-default artifact modes — 0700/0600 on create + sync/doctor repair — audit A5]

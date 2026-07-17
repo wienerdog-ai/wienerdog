@@ -1,6 +1,6 @@
 ---
 id: WP-123
-title: Staged brain-output secret gate — scan pre-commit added content, revert on a hard finding (audit A5)
+title: Staged brain-output secret gate — scan pre-commit added content, revert on a secret finding (audit A5)
 status: In-Review
 model: opus
 size: M
@@ -9,7 +9,7 @@ adrs: [ADR-0004, ADR-0024]
 branch: wp/123-staged-output-secret-gate
 ---
 
-# WP-123: Staged brain-output secret gate — scan pre-commit added content, revert on a hard finding (audit A5)
+# WP-123: Staged brain-output secret gate — scan pre-commit added content, revert on a secret finding (audit A5)
 
 ## Context (read this, nothing else)
 
