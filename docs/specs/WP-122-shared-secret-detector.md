@@ -1,7 +1,7 @@
 ---
 id: WP-122
 title: Shared scanAndRedact secret detector + regression corpus + pre-brain input hardening (audit A5)
-status: Draft
+status: Ready
 model: opus
 size: M
 depends_on: []
