@@ -2,18 +2,29 @@
 
 **Last updated:** 2026-07-17
 
-## Status: A0 is COMPLETE (2026-07-17)
+## Status: A0 and A4 are COMPLETE (2026-07-17)
 
 Audit action A0 landed as five reviewed work packages, WP-109..WP-113 (specs in
 `docs/specs/done/`): the code-owned safety profile (`src/core/safety-profile.js`,
 five capability gates, all BLOCKED, no runtime/env/flag override), the
 `wienerdog safety` preflight, the GWS / `skill:`-routine / daily-Summary /
 identity-auto-activation freezes, and the THREAT-MODEL **T0** section scoping the
-product claims to the enforced gates. Full suite green (865 tests, 0 fail).
-Next per the sequence below: **A4** (daily removal is already done by WP-112;
-the shared strict frontmatter parser remains) **and A3** (identity approval CLI +
-exact-byte hash registry — note the case-folding gap recorded in
-`memory/lessons/inbox.md`).
+product claims to the enforced gates.
+
+Audit action **A4** landed as WP-114 + WP-115 (with the daily-Summary removal
+already done by WP-112), both reviewer-approved (specs in `docs/specs/done/`,
+convention in **ADR-0022**): `src/core/frontmatter.js` is the ONE strict
+fail-closed parser (typed accessors, malformed→exclude + digest warning banner,
+the digest's `=== 'true'` fail-open closed with a digest/validator differential
+test), and all four former parser copies (digest, validator `parseFrontmatter` +
+`skillBody`, config `readScalar`, layout `cleanValue`) delegate to it — the grep
+gate (`!== '---'` / `indexOf(' #')`) returns only `frontmatter.js`. Full suite
+green (891 tests, 0 fail).
+
+Next per the sequence below: **A3** (WP-116 identity trust registry + digest
+hash-gate, WP-117 `memory approve` CLI — specs Ready-able in `docs/specs/`,
+boundaries in **ADR-0021**; the WP-112 case-folding lesson is addressed by
+WP-116's folded path keys).
 
 This file is the durable, cross-session context for the security remediation
 work. A session that starts here with no chat history should read this first,
