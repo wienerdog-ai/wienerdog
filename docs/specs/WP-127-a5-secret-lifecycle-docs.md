@@ -1,7 +1,7 @@
 ---
 id: WP-127
 title: A5 documentation — secret-detection limits, quarantine/incident runbook, vault-local no-auto-push (audit A5)
-status: Draft
+status: Ready
 model: sonnet
 size: M
 depends_on: [WP-122, WP-123, WP-124, WP-125, WP-126]
