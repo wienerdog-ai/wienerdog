@@ -145,7 +145,7 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 | [WP-124](WP-124-durable-output-sanitizing.md) | Durable output sanitizing — bounded secret-scrub of brain stdout/stderr, logs, alerts, and alert email (audit A5) | M7 | opus | Done | WP-122 |
 | [WP-125](WP-125-digest-section-secret-gate.md) | Per-section digest secret gate — omit a section that would inject a secret, keep the rest (audit A5) | M7 | sonnet | Done | WP-122 |
 | [WP-126](WP-126-private-artifact-modes.md) | Private-by-default artifact modes — 0700 dirs / 0600 sensitive files on create + sync/doctor repair (audit A5) | M7 | opus | Done | WP-124, WP-125 |
-| [WP-127](WP-127-a5-secret-lifecycle-docs.md) | A5 documentation — secret-detection limits, quarantine/incident runbook, vault-local no-auto-push (audit A5) | M7 | sonnet | In-Review | WP-122, WP-123, WP-124, WP-125, WP-126 |
+| [WP-127](WP-127-a5-secret-lifecycle-docs.md) | A5 documentation — secret-detection limits, quarantine/incident runbook, vault-local no-auto-push (audit A5) | M7 | sonnet | Done | WP-122, WP-123, WP-124, WP-125, WP-126 |
 
 > **First-production-night incident (2026-07-04).** WP-038, WP-039 and WP-041 form
 > a serial chain (they edit the shared `run-job.js` / `dream.js` / `validate.js`
