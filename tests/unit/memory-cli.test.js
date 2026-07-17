@@ -123,6 +123,18 @@ test('replacing a previously approved version says so before prompting', async (
   );
 });
 
+test('prototype-key names (toString, constructor, …) are rejected by the allowlist before any read', async () => {
+  const { paths } = setup();
+  for (const name of ['toString', 'constructor', '__proto__', 'hasOwnProperty', 'valueOf']) {
+    await assert.rejects(
+      () => memory.run(['approve', name], { paths, promptFn: async () => 'approve' }),
+      /approve which identity note/,
+      `inherited key ${JSON.stringify(name)} must be rejected as unknown`
+    );
+  }
+  assert.deepEqual(readRegistry(paths.state).approvals, {}, 'nothing recorded');
+});
+
 test('unknown file and unknown subcommand throw WienerdogError', async () => {
   const { paths } = setup();
   await assert.rejects(

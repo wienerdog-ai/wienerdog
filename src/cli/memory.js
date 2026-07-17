@@ -69,7 +69,14 @@ async function run(argv, opts = {}) {
   }
 
   const arg = argv[1] || '';
-  const basename = KNOWN[arg] || (Object.values(KNOWN).includes(arg) ? arg : null);
+  // Own-property lookup only: a plain-object bracket read would resolve
+  // inherited prototype members (toString, constructor, …) and leak past the
+  // allowlist to a filesystem read (reviewer finding, WP-117).
+  const basename = Object.prototype.hasOwnProperty.call(KNOWN, arg)
+    ? KNOWN[arg]
+    : Object.values(KNOWN).includes(arg)
+      ? arg
+      : null;
   if (!basename) {
     throw new WienerdogError('approve which identity note? one of: profile, preferences, goals, instructions');
   }
