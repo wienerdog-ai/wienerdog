@@ -1,7 +1,7 @@
 ---
 id: WP-116
 title: Exact-byte identity trust registry + fail-closed digest hash-gate (audit A3)
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: [WP-112, WP-114]
