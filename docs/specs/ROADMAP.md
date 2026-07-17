@@ -138,7 +138,7 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 | [WP-117](WP-117-memory-approve-cli.md) | `wienerdog memory approve` — TTY-only exact-byte identity ratification (audit A3) | M7 | opus | Done | WP-116 |
 | [WP-118](WP-118-bounded-streaming-transcript-parse.md) | Bounded streaming transcript parsing + pre-read file ceiling + oversized-record markers (audit A6) | M7 | opus | Done | — |
 | [WP-119](WP-119-transcript-quarantine-ledger.md) | Per-file transcript quarantine ledger replaces the scalar watermark (audit A6) | M7 | opus | Done | WP-118 |
-| [WP-120](WP-120-digest-line-and-byte-caps.md) | Enforce digest line + byte caps, bounded note reads and project counts (audit A6) | M7 | sonnet | Draft | WP-119 |
+| [WP-120](WP-120-digest-line-and-byte-caps.md) | Enforce digest line + byte caps, bounded note reads and project counts (audit A6) | M7 | sonnet | Done | WP-119 |
 | [WP-121](WP-121-hook-fail-open-hardening.md) | Make the three shipped session hooks genuinely fail-open + a hook fail-open harness (audit A6) | M7 | opus | Draft | — |
 
 > **First-production-night incident (2026-07-04).** WP-038, WP-039 and WP-041 form
