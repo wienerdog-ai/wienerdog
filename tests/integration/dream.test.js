@@ -11,6 +11,7 @@ const dream = require('../../src/cli/dream');
 const { acquireLock } = require('../../src/core/dream/lock');
 const idApprovals = require('../../src/core/identity-approvals');
 const { defaultLayout } = require('../../src/core/layout');
+const { Limits } = require('../../src/core/transcripts');
 
 const FAKE_BRAIN = path.resolve(__dirname, '../fixtures/dream/fake-brain.js');
 const INJ_FIXTURE = path.resolve(__dirname, '../fixtures/dream/transcripts/claude-injection.jsonl');
@@ -64,10 +65,35 @@ function plantOversized(claudeDir, sessionId) {
   fs.writeFileSync(path.join(projDir, `${sessionId}.jsonl`), lines.join('\n') + '\n');
 }
 
+/** Plant a sparse file just over the pre-read ceiling (ADR-0023): discovery
+ *  stats it, but it must never be opened. @param {string} claudeDir @param {string} name
+ *  @returns {string} its absolute path. */
+function plantOverCeiling(claudeDir, name) {
+  const projDir = path.join(claudeDir, 'projects', 'proj');
+  fs.mkdirSync(projDir, { recursive: true });
+  const file = path.join(projDir, `${name}.jsonl`);
+  fs.writeFileSync(file, '');
+  fs.truncateSync(file, Limits.PRE_READ_CEILING_BYTES + 1);
+  return file;
+}
+
+/** Read the parsed quarantine ledger from a core dir, or null when absent. */
+function readLedgerFile(core) {
+  const p = path.join(core, 'state', 'transcript-ledger.json');
+  if (!fs.existsSync(p)) return null;
+  return JSON.parse(fs.readFileSync(p, 'utf8'));
+}
+
+/** The single ledger record whose folded-path key ends with `suffix`, or null. */
+function ledgerRecord(ledger, suffix) {
+  const hit = Object.entries(ledger.files).find(([k]) => k.endsWith(suffix));
+  return hit ? hit[1] : null;
+}
+
 /**
  * Build a temp home + core + clean vault git repo + config.yaml, and (unless
  * disabled) plant the injection transcript so the pipeline has input to dream on.
- * @param {{timeoutMinutes?:number, withTranscript?:boolean, maxInputBytes?:number, oversized?:string}} [opts]
+ * @param {{timeoutMinutes?:number, withTranscript?:boolean, maxInputBytes?:number, oversized?:string, overCeiling?:string}} [opts]
  */
 function setup(opts = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-dream-int-'));
@@ -100,6 +126,7 @@ function setup(opts = {}) {
   }
 
   if (opts.oversized) plantOversized(claude, opts.oversized);
+  if (opts.overCeiling) plantOverCeiling(claude, opts.overCeiling);
 
   return { root, home, core, vault, claude, codex };
 }
@@ -188,9 +215,15 @@ test('dream-integration: full run commits valid tiers, reverts injection + weak 
   assert.ok(report.includes('05-Skills/weak-skill/SKILL.md'));
   assert.ok(report.includes('EVIL.json'));
 
-  // Watermarks advanced (claude got a real mtime).
-  const wm = JSON.parse(fs.readFileSync(path.join(ctx.core, 'state', 'watermarks.json'), 'utf8'));
-  assert.equal(typeof wm.claude, 'number');
+  // Per-file ledger advanced (the transcript recorded processed at its
+  // fingerprint); no scalar watermark is written any more.
+  assert.equal(fs.existsSync(path.join(ctx.core, 'state', 'watermarks.json')), false, 'no watermarks.json write');
+  const ledger = readLedgerFile(ctx.core);
+  assert.ok(ledger, 'transcript-ledger.json written after the commit');
+  const rec = ledgerRecord(ledger, 'inj.jsonl');
+  assert.ok(rec, 'the consumed transcript has a ledger record');
+  assert.equal(rec.outcome, 'processed');
+  assert.equal(typeof rec.fingerprint, 'string');
 
   // Digest regenerated over the vault (reflects the identity content).
   const digest = fs.readFileSync(path.join(ctx.core, 'state', 'digest.md'), 'utf8');
@@ -229,16 +262,16 @@ test('dream-integration: without a seeded registry the dream digest omits identi
   );
 });
 
-test('dream-integration: a second run with no new transcripts makes no commit and no watermark change', async () => {
+test('dream-integration: a second run with no new transcripts makes no commit and no ledger change', async () => {
   const ctx = setup();
   await runDream(ctx, ['--yes']);
   const afterFirst = commitCount(ctx.vault);
-  const wmFirst = fs.readFileSync(path.join(ctx.core, 'state', 'watermarks.json'), 'utf8');
+  const ledgerFirst = fs.readFileSync(path.join(ctx.core, 'state', 'transcript-ledger.json'), 'utf8');
 
   const { output } = await runDream(ctx, ['--yes']);
   assert.match(output, /nothing new to dream/);
   assert.equal(commitCount(ctx.vault), afterFirst);
-  assert.equal(fs.readFileSync(path.join(ctx.core, 'state', 'watermarks.json'), 'utf8'), wmFirst);
+  assert.equal(fs.readFileSync(path.join(ctx.core, 'state', 'transcript-ledger.json'), 'utf8'), ledgerFirst);
 });
 
 test('dream-integration: --dry-run prints the plan and resolved argv, runs no brain, makes no commit', async () => {
@@ -276,7 +309,7 @@ test('dream-integration: a dirty vault is pre-committed, then the dream proceeds
   assert.equal(git(ctx.vault, ['status', '--porcelain']).trim(), '');
 });
 
-test('dream-integration: a crashed brain restores the vault, releases the lock, advances no watermark', async () => {
+test('dream-integration: a crashed brain restores the vault, releases the lock, records no ledger outcome', async () => {
   const ctx = setup();
   const before = commitCount(ctx.vault);
   const { output, thrown } = await runDream(ctx, ['--yes'], { WIENERDOG_FAKE_BRAIN_MODE: 'crash' });
@@ -286,9 +319,9 @@ test('dream-integration: a crashed brain restores the vault, releases the lock, 
   assert.match(thrown.message, /dream brain exited 1/);
   assert.match(thrown.message, /API connection dropped/);
 
-  // No dream commit, watermarks not advanced.
+  // No dream commit, no per-file state advanced (sessions retried next run).
   assert.equal(commitCount(ctx.vault), before);
-  assert.equal(fs.existsSync(path.join(ctx.core, 'state', 'watermarks.json')), false);
+  assert.equal(readLedgerFile(ctx.core), null);
 
   // The brain's partial write is gone and the tree is byte-clean.
   assert.equal(fs.existsSync(path.join(ctx.vault, '00-Inbox/partial-note.md')), false);
@@ -359,9 +392,9 @@ test('dream-integration: a capacity-wedged dream (budget below the floor) throws
   assert.ok(!/nothing new to dream/.test(output));
   // Its capacity drop was surfaced plainly.
   assert.match(output, /capacity: dropped 1 session/);
-  // No commit, watermarks not advanced.
+  // No commit; a capacity-deferred session gets NO ledger record (retried next run).
   assert.equal(commitCount(ctx.vault), before);
-  assert.equal(fs.existsSync(path.join(ctx.core, 'state', 'watermarks.json')), false);
+  assert.equal(readLedgerFile(ctx.core), null);
 });
 
 test('dream-integration: capacity truncation logs plainly and the dream still proceeds to a commit', async () => {
@@ -425,9 +458,9 @@ test('dream-integration: a lock-losing dream is a pure no-op that leaves the win
 
   assert.equal(thrown, null);
   assert.match(output, /another dream is in progress/);
-  // No commit, no watermark advanced.
+  // No commit, no per-file state advanced.
   assert.equal(commitCount(ctx.vault), before);
-  assert.equal(fs.existsSync(path.join(state, 'watermarks.json')), false);
+  assert.equal(fs.existsSync(path.join(state, 'transcript-ledger.json')), false);
   // A's lock is intact.
   assert.equal(fs.existsSync(path.join(state, 'dream.lock')), true);
   // A's scratch is byte-for-byte untouched — no extra files, no deletions.
@@ -437,13 +470,13 @@ test('dream-integration: a lock-losing dream is a pure no-op that leaves the win
   }
 });
 
-test('dream-integration: a brain whose inputs vanish mid-run advances no watermark, makes no commit, and fails loud', async () => {
+test('dream-integration: a brain whose inputs vanish mid-run records no ledger outcome, makes no commit, and fails loud', async () => {
   // The brain exits 0 but its scratch inputs disappeared mid-read (the 2026-07-07
   // concurrency incident), so it consolidated nothing and wrote only a failure-doc
   // note. run() must catch that the inputs vanished, restore the vault (dropping
-  // the failure-doc note), advance NO watermark, and throw. On pre-WP-069 code
-  // there is no such gate: it commits the failure note and advances the watermark,
-  // so this test FAILS there.
+  // the failure-doc note), record NO per-file outcome, and throw. On pre-WP-069
+  // code there is no such gate: it commits the failure note and advances the
+  // state, so this test FAILS there.
   const ctx = setup();
   const before = commitCount(ctx.vault);
 
@@ -456,11 +489,116 @@ test('dream-integration: a brain whose inputs vanish mid-run advances no waterma
   assert.equal(commitCount(ctx.vault), before);
   assert.equal(fs.existsSync(path.join(ctx.vault, '00-Inbox/dream-failure-note.md')), false);
   assert.equal(git(ctx.vault, ['status', '--porcelain']).trim(), '');
-  // Watermark NOT advanced — the sessions are retried next run.
-  assert.equal(fs.existsSync(path.join(ctx.core, 'state', 'watermarks.json')), false);
+  // No processed record — the sessions are retried next run.
+  assert.equal(readLedgerFile(ctx.core), null);
   // Never reported success.
   assert.ok(!/dream committed/.test(output));
   // Teardown still ran: lock released, scratch gone.
   assert.equal(fs.existsSync(path.join(ctx.core, 'state', 'dream.lock')), false);
   assert.equal(fs.existsSync(path.join(ctx.core, 'state', 'dream-scratch')), false);
+});
+
+// ── WP-119: per-file quarantine ledger (audit A6, ADR-0023) ─────────────────
+
+test('dream-integration: an over-ceiling transcript is quarantined while the valid neighbour is consolidated', async () => {
+  const ctx = setup({ overCeiling: 'huge' });
+  idApprovals.seedApprovals(path.join(ctx.core, 'state'), ctx.vault, defaultLayout());
+  const before = commitCount(ctx.vault);
+
+  const { output, thrown } = await runDream(ctx, ['--yes']);
+  assert.equal(thrown, null, thrown && thrown.message);
+
+  // The valid neighbour was consolidated and committed; the run exited 0.
+  assert.equal(commitCount(ctx.vault), before + 1);
+  assert.match(output, /dream committed/);
+  // The quarantine was surfaced plainly — basename + reason only.
+  assert.match(output, /quarantined claude\/huge\.jsonl \(over-ceiling\); it will not be retried until it changes\./);
+  assert.ok(!output.includes(path.join(ctx.claude, 'projects')), 'console line carries no full path');
+
+  // The ledger records BOTH outcomes.
+  const ledger = readLedgerFile(ctx.core);
+  assert.ok(ledger, 'ledger written');
+  assert.equal(ledgerRecord(ledger, 'inj.jsonl').outcome, 'processed');
+  const q = ledgerRecord(ledger, 'huge.jsonl');
+  assert.equal(q.outcome, 'quarantined');
+  assert.equal(q.reason, 'over-ceiling');
+  // No scalar watermark write anywhere.
+  assert.equal(fs.existsSync(path.join(ctx.core, 'state', 'watermarks.json')), false);
+
+  // The digest shows the durable, secret-free quarantine banner.
+  const digest = fs.readFileSync(path.join(ctx.core, 'state', 'digest.md'), 'utf8');
+  assert.ok(digest.includes('could not be read and were skipped'), 'banner present');
+  assert.ok(digest.includes('huge.jsonl (over-ceiling)'), 'banner names basename + reason');
+  assert.ok(!digest.includes(ctx.claude), 'banner carries no full path');
+});
+
+test('dream-integration: a quarantine-only run records + banners + exits 0; unchanged not retried; changed retried', async () => {
+  const ctx = setup({ withTranscript: false, overCeiling: 'huge' });
+  const before = commitCount(ctx.vault);
+  const ledgerPath = path.join(ctx.core, 'state', 'transcript-ledger.json');
+
+  // Run 1: the ONLY fresh input is the broken file → record, banner, exit 0.
+  const r1 = await runDream(ctx, ['--yes']);
+  assert.equal(r1.thrown, null, r1.thrown && r1.thrown.message);
+  assert.match(r1.output, /quarantined claude\/huge\.jsonl \(over-ceiling\)/);
+  assert.match(r1.output, /nothing new to dream/);
+  assert.equal(commitCount(ctx.vault), before);
+  const ledger1 = readLedgerFile(ctx.core);
+  assert.equal(ledgerRecord(ledger1, 'huge.jsonl').outcome, 'quarantined');
+  const digest1 = fs.readFileSync(path.join(ctx.core, 'state', 'digest.md'), 'utf8');
+  assert.ok(digest1.includes('huge.jsonl (over-ceiling)'), 'banner written on the quarantine-only run');
+  const bytes1 = fs.readFileSync(ledgerPath, 'utf8');
+
+  // Run 2: unchanged file → skip-quarantined, no re-record, no re-alert.
+  const r2 = await runDream(ctx, ['--yes']);
+  assert.equal(r2.thrown, null, r2.thrown && r2.thrown.message);
+  assert.ok(!/quarantined claude/.test(r2.output), 'no re-quarantine console line');
+  assert.equal(fs.readFileSync(ledgerPath, 'utf8'), bytes1, 'ledger byte-unchanged');
+  assert.equal(commitCount(ctx.vault), before);
+
+  // Run 3: the file CHANGES into a small valid transcript → retried and processed.
+  const huge = path.join(ctx.claude, 'projects', 'proj', 'huge.jsonl');
+  fs.writeFileSync(
+    huge,
+    JSON.stringify({
+      type: 'user',
+      sessionId: 'huge',
+      cwd: '/home/ada/proj',
+      timestamp: '2026-01-01T10:00:00.000Z',
+      message: { role: 'user', content: 'now a perfectly normal session' },
+    }) + '\n'
+  );
+  const r3 = await runDream(ctx, ['--yes']);
+  assert.equal(r3.thrown, null, r3.thrown && r3.thrown.message);
+  assert.match(r3.output, /dream committed/);
+  assert.equal(commitCount(ctx.vault), before + 1);
+  const ledger3 = readLedgerFile(ctx.core);
+  assert.equal(ledgerRecord(ledger3, 'huge.jsonl').outcome, 'processed');
+  // The banner self-clears once the file leaves quarantine.
+  const digest3 = fs.readFileSync(path.join(ctx.core, 'state', 'digest.md'), 'utf8');
+  assert.ok(!digest3.includes('huge.jsonl (over-ceiling)'), 'banner cleared after the retry succeeded');
+});
+
+test('dream-integration: the one-time migration seeds the ledger baseline from watermarks.json', async () => {
+  const ctx = setup();
+  const inj = path.join(ctx.claude, 'projects', 'proj', 'inj.jsonl');
+  const mtime = fs.statSync(inj).mtimeMs;
+  const state = path.join(ctx.core, 'state');
+  fs.mkdirSync(state, { recursive: true });
+  // A pre-WP-119 install: the scalar watermark says this transcript is done.
+  fs.writeFileSync(path.join(state, 'watermarks.json'), JSON.stringify({ version: 1, claude: mtime, codex: null }));
+  const before = commitCount(ctx.vault);
+
+  const { output, thrown } = await runDream(ctx, ['--yes']);
+  assert.equal(thrown, null, thrown && thrown.message);
+
+  // Everything at/below the old watermark is treated as already-processed.
+  assert.match(output, /nothing new to dream/);
+  assert.equal(commitCount(ctx.vault), before);
+  const ledger = readLedgerFile(ctx.core);
+  assert.ok(ledger, 'migrated ledger persisted');
+  assert.equal(ledger.baseline_mtime.claude, mtime);
+  assert.deepEqual(ledger.files, {});
+  // watermarks.json is left in place (ignored from now on, never deleted).
+  assert.ok(fs.existsSync(path.join(state, 'watermarks.json')));
 });

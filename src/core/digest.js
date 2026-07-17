@@ -241,9 +241,12 @@ function formatAlerts(alerts) {
  * @param {string} vaultDir
  * @param {import('./layout').VaultLayout} [layout]  defaults to defaultLayout()
  * @param {{alerts?: Array<{job:string, at:string, reason:string, log_hint:string}>,
+ *          quarantineLine?: string,
  *          schedulerLine?: string, updateLine?: string,
  *          profile?: Record<string,string>,
  *          identityApprovals?: Record<string,string>}} [opts]
+ *   quarantineLine = fixed-template secret-free "transcripts skipped" banner from
+ *     the A6 quarantine ledger (WP-119, ADR-0023); empty/absent → output unchanged.
  *   profile = a code-level test seam only (never env/argv); passing `allowAll()`
  *     re-enables the daily block.
  *   identityApprovals = the A3 hash-gate map {caseFoldedVaultRel: approvedHash}
@@ -319,12 +322,14 @@ function renderDigest(vaultDir, layout = defaultLayout(), opts = {}) {
   const identityWarn = identityExclusions.length > 0
     ? `> [!warning] Wienerdog: some identity notes were left out of your session context — ${identityExclusions.map((e) => `${e.file} (${e.reason})`).join(', ')}. Fix their frontmatter and run \`wienerdog sync\`, or re-approve an intentional edit with \`wienerdog memory approve <note>\`.`
     : '';
-  // Prefix order = identity banner, then alerts, then schedulerLine, then
-  // updateLine (an active failure is more urgent than a configured-but-not-loaded
-  // job, which is more urgent than an available update). All fixed-template
-  // control-plane text; when all are empty the byte output is unchanged
-  // (golden-frozen).
-  const prefix = [identityWarn, formatAlerts(opts.alerts || []), opts.schedulerLine || '', opts.updateLine || '']
+  // Prefix order = identity banner, then alerts, then quarantineLine, then
+  // schedulerLine, then updateLine (an active failure is more urgent than a
+  // transcript that could not be read, which is more urgent than a
+  // configured-but-not-loaded job, which is more urgent than an available
+  // update). All fixed-template control-plane text; when all are empty the byte
+  // output is unchanged (golden-frozen).
+  const prefix = [identityWarn, formatAlerts(opts.alerts || []), opts.quarantineLine || '',
+    opts.schedulerLine || '', opts.updateLine || '']
     .filter((s) => s !== '')
     .join('\n\n');
   return prefix ? `${prefix}\n\n${body}` : body;

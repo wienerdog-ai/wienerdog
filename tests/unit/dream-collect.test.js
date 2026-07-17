@@ -5,12 +5,14 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { spawnSync } = require('node:child_process');
 
 const { getPaths } = require('../../src/core/paths');
 const { readDreamConfig } = require('../../src/core/dream/config');
 const { readWatermarks, writeWatermarks } = require('../../src/core/dream/watermarks');
 const { collectExtracts, cleanScratch, MIN_TRUNCATE_BYTES } = require('../../src/core/dream/scratch');
-const { MAX_MESSAGES } = require('../../src/core/transcripts');
+const ledgerLib = require('../../src/core/dream/ledger');
+const { MAX_MESSAGES, Limits } = require('../../src/core/transcripts');
 
 /** Fresh temp home + resolved paths. */
 function tempPaths() {
@@ -22,6 +24,11 @@ function tempPaths() {
     CLAUDE_CONFIG_DIR: path.join(root, 'claude'),
     CODEX_HOME: path.join(root, 'codex'),
   });
+}
+
+/** A fresh empty ledger (nothing recorded, no baseline). */
+function emptyLedger() {
+  return { version: 1, baseline_mtime: { claude: null, codex: null }, files: {} };
 }
 
 /** Write a claude transcript with `msgCount` user messages; set its mtime.
@@ -61,6 +68,18 @@ function writeCodex(paths, sessionId, when) {
   return fs.statSync(file).mtimeMs;
 }
 
+/** Plant a sparse over-ceiling claude file (never opened — content irrelevant).
+ *  @returns {string} its absolute path. */
+function writeOverCeiling(paths, sessionId, when) {
+  const dir = path.join(paths.claudeDir, 'projects', 'proj');
+  fs.mkdirSync(dir, { recursive: true });
+  const file = path.join(dir, `${sessionId}.jsonl`);
+  fs.writeFileSync(file, '');
+  fs.truncateSync(file, Limits.PRE_READ_CEILING_BYTES + 1);
+  fs.utimesSync(file, when, when);
+  return file;
+}
+
 // ---- config ----
 
 test('dream-collect: readDreamConfig returns defaults with only a vault', () => {
@@ -95,7 +114,7 @@ test('dream-collect: readDreamConfig throws on a missing vault', () => {
   assert.throws(() => readDreamConfig(paths.config), /no vault configured/);
 });
 
-// ---- watermarks ----
+// ---- watermarks (module stays for the one-time ledger migration) ----
 
 test('dream-collect: readWatermarks tolerates missing/corrupt file', () => {
   const paths = tempPaths();
@@ -113,77 +132,172 @@ test('dream-collect: writeWatermarks round-trips atomically', () => {
 
 // ---- collectExtracts ----
 
-test('dream-collect: returns both harnesses when watermarks are null', () => {
+test('dream-collect: returns both harnesses on a fresh ledger; both land in processed', () => {
   const paths = tempPaths();
-  const cMtime = writeClaude(paths, 'c1', 1, 10, new Date('2026-01-02T00:00:00Z'));
-  const xMtime = writeCodex(paths, 'x1', new Date('2026-01-03T00:00:00Z'));
+  writeClaude(paths, 'c1', 1, 10, new Date('2026-01-02T00:00:00Z'));
+  writeCodex(paths, 'x1', new Date('2026-01-03T00:00:00Z'));
 
-  const result = collectExtracts(paths, { claude: null, codex: null }, 400_000);
+  const result = collectExtracts(paths, emptyLedger(), 400_000);
 
   assert.equal(result.entries.length, 2);
   assert.equal(result.wrote.length, 2);
   assert.equal(result.droppedForSize, 0);
   assert.ok(fs.existsSync(path.join(result.scratchDir, 'claude-c1.json')));
   assert.ok(fs.existsSync(path.join(result.scratchDir, 'codex-x1.json')));
-  assert.equal(result.maxMtime.claude, cMtime);
-  assert.equal(result.maxMtime.codex, xMtime);
+  // Per-file outcomes: both were written to scratch → candidates for a processed record.
+  assert.equal(result.processed.length, 2);
+  assert.deepEqual(result.processed.map((d) => d.harness).sort(), ['claude', 'codex']);
+  assert.equal(result.newlyQuarantined.length, 0);
+  assert.equal(result.deferred.length, 0);
 });
 
-test('dream-collect: honors a per-harness watermark', () => {
+test('dream-collect: return shape — deferred aliases dropped, maxMtime is gone, disc metadata rides processed', () => {
+  const paths = tempPaths();
+  writeClaude(paths, 'c1', 1, 10, new Date('2026-01-02T00:00:00Z'));
+
+  const result = collectExtracts(paths, emptyLedger(), 400_000);
+
+  assert.ok(!('maxMtime' in result), 'the scalar-watermark maxMtime is removed');
+  assert.equal(result.dropped, result.deferred, 'dropped is a back-compat alias of deferred');
+  assert.equal(result.droppedForSize, result.deferred.length);
+  // processed carries the discovery record the ledger fingerprints.
+  const d = result.processed[0];
+  for (const k of ['harness', 'path', 'mtimeMs', 'size', 'dev', 'ino']) {
+    assert.ok(k in d, `processed[0].${k} present`);
+  }
+});
+
+test('dream-collect: honors the migrated baseline_mtime (at/below baseline with no record → skipped)', () => {
   const paths = tempPaths();
   const cMtime = writeClaude(paths, 'c1', 1, 10, new Date('2026-01-02T00:00:00Z'));
-  const xMtime = writeCodex(paths, 'x1', new Date('2026-01-03T00:00:00Z'));
+  writeCodex(paths, 'x1', new Date('2026-01-03T00:00:00Z'));
 
-  // Claude watermark == its file mtime → excluded (must be strictly newer).
-  const result = collectExtracts(paths, { claude: cMtime, codex: null }, 400_000);
+  // Claude baseline == its file mtime → treated as already-processed (must be strictly newer).
+  const ledger = { ...emptyLedger(), baseline_mtime: { claude: cMtime, codex: null } };
+  const result = collectExtracts(paths, ledger, 400_000);
 
   assert.equal(result.entries.length, 1);
   assert.equal(result.entries[0].harness, 'codex');
   assert.equal(fs.existsSync(path.join(result.scratchDir, 'claude-c1.json')), false);
   assert.ok(fs.existsSync(path.join(result.scratchDir, 'codex-x1.json')));
-  // Claude had nothing new → its watermark is unchanged.
-  assert.equal(result.maxMtime.claude, cMtime);
-  assert.equal(result.maxMtime.codex, xMtime);
+  assert.equal(result.processed.length, 1);
+  assert.equal(result.processed[0].harness, 'codex');
 });
 
-test('dream-collect: drops the oldest sessions past the size cap', () => {
+test('dream-collect: a matching processed record skips the file; a changed file is re-selected', () => {
+  const paths = tempPaths();
+  writeClaude(paths, 'c1', 1, 10, new Date('2026-01-02T00:00:00Z'));
+
+  const first = collectExtracts(paths, emptyLedger(), 400_000);
+  assert.equal(first.entries.length, 1);
+  let ledger = emptyLedger();
+  for (const d of first.processed) ledger = ledgerLib.recordProcessed(ledger, d);
+
+  const second = collectExtracts(paths, ledger, 400_000);
+  assert.equal(second.entries.length, 0, 'unchanged processed file not re-selected');
+
+  // The file changes (content + mtime) → new fingerprint → reprocessed.
+  writeClaude(paths, 'c1', 2, 10, new Date('2026-01-04T00:00:00Z'));
+  const third = collectExtracts(paths, ledger, 400_000);
+  assert.equal(third.entries.length, 1);
+});
+
+test('dream-collect: capacity defers the oldest sessions past the size cap with no negative record', () => {
   const paths = tempPaths();
   // Claude is OLDER and LARGE; codex is NEWER and small.
   writeClaude(paths, 'c1', 5, 4000, new Date('2026-01-02T00:00:00Z'));
-  const xMtime = writeCodex(paths, 'x1', new Date('2026-01-03T00:00:00Z'));
+  writeCodex(paths, 'x1', new Date('2026-01-03T00:00:00Z'));
 
   // Cap fits the small codex extract but not the large claude one.
-  const result = collectExtracts(paths, { claude: null, codex: null }, 2000);
+  const result = collectExtracts(paths, emptyLedger(), 2000);
 
   assert.ok(result.droppedForSize > 0);
   assert.equal(result.wrote.length, 1);
   assert.equal(result.entries[0].harness, 'codex');
-  // Dropped claude → its watermark stays null (won't skip it next run).
-  assert.equal(result.maxMtime.claude, null);
-  assert.equal(result.maxMtime.codex, xMtime);
+  // Capacity-deferred: listed in deferred, in NEITHER processed nor newlyQuarantined
+  // (no record → naturally retried next run — the WP-048/069 starvation fix).
+  assert.equal(result.deferred.length, 1);
+  assert.equal(result.deferred[0].session_id, 'c1');
+  assert.ok(!result.processed.some((d) => d.path.endsWith('c1.jsonl')));
+  assert.equal(result.newlyQuarantined.length, 0);
+});
+
+test('dream-collect: a deferred file is selected again on a subsequent larger-budget run', () => {
+  const paths = tempPaths();
+  writeClaude(paths, 'c1', 5, 4000, new Date('2026-01-02T00:00:00Z'));
+  writeCodex(paths, 'x1', new Date('2026-01-03T00:00:00Z'));
+
+  const first = collectExtracts(paths, emptyLedger(), 2000);
+  assert.equal(first.deferred.length, 1);
+  // Record ONLY what a successful run records: the processed files.
+  let ledger = emptyLedger();
+  for (const d of first.processed) ledger = ledgerLib.recordProcessed(ledger, d);
+
+  // A larger budget next run picks the deferred file up (no watermark gap).
+  const second = collectExtracts(paths, ledger, 400_000);
+  assert.equal(second.entries.length, 1);
+  assert.equal(second.entries[0].session_id, 'c1');
+  assert.equal(second.deferred.length, 0);
+});
+
+test('dream-collect: an over-ceiling file is quarantined WITHOUT being opened; the valid neighbour is still processed', () => {
+  const paths = tempPaths();
+  writeClaude(paths, 'c-ok', 1, 10, new Date('2026-01-02T00:00:00Z'));
+  const hugePath = writeOverCeiling(paths, 'huge', new Date('2026-01-03T00:00:00Z'));
+  if (process.platform !== 'win32') {
+    // Unreadable: any attempt to OPEN it would report read-error, so an
+    // 'over-ceiling' outcome proves the pre-read ceiling fired before open.
+    fs.chmodSync(hugePath, 0o000);
+  }
+
+  const result = collectExtracts(paths, emptyLedger(), 400_000);
+
+  assert.equal(result.newlyQuarantined.length, 1);
+  assert.equal(result.newlyQuarantined[0].reason, 'over-ceiling');
+  assert.equal(path.basename(result.newlyQuarantined[0].path), 'huge.jsonl');
+  // The valid neighbour is unaffected.
+  assert.equal(result.entries.length, 1);
+  assert.equal(result.entries[0].session_id, 'c-ok');
+  assert.equal(result.processed.length, 1);
+  assert.ok(result.processed[0].path.endsWith('c-ok.jsonl'));
+  // Quarantined ≠ deferred: it never enters the byte budget.
+  assert.equal(result.deferred.length, 0);
+});
+
+test('dream-collect: a ledger-quarantined unchanged file is not re-selected', () => {
+  const paths = tempPaths();
+  writeOverCeiling(paths, 'huge', new Date('2026-01-03T00:00:00Z'));
+
+  const first = collectExtracts(paths, emptyLedger(), 400_000);
+  assert.equal(first.newlyQuarantined.length, 1);
+  let ledger = emptyLedger();
+  for (const q of first.newlyQuarantined) ledger = ledgerLib.recordQuarantined(ledger, q, q.reason);
+
+  const second = collectExtracts(paths, ledger, 400_000);
+  assert.equal(second.newlyQuarantined.length, 0, 'unchanged quarantine not re-quarantined');
+  assert.equal(second.entries.length, 0);
 });
 
 test('dream-collect: capacity incident replay — four oversized sessions are all kept truncated (old loop kept 0)', () => {
   const paths = tempPaths();
   // Four fresh Claude sessions, each ~205 KB serialized (100 msgs × 2000 chars),
   // newest→oldest c4..c1. This is the 2026-07-05 starvation set.
-  const m1 = writeClaude(paths, 'c1', 100, 2000, new Date('2026-01-02T00:00:00Z'));
-  const m2 = writeClaude(paths, 'c2', 100, 2000, new Date('2026-01-03T00:00:00Z'));
-  const m3 = writeClaude(paths, 'c3', 100, 2000, new Date('2026-01-04T00:00:00Z'));
-  const m4 = writeClaude(paths, 'c4', 100, 2000, new Date('2026-01-05T00:00:00Z'));
-  const newest = Math.max(m1, m2, m3, m4);
+  writeClaude(paths, 'c1', 100, 2000, new Date('2026-01-02T00:00:00Z'));
+  writeClaude(paths, 'c2', 100, 2000, new Date('2026-01-03T00:00:00Z'));
+  writeClaude(paths, 'c3', 100, 2000, new Date('2026-01-04T00:00:00Z'));
+  writeClaude(paths, 'c4', 100, 2000, new Date('2026-01-05T00:00:00Z'));
 
   // Budget admits four equal shares (100 000 each) above the floor but below any
   // single extract → all four truncated. The OLD break loop kept 0 here.
-  const result = collectExtracts(paths, { claude: null, codex: null }, 400_000);
+  const result = collectExtracts(paths, emptyLedger(), 400_000);
 
   assert.equal(result.entries.length, 4);
   assert.equal(result.droppedForSize, 0);
   assert.equal(result.dropped.length, 0);
   assert.equal(result.truncated.length, 4);
   assert.ok(result.entries.every((e) => e.truncatedToFit === true));
-  // A truncated session advances the watermark (counts as consumed).
-  assert.equal(result.maxMtime.claude, newest);
+  // A truncated session still counts as consumed → all four are processed.
+  assert.equal(result.processed.length, 4);
 
   // The kept extracts are actually truncated and keep the NEWEST messages.
   const one = JSON.parse(fs.readFileSync(path.join(result.scratchDir, 'claude-c4.json'), 'utf8'));
@@ -197,7 +311,7 @@ test('dream-collect: capacity water-fill keeps a fitting session whole behind an
   writeClaude(paths, 'cbig', 100, 2000, new Date('2026-01-05T00:00:00Z'));
   const smallMtime = writeClaude(paths, 'csmall', 1, 10, new Date('2026-01-02T00:00:00Z'));
 
-  const result = collectExtracts(paths, { claude: null, codex: null }, 100_000);
+  const result = collectExtracts(paths, emptyLedger(), 100_000);
 
   assert.equal(result.entries.length, 2);
   assert.equal(result.dropped.length, 0);
@@ -212,19 +326,67 @@ test('dream-collect: capacity water-fill keeps a fitting session whole behind an
   assert.equal(result.truncated.length, 1);
 });
 
-test('dream-collect: capacity sub-floor budget drops the session whole and does not advance the watermark', () => {
+test('dream-collect: capacity sub-floor budget defers the session whole (no record of any kind)', () => {
   const paths = tempPaths();
   writeClaude(paths, 'c1', 100, 2000, new Date('2026-01-05T00:00:00Z'));
 
-  // Budget below MIN_TRUNCATE_BYTES → no useful share → dropped whole, kept 0.
-  const result = collectExtracts(paths, { claude: null, codex: null }, MIN_TRUNCATE_BYTES - 1);
+  // Budget below MIN_TRUNCATE_BYTES → no useful share → deferred whole, kept 0.
+  const result = collectExtracts(paths, emptyLedger(), MIN_TRUNCATE_BYTES - 1);
 
   assert.equal(result.entries.length, 0);
   assert.equal(result.dropped.length, 1);
   assert.equal(result.droppedForSize, 1);
   assert.equal(result.dropped[0].session_id, 'c1');
-  // Whole-dropped session must NOT advance the watermark (retried next run).
-  assert.equal(result.maxMtime.claude, null);
+  // Whole-deferred session gets NO record (retried next run).
+  assert.equal(result.processed.length, 0);
+  assert.equal(result.newlyQuarantined.length, 0);
+});
+
+// ---- one file at a time (the F1 fix) ----
+
+test('dream-collect: a backlog of near-limit files collects under a constrained heap (one file resident at a time)', () => {
+  const paths = tempPaths();
+  // 10 sessions × ~8 MB serialized extract each (2000 msgs × 4000 chars). The old
+  // collect-all-then-budget path holds all ~80 MB of parsed extracts at once and
+  // dies under a 64 MB old-space heap; the one-file-at-a-time path holds at most
+  // one extract and survives.
+  const when = new Date('2026-01-05T00:00:00Z');
+  const dir = path.join(paths.claudeDir, 'projects', 'proj');
+  fs.mkdirSync(dir, { recursive: true });
+  for (let i = 0; i < 10; i++) {
+    const sessionId = `bulk${i}`;
+    const line = JSON.stringify({
+      type: 'user',
+      sessionId,
+      cwd: '/home/ada/proj',
+      timestamp: '2026-01-01T10:00:00.000Z',
+      message: { role: 'user', content: 'x'.repeat(4000) },
+    });
+    const file = path.join(dir, `${sessionId}.jsonl`);
+    fs.writeFileSync(file, `${line}\n`.repeat(MAX_MESSAGES));
+    fs.utimesSync(file, when, when);
+  }
+
+  const scratchPath = require.resolve('../../src/core/dream/scratch');
+  const pathsPath = require.resolve('../../src/core/paths');
+  const opts = {
+    HOME: path.dirname(paths.core),
+    WIENERDOG_HOME: paths.core,
+    CLAUDE_CONFIG_DIR: paths.claudeDir,
+    CODEX_HOME: paths.codexDir,
+  };
+  const script = [
+    `const { collectExtracts } = require(${JSON.stringify(scratchPath)});`,
+    `const { getPaths } = require(${JSON.stringify(pathsPath)});`,
+    `const paths = getPaths(${JSON.stringify(opts)});`,
+    'const ledger = { version: 1, baseline_mtime: { claude: null, codex: null }, files: {} };',
+    'const res = collectExtracts(paths, ledger, 200_000_000);',
+    'console.log(JSON.stringify({ entries: res.entries.length, processed: res.processed.length, quarantined: res.newlyQuarantined.length, deferred: res.deferred.length }));',
+  ].join('\n');
+  const child = spawnSync(process.execPath, ['--max-old-space-size=64', '-e', script], { encoding: 'utf8' });
+  assert.equal(child.status, 0, `constrained-heap collect failed: ${child.stderr}`);
+  const out = JSON.parse(child.stdout);
+  assert.deepEqual(out, { entries: 10, processed: 10, quarantined: 0, deferred: 0 });
 });
 
 // ---- byte-budget truncation rebases skill_invocations (WP-087) ----
@@ -287,7 +449,7 @@ test('dream-collect: byte-budget truncation rebases skill_invocations and drops 
   fs.utimesSync(file, when, when);
 
   // ~240KB+ of padding vs. a 60KB budget forces truncation to a small newest-suffix.
-  const result = collectExtracts(paths, { claude: null, codex: null }, 60_000);
+  const result = collectExtracts(paths, emptyLedger(), 60_000);
 
   assert.equal(result.entries.length, 1);
   assert.equal(result.entries[0].truncatedToFit, true);
@@ -333,7 +495,7 @@ test('dream-collect: byte-budget truncation drops a trailing invocation whose re
   const when = new Date('2026-01-05T00:00:00Z');
   fs.utimesSync(file, when, when);
 
-  const result = collectExtracts(paths, { claude: null, codex: null }, 60_000);
+  const result = collectExtracts(paths, emptyLedger(), 60_000);
 
   assert.equal(result.entries.length, 1);
   assert.equal(result.entries[0].truncatedToFit, true);
@@ -383,7 +545,7 @@ test('dream-collect: a session hitting the MAX_MESSAGES count cap in parse() AND
 
   // Budget well below the ~2000-message capped extract's serialized size, but above
   // MIN_TRUNCATE_BYTES → forces a SECOND (byte) truncation on top of the count cap.
-  const result = collectExtracts(paths, { claude: null, codex: null }, 50_000);
+  const result = collectExtracts(paths, emptyLedger(), 50_000);
 
   assert.equal(result.entries.length, 1);
   assert.equal(result.entries[0].truncatedToFit, true);
@@ -400,10 +562,10 @@ test('dream-collect: a session hitting the MAX_MESSAGES count cap in parse() AND
 test('dream-collect: re-running empties stale scratch, cleanScratch removes it', () => {
   const paths = tempPaths();
   writeCodex(paths, 'x1', new Date('2026-01-03T00:00:00Z'));
-  const first = collectExtracts(paths, { claude: null, codex: null }, 400_000);
+  const first = collectExtracts(paths, emptyLedger(), 400_000);
   // Plant a stray file; a fresh collect must wipe it.
   fs.writeFileSync(path.join(first.scratchDir, 'stray.json'), '{}');
-  const second = collectExtracts(paths, { claude: null, codex: null }, 400_000);
+  const second = collectExtracts(paths, emptyLedger(), 400_000);
   assert.equal(fs.existsSync(path.join(second.scratchDir, 'stray.json')), false);
 
   cleanScratch(paths.state);

@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const transcripts = require('../transcripts');
+const ledgerLib = require('./ledger');
 
 /** Minimum bytes a *truncated* extract must be granted to be worth feeding. A
  *  session that cannot be given at least this much is dropped whole (and retried
@@ -67,55 +68,71 @@ function truncateExtractToFit(extract, targetBytes) {
   return build(best);
 }
 
+/** A capacity-deferral entry for a file that was never (fully) parsed: the id is
+ *  derived from the basename (extension stripped), NOT from content — the file
+ *  may never have been opened. Console-surface only.
+ *  @param {{harness:'claude'|'codex', path:string, size:number}} d
+ *  @returns {{harness:'claude'|'codex', session_id:string, bytes:number}} */
+function deferralOf(d) {
+  return { harness: d.harness, session_id: path.basename(d.path).replace(/\.[^.]+$/, ''), bytes: d.size };
+}
+
 /**
- * Select the transcripts to dream over (per-harness watermarks + a TOTAL input
- * cap) and write redacted extracts to scratch.
+ * Select the transcripts to dream over (per-file quarantine ledger + a TOTAL
+ * input cap — audit A6, ADR-0023) and write redacted extracts to scratch,
+ * materializing ONE file at a time (the F1 fix: no point holds every parsed
+ * extract in memory).
  * @param {ReturnType<import('../paths').getPaths>} paths
- * @param {{claude:number|null, codex:number|null}} watermarks
+ * @param {import('./ledger').Ledger} ledger
  * @param {number} maxInputBytes
  * @returns {{ entries: Array<{harness:'claude'|'codex', session_id:string, mtimeMs:number, scratchFile:string, truncatedToFit:boolean}>,
  *             scratchDir:string,
- *             maxMtime:{claude:number|null, codex:number|null},
+ *             processed:Array<{harness:'claude'|'codex', path:string, mtimeMs:number, size:number, dev:number, ino:number}>,
+ *             newlyQuarantined:Array<{harness:'claude'|'codex', path:string, mtimeMs:number, size:number, dev:number, ino:number, reason:string}>,
+ *             deferred:Array<{harness:'claude'|'codex', session_id:string, bytes:number}>,
  *             droppedForSize:number,
  *             dropped:Array<{harness:'claude'|'codex', session_id:string, bytes:number}>,
  *             truncated:Array<{harness:'claude'|'codex', session_id:string, originalBytes:number, keptBytes:number}>,
  *             wrote:string[] }}
+ *   processed        = every session WRITTEN to scratch (dream.js records these on commit).
+ *   newlyQuarantined = quarantined this run (dream.js records + banners).
+ *   deferred         = capacity-deferred; recorded NOWHERE → retried next run.
+ *   dropped          = back-compat alias of deferred; droppedForSize === deferred.length.
  */
-function collectExtracts(paths, watermarks, maxInputBytes) {
-  // 1. discover applies ONE `since`. Use the minimum non-null watermark; if
-  //    EITHER harness is null (never dreamed), we must see all of that harness's
-  //    files, so `since` = null.
-  const since =
-    watermarks.claude == null || watermarks.codex == null
-      ? null
-      : Math.min(watermarks.claude, watermarks.codex);
-  const discovered = transcripts.discover(paths, { since });
+function collectExtracts(paths, ledger, maxInputBytes) {
+  // 1. Discover ALL files (`since: null`): the ledger, not a coarse `since`, is
+  //    the sole authority on eligibility; discovery is cheap stats (ADR-0023).
+  const discovered = transcripts.discover(paths, { since: null });
 
-  // 2. Post-filter per harness to restore per-harness precision.
-  const fresh = discovered.filter(
-    (entry) => entry.mtimeMs > (watermarks[entry.harness] ?? -Infinity)
-  );
+  // 2. Partition by ledger state; only 'select' proceeds (skip-processed and
+  //    skip-quarantined are ignored — an unchanged quarantine is never retried).
+  const candidates = discovered.filter((d) => ledgerLib.selectState(ledger, d) === 'select');
 
-  // 3. Parse each kept entry (redacted, capped by WP-007), keeping its mtime.
-  const parsed = fresh.map((entry) => ({
-    harness: entry.harness,
-    mtimeMs: entry.mtimeMs,
-    extract: transcripts.parse(entry),
-  }));
+  // 3. Pre-read ceiling → quarantine WITHOUT parsing (the file is never opened);
+  //    it never enters the byte budget.
+  /** @type {Array<{harness:'claude'|'codex', path:string, mtimeMs:number, size:number, dev:number, ino:number, reason:string}>} */
+  const newlyQuarantined = [];
+  /** @type {typeof candidates} */
+  const underCeiling = [];
+  for (const d of candidates) {
+    if (d.size > transcripts.Limits.PRE_READ_CEILING_BYTES) newlyQuarantined.push({ ...d, reason: 'over-ceiling' });
+    else underCeiling.push(d);
+  }
 
-  // 4. TOTAL byte budget via water-filling (replaces the newest-first break).
-  //    Sessions that fit their equal share are kept whole; the boundary sessions
-  //    are truncated to their share (>= the floor) or dropped whole (sub-floor).
-  parsed.sort((a, b) => b.mtimeMs - a.mtimeMs); // newest first
-  const sizeOf = (extract) => Buffer.byteLength(JSON.stringify(extract));
-  const sizes = parsed.map((p) => sizeOf(p.extract));
+  // 4. TOTAL byte budget via water-filling, allocated from the discovery `size`
+  //    (an over-estimate of the serialized extract, so the grant is conservative).
+  //    Sessions whose file fits their equal share are kept whole; boundary
+  //    sessions get a truncation share (>= the floor) or are capacity-deferred
+  //    whole (sub-floor) — deferred is NOT quarantined, NOT recorded.
+  underCeiling.sort((a, b) => b.mtimeMs - a.mtimeMs); // newest first
+  const sizes = underCeiling.map((d) => d.size);
 
-  let active = parsed.map((_, i) => i); // indices, newest-first
+  let active = underCeiling.map((_, i) => i); // indices, newest-first
   let remaining = maxInputBytes;
-  /** @type {Map<number, number>} idx -> bytes granted (absent = dropped whole) */
+  /** @type {Map<number, number>} idx -> bytes granted (absent = deferred whole) */
   const alloc = new Map();
-  /** @type {number[]} indices dropped whole (oldest-first shed order) */
-  const droppedIdx = [];
+  /** @type {Array<{harness:'claude'|'codex', session_id:string, bytes:number}>} */
+  const deferred = [];
 
   while (active.length > 0) {
     const share = Math.floor(remaining / active.length);
@@ -134,71 +151,90 @@ function collectExtracts(paths, watermarks, maxInputBytes) {
       active = [];
       break;
     }
-    // Share too small to be useful → drop the OLDEST active session, retry.
-    droppedIdx.push(active[active.length - 1]); // active preserves newest-first
+    // Share too small to be useful → defer the OLDEST active session, retry.
+    deferred.push(deferralOf(underCeiling[active[active.length - 1]])); // active preserves newest-first
     active = active.slice(0, -1);
   }
 
-  // Materialize kept extracts in newest-first order; truncate where under-granted.
-  const kept = [];
-  /** @type {Array<{harness:'claude'|'codex', session_id:string, originalBytes:number, keptBytes:number}>} */
-  const truncated = [];
-  for (let i = 0; i < parsed.length; i++) {
-    if (!alloc.has(i)) continue;
-    const grant = alloc.get(i);
-    let extract = parsed[i].extract;
-    let truncatedToFit = false;
-    if (grant < sizes[i]) {
-      extract = truncateExtractToFit(extract, grant);
-      truncatedToFit = true;
-      truncated.push({
-        harness: parsed[i].harness,
-        session_id: extract.session_id,
-        originalBytes: sizes[i],
-        keptBytes: sizeOf(extract),
-      });
-    }
-    kept.push({ harness: parsed[i].harness, mtimeMs: parsed[i].mtimeMs, extract, truncatedToFit });
-  }
-
-  const dropped = droppedIdx.map((i) => ({
-    harness: parsed[i].harness,
-    session_id: parsed[i].extract.session_id,
-    bytes: sizes[i],
-  }));
-  const droppedForSize = dropped.length;
-
-  // 5. (Re)create an empty scratch dir, then write one file per kept extract.
+  // 5. (Re)create an empty scratch dir BEFORE the parse/write loop.
   const scratchDir = scratchDirOf(paths.state);
   fs.rmSync(scratchDir, { recursive: true, force: true });
   fs.mkdirSync(scratchDir, { recursive: true });
 
+  // 6. Parse + materialize ONE file at a time, newest-first grant order, under
+  //    ONE shared run budget: parse → (maybe truncate) → write → drop the
+  //    extract object. A runExhausted parse is a partial read: per ADR-0023 the
+  //    partial extract is DISCARDED and the file capacity-deferred (recording it
+  //    processed would silently lose its unread tail — the WP-048/069 class);
+  //    once the run budget is drained, every later candidate is likewise
+  //    deferred (amended 2026-07-17).
+  const sizeOf = (extract) => Buffer.byteLength(JSON.stringify(extract));
+  const budget = transcripts.newRunBudget();
+  let runExhausted = false;
   const entries = [];
   const wrote = [];
-  for (const item of kept) {
-    const scratchFile = path.join(scratchDir, `${item.harness}-${sanitize(item.extract.session_id)}.json`);
-    fs.writeFileSync(scratchFile, JSON.stringify(item.extract, null, 2));
+  /** @type {typeof underCeiling} */
+  const processed = [];
+  /** @type {Array<{harness:'claude'|'codex', session_id:string, originalBytes:number, keptBytes:number}>} */
+  const truncated = [];
+  for (let i = 0; i < underCeiling.length; i++) {
+    if (!alloc.has(i)) continue; // capacity-deferred whole (already listed)
+    const d = underCeiling[i];
+    if (runExhausted) {
+      deferred.push(deferralOf(d));
+      continue;
+    }
+    const grant = alloc.get(i);
+    const { extract: parsedExtract, parse } = transcripts.parseWithOutcome(d, budget);
+    if (parse.outcome !== 'ok') {
+      newlyQuarantined.push({ ...d, reason: parse.outcome });
+      continue; // no scratch file for a quarantined parse
+    }
+    if (parse.runExhausted) {
+      runExhausted = true; // discard the partial extract; defer, record nothing
+      deferred.push(deferralOf(d));
+      continue;
+    }
+    let extract = parsedExtract;
+    let truncatedToFit = false;
+    const serialized = sizeOf(extract);
+    // A whole-file grant (grant === d.size) is kept whole; an under-granted
+    // share still enforces the exact serialized grant, as today.
+    if (grant < d.size && serialized > grant) {
+      extract = truncateExtractToFit(extract, grant);
+      truncatedToFit = true;
+      truncated.push({
+        harness: d.harness,
+        session_id: extract.session_id,
+        originalBytes: serialized,
+        keptBytes: sizeOf(extract),
+      });
+    }
+    const scratchFile = path.join(scratchDir, `${d.harness}-${sanitize(extract.session_id)}.json`);
+    fs.writeFileSync(scratchFile, JSON.stringify(extract, null, 2));
     entries.push({
-      harness: item.harness,
-      session_id: item.extract.session_id,
-      mtimeMs: item.mtimeMs,
+      harness: d.harness,
+      session_id: extract.session_id,
+      mtimeMs: d.mtimeMs,
       scratchFile,
-      truncatedToFit: item.truncatedToFit,
+      truncatedToFit,
     });
     wrote.push(scratchFile);
+    processed.push(d);
+    // `extract`/`parsedExtract` go out of scope here — never all resident at once.
   }
 
-  // 6. Per-harness max mtime among KEPT entries (INCLUDING truncated ones — a
-  //    truncated session counts as consumed), else the incoming watermark (a
-  //    harness with nothing new — or everything whole-dropped — is unchanged).
-  const maxMtime = { claude: watermarks.claude ?? null, codex: watermarks.codex ?? null };
-  for (const item of kept) {
-    if (item.mtimeMs > (maxMtime[item.harness] ?? -Infinity)) {
-      maxMtime[item.harness] = item.mtimeMs;
-    }
-  }
-
-  return { entries, scratchDir, maxMtime, droppedForSize, dropped, truncated, wrote };
+  return {
+    entries,
+    scratchDir,
+    processed,
+    newlyQuarantined,
+    deferred,
+    droppedForSize: deferred.length,
+    dropped: deferred, // back-compat alias (the capacity-wedge message reads it)
+    truncated,
+    wrote,
+  };
 }
 
 /**

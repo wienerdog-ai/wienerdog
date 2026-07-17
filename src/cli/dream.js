@@ -8,7 +8,7 @@ const { getPaths } = require('../core/paths');
 const { WienerdogError } = require('../core/errors');
 const { readDreamConfig } = require('../core/dream/config');
 const { acquireLock, releaseLock, ownsLock } = require('../core/dream/lock');
-const { readWatermarks, writeWatermarks } = require('../core/dream/watermarks');
+const ledgerLib = require('../core/dream/ledger');
 const { collectExtracts, cleanScratch, MIN_TRUNCATE_BYTES } = require('../core/dream/scratch');
 const { spawnBrain, buildClaudeArgs } = require('../core/dream/brain');
 const { readVaultLayout } = require('../core/layout');
@@ -170,9 +170,45 @@ async function run(argv) {
   }
 
   try {
-    // 4. Collect the fresh transcripts into scratch (now safely under the lock).
-    const wm = readWatermarks(paths.state);
-    const sel = collectExtracts(paths, wm, cfg.maxInputBytes);
+    // 4. Read + one-time-migrate the per-file quarantine ledger (audit A6,
+    //    ADR-0023 — replaces the scalar watermark), then collect the fresh
+    //    transcripts into scratch (now safely under the lock).
+    let ledger = ledgerLib.readLedger(paths.state);
+    const mig = ledgerLib.migrateFromWatermarks(paths.state, ledger);
+    ledger = mig.ledger;
+    if (mig.migrated) ledgerLib.writeLedger(paths.state, ledger);
+    const sel = collectExtracts(paths, ledger, cfg.maxInputBytes);
+
+    // Regenerate the injected session digest from the CURRENT ledger (atomic
+    // temp + rename). The quarantine banner is re-derived from the ledger every
+    // render — durable while a quarantine is active, self-clearing after the
+    // file leaves quarantine. activeQuarantines exposes basenames + a code-owned
+    // reason enum only (never content, never a full path), so no untrusted
+    // bytes reach the injected digest (same rule as formatAlerts).
+    // A3 hash gate (WP-116, ADR-0021): the dream NEVER seeds — it reads the
+    // registry established at the last attended sync/approval and enforces, so
+    // a nightly corruption fails closed against that baseline.
+    const regenerateDigest = () => {
+      fs.mkdirSync(paths.state, { recursive: true });
+      const idReg = identityApprovals.readRegistry(paths.state);
+      const q = ledgerLib.activeQuarantines(ledger);
+      const quarantineLine =
+        q.length > 0
+          ? `> [!warning] Wienerdog: ${q.length} session transcript(s) could not be read and were skipped — ` +
+            `${q.map((e) => `${e.file} (${e.reason})`).join(', ')}. Dreaming continues over your other sessions; ` +
+            'a skipped file is retried automatically if it changes.'
+          : '';
+      const digest = renderDigest(vaultDir, layout, {
+        alerts: readAlerts(paths),
+        updateLine: renderUpdateLine(paths),
+        identityApprovals: identityApprovals.approvalsMap(idReg),
+        quarantineLine,
+      });
+      const digestDest = path.join(paths.state, 'digest.md');
+      const digestTmp = path.join(paths.state, `.digest.md.${process.pid}.tmp`);
+      fs.writeFileSync(digestTmp, digest);
+      fs.renameSync(digestTmp, digestDest);
+    };
 
     // 5. Surface capacity events plainly — a size event must NEVER be silent.
     for (const t of sel.truncated) {
@@ -187,6 +223,24 @@ async function run(argv) {
         `wienerdog: dream — capacity: dropped ${sel.dropped.length} session(s) over ` +
           `dream_max_input_bytes (${cfg.maxInputBytes}): ${names}.`
       );
+    }
+    // Per-quarantine console line: secret-free — basename + reason enum only.
+    for (const q of sel.newlyQuarantined) {
+      console.log(
+        `wienerdog: dream — quarantined ${q.harness}/${path.basename(q.path)} (${q.reason}); ` +
+          'it will not be retried until it changes.'
+      );
+    }
+
+    // 5b. Record + surface quarantines even on an otherwise-idle run — BEFORE
+    //     the entries.length === 0 returns, so a quarantine-only run records
+    //     them, shows the banner, and exits 0. Next run the unchanged file is
+    //     skip-quarantined: a permanently-broken file must not fail-loud (or
+    //     re-alert) every night.
+    if (sel.newlyQuarantined.length > 0) {
+      for (const q of sel.newlyQuarantined) ledger = ledgerLib.recordQuarantined(ledger, q, q.reason);
+      ledgerLib.writeLedger(paths.state, ledger);
+      regenerateDigest();
     }
 
     // 6. Fresh sessions existed but NONE could be fed → capacity WEDGE: fail loud
@@ -248,13 +302,14 @@ async function run(argv) {
       logStream.end();
     }
 
-    // 12. WATERMARK-SAFETY GATE. The brain exited 0 — but only trust that as a
-    //     consolidation if its inputs were AVAILABLE and UNCHANGED for the whole
-    //     run. If any expected extract vanished or changed (2026-07-07: a second
-    //     dream deleted this run's live scratch, so the brain wrote only
-    //     failure-doc notes on empty inputs), the brain consolidated NOTHING:
-    //     restore the vault, advance NO watermark, and fail loud so run-job
-    //     records a durable alert. The sessions are retried next run.
+    // 12. STATE-ADVANCE SAFETY GATE (WP-069, now per-file). The brain exited 0 —
+    //     but only trust that as a consolidation if its inputs were AVAILABLE
+    //     and UNCHANGED for the whole run. If any expected extract vanished or
+    //     changed (2026-07-07: a second dream deleted this run's live scratch,
+    //     so the brain wrote only failure-doc notes on empty inputs), the brain
+    //     consolidated NOTHING: restore the vault, record NO per-file outcome,
+    //     and fail loud so run-job records a durable alert. The sessions are
+    //     retried next run.
     if (!scratchIntact(sel.wrote, scratchBaseline)) {
       restoreVaultToHead(vaultDir);
       throw new WienerdogError(
@@ -274,24 +329,17 @@ async function run(argv) {
       stateDir: paths.state,
     });
 
-    // 14. Advance the watermarks — only now: brain 0 + inputs intact + commit ok.
-    writeWatermarks(paths.state, { claude: sel.maxMtime.claude, codex: sel.maxMtime.codex });
+    // 14. Record the per-file outcomes — only now: brain 0 + inputs intact +
+    //     commit ok (the exact WP-069 watermark-safety property, per-file). A
+    //     capacity-deferred file is in NEITHER processed nor newlyQuarantined →
+    //     no record → naturally retried next run (the WP-048/069 starvation
+    //     fix, structural — no scalar can jump past an unconsolidated session).
+    for (const d of sel.processed) ledger = ledgerLib.recordProcessed(ledger, d);
+    ledgerLib.writeLedger(paths.state, ledger);
 
-    // 15. Regenerate the injected session digest (atomic temp + rename).
-    // A3 hash gate (WP-116, ADR-0021): the dream NEVER seeds — it reads the
-    // registry established at the last attended sync/approval and enforces, so a
-    // nightly corruption fails closed against that baseline.
-    fs.mkdirSync(paths.state, { recursive: true });
-    const idReg = identityApprovals.readRegistry(paths.state);
-    const digest = renderDigest(vaultDir, layout, {
-      alerts: readAlerts(paths),
-      updateLine: renderUpdateLine(paths),
-      identityApprovals: identityApprovals.approvalsMap(idReg),
-    });
-    const digestDest = path.join(paths.state, 'digest.md');
-    const digestTmp = path.join(paths.state, `.digest.md.${process.pid}.tmp`);
-    fs.writeFileSync(digestTmp, digest);
-    fs.renameSync(digestTmp, digestDest);
+    // 15. Regenerate the injected session digest (atomic temp + rename),
+    //     including the durable quarantine banner from the current ledger.
+    regenerateDigest();
 
     // 16. Summary.
     const shaShort = res.sha ? res.sha.slice(0, 7) : '(none)';

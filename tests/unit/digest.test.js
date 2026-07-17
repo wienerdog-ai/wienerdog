@@ -71,6 +71,41 @@ test('renderDigest prepends opts.schedulerLine; empty leaves the golden byte-ide
   assert.equal(withLine, `${line}\n\n${golden}`);
 });
 
+test('renderDigest prepends opts.quarantineLine; empty/absent leaves the golden byte-identical', () => {
+  const golden = fs.readFileSync(GOLDEN, 'utf8');
+  // No quarantine line (and no alerts) → unchanged from the golden.
+  assert.equal(
+    renderDigest(FIXTURE, undefined, { quarantineLine: '', identityApprovals: approvals(FIXTURE) }),
+    golden
+  );
+  // A non-empty quarantine line is prepended, then a blank line, then the body.
+  const line =
+    '> [!warning] Wienerdog: 1 session transcript(s) could not be read and were skipped — huge.jsonl (over-ceiling). ' +
+    'Dreaming continues over your other sessions; a skipped file is retried automatically if it changes.';
+  const withLine = renderDigest(FIXTURE, undefined, { quarantineLine: line, identityApprovals: approvals(FIXTURE) });
+  assert.equal(withLine, `${line}\n\n${golden}`);
+});
+
+test('renderDigest places quarantineLine after alerts and before schedulerLine/updateLine', () => {
+  const golden = fs.readFileSync(GOLDEN, 'utf8');
+  const quarantineLine = '> [!warning] Wienerdog: 1 session transcript(s) could not be read and were skipped — huge.jsonl (over-ceiling).';
+  const schedulerLine = '> [!warning] Wienerdog: the scheduled job "dream" is set up but not currently active';
+  const updateLine = '> [!note] update available';
+  const alerts = [{ job: 'dream', at: '2026-07-04T03:30:00.000Z', reason: 'boom', log_hint: 'logs/dream/' }];
+  const out = renderDigest(FIXTURE, undefined, { alerts, quarantineLine, schedulerLine, updateLine, identityApprovals: approvals(FIXTURE) });
+  const alertIdx = out.indexOf('has failed');
+  const quarIdx = out.indexOf(quarantineLine);
+  const schedIdx = out.indexOf(schedulerLine);
+  const updIdx = out.indexOf(updateLine);
+  const bodyIdx = out.indexOf("# Who you're working with");
+  assert.ok(alertIdx !== -1 && quarIdx !== -1 && schedIdx !== -1 && updIdx !== -1 && bodyIdx !== -1, 'all five blocks present');
+  assert.ok(
+    alertIdx < quarIdx && quarIdx < schedIdx && schedIdx < updIdx && updIdx < bodyIdx,
+    'order is alerts → quarantineLine → schedulerLine → updateLine → body'
+  );
+  assert.ok(out.endsWith(golden), 'body is the unchanged golden');
+});
+
 test('renderDigest orders the prefix alerts → schedulerLine → updateLine → body', () => {
   const golden = fs.readFileSync(GOLDEN, 'utf8');
   const schedulerLine = '> [!warning] Wienerdog: the scheduled job "dream" is set up but not currently active';
