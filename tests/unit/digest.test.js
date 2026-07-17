@@ -6,7 +6,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const { renderDigest } = require('../../src/core/digest');
+const { renderDigest, DigestCaps } = require('../../src/core/digest');
 const { allowAll } = require('../../src/core/safety-profile');
 const { approvalsFromVault } = require('../../src/core/identity-approvals');
 const { defaultLayout } = require('../../src/core/layout');
@@ -283,4 +283,132 @@ test("compaction drops a note's own leading H1 (no duplicate under the section h
   assert.ok(digest.includes('## Preferences'), 'injected section header present');
   assert.ok(!/^# Preferences$/m.test(digest), "note's own leading H1 dropped");
   assert.ok(digest.includes('Direct and concise'), 'content under the H1 preserved');
+});
+
+// ── Digest size caps (audit A6, F3/F5, WP-120) ───────────────────────────────
+
+test('renderDigest truncates over-MAX_LINES content at a line boundary with the marker', () => {
+  const tmp = tmpVault();
+  // Many short lines: well under MAX_NOTE_BYTES for the note itself, but pushes
+  // the assembled digest well past MAX_LINES — isolates the LINE cap.
+  const items = [];
+  for (let i = 0; i < 200; i++) items.push(`- item ${i}`);
+  const note =
+    '---\nid: i\ntype: identity\norigin: interview\nstatus: active\n---\n\n' +
+    `# Standing instructions\n\n${items.join('\n')}\n`;
+  fs.writeFileSync(path.join(tmp, '06-Identity', 'instructions.md'), note);
+
+  const digest = renderDigest(tmp, undefined, { identityApprovals: approvals(tmp) });
+  const lines = digest.split('\n');
+  assert.ok(
+    lines.length <= DigestCaps.MAX_LINES + 1,
+    `expected <= ${DigestCaps.MAX_LINES + 1} lines (cap + marker), got ${lines.length}`
+  );
+  assert.equal(lines[lines.length - 1], DigestCaps.TRUNCATION_MARKER, 'last line is the marker');
+  // Line-boundary safety: every kept "- item N" line is verbatim from the source
+  // (never a partial line split mid-content).
+  for (const l of lines) {
+    if (l.startsWith('- item ')) assert.ok(items.includes(l), `unexpected partial line: ${JSON.stringify(l)}`);
+  }
+});
+
+test('renderDigest byte-caps a ~1,000,000-char single line within MAX_BYTES, no split UTF-8 codepoint', () => {
+  const tmp = tmpVault();
+  const dailyDir = path.join(tmp, '07-Daily');
+  fs.mkdirSync(dailyDir, { recursive: true });
+  // A single line of 1,000,000 multi-byte (2-byte UTF-8) characters — one line,
+  // well under MAX_LINES, but far over MAX_BYTES. Not per-note capped (that cap
+  // only applies to identity notes), so it exercises the digest-wide byte pass.
+  const huge = 'é'.repeat(1_000_000);
+  fs.writeFileSync(
+    path.join(dailyDir, '2026-07-01.md'),
+    `---\nid: d\ntype: daily\n---\n\n## Summary\n${huge}\n`
+  );
+
+  const digest = renderDigest(tmp, undefined, {
+    identityApprovals: approvals(tmp),
+    profile: allowAll(),
+  });
+
+  const byteLen = Buffer.byteLength(digest, 'utf8');
+  assert.ok(byteLen <= DigestCaps.MAX_BYTES, `expected <= ${DigestCaps.MAX_BYTES} bytes, got ${byteLen}`);
+  assert.ok(digest.includes(DigestCaps.TRUNCATION_MARKER), 'marker present');
+  assert.ok(!digest.includes('�'), 'no split UTF-8 codepoint (no dangling replacement char)');
+});
+
+test('an identity note over MAX_NOTE_BYTES contributes at most MAX_NOTE_BYTES, line-bounded, no per-note marker', () => {
+  const tmp = tmpVault();
+  const line1 = 'a'.repeat(5000);
+  const line2 = 'b'.repeat(5000);
+  const line3 = 'c'.repeat(5000);
+  const note =
+    '---\nid: p\ntype: identity\norigin: interview\nstatus: active\n---\n\n' +
+    `## Preferences\n\n${line1}\n${line2}\n${line3}\n`;
+  fs.writeFileSync(path.join(tmp, '06-Identity', 'preferences.md'), note);
+
+  const digest = renderDigest(tmp, undefined, { identityApprovals: approvals(tmp) });
+
+  assert.ok(digest.includes(line1), 'first line (fits under the per-note cap) is kept whole');
+  assert.ok(!digest.includes(line2), 'second line (would exceed the per-note cap) is dropped whole');
+  assert.ok(!digest.includes(line3), 'third line is dropped whole too');
+  assert.ok(!digest.includes(DigestCaps.TRUNCATION_MARKER), 'no overall marker — purely the per-note bound at work');
+
+  const start = digest.indexOf('## Preferences');
+  const afterHeading = digest.slice(start);
+  const sectionEnd = afterHeading.indexOf('\n\n');
+  const section = sectionEnd === -1 ? afterHeading : afterHeading.slice(0, sectionEnd);
+  assert.ok(
+    Buffer.byteLength(section, 'utf8') <= DigestCaps.MAX_NOTE_BYTES,
+    'note contribution stays within MAX_NOTE_BYTES'
+  );
+});
+
+test('more than MAX_PROJECTS project dirs render at most MAX_PROJECTS lines plus a deterministic "…and N more" line', () => {
+  const tmp = tmpVault();
+  const projDir = path.join(tmp, '01-Projects');
+  fs.mkdirSync(projDir, { recursive: true });
+  const total = DigestCaps.MAX_PROJECTS + 7;
+  for (let i = 0; i < total; i++) {
+    fs.mkdirSync(path.join(projDir, `proj-${String(i).padStart(3, '0')}`));
+  }
+
+  const digest = renderDigest(tmp, undefined, { identityApprovals: approvals(tmp) });
+  assert.ok(digest.includes('## Active projects'), 'projects section present');
+  const overflowLine = `- …and ${total - DigestCaps.MAX_PROJECTS} more`;
+  assert.ok(digest.includes(overflowLine), `expected deterministic overflow line ${JSON.stringify(overflowLine)}`);
+
+  const start = digest.indexOf('## Active projects');
+  const afterHeading = digest.slice(start);
+  const sectionEnd = afterHeading.indexOf('\n\n');
+  const section = sectionEnd === -1 ? afterHeading : afterHeading.slice(0, sectionEnd);
+  const projectLines = section.split('\n').filter((l) => l.startsWith('- '));
+  assert.equal(
+    projectLines.length,
+    DigestCaps.MAX_PROJECTS + 1,
+    'MAX_PROJECTS name lines + exactly one overflow line'
+  );
+});
+
+test('with over-cap content AND active banners, all banner lines are still present (prefix preserved)', () => {
+  const tmp = tmpVault();
+  const items = [];
+  for (let i = 0; i < 300; i++) items.push(`- item ${i}`);
+  const note =
+    '---\nid: i\ntype: identity\norigin: interview\nstatus: active\n---\n\n' +
+    `# Standing instructions\n\n${items.join('\n')}\n`;
+  fs.writeFileSync(path.join(tmp, '06-Identity', 'instructions.md'), note);
+
+  const alerts = [{ job: 'dream', at: '2026-07-04T03:30:00.000Z', reason: 'boom', log_hint: 'logs/dream/' }];
+  const updateLine = '> [!note] update available';
+  const digest = renderDigest(tmp, undefined, {
+    identityApprovals: approvals(tmp),
+    alerts,
+    updateLine,
+  });
+
+  assert.ok(digest.includes('has failed'), 'alert banner preserved under over-cap content');
+  assert.ok(digest.includes(updateLine), 'update banner preserved under over-cap content');
+  assert.ok(digest.includes(DigestCaps.TRUNCATION_MARKER), 'truncation marker present');
+  const lines = digest.split('\n');
+  assert.ok(lines.length <= DigestCaps.MAX_LINES + 1, 'overall line cap still enforced with banners active');
 });

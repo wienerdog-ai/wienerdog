@@ -13,6 +13,15 @@ const { hashBytes, foldKey } = require('./identity-approvals');
  *            exclusion: null|'absent'|'untrusted-exact'|'untrusted-invalid'|'malformed'}} ReadNoteResult
  */
 
+/** Digest size caps (audit A6, F3/F5). Values OWNER-APPROVED 2026-07-17 — see the spec. */
+const DigestCaps = {
+  MAX_LINES: 120, // the historically-claimed line cap, now enforced
+  MAX_BYTES: 32 * 1024, // hard byte ceiling on the injected digest
+  MAX_NOTE_BYTES: 8 * 1024, // per identity note: cap the compacted body before it joins parts[]
+  MAX_PROJECTS: 50, // cap the number of `- name` project lines
+  TRUNCATION_MARKER: '> [wienerdog: digest truncated to fit the session-context cap]',
+};
+
 /**
  * Read a note, honouring the trust gate (audit A4, ADR-0022), and report WHY it
  * was excluded so the caller can decide whether the exclusion is anomalous
@@ -218,6 +227,96 @@ function formatAlerts(alerts) {
 }
 
 /**
+ * Hard-cut `str` at the largest UTF-8 byte boundary that fits within `maxBytes`,
+ * never splitting a multi-byte codepoint. `Buffer#toString('utf8')` replaces a
+ * truncated trailing multi-byte sequence with U+FFFD — trim that off so the
+ * result never carries a dangling replacement character (audit A6, F3/F5).
+ * @param {string} str @param {number} maxBytes @returns {string}
+ */
+function hardCutUtf8(str, maxBytes) {
+  if (maxBytes <= 0) return '';
+  const buf = Buffer.from(str, 'utf8');
+  if (buf.length <= maxBytes) return str;
+  let cut = buf.subarray(0, maxBytes).toString('utf8');
+  if (cut.charCodeAt(cut.length - 1) === 0xfffd) cut = cut.slice(0, -1);
+  return cut;
+}
+
+/**
+ * Keep whole lines of `text` whose cumulative UTF-8 byte length fits within
+ * `maxBytes`, dropping any trailing lines that would not fit. No marker is
+ * appended — a per-note truncation is silently bounded (the caller's own
+ * marker, if any, covers it). Returns '' when even the first line does not fit.
+ * @param {string} text @param {number} maxBytes @returns {string}
+ */
+function capBytesAtLineBoundary(text, maxBytes) {
+  if (Buffer.byteLength(text, 'utf8') <= maxBytes) return text;
+  const lines = text.split('\n');
+  const kept = [];
+  let used = 0;
+  for (const line of lines) {
+    const lineBytes = Buffer.byteLength(line, 'utf8') + (kept.length > 0 ? 1 : 0); // +1 for the '\n' joiner
+    if (used + lineBytes > maxBytes) break;
+    used += lineBytes;
+    kept.push(line);
+  }
+  return kept.join('\n');
+}
+
+/**
+ * Fit `bodyText` within `byteBudget` bytes: first try dropping trailing lines
+ * (line-boundary safe); if even the first line alone exceeds the budget, hard-cut
+ * that single line at a UTF-8-safe boundary (never split a codepoint).
+ * @param {string} bodyText @param {number} byteBudget @returns {string}
+ */
+function capBodyToBytes(bodyText, byteBudget) {
+  if (byteBudget <= 0) return '';
+  if (Buffer.byteLength(bodyText, 'utf8') <= byteBudget) return bodyText;
+  const kept = capBytesAtLineBoundary(bodyText, byteBudget);
+  if (kept !== '') return kept;
+  const firstLine = bodyText.split('\n')[0];
+  return hardCutUtf8(firstLine, byteBudget);
+}
+
+/**
+ * Enforce DigestCaps.MAX_LINES and MAX_BYTES on `assembled`, ALWAYS preserving `prefix`
+ * (the control-plane banners) verbatim. Truncation is at a LINE boundary; a single
+ * TRUNCATION_MARKER line is appended when anything was dropped. If even prefix+marker
+ * exceeds a cap (pathological), keep the prefix + marker (prefix is never dropped). Applies
+ * the LINE cap first, then the BYTE cap on the line-capped result (a million-char single
+ * line is one line, under MAX_LINES, but blows MAX_BYTES → the byte pass hard-caps it at a
+ * UTF-8-safe boundary and appends the marker).
+ * @param {string} assembled @param {string} prefix @returns {string}
+ */
+function capDigest(assembled, prefix) {
+  const prefixPart = prefix ? `${prefix}\n\n` : '';
+  const bodyPart = prefix ? assembled.slice(prefixPart.length) : assembled;
+
+  // ---- Line cap: reserve the prefix's own lines (+1 for the blank separator)
+  // so the prefix can never be squeezed out by the body's line budget. ----
+  const prefixLineCount = prefix ? prefix.split('\n').length + 1 : 0;
+  const lineBudget = Math.max(0, DigestCaps.MAX_LINES - prefixLineCount);
+  let bodyLines = bodyPart.split('\n');
+  let truncated = false;
+  if (bodyLines.length > lineBudget) {
+    bodyLines = bodyLines.slice(0, lineBudget);
+    truncated = true;
+  }
+  let cappedBody = bodyLines.join('\n');
+
+  // ---- Byte cap on the line-capped result. The prefix's bytes (and, once we
+  // know a marker is needed, the marker's bytes) are reserved first. ----
+  const prefixBytes = Buffer.byteLength(prefixPart, 'utf8');
+  const fitsWithoutMarker = Buffer.byteLength(prefixPart + cappedBody, 'utf8') <= DigestCaps.MAX_BYTES;
+  if (!truncated && fitsWithoutMarker) return prefixPart + cappedBody;
+
+  const markerBytes = Buffer.byteLength(`\n${DigestCaps.TRUNCATION_MARKER}`, 'utf8');
+  const bodyByteBudget = Math.max(0, DigestCaps.MAX_BYTES - prefixBytes - markerBytes);
+  cappedBody = capBodyToBytes(cappedBody, bodyByteBudget);
+  return `${prefixPart}${cappedBody}\n${DigestCaps.TRUNCATION_MARKER}`;
+}
+
+/**
  * Render the SessionStart digest from a vault. Deterministic; no model calls.
  * Reads {identity_dir}/{profile,preferences,goals,instructions}.md, the newest
  * daily note under {daily_dir} (found recursively), and {projects_dir}/* directory
@@ -227,7 +326,10 @@ function formatAlerts(alerts) {
  * derived_from_untrusted value that is not an exact boolean) is omitted fail-closed
  * AND surfaced via a fixed warning banner placed first in the prefix (audit A4,
  * ADR-0022); an exact `true` is normal policy and stays silent.
- * Output is <=120 lines. When `opts.alerts` holds unresolved failure
+ * Output is capped to `DigestCaps.MAX_LINES` lines AND `DigestCaps.MAX_BYTES` bytes,
+ * with the control-plane banner prefix always preserved; over-cap content is
+ * truncated at a line boundary with a fixed marker (audit A6, F3/F5). When
+ * `opts.alerts` holds unresolved failure
  * alerts, a plain-text block is prepended (empty/absent → output unchanged).
  * When `opts.updateLine` is a non-empty fixed-template "update available" line, it
  * is prepended after any alert block (empty/absent → output unchanged).
@@ -294,14 +396,21 @@ function renderDigest(vaultDir, layout = defaultLayout(), opts = {}) {
       // 'untrusted-exact' and 'absent' are NORMAL → silent (no banner).
       continue;
     }
-    const content = compact(r.note.body);
+    // Bound a single oversized identity note (audit A6, F3/F5) independently of
+    // the overall cap, at a line boundary — no per-note marker (the overall
+    // marker, appended below if anything is dropped anywhere, covers it).
+    const content = capBytesAtLineBoundary(compact(r.note.body), DigestCaps.MAX_NOTE_BYTES);
     if (!content) continue;
     parts.push(`${header}\n${content}`);
   }
 
-  const projects = listProjectDirs(path.join(vaultDir, layout.projects_dir));
-  if (projects.length > 0) {
-    parts.push(`## Active projects\n${projects.map((n) => `- ${n}`).join('\n')}`);
+  const allProjects = listProjectDirs(path.join(vaultDir, layout.projects_dir));
+  if (allProjects.length > 0) {
+    const projects = allProjects.slice(0, DigestCaps.MAX_PROJECTS);
+    const overflow = allProjects.length - projects.length;
+    const projectLines = projects.map((n) => `- ${n}`);
+    if (overflow > 0) projectLines.push(`- …and ${overflow} more`);
+    parts.push(`## Active projects\n${projectLines.join('\n')}`);
   }
 
   const daily = newestDaily(path.join(vaultDir, layout.daily_dir));
@@ -332,7 +441,8 @@ function renderDigest(vaultDir, layout = defaultLayout(), opts = {}) {
     opts.schedulerLine || '', opts.updateLine || '']
     .filter((s) => s !== '')
     .join('\n\n');
-  return prefix ? `${prefix}\n\n${body}` : body;
+  const assembled = prefix ? `${prefix}\n\n${body}` : body;
+  return capDigest(assembled, prefix);
 }
 
-module.exports = { renderDigest };
+module.exports = { renderDigest, DigestCaps };
