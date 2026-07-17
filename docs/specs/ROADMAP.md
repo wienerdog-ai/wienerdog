@@ -135,7 +135,7 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 | [WP-114](WP-114-strict-frontmatter-parser-digest-gate.md) | Strict shared frontmatter parser + close the digest trust-gate fail-open (audit A4) | M7 | opus | Done | WP-112 |
 | [WP-115](WP-115-unify-frontmatter-consumers.md) | Unify the validator + config frontmatter consumers onto the shared strict parser (audit A4) | M7 | opus | Done | WP-114 |
 | [WP-116](WP-116-identity-trust-registry-digest-hashgate.md) | Exact-byte identity trust registry + fail-closed digest hash-gate (audit A3) | M7 | opus | Done | WP-112, WP-114 |
-| [WP-117](WP-117-memory-approve-cli.md) | `wienerdog memory approve` — TTY-only exact-byte identity ratification (audit A3) | M7 | opus | Draft | WP-116 |
+| [WP-117](WP-117-memory-approve-cli.md) | `wienerdog memory approve` — TTY-only exact-byte identity ratification (audit A3) | M7 | opus | Done | WP-116 |
 
 > **First-production-night incident (2026-07-04).** WP-038, WP-039 and WP-041 form
 > a serial chain (they edit the shared `run-job.js` / `dream.js` / `validate.js`
