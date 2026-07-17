@@ -42,8 +42,10 @@ Canonical names. Use these exact terms in code, docs, specs, and prompts — nev
   (ADR-0024). Returns sanitized text plus metadata-only findings (`{label,
   severity, count}`) — a finding never stores the matched secret bytes. Two
   severities, `redact` and `quarantine`, but the *persistence* gates (staged
-  output, digest section) withhold on **any** finding of either severity;
-  `hasHardFinding` (quarantine-severity only) drives the other consumers.
+  output, digest section) withhold on **any** finding of either severity; the
+  input and log/alert paths use `redactOnly` (inline redaction of every
+  match). `hasHardFinding` (quarantine-severity only) is an exported helper
+  for future gates; no shipped gate branches on it today.
   (Not: "filter", "scrubber", "DLP".)
 - **secret quarantine** — the fail-closed outcome when a persistence gate that
   cannot safely rewrite an artifact gets any `scanAndRedact` finding: the

@@ -70,7 +70,9 @@ or re-injecting the secret while you clean up.
 5. **Re-authorize.** Only after steps 1–4:
    - Re-add the schedules you removed in step 1: `wienerdog schedule add …`
      (or pick them again from the routine menu, `/wienerdog-routines`).
-   - Run `wienerdog doctor` to confirm nothing is flagged — no insecure file
-     modes, no pending quarantine.
+   - Run `wienerdog doctor` to confirm nothing is flagged (it checks, among
+     other things, that no Wienerdog file is readable by other users).
+   - Confirm `state/quarantine/` is empty — while anything is in it, the
+     digest keeps showing a "held for review" notice.
    - Open the digest and confirm it's clean, and confirm the *new*, rotated
      credential works where you use it.
