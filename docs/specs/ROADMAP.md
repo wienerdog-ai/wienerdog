@@ -131,7 +131,7 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 | [WP-110](WP-110-freeze-gws.md) | Freeze Google setup + GWS credential use behind the safety profile (A0) | M7 | sonnet | Done | WP-109 |
 | [WP-111](WP-111-freeze-external-content-routines.md) | Freeze external-content `skill:` schedules behind the safety profile (A0) | M7 | sonnet | Done | WP-109 |
 | [WP-112](WP-112-freeze-daily-summary-and-identity.md) | Freeze daily-Summary injection + automatic identity activation (A0) | M7 | sonnet | Done | WP-109 |
-| [WP-113](WP-113-a0-threat-boundary-docs.md) | Document the A0 pre-use safety freeze (threat-boundary docs) | M7 | sonnet | Draft | WP-109, WP-110, WP-111, WP-112 |
+| [WP-113](WP-113-a0-threat-boundary-docs.md) | Document the A0 pre-use safety freeze (threat-boundary docs) | M7 | sonnet | Ready | WP-109, WP-110, WP-111, WP-112 |
 
 > **First-production-night incident (2026-07-04).** WP-038, WP-039 and WP-041 form
 > a serial chain (they edit the shared `run-job.js` / `dream.js` / `validate.js`

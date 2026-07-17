@@ -1,7 +1,7 @@
 ---
 id: WP-113
 title: Document the A0 pre-use safety freeze (threat-boundary docs)
-status: Draft
+status: Ready
 model: sonnet
 size: M
 depends_on: [WP-109, WP-110, WP-111, WP-112]
