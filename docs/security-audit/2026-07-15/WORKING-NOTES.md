@@ -2,6 +2,19 @@
 
 **Last updated:** 2026-07-17
 
+## Status: A0 is COMPLETE (2026-07-17)
+
+Audit action A0 landed as five reviewed work packages, WP-109..WP-113 (specs in
+`docs/specs/done/`): the code-owned safety profile (`src/core/safety-profile.js`,
+five capability gates, all BLOCKED, no runtime/env/flag override), the
+`wienerdog safety` preflight, the GWS / `skill:`-routine / daily-Summary /
+identity-auto-activation freezes, and the THREAT-MODEL **T0** section scoping the
+product claims to the enforced gates. Full suite green (865 tests, 0 fail).
+Next per the sequence below: **A4** (daily removal is already done by WP-112;
+the shared strict frontmatter parser remains) **and A3** (identity approval CLI +
+exact-byte hash registry — note the case-folding gap recorded in
+`memory/lessons/inbox.md`).
+
 This file is the durable, cross-session context for the security remediation
 work. A session that starts here with no chat history should read this first,
 then `00-SYNTHESIS.md` and `ACTION-LIST.md`.
