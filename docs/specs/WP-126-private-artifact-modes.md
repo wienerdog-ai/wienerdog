@@ -4,7 +4,7 @@ title: Private-by-default artifact modes — 0700 dirs / 0600 sensitive files on
 status: Draft
 model: opus
 size: M
-depends_on: [WP-124]
+depends_on: [WP-124, WP-125]
 adrs: [ADR-0004, ADR-0024]
 branch: wp/126-private-artifact-modes
 ---
@@ -85,17 +85,19 @@ disjoint region: WP-124 scans field values; this WP chmods the file).
 
 | Action | Path | Notes |
 |--------|------|-------|
-| create | src/core/private-fs.js | `mkdirPrivate(dir)` (0700), `writeFilePrivate(dest, data)` (atomic temp+rename+chmod 0600), `repairPrivateModes(paths)` over the A5-scoped set + `A5_PRIVATE_DIRS`/`A5_PRIVATE_FILE_BASENAMES` |
+| create | src/core/private-fs.js | `mkdirPrivate(dir)` (0700), `writeFilePrivate(dest, data)` (atomic temp+rename+chmod 0600), `repairPrivateModes(paths)` over the A5-scoped set, read-only `scanPrivateModes(paths)` + `A5_PRIVATE_DIRS`/`A5_PRIVATE_FILE_BASENAMES` |
+| modify | src/core/digest.js | render the fixed insecure-modes banner line in the prefix from `opts` (count + `wienerdog sync` remediation; state-driven, adjacent to the quarantine banner) |
 | modify | src/cli/init.js | create `core`/`state`/`logs` at 0700 (not umask); keep the existing `secrets` handling |
 | modify | src/core/alerts.js | ensure `state` (0700) + `alerts.jsonl` (0600) via a chmod after create/compaction (mirrors the atomic writers) |
-| modify | src/cli/dream.js | write `digest.md` via `writeFilePrivate` (0600); scratch handled in scratch.js |
+| modify | src/cli/dream.js | write `digest.md` via `writeFilePrivate` (0600); pass the `scanPrivateModes` count into the `renderDigest` opts; scratch handled in scratch.js |
 | modify | src/core/dream/scratch.js | create the scratch dir 0700; write each extract 0600 |
-| modify | src/cli/sync.js | write `digest.md` 0600; call `repairPrivateModes(paths)` (non-dry-run) |
+| modify | src/cli/sync.js | write `digest.md` 0600; call `repairPrivateModes(paths)` (non-dry-run; dry-run reports the `scanPrivateModes` count); pass the post-repair scan count into the `renderDigest` opts |
 | modify | src/cli/doctor.js | report any A5-scoped dir/file that is group/world-accessible as a WARN with `wienerdog sync` remediation |
 | create | tests/unit/private-fs.test.js | `mkdirPrivate`/`writeFilePrivate` produce 0700/0600 under a permissive umask; `repairPrivateModes` fixes 0755/0644 → 0700/0600; idempotent |
 | modify | tests/unit/init.test.js | core/state/logs end 0700 under a permissive umask |
 | modify | tests/unit/alerts.test.js | alerts.jsonl ends 0600; file-bounding/compaction unchanged |
 | modify | tests/unit/doctor.test.js | doctor WARNs a world-readable digest/alerts and passes when private |
+| modify | tests/unit/digest.test.js | insecure-modes count > 0 → fixed banner line in the prefix; 0/absent → no banner (golden unchanged) |
 | modify | tests/integration/dream.test.js | after a dream, digest.md/scratch extracts are 0600 and the scratch dir 0700 |
 
 ### Exact contracts
@@ -134,7 +136,14 @@ const A5_PRIVATE_FILE_BASENAMES = ['digest.md', 'alerts.jsonl', 'transcript-ledg
  *  @param {import('./paths').WienerdogPaths} paths @returns {{changed:number}} */
 function repairPrivateModes(paths) { /* implement per the rules */ }
 
-module.exports = { mkdirPrivate, writeFilePrivate, repairPrivateModes, A5_PRIVATE_DIRS, A5_PRIVATE_FILE_BASENAMES };
+/** READ-ONLY scan of the same A5-scoped set: count entries whose mode grants any
+ *  group/world bit ((mode & 0o077) !== 0). Never chmods. POSIX only (win32 → {insecure:0}).
+ *  Consumers: doctor's WARN, sync --dry-run's would-repair count, and the digest
+ *  insecure-modes banner (OWNER-APPROVED 2026-07-17).
+ *  @param {import('./paths').WienerdogPaths} paths @returns {{insecure:number}} */
+function scanPrivateModes(paths) { /* implement per the rules */ }
+
+module.exports = { mkdirPrivate, writeFilePrivate, repairPrivateModes, scanPrivateModes, A5_PRIVATE_DIRS, A5_PRIVATE_FILE_BASENAMES };
 ```
 
 **2. `init.js`.** Create `core`/`state`/`logs` at `0700` (independent of umask) — either pass
@@ -171,7 +180,16 @@ diagnostics.
 **7. `doctor.js` report.** Add a read-only check: for each existing A5-scoped dir/file, if its
 mode grants any group/world bit (`(mode & 0o077) !== 0` on POSIX; skip on win32), emit a WARN
 `wienerdog: <path> is readable by other users — run \`wienerdog sync\` to harden it.` doctor
-NEVER mutates (WP-070 invariant); `sync` is the fixer.
+NEVER mutates (WP-070 invariant); `sync` is the fixer. Build it on `scanPrivateModes`/the same
+per-entry predicate so doctor, sync --dry-run, and the banner can never disagree.
+
+**8. Insecure-modes digest banner (OWNER-APPROVED 2026-07-17).** `renderDigest` accepts an
+insecure-modes count in `opts` (e.g. `opts.insecureModes`); when `> 0`, the prefix carries ONE
+fixed, code-owned line — the count + the `wienerdog sync` remediation, no paths, no content —
+adjacent to the WP-125 quarantine banner and never truncated by `capDigest`. When `0`/absent:
+no banner (golden unchanged). The dream.js and sync.js digest call sites obtain the count via
+`scanPrivateModes(paths)` (sync: AFTER its repair ran, so a successful sync renders no banner)
+and pass it in. The nightly path only *reads* modes — it never chmods (the ruling above).
 
 ### Worked example (assert in private-fs.test.js under a permissive umask)
 
@@ -186,21 +204,38 @@ repairPrivateModes(pathsFor(tmp))        → state 0o700, digest.md 0o600; secon
 
 ## OWNER-APPROVED (2026-07-17) — DECISION NEEDED, resolve in the walkthrough
 
-- **DECISION NEEDED — A5-scoped set exact membership.** Seeded set: dirs `core`, `state`,
-  `logs`, `state/dream-scratch`; files `digest.md`, `alerts.jsonl`, `transcript-ledger.json`,
-  `identity-approvals.json`, plus every `logs/**/*.log`. Explicitly EXCLUDED (A9):
-  `secrets/` and its contents, GWS grant/token/client JSON, `scheduler-status.json`,
-  `watermarks.json` (retired), `config.yaml`, the manifest. Confirm the membership and the A9
-  exclusion line.
-- **DECISION NEEDED — repair on `sync` only, or also silently on every `run-job`/dream?**
-  Recommendation: **`sync` (fixer) + `doctor` (reporter) only** — a nightly `run-job` should not
-  silently re-chmod on every fire (surprising, and the create-time private writes already keep
-  new artifacts private). The one-time repair for legacy installs happens at the next attended
-  `sync`. Confirm.
-- **DECISION NEEDED — win32 posture.** POSIX modes are a no-op on Windows; `chmod` there is
-  best-effort and the doctor check is skipped. Confirm that A5 private-modes is a POSIX
-  guarantee and Windows relies on per-user profile ACLs (documented in WP-127), not a WP-126
-  code path.
+- **OWNER-APPROVED (2026-07-17) — A5-scoped set membership confirmed.** Dirs (`0700`):
+  `core`, `state`, `logs`, `state/dream-scratch`, `state/quarantine` (per the WP-123
+  quarantine-preserve ruling). Files (`0600`): `digest.md`, `alerts.jsonl`,
+  `transcript-ledger.json`, `identity-approvals.json`, every `logs/**/*.log`, every scratch
+  extract, every `state/quarantine/*` file. Explicitly EXCLUDED (A9): `secrets/` and its
+  contents, GWS grant/token/client JSON, `scheduler-status.json`, `watermarks.json`
+  (retired), `config.yaml`, the manifest, and log rotation. The narrow explicit set is
+  deliberate: `repairPrivateModes` is a permission-rewriting sweep, and the A5/A9 boundary
+  keeps it auditable (a reviewer checks it never walks into `secrets/`). Non-secret-bearing
+  files like `config.yaml` were considered and left to A9 on purpose.
+- **OWNER-APPROVED (2026-07-17) — repair on `sync` only, PLUS a state-driven digest banner.**
+  Mutation stays attended: `sync` fixes, `doctor` reports details, and a nightly
+  `run-job`/dream NEVER silently re-chmods. But because `doctor` is never run automatically
+  (verified: nothing in src/ invokes it — it is only suggested in error messages), the owner
+  asked for awareness without automation: the digest control-plane prefix gains a fixed,
+  code-owned **insecure-modes banner** — when the read-only mode scan finds any A5-scoped
+  dir/file with group/world bits, the prefix carries one line with the COUNT and the
+  `wienerdog sync` remediation (no paths, no content — details live in `doctor`). State-driven
+  like the WP-125 quarantine banner: it renders while the condition holds and clears itself
+  after the fixing `sync`. Implementation: `private-fs.js` also exports a read-only
+  `scanPrivateModes(paths) → {insecure:number}` (the same scan the sync `--dry-run` count and
+  `doctor` use); the dream.js/sync.js digest call sites pass the count into `renderDigest`
+  opts; `digest.js` renders the fixed line. This WP therefore also touches `digest.js` and
+  depends on WP-125 to serialize that file's edits (the WP-119/120 precedent).
+- **OWNER-APPROVED (2026-07-17) — win32 posture: A5 private-modes is a POSIX guarantee.**
+  On Windows the `chmod` calls are best-effort no-ops (never throw), the doctor mode check,
+  the sync repair count, and the insecure-modes digest banner are skipped
+  (`scanPrivateModes` → `{insecure:0}`), and WP-127 documents that Windows protection relies
+  on the per-user profile ACLs, not on Wienerdog. Native ACL handling (icacls / an ACL
+  library) is rejected: it would break the zero-dependency rule for marginal gain over the
+  default per-user ACL, and the audit does not ask for it. An honest documented limit, not a
+  silent one.
 
 ## Implementation notes & constraints
 
@@ -243,6 +278,10 @@ repairPrivateModes(pathsFor(tmp))        → state 0o700, digest.md 0o600; secon
       anything under `secrets/`.
 - [ ] `doctor` WARNs on a world-readable digest/alerts and is clean once private; it never
       mutates.
+- [ ] With any A5-scoped entry group/world-accessible, the rendered digest prefix carries the
+      fixed insecure-modes banner (count + `wienerdog sync`, no paths); after a repairing
+      `sync`, the banner is gone; a clean install never renders it (golden unchanged). The
+      nightly dream path never chmods — it only passes the read-only scan count.
 - [ ] The alerts file-bounding/compaction/guards and the digest/scratch content are unchanged;
       a clean run's artifacts differ from before ONLY in their permission bits.
 - [ ] `wienerdog safety` shows all five gates BLOCKED; `npm test` and `npm run lint` pass.
