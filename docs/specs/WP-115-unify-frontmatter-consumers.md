@@ -1,7 +1,7 @@
 ---
 id: WP-115
 title: Unify the validator + config frontmatter consumers onto the shared strict parser (audit A4)
-status: Draft
+status: Ready
 model: opus
 size: M
 depends_on: [WP-114]
