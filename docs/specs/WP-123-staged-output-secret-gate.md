@@ -161,10 +161,11 @@ containing `AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY`. Aft
   A staged secret revert is a *closed event* (the file was reverted, no secret was committed,
   no ongoing unsafe state) — unlike a transcript quarantine, which persists nightly and
   earns its durable digest banner. The revert reason lands in the dream report's enforcement
-  section and in the `secretReverts` count dream.js prints. **Revisit explicitly in the
-  WP-124 walkthrough**: whether a durable "a secret was caught in dream output" surface
-  (digest banner / `alerts.jsonl` entry) is added belongs with the durable-output decisions
-  there, outside this WP's `validate.js`-only footprint.
+  section and in the `secretReverts` count dream.js prints. *Revisited and RESOLVED in the
+  WP-124 walkthrough (OWNER-APPROVED 2026-07-17): with the quarantine-preserve amendment
+  below, a withheld note IS an ongoing pending-review state — WP-125 adds a state-driven
+  digest banner rendered while `state/quarantine/` is non-empty (see WP-125 contract 5).
+  No `alerts.jsonl` entry (its cleared-on-next-success lifecycle would not track review).*
 - **OWNER-APPROVED (2026-07-17) — scan placement: option (A), staged added lines only.**
   The gate scans the git-computed staged diff (`git diff --cached -U0`, `+` lines), i.e.
   exactly the bytes THIS dream run is responsible for. A secret-shaped string the human
