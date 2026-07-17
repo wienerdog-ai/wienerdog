@@ -1,7 +1,7 @@
 ---
 id: WP-114
 title: Strict shared frontmatter parser + close the digest trust-gate fail-open (audit A4)
-status: Draft
+status: Ready
 model: opus
 size: M
 depends_on: [WP-112]
