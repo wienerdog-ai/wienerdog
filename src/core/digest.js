@@ -5,6 +5,7 @@ const path = require('node:path');
 const { defaultLayout } = require('./layout');
 const { isCapabilityAllowed, CAPABILITY } = require('./safety-profile');
 const { parse, readBool, INVALID } = require('./frontmatter');
+const { hashBytes, foldKey } = require('./identity-approvals');
 
 /**
  * @typedef {{data: Record<string,string>, body: string}} Note
@@ -241,9 +242,12 @@ function formatAlerts(alerts) {
  * @param {import('./layout').VaultLayout} [layout]  defaults to defaultLayout()
  * @param {{alerts?: Array<{job:string, at:string, reason:string, log_hint:string}>,
  *          schedulerLine?: string, updateLine?: string,
- *          profile?: Record<string,string>}} [opts]
+ *          profile?: Record<string,string>,
+ *          identityApprovals?: Record<string,string>}} [opts]
  *   profile = a code-level test seam only (never env/argv); passing `allowAll()`
  *     re-enables the daily block.
+ *   identityApprovals = the A3 hash-gate map {caseFoldedVaultRel: approvedHash}
+ *     (WP-116, ADR-0021); absent → NO identity injected (fail closed).
  * @returns {string}
  */
 function renderDigest(vaultDir, layout = defaultLayout(), opts = {}) {
@@ -259,14 +263,32 @@ function renderDigest(vaultDir, layout = defaultLayout(), opts = {}) {
   /** @type {string[]} */
   const parts = [];
 
+  const approvals = opts.identityApprovals || {};
   /** @type {Array<{file:string, reason:string}>} anomalous exclusions to warn about */
   const identityExclusions = [];
   for (const [file, header] of identity) {
-    const r = readNote(path.join(idDir, file));
+    const abs = path.join(idDir, file);
+    let bytes;
+    try {
+      bytes = fs.readFileSync(abs);
+    } catch {
+      continue; // absent → silent (normal)
+    }
+    // A3 hash gate (WP-116, ADR-0021): inject ONLY when the exact bytes match a
+    // human-approved hash. Case-folded key so Profile.md == profile.md. A mismatch
+    // is anomalous → warn, but ONLY when approvals were supplied (production); a
+    // bare test render with no map omits identity SILENTLY (fail closed).
+    const foldedRel = foldKey(`${layout.identity_dir}/${file}`);
+    if (approvals[foldedRel] !== hashBytes(bytes)) {
+      if (opts.identityApprovals !== undefined) identityExclusions.push({ file, reason: 'changed since you last approved it' });
+      continue;
+    }
+    // WP-114 provenance gate on top (structured result → SAME exclusion list).
+    const r = readNote(abs);
     if (!r.note) {
       if (r.exclusion === 'malformed') identityExclusions.push({ file, reason: 'malformed frontmatter' });
       else if (r.exclusion === 'untrusted-invalid') identityExclusions.push({ file, reason: 'unclear derived_from_untrusted value' });
-      // 'absent' and 'untrusted-exact' are NORMAL → silent (no banner).
+      // 'untrusted-exact' and 'absent' are NORMAL → silent (no banner).
       continue;
     }
     const content = compact(r.note.body);
@@ -295,7 +317,7 @@ function renderDigest(vaultDir, layout = defaultLayout(), opts = {}) {
   // prefix. Fixed, declarative, code-owned filenames only — never note content —
   // so no untrusted bytes enter the digest (same rule as formatAlerts).
   const identityWarn = identityExclusions.length > 0
-    ? `> [!warning] Wienerdog: some identity notes were left out of your session context — ${identityExclusions.map((e) => `${e.file} (${e.reason})`).join(', ')}. Fix their frontmatter, then run \`wienerdog sync\`.`
+    ? `> [!warning] Wienerdog: some identity notes were left out of your session context — ${identityExclusions.map((e) => `${e.file} (${e.reason})`).join(', ')}. Fix their frontmatter and run \`wienerdog sync\`, or re-approve an intentional edit with \`wienerdog memory approve <note>\`.`
     : '';
   // Prefix order = identity banner, then alerts, then schedulerLine, then
   // updateLine (an active failure is more urgent than a configured-but-not-loaded

@@ -177,6 +177,21 @@ test('dream-validate: a frozen modification of an existing injected identity fil
   );
 });
 
+test('dream-validate: a case-variant add (06-Identity/Profile.md) also hits the freeze branch (WP-116 case-fold hardening)', () => {
+  const { vault, scratch } = tempVault();
+  // Capital-P spelling with a floor-passing Tier-3 frontmatter: before WP-116 the
+  // case-sensitive isInjectedIdentity routed this to the ordinary numeric floor
+  // (bypassing the freeze) while the digest's literal profile.md read resolved to
+  // the SAME inode on a case-insensitive filesystem.
+  writeVault(vault, '06-Identity/Profile.md', FM({ confidence: '0.9', recurrence: '3', derived_from_untrusted: 'false' }));
+  const res = validateAndCommit({ vaultDir: vault, scratchDir: scratch, date: '2026-07-02', expectedScratch: [] });
+  assert.equal(fs.existsSync(path.join(vault, '06-Identity/Profile.md')), false, 'reverted, not committed');
+  assert.ok(
+    res.reverted.some((r) => r.path === '06-Identity/Profile.md' && /identity activation is frozen/.test(r.reason)),
+    'case-variant recorded as reverted with the identity-frozen reason'
+  );
+});
+
 test('dream-validate: passing { profile: allowAll() } keeps a floor-passing injected identity write (Tier-3-governed, not a blanket ban)', () => {
   const { vault, scratch } = tempVault();
   writeVault(vault, '06-Identity/profile.md', FM({ confidence: '0.9', recurrence: '3', derived_from_untrusted: 'false' }));

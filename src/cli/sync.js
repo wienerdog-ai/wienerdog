@@ -5,6 +5,7 @@ const path = require('node:path');
 const { getPaths } = require('../core/paths');
 const { WienerdogError } = require('../core/errors');
 const { renderDigest } = require('../core/digest');
+const identityApprovals = require('../core/identity-approvals');
 const { renderUpdateLine } = require('../core/update-check');
 const { readAlerts } = require('../core/alerts');
 const { readVaultLayout } = require('../core/layout');
@@ -209,10 +210,17 @@ async function run(argv, opts = {}) {
   const skipManagedBlock = !vaultPath;
   if (vaultPath) {
     const layout = readVaultLayout(paths.config);
+    // A3 identity trust registry (WP-116, ADR-0021): an attended sync seeds
+    // FIRST-TIME-ONLY records for identity files with no record yet, then the
+    // digest injects only exact-byte matches. Never re-seeds a changed file —
+    // that requires `wienerdog memory approve` (WP-117).
+    if (!dryRun) identityApprovals.seedApprovals(paths.state, vaultPath, layout);
+    const idReg = identityApprovals.readRegistry(paths.state);
     const digest = renderDigest(vaultPath, layout, {
       alerts: readAlerts(paths),
       schedulerLine: require('../scheduler/status').renderSchedulerStatusLine(paths),
       updateLine: renderUpdateLine(paths),
+      identityApprovals: identityApprovals.approvalsMap(idReg),
     });
     const dest = path.join(paths.state, 'digest.md');
     if (!dryRun) {

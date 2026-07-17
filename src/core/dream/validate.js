@@ -27,9 +27,14 @@ const INJECTED_IDENTITY_FILES = ['profile.md', 'preferences.md', 'goals.md', 'in
  * @returns {boolean}
  */
 function isInjectedIdentity(rel, layout) {
-  const prefix = layout.identity_dir + '/';
-  if (!rel.startsWith(prefix)) return false;
-  return INJECTED_IDENTITY_FILES.includes(rel.slice(prefix.length)); // direct child only
+  // Case-insensitive (WP-116, ADR-0021): on a case-insensitive filesystem
+  // `06-Identity/Profile.md` and `06-Identity/profile.md` are the same inode, so
+  // a case-variant dream write must hit the freeze branch too (defense in depth
+  // alongside the registry's folded path keys).
+  const prefix = (layout.identity_dir + '/').toLowerCase();
+  const low = String(rel).toLowerCase();
+  if (!low.startsWith(prefix)) return false;
+  return INJECTED_IDENTITY_FILES.includes(low.slice(prefix.length)); // direct child only
 }
 
 // Tier-3 code floor. FIXED — never tuned by memory_mode (see WP-017 spec). A

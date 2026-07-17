@@ -13,6 +13,7 @@ const { collectExtracts, cleanScratch, MIN_TRUNCATE_BYTES } = require('../core/d
 const { spawnBrain, buildClaudeArgs } = require('../core/dream/brain');
 const { readVaultLayout } = require('../core/layout');
 const { renderDigest } = require('../core/digest');
+const identityApprovals = require('../core/identity-approvals');
 const { renderUpdateLine } = require('../core/update-check');
 const { readAlerts } = require('../core/alerts');
 const {
@@ -277,8 +278,16 @@ async function run(argv) {
     writeWatermarks(paths.state, { claude: sel.maxMtime.claude, codex: sel.maxMtime.codex });
 
     // 15. Regenerate the injected session digest (atomic temp + rename).
+    // A3 hash gate (WP-116, ADR-0021): the dream NEVER seeds — it reads the
+    // registry established at the last attended sync/approval and enforces, so a
+    // nightly corruption fails closed against that baseline.
     fs.mkdirSync(paths.state, { recursive: true });
-    const digest = renderDigest(vaultDir, layout, { alerts: readAlerts(paths), updateLine: renderUpdateLine(paths) });
+    const idReg = identityApprovals.readRegistry(paths.state);
+    const digest = renderDigest(vaultDir, layout, {
+      alerts: readAlerts(paths),
+      updateLine: renderUpdateLine(paths),
+      identityApprovals: identityApprovals.approvalsMap(idReg),
+    });
     const digestDest = path.join(paths.state, 'digest.md');
     const digestTmp = path.join(paths.state, `.digest.md.${process.pid}.tmp`);
     fs.writeFileSync(digestTmp, digest);

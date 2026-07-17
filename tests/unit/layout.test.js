@@ -14,6 +14,7 @@ const {
 } = require('../../src/core/layout');
 const { renderDigest } = require('../../src/core/digest');
 const { allowAll } = require('../../src/core/safety-profile');
+const { approvalsFromVault } = require('../../src/core/identity-approvals');
 
 const POWERUSER_FIXTURE = path.join(__dirname, '..', 'fixtures', 'poweruser-vault');
 
@@ -196,7 +197,9 @@ test('layoutPromptLines names the daily path and identity dir', () => {
 
 test('renderDigest with the power-user layout: frozen default omits the nested daily (identity + project still render)', () => {
   const powerUser = { ...defaultLayout(), daily_dir: '05-Daily', daily_filename: 'YYYY/MM/YYYY-MM-DD.md' };
-  const digest = renderDigest(POWERUSER_FIXTURE, powerUser);
+  const digest = renderDigest(POWERUSER_FIXTURE, powerUser, {
+    identityApprovals: approvalsFromVault(POWERUSER_FIXTURE, powerUser),
+  });
   // Identity content (distinct persona, cannot match the default golden).
   assert.ok(digest.includes('Priya Nair'), 'identity profile content present');
   assert.ok(digest.includes('## Preferences'), 'preferences section header present');
@@ -223,7 +226,9 @@ test('renderDigest with the power-user layout + { profile: allowAll() } finds th
 
 test('renderDigest with the default layout omits the nested daily (layout routes the lookup)', () => {
   // Default layout looks in 07-Daily, which the fixture lacks → no daily section.
-  const digest = renderDigest(POWERUSER_FIXTURE);
+  const digest = renderDigest(POWERUSER_FIXTURE, undefined, {
+    identityApprovals: approvalsFromVault(POWERUSER_FIXTURE, defaultLayout()),
+  });
   assert.ok(!digest.includes('Interviewed two coastal-town planners'), 'daily omitted under default layout');
   assert.ok(!digest.includes('## Latest daily log'), 'no daily-log section under default layout');
   // Identity/projects still render (same dir names as default).

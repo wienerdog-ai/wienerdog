@@ -1,7 +1,7 @@
 ---
 id: WP-116
 title: Exact-byte identity trust registry + fail-closed digest hash-gate (audit A3)
-status: Ready
+status: In-Review
 model: opus
 size: M
 depends_on: [WP-112, WP-114]
@@ -63,6 +63,18 @@ identity file makes the digest fail closed + warn until WP-117's `memory approve
 lands to ratify the new bytes.
 
 ## Current state
+
+> **Implementation-discovered spec gap (2026-07-17).** The original Deliverables
+> table listed the digest/layout/alerts/adopt-e2e/dream-validate tests but MISSED
+> `tests/integration/dream.test.js`, whose "full run commits valid tiers …" test
+> asserts the dream's step-15 digest contains identity content
+> (`digest.includes('Ada, a product designer.')`). Post-WP-116 that fails —
+> **correctly**: the dream never seeds, the temp environment has no registry, so
+> identity is omitted fail-closed. The row + test contract below authorize seeding the
+> registry (attended-sync simulation) before the dream, plus a no-seed → no-identity
+> lock. Everything else was already green (identity-approvals 9/9, digest 17/17, full
+> suite 905 with only this 1 failure). Recorded as an amendment, not silent scope
+> growth (same class as WP-115's 2026-07-17 gap).
 
 **`src/core/digest.js`** — `renderDigest(vaultDir, layout = defaultLayout(), opts
 = {})`. Its identity loop (post WP-114) already uses the structured `readNote`
@@ -142,6 +154,7 @@ function isInjectedIdentity(rel, layout) {
 | modify | tests/unit/alerts.test.js | thread `approvalsFromVault` only where identity presence is asserted (baseline-relative tests need no change — verify) |
 | modify | tests/integration/adopt-e2e.test.js | thread `approvalsFromVault` where the adopt digest asserts identity presence |
 | modify | tests/unit/dream-validate.test.js | add a case-variant (`06-Identity/Profile.md`) frozen-revert case |
+| modify | tests/integration/dream.test.js | seed the registry (attended-sync simulation) before the dream so its step-15 digest injects identity; add a no-seed → no-identity assertion (see 2026-07-17 spec-gap note) |
 
 ### Exact contracts
 
@@ -398,6 +411,32 @@ Nothing else in `validate.js` changes.
   `validateAndCommit` runs under the frozen profile → the file is REVERTED with the
   identity-frozen reason (case-variant now hits the freeze branch). Existing cases
   unchanged.
+- `dream.test.js` (integration; drives the real CLI in-process under a temp
+  `WIENERDOG_HOME`): the "full run commits valid tiers …" test asserts the dream's
+  step-15 digest contains identity content (`digest.includes('Ada, a product
+  designer.')`). Post-WP-116 the dream **never seeds**, so with an empty registry the
+  identity is (correctly) omitted fail-closed. **Simulate the production flow — the
+  attended `sync` seeds before the dream runs** — by seeding the registry in that
+  test's setup, into the SAME state dir the in-process dream reads:
+
+  ```js
+  const idApprovals = require('../../src/core/identity-approvals');
+  const { defaultLayout } = require('../../src/core/layout');
+  // after setup() built the vault + committed profile.md, BEFORE running the dream.
+  // state dir == <core>/state (WIENERDOG_HOME/state); the vault uses the default
+  // layout (config.yaml has no vault_layout). seedApprovals mkdirs the state dir.
+  idApprovals.seedApprovals(path.join(ctx.core, 'state'), ctx.vault, defaultLayout());
+  ```
+
+  This exercises the dream's new `readRegistry → approvalsMap → renderDigest` wiring
+  end-to-end and keeps the identity assertion meaningful. (Seed AFTER `setup`'s commit
+  of `profile.md` and BEFORE the dream run; the dream cannot modify `profile.md`
+  — WP-112 freeze — so its bytes still match the seeded hash at step-15.)
+- **New integration assertion — lock "the dream never seeds."** Add a second test:
+  the same `setup()` + dream run but WITHOUT the seed, then assert the written
+  `state/digest.md` exists and does **NOT** contain `Ada, a product designer.` (and
+  contains the identity-exclusion banner — `some identity notes were left out`),
+  proving the unattended dream fails closed and never self-approves identity.
 
 ## Implementation notes & constraints
 
@@ -453,6 +492,9 @@ Nothing else in `validate.js` changes.
       existing record; the registry file is mode 0600.
 - [ ] A dream add of `06-Identity/Profile.md` with a floor-passing frontmatter is
       reverted under the frozen profile (case-insensitive `isInjectedIdentity`).
+- [ ] `dream.test.js` integration: with the registry seeded before the run, the
+      step-15 digest injects the identity (`Ada, a product designer.`); with NO seed,
+      the digest is written but omits the identity and shows the exclusion banner.
 - [ ] `npm test` and `npm run lint` pass.
 
 ## Verification steps (run these; paste output in the PR)
@@ -461,6 +503,7 @@ Nothing else in `validate.js` changes.
 npm test -- --test-name-pattern "identity-approvals"
 npm test -- --test-name-pattern "digest"
 npm test -- --test-name-pattern "dream-validate"
+npm test -- --test-name-pattern "dream-integration"
 node bin/wienerdog.js safety   # unchanged: gates still all blocked
 npm test
 npm run lint

@@ -9,6 +9,8 @@ const { execFileSync } = require('node:child_process');
 
 const dream = require('../../src/cli/dream');
 const { acquireLock } = require('../../src/core/dream/lock');
+const idApprovals = require('../../src/core/identity-approvals');
+const { defaultLayout } = require('../../src/core/layout');
 
 const FAKE_BRAIN = path.resolve(__dirname, '../fixtures/dream/fake-brain.js');
 const INJ_FIXTURE = path.resolve(__dirname, '../fixtures/dream/transcripts/claude-injection.jsonl');
@@ -149,6 +151,11 @@ async function runDream(ctx, argv, extraEnv = {}) {
 
 test('dream-integration: full run commits valid tiers, reverts injection + weak skill, deletes out-of-vault, one revertable commit', async () => {
   const ctx = setup();
+  // A3 hash gate (WP-116): simulate the attended sync's first-time seed so the
+  // dream's registry read finds approved hashes. The dream itself never seeds;
+  // profile.md is freeze-protected (WP-112), so the seeded hash still matches
+  // at the step-15 render.
+  idApprovals.seedApprovals(path.join(ctx.core, 'state'), ctx.vault, defaultLayout());
   const before = commitCount(ctx.vault);
 
   const { output, thrown } = await runDream(ctx, ['--yes']);
@@ -200,6 +207,26 @@ test('dream-integration: full run commits valid tiers, reverts injection + weak 
   git(ctx.vault, ['revert', '--no-edit', sha]);
   assert.equal(fs.existsSync(path.join(ctx.vault, '06-Identity/valid-identity.md')), false);
   assert.equal(git(ctx.vault, ['status', '--porcelain']).trim(), '');
+});
+
+test('dream-integration: without a seeded registry the dream digest omits identity (dream never seeds, fails closed)', async () => {
+  const ctx = setup();
+  // NO seedApprovals here — the registry the dream reads is empty.
+  const { thrown } = await runDream(ctx, ['--yes']);
+  assert.equal(thrown, null, thrown && thrown.message);
+
+  const digest = fs.readFileSync(path.join(ctx.core, 'state', 'digest.md'), 'utf8');
+  assert.ok(!digest.includes('Ada, a product designer.'), 'unapproved identity omitted (fail closed)');
+  assert.ok(
+    digest.includes('some identity notes were left out of your session context'),
+    'the identity-exclusion banner surfaces the omission'
+  );
+  // The dream did not create a registry (it never seeds).
+  assert.equal(
+    fs.existsSync(path.join(ctx.core, 'state', 'identity-approvals.json')),
+    false,
+    'no registry written by the dream'
+  );
 });
 
 test('dream-integration: a second run with no new transcripts makes no commit and no watermark change', async () => {
