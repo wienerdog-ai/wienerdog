@@ -626,3 +626,26 @@ test('dream-integration: a hostile quarantined filename reaches the banner and c
   assert.ok(!digest.includes('INJECTED'), 'no raw filename bytes in the digest');
   assert.ok(!/\n> \[!danger\]/.test(digest), 'the hostile name cannot start its own digest line');
 });
+
+test('dream-integration: --dry-run reports a would-be quarantine but persists neither the ledger nor the digest', async () => {
+  // OWNER-APPROVED amendment (2026-07-17): a preview run must not permanently
+  // mutate state — no transcript-ledger.json write, no digest.md rewrite.
+  const ctx = setup({ withTranscript: false, overCeiling: 'huge' });
+  const before = commitCount(ctx.vault);
+
+  const dry = await runDream(ctx, ['--dry-run']);
+  assert.equal(dry.thrown, null, dry.thrown && dry.thrown.message);
+  assert.match(dry.output, /would quarantine claude\/huge\.jsonl \(over-ceiling\)/);
+  assert.ok(!/quarantined claude/.test(dry.output), 'no definitive "quarantined" line on a preview');
+  assert.equal(commitCount(ctx.vault), before);
+  assert.equal(fs.existsSync(path.join(ctx.core, 'state', 'transcript-ledger.json')), false, 'no ledger write on dry-run');
+  assert.equal(fs.existsSync(path.join(ctx.core, 'state', 'digest.md')), false, 'no digest write on dry-run');
+
+  // The preview consumed nothing: a real run still quarantines + records + banners.
+  const real = await runDream(ctx, ['--yes']);
+  assert.equal(real.thrown, null, real.thrown && real.thrown.message);
+  assert.match(real.output, /quarantined claude\/huge\.jsonl \(over-ceiling\)/);
+  const ledger = readLedgerFile(ctx.core);
+  assert.equal(ledgerRecord(ledger, 'huge.jsonl').outcome, 'quarantined');
+  assert.ok(fs.readFileSync(path.join(ctx.core, 'state', 'digest.md'), 'utf8').includes('huge.jsonl (over-ceiling)'));
+});

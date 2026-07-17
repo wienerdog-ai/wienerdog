@@ -226,20 +226,25 @@ async function run(argv) {
     }
     // Per-quarantine console line: secret-free — SANITIZED folded basename +
     // reason enum only, through the SAME sanitizer as the digest banner
-    // (ledger.displayName; review finding, amended 2026-07-17).
+    // (ledger.displayName; review finding, amended 2026-07-17). A dry-run only
+    // diagnoses ("would quarantine"), mirroring the capacity-wedge carve-out.
     for (const q of sel.newlyQuarantined) {
-      console.log(
-        `wienerdog: dream — quarantined ${q.harness}/${ledgerLib.displayName(q.path)} (${q.reason}); ` +
-          'it will not be retried until it changes.'
-      );
+      const name = `${q.harness}/${ledgerLib.displayName(q.path)} (${q.reason})`;
+      if (dryRun) {
+        console.log(`wienerdog: dream plan (dry-run) — would quarantine ${name}.`);
+      } else {
+        console.log(`wienerdog: dream — quarantined ${name}; it will not be retried until it changes.`);
+      }
     }
 
     // 5b. Record + surface quarantines even on an otherwise-idle run — BEFORE
     //     the entries.length === 0 returns, so a quarantine-only run records
     //     them, shows the banner, and exits 0. Next run the unchanged file is
     //     skip-quarantined: a permanently-broken file must not fail-loud (or
-    //     re-alert) every night.
-    if (sel.newlyQuarantined.length > 0) {
+    //     re-alert) every night. Dry-run-guarded (OWNER-APPROVED 2026-07-17):
+    //     a preview run must not permanently mutate transcript-ledger.json or
+    //     the injected digest.md.
+    if (sel.newlyQuarantined.length > 0 && !dryRun) {
       for (const q of sel.newlyQuarantined) ledger = ledgerLib.recordQuarantined(ledger, q, q.reason);
       ledgerLib.writeLedger(paths.state, ledger);
       regenerateDigest();
