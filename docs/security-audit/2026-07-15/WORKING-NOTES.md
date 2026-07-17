@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-07-17
 
-## Status: A0 and A4 are COMPLETE (2026-07-17)
+## Status: A0, A4, and A3 are COMPLETE (2026-07-17)
 
 Audit action A0 landed as five reviewed work packages, WP-109..WP-113 (specs in
 `docs/specs/done/`): the code-owned safety profile (`src/core/safety-profile.js`,
@@ -21,10 +21,19 @@ test), and all four former parser copies (digest, validator `parseFrontmatter` +
 gate (`!== '---'` / `indexOf(' #')`) returns only `frontmatter.js`. Full suite
 green (891 tests, 0 fail).
 
-Next per the sequence below: **A3** (WP-116 identity trust registry + digest
-hash-gate, WP-117 `memory approve` CLI — specs Ready-able in `docs/specs/`,
-boundaries in **ADR-0021**; the WP-112 case-folding lesson is addressed by
-WP-116's folded path keys).
+Audit action **A3** landed as WP-116 + WP-117, both reviewer-approved (specs in
+`docs/specs/done/`, boundaries in **ADR-0021**): the exact-byte identity trust
+registry (`state/identity-approvals.json`, 0600, folded path keys / byte-exact
+content hashes), the fail-closed digest hash-gate feeding the shared exclusion
+banner, first-time-only seeding at attended `sync` (the dream never seeds), the
+case-insensitive `isInjectedIdentity` freeze predicate (closing the WP-112
+case-folding lesson), and the TTY-only `wienerdog memory approve` ratification
+CLI (grant-model: no `--yes`/env/headless bypass). No capability gate opened —
+`wienerdog safety` still shows all five BLOCKED. Full suite green (918 tests,
+0 fail). Tracked follow-up from review: unify `sync.js`'s private
+`readVaultPath` onto the shared `readScalar` (see ROADMAP note).
+
+Next per the sequence below: **A6** (bounded streaming parser / digest / hooks).
 
 This file is the durable, cross-session context for the security remediation
 work. A session that starts here with no chat history should read this first,
