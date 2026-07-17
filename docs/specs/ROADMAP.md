@@ -132,6 +132,10 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 | [WP-111](WP-111-freeze-external-content-routines.md) | Freeze external-content `skill:` schedules behind the safety profile (A0) | M7 | sonnet | Done | WP-109 |
 | [WP-112](WP-112-freeze-daily-summary-and-identity.md) | Freeze daily-Summary injection + automatic identity activation (A0) | M7 | sonnet | Done | WP-109 |
 | [WP-113](WP-113-a0-threat-boundary-docs.md) | Document the A0 pre-use safety freeze (threat-boundary docs) | M7 | sonnet | Done | WP-109, WP-110, WP-111, WP-112 |
+| [WP-114](WP-114-strict-frontmatter-parser-digest-gate.md) | Strict shared frontmatter parser + close the digest trust-gate fail-open (audit A4) | M7 | opus | Draft | WP-112 |
+| [WP-115](WP-115-unify-frontmatter-consumers.md) | Unify the validator + config frontmatter consumers onto the shared strict parser (audit A4) | M7 | opus | Draft | WP-114 |
+| [WP-116](WP-116-identity-trust-registry-digest-hashgate.md) | Exact-byte identity trust registry + fail-closed digest hash-gate (audit A3) | M7 | opus | Draft | WP-112, WP-114 |
+| [WP-117](WP-117-memory-approve-cli.md) | `wienerdog memory approve` — TTY-only exact-byte identity ratification (audit A3) | M7 | opus | Draft | WP-116 |
 
 > **First-production-night incident (2026-07-04).** WP-038, WP-039 and WP-041 form
 > a serial chain (they edit the shared `run-job.js` / `dream.js` / `validate.js`
@@ -1038,6 +1042,42 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 
 <!-- -->
 
+> **Audit A4 + A3 — the real fixes behind the A0 freezes (2026-07-17).** With A0
+> shipped (WP-109..113), the next audit actions replace two blunt freezes with their
+> real mechanisms. Each action is split into a dependency chain rather than one large
+> WP, so every step has literal verification commands and a tight, adversarially-
+> reviewable Deliverables table. **A4 (shared strict frontmatter parser).** The daily-
+> Summary removal already shipped in WP-112, so A4's remaining scope is the shared
+> parser. Wienerdog reads `key: value` frontmatter with three ad-hoc parsers that
+> disagree on the security field `derived_from_untrusted` — a concrete fail-open lives
+> in the digest, which excludes a note only on the literal string `true` (so `True`,
+> `"true"`, `'true'` are injected). **WP-114** ships the one strict parser
+> (`src/core/frontmatter.js`, typed fail-closed accessors; the convention is recorded
+> in **ADR-0022** — one strict, not-a-YAML, fail-closed parser for security-bearing
+> notes) and migrates the digest's trust gate onto it, closing the fail-open, with a
+> **differential test** proving the
+> digest and the dream validator now interpret identical bytes identically (the
+> audit's "no byte accepted as trusted at commit, interpreted differently by the
+> digest" gate). **WP-115** (depends WP-114) is the structural de-duplication: the
+> validator's `parseFrontmatter` and `config.js`'s `readScalar` route through the one
+> lexer/coercer with no behavior change. **A3 (human-ratified identity memory).**
+> WP-112 froze the dream from writing the four injected identity files; A3 adds the
+> read-side enforcement + the positive evolution path, per the new **ADR-0021**.
+> **WP-116** (depends WP-112, WP-114 — both touch `digest.js`) ships the exact-byte
+> **identity trust registry** (`state/identity-approvals.json`, 0600), gates the
+> digest's identity injection on an exact-byte hash match (fail closed + banner on
+> mismatch), seeds first-time at attended `sync` (the dream never seeds), and hardens
+> `isInjectedIdentity` case-insensitively (closing the APFS `Profile.md` == `profile.md`
+> same-inode bypass from the WP-112 review). Hashing is byte-exact — **no
+> normalization/case-folding of content before hashing** (recorded lesson); only the
+> path key is folded. **WP-117** (depends WP-116) adds `wienerdog memory approve` — the
+> TTY-only, no-`--yes`-bypass ratification verb (the `wienerdog grant` / ADR-0007
+> model) that records a human-approved exact-byte hash, the only way to change an
+> already-seeded identity file. Neither A3 WP opens a capability gate: the WP-112
+> identity-write freeze stays blocked; this is the independent read/approve path.
+
+<!-- -->
+
 ## Dependency graph
 
 ```mermaid
@@ -1174,4 +1214,9 @@ graph LR
   WP110 --> WP113
   WP111 --> WP113
   WP112 --> WP113
+  WP112 --> WP114[WP-114 strict frontmatter parser + close digest trust-gate fail-open — audit A4, ADR-0022]
+  WP114 --> WP115[WP-115 unify validator + config frontmatter consumers — audit A4]
+  WP112 --> WP116[WP-116 exact-byte identity trust registry + fail-closed digest hash-gate — audit A3, ADR-0021]
+  WP114 --> WP116
+  WP116 --> WP117[WP-117 wienerdog memory approve — TTY-only identity ratification — audit A3]
 ```
