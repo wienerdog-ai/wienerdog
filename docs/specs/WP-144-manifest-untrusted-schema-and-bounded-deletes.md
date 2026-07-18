@@ -1,7 +1,7 @@
 ---
 id: WP-144
 title: Treat the install manifest as untrusted — strict per-kind schema, per-entry error isolation, root-bounded deletes
-status: Draft
+status: Ready
 model: opus
 size: M
 depends_on: []
@@ -156,6 +156,13 @@ Add a helper `withinAllowedRoot(targetPath, allowedRoots, localBin)`:
   otherwise treat as out-of-bounds. (core/claudeDir/codexDir need no basename
   filter — the per-kind ownership proofs below already fence those.)
 - Return `true` in-bounds, `false` otherwise.
+
+**Owner walkthrough (2026-07-18): Ready.** The owner ratified the containment
+root-set `{paths.core, paths.claudeDir, paths.codexDir, ~/.local/bin}` (with the
+`~/.local/bin` basename allowlist `{wienerdog, wienerdog.cmd}`) as the complete,
+correct allowed-root set — every manifest-recorded legit target falls inside it,
+and the three-layer design (schema-validate → per-entry try/catch → root-bound)
+stands as written. The fingerprint follow-up remains deferred (above).
 
 Apply this gate in `reverse()` to these kinds ONLY: `file`, `dir`, `symlink`,
 `managed-block`, `settings-entry`, `vendored-tree`, `copied-skill`. When
