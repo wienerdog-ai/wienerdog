@@ -138,14 +138,41 @@ test('dream-brain: a tampered/missing dream skill aborts the build (fail closed,
 });
 
 
-test('dream-brain: spawnBrain runs WIENERDOG_DREAM_CMD from the fresh staging cwd and passes the env', async () => {
+/** Install `fakeScriptPath` as the pinned `name` ('claude'|'codex') in `core`'s
+ *  pin store (WP-154 schema), and return an env fragment that makes the REAL
+ *  dispatch path (resolvePinnedSpawn → verifyPin → verifyExecutable → spawn)
+ *  resolve and run it. Replaces the deleted fake-command env seam (WP-155).
+ *  @param {string} root  a fresh mkdtemp root (used for the bin dir)
+ *  @param {string} core  WIENERDOG_HOME for this test (pin store at <core>/state)
+ *  @param {string} fakeScriptPath  an executable #! script (regular file, +x)
+ *  @param {string} [name='claude']
+ *  @returns {{PATH:string, WIENERDOG_HOME:string}} env fragment to spread into env */
+function pinFakeBrain(root, core, fakeScriptPath, name = 'claude') {
+  // realpath FIRST (macOS /var → /private/var) so commandPath and
+  // dirname(realpath) are stable and the pin's string-equality checks pass.
+  const realRoot = fs.realpathSync(root);
+  const binDir = path.join(realRoot, 'bin');
+  fs.mkdirSync(binDir, { recursive: true });
+  const cmd = path.join(binDir, name);
+  fs.copyFileSync(fakeScriptPath, cmd); // regular file (copy, not symlink)
+  fs.chmodSync(cmd, 0o755);
+  const store = { schema: 1, pins: { [name]: {
+    commandPath: cmd, installDir: binDir, version: 'fake', pinnedAt: new Date().toISOString(),
+  } } };
+  const stateDir = path.join(core, 'state');
+  fs.mkdirSync(stateDir, { recursive: true });
+  fs.writeFileSync(path.join(stateDir, 'exec-pins.json'), JSON.stringify(store), { mode: 0o600 });
+  return { PATH: binDir + path.delimiter + process.env.PATH, WIENERDOG_HOME: core };
+}
+
+test('dream-brain: spawnBrain runs the pinned fake brain from the fresh staging cwd and passes the env', async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-brain-'));
   const core = path.join(root, 'core');
   const marker = path.join(root, 'marker.txt');
   const fakeCmd = path.join(root, 'fake-brain.sh');
   fs.writeFileSync(
     fakeCmd,
-    ['#!/bin/sh', 'printf "%s\\n%s\\n%s\\n" "$WIENERDOG_DREAM_VAULT" "$WIENERDOG_DREAM_SCRATCH" "$(pwd)" > "$MARKER"', 'exit 7', ''].join('\n')
+    ['#!/bin/sh', 'if [ "$1" = "--version" ]; then exit 0; fi', 'printf "%s\\n%s\\n%s\\n" "$WIENERDOG_DREAM_VAULT" "$WIENERDOG_DREAM_SCRATCH" "$(pwd)" > "$MARKER"', 'exit 7', ''].join('\n')
   );
   fs.chmodSync(fakeCmd, 0o755);
 
@@ -158,7 +185,7 @@ test('dream-brain: spawnBrain runs WIENERDOG_DREAM_CMD from the fresh staging cw
     scratchDir,
     date: '2026-07-02',
     model: null,
-    env: { ...process.env, WIENERDOG_DREAM_CMD: fakeCmd, MARKER: marker, WIENERDOG_HOME: core },
+    env: { ...process.env, ...pinFakeBrain(root, core, fakeCmd), MARKER: marker },
   });
 
   const result = await done;
@@ -190,7 +217,7 @@ test('dream-brain: spawnBrain done resolves a stderrTail on nonzero exit', async
   const fakeCmd = path.join(root, 'fake-brain.sh');
   fs.writeFileSync(
     fakeCmd,
-    ['#!/bin/sh', 'echo "brain boom: API drop mid-run" 1>&2', 'exit 4', ''].join('\n')
+    ['#!/bin/sh', 'if [ "$1" = "--version" ]; then exit 0; fi', 'echo "brain boom: API drop mid-run" 1>&2', 'exit 4', ''].join('\n')
   );
   fs.chmodSync(fakeCmd, 0o755);
 
@@ -203,7 +230,7 @@ test('dream-brain: spawnBrain done resolves a stderrTail on nonzero exit', async
     scratchDir,
     date: '2026-07-04',
     model: null,
-    env: { ...process.env, WIENERDOG_DREAM_CMD: fakeCmd, WIENERDOG_HOME: path.join(root, 'core') },
+    env: { ...process.env, ...pinFakeBrain(root, path.join(root, 'core'), fakeCmd) },
   });
 
   const result = await done;
@@ -219,6 +246,7 @@ test('dream-brain: a secret in brain output is redacted in the teed log AND stde
     fakeCmd,
     [
       '#!/bin/sh',
+      'if [ "$1" = "--version" ]; then exit 0; fi',
       'echo "stdout leak sk-ant-abcdefghijklmnopqrstuvwx0123 end"',
       'echo "Traceback: OPENAI_API_KEY=sk-proj-ABCDEF0123456789abcdef" 1>&2',
       'exit 4',
@@ -236,7 +264,7 @@ test('dream-brain: a secret in brain output is redacted in the teed log AND stde
     scratchDir: path.join(root, 'scratch'),
     date: '2026-07-04',
     model: null,
-    env: { ...process.env, WIENERDOG_DREAM_CMD: fakeCmd, WIENERDOG_HOME: path.join(root, 'core') },
+    env: { ...process.env, ...pinFakeBrain(root, path.join(root, 'core'), fakeCmd) },
     logStream,
   });
   const result = await done;
@@ -324,4 +352,35 @@ test('dream-brain: spawnBrain fails safe on pin drift — a fake claude earlier 
     (err) => err instanceof WienerdogError && /wienerdog sync/.test(err.message) && /claude/.test(err.message)
   );
   assert.equal(fs.existsSync(marker), false, 'the planted fake was never executed');
+});
+
+test('dream-brain: a set WIENERDOG_DREAM_CMD has ZERO effect — the pinned brain runs (WP-155)', { skip: process.platform === 'win32' }, async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-brain-noseam-'));
+  const core = path.join(root, 'core');
+  const marker = path.join(root, 'pinned-ran.txt');
+  const evilMarker = path.join(root, 'evil-ran.txt');
+  const fakeCmd = path.join(root, 'fake-brain.sh');
+  fs.writeFileSync(
+    fakeCmd,
+    ['#!/bin/sh', 'if [ "$1" = "--version" ]; then exit 0; fi', 'echo "$0" > "$WD_TEST_MARKER"', 'exit 0', ''].join('\n')
+  );
+  fs.chmodSync(fakeCmd, 0o755);
+  const evil = path.join(root, 'evil.sh');
+  fs.writeFileSync(evil, `#!/bin/sh\necho pwned > "${evilMarker}"\nexit 0\n`);
+  fs.chmodSync(evil, 0o755);
+  const vaultDir = path.join(root, 'vault');
+  fs.mkdirSync(vaultDir);
+
+  const { done } = spawnBrain({
+    vaultDir,
+    scratchDir: path.join(root, 'scratch'),
+    date: '2026-07-18',
+    model: null,
+    // The deleted env seam is set — it must be dead: only the pinned brain runs.
+    env: { ...process.env, ...pinFakeBrain(root, core, fakeCmd), WD_TEST_MARKER: marker, WIENERDOG_DREAM_CMD: evil },
+  });
+  const result = await done;
+  assert.equal(result.code, 0);
+  assert.ok(fs.existsSync(marker), 'the PINNED brain ran');
+  assert.equal(fs.existsSync(evilMarker), false, 'the env-seam fake never executed — the seam is dead');
 });

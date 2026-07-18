@@ -139,39 +139,26 @@ test('routine-runtime: an unmapped skill: job cannot compose (fail closed before
 // --- the A0 gate stays first ---
 
 test('routine-runtime: in production the gate throws BEFORE composing — no staging created', () => {
+  // WP-155 deleted resolveCommand's env seam, so no env save/restore is needed.
   const paths = tempPaths();
-  const savedCmd = process.env.WIENERDOG_RUNJOB_CMD;
-  delete process.env.WIENERDOG_RUNJOB_CMD;
-  try {
-    assert.throws(
-      () => runjob.resolveCommand(paths, { name: 'digest', run: 'skill:wienerdog-weekly-review' }),
-      /disabled in this release/
-    );
-    assert.ok(
-      !fs.existsSync(path.join(paths.state, 'routine-run')),
-      'no staging dir was created — the freeze fired before composition'
-    );
-    assert.ok(
-      !fs.existsSync(path.join(RUNTIME_DIR(paths), 'settings.json')),
-      'no settings profile was written — the freeze fired before composition'
-    );
-  } finally {
-    if (savedCmd === undefined) delete process.env.WIENERDOG_RUNJOB_CMD;
-    else process.env.WIENERDOG_RUNJOB_CMD = savedCmd;
-  }
+  assert.throws(
+    () => runjob.resolveCommand(paths, { name: 'digest', run: 'skill:wienerdog-weekly-review' }),
+    /disabled in this release/
+  );
+  assert.ok(
+    !fs.existsSync(path.join(paths.state, 'routine-run')),
+    'no staging dir was created — the freeze fired before composition'
+  );
+  assert.ok(
+    !fs.existsSync(path.join(RUNTIME_DIR(paths), 'settings.json')),
+    'no settings profile was written — the freeze fired before composition'
+  );
 });
 
 test('routine-runtime: with the test-only allowAll seam, resolveCommand returns the hermetic composition', () => {
   const paths = tempPaths();
-  const savedCmd = process.env.WIENERDOG_RUNJOB_CMD;
-  delete process.env.WIENERDOG_RUNJOB_CMD;
-  try {
-    const r = runjob.resolveCommand(paths, { name: 'weekly', run: 'skill:wienerdog-weekly-review' }, allowAll());
-    assert.equal(r.command, 'claude');
-    assert.equal(r.cwd, path.join(paths.state, 'routine-run', 'weekly-review'));
-    assert.equal(flagValue(r.args, '--setting-sources'), '');
-  } finally {
-    if (savedCmd === undefined) delete process.env.WIENERDOG_RUNJOB_CMD;
-    else process.env.WIENERDOG_RUNJOB_CMD = savedCmd;
-  }
+  const r = runjob.resolveCommand(paths, { name: 'weekly', run: 'skill:wienerdog-weekly-review' }, allowAll());
+  assert.equal(r.command, 'claude');
+  assert.equal(r.cwd, path.join(paths.state, 'routine-run', 'weekly-review'));
+  assert.equal(flagValue(r.args, '--setting-sources'), '');
 });

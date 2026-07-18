@@ -204,20 +204,19 @@ function killProcessTree(pid, platform, seams = {}) {
 }
 
 /**
- * Resolve the child command + args from a job's `run` field. A test may replace
- * the resolved command with WIENERDOG_RUNJOB_CMD (mirrors WP-017's DREAM_CMD).
+ * Resolve the child command + args from a job's `run` field. Reads NO
+ * environment variable (audit A7/F5, WP-155): the old fake-command env seam —
+ * the sole shell:true dispatch in the scheduler — is deleted; tests inject a
+ * replacement via `runJob`'s `opts.resolveCommand` instead.
  * @param {import('../core/paths').WienerdogPaths} paths
  * @param {{name:string, run:string}} job
  * @param {Record<string,string>} [profile] code seam for tests only (see
  *   safety-profile.js); `runJob` never passes one, so production stays frozen.
- * @returns {{command:string, args:string[], shell:boolean, cwd?:string}}
+ * @returns {{command:string, args:string[], shell:false, cwd?:string}}
  *   `cwd` is set only by the hermetic routine composition (the staging dir);
  *   absent → the caller keeps its default (the vault).
  */
 function resolveCommand(paths, job, profile) {
-  const fake = process.env.WIENERDOG_RUNJOB_CMD;
-  if (fake) return { command: fake, args: [], shell: true };
-
   const sep = job.run.indexOf(':');
   const kind = sep === -1 ? job.run : job.run.slice(0, sep);
   const rest = sep === -1 ? '' : job.run.slice(sep + 1);
@@ -453,9 +452,13 @@ function safeResolvePath(input, guard, hopCap = 40) {
  * @param {{sendAlert?: typeof defaultSendAlert, loader?: (argv:string[])=>{status:number},
  *          platform?: NodeJS.Platform,
  *          detectPolicyHooks?: typeof detectPolicyHooks,
+ *          resolveCommand?: typeof resolveCommand,
  *          profile?: Record<string,string>}} [opts] `opts.profile` is the
  *   WP-142 harness code seam (see safety-profile.js): reachable ONLY by a JS
  *   caller — the CLI entry never passes one, so production stays frozen.
+ *   `opts.resolveCommand` (WP-155) is the same idiom: a code seam for tests
+ *   only, replacing the deleted fake-command env seam — `run(argv)` never
+ *   sets it, so production always uses the module resolveCommand.
  * @returns {Promise<void>}
  */
 async function runJob(paths, job, opts = {}) {
@@ -513,7 +516,8 @@ async function runJob(paths, job, opts = {}) {
   // 2. Clean env + command. A hermetic routine composition returns its own
   //    cwd (the fresh staging dir); everything else keeps the vault cwd.
   const env = buildCleanEnv(paths, name, platform);
-  const { command, args, shell, cwd: composedCwd } = resolveCommand(paths, job, opts.profile);
+  const resolveCmd = opts.resolveCommand || resolveCommand;
+  const { command, args, shell, cwd: composedCwd } = resolveCmd(paths, job, opts.profile);
   const spawnCwd = composedCwd || cwd;
 
   // 2b. Managed-policy hook preflight (WP-132, D-POLICY-HOOK): a managed/admin

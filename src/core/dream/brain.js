@@ -158,17 +158,14 @@ function spawnBrain(o) {
     // WIENERDOG_FAKE_TODAY passes through from baseEnv unchanged.
   };
 
-  // WIENERDOG_DREAM_CMD is the test seam: run that executable instead of claude/codex.
-  const fakeCmd = baseEnv.WIENERDOG_DREAM_CMD;
+  // The brain command is resolved ONLY via WP-154's pinned front door — no env
+  // seam (audit A7/F5, WP-155 deleted the fake-command env branch); tests
+  // substitute a brain by pinning their fake in a temp WIENERDOG_HOME.
   const paths = getPaths(baseEnv);
   let command;
   let args;
   let cwd;
-  if (fakeCmd) {
-    command = fakeCmd;
-    args = [];
-    cwd = ensureBrainStaging(paths); // fake brain runs from staging too (it writes via the env vars)
-  } else if (harness === 'codex') {
+  if (harness === 'codex') {
     // A7 (WP-154): the verified pinned ABSOLUTE realpath, never the bare name —
     // a fake planted earlier on the job PATH must never win. A drifted pin
     // THROWS here (fail safe, before any spawn); the run-job watchdog/fail-loud
@@ -198,22 +195,20 @@ function spawnBrain(o) {
 
   // Run evidence (WP-132, audit A1 point 8): record the dream's actual runtime
   // posture (version + exec path + argv + digests + managed-policy state) for
-  // the claude/fake paths — best-effort, never affects the run. The prompt and
+  // the claude path — best-effort, never affects the run. The prompt and
   // skill body are reduced to sha256 inside recordRunEvidence (secret-free).
   // The codex path is A11/P2 (not hermetic under A1) and records nothing here.
   if (harness !== 'codex') {
     try {
       let claudeVersion = 'unknown';
-      if (!fakeCmd) {
-        // ONLY the real (pinned absolute) claude is version-probed — re-invoking
-        // a test fake could repeat its side effects (D-EVIDENCE: version + path, no hash).
-        try {
-          const r = spawnSync(command, ['--version'], { env: childEnv, timeout: 10_000, encoding: 'utf8' });
-          const out = (r.stdout || '').trim().slice(0, 200);
-          if (r.status === 0 && out) claudeVersion = out;
-        } catch {
-          /* best-effort */
-        }
+      // The pinned absolute claude is version-probed for the evidence record
+      // (D-EVIDENCE: version + path, no hash).
+      try {
+        const r = spawnSync(command, ['--version'], { env: childEnv, timeout: 10_000, encoding: 'utf8' });
+        const out = (r.stdout || '').trim().slice(0, 200);
+        if (r.status === 0 && out) claudeVersion = out;
+      } catch {
+        /* best-effort */
       }
       const settingsIdx = args.indexOf('--settings');
       recordRunEvidence(paths, {
@@ -227,7 +222,7 @@ function spawnBrain(o) {
         mcpDigest: 'none', // dream: --strict-mcp-config with no --mcp-config
         policyHooks: detectPolicyHooks(paths, baseEnv),
         // WP-135: the pre-dream self-check result (present when dream.js ran the
-        // probe; absent under the fake-brain/skip seams).
+        // probe; absent when a test skipped it via dream.run's opts seam).
         ...(containmentProbe ? { containmentProbe } : {}),
       });
     } catch {

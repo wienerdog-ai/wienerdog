@@ -24,10 +24,8 @@ const ENV_KEYS = [
   'CLAUDE_CONFIG_DIR',
   'CODEX_HOME',
   'WIENERDOG_FAKE_TODAY',
-  'WIENERDOG_DREAM_CMD',
   'WIENERDOG_FAKE_BRAIN_MODE',
-  'WIENERDOG_CONTAINMENT_PROBE_CMD',
-  'WIENERDOG_SKIP_CONTAINMENT_PROBE',
+  'PATH', // pinFakeBrain prepends the fake-brain bin dir (WP-155)
 ];
 
 /** @param {string} cwd @param {string[]} args */
@@ -133,14 +131,43 @@ function setup(opts = {}) {
   return { root, home, core, vault, claude, codex };
 }
 
+/** Install `fakeScriptPath` as the pinned `name` ('claude'|'codex') in `core`'s
+ *  pin store (WP-154 schema), and return an env fragment that makes the REAL
+ *  dispatch path (resolvePinnedSpawn → verifyPin → verifyExecutable → spawn)
+ *  resolve and run it. Replaces the deleted fake-command env seam (WP-155).
+ *  @param {string} root @param {string} core @param {string} fakeScriptPath
+ *  @param {string} [name='claude']
+ *  @returns {{PATH:string, WIENERDOG_HOME:string}} env fragment to spread into env */
+function pinFakeBrain(root, core, fakeScriptPath, name = 'claude') {
+  // realpath FIRST (macOS /var → /private/var) so commandPath and
+  // dirname(realpath) are stable and the pin's string-equality checks pass.
+  const realRoot = fs.realpathSync(root);
+  const binDir = path.join(realRoot, 'bin');
+  fs.mkdirSync(binDir, { recursive: true });
+  const cmd = path.join(binDir, name);
+  fs.copyFileSync(fakeScriptPath, cmd); // regular file (copy, not symlink)
+  fs.chmodSync(cmd, 0o755);
+  const store = { schema: 1, pins: { [name]: {
+    commandPath: cmd, installDir: binDir, version: 'fake', pinnedAt: new Date().toISOString(),
+  } } };
+  const stateDir = path.join(core, 'state');
+  fs.mkdirSync(stateDir, { recursive: true });
+  fs.writeFileSync(path.join(stateDir, 'exec-pins.json'), JSON.stringify(store), { mode: 0o600 });
+  return { PATH: binDir + path.delimiter + process.env.PATH, WIENERDOG_HOME: core };
+}
+
 /**
  * Apply env, run `dream`, capture stdout/stderr text and any thrown error, then
- * restore env — all in-process (no real claude, no network).
+ * restore env — all in-process (no real claude, no network). The fake brain is
+ * installed as the PINNED claude (WP-155 — the env seam is gone), and the probe
+ * is skipped by default via dream.run's JS-only opts seam (a fake brain cannot
+ * satisfy a live probe); probe cases pass {skipContainmentProbe:false, probeCmd}.
  * @param {ReturnType<typeof setup>} ctx
  * @param {string[]} argv
  * @param {Record<string,string>} [extraEnv]
+ * @param {{skipContainmentProbe?:boolean, probeCmd?:string}} [opts]
  */
-async function runDream(ctx, argv, extraEnv = {}) {
+async function runDream(ctx, argv, extraEnv = {}, opts = {}) {
   const saved = {};
   for (const k of ENV_KEYS) saved[k] = process.env[k];
   Object.assign(process.env, {
@@ -150,7 +177,7 @@ async function runDream(ctx, argv, extraEnv = {}) {
     CLAUDE_CONFIG_DIR: ctx.claude,
     CODEX_HOME: ctx.codex,
     WIENERDOG_FAKE_TODAY: DATE,
-    WIENERDOG_DREAM_CMD: FAKE_BRAIN,
+    ...pinFakeBrain(ctx.root, ctx.core, FAKE_BRAIN),
     ...extraEnv,
   });
   if (extraEnv.WIENERDOG_FAKE_BRAIN_MODE === undefined) delete process.env.WIENERDOG_FAKE_BRAIN_MODE;
@@ -162,7 +189,7 @@ async function runDream(ctx, argv, extraEnv = {}) {
   console.warn = (...a) => logs.push(a.join(' '));
   let thrown = null;
   try {
-    await dream.run(argv);
+    await dream.run(argv, { skipContainmentProbe: true, ...opts });
   } catch (e) {
     thrown = e;
   } finally {
@@ -749,11 +776,12 @@ test('dream-integration: a probe FAIL halts the dream — no brain, no precommit
   writeFile(ctx.vault, '00-Inbox/pending.md', 'uncommitted user edit\n');
 
   const failFake = writeProbeFake(ctx.root, 'fail');
-  // WIENERDOG_DREAM_CMD:'' makes the probe run (guard is falsy) while never
-  // reaching a real brain — the probe FAIL throws first.
-  const { thrown } = await runDream(ctx, ['--yes'], {
-    WIENERDOG_DREAM_CMD: '',
-    WIENERDOG_CONTAINMENT_PROBE_CMD: failFake,
+  // The probe WANTS to run here: opt out of runDream's default skip and inject
+  // the failing probe fake via the JS-only opts seam. The probe FAIL throws at
+  // step 8b, before spawnBrain — the pinned fake brain is never reached.
+  const { thrown } = await runDream(ctx, ['--yes'], {}, {
+    skipContainmentProbe: false,
+    probeCmd: failFake,
   });
   assert.ok(thrown, 'the dream must halt');
   assert.match(thrown.message, /containment self-check fail/i);
@@ -769,65 +797,48 @@ test('dream-integration: a probe INCONCLUSIVE halts the dream fail-closed (WP-13
   idApprovals.seedApprovals(path.join(ctx.core, 'state'), ctx.vault, defaultLayout());
   const before = commitCount(ctx.vault);
   const garbageFake = writeProbeFake(ctx.root, 'garbage');
-  const { thrown } = await runDream(ctx, ['--yes'], {
-    WIENERDOG_DREAM_CMD: '',
-    WIENERDOG_CONTAINMENT_PROBE_CMD: garbageFake,
+  const { thrown } = await runDream(ctx, ['--yes'], {}, {
+    skipContainmentProbe: false,
+    probeCmd: garbageFake,
   });
   assert.ok(thrown);
   assert.match(thrown.message, /containment self-check inconclusive/i);
   assert.equal(commitCount(ctx.vault), before, 'no commit on an unconfirmable probe');
 });
 
-test('dream-integration: the fake-brain seam SKIPS the probe entirely (WP-135)', async () => {
+test('dream-integration: opts.skipContainmentProbe skips the probe — the JS-only seam, no env var (WP-135/WP-155)', async () => {
   const ctx = setup();
   idApprovals.seedApprovals(path.join(ctx.core, 'state'), ctx.vault, defaultLayout());
   const before = commitCount(ctx.vault);
-  // A fail-probe fake is present, but WIENERDOG_DREAM_CMD (the fake brain) is set,
-  // so the probe is skipped and the dream runs to a normal commit.
+  // A failing probe fake is INJECTED, but the opts skip suppresses the probe
+  // entirely — the dream commits because the probe never ran. (This is the
+  // re-spec of the deleted env-var skip: only a JS caller can do this.)
   const failFake = writeProbeFake(ctx.root, 'fail');
-  const { thrown } = await runDream(ctx, ['--yes'], { WIENERDOG_CONTAINMENT_PROBE_CMD: failFake });
-  assert.equal(thrown, null, thrown && thrown.message);
-  assert.equal(commitCount(ctx.vault), before + 1, 'the dream committed — the probe was skipped');
-});
-
-test('dream-integration: WIENERDOG_SKIP_CONTAINMENT_PROBE=1 skips the probe (WP-135)', async () => {
-  const ctx = setup();
-  idApprovals.seedApprovals(path.join(ctx.core, 'state'), ctx.vault, defaultLayout());
-  const before = commitCount(ctx.vault);
-  const failFake = writeProbeFake(ctx.root, 'fail');
-  const { thrown } = await runDream(ctx, ['--yes'], {
-    WIENERDOG_CONTAINMENT_PROBE_CMD: failFake,
-    WIENERDOG_SKIP_CONTAINMENT_PROBE: '1',
+  const { thrown } = await runDream(ctx, ['--yes'], {}, {
+    skipContainmentProbe: true,
+    probeCmd: failFake,
   });
   assert.equal(thrown, null, thrown && thrown.message);
-  assert.equal(commitCount(ctx.vault), before + 1);
+  assert.equal(commitCount(ctx.vault), before + 1, 'the dream committed — the probe never ran');
 });
 
 test('dream-integration: a passing probe result is recorded in the dream run evidence (WP-135)', async () => {
   // Drive spawnBrain directly with a containmentProbe option (the dream.js →
   // spawnBrain threading), using the fake brain so no real claude is spawned.
   const ctx = setup();
-  const savedCmd = process.env.WIENERDOG_DREAM_CMD;
-  const savedHome = process.env.WIENERDOG_HOME;
-  try {
-    const { done } = spawnBrain({
-      vaultDir: ctx.vault,
-      scratchDir: path.join(ctx.core, 'state', 'dream-scratch'),
-      date: DATE,
-      model: null,
-      env: { ...process.env, WIENERDOG_DREAM_CMD: FAKE_BRAIN, WIENERDOG_HOME: ctx.core },
-      containmentProbe: { outcome: 'pass', claudeVersion: '9.9.9 (Fake Claude)' },
-    });
-    await done;
-    const rec = JSON.parse(
-      fs.readFileSync(path.join(ctx.core, 'state', EVIDENCE_FILE), 'utf8').trim().split('\n').pop()
-    );
-    assert.equal(rec.job, 'dream');
-    assert.deepEqual(rec.containmentProbe, { outcome: 'pass', claudeVersion: '9.9.9 (Fake Claude)' });
-  } finally {
-    if (savedCmd === undefined) delete process.env.WIENERDOG_DREAM_CMD;
-    else process.env.WIENERDOG_DREAM_CMD = savedCmd;
-    if (savedHome === undefined) delete process.env.WIENERDOG_HOME;
-    else process.env.WIENERDOG_HOME = savedHome;
-  }
+  const { done } = spawnBrain({
+    vaultDir: ctx.vault,
+    scratchDir: path.join(ctx.core, 'state', 'dream-scratch'),
+    date: DATE,
+    model: null,
+    // WP-155: the fake brain arrives via the pinned front door, not an env seam.
+    env: { ...process.env, ...pinFakeBrain(ctx.root, ctx.core, FAKE_BRAIN), WIENERDOG_FAKE_TODAY: DATE },
+    containmentProbe: { outcome: 'pass', claudeVersion: '9.9.9 (Fake Claude)' },
+  });
+  await done;
+  const rec = JSON.parse(
+    fs.readFileSync(path.join(ctx.core, 'state', EVIDENCE_FILE), 'utf8').trim().split('\n').pop()
+  );
+  assert.equal(rec.job, 'dream');
+  assert.deepEqual(rec.containmentProbe, { outcome: 'pass', claudeVersion: '9.9.9 (Fake Claude)' });
 });

@@ -1,7 +1,7 @@
 ---
 id: WP-155
 title: Delete the test-exec environment seams from production dispatch (DI + pinned fakes); keep every dispatch shell:false
-status: Ready
+status: In-Review
 model: opus
 size: M
 depends_on: [WP-154]

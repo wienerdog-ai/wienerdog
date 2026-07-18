@@ -91,7 +91,7 @@ function writeScript(dir, name, lines) {
  *  @param {Record<string,string|undefined>} envOverrides
  *  @param {string[]} argv @param {object} opts */
 async function withRun(env, envOverrides, argv, opts) {
-  const keys = ['HOME', 'WIENERDOG_HOME', 'WIENERDOG_RUNJOB_CMD', 'WIENERDOG_RUNJOB_TIMEOUT_MS', 'WIENERDOG_SECRET_TEST'];
+  const keys = ['HOME', 'WIENERDOG_HOME', 'WIENERDOG_RUNJOB_TIMEOUT_MS', 'WIENERDOG_SECRET_TEST'];
   const saved = {};
   for (const k of keys) saved[k] = process.env[k];
   const all = { HOME: env.HOME, WIENERDOG_HOME: env.WIENERDOG_HOME, ...envOverrides };
@@ -110,6 +110,10 @@ async function withRun(env, envOverrides, argv, opts) {
 }
 
 const noopLoader = () => ({ status: 0 });
+
+/** WP-155: the JS-only fake-command seam (replaces the deleted env seam) —
+ *  injected as runJob's opts.resolveCommand; always shell:false. */
+const fakeResolve = (script) => () => ({ command: script, args: [], shell: false });
 
 // -------------------------------------------------------------------------
 // buildCleanEnv (pure)
@@ -318,38 +322,48 @@ test('scheduler-runjob: killProcessTree never throws when its seam throws (child
 
 test('scheduler-runjob: resolveCommand maps builtin:dream, skill:*, and rejects unknown', () => {
   const { paths } = setup();
-  const savedCmd = process.env.WIENERDOG_RUNJOB_CMD;
-  delete process.env.WIENERDOG_RUNJOB_CMD;
+  const d = runjob.resolveCommand(paths, { name: 'dream', run: 'builtin:dream' });
+  assert.deepEqual(d.args.slice(1), ['dream', '--yes']);
+  // builtin:dream targets the stable vendored app/current bin (ADR-0013).
+  assert.equal(d.args[0], path.join(paths.core, 'app', 'current', 'bin', 'wienerdog.js'));
+  assert.equal(d.shell, false, 'every resolveCommand path is shell:false (WP-155)');
+  // WP-131: the skill: branch (gate seam allowing) composes the HERMETIC
+  // routine run — never a bare `claude -p /<skill>`. weekly-review is
+  // mcp:'empty' so it composes; the broker routines fail closed until A2.
+  const s = runjob.resolveCommand(paths, { name: 'x', run: 'skill:wienerdog-weekly-review' }, allowAll());
+  assert.equal(s.command, 'claude');
+  assert.equal(s.args[0], '-p');
+  assert.equal(s.args[1], '/wienerdog-weekly-review');
+  assert.ok(s.args.includes('--tools'), 'hermetic argv restricts built-ins');
+  assert.ok(s.cwd.endsWith(path.join('routine-run', 'weekly-review')), 'spawn cwd is the staging dir');
+  assert.equal(s.shell, false, 'skill composition is shell:false too');
+  // Since WP-141 the composition WRITES the per-routine broker config, so a
+  // broker routine composes too — with exactly one --mcp-config.
+  const b = runjob.resolveCommand(paths, { name: 'x', run: 'skill:wienerdog-daily-digest' }, allowAll());
+  assert.equal(b.args.filter((a) => a === '--mcp-config').length, 1);
+  assert.throws(() => runjob.resolveCommand(paths, { name: 'x', run: 'builtin:frobnicate' }), /unknown builtin/);
+  assert.throws(() => runjob.resolveCommand(paths, { name: 'x', run: 'weird:thing' }), /unknown job run kind/);
+  // A0 pre-use freeze (WP-109/111): without a profile, the `skill:` branch is
+  // refused BEFORE returning the `claude` argv — a hand-edited config.yaml
+  // `skill:` job cannot spawn a model.
+  assert.throws(
+    () => runjob.resolveCommand(paths, { name: 'x', run: 'skill:wienerdog-daily-digest' }),
+    /disabled in this release/
+  );
+});
+
+test('scheduler-runjob: a set WIENERDOG_RUNJOB_CMD env var has ZERO effect — the seam no longer exists (WP-155)', () => {
+  const { paths } = setup();
+  const saved = process.env.WIENERDOG_RUNJOB_CMD;
+  process.env.WIENERDOG_RUNJOB_CMD = '/bin/echo';
   try {
     const d = runjob.resolveCommand(paths, { name: 'dream', run: 'builtin:dream' });
-    assert.deepEqual(d.args.slice(1), ['dream', '--yes']);
-    // builtin:dream targets the stable vendored app/current bin (ADR-0013).
+    assert.notEqual(d.command, '/bin/echo', 'the env var is ignored — resolveCommand reads no env');
     assert.equal(d.args[0], path.join(paths.core, 'app', 'current', 'bin', 'wienerdog.js'));
-    // WP-131: the skill: branch (gate seam allowing) composes the HERMETIC
-    // routine run — never a bare `claude -p /<skill>`. weekly-review is
-    // mcp:'empty' so it composes; the broker routines fail closed until A2.
-    const s = runjob.resolveCommand(paths, { name: 'x', run: 'skill:wienerdog-weekly-review' }, allowAll());
-    assert.equal(s.command, 'claude');
-    assert.equal(s.args[0], '-p');
-    assert.equal(s.args[1], '/wienerdog-weekly-review');
-    assert.ok(s.args.includes('--tools'), 'hermetic argv restricts built-ins');
-    assert.ok(s.cwd.endsWith(path.join('routine-run', 'weekly-review')), 'spawn cwd is the staging dir');
-    // Since WP-141 the composition WRITES the per-routine broker config, so a
-    // broker routine composes too — with exactly one --mcp-config.
-    const b = runjob.resolveCommand(paths, { name: 'x', run: 'skill:wienerdog-daily-digest' }, allowAll());
-    assert.equal(b.args.filter((a) => a === '--mcp-config').length, 1);
-    assert.throws(() => runjob.resolveCommand(paths, { name: 'x', run: 'builtin:frobnicate' }), /unknown builtin/);
-    assert.throws(() => runjob.resolveCommand(paths, { name: 'x', run: 'weird:thing' }), /unknown job run kind/);
-    // A0 pre-use freeze (WP-109/111): without a profile, the `skill:` branch is
-    // refused BEFORE returning the `claude` argv — a hand-edited config.yaml
-    // `skill:` job cannot spawn a model.
-    assert.throws(
-      () => runjob.resolveCommand(paths, { name: 'x', run: 'skill:wienerdog-daily-digest' }),
-      /disabled in this release/
-    );
+    assert.equal(d.shell, false, 'no shell:true dispatch exists in the scheduler path');
   } finally {
-    if (savedCmd === undefined) delete process.env.WIENERDOG_RUNJOB_CMD;
-    else process.env.WIENERDOG_RUNJOB_CMD = savedCmd;
+    if (saved === undefined) delete process.env.WIENERDOG_RUNJOB_CMD;
+    else process.env.WIENERDOG_RUNJOB_CMD = saved;
   }
 });
 
@@ -367,7 +381,8 @@ test('scheduler-runjob: a successful job writes last_success, tees a log, exits 
     'exit 0',
   ]);
 
-  await withRun(env, { WIENERDOG_RUNJOB_CMD: fake, WIENERDOG_SECRET_TEST: 'leak' }, ['dream'], {
+  await withRun(env, { WIENERDOG_SECRET_TEST: 'leak' }, ['dream'], {
+    resolveCommand: fakeResolve(fake),
     loader: noopLoader,
   });
 
@@ -399,7 +414,7 @@ test('scheduler-runjob: a non-zero exit records error, fails loud, throws', asyn
   const sendAlert = (_p, _n, subject) => (alerts.push(subject), { status: 0 });
 
   await assert.rejects(
-    withRun(env, { WIENERDOG_RUNJOB_CMD: fake }, ['dream'], { sendAlert, loader: noopLoader }),
+    withRun(env, {}, ['dream'], { resolveCommand: fakeResolve(fake), sendAlert, loader: noopLoader }),
     /exited 3/
   );
 
@@ -422,7 +437,7 @@ test('scheduler-runjob: the fail-loud email body carries NO raw log tail — cod
   const sendAlert = (_p, _n, _subject, body) => (bodies.push(body), { status: 0 });
 
   await assert.rejects(
-    withRun(env, { WIENERDOG_RUNJOB_CMD: fake }, ['dream'], { sendAlert, loader: noopLoader }),
+    withRun(env, {}, ['dream'], { resolveCommand: fakeResolve(fake), sendAlert, loader: noopLoader }),
     /exited 3/
   );
 
@@ -444,7 +459,7 @@ test('scheduler-runjob: the run-job log tee redacts a secret in child output (WP
   ]);
   const sendAlert = () => ({ status: 0 });
 
-  await withRun(env, { WIENERDOG_RUNJOB_CMD: fake }, ['dream'], { sendAlert, loader: noopLoader });
+  await withRun(env, {}, ['dream'], { resolveCommand: fakeResolve(fake), sendAlert, loader: noopLoader });
 
   const logDir = path.join(paths.logs, 'dream');
   const logs = fs.readdirSync(logDir).filter((f) => f.endsWith('.log'));
@@ -471,7 +486,8 @@ test('scheduler-runjob: a hanging job hits the watchdog, kills the tree, records
   const sendAlert = () => ({ status: 0 });
 
   await assert.rejects(
-    withRun(env, { WIENERDOG_RUNJOB_CMD: fake, WIENERDOG_RUNJOB_TIMEOUT_MS: '2000' }, ['dream'], {
+    withRun(env, { WIENERDOG_RUNJOB_TIMEOUT_MS: '2000' }, ['dream'], {
+      resolveCommand: fakeResolve(fake),
       sendAlert,
       loader: noopLoader,
     }),
@@ -910,7 +926,8 @@ test(
   jobsLib.saveJob(paths, { name: 'dream', at: '03:30', run: 'builtin:dream', timeoutMinutes: 20 });
   const fake = writeScript(root, 'ok.sh', ['#!/bin/sh', 'exit 0']);
 
-  await withRun(env, { WIENERDOG_RUNJOB_CMD: fake }, ['dream'], {
+  await withRun(env, {}, ['dream'], {
+    resolveCommand: fakeResolve(fake),
     platform: 'darwin',
     sendAlert: () => ({ status: 0 }),
     loader: noopLoader,
@@ -958,7 +975,7 @@ test('scheduler-runjob: a failing run appends exactly one alert; a later success
   // 1. A failing run appends exactly one alert (and still fails loud + throws).
   const fail = writeScript(root, 'fail.sh', ['#!/bin/sh', 'exit 3']);
   await assert.rejects(
-    withRun(env, { WIENERDOG_RUNJOB_CMD: fail }, ['dream'], { sendAlert: () => ({ status: 0 }), loader: noopLoader }),
+    withRun(env, {}, ['dream'], { resolveCommand: fakeResolve(fail), sendAlert: () => ({ status: 0 }), loader: noopLoader }),
     /exited 3/
   );
   const alerts = readAlerts(paths);
@@ -967,7 +984,7 @@ test('scheduler-runjob: a failing run appends exactly one alert; a later success
 
   // 2. A subsequent successful run of the same job clears its alerts.
   const ok = writeScript(root, 'ok.sh', ['#!/bin/sh', 'exit 0']);
-  await withRun(env, { WIENERDOG_RUNJOB_CMD: ok }, ['dream'], { sendAlert: () => ({ status: 0 }), loader: noopLoader });
+  await withRun(env, {}, ['dream'], { resolveCommand: fakeResolve(ok), sendAlert: () => ({ status: 0 }), loader: noopLoader });
   assert.deepEqual(readAlerts(paths), [], 'success cleared the alert');
   assert.ok(!fs.existsSync(path.join(paths.state, ALERTS_FILE)), 'alerts.jsonl removed when empty');
 });
@@ -1027,7 +1044,8 @@ test('scheduler-runjob: --catch-up runs overdue jobs, skips fresh ones, updates 
   jobsLib.writeScheduleState(paths, 'b', { last_success: todayAfterFire.toISOString(), last_status: 'ok' });
 
   const fake = writeScript(root, 'ok.sh', ['#!/bin/sh', 'exit 0']);
-  await withRun(env, { WIENERDOG_RUNJOB_CMD: fake }, ['--catch-up'], {
+  await withRun(env, {}, ['--catch-up'], {
+    resolveCommand: fakeResolve(fake),
     now,
     loader: noopLoader,
     sendAlert: () => ({ status: 0 }),
@@ -1050,7 +1068,8 @@ test('scheduler-runjob: --catch-up does not abort the batch on a single job fail
   const fake = writeScript(root, 'fail.sh', ['#!/bin/sh', 'exit 5']);
 
   // catchUp must resolve (not throw) even though the job fails.
-  await withRun(env, { WIENERDOG_RUNJOB_CMD: fake }, ['--catch-up'], {
+  await withRun(env, {}, ['--catch-up'], {
+    resolveCommand: fakeResolve(fake),
     now,
     loader: noopLoader,
     sendAlert: () => ({ status: 0 }),
@@ -1111,7 +1130,8 @@ test('scheduler-runjob: managed policy hooks present → warns, records evidence
   const detect = () => ({ present: true, sources: ['/etc/claude-code/managed-settings.json'] });
 
   // No throw, no error watermark — the run PROCEEDS to a normal success.
-  await withRun(env, { WIENERDOG_RUNJOB_CMD: fake }, ['weekly'], {
+  await withRun(env, {}, ['weekly'], {
+    resolveCommand: fakeResolve(fake),
     loader: noopLoader,
     detectPolicyHooks: detect,
     sendAlert: () => ({ status: 0 }),
@@ -1142,7 +1162,8 @@ test('scheduler-runjob: the managed-hook warning lands on the durable alert chan
   const detect = () => ({ present: true, sources: ['/x/managed-settings.json'] });
 
   await assert.rejects(
-    withRun(env, { WIENERDOG_RUNJOB_CMD: fake }, ['weekly'], {
+    withRun(env, {}, ['weekly'], {
+      resolveCommand: fakeResolve(fake),
       loader: noopLoader,
       detectPolicyHooks: detect,
       sendAlert: () => ({ status: 0 }),
@@ -1162,7 +1183,8 @@ test('scheduler-runjob: no managed hooks → no warning, evidence still recorded
   const detect = () => ({ present: false, sources: [] });
 
   await assert.rejects(
-    withRun(env, { WIENERDOG_RUNJOB_CMD: fake }, ['weekly'], {
+    withRun(env, {}, ['weekly'], {
+      resolveCommand: fakeResolve(fake),
       loader: noopLoader,
       detectPolicyHooks: detect,
       sendAlert: () => ({ status: 0 }),
@@ -1181,7 +1203,8 @@ test('scheduler-runjob: builtin:dream under run-job records no duplicate evidenc
   jobsLib.saveJob(paths, { name: 'dream', at: '03:30', run: 'builtin:dream', timeoutMinutes: 20 });
   const fake = writeScript(root, 'ok.sh', ['#!/bin/sh', 'exit 0']);
 
-  await withRun(env, { WIENERDOG_RUNJOB_CMD: fake }, ['dream'], {
+  await withRun(env, {}, ['dream'], {
+    resolveCommand: fakeResolve(fake),
     loader: noopLoader,
     detectPolicyHooks: () => ({ present: false, sources: [] }),
   });

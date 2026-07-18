@@ -148,9 +148,16 @@ async function runBrainWithWatchdog(o) {
  * Exit 1 = expected failure (WienerdogError): no vault, dirty tree, brain
  *          failure/timeout, git error.
  * @param {string[]} argv
+ * @param {{skipContainmentProbe?:boolean, probeCmd?:string}} [opts]
+ *   TEST-ONLY (WP-155, same idiom as run-job's opts): reachable only by a JS
+ *   caller — bin/wienerdog.js calls run(rest) with argv only, so production
+ *   sees opts = {} and ALWAYS runs the probe against the WP-154 pinned claude.
+ *   skipContainmentProbe: skip the pre-dream containment self-check (a fake
+ *   brain cannot satisfy a live probe). probeCmd: forwarded to
+ *   runContainmentProbe's opts.probeCmd DI seam. No env var can do either.
  * @returns {Promise<void>}
  */
-async function run(argv) {
+async function run(argv, opts = {}) {
   const dryRun = argv.includes('--dry-run');
 
   // 1. Resolve config + date.
@@ -298,16 +305,18 @@ async function run(argv) {
 
     // 8b. PRE-DREAM CONTAINMENT SELF-CHECK (WP-135, ADR-0025 Amendment 2). Only
     //     reached when a real brain is about to spawn (past nothing-to-dream +
-    //     dry-run + capacity-wedge) — never on a fast path (cost). Skipped under
-    //     the fake-brain seam so `npm test` never spends quota / needs live
-    //     Claude. Unlike the managed-hook WARNING (WP-132, trusted admin), a
-    //     broken/unproven hermetic runtime IS an attacker-reachable threat, so a
-    //     fail OR inconclusive HALTS the dream fail-closed: no brain, no
-    //     precommit, a durable alert (run-job's fail-loud records it on the
-    //     scheduled path; the manual path prints it and exits 1).
+    //     dry-run + capacity-wedge) — never on a fast path (cost). Skippable
+    //     ONLY via the JS-only opts seam (WP-155) — tests skip it because a
+    //     fake brain cannot satisfy a live probe; production passes no opts, so
+    //     no env var can disable this check. Unlike the managed-hook WARNING
+    //     (WP-132, trusted admin), a broken/unproven hermetic runtime IS an
+    //     attacker-reachable threat, so a fail OR inconclusive HALTS the dream
+    //     fail-closed: no brain, no precommit, a durable alert (run-job's
+    //     fail-loud records it on the scheduled path; the manual path prints it
+    //     and exits 1).
     let containmentProbe = null;
-    if (!process.env.WIENERDOG_DREAM_CMD && process.env.WIENERDOG_SKIP_CONTAINMENT_PROBE !== '1') {
-      containmentProbe = runContainmentProbe(paths, { model: cfg.model, env: process.env });
+    if (!opts.skipContainmentProbe) {
+      containmentProbe = runContainmentProbe(paths, { model: cfg.model, env: process.env, probeCmd: opts.probeCmd });
       if (containmentProbe.outcome !== 'pass') {
         throw new WienerdogError(
           `dream halted: pre-dream containment self-check ${containmentProbe.outcome} on claude ` +

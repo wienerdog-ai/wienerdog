@@ -149,12 +149,9 @@ function runContainmentProbe(paths, opts = {}) {
     // be probe-spawned. Resolved INSIDE the try: resolvePinnedSpawn THROWS on
     // drift, and the probe must never throw — the catch below maps it to an
     // 'inconclusive' ProbeResult, which the caller treats as fail-closed.
-    // opts.probeCmd is the unit-test seam; the WIENERDOG_CONTAINMENT_PROBE_CMD
-    // env seam stays until WP-155 removes it.
-    const command =
-      opts.probeCmd ||
-      env.WIENERDOG_CONTAINMENT_PROBE_CMD ||
-      resolvePinnedSpawn('claude', paths, env, opts.platform || process.platform);
+    // opts.probeCmd is the JS-only test seam (WP-155 deleted the env seam:
+    // nothing here reads any env var to choose or skip the spawn).
+    const command = opts.probeCmd || resolvePinnedSpawn('claude', paths, env, opts.platform || process.platform);
 
     workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-probe-'));
     const stagingDir = path.join(workspace, 'staging'); // the cwd + writable root

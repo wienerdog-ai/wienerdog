@@ -25,8 +25,8 @@ const ENV_KEYS = [
   'CLAUDE_CONFIG_DIR',
   'CODEX_HOME',
   'WIENERDOG_FAKE_TODAY',
-  'WIENERDOG_DREAM_CMD',
   'WIENERDOG_LOADER_NOOP',
+  'PATH', // the fake claude's ~/.local/bin dir is prepended (WP-155)
 ];
 
 /** @param {string} cwd @param {string[]} args */
@@ -70,6 +70,17 @@ test('adopt-e2e: init → adopt → sync → dream through mapped tiers, one rev
     fs.mkdirSync(projDir, { recursive: true });
     fs.copyFileSync(INJ_FIXTURE, path.join(projDir, 'inj.jsonl'));
 
+    // 1b. WP-155: the env seam is gone — install the fake brain LEGITIMATELY at
+    //     <home>/.local/bin/claude, the dir the job clean PATH front-loads, so
+    //     sync's createPins (WP-154) pins it. The same dir is prepended to
+    //     process.env.PATH so the in-process dream's resolvePinnedSpawn (which
+    //     resolves on process.env.PATH) hits the SAME command path — pin-time
+    //     and spawn-time resolution must agree or the dream fails safe.
+    const localBin = path.join(home, '.local', 'bin');
+    fs.mkdirSync(localBin, { recursive: true });
+    fs.copyFileSync(FAKE_BRAIN, path.join(localBin, 'claude'));
+    fs.chmodSync(path.join(localBin, 'claude'), 0o755);
+
     // 2. Apply env.
     Object.assign(process.env, {
       HOME: home,
@@ -78,7 +89,7 @@ test('adopt-e2e: init → adopt → sync → dream through mapped tiers, one rev
       CLAUDE_CONFIG_DIR: claude,
       CODEX_HOME: codex,
       WIENERDOG_FAKE_TODAY: DATE,
-      WIENERDOG_DREAM_CMD: FAKE_BRAIN,
+      PATH: localBin + path.delimiter + process.env.PATH,
       // WP-044: adopt now auto-schedules the nightly dream. Neutralize the real
       // OS scheduler so this test never spawns launchctl/systemctl (HOME is temp).
       WIENERDOG_LOADER_NOOP: '1',
@@ -157,9 +168,11 @@ test('adopt-e2e: init → adopt → sync → dream through mapped tiers, one rev
       'nested daily Summary is NOT injected under the frozen default'
     );
 
-    // 6. dream → writes through the mapped tiers, exactly one new commit.
+    // 6. dream → writes through the mapped tiers, exactly one new commit. The
+    //    brain is the PINNED fake claude (sync pinned it above); the probe is
+    //    skipped via the JS-only opts seam (a fake brain cannot satisfy it).
     const before = commitCount(adopted);
-    await dream.run(['--yes']);
+    await dream.run(['--yes'], { skipContainmentProbe: true });
     assert.equal(commitCount(adopted), before + 1, 'exactly one dream commit');
 
     const tracked = git(adopted, ['ls-files']);

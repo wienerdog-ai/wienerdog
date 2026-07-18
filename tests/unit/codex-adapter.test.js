@@ -42,6 +42,29 @@ function setup() {
 }
 
 /** @returns {object} */
+/** Install `fakeScriptPath` as the pinned `name` ('claude'|'codex') in `core`'s
+ *  pin store (WP-154 schema), and return an env fragment that makes the REAL
+ *  dispatch path (resolvePinnedSpawn → verifyPin → verifyExecutable → spawn)
+ *  resolve and run it. Replaces the deleted fake-command env seam (WP-155).
+ *  @param {string} root @param {string} core @param {string} fakeScriptPath
+ *  @param {string} [name='claude']
+ *  @returns {{PATH:string, WIENERDOG_HOME:string}} env fragment to spread into env */
+function pinFakeBrain(root, core, fakeScriptPath, name = 'claude') {
+  const realRoot = fs.realpathSync(root); // macOS /var → /private/var stability
+  const binDir = path.join(realRoot, 'pinned-bin');
+  fs.mkdirSync(binDir, { recursive: true });
+  const cmd = path.join(binDir, name);
+  fs.copyFileSync(fakeScriptPath, cmd); // regular file (copy, not symlink)
+  fs.chmodSync(cmd, 0o755);
+  const store = { schema: 1, pins: { [name]: {
+    commandPath: cmd, installDir: binDir, version: 'fake', pinnedAt: new Date().toISOString(),
+  } } };
+  const stateDir = path.join(core, 'state');
+  fs.mkdirSync(stateDir, { recursive: true });
+  fs.writeFileSync(path.join(stateDir, 'exec-pins.json'), JSON.stringify(store), { mode: 0o600 });
+  return { PATH: binDir + path.delimiter + process.env.PATH, WIENERDOG_HOME: core };
+}
+
 function freshManifest() {
   return { version: 1, createdAt: new Date().toISOString(), entries: [] };
 }
@@ -413,7 +436,9 @@ test('Codex-only machine: full setup + working dream from rollout files alone', 
   assert.equal(collected.entries.filter((e) => e.harness === 'codex').length, 1, 'one codex extract written to scratch');
 
   // 5. A fake `codex` executable that writes a note into the vault, standing in
-  // for real `codex exec` (manual-verification-at-M4).
+  // for real `codex exec` (manual-verification-at-M4). WP-155: it arrives via
+  // the WP-154 pinned front door (a pin store in this test's core), not an env
+  // seam — spawnBrain resolves it with resolvePinnedSpawn('codex', …).
   const fakeCodex = path.join(root, 'fake-codex.sh');
   fs.writeFileSync(
     fakeCodex,
@@ -427,7 +452,7 @@ test('Codex-only machine: full setup + working dream from rollout files alone', 
     scratchDir: collected.scratchDir,
     date: '2026-07-03',
     model: null,
-    env: { ...process.env, WIENERDOG_DREAM_CMD: fakeCodex },
+    env: { ...process.env, ...pinFakeBrain(root, core, fakeCodex, 'codex') },
   });
   const result = await done;
   assert.equal(result.code, 0);
