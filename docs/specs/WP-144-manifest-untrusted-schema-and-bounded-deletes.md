@@ -180,6 +180,10 @@ hash-less path resolves outside every allowed root and is preserved), and keeps
 the existing hash-verify-when-present behavior for in-bound files. The
 record-side "hash every deletable file" hardening is flagged as a follow-up (see
 Out of scope / the WP report open questions), not silently dropped.
+**Owner decision (2026-07-18): deferred — recorded as a future item, not specced
+now.** The root bound satisfies the audit's literal acceptance ("hashless
+external file path is preserved"); the hash-every-deletable-file defense-in-depth
+is a later WP to raise after the A8 core lands, not a scope expansion here.
 
 ## Implementation notes & constraints
 
