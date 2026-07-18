@@ -64,8 +64,15 @@ const PARENT_SRC = `
 'use strict';
 const { spawn } = require('node:child_process');
 const fs = require('node:fs');
-const broker = spawn(process.execPath, [process.env.WD_BIN, 'gws', '_broker', '--routine', 'selfcheck'], {
+// Spawn a REAL broker routine (daily-digest): since WP-141 the broker refuses
+// an unregistered '--routine', so an invalid id would exit before any handshake
+// and this proof would pass vacuously. The disposable WIENERDOG_HOME has no
+// credentials, so the registry's verbs advertise-but-refuse — which does NOT
+// block the initialize handshake, and the handshake is what puts the child
+// mid-session for the parent-death cases below.
+const broker = spawn(process.execPath, [process.env.WD_BIN, 'gws', '_broker', '--routine', 'daily-digest'], {
   stdio: ['pipe', 'pipe', 'inherit'],
+  env: { ...process.env, WIENERDOG_HOME: process.env.WD_HOME },
 });
 fs.writeFileSync(process.env.WD_PIDFILE, String(broker.pid));
 // Complete a real handshake so the broker is mid-session, not just idle.
@@ -89,8 +96,12 @@ broker.stdout.once('data', () => {
  */
 async function runCase(mode, dir) {
   const pidFile = path.join(dir, `broker-${mode}.pid`);
+  // A disposable core so the broker reads no real credentials — its verbs then
+  // advertise-but-refuse, which does not block the handshake this proof needs.
+  const wdHome = path.join(dir, `core-${mode}`);
+  fs.mkdirSync(wdHome, { recursive: true });
   const parent = spawn(process.execPath, ['-e', PARENT_SRC], {
-    env: { ...process.env, WD_BIN: WIENERDOG_BIN, WD_PIDFILE: pidFile, WD_MODE: mode },
+    env: { ...process.env, WD_BIN: WIENERDOG_BIN, WD_PIDFILE: pidFile, WD_MODE: mode, WD_HOME: wdHome },
     stdio: ['ignore', 'ignore', 'inherit'],
   });
   // Attach BEFORE any await: a fast parent can close while we poll for the

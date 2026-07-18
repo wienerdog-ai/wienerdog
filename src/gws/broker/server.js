@@ -124,6 +124,10 @@ async function runBrokerServer(opts) {
     const reader = readMessages(
       stdin,
       (msg) => {
+        // Fire-and-forget: the MCP client is request/response-serial (one call
+        // in flight), so responses cannot reorder in practice; the only await
+        // (registry.callTool) is wrapped in try/catch, so a verb rejection
+        // becomes a JSON-RPC error, never an unhandledRejection.
         handle(msg);
       },
       (err) => {
