@@ -4,26 +4,32 @@
 
 ## Status: A0, A4, A3, A6, A5, and A1 are COMPLETE (2026-07-18)
 
-> **A2 SPEC PHASE COMPLETE — implementation NOT started (2026-07-18).** **ADR-0026**
-> (GWS capability broker) is Accepted and **WP-136..WP-143 are all `status: Ready`**;
-> every walkthrough decision carries a dated OWNER-APPROVED line and all seven pre-Ready
-> SPIKEs are resolved by measurement (findings folded into the specs). Measured
-> load-bearing facts (Claude Code 2.1.214, Node v24.18.0, macOS): MCP stdio framing is
-> **newline-delimited JSON-RPC** (no `Content-Length`; multiple messages per read chunk;
-> golden handshake frames recorded in WP-136, client `protocolVersion` `2025-11-25`,
-> echoing it back is accepted; `tools/call` carries a tolerated `_meta` extra); on
-> graceful shutdown Claude Code **SIGINTs** the MCP child, but a **SIGKILLed parent
-> delivers NO signal** — the child's exit-on-stdin-EOF is the SOLE orphan guard
-> (ADR-0026 §1 supervisor-reap NOT triggered); the MCP child inherits the **full parent
-> env** (identity stays argv, credentials stay files); `--permission-mode default` +
-> exact `--allowedTools mcp__wienerdog-broker__<verb>` runs the listed verb headlessly
-> and denies an unlisted verb **client-side** (the call never crosses the MCP boundary);
-> the vendored google-auth-library 10.9.0 has **no `include_granted_scopes` default**
-> (omit ⇒ absent from URL — always pass `false` explicitly) and `invalid_grant`
-> detection must pin on `e.response.data.error`, never `e.message`. Resume point:
-> implement **WP-136 first** (TDD), chain 136 → {137, 138, 139} → 140 → 141 → 142 →
-> 143. **A2 opens NO gate** — `wienerdog safety` must show all five BLOCKED after every
-> WP.
+> **A2 COMPLETE — all eight WPs Done (implemented + reviewed, 2026-07-18).** **ADR-0026**
+> (GWS capability broker) is Accepted and **WP-136..WP-143 are all `status: Done`** (specs
+> in `docs/specs/done/`). Shipped: the hand-rolled newline-framed MCP stdio transport +
+> live per-job lifecycle self-check (136); the eight-verb fixed registry with server-side
+> schemas + byte/count/rate limits (137); the least-scope per-capability credential split
+> with exact granted-scope verification + the distinct testing-mode 7-day `invalid_grant`
+> alert (138); the canonical broker-owned 0600 grant store with exact-byte integrity +
+> TTY-only mutation, retiring the F2 config.yaml YAML block (139); `cal draft-event` →
+> `add-event` behind a calendar-write grant (140); the run-job wiring — per-routine
+> broker-mcp config with the trusted `--routine` argv descriptor, exact `--allowedTools`,
+> bounded read-only vault snapshot, broker-calling routine skills with regenerated digests
+> (141); the end-to-end poisoned-email containment harness + deterministic negatives (142);
+> and the honest-claims docs pass — THREAT-MODEL/GLOSSARY/README/VISION + the gws-broker
+> runbook (143). **A per-WP wd-reviewer pass ran on all eight:** WP-137/138/143 APPROVE;
+> WP-136 (the lifecycle self-check had gone vacuous after 141 made the broker refuse an
+> unregistered `--routine` — repointed to a real routine, live-reverified PASS) and WP-142
+> (two live assertions were vacuous/over-broad — the canary check now reads the teed job
+> log + verb-arg params, the send-target check scans only the MIME header block) were fixed
+> in code; WP-139/140/141 review findings were all Deliverables-table gaps (forced
+> test-file touches), amended in the specs. **A2 opened NO gate** — `wienerdog safety` shows
+> all five BLOCKED. **The EXPENSIVE live E2E (`npm run scenarios:broker-e2e`) was NOT run
+> this session** (subscription quota + interactive `claude -p`); it is a **required
+> precondition of the eventual gate-open** (D-E2E-GATE-CROSSREF: this proof green on
+> then-current code + the live self-send positive + P1 done + a clean-commit audit rerun +
+> an explicit human go). Measured load-bearing facts (Claude Code 2.1.214, Node v24.18.0,
+> macOS) are pinned in the WP-136/138/141 specs.
 
 <!-- -->
 
@@ -74,7 +80,8 @@
 > `~/.claude.json`), and the WP-133 spec was reconciled to that model. **A1 opened NO gate**
 > — `wienerdog safety` still shows all five BLOCKED. Next audit action: **A2** (GWS broker +
 > least-scope credential migration), which also delivers the full end-to-end run-job
-> containment proof that A1's dev-time harness stops short of.
+> containment proof that A1's dev-time harness stops short of. **(A2 is now COMPLETE — see
+> the A2 block at the top of this file.)**
 
 Audit action A0 landed as five reviewed work packages, WP-109..WP-113 (specs in
 `docs/specs/done/`): the code-owned safety profile (`src/core/safety-profile.js`,
