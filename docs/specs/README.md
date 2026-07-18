@@ -17,4 +17,4 @@ S (< 1 focused hour) or M (one session). **L is forbidden — split it.** Heuris
 - Every acceptance criterion maps to a literal verification command whose output is pasted into the PR.
 - Cited ADRs are binding.
 
-Index and dependency graph: [ROADMAP.md](ROADMAP.md). Template: [_TEMPLATE.md](_TEMPLATE.md).
+Status and dependencies live in each spec's frontmatter — generate any table or graph view on demand. Release gates: [MILESTONES.md](MILESTONES.md). Narrative history: [logbook/](logbook/). Template: [_TEMPLATE.md](_TEMPLATE.md).

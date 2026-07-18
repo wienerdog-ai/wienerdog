@@ -36,7 +36,7 @@ Owner: Gyula Fehér. Status: locked for v1 (2026-07-02). Changes require an ADR.
 
 ## Milestones
 
-M0 foundation (docs/specs/agents — this commit) → M1 skeleton & installer → M2 Claude adapter + interview *(go-public possible)* → M3 capture + dreaming → M4 Codex adapter → M5 Google Workspace → M6 scheduler + digest → M7 hardening & release. Acceptance criteria per milestone live in `docs/specs/ROADMAP.md`.
+M0 foundation (docs/specs/agents — this commit) → M1 skeleton & installer → M2 Claude adapter + interview *(go-public possible)* → M3 capture + dreaming → M4 Codex adapter → M5 Google Workspace → M6 scheduler + digest → M7 hardening & release. Acceptance criteria per milestone live in `docs/specs/MILESTONES.md`.
 
 ## Key risks
 

@@ -18,7 +18,7 @@ body:
     id: fit
     attributes:
       label: Where does it fit?
-      description: Which milestone (docs/specs/ROADMAP.md), which existing WPs it depends on, which ADRs constrain it.
+      description: Which epic (if any), which existing WPs it depends on (spec frontmatter is the source of truth), which ADRs constrain it. Release gates: docs/specs/MILESTONES.md.
     validations:
       required: true
   - type: textarea
