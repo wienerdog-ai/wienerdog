@@ -22,7 +22,8 @@
     "test": "node tests/run.js",
     "lint": "node scripts/lint.js",
     "gen:agents": "node scripts/gen-agents-md.js",
-    "scenarios": "node tests/scenarios/run-scenarios.js"
+    "scenarios": "node tests/scenarios/run-scenarios.js",
+    "scenarios:negative": "node tests/scenarios/negative/run-negative.js"
   },
   "repository": {
     "type": "git",
