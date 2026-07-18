@@ -14,6 +14,7 @@ const { spawnBrain, buildClaudeArgs } = require('../core/dream/brain');
 const { readVaultLayout } = require('../core/layout');
 const { renderDigest, listSecretQuarantine } = require('../core/digest');
 const { writeFilePrivate, scanPrivateModes } = require('../core/private-fs');
+const { ensureSettingsProfile } = require('../core/runtime-settings');
 const identityApprovals = require('../core/identity-approvals');
 const { renderUpdateLine } = require('../core/update-check');
 const { readAlerts } = require('../core/alerts');
@@ -72,8 +73,10 @@ function scratchIntact(wrote, baseline) {
   return true;
 }
 
-/** Print the dry-run plan: session counts, bytes, drops, vault, resolved argv. */
-function printPlan(sel, cfg, vaultDir, date, layout) {
+/** Print the dry-run plan: session counts, bytes, drops, vault, resolved argv.
+ *  `settingsPath` is the WP-129 hook-free settings profile, ensured by the
+ *  caller (idempotent) so the echoed argv matches the real spawn's argv. */
+function printPlan(sel, cfg, vaultDir, date, layout, settingsPath) {
   /** @type {Record<string, number>} */
   const perHarness = {};
   for (const e of sel.entries) perHarness[e.harness] = (perHarness[e.harness] || 0) + 1;
@@ -94,7 +97,7 @@ function printPlan(sel, cfg, vaultDir, date, layout) {
   console.log(`  total input bytes: ${totalBytes}`);
   console.log(`  dropped for size: ${sel.droppedForSize}`);
   console.log(`  truncated to fit: ${sel.truncated.length}`);
-  const argv = buildClaudeArgs({ vaultDir, scratchDir: sel.scratchDir, date, model: cfg.model, layout });
+  const argv = buildClaudeArgs({ vaultDir, scratchDir: sel.scratchDir, date, model: cfg.model, layout, settingsPath });
   console.log(`  brain argv: claude ${argv.join(' ')}`);
 }
 
@@ -282,9 +285,10 @@ async function run(argv) {
       return;
     }
 
-    // 8. Dry-run → print the plan and stop.
+    // 8. Dry-run → print the plan and stop (no brain). The settings profile is
+    //    ensured here too (idempotent) so the echoed argv is the real argv.
     if (dryRun) {
-      printPlan(sel, cfg, vaultDir, date, layout);
+      printPlan(sel, cfg, vaultDir, date, layout, ensureSettingsProfile(paths));
       return;
     }
 

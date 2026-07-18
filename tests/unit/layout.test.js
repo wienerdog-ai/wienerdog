@@ -188,11 +188,43 @@ test('resolveDailyPath: default and power-user layouts', () => {
   assert.equal(resolveDailyPath(powerUser, '2026-07-03'), '05-Daily/2026/07/2026-07-03.md');
 });
 
+test('resolveDailyPath with vaultDir returns the absolute vault-prefixed path (WP-130 seam)', () => {
+  assert.equal(
+    resolveDailyPath(defaultLayout(), '2026-07-03', '/v'),
+    path.join('/v', '07-Daily', '2026-07-03.md')
+  );
+  const powerUser = { ...defaultLayout(), daily_dir: '05-Daily', daily_filename: 'YYYY/MM/YYYY-MM-DD.md' };
+  assert.equal(
+    resolveDailyPath(powerUser, '2026-07-03', '/v'),
+    path.join('/v', '05-Daily', '2026', '07', '2026-07-03.md')
+  );
+  // Back-compat: omitting vaultDir is byte-identical to today's relative output.
+  assert.equal(resolveDailyPath(defaultLayout(), '2026-07-03'), '07-Daily/2026-07-03.md');
+});
+
 test('layoutPromptLines names the daily path and identity dir', () => {
   const powerUser = { ...defaultLayout(), daily_dir: '05-Daily', daily_filename: 'YYYY/MM/YYYY-MM-DD.md' };
   const lines = layoutPromptLines(powerUser, '2026-07-03');
   assert.ok(lines.some((l) => l.includes('05-Daily/2026/07/2026-07-03.md')));
   assert.ok(lines.some((l) => /identity/i.test(l) && l.includes('06-Identity')));
+});
+
+test('layoutPromptLines with vaultDir prefixes EVERY tier line (WP-130 seam)', () => {
+  const lines = layoutPromptLines(defaultLayout(), '2026-07-03', '/v');
+  assert.ok(lines.some((l) => l === `Identity notes directory: ${path.join('/v', '06-Identity')}`));
+  assert.ok(lines.some((l) => l === `Skills directory: ${path.join('/v', '05-Skills')}`));
+  assert.ok(lines.some((l) => l === `Daily log file for today: ${path.join('/v', '07-Daily', '2026-07-03.md')}`));
+  assert.ok(lines.some((l) => l === `Projects directory: ${path.join('/v', '01-Projects')}`));
+  assert.ok(lines.some((l) => l === `Inbox directory: ${path.join('/v', '00-Inbox')}`));
+  assert.ok(lines.some((l) => l === `Reports directory: ${path.join('/v', 'reports/dreams')}`));
+  // No bare relative tier value remains in any line.
+  for (const l of lines) {
+    assert.ok(l.includes(path.join('/v', '')), `absolute: ${l}`);
+  }
+  // Back-compat: omitting vaultDir keeps today's relative names.
+  const rel = layoutPromptLines(defaultLayout(), '2026-07-03');
+  assert.ok(rel.some((l) => l === 'Identity notes directory: 06-Identity'));
+  assert.ok(rel.some((l) => l === 'Daily log file for today: 07-Daily/2026-07-03.md'));
 });
 
 test('renderDigest with the power-user layout: frozen default omits the nested daily (identity + project still render)', () => {

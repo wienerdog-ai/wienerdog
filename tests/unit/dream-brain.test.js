@@ -6,19 +6,47 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const { buildClaudeArgs, spawnBrain, DREAM_PROMPT } = require('../../src/core/dream/brain');
+const { buildClaudeArgs, spawnBrain, DREAM_PROMPT, ensureBrainStaging } = require('../../src/core/dream/brain');
+const { WienerdogError } = require('../../src/core/errors');
 
-test('dream-brain: buildClaudeArgs contains the sandbox flags, no model', () => {
-  const args = buildClaudeArgs({ vaultDir: '/v', scratchDir: '/s', date: '2026-07-02', model: null });
+const DREAM_SKILL_BODY = fs.readFileSync(
+  path.join(__dirname, '..', '..', 'skills', 'wienerdog-dream', 'SKILL.md'),
+  'utf8'
+);
+
+/** The value that follows a flag in an argv. @param {string[]} args @param {string} flag @returns {string|undefined} */
+function flagValue(args, flag) {
+  const i = args.indexOf(flag);
+  return i === -1 ? undefined : args[i + 1];
+}
+
+test('dream-brain: buildClaudeArgs composes the hermetic argv (WP-130), no model', () => {
+  const args = buildClaudeArgs({
+    vaultDir: '/v',
+    scratchDir: '/s',
+    date: '2026-07-02',
+    model: null,
+    settingsPath: '/set.json',
+  });
   const joined = args.join(' ');
 
-  assert.ok(joined.includes('-p'));
-  assert.ok(joined.includes('--tools Read,Write,Edit,Glob,Grep'));
-  assert.ok(joined.includes('--permission-mode acceptEdits'));
+  assert.equal(flagValue(args, '--tools'), 'Read,Write,Edit,Glob,Grep');
+  const deny = (flagValue(args, '--disallowedTools') || '').split(',');
+  for (const t of ['Bash', 'WebFetch', 'WebSearch', 'Task', 'Agent', 'Skill', 'Workflow', 'NotebookEdit']) {
+    assert.ok(deny.includes(t), `--disallowedTools names ${t}`);
+  }
+  assert.equal(flagValue(args, '--permission-mode'), 'acceptEdits');
   assert.ok(joined.includes('--add-dir /v'));
   assert.ok(joined.includes('--add-dir /s'));
-  assert.ok(joined.includes('--strict-mcp-config'));
-  assert.ok(joined.includes('--setting-sources user'));
+  assert.ok(args.includes('--strict-mcp-config'));
+  assert.ok(!args.includes('--mcp-config'), 'dream has zero MCP servers');
+
+  // A1: NO ambient setting source — empty value, never 'user' — plus the
+  // hook-free settings profile and the verified vendored skill body.
+  assert.equal(flagValue(args, '--setting-sources'), '');
+  assert.ok(!joined.includes('--setting-sources user'));
+  assert.equal(flagValue(args, '--settings'), '/set.json');
+  assert.equal(flagValue(args, '--append-system-prompt'), DREAM_SKILL_BODY);
 
   // Forbidden escape hatches must never appear.
   assert.ok(!joined.includes('--dangerously-skip-permissions'));
@@ -29,13 +57,14 @@ test('dream-brain: buildClaudeArgs contains the sandbox flags, no model', () => 
   assert.ok(!args.includes('--model'));
 
   // The prompt carries the paths (Bash is off; the skill reads them from text).
-  assert.ok(joined.includes('/wienerdog-dream'));
-  assert.ok(joined.includes('/s'));
-  assert.ok(joined.includes('/v'));
-  assert.ok(joined.includes('2026-07-02'));
+  const prompt = flagValue(args, '-p');
+  assert.ok(prompt.includes('/wienerdog-dream'));
+  assert.ok(prompt.includes('/s'));
+  assert.ok(prompt.includes('/v'));
+  assert.ok(prompt.includes('2026-07-02'));
 });
 
-test('dream-brain: DREAM_PROMPT with no layout carries the paths + default layout lines', () => {
+test('dream-brain: DREAM_PROMPT tier lines are ABSOLUTE and vault-prefixed (D-DREAM-CWD)', () => {
   const prompt = DREAM_PROMPT('/s', '/v', '2026-07-03');
 
   // The three original path lines survive.
@@ -43,11 +72,15 @@ test('dream-brain: DREAM_PROMPT with no layout carries the paths + default layou
   assert.ok(prompt.includes('Vault directory (your only write target): /v'));
   assert.ok(prompt.includes("Today's date: 2026-07-03"));
 
-  // Default layout lines are injected (folder names == today's defaults).
-  assert.ok(prompt.includes('- Identity notes directory: 06-Identity'));
-  assert.ok(prompt.includes('- Skills directory: 05-Skills'));
-  assert.ok(prompt.includes('- Daily log file for today: 07-Daily/2026-07-03.md'));
-  assert.ok(prompt.includes('- Reports directory: reports/dreams'));
+  // Tier lines are absolute (the cwd is a neutral staging dir; a bare relative
+  // name would resolve outside the --add-dir roots and the write would be lost).
+  assert.ok(prompt.includes(`- Identity notes directory: ${path.join('/v', '06-Identity')}`));
+  assert.ok(prompt.includes(`- Skills directory: ${path.join('/v', '05-Skills')}`));
+  assert.ok(prompt.includes(`- Daily log file for today: ${path.join('/v', '07-Daily', '2026-07-03.md')}`));
+  assert.ok(prompt.includes(`- Reports directory: ${path.join('/v', 'reports/dreams')}`));
+  // No bare relative tier name appears as a write target.
+  assert.ok(!prompt.includes(': 06-Identity'));
+  assert.ok(!prompt.includes(': 07-Daily/2026-07-03.md'));
 });
 
 test('dream-brain: buildClaudeArgs embeds a non-default layout, allowlist unchanged', () => {
@@ -61,31 +94,58 @@ test('dream-brain: buildClaudeArgs embeds a non-default layout, allowlist unchan
     reports_dir: 'reports/dreams',
     inbox_dir: '00-Inbox',
   };
-  const args = buildClaudeArgs({ vaultDir: '/v', scratchDir: '/s', date: '2026-07-03', model: null, layout });
-  const joined = args.join(' ');
+  const args = buildClaudeArgs({
+    vaultDir: '/v',
+    scratchDir: '/s',
+    date: '2026-07-03',
+    model: null,
+    layout,
+    settingsPath: '/set.json',
+  });
 
-  // The resolved (nested) daily-log path lands in the prompt; the default does not.
-  assert.ok(joined.includes('05-Daily/2026/07/2026-07-03.md'));
-  assert.ok(!joined.includes('07-Daily'));
+  // The resolved (nested, absolute) daily-log path lands in the prompt; the
+  // default does not. (Asserted on the prompt, not the whole argv — the
+  // appended skill body legitimately mentions default folder names.)
+  const prompt = flagValue(args, '-p');
+  assert.ok(prompt.includes(path.join('/v', '05-Daily', '2026', '07', '2026-07-03.md')));
+  assert.ok(!prompt.includes('07-Daily'));
 
   // The tool allowlist is untouched by layout.
-  assert.ok(joined.includes('--tools Read,Write,Edit,Glob,Grep'));
+  assert.equal(flagValue(args, '--tools'), 'Read,Write,Edit,Glob,Grep');
 });
 
 test('dream-brain: buildClaudeArgs includes --model when set', () => {
-  const args = buildClaudeArgs({ vaultDir: '/v', scratchDir: '/s', date: '2026-07-02', model: 'opus' });
+  const args = buildClaudeArgs({
+    vaultDir: '/v',
+    scratchDir: '/s',
+    date: '2026-07-02',
+    model: 'opus',
+    settingsPath: '/set.json',
+  });
   const i = args.indexOf('--model');
   assert.ok(i !== -1);
   assert.equal(args[i + 1], 'opus');
 });
 
-test('dream-brain: spawnBrain runs WIENERDOG_DREAM_CMD and passes the env', async () => {
+test('dream-brain: a tampered/missing dream skill aborts the build (fail closed, WP-129 seam)', () => {
+  const base = { vaultDir: '/v', scratchDir: '/s', date: '2026-07-02', model: null, settingsPath: '/set.json' };
+  assert.throws(
+    () => buildClaudeArgs({ ...base, skillSeam: { digests: { 'wienerdog-dream': 'deadbeef' } } }),
+    WienerdogError
+  );
+  const emptyRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-brain-'));
+  assert.throws(() => buildClaudeArgs({ ...base, skillSeam: { skillsRoot: emptyRoot } }), WienerdogError);
+});
+
+
+test('dream-brain: spawnBrain runs WIENERDOG_DREAM_CMD from the fresh staging cwd and passes the env', async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-brain-'));
+  const core = path.join(root, 'core');
   const marker = path.join(root, 'marker.txt');
   const fakeCmd = path.join(root, 'fake-brain.sh');
   fs.writeFileSync(
     fakeCmd,
-    ['#!/bin/sh', 'printf "%s\\n%s\\n" "$WIENERDOG_DREAM_VAULT" "$WIENERDOG_DREAM_SCRATCH" > "$MARKER"', 'exit 7', ''].join('\n')
+    ['#!/bin/sh', 'printf "%s\\n%s\\n%s\\n" "$WIENERDOG_DREAM_VAULT" "$WIENERDOG_DREAM_SCRATCH" "$(pwd)" > "$MARKER"', 'exit 7', ''].join('\n')
   );
   fs.chmodSync(fakeCmd, 0o755);
 
@@ -98,16 +158,31 @@ test('dream-brain: spawnBrain runs WIENERDOG_DREAM_CMD and passes the env', asyn
     scratchDir,
     date: '2026-07-02',
     model: null,
-    env: { ...process.env, WIENERDOG_DREAM_CMD: fakeCmd, MARKER: marker },
+    env: { ...process.env, WIENERDOG_DREAM_CMD: fakeCmd, MARKER: marker, WIENERDOG_HOME: core },
   });
 
   const result = await done;
   assert.equal(result.code, 7);
   assert.equal(typeof result.durationMs, 'number');
 
-  const [gotVault, gotScratch] = fs.readFileSync(marker, 'utf8').trim().split('\n');
+  const [gotVault, gotScratch, gotCwd] = fs.readFileSync(marker, 'utf8').trim().split('\n');
   assert.equal(gotVault, vaultDir);
   assert.equal(gotScratch, scratchDir);
+  // D-DREAM-CWD: the brain runs from the fresh staging dir, NOT the vault.
+  assert.equal(fs.realpathSync(gotCwd), fs.realpathSync(path.join(core, 'state', 'dream-run')));
+  assert.notEqual(fs.realpathSync(gotCwd), fs.realpathSync(vaultDir));
+});
+
+test('dream-brain: ensureBrainStaging recreates an empty 0700 staging dir each run', { skip: process.platform === 'win32' }, () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-brain-'));
+  const paths = { state: path.join(root, 'state') };
+  const dir = ensureBrainStaging(paths);
+  assert.equal(dir, path.join(root, 'state', 'dream-run'));
+  fs.writeFileSync(path.join(dir, 'leftover.txt'), 'stale state');
+  const again = ensureBrainStaging(paths);
+  assert.equal(again, dir);
+  assert.deepEqual(fs.readdirSync(dir), [], 'wiped empty on every run');
+  assert.equal(fs.statSync(dir).mode & 0o777, 0o700);
 });
 
 test('dream-brain: spawnBrain done resolves a stderrTail on nonzero exit', async () => {
@@ -128,7 +203,7 @@ test('dream-brain: spawnBrain done resolves a stderrTail on nonzero exit', async
     scratchDir,
     date: '2026-07-04',
     model: null,
-    env: { ...process.env, WIENERDOG_DREAM_CMD: fakeCmd },
+    env: { ...process.env, WIENERDOG_DREAM_CMD: fakeCmd, WIENERDOG_HOME: path.join(root, 'core') },
   });
 
   const result = await done;
@@ -161,7 +236,7 @@ test('dream-brain: a secret in brain output is redacted in the teed log AND stde
     scratchDir: path.join(root, 'scratch'),
     date: '2026-07-04',
     model: null,
-    env: { ...process.env, WIENERDOG_DREAM_CMD: fakeCmd },
+    env: { ...process.env, WIENERDOG_DREAM_CMD: fakeCmd, WIENERDOG_HOME: path.join(root, 'core') },
     logStream,
   });
   const result = await done;

@@ -122,40 +122,52 @@ function readVaultLayout(configFile) {
 }
 
 /**
- * The vault-relative path of the daily log for a given date, substituting into
- * daily_filename and joining under daily_dir. Tokens: 'YYYY'→year, 'MM'→month,
- * 'DD'→day, taken from a 'YYYY-MM-DD' date string.
+ * The path of the daily log for a given date, substituting into daily_filename
+ * and joining under daily_dir. Tokens: 'YYYY'→year, 'MM'→month, 'DD'→day,
+ * taken from a 'YYYY-MM-DD' date string.
  * resolveDailyPath(default, '2026-07-03')      === '07-Daily/2026-07-03.md'
  * resolveDailyPath(powerUser, '2026-07-03')    === '05-Daily/2026/07/2026-07-03.md'
+ * resolveDailyPath(default, '2026-07-03', '/v') === '/v/07-Daily/2026-07-03.md'
  * @param {VaultLayout} layout
  * @param {string} date  'YYYY-MM-DD'
- * @returns {string} vault-relative POSIX-style path
+ * @param {string} [vaultDir]  when passed, the vault-relative path is joined
+ *   under it (absolute — the WP-130 staging-cwd seam); omit → today's
+ *   vault-relative POSIX path (back-compat)
+ * @returns {string}
  */
-function resolveDailyPath(layout, date) {
+function resolveDailyPath(layout, date, vaultDir) {
   const [year, month, day] = date.split('-');
   const filename = layout.daily_filename
     .replace(/YYYY/g, year)
     .replace(/MM/g, month)
     .replace(/DD/g, day);
-  return path.posix.join(layout.daily_dir, filename);
+  const rel = path.posix.join(layout.daily_dir, filename);
+  return vaultDir ? path.join(vaultDir, rel) : rel;
 }
 
 /**
  * Human-readable lines describing the layout for the dream brain's prompt (WP-024
  * consumes this). Returns an array of plain-language lines mapping each tier to its
- * directory, plus the concrete daily-log path for `date`.
+ * directory, plus the concrete daily-log path for `date`. The layout values are
+ * already traversal-validated safe RELATIVE paths (readVaultLayout); when
+ * `vaultDir` is passed each is joined under it so the prompt carries ABSOLUTE
+ * tier paths (the brain's cwd is a neutral staging dir since WP-130, so a bare
+ * relative name would resolve outside the vault and the write would be lost).
  * @param {VaultLayout} layout
  * @param {string} date  'YYYY-MM-DD'
+ * @param {string} [vaultDir]  when passed, every tier path is joined under it
+ *   (absolute); omit → today's relative names (back-compat)
  * @returns {string[]}
  */
-function layoutPromptLines(layout, date) {
+function layoutPromptLines(layout, date, vaultDir) {
+  const dir = (d) => (vaultDir ? path.join(vaultDir, d) : d);
   return [
-    `Identity notes directory: ${layout.identity_dir}`,
-    `Skills directory: ${layout.skills_dir}`,
-    `Daily log file for today: ${resolveDailyPath(layout, date)}`,
-    `Projects directory: ${layout.projects_dir}`,
-    `Inbox directory: ${layout.inbox_dir}`,
-    `Reports directory: ${layout.reports_dir}`,
+    `Identity notes directory: ${dir(layout.identity_dir)}`,
+    `Skills directory: ${dir(layout.skills_dir)}`,
+    `Daily log file for today: ${resolveDailyPath(layout, date, vaultDir)}`,
+    `Projects directory: ${dir(layout.projects_dir)}`,
+    `Inbox directory: ${dir(layout.inbox_dir)}`,
+    `Reports directory: ${dir(layout.reports_dir)}`,
   ];
 }
 

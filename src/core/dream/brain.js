@@ -1,9 +1,15 @@
 'use strict';
 
+const fs = require('node:fs');
+const path = require('node:path');
 const { spawn } = require('node:child_process');
 
 const { defaultLayout, layoutPromptLines, resolveDailyPath } = require('../layout');
 const { redactOnly } = require('../secret-scan');
+const { getProfile, composeClaudeArgs } = require('../runtime-profile');
+const { ensureSettingsProfile, loadVendoredSkill } = require('../runtime-settings');
+const { getPaths } = require('../paths');
+const { mkdirPrivate } = require('../private-fs');
 
 /** Cap on the brain-stderr tail attached to spawnBrain's `done` result (bytes). */
 const STDERR_TAIL_MAX = 4096;
@@ -30,46 +36,49 @@ function DREAM_PROMPT(scratchDir, vaultDir, date, layout) {
     `Today's date: ${date}`,
     '',
     'Vault layout — write to these mapped locations, NOT the default folder names:',
-    ...layoutPromptLines(lay, date).map((l) => `- ${l}`),
+    // vaultDir passed → ABSOLUTE, vault-prefixed tier paths. Load-bearing since
+    // WP-130: the brain's cwd is a neutral staging dir, so a bare relative tier
+    // name would resolve under <staging>/ (outside the --add-dir roots) and the
+    // write would be silently lost.
+    ...layoutPromptLines(lay, date, vaultDir).map((l) => `- ${l}`),
   ].join('\n');
 }
 
 /**
- * Build the argv for the headless brain (Claude), AFTER the "claude" name.
- * Pure — this is the unit-tested security surface. Every flag is load-bearing:
- * the invocation gives the brain no Bash, no network, and write access to the
- * vault only (plus read of the scratch dir). These CLI flags are best-effort
- * prevention; the guarantee is WP-017's code validation.
+ * Build the argv for the headless brain (Claude), AFTER the "claude" name —
+ * composed from the code-owned 'dream' hermetic runtime profile (WP-128,
+ * ADR-0025), never hand-assembled. The invocation gives the brain no Bash, no
+ * network, no ambient setting source, no hooks, zero MCP servers, and tool
+ * access to the vault + scratch only. The vendored dream skill is
+ * integrity-checked (WP-129) and delivered via --append-system-prompt
+ * (D-SKILL-LOAD); a tampered/missing skill THROWS here, aborting the run
+ * before any spawn (fail closed). These CLI flags are best-effort prevention;
+ * the guarantee is WP-017's code validation.
+ * Deliberately NOT used: --dangerously-skip-permissions (re-enables
+ * everything), --bare (forces API-key auth, breaking the subscription
+ * ADR-0004 relies on), --safe-mode.
  * @param {{vaultDir:string, scratchDir:string, date:string, model:string|null,
- *          layout?:import('../layout').VaultLayout}} o
+ *          layout?:import('../layout').VaultLayout, settingsPath:string,
+ *          skillSeam?:{skillsRoot?:string, digests?:Record<string,string>}}} o
+ *   settingsPath  the WP-129 hook-free settings profile (absolute)
+ *   skillSeam     TEST SEAM ONLY — forwarded to loadVendoredSkill to force an
+ *                 integrity mismatch in unit tests; production callers omit it
  * @returns {string[]}
  */
-function buildClaudeArgs({ vaultDir, scratchDir, date, model, layout }) {
-  return [
-    '-p',
-    DREAM_PROMPT(scratchDir, vaultDir, date, layout), // headless, non-interactive
-    // AUTHORITATIVE built-in tool allowlist. Excludes Bash (no shell),
-    // WebFetch/WebSearch (no network), and everything else:
-    '--tools',
-    'Read,Write,Edit,Glob,Grep',
-    '--permission-mode',
-    'acceptEdits', // auto-approve edits so -p runs unattended
-    '--add-dir',
-    vaultDir, // tool access: the writable vault
+function buildClaudeArgs({ vaultDir, scratchDir, date, model, layout, settingsPath, skillSeam }) {
+  const profile = getProfile('dream');
+  return composeClaudeArgs(profile, {
+    prompt: DREAM_PROMPT(scratchDir, vaultDir, date, layout), // headless, non-interactive
+    // The ONLY tool roots: the writable vault + the readable scratch.
     // --add-dir scratchDir grants read AND write to scratch; the brain must not
     // write there. WP-017's scratch-integrity check reverts any brain write to
     // scratch (exactly the out-of-vault case WP-017's fixture exercises).
-    '--add-dir',
-    scratchDir, // tool access: read the extracts
-    '--strict-mcp-config', // with NO --mcp-config → zero MCP servers (no MCP tools/network)
-    '--setting-sources',
-    'user', // ignore project/local settings under cwd (a repo can't widen tools)
-    // Deliberately NOT used: --dangerously-skip-permissions (re-enables
-    // everything), --bare (forces API-key auth, breaking the subscription
-    // ADR-0004 relies on), --safe-mode (disables skills, so the dream skill
-    // wouldn't load).
-    ...(model ? ['--model', model] : []), // omit → user's default model (subscription auth preserved)
-  ];
+    addDirs: [vaultDir, scratchDir],
+    settingsPath,
+    mcpConfigPath: null, // dream → empty MCP (--strict-mcp-config, no --mcp-config)
+    model: model || null, // omit → user's default model (subscription auth preserved)
+    appendSystemPrompt: loadVendoredSkill('wienerdog-dream', skillSeam), // verified body or throw
+  });
 }
 
 /**
@@ -97,6 +106,23 @@ function buildCodexArgs({ vaultDir, scratchDir, date, model, layout }) {
     ...(model ? ['--model', model] : []),
     DREAM_PROMPT(scratchDir, vaultDir, date, layout), // positional prompt (last)
   ];
+}
+
+/**
+ * Wipe+recreate the fresh, empty, Wienerdog-owned staging dir the brain runs
+ * from (D-DREAM-CWD, WP-130). 0700, no `.claude`, no CLAUDE.md, no git — a
+ * neutral cwd Claude Code can never mistake for a project, so it can never
+ * discover project/local settings under it (the vault is a git repo the dream
+ * itself writes to; a hijacked dream could otherwise plant <vault>/CLAUDE.md
+ * for a later run). Recreated empty on every run — no cross-run leakage.
+ * @param {import('../paths').WienerdogPaths} paths
+ * @returns {string} absolute staging dir
+ */
+function ensureBrainStaging(paths) {
+  const dir = path.join(paths.state, 'dream-run');
+  fs.rmSync(dir, { recursive: true, force: true });
+  mkdirPrivate(dir);
+  return dir;
 }
 
 /**
@@ -128,22 +154,33 @@ function spawnBrain(o) {
 
   // WIENERDOG_DREAM_CMD is the test seam: run that executable instead of claude/codex.
   const fakeCmd = baseEnv.WIENERDOG_DREAM_CMD;
+  const paths = getPaths(baseEnv);
   let command;
   let args;
+  let cwd;
   if (fakeCmd) {
     command = fakeCmd;
     args = [];
+    cwd = ensureBrainStaging(paths); // fake brain runs from staging too (it writes via the env vars)
   } else if (harness === 'codex') {
     command = 'codex';
     args = buildCodexArgs({ vaultDir, scratchDir, date, model, layout });
+    cwd = vaultDir; // Codex path byte-unchanged (A11/P2 — its --cd vaultDir is the write fence)
   } else {
     command = 'claude';
-    args = buildClaudeArgs({ vaultDir, scratchDir, date, model, layout });
+    // WP-129 assets: the hook-free settings profile (idempotent write) + the
+    // integrity-checked skill body inside buildClaudeArgs. A tampered skill
+    // throws here — before the spawn (fail closed).
+    const settingsPath = ensureSettingsProfile(paths);
+    args = buildClaudeArgs({ vaultDir, scratchDir, date, model, layout, settingsPath });
+    // D-DREAM-CWD: fresh staging cwd, NOT the vault; the vault + scratch are
+    // reachable only via --add-dir.
+    cwd = ensureBrainStaging(paths);
   }
 
   const startedAt = Date.now();
   const child = spawn(command, args, {
-    cwd: vaultDir,
+    cwd,
     detached: true, // own process group so WP-017 can group-kill the whole tree
     stdio: ['ignore', 'pipe', 'pipe'],
     env: childEnv,
@@ -185,4 +222,4 @@ function spawnBrain(o) {
   return { child, done };
 }
 
-module.exports = { buildClaudeArgs, buildCodexArgs, spawnBrain, DREAM_PROMPT };
+module.exports = { buildClaudeArgs, buildCodexArgs, spawnBrain, DREAM_PROMPT, ensureBrainStaging };
