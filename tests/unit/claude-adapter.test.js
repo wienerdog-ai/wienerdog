@@ -496,3 +496,40 @@ test('uninstall reverses everything, keeping unrelated hooks and user content', 
   }
   assert.equal(fs.existsSync(startAbs), false, 'copied hook script removed');
 });
+
+// ── WP-148: sentinel-ambiguity isolation (audit A13) ─────────────────────────
+
+test('ambiguous CLAUDE.md markers: no throw, notice pushed, hooks + skills still installed (WP-148)', () => {
+  const paths = setup();
+  const claudeMd = path.join(paths.claudeDir, 'CLAUDE.md');
+  const broken = [
+    '# My notes',
+    '<!-- wienerdog:begin -->',
+    'old block',
+    '<!-- wienerdog:begin -->',
+    '<!-- wienerdog:end -->',
+    '',
+  ].join('\n');
+  fs.writeFileSync(claudeMd, broken);
+  const coreSkill = path.join(paths.core, 'skills', 'wienerdog-setup');
+  fs.mkdirSync(coreSkill, { recursive: true });
+  fs.writeFileSync(path.join(coreSkill, 'SKILL.md'), '# skill\n');
+
+  let res;
+  assert.doesNotThrow(() => {
+    res = applyClaudeAdapter(paths, { manifest: freshManifest() });
+  });
+
+  assert.ok(
+    res.notices.some((n) => n.includes('managed block not updated') && n.includes(claudeMd)),
+    'ambiguity surfaced as a notice naming the file'
+  );
+  assert.equal(fs.readFileSync(claudeMd, 'utf8'), broken, 'ambiguous file left byte-untouched');
+  assert.ok(fs.existsSync(path.join(paths.core, 'bin', 'session-start.sh')), 'hook script still installed');
+  const settings = JSON.parse(fs.readFileSync(path.join(paths.claudeDir, 'settings.json'), 'utf8'));
+  assert.ok(JSON.stringify(settings).includes('session-start.sh'), 'settings entry still registered');
+  if (process.platform !== 'win32') {
+    const link = path.join(paths.claudeDir, 'skills', 'wienerdog-setup');
+    assert.ok(fs.lstatSync(link).isSymbolicLink(), 'skill still symlinked');
+  }
+});

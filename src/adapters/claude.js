@@ -3,6 +3,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const shared = require('./shared');
+const { WienerdogError } = require('../core/errors');
 
 /**
  * Apply the Claude Code adapter idempotently.
@@ -50,7 +51,20 @@ function applyClaudeAdapter(paths, opts = {}) {
       digest = null;
     }
     if (digest !== null) {
-      shared.applyManagedBlock(claudeMd, digest, dryRun, manifest, out);
+      try {
+        shared.applyManagedBlock(claudeMd, digest, dryRun, manifest, out);
+      } catch (err) {
+        if (err instanceof WienerdogError) {
+          // Ambiguous / hand-broken sentinels in the user's markdown. Do NOT abort the
+          // whole sync — the hook + skill reconciliation below is independent and
+          // provably safe. Surface the problem and continue (audit A13).
+          out.notices.push(
+            `managed block not updated in ${claudeMd} — ${err.message}; hooks + skills still installed. Resolve the markers by hand, then re-run 'wienerdog sync'.`
+          );
+        } else {
+          throw err; // a non-ambiguity error (e.g. an unexpected I/O fault) is NOT swallowed
+        }
+      }
     } else {
       out.notices.push(
         `digest not found at ${digestPath}; managed block skipped (hooks + skills still installed)`
