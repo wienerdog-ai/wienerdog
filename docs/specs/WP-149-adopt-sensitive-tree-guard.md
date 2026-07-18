@@ -1,7 +1,7 @@
 ---
 id: WP-149
 title: Guard adopt against the home directory, secret dirs, and unexpectedly large trees before git init/add
-status: Draft
+status: Ready
 model: sonnet
 size: M
 depends_on: []
@@ -79,7 +79,8 @@ never throws, injectable for tests):
   markers found within a BOUNDED walk of `dir`:
   - directory basenames: `.ssh`, `.aws`, `.gnupg`, `.kube`, `.docker`
   - file basenames: `id_rsa`, `id_dsa`, `id_ecdsa`, `id_ed25519`, `.env`,
-    `credentials` (matches `~/.aws/credentials`), or a `*.pem` / `*.key` file.
+    `.netrc`, `.git-credentials`, `.npmrc`, `credentials` (matches
+    `~/.aws/credentials`), or a `*.pem` / `*.key` file.
   Matching is by basename only (case-sensitive on the literal names above; `.pem`/
   `.key` by extension). The walk SKIPS descending into a `.git` directory (a
   re-adopt of an existing repo must not scan its object store).
@@ -136,6 +137,18 @@ comparison is exact-string against `adoptedPath`.
 - The `.gitignore` starter offered later (step 6b) can reduce what gets staged,
   but it is NOT a substitute for this guard — a user may decline it, and it does
   not cover `.ssh`/`.aws` by default. The guard is the gate.
+
+**Owner walkthrough (2026-07-18): Ready.** Two owner decisions:
+1. **Headless fail-closed, no escape hatch.** `--yes`/headless does NOT bypass the
+   secret/large-tree confirmation — it refuses. A hazardous tree can only be
+   adopted interactively by retyping the exact folder path. There is deliberately
+   no `--adopt-anyway` flag (safety over scriptability for this rare, deliberate
+   action).
+2. **Secret-marker set extended.** Added the token-bearing file basenames
+   `.netrc`, `.git-credentials`, `.npmrc` to the detection list (they gate the
+   high-friction confirm, not a hard refuse — a clean notes folder is unaffected).
+Home is a hard refuse either way. Independent WP (touches only adopt.js /
+adopt-git.js) — no A8/A13 dependency.
 
 ## Implementation notes & constraints
 
