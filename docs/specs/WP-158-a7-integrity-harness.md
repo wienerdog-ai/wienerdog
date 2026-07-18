@@ -14,7 +14,7 @@ branch: wp/158-a7-integrity-harness
 ## Context (read this, nothing else)
 
 A7 hardens the three integrity anchors of Wienerdog's unattended nightly run:
-the **pinned external executables** (WP-154), the **inert test-exec seams**
+the **pinned external executables** (WP-154), the **deleted test-exec env seams**
 (WP-155), the **canonical digest-bound job descriptor** (WP-156), and the
 **out-of-tree launcher** that verifies the app + descriptor before spawning
 (WP-157). **IRON RULE (ADR-0004): Wienerdog is just files.** The audit is
@@ -52,8 +52,10 @@ entry and the launcher — the harness must not claim that.
 The A7 mechanisms this harness exercises exist after its dependencies land:
 - `src/core/exec-identity.js` — `createPins`, `verifyPin`, `resolvePinnedSpawn`
   (WP-154).
-- `src/cli/run-job.js` `resolveCommand` + `src/core/dream/brain.js` fake-seam
-  gates behind `WIENERDOG_TEST` (WP-155).
+- `src/cli/run-job.js` `resolveCommand` + `src/core/dream/brain.js` with the
+  test-exec env seams DELETED (WP-155): neither reads `WIENERDOG_RUNJOB_CMD`/
+  `WIENERDOG_DREAM_CMD`; the run-job fake is a JS-only `opts.resolveCommand`
+  injection and the dream brain is substituted only via the WP-154 pin store.
 - `src/scheduler/descriptor.js` — `writeDescriptor`, `deriveDescriptorDigest`,
   `appTreeDigest` (WP-156).
 - `src/scheduler/launcher.js` — `verifyAndResolve(paths, name, {descriptorPath,
@@ -84,8 +86,9 @@ No A7 harness exists yet.
 
 ### What the harness proves (each maps to an A7 acceptance bullet)
 
-Using a **recording fake spawn** (a seam replacing the launcher's `spawn`, or
-`WIENERDOG_TEST=1` + `WIENERDOG_RUNJOB_CMD` pointing at a recorder), against a
+Using a **recording fake spawn** (a seam replacing the launcher's `spawn`, or a
+JS-only `opts.resolveCommand` injection pointing at a recorder — there is no env
+seam to abuse post-WP-155), against a
 disposable temp `$HOME`/`WIENERDOG_HOME`:
 
 0. **Non-vacuity baseline (control).** The clean, untampered fixture (matching
@@ -118,9 +121,11 @@ disposable temp `$HOME`/`WIENERDOG_HOME`:
    A completed re-vendor switches `current` + re-binds the entry digest and the
    next verify passes; an interrupted publish (staging dir removed before rename)
    leaves the prior valid `current` + entry verifying and runnable. *(bullet 6)*
-7. **Production seam inertness (WP-155 cross-check).** With `WIENERDOG_TEST` unset,
-   a set `WIENERDOG_RUNJOB_CMD` is ignored by `resolveCommand` — the recorder shows
-   the real resolution, not the fake.
+7. **Test-exec seams do not exist (WP-155 cross-check).** Setting
+   `WIENERDOG_RUNJOB_CMD` and `WIENERDOG_DREAM_CMD` has **no effect** —
+   `resolveCommand`/`spawnBrain` read neither, and `grep -rn
+   'WIENERDOG_RUNJOB_CMD\|WIENERDOG_DREAM_CMD' src/` is empty. The recorder shows
+   the real resolution regardless of the env vars.
 
 ## Implementation notes & constraints
 
@@ -165,7 +170,7 @@ disposable temp `$HOME`/`WIENERDOG_HOME`:
       config-rewrite (1), app-mutation/repoint/out-of-root (2), manifest+config (3),
       PATH-fake (4), pin structural failure — repoint/owner/mode/ancestor (5), and update-atomicity (6)
       negatives each refuse with **zero** recorded app/model spawn, plus the
-      non-vacuity baseline (0) and the WP-155 seam-inertness cross-check (7).
+      non-vacuity baseline (0) and the WP-155 seams-do-not-exist cross-check (7).
 - [ ] `npm run scenarios:a7-integrity` with `WIENERDOG_RUN_SCENARIOS` unset prints
       skip and exits 0 (no quota); `npm test` does not run the gated scenario.
 - [ ] `tests/scenarios/a7-integrity/README.md` states what is proven, how to run,

@@ -173,7 +173,7 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 | [WP-152](done/WP-152-codex-protocol-pin-and-rerun-discipline.md) | Pin the Codex parser version + make the re-verify-on-bump discipline actionable (audit A13, follows WP-100) | M7 | sonnet | Done | — |
 | [WP-153](WP-153-target-aware-symlink-reverser.md) | Target-aware manifest symlink reverser — uninstall never deletes a user's replacement link (audit A13 follow-up, Codex-found) | M7 | opus | Draft | WP-144 |
 | [WP-154](WP-154-executable-identity-pinning.md) | Pin claude/git/codex by command path + install dir at sync, verify structurally, spawn absolute, fail safe on drift (audit A7) | M7 | opus | Draft | — |
-| [WP-155](WP-155-inert-test-exec-seams.md) | Make production test-exec overrides inert without WIENERDOG_TEST + keep every dispatch shell:false (audit A7) | M7 | sonnet | Draft | WP-154 |
+| [WP-155](WP-155-inert-test-exec-seams.md) | Delete the test-exec env seams from production dispatch (DI + pinned fakes); keep every dispatch shell:false (audit A7) | M7 | opus | Draft | WP-154 |
 | [WP-156](WP-156-canonical-job-descriptor.md) | Generate a canonical, digest-bound job descriptor at schedule/sync time (audit A7) | M7 | opus | Draft | WP-144, WP-145, WP-154 |
 | [WP-157](WP-157-independent-launcher-and-app-integrity.md) | Independent launcher outside the app tree — verify current/app/descriptor/stance before spawn (audit A7) | M7 | opus | Draft | WP-144, WP-145, WP-156 |
 | [WP-158](WP-158-a7-integrity-harness.md) | A7 integrity containment proof — end-to-end negative harness for the scheduler/app/executable anchors (audit A7) | M7 | opus | Draft | WP-154, WP-155, WP-156, WP-157 |
@@ -1493,7 +1493,7 @@ graph LR
   WP152[WP-152 Codex parser version pin + rerun-on-bump runbook — audit A13, follows WP-100]
   WP144 --> WP153[WP-153 target-aware symlink reverser — uninstall keeps a user's replacement link — audit A13]
   WP154[WP-154 pin claude/git/codex absolute + fail-safe on drift — audit A7]
-  WP154 --> WP155[WP-155 inert prod test-exec seams + shell:false — audit A7]
+  WP154 --> WP155[WP-155 delete test-exec env seams (DI + pinned fakes) + shell:false — audit A7]
   WP144 --> WP156[WP-156 canonical digest-bound job descriptor — audit A7]
   WP145 --> WP156
   WP154 --> WP156

@@ -1,15 +1,15 @@
 ---
 id: WP-155
-title: Make production test-exec overrides inert without an explicit test flag, and keep every dispatch shell:false
+title: Delete the test-exec environment seams from production dispatch (DI + pinned fakes); keep every dispatch shell:false
 status: Draft
-model: sonnet
-size: S
+model: opus
+size: M
 depends_on: [WP-154]
 adrs: [ADR-0004, ADR-0028]
 branch: wp/155-inert-test-exec-seams
 ---
 
-# WP-155: Inert production test-exec seams + shell:false invariant (audit A7, part 2 of 6)
+# WP-155: Delete the test-exec env seams; DI + pinned-fake front door; shell:false invariant (audit A7, part 2 of 6)
 
 ## Context (read this, nothing else)
 
@@ -21,30 +21,58 @@ that let a test substitute the executable a job runs: `WIENERDOG_RUNJOB_CMD`
 nothing it ships should turn an environment variable into arbitrary code at
 03:30. This WP is A7's smallest hardening (audit finding **F5**).
 
-Two problems. First, the `WIENERDOG_RUNJOB_CMD` seam returns
+Two problems in the code today. First, the `WIENERDOG_RUNJOB_CMD` seam returns
 `{command: fake, args: [], shell: true}` — a **shell:true** dispatch, the only
 one in the scheduler, so a set env var becomes an arbitrary *shell* command
 line. Second, both seams are honored **unconditionally in production**: anyone
-who can set the var in the environment the scheduled `run-job` inherits
-(`launchctl setenv`, a systemd user env drop-in, a shell profile the scheduler
-reads) gets execution as the user. The audit's recommendation (F5): gate the
-seams behind an explicit test flag so they are **inert in a production install**,
-and drop `shell:true` for an argv dispatch.
+who can set the var in the environment the scheduled `run-job` inherits gets
+execution as the user.
 
-This WP makes both seams honored **only** when `WIENERDOG_TEST === '1'` is set,
-and makes the `resolveCommand` fake return **`shell:false`**. The npm `test`
-script sets `WIENERDOG_TEST=1` so the existing suite keeps working without
-per-test edits; `buildCleanEnv` passes `WIENERDOG_TEST` through only when already
-present, so an end-to-end test's spawned child still honors the seam while a
-production scheduled run (where the flag is never set) never does.
+**The original design for this WP is ABANDONED. RESOLVED (OWNER-APPROVED
+2026-07-18, A7 walkthrough):** the earlier plan — gate both seams behind an
+explicit `WIENERDOG_TEST=1` flag so they are inert in a production install — is
+**rejected as circular**. The gate variable and the attack variable live in the
+**same place**: any attacker who can set `WIENERDOG_RUNJOB_CMD` /
+`WIENERDOG_DREAM_CMD` in the scheduled job's environment can set
+`WIENERDOG_TEST=1` with the **same capability** (e.g. one systemd
+`~/.config/environment.d/*.conf` write — an in-boundary scoped write for A7).
+Gating an env-var attack behind another env var is not a boundary; it is
+security theatre that also leaves a live `shell:true` code path.
+
+**The approved design: DELETE both test-exec env seams from production code
+entirely.** A production dispatch path must contain **zero** branches that read
+a test env var to choose what to execute. Tests keep working through two
+*non-attacker-reachable* mechanisms:
+
+1. **Dependency injection for `run-job`.** The `WIENERDOG_RUNJOB_CMD` env read is
+   removed. The tests that used it already invoke `run-job` **in-process** with
+   injected `opts` (`loader`, `sendAlert`, `profile`, …); the fake command
+   becomes one more injected `opts` — a JS-only seam reachable only by a JS
+   caller, exactly like the existing `opts.profile` (the CLI entry never passes
+   one, so production stays frozen). The `shell:true` branch dies with the seam;
+   afterward there is **no** `shell:true` dispatch anywhere in the scheduler path.
+
+2. **The WP-154 pinned front door for the dream brain.** The `WIENERDOG_DREAM_CMD`
+   env read is removed. Subprocess-level dream tests install their fake brain
+   **legitimately** in their own temp `WIENERDOG_HOME`: a pin store
+   (`exec-pins.json`, WP-154's schema) whose `claude`/`codex` pin points at the
+   fake executable. The **real** dispatch path (`loadPins → verifyPin →
+   resolvePinnedSpawn → spawn`) then runs **unmodified**, and full pin-path
+   integration coverage falls out for free.
+
+**Iron-rule alignment.** After this WP, "Wienerdog is just files" is true of the
+dispatch code too: no shipped file reads an environment variable to decide what
+binary to run. The A7 acceptance bullet "Production test command overrides are
+inert without an explicit test build and remain shell:false" is now satisfied by
+**nonexistence** — the overrides do not exist in production code at all, which is
+strictly stronger than "inert". State this mapping honestly (see Acceptance).
 
 **Honest boundary (state this; do not overclaim).** Same-user control of BOTH
 the core and the OS scheduler can still replace both anchors. A7 protects
 **scoped core writes** and **detects drift**; it is **NOT** a claim against
-arbitrary same-user native malware — that is A12's territory. This WP closes a
-defense-in-depth smell (a shelled-out env seam in the production path); a
-same-user actor who can set the OS scheduler's environment and the test flag is
-outside the boundary by construction.
+arbitrary same-user native malware — that is A12's territory. This WP removes a
+defense-in-depth smell (a test-exec env seam in the production path) and its
+`shell:true` code path.
 
 > **ADR note:** `ADR-0028` records the A7 architectural decision — a **new ADR**
 > (owner-assigned 2026-07-18), distinct from ADR-0027 (A8's re-derived scheduler
@@ -53,36 +81,96 @@ outside the boundary by construction.
 
 ## Current state
 
-**`src/cli/run-job.js` `resolveCommand(paths, job, profile)`** (~L211):
+> WP-154 (a dependency) lands **before** this WP and edits both
+> `src/cli/run-job.js` and `src/core/dream/brain.js`. The bytes quoted below are
+> today's; the notes call out what WP-154 leaves in place for this WP to remove.
+> The implementer reads the actual post-WP-154 code.
+
+**`src/cli/run-job.js` `resolveCommand(paths, job, profile)`** (~L217) — the env
+seam and the sole `shell:true` in the scheduler:
 ```js
 function resolveCommand(paths, job, profile) {
   const fake = process.env.WIENERDOG_RUNJOB_CMD;
-  if (fake) return { command: fake, args: [], shell: true };   // ← shell:true, ungated
-  ...
+  if (fake) return { command: fake, args: [], shell: true };   // ← env read + shell:true, to be DELETED
+  // …builtin:dream → {…, shell:false}; skill:* → composeRoutineRun(…) → {…, shell:false}…
 }
 ```
-The resolved `{command, args, shell}` flows straight into the `spawn(command,
-args, { …, shell })` call in `runJob` (~L548).
+Every real branch already returns `shell:false` (`builtin:dream` at ~L226 sets
+`shell: false`; `composeRoutineRun` in `src/core/routine-runtime.js` returns
+`{command:'claude', args, cwd, shell: false, …}`). The **only** `shell:true`
+producer is the fake branch. The resolved `{command, args, shell, cwd?}` flows
+into the spawn at ~L557 (`spawn(command, args, { …, shell })`).
 
-**`src/cli/run-job.js` `buildCleanEnv(paths, name, platform)`** builds the child
-env and copies through `ENV_PASSTHROUGH = ['WIENERDOG_HOME','WIENERDOG_VAULT',
-'CLAUDE_CONFIG_DIR','CODEX_HOME','ANTHROPIC_API_KEY']` (plus a Windows list).
-`WIENERDOG_RUNJOB_CMD` / `WIENERDOG_DREAM_CMD` / `WIENERDOG_TEST` are **not**
-passed through today.
+`runJob(paths, job, opts)` (~L461) already threads a JS-only test seam
+`opts.profile` into `resolveCommand(paths, job, opts.profile)` at ~L516, with
+sibling seams `opts.sendAlert`, `opts.loader`, `opts.platform`,
+`opts.detectPolicyHooks` (each defaulted, reachable only by a JS caller — the CLI
+entry `run(argv)` passes none). This is the idiom the new fake-command seam joins.
 
-**`src/core/dream/brain.js` `spawnBrain(o)`** (~L157):
+**`src/core/dream/brain.js` `spawnBrain(o)`** (~L157) — the second env seam:
 ```js
-const fakeCmd = baseEnv.WIENERDOG_DREAM_CMD;   // ← ungated
-...
-if (fakeCmd) { command = fakeCmd; args = []; cwd = ensureBrainStaging(paths); }
-else if (harness === 'codex') { … } else { … }   // WP-154 makes this the pinned claude
+// WIENERDOG_DREAM_CMD is the test seam: run that executable instead of claude/codex.
+const fakeCmd = baseEnv.WIENERDOG_DREAM_CMD;                    // ← env read, to be DELETED
+const paths = getPaths(baseEnv);
+let command; let args; let cwd;
+if (fakeCmd) { command = fakeCmd; args = []; cwd = ensureBrainStaging(paths); }  // ← branch, to be DELETED
+else if (harness === 'codex') { … }   // WP-154 makes this spawn the pinned absolute codex
+else { … }                            // WP-154 makes this spawn the pinned absolute claude
 ```
-(WP-154, a dependency, replaces the `else`/`codex` bare-name spawns with the
-verified pinned absolute path and must run first; this WP edits the `fakeCmd`
-gating in the same function.)
+The version-probe (~L199) is guarded `if (!fakeCmd && command === 'claude')`;
+WP-154 rewrites the `command === 'claude'` half (the command becomes an absolute
+realpath), leaving the `!fakeCmd` half for this WP to remove. After WP-154 the
+brain resolves the real executable via
+`resolvePinnedSpawn('claude'|'codex', getPaths(baseEnv), baseEnv, platform)`
+(WP-154's `src/core/exec-identity.js`), which re-resolves `name` on `baseEnv.PATH`
+live and requires the live command path + `dirname(realpath)` to match the pin
+and the target to pass `verifyExecutable` (regular file, exec bit, owner ∈
+{uid,0}, no group/other-writable ancestor).
 
-**`package.json`** `"test"` script runs the node test runner (e.g. `node --test …`)
-without setting `WIENERDOG_TEST`.
+**`src/cli/dream.js` `run(argv)`** (~L308) — a **production** behavior branch on a
+test var: it skips the pre-dream containment self-check when `WIENERDOG_DREAM_CMD`
+is set:
+```js
+let containmentProbe = null;
+if (!process.env.WIENERDOG_DREAM_CMD && process.env.WIENERDOG_SKIP_CONTAINMENT_PROBE !== '1') {
+  containmentProbe = runContainmentProbe(paths, { model: cfg.model, env: process.env });
+  if (containmentProbe.outcome !== 'pass') { throw new WienerdogError(`dream halted: …`); }
+}
+```
+`dream.run(argv)` is invoked **in-process** by the integration tests (they call
+`dream.run` directly after setting `process.env`), and as `wienerdog dream
+--yes` on the scheduled path. `getPaths(env)`: `core = $WIENERDOG_HOME ||
+~/.wienerdog`; `state = <core>/state`; so the pin store is
+`<WIENERDOG_HOME>/state/exec-pins.json`.
+
+**Tests that read the two env seams today** (all convert here):
+- `tests/unit/scheduler-runjob.test.js` — a `withRun(env, envOverrides, argv,
+  opts)` helper (~L93) sets `process.env.WIENERDOG_RUNJOB_CMD` from
+  `envOverrides` (its `keys` array at ~L94 lists it) then calls
+  `runjob.run(argv, opts)`; ~20 call sites pass `{ WIENERDOG_RUNJOB_CMD: fake }`
+  where `fake` is a `writeScript(...)` `#!/bin/sh` script (shebang + `chmod
+  0755`). The `resolveCommand` unit test (~L319) save/restores the var.
+- `tests/unit/routine-runtime.test.js` (~L143, ~L166) — save/deletes/restores
+  `WIENERDOG_RUNJOB_CMD` around two cases.
+- `tests/unit/dream-brain.test.js` (~L141, ~L206, ~L239) — three cases run
+  bespoke `#!/bin/sh` fakes via `env: { WIENERDOG_DREAM_CMD: fakeCmd, … }`
+  (exit-code, stderrTail, redaction). WP-154 already edits this file to add
+  pinned-path assertions and keep the fake seam working; this WP removes the
+  seam and converts these three cases.
+- `tests/integration/dream.test.js` — `runDream(ctx, argv, extraEnv)` (~L143)
+  sets `WIENERDOG_DREAM_CMD: FAKE_BRAIN` for every run and calls `dream.run`
+  in-process; the probe-gating cases (~L744–833) exploit `WIENERDOG_DREAM_CMD:''`
+  (falsy ⇒ probe runs) and the fake-brain-skips-probe premise.
+- `tests/integration/adopt-e2e.test.js` (~L81) — runs `init → adopt → sync →
+  dream` in-process with `WIENERDOG_DREAM_CMD: FAKE_BRAIN`; `sync` runs WP-154's
+  `createPins`.
+- `tests/unit/codex-adapter.test.js` (~L424–431) — drives `spawnBrain({harness:
+  'codex', …, env: { WIENERDOG_DREAM_CMD: fakeCodex }})`.
+
+Fixtures `tests/fixtures/dream/fake-brain.js` and
+`tests/fixtures/adopt/fake-brain-mapped.js` are already regular files with the
+exec bit set (`rwxr-xr-x`) and a `#!/usr/bin/env node` shebang — directly
+spawnable as pinned targets, no fixture edit needed.
 
 ## Deliverables (permission boundary — touch ONLY these)
 
@@ -90,109 +178,228 @@ without setting `WIENERDOG_TEST`.
 
 | Action | Path | Notes |
 |--------|------|-------|
-| modify | src/cli/run-job.js | Gate `WIENERDOG_RUNJOB_CMD` behind `WIENERDOG_TEST==='1'`; return `shell:false`. Add `WIENERDOG_TEST` to `ENV_PASSTHROUGH` (passed through ONLY when present). |
-| modify | src/core/dream/brain.js | Gate `WIENERDOG_DREAM_CMD` behind `WIENERDOG_TEST==='1'` (read from `baseEnv`). |
-| modify | package.json | The `test` script sets `WIENERDOG_TEST=1` for the whole run (POSIX inline; document the Windows-dev caveat). Do NOT change any other script. |
-| create | tests/unit/test-seam-gate.test.js | Prove the seams are inert without the flag, honored with it, and the run-job fake is `shell:false`. |
+| modify | src/cli/run-job.js | **Delete** the `WIENERDOG_RUNJOB_CMD` env read + `shell:true` fake branch in `resolveCommand`; `resolveCommand` no longer reads any env. Add a JS-only `opts.resolveCommand` injection in `runJob` (default = the module `resolveCommand`). Update the two stale JSDoc references to the seam. No `shell: true` literal remains in the file. |
+| modify | src/core/dream/brain.js | **Delete** every `fakeCmd`/`WIENERDOG_DREAM_CMD` reference `spawnBrain` still contains after WP-154: the `const fakeCmd = …` line, the `if (fakeCmd)` dispatch branch, and the `!fakeCmd &&` guard on the version-probe. Leave WP-154's pinned resolution intact. |
+| modify | src/cli/dream.js | Remove the `!process.env.WIENERDOG_DREAM_CMD &&` term from the containment-probe gate (~L309) so it reads `if (process.env.WIENERDOG_SKIP_CONTAINMENT_PROBE !== '1')`. No other change. |
+| modify | tests/unit/scheduler-runjob.test.js | Convert every `withRun(..., { WIENERDOG_RUNJOB_CMD: fake }, ...)` call to inject the fake via `opts.resolveCommand`; drop `WIENERDOG_RUNJOB_CMD` from the `keys` array and the `resolveCommand` test's save/restore. Add the shell:false invariant + "env var has no effect" assertions (below). |
+| modify | tests/unit/routine-runtime.test.js | Drop the now-dead `WIENERDOG_RUNJOB_CMD` save/delete/restore in both cases (the module never reads env now). |
+| modify | tests/unit/dream-brain.test.js | Convert the three `WIENERDOG_DREAM_CMD` fake cases to the pinned-fake front door via a `pinFakeBrain` helper (below); add a "`WIENERDOG_DREAM_CMD` set has no effect — the pinned brain runs" assertion. |
+| modify | tests/integration/dream.test.js | `runDream` installs a pinned fake `claude` + sets `WIENERDOG_SKIP_CONTAINMENT_PROBE=1` by default; drop `WIENERDOG_DREAM_CMD`. Re-spec the probe-gating cases (below); delete the fake-brain-skips-probe case; convert the evidence case to the pinned fake. |
+| modify | tests/integration/adopt-e2e.test.js | Install the fake `claude` at `<home>/.local/bin/claude` so `sync`'s `createPins` pins it against the job PATH and `dream` spawns it; drop `WIENERDOG_DREAM_CMD`; set `WIENERDOG_SKIP_CONTAINMENT_PROBE=1`. |
+| modify | tests/unit/codex-adapter.test.js | Install a pinned fake `codex` (harness `'codex'`) via `pinFakeBrain(root, core, fakeCodex, 'codex')`; drop `WIENERDOG_DREAM_CMD`. |
+
+`package.json` is **NOT** touched (the abandoned design set `WIENERDOG_TEST=1` in
+the `test` script; there is no test flag now). No new test file is created — the
+negative/invariant assertions live in the converted files above.
 
 ### Exact contracts
 
-**`resolveCommand` fake branch:**
+**`resolveCommand` (run-job.js) — after the edit:**
 ```js
-const seams = process.env.WIENERDOG_TEST === '1';
-const fake = seams ? process.env.WIENERDOG_RUNJOB_CMD : undefined;
-if (fake) return { command: fake, args: [], shell: false };   // gated + shell:false
+/** Resolve the child command + args from a job's `run` field.
+ *  @returns {{command:string, args:string[], shell:false, cwd?:string}} */
+function resolveCommand(paths, job, profile) {
+  // (no env read — the deleted fake branch was the only env dependency)
+  const sep = job.run.indexOf(':');
+  const kind = sep === -1 ? job.run : job.run.slice(0, sep);
+  // …builtin:dream → { …, shell:false }; skill:* → composeRoutineRun (shell:false); else throw…
+}
 ```
-With `WIENERDOG_TEST` unset, `WIENERDOG_RUNJOB_CMD` is **ignored entirely** —
-`resolveCommand` proceeds to the real `builtin:`/`skill:` resolution.
+`shell` is now `false` on every returned path. Keep threading `shell` at the
+spawn site (it is provably always `false`); do not introduce a `shell:true`
+literal anywhere.
 
-**`spawnBrain` fake branch:**
+**`runJob` (run-job.js) — the new JS-only injection seam:**
 ```js
-const fakeCmd = baseEnv.WIENERDOG_TEST === '1' ? baseEnv.WIENERDOG_DREAM_CMD : undefined;
+// in runJob, replacing the direct call at ~L516:
+const resolveCmd = opts.resolveCommand || resolveCommand;
+const { command, args, shell, cwd: composedCwd } = resolveCmd(paths, job, opts.profile);
 ```
-With the flag unset, the brain resolves the real (WP-154-pinned) `claude`/`codex`.
+Document `opts.resolveCommand` in `runJob`'s JSDoc exactly like `opts.profile`: a
+**code seam for tests only**, reachable only by a JS caller — `run(argv)` (the CLI
+entry) never sets it, so production always uses the module `resolveCommand`. A
+test override returns the fake directly, e.g.
+`{ resolveCommand: () => ({ command: fakeScript, args: [], shell: false }) }`.
+(The `#!/bin/sh` fake scripts already carry a shebang + exec bit, so `shell:false`
+spawns them fine — no fixture change.)
 
-**`buildCleanEnv`:** add `'WIENERDOG_TEST'` to `ENV_PASSTHROUGH`. The existing
-loop copies a var **only if present** (`if (process.env[k]) env[k] = …`), so a
-production run (flag absent) still gets a clean child env with no flag, while an
-end-to-end test that sets `WIENERDOG_TEST=1` propagates it into the spawned dream
-child so `WIENERDOG_DREAM_CMD` is honored there. No other passthrough changes.
+**`spawnBrain` (brain.js) — after the edit:** the brain command is resolved
+**only** via WP-154's `resolvePinnedSpawn` for the `codex`/`claude` paths; there
+is no `fakeCmd` variable, no `if (fakeCmd)` branch, and the version-probe guard no
+longer mentions `fakeCmd`. Nothing in the function reads `WIENERDOG_DREAM_CMD`.
 
-**`package.json` `test` script:** prefix the runner with `WIENERDOG_TEST=1`, e.g.
-`"test": "WIENERDOG_TEST=1 node --test …"` (keep the existing runner + globs
-otherwise byte-identical). This makes the whole suite run with the flag, so no
-individual test file needs editing.
+**`dream.js` — after the edit:**
+```js
+let containmentProbe = null;
+if (process.env.WIENERDOG_SKIP_CONTAINMENT_PROBE !== '1') {
+  containmentProbe = runContainmentProbe(paths, { model: cfg.model, env: process.env });
+  if (containmentProbe.outcome !== 'pass') { throw new WienerdogError(`dream halted: …`); }
+}
+```
+
+**Test helper `pinFakeBrain` (added to the test files that need it — dream-brain,
+dream, codex-adapter; each may keep its own copy or a tiny shared local).** This
+is the pinned-fake install recipe. It MUST satisfy WP-154's structural checks so
+the implementer does not fight `verifyExecutable`/`verifyPin`:
+
+```js
+/** Install `fakeScriptPath` as the pinned `name` ('claude'|'codex') in `core`'s
+ *  pin store, and return an env fragment that makes the REAL dispatch path
+ *  (resolvePinnedSpawn → verifyPin → verifyExecutable → spawn) resolve and run it.
+ *  @param {string} root  a fresh mkdtemp root (used for the bin dir)
+ *  @param {string} core  WIENERDOG_HOME for this test (pin store at <core>/state)
+ *  @param {string} fakeScriptPath  an executable #! script (regular file, +x)
+ *  @param {string} [name='claude']
+ *  @returns {{PATH:string, WIENERDOG_HOME:string}} env fragment to spread into env */
+function pinFakeBrain(root, core, fakeScriptPath, name = 'claude') {
+  // 1. realpath the root FIRST (macOS /var → /private/var) so commandPath and
+  //    dirname(realpath) are stable and the pin's string-equality checks pass.
+  const realRoot = fs.realpathSync(root);
+  const binDir = path.join(realRoot, 'bin');       // user-owned; 0755 ⇒ NOT group/other-writable
+  fs.mkdirSync(binDir, { recursive: true });
+  const cmd = path.join(binDir, name);
+  fs.copyFileSync(fakeScriptPath, cmd);            // regular file (copy, not symlink)
+  fs.chmodSync(cmd, 0o755);                        // exec bit; owner = the test user
+  // 2. Write the 0600 pin store: commandPath = first PATH hit, installDir =
+  //    dirname(realpath) — both equal `cmd`/`binDir` because realRoot is real
+  //    and `cmd` is a plain file (no symlink components).
+  const store = { schema: 1, pins: { [name]: {
+    commandPath: cmd, installDir: binDir, version: 'fake', pinnedAt: new Date().toISOString(),
+  } } };
+  const stateDir = path.join(core, 'state');
+  fs.mkdirSync(stateDir, { recursive: true });
+  fs.writeFileSync(path.join(stateDir, 'exec-pins.json'), JSON.stringify(store), { mode: 0o600 });
+  // 3. binDir FIRST on PATH so resolveExecutable(name) hits `cmd`.
+  return { PATH: binDir + path.delimiter + process.env.PATH, WIENERDOG_HOME: core };
+}
+```
+The exact `exec-pins.json` key/schema (`schema`, `pins.<name>.commandPath`,
+`installDir`, `version`, `pinnedAt`) is WP-154's; if WP-154 changes it, mirror the
+shipped shape (read `src/core/exec-identity.js`). Spawn resolution flow to keep in
+mind: `spawnBrain` calls `resolvePinnedSpawn(name, getPaths(baseEnv), baseEnv,
+platform)`, which re-resolves `name` on `baseEnv.PATH` (hence the env fragment must
+be spread into the `env` passed to `spawnBrain`/`dream.run`'s `process.env`).
+
+**Re-spec of `dream.test.js` probe-gating cases (~L744–833):**
+- `runDream` default: install the pinned fake `claude` (via `pinFakeBrain`), set
+  `WIENERDOG_SKIP_CONTAINMENT_PROBE: '1'` (a fake brain cannot satisfy a live
+  probe), remove `WIENERDOG_DREAM_CMD`. Most cases inherit this and just commit.
+- **probe FAIL / probe INCONCLUSIVE cases:** these WANT the probe to run. Override
+  the default with `WIENERDOG_SKIP_CONTAINMENT_PROBE: ''` and set
+  `WIENERDOG_CONTAINMENT_PROBE_CMD` to the fail/garbage probe fake (unchanged
+  seam). The probe throws at step 8b **before** `spawnBrain`, so no pin is
+  required to reach the assertion (the default pin install is harmless).
+- **"the fake-brain seam SKIPS the probe entirely" case (~L781): DELETE it.** Its
+  premise — setting `WIENERDOG_DREAM_CMD` skips the probe — no longer exists. The
+  canonical skip is the `WIENERDOG_SKIP_CONTAINMENT_PROBE=1` case (~L793), which
+  stays and is now also the default path.
+- **evidence case (~L806):** replace `env: { WIENERDOG_DREAM_CMD: FAKE_BRAIN, … }`
+  on the direct `spawnBrain` call with `env: { ...process.env,
+  ...pinFakeBrain(ctx.root, ctx.core, FAKE_BRAIN) }`; keep the `containmentProbe:
+  { outcome:'pass', … }` assertion.
 
 ## Implementation notes & constraints
 
-- Zero new dependencies; plain Node ≥ 18, JSDoc types only.
-- **No dependency on WP-144/145** — this WP touches none of `manifest.js`, the
-  `scheduler-entry` kind, `schedule.js`, or `generators.js`. It depends on
-  **WP-154** solely because both edit `src/core/dream/brain.js` (serialize; WP-154
-  lands the pinned-spawn `else` branches first, this WP edits the `fakeCmd`
-  gating).
-- **Windows-dev caveat:** the inline `WIENERDOG_TEST=1 …` form is POSIX. If a
-  cross-platform `npm test` on native Windows is required, use a zero-dep
-  approach (a tiny `node -e` pre-step that re-execs the runner with the env set,
-  or the `env` field of a wrapper) — CI runs POSIX, so the inline form is
-  acceptable for now; record the choice under "Decisions made".
-- If gating breaks a test that spawns `run-job`/`dream` through a **bespoke env
-  that strips inherited vars** (rare), that missing propagation is a real gap:
-  STOP and report it (do not edit unlisted test files to paper over it) — it is a
-  spec bug to route back.
-- The child dream never sees `WIENERDOG_RUNJOB_CMD` (not in any passthrough) —
-  only `run-job`'s own process reads it, which is the intended surface.
+- Zero new dependencies; plain Node ≥ 18, JSDoc types only; no build step.
+- **Serialization with WP-154 (same two source files).** WP-154 lands first and
+  rewrites the brain's `codex`/`claude` resolution to pinned absolute paths and
+  the version-probe's `command === 'claude'` check. WP-155 removes only what
+  remains that references the deleted seams. Read the actual post-WP-154
+  `brain.js`/`run-job.js`; do not reintroduce a bare-name spawn.
+- **`adopt-e2e` runs `sync` ⇒ `createPins` (WP-154).** Do NOT hand-write a pin
+  that `sync` will overwrite. Instead place the fake `claude` at
+  `<home>/.local/bin/claude` (the dir the job clean PATH front-loads) so
+  `createPins` pins it, and prepend that same dir to `process.env.PATH` so the
+  in-process dream's `resolvePinnedSpawn` (which resolves on `process.env.PATH`)
+  resolves the **same** command path — otherwise pin-time and spawn-time paths
+  diverge and the dream fails safe. If you cannot make the two PATHs agree
+  (createPins must pin against the **job clean PATH** that `run-job`/`dream` later
+  spawn under), that is a **WP-154 PATH-consistency gap**: STOP and route it back
+  as a spec bug (do not paper over it by disabling the pin path in the test).
+- **Probe-skip seam is out of scope but reused.** `WIENERDOG_SKIP_CONTAINMENT_PROBE`
+  and `WIENERDOG_CONTAINMENT_PROBE_CMD` are pre-existing test env seams in
+  `dream.js`/`containment-probe.js`; this WP removes only the `WIENERDOG_DREAM_CMD`
+  term from the probe gate and does not touch them. They are the "same disease
+  elsewhere" — flag for a separate agenda item, do not expand scope.
+- **Scenario-runner `delete env.WIENERDOG_DREAM_CMD` lines** in
+  `tests/scenarios/run-scenarios.js` (~L314, ~L371 comment) and
+  `tests/scenarios/negative/run-negative.js` (~L218) become dead no-ops after the
+  seam is gone. **Decision: leave them** — they are cosmetic residue in a
+  live-run harness that `npm test` never executes, and touching them would widen
+  the deliverables to scenario files for zero behavioral gain. (They are why the
+  grep acceptance below is scoped to `src/`.)
+- The `WIENERDOG_RUNJOB_TIMEOUT_MS` timeout knob is a different, non-exec seam and
+  stays; keep it in `withRun`'s `keys` array.
 - When uncertain, choose the simpler option and record it under "Decisions made".
 
 ## Security checklist
 
-- [ ] With `WIENERDOG_TEST` unset, both `WIENERDOG_RUNJOB_CMD` and
-      `WIENERDOG_DREAM_CMD` are **ignored** — a production scheduled run dispatches
-      only the real code-owned command.
-- [ ] The `resolveCommand` fake returns **`shell:false`** — there is no
-      `shell:true` dispatch anywhere in the scheduler path.
-- [ ] `buildCleanEnv` passes `WIENERDOG_TEST` through **only when already set** —
-      production child envs carry no test flag.
-- [ ] No unlisted file (especially existing tests) is modified; the suite passes
-      because the npm script sets the flag globally.
+- [ ] `resolveCommand` reads **no** environment variable; a set
+      `WIENERDOG_RUNJOB_CMD` has zero effect on what a scheduled job dispatches.
+- [ ] `spawnBrain` reads **no** `WIENERDOG_DREAM_CMD`; the brain is resolved only
+      via WP-154's pinned front door; a set `WIENERDOG_DREAM_CMD` has zero effect.
+- [ ] There is **no** `shell:true` dispatch anywhere in the scheduler path
+      (`grep -n 'shell: true' src/cli/run-job.js` returns nothing; every
+      `resolveCommand` return is `shell:false`).
+- [ ] `dream.js` no longer branches production behavior on `WIENERDOG_DREAM_CMD`.
+- [ ] Grep acceptance: `grep -rn 'WIENERDOG_RUNJOB_CMD\|WIENERDOG_DREAM_CMD' src/`
+      returns **nothing** — the seams do not exist in production code.
+- [ ] No unlisted file is modified; the suite passes via DI + pinned fakes, not a
+      global test flag.
 
 ## Acceptance criteria (mapped to the A7 acceptance bullets)
 
 - [ ] **[A7 — "Production test command overrides are inert without an explicit
-      test build and remain shell:false."]** With `WIENERDOG_TEST` unset and
-      `WIENERDOG_RUNJOB_CMD=/bin/echo` set, `resolveCommand` returns the real
-      `builtin:dream` resolution (not the fake); with `WIENERDOG_TEST=1` it returns
-      `{command:'/bin/echo', args:[], shell:false}`.
-- [ ] With `WIENERDOG_TEST` unset and `WIENERDOG_DREAM_CMD` set, `spawnBrain`
-      resolves the real brain (asserted via the WP-154 pinned-path seam / a
-      throw when no pin), not the fake.
-- [ ] The full existing suite passes unchanged (the npm `test` script provides the
-      flag); no per-test edits.
+      test build and remain shell:false."]** Satisfied by **nonexistence**, which
+      is stronger than inertness: `grep -rn 'WIENERDOG_RUNJOB_CMD\|WIENERDOG_DREAM_CMD'
+      src/` is empty, and no `resolveCommand` path returns `shell:true`. A unit
+      test sets `process.env.WIENERDOG_RUNJOB_CMD=/bin/echo` and asserts
+      `resolveCommand({}, {name:'dream', run:'builtin:dream'})` still returns the
+      real `builtin:dream` resolution with `shell:false` (the env var is ignored).
+- [ ] A unit/integration test sets `WIENERDOG_DREAM_CMD` and asserts `spawnBrain`
+      ignores it — the **pinned** brain runs (via `pinFakeBrain`), proving the env
+      seam is dead and the WP-154 pin path is the only substitution mechanism.
+- [ ] The `run-job` fake is injected via `opts.resolveCommand` (JS-only); the CLI
+      entry passes none, so production `resolveCommand` is always used.
+- [ ] The dream integration/adopt/codex tests drive the real pinned dispatch
+      (`resolvePinnedSpawn → verifyPin → spawn`) against a fake installed in a temp
+      `WIENERDOG_HOME` pin store — full pin-path coverage, no env seam.
+- [ ] The full suite passes with **no** `WIENERDOG_TEST` flag and no
+      `package.json` change.
 - [ ] `npm test` and `npm run lint` are green.
 
 ## Verification steps (run these; paste output in the PR)
 
 ```bash
-npm test -- --test-name-pattern "test-seam-gate|run-job|dream-brain"
-# prove production inertness directly (flag unset ⇒ fake ignored):
-WIENERDOG_RUNJOB_CMD=/bin/echo node -e "const {resolveCommand}=require('./src/cli/run-job'); console.log(resolveCommand({}, {name:'dream', run:'builtin:dream'}))"
+# the seams do not exist in production code:
+grep -rn 'WIENERDOG_RUNJOB_CMD\|WIENERDOG_DREAM_CMD' src/ ; test $? -eq 1 && echo "OK: absent from src/"
+# no shell:true dispatch remains:
+grep -n 'shell: true' src/cli/run-job.js ; test $? -eq 1 && echo "OK: no shell:true"
+# the converted suites:
+npm test -- --test-name-pattern "scheduler-runjob|routine-runtime|dream-brain|dream-integration|adopt-e2e|codex-adapter"
 npm test
 npm run lint
 ```
 
 ## Out of scope (do NOT do these)
 
-- Resolving/verifying/pinning the executables — **WP-154** (this WP only gates the
-  fake seams; it does not change how the real command is resolved).
+- Resolving/verifying/pinning the executables — **WP-154** (this WP consumes the
+  pin front door; it does not change how the real command is resolved).
+- Removing the `WIENERDOG_SKIP_CONTAINMENT_PROBE` / `WIENERDOG_CONTAINMENT_PROBE_CMD`
+  probe seams, the `WIENERDOG_RUNJOB_TIMEOUT_MS` timeout knob, or the
+  `WIENERDOG_UPDATE_FETCH_CMD` update-fetch seam — same disease, **separate agenda
+  item** (flag, do not touch).
+- Cleaning the dead `delete env.WIENERDOG_DREAM_CMD` lines in `tests/scenarios/*`
+  (decision above: left as harmless residue).
 - The job descriptor, digest binding, or the launcher — **WP-156 / WP-157**.
 - The `schedulerSpawn` `WIENERDOG_LOADER_NOOP` / `WIENERDOG_TEST_NO_REAL_SCHEDULER`
-  seams (already correctly guarded in `src/scheduler/spawn.js`) — leave untouched.
+  seams in `src/scheduler/spawn.js` — leave untouched.
 
 ## Definition of done
 
 1. All verification steps pass locally; output pasted into the PR body.
 2. Branch `wp/155-inert-test-exec-seams`; conventional commits; PR titled
-   `fix(security): gate test-exec seams behind WIENERDOG_TEST + drop shell:true (WP-155)`.
+   `fix(security): delete test-exec env seams — DI + pinned fakes, shell:false invariant (WP-155)`.
 3. PR template filled, including "Decisions made" (or "none") and `Generated-by:`.
 4. This spec's `status:` flipped to `In-Review` in the same PR.
 
