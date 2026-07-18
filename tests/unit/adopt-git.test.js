@@ -263,3 +263,164 @@ test('adopt refuses a vault inside the canonical core (ADR-0019) with zero write
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
+
+// ── WP-149: inspectAdoptTree (audit A13 adopt guard) ─────────────────────────
+
+/** Fresh temp dir for tree-inspection cases. */
+function treeSetup() {
+  return fs.mkdtempSync(path.join(os.tmpdir(), 'wd-adopt-tree-'));
+}
+
+test('inspectAdoptTree: dir === home reports isHome', () => {
+  const root = treeSetup();
+  const r = adoptGit.inspectAdoptTree(root, root);
+  assert.equal(r.isHome, true);
+});
+
+test('inspectAdoptTree: finds sensitive dirs, key files, and pem/key extensions as relative paths', () => {
+  const root = treeSetup();
+  fs.mkdirSync(path.join(root, '.ssh'), { recursive: true });
+  fs.writeFileSync(path.join(root, '.ssh', 'id_rsa'), 'x');
+  fs.mkdirSync(path.join(root, 'sub'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'sub', 'server.pem'), 'x');
+  fs.writeFileSync(path.join(root, '.env'), 'x');
+  fs.writeFileSync(path.join(root, 'notes.md'), '# fine\n');
+
+  const r = adoptGit.inspectAdoptTree(root, '/nonexistent-home');
+  assert.equal(r.isHome, false);
+  assert.ok(r.sensitive.includes('.ssh'), 'sensitive dir basename');
+  assert.ok(r.sensitive.includes('.ssh/id_rsa'), 'key file inside sensitive dir');
+  assert.ok(r.sensitive.includes('sub/server.pem'), 'pem extension in subdir');
+  assert.ok(r.sensitive.includes('.env'), 'dotenv file');
+  assert.ok(!r.sensitive.includes('notes.md'), 'plain note not flagged');
+  assert.equal(r.tooLarge, false);
+});
+
+test('inspectAdoptTree: .git directories are not descended into', () => {
+  const root = treeSetup();
+  fs.mkdirSync(path.join(root, '.git', 'objects'), { recursive: true });
+  fs.writeFileSync(path.join(root, '.git', 'objects', 'id_rsa'), 'x'); // would match if descended
+  const r = adoptGit.inspectAdoptTree(root, '/nonexistent-home');
+  assert.deepEqual(r.sensitive, []);
+});
+
+test('inspectAdoptTree: lowered entry cap marks the tree truncated + tooLarge', () => {
+  const root = treeSetup();
+  for (let i = 0; i < 12; i++) fs.writeFileSync(path.join(root, `f${i}.md`), 'x');
+  const r = adoptGit.inspectAdoptTree(root, '/nonexistent-home', { maxEntries: 5 });
+  assert.equal(r.truncated, true);
+  assert.equal(r.tooLarge, true);
+});
+
+test('inspectAdoptTree: lowered byte cap also truncates', () => {
+  const root = treeSetup();
+  fs.writeFileSync(path.join(root, 'a.md'), 'x'.repeat(4096));
+  fs.writeFileSync(path.join(root, 'b.md'), 'x'.repeat(4096));
+  const r = adoptGit.inspectAdoptTree(root, '/nonexistent-home', { maxBytes: 1000 });
+  assert.equal(r.truncated, true);
+  assert.equal(r.tooLarge, true);
+});
+
+test('inspectAdoptTree: a clean small notes folder is unflagged', () => {
+  const root = treeSetup();
+  fs.mkdirSync(path.join(root, '05-Daily'), { recursive: true });
+  fs.writeFileSync(path.join(root, '05-Daily', '2026-07-18.md'), '# day\n');
+  fs.writeFileSync(path.join(root, 'hub.md'), '# hub\n');
+  const r = adoptGit.inspectAdoptTree(root, '/nonexistent-home');
+  assert.deepEqual(
+    { isHome: r.isHome, sensitive: r.sensitive, tooLarge: r.tooLarge, truncated: r.truncated },
+    { isHome: false, sensitive: [], tooLarge: false, truncated: false }
+  );
+  assert.equal(r.entryCount, 3, 'dir + two files counted');
+});
+
+test('inspectAdoptTree: a symlink is counted but never followed', () => {
+  if (process.platform === 'win32') return;
+  const root = treeSetup();
+  const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-adopt-outside-'));
+  fs.writeFileSync(path.join(outside, 'id_rsa'), 'x');
+  fs.symlinkSync(outside, path.join(root, 'link-out'));
+  const r = adoptGit.inspectAdoptTree(root, '/nonexistent-home');
+  assert.deepEqual(r.sensitive, [], 'content behind the symlink is not scanned');
+  assert.equal(r.entryCount, 1, 'the symlink itself is counted');
+});
+
+test('inspectAdoptTree: never throws on an unreadable dir (best-effort)', () => {
+  const r = adoptGit.inspectAdoptTree('/nonexistent-dir-xyz', '/nonexistent-home');
+  assert.deepEqual(
+    { isHome: r.isHome, sensitive: r.sensitive, entryCount: r.entryCount, tooLarge: r.tooLarge },
+    { isHome: false, sensitive: [], entryCount: 0, tooLarge: false }
+  );
+});
+
+test('adopt hard-refuses the home directory before any git work (WP-149)', async () => {
+  const adopt = require('../../src/cli/adopt');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-adopt-home-'));
+  const core = path.join(root, 'wd');
+  const configPath = path.join(core, 'config.yaml');
+
+  const ENV_KEYS = ['HOME', 'WIENERDOG_HOME', 'WIENERDOG_VAULT', 'CLAUDE_CONFIG_DIR', 'CODEX_HOME'];
+  const saved = {};
+  for (const k of ENV_KEYS) saved[k] = process.env[k];
+
+  try {
+    fs.mkdirSync(core, { recursive: true });
+    fs.writeFileSync(configPath, 'version: 1\nvault: null\nmemory_mode: standard\n');
+    Object.assign(process.env, { HOME: root, WIENERDOG_HOME: core });
+    for (const k of ['WIENERDOG_VAULT', 'CLAUDE_CONFIG_DIR', 'CODEX_HOME']) delete process.env[k];
+
+    await assert.rejects(
+      () => adopt.run([root, '--yes']),
+      (err) => {
+        assert.ok(err instanceof WienerdogError);
+        assert.match(err.message, /refusing to adopt your home directory/);
+        return true;
+      }
+    );
+    assert.equal(fs.existsSync(path.join(root, '.git')), false, 'no git init happened');
+  } finally {
+    for (const k of ENV_KEYS) {
+      if (saved[k] === undefined) delete process.env[k];
+      else process.env[k] = saved[k];
+    }
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('adopt under --yes refuses a tree with sensitive files instead of auto-accepting (WP-149)', async () => {
+  const adopt = require('../../src/cli/adopt');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-adopt-secret-'));
+  const core = path.join(root, 'wd');
+  const vault = path.join(root, 'notes');
+  const configPath = path.join(core, 'config.yaml');
+
+  const ENV_KEYS = ['HOME', 'WIENERDOG_HOME', 'WIENERDOG_VAULT', 'CLAUDE_CONFIG_DIR', 'CODEX_HOME'];
+  const saved = {};
+  for (const k of ENV_KEYS) saved[k] = process.env[k];
+
+  try {
+    fs.mkdirSync(core, { recursive: true });
+    fs.mkdirSync(path.join(vault, '.ssh'), { recursive: true });
+    fs.writeFileSync(path.join(vault, '.ssh', 'id_rsa'), 'x');
+    fs.writeFileSync(path.join(vault, 'hub.md'), '# hub\n');
+    fs.writeFileSync(configPath, 'version: 1\nvault: null\nmemory_mode: standard\n');
+    Object.assign(process.env, { HOME: root, WIENERDOG_HOME: core });
+    for (const k of ['WIENERDOG_VAULT', 'CLAUDE_CONFIG_DIR', 'CODEX_HOME']) delete process.env[k];
+
+    await assert.rejects(
+      () => adopt.run([vault, '--yes']),
+      (err) => {
+        assert.ok(err instanceof WienerdogError);
+        assert.match(err.message, /refusing to adopt a folder with sensitive files/);
+        return true;
+      }
+    );
+    assert.equal(fs.existsSync(path.join(vault, '.git')), false, 'no git init happened');
+  } finally {
+    for (const k of ENV_KEYS) {
+      if (saved[k] === undefined) delete process.env[k];
+      else process.env[k] = saved[k];
+    }
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});

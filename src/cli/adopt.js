@@ -55,6 +55,22 @@ function confirm(prompt) {
   });
 }
 
+/**
+ * Ask a question on stdin and resolve the RAW typed line (high-friction typed
+ * confirmation — WP-149; the caller compares it exact-string).
+ * @param {string} prompt
+ * @returns {Promise<string>}
+ */
+function confirmTyped(prompt) {
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  return new Promise((resolve) => {
+    rl.question(prompt, (answer) => {
+      rl.close();
+      resolve(answer);
+    });
+  });
+}
+
 /** @param {string} dir @param {string[]} args @returns {import('child_process').SpawnSyncReturns<Buffer>} */
 function git(dir, args) {
   return spawnSync('git', ['-C', dir, ...args]);
@@ -153,6 +169,49 @@ async function run(argv) {
       "Your vault can't live inside Wienerdog's own folder (~/.wienerdog) — " +
         'pick a location of your own, like ~/wienerdog or your Documents.'
     );
+  }
+
+  // 3b. Adopt guard (WP-149, audit A13): refuse/high-friction-gate a hazardous
+  //     target BEFORE any git init / git add -A can snapshot it.
+  const guard = adoptGit.inspectAdoptTree(adoptedPath, fs.realpathSync(paths.home));
+
+  // 1) Home directory → hard refuse (never adopt $HOME as a vault).
+  if (guard.isHome) {
+    throw new WienerdogError(
+      "refusing to adopt your home directory as a vault — 'git add -A' here would try to " +
+        'snapshot everything under ~. Point adopt at a dedicated notes folder (e.g. ~/wienerdog).'
+    );
+  }
+
+  // 2) Secret material or an unexpectedly large tree → HIGH-FRICTION confirmation.
+  //    --yes / headless must NOT auto-accept this: fail closed there.
+  if (guard.sensitive.length > 0 || guard.tooLarge) {
+    const reasons = [];
+    if (guard.sensitive.length > 0) {
+      reasons.push(
+        `sensitive files (${guard.sensitive.slice(0, 8).join(', ')}${guard.sensitive.length > 8 ? ', …' : ''})`
+      );
+    }
+    if (guard.tooLarge) {
+      reasons.push(
+        `a very large tree (${guard.entryCount}${guard.truncated ? '+' : ''} entries, ~${Math.round(guard.bytes / 1e6)} MB)`
+      );
+    }
+    console.log(`\nThis folder contains ${reasons.join(' and ')}.`);
+    console.log('Committing it to git would snapshot that content. If this is not what you want, stop now.');
+    if (dryRun) {
+      console.log('(--dry-run: would require you to retype the folder name to proceed.)');
+    } else if (yes) {
+      // Headless adoption of a hazardous tree is refused — the confirmation is
+      // deliberately un-bypassable (audit A13 "high-friction").
+      throw new WienerdogError(
+        'refusing to adopt a folder with sensitive files or a very large tree under --yes; ' +
+          're-run interactively to confirm, or point adopt at a clean notes folder.'
+      );
+    } else {
+      const typed = await confirmTyped(`To proceed, retype the folder path exactly (${adoptedPath}): `);
+      if (typed.trim() !== adoptedPath) throw new WienerdogError('confirmation did not match; adoption aborted.');
+    }
   }
 
   // 4. Refuse re-adoption (raw-text check keeps the config rewrite atomic).

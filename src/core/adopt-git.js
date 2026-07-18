@@ -136,12 +136,105 @@ function applyGitignore(plan) {
   fs.writeFileSync(plan.path, content);
 }
 
+// ── WP-149: bounded pre-adopt tree inspection (audit A13) ────────────────────
+
+/** Hard walk caps — the guard itself must never hang or OOM on a huge target. */
+const WALK_MAX_ENTRIES = 50_000;
+const WALK_MAX_BYTES = 1_000_000_000; // ~1 GB
+
+/** Thresholds above which a tree is "unexpectedly large" for a notes vault. */
+const BIG_ENTRY_COUNT = 20_000;
+const BIG_BYTES = 500_000_000; // ~500 MB
+
+/** How many sensitive paths are reported (dedup happens naturally by path). */
+const SENSITIVE_REPORT_CAP = 20;
+
+const SENSITIVE_DIR_BASENAMES = new Set(['.ssh', '.aws', '.gnupg', '.kube', '.docker']);
+const SENSITIVE_FILE_BASENAMES = new Set([
+  'id_rsa', 'id_dsa', 'id_ecdsa', 'id_ed25519',
+  '.env', '.netrc', '.git-credentials', '.npmrc',
+  'credentials', // matches ~/.aws/credentials
+]);
+
+/**
+ * Inspect an adoption target BEFORE any `git init` / `git add -A`: is it the
+ * home directory, does it contain secret material, is it unexpectedly large?
+ * Bounded walk — names/sizes only (never file contents), lstat semantics (a
+ * symlink is counted, never followed), `.git` directories are not descended
+ * into (a re-adopt must not scan the object store). Best-effort: any fs error
+ * on an entry is skipped; the function never throws.
+ * @param {string} dir   realpath'd adopted dir
+ * @param {string} home  realpath'd home dir
+ * @param {{maxEntries?:number, maxBytes?:number}} [opts]
+ * @returns {{isHome:boolean, sensitive:string[], entryCount:number,
+ *            bytes:number, tooLarge:boolean, truncated:boolean}}
+ */
+function inspectAdoptTree(dir, home, opts = {}) {
+  const maxEntries = opts.maxEntries || WALK_MAX_ENTRIES;
+  const maxBytes = opts.maxBytes || WALK_MAX_BYTES;
+  const isHome = dir === home;
+
+  /** @type {string[]} */
+  const sensitive = [];
+  let entryCount = 0;
+  let bytes = 0;
+  let truncated = false;
+
+  /** @param {string} abs @param {string} rel */
+  const walk = (abs, rel) => {
+    if (truncated) return;
+    let ents = [];
+    try {
+      ents = fs.readdirSync(abs, { withFileTypes: true });
+    } catch {
+      return; // unreadable dir — best-effort skip
+    }
+    for (const e of ents) {
+      if (entryCount >= maxEntries || bytes > maxBytes) {
+        truncated = true;
+        return;
+      }
+      const relPath = rel ? `${rel}/${e.name}` : e.name;
+      entryCount += 1;
+      if (e.isDirectory()) {
+        if (e.name === '.git') continue; // never scan a repo's object store
+        if (SENSITIVE_DIR_BASENAMES.has(e.name) && sensitive.length < SENSITIVE_REPORT_CAP) {
+          sensitive.push(relPath);
+        }
+        walk(path.join(abs, e.name), relPath);
+      } else {
+        // Files AND symlinks (lstat semantics via dirent): count size best-effort,
+        // never follow a symlink out of the tree.
+        if (e.isFile()) {
+          try {
+            bytes += fs.lstatSync(path.join(abs, e.name)).size;
+          } catch { /* best-effort */ }
+          const isSensitiveName =
+            SENSITIVE_FILE_BASENAMES.has(e.name) || /\.(pem|key)$/.test(e.name);
+          if (isSensitiveName && sensitive.length < SENSITIVE_REPORT_CAP) {
+            sensitive.push(relPath);
+          }
+        }
+      }
+    }
+  };
+  walk(dir, '');
+
+  const tooLarge = truncated || entryCount > BIG_ENTRY_COUNT || bytes > BIG_BYTES;
+  return { isHome, sensitive, entryCount, bytes, tooLarge, truncated };
+}
+
 module.exports = {
   DEFAULT_GITIGNORE_LINES,
   STALE_LOCK_AGE_MS,
+  WALK_MAX_ENTRIES,
+  WALK_MAX_BYTES,
+  BIG_ENTRY_COUNT,
+  BIG_BYTES,
   runGitStep,
   inspectIndexLock,
   removeIndexLock,
   planGitignore,
   applyGitignore,
+  inspectAdoptTree,
 };
