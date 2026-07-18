@@ -1,7 +1,7 @@
 ---
 id: WP-134
 title: A1 documentation — hermetic runtime profile threat model, glossary terms, honest containment claims (audit A1)
-status: In-Review
+status: Done
 model: sonnet
 size: S
 depends_on: [WP-128, WP-129, WP-130, WP-131, WP-132, WP-133, WP-135]
