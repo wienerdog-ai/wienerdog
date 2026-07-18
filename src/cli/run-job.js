@@ -201,7 +201,9 @@ function killProcessTree(pid, platform, seams = {}) {
  * @param {{name:string, run:string}} job
  * @param {Record<string,string>} [profile] code seam for tests only (see
  *   safety-profile.js); `runJob` never passes one, so production stays frozen.
- * @returns {{command:string, args:string[], shell:boolean}}
+ * @returns {{command:string, args:string[], shell:boolean, cwd?:string}}
+ *   `cwd` is set only by the hermetic routine composition (the staging dir);
+ *   absent → the caller keeps its default (the vault).
  */
 function resolveCommand(paths, job, profile) {
   const fake = process.env.WIENERDOG_RUNJOB_CMD;
@@ -217,12 +219,14 @@ function resolveCommand(paths, job, profile) {
     throw new WienerdogError(`unknown builtin job: ${rest}`);
   }
   if (kind === 'skill') {
-    // A0 pre-use freeze: refuse to spawn a bare `claude -p /<skill>` for an
-    // external-content routine (audit A1) — fail closed BEFORE the model spawn,
-    // even for a hand-edited config.yaml job.
+    // A0 pre-use freeze FIRST: refuse an external-content routine (audit A1)
+    // before ANY composition/staging — fail closed even for a hand-edited
+    // config.yaml job. Still BLOCKED in production (no profile arg → frozen).
     requireCapability(CAPABILITY.EXTERNAL_CONTENT_ROUTINE, profile);
-    // Claude is the v1 default headless brain for routine skills.
-    return { command: 'claude', args: ['-p', `/${rest}`], shell: false };
+    // Hermetic routine composition (WP-131, ADR-0025): code-owned profile
+    // lookup (unknown skill → fail closed), staging cwd as the only writable
+    // root, hook-free settings, verified skill body, broker MCP seam (A2).
+    return require('../core/routine-runtime').composeRoutineRun(paths, job);
   }
   throw new WienerdogError(`unknown job run kind in "${job.run}"`);
 }
@@ -467,9 +471,11 @@ async function runJob(paths, job, opts = {}) {
     throw new WienerdogError(`job "${name}" ${reason}`);
   }
 
-  // 2. Clean env + command.
+  // 2. Clean env + command. A hermetic routine composition returns its own
+  //    cwd (the fresh staging dir); everything else keeps the vault cwd.
   const env = buildCleanEnv(paths, name, platform);
-  const { command, args, shell } = resolveCommand(paths, job);
+  const { command, args, shell, cwd: composedCwd } = resolveCommand(paths, job);
+  const spawnCwd = composedCwd || cwd;
 
   // 3. Per-run log file (mkdir -p the job's log dir).
   const logDir = path.join(paths.logs, name);
@@ -485,7 +491,7 @@ async function runJob(paths, job, opts = {}) {
   let failure = null;
   try {
     const child = spawn(command, args, {
-      cwd,
+      cwd: spawnCwd,
       // POSIX: detach into its own process group so the watchdog can kill the
       // whole tree via a negative-PID signal. Windows has no process groups —
       // detached only spawns a visible console window and buys nothing (the

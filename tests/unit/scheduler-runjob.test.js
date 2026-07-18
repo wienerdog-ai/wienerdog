@@ -325,9 +325,21 @@ test('scheduler-runjob: resolveCommand maps builtin:dream, skill:*, and rejects 
     assert.deepEqual(d.args.slice(1), ['dream', '--yes']);
     // builtin:dream targets the stable vendored app/current bin (ADR-0013).
     assert.equal(d.args[0], path.join(paths.core, 'app', 'current', 'bin', 'wienerdog.js'));
-    const s = runjob.resolveCommand(paths, { name: 'x', run: 'skill:wienerdog-daily-digest' }, allowAll());
+    // WP-131: the skill: branch (gate seam allowing) composes the HERMETIC
+    // routine run — never a bare `claude -p /<skill>`. weekly-review is
+    // mcp:'empty' so it composes; the broker routines fail closed until A2.
+    const s = runjob.resolveCommand(paths, { name: 'x', run: 'skill:wienerdog-weekly-review' }, allowAll());
     assert.equal(s.command, 'claude');
-    assert.deepEqual(s.args, ['-p', '/wienerdog-daily-digest']);
+    assert.equal(s.args[0], '-p');
+    assert.equal(s.args[1], '/wienerdog-weekly-review');
+    assert.ok(s.args.includes('--tools'), 'hermetic argv restricts built-ins');
+    assert.ok(s.cwd.endsWith(path.join('routine-run', 'weekly-review')), 'spawn cwd is the staging dir');
+    // A broker-requiring routine (daily-digest) fails closed until A2 wires
+    // the broker MCP config (D-BROKER-SEAM).
+    assert.throws(
+      () => runjob.resolveCommand(paths, { name: 'x', run: 'skill:wienerdog-daily-digest' }, allowAll()),
+      /broker/
+    );
     assert.throws(() => runjob.resolveCommand(paths, { name: 'x', run: 'builtin:frobnicate' }), /unknown builtin/);
     assert.throws(() => runjob.resolveCommand(paths, { name: 'x', run: 'weird:thing' }), /unknown job run kind/);
     // A0 pre-use freeze (WP-109/111): without a profile, the `skill:` branch is
