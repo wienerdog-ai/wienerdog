@@ -1,7 +1,7 @@
 ---
 id: WP-141
 title: Wire the broker into the routine runtime — fill the broker-mcp.json seam, trusted launch descriptor, MCP tool allowlist, read-only vault snapshot, functional routine skills (audit A2)
-status: Draft
+status: Ready
 model: opus
 size: M
 depends_on: [WP-137, WP-138, WP-139]
@@ -128,10 +128,9 @@ Wienerdog bin with the routine id **in the broker's argv**:
   SPIKE-env-inheritance): identity is argv; credentials are files; the `env` block only
   re-asserts `WIENERDOG_HOME` + the auto-background-off flag.
 - Per-run rewrite is safe: `ensureRoutineStaging` already wipes per run; the config is
-  regenerated each run so a stale routine id can never leak across runs. (If two routines
-  can run concurrently — catch-up — write per-routine filenames `broker-mcp-<id>.json` and
-  return that; **D-BROKER-CONFIG-PATH**, recommend per-routine filename for concurrency
-  safety.)
+  regenerated each run so a stale routine id can never leak across runs. **Per-routine
+  filenames are mandatory (D-BROKER-CONFIG-PATH, resolved below):**
+  `ensureBrokerMcpConfig` writes and returns `broker-mcp-<id>.json`.
 
 **2. `--allowedTools` for MCP verbs.** `runtime-profile.js` gains `brokerVerbs: string[]`
 per routine profile (the exact WP-137 verb names the routine may call):
@@ -140,10 +139,11 @@ per routine profile (the exact WP-137 verb names the routine may call):
 - `weekly-review`: `['create_draft']`
 `composeClaudeArgs` emits `--allowedTools mcp__wienerdog-broker__calendar_list,mcp__wienerdog-broker__gmail_search,…`
 for exactly those (never a wildcard `mcp__*`). The built-in `--tools`/`--disallowedTools`
-stay as A1 set them (`Read` allowed; Bash/etc denied). **SPIKE-permission-modes:** confirm
-the headless permission-mode value that makes an exact `--allowedTools` non-interactive
-against `code.claude.com/docs/en/permission-modes` before pinning it into the composer;
-routine verbs must not be `requiresUserInteraction` (denied headlessly).
+stay as A1 set them (`Read` allowed; Bash/etc denied). **SPIKE-permission-modes —
+RESOLVED (MEASURED 2026-07-18, see SPIKEs):** the routines' existing
+`--permission-mode default` is correct as-is — under headless `claude -p` an
+`--allowedTools`-listed MCP tool runs non-interactively and an unlisted one is denied
+immediately without a prompt; pin `default`, no `bypassPermissions` needed.
 
 **3. `gws-broker.js` real registry.** The `_broker` entry parses `--routine <id>`, maps it
 to a profile (reuse `profileIdForSkill`/`getProfile`), loads the per-capability credentials
@@ -185,10 +185,12 @@ the same commit (WP-129's integrity gate refuses a body that does not match its 
 
 ## DECISION NEEDED (resolve in the walkthrough; each becomes a dated OWNER-APPROVED line before Ready)
 
-- **D-BROKER-CONFIG-PATH (recommend per-routine filename).** Fixed `broker-mcp.json`
-  regenerated per run vs per-routine `broker-mcp-<id>.json`. Recommend **per-routine
-  filename** so two concurrent routines (catch-up) never share/clobber a config; update
-  `ensureBrokerMcpConfig`/`brokerMcpConfigPath` accordingly.
+- **D-BROKER-CONFIG-PATH — RESOLVED (OWNER-APPROVED 2026-07-18): per-routine filename
+  `broker-mcp-<id>.json`.** With a single shared `broker-mcp.json`, two concurrent
+  routines (catch-up) race: the second run's write could land before the first run's
+  `claude -p` reads the config, launching the broker with the OTHER routine's identity —
+  the F5 identity confusion reborn as a race. Per-routine filenames eliminate the race
+  for free; the fixed-name alternative buys nothing in exchange.
 - **D-VAULT-SNAPSHOT — RESOLVED (OWNER-APPROVED 2026-07-18): fixed dirs + caps +
   visible skip.** daily-digest → the single newest `reports/dreams/*.md`; weekly-review
   → the last 7 `07-Daily/*.md` + last 7 `reports/dreams/*.md`; inbox-triage → none. Hard
@@ -197,19 +199,29 @@ the same commit (WP-129's integrity gate refuses a body that does not match its 
   over-cap file is skipped, never silently** — recorded in the WP-132 run evidence and
   surfaced on the next digest via the existing state-driven warning-banner mechanism
   (WP-125 exclusion-banner precedent). Never fail the whole run for one oversized file.
-- **D-SKILL-REWRITE-OWNER (recommend here, atomic with the digest).** Whether the SKILL
-  prose rewrites live here (atomic with the digest regen, needed for function) or in the
-  WP-143 docs WP. Recommend **here**: a byte change to a skill MUST regenerate its integrity
-  digest in the same commit, and WP-142's positive functional check needs broker-calling
-  skills; WP-143 refines user-facing prose but does not re-freeze digests.
+- **D-SKILL-REWRITE-OWNER — RESOLVED (OWNER-APPROVED 2026-07-18): here, atomic with the
+  digest regen.** (a) A skill byte change and its `runtime-skill-digests.json` sha256
+  regen MUST land in the same commit — otherwise an intermediate state exists where the
+  runtime refuses every skill; (b) WP-142's end-to-end proof needs FUNCTIONING
+  broker-calling skills, which a deferral to WP-143 would break; (c) this is the
+  functional change that makes a routine contained-and-functional, not doc polish.
+  WP-143 refines user-facing prose only and does not re-freeze digests.
 
-## SPIKEs (resolve with a live measurement before Ready)
+## SPIKEs (both RESOLVED by live measurement — 2026-07-18, Claude Code 2.1.214, Node v24.18.0)
 
-- **SPIKE-permission-modes** — the exact headless permission-mode that pairs with an exact
-  `--allowedTools` (contract 2). Confirm against the official permission-modes doc.
-- **SPIKE-mcp-tool-naming** — confirm the live `mcp__<server>__<verb>` names Claude Code
-  actually exposes for this broker match what `--allowedTools` lists (a mismatch silently
-  blocks every verb). WP-142's live harness is the backstop.
+- **SPIKE-permission-modes — RESOLVED: `default` works headlessly with an exact
+  allowlist.** Measured with the routine composition's flags (`claude -p --tools Read
+  --permission-mode default --strict-mcp-config --mcp-config … --allowedTools
+  mcp__wienerdog-broker__calendar_list`): the allowlisted verb executed
+  non-interactively; a server-advertised but UNLISTED verb (`gmail_search`) was denied
+  immediately with no prompt ("requested permissions … but you haven't granted it
+  yet"). Keep the profiles' existing `permissionMode:'default'`.
+- **SPIKE-mcp-tool-naming — RESOLVED: `mcp__<server>__<verb>` confirmed with the real
+  server name.** A probe MCP server registered as `wienerdog-broker` advertising
+  `calendar_list`/`gmail_search` matched `--allowedTools
+  mcp__wienerdog-broker__calendar_list` exactly, and the probe's own log proves the
+  denied verb NEVER crossed the MCP boundary (exactly one `tools/call` reached the
+  server). WP-142's live harness remains the backstop against future renames.
 
 ## Implementation notes & constraints
 
