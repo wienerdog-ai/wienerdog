@@ -1,7 +1,7 @@
 ---
 id: WP-150
 title: Validate path-defining environment overrides — require absolute, normalized paths and reject ".."
-status: Ready
+status: Done
 model: sonnet
 size: S
 depends_on: []

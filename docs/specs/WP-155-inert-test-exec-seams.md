@@ -1,15 +1,15 @@
 ---
-id: WP-154
+id: WP-155
 title: Make production test-exec overrides inert without an explicit test flag, and keep every dispatch shell:false
 status: Draft
 model: sonnet
 size: S
-depends_on: [WP-153]
+depends_on: [WP-154]
 adrs: [ADR-0004, ADR-0028]
-branch: wp/154-inert-test-exec-seams
+branch: wp/155-inert-test-exec-seams
 ---
 
-# WP-154: Inert production test-exec seams + shell:false invariant (audit A7, part 2 of 6)
+# WP-155: Inert production test-exec seams + shell:false invariant (audit A7, part 2 of 6)
 
 ## Context (read this, nothing else)
 
@@ -75,9 +75,9 @@ passed through today.
 const fakeCmd = baseEnv.WIENERDOG_DREAM_CMD;   // ← ungated
 ...
 if (fakeCmd) { command = fakeCmd; args = []; cwd = ensureBrainStaging(paths); }
-else if (harness === 'codex') { … } else { … }   // WP-153 makes this the pinned claude
+else if (harness === 'codex') { … } else { … }   // WP-154 makes this the pinned claude
 ```
-(WP-153, a dependency, replaces the `else`/`codex` bare-name spawns with the
+(WP-154, a dependency, replaces the `else`/`codex` bare-name spawns with the
 verified pinned absolute path and must run first; this WP edits the `fakeCmd`
 gating in the same function.)
 
@@ -110,7 +110,7 @@ With `WIENERDOG_TEST` unset, `WIENERDOG_RUNJOB_CMD` is **ignored entirely** —
 ```js
 const fakeCmd = baseEnv.WIENERDOG_TEST === '1' ? baseEnv.WIENERDOG_DREAM_CMD : undefined;
 ```
-With the flag unset, the brain resolves the real (WP-153-pinned) `claude`/`codex`.
+With the flag unset, the brain resolves the real (WP-154-pinned) `claude`/`codex`.
 
 **`buildCleanEnv`:** add `'WIENERDOG_TEST'` to `ENV_PASSTHROUGH`. The existing
 loop copies a var **only if present** (`if (process.env[k]) env[k] = …`), so a
@@ -128,7 +128,7 @@ individual test file needs editing.
 - Zero new dependencies; plain Node ≥ 18, JSDoc types only.
 - **No dependency on WP-144/145** — this WP touches none of `manifest.js`, the
   `scheduler-entry` kind, `schedule.js`, or `generators.js`. It depends on
-  **WP-153** solely because both edit `src/core/dream/brain.js` (serialize; WP-153
+  **WP-154** solely because both edit `src/core/dream/brain.js` (serialize; WP-154
   lands the pinned-spawn `else` branches first, this WP edits the `fakeCmd`
   gating).
 - **Windows-dev caveat:** the inline `WIENERDOG_TEST=1 …` form is POSIX. If a
@@ -164,7 +164,7 @@ individual test file needs editing.
       `builtin:dream` resolution (not the fake); with `WIENERDOG_TEST=1` it returns
       `{command:'/bin/echo', args:[], shell:false}`.
 - [ ] With `WIENERDOG_TEST` unset and `WIENERDOG_DREAM_CMD` set, `spawnBrain`
-      resolves the real brain (asserted via the WP-153 pinned-path seam / a
+      resolves the real brain (asserted via the WP-154 pinned-path seam / a
       throw when no pin), not the fake.
 - [ ] The full existing suite passes unchanged (the npm `test` script provides the
       flag); no per-test edits.
@@ -182,17 +182,17 @@ npm run lint
 
 ## Out of scope (do NOT do these)
 
-- Resolving/verifying/pinning the executables — **WP-153** (this WP only gates the
+- Resolving/verifying/pinning the executables — **WP-154** (this WP only gates the
   fake seams; it does not change how the real command is resolved).
-- The job descriptor, digest binding, or the launcher — **WP-155 / WP-156**.
+- The job descriptor, digest binding, or the launcher — **WP-156 / WP-157**.
 - The `schedulerSpawn` `WIENERDOG_LOADER_NOOP` / `WIENERDOG_TEST_NO_REAL_SCHEDULER`
   seams (already correctly guarded in `src/scheduler/spawn.js`) — leave untouched.
 
 ## Definition of done
 
 1. All verification steps pass locally; output pasted into the PR body.
-2. Branch `wp/154-inert-test-exec-seams`; conventional commits; PR titled
-   `fix(security): gate test-exec seams behind WIENERDOG_TEST + drop shell:true (WP-154)`.
+2. Branch `wp/155-inert-test-exec-seams`; conventional commits; PR titled
+   `fix(security): gate test-exec seams behind WIENERDOG_TEST + drop shell:true (WP-155)`.
 3. PR template filled, including "Decisions made" (or "none") and `Generated-by:`.
 4. This spec's `status:` flipped to `In-Review` in the same PR.
 

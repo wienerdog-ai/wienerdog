@@ -433,3 +433,45 @@ test('Codex-only machine: full setup + working dream from rollout files alone', 
   assert.equal(result.code, 0);
   assert.ok(fs.existsSync(path.join(vault, '07-Daily', '2026-07-03.md')), 'the codex-path brain wrote to the vault');
 });
+
+// ── WP-148: sentinel-ambiguity isolation (audit A13) ─────────────────────────
+
+test('ambiguous AGENTS.md markers: no throw, notice pushed, hooks + skills still installed; override notice stays success-only (WP-148)', () => {
+  const paths = setup();
+  const agentsMd = path.join(paths.codexDir, 'AGENTS.md');
+  const broken = [
+    '# Agent notes',
+    '<!-- wienerdog:begin -->',
+    'old block',
+    '<!-- wienerdog:begin -->',
+    '<!-- wienerdog:end -->',
+    '',
+  ].join('\n');
+  fs.writeFileSync(agentsMd, broken);
+  // Override file present: its shadowing notice must NOT fire when the managed
+  // block could not be updated (success-only ordering — spec implementation note).
+  fs.writeFileSync(path.join(paths.codexDir, 'AGENTS.override.md'), '# override\n');
+  const coreSkill = path.join(paths.core, 'skills', 'wienerdog-setup');
+  fs.mkdirSync(coreSkill, { recursive: true });
+  fs.writeFileSync(path.join(coreSkill, 'SKILL.md'), '# skill\n');
+
+  let res;
+  assert.doesNotThrow(() => {
+    res = applyCodexAdapter(paths, { manifest: freshManifest() });
+  });
+
+  assert.ok(
+    res.notices.some((n) => n.includes('managed block not updated') && n.includes(agentsMd)),
+    'ambiguity surfaced as a notice naming the file'
+  );
+  assert.ok(
+    !res.notices.some((n) => n.includes('AGENTS.override.md exists')),
+    'override notice does not fire when the block was not updated'
+  );
+  assert.equal(fs.readFileSync(agentsMd, 'utf8'), broken, 'ambiguous file left byte-untouched');
+  assert.ok(fs.existsSync(path.join(paths.core, 'bin', 'session-start.sh')), 'hook script still installed');
+  if (process.platform !== 'win32') {
+    const link = path.join(paths.codexDir, 'skills', 'wienerdog-setup');
+    assert.ok(fs.lstatSync(link).isSymbolicLink(), 'skill still symlinked');
+  }
+});

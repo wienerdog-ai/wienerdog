@@ -1,15 +1,15 @@
 ---
-id: WP-156
+id: WP-157
 title: Independent launcher outside the app tree — verify current containment, app digest, descriptor digest, and prod/dev stance before spawn
 status: Draft
 model: opus
 size: M
-depends_on: [WP-144, WP-145, WP-155]
+depends_on: [WP-144, WP-145, WP-156]
 adrs: [ADR-0004, ADR-0013, ADR-0027, ADR-0028]
-branch: wp/156-independent-launcher-and-app-integrity
+branch: wp/157-independent-launcher-and-app-integrity
 ---
 
-# WP-156: Independent launcher + fire-time app/descriptor integrity (audit A7, part 4 of 6)
+# WP-157: Independent launcher + fire-time app/descriptor integrity (audit A7, part 4 of 6)
 
 ## Context (read this, nothing else)
 
@@ -23,7 +23,7 @@ RULE (ADR-0004): Wienerdog is just files** — the scheduled fire must run only 
 authorized, unmodified app.
 
 This WP completes A7's core: a **minimal launcher that lives OUTSIDE the mutable
-app tree**. WP-155 produced the canonical, digest-bound job descriptor; this WP
+app tree**. WP-156 produced the canonical, digest-bound job descriptor; this WP
 (1) writes a small launcher to `<core>/launcher/launch.js` (not under
 `app/current`), (2) rewrites every OS scheduler entry to invoke the launcher with
 the descriptor path + its expected digest bound into the entry arguments, and (3)
@@ -71,7 +71,7 @@ rather than silently executed.
   (~L336). `windowsCatchupTaskXml` / `catchupPlist` invoke `run-job --catch-up`.
 
 **`src/cli/schedule.js`** `registerPlatform(...)` builds `node`/`bin` and passes
-them into the renderers (~L159-246). WP-155 added a `writeDescriptor(...)` call
+them into the renderers (~L159-246). WP-156 added a `writeDescriptor(...)` call
 here and left the entry argv unchanged.
 
 **`src/core/vendor.js`**: `vendorSelf(paths, opts)` (~L121) copies the published
@@ -81,7 +81,7 @@ tree into `<core>/app/<version>/` via a `.staging.<pid>` dir + atomic rename, th
 `appDir`/`currentLink`/`currentBin` (~L17-23). The version dir is currently left
 writable; `current` containment/ownership is not checked.
 
-**`src/scheduler/descriptor.js`** (WP-155, a dependency): `descriptorPath`,
+**`src/scheduler/descriptor.js`** (WP-156, a dependency): `descriptorPath`,
 `writeDescriptor`, `deriveDescriptorDigest`, `appTreeDigest`, `buildDescriptor`,
 plus the descriptor's `appRelease.{treeDigest, stance}`.
 
@@ -209,9 +209,9 @@ Catch-up entries: `[node, launcherPath, '--catch-up', '--descriptor',
   dev-looking tree (planted `.git`) must **refuse**, not silently downgrade to the
   unverified dev path. In dev, integrity of a live checkout is not enforceable —
   the stance match is the guard, not a treeDigest over an edited checkout.
-- **Depends on WP-155** for the descriptor API/files and **WP-144/145** because it
+- **Depends on WP-156** for the descriptor API/files and **WP-144/145** because it
   edits `generators.js` (serialize after WP-145) and `schedule.js` (serialize
-  after WP-155), and the launcher file + read-only version dir must remain
+  after WP-156), and the launcher file + read-only version dir must remain
   consistent with WP-144's untrusted-manifest/root-bounded-delete uninstall (the
   launcher `file` entry is in-bounds; the read-only version dir must still be
   removable by uninstall — restore write mode before delete if needed; note it).
@@ -271,11 +271,11 @@ npm run lint
 
 ## Out of scope (do NOT do these)
 
-- Building/writing the descriptor and hashing the app tree — **WP-155** (this WP
+- Building/writing the descriptor and hashing the app tree — **WP-156** (this WP
   consumes `descriptor.js`).
-- Executable pinning — **WP-153**; the launcher verifies the *app*, the pins guard
+- Executable pinning — **WP-154**; the launcher verifies the *app*, the pins guard
   the *external* executables.
-- The end-to-end negative harness that drives real scheduled runs — **WP-157**.
+- The end-to-end negative harness that drives real scheduled runs — **WP-158**.
 - Content-addressed **renaming** of the version dir (`app/<hash>/`): out of scope;
   this WP content-addresses the *verification* (treeDigest), not the dir name
   (keeps ADR-0013's version-dir layout). Flag it to the ADR if the owner wants the
@@ -284,8 +284,8 @@ npm run lint
 ## Definition of done
 
 1. All verification steps pass locally; output pasted into the PR body.
-2. Branch `wp/156-independent-launcher-and-app-integrity`; conventional commits; PR
-   titled `feat(security): out-of-tree launcher verifies app + descriptor integrity before spawn (WP-156)`.
+2. Branch `wp/157-independent-launcher-and-app-integrity`; conventional commits; PR
+   titled `feat(security): out-of-tree launcher verifies app + descriptor integrity before spawn (WP-157)`.
 3. PR template filled, including "Decisions made" (or "none") and `Generated-by:`.
 4. This spec's `status:` flipped to `In-Review` in the same PR.
 

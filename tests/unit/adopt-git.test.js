@@ -263,3 +263,239 @@ test('adopt refuses a vault inside the canonical core (ADR-0019) with zero write
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
+
+// ── WP-149: inspectAdoptTree (audit A13 adopt guard) ─────────────────────────
+
+/** Fresh temp dir for tree-inspection cases. */
+function treeSetup() {
+  return fs.mkdtempSync(path.join(os.tmpdir(), 'wd-adopt-tree-'));
+}
+
+test('inspectAdoptTree: dir === home reports isHome', () => {
+  const root = treeSetup();
+  const r = adoptGit.inspectAdoptTree(root, root);
+  assert.equal(r.isHome, true);
+});
+
+test('inspectAdoptTree: finds sensitive dirs, key files, and pem/key extensions as relative paths', () => {
+  const root = treeSetup();
+  fs.mkdirSync(path.join(root, '.ssh'), { recursive: true });
+  fs.writeFileSync(path.join(root, '.ssh', 'id_rsa'), 'x');
+  fs.mkdirSync(path.join(root, 'sub'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'sub', 'server.pem'), 'x');
+  fs.writeFileSync(path.join(root, '.env'), 'x');
+  fs.writeFileSync(path.join(root, 'notes.md'), '# fine\n');
+
+  const r = adoptGit.inspectAdoptTree(root, '/nonexistent-home');
+  assert.equal(r.isHome, false);
+  assert.ok(r.sensitive.includes('.ssh'), 'sensitive dir basename');
+  assert.ok(r.sensitive.includes('.ssh/id_rsa'), 'key file inside sensitive dir');
+  assert.ok(r.sensitive.includes('sub/server.pem'), 'pem extension in subdir');
+  assert.ok(r.sensitive.includes('.env'), 'dotenv file');
+  assert.ok(!r.sensitive.includes('notes.md'), 'plain note not flagged');
+  assert.equal(r.tooLarge, false);
+});
+
+test('inspectAdoptTree: .git directories are not descended into', () => {
+  const root = treeSetup();
+  fs.mkdirSync(path.join(root, '.git', 'objects'), { recursive: true });
+  fs.writeFileSync(path.join(root, '.git', 'objects', 'id_rsa'), 'x'); // would match if descended
+  const r = adoptGit.inspectAdoptTree(root, '/nonexistent-home');
+  assert.deepEqual(r.sensitive, []);
+});
+
+test('inspectAdoptTree: lowered entry cap marks the tree truncated + tooLarge', () => {
+  const root = treeSetup();
+  for (let i = 0; i < 12; i++) fs.writeFileSync(path.join(root, `f${i}.md`), 'x');
+  const r = adoptGit.inspectAdoptTree(root, '/nonexistent-home', { maxEntries: 5 });
+  assert.equal(r.truncated, true);
+  assert.equal(r.tooLarge, true);
+});
+
+test('inspectAdoptTree: lowered byte cap also truncates', () => {
+  const root = treeSetup();
+  fs.writeFileSync(path.join(root, 'a.md'), 'x'.repeat(4096));
+  fs.writeFileSync(path.join(root, 'b.md'), 'x'.repeat(4096));
+  const r = adoptGit.inspectAdoptTree(root, '/nonexistent-home', { maxBytes: 1000 });
+  assert.equal(r.truncated, true);
+  assert.equal(r.tooLarge, true);
+});
+
+test('inspectAdoptTree: a clean small notes folder is unflagged', () => {
+  const root = treeSetup();
+  fs.mkdirSync(path.join(root, '05-Daily'), { recursive: true });
+  fs.writeFileSync(path.join(root, '05-Daily', '2026-07-18.md'), '# day\n');
+  fs.writeFileSync(path.join(root, 'hub.md'), '# hub\n');
+  const r = adoptGit.inspectAdoptTree(root, '/nonexistent-home');
+  assert.deepEqual(
+    { isHome: r.isHome, sensitive: r.sensitive, tooLarge: r.tooLarge, truncated: r.truncated },
+    { isHome: false, sensitive: [], tooLarge: false, truncated: false }
+  );
+  assert.equal(r.entryCount, 3, 'dir + two files counted');
+});
+
+test('inspectAdoptTree: a symlink is counted but never followed', () => {
+  if (process.platform === 'win32') return;
+  const root = treeSetup();
+  const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-adopt-outside-'));
+  fs.writeFileSync(path.join(outside, 'id_rsa'), 'x');
+  fs.symlinkSync(outside, path.join(root, 'link-out'));
+  const r = adoptGit.inspectAdoptTree(root, '/nonexistent-home');
+  assert.deepEqual(r.sensitive, [], 'content behind the symlink is not scanned');
+  assert.equal(r.entryCount, 1, 'the symlink itself is counted');
+});
+
+test('inspectAdoptTree: an unreadable root does not throw but FAILS CLOSED (truncated → tooLarge)', () => {
+  const r = adoptGit.inspectAdoptTree('/nonexistent-dir-xyz', '/nonexistent-home');
+  // A dir we cannot read cannot be proven safe → the gate must fire, not pass.
+  assert.deepEqual(
+    { isHome: r.isHome, entryCount: r.entryCount, truncated: r.truncated, tooLarge: r.tooLarge },
+    { isHome: false, entryCount: 0, truncated: true, tooLarge: true }
+  );
+});
+
+test('adopt hard-refuses the home directory before any git work (WP-149)', async () => {
+  const adopt = require('../../src/cli/adopt');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-adopt-home-'));
+  const core = path.join(root, 'wd');
+  const configPath = path.join(core, 'config.yaml');
+
+  const ENV_KEYS = ['HOME', 'WIENERDOG_HOME', 'WIENERDOG_VAULT', 'CLAUDE_CONFIG_DIR', 'CODEX_HOME'];
+  const saved = {};
+  for (const k of ENV_KEYS) saved[k] = process.env[k];
+
+  try {
+    fs.mkdirSync(core, { recursive: true });
+    fs.writeFileSync(configPath, 'version: 1\nvault: null\nmemory_mode: standard\n');
+    Object.assign(process.env, { HOME: root, WIENERDOG_HOME: core });
+    for (const k of ['WIENERDOG_VAULT', 'CLAUDE_CONFIG_DIR', 'CODEX_HOME']) delete process.env[k];
+
+    await assert.rejects(
+      () => adopt.run([root, '--yes']),
+      (err) => {
+        assert.ok(err instanceof WienerdogError);
+        assert.match(err.message, /refusing to adopt your home directory/);
+        return true;
+      }
+    );
+    assert.equal(fs.existsSync(path.join(root, '.git')), false, 'no git init happened');
+  } finally {
+    for (const k of ENV_KEYS) {
+      if (saved[k] === undefined) delete process.env[k];
+      else process.env[k] = saved[k];
+    }
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('adopt under --yes refuses a tree with sensitive files instead of auto-accepting (WP-149)', async () => {
+  const adopt = require('../../src/cli/adopt');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-adopt-secret-'));
+  const core = path.join(root, 'wd');
+  const vault = path.join(root, 'notes');
+  const configPath = path.join(core, 'config.yaml');
+
+  const ENV_KEYS = ['HOME', 'WIENERDOG_HOME', 'WIENERDOG_VAULT', 'CLAUDE_CONFIG_DIR', 'CODEX_HOME'];
+  const saved = {};
+  for (const k of ENV_KEYS) saved[k] = process.env[k];
+
+  try {
+    fs.mkdirSync(core, { recursive: true });
+    fs.mkdirSync(path.join(vault, '.ssh'), { recursive: true });
+    fs.writeFileSync(path.join(vault, '.ssh', 'id_rsa'), 'x');
+    fs.writeFileSync(path.join(vault, 'hub.md'), '# hub\n');
+    fs.writeFileSync(configPath, 'version: 1\nvault: null\nmemory_mode: standard\n');
+    Object.assign(process.env, { HOME: root, WIENERDOG_HOME: core });
+    for (const k of ['WIENERDOG_VAULT', 'CLAUDE_CONFIG_DIR', 'CODEX_HOME']) delete process.env[k];
+
+    await assert.rejects(
+      () => adopt.run([vault, '--yes']),
+      (err) => {
+        assert.ok(err instanceof WienerdogError);
+        assert.match(err.message, /refusing to adopt a folder with sensitive files/);
+        return true;
+      }
+    );
+    assert.equal(fs.existsSync(path.join(vault, '.git')), false, 'no git init happened');
+  } finally {
+    for (const k of ENV_KEYS) {
+      if (saved[k] === undefined) delete process.env[k];
+      else process.env[k] = saved[k];
+    }
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// ── WP-149 review round (Codex F3): streaming, handle-bounded, fail-closed ───
+
+/** Build an injected opendir seam over an in-memory tree (map of dir abs →
+ *  array of {name, dir?} dirents), tracking peak concurrent open handles and
+ *  total readSync calls. Optional faults: throwOpen(abs)/throwRead(abs). */
+function fakeFs(tree, faults = {}) {
+  const stats = { open: 0, close: 0, peak: 0, active: 0, reads: 0 };
+  const opendir = (abs) => {
+    if (faults.throwOpen && faults.throwOpen(abs)) throw new Error('EMFILE');
+    stats.open += 1; stats.active += 1; stats.peak = Math.max(stats.peak, stats.active);
+    const ents = tree[abs] || [];
+    let i = 0;
+    return {
+      readSync() {
+        stats.reads += 1;
+        if (faults.throwRead && faults.throwRead(abs)) throw new Error('EIO');
+        if (i >= ents.length) return null;
+        const e = ents[i]; i += 1;
+        return { name: e.name, isDirectory: () => !!e.dir, isFile: () => !e.dir };
+      },
+      closeSync() { stats.close += 1; stats.active -= 1; },
+    };
+  };
+  return { opendir, stats };
+}
+
+test('inspectAdoptTree: streams a huge flat dir, stops at the cap, reads no more than cap+1 dirents (WP-149)', () => {
+  const N = 100000;
+  const ents = Array.from({ length: N }, (_, i) => ({ name: `f${i}.md` }));
+  const { opendir, stats } = fakeFs({ '/r': ents });
+  const r = adoptGit.inspectAdoptTree('/r', '/nonexistent-home', { maxEntries: 5, opendir });
+  assert.equal(r.truncated, true);
+  assert.equal(r.tooLarge, true);
+  assert.ok(stats.reads <= 6, `stopped early: ${stats.reads} reads, not ${N}`);
+});
+
+test('inspectAdoptTree: holds at most ONE directory handle open at any depth (WP-149 — no EMFILE by depth)', () => {
+  // A deep chain /d0 → /d0/s → /d0/s/s → … ; every parent must be closed before
+  // its child is opened, so peak concurrent handles is 1.
+  const tree = {};
+  let abs = '/d0';
+  for (let d = 0; d < 50; d++) {
+    const child = `${abs}/s`;
+    tree[abs] = [{ name: 's', dir: true }];
+    abs = child;
+  }
+  tree[abs] = [{ name: 'leaf.md' }];
+  const { opendir, stats } = fakeFs(tree);
+  const r = adoptGit.inspectAdoptTree('/d0', '/nonexistent-home', { opendir });
+  assert.equal(stats.peak, 1, `peak open handles was ${stats.peak}, must be 1`);
+  assert.equal(stats.open, stats.close, 'every opened handle was closed');
+  assert.equal(r.truncated, false);
+});
+
+test('inspectAdoptTree: a mid-tree opendir failure FAILS CLOSED even with a secret below it (WP-149 — no fail-open)', () => {
+  // /r has subdir /r/deep which cannot be opened (EMFILE); a secret lives below.
+  const tree = {
+    '/r': [{ name: 'deep', dir: true }, { name: 'notes.md' }],
+    '/r/deep': [{ name: 'id_rsa' }], // never reached — opendir throws
+  };
+  const { opendir } = fakeFs(tree, { throwOpen: (abs) => abs === '/r/deep' });
+  const r = adoptGit.inspectAdoptTree('/r', '/nonexistent-home', { opendir });
+  // We could not scan /r/deep → the tree is NOT provably clean → the gate must fire.
+  assert.equal(r.truncated, true, 'incomplete scan marked truncated');
+  assert.equal(r.tooLarge, true, 'so the high-friction adopt gate fires');
+});
+
+test('inspectAdoptTree: a mid-stream readSync fault also fails closed (WP-149)', () => {
+  const { opendir } = fakeFs({ '/r': [{ name: 'a.md' }] }, { throwRead: (abs) => abs === '/r' });
+  const r = adoptGit.inspectAdoptTree('/r', '/nonexistent-home', { opendir });
+  assert.equal(r.truncated, true);
+  assert.equal(r.tooLarge, true);
+});

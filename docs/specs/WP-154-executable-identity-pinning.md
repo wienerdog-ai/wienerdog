@@ -1,15 +1,15 @@
 ---
-id: WP-153
+id: WP-154
 title: Resolve, verify, and pin Claude/Git/Codex to absolute realpaths at sync; spawn absolute; fail safe on drift
 status: Draft
 model: opus
 size: M
 depends_on: []
 adrs: [ADR-0004, ADR-0009, ADR-0028]
-branch: wp/153-executable-identity-pinning
+branch: wp/154-executable-identity-pinning
 ---
 
-# WP-153: Executable identity — pin Claude/Git/Codex, spawn absolute, fail safe on drift (audit A7, part 1 of 6)
+# WP-154: Executable identity — pin Claude/Git/Codex, spawn absolute, fail safe on drift (audit A7, part 1 of 6)
 
 ## Context (read this, nothing else)
 
@@ -78,7 +78,7 @@ It also version-probes the real claude with `spawnSync(command, ['--version'], �
 resolved **path, never a content hash** — "executable integrity is A7's
 boundary" (D-EVIDENCE). There is a test seam `WIENERDOG_DREAM_CMD` (the
 `fakeCmd` branch) that runs an arbitrary command instead of claude/codex; this
-WP leaves that seam's *gating* to WP-154 but must not break it.
+WP leaves that seam's *gating* to WP-155 but must not break it.
 
 **`src/core/dream/validate.js` `git(vaultDir, args, opts)`** (~L60) spawns git
 by bare name: `spawnSync('git', ['-C', vaultDir, ...args], { encoding: 'utf8' })`,
@@ -108,7 +108,7 @@ Nothing today resolves, verifies, hashes, or pins these executables.
 |--------|------|-------|
 | create | src/core/exec-identity.js | The pin module: resolve → realpath → verify → hash → pin; load/verify; fail-safe absolute resolve for spawning. |
 | modify | src/cli/sync.js | After `vendorSelf`/`writeShim`, call `createPins(paths, {manifest})` (idempotent repin on every sync). Print a one-line notice on unresolved/verify-failed execs. Dry-run makes no writes. |
-| modify | src/core/dream/brain.js | Spawn the **verified pinned absolute path** for `claude`/`codex` (not bare name); version-probe the pinned path. Leave the `WIENERDOG_DREAM_CMD` fake branch behavior for WP-154. |
+| modify | src/core/dream/brain.js | Spawn the **verified pinned absolute path** for `claude`/`codex` (not bare name); version-probe the pinned path. Leave the `WIENERDOG_DREAM_CMD` fake branch behavior for WP-155. |
 | modify | src/core/dream/validate.js | Spawn the **verified pinned absolute** `git` (not bare `'git'`); fail safe with the repin message on pin drift. |
 | create | tests/unit/exec-identity.test.js | Unit cases for resolve/verify/hash/pin/verifyPin/fail-safe below. |
 | modify | tests/unit/dream-brain.test.js | Assert the brain spawns the pinned absolute path and fails safe on drift; the fake seam still works. |
@@ -212,7 +212,7 @@ module.exports = { resolveExecutable, verifyExecutable, probeVersion, hashFile,
   o.platform || process.platform)`. A thrown fail-safe error must propagate
   (dream fails loud — the existing run-job watchdog/fail-loud handles it). The
   `--version` probe uses the same `command`. The `WIENERDOG_DREAM_CMD` fake
-  branch (`fakeCmd`) is unchanged here (WP-154 gates it) and MUST bypass pinning.
+  branch (`fakeCmd`) is unchanged here (WP-155 gates it) and MUST bypass pinning.
 - `validate.js` `git(...)`: resolve once via `resolvePinnedSpawn('git',
   getPaths(), process.env, process.platform)` and spawn that absolute path
   (`spawnSync(gitPath, ['-C', vaultDir, ...args], …)`). A thrown fail-safe error
@@ -252,7 +252,7 @@ module.exports = { resolveExecutable, verifyExecutable, probeVersion, hashFile,
 - [ ] The pin store is written **0600**; the resolve/verify path never spawns a
       binary that failed `verifyExecutable`.
 - [ ] The `WIENERDOG_DREAM_CMD` fake seam still bypasses pinning for tests and is
-      untouched by this WP (its production inertness is WP-154).
+      untouched by this WP (its production inertness is WP-155).
 
 ## Acceptance criteria (mapped to the A7 acceptance bullets)
 
@@ -286,10 +286,10 @@ npm run lint
 ## Out of scope (do NOT do these)
 
 - Gating the `WIENERDOG_RUNJOB_CMD` / `WIENERDOG_DREAM_CMD` test seams and dropping
-  `shell:true` — **WP-154** (depends on this WP; do not change the fake branches'
+  `shell:true` — **WP-155** (depends on this WP; do not change the fake branches'
   activation here).
 - The canonical job descriptor, its digest binding, and the out-of-tree launcher —
-  **WP-155 / WP-156**.
+  **WP-156 / WP-157**.
 - Pinning the routine (`skill:`) claude invocation in `routine-runtime.js` — external
   routines are frozen (A0/A1); folded into the routine runtime later. Note it in the PR.
 - Any change to `buildCleanEnv`'s `PATH` ordering (ADR-0009 keeps `~/.local/bin`
@@ -298,8 +298,8 @@ npm run lint
 ## Definition of done
 
 1. All verification steps pass locally; output pasted into the PR body.
-2. Branch `wp/153-executable-identity-pinning`; conventional commits; PR titled
-   `feat(security): pin claude/git/codex to verified absolute paths + fail safe on drift (WP-153)`.
+2. Branch `wp/154-executable-identity-pinning`; conventional commits; PR titled
+   `feat(security): pin claude/git/codex to verified absolute paths + fail safe on drift (WP-154)`.
 3. PR template filled, including "Decisions made" (or "none") and `Generated-by:`.
 4. This spec's `status:` flipped to `In-Review` in the same PR.
 

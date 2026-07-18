@@ -65,7 +65,10 @@ Google-disabled, dream-only evaluation.
   otherwise be silently absorbed as trusted user text. **Residual (accepted):**
   a Codex CLI version bump can rename or add tool-output item types; the golden
   fixture (WP-100) catches a drop of the *known* types in CI, but a genuinely
-  new type must be re-verified on the next Codex pin bump.
+  new type must be re-verified on the next Codex pin bump — the version is
+  pinned in `src/core/supported-codex.js` and the re-verification steps (rerun
+  the golden fixtures, confirm tool-output types, re-affirm the
+  `developer`-role trust) are in `docs/runbooks/codex-pin-bump.md`.
 - **Tiered gates**: Tier 3 destinations — `06-Identity/`, `05-Skills/`, anything that feeds the injected digest — require score ≥ 0.85 AND recurrence across ≥ 3 distinct sessions AND `derived_from_untrusted: false`. Untrusted-derived content can exist only in Tier 1/2 notes, flagged, and is excluded from digest rendering. One scoped exception: per-skill `LEARNINGS.md` ledgers under `05-Skills/` are quarantined observation data — never injected into sessions, never executed — and may record single-session and untrusted-derived entries by design; whether an entry can *authorize* a skill revision is governed by ADR-0020's mechanical trust rules instead.
 - **Code, not the model, enforces the boundary**: the orchestrator validates the post-dream git diff; any write violating tier rules is reverted and flagged in the dream report.
 - **One commit per dream** → `git revert <sha>` undoes an entire night.

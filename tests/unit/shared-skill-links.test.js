@@ -339,3 +339,98 @@ test('a pre-existing correct symlink is adopted into the manifest (recorded, rep
     [{ kind: 'symlink', path: linkPath }]
   );
 });
+
+// ── WP-146: foreign-symlink preservation (audit A13) ─────────────────────────
+
+test('a wienerdog-* symlink pointing elsewhere is preserved with a notice, no manifest entry (WP-146)', () => {
+  if (process.platform === 'win32') return;
+  const { root, skillsDir, targetSkillsDir } = setup();
+  const foreignTarget = path.join(root, 'somewhere-else');
+  fs.mkdirSync(foreignTarget, { recursive: true });
+  fs.mkdirSync(targetSkillsDir, { recursive: true });
+  const linkPath = path.join(targetSkillsDir, 'wienerdog-setup');
+  fs.symlinkSync(foreignTarget, linkPath);
+
+  const out = freshOut();
+  const manifest = freshManifest();
+  shared.applySkillLinks(skillsDir, targetSkillsDir, false, manifest, out);
+
+  assert.equal(fs.readlinkSync(linkPath), foreignTarget, 'still points at the foreign target');
+  assert.ok(
+    out.notices.some((n) => n.includes('left foreign symlink untouched') && n.includes(foreignTarget) && n.includes(linkPath)),
+    'notice names the foreign target and the link path'
+  );
+  assert.equal(out.changed.length, 0, 'not reported as changed');
+  assert.equal(
+    manifest.entries.filter((e) => e.kind === 'symlink' && e.path === linkPath).length,
+    0,
+    'no symlink manifest entry recorded for a link we do not own'
+  );
+});
+
+test('dry-run also preserves a foreign symlink and still discloses the notice (WP-146)', () => {
+  if (process.platform === 'win32') return;
+  const { root, skillsDir, targetSkillsDir } = setup();
+  const foreignTarget = path.join(root, 'somewhere-else');
+  fs.mkdirSync(foreignTarget, { recursive: true });
+  fs.mkdirSync(targetSkillsDir, { recursive: true });
+  const linkPath = path.join(targetSkillsDir, 'wienerdog-setup');
+  fs.symlinkSync(foreignTarget, linkPath);
+
+  const out = freshOut();
+  shared.applySkillLinks(skillsDir, targetSkillsDir, true, freshManifest(), out);
+
+  assert.equal(fs.readlinkSync(linkPath), foreignTarget);
+  assert.ok(out.notices.some((n) => n.includes('left foreign symlink untouched')));
+});
+
+test('a symlink already pointing at our core source is still unchanged + recorded (WP-146 regression guard)', () => {
+  if (process.platform === 'win32') return;
+  const { skillsDir, targetSkillsDir, coreSkill } = setup();
+  fs.mkdirSync(targetSkillsDir, { recursive: true });
+  const linkPath = path.join(targetSkillsDir, 'wienerdog-setup');
+  fs.symlinkSync(coreSkill, linkPath);
+
+  const out = freshOut();
+  const manifest = freshManifest();
+  shared.applySkillLinks(skillsDir, targetSkillsDir, false, manifest, out);
+
+  assert.ok(out.unchanged.includes(linkPath));
+  assert.equal(manifest.entries.filter((e) => e.kind === 'symlink' && e.path === linkPath).length, 1);
+  assert.equal(out.notices.length, 0);
+});
+
+// ── WP-146 review round (Codex F1): ownership-transition on a replaced link ───
+
+test('a link WE created, then user-replaced with a foreign target, loses its manifest ownership entry on re-sync — so uninstall cannot delete the replacement (WP-146)', () => {
+  if (process.platform === 'win32') return;
+  const { getPaths } = require('../../src/core/paths');
+  const manifestLib = require('../../src/core/manifest');
+  const { root, skillsDir, targetSkillsDir } = setup();
+
+  // Simulate a prior sync that DID create our link here (manifest owns it).
+  fs.mkdirSync(targetSkillsDir, { recursive: true });
+  const linkPath = path.join(targetSkillsDir, 'wienerdog-setup');
+  const manifest = freshManifest();
+  manifest.entries.push({ kind: 'symlink', path: linkPath });
+
+  // User replaces it with a foreign symlink.
+  const foreignTarget = path.join(root, 'my-own-thing');
+  fs.mkdirSync(foreignTarget, { recursive: true });
+  fs.symlinkSync(foreignTarget, linkPath);
+
+  // Re-sync: preserve the foreign link AND drop the stale ownership entry.
+  const out = freshOut();
+  shared.applySkillLinks(skillsDir, targetSkillsDir, false, manifest, out);
+  assert.equal(
+    manifest.entries.filter((e) => e.kind === 'symlink' && e.path === linkPath).length,
+    0,
+    'stale symlink ownership entry removed'
+  );
+
+  // End-to-end proof: a real uninstall reverse() must NOT delete the user's link.
+  const paths = getPaths({ HOME: root, WIENERDOG_HOME: path.join(root, 'wd'), CLAUDE_CONFIG_DIR: path.dirname(targetSkillsDir) });
+  manifestLib.reverse(paths, manifest, { dryRun: false });
+  assert.ok(fs.existsSync(linkPath), "the user's replacement symlink survived uninstall");
+  assert.equal(fs.readlinkSync(linkPath), foreignTarget, 'and still points where the user put it');
+});

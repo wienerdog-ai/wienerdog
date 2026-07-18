@@ -1,15 +1,15 @@
 ---
-id: WP-155
+id: WP-156
 title: Generate a canonical, digest-bound job descriptor at schedule/sync time
 status: Draft
 model: opus
 size: M
-depends_on: [WP-144, WP-145, WP-153]
+depends_on: [WP-144, WP-145, WP-154]
 adrs: [ADR-0004, ADR-0013, ADR-0027, ADR-0028]
-branch: wp/155-canonical-job-descriptor
+branch: wp/156-canonical-job-descriptor
 ---
 
-# WP-155: Canonical digest-bound job descriptor (audit A7, part 3 of 6)
+# WP-156: Canonical digest-bound job descriptor (audit A7, part 3 of 6)
 
 ## Context (read this, nothing else)
 
@@ -28,14 +28,14 @@ This WP builds the first half of the fix (audit A7): a **canonical job
 descriptor** — a code-owned, deterministic record of exactly what a scheduled
 job is authorized to run: its `run` action, capability profile, prompt/skill
 content hash, timeout, vault root, the **absolute executable identities** (from
-WP-153's pins), and the **app release digest** (a content address of the
+WP-154's pins), and the **app release digest** (a content address of the
 vendored `app/current` tree). The descriptor is serialized canonically and
 reduced to a **descriptor digest** (sha256). It is written at schedule/sync time
 and can be **re-derived from live inputs** so a later comparison reveals drift.
 
 This WP produces the descriptor module and writes/records descriptors during
 schedule registration. It does **not** yet bind the digest into the OS entry or
-enforce it at fire time — that is WP-156 (the out-of-tree launcher that consumes
+enforce it at fire time — that is WP-157 (the out-of-tree launcher that consumes
 this descriptor). Keeping the descriptor a separate, independently-tested layer
 mirrors how WP-145 (scheduler unload) builds on WP-144 (manifest schema).
 
@@ -74,7 +74,7 @@ ExecStart/Arguments today are `[node, bin, 'run-job', name]`.
 recording a `vendored-tree` entry. `isDevCheckout(root, env)` returns true for a
 `.git` dir or `WIENERDOG_DEV=1`.
 
-**`src/core/exec-identity.js`** (WP-153, a dependency): `loadPins(paths)` returns
+**`src/core/exec-identity.js`** (WP-154, a dependency): `loadPins(paths)` returns
 `{claude?, git?, codex?}` pins (`{realpath, version, sizeBytes, sha256, …}`) from
 `<core>/state/exec-pins.json`.
 
@@ -103,7 +103,7 @@ authorization record.
 | Action | Path | Notes |
 |--------|------|-------|
 | create | src/scheduler/descriptor.js | Build / canonicalize / digest / write / re-derive the job descriptor; hash the app-current tree. Pure + `fs`-only; lazy-requires `exec-identity`, `vendor`, `brain` (no static cycle). |
-| modify | src/cli/schedule.js | In `registerPlatform` (thus `add` + `repointSchedules`): after the OS entry is ensured, `writeDescriptor` for the job (idempotent; record its `file` manifest entry). Do NOT change the entry's argv here (WP-156). |
+| modify | src/cli/schedule.js | In `registerPlatform` (thus `add` + `repointSchedules`): after the OS entry is ensured, `writeDescriptor` for the job (idempotent; record its `file` manifest entry). Do NOT change the entry's argv here (WP-157). |
 | create | tests/unit/descriptor.test.js | Determinism + per-input digest-change + write/record + re-derive cases below. |
 | modify | tests/unit/scheduler-schedule.test.js | Assert `add`/`repointSchedules` write a descriptor file (0600) and record it; a legit uninstall removes it. |
 
@@ -121,7 +121,7 @@ authorization record.
   "timeoutMinutes": 20,
   "vaultRoot": "/Users/me/wienerdog",
   "node": "/opt/homebrew/opt/node/bin/node",   // process.execPath
-  "exec": {                                 // from WP-153 pins (realpath+version+sha256)
+  "exec": {                                 // from WP-154 pins (realpath+version+sha256)
     "claude": { "realpath": "…", "version": "…", "sha256": "…" },
     "git":    { "realpath": "…", "version": "…", "sha256": "…" }
   },
@@ -166,7 +166,7 @@ function descriptorPath(paths, name) {}
 function writeDescriptor(paths, job, opts) {}
 
 /** Re-derive the digest from live inputs (buildDescriptor→descriptorDigest),
- *  WITHOUT reading the stored file — the drift-comparison primitive WP-156 uses.
+ *  WITHOUT reading the stored file — the drift-comparison primitive WP-157 uses.
  *  @returns {string} 'sha256:…' */
 function deriveDescriptorDigest(paths, job, opts) {}
 
@@ -183,7 +183,7 @@ argv). `add` and `repointSchedules` both flow through `registerPlatform`, so bot
 write/refresh the descriptor. The descriptor file is saved with the manifest
 (the existing `manifestLib.save` at the end of `add`/the sync flow). **Do not add
 any argv/flag to the OS entry here** — the entry stays `[node, bin, run-job,
-name]` until WP-156 rewrites it to invoke the launcher with the descriptor path +
+name]` until WP-157 rewrites it to invoke the launcher with the descriptor path +
 digest.
 
 ## Implementation notes & constraints
@@ -198,14 +198,14 @@ digest.
   POSIX separators so the digest is machine-independent for identical bytes.
 - **Dev stance:** when `current`'s target is a dev checkout (`isDevCheckout`),
   `appTreeDigest` over a live, edited checkout is not stable — record
-  `stance:"dev"` and still compute the digest, but WP-156 will treat `dev`
+  `stance:"dev"` and still compute the digest, but WP-157 will treat `dev`
   differently (integrity enforced only for `prod`). This WP only records the
   stance truthfully.
 - **Why depend on WP-144/145:** this WP edits `schedule.js`, the shared scheduler
   register surface WP-145 also modifies (serialize), and the descriptor's
   persistence must respect WP-144's untrusted-manifest/root-bounded-delete model
   (the descriptor file is an in-bounds `<core>/state` `file` entry, valid under
-  WP-144's `file` schema). It depends on **WP-153** for the exec pins embedded in
+  WP-144's `file` schema). It depends on **WP-154** for the exec pins embedded in
   `exec`.
 - Idempotence: a second `sync`/`schedule add` with unchanged inputs rewrites the
   descriptor to byte-identical content (reuse the atomic temp+rename + equality
@@ -230,7 +230,7 @@ digest.
 - [ ] **[A7 bullet 1/3 — precondition]** `deriveDescriptorDigest` is
       deterministic (same inputs ⇒ same digest) and changes when the config `run`
       action, the vault root, any embedded exec pin, or the app `treeDigest`
-      changes — each proven by a unit test mutating exactly one input. (WP-156
+      changes — each proven by a unit test mutating exactly one input. (WP-157
       turns this into "config `run` rewrite ⇒ mismatch alert + zero model spawn"
       and "manifest+config rewrite cannot defeat the independent descriptor".)
 - [ ] `appTreeDigest` over a fixture app dir is stable and changes on any file
@@ -253,9 +253,9 @@ npm run lint
 ## Out of scope (do NOT do these)
 
 - Binding the digest into the OS scheduler entry, the out-of-tree launcher, and
-  fire-time enforcement — **WP-156** (depends on this WP; this WP changes no entry
+  fire-time enforcement — **WP-157** (depends on this WP; this WP changes no entry
   argv and enforces nothing at run time).
-- Resolving/verifying/pinning executables — **WP-153** (this WP consumes its pins).
+- Resolving/verifying/pinning executables — **WP-154** (this WP consumes its pins).
 - Re-deriving the scheduler **unload** argv on uninstall — **WP-145** (A8, ADR-0027).
 - Any change to `manifest.js` or a new manifest kind — the descriptor is a plain
   `file` entry by design.
@@ -263,8 +263,8 @@ npm run lint
 ## Definition of done
 
 1. All verification steps pass locally; output pasted into the PR body.
-2. Branch `wp/155-canonical-job-descriptor`; conventional commits; PR titled
-   `feat(security): canonical digest-bound job descriptor at schedule/sync (WP-155)`.
+2. Branch `wp/156-canonical-job-descriptor`; conventional commits; PR titled
+   `feat(security): canonical digest-bound job descriptor at schedule/sync (WP-156)`.
 3. PR template filled, including "Decisions made" (or "none") and `Generated-by:`.
 4. This spec's `status:` flipped to `In-Review` in the same PR.
 

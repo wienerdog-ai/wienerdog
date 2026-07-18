@@ -3,6 +3,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const shared = require('./shared');
+const { WienerdogError } = require('../core/errors');
 
 /**
  * Apply the Codex CLI adapter idempotently.
@@ -66,11 +67,26 @@ function applyCodexAdapter(paths, opts = {}) {
       digest = null;
     }
     if (digest !== null) {
-      shared.applyManagedBlock(agentsMd, digest, dryRun, manifest, out);
-      if (fs.existsSync(overridePath)) {
-        out.notices.push(
-          "~/.codex/AGENTS.override.md exists — it shadows Wienerdog's AGENTS.md; merge the managed block manually or remove the override"
-        );
+      try {
+        shared.applyManagedBlock(agentsMd, digest, dryRun, manifest, out);
+        // Success-only by design (spec implementation note): the override notice
+        // need not fire when the block could not be updated.
+        if (fs.existsSync(overridePath)) {
+          out.notices.push(
+            "~/.codex/AGENTS.override.md exists — it shadows Wienerdog's AGENTS.md; merge the managed block manually or remove the override"
+          );
+        }
+      } catch (err) {
+        if (err instanceof WienerdogError) {
+          // Ambiguous / hand-broken sentinels in the user's markdown. Do NOT abort the
+          // whole sync — the hook + skill reconciliation below is independent and
+          // provably safe. Surface the problem and continue (audit A13).
+          out.notices.push(
+            `managed block not updated in ${agentsMd} — ${err.message}; hooks + skills still installed. Resolve the markers by hand, then re-run 'wienerdog sync'.`
+          );
+        } else {
+          throw err; // a non-ambiguity error (e.g. an unexpected I/O fault) is NOT swallowed
+        }
       }
     } else {
       out.notices.push(

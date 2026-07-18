@@ -1,23 +1,23 @@
 ---
-id: WP-157
+id: WP-158
 title: A7 integrity containment proof — end-to-end negative harness for the scheduler/app/executable anchors
 status: Draft
 model: opus
 size: M
-depends_on: [WP-153, WP-154, WP-155, WP-156]
+depends_on: [WP-154, WP-155, WP-156, WP-157]
 adrs: [ADR-0004, ADR-0009, ADR-0013, ADR-0028]
-branch: wp/157-a7-integrity-harness
+branch: wp/158-a7-integrity-harness
 ---
 
-# WP-157: A7 end-to-end integrity containment harness (audit A7, part 5 of 6)
+# WP-158: A7 end-to-end integrity containment harness (audit A7, part 5 of 6)
 
 ## Context (read this, nothing else)
 
 A7 hardens the three integrity anchors of Wienerdog's unattended nightly run:
-the **pinned external executables** (WP-153), the **inert test-exec seams**
-(WP-154), the **canonical digest-bound job descriptor** (WP-155), and the
+the **pinned external executables** (WP-154), the **inert test-exec seams**
+(WP-155), the **canonical digest-bound job descriptor** (WP-156), and the
 **out-of-tree launcher** that verifies the app + descriptor before spawning
-(WP-156). **IRON RULE (ADR-0004): Wienerdog is just files.** The audit is
+(WP-157). **IRON RULE (ADR-0004): Wienerdog is just files.** The audit is
 explicit that "a work package is not complete until its adversarial criteria
 execute on the final bytes." This WP is that proof: an end-to-end **negative
 harness** that drives the real launcher/run-job path against each tamper and
@@ -51,16 +51,16 @@ entry and the launcher — the harness must not claim that.
 
 The A7 mechanisms this harness exercises exist after its dependencies land:
 - `src/core/exec-identity.js` — `createPins`, `verifyPin`, `resolvePinnedSpawn`
-  (WP-153).
+  (WP-154).
 - `src/cli/run-job.js` `resolveCommand` + `src/core/dream/brain.js` fake-seam
-  gates behind `WIENERDOG_TEST` (WP-154).
+  gates behind `WIENERDOG_TEST` (WP-155).
 - `src/scheduler/descriptor.js` — `writeDescriptor`, `deriveDescriptorDigest`,
-  `appTreeDigest` (WP-155).
+  `appTreeDigest` (WP-156).
 - `src/scheduler/launcher.js` — `verifyAndResolve(paths, name, {descriptorPath,
   expectDigest, …})` returning `{ok, command, args}` | `{ok:false, reason}`, and
-  `main(argv)` which spawns only on `ok` (WP-156).
+  `main(argv)` which spawns only on `ok` (WP-157).
 - `src/core/vendor.js` — `vendorSelf`, `repointCurrent`, `verifyCurrentContainment`,
-  `writeLauncher` (WP-156).
+  `writeLauncher` (WP-157).
 
 **Existing harness conventions to mirror** (WP-133 / WP-142): scenario scripts
 live under `tests/scenarios/<name>/`; the live/expensive path is hard-gated by
@@ -116,7 +116,7 @@ disposable temp `$HOME`/`WIENERDOG_HOME`:
    A completed re-vendor switches `current` + re-binds the entry digest and the
    next verify passes; an interrupted publish (staging dir removed before rename)
    leaves the prior valid `current` + entry verifying and runnable. *(bullet 6)*
-7. **Production seam inertness (WP-154 cross-check).** With `WIENERDOG_TEST` unset,
+7. **Production seam inertness (WP-155 cross-check).** With `WIENERDOG_TEST` unset,
    a set `WIENERDOG_RUNJOB_CMD` is ignored by `resolveCommand` — the recorder shows
    the real resolution, not the fake.
 
@@ -131,10 +131,10 @@ disposable temp `$HOME`/`WIENERDOG_HOME`:
   `$HOME`/`WIENERDOG_HOME`/`CLAUDE_CONFIG_DIR` redirect to temp dirs removed in a
   `finally`; the fake `claude`/`git` are inert temp scripts; no `ANTHROPIC_API_KEY`
   reaches any child.
-- **This proves WP-153..WP-156; it does not modify them.** A containment gap here
+- **This proves WP-154..WP-157; it does not modify them.** A containment gap here
   is a **spec-gap** routed back to wd-architect for a dated amendment to the
   relevant WP — never a fix smuggled into the harness. (E.g. if `verifyAndResolve`
-  misses the repoint case, that is a WP-156 bug.)
+  misses the repoint case, that is a WP-157 bug.)
 - **Fail loud.** Any unexpected recorded spawn, any missed refusal, any missing
   alert, any non-vacuity failure ⇒ non-zero exit with a clear message.
 - **CI stays dormant (ADR-0009):** no scheduled CI; a `scenarios-a7-integrity.yml`,
@@ -163,7 +163,7 @@ disposable temp `$HOME`/`WIENERDOG_HOME`:
       config-rewrite (1), app-mutation/repoint/out-of-root (2), manifest+config (3),
       PATH-fake (4), pin-mutation/owner/mode/ancestor (5), and update-atomicity (6)
       negatives each refuse with **zero** recorded app/model spawn, plus the
-      non-vacuity baseline (0) and the WP-154 seam-inertness cross-check (7).
+      non-vacuity baseline (0) and the WP-155 seam-inertness cross-check (7).
 - [ ] `npm run scenarios:a7-integrity` with `WIENERDOG_RUN_SCENARIOS` unset prints
       skip and exits 0 (no quota); `npm test` does not run the gated scenario.
 - [ ] `tests/scenarios/a7-integrity/README.md` states what is proven, how to run,
@@ -185,16 +185,16 @@ WIENERDOG_RUN_SCENARIOS=1 npm run scenarios:a7-integrity
 
 - Changing any A7 mechanism (`exec-identity.js`, `run-job.js`, `brain.js`,
   `descriptor.js`, `launcher.js`, `vendor.js`, `generators.js`, `schedule.js`) — a
-  gap is a spec-gap back to wd-architect for **WP-153..WP-156**.
+  gap is a spec-gap back to wd-architect for **WP-154..WP-157**.
 - Spending real model quota or touching the real OS scheduler / real `~/.claude`.
-- A7 documentation prose — **WP-158**.
+- A7 documentation prose — **WP-159**.
 
 ## Definition of done
 
 1. All non-gated verification steps pass locally; output pasted into the PR body
    (state whether the optional gated run was executed and its result).
-2. Branch `wp/157-a7-integrity-harness`; conventional commits; PR titled
-   `test(scenarios): A7 scheduler/app/executable integrity containment proof (WP-157)`.
+2. Branch `wp/158-a7-integrity-harness`; conventional commits; PR titled
+   `test(scenarios): A7 scheduler/app/executable integrity containment proof (WP-158)`.
 3. PR template filled, including "Decisions made" (or "none") and `Generated-by:`.
 4. This spec's `status:` flipped to `In-Review` in the same PR.
 

@@ -1,23 +1,23 @@
 ---
-id: WP-158
+id: WP-159
 title: A7 documentation — honest scheduler/app/executable integrity claims, threat model, glossary, runbook
 status: Draft
 model: sonnet
 size: M
-depends_on: [WP-153, WP-154, WP-155, WP-156]
+depends_on: [WP-154, WP-155, WP-156, WP-157]
 adrs: [ADR-0004, ADR-0013, ADR-0028]
-branch: wp/158-a7-integrity-docs
+branch: wp/159-a7-integrity-docs
 ---
 
-# WP-158: A7 documentation (audit A7, part 6 of 6)
+# WP-159: A7 documentation (audit A7, part 6 of 6)
 
 ## Context (read this, nothing else)
 
 A7 hardens the integrity of Wienerdog's unattended nightly run: external
-executables are **pinned** to verified absolute paths (WP-153), the test-exec
-seams are **inert in production** (WP-154), each scheduled job has a **canonical
-digest-bound descriptor** (WP-155), and an **out-of-tree launcher** verifies the
-app + descriptor before spawning (WP-156). This WP writes the honest, traceable
+executables are **pinned** to verified absolute paths (WP-154), the test-exec
+seams are **inert in production** (WP-155), each scheduled job has a **canonical
+digest-bound descriptor** (WP-156), and an **out-of-tree launcher** verifies the
+app + descriptor before spawning (WP-157). This WP writes the honest, traceable
 documentation for that work, closing the audit's "Required documentation changes"
 for the scheduler/app/executable boundary: **every claim must trace to a shipped
 mechanism**, and the arbitrary-same-user-malware non-goal must be stated plainly.
@@ -55,7 +55,7 @@ sentence overreach it (no "your scheduled AI can never be tampered with").
   no scoped statement of the integrity boundary.
 - `docs/runbooks/` — holds operator runbooks (e.g. the WP-143 `gws-broker.md`,
   `codex-review.md`); no executable/scheduler-integrity runbook.
-- The shipped A7 mechanisms (WP-153..WP-156) are the only source of truth for what
+- The shipped A7 mechanisms (WP-154..WP-157) are the only source of truth for what
   the docs may claim.
 
 ## Deliverables (permission boundary — touch ONLY these)
@@ -106,7 +106,7 @@ sentence overreach it (no "your scheduled AI can never be tampered with").
   scheduled job is authorized to run (run action, capability profile,
   prompt/skill hash, timeout, vault root, absolute executable identities, app
   release digest); written at schedule/sync and re-derivable to detect drift
-  (WP-155).
+  (WP-156).
 - **descriptor digest** — the sha256 of the canonicalized job descriptor, bound
   into the OS scheduler entry as the independent anchor a scoped `config.yaml`/app
   rewrite cannot change.
@@ -115,11 +115,11 @@ sentence overreach it (no "your scheduled AI can never be tampered with").
   re-verified at fire time.
 - **independent launcher** — the minimal Node launcher at `<core>/launcher/
   launch.js`, **outside** the mutable `app/current` tree, that verifies integrity
-  before spawning `run-job` (WP-156); it is not a daemon (ADR-0004) — it runs and
+  before spawning `run-job` (WP-157); it is not a daemon (ADR-0004) — it runs and
   exits with each fire.
 - **executable pin** — the recorded verified identity (absolute realpath, version,
   size, content hash) of `claude`/`git`/`codex`, captured at install/sync; the
-  nightly job spawns the pinned absolute path and fails safe on drift (WP-153).
+  nightly job spawns the pinned absolute path and fails safe on drift (WP-154).
 - **production/dev stance** — whether an install runs the vendored `app/<version>`
   (prod, integrity-enforced) or a dev checkout (dev, mutable-by-design); the
   launcher refuses a prod entry that resolves to a dev-looking tree, so a planted
@@ -139,7 +139,7 @@ sentence overreach it (no "your scheduled AI can never be tampered with").
 
 - **Prose only.** No product code, no golden fixtures, no CLI-string pins. A claim
   that needs a code change is a spec-gap back to wd-architect.
-- **Every claim traces to a mechanism** in WP-153..WP-156. Where the boundary is
+- **Every claim traces to a mechanism** in WP-154..WP-157. Where the boundary is
   scoped-write-detection (not an OS boundary), say so — do not imply cryptographic
   or OS-level unforgeability.
 - **Keep "sandbox" reserved** for `sandbox-guard.js`; the launcher is an
@@ -201,8 +201,8 @@ node bin/wienerdog.js safety      # all five gates BLOCKED
 ## Definition of done
 
 1. All verification steps pass locally; output pasted into the PR body.
-2. Branch `wp/158-a7-integrity-docs`; conventional commits; PR titled
-   `docs(security): honest A7 scheduler/app/executable integrity claims + runbook (WP-158)`.
+2. Branch `wp/159-a7-integrity-docs`; conventional commits; PR titled
+   `docs(security): honest A7 scheduler/app/executable integrity claims + runbook (WP-159)`.
 3. PR template filled, including "Decisions made" (or "none") and `Generated-by:`.
 4. This spec's `status:` flipped to `In-Review` in the same PR.
 
