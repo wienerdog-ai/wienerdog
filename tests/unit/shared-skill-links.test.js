@@ -399,3 +399,38 @@ test('a symlink already pointing at our core source is still unchanged + recorde
   assert.equal(manifest.entries.filter((e) => e.kind === 'symlink' && e.path === linkPath).length, 1);
   assert.equal(out.notices.length, 0);
 });
+
+// ── WP-146 review round (Codex F1): ownership-transition on a replaced link ───
+
+test('a link WE created, then user-replaced with a foreign target, loses its manifest ownership entry on re-sync — so uninstall cannot delete the replacement (WP-146)', () => {
+  if (process.platform === 'win32') return;
+  const { getPaths } = require('../../src/core/paths');
+  const manifestLib = require('../../src/core/manifest');
+  const { root, skillsDir, targetSkillsDir } = setup();
+
+  // Simulate a prior sync that DID create our link here (manifest owns it).
+  fs.mkdirSync(targetSkillsDir, { recursive: true });
+  const linkPath = path.join(targetSkillsDir, 'wienerdog-setup');
+  const manifest = freshManifest();
+  manifest.entries.push({ kind: 'symlink', path: linkPath });
+
+  // User replaces it with a foreign symlink.
+  const foreignTarget = path.join(root, 'my-own-thing');
+  fs.mkdirSync(foreignTarget, { recursive: true });
+  fs.symlinkSync(foreignTarget, linkPath);
+
+  // Re-sync: preserve the foreign link AND drop the stale ownership entry.
+  const out = freshOut();
+  shared.applySkillLinks(skillsDir, targetSkillsDir, false, manifest, out);
+  assert.equal(
+    manifest.entries.filter((e) => e.kind === 'symlink' && e.path === linkPath).length,
+    0,
+    'stale symlink ownership entry removed'
+  );
+
+  // End-to-end proof: a real uninstall reverse() must NOT delete the user's link.
+  const paths = getPaths({ HOME: root, WIENERDOG_HOME: path.join(root, 'wd'), CLAUDE_CONFIG_DIR: path.dirname(targetSkillsDir) });
+  manifestLib.reverse(paths, manifest, { dryRun: false });
+  assert.ok(fs.existsSync(linkPath), "the user's replacement symlink survived uninstall");
+  assert.equal(fs.readlinkSync(linkPath), foreignTarget, 'and still points where the user put it');
+});

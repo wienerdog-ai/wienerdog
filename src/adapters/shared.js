@@ -70,6 +70,14 @@ function recordCopiedSkill(manifest, linkPath, hash) {
   if (!existing) manifest.entries.push(entry);
 }
 
+/** Drop a manifest ownership entry we no longer own (same kind+path), so
+ *  uninstall never reverses it. No-op when absent or when no manifest is given.
+ *  @param {object} [manifest] @param {string} kind @param {string} entryPath */
+function dropOwnedEntry(manifest, kind, entryPath) {
+  if (!manifest || !Array.isArray(manifest.entries)) return;
+  manifest.entries = manifest.entries.filter((e) => !(e.kind === kind && e.path === entryPath));
+}
+
 /** Upsert the settings-entry manifest record: refresh `commands` (and
  *  `createdFile`) so uninstall always removes the CURRENT hook set, not the
  *  first version recorded (audit A13). `createdFile:true` is sticky — a re-sync
@@ -393,7 +401,11 @@ function applySkillLinks(skillsDir, targetSkillsDir, dryRun, manifest, out, opts
         // A wienerdog-* symlink whose target is NOT our core skill source — a user's
         // own link, or a stale one from another install root. Never silently clobber
         // it (audit A13): report and leave it exactly as found. Do NOT record a
-        // manifest symlink entry for it (we do not own it).
+        // manifest symlink entry for it (we do not own it) AND drop any stale
+        // ownership entry from a prior sync when WE created the link here — otherwise
+        // reverseSymlink (which unlinks any symlink at a recorded path, without a
+        // target check) would delete the user's replacement on uninstall.
+        dropOwnedEntry(manifest, 'symlink', linkPath);
         out.notices.push(
           `left foreign symlink untouched (points at ${currentTarget || 'an unreadable target'}, not the Wienerdog skill source): ${linkPath}`
         );
