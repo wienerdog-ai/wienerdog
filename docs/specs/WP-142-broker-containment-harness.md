@@ -82,8 +82,9 @@ audit's A2 acceptance bullets:
 | create | tests/scenarios/broker-e2e/fake-google.js | a fake-Google backend for the broker: records every attempted API method; a poisoned request that reaches an out-of-allowlist method is a HARD FAIL (D-E2E-BROKER) |
 | create | tests/scenarios/broker-e2e/fixtures/ | poisoned-email fixture + planted token/grant canaries + a grant-store to bit-flip |
 | create | tests/scenarios/broker-e2e/README.md | what it proves (the A2 gate-opening precondition), how to run (subscription), the gating |
-| create | tests/unit/broker-e2e-negatives.test.js | the NON-live negatives (schema-reject external recipient = 0 calls; grant bit flip fails closed; read-only credential rejects send/delete; forged env cannot change identity) — runnable in `npm test` |
+| create | tests/unit/broker-e2e-negatives.test.js | the NON-live negatives (schema-reject external recipient = 0 calls; grant bit flip fails closed; read-only credential rejects send/delete; forged env cannot change identity) — runnable in `npm test`; test names are prefixed `broker-e2e-negatives:` so the `--test-name-pattern "broker-e2e-negatives"` selector works |
 | modify | package.json | add `npm run scenarios:broker-e2e` (guarded identically to WP-133; skip+exit 0 without `WIENERDOG_RUN_SCENARIOS`) |
+| modify | src/cli/run-job.js | AMENDED 2026-07-18 (review): forward `opts.profile` through `runJob` into `resolveCommand` so the `allowAll()` seam reaches the real run-job path (a JS-only seam; the CLI entry passes no profile, so production stays frozen) |
 
 ### What the harness proves
 

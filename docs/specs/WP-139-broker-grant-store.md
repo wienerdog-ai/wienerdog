@@ -70,8 +70,9 @@ five BLOCKED after this WP.
 | modify | src/cli/grant.js | mint grants into the new store (send-self + calendar-write kinds); keep the TTY typed-word confirmation; add `wienerdog grant calendar-write --routine`/CLI-scope |
 | modify | src/gws/grant.js | retire the config.yaml YAML block (drop `saveGrant`'s config write + manifest-hash re-sync — the F2 path); keep the pure `isSendAllowed` enforcement (reused by the store) |
 | create | tests/unit/broker-grant-store.test.js | put/read round-trip, integrity mismatch fails closed + fixed alert, unknown/absent grant denied, TTY-only mutation, calendar-write kind |
-| modify | tests/unit/gws-grant.test.js | reconcile the retired YAML path (assert the F2 write path is gone) |
-| modify | tests/unit/cli-grant.test.js | reconcile the store-backed mint + calendar-write kind + TTY-only |
+| modify | tests/unit/gws-grant.test.js | reconcile the retired YAML path (assert the F2 write path is gone) + the store-backed mint + calendar-write kind + TTY-only (the CLI grant tests live here, not in a `cli-grant.test.js`) |
+| modify | tests/unit/gws-send.test.js | AMENDED 2026-07-18 (review): the frozen `gmail.send` read path seeds a grant via the now-deleted `saveGrant`; reconcile with a local legacy-YAML seed helper |
+| modify | tests/unit/gws-dispatch.test.js | AMENDED 2026-07-18 (review): same `saveGrant` seed reconciliation as gws-send.test.js |
 
 ### Exact contracts
 

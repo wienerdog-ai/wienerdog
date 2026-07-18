@@ -91,9 +91,12 @@ A2 never does). `wienerdog safety` shows all five gates BLOCKED after this WP.
 /** Read framed JSON-RPC messages from `stream`, invoking `onMessage(obj)` per message.
  *  Bounded: a single message may not exceed MAX_MESSAGE_BYTES (fail closed — drop the
  *  connection with a JSON-RPC parse error, never buffer unboundedly). Reassembles
- *  partial reads. @param {NodeJS.ReadableStream} stream
- *  @param {(msg:object)=>void} onMessage @returns {{close():void}} */
-function readMessages(stream, onMessage)
+ *  partial reads. A third `onError({kind:'parse'|'oversize'})` seam (AMENDED 2026-07-18,
+ *  review) lets server.js emit the JSON-RPC parse error and distinguish pre-/post-
+ *  handshake drift — additive/optional; a two-arg call still works.
+ *  @param {NodeJS.ReadableStream} stream @param {(msg:object)=>void} onMessage
+ *  @param {(err:{kind:'parse'|'oversize'})=>void} [onError] @returns {{close():void}} */
+function readMessages(stream, onMessage, onError)
 
 /** Serialize + frame one JSON-RPC message to `stream`.
  *  @param {NodeJS.WritableStream} stream @param {object} msg */

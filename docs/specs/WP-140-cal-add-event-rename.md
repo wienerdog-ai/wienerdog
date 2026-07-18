@@ -64,6 +64,7 @@ unreachable in production. `wienerdog safety` shows all five BLOCKED after this 
 | modify | src/gws/index.js | dispatch `cal add-event` through the write-credential + grant path; `list`/`show` through the read credential; no generic full-scope `services` for `cal` |
 | create | tests/unit/gws-calendar-addevent.test.js | rename coverage, grant-gated add-event (denied without grant → no insert), read verbs use read credential, no delete/update verb exists |
 | modify | tests/unit/gws-calendar.test.js | reconcile the rename + gating expectations |
+| modify | tests/unit/gws-dispatch.test.js | AMENDED 2026-07-18 (review): the two `cal` bridge tests break on the verb rename + the `run(deps, flags)` credential-seam change; reconcile (add a `getServicesForClass` stub, seed a calendar_write grant, rename verb) |
 
 ### Exact contracts
 

@@ -100,6 +100,9 @@ shows all five BLOCKED after this WP.
 | create | tests/unit/broker-wiring.test.js | seam-writer emits a config with the trusted `--routine` argv + timeout + env; `--allowedTools` names exactly the profile verbs; snapshot bounded + read-only; unknown routine fails closed |
 | modify | tests/unit/routine-runtime.test.js | reconcile the seam-writer + snapshot behavior |
 | modify | tests/unit/runtime-profile.test.js | reconcile `--allowedTools` + weekly-review broker flip |
+| modify | tests/unit/broker-server.test.js | AMENDED 2026-07-18 (review): the `gws _broker` end-to-end test asserted the empty stub registry — this WP fills it; repoint to the real registry (`daily-digest`) |
+| modify | tests/unit/scheduler-runjob.test.js | AMENDED 2026-07-18 (review): `resolveCommand` asserted a broker routine fails closed on the absent seam — this WP writes the seam, so it now composes |
+| modify | tests/unit/routines-skill-structure.test.js | AMENDED 2026-07-18 (review): the SKILL-body assertions checked for `wienerdog gws` Bash — this WP rewrites them to broker verbs |
 
 ### Exact contracts
 
@@ -176,6 +179,18 @@ function makeVaultSnapshot(paths, routineId, stagingDir)
 the staging cwd stays the sole WRITE target). The vault itself is never in `--add-dir`
 (a hijacked routine cannot read/rewrite live memory notes — the WP-131 D-ROUTINE-VAULT-READ
 guarantee, now with a bounded read-only copy instead of nothing).
+
+> **AMENDED 2026-07-18 (review, maintainer scoping decision).** The
+> owner-mandated "skip VISIBLY, never silently" requirement is satisfied by
+> writing each skipped file to **stderr → the WP-013 job log** (visible,
+> durable, per-run). The additional wiring the contract sketches — threading
+> `snapshotSkipped` into the **WP-132 run-evidence record** and the **WP-125
+> digest warning-banner** — is DEFERRED to a scoped follow-up WP: the
+> Deliverables table lists `run-job.js` only for the env + id flow and scopes
+> no evidence/digest module, and the run-evidence sanitizer drops unknown
+> fields by design, so that wiring cannot land inside this WP's boundary. The
+> core mandate (visible, non-fatal skips) is met here; the evidence/banner
+> surface is a docstring-tracked follow-up, not an A2 gate blocker.
 
 **5. Routine SKILL rewrites.** Replace every `wienerdog gws …` Bash instruction with the
 corresponding broker verb (a tool call, not Bash) and every vault path read with a Read of
