@@ -38,6 +38,14 @@ async function main() {
     return;
   }
 
+  // Hidden per-job MCP broker entry (WP-136): routed before the gws dispatch
+  // because it is pure transport — no Google code, credential, or capability —
+  // and its stdout is the MCP channel, so it must bypass gws' render path.
+  if (cmd === 'gws' && rest[0] === '_broker') {
+    await require('../src/cli/gws-broker').run(rest.slice(1));
+    return;
+  }
+
   /** @type {Record<string, () => {run: (argv: string[]) => Promise<void>}>} */
   const commands = {
     init: () => require('../src/cli/init'),
