@@ -1,7 +1,7 @@
 ---
 id: WP-138
 title: Least-scope GWS credential split + granted-scope verification + broker per-verb credential selection (audit A2)
-status: Draft
+status: Ready
 model: opus
 size: M
 depends_on: [WP-136]
@@ -178,13 +178,13 @@ async function loadCredentialServices(paths, capabilityClass, opts = {})
   all-or-nothing per client. Local mitigation: revoking the grant / deleting a token
   file disables that capability broker-side. Revisit if per-capability revocation is
   required.
-- **D-TOKEN-MIGRATION (recommend retire-and-reauth).** The legacy combined token: import
-  it as one of the split credentials (risky — it is a superset, so scope verification
-  would refuse it anyway) vs retire it and require fresh per-credential `gws auth`.
-  Recommend **retire + re-auth**: detect the legacy token, print a one-time notice that
-  the credential model changed and `gws auth` must be re-run, and do NOT reuse the broad
-  token (it would fail the exact-scope check by design). GWS is frozen and no production
-  token exists, so no user is disrupted.
+- **D-TOKEN-MIGRATION — RESOLVED (OWNER-APPROVED 2026-07-18): retire + re-auth.** The
+  legacy combined token is never imported as a split credential: it is a scope
+  **superset**, so the exact-scope verification (which deliberately refuses supersets as
+  scope bleed) would reject it by design — an import path would be a guaranteed-failing
+  code path. Instead: detect the legacy token, print a one-time plain-language notice
+  that the credential model changed and `gws auth` must be re-run per credential, and do
+  NOT reuse the broad token. No disruption: GWS is frozen and no production token exists.
 - **D-TESTING-MODE (cross-ref WP-143) — RESOLVED (OWNER-APPROVED 2026-07-18): the
   per-user non-Testing client posture** (ADR-0026 §3a): the documented recommended setup
   is the user's own OAuth client flipped out of "Testing" (unverified "In production" —
@@ -192,14 +192,24 @@ async function loadCredentialServices(paths, capabilityClass, opts = {})
   Testing-mode fallback. This WP MUST ship the loud fail-closed expiry alert regardless;
   the posture doc is WP-143 (with the production-unverified-restricted SPIKE).
 
-## SPIKEs (resolve with a live measurement before Ready)
+## SPIKEs (both RESOLVED — 2026-07-18, vendored google-auth-library 10.9.0 / googleapis 173.0.0)
 
-- **SPIKE-include-granted-scopes-default** — the vendored google-auth-library's default
-  for `include_granted_scopes` when omitted is unverified. Measure it; set the param to
-  `false` explicitly regardless (do not rely on the default).
-- **SPIKE-scope-verify-shape** — confirm `getTokenInfo` returns `scopes[]` in the vendored
-  library version and the exact `invalid_grant` error shape for an expired refresh token
-  (drives the distinct testing-mode alert).
+- **SPIKE-include-granted-scopes-default — RESOLVED: the library has NO default at
+  all.** `generateAuthUrl` querystring-serializes exactly the opts it is given
+  (measured live on the vendored 10.9.0): with the param omitted it is **absent from
+  the auth URL** (Google's server-side default then governs — not ours to rely on);
+  with `include_granted_scopes:false` the URL carries `include_granted_scopes=false`.
+  The spec's rule stands: ALWAYS pass `false` explicitly.
+- **SPIKE-scope-verify-shape — RESOLVED (by vendored-code inspection, not a live
+  expired token — none exists while GWS is frozen).** `getTokenInfo` in 10.9.0 returns
+  `scopes[]` (built as `data.scope.split(' ')`). The expired/revoked-refresh-token
+  shape is pinned by the library's own handling in `refreshTokenNoCache`: a
+  `GaxiosError` with `e.response.data = {error:'invalid_grant',
+  error_description:…}`; the library REWRITES `e.message` to the JSON-stringified body
+  when `error_description` matches `/ReAuth/i`, so the testing-mode expiry alert must
+  detect on **`e.response?.data?.error === 'invalid_grant'`**, never on `e.message`.
+  The implementer re-confirms the shape in unit tests with a fake transport; live
+  confirmation arrives naturally with first real use (WP-142/A2 rerun).
 
 ## Implementation notes & constraints
 
