@@ -157,7 +157,7 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 | [WP-136](WP-136-broker-stdio-transport.md) | GWS broker transport — hand-rolled MCP stdio JSON-RPC server + per-job lifecycle self-check (audit A2) | M7 | opus | Ready | WP-131 |
 | [WP-137](WP-137-broker-verb-registry.md) | GWS broker verb registry — fixed verbs, server-side schemas, byte/count/rate limits, exact API-method allowlist (audit A2) | M7 | opus | Ready | WP-136 |
 | [WP-138](WP-138-least-scope-credential-split.md) | Least-scope GWS credential split + granted-scope verification + broker per-verb credential selection (audit A2) | M7 | opus | Ready | WP-136 |
-| [WP-139](WP-139-broker-grant-store.md) | Canonical broker-owned grant store — TTY-only mutation, exact-byte integrity fail-closed, retire the config.yaml YAML block (audit A2) | M7 | opus | Draft | WP-136 |
+| [WP-139](WP-139-broker-grant-store.md) | Canonical broker-owned grant store — TTY-only mutation, exact-byte integrity fail-closed, retire the config.yaml YAML block (audit A2) | M7 | opus | Ready | WP-136 |
 | [WP-140](WP-140-cal-add-event-rename.md) | Rename `cal draft-event` → `cal add-event` behind a calendar-write grant + credential (audit A2) | M7 | sonnet | Draft | WP-138, WP-139 |
 | [WP-141](WP-141-broker-runjob-wiring.md) | Wire the broker into the routine runtime — broker-mcp.json seam, trusted launch descriptor, MCP tool allowlist, read-only vault snapshot, functional routine skills (audit A2) | M7 | opus | Draft | WP-137, WP-138, WP-139 |
 | [WP-142](WP-142-broker-containment-harness.md) | Broker containment proof — end-to-end run-job poisoned-email E2E + exact-verb/grant/credential negatives (audit A2) | M7 | opus | Draft | WP-140, WP-141 |

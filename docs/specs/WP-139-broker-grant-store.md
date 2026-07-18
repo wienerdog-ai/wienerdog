@@ -1,7 +1,7 @@
 ---
 id: WP-139
 title: Canonical broker-owned grant store — TTY-only mutation, exact-byte integrity fail-closed, retire the config.yaml YAML block (audit A2)
-status: Draft
+status: Ready
 model: opus
 size: M
 depends_on: [WP-136]
@@ -153,11 +153,14 @@ function putGrant(paths, grant, opts)
   TTY path — but its own record type: a pure per-routine on/off with no recipient
   concept (no `to` allowlist; reusing the send-grant schema would give an empty field
   special implicit meaning, and the two capabilities must never imply each other).
-- **D-STORE-INTEGRITY (recommend exact-byte sha256, honestly framed).** The integrity
-  marker's role: a real cryptographic boundary vs tamper-evidence. Recommend the ADR-0021
-  framing — exact-byte `sha256` tamper-evidence between attended actions, explicitly NOT an
-  OS boundary (the real model-forge defense is A1+A2). Do not add a keyed MAC (the audit
-  showed a same-user-readable key is not a boundary; it would imply a false guarantee).
+- **D-STORE-INTEGRITY — RESOLVED (OWNER-APPROVED 2026-07-18): exact-byte sha256,
+  honestly framed.** The ADR-0021 framing: exact-byte `sha256` **tamper-evidence between
+  attended actions**, explicitly NOT an OS boundary — a same-user native actor can
+  rewrite hash and store alike (the A12 residual, documented). The real model-forge
+  defense is A1 (no Bash, staging-only writes) + A2 (no raw credential). NO keyed MAC:
+  the audit showed a same-user-readable key is not a boundary, so a MAC would add
+  complexity only to imply a false guarantee. One integrity discipline across the
+  product (identity trust registry precedent), honest claims throughout.
 
 ## Implementation notes & constraints
 
