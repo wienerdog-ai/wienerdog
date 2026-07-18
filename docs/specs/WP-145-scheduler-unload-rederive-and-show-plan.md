@@ -1,7 +1,7 @@
 ---
 id: WP-145
 title: Re-derive scheduler unload commands from platform + validated identity, and show the derived uninstall plan before confirmation
-status: Draft
+status: Ready
 model: opus
 size: M
 depends_on: [WP-144]
@@ -32,6 +32,11 @@ This reversal of the WP-013/WP-071 store-then-execute design is ratified in
 executable input from the manifest; the unregister command is code-owned and
 re-derived. `manifest.js` gains no static scheduler dependency (the derivation
 is delegated to the platform generator layer, required lazily / injected).
+
+**Owner walkthrough (2026-07-18): Ready.** The design core — re-derive the
+unregister command, never execute manifest-stored argv — is the ADR-0027
+decision the owner ratified; this WP only decomposes it into contracts and
+introduces no new fork. Depends on WP-144 (shares the manifest reverser).
 
 This is **part 2 of 2** for A8. Part 1 (WP-144, a dependency) added strict
 per-kind schema, per-entry error isolation, and root-bounded deletes for the
