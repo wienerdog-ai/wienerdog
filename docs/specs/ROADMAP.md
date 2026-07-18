@@ -149,7 +149,7 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 | [WP-128](WP-128-runtime-profile-registry.md) | Code-owned hermetic runtime profile registry + pure claude argv composer (audit A1) | M7 | opus | Done | — |
 | [WP-129](WP-129-hookfree-settings-and-vendored-skill.md) | Hook-free settings profile + vendored, integrity-checked skill text (audit A1) | M7 | opus | Done | WP-128 |
 | [WP-130](WP-130-dream-hermetic-runtime.md) | Make the dream brain hermetic — profile-composed argv, hook-free settings, staging cwd (audit A1) | M7 | opus | Done | WP-128, WP-129 |
-| [WP-131](WP-131-routine-hermetic-runtime.md) | Hermetic routine runtime — code-owned profile lookup, staging dir, single broker MCP seam (audit A1) | M7 | opus | In-Review | WP-128, WP-129 |
+| [WP-131](WP-131-routine-hermetic-runtime.md) | Hermetic routine runtime — code-owned profile lookup, staging dir, single broker MCP seam (audit A1) | M7 | opus | Done | WP-128, WP-129 |
 | [WP-132](WP-132-policy-hook-preflight-and-run-evidence.md) | Managed-policy hook preflight (warn + record) + hermetic-run evidence record (audit A1) | M7 | opus | In-Review | WP-130, WP-131 |
 | [WP-133](WP-133-live-negative-containment-harness.md) | Live negative containment harness — hermetic dream + every routine, canaries (audit A1) | M7 | opus | In-Review | WP-130, WP-131, WP-132 |
 | [WP-134](WP-134-a1-runtime-containment-docs.md) | A1 documentation — hermetic runtime profile threat model, glossary, honest claims (audit A1) | M7 | sonnet | In-Review | WP-128, WP-129, WP-130, WP-131, WP-132, WP-133, WP-135 |

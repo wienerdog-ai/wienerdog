@@ -1,7 +1,7 @@
 ---
 id: WP-131
 title: Hermetic routine runtime — code-owned profile lookup, staging dir, single broker MCP seam (audit A1)
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: [WP-128, WP-129]
