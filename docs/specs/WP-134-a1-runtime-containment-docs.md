@@ -1,10 +1,10 @@
 ---
 id: WP-134
 title: A1 documentation — hermetic runtime profile threat model, glossary terms, honest containment claims (audit A1)
-status: Draft
+status: Ready
 model: sonnet
 size: S
-depends_on: [WP-128, WP-129, WP-130, WP-131, WP-132, WP-133]
+depends_on: [WP-128, WP-129, WP-130, WP-131, WP-132, WP-133, WP-135]
 adrs: [ADR-0004, ADR-0025]
 branch: wp/134-a1-runtime-containment-docs
 ---
@@ -20,11 +20,13 @@ plain language for knowledge workers (CLAUDE.md); markdownlint must pass.
 Audit action **A1** (ADR-0025) made every headless `claude -p` job hermetic: a
 **code-owned hermetic runtime profile** — no ambient setting source, a hook-free
 `--settings` profile with `disableAllHooks`, an empty or single-broker MCP, a staging
-cwd, a vendored integrity-checked skill, a managed-policy preflight STOP, run evidence,
-and a **live** negative containment harness (WP-128..WP-133). This WP makes the docs tell
-the truth about that boundary, closing the audit's "required documentation changes":
-*describe built-in/MCP containment separately from full process containment*, and *keep
-all README/VISION/THREAT-MODEL claims mechanically traceable to the enforced boundary*.
+cwd, a vendored integrity-checked skill, a managed-policy preflight **warning** (WP-132),
+run evidence, a dev-time **live** negative containment harness (WP-133), and a **runtime
+containment self-check** that verifies the actually-installed Claude before each dream and
+fails closed (WP-135, ADR-0025 Amendment 2). This WP makes the docs tell the truth about
+that boundary, closing the audit's "required documentation changes": *describe
+built-in/MCP containment separately from full process containment*, and *keep all
+README/VISION/THREAT-MODEL claims mechanically traceable to the enforced boundary*.
 
 Two hard terminology facts (ADR-0025):
 
@@ -33,8 +35,10 @@ Two hard terminology facts (ADR-0025):
    / **capability profile** — the docs must stop calling the dream containment a
    "sandbox."
 2. The claim is **agent containment, not native-malware protection** (00-SYNTHESIS
-   boundary; ACTION-LIST A12) — and it is proven **live on a pinned Claude version**, not
-   by argv assertions.
+   boundary; ACTION-LIST A12) — and it is **verified at runtime before each dream** by a
+   bounded live canary probe of the real hermetic composition that fails closed if the
+   installed Claude no longer honors the flags (WP-135), not asserted only by argv strings
+   or against a repo-pinned version.
 
 This is the A1 analog of WP-127 (the A5 docs WP). It touches only docs.
 
@@ -67,8 +71,8 @@ native-malware non-goal. Grep them; only change claims that are now inaccurate.
 
 | Action | Path | Notes |
 |--------|------|-------|
-| modify | docs/THREAT-MODEL.md | rewrite T1/T2 containment prose + the "sandbox"→"hermetic runtime profile" renames + the residual bullets; add the native-malware/live-proof honesty; add an A1 boundary paragraph |
-| modify | docs/GLOSSARY.md | add **hermetic runtime profile**, **capability profile**, **staging directory**, **run evidence**; cross-link the reserved-"sandbox" note |
+| modify | docs/THREAT-MODEL.md | rewrite T1/T2 containment prose + the "sandbox"→"hermetic runtime profile" renames + the residual bullets; add the native-malware honesty + the runtime-self-verified (WP-135) + managed-hook-WARNING framing; add an A1 boundary paragraph |
+| modify | docs/GLOSSARY.md | add **hermetic runtime profile**, **capability profile**, **staging directory**, **run evidence**, **containment self-check**; cross-link the reserved-"sandbox" note |
 | modify | README.md | reconcile any containment claim to the enforced hermetic profile (only if inaccurate) |
 | modify | docs/VISION.md | same reconciliation (only if a claim is now inaccurate) |
 
@@ -93,14 +97,30 @@ native-malware non-goal. Grep them; only change claims that are now inaccurate.
   - the brain runs from a **fresh staging directory**, writes only the vault (dream) /
     staging (routine), and reads inputs only via bounded snapshots;
   - the skill body is **vendored and integrity-checked**;
-  - a **managed/admin-policy hook** makes an unattended run **STOP** (it is not silently
-    run non-hermetically);
-  - **run evidence** records the version/executable/profile/argv/digests.
+  - an enterprise/admin **managed-policy hook** (which a user/project/local `disableAllHooks`
+    cannot disable) is **detected read-only, warned about loudly on the durable channel, and
+    recorded in run evidence — and the run PROCEEDS**. It does **not** STOP: a managed hook is
+    the administrator's own deliberate config, **not reachable by attacker transcript/email
+    content**, so it is a **documented trusted-computing-base residual** (same shelf as A12
+    same-user native code and A7 executable integrity), not an A1 attacker vector. The
+    requirement is that the non-hermetic state be *visible*, not that the run be refused (WP-132);
+  - **run evidence** records the version/executable/profile/argv/digests (and the
+    managed-policy state and the containment self-check result);
+  - containment is **verified at runtime before each dream**: a bounded live canary probe of
+    the real hermetic composition runs and **fails closed** (the dream halts, durable alert)
+    if the actually-installed Claude no longer honors the containment flags (WP-135).
 - **Separate built-in/MCP containment from full process containment** and state the proof
-  honestly: containment is certified by a **live negative harness on a pinned Claude
-  version** (WP-133), not by argv strings; it contains the **agent** (a hijacked brain gets
-  no Bash/network/MCP/hook/secret-read), and it is **not** a boundary against arbitrary
-  same-user native code (A12) or against a swapped/mutated `claude` executable (**A7**).
+  honestly: containment is **runtime-self-verified** — the pre-dream self-check (WP-135)
+  validates the *actually-installed* Claude before each run and halts fail-closed on a break,
+  rather than being certified only against a repo-pinned version (a deployed user never
+  rebuilds the repo, and Claude auto-updates fast, so a pinned constant goes stale immediately
+  — ADR-0025 Amendment 2). The **dev-time** comprehensive hostile-fixture proof (WP-133,
+  including the config-mutating inherited-hook test) complements it; `supported-claude.js` is
+  only a dev-time "last tested version" record, not a production pin. Containment contains the
+  **agent** (a hijacked brain gets no Bash/network/MCP/hook/secret-read), and it is **not** a
+  boundary against arbitrary same-user native code (A12) or against a swapped/mutated `claude`
+  executable (**A7**). The self-check is a live tripwire on the same flags the real dream
+  depends on — a canary, not an exhaustive proof.
 - Update the T1 residual bullet (line ~220) and the A5 secret-residual bullet (line ~226)
   wording that references "the sandbox denies Bash/network" / "the runtime profile (A1)" to
   match the enforced hermetic profile.
@@ -118,7 +138,12 @@ native-malware non-goal. Grep them; only change claims that are now inaccurate.
   job runs in (and, for a routine, its only writable output), so no project/local settings
   are discovered under the cwd.
 - **run evidence** — the bounded, secret-free per-run record (Claude version, executable,
-  profile, argv, settings/MCP digests) written to `state/run-evidence.jsonl` (ADR-0025).
+  profile, argv, settings/MCP digests, managed-policy state, containment self-check result)
+  written to `state/run-evidence.jsonl` (ADR-0025).
+- **containment self-check** — the bounded live canary probe of the real hermetic
+  composition that runs before each dream and fails closed (halts + durable alert) if the
+  installed Claude no longer honors the containment flags (WP-135, ADR-0025). Verifies the
+  actual local runtime, not a repo-pinned version.
 
 **3. README.md / VISION.md.** Only where a claim is now inaccurate: reword "sandboxed dream
 / no Bash / no network" to the honest enforced statement — "each nightly/scheduled run has
@@ -145,12 +170,18 @@ Keep it plain-language.
       settings, hook-free profile, explicit non-empty tool allowlist as the primary
       restriction + redundant deny list (Bash/WebFetch/WebSearch/Task/Agent/Skill/Workflow/
       NotebookEdit), empty/single-broker MCP, staging cwd, vendored integrity-checked skill,
-      managed-policy STOP,
-      run evidence); built-in/MCP containment is stated separately from full process
-      containment; the native-malware (A12) + executable-integrity (A7) + live-proof caveats
-      are present.
+      the **managed-policy hook WARNING + documented-residual** posture (detect + warn +
+      record + proceed, NOT a STOP), run evidence, and the **pre-dream runtime containment
+      self-check that fails closed**); built-in/MCP containment is stated separately from full
+      process containment; the proof is described as **runtime-self-verified** (WP-135), NOT a
+      pinned-version certification; the native-malware (A12) + executable-integrity (A7)
+      caveats are present.
+- [ ] The docs contain **no** claim that a managed/admin-policy hook STOPs or refuses a run
+      (it warns + records + proceeds), and **no** claim that containment is certified against
+      a pinned Claude version (it is verified at runtime before each dream).
 - [ ] `docs/GLOSSARY.md` defines **hermetic runtime profile**, **capability profile**,
-      **staging directory**, and **run evidence**, and preserves the reserved-"sandbox" note.
+      **staging directory**, **run evidence**, and **containment self-check**, and preserves
+      the reserved-"sandbox" note.
 - [ ] README.md / VISION.md contain no inaccurate containment claim (either reconciled or
       confirmed-unaffected and noted).
 - [ ] A grep for "sandbox" in THREAT-MODEL.md returns only the intentional
@@ -170,7 +201,7 @@ node bin/wienerdog.js safety                     # all five gates BLOCKED
 
 ## Out of scope (do NOT do these)
 
-- Any code change (this is docs-only) — the machinery is WP-128..WP-133.
+- Any code change (this is docs-only) — the machinery is WP-128..WP-133 + WP-135.
 - Documenting the A2 GWS broker's user-facing behavior — **A2's** docs WP.
 - Rewriting A5/A6/A3/A4/A0 sections beyond the "sandbox"→"hermetic runtime profile" rename
   where those sections reference the dream containment.
