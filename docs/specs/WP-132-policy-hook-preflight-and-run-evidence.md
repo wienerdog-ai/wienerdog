@@ -1,7 +1,7 @@
 ---
 id: WP-132
-title: Managed-policy hook preflight (STOP unattended) + hermetic-run evidence record (audit A1)
-status: Draft
+title: Managed-policy hook preflight (warn + record) + hermetic-run evidence record (audit A1)
+status: Ready
 model: opus
 size: M
 depends_on: [WP-130, WP-131]
@@ -9,7 +9,7 @@ adrs: [ADR-0004, ADR-0025]
 branch: wp/132-policy-hook-preflight-and-run-evidence
 ---
 
-# WP-132: Managed-policy hook preflight (STOP unattended) + hermetic-run evidence record (audit A1)
+# WP-132: Managed-policy hook preflight (warn + record) + hermetic-run evidence record (audit A1)
 
 ## Context (read this, nothing else)
 
@@ -23,11 +23,16 @@ hook-free `--settings` profile with `disableAllHooks`, an empty or single-broker
 and a staging cwd. Two audit-**A1** items remain (points 7 and 8):
 
 1. **Managed-policy hook preflight (point 7).** `disableAllHooks` and excluding the user
-   setting source stop *user-scope* hooks. But an **enterprise/admin managed policy** can
-   inject hooks that the model-run cannot disable. If such a policy is present, an
-   **unattended** hermetic run is no longer hermetic — so preflight must **detect it and
-   STOP** the unattended run with a fixed, fail-loud alert, rather than run
-   non-hermetically and pretend it's contained.
+   setting source stop *user-scope* hooks (spike-confirmed on 2.1.214). But an
+   **enterprise/admin managed policy** can inject hooks that a user/project/local
+   `disableAllHooks` cannot override. That is the enterprise admin's own deliberate config,
+   **not reachable by an attacker's transcript/email content** (setting one needs admin
+   rights) — so it is trusted-computing-base, the same category as A12/A7, not an A1
+   attacker vector. Preflight must **detect it, warn loudly, and record it** (a documented
+   trusted-computing-base residual — managed hooks are the admin's config, not an attacker
+   vector), rather than run non-hermetically and pretend it's contained. The run
+   **proceeds** — it does not STOP (D-POLICY-HOOK, resolved WARNING; full rationale in the
+   DECISION NEEDED block).
 2. **Run evidence (point 8).** Every hermetic run must record, in durable evidence, the
    **Claude version, the resolved executable identity, the profile id, the argv, the
    settings digest, and the MCP digest** — so the run's actual runtime posture is
@@ -35,8 +40,8 @@ and a staging cwd. Two audit-**A1** items remain (points 7 and 8):
    really ran).
 
 This WP adds both at the two spawn sites (dream `spawnBrain`, routine `runJob`), plus
-two small pure-ish modules. It changes containment posture (a new STOP condition) and
-observability (a new record); it opens no gate and makes no routine runnable.
+two small pure-ish modules. It adds observability (a new record) and a visible warning for
+the managed-hook residual; it never STOPs a run, opens no gate, and makes no routine runnable.
 
 Terminology (ADR-0025): **hermetic runtime profile** — never "sandbox" (that word is
 `src/core/sandbox-guard.js`, the redirect warning).
@@ -73,11 +78,11 @@ Managed-settings locations are OS-specific and version-dependent (see D-POLICY-H
 |--------|------|-------|
 | create | src/core/policy-hooks.js | `detectPolicyHooks(paths, env)` → `{present:boolean, sources:string[]}` (read-only, never throws) |
 | create | src/core/run-evidence.js | `recordRunEvidence(paths, rec)` — append a bounded secret-free JSONL record (0600) |
-| modify | src/cli/run-job.js | preflight STOP (fail-loud) when policy hooks present + attended-run carve-out; record evidence per run |
+| modify | src/cli/run-job.js | preflight: when policy hooks present, emit a loud durable warning + flag it for evidence, then PROCEED (no STOP); record evidence per run |
 | modify | src/core/dream/brain.js | record evidence for the dream run (version, exec path, profile, argv, digests) |
 | create | tests/unit/policy-hooks.test.js | detection present/absent + read-only + never-throws |
 | create | tests/unit/run-evidence.test.js | record shape, 0600, bounded, secret-free (no raw argv secret leak) |
-| modify | tests/unit/run-job.test.js | preflight STOP path + attended carve-out + evidence recorded |
+| modify | tests/unit/run-job.test.js | policy-hook present → warns + records + proceeds-to-spawn (no throw); evidence recorded |
 
 ### Exact contracts
 
@@ -120,6 +125,8 @@ const { appendFilePrivate } = require('./private-fs'); // if absent, use writeFi
  * @property {string[]} argv        the composed argv (the appended skill body is REPLACED by its sha256 — see notes)
  * @property {string} settingsDigest  sha256 of the --settings file (WP-129 settingsDigest)
  * @property {string} mcpDigest       sha256 of the --mcp-config file, or 'none'
+ * @property {{present:boolean, sources:string[]}} policyHooks  managed-policy detection at
+ *                                    this run (always recorded, whether or not a warning fired)
  */
 
 /**
@@ -136,76 +143,125 @@ function recordRunEvidence(paths, rec) { /* mkdirPrivate(state), append JSONL 06
 module.exports = { recordRunEvidence };
 ```
 
-**3. `run-job.js` preflight + evidence.** Before spawning a routine (after the gate check,
-before `buildCleanEnv`/spawn):
+**3. `run-job.js` preflight + evidence.** Before spawning (after the gate check, before
+`buildCleanEnv`/spawn), detect managed-policy hooks and, if present, emit a **loud durable
+warning** and flag it for the evidence record — then **PROCEED to the normal spawn**. There
+is **NO** `throw`, **NO** refusal, and **NO** `writeScheduleState(...,'error')` for this
+case (D-POLICY-HOOK → WARNING). A managed hook is the admin's trusted config, not an
+attacker vector; the requirement is that the non-hermetic state be *visible*, not that the
+run be stopped:
 
 ```js
 const report = require('../core/policy-hooks').detectPolicyHooks(paths, process.env);
-if (report.present && isUnattended(opts)) {
-  const reason = `refused: a managed/admin policy defines hooks that cannot be disabled ` +
-    `(${report.sources.join(', ')}) — an unattended hermetic run is not contained under this policy. ` +
-    `See ADR-0025; accepting a managed-policy runtime is a future reviewed decision.`;
-  jobsLib.writeScheduleState(paths, name, { last_status: 'error', last_error_at: nowIso() });
-  await failLoud(paths, name, reason, opts);
-  throw new WienerdogError(`job "${name}" ${reason}`);
+let policyHookWarned = false;
+if (report.present) {
+  // Loud, durable, secret-free warning on the SAME channel failLoud uses (appendAlert).
+  // NOT a failure: no writeScheduleState('error'), no throw — the run proceeds.
+  appendAlert(paths, {
+    job: name,
+    at: nowIso(),
+    reason:
+      `warning: a managed/admin policy defines Claude Code hooks that cannot be disabled ` +
+      `(${report.sources.join(', ')}) — this run is NOT fully hermetic under that policy. ` +
+      `Managed hooks are your administrator's config (trusted-computing-base residual, ` +
+      `see the threat model), not an attacker vector; the run continues. ADR-0025.`,
+  });
+  policyHookWarned = true; // captured in the run-evidence record below
 }
+// … normal buildCleanEnv + spawn continues unchanged …
 ```
 
 After a run completes, `recordRunEvidence(paths, {...})` with the captured version/exec/
-argv/digests (argv free-text reduced to sha256 per the contract).
+argv/digests (argv free-text reduced to sha256 per the contract) **plus** a
+`policyHooks: {present, sources}` field so the evidence always captures the current
+managed-policy state whether or not the warning fired.
+
+> **Alert-fatigue is a DEFERRED revisit, not built here (owner-flagged).** A managed hook
+> is present on *every* run, so a per-run warning will fatigue the user. v1 ships the plain
+> per-run warning above (owner: "do it now, revisit later based on experience"). Do **not**
+> build the state-change/fingerprint dedup now; the one-line pointer to the likely tuning
+> (warn only on a managed-policy STATE CHANGE, WP-070 cache-then-render pattern) lives in
+> the DECISION NEEDED REVISIT note — do not add new machinery for it.
 
 **4. `brain.js` evidence.** `spawnBrain` (or `dream.js` around it) records the dream run's
 evidence with `job:'dream'`, `profileId:'dream'`, the resolved `claude` path, the argv
-(skill body → sha256), and the settings/MCP digests. The dream is attended-or-scheduled;
-the policy preflight for the dream lives in `run-job.js` (the dream runs as
-`builtin:dream` under `runJob`), so `spawnBrain` only records evidence — the STOP is at
-the `runJob` layer for both paths. Confirm the dream's scheduled invocation flows through
-`runJob` (it does: `run:'builtin:dream'`); a direct `wienerdog dream` (attended) is
-carved out by `isUnattended`.
+(skill body → sha256), and the settings/MCP digests. The scheduled dream runs as
+`builtin:dream` under `runJob`, so its managed-policy warning is emitted once at the
+`runJob` layer (contract 3) — `spawnBrain` only records evidence. Include the same
+`policyHooks: {present, sources}` field in the dream's evidence so the record is uniform
+across both spawn paths.
 
-### `isUnattended(opts)` (attended carve-out)
-
-An unattended run is one launched by the OS scheduler (`run-job`); an attended run is a
-human at a terminal (`wienerdog dream` with a TTY, or `run-job` invoked interactively).
-Recommended signal: treat a run as **unattended** when it is not on a TTY
-(`process.stdout.isTTY` false) — the scheduler child has no TTY. A human debugging at a
-terminal (TTY present) is attended and the STOP downgrades to a **loud warning** (they
-chose to run it). Record the exact predicate under "Decisions made" (D-POLICY-HOOK covers
-the policy posture; this is the attended/unattended split).
+> **No attended/unattended STOP gate.** Because the managed-hook case is now a WARNING that
+> always proceeds (not a STOP), there is no attended-vs-unattended refusal split. The
+> warning surfaces on the durable `appendAlert` channel regardless of TTY, so a scheduled
+> (no-TTY) run and an interactive run are treated identically. **`isUnattended` is dropped
+> from this WP** — it existed only to gate the removed STOP. (If a later revisit wants to
+> tune *where* the warning surfaces, that is part of the deferred alert-fatigue work, not v1.)
 
 ## DECISION NEEDED (resolve in the walkthrough; each becomes a dated OWNER-APPROVED line before Ready)
 
-- **D-POLICY-HOOK — managed-policy posture + detection locations.**
-  - **Recommended: a managed-policy hook is a HARD STOP for unattended runs, with NO
-    runtime accept-opt in v1** (consistent with the A0 no-override posture); an attended
-    TTY run downgrades to a loud warning. Detection reads the known managed-settings
-    locations — on macOS `/Library/Application Support/ClaudeCode/managed-settings.json`,
-    on Linux `/etc/claude-code/managed-settings.json` (the documented enterprise policy
-    paths) — plus any location a quick wd-researcher check confirms for the pinned Claude
-    version; a hook key present there → STOP. A read/parse failure fails closed (treated
-    as present).
-  - **Counterargument:** (a) the exact managed-settings paths and whether `disableAllHooks`
-    actually fails to override them are **version-dependent runtime facts** — this needs a
-    short **wd-researcher** confirmation against Claude Code 2.1.212 before the locations
-    are hard-coded, and the WP-133 live harness should include a managed-policy fixture if
-    feasible; (b) a hard STOP with no accept-opt means an enterprise-managed machine
-    cannot run the dream at all until a future release — which is the *safe* default but
-    may frustrate a legitimately-managed user. Recommend shipping the hard STOP now
-    (fail-closed is the audit's posture) and treating "a reviewed accept path" as a future
-    WP if a real managed user hits it.
-  - *(If wd-researcher finds `disableAllHooks` DOES override managed hooks on the pinned
-    version, this preflight becomes a belt-and-suspenders WARNING instead of a STOP —
-    record that finding as the ruling.)*
+- **D-POLICY-HOOK — RESOLVED (OWNER-APPROVED 2026-07-18, research-informed): WARNING +
+  evidence + documented residual, NOT a hard STOP.** The original recommendation was a hard
+  STOP; a wd-researcher pass against the official Claude Code docs
+  (`memory/research/2026-07-18-managed-settings-hooks-override.md`) inverted it.
+  - **Research facts (official docs, high confidence):**
+    1. Managed-settings paths confirmed: macOS `/Library/Application
+       Support/ClaudeCode/managed-settings.json`, Linux `/etc/claude-code/managed-settings.json`,
+       Windows `C:\Program Files\ClaudeCode\managed-settings.json` (+ a `managed-settings.d/`
+       drop-in dir). No env var redirects the path. Managed settings load independently of
+       `--setting-sources` (which only takes `user|project|local`; `managed` isn't a valid value).
+    2. `disableAllHooks` set at user/project/local level **cannot** disable a managed hook
+       (verbatim from the hooks reference); only managed-level `disableAllHooks` can. The
+       dangerous inverse bug (user `disableAllHooks` bypassing managed org hooks, GH
+       anthropics/claude-code#26637) was **fixed in 2.1.49**; this machine runs **2.1.214**
+       (note: not 2.1.212 — fix the version elsewhere in the A1 specs, esp. WP-133 D-CLAUDE-PIN).
+  - **Why WARNING, not STOP:** wienerdog's containment rests on disabling *user-scope*
+    hooks, which works (spike-confirmed on 2.1.214). A *managed* hook is the enterprise
+    admin's deliberate config — **not reachable by an attacker's transcript/email content**
+    (setting one needs admin rights), so it is trusted-computing-base, the same category as
+    A12 (arbitrary same-user native code) and A7 (executable integrity), NOT an A1 attacker
+    vector. A hard STOP would treat the trusted admin as an attacker and **brick the dream on
+    every enterprise-managed machine** for a non-threat. The audit's own point-7 wording
+    ("STOP **unless that policy is explicitly accepted as part of the trusted runtime**")
+    already concedes the policy can be trusted; it only requires the non-hermetic state be
+    **visible, not silent**.
+  - **Approved posture:**
+    - `detectPolicyHooks` stays (read-only, the confirmed paths; malformed/unreadable →
+      `present:true`, fail closed). It never STOPs the run.
+    - A managed hook present → a **loud warning** on the durable channel + it is recorded in
+      the run-evidence record. The run proceeds.
+    - The managed-hook case is a **documented residual** in the THREAT-MODEL (WP-134), same
+      shelf as A12/A7.
+    - A formal "explicitly accept a managed-policy runtime as trusted" path is a **future WP**
+      (as originally scoped) — not built here.
+  - **⚠️ REVISIT (owner-flagged 2026-07-18) — alert fatigue.** A managed hook is present on
+    *every* run, so a per-run loud warning would fatigue the user. v1 ships the plain
+    warning (owner: "do it now, revisit later based on experience"). The likely tuning,
+    recorded here for the revisit: **emit the loud warning only on a managed-policy STATE
+    CHANGE** — fingerprint the detected managed hook set and warn only when it first appears
+    or changes vs the last run's recorded fingerprint (the WP-070 cache-then-render /
+    state-change pattern), while the run-evidence record ALWAYS captures the current state.
+    This keeps the signal honest and durable without nightly noise. Not built in v1; noted
+    for the experience-based revisit.
+  - **Version-floor (optional, soft):** a `claude --version` < 2.1.49 check MAY warn, but the
+    research tied that fix to *managed*-hook bypass (org security), NOT to the reliability of
+    wienerdog's *user*-hook disabling — so do not oversell it as a hard STOP; a soft warning
+    at most. (Owner did not require it.)
 
-- **D-EVIDENCE — executable-identity depth.**
-  - **Recommended: record the Claude version + the resolved absolute executable path (and
-    the settings/MCP digests), but NOT a content hash of the `claude` binary.** Executable
-    *integrity* (a fake `claude` earlier on PATH, a mutated binary) is **A7's** boundary;
-    A1's evidence documents *what ran* so A7/audit can verify later. Hashing the binary
-    every run is expensive and churns on every Claude update.
-  - **Counterargument:** without a binary hash, the evidence can't by itself prove the
-    executable wasn't swapped — but that proof is explicitly A7's job, and recording the
-    path+version is enough for A7 to build on. Recommend path+version now; A7 adds the hash.
+- **D-EVIDENCE — RESOLVED (OWNER-APPROVED 2026-07-18): version + path + digests, NO binary
+  hash.** Record the Claude version + the resolved absolute executable path + the
+  settings/MCP digests, but **NOT a content hash of the `claude` binary.**
+  - **Rationale (owner-reinforced):** executable *integrity* (a fake `claude` earlier on
+    PATH, a mutated binary) is **A7's** boundary; A1's evidence documents *what ran* so
+    A7/audit can verify later. A binary hash would also be **noisy in normal operation**:
+    Claude Code auto-updates frequently (daily or multiple times a day) — this machine went
+    **2.1.212 → 2.1.214 within a day** — so the hash would churn constantly and carry no
+    signal about tampering vs a routine update. Path + version is the right A1 depth.
+  - **Counterargument (accepted):** without a binary hash the evidence can't by itself prove
+    the executable wasn't swapped — but that proof is explicitly A7's job, and path+version
+    is enough for A7 to build on. (This frequent-update reality also bears on WP-133's
+    D-CLAUDE-PIN — an exact version pin that fails the harness on every auto-update would be
+    equally noisy; carry this observation there.)
 
 ## Implementation notes & constraints
 
@@ -215,9 +271,10 @@ the policy posture; this is the attended/unattended split).
   fixed values (`--tools`, `--strict-mcp-config`, `--settings <path>`) are safe to record
   verbatim. A unit test plants a secret in a prompt and asserts it never appears in the
   evidence file (mirror the WP-124 secret-free-alert test).
-- **Never fail the job for evidence/preflight-read errors.** `recordRunEvidence` and
-  `detectPolicyHooks` never throw; a failure is swallowed (the preflight STOP is a
-  *deliberate* throw, not an error). The `maybeRefresh`/status-probe pattern in `run.js`
+- **Never fail the job for evidence/preflight/policy-detection.** `recordRunEvidence` and
+  `detectPolicyHooks` never throw; a failure is swallowed. The managed-hook case emits a
+  warning and **proceeds** — nothing in this WP throws or refuses a run (the STOP was
+  removed; D-POLICY-HOOK → WARNING). The `maybeRefresh`/status-probe pattern in `run.js`
   (try/catch that never alters the exit code) is the model.
 - **Bounded like alerts.jsonl.** `run-evidence.jsonl` is capped (drop oldest over the cap,
   reuse the WP-096 bounding approach); 0600 via private-fs. If `appendFilePrivate` does
@@ -230,12 +287,14 @@ the policy posture; this is the attended/unattended split).
 
 ## Security checklist
 
-- [ ] An unattended scheduled run STOPs fail-loud when a managed/admin policy defines
-      hooks (fail closed on a malformed policy file too); an attended TTY run downgrades to
-      a loud warning. Run evidence is 0600, bounded, and **secret-free** — the prompt and
-      skill body are reduced to sha256, never stored raw, so the evidence file cannot leak a
-      staged secret. Neither the preflight read nor the evidence write can throw and fail
-      the job (only the deliberate policy STOP throws).
+- [ ] When a managed/admin policy defines hooks, the run emits a loud durable warning
+      (the secret-free `appendAlert` channel), records the managed-policy state in the
+      evidence record, and **proceeds to spawn** — it never STOPs, throws, or writes an
+      error watermark for this case. Detection is still fail-closed in the sense that a
+      malformed/unreadable policy file is treated as `present:true` (warn), but present ≠
+      stop. Run evidence is 0600, bounded, and **secret-free** — the prompt and skill body
+      are reduced to sha256, never stored raw, so the evidence file cannot leak a staged
+      secret. Neither the policy detection nor the evidence write can throw and fail the job.
 
 ## Acceptance criteria
 
@@ -243,13 +302,17 @@ the policy posture; this is the attended/unattended split).
       hooks, `present:true` with the source path(s) when one does, and `present:true`
       (fail closed) on a malformed/unreadable policy file; it performs no writes and never
       throws (assert via injected `readFile`/`locations` seams — never the real OS paths).
-- [ ] An unattended `run-job` with policy hooks present throws a `WienerdogError` after a
-      durable fail-loud alert and creates no spawn; with policy hooks absent it proceeds;
-      an attended (TTY) run warns and proceeds.
+- [ ] A `run-job` with policy hooks present emits a loud durable warning, records the
+      managed-policy state in the evidence record, and **PROCEEDS to spawn** (no throw, no
+      error watermark); with policy hooks absent it proceeds with no warning. A
+      malformed/unreadable policy file still detects as `present:true` (fail-closed
+      detection) and likewise warns-and-proceeds (never STOPs).
 - [ ] `recordRunEvidence` appends a JSONL record with the version/execPath/profileId/argv
-      (free-text → sha256)/settingsDigest/mcpDigest, 0600, bounded; a planted secret in the
-      prompt never appears in the file.
-- [ ] The dream run records evidence with `job:'dream'`, `profileId:'dream'`.
+      (free-text → sha256)/settingsDigest/mcpDigest **and `policyHooks:{present,sources}`**,
+      0600, bounded; a planted secret in the prompt never appears in the file. No field is
+      or implies a content hash of the `claude` binary (executable integrity is A7).
+- [ ] The dream run records evidence with `job:'dream'`, `profileId:'dream'`, and the same
+      `policyHooks` field.
 - [ ] `wienerdog safety` shows all five gates BLOCKED (`safety-profile.js` untouched).
 - [ ] `npm test` and `npm run lint` pass.
 
@@ -266,10 +329,19 @@ node bin/wienerdog.js safety   # all five gates BLOCKED
 
 ## Out of scope (do NOT do these)
 
-- Verifying the `claude`/`git` executable integrity (hash/owner/PATH) — **A7**.
-- A reviewed "accept a managed-policy runtime" path — future WP.
+- Verifying the `claude`/`git` executable integrity (hash/owner/PATH) — **A7**. No binary
+  content hash is recorded here (D-EVIDENCE); evidence carries version + path + digests only.
+- A reviewed "explicitly accept a managed-policy runtime as trusted" path — future WP.
+- **Any STOP/refusal for the managed-hook case** — resolved to WARNING (D-POLICY-HOOK); the
+  run always proceeds.
+- **The alert-fatigue state-change/fingerprint dedup** — deferred experience-based revisit
+  (owner-flagged); v1 ships the plain per-run warning only.
+- **The optional soft version-floor warning** (`claude --version` < 2.1.49) — not built in
+  v1 (owner did not require it; a soft warning at most, deferred). It must never be a STOP.
 - The live negative harness — **WP-133** (it will assert canaries + inventory live).
 - Any change to the composed argv itself — **WP-130/WP-131** own composition.
+- Threat-model text for the managed-hook residual — **WP-134** owns it (this WP only hands
+  it off; do not write THREAT-MODEL prose here).
 
 ## Definition of done
 
