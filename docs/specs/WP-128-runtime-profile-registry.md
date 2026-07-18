@@ -1,7 +1,7 @@
 ---
 id: WP-128
 title: Code-owned hermetic runtime profile registry + pure claude argv composer (audit A1)
-status: Draft
+status: Ready
 model: opus
 size: M
 depends_on: []
@@ -179,6 +179,8 @@ const PROFILES = Object.freeze({
   // and it lands as a dated amendment.
   'daily-digest':  /* routine: tools:['Read'], disallowedTools:DENY, mcp:'broker', permissionMode per profile, skillId:'wienerdog-daily-digest' */,
   'inbox-triage':  /* routine: tools:['Read'], disallowedTools:DENY, mcp:'broker', skillId:'wienerdog-inbox-triage' */,
+  // A2-RESTORE: mcp is 'empty' ONLY because A1 wires no broker; weekly-review drafts
+  // email via gws, so re-evaluate (likely flip to 'broker') when A2 wires the broker.
   'weekly-review': /* routine: tools:['Read'], disallowedTools:DENY, mcp:'empty' (no broker wired under A1), skillId:'wienerdog-weekly-review' */,
 });
 
@@ -248,24 +250,37 @@ composeClaudeArgs(getProfile('daily-digest'), {... mcpConfigPath:null ...})
   source (a planted user `SessionStart` hook did not fire under it; it fired under default
   sources as a control). The composer emits `--setting-sources ""` as a module constant,
   and the vendored skill arrives via `--append-system-prompt` (D-SKILL-LOAD), so the
-  composer depends on no ambient source. Owner still ratifies this in the walkthrough; the
-  measured basis is the SPIKE-INFORMED AMENDMENT block above. *(The earlier open
-  counterargument — "empty may be rejected / may revert to defaults" — is retired by the
-  measurement.)*
+  composer depends on no ambient source. **OWNER-APPROVED 2026-07-18** (ratified in the
+  walkthrough on the measured basis in the SPIKE-INFORMED AMENDMENT block above). *(The
+  earlier open counterargument — "empty may be rejected / may revert to defaults" — is
+  retired by the measurement.)*
 
-- **D-BROKER-SEAM — the routine broker MCP posture in the registry.** *(Unaffected by the
+- **D-BROKER-SEAM — RESOLVED (OWNER-APPROVED 2026-07-18).** *(Unaffected by the
   empty-tools finding — this is the MCP posture, independent of the tool allowlist, which
   is now settled: every routine carries an explicit minimal `tools:['Read']`, never `[]`.)*
   A routine that needs Google (daily-digest, inbox-triage) declares `mcp:'broker'`;
   the composer requires an absolute `mcpConfigPath` or fails closed. The broker itself
   is **A2**, not built here.
-  - **Recommended: `mcp:'broker'` for daily-digest and inbox-triage; `mcp:'empty'` for
-    weekly-review** (its skill states it "needs nothing beyond Wienerdog / the vault").
-    A1 ships the *requirement* + fail-closed enforcement; A2 supplies the config file.
-  - **Counterargument:** weekly-review's shipped skill also drafts email via
-    `wienerdog gws`, so it may in fact need the broker too — but under A1 it has no
-    Bash and no gws CLI, so its draft path is deferred to A2 regardless; marking it
-    `empty` now is honest about A1's containment (no broker wired) and A2 can flip it.
+  - **Approved: `mcp:'broker'` for daily-digest and inbox-triage; `mcp:'empty'` for
+    weekly-review.** A1 ships the *requirement* + fail-closed enforcement; a `broker`
+    profile with no config (the state until A2 supplies one) fails closed — contained
+    and inert, which is the intended A1 posture (the `external-content-routine` gate
+    stays BLOCKED regardless).
+  - **⚠️ A2-RESTORE — this is a deliberate temporary downgrade, not a final state.**
+    weekly-review's shipped skill also drafts email via `wienerdog gws`, so it will need
+    the broker once A2 restores routine function. It is marked `mcp:'empty'` now **only**
+    because A1 wires no broker and, under A1, the routine has no Bash and no gws CLI — its
+    draft path is dead until A2 regardless. The owner explicitly directed that this
+    downgrade **must leave a durable trace so A2 revisits it** and does not mistake the
+    `empty` marking for a reviewed "weekly-review needs no Google" decision. Two traces
+    are therefore REQUIRED (both are deliverables of this WP, not optional prose):
+    1. **In the spec** — this OWNER-APPROVED block.
+    2. **In the code** — the `weekly-review` profile object in `runtime-profile.js` MUST
+       carry an inline `// A2-RESTORE:` comment stating that `mcp` is to be re-evaluated
+       (likely flipped to `'broker'`) when A2 wires the credential broker, so the A2
+       implementer sees it at the exact edit site. The unit test asserts the marker
+       string is present in the module source (a grep-style check), so the trace cannot
+       be silently dropped in a future refactor.
 
 ## Implementation notes & constraints
 
@@ -317,7 +332,11 @@ composeClaudeArgs(getProfile('daily-digest'), {... mcpConfigPath:null ...})
       user`, and includes `--settings <path>`.
 - [ ] `composeClaudeArgs` for a `mcp:'broker'` profile with `mcpConfigPath:null` throws
       `RuntimeProfileError` (fail closed); with an absolute path it emits exactly one
-      `--mcp-config <path>`.
+      `--mcp-config <path>`. `daily-digest` and `inbox-triage` are `mcp:'broker'`;
+      `weekly-review` is `mcp:'empty'`.
+- [ ] The `weekly-review` profile in `runtime-profile.js` carries the `A2-RESTORE:` inline
+      marker (D-BROKER-SEAM), and a test asserts that marker string is present in the module
+      source so the deliberate temporary `mcp:'empty'` downgrade cannot be silently lost.
 - [ ] `wienerdog safety` shows all five gates BLOCKED (`safety-profile.js` untouched).
 - [ ] `npm test` and `npm run lint` pass.
 
