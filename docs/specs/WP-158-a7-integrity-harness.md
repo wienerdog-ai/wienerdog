@@ -1,7 +1,7 @@
 ---
 id: WP-158
 title: A7 integrity containment proof — end-to-end negative harness for the scheduler/app/executable anchors
-status: Draft
+status: Ready
 model: opus
 size: M
 depends_on: [WP-154, WP-155, WP-156, WP-157]

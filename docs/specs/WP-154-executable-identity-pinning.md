@@ -1,7 +1,7 @@
 ---
 id: WP-154
 title: Pin Claude/Git/Codex by command path + install dir at sync; verify structurally; spawn absolute; fail safe on drift
-status: Draft
+status: Ready
 model: opus
 size: M
 depends_on: []
