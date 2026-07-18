@@ -1,7 +1,7 @@
 ---
 id: WP-137
 title: GWS broker verb registry — fixed verbs, server-side schemas, byte/count/rate limits, exact API-method allowlist (audit A2)
-status: Ready
+status: In-Review
 model: opus
 size: M
 depends_on: [WP-136]
