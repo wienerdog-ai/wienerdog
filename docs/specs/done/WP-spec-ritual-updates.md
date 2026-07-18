@@ -1,7 +1,7 @@
 ---
 id: WP-spec-ritual-updates
 title: Update the prose ritual sites to the slug/frontmatter spec system — agents, template, glossary, CLAUDE.md
-status: Ready
+status: Done
 model: sonnet
 size: M
 depends_on: [WP-160]
