@@ -1,7 +1,7 @@
 ---
 id: WP-146
 title: Upsert the recorded hook command set on every sync, and preserve a foreign namespaced symlink instead of clobbering it
-status: Draft
+status: Ready
 model: sonnet
 size: S
 depends_on: []
@@ -132,6 +132,17 @@ Call it as `recordSettingsEntry(manifest, settingsPath, createdFile, events.map(
   entry, OR when the existing value is not already `true`**. Concretely: set
   `entry.createdFile = existing ? (existing.createdFile === true ? true : createdFile) : createdFile`.
   (Record this decision in the PR "Decisions made".) `commands` is always refreshed.
+- **Why sticky `createdFile:true` is safe (owner-clarified 2026-07-18).** The
+  flag is NOT delete authority. The reverser (`reverseSettingsEntry` in
+  `manifest.js` — NOT modified by this WP) strips only *our* recorded `commands`
+  from `hooks`, then deletes the file ONLY when `createdFile === true` **AND** the
+  settings object is empty afterwards (`Object.keys(settings).length === 0`);
+  otherwise it writes the cleaned settings back. So a shared/global settings file
+  (e.g. `~/.claude/settings.json`) that Wienerdog created but the user later added
+  their own keys to is **preserved** on uninstall — the emptiness guard prevents
+  any user-content loss. Sticky-true therefore only lets uninstall clean up an
+  *empty* file we created; it can never delete user data. The implementer must
+  NOT touch the reverser's emptiness guard.
 
 **2. Foreign-symlink preservation.** In `applySkillLinks`, change the symlink
 `else` branch (current target ≠ our `target`) so it does NOT unlink/recreate.
