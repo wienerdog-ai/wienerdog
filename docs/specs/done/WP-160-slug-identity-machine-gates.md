@@ -1,7 +1,7 @@
 ---
 id: WP-160
 title: Switch the spec-system machine gates to slug identity — schema, cross-file frontmatter checks, CI regexes, boundary allowlist
-status: Ready
+status: Done
 model: opus
 size: M
 depends_on: []
