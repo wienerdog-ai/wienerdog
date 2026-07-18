@@ -1,7 +1,7 @@
 ---
 id: WP-136
 title: GWS broker transport — hand-rolled MCP stdio JSON-RPC server + per-job lifecycle self-check (audit A2)
-status: Draft
+status: Ready
 model: opus
 size: M
 depends_on: [WP-131]
@@ -100,11 +100,16 @@ function readMessages(stream, onMessage)
 function writeMessage(stream, msg)
 ```
 
-- **SPIKE-mcp-framing (resolve before Ready):** MCP stdio framing is not doc-stated.
-  Measure the real `claude -p` wire format (newline-delimited JSON-RPC vs LSP-style
-  `Content-Length:` headers) with a throwaway echo server and pin `protocol.js` to what
-  the installed Claude actually sends/expects. Record the measured framing + Claude
-  version in the PR. Implement the confirmed one; keep the other trivially swappable.
+- **SPIKE-mcp-framing — RESOLVED (MEASURED 2026-07-18, Claude Code 2.1.214, Node
+  v24.18.0, macOS): newline-delimited JSON-RPC.** A throwaway logging echo server run
+  under the real `claude -p --mcp-config <file> --strict-mcp-config` showed one JSON-RPC
+  object per `\n`-terminated line in both directions — NO LSP-style `Content-Length:`
+  headers (the probe replied newline-delimited and the full initialize → tools/list →
+  tools/call round-trip succeeded). Multiple messages DO arrive in a single stdin read
+  (`notifications/initialized` + `tools/list` shared one 102-byte chunk), so line
+  reassembly across chunk boundaries is mandatory. Pin `protocol.js` to
+  newline-delimited; keep `Content-Length` trivially swappable. Re-record the observed
+  framing + Claude version in the PR against the implementer's installed Claude.
 - `MAX_MESSAGE_BYTES` is a hard bound (e.g. 4 MB) — an oversized/garbage frame yields a
   JSON-RPC parse error and closes, never an unbounded buffer (ReDoS/DoS hygiene).
 
@@ -126,8 +131,20 @@ async function runBrokerServer(opts)
 
 - Implements exactly three MCP methods:
   - `initialize` → returns the protocol version (`constants.js`), server name/version,
-    and a `tools` capability. **SPIKE:** confirm the exact `initialize` result fields
-    Claude Code requires against the live handshake; pin them.
+    and a `tools` capability. **MEASURED golden handshake (2026-07-18, Claude Code
+    2.1.214)** — these recorded frames seed the golden-frame unit tests below:
+
+    ```text
+    → {"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{"roots":{"listChanged":true},"elicitation":{}},"clientInfo":{"name":"claude-code","title":"Claude Code","version":"2.1.214","description":"Anthropic's agentic coding tool","websiteUrl":"https://claude.com/claude-code"}},"jsonrpc":"2.0","id":0}
+    ← {"jsonrpc":"2.0","id":0,"result":{"protocolVersion":"2025-11-25","capabilities":{"tools":{}},"serverInfo":{"name":"probe","version":"0.0.1"}}}   (accepted)
+    → {"method":"notifications/initialized","jsonrpc":"2.0"}                              (no id — never answer a notification)
+    → {"method":"tools/list","jsonrpc":"2.0","id":1}
+    → {"method":"tools/call","params":{"name":"echo","arguments":{"text":"…"},"_meta":{"claudecode/toolUseId":"toolu_…","progressToken":2}},"jsonrpc":"2.0","id":2}
+    ```
+
+    Echoing the client's requested `protocolVersion` was accepted; `2025-11-25` goes
+    into the `constants.js` supported set. `tools/call` params carry an extra `_meta`
+    object — tolerate and ignore unknown fields.
   - `tools/list` → `{ tools: registry.listTools() }`.
   - `tools/call` → validate the method params shape, then `registry.callTool(name, args)`;
     map a thrown/rejected verb error to a JSON-RPC error object with a **fixed,
@@ -196,17 +213,32 @@ observed behavior + Claude/Node version in the PR.
 - **D-BROKER-LAUNCH — RESOLVED (OWNER-APPROVED 2026-07-18): hidden subcommand.** See
   contract 3.
 
-## SPIKEs (must be resolved with a live measurement before Ready)
+## SPIKEs (all RESOLVED by live measurement — 2026-07-18, Claude Code 2.1.214, Node v24.18.0, macOS)
 
-- **SPIKE-mcp-framing** — the stdio wire framing (contract 1). Blocks pinning `protocol.js`.
-- **SPIKE-stdio-lifecycle** — the broker dies with its parent (contract 4). Load-bearing
-  for ADR-0004; if it orphans, a supervisor reap is required before A2 can proceed.
-- **SPIKE-env-inheritance** — dump the broker child's `process.env` under the real
-  composition and record whether it inherits the full parent env or a stripped subset.
-  The design **must not rely on env inheritance either way**: the broker takes its
-  identity from `--routine` (argv) and its credentials from files (later WPs), never
-  from an inherited env var. Record the finding; if the parent env leaks secrets into the
-  child, note it for WP-138's credential-load hygiene.
+- **SPIKE-mcp-framing — RESOLVED: newline-delimited JSON-RPC.** Details pinned in
+  contract 1; the recorded golden handshake frames are in contract 2.
+- **SPIKE-stdio-lifecycle — RESOLVED: no orphan in any of three parent-death cases.**
+  A PID-logging probe MCP child observed under the real `claude -p`:
+  (a) parent normal exit → Claude Code sends the child **SIGINT** (an active kill, not
+  just EOF); (b) parent SIGTERMed mid-`tools/call` → the child still received SIGINT
+  and died; (c) parent SIGKILLed mid-`tools/call` (crash-equivalent — no cleanup
+  possible) → the child got **no signal**, was reparented to PID 1, and saw stdin
+  EOF+close; it died only because it exits on stdin EOF. **Consequence: exit-on-stdin-EOF
+  (contract 2) is the SOLE orphan guard in the crash case and is load-bearing for
+  ADR-0004; the broker must also exit promptly on SIGINT/SIGTERM/SIGHUP.** The ADR-0026
+  §1 supervisor-reap follow-up is NOT triggered. The gated self-check (contract 4)
+  re-proves all three cases on the implementer's installed versions.
+- **SPIKE-env-inheritance — RESOLVED: the child inherits the FULL parent env** (62 vars
+  in the probe run — `PATH`, `HOME`, `SSH_AUTH_SOCK`, `CLAUDECODE=1`,
+  `CLAUDE_CODE_ENTRYPOINT=sdk-cli`, `CLAUDE_PROJECT_DIR`, …) plus any `env` entries from
+  the MCP config; nothing is stripped. The design rule stands: identity from `--routine`
+  argv, credentials from files, never from env. Recorded for WP-138's credential-load
+  hygiene and WP-141's composition: anything in the routine parent's env IS visible to
+  the broker child (and every other MCP child), so the composition must never export
+  secrets into the routine's env.
+- Corroborating observation for WP-141's SPIKE-mcp-tool-naming: in the measurement run,
+  `--allowedTools "mcp__probe__echo"` gated the probe's `echo` tool as expected
+  (`mcp__<server>__<verb>`).
 
 ## Implementation notes & constraints
 
