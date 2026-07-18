@@ -155,7 +155,7 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 | [WP-134](WP-134-a1-runtime-containment-docs.md) | A1 documentation — hermetic runtime profile threat model, glossary, honest claims (audit A1) | M7 | sonnet | Done | WP-128, WP-129, WP-130, WP-131, WP-132, WP-133, WP-135 |
 | [WP-135](WP-135-pre-dream-containment-self-check.md) | Pre-dream containment self-check — a bounded live canary probe of the real hermetic composition (audit A1) | M7 | opus | Done | WP-130, WP-132 |
 | [WP-136](WP-136-broker-stdio-transport.md) | GWS broker transport — hand-rolled MCP stdio JSON-RPC server + per-job lifecycle self-check (audit A2) | M7 | opus | Ready | WP-131 |
-| [WP-137](WP-137-broker-verb-registry.md) | GWS broker verb registry — fixed verbs, server-side schemas, byte/count/rate limits, exact API-method allowlist (audit A2) | M7 | opus | Draft | WP-136 |
+| [WP-137](WP-137-broker-verb-registry.md) | GWS broker verb registry — fixed verbs, server-side schemas, byte/count/rate limits, exact API-method allowlist (audit A2) | M7 | opus | Ready | WP-136 |
 | [WP-138](WP-138-least-scope-credential-split.md) | Least-scope GWS credential split + granted-scope verification + broker per-verb credential selection (audit A2) | M7 | opus | Draft | WP-136 |
 | [WP-139](WP-139-broker-grant-store.md) | Canonical broker-owned grant store — TTY-only mutation, exact-byte integrity fail-closed, retire the config.yaml YAML block (audit A2) | M7 | opus | Draft | WP-136 |
 | [WP-140](WP-140-cal-add-event-rename.md) | Rename `cal draft-event` → `cal add-event` behind a calendar-write grant + credential (audit A2) | M7 | sonnet | Draft | WP-138, WP-139 |

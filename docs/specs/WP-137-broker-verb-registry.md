@@ -1,7 +1,7 @@
 ---
 id: WP-137
 title: GWS broker verb registry — fixed verbs, server-side schemas, byte/count/rate limits, exact API-method allowlist (audit A2)
-status: Draft
+status: Ready
 model: opus
 size: M
 depends_on: [WP-136]
@@ -142,13 +142,17 @@ function buildRegistry(deps)
 
 ## DECISION NEEDED (resolve in the walkthrough; each becomes a dated OWNER-APPROVED line before Ready)
 
-- **D-VERB-SET (recommend the table above).** The exact v1 verb set. Recommend exactly
-  the eight verbs above — they cover the three shipped routines
+- **D-VERB-SET — RESOLVED (OWNER-APPROVED 2026-07-18): the eight-verb table above,
+  `drive_*` included.** The set covers the three shipped routines
   (daily-digest: `calendar_list`,`gmail_search`,`gmail_read`,`send_digest_to_self`;
   inbox-triage: `gmail_search`,`gmail_read`,`create_draft`;
-  weekly-review: `create_draft` + vault read via `--add-dir`) with nothing extra. Drive
-  verbs are included because the audit's example capability set lists them and they are
-  read-only; the owner may drop `drive_*` from v1 if no routine uses them (leaner surface).
+  weekly-review: `create_draft` + vault read via `--add-dir`) with nothing extra. The
+  `drive_*` verbs stay in v1: they are read-only, the pure functions already exist, the
+  audit's example capability set lists them, and — the deciding argument — a verb in the
+  registry is NOT model-facing exposure by itself: a routine only reaches verbs its
+  WP-141 composition explicitly allowlists (`--allowedTools`), so `drive_*` stays
+  invisible to the shipped routines' models while sparing a future WP if a routine ever
+  needs Drive reads.
 - **D-SEND-SCOPE (cross-ref WP-138) — RESOLVED (OWNER-APPROVED 2026-07-18):
   `gmail.send`.** `send_digest_to_self` uses the SEND capability class, which WP-138
   maps to `gmail.send` (the narrower scope). This WP only needs `messages.send` +
