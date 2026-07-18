@@ -161,16 +161,16 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 | [WP-140](WP-140-cal-add-event-rename.md) | Rename `cal draft-event` → `cal add-event` behind a calendar-write grant + credential (audit A2) | M7 | sonnet | Ready | WP-138, WP-139 |
 | [WP-141](WP-141-broker-runjob-wiring.md) | Wire the broker into the routine runtime — broker-mcp.json seam, trusted launch descriptor, MCP tool allowlist, read-only vault snapshot, functional routine skills (audit A2) | M7 | opus | Ready | WP-137, WP-138, WP-139 |
 | [WP-142](WP-142-broker-containment-harness.md) | Broker containment proof — end-to-end run-job poisoned-email E2E + exact-verb/grant/credential negatives (audit A2) | M7 | opus | Ready | WP-140, WP-141 |
-| [WP-143](WP-143-a2-broker-docs.md) | A2 documentation — honest broker claims, THREAT-MODEL, GLOSSARY, gws-broker runbook, testing-mode 7-day expiry limitation (audit A2) | M7 | sonnet | Draft | WP-136, WP-137, WP-138, WP-139, WP-140, WP-141, WP-142 |
-| [WP-144](WP-144-manifest-untrusted-schema-and-bounded-deletes.md) | Treat the install manifest as untrusted — strict per-kind schema, per-entry error isolation, root-bounded deletes (audit A8) | M7 | opus | Draft | — |
-| [WP-145](WP-145-scheduler-unload-rederive-and-show-plan.md) | Re-derive scheduler unload from platform + validated identity, show the uninstall plan before confirm (audit A8) | M7 | opus | Draft | WP-144 |
-| [WP-146](WP-146-settings-upsert-and-foreign-symlink-preserve.md) | Upsert the recorded hook command set on every sync + preserve a foreign namespaced symlink (audit A13) | M7 | sonnet | Draft | — |
-| [WP-147](WP-147-managed-block-separator-roundtrip.md) | Managed-block uninstall removes only Wienerdog-added separators — never fuse a user's lines (audit A13) | M7 | opus | Draft | WP-145, WP-146 |
-| [WP-148](WP-148-sentinel-ambiguity-isolation.md) | Ambiguous managed block must not abort independent skill/hook reconciliation (audit A13) | M7 | sonnet | Draft | — |
-| [WP-149](WP-149-adopt-sensitive-tree-guard.md) | Guard adopt against home/secret/huge trees before git init+add (audit A13) | M7 | sonnet | Draft | — |
-| [WP-150](WP-150-env-override-path-validation.md) | Validate path-defining env overrides — absolute, normalized, reject '..' (audit A13) | M7 | sonnet | Draft | — |
-| [WP-151](WP-151-self-alert-code-owned-body.md) | Build fail-loud alert/self-email body from code-owned status fields only (audit A13) | M7 | sonnet | Draft | — |
-| [WP-152](WP-152-codex-protocol-pin-and-rerun-discipline.md) | Pin the Codex parser version + make the re-verify-on-bump discipline actionable (audit A13, follows WP-100) | M7 | sonnet | Draft | — |
+| [WP-143](WP-143-a2-broker-docs.md) | A2 documentation — honest broker claims, THREAT-MODEL, GLOSSARY, gws-broker runbook, testing-mode 7-day expiry limitation (audit A2) | M7 | sonnet | Ready | WP-136, WP-137, WP-138, WP-139, WP-140, WP-141, WP-142 |
+| [WP-144](WP-144-manifest-untrusted-schema-and-bounded-deletes.md) | Treat the install manifest as untrusted — strict per-kind schema, per-entry error isolation, root-bounded deletes (audit A8) | M7 | opus | Ready | — |
+| [WP-145](WP-145-scheduler-unload-rederive-and-show-plan.md) | Re-derive scheduler unload from platform + validated identity, show the uninstall plan before confirm (audit A8) | M7 | opus | Ready | WP-144 |
+| [WP-146](WP-146-settings-upsert-and-foreign-symlink-preserve.md) | Upsert the recorded hook command set on every sync + preserve a foreign namespaced symlink (audit A13) | M7 | sonnet | Ready | — |
+| [WP-147](WP-147-managed-block-separator-roundtrip.md) | Managed-block uninstall removes only Wienerdog-added separators — never fuse a user's lines (audit A13) | M7 | opus | Ready | WP-145, WP-146 |
+| [WP-148](WP-148-sentinel-ambiguity-isolation.md) | Ambiguous managed block must not abort independent skill/hook reconciliation (audit A13) | M7 | sonnet | Ready | — |
+| [WP-149](WP-149-adopt-sensitive-tree-guard.md) | Guard adopt against home/secret/huge trees before git init+add (audit A13) | M7 | sonnet | Ready | — |
+| [WP-150](WP-150-env-override-path-validation.md) | Validate path-defining env overrides — absolute, normalized, reject '..' (audit A13) | M7 | sonnet | Ready | — |
+| [WP-151](WP-151-self-alert-code-owned-body.md) | Build fail-loud alert/self-email body from code-owned status fields only (audit A13) | M7 | sonnet | Ready | — |
+| [WP-152](WP-152-codex-protocol-pin-and-rerun-discipline.md) | Pin the Codex parser version + make the re-verify-on-bump discipline actionable (audit A13, follows WP-100) | M7 | sonnet | Ready | — |
 
 > **First-production-night incident (2026-07-04).** WP-038, WP-039 and WP-041 form
 > a serial chain (they edit the shared `run-job.js` / `dream.js` / `validate.js`

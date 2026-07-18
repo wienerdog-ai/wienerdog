@@ -1,7 +1,7 @@
 ---
 id: WP-143
 title: A2 documentation — honest broker product claims, THREAT-MODEL, GLOSSARY broker terms, gws-broker runbook, testing-mode 7-day expiry limitation (audit A2)
-status: Draft
+status: Ready
 model: sonnet
 size: M
 depends_on: [WP-136, WP-137, WP-138, WP-139, WP-140, WP-141, WP-142]
@@ -146,15 +146,19 @@ so a user revokes at Google by removing Wienerdog's app access entirely.
 
 ## DECISION NEEDED (resolve in the walkthrough; each becomes a dated OWNER-APPROVED line before Ready)
 
-- **D-CLAIM-WORDING (recommend "on the enforced broker/CLI path").** How to scope the
-  README/VISION send claim. Recommend the phrasing "your AI can only send what you granted,
-  to whom you granted it, **on the path Wienerdog enforces** — the broker and CLI" with a
-  one-line honest footnote that this is not a claim against other software running as you
-  (A12). Preserves the differentiator while being true.
-- **D-VERIFY-FIGURES (recommend omit numbers until confirmed).** Whether to quote Google
-  app-verification cost/timeline in the runbook. Recommend **omit specific figures** (mark
-  as "annual assessment, see Google's restricted-scope-verification page") until a
-  wd-researcher spike confirms current numbers — avoid shipping a stale dollar figure.
+- **D-CLAIM-WORDING — RESOLVED (OWNER-APPROVED 2026-07-18): "on the enforced broker/CLI
+  path" + honest footnote.** The README/VISION send claim is scoped to the enforced
+  path: "your AI can only send what you granted, to whom you granted it, **on the path
+  Wienerdog enforces** — the broker and CLI", with a one-line footnote that this is not
+  a claim against other software running as the same OS user (A12). Every word traces to
+  a shipped mechanism (A0/T0 discipline); the full-retreat alternative ("grants limit
+  sending") was rejected — equally true but needlessly surrenders the differentiator.
+- **D-VERIFY-FIGURES — RESOLVED (OWNER-APPROVED 2026-07-18): omit specific figures.**
+  The runbook says "annual assessment — see Google's restricted-scope app-verification
+  page for current cost and process" and quotes NO dollar/timeline figures; a concrete
+  number may enter only after a wd-researcher primary-source spike confirms it. A stale
+  baked-in figure would violate the very honest-docs discipline this WP enforces, and
+  the always-current link serves the user better than a decaying "~approx" number.
 
 ## Implementation notes & constraints
 
