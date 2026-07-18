@@ -467,8 +467,30 @@ function reverse(paths, manifest, { dryRun = false } = {}) {
   // (`sameResolvedDir` is just realpath equality). Catches symlinked/normalized
   // aliases of any deferred member.
   const resolvesTo = (p, target) => p === target || sameResolvedDir(p, target);
+  // A8 containment roots (WP-144): every legit manifest target lives inside one
+  // of these (owner-ratified root set). ~/.local/bin is shared with other tools,
+  // so withinAllowedRoot additionally basename-allowlists the two shim names.
+  const localBin = path.join(paths.home, '.local', 'bin');
+  const allowedRoots = [paths.core, paths.claudeDir, paths.codexDir, localBin];
+  /** The kinds whose reversers delete/rewrite — the root-bound gate applies to
+   *  exactly these (scheduler-entry → WP-145; vault kinds are no-op-preserved). */
+  const MUTATING_KINDS = new Set([
+    'file', 'dir', 'symlink', 'managed-block', 'settings-entry', 'vendored-tree', 'copied-skill',
+  ]);
 
   for (const entry of [...manifest.entries].reverse()) {
+    // ── SCHEMA VALIDATION (audit A8, WP-144) — the manifest is UNTRUSTED ────
+    // A malformed entry (unknown kind, bad path, wrong-typed field) is skipped
+    // fail-safe with a visible notice and never reaches the guard arithmetic or
+    // a reverser. Runs FIRST so everything downstream can assume the shape.
+    const shape = validateEntry(entry);
+    if (!shape.ok) {
+      const kind = entry && typeof entry.kind === 'string' ? entry.kind : '?';
+      const p = entry && typeof entry.path === 'string' && entry.path !== '' ? entry.path : '?';
+      process.stderr.write(`wienerdog: skipping manifest entry with invalid ${kind} shape (${p})\n`);
+      skipped.push(p);
+      continue;
+    }
     // ── GLOBAL DEFERRED-MEMBER GUARD (before kind dispatch) ──────────────────
     // reverse() must NEVER delete/damage the three deferred members — the
     // manifest, the core dir, and config.yaml — regardless of entry KIND or path
@@ -518,67 +540,165 @@ function reverse(paths, manifest, { dryRun = false } = {}) {
       continue;
     }
     // ── end global guard ─────────────────────────────────────────────────────
-    if (entry.kind === 'file') {
-      // (manifest/config already handled by the global guard above.)
-      if (!isFile(entry.path)) {
+    // ── PER-ENTRY ERROR ISOLATION + ROOT BOUND (audit A8, WP-144) ────────────
+    // One throwing reverser must never abort the whole uninstall (that made the
+    // install permanently un-uninstallable — every retry hit the same entry).
+    // The containment check lives INSIDE the try so an fs error during realpath
+    // resolution also fails safe (preserve, not crash).
+    try {
+      if (MUTATING_KINDS.has(entry.kind) && !withinAllowedRoot(entry.path, allowedRoots, localBin)) {
+        // A poisoned/hand-edited entry pointing outside every Wienerdog-owned
+        // root (e.g. {kind:'file', path:'~/taxes.pdf'}) — PRESERVE, never delete.
+        process.stderr.write(
+          `wienerdog: preserving ${entry.path} — outside every Wienerdog-owned root (not deleting)\n`
+        );
         skipped.push(entry.path);
         continue;
       }
-      if (entry.hash && sha256File(entry.path) !== entry.hash) {
-        // We recorded this file's content at write time; it differs now → the
-        // user (or another writer) changed it. Prove-before-delete: keep it,
-        // don't destroy an edit.
-        process.stderr.write(`wienerdog: keeping ${entry.path} — modified since install\n`);
+      if (entry.kind === 'file') {
+        // (manifest/config already handled by the global guard above.)
+        if (!isFile(entry.path)) {
+          skipped.push(entry.path);
+          continue;
+        }
+        if (entry.hash && sha256File(entry.path) !== entry.hash) {
+          // We recorded this file's content at write time; it differs now → the
+          // user (or another writer) changed it. Prove-before-delete: keep it,
+          // don't destroy an edit.
+          process.stderr.write(`wienerdog: keeping ${entry.path} — modified since install\n`);
+          skipped.push(entry.path);
+          continue;
+        }
+        if (!dryRun) fs.rmSync(entry.path, { force: true });
+        removedSet.add(entry.path);
+        removed.push(entry.path);
+      } else if (entry.kind === 'dir') {
+        // (The core is handled by the global guard above and never reaches here.)
+        if (!isDir(entry.path)) {
+          skipped.push(entry.path);
+          continue;
+        }
+        const remaining = fs
+          .readdirSync(entry.path)
+          .map((child) => path.join(entry.path, child))
+          .filter((child) => !removedSet.has(child));
+        if (remaining.length > 0) {
+          skipped.push(entry.path);
+          continue;
+        }
+        if (!dryRun) fs.rmdirSync(entry.path);
+        removedSet.add(entry.path);
+        removed.push(entry.path);
+      } else if (entry.kind === 'symlink') {
+        reverseSymlink(entry, dryRun, removed, skipped, removedSet);
+      } else if (entry.kind === 'managed-block') {
+        reverseManagedBlock(entry, dryRun, removed, skipped, removedSet);
+      } else if (entry.kind === 'settings-entry') {
+        reverseSettingsEntry(entry, dryRun, removed, skipped, removedSet);
+      } else if (entry.kind === 'scheduler-entry') {
+        reverseSchedulerEntry(entry, dryRun, removed, skipped, removedSet);
+      } else if (entry.kind === 'vendored-tree') {
+        reverseVendoredTree(entry, dryRun, removed, skipped, removedSet, appRoot);
+      } else if (entry.kind === 'copied-skill') {
+        reverseCopiedSkill(entry, dryRun, removed, skipped, removedSet, skillsRoots);
+      } else if (entry.kind === 'vault-file' || entry.kind === 'vault-dir') {
+        // The vault is the user's treasure — always preserved (ADR-0010, ADR-0019).
+        // No filesystem action; NOT added to removedSet (it lives outside the core).
+        // Counted so uninstall can print ONE plain-language reassurance line
+        // instead of the former per-file 'unknown kind' stderr warnings.
+        preserved.push(entry.path);
+      } else {
+        // Unreachable today (validateEntry rejects unknown kinds first); kept as
+        // the belt-and-suspenders catch-all should the schema table and this
+        // dispatch ever drift apart.
+        process.stderr.write(
+          `wienerdog: skipping unknown manifest entry kind '${entry.kind}' (${entry.path})\n`
+        );
         skipped.push(entry.path);
-        continue;
       }
-      if (!dryRun) fs.rmSync(entry.path, { force: true });
-      removedSet.add(entry.path);
-      removed.push(entry.path);
-    } else if (entry.kind === 'dir') {
-      // (The core is handled by the global guard above and never reaches here.)
-      if (!isDir(entry.path)) {
-        skipped.push(entry.path);
-        continue;
-      }
-      const remaining = fs
-        .readdirSync(entry.path)
-        .map((child) => path.join(entry.path, child))
-        .filter((child) => !removedSet.has(child));
-      if (remaining.length > 0) {
-        skipped.push(entry.path);
-        continue;
-      }
-      if (!dryRun) fs.rmdirSync(entry.path);
-      removedSet.add(entry.path);
-      removed.push(entry.path);
-    } else if (entry.kind === 'symlink') {
-      reverseSymlink(entry, dryRun, removed, skipped, removedSet);
-    } else if (entry.kind === 'managed-block') {
-      reverseManagedBlock(entry, dryRun, removed, skipped, removedSet);
-    } else if (entry.kind === 'settings-entry') {
-      reverseSettingsEntry(entry, dryRun, removed, skipped, removedSet);
-    } else if (entry.kind === 'scheduler-entry') {
-      reverseSchedulerEntry(entry, dryRun, removed, skipped, removedSet);
-    } else if (entry.kind === 'vendored-tree') {
-      reverseVendoredTree(entry, dryRun, removed, skipped, removedSet, appRoot);
-    } else if (entry.kind === 'copied-skill') {
-      reverseCopiedSkill(entry, dryRun, removed, skipped, removedSet, skillsRoots);
-    } else if (entry.kind === 'vault-file' || entry.kind === 'vault-dir') {
-      // The vault is the user's treasure — always preserved (ADR-0010, ADR-0019).
-      // No filesystem action; NOT added to removedSet (it lives outside the core).
-      // Counted so uninstall can print ONE plain-language reassurance line
-      // instead of the former per-file 'unknown kind' stderr warnings.
-      preserved.push(entry.path);
-    } else {
+    } catch (err) {
+      // Per-entry isolation: skip THIS entry, keep sweeping. The loop always
+      // completes, so uninstall can delete the manifest and retry-ability is
+      // never wedged on one bad file (e.g. malformed settings.json).
       process.stderr.write(
-        `wienerdog: skipping unknown manifest entry kind '${entry.kind}' (${entry.path})\n`
+        `wienerdog: could not reverse ${entry.kind} entry ${entry.path} (${err.code || err.message}) — leaving it in place\n`
       );
       skipped.push(entry.path);
     }
   }
 
   return { removed, skipped, preserved, deferredConfig, deferredConfigHash };
+}
+
+/** Required/optional field types per manifest kind (audit A8, WP-144). Keys
+ *  beyond these are ignored (forward-compat), never rejected; only the listed
+ *  fields are type-enforced. `scheduler-entry` gets deep validation in WP-145. */
+const ENTRY_FIELD_TYPES = {
+  file: { hash: 'string' },
+  dir: {},
+  symlink: {},
+  'managed-block': { createdFile: 'boolean' },
+  'settings-entry': { createdFile: 'boolean', commands: 'string[]' },
+  'vendored-tree': {},
+  'copied-skill': { hash: 'string' },
+  'vault-file': {},
+  'vault-dir': {},
+  'scheduler-entry': {},
+};
+
+/**
+ * Validate one manifest entry's shape (audit A8, WP-144): the manifest is a
+ * plaintext user-editable file, so replay treats it as UNTRUSTED input. A
+ * malformed entry is skipped fail-safe by reverse() — it must never reach a
+ * reverser. Unknown kinds, a missing/empty/non-string `path`, or a wrong-typed
+ * known field all fail; extra keys are ignored (forward-compat).
+ * @param {any} entry
+ * @returns {{ok:true}|{ok:false, why:string}}
+ */
+function validateEntry(entry) {
+  if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+    return { ok: false, why: 'entry is not an object' };
+  }
+  const fields = Object.prototype.hasOwnProperty.call(ENTRY_FIELD_TYPES, entry.kind)
+    ? ENTRY_FIELD_TYPES[entry.kind]
+    : null;
+  if (!fields) return { ok: false, why: `unknown kind ${JSON.stringify(entry.kind)}` };
+  if (typeof entry.path !== 'string' || entry.path === '') {
+    return { ok: false, why: 'missing/empty/non-string path' };
+  }
+  for (const [key, type] of Object.entries(fields)) {
+    const value = entry[key];
+    if (value === undefined) continue;
+    const bad =
+      (type === 'string' && typeof value !== 'string') ||
+      (type === 'boolean' && typeof value !== 'boolean') ||
+      (type === 'string[]' && !(Array.isArray(value) && value.every((c) => typeof c === 'string')));
+    if (bad) return { ok: false, why: `${key} must be a ${type}` };
+  }
+  return { ok: true };
+}
+
+/**
+ * The A8 containment layer (WP-144): is `targetPath` inside an allowed
+ * Wienerdog-owned root? Containment uses the realpath-aware `contains` (both
+ * sides canonicalized — a `..`/normalized/symlinked alias that resolves outside
+ * every root fails). `~/.local/bin` is a USER-SHARED dir, so when it is the
+ * only matching root the basename must additionally be one of the two shim
+ * names — a planted `~/.local/bin/other-tool` entry is out-of-bounds. The
+ * other roots need no basename filter: the per-kind ownership proofs (hash,
+ * isSymlink, surgical block edits) already fence them.
+ * @param {string} targetPath
+ * @param {string[]} allowedRoots
+ * @param {string} localBin
+ * @returns {boolean}
+ */
+function withinAllowedRoot(targetPath, allowedRoots, localBin) {
+  const matching = allowedRoots.filter((root) => contains(root, targetPath));
+  if (matching.length === 0) return false;
+  if (matching.every((root) => root === localBin)) {
+    return ['wienerdog', 'wienerdog.cmd'].includes(path.basename(targetPath));
+  }
+  return true;
 }
 
 /**
@@ -665,4 +785,4 @@ function disposeCoreMechanics(paths, { dryRun = false, vaultPath = null } = {}) 
   return { removed, skippedForVault };
 }
 
-module.exports = { load, record, save, reverse, disposeCoreMechanics, reverseSchedulerEntry, reverseVendoredTree, reverseCopiedSkill, hashDir, sha256File };
+module.exports = { load, record, save, reverse, disposeCoreMechanics, reverseSchedulerEntry, reverseVendoredTree, reverseCopiedSkill, hashDir, sha256File, validateEntry, withinAllowedRoot };

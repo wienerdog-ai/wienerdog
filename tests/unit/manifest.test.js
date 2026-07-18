@@ -906,3 +906,141 @@ test('disposeCoreMechanics dry-run changes nothing on disk', () => {
   assert.equal(fs.existsSync(paths.secrets), true);
   assert.equal(fs.existsSync(paths.core), true);
 });
+
+// ── WP-144 (audit A8): schema validation + per-entry isolation + root bound ──
+
+test('WP-144 reverse: a hash-less file entry OUTSIDE every allowed root is preserved (taxes.pdf)', () => {
+  const paths = tempPaths();
+  const manifest = makeInstall(paths);
+  const taxes = path.join(paths.home, 'taxes.pdf');
+  fs.writeFileSync(taxes, 'my taxes');
+  manifestLib.record(manifest, { kind: 'file', path: taxes }); // poisoned: no hash, outside roots
+
+  const res = manifestLib.reverse(paths, manifest);
+
+  assert.equal(fs.readFileSync(taxes, 'utf8'), 'my taxes', 'the external file is untouched');
+  assert.ok(res.skipped.includes(taxes), 'the poisoned entry is reported in skipped');
+  assert.ok(!res.removed.includes(taxes));
+});
+
+test('WP-144 reverse: a ../ alias pointing outside the roots is preserved (realpath containment)', () => {
+  const paths = tempPaths();
+  const manifest = makeInstall(paths);
+  fs.mkdirSync(paths.claudeDir, { recursive: true });
+  const evilReal = path.join(paths.home, 'evil.txt');
+  fs.writeFileSync(evilReal, 'evil-but-precious');
+  const alias = path.join(paths.claudeDir, '..', 'evil.txt'); // resolves to <home>/evil.txt
+
+  manifestLib.record(manifest, { kind: 'file', path: alias });
+  const res = manifestLib.reverse(paths, manifest);
+
+  assert.equal(fs.readFileSync(evilReal, 'utf8'), 'evil-but-precious');
+  assert.ok(res.skipped.includes(alias));
+});
+
+test('WP-144 reverse: a malformed settings.json no longer aborts the sweep — entry skipped, everything else reversed', () => {
+  const paths = tempPaths();
+  const manifest = makeInstall(paths);
+  fs.mkdirSync(paths.claudeDir, { recursive: true });
+  const settings = path.join(paths.claudeDir, 'settings.json');
+  fs.writeFileSync(settings, '{ not json at all');
+  const survivor = path.join(paths.core, 'bin-extra.txt');
+  fs.mkdirSync(path.dirname(survivor), { recursive: true });
+  fs.writeFileSync(survivor, 'x');
+  // survivor is recorded BEFORE the settings entry, so the reverse-order loop
+  // hits the THROWING settings entry FIRST and the survivor after it — its
+  // removal proves the loop ran past the bad entry instead of aborting.
+  manifestLib.record(manifest, { kind: 'file', path: survivor });
+  manifestLib.record(manifest, { kind: 'settings-entry', path: settings, commands: ['x'] });
+
+  let res;
+  assert.doesNotThrow(() => {
+    res = manifestLib.reverse(paths, manifest);
+  });
+  assert.ok(res.skipped.includes(settings), 'the malformed settings entry is skipped, not fatal');
+  assert.equal(fs.existsSync(survivor), false, 'entries after the bad one still reverse');
+  assert.equal(fs.readFileSync(settings, 'utf8'), '{ not json at all', 'the malformed file is left in place');
+});
+
+test('WP-144 reverse: invalid shapes (unknown kind, numeric path, wrong-typed fields) never reach a reverser', () => {
+  const paths = tempPaths();
+  const manifest = makeInstall(paths);
+  const victim = path.join(paths.core, 'victim.txt');
+  fs.writeFileSync(victim, 'x');
+  manifest.entries.push({ kind: 'frobnicate', path: victim }); // unknown kind
+  manifest.entries.push({ kind: 'file', path: 42 }); // non-string path
+  manifest.entries.push({ kind: 'file' }); // missing path
+  manifest.entries.push({ kind: 'file', path: victim, hash: 42 }); // wrong-typed hash
+  manifest.entries.push({ kind: 'settings-entry', path: victim, commands: 'not-an-array' });
+  manifest.entries.push(null); // not even an object
+
+  let res;
+  assert.doesNotThrow(() => {
+    res = manifestLib.reverse(paths, manifest);
+  });
+  assert.equal(fs.existsSync(victim), true, 'no malformed entry deleted the target');
+  // Every malformed entry lands in skipped ('?' for the unusable paths).
+  assert.ok(res.skipped.filter((p) => p === '?').length >= 3, 'unusable paths reported as ?');
+});
+
+test('WP-144 validateEntry: shapes accepted and rejected per the schema table', () => {
+  const ok = (e) => assert.equal(manifestLib.validateEntry(e).ok, true, JSON.stringify(e));
+  const bad = (e) => assert.equal(manifestLib.validateEntry(e).ok, false, JSON.stringify(e));
+
+  ok({ kind: 'file', path: '/a' });
+  ok({ kind: 'file', path: '/a', hash: 'abc', extra: { ignored: true } });
+  ok({ kind: 'settings-entry', path: '/a', createdFile: true, commands: ['a', 'b'] });
+  ok({ kind: 'scheduler-entry', path: '/a', unload: 'deep validation is WP-145' });
+  ok({ kind: 'vault-file', path: '/a' });
+
+  bad({ kind: 'file', path: '' });
+  bad({ kind: 'file', path: 42 });
+  bad({ kind: 'file' });
+  bad({ kind: 'file', path: '/a', hash: 42 });
+  bad({ kind: 'managed-block', path: '/a', createdFile: 'yes' });
+  bad({ kind: 'settings-entry', path: '/a', commands: [1, 2] });
+  bad({ kind: 'no-such-kind', path: '/a' });
+  bad(null);
+  bad(['file']);
+});
+
+test('WP-144 reverse: the ~/.local/bin shim is removed, a planted neighbor is preserved (basename allowlist)', () => {
+  const paths = tempPaths();
+  const manifest = makeInstall(paths);
+  const localBin = path.join(paths.home, '.local', 'bin');
+  fs.mkdirSync(localBin, { recursive: true });
+  const shim = path.join(localBin, 'wienerdog');
+  const other = path.join(localBin, 'other-tool');
+  fs.writeFileSync(shim, '#!/bin/sh\n');
+  fs.writeFileSync(other, '#!/bin/sh\nprecious user tool\n');
+  manifestLib.record(manifest, { kind: 'file', path: shim });
+  manifestLib.record(manifest, { kind: 'file', path: other }); // poisoned neighbor
+
+  const res = manifestLib.reverse(paths, manifest);
+
+  assert.equal(fs.existsSync(shim), false, 'the wienerdog shim is removed (in-bounds basename)');
+  assert.equal(fs.existsSync(other), true, 'the shared-dir neighbor is preserved');
+  assert.ok(res.removed.includes(shim));
+  assert.ok(res.skipped.includes(other));
+});
+
+test('WP-144 withinAllowedRoot: containment + shared-dir basename rule', () => {
+  const paths = tempPaths();
+  fs.mkdirSync(paths.core, { recursive: true });
+  fs.mkdirSync(paths.claudeDir, { recursive: true });
+  const localBin = path.join(paths.home, '.local', 'bin');
+  fs.mkdirSync(localBin, { recursive: true });
+  const roots = [paths.core, paths.claudeDir, paths.codexDir, localBin];
+  const touch = (p) => {
+    fs.mkdirSync(path.dirname(p), { recursive: true });
+    fs.writeFileSync(p, 'x');
+    return p;
+  };
+
+  assert.equal(manifestLib.withinAllowedRoot(touch(path.join(paths.core, 'a.txt')), roots, localBin), true);
+  assert.equal(manifestLib.withinAllowedRoot(touch(path.join(paths.claudeDir, 'skills', 's.md')), roots, localBin), true);
+  assert.equal(manifestLib.withinAllowedRoot(touch(path.join(paths.home, 'outside.txt')), roots, localBin), false);
+  assert.equal(manifestLib.withinAllowedRoot(touch(path.join(localBin, 'wienerdog')), roots, localBin), true);
+  assert.equal(manifestLib.withinAllowedRoot(touch(path.join(localBin, 'wienerdog.cmd')), roots, localBin), true);
+  assert.equal(manifestLib.withinAllowedRoot(touch(path.join(localBin, 'rm')), roots, localBin), false, 'shared-dir neighbor blocked');
+});

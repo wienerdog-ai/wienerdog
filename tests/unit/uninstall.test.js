@@ -493,3 +493,34 @@ test('uninstall --yes with a symlinked core exits 0 and unlinks the link (target
   assert.equal(fs.lstatSync(realCore).isDirectory(), true, 'the user-made target dir remains');
   assert.deepEqual(fs.readdirSync(realCore), [], 'target dir emptied of mechanics');
 });
+
+test('WP-144 uninstall: a poisoned external path is preserved and a malformed settings entry no longer wedges the uninstall', () => {
+  const { root, core, env } = tempEnv();
+  run(['init', '--yes'], env);
+
+  // Poison the (untrusted, plaintext) manifest by hand, like an attacker or a
+  // corrupted edit would: an external user file + a malformed settings target.
+  const taxes = path.join(root, 'taxes.pdf');
+  fs.writeFileSync(taxes, 'precious user bytes');
+  const badSettings = path.join(root, 'absent-claude', 'settings.json');
+  fs.mkdirSync(path.dirname(badSettings), { recursive: true });
+  fs.writeFileSync(badSettings, '{ not json at all');
+  const manifestPath = path.join(core, 'install-manifest.json');
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  // Prepend so the reverse-order loop hits them LAST — after real entries — and
+  // append one too so they bracket the sweep either way.
+  manifest.entries.unshift({ kind: 'file', path: taxes });
+  manifest.entries.push({ kind: 'settings-entry', path: badSettings, commands: ['x'] });
+  manifest.entries.push({ kind: 'file', path: 42 });
+  fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+
+  const r = run(['uninstall', '--yes'], env);
+
+  assert.equal(r.status, 0, r.stderr);
+  // (The test-runner `run` helper captures stderr only on failure, so the
+  // "preserving … outside every Wienerdog-owned root" notice is asserted in
+  // manifest.test.js; here the on-disk preservation is the proof.)
+  assert.equal(fs.readFileSync(taxes, 'utf8'), 'precious user bytes', 'external file preserved');
+  assert.equal(fs.readFileSync(badSettings, 'utf8'), '{ not json at all', 'malformed settings left in place');
+  assert.equal(fs.existsSync(core), false, 'the core (and its manifest) is fully removed — not wedged');
+});

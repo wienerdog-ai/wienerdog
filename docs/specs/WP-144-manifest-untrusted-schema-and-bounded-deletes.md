@@ -1,7 +1,7 @@
 ---
 id: WP-144
 title: Treat the install manifest as untrusted — strict per-kind schema, per-entry error isolation, root-bounded deletes
-status: Ready
+status: In-Review
 model: opus
 size: M
 depends_on: []
