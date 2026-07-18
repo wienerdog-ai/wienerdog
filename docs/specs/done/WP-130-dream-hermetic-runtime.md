@@ -1,7 +1,7 @@
 ---
 id: WP-130
 title: Make the dream brain hermetic — compose from the profile, hook-free settings, staging cwd (audit A1)
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: [WP-128, WP-129]
