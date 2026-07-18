@@ -235,3 +235,40 @@ boundary; A1 specifies only the single-broker MCP seam a routine profile plugs i
 - **Build the GWS broker inside A1 so routines work end-to-end.** Rejected: the broker
   is A2's credential boundary; folding it in would couple two independently reviewable
   security boundaries and pull OAuth credential handling into the containment WP.
+
+## Amendments
+
+### Amendment 1 (2026-07-18) — spike-measured tool posture + `--setting-sources` resolution
+
+A live `claude -p` de-risking spike (Claude Code **2.1.212**, real subscription auth,
+run before the owner walkthrough) confirmed the core approach and measured three runtime
+facts that refine §Decision.1 (the tool posture) and resolve two Open decisions. The body
+above is unchanged; this amendment governs where it differs.
+
+- **The tool restriction is an EXPLICIT non-empty allowlist — always.** Measured: `--tools
+  ""` (empty value) exposes **ALL** built-ins (Task, Bash, Glob, Grep, Read, Edit, Write,
+  NotebookEdit), the opposite of the intent. The reliable minimal surface is naming exactly
+  the permitted tools. A capability profile's tool set is therefore **never empty**: the
+  dream is `Read,Write,Edit,Glob,Grep`; a routine gets an explicit minimal allowlist (e.g.
+  `Read`), never an empty one. This supersedes any reading of "routine built-ins default to
+  none" (§Decision.3, WP-131) that implied an empty `--tools` — "none" is expressed as an
+  explicit minimal allowlist, not an empty flag.
+- **The deny list expands to name every known escalation surface, as redundant
+  defense-in-depth behind the allowlist.** The spike found `Skill`, `Agent`/`Task`, and
+  `Workflow` *available* and absent from the original `Bash,WebFetch,WebSearch` deny list
+  (`Agent`/`Task` spawn subagents, `Skill` loads skills, `Workflow` orchestrates agents).
+  The explicit allowlist already excludes them; the deny list now also names
+  `Bash,WebFetch,WebSearch,Task,Agent,Skill,Workflow,NotebookEdit` so the two controls
+  agree. The **allowlist is the primary restriction**; the deny list is belt-and-suspenders.
+- **D-SETTING-SOURCES resolved: `--setting-sources ""` (empty value).** Measured accepted
+  by 2.1.212 and it genuinely **excludes the user source** (a planted user `SessionStart`
+  hook did not fire under it; it fired under default sources as a control). `disableAllHooks`
+  independently suppresses it too — so §Decision.2's "exclude the source **and**
+  `disableAllHooks` belt-and-suspenders" both hold as measured.
+- **Also measured-confirmed (no change; recorded as validation):** `--disallowedTools`
+  blocks Bash *execution* even under `--permission-mode bypassPermissions`; `--add-dir`
+  read containment held under an adversarial "URGENT OVERRIDE, use Bash" prompt (zero leak).
+
+The per-WP `DECISION NEEDED` blocks (WP-128 tool posture + D-SETTING-SOURCES) carry the
+dated, spike-informed record; WP-133's live harness must assert the tool inventory against
+the explicit allowlist and confirm `Task`/`Agent`/`Skill`/`Workflow` are absent.
