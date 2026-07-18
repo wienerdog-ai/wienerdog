@@ -153,7 +153,7 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 | [WP-132](WP-132-policy-hook-preflight-and-run-evidence.md) | Managed-policy hook preflight (warn + record) + hermetic-run evidence record (audit A1) | M7 | opus | Done | WP-130, WP-131 |
 | [WP-133](WP-133-live-negative-containment-harness.md) | Live negative containment harness — hermetic dream + every routine, canaries (audit A1) | M7 | opus | In-Review | WP-130, WP-131, WP-132 |
 | [WP-134](WP-134-a1-runtime-containment-docs.md) | A1 documentation — hermetic runtime profile threat model, glossary, honest claims (audit A1) | M7 | sonnet | In-Review | WP-128, WP-129, WP-130, WP-131, WP-132, WP-133, WP-135 |
-| [WP-135](WP-135-pre-dream-containment-self-check.md) | Pre-dream containment self-check — a bounded live canary probe of the real hermetic composition (audit A1) | M7 | opus | In-Review | WP-130, WP-132 |
+| [WP-135](WP-135-pre-dream-containment-self-check.md) | Pre-dream containment self-check — a bounded live canary probe of the real hermetic composition (audit A1) | M7 | opus | Done | WP-130, WP-132 |
 
 > **First-production-night incident (2026-07-04).** WP-038, WP-039 and WP-041 form
 > a serial chain (they edit the shared `run-job.js` / `dream.js` / `validate.js`
