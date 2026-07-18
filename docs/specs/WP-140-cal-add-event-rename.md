@@ -1,7 +1,7 @@
 ---
 id: WP-140
 title: Rename `cal draft-event` → `cal add-event` and gate every calendar mutation behind a calendar-write grant + credential (audit A2)
-status: Draft
+status: Ready
 model: sonnet
 size: S
 depends_on: [WP-138, WP-139]
@@ -85,15 +85,22 @@ unreachable in production. `wienerdog safety` shows all five BLOCKED after this 
 
 ## DECISION NEEDED (resolve in the walkthrough; each becomes a dated OWNER-APPROVED line before Ready)
 
-- **D-ADDEVENT-DEGRADE (recommend fail-visible notice, mirror send).** On a missing
-  calendar-write grant: degrade to a fail-visible notice with zero insert (mirroring the
-  send-grant degrade-to-draft) vs hard error. Recommend the **fail-visible notice** for
-  consistency with ADR-0007's fail-safe-and-visible posture — a misconfigured routine
-  produces a clear "not created; grant it" message, not a crash.
-- **D-CAL-ATTENDEES (recommend keep attendees, `sendUpdates:'none'`).** Whether
-  `add-event` may still take `--attendee`. Recommend keeping the existing behavior
-  (`sendUpdates:'none'` is mandatory so it never notifies — notifying would be an outbound
-  action; ADR-0007). Adding a self-only event is the common case.
+- **D-ADDEVENT-DEGRADE — RESOLVED (OWNER-APPROVED 2026-07-18): fail-visible notice,
+  mirror send.** On a missing calendar-write grant, `cal add-event` degrades to the
+  fail-visible notice in the contract above ("no calendar-write grant for <routine>;
+  not created. Run: …") with **zero** insert calls — consistent with the send-grant
+  degrade-to-draft and ADR-0007's fail-safe-and-visible posture. A hard error was
+  rejected: security-equivalent (zero mutation either way) but inconsistent with the
+  send path, and one missing grant would kill an entire routine run instead of
+  producing an actionable message.
+- **D-CAL-ATTENDEES — RESOLVED (OWNER-APPROVED 2026-07-18): keep `--attendee`,
+  `sendUpdates:'none'` mandatory.** Existing behavior kept: no notification email is
+  ever sent (emailing would be an outbound action, ADR-0007). Honest nuance recorded:
+  `sendUpdates:'none'` suppresses the EMAIL only — for a Google-account attendee the
+  invitation can still appear in their calendar, so an attendee-bearing insert IS an
+  outward-visible effect. Accepted because the verb lives behind a TTY-minted
+  `calendar_write` grant (and `gws-use` stays BLOCKED in A2); WP-143 documents the
+  nuance in the honest-claims pass.
 
 ## Implementation notes & constraints
 
