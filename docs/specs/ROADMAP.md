@@ -154,6 +154,14 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 | [WP-133](WP-133-live-negative-containment-harness.md) | Live negative containment harness — hermetic dream + every routine, canaries (audit A1) | M7 | opus | Done | WP-130, WP-131, WP-132 |
 | [WP-134](WP-134-a1-runtime-containment-docs.md) | A1 documentation — hermetic runtime profile threat model, glossary, honest claims (audit A1) | M7 | sonnet | Done | WP-128, WP-129, WP-130, WP-131, WP-132, WP-133, WP-135 |
 | [WP-135](WP-135-pre-dream-containment-self-check.md) | Pre-dream containment self-check — a bounded live canary probe of the real hermetic composition (audit A1) | M7 | opus | Done | WP-130, WP-132 |
+| [WP-136](WP-136-broker-stdio-transport.md) | GWS broker transport — hand-rolled MCP stdio JSON-RPC server + per-job lifecycle self-check (audit A2) | M7 | opus | Draft | WP-131 |
+| [WP-137](WP-137-broker-verb-registry.md) | GWS broker verb registry — fixed verbs, server-side schemas, byte/count/rate limits, exact API-method allowlist (audit A2) | M7 | opus | Draft | WP-136 |
+| [WP-138](WP-138-least-scope-credential-split.md) | Least-scope GWS credential split + granted-scope verification + broker per-verb credential selection (audit A2) | M7 | opus | Draft | WP-136 |
+| [WP-139](WP-139-broker-grant-store.md) | Canonical broker-owned grant store — TTY-only mutation, exact-byte integrity fail-closed, retire the config.yaml YAML block (audit A2) | M7 | opus | Draft | WP-136 |
+| [WP-140](WP-140-cal-add-event-rename.md) | Rename `cal draft-event` → `cal add-event` behind a calendar-write grant + credential (audit A2) | M7 | sonnet | Draft | WP-138, WP-139 |
+| [WP-141](WP-141-broker-runjob-wiring.md) | Wire the broker into the routine runtime — broker-mcp.json seam, trusted launch descriptor, MCP tool allowlist, read-only vault snapshot, functional routine skills (audit A2) | M7 | opus | Draft | WP-137, WP-138, WP-139 |
+| [WP-142](WP-142-broker-containment-harness.md) | Broker containment proof — end-to-end run-job poisoned-email E2E + exact-verb/grant/credential negatives (audit A2) | M7 | opus | Draft | WP-140, WP-141 |
+| [WP-143](WP-143-a2-broker-docs.md) | A2 documentation — honest broker claims, THREAT-MODEL, GLOSSARY, gws-broker runbook, testing-mode 7-day expiry limitation (audit A2) | M7 | sonnet | Draft | WP-136, WP-137, WP-138, WP-139, WP-140, WP-141, WP-142 |
 | [WP-144](WP-144-manifest-untrusted-schema-and-bounded-deletes.md) | Treat the install manifest as untrusted — strict per-kind schema, per-entry error isolation, root-bounded deletes (audit A8) | M7 | opus | Draft | — |
 | [WP-145](WP-145-scheduler-unload-rederive-and-show-plan.md) | Re-derive scheduler unload from platform + validated identity, show the uninstall plan before confirm (audit A8) | M7 | opus | Draft | WP-144 |
 | [WP-146](WP-146-settings-upsert-and-foreign-symlink-preserve.md) | Upsert the recorded hook command set on every sync + preserve a foreign namespaced symlink (audit A13) | M7 | sonnet | Draft | — |
@@ -1235,6 +1243,47 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 
 <!-- -->
 
+> **A2 GWS capability broker (2026-07-18, ADR-0026 Accepted).** Closes the audit's GWS
+> capability-boundary cluster (04-gws-grants F1/F2/F3/F5): the single combined OAuth token
+> is send-and-write-capable (F1) and the send grant is a forgeable plaintext YAML fact (F2),
+> so the grant model is a property of the CLI wrapper, not the credential or the OS. A2
+> fills the A1 seam (WP-131's `broker-mcp.json`) with a **credential-holding capability
+> broker**: a per-job **stdio** child (ADR-0004 — NOT a daemon; spawned by the routine's
+> `claude -p`, dies with it) that alone loads OAuth tokens and exposes only **fixed verbs**
+> (server-side schemas, byte/count/rate limits, an exact API-method allowlist) to the
+> model — no token bytes, no raw client, no generic send. **WP-136** the hand-rolled MCP
+> stdio transport (zero-dep JSON-RPC, no @modelcontextprotocol/sdk) + a live per-job
+> lifecycle self-check; **WP-137** the fixed verb registry + limits; **WP-138** the
+> least-scope credential split (READ = readonly scopes incl. `calendar.events.readonly`;
+> DRAFT = `gmail.compose`; SEND = narrower `gmail.send`; CALENDAR_WRITE = `calendar.events`)
+> with actual-granted-scope verification and `include_granted_scopes:false` (scope-bleed
+> guard); **WP-139** the canonical broker-owned grant store (TTY-only, exact-byte integrity
+> fail-closed, retires the config.yaml YAML block); **WP-140** the `cal draft-event` →
+> `cal add-event` rename behind a calendar-write grant; **WP-141** the wiring (per-run
+> broker-mcp.json with the trusted `--routine` launch descriptor in the broker argv,
+> `--allowedTools mcp__broker__<verb>`, a bounded read-only vault snapshot, and broker-
+> calling routine skills); **WP-142** the end-to-end run-job poisoned-email containment
+> proof deferred from A1/WP-133 (a REQUIRED gate-opening precondition, executed here via the
+> `allowAll()` seam); **WP-143** the honest docs (broker boundary, gmail.compose send-
+> capability, cal add-event live mutation, grant store as tamper-evidence not an OS
+> boundary, the Google testing-mode 7-day refresh-token expiry limitation, A12 same-user
+> residual). Spec phase informed by a wd-researcher pass: `--strict-mcp-config` is required
+> (`--mcp-config` is additive); MCP tools are `mcp__<server>__<verb>` and need
+> `--allowedTools` (`--tools` governs built-ins only); `gmail.compose` is send-capable and
+> there is no draft-only Gmail scope; `calendar.events` allows delete (delete-prevention is
+> the verb allowlist, not the scope); **testing-mode issues 7-day refresh tokens** for
+> Restricted scopes — resolved by the per-user non-Testing client posture (unverified
+> "In production", D-TESTING-MODE) with a loud fail-closed expiry alert regardless;
+> revocation is per-client (D-OAUTH-CLIENT-COUNT);
+> and the stdio-child lifecycle is doc-unconfirmed → a mandatory WP-136 live self-check
+> (no orphaned broker, ADR-0004). **A2 opens NO capability gate** — `wienerdog safety`
+> shows all five BLOCKED after every WP; A1 contained the model, A2 removes the raw
+> credential, and `external-content-routine`/`gws-use` open only later (P1 + audit rerun +
+> explicit go + the WP-142 end-to-end containment proof). Chain: 136 → {137, 138, 139};
+> {138,139} → 140; {137,138,139} → 141; {140,141} → 142; all → 143.
+
+<!-- -->
+
 ## Dependency graph
 
 ```mermaid
@@ -1407,6 +1456,24 @@ graph LR
   WP128 --> WP134[WP-134 A1 docs — hermetic runtime profile threat model + glossary]
   WP133 --> WP134
   WP135 --> WP134
+  WP131 --> WP136[WP-136 GWS broker MCP stdio transport + per-job lifecycle self-check — audit A2, ADR-0026]
+  WP136 --> WP137[WP-137 broker verb registry — fixed verbs + schemas + limits — audit A2]
+  WP136 --> WP138[WP-138 least-scope credential split + granted-scope verification — audit A2]
+  WP136 --> WP139[WP-139 broker-owned grant store — TTY-only + integrity fail-closed — audit A2]
+  WP138 --> WP140[WP-140 cal draft-event → add-event behind a calendar-write grant — audit A2]
+  WP139 --> WP140
+  WP137 --> WP141[WP-141 wire broker into routine runtime — seam + descriptor + allowedTools + snapshot — audit A2]
+  WP138 --> WP141
+  WP139 --> WP141
+  WP140 --> WP142[WP-142 end-to-end run-job poisoned-email containment proof — audit A2]
+  WP141 --> WP142
+  WP136 --> WP143[WP-143 A2 docs — honest broker claims + threat model + glossary + runbook]
+  WP137 --> WP143
+  WP138 --> WP143
+  WP139 --> WP143
+  WP140 --> WP143
+  WP141 --> WP143
+  WP142 --> WP143
   WP144[WP-144 manifest untrusted schema + root-bounded deletes + per-entry isolation — audit A8]
   WP144 --> WP145[WP-145 re-derive scheduler unload from validated identity + show uninstall plan — audit A8, ADR-0027]
   WP146[WP-146 settings-command upsert + preserve foreign wienerdog-* symlink — audit A13]
