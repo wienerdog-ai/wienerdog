@@ -1,7 +1,7 @@
 ---
 id: WP-152
 title: Pin the Codex protocol/CLI version the transcript parser is verified against, and make the re-verify-on-bump discipline actionable
-status: Draft
+status: Ready
 model: sonnet
 size: S
 depends_on: []
@@ -141,6 +141,16 @@ e.g.: "…re-verified on the next Codex pin bump — the version is pinned in
 `src/core/supported-codex.js` and the re-verification steps (rerun the golden
 fixtures, confirm tool-output types, re-affirm the `developer`-role trust) are in
 `docs/runbooks/codex-pin-bump.md`." Keep the rest of the bullet unchanged.
+
+**Owner walkthrough (2026-07-18): Ready.** No open fork. Owner ratified that this
+is an ADVISORY record + discipline, NOT a runtime gate — consistent with the
+already-ratified `supported-claude.js` philosophy (ADR-0025 Amendment 2:
+containment is runtime-self-verified; a repo-pinned version is a maintainer
+record because a deployed user never rebuilds and the CLI auto-updates). The
+security property was shipped by WP-100 (fail-closed roles + `{user, developer}`
+allowlist); this WP only adds the single-source-of-truth pin, the
+re-verify-on-bump runbook, and the cross-references. Independent WP (no A8/A13
+dependency).
 
 ## Implementation notes & constraints
 
