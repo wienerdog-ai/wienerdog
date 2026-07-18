@@ -77,6 +77,20 @@ hash would add alarm noise, not protection. That attacker class is A12's.
 > *unload*). The ADR-0028 file is written as the A7 spec walkthrough concludes;
 > until then this spec set is the design-of-record.
 
+**SPEC-GAP AMENDMENT (2026-07-18, A7 walkthrough).** This WP's security
+checklist mandates that `claude`/`git`/`codex` are spawned by verified absolute
+realpath, never bare name — but the original Deliverables covered only
+`brain.js`/`validate.js`/`sync.js` and **missed one bare-name spawn**:
+`src/core/dream/containment-probe.js` (~L136) falls back to bare `'claude'` for
+its pre-dream probe spawn. That is an **F4** surface identical to the one this WP
+closes: a fake `claude` earlier on the job PATH wins the probe spawn. This
+amendment brings the probe spawn under the pin (Deliverables + wiring +
+checklist + acceptance below). **Boundary with WP-155:** this WP replaces **only**
+the bare-`'claude'` final fallback with the pinned resolve; it **must not**
+remove the `WIENERDOG_CONTAINMENT_PROBE_CMD` env fallback that sits before it —
+deleting that env seam is WP-155's job. See Implementation notes → "Probe-spawn
+pinning boundary with WP-155".
+
 ## Current state
 
 **`src/cli/run-job.js` `buildCleanEnv(paths, name, platform)`** builds the job
@@ -108,6 +122,19 @@ test-exec env seams outright), and must not break it in the meantime.
 by bare name: `spawnSync('git', ['-C', vaultDir, ...args], { encoding: 'utf8' })`,
 throwing `WienerdogError` on `ENOENT`/non-zero.
 
+**`src/core/dream/containment-probe.js` `runContainmentProbe(paths, opts)`** (~L133)
+chooses the probe command at ~L136:
+```js
+const command = opts.probeCmd || env.WIENERDOG_CONTAINMENT_PROBE_CMD || 'claude';
+```
+and spawns it (`captureVersion(command, …)` ~L177, `spawn(command, args, …)`
+~L179) — a **bare `'claude'`** on the production fallback. `opts.probeCmd` is the
+existing unit-test injection seam (`tests/unit/containment-probe.test.js` passes
+it on every call). `WIENERDOG_CONTAINMENT_PROBE_CMD` is a test env seam WP-155
+removes. The probe promises to **never throw** (file header): the whole spawn is
+wrapped in a `try` (~L144) whose `catch` returns an `'inconclusive'` ProbeResult,
+and its caller (`dream.js`) fails the dream closed on any non-`pass` outcome.
+
 **`src/cli/sync.js` `run(argv, opts)`** is the compiler pass (also invoked by
 `init`). After `vendorSelf` + `writeShim` it does private-mode repair, digest
 render, skill staging, and adapter application. It records artifacts in the
@@ -134,9 +161,11 @@ Nothing today resolves, verifies, or pins these executables.
 | modify | src/cli/sync.js | After `vendorSelf`/`writeShim`, call `createPins(paths, {manifest})` (idempotent repin on every sync). Print a one-line notice on unresolved/verify-failed execs. Dry-run makes no writes. |
 | modify | src/core/dream/brain.js | Spawn the **verified pinned absolute path** for `claude`/`codex` (not bare name); version-probe the pinned path. Leave the `WIENERDOG_DREAM_CMD` fake branch in place for WP-155 to remove. |
 | modify | src/core/dream/validate.js | Spawn the **verified pinned absolute** `git` (not bare `'git'`); fail safe with the repin message on pin drift. |
+| modify | src/core/dream/containment-probe.js | Replace **only** the bare `'claude'` final fallback (~L136) with the pinned absolute resolve: `opts.probeCmd \|\| env.WIENERDOG_CONTAINMENT_PROBE_CMD \|\| resolvePinnedSpawn('claude', paths, env, opts.platform \|\| process.platform)`. Keep the `opts.probeCmd` and `WIENERDOG_CONTAINMENT_PROBE_CMD` terms untouched (WP-155 removes the env one). Move the `const command = …` resolution **inside** the existing `try` so a fail-safe throw becomes an `'inconclusive'` ProbeResult (preserve never-throws). Add `platform` to the `opts` typedef (default `process.platform`). |
 | create | tests/unit/exec-identity.test.js | Unit cases for resolve/verify/pin/verifyPin/fail-safe below. |
 | modify | tests/unit/dream-brain.test.js | Assert the brain spawns the pinned absolute path and fails safe on drift; the fake seam still works. |
 | modify | tests/unit/dream-validate.test.js | Assert git uses the pinned absolute path and fails safe on drift. |
+| modify | tests/unit/containment-probe.test.js | Add a case: with a valid pin for a fake `claude` and **no** `opts.probeCmd`, the probe spawns the **pinned absolute path**; a second fake `claude` planted earlier on `PATH` never gets probe-spawned (drift ⇒ the resolve throws ⇒ `'inconclusive'`, never a spawn of the fake). Inject `platform` per the no-mock rule. |
 
 ### Exact contracts
 
@@ -243,6 +272,18 @@ module.exports = { resolveExecutable, verifyExecutable, probeVersion,
   getPaths(), process.env, process.platform)` and spawn that absolute path
   (`spawnSync(gitPath, ['-C', vaultDir, ...args], …)`). A thrown fail-safe error
   is surfaced (same `WienerdogError` path the ENOENT hint uses today).
+- `containment-probe.js` `runContainmentProbe(paths, opts)`: the probe's `'claude'`
+  fallback becomes `resolvePinnedSpawn('claude', paths, env, opts.platform ||
+  process.platform)` — `paths` is the function's first arg, `env` is
+  `opts.env || process.env`. Keep the `opts.probeCmd` and
+  `WIENERDOG_CONTAINMENT_PROBE_CMD` terms **ahead** of the pinned resolve (both stay
+  this WP; WP-155 removes the env one). Because `resolvePinnedSpawn` **throws** on
+  drift and the probe must never throw, move the `const command = …` line **inside**
+  the `try` (before `captureVersion`); the existing `catch` then maps a drifted/
+  unresolvable pin to `{ outcome:'inconclusive', reason:'probe error: …' }`, which
+  the caller already treats as fail-closed. The unit tests inject `opts.probeCmd`
+  and so never reach the pinned resolve — the new pinned-path case (no `probeCmd`)
+  is the only one that exercises it.
 
 ## Implementation notes & constraints
 
@@ -273,12 +314,22 @@ module.exports = { resolveExecutable, verifyExecutable, probeVersion,
   `exec-pins.json` to byte-identical content (stable key order; re-use the prior
   `pinnedAt` when commandPath+installDir are unchanged — `version` may advance
   on auto-update without churning `pinnedAt`).
+- **Probe-spawn pinning boundary with WP-155.** `containment-probe.js` is edited by
+  **both** WPs and they must not collide. **This WP (lands first):** replace ONLY
+  the bare `'claude'` final fallback with `resolvePinnedSpawn(...)`; **leave the
+  `WIENERDOG_CONTAINMENT_PROBE_CMD` env fallback in place** — it is still the probe
+  test path until WP-155 lands. **WP-155 (lands second):** deletes that env term,
+  leaving `opts.probeCmd || resolvePinnedSpawn(...)`. If you find yourself wanting
+  to remove the env seam here, STOP — that is out of scope for this WP.
 - When uncertain, choose the simpler option and record it under "Decisions made".
 
 ## Security checklist
 
 - [ ] `claude`, `git`, and (when present) `codex` are spawned by their **verified
       absolute realpath**, never by bare name; a fake earlier on `PATH` cannot win.
+      This includes the **containment-probe** `claude` spawn
+      (`src/core/dream/containment-probe.js`) — `grep -n "'claude'" src/core/dream/containment-probe.js`
+      shows no bare-name spawn fallback (the fallback is `resolvePinnedSpawn`).
 - [ ] A live resolution that no longer matches the pinned command path or
       install dir, or whose target fails owner/mode/ancestor-writable
       verification, **stops the spawn pre-flight** with a clear repin message —
@@ -308,6 +359,12 @@ module.exports = { resolveExecutable, verifyExecutable, probeVersion,
       fail-safe, no repin prompt. An install-method change that MOVES the
       install dir makes the next dream fail safe with the repin message; running
       `sync` re-pins and the next dream succeeds against the new location.
+- [ ] **[spec-gap amendment]** The pre-dream containment probe spawns the **pinned
+      absolute** `claude`: with a valid pin, a fake `claude` planted earlier on the
+      job `PATH` makes `runContainmentProbe` return `'inconclusive'` (the pinned
+      resolve throws drift; the never-throws wrapper maps it) — the fake is **never
+      probe-spawned**, and the dream fails closed. Covered by a
+      `tests/unit/containment-probe.test.js` case (no `opts.probeCmd`).
 - [ ] `resolveExecutable`/`verifyExecutable`/`createPins`/`verifyPin`
       have direct unit coverage (temp-dir fake executables; injected `platform`).
 - [ ] `createPins` is idempotent (second sync ⇒ byte-identical `exec-pins.json`).
@@ -316,16 +373,18 @@ module.exports = { resolveExecutable, verifyExecutable, probeVersion,
 ## Verification steps (run these; paste output in the PR)
 
 ```bash
-npm test -- --test-name-pattern "exec-identity|dream-brain|dream-validate"
+npm test -- --test-name-pattern "exec-identity|dream-brain|dream-validate|containment-probe"
 npm test
 npm run lint
 ```
 
 ## Out of scope (do NOT do these)
 
-- Removing the `WIENERDOG_RUNJOB_CMD` / `WIENERDOG_DREAM_CMD` test seams and dropping
-  `shell:true` — **WP-155** (depends on this WP; do not change the fake branches'
-  activation here).
+- Removing the `WIENERDOG_RUNJOB_CMD` / `WIENERDOG_DREAM_CMD` / `WIENERDOG_CONTAINMENT_PROBE_CMD`
+  test seams and dropping `shell:true` — **WP-155** (depends on this WP; do not
+  change the fake branches' activation, and leave the probe's
+  `WIENERDOG_CONTAINMENT_PROBE_CMD` env fallback in place — you only replace the
+  bare-`'claude'` fallback here).
 - The canonical job descriptor, its digest binding, and the out-of-tree launcher —
   **WP-156 / WP-157**.
 - Pinning the routine (`skill:`) claude invocation in `routine-runtime.js` — external

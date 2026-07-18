@@ -13,13 +13,24 @@ branch: wp/155-inert-test-exec-seams
 
 ## Context (read this, nothing else)
 
-Wienerdog's scheduled job dispatch carries two **test-only** environment seams
-that let a test substitute the executable a job runs: `WIENERDOG_RUNJOB_CMD`
-(in `src/cli/run-job.js` `resolveCommand`) and `WIENERDOG_DREAM_CMD` (in
-`src/core/dream/brain.js` `spawnBrain`). These are test hooks living in the
-**production** dispatch path. **IRON RULE (ADR-0004): Wienerdog is just files** —
-nothing it ships should turn an environment variable into arbitrary code at
-03:30. This WP is A7's smallest hardening (audit finding **F5**).
+Wienerdog's scheduled job dispatch carries **four** test-only environment seams
+that let a test substitute or bypass what a job runs. Two pick the executable a
+job runs: `WIENERDOG_RUNJOB_CMD` (in `src/cli/run-job.js` `resolveCommand`) and
+`WIENERDOG_DREAM_CMD` (in `src/core/dream/brain.js` `spawnBrain`). Two more
+gate/redirect the **pre-dream containment probe**: `WIENERDOG_SKIP_CONTAINMENT_PROBE`
+(in `src/cli/dream.js`, skips the probe) and `WIENERDOG_CONTAINMENT_PROBE_CMD`
+(in `src/core/dream/containment-probe.js`, redirects the probe's `claude` spawn).
+All four are test hooks living in the **production** dispatch path. **IRON RULE
+(ADR-0004): Wienerdog is just files** — nothing it ships should turn an
+environment variable into arbitrary code (or into *disabling a security check*)
+at 03:30. This WP is A7's smallest hardening (audit finding **F5**).
+
+> The original b4fb865 rework of this WP deleted only the first two seams and
+> deliberately **kept** `WIENERDOG_SKIP_CONTAINMENT_PROBE` /
+> `WIENERDOG_CONTAINMENT_PROBE_CMD` as the probe's test path. The A7 walkthrough
+> owner **rejected** that (see the probe-seam amendment below): a production
+> security check that can be disabled or redirected by an env var is the **same
+> disease** as an exec seam. The probe seams now go with the other two.
 
 Two problems in the code today. First, the `WIENERDOG_RUNJOB_CMD` seam returns
 `{command: fake, args: [], shell: true}` — a **shell:true** dispatch, the only
@@ -59,6 +70,35 @@ a test env var to choose what to execute. Tests keep working through two
    fake executable. The **real** dispatch path (`loadPins → verifyPin →
    resolvePinnedSpawn → spawn`) then runs **unmodified**, and full pin-path
    integration coverage falls out for free.
+
+3. **Dependency injection for the containment probe (probe-seam amendment).**
+   The `WIENERDOG_SKIP_CONTAINMENT_PROBE` and `WIENERDOG_CONTAINMENT_PROBE_CMD`
+   env reads are removed. `dream.run(argv)` gains a **test-only** second argument
+   `opts` (same injected-dependency idiom this WP already establishes for
+   `run-job`'s `opts.resolveCommand`): `opts.skipContainmentProbe` (boolean,
+   replaces the env skip) and `opts.probeCmd` (forwarded to
+   `runContainmentProbe`'s existing `opts.probeCmd` DI seam, replaces the env
+   redirect). The CLI entry never passes `opts` (`bin/wienerdog.js` calls
+   `run(rest)` with argv only), so **production always runs the probe and can
+   never skip or redirect it** — there is no env knob left to do so.
+
+> **RESOLVED (OWNER-APPROVED 2026-07-18, A7 walkthrough) — the probe env seams
+> go too.** The b4fb865 rework kept `WIENERDOG_SKIP_CONTAINMENT_PROBE` as the
+> test path for skipping the pre-dream containment probe and left
+> `WIENERDOG_CONTAINMENT_PROBE_CMD` untouched. The owner **rejected** that: it is
+> the **same circularity disease** as the abandoned `WIENERDOG_TEST` gate —
+> production security behavior (whether the containment self-check runs, and what
+> binary it probes) branching on an env var an in-boundary scoped write can set.
+> **Feasibility (verified against the code):** every probe-relevant test already
+> drives `dream` **in-process** — `tests/integration/dream.test.js`'s `runDream`
+> helper mutates `process.env` and calls `dream.run(argv)` directly, and
+> `tests/integration/adopt-e2e.test.js` calls `dream.run(['--yes'])` in-process
+> — so a JS-only `opts` argument reaches every one of them with no subprocess
+> boundary to cross. And `runContainmentProbe(paths, opts)` **already** exposes
+> an `opts.probeCmd` injection path (`src/core/dream/containment-probe.js`: the
+> command is `opts.probeCmd || env.WIENERDOG_CONTAINMENT_PROBE_CMD || <pinned
+> claude>`); this WP deletes only the middle env term, leaving the DI path and
+> WP-154's pinned resolve. So the probe seams cost nothing extra to remove.
 
 **Iron-rule alignment.** After this WP, "Wienerdog is just files" is true of the
 dispatch code too: no shipped file reads an environment variable to decide what
@@ -127,9 +167,10 @@ live and requires the live command path + `dirname(realpath)` to match the pin
 and the target to pass `verifyExecutable` (regular file, exec bit, owner ∈
 {uid,0}, no group/other-writable ancestor).
 
-**`src/cli/dream.js` `run(argv)`** (~L308) — a **production** behavior branch on a
-test var: it skips the pre-dream containment self-check when `WIENERDOG_DREAM_CMD`
-is set:
+**`src/cli/dream.js` `run(argv)`** (~L153, gate at ~L309) — a **production**
+behavior branch on **two** test vars: it skips the pre-dream containment
+self-check when `WIENERDOG_DREAM_CMD` is set OR when
+`WIENERDOG_SKIP_CONTAINMENT_PROBE === '1'`:
 ```js
 let containmentProbe = null;
 if (!process.env.WIENERDOG_DREAM_CMD && process.env.WIENERDOG_SKIP_CONTAINMENT_PROBE !== '1') {
@@ -137,13 +178,27 @@ if (!process.env.WIENERDOG_DREAM_CMD && process.env.WIENERDOG_SKIP_CONTAINMENT_P
   if (containmentProbe.outcome !== 'pass') { throw new WienerdogError(`dream halted: …`); }
 }
 ```
-`dream.run(argv)` is invoked **in-process** by the integration tests (they call
+`run` currently takes **only** `argv`; it is `module.exports = { run }` (~L411)
+and the CLI entry `bin/wienerdog.js` (~L72) calls `run(rest)` with argv only.
+`dream.run` is invoked **in-process** by the integration tests (they call
 `dream.run` directly after setting `process.env`), and as `wienerdog dream
 --yes` on the scheduled path. `getPaths(env)`: `core = $WIENERDOG_HOME ||
 ~/.wienerdog`; `state = <core>/state`; so the pin store is
 `<WIENERDOG_HOME>/state/exec-pins.json`.
 
-**Tests that read the two env seams today** (all convert here):
+**`src/core/dream/containment-probe.js` `runContainmentProbe(paths, opts)`**
+(~L133) — the probe command is chosen at ~L136:
+```js
+const command = opts.probeCmd || env.WIENERDOG_CONTAINMENT_PROBE_CMD || 'claude';
+```
+The `'claude'` bare-name fallback is **replaced by WP-154** with a pinned
+absolute resolve (`resolvePinnedSpawn('claude', …)`); the `opts.probeCmd`
+injection path (used by `tests/unit/containment-probe.test.js`) stays. This WP
+deletes only the **middle** term — the `env.WIENERDOG_CONTAINMENT_PROBE_CMD ||`
+production seam — leaving `opts.probeCmd || <WP-154 pinned resolve>`. Read the
+actual post-WP-154 line before editing (WP-154 lands first, on this same file).
+
+**Tests that read the four env seams today** (all convert here):
 - `tests/unit/scheduler-runjob.test.js` — a `withRun(env, envOverrides, argv,
   opts)` helper (~L93) sets `process.env.WIENERDOG_RUNJOB_CMD` from
   `envOverrides` (its `keys` array at ~L94 lists it) then calls
@@ -159,8 +214,13 @@ if (!process.env.WIENERDOG_DREAM_CMD && process.env.WIENERDOG_SKIP_CONTAINMENT_P
   seam and converts these three cases.
 - `tests/integration/dream.test.js` — `runDream(ctx, argv, extraEnv)` (~L143)
   sets `WIENERDOG_DREAM_CMD: FAKE_BRAIN` for every run and calls `dream.run`
-  in-process; the probe-gating cases (~L744–833) exploit `WIENERDOG_DREAM_CMD:''`
-  (falsy ⇒ probe runs) and the fake-brain-skips-probe premise.
+  in-process; its `ENV_KEYS` array (~L20) save/restores `WIENERDOG_DREAM_CMD`,
+  `WIENERDOG_CONTAINMENT_PROBE_CMD`, and `WIENERDOG_SKIP_CONTAINMENT_PROBE`
+  (`WIENERDOG_FAKE_BRAIN_MODE` also, but that one stays — see note). The
+  probe-gating cases (~L744–833) exploit `WIENERDOG_DREAM_CMD:''` (falsy ⇒ probe
+  runs), `WIENERDOG_CONTAINMENT_PROBE_CMD` (fail/garbage fakes, ~L756/L774/L788),
+  `WIENERDOG_SKIP_CONTAINMENT_PROBE:'1'` (~L800), and the fake-brain-skips-probe
+  premise. All of these move to the `opts` argument (below).
 - `tests/integration/adopt-e2e.test.js` (~L81) — runs `init → adopt → sync →
   dream` in-process with `WIENERDOG_DREAM_CMD: FAKE_BRAIN`; `sync` runs WP-154's
   `createPins`.
@@ -180,12 +240,13 @@ spawnable as pinned targets, no fixture edit needed.
 |--------|------|-------|
 | modify | src/cli/run-job.js | **Delete** the `WIENERDOG_RUNJOB_CMD` env read + `shell:true` fake branch in `resolveCommand`; `resolveCommand` no longer reads any env. Add a JS-only `opts.resolveCommand` injection in `runJob` (default = the module `resolveCommand`). Update the two stale JSDoc references to the seam. No `shell: true` literal remains in the file. |
 | modify | src/core/dream/brain.js | **Delete** every `fakeCmd`/`WIENERDOG_DREAM_CMD` reference `spawnBrain` still contains after WP-154: the `const fakeCmd = …` line, the `if (fakeCmd)` dispatch branch, and the `!fakeCmd &&` guard on the version-probe. Leave WP-154's pinned resolution intact. |
-| modify | src/cli/dream.js | Remove the `!process.env.WIENERDOG_DREAM_CMD &&` term from the containment-probe gate (~L309) so it reads `if (process.env.WIENERDOG_SKIP_CONTAINMENT_PROBE !== '1')`. No other change. |
+| modify | src/cli/dream.js | Change `run(argv)` → `run(argv, opts = {})`. **Delete** both env reads from the containment-probe gate (~L309): replace `if (!process.env.WIENERDOG_DREAM_CMD && process.env.WIENERDOG_SKIP_CONTAINMENT_PROBE !== '1')` with `if (!opts.skipContainmentProbe)`, and forward `probeCmd: opts.probeCmd` into the `runContainmentProbe(paths, {…})` call. No other behavior change; production passes no `opts`, so the probe always runs. |
+| modify | src/core/dream/containment-probe.js | **Delete** the `env.WIENERDOG_CONTAINMENT_PROBE_CMD` middle term at ~L136 (the `\|\|` alternative sitting before the WP-154 pinned resolve), so the command is `opts.probeCmd` falling back to the pinned resolve only. Nothing in the module reads any env var to choose or skip a spawn afterward. WP-154 has already replaced the bare `'claude'` fallback with the pinned resolve on this line — do not reintroduce a bare name. |
 | modify | tests/unit/scheduler-runjob.test.js | Convert every `withRun(..., { WIENERDOG_RUNJOB_CMD: fake }, ...)` call to inject the fake via `opts.resolveCommand`; drop `WIENERDOG_RUNJOB_CMD` from the `keys` array and the `resolveCommand` test's save/restore. Add the shell:false invariant + "env var has no effect" assertions (below). |
 | modify | tests/unit/routine-runtime.test.js | Drop the now-dead `WIENERDOG_RUNJOB_CMD` save/delete/restore in both cases (the module never reads env now). |
 | modify | tests/unit/dream-brain.test.js | Convert the three `WIENERDOG_DREAM_CMD` fake cases to the pinned-fake front door via a `pinFakeBrain` helper (below); add a "`WIENERDOG_DREAM_CMD` set has no effect — the pinned brain runs" assertion. |
-| modify | tests/integration/dream.test.js | `runDream` installs a pinned fake `claude` + sets `WIENERDOG_SKIP_CONTAINMENT_PROBE=1` by default; drop `WIENERDOG_DREAM_CMD`. Re-spec the probe-gating cases (below); delete the fake-brain-skips-probe case; convert the evidence case to the pinned fake. |
-| modify | tests/integration/adopt-e2e.test.js | Install the fake `claude` at `<home>/.local/bin/claude` so `sync`'s `createPins` pins it against the job PATH and `dream` spawns it; drop `WIENERDOG_DREAM_CMD`; set `WIENERDOG_SKIP_CONTAINMENT_PROBE=1`. |
+| modify | tests/integration/dream.test.js | `runDream` gains an `opts` param forwarded to `dream.run(argv, opts)` and defaults `opts.skipContainmentProbe = true`; it installs a pinned fake `claude`; drop `WIENERDOG_DREAM_CMD`, `WIENERDOG_CONTAINMENT_PROBE_CMD`, and `WIENERDOG_SKIP_CONTAINMENT_PROBE` from `ENV_KEYS` (keep `WIENERDOG_FAKE_BRAIN_MODE`). Re-spec the probe-gating cases via `opts` (below); delete the fake-brain-skips-probe case; convert the evidence case to the pinned fake. |
+| modify | tests/integration/adopt-e2e.test.js | Install the fake `claude` at `<home>/.local/bin/claude` so `sync`'s `createPins` pins it against the job PATH and `dream` spawns it; drop `WIENERDOG_DREAM_CMD` (and it from `ENV_KEYS`); call `dream.run(['--yes'], { skipContainmentProbe: true })` (the fake brain cannot satisfy a live probe). |
 | modify | tests/unit/codex-adapter.test.js | Install a pinned fake `codex` (harness `'codex'`) via `pinFakeBrain(root, core, fakeCodex, 'codex')`; drop `WIENERDOG_DREAM_CMD`. |
 
 `package.json` is **NOT** touched (the abandoned design set `WIENERDOG_TEST=1` in
@@ -228,14 +289,43 @@ spawns them fine — no fixture change.)
 is no `fakeCmd` variable, no `if (fakeCmd)` branch, and the version-probe guard no
 longer mentions `fakeCmd`. Nothing in the function reads `WIENERDOG_DREAM_CMD`.
 
-**`dream.js` — after the edit:**
+**`dream.js` — after the edit.** `run` gains a JS-only `opts` argument (documented
+in its JSDoc as a **test-only** seam, exactly like `run-job`'s `opts`: reachable
+only by a JS caller — `bin/wienerdog.js` calls `run(rest)`, so production sees
+`opts = {}`):
 ```js
-let containmentProbe = null;
-if (process.env.WIENERDOG_SKIP_CONTAINMENT_PROBE !== '1') {
-  containmentProbe = runContainmentProbe(paths, { model: cfg.model, env: process.env });
-  if (containmentProbe.outcome !== 'pass') { throw new WienerdogError(`dream halted: …`); }
+/** @param {string[]} argv
+ *  @param {{skipContainmentProbe?:boolean, probeCmd?:string}} [opts]
+ *    TEST-ONLY. skipContainmentProbe: skip the pre-dream containment self-check
+ *    (a fake brain cannot satisfy a live probe). probeCmd: forwarded to
+ *    runContainmentProbe's opts.probeCmd DI seam. The CLI entry passes neither,
+ *    so production ALWAYS runs the probe against the WP-154 pinned claude. */
+async function run(argv, opts = {}) {
+  …
+  let containmentProbe = null;
+  if (!opts.skipContainmentProbe) {
+    containmentProbe = runContainmentProbe(paths, { model: cfg.model, env: process.env, probeCmd: opts.probeCmd });
+    if (containmentProbe.outcome !== 'pass') { throw new WienerdogError(`dream halted: …`); }
+  }
 }
 ```
+No production caller sets `opts`, so `skipContainmentProbe` is falsy and
+`probeCmd` is undefined in production — the probe runs and resolves its `claude`
+via WP-154's pinned front door. There is **no** env var that can skip or redirect
+the probe.
+
+**`containment-probe.js` — after the edit:**
+```js
+// WP-154 already made the fallback a pinned absolute resolve; this WP deletes the
+// env term, leaving injection + pinned resolve only:
+const command = opts.probeCmd || resolvePinnedSpawn('claude', paths, env, /* platform */);
+```
+The exact right-hand side is WP-154's (mirror the shipped line — read
+`src/core/dream/containment-probe.js` post-WP-154). Nothing in the function reads
+`WIENERDOG_CONTAINMENT_PROBE_CMD` (or any other env var) to choose the spawn.
+`tests/unit/containment-probe.test.js` already injects exclusively via
+`opts.probeCmd`, so **it needs no change from this WP** — do not touch it (it is
+WP-154's deliverable for the pinned-path case).
 
 **Test helper `pinFakeBrain` (added to the test files that need it — dream-brain,
 dream, codex-adapter; each may keep its own copy or a tiny shared local).** This
@@ -280,32 +370,53 @@ mind: `spawnBrain` calls `resolvePinnedSpawn(name, getPaths(baseEnv), baseEnv,
 platform)`, which re-resolves `name` on `baseEnv.PATH` (hence the env fragment must
 be spread into the `env` passed to `spawnBrain`/`dream.run`'s `process.env`).
 
+**`runDream` helper — after the edit.** Gains a fourth `opts` argument forwarded
+to `dream.run`, defaulting to skip (a fake brain cannot satisfy a live probe):
+```js
+async function runDream(ctx, argv, extraEnv = {}, opts = {}) {
+  …                                             // (env apply/restore unchanged)
+  await dream.run(argv, { skipContainmentProbe: true, ...opts });
+}
+```
+Cases that want the probe to actually run pass `{ skipContainmentProbe: false,
+probeCmd: … }` as the fourth arg — no env var involved.
+
 **Re-spec of `dream.test.js` probe-gating cases (~L744–833):**
-- `runDream` default: install the pinned fake `claude` (via `pinFakeBrain`), set
-  `WIENERDOG_SKIP_CONTAINMENT_PROBE: '1'` (a fake brain cannot satisfy a live
-  probe), remove `WIENERDOG_DREAM_CMD`. Most cases inherit this and just commit.
-- **probe FAIL / probe INCONCLUSIVE cases:** these WANT the probe to run. Override
-  the default with `WIENERDOG_SKIP_CONTAINMENT_PROBE: ''` and set
-  `WIENERDOG_CONTAINMENT_PROBE_CMD` to the fail/garbage probe fake (unchanged
-  seam). The probe throws at step 8b **before** `spawnBrain`, so no pin is
-  required to reach the assertion (the default pin install is harmless).
+- **default path:** `runDream` installs the pinned fake `claude` (via
+  `pinFakeBrain`) and defaults `opts.skipContainmentProbe = true`; drop
+  `WIENERDOG_DREAM_CMD`. Most cases inherit this and just commit.
+- **probe FAIL / probe INCONCLUSIVE cases (~L744, ~L767):** these WANT the probe
+  to run. Pass `opts = { skipContainmentProbe: false, probeCmd: failFake }` (resp.
+  `garbageFake`) as `runDream`'s fourth arg; drop the `WIENERDOG_DREAM_CMD:''` and
+  `WIENERDOG_CONTAINMENT_PROBE_CMD` `extraEnv`. The probe throws at step 8b
+  **before** `spawnBrain`, so no pin is required to reach the assertion (the
+  default pin install is harmless).
 - **"the fake-brain seam SKIPS the probe entirely" case (~L781): DELETE it.** Its
-  premise — setting `WIENERDOG_DREAM_CMD` skips the probe — no longer exists. The
-  canonical skip is the `WIENERDOG_SKIP_CONTAINMENT_PROBE=1` case (~L793), which
-  stays and is now also the default path.
+  premise — setting `WIENERDOG_DREAM_CMD` skips the probe — no longer exists.
+- **"WIENERDOG_SKIP_CONTAINMENT_PROBE=1 skips the probe" case (~L793):** keep it,
+  re-specced to prove the **opts** skip suppresses even a present fail-probe fake:
+  `runDream(ctx, ['--yes'], {}, { skipContainmentProbe: true, probeCmd: failFake })`
+  → the dream commits (the probe never ran). Rename the test title away from the
+  deleted env var (e.g. "…`opts.skipContainmentProbe` skips the probe…").
 - **evidence case (~L806):** replace `env: { WIENERDOG_DREAM_CMD: FAKE_BRAIN, … }`
   on the direct `spawnBrain` call with `env: { ...process.env,
   ...pinFakeBrain(ctx.root, ctx.core, FAKE_BRAIN) }`; keep the `containmentProbe:
-  { outcome:'pass', … }` assertion.
+  { outcome:'pass', … }` assertion (unchanged by the probe-seam amendment — it
+  passes `containmentProbe` straight to `spawnBrain`, never touching the gate).
 
 ## Implementation notes & constraints
 
 - Zero new dependencies; plain Node ≥ 18, JSDoc types only; no build step.
-- **Serialization with WP-154 (same two source files).** WP-154 lands first and
-  rewrites the brain's `codex`/`claude` resolution to pinned absolute paths and
-  the version-probe's `command === 'claude'` check. WP-155 removes only what
-  remains that references the deleted seams. Read the actual post-WP-154
-  `brain.js`/`run-job.js`; do not reintroduce a bare-name spawn.
+- **Serialization with WP-154 (three shared source files).** WP-154 lands first
+  and rewrites (a) the brain's `codex`/`claude` resolution to pinned absolute
+  paths and the version-probe's `command === 'claude'` check, and (b) the
+  containment probe's bare-`'claude'` fallback to a pinned resolve
+  (`src/core/dream/containment-probe.js` — WP-154's spec-gap amendment). WP-155
+  removes only what remains that references the deleted seams: the
+  `WIENERDOG_RUNJOB_CMD`/`WIENERDOG_DREAM_CMD` exec seams **and** the
+  `WIENERDOG_SKIP_CONTAINMENT_PROBE`/`WIENERDOG_CONTAINMENT_PROBE_CMD` probe seams.
+  Read the actual post-WP-154 `brain.js`/`run-job.js`/`containment-probe.js`; do
+  not reintroduce a bare-name spawn, and keep WP-154's pinned resolve intact.
 - **`adopt-e2e` runs `sync` ⇒ `createPins` (WP-154).** Do NOT hand-write a pin
   that `sync` will overwrite. Instead place the fake `claude` at
   `<home>/.local/bin/claude` (the dir the job clean PATH front-loads) so
@@ -316,11 +427,14 @@ be spread into the `env` passed to `spawnBrain`/`dream.run`'s `process.env`).
   (createPins must pin against the **job clean PATH** that `run-job`/`dream` later
   spawn under), that is a **WP-154 PATH-consistency gap**: STOP and route it back
   as a spec bug (do not paper over it by disabling the pin path in the test).
-- **Probe-skip seam is out of scope but reused.** `WIENERDOG_SKIP_CONTAINMENT_PROBE`
-  and `WIENERDOG_CONTAINMENT_PROBE_CMD` are pre-existing test env seams in
-  `dream.js`/`containment-probe.js`; this WP removes only the `WIENERDOG_DREAM_CMD`
-  term from the probe gate and does not touch them. They are the "same disease
-  elsewhere" — flag for a separate agenda item, do not expand scope.
+- **Probe seams are now IN scope (A7-walkthrough amendment).**
+  `WIENERDOG_SKIP_CONTAINMENT_PROBE` (in `dream.js`) and
+  `WIENERDOG_CONTAINMENT_PROBE_CMD` (in `containment-probe.js`) are **deleted** by
+  this WP and replaced with the JS-only `dream.run(argv, opts)` seam
+  (`opts.skipContainmentProbe`, `opts.probeCmd`). `containment-probe.test.js`
+  already injects via `opts.probeCmd` and needs **no** change; do not touch it.
+  The containment-probe.js edit is a **one-line deletion** of the env term left by
+  WP-154's pinned resolve — do not otherwise rewrite that line.
 - **Scenario-runner `delete env.WIENERDOG_DREAM_CMD` lines** in
   `tests/scenarios/run-scenarios.js` (~L314, ~L371 comment) and
   `tests/scenarios/negative/run-negative.js` (~L218) become dead no-ops after the
@@ -342,8 +456,14 @@ be spread into the `env` passed to `spawnBrain`/`dream.run`'s `process.env`).
       (`grep -n 'shell: true' src/cli/run-job.js` returns nothing; every
       `resolveCommand` return is `shell:false`).
 - [ ] `dream.js` no longer branches production behavior on `WIENERDOG_DREAM_CMD`.
-- [ ] Grep acceptance: `grep -rn 'WIENERDOG_RUNJOB_CMD\|WIENERDOG_DREAM_CMD' src/`
-      returns **nothing** — the seams do not exist in production code.
+- [ ] **The containment probe cannot be skipped or redirected in production.**
+      `dream.js` reads **no** `WIENERDOG_SKIP_CONTAINMENT_PROBE`, and
+      `containment-probe.js` reads **no** `WIENERDOG_CONTAINMENT_PROBE_CMD`; the
+      only skip/redirect is the JS-only `dream.run(argv, opts)` seam, which the CLI
+      entry never sets — so a scheduled dream **always** runs the probe against the
+      WP-154 pinned `claude`. No env knob can disable the security check.
+- [ ] Grep acceptance: `grep -rnE 'WIENERDOG_RUNJOB_CMD|WIENERDOG_DREAM_CMD|WIENERDOG_SKIP_CONTAINMENT_PROBE|WIENERDOG_CONTAINMENT_PROBE_CMD' src/`
+      returns **nothing** — none of the four seams exist in production code.
 - [ ] No unlisted file is modified; the suite passes via DI + pinned fakes, not a
       global test flag.
 
@@ -359,6 +479,12 @@ be spread into the `env` passed to `spawnBrain`/`dream.run`'s `process.env`).
 - [ ] A unit/integration test sets `WIENERDOG_DREAM_CMD` and asserts `spawnBrain`
       ignores it — the **pinned** brain runs (via `pinFakeBrain`), proving the env
       seam is dead and the WP-154 pin path is the only substitution mechanism.
+- [ ] **[probe-seam amendment]** Setting `WIENERDOG_SKIP_CONTAINMENT_PROBE=1` and
+      `WIENERDOG_CONTAINMENT_PROBE_CMD` has **zero** effect: the probe still runs
+      against the pinned `claude`. The probe is skipped/redirected only via
+      `dream.run(argv, {skipContainmentProbe|probeCmd})`, which the CLI entry never
+      passes. `grep -rnE 'WIENERDOG_SKIP_CONTAINMENT_PROBE|WIENERDOG_CONTAINMENT_PROBE_CMD' src/`
+      is empty.
 - [ ] The `run-job` fake is injected via `opts.resolveCommand` (JS-only); the CLI
       entry passes none, so production `resolveCommand` is always used.
 - [ ] The dream integration/adopt/codex tests drive the real pinned dispatch
@@ -371,8 +497,8 @@ be spread into the `env` passed to `spawnBrain`/`dream.run`'s `process.env`).
 ## Verification steps (run these; paste output in the PR)
 
 ```bash
-# the seams do not exist in production code:
-grep -rn 'WIENERDOG_RUNJOB_CMD\|WIENERDOG_DREAM_CMD' src/ ; test $? -eq 1 && echo "OK: absent from src/"
+# none of the four seams exist in production code:
+grep -rnE 'WIENERDOG_RUNJOB_CMD|WIENERDOG_DREAM_CMD|WIENERDOG_SKIP_CONTAINMENT_PROBE|WIENERDOG_CONTAINMENT_PROBE_CMD' src/ ; test $? -eq 1 && echo "OK: absent from src/"
 # no shell:true dispatch remains:
 grep -n 'shell: true' src/cli/run-job.js ; test $? -eq 1 && echo "OK: no shell:true"
 # the converted suites:
@@ -385,10 +511,11 @@ npm run lint
 
 - Resolving/verifying/pinning the executables — **WP-154** (this WP consumes the
   pin front door; it does not change how the real command is resolved).
-- Removing the `WIENERDOG_SKIP_CONTAINMENT_PROBE` / `WIENERDOG_CONTAINMENT_PROBE_CMD`
-  probe seams, the `WIENERDOG_RUNJOB_TIMEOUT_MS` timeout knob, or the
-  `WIENERDOG_UPDATE_FETCH_CMD` update-fetch seam — same disease, **separate agenda
-  item** (flag, do not touch).
+- Removing the `WIENERDOG_RUNJOB_TIMEOUT_MS` timeout knob or the
+  `WIENERDOG_UPDATE_FETCH_CMD` update-fetch seam — different (non-exec / timeout)
+  seams, **separate agenda item** (flag, do not touch). (The probe seams
+  `WIENERDOG_SKIP_CONTAINMENT_PROBE` / `WIENERDOG_CONTAINMENT_PROBE_CMD` are now
+  **in scope** — see the probe-seam amendment in Context.)
 - Cleaning the dead `delete env.WIENERDOG_DREAM_CMD` lines in `tests/scenarios/*`
   (decision above: left as harmless residue).
 - The job descriptor, digest binding, or the launcher — **WP-156 / WP-157**.
