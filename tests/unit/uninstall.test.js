@@ -524,3 +524,75 @@ test('WP-144 uninstall: a poisoned external path is preserved and a malformed se
   assert.equal(fs.readFileSync(badSettings, 'utf8'), '{ not json at all', 'malformed settings left in place');
   assert.equal(fs.existsSync(core), false, 'the core (and its manifest) is fully removed — not wedged');
 });
+
+test('WP-145 uninstall: the interactive path shows the derived plan (incl. would-run) BEFORE the confirm prompt', () => {
+  const { root, core, env } = tempEnv();
+  run(['init', '--yes'], env);
+
+  // Plant a platform-correct schedule file + entry so a derived command exists.
+  let schedDir;
+  let base;
+  let derivedHead;
+  if (process.platform === 'darwin') {
+    schedDir = path.join(root, 'Library', 'LaunchAgents');
+    base = 'ai.wienerdog.dream.plist';
+    derivedHead = 'launchctl bootout';
+  } else if (process.platform === 'win32') {
+    schedDir = path.join(core, 'schedules');
+    base = 'wienerdog-dream.xml';
+    derivedHead = 'schtasks /delete';
+  } else {
+    schedDir = path.join(root, '.config', 'systemd', 'user');
+    base = 'wienerdog-dream.timer';
+    derivedHead = 'systemctl --user disable';
+  }
+  fs.mkdirSync(schedDir, { recursive: true });
+  const schedFile = path.join(schedDir, base);
+  fs.writeFileSync(schedFile, 'x');
+  const manifestPath = path.join(core, 'install-manifest.json');
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  manifest.entries.push({ kind: 'scheduler-entry', path: schedFile, unload: ['/bin/sh', '-c', 'echo poisoned'] });
+  fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+
+  // Interactive run, answering "n": the plan must print, then the prompt fires
+  // (confirm() may route the prompt text to stderr/dev-tty when stdin is a
+  // pipe), then abort. 'Aborted.' prints only AFTER the prompt resolves, so it
+  // is the reliable post-prompt marker inside stdout.
+  const { spawnSync } = require('node:child_process');
+  const r = spawnSync('node', [bin, 'uninstall'], { env, encoding: 'utf8', input: 'n\n' });
+  const stdout = r.stdout || '';
+  const planIdx = stdout.indexOf('Planned actions:');
+  const wouldRunIdx = stdout.indexOf(`would run: ${derivedHead}`);
+  const abortedIdx = stdout.indexOf('Aborted.');
+  assert.equal(r.status, 0, r.stderr);
+  assert.ok(planIdx !== -1, stdout);
+  assert.ok(wouldRunIdx !== -1, 'the derived unregister command is disclosed');
+  assert.ok(abortedIdx !== -1, stdout);
+  assert.ok(planIdx < wouldRunIdx && wouldRunIdx < abortedIdx, 'plan (with derived commands) precedes the prompt outcome');
+  assert.ok(!stdout.includes('/bin/sh'), 'the stored (poisoned) argv is never shown');
+  assert.ok(fs.existsSync(core), 'declining the prompt removed nothing');
+  assert.ok(fs.existsSync(schedFile));
+});
+
+test('WP-145 uninstall --yes: a poisoned scheduler unload argv never spawns; the canary is never created', () => {
+  const { root, core, env } = tempEnv();
+  run(['init', '--yes'], env);
+  const canary = path.join(root, 'pwned-canary.txt');
+  const outside = path.join(root, 'not-a-schedule.plist');
+  fs.writeFileSync(outside, 'x');
+  const manifestPath = path.join(core, 'install-manifest.json');
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  manifest.entries.push({
+    kind: 'scheduler-entry',
+    path: outside,
+    unload: ['/bin/sh', '-c', `touch ${canary}`],
+  });
+  fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+
+  const r = run(['uninstall', '--yes'], env);
+
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(fs.existsSync(canary), false, 'the stored argv was never executed');
+  assert.equal(fs.existsSync(outside), true, 'the unrecognized schedule path is preserved');
+  assert.equal(fs.existsSync(core), false, 'the uninstall itself completed');
+});

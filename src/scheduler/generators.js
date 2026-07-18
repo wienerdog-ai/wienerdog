@@ -73,6 +73,45 @@ function systemdUnitBase(name) {
 }
 
 /**
+ * Re-derive a schedule file's unregister argv from its basename identity +
+ * platform (audit A8, ADR-0027, WP-145). The install manifest is an editable
+ * plaintext file, so a stored `entry.unload` argv is UNTRUSTED and is never
+ * executed; the uninstall reverser calls this instead. Reads ONLY
+ * `path.basename(schedulePath)` and the platform; the regexes are fully
+ * anchored, so `/`, `\`, `..`, or spaces in a poisoned filename can never
+ * reach the derived argv.
+ * @param {string} schedulePath
+ * @param {NodeJS.Platform} platform  injected — never mock process.platform
+ * @param {NodeJS.ProcessEnv} [env]  reserved (defaults to process.env)
+ * @returns {string[]|null}  the code-owned unregister argv, or null when
+ *   nothing must (or can) be unregistered — a `.service` unit, a foreign
+ *   basename, an unknown platform, or a uid-less darwin. null still lets the
+ *   caller remove the schedule file itself (fail safe).
+ */
+function deriveUnloadArgv(schedulePath, platform, env = process.env) {
+  // Basename semantics must follow the INJECTED platform, not the host's —
+  // a win32 path uses backslashes even when this code is unit-tested on POSIX.
+  const base = (platform === 'win32' ? path.win32 : path.posix).basename(schedulePath);
+  if (platform === 'darwin') {
+    const m = base.match(/^(ai\.wienerdog\.[a-z0-9][a-z0-9-]*)\.plist$/);
+    if (!m) return null;
+    if (typeof process.getuid !== 'function') return null; // no uid → no bootout target
+    return ['launchctl', 'bootout', `gui/${process.getuid()}/${m[1]}`];
+  }
+  if (platform === 'linux') {
+    const m = base.match(/^(wienerdog-[a-z0-9][a-z0-9-]*)\.timer$/);
+    if (!m) return null; // .service units (and anything else) need no unregister
+    return ['systemctl', '--user', 'disable', '--now', `${m[1]}.timer`];
+  }
+  if (platform === 'win32') {
+    const m = base.match(/^wienerdog-([a-z0-9][a-z0-9-]*)\.xml$/);
+    if (!m) return null;
+    return ['schtasks', '/delete', '/tn', `\\Wienerdog\\${m[1]}`, '/f'];
+  }
+  return null;
+}
+
+/**
  * Parse a 24-hour "HH:MM" clock string.
  * @param {string} at
  * @returns {{hour:number, minute:number}}
@@ -462,6 +501,7 @@ module.exports = {
   systemdUserDir,
   launchdLabel,
   systemdUnitBase,
+  deriveUnloadArgv,
   parseAt,
   xmlEscape,
   launchdPlist,

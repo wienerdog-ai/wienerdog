@@ -79,22 +79,29 @@ async function runSchedule(env, argv, loader, profile) {
 }
 
 /**
- * Run `fn` with WP-071's suite-wide hard scheduler guard
- * (WIENERDOG_TEST_NO_REAL_SCHEDULER) cleared, restoring it afterwards. The
- * marker-based reverse/remove tests below deliberately swap a benign in-process
- * `node -e` command in as the entry's `unload`, then assert it EXECUTED — so they
- * must let schedulerSpawn actually spawn (never a real launchctl/systemctl/schtasks
- * command). Await it even for synchronous `fn`.
- * @template T @param {() => (T | Promise<T>)} fn @returns {Promise<T>}
+ * Run `fn` with the single scheduler mutation chokepoint (schedulerSpawn)
+ * replaced by a recording spy — reverseSchedulerEntry re-requires the module,
+ * so mutating its export is observed. WP-145 re-derives unregister argvs from
+ * the schedule file identity, which can produce REAL launchctl/systemctl/
+ * schtasks commands even in tests; the spy guarantees nothing ever actually
+ * spawns (the old marker-unload trick died with the stored-unload seam).
+ * Await it even for synchronous `fn`.
+ * @template T @param {() => (T | Promise<T>)} fn
+ * @returns {Promise<{result:T, calls:string[][]}>}
  */
-async function withUnloadSpawnAllowed(fn) {
-  const saved = process.env.WIENERDOG_TEST_NO_REAL_SCHEDULER;
-  delete process.env.WIENERDOG_TEST_NO_REAL_SCHEDULER;
+async function withSpawnSpy(fn) {
+  const spawnMod = require('../../src/scheduler/spawn');
+  const orig = spawnMod.schedulerSpawn;
+  /** @type {string[][]} */ const calls = [];
+  spawnMod.schedulerSpawn = (argv) => {
+    calls.push(argv);
+    return { status: 0 };
+  };
   try {
-    return await fn();
+    const result = await fn();
+    return { result, calls };
   } finally {
-    if (saved === undefined) delete process.env.WIENERDOG_TEST_NO_REAL_SCHEDULER;
-    else process.env.WIENERDOG_TEST_NO_REAL_SCHEDULER = saved;
+    spawnMod.schedulerSpawn = orig;
   }
 }
 
@@ -191,10 +198,10 @@ test('scheduler-schedule: schedule.json watermark read/write', () => {
 // manifest.js: scheduler-entry reverse (harmless marker command as the "spy")
 // -------------------------------------------------------------------------
 
-test('scheduler-schedule: reverseSchedulerEntry runs the stored unload then removes the file', async () => {
+test('scheduler-schedule: reverseSchedulerEntry DERIVES the unregister argv — the stored unload never runs (WP-145)', async () => {
   const { root } = setup();
-  const file = path.join(root, 'ai.wienerdog.x.plist');
-  fs.writeFileSync(file, '<plist/>');
+  const file = path.join(root, 'wienerdog-zz-test.timer');
+  fs.writeFileSync(file, '[Timer]\n');
   const marker = path.join(root, 'unload-ran');
   const entry = {
     kind: 'scheduler-entry',
@@ -203,18 +210,22 @@ test('scheduler-schedule: reverseSchedulerEntry runs the stored unload then remo
   };
   const removed = [];
   const skipped = [];
-  await withUnloadSpawnAllowed(() =>
-    manifestLib.reverseSchedulerEntry(entry, false, removed, skipped, new Set())
+  const { calls } = await withSpawnSpy(() =>
+    manifestLib.reverseSchedulerEntry(entry, false, removed, skipped, new Set(), {
+      platform: 'linux',
+      schedulerRoots: [root],
+    })
   );
-  assert.ok(fs.existsSync(marker), 'unload argv was executed');
+  assert.ok(!fs.existsSync(marker), 'the stored unload argv is NEVER executed (ADR-0027)');
+  assert.deepEqual(calls, [['systemctl', '--user', 'disable', '--now', 'wienerdog-zz-test.timer']]);
   assert.ok(!fs.existsSync(file), 'file removed');
   assert.deepEqual(removed, [file]);
 });
 
-test('scheduler-schedule: reverseSchedulerEntry --dry-run runs nothing but reports', () => {
+test('scheduler-schedule: reverseSchedulerEntry --dry-run runs nothing but reports', async () => {
   const { root } = setup();
-  const file = path.join(root, 'ai.wienerdog.y.plist');
-  fs.writeFileSync(file, '<plist/>');
+  const file = path.join(root, 'wienerdog-zz-dry.timer');
+  fs.writeFileSync(file, '[Timer]\n');
   const marker = path.join(root, 'dry-marker');
   const entry = {
     kind: 'scheduler-entry',
@@ -222,17 +233,37 @@ test('scheduler-schedule: reverseSchedulerEntry --dry-run runs nothing but repor
     unload: [process.execPath, '-e', `require('fs').writeFileSync(${JSON.stringify(marker)}, 'ran')`],
   };
   const removed = [];
-  manifestLib.reverseSchedulerEntry(entry, true, removed, [], new Set());
-  assert.ok(!fs.existsSync(marker), 'dry-run did not run the unload');
+  const { calls } = await withSpawnSpy(() =>
+    manifestLib.reverseSchedulerEntry(entry, true, removed, [], new Set(), {
+      platform: 'linux',
+      schedulerRoots: [root],
+    })
+  );
+  assert.ok(!fs.existsSync(marker), 'dry-run did not run the stored unload');
+  assert.equal(calls.length, 0, 'dry-run spawns nothing');
   assert.ok(fs.existsSync(file), 'dry-run did not remove the file');
   assert.deepEqual(removed, [file]);
 });
 
-test('scheduler-schedule: manifest.reverse handles scheduler-entry (unload + rm)', async () => {
-  const { paths, root } = setup();
-  const file = path.join(root, 'ai.wienerdog.z.plist');
-  fs.writeFileSync(file, '<plist/>');
-  const marker = path.join(root, 'reverse-ran');
+test('scheduler-schedule: manifest.reverse handles scheduler-entry (derived unregister + rm)', async () => {
+  const { paths } = setup();
+  // A platform-correct schedule file inside the REAL scheduler root, so both
+  // the derivation and the WP-145 root bound fire on this host.
+  let file;
+  let expected;
+  if (process.platform === 'darwin') {
+    file = path.join(paths.home, 'Library', 'LaunchAgents', 'ai.wienerdog.zz-wd-test.plist');
+    expected = ['launchctl', 'bootout', `gui/${process.getuid()}/ai.wienerdog.zz-wd-test`];
+  } else if (process.platform === 'win32') {
+    file = path.join(paths.core, 'schedules', 'wienerdog-zz-wd-test.xml');
+    expected = ['schtasks', '/delete', '/tn', '\\Wienerdog\\zz-wd-test', '/f'];
+  } else {
+    file = path.join(paths.home, '.config', 'systemd', 'user', 'wienerdog-zz-wd-test.timer');
+    expected = ['systemctl', '--user', 'disable', '--now', 'wienerdog-zz-wd-test.timer'];
+  }
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, 'x');
+  const marker = path.join(paths.home, 'reverse-ran');
   const manifest = manifestLib.load(paths);
   manifestLib.record(manifest, {
     kind: 'scheduler-entry',
@@ -240,12 +271,18 @@ test('scheduler-schedule: manifest.reverse handles scheduler-entry (unload + rm)
     unload: [process.execPath, '-e', `require('fs').writeFileSync(${JSON.stringify(marker)}, 'ran')`],
   });
   manifestLib.save(paths, manifest);
-  const { removed } = await withUnloadSpawnAllowed(() =>
-    manifestLib.reverse(paths, manifestLib.load(paths))
-  );
-  assert.ok(fs.existsSync(marker), 'reverse ran the stored unload');
+  const savedXdg = process.env.XDG_CONFIG_HOME;
+  delete process.env.XDG_CONFIG_HOME; // reverse() derives the systemd root from paths.home
+  let out;
+  try {
+    out = await withSpawnSpy(() => manifestLib.reverse(paths, manifestLib.load(paths)));
+  } finally {
+    if (savedXdg !== undefined) process.env.XDG_CONFIG_HOME = savedXdg;
+  }
+  assert.ok(!fs.existsSync(marker), 'the stored unload argv never ran');
+  assert.deepEqual(out.calls, [expected], 'the DERIVED unregister command reached the chokepoint');
   assert.ok(!fs.existsSync(file), 'reverse removed the entry file');
-  assert.ok(removed.includes(file));
+  assert.ok(out.result.removed.includes(file));
 });
 
 // -------------------------------------------------------------------------
@@ -350,17 +387,17 @@ test('scheduler-schedule: add then manifest.reverse DEFERS config.yaml (hash re-
   const { env, paths } = setup();
   await runSchedule(env, ['add', 'dream', '--at', '03:30', '--job', 'dream'], () => ({ status: 0 }));
   assert.ok(fs.existsSync(paths.config));
-  // Rewrite scheduler-entry unloads to harmless markers so reverse never calls launchctl/systemctl.
-  const manifest = manifestLib.load(paths);
-  for (const e of manifest.entries) {
-    if (e.kind === 'scheduler-entry') e.unload = [process.execPath, '-e', '0'];
-  }
-  manifestLib.save(paths, manifest);
   // WP-088: config.yaml is a deferred-deletion-set member — reverse() NO LONGER
   // deletes it. A re-synced (unmodified) hash means it is recognized as our own
   // file and returned in deferredConfig (uninstall.js deletes it LAST), NOT kept
-  // as a customized edit.
-  const { deferredConfig } = manifestLib.reverse(paths, manifestLib.load(paths));
+  // as a customized edit. The spawn spy is LOAD-BEARING here (WP-145): reverse
+  // now DERIVES real launchctl/systemctl unregister argvs from the registered
+  // schedule files' identities (ai.wienerdog.dream, ai.wienerdog.catchup — the
+  // labels are per-user-global, NOT HOME-scoped), so without the spy this test
+  // would bootout the developer's REAL agents when run outside the suite guard.
+  const {
+    result: { deferredConfig },
+  } = await withSpawnSpy(() => manifestLib.reverse(paths, manifestLib.load(paths)));
   assert.equal(deferredConfig, paths.config, 'unmodified config is deferred (recognized), not mistaken for a user edit');
   assert.ok(fs.existsSync(paths.config), 'reverse() defers config.yaml; uninstall.js deletes it last');
 });
@@ -369,7 +406,9 @@ test('scheduler-schedule: remove runs the unload, deletes files, drops entries a
   const { env, paths, root } = setup();
   await runSchedule(env, ['add', 'dream', '--at', '03:30', '--job', 'dream'], () => ({ status: 0 }));
 
-  // Replace the per-job entry's unload with a marker command (avoid real launchctl/systemctl).
+  // WP-145: poison the stored unloads with marker commands to prove they are
+  // IGNORED; the remove flow derives the real unregister argv instead (the spy
+  // captures it, so nothing ever actually spawns).
   const marker = path.join(root, 'remove-unload-ran');
   const manifest = manifestLib.load(paths);
   const jobBasenames = new Set([
@@ -388,9 +427,13 @@ test('scheduler-schedule: remove runs the unload, deletes files, drops entries a
   }
   manifestLib.save(paths, manifest);
 
-  await withUnloadSpawnAllowed(() => runSchedule(env, ['remove', 'dream'], () => ({ status: 0 })));
+  const { calls } = await withSpawnSpy(() => runSchedule(env, ['remove', 'dream'], () => ({ status: 0 })));
 
-  assert.ok(fs.existsSync(marker), 'stored unload ran during remove');
+  assert.ok(!fs.existsSync(marker), 'the stored (poisoned) unload never ran — the argv is derived (WP-145)');
+  assert.ok(
+    calls.every((argv) => ['launchctl', 'systemctl', 'schtasks'].includes(argv[0])),
+    'only code-derived scheduler commands reach the chokepoint'
+  );
   for (const f of jobFiles) assert.ok(!fs.existsSync(f), `${f} deleted`);
   assert.equal(jobsLib.findJob(paths, 'dream'), null, 'job dropped from config');
   const after = manifestLib.load(paths);
@@ -515,16 +558,21 @@ test('scheduler-schedule: remove reports the zero-removal wording (count + best-
   let out = '';
   const origOut = process.stdout.write.bind(process.stdout);
   process.stdout.write = (s) => ((out += s), true);
+  let spyCalls;
   try {
-    await withUnloadSpawnAllowed(() => runSchedule(env, ['remove', 'ghost-job'], () => ({ status: 0 })));
+    ({ calls: spyCalls } = await withSpawnSpy(() => runSchedule(env, ['remove', 'ghost-job'], () => ({ status: 0 }))));
   } finally {
     process.stdout.write = origOut;
   }
 
-  assert.ok(fs.existsSync(marker), 'the recorded unload argv ran best-effort even though the file was absent');
+  assert.ok(!fs.existsSync(marker), 'the stored unload argv never runs (WP-145 derives instead)');
+  assert.ok(
+    spyCalls.every((argv) => ['launchctl', 'systemctl', 'schtasks'].includes(argv[0])),
+    'only a code-derived command may fire best-effort'
+  );
   assert.match(
     out,
-    /deleted 0 schedule files and ran any recorded OS-unregister command\(s\) best-effort \(no schedule file was present to delete\)/
+    /deleted 0 schedule files and ran the derived OS-unregister command\(s\) best-effort \(no schedule file was present to delete\)/
   );
   assert.ok(!/unloaded/.test(out), 'never claims "unloaded"');
   assert.ok(!/already gone/i.test(out), 'never claims the OS entry was "already gone"');
@@ -532,15 +580,17 @@ test('scheduler-schedule: remove reports the zero-removal wording (count + best-
 });
 
 test('scheduler-schedule: a normal removal reports removed.length (N=2), not the singular "its schedule file"', async () => {
-  const { env, paths, root } = setup();
+  const { env, paths } = setup();
   const manifest = manifestLib.load(paths);
   // Two scheduler-entries (mirrors the Linux timer+service pair) whose files
-  // actually exist on disk, portable regardless of the real host platform.
-  const timerPath = path.join(root, `${gen.systemdUnitBase('two-files')}.timer`);
-  const servicePath = path.join(root, `${gen.systemdUnitBase('two-files')}.service`);
+  // exist inside the REAL systemd user root — WP-145's root bound requires it.
+  const systemdDir = path.join(paths.home, '.config', 'systemd', 'user');
+  fs.mkdirSync(systemdDir, { recursive: true });
+  const timerPath = path.join(systemdDir, `${gen.systemdUnitBase('two-files')}.timer`);
+  const servicePath = path.join(systemdDir, `${gen.systemdUnitBase('two-files')}.service`);
   fs.writeFileSync(timerPath, '[Timer]\n');
   fs.writeFileSync(servicePath, '[Service]\n');
-  const marker = path.join(root, 'two-files-unload-ran');
+  const marker = path.join(paths.home, 'two-files-unload-ran');
   manifestLib.record(manifest, {
     kind: 'scheduler-entry',
     path: timerPath,
@@ -550,18 +600,21 @@ test('scheduler-schedule: a normal removal reports removed.length (N=2), not the
   manifestLib.save(paths, manifest);
   jobsLib.saveJob(paths, { name: 'two-files', at: '03:30', run: 'builtin:dream', timeoutMinutes: 20 });
 
+  const savedXdg = process.env.XDG_CONFIG_HOME;
+  delete process.env.XDG_CONFIG_HOME; // the systemd root must derive from paths.home
   let out = '';
   const origOut = process.stdout.write.bind(process.stdout);
   process.stdout.write = (s) => ((out += s), true);
   try {
-    await withUnloadSpawnAllowed(() => runSchedule(env, ['remove', 'two-files'], () => ({ status: 0 })));
+    await withSpawnSpy(() => runSchedule(env, ['remove', 'two-files'], () => ({ status: 0 })));
   } finally {
     process.stdout.write = origOut;
+    if (savedXdg !== undefined) process.env.XDG_CONFIG_HOME = savedXdg;
   }
 
-  assert.ok(fs.existsSync(marker), 'the recorded unload argv ran');
+  assert.ok(!fs.existsSync(marker), 'the stored unload argv never runs (WP-145 derives instead)');
   assert.ok(!fs.existsSync(timerPath) && !fs.existsSync(servicePath), 'both files deleted');
-  assert.match(out, /deleted 2 schedule files and ran any recorded OS-unregister command\(s\) best-effort/);
+  assert.match(out, /deleted 2 schedule files and ran the derived OS-unregister command\(s\) best-effort/);
   assert.ok(!/its schedule file/.test(out), 'does not misreport with the singular "its schedule file"');
   assert.ok(!/unloaded/.test(out), 'never claims "unloaded"');
 });
@@ -718,7 +771,8 @@ test('scheduler-schedule: remove after a win32 register reverses the dream entry
   const dreamXml = gen.windowsTaskFile(paths, 'dream');
   const catchupXml = gen.windowsTaskFile(paths, 'catchup');
 
-  // Swap the dream entry's unload for a marker so remove never spawns a real schtasks.
+  // WP-145: poison the dream entry's stored unload with a marker to prove it is
+  // ignored; the spy guarantees nothing real spawns on any host platform.
   const marker = path.join(root, 'win32-remove-unload-ran');
   const m2 = manifestLib.load(paths);
   for (const e of m2.entries) {
@@ -728,9 +782,9 @@ test('scheduler-schedule: remove after a win32 register reverses the dream entry
   }
   manifestLib.save(paths, m2);
 
-  await withUnloadSpawnAllowed(() => runSchedule(env, ['remove', 'dream'], () => ({ status: 0 })));
+  await withSpawnSpy(() => runSchedule(env, ['remove', 'dream'], () => ({ status: 0 })));
 
-  assert.ok(fs.existsSync(marker), 'the stored schtasks-delete unload ran during remove');
+  assert.ok(!fs.existsSync(marker), 'the stored unload never ran — the unregister argv is derived (WP-145)');
   assert.ok(!fs.existsSync(dreamXml), 'the dream XML was deleted');
   assert.ok(fs.existsSync(catchupXml), 'the shared catch-up XML remains until uninstall');
   assert.equal(jobsLib.findJob(paths, 'dream'), null, 'the dream job was dropped from config');

@@ -1,7 +1,7 @@
 ---
 id: WP-145
 title: Re-derive scheduler unload commands from platform + validated identity, and show the derived uninstall plan before confirmation
-status: Ready
+status: In-Review
 model: opus
 size: M
 depends_on: [WP-144]

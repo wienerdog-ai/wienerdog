@@ -91,6 +91,19 @@ async function run(argv) {
   }
 
   if (!yes) {
+    // A8 (WP-145): show the DERIVED plan — every command, path, and effect —
+    // BEFORE asking for consent. Same enumeration --dry-run prints; reverse()
+    // itself emits each re-derived `would run: …` unregister command (ADR-0027:
+    // commands are code-derived, never manifest-stored argv). This is
+    // disclosure, not a gate — --yes skips only the prompt, the set of valid
+    // actions is identical either way.
+    console.log('\nPlanned actions:');
+    const plan = manifestLib.reverse(paths, manifest, { dryRun: true });
+    const mechPlan = manifestLib.disposeCoreMechanics(paths, { dryRun: true, vaultPath });
+    for (const p of plan.removed) console.log(`  remove ${p}`);
+    if (plan.deferredConfig) console.log(`  remove ${plan.deferredConfig} (unmodified config — deleted last)`);
+    for (const d of mechPlan.removed) console.log(`  remove ${d} (machine-generated state, recursive)`);
+    console.log(`  remove ${paths.core} (the canonical core — removed once empty)`);
     const ok = await confirm('\nProceed with removal? [y/N] ');
     if (!ok) {
       console.log('Aborted.');

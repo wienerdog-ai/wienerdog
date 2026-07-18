@@ -369,13 +369,13 @@ test('global guard (vi): a {kind:scheduler-entry, path: config} leaves config in
   assert.ok(!removed.includes(paths.config));
 });
 
-test('global guard (vii) DOCUMENTED RESIDUAL: a scheduler-entry `unload` argv IS invoked as designed (guard screens entry.path, NOT unload)', () => {
-  // The global guard screens entry.path only. A scheduler-entry with a
-  // NON-deferred path but an `unload` argv that would touch a deferred member
-  // still runs its unload — an explicit, ACCEPTED out-of-scope residual (WP-088
-  // Non-goals / round 6). This test PINS that behavior + scoping; it is NOT a
-  // "guard blocks it" assertion. Forging `unload` requires write access to the
-  // core, which already grants arbitrary code execution.
+test('WP-145 closes the WP-088 residual: a stored scheduler-entry `unload` argv is NEVER spawned (ADR-0027)', () => {
+  // The WP-088-era residual — reverse() executing the manifest-stored `unload`
+  // argv — is CLOSED: the unregister command is re-derived from the file's
+  // basename identity + platform, and this hybrid name ('wienerdog-dream.plist')
+  // derives to nothing on every platform, so the chokepoint sees zero calls.
+  // The unrecognized basename also fails the WP-145 scheduler-root bound, so
+  // the file itself is preserved.
   const paths = tempPaths();
   const manifest = makeInstall(paths);
   const schedFile = path.join(paths.core, 'schedules', 'wienerdog-dream.plist');
@@ -392,15 +392,15 @@ test('global guard (vii) DOCUMENTED RESIDUAL: a scheduler-entry `unload` argv IS
   const origSpawn = spawnMod.schedulerSpawn;
   /** @type {string[][]} */ const calls = [];
   spawnMod.schedulerSpawn = (argv) => { calls.push(argv); return { status: 0 }; };
+  let res;
   try {
-    manifestLib.reverse(paths, reloaded, {});
+    res = manifestLib.reverse(paths, reloaded, {});
   } finally {
     spawnMod.schedulerSpawn = origSpawn;
   }
-  assert.equal(calls.length, 1, 'the unload argv is invoked as designed (accepted residual)');
-  assert.deepEqual(calls[0], unload, 'the exact unload argv reached the chokepoint — the guard did NOT block it');
-  // And this indirect route is NOT a WP-088 regression: the ledger is untouched
-  // (the unload was a marker, not a real delete).
+  assert.equal(calls.length, 0, 'the stored unload argv never reaches the chokepoint');
+  assert.equal(fs.existsSync(schedFile), true, 'unrecognized schedule name is preserved, not deleted');
+  assert.ok(res.skipped.includes(schedFile));
   assert.equal(fs.existsSync(paths.manifest), true);
 });
 
@@ -1043,4 +1043,131 @@ test('WP-144 withinAllowedRoot: containment + shared-dir basename rule', () => {
   assert.equal(manifestLib.withinAllowedRoot(touch(path.join(localBin, 'wienerdog')), roots, localBin), true);
   assert.equal(manifestLib.withinAllowedRoot(touch(path.join(localBin, 'wienerdog.cmd')), roots, localBin), true);
   assert.equal(manifestLib.withinAllowedRoot(touch(path.join(localBin, 'rm')), roots, localBin), false, 'shared-dir neighbor blocked');
+});
+
+// ── WP-145 (audit A8, ADR-0027): scheduler unload re-derivation + root bound ──
+
+const generators = require('../../src/scheduler/generators');
+
+test('WP-145 deriveUnloadArgv: per-platform derivation from basename identity only', () => {
+  const d = generators.deriveUnloadArgv;
+  if (typeof process.getuid === 'function') {
+    assert.deepEqual(
+      d('/Users/x/Library/LaunchAgents/ai.wienerdog.dream.plist', 'darwin'),
+      ['launchctl', 'bootout', `gui/${process.getuid()}/ai.wienerdog.dream`]
+    );
+  }
+  assert.deepEqual(
+    d('/home/x/.config/systemd/user/wienerdog-daily-digest.timer', 'linux'),
+    ['systemctl', '--user', 'disable', '--now', 'wienerdog-daily-digest.timer']
+  );
+  assert.equal(d('/home/x/.config/systemd/user/wienerdog-dream.service', 'linux'), null, '.service needs no unregister');
+  assert.deepEqual(
+    d('C:\\Users\\x\\.wienerdog\\schedules\\wienerdog-dream.xml', 'win32'),
+    ['schtasks', '/delete', '/tn', '\\Wienerdog\\dream', '/f']
+  );
+  // Non-matching / poisoned basenames and foreign platforms derive nothing.
+  assert.equal(d('/x/com.apple.something.plist', 'darwin'), null);
+  assert.equal(d('/x/ai.wienerdog.evil name.plist', 'darwin'), null, 'a space breaks the anchored match');
+  assert.equal(d('/x/ai.wienerdog.UPPER.plist', 'darwin'), null, 'stem charset is enforced');
+  assert.equal(d('/x/wienerdog-dream.timer', 'darwin'), null, 'wrong platform for the suffix');
+  assert.equal(d('/x/wienerdog-dream.xml', 'linux'), null);
+  assert.equal(d('/x/ai.wienerdog.dream.plist', 'freebsd'), null, 'unknown platform derives nothing');
+});
+
+test('WP-145 reverse dry-run: the DERIVED unregister command is shown; the stored unload argv is ignored', () => {
+  const paths = tempPaths();
+  const manifest = makeInstall(paths);
+  // Build the platform's real schedule file identity so derivation fires here.
+  let schedDir;
+  let base;
+  let expected;
+  if (process.platform === 'darwin') {
+    schedDir = path.join(paths.home, 'Library', 'LaunchAgents');
+    base = 'ai.wienerdog.dream.plist';
+    expected = ['launchctl', 'bootout', `gui/${process.getuid()}/ai.wienerdog.dream`];
+  } else if (process.platform === 'win32') {
+    schedDir = path.join(paths.core, 'schedules');
+    base = 'wienerdog-dream.xml';
+    expected = ['schtasks', '/delete', '/tn', '\\Wienerdog\\dream', '/f'];
+  } else {
+    schedDir = path.join(paths.home, '.config', 'systemd', 'user');
+    base = 'wienerdog-dream.timer';
+    expected = ['systemctl', '--user', 'disable', '--now', 'wienerdog-dream.timer'];
+  }
+  fs.mkdirSync(schedDir, { recursive: true });
+  const schedFile = path.join(schedDir, base);
+  fs.writeFileSync(schedFile, 'x');
+  manifestLib.record(manifest, {
+    kind: 'scheduler-entry',
+    path: schedFile,
+    unload: ['/bin/sh', '-c', 'echo poisoned'], // must never appear anywhere
+  });
+
+  // systemdUserDir honors XDG_CONFIG_HOME; pin it to the temp home for the run.
+  const savedXdg = process.env.XDG_CONFIG_HOME;
+  delete process.env.XDG_CONFIG_HOME;
+  const savedHomeEnv = process.env.HOME;
+  process.env.HOME = paths.home;
+  const origWrite = process.stdout.write.bind(process.stdout);
+  let out = '';
+  process.stdout.write = (chunk) => {
+    out += chunk;
+    return true;
+  };
+  try {
+    manifestLib.reverse(paths, manifest, { dryRun: true });
+  } finally {
+    process.stdout.write = origWrite;
+    if (savedXdg === undefined) delete process.env.XDG_CONFIG_HOME;
+    else process.env.XDG_CONFIG_HOME = savedXdg;
+    process.env.HOME = savedHomeEnv;
+  }
+  assert.ok(out.includes(`would run: ${expected.join(' ')}`), out);
+  assert.ok(!out.includes('/bin/sh'), 'the stored (poisoned) argv is never shown or run');
+  assert.equal(fs.existsSync(schedFile), true, 'dry-run removes nothing');
+});
+
+test('WP-145 reverse: a foreign plist in a recognized scheduler root is preserved with no unregister', () => {
+  const paths = tempPaths();
+  const manifest = makeInstall(paths);
+  const laDir = path.join(paths.home, 'Library', 'LaunchAgents');
+  fs.mkdirSync(laDir, { recursive: true });
+  const foreign = path.join(laDir, 'com.apple.something.plist');
+  fs.writeFileSync(foreign, '<plist/>\n');
+  manifestLib.record(manifest, { kind: 'scheduler-entry', path: foreign });
+
+  const spawnMod = require('../../src/scheduler/spawn');
+  const origSpawn = spawnMod.schedulerSpawn;
+  /** @type {string[][]} */ const calls = [];
+  spawnMod.schedulerSpawn = (argv) => { calls.push(argv); return { status: 0 }; };
+  let res;
+  try {
+    res = manifestLib.reverse(paths, manifest);
+  } finally {
+    spawnMod.schedulerSpawn = origSpawn;
+  }
+  assert.equal(calls.length, 0, 'no unregister derived for a foreign basename');
+  assert.equal(fs.existsSync(foreign), true, 'the foreign plist is preserved');
+  assert.ok(res.skipped.includes(foreign));
+});
+
+test('WP-145 withinSchedulerRoot: containment AND wienerdog basename are both required', () => {
+  const paths = tempPaths();
+  const laDir = path.join(paths.home, 'Library', 'LaunchAgents');
+  fs.mkdirSync(laDir, { recursive: true });
+  const roots = [laDir];
+  const touch = (p) => {
+    fs.mkdirSync(path.dirname(p), { recursive: true });
+    fs.writeFileSync(p, 'x');
+    return p;
+  };
+  assert.equal(manifestLib.withinSchedulerRoot(touch(path.join(laDir, 'ai.wienerdog.dream.plist')), roots), true);
+  assert.equal(manifestLib.withinSchedulerRoot(touch(path.join(laDir, 'wienerdog-dream.timer')), roots), true);
+  assert.equal(manifestLib.withinSchedulerRoot(touch(path.join(laDir, 'com.apple.x.plist')), roots), false);
+  assert.equal(
+    manifestLib.withinSchedulerRoot(touch(path.join(paths.home, 'ai.wienerdog.dream.plist')), roots),
+    false,
+    'right name outside every scheduler root is still out-of-bounds'
+  );
 });

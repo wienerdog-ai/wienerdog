@@ -419,8 +419,19 @@ function remove(argv, loader) {
   const removed = [];
   const skipped = [];
   const removedSet = new Set();
+  // WP-145 (ADR-0027): the unregister argv is re-derived from the file's
+  // basename identity + platform, never the stored entry.unload; the file
+  // removal is bounded to the known scheduler roots.
+  const schedulerOpts = {
+    platform: process.platform,
+    schedulerRoots: [
+      gen.launchAgentsDir(paths.home),
+      gen.systemdUserDir(paths.home, process.env),
+      path.join(paths.core, 'schedules'),
+    ],
+  };
   for (const entry of matched) {
-    manifestLib.reverseSchedulerEntry(entry, false, removed, skipped, removedSet);
+    manifestLib.reverseSchedulerEntry(entry, false, removed, skipped, removedSet, schedulerOpts);
   }
   manifest.entries = manifest.entries.filter((e) => !matched.includes(e));
   manifestLib.save(paths, manifest);
@@ -428,18 +439,19 @@ function remove(argv, loader) {
 
   if (removed.length === 0) {
     // No schedule FILE was present to delete (already removed, or never registered).
-    // But reverseSchedulerEntry runs any recorded `unload` argv BEFORE checking the
-    // file (manifest.js:193 — unload, then the isFile() guard), so a best-effort
-    // OS-unregister command may still have RUN even with zero file deletions. Report
-    // the count (0) AND the same best-effort qualifier as the non-empty branch; do NOT
-    // assert the OS entry was "already gone" — that is not known here.
-    process.stdout.write(`wienerdog: removed "${name}" from Wienerdog's schedule — deleted 0 schedule files and ran any recorded OS-unregister command(s) best-effort (no schedule file was present to delete).\n`);
+    // But reverseSchedulerEntry runs the DERIVED unregister argv BEFORE checking
+    // the file (WP-145: derive, then the root-bound/isFile guards), so a
+    // best-effort OS-unregister command may still have RUN even with zero file
+    // deletions. Report the count (0) AND the same best-effort qualifier as the
+    // non-empty branch; do NOT assert the OS entry was "already gone" — that is
+    // not known here.
+    process.stdout.write(`wienerdog: removed "${name}" from Wienerdog's schedule — deleted 0 schedule files and ran the derived OS-unregister command(s) best-effort (no schedule file was present to delete).\n`);
   } else {
     const fileWord = removed.length === 1 ? 'file' : 'files';
     const absentTail = skipped.length > 0
       ? `; ${skipped.length} file${skipped.length === 1 ? ' was' : 's were'} already absent`
       : '';
-    process.stdout.write(`wienerdog: removed "${name}" from Wienerdog's schedule — deleted ${removed.length} schedule ${fileWord} and ran any recorded OS-unregister command(s) best-effort${absentTail}.\n`);
+    process.stdout.write(`wienerdog: removed "${name}" from Wienerdog's schedule — deleted ${removed.length} schedule ${fileWord} and ran the derived OS-unregister command(s) best-effort${absentTail}.\n`);
   }
 }
 

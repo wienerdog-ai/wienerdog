@@ -257,29 +257,49 @@ function reverseSettingsEntry(entry, dryRun, removed, skipped, removedSet) {
 }
 
 /**
- * Reverse a 'scheduler-entry' entry: run the stored `unload` argv best-effort to
- * unregister the entry from the OS scheduler, then remove the file. Keeps
- * manifest.js free of any launchd/systemd knowledge — the platform-specific
- * `unload` argv is computed at add time (schedule.js) and stored on the entry.
+ * Reverse a 'scheduler-entry' entry: RE-DERIVE the unregister argv from the
+ * schedule file's basename identity + platform (never the stored `unload` —
+ * audit A8, ADR-0027, WP-145), run it best-effort, then remove the file iff it
+ * is a recognized Wienerdog schedule file inside a known scheduler root. The
+ * stored `unload` remains on entries for scheduler/status.js display only.
  * @param {ManifestEntry} entry
  * @param {boolean} dryRun
  * @param {string[]} removed @param {string[]} skipped @param {Set<string>} removedSet
+ * @param {{platform?:NodeJS.Platform, schedulerRoots?:string[]}} [opts]  computed
+ *   once in reverse(); defaults keep the exported function directly callable.
  */
-function reverseSchedulerEntry(entry, dryRun, removed, skipped, removedSet) {
-  if (Array.isArray(entry.unload) && entry.unload.length > 0) {
+function reverseSchedulerEntry(entry, dryRun, removed, skipped, removedSet, opts = {}) {
+  const platform = opts.platform || process.platform;
+  const schedulerRoots = opts.schedulerRoots || [];
+  // Audit A8 / ADR-0027 (WP-145): the manifest is UNTRUSTED, so the stored
+  // `entry.unload` argv is NEVER read or executed — a poisoned
+  // {unload:['/bin/sh','-c','…']} must spawn nothing. The unregister command is
+  // re-derived, code-owned, from the file's basename identity + platform
+  // (fully-anchored regexes; nothing from the manifest reaches the argv).
+  // Required lazily to keep manifest.js free of a static scheduler dependency
+  // (generators.js requires this module — a static import would cycle).
+  const argv = require('../scheduler/generators').deriveUnloadArgv(entry.path, platform);
+  if (argv) {
     if (dryRun) {
-      process.stdout.write(`wienerdog: would run: ${entry.unload.join(' ')}\n`);
+      process.stdout.write(`wienerdog: would run: ${argv.join(' ')}\n`);
     } else {
       // Best-effort: the entry may already be unloaded. Ignore non-zero/errors;
       // the goal is the file removal below. Routes through the single scheduler
       // mutation chokepoint (WP-071) so the test guard covers this path too.
-      // Required lazily to keep manifest.js free of a static scheduler dependency.
       try {
-        require('../scheduler/spawn').schedulerSpawn(entry.unload);
+        require('../scheduler/spawn').schedulerSpawn(argv);
       } catch {
         /* ignore — unregistration is best-effort */
       }
     }
+  }
+  // Bound the file removal (WP-145): only a recognized wienerdog schedule file
+  // inside a known scheduler root (LaunchAgents / systemd user dir /
+  // <core>/schedules) may be deleted; anything else is preserved.
+  if (!withinSchedulerRoot(entry.path, schedulerRoots)) {
+    process.stderr.write(`wienerdog: preserving ${entry.path} — not a recognized Wienerdog schedule file\n`);
+    skipped.push(entry.path);
+    return;
   }
   if (!isFile(entry.path)) {
     skipped.push(entry.path);
@@ -288,6 +308,19 @@ function reverseSchedulerEntry(entry, dryRun, removed, skipped, removedSet) {
   if (!dryRun) fs.rmSync(entry.path, { force: true });
   removedSet.add(entry.path);
   removed.push(entry.path);
+}
+
+/**
+ * Is `p` a Wienerdog-named schedule file inside one of the known scheduler
+ * roots? Realpath-aware containment (via `contains`) plus a basename check —
+ * both must hold, so a poisoned scheduler-entry pointing at an arbitrary file
+ * (even inside a root, e.g. a foreign com.apple.*.plist) is preserved (WP-145).
+ * @param {string} p @param {string[]} roots @returns {boolean}
+ */
+function withinSchedulerRoot(p, roots) {
+  if (!roots.some((root) => contains(root, p))) return false;
+  const base = path.basename(p);
+  return /^ai\.wienerdog\..*\.plist$/.test(base) || /^wienerdog-.*\.(timer|service|xml)$/.test(base);
 }
 
 /** True iff `a` and `b` resolve (via realpath) to the SAME directory. Fail-closed
@@ -472,6 +505,18 @@ function reverse(paths, manifest, { dryRun = false } = {}) {
   // so withinAllowedRoot additionally basename-allowlists the two shim names.
   const localBin = path.join(paths.home, '.local', 'bin');
   const allowedRoots = [paths.core, paths.claudeDir, paths.codexDir, localBin];
+  // Scheduler containment roots + platform for reverseSchedulerEntry (WP-145).
+  // generators.js is required lazily — it statically requires this module, so a
+  // top-level import would cycle; at reverse() call time both are fully loaded.
+  const gen = require('../scheduler/generators');
+  const schedulerOpts = {
+    platform: process.platform,
+    schedulerRoots: [
+      gen.launchAgentsDir(paths.home), // ~/Library/LaunchAgents
+      gen.systemdUserDir(paths.home, process.env), // $XDG_CONFIG_HOME||~/.config + /systemd/user
+      path.join(paths.core, 'schedules'), // Windows task XML
+    ],
+  };
   /** The kinds whose reversers delete/rewrite — the root-bound gate applies to
    *  exactly these (scheduler-entry → WP-145; vault kinds are no-op-preserved). */
   const MUTATING_KINDS = new Set([
@@ -596,7 +641,7 @@ function reverse(paths, manifest, { dryRun = false } = {}) {
       } else if (entry.kind === 'settings-entry') {
         reverseSettingsEntry(entry, dryRun, removed, skipped, removedSet);
       } else if (entry.kind === 'scheduler-entry') {
-        reverseSchedulerEntry(entry, dryRun, removed, skipped, removedSet);
+        reverseSchedulerEntry(entry, dryRun, removed, skipped, removedSet, schedulerOpts);
       } else if (entry.kind === 'vendored-tree') {
         reverseVendoredTree(entry, dryRun, removed, skipped, removedSet, appRoot);
       } else if (entry.kind === 'copied-skill') {
@@ -785,4 +830,4 @@ function disposeCoreMechanics(paths, { dryRun = false, vaultPath = null } = {}) 
   return { removed, skippedForVault };
 }
 
-module.exports = { load, record, save, reverse, disposeCoreMechanics, reverseSchedulerEntry, reverseVendoredTree, reverseCopiedSkill, hashDir, sha256File, validateEntry, withinAllowedRoot };
+module.exports = { load, record, save, reverse, disposeCoreMechanics, reverseSchedulerEntry, reverseVendoredTree, reverseCopiedSkill, hashDir, sha256File, validateEntry, withinAllowedRoot, withinSchedulerRoot };
