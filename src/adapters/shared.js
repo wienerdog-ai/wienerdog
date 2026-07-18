@@ -70,6 +70,25 @@ function recordCopiedSkill(manifest, linkPath, hash) {
   if (!existing) manifest.entries.push(entry);
 }
 
+/** Upsert the settings-entry manifest record: refresh `commands` (and
+ *  `createdFile`) so uninstall always removes the CURRENT hook set, not the
+ *  first version recorded (audit A13). `createdFile:true` is sticky — a re-sync
+ *  that sees the file present must not flip the original "we created it" truth.
+ *  Sticky-true is safe because the reverser deletes the file only when it is
+ *  ALSO empty after stripping our commands (emptiness guard in
+ *  reverseSettingsEntry — never modified here).
+ *  @param {object} [manifest] @param {string} settingsPath
+ *  @param {boolean} createdFile @param {string[]} commands */
+function recordSettingsEntry(manifest, settingsPath, createdFile, commands) {
+  if (!manifest) return;
+  if (!Array.isArray(manifest.entries)) manifest.entries = [];
+  const existing = manifest.entries.find((e) => e.kind === 'settings-entry' && e.path === settingsPath);
+  const entry = existing || { kind: 'settings-entry', path: settingsPath };
+  entry.createdFile = existing ? (existing.createdFile === true ? true : createdFile) : createdFile;
+  entry.commands = commands;
+  if (!existing) manifest.entries.push(entry);
+}
+
 /**
  * Build the sentinel-delimited managed block from a digest string. Neutralize any
  * digest LINE that trims exactly to a sentinel so the emitted block always has
@@ -284,12 +303,7 @@ function applySettings(settingsPath, events, dryRun, manifest, out) {
   } else {
     out.unchanged.push(settingsPath);
   }
-  recordOnce(manifest, {
-    kind: 'settings-entry',
-    path: settingsPath,
-    createdFile,
-    commands: events.map(([, c]) => shellQuoteCommand(c)),
-  });
+  recordSettingsEntry(manifest, settingsPath, createdFile, events.map(([, c]) => shellQuoteCommand(c)));
 }
 
 /** Deep-equal two directory trees: identical relative entry set + file bytes.
@@ -376,12 +390,13 @@ function applySkillLinks(skillsDir, targetSkillsDir, dryRun, manifest, out, opts
         out.unchanged.push(linkPath);
         recordOnce(manifest, { kind: 'symlink', path: linkPath });
       } else {
-        if (!dryRun) {
-          fs.unlinkSync(linkPath);
-          symlink(target, linkPath);
-        }
-        recordOnce(manifest, { kind: 'symlink', path: linkPath });
-        out.changed.push(linkPath);
+        // A wienerdog-* symlink whose target is NOT our core skill source — a user's
+        // own link, or a stale one from another install root. Never silently clobber
+        // it (audit A13): report and leave it exactly as found. Do NOT record a
+        // manifest symlink entry for it (we do not own it).
+        out.notices.push(
+          `left foreign symlink untouched (points at ${currentTarget || 'an unreadable target'}, not the Wienerdog skill source): ${linkPath}`
+        );
       }
     } else if (stat !== null && stat.isDirectory()) {
       // A directory in the wienerdog-* namespace. Refresh it ONLY when its on-disk
@@ -440,4 +455,4 @@ function applySkillLinks(skillsDir, targetSkillsDir, dryRun, manifest, out, opts
   }
 }
 
-module.exports = { recordOnce, buildBlock, applyManagedBlock, copyHookScript, toPosixCommand, applySettings, applySkillLinks };
+module.exports = { recordOnce, recordSettingsEntry, buildBlock, applyManagedBlock, copyHookScript, toPosixCommand, applySettings, applySkillLinks };

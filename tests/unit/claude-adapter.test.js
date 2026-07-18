@@ -533,3 +533,41 @@ test('ambiguous CLAUDE.md markers: no throw, notice pushed, hooks + skills still
     assert.ok(fs.lstatSync(link).isSymbolicLink(), 'skill still symlinked');
   }
 });
+
+// ── WP-146: settings-entry upsert (audit A13) ────────────────────────────────
+
+test('re-apply with a changed hook set upserts the recorded commands (WP-146)', () => {
+  const paths = setup();
+  const shared = require('../../src/adapters/shared');
+  const settingsPath = path.join(paths.claudeDir, 'settings.json');
+  const manifest = freshManifest();
+  const A = path.join(paths.core, 'bin', 'session-start.sh');
+  const B = path.join(paths.core, 'bin', 'session-end.sh');
+
+  shared.applySettings(settingsPath, [['SessionStart', A]], false, manifest, { changed: [], unchanged: [], notices: [] });
+  const first = manifest.entries.filter((e) => e.kind === 'settings-entry' && e.path === settingsPath);
+  assert.equal(first.length, 1);
+  assert.deepEqual(first[0].commands, [q(A)]);
+  assert.equal(first[0].createdFile, true, 'we created the file on first apply');
+
+  shared.applySettings(settingsPath, [['SessionStart', A], ['SessionEnd', B]], false, manifest, { changed: [], unchanged: [], notices: [] });
+  const after = manifest.entries.filter((e) => e.kind === 'settings-entry' && e.path === settingsPath);
+  assert.equal(after.length, 1, 'entry not duplicated');
+  assert.deepEqual(after[0].commands, [q(A), q(B)], 'commands reflect the NEW set');
+  assert.equal(after[0].createdFile, true, 'genuine createdFile:true stays sticky on re-sync');
+});
+
+test('re-apply with an unchanged hook set leaves the settings-entry byte-identical (WP-146 idempotence)', () => {
+  const paths = setup();
+  const shared = require('../../src/adapters/shared');
+  const settingsPath = path.join(paths.claudeDir, 'settings.json');
+  const manifest = freshManifest();
+  const A = path.join(paths.core, 'bin', 'session-start.sh');
+
+  shared.applySettings(settingsPath, [['SessionStart', A]], false, manifest, { changed: [], unchanged: [], notices: [] });
+  const snap = JSON.stringify(manifest.entries);
+  const out2 = { changed: [], unchanged: [], notices: [] };
+  shared.applySettings(settingsPath, [['SessionStart', A]], false, manifest, out2);
+  assert.equal(JSON.stringify(manifest.entries), snap, 'manifest entry byte-identical on re-sync');
+  assert.ok(out2.unchanged.includes(settingsPath));
+});
