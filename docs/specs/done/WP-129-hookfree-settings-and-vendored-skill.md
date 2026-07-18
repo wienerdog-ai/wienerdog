@@ -1,7 +1,7 @@
 ---
 id: WP-129
 title: Hook-free settings profile + vendored, integrity-checked skill text (audit A1)
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: [WP-128]
