@@ -161,17 +161,30 @@ const SENSITIVE_FILE_BASENAMES = new Set([
  * home directory, does it contain secret material, is it unexpectedly large?
  * Bounded walk — names/sizes only (never file contents), lstat semantics (a
  * symlink is counted, never followed), `.git` directories are not descended
- * into (a re-adopt must not scan the object store). Best-effort: any fs error
- * on an entry is skipped; the function never throws.
+ * into (a re-adopt must not scan the object store).
+ *
+ * Traversal is iterative over an explicit stack of directory PATHS, opening
+ * exactly ONE directory handle at a time (a recursive open-while-descending
+ * walk could hold one handle per depth level and hit EMFILE). It streams each
+ * directory (opendir/readSync) so a huge flat tree stops at the cap without
+ * materializing every dirent first.
+ *
+ * FAIL CLOSED: the function never throws, but any scan INCOMPLETENESS — an
+ * unreadable directory, a mid-stream read fault, or a hit cap — sets
+ * `truncated:true` (hence `tooLarge:true`), so an incomplete scan of a
+ * hazardous tree can never present as clean and slip past the adopt gate.
  * @param {string} dir   realpath'd adopted dir
  * @param {string} home  realpath'd home dir
- * @param {{maxEntries?:number, maxBytes?:number}} [opts]
+ * @param {{maxEntries?:number, maxBytes?:number,
+ *          opendir?:(p:string)=>{readSync:()=>import('fs').Dirent|null, closeSync:()=>void}}} [opts]
+ *   opendir = injectable directory-stream seam (test only); defaults to fs.opendirSync.
  * @returns {{isHome:boolean, sensitive:string[], entryCount:number,
  *            bytes:number, tooLarge:boolean, truncated:boolean}}
  */
 function inspectAdoptTree(dir, home, opts = {}) {
   const maxEntries = opts.maxEntries || WALK_MAX_ENTRIES;
   const maxBytes = opts.maxBytes || WALK_MAX_BYTES;
+  const opendir = opts.opendir || fs.opendirSync;
   const isHome = dir === home;
 
   /** @type {string[]} */
@@ -180,32 +193,45 @@ function inspectAdoptTree(dir, home, opts = {}) {
   let bytes = 0;
   let truncated = false;
 
-  /** @param {string} abs @param {string} rel */
-  const walk = (abs, rel) => {
-    if (truncated) return;
-    let ents = [];
+  /** Explicit work stack of {abs, rel} — one handle open at a time. */
+  const stack = [{ abs: dir, rel: '' }];
+  while (stack.length > 0 && !truncated) {
+    const { abs, rel } = stack.pop();
+    let handle;
     try {
-      ents = fs.readdirSync(abs, { withFileTypes: true });
+      handle = opendir(abs);
     } catch {
-      return; // unreadable dir — best-effort skip
+      // Could not read this dir → we cannot prove it is safe. Fail closed.
+      truncated = true;
+      break;
     }
-    for (const e of ents) {
-      if (entryCount >= maxEntries || bytes > maxBytes) {
-        truncated = true;
-        return;
-      }
-      const relPath = rel ? `${rel}/${e.name}` : e.name;
-      entryCount += 1;
-      if (e.isDirectory()) {
-        if (e.name === '.git') continue; // never scan a repo's object store
-        if (SENSITIVE_DIR_BASENAMES.has(e.name) && sensitive.length < SENSITIVE_REPORT_CAP) {
-          sensitive.push(relPath);
+    /** child dirs discovered here; pushed only AFTER this handle is closed. */
+    const childDirs = [];
+    try {
+      for (;;) {
+        let e;
+        try {
+          e = handle.readSync();
+        } catch {
+          truncated = true; // read fault mid-stream → incomplete scan → fail closed
+          break;
         }
-        walk(path.join(abs, e.name), relPath);
-      } else {
-        // Files AND symlinks (lstat semantics via dirent): count size best-effort,
-        // never follow a symlink out of the tree.
-        if (e.isFile()) {
+        if (e === null) break; // end of directory
+        if (entryCount >= maxEntries || bytes > maxBytes) {
+          truncated = true;
+          break;
+        }
+        const relPath = rel ? `${rel}/${e.name}` : e.name;
+        entryCount += 1;
+        if (e.isDirectory()) {
+          if (e.name === '.git') continue; // never scan a repo's object store
+          if (SENSITIVE_DIR_BASENAMES.has(e.name) && sensitive.length < SENSITIVE_REPORT_CAP) {
+            sensitive.push(relPath);
+          }
+          childDirs.push({ abs: path.join(abs, e.name), rel: relPath });
+        } else if (e.isFile()) {
+          // Files only (lstat semantics via dirent): a symlink is counted but its
+          // target is never followed out of the tree.
           try {
             bytes += fs.lstatSync(path.join(abs, e.name)).size;
           } catch { /* best-effort */ }
@@ -216,9 +242,12 @@ function inspectAdoptTree(dir, home, opts = {}) {
           }
         }
       }
+    } finally {
+      // Close THIS directory before descending — bounds open handles to one.
+      try { handle.closeSync(); } catch { /* best-effort */ }
     }
-  };
-  walk(dir, '');
+    for (const child of childDirs) stack.push(child);
+  }
 
   const tooLarge = truncated || entryCount > BIG_ENTRY_COUNT || bytes > BIG_BYTES;
   return { isHome, sensitive, entryCount, bytes, tooLarge, truncated };

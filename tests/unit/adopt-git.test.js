@@ -345,11 +345,12 @@ test('inspectAdoptTree: a symlink is counted but never followed', () => {
   assert.equal(r.entryCount, 1, 'the symlink itself is counted');
 });
 
-test('inspectAdoptTree: never throws on an unreadable dir (best-effort)', () => {
+test('inspectAdoptTree: an unreadable root does not throw but FAILS CLOSED (truncated → tooLarge)', () => {
   const r = adoptGit.inspectAdoptTree('/nonexistent-dir-xyz', '/nonexistent-home');
+  // A dir we cannot read cannot be proven safe → the gate must fire, not pass.
   assert.deepEqual(
-    { isHome: r.isHome, sensitive: r.sensitive, entryCount: r.entryCount, tooLarge: r.tooLarge },
-    { isHome: false, sensitive: [], entryCount: 0, tooLarge: false }
+    { isHome: r.isHome, entryCount: r.entryCount, truncated: r.truncated, tooLarge: r.tooLarge },
+    { isHome: false, entryCount: 0, truncated: true, tooLarge: true }
   );
 });
 
@@ -423,4 +424,78 @@ test('adopt under --yes refuses a tree with sensitive files instead of auto-acce
     }
     fs.rmSync(root, { recursive: true, force: true });
   }
+});
+
+// ── WP-149 review round (Codex F3): streaming, handle-bounded, fail-closed ───
+
+/** Build an injected opendir seam over an in-memory tree (map of dir abs →
+ *  array of {name, dir?} dirents), tracking peak concurrent open handles and
+ *  total readSync calls. Optional faults: throwOpen(abs)/throwRead(abs). */
+function fakeFs(tree, faults = {}) {
+  const stats = { open: 0, close: 0, peak: 0, active: 0, reads: 0 };
+  const opendir = (abs) => {
+    if (faults.throwOpen && faults.throwOpen(abs)) throw new Error('EMFILE');
+    stats.open += 1; stats.active += 1; stats.peak = Math.max(stats.peak, stats.active);
+    const ents = tree[abs] || [];
+    let i = 0;
+    return {
+      readSync() {
+        stats.reads += 1;
+        if (faults.throwRead && faults.throwRead(abs)) throw new Error('EIO');
+        if (i >= ents.length) return null;
+        const e = ents[i]; i += 1;
+        return { name: e.name, isDirectory: () => !!e.dir, isFile: () => !e.dir };
+      },
+      closeSync() { stats.close += 1; stats.active -= 1; },
+    };
+  };
+  return { opendir, stats };
+}
+
+test('inspectAdoptTree: streams a huge flat dir, stops at the cap, reads no more than cap+1 dirents (WP-149)', () => {
+  const N = 100000;
+  const ents = Array.from({ length: N }, (_, i) => ({ name: `f${i}.md` }));
+  const { opendir, stats } = fakeFs({ '/r': ents });
+  const r = adoptGit.inspectAdoptTree('/r', '/nonexistent-home', { maxEntries: 5, opendir });
+  assert.equal(r.truncated, true);
+  assert.equal(r.tooLarge, true);
+  assert.ok(stats.reads <= 6, `stopped early: ${stats.reads} reads, not ${N}`);
+});
+
+test('inspectAdoptTree: holds at most ONE directory handle open at any depth (WP-149 — no EMFILE by depth)', () => {
+  // A deep chain /d0 → /d0/s → /d0/s/s → … ; every parent must be closed before
+  // its child is opened, so peak concurrent handles is 1.
+  const tree = {};
+  let abs = '/d0';
+  for (let d = 0; d < 50; d++) {
+    const child = `${abs}/s`;
+    tree[abs] = [{ name: 's', dir: true }];
+    abs = child;
+  }
+  tree[abs] = [{ name: 'leaf.md' }];
+  const { opendir, stats } = fakeFs(tree);
+  const r = adoptGit.inspectAdoptTree('/d0', '/nonexistent-home', { opendir });
+  assert.equal(stats.peak, 1, `peak open handles was ${stats.peak}, must be 1`);
+  assert.equal(stats.open, stats.close, 'every opened handle was closed');
+  assert.equal(r.truncated, false);
+});
+
+test('inspectAdoptTree: a mid-tree opendir failure FAILS CLOSED even with a secret below it (WP-149 — no fail-open)', () => {
+  // /r has subdir /r/deep which cannot be opened (EMFILE); a secret lives below.
+  const tree = {
+    '/r': [{ name: 'deep', dir: true }, { name: 'notes.md' }],
+    '/r/deep': [{ name: 'id_rsa' }], // never reached — opendir throws
+  };
+  const { opendir } = fakeFs(tree, { throwOpen: (abs) => abs === '/r/deep' });
+  const r = adoptGit.inspectAdoptTree('/r', '/nonexistent-home', { opendir });
+  // We could not scan /r/deep → the tree is NOT provably clean → the gate must fire.
+  assert.equal(r.truncated, true, 'incomplete scan marked truncated');
+  assert.equal(r.tooLarge, true, 'so the high-friction adopt gate fires');
+});
+
+test('inspectAdoptTree: a mid-stream readSync fault also fails closed (WP-149)', () => {
+  const { opendir } = fakeFs({ '/r': [{ name: 'a.md' }] }, { throwRead: (abs) => abs === '/r' });
+  const r = adoptGit.inspectAdoptTree('/r', '/nonexistent-home', { opendir });
+  assert.equal(r.truncated, true);
+  assert.equal(r.tooLarge, true);
 });
