@@ -1,7 +1,7 @@
 ---
 id: WP-146
 title: Upsert the recorded hook command set on every sync, and preserve a foreign namespaced symlink instead of clobbering it
-status: Ready
+status: Done
 model: sonnet
 size: S
 depends_on: []
