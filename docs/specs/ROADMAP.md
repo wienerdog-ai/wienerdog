@@ -1491,20 +1491,21 @@ graph LR
   WP150[WP-150 env-override path validation — absolute, reject .. segments — audit A13]
   WP151[WP-151 self-alert body from code-owned fields only — audit A13]
   WP152[WP-152 Codex parser version pin + rerun-on-bump runbook — audit A13, follows WP-100]
-  WP153[WP-153 pin claude/git/codex absolute + fail-safe on drift — audit A7]
-  WP153 --> WP154[WP-154 inert prod test-exec seams + shell:false — audit A7]
-  WP144 --> WP155[WP-155 canonical digest-bound job descriptor — audit A7]
-  WP145 --> WP155
-  WP153 --> WP155
-  WP144 --> WP156[WP-156 independent launcher — verify app+descriptor before spawn — audit A7]
+  WP144 --> WP153[WP-153 target-aware symlink reverser — uninstall keeps a user's replacement link — audit A13]
+  WP154[WP-154 pin claude/git/codex absolute + fail-safe on drift — audit A7]
+  WP154 --> WP155[WP-155 inert prod test-exec seams + shell:false — audit A7]
+  WP144 --> WP156[WP-156 canonical digest-bound job descriptor — audit A7]
   WP145 --> WP156
-  WP155 --> WP156
-  WP153 --> WP157[WP-157 A7 integrity containment harness — audit A7]
-  WP154 --> WP157
-  WP155 --> WP157
+  WP154 --> WP156
+  WP144 --> WP157[WP-157 independent launcher — verify app+descriptor before spawn — audit A7]
+  WP145 --> WP157
   WP156 --> WP157
-  WP153 --> WP158[WP-158 A7 integrity docs — threat model + glossary + runbook]
-  WP154 --> WP158
+  WP154 --> WP158[WP-158 A7 integrity containment harness — audit A7]
   WP155 --> WP158
   WP156 --> WP158
+  WP157 --> WP158
+  WP154 --> WP159[WP-159 A7 integrity docs — threat model + glossary + runbook]
+  WP155 --> WP159
+  WP156 --> WP159
+  WP157 --> WP159
 ```
