@@ -4,6 +4,26 @@
 
 ## Status: A0, A4, A3, A6, and A5 are COMPLETE (2026-07-18)
 
+> **A1 SPEC PHASE COMPLETE — implementation NOT started (2026-07-18).** Audit action
+> **A1 (hermetic runtime profiles)** has been fully specced and walked through with the
+> owner, but **no code is written yet**. **ADR-0025** is Accepted (+2 amendments), and
+> **WP-128..WP-135** are all `status: Ready` (specs in `docs/specs/`, NOT `done/`):
+> 128 profile registry + argv composer · 129 hook-free settings + vendored-skill
+> integrity · 130 hermetic dream (staging cwd + absolute tier paths) · 131 hermetic
+> routine (contained-inert until A2) · 132 managed-policy WARNING + run evidence · 133
+> dev-time live negative harness · 135 pre-dream runtime self-check · 134 docs. The
+> ROADMAP has the rows + A1 chain note + graph. **Resume point for a fresh session:**
+> begin implementation at **WP-128** (TDD, tests first), then sequentially per the WP
+> lifecycle below; the dependency chain is 128 → 129 → {130,131} → 132 → {133,135},
+> 134 → all. Load-bearing runtime facts already measured (see the A1 lessons in
+> `memory/lessons/inbox.md`): empty `--tools` exposes ALL built-ins (use an explicit
+> allowlist); `--setting-sources ""` excludes the user source; `--append-system-prompt`
+> delivers the vendored skill; the containment probe judges by the structured
+> `permission_denials` field + canary ground truth, NEVER an output magic-string. A1
+> opens NO gate — `wienerdog safety` must stay all-BLOCKED. This Status header flips to
+> "A1 COMPLETE" only when all eight WPs are Done (implemented + reviewed), per the A5
+> precedent.
+
 Audit action A0 landed as five reviewed work packages, WP-109..WP-113 (specs in
 `docs/specs/done/`): the code-owned safety profile (`src/core/safety-profile.js`,
 five capability gates, all BLOCKED, no runtime/env/flag override), the
