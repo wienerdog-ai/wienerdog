@@ -5,13 +5,16 @@ const readline = require('node:readline');
 const { getPaths } = require('../core/paths');
 const { WienerdogError } = require('../core/errors');
 const grantLib = require('../gws/grant');
+const grantStore = require('../gws/broker/grant-store');
 
 /**
- * `wienerdog grant send` — the ONLY way a send grant is created (ADR-0007).
- * The typed-word confirmation is the security boundary: it is read from a real
- * controlling terminal (never a piped/redirected stdin) and `--yes` does NOT
- * bypass it, so no skill, hook, dream, or headless job (nothing scriptable via
- * `--yes` or a plain pipe) can mint or widen a grant.
+ * `wienerdog grant send|calendar-write` — the ONLY way a grant is created
+ * (ADR-0007, WP-139). The typed-word confirmation is the security boundary: it
+ * is read from a real controlling terminal (never a piped/redirected stdin)
+ * and `--yes` does NOT bypass it, so no skill, hook, dream, or headless job
+ * (nothing scriptable via `--yes` or a plain pipe) can mint or widen a grant.
+ * Grants land in the broker-owned store (state/broker-grants.json), not
+ * config.yaml — the legacy YAML block is retired (F2) and ignored.
  */
 
 const NO_TTY_GRANT_MESSAGE =
@@ -103,7 +106,27 @@ async function authenticatedAddress(paths) {
 }
 
 /**
- * `wienerdog grant send --routine <name> --to <a@b>[,<c@d>...]`.
+ * One-time D-GRANT-MIGRATION notice: legacy YAML grants in config.yaml are no
+ * longer honored as a write target; tell the user the model changed.
+ * @param {import('../core/paths').WienerdogPaths} paths
+ * @param {NodeJS.WritableStream} out
+ */
+function noticeLegacyYaml(paths, out) {
+  try {
+    if (grantLib.hasLegacyYamlGrants(fs.readFileSync(paths.config, 'utf8'))) {
+      out.write(
+        'Note: the grant model changed — grants now live in a broker-owned store,\n' +
+          'and the old grants block in config.yaml is ignored. Re-grant here as needed.\n'
+      );
+    }
+  } catch {
+    /* no config — nothing to notice */
+  }
+}
+
+/**
+ * `wienerdog grant send --routine <name> --to <a@b>[,<c@d>...]`
+ * `wienerdog grant calendar-write --routine <name>`
  * @param {string[]} argv
  * @param {{promptFn?:(q:string)=>Promise<string>,
  *          paths?:import('../core/paths').WienerdogPaths}} [opts] injection seam
@@ -112,14 +135,38 @@ async function authenticatedAddress(paths) {
 async function run(argv, opts = {}) {
   const promptFn = opts.promptFn || defaultPrompt;
   const paths = opts.paths || getPaths();
+  const out = process.stdout;
 
   const verb = argv[0];
-  if (verb !== 'send') {
-    throw new WienerdogError(`unknown grant command '${verb || ''}' — only 'send' is supported`);
+  if (verb !== 'send' && verb !== 'calendar-write') {
+    throw new WienerdogError(
+      `unknown grant command '${verb || ''}' — only 'send' and 'calendar-write' are supported`
+    );
   }
 
   const parsed = parseArgs(argv.slice(1));
   if (!parsed.routine) throw new WienerdogError('missing required flag --routine');
+  noticeLegacyYaml(paths, out);
+
+  if (verb === 'calendar-write') {
+    out.write(
+      `You are about to let the "${parsed.routine}" routine CREATE events on your\n` +
+        'primary calendar without further prompting (it can never delete or notify).\n'
+    );
+    const answer = await promptFn('Type the word "grant" to confirm (anything else cancels): ');
+    if (String(answer).trim() !== 'grant') {
+      out.write('Cancelled.\n');
+      return;
+    }
+    grantStore.putGrant(
+      paths,
+      { routineId: parsed.routine, kind: 'calendar_write', to: [] },
+      { confirmedAtTty: true }
+    );
+    out.write(`wienerdog: granted "${parsed.routine}" → calendar-write.\n`);
+    return;
+  }
+
   if (!parsed.to) throw new WienerdogError('missing required flag --to');
   const recipients = parsed.to.split(',').map((s) => s.trim()).filter(Boolean);
   if (recipients.length === 0) throw new WienerdogError('missing required flag --to');
@@ -132,7 +179,6 @@ async function run(argv, opts = {}) {
     (r) => !self || r.toLowerCase() !== self.toLowerCase()
   );
 
-  const out = process.stdout;
   out.write(`You are about to let the "${parsed.routine}" routine SEND email to:\n`);
   for (const r of recipients) out.write(`  - ${r}\n`);
   out.write('Anything this routine emails will go to those addresses without further prompting.\n');
@@ -146,7 +192,13 @@ async function run(argv, opts = {}) {
     return;
   }
 
-  grantLib.saveGrant(paths, { routine: parsed.routine, to: recipients });
+  // confirmedAtTty is set HERE and only here — after the typed-word /dev/tty
+  // confirmation above. putGrant refuses any other caller.
+  grantStore.putGrant(
+    paths,
+    { routineId: parsed.routine, kind: 'send_self', to: recipients },
+    { confirmedAtTty: true }
+  );
   out.write(`wienerdog: granted "${parsed.routine}" → ${recipients.join(', ')}.\n`);
 }
 

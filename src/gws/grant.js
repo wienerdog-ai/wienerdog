@@ -1,56 +1,33 @@
 'use strict';
 
 const fs = require('node:fs');
-const crypto = require('node:crypto');
-
-const manifestLib = require('../core/manifest');
 
 /**
- * Send grants (ADR-0007). Grants are the security boundary that keeps outbound
- * email from becoming an exfiltration channel (THREAT-MODEL T4a): they are
- * mechanics, not vault, so no model-writable surface can create or widen one.
- * They live in a comment-fenced managed section of ~/.wienerdog/config.yaml,
- * written ONLY by the interactive `wienerdog grant` CLI. This module owns
- * parsing/writing that section (it knows the exact shape it writes) and the
- * pure enforcement decision consulted by `gws gmail send`.
+ * LEGACY send-grant reading + the pure enforcement decision (ADR-0007).
+ *
+ * WP-139 RETIRED the config.yaml managed-YAML grant block as a WRITE target:
+ * the audit (A2, F2) showed the old write path was an unauthenticated
+ * plaintext fact any same-user writer could forge — and it even re-synced the
+ * recorded install hash. Grants now live ONLY in the broker-owned store
+ * (src/gws/broker/grant-store.js), minted ONLY by the TTY-confirmed
+ * `wienerdog grant` CLI. This module keeps:
+ *  - `parseGrants`/`findGrant`: READ-ONLY legacy-block parsing, retained solely
+ *    because the frozen `gmail.js send` path still consults it (reconciled to
+ *    the store by WP-141); it can no longer be written by any product path.
+ *  - `isSendAllowed`: the pure fail-closed exact-address enforcement decision,
+ *    reused by the store for any future third-party allowlist.
  *
  * @typedef {import('../core/paths').WienerdogPaths} WienerdogPaths
  * @typedef {{routine:string, to:string[]}} Grant
  */
 
-/** The exact begin/end sentinels (full lines, including the leading `#`). */
+/** The exact begin/end sentinels of the LEGACY block (full lines, with `#`). */
 const BEGIN = '# --- wienerdog:grants (managed by `wienerdog grant`; do not edit by hand) ---';
 const END = '# --- end wienerdog:grants ---';
 
-/** @param {string} content @returns {string} sha256 hex. */
-function sha256(content) {
-  return crypto.createHash('sha256').update(content).digest('hex');
-}
-
 /**
- * De-duplicate a recipient list case-insensitively, preserving order and the
- * first-seen (trimmed) spelling.
- * @param {string[]} list
- * @returns {string[]}
- */
-function dedupTo(list) {
-  const seen = new Set();
-  const out = [];
-  for (const a of list || []) {
-    const trimmed = String(a).trim();
-    if (!trimmed) continue;
-    const key = trimmed.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(trimmed);
-  }
-  return out;
-}
-
-/**
- * Parse the grants managed-section out of config.yaml content. Reads only
- * between the two sentinels; tolerant of the exact block this module writes.
- * Absent section → [].
+ * Parse the legacy grants managed-section out of config.yaml content. Reads
+ * only between the two sentinels. Absent section → [].
  * @param {string} configText
  * @returns {Grant[]}
  */
@@ -77,86 +54,17 @@ function parseGrants(configText) {
 }
 
 /**
- * Render the managed section (sentinels + indented YAML) for `grants`.
- * @param {Grant[]} grants
- * @returns {string} ends with a single trailing newline
- */
-function renderSection(grants) {
-  const lines = [BEGIN, 'grants:'];
-  for (const g of grants) {
-    lines.push(`  - routine: ${g.routine}`);
-    lines.push('    to:');
-    for (const addr of g.to) lines.push(`      - ${addr}`);
-  }
-  lines.push(END);
-  return `${lines.join('\n')}\n`;
-}
-
-/**
- * Remove the managed section (and the one blank-line separator we insert before
- * it), returning the content that lives outside the sentinels byte-for-byte.
+ * Is a legacy YAML grant block present in this config text? Used for the
+ * one-time "grant model changed" notice (D-GRANT-MIGRATION).
  * @param {string} configText
- * @returns {string}
+ * @returns {boolean}
  */
-function stripSection(configText) {
-  const beginIdx = configText.indexOf(BEGIN);
-  if (beginIdx === -1) return configText;
-  const endIdx = configText.indexOf(END);
-  let afterEnd = endIdx + END.length;
-  if (configText[afterEnd] === '\n') afterEnd += 1;
-  let before = configText.slice(0, beginIdx);
-  const after = configText.slice(afterEnd);
-  // Undo the single blank-line separator written before BEGIN.
-  if (before.endsWith('\n')) before = before.slice(0, -1);
-  return before + after;
+function hasLegacyYamlGrants(configText) {
+  return configText.includes(BEGIN);
 }
 
 /**
- * Return config.yaml content with the grants section replaced by `grants`
- * (removed entirely if grants is empty). Everything OUTSIDE the sentinels is
- * preserved byte-for-byte; the section is (re)written just before EOF with
- * exactly one blank line before it.
- * @param {string} configText
- * @param {Grant[]} grants
- * @returns {string}
- */
-function renderConfigWithGrants(configText, grants) {
-  const base = stripSection(configText);
-  if (!grants || grants.length === 0) return base;
-  const sep = base.endsWith('\n') ? '\n' : '\n\n';
-  return base + sep + renderSection(grants);
-}
-
-/**
- * Upsert one grant (add, or replace an existing grant with the same routine)
- * and persist config.yaml, then re-sync the manifest hash so uninstall stays
- * clean.
- * @param {WienerdogPaths} paths
- * @param {Grant} grant
- */
-function saveGrant(paths, grant) {
-  const configText = fs.readFileSync(paths.config, 'utf8');
-  const grants = parseGrants(configText);
-  const entry = { routine: grant.routine, to: dedupTo(grant.to) };
-  const idx = grants.findIndex((g) => g.routine === grant.routine);
-  if (idx >= 0) grants[idx] = entry;
-  else grants.push(entry);
-
-  const next = renderConfigWithGrants(configText, grants);
-  fs.writeFileSync(paths.config, next);
-
-  // Mirror init.js: keep the recorded hash in sync with our own rewrite so
-  // uninstall removes config.yaml rather than "keeping … modified since install".
-  const manifest = manifestLib.load(paths);
-  const configEntry = manifest.entries.find((e) => e.kind === 'file' && e.path === paths.config);
-  if (configEntry) {
-    configEntry.hash = sha256(next);
-    manifestLib.save(paths, manifest);
-  }
-}
-
-/**
- * Look up the grant for a routine.
+ * Look up the LEGACY grant for a routine (read-only; see module comment).
  * @param {WienerdogPaths} paths
  * @param {string|null} routine
  * @returns {Grant|null} null if routine is null/absent
@@ -198,4 +106,4 @@ function isSendAllowed(grant, recipients) {
   return { allowed: true, reason: 'all recipients granted' };
 }
 
-module.exports = { parseGrants, renderConfigWithGrants, saveGrant, findGrant, isSendAllowed };
+module.exports = { parseGrants, hasLegacyYamlGrants, findGrant, isSendAllowed };

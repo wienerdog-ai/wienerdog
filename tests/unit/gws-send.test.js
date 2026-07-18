@@ -9,7 +9,22 @@ const path = require('node:path');
 
 const gmail = require('../../src/gws/gmail');
 const alert = require('../../src/gws/alert');
-const grant = require('../../src/gws/grant');
+/** WP-139 retired the product write path for the legacy YAML block
+ *  (grant.saveGrant is gone); gmail.send still READS it until WP-141, so these
+ *  tests seed the block by hand. */
+function seedLegacyGrant(paths, g) {
+  const lines = [
+    '# --- wienerdog:grants (managed by `wienerdog grant`; do not edit by hand) ---',
+    'grants:',
+    `  - routine: ${g.routine}`,
+    '    to:',
+  ];
+  for (const addr of g.to) lines.push(`      - ${addr}`);
+  lines.push('# --- end wienerdog:grants ---');
+  const cfg = fs.readFileSync(paths.config, 'utf8');
+  fs.writeFileSync(paths.config, `${cfg}\n${lines.join('\n')}\n`);
+}
+
 const { getPaths } = require('../../src/core/paths');
 
 const repoRoot = path.join(__dirname, '..', '..');
@@ -67,7 +82,7 @@ function decode(raw) {
 
 test('send executes a real send under a matching grant', async () => {
   const paths = initPaths();
-  grant.saveGrant(paths, { routine: 'daily-digest', to: ['me@example.com'] });
+  seedLegacyGrant(paths, { routine: 'daily-digest', to: ['me@example.com'] });
   const s = stubGmail();
 
   const res = await gmail.send(s.services, {
@@ -86,7 +101,7 @@ test('send executes a real send under a matching grant', async () => {
 
 test('send matches the allowlist case-insensitively', async () => {
   const paths = initPaths();
-  grant.saveGrant(paths, { routine: 'daily-digest', to: ['Me@Example.com'] });
+  seedLegacyGrant(paths, { routine: 'daily-digest', to: ['Me@Example.com'] });
   const s = stubGmail();
   const res = await gmail.send(s.services, {
     to: 'me@example.com',
@@ -100,7 +115,7 @@ test('send matches the allowlist case-insensitively', async () => {
 
 test('send degrades to a draft when a recipient is not granted (no throw)', async () => {
   const paths = initPaths();
-  grant.saveGrant(paths, { routine: 'daily-digest', to: ['me@example.com'] });
+  seedLegacyGrant(paths, { routine: 'daily-digest', to: ['me@example.com'] });
   const s = stubGmail();
 
   const res = await gmail.send(s.services, {
@@ -124,7 +139,7 @@ test('send degrades to a draft when a recipient is not granted (no throw)', asyn
 
 test('send degrades when only SOME recipients are granted', async () => {
   const paths = initPaths();
-  grant.saveGrant(paths, { routine: 'daily-digest', to: ['me@example.com'] });
+  seedLegacyGrant(paths, { routine: 'daily-digest', to: ['me@example.com'] });
   const s = stubGmail();
   const res = await gmail.send(s.services, {
     to: 'me@example.com, stranger@evil.com',
@@ -140,7 +155,7 @@ test('send degrades when only SOME recipients are granted', async () => {
 
 test('a null routine always degrades to a draft (fail-safe)', async () => {
   const paths = initPaths();
-  grant.saveGrant(paths, { routine: 'daily-digest', to: ['me@example.com'] });
+  seedLegacyGrant(paths, { routine: 'daily-digest', to: ['me@example.com'] });
   const s = stubGmail();
   const res = await gmail.send(s.services, {
     to: 'me@example.com',

@@ -8,7 +8,22 @@ const os = require('node:os');
 const path = require('node:path');
 
 const { getPaths } = require('../../src/core/paths');
-const grant = require('../../src/gws/grant');
+/** WP-139 retired the product write path for the legacy YAML block
+ *  (grant.saveGrant is gone); gmail.send still READS it until WP-141, so these
+ *  tests seed the block by hand. */
+function seedLegacyGrant(paths, g) {
+  const lines = [
+    '# --- wienerdog:grants (managed by `wienerdog grant`; do not edit by hand) ---',
+    'grants:',
+    `  - routine: ${g.routine}`,
+    '    to:',
+  ];
+  for (const addr of g.to) lines.push(`      - ${addr}`);
+  lines.push('# --- end wienerdog:grants ---');
+  const cfg = fs.readFileSync(paths.config, 'utf8');
+  fs.writeFileSync(paths.config, `${cfg}\n${lines.join('\n')}\n`);
+}
+
 const client = require('../../src/gws/client');
 const { allowAll } = require('../../src/core/safety-profile');
 
@@ -149,7 +164,7 @@ test('gws-dispatch: gmail send without a grant degrades to draft + verbatim noti
 
 test('gws-dispatch: gmail send with a matching --routine grant sends for real', async () => {
   const { paths, env } = initPaths();
-  grant.saveGrant(paths, { routine: 'daily-digest', to: ['a@b.com'] });
+  seedLegacyGrant(paths, { routine: 'daily-digest', to: ['a@b.com'] });
   const s = stubGmail();
   currentServices = s.services;
 
@@ -180,7 +195,7 @@ test('gws-dispatch: gmail send with a matching --routine grant sends for real', 
 
 test('gws-dispatch: WIENERDOG_JOB env supplies the routine when --routine is absent', async () => {
   const { paths, env } = initPaths();
-  grant.saveGrant(paths, { routine: 'daily-digest', to: ['a@b.com'] });
+  seedLegacyGrant(paths, { routine: 'daily-digest', to: ['a@b.com'] });
   const s = stubGmail();
   currentServices = s.services;
 

@@ -6,21 +6,15 @@ const { execFileSync } = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const crypto = require('node:crypto');
 const { PassThrough } = require('node:stream');
 
 const grant = require('../../src/gws/grant');
+const grantStore = require('../../src/gws/broker/grant-store');
 const grantCli = require('../../src/cli/grant');
-const manifestLib = require('../../src/core/manifest');
 const { getPaths } = require('../../src/core/paths');
 
 const repoRoot = path.join(__dirname, '..', '..');
 const bin = path.join(repoRoot, 'bin', 'wienerdog.js');
-
-/** @param {string} s @returns {string} */
-function sha256(s) {
-  return crypto.createHash('sha256').update(s).digest('hex');
-}
 
 /** Isolated temp core that never touches the real ~/.wienerdog. */
 function tempEnv() {
@@ -61,27 +55,48 @@ async function withStdinTTY(value, fn) {
 const BASE_CONFIG =
   '# Wienerdog configuration\nversion: 1\nvault: /home/x/wienerdog\nmemory_mode: standard\n';
 
-// --- parse / render round-trip ------------------------------------------------
+/** Hand-render the LEGACY YAML block (the product can no longer write it — WP-139). */
+function legacyBlock(grants) {
+  const lines = ['# --- wienerdog:grants (managed by `wienerdog grant`; do not edit by hand) ---', 'grants:'];
+  for (const g of grants) {
+    lines.push(`  - routine: ${g.routine}`);
+    lines.push('    to:');
+    for (const addr of g.to) lines.push(`      - ${addr}`);
+  }
+  lines.push('# --- end wienerdog:grants ---');
+  return `${lines.join('\n')}\n`;
+}
 
-test('renderConfigWithGrants round-trips and preserves content outside sentinels', () => {
+// --- legacy parse (read-only path kept for the frozen gmail.send) ------------
+
+test('parseGrants still reads a legacy YAML block (read-only); absent section → []', () => {
   const grants = [
     { routine: 'daily-digest', to: ['gyula@example.com'] },
     { routine: 'weekly-review', to: ['gyula@example.com', 'ada@example.com'] },
   ];
-  const withGrants = grant.renderConfigWithGrants(BASE_CONFIG, grants);
-
-  assert.match(withGrants, /# --- wienerdog:grants/);
-  assert.deepEqual(grant.parseGrants(withGrants), grants);
-  // Exactly one blank line separates prior content from the begin sentinel.
-  assert.match(withGrants, /memory_mode: standard\n\n# --- wienerdog:grants/);
-  // Re-rendering from the parsed grants is byte-identical.
-  assert.equal(grant.renderConfigWithGrants(BASE_CONFIG, grant.parseGrants(withGrants)), withGrants);
-  // Removing all grants restores the original byte-for-byte.
-  assert.equal(grant.renderConfigWithGrants(withGrants, []), BASE_CONFIG);
+  const cfg = `${BASE_CONFIG}\n${legacyBlock(grants)}`;
+  assert.deepEqual(grant.parseGrants(cfg), grants);
+  assert.deepEqual(grant.parseGrants(BASE_CONFIG), []);
+  assert.equal(grant.hasLegacyYamlGrants(cfg), true);
+  assert.equal(grant.hasLegacyYamlGrants(BASE_CONFIG), false);
 });
 
-test('parseGrants returns [] when the section is absent', () => {
-  assert.deepEqual(grant.parseGrants(BASE_CONFIG), []);
+test('the F2 write path is GONE: grant.js no longer exports saveGrant or renderConfigWithGrants', () => {
+  assert.equal(grant.saveGrant, undefined);
+  assert.equal(grant.renderConfigWithGrants, undefined);
+});
+
+test('findGrant reads the legacy block; null routine → null', () => {
+  const { env } = tempEnv();
+  const paths = initPaths(env);
+  const cfg = fs.readFileSync(paths.config, 'utf8');
+  fs.writeFileSync(paths.config, `${cfg}\n${legacyBlock([{ routine: 'daily-digest', to: ['me@example.com'] }])}`);
+  assert.equal(grant.findGrant(paths, null), null);
+  assert.deepEqual(grant.findGrant(paths, 'daily-digest'), {
+    routine: 'daily-digest',
+    to: ['me@example.com'],
+  });
+  assert.equal(grant.findGrant(paths, 'no-such-routine'), null);
 });
 
 // --- isSendAllowed truth table ------------------------------------------------
@@ -118,72 +133,18 @@ test('isSendAllowed FAILS CLOSED on an empty or whitespace-only recipient list (
   assert.equal(grant.isSendAllowed(g, ['a@x.com']).allowed, true);
 });
 
-test('findGrant returns null for a null routine', () => {
+// --- CLI confirmation gating (store-backed since WP-139) ---------------------
+
+test('grant CLI mints a send_self STORE grant only after the typed word "grant"; config.yaml untouched', async () => {
   const { env } = tempEnv();
   const paths = initPaths(env);
-  grant.saveGrant(paths, { routine: 'daily-digest', to: ['me@example.com'] });
-  assert.equal(grant.findGrant(paths, null), null);
-  assert.deepEqual(grant.findGrant(paths, 'daily-digest'), {
-    routine: 'daily-digest',
-    to: ['me@example.com'],
-  });
-  assert.equal(grant.findGrant(paths, 'no-such-routine'), null);
-});
-
-// --- saveGrant upsert + manifest-hash resync ---------------------------------
-
-test('saveGrant upserts by routine and re-syncs the manifest hash (uninstall stays clean)', () => {
-  const { env } = tempEnv();
-  const paths = initPaths(env);
-
-  grant.saveGrant(paths, { routine: 'daily-digest', to: ['gyula@example.com'] });
-  let cfg = fs.readFileSync(paths.config, 'utf8');
-  assert.match(cfg, /wienerdog:grants/);
-  assert.deepEqual(grant.parseGrants(cfg), [
-    { routine: 'daily-digest', to: ['gyula@example.com'] },
-  ]);
-
-  // Same routine replaces (dedup case-insensitively, preserve order).
-  grant.saveGrant(paths, {
-    routine: 'daily-digest',
-    to: ['gyula@example.com', 'ADA@example.com', 'ada@example.com'],
-  });
-  cfg = fs.readFileSync(paths.config, 'utf8');
-  assert.deepEqual(grant.parseGrants(cfg), [
-    { routine: 'daily-digest', to: ['gyula@example.com', 'ADA@example.com'] },
-  ]);
-
-  // A different routine appends a second grant.
-  grant.saveGrant(paths, { routine: 'weekly-review', to: ['gyula@example.com'] });
-  cfg = fs.readFileSync(paths.config, 'utf8');
-  assert.equal(grant.parseGrants(cfg).length, 2);
-
-  // The manifest hash was re-synced, so uninstall removes config.yaml cleanly.
-  // WP-088: config.yaml is now a deferred-deletion-set member — reverse() defers
-  // it (returns it in deferredConfig) rather than deleting it inline; uninstall.js
-  // deletes it LAST. A re-synced hash means it is recognized as our own unmodified
-  // file (deferred), NOT kept as a customized edit.
-  const manifest = manifestLib.load(paths);
-  const entry = manifest.entries.find((e) => e.kind === 'file' && e.path === paths.config);
-  assert.equal(entry.hash, sha256(cfg));
-  const { deferredConfig } = manifestLib.reverse(paths, manifest);
-  assert.equal(deferredConfig, paths.config, 'unmodified config is deferred for clean removal, not kept as a user edit');
-  assert.ok(fs.existsSync(paths.config), 'reverse() defers config.yaml; uninstall.js removes it last');
-});
-
-// --- CLI confirmation gating -------------------------------------------------
-
-test('grant CLI writes a grant only after the typed word "grant"', async () => {
-  const { env } = tempEnv();
-  const paths = initPaths(env);
+  const configBefore = fs.readFileSync(paths.config, 'utf8');
   await grantCli.run(['send', '--routine', 'daily-digest', '--to', 'me@example.com'], {
     paths,
     promptFn: async () => 'grant',
   });
-  assert.deepEqual(grant.findGrant(paths, 'daily-digest'), {
-    routine: 'daily-digest',
-    to: ['me@example.com'],
-  });
+  assert.equal(grantStore.grantCheck(paths, 'daily-digest', 'send_self').allowed, true);
+  assert.equal(fs.readFileSync(paths.config, 'utf8'), configBefore, 'no YAML block is ever written');
 });
 
 test('grant CLI cancels with no write when confirmation is not exactly "grant"', async () => {
@@ -193,8 +154,8 @@ test('grant CLI cancels with no write when confirmation is not exactly "grant"',
     paths,
     promptFn: async () => 'yes',
   });
-  assert.equal(grant.findGrant(paths, 'daily-digest'), null);
-  assert.doesNotMatch(fs.readFileSync(paths.config, 'utf8'), /wienerdog:grants/);
+  assert.equal(grantStore.grantCheck(paths, 'daily-digest', 'send_self').allowed, false);
+  assert.equal(fs.existsSync(grantStore.storePath(paths)), false);
 });
 
 test('grant CLI: --yes does NOT bypass the typed confirmation', async () => {
@@ -209,7 +170,29 @@ test('grant CLI: --yes does NOT bypass the typed confirmation', async () => {
     },
   });
   assert.equal(asked, true); // the prompt still ran
-  assert.equal(grant.findGrant(paths, 'r'), null);
+  assert.equal(grantStore.grantCheck(paths, 'r', 'send_self').allowed, false);
+});
+
+test('grant CLI: calendar-write mints a calendar_write grant behind the same confirmation', async () => {
+  const { env } = tempEnv();
+  const paths = initPaths(env);
+  await grantCli.run(['calendar-write', '--routine', 'daily-digest'], {
+    paths,
+    promptFn: async () => 'grant',
+  });
+  assert.equal(grantStore.grantCheck(paths, 'daily-digest', 'calendar_write').allowed, true);
+  // The kinds never imply each other.
+  assert.equal(grantStore.grantCheck(paths, 'daily-digest', 'send_self').allowed, false);
+});
+
+test('grant CLI: calendar-write cancels without the typed word', async () => {
+  const { env } = tempEnv();
+  const paths = initPaths(env);
+  await grantCli.run(['calendar-write', '--routine', 'daily-digest'], {
+    paths,
+    promptFn: async () => 'ok',
+  });
+  assert.equal(grantStore.grantCheck(paths, 'daily-digest', 'calendar_write').allowed, false);
 });
 
 test('grant CLI warns about third-party recipients before prompting', async () => {
@@ -230,6 +213,28 @@ test('grant CLI warns about third-party recipients before prompting', async () =
     process.stdout.write = orig;
   }
   assert.match(lines.join(''), /third-party addresses/);
+});
+
+test('grant CLI prints the one-time model-changed notice when a legacy YAML block exists', async () => {
+  const { env } = tempEnv();
+  const paths = initPaths(env);
+  const cfg = fs.readFileSync(paths.config, 'utf8');
+  fs.writeFileSync(paths.config, `${cfg}\n${legacyBlock([{ routine: 'old', to: ['a@b.com'] }])}`);
+  const lines = [];
+  const orig = process.stdout.write;
+  process.stdout.write = (s) => {
+    lines.push(String(s));
+    return true;
+  };
+  try {
+    await grantCli.run(['send', '--routine', 'r', '--to', 'a@b.com'], {
+      paths,
+      promptFn: async () => 'nope',
+    });
+  } finally {
+    process.stdout.write = orig;
+  }
+  assert.match(lines.join(''), /grant model changed/);
 });
 
 // --- defaultPrompt controlling-terminal boundary (WP-086) --------------------
@@ -285,11 +290,11 @@ test('grant CLI: a piped/redirected/closed stdin cannot mint a grant (no control
       promptFn: (q) => grantCli.defaultPrompt(q, { openTty }),
     });
   });
-  assert.equal(grant.findGrant(paths, 'daily-digest'), null);
-  assert.doesNotMatch(fs.readFileSync(paths.config, 'utf8'), /wienerdog:grants/);
+  assert.equal(grantStore.grantCheck(paths, 'daily-digest', 'send_self').allowed, false);
+  assert.equal(fs.existsSync(grantStore.storePath(paths)), false);
 });
 
-test('grant CLI rejects a bad address and a missing flag', async () => {
+test('grant CLI rejects a bad address, a missing flag, and an unknown verb', async () => {
   const { env } = tempEnv();
   const paths = getPaths(env);
   await assert.rejects(
@@ -301,7 +306,11 @@ test('grant CLI rejects a bad address and a missing flag', async () => {
     /--routine/
   );
   await assert.rejects(
+    () => grantCli.run(['calendar-write'], { paths, promptFn: async () => 'grant' }),
+    /--routine/
+  );
+  await assert.rejects(
     () => grantCli.run(['revoke', '--routine', 'r', '--to', 'a@b.com'], { paths, promptFn: async () => 'grant' }),
-    /only 'send'/
+    /only 'send' and 'calendar-write'/
   );
 });

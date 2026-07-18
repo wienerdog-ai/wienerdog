@@ -1,7 +1,7 @@
 ---
 id: WP-139
 title: Canonical broker-owned grant store — TTY-only mutation, exact-byte integrity fail-closed, retire the config.yaml YAML block (audit A2)
-status: Ready
+status: In-Review
 model: opus
 size: M
 depends_on: [WP-136]
