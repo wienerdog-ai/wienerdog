@@ -1,8 +1,36 @@
 # Security-audit working notes (fork context for future sessions)
 
-**Last updated:** 2026-07-18
+**Last updated:** 2026-07-19
 
 ## Status: A0, A4, A3, A6, A5, and A1 are COMPLETE (2026-07-18)
+
+> **A7 SPEC PHASE COMPLETE — implementation NOT started (2026-07-19).** Audit action
+> **A7** (scheduler, vendored app, and executable integrity, P1) is specced and
+> owner-walked-through; **WP-154..WP-159 are all `status: Ready`** and **ADR-0028**
+> (scheduler/app/executable integrity) is **Accepted**. Key owner decisions (dated
+> `OWNER-APPROVED` markers in the specs): **structural exec pin** — command path +
+> install dir + spawn-time structural verification, NO content hash (claude
+> auto-updates several times daily, observed live; a hash gate would train the user
+> to disable the check); **test-exec env seams DELETED, not gated** (the
+> `WIENERDOG_TEST` gate was rejected as circular — the gate var and the attack var
+> share the same write surface) — run-job/probe substitution is JS-injected deps,
+> the dream brain substitutes only via pin-store-installed fakes, and the
+> containment-probe spawn is pinned (WP-154 gap fix); **descriptor** covers
+> run/model/effective-timeoutMs/pins/app-digest ("everything that shapes the 03:30
+> spawn is digest-covered, no exceptions") with **fail-closed sync authorization**
+> (no soft fallback; a hand-edit without `sync` = one skipped, alerted night);
+> **launcher boundary stated truthfully** (the launcher is a core file — a
+> core-wide write defeats the layer alone, A12; the "2b" entry-inlined
+> bootstrap-hash path is documented in WP-157 + ADR-0028, deferred to A12);
+> hash-named version dirs rejected. **Sequencing:** WP-154 (deps: none) first;
+> WP-155 strictly after 154 (they share `brain.js`/`run-job.js`/
+> `containment-probe.js`; the probe boundary: 154 replaces the bare-name fallback,
+> 155 deletes the env term); WP-156 after 144/145 + 154; WP-157 after 144/145 +
+> 156; WP-158/159 last. **A7 opens NO gate** — `wienerdog safety` stays
+> all-BLOCKED. Parked follow-up agenda (not specced): env-seam sweep for
+> `WIENERDOG_UPDATE_FETCH_CMD` + `WIENERDOG_RUNJOB_TIMEOUT_MS`.
+
+<!-- -->
 
 > **A2 COMPLETE — all eight WPs Done (implemented + reviewed, 2026-07-18).** **ADR-0026**
 > (GWS capability broker) is Accepted and **WP-136..WP-143 are all `status: Done`** (specs
