@@ -1,7 +1,7 @@
 ---
 id: WP-133
 title: Live negative containment harness — hermetic dream + every routine, canaries, tool inventory (audit A1)
-status: Draft
+status: Ready
 model: opus
 size: M
 depends_on: [WP-130, WP-131, WP-132]
@@ -167,21 +167,30 @@ module.exports = { SUPPORTED_CLAUDE, checkClaudeVersion };
     certified before?" self-notice. Recommend (b): the constant costs nothing and gives the
     maintainer a cheap re-cert signal, while WP-135 owns all production safety.
 
-- **D-HARNESS-ROUTINE-EXEC — how a routine's contained argv is run live without opening
-  the gate.**
-  - **Recommended: the harness calls `composeRoutineRun` directly (which does not check the
-    gate — the gate lives in `run-job.js`) and spawns the returned `{command,args,cwd}`
-    itself**, so it exercises the exact production argv without touching
-    `external-content-routine`. Rationale: this proves the *composed* containment argv,
-    which is the security-relevant artifact; going through `run-job.js` would require the
-    `allowAll()` profile seam and pull in clean-env/watchdog/log machinery irrelevant to
-    the containment assertion.
-  - **Counterargument:** spawning the argv directly skips `run-job.js`'s clean env and
-    WP-132 preflight, so the harness proves the *argv's* containment but not the whole
-    `run-job` wrapper. Mitigation: `run-job`'s wrapper is unit-tested (WP-131/WP-132); the
-    live harness's unique value is proving the argv contains against the real runtime.
-    Optionally add ONE end-to-end `run-job` case with the `allowAll()` seam if the owner
-    wants the full wrapper proven live too.
+- **D-HARNESS-ROUTINE-EXEC — RESOLVED (OWNER-APPROVED 2026-07-18): compose-and-spawn now;
+  the full end-to-end proof is a REQUIRED gate-opening precondition, executed at A2.**
+  - **Approved (now, WP-133): the harness calls `composeRoutineRun` directly (which does not
+    check the gate — the gate lives in `run-job.js`) and spawns the returned
+    `{command,args,cwd}` itself**, so it exercises the exact production argv without touching
+    `external-content-routine`. This proves the *composed* containment argv — where all the
+    containment lives (the tools allowlist, deny list, staging, settings, MCP posture). It is
+    real and stable today: dream always, `weekly-review` (`mcp:'empty'`) composes, and the
+    broker routines are asserted **fail-closed** (no A2 broker config yet).
+  - **The full end-to-end `run-job` wrapper proof (B) is NOT optional — it is a REQUIRED
+    precondition for ever opening the `external-content-routine` gate.** *(Corrected framing,
+    owner 2026-07-18: the point of A1/A2 is to make it SAFE to remove the block, so the
+    containment proof must be as complete as opening the gate demands — "routines are blocked
+    now" is NOT a valid reason to under-prove. It would be circular: this proof is the
+    precondition for unblocking.)* The reason B is sequenced to **A2** is non-circular: a
+    routine's full production launch path does not yet EXIST in final form — A2 wires the
+    broker + the bounded vault snapshot into `run-job` and the routine profile, and broker
+    routines have no runnable argv at all until then. Building B now would test an incomplete
+    wrapper A2 will change. So: **A2 (and the eventual gate-open work) MUST add the end-to-end
+    `run-job` live containment case (via the `allowAll()` code seam) against the A2-final
+    routine path — clean env + WP-132 preflight + snapshot + broker — before the gate opens.**
+    Recorded here as a durable hand-off; when A2 is specced this becomes an explicit
+    gate-opening precondition in the A2 work (cross-ref the ACTION-LIST gate-open criteria:
+    P1 + audit rerun + explicit go + this end-to-end containment proof).
 
 ## Implementation notes & constraints
 
