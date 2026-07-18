@@ -28,9 +28,10 @@ test('allows the spec file itself', () => {
   assert.equal(result.status, 0);
 });
 
-test('allows docs/specs/ROADMAP.md unconditionally', () => {
+test('rejects docs/specs/ROADMAP.md when not listed in Deliverables (ADR-0029)', () => {
   const result = run([specPath, 'docs/specs/ROADMAP.md']);
-  assert.equal(result.status, 0);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /ROADMAP\.md/);
 });
 
 test('rejects a file not in the Deliverables table', () => {

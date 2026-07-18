@@ -56,7 +56,7 @@ jobs:
         env:
           PR_BODY: ${{ github.event.pull_request.body }}
         run: |
-          SPEC=$(printf '%s\n' "$PR_BODY" | grep -m1 -oE 'Spec:[[:space:]]*docs/specs/WP-[0-9]{3}[A-Za-z0-9._-]*\.md' | sed -E 's/^Spec:[[:space:]]*//')
+          SPEC=$(printf '%s\n' "$PR_BODY" | grep -m1 -oE 'Spec:[[:space:]]*docs/specs/WP-[a-z0-9][A-Za-z0-9._-]*\.md' | sed -E 's/^Spec:[[:space:]]*//')
           if [ -z "$SPEC" ]; then
             echo "::notice::No Spec: line found in PR body — treating as a docs-only PR, boundary check skipped."
             exit 0
@@ -78,7 +78,7 @@ jobs:
           PR_BODY: ${{ github.event.pull_request.body }}
         run: |
           if printf '%s\n' "$PR_BODY" | grep -qE '^Spec:'; then
-            PATTERN='^(feat|fix|docs|test|chore)(\([a-z0-9-]+\))?: .+ \(WP-[0-9]{3}\)$'
+            PATTERN='^(feat|fix|docs|test|chore)(\([a-z0-9-]+\))?: .+ \(WP-[a-z0-9]+(-[a-z0-9]+)*\)$'
           else
             PATTERN='^(feat|fix|docs|test|chore)(\([a-z0-9-]+\))?: .+$'
           fi

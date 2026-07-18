@@ -2,8 +2,8 @@
 /** Usage: node scripts/boundary-check.js <specPath> <changedFile...>
  *  Parses the spec's "## Deliverables" markdown table (rows: | Action | Path | Notes |),
  *  exits 0 if every changedFile is listed (exact path match) or is the spec file itself,
- *  else prints offending paths and exits 1. The spec file and docs/specs/ROADMAP.md
- *  are always allowed (status flips). */
+ *  else prints offending paths and exits 1. The spec file is always allowed
+ *  (status flips). */
 'use strict';
 const fs = require('node:fs');
 
@@ -42,7 +42,6 @@ function main() {
   const specText = fs.readFileSync(specPath, 'utf8');
   const allowed = new Set(parseDeliverables(specText));
   allowed.add(specPath);
-  allowed.add('docs/specs/ROADMAP.md');
   // Lockfile churn legitimately accompanies package.json changes.
   allowed.add('package-lock.json');
   // One appended dogfood lesson per session is allowed by CLAUDE.md.

@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 /**
- * Validates YAML frontmatter of every docs/specs/WP-*.md against
- * tests/schemas/spec.schema.json, and every .claude/agents/*.md against
- * tests/schemas/agent.schema.json.
+ * Validates YAML frontmatter of every docs/specs/WP-*.md and
+ * docs/specs/done/WP-*.md against tests/schemas/spec.schema.json, and every
+ * .claude/agents/*.md against tests/schemas/agent.schema.json. Also runs
+ * cross-file checks over all specs: `id` uniqueness and `depends_on`
+ * resolution (ADR-0029).
  *
  * Hand-rolled frontmatter parser (no runtime YAML dependency). Supports only
  * the subset of YAML this repo actually uses: a block delimited by `---`
@@ -83,6 +85,36 @@ function validate(data, schema, label) {
   return errors;
 }
 
+/**
+ * Cross-file checks over all spec frontmatters (ADR-0029): every `id` is
+ * unique across docs/specs/ and docs/specs/done/, and every `depends_on`
+ * entry resolves to an existing spec id.
+ * @param {{file: string, fm: Record<string, string|string[]>}[]} specs
+ * @returns {string[]}
+ */
+function crossChecks(specs) {
+  const errors = [];
+  /** @type {Map<string, string>} */
+  const byId = new Map();
+  for (const { file, fm } of specs) {
+    if (typeof fm.id !== 'string') continue;
+    if (byId.has(fm.id)) {
+      errors.push(`${file}: duplicate id "${fm.id}" (also declared in ${byId.get(fm.id)})`);
+    } else {
+      byId.set(fm.id, file);
+    }
+  }
+  for (const { file, fm } of specs) {
+    const deps = Array.isArray(fm.depends_on) ? fm.depends_on : [];
+    for (const dep of deps) {
+      if (!byId.has(dep)) {
+        errors.push(`${file}: depends_on "${dep}" does not resolve to any spec id`);
+      }
+    }
+  }
+  return errors;
+}
+
 /** @param {string} p */
 function loadSchema(p) {
   return JSON.parse(fs.readFileSync(p, 'utf8'));
@@ -103,11 +135,16 @@ function main() {
   const specSchema = loadSchema(path.join(root, 'tests/schemas/spec.schema.json'));
   const agentSchema = loadSchema(path.join(root, 'tests/schemas/agent.schema.json'));
 
-  const specFiles = globFiles(path.join(root, 'docs/specs'), 'WP-');
+  const specFiles = [
+    ...globFiles(path.join(root, 'docs/specs'), 'WP-'),
+    ...globFiles(path.join(root, 'docs/specs/done'), 'WP-'),
+  ];
   const agentFiles = globFiles(path.join(root, '.claude/agents'), '');
 
   /** @type {string[]} */
   const allErrors = [];
+  /** @type {{file: string, fm: Record<string, string|string[]>}[]} */
+  const parsedSpecs = [];
 
   for (const file of specFiles) {
     const fm = parseFrontmatter(fs.readFileSync(file, 'utf8'));
@@ -115,8 +152,11 @@ function main() {
       allErrors.push(`${file}: no frontmatter found`);
       continue;
     }
+    parsedSpecs.push({ file, fm });
     allErrors.push(...validate(fm, specSchema, file));
   }
+
+  allErrors.push(...crossChecks(parsedSpecs));
 
   for (const file of agentFiles) {
     const fm = parseFrontmatter(fs.readFileSync(file, 'utf8'));
