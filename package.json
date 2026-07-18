@@ -24,7 +24,8 @@
     "gen:agents": "node scripts/gen-agents-md.js",
     "scenarios": "node tests/scenarios/run-scenarios.js",
     "scenarios:negative": "node tests/scenarios/negative/run-negative.js",
-    "broker:selfcheck": "node tests/scenarios/broker/lifecycle-selfcheck.js"
+    "broker:selfcheck": "node tests/scenarios/broker/lifecycle-selfcheck.js",
+    "scenarios:broker-e2e": "node tests/scenarios/broker-e2e/run-broker-e2e.js"
   },
   "repository": {
     "type": "git",

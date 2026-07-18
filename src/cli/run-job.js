@@ -452,7 +452,10 @@ function safeResolvePath(input, guard, hopCap = 40) {
  * @param {{name:string, at:string, run:string, timeoutMinutes:number}} job
  * @param {{sendAlert?: typeof defaultSendAlert, loader?: (argv:string[])=>{status:number},
  *          platform?: NodeJS.Platform,
- *          detectPolicyHooks?: typeof detectPolicyHooks}} [opts]
+ *          detectPolicyHooks?: typeof detectPolicyHooks,
+ *          profile?: Record<string,string>}} [opts] `opts.profile` is the
+ *   WP-142 harness code seam (see safety-profile.js): reachable ONLY by a JS
+ *   caller — the CLI entry never passes one, so production stays frozen.
  * @returns {Promise<void>}
  */
 async function runJob(paths, job, opts = {}) {
@@ -510,7 +513,7 @@ async function runJob(paths, job, opts = {}) {
   // 2. Clean env + command. A hermetic routine composition returns its own
   //    cwd (the fresh staging dir); everything else keeps the vault cwd.
   const env = buildCleanEnv(paths, name, platform);
-  const { command, args, shell, cwd: composedCwd } = resolveCommand(paths, job);
+  const { command, args, shell, cwd: composedCwd } = resolveCommand(paths, job, opts.profile);
   const spawnCwd = composedCwd || cwd;
 
   // 2b. Managed-policy hook preflight (WP-132, D-POLICY-HOOK): a managed/admin
