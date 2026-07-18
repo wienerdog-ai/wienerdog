@@ -44,6 +44,18 @@ Any mismatch ⇒ a fixed durable alert and **zero model/Node-app spawn**. It als
 hardens the vendored update: the version dir is made read-only after the atomic
 publish, and an interrupted update leaves the previous valid `current` intact.
 
+> **RESOLVED (OWNER-APPROVED 2026-07-18, A7 walkthrough) — fail-closed sync
+> authorization (this is where it is enforced).** Runtime edits to `config.yaml`
+> (or the app tree) do **not** change what the scheduled job runs until an explicit
+> `wienerdog sync` re-binds the descriptor digest into the OS entry. At fire time,
+> **any** descriptor-digest mismatch ⇒ a durable alert + **zero model/Node-app
+> spawn**. To be unambiguous: there is **no soft fallback** to the stored
+> descriptor and **no "run anyway"** path — the launcher refuses and exits
+> non-zero. The single remedy is `wienerdog sync`. Accepted UX cost, stated
+> plainly: a legitimate hand-edit of `config.yaml` **without** a follow-up `sync`
+> makes the next scheduled dream refuse with a clear mismatch alert — one skipped
+> night, not silent degradation.
+
 **Honest boundary (state this; do not overclaim).** Same-user control of BOTH
 the core and the OS scheduler can still replace both anchors: an actor who can
 rewrite the OS entry file (`~/Library/LaunchAgents/…`, a systemd unit) AND the
@@ -131,8 +143,9 @@ manifest entry (WP-144-valid, in-bounds under `<core>`).
  *   - appTreeDigest(paths) !== descriptor.appRelease.treeDigest;
  *   - the descriptor's stance does not match the live stance (prod entry over a
  *     dev-looking tree, or vice versa);
- *   - deriveDescriptorDigest(paths, job, …) !== o.expectDigest (config `run`/pin/
- *     app drift, and the entry-bound digest is the independent anchor). */
+ *   - deriveDescriptorDigest(paths, job, …) !== o.expectDigest (config `run`/
+ *     `model`/pin/app drift, and the entry-bound digest is the independent
+ *     anchor). */
 function verifyAndResolve(paths, name, o) {}
 
 /** CLI entry the OS scheduler invokes:

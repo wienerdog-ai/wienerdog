@@ -79,8 +79,8 @@ sentence overreach it (no "your scheduled AI can never be tampered with").
   under `app/current` and (b) the `run` action in `config.yaml`. A7 makes both
   **integrity-checked at fire time** rather than trusted.
 - Each scheduled job has a **canonical, code-owned descriptor** (its `run` action,
-  capability profile, prompt/skill hash, timeout, vault root, the absolute
-  executable identities, and the app release digest), reduced to a **descriptor
+  capability profile, prompt/skill hash, timeout, configured model, vault root, the
+  absolute executable identities, and the app release digest), reduced to a **descriptor
   digest** that is **bound into the OS scheduler entry**. Runtime edits to
   `config.yaml` or the app tree do **not** change what runs until an explicit
   `wienerdog sync` re-binds — a mismatch **fails closed** (a fixed alert, zero
@@ -107,9 +107,9 @@ sentence overreach it (no "your scheduled AI can never be tampered with").
 **GLOSSARY additions (canonical names — never invent synonyms elsewhere):**
 - **job descriptor** — the code-owned, deterministic record of exactly what a
   scheduled job is authorized to run (run action, capability profile,
-  prompt/skill hash, timeout, vault root, absolute executable identities, app
-  release digest); written at schedule/sync and re-derivable to detect drift
-  (WP-156).
+  prompt/skill hash, timeout, configured model, vault root, absolute executable
+  identities, app release digest); written at schedule/sync and re-derivable to
+  detect drift (WP-156).
 - **descriptor digest** — the sha256 of the canonicalized job descriptor, bound
   into the OS scheduler entry as the independent anchor a scoped `config.yaml`/app
   rewrite cannot change.

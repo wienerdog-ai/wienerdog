@@ -27,8 +27,8 @@ Wienerdog is just files.**
 This WP builds the first half of the fix (audit A7): a **canonical job
 descriptor** — a code-owned, deterministic record of exactly what a scheduled
 job is authorized to run: its `run` action, capability profile, prompt/skill
-content hash, timeout, vault root, the **pinned executable identities**
-(command path + install dir, from
+content hash, timeout, the **configured model**, vault root, the **pinned
+executable identities** (command path + install dir, from
 WP-154's pins), and the **app release digest** (a content address of the
 vendored `app/current` tree). The descriptor is serialized canonically and
 reduced to a **descriptor digest** (sha256). It is written at schedule/sync time
@@ -47,6 +47,20 @@ not re-register the OS scheduler entry) and **detects drift**; it is **NOT** a
 claim against arbitrary same-user native malware — that is A12's territory. The
 descriptor's value is that re-deriving it after a scoped `config.yaml`/app edit
 yields a **different digest** than the one captured at authorization time.
+
+> **RESOLVED (OWNER-APPROVED 2026-07-18, A7 walkthrough) — fail-closed sync
+> authorization.** A runtime edit to `config.yaml` (or the app tree) does **not**
+> change what the nightly job executes until an explicit `wienerdog sync`
+> re-derives and re-binds the descriptor digest. At fire time, **any**
+> descriptor-digest mismatch ⇒ a durable alert + **zero model spawn** — there is
+> **no soft fallback** to the stored descriptor and **no "run anyway"** path. The
+> single remedy is always `wienerdog sync`. The honest UX cost is accepted and
+> stated plainly: a legitimate hand-edit of `config.yaml` **without** a follow-up
+> `sync` makes the next scheduled dream refuse with a clear mismatch alert — one
+> skipped night, not silent degradation. This WP builds the descriptor + drift
+> primitive that make this semantic possible; WP-157 enforces it at fire time.
+
+<!-- -->
 
 > **ADR note:** `ADR-0028` records the A7 architectural decision — a **new ADR**
 > (owner-assigned 2026-07-18) covering the digest-bound descriptor + independent
@@ -87,6 +101,18 @@ every Claude Code auto-update.
 integrity-checked skill body used via `--append-system-prompt`); a routine's
 skill body hash comes from the WP-131 hermetic composition.
 
+**`src/core/dream/config.js`** `readDreamConfig(configFile)` is the single config
+read that supplies the dream's runtime knobs: it returns `{vault, timeoutMs,
+maxInputBytes, model}`, where `model` is the `dream_model` config key (via
+`readScalar(body, 'dream_model')`), `null` when unset. `src/cli/dream.js` reads
+`const cfg = readDreamConfig(paths.config)` and threads **`cfg.model`** into BOTH
+the brain spawn argv (`buildClaudeArgs({… model: cfg.model …})` →
+`composeClaudeArgs` emits `--model <model>` in `src/core/runtime-profile.js`;
+Codex's `buildCodexArgs` emits `--model` in `brain.js`) **and** the pre-dream
+containment probe (`runContainmentProbe(paths, { model: cfg.model, … })`). So
+`cfg.model` shapes the 03:30 spawn — the same `readDreamConfig` read that this WP
+uses for `vaultRoot` also supplies `model`.
+
 **WP-144 / WP-145 (dependencies, separately Ready):** WP-144 makes uninstall
 treat the manifest as untrusted (per-kind `validateEntry` schema, per-entry
 error isolation, root-bounded deletes); a `file` entry needs only `{path}` and
@@ -123,6 +149,10 @@ authorization record.
   "promptHash": "sha256:…",                // builtin: sha256(DREAM_PROMPT template) ⊕ vendored dream-skill body hash;
                                            //   skill: the WP-131 verified skill-body hash
   "timeoutMinutes": 20,
+  "model": "sonnet",                       // exact config `dream_model` string put
+                                           //   into the `--model` spawn argv (and the
+                                           //   containment probe); null when unset
+                                           //   (→ user's default model, no `--model`)
   "vaultRoot": "/Users/me/wienerdog",
   "node": "/opt/homebrew/opt/node/bin/node",   // process.execPath
   "exec": {                                 // from WP-154 pins — STABLE identity fields ONLY
@@ -142,6 +172,18 @@ authorization record.
 }
 ```
 
+> **RESOLVED (OWNER-APPROVED 2026-07-18, A7 walkthrough) — `model` joins the
+> descriptor.** The ratified A7 rule is "everything that shapes the 03:30 spawn
+> argv is digest-covered, no exceptions." `cfg.model` flows into the brain spawn
+> argv (`--model …`) **and** the containment probe (see Current state), yet was
+> absent from an earlier descriptor draft — so a `dream_model` edit would have
+> taken effect **silently, without `sync`**, making the WP-159 "everything is
+> digest-covered" documentation claim exception-ridden. `model` is therefore a
+> descriptor field; changing it in `config.yaml` requires `wienerdog sync` (same
+> rule as `timeout`). **Field ordering:** it is shown after `timeoutMinutes`
+> (both are spawn-argv scalars) purely for readability — `canonicalize` sorts
+> keys, so document order is non-normative.
+
 **`src/scheduler/descriptor.js` — pure/`fs`-only, zero deps, JSDoc types:**
 ```js
 /** Content-address the vendored app tree: sha256 over the sorted list of
@@ -151,10 +193,14 @@ authorization record.
  *  @param {import('../core/paths').WienerdogPaths} paths @returns {string} 'sha256:…' */
 function appTreeDigest(paths) {}
 
-/** Build the descriptor for a job from LIVE inputs (config run, pins, app tree,
- *  prompt/skill body). @param {import('../core/paths').WienerdogPaths} paths
+/** Build the descriptor for a job from LIVE inputs (config run, config model,
+ *  pins, app tree, prompt/skill body). @param {import('../core/paths').WienerdogPaths} paths
  *  @param {{name, run, timeoutMinutes}} job
- *  @param {{env?, platform?, vaultRoot?:string}} [opts]  vaultRoot from readDreamConfig
+ *  @param {{env?, platform?, vaultRoot?:string, model?:string|null}} [opts]
+ *   `vaultRoot` and `model` both come from the same `readDreamConfig(paths.config)`
+ *   read (`src/core/dream/config.js`): `vaultRoot`=cfg.vault, `model`=cfg.model
+ *   (the `dream_model` key, null when unset). Passing them in `opts` is an override
+ *   for tests; production reads them from config.
  *  @returns {object} the descriptor (canonical field order). */
 function buildDescriptor(paths, job, opts) {}
 
@@ -226,8 +272,9 @@ digest.
 - [ ] The descriptor is **code-owned**: every field derives from live Wienerdog
       state (config `run`, pins, app tree, prompt/skill body), never from
       attacker-suppliable free-form input.
-- [ ] Changing the job's `run` action, vault root, an exec pin, or the app tree
-      bytes yields a **different** `descriptorDigest` (drift is detectable).
+- [ ] Changing the job's `run` action, vault root, the config `model`, an exec
+      pin, or the app tree bytes yields a **different** `descriptorDigest` (drift
+      is detectable).
 - [ ] The descriptor file is **0600** under `<core>/state/descriptors/`, recorded
       as an in-bounds `file` manifest entry (WP-144-valid; a legit uninstall
       removes it, the vault is preserved).
@@ -238,8 +285,9 @@ digest.
 
 - [ ] **[A7 bullet 1/3 — precondition]** `deriveDescriptorDigest` is
       deterministic (same inputs ⇒ same digest) and changes when the config `run`
-      action, the vault root, any embedded exec pin, or the app `treeDigest`
-      changes — each proven by a unit test mutating exactly one input. (WP-157
+      action, the vault root, the config `model` (`dream_model`), any embedded
+      exec pin, or the app `treeDigest` changes — each proven by a unit test
+      mutating exactly one input. (WP-157
       turns this into "config `run` rewrite ⇒ mismatch alert + zero model spawn"
       and "manifest+config rewrite cannot defeat the independent descriptor".)
 - [ ] `appTreeDigest` over a fixture app dir is stable and changes on any file
