@@ -251,3 +251,77 @@ test('dream-brain: a secret in brain output is redacted in the teed log AND stde
   assert.ok(!result.stderrTail.includes('sk-proj-ABCDEF0123456789abcdef'), 'secret must not reach stderrTail');
   assert.ok(result.stderrTail.includes('OPENAI_API_KEY='), 'non-secret context is preserved');
 });
+
+// --- A7 (WP-154): the brain is spawned by its verified pinned absolute path ---
+
+/** A fake `claude` that answers --version and records its own invoked path. */
+function writePinnableClaude(binDir) {
+  const p = path.join(binDir, 'claude');
+  fs.writeFileSync(
+    p,
+    [
+      '#!/bin/sh',
+      'if [ "$1" = "--version" ]; then echo "9.9.9 (Fake Claude)"; exit 0; fi',
+      'echo "$0" > "$WD_TEST_MARKER"',
+      'exit 0',
+      '',
+    ].join('\n')
+  );
+  fs.chmodSync(p, 0o755);
+  return p;
+}
+
+test('dream-brain: spawnBrain spawns the pinned ABSOLUTE claude path, never the bare name (WP-154)', { skip: process.platform === 'win32' }, async () => {
+  const { createPins } = require('../../src/core/exec-identity');
+  const { getPaths } = require('../../src/core/paths');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-brain-pin-'));
+  const bin = path.join(root, 'bin');
+  fs.mkdirSync(bin, { recursive: true, mode: 0o700 });
+  const fake = writePinnableClaude(bin);
+  const marker = path.join(root, 'marker.txt');
+  const vaultDir = path.join(root, 'vault');
+  fs.mkdirSync(vaultDir);
+
+  const env = {
+    HOME: root,
+    WIENERDOG_HOME: path.join(root, 'wd'),
+    PATH: `${bin}:/usr/bin:/bin`,
+    WD_TEST_MARKER: marker,
+  };
+  createPins(getPaths(env), { env, platform: process.platform });
+
+  const { done } = spawnBrain({ vaultDir, scratchDir: path.join(root, 'scratch'), date: '2026-07-18', model: null, env });
+  const result = await done;
+  assert.equal(result.code, 0);
+  assert.equal(fs.readFileSync(marker, 'utf8').trim(), fs.realpathSync(fake), 'spawned by absolute realpath');
+});
+
+test('dream-brain: spawnBrain fails safe on pin drift — a fake claude earlier on PATH never spawns (WP-154)', { skip: process.platform === 'win32' }, () => {
+  const { createPins } = require('../../src/core/exec-identity');
+  const { getPaths } = require('../../src/core/paths');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-brain-pin-'));
+  const bin = path.join(root, 'bin');
+  const evil = path.join(root, 'evil');
+  fs.mkdirSync(bin, { recursive: true, mode: 0o700 });
+  fs.mkdirSync(evil, { recursive: true, mode: 0o700 });
+  writePinnableClaude(bin);
+  const marker = path.join(root, 'evil-marker.txt');
+  const vaultDir = path.join(root, 'vault');
+  fs.mkdirSync(vaultDir);
+
+  const pinEnv = { HOME: root, WIENERDOG_HOME: path.join(root, 'wd'), PATH: `${bin}:/usr/bin:/bin` };
+  createPins(getPaths(pinEnv), { env: pinEnv, platform: process.platform });
+
+  // Plant the fake FIRST on the job PATH; give it the marker so an accidental
+  // spawn would be visible.
+  const evilClaude = path.join(evil, 'claude');
+  fs.writeFileSync(evilClaude, `#!/bin/sh\necho pwned > "${marker}"\nexit 0\n`);
+  fs.chmodSync(evilClaude, 0o755);
+  const env = { ...pinEnv, PATH: `${evil}:${bin}:/usr/bin:/bin`, WD_TEST_MARKER: marker };
+
+  assert.throws(
+    () => spawnBrain({ vaultDir, scratchDir: path.join(root, 'scratch'), date: '2026-07-18', model: null, env }),
+    (err) => err instanceof WienerdogError && /wienerdog sync/.test(err.message) && /claude/.test(err.message)
+  );
+  assert.equal(fs.existsSync(marker), false, 'the planted fake was never executed');
+});

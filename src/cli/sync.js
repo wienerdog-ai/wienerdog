@@ -204,6 +204,25 @@ async function run(argv, opts = {}) {
     status.refreshSchedulerStatus(paths);
   }
 
+  // A7 (WP-154, ADR-0028): pin claude/git/codex by command path + install dir.
+  // Resolution runs under the SAME clean PATH the nightly job builds — pinning
+  // under the interactive shell PATH would false-drift every night whenever the
+  // shell orders the claude/git dirs differently than buildCleanEnv does.
+  // Idempotent re-pin on every sync (sync IS the explicit "confirm and re-pin"
+  // step the fail-safe message points at). Dry-run: count only, no writes.
+  {
+    const { createPins } = require('../core/exec-identity');
+    const { buildCleanEnv } = require('./run-job');
+    const pinEnv = buildCleanEnv(paths, 'sync');
+    if (dryRun) {
+      const r = createPins(paths, { env: pinEnv, dryRun: true });
+      console.log(`wienerdog: would pin ${Object.keys(r.pins).length} executable(s).`);
+    } else {
+      const r = createPins(paths, { env: pinEnv, manifest });
+      for (const n of r.notices) console.log(`wienerdog: ${n}`);
+    }
+  }
+
   /** @type {{changed: string[], unchanged: string[], notices: string[]}} */
   const summary = { changed: [], unchanged: [], notices: [] };
 

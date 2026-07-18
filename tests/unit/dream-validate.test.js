@@ -11,9 +11,13 @@ const { execFileSync } = require('node:child_process');
 const {
   validateAndCommit,
   parseFrontmatter,
+  assertGitRepo,
   precommitSessionEdits,
   restoreVaultToHead,
 } = require('../../src/core/dream/validate');
+const { createPins } = require('../../src/core/exec-identity');
+const { getPaths } = require('../../src/core/paths');
+const { WienerdogError } = require('../../src/core/errors');
 const { defaultLayout } = require('../../src/core/layout');
 const { readRegistry, recordSkills } = require('../../src/core/dream/skill-registry');
 const { allowAll } = require('../../src/core/safety-profile');
@@ -1149,4 +1153,43 @@ test('dream-validate: EP2 a text change with only deleted lines is still skipped
   assert.ok(res.committed.includes('04-Atomic/shrink.md'));
   assert.equal(git(vault, ['show', 'HEAD:04-Atomic/shrink.md']), 'keep this line\n');
   assert.equal(res.secretReverts, 0);
+});
+
+// --- A7 (WP-154): git is spawned by its verified pinned absolute path ---
+
+test('dream-validate: git works against a valid pin and fails safe when a fake git wins PATH (WP-154)', { skip: process.platform === 'win32' }, () => {
+  const { vault } = tempVault();
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-validate-pin-'));
+  const evilBin = path.join(root, 'evil');
+  fs.mkdirSync(evilBin, { recursive: true, mode: 0o700 });
+  const marker = path.join(root, 'evil-ran.txt');
+  const evilGit = path.join(evilBin, 'git');
+  fs.writeFileSync(evilGit, `#!/bin/sh\necho pwned > "${marker}"\nexit 0\n`);
+  fs.chmodSync(evilGit, 0o755);
+
+  // Pin the REAL git under the test process PATH into an isolated core, then
+  // point the module's getPaths()/process.env at it for the duration.
+  const savedHome = process.env.WIENERDOG_HOME;
+  const savedPath = process.env.PATH;
+  try {
+    process.env.WIENERDOG_HOME = path.join(root, 'wd');
+    const paths = getPaths(process.env);
+    createPins(paths, { env: { PATH: process.env.PATH }, platform: process.platform });
+
+    // Valid pin: git ops run normally (via the pinned absolute realpath).
+    assertGitRepo(vault);
+
+    // Drift: a fake `git` planted earlier on PATH must NEVER run — the pinned
+    // resolve fails safe with the repin message before any spawn.
+    process.env.PATH = `${evilBin}:${savedPath}`;
+    assert.throws(
+      () => assertGitRepo(vault),
+      (err) => err instanceof WienerdogError && /wienerdog sync/.test(err.message) && /git/.test(err.message)
+    );
+    assert.equal(fs.existsSync(marker), false, 'the fake git was never executed');
+  } finally {
+    if (savedHome === undefined) delete process.env.WIENERDOG_HOME;
+    else process.env.WIENERDOG_HOME = savedHome;
+    process.env.PATH = savedPath;
+  }
 });

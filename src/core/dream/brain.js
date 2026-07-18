@@ -9,6 +9,7 @@ const { redactOnly } = require('../secret-scan');
 const { getProfile, composeClaudeArgs } = require('../runtime-profile');
 const { ensureSettingsProfile, loadVendoredSkill, settingsDigest } = require('../runtime-settings');
 const { getPaths } = require('../paths');
+const { resolvePinnedSpawn } = require('../exec-identity');
 const { mkdirPrivate } = require('../private-fs');
 const { detectPolicyHooks } = require('../policy-hooks');
 const { recordRunEvidence } = require('../run-evidence');
@@ -135,12 +136,15 @@ function ensureBrainStaging(paths) {
  * @param {{vaultDir:string, scratchDir:string, date:string, model:string|null,
  *          layout?:import('../layout').VaultLayout,
  *          harness?:'claude'|'codex', env?:NodeJS.ProcessEnv,
+ *          platform?:NodeJS.Platform,
  *          logStream?:NodeJS.WritableStream}} o
+ *   platform  the run's platform (never mock process.platform — inject it)
  * @returns {{ child: import('child_process').ChildProcess,
  *             done: Promise<{code:number|null, durationMs:number, stderrTail:string}> }}
  */
 function spawnBrain(o) {
   const { vaultDir, scratchDir, date, model, harness, env, logStream, containmentProbe } = o;
+  const platform = o.platform || process.platform;
   const layout = o.layout || defaultLayout();
   const baseEnv = env || process.env;
   const childEnv = {
@@ -165,11 +169,15 @@ function spawnBrain(o) {
     args = [];
     cwd = ensureBrainStaging(paths); // fake brain runs from staging too (it writes via the env vars)
   } else if (harness === 'codex') {
-    command = 'codex';
+    // A7 (WP-154): the verified pinned ABSOLUTE realpath, never the bare name —
+    // a fake planted earlier on the job PATH must never win. A drifted pin
+    // THROWS here (fail safe, before any spawn); the run-job watchdog/fail-loud
+    // surfaces it and the message points at `wienerdog sync` to re-pin.
+    command = resolvePinnedSpawn('codex', paths, baseEnv, platform);
     args = buildCodexArgs({ vaultDir, scratchDir, date, model, layout });
     cwd = vaultDir; // Codex path byte-unchanged (A11/P2 — its --cd vaultDir is the write fence)
   } else {
-    command = 'claude';
+    command = resolvePinnedSpawn('claude', paths, baseEnv, platform); // A7: pinned absolute, see above
     // WP-129 assets: the hook-free settings profile (idempotent write) + the
     // integrity-checked skill body inside buildClaudeArgs. A tampered skill
     // throws here — before the spawn (fail closed).
@@ -196,9 +204,9 @@ function spawnBrain(o) {
   if (harness !== 'codex') {
     try {
       let claudeVersion = 'unknown';
-      if (!fakeCmd && command === 'claude') {
-        // ONLY the real claude is version-probed — re-invoking a test fake
-        // could repeat its side effects (D-EVIDENCE: version + path, no hash).
+      if (!fakeCmd) {
+        // ONLY the real (pinned absolute) claude is version-probed — re-invoking
+        // a test fake could repeat its side effects (D-EVIDENCE: version + path, no hash).
         try {
           const r = spawnSync(command, ['--version'], { env: childEnv, timeout: 10_000, encoding: 'utf8' });
           const out = (r.stdout || '').trim().slice(0, 200);

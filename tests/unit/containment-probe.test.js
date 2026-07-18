@@ -169,3 +169,39 @@ test('containment-probe: composes the REAL dream argv with the bounding flags', 
   assert.equal(args[args.indexOf('--output-format') + 1], 'json');
   assert.equal(r.checks.argvStatic, true);
 });
+
+// --- A7 (WP-154): the probe's production fallback is the pinned absolute claude ---
+
+test('containment-probe: with a valid pin and no probeCmd, the PINNED absolute claude is probe-spawned; a fake earlier on PATH is never spawned', { skip: process.platform === 'win32' }, () => {
+  const { createPins } = require('../../src/core/exec-identity');
+  const { paths, root } = tempPaths();
+  const bin = path.join(root, 'bin');
+  const evil = path.join(root, 'evil');
+  fs.mkdirSync(bin, { recursive: true, mode: 0o700 });
+  fs.mkdirSync(evil, { recursive: true, mode: 0o700 });
+  // A contained-mode fake NAMED `claude` so PATH resolution can find and pin it.
+  fs.copyFileSync(writeFake(root, 'contained'), path.join(bin, 'claude'));
+  fs.chmodSync(path.join(bin, 'claude'), 0o755);
+
+  const env = { ...process.env, PATH: `${bin}:${process.env.PATH}` };
+  delete env.WIENERDOG_CONTAINMENT_PROBE_CMD;
+  createPins(paths, { env, platform: process.platform });
+
+  // No opts.probeCmd: the pinned resolve supplies the absolute fake-claude path.
+  const ok = runContainmentProbe(paths, { model: null, env, platform: process.platform });
+  assert.equal(ok.outcome, 'pass', ok.reason);
+  assert.equal(ok.claudeVersion, '9.9.9 (Fake Claude)', 'the pinned fake was the one probed');
+
+  // Drift: a second fake planted EARLIER on the job PATH. The pinned resolve
+  // throws inside the never-throws wrapper -> 'inconclusive' (the caller fails
+  // closed); the planted fake is never probe-spawned.
+  const marker = path.join(root, 'evil-ran.txt');
+  fs.writeFileSync(path.join(evil, 'claude'), `#!/bin/sh\necho pwned > "${marker}"\nexit 0\n`);
+  fs.chmodSync(path.join(evil, 'claude'), 0o755);
+  const driftEnv = { ...env, PATH: `${evil}:${env.PATH}` };
+
+  const r = runContainmentProbe(paths, { model: null, env: driftEnv, platform: process.platform });
+  assert.equal(r.outcome, 'inconclusive');
+  assert.match(r.reason, /probe error: .*claude/);
+  assert.equal(fs.existsSync(marker), false, 'the planted fake was never probe-spawned');
+});

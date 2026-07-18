@@ -6,6 +6,8 @@ const crypto = require('node:crypto');
 const { spawnSync } = require('node:child_process');
 
 const { WienerdogError } = require('../errors');
+const { getPaths } = require('../paths');
+const { resolvePinnedSpawn } = require('../exec-identity');
 const { defaultLayout } = require('../layout');
 const { recordSkills, readRegistry } = require('./skill-registry');
 const { isCapabilityAllowed, CAPABILITY } = require('../safety-profile');
@@ -52,13 +54,18 @@ const MIN_RECURRENCE = 3;
  * Run git inside the vault. Args are passed as an array (never a shell string —
  * paths may contain spaces). Non-zero exit throws WienerdogError unless
  * allowFail is set (then the raw result is returned for inspection).
+ * A7 (WP-154): git is spawned by its verified pinned ABSOLUTE realpath, never
+ * the bare name — a fake `git` planted earlier on the job PATH must never win.
+ * A drifted pin makes resolvePinnedSpawn THROW (fail safe, same WienerdogError
+ * surface as the ENOENT hint below); the message points at `wienerdog sync`.
  * @param {string} vaultDir
  * @param {string[]} args
  * @param {{allowFail?:boolean}} [opts]
  * @returns {import('child_process').SpawnSyncReturns<string>}
  */
 function git(vaultDir, args, opts = {}) {
-  const res = spawnSync('git', ['-C', vaultDir, ...args], { encoding: 'utf8' });
+  const gitPath = resolvePinnedSpawn('git', getPaths(), process.env, process.platform);
+  const res = spawnSync(gitPath, ['-C', vaultDir, ...args], { encoding: 'utf8' });
   if (res.error) {
     const hint =
       res.error.code === 'ENOENT'

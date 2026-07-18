@@ -24,6 +24,7 @@ const crypto = require('node:crypto');
 const { spawnSync } = require('node:child_process');
 const { getProfile, composeClaudeArgs } = require('../runtime-profile');
 const { ensureSettingsProfile } = require('../runtime-settings');
+const { resolvePinnedSpawn } = require('../exec-identity');
 
 /** The full deny set the composed argv must name (WP-128 expanded deny list). */
 const DENY_TOOLS = ['Bash', 'WebFetch', 'WebSearch', 'Task', 'Agent', 'Skill', 'Workflow', 'NotebookEdit'];
@@ -127,13 +128,14 @@ function corroborateDenials(env, canaryPath, writePath) {
 /**
  * Run ONE bounded live canary probe of the real dream hermetic composition.
  * @param {import('../paths').WienerdogPaths} paths
- * @param {{model:string|null, env?:NodeJS.ProcessEnv, spawn?:typeof spawnSync, probeCmd?:string}} opts
+ * @param {{model:string|null, env?:NodeJS.ProcessEnv, spawn?:typeof spawnSync, probeCmd?:string,
+ *          platform?:NodeJS.Platform}} opts  platform defaults to process.platform
+ *   (never mock process.platform — inject it)
  * @returns {ProbeResult}
  */
 function runContainmentProbe(paths, opts = {}) {
   const env = opts.env || process.env;
   const spawn = opts.spawn || spawnSync;
-  const command = opts.probeCmd || env.WIENERDOG_CONTAINMENT_PROBE_CMD || 'claude';
   const model = opts.model || null;
 
   /** @type {ProbeResult['checks']} */
@@ -142,6 +144,18 @@ function runContainmentProbe(paths, opts = {}) {
   let workspace = null;
 
   try {
+    // A7 (WP-154): the production fallback is the verified pinned ABSOLUTE
+    // claude, never the bare name — a fake earlier on the job PATH must never
+    // be probe-spawned. Resolved INSIDE the try: resolvePinnedSpawn THROWS on
+    // drift, and the probe must never throw — the catch below maps it to an
+    // 'inconclusive' ProbeResult, which the caller treats as fail-closed.
+    // opts.probeCmd is the unit-test seam; the WIENERDOG_CONTAINMENT_PROBE_CMD
+    // env seam stays until WP-155 removes it.
+    const command =
+      opts.probeCmd ||
+      env.WIENERDOG_CONTAINMENT_PROBE_CMD ||
+      resolvePinnedSpawn('claude', paths, env, opts.platform || process.platform);
+
     workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-probe-'));
     const stagingDir = path.join(workspace, 'staging'); // the cwd + writable root
     const allowedDir = path.join(workspace, 'allowed'); // benign readable add-dir
