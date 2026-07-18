@@ -57,12 +57,14 @@ function discoverCodex(sessionsDir, opts) {
 // user-authored memory content the dream needs; dropping it loses nothing
 // valuable and avoids an unevidenced trust decision.
 // (memo memory/research/2026-07-13-codex-transcript-role-provenance.md)
+// Revisit this list at each Codex pin bump — see docs/runbooks/codex-pin-bump.md.
 const TRUSTED_MESSAGE_ROLES = new Set(['user', 'developer']);
 
 // Tool/external-output item types → UNTRUSTED (role 'tool_result'). Primary on
 // codex-cli 0.144.x: custom_tool_call_output. Legacy/alternate variants:
 // function_call_output, local_shell_call, web_search_call, tool_search_output.
 // Each is a distinct response_item `type`, never a `message`.
+// Revisit this list at each Codex pin bump — see docs/runbooks/codex-pin-bump.md.
 const TOOL_OUTPUT_TYPES = new Set([
   'custom_tool_call_output',
   'function_call_output',
@@ -99,6 +101,9 @@ function extractToolOutputText(payload) {
  * Map one response_item payload to a message, or null if it produces none.
  * Verified against codex-cli 0.144.1 + upstream openai/codex source
  * (memo memory/research/2026-07-13-codex-transcript-role-provenance.md).
+ * Verified against the version pinned in `src/core/supported-codex.js`
+ * (`SUPPORTED_CODEX`); re-verify per `docs/runbooks/codex-pin-bump.md` on
+ * every codex-cli update.
  * @param {Object} payload
  * @returns {{role:'user'|'assistant'|'tool_result', text:string, ts:null}|null}
  */
