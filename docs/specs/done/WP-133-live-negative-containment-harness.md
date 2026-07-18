@@ -1,7 +1,7 @@
 ---
 id: WP-133
 title: Live negative containment harness — hermetic dream + every routine, canaries, tool inventory (audit A1)
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: [WP-130, WP-131, WP-132]
