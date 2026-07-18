@@ -1,7 +1,7 @@
 ---
 id: WP-149
 title: Guard adopt against the home directory, secret dirs, and unexpectedly large trees before git init/add
-status: Ready
+status: Done
 model: sonnet
 size: M
 depends_on: []
