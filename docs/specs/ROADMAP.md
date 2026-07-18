@@ -154,6 +154,15 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 | [WP-133](WP-133-live-negative-containment-harness.md) | Live negative containment harness — hermetic dream + every routine, canaries (audit A1) | M7 | opus | Done | WP-130, WP-131, WP-132 |
 | [WP-134](WP-134-a1-runtime-containment-docs.md) | A1 documentation — hermetic runtime profile threat model, glossary, honest claims (audit A1) | M7 | sonnet | Done | WP-128, WP-129, WP-130, WP-131, WP-132, WP-133, WP-135 |
 | [WP-135](WP-135-pre-dream-containment-self-check.md) | Pre-dream containment self-check — a bounded live canary probe of the real hermetic composition (audit A1) | M7 | opus | Done | WP-130, WP-132 |
+| [WP-144](WP-144-manifest-untrusted-schema-and-bounded-deletes.md) | Treat the install manifest as untrusted — strict per-kind schema, per-entry error isolation, root-bounded deletes (audit A8) | M7 | opus | Draft | — |
+| [WP-145](WP-145-scheduler-unload-rederive-and-show-plan.md) | Re-derive scheduler unload from platform + validated identity, show the uninstall plan before confirm (audit A8) | M7 | opus | Draft | WP-144 |
+| [WP-146](WP-146-settings-upsert-and-foreign-symlink-preserve.md) | Upsert the recorded hook command set on every sync + preserve a foreign namespaced symlink (audit A13) | M7 | sonnet | Draft | — |
+| [WP-147](WP-147-managed-block-separator-roundtrip.md) | Managed-block uninstall removes only Wienerdog-added separators — never fuse a user's lines (audit A13) | M7 | opus | Draft | WP-145, WP-146 |
+| [WP-148](WP-148-sentinel-ambiguity-isolation.md) | Ambiguous managed block must not abort independent skill/hook reconciliation (audit A13) | M7 | sonnet | Draft | — |
+| [WP-149](WP-149-adopt-sensitive-tree-guard.md) | Guard adopt against home/secret/huge trees before git init+add (audit A13) | M7 | sonnet | Draft | — |
+| [WP-150](WP-150-env-override-path-validation.md) | Validate path-defining env overrides — absolute, normalized, reject '..' (audit A13) | M7 | sonnet | Draft | — |
+| [WP-151](WP-151-self-alert-code-owned-body.md) | Build fail-loud alert/self-email body from code-owned status fields only (audit A13) | M7 | sonnet | Draft | — |
+| [WP-152](WP-152-codex-protocol-pin-and-rerun-discipline.md) | Pin the Codex parser version + make the re-verify-on-bump discipline actionable (audit A13, follows WP-100) | M7 | sonnet | Draft | — |
 
 > **First-production-night incident (2026-07-04).** WP-038, WP-039 and WP-041 form
 > a serial chain (they edit the shared `run-job.js` / `dream.js` / `validate.js`
@@ -1398,4 +1407,14 @@ graph LR
   WP128 --> WP134[WP-134 A1 docs — hermetic runtime profile threat model + glossary]
   WP133 --> WP134
   WP135 --> WP134
+  WP144[WP-144 manifest untrusted schema + root-bounded deletes + per-entry isolation — audit A8]
+  WP144 --> WP145[WP-145 re-derive scheduler unload from validated identity + show uninstall plan — audit A8, ADR-0027]
+  WP146[WP-146 settings-command upsert + preserve foreign wienerdog-* symlink — audit A13]
+  WP145 --> WP147[WP-147 managed-block separator round-trip — never fuse user lines — audit A13]
+  WP146 --> WP147
+  WP148[WP-148 sentinel-ambiguity isolation — ambiguous block does not abort hooks/skills — audit A13]
+  WP149[WP-149 adopt guard — refuse home/secret/huge trees before git init+add — audit A13]
+  WP150[WP-150 env-override path validation — absolute, reject .. segments — audit A13]
+  WP151[WP-151 self-alert body from code-owned fields only — audit A13]
+  WP152[WP-152 Codex parser version pin + rerun-on-bump runbook — audit A13, follows WP-100]
 ```
