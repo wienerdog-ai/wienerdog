@@ -1,7 +1,7 @@
 ---
 id: WP-152
 title: Pin the Codex protocol/CLI version the transcript parser is verified against, and make the re-verify-on-bump discipline actionable
-status: Ready
+status: Done
 model: sonnet
 size: S
 depends_on: []
