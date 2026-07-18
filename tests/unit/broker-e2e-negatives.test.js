@@ -55,7 +55,7 @@ function recordingServices() {
 
 // --- acceptance point 2: external recipient → schema reject, ZERO API calls ---
 
-test('e2e-negatives: send_digest_to_self with any external recipient field makes ZERO API calls', async () => {
+test('broker-e2e-negatives: send_digest_to_self with any external recipient field makes ZERO API calls', async () => {
   for (const extra of [{ to: 'attacker@evil.com' }, { cc: 'x@y.z' }, { bcc: 'x@y.z' }, { recipient: 'x@y.z' }]) {
     const services = recordingServices();
     const registry = buildRegistry({
@@ -72,7 +72,7 @@ test('e2e-negatives: send_digest_to_self with any external recipient field makes
 
 // --- acceptance point 3: forged routine name / env cannot change identity ---
 
-test('e2e-negatives: the trusted descriptor argv comes from the code-owned profile, never from WIENERDOG_JOB', () => {
+test('broker-e2e-negatives: the trusted descriptor argv comes from the code-owned profile, never from WIENERDOG_JOB', () => {
   const paths = tempPaths();
   const saved = process.env.WIENERDOG_JOB;
   process.env.WIENERDOG_JOB = 'forged-identity';
@@ -88,7 +88,7 @@ test('e2e-negatives: the trusted descriptor argv comes from the code-owned profi
   }
 });
 
-test('e2e-negatives: a forged --routine (not a code-owned profile) cannot start the broker, even with a forged env', async () => {
+test('broker-e2e-negatives: a forged --routine (not a code-owned profile) cannot start the broker, even with a forged env', async () => {
   const paths = tempPaths();
   const child = spawn(process.execPath, [bin, 'gws', '_broker', '--routine', 'forged-routine'], {
     env: {
@@ -109,7 +109,7 @@ test('e2e-negatives: a forged --routine (not a code-owned profile) cannot start 
   assert.equal(out, '', 'no MCP byte spoken for a forged identity');
 });
 
-test('e2e-negatives: a grant minted for one routine never answers for another (identity keys the grant)', () => {
+test('broker-e2e-negatives: a grant minted for one routine never answers for another (identity keys the grant)', () => {
   const paths = tempPaths();
   grantStore.putGrant(paths, { routineId: 'weekly-review', kind: 'send_self', to: [] }, { confirmedAtTty: true });
   assert.equal(grantStore.grantCheck(paths, 'daily-digest', 'send_self').allowed, false);
@@ -118,7 +118,7 @@ test('e2e-negatives: a grant minted for one routine never answers for another (i
 
 // --- acceptance point 5: grant-store bit flip fails closed, zero send ---
 
-test('e2e-negatives: a grant-store bit flip → send verb returns the fixed notice with ZERO send calls', async () => {
+test('broker-e2e-negatives: a grant-store bit flip → send verb returns the fixed notice with ZERO send calls', async () => {
   const paths = tempPaths();
   grantStore.putGrant(paths, { routineId: 'daily-digest', kind: 'send_self', to: [] }, { confirmedAtTty: true });
   const file = grantStore.storePath(paths);
@@ -145,7 +145,7 @@ test('e2e-negatives: a grant-store bit flip → send verb returns the fixed noti
 
 // --- acceptance point 6: a read-only credential cannot send / mutate ---
 
-test('e2e-negatives: a read-only credential presented for SEND is refused by the exact-scope check', async () => {
+test('broker-e2e-negatives: a read-only credential presented for SEND is refused by the exact-scope check', async () => {
   const paths = tempPaths();
   fs.mkdirSync(paths.secrets, { recursive: true, mode: 0o700 });
   client.persistClientJson(paths, { installed: { client_id: 'id', client_secret: 's' } });
@@ -160,7 +160,7 @@ test('e2e-negatives: a read-only credential presented for SEND is refused by the
   );
 });
 
-test('e2e-negatives: a read-only credential presented for CALENDAR_WRITE is refused the same way', async () => {
+test('broker-e2e-negatives: a read-only credential presented for CALENDAR_WRITE is refused the same way', async () => {
   const paths = tempPaths();
   fs.mkdirSync(paths.secrets, { recursive: true, mode: 0o700 });
   client.persistClientJson(paths, { installed: { client_id: 'id', client_secret: 's' } });
@@ -178,7 +178,7 @@ test('e2e-negatives: a read-only credential presented for CALENDAR_WRITE is refu
 
 // --- the registry's method surface is closed (supports live assertion 3) ---
 
-test('e2e-negatives: no broker verb maps to a delete/update/generic method', () => {
+test('broker-e2e-negatives: no broker verb maps to a delete/update/generic method', () => {
   const { VERBS } = require('../../src/gws/broker/verbs');
   for (const v of Object.values(VERBS)) {
     assert.ok(!/delete|update|patch|batch/i.test(v.apiMethod), `${v.name} must not mutate beyond its verb`);
