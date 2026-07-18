@@ -38,9 +38,11 @@ the core and the OS scheduler can still replace both anchors. A7 protects
 **scoped core writes** and **detects drift**; it is **NOT** a claim against
 arbitrary same-user native malware — that is A12's territory. This harness
 proves the *scoped-write* negatives (write `config.yaml`/`app/current`/
-`~/.local/bin` but not the OS entry) and the *drift-detection* positives; it does
-**not** assert protection against an actor who also rewrites the OS scheduler
-entry and the launcher — the harness must not claim that.
+`~/.local/bin` but NOT the launcher file or the OS entry) and the
+*drift-detection* positives; it does **not** assert protection against an actor
+who can overwrite the launcher itself (`<core>/launcher/launch.js`, a core-wide
+write that defeats the launcher layer alone) or rewrite the OS scheduler entry —
+the harness must not claim that.
 
 > **ADR note:** `ADR-0028` records the A7 architectural decision — a **new ADR**
 > (owner-assigned 2026-07-18), distinct from ADR-0027 (A8's re-derived scheduler

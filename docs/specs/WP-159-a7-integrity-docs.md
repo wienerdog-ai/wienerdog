@@ -98,11 +98,15 @@ sentence overreach it (no "your scheduled AI can never be tampered with").
 - The production test-exec seams (`WIENERDOG_RUNJOB_CMD`, `WIENERDOG_DREAM_CMD`)
   are **inert without `WIENERDOG_TEST=1`** and every dispatch is **`shell:false`**.
 - **Honest residual (A12):** this protects **scoped core writes** and **detects
-  drift** between attended `sync`s; it is **not an OS boundary**. A same-user
-  *native* actor who can rewrite the OS scheduler entry AND the launcher/app can
-  replace both anchors — that is A12's territory, a different design (root-/
+  drift** between attended `sync`s; it is **not an OS boundary**. The independent
+  launcher is itself a core file (`<core>/launcher/launch.js`), so a same-user
+  *native* actor with a **core-wide write** — e.g. one that overwrites the
+  launcher itself — defeats this layer **alone**, without even touching the OS
+  scheduler entry; that is A12's territory, a different design (root-/
   publisher-anchored launcher, OS user-presence), not a local-file tweak. Do not
-  imply the scheduled run is tamper-proof against same-user native code.
+  imply the scheduled run is tamper-proof against same-user native code, and do
+  not imply the launcher is protected against a write that reaches the launcher
+  file.
 
 **GLOSSARY additions (canonical names — never invent synonyms elsewhere):**
 - **job descriptor** — the code-owned, deterministic record of exactly what a

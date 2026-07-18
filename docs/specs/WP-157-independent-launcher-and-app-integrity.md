@@ -56,16 +56,61 @@ publish, and an interrupted update leaves the previous valid `current` intact.
 > makes the next scheduled dream refuse with a clear mismatch alert — one skipped
 > night, not silent degradation.
 
-**Honest boundary (state this; do not overclaim).** Same-user control of BOTH
-the core and the OS scheduler can still replace both anchors: an actor who can
-rewrite the OS entry file (`~/Library/LaunchAgents/…`, a systemd unit) AND the
-launcher/app can defeat this. A7 protects **scoped core writes** (a limited
-primitive that writes `app/current`/`config.yaml` but does not re-register the OS
-entry) and **detects drift** (the entry's bound digest, a different file from the
-app tree, still names the authorized state). It is **NOT** a claim against
-arbitrary same-user native malware — that is A12's territory. The launcher being
-outside `app/current` is what lets a scoped write to the app tree be *caught*
-rather than silently executed.
+**Honest boundary (state this; do not overclaim).**
+> **RESOLVED (OWNER-APPROVED 2026-07-18, A7 walkthrough) — corrected boundary: the
+> launcher is itself a core file.** The earlier draft claimed an attacker needs to
+> rewrite "the OS entry file AND the launcher/app" to defeat this — that was
+> **wrong**. The entry-bound `--expect-digest` is interpreted BY the launcher, and
+> the launcher lives at `<core>/launcher/launch.js` — the SAME write surface as the
+> app tree it guards. So **rewriting the launcher ALONE defeats this layer**: a
+> replaced launcher simply ignores the bound digest and spawns anything, **no
+> OS-entry write required**.
+
+The precise, honest claim: a **core-wide write primitive** — anything that can
+overwrite `<core>/launcher/launch.js` (arbitrary same-user write anywhere under
+`<core>`) — defeats this layer **alone**, and that class of adversary is **A12's
+territory**, not A7's. What A7 protects is the **strictly narrower** class of
+**scoped writes that reach `config.yaml`, the app tree, and/or the install
+manifest but NOT the launcher file** — e.g. an agent session with vault/config
+write access, a subverted routine, or a config-only primitive. Against that class
+the guarantee is precise and holds: because the launcher (a *different* file from
+both the app tree and `config.yaml`) re-derives and checks the descriptor digest
+against the value bound into the OS entry, a **`config.yaml` + manifest rewrite
+alone can never make a drifted state verify** — the launcher catches the drift and
+refuses. The launcher living outside `app/current` is exactly what lets a scoped
+write *to the app tree* be *caught* rather than silently executed; it does **not**
+defend the launcher file against a write that reaches the launcher itself.
+
+> **Documented strengthening path ("2b") — owner-considered, DEFERRED to A12, NOT
+> implemented in this WP.** The residual above (a core-wide write to the launcher
+> file defeats this layer without touching the OS entry) has a known, deliberately
+> deferred hardening: move the trust anchor off the on-disk launcher file and into
+> the OS entry the scheduler already treats as authoritative. Inline a ~10-line
+> bootstrap into the OS entry argv itself (`node -e '<bootstrap>'`) that:
+> reads `<core>/launcher/launch.js` **once** into memory, computes `sha256` over
+> that buffer, compares it to a **launcher-digest embedded in the entry**, and on
+> match executes the launcher **from that same in-memory buffer** (no second disk
+> read — **TOCTOU-free**); on mismatch it writes to stderr and exits non-zero with
+> **zero spawn**. This raises the bar so overwriting `launch.js` alone no longer
+> suffices — an attacker would ALSO have to rewrite the OS entry (which, unlike the
+> old wrong sentence, this design would then legitimately require).
+> **Costs, recorded so the deferral is honest:**
+> - every launcher change requires an OS-entry rewrite + scheduler reload (entry
+>   churn on each `sync` that touches the launcher);
+> - the refuse path **cannot** append the durable alert (the alert code lives in
+>   the unverified launcher/app files it is refusing to trust) — stderr + non-zero
+>   exit only, no `appendAlert`;
+> - the run-from-buffer pattern (executing a module from an in-memory buffer
+>   without re-reading disk) needs careful review;
+> - the inline code must be escaped per-platform (launchd plist array vs systemd
+>   `ExecStart` vs Windows XML `<Arguments>`) — small but real.
+>
+> This path is to be **carried into ADR-0028** (written at the A7 walkthrough's
+> conclusion) as the documented next increment; its **revisit trigger is A12** (the
+> audit item that owns arbitrary same-user native-malware defenses). It is **not**
+> built now.
+
+<!-- -->
 
 > **ADR note:** `ADR-0028` records the A7 architectural decision — a **new ADR**
 > (owner-assigned 2026-07-18), distinct from ADR-0027 (A8's re-derived scheduler
@@ -123,9 +168,10 @@ filename does not change), so unload still works after this WP.
 **Launcher location.** `<core>/launcher/launch.js`, a small self-contained Node
 file placed by `writeLauncher` at vendor time (like the PATH shim). It is a
 **secondary anchor**: distinct from `app/current`, so a scoped write to the app
-tree cannot disable it. (A write that reaches *both* the launcher and the OS entry
-is outside the boundary — see the boundary paragraph.) Recorded as a `file`
-manifest entry (WP-144-valid, in-bounds under `<core>`).
+tree cannot disable it. (A write that can overwrite the launcher file itself — a
+core-wide write primitive — is outside this layer's boundary; the launcher is a
+core file and does not defend itself. See the boundary paragraph.) Recorded as a
+`file` manifest entry (WP-144-valid, in-bounds under `<core>`).
 
 **`src/scheduler/launcher.js`:**
 ```js
@@ -144,8 +190,8 @@ manifest entry (WP-144-valid, in-bounds under `<core>`).
  *   - the descriptor's stance does not match the live stance (prod entry over a
  *     dev-looking tree, or vice versa);
  *   - deriveDescriptorDigest(paths, job, …) !== o.expectDigest (config `run`/
- *     `model`/pin/app drift, and the entry-bound digest is the independent
- *     anchor). */
+ *     `model`/`timeout`/pin/app drift, and the entry-bound digest is the
+ *     independent anchor). */
 function verifyAndResolve(paths, name, o) {}
 
 /** CLI entry the OS scheduler invokes:
@@ -291,8 +337,12 @@ npm run lint
 - The end-to-end negative harness that drives real scheduled runs — **WP-158**.
 - Content-addressed **renaming** of the version dir (`app/<hash>/`): out of scope;
   this WP content-addresses the *verification* (treeDigest), not the dir name
-  (keeps ADR-0013's version-dir layout). Flag it to the ADR if the owner wants the
-  stronger form.
+  (keeps ADR-0013's version-dir layout). **RESOLVED (OWNER-APPROVED 2026-07-18, A7
+  walkthrough) — REJECTED:** version-named dirs stay. Content-addressing already
+  lives in the fire-time check (treeDigest vs descriptor — the dir NAME decides
+  nothing at verify time); renaming to `app/<hash>/` would churn uninstall/manifest
+  paths and destroy at-a-glance debuggability ("which version am I running") for no
+  meaningful attacker cost.
 
 ## Definition of done
 

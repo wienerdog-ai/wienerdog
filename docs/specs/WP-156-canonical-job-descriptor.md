@@ -148,7 +148,13 @@ authorization record.
   "profileId": "dream",                    // code-owned capability profile id
   "promptHash": "sha256:…",                // builtin: sha256(DREAM_PROMPT template) ⊕ vendored dream-skill body hash;
                                            //   skill: the WP-131 verified skill-body hash
-  "timeoutMinutes": 20,
+  "timeoutMs": 1200000,                    // EFFECTIVE dream watchdog + lock-deadline
+                                           //   timeout = readDreamConfig().timeoutMs
+                                           //   (config `dream_timeout_minutes`, default
+                                           //   20 min ⇒ 1_200_000 ms when unset). NOT
+                                           //   job.timeoutMinutes (that governs only the
+                                           //   run-job OUTER watchdog, a fixed registration
+                                           //   value). See the timeout amendment below.
   "model": "sonnet",                       // exact config `dream_model` string put
                                            //   into the `--model` spawn argv (and the
                                            //   containment probe); null when unset
@@ -184,6 +190,36 @@ authorization record.
 > (both are spawn-argv scalars) purely for readability — `canonicalize` sorts
 > keys, so document order is non-normative.
 
+<!-- -->
+
+> **RESOLVED (OWNER-APPROVED 2026-07-18, A7 walkthrough) — descriptor timeout is
+> the EFFECTIVE config value, not a registration constant (mis-wired source).**
+> Under the ratified "everything that shapes the 03:30 spawn is digest-covered, no
+> exceptions" rule (DECISION 2), the timeout field was mis-wired. An earlier draft
+> sourced it from `job.timeoutMinutes` — the value in config.yaml's `jobs:`
+> managed section that is written as a fixed `20` at dream registration
+> (`schedule.js`) and governs ONLY the **outer** run-job watchdog
+> (`run-job.js` `resolveTimeoutMs`). Meanwhile the value that actually bounds the
+> nightly brain — the **inner** brain watchdog (`runBrainWithWatchdog({timeoutMs:
+> cfg.timeoutMs})`) **and** the single-run lock deadline (`acquireLock(paths.state,
+> cfg.timeoutMs)`) in `src/cli/dream.js` — is `cfg.timeoutMs` from
+> `readDreamConfig`, i.e. the **top-level `dream_timeout_minutes`** config key. So
+> a `dream_timeout_minutes` edit changed the real dream timeout **silently and
+> without `sync`**, and never drifted the digest — the field protected a constant.
+> **Fix:** the descriptor's timeout is sourced from the SAME
+> `readDreamConfig(paths.config)` read that supplies `vaultRoot`/`model`, recording
+> the EFFECTIVE value `cfg.timeoutMs`.
+> **Units/naming (recorded choice):** the field is `timeoutMs` (integer
+> milliseconds), recording `cfg.timeoutMs` verbatim — the exact value the watchdog
+> and lock consume, with no lossy minute-conversion and the unit explicit in the
+> name (chosen over `timeoutMinutes`).
+> **Unset behavior (verified against code):** when `dream_timeout_minutes` is
+> unset, `readDreamConfig` returns its OWN default of 20 min (`1_200_000` ms) — it
+> does NOT fall back to `job.timeoutMinutes`; the descriptor records that effective
+> default. The run-job outer watchdog (`job.timeoutMinutes`, jobs managed section,
+> fixed 20 at registration) is a separate registration value and is not the
+> descriptor's timeout source. This was a mis-wired source, not a scope change.
+
 **`src/scheduler/descriptor.js` — pure/`fs`-only, zero deps, JSDoc types:**
 ```js
 /** Content-address the vendored app tree: sha256 over the sorted list of
@@ -196,11 +232,15 @@ function appTreeDigest(paths) {}
 /** Build the descriptor for a job from LIVE inputs (config run, config model,
  *  pins, app tree, prompt/skill body). @param {import('../core/paths').WienerdogPaths} paths
  *  @param {{name, run, timeoutMinutes}} job
- *  @param {{env?, platform?, vaultRoot?:string, model?:string|null}} [opts]
- *   `vaultRoot` and `model` both come from the same `readDreamConfig(paths.config)`
- *   read (`src/core/dream/config.js`): `vaultRoot`=cfg.vault, `model`=cfg.model
- *   (the `dream_model` key, null when unset). Passing them in `opts` is an override
- *   for tests; production reads them from config.
+ *  @param {{env?, platform?, vaultRoot?:string, model?:string|null, timeoutMs?:number}} [opts]
+ *   `vaultRoot`, `model`, and `timeoutMs` all come from the same
+ *   `readDreamConfig(paths.config)` read (`src/core/dream/config.js`):
+ *   `vaultRoot`=cfg.vault, `model`=cfg.model (the `dream_model` key, null when
+ *   unset), `timeoutMs`=cfg.timeoutMs (the EFFECTIVE dream watchdog + lock-deadline
+ *   timeout; config `dream_timeout_minutes`, default 20 min ⇒ 1_200_000 ms when
+ *   unset). The descriptor's timeout is this effective value, NOT
+ *   `job.timeoutMinutes` (which governs only the run-job outer watchdog). Passing
+ *   these in `opts` is an override for tests; production reads them from config.
  *  @returns {object} the descriptor (canonical field order). */
 function buildDescriptor(paths, job, opts) {}
 
@@ -232,9 +272,11 @@ module.exports = { appTreeDigest, buildDescriptor, canonicalize, descriptorDiges
 **`schedule.js` wiring.** In `registerPlatform`, after the platform entries are
 ensured (and only when not a dry, unsupported-platform bail), call
 `require('../scheduler/descriptor').writeDescriptor(paths, {name, run,
-timeoutMinutes}, { platform })` for the job being registered. The `run` +
-`timeoutMinutes` come from the job definition (`jobsLib.findJob`/the `add`
-argv). `add` and `repointSchedules` both flow through `registerPlatform`, so both
+timeoutMinutes}, { platform })` for the job being registered. The `run` comes
+from the job definition (`jobsLib.findJob`/the `add` argv); the descriptor's
+**timeout, vault root, and model are read from `readDreamConfig(paths.config)`
+inside `buildDescriptor`** (the EFFECTIVE runtime values) — `job.timeoutMinutes`
+is NOT the descriptor's timeout source. `add` and `repointSchedules` both flow through `registerPlatform`, so both
 write/refresh the descriptor. The descriptor file is saved with the manifest
 (the existing `manifestLib.save` at the end of `add`/the sync flow). **Do not add
 any argv/flag to the OS entry here** — the entry stays `[node, bin, run-job,
@@ -272,7 +314,8 @@ digest.
 - [ ] The descriptor is **code-owned**: every field derives from live Wienerdog
       state (config `run`, pins, app tree, prompt/skill body), never from
       attacker-suppliable free-form input.
-- [ ] Changing the job's `run` action, vault root, the config `model`, an exec
+- [ ] Changing the job's `run` action, vault root, the config `model`
+      (`dream_model`), the config **timeout** (`dream_timeout_minutes`), an exec
       pin, or the app tree bytes yields a **different** `descriptorDigest` (drift
       is detectable).
 - [ ] The descriptor file is **0600** under `<core>/state/descriptors/`, recorded
@@ -285,8 +328,9 @@ digest.
 
 - [ ] **[A7 bullet 1/3 — precondition]** `deriveDescriptorDigest` is
       deterministic (same inputs ⇒ same digest) and changes when the config `run`
-      action, the vault root, the config `model` (`dream_model`), any embedded
-      exec pin, or the app `treeDigest` changes — each proven by a unit test
+      action, the vault root, the config `model` (`dream_model`), the config
+      **timeout** (`dream_timeout_minutes`), any embedded exec pin, or the app
+      `treeDigest` changes — each proven by a unit test
       mutating exactly one input. (WP-157
       turns this into "config `run` rewrite ⇒ mismatch alert + zero model spawn"
       and "manifest+config rewrite cannot defeat the independent descriptor".)
