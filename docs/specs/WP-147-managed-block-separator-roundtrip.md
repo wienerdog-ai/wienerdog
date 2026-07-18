@@ -1,7 +1,7 @@
 ---
 id: WP-147
 title: Managed-block uninstall must remove only Wienerdog-added separators, never fuse a user's surrounding lines
-status: Draft
+status: Ready
 model: opus
 size: M
 depends_on: [WP-145, WP-146]
@@ -133,6 +133,15 @@ const remaining = before + after;
 ```
 The rest of `reverseManagedBlock` (the `createdFile && remaining.trim()===''`
 delete, the ambiguity try/catch, the `span===null` skip) is unchanged.
+
+**Owner walkthrough (2026-07-18): Ready.** The owner ratified the two-part fix —
+record the exact inserted separator bytes (`sepBefore`/`sepAfter`) as origin
+metadata AND an anti-fusion safety guard that refuses any leading-separator strip
+which would erase a user line boundary — plus the legacy `'\n'` fallback (old
+manifests get the same guard, so they stop fusing too) and the non-lossy forward
+insert. The safety guard is the load-bearing correctness property (it prevents
+corruption even without recorded metadata); the metadata adds byte-perfect
+precision. Depends on WP-145 (manifest.js) and WP-146 (shared.js).
 
 **Why this is correct (worked cases the tests must cover):**
 - Genuine append, `current='foo\n'` → file `foo\n\nblock\n`, `sepBefore='\n'`.
