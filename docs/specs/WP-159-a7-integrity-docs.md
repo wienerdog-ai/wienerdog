@@ -14,8 +14,10 @@ branch: wp/159-a7-integrity-docs
 ## Context (read this, nothing else)
 
 A7 hardens the integrity of Wienerdog's unattended nightly run: external
-executables are **pinned** to verified absolute paths (WP-154), the test-exec
-seams are **inert in production** (WP-155), each scheduled job has a **canonical
+executables are **pinned** to verified absolute paths (WP-154), the production
+dispatch code carries **no test-exec seams at all** (WP-155 deletes them — test
+substitution happens only via JS-only injected dependencies and pin-store-installed
+fakes, and every dispatch is `shell:false`), each scheduled job has a **canonical
 digest-bound descriptor** (WP-156), and an **out-of-tree launcher** verifies the
 app + descriptor before spawning (WP-157). This WP writes the honest, traceable
 documentation for that work, closing the audit's "Required documentation changes"
@@ -32,7 +34,9 @@ code to match aspirational docs.
 hide).** Same-user control of BOTH the core and the OS scheduler can still
 replace both anchors. A7 protects **scoped core writes** (a limited file-write
 primitive or an agent session that can write `config.yaml`, `app/current`, or
-`~/.local/bin` but cannot re-register the OS scheduler entry) and **detects
+`~/.local/bin` but can neither re-register the OS scheduler entry nor overwrite the
+independent launcher at `<core>/launcher/launch.js` — a core-wide write that reaches
+the launcher defeats this layer alone, A12) and **detects
 drift**; it is **NOT** a claim against arbitrary same-user native malware — that
 is A12's territory. The docs must say this in plain language and must not let any
 sentence overreach it (no "your scheduled AI can never be tampered with").
@@ -64,7 +68,7 @@ sentence overreach it (no "your scheduled AI can never be tampered with").
 
 | Action | Path | Notes |
 |--------|------|-------|
-| modify | docs/THREAT-MODEL.md | Add the scheduler/app/executable-integrity threat entry: the F1–F5 threats, what A7 enforces (pins, descriptor+digest, out-of-tree launcher, prod/dev stance, inert seams), and the honest scoped-write-vs-A12 residual. |
+| modify | docs/THREAT-MODEL.md | Add the scheduler/app/executable-integrity threat entry: the F1–F5 threats, what A7 enforces (pins, descriptor+digest, out-of-tree launcher, prod/dev stance, no test-exec seams), and the honest scoped-write-vs-A12 residual. |
 | modify | docs/ARCHITECTURE.md | Describe the descriptor → digest → OS-entry binding → launcher verify → run-job flow, executable pinning, and the read-only version dir; cross-reference ADR-0013 and the A7 ADR (by final number once assigned). |
 | modify | docs/GLOSSARY.md | Add `job descriptor`, `descriptor digest`, `app release digest` (app tree content address), `independent launcher`, `executable pin`, `production/dev stance`. |
 | modify | README.md | Scope the unattended-dreaming claim to the enforced launcher/pin path; add the one-line same-user-native (A12) non-goal. |
@@ -95,8 +99,13 @@ sentence overreach it (no "your scheduled AI can never be tampered with").
   routine auto-update (new version file under the same install dir) passes
   silently; an install-method change (e.g. → Homebrew) **fails safe** until
   re-pinned.
-- The production test-exec seams (`WIENERDOG_RUNJOB_CMD`, `WIENERDOG_DREAM_CMD`)
-  are **inert without `WIENERDOG_TEST=1`** and every dispatch is **`shell:false`**.
+- The dispatch code carries **no test-exec seams**: WP-155 **deletes**
+  `WIENERDOG_RUNJOB_CMD`, `WIENERDOG_DREAM_CMD`, and the probe env seams
+  (`WIENERDOG_SKIP_CONTAINMENT_PROBE`, `WIENERDOG_CONTAINMENT_PROBE_CMD`). No
+  `WIENERDOG_TEST` gate exists. Test substitution happens only through JS-only
+  injected dependencies and pin-store-installed fakes; every dispatch is
+  **`shell:false`**, and **no environment variable** can substitute an executable or
+  skip the containment probe.
 - **Honest residual (A12):** this protects **scoped core writes** and **detects
   drift** between attended `sync`s; it is **not an OS boundary**. The independent
   launcher is itself a core file (`<core>/launcher/launch.js`), so a same-user
@@ -134,15 +143,40 @@ sentence overreach it (no "your scheduled AI can never be tampered with").
   launcher refuses a prod entry that resolves to a dev-looking tree, so a planted
   `.git` cannot downgrade verification.
 
-## DECISION NEEDED (resolve in the walkthrough; each becomes a dated OWNER-APPROVED line before Ready)
+## Decisions resolved in the walkthrough
 
-- **D-A7-CLAIM-WORDING** — the exact README/VISION sentence scoping the
-  unattended-integrity claim to the enforced launcher/pin path, with the one-line
-  A12 non-goal footnote (mirror the WP-143 D-CLAIM-WORDING resolution: name the
-  enforced path, add the honest same-user-native footnote, do not full-retreat).
-- **D-A7-ADR-REF** — whether the docs reference a **new** A7 ADR or an **extended
-  ADR-0027**; the docs cite the final number the owner assigns (this WP must not
-  bake in a guessed number).
+- **D-A7-CLAIM-WORDING — RESOLVED (OWNER-APPROVED 2026-07-19, A7 walkthrough): scoped
+  "verified before they run" claim + boundary footnote.** README carries the claim
+  **verbatim** (the implementer pastes it); VISION gets the **same substance adapted to
+  its voice** — that adaptation license is granted here, but the mechanism claims and
+  the non-goal must survive the adaptation unchanged. Verbatim README text:
+
+  > **Scheduled runs are verified before they run.** At every nightly fire, an
+  > independent launcher first checks that the app's code matches its recorded content
+  > address and that the job still matches its digest-bound authorization descriptor;
+  > Claude and Git are only spawned from their pinned, structurally verified install
+  > locations. Edits to `config.yaml` or the app tree made outside `wienerdog sync`
+  > don't change what runs — the job refuses with an alert instead (fail closed; the
+  > fix is one `wienerdog sync`).
+
+  Plus the boundary footnote (verbatim, both files):
+
+  > *Boundary, stated plainly: this protects against scoped file writes and detects
+  > drift between syncs. It is not a defense against arbitrary same-user native
+  > malware — that requires OS-level anchoring (see THREAT-MODEL).*
+
+  **Rationale:** leads with the capability claim ("verified before they run"), states
+  fail-closed plus the one-command remedy in user language, and names the non-goal
+  without publishing an attack recipe — mirroring WP-143's D-CLAIM-WORDING pattern
+  (name the enforced path, add the honest same-user-native footnote, do not
+  full-retreat).
+
+- **D-A7-ADR-REF — RESOLVED (OWNER-APPROVED 2026-07-19, A7 walkthrough): the docs cite
+  the new ADR-0028.** The A7 architectural decision lives in a **new** ADR-0028
+  (owner-assigned 2026-07-18, reconfirmed at the 2026-07-19 walkthrough close),
+  distinct from ADR-0027 (A8's re-derived scheduler *unload*); the "extend ADR-0027"
+  alternative was rejected. This WP cites **ADR-0028** (see the ADR note above and the
+  `adrs:` frontmatter); the ADR-0028 file is written as the A7 walkthrough concludes.
 
 ## Implementation notes & constraints
 
@@ -165,7 +199,7 @@ sentence overreach it (no "your scheduled AI can never be tampered with").
 - [ ] No doc claims a protection the shipped A7 code does not enforce. The
       unattended-integrity claim is scoped to the enforced launcher/pin path; the
       A12 same-user-native residual, the "detects drift between attended syncs, not
-      an OS boundary" framing, the prod/dev stance guard, and the inert-seam /
+      an OS boundary" framing, the prod/dev stance guard, and the seam-deletion /
       `shell:false` facts are all stated. "Sandbox" is not used for the launcher.
 
 ## Acceptance criteria
