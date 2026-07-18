@@ -1,7 +1,7 @@
 ---
 id: WP-135
 title: Pre-dream containment self-check — a bounded live canary probe of the real hermetic composition (audit A1)
-status: Ready
+status: In-Review
 model: opus
 size: M
 depends_on: [WP-130, WP-132]

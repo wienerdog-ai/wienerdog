@@ -15,6 +15,7 @@ const { readVaultLayout } = require('../core/layout');
 const { renderDigest, listSecretQuarantine } = require('../core/digest');
 const { writeFilePrivate, scanPrivateModes } = require('../core/private-fs');
 const { ensureSettingsProfile } = require('../core/runtime-settings');
+const { runContainmentProbe } = require('../core/dream/containment-probe');
 const identityApprovals = require('../core/identity-approvals');
 const { renderUpdateLine } = require('../core/update-check');
 const { readAlerts } = require('../core/alerts');
@@ -107,11 +108,14 @@ function printPlan(sel, cfg, vaultDir, date, layout, settingsPath) {
  * (ADR-0004: nothing outlives the job).
  * @param {{vaultDir:string, scratchDir:string, date:string, model:string|null,
  *          layout:import('../core/layout').VaultLayout,
- *          timeoutMs:number, logStream:NodeJS.WritableStream}} o
+ *          timeoutMs:number, logStream:NodeJS.WritableStream,
+ *          containmentProbe?:{outcome:string, claudeVersion:string}}} o
  */
 async function runBrainWithWatchdog(o) {
-  const { vaultDir, scratchDir, date, model, layout, timeoutMs, logStream } = o;
-  const { child, done } = spawnBrain({ vaultDir, scratchDir, date, model, layout, env: process.env, logStream });
+  const { vaultDir, scratchDir, date, model, layout, timeoutMs, logStream, containmentProbe } = o;
+  const { child, done } = spawnBrain({
+    vaultDir, scratchDir, date, model, layout, env: process.env, logStream, containmentProbe,
+  });
 
   let timer = null;
   const watchdog = new Promise((_resolve, reject) => {
@@ -292,6 +296,27 @@ async function run(argv) {
       return;
     }
 
+    // 8b. PRE-DREAM CONTAINMENT SELF-CHECK (WP-135, ADR-0025 Amendment 2). Only
+    //     reached when a real brain is about to spawn (past nothing-to-dream +
+    //     dry-run + capacity-wedge) — never on a fast path (cost). Skipped under
+    //     the fake-brain seam so `npm test` never spends quota / needs live
+    //     Claude. Unlike the managed-hook WARNING (WP-132, trusted admin), a
+    //     broken/unproven hermetic runtime IS an attacker-reachable threat, so a
+    //     fail OR inconclusive HALTS the dream fail-closed: no brain, no
+    //     precommit, a durable alert (run-job's fail-loud records it on the
+    //     scheduled path; the manual path prints it and exits 1).
+    let containmentProbe = null;
+    if (!process.env.WIENERDOG_DREAM_CMD && process.env.WIENERDOG_SKIP_CONTAINMENT_PROBE !== '1') {
+      containmentProbe = runContainmentProbe(paths, { model: cfg.model, env: process.env });
+      if (containmentProbe.outcome !== 'pass') {
+        throw new WienerdogError(
+          `dream halted: pre-dream containment self-check ${containmentProbe.outcome} on claude ` +
+            `${containmentProbe.claudeVersion} — ${containmentProbe.reason}. The dream did not run; your ` +
+            'memory was not touched. Re-run after updating/checking Claude.'
+        );
+      }
+    }
+
     // 9. Baseline the scratch files while they are still pristine (before brain).
     const scratchBaseline = hashScratch(sel.wrote);
 
@@ -313,6 +338,9 @@ async function run(argv) {
         layout,
         timeoutMs: cfg.timeoutMs,
         logStream,
+        containmentProbe: containmentProbe
+          ? { outcome: containmentProbe.outcome, claudeVersion: containmentProbe.claudeVersion }
+          : null,
       });
     } catch (err) {
       // Brain failed/timed out: discard its partial, unvalidated writes, then fail.

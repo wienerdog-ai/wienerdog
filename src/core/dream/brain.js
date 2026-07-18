@@ -140,7 +140,7 @@ function ensureBrainStaging(paths) {
  *             done: Promise<{code:number|null, durationMs:number, stderrTail:string}> }}
  */
 function spawnBrain(o) {
-  const { vaultDir, scratchDir, date, model, harness, env, logStream } = o;
+  const { vaultDir, scratchDir, date, model, harness, env, logStream, containmentProbe } = o;
   const layout = o.layout || defaultLayout();
   const baseEnv = env || process.env;
   const childEnv = {
@@ -218,6 +218,9 @@ function spawnBrain(o) {
         settingsDigest: settingsIdx === -1 ? 'missing' : settingsDigest(args[settingsIdx + 1]),
         mcpDigest: 'none', // dream: --strict-mcp-config with no --mcp-config
         policyHooks: detectPolicyHooks(paths, baseEnv),
+        // WP-135: the pre-dream self-check result (present when dream.js ran the
+        // probe; absent under the fake-brain/skip seams).
+        ...(containmentProbe ? { containmentProbe } : {}),
       });
     } catch {
       /* evidence is best-effort — never affects the run */

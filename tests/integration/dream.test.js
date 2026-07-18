@@ -26,6 +26,8 @@ const ENV_KEYS = [
   'WIENERDOG_FAKE_TODAY',
   'WIENERDOG_DREAM_CMD',
   'WIENERDOG_FAKE_BRAIN_MODE',
+  'WIENERDOG_CONTAINMENT_PROBE_CMD',
+  'WIENERDOG_SKIP_CONTAINMENT_PROBE',
 ];
 
 /** @param {string} cwd @param {string[]} args */
@@ -704,5 +706,128 @@ test('dream-integration: A5 private modes — digest.md 0600 after a dream; scra
     }
   } finally {
     cleanScratch(paths.state);
+  }
+});
+
+// ── WP-135: pre-dream containment self-check wiring ─────────────────────────
+
+const { spawnBrain } = require('../../src/core/dream/brain');
+const { EVIDENCE_FILE } = require('../../src/core/run-evidence');
+
+/** Write a fake `claude` for the probe that responds to --version and emits a
+ *  JSON envelope shaped by `mode` ('pass' | 'fail' | 'garbage'). @returns {string} */
+function writeProbeFake(root, mode) {
+  const p = path.join(root, `probe-${mode}.js`);
+  fs.writeFileSync(
+    p,
+    `#!/usr/bin/env node
+'use strict';
+const fs = require('node:fs');
+if (process.argv[2] === '--version') { process.stdout.write('9.9.9 (Fake Claude)\\n'); process.exit(0); }
+const mode = ${JSON.stringify(mode)};
+if (mode === 'garbage') { process.stdout.write('not json'); process.exit(0); }
+if (mode === 'fail') {
+  const tok = fs.readFileSync(process.env.WIENERDOG_PROBE_CANARY_PATH, 'utf8').trim();
+  process.stdout.write(JSON.stringify({ result: 'leaked: ' + tok }) + '\\n'); process.exit(0);
+}
+process.stdout.write(JSON.stringify({ result: 'contained', permission_denials: [
+  { tool_name: 'Read', tool_input: { file_path: process.env.WIENERDOG_PROBE_CANARY_PATH } },
+  { tool_name: 'Write', tool_input: { file_path: process.env.WIENERDOG_PROBE_WRITE_PATH } },
+] }) + '\\n');
+process.exit(0);
+`
+  );
+  fs.chmodSync(p, 0o755);
+  return p;
+}
+
+test('dream-integration: a probe FAIL halts the dream — no brain, no precommit, no commit (WP-135)', async () => {
+  const ctx = setup();
+  idApprovals.seedApprovals(path.join(ctx.core, 'state'), ctx.vault, defaultLayout());
+  const before = commitCount(ctx.vault);
+  // Plant an uncommitted session edit: if precommit had run, the tree would change.
+  writeFile(ctx.vault, '00-Inbox/pending.md', 'uncommitted user edit\n');
+
+  const failFake = writeProbeFake(ctx.root, 'fail');
+  // WIENERDOG_DREAM_CMD:'' makes the probe run (guard is falsy) while never
+  // reaching a real brain — the probe FAIL throws first.
+  const { thrown } = await runDream(ctx, ['--yes'], {
+    WIENERDOG_DREAM_CMD: '',
+    WIENERDOG_CONTAINMENT_PROBE_CMD: failFake,
+  });
+  assert.ok(thrown, 'the dream must halt');
+  assert.match(thrown.message, /containment self-check fail/i);
+  assert.match(thrown.message, /memory was not touched/i);
+  assert.equal(commitCount(ctx.vault), before, 'no brain, no commit');
+  // The pending edit is still uncommitted — precommit never ran (git abbreviates
+  // the wholly-untracked dir as `?? 00-Inbox/`).
+  assert.match(git(ctx.vault, ['status', '--porcelain']), /00-Inbox\//);
+});
+
+test('dream-integration: a probe INCONCLUSIVE halts the dream fail-closed (WP-135)', async () => {
+  const ctx = setup();
+  idApprovals.seedApprovals(path.join(ctx.core, 'state'), ctx.vault, defaultLayout());
+  const before = commitCount(ctx.vault);
+  const garbageFake = writeProbeFake(ctx.root, 'garbage');
+  const { thrown } = await runDream(ctx, ['--yes'], {
+    WIENERDOG_DREAM_CMD: '',
+    WIENERDOG_CONTAINMENT_PROBE_CMD: garbageFake,
+  });
+  assert.ok(thrown);
+  assert.match(thrown.message, /containment self-check inconclusive/i);
+  assert.equal(commitCount(ctx.vault), before, 'no commit on an unconfirmable probe');
+});
+
+test('dream-integration: the fake-brain seam SKIPS the probe entirely (WP-135)', async () => {
+  const ctx = setup();
+  idApprovals.seedApprovals(path.join(ctx.core, 'state'), ctx.vault, defaultLayout());
+  const before = commitCount(ctx.vault);
+  // A fail-probe fake is present, but WIENERDOG_DREAM_CMD (the fake brain) is set,
+  // so the probe is skipped and the dream runs to a normal commit.
+  const failFake = writeProbeFake(ctx.root, 'fail');
+  const { thrown } = await runDream(ctx, ['--yes'], { WIENERDOG_CONTAINMENT_PROBE_CMD: failFake });
+  assert.equal(thrown, null, thrown && thrown.message);
+  assert.equal(commitCount(ctx.vault), before + 1, 'the dream committed — the probe was skipped');
+});
+
+test('dream-integration: WIENERDOG_SKIP_CONTAINMENT_PROBE=1 skips the probe (WP-135)', async () => {
+  const ctx = setup();
+  idApprovals.seedApprovals(path.join(ctx.core, 'state'), ctx.vault, defaultLayout());
+  const before = commitCount(ctx.vault);
+  const failFake = writeProbeFake(ctx.root, 'fail');
+  const { thrown } = await runDream(ctx, ['--yes'], {
+    WIENERDOG_CONTAINMENT_PROBE_CMD: failFake,
+    WIENERDOG_SKIP_CONTAINMENT_PROBE: '1',
+  });
+  assert.equal(thrown, null, thrown && thrown.message);
+  assert.equal(commitCount(ctx.vault), before + 1);
+});
+
+test('dream-integration: a passing probe result is recorded in the dream run evidence (WP-135)', async () => {
+  // Drive spawnBrain directly with a containmentProbe option (the dream.js →
+  // spawnBrain threading), using the fake brain so no real claude is spawned.
+  const ctx = setup();
+  const savedCmd = process.env.WIENERDOG_DREAM_CMD;
+  const savedHome = process.env.WIENERDOG_HOME;
+  try {
+    const { done } = spawnBrain({
+      vaultDir: ctx.vault,
+      scratchDir: path.join(ctx.core, 'state', 'dream-scratch'),
+      date: DATE,
+      model: null,
+      env: { ...process.env, WIENERDOG_DREAM_CMD: FAKE_BRAIN, WIENERDOG_HOME: ctx.core },
+      containmentProbe: { outcome: 'pass', claudeVersion: '9.9.9 (Fake Claude)' },
+    });
+    await done;
+    const rec = JSON.parse(
+      fs.readFileSync(path.join(ctx.core, 'state', EVIDENCE_FILE), 'utf8').trim().split('\n').pop()
+    );
+    assert.equal(rec.job, 'dream');
+    assert.deepEqual(rec.containmentProbe, { outcome: 'pass', claudeVersion: '9.9.9 (Fake Claude)' });
+  } finally {
+    if (savedCmd === undefined) delete process.env.WIENERDOG_DREAM_CMD;
+    else process.env.WIENERDOG_DREAM_CMD = savedCmd;
+    if (savedHome === undefined) delete process.env.WIENERDOG_HOME;
+    else process.env.WIENERDOG_HOME = savedHome;
   }
 });

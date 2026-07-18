@@ -39,6 +39,7 @@ const FREE_TEXT_FLAGS = new Set(['-p', '--append-system-prompt']);
  * @property {string} settingsDigest  sha256 of the --settings file, or 'missing'
  * @property {string} mcpDigest       sha256 of the --mcp-config file, or 'none'
  * @property {{present:boolean, sources:string[]}} policyHooks  managed-policy detection at this run
+ * @property {{outcome:string, claudeVersion:string}} [containmentProbe]  WP-135 pre-dream self-check result
  */
 
 /** @param {import('./paths').WienerdogPaths} paths @returns {string} */
@@ -76,7 +77,7 @@ function sanitizeRecord(r) {
   const o = r && typeof r === 'object' && !Array.isArray(r) ? r : {};
   const scrub = (v) => redactOnly(String(v == null ? '' : v).slice(0, 2000));
   const hooks = o.policyHooks && typeof o.policyHooks === 'object' ? o.policyHooks : {};
-  return {
+  const rec = {
     at: scrub(o.at),
     job: scrub(o.job),
     profileId: scrub(o.profileId),
@@ -90,6 +91,13 @@ function sanitizeRecord(r) {
       sources: (Array.isArray(hooks.sources) ? hooks.sources : []).slice(0, 20).map(scrub),
     },
   };
+  if (o.containmentProbe && typeof o.containmentProbe === 'object') {
+    rec.containmentProbe = {
+      outcome: scrub(o.containmentProbe.outcome),
+      claudeVersion: scrub(o.containmentProbe.claudeVersion),
+    };
+  }
+  return rec;
 }
 
 /**
