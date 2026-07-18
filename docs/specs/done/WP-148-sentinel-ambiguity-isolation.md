@@ -1,7 +1,7 @@
 ---
 id: WP-148
 title: An ambiguous managed block must not abort the independent skill and hook reconciliation
-status: Ready
+status: Done
 model: sonnet
 size: S
 depends_on: []
