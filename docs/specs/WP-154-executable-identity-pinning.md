@@ -43,7 +43,8 @@ spawn — using the **live verified absolute realpath**. Any check failing
 `wienerdog sync` after confirming the change is legitimate. `node` itself is
 `process.execPath` (already absolute, the running interpreter) and is not pinned.
 
-**No content hash — by design (owner decision, 2026-07-18 A7 walkthrough).**
+**No content hash — RESOLVED (OWNER-APPROVED 2026-07-18, A7 walkthrough):
+structural pin, not a content/size/exact-realpath gate.**
 Claude Code self-updates several times a day by writing a NEW version-named
 file and repointing the command symlink (observed live: `~/.local/bin/claude →
 ~/.local/share/claude/versions/2.1.214`; four version files appeared in three

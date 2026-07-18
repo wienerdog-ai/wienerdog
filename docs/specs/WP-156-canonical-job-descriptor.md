@@ -77,10 +77,10 @@ recording a `vendored-tree` entry. `isDevCheckout(root, env)` returns true for a
 
 **`src/core/exec-identity.js`** (WP-154, a dependency): `loadPins(paths)` returns
 `{claude?, git?, codex?}` pins (`{commandPath, installDir, version, pinnedAt}`)
-from `<core>/state/exec-pins.json`. Per the owner-approved no-hash decision
-(2026-07-18 A7 walkthrough), a pin records the stable **command path + install
-dir**, not a content hash or exact realpath — those change on every Claude Code
-auto-update.
+from `<core>/state/exec-pins.json`. Per the WP-154 pin decision (RESOLVED —
+OWNER-APPROVED 2026-07-18, A7 walkthrough), a pin records the stable **command
+path + install dir**, not a content hash or exact realpath — those change on
+every Claude Code auto-update.
 
 **`src/core/dream/brain.js`** exposes `DREAM_PROMPT(scratch, vault, date, layout)`
 (the builtin prompt template) and `loadVendoredSkill('wienerdog-dream')` (the
@@ -130,8 +130,9 @@ authorization record.
     "git":    { "commandPath": "…", "installDir": "…" }
     // `version` (and any realpath) are deliberately EXCLUDED: they change on
     // every claude auto-update and would drift the descriptor digest, turning
-    // legitimate auto-updates into WP-157 fire-time alarms (owner decision
-    // 2026-07-18). The pin's structural verification still runs at spawn time.
+    // legitimate auto-updates into WP-157 fire-time alarms (RESOLVED —
+    // OWNER-APPROVED 2026-07-18). The pin's structural verification still runs
+    // at spawn time.
   },
   "appRelease": {
     "version": "0.4.1",

@@ -106,12 +106,14 @@ disposable temp `$HOME`/`WIENERDOG_HOME`:
    manifest still refuses. *(bullet 3)*
 4. **Fake `claude`/`git` earlier on PATH never executes.** With a valid claude
    pin, plant `<tmp>/.local/bin/claude` earlier on the job PATH;
-   `resolvePinnedSpawn('claude', …)` throws (realpath drift); the recorder shows
-   the fake was **never** launched. *(bullet 4)*
-5. **Pinned executable mutation/owner/mode/ancestor failure stops pre-spawn.**
-   Mutate the pinned executable's bytes (and, on POSIX, its owner/mode/an ancestor
-   dir's writability); each ⇒ `resolvePinnedSpawn` throws before any spawn.
-   *(bullet 5)*
+   `resolvePinnedSpawn('claude', …)` throws (live command path ≠ pinned command
+   path); the recorder shows the fake was **never** launched. *(bullet 4)*
+5. **Pinned executable structural failure stops pre-spawn.** Repoint the pinned
+   command symlink to a target outside the pinned install dir, or (on POSIX)
+   change the target's owner, clear its exec bit, or make an ancestor dir
+   group/other-writable; each ⇒ `resolvePinnedSpawn` throws before any spawn.
+   (In-place byte mutation of the user-owned target is NOT detected — WP-154
+   honest boundary.) *(bullet 5)*
 6. **Valid update switches atomically; interrupted update retains the old version.**
    A completed re-vendor switches `current` + re-binds the entry digest and the
    next verify passes; an interrupted publish (staging dir removed before rename)
@@ -161,7 +163,7 @@ disposable temp `$HOME`/`WIENERDOG_HOME`:
 
 - [ ] `npm test -- --test-name-pattern "a7-integrity-negatives"` passes: the
       config-rewrite (1), app-mutation/repoint/out-of-root (2), manifest+config (3),
-      PATH-fake (4), pin-mutation/owner/mode/ancestor (5), and update-atomicity (6)
+      PATH-fake (4), pin structural failure — repoint/owner/mode/ancestor (5), and update-atomicity (6)
       negatives each refuse with **zero** recorded app/model spawn, plus the
       non-vacuity baseline (0) and the WP-155 seam-inertness cross-check (7).
 - [ ] `npm run scenarios:a7-integrity` with `WIENERDOG_RUN_SCENARIOS` unset prints

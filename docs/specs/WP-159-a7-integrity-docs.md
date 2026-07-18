@@ -88,10 +88,13 @@ sentence overreach it (no "your scheduled AI can never be tampered with").
 - A **minimal launcher outside the mutable app tree** verifies `current`
   containment + ownership, the app content address, the descriptor digest against
   the entry-bound value, and the **production-vs-dev stance** before it spawns.
-- Claude/Git/Codex are **resolved to verified absolute paths at install/sync and
-  pinned**; a fake planted earlier on `PATH` (e.g. in the user-writable
-  `~/.local/bin` that the clean job `PATH` front-loads) is refused on realpath
-  drift, and a legitimate update **fails safe** until re-pinned.
+- Claude/Git/Codex are **resolved and structurally pinned at install/sync** (by
+  command path + install dir, with structural verification at spawn); a fake
+  planted earlier on `PATH` (e.g. in the user-writable `~/.local/bin` that the
+  clean job `PATH` front-loads) is refused on command-path/install-dir drift. A
+  routine auto-update (new version file under the same install dir) passes
+  silently; an install-method change (e.g. → Homebrew) **fails safe** until
+  re-pinned.
 - The production test-exec seams (`WIENERDOG_RUNJOB_CMD`, `WIENERDOG_DREAM_CMD`)
   are **inert without `WIENERDOG_TEST=1`** and every dispatch is **`shell:false`**.
 - **Honest residual (A12):** this protects **scoped core writes** and **detects
@@ -117,9 +120,11 @@ sentence overreach it (no "your scheduled AI can never be tampered with").
   launch.js`, **outside** the mutable `app/current` tree, that verifies integrity
   before spawning `run-job` (WP-157); it is not a daemon (ADR-0004) — it runs and
   exits with each fire.
-- **executable pin** — the recorded verified identity (absolute realpath, version,
-  size, content hash) of `claude`/`git`/`codex`, captured at install/sync; the
-  nightly job spawns the pinned absolute path and fails safe on drift (WP-154).
+- **executable pin** — the recorded structural identity (stable command path +
+  install dir; `version` informational only, no content hash) of
+  `claude`/`git`/`codex`, captured at install/sync; the nightly job spawns the
+  live verified absolute path and fails safe on command-path/install-dir drift
+  (WP-154).
 - **production/dev stance** — whether an install runs the vendored `app/<version>`
   (prod, integrity-enforced) or a dev checkout (dev, mutable-by-design); the
   launcher refuses a prod entry that resolves to a dev-looking tree, so a planted
