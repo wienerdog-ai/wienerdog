@@ -35,6 +35,28 @@ Canonical names. Use these exact terms in code, docs, specs, and prompts — nev
 - **capability gate** — one named on/off switch in the safety profile
   (e.g. `gws-use`, `external-content-routine`). A blocked gate makes its feature
   fail closed before any side effect (no model spawn, no credential load).
+- **hermetic runtime profile** — the code-owned set of capabilities a headless
+  model job runs under: built-in tool allowlist, deny list, MCP posture,
+  hook-free settings, staging cwd, and filesystem roots. Composed by Wienerdog
+  (`src/core/runtime-profile.js`) and never inherited from ambient config
+  (ADR-0025). (Not a "sandbox" — that word means the `WIENERDOG_HOME`-redirect
+  guard, `sandbox-guard.js`.)
+- **capability profile** — a synonym for one specific hermetic runtime profile
+  (`dream`, `daily-digest`, `inbox-triage`, `weekly-review`) as defined in
+  `src/core/runtime-profile.js`.
+- **staging directory** — the fresh, empty, Wienerdog-owned working directory a
+  hermetic job runs in (and, for a routine, its only writable output), so no
+  project or local settings can be discovered under the job's working directory.
+- **run evidence** — the bounded, secret-free per-run record (Claude version,
+  executable, profile, argv, settings/MCP digests, managed-policy state,
+  containment self-check result) written to `state/run-evidence.jsonl`
+  (ADR-0025). Free-text fields (prompt, skill body) are reduced to a `sha256`,
+  never stored raw.
+- **containment self-check** — the bounded live canary probe of the real
+  hermetic composition that runs before each dream and fails closed (halts the
+  dream + raises a durable alert) if the installed Claude no longer honors the
+  containment flags (WP-135, ADR-0025). Verifies the actual local runtime, not a
+  repo-pinned version.
 - **secret scan / `scanAndRedact`** — the single shared secret detector
   (`src/core/secret-scan.js`), called independently at four fail-closed
   persistence points in the dream lifecycle: transcript input, the brain's
