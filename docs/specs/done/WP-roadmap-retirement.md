@@ -1,7 +1,7 @@
 ---
 id: WP-roadmap-retirement
 title: Split ROADMAP.md into MILESTONES.md + logbook/ entries, delete it, repoint references, backfill the ADR index
-status: Ready
+status: Done
 model: opus
 size: M
 depends_on: [WP-160, WP-spec-ritual-updates]
