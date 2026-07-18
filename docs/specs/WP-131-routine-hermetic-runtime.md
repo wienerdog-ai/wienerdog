@@ -1,7 +1,7 @@
 ---
 id: WP-131
 title: Hermetic routine runtime — code-owned profile lookup, staging dir, single broker MCP seam (audit A1)
-status: Draft
+status: Ready
 model: opus
 size: M
 depends_on: [WP-128, WP-129]
@@ -191,38 +191,41 @@ claude -p "/wienerdog-daily-digest" \
 
 ## DECISION NEEDED (resolve in the walkthrough; each becomes a dated OWNER-APPROVED line before Ready)
 
-- **D-BROKER-SEAM (A1 side) — the pre-A2 broker seam behavior.** A broker-requiring
-  routine (`daily-digest`, `inbox-triage`) needs a `--mcp-config`; A2 has not built the
-  broker.
-  - **Recommended: `brokerMcpConfigPath` returns a fixed, non-existent A2 sentinel path
+- **D-BROKER-SEAM (A1 side) — RESOLVED (OWNER-APPROVED 2026-07-18): fail closed on a
+  non-existent A2 sentinel.** A broker-requiring routine (`daily-digest`, `inbox-triage`)
+  needs a `--mcp-config`; A2 has not built the broker.
+  - **Approved: `brokerMcpConfigPath` returns a fixed, non-existent A2 sentinel path
     for a `mcp:'broker'` profile, so `composeClaudeArgs` fails closed** (WP-128 throws
     `RuntimeProfileError` when `mcp:'broker'` but no usable config) — the routine is
     *contained and inert* until A2 wires a real broker at that seam. The seam path and
     the "A2 owns this" contract are recorded here so A2 has one place to plug in.
-  - **Counterargument:** a non-existent config path means the unit test for a
+  - **Counterargument (accepted):** a non-existent config path means the unit test for a
     broker-routine composition asserts a *throw*, not a full argv — slightly less
     coverage of the broker argv shape now. Mitigation: the composer's `--mcp-config`
     emission is already unit-tested in WP-128 with a synthetic absolute path; here we
     additionally assert the fail-closed behavior, which is the security-relevant property
     pre-A2. The alternative (write a stub empty MCP config so composition succeeds) risks
-    a routine appearing runnable-but-toothless and masking the "A2 not wired" state.
+    a routine appearing runnable-but-toothless and masking the "A2 not wired" state — the
+    owner rejected it for exactly that reason.
 
-- **D-ROUTINE-VAULT-READ — does a routine get read access to the vault?** Weekly review's
-  shipped skill reads `<vault>/reports/dreams/` and writes notes; daily digest reads the
-  latest dream report.
-  - **Recommended: NO vault access in the A1 routine profile** — the routine's only root
-    is its staging dir; any vault/report data it needs is supplied as a **bounded input
-    snapshot staged into the staging dir** by the orchestrator (audit A1 point 3,
-    "bounded input snapshots"). Rationale: giving a routine `--add-dir <vault>` would let
-    a hijacked routine read/rewrite memory notes — exactly the ambient-filesystem
-    authority A1 removes. The snapshot is code-controlled and read-only.
-  - **Counterargument:** staging bounded snapshots for each routine is extra machinery
-    that A1 doesn't strictly need to *contain* (containment holds even with zero vault
-    access — the routine just can't do its job, which is fine pre-A2). So the honest v1
-    is: **no vault access and no snapshot yet** — the routine profile is contained-inert;
-    A2 (which makes routines functional) owns wiring the bounded snapshot + broker
-    together. Recommend deferring the snapshot machinery to A2 and shipping A1 with
-    staging-only, no vault, no snapshot — record this so A2 picks it up.
+- **D-ROUTINE-VAULT-READ — RESOLVED (OWNER-APPROVED 2026-07-18): staging-only, no vault,
+  snapshot deferred to A2.** Weekly review's shipped skill reads `<vault>/reports/dreams/`
+  and writes notes; daily digest reads the latest dream report. Under A1 the routine gets
+  neither.
+  - **Approved: NO vault access and NO snapshot in the A1 routine profile** — the routine's
+    only root is its staging dir. Rationale: giving a routine `--add-dir <vault>` would let
+    a hijacked routine read/rewrite memory notes — exactly the ambient-filesystem authority
+    A1 removes. Containment holds even with zero vault access; the routine simply cannot do
+    its job until A2, which is correct — production routines stay BLOCKED regardless.
+  - **A2 owns restoring routine FUNCTION as one coherent, reviewed unit.** The bounded
+    read-only vault-snapshot machinery (audit A1 point 3, "bounded input snapshots") is
+    deferred to A2 and wired there **together with the broker** — so a routine regains its
+    vault-read and its Google access in the same reviewed change, not in A1 fragments. This
+    is the durable A2 hand-off: A1 contains (wraps the routine inert); A2 uncontains-and-
+    enables (snapshot + broker + the eventual gate/go decision). Recorded so A2 picks it up.
+  - **Counterargument (accepted):** staging bounded snapshots are extra machinery A1 does
+    not need to *contain*; shipping A1 staging-only keeps the containment WP small and
+    honest and avoids pre-empting A2's snapshot+broker design.
 
 ## Implementation notes & constraints
 
