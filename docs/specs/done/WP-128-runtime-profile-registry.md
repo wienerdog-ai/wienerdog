@@ -1,7 +1,7 @@
 ---
 id: WP-128
 title: Code-owned hermetic runtime profile registry + pure claude argv composer (audit A1)
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: []

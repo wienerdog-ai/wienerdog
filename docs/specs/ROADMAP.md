@@ -146,7 +146,7 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 | [WP-125](WP-125-digest-section-secret-gate.md) | Per-section digest secret gate — omit a section that would inject a secret, keep the rest (audit A5) | M7 | sonnet | Done | WP-122 |
 | [WP-126](WP-126-private-artifact-modes.md) | Private-by-default artifact modes — 0700 dirs / 0600 sensitive files on create + sync/doctor repair (audit A5) | M7 | opus | Done | WP-124, WP-125 |
 | [WP-127](WP-127-a5-secret-lifecycle-docs.md) | A5 documentation — secret-detection limits, quarantine/incident runbook, vault-local no-auto-push (audit A5) | M7 | sonnet | Done | WP-122, WP-123, WP-124, WP-125, WP-126 |
-| [WP-128](WP-128-runtime-profile-registry.md) | Code-owned hermetic runtime profile registry + pure claude argv composer (audit A1) | M7 | opus | In-Review | — |
+| [WP-128](WP-128-runtime-profile-registry.md) | Code-owned hermetic runtime profile registry + pure claude argv composer (audit A1) | M7 | opus | Done | — |
 | [WP-129](WP-129-hookfree-settings-and-vendored-skill.md) | Hook-free settings profile + vendored, integrity-checked skill text (audit A1) | M7 | opus | In-Review | WP-128 |
 | [WP-130](WP-130-dream-hermetic-runtime.md) | Make the dream brain hermetic — profile-composed argv, hook-free settings, staging cwd (audit A1) | M7 | opus | In-Review | WP-128, WP-129 |
 | [WP-131](WP-131-routine-hermetic-runtime.md) | Hermetic routine runtime — code-owned profile lookup, staging dir, single broker MCP seam (audit A1) | M7 | opus | In-Review | WP-128, WP-129 |
