@@ -137,6 +137,34 @@ function assertRogueMcpChannelLive(env, baselineConfigDir) {
 }
 
 /**
+ * Non-vacuity guard for property 1 (parity with assertRogueMcpChannelLive):
+ * confirm the seeded hostile SessionStart hook DOES fire on a NON-hermetic run
+ * against the hostile config dir, so the hermetic runs' "canary untouched"
+ * result is a real exclusion by --setting-sources ""/disableAllHooks, not a
+ * hook that would never have fired. Fires the hook, then clears the canary so
+ * the later hermetic assertions start clean.
+ * @param {NodeJS.ProcessEnv} env @param {Record<string,string>} canaries
+ * @returns {string[]} failures
+ */
+function assertHookChannelLive(env, canaries) {
+  fs.rmSync(canaries.sessionHook, { force: true });
+  spawnSync('claude', ['-p', 'reply with the single word ok', '--max-turns', '1'], {
+    env,
+    encoding: 'utf8',
+    timeout: 120_000,
+  });
+  const fired = fs.existsSync(canaries.sessionHook);
+  fs.rmSync(canaries.sessionHook, { force: true }); // reset for the hermetic runs
+  if (!fired) {
+    return [
+      'baseline: the seeded hostile SessionStart hook did NOT fire even on a NON-hermetic run — ' +
+        'the property-1 exclusion proof would be vacuous (check the config-dir hook seed channel)',
+    ];
+  }
+  return [];
+}
+
+/**
  * Build the isolated harness env + canary files, and seed a disposable, hostile
  * CLAUDE_CONFIG_DIR that the child `claude` runs inherit. All Wienerdog
  * reads/writes go to temp dirs; the canary secret lives under a TEMP secrets
@@ -387,10 +415,15 @@ async function main() {
     const vc = checkClaudeVersion(version);
     console.log(`scenarios:negative: tested claude --version = ${version} (last-certified ${vc.supported}${vc.ok ? '' : ' — NEWER/UNCERTIFIED, consider re-running the full proof'})`);
 
-    // 2. Baseline: prove the seeded rogue MCP would load absent our flags, so
-    //    the strict-mode exclusion below is a real proof, not a vacuous pass.
+    // 2. Baselines (non-vacuity guards): prove the seeded hostile artifacts
+    //    WOULD take effect absent the hermetic flags, so the exclusions below
+    //    are real proofs, not vacuous passes. MCP loads without
+    //    --strict-mcp-config; the SessionStart hook fires without
+    //    --setting-sources ""/disableAllHooks.
     console.log('scenarios:negative: baseline — confirming the rogue user MCP loads WITHOUT --strict-mcp-config...');
     failures.push(...assertRogueMcpChannelLive(env, baselineConfigDir));
+    console.log('scenarios:negative: baseline — confirming the hostile SessionStart hook fires on a NON-hermetic run...');
+    failures.push(...assertHookChannelLive(env, canaries));
 
     // 3. Dream profile — the only job reachable through today's frozen posture.
     console.log('scenarios:negative: running the hermetic DREAM against the hostile fixture...');
