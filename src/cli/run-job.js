@@ -15,6 +15,9 @@ const jobsLib = require('../scheduler/jobs');
 const gen = require('../scheduler/generators');
 const tccguard = require('../scheduler/tccguard');
 const { requireCapability, CAPABILITY } = require('../core/safety-profile');
+const { detectPolicyHooks } = require('../core/policy-hooks');
+const { recordRunEvidence } = require('../core/run-evidence');
+const { settingsDigest } = require('../core/runtime-settings');
 
 /**
  * `wienerdog run-job <name>` is the short-lived wrapper the OS scheduler launches
@@ -231,6 +234,32 @@ function resolveCommand(paths, job, profile) {
   throw new WienerdogError(`unknown job run kind in "${job.run}"`);
 }
 
+/** The value that follows a flag in an argv, or undefined.
+ *  @param {string[]} args @param {string} flag @returns {string|undefined} */
+function argvFlagValue(args, flag) {
+  const i = args.indexOf(flag);
+  return i === -1 ? undefined : args[i + 1];
+}
+
+/**
+ * Capture `claude --version` for the run-evidence record. ONLY spawns when the
+ * resolved command IS claude — never a test fake (a fake may have side effects
+ * when re-invoked) and never codex. Bounded, best-effort: 'unknown' on any
+ * failure (D-EVIDENCE: version + path, no binary hash — integrity is A7).
+ * @param {string} command @param {NodeJS.ProcessEnv} env @returns {string}
+ */
+function captureClaudeVersion(command, env) {
+  const base = path.basename(command).replace(/\.(cmd|exe)$/i, '');
+  if (base !== 'claude') return 'unknown';
+  try {
+    const r = spawnSync(command, ['--version'], { env, timeout: 10_000, encoding: 'utf8' });
+    const out = (r.stdout || '').trim().slice(0, 200);
+    return r.status === 0 && out ? out : 'unknown';
+  } catch {
+    return 'unknown';
+  }
+}
+
 /** Resolve the watchdog timeout in ms (WIENERDOG_RUNJOB_TIMEOUT_MS is a test seam).
  *  @param {{timeoutMinutes:number}} job @returns {number} */
 function resolveTimeoutMs(job) {
@@ -416,7 +445,8 @@ function safeResolvePath(input, guard, hopCap = 40) {
  * @param {import('../core/paths').WienerdogPaths} paths
  * @param {{name:string, at:string, run:string, timeoutMinutes:number}} job
  * @param {{sendAlert?: typeof defaultSendAlert, loader?: (argv:string[])=>{status:number},
- *          platform?: NodeJS.Platform}} [opts]
+ *          platform?: NodeJS.Platform,
+ *          detectPolicyHooks?: typeof detectPolicyHooks}} [opts]
  * @returns {Promise<void>}
  */
 async function runJob(paths, job, opts = {}) {
@@ -476,6 +506,31 @@ async function runJob(paths, job, opts = {}) {
   const env = buildCleanEnv(paths, name, platform);
   const { command, args, shell, cwd: composedCwd } = resolveCommand(paths, job);
   const spawnCwd = composedCwd || cwd;
+
+  // 2b. Managed-policy hook preflight (WP-132, D-POLICY-HOOK): a managed/admin
+  //     policy can inject hooks disableAllHooks cannot override. That is the
+  //     admin's own trusted config (trusted-computing-base residual, not an
+  //     attacker vector), so WARN loudly + durably and PROCEED — no throw, no
+  //     error watermark. The state is also captured in the evidence record.
+  const policyDetect = opts.detectPolicyHooks || detectPolicyHooks;
+  let policyHooks = { present: false, sources: [] };
+  try {
+    policyHooks = policyDetect(paths, process.env);
+  } catch {
+    policyHooks = { present: true, sources: [] }; // detection must never fail the job; fail closed
+  }
+  if (policyHooks.present) {
+    appendAlert(paths, {
+      job: name,
+      at: nowIso(),
+      reason:
+        `warning: a managed/admin policy defines Claude Code hooks that cannot be disabled ` +
+        `(${policyHooks.sources.join(', ') || 'unknown source'}) — this run is NOT fully hermetic ` +
+        `under that policy. Managed hooks are your administrator's config (trusted-computing-base ` +
+        `residual, see the threat model), not an attacker vector; the run continues. ADR-0025.`,
+      log_hint: '',
+    });
+  }
 
   // 3. Per-run log file (mkdir -p the job's log dir).
   const logDir = path.join(paths.logs, name);
@@ -542,6 +597,37 @@ async function runJob(paths, job, opts = {}) {
 
   // 5. Rotate logs after the run.
   rotateLogs(logDir);
+
+  // 5a. Run evidence (WP-132, audit A1 point 8): record what actually ran for
+  //     a skill: routine, success or failure — best-effort, never affects the
+  //     job outcome. builtin:dream's evidence is recorded by spawnBrain (the
+  //     dream layer) so the record is not duplicated here.
+  if (job.run.startsWith('skill:')) {
+    try {
+      const skillId = job.run.slice(job.run.indexOf(':') + 1);
+      let profileId = 'unknown';
+      try {
+        profileId = require('../core/routine-runtime').profileIdForSkill(skillId);
+      } catch {
+        /* unmapped skill under the fake seam → 'unknown' */
+      }
+      const settingsFile = argvFlagValue(args, '--settings');
+      const mcpFile = argvFlagValue(args, '--mcp-config');
+      recordRunEvidence(paths, {
+        at: nowIso(),
+        job: name,
+        profileId,
+        claudeVersion: captureClaudeVersion(command, env),
+        execPath: command,
+        argv: args,
+        settingsDigest: settingsFile ? settingsDigest(settingsFile) : 'missing',
+        mcpDigest: mcpFile ? settingsDigest(mcpFile) : 'none',
+        policyHooks,
+      });
+    } catch {
+      /* evidence is best-effort — never affects the job */
+    }
+  }
 
   const secs = Math.round((Date.now() - started) / 1000);
 

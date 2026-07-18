@@ -1088,3 +1088,104 @@ update_check: true
   assert.equal(cache.latest, '9.9.9', 'injected fetch populated the cache');
   assert.ok(cache.last_check, 'attempt was stamped');
 });
+
+// -------------------------------------------------------------------------
+// WP-132: managed-policy hook preflight + run evidence
+// -------------------------------------------------------------------------
+
+const { EVIDENCE_FILE } = require('../../src/core/run-evidence');
+
+/** @param {object} paths @returns {object[]} parsed run-evidence records */
+function readEvidence(paths) {
+  const file = path.join(paths.state, EVIDENCE_FILE);
+  if (!fs.existsSync(file)) return [];
+  return fs
+    .readFileSync(file, 'utf8')
+    .split('\n')
+    .filter((l) => l.trim() !== '')
+    .map((l) => JSON.parse(l));
+}
+
+test('scheduler-runjob: managed policy hooks present → warns, records evidence, PROCEEDS (WP-132)', async () => {
+  const { root, env, paths } = setup();
+  jobsLib.saveJob(paths, { name: 'weekly', at: '07:00', run: 'skill:wienerdog-weekly-review', timeoutMinutes: 15 });
+  const fake = writeScript(root, 'ok.sh', ['#!/bin/sh', 'exit 0']);
+  const detect = () => ({ present: true, sources: ['/etc/claude-code/managed-settings.json'] });
+
+  // No throw, no error watermark — the run PROCEEDS to a normal success.
+  await withRun(env, { WIENERDOG_RUNJOB_CMD: fake }, ['weekly'], {
+    loader: noopLoader,
+    detectPolicyHooks: detect,
+    sendAlert: () => ({ status: 0 }),
+  });
+  const state = jobsLib.readScheduleState(paths);
+  assert.equal(state.weekly.last_status, 'ok', 'managed hooks are a WARNING, never a STOP');
+
+  // The evidence record captures the managed-policy state either way.
+  const records = readEvidence(paths);
+  assert.equal(records.length, 1);
+  const rec = records[0];
+  assert.equal(rec.job, 'weekly');
+  assert.equal(rec.profileId, 'weekly-review');
+  // The random temp-dir segment may be scrubbed by the uniform redaction pass
+  // (a test-env artifact — production exec paths are stable); the executable
+  // identity itself must survive.
+  assert.ok(rec.execPath.endsWith('/ok.sh'), rec.execPath);
+  assert.equal(rec.claudeVersion, 'unknown', 'a test fake is never version-probed');
+  assert.deepEqual(rec.policyHooks, { present: true, sources: ['/etc/claude-code/managed-settings.json'] });
+});
+
+test('scheduler-runjob: the managed-hook warning lands on the durable alert channel (WP-132)', async () => {
+  const { root, env, paths } = setup();
+  jobsLib.saveJob(paths, { name: 'weekly', at: '07:00', run: 'skill:wienerdog-weekly-review', timeoutMinutes: 15 });
+  // A FAILING run keeps alerts.jsonl intact (a success clears the job's alerts),
+  // so the durable warning is observable here alongside the failure alert.
+  const fake = writeScript(root, 'fail.sh', ['#!/bin/sh', 'exit 3']);
+  const detect = () => ({ present: true, sources: ['/x/managed-settings.json'] });
+
+  await assert.rejects(
+    withRun(env, { WIENERDOG_RUNJOB_CMD: fake }, ['weekly'], {
+      loader: noopLoader,
+      detectPolicyHooks: detect,
+      sendAlert: () => ({ status: 0 }),
+    }),
+    /exited 3/
+  );
+  const warnings = readAlerts(paths).filter((a) => a.reason.includes('managed/admin policy'));
+  assert.equal(warnings.length, 1, 'one durable managed-hook warning');
+  assert.ok(warnings[0].reason.includes('/x/managed-settings.json'), 'names the source');
+  assert.ok(warnings[0].reason.includes('the run continues'), 'states it is not a stop');
+});
+
+test('scheduler-runjob: no managed hooks → no warning, evidence still recorded for a skill run (WP-132)', async () => {
+  const { root, env, paths } = setup();
+  jobsLib.saveJob(paths, { name: 'weekly', at: '07:00', run: 'skill:wienerdog-weekly-review', timeoutMinutes: 15 });
+  const fake = writeScript(root, 'fail.sh', ['#!/bin/sh', 'exit 3']);
+  const detect = () => ({ present: false, sources: [] });
+
+  await assert.rejects(
+    withRun(env, { WIENERDOG_RUNJOB_CMD: fake }, ['weekly'], {
+      loader: noopLoader,
+      detectPolicyHooks: detect,
+      sendAlert: () => ({ status: 0 }),
+    }),
+    /exited 3/
+  );
+  const warnings = readAlerts(paths).filter((a) => a.reason.includes('managed/admin policy'));
+  assert.equal(warnings.length, 0, 'no warning when no managed policy is present');
+  const records = readEvidence(paths);
+  assert.equal(records.length, 1, 'evidence recorded on failure too');
+  assert.deepEqual(records[0].policyHooks, { present: false, sources: [] });
+});
+
+test('scheduler-runjob: builtin:dream under run-job records no duplicate evidence at this layer (WP-132)', async () => {
+  const { root, env, paths } = setup();
+  jobsLib.saveJob(paths, { name: 'dream', at: '03:30', run: 'builtin:dream', timeoutMinutes: 20 });
+  const fake = writeScript(root, 'ok.sh', ['#!/bin/sh', 'exit 0']);
+
+  await withRun(env, { WIENERDOG_RUNJOB_CMD: fake }, ['dream'], {
+    loader: noopLoader,
+    detectPolicyHooks: () => ({ present: false, sources: [] }),
+  });
+  assert.deepEqual(readEvidence(paths), [], 'the dream layer (spawnBrain) owns the dream evidence');
+});

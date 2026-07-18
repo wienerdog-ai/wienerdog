@@ -2,14 +2,16 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const { spawn } = require('node:child_process');
+const { spawn, spawnSync } = require('node:child_process');
 
 const { defaultLayout, layoutPromptLines, resolveDailyPath } = require('../layout');
 const { redactOnly } = require('../secret-scan');
 const { getProfile, composeClaudeArgs } = require('../runtime-profile');
-const { ensureSettingsProfile, loadVendoredSkill } = require('../runtime-settings');
+const { ensureSettingsProfile, loadVendoredSkill, settingsDigest } = require('../runtime-settings');
 const { getPaths } = require('../paths');
 const { mkdirPrivate } = require('../private-fs');
+const { detectPolicyHooks } = require('../policy-hooks');
+const { recordRunEvidence } = require('../run-evidence');
 
 /** Cap on the brain-stderr tail attached to spawnBrain's `done` result (bytes). */
 const STDERR_TAIL_MAX = 4096;
@@ -185,6 +187,42 @@ function spawnBrain(o) {
     stdio: ['ignore', 'pipe', 'pipe'],
     env: childEnv,
   });
+
+  // Run evidence (WP-132, audit A1 point 8): record the dream's actual runtime
+  // posture (version + exec path + argv + digests + managed-policy state) for
+  // the claude/fake paths — best-effort, never affects the run. The prompt and
+  // skill body are reduced to sha256 inside recordRunEvidence (secret-free).
+  // The codex path is A11/P2 (not hermetic under A1) and records nothing here.
+  if (harness !== 'codex') {
+    try {
+      let claudeVersion = 'unknown';
+      if (!fakeCmd && command === 'claude') {
+        // ONLY the real claude is version-probed — re-invoking a test fake
+        // could repeat its side effects (D-EVIDENCE: version + path, no hash).
+        try {
+          const r = spawnSync(command, ['--version'], { env: childEnv, timeout: 10_000, encoding: 'utf8' });
+          const out = (r.stdout || '').trim().slice(0, 200);
+          if (r.status === 0 && out) claudeVersion = out;
+        } catch {
+          /* best-effort */
+        }
+      }
+      const settingsIdx = args.indexOf('--settings');
+      recordRunEvidence(paths, {
+        at: new Date().toISOString(),
+        job: 'dream',
+        profileId: 'dream',
+        claudeVersion,
+        execPath: command,
+        argv: args,
+        settingsDigest: settingsIdx === -1 ? 'missing' : settingsDigest(args[settingsIdx + 1]),
+        mcpDigest: 'none', // dream: --strict-mcp-config with no --mcp-config
+        policyHooks: detectPolicyHooks(paths, baseEnv),
+      });
+    } catch {
+      /* evidence is best-effort — never affects the run */
+    }
+  }
 
   // EP3 (audit A5, ADR-0024, WP-124): the brain's stdout/stderr is fully
   // attacker-influenceable, so every chunk is redacted BEFORE it reaches the
