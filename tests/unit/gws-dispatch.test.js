@@ -25,6 +25,7 @@ function seedLegacyGrant(paths, g) {
 }
 
 const client = require('../../src/gws/client');
+const grantStore = require('../../src/gws/broker/grant-store');
 const { allowAll } = require('../../src/core/safety-profile');
 
 const repoRoot = path.join(__dirname, '..', '..');
@@ -39,6 +40,9 @@ const bin = path.join(repoRoot, 'bin', 'wienerdog.js');
  */
 let currentServices;
 client.getServices = () => currentServices;
+// WP-140: the cal bridge selects a per-class credential via getServicesForClass;
+// the same stub serves every class in these dispatch tests.
+client.getServicesForClass = () => currentServices;
 
 const gwsIndex = require('../../src/gws/index');
 
@@ -240,8 +244,9 @@ test('gws-dispatch: _alert is invoked with exactly {subject, body}', async () =>
   assert.match(decoded, /job X crashed/);
 });
 
-test('gws-dispatch: cal draft-event still works through the run() bridge', async () => {
-  const { env } = initPaths();
+test('gws-dispatch: cal add-event works through the run() bridge under a calendar_write grant', async () => {
+  const { paths, env } = initPaths();
+  grantStore.putGrant(paths, { routineId: 'daily-digest', kind: 'calendar_write', to: [] }, { confirmedAtTty: true });
   const s = stubCalendar();
   currentServices = s.services;
 
@@ -250,7 +255,9 @@ test('gws-dispatch: cal draft-event still works through the run() bridge', async
       gwsIndex.run(
         [
           'cal',
-          'draft-event',
+          'add-event',
+          '--routine',
+          'daily-digest',
           '--title',
           't',
           '--start',
@@ -272,8 +279,9 @@ test('gws-dispatch: cal draft-event still works through the run() bridge', async
   assert.deepEqual(seen.requestBody.end, { dateTime: '2026-07-03T09:15:00Z' });
 });
 
-test('gws-dispatch: repeatable --attendee accumulates through to cal draft-event', async () => {
-  const { env } = initPaths();
+test('gws-dispatch: repeatable --attendee accumulates through to cal add-event', async () => {
+  const { paths, env } = initPaths();
+  grantStore.putGrant(paths, { routineId: 'daily-digest', kind: 'calendar_write', to: [] }, { confirmedAtTty: true });
   const s = stubCalendar();
   currentServices = s.services;
 
@@ -282,7 +290,9 @@ test('gws-dispatch: repeatable --attendee accumulates through to cal draft-event
       gwsIndex.run(
         [
           'cal',
-          'draft-event',
+          'add-event',
+          '--routine',
+          'daily-digest',
           '--title',
           't',
           '--start',

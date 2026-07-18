@@ -138,7 +138,18 @@ const DISPATCH = {
       routine: resolveRoutine(flags),
       paths,
     }),
-  'cal': ({ flags, services }) => require('./calendar').run(services(), flags),
+  // Since WP-140 `cal` gets NO generic full-scope services: the calendar
+  // bridge selects a least-scope credential per verb (READ for list/show,
+  // CALENDAR_WRITE + a calendar_write grant for add-event).
+  'cal': ({ paths, flags }) =>
+    require('./calendar').run(
+      {
+        paths,
+        routine: resolveRoutine(flags),
+        servicesFor: (cls) => require('./client').getServicesForClass(paths, cls),
+      },
+      flags
+    ),
   'drive': ({ flags, services }) => require('./drive').run(services(), flags),
   '_alert': ({ flags, services }) =>
     require('./alert').run(services(), { subject: flags.subject, body: flags.body }),

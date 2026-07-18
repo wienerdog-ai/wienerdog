@@ -60,14 +60,17 @@ async function show(services, opts) {
 }
 
 /**
- * cal draft-event — create an event on the PRIMARY calendar WITHOUT notifying
- * anyone. `sendUpdates:'none'` is MANDATORY: this verb must never notify
- * attendees (that would be an outbound, grant-gated action; see WP-018).
+ * cal add-event — create a LIVE event on the PRIMARY calendar WITHOUT
+ * notifying anyone (renamed from the old misnomer: an insert is a live
+ * mutation, not a draft — audit A2 F3). `sendUpdates:'none'` is MANDATORY:
+ * this verb must never email attendees (that would be an outbound,
+ * grant-gated action). There is deliberately NO delete/update counterpart —
+ * delete-prevention is the verb allowlist, not the scope (ADR-0026 §3).
  * @param {{calendar:object}} services
  * @param {{title:string, start:string, end:string, attendees?:string[]}} opts
  * @returns {Promise<{id:string, htmlLink:string}>}
  */
-async function draftEvent(services, opts) {
+async function addEvent(services, opts) {
   const res = await services.calendar.events.insert({
     calendarId: 'primary',
     sendUpdates: 'none',
@@ -135,30 +138,54 @@ function parseVerbFlags(tokens) {
 
 /**
  * `cal <verb>` entry point — index.js's dispatch table routes the whole `cal`
- * group here (`DISPATCH['cal']`), passing the parsed CLI flags with the verb
- * as `flags.positionals[0]`.
- * @param {{calendar:object}} services
+ * group here (`DISPATCH['cal']`). Since WP-140 the bridge selects a
+ * least-scope credential PER VERB (no full-scope services object exists for
+ * `cal`): `list`/`show` run on the READ credential (calendar.events.readonly —
+ * physically cannot mutate), `add-event` runs on the CALENDAR_WRITE credential
+ * and ONLY under a TTY-minted `calendar_write` grant (WP-139). A missing grant
+ * degrades to a fail-visible notice with ZERO insert calls
+ * (D-ADDEVENT-DEGRADE, mirroring the send-grant posture).
+ * @param {{paths: import('../core/paths').WienerdogPaths,
+ *          routine: string|null,
+ *          servicesFor: (capabilityClass:string)=>{calendar:object}}} deps
  * @param {{positionals:string[], to?:string, max?:number}} flags
  * @returns {Promise<*>}
  */
-async function run(services, flags) {
+async function run(deps, flags) {
+  const { CAPABILITY_CLASS } = require('./broker/constants');
   const [verb, ...rest] = flags.positionals;
   const sub = parseVerbFlags(rest);
   switch (verb) {
     case 'list':
-      return list(services, { from: sub.from, to: flags.to, max: flags.max });
+      return list(deps.servicesFor(CAPABILITY_CLASS.READ), { from: sub.from, to: flags.to, max: flags.max });
     case 'show':
-      return show(services, { id: require_(sub.id, '--id') });
-    case 'draft-event':
-      return draftEvent(services, {
+      return show(deps.servicesFor(CAPABILITY_CLASS.READ), { id: require_(sub.id, '--id') });
+    case 'add-event': {
+      const opts = {
         title: require_(sub.title, '--title'),
         start: require_(sub.start, '--start'),
         end: require_(sub.end, '--end'),
         attendees: sub.attendees,
-      });
+      };
+      const { grantCheck } = require('./broker/grant-store');
+      const routine = deps.routine || null;
+      const decision = grantCheck(deps.paths, routine, 'calendar_write');
+      if (!decision.allowed) {
+        // Fail-visible, zero mutation (ADR-0007 posture; alert carries the
+        // fixed integrity message when the store failed its check).
+        return {
+          created: false,
+          notice:
+            `no calendar-write grant for ${routine || '<none>'}; not created. ` +
+            'Run: wienerdog grant calendar-write --routine <name>' +
+            (decision.alert ? ` (${decision.alert})` : ''),
+        };
+      }
+      return addEvent(deps.servicesFor(CAPABILITY_CLASS.CALENDAR_WRITE), opts);
+    }
     default:
       throw new WienerdogError(`unknown cal verb: ${verb || '<none>'}`);
   }
 }
 
-module.exports = { list, show, draftEvent, run };
+module.exports = { list, show, addEvent, run };

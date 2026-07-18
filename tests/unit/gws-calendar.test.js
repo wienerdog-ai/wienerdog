@@ -113,7 +113,7 @@ test('show returns full event detail', async () => {
   assert.equal(seen.eventId, 'abc');
 });
 
-test('draftEvent always inserts with sendUpdates:none and never notifies', async () => {
+test('addEvent always inserts with sendUpdates:none and never notifies', async () => {
   let seen;
   const services = {
     calendar: {
@@ -126,7 +126,7 @@ test('draftEvent always inserts with sendUpdates:none and never notifies', async
     },
   };
 
-  const result = await calendar.draftEvent(services, {
+  const result = await calendar.addEvent(services, {
     title: 'Plan review',
     start: '2026-07-03T10:00:00Z',
     end: '2026-07-03T10:30:00Z',
@@ -147,7 +147,7 @@ test('draftEvent always inserts with sendUpdates:none and never notifies', async
   assert.deepEqual(JSON.parse(JSON.stringify(result)), result);
 });
 
-test('draftEvent defaults attendees to an empty array when omitted', async () => {
+test('addEvent defaults attendees to an empty array when omitted', async () => {
   const services = {
     calendar: {
       events: {
@@ -155,7 +155,7 @@ test('draftEvent defaults attendees to an empty array when omitted', async () =>
       },
     },
   };
-  const result = await calendar.draftEvent(services, {
+  const result = await calendar.addEvent(services, {
     title: 'Solo block',
     start: '2026-07-03T10:00:00Z',
     end: '2026-07-03T10:30:00Z',
@@ -163,52 +163,75 @@ test('draftEvent defaults attendees to an empty array when omitted', async () =>
   assert.equal(result.id, 'evt-2');
 });
 
+// run()'s deps shape since WP-140: {paths, routine, servicesFor}. These tests
+// need no grant store — a services-only deps stub covers the read verbs and
+// flag validation (grant-gated add-event coverage lives in
+// gws-calendar-addevent.test.js).
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const { getPaths } = require('../../src/core/paths');
+const grantStore = require('../../src/gws/broker/grant-store');
+
+/** deps over a fixed services object, with a fresh temp core for grants. */
+function depsOver(services, { grant } = {}) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-cal-'));
+  const paths = getPaths({ HOME: root, WIENERDOG_HOME: path.join(root, 'wd') });
+  if (grant) {
+    grantStore.putGrant(paths, { routineId: 'r', kind: 'calendar_write', to: [] }, { confirmedAtTty: true });
+  }
+  return { paths, routine: 'r', servicesFor: () => services };
+}
+
 test('run: cal show throws WienerdogError when --id is missing', async () => {
-  const services = { calendar: {} };
+  const deps = depsOver({ calendar: {} });
   await assert.rejects(
-    () => calendar.run(services, { positionals: ['show'] }),
+    () => calendar.run(deps, { positionals: ['show'] }),
     (err) => err instanceof WienerdogError && /--id/.test(err.message)
   );
 });
 
-test('run: cal draft-event throws WienerdogError when --title is missing', async () => {
-  const services = { calendar: {} };
+test('run: cal add-event throws WienerdogError when --title is missing', async () => {
+  const deps = depsOver({ calendar: {} });
   await assert.rejects(
     () =>
-      calendar.run(services, {
-        positionals: ['draft-event', '--start', 'a', '--end', 'b'],
+      calendar.run(deps, {
+        positionals: ['add-event', '--start', 'a', '--end', 'b'],
       }),
     (err) => err instanceof WienerdogError && /--title/.test(err.message)
   );
 });
 
 test('run: cal list dispatches through to list() with --json-friendly flags', async () => {
-  const services = {
+  const deps = depsOver({
     calendar: {
       events: {
         list: async () => ({ data: { items: [] } }),
       },
     },
-  };
-  const result = await calendar.run(services, { positionals: ['list'], max: 5 });
+  });
+  const result = await calendar.run(deps, { positionals: ['list'], max: 5 });
   assert.deepEqual(result, []);
 });
 
-test('run: cal draft-event parses --title/--start/--end/--attendee tokens', async () => {
+test('run: cal add-event parses --title/--start/--end/--attendee tokens (granted)', async () => {
   let seen;
-  const services = {
-    calendar: {
-      events: {
-        insert: async (args) => {
-          seen = args;
-          return { data: { id: 'evt-3', htmlLink: 'x' } };
+  const deps = depsOver(
+    {
+      calendar: {
+        events: {
+          insert: async (args) => {
+            seen = args;
+            return { data: { id: 'evt-3', htmlLink: 'x' } };
+          },
         },
       },
     },
-  };
-  await calendar.run(services, {
+    { grant: true }
+  );
+  await calendar.run(deps, {
     positionals: [
-      'draft-event',
+      'add-event',
       '--title',
       'Standup',
       '--start',
