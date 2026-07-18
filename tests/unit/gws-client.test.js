@@ -19,11 +19,12 @@ function tempPaths() {
   return paths;
 }
 
-test('SCOPES is exactly the four consented scopes, in order', () => {
-  assert.deepEqual(client.SCOPES, [
+test('client re-exports the frozen per-capability SCOPE_SETS (combined SCOPES is gone)', () => {
+  assert.equal(client.SCOPES, undefined, 'the combined-scope constant is retired (WP-138)');
+  assert.deepEqual(client.SCOPE_SETS, require('../../src/gws/scope-sets').SCOPE_SETS);
+  assert.deepEqual(client.SCOPE_SETS.READ, [
     'https://www.googleapis.com/auth/gmail.readonly',
-    'https://www.googleapis.com/auth/gmail.compose',
-    'https://www.googleapis.com/auth/calendar',
+    'https://www.googleapis.com/auth/calendar.events.readonly',
     'https://www.googleapis.com/auth/drive.readonly',
   ]);
 });
@@ -80,23 +81,26 @@ test('loadToken throws a WienerdogError on corrupt JSON', () => {
   );
 });
 
-test('getServices with opts.factory returns the factory object and loads no real googleapis', () => {
+test('getServicesForClass with opts.factory returns the factory object and loads no real googleapis', () => {
   const paths = tempPaths();
   const token = { access_token: 'a' };
-  client.persistToken(paths, token);
+  client.persistTokenForClass(paths, 'READ', token);
   client.persistClientJson(paths, { installed: { client_id: 'id', client_secret: 's' } });
 
   const stub = { gmail: {}, calendar: {}, drive: {} };
   let seenToken;
-  const services = client.getServices(paths, {
-    factory: (t) => {
+  let seenClass;
+  const services = client.getServicesForClass(paths, 'READ', {
+    factory: (t, cls) => {
       seenToken = t;
+      seenClass = cls;
       return stub;
     },
   });
 
   assert.equal(services, stub);
   assert.deepEqual(seenToken, token);
+  assert.equal(seenClass, 'READ');
   // The real googleapis package must not have been loaded by the factory path.
   // (Robust whether or not googleapis is installed: if it can't even resolve,
   // it certainly wasn't loaded.)
@@ -107,4 +111,14 @@ test('getServices with opts.factory returns the factory object and loads no real
     resolved = null;
   }
   if (resolved) assert.equal(require.cache[resolved], undefined);
+});
+
+test('getServices (combined-token path) is retired: it throws the split-credential migration error', () => {
+  const paths = tempPaths();
+  client.persistToken(paths, { access_token: 'legacy' });
+  client.persistClientJson(paths, { installed: { client_id: 'id', client_secret: 's' } });
+  assert.throws(
+    () => client.getServices(paths),
+    (err) => err instanceof WienerdogError && /gws auth/.test(err.message)
+  );
 });

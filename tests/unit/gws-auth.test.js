@@ -37,39 +37,49 @@ function tempClientPath() {
 // (i) run() with an injected oauthClient + opts.startLoopback fake.
 // ---------------------------------------------------------------------------
 
-test('run() sends state + PKCE on the auth URL and codeVerifier on the token exchange', async () => {
-  const paths = tempPaths();
-  const clientPath = tempClientPath();
+const clientMod = require('../../src/gws/client');
+const { requiredScopesFor } = require('../../src/gws/scope-sets');
+const { CAPABILITY_CLASS } = require('../../src/gws/broker/constants');
 
-  const fakeStartLoopback = (_expectedState) =>
-    Promise.resolve({
-      server: { close() {} },
-      port: 12345,
-      waitForCode: Promise.resolve('the-code'),
-    });
-
-  let generateAuthUrlOpts;
-  let getTokenArg;
-  const oauthClient = {
+/** A recording fake oauth client whose tokeninfo grants exactly what was requested. */
+function fakeOauth(overrides = {}) {
+  const state = { authUrlCalls: [], getTokenArgs: [], lastScope: null };
+  return {
+    state,
     generateCodeVerifierAsync: async () => ({ codeVerifier: 'ver', codeChallenge: 'chal' }),
     generateAuthUrl: (opts) => {
-      generateAuthUrlOpts = opts;
+      state.authUrlCalls.push(opts);
+      state.lastScope = opts.scope;
       return 'https://accounts.google.com/o/oauth2/v2/auth?fake=1';
     },
     getToken: async (arg) => {
-      getTokenArg = arg;
-      return { tokens: { access_token: 'a' } };
+      state.getTokenArgs.push(arg);
+      return { tokens: { access_token: `at-${state.getTokenArgs.length}`, refresh_token: 'r' } };
     },
     setCredentials() {},
+    getTokenInfo: overrides.getTokenInfo || (async () => ({ scopes: state.lastScope.slice() })),
   };
+}
 
-  const googleapisStub = {
-    google: {
-      gmail: () => {
-        throw new Error('no gmail in this test');
-      },
+const fakeStartLoopback = (_expectedState) =>
+  Promise.resolve({
+    server: { close() {} },
+    port: 12345,
+    waitForCode: Promise.resolve('the-code'),
+  });
+
+const googleapisStub = {
+  google: {
+    gmail: () => {
+      throw new Error('no gmail in this test');
     },
-  };
+  },
+};
+
+test('run() runs ONE consent flow per capability class: per-class scopes, include_granted_scopes:false, PKCE, separate tokens', async () => {
+  const paths = tempPaths();
+  const clientPath = tempClientPath();
+  const oauthClient = fakeOauth();
 
   const result = await auth.run(paths, {
     clientPath,
@@ -80,14 +90,75 @@ test('run() sends state + PKCE on the auth URL and codeVerifier on the token exc
     runInstall: () => ({ status: 0 }),
   });
 
-  assert.equal(typeof generateAuthUrlOpts.state, 'string');
-  assert.ok(generateAuthUrlOpts.state.length > 0);
-  assert.equal(generateAuthUrlOpts.code_challenge, 'chal');
-  assert.equal(generateAuthUrlOpts.code_challenge_method, 'S256');
+  const classes = Object.values(CAPABILITY_CLASS);
+  assert.equal(oauthClient.state.authUrlCalls.length, classes.length, 'one flow per class');
+  for (let i = 0; i < classes.length; i++) {
+    const call = oauthClient.state.authUrlCalls[i];
+    assert.deepEqual(call.scope, requiredScopesFor(classes[i]), `flow ${i} requests the ${classes[i]} set`);
+    assert.equal(call.include_granted_scopes, false, 'scope-bleed guard is explicit');
+    assert.equal(typeof call.state, 'string');
+    assert.ok(call.state.length > 0);
+    assert.equal(call.code_challenge, 'chal');
+    assert.equal(call.code_challenge_method, 'S256');
+  }
+  assert.deepEqual(oauthClient.state.getTokenArgs[0], { code: 'the-code', codeVerifier: 'ver' });
 
-  assert.deepEqual(getTokenArg, { code: 'the-code', codeVerifier: 'ver' });
-
+  for (const cls of classes) {
+    assert.ok(
+      fs.existsSync(clientMod.tokenPathForClass(paths, cls)),
+      `token persisted for ${cls}`
+    );
+  }
   assert.equal(result.email, null);
+  assert.equal(result.tokenPaths.length, classes.length);
+});
+
+test('run() fails the flow when the granted scopes are not exactly the requested least-scope set', async () => {
+  const paths = tempPaths();
+  const clientPath = tempClientPath();
+  const oauthClient = fakeOauth({
+    // Grants a superset on every flow — the exact-set verification must refuse.
+    getTokenInfo: async () => ({
+      scopes: [...requiredScopesFor(CAPABILITY_CLASS.READ), 'https://www.googleapis.com/auth/gmail.send'],
+    }),
+  });
+
+  await assert.rejects(
+    () =>
+      auth.run(paths, {
+        clientPath,
+        startLoopback: fakeStartLoopback,
+        oauthClient,
+        googleapis: googleapisStub,
+        yes: true,
+        runInstall: () => ({ status: 0 }),
+      }),
+    /scope/i
+  );
+  assert.equal(
+    fs.existsSync(clientMod.tokenPathForClass(paths, CAPABILITY_CLASS.READ)),
+    false,
+    'a token failing scope verification is NOT persisted'
+  );
+});
+
+test('run() retires a legacy combined token (rename, never reuse)', async () => {
+  const paths = tempPaths();
+  const clientPath = tempClientPath();
+  fs.mkdirSync(paths.secrets, { recursive: true, mode: 0o700 });
+  clientMod.persistToken(paths, { access_token: 'legacy' });
+
+  await auth.run(paths, {
+    clientPath,
+    startLoopback: fakeStartLoopback,
+    oauthClient: fakeOauth(),
+    googleapis: googleapisStub,
+    yes: true,
+    runInstall: () => ({ status: 0 }),
+  });
+
+  assert.equal(fs.existsSync(clientMod.tokenPath(paths)), false, 'legacy token renamed away');
+  assert.ok(fs.existsSync(`${clientMod.tokenPath(paths)}.retired`));
 });
 
 // ---------------------------------------------------------------------------

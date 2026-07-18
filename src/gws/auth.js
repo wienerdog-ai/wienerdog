@@ -5,7 +5,10 @@ const http = require('node:http');
 const crypto = require('node:crypto');
 
 const { WienerdogError } = require('../core/errors');
-const { SCOPES, persistToken, persistClientJson } = require('./client');
+const { persistTokenForClass, tokenPathForClass, persistClientJson } = require('./client');
+const { requiredScopesFor } = require('./scope-sets');
+const { CAPABILITY_CLASS } = require('./broker/constants');
+const { hasLegacyToken, retireLegacyToken, MIGRATION_NOTICE } = require('./token-migration');
 const { loadGoogleapis, ensureGoogleapis } = require('./deps');
 
 /**
@@ -22,12 +25,17 @@ const CLOSE_PAGE =
 const CONSENT_TIMEOUT_MS = 5 * 60 * 1000;
 
 /**
- * Run the interactive OAuth loopback flow and persist the token.
+ * Run the interactive OAuth flows — ONE consent per capability class
+ * (WP-138): each flow requests only that class's least-scope set with
+ * `include_granted_scopes:false` (the scope-bleed guard), verifies the
+ * actually-granted scopes are exactly the requested set, and persists the
+ * token to its own 0600 file. A pre-split combined token is retired first
+ * (renamed aside, never reused — D-TOKEN-MIGRATION).
  * @param {WienerdogPaths} paths
  * @param {{clientPath?: string, googleapis?: object, oauthClient?: object,
  *          openBrowser?: (url:string)=>void,
  *          startLoopback?: (expectedState:string, timeoutMs?:number)=>Promise<{server:object,port:number,waitForCode:Promise<string>}>}} opts
- * @returns {Promise<{email:string|null, tokenPath:string}>}
+ * @returns {Promise<{email:string|null, tokenPath:string, tokenPaths:string[]}>}
  */
 async function run(paths, opts = {}) {
   if (!opts.clientPath) {
@@ -53,6 +61,12 @@ async function run(paths, opts = {}) {
   }
   persistClientJson(paths, clientJson);
 
+  // 1b. Retire a pre-split combined token: set aside, tell the user, never reuse.
+  if (hasLegacyToken(paths)) {
+    retireLegacyToken(paths);
+    process.stdout.write(`\n${MIGRATION_NOTICE}`);
+  }
+
   // 2b. Ensure Google's client library is installed (on-demand, with consent —
   // ADR-0013/ADR-0011). No-op if already present; consent seams pass through.
   await ensureGoogleapis(paths, {
@@ -61,18 +75,48 @@ async function run(paths, opts = {}) {
     runInstall: opts.runInstall,
   });
 
+  const classes = Object.values(CAPABILITY_CLASS);
+  const tokenPaths = [];
+  let email = null;
+
+  for (let i = 0; i < classes.length; i++) {
+    const cls = classes[i];
+    const label = `[${i + 1}/${classes.length}] ${cls}`;
+    const { token, oauth } = await runFlowForClass(paths, cfg, cls, label, opts);
+
+    // Verify BEFORE persisting: a token whose granted scopes are not exactly
+    // the requested least-scope set never lands on disk.
+    await verifyGrantedScopes(oauth, token, cls);
+    persistTokenForClass(paths, cls, token);
+    tokenPaths.push(tokenPathForClass(paths, cls));
+
+    // Best-effort account email off the READ credential (gmail.readonly).
+    if (cls === CAPABILITY_CLASS.READ) email = await fetchEmail(oauth, opts, paths);
+  }
+
+  return { email, tokenPath: paths.secrets, tokenPaths };
+}
+
+/**
+ * One PKCE + state loopback consent flow for one capability class. Unchanged
+ * per-flow security posture: PKCE, high-entropy `state`, 5-min timeout, and
+ * the loopback socket never outlives the flow (ADR-0004).
+ * @param {WienerdogPaths} paths
+ * @param {{client_id:string, client_secret:string}} cfg
+ * @param {string} cls capability class
+ * @param {string} label progress label for the consent prompt
+ * @param {object} opts injection seams (oauthClient, googleapis, startLoopback, openBrowser)
+ * @returns {Promise<{token: object, oauth: object}>}
+ */
+async function runFlowForClass(paths, cfg, cls, label, opts) {
   // A random, high-entropy state correlates the callback to the request we made.
   const state = crypto.randomBytes(32).toString('base64url');
 
-  // 3. Start the loopback listener on an ephemeral port before building the URL.
-  // Loopback listener verifies `state`; injectable for tests.
   const startLoopbackFn = opts.startLoopback || startLoopback;
   const { server, port, waitForCode } = await startLoopbackFn(state);
 
   try {
     const redirectUri = `http://127.0.0.1:${port}/`;
-
-    // 2. Build an OAuth2 client (injectable for tests).
     const oauth =
       opts.oauthClient ||
       new (opts.googleapis || loadGoogleapis(paths)).google.auth.OAuth2(
@@ -84,35 +128,60 @@ async function run(paths, opts = {}) {
     // PKCE (RFC 8252 MUST for this client shape). Opt-in in google-auth-library.
     const { codeVerifier, codeChallenge } = await oauth.generateCodeVerifierAsync();
 
-    // 4. Generate + present the consent URL.
     const authUrl = oauth.generateAuthUrl({
       access_type: 'offline',
       prompt: 'consent',
-      scope: SCOPES,
+      scope: requiredScopesFor(cls),
       state,
+      // Measured (SPIKE-include-granted-scopes-default): the library has NO
+      // default — omitting the param leaves Google's server-side default in
+      // charge. Always pass false explicitly (the scope-bleed guard).
+      include_granted_scopes: false,
       code_challenge: codeChallenge,
       code_challenge_method: 'S256',
     });
     process.stdout.write(
-      `\nOpen this URL in your browser to authorize Wienerdog:\n\n${authUrl}\n\n`
+      `\n${label}: open this URL in your browser to authorize Wienerdog:\n\n${authUrl}\n\n`
     );
     if (opts.openBrowser) opts.openBrowser(authUrl);
 
-    // 5. Wait for the single loopback redirect carrying ?code=...
     const code = await waitForCode;
-
-    // 6. Exchange the code for tokens and persist them.
     const token = (await oauth.getToken({ code, codeVerifier })).tokens;
     oauth.setCredentials(token);
-    persistToken(paths, token);
-
-    // 7. Best-effort account email for the confirmation line.
-    const email = await fetchEmail(oauth, opts, paths);
-
-    return { email, tokenPath: require('./client').tokenPath(paths) };
+    return { token, oauth };
   } finally {
     // No socket may outlive the command (ADR-0004).
     server.close();
+  }
+}
+
+/**
+ * Assert the freshly-granted scopes are EXACTLY the class's least-scope set
+ * (tokeninfo). A superset is scope bleed; a subset is an incomplete consent —
+ * both fail the flow before the token is persisted.
+ * @param {object} oauth the flow's oauth client (carries getTokenInfo)
+ * @param {object} token the freshly-exchanged token
+ * @param {string} cls capability class
+ * @returns {Promise<void>}
+ */
+async function verifyGrantedScopes(oauth, token, cls) {
+  const required = requiredScopesFor(cls);
+  let info;
+  try {
+    info = await oauth.getTokenInfo(token.access_token);
+  } catch {
+    throw new WienerdogError(
+      `could not verify the granted Google scopes for ${cls} — re-run \`wienerdog gws auth\``
+    );
+  }
+  const granted = new Set((info && info.scopes) || []);
+  const exact =
+    granted.size === required.length && required.every((s) => granted.has(s));
+  if (!exact) {
+    throw new WienerdogError(
+      `the Google consent for ${cls} did not grant exactly the requested least-scope set — ` +
+        're-run `wienerdog gws auth` and approve exactly the requested access'
+    );
   }
 }
 
