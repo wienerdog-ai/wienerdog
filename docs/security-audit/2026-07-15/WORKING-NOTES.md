@@ -27,6 +27,32 @@
 
 <!-- -->
 
+> **A8 + A13 SPEC PHASE COMPLETE — implementation NOT started (2026-07-18).** Audit
+> actions **A8** (manifest replay as untrusted input, P1) and **A13** (remaining lower
+> findings, P2) are specced and owner-walked-through; **WP-144..WP-152 are all
+> `status: Ready`** (specs in `docs/specs/`, NOT `done/`). A8: 144 strict per-kind
+> manifest schema + per-entry try/catch isolation + root-bounded deletes; 145 re-derive
+> the scheduler unload from platform + validated identity, never execute manifest-stored
+> argv (**ADR-0027**, owner-approved), show the uninstall plan before confirm. A13: 146
+> settings-command upsert + foreign `wienerdog-*` symlink preserve; 147 managed-block
+> separator round-trip (record exact separator bytes + anti-fusion guard); 148
+> sentinel-ambiguity isolation (adapters); 149 adopt guard (home hard-refuse;
+> secret/huge tree → high-friction typed confirm, headless fail-closed, no escape hatch;
+> secret set extended with `.netrc`/`.git-credentials`/`.npmrc`); 150 env-override path
+> validation (reject-not-normalize, absolute + no `.`/`..`, HOME excluded); 151
+> self-alert body from code-owned fields only; 152 Codex parser version pin
+> (`supported-codex.js`, advisory record NOT a gate, mirrors `supported-claude.js`) +
+> rerun runbook. Owner walkthrough decisions are recorded per-spec (dated
+> OWNER-APPROVED / owner-walkthrough lines). **Dependency chains (file-collision):**
+> `manifest.js` 144 → 145 → 147; `shared.js` 146 → 147; the rest are independent. **Wave
+> 1 (parallel):** 144, 146, 148, 149, 150, 151, 152 · **Wave 2:** 145 · **Wave 3:** 147.
+> **Cross-batch:** 151 touches `run-job.js` (so does A2's 141) → sequence 151 after 141.
+> Deferred (owner-approved): hash-every-deletable-file fingerprint hardening is a future
+> WP, not in 144. **A8/A13 opens NO gate** — `wienerdog safety` stays all-BLOCKED.
+> Resume point: implement **WP-144 first** (TDD, tests first).
+
+<!-- -->
+
 > **A1 COMPLETE — all eight WPs Done (implemented + reviewed, 2026-07-18).** Audit action
 > **A1 (hermetic runtime profiles)** is fully implemented and reviewed. **ADR-0025** is
 > Accepted (+2 amendments), and **WP-128..WP-135** are all `status: Done` (specs in
