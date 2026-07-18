@@ -82,7 +82,11 @@ Managed-settings locations are OS-specific and version-dependent (see D-POLICY-H
 | modify | src/core/dream/brain.js | record evidence for the dream run (version, exec path, profile, argv, digests) |
 | create | tests/unit/policy-hooks.test.js | detection present/absent + read-only + never-throws |
 | create | tests/unit/run-evidence.test.js | record shape, 0600, bounded, secret-free (no raw argv secret leak) |
-| modify | tests/unit/run-job.test.js | policy-hook present → warns + records + proceeds-to-spawn (no throw); evidence recorded |
+| modify | tests/unit/scheduler-runjob.test.js | policy-hook present → warns + records + proceeds-to-spawn (no throw); evidence recorded |
+
+> **Amendment (2026-07-18, review pass).** The `run-job.js` unit-test row originally named
+> `tests/unit/run-job.test.js`, which does not exist; the real suite covering `src/cli/run-job.js`
+> is `tests/unit/scheduler-runjob.test.js`. Corrected in the table above.
 
 ### Exact contracts
 

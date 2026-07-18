@@ -85,8 +85,17 @@ dev-time record only (reconciled in WP-133's D-CLAUDE-PIN amendment) — it is N
 | create | src/core/dream/containment-probe.js | `runContainmentProbe(paths, opts)` → `{outcome, claudeVersion, reason, checks}`; temp canary workspace; composes the REAL dream argv + bounding flags; static + behavioral assertions |
 | modify | src/cli/dream.js | run the probe AFTER the dry-run/"nothing to dream" returns and BEFORE `precommitSessionEdits`/brain; fail-closed halt on fail/inconclusive (durable alert, no brain, no precommit) |
 | modify | src/core/run-evidence.js | add an optional `containmentProbe:{outcome, claudeVersion}` field to the `RunEvidence` typedef (WP-132) |
+| modify | src/core/dream/brain.js | thread the probe result into `spawnBrain`'s `recordRunEvidence` call so the dream evidence carries `containmentProbe` (Exact-contract #3: the field is built at the dream spawn site per WP-132) |
 | create | tests/unit/containment-probe.test.js | probe pass/fail/inconclusive via the fake-probe seam + temp-dir cleanup + never-touches-real-config |
-| modify | tests/unit/dream.test.js | probe-fail/inconclusive halts the dream (no brain, no precommit); fake-brain seam skips the probe; probe result recorded in evidence |
+| modify | tests/integration/dream.test.js | probe-fail/inconclusive halts the dream (no brain, no precommit); fake-brain seam skips the probe; probe result recorded in evidence |
+
+> **Amendment (2026-07-18, review pass).** Two Deliverables corrections. (1) Added the
+> `modify src/core/dream/brain.js` row: Exact-contract #3 requires the `containmentProbe`
+> evidence field to be built "at the dream spawn site per WP-132", and that site is
+> `spawnBrain` in `brain.js` (which calls `recordRunEvidence`) — so the table had to list it
+> or it would contradict the contract. (2) The dream-lifecycle test row named
+> `tests/unit/dream.test.js`, which does not exist; the real dream lifecycle suite (where the
+> WP-135 wiring tests land) is `tests/integration/dream.test.js`. Corrected in the table above.
 
 ### Exact contracts
 

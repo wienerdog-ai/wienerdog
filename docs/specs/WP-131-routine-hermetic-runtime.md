@@ -89,7 +89,12 @@ There is no mapping from a `job.run` skill id to a routine **profile id**
 | create | src/core/routine-runtime.js | resolve a `job.run` → routine profile id (code-owned map, fail closed); `composeRoutineRun(paths, job)` → `{command,args,cwd}`; `ensureRoutineStaging`; broker-MCP seam |
 | modify | src/cli/run-job.js | `resolveCommand` `skill:` branch delegates to `routine-runtime.js` (keeps the `requireCapability` freeze BEFORE composition); spawn uses the returned staging cwd |
 | create | tests/unit/routine-runtime.test.js | profile-id mapping (known/unknown fail closed), composed argv (no Bash/ambient/user-settings, one broker MCP), staging cwd, gate-still-blocked |
-| modify | tests/unit/run-job.test.js | reconcile `resolveCommand` expectations for the `skill:` branch |
+| modify | tests/unit/scheduler-runjob.test.js | reconcile `resolveCommand` expectations for the `skill:` branch |
+
+> **Amendment (2026-07-18, review pass).** The `run-job.js` unit-test row originally named
+> `tests/unit/run-job.test.js`, which does not exist; the real suite covering `src/cli/run-job.js`
+> is `tests/unit/scheduler-runjob.test.js`. Corrected in the table above. (The broker-seam
+> contract prose is reconciled separately under D-BROKER-SEAM.)
 
 ### Exact contracts
 
@@ -122,12 +127,16 @@ function profileIdForSkill(skillId) { /* SKILL_TO_PROFILE[skillId] or throw */ }
 function ensureRoutineStaging(paths, routineId) { /* mkdirPrivate(state/routine-run/<routineId>), wiped */ }
 
 /** Absolute path to the routine's single broker MCP config, or null when the profile is
- *  mcp:'empty'. THE A2 SEAM: A2 writes this config (the credential-holding local stdio
- *  broker). Until A2, this returns a fixed sentinel path that does NOT exist, so a
- *  broker-requiring routine composed here fails closed in composeClaudeArgs (no
- *  --mcp-config → RuntimeProfileError) — the routine is contained AND inert until A2.
+ *  mcp:'empty' OR when the A2 broker seam file is not yet present. THE A2 SEAM: A2 writes
+ *  this config (the credential-holding local stdio broker). Until A2 writes it, this returns
+ *  **null** even for a mcp:'broker' profile, so a broker-requiring routine composed here
+ *  fails closed in composeClaudeArgs (no --mcp-config → RuntimeProfileError) — the routine is
+ *  contained AND inert until A2. Returning null (not a nonexistent absolute sentinel) is what
+ *  actually fails closed: composeClaudeArgs validates absoluteness, NOT existence, so a
+ *  nonexistent-but-absolute sentinel would PASS its guard and emit a broken --mcp-config
+ *  instead of throwing (2026-07-18 review-pass amendment).
  *  @param {import('../core/paths').WienerdogPaths} paths @param {import('./runtime-profile').RuntimeProfile} profile @returns {string|null} */
-function brokerMcpConfigPath(paths, profile) { /* profile.mcp==='broker' ? <A2 seam path> : null */ }
+function brokerMcpConfigPath(paths, profile) { /* profile.mcp==='broker' && A2 seam file present ? <A2 seam path> : null */ }
 
 /**
  * Compose a routine's hermetic run (command + argv + cwd). Does NOT check the capability
@@ -191,15 +200,25 @@ claude -p "/wienerdog-daily-digest" \
 
 ## DECISION NEEDED (resolve in the walkthrough; each becomes a dated OWNER-APPROVED line before Ready)
 
-- **D-BROKER-SEAM (A1 side) — RESOLVED (OWNER-APPROVED 2026-07-18): fail closed on a
-  non-existent A2 sentinel.** A broker-requiring routine (`daily-digest`, `inbox-triage`)
-  needs a `--mcp-config`; A2 has not built the broker.
-  - **Approved: `brokerMcpConfigPath` returns a fixed, non-existent A2 sentinel path
-    for a `mcp:'broker'` profile, so `composeClaudeArgs` fails closed** (WP-128 throws
+- **D-BROKER-SEAM (A1 side) — RESOLVED (OWNER-APPROVED 2026-07-18): fail closed by returning
+  null until the A2 seam file exists.** A broker-requiring routine (`daily-digest`,
+  `inbox-triage`) needs a `--mcp-config`; A2 has not built the broker.
+  - **Approved: `brokerMcpConfigPath` returns `null` for a `mcp:'broker'` profile while the
+    A2 broker seam file is absent, so `composeClaudeArgs` fails closed** (WP-128 throws
     `RuntimeProfileError` when `mcp:'broker'` but no usable config) — the routine is
     *contained and inert* until A2 wires a real broker at that seam. The seam path and
     the "A2 owns this" contract are recorded here so A2 has one place to plug in.
-  - **Counterargument (accepted):** a non-existent config path means the unit test for a
+  - **Amendment (2026-07-18, review pass — reconciles the original "nonexistent sentinel"
+    wording).** The original approved line said `brokerMcpConfigPath` returns a fixed,
+    *nonexistent* absolute sentinel path so composition fails closed. The review pass ruled
+    that WRONG and reconciled it to `null`: `composeClaudeArgs` validates path *absoluteness*,
+    not *existence*, so a nonexistent-but-absolute sentinel would have PASSED the guard and
+    emitted a broken `--mcp-config` instead of throwing — i.e. it would NOT have failed closed.
+    Returning `null` (no `--mcp-config` → `RuntimeProfileError` for a `mcp:'broker'` profile)
+    is what actually fails closed and preserves the original intent (broker routines contained
+    and inert until A2). The shipped implementation already does this; the contract prose above
+    and around line 128 is reconciled to match.
+  - **Counterargument (accepted):** a null broker config means the unit test for a
     broker-routine composition asserts a *throw*, not a full argv — slightly less
     coverage of the broker argv shape now. Mitigation: the composer's `--mcp-config`
     emission is already unit-tested in WP-128 with a synthetic absolute path; here we
