@@ -10,7 +10,7 @@ const {
   SKILL_TO_PROFILE,
   profileIdForSkill,
   ensureRoutineStaging,
-  brokerMcpConfigPath,
+  ensureBrokerMcpConfig,
   composeRoutineRun,
 } = require('../../src/core/routine-runtime');
 const { getProfile, RuntimeProfileError } = require('../../src/core/runtime-profile');
@@ -66,21 +66,19 @@ test('routine-runtime: ensureRoutineStaging recreates an empty 0700 dir per run'
 
 // --- broker seam ---
 
-test('routine-runtime: brokerMcpConfigPath is null until A2 wires the seam file', () => {
+test('routine-runtime: ensureBrokerMcpConfig WRITES the per-routine seam (WP-141) and stays null for dream', () => {
   const paths = tempPaths();
-  assert.equal(brokerMcpConfigPath(paths, getProfile('daily-digest')), null, 'broker profile, seam absent');
-  assert.equal(brokerMcpConfigPath(paths, getProfile('weekly-review')), null, 'mcp:empty profile');
-  // A2 writes the seam file → the broker profile picks it up (the ONE plug-in point).
-  const seam = path.join(RUNTIME_DIR(paths), 'broker-mcp.json');
-  fs.mkdirSync(RUNTIME_DIR(paths), { recursive: true });
-  fs.writeFileSync(seam, '{}');
-  assert.equal(brokerMcpConfigPath(paths, getProfile('daily-digest')), seam);
-  assert.equal(brokerMcpConfigPath(paths, getProfile('weekly-review')), null, 'mcp:empty stays null');
+  const seam = ensureBrokerMcpConfig(paths, getProfile('daily-digest'));
+  assert.equal(seam, path.join(RUNTIME_DIR(paths), 'broker-mcp-daily-digest.json'));
+  assert.ok(fs.existsSync(seam), 'the seam file is written, not merely located');
+  const cfg = JSON.parse(fs.readFileSync(seam, 'utf8'));
+  assert.deepEqual(cfg.mcpServers['wienerdog-broker'].args.slice(-2), ['--routine', 'daily-digest']);
+  assert.equal(ensureBrokerMcpConfig(paths, getProfile('dream')), null, 'mcp:empty profile stays null');
 });
 
 // --- composition ---
 
-test('routine-runtime: composeRoutineRun (weekly-review, mcp:empty) is fully hermetic', () => {
+test('routine-runtime: composeRoutineRun (weekly-review) is fully hermetic with the broker wired', () => {
   const paths = tempPaths();
   const job = { name: 'weekly', run: 'skill:wienerdog-weekly-review' };
   const r = composeRoutineRun(paths, job);
@@ -88,7 +86,7 @@ test('routine-runtime: composeRoutineRun (weekly-review, mcp:empty) is fully her
   assert.equal(r.command, 'claude');
   assert.equal(r.shell, false);
   assert.equal(r.cwd, path.join(paths.state, 'routine-run', 'weekly-review'));
-  assert.deepEqual(fs.readdirSync(r.cwd), [], 'staging is empty');
+  assert.deepEqual(fs.readdirSync(r.cwd), ['vault-snapshot'], 'staging holds only the read-only snapshot');
 
   const args = r.args;
   assert.equal(flagValue(args, '-p'), '/wienerdog-weekly-review');
@@ -99,11 +97,18 @@ test('routine-runtime: composeRoutineRun (weekly-review, mcp:empty) is fully her
   assert.ok(!args.join(' ').includes('--setting-sources user'));
   assert.equal(flagValue(args, '--settings'), path.join(RUNTIME_DIR(paths), 'settings.json'));
   assert.ok(args.includes('--strict-mcp-config'));
-  assert.ok(!args.includes('--mcp-config'), 'mcp:empty → no MCP server');
+  assert.equal(
+    flagValue(args, '--mcp-config'),
+    path.join(RUNTIME_DIR(paths), 'broker-mcp-weekly-review.json'),
+    'weekly-review is mcp:broker since WP-141 (A2-RESTORE done)'
+  );
+  assert.equal(flagValue(args, '--allowedTools'), 'mcp__wienerdog-broker__create_draft');
 
-  // The ONLY writable root is the staging dir — never the vault/home.
+  // The ONLY writable root is the staging dir — never the vault/home; the
+  // snapshot subdir is added for read intent only.
   const addDirs = args.flatMap((a, i) => (a === '--add-dir' ? [args[i + 1]] : []));
-  assert.deepEqual(addDirs, [r.cwd]);
+  assert.deepEqual(addDirs, [r.cwd, path.join(r.cwd, 'vault-snapshot')]);
+  assert.ok(!addDirs.includes(paths.vault), 'the live vault is NEVER added');
 
   // The verified vendored skill body is appended (D-SKILL-LOAD).
   const body = fs.readFileSync(
@@ -113,26 +118,13 @@ test('routine-runtime: composeRoutineRun (weekly-review, mcp:empty) is fully her
   assert.equal(flagValue(args, '--append-system-prompt'), body);
 });
 
-test('routine-runtime: a broker routine with no A2 config fails closed (D-BROKER-SEAM)', () => {
+test('routine-runtime: a broker routine composes exactly one --mcp-config, written by the composition itself', () => {
   const paths = tempPaths();
-  assert.throws(
-    () => composeRoutineRun(paths, { name: 'digest', run: 'skill:wienerdog-daily-digest' }),
-    RuntimeProfileError
-  );
-  assert.throws(
-    () => composeRoutineRun(paths, { name: 'triage', run: 'skill:wienerdog-inbox-triage' }),
-    RuntimeProfileError
-  );
-});
-
-test('routine-runtime: a broker routine composes exactly one --mcp-config once A2 wires the seam', () => {
-  const paths = tempPaths();
-  const seam = path.join(RUNTIME_DIR(paths), 'broker-mcp.json');
-  fs.mkdirSync(RUNTIME_DIR(paths), { recursive: true });
-  fs.writeFileSync(seam, '{}');
   const r = composeRoutineRun(paths, { name: 'digest', run: 'skill:wienerdog-daily-digest' });
   assert.equal(r.args.filter((a) => a === '--mcp-config').length, 1);
-  assert.equal(flagValue(r.args, '--mcp-config'), seam);
+  const seam = flagValue(r.args, '--mcp-config');
+  assert.equal(seam, path.join(RUNTIME_DIR(paths), 'broker-mcp-daily-digest.json'));
+  assert.ok(fs.existsSync(seam), 'the WP-141 composition writes the seam per run');
   assert.ok(r.args.includes('--strict-mcp-config'));
 });
 

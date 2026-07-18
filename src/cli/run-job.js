@@ -136,6 +136,9 @@ function buildCleanEnv(paths, name, platform = process.platform) {
         ),
       ].join(';'),
       WIENERDOG_JOB: name,
+      // WP-141: the run-job supervisor is the SINGLE timeout authority for a
+      // routine; disable the Claude client's >2min MCP auto-backgrounding.
+      CLAUDE_CODE_MCP_AUTO_BACKGROUND_MS: '0',
     };
     // USERPROFILE is set explicitly above and absent from WIN_ENV_PASSTHROUGH, so
     // neither passthrough loop overwrites the deterministic homedir. No USER on
@@ -167,6 +170,9 @@ function buildCleanEnv(paths, name, platform = process.platform) {
       '/sbin',
     ].join(':'),
     WIENERDOG_JOB: name, // WP-018's send resolves the routine from this
+    // WP-141: the run-job supervisor is the SINGLE timeout authority for a
+    // routine; disable the Claude client's >2min MCP auto-backgrounding.
+    CLAUDE_CODE_MCP_AUTO_BACKGROUND_MS: '0',
   };
   const user = resolveUsername();
   if (user) env.USER = user;

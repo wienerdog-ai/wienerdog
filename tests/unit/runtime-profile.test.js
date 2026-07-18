@@ -79,10 +79,11 @@ test('runtime-profile: routine profiles carry the explicit minimal allowlist', (
   assert.deepEqual(getProfile('weekly-review').tools, ['Read']);
 });
 
-test('runtime-profile: broker/empty MCP posture per D-BROKER-SEAM', () => {
+test('runtime-profile: every routine is mcp:broker since WP-141 (A2-RESTORE done); dream stays empty', () => {
   assert.equal(getProfile('daily-digest').mcp, 'broker');
   assert.equal(getProfile('inbox-triage').mcp, 'broker');
-  assert.equal(getProfile('weekly-review').mcp, 'empty');
+  assert.equal(getProfile('weekly-review').mcp, 'broker');
+  assert.equal(getProfile('dream').mcp, 'empty');
 });
 
 test('runtime-profile: getProfile fails closed on an unknown id', () => {
@@ -179,10 +180,10 @@ test('runtime-profile: an mcp:empty profile refuses a supplied mcpConfigPath', (
 
 // --- durable A2 trace ---
 
-test('runtime-profile: weekly-review carries the A2-RESTORE marker in the module source', () => {
+test('runtime-profile: the A2-RESTORE marker records the WP-141 broker flip in the module source', () => {
   const src = fs.readFileSync(
     path.join(__dirname, '..', '..', 'src', 'core', 'runtime-profile.js'),
     'utf8'
   );
-  assert.ok(src.includes('A2-RESTORE:'), 'the A2-RESTORE marker must not be dropped (D-BROKER-SEAM)');
+  assert.ok(src.includes('A2-RESTORE done'), 'the A2-RESTORE trace records the flip happened (WP-141)');
 });

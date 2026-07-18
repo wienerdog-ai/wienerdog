@@ -15,6 +15,7 @@
 
 const path = require('node:path');
 const { WienerdogError } = require('./errors');
+const { BROKER_SERVER_NAME } = require('../gws/broker/constants');
 
 /**
  * A code-owned capability profile. FROZEN — a profile is edited only as a
@@ -28,6 +29,9 @@ const { WienerdogError } = require('./errors');
  *                                       measured that an empty `--tools` exposes ALL built-ins.
  * @property {string[]} disallowedTools  explicit deny (redundant defense-in-depth behind the allowlist)
  * @property {'empty'|'broker'} mcp      'empty' → zero MCP servers; 'broker' → exactly one A2 broker MCP
+ * @property {string[]} [brokerVerbs]    broker profiles only: the EXACT WP-137 verb names this
+ *                                       routine may call — emitted as `--allowedTools
+ *                                       mcp__wienerdog-broker__<verb>` (never a wildcard)
  * @property {string} permissionMode     'acceptEdits' for dream; routines per their profile
  * @property {string} skillId            the vendored skill this profile runs
  */
@@ -86,6 +90,7 @@ const PROFILES = Object.freeze({
     tools: Object.freeze(['Read']),
     disallowedTools: DENY,
     mcp: 'broker',
+    brokerVerbs: Object.freeze(['calendar_list', 'gmail_search', 'gmail_read', 'send_digest_to_self']),
     permissionMode: 'default',
     skillId: 'wienerdog-daily-digest',
   }),
@@ -95,6 +100,7 @@ const PROFILES = Object.freeze({
     tools: Object.freeze(['Read']),
     disallowedTools: DENY,
     mcp: 'broker',
+    brokerVerbs: Object.freeze(['gmail_search', 'gmail_read', 'create_draft']),
     permissionMode: 'default',
     skillId: 'wienerdog-inbox-triage',
   }),
@@ -103,11 +109,10 @@ const PROFILES = Object.freeze({
     kind: 'routine',
     tools: Object.freeze(['Read']),
     disallowedTools: DENY,
-    // A2-RESTORE: mcp is 'empty' ONLY because A1 wires no broker (D-BROKER-SEAM,
-    // WP-128). weekly-review's shipped skill drafts email via gws, so re-evaluate
-    // (likely flip to 'broker') when A2 wires the credential broker. This is a
-    // deliberate temporary downgrade, NOT a reviewed "needs no Google" decision.
-    mcp: 'empty',
+    // A2-RESTORE done (WP-141): the broker is wired, so weekly-review gets its
+    // broker back — it drafts email via the create_draft verb, nothing else.
+    mcp: 'broker',
+    brokerVerbs: Object.freeze(['create_draft']),
     permissionMode: 'default',
     skillId: 'wienerdog-weekly-review',
   }),
@@ -170,6 +175,11 @@ function composeClaudeArgs(profile, ctx) {
         `profile "${profile.id}" requires the broker MCP config (an absolute mcpConfigPath) — refusing to run without it`
       );
     }
+    if (!Array.isArray(profile.brokerVerbs) || profile.brokerVerbs.length === 0) {
+      throw new RuntimeProfileError(
+        `profile "${profile.id}" is mcp:'broker' but declares no brokerVerbs — refusing to compose without an exact MCP allowlist`
+      );
+    }
   } else if (mcpConfigPath != null) {
     throw new RuntimeProfileError(
       `profile "${profile.id}" is mcp:'empty' but an mcpConfigPath was supplied — refusing to widen the MCP surface`
@@ -180,6 +190,11 @@ function composeClaudeArgs(profile, ctx) {
     '--tools', profile.tools.join(','),
     '--disallowedTools', profile.disallowedTools.join(','),
     '--permission-mode', profile.permissionMode,
+    // MCP tools are NOT governed by --tools (measured): a broker profile gets an
+    // EXACT --allowedTools naming each mcp__<server>__<verb> — never a wildcard.
+    ...(profile.mcp === 'broker'
+      ? ['--allowedTools', profile.brokerVerbs.map((v) => `mcp__${BROKER_SERVER_NAME}__${v}`).join(',')]
+      : []),
     ...addDirs.flatMap((d) => ['--add-dir', d]),
     '--strict-mcp-config',
     ...(mcpConfigPath ? ['--mcp-config', mcpConfigPath] : []),

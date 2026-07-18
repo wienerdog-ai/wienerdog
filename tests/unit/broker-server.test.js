@@ -223,7 +223,13 @@ test('broker-server: resolves on stdin EOF and reports exit code via the onExit 
 });
 
 test('broker-server: `wienerdog gws _broker` speaks the handshake over real stdio and exits on EOF', async () => {
-  const child = spawn(process.execPath, [bin, 'gws', '_broker', '--routine', 'test-routine'], {
+  // Since WP-141 the entry assembles the REAL registry for a known routine
+  // (an isolated temp core: no credentials → verbs advertise but refuse).
+  const os = require('node:os');
+  const fs = require('node:fs');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-brokercli-'));
+  const child = spawn(process.execPath, [bin, 'gws', '_broker', '--routine', 'daily-digest'], {
+    env: { ...process.env, HOME: root, WIENERDOG_HOME: path.join(root, 'wd') },
     stdio: ['pipe', 'pipe', 'pipe'],
   });
   let out = '';
@@ -243,7 +249,7 @@ test('broker-server: `wienerdog gws _broker` speaks the handshake over real stdi
   assert.equal(replies.length, 2, 'initialize + tools/list replies, nothing else on stdout');
   assert.equal(replies[0].result.protocolVersion, '2025-11-25');
   assert.equal(replies[0].result.serverInfo.name, BROKER_SERVER_NAME);
-  assert.deepEqual(replies[1].result, { tools: [] }, 'the WP-136 stub registry lists zero tools');
+  assert.ok(replies[1].result.tools.length >= 8, 'the real WP-137 registry is advertised');
 });
 
 test('broker-server: `gws _broker` stays hidden — absent from `wienerdog help` output', async () => {

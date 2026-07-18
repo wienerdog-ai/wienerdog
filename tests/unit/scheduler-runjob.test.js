@@ -334,12 +334,10 @@ test('scheduler-runjob: resolveCommand maps builtin:dream, skill:*, and rejects 
     assert.equal(s.args[1], '/wienerdog-weekly-review');
     assert.ok(s.args.includes('--tools'), 'hermetic argv restricts built-ins');
     assert.ok(s.cwd.endsWith(path.join('routine-run', 'weekly-review')), 'spawn cwd is the staging dir');
-    // A broker-requiring routine (daily-digest) fails closed until A2 wires
-    // the broker MCP config (D-BROKER-SEAM).
-    assert.throws(
-      () => runjob.resolveCommand(paths, { name: 'x', run: 'skill:wienerdog-daily-digest' }, allowAll()),
-      /broker/
-    );
+    // Since WP-141 the composition WRITES the per-routine broker config, so a
+    // broker routine composes too — with exactly one --mcp-config.
+    const b = runjob.resolveCommand(paths, { name: 'x', run: 'skill:wienerdog-daily-digest' }, allowAll());
+    assert.equal(b.args.filter((a) => a === '--mcp-config').length, 1);
     assert.throws(() => runjob.resolveCommand(paths, { name: 'x', run: 'builtin:frobnicate' }), /unknown builtin/);
     assert.throws(() => runjob.resolveCommand(paths, { name: 'x', run: 'weird:thing' }), /unknown job run kind/);
     // A0 pre-use freeze (WP-109/111): without a profile, the `skill:` branch is

@@ -17,7 +17,14 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { getProfile, composeClaudeArgs, RuntimeProfileError } = require('./runtime-profile');
 const { RUNTIME_DIR, ensureSettingsProfile, loadVendoredSkill } = require('./runtime-settings');
-const { mkdirPrivate } = require('./private-fs');
+const { mkdirPrivate, writeFilePrivate } = require('./private-fs');
+const { makeVaultSnapshot } = require('./vault-snapshot');
+const { BROKER_SERVER_NAME } = require('../gws/broker/constants');
+
+/** Per-server MCP timeout for the broker child. The run-job supervisor stays
+ *  the single run-level timeout authority (CLAUDE_CODE_MCP_AUTO_BACKGROUND_MS=0
+ *  disables the client's auto-backgrounding); this bounds one hung tool call. */
+const BROKER_MCP_TIMEOUT_MS = 120000;
 
 /**
  * Code-owned skill-id → routine-profile-id map. The ONLY bridge from a config
@@ -63,21 +70,37 @@ function ensureRoutineStaging(paths, routineId) {
 }
 
 /**
- * Absolute path to the routine's single broker MCP config, or null when the
- * profile is mcp:'empty' — or when the broker config does not exist yet.
- * THE A2 SEAM: A2 writes the credential-holding local stdio broker's MCP
- * config at core/runtime/broker-mcp.json. Until then the seam file is absent,
- * so this returns null and a broker-requiring routine fails closed in
- * composeClaudeArgs (RuntimeProfileError) — contained AND inert until A2
- * (D-BROKER-SEAM, OWNER-APPROVED 2026-07-18).
+ * Write the routine's single broker MCP config and return its absolute path
+ * (null for a mcp:'empty' profile). THE A2 SEAM, FILLED (WP-141): the config
+ * is regenerated per run at a PER-ROUTINE filename (D-BROKER-CONFIG-PATH —
+ * two concurrent routines can never race each other into the wrong identity)
+ * and embeds the routine id in the broker's spawn ARGV — the trusted launch
+ * descriptor. The broker learns "I am daily-digest" from Wienerdog's code,
+ * never from model input and never from env (closes audit F5;
+ * SPIKE-env-inheritance is irrelevant to identity integrity).
  * @param {import('./paths').WienerdogPaths} paths
  * @param {import('./runtime-profile').RuntimeProfile} profile
  * @returns {string|null}
  */
-function brokerMcpConfigPath(paths, profile) {
+function ensureBrokerMcpConfig(paths, profile) {
   if (profile.mcp !== 'broker') return null;
-  const seam = path.join(RUNTIME_DIR(paths), 'broker-mcp.json');
-  return fs.existsSync(seam) ? seam : null;
+  const gen = require('../scheduler/generators');
+  const dest = path.join(RUNTIME_DIR(paths), `broker-mcp-${profile.id}.json`);
+  const config = {
+    mcpServers: {
+      [BROKER_SERVER_NAME]: {
+        command: gen.nodePath(),
+        args: [gen.wienerdogBin(paths), 'gws', '_broker', '--routine', profile.id],
+        // Identity is argv, credentials are files; env only re-asserts the
+        // core location and keeps the run-job supervisor the single timeout
+        // authority (no client-side auto-backgrounding).
+        env: { WIENERDOG_HOME: paths.core, CLAUDE_CODE_MCP_AUTO_BACKGROUND_MS: '0' },
+        timeout: BROKER_MCP_TIMEOUT_MS,
+      },
+    },
+  };
+  writeFilePrivate(dest, `${JSON.stringify(config, null, 2)}\n`);
+  return dest;
 }
 
 /**
@@ -95,21 +118,31 @@ function composeRoutineRun(paths, job) {
   const profile = getProfile(profileIdForSkill(skillId)); // fail closed on unknown
   const settingsPath = ensureSettingsProfile(paths);
   const cwd = ensureRoutineStaging(paths, profile.id);
+  // Bounded read-only vault snapshot (D-VAULT-SNAPSHOT): the routine Reads a
+  // copy inside its staging dir; the LIVE vault is never in --add-dir. Skips
+  // are surfaced on stderr (→ the job log) — visible, never silent, never
+  // fatal.
+  const snapshot = makeVaultSnapshot(paths, profile.id, cwd);
+  for (const s of snapshot.skipped) {
+    process.stderr.write(`wienerdog: vault snapshot skipped ${s.file} (${s.reason})\n`);
+  }
+  const addDirs = [cwd]; // staging stays the SOLE writable target
+  if (snapshot.snapshotDir) addDirs.push(snapshot.snapshotDir); // read intent only
   const args = composeClaudeArgs(profile, {
     prompt: `/${skillId}`, // the routine trigger
-    addDirs: [cwd], // ONLY the staging dir is writable — no vault/home/secrets (D-ROUTINE-VAULT-READ)
+    addDirs,
     settingsPath,
-    mcpConfigPath: brokerMcpConfigPath(paths, profile), // broker (A2) or null → fail closed if required
+    mcpConfigPath: ensureBrokerMcpConfig(paths, profile), // the filled A2 seam (or null for mcp:'empty')
     model: null,
     appendSystemPrompt: loadVendoredSkill(skillId), // integrity-checked body (D-SKILL-LOAD)
   });
-  return { command: 'claude', args, cwd, shell: false };
+  return { command: 'claude', args, cwd, shell: false, snapshotSkipped: snapshot.skipped };
 }
 
 module.exports = {
   SKILL_TO_PROFILE,
   profileIdForSkill,
   ensureRoutineStaging,
-  brokerMcpConfigPath,
+  ensureBrokerMcpConfig,
   composeRoutineRun,
 };

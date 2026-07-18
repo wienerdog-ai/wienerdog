@@ -103,32 +103,37 @@ test('wienerdog-daily-digest: all mandatory ## headings are present verbatim', (
   }
 });
 
-test('wienerdog-daily-digest: references the exact gws/vault reads and the send command', () => {
-  assert.ok(dailyDigest.text.includes('wienerdog gws cal list'), 'missing wienerdog gws cal list');
-  assert.ok(dailyDigest.text.includes('wienerdog gws gmail search'), 'missing wienerdog gws gmail search');
-  assert.ok(dailyDigest.text.includes('reports/dreams/'), 'missing reports/dreams/');
-  assert.ok(dailyDigest.text.includes('wienerdog gws gmail send'), 'missing wienerdog gws gmail send');
+test('wienerdog-daily-digest: references the exact broker verbs and the snapshot read (WP-141)', () => {
+  assert.ok(dailyDigest.text.includes('calendar_list'), 'missing calendar_list verb');
+  assert.ok(dailyDigest.text.includes('gmail_search'), 'missing gmail_search verb');
+  assert.ok(dailyDigest.text.includes('gmail_read'), 'missing gmail_read verb');
+  assert.ok(dailyDigest.text.includes('vault-snapshot/reports/dreams/'), 'missing snapshot reports/dreams read');
+  assert.ok(dailyDigest.text.includes('send_digest_to_self'), 'missing send_digest_to_self verb');
+  assert.ok(!dailyDigest.text.includes('wienerdog gws'), 'the gws Bash CLI is dead under A1 — no reference may remain');
 });
 
-test('wienerdog-daily-digest: states ungranted-send-degrades-to-draft and references WIENERDOG_JOB', () => {
-  assert.ok(dailyDigest.flat.includes('WIENERDOG_JOB'), 'missing WIENERDOG_JOB');
+test('wienerdog-daily-digest: states the ungranted send degrades to a visible notice (WP-141)', () => {
   const grantIdx = dailyDigest.flat.indexOf('granted send');
   assert.ok(grantIdx !== -1, 'missing mention of the send grant');
-  const draftIdx = dailyDigest.flat.indexOf('draft', grantIdx);
+  const noticeIdx = dailyDigest.flat.indexOf('notice', grantIdx);
   assert.ok(
-    draftIdx !== -1 && draftIdx - grantIdx < 400,
-    '"draft" does not appear near the grant explanation'
+    noticeIdx !== -1 && noticeIdx - grantIdx < 400,
+    '"notice" does not appear near the grant explanation'
+  );
+  assert.ok(
+    !dailyDigest.flat.includes('WIENERDOG_JOB'),
+    'identity comes from the trusted launch descriptor now, never env (F5)'
   );
 });
 
-test('wienerdog-daily-digest: states it only sends to the user\'s own address and never creates/widens a grant', () => {
+test('wienerdog-daily-digest: states the send is self-only and grants can never be widened', () => {
   assert.ok(
-    dailyDigest.flat.includes("Never send to any address other than the user's own"),
+    dailyDigest.flat.includes("can only go to the user's own address"),
     'missing send-to-self-only statement'
   );
   assert.ok(
-    dailyDigest.flat.includes('never attempt to create or widen a grant'),
-    'missing never-create-or-widen-a-grant statement'
+    dailyDigest.flat.includes('add a recipient or widen a grant'),
+    'missing never-add-recipient-or-widen-a-grant statement'
   );
 });
 
@@ -139,12 +144,13 @@ test('wienerdog-inbox-triage: all mandatory ## headings are present verbatim', (
   }
 });
 
-test('wienerdog-inbox-triage: references gws gmail draft and states it never sends', () => {
-  assert.ok(inboxTriage.text.includes('wienerdog gws gmail draft'), 'missing wienerdog gws gmail draft');
+test('wienerdog-inbox-triage: references the create_draft verb and states it has no send tool', () => {
+  assert.ok(inboxTriage.text.includes('create_draft'), 'missing create_draft verb');
+  assert.ok(!inboxTriage.text.includes('wienerdog gws'), 'no gws Bash CLI reference may remain');
   const neverSendIdx = inboxTriage.text.indexOf('## Never send');
+  assert.ok(neverSendIdx !== -1);
   const section = inboxTriage.text.slice(neverSendIdx);
-  assert.ok(section.includes('never runs `wienerdog gws gmail send`'), 'missing never-runs-send statement');
-  assert.ok(section.toLowerCase().includes('send grant'), 'missing send grant mention');
+  assert.ok(section.includes('no send tool'), 'missing no-send-tool statement');
 });
 
 test('wienerdog-weekly-review: all mandatory ## headings are present verbatim', () => {
@@ -154,11 +160,13 @@ test('wienerdog-weekly-review: all mandatory ## headings are present verbatim', 
   }
 });
 
-test('wienerdog-weekly-review: references reading 07-Daily/ and states it never sends', () => {
-  assert.ok(weeklyReview.text.includes('07-Daily/'), 'missing 07-Daily/');
+test('wienerdog-weekly-review: references the snapshot 07-Daily read and states it has no send tool', () => {
+  assert.ok(weeklyReview.text.includes('vault-snapshot/07-Daily/'), 'missing snapshot 07-Daily read');
+  assert.ok(!weeklyReview.text.includes('wienerdog gws'), 'no gws Bash CLI reference may remain');
   const neverSendIdx = weeklyReview.text.indexOf('## Never send');
+  assert.ok(neverSendIdx !== -1);
   const section = weeklyReview.text.slice(neverSendIdx);
-  assert.ok(section.includes('never runs `wienerdog gws gmail send`'), 'missing never-runs-send statement');
+  assert.ok(section.includes('no send tool'), 'missing no-send-tool statement');
 });
 
 test('only wienerdog-routines mentions the grant command; the headless routines never invoke it', () => {
