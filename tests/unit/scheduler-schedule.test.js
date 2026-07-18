@@ -942,3 +942,65 @@ test('scheduler-schedule: list --json reports jobs with watermarks', { skip: !SC
   assert.equal(digest.last_success, null);
   assert.equal(digest.last_status, null);
 });
+
+// ── WP-156: canonical digest-bound job descriptor at schedule/sync time ──────
+
+/** Plant a minimal vendored app tree (app/current → app/0.0.1) so
+ *  buildDescriptor's appTreeDigest/readVersion resolve in this temp core. */
+function plantAppTree(paths) {
+  const versionDir = path.join(paths.core, 'app', '0.0.1');
+  fs.mkdirSync(path.join(versionDir, 'bin'), { recursive: true });
+  fs.writeFileSync(path.join(versionDir, 'package.json'), '{"version":"0.0.1"}\n');
+  fs.writeFileSync(path.join(versionDir, 'bin', 'wienerdog.js'), '// app\n');
+  fs.symlinkSync(versionDir, path.join(paths.core, 'app', 'current'));
+}
+
+test('scheduler-schedule: add writes a 0600 job descriptor, records it once, and re-add is a no-op (WP-156)', { skip: !SCHED_SUPPORTED }, async () => {
+  const { env, paths } = setup();
+  plantAppTree(paths);
+  await runSchedule(env, ['add', 'dream', '--at', '03:30', '--job', 'dream'], () => ({ status: 0 }));
+
+  const descPath = path.join(paths.state, 'descriptors', 'dream.json');
+  assert.ok(fs.existsSync(descPath), 'descriptor written during add');
+  assert.equal(fs.statSync(descPath).mode & 0o777, 0o600);
+  const bytes = fs.readFileSync(descPath);
+  const d = JSON.parse(bytes.toString('utf8'));
+  assert.equal(d.job, 'dream');
+  assert.equal(d.run, 'builtin:dream');
+  assert.match(d.appRelease.treeDigest, /^sha256:/);
+  const entries = manifestLib.load(paths).entries.filter((e) => e.kind === 'file' && e.path === descPath);
+  assert.equal(entries.length, 1, 'exactly one manifest file entry for the descriptor');
+
+  // Second add: byte-identical descriptor, still exactly one manifest entry.
+  await runSchedule(env, ['add', 'dream', '--at', '03:30', '--job', 'dream'], () => ({ status: 0 }));
+  assert.ok(fs.readFileSync(descPath).equals(bytes), 'unchanged inputs ⇒ byte-identical descriptor');
+  const entries2 = manifestLib.load(paths).entries.filter((e) => e.kind === 'file' && e.path === descPath);
+  assert.equal(entries2.length, 1, 'no duplicate manifest entry on re-add');
+});
+
+test('scheduler-schedule: repointSchedules refreshes the descriptor; a legit uninstall reverse removes it (WP-156)', { skip: !SCHED_SUPPORTED }, async () => {
+  const { env, paths } = setup();
+  plantAppTree(paths);
+  await runSchedule(env, ['add', 'dream', '--at', '03:30', '--job', 'dream'], () => ({ status: 0 }));
+  const descPath = path.join(paths.state, 'descriptors', 'dream.json');
+  fs.rmSync(descPath); // simulate a lost descriptor — sync's repoint restores it
+
+  const saved = { HOME: process.env.HOME, WIENERDOG_HOME: process.env.WIENERDOG_HOME };
+  process.env.HOME = env.HOME;
+  process.env.WIENERDOG_HOME = env.WIENERDOG_HOME;
+  let manifest;
+  try {
+    manifest = manifestLib.load(paths);
+    schedule.repointSchedules(paths, manifest, { loader: () => ({ status: 0 }) });
+    manifestLib.save(paths, manifest);
+  } finally {
+    process.env.HOME = saved.HOME;
+    process.env.WIENERDOG_HOME = saved.WIENERDOG_HOME;
+  }
+  assert.ok(fs.existsSync(descPath), 'repointSchedules (the sync path) rewrote the descriptor');
+
+  // A legitimate uninstall reverse removes the in-bounds descriptor file.
+  const { result } = await withSpawnSpy(() => manifestLib.reverse(paths, manifestLib.load(paths)));
+  assert.ok(result.removed.includes(descPath), 'the descriptor file entry reverses');
+  assert.equal(fs.existsSync(descPath), false);
+});

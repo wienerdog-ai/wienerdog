@@ -1,7 +1,7 @@
 ---
 id: WP-156
 title: Generate a canonical, digest-bound job descriptor at schedule/sync time
-status: Ready
+status: In-Review
 model: opus
 size: M
 depends_on: [WP-144, WP-145, WP-154]

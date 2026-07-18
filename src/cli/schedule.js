@@ -156,6 +156,38 @@ function ensureWindowsCatchup(paths, manifest, loader) {
  *   registration's primary loader call returned nonzero.
  */
 function registerPlatform(paths, manifest, o, loader, platform = process.platform) {
+  const res = registerPlatformEntries(paths, manifest, o, loader, platform);
+  // A7 (WP-156, ADR-0028): capture the canonical digest-bound job descriptor —
+  // the code-owned record of what this job is AUTHORIZED to run (run action,
+  // profile, prompt/skill hash, effective timeout, model, vault root, WP-154
+  // pins, app tree digest). Both register paths (`add` and sync's
+  // repointSchedules) flow through here, so an explicit `wienerdog sync` is
+  // exactly what re-derives and re-binds it. Best-effort by design: a
+  // descriptor failure (e.g. no vault yet, app not vendored) degrades to a
+  // notice and never blocks registration — WP-157 fails CLOSED at fire time
+  // when the descriptor is missing/mismatched, so skipping here is fail-safe.
+  // The OS entry argv is NOT touched here (that is WP-157's launcher rebind).
+  const job = jobsLib.findJob(paths, o.name);
+  if (job) {
+    try {
+      const descriptor = require('../scheduler/descriptor');
+      const d = descriptor.writeDescriptor(paths, job, { platform });
+      const exists = manifest.entries.some((e) => e.kind === 'file' && e.path === d.path);
+      if (!exists) manifestLib.record(manifest, { kind: 'file', path: d.path });
+    } catch (err) {
+      process.stderr.write(
+        `wienerdog: could not write the job descriptor for "${o.name}" (${err.message}) — ` +
+          `run 'wienerdog sync' once the install is complete.\n`
+      );
+    }
+  }
+  return res;
+}
+
+/** The platform-specific OS-entry registration body behind registerPlatform
+ *  (same params/returns) — split out so the descriptor capture wraps every
+ *  platform branch uniformly (WP-156). */
+function registerPlatformEntries(paths, manifest, o, loader, platform = process.platform) {
   const node = gen.nodePath();
   const bin = gen.wienerdogBin(paths);
 
