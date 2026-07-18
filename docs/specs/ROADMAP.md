@@ -171,6 +171,12 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 | [WP-150](WP-150-env-override-path-validation.md) | Validate path-defining env overrides — absolute, normalized, reject '..' (audit A13) | M7 | sonnet | Ready | — |
 | [WP-151](WP-151-self-alert-code-owned-body.md) | Build fail-loud alert/self-email body from code-owned status fields only (audit A13) | M7 | sonnet | Ready | — |
 | [WP-152](WP-152-codex-protocol-pin-and-rerun-discipline.md) | Pin the Codex parser version + make the re-verify-on-bump discipline actionable (audit A13, follows WP-100) | M7 | sonnet | Ready | — |
+| [WP-153](WP-153-executable-identity-pinning.md) | Resolve/verify/pin claude/git/codex to absolute realpaths at sync, spawn absolute, fail safe on drift (audit A7) | M7 | opus | Draft | — |
+| [WP-154](WP-154-inert-test-exec-seams.md) | Make production test-exec overrides inert without WIENERDOG_TEST + keep every dispatch shell:false (audit A7) | M7 | sonnet | Draft | WP-153 |
+| [WP-155](WP-155-canonical-job-descriptor.md) | Generate a canonical, digest-bound job descriptor at schedule/sync time (audit A7) | M7 | opus | Draft | WP-144, WP-145, WP-153 |
+| [WP-156](WP-156-independent-launcher-and-app-integrity.md) | Independent launcher outside the app tree — verify current/app/descriptor/stance before spawn (audit A7) | M7 | opus | Draft | WP-144, WP-145, WP-155 |
+| [WP-157](WP-157-a7-integrity-harness.md) | A7 integrity containment proof — end-to-end negative harness for the scheduler/app/executable anchors (audit A7) | M7 | opus | Draft | WP-153, WP-154, WP-155, WP-156 |
+| [WP-158](WP-158-a7-integrity-docs.md) | A7 documentation — honest scheduler/app/executable integrity claims, threat model, glossary, runbook (audit A7) | M7 | sonnet | Draft | WP-153, WP-154, WP-155, WP-156 |
 
 > **First-production-night incident (2026-07-04).** WP-038, WP-039 and WP-041 form
 > a serial chain (they edit the shared `run-job.js` / `dream.js` / `validate.js`
@@ -1484,4 +1490,20 @@ graph LR
   WP150[WP-150 env-override path validation — absolute, reject .. segments — audit A13]
   WP151[WP-151 self-alert body from code-owned fields only — audit A13]
   WP152[WP-152 Codex parser version pin + rerun-on-bump runbook — audit A13, follows WP-100]
+  WP153[WP-153 pin claude/git/codex absolute + fail-safe on drift — audit A7]
+  WP153 --> WP154[WP-154 inert prod test-exec seams + shell:false — audit A7]
+  WP144 --> WP155[WP-155 canonical digest-bound job descriptor — audit A7]
+  WP145 --> WP155
+  WP153 --> WP155
+  WP144 --> WP156[WP-156 independent launcher — verify app+descriptor before spawn — audit A7]
+  WP145 --> WP156
+  WP155 --> WP156
+  WP153 --> WP157[WP-157 A7 integrity containment harness — audit A7]
+  WP154 --> WP157
+  WP155 --> WP157
+  WP156 --> WP157
+  WP153 --> WP158[WP-158 A7 integrity docs — threat model + glossary + runbook]
+  WP154 --> WP158
+  WP155 --> WP158
+  WP156 --> WP158
 ```
