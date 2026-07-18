@@ -1,7 +1,7 @@
 ---
 id: WP-130
 title: Make the dream brain hermetic — compose from the profile, hook-free settings, staging cwd (audit A1)
-status: Draft
+status: Ready
 model: opus
 size: M
 depends_on: [WP-128, WP-129]
@@ -71,9 +71,11 @@ latent until M4); leave it byte-unchanged.
 
 | Action | Path | Notes |
 |--------|------|-------|
-| modify | src/core/dream/brain.js | `buildClaudeArgs` composes from `getProfile('dream')` + WP-129 settings/skill; `spawnBrain` sets a fresh staging cwd + ensures the settings profile; drop `--setting-sources user` |
+| modify | src/core/layout.js | `layoutPromptLines`/`resolveDailyPath` gain an OPTIONAL `vaultDir` param → absolute tier paths when passed; omit → today's relative paths (back-compat) — the D-DREAM-CWD absolute-tier-path seam |
+| modify | src/core/dream/brain.js | `buildClaudeArgs` composes from `getProfile('dream')` + WP-129 settings/skill; `DREAM_PROMPT` passes `vaultDir` so tier paths are absolute; `spawnBrain` sets a fresh staging cwd + ensures the settings profile; drop `--setting-sources user` |
 | modify | src/cli/dream.js | pass the staging dir to `spawnBrain`; keep `printPlan` echoing the composed argv |
-| modify | tests/unit/dream-brain.test.js | assert the composed argv (no `--setting-sources user`, has `--settings`, has `disallowedTools`, empty MCP) + staging cwd + integrity-fail aborts |
+| modify | tests/unit/layout.test.js | assert `layoutPromptLines`/`resolveDailyPath` return absolute vault-prefixed paths WITH `vaultDir` and unchanged relative paths WITHOUT it (back-compat) |
+| modify | tests/unit/dream-brain.test.js | assert the composed argv (no `--setting-sources user`, has `--settings`, has `disallowedTools`, empty MCP) + staging cwd + integrity-fail aborts + the prompt's tier paths are absolute/vault-prefixed |
 | modify | tests/unit/dream.test.js | update any argv/cwd expectations the wiring changes (reconcile intentionally) |
 
 > If the exact test file names differ, use the existing brain/dream unit test files
@@ -82,8 +84,50 @@ latent until M4); leave it byte-unchanged.
 
 ### Exact contracts
 
-**1. `buildClaudeArgs` — compose, don't hand-assemble.** Replace the literal flag list
-with a call into WP-128's composer using the dream profile and WP-129's assets:
+**1. Absolute tier paths — the `layout.js` seam + `DREAM_PROMPT` (D-DREAM-CWD entailment).**
+Because the brain's cwd is now a neutral staging dir (not the vault), the prompt must hand
+the skill **absolute** tier paths — a relative `06-Identity/…` would resolve under
+`<staging>/…`, outside the `--add-dir` roots (write fails / silently lost). Add an
+**optional** `vaultDir` param to the two path producers in `src/core/layout.js`:
+
+```js
+/** @param {VaultLayout} layout @param {string} date @param {string} [vaultDir]
+ *  @returns {string} vault-relative POSIX path, OR — when vaultDir is passed — that path
+ *  joined under vaultDir (absolute). Back-compat: omit vaultDir → today's behavior. */
+function resolveDailyPath(layout, date, vaultDir) {
+  const rel = path.posix.join(layout.daily_dir, /* filename token-substituted as today */);
+  return vaultDir ? path.join(vaultDir, rel) : rel;
+}
+
+/** @param {VaultLayout} layout @param {string} date @param {string} [vaultDir]
+ *  @returns {string[]} the tier lines; each dir is joined under vaultDir (absolute) when
+ *  vaultDir is passed, else the relative name (today's behavior). */
+function layoutPromptLines(layout, date, vaultDir) {
+  const dir = (d) => (vaultDir ? path.join(vaultDir, d) : d);
+  return [
+    `Identity notes directory: ${dir(layout.identity_dir)}`,
+    `Skills directory: ${dir(layout.skills_dir)}`,
+    `Daily log file for today: ${resolveDailyPath(layout, date, vaultDir)}`,
+    `Projects directory: ${dir(layout.projects_dir)}`,
+    `Inbox directory: ${dir(layout.inbox_dir)}`,
+    `Reports directory: ${dir(layout.reports_dir)}`,
+  ];
+}
+```
+
+Then `DREAM_PROMPT(scratchDir, vaultDir, date, layout)` in `brain.js` passes `vaultDir`
+into `layoutPromptLines(lay, date, vaultDir)` so every tier line is absolute and
+vault-prefixed. **Traversal-safety is unchanged:** `readVaultLayout`/`isSafeRelativePath`
+still store and validate only safe **relative** values; absolutization happens only here,
+at prompt-build time, by joining an already-validated safe-relative tier under the trusted
+`vaultDir`. **Back-compat:** the param is optional — `adopt.js`'s `resolveDailyPath(layout,
+'2026-07-03')` (a human-readable example) and `brain.js`'s `WIENERDOG_DREAM_LAYOUT` env
+`daily_today` (joined under the absolute `WIENERDOG_DREAM_VAULT` by the fake-brain seam)
+pass no `vaultDir` and stay byte-identical.
+
+**2. `buildClaudeArgs` — compose, don't hand-assemble.** Replace the literal flag list
+with a call into WP-128's composer using the dream profile and WP-129's assets (the
+`DREAM_PROMPT` it calls now emits absolute tier paths, per contract 1):
 
 ```js
 const { getProfile, composeClaudeArgs } = require('../runtime-profile');
@@ -115,7 +159,7 @@ verified skill body.
 `loadVendoredSkill` **throwing** (skill tampered/missing) MUST abort the run before the
 spawn — do not catch-and-continue.
 
-**2. `spawnBrain` — fresh staging cwd + ensure the settings profile.** The brain's `cwd`
+**3. `spawnBrain` — fresh staging cwd + ensure the settings profile.** The brain's `cwd`
 becomes a fresh, empty, Wienerdog-owned staging dir (D-DREAM-CWD), NOT `vaultDir`. Ensure
 the WP-129 settings profile exists and pass its path into `buildClaudeArgs`:
 
@@ -135,7 +179,7 @@ leaks between runs. The vault + scratch remain reachable ONLY via `--add-dir`. T
 existing fake-brain tests that write to the vault via the env vars keep working because
 the vault path still travels in `childEnv.WIENERDOG_DREAM_VAULT`.
 
-**3. `dream.js` — pass the staging dir through; keep the dry-run plan honest.** If
+**4. `dream.js` — pass the staging dir through; keep the dry-run plan honest.** If
 `spawnBrain` now owns staging creation, `dream.js` needs no staging change; but
 `printPlan`'s `buildClaudeArgs(...)` call must pass a `settingsPath` so the dry-run echo
 matches the real argv. Ensure the settings profile in the dry-run path too (idempotent),
@@ -144,7 +188,17 @@ or pass a representative path and note it. The dry-run must NOT spawn a brain (u
 ### Worked example (dream argv after this WP, dream profile)
 
 ```
-claude -p "/wienerdog-dream ..." \
+claude -p "/wienerdog-dream
+Scratch extracts directory (read-only inputs): <scratch>
+Vault directory (your only write target): <vault>
+Today's date: <date>
+Vault layout — write to these mapped locations ...:
+- Identity notes directory: <vault>/06-Identity
+- Skills directory: <vault>/05-Skills
+- Daily log file for today: <vault>/07-Daily/<date>.md
+- Projects directory: <vault>/01-Projects
+- Inbox directory: <vault>/00-Inbox
+- Reports directory: <vault>/reports/dreams" \
   --tools Read,Write,Edit,Glob,Grep \
   --disallowedTools Bash,WebFetch,WebSearch,Task,Agent,Skill,Workflow,NotebookEdit \
   --permission-mode acceptEdits \
@@ -154,31 +208,63 @@ claude -p "/wienerdog-dream ..." \
   --settings <core>/runtime/settings.json \
   --append-system-prompt "<verified wienerdog-dream body>" \
   [--model <model>]
-# NOTE: no `--setting-sources user`, no `--mcp-config`. cwd = fresh staging dir, not the vault.
+# NOTE: no `--setting-sources user`, no `--mcp-config`. cwd = fresh staging dir, not the
+# vault — so the tier paths in the prompt are ABSOLUTE and vault-prefixed (contract 1), never
+# bare relative names that would resolve under the staging cwd and be lost.
 ```
 
 ## DECISION NEEDED (resolve in the walkthrough; each becomes a dated OWNER-APPROVED line before Ready)
 
-- **D-DREAM-CWD — the brain's working directory.** The audit (A1 point 3) says run from
-  a fresh staging directory, "not the vault or a user project." But the dream's
-  legitimate write target IS the vault (reached via `--add-dir`).
-  - **Recommended: cwd = a fresh, empty, Wienerdog-owned staging dir** (e.g.
+- **D-DREAM-CWD — RESOLVED (OWNER-APPROVED 2026-07-18): fresh staging cwd.** The audit
+  (A1 point 3) says run from a fresh staging directory, "not the vault or a user project."
+  The dream's legitimate write target IS the vault (reached via `--add-dir`).
+  - **Approved: cwd = a fresh, empty, Wienerdog-owned staging dir** (e.g.
     `state/dream-run/`, wiped+recreated each run, 0700), with the vault and scratch
     reachable only through `--add-dir`. Rationale: with a neutral empty cwd, Claude Code
     can never discover a project/local `settings.json`, `.claude/`, or `CLAUDE.md` under
     the cwd — closing the last ambient-inheritance vector that isn't covered by dropping
-    `--setting-sources user`. The vault stays the write target; nothing about WP-017's
-    diff validation (which the orchestrator runs against the vault via its own
-    `spawnSync('git', …)`, not the brain's cwd) changes.
-  - **Counterargument:** the brain has run with `cwd: vaultDir` since WP-008, and a
-    relative path the dream skill emits (if any) would resolve against the cwd; moving
-    cwd off the vault could surface a latent assumption. Mitigation: the dream skill is
-    handed absolute vault/scratch paths in the prompt (it always has been — "Bash is off,
-    the skill cannot read env"), and the WP-133 live harness re-runs the real dream to
-    confirm nothing regressed. The alternative (keep cwd=vault) leaves a
-    project-settings-under-cwd vector open for no functional benefit.
-  - *(Consumes D-SETTING-SOURCES and D-SKILL-LOAD from WP-128/WP-129 — this WP just
-    plugs their resolved values into the composer.)*
+    `--setting-sources user`. This matters specifically because the vault is a git repo
+    the dream itself writes to: a hijacked dream could otherwise plant `<vault>/CLAUDE.md`
+    or `<vault>/.claude/settings.json` that a later `cwd=vault` run would load. The vault
+    stays the write target; WP-017's diff validation (orchestrator's own `spawnSync('git',
+    …)` against the vault, not the brain's cwd) is unaffected.
+  - **ENTAILED SPEC-GAP — absolute tier paths: RESOLVED (architect amendment, 2026-07-18).**
+    Verified in the walkthrough: the dream prompt hands the skill the **absolute** vault dir
+    but **vault-RELATIVE** tier directory names (`identity_dir:'06-Identity'`,
+    `skills_dir:'05-Skills'`, `resolveDailyPath` → `07-Daily/…`, `projects_dir:'01-Projects'`,
+    `inbox_dir:'00-Inbox'`, `reports_dir:'reports/dreams'`, via `layoutPromptLines` in
+    `src/core/layout.js`). Today those relative names resolve correctly ONLY because
+    `cwd=vaultDir`. Moving cwd to a neutral staging dir would make a relative tier write land
+    in `<staging>/…` (outside the `--add-dir` roots → the write fails or is silently lost
+    when staging is wiped) — the "latent relative-path assumption" this decision's
+    counterargument named, now confirmed real. The staging-cwd decision therefore **entails**
+    handing the skill ABSOLUTE tier paths.
+    - **Seam chosen (architect, 2026-07-18): option (a) — a `layout.js` seam.**
+      `layoutPromptLines(layout, date, vaultDir)` and `resolveDailyPath(layout, date,
+      vaultDir)` take an **optional** `vaultDir`; when it is passed, each returned tier path
+      is joined under `vaultDir` (absolute); when it is omitted, behavior is **byte-identical
+      to today** (relative POSIX paths). `brain.js`'s `DREAM_PROMPT` passes `vaultDir` so the
+      prompt carries absolute tier paths; every other caller passes nothing and is unchanged.
+      **Rationale:** the absolutization is a pure, unit-testable path transform that belongs
+      next to the layout model it derives from (not string-shaped inside `brain.js`), and one
+      seam keeps the two path producers (`layoutPromptLines`, `resolveDailyPath`) consistent.
+      Cost: `src/core/layout.js` + its test join WP-130's Deliverables (see the table).
+      Option (b) — absolutizing inside `brain.js` — was rejected as string-fragile and
+      because it would duplicate join logic the layout module already owns.
+    - **Traversal-safety contract is intact:** the stored/validated layout values stay safe
+      relative paths (`isSafeRelativePath` unchanged; `readVaultLayout` still rejects
+      absolute/`..`/backslash values). Absolutization happens only at PROMPT-BUILD time by
+      joining an already-validated safe-relative tier under the trusted `vaultDir` — it does
+      not change what is stored, validated, or accepted from config.
+    - **Back-compat confirmed (all callers checked):** `resolveDailyPath` callers —
+      `brain.js:33`/`layoutPromptLines` (opts into `vaultDir`), `brain.js:125`
+      (`WIENERDOG_DREAM_LAYOUT` env `daily_today`: stays RELATIVE — the fake-brain seam joins
+      it under the absolute `WIENERDOG_DREAM_VAULT` env, so unchanged), and `adopt.js:95`
+      (`exampleDaily` — a human-readable example string, must stay relative, unchanged).
+      `layoutPromptLines` caller — only `brain.js:33` (opts in) and the layout unit test.
+      No other consumer exists; the optional param is additive.
+  - *(Also consumes D-SETTING-SOURCES and D-SKILL-LOAD from WP-128/WP-129 — this WP plugs
+    their resolved values into the composer.)*
 
 ## Implementation notes & constraints
 
@@ -187,6 +273,10 @@ claude -p "/wienerdog-dream ..." \
 - **Reuse `physicalPath()`/`sameDir()`** from `sandbox-guard.js` if you assert the
   staging dir is distinct from the vault/scratch (symlink/case-alias safe). Do not add a
   second path-identity helper.
+- **Absolute tier paths are load-bearing, not cosmetic.** Moving cwd off the vault WITHOUT
+  absolutizing the prompt's tier paths silently loses every dream write (they land under the
+  wiped staging dir). Contract 1 (the `layout.js` `vaultDir` seam) MUST land in the same WP
+  as the cwd move; the layout `vaultDir` param stays OPTIONAL so no other caller changes.
 - **The EP3 redaction tee (WP-124) stays.** `spawnBrain` still pipes stdout/stderr
   through `redactOnly` into the log/stderrTail — do not remove or reorder that.
 - **Fail closed on skill integrity.** A tampered/missing dream skill (WP-129
@@ -207,8 +297,10 @@ claude -p "/wienerdog-dream ..." \
       Bash/WebFetch/WebSearch/Task/Agent/Skill/Workflow/NotebookEdit,
       uses an empty MCP config, and runs from a fresh staging cwd that contains no
       project/local settings — so an inherited user hook/plugin/MCP or a permissive Bash
-      rule cannot reach the hijacked dream. The vendored skill is integrity-checked
-      before use; a tampered skill aborts the run. (Live-proven in WP-133; the argv/cwd
+      rule cannot reach the hijacked dream. The prompt's tier write targets are ABSOLUTE and
+      vault-prefixed (so a neutral cwd loses no write), while `readVaultLayout`'s
+      traversal-safety over stored relative values is unchanged. The vendored skill is
+      integrity-checked before use; a tampered skill aborts the run. (Live-proven in WP-133; the argv/cwd
       is unit-asserted here.)
 
 ## Acceptance criteria
@@ -221,6 +313,13 @@ claude -p "/wienerdog-dream ..." \
 - [ ] `spawnBrain` spawns with `cwd` = the fresh staging dir (not `vaultDir`); the vault
       and scratch are present as `--add-dir` roots; the staging dir is empty/0700 and
       recreated each run.
+- [ ] The `DREAM_PROMPT` tier lines are **absolute and vault-prefixed** (e.g.
+      `<vault>/06-Identity`, `<vault>/07-Daily/<date>.md`); no bare relative tier name
+      (`06-Identity`, `07-Daily/…`) appears as a write target in the prompt.
+- [ ] `layoutPromptLines(layout, date, vaultDir)` and `resolveDailyPath(layout, date,
+      vaultDir)` return absolute vault-prefixed paths WITH `vaultDir`, and byte-identical
+      relative paths WITHOUT it (back-compat); `readVaultLayout`/`isSafeRelativePath` are
+      unchanged and still reject absolute/`..`/backslash config values.
 - [ ] A forced dream-skill integrity mismatch (WP-129 seam) makes `buildClaudeArgs`/the
       dream run throw before spawning a brain (fail closed).
 - [ ] The dry-run plan (`wienerdog dream --dry-run`) echoes the new composed argv and
