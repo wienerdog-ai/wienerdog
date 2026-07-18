@@ -172,7 +172,7 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 | [WP-151](WP-151-self-alert-code-owned-body.md) | Build fail-loud alert/self-email body from code-owned status fields only (audit A13) | M7 | sonnet | Ready | — |
 | [WP-152](done/WP-152-codex-protocol-pin-and-rerun-discipline.md) | Pin the Codex parser version + make the re-verify-on-bump discipline actionable (audit A13, follows WP-100) | M7 | sonnet | Done | — |
 | [WP-153](WP-153-target-aware-symlink-reverser.md) | Target-aware manifest symlink reverser — uninstall never deletes a user's replacement link (audit A13 follow-up, Codex-found) | M7 | opus | Draft | WP-144 |
-| [WP-154](WP-154-executable-identity-pinning.md) | Resolve/verify/pin claude/git/codex to absolute realpaths at sync, spawn absolute, fail safe on drift (audit A7) | M7 | opus | Draft | — |
+| [WP-154](WP-154-executable-identity-pinning.md) | Pin claude/git/codex by command path + install dir at sync, verify structurally, spawn absolute, fail safe on drift (audit A7) | M7 | opus | Draft | — |
 | [WP-155](WP-155-inert-test-exec-seams.md) | Make production test-exec overrides inert without WIENERDOG_TEST + keep every dispatch shell:false (audit A7) | M7 | sonnet | Draft | WP-154 |
 | [WP-156](WP-156-canonical-job-descriptor.md) | Generate a canonical, digest-bound job descriptor at schedule/sync time (audit A7) | M7 | opus | Draft | WP-144, WP-145, WP-154 |
 | [WP-157](WP-157-independent-launcher-and-app-integrity.md) | Independent launcher outside the app tree — verify current/app/descriptor/stance before spawn (audit A7) | M7 | opus | Draft | WP-144, WP-145, WP-156 |

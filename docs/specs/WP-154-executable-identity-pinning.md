@@ -1,6 +1,6 @@
 ---
 id: WP-154
-title: Resolve, verify, and pin Claude/Git/Codex to absolute realpaths at sync; spawn absolute; fail safe on drift
+title: Pin Claude/Git/Codex by command path + install dir at sync; verify structurally; spawn absolute; fail safe on drift
 status: Draft
 model: opus
 size: M
@@ -30,14 +30,32 @@ finding **F4**: an attacker who plants a malicious `claude` or `git` there wins
 `PATH` resolution for **every** nightly job — persistent execution as the user,
 needing only one file write and no scheduler access.
 
-This WP resolves `claude`/`git`/`codex` to **absolute realpaths** at
-install/sync time, verifies each is a regular, correctly-owned, non-writable-
-ancestor executable, records a **pin** (realpath + version + size + content
-hash) in a code-owned store, and makes every nightly spawn use the **verified
-absolute path**. A pinned executable that later changes (moved, replaced,
-mutated) **fails safe** — the job refuses to spawn and tells the user to re-pin
-via `wienerdog sync` after confirming the update is legitimate. `node` itself is
+This WP resolves `claude`/`git`/`codex` at install/sync time and records a
+**structural pin** in a code-owned store: the PATH-resolved **command path**
+(e.g. `~/.local/bin/claude`) plus the **install dir** — the parent directory of
+the command's resolved realpath (e.g. `~/.local/share/claude/versions`). Every
+nightly spawn re-resolves the executable live and requires: (a) the command
+path is unchanged; (b) the live realpath still resolves into the pinned install
+dir; (c) the live target passes structural verification (regular file, exec
+bit, correct owner, no group/other-writable ancestor dirs). Only then does it
+spawn — using the **live verified absolute realpath**. Any check failing
+**fails safe**: the job refuses to spawn and tells the user to re-pin via
+`wienerdog sync` after confirming the change is legitimate. `node` itself is
 `process.execPath` (already absolute, the running interpreter) and is not pinned.
+
+**No content hash — by design (owner decision, 2026-07-18 A7 walkthrough).**
+Claude Code self-updates several times a day by writing a NEW version-named
+file and repointing the command symlink (observed live: `~/.local/bin/claude →
+~/.local/share/claude/versions/2.1.214`; four version files appeared in three
+days). A size/sha256 (or exact-realpath) gate would alarm on every legitimate
+auto-update, training the user to ignore or disable the check. The structural
+pin stays **silent across auto-updates** (new file, same install dir) while
+still refusing the F4 plant (different command path, or a target outside the
+pinned install dir). This supersedes the ACTION-LIST A7 wording
+("version/hash … legitimate executable updates fail safe and require an
+explicit repin") for auto-updating executables; an install-*method* change
+(e.g. native → Homebrew, or a versioned Cellar dir move on `brew upgrade`)
+still fails safe and requires an explicit `wienerdog sync`.
 
 **Honest boundary (state this; do not overclaim).** Same-user control of BOTH
 the core and the OS scheduler can still replace both anchors. A7 protects
@@ -46,8 +64,12 @@ that can write `~/.local/bin` or `~/.wienerdog` but not re-register the OS
 scheduler) and **detects drift**; it is **NOT** a claim against arbitrary
 same-user native malware — that is A12's territory. This WP's protection holds
 because the pin, captured from the legitimate install environment, records the
-real executable's realpath+hash; a later-planted fake has a different
-realpath/hash and is refused.
+real executable's command path + install dir; a later-planted fake sits at a
+different command path or resolves outside the pinned install dir and is
+refused. **In-place substitution** — overwriting the real, user-owned target
+file at its unchanged path — is NOT detected (no content hash, see above); an
+attacker with that write power could equally rewrite the pin store itself, so a
+hash would add alarm noise, not protection. That attacker class is A12's.
 
 > **ADR note:** `ADR-0028` records the A7 architectural decision — a **new ADR**
 > (owner-assigned 2026-07-18), distinct from ADR-0027 (A8's re-derived scheduler
@@ -98,7 +120,7 @@ resolves inside `<core>` — the pin store below is in-bounds and needs no manif
 schema change, so **this WP does not depend on WP-144/145** — see Implementation
 notes.)
 
-Nothing today resolves, verifies, hashes, or pins these executables.
+Nothing today resolves, verifies, or pins these executables.
 
 ## Deliverables (permission boundary — touch ONLY these)
 
@@ -106,11 +128,11 @@ Nothing today resolves, verifies, hashes, or pins these executables.
 
 | Action | Path | Notes |
 |--------|------|-------|
-| create | src/core/exec-identity.js | The pin module: resolve → realpath → verify → hash → pin; load/verify; fail-safe absolute resolve for spawning. |
+| create | src/core/exec-identity.js | The pin module: resolve → realpath → verify → pin (command path + install dir); load/verify; fail-safe absolute resolve for spawning. |
 | modify | src/cli/sync.js | After `vendorSelf`/`writeShim`, call `createPins(paths, {manifest})` (idempotent repin on every sync). Print a one-line notice on unresolved/verify-failed execs. Dry-run makes no writes. |
 | modify | src/core/dream/brain.js | Spawn the **verified pinned absolute path** for `claude`/`codex` (not bare name); version-probe the pinned path. Leave the `WIENERDOG_DREAM_CMD` fake branch behavior for WP-155. |
 | modify | src/core/dream/validate.js | Spawn the **verified pinned absolute** `git` (not bare `'git'`); fail safe with the repin message on pin drift. |
-| create | tests/unit/exec-identity.test.js | Unit cases for resolve/verify/hash/pin/verifyPin/fail-safe below. |
+| create | tests/unit/exec-identity.test.js | Unit cases for resolve/verify/pin/verifyPin/fail-safe below. |
 | modify | tests/unit/dream-brain.test.js | Assert the brain spawns the pinned absolute path and fails safe on drift; the fake seam still works. |
 | modify | tests/unit/dream-validate.test.js | Assert git uses the pinned absolute path and fails safe on drift. |
 
@@ -123,13 +145,9 @@ Nothing today resolves, verifies, hashes, or pins these executables.
   "schema": 1,
   "pins": {
     "claude": {
-      "realpath": "/opt/homebrew/bin/claude",   // absolute, fs.realpathSync-canonical
-      "version": "1.2.3 (Claude Code)",           // probeVersion() output, bounded 200 chars
-      "sizeBytes": 481234,
-      "sha256": "…",                              // or null when file > cap (see hashFile)
-      "hashReason": "size-cap",                    // present only when sha256 is null
-      "mode": 493,                                  // fs.Stats.mode (decimal); informational
-      "owner": 501,                                 // POSIX uid; -1 on win32
+      "commandPath": "/Users/me/.local/bin/claude",        // first PATH hit at pin time (pre-realpath)
+      "installDir": "/Users/me/.local/share/claude/versions", // dirname of the resolved realpath at pin time
+      "version": "1.2.3 (Claude Code)",  // probeVersion() output, bounded 200 chars; INFORMATIONAL — never compared
       "pinnedAt": "2026-07-18T…Z"
     },
     "git": { … },
@@ -163,11 +181,9 @@ function verifyExecutable(realpath, platform, ctx) {}
 /** `<exe> --version`, bounded (10s), best-effort. @returns {string} 'unknown' on any failure. */
 function probeVersion(realpath, env, spawnSyncFn) {}
 
-/** sha256 of the file bytes, capped. @param {string} realpath @param {number} [capBytes=67108864]
- *  @returns {{sha256:string}|{sha256:null, reason:string}}  reason 'size-cap' | 'read-error'. */
-function hashFile(realpath, capBytes) {}
-
-/** Build one pin (resolve+verify+probe+hash). @returns {object|{name, error:string}}. */
+/** Build one pin (resolve+verify+probe): {commandPath, installDir, version,
+ *  pinnedAt} where commandPath = resolveExecutable().path and installDir =
+ *  dirname(resolveExecutable().realpath). @returns {object|{name, error:string}}. */
 function buildPin(name, env, platform, seams) {}
 
 /** Resolve+verify+pin claude, git, and (if resolvable) codex; write the 0600 store
@@ -181,14 +197,21 @@ function createPins(paths, opts) {}
 /** Load the pin store. Missing/corrupt ⇒ {}. @returns {object}. */
 function loadPins(paths) {}
 
-/** Verify the CURRENT on-disk exec still matches its pin.
+/** Verify the CURRENT PATH resolution of `name` still matches its pin.
+ *  Re-resolves live, then requires: (a) live command path === pin.commandPath;
+ *  (b) dirname(live realpath) === pin.installDir (exact string equality);
+ *  (c) verifyExecutable(live realpath) passes. `version` is informational and
+ *  NEVER compared.
  *  @returns {{ok:true, path:string}|{ok:false, why:string, drift:boolean}}
- *    drift:true when a pin EXISTS but the live realpath/size/sha256/verify differs
- *    (⇒ caller must fail safe); drift:false when NO pin exists (first-run/upgrade). */
+ *    ok.path is the LIVE verified realpath. drift:true when a pin EXISTS but a
+ *    check fails (⇒ caller must fail safe); drift:false when NO pin exists
+ *    (first-run/upgrade). */
 function verifyPin(name, paths, opts) {}
 
 /** The spawn accessor. Returns the ABSOLUTE path to spawn, or throws.
- *  - Pin exists + verifies ⇒ return pin.realpath.
+ *  - Pin exists + verifyPin ok ⇒ return the LIVE verified realpath (never a
+ *    stored path — the target moves on every auto-update; the pin authorizes
+ *    the LOCATION, the live resolve supplies the file).
  *  - Pin exists but drifted ⇒ THROW WienerdogError (fail safe; message names the
  *    exec, the change, and "run `wienerdog sync` to re-pin after confirming the
  *    update is legitimate").
@@ -197,7 +220,7 @@ function verifyPin(name, paths, opts) {}
  *  @returns {string} absolute realpath @throws {WienerdogError} */
 function resolvePinnedSpawn(name, paths, env, platform) {}
 
-module.exports = { resolveExecutable, verifyExecutable, probeVersion, hashFile,
+module.exports = { resolveExecutable, verifyExecutable, probeVersion,
   buildPin, createPins, loadPins, verifyPin, resolvePinnedSpawn, EXEC_PINS_PATH };
 ```
 
@@ -236,19 +259,27 @@ module.exports = { resolveExecutable, verifyExecutable, probeVersion, hashFile,
   pin resolves live (benign first-run/upgrade). Do not collapse these.
 - `codex` is optional (M4, not yet reachable): unresolvable ⇒ notice + no pin, not
   an error. Only pin it when resolvable.
+- **`installDir` is the exact dirname** of the pin-time realpath, compared by
+  string equality — no prefix walk, no per-installer special cases. Known
+  consequence (pre-made decision): Homebrew keeps binaries in version-named
+  Cellar dirs, so a `brew upgrade git` moves `installDir` ⇒ next dream fails
+  safe until `wienerdog sync`. Acceptable: brew upgrades are explicit user
+  actions (unlike claude's silent multi-daily auto-update, which keeps a stable
+  `versions/` dir and passes silently).
 - Idempotence: a second `sync` with an unchanged environment rewrites
-  `exec-pins.json` to byte-identical content (stable key order, stable `pinnedAt`
-  only when a pin's identity actually changed — re-use the prior `pinnedAt` when
-  realpath+size+sha256+version are unchanged, so the file does not churn).
+  `exec-pins.json` to byte-identical content (stable key order; re-use the prior
+  `pinnedAt` when commandPath+installDir are unchanged — `version` may advance
+  on auto-update without churning `pinnedAt`).
 - When uncertain, choose the simpler option and record it under "Decisions made".
 
 ## Security checklist
 
 - [ ] `claude`, `git`, and (when present) `codex` are spawned by their **verified
       absolute realpath**, never by bare name; a fake earlier on `PATH` cannot win.
-- [ ] A pin that no longer matches the live realpath/size/sha256, or whose
-      executable fails owner/mode/ancestor-writable verification, **stops the spawn
-      pre-flight** with a clear repin message — no fallback to the changed binary.
+- [ ] A live resolution that no longer matches the pinned command path or
+      install dir, or whose target fails owner/mode/ancestor-writable
+      verification, **stops the spawn pre-flight** with a clear repin message —
+      no fallback to the changed binary.
 - [ ] The pin store is written **0600**; the resolve/verify path never spawns a
       binary that failed `verifyExecutable`.
 - [ ] The `WIENERDOG_DREAM_CMD` fake seam still bypasses pinning for tests and is
@@ -259,18 +290,22 @@ module.exports = { resolveExecutable, verifyExecutable, probeVersion, hashFile,
 - [ ] **[A7 bullet 4 — "Fake claude/git/codex earlier on PATH never executes."]**
       With a valid pin for the real claude, planting an executable named `claude`
       earlier on the job `PATH` causes `resolvePinnedSpawn('claude', …)` to
-      **throw** (drift: re-resolved realpath ≠ pinned realpath) — the fake never
+      **throw** (drift: live command path ≠ pinned command path) — the fake never
       spawns.
-- [ ] **[A7 bullet 5 — "Pinned executable mutation/owner/mode/ancestor failure
-      stops pre-spawn."]** Mutating the pinned file's bytes (sha256/size change),
-      changing its owner, clearing its execute bit, or making an ancestor dir
-      group/other-writable each makes `verifyPin`/`resolvePinnedSpawn` fail before
-      any spawn.
-- [ ] **[A7 bullet 6 — executable-update half]** A legitimate update that changes
-      the pinned binary makes the next dream **fail safe** (clear "run `wienerdog
-      sync` to re-pin" message); running `sync` re-pins and the next dream
-      succeeds against the new verified path.
-- [ ] `resolveExecutable`/`verifyExecutable`/`hashFile`/`createPins`/`verifyPin`
+- [ ] **[A7 bullet 5, restated per the no-hash decision]** Repointing the
+      command symlink to a target OUTSIDE the pinned install dir (e.g.
+      `/tmp/evil` — root-owned-sticky `/tmp` passes the ancestor rule, the
+      install-dir check refuses it), changing the target's owner, clearing its
+      execute bit, or making an ancestor dir group/other-writable each makes
+      `verifyPin`/`resolvePinnedSpawn` fail before any spawn. (In-place byte
+      mutation of the user-owned target is NOT detected — honest boundary above.)
+- [ ] **[A7 bullet 6, restated per the no-hash decision]** A legitimate
+      auto-update that swaps in a new version file under the SAME install dir
+      (new realpath, same dirname) passes `verifyPin` **silently** — no
+      fail-safe, no repin prompt. An install-method change that MOVES the
+      install dir makes the next dream fail safe with the repin message; running
+      `sync` re-pins and the next dream succeeds against the new location.
+- [ ] `resolveExecutable`/`verifyExecutable`/`createPins`/`verifyPin`
       have direct unit coverage (temp-dir fake executables; injected `platform`).
 - [ ] `createPins` is idempotent (second sync ⇒ byte-identical `exec-pins.json`).
 - [ ] `npm test` and `npm run lint` are green.

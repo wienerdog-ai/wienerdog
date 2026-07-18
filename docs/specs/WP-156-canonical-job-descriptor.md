@@ -27,7 +27,8 @@ Wienerdog is just files.**
 This WP builds the first half of the fix (audit A7): a **canonical job
 descriptor** — a code-owned, deterministic record of exactly what a scheduled
 job is authorized to run: its `run` action, capability profile, prompt/skill
-content hash, timeout, vault root, the **absolute executable identities** (from
+content hash, timeout, vault root, the **pinned executable identities**
+(command path + install dir, from
 WP-154's pins), and the **app release digest** (a content address of the
 vendored `app/current` tree). The descriptor is serialized canonically and
 reduced to a **descriptor digest** (sha256). It is written at schedule/sync time
@@ -75,8 +76,11 @@ recording a `vendored-tree` entry. `isDevCheckout(root, env)` returns true for a
 `.git` dir or `WIENERDOG_DEV=1`.
 
 **`src/core/exec-identity.js`** (WP-154, a dependency): `loadPins(paths)` returns
-`{claude?, git?, codex?}` pins (`{realpath, version, sizeBytes, sha256, …}`) from
-`<core>/state/exec-pins.json`.
+`{claude?, git?, codex?}` pins (`{commandPath, installDir, version, pinnedAt}`)
+from `<core>/state/exec-pins.json`. Per the owner-approved no-hash decision
+(2026-07-18 A7 walkthrough), a pin records the stable **command path + install
+dir**, not a content hash or exact realpath — those change on every Claude Code
+auto-update.
 
 **`src/core/dream/brain.js`** exposes `DREAM_PROMPT(scratch, vault, date, layout)`
 (the builtin prompt template) and `loadVendoredSkill('wienerdog-dream')` (the
@@ -121,9 +125,13 @@ authorization record.
   "timeoutMinutes": 20,
   "vaultRoot": "/Users/me/wienerdog",
   "node": "/opt/homebrew/opt/node/bin/node",   // process.execPath
-  "exec": {                                 // from WP-154 pins (realpath+version+sha256)
-    "claude": { "realpath": "…", "version": "…", "sha256": "…" },
-    "git":    { "realpath": "…", "version": "…", "sha256": "…" }
+  "exec": {                                 // from WP-154 pins — STABLE identity fields ONLY
+    "claude": { "commandPath": "…", "installDir": "…" },
+    "git":    { "commandPath": "…", "installDir": "…" }
+    // `version` (and any realpath) are deliberately EXCLUDED: they change on
+    // every claude auto-update and would drift the descriptor digest, turning
+    // legitimate auto-updates into WP-157 fire-time alarms (owner decision
+    // 2026-07-18). The pin's structural verification still runs at spawn time.
   },
   "appRelease": {
     "version": "0.4.1",
