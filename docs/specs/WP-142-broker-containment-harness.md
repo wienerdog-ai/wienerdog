@@ -1,7 +1,7 @@
 ---
 id: WP-142
 title: Broker containment proof — end-to-end run-job poisoned-email E2E + exact-verb / grant / credential negatives (audit A2, the A1-deferred gate-opening proof)
-status: Draft
+status: Ready
 model: opus
 size: M
 depends_on: [WP-140, WP-141]
@@ -133,11 +133,15 @@ Gmail ops. Assert, against the **fake-Google** backend's recorded call log (D-E2
   and becomes a REQUIRED precondition of the eventual gate-open decision (record it
   under D-E2E-GATE-CROSSREF alongside P1 + audit rerun + explicit go). Its failure mode
   is functional, never containment evidence.
-- **D-E2E-GATE-CROSSREF (recommend explicit precondition record).** Record here, as a durable
-  hand-off, that this proof PASSING is a **precondition** for the eventual
-  `external-content-routine` gate-open work (which also needs P1 + audit rerun + explicit
-  go). This WP does not open the gate; it produces the evidence the gate-open decision
-  requires. Recommend stating it explicitly so the future gate-open WP cross-references this.
+- **D-E2E-GATE-CROSSREF — RESOLVED (OWNER-APPROVED 2026-07-18): explicit precondition
+  record.** Durable hand-off, stated here because done specs are the project's permanent
+  changelog: **the eventual `external-content-routine` / `gws-use` gate-open work MUST
+  cross-reference this spec and may proceed only when ALL of the following hold** —
+  (1) this WP's end-to-end poisoned-email containment proof passes on the then-current
+  code; (2) the live self-send positive check has been run (D-E2E-BROKER — optional at
+  A2, REQUIRED at gate-open); (3) P1 is complete; (4) a clean-commit audit rerun is
+  green; (5) an explicit human go is recorded. This WP itself opens NO gate; it produces
+  evidence only.
 
 ## Implementation notes & constraints
 
