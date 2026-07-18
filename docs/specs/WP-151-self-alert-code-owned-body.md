@@ -1,7 +1,7 @@
 ---
 id: WP-151
 title: Build the fail-loud alert and self-email body from code-owned status fields, never a free-form failure string
-status: Draft
+status: Ready
 model: sonnet
 size: S
 depends_on: []
@@ -106,6 +106,14 @@ if (failure) {
   once `reason` is code-owned, the whole body is.
 - `fs`, `logFile`, and `redactOnly` are already in scope in `runJob`; no new
   imports.
+
+**Owner walkthrough (2026-07-18): Ready.** No open fork. Owner ratified reducing a
+non-WienerdogError failure to the fixed code-owned sentence in the durable
+alert/email and writing the raw (redacted) cause to the local per-run log only —
+so the machine-leaving email carries no free-form/attacker-influenced text while
+the user can still debug from the log. WienerdogError reasons stay as-is (already
+code-owned). Note: WP-151 touches `run-job.js`, which the A2 batch's WP-141 also
+touches — sequence WP-151 after WP-141 lands (cross-batch, not a formal dep).
 
 ## Implementation notes & constraints
 
