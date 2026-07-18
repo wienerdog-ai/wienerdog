@@ -208,8 +208,7 @@ function putGrant(paths, grant, opts)
 
 ```bash
 npm test -- --test-name-pattern "broker-grant-store"
-npm test -- --test-name-pattern "gws-grant"
-npm test -- --test-name-pattern "cli-grant"
+npm test -- --test-name-pattern "gws-grant"   # the store-backed CLI grant tests live here (no cli-grant.test.js)
 npm test
 npm run lint
 node bin/wienerdog.js safety    # all five gates BLOCKED
