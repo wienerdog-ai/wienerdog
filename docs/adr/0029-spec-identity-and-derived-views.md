@@ -1,12 +1,14 @@
 # ADR-0029: Spec identity is a slug; frontmatter is the only authority; shared views are generated, never hand-written
 
-Status: Proposed
+Status: Accepted
 Date: 2026-07-18
 
+> **OWNER-RATIFIED (2026-07-19).** Felho approved the migration after two wd-architect
+> review passes. Implemented by **WP-160** (gate/ritual updates — the last numbered WP)
+> and **WP-roadmap-retirement** (ROADMAP split and deletion — the first slug-id WP).
 > Drafted from the 2026-07-18 owner walkthrough of the WP-153/154 collision and the
-> ROADMAP merge-conflict retro; revised after wd-architect review (same day). Retires the
-> hand-maintained `docs/specs/ROADMAP.md` design (M0-era, never ADR-recorded) and builds
-> on ADR-0005's spec-driven workflow. Pending owner ratification.
+> ROADMAP merge-conflict retro. Retires the hand-maintained `docs/specs/ROADMAP.md`
+> design (M0-era, never ADR-recorded) and builds on ADR-0005's spec-driven workflow.
 
 ## Context
 
