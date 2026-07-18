@@ -1,7 +1,7 @@
 ---
 id: WP-132
 title: Managed-policy hook preflight (warn + record) + hermetic-run evidence record (audit A1)
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: [WP-130, WP-131]
