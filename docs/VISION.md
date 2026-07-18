@@ -19,7 +19,7 @@ Wienerdog packages that fix as a one-line install:
 curl -fsSL …/install.sh | bash   →   /wienerdog-setup
 ```
 
-An interview conducted *by the user's own AI* produces their profile, preferences, and working instructions. A PARA-structured markdown vault becomes the model's persistent memory. A nightly **dreaming** job reviews the day's conversations, promotes what matters into long-term memory through quality gates, and turns repeated workflows into reusable skills. Optional Google Workspace senses (read-first, draft-first, sending only under explicit user-created grants) and an opt-in catalog of OS-native scheduled routines — designed to deliver a spectacular first win within a day — complete the stack (in this build, Google senses and the routine catalog are off pending the pre-use security review — see "What we will not do").
+An interview conducted *by the user's own AI* produces their profile, preferences, and working instructions. A PARA-structured markdown vault becomes the model's persistent memory. A nightly **dreaming** job reviews the day's conversations, promotes what matters into long-term memory through quality gates, and turns repeated workflows into reusable skills. Optional Google Workspace senses (read-first, draft-first, reached only through a local capability broker, sending only under explicit user-created grants) and an opt-in catalog of OS-native scheduled routines — designed to deliver a spectacular first win within a day — complete the stack (in this build, Google senses and the routine catalog are off pending the pre-use security review — see "What we will not do").
 
 ## The principle that defines us
 
@@ -45,5 +45,5 @@ Two weeks after install, the user's memory vault is growing without their effort
 
 - No daemon, gateway, or server — ever (ADR-0004).
 - No telemetry.
-- No sending without a grant: outbound actions (email, invites) execute only under grants the user created interactively, scoped to specific routines and recipients (ADR-0007). The AI can never widen its own permissions along the enforced grant/CLI path. In the current security-hardened build the Google Workspace layer is disabled entirely behind a pre-use safety gate — see the threat model's T0 and run `wienerdog safety`.
+- No sending without a grant: outbound actions (email, invites) execute only under grants the user created interactively, scoped to specific routines and recipients (ADR-0007), and a routine reaches Google only through the local capability broker's fixed verbs (ADR-0026) — it never holds a raw credential or a generic send. Along that enforced broker/CLI path the AI cannot widen its own permissions; this is a boundary against a hijacked model, not against arbitrary same-user native code (see the threat model's T4a). In the current security-hardened build the Google Workspace layer is disabled entirely behind a pre-use safety gate — see the threat model's T0 and run `wienerdog safety`.
 - No feature that requires the user to understand what a port is.
