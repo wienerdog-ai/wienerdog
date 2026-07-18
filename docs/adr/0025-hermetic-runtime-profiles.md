@@ -272,3 +272,46 @@ above is unchanged; this amendment governs where it differs.
 The per-WP `DECISION NEEDED` blocks (WP-128 tool posture + D-SETTING-SOURCES) carry the
 dated, spike-informed record; WP-133's live harness must assert the tool inventory against
 the explicit allowlist and confirm `Task`/`Agent`/`Skill`/`Workflow` are absent.
+
+### Amendment 2 (2026-07-18) — A1 containment is RUNTIME-SELF-VERIFIED, not pinned
+
+The owner walkthrough resolved how A1 containment is proven **in production**. §Decision.5
+above certifies containment with a live harness on a **pinned** Claude version — correct for
+dev-time, but wrong for a deployed user: they never rebuild the repo, and Claude auto-updates
+fast (measured **2.1.212 → 2.1.214 in a day**), so a repo-pinned "supported version" constant
+goes stale immediately and a drift-warning against it is constant noise, not a check.
+
+**Resolution: the dream self-verifies its own containment at runtime.** Before each dream
+spawns its brain, a **bounded live canary probe** runs the **same production hermetic
+composition** (WP-128 `getProfile('dream')` + `composeClaudeArgs` — the real argv) against a
+temp canary workspace and asserts the config-mutation-free containment properties: an
+out-of-`--add-dir` read is blocked (a temp canary secret is never returned), an out-of-staging
+write is blocked, `--tools` is non-empty with the deny set present, and Bash/deny-list tools
+are unavailable. If the installed Claude no longer honors the flags — or the probe cannot
+confirm they hold — the dream **fails closed** (halts, durable alert) rather than running
+un-hermetically over attacker-influenceable transcripts. This **closes the residual** the
+pinned-version approach left (a production dream running nightly on an un-verified Claude)
+and replaces the pin's production-safety role.
+
+**The split is deliberate:**
+
+- **WP-135 — runtime self-check (production).** The **config-mutation-free subset**, run
+  before every actual dream, fail-closed on a break. It does NOT test the inherited-user-hook
+  property, because that requires installing a canary hook into the real `~/.claude` — unsafe
+  to do unattended nightly.
+- **WP-133 — dev-time comprehensive proof.** The full hostile-fixture harness, **including**
+  the config-mutating inherited-`SessionStart`-hook test (backed up + restored), run by the
+  maintainer on the pinned version. `src/core/supported-claude.js` is demoted to a WP-133
+  dev-time RECORD ("last tested version"), explicitly **not wired into production**.
+
+**Residual this closes and the one it doesn't:** the probe proves the flags held for **that
+probe's** run on the actually-installed Claude — it converts "we hope the flags still work"
+into "we checked tonight, and halted if not." It is a **canary, not a total proof**: a
+sufficiently adversarial real transcript is contained by the **same flags** the probe just
+verified (that is the point — the probe is a live tripwire on the containment mechanism the
+real dream depends on), but the probe does not exhaustively enumerate every attack. Same-user
+native code (A12) and executable integrity (A7) remain out of scope, unchanged.
+
+The WP-135 `DECISION NEEDED` blocks (D-PROBE-INCONCLUSIVE, D-PROBE-STRICTNESS, D-PROBE-CADENCE)
+carry the per-decision record; WP-133's D-CLAUDE-PIN block is amended to point here as the
+resolution of the production-safety question.

@@ -121,33 +121,51 @@ negative suite for the profiles that can compose (dream + `weekly-review`/`mcp:'
 plus any broker routine once A2 provides a test broker config via a seam). Record which
 profiles ran live vs asserted-fail-closed in the harness output.
 
-### `src/core/supported-claude.js` (pure)
+### `src/core/supported-claude.js` (pure — DEV-TIME RECORD ONLY, not a production gate)
+
+Per D-CLAUDE-PIN (resolved 2026-07-18): this constant is the **last version the full
+dev-time proof (this harness) was run against** — a maintainer RECORD, NOT wired into any
+production path (WP-135's runtime self-check owns production safety). The maintainer sets it
+when they run the proof; it is advisory for the harness's own "you're on a newer, un-certified
+version — re-run me" notice. (Observed drift that motivated the split: the maintainer's box
+went 2.1.212 → 2.1.214 within a day.)
 
 ```js
 'use strict';
-/** The Claude Code version A1 containment was certified against. Bumping it REQUIRES a
- *  fresh live-harness pass (containment flags are version-dependent — ADR-0025). */
-const SUPPORTED_CLAUDE = '2.1.212';   // D-CLAUDE-PIN
+/** The Claude Code version this harness's comprehensive proof was last run against — a
+ *  DEV-TIME record the harness prints, NOT a production gate (WP-135 self-check owns runtime
+ *  safety; ADR-0025 Amendment 2). Set by the maintainer when they re-run the full proof. */
+const SUPPORTED_CLAUDE = '2.1.214';   // maintainer-set at last proof run; advisory only
 /** @param {string} actual  raw `claude --version` output @returns {{ok:boolean, actual:string, supported:string}} */
-function checkClaudeVersion(actual) { /* parse semver from actual; compare per D-CLAUDE-PIN policy */ }
+function checkClaudeVersion(actual) { /* parse semver; advisory "tested-newer-than-certified" notice for the harness output */ }
 module.exports = { SUPPORTED_CLAUDE, checkClaudeVersion };
 ```
 
 ## DECISION NEEDED (resolve in the walkthrough; each becomes a dated OWNER-APPROVED line before Ready)
 
-- **D-CLAUDE-PIN — exact pin vs supported minimum.**
-  - **Recommended: pin an exact `SUPPORTED_CLAUDE` and have the harness assert equality,
-    but treat a mismatch as a loud FAIL-with-record, not a silent skip.** Rationale:
-    containment flag semantics (`--setting-sources ''`, `--tools ''`, `disableAllHooks`,
-    managed-policy override) are the kind of thing a Claude release can change; a certified
-    exact version is the only honest claim. The maintainer bumps the constant and re-runs
-    the harness on each Claude update — a cheap, deliberate gate.
-  - **Counterargument:** an exact pin means every routine Claude auto-update "breaks" the
-    harness until the maintainer re-certifies — noisy. A softer policy (assert `>= min`,
-    record the exact tested version, warn on a newer version) reduces friction but risks
-    trusting containment on an untested newer version. Recommend exact pin (fail-loud) as
-    the certified claim, with the tested version always recorded so a re-cert is a
-    one-line bump + one harness run.
+- **D-CLAUDE-PIN — RESOLVED (2026-07-18): the pin's PRODUCTION role moves to WP-135's runtime
+  self-check; `supported-claude.js` is a dev-time RECORD only.** The walkthrough surfaced that
+  a repo-pinned `SUPPORTED_CLAUDE` is the wrong *production* safety mechanism — a deployed user
+  never rebuilds the repo and Claude auto-updates fast (measured 2.1.212 → 2.1.214 in a day),
+  so the pin goes stale immediately and comparing to it is noise, not a check. **WP-135**
+  (pre-dream containment self-check) replaces that role: it runs a bounded live canary probe of
+  the real hermetic composition before **each** dream and fails closed if the *actually-installed*
+  Claude no longer honors the flags — validating the live environment, not a constant (ADR-0025
+  Amendment 2).
+  - **This harness stays the thorough DEV-TIME hostile-fixture proof** — including the
+    config-mutating inherited-`SessionStart`-hook test (which WP-135 deliberately omits, as it
+    needs real-config mutation). `src/core/supported-claude.js` is kept **only** as a harness
+    RECORD of the last version this comprehensive proof was run against (printed in the harness
+    output); it is **NOT wired into any production path** (a `grep` shows no `src/` non-test
+    caller). `checkClaudeVersion` becomes advisory for the harness's own "you're testing a newer
+    version than last certified — re-run me" notice, never a production gate.
+  - **Recommended posture:** keep `supported-claude.js` (option b) as a pure dev-time helper the
+    harness uses for its output, `SUPPORTED_CLAUDE` bumped by the maintainer when they re-run the
+    full proof; the harness records the actually-tested `claude --version` every run. The owner
+    may instead **drop the constant entirely** (option a) and have the harness just print the
+    tested version with no comparison — leaner, but loses the "am I testing a version I've
+    certified before?" self-notice. Recommend (b): the constant costs nothing and gives the
+    maintainer a cheap re-cert signal, while WP-135 owns all production safety.
 
 - **D-HARNESS-ROUTINE-EXEC — how a routine's contained argv is run live without opening
   the gate.**
