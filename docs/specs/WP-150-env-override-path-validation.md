@@ -1,7 +1,7 @@
 ---
 id: WP-150
 title: Validate path-defining environment overrides — require absolute, normalized paths and reject ".."
-status: Draft
+status: Ready
 model: sonnet
 size: S
 depends_on: []
@@ -128,6 +128,15 @@ function getPaths(env = process.env) {
 - Do NOT validate `HOME` (OS-standard; validating it risks breaking valid exotic
   homes). If a follow-up wants HOME hardening, it is a separate decision.
 - When uncertain, choose the simpler option and record it under "Decisions made".
+
+**Owner walkthrough (2026-07-18): Ready.** Owner ratified: reject (fail closed
+with `WienerdogError`) rather than silently normalize a bad override; validate
+only the five destructive/write-root vars (`WIENERDOG_HOME`, `WIENERDOG_VAULT`,
+`WIENERDOG_CLAUDE_DIR`, `CLAUDE_CONFIG_DIR`, `CODEX_HOME`), with `HOME`
+deliberately excluded; and keep the stricter check that rejects BOTH `.` and `..`
+segments (not just `..`) to enforce clean absolute paths — harmless in practice
+(no real absolute override uses `.` segments). Independent WP (paths.js only) —
+no A8/A13 dependency.
 
 ## Security checklist
 
