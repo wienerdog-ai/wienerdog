@@ -1,6 +1,6 @@
 # Work-package specs
 
-A **work package (WP)** is one self-contained implementation spec: one implementer session, one branch, one PR. Specs are the primary interface through which models receive work (ADR-0005) and obey the **One-Document Rule**: implementable reading only the spec + CLAUDE.md.
+A **work package (WP)** is one self-contained implementation spec: one implementer session, one PR. Specs are the primary interface through which models receive work (ADR-0005) and obey the **One-Document Rule**: implementable reading only the spec + CLAUDE.md.
 
 ## Lifecycle
 

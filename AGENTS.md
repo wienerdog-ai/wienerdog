@@ -46,8 +46,8 @@ starts something that keeps running, it is wrong.
   the PR; paste their output into the PR body.
 
 ## Git discipline
-- Branch: `wp/XXX-slug` (from your spec's frontmatter). Never commit to main.
-- Conventional commits: `feat|fix|docs|test|chore(scope): message (WP-XXX)`.
+- Branch: `wp/<slug>`. Never commit to main.
+- Conventional commits: `feat|fix|docs|test|chore(scope): message (WP-<slug>)`.
 - One PR per WP. Fill the PR template completely, including the
   `Generated-by: <model>` line.
 

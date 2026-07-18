@@ -85,6 +85,9 @@ Canonical names. Use these exact terms in code, docs, specs, and prompts — nev
 - **routine catalog** — the opt-in post-setup menu of ready-made routines (`/wienerdog-routines`); nothing is scheduled by default (ADR-0008).
 - **interview** — the `/wienerdog-setup` conversation that produces `06-Identity/` notes, from which CLAUDE.md/AGENTS.md managed blocks are rendered.
 - **memory_mode** — user preset for gate strictness: conservative | standard | eager.
-- **work package (WP)** — one self-contained implementation spec in `docs/specs/`, sized for one implementer session, one branch, one PR.
+- **work package (WP)** — one self-contained implementation spec in `docs/specs/`, sized for one implementer session, one PR.
+- **slug** — the kebab-case identity of a work package (`WP-<slug>`), chosen at draft time, globally unique across `docs/specs/` and `done/` (lint-enforced), never renumbered (ADR-0029). Legacy numeric ids (`WP-042`) are valid slugs.
+- **epic** — optional kebab-case frontmatter label grouping related WPs into a stream (e.g. `audit-a7`). The only grouping field on a spec; WPs carry no milestone.
+- **logbook** — dated narrative entries in `docs/specs/logbook/` (`YYYY-MM-DD-<slug>.md`, `related_wps:` frontmatter): incident retros and chain rationale. One file per entry so parallel writers never conflict.
 - **One-Document Rule** — a mid-tier model must be able to ship a WP reading only that spec + CLAUDE.md.
 - **implementer** — a fresh harness session pointed at one Ready WP spec. Not a named agent (ADR-0005).

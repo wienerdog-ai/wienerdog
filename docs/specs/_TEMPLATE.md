@@ -1,15 +1,15 @@
 ---
-id: WP-XXX
+id: WP-short-slug        # kebab slug — becomes the filename WP-short-slug.md
 title: <verb-first, e.g. "Implement vault skeleton generator">
 status: Draft            # Draft | Ready | In-Progress | In-Review | Done
 model: sonnet            # recommended implementer tier: sonnet | opus
 size: S                  # S (<1h session) | M (one session) — L is forbidden; split it
-depends_on: []           # e.g. [WP-002]
+depends_on: []           # e.g. [WP-vault-skeleton]
 adrs: []                 # e.g. [ADR-0004] — decisions this WP must respect
-branch: wp/XXX-short-slug
+# epic: audit-a7         # optional — uncomment and set when part of a larger stream
 ---
 
-# WP-XXX: <title>
+# WP-<slug>: <title>
 
 ## Context (read this, nothing else)
 
@@ -27,8 +27,8 @@ signatures being extended, sample of existing output if relevant. For greenfield
 
 ## Deliverables (permission boundary — touch ONLY these)
 
-<!-- Always allowed without listing: this spec file itself (the status flip),
-     docs/specs/ROADMAP.md, package-lock.json. Everything else must be listed. -->
+<!-- Always allowed without listing: this spec file itself (the status flip)
+     and package-lock.json. Everything else must be listed. -->
 
 | Action | Path | Notes |
 |--------|------|-------|
@@ -87,6 +87,6 @@ npm run lint
 ## Definition of done
 
 1. All verification steps pass locally; output pasted into the PR body.
-2. Branch from frontmatter; conventional commits; PR titled `feat(scope): title (WP-XXX)`.
+2. Conventional commits; PR titled `feat(scope): title (WP-<slug>)`.
 3. PR template filled, including "Decisions made" (or "none") and `Generated-by:`.
 4. This spec's `status:` flipped to `In-Review` in the same PR.

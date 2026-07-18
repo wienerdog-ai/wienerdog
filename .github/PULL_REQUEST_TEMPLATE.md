@@ -1,4 +1,4 @@
-Spec: docs/specs/WP-XXX-....md  <!-- delete this line for docs-only PRs with no spec -->
+Spec: docs/specs/WP-<slug>.md  <!-- delete this line for docs-only PRs with no spec -->
 
 ## Deliverables checklist
 
