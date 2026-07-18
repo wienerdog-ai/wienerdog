@@ -171,6 +171,7 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 | [WP-150](done/WP-150-env-override-path-validation.md) | Validate path-defining env overrides — absolute, normalized, reject '..' (audit A13) | M7 | sonnet | Done | — |
 | [WP-151](WP-151-self-alert-code-owned-body.md) | Build fail-loud alert/self-email body from code-owned status fields only (audit A13) | M7 | sonnet | Ready | — |
 | [WP-152](done/WP-152-codex-protocol-pin-and-rerun-discipline.md) | Pin the Codex parser version + make the re-verify-on-bump discipline actionable (audit A13, follows WP-100) | M7 | sonnet | Done | — |
+| [WP-153](WP-153-target-aware-symlink-reverser.md) | Target-aware manifest symlink reverser — uninstall never deletes a user's replacement link (audit A13 follow-up, Codex-found) | M7 | opus | Draft | WP-144 |
 
 > **First-production-night incident (2026-07-04).** WP-038, WP-039 and WP-041 form
 > a serial chain (they edit the shared `run-job.js` / `dream.js` / `validate.js`
