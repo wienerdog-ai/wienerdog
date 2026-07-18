@@ -4,6 +4,29 @@
 
 ## Status: A0, A4, A3, A6, A5, and A1 are COMPLETE (2026-07-18)
 
+> **A2 SPEC PHASE COMPLETE — implementation NOT started (2026-07-18).** **ADR-0026**
+> (GWS capability broker) is Accepted and **WP-136..WP-143 are all `status: Ready`**;
+> every walkthrough decision carries a dated OWNER-APPROVED line and all seven pre-Ready
+> SPIKEs are resolved by measurement (findings folded into the specs). Measured
+> load-bearing facts (Claude Code 2.1.214, Node v24.18.0, macOS): MCP stdio framing is
+> **newline-delimited JSON-RPC** (no `Content-Length`; multiple messages per read chunk;
+> golden handshake frames recorded in WP-136, client `protocolVersion` `2025-11-25`,
+> echoing it back is accepted; `tools/call` carries a tolerated `_meta` extra); on
+> graceful shutdown Claude Code **SIGINTs** the MCP child, but a **SIGKILLed parent
+> delivers NO signal** — the child's exit-on-stdin-EOF is the SOLE orphan guard
+> (ADR-0026 §1 supervisor-reap NOT triggered); the MCP child inherits the **full parent
+> env** (identity stays argv, credentials stay files); `--permission-mode default` +
+> exact `--allowedTools mcp__wienerdog-broker__<verb>` runs the listed verb headlessly
+> and denies an unlisted verb **client-side** (the call never crosses the MCP boundary);
+> the vendored google-auth-library 10.9.0 has **no `include_granted_scopes` default**
+> (omit ⇒ absent from URL — always pass `false` explicitly) and `invalid_grant`
+> detection must pin on `e.response.data.error`, never `e.message`. Resume point:
+> implement **WP-136 first** (TDD), chain 136 → {137, 138, 139} → 140 → 141 → 142 →
+> 143. **A2 opens NO gate** — `wienerdog safety` must show all five BLOCKED after every
+> WP.
+
+<!-- -->
+
 > **A1 COMPLETE — all eight WPs Done (implemented + reviewed, 2026-07-18).** Audit action
 > **A1 (hermetic runtime profiles)** is fully implemented and reviewed. **ADR-0025** is
 > Accepted (+2 amendments), and **WP-128..WP-135** are all `status: Done` (specs in
