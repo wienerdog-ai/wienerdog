@@ -1,7 +1,7 @@
 ---
 id: WP-148
 title: An ambiguous managed block must not abort the independent skill and hook reconciliation
-status: Draft
+status: Ready
 model: sonnet
 size: S
 depends_on: []
@@ -102,6 +102,12 @@ if (digest !== null) {
   `locateManagedBlock` runs before any write; the catch handles both).
 - Steps 2 (hooks) and 3 (skills) already run after Step 1 in both adapters — no
   change beyond ensuring they are now reached.
+
+**Owner walkthrough (2026-07-18): Ready.** Mechanical, no open fork. The owner
+ratified converting ONLY the known `WienerdogError` (ambiguity signal) into a
+notice and re-throwing any other error unchanged (no blanket-swallow), for both
+the Claude and Codex adapters. Independent (touches only the adapters — no
+manifest.js/shared.js), so no A8/A13 dependency.
 
 ## Implementation notes & constraints
 
