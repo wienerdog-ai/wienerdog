@@ -2,27 +2,30 @@
 
 **Last updated:** 2026-07-18
 
-## Status: A0, A4, A3, A6, and A5 are COMPLETE (2026-07-18)
+## Status: A0, A4, A3, A6, A5, and A1 are COMPLETE (2026-07-18)
 
-> **A1 SPEC PHASE COMPLETE — implementation NOT started (2026-07-18).** Audit action
-> **A1 (hermetic runtime profiles)** has been fully specced and walked through with the
-> owner, but **no code is written yet**. **ADR-0025** is Accepted (+2 amendments), and
-> **WP-128..WP-135** are all `status: Ready` (specs in `docs/specs/`, NOT `done/`):
-> 128 profile registry + argv composer · 129 hook-free settings + vendored-skill
-> integrity · 130 hermetic dream (staging cwd + absolute tier paths) · 131 hermetic
-> routine (contained-inert until A2) · 132 managed-policy WARNING + run evidence · 133
-> dev-time live negative harness · 135 pre-dream runtime self-check · 134 docs. The
-> ROADMAP has the rows + A1 chain note + graph. **Resume point for a fresh session:**
-> begin implementation at **WP-128** (TDD, tests first), then sequentially per the WP
-> lifecycle below; the dependency chain is 128 → 129 → {130,131} → 132 → {133,135},
-> 134 → all. Load-bearing runtime facts already measured (see the A1 lessons in
-> `memory/lessons/inbox.md`): empty `--tools` exposes ALL built-ins (use an explicit
-> allowlist); `--setting-sources ""` excludes the user source; `--append-system-prompt`
-> delivers the vendored skill; the containment probe judges by the structured
-> `permission_denials` field + canary ground truth, NEVER an output magic-string. A1
-> opens NO gate — `wienerdog safety` must stay all-BLOCKED. This Status header flips to
-> "A1 COMPLETE" only when all eight WPs are Done (implemented + reviewed), per the A5
-> precedent.
+> **A1 COMPLETE — all eight WPs Done (implemented + reviewed, 2026-07-18).** Audit action
+> **A1 (hermetic runtime profiles)** is fully implemented and reviewed. **ADR-0025** is
+> Accepted (+2 amendments), and **WP-128..WP-135** are all `status: Done` (specs in
+> `docs/specs/done/`): 128 profile registry + argv composer · 129 hook-free settings +
+> vendored-skill integrity · 130 hermetic dream (staging cwd + absolute tier paths) · 131
+> hermetic routine (contained-inert until A2) · 132 managed-policy WARNING + run evidence ·
+> 133 live negative harness · 135 pre-dream runtime self-check · 134 docs. A per-WP review
+> pass (one wd-reviewer per WP against its spec) returned APPROVE on all eight; three
+> spec-side Deliverables defects found in review were corrected by amendment (WP-131/132
+> named a nonexistent `run-job.test.js` → `scheduler-runjob.test.js`; WP-131 broker-seam
+> prose reconciled to the shipped fail-closed `null`; WP-135 added the contract-mandated
+> `brain.js` row + fixed the `dream.test.js` path). WP-133's one blocking finding (the
+> spec-required rogue-MCP canary was never seeded) was fixed and **live-proven** on claude
+> 2.1.214: `WIENERDOG_RUN_SCENARIOS=1 npm run scenarios:negative` PASSES, with in-harness
+> non-vacuity controls proving both the rogue MCP and the hostile SessionStart hook take
+> effect absent the hermetic flags, then are excluded by them. The harness was also hardened
+> to touch **no** real config (all hostile artifacts seeded into a disposable
+> `CLAUDE_CONFIG_DIR`; auth via keychain; only non-sensitive onboarding keys read from
+> `~/.claude.json`), and the WP-133 spec was reconciled to that model. **A1 opened NO gate**
+> — `wienerdog safety` still shows all five BLOCKED. Next audit action: **A2** (GWS broker +
+> least-scope credential migration), which also delivers the full end-to-end run-job
+> containment proof that A1's dev-time harness stops short of.
 
 Audit action A0 landed as five reviewed work packages, WP-109..WP-113 (specs in
 `docs/specs/done/`): the code-owned safety profile (`src/core/safety-profile.js`,
