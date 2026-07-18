@@ -146,6 +146,14 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 | [WP-125](WP-125-digest-section-secret-gate.md) | Per-section digest secret gate — omit a section that would inject a secret, keep the rest (audit A5) | M7 | sonnet | Done | WP-122 |
 | [WP-126](WP-126-private-artifact-modes.md) | Private-by-default artifact modes — 0700 dirs / 0600 sensitive files on create + sync/doctor repair (audit A5) | M7 | opus | Done | WP-124, WP-125 |
 | [WP-127](WP-127-a5-secret-lifecycle-docs.md) | A5 documentation — secret-detection limits, quarantine/incident runbook, vault-local no-auto-push (audit A5) | M7 | sonnet | Done | WP-122, WP-123, WP-124, WP-125, WP-126 |
+| [WP-128](WP-128-runtime-profile-registry.md) | Code-owned hermetic runtime profile registry + pure claude argv composer (audit A1) | M7 | opus | Ready | — |
+| [WP-129](WP-129-hookfree-settings-and-vendored-skill.md) | Hook-free settings profile + vendored, integrity-checked skill text (audit A1) | M7 | opus | Ready | WP-128 |
+| [WP-130](WP-130-dream-hermetic-runtime.md) | Make the dream brain hermetic — profile-composed argv, hook-free settings, staging cwd (audit A1) | M7 | opus | Ready | WP-128, WP-129 |
+| [WP-131](WP-131-routine-hermetic-runtime.md) | Hermetic routine runtime — code-owned profile lookup, staging dir, single broker MCP seam (audit A1) | M7 | opus | Ready | WP-128, WP-129 |
+| [WP-132](WP-132-policy-hook-preflight-and-run-evidence.md) | Managed-policy hook preflight (warn + record) + hermetic-run evidence record (audit A1) | M7 | opus | Ready | WP-130, WP-131 |
+| [WP-133](WP-133-live-negative-containment-harness.md) | Live negative containment harness — hermetic dream + every routine, canaries (audit A1) | M7 | opus | Ready | WP-130, WP-131, WP-132 |
+| [WP-134](WP-134-a1-runtime-containment-docs.md) | A1 documentation — hermetic runtime profile threat model, glossary, honest claims (audit A1) | M7 | sonnet | Ready | WP-128, WP-129, WP-130, WP-131, WP-132, WP-133, WP-135 |
+| [WP-135](WP-135-pre-dream-containment-self-check.md) | Pre-dream containment self-check — a bounded live canary probe of the real hermetic composition (audit A1) | M7 | opus | Ready | WP-130, WP-132 |
 
 > **First-production-night incident (2026-07-04).** WP-038, WP-039 and WP-041 form
 > a serial chain (they edit the shared `run-job.js` / `dream.js` / `validate.js`
@@ -1187,6 +1195,37 @@ Milestone acceptance criteria are binding; WPs are the unit of implementation. S
 
 <!-- -->
 
+> **A1 hermetic runtime profiles (2026-07-18, ADR-0025 Accepted + 2 amendments).** Closes the
+> audit's defining containment defect (R1): a headless `claude -p` job (the dream + every
+> routine) inherited its capabilities from the user's ambient Claude config, so a hijacked
+> job over a malicious transcript/email could reach an inherited Bash rule, plugin, hook, or
+> MCP. A1 makes every job run under a **code-owned hermetic runtime profile** composed by
+> Wienerdog: explicit non-empty `--tools` allowlist (primary) + expanded deny list, empty MCP
+> (dream) or one local A2-broker seam (routine), no ambient setting source (`--setting-sources
+> ""`) + a hook-free `--settings` profile (`disableAllHooks`), a vendored integrity-checked
+> skill via `--append-system-prompt`, and a fresh staging cwd. Spec phase informed by live
+> `claude -p` spikes (empty `--tools` exposes ALL built-ins → explicit allowlist; `--setting-
+> sources ""` excludes the user source; `--append-system-prompt` faithfully delivers the 22 KB
+> skill; a probe prompt's echoed `BASH-OK` string is a false-fail trap → judge by the
+> structured `permission_denials` field + canary ground truth) and a wd-researcher pass
+> (managed/admin-policy hooks are trusted-computing-base, not an attacker vector → WARN + record,
+> not STOP). **WP-128** the profile registry + argv composer; **WP-129** hook-free settings +
+> vendored-skill integrity; **WP-130** the hermetic dream (staging cwd + absolute tier paths);
+> **WP-131** the hermetic routine (contained-and-inert until A2 wires the broker + vault
+> snapshot); **WP-132** the managed-policy WARNING + secret-free run evidence; **WP-133** the
+> dev-time live negative harness (the full end-to-end run-job wrapper proof is a REQUIRED
+> gate-opening precondition, executed at A2); **WP-135** the pre-dream containment self-check —
+> a bounded live canary probe of the real hermetic composition run before every dream, fail-
+> closed halt if the actually-installed Claude no longer honors the flags (containment is
+> **runtime-self-verified**, ADR-0025 Amendment 2, not asserted against a repo-pinned version
+> that goes stale on every Claude auto-update); **WP-134** the honest docs (threat model,
+> glossary, sandbox→hermetic rename). **A1 opens NO capability gate** — `wienerdog safety` shows
+> all five BLOCKED after every WP; A1 contains the agent, A2 restores routine function, and the
+> gate opens only later (P1 + audit rerun + explicit go + the end-to-end containment proof).
+> Chain: 128 → 129 → {130, 131}; {130,131} → 132; 132 → {133, 135}; 134 → all.
+
+<!-- -->
+
 ## Dependency graph
 
 ```mermaid
@@ -1343,4 +1382,20 @@ graph LR
   WP124 --> WP127
   WP125 --> WP127
   WP126 --> WP127
+  WP128[WP-128 code-owned hermetic runtime profile registry + argv composer — audit A1, ADR-0025]
+  WP128 --> WP129[WP-129 hook-free settings profile + vendored integrity-checked skill — audit A1]
+  WP129 --> WP130[WP-130 hermetic dream brain — staging cwd + absolute tier paths — audit A1]
+  WP128 --> WP130
+  WP129 --> WP131[WP-131 hermetic routine runtime — profile lookup + staging + broker seam — audit A1]
+  WP128 --> WP131
+  WP130 --> WP132[WP-132 managed-policy hook WARNING + secret-free run evidence — audit A1]
+  WP131 --> WP132
+  WP132 --> WP133[WP-133 dev-time live negative containment harness — audit A1]
+  WP130 --> WP133
+  WP131 --> WP133
+  WP132 --> WP135[WP-135 pre-dream containment self-check — runtime-self-verified, fail-closed — audit A1, ADR-0025 Amendment 2]
+  WP130 --> WP135
+  WP128 --> WP134[WP-134 A1 docs — hermetic runtime profile threat model + glossary]
+  WP133 --> WP134
+  WP135 --> WP134
 ```
