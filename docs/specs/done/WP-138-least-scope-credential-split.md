@@ -1,7 +1,7 @@
 ---
 id: WP-138
 title: Least-scope GWS credential split + granted-scope verification + broker per-verb credential selection (audit A2)
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: [WP-136]

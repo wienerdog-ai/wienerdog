@@ -1,7 +1,7 @@
 ---
 id: WP-136
 title: GWS broker transport — hand-rolled MCP stdio JSON-RPC server + per-job lifecycle self-check (audit A2)
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: [WP-131]

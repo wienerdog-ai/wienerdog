@@ -1,7 +1,7 @@
 ---
 id: WP-140
 title: Rename `cal draft-event` → `cal add-event` and gate every calendar mutation behind a calendar-write grant + credential (audit A2)
-status: In-Review
+status: Done
 model: sonnet
 size: S
 depends_on: [WP-138, WP-139]

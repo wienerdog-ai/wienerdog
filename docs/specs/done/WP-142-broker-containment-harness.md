@@ -1,7 +1,7 @@
 ---
 id: WP-142
 title: Broker containment proof — end-to-end run-job poisoned-email E2E + exact-verb / grant / credential negatives (audit A2, the A1-deferred gate-opening proof)
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: [WP-140, WP-141]

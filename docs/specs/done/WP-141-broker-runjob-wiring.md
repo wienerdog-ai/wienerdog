@@ -1,7 +1,7 @@
 ---
 id: WP-141
 title: Wire the broker into the routine runtime — fill the broker-mcp.json seam, trusted launch descriptor, MCP tool allowlist, read-only vault snapshot, functional routine skills (audit A2)
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: [WP-137, WP-138, WP-139]

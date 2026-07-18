@@ -1,7 +1,7 @@
 ---
 id: WP-143
 title: A2 documentation — honest broker product claims, THREAT-MODEL, GLOSSARY broker terms, gws-broker runbook, testing-mode 7-day expiry limitation (audit A2)
-status: In-Review
+status: Done
 model: sonnet
 size: M
 depends_on: [WP-136, WP-137, WP-138, WP-139, WP-140, WP-141, WP-142]
