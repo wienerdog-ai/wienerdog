@@ -5,7 +5,7 @@ status: Draft
 model: opus
 size: M
 depends_on: [WP-153, WP-154, WP-155, WP-156]
-adrs: [ADR-0004, ADR-0009, ADR-0013, ADR-00XX-a7-executable-integrity]
+adrs: [ADR-0004, ADR-0009, ADR-0013, ADR-0028]
 branch: wp/157-a7-integrity-harness
 ---
 
@@ -42,9 +42,10 @@ proves the *scoped-write* negatives (write `config.yaml`/`app/current`/
 **not** assert protection against an actor who also rewrites the OS scheduler
 entry and the launcher — the harness must not claim that.
 
-> **ADR note:** `ADR-00XX-a7-executable-integrity` is a **placeholder — PENDING
-> owner number assignment.** The owner assigns the number (or extends ADR-0027)
-> before this spec goes Ready.
+> **ADR note:** `ADR-0028` records the A7 architectural decision — a **new ADR**
+> (owner-assigned 2026-07-18), distinct from ADR-0027 (A8's re-derived scheduler
+> *unload*). The ADR-0028 file is written as the A7 spec walkthrough concludes;
+> until then this spec set is the design-of-record.
 
 ## Current state
 

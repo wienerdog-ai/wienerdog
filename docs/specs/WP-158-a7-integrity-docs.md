@@ -5,7 +5,7 @@ status: Draft
 model: sonnet
 size: M
 depends_on: [WP-153, WP-154, WP-155, WP-156]
-adrs: [ADR-0004, ADR-0013, ADR-00XX-a7-executable-integrity]
+adrs: [ADR-0004, ADR-0013, ADR-0028]
 branch: wp/158-a7-integrity-docs
 ---
 
@@ -37,10 +37,10 @@ drift**; it is **NOT** a claim against arbitrary same-user native malware — th
 is A12's territory. The docs must say this in plain language and must not let any
 sentence overreach it (no "your scheduled AI can never be tampered with").
 
-> **ADR note:** `ADR-00XX-a7-executable-integrity` is a **placeholder — PENDING
-> owner number assignment.** The owner assigns the number (or extends ADR-0027)
-> before this spec goes Ready; this docs WP references the decision by its final
-> number once assigned, and must NOT invent one.
+> **ADR note:** `ADR-0028` records the A7 architectural decision — a **new ADR**
+> (owner-assigned 2026-07-18), distinct from ADR-0027. This docs WP references the
+> decision by that number; the ADR-0028 file is written as the A7 walkthrough
+> concludes.
 
 ## Current state
 

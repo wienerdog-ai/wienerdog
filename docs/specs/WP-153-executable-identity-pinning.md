@@ -5,7 +5,7 @@ status: Draft
 model: opus
 size: M
 depends_on: []
-adrs: [ADR-0004, ADR-0009, ADR-00XX-a7-executable-integrity]
+adrs: [ADR-0004, ADR-0009, ADR-0028]
 branch: wp/153-executable-identity-pinning
 ---
 
@@ -49,10 +49,10 @@ because the pin, captured from the legitimate install environment, records the
 real executable's realpath+hash; a later-planted fake has a different
 realpath/hash and is refused.
 
-> **ADR note:** `ADR-00XX-a7-executable-integrity` is a **placeholder — PENDING
-> owner number assignment.** A7 is a distinct architectural decision from
-> ADR-0027 (A8's re-derived scheduler unload). The owner will assign the number
-> or decide to fold it into an existing ADR before this spec goes Ready.
+> **ADR note:** `ADR-0028` records the A7 architectural decision — a **new ADR**
+> (owner-assigned 2026-07-18), distinct from ADR-0027 (A8's re-derived scheduler
+> *unload*). The ADR-0028 file is written as the A7 spec walkthrough concludes;
+> until then this spec set is the design-of-record.
 
 ## Current state
 

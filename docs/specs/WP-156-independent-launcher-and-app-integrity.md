@@ -5,7 +5,7 @@ status: Draft
 model: opus
 size: M
 depends_on: [WP-144, WP-145, WP-155]
-adrs: [ADR-0004, ADR-0013, ADR-0027, ADR-00XX-a7-executable-integrity]
+adrs: [ADR-0004, ADR-0013, ADR-0027, ADR-0028]
 branch: wp/156-independent-launcher-and-app-integrity
 ---
 
@@ -55,9 +55,10 @@ arbitrary same-user native malware — that is A12's territory. The launcher bei
 outside `app/current` is what lets a scoped write to the app tree be *caught*
 rather than silently executed.
 
-> **ADR note:** `ADR-00XX-a7-executable-integrity` is a **placeholder — PENDING
-> owner number assignment.** The owner assigns the number (or extends ADR-0027)
-> before this spec goes Ready.
+> **ADR note:** `ADR-0028` records the A7 architectural decision — a **new ADR**
+> (owner-assigned 2026-07-18), distinct from ADR-0027 (A8's re-derived scheduler
+> *unload*). The ADR-0028 file is written as the A7 spec walkthrough concludes;
+> until then this spec set is the design-of-record.
 
 ## Current state
 

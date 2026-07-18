@@ -5,7 +5,7 @@ status: Draft
 model: opus
 size: M
 depends_on: [WP-144, WP-145, WP-153]
-adrs: [ADR-0004, ADR-0013, ADR-0027, ADR-00XX-a7-executable-integrity]
+adrs: [ADR-0004, ADR-0013, ADR-0027, ADR-0028]
 branch: wp/155-canonical-job-descriptor
 ---
 
@@ -47,11 +47,11 @@ claim against arbitrary same-user native malware — that is A12's territory. Th
 descriptor's value is that re-deriving it after a scoped `config.yaml`/app edit
 yields a **different digest** than the one captured at authorization time.
 
-> **ADR note:** `ADR-00XX-a7-executable-integrity` is a **placeholder — PENDING
-> owner number assignment.** A7 (digest-bound descriptor + independent launcher +
-> executable pinning) is a distinct architectural decision from ADR-0027 (A8's
-> re-derived scheduler *unload*). The owner assigns the number (or decides to
-> extend ADR-0027) before this spec goes Ready.
+> **ADR note:** `ADR-0028` records the A7 architectural decision — a **new ADR**
+> (owner-assigned 2026-07-18) covering the digest-bound descriptor + independent
+> launcher + executable pinning, distinct from ADR-0027 (A8's re-derived scheduler
+> *unload*). The ADR-0028 file is written as the A7 spec walkthrough concludes;
+> until then this spec set is the design-of-record.
 
 ## Current state
 

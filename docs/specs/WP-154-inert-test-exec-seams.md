@@ -5,7 +5,7 @@ status: Draft
 model: sonnet
 size: S
 depends_on: [WP-153]
-adrs: [ADR-0004, ADR-00XX-a7-executable-integrity]
+adrs: [ADR-0004, ADR-0028]
 branch: wp/154-inert-test-exec-seams
 ---
 
@@ -46,9 +46,10 @@ defense-in-depth smell (a shelled-out env seam in the production path); a
 same-user actor who can set the OS scheduler's environment and the test flag is
 outside the boundary by construction.
 
-> **ADR note:** `ADR-00XX-a7-executable-integrity` is a **placeholder — PENDING
-> owner number assignment.** The owner assigns the number (or folds A7 into an
-> existing ADR) before this spec goes Ready.
+> **ADR note:** `ADR-0028` records the A7 architectural decision — a **new ADR**
+> (owner-assigned 2026-07-18), distinct from ADR-0027 (A8's re-derived scheduler
+> *unload*). The ADR-0028 file is written as the A7 spec walkthrough concludes;
+> until then this spec set is the design-of-record.
 
 ## Current state
 
