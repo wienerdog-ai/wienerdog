@@ -377,8 +377,20 @@ shared case list (A6) must add:
   `createPins({dryRun:true})`, adopt's preflight, and `captureClaudeVersion`.
   **[R13]** Plus: (i) a **recursive** case — an absolute interpreter whose own
   shebang is `#!/usr/bin/env x` + planted `x` ⇒ refuse, `x` never runs; (ii) the
-  **boundary canary** (`tests/unit/pinned-exec-canary.test.js`) in `npm test`:
-  `exec-identity.js` exports no path-returning function and no module outside it
-  imports `resolvePinnedSpawn`/`bindInterpreter`. Mutation: any site reverted to a
-  raw `spawnSync(realpath)`, or the encapsulation boundary broken (export/import)
-  ⇒ the zero-execution or boundary assertion fails.
+  **[R15] execution-only boundary canary** (`tests/unit/pinned-exec-canary.test.js`)
+  in `npm test`: `exec-identity.js` public exports equal the EXACT path-free list
+  `{createPins, loadPins, spawnPinnedSync, spawnPinned, EXEC_PINS_PATH}`; no module
+  outside it imports an internal exec-path helper; no module feeds a pin-state field
+  into a `spawn*`/`exec*`; and `spawnPinned*` returns carry no `spawnfile`/
+  `spawnargs`. Mutation: any site reverted to a raw `spawnSync(realpath)`, an
+  internal helper exported/imported, or a raw `ChildProcess`/`spawnfile` returned ⇒
+  the zero-execution / boundary / leak assertion fails.
+- **[R15] One tamper case PER digest-covered field** (the WP-156 authoritative
+  set): the harness must include a single-field tamper for **each** of `run`,
+  `model`, `timeoutMs` (inner), `outerTimeoutMs`, `maxInputBytes`, `vaultLayout`,
+  `vaultRoot`, `home`, `schedule` (`at`+tz), `promptHash` (mutate the vendored
+  dream-skill/template body), each `exec` pin, and `appRelease` bytes — each ⇒
+  digest drift ⇒ refuse + zero spawn (dev-stance cases exclude `treeDigest`/`version`
+  per the reduction). (`profileId` is code-derived from `run`, so the `run` case
+  covers it — no separate tamper.) Drop any field from the descriptor ⇒ its tamper
+  stops drifting ⇒ that case fails (proving the field is digest-covered).

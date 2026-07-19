@@ -141,44 +141,58 @@ authorization record.
 
 ### Exact contracts
 
-**Descriptor object** (canonical field order; all paths absolute):
+**Descriptor object — THE single authoritative schema [R15].** Every field below
+is normative (name, type, unit, source, null/default). `canonicalize` sorts keys,
+so document order is non-normative. An implementer MUST emit exactly this field
+set (omitting one lets a static edit stay digest-equivalent and defeats
+authorization). All paths absolute.
+
 ```jsonc
 {
-  "schema": 1,
-  "job": "dream",
-  "run": "builtin:dream",                 // exact config `run` action string
-  "profileId": "dream",                    // code-owned capability profile id
-  "promptHash": "sha256:…",                // builtin: sha256(DREAM_PROMPT template) ⊕ vendored dream-skill body hash;
-                                           //   skill: the WP-131 verified skill-body hash
-  "timeoutMs": 1200000,                    // EFFECTIVE dream watchdog + lock-deadline
-                                           //   timeout = readDreamConfig().timeoutMs
-                                           //   (config `dream_timeout_minutes`, default
-                                           //   20 min ⇒ 1_200_000 ms when unset). NOT
-                                           //   job.timeoutMinutes (that governs only the
-                                           //   run-job OUTER watchdog, a fixed registration
-                                           //   value). See the timeout amendment below.
-  "model": "sonnet",                       // exact config `dream_model` string put
-                                           //   into the `--model` spawn argv (and the
-                                           //   containment probe); null when unset
-                                           //   (→ user's default model, no `--model`)
-  "vaultRoot": "/Users/me/wienerdog",
-  "node": "/opt/homebrew/opt/node/bin/node",   // process.execPath
-  "exec": {                                 // from WP-154 pins — STABLE identity fields ONLY
-    "claude": { "commandPath": "…", "installDir": "…" },
-    "git":    { "commandPath": "…", "installDir": "…" }
-    // `version` (and any realpath) are deliberately EXCLUDED: they change on
-    // every claude auto-update and would drift the descriptor digest, turning
-    // legitimate auto-updates into WP-157 fire-time alarms (RESOLVED —
-    // OWNER-APPROVED 2026-07-18). The pin's structural verification still runs
-    // at spawn time.
+  "schema": 1,                             // int
+  "job": "dream",                          // string — job name
+  "run": "builtin:dream",                  // string — exact config `run` action
+  "profileId": "dream",                    // string — code-owned capability profile id
+  "promptHash": "sha256:…",                // string — builtin: sha256(DREAM_PROMPT template,
+                                           //   rendered with the EFFECTIVE vaultLayout) ⊕
+                                           //   vendored dream-skill body hash; skill: WP-131 body hash
+  "model": "sonnet",                       // string|null — config `dream_model` → `--model`
+                                           //   (and the containment probe); null when unset
+  "timeoutMs": 1200000,                    // int ms — EFFECTIVE INNER dream watchdog + lock
+                                           //   deadline = readDreamConfig().timeoutMs
+                                           //   (config `dream_timeout_minutes`, default 20min⇒1_200_000)
+  "outerTimeoutMs": 1200000,               // int ms — EFFECTIVE OUTER run-job watchdog
+                                           //   (resolveTimeoutMs from job.timeoutMinutes); R2:F5
+  "maxInputBytes": 8000000,                // int — config `dream_max_input_bytes` (default 8_000_000); R2:F5
+  "vaultLayout": { … },                    // object — effective readVaultLayout(config), canonicalized; R2:F5
+  "vaultRoot": "/Users/me/wienerdog",      // string abs — cfg.vault
+  "home": "/Users/me",                     // string abs — the BOUND authorized home; R4:#2
+  "schedule": { "at": "03:30",             // object — effective schedule + timezone semantics
+                "timezone": "local" },     //   (from job.at); R3:#3 — an `at`/tz edit drifts the digest
+  "node": "/…/bin/node",                   // string abs — process.execPath
+  "exec": {                                // WP-154 pins — STABLE identity fields ONLY
+    "claude": { "commandPath": "…", "installDir": "…" },  // REQUIRED (R2:F1)
+    "git":    { "commandPath": "…", "installDir": "…" },  // REQUIRED (R2:F1)
+    "codex":  { "commandPath": "…", "installDir": "…" }   // OPTIONAL — present only if a codex job is authorized
+    // `version`/realpath EXCLUDED (survive claude auto-updates); structural verify still runs at spawn.
   },
   "appRelease": {
-    "version": "0.4.1",
-    "treeDigest": "sha256:…",              // content address of app/current (below)
-    "stance": "prod"                        // "prod" | "dev" (isDevCheckout of current's target)
+    "version": "0.4.1",                    // string
+    "treeDigest": "sha256:…",              // string — content address of app/current (injective encoding, A3)
+    "stance": "prod"                       // "prod" | "dev" (isDevCheckout of current's target)
+    // DEV-STANCE REDUCTION [R2:F10/A5]: for stance:"dev", the fire-time comparison
+    // digest reduces appRelease to { "stance":"dev", "root":"<canonical checkout root>" }
+    // — EXCLUDING treeDigest + version (a live checkout is legitimately edited) — and
+    // includes ALL the config-shaped fields above unchanged. prod includes treeDigest+version.
   }
 }
 ```
+
+> **Field sources (all from the SAME `readDreamConfig`/`readVaultLayout`/`jobs.js`
+> reads):** `run`←job.run; `model`←cfg.model; `timeoutMs`←cfg.timeoutMs;
+> `outerTimeoutMs`←resolved job.timeoutMinutes; `maxInputBytes`←cfg.maxInputBytes;
+> `vaultLayout`←readVaultLayout(config); `vaultRoot`←cfg.vault; `home`←bound home;
+> `schedule`←{job.at, tz}; `exec`←loadPins (claude+git required); `appRelease`←vendor.
 
 > **RESOLVED (OWNER-APPROVED 2026-07-18, A7 walkthrough) — `model` joins the
 > descriptor.** The ratified A7 rule is "everything that shapes the 03:30 spawn

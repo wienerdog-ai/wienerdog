@@ -124,8 +124,9 @@ without an explicit test build and remain `shell:false`" is satisfied by
 Each scheduled job gets a **canonical job descriptor** — a code-owned,
 deterministic record of exactly what the job is authorized to run — written at
 schedule/sync time and re-derivable from live inputs so a later comparison reveals
-drift. Its fields (canonical field order; `canonicalize` sorts keys, so document
-order is non-normative):
+drift. **[R15] The single authoritative schema is WP-156's "Descriptor object"**;
+this block mirrors its complete field set (canonicalize sorts keys, so order is
+non-normative):
 
 ```jsonc
 {
@@ -133,20 +134,28 @@ order is non-normative):
   "job": "dream",
   "run": "builtin:dream",          // exact config `run` action
   "profileId": "dream",            // code-owned capability profile id
-  "promptHash": "sha256:…",        // builtin prompt template ⊕ vendored skill body hash
-  "timeoutMs": 1200000,            // EFFECTIVE dream watchdog + lock deadline (cfg.timeoutMs)
-  "model": "sonnet",               // exact config `dream_model` put into `--model`; null when unset
+  "promptHash": "sha256:…",        // builtin prompt template (rendered w/ effective vaultLayout) ⊕ skill body hash
+  "model": "sonnet",               // config `dream_model` → `--model`; null when unset
+  "timeoutMs": 1200000,            // int ms — EFFECTIVE INNER dream watchdog + lock deadline (cfg.timeoutMs)
+  "outerTimeoutMs": 1200000,       // int ms — EFFECTIVE OUTER run-job watchdog (resolved job.timeoutMinutes)
+  "maxInputBytes": 8000000,        // int — config `dream_max_input_bytes`
+  "vaultLayout": { },              // object — effective readVaultLayout(config), canonicalized
   "vaultRoot": "/Users/me/wienerdog",
+  "home": "/Users/me",             // string abs — BOUND authorized home
+  "schedule": { "at": "03:30", "timezone": "local" },  // effective schedule + tz (from job.at)
   "node": "/…/bin/node",           // process.execPath
   "exec": {                        // WP-154 pins — STABLE identity fields ONLY
-    "claude": { "commandPath": "…", "installDir": "…" },
-    "git":    { "commandPath": "…", "installDir": "…" }
-    // `version` and any realpath are EXCLUDED so the digest survives auto-updates
+    "claude": { "commandPath": "…", "installDir": "…" },  // REQUIRED
+    "git":    { "commandPath": "…", "installDir": "…" },  // REQUIRED
+    "codex":  { "commandPath": "…", "installDir": "…" }   // OPTIONAL (only if a codex job is authorized)
+    // `version`/realpath EXCLUDED so the digest survives auto-updates
   },
   "appRelease": {
     "version": "0.4.1",
-    "treeDigest": "sha256:…",      // content address of app/current (sorted per-file hashes)
+    "treeDigest": "sha256:…",      // content address of app/current (injective encoding)
     "stance": "prod"               // "prod" | "dev"
+    // DEV reduction: stance:"dev" ⇒ appRelease reduces to {stance,root}, EXCLUDING
+    // treeDigest+version; all config-shaped fields above stay in the dev digest.
   }
 }
 ```
@@ -439,18 +448,26 @@ implemented as dated amendments in the six specs and detailed in `FIX-PLAN.md`.
    **[R13] The interpreter must itself be NATIVE** — an absolute non-node
    interpreter that has its OWN shebang fails closed (else it recursively
    PATH-resolves its own `#!/usr/bin/env x`).
-   **[R13] Terminal invariant — pinned execution is ENCAPSULATED (structural, not a
-   textual scan):** *pinned targets are executed only through `spawnPinnedSync` /
-   `spawnPinned`, which resolve → verify → bind-interpreter → spawn and NEVER return
-   a spawnable path; `resolvePinnedSpawn` and `bindInterpreter` are module-internal
-   (not exported), so no caller can obtain a raw pinned path.* A fixed-file textual
-   scan could never cover future modules or evasions (aliased/namespaced spawns,
-   wrappers) — the claimed "every pinned spawn anywhere forever" guarantee was
-   false; **encapsulation is the guarantee**. A narrowed **boundary** canary +
-   zero-execution site tests enforce it as defense-in-depth: (a) `exec-identity.js`
-   exports no function returning a raw pinned path; (b) no module outside
-   `exec-identity.js` imports `resolvePinnedSpawn`/`bindInterpreter`. (Manual site
-   enumeration had kept missing sites — `captureClaudeVersion` was the 5th, found
+   **[R13/R15] Terminal invariant — EXECUTION-only encapsulation (structural, not a
+   textual scan, and not overclaimed):** *a pinned target is EXECUTED only through
+   `spawnPinnedSync`/`spawnPinned`, which resolve → verify → bind-interpreter →
+   spawn.* Their returns must not leak a spawnable path — `spawnPinnedSync` returns
+   `{status, signal, stdout, stderr}` (no `spawnfile`/`spawnargs`; path-bearing
+   error text sanitized to the exec `name`), and `spawnPinned` returns a restricted
+   child facade (no `spawnfile`/`spawnargs`; a raw `ChildProcess` would leak the
+   realpath). The exec-path helpers (`resolvePinnedSpawn`, `bindInterpreter`,
+   `resolveExecutable`, `verifyExecutable`, `verifyPin`, `buildPin`, `probeVersion`)
+   are **module-internal** (verified: no external importers). `loadPins`/`createPins`
+   stay exported because they return path-bearing pin state as **DATA** (for the
+   descriptor digest + doctor/status) that no consumer spawns — so the honest
+   invariant is "executed only via `spawnPinned*`," NOT "no function returns a path"
+   (that overclaim was corrected in R15). A fixed-file textual scan could never
+   cover future modules or evasions — **encapsulation is the guarantee**; a sound
+   **boundary** canary + zero-execution site tests enforce it: (a) the exec surface's
+   public exports equal an EXACT path-free list; (b) no module outside
+   `exec-identity.js` imports an internal exec-path helper; (c) no module feeds a
+   pin-state return into a `spawn*`/`exec*`. (Manual site enumeration had kept
+   missing sites — `captureClaudeVersion` was the 5th, found
    after R11 claimed "every site"; encapsulation removes the need to enumerate.)
 
 3. **Everything shaping the spawn is digest-covered — now including `vault_layout`

@@ -82,10 +82,13 @@ sentence overreach it (no "your scheduled AI can never be tampered with").
 - The registered OS scheduler entry is **static**; what it runs is (a) the code
   under `app/current` and (b) the `run` action in `config.yaml`. A7 makes both
   **integrity-checked at fire time** rather than trusted.
-- Each scheduled job has a **canonical, code-owned descriptor** (its `run` action,
-  capability profile, prompt/skill hash, timeout, configured model, vault root, the
-  absolute executable identities, and the app release digest), reduced to a **descriptor
-  digest** that is **bound into the OS scheduler entry**. Runtime edits to
+- Each scheduled job has a **canonical, code-owned descriptor** covering the full
+  digest-covered field set (WP-156's authoritative schema): `run` action, capability
+  profile, prompt/skill hash, configured `model`, **inner + outer timeouts**,
+  **max input bytes**, **vault layout**, vault root, **bound home**, **schedule
+  (`at`+timezone)**, the absolute executable identities (claude+git required, codex
+  optional), and the app release digest — reduced to a **descriptor digest**
+  **bound into the OS scheduler entry**. Runtime edits to
   `config.yaml` or the app tree do **not** change what runs until an explicit
   `wienerdog sync` re-binds — a mismatch **fails closed** (a fixed alert, zero
   model spawn).
@@ -119,10 +122,12 @@ sentence overreach it (no "your scheduled AI can never be tampered with").
 
 **GLOSSARY additions (canonical names — never invent synonyms elsewhere):**
 - **job descriptor** — the code-owned, deterministic record of exactly what a
-  scheduled job is authorized to run (run action, capability profile,
-  prompt/skill hash, timeout, configured model, vault root, absolute executable
-  identities, app release digest); written at schedule/sync and re-derivable to
-  detect drift (WP-156).
+  scheduled job is authorized to run. Digest-covered field set (WP-156's
+  authoritative schema): run action, capability profile, prompt/skill hash,
+  configured model, inner timeout, outer timeout, max input bytes, vault layout,
+  vault root, bound home, schedule (`at`+timezone), absolute executable identities
+  (claude+git required, codex optional), and the app release digest; written at
+  schedule/sync and re-derivable to detect drift (WP-156).
 - **descriptor digest** — the sha256 of the canonicalized job descriptor, bound
   into the OS scheduler entry as the independent anchor a scoped `config.yaml`/app
   rewrite cannot change.
@@ -303,10 +308,12 @@ describe the **fixed** code. Full context: `FIX-PLAN.md` cluster **C5**.
   claim the config-drift guarantee for the catch-up path. Once WP-160 lands,
   update to "catch-up verifies each due job against a digest bound into the
   catch-up registration (not the editable entry file)."
-- **[R2:F5] Digest-covered knobs.** The `job descriptor` glossary/threat-model
-  list of digest-covered inputs is `run`, `model`, effective timeout (inner +
-  outer), `vault_layout`, `dream_max_input_bytes`, prompt/skill hash, exec pins,
-  app release digest — state this set. Also state that `WIENERDOG_FAKE_TODAY` /
+- **[R2:F5/R15] Digest-covered knobs (the WP-156 authoritative set).** The `job
+  descriptor` glossary/threat-model list of digest-covered inputs is `run`, `model`,
+  inner timeout (`timeoutMs`), outer timeout (`outerTimeoutMs`), `maxInputBytes`,
+  `vaultLayout`, vault root, bound `home`, `schedule` (`at`+timezone), prompt/skill
+  hash, exec pins (claude+git required, codex optional), app release digest — state
+  this exact set. Also state that `WIENERDOG_FAKE_TODAY` /
   `WIENERDOG_RUNJOB_TIMEOUT_MS` are **deleted** from production (no env can shift
   the scheduled date/timeout), and the date derives from the system clock.
 - **[R2:F10] Dev.** State that a dev-stance install is verified by a
