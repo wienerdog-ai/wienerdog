@@ -327,7 +327,9 @@ shared case list (A6) must add:
   dream job does not bind/register (or `spawnPinnedSync('claude', …)` throws) —
   a planted `~/.local/bin/claude` never runs.
 - **[R2:F10]** a **git-worktree dev** positive: a dev-stance install with `.git`
-  as a **file** + a tracked-source edit still runs (config-fields-only dev digest).
+  as a **file** + a tracked-source edit still runs (dev digest = full descriptor
+  minus `appRelease.treeDigest`+`version` only); an `at`/`home` edit on the dev
+  install still **refuses** (schedule/home retained in the dev digest — R15).
 - **[R2:F12]** a **catch-up file-forge** negative (belongs with **WP-160** once
   it lands): editing `config.yaml` + the per-job entry **source file** (without
   reload) still refuses at catch-up — the loaded-registration map is the anchor.
@@ -388,9 +390,12 @@ shared case list (A6) must add:
 - **[R15] One tamper case PER digest-covered field** (the WP-156 authoritative
   set): the harness must include a single-field tamper for **each** of `run`,
   `model`, `timeoutMs` (inner), `outerTimeoutMs`, `maxInputBytes`, `vaultLayout`,
-  `vaultRoot`, `home`, `schedule` (`at`+tz), `promptHash` (mutate the vendored
+  `vaultRoot`, `home`, `schedule` (`at`+`timezone`), `node`, `promptHash` (mutate the vendored
   dream-skill/template body), each `exec` pin, and `appRelease` bytes — each ⇒
   digest drift ⇒ refuse + zero spawn (dev-stance cases exclude `treeDigest`/`version`
-  per the reduction). (`profileId` is code-derived from `run`, so the `run` case
-  covers it — no separate tamper.) Drop any field from the descriptor ⇒ its tamper
-  stops drifting ⇒ that case fails (proving the field is digest-covered).
+  per the reduction). **Code-owned fields** — `node` (process.execPath), `schema`,
+  `job`, `profileId` (derived from `run`) — are not config-editable; cover them with
+  a **descriptor-file forge** case (edit the stored field, then the launcher's
+  re-derivation from the real value ⇒ digest mismatch ⇒ refuse), except `profileId`
+  which the `run` case already covers. Drop any field from the descriptor ⇒ its
+  tamper stops drifting ⇒ that case fails (proving the field is digest-covered).

@@ -168,7 +168,7 @@ authorization). All paths absolute.
   "vaultRoot": "/Users/me/wienerdog",      // string abs — cfg.vault
   "home": "/Users/me",                     // string abs — the BOUND authorized home; R4:#2
   "schedule": { "at": "03:30",             // object — effective schedule + timezone semantics
-                "timezone": "local" },     //   (from job.at); R3:#3 — an `at`/tz edit drifts the digest
+                "timezone": "local" },     //   (from job.at); R3:#3 — an `at`/`timezone` edit drifts the digest
   "node": "/…/bin/node",                   // string abs — process.execPath
   "exec": {                                // WP-154 pins — STABLE identity fields ONLY
     "claude": { "commandPath": "…", "installDir": "…" },  // REQUIRED (R2:F1)
@@ -180,10 +180,13 @@ authorization). All paths absolute.
     "version": "0.4.1",                    // string
     "treeDigest": "sha256:…",              // string — content address of app/current (injective encoding, A3)
     "stance": "prod"                       // "prod" | "dev" (isDevCheckout of current's target)
-    // DEV-STANCE REDUCTION [R2:F10/A5]: for stance:"dev", the fire-time comparison
-    // digest reduces appRelease to { "stance":"dev", "root":"<canonical checkout root>" }
-    // — EXCLUDING treeDigest + version (a live checkout is legitimately edited) — and
-    // includes ALL the config-shaped fields above unchanged. prod includes treeDigest+version.
+    // DEV-STANCE REDUCTION [R2:F10/A5/R15]: for stance:"dev", the fire-time comparison
+    // digest = the COMPLETE descriptor with appRelease replaced by
+    // { "stance":"dev", "root":"<canonical checkout root>" } — excluding ONLY
+    // treeDigest+version. EVERY other field (run, profileId, promptHash, model,
+    // timeoutMs, outerTimeoutMs, maxInputBytes, vaultLayout, vaultRoot, home,
+    // schedule, node, exec) is RETAINED. No "config-fields-only subset." prod
+    // includes treeDigest+version.
   }
 }
 ```
@@ -192,7 +195,7 @@ authorization). All paths absolute.
 > reads):** `run`←job.run; `model`←cfg.model; `timeoutMs`←cfg.timeoutMs;
 > `outerTimeoutMs`←resolved job.timeoutMinutes; `maxInputBytes`←cfg.maxInputBytes;
 > `vaultLayout`←readVaultLayout(config); `vaultRoot`←cfg.vault; `home`←bound home;
-> `schedule`←{job.at, tz}; `exec`←loadPins (claude+git required); `appRelease`←vendor.
+> `schedule`←{at: job.at, timezone}; `exec`←loadPins (claude+git required); `appRelease`←vendor.
 
 > **RESOLVED (OWNER-APPROVED 2026-07-18, A7 walkthrough) — `model` joins the
 > descriptor.** The ratified A7 rule is "everything that shapes the 03:30 spawn
@@ -470,18 +473,24 @@ digest" is self-contradictory: `deriveDescriptorDigest` **includes**
 `appRelease.treeDigest`, so any checkout edit changes the digest ⇒ refuse; dev
 vendoring points `app/current` **outside** `<core>/app` (containment rejects it);
 and `.git` is a **file** in git worktrees (our worktree + Gyula's dev machine) so
-a dir-only check makes dev permanently non-runnable. **Corrected contract:**
-`deriveDescriptorDigest` gains a **stance-aware** mode (or a sibling
-`deriveDevDigest`) so that for `stance:'dev'` the fire-time comparison digest is
-computed over the descriptor with `appRelease` **reduced to
-`{stance:'dev', root:<canonical checkout root>}`** — EXCLUDING `treeDigest` and
-`version`, covering only the config-shaped fields (`run`, `model`, `timeoutMs`,
-`vaultLayout`, `maxInputBytes`, outer timeout, exec pins, `promptHash`,
-`vaultRoot`) plus the bound checkout `root`. Bind that dev digest at registration.
-(The launcher-side dev containment vs the bound root + `.git`-dir-or-gitfile
-liveness + the dev fire path live in WP-157 A3.) **Test:** a dev descriptor's
-digest is unchanged by a tracked-source edit but changes on a `run`/`model`/
-`vault_layout` edit.
+a dir-only check makes dev permanently non-runnable.
+
+**[R15] THE ONE dev-reduction definition (identical in WP-156/157/158/159, ADR-0028,
+FIX-PLAN):** *the dev digest = `canonicalize` the **COMPLETE** authoritative
+descriptor after replacing **only** `appRelease` with `{stance:'dev', root:<canonical
+checkout root>}` (i.e. exclude **only** `treeDigest`+`version`); **every other field
+— `run`, `profileId`, `promptHash`, `model`, `timeoutMs`, `outerTimeoutMs`,
+`maxInputBytes`, `vaultLayout`, `vaultRoot`, `home`, `schedule`, `node`, `exec` — is
+RETAINED and digest-covered.*** There is NO "config-fields-only subset" — that
+phrasing is deleted everywhere (an omitted `schedule`/`home`/`node` would let a
+static `job.at`/home/node edit stay digest-equivalent on dev machines, e.g. Gyula's,
+re-timing/suppressing the job). **Corrected contract:** `deriveDescriptorDigest`
+gains a **stance-aware** mode (or a sibling `deriveDevDigest`) applying exactly the
+reduction above; bind that dev digest at registration. (The launcher-side dev
+containment vs the bound root + `.git`-dir-or-gitfile liveness + the dev fire path
+live in WP-157 A3.) **Test:** a dev descriptor's digest is unchanged by a
+tracked-source edit but changes on ANY config-field edit incl. `run`/`model`/
+`vault_layout`/**`schedule.at`**/`home`.
 
 ### A4 — best-effort descriptor write surfaces on failure [wd P3]
 
@@ -500,9 +509,9 @@ attacker rewrites an authorized job's schedule in `config.yaml` without changing
 its digest — advance `at` to re-run the model job every catch-up, or move it to
 suppress the job — with no drift. **Corrected contract:** thread `job.at` (from
 `jobs.js`, which already parses `at`) into `buildDescriptor` and add a canonical
-**`schedule`** field — the **effective schedule string + its timezone
-semantics** (`{at:'HH:MM', tz:<the timezone the scheduler interprets it in>}`),
-canonicalized so it folds into `descriptorDigest`. Treat `at` exactly like
+**`schedule`** field — the **effective schedule + its timezone semantics**
+(`{at:'HH:MM', timezone:<the timezone the scheduler interprets it in>}` — field
+name `timezone`, never `tz`), canonicalized so it folds into `descriptorDigest`. Treat `at` exactly like
 `model`/`timeout`/`vaultLayout`: an `at` edit now requires `wienerdog sync`. This
 field flows into the normal per-job digest **and** the catch-up per-job map
 (WP-160). **Test:** an `at`-only rewrite changes `deriveDescriptorDigest` and, at

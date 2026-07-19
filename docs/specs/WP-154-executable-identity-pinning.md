@@ -169,7 +169,7 @@ Nothing today resolves, verifies, or pins these executables.
 | modify | src/cli/adopt.js | **[R8:#3/R9:#2]** transactional pin preflight at the START of `adopt.run` — dry `createPins({dryRun:true})` resolves+verifies claude **and** git without writing; if either fails, ABORT before adopt's first mutation (no Git snapshot/config/scaffold; prior `exec-pins.json` byte-identical); only if both resolve, atomically commit the complete pin store, then proceed to adoption. See A5. |
 | modify | tests/integration/adopt-e2e.test.js | **[R9:#2]** failure test: pre-WP-154 install with claude unresolvable ⇒ `adopt` aborts with vault/config/manifest/prior-pin-store all byte-identical. |
 | modify | src/cli/run-job.js | **[R12/R13]** route `captureClaudeVersion` (~L256, called ~L633) through **`spawnPinnedSync('claude', …, ['--version'])`** (never a raw path) — node-shebang ⇒ runs via `process.execPath`; native ⇒ direct; PATH-resolving non-node ⇒ `'unknown'` without executing. Keep the raw claude path ONLY for the `basename==='claude'` label check. `defaultSendAlert` (~L318, `gen.nodePath()`=`process.execPath`) is already safe. |
-| create | tests/unit/pinned-exec-canary.test.js | **[R13/R15]** execution-only encapsulation-boundary guard: (a) `exec-identity.js` public exports equal the EXACT path-free list `{createPins, loadPins, spawnPinnedSync, spawnPinned, EXEC_PINS_PATH}`; (b) no module outside `exec-identity.js` imports any internal exec-path helper (`resolvePinnedSpawn`/`bindInterpreter`/`resolveExecutable`/`verifyExecutable`/`verifyPin`/`buildPin`/`probeVersion`); (c) no module feeds a `loadPins`/`createPins` pin-state field (`.commandPath`/`.installDir`/`.realpath`) into a `spawn*`/`exec*` call. |
+| create | tests/unit/pinned-exec-canary.test.js | **[R13/R15]** execution-only encapsulation-boundary guard: (a) `exec-identity.js` public exports equal the EXACT path-free, seam-free list `{createPins, loadPins, spawnPinnedSync, spawnPinned, EXEC_PINS_PATH}`; (b) no module outside `exec-identity.js` imports any internal exec-path helper (`resolvePinnedSpawn`/`bindInterpreter`/`resolveExecutable`/`verifyExecutable`/`verifyPin`/`buildPin`/`probeVersion`); (c) no module feeds a `loadPins`/`createPins` pin-state field (`.commandPath`/`.installDir`/`.realpath`) into a `spawn*`/`exec*` call; (d) **no public exec-surface function accepts a spawn/exec callback param** (`spawnPinnedSync`/`spawnPinned`/`createPins` signatures have no `spawnSync`/`spawn`/`exec` option); (e) `spawnPinned*` returns carry no `spawnfile`/`spawnargs`. |
 
 ### Exact contracts
 
@@ -240,7 +240,12 @@ function bindInterpreter(realpath, env, platform) {}
  *  @param {string} name 'claude'|'git'|'codex'
  *  @param {import('./paths').WienerdogPaths} paths
  *  @param {{args?:string[], env?:NodeJS.ProcessEnv, platform?:NodeJS.Platform,
- *           spawnSync?:Function, …spawnOpts}} [opts]
+ *           …spawnOpts}} [opts]
+ *    **[R15] NO spawn/exec callback param** — the real spawn is module-private, so a
+ *    consumer cannot inject a callback that would RECEIVE the bound command+args
+ *    (native → realpath as command; node script → realpath in args[0]) and re-spawn
+ *    it directly. Tests exercise it via marker executables or a NON-exported test
+ *    factory (never on the public signature).
  *  @returns {{status:number|null, signal:string|null, stdout:Buffer, stderr:Buffer}}
  *    @throws on drift/tamper/unsupported-interpreter (fail closed, no spawn). */
 function spawnPinnedSync(name, paths, opts) {}
@@ -248,32 +253,34 @@ function spawnPinnedSync(name, paths, opts) {}
 /** [R13/R15] Async variant, for a detached/streamed child (the dream brain).
  *  Returns a **restricted child facade** exposing only `{ stdout, stderr, stdin,
  *  pid, on/once (close/exit/error), kill }` — **NOT `spawnfile`/`spawnargs`** (a
- *  raw `ChildProcess` leaks the realpath via those). Never returns a path.
- *  @returns {{stdout, stderr, stdin, pid, on, once, kill}} */
+ *  raw `ChildProcess` leaks the realpath via those). Never returns a path. Same
+ *  `opts` as `spawnPinnedSync` — **NO spawn/exec callback param** [R15]. */
 function spawnPinned(name, paths, opts) {}
 
-/** `<exe> --version`, bounded (10s), best-effort. **[R11]** MUST execute via
- *  `bindInterpreter(realpath, env, platform)` — spawn `spec.command` with
- *  `[...spec.args, '--version']`, NEVER `spawnSync(realpath, …)` directly (a
- *  node-shebang probe thus runs `process.execPath <script> --version`). A THROW
- *  from `bindInterpreter` (unsupported PATH-resolving interpreter) propagates —
- *  it must NOT be swallowed as 'unknown', because the point is to refuse WITHOUT
- *  executing. @returns {string} 'unknown' on a benign probe failure. */
-function probeVersion(realpath, env, spawnSyncFn, platform) {}
+/** [INTERNAL — not exported] `<exe> --version`, bounded (10s), best-effort. MUST
+ *  execute via the internal `bindInterpreter` (node-shebang probe runs
+ *  `process.execPath <script> --version`), NEVER `spawnSync(realpath, …)` directly.
+ *  A THROW from `bindInterpreter` (unsupported PATH-resolving interpreter)
+ *  propagates — not swallowed as 'unknown'. The spawn is module-private; any test
+ *  seam here is internal (never on a public signature). @returns {string} 'unknown'
+ *  on a benign probe failure. */
+function probeVersion(realpath, env, platform) {}
 
-/** Build one pin (resolve+verify+bindInterpreter+probe): {commandPath, installDir,
- *  version, pinnedAt}. **[R11]** call `bindInterpreter` BEFORE `probeVersion`;
- *  an unsupported PATH-resolving non-node shebang ⇒ the helper THROWS and the exec
- *  is REFUSED (returned as {name, error}) **without ever executing the target**.
+/** [INTERNAL — not exported] Build one pin (resolve+verify+bindInterpreter+probe):
+ *  {commandPath, installDir, version, pinnedAt}. Call `bindInterpreter` BEFORE
+ *  `probeVersion`; an unsupported PATH-resolving non-node shebang ⇒ THROWS and the
+ *  exec is REFUSED (returned as {name, error}) **without ever executing the target**.
  *  @returns {object|{name, error:string}}. */
-function buildPin(name, env, platform, seams) {}
+function buildPin(name, env, platform) {}
 
 /** Resolve+verify+pin claude, git, and (if resolvable) codex; write the 0600 store
  *  and record the manifest file entry (once). Idempotent: same inputs ⇒ same bytes.
  *  @param {import('./paths').WienerdogPaths} paths
  *  @param {{env?:NodeJS.ProcessEnv, platform?:NodeJS.Platform, manifest?:object,
- *           dryRun?:boolean, spawnSync?:Function}} [opts]
- *  @returns {{pins:object, notices:string[]}}  notices: unresolved/verify-failed execs. */
+ *           dryRun?:boolean}} [opts]
+ *    **[R15] NO spawn/exec callback param** (the version probe's spawn is
+ *    module-private). @returns {{pins:object, notices:string[]}}  notices:
+ *    unresolved/verify-failed execs. */
 function createPins(paths, opts) {}
 
 /** Load the pin store. Missing/corrupt ⇒ {}. @returns {object}. */
@@ -615,7 +622,13 @@ imports** any internal exec-path helper (`resolvePinnedSpawn`, `bindInterpreter`
 `resolveExecutable`, `verifyExecutable`, `verifyPin`, `buildPin`, `probeVersion`);
 (c) **no module feeds a `loadPins`/`createPins` pin-state return (`.commandPath`/
 `.installDir`/`.realpath`) into a `spawn*`/`exec*` call** — pin state is data, never
-a spawn argument. The guarantee is **execution-only encapsulation**: a pinned
+a spawn argument; (d) **[R15] no public exec-surface function accepts a spawn/exec
+callback param** — `spawnPinnedSync`/`spawnPinned`/`createPins` signatures carry no
+`spawnSync`/`spawn`/`exec` option (an injected callback would receive the bound
+command+args and leak the path; this is the WP-155 "test seam in the public API"
+class — the real spawn stays module-private, tests use marker executables or a
+non-exported factory); (e) `spawnPinned*` returns carry no `spawnfile`/`spawnargs`.
+The guarantee is **execution-only encapsulation**: a pinned
 target is executed only through `spawnPinned*`, whose returns don't leak a
 spawnable path. The canary does NOT claim "no function ever returns a path"
 (`loadPins` legitimately does, as data).
@@ -705,11 +718,13 @@ valid descriptor binds.
   equal the EXACT path-free list `{createPins, loadPins, spawnPinnedSync,
   spawnPinned, EXEC_PINS_PATH}`; (ii) no module outside `exec-identity.js` imports
   any internal exec-path helper; (iii) no module feeds a `loadPins`/`createPins`
-  pin-state field into a `spawn*`/`exec*`. (c) **[R15] no path leak in the exec
+  pin-state field into a `spawn*`/`exec*`; (iv) **no public exec-surface function
+  accepts a spawn/exec callback param** (`spawnPinnedSync`/`spawnPinned`/`createPins`
+  have no `spawnSync`/`spawn`/`exec` option). (c) **[R15] no path leak in the exec
   return:** `spawnPinnedSync`'s return has no `spawnfile`/`spawnargs` (and any
   path-bearing error text is sanitized to the exec `name`); `spawnPinned` returns
   the restricted facade (no `spawnfile`/`spawnargs`). **Mutation:** revert
   `captureClaudeVersion` to a raw `spawnSync(rawResolvedPath, …)` ⇒ its planted-node
   zero-execution test fails; export an internal exec-path helper, import one
-  externally, or return a raw `ChildProcess`/`spawnfile` ⇒ the boundary/leak canary
-  fails.
+  externally, add a `spawnSync` param to a public signature, or return a raw
+  `ChildProcess`/`spawnfile` ⇒ the boundary/leak canary fails.

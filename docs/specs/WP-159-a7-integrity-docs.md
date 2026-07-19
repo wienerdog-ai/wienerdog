@@ -316,9 +316,13 @@ describe the **fixed** code. Full context: `FIX-PLAN.md` cluster **C5**.
   this exact set. Also state that `WIENERDOG_FAKE_TODAY` /
   `WIENERDOG_RUNJOB_TIMEOUT_MS` are **deleted** from production (no env can shift
   the scheduled date/timeout), and the date derives from the system clock.
-- **[R2:F10] Dev.** State that a dev-stance install is verified by a
-  **config-fields-only** digest (tracked-source edits do not refuse) + a
-  bound-checkout-root containment, and supports git worktrees (`.git` as a file).
+- **[R2:F10/R15] Dev.** State that a dev-stance install is verified by the **dev
+  digest = the full descriptor with `appRelease` reduced to `{stance, root}`
+  (excluding ONLY `treeDigest`+`version`); every other field — incl. `schedule`,
+  `home`, `node` — is retained**. So tracked-source edits don't refuse, but a
+  `config.yaml` edit (incl. schedule `at`) still does. Plus bound-checkout-root
+  containment, and git-worktree support (`.git` as a file). Do NOT describe it as a
+  "config-fields-only subset."
 
 ### Round-3 follow-through (2026-07-19)
 

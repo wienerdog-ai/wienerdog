@@ -417,10 +417,12 @@ points `app/current` OUTSIDE `<core>/app`, so `verifyCurrentContainment` rejects
 it; (c) `.git` is a **file** in git worktrees (our worktree + Gyula's dev
 machine), so a dir-only check makes dev permanently non-runnable.
 **Corrected fire-time dev path:**
-- Compare the **config-fields-only dev digest** (WP-156 A5:
-  `appRelease`→`{stance:'dev', root}`, excluding `treeDigest`/`version`) against
-  the dev `--expect-digest`. A tracked-source edit does not drift it; a
-  `config.yaml` `run`/`model`/`vault_layout`/… edit does ⇒ refuse.
+- Compare the **dev digest** (the ONE dev reduction, WP-156 A5: the COMPLETE
+  descriptor with `appRelease`→`{stance:'dev', root}`, excluding ONLY
+  `treeDigest`+`version`; EVERY other field — incl. `schedule`, `home`, `node`,
+  `profileId` — retained) against the dev `--expect-digest`. A tracked-source edit
+  does not drift it; ANY config-field edit (`run`/`model`/`vault_layout`/
+  **`schedule.at`**/`home`/…) does ⇒ refuse.
 - **Dev containment:** verify the live `app/current` realpath **equals the bound
   checkout `root`** (from the descriptor), not that it resolves inside
   `<core>/app`. Catches a repoint while legitimizing the out-of-`<core>/app` dev

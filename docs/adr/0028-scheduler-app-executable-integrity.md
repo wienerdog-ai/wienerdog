@@ -142,7 +142,7 @@ non-normative):
   "vaultLayout": { },              // object — effective readVaultLayout(config), canonicalized
   "vaultRoot": "/Users/me/wienerdog",
   "home": "/Users/me",             // string abs — BOUND authorized home
-  "schedule": { "at": "03:30", "timezone": "local" },  // effective schedule + tz (from job.at)
+  "schedule": { "at": "03:30", "timezone": "local" },  // effective schedule + timezone (from job.at)
   "node": "/…/bin/node",           // process.execPath
   "exec": {                        // WP-154 pins — STABLE identity fields ONLY
     "claude": { "commandPath": "…", "installDir": "…" },  // REQUIRED
@@ -464,9 +464,12 @@ implemented as dated amendments in the six specs and detailed in `FIX-PLAN.md`.
    (that overclaim was corrected in R15). A fixed-file textual scan could never
    cover future modules or evasions — **encapsulation is the guarantee**; a sound
    **boundary** canary + zero-execution site tests enforce it: (a) the exec surface's
-   public exports equal an EXACT path-free list; (b) no module outside
+   public exports equal an EXACT path-free, **seam-free** list; (b) no module outside
    `exec-identity.js` imports an internal exec-path helper; (c) no module feeds a
-   pin-state return into a `spawn*`/`exec*`. (Manual site enumeration had kept
+   pin-state return into a `spawn*`/`exec*`; (d) **[R15] no public exec-surface
+   function accepts a spawn/exec callback param** (an injected callback would receive
+   the bound command+args and leak the path — the real spawn is module-private).
+   (Manual site enumeration had kept
    missing sites — `captureClaudeVersion` was the 5th, found
    after R11 claimed "every site"; encapsulation removes the need to enumerate.)
 
@@ -563,11 +566,14 @@ implemented as dated amendments in the six specs and detailed in `FIX-PLAN.md`.
    tree digest but still compare the full descriptor digest" is self-contradictory
    (the full digest includes the tree digest) and, with dev's out-of-`<core>/app`
    vendoring and `.git`-as-a-file worktrees, made dev permanently non-runnable. Dev
-   now binds a **config-fields-only** digest (excludes `treeDigest`/`version`) plus
-   the canonical checkout root; fire-time dev verifies that config digest + a
-   dev-specific containment (live `current` == bound root) + `.git`-dir-or-gitfile
-   liveness. Dev stance is bound at registration, not read from a live
-   `WIENERDOG_DEV` env at fire time.
+   now binds a **dev digest = the COMPLETE descriptor with `appRelease` replaced by
+   `{stance:'dev', root}` — excluding ONLY `treeDigest`+`version`; EVERY other field
+   (incl. `schedule`, `home`, `node`, `profileId`) is RETAINED** (there is no
+   "config-fields-only subset" — an omitted `schedule`/`home` would let a static
+   `at`/home edit stay digest-equivalent on dev machines). Fire-time dev verifies
+   that dev digest + a dev-specific containment (live `current` == bound root) +
+   `.git`-dir-or-gitfile liveness. Dev stance is bound at registration, not read
+   from a live `WIENERDOG_DEV` env at fire time.
 
 ### Residuals added to the Honest boundary (deferred to A12)
 

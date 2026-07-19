@@ -67,7 +67,7 @@ for the scoped-write class only.
 - `src/scheduler/descriptor.js` (WP-156, incl. its fix-pass amendments):
   `buildDescriptor`, `deriveDescriptorDigest`, and the digest now cover
   `run`/`model`/`timeoutMs`/`vaultLayout`/`maxInputBytes`/outer-timeout/`schedule`
-  (`at`+tz)/`home`/exec pins/prompt hash/app release. The digest is the per-job
+  (`at`+`timezone`)/`home`/exec pins/prompt hash/app release. The digest is the per-job
   authorization anchor.
 - `src/cli/run-job.js` catch-up runner reads jobs from `config.yaml` and calls
   `runJob` directly (the bypass). **[R5]** its post-success path (L653) also calls
