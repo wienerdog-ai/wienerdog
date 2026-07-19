@@ -35,8 +35,9 @@ rules, the managed-block drill gate, `memory approve` allowed names — into a c
 against both the post-R8 prose and the code, and the very next round (round 9) returned
 **APPROVE / SHIPPABLE** with no material findings. The same disease reappeared in the
 A10 reap mechanism's **settle-path matrix** (which reap primitive runs on which of four
-exit paths), described in four drifting locations (round-10 R10-2); extracting it to one
-authoritative table resolved it.
+exit paths), described in four drifting locations (round-10 R10-2); the remedy was again
+to extract it to one authoritative table — but, as R11-2 below shows, that extraction was
+left incomplete.
 
 But round 11 (R11-2) exposed the failure mode of a *careless* extraction: the
 settle-matrix table had been added, yet the old scattered three-reap statements survived
@@ -51,10 +52,31 @@ A9/A10 rounds show the identical drift in in-spec *contract content*.
 
 ## Decision
 
-**When a spec or contract-dense doc states three or more discrete contracts, extract each
-contract into a single authoritative reference table and have the prose cite the table
-rather than restate the contract facts inline. There is one source of truth per contract
-*within that document*.**
+**Core rule — one authority per contract; every other mention is subordinate to it.**
+When a spec or contract-dense doc states three or more discrete contracts, give each
+contract exactly **one designated authority**: a single reference table that states its
+facts. Every other mention of that contract must be **subordinate** to that authority —
+either **(a)** prose that explains or applies the contract while **citing** the table
+("resolve the core (Table A)", "the Table D three-check conjunction"), or **(b)** across
+documents, a **derived local copy** that ADR-0005's One-Document Rule requires, marked as
+derived-from the owning table. There is one authority per contract *within that document*.
+
+**The violation to eliminate is an INDEPENDENT NORMATIVE re-declaration** — a second
+statement of a contract's facts that stands on its own as a rule and can silently
+**drift** from the authority. *That* is what "never restate" targets, not textual
+repetition as such. A citation of the table is not a copy; an applied worked example that
+points at the table is not a copy; the ADR-0005 cross-document local copy (subordinate,
+marked derived-from) is not a copy in the forbidden sense. A sentence that **re-asserts**
+the contract's facts as if it were itself the source of truth **is** the forbidden copy
+and must be rewritten as a citation. So read "purge every scattered copy" precisely: purge
+every **independent normative re-statement** (each one a drift risk), not every mention.
+
+**The R11-2 lesson, in these terms (non-negotiable).** Adding a reference table while
+leaving independent normative copies of the same contract in place is the
+self-contradiction to avoid: the table and the surviving copies can drift into mutual
+contradiction that no implementer can satisfy — **strictly worse** than the original
+scatter. Extraction is complete only when every independent normative re-statement of the
+contract has been converted into a citation of its table; grep-verify that none survives.
 
 **Scope: within a single document (the cross-document boundary).** This decision governs
 *intra-document* presentation only. Across documents, ADR-0005's **One-Document Rule**
@@ -72,14 +94,28 @@ stated crisply:
   *cite* the table (e.g. "the Table D three-check conjunction") rather than independently
   re-asserting its facts.
 
-The A9/A10 evidence read through this boundary: the genuine single-source win is the
-settle-path reap matrix **within `WP-a10-reap-mechanism`** — that one document's four
-drifting prose descriptions of which reap runs on which exit path collapsed to one
-authoritative table it now cites everywhere. The sibling `WP-a10-escape-harness` (a
-*separate* document) legitimately keeps a **local copy** of that matrix and restates the
-per-exit-path reap operations in its Current-state, live-proof, and acceptance sections —
-that is ADR-0005 self-containment doing its job, not a violation, because the harness must
-be implementable without opening the reap-mechanism spec.
+**Examples, honestly — one clean, one cautionary.**
+
+- **Clean success precedent — `WP-a9-incident-runbook`.** Its five recurring contracts'
+  scattered prose copies were **actually reduced to citations** of a compact
+  Contract-reference table ("resolve the core (Table A)", "the Table D three-check
+  conjunction"); the extraction was verified faithful against both the post-R8 prose and
+  the code, and the very next round (round 9) returned **APPROVE / SHIPPABLE**. This is
+  what the discipline looks like when it is complete.
+- **Cautionary / in-progress case — `WP-a10-reap-mechanism`.** Its **settle-path reap
+  matrix** is the correct **authority** for which reap primitive runs on which of the four
+  exit paths, but the spec **still carries independent normative re-declarations** of those
+  same per-path facts *outside* that table — the Deliverables `modify` cells, the "unified
+  rule in one line" prose, and several acceptance criteria each re-state which primitive
+  runs on which settle path. That is exactly the **R11-2 danger** (a table plus surviving
+  normative copies) caught mid-remediation; completing the discipline means turning each of
+  those re-statements into a **citation** of the matrix. Treat this as a spec **moving
+  toward** the discipline, **not** a finished single-source exemplar — the ADR does not
+  claim it is clean. (The sibling `WP-a10-escape-harness`, a *separate* document, keeps its
+  own **derived local copy** of the matrix, which ADR-0005 self-containment *requires* so
+  the harness is implementable without opening the reap-mechanism spec — that copy is
+  subordinate and legitimate, a different thing from the reap-mechanism's own out-of-table
+  re-declarations.)
 
 **Contract-dense trigger (operational).** Use reference tables when the document states
 **3+** discrete contracts of these shapes:
@@ -89,33 +125,36 @@ be implementable without opening the reap-mechanism spec.
 (d) argument / enum allowlists;
 (e) source-of-truth / restore / mapping rules.
 
-**Purge-all-copies discipline (the R11-2 lesson, non-negotiable).** Extraction is
-complete only when no independent restatement of the same contract survives outside the
-table. When you extract, grep-verify that every scattered copy is gone and the prose now
-*references* the table — a table alongside stale inline copies is a self-contradiction
-worse than the original scatter.
+**Grep-verify at extraction time (the R11-2 discipline in practice).** Because the danger
+is a *surviving* independent normative copy, not a mention, an extraction is done only
+after a grep confirms every independent re-statement of the contract now cites the table
+rather than re-asserting its facts. The reviewer and architect own this check (below).
 
-**When NOT to tabularize — a CONTRACT-level exception, not a spec-level one (the honest
-counter-case).** The exemption is scoped to a **single contract**, never to a whole spec.
-A spec-level carve-out would swallow everything: the repo template *requires* every WP to
-carry acceptance criteria and verification steps, so "has an acceptance test or a harness"
-describes nearly every spec and the policy would almost never apply — and the ADR's own
-successes contradict a spec-level reading (the incident-runbook was tabularized *despite* a
-mandatory three-config end-to-end dry-run gate; the settle-path matrix was tabularized
-*despite* a live merge-gate harness). So: **a specific contract is exempt from
-tabularization only when a runnable gate enforces every one of its facts exhaustively and
-directly** — the gate itself is the single source of truth for that contract, so a table
-would be redundant. A general acceptance test or live harness does **not** exempt a spec's
-*other* contracts: a harness that proves runtime behavior does not prove that every
-scattered prose copy of a path or rule agrees with the others (that is precisely the drift
-the tables kill). Read this way the examples are consistent: the runbook and the
-settle-path matrix were tabularized because their scattered contracts were **not** each
-exhaustively, directly gate-enforced — the dry-run and the harness prove behavior, not
-prose agreement. The honest core still holds: genuinely *progressive* design work (each
-finding builds on the last) is real design churn, not scattered-contract thrash, and is not
-a tabularization target. In the same A9/A10 session the A10 reap **code** contracts largely
-stayed prose for exactly that reason — progressive findings — and only their one genuinely
-contract-dense, drift-prone element, the settle-path matrix, got a table.
+**When NOT to tabularize — ONE contract-level exception.** A specific **contract** —
+never a whole spec — is exempt from tabularization **only when a runnable gate enforces
+every one of its facts exhaustively and directly**; the gate is then that contract's single
+authority, so a table would be redundant. **This is the sole exception.** A spec-level
+carve-out would swallow everything — the repo template *requires* every WP to carry
+acceptance criteria and verification steps, so "has an acceptance test or a harness"
+describes nearly every spec — and the ADR's own successes contradict a spec-level reading:
+the incident-runbook was tabularized *despite* a mandatory three-config end-to-end dry-run
+gate, and the settle-path matrix *despite* a live merge-gate harness. A general acceptance
+test or live harness therefore does **not** exempt a spec's *other* contracts: a harness
+proves runtime behavior, not that every scattered prose copy of a path or rule agrees with
+the others — and that drift is exactly what the tables kill. Read this way the examples are
+consistent: the runbook and the settle-path matrix were tabularized precisely because their
+scattered contracts were **not** each exhaustively, directly gate-enforced.
+
+**Pre-contract design notes, and only until a contract appears.** Genuinely *progressive*
+design work (each finding builds on the last) is real design churn, not scattered-contract
+thrash — but this leniency is scoped strictly to **pre-contract design notes that do not
+yet state a discrete contract**. **The moment a triggered document states discrete contract
+facts** (any of the five shapes above), the leniency ends and **only the
+exhaustive-runnable-gate exception applies**; there is no second, subjective "progressive
+design stays prose" carve-out for content that has already hardened into a contract. In the
+A9/A10 session the A10 reap **code** contracts stayed prose while they were still
+progressive design notes; the one element that had hardened into a discrete, drift-prone
+contract — the settle-path matrix — correctly got a table.
 
 **How we enforce it (four-point process integration).**
 
@@ -145,10 +184,12 @@ acceptance-criteria-as-verification-commands — tables live inside those constr
   clean immediately after the runbook extraction; the settle-matrix table closed R10-2.
 - A contract fix touches one table cell, not N prose sentences; a dry-run or validation
   step gets an obvious target (validate the table against the real system).
-- **Cost/risk:** the extraction itself is real work and **must** purge every scattered
-  copy (R11-2) or it makes things strictly worse. Over-tabularizing a progressive or
-  exhaustively-gate-enforced *contract* is waste (the counter-case) — the trigger and the
-  contract-level "when NOT to" clause exist to bound this.
+- **Cost/risk:** the extraction itself is real work and **must** convert every independent
+  normative re-statement of the contract into a citation of its table (R11-2), or it makes
+  things strictly worse — a table plus a surviving normative copy is the self-contradiction,
+  not a partial win. Over-tabularizing a **pre-contract design note** or an
+  **exhaustively-gate-enforced contract** is waste — the trigger and the single
+  contract-level "when NOT to" exception exist to bound this.
 - Does **not** change the One-Document Rule, the Deliverables-table permission boundary,
   or acceptance-criteria-as-verification-commands. No new tooling, no daemon, no telemetry
   (ADR-0004 holds).
