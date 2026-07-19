@@ -229,6 +229,76 @@ version part beyond ~15 digits loses integer precision; the worst case is a
 cosmetically-bogus "update available" notice (the source is npm's own dist-tags,
 not attacker-controlled, and the line is fixed-template — no injection surface).
 
+## T8 — Scheduled-run code & executable integrity (A7)
+
+**Attack class (findings F1–F5)**: the registered OS scheduler entry is
+**static** — it just launches Node against the code under `~/.wienerdog/app/current`
+with the `run` action read from `config.yaml`. Neither of those mutable inputs was
+integrity-checked, so a process able to write `config.yaml` (change the `run`
+action — F1), write `app/<version>/**` or repoint the `app/current` symlink
+(replace the code the scheduler runs — F2/F3), or plant a fake `claude`/`git`
+earlier on the job `PATH` (the clean job `PATH` front-loads the user-writable
+`~/.local/bin` for the subscription-auth reasons in ADR-0009 — F4) could turn a
+pre-authorized nightly slot into persistent execution **without registering its
+own scheduler entry**. A test-exec seam left in the dispatch code (F5) was a sixth
+surface: an environment variable that chose what a job runs.
+
+**What A7 enforces (WP-154..WP-157, ADR-0028)**:
+
+- **Canonical digest-bound job descriptor.** Each scheduled job has a code-owned
+  descriptor — its `run` action, capability profile, prompt/skill content hash,
+  effective timeout, configured model, vault root, the absolute [executable
+  identities](GLOSSARY.md), and the [app release digest](GLOSSARY.md) — reduced to
+  a **descriptor digest** that is **bound into the OS scheduler entry**. Runtime
+  edits to `config.yaml` or the app tree do **not** change what runs until an
+  explicit `wienerdog sync` re-derives and re-binds the digest; at fire time any
+  mismatch **fails closed** — a fixed durable alert and **zero model spawn**, no
+  soft fallback, no "run anyway". The one remedy is `wienerdog sync`. Accepted UX
+  cost, stated plainly: a legitimate hand-edit of `config.yaml` without a
+  follow-up `sync` makes the next scheduled dream refuse with a clear alert — one
+  skipped night, not silent degradation.
+- **Independent launcher outside the mutable app tree.** The OS entry invokes
+  `<core>/launcher/launch.js` (not the app bin directly). Before it spawns Node or
+  the model it verifies: `current` resolves inside `<core>/app` and is user-owned;
+  the live app tree content-addresses to the descriptor's app release digest; the
+  re-derived descriptor digest equals the entry-bound value; and the
+  **production/dev stance** matches (a prod entry over a dev-looking tree — e.g. a
+  planted `.git` — is refused, never silently downgraded to the unverified dev
+  path). The published version dir's files are made read-only after the atomic
+  publish; an interrupted update leaves the previous valid `current` intact.
+- **Structurally pinned external executables.** `claude`/`git`/`codex` are
+  resolved and **pinned** at install/sync by command path + install dir (with
+  structural verification — regular file, exec bit, owner, no group/other-writable
+  ancestor — at spawn), and the nightly job spawns the live verified absolute path.
+  A fake planted earlier on `PATH` is refused on command-path/install-dir drift; a
+  routine auto-update (a new version file under the same install dir) passes
+  silently, while an install-method change (e.g. → Homebrew) **fails safe** until
+  re-pinned. Deliberately **no content hash** (WP-154): Claude Code self-updates
+  several times a day, so a hash/exact-realpath gate would alarm on every
+  legitimate update and train the user to ignore it.
+- **No test-exec seams in the dispatch code.** WP-155 **deletes**
+  `WIENERDOG_RUNJOB_CMD`, `WIENERDOG_DREAM_CMD`, and the probe env seams
+  (`WIENERDOG_SKIP_CONTAINMENT_PROBE`, `WIENERDOG_CONTAINMENT_PROBE_CMD`). There is
+  no `WIENERDOG_TEST` gate. Test substitution happens only through JS-only injected
+  dependencies and pin-store-installed fakes; every dispatch is **`shell:false`**,
+  and **no environment variable** can substitute an executable or skip the
+  containment self-check. The end-to-end negative harness (WP-158) drives the real
+  launcher/pin path against each tamper and asserts zero model spawn, with a
+  non-vacuity control proving the clean baseline does run.
+
+**Honest residual (A12).** This protects **scoped core writes** and **detects
+drift** between attended `sync`s; it is **not an OS boundary**. The independent
+launcher is itself a core file (`<core>/launcher/launch.js`), so a same-user
+*native* actor with a **core-wide write** — one that overwrites the launcher
+itself — defeats this layer **alone**, without even touching the OS scheduler
+entry. That class is A12's territory and needs a different design (a root- or
+publisher-anchored launcher, OS user-presence), not a local-file tweak. A7 catches
+the narrower, realistic class — a limited file-write primitive or an agent session
+that can write `config.yaml`, `app/current`, or `~/.local/bin` but can neither
+re-register the OS scheduler entry nor overwrite the launcher file — and makes a
+`config.yaml` + manifest rewrite alone unable to make a drifted state verify. Do
+not read this as "your scheduled AI can never be tampered with".
+
 ## Privacy posture
 
 No telemetry. No network calls except the Google APIs the user configured, the harness's own model traffic, and the once-daily update-availability check against the npm registry (a plain GET carrying no user data; disclosed and opt-out — see T7). All model use goes through the user's own subscription (`claude -p` / `codex exec`) — no third-party relay ever sees transcripts. Transcripts never leave the machine; only the user's chosen harness provider sees what it already saw.

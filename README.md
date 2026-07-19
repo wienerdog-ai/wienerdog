@@ -59,6 +59,9 @@ That's it. Your AI interviews you, builds your memory vault, and starts remember
 
 [^send-scope]: This is a claim about what Wienerdog's own broker and CLI enforce against a hijacked AI, not an absolute guarantee against other software running as the same user on your machine — anything running as you can already read the same files. See the [threat model](docs/THREAT-MODEL.md) (T4a) for the honest boundary.
 - **Laptop-friendly routines** *(optional, pick from a catalog)* — after setup, choose from a menu of ready-made scheduled routines (morning digest, inbox triage, weekly review, …) run by your OS's native scheduler (launchd / systemd / Task Scheduler). Laptop was closed at run time? It catches up. No daemon. In this security-hardened build, routines from the catalog are turned off pending a one-time pre-use safety review (run `wienerdog safety` to see what's enabled) — they're coming back once the safety gates are cleared.
+- **Scheduled runs are verified before they run.** At every nightly fire, an independent launcher first checks that the app's code matches its recorded content address and that the job still matches its digest-bound authorization descriptor; Claude and Git are only spawned from their pinned, structurally verified install locations. Edits to `config.yaml` or the app tree made outside `wienerdog sync` don't change what runs — the job refuses with an alert instead (fail closed; the fix is one `wienerdog sync`).[^a7-boundary]
+
+[^a7-boundary]: *Boundary, stated plainly: this protects against scoped file writes and detects drift between syncs. It is not a defense against arbitrary same-user native malware — that requires OS-level anchoring (see [THREAT-MODEL](docs/THREAT-MODEL.md)).*
 
 ## Why Wienerdog and not a "personal AI agent" app?
 

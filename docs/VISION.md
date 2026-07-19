@@ -32,6 +32,9 @@ OpenClaw and Hermes Agent prove the demand for persistent, personal AI — and b
 - **TOS-compliant.** Everything executes through the user's own Claude Code / Codex subscription (`claude -p` / `codex exec` for scheduled jobs) — no gray-zone API relays.
 - **User-owned.** Memory is plain markdown in the user's home directory, versioned in git, readable without any tool, portable between AI vendors.
 - **Tiny maintenance surface.** The intelligence lives in prompts; the code is thin plumbing (< ~4k LOC).
+- **Scheduled runs are verified before they run.** Because the nightly jobs are unattended, an independent launcher checks — at every fire — that the app's code still matches its recorded content address and that the job still matches its digest-bound authorization descriptor, and Claude and Git are spawned only from their pinned, structurally verified install locations. An edit to `config.yaml` or the app tree made outside `wienerdog sync` does not change what runs; the job refuses with an alert (fail closed) until an explicit re-sync re-authorizes it.[^a7-boundary]
+
+[^a7-boundary]: *Boundary, stated plainly: this protects against scoped file writes and detects drift between syncs. It is not a defense against arbitrary same-user native malware — that requires OS-level anchoring (see [THREAT-MODEL](THREAT-MODEL.md)).*
 
 ## Who it's for
 

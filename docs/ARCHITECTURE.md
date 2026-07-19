@@ -171,6 +171,17 @@ Command surface, **governance enforced in the CLI, not in prompts**: `gmail sear
 
 `run-job` responsibilities (claude-os L5/L6 lessons codified): build a clean env explicitly (launchd inherits almost nothing — PATH to node/claude/codex, HOME); **TCC-guard** — refuse to start if the job references TCC-protected paths; watchdog hard timeout (kill after limit); tee output to `~/.wienerdog/logs/<name>/` with rotation; on failure/timeout **fail loud** — `gws _alert` email if configured, else OS notification + red banner line in `state/digest.md` so the next session surfaces it; record `last_success`.
 
+### Fire-time integrity (A7, ADR-0028)
+
+The OS entry is **static** and the code it runs (`app/current`) and the `run` action (`config.yaml`) are mutable, so A7 makes both integrity-checked at fire time rather than trusted. The flow, per scheduled job:
+
+1. **Descriptor at schedule/sync.** `schedule add`/`sync` writes a canonical [job descriptor](GLOSSARY.md) (`state/descriptors/<name>.json`) capturing exactly what the job may run — `run` action, capability profile, prompt/skill content hash, effective timeout, configured model, vault root, the [executable pins](GLOSSARY.md), and the [app release digest](GLOSSARY.md) of `app/current` — and reduces it to a **descriptor digest**.
+2. **Digest bound into the OS entry.** The entry no longer invokes the app bin directly; it invokes `node <core>/launcher/launch.js <name> --descriptor <path> --expect-digest <digest>`. The bound digest is the independent anchor.
+3. **Launcher verify before spawn.** At each fire the [independent launcher](GLOSSARY.md) — deliberately **outside** `app/current` (see ADR-0013 for the vendored `app/<version>` + `current` symlink layout) — verifies, in order: `current` containment + user ownership; the live app tree content-addresses to the descriptor's app release digest; the [production/dev stance](GLOSSARY.md) matches (no planted-`.git` downgrade); and the re-derived descriptor digest equals `--expect-digest`. Only then does it spawn `run-job <name>`; any mismatch **fails closed** (a fixed durable alert, zero model spawn) and the remedy is one `wienerdog sync`.
+4. **Executable pinning.** Inside the job, `claude`/`git`/`codex` are spawned by their live **verified absolute path** from the pin store (command path + install dir; structural verification at spawn), never a bare name — so a fake earlier on the clean job `PATH` (which front-loads the user-writable `~/.local/bin`, ADR-0009) cannot win resolution.
+
+Publish hardening: after the atomic version-dir publish, `app/<version>` files are made read-only (dirs stay writable so uninstall still removes them); an interrupted update leaves the prior valid `current`. The launcher is a secondary anchor, not an OS boundary — a same-user write that reaches `launch.js` itself defeats this layer (A12; see THREAT-MODEL T8).
+
 ## Repo layout
 
 ```
