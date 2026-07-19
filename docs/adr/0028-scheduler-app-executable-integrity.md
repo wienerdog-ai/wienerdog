@@ -483,10 +483,16 @@ implemented as dated amendments in the six specs and detailed in `FIX-PLAN.md`.
    deciding due-ness** (so an `at`-rewrite-to-future or a removal alerts rather
    than silently suppressing), and transports the per-job digest map as
    **base64url(canonical JSON)** with a bounded decoder (raw JSON argv is not
-   platform-safe on Windows `CommandLineToArgvW` / systemd quoting). **[R5]
-   Attended-authorization boundary:** only attended `sync`/`schedule` may mint or
-   replace the catch-up authorization map/registration; **no nightly/runtime path
-   may derive authorization from `config.yaml`.** In particular the post-success
+   platform-safe on Windows `CommandLineToArgvW` / systemd quoting). **[R8:#2]
+   Platform contract:** the map + `run-job --catch-up` dispatch exist on **macOS**
+   (`catchupPlist`) and **Windows** (schtasks ONLOGON+hourly) only — the platforms
+   with a *separate* catch-up registration. **Linux has no catch-up map**: its
+   per-job `.timer Persistent=true` replays the NORMAL per-job `.service`, already
+   authorized by that job's own `--expect-digest` (WP-157); no all-job map, no
+   duplicate dispatch. **[R5] Attended-authorization boundary:** only attended,
+   user-invoked registration may mint or replace the catch-up authorization
+   map/registration; **no nightly/runtime path may derive authorization from
+   `config.yaml`.** In particular the post-success
    runtime backstop (`run-job.js` `ensureCatchup`) is removed — a nightly success
    must not re-bind the loaded map from a since-mutated config (else a statically
    added job B gets authorized after unrelated job A succeeds, with no

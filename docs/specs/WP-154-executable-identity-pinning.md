@@ -501,8 +501,25 @@ path, resolve pins against a clean job PATH derived like pinning does
 `buildCleanEnv` ordering (ADR-0009). If more than a few lines, downgrade to a
 documented residual and record it in the PR.
 
+### A5 — adopt must bootstrap pins before it registers [Codex HIGH, R8:#3]
+
+`src/cli/adopt.js` (`adopt.js:370`) calls `ensureDreamSchedule` but runs **no**
+`createPins` and does not call `sync`, so a legacy/pre-WP-154 install (config.yaml
+but no `exec-pins.json`) reaches descriptor binding with **no pins** — violating
+A1b's "dream binding requires claude+git pins," and either failing after adoption
+state is already mutated or binding a pinless descriptor. **Corrected contract:**
+`adopt` must **create + validate pins via the same clean-PATH `createPins`
+procedure `sync` uses, BEFORE `ensureDreamSchedule`/any descriptor+map
+registration**, or **abort before committing adoption state** (fail-closed, never
+half-adopt). Add `src/cli/adopt.js` to this WP's Deliverables for the pin
+bootstrap (the descriptor/map binding on the same file is WP-160's concern — the
+file is shared, serialized: WP-154 pin bootstrap lands first, WP-160 mint after).
+**Acceptance:** a valid pre-WP-154 install with no `exec-pins.json` ⇒ `adopt`
+creates pins then binds a valid descriptor, or aborts cleanly without
+half-mutating adoption state.
+
 ### Deliverables / acceptance additions
-- Deliverables unchanged (all edits within the listed files).
+- **[R8:#3]** Add `src/cli/adopt.js` (pin bootstrap before register) — see A5.
 - Acceptance: add — a corrupt/unreadable/foreign `exec-pins.json` makes
   `resolvePinnedSpawn` **throw** (never live-resolve); a node-shebang pin spawns
   via `process.execPath` and a planted `node` earlier on PATH is irrelevant; each

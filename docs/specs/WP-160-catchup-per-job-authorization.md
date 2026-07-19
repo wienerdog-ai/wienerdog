@@ -55,10 +55,15 @@ for the scoped-write class only.
   (WP-157) verifies containment + app-tree digest against a single
   `--expect-digest`, then `main` spawns `node currentBin run-job --catch-up`. No
   per-job descriptor is consulted.
-- `src/scheduler/generators.js` renders the catch-up entry
-  (`catchupPlist` / `windowsCatchupTaskXml` / the systemd persistent timer) with
-  argv `[node, launcher, '--catch-up', '--expect-digest', <appTreeDigest>]`
-  (post-WP-157). Per-job entries carry the per-job `--expect-digest` (WP-157).
+- `src/scheduler/generators.js` — **[R8:#2] catch-up registration exists on two
+  platforms only:** macOS `catchupPlist` (via `ensureCatchup`, which is
+  `if (process.platform !== 'darwin') return` — generators.js:501) and Windows
+  `windowsCatchupTaskXml` (ONLOGON+hourly schtasks, via `schedule.js:151`
+  `ensureCatchup`). **Linux has NO separate catch-up registration** — its per-job
+  `.timer` uses `Persistent=true` (generators.js:254), so a missed fire replays
+  the **normal per-job `.service`**, which already carries the normal per-job
+  `--expect-digest` (WP-157). Per-job entries carry the per-job `--expect-digest`
+  on all platforms.
 - `src/scheduler/descriptor.js` (WP-156, incl. its fix-pass amendments):
   `buildDescriptor`, `deriveDescriptorDigest`, and the digest now cover
   `run`/`model`/`timeoutMs`/`vaultLayout`/`maxInputBytes`/outer-timeout/`schedule`
@@ -80,14 +85,14 @@ for the scoped-write class only.
 
 | Action | Path | Notes |
 |--------|------|-------|
-| modify | src/scheduler/generators.js | At registration, bind the per-job digest map into the **catch-up entry's registered arguments** as `--job-digests <base64url(canonicalJSON)>` (one opaque token — [R4:#3]), populated under registration privilege (loaded/DB state), never re-read from an editable file per fire. **[R5]** provide a teardown that removes the catch-up entry when no jobs remain. |
-| modify | src/cli/schedule.js | Compute the per-job digest map (`{jobName: deriveDescriptorDigest(paths, job)}` over all configured jobs), base64url-encode the canonical JSON, pass it to the catch-up renderer. **[R5]** this + `sync repoint` are the ONLY mint points; on final-job removal, tear the catch-up entry + map down cleanly. **[R6]** `repointSchedules` also QUERIES the loaded catch-up registration and REPAIRS it (regenerate canonical entry + correct bound map) when missing/stale — the sole home for the missing-registration heal. |
+| modify | src/scheduler/generators.js | At registration, bind the per-job digest map into the **catch-up entry's registered arguments** as `--job-digests <base64url(canonicalJSON)>` (one opaque token — [R4:#3]), populated under registration privilege (loaded/DB state), never re-read from an editable file per fire. **[R5]** provide the teardown **primitive** that removes the catch-up entry when no jobs remain (invoked only by `repointSchedules`, the teardown owner — [R8]). |
+| modify | src/cli/schedule.js | Compute the per-job digest map (`{jobName: deriveDescriptorDigest(paths, job)}` over all configured jobs), base64url-encode the canonical JSON, pass it to the catch-up renderer (a mint caller — `schedule add`). **[R6]** `repointSchedules` also QUERIES the loaded catch-up registration and REPAIRS it (regenerate canonical entry + correct bound map) when missing/stale — the sole home for the missing-registration heal. **[R8]** teardown is stated ONE way: `repointSchedules` is the **sole teardown owner**; `schedule remove` must **invoke `repointSchedules`** for catch-up teardown, not tear it down directly. |
 | modify | src/scheduler/launcher.js | `parseArgv` recognizes `--job-digests` (value-taking, opaque base64url token); `verifyCatchup` forwards it; `main` passes it through to the catch-up runner argv. The launcher NEVER reads a per-job entry file to obtain a digest. |
 | modify | src/cli/run-job.js | The catch-up runner decodes `--job-digests` (bounded base64url→JSON→shape-validate; malformed/oversized ⇒ durable alert + zero spawn), authorizes the **union** of bound ∪ configured job names BEFORE due-filtering ([R4:#1]), and runs only jobs whose live `deriveDescriptorDigest` matches the bound map; additions/removals/mismatches ⇒ alert, zero spawn. **[R5] REMOVE the post-success runtime `gen.ensureCatchup` call (L653)** — a runtime path must not mint authorization from config; at most emit a read-only "catch-up entry missing" notice, never regenerate. |
 | modify | src/cli/sync.js | **[R6]** the attended sync flow (its `repointSchedules` call) is the SINGLE owner of catch-up register/repair/teardown — orchestrate the query+repair here; the map (re)bind + repair logic itself lives in `repointSchedules` (`schedule.js`, already listed). |
 | modify | src/scheduler/status.js | **[R6]** `reloadMissing` is **excluded from the catch-up entry entirely** — it neither creates, authorizes, nor reloads it (catch-up repair/teardown is repointSchedules' sole responsibility). |
 | modify | src/cli/init.js | **[R7]** `init`'s `ensureDreamSchedule` mints the catch-up map from freshly-validated descriptors (first-install; init does not necessarily run `sync`). No config-trusted/stale map. |
-| modify | src/cli/adopt.js | **[R7]** `adopt`'s `ensureDreamSchedule` mints the catch-up map from freshly-validated descriptors — adopt does NOT call `sync`, so it is a first-class attended mint caller. |
+| modify | src/cli/adopt.js | **[R7]** `adopt`'s `ensureDreamSchedule` mints the catch-up map from freshly-validated descriptors — adopt does NOT call `sync`, so it is a first-class attended mint caller. **[R8:#3]** adopt runs no `createPins` today, so a legacy/pre-WP-154 install (config.yaml but no `exec-pins.json`) has no pins, and WP-154/156 require claude+git pins before binding a dream descriptor → adopt must **create + validate pins via the same clean-PATH `createPins` procedure sync uses, BEFORE `ensureDreamSchedule`/any descriptor+map registration**, or **abort before committing adoption state** (fail-closed, never half-adopt). **Placement:** the pin-bootstrap step is **WP-154's** concern (it owns `createPins`); the descriptor/map binding is WP-160's. `src/cli/adopt.js` is listed in both WPs' Deliverables (pin bootstrap under WP-154, mint under WP-160). |
 | create | tests/unit/catchup-authorization.test.js | The negatives below. |
 | modify | tests/unit/scheduler-generators.test.js | Assert the catch-up entry carries `--job-digests` with a canonical map. |
 
@@ -111,6 +116,17 @@ bounded schema decoder**: reject if length > a fixed cap (e.g. 64 KiB); `atob`
 **any** malformed/oversized/shape-invalid input ⇒ **durable alert + zero spawn**,
 never a thrown crash. Do not use raw JSON or per-platform ad-hoc escaping.
 
+**[R8:#2] Platform contract — the map applies to macOS + Windows only.** The
+base64url per-job digest map is bound into the **macOS `catchupPlist`** and the
+**Windows schtasks ONLOGON+hourly** catch-up entries — the two platforms with a
+*separate* catch-up registration + a shared `run-job --catch-up` dispatch.
+**Linux has no separate catch-up entry and no map:** its per-job systemd
+`.timer Persistent=true` replays the **normal per-job `.service`**, already
+authorized by that job's normal per-job `--expect-digest` (WP-157) — so Linux
+catch-up needs no all-job map and must **not** introduce a duplicate all-job
+dispatch. All WP-160 map machinery (bind, decode, union-authorize) is
+macOS/Windows only.
+
 **Anchor rule (the whole point).** The authorized digest for a job on the
 catch-up path is read **only** from:
 1. the `--job-digests` map delivered via the launcher's argv (which the OS passes
@@ -123,8 +139,11 @@ It is **never** read from the per-job entry **file** on disk, nor from
 `config.yaml`. A forged per-job source file (edited without reload) must not
 affect the decision.
 
-**[R5] Attended-authorization boundary — only `sync`/`schedule` may mint the
-map.** The union-before-due algorithm cannot protect an anchor that a trusted
+**[R5/R7] Attended-authorization boundary — only attended, user-invoked
+registration may mint the map.** The authorized-mint set is `sync`/
+`repointSchedules`, `schedule add`, `init`'s `ensureDreamSchedule`, and `adopt`'s
+`ensureDreamSchedule` (see the table below), each minting from freshly-validated
+descriptors. The union-before-due algorithm cannot protect an anchor that a trusted
 **runtime** path refreshes from mutable config. Confirmed hole: the post-success
 runtime backstop `gen.ensureCatchup(paths, {loader})` (run-job.js:653, macOS)
 regenerates the catch-up entry **and its digest map from the current (mutable)
@@ -222,9 +241,12 @@ others.
       **alerts** (never silently suppresses).
 - [ ] The `--job-digests` transport is base64url; a malformed/oversized value
       fails closed with a durable alert, never an unhandled parse crash.
-- [ ] **[R5]** Only attended `sync`/`schedule` mint or replace the catch-up map/
-      registration; NO nightly/runtime path (esp. the run-job post-success
-      backstop) re-derives authorization from `config.yaml`. Removing the final
+- [ ] **[R5/R7]** Only attended, user-invoked registration callers (`sync`/
+      `repointSchedules`, `schedule add`, `init`, `adopt`) mint/replace the
+      catch-up map, always from freshly-validated descriptors; NO nightly/runtime
+      path (esp. the run-job post-success backstop) re-derives authorization from
+      `config.yaml`. `repointSchedules` is the sole teardown owner (`schedule
+      remove` delegates teardown to it). Removing the final
       job via attended `sync` tears the entry + map down cleanly.
 
 ## Acceptance criteria
@@ -241,10 +263,13 @@ others.
 - [ ] **[removal, R4:#1]** Removing an authorized job from `config.yaml` ⇒ a
       **REMOVAL alert** + zero spawn (not silent). An added/unauthorized job ⇒ an
       alert, zero spawn.
-- [ ] **[transport, R4:#3]** End-to-end: the argv value Node actually receives on
-      macOS/Linux/Windows decodes (base64url → JSON → shape-valid) to the bound
-      map; a **malformed** or **oversized** map ⇒ durable alert + zero spawn (no
-      crash, no invalid-JSON exception).
+- [ ] **[transport, R4:#3 / R8:#2]** End-to-end on **macOS + Windows** (the map
+      platforms): the argv value Node actually receives decodes (base64url → JSON →
+      shape-valid) to the bound map; a **malformed** or **oversized** map ⇒ durable
+      alert + zero spawn (no crash). **On Linux there is no map** — assert the
+      per-job `.timer Persistent=true` replays the NORMAL per-job `.service`
+      (authorized by its own `--expect-digest`), with **no** separate all-job
+      catch-up dispatch.
 - [ ] **[runtime-mint, R5]** Statically add/modify job B in `config.yaml`, then
       let unchanged authorized job A succeed on its normal fire ⇒ A's success does
       **NOT** reload the catch-up entry and does **NOT** authorize B; a subsequent
@@ -255,6 +280,11 @@ others.
       `sync`) each bind the catch-up map from **freshly-validated descriptors**
       derived in that run (assert the loaded entry's argv carries the correct
       base64url map; assert it is NOT sourced from a retained file or a stale map).
+- [ ] **[adopt pin-bootstrap, R8:#3]** A valid pre-WP-154 install (config.yaml,
+      **no** `exec-pins.json`) → `adopt` **creates pins** (clean-PATH `createPins`)
+      then binds a valid descriptor + catch-up map; if pins can't be created
+      (e.g. claude/git unresolvable) it **aborts before mutating adoption state**
+      (fail-closed, never half-adopt) — never binds a partial/pinless descriptor.
 - [ ] **[missing-registration heal, R6]** With the source file + manifest intact
       and canonical but the **loaded** OS catch-up registration missing, ONE
       attended `wienerdog sync` restores it with the correct bound map (assert the
