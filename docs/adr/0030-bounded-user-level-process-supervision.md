@@ -1,6 +1,6 @@
 # ADR-0030: Bounded user-level process supervision — reap the findable descendant tree to quiescence; adversarial full-detach is A12
 
-Status: Proposed
+Status: Accepted
 Date: 2026-07-19
 
 > **OWNER-APPROVED IN PRINCIPLE (2026-07-19).** In the A10 Codex round-1 review
@@ -8,8 +8,9 @@ Date: 2026-07-19
 > the **findable** descendant tree to quiescence and does **not** claim closure
 > against an adversarially full-detaching native process — that residual is
 > A12's, mitigated meanwhile by the A1 hermetic runtime profiles. Following the
-> ADR-0028 flow, this ADR stays **Proposed** until the owner ratifies it at the
-> `Ready`-flip of the A10 WPs that cite it; a later WP ruling that changes a
+> ADR-0028 flow, this ADR was **ratified (Accepted) by the owner at the
+> `Ready`-flip of the A10 WPs that cite it** (2026-07-19, after the Codex
+> design-review loop converged); a later WP ruling that changes a
 > detail here lands as a dated amendment (the ADR-0024 convention). The A10 WPs
 > (`WP-a10-reap-mechanism`, `WP-a10-escape-harness`) are the per-file
 > design-of-record; this ADR is the durable boundary they cite instead of an
