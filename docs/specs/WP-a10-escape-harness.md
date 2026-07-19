@@ -77,8 +77,11 @@ posture the harness itself must honor.
   `builtin:dream` it `reapGroup`s the **per-token** brain pidfile group
   (`state/dream-brain.<token>.pid`, group B) even when the middle `dream.js` died —
   three reap operations, two group-A targets sharing `child.pid` plus one group-B.
-- **`src/cli/dream.js`** writes/removes the per-token brain pidfile and reaps via
-  `reapTree` on the timeout path.
+- **`src/cli/dream.js`** writes the per-token brain pidfile at spawn and reaps via
+  `reapTree` on the timeout path; in its `finally` (when a run token is present) it
+  `reapGroup(child.pid)`s group B **before** deleting the pidfile (R6-2), so a
+  brain-leader non-zero exit cannot leak a surviving group-B member past the
+  hand-up release.
 - **`tests/integration/dream.test.js`** already uses `{ skip: process.platform
   === 'win32' }` for POSIX-only integration cases — reuse that idiom.
 - No live escape harness exists yet; the mechanism WP proved the primitive only
@@ -90,9 +93,9 @@ posture the harness itself must honor.
 
 | Action | Path | Notes |
 |--------|------|-------|
-| create | tests/integration/reap-escape.test.js | The live POSIX escape-negative harness: escape matrix (a)–(e), non-vacuity baseline, the SIGKILL-the-middle-while-brain-lives test, the fake-`ps`-in-PATH negative, and the timed snapshot/fork/setsid interleaving attack test. Skips on win32. |
-| create | tests/fixtures/reap/supervised-child.js | A tiny Node fixture: a supervised "middle" that spawns a requested escape variant (env/argv-selected) and prints the grandchild pid on stdout, then sleeps; used as the reap target. For the middle-death proof it can spawn **both** a group-A descendant and a re-detached brain and write the per-token brain pidfile. |
-| create | tests/fixtures/reap/spawn-variant.js | Spawns one grandchild per variant — plain / re-detached (`detached:true`) / `setsid` / double-fork-no-setsid / setsid+double-fork — each a long `sleep`; prints its pid. Pure Node (use `child_process` + `process.setsid` via a `setsid`-style re-exec; no external `setsid` binary required, but if used it must be the absolute `/usr/bin/setsid` where present, else the Node `detached`+new-session technique). |
+| create | tests/integration/reap-escape.test.js | The live POSIX escape-negative harness: escape matrix (a)–(e), non-vacuity baseline, the SIGKILL-the-middle-while-brain-lives test, the fake-`ps`-in-PATH negative, the timed snapshot/fork/setsid interleaving attack test, and the **brain-leader-non-zero-exit group-B-quiescence-before-pidfile-delete test (R6-2)**. Skips on win32. |
+| create | tests/fixtures/reap/supervised-child.js | A tiny Node fixture: a supervised "middle" that spawns a requested escape variant (env/argv-selected) and prints the grandchild pid on stdout, then sleeps; used as the reap target. For the middle-death proof it can spawn **both** a group-A descendant and a re-detached brain and write the per-token brain pidfile. For the **brain-leader-exit proof (R6-2)** it spawns a re-detached "brain" (group B) that itself spawns a **same-group-B child** (plain, stays in the brain's pgid) and then **exits non-zero**, and writes the per-token brain pidfile — so a surviving group-B member outlives its leader. |
+| create | tests/fixtures/reap/spawn-variant.js | Spawns one grandchild per variant — plain / re-detached (`detached:true`) / `setsid` / double-fork-no-setsid / setsid+double-fork — each a long `sleep`; prints its pid. A re-detached "brain" variant also supports a **same-group-B-child-then-exit-non-zero** mode (for the R6-2 proof): the brain leader spawns a plain same-pgid child, prints its pid, then exits with a non-zero code, leaving a leaderless surviving group-B member. Pure Node (use `child_process` + `process.setsid` via a `setsid`-style re-exec; no external `setsid` binary required, but if used it must be the absolute `/usr/bin/setsid` where present, else the Node `detached`+new-session technique). |
 | create | tests/fixtures/reap/fake-ps | An executable fake `ps` (marker-writing / bogus-output) for the PATH-injection negative test — proves the reap never runs it. |
 
 ### Escape-test matrix (the A10 acceptance)
@@ -176,6 +179,32 @@ is not vacuously green.
      force the interleaving** (owner, round-2) — a best-effort timer is sufficient
      for a nightly note-taking job.
 
+4. **Brain-leader non-zero exit — group-B quiescence BEFORE the hand-up is
+   released (R6-2 — mandatory, required green, POSIX gate).** This proves
+   `dream.js`'s `finally` reaps group B before it deletes the per-token pidfile, so
+   a surviving group-B member cannot slip past both `dream.js` **and** `run-job`'s
+   pidfile-gated backstop. Stand up the real chain: a `run-job`-style supervisor
+   mints a run token and spawns the `supervised-child.js` middle, which spawns a
+   **re-detached "brain"** (group B) and writes the per-token brain pidfile
+   (`state/dream-brain.<token>.pid`) — the `builtin:dream` wiring. The **brain
+   leader itself spawns a same-group-B child** (a plain, non-detached child that
+   stays in the brain's pgid) and then **exits NON-ZERO** — so by the time the reap
+   runs the brain leader is gone but a surviving group-B member remains. Drive the
+   **REAL** `dream.js` `runBrainWithWatchdog` settle path (its actual `finally`, or
+   a thin harness invoking the exact same reap-on-settle function — not a
+   reimplementation), which on a run-token-present settle does
+   `reapGroup(child.pid)` **before** it removes the pidfile. Assert: the surviving
+   group-B child reaches `ESRCH`, **and** that reap happens **before** the pidfile
+   is deleted — observed by recording the order of the `reapGroup(child.pid)` call
+   and the pidfile unlink (e.g. a wrapped unlink / recorded call sequence, or
+   confirming the pidfile still exists at the instant the survivor is confirmed
+   dead). The brain leader's exit alone must **not** be what removes the child (the
+   fixture keeps the group-B child alive independently), so a green proves the
+   `reapGroup` — not luck — did the reaping. **This case must actually run on the
+   POSIX gate — a skip is NOT a pass.** (If the `finally` deleted the pidfile
+   before the `reapGroup`, or omitted the `reapGroup` entirely, the surviving
+   group-B child would still be live and this test must fail.)
+
 ## Security checklist
 
 - [ ] The harness proves, with **real** processes, that a re-detached child
@@ -207,6 +236,13 @@ is not vacuously green.
       leaderless group-A member and the brain both reach `ESRCH` and the pidfile is
       deleted **before** fixture cleanup — **zero survivors**. (Omitting
       `reapGroup(child.pid)` must fail this test.)
+- [ ] **[Brain-leader-exit group-B quiescence, R6-2]** With the brain leader
+      exiting **non-zero** while a same-PGID group-B child survives, the **real**
+      `dream.js` `finally` reap runs `reapGroup(child.pid)` and the surviving
+      group-B child reaches `ESRCH` **before** the per-token pidfile is deleted —
+      asserted by observing the reap/unlink order. This case **runs on the POSIX
+      gate** (a skip is not a pass); omitting the `reapGroup` or deleting the
+      pidfile first must fail it.
 - [ ] **[No bare ps, finding 7]** With a `fake-ps` earlier on `PATH`, the reap
       does not run it (marker absent) and still kills a real re-detached child.
 - [ ] **[TOCTOU group-retaining, finding 8a]** A **group-retaining** grandchild
@@ -229,6 +265,9 @@ grep -nE "setsid|double-fork|residual|ESRCH|dream-brain|reapGroup|group-A|fake-p
 # R4-B: the middle-death proof drives BOTH group-A reaps (reapTree + reapGroup on
 # child.pid) so the leaderless reparented member is proven ESRCH:
 grep -nE "reapTree|reapGroup|leaderless|child\.pid" tests/integration/reap-escape.test.js
+# R6-2: the brain-leader-non-zero-exit proof asserts group-B quiescence (reapGroup)
+# BEFORE the pidfile is deleted, and runs on the POSIX gate (not a skip):
+grep -nE "brain.leader|non-zero|before .*pidfile|group-B|ESRCH" tests/integration/reap-escape.test.js
 ```
 
 ## Implementation notes & constraints

@@ -233,10 +233,10 @@ only on timeout.
 |--------|------|-------|
 | create | src/core/reap.js | `reapTree(pid, platform, seams)` — authoritative process-table read (Linux `/proc`, macOS verified absolute `/bin/ps`, **never** bare `ps`), real ppid-descendant + group SIGKILL, **kill–rescan to two consecutive zero sweeps** (bounded), best-effort/never-throws; win32 **absolute System32** `taskkill /T /F` with **no bare-name fallback**. `reapGroup(pgid, platform, seams)` — the authenticated-PGID primitive: POSIX **negative-PGID** `kill(-pgid, SIGKILL)` (works even if the group leader already exited), win32 absolute `taskkill /PID <pgid> /T /F` — **win32 reaches only a live pid + its live tree, NO negative-PGID equivalent, so NO leaderless-member guarantee (R5-2; deferred to WP-a10-windows-reap)**; best-effort/never-throws. Also exports `readProcessTable` for direct unit coverage. Pure, seam-injectable. |
 | modify | src/cli/run-job.js | (a) `killProcessTree` delegates to `reapTree` (keep the export + signature). (b) For `builtin:dream`, **mint a per-run token BEFORE spawn** and pass it to the child (env var), and compute the per-run pidfile path `state/dream-brain.<token>.pid`. (c) Reap on **every** child-exit path: on an **abnormal** settle (timeout / `'error'` / non-clean `'close'`) reap the group-A tree with **BOTH** `reapTree(child.pid)` **and** `reapGroup(child.pid)` (the negative-PGID group kill reaches a leaderless reparented group-A member once the middle/group-leader has exited — after `'close'` `reapTree`'s ppid-closure alone finds nothing); on **any** settle for `builtin:dream` read the per-token pidfile and `reapGroup(brain.pgid)` if present, then delete it. **POSIX guarantee only: on win32 the group-reap authority does NOT activate — the win32 abnormal-close path keeps the pre-A10 timeout-path `taskkill /T /F` behavior, leaderless-member case deferred to WP-a10-windows-reap (R5-2).** Best-effort; never change the job outcome/throw. |
-| modify | src/cli/dream.js | `runBrainWithWatchdog` uses `reapTree(child.pid, platform, seams)` on timeout; when a run token is present (set by `run-job`), **write** the per-run brain pidfile (`state/dream-brain.<token>.pid`, `0600`, `{pid, pgid}`, **atomically** via `writeFilePrivate`) right after `spawnBrain` and **remove** it in `finally`. Standalone (no token) writes no hand-up pidfile. Thread `paths` + an injected `platform` (never mock `process.platform`) + optional reap seam. |
+| modify | src/cli/dream.js | `runBrainWithWatchdog` uses `reapTree(child.pid, platform, seams)` on timeout; when a run token is present (set by `run-job`), **write** the per-run brain pidfile (`state/dream-brain.<token>.pid`, `0600`, `{pid, pgid}`, **atomically** via `writeFilePrivate`) right after `spawnBrain`. In `finally`, when a run token is present, **PROVE group-B quiescence BEFORE releasing the hand-up**: first `reapGroup(child.pid, platform, seams)` (the negative-PGID group kill reaps any surviving group-B member even after the brain leader has exited — brain pgid == `child.pid`), **then remove** the pidfile. Deleting the pidfile before that reap is the R6-2 bug: on a non-timeout brain-leader **non-zero exit** with a surviving same-PGID group-B child, dream.js's `finally` would drop the pidfile before `run-job`'s abnormal-settle runs, and `run-job` only `reapGroup(brain.pgid)`s when the pidfile is present — so the survivor would leak. Standalone (no token) writes no hand-up pidfile. Thread `paths` + an injected `platform` (never mock `process.platform`) + optional reap seam. |
 | create | tests/unit/reap.test.js | `reapTree`/`reapGroup`/`readProcessTable` unit cases (fake `/proc` root + fake `/bin/ps`; classification of plain/re-detached/setsid/double-fork; kill–rescan quiescence; never-throws on a bad table; darwin reader uses absolute `/bin/ps`, never bare `ps`; `reapGroup` does a **negative-PGID** kill and reaps an **exited-leader-with-live-member** group; win32 uses the **absolute System32** `taskkill` and **never** a bare-name / PATH-planted `taskkill`). |
 | modify | tests/unit/scheduler-runjob.test.js | `killProcessTree` reaps via `reapTree` (kills a re-detached grandchild, not only group A); on abnormal close the **group-A tree** is reaped via **BOTH** `reapTree(child.pid)` **and** `reapGroup(child.pid)` (assert both seams are invoked — the `reapGroup(child.pid)` negative-PGID kill is what covers a leaderless reparented group-A member once the middle has exited); for `builtin:dream` the **per-token** brain pidfile group is reaped via `reapGroup(brain.pgid)` and the pidfile deleted; a second, lock-losing concurrent run reaps **only its own** token pidfile and never the other run's live brain; win32 branch shells the absolute System32 `taskkill /T /F`. |
-| modify | tests/integration/dream.test.js | `runBrainWithWatchdog` writes the **per-token** brain pidfile at spawn and removes it on normal completion; the timeout path reaps a re-detached fake brain (no orphan) via the injected reap seam; a middle killed at the spawn→hand-up boundary is covered (the sub-ms residual documented, not asserted reaped). |
+| modify | tests/integration/dream.test.js | `runBrainWithWatchdog` writes the **per-token** brain pidfile at spawn and removes it on normal completion; the timeout path reaps a re-detached fake brain (no orphan) via the injected reap seam; **on a brain-leader non-zero exit the `finally` invokes `reapGroup(child.pid)` BEFORE deleting the pidfile** (assert the reap seam is called and ordered before the pidfile unlink — R6-2); a middle killed at the spawn→hand-up boundary is covered (the sub-ms residual documented, not asserted reaped). |
 
 ### Exact contracts
 
@@ -384,7 +384,12 @@ signature; the existing `{kill, spawnSync}` seams map straight through).
   - After the child settles by **any** path, for `builtin:dream` read **this run's**
     `state/dream-brain.<token>.pid`; if present, `reapGroup(brain.pgid, platform,
     opts)` to kill the detached group-B brain (covers a brain orphaned by a dead
-    middle), then delete the pidfile.
+    middle), then delete the pidfile. On the **normal brain-leader-exit** path
+    `dream.js`'s own `finally` has already `reapGroup`ed group B and removed the
+    pidfile (R6-2), so this read is a best-effort no-op; `run-job`'s reap here is
+    the **backstop** for the *other* leak path — a middle that died **before**
+    `dream.js`'s `finally` could run, leaving the pidfile behind for `run-job` to
+    find.
 - Do **not** `reapTree(child.pid)` after a **clean** `'close'` (exit 0): the group
   leader exited and re-reaping is pointless; the per-token brain pidfile was
   already removed by `dream.js`, and reading a stale one is a best-effort no-op.
@@ -399,12 +404,36 @@ is `detached`, so its pid is its pgid) **atomically** via `writeFilePrivate`
 (`0600`, temp+rename — the write happens immediately post-spawn so the hand-up
 window is sub-ms); `reapTree(child.pid, platform, seams)` on the timeout path
 (replacing the inline `process.kill(-child.pid)`); keep `reject(new
-WienerdogError(...))` and `finally { clearTimeout(timer) }`; in the same
-`finally`, **remove** this run's pidfile (best-effort). A **standalone** `wienerdog
-dream` (no run token) writes no hand-up pidfile — its inner watchdog reaps the
-brain directly. Thread `paths`, an injected `platform` (default
-`process.platform`), and an optional reap seam from the caller (`dream.js`'s
-`run(argv, opts)` already carries a JS-only `opts` seam idiom — WP-155).
+WienerdogError(...))` and `finally { clearTimeout(timer) }`.
+
+**In the same `finally`, when a run token is present, PROVE group-B quiescence
+BEFORE releasing the hand-up (R6-2).** Order is load-bearing: **first**
+`reapGroup(child.pid, platform, seams)` — the **negative-PGID** `kill(-child.pid)`
+that reaps any surviving group-B member even after the brain leader has exited
+(the brain is `detached`, so its pgid **is** `child.pid`) — **then** remove this
+run's pidfile (best-effort). **Removing the pidfile before that reap is the bug:**
+on a **non-timeout brain-leader non-zero exit** (the brain `'close'`s non-zero →
+`runBrainWithWatchdog` throws its `WienerdogError` → this `finally` runs), a
+same-PGID group-B child the brain spawned can survive the leader. If the `finally`
+deletes the pidfile *before* proving quiescence, then by the time `run-job`'s
+outer abnormal-settle runs the pidfile is gone — and `run-job` only
+`reapGroup(brain.pgid)`s **when the pidfile is present** — so that surviving
+group-B member leaks unreaped. Neither the inner watchdog (it fires **only** on
+timeout, not on a brain-leader exit) nor `run-job` would reap it on this path. So
+`dream.js` itself must guarantee group-B quiescence via `reapGroup(child.pid)`
+before it deletes the pidfile, on **every** settle where the brain leader has
+exited — not only on timeout. (`reapGroup` is best-effort and never throws; a
+negative-PGID kill of an already-empty group is a harmless `ESRCH` no-op, so
+running it unconditionally in the token-present `finally` is safe.) The outer
+`run-job` abnormal-settle remains the **backstop** for the *other* leak path — a
+middle that dies **before** this `finally` runs, leaving the pidfile behind for
+`run-job` to find and `reapGroup(brain.pgid)`.
+
+A **standalone** `wienerdog dream` (no run token) writes no hand-up pidfile and
+does no `reapGroup` in `finally` — its inner watchdog reaps the brain directly.
+Thread `paths`, an injected `platform` (default `process.platform`), and an
+optional reap seam from the caller (`dream.js`'s `run(argv, opts)` already carries
+a JS-only `opts` seam idiom — WP-155).
 
 ## Security checklist
 
@@ -435,6 +464,15 @@ brain directly. Thread `paths`, an injected `platform` (default
       token's group via `reapGroup` and deletes the file — asserted in
       `scheduler-runjob.test.js` (the full SIGKILL-the-middle live proof is the
       sibling harness WP).
+- [ ] **[Group-B quiescence before hand-up release, R6-2]** On a **brain-leader
+      non-zero exit** (not a timeout) with a surviving same-PGID group-B member,
+      `dream.js`'s `finally` calls `reapGroup(child.pid)` **before** it deletes the
+      per-token pidfile — asserted in `dream.test.js` that the reap seam is invoked
+      and ordered strictly before the pidfile unlink. (Deleting the pidfile first
+      would let a surviving group-B child escape both `dream.js` and `run-job`'s
+      pidfile-gated backstop.) The live post-`'close'` proof — the surviving member
+      reaching `ESRCH` **before** the pidfile is deleted — is on the POSIX gate in
+      `WP-a10-escape-harness`.
 - [ ] **[Cross-run isolation, round-2]** A second, lock-losing concurrent dream
       run reaps **only its own** token pidfile and never reads or kills the first
       run's live brain — unit-asserted with two distinct tokens.
@@ -490,6 +528,9 @@ npm run lint
 grep -nE "/bin/ps|/proc|System32|reapGroup|kill\(\s*-" src/core/reap.js
 # the per-run token pidfile + reapGroup wiring is present:
 grep -nE "dream-brain\.|WIENERDOG_DREAM_RUN_TOKEN|reapGroup|reapTree" src/cli/run-job.js src/cli/dream.js
+# R6-2: dream.js's finally reaps group B (reapGroup child.pid) BEFORE deleting the
+# pidfile, so a brain-leader non-zero exit cannot leak a surviving group-B member:
+grep -nE "reapGroup\(.*child\.pid" src/cli/dream.js
 # R5-2: the win32 leaderless-member scope boundary is carried into code comments
 # (win32 group-reap provides no leaderless guarantee; POSIX-only this release):
 grep -niE "leaderless|no negative-pgid|windows-reap|pre-A10|POSIX-only" src/core/reap.js src/cli/run-job.js

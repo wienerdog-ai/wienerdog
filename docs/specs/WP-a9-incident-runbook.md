@@ -173,7 +173,7 @@ state and act on:
 
 | Action | Path | Notes |
 |--------|------|-------|
-| create | docs/runbooks/incident.md | The general incident-drill runbook (house numbered-checklist format), covering the seven ordered A9 steps: (1) snapshot the `config.yaml` `jobs:` definitions (the restore source; `schedule.json` holds only watermarks), remove every per-job schedule **and** the shared catch-up entry — the catch-up removal deleting its scheduler FILE **and** its `install-manifest.json` entry, not merely unregistering it, so `sync`'s `reloadMissing` cannot resurrect it — then reach proven quiescence by REBOOT (the **sole** authoritative proof — a pre-reboot process grep is a non-proof hint that can only *reveal* a live job; if you cannot reboot you **stop-and-escalate**, never grep-certify clean); (2) preserve-evidence-privately; (3) revoke+rotate; (4) purge digest+managed-block; (5) clean git; (6) fail-closed byte-level acceptance drill (whole-file marker grep + one-sentinel-pair check per installed harness file); (7) re-authorize by reconstructing `schedule add --job` for **builtin** jobs from the `jobs:` snapshot — a `skill:*` routine is frozen by the A0 pre-use gate (audit A1) and is NOT re-addable this release (do not promise a failing `--skill` command; only its snapshot definition is preserved for later). |
+| create | docs/runbooks/incident.md | The general incident-drill runbook (house numbered-checklist format), covering the seven ordered A9 steps: (1) snapshot the `config.yaml` `jobs:` definitions (the restore source; `schedule.json` holds only watermarks), remove every per-job schedule **and** the shared catch-up entry — the catch-up removal deleting its scheduler FILE **and** its `install-manifest.json` entry, not merely unregistering it, so `sync`'s `reloadMissing` cannot resurrect it — then reach proven quiescence by REBOOT (the **sole** authoritative proof — a pre-reboot process grep is a non-proof hint that can only *reveal* a live job; if you cannot reboot you **stop-and-escalate**, never grep-certify clean); (2) preserve-evidence-privately; (3) revoke+rotate; (4) purge digest+managed-block; (5) clean git; (6) fail-closed acceptance drill (SessionStart-hook `additionalContext` byte-compare against the raw `state/digest.md`, plus a three-check managed-block proof — clean `sync` notice + whole-file marker grep + one-sentinel-pair check per installed harness file; **no** region-vs-raw-digest byte-compare, which would falsely fail because `sync` trims+neutralizes); (7) re-authorize by reconstructing `schedule add --job` for **builtin** jobs from the `jobs:` snapshot — a `skill:*` routine is frozen by the A0 pre-use gate (audit A1) and is NOT re-addable this release (do not promise a failing `--skill` command; only its snapshot definition is preserved for later). |
 | modify | docs/runbooks/secret-incident.md | Add one cross-link near the top: the secret leak is the credential-specific case of the general incident drill (link `incident.md`); for a general or suspected-compromise incident, start there. Do NOT rewrite its steps. |
 
 ### Exact contract — what `docs/runbooks/incident.md` must state
@@ -387,9 +387,11 @@ The detail of each:
      STOP.
    - **Grep the regenerated `state/digest.md`** for the poisoned marker directly
      (belt-and-suspenders against the decoded bytes above).
-   - **Check the managed block in every INSTALLED harness file via `sync`'s own
-     output PLUS an explicit WHOLE-FILE marker check AND a sentinel-region check —
-     not `doctor`.** `sync` runs only the **detected** harness's adapter, and a
+   - **Check the managed block in every INSTALLED harness file with a THREE-CHECK
+     conjunction — a clean `sync` (no notice) AND a WHOLE-FILE marker grep AND a
+     single-sentinel-pair check — not `doctor`, and NOT a region-vs-raw-digest
+     byte-compare (see the third check for why that would falsely fail).** `sync`
+     runs only the **detected** harness's adapter, and a
      single-harness (Claude-only **or** Codex-only) install is supported and
      tested — so exactly one of `CLAUDE.md` / `AGENTS.md` may legitimately be
      **absent**. Run this check on **each file that a detected harness owns**: both
@@ -410,16 +412,26 @@ The detail of each:
        injected**. A grep scoped to only the sentinel region would falsely pass.
        The marker must be found **nowhere** in the file. `sync` alone does **not**
        prove cleanup when the sentinels were missing.
-     - **Confirm exactly one sentinel pair, and that its region matches the clean
-       digest.** Confirm the file contains exactly one `<!-- wienerdog:begin -->` …
+     - **Confirm exactly one sentinel pair — no orphaned out-of-sentinel
+       remnant.** Confirm the file contains exactly one `<!-- wienerdog:begin -->` …
        `<!-- wienerdog:end -->` pair. A **duplicated** pair is a failure. A
        **missing** pair is also a failure — and specifically means `sync` appended
        a new block while your pre-existing (possibly poisoned) content sits
        orphaned **outside** it: you must **manually remove or quarantine that
-       orphaned content**, re-run `sync`, and re-run this drill. When the single
-       pair is present, byte-compare the text **between** the sentinels against the
-       clean `state/digest.md` (the same bytes the SessionStart hook injects) —
-       they must match, so no extra text was slipped **inside** the region.
+       orphaned content**, re-run `sync`, and re-run this drill.
+     - **Do NOT byte-compare the sentinel region against the raw
+       `state/digest.md`.** `sync` writes the managed block as a *transform* of the
+       digest — it trims trailing newlines and neutralizes any full-line sentinel in
+       the digest — so the region is **never byte-identical** to the raw digest, and
+       such a compare would **falsely fail on a clean install** and wrongly block
+       re-authorization. Do not reproduce that transform by hand. The three checks
+       above already prove the block is clean **by construction**: the whole-file
+       marker grep proves the poison is nowhere in the file; the single-pair check
+       proves no poisoned remnant sits orphaned outside the block; and a clean
+       `sync` with no notice proves the block is exactly what `sync` renders from
+       the current, clean digest. If the digest source is clean and `sync`
+       succeeded with no warning/notice, the block is clean by construction — the
+       raw-digest byte-equality would add no security property, only false failures.
      (`doctor` does **not** verify managed-block / sentinel integrity — do not
      treat a clean `doctor` as proof here.)
    - *(Optional extra sanity check, NOT the proof.)* You may also start a **new**
@@ -536,9 +548,13 @@ fix-source → `memory approve` → `sync`). No jargon without a one-clause glos
       check that (a) `grep -F`s the poisoned marker over the **ENTIRE** file (not
       only the sentinel region — a both-sentinels-deleted attack leaves poisoned
       text that `sync` appends around, still injected), and (b) confirms exactly
-      one sentinel pair whose region matches the clean digest, treating a **missing**
+      one sentinel pair (no orphaned out-of-sentinel remnant), treating a **missing**
       pair as "`sync` appended a fresh block and the old content is orphaned outside
-      it — manually remove/quarantine it" (**not** `doctor`). The new-session
+      it — manually remove/quarantine it" (**not** `doctor`); it does **NOT**
+      byte-compare the sentinel region against the raw `state/digest.md` (`sync`'s
+      trim+neutralize transform means the region never equals the raw digest, so
+      that compare would falsely fail on a clean install — the three checks prove the
+      block clean by construction). The new-session
       observation is an optional extra, not the proof; the proof is tied to the
       ADR-0021 byte-gated injection.
 - [ ] **[R4-D]** The re-authorize step re-adds **only builtin** jobs via
@@ -576,6 +592,10 @@ grep -nE "bin/session-start\.sh|WIENERDOG_HOME|WIENERDOG_JOB|additionalContext|h
 # the managed-block check greps the WHOLE file, handles a missing sentinel pair
 # (orphaned poison) and a single-harness (Claude-only / Codex-only) install:
 grep -niE "entire file|whole .*file|orphan|installed harness|single-harness" docs/runbooks/incident.md
+# R6-1: the managed-block check is the three-check conjunction (clean sync + whole-file
+# marker grep + exactly one sentinel pair), NOT a fragile region-vs-raw-digest
+# byte-compare (buildBlock trims+neutralizes, so the region never equals the raw digest):
+grep -niE "by construction|never byte-identical|falsely fail|one sentinel pair|three-check" docs/runbooks/incident.md
 # memory approve uses a short name, not a path:
 grep -nE "memory approve (profile|preferences|goals|instructions|<note>)" docs/runbooks/incident.md
 # R4-D: re-authorize re-adds only builtin --job; skill:* is frozen (A0/A1) and not
