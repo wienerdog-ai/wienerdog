@@ -1,4 +1,4 @@
-# ADR-0031: Contract-dense specs extract each contract into one authoritative reference table; prose cites it, never restates it
+# ADR-0031: A dense contract's single source of truth is one canonical reference table; registered mirrored surfaces defer to it and move with it
 
 Status: Proposed
 Date: 2026-07-19
@@ -114,16 +114,23 @@ This replaces the earlier, vaguer "3+ discrete contracts of five shapes" trigger
 two-or-more-conditions test is concrete and catches the drift-prone cases directly (a
 taxonomy plus multiple mirrors, an authority boundary plus successor specs, and so on).
 
-**Examples, honestly — one clean precedent, one cautionary case.**
+**Examples, honestly — a table-extraction precedent and a cautionary drift case. The
+Mirrored Surface Checklist is a new discipline this ADR introduces, and no existing spec
+yet carries it; the first spec to demonstrate it is the follow-up `WP-contract-reference-tables`.**
 
-- **Clean precedent — `WP-a9-incident-runbook`.** Its five recurring contracts live in
-  compact canonical reference tables (Tables A–E: path resolution, per-platform scheduler
-  artifacts, restore rules, the managed-block drill gate, `memory approve` allowed names).
-  The spec's Deliverables table and acceptance criteria are **registered mirrored summaries
-  that defer to those tables** — not second independent authorities. The extraction was
-  verified faithful against both the post-R8 prose and the code, and the very next round
-  (round 9) returned **APPROVE / SHIPPABLE**. This is what the discipline looks like when
-  every mirror is registered and deferring: clean, with no second authority anywhere.
+- **Table-extraction precedent — `WP-a9-incident-runbook`.** Its five recurring contracts
+  were pulled out of scattered operative prose into compact canonical reference tables
+  (Tables A–E: path resolution, per-platform scheduler artifacts, restore rules, the
+  managed-block drill gate, `memory approve` allowed names). The extraction was verified
+  faithful against both the post-R8 prose and the code, and the very next round (round 9)
+  returned **APPROVE / SHIPPABLE** with no material findings. That is the evidenced win —
+  extract each scattered contract into one authoritative table and the review loop converges
+  immediately — and it is the **extraction** half of this decision, standing on real
+  evidence. What the runbook does **not** demonstrate is the Mirrored Surface Checklist: it
+  was extracted **before** this ADR named the checklist, so its Deliverables cells and
+  acceptance criteria restate the Tables A–E facts **without** being registered as mirrors or
+  explicitly marked as deferring. Read it as the extraction precedent only — **not** as a
+  checklist-compliant exemplar, and not as a spec whose mirrors are all registered.
 - **Cautionary case — `WP-a10-reap-mechanism`.** Its **settle-path matrix** is the correct
   canonical source for which reap primitive runs on which of the four exit paths. But R11-2
   found several mirrors of it — the Deliverables `modify` cells, the "unified rule in one
@@ -136,6 +143,16 @@ taxonomy plus multiple mirrors, an authority boundary plus successor specs, and 
   derived local copy of the matrix, which ADR-0005 self-containment *requires*; under this
   framing that copy is a legitimate cross-document mirrored summary that defers to the owning
   table — see the boundary below.)
+
+The ADR does **not** need a single spec that already shows both halves to be sound. The
+**extraction** half is evidenced by the runbook (round 9 returned clean immediately after
+its tables landed); the **drift** half — the failure that motivates the Mirrored Surface
+Checklist — is evidenced by R11-2 itself (an unregistered mirror that drifted from its
+canonical table). The Mirrored Surface Checklist is therefore a **new** discipline this ADR
+introduces to close that drift gap, so far **unproven by any existing spec**: the runbook
+predates it and demonstrates only extraction, and its first application and demonstration is
+the follow-up `WP-contract-reference-tables`. The absence of one already-complete exemplar
+is thus explicit and intentional, not an oversight.
 
 **The single exception — a contract whose facts are all gate-enforced.** A specific
 **contract** — never a whole spec — is exempt from having a canonical table **only when a
