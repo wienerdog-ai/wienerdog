@@ -79,9 +79,12 @@ posture the harness itself must honor.
   three reap operations, two group-A targets sharing `child.pid` plus one group-B.
 - **`src/cli/dream.js`** writes the per-token brain pidfile at spawn and reaps via
   `reapTree` on the timeout path; in its `finally` (when a run token is present) it
-  `reapGroup(child.pid)`s group B **before** deleting the pidfile (R6-2), so a
-  brain-leader non-zero exit cannot leak a surviving group-B member past the
-  hand-up release.
+  `reapGroup(child.pid)`s group B **before** deleting the pidfile (R6-2), and
+  `reapGroup` now **polls to verified quiescence** and returns a checked
+  `{ reaped }` — so `dream.js` deletes the pidfile **only** once the group is
+  verified empty (`{ reaped: true }`) and **retains** it on a timed-out reap for
+  `run-job`'s backstop (R7-2). A brain-leader non-zero exit therefore cannot leak a
+  surviving group-B member past the hand-up release.
 - **`tests/integration/dream.test.js`** already uses `{ skip: process.platform
   === 'win32' }` for POSIX-only integration cases — reuse that idiom.
 - No live escape harness exists yet; the mechanism WP proved the primitive only
@@ -193,12 +196,14 @@ is not vacuously green.
    **REAL** `dream.js` `runBrainWithWatchdog` settle path (its actual `finally`, or
    a thin harness invoking the exact same reap-on-settle function — not a
    reimplementation), which on a run-token-present settle does
-   `reapGroup(child.pid)` **before** it removes the pidfile. Assert: the surviving
-   group-B child reaches `ESRCH`, **and** that reap happens **before** the pidfile
-   is deleted — observed by recording the order of the `reapGroup(child.pid)` call
-   and the pidfile unlink (e.g. a wrapped unlink / recorded call sequence, or
-   confirming the pidfile still exists at the instant the survivor is confirmed
-   dead). The brain leader's exit alone must **not** be what removes the child (the
+   `reapGroup(child.pid)` **before** it removes the pidfile — and, per R7-2, removes
+   the pidfile **only** once that `reapGroup` reports the group verified-empty
+   (`{ reaped: true }`), so the ESRCH-before-delete ordering is a mechanism
+   guarantee, not incidental timing. Assert: the surviving group-B child reaches
+   `ESRCH`, **and** that reap happens **before** the pidfile is deleted — observed by
+   recording the order of the `reapGroup(child.pid)` call and the pidfile unlink
+   (e.g. a wrapped unlink / recorded call sequence, or confirming the pidfile still
+   exists at the instant the survivor is confirmed dead). The brain leader's exit alone must **not** be what removes the child (the
    fixture keeps the group-B child alive independently), so a green proves the
    `reapGroup` — not luck — did the reaping. **This case must actually run on the
    POSIX gate — a skip is NOT a pass.** (If the `finally` deleted the pidfile

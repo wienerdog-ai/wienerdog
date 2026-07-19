@@ -231,12 +231,12 @@ only on timeout.
 
 | Action | Path | Notes |
 |--------|------|-------|
-| create | src/core/reap.js | `reapTree(pid, platform, seams)` — authoritative process-table read (Linux `/proc`, macOS verified absolute `/bin/ps`, **never** bare `ps`), real ppid-descendant + group SIGKILL, **kill–rescan to two consecutive zero sweeps** (bounded), best-effort/never-throws; win32 **absolute System32** `taskkill /T /F` with **no bare-name fallback**. `reapGroup(pgid, platform, seams)` — the authenticated-PGID primitive: POSIX **negative-PGID** `kill(-pgid, SIGKILL)` (works even if the group leader already exited), win32 absolute `taskkill /PID <pgid> /T /F` — **win32 reaches only a live pid + its live tree, NO negative-PGID equivalent, so NO leaderless-member guarantee (R5-2; deferred to WP-a10-windows-reap)**; best-effort/never-throws. Also exports `readProcessTable` for direct unit coverage. Pure, seam-injectable. |
-| modify | src/cli/run-job.js | (a) `killProcessTree` delegates to `reapTree` (keep the export + signature). (b) For `builtin:dream`, **mint a per-run token BEFORE spawn** and pass it to the child (env var), and compute the per-run pidfile path `state/dream-brain.<token>.pid`. (c) Reap on **every** child-exit path: on an **abnormal** settle (timeout / `'error'` / non-clean `'close'`) reap the group-A tree with **BOTH** `reapTree(child.pid)` **and** `reapGroup(child.pid)` (the negative-PGID group kill reaches a leaderless reparented group-A member once the middle/group-leader has exited — after `'close'` `reapTree`'s ppid-closure alone finds nothing); on **any** settle for `builtin:dream` read the per-token pidfile and `reapGroup(brain.pgid)` if present, then delete it. **POSIX guarantee only: on win32 the group-reap authority does NOT activate — the win32 abnormal-close path keeps the pre-A10 timeout-path `taskkill /T /F` behavior, leaderless-member case deferred to WP-a10-windows-reap (R5-2).** Best-effort; never change the job outcome/throw. |
-| modify | src/cli/dream.js | `runBrainWithWatchdog` uses `reapTree(child.pid, platform, seams)` on timeout; when a run token is present (set by `run-job`), **write** the per-run brain pidfile (`state/dream-brain.<token>.pid`, `0600`, `{pid, pgid}`, **atomically** via `writeFilePrivate`) right after `spawnBrain`. In `finally`, when a run token is present, **PROVE group-B quiescence BEFORE releasing the hand-up**: first `reapGroup(child.pid, platform, seams)` (the negative-PGID group kill reaps any surviving group-B member even after the brain leader has exited — brain pgid == `child.pid`), **then remove** the pidfile. Deleting the pidfile before that reap is the R6-2 bug: on a non-timeout brain-leader **non-zero exit** with a surviving same-PGID group-B child, dream.js's `finally` would drop the pidfile before `run-job`'s abnormal-settle runs, and `run-job` only `reapGroup(brain.pgid)`s when the pidfile is present — so the survivor would leak. Standalone (no token) writes no hand-up pidfile. Thread `paths` + an injected `platform` (never mock `process.platform`) + optional reap seam. |
-| create | tests/unit/reap.test.js | `reapTree`/`reapGroup`/`readProcessTable` unit cases (fake `/proc` root + fake `/bin/ps`; classification of plain/re-detached/setsid/double-fork; kill–rescan quiescence; never-throws on a bad table; darwin reader uses absolute `/bin/ps`, never bare `ps`; `reapGroup` does a **negative-PGID** kill and reaps an **exited-leader-with-live-member** group; win32 uses the **absolute System32** `taskkill` and **never** a bare-name / PATH-planted `taskkill`). |
-| modify | tests/unit/scheduler-runjob.test.js | `killProcessTree` reaps via `reapTree` (kills a re-detached grandchild, not only group A); on abnormal close the **group-A tree** is reaped via **BOTH** `reapTree(child.pid)` **and** `reapGroup(child.pid)` (assert both seams are invoked — the `reapGroup(child.pid)` negative-PGID kill is what covers a leaderless reparented group-A member once the middle has exited); for `builtin:dream` the **per-token** brain pidfile group is reaped via `reapGroup(brain.pgid)` and the pidfile deleted; a second, lock-losing concurrent run reaps **only its own** token pidfile and never the other run's live brain; win32 branch shells the absolute System32 `taskkill /T /F`. |
-| modify | tests/integration/dream.test.js | `runBrainWithWatchdog` writes the **per-token** brain pidfile at spawn and removes it on normal completion; the timeout path reaps a re-detached fake brain (no orphan) via the injected reap seam; **on a brain-leader non-zero exit the `finally` invokes `reapGroup(child.pid)` BEFORE deleting the pidfile** (assert the reap seam is called and ordered before the pidfile unlink — R6-2); a middle killed at the spawn→hand-up boundary is covered (the sub-ms residual documented, not asserted reaped). |
+| create | src/core/reap.js | `reapTree(pid, platform, seams)` — authoritative process-table read (Linux `/proc`, macOS verified absolute `/bin/ps`, **never** bare `ps`), real ppid-descendant + group SIGKILL, **kill–rescan to two consecutive zero sweeps** (bounded), best-effort/never-throws; win32 **absolute System32** `taskkill /T /F` with **no bare-name fallback**. `reapGroup(pgid, platform, seams)` — the authenticated-PGID primitive: POSIX **negative-PGID** `kill(-pgid, SIGKILL)` (works even if the group leader already exited) **then a bounded poll (`kill(-pgid, 0)` until ESRCH, `maxPolls` default 5) to VERIFIED quiescence**, returning a **CHECKED result `{ reaped: boolean }`** — `reaped:true` only when the group is verified empty, `reaped:false` on timeout with members still present (R7-2); win32 absolute `taskkill /PID <pgid> /T /F` returning `{ reaped: true }` best-effort — **win32 reaches only a live pid + its live tree, NO negative-PGID equivalent, so NO leaderless-member guarantee (R5-2; deferred to WP-a10-windows-reap)**; best-effort/never-throws. Also exports `readProcessTable` for direct unit coverage. Pure, seam-injectable. |
+| modify | src/cli/run-job.js | (a) `killProcessTree` delegates to `reapTree` (keep the export + signature). (b) For `builtin:dream`, **mint a per-run token BEFORE spawn** and pass it to the child (env var), and compute the per-run pidfile path `state/dream-brain.<token>.pid`. (c) Reap on **every** child-exit path: on an **abnormal** settle (timeout / `'error'` / non-clean `'close'`) reap the group-A tree with **BOTH** `reapTree(child.pid)` **and** `reapGroup(child.pid)` (the negative-PGID group kill reaches a leaderless reparented group-A member once the middle/group-leader has exited — after `'close'` `reapTree`'s ppid-closure alone finds nothing); on **any** settle for `builtin:dream` read the per-token pidfile and, if present, `reapGroup(brain.pgid)` — **deleting the pidfile only if it returned `{ reaped: true }`; on `{ reaped: false }` leave the pidfile in place** (best-effort — `run-job` is the last backstop, so a leftover per-token pidfile after a timed-out reap is a harmless diagnostic residual, never deleted while the group may be non-empty) (R7-2). **POSIX guarantee only: on win32 the group-reap authority does NOT activate — the win32 abnormal-close path keeps the pre-A10 timeout-path `taskkill /T /F` behavior, leaderless-member case deferred to WP-a10-windows-reap (R5-2).** Best-effort; never change the job outcome/throw. |
+| modify | src/cli/dream.js | `runBrainWithWatchdog` uses `reapTree(child.pid, platform, seams)` on timeout; when a run token is present (set by `run-job`), **write** the per-run brain pidfile (`state/dream-brain.<token>.pid`, `0600`, `{pid, pgid}`, **atomically** via `writeFilePrivate`) right after `spawnBrain`. In `finally`, when a run token is present, **PROVE group-B quiescence BEFORE releasing the hand-up**: first `reapGroup(child.pid, platform, seams)` (the negative-PGID group kill reaps any surviving group-B member even after the brain leader has exited — brain pgid == `child.pid`), **then remove the pidfile ONLY if `reapGroup` returned `{ reaped: true }`** (the group is verified empty). On `{ reaped: false }` (the bounded poll timed out with a member still present) **RETAIN** the pidfile so `run-job`'s abnormal-settle backstop can retry `reapGroup(brain.pgid)` (R7-2) — never delete a pidfile whose group is not yet verified quiescent. Deleting the pidfile before that verified reap is the R6-2/R7-2 bug: on a non-timeout brain-leader **non-zero exit** with a surviving same-PGID group-B child, dream.js's `finally` would drop the pidfile before `run-job`'s abnormal-settle runs, and `run-job` only `reapGroup(brain.pgid)`s when the pidfile is present — so the survivor would leak. Standalone (no token) writes no hand-up pidfile. Thread `paths` + an injected `platform` (never mock `process.platform`) + optional reap seam. |
+| create | tests/unit/reap.test.js | `reapTree`/`reapGroup`/`readProcessTable` unit cases (fake `/proc` root + fake `/bin/ps`; classification of plain/re-detached/setsid/double-fork; kill–rescan quiescence; never-throws on a bad table; darwin reader uses absolute `/bin/ps`, never bare `ps`; **churn regression (R7-3): a mid-scan vanishing unrelated pid — a numeric `/proc` dir whose per-entry `stat` read throws `ENOENT` — is SKIPPED, the snapshot still returns the surviving rows (NOT null), and the descendant reap still proceeds; only an unreadable `<procRoot>` root or a zero-usable-row parse yields null**; `reapGroup` does a **negative-PGID** kill, **polls to verified quiescence** and returns the **checked `{ reaped }`** — `{ reaped: true }` when it reaps an **exited-leader-with-live-member** group to empty, `{ reaped: false }` when a bounded (`maxPolls`) poll times out with a member still present (R7-2); win32 uses the **absolute System32** `taskkill` and **never** a bare-name / PATH-planted `taskkill`). |
+| modify | tests/unit/scheduler-runjob.test.js | `killProcessTree` reaps via `reapTree` (kills a re-detached grandchild, not only group A); on abnormal close the **group-A tree** is reaped via **BOTH** `reapTree(child.pid)` **and** `reapGroup(child.pid)` (assert both seams are invoked — the `reapGroup(child.pid)` negative-PGID kill is what covers a leaderless reparented group-A member once the middle has exited); for `builtin:dream` the **per-token** brain pidfile group is reaped via `reapGroup(brain.pgid)` and the pidfile deleted **only** when `reapGroup` returned `{ reaped: true }` (assert a `{ reaped: false }` result leaves the pidfile in place for the backstop — R7-2); a second, lock-losing concurrent run reaps **only its own** token pidfile and never the other run's live brain; win32 branch shells the absolute System32 `taskkill /T /F`. |
+| modify | tests/integration/dream.test.js | `runBrainWithWatchdog` writes the **per-token** brain pidfile at spawn and removes it on normal completion; the timeout path reaps a re-detached fake brain (no orphan) via the injected reap seam; **on a brain-leader non-zero exit the `finally` invokes `reapGroup(child.pid)` BEFORE deleting the pidfile, and deletes it only on `{ reaped: true }`** (assert the reap seam is called and ordered before the pidfile unlink — R6-2 — and that an injected `{ reaped: false }` result RETAINS the pidfile — R7-2); a middle killed at the spawn→hand-up boundary is covered (the sub-ms residual documented, not asserted reaped). |
 
 ### Exact contracts
 
@@ -272,35 +272,62 @@ only on timeout.
 function reapTree(pid, platform, seams = {}) {}
 
 /** Read the process table from the authoritative source for `platform`.
- *  Linux: parse `<procRoot>/<pid>/stat` for every numeric dir (pid = field 1,
- *    ppid = field 4, pgrp = field 5 — parse AFTER the last ')' because comm may
- *    contain spaces/parens). No external binary.
+ *  Linux: readdir `<procRoot>`, then for every numeric dir parse
+ *    `<procRoot>/<pid>/stat` (pid = field 1, ppid = field 4, pgrp = field 5 —
+ *    parse AFTER the last ')' because comm may contain spaces/parens). No external
+ *    binary. **Per-PID disappearance is normal churn, NOT a failure (R7-3):** a
+ *    process routinely exits between the readdir and the per-entry stat read, so a
+ *    per-entry `ENOENT`/`ESRCH` (or an unreadable/empty single `stat` file) SKIPS
+ *    that pid and CONTINUES the snapshot — it must NOT null the whole table.
+ *    Nulling on one vanished, unrelated pid would drop the caller to the legacy
+ *    single group-kill and leak the separately-detached group-B brain — a fully
+ *    non-adversarial timeout leak.
  *  darwin/bsd: spawnSync(psPath, ['-A','-o','pid=,ppid=,pgid=']) ONLY after
  *    verifyExecutable(psPath) passes; psPath MUST be absolute ('/bin/ps'), never
- *    'ps' (no PATH lookup). Parse the [pid, ppid, pgid] triples.
- *  On any failure/empty result → return null (caller falls back to group-kill).
+ *    'ps' (no PATH lookup). Parse the [pid, ppid, pgid] triples; a single malformed
+ *    line is skipped, not fatal.
+ *  Return `null` ONLY when the snapshot is unusable AS A WHOLE — the `<procRoot>`
+ *    readdir itself fails (unreadable `/proc` root), `/bin/ps` is
+ *    missing/unverifiable or its spawn fails, or parsing yields ZERO usable rows. A
+ *    table with SOME rows (individual entries skipped for per-PID races) is
+ *    returned, never nulled. The caller falls back to the legacy group-kill only on
+ *    `null`.
  *  @returns {Array<{pid:number, ppid:number, pgid:number}>|null} */
 function readProcessTable(platform, seams = {}) {}
 
-/** Reap an AUTHENTICATED process GROUP by its pgid — the handed-up brain group.
- *  Distinct from reapTree: the input is a PGID, not a PID, and the group leader
- *  may already have exited. Best-effort; NEVER throws.
- *  POSIX: kill(-pgid, 'SIGKILL') — a NEGATIVE-pgid signal reaps every surviving
- *    member of the group even when the leader is gone (a positive-pid table
- *    lookup would find nothing and leak the members). No ppid-closure, no
- *    rescan: this is the direct group signal, guarded so it never targets pgid 1
- *    or process.pid.
+/** Reap an AUTHENTICATED process GROUP by its pgid — the handed-up brain group —
+ *  and CONFIRM the group is empty before reporting success (R7-2). Distinct from
+ *  reapTree: the input is a PGID, not a PID, and the group leader may already have
+ *  exited. Best-effort; NEVER throws; returns a CHECKED result.
+ *  POSIX: SIGKILL the group by NEGATIVE pgid — kill(-pgid, 'SIGKILL') reaps every
+ *    surviving member even when the leader is gone (a positive-pid table lookup
+ *    would find nothing and leak the members) — then BOUNDED-POLL the group to
+ *    quiescence: probe kill(-pgid, 0) and re-SIGKILL until it throws ESRCH (no
+ *    member of the group remains) or maxPolls is reached. A successful SIGKILL only
+ *    means the signal was ACCEPTED, NOT that every member is gone; on an error it
+ *    proves even less — so the direct signal alone is never treated as completion.
+ *    This poll is what turns "signal accepted" into "group verified empty". Guarded
+ *    so it never targets pgid 1 or process.pid.
  *  win32: absolute System32 `taskkill /PID <pgid> /T /F` (pgid == the detached
  *    brain's pid); no bare-name fallback. NOTE (R5-2): on win32 this reaches only a
  *    LIVE pid and its LIVE child tree — there is NO negative-PGID equivalent, so it
  *    does NOT reach a leaderless reparented member once the group leader has exited.
  *    win32 therefore provides NO leaderless-member guarantee; that case is deferred
- *    to WP-a10-windows-reap (see the Platform-scope note in Context).
+ *    to WP-a10-windows-reap (see the Platform-scope note in Context). win32 returns
+ *    `{ reaped: true }` best-effort after the taskkill — it cannot verify the
+ *    leaderless case it explicitly does not cover.
  *  @param {number} pgid  the handed-up brain process-group id
  *  @param {NodeJS.Platform} platform  inject it — never mock process.platform
  *  @param {{ kill?: typeof process.kill,
- *            spawnSync?: typeof import('child_process').spawnSync }} [seams]
- *  @returns {void} */
+ *            readTable?: () => Array<{pid:number, ppid:number, pgid:number}>,
+ *            spawnSync?: typeof import('child_process').spawnSync,
+ *            maxPolls?: number }} [seams]  maxPolls default 5
+ *  @returns {{ reaped: boolean }}  reaped=true ONLY when the group reached VERIFIED
+ *    quiescence (POSIX: kill(-pgid, 0) threw ESRCH within maxPolls; win32:
+ *    best-effort after taskkill). reaped=false on a POSIX timeout with members
+ *    still present — the caller MUST retain the hand-up pidfile in that case so
+ *    run-job's backstop can retry, and MUST NOT delete a pidfile whose group is not
+ *    yet verified empty (R7-2). */
 function reapGroup(pgid, platform, seams = {}) {}
 
 module.exports = { reapTree, reapGroup, readProcessTable };
@@ -324,6 +351,25 @@ module.exports = { reapTree, reapGroup, readProcessTable };
 Determinism/safety: the whole function is `try/catch`-wrapped; a malformed table,
 a missing/unverifiable `/bin/ps`, or an unreadable `/proc` degrades to the legacy
 group-kill and never throws.
+
+**`reapGroup` — poll to VERIFIED quiescence, then report (R7-2).** `reapGroup` must
+not be a single fire-and-forget `kill(-pgid, SIGKILL)`: a successful signal only
+proves the signal was accepted, not that every group member is `ESRCH`, and on
+error it proves even less — so a caller that deletes the hand-up pidfile right after
+the signal loses the brain's identity while a member may still be alive (the
+outer backstop can then no longer find it). POSIX algorithm:
+1. `kill(-pgid, 'SIGKILL')` (guarded: never `pgid === 1`, never
+   `pgid === process.pgid`/`process.pid`); each kill `try/catch`ed.
+2. **Probe:** `kill(-pgid, 0)`. If it throws `ESRCH`, the group is **verified
+   empty** → return `{ reaped: true }`. If it returns (a member survives), re-SIGKILL
+   and re-probe.
+3. Repeat step 2 up to `maxPolls` (default 5, bounded — never spin). If the group is
+   still non-empty after the cap → return `{ reaped: false }` (do **not** throw).
+The **checked result gates pidfile deletion**: the caller deletes the per-run brain
+pidfile **only** on `{ reaped: true }`; on `{ reaped: false }` it **retains** the
+pidfile so `run-job`'s abnormal-settle backstop can retry the group reap. A
+negative-pgid probe of an already-empty group is a harmless `ESRCH`, so calling
+`reapGroup` on a group that is already gone returns `{ reaped: true }` at once.
 
 **win32 (no bare-name fallback, round-2 finding):** resolve `taskkill` to its
 **absolute** System32 path
@@ -384,12 +430,17 @@ signature; the existing `{kill, spawnSync}` seams map straight through).
   - After the child settles by **any** path, for `builtin:dream` read **this run's**
     `state/dream-brain.<token>.pid`; if present, `reapGroup(brain.pgid, platform,
     opts)` to kill the detached group-B brain (covers a brain orphaned by a dead
-    middle), then delete the pidfile. On the **normal brain-leader-exit** path
-    `dream.js`'s own `finally` has already `reapGroup`ed group B and removed the
-    pidfile (R6-2), so this read is a best-effort no-op; `run-job`'s reap here is
-    the **backstop** for the *other* leak path — a middle that died **before**
-    `dream.js`'s `finally` could run, leaving the pidfile behind for `run-job` to
-    find.
+    middle), and **delete the pidfile only if that `reapGroup` returned `{ reaped:
+    true }`** (the group is verified empty); on `{ reaped: false }` **leave the
+    pidfile** — `run-job` is the last backstop, so a leftover per-token pidfile after
+    a timed-out reap is a harmless diagnostic residual, never deleted while the
+    group may still be non-empty (R7-2). On the **normal brain-leader-exit** path
+    `dream.js`'s own `finally` has already `reapGroup`ed group B to verified
+    quiescence and removed the pidfile (R6-2/R7-2), so this read is a best-effort
+    no-op; `run-job`'s reap here is the **backstop** for the *other* leak path — a
+    middle that died **before** `dream.js`'s `finally` could run (or whose `finally`
+    reap timed out and RETAINED the pidfile), leaving the pidfile behind for
+    `run-job` to find and retry.
 - Do **not** `reapTree(child.pid)` after a **clean** `'close'` (exit 0): the group
   leader exited and re-reaping is pointless; the per-token brain pidfile was
   already removed by `dream.js`, and reading a stale one is a best-effort no-op.
@@ -407,11 +458,16 @@ window is sub-ms); `reapTree(child.pid, platform, seams)` on the timeout path
 WienerdogError(...))` and `finally { clearTimeout(timer) }`.
 
 **In the same `finally`, when a run token is present, PROVE group-B quiescence
-BEFORE releasing the hand-up (R6-2).** Order is load-bearing: **first**
+BEFORE releasing the hand-up (R6-2/R7-2).** Order is load-bearing: **first**
 `reapGroup(child.pid, platform, seams)` — the **negative-PGID** `kill(-child.pid)`
 that reaps any surviving group-B member even after the brain leader has exited
-(the brain is `detached`, so its pgid **is** `child.pid`) — **then** remove this
-run's pidfile (best-effort). **Removing the pidfile before that reap is the bug:**
+(the brain is `detached`, so its pgid **is** `child.pid`), and which now **polls to
+verified quiescence and returns a checked `{ reaped }`** (R7-2) — **then** remove
+this run's pidfile **only when it reported `{ reaped: true }`**. On `{ reaped:
+false }` (the bounded poll timed out with a group-B member still present)
+**RETAIN** the pidfile so `run-job`'s abnormal-settle backstop can retry
+`reapGroup(brain.pgid)`; never release the hand-up while the group is not yet
+verified empty. **Removing the pidfile before that verified reap is the bug:**
 on a **non-timeout brain-leader non-zero exit** (the brain `'close'`s non-zero →
 `runBrainWithWatchdog` throws its `WienerdogError` → this `finally` runs), a
 same-PGID group-B child the brain spawned can survive the leader. If the `finally`
@@ -420,14 +476,16 @@ outer abnormal-settle runs the pidfile is gone — and `run-job` only
 `reapGroup(brain.pgid)`s **when the pidfile is present** — so that surviving
 group-B member leaks unreaped. Neither the inner watchdog (it fires **only** on
 timeout, not on a brain-leader exit) nor `run-job` would reap it on this path. So
-`dream.js` itself must guarantee group-B quiescence via `reapGroup(child.pid)`
-before it deletes the pidfile, on **every** settle where the brain leader has
-exited — not only on timeout. (`reapGroup` is best-effort and never throws; a
-negative-PGID kill of an already-empty group is a harmless `ESRCH` no-op, so
-running it unconditionally in the token-present `finally` is safe.) The outer
-`run-job` abnormal-settle remains the **backstop** for the *other* leak path — a
-middle that dies **before** this `finally` runs, leaving the pidfile behind for
-`run-job` to find and `reapGroup(brain.pgid)`.
+`dream.js` itself must guarantee **verified** group-B quiescence via
+`reapGroup(child.pid)` before it deletes the pidfile, on **every** settle where the
+brain leader has exited — not only on timeout. (`reapGroup` is best-effort and never
+throws; a negative-PGID kill+probe of an already-empty group returns `{ reaped:
+true }` at once — a harmless `ESRCH` — so running it unconditionally in the
+token-present `finally` is safe.) The outer `run-job` abnormal-settle remains the
+**backstop** for the *other* leak path — a middle that dies **before** this
+`finally` runs, **or** a `finally` reap that timed out (`{ reaped: false }`) and
+RETAINED the pidfile — leaving the pidfile behind for `run-job` to find and retry
+`reapGroup(brain.pgid)`.
 
 A **standalone** `wienerdog dream` (no run token) writes no hand-up pidfile and
 does no `reapGroup` in `finally` — its inner watchdog reaps the brain directly.
@@ -451,6 +509,12 @@ a JS-only `opts` seam idiom — WP-155).
       **negative-PGID** `kill(-pgid)` (reaches surviving members even after the
       group leader exited), never by feeding the pgid to `reapTree` as a pid. The
       PID/PGID-reuse window is the stated ADR-0030 residual (no start-time check).
+- [ ] **[R7-2]** `reapGroup` **polls to VERIFIED quiescence** (POSIX: re-SIGKILL +
+      `kill(-pgid, 0)` until `ESRCH` or `maxPolls`) and returns a **checked `{ reaped:
+      boolean }`** — never a single fire-and-forget kill. Callers delete the per-run
+      hand-up pidfile **only** on `{ reaped: true }`; on `{ reaped: false }` they
+      **retain** it for `run-job`'s backstop retry. A successful SIGKILL alone (or an
+      error) is never treated as completion.
 
 ## Acceptance criteria (mapped to the A10 acceptance bullets + ADR-0030)
 
@@ -464,15 +528,18 @@ a JS-only `opts` seam idiom — WP-155).
       token's group via `reapGroup` and deletes the file — asserted in
       `scheduler-runjob.test.js` (the full SIGKILL-the-middle live proof is the
       sibling harness WP).
-- [ ] **[Group-B quiescence before hand-up release, R6-2]** On a **brain-leader
+- [ ] **[Group-B quiescence before hand-up release, R6-2/R7-2]** On a **brain-leader
       non-zero exit** (not a timeout) with a surviving same-PGID group-B member,
       `dream.js`'s `finally` calls `reapGroup(child.pid)` **before** it deletes the
-      per-token pidfile — asserted in `dream.test.js` that the reap seam is invoked
-      and ordered strictly before the pidfile unlink. (Deleting the pidfile first
-      would let a surviving group-B child escape both `dream.js` and `run-job`'s
-      pidfile-gated backstop.) The live post-`'close'` proof — the surviving member
-      reaching `ESRCH` **before** the pidfile is deleted — is on the POSIX gate in
-      `WP-a10-escape-harness`.
+      per-token pidfile, and deletes the pidfile **only** when that `reapGroup`
+      returned `{ reaped: true }` (verified-empty group); on `{ reaped: false }` it
+      **retains** the pidfile for `run-job`'s backstop — asserted in `dream.test.js`
+      that the reap seam is invoked and ordered strictly before the pidfile unlink,
+      and that a `{ reaped: false }` result leaves the pidfile in place. (Deleting
+      the pidfile before a verified reap would let a surviving group-B child escape
+      both `dream.js` and `run-job`'s pidfile-gated backstop.) The live
+      post-`'close'` proof — the surviving member reaching `ESRCH` **before** the
+      pidfile is deleted — is on the POSIX gate in `WP-a10-escape-harness`.
 - [ ] **[Cross-run isolation, round-2]** A second, lock-losing concurrent dream
       run reaps **only its own** token pidfile and never reads or kills the first
       run's live brain — unit-asserted with two distinct tokens.
@@ -496,14 +563,27 @@ a JS-only `opts` seam idiom — WP-155).
       `taskkill /T /F`** behavior (no regression), and the Windows post-parent-exit
       case is **deferred to `WP-a10-windows-reap`**. This is an owner-approved
       platform-scope boundary, **not** an ADR-0030 residual.
-- [ ] **[Authenticated-PGID, round-2]** `reapGroup(pgid)` issues a **negative-PGID**
-      `kill(-pgid)` and reaps an **exited-group-leader-with-live-member** group;
-      the recycled-id case is the documented ADR-0030 residual (no test asserts it
-      reaped).
+- [ ] **[Authenticated-PGID, round-2 + R7-2]** `reapGroup(pgid)` issues a
+      **negative-PGID** `kill(-pgid)`, **polls to verified quiescence**
+      (`kill(-pgid, 0)` until `ESRCH`, bounded by `maxPolls`), and reaps an
+      **exited-group-leader-with-live-member** group — returning `{ reaped: true }`
+      only when the group is verified empty and `{ reaped: false }` on a bounded
+      timeout with a member still present (unit-asserted with an injected table/kill
+      seam for both outcomes). The recycled-id case is the documented ADR-0030
+      residual (no test asserts it reaped).
 - [ ] **[Quiescence]** `reapTree` re-sweeps until two consecutive clean sweeps
       (bounded by `maxSweeps`); a fake table that "spawns" a child between the
       first snapshot and the first kill is fully reaped by the loop — unit-tested
       with an injected table generator.
+- [ ] **[R7-3 — per-PID churn does not null the snapshot]** `readProcessTable`
+      handles per-PID disappearance races: on Linux a numeric `<procRoot>` dir whose
+      per-entry `stat` read throws `ENOENT`/`ESRCH` (the process exited between the
+      readdir and the read) is **SKIPPED** and the walk CONTINUES, returning the
+      surviving rows — it does **not** null the whole table. `null` is returned only
+      when the snapshot is unusable as a whole (unreadable `<procRoot>` root,
+      missing/unverifiable `/bin/ps`, or zero usable rows). Unit-asserted with a fake
+      `/proc` whose one entry vanishes mid-scan: the reap still enumerates and kills
+      the real descendant tree rather than falling back to the legacy group-kill.
 - [ ] **[No bare ps / no bare taskkill]** `readProcessTable` on darwin invokes
       `spawnSync` with `argv[0] === '/bin/ps'` (absolute) and never `'ps'`; on
       linux it reads `<procRoot>/<pid>/stat`; the win32 branch spawns the
@@ -534,6 +614,19 @@ grep -nE "reapGroup\(.*child\.pid" src/cli/dream.js
 # R5-2: the win32 leaderless-member scope boundary is carried into code comments
 # (win32 group-reap provides no leaderless guarantee; POSIX-only this release):
 grep -niE "leaderless|no negative-pgid|windows-reap|pre-A10|POSIX-only" src/core/reap.js src/cli/run-job.js
+# R7-2: reapGroup polls to VERIFIED quiescence (probe kill(-pgid, 0)/re-kill until
+# ESRCH, bounded by maxPolls) and returns a CHECKED { reaped } result — not a single
+# fire-and-forget kill:
+grep -nE "reaped|maxPolls|kill\(\s*-?[^,]+,\s*0\)|ESRCH" src/core/reap.js
+# R7-2: dream.js and run-job.js delete the hand-up pidfile ONLY on { reaped: true }
+# and RETAIN it on a timed-out reap for the backstop:
+grep -nE "reaped|retain|only.*reaped|unlink" src/cli/dream.js src/cli/run-job.js
+# R7-3: readProcessTable skips a per-PID disappearance (ENOENT/ESRCH on a single
+# /proc entry) and continues the snapshot rather than nulling the whole table:
+grep -nE "ENOENT|ESRCH|continue|skip" src/core/reap.js
+# R7-3: the churn-regression test asserts a mid-scan vanishing pid does not abort
+# the descendant reap:
+grep -nE "ENOENT|vanish|churn|mid-scan|skip" tests/unit/reap.test.js
 ```
 
 ## Implementation notes & constraints

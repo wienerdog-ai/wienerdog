@@ -46,7 +46,7 @@ sessions).
 Two product invariants this runbook must respect and can rely on:
 
 - **Digest injection is byte-gated (ADR-0021, identity trust registry).** The
-  session-start **digest** (`~/.wienerdog/state/digest.md`) injects an identity
+  session-start **digest** (`<core>/state/digest.md`) injects an identity
   file only when its current bytes match the `sha256` a human ratified via
   `wienerdog memory approve`. A tampered/unapproved identity note is **not**
   re-injected — this is *why* the drill can prove "the old digest is no longer
@@ -76,6 +76,22 @@ keeps writing/re-injecting while you clean up:
 Other runbooks in `docs/runbooks/` (`codex-review.md`, `release.md`,
 `triage.md`, `secret-incident.md`, …) share that numbered-checklist format.
 
+**The core directory is NOT always `~/.wienerdog` — resolve it once, up front
+(R7-1).** The shipped path layer resolves the **core** dir to `$WIENERDOG_HOME`
+when that variable is set, otherwise the platform default `~/.wienerdog`
+(`src/core/paths.js:55` — `core = $WIENERDOG_HOME || ~/.wienerdog`). A runbook that
+hardcodes `~/.wienerdog` (or Windows `$env:USERPROFILE\.wienerdog`) is **wrong on a
+custom-`WIENERDOG_HOME` install**: it would unregister the OS task while leaving the
+REAL `<core>/schedules/wienerdog-catchup.xml` and its manifest entry intact — every
+check passes, then step 4's `wienerdog sync` `reloadMissing` resurrects catch-up
+before the drill. So the runbook must, **before step 1 (a step 0 preamble)**,
+resolve ONE authoritative core, display it, have the user confirm it, and use that
+SAME resolved core for **every** path it later names (the catch-up XML/plist, the
+install manifest, the evidence copy, the digest grep, the SessionStart hook, and all
+verifications). The one path that is NOT under the core is the macOS catch-up
+LaunchAgent plist (`~/Library/LaunchAgents/ai.wienerdog.catchup.plist`, always
+home-based, independent of `WIENERDOG_HOME`).
+
 **Commands the drill relies on (all already shipped):**
 - `wienerdog schedule list` / `wienerdog schedule remove <name>` — enumerate and
   unregister scheduled jobs.
@@ -94,12 +110,13 @@ Other runbooks in `docs/runbooks/` (`codex-review.md`, `release.md`,
   not lean on `doctor` for either.
 
 **Code-owned evidence artifacts the "preserve evidence" step snapshots** (all
-bounded, code-owned; **treat as potentially sensitive — see below**):
-- `~/.wienerdog/state/run-evidence.jsonl` — the bounded per-run record (Claude
+bounded, code-owned; **treat as potentially sensitive — see below**; all live under
+the step-0-resolved `<core>`, NOT necessarily `~/.wienerdog`):
+- `<core>/state/run-evidence.jsonl` — the bounded per-run record (Claude
   version, executable, profile, argv, settings/MCP digests, managed-policy
   state, containment self-check result). Free-text is reduced to `sha256`.
-- `~/.wienerdog/state/alerts.jsonl` — durable fail-loud alerts.
-- `~/.wienerdog/logs/<job>/*.log` — per-run job logs (redacted stream).
+- `<core>/state/alerts.jsonl` — durable fail-loud alerts.
+- `<core>/logs/<job>/*.log` — per-run job logs (redacted stream).
 
 **Redaction is best-effort, so evidence is NOT guaranteed secret-free (do not
 claim it is).** Per ADR-0024 and the `run-job.js` EP3 comment, the log stream is
@@ -173,7 +190,7 @@ state and act on:
 
 | Action | Path | Notes |
 |--------|------|-------|
-| create | docs/runbooks/incident.md | The general incident-drill runbook (house numbered-checklist format), covering the seven ordered A9 steps: (1) snapshot the `config.yaml` `jobs:` definitions (the restore source; `schedule.json` holds only watermarks), remove every per-job schedule **and** the shared catch-up entry — the catch-up removal deleting its scheduler FILE **and** its `install-manifest.json` entry, not merely unregistering it, so `sync`'s `reloadMissing` cannot resurrect it — then reach proven quiescence by REBOOT (the **sole** authoritative proof — a pre-reboot process grep is a non-proof hint that can only *reveal* a live job; if you cannot reboot you **stop-and-escalate**, never grep-certify clean); (2) preserve-evidence-privately; (3) revoke+rotate; (4) purge digest+managed-block; (5) clean git; (6) fail-closed acceptance drill (SessionStart-hook `additionalContext` byte-compare against the raw `state/digest.md`, plus a three-check managed-block proof — clean `sync` notice + whole-file marker grep + one-sentinel-pair check per installed harness file; **no** region-vs-raw-digest byte-compare, which would falsely fail because `sync` trims+neutralizes); (7) re-authorize by reconstructing `schedule add --job` for **builtin** jobs from the `jobs:` snapshot — a `skill:*` routine is frozen by the A0 pre-use gate (audit A1) and is NOT re-addable this release (do not promise a failing `--skill` command; only its snapshot definition is preserved for later). |
+| create | docs/runbooks/incident.md | The general incident-drill runbook (house numbered-checklist format), opening with a **step 0 preamble** that resolves the ONE authoritative core = `$WIENERDOG_HOME` if set else the platform default (POSIX `${WIENERDOG_HOME:-$HOME/.wienerdog}`, Windows `$env:WIENERDOG_HOME` else `$env:USERPROFILE\.wienerdog`), DISPLAYS it, has the user CONFIRM it, and requires every later path (the catch-up XML/plist, the install manifest, the evidence copy, the digest grep, the SessionStart hook, and all verifications) to use that SAME `<core>` — never a hardcoded `~/.wienerdog` (R7-1); then the seven ordered A9 steps: (1) snapshot the `<core>/config.yaml` `jobs:` definitions (the restore source; `schedule.json` holds only watermarks), remove every per-job schedule **and** the shared catch-up entry — the catch-up removal deleting its scheduler FILE **and** its `install-manifest.json` entry, not merely unregistering it, so `sync`'s `reloadMissing` cannot resurrect it — then reach proven quiescence by REBOOT (the **sole** authoritative proof — a pre-reboot process grep is a non-proof hint that can only *reveal* a live job; if you cannot reboot you **stop-and-escalate**, never grep-certify clean); (2) preserve-evidence-privately; (3) revoke+rotate; (4) purge digest+managed-block; (5) clean git; (6) fail-closed acceptance drill (SessionStart-hook `additionalContext` byte-compare against the raw `state/digest.md`, plus a three-check managed-block proof — clean `sync` notice + whole-file marker grep + one-sentinel-pair check per installed harness file; **no** region-vs-raw-digest byte-compare, which would falsely fail because `sync` trims+neutralizes); (7) re-authorize by reconstructing `schedule add --job` for **builtin** jobs from the `jobs:` snapshot — a `skill:*` routine is frozen by the A0 pre-use gate (audit A1) and is NOT re-addable this release (do not promise a failing `--skill` command; only its snapshot definition is preserved for later). |
 | modify | docs/runbooks/secret-incident.md | Add one cross-link near the top: the secret leak is the credential-specific case of the general incident drill (link `incident.md`); for a general or suspected-compromise incident, start there. Do NOT rewrite its steps. |
 
 ### Exact contract — what `docs/runbooks/incident.md` must state
@@ -182,19 +199,48 @@ House format: a short intro paragraph, then a **numbered, ordered** imperative
 checklist in plain language (define "revoke", "rotate", "managed block", "git
 history" in one clause each — the audience is a knowledge worker). The steps are
 ordered so nothing reads/commits/injects the compromised state while you clean
-up, and so the machine is **proven clean before it is re-authorized**. It must
-cover, **in this order**: (1) stop schedules + prove quiescence, (2) preserve
+up, and so the machine is **proven clean before it is re-authorized**. It opens
+with a **step 0 preamble** that resolves the one authoritative **core** path
+(below) and requires every later path to use it, then covers, **in this order**:
+(1) stop schedules + prove quiescence, (2) preserve
 evidence into a private folder, (3) revoke+rotate credentials, (4) purge the
 compromised digest + managed block, (5) clean git history, (6) run the
 byte-level acceptance drill, (7) re-authorize only after a recorded drill pass.
 The detail of each:
+
+0. **Resolve the one authoritative core path — do this FIRST, before any other
+   step, and use it everywhere below (R7-1).** Wienerdog's files do NOT always live
+   in `~/.wienerdog`: the path layer resolves the **core** directory to
+   `$WIENERDOG_HOME` when that variable is set, otherwise the platform default
+   `~/.wienerdog`. If you assume the default on a custom-`WIENERDOG_HOME` install,
+   every path in this runbook points at the WRONG directory — you would unregister
+   the OS task while leaving the REAL `<core>/schedules/wienerdog-catchup.xml` and
+   its manifest entry intact, all your checks would pass, and step 4's `wienerdog
+   sync` would then RESURRECT catch-up before the drill. So resolve `<core>` once,
+   now, DISPLAY it, and CONFIRM it is the directory that actually holds your
+   Wienerdog install (it must contain `config.yaml`, `state/`, and
+   `install-manifest.json`) before continuing:
+   - macOS / Linux: `CORE="${WIENERDOG_HOME:-$HOME/.wienerdog}"; echo "$CORE"`,
+     then confirm it — `ls "$CORE/config.yaml" "$CORE/install-manifest.json"`.
+   - Windows (PowerShell): `$core = if ($env:WIENERDOG_HOME) { $env:WIENERDOG_HOME }
+     else { "$env:USERPROFILE\.wienerdog" }; $core`, then confirm
+     `Test-Path "$core\config.yaml"` and `Test-Path "$core\install-manifest.json"`
+     both return `True`.
+   Everywhere this runbook writes `<core>` (POSIX `$CORE`, Windows `$core`) — the
+   catch-up scheduler XML, the install manifest, the evidence you copy, the digest
+   you grep, the installed SessionStart hook, and every verification — it means
+   THIS resolved directory, **never** a hardcoded `~/.wienerdog` /
+   `$env:USERPROFILE\.wienerdog`. The **one** path that is NOT under the core is the
+   macOS catch-up LaunchAgent plist (`~/Library/LaunchAgents/ai.wienerdog.catchup.plist`),
+   which is always home-based regardless of `WIENERDOG_HOME` — see step 1.
 
 1. **Stop everything that can fire, then reach proven quiescence — before
    anything else.** In order:
    - **First, snapshot the job DEFINITIONS — before you remove anything.** The
      recoverable job definitions (each job's `name`, `at` time, `run` type, and
      `timeout_minutes`) live in the managed `jobs:` section of **`config.yaml`**
-     (at the core root, `~/.wienerdog/config.yaml`) — **not** in
+     (at the core root, `<core>/config.yaml` — the core you resolved in step 0, not
+     necessarily `~/.wienerdog`) — **not** in
      `state/schedule.json`, which holds only run **watermarks** (`last_success` /
      `last_status` / `last_error_at`) and cannot restore a schedule. `wienerdog
      schedule remove` **mutates `config.yaml`** (it strips the job from the `jobs:`
@@ -228,11 +274,13 @@ The detail of each:
        file `reloadMissing` would reload from, so it MUST go).
      - Windows (PowerShell): `Unregister-ScheduledTask -TaskPath '\Wienerdog\'
        -TaskName 'catchup' -Confirm:$false`, then delete its scheduler XML file
-       (`<core>\schedules\wienerdog-catchup.xml`, where `<core>` is
-       `$env:USERPROFILE\.wienerdog` — this is the file `reloadMissing` would
-       reload from, so it MUST go too; the current Windows text is weakest here).
+       (`<core>\schedules\wienerdog-catchup.xml`, where `<core>` is the `$core` you
+       resolved in **step 0** — `$env:WIENERDOG_HOME` if set, else
+       `$env:USERPROFILE\.wienerdog`; do NOT assume the default here — this is the
+       file `reloadMissing` would reload from, so it MUST go too).
      - **Both platforms: remove the catch-up entry from
-       `install-manifest.json`.** Open `<core>/install-manifest.json` and delete
+       `install-manifest.json`.** Open `<core>/install-manifest.json` (the `<core>`
+       resolved in step 0) and delete
        the `entries[]` object whose `kind` is `scheduler-entry` and whose `path`
        is the catch-up plist/XML above (its `unload` argv names
        `ai.wienerdog.catchup` / `\Wienerdog\catchup`). With no manifest record,
@@ -244,8 +292,8 @@ The detail of each:
        '\Wienerdog\' -ErrorAction SilentlyContinue` lists nothing; AND (b) the
        scheduler file is gone — macOS `test ! -e
        ~/Library/LaunchAgents/ai.wienerdog.catchup.plist`; Windows
-       `Test-Path "$env:USERPROFILE\.wienerdog\schedules\wienerdog-catchup.xml"`
-       returns `False` — and `install-manifest.json` no longer contains a
+       `Test-Path "$core\schedules\wienerdog-catchup.xml"` (the step-0 `$core`)
+       returns `False` — and `<core>/install-manifest.json` no longer contains a
        catch-up `scheduler-entry`. If either the file or the manifest entry
        remains, STOP and fix it: a surviving file+entry means `sync` will
        re-arm the machine.
@@ -284,7 +332,7 @@ The detail of each:
    are **not** guaranteed secret-free.
    - **Create the incident folder, make it private, and exclude it from cloud
      sync / backup — all BEFORE copying anything in.** Put it OUTSIDE
-     `~/.wienerdog` and outside any synced/backed-up path (not under iCloud Drive
+     the step-0 `<core>` and outside any synced/backed-up path (not under iCloud Drive
      / Dropbox / OneDrive / Google Drive):
      - macOS / Linux: `mkdir -m 700 ~/wienerdog-incident-<date>`, and add that
        folder to your backup exclusions *before* the copy (Time Machine: System
@@ -293,10 +341,11 @@ The detail of each:
        grant only your account — `icacls <folder> /inheritance:r /grant:r
        "$($env:USERNAME):(OI)(CI)F"` — and exclude it from File History / OneDrive
        backup, all before copying.
-   - **Copy the evidence in:** the **`config.yaml` `jobs:` snapshot** (the step-1
-     restore source), `state/run-evidence.jsonl`, `state/alerts.jsonl`, and the
-     relevant `logs/<job>/` files; optionally `state/schedule.json` too (watermark
-     evidence, not the restore source).
+   - **Copy the evidence in** — all read from the step-0 `<core>`: the
+     **`<core>/config.yaml` `jobs:` snapshot** (the step-1 restore source),
+     `<core>/state/run-evidence.jsonl`, `<core>/state/alerts.jsonl`, and the
+     relevant `<core>/logs/<job>/` files; optionally `<core>/state/schedule.json`
+     too (watermark evidence, not the restore source).
    - **Re-apply private modes recursively, then re-verify (blocking).** The copies
      leave Wienerdog's own `0700`/`0600` protection when they land elsewhere, so
      restore it over the **whole tree** — a plain `chmod 600 …/*` is wrong (it
@@ -316,7 +365,7 @@ The detail of each:
 3. **Revoke, then rotate, the affected credentials — at the provider.** Point at
    `secret-incident.md` step 2 for the exact revoke-then-rotate discipline (a
    rotated-but-not-revoked key is still live). Cover the credentials Wienerdog
-   holds: Google broker tokens (`~/.wienerdog/secrets/google-token-*.json` — re-
+   holds: Google broker tokens (`<core>/secrets/google-token-*.json` — re-
    run the Google setup to re-mint) and any provider API key the machine used.
    For a suspected *machine* compromise, treat every credential the machine
    touched as exposed.
@@ -370,23 +419,24 @@ The detail of each:
    inject against the digest.
    - **Run the installed SessionStart hook directly, with the environment set so
      it actually injects.** The installed hook is the copy at
-     **`<core>/bin/session-start.sh`** (`<core>` = `~/.wienerdog`; the adapter
-     installs it there — do **not** rely on `doctor` to print the path, it does
-     not). Run it with `WIENERDOG_HOME` set to your core and `WIENERDOG_JOB`
-     **cleared** (an inherited `WIENERDOG_JOB` makes the hook exit `0` with no
-     output — a false "clean"):
-     `WIENERDOG_JOB= WIENERDOG_HOME="$HOME/.wienerdog" "$HOME/.wienerdog/bin/session-start.sh"`
+     **`<core>/bin/session-start.sh`** (`<core>` = the step-0 `$CORE`, not
+     necessarily `~/.wienerdog`; the adapter installs it under the core — do **not**
+     rely on `doctor` to print the path, it does not). Run it with `WIENERDOG_HOME`
+     set to that same resolved core and `WIENERDOG_JOB` **cleared** (an inherited
+     `WIENERDOG_JOB` makes the hook exit `0` with no output — a false "clean"):
+     `WIENERDOG_JOB= WIENERDOG_HOME="$CORE" "$CORE/bin/session-start.sh"`
    - **Verify fail-closed.** Pipe that stdout through a tiny `node -e` that parses
      the JSON envelope and BLOCKS (drill FAILS — do not re-authorize) on any of:
      empty stdout, a JSON-parse failure, `hookSpecificOutput.hookEventName !==
      'SessionStart'`, or a non-string `additionalContext`. When it parses,
-     **byte-compare** `additionalContext` to the bytes of `state/digest.md` — they
+     **byte-compare** `additionalContext` to the bytes of `<core>/state/digest.md`
+     (the step-0 core) — they
      must be **identical** (the hook injects exactly those bytes) — AND confirm a
      `grep -F` for the poisoned marker over `additionalContext` finds nothing. A
      marker match, a mismatch against the digest, or any block condition means
      STOP.
-   - **Grep the regenerated `state/digest.md`** for the poisoned marker directly
-     (belt-and-suspenders against the decoded bytes above).
+   - **Grep the regenerated `<core>/state/digest.md`** for the poisoned marker
+     directly (belt-and-suspenders against the decoded bytes above).
    - **Check the managed block in every INSTALLED harness file with a THREE-CHECK
      conjunction — a clean `sync` (no notice) AND a WHOLE-FILE marker grep AND a
      single-sentinel-pair check — not `doctor`, and NOT a region-vs-raw-digest
@@ -486,6 +536,18 @@ fix-source → `memory approve` → `sync`). No jargon without a one-clause glos
 
 ## Acceptance criteria
 
+- [ ] **[R7-1]** The runbook opens with a **step 0 preamble** (before step 1) that
+      resolves the ONE authoritative **core** = `$WIENERDOG_HOME` if set else the
+      platform default, gives both the POSIX (`${WIENERDOG_HOME:-$HOME/.wienerdog}`)
+      and Windows (`$env:WIENERDOG_HOME` else `$env:USERPROFILE\.wienerdog`)
+      resolution, DISPLAYS the resolved core, and has the user CONFIRM it holds the
+      real install (`config.yaml`, `state/`, `install-manifest.json`). Every later
+      path in the runbook — the catch-up scheduler XML, `install-manifest.json`, the
+      evidence copy, `state/digest.md`, the SessionStart hook, and every
+      verification — references that same resolved `<core>` (`$CORE` / `$core`),
+      **never** a hardcoded `~/.wienerdog` / `$env:USERPROFILE\.wienerdog`; the one
+      documented exception is the macOS catch-up LaunchAgent plist
+      (`~/Library/LaunchAgents/ai.wienerdog.catchup.plist`, always home-based).
 - [ ] `docs/runbooks/incident.md` exists in the house numbered-checklist format
       and covers, **in order**: (1) snapshot the **`config.yaml` `jobs:`
       definitions** before removal (the restore source — `state/schedule.json`
@@ -575,6 +637,10 @@ fix-source → `memory approve` → `sync`). No jargon without a one-clause glos
 npm run lint
 test -f docs/runbooks/incident.md && echo "runbook present — OK"
 grep -n "incident.md" docs/runbooks/secret-incident.md && echo "cross-link present — OK"
+# R7-1: a step-0 preamble resolves the ONE authoritative core (WIENERDOG_HOME else
+# default) with both POSIX and Windows resolution, displays+confirms it, and every
+# later path uses <core> rather than a hardcoded ~/.wienerdog:
+grep -nE "WIENERDOG_HOME:-\\\$HOME/\.wienerdog|env:WIENERDOG_HOME|step 0|resolve.*core|<core>" docs/runbooks/incident.md
 # each required mechanism is referenced (config.yaml jobs: is the restore source):
 grep -nE "schedule (list|remove)|config\.yaml|jobs:|run-evidence\.jsonl|memory approve|wienerdog sync|managed block" docs/runbooks/incident.md
 # the restore snapshot is config.yaml jobs:, and schedule.json is only watermark evidence:
