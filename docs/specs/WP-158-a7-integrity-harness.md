@@ -360,3 +360,9 @@ shared case list (A6) must add:
   positive: removing a job (incl. the final job) cleanly refreshes/tears down the
   map. Fails if the runtime post-success `ensureCatchup` still re-binds from
   config.
+- **[R6]** **missing-registration heal** (WP-160): source file + manifest intact
+  and canonical but the LOADED catch-up registration missing ⇒ ONE attended
+  `sync` restores it with the correct bound base64url map (assert the loaded
+  entry's argv); and the generic `reloadMissing`, run alone, NEVER creates/
+  authorizes the catch-up entry. Fails if repoint doesn't repair, or if
+  `reloadMissing` touches catch-up.

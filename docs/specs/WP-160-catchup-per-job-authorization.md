@@ -81,9 +81,11 @@ for the scoped-write class only.
 | Action | Path | Notes |
 |--------|------|-------|
 | modify | src/scheduler/generators.js | At registration, bind the per-job digest map into the **catch-up entry's registered arguments** as `--job-digests <base64url(canonicalJSON)>` (one opaque token — [R4:#3]), populated under registration privilege (loaded/DB state), never re-read from an editable file per fire. **[R5]** provide a teardown that removes the catch-up entry when no jobs remain. |
-| modify | src/cli/schedule.js | Compute the per-job digest map (`{jobName: deriveDescriptorDigest(paths, job)}` over all configured jobs), base64url-encode the canonical JSON, pass it to the catch-up renderer. **[R5]** this + `sync repoint` are the ONLY mint points; on final-job removal, tear the catch-up entry + map down cleanly (not left stale). |
+| modify | src/cli/schedule.js | Compute the per-job digest map (`{jobName: deriveDescriptorDigest(paths, job)}` over all configured jobs), base64url-encode the canonical JSON, pass it to the catch-up renderer. **[R5]** this + `sync repoint` are the ONLY mint points; on final-job removal, tear the catch-up entry + map down cleanly. **[R6]** `repointSchedules` also QUERIES the loaded catch-up registration and REPAIRS it (regenerate canonical entry + correct bound map) when missing/stale — the sole home for the missing-registration heal. |
 | modify | src/scheduler/launcher.js | `parseArgv` recognizes `--job-digests` (value-taking, opaque base64url token); `verifyCatchup` forwards it; `main` passes it through to the catch-up runner argv. The launcher NEVER reads a per-job entry file to obtain a digest. |
 | modify | src/cli/run-job.js | The catch-up runner decodes `--job-digests` (bounded base64url→JSON→shape-validate; malformed/oversized ⇒ durable alert + zero spawn), authorizes the **union** of bound ∪ configured job names BEFORE due-filtering ([R4:#1]), and runs only jobs whose live `deriveDescriptorDigest` matches the bound map; additions/removals/mismatches ⇒ alert, zero spawn. **[R5] REMOVE the post-success runtime `gen.ensureCatchup` call (L653)** — a runtime path must not mint authorization from config; at most emit a read-only "catch-up entry missing" notice, never regenerate. |
+| modify | src/cli/sync.js | **[R6]** the attended sync flow (its `repointSchedules` call) is the SINGLE owner of catch-up register/repair/teardown — orchestrate the query+repair here; the map (re)bind + repair logic itself lives in `repointSchedules` (`schedule.js`, already listed). |
+| modify | src/scheduler/status.js | **[R6]** `reloadMissing` is **excluded from the catch-up entry entirely** — it neither creates, authorizes, nor reloads it (catch-up is repointSchedules' sole responsibility). |
 | create | tests/unit/catchup-authorization.test.js | The negatives below. |
 | modify | tests/unit/scheduler-generators.test.js | Assert the catch-up entry carries `--job-digests` with a canonical map. |
 
@@ -141,9 +143,9 @@ Enumerated catch-up registration/reload paths + the required stance:
 | Path | When | Stance | Required behavior |
 |------|------|--------|-------------------|
 | `run-job.js:653` `ensureCatchup` (post-success backstop) | **runtime/nightly** | forbidden to mint | **Remove** the re-registration. It may, at most, read-only *check* presence and emit a notice ("catch-up entry missing — run `wienerdog sync`"); it must **never** regenerate the entry/map from config. If it cannot supply the already-loaded map it must **leave the loaded entry intact** (never overwrite with stale/missing args → would disable catch-up). |
-| `schedule.js:258` `ensureCatchup` (via `schedule add`/register) | attended | **mints** | Computes + binds the canonical map (this is the authorized mint point). |
-| `sync.js:188` `repointSchedules` | attended (`sync`) | **mints/replaces** | Recomputes + rebinds the map from validated config; the canonical refresh point for legitimate schedule changes. |
-| `sync.js:197` / `status.js:185` `reloadMissing` (sync-time heal) | attended (runs under `sync`) | re-registers canonical content; **map set by the sync flow** | Heal re-registers missing CANONICAL entries (WP-145) but does **not** independently mint the per-job digest map — the map is (re)bound by the same attended `sync` (`repointSchedules`). Never derive per-job authorization from config here. |
+| `schedule.js:258` `ensureCatchup` (via `schedule add`/register) | attended | **mints** | Computes + binds the canonical map (an authorized mint point). |
+| `sync.js:188` `repointSchedules` | attended (`sync`) | **mints AND repairs** the catch-up registration + map | **[R6] Single owner.** Recomputes + rebinds the map from validated config, AND **queries the loaded catch-up registration and repairs it** when missing/stale — regenerating the canonical entry with the correct bound base64url map (and owning the final-job **teardown**). This is the sole home for the missing-registration case, so a byte-identical source can still be restored with a fresh authorized map. |
+| `sync.js:197` / `status.js:185` `reloadMissing` (generic sync-time heal) | attended (runs under `sync`) | **never touches the catch-up entry** | **[R6]** The generic heal re-registers missing CANONICAL per-job entries (WP-145) but is **excluded** from the catch-up entry entirely — it neither creates, authorizes, nor reloads it. All catch-up register/repair/teardown belongs to `repointSchedules` (row above), which runs in the same attended `sync`. This removes the map/canonical-byte handoff ambiguity: only one path owns catch-up. |
 
 **Legitimate schedule change** refreshes the map **only** via attended `sync`
 (`repointSchedules`) or `schedule` — including the edge case of **removing the
@@ -236,6 +238,14 @@ others.
       catch-up **refuses B** (alert + zero spawn). Removing a job via attended
       `sync` cleanly refreshes the map (including removing the **final** job:
       entry + map torn down, not left stale).
+- [ ] **[missing-registration heal, R6]** With the source file + manifest intact
+      and canonical but the **loaded** OS catch-up registration missing, ONE
+      attended `wienerdog sync` restores it with the correct bound map (assert the
+      loaded entry's argv carries the right base64url map). AND the generic
+      `reloadMissing` heal, run alone, **never** creates/authorizes/reloads the
+      catch-up entry (assert the exclusion). Mutation: if repoint doesn't repair
+      catch-up ⇒ the restore assertion fails; if `reloadMissing` still touches
+      catch-up ⇒ the exclusion assertion fails.
 - [ ] macOS and Windows catch-up negatives execute (not just POSIX).
 - [ ] `npm test` and `npm run lint` are green.
 
