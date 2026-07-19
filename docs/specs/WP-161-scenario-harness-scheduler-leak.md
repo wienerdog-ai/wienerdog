@@ -246,16 +246,29 @@ const initEnv = scg.buildInitEnv(env, root, shim);
 const initRes = runWienerdog(['init', '--fresh-vault', '--yes'], initEnv);
 // auth-sensitive subprocess → UNCHANGED real env (do not touch):
 const dreamRes = runWienerdog(['dream', '--yes'], env);
-// ... in finally, before/after fs.rmSync(root):
-failures.push(...scg.assertNoLoaderInvoked(shim));
-failures.push(...scg.assertNoRealSchedulerLeak(root));
+// ... in finally:
+//   MANDATORY ORDER — the shim-log check reads shim.logPath, which lives under
+//   root, so it MUST run BEFORE fs.rmSync(root) or a deleted log reads as a
+//   false clean (F7):
+failures.push(...scg.assertNoLoaderInvoked(shim));   // BEFORE the rm — non-negotiable
+failures.push(...scg.assertNoRealSchedulerLeak(root)); // either side of the rm (reads the real dir)
+// ... only now:
+fs.rmSync(root, { recursive: true, force: true });
 ```
-The observer reads the *real* scheduler dir (not `root`), so its `finally`
-ordering relative to `fs.rmSync(root)` does not matter; run it before the rm for
-clarity. It defaults `env` to the runner's own `process.env` — which is the real
-env (the `initEnv` redirect only applies to the `init` child, never the runner
-process), so the observer scans `process.env.HOME || os.homedir()` per **F5**;
-pass no `env` in the wiring. `run-negative`'s `init` is inside `runDream`, which must return the two
+**Ordering is NOT uniformly free (Codex F7).** `assertNoLoaderInvoked` reads
+`shim.logPath`, which lives **under `root`**, and a missing/empty log counts as
+clean (`[]`); if it ran *after* `fs.rmSync(root)`, the wiped log would read as a
+false clean and mask a `LOADER_NOOP` regression (the shim blocks the loader,
+`init` can still exit 0 as "load-failed", then the deleted log hides it). So
+`assertNoLoaderInvoked(shim)` **MUST run before `fs.rmSync(root)` in both
+runners** — this is a required wiring contract, not a style preference. The
+**observer** (`assertNoRealSchedulerLeak`) reads the *real* scheduler dir (not
+`root`), so it alone is order-independent; run it either side. The observer
+defaults `env` to the runner's own `process.env` — the real env (the `initEnv`
+redirect only applies to the `init` child, never the runner process) — so it
+scans `process.env.HOME || os.homedir()` per **F5**; pass no `env` in the wiring.
+`shim.logPath` is exposed on the returned `shim` object precisely so this
+before-delete ordering is obvious at the call site. `run-negative`'s `init` is inside `runDream`, which must return the two
 tripwire failures (or the caller must have `root`/`shim` in scope to assert in
 `main`'s `finally` — implementer's choice, recorded under "Decisions made").
 
@@ -358,11 +371,27 @@ contributor completes this later; recorded here so it is not lost.
       `.timer` under `<tmpHome>/.config/systemd/user`; the observer scans that
       dir and reports it. Assert both derive from the injected `env.HOME`, so a
       HOME-redirection regression could not hide in a dir the observer skipped.
+    - **Linux XDG-scan branch (Codex F6 — proves the OBSERVER itself honors
+      `XDG_CONFIG_HOME`, not just `buildInitEnv`):** with `opts.platform='linux'`
+      and `opts.env` carrying `HOME='<tmpHome>'` **and** `XDG_CONFIG_HOME='<tmpXdg>'`
+      pointing at **different** temp dirs, plant the leaked `.timer` **only** under
+      `<tmpXdg>/systemd/user` (leave `<tmpHome>/.config/systemd/user` empty or
+      absent). The observer must scan `<tmpXdg>/systemd/user` and **report** the
+      leak. This fails an observer that always looks at `<HOME>/.config/systemd/user`
+      — so it proves the observer's Linux dir derivation matches `systemdUserDir`
+      exactly (XDG preferred over the HOME fallback), closing the gap where a leak
+      on an XDG machine would be missed while every other branch still passed.
 - [ ] `npm test` and `npm run lint` are green. (The two runner edits are not
       exercised by `npm test`, which does not set `WIENERDOG_RUN_SCENARIOS`.)
 - [ ] Static check: `grep -n "buildInitEnv\|assertNoRealSchedulerLeak\|assertNoLoaderInvoked" tests/scenarios/run-scenarios.js tests/scenarios/negative/run-negative.js`
       shows the init-env + both tripwires wired in both runners, and the `dream`
       call still receives the original `env` (not `initEnv`).
+- [ ] **Ordering (Codex F7):** in **both** runners, `assertNoLoaderInvoked(shim)`
+      runs **before** `fs.rmSync(root)` (the shim log lives under `root`; checking
+      it after the delete would read the wiped log as a false clean and mask a
+      `LOADER_NOOP` regression). Assert this by source ordering — the
+      `assertNoLoaderInvoked` call precedes the `fs.rmSync(root, …)` call in each
+      runner's `finally`. (The observer may run either side — it reads the real dir.)
 - [ ] **Live proof (gated; run manually, paste output):** on a clean machine,
       `WIENERDOG_RUN_SCENARIOS=1 npm run scenarios:negative` (and the main
       scenarios run) leaves `ls ~/Library/LaunchAgents | grep -i wienerdog`
