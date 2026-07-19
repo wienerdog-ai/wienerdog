@@ -5,7 +5,7 @@ status: Draft
 model: sonnet
 size: S
 depends_on: []
-adrs: [ADR-0004, ADR-0021, ADR-0024]
+adrs: [ADR-0004, ADR-0021, ADR-0024, ADR-0027]
 epic: audit-a9
 ---
 
@@ -88,12 +88,33 @@ Other runbooks in `docs/runbooks/` (`codex-review.md`, `release.md`,
   skill links).
 
 **Code-owned evidence artifacts the "preserve evidence" step snapshots** (all
-already written, secret-free, 0600):
+bounded, code-owned; **treat as potentially sensitive — see below**):
 - `~/.wienerdog/state/run-evidence.jsonl` — the bounded per-run record (Claude
   version, executable, profile, argv, settings/MCP digests, managed-policy
   state, containment self-check result). Free-text is reduced to `sha256`.
 - `~/.wienerdog/state/alerts.jsonl` — durable fail-loud alerts.
-- `~/.wienerdog/logs/<job>/*.log` — per-run job logs (secret-redacted stream).
+- `~/.wienerdog/logs/<job>/*.log` — per-run job logs (redacted stream).
+
+**Redaction is best-effort, so evidence is NOT guaranteed secret-free (do not
+claim it is).** Per ADR-0024 and the `run-job.js` EP3 comment, the log stream is
+scanned per-chunk before it is written, but a **boundary-split** secret (one that
+straddles two stream chunks) is only **partially** redacted, and an unknown or
+encoded secret is **not** redacted at all. The runbook must therefore treat all
+three artifacts as **potentially sensitive** and handle the incident snapshot with
+private modes and no off-machine sync (contract step 2 below), never as "safe to
+keep because it has no secrets."
+
+**A `schedule remove` does not stop a job that is already running (do not assume
+quiescence).** Per ADR-0027 / WP-145, `schedule remove` re-derives and runs a
+best-effort OS **unregister** and then deletes the schedule file; the OS
+unregister is **best-effort** (a poisoned or already-unloaded entry is ignored —
+`manifest.js reverseSchedulerEntry` swallows the error), and, critically,
+unregistering only stops **future** fires. **A dream/routine job that is running
+*right now* keeps running** — reading, committing, and injecting — after
+`remove` returns. The runbook must therefore add a **proven-quiescence** gate
+(contract step 1 below): after removal, verify no Wienerdog job process is live
+and stop any that is, and begin credential rotation only once zero jobs are
+active.
 
 ## Deliverables (permission boundary — touch ONLY these)
 
@@ -101,7 +122,7 @@ already written, secret-free, 0600):
 
 | Action | Path | Notes |
 |--------|------|-------|
-| create | docs/runbooks/incident.md | The general incident-drill runbook (house numbered-checklist format), covering the six A9 steps + the acceptance drill. |
+| create | docs/runbooks/incident.md | The general incident-drill runbook (house numbered-checklist format), covering the seven ordered A9 steps: stop+prove-quiescence, preserve-evidence-privately, revoke+rotate, purge digest+managed-block, clean git, byte-level acceptance drill, then re-authorize. |
 | modify | docs/runbooks/secret-incident.md | Add one cross-link near the top: the secret leak is the credential-specific case of the general incident drill (link `incident.md`); for a general or suspected-compromise incident, start there. Do NOT rewrite its steps. |
 
 ### Exact contract — what `docs/runbooks/incident.md` must state
@@ -110,23 +131,66 @@ House format: a short intro paragraph, then a **numbered, ordered** imperative
 checklist in plain language (define "revoke", "rotate", "managed block", "git
 history" in one clause each — the audience is a knowledge worker). The steps are
 ordered so nothing reads/commits/injects the compromised state while you clean
-up. It must cover, **in this order**:
+up, and so the machine is **proven clean before it is re-authorized**. It must
+cover, **in this order**: (1) stop schedules + prove quiescence, (2) preserve
+evidence into a private folder, (3) revoke+rotate credentials, (4) purge the
+compromised digest + managed block, (5) clean git history, (6) run the
+byte-level acceptance drill, (7) re-authorize only after a recorded drill pass.
+The detail of each:
 
-1. **Stop all schedules first — before anything else.** `wienerdog schedule
-   list`, then `wienerdog schedule remove <name>` for every job (the nightly
-   dream and any catalog routine). This satisfies the A9 acceptance "stops all
-   jobs *before* credential rotation": no dream/routine can run, read, commit,
-   or inject while you investigate. State that `remove` only unregisters — you
-   re-add in step 6.
+1. **Stop all schedules AND prove no job is still running — before anything
+   else.** Two parts, in order:
+   - **Unregister every schedule.** `wienerdog schedule list`, then `wienerdog
+     schedule remove <name>` for every job (the nightly dream and any catalog
+     routine). State plainly that `remove` only stops **future** fires and that
+     its OS-unregister is best-effort — it does **not** stop a job that is
+     running **right now**, and you re-add in the re-authorize step.
+   - **Prove quiescence — zero active Wienerdog jobs — and stop any that is
+     live.** Because a dream/routine already in flight keeps reading, committing,
+     and injecting after `remove` returns, you must confirm none is running
+     before you rotate anything. Give platform-appropriate, do-it-yourself
+     checks and an explicit stop:
+     - macOS / Linux: `pgrep -fl wienerdog` (and `pgrep -fl 'claude -p'` for a
+       live brain). If anything is listed, stop it: `pkill -f wienerdog` (repeat
+       until `pgrep` is empty); for a stubborn process, `kill -9 <pid>`.
+     - macOS additionally: `launchctl list | grep -i wienerdog` should show no
+       loaded label after `remove`.
+     - Linux additionally: `systemctl --user list-timers | grep -i wienerdog`
+       and `systemctl --user list-units 'wienerdog-*'` should show nothing
+       active.
+     - Windows: `Get-ScheduledTask -TaskPath '\\Wienerdog\\' -ErrorAction
+       SilentlyContinue` should list nothing, and
+       `Get-Process | Where-Object { $_.Path -like '*wienerdog*' }` (plus any
+       `claude` process) should be empty; `Stop-Process -Id <pid> -Force` for
+       any straggler.
+     - **Do not proceed to credential rotation until every one of these is empty
+       (proven zero active jobs).** State this as a hard gate: rotation begins
+       only at proven quiescence, and if a check keeps finding a live job, treat
+       the machine as still-compromised and escalate rather than continuing.
 
-2. **Preserve the evidence metadata — copy it aside, do NOT delete it yet.**
-   Before you change anything, snapshot the code-owned, secret-free run record
-   so you can see what actually ran and when: copy `state/run-evidence.jsonl`,
+2. **Preserve the evidence — copy it aside into a private folder, do NOT delete
+   it yet.** Before you change anything, snapshot the code-owned run record so you
+   can see what actually ran and when: copy `state/run-evidence.jsonl`,
    `state/alerts.jsonl`, and the relevant `logs/<job>/` files to a folder
-   *outside* `~/.wienerdog` (e.g. `~/wienerdog-incident-<date>/`). Explain that
-   these are bounded, redacted, code-owned records (no raw secrets, no raw brain
-   output — ADR-0024), so they are safe to keep as your incident timeline. Do
-   not run cleanup steps until this snapshot exists.
+   *outside* `~/.wienerdog`. **Treat every copy as potentially sensitive** —
+   redaction is best-effort (a boundary-split or encoded secret can survive in a
+   log; ADR-0024), so these are your incident timeline but they are **not**
+   guaranteed secret-free. Handle them privately:
+   - Create the incident folder **private to you before copying anything into
+     it**: `mkdir -m 700 ~/wienerdog-incident-<date>` (macOS/Linux); on Windows
+     create the folder and remove inherited access so only your account can read
+     it. Do not use a world- or group-readable location.
+   - After copying, tighten the copies to owner-only: `chmod 600
+     ~/wienerdog-incident-<date>/*` (POSIX). State that the copies leave
+     Wienerdog's own `0700`/`0600` protection when they land elsewhere, so you
+     re-apply it by hand.
+   - **Keep the folder off any cloud sync or backup.** Explicitly do not place it
+     under iCloud Drive / Dropbox / OneDrive / Google Drive or any auto-backup
+     path, and exclude it from Time Machine / file-history backups — an incident
+     snapshot must not be silently copied off the machine.
+   - *(Optional, your judgment.)* Record an integrity hash of each copied file
+     (e.g. `shasum -a 256 …`) so you can later prove the timeline was not altered.
+   - Do not run any cleanup step until this private snapshot exists.
 
 3. **Revoke, then rotate, the affected credentials — at the provider.** Point at
    `secret-incident.md` step 2 for the exact revoke-then-rotate discipline (a
@@ -161,22 +225,45 @@ up. It must cover, **in this order**:
    history; if you ever pushed a fork/remote, force-push there too and treat the
    credential/content as compromised regardless.
 
-6. **Re-authorize — only after steps 1–5.** Re-add the schedules you removed
-   (`wienerdog schedule add …` or the routine menu `/wienerdog-routines`), then
-   run `wienerdog doctor` and confirm nothing is flagged (permissions, scheduler
-   load).
+6. **Run the acceptance drill FIRST — prove the old digest/managed block is gone
+   BEFORE you re-authorize.** The drill is the gate, not an afterthought: you do
+   **not** re-add schedules until it passes. Verify at the **byte level** that the
+   compromised context can no longer be injected — not by watching how a session
+   behaves, but by inspecting the exact bytes the injection machinery would use:
+   - **Run the installed SessionStart hook directly and inspect the bytes it
+     would inject.** Wienerdog's hook (`templates/hooks/session-start.sh`, its
+     installed copy — `wienerdog doctor` reports the hook path) reads
+     `state/digest.md` and emits a JSON envelope
+     `{ "hookSpecificOutput": { "hookEventName": "SessionStart",
+     "additionalContext": "<digest bytes>" } }`. Run that installed hook,
+     decode `hookSpecificOutput.additionalContext` from its stdout, and confirm a
+     `grep -F` for the poisoned marker over those **exact injected bytes** finds
+     nothing. (Give the literal one-liner: run the hook, pipe its stdout through a
+     tiny `node -e` that parses the JSON and prints `additionalContext`, then
+     `grep -F "<marker>"`; a match means STOP — do not re-authorize.)
+   - **Grep the regenerated `state/digest.md`** for the poisoned marker directly
+     (belt-and-suspenders against the decoded bytes above).
+   - **Check BOTH managed blocks** — the sentinel-delimited region
+     (`<!-- wienerdog:begin --> … <!-- wienerdog:end -->`) in **`CLAUDE.md` AND
+     in `AGENTS.md`** — and confirm neither contains the marker.
+   - **Treat any sync sentinel / adapter notice as blocking.** If `wienerdog
+     sync` (or `doctor`) reports a managed-block out-of-sync sentinel, a missing
+     or duplicated sentinel, or an adapter warning about either file, the drill
+     **fails**: the managed block is not in a known-clean rendered state, so stop
+     and fix the source before continuing — do not re-authorize on a warning.
+   - *(Optional extra sanity check, NOT the proof.)* You may also start a **new**
+     Claude Code / Codex session and confirm it does not surface the poisoned
+     fact — but this observation is a nicety, not the acceptance: the byte-level
+     checks above are the proof (the injection is byte-gated, ADR-0021).
+   Record the drill result (the four checks above, all clean). A9's acceptance is
+   met only when the drill passes and is recorded — that recorded pass is the
+   precondition for step 7.
 
-7. **Run the acceptance drill — prove the old digest/managed block is gone.**
-   A concrete, do-it-yourself verification that the compromised context is no
-   longer injected:
-   - Confirm the freshly-rendered `state/digest.md` no longer contains the
-     compromised marker (a plain `grep` for the poisoned text finds nothing).
-   - Confirm the CLAUDE.md / AGENTS.md managed block no longer contains it.
-   - Start a **new** Claude Code / Codex session and confirm it does not surface
-     the poisoned fact/instruction — the session-start digest is clean, and any
-     unapproved identity change is byte-gated out (ADR-0021).
-   Frame this as the drill A9 requires: if all three are clean, the old digest
-   and managed block are provably no longer being injected.
+7. **Re-authorize — only after a successful, recorded drill (step 6) and steps
+   1–5.** Re-add the schedules you removed (`wienerdog schedule add …` or the
+   routine menu `/wienerdog-routines`), then run `wienerdog doctor` and confirm
+   nothing is flagged (permissions, scheduler load). Schedules come back **only**
+   after the acceptance drill has passed and been recorded — never before.
 
 Keep every command exact and every claim traceable to a shipped mechanism (do
 not describe a "remove managed block" command — there is none; the mechanism is
@@ -202,20 +289,31 @@ fix-source → `memory approve` → `sync`). No jargon without a one-clause glos
 ## Acceptance criteria
 
 - [ ] `docs/runbooks/incident.md` exists in the house numbered-checklist format
-      and covers, **in order**: (1) stop all schedules first, (2) preserve
-      evidence metadata before any cleanup, (3) revoke+rotate credentials,
+      and covers, **in order**: (1) stop all schedules **and prove quiescence**
+      (zero active jobs, stop any live one), (2) preserve evidence into a
+      **private** folder before any cleanup, (3) revoke+rotate credentials,
       (4) purge the compromised digest **and** managed block (fix source →
-      `memory approve` → `sync`), (5) clean git history, (6) re-authorize,
-      (7) the acceptance drill proving the old digest/managed block is no longer
-      injected.
-- [ ] Step order puts "stop all jobs" strictly before credential rotation
-      (A9 acceptance).
+      `memory approve` → `sync`), (5) clean git history, (6) the byte-level
+      acceptance drill proving the old digest/managed block is no longer injected,
+      (7) re-authorize **only** after a recorded drill pass.
+- [ ] Step order puts "stop all jobs" strictly before credential rotation, and
+      puts the acceptance drill strictly **before** re-authorization (A9
+      acceptance): schedules are re-added only after a recorded drill pass.
+- [ ] The stop-schedules step states that `schedule remove` does **not** stop an
+      already-running job and gives platform-appropriate live-process checks
+      (`pgrep`/`launchctl`/`systemctl`/`Get-ScheduledTask`) plus an explicit stop,
+      gating credential rotation on proven zero active jobs.
 - [ ] The evidence-preservation step names `state/run-evidence.jsonl`,
-      `state/alerts.jsonl`, and `logs/<job>/`, and says to copy them aside before
-      cleanup.
-- [ ] The acceptance-drill step gives a concrete check (grep the fresh digest +
-      managed block, start a new session) that the compromised marker is gone,
-      and ties it to the ADR-0021 byte-gated injection.
+      `state/alerts.jsonl`, and `logs/<job>/`; treats them as **potentially
+      sensitive** (best-effort redaction, not secret-free); and requires a `0700`
+      incident folder, `0600` copies, and explicit exclusion from cloud sync /
+      backup.
+- [ ] The acceptance-drill step verifies at the **byte level**: run the installed
+      SessionStart hook and grep its decoded `additionalContext`, grep the
+      regenerated `state/digest.md`, and grep **both** managed blocks (`CLAUDE.md`
+      **and** `AGENTS.md`); any sync sentinel / adapter notice is blocking; the
+      new-session observation is an optional extra, not the proof. It ties the
+      proof to the ADR-0021 byte-gated injection.
 - [ ] `docs/runbooks/secret-incident.md` gains a cross-link naming `incident.md`
       as the general drill (its existing steps are unchanged).
 - [ ] Every documented command/mechanism is one that already ships (no invented
@@ -230,6 +328,12 @@ test -f docs/runbooks/incident.md && echo "runbook present — OK"
 grep -n "incident.md" docs/runbooks/secret-incident.md && echo "cross-link present — OK"
 # each required mechanism is referenced:
 grep -nE "schedule (list|remove)|run-evidence\.jsonl|memory approve|wienerdog sync|managed block" docs/runbooks/incident.md
+# the quiescence gate, private evidence handling, and byte-level drill are present:
+grep -nE "pgrep|launchctl|systemctl|Get-ScheduledTask" docs/runbooks/incident.md
+grep -nE "0700|chmod 600|mkdir -m 700|cloud|backup|Time Machine" docs/runbooks/incident.md
+grep -nE "additionalContext|SessionStart|AGENTS\.md" docs/runbooks/incident.md
+# the drill precedes re-authorization (drill line number < re-add line number):
+awk '/acceptance drill/{d=NR} /schedule add|routine menu|Re-authorize/{if(d){print "drill@"d" before re-auth@"NR; exit}}' docs/runbooks/incident.md
 ```
 
 ## Out of scope (do NOT do these)
