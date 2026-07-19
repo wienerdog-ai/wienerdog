@@ -369,3 +369,8 @@ shared case list (A6) must add:
   entry's argv); and the generic `reloadMissing`, run alone, NEVER creates/
   authorizes the catch-up entry. Fails if repoint doesn't repair, or if
   `reloadMissing` touches catch-up.
+- **[R10]** **non-node env-shebang fail-closed** (WP-154): a pinned executable
+  with a `#!/usr/bin/env <non-node>` shebang + a fake `<x>` planted FIRST on the
+  job PATH ⇒ `resolvePinnedSpawn` THROWS, the plant is **never** executed (the
+  recorder shows zero spawn of the fake). Mutation: revert to "resolve `<x>`
+  through the job PATH + structural verify" ⇒ the plant runs ⇒ fails.

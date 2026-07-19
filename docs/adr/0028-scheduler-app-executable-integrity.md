@@ -416,9 +416,18 @@ implemented as dated amendments in the six specs and detailed in `FIX-PLAN.md`.
 2. **The interpreter is verified, not just the script (Decision 1 refinement).**
    Structural verification of a pinned `#!/usr/bin/env node` script (the shape of
    `claude`/`codex`) did not cover the interpreter, which `env` re-resolves from the
-   job PATH. Node-shebang pins are now spawned via `process.execPath` (the verified,
-   absolute, running node); native binaries spawn directly; other interpreters are
-   resolved + structurally verified. No PATH re-resolution of the interpreter.
+   job PATH. The supported interpreter set is: **native binary** (no shebang) →
+   spawn the verified realpath directly; **node shebang** (`env node`, `-S node`,
+   `<abs>/node`) → spawn `process.execPath <script>`; **absolute non-node
+   interpreter** (`#!/abs/interp`) → `verifyExecutable(abs)` then spawn it, else
+   THROW. **[R10] A PATH-resolving non-node env shebang (`#!/usr/bin/env
+   <non-node>`) FAILS CLOSED (THROW)** — it is **not** resolved through the job
+   PATH, because the job PATH front-loads attacker-writable `~/.local/bin` and
+   structural verification would pass a statically-planted fake interpreter there,
+   re-introducing the static F4 PATH hijack. claude/codex are node and git is
+   native, so this branch is unexercised today; failing closed costs nothing now
+   and removes the hijack surface if an upstream wrapper ever changes. No PATH
+   re-resolution of any interpreter.
 
 3. **Everything shaping the spawn is digest-covered — now including `vault_layout`
    and the other mutable inputs (Decision 3 refinement).** `vault_layout` (which

@@ -475,9 +475,20 @@ returns a **spawn spec** `{command:string, args:string[]}` (spawn `command` with
 - node shebang (`env node`, `env -S node …`, `<abs>/node`) ⇒
   `{command: process.execPath, args:[realpath]}` — the verified, absolute,
   already-running node; no PATH interpreter resolution;
-- other `env`-based interpreter ⇒ resolve+`verifyExecutable` the interpreter
-  against the job PATH, spawn via its verified absolute path, else THROW;
-- absolute non-node interpreter ⇒ `verifyExecutable` it, else THROW.
+- absolute non-node interpreter (`#!/abs/interp`) ⇒ `verifyExecutable(abs)` then
+  `{command: abs, args:[realpath]}`; unverified ⇒ THROW;
+- **[R10] PATH-resolving non-node env shebang (`#!/usr/bin/env <non-node>`) ⇒
+  THROW / fail closed.** Do **NOT** resolve the interpreter through the job PATH.
+  Rationale (safe-direction tie-break): the job PATH front-loads attacker-writable
+  `~/.local/bin`, and `verifyExecutable` passes any current-user-owned executable
+  in a non-group-writable dir — so "resolve the interpreter through the job PATH +
+  structural verify" (the earlier clause) re-introduces the **static** F4 PATH
+  hijack (a statically planted fake `<non-node>` there is executed by the scheduled
+  job — no scheduler mutation, no concurrent writer, no A12). claude/codex are
+  node and git is native, so this branch is **not exercised today**; failing closed
+  costs nothing now and removes the hijack surface if an upstream wrapper ever
+  changes to a PATH-resolving non-node interpreter. Message: "the pinned executable
+  uses an unsupported PATH-resolving interpreter — investigate or re-pin."
 Add `readShebang(realpath)` (bounded 512-byte first-line read). Callers
 (`brain.js` incl. the `--version` probe, `validate.js`, `containment-probe.js`)
 spawn `spec.command` with `spec.args` prepended. This is an API **shape** change
@@ -543,3 +554,9 @@ valid descriptor binds.
   `resolvePinnedSpawn` **throw** (never live-resolve); a node-shebang pin spawns
   via `process.execPath` and a planted `node` earlier on PATH is irrelevant; each
   proven by a unit test that fails if the fix is reverted.
+- **[R10] Acceptance:** a pinned executable with a **non-node
+  `#!/usr/bin/env <x>`** shebang, with a fake `<x>` planted FIRST on the job PATH,
+  makes `resolvePinnedSpawn` **THROW** — the plant is **never** executed. Mutation:
+  revert this branch to "resolve `<x>` through the job PATH + structural verify" ⇒
+  the plant runs ⇒ the test fails. (`exec-identity.test.js`; the harness — WP-158 —
+  mirrors it as an end-to-end negative.)
