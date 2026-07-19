@@ -191,9 +191,13 @@ exit 9   # fail-closed: any real mutation attempt is captured AND fails
 `chmod 0o755`. These are a **safety net**: with `LOADER_NOOP=1` the shims never
 fire in a correct run (the log stays empty). If a future edit drops
 `LOADER_NOOP`, the shim **captures the mutation and makes it fail** before it can
-register anything real. **POSIX-only** (darwin/linux); on Windows the shim layer
-is skipped — Windows task **files** are already WIENERDOG_HOME-scoped (temp) and
-registration is stopped by `LOADER_NOOP` alone. State this boundary in the code.
+register anything real. **The shim interceptor is POSIX-only (darwin/linux):** on
+Windows it is skipped and there is no `schtasks` interceptor and no Task
+Scheduler observer — `schtasks /create` registers a **global** Task Scheduler
+task (not a file under a redirected dir), so on Windows only `LOADER_NOOP` guards
+the real registration. This is a **deliberately accepted residual** — see
+"Accepted residual (Windows)" below; do not write any code or comment implying
+that WIENERDOG_HOME-scoping the task XML file makes Windows contained.
 
 **`assertNoLoaderInvoked(shim)` → `string[]`**: if `shim.logPath` exists and is
 non-empty, return one failure per recorded line (the loader was invoked despite
@@ -205,10 +209,20 @@ per-platform scheduler dir(s) and returns a failure for every Wienerdog-named
 entry **whose file content references `tempRoot`** — i.e. a plist/timer/service
 this run actually leaked (its `ProgramArguments`/`ExecStart` point at this run's
 temp core). Contract:
-- Real dir(s) from `os.homedir()` unless `opts.dir` overrides (for unit tests);
-  `opts.platform` overrides `process.platform`. `darwin` →
-  `<home>/Library/LaunchAgents`; `linux` → `$XDG_CONFIG_HOME/systemd/user` else
-  `<home>/.config/systemd/user`; other → `[]` (no file-based dir to scan).
+- **Compute the real home with the SAME rule the product uses — `env.HOME ||
+  os.homedir()`, where `env = opts.env || process.env`** — NOT `os.homedir()`
+  alone. **(Codex Finding F5.)** The product derives `paths.home` as
+  `env.HOME || os.homedir()` (`src/core/paths.js:54`) and the runner inherits the
+  real `process.env.HOME`; if that differs from `os.homedir()` (sudo, CI, a
+  custom `HOME`), a HOME-redirection regression would leak into
+  `$HOME/Library/LaunchAgents` while an `os.homedir()`-based observer scanned a
+  *different* directory and reported a false clean. `opts.env` is injectable so a
+  unit test can pass a fake env whose `HOME` differs from `os.homedir()`.
+- Scanned dir(s), from that home and `env` (unless `opts.dir` fully overrides,
+  for direct-injection unit tests); `opts.platform` overrides `process.platform`.
+  `darwin` → `<home>/Library/LaunchAgents`; `linux` → `env.XDG_CONFIG_HOME` set →
+  `<xdg>/systemd/user`, else `<home>/.config/systemd/user` (mirroring product
+  `systemdUserDir`); other → `[]` (no file-based dir to scan).
 - "Wienerdog-named", **fully anchored**: `^ai\.wienerdog\.[a-z0-9.-]+\.plist$`
   (darwin) / `^wienerdog-[a-z0-9.-]+\.(timer|service)$` (linux).
 - **Leak signal = content contains `tempRoot`.** This is precise to *this* run:
@@ -238,7 +252,10 @@ failures.push(...scg.assertNoRealSchedulerLeak(root));
 ```
 The observer reads the *real* scheduler dir (not `root`), so its `finally`
 ordering relative to `fs.rmSync(root)` does not matter; run it before the rm for
-clarity. `run-negative`'s `init` is inside `runDream`, which must return the two
+clarity. It defaults `env` to the runner's own `process.env` — which is the real
+env (the `initEnv` redirect only applies to the `init` child, never the runner
+process), so the observer scans `process.env.HOME || os.homedir()` per **F5**;
+pass no `env` in the wiring. `run-negative`'s `init` is inside `runDream`, which must return the two
 tripwire failures (or the caller must have `root`/`shim` in scope to assert in
 `main`'s `finally` — implementer's choice, recorded under "Decisions made").
 
@@ -262,6 +279,29 @@ tripwire failures (or the caller must have `root`/`shim` in scope to assert in
   `child_process` needed in the guard module itself).
 - When uncertain, choose the simpler option and record it under "Decisions made".
 
+## Accepted residual (Windows) — scoped, deliberate (Codex Finding F4)
+
+**Residual:** On Windows the harness relies on `WIENERDOG_LOADER_NOOP` **alone** —
+there is **no `schtasks` PATH interceptor and no Task Scheduler observer**. Unlike
+launchd/systemd (file-based, redirected into temp via `HOME`/`XDG_CONFIG_HOME`),
+`schtasks /create` registers a **global** Task Scheduler task, not a file under a
+redirected directory. So a `WIENERDOG_LOADER_NOOP` regression on Windows could
+leave a **real global task pointing at a deleted temp core**, and neither
+tripwire in this WP would catch it. Do NOT claim otherwise anywhere in the code
+or docs — WIENERDOG_HOME-scoping the task XML file does not contain the
+registration.
+
+**Why accepted (owner, 2026-07-19):** the live scenario runners run only on the
+maintainer's macOS/Linux machines; Windows live-scenario runs are neither a used
+nor a testable path here (Windows cannot even be exercised on this machine). The
+POSIX shim + observer cover the platforms that actually run the harness.
+
+**Follow-up (do NOT build in this WP):** a future Windows-hardening item should
+add a `schtasks` interceptor with `PATHEXT`/`.cmd` handling **plus** a report-only
+Task Scheduler observer (e.g. `schtasks /query` filtered to `\Wienerdog\*`,
+reporting any task whose action references a nonexistent core). A Windows
+contributor completes this later; recorded here so it is not lost.
+
 ## Security checklist
 
 - [ ] The `init` subprocess runs with `HOME` **and** `XDG_CONFIG_HOME` under the
@@ -273,12 +313,17 @@ tripwire failures (or the caller must have `root`/`shim` in scope to assert in
       no `CLAUDE_CONFIG_DIR` pin — so subscription auth (ADR-0009) is provably
       identical to today; `ANTHROPIC_API_KEY` is still deleted. **(Finding 2.)**
 - [ ] `WIENERDOG_LOADER_NOOP=1` on the `init` env stops every real
-      `launchctl`/`systemctl`/`loginctl`/`schtasks` mutation; the PATH shims
-      fail-closed and record any mutation that a regression lets slip. **(Finding 3.)**
+      `launchctl`/`systemctl`/`loginctl`/`schtasks` mutation. **The fail-closed
+      PATH-shim guarantee is POSIX (darwin/linux) only;** on Windows the harness
+      is `LOADER_NOOP`-only, with the documented Accepted residual — no `schtasks`
+      shim, no Task Scheduler observer. **(Finding 3 + F4.)**
 - [ ] The filesystem observer is **report-only** (never `rmSync`, never
-      `bootout`/`disable`), keys its leak signal on file content referencing the
-      run's `tempRoot` (immune to a concurrent legitimate install), and uses
-      fully-anchored Wienerdog basename patterns. **(Finding 3.)**
+      `bootout`/`disable`), computes the real home as `env.HOME || os.homedir()`
+      (matching `paths.js`, not `os.homedir()` alone — **F5**), keys its leak
+      signal on file content referencing the run's `tempRoot` (immune to a
+      concurrent legitimate install), and uses fully-anchored Wienerdog basename
+      patterns. It covers the file-based schedulers (launchd/systemd); Windows
+      Task Scheduler is out of scope per the Accepted residual. **(Finding 3 + F5 + F4.)**
 - [ ] The deterministic unit test operates entirely inside injected temp dirs and
       never reads or writes the real scheduler directory.
 
@@ -302,6 +347,17 @@ tripwire failures (or the caller must have `root`/`shim` in scope to assert in
     `tempRoot`, **ignores** a Wienerdog entry whose content references a
     different (real) path, and — asserted explicitly — **leaves both files on
     disk** (observer, not cleaner).
+  - **F5 differing-HOME derivation (no `opts.dir`; inject `opts.env` with `HOME`
+    set to a temp dir ≠ `os.homedir()`):**
+    - **macOS branch:** with `opts.platform='darwin'` and
+      `opts.env.HOME='<tmpHome>'`, plant a `tempRoot`-referencing plist under
+      `<tmpHome>/Library/LaunchAgents`; the observer scans **that** dir (derived
+      from `env.HOME`, not `os.homedir()`) and reports the leak.
+    - **Linux HOME-fallback branch:** with `opts.platform='linux'`,
+      `opts.env.HOME='<tmpHome>'`, and no `XDG_CONFIG_HOME`, plant a leaked
+      `.timer` under `<tmpHome>/.config/systemd/user`; the observer scans that
+      dir and reports it. Assert both derive from the injected `env.HOME`, so a
+      HOME-redirection regression could not hide in a dir the observer skipped.
 - [ ] `npm test` and `npm run lint` are green. (The two runner edits are not
       exercised by `npm test`, which does not set `WIENERDOG_RUN_SCENARIOS`.)
 - [ ] Static check: `grep -n "buildInitEnv\|assertNoRealSchedulerLeak\|assertNoLoaderInvoked" tests/scenarios/run-scenarios.js tests/scenarios/negative/run-negative.js`
