@@ -1,7 +1,7 @@
 ---
 id: WP-a9-incident-runbook
 title: Add the general incident-drill runbook — stop schedules, preserve evidence, rotate credentials, purge injected digest/managed block, clean git history, re-authorize
-status: Draft
+status: Ready
 model: sonnet
 size: S
 depends_on: []
