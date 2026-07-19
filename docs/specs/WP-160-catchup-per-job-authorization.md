@@ -62,7 +62,7 @@ for the scoped-write class only.
 - `src/scheduler/descriptor.js` (WP-156, incl. its fix-pass amendments):
   `buildDescriptor`, `deriveDescriptorDigest`, and the digest now cover
   `run`/`model`/`timeoutMs`/`vaultLayout`/`maxInputBytes`/outer-timeout/`schedule`
-  (`at`+tz)/exec pins/prompt hash/app release. The digest is the per-job
+  (`at`+tz)/`home`/exec pins/prompt hash/app release. The digest is the per-job
   authorization anchor.
 - `src/cli/run-job.js` catch-up runner reads jobs from `config.yaml` and calls
   `runJob` directly (the bypass).
@@ -76,10 +76,10 @@ for the scoped-write class only.
 
 | Action | Path | Notes |
 |--------|------|-------|
-| modify | src/scheduler/generators.js | At registration, bind the canonical per-job digest map into the **catch-up entry's registered arguments** (`--job-digests <canonical map>`), populated under registration privilege — the loaded/DB state, never re-read from an editable file per fire. Escape per platform as today. |
-| modify | src/cli/schedule.js | Compute the per-job digest map (`{jobName: deriveDescriptorDigest(paths, job)}` over all configured jobs) at register/repoint time and pass it to the catch-up renderer. |
-| modify | src/scheduler/launcher.js | `parseArgv` recognizes `--job-digests` (value-taking); `verifyCatchup` accepts + forwards the map; `main` passes it through to the catch-up runner argv. The launcher NEVER reads a per-job entry file to obtain a digest. |
-| modify | src/cli/run-job.js | The catch-up runner, per due job, re-derives `deriveDescriptorDigest(paths, job)` and compares it to the **argv-supplied** map entry; mismatch / job absent from the map ⇒ refuse that job, `appendAlert`, **zero spawn**; match ⇒ run. Never execute a job's `run`/`at` straight from mutable config without this check. |
+| modify | src/scheduler/generators.js | At registration, bind the per-job digest map into the **catch-up entry's registered arguments** as `--job-digests <base64url(canonicalJSON)>` (one opaque token — [R4:#3]), populated under registration privilege (loaded/DB state), never re-read from an editable file per fire. |
+| modify | src/cli/schedule.js | Compute the per-job digest map (`{jobName: deriveDescriptorDigest(paths, job)}` over all configured jobs), base64url-encode the canonical JSON, and pass it to the catch-up renderer. |
+| modify | src/scheduler/launcher.js | `parseArgv` recognizes `--job-digests` (value-taking, opaque base64url token); `verifyCatchup` forwards it; `main` passes it through to the catch-up runner argv. The launcher NEVER reads a per-job entry file to obtain a digest. |
+| modify | src/cli/run-job.js | The catch-up runner decodes `--job-digests` (bounded base64url→JSON→shape-validate; malformed/oversized ⇒ durable alert + zero spawn), authorizes the **union** of bound ∪ configured job names BEFORE due-filtering ([R4:#1]), and runs only jobs whose live `deriveDescriptorDigest` matches the bound map; additions/removals/mismatches ⇒ alert, zero spawn. |
 | create | tests/unit/catchup-authorization.test.js | The negatives below. |
 | modify | tests/unit/scheduler-generators.test.js | Assert the catch-up entry carries `--job-digests` with a canonical map. |
 
@@ -90,6 +90,18 @@ registration): a canonical-JSON object `{ "<jobName>": "sha256:…", … }` over
 **every configured job**, each value = `deriveDescriptorDigest(paths, job)` (the
 same digest the per-job entry binds). Canonical = key-sorted, no whitespace
 variance — deterministic. Small (one entry per job).
+
+**[R4:#3] Transport — base64url, not raw JSON.** Quote-bearing canonical JSON as
+a single argv value does NOT survive `CommandLineToArgvW` token boundaries in the
+Windows Task Scheduler `<Arguments>` (JSON quotes are consumed as command syntax)
+and has the same quoting hazard under systemd `ExecStart` — the runner would get
+invalid JSON and every catch-up would fail closed with no diagnostic. **Exact
+transport:** the bound argv value is **`base64url(canonicalJSON)`** (one opaque
+token, no shell/XML metacharacters). The run-job side decodes with a **strict,
+bounded schema decoder**: reject if length > a fixed cap (e.g. 64 KiB); `atob`
+(base64url) → `JSON.parse` → shape-validate (object of `string → "sha256:<hex>"`);
+**any** malformed/oversized/shape-invalid input ⇒ **durable alert + zero spawn**,
+never a thrown crash. Do not use raw JSON or per-platform ad-hoc escaping.
 
 **Anchor rule (the whole point).** The authorized digest for a job on the
 catch-up path is read **only** from:
@@ -103,17 +115,34 @@ It is **never** read from the per-job entry **file** on disk, nor from
 `config.yaml`. A forged per-job source file (edited without reload) must not
 affect the decision.
 
-**Catch-up runner algorithm** (`run-job.js`, per due job `j`):
+**[R4:#1] Authorize the FULL job set BEFORE computing due-ness.** The naive
+"filter due jobs from mutable `job.at`, then digest-compare each due job" lets an
+attacker rewrite an overdue job's `at` to a future time (→ not-due → never
+authorized → **silently suppressed, no alert**), and job *removal* has the same
+gap (only live-configured jobs are traversed). Due-filtering reads the very
+`job.at` the digest is supposed to authorize, so it must run **after**
+authorization, not before. **Corrected algorithm** (`run-job.js`):
 ```
-authorized = map[j.name]                 // from argv (loaded state)
-if (authorized === undefined) → refuse j (alert, zero spawn)
-live = deriveDescriptorDigest(paths, j)  // j from validated config
-if (live !== authorized) → refuse j (alert, zero spawn)
-else → runJob(j)
+liveJobs   = configured jobs (validated config)        // name → job
+boundNames = keys(map)                                  // from the loaded argv map
+names      = union(boundNames, keys(liveJobs))          // authorize the UNION
+for name in names:
+  authorized = map[name]
+  live       = liveJobs[name] ? deriveDescriptorDigest(paths, liveJobs[name]) : undefined
+  if (authorized === undefined)  → ADD  : alert "unauthorized job <name>", zero spawn
+  else if (live === undefined)   → REMOVAL: alert "authorized job <name> removed from config", zero spawn
+  else if (live !== authorized)  → DRIFT : alert "<name> descriptor changed", zero spawn
+  // (any of the three ⇒ this job is NOT eligible to run)
+# ONLY jobs that passed authorization are eligible:
+for name in authorizedJobs:
+  if isDue(liveJobs[name]) → runJob(liveJobs[name])     // due computed from the AUTHORIZED schedule
 ```
-`j.at` (its schedule) is part of the descriptor digest (WP-156), so an `at`
-rewrite drifts `live` ≠ `authorized` ⇒ refuse — the due-time decision is
-authorized, not just the content.
+Because `job.at`/`schedule` is in the descriptor digest (WP-156 A6), an `at`
+rewrite makes `live !== authorized` ⇒ **DRIFT alert** (not silent suppression),
+and a removed job ⇒ **REMOVAL alert**. Due-ness is computed only from a schedule
+that has already been authorized. A single unauthorized/removed/drifted job
+alerts + spawns nothing for that job; it does not abort authorization of the
+others.
 
 ## Implementation notes & constraints
 
@@ -138,7 +167,11 @@ authorized, not just the content.
       that job (alert, zero spawn), matching the normal-fire refusal.
 - [ ] Editing a per-job entry **source file** (without reloading the scheduler)
       does NOT let catch-up run a drifted job.
-- [ ] A job absent from the bound map is refused, not run from config.
+- [ ] Authorization runs over the **union** of bound ∪ configured job names and
+      **precedes** due-filtering; an `at`-rewrite-to-future or a job removal
+      **alerts** (never silently suppresses).
+- [ ] The `--job-digests` transport is base64url; a malformed/oversized value
+      fails closed with a durable alert, never an unhandled parse crash.
 
 ## Acceptance criteria
 
@@ -148,8 +181,16 @@ authorized, not just the content.
 - [ ] **[file-forge]** Rewriting `config.yaml` `run` AND the per-job source entry
       file to carry the newly-derived digest, WITHOUT reloading the scheduler ⇒
       still refused (the loaded map is the anchor).
-- [ ] **[due-time]** An `at`-only rewrite of an authorized job ⇒ refused (not run,
-      not silently suppressed).
+- [ ] **[due-time, R4:#1]** An `at`-only rewrite of an authorized job ⇒ a **DRIFT
+      alert** + zero spawn (authorized BEFORE due-filtering, so it is never
+      silently suppressed by being made not-due).
+- [ ] **[removal, R4:#1]** Removing an authorized job from `config.yaml` ⇒ a
+      **REMOVAL alert** + zero spawn (not silent). An added/unauthorized job ⇒ an
+      alert, zero spawn.
+- [ ] **[transport, R4:#3]** End-to-end: the argv value Node actually receives on
+      macOS/Linux/Windows decodes (base64url → JSON → shape-valid) to the bound
+      map; a **malformed** or **oversized** map ⇒ durable alert + zero spawn (no
+      crash, no invalid-JSON exception).
 - [ ] macOS and Windows catch-up negatives execute (not just POSIX).
 - [ ] `npm test` and `npm run lint` are green.
 

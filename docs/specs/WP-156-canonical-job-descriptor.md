@@ -494,3 +494,19 @@ field flows into the normal per-job digest **and** the catch-up per-job map
 (WP-160). **Test:** an `at`-only rewrite changes `deriveDescriptorDigest` and, at
 fire/catch-up time, is **REFUSED** (not run, not silently suppressed) — drop the
 `schedule` field ⇒ the `at` rewrite no longer drifts ⇒ fails.
+
+### A7 — bind the absolute home (credential/config root parent) [Codex HIGH, R4:#2]
+
+The round-4 review found the credential/config roots reconstruct **beneath**
+`home = env.HOME || os.homedir()` (paths.js:54), so an in-scope scheduler-env
+writer who keeps the authorized `WIENERDOG_HOME`/`WIENERDOG_VAULT` but replaces
+**`HOME`** relocates the model's credential/config account with **no digest
+drift**. **Corrected contract:** add a **`home`** descriptor field (the absolute
+authorized home path) so it is digest-covered — a change to the authorized home
+requires `wienerdog sync`. WP-157 A10 binds this same value into the loaded OS
+entry (`HOME`/`USERPROFILE`) and reconstructs `CLAUDE_CONFIG_DIR`/`CODEX_HOME`
+from the **bound** home, never `env.HOME || os.homedir()`. Keep consistent with the
+`WIENERDOG_HOME` half-sandbox redirect (a different var, still allowlisted) and
+the dev-descriptor bound checkout root. **Test:** changing the authorized home
+changes `deriveDescriptorDigest` (drop `home` ⇒ a hostile `HOME` no longer drifts
+⇒ fails).

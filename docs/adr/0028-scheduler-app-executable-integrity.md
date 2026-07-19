@@ -439,9 +439,12 @@ implemented as dated amendments in the six specs and detailed in `FIX-PLAN.md`.
    are reconstructed deterministically to the canonical wienerdog-owned paths
    (bind the SOURCE in the descriptor if a custom root is honored, never the secret
    value) and the scheduled dream does not depend on an inherited API key
-   (subscription auth, ADR-0009). To keep dependency ordering sound, **WP-156
-   `depends_on: WP-155`** so the launcher (WP-157) cannot enforce before the seam
-   deletions land. The app-tree digest encoding is made
+   (subscription auth, ADR-0009). **[R4] The absolute home** (the parent those
+   roots hang off, previously `env.HOME||os.homedir()`) is itself bound — a
+   digest-covered descriptor field set in the loaded OS entry — so a hostile
+   ambient `HOME` cannot relocate the credential account with no drift. To keep
+   dependency ordering sound, **WP-156 `depends_on: WP-155`** so the launcher
+   (WP-157) cannot enforce before the seam deletions land. The app-tree digest encoding is made
    injective (canonical-JSON of sorted `[relpath, hash]` pairs; the prior
    `relpath\nhash\n` concat was collidable via newline filenames) — and, because
    the launcher keeps its **own** copy of the digest, **both** `descriptor.js` and
@@ -476,7 +479,11 @@ implemented as dated amendments in the six specs and detailed in `FIX-PLAN.md`.
    catch-up authorization PENDING, so catch-up is NOT yet fail-closed until WP-160
    lands** (WP-158/WP-159 `depends_on: WP-160`). Every verification exception (on
    both paths) becomes a durable alert + zero spawn (never a bare throw with no
-   alert).
+   alert). **[R4] WP-160 authorizes the union of bound ∪ configured jobs BEFORE
+   deciding due-ness** (so an `at`-rewrite-to-future or a removal alerts rather
+   than silently suppressing), and transports the per-job digest map as
+   **base64url(canonical JSON)** with a bounded decoder (raw JSON argv is not
+   platform-safe on Windows `CommandLineToArgvW` / systemd quoting).
 
 7. **Dev is a separate, runnable descriptor (Decision 3/4 refinement).** "Skip the
    tree digest but still compare the full descriptor digest" is self-contradictory

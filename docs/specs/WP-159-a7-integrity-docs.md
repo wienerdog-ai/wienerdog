@@ -327,3 +327,10 @@ describe the **fixed** code. Full context: `FIX-PLAN.md` cluster **C5**.
 - **[R3:#2] Catch-up.** Because WP-159 now `depends_on: WP-160`, the docs may
   state catch-up is fail-closed per job only if WP-160 has landed; otherwise name
   it as a pending gap (see the round-2 A1 note).
+- **[R4:#2] Bound home.** The scheduled-environment claim must include that the
+  **home directory** (parent of the credential/config roots) is bound at
+  registration + digest-covered, so a hostile ambient `HOME` cannot relocate the
+  model's credential/config account.
+- **[R4:#1] Catch-up alerts, not silent suppression.** State (once WP-160 lands)
+  that catch-up authorizes the full job set before deciding due-ness, so an `at`
+  rewrite or a job removal produces an alert rather than a silent skip.

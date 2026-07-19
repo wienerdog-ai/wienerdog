@@ -342,3 +342,14 @@ shared case list (A6) must add:
   `APPDATA`) does NOT alter the authorized execution context — the recorded child
   sees the canonical wienerdog config roots and no ambient key. Fails if
   `ENV_PASSTHROUGH` still carries them.
+- **[R4:#2]** **hostile-HOME** negative: a hostile ambient `HOME`/`USERPROFILE`
+  (with otherwise-authorized core/vault) does NOT move the child's config/
+  credential root — the child resolves the **bound** home. Fails if the roots
+  reconstruct from `env.HOME||os.homedir()`.
+- **[R4:#1]** **catch-up job-removal / at-rewrite alert** cases (belong with
+  **WP-160**): removing an authorized job, or rewriting its `at` to a future time,
+  each produces a durable **alert** with zero spawn — NOT silent suppression
+  (proves authorization precedes due-filtering).
+- **[R4:#3]** **catch-up transport** cases (WP-160): the base64url `--job-digests`
+  round-trips on macOS/Linux/Windows; a malformed/oversized value ⇒ durable alert
+  + zero spawn (no parse crash).

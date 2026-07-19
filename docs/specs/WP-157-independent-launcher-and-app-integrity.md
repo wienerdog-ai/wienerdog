@@ -523,13 +523,33 @@ this is the authentication trust boundary, and the "everything shaping the spawn
 is authorized" invariant is still false. F8's child scrub removes only Node vars.
 **Corrected contract — define the COMPLETE allowed scheduled environment (do not
 inherit ambient credential/config overrides):**
+- **[R4:#2] Bind HOME — reconstruction under an inherited HOME is still open.**
+  `getPaths` derives `home = env.HOME || os.homedir()` (paths.js:54) and the config
+  roots reconstruct **beneath** it, so an in-scope scheduler-env writer who keeps
+  the authorized `WIENERDOG_HOME`/`WIENERDOG_VAULT` but replaces **`HOME`** moves
+  the model's credential/config account under the attacker's home with **no digest
+  drift** (descriptor re-derivation still matches). Dropping the explicit cred vars
+  did not close their parent. **Fix:** bind the **absolute home path** at
+  registration — set `HOME` (and win32 `USERPROFILE`) to the bound value in the
+  **loaded OS entry** (launchd `EnvironmentVariables` / systemd `Environment=HOME=`
+  / Windows), so ambient/`environment.d` `HOME` is overridden by the registered
+  entry; **clear + re-assert** `HOME`/`USERPROFILE` at the launcher-child layer;
+  and record `home` as a **digest-covered descriptor field** (WP-156) so a change
+  to the authorized home requires `sync`. The config roots then reconstruct from
+  the **bound** home, **never** `env.HOME || os.homedir()`. Keep this consistent
+  with the legitimate `WIENERDOG_HOME` half-sandbox redirect (that redirects the
+  wienerdog core, a *different* var, and stays in the allowlist) and with the
+  dev-descriptor's bound checkout root (also an absolute path bound at
+  registration). **Negative test:** a hostile ambient `HOME` (with otherwise-
+  authorized core/vault) must NOT change the authorized config/credential root —
+  the child resolves the bound home.
 - **Config roots reconstructed deterministically.** Remove `CLAUDE_CONFIG_DIR`
   and `CODEX_HOME` from `ENV_PASSTHROUGH`; `buildCleanEnv` sets them explicitly to
-  the **canonical wienerdog-owned paths** (code-derived, like it already does for
-  `HOME`/`USERPROFILE`). Because they are code-derived constants (not read from
-  attacker env), they need no digest field. **If a custom config root must be
-  honored, bind its SOURCE/path in the descriptor at sync** (never the secret
-  value) so a later ambient override drifts the digest.
+  the canonical wienerdog-owned paths **beneath the BOUND home** (never
+  `env.HOME || os.homedir()`). Because they are code-derived from the bound home,
+  they need no separate digest field once `home` is bound. **If a custom config
+  root must be honored, bind its SOURCE/path in the descriptor at sync** (never the
+  secret value) so a later ambient override drifts the digest.
 - **No inherited API key on the scheduled path.** Remove `ANTHROPIC_API_KEY` from
   `ENV_PASSTHROUGH`; the scheduled dream is subscription-authed (ADR-0009) and
   must not depend on an inherited API key. (If a key path is ever genuinely
