@@ -1,7 +1,7 @@
 ---
 id: WP-contract-reference-tables
 title: Integrate ADR-0031 contract reference tables into the spec template and the two agent duties
-status: Ready
+status: In-Review
 model: sonnet
 size: S
 depends_on: []

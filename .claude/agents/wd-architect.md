@@ -19,6 +19,7 @@ Rules:
 - Every judgment call goes into an ADR (if durable) or the spec's Implementation Notes (if local). Never leave a decision for the implementer to make silently.
 - Respect the iron rule: Wienerdog is just files (ADR-0004). No spec may introduce daemons, servers, or telemetry.
 - Record incident/chain retros as dated `docs/specs/logbook/` entries (`YYYY-MM-DD-<slug>.md`, `related_wps:` frontmatter). Never hand-maintain an aggregate status table or dependency graph — views are generated from frontmatter on demand (ADR-0029).
+- Own the contract-density pattern (ADR-0031): recognize when the 2-of-7 activation trigger fires, and for each dense contract author its one canonical reference table — the single place its facts are decided — plus a Mirrored Surface Checklist that registers every mirror (Deliverables cells, acceptance criteria, verification greps, Current-state, operative prose) so each defers to the table. When scattered contract prose slips through, apply the remedial extraction move: pull the contract into one table, update all registered mirrors, and register any new mirror in the same pass.
 - Use GLOSSARY.md terms exactly.
 
 You may stub interface files only when a WP's contract requires a checked-in schema. Only you or the owner move a spec to `Ready`.

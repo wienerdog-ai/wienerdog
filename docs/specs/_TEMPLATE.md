@@ -48,6 +48,50 @@ output file in full.
 function doThing(dir, opts)
 ```
 
+## Contract reference (optional — mark N/A if this WP is not contract-dense)
+
+Fill this in only when the **activation trigger** fires: turn the discipline on
+when **two or more** of these are true (ADR-0031's 2-of-7 test):
+
+(i) an API / interface / result **shape** changes;
+(ii) a **status or result taxonomy** changes or is introduced;
+(iii) structured **input/output parsing, payload validation, or schema acceptance** changes;
+(iv) **error / fallback / timeout / cancellation / precedence / reason-code** behavior changes;
+(v) the task **crosses an authority boundary** — one component emits or records data but another owns its interpretation or lifecycle;
+(vi) **multiple downstream consumers or successor specs** inherit the contract;
+(vii) the **same contract must appear in multiple mirrored surfaces**.
+
+If fewer than two are true, replace this whole section with `N/A — <one-line
+reason>` and delete the scaffolds below. (The single exception is
+contract-level: a specific contract skips its table only when a runnable gate
+enforces every one of its facts exhaustively — the gate is then its canonical
+source. A general test or harness does not exempt a spec's other contracts.)
+
+When it fires, give each dense contract **one canonical reference table** — the
+single place its facts are decided — and have the operative prose cite it
+("resolve the core (Table A)") rather than restate it.
+
+### Contract table(s)
+
+<!-- One canonical table per dense contract. Example shape: -->
+
+| Contract | Fact / rule | Value |
+|----------|-------------|-------|
+|          |             |       |
+
+### Mirrored Surface Checklist
+
+For each canonical table above, name **every surface in this spec that mirrors
+it**, so a review finding updates the table and all its mirrors in one pass
+(update-all-mirrors) and any new mirror found in review is added here on the
+spot (register-new-mirrors):
+
+- [ ] Deliverables-table cells that restate a path or rule
+- [ ] Acceptance criteria that assert its facts
+- [ ] Verification commands / greps
+- [ ] Current-state description
+- [ ] Operative prose steps that apply it
+
 ## Implementation notes & constraints
 
 - Constraints beyond CLAUDE.md (e.g. "no new npm deps").
