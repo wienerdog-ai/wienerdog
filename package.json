@@ -25,7 +25,8 @@
     "scenarios": "node tests/scenarios/run-scenarios.js",
     "scenarios:negative": "node tests/scenarios/negative/run-negative.js",
     "broker:selfcheck": "node tests/scenarios/broker/lifecycle-selfcheck.js",
-    "scenarios:broker-e2e": "node tests/scenarios/broker-e2e/run-broker-e2e.js"
+    "scenarios:broker-e2e": "node tests/scenarios/broker-e2e/run-broker-e2e.js",
+    "scenarios:a7-integrity": "node tests/scenarios/a7-integrity/run-a7-integrity.js"
   },
   "repository": {
     "type": "git",
