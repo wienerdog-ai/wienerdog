@@ -67,9 +67,11 @@ a test env var to choose what to execute. Tests keep working through two
    env read is removed. Subprocess-level dream tests install their fake brain
    **legitimately** in their own temp `WIENERDOG_HOME`: a pin store
    (`exec-pins.json`, WP-154's schema) whose `claude`/`codex` pin points at the
-   fake executable. The **real** dispatch path (`loadPins → verifyPin →
-   resolvePinnedSpawn → spawn`) then runs **unmodified**, and full pin-path
-   integration coverage falls out for free.
+   fake executable. The **real** dispatch path (`spawnPinned*` internally:
+   `loadPins → verifyPin → bindInterpreter → spawn`) then runs **unmodified**, and
+   full pin-path integration coverage falls out for free. **[R13]** Consumer sites
+   call the encapsulated `spawnPinnedSync`/`spawnPinned`; `resolvePinnedSpawn`/
+   `bindInterpreter` are module-internal to `exec-identity.js`.
 
 3. **Dependency injection for the containment probe (probe-seam amendment).**
    The `WIENERDOG_SKIP_CONTAINMENT_PROBE` and `WIENERDOG_CONTAINMENT_PROBE_CMD`
@@ -160,12 +162,12 @@ else { … }                            // WP-154 makes this spawn the pinned ab
 The version-probe (~L199) is guarded `if (!fakeCmd && command === 'claude')`;
 WP-154 rewrites the `command === 'claude'` half (the command becomes an absolute
 realpath), leaving the `!fakeCmd` half for this WP to remove. After WP-154 the
-brain resolves the real executable via
-`resolvePinnedSpawn('claude'|'codex', getPaths(baseEnv), baseEnv, platform)`
-(WP-154's `src/core/exec-identity.js`), which re-resolves `name` on `baseEnv.PATH`
-live and requires the live command path + `dirname(realpath)` to match the pin
-and the target to pass `verifyExecutable` (regular file, exec bit, owner ∈
-{uid,0}, no group/other-writable ancestor).
+brain executes the real executable via **`spawnPinned('claude'|'codex',
+getPaths(baseEnv), { args, …, env: baseEnv, platform })`** ([R13] the encapsulated
+public API — WP-154's `src/core/exec-identity.js`), which internally re-resolves
+`name` on `baseEnv.PATH` live and requires the live command path +
+`dirname(realpath)` to match the pin and the target to pass `verifyExecutable`
+(regular file, exec bit, owner ∈ {uid,0}, no group/other-writable ancestor).
 
 **`src/cli/dream.js` `run(argv)`** (~L153, gate at ~L309) — a **production**
 behavior branch on **two** test vars: it skips the pre-dream containment
@@ -191,11 +193,11 @@ and the CLI entry `bin/wienerdog.js` (~L72) calls `run(rest)` with argv only.
 ```js
 const command = opts.probeCmd || env.WIENERDOG_CONTAINMENT_PROBE_CMD || 'claude';
 ```
-The `'claude'` bare-name fallback is **replaced by WP-154** with a pinned
-absolute resolve (`resolvePinnedSpawn('claude', …)`); the `opts.probeCmd`
+The `'claude'` bare-name fallback is **replaced by WP-154** with the encapsulated
+`spawnPinnedSync('claude', …)` call ([R13]); the `opts.probeCmd`
 injection path (used by `tests/unit/containment-probe.test.js`) stays. This WP
 deletes only the **middle** term — the `env.WIENERDOG_CONTAINMENT_PROBE_CMD ||`
-production seam — leaving `opts.probeCmd || <WP-154 pinned resolve>`. Read the
+production seam — leaving `opts.probeCmd || <WP-154 spawnPinnedSync call>`. Read the
 actual post-WP-154 line before editing (WP-154 lands first, on this same file).
 
 **Tests that read the four env seams today** (all convert here):
@@ -285,10 +287,11 @@ test override returns the fake directly, e.g.
 (The `#!/bin/sh` fake scripts already carry a shebang + exec bit, so `shell:false`
 spawns them fine — no fixture change.)
 
-**`spawnBrain` (brain.js) — after the edit:** the brain command is resolved
-**only** via WP-154's `resolvePinnedSpawn` for the `codex`/`claude` paths; there
-is no `fakeCmd` variable, no `if (fakeCmd)` branch, and the version-probe guard no
-longer mentions `fakeCmd`. Nothing in the function reads `WIENERDOG_DREAM_CMD`.
+**`spawnBrain` (brain.js) — after the edit:** the brain is executed
+**only** via WP-154's `spawnPinned`/`spawnPinnedSync` for the `codex`/`claude`
+paths ([R13] encapsulated — never a raw path); there is no `fakeCmd` variable, no
+`if (fakeCmd)` branch, and the version-probe guard no longer mentions `fakeCmd`.
+Nothing in the function reads `WIENERDOG_DREAM_CMD`.
 
 **`dream.js` — after the edit.** `run` gains a JS-only `opts` argument (documented
 in its JSDoc as a **test-only** seam, exactly like `run-job`'s `opts`: reachable
@@ -317,9 +320,11 @@ the probe.
 
 **`containment-probe.js` — after the edit:**
 ```js
-// WP-154 already made the fallback a pinned absolute resolve; this WP deletes the
-// env term, leaving injection + pinned resolve only:
-const command = opts.probeCmd || resolvePinnedSpawn('claude', paths, env, /* platform */);
+// [R13] WP-154 already made the fallback the encapsulated spawnPinnedSync call;
+// this WP deletes only the env term, leaving injection + the pinned call:
+const result = opts.probeCmd
+  ? spawnSync(opts.probeCmd, args, …)
+  : spawnPinnedSync('claude', paths, { env, platform, args });
 ```
 The exact right-hand side is WP-154's (mirror the shipped line — read
 `src/core/dream/containment-probe.js` post-WP-154). Nothing in the function reads
@@ -336,7 +341,7 @@ the implementer does not fight `verifyExecutable`/`verifyPin`:
 ```js
 /** Install `fakeScriptPath` as the pinned `name` ('claude'|'codex') in `core`'s
  *  pin store, and return an env fragment that makes the REAL dispatch path
- *  (resolvePinnedSpawn → verifyPin → verifyExecutable → spawn) resolve and run it.
+ *  (spawnPinned* internally: resolve → verifyPin → verifyExecutable → bind → spawn) run it.
  *  @param {string} root  a fresh mkdtemp root (used for the bin dir)
  *  @param {string} core  WIENERDOG_HOME for this test (pin store at <core>/state)
  *  @param {string} fakeScriptPath  an executable #! script (regular file, +x)
@@ -367,9 +372,10 @@ function pinFakeBrain(root, core, fakeScriptPath, name = 'claude') {
 The exact `exec-pins.json` key/schema (`schema`, `pins.<name>.commandPath`,
 `installDir`, `version`, `pinnedAt`) is WP-154's; if WP-154 changes it, mirror the
 shipped shape (read `src/core/exec-identity.js`). Spawn resolution flow to keep in
-mind: `spawnBrain` calls `resolvePinnedSpawn(name, getPaths(baseEnv), baseEnv,
-platform)`, which re-resolves `name` on `baseEnv.PATH` (hence the env fragment must
-be spread into the `env` passed to `spawnBrain`/`dream.run`'s `process.env`).
+mind: `spawnBrain` calls `spawnPinned(name, getPaths(baseEnv), { …, env: baseEnv,
+platform })` ([R13]), which internally re-resolves `name` on `baseEnv.PATH` (hence
+the env fragment must be spread into the `env` passed to `spawnBrain`/`dream.run`'s
+`process.env`).
 
 **`runDream` helper — after the edit.** Gains a fourth `opts` argument forwarded
 to `dream.run`, defaulting to skip (a fake brain cannot satisfy a live probe):
@@ -422,7 +428,7 @@ probeCmd: … }` as the fourth arg — no env var involved.
   that `sync` will overwrite. Instead place the fake `claude` at
   `<home>/.local/bin/claude` (the dir the job clean PATH front-loads) so
   `createPins` pins it, and prepend that same dir to `process.env.PATH` so the
-  in-process dream's `resolvePinnedSpawn` (which resolves on `process.env.PATH`)
+  in-process dream's `spawnPinned*` (which internally resolves on `process.env.PATH`)
   resolves the **same** command path — otherwise pin-time and spawn-time paths
   diverge and the dream fails safe. If you cannot make the two PATHs agree
   (createPins must pin against the **job clean PATH** that `run-job`/`dream` later
@@ -488,9 +494,9 @@ probeCmd: … }` as the fourth arg — no env var involved.
       is empty.
 - [ ] The `run-job` fake is injected via `opts.resolveCommand` (JS-only); the CLI
       entry passes none, so production `resolveCommand` is always used.
-- [ ] The dream integration/adopt/codex tests drive the real pinned dispatch
-      (`resolvePinnedSpawn → verifyPin → spawn`) against a fake installed in a temp
-      `WIENERDOG_HOME` pin store — full pin-path coverage, no env seam.
+- [ ] The dream integration/adopt/codex tests drive the real pinned dispatch via
+      `spawnPinned*` (internally: resolve → verifyPin → bind → spawn) against a fake
+      installed in a temp `WIENERDOG_HOME` pin store — full pin-path coverage, no env seam.
 - [ ] The full suite passes with **no** `WIENERDOG_TEST` flag and no
       `package.json` change.
 - [ ] `npm test` and `npm run lint` are green.

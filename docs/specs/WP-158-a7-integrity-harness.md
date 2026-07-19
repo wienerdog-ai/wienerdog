@@ -52,7 +52,7 @@ the harness must not claim that.
 ## Current state
 
 The A7 mechanisms this harness exercises exist after its dependencies land:
-- `src/core/exec-identity.js` — `createPins`, `verifyPin`, `resolvePinnedSpawn`
+- `src/core/exec-identity.js` — `createPins`, `verifyPin`, `spawnPinnedSync`/`spawnPinned`
   (WP-154).
 - `src/cli/run-job.js` `resolveCommand` + `src/core/dream/brain.js` with the
   test-exec env seams DELETED (WP-155): neither reads `WIENERDOG_RUNJOB_CMD`/
@@ -83,7 +83,7 @@ No A7 harness exists yet.
 | create | tests/scenarios/a7-integrity/run-a7-integrity.js | The end-to-end harness: build a temp core+app+pins+descriptor+entry, then run each tamper through the real launcher with a recording fake-spawn; assert zero spawn / correct fail-safe; non-vacuity baseline. Gated by `WIENERDOG_RUN_SCENARIOS`. |
 | create | tests/scenarios/a7-integrity/fixtures/ | A minimal fake `app/current` tree, a fake `claude`/`git` executable, a poisoned `config.yaml` (`run` \| `dream_model` \| `dream_timeout_minutes` rewrite), a planted `~/.local/bin/claude`, a planted `.git` dir inside the app tree (prod→dev stance downgrade). |
 | create | tests/scenarios/a7-integrity/README.md | What it proves (the six A7 ACTION-LIST bullets plus the walkthrough-added timeout/model/stance drift cases), how to run, the gating, the honest boundary (scoped-write negatives, not same-user-native). |
-| create | tests/unit/a7-integrity-negatives.test.js | The DETERMINISTIC negatives that run in `npm test` (no scenario gating): each tamper ⇒ `verifyAndResolve`/`resolvePinnedSpawn` refuses + the fake spawn recorded ZERO app/model launches; plus the non-vacuity baseline. |
+| create | tests/unit/a7-integrity-negatives.test.js | The DETERMINISTIC negatives that run in `npm test` (no scenario gating): each tamper ⇒ `verifyAndResolve`/`spawnPinnedSync` refuses + the fake spawn recorded ZERO app/model launches; plus the non-vacuity baseline. |
 | modify | package.json | Add `scenarios:a7-integrity` (guarded identically to WP-133/142: skip + exit 0 without `WIENERDOG_RUN_SCENARIOS`). Do NOT change other scripts. |
 
 ### What the harness proves (cases 1-8 map to the six A7 ACTION-LIST bullets + the walkthrough-added drift cases)
@@ -131,12 +131,12 @@ bullet is invented; see the tamper-matrix OWNER-APPROVED marker below):
    manifest still refuses. *(bullet 3)*
 5. **Fake `claude`/`git` earlier on PATH never executes.** With a valid claude
    pin, plant `<tmp>/.local/bin/claude` earlier on the job PATH;
-   `resolvePinnedSpawn('claude', …)` throws (live command path ≠ pinned command
+   `spawnPinnedSync('claude', …)` throws (live command path ≠ pinned command
    path); the recorder shows the fake was **never** launched. *(bullet 4)*
 6. **Pinned executable structural failure stops pre-spawn.** Repoint the pinned
    command symlink to a target outside the pinned install dir, or (on POSIX)
    change the target's owner, clear its exec bit, or make an ancestor dir
-   group/other-writable; each ⇒ `resolvePinnedSpawn` throws before any spawn.
+   group/other-writable; each ⇒ `spawnPinnedSync` throws before any spawn.
    (In-place byte mutation of the user-owned target is NOT detected — WP-154
    honest boundary.) *(bullet 5)*
 7. **Valid update switches atomically; interrupted update retains the old version.**
@@ -297,7 +297,7 @@ digest, and the next verify passes (exactly one spawn).
 
 ### A5 — foreign-owner row [both]
 Execute the owner-uid tamper (`verifyExecutable` owner check) deterministically
-via an injected/stubbed uid (no root needed); assert `resolvePinnedSpawn` throws
+via an injected/stubbed uid (no root needed); assert `spawnPinnedSync` throws
 pre-spawn.
 
 ### A6 — one authoritative case list [spec]
@@ -324,7 +324,7 @@ shared case list (A6) must add:
   for `WIENERDOG_FAKE_TODAY` / `WIENERDOG_RUNJOB_TIMEOUT_MS` (setting them has
   zero effect — same shape as case 8).
 - **[R2:F1]** a **partial pin store** case: a store with git but no claude ⇒ the
-  dream job does not bind/register (or `resolvePinnedSpawn('claude')` throws) —
+  dream job does not bind/register (or `spawnPinnedSync('claude', …)` throws) —
   a planted `~/.local/bin/claude` never runs.
 - **[R2:F10]** a **git-worktree dev** positive: a dev-stance install with `.git`
   as a **file** + a tracked-source edit still runs (config-fields-only dev digest).
@@ -369,14 +369,16 @@ shared case list (A6) must add:
   entry's argv); and the generic `reloadMissing`, run alone, NEVER creates/
   authorizes the catch-up entry. Fails if repoint doesn't repair, or if
   `reloadMissing` touches catch-up.
-- **[R10/R11/R12]** **non-node env-shebang fail-closed at EVERY exec site**
-  (WP-154): a pinned executable with a `#!/usr/bin/env <non-node>` shebang + a fake
-  `<x>` planted FIRST on the job PATH ⇒ the plant records **ZERO executions**
-  (spy/marker) at **all** of: `resolvePinnedSpawn` (fire), `createPins`,
-  `createPins({dryRun:true})`, adopt's preflight, and `run-job.js`
-  `captureClaudeVersion` (run-evidence) — each THROWS/refuses without executing.
-  **[R12]** Plus the **static-scan canary** (`tests/unit/pinned-exec-canary.test.js`)
-  runs in `npm test`: it FAILS if any pinned-exec module spawns a resolved/pinned
-  path not produced by `bindInterpreter`. Mutation: revert **any** site to a direct
-  `spawnSync(realpath)`, or add a new one ⇒ the canary and/or the zero-execution
-  assertion fails.
+- **[R10/R11/R12/R13]** **interpreter hijack closed by ENCAPSULATION** (WP-154): a
+  pinned executable with a `#!/usr/bin/env <non-node>` shebang + a fake `<x>`
+  planted FIRST on the job PATH ⇒ the plant records **ZERO executions**
+  (spy/marker) at **all** exec sites, which now all go through
+  `spawnPinnedSync`/`spawnPinned` (the only public exec API): fire, `createPins`,
+  `createPins({dryRun:true})`, adopt's preflight, and `captureClaudeVersion`.
+  **[R13]** Plus: (i) a **recursive** case — an absolute interpreter whose own
+  shebang is `#!/usr/bin/env x` + planted `x` ⇒ refuse, `x` never runs; (ii) the
+  **boundary canary** (`tests/unit/pinned-exec-canary.test.js`) in `npm test`:
+  `exec-identity.js` exports no path-returning function and no module outside it
+  imports `resolvePinnedSpawn`/`bindInterpreter`. Mutation: any site reverted to a
+  raw `spawnSync(realpath)`, or the encapsulation boundary broken (export/import)
+  ⇒ the zero-execution or boundary assertion fails.

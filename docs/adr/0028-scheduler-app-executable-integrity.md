@@ -111,8 +111,8 @@ fake becomes a JS-only `opts.resolveCommand` (like the existing `opts.profile`),
 and the dream/probe gate becomes a JS-only `dream.run(argv, opts)` argument the CLI
 entry never passes; (2) the **WP-154 pinned front door** — subprocess dream tests
 install their fake brain *legitimately* as a pin-store entry pointing at the fake
-executable, so the real `loadPins → verifyPin → resolvePinnedSpawn → spawn` path
-runs unmodified. The scheduler's only `shell:true` dispatch dies with the seam:
+executable, so the real pinned dispatch (`spawnPinned*`, internally
+`loadPins → verifyPin → bind → spawn`) runs unmodified. The scheduler's only `shell:true` dispatch dies with the seam:
 after this WP, **every** dispatch is `shell:false`, and no shipped file reads an
 environment variable to decide what binary to run or whether the containment
 self-check runs. The A7 acceptance "production test command overrides are inert
@@ -427,26 +427,31 @@ implemented as dated amendments in the six specs and detailed in `FIX-PLAN.md`.
    re-introducing the static F4 PATH hijack. claude/codex are node and git is
    native, so this branch is unexercised today; failing closed costs nothing now
    and removes the hijack surface if an upstream wrapper ever changes. No PATH
-   re-resolution of any interpreter. **[R11] This four-case rule lives in ONE
-   shared helper (`bindInterpreter`) routed through EVERY site that executes a
-   pinned target — fire (`resolvePinnedSpawn`), pin creation
-   (`buildPin`/`probeVersion`, incl. `createPins`, its dry-run, and adopt's
-   preflight), the launcher's spawn, and any version/containment probe.** No site
-   may `spawnSync(realpath, …)` a pinned target directly; the `--version` probe runs
+   re-resolution of any interpreter. **[R11→R13] This four-case rule lives in ONE
+   module-internal helper (`bindInterpreter`) invoked only inside the encapsulated
+   `spawnPinnedSync`/`spawnPinned` API**, which every consumer site uses — fire
+   (brain/validate/probe), pin creation (`buildPin`/`probeVersion`, incl.
+   `createPins`, its dry-run, and adopt's preflight), and `captureClaudeVersion`.
+   No consumer holds a raw path; the `--version` probe runs
    `process.execPath <script> --version` for node shebangs, and an unsupported
    PATH-resolving interpreter is REFUSED at pin creation **without executing the
    target** (closing the hijack class at pin-creation time, not only at fire time).
-   **[R12] Enforced invariant (by construction, not by enumeration):** *every spawn
-   of a pinned executable is produced by the single `bindInterpreter` helper* —
-   verified by a **static-scan canary test** (the WP-155 `grep 'shell: true'` /
-   WP-082 pattern) over the pinned-exec modules (`exec-identity.js`, `dream/brain.js`,
-   `dream/validate.js`, `dream/containment-probe.js`, `cli/run-job.js`,
-   `scheduler/launcher.js`) that FAILS on any `spawn*`/`execFile*` of a
-   resolved/pinned path not produced by `bindInterpreter` (allowlist:
-   `bindInterpreter` results or `process.execPath`/`nodePath()`). Manual site
-   enumeration kept missing sites (the run-evidence `captureClaudeVersion` in
-   `run-job.js` was the 5th, found after R11 claimed "every site"); the canary
-   makes "every site" mechanically true, including future sites.
+   **[R13] The interpreter must itself be NATIVE** — an absolute non-node
+   interpreter that has its OWN shebang fails closed (else it recursively
+   PATH-resolves its own `#!/usr/bin/env x`).
+   **[R13] Terminal invariant — pinned execution is ENCAPSULATED (structural, not a
+   textual scan):** *pinned targets are executed only through `spawnPinnedSync` /
+   `spawnPinned`, which resolve → verify → bind-interpreter → spawn and NEVER return
+   a spawnable path; `resolvePinnedSpawn` and `bindInterpreter` are module-internal
+   (not exported), so no caller can obtain a raw pinned path.* A fixed-file textual
+   scan could never cover future modules or evasions (aliased/namespaced spawns,
+   wrappers) — the claimed "every pinned spawn anywhere forever" guarantee was
+   false; **encapsulation is the guarantee**. A narrowed **boundary** canary +
+   zero-execution site tests enforce it as defense-in-depth: (a) `exec-identity.js`
+   exports no function returning a raw pinned path; (b) no module outside
+   `exec-identity.js` imports `resolvePinnedSpawn`/`bindInterpreter`. (Manual site
+   enumeration had kept missing sites — `captureClaudeVersion` was the 5th, found
+   after R11 claimed "every site"; encapsulation removes the need to enumerate.)
 
 3. **Everything shaping the spawn is digest-covered — now including `vault_layout`
    and the other mutable inputs (Decision 3 refinement).** `vault_layout` (which

@@ -161,15 +161,15 @@ Nothing today resolves, verifies, or pins these executables.
 | modify | src/cli/sync.js | After `vendorSelf`/`writeShim`, call `createPins(paths, {manifest})` (idempotent repin on every sync). Print a one-line notice on unresolved/verify-failed execs. Dry-run makes no writes. |
 | modify | src/core/dream/brain.js | Spawn the **verified pinned absolute path** for `claude`/`codex` (not bare name); version-probe the pinned path. Leave the `WIENERDOG_DREAM_CMD` fake branch in place for WP-155 to remove. |
 | modify | src/core/dream/validate.js | Spawn the **verified pinned absolute** `git` (not bare `'git'`); fail safe with the repin message on pin drift. |
-| modify | src/core/dream/containment-probe.js | Replace **only** the bare `'claude'` final fallback (~L136) with the pinned absolute resolve: `opts.probeCmd \|\| env.WIENERDOG_CONTAINMENT_PROBE_CMD \|\| resolvePinnedSpawn('claude', paths, env, opts.platform \|\| process.platform)`. Keep the `opts.probeCmd` and `WIENERDOG_CONTAINMENT_PROBE_CMD` terms untouched (WP-155 removes the env one). Move the `const command = …` resolution **inside** the existing `try` so a fail-safe throw becomes an `'inconclusive'` ProbeResult (preserve never-throws). Add `platform` to the `opts` typedef (default `process.platform`). |
+| modify | src/core/dream/containment-probe.js | Replace **only** the bare `'claude'` final fallback (~L136) with an encapsulated **`spawnPinnedSync('claude', paths, {env, platform, args})`** call ([R13] — never `resolvePinnedSpawn`, which is module-internal), ordered as `opts.probeCmd \|\| env.WIENERDOG_CONTAINMENT_PROBE_CMD \|\| <spawnPinnedSync call>`. Keep the `opts.probeCmd` and `WIENERDOG_CONTAINMENT_PROBE_CMD` terms untouched (WP-155 removes the env one). Move the spawn **inside** the existing `try` so a fail-safe throw becomes an `'inconclusive'` ProbeResult (preserve never-throws). Add `platform` to the `opts` typedef (default `process.platform`). |
 | create | tests/unit/exec-identity.test.js | Unit cases for resolve/verify/pin/verifyPin/fail-safe below. |
 | modify | tests/unit/dream-brain.test.js | Assert the brain spawns the pinned absolute path and fails safe on drift; the fake seam still works. |
 | modify | tests/unit/dream-validate.test.js | Assert git uses the pinned absolute path and fails safe on drift. |
 | modify | tests/unit/containment-probe.test.js | Add a case: with a valid pin for a fake `claude` and **no** `opts.probeCmd`, the probe spawns the **pinned absolute path**; a second fake `claude` planted earlier on `PATH` never gets probe-spawned (drift ⇒ the resolve throws ⇒ `'inconclusive'`, never a spawn of the fake). Inject `platform` per the no-mock rule. |
 | modify | src/cli/adopt.js | **[R8:#3/R9:#2]** transactional pin preflight at the START of `adopt.run` — dry `createPins({dryRun:true})` resolves+verifies claude **and** git without writing; if either fails, ABORT before adopt's first mutation (no Git snapshot/config/scaffold; prior `exec-pins.json` byte-identical); only if both resolve, atomically commit the complete pin store, then proceed to adoption. See A5. |
 | modify | tests/integration/adopt-e2e.test.js | **[R9:#2]** failure test: pre-WP-154 install with claude unresolvable ⇒ `adopt` aborts with vault/config/manifest/prior-pin-store all byte-identical. |
-| modify | src/cli/run-job.js | **[R12]** route `captureClaudeVersion` (~L256, called ~L633) through `bindInterpreter` — node-shebang ⇒ `spawnSync(process.execPath,[claudeScript,'--version'])`; native ⇒ direct; PATH-resolving non-node ⇒ return `'unknown'` without executing. Keep the raw claude path for the `basename==='claude'` check. `defaultSendAlert` (~L318, `gen.nodePath()`=`process.execPath`) is already safe. |
-| create | tests/unit/pinned-exec-canary.test.js | **[R12]** static-scan canary: fail if any pinned-exec module spawns a resolved/pinned path NOT produced by `bindInterpreter` (allowlist below). Anti-whack-a-mole enforcement. |
+| modify | src/cli/run-job.js | **[R12/R13]** route `captureClaudeVersion` (~L256, called ~L633) through **`spawnPinnedSync('claude', …, ['--version'])`** (never a raw path) — node-shebang ⇒ runs via `process.execPath`; native ⇒ direct; PATH-resolving non-node ⇒ `'unknown'` without executing. Keep the raw claude path ONLY for the `basename==='claude'` label check. `defaultSendAlert` (~L318, `gen.nodePath()`=`process.execPath`) is already safe. |
+| create | tests/unit/pinned-exec-canary.test.js | **[R13]** encapsulation-**boundary** guard: (a) `exec-identity.js` exports no function returning a raw pinned path; (b) no module outside `exec-identity.js` imports `resolvePinnedSpawn`/`bindInterpreter`. (Defense-in-depth on the boundary — the structural guarantee is that callers only get `spawnPinned*`.) |
 
 ### Exact contracts
 
@@ -213,18 +213,37 @@ function resolveExecutable(name, env, platform) {}
  *    reduced guarantee (no POSIX mode/owner semantics). */
 function verifyExecutable(realpath, platform, ctx) {}
 
-/** [R11] THE single interpreter-binding helper — the ONE source of truth for the
- *  four-case contract, used at EVERY site that executes a pinned target (probe +
- *  fire + launcher). Reads the shebang (bounded 512 bytes) and classifies:
+/** [R11/R13] THE single interpreter-binding helper — internal (NOT exported);
+ *  the ONE source of truth for the four-case contract. Reads the shebang (bounded
+ *  512 bytes) and classifies:
  *   - no shebang (native binary) ⇒ {command: realpath, args: []}
  *   - node shebang (`env node` | `env -S node` | `<abs>/node`) ⇒
  *       {command: process.execPath, args: [realpath]}   // never PATH-resolve node
- *   - absolute non-node interpreter (`#!/abs/interp`) ⇒ verifyExecutable(abs) then
- *       {command: abs, args: [realpath]}, else THROW
+ *   - absolute non-node interpreter (`#!/abs/interp`) ⇒ verifyExecutable(abs), and
+ *       [R13] the interpreter must itself be NATIVE — **fail closed if `abs` has
+ *       its OWN shebang** (a script interpreter would recursively PATH-resolve its
+ *       own `#!/usr/bin/env x`). Then {command: abs, args: [realpath]}, else THROW.
+ *       (Equivalent sound alternative: recurse with a strict depth/cycle limit,
+ *       refusing any PATH-resolving shebang at any depth. Fail-closed-if-shebang is
+ *       simplest.)
  *   - PATH-resolving non-node env shebang (`#!/usr/bin/env <non-node>`) ⇒ THROW
  *       (fail closed — never resolve `<non-node>` through the job PATH)
  *  @returns {{command:string, args:string[]}} @throws {WienerdogError} */
 function bindInterpreter(realpath, env, platform) {}
+
+/** [R13] THE ONLY public API to EXECUTE a pinned target. Resolves → verifies →
+ *  bindInterpreter → spawns, and NEVER returns a spawnable path (so no caller can
+ *  hold a raw pinned path). @param {string} name 'claude'|'git'|'codex'
+ *  @param {import('./paths').WienerdogPaths} paths
+ *  @param {{args?:string[], env?:NodeJS.ProcessEnv, platform?:NodeJS.Platform,
+ *           spawnSync?:Function, …spawnOpts}} [opts]
+ *  @returns {import('child_process').SpawnSyncReturns<Buffer>} @throws on
+ *    drift/tamper/unsupported-interpreter (fail closed, no spawn). */
+function spawnPinnedSync(name, paths, opts) {}
+
+/** [R13] Async variant, same contract, for any site that needs a detached/streamed
+ *  child (e.g. the dream brain). Never returns a path. @returns {ChildProcess} */
+function spawnPinned(name, paths, opts) {}
 
 /** `<exe> --version`, bounded (10s), best-effort. **[R11]** MUST execute via
  *  `bindInterpreter(realpath, env, platform)` — spawn `spec.command` with
@@ -276,8 +295,11 @@ function verifyPin(name, paths, opts) {}
  *  @returns {string} absolute realpath @throws {WienerdogError} */
 function resolvePinnedSpawn(name, paths, env, platform) {}
 
-module.exports = { resolveExecutable, verifyExecutable, bindInterpreter, probeVersion,
-  buildPin, createPins, loadPins, verifyPin, resolvePinnedSpawn, EXEC_PINS_PATH };
+// [R13] resolvePinnedSpawn + bindInterpreter are MODULE-INTERNAL (NOT exported) —
+// no caller may obtain a raw pinned path. spawnPinnedSync/spawnPinned are the only
+// public way to execute a pinned target.
+module.exports = { resolveExecutable, verifyExecutable, probeVersion,
+  buildPin, createPins, loadPins, verifyPin, spawnPinnedSync, spawnPinned, EXEC_PINS_PATH };
 ```
 
 **Wiring.**
@@ -286,25 +308,31 @@ module.exports = { resolveExecutable, verifyExecutable, bindInterpreter, probeVe
   then print each `r.notices` line as `wienerdog: <notice>` (e.g. `git not found
   on the job PATH — nightly commit will fail until it is installed and you re-run
   sync`). Dry-run: report the count only, write nothing.
-- `brain.js`: replace `command = 'codex'` / `command = 'claude'` with
-  `command = resolvePinnedSpawn('codex'|'claude', getPaths(baseEnv), baseEnv,
-  o.platform || process.platform)`. A thrown fail-safe error must propagate
-  (dream fails loud — the existing run-job watchdog/fail-loud handles it). The
-  `--version` probe uses the same `command`. The `WIENERDOG_DREAM_CMD` fake
-  branch (`fakeCmd`) is unchanged here (WP-155 removes it) and MUST bypass pinning
-  until WP-155 lands.
-- `validate.js` `git(...)`: resolve once via `resolvePinnedSpawn('git',
-  getPaths(), process.env, process.platform)` and spawn that absolute path
-  (`spawnSync(gitPath, ['-C', vaultDir, ...args], …)`). A thrown fail-safe error
-  is surfaced (same `WienerdogError` path the ENOENT hint uses today).
+> **[R13] Call-site rule (encapsulation):** consumer sites call
+> **`spawnPinnedSync`/`spawnPinned`** (the only public exec API) — never
+> `resolvePinnedSpawn`/`bindInterpreter` (module-internal). The bullets below are
+> written to the encapsulated API.
+- `brain.js`: replace the `command = 'codex'`/`command = 'claude'` + `spawn(...)`
+  with a single `spawnPinned('codex'|'claude', getPaths(baseEnv), { args, cwd,
+  detached:true, env: childEnv, platform: o.platform || process.platform })` call
+  (async, detached — it never receives a path). A thrown fail-safe error must
+  propagate (dream fails loud — the run-job watchdog handles it). The `--version`
+  probe uses `spawnPinnedSync('claude'|'codex', getPaths(baseEnv), { args:
+  ['--version'], … })`. The `WIENERDOG_DREAM_CMD` fake branch is unchanged here
+  (WP-155 removes it) and MUST bypass pinning until WP-155 lands.
+- `validate.js` `git(...)`: `spawnPinnedSync('git', getPaths(), { args: ['-C',
+  vaultDir, ...args], env: process.env, platform: process.platform })` (never a raw
+  path). A thrown fail-safe error is surfaced (same `WienerdogError` path the
+  ENOENT hint uses today).
 - `containment-probe.js` `runContainmentProbe(paths, opts)`: the probe's `'claude'`
-  fallback becomes `resolvePinnedSpawn('claude', paths, env, opts.platform ||
-  process.platform)` — `paths` is the function's first arg, `env` is
-  `opts.env || process.env`. Keep the `opts.probeCmd` and
-  `WIENERDOG_CONTAINMENT_PROBE_CMD` terms **ahead** of the pinned resolve (both stay
-  this WP; WP-155 removes the env one). Because `resolvePinnedSpawn` **throws** on
-  drift and the probe must never throw, move the `const command = …` line **inside**
-  the `try` (before `captureVersion`); the existing `catch` then maps a drifted/
+  fallback becomes a **`spawnPinnedSync('claude', paths, { env: opts.env ||
+  process.env, platform: opts.platform || process.platform, args })`** call — `paths`
+  is the function's first arg. Keep the `opts.probeCmd` and
+  `WIENERDOG_CONTAINMENT_PROBE_CMD` terms **ahead** of the pinned call (both stay
+  this WP; WP-155 removes the env one). Because `spawnPinnedSync` **throws** on
+  drift/unsupported-interpreter and the probe must never throw, move the
+  `const command = …`/spawn **inside** the `try` (before `captureVersion`); the
+  existing `catch` then maps a drifted/
   unresolvable pin to `{ outcome:'inconclusive', reason:'probe error: …' }`, which
   the caller already treats as fail-closed. The unit tests inject `opts.probeCmd`
   and so never reach the pinned resolve — the new pinned-path case (no `probeCmd`)
@@ -341,11 +369,12 @@ module.exports = { resolveExecutable, verifyExecutable, bindInterpreter, probeVe
   on auto-update without churning `pinnedAt`).
 - **Probe-spawn pinning boundary with WP-155.** `containment-probe.js` is edited by
   **both** WPs and they must not collide. **This WP (lands first):** replace ONLY
-  the bare `'claude'` final fallback with `resolvePinnedSpawn(...)`; **leave the
-  `WIENERDOG_CONTAINMENT_PROBE_CMD` env fallback in place** — it is still the probe
-  test path until WP-155 lands. **WP-155 (lands second):** deletes that env term,
-  leaving `opts.probeCmd || resolvePinnedSpawn(...)`. If you find yourself wanting
-  to remove the env seam here, STOP — that is out of scope for this WP.
+  the bare `'claude'` final fallback with the encapsulated `spawnPinnedSync(...)`
+  call ([R13]); **leave the `WIENERDOG_CONTAINMENT_PROBE_CMD` env fallback in
+  place** — it is still the probe test path until WP-155 lands. **WP-155 (lands
+  second):** deletes that env term, leaving `opts.probeCmd || <spawnPinnedSync
+  call>`. If you find yourself wanting to remove the env seam here, STOP — that is
+  out of scope for this WP.
 - When uncertain, choose the simpler option and record it under "Decisions made".
 
 ## Security checklist
@@ -354,7 +383,7 @@ module.exports = { resolveExecutable, verifyExecutable, bindInterpreter, probeVe
       absolute realpath**, never by bare name; a fake earlier on `PATH` cannot win.
       This includes the **containment-probe** `claude` spawn
       (`src/core/dream/containment-probe.js`) — `grep -n "'claude'" src/core/dream/containment-probe.js`
-      shows no bare-name spawn fallback (the fallback is `resolvePinnedSpawn`).
+      shows no bare-name spawn fallback (the fallback is the `spawnPinnedSync` call).
 - [ ] A live resolution that no longer matches the pinned command path or
       install dir, or whose target fails owner/mode/ancestor-writable
       verification, **stops the spawn pre-flight** with a clear repin message —
@@ -368,16 +397,17 @@ module.exports = { resolveExecutable, verifyExecutable, bindInterpreter, probeVe
 
 - [ ] **[A7 bullet 4 — "Fake claude/git/codex earlier on PATH never executes."]**
       With a valid pin for the real claude, planting an executable named `claude`
-      earlier on the job `PATH` causes `resolvePinnedSpawn('claude', …)` to
-      **throw** (drift: live command path ≠ pinned command path) — the fake never
-      spawns.
+      earlier on the job `PATH` causes `spawnPinnedSync('claude', …)` to
+      **throw** (its internal resolve/verify detects drift: live command path ≠
+      pinned command path) — the fake never spawns.
 - [ ] **[A7 bullet 5, restated per the no-hash decision]** Repointing the
       command symlink to a target OUTSIDE the pinned install dir (e.g.
       `/tmp/evil` — root-owned-sticky `/tmp` passes the ancestor rule, the
       install-dir check refuses it), changing the target's owner, clearing its
       execute bit, or making an ancestor dir group/other-writable each makes
-      `verifyPin`/`resolvePinnedSpawn` fail before any spawn. (In-place byte
-      mutation of the user-owned target is NOT detected — honest boundary above.)
+      `spawnPinnedSync` fail before any spawn (its internal `verifyPin`/resolve
+      refuses). (In-place byte mutation of the user-owned target is NOT detected —
+      honest boundary above.)
 - [ ] **[A7 bullet 6, restated per the no-hash decision]** A legitimate
       auto-update that swaps in a new version file under the SAME install dir
       (new realpath, same dirname) passes `verifyPin` **silently** — no
@@ -386,8 +416,8 @@ module.exports = { resolveExecutable, verifyExecutable, bindInterpreter, probeVe
       `sync` re-pins and the next dream succeeds against the new location.
 - [ ] **[spec-gap amendment]** The pre-dream containment probe spawns the **pinned
       absolute** `claude`: with a valid pin, a fake `claude` planted earlier on the
-      job `PATH` makes `runContainmentProbe` return `'inconclusive'` (the pinned
-      resolve throws drift; the never-throws wrapper maps it) — the fake is **never
+      job `PATH` makes `runContainmentProbe` return `'inconclusive'` (the
+      `spawnPinnedSync` call throws drift; the never-throws wrapper maps it) — the fake is **never
       probe-spawned**, and the dream fails closed. Covered by a
       `tests/unit/containment-probe.test.js` case (no `opts.probeCmd`).
 - [ ] `resolveExecutable`/`verifyExecutable`/`createPins`/`verifyPin`
@@ -466,7 +496,7 @@ command is drift ⇒ THROW (live self-heal only when the whole store is `absent`
 `claude` and `git` pins present** — a non-empty `exec` map is not sufficient; if
 either is missing, refuse to bind/register the dream job (surface a hard notice)
 rather than binding a bypassing partial. `codex` stays optional until a codex job
-is authorized. Test: a partial store (git only) makes `resolvePinnedSpawn('claude')`
+is authorized. Test: a partial store (git only) makes `spawnPinnedSync('claude', …)`
 throw (never live-resolve a plant), and one sync with claude unresolved does not
 bind a partial dream descriptor.
 - `loadPins(paths)` (used by `descriptor.buildDescriptor`) keeps returning
@@ -491,15 +521,19 @@ returned a bare realpath string that callers `spawn`ed directly. A pinned node
 script (`#!/usr/bin/env node` — the confirmed shape of `claude`/`codex`) makes
 the kernel re-resolve `node` via `env` from the job PATH; a planted `node`/`env`
 earlier on PATH runs (the front-loaded node-dir masks this only incidentally, and
-not on the interactive path). **Corrected contract:** `resolvePinnedSpawn`
-returns a **spawn spec** `{command:string, args:string[]}` (spawn `command` with
-`[...args, ...jobArgs]`):
+not on the interactive path). **Corrected contract** (this classification is the
+`bindInterpreter` helper; **[R13]** `bindInterpreter` and `resolvePinnedSpawn` are
+now module-INTERNAL and callers invoke `spawnPinnedSync`/`spawnPinned` — see the
+terminal-design amendment below). The internal spawn spec is `{command:string,
+args:string[]}`:
 - native binary (no shebang, e.g. `git`) ⇒ `{command: realpath, args:[]}`;
 - node shebang (`env node`, `env -S node …`, `<abs>/node`) ⇒
   `{command: process.execPath, args:[realpath]}` — the verified, absolute,
   already-running node; no PATH interpreter resolution;
-- absolute non-node interpreter (`#!/abs/interp`) ⇒ `verifyExecutable(abs)` then
-  `{command: abs, args:[realpath]}`; unverified ⇒ THROW;
+- absolute non-node interpreter (`#!/abs/interp`) ⇒ `verifyExecutable(abs)` **and
+  [R13] require `abs` to be NATIVE — fail closed if it has its own shebang** (a
+  script interpreter would recursively PATH-resolve its own `#!/usr/bin/env x`);
+  then `{command: abs, args:[realpath]}`; unverified/has-shebang ⇒ THROW;
 - **[R10] PATH-resolving non-node env shebang (`#!/usr/bin/env <non-node>`) ⇒
   THROW / fail closed.** Do **NOT** resolve the interpreter through the job PATH.
   Rationale (safe-direction tie-break): the job PATH front-loads attacker-writable
@@ -512,53 +546,49 @@ returns a **spawn spec** `{command:string, args:string[]}` (spawn `command` with
   costs nothing now and removes the hijack surface if an upstream wrapper ever
   changes to a PATH-resolving non-node interpreter. Message: "the pinned executable
   uses an unsupported PATH-resolving interpreter — investigate or re-pin."
-**[R11] One shared helper, routed through EVERY exec site (close the class, not one
-site).** The round-10 fail-closed rule was applied only at fire time
-(`resolvePinnedSpawn`), but **pin creation also executes the target**:
-`buildPin`→`probeVersion` `spawnSync`s the pinned realpath for `--version`, so a
-`#!/usr/bin/env <non-node>` pin runs a static fake `<non-node>` from front-loaded
-`~/.local/bin` **at pin-creation time** (incl. `createPins`, its `dryRun`, and
-adopt's preflight) — before any fire-time gate. **Corrected contract:** the
-four-case classification lives in **one** helper `bindInterpreter(realpath, env,
-platform)` → `{command, args}` | THROW (above), and **every** site that executes a
-pinned target routes through it — **no site may `spawnSync(realpath, …)` a pinned
-target directly.** Enumerated exec sites:
-1. `resolvePinnedSpawn` (fire) — returns the helper's `{command,args}`.
-2. `buildPin`/`probeVersion` (pin creation — `createPins`, `createPins({dryRun})`,
-   and adopt's preflight): call `bindInterpreter` **before** probing; a THROW
-   refuses that exec **without executing it** (createPins records an
-   unsupported-interpreter notice/failure, never a silent partial that already ran
-   the plant). The node-shebang probe runs `process.execPath <script> --version`.
-3. `run-job.js` **`captureClaudeVersion`** (~L256, called ~L633) — the
-   run-evidence `spawnSync(command, ['--version'])` on the resolved claude path.
-   **[R12]** It needs the raw claude path for its `basename === 'claude'` check
-   but must EXECUTE via `bindInterpreter`: node-shebang ⇒ `spawnSync(process.execPath,
-   [claudeScript, '--version'])`; native ⇒ direct; PATH-resolving non-node ⇒
-   refuse (return `'unknown'`, never execute). (`gen.nodePath()` = `process.execPath`,
-   so `defaultSendAlert` at ~L318 is already safe — no change there.)
-4. The **launcher's** own spawn path (WP-157) and any **version/containment
-   probe** — same helper, never a raw realpath spawn.
-Add `readShebang(realpath)` (bounded 512-byte first-line read) as the helper's
-input. `resolvePinnedSpawn` returning `{command,args}` is an API **shape** change
-(string → object) — update its JSDoc and all call sites (`brain.js` incl. the
-`--version` probe, `validate.js`, `containment-probe.js`, `run-job.js`
-`captureClaudeVersion`).
+**[R11→R13] TERMINAL DESIGN — encapsulate pinned execution so no caller ever holds
+a raw path.** Round 10 gated only fire; R11/R12 chased pin-creation +
+`captureClaudeVersion` by enumeration; a static scan still can't cover future
+modules or evasions (`const run = spawnSync; run(rawPath)`, `cp.spawnSync`
+property calls, a pinned spawn from a module outside a fixed list). The sound
+closure is **encapsulation, not enumeration**:
 
-**[R12] Terminal fix — a static-scan canary makes "every site" mechanical, not
-enumerated.** This class has now surfaced at three sites (`resolvePinnedSpawn`,
-`buildPin`/`probeVersion`, `captureClaudeVersion`); prose enumeration keeps
-missing sites (the coordinator's independent grep found #5 after R11 claimed "every
-site"). Add a unit **canary** (the WP-155 `grep -rnE 'shell: true'` / WP-082
-pattern) that statically scans the pinned-exec modules — `exec-identity.js`,
-`dream/brain.js`, `dream/validate.js`, `dream/containment-probe.js`,
-`cli/run-job.js`, `scheduler/launcher.js` — for any `spawnSync(`/`spawn(`/
-`execFileSync(`/`execFile(` whose command argument is a **resolved/pinned
-executable path NOT produced by `bindInterpreter`** (a raw realpath / `command`
-var), and **FAILS** if one exists outside the sanctioned allowlist. **Allowlist =**
-spawns whose command is a `bindInterpreter` result (`spec.command`) OR
-`process.execPath` / `gen.nodePath()`. A new direct spawn of a pinned target
-anywhere ⇒ the canary fails. This closes the class **by construction**, not by
-chasing sites.
+- **`spawnPinnedSync(name, paths, opts)`** (and async `spawnPinned`) is the **ONLY
+  public API** to execute a pinned target. It internally resolves → verifies →
+  `bindInterpreter` → spawns, and **NEVER returns a spawnable path.**
+- **`resolvePinnedSpawn` and `bindInterpreter` are module-INTERNAL (not
+  exported).** No caller outside `exec-identity.js` can obtain a raw pinned path to
+  misuse.
+- **All five pinned-exec sites call `spawnPinnedSync`/`spawnPinned`:** the brain
+  `claude`/`codex` (async `spawnPinned` — detached), the vault-commit `git`
+  (`spawnPinnedSync`), the containment-probe `claude`, `run-job.js`
+  `captureClaudeVersion` (the run-evidence `--version`; it keeps the raw path only
+  for its `basename==='claude'` label check but EXECUTES via `spawnPinnedSync`),
+  and `buildPin`/`probeVersion` at pin creation (`createPins`, its `dryRun`, adopt
+  preflight). The **launcher** spawns `process.execPath`+run-job (not a pinned
+  external) — unchanged. `gen.nodePath()`=`process.execPath`, so
+  `defaultSendAlert` (~run-job.js:318) is already safe.
+- **[R13] Recursive interpreter hijack closed:** the absolute-non-node-interpreter
+  branch of `bindInterpreter` must require the interpreter to be **NATIVE — fail
+  closed if `abs` has its OWN shebang** (else spawning `/trusted/interp` that is
+  itself `#!/usr/bin/env x` recursively PATH-resolves `x`, running a planted
+  `~/.local/bin/x`; the old canary stayed green because the command WAS a
+  `bindInterpreter` result). (Sound alternative: recurse with a strict depth/cycle
+  limit, refusing any PATH-resolving shebang at any depth.)
+
+Add `readShebang(realpath)` (bounded 512-byte first-line read) as the helper's
+input.
+
+**Canary — narrowed to what a static scan CAN soundly enforce (boundary guard,
+defense-in-depth — NOT a whole-codebase execution guarantee).**
+`tests/unit/pinned-exec-canary.test.js` asserts the **encapsulation boundary**:
+(a) `exec-identity.js` **exports no function that returns a raw pinned executable
+path** (only `spawnPinnedSync`/`spawnPinned` execute; `resolvePinnedSpawn`/
+`bindInterpreter` are not in `module.exports`); (b) **no module outside
+`exec-identity.js` imports `resolvePinnedSpawn` or `bindInterpreter`**. The
+guarantee is **structural** (callers never receive a spawnable pinned path), and
+the canary guards the boundary that makes it so — it does not claim to scan every
+spawn everywhere (that claim was false).
 
 ### A3 — sync ordering: pins before descriptors [wd P1, shared with WP-156]
 
@@ -617,12 +647,12 @@ valid descriptor binds.
 ### Deliverables / acceptance additions
 - **[R8:#3]** Add `src/cli/adopt.js` (pin bootstrap before register) — see A5.
 - Acceptance: add — a corrupt/unreadable/foreign `exec-pins.json` makes
-  `resolvePinnedSpawn` **throw** (never live-resolve); a node-shebang pin spawns
+  `spawnPinnedSync` **throw** (never live-resolve); a node-shebang pin spawns
   via `process.execPath` and a planted `node` earlier on PATH is irrelevant; each
   proven by a unit test that fails if the fix is reverted.
 - **[R10] Acceptance:** a pinned executable with a **non-node
   `#!/usr/bin/env <x>`** shebang, with a fake `<x>` planted FIRST on the job PATH,
-  makes `resolvePinnedSpawn` **THROW** — the plant is **never** executed. Mutation:
+  makes `spawnPinnedSync` **THROW** — the plant is **never** executed. Mutation:
   revert this branch to "resolve `<x>` through the job PATH + structural verify" ⇒
   the plant runs ⇒ the test fails. (`exec-identity.test.js`; the harness — WP-158 —
   mirrors it as an end-to-end negative.)
@@ -634,17 +664,16 @@ valid descriptor binds.
   that already ran it. The node-shebang probe executes `process.execPath <script>
   --version` (never the raw realpath). Mutation: revert **any** exec site to a
   direct `spawnSync(realpath)` ⇒ the plant executes ⇒ the zero-execution assertion
-  fails. Keep the R10 `resolvePinnedSpawn` regression.
-- **[R12] Acceptance — `captureClaudeVersion` + the enforcement canary:**
-  (a) `captureClaudeVersion` with a node-shebang claude + a fake `node` planted
-  FIRST on the job PATH runs `process.execPath <script> --version` — the planted
-  `node` records ZERO executions; a non-node PATH-resolving claude ⇒ returns
-  `'unknown'` without executing. (b) The **static-scan canary**
-  (`tests/unit/pinned-exec-canary.test.js`) scans `exec-identity.js`,
-  `dream/brain.js`, `dream/validate.js`, `dream/containment-probe.js`,
-  `cli/run-job.js`, `scheduler/launcher.js` and **FAILS** if any `spawnSync(`/
-  `spawn(`/`execFileSync(`/`execFile(` uses a resolved/pinned command that is not a
-  `bindInterpreter` result (`spec.command`) nor `process.execPath`/`nodePath()`.
-  **Mutation:** add a direct `spawnSync(rawResolvedPath, …)` anywhere in the
-  scanned modules ⇒ the canary fails; remove `bindInterpreter` from
-  `captureClaudeVersion` ⇒ its planted-node zero-execution test fails.
+  fails. Keep the R10 `spawnPinnedSync` regression.
+- **[R12→R13] Acceptance — `captureClaudeVersion` + the encapsulation-boundary
+  canary:** (a) `captureClaudeVersion` (now via `spawnPinnedSync('claude', …,
+  ['--version'])`) with a node-shebang claude + a fake `node` planted FIRST on the
+  job PATH runs `process.execPath <script> --version` — the planted `node` records
+  ZERO executions; a non-node PATH-resolving claude ⇒ returns `'unknown'` without
+  executing. (b) The **boundary canary** (`tests/unit/pinned-exec-canary.test.js`,
+  [R13] — narrowed from the R12 whole-codebase scan, which couldn't be sound):
+  `exec-identity.js` exports no function returning a raw pinned path, and no module
+  outside `exec-identity.js` imports `resolvePinnedSpawn`/`bindInterpreter`.
+  **Mutation:** revert `captureClaudeVersion` to a raw `spawnSync(rawResolvedPath, …)`
+  ⇒ its planted-node zero-execution test fails; export the internal resolve/bind or
+  import them externally ⇒ the boundary canary fails.
