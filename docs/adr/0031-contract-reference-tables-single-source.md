@@ -1,12 +1,15 @@
 # ADR-0031: A dense contract's single source of truth is one canonical reference table; registered mirrored surfaces defer to it and move with it
 
-Status: Proposed
+Status: Accepted
 Date: 2026-07-19
 
-> **OWNER-APPROVED IN PRINCIPLE (2026-07-19).** Felho's own diagnosis, articulated
-> during the A9/A10 security-audit spec-review loop. Stays **Proposed** until Felho
-> ratifies at the close of the review round on this ADR — mirroring the ADR-0028 /
-> ADR-0030 Proposed→Accepted flow. Extends ADR-0029's single-source-of-truth
+> **OWNER-RATIFIED (2026-07-19).** Felho's own diagnosis, articulated during the
+> A9/A10 security-audit spec-review loop, and ratified by Felho at the close of the
+> review round on this ADR — mirroring the ADR-0028 / ADR-0030 Proposed→Accepted
+> flow. The review took four rounds (the ADR's own two-consecutive-rounds
+> circuit-breaker fired on the ADR itself), converging once the rule was reframed on
+> the canonical-source model adapted from the pairflow project's Contract-Dense Task
+> Gate. Extends ADR-0029's single-source-of-truth
 > principle from spec-lifecycle bookkeeping to in-spec *contract* content; builds on
 > ADR-0005's spec-driven workflow.
 
