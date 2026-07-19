@@ -77,18 +77,27 @@ Other runbooks in `docs/runbooks/` (`codex-review.md`, `release.md`,
 `triage.md`, `secret-incident.md`, …) share that numbered-checklist format.
 
 **The core directory is NOT always `~/.wienerdog` — resolve it once, up front
-(R7-1).** The shipped path layer resolves the **core** dir to `$WIENERDOG_HOME`
-when that variable is set, otherwise the platform default `~/.wienerdog`
-(`src/core/paths.js:55` — `core = $WIENERDOG_HOME || ~/.wienerdog`). A runbook that
-hardcodes `~/.wienerdog` (or Windows `$env:USERPROFILE\.wienerdog`) is **wrong on a
-custom-`WIENERDOG_HOME` install**: it would unregister the OS task while leaving the
-REAL `<core>/schedules/wienerdog-catchup.xml` and its manifest entry intact — every
-check passes, then step 4's `wienerdog sync` `reloadMissing` resurrects catch-up
-before the drill. So the runbook must, **before step 1 (a step 0 preamble)**,
-resolve ONE authoritative core, display it, have the user confirm it, and use that
-SAME resolved core for **every** path it later names (the catch-up XML/plist, the
-install manifest, the evidence copy, the digest grep, the SessionStart hook, and all
-verifications). The one path that is NOT under the core is the macOS catch-up
+(R7-1/R8-4).** The shipped path layer resolves the **core** dir to `$WIENERDOG_HOME`
+when that variable is set, otherwise `<home>/.wienerdog`, where `<home>` is `$HOME`
+if set, else the platform account home directory (`src/core/paths.js:54–55` —
+`home = HOME || os.homedir()`, `core = $WIENERDOG_HOME || <home>/.wienerdog`). On
+Windows this means `HOME` is honored **before** `USERPROFILE` — so a runbook that
+hardcodes `~/.wienerdog`, or that jumps straight to Windows
+`$env:USERPROFILE\.wienerdog` when `HOME` is set, is **wrong on a
+custom-`WIENERDOG_HOME` or HOME-set install**: it would unregister the OS task while
+leaving the REAL `<core>/schedules/wienerdog-catchup.xml` and its manifest entry
+intact — every check passes, then step 4's `wienerdog sync` `reloadMissing`
+resurrects catch-up before the drill. The **code-authoritative** way to learn the
+core is `wienerdog doctor`, which prints a `core directory exists (<path>)` line
+where `<path>` is exactly `getPaths().core` (`src/cli/doctor.js:322`) — reading it
+from `doctor` is guaranteed to match what `sync`/`schedule`/`memory approve` act on.
+So the runbook must, **before step 1 (a step 0 preamble)**, read that ONE
+authoritative core from `doctor`, cross-check it against the code order
+(`WIENERDOG_HOME` → `HOME` → platform homedir → `.wienerdog`), display it, have the
+user confirm it, **persist it durably so it survives the step-1 reboot**, and use
+that SAME resolved core for **every** path it later names (the catch-up XML/plist,
+the install manifest, the evidence copy, the digest grep, the SessionStart hook, and
+all verifications). The one path that is NOT under the core is the macOS catch-up
 LaunchAgent plist (`~/Library/LaunchAgents/ai.wienerdog.catchup.plist`, always
 home-based, independent of `WIENERDOG_HOME`).
 
@@ -190,7 +199,7 @@ state and act on:
 
 | Action | Path | Notes |
 |--------|------|-------|
-| create | docs/runbooks/incident.md | The general incident-drill runbook (house numbered-checklist format), opening with a **step 0 preamble** that resolves the ONE authoritative core = `$WIENERDOG_HOME` if set else the platform default (POSIX `${WIENERDOG_HOME:-$HOME/.wienerdog}`, Windows `$env:WIENERDOG_HOME` else `$env:USERPROFILE\.wienerdog`), DISPLAYS it, has the user CONFIRM it, and requires every later path (the catch-up XML/plist, the install manifest, the evidence copy, the digest grep, the SessionStart hook, and all verifications) to use that SAME `<core>` — never a hardcoded `~/.wienerdog` (R7-1); then the seven ordered A9 steps: (1) snapshot the `<core>/config.yaml` `jobs:` definitions (the restore source; `schedule.json` holds only watermarks), remove every per-job schedule **and** the shared catch-up entry — the catch-up removal deleting its scheduler FILE **and** its `install-manifest.json` entry, not merely unregistering it, so `sync`'s `reloadMissing` cannot resurrect it — then reach proven quiescence by REBOOT (the **sole** authoritative proof — a pre-reboot process grep is a non-proof hint that can only *reveal* a live job; if you cannot reboot you **stop-and-escalate**, never grep-certify clean); (2) preserve-evidence-privately; (3) revoke+rotate; (4) purge digest+managed-block; (5) clean git; (6) fail-closed acceptance drill (SessionStart-hook `additionalContext` byte-compare against the raw `state/digest.md`, plus a three-check managed-block proof — clean `sync` notice + whole-file marker grep + one-sentinel-pair check per installed harness file; **no** region-vs-raw-digest byte-compare, which would falsely fail because `sync` trims+neutralizes); (7) re-authorize by reconstructing `schedule add --job` for **builtin** jobs from the `jobs:` snapshot — a `skill:*` routine is frozen by the A0 pre-use gate (audit A1) and is NOT re-addable this release (do not promise a failing `--skill` command; only its snapshot definition is preserved for later). |
+| create | docs/runbooks/incident.md | The general incident-drill runbook (house numbered-checklist format), opening with a **step 0 preamble** that resolves the ONE authoritative core by reading `wienerdog doctor`'s `core directory exists (<path>)` line (the code-authoritative `getPaths().core`), cross-checked against the exact code-mirrored order — `WIENERDOG_HOME`, else `HOME`, else the platform account homedir, then `.wienerdog` (mirroring `paths.js:54–55`; `HOME` is tried **before** `USERPROFILE` on Windows, R8-4) — DISPLAYS it, has the user CONFIRM it (`config.yaml`, `state/`, `install-manifest.json`), **persists it durably OUTSIDE the core so it survives the step-1 reboot** and, after the reboot, RE-RESOLVES + RE-CONFIRMS + RE-EXPORTS `WIENERDOG_HOME` for every later command (R8-2), and requires every later path (the catch-up XML/plist, the install manifest, the evidence copy, the digest grep, the SessionStart hook, and all verifications) to use that SAME `<core>` — never a hardcoded `~/.wienerdog` / `$env:USERPROFILE\.wienerdog`, and never a bare relative `state/…` (R7-1/R8-3); then the seven ordered A9 steps: (1) snapshot the `<core>/config.yaml` `jobs:` definitions (the restore source; `schedule.json` holds only watermarks), remove every per-job schedule **and** the shared catch-up entry — the catch-up removal deleting its scheduler FILE **and** its `install-manifest.json` entry, not merely unregistering it, so `sync`'s `reloadMissing` cannot resurrect it — then reach proven quiescence by REBOOT (the **sole** authoritative proof — a pre-reboot process grep is a non-proof hint that can only *reveal* a live job; if you cannot reboot you **stop-and-escalate**, never grep-certify clean); (2) preserve-evidence-privately; (3) revoke+rotate; (4) purge digest+managed-block; (5) clean git; (6) fail-closed acceptance drill (SessionStart-hook `additionalContext` byte-compare against the raw `state/digest.md`, plus a three-check managed-block proof — clean `sync` (notice-tolerant: the two constant Codex info notices are allowed; only concrete integrity failures block, R8-5) + whole-file marker grep + one-sentinel-pair check per installed harness file; **no** region-vs-raw-digest byte-compare, which would falsely fail because `sync` trims+neutralizes); (7) re-authorize by reconstructing `schedule add --job` for **builtin** jobs from the `jobs:` snapshot — a `skill:*` routine is frozen by the A0 pre-use gate (audit A1) and is NOT re-addable this release (do not promise a failing `--skill` command; only its snapshot definition is preserved for later). |
 | modify | docs/runbooks/secret-incident.md | Add one cross-link near the top: the secret leak is the credential-specific case of the general incident drill (link `incident.md`); for a general or suspected-compromise incident, start there. Do NOT rewrite its steps. |
 
 ### Exact contract — what `docs/runbooks/incident.md` must state
@@ -211,21 +220,58 @@ The detail of each:
 0. **Resolve the one authoritative core path — do this FIRST, before any other
    step, and use it everywhere below (R7-1).** Wienerdog's files do NOT always live
    in `~/.wienerdog`: the path layer resolves the **core** directory to
-   `$WIENERDOG_HOME` when that variable is set, otherwise the platform default
-   `~/.wienerdog`. If you assume the default on a custom-`WIENERDOG_HOME` install,
-   every path in this runbook points at the WRONG directory — you would unregister
-   the OS task while leaving the REAL `<core>/schedules/wienerdog-catchup.xml` and
-   its manifest entry intact, all your checks would pass, and step 4's `wienerdog
-   sync` would then RESURRECT catch-up before the drill. So resolve `<core>` once,
-   now, DISPLAY it, and CONFIRM it is the directory that actually holds your
-   Wienerdog install (it must contain `config.yaml`, `state/`, and
-   `install-manifest.json`) before continuing:
-   - macOS / Linux: `CORE="${WIENERDOG_HOME:-$HOME/.wienerdog}"; echo "$CORE"`,
-     then confirm it — `ls "$CORE/config.yaml" "$CORE/install-manifest.json"`.
-   - Windows (PowerShell): `$core = if ($env:WIENERDOG_HOME) { $env:WIENERDOG_HOME }
-     else { "$env:USERPROFILE\.wienerdog" }; $core`, then confirm
-     `Test-Path "$core\config.yaml"` and `Test-Path "$core\install-manifest.json"`
-     both return `True`.
+   `$WIENERDOG_HOME` when that variable is set, otherwise `<home>/.wienerdog`, where
+   `<home>` itself is `$HOME` if set, else the platform account home directory
+   (`src/core/paths.js:54–55` — `home = HOME || os.homedir()`, `core =
+   $WIENERDOG_HOME || <home>/.wienerdog`). If you assume the default on a
+   custom-`WIENERDOG_HOME` install, every path in this runbook points at the WRONG
+   directory — you would unregister the OS task while leaving the REAL
+   `<core>/schedules/wienerdog-catchup.xml` and its manifest entry intact, all your
+   checks would pass, and step 4's `wienerdog sync` would then RESURRECT catch-up
+   before the drill.
+
+   **Read the core from `wienerdog doctor` (the code-authoritative source), then
+   cross-check and confirm it (R8-4).** `wienerdog doctor` prints a line `core
+   directory exists (<path>)` where `<path>` is exactly the core the CLI itself
+   resolved (`getPaths().core`) — so reading it from `doctor` is guaranteed to match
+   what `sync`/`schedule`/`memory approve` will act on, better than hand-resolving.
+   Run `wienerdog doctor`, read that `<path>`, and set your core variable to it:
+   - macOS / Linux: `CORE="$(wienerdog doctor 2>/dev/null | sed -n 's/.*core
+     directory exists (\(.*\)).*/\1/p')"; echo "$CORE"`.
+   - Windows (PowerShell): `$core = (wienerdog doctor 2>$null | Select-String
+     'core directory exists \((.*)\)').Matches.Groups[1].Value; $core`.
+   Then **cross-check** that value against the exact code-mirrored resolution order —
+   `WIENERDOG_HOME`, else `HOME`, else the platform account home directory, then
+   `.wienerdog` (this MIRRORS `paths.js` — do **not** jump straight to
+   `USERPROFILE`/`~` when `HOME` is set):
+   - macOS / Linux: `echo "${WIENERDOG_HOME:-${HOME:-$HOME}/.wienerdog}"` (on POSIX
+     `HOME` is effectively always set; if it somehow is not, use the account's home
+     dir).
+   - Windows (PowerShell): `if ($env:WIENERDOG_HOME) { $env:WIENERDOG_HOME }
+     elseif ($env:HOME) { "$env:HOME\.wienerdog" } else { "$env:USERPROFILE\.wienerdog" }`
+     — note `HOME` is tried **before** `USERPROFILE`, matching the code; a Windows
+     box with `HOME` set but `WIENERDOG_HOME` empty resolves under `HOME`, not
+     `USERPROFILE`.
+   If the `doctor` value and the cross-check disagree, STOP and reconcile before
+   continuing — a mismatch means your interactive environment differs from what the
+   install uses. Finally **DISPLAY** the resolved core and **CONFIRM** it is the
+   directory that actually holds your install — it must contain `config.yaml`,
+   `state/`, and `install-manifest.json`:
+   - macOS / Linux: `ls "$CORE/config.yaml" "$CORE/state" "$CORE/install-manifest.json"`.
+   - Windows (PowerShell): `Test-Path "$core\config.yaml"`, `Test-Path "$core\state"`,
+     and `Test-Path "$core\install-manifest.json"` must all return `True`.
+
+   **Persist the confirmed core path durably NOW — it must survive the step-1 reboot
+   (R8-2).** The `$CORE`/`$core` shell variable does **NOT** survive a reboot, and a
+   one-shot `WIENERDOG_HOME` export does not either — yet step 1 mandates a reboot
+   and every step after it (sync, memory approve, schedule add, doctor, all
+   verifications) must run against THIS core, not a re-defaulted one. So record it
+   durably **OUTSIDE** the core (which survives reboot) AND note it off-machine:
+   - macOS / Linux: `echo "$CORE" > "$HOME/wienerdog-incident-<date>-CORE-PATH.txt"`.
+   - Windows (PowerShell): `$core | Out-File "$env:USERPROFILE\wienerdog-incident-<date>-CORE-PATH.txt"`.
+   Also write the path down somewhere off the machine (paper / your phone). In step 2
+   this record joins the private incident evidence folder.
+
    Everywhere this runbook writes `<core>` (POSIX `$CORE`, Windows `$core`) — the
    catch-up scheduler XML, the install manifest, the evidence you copy, the digest
    you grep, the installed SessionStart hook, and every verification — it means
@@ -241,7 +287,7 @@ The detail of each:
      `timeout_minutes`) live in the managed `jobs:` section of **`config.yaml`**
      (at the core root, `<core>/config.yaml` — the core you resolved in step 0, not
      necessarily `~/.wienerdog`) — **not** in
-     `state/schedule.json`, which holds only run **watermarks** (`last_success` /
+     `<core>/state/schedule.json`, which holds only run **watermarks** (`last_success` /
      `last_status` / `last_error_at`) and cannot restore a schedule. `wienerdog
      schedule remove` **mutates `config.yaml`** (it strips the job from the `jobs:`
      section), and `schedule list` does **not** print `timeout_minutes` — so a
@@ -251,8 +297,8 @@ The detail of each:
      Copy **every** job's definition, including any `run: skill:<name>` routine:
      a `skill:*` routine cannot be re-added this release (the A0 gate, step 7), so
      this snapshot is the **only** record of its definition to re-add later.
-     (You MAY also capture `state/schedule.json` as separate **watermark evidence**
-     — but it is **not** the restore source.) Handle both with the same private
+     (You MAY also capture `<core>/state/schedule.json` as separate **watermark
+     evidence** — but it is **not** the restore source.) Handle both with the same private
      folder discipline as the rest of the evidence in step 2 — it is why the
      snapshot goes into that folder.
    - **Unregister every per-job schedule.** `wienerdog schedule list`, then
@@ -305,6 +351,26 @@ The detail of each:
      run — platform-independently, with no process forensics. **Credential rotation
      (step 3) begins only after this reboot. A reboot is the sole proof of
      quiescence this runbook accepts.**
+   - **After the reboot: RE-RESOLVE, RE-CONFIRM, and RE-EXPORT the core before ANY
+     further command (R8-2).** The reboot wiped your `$CORE`/`$core` shell variable
+     and any one-shot `WIENERDOG_HOME` export, so a fresh shell would silently
+     re-default the core — re-introducing exactly the wrong-directory bug step 0
+     guards against. So, in the new post-reboot session, before running anything
+     else:
+     1. Re-resolve the core the same way as step 0 (read `wienerdog doctor`'s `core
+        directory exists (<path>)` line) and **confirm it equals the value you
+        recorded** in `wienerdog-incident-<date>-CORE-PATH.txt`. If they differ,
+        STOP and reconcile — do not proceed against a mismatched core.
+     2. **Re-export it for the whole session** so every later CLI call uses it
+        explicitly: macOS / Linux `export WIENERDOG_HOME="$CORE"`; Windows
+        (PowerShell) `$env:WIENERDOG_HOME = "$core"`.
+     3. Re-verify the triple (`config.yaml`, `state/`, `install-manifest.json`)
+        under that core, as in step 0.
+     From here on, **every** post-reboot Wienerdog command — `wienerdog sync`,
+     `wienerdog memory approve`, `wienerdog schedule add`, `wienerdog doctor`, and
+     the drill hook run in step 6 — MUST run with `WIENERDOG_HOME` set to this
+     `$CORE` in its environment (the export above accomplishes that for the
+     session), so none of them can act on a re-defaulted core.
    - **A live-process grep is NOT proof — it can only catch a live job, never
      certify a clean one (R4-C).** You MAY run a quick check *before* rebooting to
      see whether an obvious Wienerdog process is still up — macOS / Linux `pgrep
@@ -345,7 +411,9 @@ The detail of each:
      **`<core>/config.yaml` `jobs:` snapshot** (the step-1 restore source),
      `<core>/state/run-evidence.jsonl`, `<core>/state/alerts.jsonl`, and the
      relevant `<core>/logs/<job>/` files; optionally `<core>/state/schedule.json`
-     too (watermark evidence, not the restore source).
+     too (watermark evidence, not the restore source). Also move the step-0
+     `wienerdog-incident-<date>-CORE-PATH.txt` record into this folder so the
+     confirmed core path is filed alongside the rest of the timeline.
    - **Re-apply private modes recursively, then re-verify (blocking).** The copies
      leave Wienerdog's own `0700`/`0600` protection when they land elsewhere, so
      restore it over the **whole tree** — a plain `chmod 600 …/*` is wrong (it
@@ -373,7 +441,10 @@ The detail of each:
 4. **Remove the compromised injected context — the digest AND the managed
    block.** This is the step that stops the poisoned identity/context from
    entering new sessions:
-   - Delete `state/digest.md` (it is regenerated).
+   - Delete `$CORE/state/digest.md` (Windows `$core\state\digest.md`) — it is
+     regenerated. Use the explicit resolved path, never a bare relative
+     `state/…` path (that would resolve against your current working directory
+     and could delete the wrong file while the real compromised one survives).
    - Fix the source: if an **identity note** (in the vault's identity folder, by
      default `06-Identity/`) was poisoned, correct it in the vault. Because digest
      injection is byte-gated by the identity trust registry (ADR-0021), a changed
@@ -384,8 +455,8 @@ The detail of each:
      and shows the exact bytes; it accepts **no** arbitrary file path (not a
      `06-Identity/…` path) and has no headless bypass — so only the bytes you just
      reviewed can ever be injected again.
-   - Run `wienerdog sync` — it re-renders a clean `state/digest.md` and re-writes
-     the CLAUDE.md / AGENTS.md **managed block** (the sentinel-delimited region
+   - Run `wienerdog sync` — it re-renders a clean `$CORE/state/digest.md` and
+     re-writes the CLAUDE.md / AGENTS.md **managed block** (the sentinel-delimited region
      Wienerdog owns) from the current, corrected identity. If you suspect the
      managed block itself was hand-tampered, note that `sync` overwrites only
      inside the sentinels and re-derives the block, so a clean sync restores it.
@@ -398,8 +469,9 @@ The detail of each:
      the catch-up job here — re-arming the machine before the acceptance drill.
      Do not run `sync` until step 1's dual re-verify (OS registration gone AND
      scheduler file gone AND no catch-up manifest entry) passed.
-   - Also review `state/quarantine/` (cross-link `secret-incident.md` step 3 for
-     the true-positive/false-positive handling).
+   - Also review `$CORE/state/quarantine/` (Windows `$core\state\quarantine\`;
+     cross-link `secret-incident.md` step 3 for the true-positive/false-positive
+     handling) — again the explicit resolved path, never a bare relative `state/…`.
 
 5. **Clean the git history (vault).** Cross-link `secret-incident.md` step 4 for
    the concrete commands (`git commit --amend` / `git rebase -i` for a recent
@@ -438,7 +510,8 @@ The detail of each:
    - **Grep the regenerated `<core>/state/digest.md`** for the poisoned marker
      directly (belt-and-suspenders against the decoded bytes above).
    - **Check the managed block in every INSTALLED harness file with a THREE-CHECK
-     conjunction — a clean `sync` (no notice) AND a WHOLE-FILE marker grep AND a
+     conjunction — a clean `sync` (no integrity-failure signal; the two constant
+     Codex info notices are tolerated, R8-5) AND a WHOLE-FILE marker grep AND a
      single-sentinel-pair check — not `doctor`, and NOT a region-vs-raw-digest
      byte-compare (see the third check for why that would falsely fail).** `sync`
      runs only the **detected** harness's adapter, and a
@@ -450,9 +523,20 @@ The detail of each:
      being **missing** is a failure; an *un-installed* harness's absent file is
      not — do not let a legitimately absent file block re-authorization.) For each
      such file, all three of:
-     - **Re-run `wienerdog sync` and read its output.** Any managed-block
-       out-of-sync / adapter notice for an installed file means the drill **fails**
-       (the block is not in a known-clean rendered state).
+     - **Re-run `wienerdog sync` and read its output — block only on a concrete
+       integrity FAILURE, not on the constant Codex info notices (R8-5).** The gate
+       **fails** the drill on any of: a **non-zero `sync` exit**; a "managed block
+       not updated" / out-of-sync message for an installed file; a **missing
+       digest**; a **skipped installed adapter** (an installed harness whose adapter
+       did not run); or a **shadowing `AGENTS.override`** that displaces the managed
+       block. It must **NOT** fail merely because `sync` printed a notice: on a Codex
+       install `sync` **always** emits two constant **informational** notices on a
+       successful run — the `/hooks` hook-trust notice ("Codex requires trusting new
+       hooks via `/hooks` …") and the skills-aren't-slash-commands notice ("In Codex,
+       skills aren't slash commands …") — which appear on **every** clean sync and
+       are **explicitly allowed**. Requiring "no notice at all" would make this check
+       impossible to pass on Codex. So read for the concrete-failure signals above,
+       and treat those two constant info notices as normal, not as a failure.
      - **`grep -F` the poisoned marker over the ENTIRE file — the whole `CLAUDE.md`
        / `AGENTS.md`, NOT only the region between the sentinels.** This is the
        load-bearing check. If an attacker deleted **both** sentinels and left the
@@ -470,18 +554,19 @@ The detail of each:
        orphaned **outside** it: you must **manually remove or quarantine that
        orphaned content**, re-run `sync`, and re-run this drill.
      - **Do NOT byte-compare the sentinel region against the raw
-       `state/digest.md`.** `sync` writes the managed block as a *transform* of the
-       digest — it trims trailing newlines and neutralizes any full-line sentinel in
-       the digest — so the region is **never byte-identical** to the raw digest, and
+       `$CORE/state/digest.md`.** `sync` writes the managed block as a *transform* of
+       the digest — it trims trailing newlines and neutralizes any full-line sentinel
+       in the digest — so the region is **never byte-identical** to the raw digest, and
        such a compare would **falsely fail on a clean install** and wrongly block
        re-authorization. Do not reproduce that transform by hand. The three checks
        above already prove the block is clean **by construction**: the whole-file
        marker grep proves the poison is nowhere in the file; the single-pair check
        proves no poisoned remnant sits orphaned outside the block; and a clean
-       `sync` with no notice proves the block is exactly what `sync` renders from
-       the current, clean digest. If the digest source is clean and `sync`
-       succeeded with no warning/notice, the block is clean by construction — the
-       raw-digest byte-equality would add no security property, only false failures.
+       `sync` (no integrity-failure signal — the two constant Codex info notices are
+       tolerated) proves the block is exactly what `sync` renders from the current,
+       clean digest. If the digest source is clean and `sync` succeeded with no
+       integrity-failure signal, the block is clean by construction — the raw-digest
+       byte-equality would add no security property, only false failures.
      (`doctor` does **not** verify managed-block / sentinel integrity — do not
      treat a clean `doctor` as proof here.)
    - *(Optional extra sanity check, NOT the proof.)* You may also start a **new**
@@ -517,6 +602,17 @@ Keep every command exact and every claim traceable to a shipped mechanism (do
 not describe a "remove managed block" command — there is none; the mechanism is
 fix-source → `memory approve` → `sync`). No jargon without a one-clause gloss.
 
+**Every operative path under the core MUST be written with the step-0 resolved
+prefix — `$CORE/state/…` (POSIX) or `$core\state\…` (Windows) — never a bare
+relative `state/…` (R8-3).** A bare `state/digest.md` / `state/quarantine/` /
+`state/schedule.json` resolves against the current working directory, so a precise
+follower could delete or inspect the wrong file while the real compromised core
+artifact is untouched. This binds the `digest.md` delete, the `quarantine/` review,
+the `schedule.json`/`run-evidence.jsonl`/`alerts.jsonl` snapshots, and the `sync`
+description — all get the explicit `<core>` prefix. When you must caution against
+the relative form, write it as `state/…` (an ellipsis, not a concrete filename) so
+the runbook never contains a bare operative `state/<file>` token.
+
 ## Implementation notes & constraints
 
 - **Docs-only.** The Deliverables table is exhaustive; do not edit `src/` or
@@ -536,18 +632,41 @@ fix-source → `memory approve` → `sync`). No jargon without a one-clause glos
 
 ## Acceptance criteria
 
-- [ ] **[R7-1]** The runbook opens with a **step 0 preamble** (before step 1) that
-      resolves the ONE authoritative **core** = `$WIENERDOG_HOME` if set else the
-      platform default, gives both the POSIX (`${WIENERDOG_HOME:-$HOME/.wienerdog}`)
-      and Windows (`$env:WIENERDOG_HOME` else `$env:USERPROFILE\.wienerdog`)
-      resolution, DISPLAYS the resolved core, and has the user CONFIRM it holds the
-      real install (`config.yaml`, `state/`, `install-manifest.json`). Every later
-      path in the runbook — the catch-up scheduler XML, `install-manifest.json`, the
-      evidence copy, `state/digest.md`, the SessionStart hook, and every
-      verification — references that same resolved `<core>` (`$CORE` / `$core`),
-      **never** a hardcoded `~/.wienerdog` / `$env:USERPROFILE\.wienerdog`; the one
-      documented exception is the macOS catch-up LaunchAgent plist
+- [ ] **[R7-1/R8-4]** The runbook opens with a **step 0 preamble** (before step 1)
+      that resolves the ONE authoritative **core** by **reading `wienerdog doctor`'s
+      `core directory exists (<path>)` line** (the code-authoritative
+      `getPaths().core`), and cross-checks it against the exact code-mirrored order —
+      `WIENERDOG_HOME`, else `HOME`, else the platform account homedir, then
+      `.wienerdog` (mirroring `paths.js:54–55`), with `HOME` tried **before**
+      `USERPROFILE` on Windows (a Windows box with `HOME` set but `WIENERDOG_HOME`
+      empty resolves under `HOME`, NOT `USERPROFILE`). It DISPLAYS the resolved core
+      and has the user CONFIRM it holds the real install (`config.yaml`, `state/`,
+      `install-manifest.json`). Every later path in the runbook — the catch-up
+      scheduler XML, `install-manifest.json`, the evidence copy,
+      `$CORE/state/digest.md`, the SessionStart hook, and every verification —
+      references that same resolved `<core>` (`$CORE` / `$core`), **never** a
+      hardcoded `~/.wienerdog` / `$env:USERPROFILE\.wienerdog`; the one documented
+      exception is the macOS catch-up LaunchAgent plist
       (`~/Library/LaunchAgents/ai.wienerdog.catchup.plist`, always home-based).
+- [ ] **[R8-2]** Step 0 **persists** the confirmed absolute core path durably
+      OUTSIDE the core (a home-dir `wienerdog-incident-<date>-CORE-PATH.txt` record
+      that survives the reboot, plus an off-machine note) BEFORE the step-1 reboot;
+      and step 1, **after** the reboot, has a mandatory sub-step that RE-RESOLVES the
+      core (via `doctor`), RE-CONFIRMS it equals the recorded value, RE-EXPORTS
+      `WIENERDOG_HOME` for the session (`export WIENERDOG_HOME="$CORE"` /
+      `$env:WIENERDOG_HOME="$core"`), and re-verifies the `config.yaml`/`state/`/
+      `install-manifest.json` triple — so every post-reboot command (`sync`, `memory
+      approve`, `schedule add`, `doctor`, the drill hook) runs against the SAME core,
+      never a re-defaulted one. It states that the `$CORE`/`$core` shell variable and
+      a one-shot `WIENERDOG_HOME` export do **not** survive a reboot.
+- [ ] **[R8-3]** Every operative path under the core in the runbook uses the
+      resolved prefix (`$CORE/state/…` / `$core\state\…`), never a bare relative
+      `state/…`: the `digest.md` delete, the `quarantine/` review, the
+      `schedule.json`/`run-evidence.jsonl`/`alerts.jsonl` snapshots, the `sync`
+      description, and the drill's digest references all carry the explicit `<core>`
+      prefix. `docs/runbooks/incident.md` contains **no** bare operative
+      `state/<file>` token (cautions against the relative form use an ellipsis
+      `state/…`, not a concrete filename).
 - [ ] `docs/runbooks/incident.md` exists in the house numbered-checklist format
       and covers, **in order**: (1) snapshot the **`config.yaml` `jobs:`
       definitions** before removal (the restore source — `state/schedule.json`
@@ -603,22 +722,30 @@ fix-source → `memory approve` → `sync`). No jargon without a one-clause glos
       **`<core>/bin/session-start.sh`** with `WIENERDOG_HOME` set and
       `WIENERDOG_JOB` cleared, BLOCKS on empty stdout / JSON-parse failure / wrong
       `hookEventName` / non-string `additionalContext`, byte-compares
-      `additionalContext` to `state/digest.md`, greps the regenerated digest, and
-      checks the managed block of **every installed harness file** (both `CLAUDE.md`
-      and `AGENTS.md` when both harnesses are installed, only the single present
-      file on a single-harness install) via `sync`'s notice **plus** an explicit
-      check that (a) `grep -F`s the poisoned marker over the **ENTIRE** file (not
-      only the sentinel region — a both-sentinels-deleted attack leaves poisoned
-      text that `sync` appends around, still injected), and (b) confirms exactly
-      one sentinel pair (no orphaned out-of-sentinel remnant), treating a **missing**
-      pair as "`sync` appended a fresh block and the old content is orphaned outside
-      it — manually remove/quarantine it" (**not** `doctor`); it does **NOT**
-      byte-compare the sentinel region against the raw `state/digest.md` (`sync`'s
-      trim+neutralize transform means the region never equals the raw digest, so
-      that compare would falsely fail on a clean install — the three checks prove the
-      block clean by construction). The new-session
-      observation is an optional extra, not the proof; the proof is tied to the
-      ADR-0021 byte-gated injection.
+      `additionalContext` to `$CORE/state/digest.md`, greps the regenerated digest,
+      and checks the managed block of **every installed harness file** (both
+      `CLAUDE.md` and `AGENTS.md` when both harnesses are installed, only the single
+      present file on a single-harness install) via a **notice-tolerant** `sync`
+      check **plus** an explicit check that (a) `grep -F`s the poisoned marker over
+      the **ENTIRE** file (not only the sentinel region — a both-sentinels-deleted
+      attack leaves poisoned text that `sync` appends around, still injected), and
+      (b) confirms exactly one sentinel pair (no orphaned out-of-sentinel remnant),
+      treating a **missing** pair as "`sync` appended a fresh block and the old
+      content is orphaned outside it — manually remove/quarantine it" (**not**
+      `doctor`); it does **NOT** byte-compare the sentinel region against the raw
+      `$CORE/state/digest.md` (`sync`'s trim+neutralize transform means the region
+      never equals the raw digest, so that compare would falsely fail on a clean
+      install — the three checks prove the block clean by construction). The
+      new-session observation is an optional extra, not the proof; the proof is tied
+      to the ADR-0021 byte-gated injection.
+- [ ] **[R8-5]** The managed-block `sync` check is **notice-tolerant**: it blocks
+      the drill **only** on a concrete integrity failure — a non-zero `sync` exit, a
+      "managed block not updated" / out-of-sync message for an installed file, a
+      missing digest, a skipped installed adapter, or a shadowing `AGENTS.override` —
+      and **explicitly allows** the two constant Codex informational notices (the
+      `/hooks` hook-trust notice and the skills-aren't-slash-commands notice) that
+      `codex.js` emits on **every** successful sync. It does **not** require the
+      absence of ALL notices (which could never pass on a Codex install).
 - [ ] **[R4-D]** The re-authorize step re-adds **only builtin** jobs via
       `wienerdog schedule add … --job <builtin> …` reconstructed from the snapshot;
       it explicitly states a `skill:*` routine is **frozen by the A0 pre-use gate
@@ -629,6 +756,21 @@ fix-source → `memory approve` → `sync`). No jargon without a one-clause glos
       as the general drill (its existing steps are unchanged).
 - [ ] Every documented command/mechanism is one that already ships (no invented
       command); `memory approve` is shown with a short name, never a file path.
+- [ ] **[Endgame dry-run gate]** Before this WP can leave Draft, the runbook is
+      **DRY-RUN validated end-to-end** against **three** configurations, and the
+      implementer/verifier **pastes the evidence** of each into the PR: (1) a **clean
+      Claude-only** install, (2) a **clean Codex-only** install, and (3) a
+      **custom-`WIENERDOG_HOME`** install (with `HOME` also set — on Windows this is
+      the R8-4 case). For each, walk the runbook **step 0 → step 1 (stop + catch-up
+      removal + reboot + post-reboot re-resolve/re-export) → step 4 `sync` → step 6
+      drill → step 7 re-authorize** and confirm: (a) step 0 resolves the **correct**
+      core (matching `wienerdog doctor`), and the persisted CORE-PATH survives the
+      reboot and re-resolves identically; (b) no **false catch-up resurrection** —
+      after step 1 the step-4 `sync` does not re-arm catch-up; and (c) the
+      managed-block gate **passes** notice-tolerantly (the Codex-only run in
+      particular passes **despite** the two constant Codex info notices). This is a
+      literal validation the implementer/verifier performs; its pasted output is the
+      evidence.
 - [ ] `npm run lint` passes.
 
 ## Verification steps (run these; paste output in the PR)
@@ -637,10 +779,22 @@ fix-source → `memory approve` → `sync`). No jargon without a one-clause glos
 npm run lint
 test -f docs/runbooks/incident.md && echo "runbook present — OK"
 grep -n "incident.md" docs/runbooks/secret-incident.md && echo "cross-link present — OK"
-# R7-1: a step-0 preamble resolves the ONE authoritative core (WIENERDOG_HOME else
-# default) with both POSIX and Windows resolution, displays+confirms it, and every
-# later path uses <core> rather than a hardcoded ~/.wienerdog:
-grep -nE "WIENERDOG_HOME:-\\\$HOME/\.wienerdog|env:WIENERDOG_HOME|step 0|resolve.*core|<core>" docs/runbooks/incident.md
+# R7-1: a step-0 preamble resolves the ONE authoritative core, displays+confirms it,
+# and every later path uses <core> rather than a hardcoded ~/.wienerdog:
+grep -nE "env:WIENERDOG_HOME|step 0|resolve.*core|<core>|\\\$CORE" docs/runbooks/incident.md
+# R8-4: step 0 reads the core from `wienerdog doctor` (code-authoritative) and the
+# code-mirrored order tries HOME before USERPROFILE (never straight to USERPROFILE):
+grep -nE "doctor|core directory exists|HOME.*USERPROFILE|WIENERDOG_HOME.*HOME|env:HOME" docs/runbooks/incident.md
+# R8-2: step 0 persists the core path durably before the reboot, and step 1
+# re-resolves + re-confirms + re-exports WIENERDOG_HOME after the reboot:
+grep -nE "CORE-PATH|survive.*reboot|after the reboot|RE-RESOLVE|re-resolve|export WIENERDOG_HOME|env:WIENERDOG_HOME =" docs/runbooks/incident.md
+# R8-3: no bare relative operative state/<file> path anywhere in the runbook. Every
+# POSIX reference must be slash-prefixed ($CORE/state/… , <core>/state/…); Windows uses
+# `$core\state\…` (backslash separator — never matches `state/`); cautions use an
+# ellipsis (state/…). Stage 1 finds every `state/<file>`, stage 2 drops the prefixed
+# `/state/` ones — anything the pipe still PRINTS is a bare relative path to fix
+# (expect NO output):
+grep -nE "state/(digest|quarantine|schedule|run-evidence|alerts)" docs/runbooks/incident.md | grep -vE "/state/"
 # each required mechanism is referenced (config.yaml jobs: is the restore source):
 grep -nE "schedule (list|remove)|config\.yaml|jobs:|run-evidence\.jsonl|memory approve|wienerdog sync|managed block" docs/runbooks/incident.md
 # the restore snapshot is config.yaml jobs:, and schedule.json is only watermark evidence:
@@ -662,6 +816,10 @@ grep -niE "entire file|whole .*file|orphan|installed harness|single-harness" doc
 # marker grep + exactly one sentinel pair), NOT a fragile region-vs-raw-digest
 # byte-compare (buildBlock trims+neutralizes, so the region never equals the raw digest):
 grep -niE "by construction|never byte-identical|falsely fail|one sentinel pair|three-check" docs/runbooks/incident.md
+# R8-5: the managed-block sync check is NOTICE-TOLERANT — it blocks only on concrete
+# integrity failures and explicitly allows the two constant Codex info notices, so a
+# Codex-only install can pass (it does NOT require the absence of all notices):
+grep -niE "notice-tolerant|info notice|constant.*notice|integrity failure|not updated|skipped.*adapter|AGENTS.override|allowed" docs/runbooks/incident.md
 # memory approve uses a short name, not a path:
 grep -nE "memory approve (profile|preferences|goals|instructions|<note>)" docs/runbooks/incident.md
 # R4-D: re-authorize re-adds only builtin --job; skill:* is frozen (A0/A1) and not

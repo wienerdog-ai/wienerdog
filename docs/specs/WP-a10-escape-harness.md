@@ -77,6 +77,10 @@ posture the harness itself must honor.
   `builtin:dream` it `reapGroup`s the **per-token** brain pidfile group
   (`state/dream-brain.<token>.pid`, group B) even when the middle `dream.js` died —
   three reap operations, two group-A targets sharing `child.pid` plus one group-B.
+  As the **FINAL** backstop (no later run reads another run's pidfile), on a
+  `{ reaped: false }` it does one **bounded** final escalation and then **FAILS
+  LOUD** (`failLoud` alert + error watermark + non-zero outcome) rather than
+  silently certifying the job clean while a findable group is live (R8-1).
 - **`src/cli/dream.js`** writes the per-token brain pidfile at spawn and reaps via
   `reapTree` on the timeout path; in its `finally` (when a run token is present) it
   `reapGroup(child.pid)`s group B **before** deleting the pidfile (R6-2), and
@@ -96,7 +100,7 @@ posture the harness itself must honor.
 
 | Action | Path | Notes |
 |--------|------|-------|
-| create | tests/integration/reap-escape.test.js | The live POSIX escape-negative harness: escape matrix (a)–(e), non-vacuity baseline, the SIGKILL-the-middle-while-brain-lives test, the fake-`ps`-in-PATH negative, the timed snapshot/fork/setsid interleaving attack test, and the **brain-leader-non-zero-exit group-B-quiescence-before-pidfile-delete test (R6-2)**. Skips on win32. |
+| create | tests/integration/reap-escape.test.js | The live POSIX escape-negative harness: escape matrix (a)–(e), non-vacuity baseline, the SIGKILL-the-middle-while-brain-lives test, the fake-`ps`-in-PATH negative, the timed snapshot/fork/setsid interleaving attack test, the **brain-leader-non-zero-exit group-B-quiescence-before-pidfile-delete test (R6-2)**, and the **final-backstop early-return regression (R8-1)**: a seam-injected `reapGroup → { reaped: false }` on the abnormal-settle path drives `run-job` to do one **bounded** final escalation and then **FAIL LOUD** (alert + error watermark + non-zero outcome), never silently certifying clean nor looping unbounded. Skips on win32 (the seam-injected R8-1 case forces the POSIX branch and runs on the POSIX gate). |
 | create | tests/fixtures/reap/supervised-child.js | A tiny Node fixture: a supervised "middle" that spawns a requested escape variant (env/argv-selected) and prints the grandchild pid on stdout, then sleeps; used as the reap target. For the middle-death proof it can spawn **both** a group-A descendant and a re-detached brain and write the per-token brain pidfile. For the **brain-leader-exit proof (R6-2)** it spawns a re-detached "brain" (group B) that itself spawns a **same-group-B child** (plain, stays in the brain's pgid) and then **exits non-zero**, and writes the per-token brain pidfile — so a surviving group-B member outlives its leader. |
 | create | tests/fixtures/reap/spawn-variant.js | Spawns one grandchild per variant — plain / re-detached (`detached:true`) / `setsid` / double-fork-no-setsid / setsid+double-fork — each a long `sleep`; prints its pid. A re-detached "brain" variant also supports a **same-group-B-child-then-exit-non-zero** mode (for the R6-2 proof): the brain leader spawns a plain same-pgid child, prints its pid, then exits with a non-zero code, leaving a leaderless surviving group-B member. Pure Node (use `child_process` + `process.setsid` via a `setsid`-style re-exec; no external `setsid` binary required, but if used it must be the absolute `/usr/bin/setsid` where present, else the Node `detached`+new-session technique). |
 | create | tests/fixtures/reap/fake-ps | An executable fake `ps` (marker-writing / bogus-output) for the PATH-injection negative test — proves the reap never runs it. |
@@ -125,7 +129,7 @@ a single `kill(-childPgid)` legacy group-kill instead of `reapTree`), assert at
 least one of (b)–(d) **survives** — proving the harness detects a real escape and
 is not vacuously green.
 
-### The three additional live proofs
+### The additional live proofs
 
 1. **SIGKILL-the-middle-while-a-group-A-descendant AND the brain live (findings 6,
    10, and R3-E/R4-B — mandatory).** Stand up the real chain: a `run-job`-style
@@ -210,6 +214,28 @@ is not vacuously green.
    before the `reapGroup`, or omitted the `reapGroup` entirely, the surviving
    group-B child would still be live and this test must fail.)
 
+5. **Final-backstop early-return regression — `run-job` never certifies clean on
+   `{ reaped: false }` (R8-1 — mandatory, required green, POSIX gate).** This proves
+   the FINAL backstop does not silently complete when a group will not reap. Drive
+   the **REAL** `run-job` abnormal-settle reap path (its actual settle code, or a
+   thin harness invoking the exact same reap-on-settle function — not a
+   reimplementation) with an injected reap seam whose `reapGroup` returns
+   `{ reaped: false }` on its **first** call (a group that resists the first reap).
+   Assert: run-job does **NOT** silently complete the job clean — instead it (a) does
+   **one bounded FINAL escalation** (a further, bounded `reapGroup` re-poll/re-kill of
+   the still-non-empty group — observed by the seam being called again, and by the
+   call count staying **bounded**, never an unbounded block-until-`ESRCH` loop), and
+   (b) when the escalation's `reapGroup` **still** returns `{ reaped: false }`,
+   run-job **FAILS LOUD** — a durable `state/alerts.jsonl` alert is written, the
+   `last_status:'error'` / `last_error_at` watermark is set, and the job outcome is
+   non-zero / error. Also assert the mirror case: a seam whose escalation call
+   **resolves** to `{ reaped: true }` (the group finally reaps) settles **clean** —
+   no fail-loud, pidfile deleted. This is a seam-injected control-flow regression (it
+   forces the `{ reaped: false }` the OS rarely produces), so pass the POSIX
+   `platform` and the reap seam via the mechanism WP's injection points; it **runs on
+   the POSIX gate** (a skip is not a pass). (If run-job silently completed, or relied
+   on a never-read retained pidfile, or looped unbounded, this test must fail.)
+
 ## Security checklist
 
 - [ ] The harness proves, with **real** processes, that a re-detached child
@@ -248,6 +274,15 @@ is not vacuously green.
       asserted by observing the reap/unlink order. This case **runs on the POSIX
       gate** (a skip is not a pass); omitting the `reapGroup` or deleting the
       pidfile first must fail it.
+- [ ] **[R8-1 — final backstop fails loud, never certifies clean]** With an injected
+      `reapGroup → { reaped: false }` that persists across the escalation on the
+      **real** `run-job` abnormal-settle reap path, run-job does **one bounded FINAL
+      escalation** (the seam is re-called, the call count stays bounded — no unbounded
+      block-until-`ESRCH`) and then **FAILS LOUD** (durable `state/alerts.jsonl`
+      alert + `last_status:'error'` watermark + non-zero outcome), never silently
+      completing nor relying on a never-read retained pidfile; the mirror case
+      (escalation resolves to `{ reaped: true }`) settles clean with no fail-loud.
+      This case **runs on the POSIX gate** (a skip is not a pass).
 - [ ] **[No bare ps, finding 7]** With a `fake-ps` earlier on `PATH`, the reap
       does not run it (marker absent) and still kills a real re-detached child.
 - [ ] **[TOCTOU group-retaining, finding 8a]** A **group-retaining** grandchild
@@ -273,6 +308,9 @@ grep -nE "reapTree|reapGroup|leaderless|child\.pid" tests/integration/reap-escap
 # R6-2: the brain-leader-non-zero-exit proof asserts group-B quiescence (reapGroup)
 # BEFORE the pidfile is deleted, and runs on the POSIX gate (not a skip):
 grep -nE "brain.leader|non-zero|before .*pidfile|group-B|ESRCH" tests/integration/reap-escape.test.js
+# R8-1: the final-backstop regression asserts a { reaped: false } drives a bounded
+# escalation then fail-loud, never a silent clean completion or unbounded loop:
+grep -nE "reaped: false|fail.?loud|failLoud|bounded|escalat|not.*certif|alerts" tests/integration/reap-escape.test.js
 ```
 
 ## Implementation notes & constraints

@@ -126,6 +126,23 @@ setsid+double-fork detach.
   A12. The escape harness **records** this case; it does not force it with a
   deterministic snapshot/fork/setsid test barrier — disproportionate for a nightly
   note-taking job.
+- **Unkillable (kernel D-state) descendant: found, surfaced loudly, not silently
+  leaked.** A descendant that is a findable ppid/group member but is wedged in an
+  **uninterruptible kernel sleep** (D-state, e.g. blocked in a hung syscall) cannot
+  be reaped by SIGKILL until the kernel returns — repeated `kill` has no effect and
+  the bounded quiescence loop / bounded `reapGroup` poll will exhaust its cap with
+  the member still present. This is beyond user-level supervision — the **same
+  family** as the adversarial full-detach and kill-induced-late-reparent boundaries:
+  a process the reaper cannot terminate. The mechanism must **NOT** block forever
+  waiting for it (an unbounded block-until-`ESRCH` would itself be a
+  persistent-process ADR-0004 violation) and must **NOT** silently certify the job
+  clean. Instead the FINAL backstop (`run-job`'s abnormal settle) does one **bounded
+  final escalation** and, if the group is still non-empty, **FAILS LOUD** — a durable
+  `state/alerts.jsonl` alert plus a `last_status:'error'` watermark plus a non-zero
+  job outcome — so an un-reapable survivor is always **surfaced**, never leaked as a
+  hollow retained pidfile. Final closure of an arbitrary unkillable same-user process
+  belongs with the other kernel-level residuals to **audit A12**; it is mitigated
+  meanwhile by A1 (the contained brain has no shell to wedge one deliberately).
 - **PID/PGID reuse.** The handed-up brain group is reaped with an explicit
   **negative-PGID** signal (`kill(-pgid)` via `reapGroup`), which reaches surviving
   members even after the group leader has exited — a positive-pid table lookup
