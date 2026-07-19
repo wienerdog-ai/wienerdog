@@ -321,11 +321,24 @@ needed, because `sync` does the registering. **Corrected heal algorithm:**
    SAME `generators.js` renderers `registerPlatform` uses; write it atomically
    (temp+rename) to the canonical path after confirming that path is a **regular,
    non-symlink** in-root file; **byte-verify** the written artifact.
-3. Register **that exact regenerated artifact** — the file-path arg to
-   `bootstrap`/`/xml` is the path we just wrote and verified, never one
-   discovered on disk.
+3. Register from the just-written canonical path, **minimizing the window** (no
+   work between byte-verify and register).
 Reuse `schedule.js`'s regenerate-then-register path; `status.js` must not have a
-"load whatever file is there" branch. **Tests:** (i) poisoned
+"load whatever file is there" branch.
+
+**[R3:#1] Honest residual — the verify→register reopen race is A12, not closed
+here.** After byte-verifying the regenerated file, `launchctl`/`schtasks`/
+`systemd` **reopen the pathname** to register it; a concurrent writer can swap the
+file (or a parent dir) between verify and register. So "the scheduler receives
+that exact regenerated artifact" is **not** guaranteed and must **not** be
+claimed. This is the **same class as the launcher hash-then-reopen /
+verify-to-use race** already deferred to A12 (WP-157 A7): it requires an **active
+concurrent writer at heal time** = native/same-user code, **not** a static scoped
+write — and a *static* planted file IS defeated (regenerate-from-config +
+configured-jobs-only, which is F34's real value). Do **not** redesign this into a
+platform inode-binding mechanism (out of scope). Add this race to ADR-0028's
+residual list (next to the 2b / verify-to-use residual) and to WP-159's
+THREAT-MODEL residuals. **Tests:** (i) poisoned
 `unload:['/bin/sh','-c','touch <canary>']` on a real in-root dream plist ⇒ heal
 regenerates+registers the canonical dream plist, canary never appears; (ii) a
 recognized in-root `ai.wienerdog.evil.plist` that is NOT a configured job ⇒ NOT

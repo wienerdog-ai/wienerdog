@@ -4,7 +4,7 @@ title: Generate a canonical, digest-bound job descriptor at schedule/sync time
 status: In-Review
 model: opus
 size: M
-depends_on: [WP-144, WP-145, WP-154]
+depends_on: [WP-144, WP-145, WP-154, WP-155]
 adrs: [ADR-0004, ADR-0013, ADR-0027, ADR-0028]
 branch: wp/156-canonical-job-descriptor
 ---
@@ -476,3 +476,21 @@ fail-closed. `registerPlatform` already prints a per-job stderr notice; surface 
 non-zero failure **count** in the `sync` summary so `sync` does not report
 success while descriptors failed to write. Record in Implementation notes; no new
 file.
+
+### A6 — the schedule (`job.at`) must be digest-covered [Codex HIGH, R3]
+
+The round-3 review found `deriveDescriptorDigest` authorizes a job's **content**
+but not its **due-time**: the descriptor omits `job.at` (confirmed —
+`buildDescriptor`'s `job` param is `{name, run, timeoutMinutes}`, no `at`). An
+attacker rewrites an authorized job's schedule in `config.yaml` without changing
+its digest — advance `at` to re-run the model job every catch-up, or move it to
+suppress the job — with no drift. **Corrected contract:** thread `job.at` (from
+`jobs.js`, which already parses `at`) into `buildDescriptor` and add a canonical
+**`schedule`** field — the **effective schedule string + its timezone
+semantics** (`{at:'HH:MM', tz:<the timezone the scheduler interprets it in>}`),
+canonicalized so it folds into `descriptorDigest`. Treat `at` exactly like
+`model`/`timeout`/`vaultLayout`: an `at` edit now requires `wienerdog sync`. This
+field flows into the normal per-job digest **and** the catch-up per-job map
+(WP-160). **Test:** an `at`-only rewrite changes `deriveDescriptorDigest` and, at
+fire/catch-up time, is **REFUSED** (not run, not silently suppressed) — drop the
+`schedule` field ⇒ the `at` rewrite no longer drifts ⇒ fails.

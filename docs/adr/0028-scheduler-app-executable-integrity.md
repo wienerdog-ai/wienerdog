@@ -425,12 +425,23 @@ implemented as dated amendments in the six specs and detailed in `FIX-PLAN.md`.
    changes the model's authorized write locations via the dream prompt +
    `WIENERDOG_DREAM_LAYOUT` env) was omitted; it is added as a first-class field
    `vaultLayout`. **Round-2 refinement:** an audit found more uncovered mutable
-   inputs — `dream_max_input_bytes` (corpus size) and the effective **outer**
-   watchdog timeout are added to the digest too; and the test time/timeout ENV
-   seams `WIENERDOG_FAKE_TODAY` and `WIENERDOG_RUNJOB_TIMEOUT_MS` (a test seam in
-   the production dispatch path — same class as Decision 2) are **deleted** from
+   inputs — `dream_max_input_bytes` (corpus size), the effective **outer**
+   watchdog timeout, and **[R3] the job's schedule (`at` + timezone semantics)**
+   (previously omitted, so a schedule rewrite re-timed or suppressed a job with no
+   drift) — are added to the digest too; and the test time/timeout ENV seams
+   `WIENERDOG_FAKE_TODAY` and `WIENERDOG_RUNJOB_TIMEOUT_MS` (a test seam in the
+   production dispatch path — same class as Decision 2) are **deleted** from
    production (folded into WP-155), after which the date derives from the system
-   clock (not attacker-settable via env). The app-tree digest encoding is made
+   clock (not attacker-settable via env). **[R3] The scheduled execution
+   *environment* is likewise a defined allowlist:** the ambient credential/config
+   vars `CLAUDE_CONFIG_DIR`/`CODEX_HOME`/`ANTHROPIC_API_KEY` are no longer
+   inherited (an `environment.d`/`launchctl` write is in-scope) — the config roots
+   are reconstructed deterministically to the canonical wienerdog-owned paths
+   (bind the SOURCE in the descriptor if a custom root is honored, never the secret
+   value) and the scheduled dream does not depend on an inherited API key
+   (subscription auth, ADR-0009). To keep dependency ordering sound, **WP-156
+   `depends_on: WP-155`** so the launcher (WP-157) cannot enforce before the seam
+   deletions land. The app-tree digest encoding is made
    injective (canonical-JSON of sorted `[relpath, hash]` pairs; the prior
    `relpath\nhash\n` concat was collidable via newline filenames) — and, because
    the launcher keeps its **own** copy of the digest, **both** `descriptor.js` and
@@ -453,16 +464,18 @@ implemented as dated amendments in the six specs and detailed in `FIX-PLAN.md`.
    `cmd` with a proven token encoder) — inline `cmd /c` with only XML escaping was
    unsafe (`%VAR%` expansion / AutoRun in hostile paths).
 
-6. **Fail-closed on the catch-up path (Decision 3/4 refinement).** Catch-up
-   verified only the app-tree digest and then ran jobs from mutable `config.yaml`,
-   so a config change a normal fire refused was executed by the next catch-up.
-   Catch-up now verifies each due job's descriptor digest against an **authorized
-   per-job digest map bound into the catch-up OS registration itself** (the
-   loaded/registered args, or a live-registration query) — **never re-read from the
-   editable per-job entry file**, which is a user-writable source artifact an
-   in-scope attacker can forge without reloading the scheduler. Given its size this
-   is **split into WP-160 (catch-up per-job authorization)**. Every verification
-   exception becomes a durable alert + zero spawn (never a bare throw with no
+6. **Catch-up per-job authorization — PENDING until WP-160 (Decision 3/4
+   refinement).** Catch-up verified only the app-tree digest and then ran jobs
+   from mutable `config.yaml`, so a config change a normal fire refused was
+   executed by the next catch-up. The fix binds an **authorized per-job digest map
+   into the catch-up OS registration itself** (the loaded/registered args, or a
+   live-registration query) — **never re-read from the editable per-job entry
+   file**, which is a user-writable source artifact an in-scope attacker can forge
+   without reloading the scheduler. **[R3] This is delivered by the materialized
+   `WP-160` (Draft); WP-157 ships the normal per-job fire enforcement but leaves
+   catch-up authorization PENDING, so catch-up is NOT yet fail-closed until WP-160
+   lands** (WP-158/WP-159 `depends_on: WP-160`). Every verification exception (on
+   both paths) becomes a durable alert + zero spawn (never a bare throw with no
    alert).
 
 7. **Dev is a separate, runnable descriptor (Decision 3/4 refinement).** "Skip the
@@ -484,6 +497,13 @@ implemented as dated amendments in the six specs and detailed in `FIX-PLAN.md`.
   bootstrap**. The in-scope A7 model (static scoped write, caught at fire) does not
   include an active concurrent writer racing at fire time — that is A12. Stated
   plainly in docs; not claimed as TOCTOU-free.
+- **[R3] Heal verify→register race (WP-145).** The sync-time heal regenerates a
+  canonical scheduler file, byte-verifies it, then `launchctl`/`schtasks`/`systemd`
+  **reopen the pathname** to register it — a concurrent writer can swap the file
+  between verify and register. Same class as the verify-to-use race above: a
+  *static* planted file is defeated (regenerate-from-config, configured-jobs-only),
+  but an active concurrent writer at heal time is A12. The heal does not claim the
+  scheduler receives the exact verified bytes; the window is minimized.
 - The `makeTreeFilesReadOnly` control is **files-only** (best-effort friction,
   defeated by a same-user `chmod`); the app-tree digest is the real guard.
 

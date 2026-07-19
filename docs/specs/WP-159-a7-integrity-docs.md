@@ -4,7 +4,7 @@ title: A7 documentation — honest scheduler/app/executable integrity claims, th
 status: In-Review
 model: sonnet
 size: M
-depends_on: [WP-154, WP-155, WP-156, WP-157]
+depends_on: [WP-154, WP-155, WP-156, WP-157, WP-160]
 adrs: [ADR-0004, ADR-0013, ADR-0028]
 branch: wp/159-a7-integrity-docs
 ---
@@ -307,3 +307,23 @@ describe the **fixed** code. Full context: `FIX-PLAN.md` cluster **C5**.
 - **[R2:F10] Dev.** State that a dev-stance install is verified by a
   **config-fields-only** digest (tracked-source edits do not refuse) + a
   bound-checkout-root containment, and supports git worktrees (`.git` as a file).
+
+### Round-3 follow-through (2026-07-19)
+
+- **[R3:#3] Schedule coverage.** Add the job's **schedule (`at` + timezone)** to
+  the stated digest-covered set; a schedule rewrite now requires `wienerdog sync`
+  (an `at` edit is refused, not silently re-timed/suppressed).
+- **[R3:#4] Scheduled-environment allowlist.** State that the scheduled dream runs
+  in a **defined environment**: config roots (`CLAUDE_CONFIG_DIR`/`CODEX_HOME`)
+  are reconstructed to the canonical wienerdog-owned paths, not inherited; the
+  scheduled run does not depend on an inherited `ANTHROPIC_API_KEY` (subscription
+  auth, ADR-0009). An `environment.d`/`launchctl` write cannot change the model
+  account, credential root, or config root.
+- **[R3:#1] Heal verify→register race** — add to THREAT-MODEL residuals alongside
+  the launcher verify-to-use race: the sync-time heal regenerates + verifies a
+  canonical scheduler file, but registration reopens the path; an active
+  concurrent writer at heal time (A12) could swap it. A *static* planted file is
+  defeated. Do not claim the scheduler receives the exact verified bytes.
+- **[R3:#2] Catch-up.** Because WP-159 now `depends_on: WP-160`, the docs may
+  state catch-up is fail-closed per job only if WP-160 has landed; otherwise name
+  it as a pending gap (see the round-2 A1 note).

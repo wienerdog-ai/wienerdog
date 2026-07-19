@@ -162,7 +162,7 @@ filename does not change), so unload still works after this WP.
 | create | tests/unit/launcher.test.js | `verifyAndResolve` pass + every mismatch (out-of-root current, app byte mutation, repoint, wrong descriptor digest, prod/dev mismatch) ⇒ refuse + zero spawn. |
 | modify | tests/unit/vendor.test.js | Assert the launcher is placed outside `app/`, the version dir is read-only, interrupted publish keeps old `current`, `verifyCurrentContainment` rejects an out-of-root symlink. |
 | modify | tests/unit/scheduler-generators.test.js | Assert entries invoke the launcher with the descriptor path + expect-digest; catch-up entries use `--catch-up`. |
-| modify | src/cli/run-job.js | Fix-pass (2026-07-19): catch-up must verify each due job's descriptor digest against the per-job digest map bound into the **catch-up OS registration** (loaded state), never the editable entry file (A5, [R2:F12]). **Recommend splitting to a new WP-160** — record the decision. |
+| modify | src/cli/run-job.js | Fix-pass (2026-07-19, [R3:#4]): scheduled-env allowlist — drop `CLAUDE_CONFIG_DIR`/`CODEX_HOME`/`ANTHROPIC_API_KEY` from `ENV_PASSTHROUGH`; reconstruct the config roots deterministically in `buildCleanEnv`; ensure Windows `APPDATA`/`LOCALAPPDATA` cannot override the bound config root (A10). (Catch-up per-job verification moved to **WP-160**.) |
 | modify | tests/unit/scheduler-schedule.test.js | Fix-pass: entry-argv + digest-binding change (boundary reconciliation, A9). |
 | modify | tests/unit/sync-repoint.test.js | Fix-pass: entry-argv reconciliation on repoint (boundary, A9). |
 
@@ -461,17 +461,15 @@ refuse, but catch-up reads the forged FILE and runs. **Corrected:** at
 **registration** (registration privilege) bind a **canonical per-job digest map**
 into the **catch-up OS entry's own arguments** (the args launchd/systemd fire from
 and schtasks stores in the task DB — loaded state, not re-read from the editable
-file). The launcher receives the map from the OS-loaded argv and passes it to
-`run-job --catch-up`, which per due job compares `deriveDescriptorDigest` to the
-**argv map** (never a file read); mismatch/absent ⇒ refuse + alert + zero spawn.
-Acceptable alternative: query the **live registration** (`launchctl print` /
-`systemctl show` / `schtasks /query /xml` — all loaded/DB state), never the source
-file. **Size → SPLIT:** this is now large enough to **split into a new WP-160
-(catch-up per-job authorization)** depending on WP-157; land WP-157 with the
-other fixes and have WP-159 name catch-up as a pending gap until WP-160 lands.
-Tests: rewrite `config.yaml` `run` AND the per-job source file without reload ⇒
-catch-up still refuses (proves the file forge fails); add macOS + Windows catch-up
-negatives.
+file). **[R3:#2] SPLIT — materialized as `docs/specs/WP-160-catchup-per-job-
+authorization.md`** (Draft, `depends_on:[WP-156, WP-157]`), with the full
+contract (per-job digest map bound into the catch-up registration argv,
+`run-job --catch-up` comparison, macOS/Windows negatives). **WP-157 lands as an
+explicitly-incomplete intermediate for the catch-up path**: it ships the normal
+per-job fire enforcement but NOT catch-up authorization. Machine-visible: WP-158
+and WP-159 now `depends_on: WP-160`, so the harness/docs cannot ship claiming
+catch-up is covered before WP-160 lands. ADR-0028 states catch-up authorization
+is **PENDING until WP-160**. (See WP-160 for the anchor rule + tests.)
 
 ### A6 — `ensureCatchup` signature [Codex MED]
 
@@ -513,3 +511,41 @@ Spec wording now matches the impl; no code change.
   surface — the alert appears in the **next digest banner**; remedy is
   `wienerdog sync`. Do **not** wire `doctor` here (see WP-159 amendment; a
   follow-up WP-162 may add a doctor A7 reader).
+
+### A10 — the scheduled execution environment is a defined allowlist [Codex HIGH, R3:#4]
+
+Ambient credential/config env is an uncovered spawn-shaper. `ENV_PASSTHROUGH`
+(run-job.js:33) copies `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, and `ANTHROPIC_API_KEY`
+into the clean job env, and (win32) `APPDATA`/`LOCALAPPDATA` are passed through.
+An `environment.d` / `launchctl setenv` write (an in-scope A7 write) changes the
+**model account, credential root, or config root** with **no digest drift** —
+this is the authentication trust boundary, and the "everything shaping the spawn
+is authorized" invariant is still false. F8's child scrub removes only Node vars.
+**Corrected contract — define the COMPLETE allowed scheduled environment (do not
+inherit ambient credential/config overrides):**
+- **Config roots reconstructed deterministically.** Remove `CLAUDE_CONFIG_DIR`
+  and `CODEX_HOME` from `ENV_PASSTHROUGH`; `buildCleanEnv` sets them explicitly to
+  the **canonical wienerdog-owned paths** (code-derived, like it already does for
+  `HOME`/`USERPROFILE`). Because they are code-derived constants (not read from
+  attacker env), they need no digest field. **If a custom config root must be
+  honored, bind its SOURCE/path in the descriptor at sync** (never the secret
+  value) so a later ambient override drifts the digest.
+- **No inherited API key on the scheduled path.** Remove `ANTHROPIC_API_KEY` from
+  `ENV_PASSTHROUGH`; the scheduled dream is subscription-authed (ADR-0009) and
+  must not depend on an inherited API key. (If a key path is ever genuinely
+  required, bind its approved source in the descriptor — not the value.)
+- **Windows.** Keep `APPDATA`/`LOCALAPPDATA` (needed for PATH/tooling) but ensure
+  they **cannot override the bound config root** (the config root is set
+  explicitly, so `APPDATA` never determines it).
+- **Clear at the OS-entry boundary too** (same layer as the A1 NODE_OPTIONS
+  scrub) and in the launcher child-env scrub, so an inherited
+  `CLAUDE_CONFIG_DIR`/`CODEX_HOME`/`ANTHROPIC_API_KEY` never even reaches the
+  launcher's node.
+Add `src/cli/run-job.js` to Deliverables (done). **Tests:** an `environment.d` /
+`launchctl` change to `CLAUDE_CONFIG_DIR`/`CODEX_HOME`/`ANTHROPIC_API_KEY` (+
+Windows `APPDATA`) does **not** alter the authorized execution context (the child
+sees the canonical wienerdog config roots; no ambient key). **Size note:** if
+this exceeds WP-157's budget, split to a materialized `WP-163-scheduled-env-
+allowlist` (depending on WP-157; WP-158/WP-159 then also depend on it) — do not
+ship it as prose-only (the WP-160 lesson). The deterministic-reconstruction
+approach is compact and expected to fit WP-157.

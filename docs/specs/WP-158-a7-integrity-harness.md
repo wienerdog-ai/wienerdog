@@ -4,7 +4,7 @@ title: A7 integrity containment proof — end-to-end negative harness for the sc
 status: In-Review
 model: opus
 size: M
-depends_on: [WP-154, WP-155, WP-156, WP-157]
+depends_on: [WP-154, WP-155, WP-156, WP-157, WP-160]
 adrs: [ADR-0004, ADR-0009, ADR-0013, ADR-0028]
 branch: wp/158-a7-integrity-harness
 ---
@@ -331,4 +331,14 @@ shared case list (A6) must add:
 - **[R2:F12]** a **catch-up file-forge** negative (belongs with **WP-160** once
   it lands): editing `config.yaml` + the per-job entry **source file** (without
   reload) still refuses at catch-up — the loaded-registration map is the anchor.
-  Until WP-160 lands, mark this case pending and note it in the README.
+  Until WP-160 lands, mark this case pending and note it in the README. (WP-158
+  now `depends_on: WP-160`, so the harness ships with this case executable.)
+- **[R3:#3]** an **`at`-only schedule rewrite** case: rewriting a job's `at` in
+  `config.yaml` (no other change) ⇒ digest drift ⇒ refuse at both the normal fire
+  and catch-up (not run, not silently suppressed). Fails if `schedule` is dropped
+  from the digest.
+- **[R3:#4]** **scheduled-environment** negatives: an `environment.d`/`launchctl`
+  change to `CLAUDE_CONFIG_DIR`/`CODEX_HOME`/`ANTHROPIC_API_KEY` (+ Windows
+  `APPDATA`) does NOT alter the authorized execution context — the recorded child
+  sees the canonical wienerdog config roots and no ambient key. Fails if
+  `ENV_PASSTHROUGH` still carries them.
