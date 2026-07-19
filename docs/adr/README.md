@@ -35,3 +35,5 @@ Durable decisions live here so they are made once, not re-litigated per session 
 | [0027](0027-scheduler-unload-rederived-not-stored.md) | Re-derive scheduler unload — never execute manifest-stored argv | Accepted |
 | [0028](0028-scheduler-app-executable-integrity.md) | Scheduler, app, and executable integrity — pins, descriptors, out-of-tree launcher | Accepted |
 | [0029](0029-spec-identity-and-derived-views.md) | Slug spec identity; frontmatter authority; views generated, never hand-written | Accepted |
+| [0030](0030-bounded-user-level-process-supervision.md) | Bounded user-level process supervision — reap the findable descendant tree to quiescence; adversarial full-detach is A12 | Accepted |
+| [0031](0031-contract-reference-tables-single-source.md) | Contract-dense specs extract each contract into one authoritative reference table; prose cites, never restates | Proposed |
