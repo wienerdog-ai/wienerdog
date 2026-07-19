@@ -287,7 +287,12 @@ describe the **fixed** code. Full context: `FIX-PLAN.md` cluster **C5**.
   guarantees (`verifyExecutable` win32 returns early — no owner/mode/ancestor).
 - **A6 — verify-to-use race [Codex MED, = WP-157 A7].** Add the hash-then-reopen
   / verify-to-use TOCTOU to the THREAT-MODEL residuals, alongside the
-  launcher-file-write (2b) residual — an honest, deferred A12 item.
+  launcher-file-write (2b) residual — an honest, deferred A12 item. **[R9]** The
+  THREAT-MODEL residual list now names **three** same-class A12 races, stated
+  identically: (1) launcher verify-to-use (WP-157), (2) heal verify→register
+  (WP-145), (3) uninstall ancestor-replacement (WP-144) — each is an *active
+  concurrent writer at fire/heal/uninstall time* (native/same-user code); the
+  corresponding *static* attack is closed. None is claimed as fixed.
 - **A7 — GLOSSARY.** Add `vault layout` to the digest-covered field list in the
   `job descriptor` definition (WP-156 A2).
 

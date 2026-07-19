@@ -291,9 +291,31 @@ canonical, symlink-free path — an intermediate swap can no longer affect it). 
 read-then-write kinds (`managed-block`, `settings-entry`), open `resolved` once
 with `O_NOFOLLOW` on the final component and read+modify+write through the **same
 fd** (ELOOP ⇒ preserve+skip). `symlink` keeps `lstat`+`unlink` (must not resolve
-through the link). Test: an intermediate directory symlink swapped to an
-out-of-root target after the check ⇒ the external file is **preserved** (fails if
-ops use lexical `entry.path`).
+through the link).
+
+**[R9:#1] Scope + A12 residual — realpath strings don't bind later ops to the
+validated inode.** `fs.realpathSync` returns a **string**; the subsequent
+path-based `fs` ops **re-walk** that pathname. Against a **static** in-place
+symlink swap (the original F30), realpath resolves it and the op stays in-bounds —
+that case IS closed (and the final-component swap is closed by `O_NOFOLLOW`). But
+an attacker who **renames an ancestor and replaces it with a symlink to an
+external tree between realpath and the op** makes `rmSync`/`openSync` follow it —
+and Node has **no dirfd-relative (`openat`/`unlinkat`) fs API**, while a native
+addon would violate ADR-0004, so binding traversal to the inode is **not
+achievable in-scope**. An active ancestor-rename during the op = an **active
+concurrent writer at uninstall time = A12** (native/same-user code), the **same
+class** as the launcher verify-to-use and heal verify→register races already
+accepted. **Disposition:** (a) this WP's acceptance + test are narrowed to the
+**static symlink-replacement** case (realpath resolves it; assert the external
+target is **preserved**); (b) the **concurrent ancestor-replacement** race is
+added to the A12 residual list in ADR-0028 + WP-159, stated identically to the
+other two races; (c) `O_NOFOLLOW` stays on the final component. Do **not** attempt
+dirfd/openat (out of scope, ADR-0004).
+
+Test (narrowed): a **static** intermediate symlink swapped to an out-of-root
+target **before** reverse runs ⇒ the external file is **preserved** (fails if ops
+use lexical `entry.path`). The active-concurrent-rename case is an accepted A12
+residual, not a test target here.
 
 ### A2 — deferred-config `sha256File` inside per-entry isolation [both, MED]
 

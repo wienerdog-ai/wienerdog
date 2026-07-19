@@ -496,20 +496,18 @@ implemented as dated amendments in the six specs and detailed in `FIX-PLAN.md`.
    runtime backstop (`run-job.js` `ensureCatchup`) is removed — a nightly success
    must not re-bind the loaded map from a since-mutated config (else a statically
    added job B gets authorized after unrelated job A succeeds, with no
-   scheduler-registration capability). Legitimate schedule changes (incl. removing
-   the final job → clean teardown) refresh the map only under attended `sync`.
-   **[R6/R7] Catch-up ownership:** the map is **minted** by ANY attended,
-   user-invoked registration caller — `sync`/`repointSchedules`, `schedule add`,
-   `init`'s `ensureDreamSchedule`, and `adopt`'s `ensureDreamSchedule` (adopt does
-   not call `sync`) — always from **freshly-validated descriptors** derived in that
-   run, never a retained source file or stale map. Attended `repointSchedules` is
-   additionally the **sole repair/teardown owner** for a missing/stale *loaded*
-   catch-up registration (regenerating the canonical entry with the correct bound
-   map); the generic `reloadMissing` heal and `doctor` are **excluded from the
-   catch-up entry entirely**. This gives the missing-registration case a coherent
-   home without violating the attended-only-mint or the regenerate-don't-trust-
-   source rules — so a missing catch-up registration is restored by one attended
-   `sync` rather than staying unavailable and masking missed execution.
+   scheduler-registration capability). **[R6/R7/R9:#3] Canonical ownership
+   invariant (stated verbatim in ADR-0028, WP-160, and FIX-PLAN C8):** *All four
+   attended, user-invoked callers — `sync`/`repointSchedules`, `schedule add`,
+   `init`, `adopt` — may MINT/register the catch-up map from freshly-validated
+   descriptors; `repointSchedules` ALONE owns repair + teardown; `schedule remove`
+   delegates teardown to `repointSchedules`.* `reloadMissing` and `doctor` never
+   mint or touch the catch-up entry (adopt does not call `sync`, so it is a
+   first-class mint caller, never a retained source file or stale map). This gives
+   the missing-registration case a coherent home without violating the
+   attended-only-mint or the regenerate-don't-trust-source rules — so a missing
+   catch-up registration is restored by one attended `sync` rather than staying
+   unavailable and masking missed execution.
 
 7. **Dev is a separate, runnable descriptor (Decision 3/4 refinement).** "Skip the
    tree digest but still compare the full descriptor digest" is self-contradictory
@@ -537,6 +535,15 @@ implemented as dated amendments in the six specs and detailed in `FIX-PLAN.md`.
   *static* planted file is defeated (regenerate-from-config, configured-jobs-only),
   but an active concurrent writer at heal time is A12. The heal does not claim the
   scheduler receives the exact verified bytes; the window is minimized.
+- **[R9] Uninstall ancestor-replacement race (WP-144).** The uninstall reverser
+  `fs.realpathSync`es a target and re-validates containment, but the subsequent
+  path-based `fs` ops re-walk the pathname; an attacker who **renames an ancestor
+  and replaces it with a symlink to an external tree between realpath and the op**
+  redirects `rmSync`/`openSync` (Node has no `openat`/`unlinkat`; a native addon
+  would violate ADR-0004). Same class as the two races above: the **static**
+  in-place symlink swap is closed by realpath (+ `O_NOFOLLOW` on the final
+  component), but an **active concurrent ancestor-rename at uninstall time** is
+  A12. Not claimed as closed.
 - The `makeTreeFilesReadOnly` control is **files-only** (best-effort friction,
   defeated by a same-user `chmod`); the app-tree digest is the real guard.
 

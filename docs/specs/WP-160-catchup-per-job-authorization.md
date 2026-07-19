@@ -89,10 +89,10 @@ for the scoped-write class only.
 | modify | src/cli/schedule.js | Compute the per-job digest map (`{jobName: deriveDescriptorDigest(paths, job)}` over all configured jobs), base64url-encode the canonical JSON, pass it to the catch-up renderer (a mint caller — `schedule add`). **[R6]** `repointSchedules` also QUERIES the loaded catch-up registration and REPAIRS it (regenerate canonical entry + correct bound map) when missing/stale — the sole home for the missing-registration heal. **[R8]** teardown is stated ONE way: `repointSchedules` is the **sole teardown owner**; `schedule remove` must **invoke `repointSchedules`** for catch-up teardown, not tear it down directly. |
 | modify | src/scheduler/launcher.js | `parseArgv` recognizes `--job-digests` (value-taking, opaque base64url token); `verifyCatchup` forwards it; `main` passes it through to the catch-up runner argv. The launcher NEVER reads a per-job entry file to obtain a digest. |
 | modify | src/cli/run-job.js | The catch-up runner decodes `--job-digests` (bounded base64url→JSON→shape-validate; malformed/oversized ⇒ durable alert + zero spawn), authorizes the **union** of bound ∪ configured job names BEFORE due-filtering ([R4:#1]), and runs only jobs whose live `deriveDescriptorDigest` matches the bound map; additions/removals/mismatches ⇒ alert, zero spawn. **[R5] REMOVE the post-success runtime `gen.ensureCatchup` call (L653)** — a runtime path must not mint authorization from config; at most emit a read-only "catch-up entry missing" notice, never regenerate. |
-| modify | src/cli/sync.js | **[R6]** the attended sync flow (its `repointSchedules` call) is the SINGLE owner of catch-up register/repair/teardown — orchestrate the query+repair here; the map (re)bind + repair logic itself lives in `repointSchedules` (`schedule.js`, already listed). |
+| modify | src/cli/sync.js | **[R6/R9:#3]** the attended sync flow (its `repointSchedules` call) is the sole owner of catch-up **repair + teardown** (mint is done by all four attended callers — see the canonical invariant) — orchestrate the query+repair here; the map (re)bind + repair logic itself lives in `repointSchedules` (`schedule.js`, already listed). |
 | modify | src/scheduler/status.js | **[R6]** `reloadMissing` is **excluded from the catch-up entry entirely** — it neither creates, authorizes, nor reloads it (catch-up repair/teardown is repointSchedules' sole responsibility). |
 | modify | src/cli/init.js | **[R7]** `init`'s `ensureDreamSchedule` mints the catch-up map from freshly-validated descriptors (first-install; init does not necessarily run `sync`). No config-trusted/stale map. |
-| modify | src/cli/adopt.js | **[R7]** `adopt`'s `ensureDreamSchedule` mints the catch-up map from freshly-validated descriptors — adopt does NOT call `sync`, so it is a first-class attended mint caller. **[R8:#3]** adopt runs no `createPins` today, so a legacy/pre-WP-154 install (config.yaml but no `exec-pins.json`) has no pins, and WP-154/156 require claude+git pins before binding a dream descriptor → adopt must **create + validate pins via the same clean-PATH `createPins` procedure sync uses, BEFORE `ensureDreamSchedule`/any descriptor+map registration**, or **abort before committing adoption state** (fail-closed, never half-adopt). **Placement:** the pin-bootstrap step is **WP-154's** concern (it owns `createPins`); the descriptor/map binding is WP-160's. `src/cli/adopt.js` is listed in both WPs' Deliverables (pin bootstrap under WP-154, mint under WP-160). |
+| modify | src/cli/adopt.js | **[R7]** `adopt`'s `ensureDreamSchedule` mints the catch-up map from freshly-validated descriptors — adopt does NOT call `sync`, so it is a first-class attended mint caller. **[R8:#3]** adopt runs no `createPins` today, so a legacy/pre-WP-154 install (config.yaml but no `exec-pins.json`) has no pins, and WP-154/156 require claude+git pins before binding a dream descriptor → adopt needs a **transactional pin preflight at the START of `adopt.run`** (dry resolve+verify claude+git → abort before any mutation on failure → atomic commit) — see **WP-154 A5 [R9:#2]**, which owns that step. The descriptor/map **mint** here (WP-160) runs only after WP-154's preflight has committed a complete pin store. `src/cli/adopt.js` is in both WPs' Deliverables (preflight under WP-154, mint under WP-160; serialized). |
 | create | tests/unit/catchup-authorization.test.js | The negatives below. |
 | modify | tests/unit/scheduler-generators.test.js | Assert the catch-up entry carries `--job-digests` with a canonical map. |
 
@@ -172,17 +172,17 @@ Enumerated catch-up registration/reload paths + the required stance:
 | `sync.js:197` / `status.js:185` `reloadMissing` (generic sync-time heal) | attended (runs under `sync`) | **never touches the catch-up entry** | **[R6]** The generic heal re-registers missing CANONICAL per-job entries (WP-145) but is **excluded** from the catch-up entry entirely. Catch-up **repair/teardown** belongs to `repointSchedules`; **mint** belongs to any attended registration caller above. |
 | `doctor` | attended, read-only | **never mints/touches** | Read-only presence report only. |
 
-**[R7] The authorized-mint set is ALL attended, user-invoked registration
-callers** — `sync`/`repointSchedules`, `schedule add`, `init`'s
-`ensureDreamSchedule`, and `adopt`'s `ensureDreamSchedule` — each minting the map
-from **freshly-validated descriptors** derived in that attended run.
-`repointSchedules` remains the sole **repair/teardown** owner for a missing/stale
-*loaded* entry; `reloadMissing` and `doctor` never mint or touch it.
+**CANONICAL OWNERSHIP INVARIANT [R7/R9:#3] (stated verbatim in WP-160, ADR-0028
+item 6, and FIX-PLAN C8):** *All four attended, user-invoked callers —
+`sync`/`repointSchedules`, `schedule add`, `init`, `adopt` — may MINT/register the
+catch-up map from freshly-validated descriptors; `repointSchedules` ALONE owns
+repair + teardown; `schedule remove` delegates teardown to `repointSchedules`.*
+`reloadMissing` and `doctor` never mint or touch the catch-up entry.
 
-**Legitimate schedule change** refreshes the map **only** via an attended,
-user-invoked registration caller — including the edge case of **removing the final
-job**: the map/entry must be **cleanly torn down** (catch-up entry + map removed,
-not left stale with a removed job).
+**Legitimate schedule change** refreshes the map via **any** of the four attended
+mint callers above (not `sync` alone) — including the edge case of **removing the
+final job**, whose teardown is owned by `repointSchedules`: the map/entry must be
+**cleanly torn down** (catch-up entry + map removed, not left stale).
 
 **[R4:#1] Authorize the FULL job set BEFORE computing due-ness.** The naive
 "filter due jobs from mutable `job.at`, then digest-compare each due job" lets an

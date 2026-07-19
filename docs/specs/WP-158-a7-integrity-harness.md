@@ -350,9 +350,12 @@ shared case list (A6) must add:
   **WP-160**): removing an authorized job, or rewriting its `at` to a future time,
   each produces a durable **alert** with zero spawn — NOT silent suppression
   (proves authorization precedes due-filtering).
-- **[R4:#3]** **catch-up transport** cases (WP-160): the base64url `--job-digests`
-  round-trips on macOS/Linux/Windows; a malformed/oversized value ⇒ durable alert
-  + zero spawn (no parse crash).
+- **[R4:#3 / R8:#2]** **catch-up transport** cases (WP-160), **macOS + Windows
+  only**: the base64url `--job-digests` round-trips; a malformed/oversized value ⇒
+  durable alert + zero spawn (no parse crash). **On Linux there is NO map** —
+  assert instead that the per-job `.timer Persistent=true` invokes the NORMAL
+  per-job `.service` carrying its own `--expect-digest`, and that **no separate
+  all-job catch-up registration exists** on Linux.
 - **[R5]** **runtime-mint** negative (WP-160): statically add/modify job B in
   `config.yaml`, then let unchanged authorized job A succeed on its normal fire ⇒
   A's success does NOT reload the catch-up entry and does NOT authorize B; the

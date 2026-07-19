@@ -166,6 +166,8 @@ Nothing today resolves, verifies, or pins these executables.
 | modify | tests/unit/dream-brain.test.js | Assert the brain spawns the pinned absolute path and fails safe on drift; the fake seam still works. |
 | modify | tests/unit/dream-validate.test.js | Assert git uses the pinned absolute path and fails safe on drift. |
 | modify | tests/unit/containment-probe.test.js | Add a case: with a valid pin for a fake `claude` and **no** `opts.probeCmd`, the probe spawns the **pinned absolute path**; a second fake `claude` planted earlier on `PATH` never gets probe-spawned (drift ⇒ the resolve throws ⇒ `'inconclusive'`, never a spawn of the fake). Inject `platform` per the no-mock rule. |
+| modify | src/cli/adopt.js | **[R8:#3/R9:#2]** transactional pin preflight at the START of `adopt.run` — dry `createPins({dryRun:true})` resolves+verifies claude **and** git without writing; if either fails, ABORT before adopt's first mutation (no Git snapshot/config/scaffold; prior `exec-pins.json` byte-identical); only if both resolve, atomically commit the complete pin store, then proceed to adoption. See A5. |
+| modify | tests/integration/adopt-e2e.test.js | **[R9:#2]** failure test: pre-WP-154 install with claude unresolvable ⇒ `adopt` aborts with vault/config/manifest/prior-pin-store all byte-identical. |
 
 ### Exact contracts
 
@@ -501,22 +503,39 @@ path, resolve pins against a clean job PATH derived like pinning does
 `buildCleanEnv` ordering (ADR-0009). If more than a few lines, downgrade to a
 documented residual and record it in the PR.
 
-### A5 — adopt must bootstrap pins before it registers [Codex HIGH, R8:#3]
+### A5 — adopt needs a TRANSACTIONAL pin preflight [Codex HIGH, R8:#3 → R9:#2]
 
 `src/cli/adopt.js` (`adopt.js:370`) calls `ensureDreamSchedule` but runs **no**
 `createPins` and does not call `sync`, so a legacy/pre-WP-154 install (config.yaml
 but no `exec-pins.json`) reaches descriptor binding with **no pins** — violating
-A1b's "dream binding requires claude+git pins," and either failing after adoption
-state is already mutated or binding a pinless descriptor. **Corrected contract:**
-`adopt` must **create + validate pins via the same clean-PATH `createPins`
-procedure `sync` uses, BEFORE `ensureDreamSchedule`/any descriptor+map
-registration**, or **abort before committing adoption state** (fail-closed, never
-half-adopt). Add `src/cli/adopt.js` to this WP's Deliverables for the pin
-bootstrap (the descriptor/map binding on the same file is WP-160's concern — the
-file is shared, serialized: WP-154 pin bootstrap lands first, WP-160 mint after).
-**Acceptance:** a valid pre-WP-154 install with no `exec-pins.json` ⇒ `adopt`
-creates pins then binds a valid descriptor, or aborts cleanly without
-half-mutating adoption state.
+A1b's "dream binding requires claude+git pins."
+
+**[R9:#2] The naive "createPins then register" is non-transactional:** `createPins`
+**writes** `exec-pins.json` (and can write a valid **partial** store) before
+returning, and adopt mutates the Git repo/config/scaffold **before**
+`ensureDreamSchedule` — so a create-then-validate ordering can overwrite a good
+store, leave a partial one, or half-adopt. **Corrected contract — a transactional
+preflight at the very START of `adopt.run`, before adopt's first mutation:**
+1. **Dry preflight (no writes):** `createPins(paths, {dryRun:true, …})` resolves +
+   `verifyExecutable`s each name and returns what it *would* pin without touching
+   disk; require BOTH `claude` AND `git` to resolve+verify (codex optional).
+2. **Abort-before-mutate:** if either fails, ABORT **before** adopt's first
+   mutation — no Git snapshot, no config, no scaffold — leaving vault/config/
+   manifest and any prior `exec-pins.json` **byte-identical** (fail-closed, never
+   half-adopt).
+3. **Atomic commit:** only if both resolve, **atomically** write the complete pin
+   store (temp+rename; never a partial), THEN proceed with adoption +
+   `ensureDreamSchedule`.
+Place this at the top of `adopt.run`, before the Git/snapshot mutation — NOT near
+`ensureDreamSchedule`. **Deliverables:** `src/cli/adopt.js` (added to the table
+above) for the pin preflight/commit (this WP owns `createPins`); the descriptor/
+map binding on the same file is WP-160's (serialized: WP-154 preflight first,
+WP-160 mint after). This requires `createPins` to support a **`dryRun`** that
+resolves+verifies per name without writing — extend its `opts` (already typed
+`{dryRun?:boolean}` in the exec-identity contract). **Test:** pre-WP-154 install,
+claude unresolvable ⇒ adopt aborts with vault/config/manifest/prior-pin-store all
+byte-identical; both resolvable ⇒ complete store committed atomically, then a
+valid descriptor binds.
 
 ### Deliverables / acceptance additions
 - **[R8:#3]** Add `src/cli/adopt.js` (pin bootstrap before register) — see A5.
