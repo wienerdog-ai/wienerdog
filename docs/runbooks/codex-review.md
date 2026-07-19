@@ -47,6 +47,14 @@ mechanisms) → repeat until clean → owner sign-off → specs move to Ready.
   (PR diffs) — never by the orchestrator inline, and never by Codex itself.
 - A finding the owner rejects is recorded in the spec/PR as an accepted
   residual with a one-line reason.
+- **Loop circuit-breaker (ADR-0031).** If two consecutive review rounds land a
+  finding on the *same* contract family, stop fixing finding-by-finding and do a
+  contract-**extraction** pass instead: pull that contract into one canonical
+  reference table and register its mirrored surfaces per ADR-0031's Mirrored
+  Surface Checklist, then resume the loop. The Mirrored Surface Checklist is the
+  stronger day-to-day mechanism (it keeps mirrors in lockstep up front); this
+  breaker is the backstop for when scattered contract prose slipped through
+  unregistered.
 
 ## Requirements
 
