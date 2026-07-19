@@ -101,9 +101,15 @@ setsid+double-fork detach.
   descendant to quiescence, whichever watchdog fires and even when none does
   (the outer supervisor learns the brain's pid/pgid before the middle can die,
   so it can reap a reparented orphan). On an abnormal middle exit the supervisor
-  reaps **two distinct targets**: the middle's **group-A** descendant tree
-  (`reapTree`) and the detached **group-B** brain group (`reapGroup`). This is
-  proven by the live escape harness, not by argv assertions.
+  reaps **two distinct groups** via the **checked** `reapGroup`: the middle's
+  **group-A** group (`reapGroup(child.pid)` — the negative-PGID kill that reaches a
+  leaderless reparented group-A member once the middle/group leader has exited) and
+  the detached **group-B** brain group (`reapGroup(brain.pgid)`).
+  `reapTree(child.pid)`'s ppid-closure tree kill is the **timeout-path** primitive
+  (the sole path where the middle is still alive, so its closure is non-empty). The
+  authoritative per-path statement is `WP-a10-reap-mechanism`'s **settle-path reap
+  matrix**; this ADR cites it rather than restate a divergent subset. This is proven
+  by the live escape harness, not by argv assertions.
 - **Per-run isolation (cross-run safety).** The handed-up brain identity lives in
   a **per-run** pidfile keyed by a token the outer supervisor mints before spawn
   (`state/dream-brain.<token>.pid`), and each supervisor reaps **only** its own
