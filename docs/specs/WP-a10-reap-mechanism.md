@@ -107,24 +107,37 @@ brain pidfile, not a single shared one:
   would find nothing and **leak** the surviving members. So the mechanism gets a
   **second, distinct** primitive `reapGroup(pgid)` for the authenticated-PGID
   contract, separate from `reapTree(pid)`'s PID-tree contract.
-- **Abnormal close reaps the FULL group-A tree — via BOTH primitives (round-2 +
-  round-3 findings).** On an abnormal middle exit (timeout, `'error'`, or a
-  non-clean `'close'`), `run-job` must reap the middle's **whole group-A
-  descendant tree** (a group-A descendant the middle spawned can outlive it) **in
-  addition to** `reapGroup(brain.pgid)` for the detached group-B brain. Group A
-  must be reaped with **both** `reapTree(child.pid)` **and**
-  `reapGroup(child.pid)`, because they cover different states: on the **timeout**
-  path the middle is still alive, so `reapTree`'s ppid-closure sees the group-A
-  descendants and kills them; but by the time `run-job` receives a `'close'`/
-  `'error'`, the group-A leader (the middle, whose pid == group-A pgid because it
-  was spawned `detached`) has **already exited** and vanished from the process
-  table — so `reapTree(child.pid)` computes an **empty** ppid-descendant set and
-  sends **no** kill, and a fully NON-adversarial sleeping group-A child that
-  reparented to `init` (still carrying `child.pid` as its PGID) would survive.
-  The explicit `reapGroup(child.pid)` closes that: its **negative-PGID**
-  `kill(-child.pid)` reaches a leaderless reparented group-A member even with the
-  leader gone. So the abnormal path issues three reaps: `reapTree(child.pid)` +
-  `reapGroup(child.pid)` for group A, and `reapGroup(brain.pgid)` for group B.
+- **Group A is reaped by TWO primitives that cover different paths — see the
+  settle-path reap matrix (round-2 + round-3 + R10-2/R11-1 findings).** On every
+  settle path `run-job` must reap the middle's **group-A** descendants (a group-A
+  descendant the middle spawned can outlive it) **in addition to**
+  `reapGroup(brain.pgid)` for the detached group-B brain. Two group-A primitives
+  cover different states, and **which one runs on which path is stated once, in the
+  authoritative settle-path reap matrix below — this bullet explains WHY, it does
+  NOT restate a per-path set.** The **checked** `reapGroup(child.pid)` — an explicit
+  **negative-PGID** `kill(-child.pid)` — runs on **every** settle path: once the
+  group-A leader (the middle, whose pid == group-A pgid because it was spawned
+  `detached`) has exited, a fully NON-adversarial sleeping group-A child that
+  reparented to `init` (still carrying `child.pid` as its PGID) is a **leaderless**
+  member, and the negative-PGID kill reaches it even with the leader gone.
+  `reapTree(child.pid)` — a ppid-closure tree kill — is the **timeout-path**
+  primitive only: while the middle is alive it enumerates and kills the group-A
+  descendants (including a re-detached one), and it is a harmless **no-op** once the
+  middle has exited (its ppid-closure is then empty and it sends no kill). **The
+  timeout path does NOT guarantee the middle is still alive:** `run-job`'s
+  completion promise resolves on the child's **`'close'`** event, and a descendant
+  holding the inherited stdout/stderr pipe open can delay `'close'` past the
+  middle's actual exit — so the watchdog timer can fire while the middle has
+  **already** exited (verified against `run-job.js:589–603`, which races the timer
+  against `'close'`, not `'exit'`). `reapTree` on the timeout row is therefore a
+  **best-effort extra**, not a liveness-dependent guarantee; the group reaps
+  (`reapGroup(child.pid)` group-A + `reapGroup(brain.pgid)` group-B) are what
+  actually cover the non-adversarial case **regardless** of whether the middle is
+  still alive. A group-A descendant that has re-detached into a **DIFFERENT** pgid
+  (`setsid`) once the middle exited is in no descendant group and is no longer a
+  ppid-descendant — that is the already-accepted **ADR-0030 adversarial-escape
+  residual** (setsid+double-fork; the hermetic brain has no shell to produce one),
+  **not** a new blocker.
 
 **Platform scope: the leaderless-member guarantee is POSIX-only this release —
 owner-approved, R5-2 (this is ordinary platform scope, NOT an ADR-0030
@@ -232,11 +245,11 @@ only on timeout.
 | Action | Path | Notes |
 |--------|------|-------|
 | create | src/core/reap.js | `reapTree(pid, platform, seams)` — authoritative process-table read (Linux `/proc`, macOS verified absolute `/bin/ps`, **never** bare `ps`), real ppid-descendant + group SIGKILL, **kill–rescan to two consecutive zero sweeps** (bounded), best-effort/never-throws; win32 **absolute System32** `taskkill /T /F` with **no bare-name fallback**. `reapGroup(pgid, platform, seams)` — the authenticated-PGID primitive: POSIX **negative-PGID** `kill(-pgid, SIGKILL)` (works even if the group leader already exited) **then a bounded poll (`kill(-pgid, 0)` until ESRCH, `maxPolls` default 5) to VERIFIED quiescence**, returning a **CHECKED result `{ reaped: boolean }`** — `reaped:true` only when the group is verified empty, `reaped:false` on timeout with members still present (R7-2); win32 absolute `taskkill /PID <pgid> /T /F` returning `{ reaped: true }` best-effort — **win32 reaches only a live pid + its live tree, NO negative-PGID equivalent, so NO leaderless-member guarantee (R5-2; deferred to WP-a10-windows-reap)**; best-effort/never-throws. Also exports `readProcessTable` for direct unit coverage. Pure, seam-injectable. |
-| modify | src/cli/run-job.js | (a) `killProcessTree` delegates to `reapTree` (keep the export + signature). (b) For `builtin:dream`, **mint a per-run token BEFORE spawn** and pass it to the child (env var), and compute the per-run pidfile path `state/dream-brain.<token>.pid`. (c) Reap on **every** child-exit path per the **settle-path reap matrix** (Exact contracts). On **every** settle path (timeout, `'error'`, abnormal `'close'`, clean `'close'`) reap **group A** with the **checked** `reapGroup(child.pid)` (the negative-PGID `kill(-child.pid)` that reaches a leaderless reparented group-A member once the middle/group-leader has exited). **Additionally, on the timeout path ONLY** (the sole path where the middle is still alive) reap group A with `reapTree(child.pid)` — its ppid-closure enumerates the group-A descendants incl. a re-detached one. Do **NOT** run `reapTree(child.pid)` on the `'error'` / `'close'` rows: the leader has exited so its ppid-closure is empty (a pointless no-op). So the **checked** `reapGroup(child.pid)` group-A reap runs on **every** settle path, while `reapTree(child.pid)` runs on the **timeout path only** (R9-1/R10-2). A `{ reaped: false }` from the clean-close group-A reap takes the **same bounded FINAL escalation + fail-loud** rule as the abnormal path (R8-1) — never a silent clean completion. On **any** settle for `builtin:dream` read the per-token pidfile and, if present, `reapGroup(brain.pgid)`. **`run-job` is the FINAL backstop — no later run ever reads another run's token pidfile, so a retained pidfile is never re-read (R8-1).** Therefore a `{ reaped: false }` from a settle-path `reapGroup(child.pid)` (group A — abnormal **or** clean `'close'`, R9-1) or `reapGroup(brain.pgid)` (group B) must **NOT** silently complete the job: run-job performs a **bounded FINAL escalation** — one further bounded `reapGroup` re-poll/re-kill of **both** the still-non-empty group-A pgid (`child.pid`) **and** the brain group (`brain.pgid`) — and if a group is **STILL** non-empty (`{ reaped: false }` again) it **FAILS LOUD** via the existing `failLoud` path (a durable `state/alerts.jsonl` alert + a `last_status:'error'` / `last_error_at` watermark) and surfaces a **non-zero / error job outcome**, rather than certifying the job clean while a group may still be live (a live group surviving the job is the ADR-0004 "nothing survives the job" violation). **Do NOT specify an unbounded block-until-`ESRCH`: the escalation is bounded** (an unkillable D-state process cannot be reaped by SIGKILL until the kernel returns — blocking forever would itself violate the ADR-0004 no-persistent-process spirit; that unkillable case is the ADR-0030 residual — surfaced by this same loud alert, never silently leaked). Delete the per-token brain pidfile once its group is **verified empty** (`{ reaped: true }`); do not silently retain a hollow pidfile as a "diagnostic residual" — a group that will not reap ends in the loud alert, not in a never-read leftover file (R7-2/R8-1). **POSIX guarantee only: on win32 the group-reap authority does NOT activate — the win32 abnormal-close path keeps the pre-A10 timeout-path `taskkill /T /F` behavior, leaderless-member case deferred to WP-a10-windows-reap (R5-2); win32 `reapGroup` returns `{ reaped: true }` best-effort, so this fail-loud escalation is POSIX-only.** Reap work is otherwise best-effort and never throws into the watchdog (the watchdog must still raise its timeout `WienerdogError`); the **one** deliberate outcome change is the R8-1 final-backstop fail-loud when a findable group cannot be reaped to quiescence. |
-| modify | src/cli/dream.js | `runBrainWithWatchdog` uses `reapTree(child.pid, platform, seams)` on timeout; when a run token is present (set by `run-job`), **write** the per-run brain pidfile (`state/dream-brain.<token>.pid`, `0600`, `{pid, pgid}`, **atomically** via `writeFilePrivate`) right after `spawnBrain`. **If that `writeFilePrivate` hand-up write THROWS (fallible I/O — disk-full / permission / temp→final rename) while the just-spawned brain is alive, immediately `reapGroup(child.pid)` the brain group to verified quiescence and FAIL the run (throw `WienerdogError` → run-job fail-loud + error outcome); never proceed into the brain race as if supervised (R10-1) — distinct from the sub-ms spawn→write residual.** In `finally`, when a run token is present, **PROVE group-B quiescence BEFORE releasing the hand-up**: first `reapGroup(child.pid, platform, seams)` (the negative-PGID group kill reaps any surviving group-B member even after the brain leader has exited — brain pgid == `child.pid`), **then remove the pidfile ONLY if `reapGroup` returned `{ reaped: true }`** (the group is verified empty). On `{ reaped: false }` (the bounded poll timed out with a member still present) **RETAIN** the pidfile so `run-job`'s abnormal-settle backstop can retry `reapGroup(brain.pgid)` (R7-2) — never delete a pidfile whose group is not yet verified quiescent. Deleting the pidfile before that verified reap is the R6-2/R7-2 bug: on a non-timeout brain-leader **non-zero exit** with a surviving same-PGID group-B child, dream.js's `finally` would drop the pidfile before `run-job`'s abnormal-settle runs, and `run-job` only `reapGroup(brain.pgid)`s when the pidfile is present — so the survivor would leak. Standalone (no token) writes no hand-up pidfile. Thread `paths` + an injected `platform` (never mock `process.platform`) + optional reap seam + an injected `writeFilePrivate` seam (test-only, to exercise the R10-1 hand-up write-failure guard). |
+| modify | src/cli/run-job.js | (a) `killProcessTree` delegates to `reapTree` (keep the export + signature). (b) For `builtin:dream`, **mint a per-run token BEFORE spawn** and pass it to the child (env var), and compute the per-run pidfile path `state/dream-brain.<token>.pid`. (c) Reap on **every** child-exit path per the **settle-path reap matrix** (Exact contracts). On **every** settle path (timeout, `'error'`, abnormal `'close'`, clean `'close'`) reap **group A** with the **checked** `reapGroup(child.pid)` (the negative-PGID `kill(-child.pid)` that reaches a leaderless reparented group-A member once the middle/group-leader has exited). **Additionally, on the timeout path ONLY** (where the middle *may* still be alive — `reapTree` is a **best-effort extra**, a no-op once the middle has exited; the timer races the child's `'close'` event, not `'exit'`, so it can fire post-exit) reap group A with `reapTree(child.pid)` — while the middle is alive its ppid-closure enumerates the group-A descendants incl. a re-detached one. Do **NOT** run `reapTree(child.pid)` on the `'error'` / `'close'` rows: the leader has exited so its ppid-closure is empty (a pointless no-op). So the **checked** `reapGroup(child.pid)` group-A reap runs on **every** settle path, while `reapTree(child.pid)` runs on the **timeout path only** (R9-1/R10-2). A `{ reaped: false }` from the clean-close group-A reap takes the **same bounded FINAL escalation + fail-loud** rule as the abnormal path (R8-1) — never a silent clean completion. On **any** settle for `builtin:dream` read the per-token pidfile and, if present, `reapGroup(brain.pgid)`. **`run-job` is the FINAL backstop — no later run ever reads another run's token pidfile, so a retained pidfile is never re-read (R8-1).** Therefore a `{ reaped: false }` from a settle-path `reapGroup(child.pid)` (group A — abnormal **or** clean `'close'`, R9-1) or `reapGroup(brain.pgid)` (group B) must **NOT** silently complete the job: run-job performs a **bounded FINAL escalation** — one further bounded `reapGroup` re-poll/re-kill of **both** the still-non-empty group-A pgid (`child.pid`) **and** the brain group (`brain.pgid`) — and if a group is **STILL** non-empty (`{ reaped: false }` again) it **FAILS LOUD** via the existing `failLoud` path (a durable `state/alerts.jsonl` alert + a `last_status:'error'` / `last_error_at` watermark) and surfaces a **non-zero / error job outcome**, rather than certifying the job clean while a group may still be live (a live group surviving the job is the ADR-0004 "nothing survives the job" violation). **Do NOT specify an unbounded block-until-`ESRCH`: the escalation is bounded** (an unkillable D-state process cannot be reaped by SIGKILL until the kernel returns — blocking forever would itself violate the ADR-0004 no-persistent-process spirit; that unkillable case is the ADR-0030 residual — surfaced by this same loud alert, never silently leaked). Delete the per-token brain pidfile once its group is **verified empty** (`{ reaped: true }`); do not silently retain a hollow pidfile as a "diagnostic residual" — a group that will not reap ends in the loud alert, not in a never-read leftover file (R7-2/R8-1). **POSIX guarantee only: on win32 the group-reap authority does NOT activate — the win32 abnormal-close path keeps the pre-A10 timeout-path `taskkill /T /F` behavior, leaderless-member case deferred to WP-a10-windows-reap (R5-2); win32 `reapGroup` returns `{ reaped: true }` best-effort, so this fail-loud escalation is POSIX-only.** Reap work is otherwise best-effort and never throws into the watchdog (the watchdog must still raise its timeout `WienerdogError`); the **one** deliberate outcome change is the R8-1 final-backstop fail-loud when a findable group cannot be reaped to quiescence. |
+| modify | src/cli/dream.js | `runBrainWithWatchdog` uses `reapTree(child.pid, platform, seams)` on timeout; when a run token is present (set by `run-job`), **write** the per-run brain pidfile (`state/dream-brain.<token>.pid`, `0600`, `{pid, pgid}`, **atomically** via `writeFilePrivate`) right after `spawnBrain`. **If that `writeFilePrivate` hand-up write THROWS (fallible I/O — disk-full / permission / temp→final rename) while the just-spawned brain is alive, immediately `reapGroup(child.pid)` the brain group and FAIL the run (throw `WienerdogError` → run-job fail-loud + error outcome); on `{ reaped: false }` do one bounded FINAL escalation (unified with R8-1, still holding `child.pid` — `run-job` has no pidfile to retry) and, if still non-empty, throw a survivor-specific `WienerdogError` naming the un-reaped brain group so it is surfaced LOUDLY; never proceed into the brain race as if supervised, never a silent exit (R10-1/R11-3) — distinct from the sub-ms spawn→write residual.** In `finally`, when a run token is present, **PROVE group-B quiescence BEFORE releasing the hand-up**: first `reapGroup(child.pid, platform, seams)` (the negative-PGID group kill reaps any surviving group-B member even after the brain leader has exited — brain pgid == `child.pid`), **then remove the pidfile ONLY if `reapGroup` returned `{ reaped: true }`** (the group is verified empty). On `{ reaped: false }` (the bounded poll timed out with a member still present) **RETAIN** the pidfile so `run-job`'s abnormal-settle backstop can retry `reapGroup(brain.pgid)` (R7-2) — never delete a pidfile whose group is not yet verified quiescent. Deleting the pidfile before that verified reap is the R6-2/R7-2 bug: on a non-timeout brain-leader **non-zero exit** with a surviving same-PGID group-B child, dream.js's `finally` would drop the pidfile before `run-job`'s abnormal-settle runs, and `run-job` only `reapGroup(brain.pgid)`s when the pidfile is present — so the survivor would leak. Standalone (no token) writes no hand-up pidfile. Thread `paths` + an injected `platform` (never mock `process.platform`) + optional reap seam + an injected `writeFilePrivate` seam (test-only, to exercise the R10-1 hand-up write-failure guard). |
 | create | tests/unit/reap.test.js | `reapTree`/`reapGroup`/`readProcessTable` unit cases (fake `/proc` root + fake `/bin/ps`; classification of plain/re-detached/setsid/double-fork; kill–rescan quiescence; never-throws on a bad table; darwin reader uses absolute `/bin/ps`, never bare `ps`; **churn regression (R7-3): a mid-scan vanishing unrelated pid — a numeric `/proc` dir whose per-entry `stat` read throws `ENOENT` — is SKIPPED, the snapshot still returns the surviving rows (NOT null), and the descendant reap still proceeds; only an unreadable `<procRoot>` root or a zero-usable-row parse yields null**; `reapGroup` does a **negative-PGID** kill, **polls to verified quiescence** and returns the **checked `{ reaped }`** — `{ reaped: true }` when it reaps an **exited-leader-with-live-member** group to empty, `{ reaped: false }` when a bounded (`maxPolls`) poll times out with a member still present (R7-2); win32 uses the **absolute System32** `taskkill` and **never** a bare-name / PATH-planted `taskkill`). |
-| modify | tests/unit/scheduler-runjob.test.js | `killProcessTree` reaps via `reapTree` (kills a re-detached grandchild, not only group A); on abnormal close the **group-A tree** is reaped via **BOTH** `reapTree(child.pid)` **and** `reapGroup(child.pid)` (assert both seams are invoked — the `reapGroup(child.pid)` negative-PGID kill is what covers a leaderless reparented group-A member once the middle has exited); on a **clean** `'close'` (exit 0) group A is still reaped via `reapGroup(child.pid)` **only** — assert `reapGroup(child.pid)` is invoked and `reapTree(child.pid)` is **NOT** on the clean-close path (R9-1), and that an injected `{ reaped: false }` on the clean-close group-A reap drives the same bounded final escalation + `failLoud` + error outcome (an initial `{ reaped: true }` settles clean); for `builtin:dream` the **per-token** brain pidfile group is reaped via `reapGroup(brain.pgid)` and the pidfile deleted when `reapGroup` returned `{ reaped: true }`; **R8-1 final-backstop**: assert that an injected `{ reaped: false }` that **persists across** the bounded final escalation drives `run-job` to `failLoud` + a `last_status:'error'` watermark + a non-zero/error outcome (run-job as the FINAL backstop does NOT silently complete nor rely on a never-read retained pidfile), while a `{ reaped: false }` the escalation **resolves** to `{ reaped: true }` (or an initial `{ reaped: true }`) settles clean and deletes the pidfile; a second, lock-losing concurrent run reaps **only its own** token pidfile and never the other run's live brain; win32 branch shells the absolute System32 `taskkill /T /F` (and its `{ reaped: true }` best-effort return does not trigger the POSIX fail-loud path). |
-| modify | tests/integration/dream.test.js | `runBrainWithWatchdog` writes the **per-token** brain pidfile at spawn and removes it on normal completion; the timeout path reaps a re-detached fake brain (no orphan) via the injected reap seam; **on a brain-leader non-zero exit the `finally` invokes `reapGroup(child.pid)` BEFORE deleting the pidfile, and deletes it only on `{ reaped: true }`** (assert the reap seam is called and ordered before the pidfile unlink — R6-2 — and that an injected `{ reaped: false }` result RETAINS the pidfile — R7-2); a middle killed at the spawn→hand-up boundary is covered (the sub-ms residual documented, not asserted reaped); **R10-1: a seam-injected `writeFilePrivate` that THROWS on the hand-up write drives `dream.js` to `reapGroup(child.pid)` the just-spawned brain group and FAIL the run — assert the reap seam is invoked on `child.pid` and a `WienerdogError` is thrown (never proceeding unsupervised with no pidfile handed up)**. |
+| modify | tests/unit/scheduler-runjob.test.js | `killProcessTree` reaps via `reapTree` (kills a re-detached grandchild, not only group A); per the **settle-path reap matrix**, on the **timeout** path group A is reaped via **both** `reapTree(child.pid)` and `reapGroup(child.pid)` (assert both seams are invoked on the timeout path); on **abnormal close** (`'error'` / non-clean `'close'`) group A is reaped via `reapGroup(child.pid)` **only** — assert `reapGroup(child.pid)` is invoked and `reapTree(child.pid)` is **NOT** on the abnormal-close path (its ppid-closure is empty once the leader has exited — a no-op; the `reapGroup(child.pid)` negative-PGID kill is what covers a leaderless reparented group-A member); on a **clean** `'close'` (exit 0) group A is still reaped via `reapGroup(child.pid)` **only** — assert `reapGroup(child.pid)` is invoked and `reapTree(child.pid)` is **NOT** on the clean-close path (R9-1), and that an injected `{ reaped: false }` on the clean-close group-A reap drives the same bounded final escalation + `failLoud` + error outcome (an initial `{ reaped: true }` settles clean); for `builtin:dream` the **per-token** brain pidfile group is reaped via `reapGroup(brain.pgid)` and the pidfile deleted when `reapGroup` returned `{ reaped: true }`; **R8-1 final-backstop**: assert that an injected `{ reaped: false }` that **persists across** the bounded final escalation drives `run-job` to `failLoud` + a `last_status:'error'` watermark + a non-zero/error outcome (run-job as the FINAL backstop does NOT silently complete nor rely on a never-read retained pidfile), while a `{ reaped: false }` the escalation **resolves** to `{ reaped: true }` (or an initial `{ reaped: true }`) settles clean and deletes the pidfile; a second, lock-losing concurrent run reaps **only its own** token pidfile and never the other run's live brain; win32 branch shells the absolute System32 `taskkill /T /F` (and its `{ reaped: true }` best-effort return does not trigger the POSIX fail-loud path). |
+| modify | tests/integration/dream.test.js | `runBrainWithWatchdog` writes the **per-token** brain pidfile at spawn and removes it on normal completion; the timeout path reaps a re-detached fake brain (no orphan) via the injected reap seam; **on a brain-leader non-zero exit the `finally` invokes `reapGroup(child.pid)` BEFORE deleting the pidfile, and deletes it only on `{ reaped: true }`** (assert the reap seam is called and ordered before the pidfile unlink — R6-2 — and that an injected `{ reaped: false }` result RETAINS the pidfile — R7-2); a middle killed at the spawn→hand-up boundary is covered (the sub-ms residual documented, not asserted reaped); **R10-1/R11-3: a seam-injected `writeFilePrivate` that THROWS on the hand-up write drives `dream.js` to `reapGroup(child.pid)` the just-spawned brain group and FAIL the run — assert the reap seam is invoked on `child.pid` and a `WienerdogError` is thrown; and assert the checked-result branches — `{ reaped: true }` (reaped, run fails), `false → true` (one bounded escalation reaps, run fails), and `false → false` (still non-empty → survivor-specific `WienerdogError`, error outcome, NOT a silent pass), with the escalation call count bounded (never proceeding unsupervised with no pidfile handed up)**. |
 
 ### Exact contracts
 
@@ -415,24 +428,31 @@ only, and this matrix's `reapGroup` cells are no-ops there.
 
 | Settle path | `reapTree(child.pid)` — group A (ppid-closure tree kill) | `reapGroup(child.pid)` — checked, group A (negative-PGID kill) | `reapGroup(brain.pgid)` — checked, group B |
 |---|---|---|---|
-| **timeout** (watchdog fired) | **YES** — the middle is still alive, so its ppid-closure enumerates + kills the group-A descendants, including a re-detached one | **YES** | **YES** — `builtin:dream`, when the per-token pidfile is present |
+| **timeout** (watchdog fired) | **YES** (best-effort extra) — while the middle is alive its ppid-closure enumerates + kills the group-A descendants (incl. a re-detached one); a harmless **no-op** if the middle has already exited (the timer races the child's `'close'`, not `'exit'` — a descendant holding the inherited stdio pipe open can delay `'close'` past the middle's real exit, so the timer can fire post-exit). The guarantee rests on the group reaps, not on `reapTree`'s liveness. | **YES** | **YES** — `builtin:dream`, when the per-token pidfile is present |
 | **`'error'`** (spawn failure) | **NO** — no live middle; the ppid-closure is empty (a no-op) | **YES** | **YES** — `builtin:dream`, when the per-token pidfile is present |
 | **abnormal `'close'`** (non-zero / signal) | **NO** — the group-A leader (the middle) has already exited; the ppid-closure is empty (a no-op) | **YES** | **YES** — `builtin:dream`, when the per-token pidfile is present |
 | **clean `'close'`** (exit 0) | **NO** — the leader cleanly exited; the ppid-closure is empty (a no-op) | **YES** | **YES** — `builtin:dream`, when the per-token pidfile is present |
 
 **The unified rule in one line:** `reapTree(child.pid)` runs on the **timeout path
-ONLY** — the sole path where the middle/group-A leader is still alive, so its
-ppid-closure is non-empty. The **checked** `reapGroup(child.pid)` group-A reap runs
-on **EVERY** settle path: once the leader is gone the negative-PGID
-`kill(-child.pid)` is the only primitive that reaches a leaderless reparented
-group-A member (what `reapTree`'s now-empty closure cannot). The **checked**
-`reapGroup(brain.pgid)` group-B reap runs on **every** settle path for
-`builtin:dream` when the per-token pidfile is present. Rationale: after the middle
-exits (on `'error'` or any `'close'`), `reapTree(child.pid)`'s ppid-closure finds
-nothing and issues no kill, so it is pointless on those rows — a table read for zero
-effect. Any `{ reaped: false }` cell → the R8-1 bounded FINAL escalation +
-fail-loud; `run-job` never certifies a job clean while a findable group is live
-(ADR-0004 "nothing survives the job").
+ONLY** — the sole path on which the middle/group-A leader *may* still be alive, so
+its ppid-closure *may* be non-empty. It is a **best-effort extra**, not a
+liveness-dependent guarantee: the timeout fires when the timer wins the race against
+the child's **`'close'`** event (not `'exit'`), and a descendant holding the
+inherited stdio pipe open can delay `'close'` past the middle's real exit — so the
+timer can fire while the middle has **already** exited, leaving `reapTree`'s
+ppid-closure empty (a harmless no-op). The **checked** `reapGroup(child.pid)` group-A
+reap runs on **EVERY** settle path and is what carries the guarantee: once the leader
+is gone the negative-PGID `kill(-child.pid)` is the only primitive that reaches a
+leaderless reparented group-A member (what `reapTree`'s empty closure cannot). The
+**checked** `reapGroup(brain.pgid)` group-B reap runs on **every** settle path for
+`builtin:dream` when the per-token pidfile is present. Rationale for confining
+`reapTree` to the timeout row: after the middle exits (on `'error'` or any
+`'close'`), `reapTree(child.pid)`'s ppid-closure finds nothing and issues no kill, so
+it is pointless on those rows — a table read for zero effect; a group-A descendant
+that re-detached into a **different** pgid (`setsid`) once the middle exited is the
+ADR-0030 adversarial residual, not a `reapTree` gap. Any `{ reaped: false }` cell →
+the R8-1 bounded FINAL escalation + fail-loud; `run-job` never certifies a job clean
+while a findable group is live (ADR-0004 "nothing survives the job").
 
 - **Mint a per-run token before spawn (`builtin:dream` only).** Before spawning
   the middle, mint a unique token (e.g. `crypto.randomBytes(8).toString('hex')`),
@@ -446,9 +466,11 @@ fail-loud; `run-job` never certifies a job clean while a findable group is live
     **negative-PGID** `kill(-child.pid)` that reaches a leaderless reparented group-A
     member once the middle — the group-A **leader**, whose pid **is** the group-A
     pgid because it was spawned `detached` — has exited). **Additionally, on the
-    timeout path ONLY** (the sole path where the middle is still alive) run
-    `reapTree(child.pid, platform, opts)`, whose ppid-closure enumerates and kills
-    the group-A descendants including a re-detached one. Do **NOT** run
+    timeout path ONLY** (where the middle *may* still be alive; `reapTree` is a
+    **best-effort extra**, a no-op once the middle has exited — the timer races the
+    child's `'close'`, not `'exit'`, so it can fire post-exit) run
+    `reapTree(child.pid, platform, opts)`, whose ppid-closure — while the middle is
+    alive — enumerates and kills the group-A descendants including a re-detached one. Do **NOT** run
     `reapTree(child.pid)` on the `'error'` / `'close'` rows: the leader has already
     exited and left the process table, so its ppid-closure is **empty** and issues no
     kill — a pointless no-op there. (These group-A reaps are distinct from the
@@ -533,12 +555,32 @@ brain has already been spawned. If that hand-up write throws, the middle can exi
 with an error **without** a pidfile on disk, and `run-job`'s outer backstop (which
 `reapGroup(brain.pgid)`s **only** when the per-token pidfile is present) never learns
 the brain's identity — so the detached group-B brain survives the job, unsupervised
-and unreaped. Therefore the hand-up write MUST run under a **cleanup guard**: **if
-the `writeFilePrivate` write throws, `dream.js` immediately runs the checked
-`reapGroup(child.pid, platform, seams)` on the just-spawned brain group to VERIFIED
-quiescence, then treats the run as a FAILURE** — throw a `WienerdogError` so the
+and unreaped. Therefore the hand-up write MUST run under a **cleanup guard**: **if the
+`writeFilePrivate` write throws, `dream.js` immediately runs the checked
+`reapGroup(child.pid, platform, seams)` on the just-spawned brain group and, whether
+or not it reaps, treats the run as a FAILURE** — throw a `WienerdogError` so the
 run-job supervisor records its durable fail-loud alert + error watermark + non-zero
 outcome — and does **NOT** proceed into the brain race as if the hand-up succeeded.
+**Define the `{ reaped: false }` branch explicitly, unified with the R8-1
+final-backstop rule (do NOT invent a divergent one).** Because the pidfile write
+FAILED, no identity was handed up, so `run-job`'s outer backstop can **never** retry
+this group (it `reapGroup(brain.pgid)`s **only** when the pidfile is present) — this
+guard is the **only** reaper that holds `child.pid`, so it must finish the job here,
+not defer to a backstop that will never see it. On a `{ reaped: false }` from the
+immediate guard reap, `dream.js` performs **one bounded FINAL escalation** — a
+further bounded `reapGroup(child.pid, platform, seams)` re-poll/re-kill **while it
+still holds `child.pid`** — and then:
+- if the escalation reaches `{ reaped: true }` (the group is now verified empty),
+  throw the `WienerdogError` (the run still FAILS — the brain was reaped, but the
+  hand-up broke, so the run is not certified clean);
+- if the escalation **still** returns `{ reaped: false }` (a findable but un-reapable
+  group — the kernel D-state / ADR-0030 residual), throw a **survivor-specific**
+  `WienerdogError` that names the un-reaped brain group (`child.pid`) so `run-job`'s
+  fail-loud alert + error watermark + non-zero outcome **surface the surviving group
+  LOUDLY** — never a silent exit that leaves an unsupervised brain unrecorded.
+The escalation is **bounded** (never an unbounded block-until-`ESRCH` — that would
+itself violate ADR-0004's no-persistent-process spirit); the un-reapable case is the
+same ADR-0030 residual as R8-1's, surfaced by the same loud path (R11-3).
 The failing write is reachable in tests via an injected `writeFilePrivate` seam
 (thread it through `dream.js`'s JS-only `opts`, same idiom as the reap seam). The
 standalone path (no run token) writes no hand-up pidfile and needs no guard (its
@@ -641,33 +683,45 @@ a JS-only `opts` seam idiom — WP-155).
       both `dream.js` and `run-job`'s pidfile-gated backstop.) The live
       post-`'close'` proof — the surviving member reaching `ESRCH` **before** the
       pidfile is deleted — is on the POSIX gate in `WP-a10-escape-harness`.
-- [ ] **[Hand-up write-failure guard, R10-1]** When the per-token pidfile
+- [ ] **[Hand-up write-failure guard, R10-1 + R11-3]** When the per-token pidfile
       `writeFilePrivate` hand-up write **throws** (fallible I/O — disk-full /
       permission / temp→final rename failure) while the just-spawned brain is alive,
-      `dream.js` **immediately** `reapGroup(child.pid)`s the brain group to verified
-      quiescence and **fails the run** (throws `WienerdogError` → `run-job` fail-loud
-      + error watermark + non-zero outcome) rather than proceeding into the brain
-      race with no pidfile handed up — which would leave the detached group-B brain
-      unsupervised (`run-job`'s backstop only `reapGroup(brain.pgid)`s when the
-      pidfile is present). Unit-asserted in `dream.test.js` with a seam-injected
-      `writeFilePrivate` that throws: the reap seam is invoked on `child.pid` and the
-      run ends in error. This is a durable I/O path, **distinct** from the accepted
-      sub-ms spawn→hand-up-window residual (ADR-0030). The **live** proof — a real
+      `dream.js` **immediately** `reapGroup(child.pid)`s the brain group and **fails
+      the run** (throws `WienerdogError` → `run-job` fail-loud + error watermark +
+      non-zero outcome) rather than proceeding into the brain race with no pidfile
+      handed up — which would leave the detached group-B brain unsupervised
+      (`run-job`'s backstop only `reapGroup(brain.pgid)`s when the pidfile is present,
+      and here the failed write handed up nothing, so `run-job` can never retry this
+      group; this guard is the only reaper holding `child.pid`). On a
+      `{ reaped: false }` from the guard reap, `dream.js` does **one bounded FINAL
+      escalation** (unified with R8-1) while still holding `child.pid`, then throws —
+      **survivor-specific** when the group is still non-empty, so the un-reaped brain
+      is surfaced LOUDLY, never a silent exit. Unit-asserted in `dream.test.js` with a
+      seam-injected `writeFilePrivate` that throws, across the checked-result
+      sequences: `{ reaped: true }` (reaped, run fails), `false → true` (escalation
+      reaps, run fails), and `false → false` (still non-empty → survivor-specific
+      `WienerdogError`, error outcome, NOT a silent pass); the reap seam is invoked on
+      `child.pid` and the escalation call count stays bounded. This is a durable I/O
+      path, **distinct** from the accepted sub-ms spawn→hand-up-window residual
+      (ADR-0030). The **live** proof — a real
       surviving brain child reaching `ESRCH` via the guard reap — is on the POSIX
       gate in `WP-a10-escape-harness`.
 - [ ] **[Cross-run isolation, round-2]** A second, lock-losing concurrent dream
       run reaps **only its own** token pidfile and never reads or kills the first
       run's live brain — unit-asserted with two distinct tokens.
-- [ ] **[Abnormal-close group-A, round-2 + round-3, POSIX]** On timeout /
-      `'error'` / non-clean `'close'` on **POSIX**, `run-job` reaps the middle's
-      **group-A** tree with **both** `reapTree(child.pid)` **and**
-      `reapGroup(child.pid)` (distinct from the group-B `reapGroup(brain.pgid)`) —
-      unit-asserted that both are invoked on the abnormal path. Because a
-      post-`'close'` `reapTree(child.pid)` sees an exited group-A leader and issues
-      no kill, the `reapGroup(child.pid)` **negative-PGID** kill is what reaps a
-      **leaderless reparented group-A member**; the sibling live harness must prove,
-      on the real post-`'close'` path, that such a member ends up **ESRCH** (the
-      unit test asserts the call wiring; the live proof is `WP-a10-escape-harness`).
+- [ ] **[Abnormal-close group-A, round-2 + round-3 + R11-2, POSIX]** Per the
+      **settle-path reap matrix**, on `'error'` / non-clean `'close'` on **POSIX**
+      `run-job` reaps the middle's **group-A** members via the **checked**
+      `reapGroup(child.pid)` **only** (distinct from the group-B
+      `reapGroup(brain.pgid)`); `reapTree(child.pid)` is **NOT** invoked on those rows
+      (its ppid-closure is empty once the group-A leader has exited — a no-op).
+      It is the `reapGroup(child.pid)` **negative-PGID** kill that reaps a
+      **leaderless reparented group-A member**. Unit-asserted in
+      `scheduler-runjob.test.js` that on the abnormal-close path `reapGroup(child.pid)`
+      is invoked and `reapTree(child.pid)` is **not**; the live proof that such a
+      member ends up **ESRCH** on the real post-`'close'` path is
+      `WP-a10-escape-harness`. (`reapTree(child.pid)` is asserted on the **timeout**
+      row only — where the middle may still be alive — per the matrix.)
 - [ ] **[Clean-close group-A, R9-1, POSIX]** On a **clean** `'close'` (exit 0) on
       **POSIX**, `run-job` still reaps group A via `reapGroup(child.pid)` (the
       negative-PGID group kill) and **not** `reapTree` — so a plain group-A child
@@ -752,8 +806,8 @@ grep -nE "/bin/ps|/proc|System32|reapGroup|kill\(\s*-" src/core/reap.js
 # the per-run token pidfile + reapGroup wiring is present:
 grep -nE "dream-brain\.|WIENERDOG_DREAM_RUN_TOKEN|reapGroup|reapTree" src/cli/run-job.js src/cli/dream.js
 # R9-1: group-A reapGroup(child.pid) runs on EVERY settle path — including a clean
-# close (exit 0) — while reapTree(child.pid) is confined to the timeout/abnormal
-# path (never run after a clean leader exit):
+# close (exit 0) — while reapTree(child.pid) is confined to the timeout path ONLY
+# (never run once the leader has exited — 'error', abnormal 'close', or clean 'close'):
 grep -nE "clean.*close|every settle|reapGroup\(.*child\.pid" src/cli/run-job.js
 grep -nE "R9-1|clean.?close|reapGroup\(.*child\.pid|reapTree.*NOT|not.*reapTree" tests/unit/scheduler-runjob.test.js
 # R6-2: dream.js's finally reaps group B (reapGroup child.pid) BEFORE deleting the
@@ -764,6 +818,11 @@ grep -nE "reapGroup\(.*child\.pid" src/cli/dream.js
 # unsupervised brain is left with no pidfile handed up:
 grep -nE "writeFilePrivate|reapGroup\(.*child\.pid|R10-1" src/cli/dream.js
 grep -nE "R10-1|write.?fail|writeFilePrivate|reapGroup|throw" tests/integration/dream.test.js
+# R11-3: the R10-1 guard's { reaped: false } branch does one bounded FINAL escalation
+# (still holding child.pid — run-job has no pidfile to retry) and then throws a
+# survivor-specific fail-loud, never a silent exit:
+grep -nE "reaped|escalat|survivor|bounded|R11-3" src/cli/dream.js
+grep -nE "R11-3|reaped.*false|false.*true|escalat|survivor|bounded" tests/unit/reap.test.js tests/integration/dream.test.js
 # R5-2: the win32 leaderless-member scope boundary is carried into code comments
 # (win32 group-reap provides no leaderless guarantee; POSIX-only this release):
 grep -niE "leaderless|no negative-pgid|windows-reap|pre-A10|POSIX-only" src/core/reap.js src/cli/run-job.js

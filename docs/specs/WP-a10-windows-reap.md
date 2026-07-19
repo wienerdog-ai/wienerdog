@@ -67,11 +67,14 @@ member ends up gone. That live Windows merge-gate is a required deliverable here
   System32** `taskkill /PID <pid> /T /F` (no bare-name fallback), and
   `readProcessTable` has **no** win32 branch — win32 relies on `taskkill`'s own
   live-PID tree walk, which cannot reach a leaderless reparented member.
-- **`src/cli/run-job.js`** reaps on every child-exit path. On POSIX the abnormal
-  settle runs three reaps (`reapTree(child.pid)` + `reapGroup(child.pid)` for
-  group A, `reapGroup(brain.pgid)` for group B). On **win32** the abnormal-close
-  group-reap authority does **not** activate — it keeps the pre-A10 timeout-path
-  `taskkill /T /F` behavior (documented, not a guarantee).
+- **`src/cli/run-job.js`** reaps on every child-exit path per
+  `WP-a10-reap-mechanism`'s **settle-path reap matrix**. On POSIX the abnormal
+  settle (`'error'` / non-clean `'close'`) reaps group A via `reapGroup(child.pid)`
+  and group B via `reapGroup(brain.pgid)`; `reapTree(child.pid)` is confined to the
+  **timeout** row (a no-op once the leader has exited, so it is not run on the
+  abnormal rows). On **win32** the abnormal-close group-reap authority does **not**
+  activate — it keeps the pre-A10 timeout-path `taskkill /T /F` behavior (documented,
+  not a guarantee).
 - **`src/core/exec-identity.js`** exports `verifyExecutable(realpath, platform,
   ctx)` → `{ ok, why }`. Reuse it to gate the absolute Windows enumeration/kill
   binaries before spawn.

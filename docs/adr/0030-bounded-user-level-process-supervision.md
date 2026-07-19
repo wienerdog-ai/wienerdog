@@ -106,10 +106,19 @@ setsid+double-fork detach.
   leaderless reparented group-A member once the middle/group leader has exited) and
   the detached **group-B** brain group (`reapGroup(brain.pgid)`).
   `reapTree(child.pid)`'s ppid-closure tree kill is the **timeout-path** primitive
-  (the sole path where the middle is still alive, so its closure is non-empty). The
-  authoritative per-path statement is `WP-a10-reap-mechanism`'s **settle-path reap
-  matrix**; this ADR cites it rather than restate a divergent subset. This is proven
-  by the live escape harness, not by argv assertions.
+  and a **best-effort extra** — it does **not** assume the middle is still alive at
+  timeout: the watchdog timer races the child's **`'close'`** event (not `'exit'`),
+  so a descendant holding the inherited stdio pipe open can delay `'close'` past the
+  middle's real exit and the timer can fire once the middle has already exited (its
+  ppid-closure then empty, a no-op). The two group reaps above carry the guarantee
+  **regardless** of middle-liveness. A group-A descendant that additionally
+  re-detached into a **DIFFERENT** pgid (`setsid`) once the leader exited — in no
+  descendant group and no longer a ppid-descendant — is **not** a findable-class gap
+  but the combined full-detach residual below (mitigated by A1; the contained brain
+  has no shell to produce one). The authoritative per-path statement is
+  `WP-a10-reap-mechanism`'s **settle-path reap matrix**; this ADR cites it rather than
+  restate a divergent subset. This is proven by the live escape harness, not by argv
+  assertions.
 - **Per-run isolation (cross-run safety).** The handed-up brain identity lives in
   a **per-run** pidfile keyed by a token the outer supervisor mints before spawn
   (`state/dream-brain.<token>.pid`), and each supervisor reaps **only** its own
