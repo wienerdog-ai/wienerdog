@@ -369,8 +369,14 @@ shared case list (A6) must add:
   entry's argv); and the generic `reloadMissing`, run alone, NEVER creates/
   authorizes the catch-up entry. Fails if repoint doesn't repair, or if
   `reloadMissing` touches catch-up.
-- **[R10]** **non-node env-shebang fail-closed** (WP-154): a pinned executable
-  with a `#!/usr/bin/env <non-node>` shebang + a fake `<x>` planted FIRST on the
-  job PATH ⇒ `resolvePinnedSpawn` THROWS, the plant is **never** executed (the
-  recorder shows zero spawn of the fake). Mutation: revert to "resolve `<x>`
-  through the job PATH + structural verify" ⇒ the plant runs ⇒ fails.
+- **[R10/R11/R12]** **non-node env-shebang fail-closed at EVERY exec site**
+  (WP-154): a pinned executable with a `#!/usr/bin/env <non-node>` shebang + a fake
+  `<x>` planted FIRST on the job PATH ⇒ the plant records **ZERO executions**
+  (spy/marker) at **all** of: `resolvePinnedSpawn` (fire), `createPins`,
+  `createPins({dryRun:true})`, adopt's preflight, and `run-job.js`
+  `captureClaudeVersion` (run-evidence) — each THROWS/refuses without executing.
+  **[R12]** Plus the **static-scan canary** (`tests/unit/pinned-exec-canary.test.js`)
+  runs in `npm test`: it FAILS if any pinned-exec module spawns a resolved/pinned
+  path not produced by `bindInterpreter`. Mutation: revert **any** site to a direct
+  `spawnSync(realpath)`, or add a new one ⇒ the canary and/or the zero-execution
+  assertion fails.

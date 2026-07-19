@@ -427,7 +427,26 @@ implemented as dated amendments in the six specs and detailed in `FIX-PLAN.md`.
    re-introducing the static F4 PATH hijack. claude/codex are node and git is
    native, so this branch is unexercised today; failing closed costs nothing now
    and removes the hijack surface if an upstream wrapper ever changes. No PATH
-   re-resolution of any interpreter.
+   re-resolution of any interpreter. **[R11] This four-case rule lives in ONE
+   shared helper (`bindInterpreter`) routed through EVERY site that executes a
+   pinned target — fire (`resolvePinnedSpawn`), pin creation
+   (`buildPin`/`probeVersion`, incl. `createPins`, its dry-run, and adopt's
+   preflight), the launcher's spawn, and any version/containment probe.** No site
+   may `spawnSync(realpath, …)` a pinned target directly; the `--version` probe runs
+   `process.execPath <script> --version` for node shebangs, and an unsupported
+   PATH-resolving interpreter is REFUSED at pin creation **without executing the
+   target** (closing the hijack class at pin-creation time, not only at fire time).
+   **[R12] Enforced invariant (by construction, not by enumeration):** *every spawn
+   of a pinned executable is produced by the single `bindInterpreter` helper* —
+   verified by a **static-scan canary test** (the WP-155 `grep 'shell: true'` /
+   WP-082 pattern) over the pinned-exec modules (`exec-identity.js`, `dream/brain.js`,
+   `dream/validate.js`, `dream/containment-probe.js`, `cli/run-job.js`,
+   `scheduler/launcher.js`) that FAILS on any `spawn*`/`execFile*` of a
+   resolved/pinned path not produced by `bindInterpreter` (allowlist:
+   `bindInterpreter` results or `process.execPath`/`nodePath()`). Manual site
+   enumeration kept missing sites (the run-evidence `captureClaudeVersion` in
+   `run-job.js` was the 5th, found after R11 claimed "every site"); the canary
+   makes "every site" mechanically true, including future sites.
 
 3. **Everything shaping the spawn is digest-covered — now including `vault_layout`
    and the other mutable inputs (Decision 3 refinement).** `vault_layout` (which
