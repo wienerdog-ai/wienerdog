@@ -196,11 +196,11 @@ through this **unchanged**.
 
 | Action | Path | Notes |
 |--------|------|-------|
-| modify | src/core/private-fs.js | (a) Extend the single internal enumerator to the union of the A5 set **and** the A9 set: `secrets/` dir (`0700`), every regular file directly under `secrets/` (`0600`), the sensitive `state/` files `broker-grants.json`/`exec-pins.json`/`run-evidence.jsonl` (`0600`), **each existing `logs/<job>` subdirectory (`0700`)**, **and** the four metadata files `config.yaml`/`install-manifest.json` (core root) + `state/schedule.json`/`state/watermarks.json` (`0600`, repair-only per the dated decision below). The enumerator carries each entry's **expected mode** (dirs `0700`, files `0600`). Add the A9 constants and export them alongside the A5 ones. `repairPrivateModes` sets each entry to its expected mode; `insecureEntries`/`scanPrivateModes` flag the full `(mode & 0o777) !== expectedMode` deviation (over-tight included) — names/signatures unchanged, now over the union. (b) Add and export the **fail-closed** `createLogStreamPrivate(file, opts)` — the shared `0600` log-stream helper the two log writers call (aborts the write if it cannot secure the fd; contract below). |
+| modify | src/core/private-fs.js | (a) Extend the single internal enumerator to the union of the A5 set **and** the A9 set: `secrets/` dir (`0700`), every regular file directly under `secrets/` (`0600`), the sensitive `state/` files `broker-grants.json`/`exec-pins.json`/`run-evidence.jsonl` (`0600`), **each existing `logs/<job>` subdirectory (`0700`)**, **and** the four metadata files `config.yaml`/`install-manifest.json` (core root) + `state/schedule.json`/`state/watermarks.json` (`0600`, repair-only per the dated decision below). The enumerator carries each entry's **expected mode** (dirs `0700`, files `0600`). Add the A9 constants and export them alongside the A5 ones. `repairPrivateModes` is **TWO-PHASE** (round-3 finding): it chmods every enumerated private **dir** to `0700` **first**, THEN **re-enumerates** the now-traversable dir contents and chmods **files** to `0600` — a single up-front enumeration cannot see a `0644` file trapped inside a `000` (or non-executable) `secrets/`, because `listFiles`'s `readdirSync` fails while the dir is unreadable and returns `[]`, so a one-pass repair would fix the dir but leave the file `0644` until the next sync. `insecureEntries`/`scanPrivateModes` flag the full `(mode & 0o777) !== expectedMode` deviation (over-tight included) — names/signatures unchanged, now over the union. (b) Add and export the **fail-closed** `createLogStreamPrivate(file, opts)` — the shared `0600` log-stream helper the two log writers call (aborts the write if it cannot secure the fd; contract below). |
 | modify | src/cli/run-job.js | **ONLY** the two log sites: line 550's `fs.mkdirSync(logDir, {recursive:true})` → `mkdirPrivate(logDir)` (dir `0700`), and line 552's `fs.createWriteStream(logFile)` → `createLogStreamPrivate(logFile)` (file `0600`). Touch nothing else in this file. |
 | modify | src/cli/dream.js | **ONLY** the two log sites: line 339's `fs.mkdirSync(logDir, {recursive:true})` → `mkdirPrivate(logDir)`, and line 340's `fs.createWriteStream(<date>.log, { flags: 'a' })` → `createLogStreamPrivate(<date>.log, { flags: 'a' })`. Touch nothing else in this file. |
 | modify | src/cli/doctor.js | Fold the dedicated `secrets/`-dir `0700` check into the shared predicate: the `insecureEntries` loop now covers the `secrets/` dir **and** its files (and flags an over-tight `secrets/` too), so remove the redundant mode-comparison warn (keep the **"secrets directory missing"** hard `fail`). Update the shared-loop warn message so it no longer speaks only of "readable by other users" — it now covers wrong permissions in either direction (expected `0700`/`0600`). Single predicate, three surfaces — the module's stated invariant. |
-| modify | tests/unit/private-fs.test.js | Add the A9 cases below (secrets dir+files, grants/pins repair, the four metadata files repaired, **each `logs/<job>` dir repaired to `0700`**, **over-tight `0600` and `000` `secrets/` flagged + repaired to `0700`**, permissive-umask, upgrade from 0755/0644, win32 no-op) **and** `createLogStreamPrivate` cases: fresh file under `umask 000` → `0600`; a pre-existing `0666` append target → `0600`; **fchmod-fails → helper throws and ZERO log bytes are written**; win32 no-op (plain stream). |
+| modify | tests/unit/private-fs.test.js | Add the A9 cases below (secrets dir+files, grants/pins repair, the four metadata files repaired, **each `logs/<job>` dir repaired to `0700`**, **over-tight `0600` and `000` `secrets/` flagged + repaired to `0700`**, **the round-3 COMBINED case: a `000` `secrets/` containing a `0644` token/client file → a SINGLE `repairPrivateModes` call chmods BOTH the dir to `0700` and the trapped file to `0600` (two-phase), and a follow-up `scanPrivateModes` returns `{insecure: 0}`**, permissive-umask, upgrade from 0755/0644, win32 no-op) **and** `createLogStreamPrivate` cases: fresh file under `umask 000` → `0600`; a pre-existing `0666` append target → `0600`; **fchmod-fails → helper throws and ZERO log bytes are written**; win32 no-op (plain stream). |
 | modify | tests/unit/scheduler-runjob.test.js | Under a permissive umask, assert the per-run log **dir** (`0700`) **and** file (`0600`) written by run-job's real writer path (fresh-install acceptance runs the **actual** writer, not just the predicate). |
 | modify | tests/integration/dream.test.js | Under a permissive umask, assert the dream's log **dir** (`0700`) **and** `<date>.log` (`0600`) written by dream's real writer path, including the append-into-a-legacy-`0666`-file case. |
 | modify | tests/unit/doctor.test.js | Assert a group/other-readable **or over-tight** `secrets/` dir, token file, or metadata file is WARNed via the unified predicate; assert the missing-secrets `fail` still fires. |
@@ -267,6 +267,28 @@ call; keep the single-enumerator invariant.)
 **and** an over-tight/invalid one (a `0600` or `000` `secrets/` that cannot be
 traversed — a broken store). `repairPrivateModes` chmods each flagged entry to
 its **expected** mode (not a fixed 0700/0600 by guess). `win32 → []` unchanged.
+
+**Repair is TWO-PHASE (round-3 finding).** A single up-front enumeration cannot
+see a `0644` credential file **trapped inside a `000` (or otherwise
+non-executable) `secrets/`**: the enumerator walks `secrets/` with
+`listFiles(paths.secrets, …)`, whose `fs.readdirSync` **fails while the dir is
+unreadable and returns `[]`** (verified — `private-fs.js` `listFiles` catches and
+returns `[]`), so the file inside is never enumerated. A one-pass repair would
+then chmod the **dir** to `0700` but never touch the `0644` file — leaving a
+world-readable token until the **next** sync, breaking the single-sync `0600`
+guarantee. So `repairPrivateModes` MUST:
+1. **Phase 1 — dirs first.** Chmod every enumerated private directory (the A5
+   dirs, `secrets/`, every `logs/<job>`) to its expected `0700`. This makes a
+   `000`/`0644` `secrets/` traversable again.
+2. **Phase 2 — re-enumerate, then files.** **Re-run the file enumeration** (so the
+   now-`0700` `secrets/` yields its contents) and chmod every enumerated file to
+   its expected `0600`.
+Both phases count their changes into the returned `{changed}`. The result: a
+**single** `repairPrivateModes` call over a `000` `secrets/` containing a `0644`
+token fixes **both** the dir and the file, and a follow-up `scanPrivateModes`
+returns `{insecure: 0}`. (Keep the single-enumerator invariant: phase 2 re-calls
+the same enumerator — or its file-only half — that feeds all three surfaces; do
+not introduce a second, parallel secrets walk.)
 
 **The shared private log-stream helper `createLogStreamPrivate` — FAIL-CLOSED
 (round-2 finding 6).** The two log writers must open their stream `0600`
@@ -342,7 +364,9 @@ Resulting behavior (all three surfaces, for free):
 - `repairPrivateModes(paths)` → chmods a legacy `0755` `secrets/`→`0700`, a
   legacy `0644` token/grant/pin/metadata file→`0600`, a legacy `0777`
   `logs/<job>` dir→`0700`, **and an over-tight `0600`/`000` `secrets/`→`0700`**,
-  counting each change.
+  counting each change — **two-phase, so a `0644` token trapped inside a `000`
+  `secrets/` is reached in the same call** (the dir is opened to `0700` before the
+  file enumeration runs).
 - `insecureEntries(paths)` / `scanPrivateModes(paths)` → now report a
   wrong-moded `secrets/` dir (loosened **or** over-tight), token/grant/pin/
   metadata file, or `logs/<job>` dir (the four metadata files included per the
@@ -446,6 +470,11 @@ umask 000; wienerdog run-job dream   # logs/dream/ is 0700 and <stamp>.log is 06
 - [ ] The predicate uses **expected-mode equality** (`(mode & 0o777) !==
       expectedMode`), so a `0600` or `000` `secrets/` (traversal-broken store) is
       flagged, not passed as clean.
+- [ ] `repairPrivateModes` is **two-phase** (dirs→`0700` first, then re-enumerate
+      + files→`0600`): a **single** call over a `000` `secrets/` containing a
+      `0644` token fixes **both** the dir and the trapped file, and a follow-up
+      `scanPrivateModes` returns `{insecure: 0}` — a one-pass repair that misses the
+      file inside a still-unreadable dir is rejected.
 - [ ] A **freshly-created** per-run log (both `run-job` and `dream` writer paths)
       under `umask 000` ends with its **directory `0700`** and its **file `0600`**
       — not `0777`/`0666` — and a `dream` append into a pre-existing `0666` log
@@ -477,7 +506,10 @@ umask 000; wienerdog run-job dream   # logs/dream/ is 0700 and <stamp>.log is 06
       `repairPrivateModes` changes each to its expected `0700`/`0600` and returns
       the correct `{changed}` count; a second call returns `{changed: 0}`
       (idempotent). A `0600` and a `000` `secrets/` are **also** repaired to
-      `0700` in the same pass.
+      `0700` in the same pass; and a `000` `secrets/` **containing a `0644`
+      token/client file** has **both** the dir and the trapped file repaired by a
+      **single** `repairPrivateModes` call (two-phase), with a follow-up
+      `scanPrivateModes` returning `{insecure: 0}`.
 - [ ] `insecureEntries`/`scanPrivateModes` report exactly those insecure A9
       entries (secrets — loosened and over-tight — + grants/pins + the four
       metadata files + log dirs) before repair and none after; `doctor` WARNs them

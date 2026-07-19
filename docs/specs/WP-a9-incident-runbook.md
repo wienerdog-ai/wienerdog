@@ -143,7 +143,7 @@ state and act on:
 
 | Action | Path | Notes |
 |--------|------|-------|
-| create | docs/runbooks/incident.md | The general incident-drill runbook (house numbered-checklist format), covering the seven ordered A9 steps: (1) snapshot `state/schedule.json`, remove every per-job schedule **and** the shared catch-up entry, then reach proven quiescence by REBOOT (optional live-checks only if reboot is impossible); (2) preserve-evidence-privately; (3) revoke+rotate; (4) purge digest+managed-block; (5) clean git; (6) fail-closed byte-level acceptance drill; (7) re-authorize. |
+| create | docs/runbooks/incident.md | The general incident-drill runbook (house numbered-checklist format), covering the seven ordered A9 steps: (1) snapshot the `config.yaml` `jobs:` definitions (the restore source; `schedule.json` holds only watermarks), remove every per-job schedule **and** the shared catch-up entry, then reach proven quiescence by REBOOT (optional live-checks only if reboot is impossible); (2) preserve-evidence-privately; (3) revoke+rotate; (4) purge digest+managed-block; (5) clean git; (6) fail-closed byte-level acceptance drill (whole-file marker grep + one-sentinel-pair check per installed harness file); (7) re-authorize by reconstructing `schedule add` from the `jobs:` snapshot. |
 | modify | docs/runbooks/secret-incident.md | Add one cross-link near the top: the secret leak is the credential-specific case of the general incident drill (link `incident.md`); for a general or suspected-compromise incident, start there. Do NOT rewrite its steps. |
 
 ### Exact contract — what `docs/runbooks/incident.md` must state
@@ -161,14 +161,21 @@ The detail of each:
 
 1. **Stop everything that can fire, then reach proven quiescence — before
    anything else.** In order:
-   - **First, snapshot the schedule definitions — before you remove anything.**
-     Copy `state/schedule.json` into the private incident folder (step 2) NOW.
-     `schedule list` does **not** show each job's `timeoutMinutes`, and `schedule
-     remove` deletes the job's config entry — so a later plain re-add cannot
-     losslessly restore the exact `time` / `type` / `timeoutMinutes`. This
-     snapshot is what step 7 re-authorizes from. (Handle it with the same private
+   - **First, snapshot the job DEFINITIONS — before you remove anything.** The
+     recoverable job definitions (each job's `name`, `at` time, `run` type, and
+     `timeout_minutes`) live in the managed `jobs:` section of **`config.yaml`**
+     (at the core root, `~/.wienerdog/config.yaml`) — **not** in
+     `state/schedule.json`, which holds only run **watermarks** (`last_success` /
+     `last_status` / `last_error_at`) and cannot restore a schedule. `wienerdog
+     schedule remove` **mutates `config.yaml`** (it strips the job from the `jobs:`
+     section), and `schedule list` does **not** print `timeout_minutes` — so a
+     later plain re-add cannot losslessly restore the exact `at` / `run` /
+     `timeout_minutes`. Copy the **`config.yaml` `jobs:` section** into the private
+     incident folder (step 2) NOW; this snapshot is what step 7 re-authorizes from.
+     (You MAY also capture `state/schedule.json` as separate **watermark evidence**
+     — but it is **not** the restore source.) Handle both with the same private
      folder discipline as the rest of the evidence in step 2 — it is why the
-     snapshot goes into that folder.)
+     snapshot goes into that folder.
    - **Unregister every per-job schedule.** `wienerdog schedule list`, then
      `wienerdog schedule remove <name>` for every job (the nightly dream and any
      catalog routine). State plainly that `remove` only stops **future** fires
@@ -227,9 +234,10 @@ The detail of each:
        grant only your account — `icacls <folder> /inheritance:r /grant:r
        "$($env:USERNAME):(OI)(CI)F"` — and exclude it from File History / OneDrive
        backup, all before copying.
-   - **Copy the evidence in:** `state/schedule.json` (the step-1 snapshot),
-     `state/run-evidence.jsonl`, `state/alerts.jsonl`, and the relevant
-     `logs/<job>/` files.
+   - **Copy the evidence in:** the **`config.yaml` `jobs:` snapshot** (the step-1
+     restore source), `state/run-evidence.jsonl`, `state/alerts.jsonl`, and the
+     relevant `logs/<job>/` files; optionally `state/schedule.json` too (watermark
+     evidence, not the restore source).
    - **Re-apply private modes recursively, then re-verify (blocking).** The copies
      leave Wienerdog's own `0700`/`0600` protection when they land elsewhere, so
      restore it over the **whole tree** — a plain `chmod 600 …/*` is wrong (it
@@ -311,17 +319,41 @@ The detail of each:
      STOP.
    - **Grep the regenerated `state/digest.md`** for the poisoned marker directly
      (belt-and-suspenders against the decoded bytes above).
-   - **Check BOTH managed blocks via `sync`'s own output PLUS an explicit sentinel
-     check — not `doctor`.** Re-run `wienerdog sync` and read its output: if it
-     prints any managed-block out-of-sync / adapter notice for `CLAUDE.md` or
-     `AGENTS.md`, the drill **fails** (the block is not in a known-clean rendered
-     state). Then, independently of any tool, check the sentinel region in
-     **`CLAUDE.md` AND `AGENTS.md`**: confirm each file contains exactly one
-     `<!-- wienerdog:begin -->` … `<!-- wienerdog:end -->` pair (a missing or
-     duplicated sentinel is a failure), and confirm a `grep -F` for the poisoned
-     marker between the sentinels finds nothing in either file. (`doctor` does
-     **not** verify managed-block / sentinel integrity — do not treat a clean
-     `doctor` as proof here.)
+   - **Check the managed block in every INSTALLED harness file via `sync`'s own
+     output PLUS an explicit WHOLE-FILE marker check AND a sentinel-region check —
+     not `doctor`.** `sync` runs only the **detected** harness's adapter, and a
+     single-harness (Claude-only **or** Codex-only) install is supported and
+     tested — so exactly one of `CLAUDE.md` / `AGENTS.md` may legitimately be
+     **absent**. Run this check on **each file that a detected harness owns**: both
+     `CLAUDE.md` **and** `AGENTS.md` when both harnesses are installed, or only the
+     single present file on a single-harness install. (An installed harness's file
+     being **missing** is a failure; an *un-installed* harness's absent file is
+     not — do not let a legitimately absent file block re-authorization.) For each
+     such file, all three of:
+     - **Re-run `wienerdog sync` and read its output.** Any managed-block
+       out-of-sync / adapter notice for an installed file means the drill **fails**
+       (the block is not in a known-clean rendered state).
+     - **`grep -F` the poisoned marker over the ENTIRE file — the whole `CLAUDE.md`
+       / `AGENTS.md`, NOT only the region between the sentinels.** This is the
+       load-bearing check. If an attacker deleted **both** sentinels and left the
+       poisoned prose in place, `sync` finds no sentinel and **appends a fresh
+       clean block at end-of-file**, leaving the old poisoned text **outside** the
+       sentinels — and the harness reads the **whole file**, so it is **still
+       injected**. A grep scoped to only the sentinel region would falsely pass.
+       The marker must be found **nowhere** in the file. `sync` alone does **not**
+       prove cleanup when the sentinels were missing.
+     - **Confirm exactly one sentinel pair, and that its region matches the clean
+       digest.** Confirm the file contains exactly one `<!-- wienerdog:begin -->` …
+       `<!-- wienerdog:end -->` pair. A **duplicated** pair is a failure. A
+       **missing** pair is also a failure — and specifically means `sync` appended
+       a new block while your pre-existing (possibly poisoned) content sits
+       orphaned **outside** it: you must **manually remove or quarantine that
+       orphaned content**, re-run `sync`, and re-run this drill. When the single
+       pair is present, byte-compare the text **between** the sentinels against the
+       clean `state/digest.md` (the same bytes the SessionStart hook injects) —
+       they must match, so no extra text was slipped **inside** the region.
+     (`doctor` does **not** verify managed-block / sentinel integrity — do not
+     treat a clean `doctor` as proof here.)
    - *(Optional extra sanity check, NOT the proof.)* You may also start a **new**
      Claude Code / Codex session and confirm it does not surface the poisoned
      fact — but this observation is a nicety, not the acceptance: the byte-level
@@ -331,10 +363,16 @@ The detail of each:
    for step 7.
 
 7. **Re-authorize — only after a successful, recorded drill (step 6) and steps
-   1–5.** Re-add the schedules you removed (`wienerdog schedule add …` or the
-   routine menu `/wienerdog-routines`), then run `wienerdog doctor` and confirm
-   nothing is flagged (permissions, scheduler load). Schedules come back **only**
-   after the acceptance drill has passed and been recorded — never before.
+   1–5.** Re-add each schedule you removed by **reconstructing its exact command
+   from the `config.yaml` `jobs:` snapshot** you took in step 1: for every job in
+   the snapshot run `wienerdog schedule add <name> --at <HH:MM> --timeout
+   <minutes>` with **exactly one** of `--job <builtin>` (e.g. `--job dream` for a
+   `run: builtin:dream` job) or `--skill <name>` (for a `run: skill:<name>` job) —
+   the snapshot's `run:` value tells you which, and `at` / `timeout_minutes` give
+   the other two flags. (The routine menu `/wienerdog-routines` is fine for the
+   standard nightly dream.) Then run `wienerdog doctor` and confirm nothing is
+   flagged (permissions, scheduler load). Schedules come back **only** after the
+   acceptance drill has passed and been recorded — never before.
 
 Keep every command exact and every claim traceable to a shipped mechanism (do
 not describe a "remove managed block" command — there is none; the mechanism is
@@ -360,15 +398,18 @@ fix-source → `memory approve` → `sync`). No jargon without a one-clause glos
 ## Acceptance criteria
 
 - [ ] `docs/runbooks/incident.md` exists in the house numbered-checklist format
-      and covers, **in order**: (1) snapshot `state/schedule.json` before removal,
-      remove every per-job schedule **and** the shared catch-up entry, then reach
-      proven quiescence by **reboot** (optional live-checks only if reboot is
-      impossible); (2) preserve evidence into a **private, sync/backup-excluded**
-      folder before any cleanup; (3) revoke+rotate credentials; (4) purge the
-      compromised digest **and** managed block (fix source → `memory approve
-      <note>` → `sync`); (5) clean git history; (6) the fail-closed byte-level
-      acceptance drill proving the old digest/managed block is no longer injected;
-      (7) re-authorize **only** after a recorded drill pass.
+      and covers, **in order**: (1) snapshot the **`config.yaml` `jobs:`
+      definitions** before removal (the restore source — `state/schedule.json`
+      holds only watermarks, not job definitions), remove every per-job schedule
+      **and** the shared catch-up entry, then reach proven quiescence by **reboot**
+      (optional live-checks only if reboot is impossible); (2) preserve evidence
+      into a **private, sync/backup-excluded** folder before any cleanup; (3)
+      revoke+rotate credentials; (4) purge the compromised digest **and** managed
+      block (fix source → `memory approve <note>` → `sync`); (5) clean git history;
+      (6) the fail-closed byte-level acceptance drill proving the old
+      digest/managed block is no longer injected; (7) re-authorize **only** after a
+      recorded drill pass, reconstructing each `schedule add` from the `jobs:`
+      snapshot.
 - [ ] Step order puts "stop all jobs" strictly before credential rotation, and
       puts the acceptance drill strictly **before** re-authorization (A9
       acceptance): schedules are re-added only after a recorded drill pass.
@@ -379,8 +420,10 @@ fix-source → `memory approve` → `sync`). No jargon without a one-clause glos
       quiescence proof and keeps an optional live-check (two consecutive clean,
       matching the **command line / tree** for `claude` **and** `codex`, not a
       binary path) that gates credential rotation.
-- [ ] The evidence-preservation step snapshots `state/schedule.json` **before**
-      removal and names `state/run-evidence.jsonl`, `state/alerts.jsonl`, and
+- [ ] The evidence-preservation step snapshots the **`config.yaml` `jobs:`
+      definitions** (the restore source) **before** removal — optionally also
+      `state/schedule.json` as watermark evidence — and names
+      `state/run-evidence.jsonl`, `state/alerts.jsonl`, and
       `logs/<job>/`; treats them as **potentially sensitive** (best-effort
       redaction, not secret-free); creates+verifies a private, sync/backup-excluded
       folder **before** copying; and re-applies modes **recursively** (every dir
@@ -391,10 +434,17 @@ fix-source → `memory approve` → `sync`). No jargon without a one-clause glos
       `WIENERDOG_JOB` cleared, BLOCKS on empty stdout / JSON-parse failure / wrong
       `hookEventName` / non-string `additionalContext`, byte-compares
       `additionalContext` to `state/digest.md`, greps the regenerated digest, and
-      checks **both** managed blocks via `sync`'s notice **plus** an explicit
-      sentinel/marker check in `CLAUDE.md` **and** `AGENTS.md` (**not** `doctor`).
-      The new-session observation is an optional extra, not the proof; the proof
-      is tied to the ADR-0021 byte-gated injection.
+      checks the managed block of **every installed harness file** (both `CLAUDE.md`
+      and `AGENTS.md` when both harnesses are installed, only the single present
+      file on a single-harness install) via `sync`'s notice **plus** an explicit
+      check that (a) `grep -F`s the poisoned marker over the **ENTIRE** file (not
+      only the sentinel region — a both-sentinels-deleted attack leaves poisoned
+      text that `sync` appends around, still injected), and (b) confirms exactly
+      one sentinel pair whose region matches the clean digest, treating a **missing**
+      pair as "`sync` appended a fresh block and the old content is orphaned outside
+      it — manually remove/quarantine it" (**not** `doctor`). The new-session
+      observation is an optional extra, not the proof; the proof is tied to the
+      ADR-0021 byte-gated injection.
 - [ ] `docs/runbooks/secret-incident.md` gains a cross-link naming `incident.md`
       as the general drill (its existing steps are unchanged).
 - [ ] Every documented command/mechanism is one that already ships (no invented
@@ -407,14 +457,19 @@ fix-source → `memory approve` → `sync`). No jargon without a one-clause glos
 npm run lint
 test -f docs/runbooks/incident.md && echo "runbook present — OK"
 grep -n "incident.md" docs/runbooks/secret-incident.md && echo "cross-link present — OK"
-# each required mechanism is referenced:
-grep -nE "schedule (list|remove)|schedule\.json|run-evidence\.jsonl|memory approve|wienerdog sync|managed block" docs/runbooks/incident.md
+# each required mechanism is referenced (config.yaml jobs: is the restore source):
+grep -nE "schedule (list|remove)|config\.yaml|jobs:|run-evidence\.jsonl|memory approve|wienerdog sync|managed block" docs/runbooks/incident.md
+# the restore snapshot is config.yaml jobs:, and schedule.json is only watermark evidence:
+grep -nE "config\.yaml.*jobs:|jobs:.*definition|watermark" docs/runbooks/incident.md
 # the catch-up removal + reboot-canonical quiescence + fixed optional live-check:
 grep -nE "ai\.wienerdog\.catchup|\\\\Wienerdog\\\\catchup|reboot|CommandLine|claude\|codex" docs/runbooks/incident.md
 # private evidence handling: pre-copy exclusion + recursive perms + windows ACL:
 grep -nE "find .*-type d.*chmod 700|find .*-type f.*chmod 600|icacls|Time Machine|OneDrive" docs/runbooks/incident.md
 # the fail-closed byte-level drill: installed hook path + env + block conditions:
 grep -nE "bin/session-start\.sh|WIENERDOG_HOME|WIENERDOG_JOB|additionalContext|hookEventName|AGENTS\.md" docs/runbooks/incident.md
+# the managed-block check greps the WHOLE file, handles a missing sentinel pair
+# (orphaned poison) and a single-harness (Claude-only / Codex-only) install:
+grep -niE "entire file|whole .*file|orphan|installed harness|single-harness" docs/runbooks/incident.md
 # memory approve uses a short name, not a path:
 grep -nE "memory approve (profile|preferences|goals|instructions|<note>)" docs/runbooks/incident.md
 # the drill precedes re-authorization (drill line number < re-add line number):
