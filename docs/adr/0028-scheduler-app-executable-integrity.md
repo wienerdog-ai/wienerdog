@@ -492,14 +492,18 @@ implemented as dated amendments in the six specs and detailed in `FIX-PLAN.md`.
    added job B gets authorized after unrelated job A succeeds, with no
    scheduler-registration capability). Legitimate schedule changes (incl. removing
    the final job → clean teardown) refresh the map only under attended `sync`.
-   **[R6] Single owner for catch-up register/repair/teardown:** attended
-   `repointSchedules` (the `sync` path) both binds the map AND repairs a missing
-   loaded catch-up registration (regenerating the canonical entry with the correct
-   bound map); the generic `reloadMissing` heal is **excluded from the catch-up
-   entry entirely**. This gives the missing-registration case a coherent home
-   without violating the attended-only-mint or the regenerate-don't-trust-source
-   rules — so a missing catch-up registration is restored by one attended `sync`
-   rather than staying unavailable and masking missed execution.
+   **[R6/R7] Catch-up ownership:** the map is **minted** by ANY attended,
+   user-invoked registration caller — `sync`/`repointSchedules`, `schedule add`,
+   `init`'s `ensureDreamSchedule`, and `adopt`'s `ensureDreamSchedule` (adopt does
+   not call `sync`) — always from **freshly-validated descriptors** derived in that
+   run, never a retained source file or stale map. Attended `repointSchedules` is
+   additionally the **sole repair/teardown owner** for a missing/stale *loaded*
+   catch-up registration (regenerating the canonical entry with the correct bound
+   map); the generic `reloadMissing` heal and `doctor` are **excluded from the
+   catch-up entry entirely**. This gives the missing-registration case a coherent
+   home without violating the attended-only-mint or the regenerate-don't-trust-
+   source rules — so a missing catch-up registration is restored by one attended
+   `sync` rather than staying unavailable and masking missed execution.
 
 7. **Dev is a separate, runnable descriptor (Decision 3/4 refinement).** "Skip the
    tree digest but still compare the full descriptor digest" is self-contradictory

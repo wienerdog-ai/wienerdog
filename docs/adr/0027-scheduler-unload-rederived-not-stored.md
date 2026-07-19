@@ -118,6 +118,9 @@ recognized in-root `ai.wienerdog.*.plist` (or a symlink, or a plist with arbitra
 sync-time heal **regenerates** the canonical scheduler content from **live
 validated configuration** (for **configured, code-recognized jobs only**),
 atomically replaces / byte-verifies a **regular non-symlink** file in-root, and
-registers **that exact regenerated artifact**. Unknown manifest entries and
-found-on-disk files are **never** healed or registered. Implemented as WP-145
-fix-pass amendments.
+registers from the regenerated canonical path — **subject to the documented A12
+verify→register reopen race** (an active concurrent writer at heal time can swap
+the pathname after byte-verification; see ADR-0028 residuals + WP-145, which state
+the same residual). A *static* planted file is still defeated. Unknown manifest
+entries and found-on-disk files are **never** healed or registered. Implemented as
+WP-145 fix-pass amendments.

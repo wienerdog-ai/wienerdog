@@ -85,7 +85,9 @@ for the scoped-write class only.
 | modify | src/scheduler/launcher.js | `parseArgv` recognizes `--job-digests` (value-taking, opaque base64url token); `verifyCatchup` forwards it; `main` passes it through to the catch-up runner argv. The launcher NEVER reads a per-job entry file to obtain a digest. |
 | modify | src/cli/run-job.js | The catch-up runner decodes `--job-digests` (bounded base64url→JSON→shape-validate; malformed/oversized ⇒ durable alert + zero spawn), authorizes the **union** of bound ∪ configured job names BEFORE due-filtering ([R4:#1]), and runs only jobs whose live `deriveDescriptorDigest` matches the bound map; additions/removals/mismatches ⇒ alert, zero spawn. **[R5] REMOVE the post-success runtime `gen.ensureCatchup` call (L653)** — a runtime path must not mint authorization from config; at most emit a read-only "catch-up entry missing" notice, never regenerate. |
 | modify | src/cli/sync.js | **[R6]** the attended sync flow (its `repointSchedules` call) is the SINGLE owner of catch-up register/repair/teardown — orchestrate the query+repair here; the map (re)bind + repair logic itself lives in `repointSchedules` (`schedule.js`, already listed). |
-| modify | src/scheduler/status.js | **[R6]** `reloadMissing` is **excluded from the catch-up entry entirely** — it neither creates, authorizes, nor reloads it (catch-up is repointSchedules' sole responsibility). |
+| modify | src/scheduler/status.js | **[R6]** `reloadMissing` is **excluded from the catch-up entry entirely** — it neither creates, authorizes, nor reloads it (catch-up repair/teardown is repointSchedules' sole responsibility). |
+| modify | src/cli/init.js | **[R7]** `init`'s `ensureDreamSchedule` mints the catch-up map from freshly-validated descriptors (first-install; init does not necessarily run `sync`). No config-trusted/stale map. |
+| modify | src/cli/adopt.js | **[R7]** `adopt`'s `ensureDreamSchedule` mints the catch-up map from freshly-validated descriptors — adopt does NOT call `sync`, so it is a first-class attended mint caller. |
 | create | tests/unit/catchup-authorization.test.js | The negatives below. |
 | modify | tests/unit/scheduler-generators.test.js | Assert the catch-up entry carries `--job-digests` with a canonical map. |
 
@@ -133,24 +135,35 @@ into LOADED scheduler state** — the next catch-up treats B as authorized and r
 it, no alert, with **no scheduler-registration capability** ever exercised by the
 attacker.
 
-**Invariant (enforce at every path below):** only **attended** operations
-(`wienerdog sync` / `wienerdog schedule`) may **mint or replace** the catch-up
-authorization map / registration. **No nightly/runtime path may derive
-authorization from `config.yaml`.**
+**Invariant (enforce at every path below):** only **attended, user-invoked
+registration** may **mint or replace** the catch-up authorization map /
+registration, and it must always mint from **freshly-validated descriptors derived
+in that same attended run** — never from a retained source file or a stale map.
+**No nightly/runtime path may derive authorization from `config.yaml`.**
 
 Enumerated catch-up registration/reload paths + the required stance:
 
 | Path | When | Stance | Required behavior |
 |------|------|--------|-------------------|
 | `run-job.js:653` `ensureCatchup` (post-success backstop) | **runtime/nightly** | forbidden to mint | **Remove** the re-registration. It may, at most, read-only *check* presence and emit a notice ("catch-up entry missing — run `wienerdog sync`"); it must **never** regenerate the entry/map from config. If it cannot supply the already-loaded map it must **leave the loaded entry intact** (never overwrite with stale/missing args → would disable catch-up). |
-| `schedule.js:258` `ensureCatchup` (via `schedule add`/register) | attended | **mints** | Computes + binds the canonical map (an authorized mint point). |
-| `sync.js:188` `repointSchedules` | attended (`sync`) | **mints AND repairs** the catch-up registration + map | **[R6] Single owner.** Recomputes + rebinds the map from validated config, AND **queries the loaded catch-up registration and repairs it** when missing/stale — regenerating the canonical entry with the correct bound base64url map (and owning the final-job **teardown**). This is the sole home for the missing-registration case, so a byte-identical source can still be restored with a fresh authorized map. |
-| `sync.js:197` / `status.js:185` `reloadMissing` (generic sync-time heal) | attended (runs under `sync`) | **never touches the catch-up entry** | **[R6]** The generic heal re-registers missing CANONICAL per-job entries (WP-145) but is **excluded** from the catch-up entry entirely — it neither creates, authorizes, nor reloads it. All catch-up register/repair/teardown belongs to `repointSchedules` (row above), which runs in the same attended `sync`. This removes the map/canonical-byte handoff ambiguity: only one path owns catch-up. |
+| `schedule.js:258` `ensureCatchup` (via `schedule add`) | attended, user-invoked | **mints** | Computes + binds the canonical map from freshly-validated descriptors. |
+| `init.js:186` `ensureDreamSchedule` → `registerPlatform` → `ensureCatchup` | attended, user-invoked (`init`) | **mints** | **[R7]** First-install mint from freshly-derived descriptors (init does not necessarily run `sync`). |
+| `adopt.js:370` `ensureDreamSchedule` → `registerPlatform` → `ensureCatchup` | attended, user-invoked (`adopt`) | **mints** | **[R7]** Adopt mints directly — it does **not** call `sync` — so it is a first-class mint caller, from freshly-derived descriptors, never a retained/stale map. |
+| `sync.js:188` `repointSchedules` | attended (`sync`) | **mints AND repairs** the catch-up registration + map | **[R6] Sole REPAIR/teardown owner.** Recomputes + rebinds the map from freshly-validated descriptors, AND **queries the loaded catch-up registration and repairs it** when missing/stale — regenerating the canonical entry with the correct bound base64url map (and owning the final-job **teardown**). The sole home for the missing-loaded-registration case, so a byte-identical source can still be restored with a fresh authorized map. |
+| `sync.js:197` / `status.js:185` `reloadMissing` (generic sync-time heal) | attended (runs under `sync`) | **never touches the catch-up entry** | **[R6]** The generic heal re-registers missing CANONICAL per-job entries (WP-145) but is **excluded** from the catch-up entry entirely. Catch-up **repair/teardown** belongs to `repointSchedules`; **mint** belongs to any attended registration caller above. |
+| `doctor` | attended, read-only | **never mints/touches** | Read-only presence report only. |
 
-**Legitimate schedule change** refreshes the map **only** via attended `sync`
-(`repointSchedules`) or `schedule` — including the edge case of **removing the
-final job**: the map/entry must be **cleanly torn down** (catch-up entry + map
-removed, not left stale with a removed job).
+**[R7] The authorized-mint set is ALL attended, user-invoked registration
+callers** — `sync`/`repointSchedules`, `schedule add`, `init`'s
+`ensureDreamSchedule`, and `adopt`'s `ensureDreamSchedule` — each minting the map
+from **freshly-validated descriptors** derived in that attended run.
+`repointSchedules` remains the sole **repair/teardown** owner for a missing/stale
+*loaded* entry; `reloadMissing` and `doctor` never mint or touch it.
+
+**Legitimate schedule change** refreshes the map **only** via an attended,
+user-invoked registration caller — including the edge case of **removing the final
+job**: the map/entry must be **cleanly torn down** (catch-up entry + map removed,
+not left stale with a removed job).
 
 **[R4:#1] Authorize the FULL job set BEFORE computing due-ness.** The naive
 "filter due jobs from mutable `job.at`, then digest-compare each due job" lets an
@@ -238,6 +251,10 @@ others.
       catch-up **refuses B** (alert + zero spawn). Removing a job via attended
       `sync` cleanly refreshes the map (including removing the **final** job:
       entry + map torn down, not left stale).
+- [ ] **[init/adopt mint, R7]** `init` and `adopt` (neither necessarily running
+      `sync`) each bind the catch-up map from **freshly-validated descriptors**
+      derived in that run (assert the loaded entry's argv carries the correct
+      base64url map; assert it is NOT sourced from a retained file or a stale map).
 - [ ] **[missing-registration heal, R6]** With the source file + manifest intact
       and canonical but the **loaded** OS catch-up registration missing, ONE
       attended `wienerdog sync` restores it with the correct bound map (assert the
