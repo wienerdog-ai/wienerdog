@@ -388,3 +388,80 @@ the specs:
 - **WP-159** — honest A7 docs: THREAT-MODEL, ARCHITECTURE, GLOSSARY, README, VISION,
   and the integrity runbook; every claim traces to a shipped mechanism and the A12
   same-user-native residual is stated plainly.
+
+## Amendment (2026-07-19) — fix-pass corrections from the double-gate review
+
+The In-Review WP-154..WP-159 implementations were reviewed (wd-reviewer + per-spec
+Codex) and found to have a critical + several high defects, all in the recurring
+**fail-open** class. The decisions below refine — not reverse — this ADR. They are
+implemented as dated amendments in the six specs and detailed in `FIX-PLAN.md`.
+
+1. **Executable pin is fail-CLOSED on tamper (Decision 1 refinement).** A
+   missing/unreadable/corrupt/foreign `exec-pins.json` no longer degrades to a bare
+   live PATH resolve. The resolver distinguishes *absent* (ENOENT — genuine
+   first-run self-heal only) from *tampered* (unreadable/corrupt/foreign schema —
+   **refuse**). Deletion-after-sync on the **unattended** path is caught by the
+   descriptor digest (the pins are folded into it; a deleted store ⇒ empty `exec`
+   ⇒ digest mismatch ⇒ launcher refuses), because the OS-entry-bound digest is the
+   one anchor an in-scope (scoped-write) attacker cannot forge. The attended manual
+   `dream` self-heal on a genuinely-absent store is retained and stated as an
+   honest residual (attended, out of the unattended threat model).
+
+2. **The interpreter is verified, not just the script (Decision 1 refinement).**
+   Structural verification of a pinned `#!/usr/bin/env node` script (the shape of
+   `claude`/`codex`) did not cover the interpreter, which `env` re-resolves from the
+   job PATH. Node-shebang pins are now spawned via `process.execPath` (the verified,
+   absolute, running node); native binaries spawn directly; other interpreters are
+   resolved + structurally verified. No PATH re-resolution of the interpreter.
+
+3. **Everything shaping the spawn is digest-covered — now including `vault_layout`
+   (Decision 3 refinement).** The `vault_layout` config (which changes the model's
+   authorized write locations via the dream prompt + `WIENERDOG_DREAM_LAYOUT` env)
+   was omitted from the descriptor digest. It is added as a first-class descriptor
+   field `vaultLayout`; editing it now requires `wienerdog sync`. The app-tree
+   digest encoding is also made injective (canonical-JSON of sorted `[relpath,
+   hash]` pairs; the prior `relpath\nhash\n` concatenation was collidable via
+   newline filenames).
+
+4. **Pins are created before descriptors are written/bound (Decision 3/4
+   interaction).** `sync` created pins *after* writing + digest-binding descriptors,
+   so the first descriptor on a fresh install bound `exec:{}` and drifted once pins
+   landed (nightly fail-closed until a 2nd sync). Ordering invariant: no descriptor
+   is written and no entry digest bound before the current environment's pins exist.
+
+5. **The scheduled node's environment is sanitized (Decision 4 refinement).**
+   Inherited `NODE_OPTIONS`/`NODE_PATH` (code-loading vars an in-scope env write can
+   set — e.g. `environment.d`, `launchctl setenv`) executed attacker code in the
+   launcher's own node process before `launch.js` ran. The OS scheduler entries now
+   clear these vars for the node they launch (launchd `EnvironmentVariables`,
+   systemd `Environment=`, Windows `cmd /c set …`), and the launcher passes a
+   scrubbed env to its child spawn.
+
+6. **Fail-closed on the catch-up path (Decision 3/4 refinement).** Catch-up
+   verified only the app-tree digest and then ran jobs from mutable `config.yaml`,
+   so a config change a normal fire refused was executed by the next catch-up.
+   Catch-up now verifies each due job's descriptor digest against the digest bound
+   into that job's own per-job OS entry (`readBoundDigest`), refusing on mismatch.
+   Dev stance is bound at registration (not read from a live `WIENERDOG_DEV` env at
+   fire time) and dev still verifies the descriptor digest + containment (it skips
+   only the unstable app-tree byte digest). Every verification exception becomes a
+   durable alert + zero spawn (never a bare throw with no alert).
+
+### Residuals added to the Honest boundary (deferred to A12)
+
+- **Verify-to-use (hash-then-reopen) race.** The launcher hashes the app tree,
+  then reopens the same on-disk tree to `require` its verifiers and to spawn
+  `bin/wienerdog.js`. Spawning `node` against an on-disk tree is intrinsically
+  reopen-based; a TOCTOU-free design requires the deferred **"2b" in-memory
+  bootstrap**. The in-scope A7 model (static scoped write, caught at fire) does not
+  include an active concurrent writer racing at fire time — that is A12. Stated
+  plainly in docs; not claimed as TOCTOU-free.
+- The `makeTreeFilesReadOnly` control is **files-only** (best-effort friction,
+  defeated by a same-user `chmod`); the app-tree digest is the real guard.
+
+### Refuse-surface decision
+
+The launcher refuse text pointed to `wienerdog doctor`, which reads no A7 state.
+The durable alert surfaces in the **digest banner** (`alerts.jsonl`); the refuse
+text and runbook point there + to `wienerdog sync`. Wiring `doctor` to A7 state is
+a deferred follow-up (candidate WP-162), not built in this pass.

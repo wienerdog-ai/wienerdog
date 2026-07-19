@@ -102,6 +102,10 @@ lines) and returns before any mutation.
 | modify | src/cli/uninstall.js | Before the confirm prompt (interactive path), print the derived plan (reuse `reverse(..., {dryRun:true})` enumeration incl. the derived "would run" lines) so the user sees every derived command/path before consenting; `--yes` skips only the prompt, never widens validity. |
 | modify | tests/unit/manifest.test.js | Adversarial cases below. |
 | modify | tests/unit/uninstall.test.js | Prove the derived plan is shown before confirm and a poisoned `unload` never spawns. |
+| modify | src/scheduler/status.js | Fix-pass (2026-07-19): re-derive the sync-time heal probe/reload argv from validated identity + platform; NEVER read `entry.unload` into an executed argv (A2). |
+| modify | src/cli/schedule.js | Fix-pass: `remove()` is a 2nd production caller of `reverseSchedulerEntry` with a duplicated `schedulerRoots`; mirror the root-set + validate-before-spawn (A3). |
+| modify | tests/unit/scheduler-status.test.js | Fix-pass: a poisoned `entry.unload` never spawns via the heal path; out-of-root path ⇒ zero probe/reload (A2). |
+| modify | tests/unit/scheduler-schedule.test.js | Fix-pass: `schedule remove` mirrors the reverser containment + validate-before-spawn ordering (A1/A3). |
 
 ### Exact contracts
 
@@ -251,8 +255,11 @@ npm run lint
   (this WP depends on it; do not re-implement it).
 - Changing how schedule entries are WRITTEN (`schedule.js`/`generators.js`
   register path). This WP only changes derivation-on-reverse and one additive
-  pure helper. The stored `entry.unload` may remain on entries (ignored on
-  reverse, still used by `scheduler/status.js` display) — do not remove it.
+  pure helper. The stored `entry.unload` may remain on entries (ignored for
+  execution everywhere). **Fix-pass 2026-07-19 (A2): the earlier claim that
+  `status.js` may keep reading `entry.unload` for "display" is WITHDRAWN — it
+  executes it via `reloadMissing`; `status.js` now re-derives probe/reload argv
+  too (see Fix-pass amendments).**
 - The managed-block separator fidelity bug — **WP-147**.
 
 ## Definition of done
@@ -262,3 +269,56 @@ npm run lint
    PR titled `fix(uninstall): re-derive scheduler unload from validated identity + show plan before confirm (WP-145)`.
 3. PR template filled, including "Decisions made" (or "none") and `Generated-by:`.
 4. This spec's `status:` flipped to `In-Review` in the same PR.
+
+## Fix-pass amendments (2026-07-19)
+
+Review found the unregister still spawns before validation, and — the bigger gap
+— **ADR-0027 is not actually closed**: a second caller still executes stored
+`entry.unload`. Full implementer contract + tests: `FIX-PLAN.md` cluster **C7**.
+Real files: `src/core/manifest.js`, `src/scheduler/status.js`,
+`src/scheduler/generators.js`, `src/cli/schedule.js` (the report said
+`src/cli/…`).
+
+### A1 — spawn-before-check [Codex HIGH, verified]
+
+`reverseSchedulerEntry` derives the argv (L281) and fires `schedulerSpawn`
+(L289) **before** `withinSchedulerRoot` (L299). A recognized-basename-but-
+out-of-root entry runs `launchctl bootout` before the root gate — violating this
+WP's own "out-of-root spawns nothing." **Corrected contract (the spec already
+intends this; the code ordered it wrong):** validate `withinSchedulerRoot` +
+recognized basename **first**; only then derive + spawn + remove. Out-of-root /
+unrecognized ⇒ preserve, spawn nothing, derive nothing.
+
+### A2 — `status.js` heal path also re-derives (close ADR-0027) [Codex HIGH, verified]
+
+This WP's original "Out of scope" said `entry.unload` "still used by
+`scheduler/status.js` display — do not remove it." That was **wrong**:
+`status.js` `describeEntry` (L21-53) reads `entry.unload` into a **reload** argv
+that `reloadMissing` (L201, sync-time self-heal) **executes** via
+`schedulerSpawn`, and `probeAll` spawns a probe from it too. So the ADR-0027
+"never execute manifest-stored argv" claim is open on the heal path.
+**Corrected contract:** `entry.unload` is never read into any executed argv, on
+any path. Add `deriveProbeArgv` + `deriveReloadArgv` to `generators.js`
+(fully-anchored, basename+platform, mirroring `deriveUnloadArgv`; any file-path
+arg like `launchctl bootstrap <path>` / `schtasks /xml <path>` is
+`withinSchedulerRoot`-gated). Rewrite `status.js` to use them and gate every
+spawn behind the scheduler-root check. **This expands this WP's scope** to
+`src/scheduler/status.js` + `tests/unit/scheduler-status.test.js` (added to
+Deliverables) — coherent because it completes ADR-0027. Test: a poisoned
+`unload:['/bin/sh','-c','touch <canary>']` on a real in-root plist ⇒ the derived
+`bootstrap` runs, the canary never appears; out-of-root ⇒ zero probe/reload.
+
+### A3 — boundary: `schedule.js` remove() [wd P1]
+
+`src/cli/schedule.js` `remove()` (L512-522) is a 2nd production caller of
+`reverseSchedulerEntry` with a **byte-duplicated** `schedulerRoots`; the root-set
++ validate-before-spawn change must be mirrored here or `schedule remove`
+diverges from uninstall. Added to Deliverables:
+`src/cli/schedule.js` + `tests/unit/scheduler-schedule.test.js`.
+
+### ADR-0027 amendment (see the ADR file)
+
+The decision's "uninstall reverser" scope is broadened to **all**
+scheduler-mutation paths (uninstall reverse, `schedule remove`, sync-time heal
+probe + reload). The "Out of scope" note in this spec permitting `status.js` to
+keep reading `entry.unload` is **withdrawn**.

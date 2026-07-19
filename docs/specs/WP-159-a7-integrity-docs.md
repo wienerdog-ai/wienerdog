@@ -251,3 +251,42 @@ node bin/wienerdog.js safety      # all five gates BLOCKED
 
 > **Fork note:** work lands directly on `main` per the WORKING-NOTES; `branch:`/PR
 > fields are kept for template/upstream-porting fidelity.
+
+## Fix-pass amendments (2026-07-19)
+
+Review found the docs overclaim relative to the code; several claims traced back
+to code gaps now fixed in WP-154..WP-158. This WP lands **last** and must
+describe the **fixed** code. Full context: `FIX-PLAN.md` cluster **C5**.
+
+- **A1 — catch-up config drift [Codex HIGH → fixed in WP-157 A5].** After the
+  WP-157 catch-up per-job-descriptor fix, "config drift ⇒ zero model spawn" holds
+  on catch-up too — but the docs must state that catch-up is verified **per job**
+  (not app-tree-only). If WP-157 A5 is split to WP-160 and not yet landed, scope
+  the claim to the normal fire and name catch-up as a pending gap. Do not
+  overclaim.
+- **A2 — "every scheduled spawn is pinned" is false [Codex HIGH].** Scope the pin
+  claim to the **dream brain (claude/codex), the vault commit (git), and the
+  containment probe**. Do NOT claim routines are pinned — `routine-runtime.js`
+  returns bare `command:'claude'` and routine pinning is explicitly deferred
+  (WP-154 out-of-scope; frozen routines). Add: "routine-runtime pinning is a
+  documented follow-up."
+- **A3 — re-pin recovery [= WP-156 A1].** The "one `wienerdog sync` recovers"
+  claim is true only after the WP-156 ordering fix; safe to keep once it lands.
+- **A4 — doctor↔A7 gap + refuse-text surface [wd/Codex P2]. DECISION.** `doctor`
+  reads no A7 state (`alerts.jsonl`/pins/descriptor — confirmed). The durable
+  alert surfaces in the **digest banner** (`digest.js` reads `alerts.jsonl`).
+  **Owner-ethos decision (simplest):** the runbook and the WP-157 refuse text
+  point to the **digest banner + `wienerdog sync`**, NOT `wienerdog doctor`. A
+  `doctor` A7 reader is **not** built in this pass; it is a follow-up (candidate
+  **WP-162: doctor reads A7 alert/pin/descriptor state**). Record this decision
+  and the follow-up here. Add a verification grep asserting the runbook does not
+  name `wienerdog doctor` as the A7 alert surface.
+- **A5 — enforcement reductions [Codex MED].** State them where guarantees are
+  made: **dev** stance skips the app-tree byte digest (but still verifies the
+  descriptor digest + containment, per WP-157 A3); **Windows** has reduced POSIX
+  guarantees (`verifyExecutable` win32 returns early — no owner/mode/ancestor).
+- **A6 — verify-to-use race [Codex MED, = WP-157 A7].** Add the hash-then-reopen
+  / verify-to-use TOCTOU to the THREAT-MODEL residuals, alongside the
+  launcher-file-write (2b) residual — an honest, deferred A12 item.
+- **A7 — GLOSSARY.** Add `vault layout` to the digest-covered field list in the
+  `job descriptor` definition (WP-156 A2).

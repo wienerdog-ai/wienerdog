@@ -402,3 +402,89 @@ npm run lint
 
 > **Fork note:** work lands directly on `main` per the WORKING-NOTES; `branch:`/PR
 > fields are kept for template/upstream-porting fidelity.
+
+## Fix-pass amendments (2026-07-19)
+
+Adversarial review (wd-reviewer + Codex) found the In-Review implementation
+fails OPEN. These amendments correct the contract. Full implementer contract +
+tests: `FIX-PLAN.md` cluster **C1**. No new files — all edits are within the
+existing Deliverables.
+
+### A1 — pin store is fail-CLOSED on tamper (was fail-open) [Codex HIGH]
+
+`loadPins` collapsed ENOENT, EACCES, JSON-parse error, and foreign schema all to
+`{}`, and `verifyPin`/`resolvePinnedSpawn` treated every one as "no pin ⇒
+self-heal via live PATH resolve" — so deleting or corrupting `exec-pins.json`
+silently downgraded a pinned install to unpinned. **Corrected contract:**
+distinguish three states via an internal `readPinStore(paths)` →
+`{state:'ok'|'absent'|'tampered', pins}`:
+- ENOENT → `absent`; EACCES/EISDIR/other read error, JSON-parse error, or
+  wrong/foreign schema → `tampered`; valid `schema===1` → `ok`.
+- `verifyPin`: `tampered` ⇒ `{ok:false, why:'pin store unreadable or corrupt',
+  drift:true}` (fail closed). `absent` + no pin for the name ⇒ `drift:false`
+  (genuine first-run self-heal). `ok` + no pin for the name ⇒ `drift:false`.
+- `resolvePinnedSpawn`: `drift:true` (incl. `tampered`) ⇒ **THROW**. `absent` ⇒
+  the existing live self-heal (genuine pre-first-sync **only**).
+- `loadPins(paths)` (used by `descriptor.buildDescriptor`) keeps returning
+  `.pins` (tampered ⇒ `{}` ⇒ empty `exec` ⇒ launcher digest mismatch — fail
+  closed on the scheduled path).
+
+**Honest boundary (state in Context; do not overclaim).** An in-scope attacker
+can still *delete* the store (→ `absent` → self-heal on the **attended** manual
+path). Deletion-after-sync is caught on the **unattended** path by the
+descriptor digest **bound into the OS entry** (the pins are folded into that
+digest; a deleted store ⇒ empty `exec` ⇒ re-derived digest ≠ bound digest ⇒
+WP-157 refuses) — provided `exec` was non-empty at bind time (the WP-156 ordering
+fix) and the launcher path is not bypassed (the WP-157 dev/catch-up fixes).
+`resolvePinnedSpawn`'s `absent`→self-heal therefore remains only for genuine
+first-run and attended dream; it is backstopped on the scheduled path by the
+launcher. Do **not** claim `resolvePinnedSpawn` alone closes deletion.
+
+### A2 — verify the interpreter, not just the script [Codex HIGH]
+
+`verifyExecutable` performs no shebang handling, and `resolvePinnedSpawn`
+returned a bare realpath string that callers `spawn`ed directly. A pinned node
+script (`#!/usr/bin/env node` — the confirmed shape of `claude`/`codex`) makes
+the kernel re-resolve `node` via `env` from the job PATH; a planted `node`/`env`
+earlier on PATH runs (the front-loaded node-dir masks this only incidentally, and
+not on the interactive path). **Corrected contract:** `resolvePinnedSpawn`
+returns a **spawn spec** `{command:string, args:string[]}` (spawn `command` with
+`[...args, ...jobArgs]`):
+- native binary (no shebang, e.g. `git`) ⇒ `{command: realpath, args:[]}`;
+- node shebang (`env node`, `env -S node …`, `<abs>/node`) ⇒
+  `{command: process.execPath, args:[realpath]}` — the verified, absolute,
+  already-running node; no PATH interpreter resolution;
+- other `env`-based interpreter ⇒ resolve+`verifyExecutable` the interpreter
+  against the job PATH, spawn via its verified absolute path, else THROW;
+- absolute non-node interpreter ⇒ `verifyExecutable` it, else THROW.
+Add `readShebang(realpath)` (bounded 512-byte first-line read). Callers
+(`brain.js` incl. the `--version` probe, `validate.js`, `containment-probe.js`)
+spawn `spec.command` with `spec.args` prepended. This is an API **shape** change
+(string → object) — update the `resolvePinnedSpawn` JSDoc and all call sites.
+
+### A3 — sync ordering: pins before descriptors [wd P1, shared with WP-156]
+
+`src/cli/sync.js` calls `repointSchedules` (which writes + digest-binds
+descriptors, reading pins via `loadPins`) **before** `createPins`, so the first
+descriptor on a fresh install binds `exec:{}` and drifts once pins land.
+**Corrected contract:** in `sync.run`, move the WP-154 `createPins(paths, {…,
+manifest})` call **above** `repointSchedules`. (`sync.js` is this WP's file; the
+*reason* is WP-156's descriptor — recorded in both. See WP-156 amendment for the
+real-sync exec test.)
+
+### A4 — manual-dream PATH provenance [wd P2]
+
+`validate.js`/`containment-probe.js`/`brain.js` resolve on `process.env.PATH`;
+attended `wienerdog dream` uses the interactive PATH → false drift + an
+unbreakable refuse loop. **Corrected contract (minimal):** on the attended dream
+path, resolve pins against a clean job PATH derived like pinning does
+(`buildCleanEnv(paths,'dream').PATH`, threaded as the `env` arg). Do not change
+`buildCleanEnv` ordering (ADR-0009). If more than a few lines, downgrade to a
+documented residual and record it in the PR.
+
+### Deliverables / acceptance additions
+- Deliverables unchanged (all edits within the listed files).
+- Acceptance: add — a corrupt/unreadable/foreign `exec-pins.json` makes
+  `resolvePinnedSpawn` **throw** (never live-resolve); a node-shebang pin spawns
+  via `process.execPath` and a planted `node` earlier on PATH is irrelevant; each
+  proven by a unit test that fails if the fix is reverted.

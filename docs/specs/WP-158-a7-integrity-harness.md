@@ -251,3 +251,66 @@ WIENERDOG_RUN_SCENARIOS=1 npm run scenarios:a7-integrity
 
 > **Fork note:** work lands directly on `main` per the WORKING-NOTES; `branch:`/PR
 > fields are kept for template/upstream-porting fidelity.
+
+## Fix-pass amendments (2026-07-19)
+
+Adversarial review (verified by execution) found the harness **substantially
+vacuous** — the exact WP-082 canary class this project has a documented lesson
+about. Full implementer contract + per-case mutations: `FIX-PLAN.md` cluster
+**C4**. No new files (all edits within the listed Deliverables) except the shared
+case module noted in A6.
+
+**Root cause.** The launcher runs `findJob` (step 4) *before* the
+descriptor-digest comparison (step 5), and `buildDescriptor` folds tree-digest
+**and** stance into the digest — so the dedicated guards (containment,
+tree-digest, stance) are individually redundant against the digest re-derivation,
+and every case asserts only `exit==1 + zero-spawn + /integrity mismatch/` (the
+last is unconditional in the alert template). Deleting any single guard leaves
+the harness green.
+
+**New binding acceptance property.** Each tamper case MUST fail if the guard it
+targets is deleted — proven by asserting the **specific** refusal reason that
+only that guard produces (not the generic `/integrity mismatch/`).
+
+### A1 — targeted config poison [both, verified]
+`poisonConfig` for `dream_model`/`dream_timeout_minutes` rewrites the whole
+`config.yaml`, erasing the `jobs:` block, so the launcher refuses at `findJob`
+before the digest check. Fix: mutate **only the target key**, preserving the
+`jobs:` managed block; assert the specific descriptor-changed reason.
+
+### A2 — guard isolation [both]
+Each launcher-guard case asserts the distinct reason only that guard emits
+(stance / containment / app-tree / descriptor-digest), so deleting that guard
+changes the reason and fails the case.
+
+### A3 — real manifest [both]
+`buildProdInstall` writes a real `install-manifest.json` (pass `manifest` to
+`vendorSelf` + `createPins`, then `save`); case 4 tampers the real manifest and
+asserts refusal — not a swallowed ENOENT that degenerates to config drift.
+
+### A4 — interrupted-update realism + positive path [both]
+Case 7 uses a **valid different-version** v2 source (real `package.json` + tree)
+so `vendorSelf` reaches staging; interruption is simulated **after staging
+begins**; assert `current` retained + still verifies; AND add the required
+**positive** clause — a completed re-vendor switches `current`, re-binds the entry
+digest, and the next verify passes (exactly one spawn).
+
+### A5 — foreign-owner row [both]
+Execute the owner-uid tamper (`verifyExecutable` owner check) deterministically
+via an injected/stubbed uid (no root needed); assert `resolvePinnedSpawn` throws
+pre-spawn.
+
+### A6 — one authoritative case list [spec]
+Extract the tamper matrix into a single shared module consumed by BOTH
+`a7-integrity-negatives.test.js` and `run-a7-integrity.js`; add the runner's
+missing cases (2b sibling-repoint, 6a repoint-outside, 8 seams-nonexistence).
+Add the new **`vault_layout` drift** tamper (from WP-156 A2) to the config-rewrite
+group. The README "no gaps" claim is permitted only once one shared list covers
+every launcher check and every digest-covered knob (`run`, `dream_model`,
+`dream_timeout_minutes`, `vault_layout`) with an isolating case each.
+
+### Acceptance additions
+- Each tamper case fails if the guard it targets is deleted (specific-reason
+  assertions) — a required, checked property.
+- The `dream_model`/`dream_timeout_minutes`/`vault_layout` cases reach and trip
+  the **descriptor-digest** check (not `findJob`).

@@ -136,6 +136,7 @@ authorization record.
 | modify | src/cli/schedule.js | In `registerPlatform` (thus `add` + `repointSchedules`): after the OS entry is ensured, `writeDescriptor` for the job (idempotent; record its `file` manifest entry). Do NOT change the entry's argv here (WP-157). |
 | create | tests/unit/descriptor.test.js | Determinism + per-input digest-change + write/record + re-derive cases below. |
 | modify | tests/unit/scheduler-schedule.test.js | Assert `add`/`repointSchedules` write a descriptor file (0600) and record it; a legit uninstall removes it. |
+| modify | tests/unit/sync-repoint.test.js | Fix-pass (2026-07-19): real `sync.run` produces a non-empty descriptor `exec` and no digest drift after ONE sync (A1 ordering); newline-filename injectivity (A3). |
 
 ### Exact contracts
 
@@ -371,3 +372,66 @@ npm run lint
 
 > **Fork note:** work lands directly on `main` per the WORKING-NOTES; `branch:`/PR
 > fields are kept for template/upstream-porting fidelity.
+
+## Fix-pass amendments (2026-07-19)
+
+Adversarial review found three descriptor-correctness defects. Full implementer
+contract + tests: `FIX-PLAN.md` cluster **C2**.
+
+### A1 — pin/descriptor write ordering (the P1) [wd, 3× surfaced]
+
+`sync.run` calls `repointSchedules` (writes + digest-binds descriptors, reading
+pins via `loadPins`) **before** `createPins` (sync.js:188 vs :221). On the first
+sync of a machine where a job exists but `exec-pins.json` does not, the
+descriptor is written and the OS-entry `--expect-digest` bound with `exec:{}`;
+`createPins` then populates the store; at the next fire the launcher re-derives
+with the now-present pins ⇒ digest ≠ bound digest ⇒ **refuse** (nightly
+fail-closed until a 2nd sync — a hard availability P1 once WP-157 enforces).
+`init --fresh-vault` is already correct (its `ensureDreamSchedule` runs after
+sync's `createPins`); plain `init` writes no descriptor.
+
+**Corrected contract — ordering invariant:** no descriptor may be written, and no
+entry digest bound, before the exec pins for the current environment exist. The
+fix lives in `sync.js` (WP-154's file): move `createPins` **above**
+`repointSchedules` (recorded as a WP-154/WP-156 joint amendment). **New test**
+(`tests/unit/sync-repoint.test.js`): after ONE real `sync.run` with a resolvable
+`claude`/`git` on the job PATH and a `dream` job, the on-disk descriptor's `exec`
+is non-empty AND `deriveDescriptorDigest(paths, job)` equals the digest bound
+into the OS entry (no drift after one sync). Fails if the reorder is reverted.
+
+### A2 — `vault_layout` must be digest-covered [Codex HIGH]
+
+`readVaultLayout(paths.config)` (dream.js:167) flows into
+`buildClaudeArgs({…layout})` → `DREAM_PROMPT(…,layout)` (brain.js:74) and the
+`WIENERDOG_DREAM_LAYOUT` env (brain.js:157) — it changes the model's authorized
+write locations. But `descriptor.profileAndPromptHash` renders
+`DREAM_PROMPT('<scratch>','<vault>','<date>')` with **no layout**, capturing the
+default only, so a `vault_layout` edit takes effect **without** `sync` and drifts
+no digest — violating "everything shaping the 03:30 spawn is digest-covered."
+**Corrected contract:** add a first-class descriptor field **`vaultLayout`** =
+the effective `readVaultLayout(paths.config)` object (read in `buildDescriptor`
+from the same config read as `vaultRoot`/`model`/`timeoutMs`), canonicalized so
+it folds into `descriptorDigest`. Editing `vault_layout` now requires
+`wienerdog sync` (same rule as `model`/`timeout`). Add it to the descriptor
+object shape above, the ADR-0028 descriptor block, and the Security-checklist
+"changing … yields a different digest" list. **Test:** mutate one `vault_layout`
+key ⇒ `deriveDescriptorDigest` changes (fails if the field is dropped).
+
+### A3 — injective app-tree digest encoding [Codex MED]
+
+`appTreeDigest` hashes `entries.sort().join('')` where each entry is
+`` `${relpath}\n${sha256}\n` `` — non-injective (a newline in a filename forges a
+boundary). **Corrected contract:** hash the canonical JSON of the sorted
+`[relpath, filehash]` pairs — `'sha256:' + sha256(JSON.stringify(sortedPairs))`
+(sort by `relpath`; `JSON.stringify` escapes `\n`/`"`). Keep symlink/dir
+exclusion + POSIX relpaths. Digest values change fork-wide (re-derived on next
+sync — acceptable). **Test:** two trees differing only by a newline in a filename
+produce different digests (fails on the old `\n` concat).
+
+### A4 — best-effort descriptor write surfaces on failure [wd P3]
+
+Post-WP-157 a persistent `writeDescriptor` failure means silent nightly
+fail-closed. `registerPlatform` already prints a per-job stderr notice; surface a
+non-zero failure **count** in the `sync` summary so `sync` does not report
+success while descriptors failed to write. Record in Implementation notes; no new
+file.

@@ -162,6 +162,9 @@ filename does not change), so unload still works after this WP.
 | create | tests/unit/launcher.test.js | `verifyAndResolve` pass + every mismatch (out-of-root current, app byte mutation, repoint, wrong descriptor digest, prod/dev mismatch) ⇒ refuse + zero spawn. |
 | modify | tests/unit/vendor.test.js | Assert the launcher is placed outside `app/`, the version dir is read-only, interrupted publish keeps old `current`, `verifyCurrentContainment` rejects an out-of-root symlink. |
 | modify | tests/unit/scheduler-generators.test.js | Assert entries invoke the launcher with the descriptor path + expect-digest; catch-up entries use `--catch-up`. |
+| modify | src/cli/run-job.js | Fix-pass (2026-07-19): catch-up must verify each due job's descriptor digest against its per-job entry-bound digest before running it (A5). If this pushes past size M, split to a new WP-160 (record the decision). |
+| modify | tests/unit/scheduler-schedule.test.js | Fix-pass: entry-argv + digest-binding change (boundary reconciliation, A9). |
+| modify | tests/unit/sync-repoint.test.js | Fix-pass: entry-argv reconciliation on repoint (boundary, A9). |
 
 ### Exact contracts
 
@@ -354,3 +357,121 @@ npm run lint
 
 > **Fork note:** work lands directly on `main` per the WORKING-NOTES; `branch:`/PR
 > fields are kept for template/upstream-porting fidelity.
+
+## Fix-pass amendments (2026-07-19)
+
+Adversarial review found 1 critical + several high defects — the launcher is
+bypassable. Full implementer contract + tests: `FIX-PLAN.md` cluster **C3**.
+
+### A1 — neutralize code-loading env for the scheduled node [Codex CRITICAL]
+
+The OS entries run `node <launcher> …` with no env scrubbing, and the launcher
+forwards `process.env` unchanged to its child spawn (launcher.js:334). An
+inherited `NODE_OPTIONS=--require <evil>` runs attacker code **in the launcher's
+own node process, before `launch.js`** — bypassing every check. Env writes
+(`~/.config/environment.d/*.conf`, `launchctl setenv`) are in-scope for A7.
+**Corrected contract:** neutralize `NODE_OPTIONS` and `NODE_PATH` at BOTH layers:
+- **OS entry (primary):** launchd — `EnvironmentVariables` dict with
+  `NODE_OPTIONS`→`""`, `NODE_PATH`→`""` (in `launchdPlist` + `catchupPlist`);
+  systemd — `Environment=NODE_OPTIONS=` and `Environment=NODE_PATH=` under
+  `[Service]`; Windows — wrap in `cmd.exe /c set "NODE_OPTIONS="&&set
+  "NODE_PATH="&& "<node>" "<launcher>" …` (XML-escaped; recorded decision).
+- **Launcher child spawn (defense-in-depth):** `main` spawns with a scrubbed copy
+  of the env (`delete childEnv.NODE_OPTIONS; delete childEnv.NODE_PATH`).
+
+Add to the Security checklist: "no code-loading Node env var reaches the launcher
+process or its child." Tests: generators emit the clearing per platform; `main`
+spawns without those vars even when `process.env` has them.
+
+### A2 — schema-aware argv parse [Codex HIGH, verified]
+
+`parseArgv` treats every `--x` as value-taking, so the generator-emitted
+`--catch-up --expect-digest <d>` makes `--catch-up` swallow `--expect-digest`
+(→ `undefined`), refusing every prod catch-up. **Corrected contract:**
+`--catch-up` is boolean; `--descriptor`/`--expect-digest` are value-taking; an
+unknown `--flag` refuses (fail closed). Test: `parseArgv(['--catch-up',
+'--expect-digest','D'])` → `{'catch-up':true,'expect-digest':'D'}`.
+
+### A3 — dev branches must not fail open [Codex HIGH]
+
+`isDev` trusts `WIENERDOG_DEV=1` from the inherited env; the dev-stance path
+(L210-215) and catch-up path (L268) return `ok:true` before any digest check.
+**Corrected contract:**
+1. Fire-time dev authority is the descriptor's **digest-bound** `appRelease.stance`
+   + the on-disk `.git` liveness check; **remove `env.WIENERDOG_DEV` as a
+   fire-time trigger** (bind stance at registration, not at fire).
+2. A `dev`-stance path skips only the **app-tree byte digest** (a live checkout is
+   legitimately edited) — it MUST still `deriveDescriptorDigest` vs
+   `--expect-digest` (catches `run`/`model`/`timeout`/`vault_layout` rewrites) and
+   verify containment.
+3. Catch-up performs no dev early-return before containment (+ per-job
+   verification, A5). A `prod` entry over a `.git` tree still refuses.
+Tests: dev-stance + config rewrite ⇒ refuse; `WIENERDOG_DEV=1` in env does not
+disable checks; prod + planted `.git` ⇒ refuse.
+
+### A4 — every verification exception → alert, never a bare throw [Codex MED]
+
+`appTreeDigestOf` (and the lazy `require`s) run outside try/catch, so an
+unreadable/renamed entry throws past the sole `appendRefuseAlert` site →
+non-zero exit with **no durable alert** (tamper looks like a missed job).
+**Corrected contract:** wrap the whole verdict computation; any exception ⇒
+`{ok:false, reason:'integrity check errored: …'}`; `main` converts every non-ok
+verdict (incl. thrown) to alert + stderr + non-zero exit + **zero spawn**. No
+path exits without spawning (ok) or alerting (refuse). Test: an unreadable file
+under `app/current` ⇒ refuse with an appended `alerts.jsonl` record + zero spawn.
+
+### A5 — catch-up must enforce per-job descriptors [Codex HIGH via WP-159]
+
+Catch-up verifies only the app-tree digest; `run-job --catch-up` then reads jobs
+from **mutable** `config.yaml` and calls `runJob` directly, so a config change a
+normal fire *refused* is *executed* by the next catch-up. **Corrected contract:**
+catch-up must not run a job whose live descriptor digest ≠ the digest **bound
+into that job's own per-job OS entry**. Add a generator helper
+`readBoundDigest(paths, jobName, platform)` (parse the plist/service/xml for the
+`--expect-digest` value); in the catch-up runner (`run-job --catch-up`), per due
+job: `deriveDescriptorDigest` vs `readBoundDigest`; mismatch/missing ⇒ refuse +
+alert + zero spawn. **Size flag:** if this pushes WP-157 past size M, split to a
+new **WP-160 (catch-up per-job authorization)** depending on WP-157 — record the
+decision. Tests: per-job digest mismatch ⇒ catch-up refuses (zero spawn); add
+macOS + Windows catch-up negatives (currently absent).
+
+### A6 — `ensureCatchup` signature [Codex MED]
+
+`generators.ensureCatchup` passes a removed `bin` field and no
+`launcher`/`expectDigest` → `catchupPlist` renders `"undefined"` argv. Pass
+`{node, launcher, expectDigest, logDir}`. Test: backstop plist args contain the
+launcher + a real digest, never `"undefined"`.
+
+### A7 — hash-then-reopen / verify-to-use TOCTOU: documented A12 residual [Codex HIGH]
+
+The launcher hashes the tree then reopens the same mutable `target` to `require`
+verifier modules (L235-237) and spawn `bin/wienerdog.js` (L249/L334). Spawning
+`node` against an on-disk tree is intrinsically reopen-based; TOCTOU-freedom
+needs the deferred **"2b" in-memory-bootstrap** (already recorded, revisit
+trigger A12). The in-scope A7 model is "static write, caught at fire" (a static
+write **is** caught at hash time); winning a sub-fire-time race needs an active
+concurrent writer at 03:30 = A12. **Action:** keep `makeTreeFilesReadOnly`,
+minimize the hash→exec window, and **add the verify-to-use race to this WP's
+Honest boundary, ADR-0028 residuals, and WP-159 THREAT-MODEL** — do **not** claim
+TOCTOU-freedom. No full A7 code fix; a cheap sound tightening is welcome but not
+required.
+
+### A8 — `makeTreeFilesReadOnly` is files-only (by design) [wd P3]
+
+The helper clears write bits on files, not dirs. **Amended contract:** the
+version dir is made **files-read-only** (not `chmod -R a-w`) — dir read-only
+would fight uninstall/re-vendor and is defeated by a same-user `chmod`; the
+**app-tree digest is the real guard**, read-only files are best-effort friction.
+Spec wording now matches the impl; no code change.
+
+### A9 — boundary + refuse text [wd P2 / Codex P2]
+
+- Deliverables add `tests/unit/scheduler-schedule.test.js` +
+  `tests/unit/sync-repoint.test.js` (the entry-argv/digest-binding change
+  legitimately touches both) and `src/cli/run-job.js` (A5, unless split to
+  WP-160). All added to the table above.
+- Refuse text points to `wienerdog doctor`, which reads no A7 state
+  (`alerts.jsonl`/pins/descriptor). Change the message to point at the real
+  surface — the alert appears in the **next digest banner**; remedy is
+  `wienerdog sync`. Do **not** wire `doctor` here (see WP-159 amendment; a
+  follow-up WP-162 may add a doctor A7 reader).

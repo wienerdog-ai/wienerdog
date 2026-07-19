@@ -269,3 +269,54 @@ npm run lint
    PR titled `fix(uninstall): treat the manifest as untrusted — schema + root-bounded deletes (WP-144)`.
 3. PR template filled, including "Decisions made" (or "none") and `Generated-by:`.
 4. This spec's `status:` flipped to `In-Review` in the same PR.
+
+## Fix-pass amendments (2026-07-19)
+
+Review found a delete-time TOCTOU and an isolation gap. Full implementer contract
++ tests: `FIX-PLAN.md` cluster **C6**. No new files (all edits within
+`src/core/manifest.js` + the two listed test files). Real file is
+`src/core/manifest.js` (the report said `src/cli/manifest.js`).
+
+### A1 — symlink-swap TOCTOU: bind mutations to the resolved path [Codex HIGH]
+
+`withinAllowedRoot` validates the current realpath (L594), but the reversers then
+act on the **lexical** `entry.path` — `sha256File(entry.path)` (L609),
+`fs.rmSync(entry.path)` (L617), `reverseManagedBlock` read L176→write L210,
+`reverseSettingsEntry` read L226→write L254. An actor who retargets an
+intermediate directory symlink after the check redirects the op out of root.
+**Corrected contract:** for every mutating kind, resolve once
+(`resolved = fs.realpathSync(entry.path)`, inside the per-entry try), re-validate
+`withinAllowedRoot(resolved, …)`, and perform all `fs` ops on **`resolved`** (a
+canonical, symlink-free path — an intermediate swap can no longer affect it). For
+read-then-write kinds (`managed-block`, `settings-entry`), open `resolved` once
+with `O_NOFOLLOW` on the final component and read+modify+write through the **same
+fd** (ELOOP ⇒ preserve+skip). `symlink` keeps `lstat`+`unlink` (must not resolve
+through the link). Test: an intermediate directory symlink swapped to an
+out-of-root target after the check ⇒ the external file is **preserved** (fails if
+ops use lexical `entry.path`).
+
+### A2 — deferred-config `sha256File` inside per-entry isolation [both, MED]
+
+The config-guard `sha256File` at **L566** is **above** the per-entry `try`
+(opens L593), so a read error (EACCES/EISDIR-after-swap/ELOOP) aborts the whole
+sweep → retry-wedged uninstall. **Corrected contract:** wrap the deferred-config
+hashing in its own try/catch; on error, do not defer that member (leave config in
+place), write one notice, continue. The sweep must always complete. Test: a
+config entry whose file is unreadable no longer aborts uninstall; the manifest is
+still removed.
+
+### A3 — crash-retry notice [impl, P2]
+
+An idempotent re-run prints "outside every Wienerdog-owned root" for an
+already-deleted in-bounds file (realpath throws ⇒ contains=false).
+**Corrected contract:** existence-check before the containment gate — a
+non-existent target is skipped silently as already-removed. Test: reversing twice
+emits no false "outside every root" line.
+
+### A4 — stale-symlink (target-match) — NOT this WP
+
+The reviewer's stale-symlink finding (a stale entry deletes a user's in-root
+replacement link; `reverseSymlink` proves only "is a symlink") is **owned by
+WP-153 (Draft)** — dispositioned there, not designed here. WP-153's planned
+`target` schema key is forward-compatible with this WP's `symlink` schema
+(`{path}`).

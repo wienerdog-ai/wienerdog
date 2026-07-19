@@ -86,3 +86,26 @@ separation-of-concerns intent while removing the execution-of-stored-argv sink.
   flags). Rejected in favor of taking no executable input from the file.
 - **Keep the stored argv, only bound the file removal.** Bounds the delete but leaves the
   command-execution sink open — does not satisfy A8. Rejected.
+
+## Amendment (2026-07-19) — the decision covers ALL scheduler-mutation paths
+
+The WP-145 review found the decision as implemented was scoped too narrowly: it
+closed only the **uninstall reverser** (`manifest.js reverseSchedulerEntry` via
+`deriveUnloadArgv`), while two other callers still executed stored `entry.unload`:
+
+1. **`schedule remove`** (`src/cli/schedule.js`) — a second production caller of the
+   shared reverser.
+2. **The sync-time self-heal** (`src/scheduler/status.js` `describeEntry` →
+   `reloadMissing`/`probeAll`, invoked from `sync`) — read `entry.unload` straight
+   into a launchd `bootstrap` / systemd `enable` / schtasks `/create` argv and
+   spawned it via `schedulerSpawn`.
+
+**Clarified decision:** "never execute an argv sourced from the manifest; re-derive
+from platform + validated identity" applies to **every** scheduler-mutation path —
+uninstall reverse, `schedule remove`, and the sync-time heal (probe **and**
+reload). `generators.js` gains `deriveProbeArgv` and `deriveReloadArgv` alongside
+`deriveUnloadArgv` (same fully-anchored basename+platform derivation); any file-path
+argument a re-register command needs (e.g. `launchctl bootstrap <plist>`,
+`schtasks /xml <xml>`) is `withinSchedulerRoot`-gated before use. Also: the
+unregister spawn must occur **after** the root/basename validation, not before
+(the implementation had spawned first). Implemented as WP-145 fix-pass amendments.
