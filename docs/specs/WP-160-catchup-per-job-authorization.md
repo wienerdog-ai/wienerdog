@@ -65,7 +65,11 @@ for the scoped-write class only.
   (`at`+tz)/`home`/exec pins/prompt hash/app release. The digest is the per-job
   authorization anchor.
 - `src/cli/run-job.js` catch-up runner reads jobs from `config.yaml` and calls
-  `runJob` directly (the bypass).
+  `runJob` directly (the bypass). **[R5]** its post-success path (L653) also calls
+  `gen.ensureCatchup(paths, {loader})` (macOS), which regenerates the catch-up
+  entry + digest map from the **current mutable** job set at **runtime** — a
+  second, subtler bypass this WP must close (see the attended-authorization
+  boundary below).
 - `src/scheduler/launcher.js parseArgv` (WP-157) is schema-aware: `--catch-up`
   boolean; `--descriptor`/`--expect-digest` value-taking. This WP adds one more
   value-taking flag (`--job-digests`).
@@ -76,10 +80,10 @@ for the scoped-write class only.
 
 | Action | Path | Notes |
 |--------|------|-------|
-| modify | src/scheduler/generators.js | At registration, bind the per-job digest map into the **catch-up entry's registered arguments** as `--job-digests <base64url(canonicalJSON)>` (one opaque token — [R4:#3]), populated under registration privilege (loaded/DB state), never re-read from an editable file per fire. |
-| modify | src/cli/schedule.js | Compute the per-job digest map (`{jobName: deriveDescriptorDigest(paths, job)}` over all configured jobs), base64url-encode the canonical JSON, and pass it to the catch-up renderer. |
+| modify | src/scheduler/generators.js | At registration, bind the per-job digest map into the **catch-up entry's registered arguments** as `--job-digests <base64url(canonicalJSON)>` (one opaque token — [R4:#3]), populated under registration privilege (loaded/DB state), never re-read from an editable file per fire. **[R5]** provide a teardown that removes the catch-up entry when no jobs remain. |
+| modify | src/cli/schedule.js | Compute the per-job digest map (`{jobName: deriveDescriptorDigest(paths, job)}` over all configured jobs), base64url-encode the canonical JSON, pass it to the catch-up renderer. **[R5]** this + `sync repoint` are the ONLY mint points; on final-job removal, tear the catch-up entry + map down cleanly (not left stale). |
 | modify | src/scheduler/launcher.js | `parseArgv` recognizes `--job-digests` (value-taking, opaque base64url token); `verifyCatchup` forwards it; `main` passes it through to the catch-up runner argv. The launcher NEVER reads a per-job entry file to obtain a digest. |
-| modify | src/cli/run-job.js | The catch-up runner decodes `--job-digests` (bounded base64url→JSON→shape-validate; malformed/oversized ⇒ durable alert + zero spawn), authorizes the **union** of bound ∪ configured job names BEFORE due-filtering ([R4:#1]), and runs only jobs whose live `deriveDescriptorDigest` matches the bound map; additions/removals/mismatches ⇒ alert, zero spawn. |
+| modify | src/cli/run-job.js | The catch-up runner decodes `--job-digests` (bounded base64url→JSON→shape-validate; malformed/oversized ⇒ durable alert + zero spawn), authorizes the **union** of bound ∪ configured job names BEFORE due-filtering ([R4:#1]), and runs only jobs whose live `deriveDescriptorDigest` matches the bound map; additions/removals/mismatches ⇒ alert, zero spawn. **[R5] REMOVE the post-success runtime `gen.ensureCatchup` call (L653)** — a runtime path must not mint authorization from config; at most emit a read-only "catch-up entry missing" notice, never regenerate. |
 | create | tests/unit/catchup-authorization.test.js | The negatives below. |
 | modify | tests/unit/scheduler-generators.test.js | Assert the catch-up entry carries `--job-digests` with a canonical map. |
 
@@ -114,6 +118,37 @@ catch-up path is read **only** from:
 It is **never** read from the per-job entry **file** on disk, nor from
 `config.yaml`. A forged per-job source file (edited without reload) must not
 affect the decision.
+
+**[R5] Attended-authorization boundary — only `sync`/`schedule` may mint the
+map.** The union-before-due algorithm cannot protect an anchor that a trusted
+**runtime** path refreshes from mutable config. Confirmed hole: the post-success
+runtime backstop `gen.ensureCatchup(paths, {loader})` (run-job.js:653, macOS)
+regenerates the catch-up entry **and its digest map from the current (mutable)
+job set** after a nightly job succeeds. Attack: statically add/modify job B in
+`config.yaml` without touching authorized job A; A's normal fire still passes its
+own per-job digest; after A succeeds, the runtime backstop **binds B's digest
+into LOADED scheduler state** — the next catch-up treats B as authorized and runs
+it, no alert, with **no scheduler-registration capability** ever exercised by the
+attacker.
+
+**Invariant (enforce at every path below):** only **attended** operations
+(`wienerdog sync` / `wienerdog schedule`) may **mint or replace** the catch-up
+authorization map / registration. **No nightly/runtime path may derive
+authorization from `config.yaml`.**
+
+Enumerated catch-up registration/reload paths + the required stance:
+
+| Path | When | Stance | Required behavior |
+|------|------|--------|-------------------|
+| `run-job.js:653` `ensureCatchup` (post-success backstop) | **runtime/nightly** | forbidden to mint | **Remove** the re-registration. It may, at most, read-only *check* presence and emit a notice ("catch-up entry missing — run `wienerdog sync`"); it must **never** regenerate the entry/map from config. If it cannot supply the already-loaded map it must **leave the loaded entry intact** (never overwrite with stale/missing args → would disable catch-up). |
+| `schedule.js:258` `ensureCatchup` (via `schedule add`/register) | attended | **mints** | Computes + binds the canonical map (this is the authorized mint point). |
+| `sync.js:188` `repointSchedules` | attended (`sync`) | **mints/replaces** | Recomputes + rebinds the map from validated config; the canonical refresh point for legitimate schedule changes. |
+| `sync.js:197` / `status.js:185` `reloadMissing` (sync-time heal) | attended (runs under `sync`) | re-registers canonical content; **map set by the sync flow** | Heal re-registers missing CANONICAL entries (WP-145) but does **not** independently mint the per-job digest map — the map is (re)bound by the same attended `sync` (`repointSchedules`). Never derive per-job authorization from config here. |
+
+**Legitimate schedule change** refreshes the map **only** via attended `sync`
+(`repointSchedules`) or `schedule` — including the edge case of **removing the
+final job**: the map/entry must be **cleanly torn down** (catch-up entry + map
+removed, not left stale with a removed job).
 
 **[R4:#1] Authorize the FULL job set BEFORE computing due-ness.** The naive
 "filter due jobs from mutable `job.at`, then digest-compare each due job" lets an
@@ -172,6 +207,10 @@ others.
       **alerts** (never silently suppresses).
 - [ ] The `--job-digests` transport is base64url; a malformed/oversized value
       fails closed with a durable alert, never an unhandled parse crash.
+- [ ] **[R5]** Only attended `sync`/`schedule` mint or replace the catch-up map/
+      registration; NO nightly/runtime path (esp. the run-job post-success
+      backstop) re-derives authorization from `config.yaml`. Removing the final
+      job via attended `sync` tears the entry + map down cleanly.
 
 ## Acceptance criteria
 
@@ -191,6 +230,12 @@ others.
       macOS/Linux/Windows decodes (base64url → JSON → shape-valid) to the bound
       map; a **malformed** or **oversized** map ⇒ durable alert + zero spawn (no
       crash, no invalid-JSON exception).
+- [ ] **[runtime-mint, R5]** Statically add/modify job B in `config.yaml`, then
+      let unchanged authorized job A succeed on its normal fire ⇒ A's success does
+      **NOT** reload the catch-up entry and does **NOT** authorize B; a subsequent
+      catch-up **refuses B** (alert + zero spawn). Removing a job via attended
+      `sync` cleanly refreshes the map (including removing the **final** job:
+      entry + map torn down, not left stale).
 - [ ] macOS and Windows catch-up negatives execute (not just POSIX).
 - [ ] `npm test` and `npm run lint` are green.
 

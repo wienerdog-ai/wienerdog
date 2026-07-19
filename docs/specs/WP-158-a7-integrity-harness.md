@@ -353,3 +353,10 @@ shared case list (A6) must add:
 - **[R4:#3]** **catch-up transport** cases (WP-160): the base64url `--job-digests`
   round-trips on macOS/Linux/Windows; a malformed/oversized value ⇒ durable alert
   + zero spawn (no parse crash).
+- **[R5]** **runtime-mint** negative (WP-160): statically add/modify job B in
+  `config.yaml`, then let unchanged authorized job A succeed on its normal fire ⇒
+  A's success does NOT reload the catch-up entry and does NOT authorize B; the
+  next catch-up **refuses B** (alert + zero spawn). Plus an attended-`sync`
+  positive: removing a job (incl. the final job) cleanly refreshes/tears down the
+  map. Fails if the runtime post-success `ensureCatchup` still re-binds from
+  config.

@@ -326,6 +326,14 @@ needed, because `sync` does the registering. **Corrected heal algorithm:**
 Reuse `schedule.js`'s regenerate-then-register path; `status.js` must not have a
 "load whatever file is there" branch.
 
+**[R5] The heal must not mint catch-up authorization.** `reloadMissing` runs under
+attended `sync`, so re-registering canonical content is allowed — but it must
+**not** independently derive the catch-up per-job **digest map** from
+`config.yaml`. The map is (re)bound only by the attended `sync` flow itself
+(`repointSchedules`, WP-160). The heal re-registers missing CANONICAL entries; the
+authorization anchor (the digest map) is set solely by attended `sync`/`schedule`.
+See WP-160's attended-authorization boundary table.
+
 **[R3:#1] Honest residual — the verify→register reopen race is A12, not closed
 here.** After byte-verifying the regenerated file, `launchctl`/`schtasks`/
 `systemd` **reopen the pathname** to register it; a concurrent writer can swap the

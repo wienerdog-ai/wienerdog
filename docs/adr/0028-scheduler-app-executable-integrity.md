@@ -483,7 +483,15 @@ implemented as dated amendments in the six specs and detailed in `FIX-PLAN.md`.
    deciding due-ness** (so an `at`-rewrite-to-future or a removal alerts rather
    than silently suppressing), and transports the per-job digest map as
    **base64url(canonical JSON)** with a bounded decoder (raw JSON argv is not
-   platform-safe on Windows `CommandLineToArgvW` / systemd quoting).
+   platform-safe on Windows `CommandLineToArgvW` / systemd quoting). **[R5]
+   Attended-authorization boundary:** only attended `sync`/`schedule` may mint or
+   replace the catch-up authorization map/registration; **no nightly/runtime path
+   may derive authorization from `config.yaml`.** In particular the post-success
+   runtime backstop (`run-job.js` `ensureCatchup`) is removed — a nightly success
+   must not re-bind the loaded map from a since-mutated config (else a statically
+   added job B gets authorized after unrelated job A succeeds, with no
+   scheduler-registration capability). Legitimate schedule changes (incl. removing
+   the final job → clean teardown) refresh the map only under attended `sync`.
 
 7. **Dev is a separate, runnable descriptor (Decision 3/4 refinement).** "Skip the
    tree digest but still compare the full descriptor digest" is self-contradictory
