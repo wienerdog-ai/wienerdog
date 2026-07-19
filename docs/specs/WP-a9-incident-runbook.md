@@ -129,6 +129,27 @@ state and act on:
   work after every per-job schedule is gone. (Linux/systemd has **no** catch-up
   entry — catch-up is launchd/schtasks only, per `schedule.js`.) The runbook must
   **remove and re-verify** the catch-up entry explicitly (contract step 1).
+- **`wienerdog sync` RE-REGISTERS a merely-unregistered catch-up entry — so
+  unregister-only is not enough; the scheduler FILE and manifest entry must go
+  too (R5-1).** `sync` calls `status.reloadMissing` (verified: `sync.js:197`),
+  which walks **`install-manifest.json`** (`<core>/install-manifest.json`) and,
+  for any `scheduler-entry` whose OS registration probes as **missing** but whose
+  manifest entry **and scheduler file survive**, re-registers it via the platform
+  reload command — `launchctl bootstrap` / `systemctl enable --now` /
+  `schtasks /create /xml` (verified: `status.js:31/40/49`). The catch-up entry's
+  file (`entry.path`: macOS `~/Library/LaunchAgents/ai.wienerdog.catchup.plist`,
+  Windows `<core>/schedules/wienerdog-catchup.xml`) and its manifest record both
+  survive an unregister-only stop, so the **next `wienerdog sync`** (step 4 and
+  again in the step-6 drill) would **resurrect** the catch-up job — re-arming the
+  machine *before* the acceptance drill and re-authorization. This is
+  **cross-platform** (all three reload commands exist), not Windows-only, though
+  the Windows stop text is the weakest today. The fix (contract step 1): the
+  catch-up stop must **delete the scheduler file AND remove the catch-up entry
+  from `install-manifest.json`** — not merely unregister — so `reloadMissing` has
+  nothing to resurrect. (Named `schedule remove` already deletes a job's own file
+  within the scheduler roots and drops its manifest entry, so a per-job-removed
+  job cannot be resurrected; the catch-up is the one gap, because per-job `remove`
+  deliberately leaves it.)
 - **The ONLY authoritative way to reach zero running Wienerdog processes is to
   REBOOT after removing every per-job schedule AND the catch-up entry — not
   per-platform process forensics (R4-C, round-4).** After a reboot, with nothing
@@ -152,7 +173,7 @@ state and act on:
 
 | Action | Path | Notes |
 |--------|------|-------|
-| create | docs/runbooks/incident.md | The general incident-drill runbook (house numbered-checklist format), covering the seven ordered A9 steps: (1) snapshot the `config.yaml` `jobs:` definitions (the restore source; `schedule.json` holds only watermarks), remove every per-job schedule **and** the shared catch-up entry, then reach proven quiescence by REBOOT (the **sole** authoritative proof — a pre-reboot process grep is a non-proof hint that can only *reveal* a live job; if you cannot reboot you **stop-and-escalate**, never grep-certify clean); (2) preserve-evidence-privately; (3) revoke+rotate; (4) purge digest+managed-block; (5) clean git; (6) fail-closed byte-level acceptance drill (whole-file marker grep + one-sentinel-pair check per installed harness file); (7) re-authorize by reconstructing `schedule add --job` for **builtin** jobs from the `jobs:` snapshot — a `skill:*` routine is frozen by the A0 pre-use gate (audit A1) and is NOT re-addable this release (do not promise a failing `--skill` command; only its snapshot definition is preserved for later). |
+| create | docs/runbooks/incident.md | The general incident-drill runbook (house numbered-checklist format), covering the seven ordered A9 steps: (1) snapshot the `config.yaml` `jobs:` definitions (the restore source; `schedule.json` holds only watermarks), remove every per-job schedule **and** the shared catch-up entry — the catch-up removal deleting its scheduler FILE **and** its `install-manifest.json` entry, not merely unregistering it, so `sync`'s `reloadMissing` cannot resurrect it — then reach proven quiescence by REBOOT (the **sole** authoritative proof — a pre-reboot process grep is a non-proof hint that can only *reveal* a live job; if you cannot reboot you **stop-and-escalate**, never grep-certify clean); (2) preserve-evidence-privately; (3) revoke+rotate; (4) purge digest+managed-block; (5) clean git; (6) fail-closed byte-level acceptance drill (whole-file marker grep + one-sentinel-pair check per installed harness file); (7) re-authorize by reconstructing `schedule add --job` for **builtin** jobs from the `jobs:` snapshot — a `skill:*` routine is frozen by the A0 pre-use gate (audit A1) and is NOT re-addable this release (do not promise a failing `--skill` command; only its snapshot definition is preserved for later). |
 | modify | docs/runbooks/secret-incident.md | Add one cross-link near the top: the secret leak is the credential-specific case of the general incident drill (link `incident.md`); for a general or suspected-compromise incident, start there. Do NOT rewrite its steps. |
 
 ### Exact contract — what `docs/runbooks/incident.md` must state
@@ -193,15 +214,41 @@ The detail of each:
      catalog routine). State plainly that `remove` only stops **future** fires
      and its OS-unregister is best-effort — it does **not** stop a job running
      **right now** (you prove that separately below), and you re-add in step 7.
-   - **Remove the shared catch-up entry (macOS / Windows) and re-verify it is
-     gone.** Per-job `remove` deliberately leaves it, so remove it by hand:
+   - **Remove the shared catch-up entry (macOS / Windows) — unregister it, delete
+     its scheduler FILE, AND drop its `install-manifest.json` entry, then block on
+     a dual re-verify.** Per-job `remove` deliberately leaves it, so remove it by
+     hand. **Unregister-only is NOT enough:** the next `wienerdog sync` (step 4,
+     and again in the step-6 drill) calls `reloadMissing`, which re-registers any
+     manifest `scheduler-entry` whose OS registration is gone but whose manifest
+     entry **and** scheduler file survive — so you must delete **all three**: the
+     OS registration, the scheduler file, and the manifest entry.
      - macOS: `launchctl bootout gui/$(id -u)/ai.wienerdog.catchup` (fall back to
-       `launchctl remove ai.wienerdog.catchup`), then delete its LaunchAgent
-       plist; re-verify `launchctl list | grep -c ai.wienerdog.catchup` prints
-       `0`.
+       `launchctl remove ai.wienerdog.catchup`), then delete its LaunchAgent plist
+       (`~/Library/LaunchAgents/ai.wienerdog.catchup.plist` — this is the exact
+       file `reloadMissing` would reload from, so it MUST go).
      - Windows (PowerShell): `Unregister-ScheduledTask -TaskPath '\Wienerdog\'
-       -TaskName 'catchup' -Confirm:$false`; re-verify `Get-ScheduledTask
-       -TaskPath '\Wienerdog\' -ErrorAction SilentlyContinue` lists nothing.
+       -TaskName 'catchup' -Confirm:$false`, then delete its scheduler XML file
+       (`<core>\schedules\wienerdog-catchup.xml`, where `<core>` is
+       `$env:USERPROFILE\.wienerdog` — this is the file `reloadMissing` would
+       reload from, so it MUST go too; the current Windows text is weakest here).
+     - **Both platforms: remove the catch-up entry from
+       `install-manifest.json`.** Open `<core>/install-manifest.json` and delete
+       the `entries[]` object whose `kind` is `scheduler-entry` and whose `path`
+       is the catch-up plist/XML above (its `unload` argv names
+       `ai.wienerdog.catchup` / `\Wienerdog\catchup`). With no manifest record,
+       `reloadMissing` has nothing to iterate for the catch-up job. (Do NOT delete
+       unrelated entries; edit only the catch-up object.)
+     - **Blocking dual re-verify — do not proceed until BOTH are true:** (a) the
+       OS registration is gone — macOS `launchctl list | grep -c
+       ai.wienerdog.catchup` prints `0`; Windows `Get-ScheduledTask -TaskPath
+       '\Wienerdog\' -ErrorAction SilentlyContinue` lists nothing; AND (b) the
+       scheduler file is gone — macOS `test ! -e
+       ~/Library/LaunchAgents/ai.wienerdog.catchup.plist`; Windows
+       `Test-Path "$env:USERPROFILE\.wienerdog\schedules\wienerdog-catchup.xml"`
+       returns `False` — and `install-manifest.json` no longer contains a
+       catch-up `scheduler-entry`. If either the file or the manifest entry
+       remains, STOP and fix it: a surviving file+entry means `sync` will
+       re-arm the machine.
      - Linux/systemd: nothing to do — there is no catch-up entry on this
        platform.
    - **Reach proven quiescence — the ONLY authoritative path is to REBOOT.** With
@@ -293,6 +340,15 @@ The detail of each:
      Wienerdog owns) from the current, corrected identity. If you suspect the
      managed block itself was hand-tampered, note that `sync` overwrites only
      inside the sentinels and re-derives the block, so a clean sync restores it.
+   - **Before you run `sync`, confirm step 1's catch-up removal is complete.**
+     `wienerdog sync` also runs `reloadMissing`, which **re-registers any manifest
+     `scheduler-entry` whose OS registration is missing but whose scheduler file
+     survives** (`sync.js:197` → `status.reloadMissing`). So `sync` must **not be
+     able to reactivate ANY schedule before step 7**: if step 1 left the catch-up
+     file or its `install-manifest.json` entry in place, this `sync` will resurrect
+     the catch-up job here — re-arming the machine before the acceptance drill.
+     Do not run `sync` until step 1's dual re-verify (OS registration gone AND
+     scheduler file gone AND no catch-up manifest entry) passed.
    - Also review `state/quarantine/` (cross-link `secret-incident.md` step 3 for
      the true-positive/false-positive handling).
 
@@ -422,7 +478,10 @@ fix-source → `memory approve` → `sync`). No jargon without a one-clause glos
       and covers, **in order**: (1) snapshot the **`config.yaml` `jobs:`
       definitions** before removal (the restore source — `state/schedule.json`
       holds only watermarks, not job definitions), remove every per-job schedule
-      **and** the shared catch-up entry, then reach proven quiescence by **reboot**
+      **and** the shared catch-up entry (deleting the catch-up scheduler FILE
+      **and** its `install-manifest.json` entry, not merely unregistering, so
+      `sync`'s `reloadMissing` cannot resurrect it), then reach proven quiescence
+      by **reboot**
       (the **sole** authoritative proof — a pre-reboot process grep is a non-proof
       hint, and a user who cannot reboot **stops and escalates**, never
       grep-certifies clean); (2) preserve evidence
@@ -438,14 +497,25 @@ fix-source → `memory approve` → `sync`). No jargon without a one-clause glos
       puts the acceptance drill strictly **before** re-authorization (A9
       acceptance): schedules are re-added only after a recorded drill pass.
 - [ ] The stop step states that `schedule remove` does **not** stop an
-      already-running job **and leaves the shared catch-up entry**; it removes and
-      re-verifies the catch-up entry (macOS `ai.wienerdog.catchup`, Windows
-      `\Wienerdog\catchup`; Linux has none); it makes **reboot** the **sole
-      authoritative** quiescence proof and states plainly that a pre-reboot
-      live-process grep is **NOT proof** (it can only *reveal* a still-live job — a
-      differently-named injected helper escapes it — never *certify* a clean one);
-      credential rotation begins **only after a reboot**, and a user who cannot
-      reboot **stops and escalates** rather than grep-certifying clean.
+      already-running job **and leaves the shared catch-up entry**; it removes the
+      catch-up entry (macOS `ai.wienerdog.catchup`, Windows `\Wienerdog\catchup`;
+      Linux has none) by deleting its **scheduler FILE** (macOS LaunchAgents plist,
+      Windows `<core>\schedules\wienerdog-catchup.xml`) **and** its
+      `install-manifest.json` entry — not merely unregistering — and **blocks on a
+      dual re-verify that BOTH the OS registration AND the scheduler file are gone
+      (plus no catch-up manifest entry)** so `sync`'s `reloadMissing` cannot
+      resurrect it; it makes **reboot** the **sole authoritative** quiescence proof
+      and states plainly that a pre-reboot live-process grep is **NOT proof** (it
+      can only *reveal* a still-live job — a differently-named injected helper
+      escapes it — never *certify* a clean one); credential rotation begins **only
+      after a reboot**, and a user who cannot reboot **stops and escalates** rather
+      than grep-certifying clean.
+- [ ] **[R5-1]** The purge step (step 4) warns that `wienerdog sync` runs
+      `reloadMissing`, which re-registers any manifest `scheduler-entry` whose OS
+      registration is missing but whose scheduler file survives; it states plainly
+      that `sync` must **not** be able to reactivate ANY schedule before step 7, so
+      the step-1 catch-up removal (file **and** manifest entry) must be complete and
+      dual-verified before any `sync`.
 - [ ] The evidence-preservation step snapshots the **`config.yaml` `jobs:`
       definitions** (the restore source) **before** removal — optionally also
       `state/schedule.json` as watermark evidence — and names
@@ -495,6 +565,9 @@ grep -nE "schedule (list|remove)|config\.yaml|jobs:|run-evidence\.jsonl|memory a
 grep -nE "config\.yaml.*jobs:|jobs:.*definition|watermark" docs/runbooks/incident.md
 # the catch-up removal + reboot-as-SOLE-proof + the grep-is-not-proof / escalate wording:
 grep -nE "ai\.wienerdog\.catchup|\\\\Wienerdog\\\\catchup|reboot|CommandLine|claude\|codex" docs/runbooks/incident.md
+# R5-1: catch-up removal deletes the scheduler FILE + install-manifest.json entry
+# (not just unregister), and sync's reloadMissing cannot resurrect a surviving entry:
+grep -nE "install-manifest\.json|reloadMissing|resurrect|re-register|scheduler file|catchup\.plist|wienerdog-catchup\.xml" docs/runbooks/incident.md
 grep -niE "not proof|non-proof|cannot reboot|escalate|sole" docs/runbooks/incident.md
 # private evidence handling: pre-copy exclusion + recursive perms + windows ACL:
 grep -nE "find .*-type d.*chmod 700|find .*-type f.*chmod 600|icacls|Time Machine|OneDrive" docs/runbooks/incident.md

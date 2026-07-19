@@ -46,7 +46,15 @@ claim to reap it.
 
 **Live-test posture (match the repo convention).** These are real-process tests,
 POSIX-only. Skip on win32 with a note (`{ skip: process.platform === 'win32' }`,
-the pattern already used in `tests/integration/dream.test.js`). They spawn only
+the pattern already used in `tests/integration/dream.test.js`). **The win32 skip is
+an accepted, owner-approved platform-scope boundary, not a hidden gap (R5-2):** the
+reap's leaderless-reparented-member guarantee is **POSIX-only** this release (win32
+`taskkill` has no negative-PGID equivalent, so the group-reap authority does not
+activate there — see `WP-a10-reap-mechanism`'s Platform-scope note), so **this
+harness's merge-gate is POSIX-only this release by design**. Windows post-parent-exit
+reaping — and its own **live** Windows merge-gate (a skipped harness is not proof) —
+is owned by the follow-up `WP-a10-windows-reap`. State the skip reason inline in the
+test note so the boundary is explicit, never silent. They spawn only
 short-lived local fixture processes (a `sleep`-style Node child), never the real
 `claude`; they must be **self-cleaning** (kill every fixture pid in a `finally`,
 even on assertion failure) so a failed run leaves no stray process — an ADR-0004

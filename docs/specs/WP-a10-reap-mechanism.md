@@ -126,6 +126,42 @@ brain pidfile, not a single shared one:
   leader gone. So the abnormal path issues three reaps: `reapTree(child.pid)` +
   `reapGroup(child.pid)` for group A, and `reapGroup(brain.pgid)` for group B.
 
+**Platform scope: the leaderless-member guarantee is POSIX-only this release —
+owner-approved, R5-2 (this is ordinary platform scope, NOT an ADR-0030
+adversarial residual).** The leaderless-reparented-member reap above rests on the
+POSIX **negative-PGID** `kill(-pgid)` semantics, which reach every surviving group
+member even after the group leader has exited. **Windows has no equivalent.** On
+win32, `reapGroup(pgid)` reduces to `taskkill /PID <pgid> /T /F`, which targets a
+**live PID and its LIVE child tree** — once the middle (the group-A leader) has
+exited (which, on the abnormal `'close'`/`'error'` path, it already has), that pid
+is gone from the table, so `reapGroup(child.pid)` reaches **nothing** and does NOT
+reap a surviving reparented group-A child. In other words, R4-B's leaderless-member
+fix is a **no-op on win32**, and the sibling `WP-a10-escape-harness` SKIPS on
+Windows, so the merge-gate cannot catch the gap. Owner decision for this release:
+- **(a)** the non-adversarial reap-to-quiescence guarantee (a leaderless group-A
+  member reaped after an abnormal close) is **scoped to POSIX** — Linux `/proc`,
+  macOS `/bin/ps`.
+- **(b)** on win32 the **new group-reap authority MUST NOT activate**: the win32
+  abnormal-close path **falls back to the existing pre-A10 single-timeout
+  `taskkill /T /F` behavior** (`reapTree(child.pid)` on the **timeout** path only,
+  while the middle is still alive so its live tree is killed) — **no regression**,
+  but it is explicitly documented as **NOT providing** the leaderless-descendant
+  guarantee. Do not wire the abnormal-close `reapGroup(child.pid)` /
+  `reapGroup(brain.pgid)` group-reap as a win32 correctness guarantee — it cannot
+  deliver one, and pretending it does would be a false claim.
+- **(c)** Windows post-parent-exit reaping is **DEFERRED to a follow-up WP**
+  (`WP-a10-windows-reap`, Draft). Closing it needs an **absolute-path Windows
+  authoritative process-table enumeration** (e.g. absolute-path `tasklist` /
+  `Get-CimInstance Win32_Process` walking `ParentProcessId`) **AND** a **live
+  Windows merge-gate test** — a skipped harness is **not** proof. **Job Objects
+  are explicitly OUT** (heavier OS containment we avoid — the same class as the
+  cgroup/PID-namespace mechanism already ruled out).
+
+This platform-scope boundary is recorded here, in this WP, as an explicit
+owner-approved decision — it is **not** an ADR-0030 residual (ADR-0030 is only for
+the *adversarial* escapee: the combined setsid+double-fork full-detach; this is
+ordinary per-platform scope, an entirely non-adversarial surviving child).
+
 The inner `dream.js` watchdog uses the same `reapTree`, so standalone `wienerdog
 dream` also reaps a re-detached brain; standalone runs have no outer supervisor
 and need no hand-up pidfile (the inner watchdog reaps the brain directly).
@@ -195,8 +231,8 @@ only on timeout.
 
 | Action | Path | Notes |
 |--------|------|-------|
-| create | src/core/reap.js | `reapTree(pid, platform, seams)` — authoritative process-table read (Linux `/proc`, macOS verified absolute `/bin/ps`, **never** bare `ps`), real ppid-descendant + group SIGKILL, **kill–rescan to two consecutive zero sweeps** (bounded), best-effort/never-throws; win32 **absolute System32** `taskkill /T /F` with **no bare-name fallback**. `reapGroup(pgid, platform, seams)` — the authenticated-PGID primitive: POSIX **negative-PGID** `kill(-pgid, SIGKILL)` (works even if the group leader already exited), win32 absolute `taskkill /PID <pgid> /T /F`; best-effort/never-throws. Also exports `readProcessTable` for direct unit coverage. Pure, seam-injectable. |
-| modify | src/cli/run-job.js | (a) `killProcessTree` delegates to `reapTree` (keep the export + signature). (b) For `builtin:dream`, **mint a per-run token BEFORE spawn** and pass it to the child (env var), and compute the per-run pidfile path `state/dream-brain.<token>.pid`. (c) Reap on **every** child-exit path: on an **abnormal** settle (timeout / `'error'` / non-clean `'close'`) reap the group-A tree with **BOTH** `reapTree(child.pid)` **and** `reapGroup(child.pid)` (the negative-PGID group kill reaches a leaderless reparented group-A member once the middle/group-leader has exited — after `'close'` `reapTree`'s ppid-closure alone finds nothing); on **any** settle for `builtin:dream` read the per-token pidfile and `reapGroup(brain.pgid)` if present, then delete it. Best-effort; never change the job outcome/throw. |
+| create | src/core/reap.js | `reapTree(pid, platform, seams)` — authoritative process-table read (Linux `/proc`, macOS verified absolute `/bin/ps`, **never** bare `ps`), real ppid-descendant + group SIGKILL, **kill–rescan to two consecutive zero sweeps** (bounded), best-effort/never-throws; win32 **absolute System32** `taskkill /T /F` with **no bare-name fallback**. `reapGroup(pgid, platform, seams)` — the authenticated-PGID primitive: POSIX **negative-PGID** `kill(-pgid, SIGKILL)` (works even if the group leader already exited), win32 absolute `taskkill /PID <pgid> /T /F` — **win32 reaches only a live pid + its live tree, NO negative-PGID equivalent, so NO leaderless-member guarantee (R5-2; deferred to WP-a10-windows-reap)**; best-effort/never-throws. Also exports `readProcessTable` for direct unit coverage. Pure, seam-injectable. |
+| modify | src/cli/run-job.js | (a) `killProcessTree` delegates to `reapTree` (keep the export + signature). (b) For `builtin:dream`, **mint a per-run token BEFORE spawn** and pass it to the child (env var), and compute the per-run pidfile path `state/dream-brain.<token>.pid`. (c) Reap on **every** child-exit path: on an **abnormal** settle (timeout / `'error'` / non-clean `'close'`) reap the group-A tree with **BOTH** `reapTree(child.pid)` **and** `reapGroup(child.pid)` (the negative-PGID group kill reaches a leaderless reparented group-A member once the middle/group-leader has exited — after `'close'` `reapTree`'s ppid-closure alone finds nothing); on **any** settle for `builtin:dream` read the per-token pidfile and `reapGroup(brain.pgid)` if present, then delete it. **POSIX guarantee only: on win32 the group-reap authority does NOT activate — the win32 abnormal-close path keeps the pre-A10 timeout-path `taskkill /T /F` behavior, leaderless-member case deferred to WP-a10-windows-reap (R5-2).** Best-effort; never change the job outcome/throw. |
 | modify | src/cli/dream.js | `runBrainWithWatchdog` uses `reapTree(child.pid, platform, seams)` on timeout; when a run token is present (set by `run-job`), **write** the per-run brain pidfile (`state/dream-brain.<token>.pid`, `0600`, `{pid, pgid}`, **atomically** via `writeFilePrivate`) right after `spawnBrain` and **remove** it in `finally`. Standalone (no token) writes no hand-up pidfile. Thread `paths` + an injected `platform` (never mock `process.platform`) + optional reap seam. |
 | create | tests/unit/reap.test.js | `reapTree`/`reapGroup`/`readProcessTable` unit cases (fake `/proc` root + fake `/bin/ps`; classification of plain/re-detached/setsid/double-fork; kill–rescan quiescence; never-throws on a bad table; darwin reader uses absolute `/bin/ps`, never bare `ps`; `reapGroup` does a **negative-PGID** kill and reaps an **exited-leader-with-live-member** group; win32 uses the **absolute System32** `taskkill` and **never** a bare-name / PATH-planted `taskkill`). |
 | modify | tests/unit/scheduler-runjob.test.js | `killProcessTree` reaps via `reapTree` (kills a re-detached grandchild, not only group A); on abnormal close the **group-A tree** is reaped via **BOTH** `reapTree(child.pid)` **and** `reapGroup(child.pid)` (assert both seams are invoked — the `reapGroup(child.pid)` negative-PGID kill is what covers a leaderless reparented group-A member once the middle has exited); for `builtin:dream` the **per-token** brain pidfile group is reaped via `reapGroup(brain.pgid)` and the pidfile deleted; a second, lock-losing concurrent run reaps **only its own** token pidfile and never the other run's live brain; win32 branch shells the absolute System32 `taskkill /T /F`. |
@@ -255,7 +291,11 @@ function readProcessTable(platform, seams = {}) {}
  *    rescan: this is the direct group signal, guarded so it never targets pgid 1
  *    or process.pid.
  *  win32: absolute System32 `taskkill /PID <pgid> /T /F` (pgid == the detached
- *    brain's pid); no bare-name fallback.
+ *    brain's pid); no bare-name fallback. NOTE (R5-2): on win32 this reaches only a
+ *    LIVE pid and its LIVE child tree — there is NO negative-PGID equivalent, so it
+ *    does NOT reach a leaderless reparented member once the group leader has exited.
+ *    win32 therefore provides NO leaderless-member guarantee; that case is deferred
+ *    to WP-a10-windows-reap (see the Platform-scope note in Context).
  *  @param {number} pgid  the handed-up brain process-group id
  *  @param {NodeJS.Platform} platform  inject it — never mock process.platform
  *  @param {{ kill?: typeof process.kill,
@@ -298,6 +338,16 @@ resolved path in a variable — do not write a bare-name string literal into any
 `spawnSync` call. The OS PID table handles the tree; no re-sweep needed. `reapGroup`
 uses the same absolute-only resolution.
 
+**win32 leaderless-member limit (R5-2).** `taskkill /PID <pid> /T /F` kills a live
+pid and its **live** child tree only; Windows has **no** negative-PGID equivalent,
+so once the group leader has exited (the abnormal-close case) `reapGroup` on win32
+reaches **nothing** and cannot reap a leaderless reparented member. Per the
+owner-approved Platform-scope decision in Context, the win32 abnormal-close path
+keeps the **pre-A10** single-timeout `taskkill /T /F` behavior and does **not**
+activate the group-reap authority as a correctness guarantee; the leaderless-member
+case is **deferred to WP-a10-windows-reap**. Do not add per-platform start-time or
+Job-Object machinery here to close it (out of scope).
+
 **`run-job.js` wiring.** `killProcessTree(pid, platform, seams)` becomes a thin
 wrapper over `reapTree(pid, platform, seams)` (preserve the exported name +
 signature; the existing `{kill, spawnSync}` seams map straight through).
@@ -323,6 +373,14 @@ signature; the existing `{kill, spawnSync}` seams map straight through).
     **negative-PGID** `kill(-child.pid)` reaches that leaderless reparented member.
     (These two group-A reaps are distinct from the group-B `reapGroup(brain.pgid)`
     below — three reaps, two group-A targets sharing `child.pid`, one group-B.)
+    **This three-reap abnormal-close authority is POSIX-only (R5-2).** On win32
+    `reapGroup`'s `taskkill` cannot reach a leaderless reparented member (no
+    negative-PGID equivalent — see the Platform-scope note in Context), so on win32
+    the abnormal-close path keeps the **pre-A10 behavior**: the timeout-path
+    `reapTree(child.pid)` (absolute `taskkill /PID <child.pid> /T /F` while the
+    middle is still alive) only, with **no** leaderless-descendant guarantee. Do
+    not present the win32 `reapGroup` calls as delivering that guarantee; the
+    Windows post-parent-exit case is deferred to **WP-a10-windows-reap**.
   - After the child settles by **any** path, for `builtin:dream` read **this run's**
     `state/dream-brain.<token>.pid`; if present, `reapGroup(brain.pgid, platform,
     opts)` to kill the detached group-B brain (covers a brain orphaned by a dead
@@ -380,16 +438,26 @@ brain directly. Thread `paths`, an injected `platform` (default
 - [ ] **[Cross-run isolation, round-2]** A second, lock-losing concurrent dream
       run reaps **only its own** token pidfile and never reads or kills the first
       run's live brain — unit-asserted with two distinct tokens.
-- [ ] **[Abnormal-close group-A, round-2 + round-3]** On timeout / `'error'` /
-      non-clean `'close'`, `run-job` reaps the middle's **group-A** tree with
-      **both** `reapTree(child.pid)` **and** `reapGroup(child.pid)` (distinct from
-      the group-B `reapGroup(brain.pgid)`) — unit-asserted that both are invoked on
-      the abnormal path. Because a post-`'close'` `reapTree(child.pid)` sees an
-      exited group-A leader and issues no kill, the `reapGroup(child.pid)`
-      negative-PGID kill is what reaps a **leaderless reparented group-A member**;
-      the sibling live harness must prove, on the real post-`'close'` path, that
-      such a member ends up **ESRCH** (the unit test asserts the call wiring; the
-      live proof is `WP-a10-escape-harness`).
+- [ ] **[Abnormal-close group-A, round-2 + round-3, POSIX]** On timeout /
+      `'error'` / non-clean `'close'` on **POSIX**, `run-job` reaps the middle's
+      **group-A** tree with **both** `reapTree(child.pid)` **and**
+      `reapGroup(child.pid)` (distinct from the group-B `reapGroup(brain.pgid)`) —
+      unit-asserted that both are invoked on the abnormal path. Because a
+      post-`'close'` `reapTree(child.pid)` sees an exited group-A leader and issues
+      no kill, the `reapGroup(child.pid)` **negative-PGID** kill is what reaps a
+      **leaderless reparented group-A member**; the sibling live harness must prove,
+      on the real post-`'close'` path, that such a member ends up **ESRCH** (the
+      unit test asserts the call wiring; the live proof is `WP-a10-escape-harness`).
+- [ ] **[Platform scope: POSIX-only, win32 does not activate, R5-2]** The
+      leaderless-reparented-member guarantee is **POSIX-only** this release. On
+      **win32** the abnormal-close **group-reap authority does NOT activate**: the
+      spec (Context Platform-scope note + `reapGroup` win32 JSDoc + win32 prose)
+      states that `taskkill` reaches only a live pid and its live tree, has **no**
+      negative-PGID equivalent, and therefore provides **no** leaderless-member
+      guarantee; the win32 abnormal-close path keeps the **pre-A10 single-timeout
+      `taskkill /T /F`** behavior (no regression), and the Windows post-parent-exit
+      case is **deferred to `WP-a10-windows-reap`**. This is an owner-approved
+      platform-scope boundary, **not** an ADR-0030 residual.
 - [ ] **[Authenticated-PGID, round-2]** `reapGroup(pgid)` issues a **negative-PGID**
       `kill(-pgid)` and reaps an **exited-group-leader-with-live-member** group;
       the recycled-id case is the documented ADR-0030 residual (no test asserts it
@@ -422,6 +490,9 @@ npm run lint
 grep -nE "/bin/ps|/proc|System32|reapGroup|kill\(\s*-" src/core/reap.js
 # the per-run token pidfile + reapGroup wiring is present:
 grep -nE "dream-brain\.|WIENERDOG_DREAM_RUN_TOKEN|reapGroup|reapTree" src/cli/run-job.js src/cli/dream.js
+# R5-2: the win32 leaderless-member scope boundary is carried into code comments
+# (win32 group-reap provides no leaderless guarantee; POSIX-only this release):
+grep -niE "leaderless|no negative-pgid|windows-reap|pre-A10|POSIX-only" src/core/reap.js src/cli/run-job.js
 ```
 
 ## Implementation notes & constraints
@@ -503,6 +574,13 @@ grep -nE "dream-brain\.|WIENERDOG_DREAM_RUN_TOKEN|reapGroup|reapTree" src/cli/ru
   harness shows it is required, flag an ADR-0030 amendment; do not build it here.
 - Defending against the combined setsid+double-fork full-detach escapee — the
   documented ADR-0030 / A12 residual (the contained brain cannot produce one).
+- **Windows post-parent-exit reaping (the leaderless reparented group-A member on
+  win32) — DEFERRED to `WP-a10-windows-reap` (R5-2).** win32 `taskkill` has no
+  negative-PGID equivalent, so this WP does **not** provide the leaderless-member
+  guarantee on Windows; it keeps the pre-A10 timeout-path `taskkill /T /F` behavior
+  there. Closing the Windows gap needs an absolute-path Windows authoritative
+  process-table walk + a **live** Windows merge-gate test (Job Objects explicitly
+  out); that is the follow-up WP, not this one.
 - The **log-stream `0600` fix** in `run-job.js`/`dream.js` — **WP-a9-private-
   modes-repair** owns that (a different line in the same files).
 
