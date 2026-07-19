@@ -55,14 +55,17 @@ posture the harness itself must honor.
 ## Current state
 
 - **`src/core/reap.js`** (created by WP-a10-reap-mechanism) exports
-  `reapTree(pid, platform, seams)` and `readProcessTable(platform, seams)`. On
-  POSIX with no seams it reads the authoritative table (Linux `/proc`, macOS
-  absolute verified `/bin/ps`) and SIGKILLs the real descendant tree + groups,
-  re-sweeping to two consecutive clean sweeps.
-- **`src/cli/run-job.js`** reaps on every child-exit path and, for
-  `builtin:dream`, reaps the brain pidfile group (`state/dream-brain.pid`) even
-  when the middle `dream.js` died.
-- **`src/cli/dream.js`** writes/removes the brain pidfile and reaps via
+  `reapTree(pid, platform, seams)`, `reapGroup(pgid, platform, seams)` (the
+  authenticated-PGID negative-`kill(-pgid)` primitive), and
+  `readProcessTable(platform, seams)`. On POSIX with no seams `reapTree` reads the
+  authoritative table (Linux `/proc`, macOS absolute verified `/bin/ps`) and
+  SIGKILLs the real descendant tree + groups, re-sweeping to two consecutive clean
+  sweeps.
+- **`src/cli/run-job.js`** reaps on every child-exit path: on an abnormal settle
+  it `reapTree`s the middle's **group-A tree**, and for `builtin:dream` it
+  `reapGroup`s the **per-token** brain pidfile group
+  (`state/dream-brain.<token>.pid`) even when the middle `dream.js` died.
+- **`src/cli/dream.js`** writes/removes the per-token brain pidfile and reaps via
   `reapTree` on the timeout path.
 - **`tests/integration/dream.test.js`** already uses `{ skip: process.platform
   === 'win32' }` for POSIX-only integration cases — reuse that idiom.
@@ -76,7 +79,7 @@ posture the harness itself must honor.
 | Action | Path | Notes |
 |--------|------|-------|
 | create | tests/integration/reap-escape.test.js | The live POSIX escape-negative harness: escape matrix (a)–(e), non-vacuity baseline, the SIGKILL-the-middle-while-brain-lives test, the fake-`ps`-in-PATH negative, and the timed snapshot/fork/setsid interleaving attack test. Skips on win32. |
-| create | tests/fixtures/reap/supervised-child.js | A tiny Node fixture: a supervised "middle" that spawns a requested escape variant (env/argv-selected) and prints the grandchild pid on stdout, then sleeps; used as the reap target. |
+| create | tests/fixtures/reap/supervised-child.js | A tiny Node fixture: a supervised "middle" that spawns a requested escape variant (env/argv-selected) and prints the grandchild pid on stdout, then sleeps; used as the reap target. For the middle-death proof it can spawn **both** a group-A descendant and a re-detached brain and write the per-token brain pidfile. |
 | create | tests/fixtures/reap/spawn-variant.js | Spawns one grandchild per variant — plain / re-detached (`detached:true`) / `setsid` / double-fork-no-setsid / setsid+double-fork — each a long `sleep`; prints its pid. Pure Node (use `child_process` + `process.setsid` via a `setsid`-style re-exec; no external `setsid` binary required, but if used it must be the absolute `/usr/bin/setsid` where present, else the Node `detached`+new-session technique). |
 | create | tests/fixtures/reap/fake-ps | An executable fake `ps` (marker-writing / bogus-output) for the PATH-injection negative test — proves the reap never runs it. |
 
@@ -106,15 +109,19 @@ is not vacuously green.
 
 ### The three additional live proofs
 
-1. **SIGKILL-the-middle-while-the-brain-lives (finding 6, mandatory).** Stand up
-   the real chain: a `run-job`-style supervisor spawns the `supervised-child.js`
-   middle, which spawns a re-detached long-sleeping "brain" and writes the brain
-   pidfile (`state/dream-brain.pid`) — exactly the `builtin:dream` wiring. `SIGKILL`
-   the **middle** so its inner watchdog can never fire; then run the supervisor's
-   settle-path reap (reads the pidfile, `reapTree`s the brain group). Assert the
-   brain pid is `ESRCH` and the pidfile is deleted → **zero survivors**. Drive
-   this through the real `run-job` settle path (or a thin harness that invokes the
-   same reap-on-close code), not a reimplementation.
+1. **SIGKILL-the-middle-while-a-group-A-descendant AND the brain live (findings 6
+   and 10, mandatory).** Stand up the real chain: a `run-job`-style supervisor mints
+   a run token and spawns the `supervised-child.js` middle, which spawns **both** a
+   long-sleeping **group-A descendant** (a plain child in the middle's own group)
+   **and** a re-detached long-sleeping "brain" (group B), and writes the per-token
+   brain pidfile (`state/dream-brain.<token>.pid`) — exactly the `builtin:dream`
+   wiring. `SIGKILL` the **middle** so its inner watchdog can never fire; then run
+   the supervisor's settle-path reap (abnormal close → `reapTree(child.pid)` for
+   group A **and** `reapGroup(brain.pgid)` for the per-token brain pidfile). Assert
+   **both** the group-A descendant pid and the brain pid are `ESRCH` and the
+   pidfile is deleted → **zero survivors**. Drive this through the real `run-job`
+   settle path (or a thin harness that invokes the same reap-on-close code), not a
+   reimplementation.
 
 2. **Fake-`ps`-in-PATH negative (finding 7).** Prepend `tests/fixtures/reap/` (or
    a temp dir holding `fake-ps`) to `PATH`, then run the **real** macOS reader
@@ -124,14 +131,27 @@ is not vacuously green.
    file that must **not** appear, and by the reap still correctly killing a real
    re-detached child. Proves a planted `ps` cannot become the kill authority.
 
-3. **Timed snapshot/fork/setsid interleaving attack (finding 8a).** A supervised
-   child that, on a timer, **forks a new grandchild between the reap's first
-   snapshot and its first kill** (simulate a child that spawns siblings during
-   teardown). Assert the **kill–rescan-to-quiescence** loop still ends with zero
-   reachable descendants — i.e. the late-forked grandchild is caught by a later
-   sweep, closing the snapshot→kill TOCTOU. Bound the fixture's fork count so the
-   loop terminates (it must, given `maxSweeps`), and assert the reap returns
-   without exceeding its sweep cap.
+3. **Late-fork-during-teardown, best-effort (findings 8a + 14).** A supervised
+   child that, on a timer, **forks a new grandchild while the reap is sweeping**
+   (simulate a child that spawns siblings during teardown). Two cases, and only
+   the first is a required green:
+   - **Group-retaining late fork (required green).** The late grandchild keeps its
+     parent's group (no `setsid`), so it is a findable descendant. Assert the
+     **kill–rescan-to-quiescence** loop still ends with zero reachable descendants
+     — the late-forked grandchild is caught by a later sweep, closing the
+     snapshot→kill TOCTOU. Bound the fixture's fork count so the loop terminates
+     (it must, given `maxSweeps`), and assert the reap returns without exceeding
+     its sweep cap.
+   - **Kill-induced late reparent (DOCUMENTED RESIDUAL — not a required green,
+     finding 14).** A late grandchild that `setsid`s into a **new session AFTER the
+     first snapshot** and is then reparented to `init` by the reaper's **own** kill
+     of its parent is, by the next sweep, in no descendant group and has no ppid
+     ancestry — it can survive both clean sweeps. This is the self-induced,
+     kernel-level residual named in ADR-0030; the contained brain has no shell to
+     produce it. **Record it as the honest boundary; do NOT assert it reaped, and
+     do NOT build the deterministic snapshot/fork/setsid test-barrier machinery to
+     force the interleaving** (owner, round-2) — a best-effort timer is sufficient
+     for a nightly note-taking job.
 
 ## Security checklist
 
@@ -154,14 +174,19 @@ is not vacuously green.
       `ESRCH` after `reapTree`; the non-vacuity baseline shows at least one
       survives without the reap; case (e) setsid+double-fork is the recorded
       residual.
-- [ ] **[Middle-death, finding 6]** With the middle `SIGKILL`ed while the brain
-      lives, the supervisor's settle-path reap (via the brain pidfile) leaves the
-      brain `ESRCH` and deletes the pidfile — **zero survivors**.
+- [ ] **[Middle-death, findings 6 + 10]** With the middle `SIGKILL`ed while
+      **both** a group-A descendant and the brain live, the supervisor's
+      settle-path reap (`reapTree(child.pid)` for group A + `reapGroup(brain.pgid)`
+      via the per-token pidfile) leaves **both** `ESRCH` and deletes the pidfile —
+      **zero survivors**.
 - [ ] **[No bare ps, finding 7]** With a `fake-ps` earlier on `PATH`, the reap
       does not run it (marker absent) and still kills a real re-detached child.
-- [ ] **[TOCTOU, finding 8a]** A grandchild forked between the reap's snapshot
-      and kill is still gone after the kill–rescan loop; the loop terminates
-      within `maxSweeps`.
+- [ ] **[TOCTOU group-retaining, finding 8a]** A **group-retaining** grandchild
+      forked while the reap sweeps is still gone after the kill–rescan loop; the
+      loop terminates within `maxSweeps`.
+- [ ] **[Kill-induced late reparent, finding 14]** The setsid-after-snapshot,
+      reparent-via-kill case is **recorded** as the ADR-0030 residual — not
+      asserted reaped, and no deterministic test-barrier machinery is built.
 - [ ] The harness skips cleanly on win32 with a note; `npm test` and `npm run
       lint` are green.
 
@@ -171,8 +196,8 @@ is not vacuously green.
 npm test -- --test-name-pattern "reap-escape"
 npm test
 npm run lint
-# the residual and the middle-death/fake-ps/TOCTOU cases are present:
-grep -nE "setsid|double-fork|residual|ESRCH|dream-brain\.pid|fake-ps|two consecutive|rescan|interleav" tests/integration/reap-escape.test.js
+# the residual and the middle-death/fake-ps/TOCTOU/group-A cases are present:
+grep -nE "setsid|double-fork|residual|ESRCH|dream-brain|reapGroup|group-A|fake-ps|two consecutive|rescan|reparent|interleav" tests/integration/reap-escape.test.js
 ```
 
 ## Implementation notes & constraints

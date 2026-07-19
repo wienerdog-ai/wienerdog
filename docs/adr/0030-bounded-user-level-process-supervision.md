@@ -54,8 +54,13 @@ descendant belongs to, then **re-snapshots and re-kills in a bounded loop until
 two consecutive sweeps observe zero remaining descendants** (a fork occurring
 between snapshot and kill is caught on the next sweep; the loop is capped so it
 never spins unbounded). This replaces single-snapshot reaping and closes the
-snapshot→kill TOCTOU for every process the supervisor can find. On win32 the OS
-PID-table `taskkill /T /F` remains the primitive.
+snapshot→kill TOCTOU for every process the supervisor can find. A **second,
+distinct** primitive, `reapGroup(pgid)`, serves the authenticated-PGID contract
+(the handed-up brain group): it issues an explicit **negative-PGID**
+`kill(-pgid)` that reaches surviving members even after the group leader has
+exited, and is kept separate from `reapTree(pid)`'s PID-tree contract so a bare
+pgid is never mis-handled as a pid. On win32 the OS PID-table `taskkill /T /F`
+(absolute System32 only) remains the primitive.
 
 **2. Read the process table from an authoritative source, never a PATH-resolved
 binary.** The nightly job PATH deliberately front-loads the user/agent-writable
@@ -66,7 +71,12 @@ process table from Linux `/proc` directly (no external binary) and, on
 macOS/BSD, from the **absolute, SIP-protected** `/bin/ps` verified structurally
 before spawn (reusing the WP-154 `exec-identity` verification: regular file,
 owner ∈ {current, root}, no group/other-writable ancestor). A `ps` planted
-earlier on PATH can never be the reaper.
+earlier on PATH can never be the reaper. The same rule binds the **kill** tool on
+win32: only the **absolute System32 `taskkill.exe`** may execute as kill
+authority — there is **no bare-name `taskkill` fallback** (the Windows clean-run
+PATH front-loads the user-writable `~/.local/bin` ahead of System32, so a bare
+name is the same injection class, and worse because it kills). An absent System32
+`taskkill.exe` is a diagnosed no-op, never a bare-name spawn.
 
 **3. Bound the guarantee — full closure for findable trees; adversarial
 full-detach is A12.** The reap is a **total** guarantee for the process classes a
@@ -90,17 +100,44 @@ setsid+double-fork detach.
   dies while the brain lives — the supervisor reaps the brain and every reachable
   descendant to quiescence, whichever watchdog fires and even when none does
   (the outer supervisor learns the brain's pid/pgid before the middle can die,
-  so it can reap a reparented orphan). This is proven by the live escape harness,
-  not by argv assertions.
+  so it can reap a reparented orphan). On an abnormal middle exit the supervisor
+  reaps **two distinct targets**: the middle's **group-A** descendant tree
+  (`reapTree`) and the detached **group-B** brain group (`reapGroup`). This is
+  proven by the live escape harness, not by argv assertions.
+- **Per-run isolation (cross-run safety).** The handed-up brain identity lives in
+  a **per-run** pidfile keyed by a token the outer supervisor mints before spawn
+  (`state/dream-brain.<token>.pid`), and each supervisor reaps **only** its own
+  run's pidfile. A single shared pidfile was a cross-run hazard: a second,
+  lock-losing concurrent dream would read and kill the first run's **live** brain.
+  Per-run tokens close that.
 - **Combined `setsid`+double-fork full-detach: open, mitigated, deferred.** The
   escapee is in no descendant group and has no ppid ancestry to the supervisor;
   it is the documented residual, mitigated by A1 (the contained brain has no
   shell to create one) and handed to A12 (arbitrary same-user native code).
-- **PID reuse.** The handed-up brain identity is reaped by its **process group**
-  (`kill(-pgid)`), not by a bare pid, so an unrelated process that happens to
-  reuse the brain's exited pid is not group-killed unless it deliberately joined
-  that pgid — an astronomically unlikely, self-inflicted case. The narrow window
-  is a stated, accepted residual.
+- **Kill-induced late reparent: open, mitigated, deferred.** A known descendant
+  that opens a **new session (`setsid`) AFTER the reap's first snapshot** and is
+  then reparented to `init`/`launchd` by the reaper's **own** kill of its parent
+  is, by the next sweep, in no descendant group and has no ppid ancestry — so it
+  can survive both clean sweeps. No double-fork is required; the reparenting is
+  **reaper-induced**, a self-inflicted sub-ms window. The non-adversarial findable-
+  tree guarantee does **not** cover it. Closing it deterministically would need a
+  kernel containment barrier (cgroup / PID-namespace), which ADR-0004 forbids; it
+  is mitigated by A1 (the contained brain has no shell to `setsid`) and deferred to
+  A12. The escape harness **records** this case; it does not force it with a
+  deterministic snapshot/fork/setsid test barrier — disproportionate for a nightly
+  note-taking job.
+- **PID/PGID reuse.** The handed-up brain group is reaped with an explicit
+  **negative-PGID** signal (`kill(-pgid)` via `reapGroup`), which reaches surviving
+  members even after the group leader has exited — a positive-pid table lookup
+  would find nothing and leak them. No per-platform process **start-time** check is
+  added (owner decision): an unrelated process that reuses the exited brain's
+  pid/pgid within a running reap window is not group-killed unless it deliberately
+  joined that pgid — an astronomically unlikely, self-inflicted micro-window. The
+  per-token pidfile is written fresh at spawn and removed on clean completion, so
+  the stale window is small. This, and the sub-ms **spawn→hand-up gap** (a middle
+  that dies between `spawnBrain` and the atomic pidfile write hands up nothing —
+  no full handshake protocol is added, only an atomic immediate-post-spawn write),
+  are stated, accepted, non-adversarial residuals.
 
 ## Consequences
 

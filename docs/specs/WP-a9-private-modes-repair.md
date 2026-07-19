@@ -51,7 +51,7 @@ writer; the broker grant store, the executable pins (WP-154), and run evidence
 via `private-fs.writeFilePrivate` (`0600`). So the **fresh-install-under-
 permissive-umask** half is already satisfied *for those files at write time*.
 
-Two gaps remain, and this WP closes both:
+Three gaps remain, and this WP closes all three:
 
 1. **The shared predicate/repair set does not enumerate the A9 artifacts.**
    `insecureEntries` / `repairPrivateModes` / `scanPrivateModes` do **not** list
@@ -60,22 +60,42 @@ Two gaps remain, and this WP closes both:
    `0755` `secrets/`, a legacy grant store) is **never detected by doctor, never
    repaired by sync, never bannered in the digest**. The **upgrade-repair** half
    of the acceptance is unmet for the entire `secrets/` + grants/pins set.
-2. **The per-run log writers are NOT umask-independent `0600` (Codex round-1
-   finding).** Unlike the credential writers, the two log-stream creators use a
-   **bare** `fs.createWriteStream` with no `mode`, so under a permissive umask
-   they land world-readable (`0666 & ~umask`): `src/cli/run-job.js:552`
-   (`fs.createWriteStream(logFile)`) and `src/cli/dream.js:340`
-   (`fs.createWriteStream(<date>.log, { flags: 'a' })`). Logs **are** a declared
-   private artifact (they are in the A5 dir/`*.log` walk), so the A9 acceptance
-   "fresh install under permissive umask ends with the declared private modes"
-   is **violated for logs at write time** — the earlier "no writer changes"
-   framing was wrong for logs. This WP fixes both log writers to write `0600`
-   directly (so a fresh install is private the instant the log is opened, not
-   only after the next `sync` repairs it) via a shared private log-stream helper.
+2. **The per-run log writers — file AND directory — are NOT umask-independent
+   (Codex round-1 + round-2 findings).** Two sub-gaps, same class:
+   - **The log FILE stream is opened with a bare `fs.createWriteStream` (no
+     `mode`)**, so under a permissive umask it lands world-readable
+     (`0666 & ~umask`): `src/cli/run-job.js:552` (`fs.createWriteStream(logFile)`)
+     and `src/cli/dream.js:340` (`fs.createWriteStream(<date>.log, { flags: 'a' })`).
+   - **The log DIRECTORY is created with a bare `fs.mkdirSync(…, {recursive:true})`
+     (no `mode`)**, so under `umask 000` the `logs/<job>` dir lands `0777`:
+     `src/cli/run-job.js:550` (`fs.mkdirSync(logDir, { recursive: true })`) and
+     `src/cli/dream.js:339` (`fs.mkdirSync(logDir, { recursive: true })`).
+   Logs **are** a declared private artifact (they are in the A5 dir/`*.log`
+   walk), so the A9 acceptance "fresh install under permissive umask ends with the
+   declared private modes" is **violated for logs at write time** — the earlier
+   "no writer changes" framing was wrong for logs. This WP fixes **both** writers:
+   the directory via `mkdirPrivate(logDir)` (`0700`) and the file via a shared
+   **fail-closed** private log-stream helper (`0600`) — so a fresh install is
+   private the instant the log dir/file is opened, not only after the next `sync`
+   repairs it.
+3. **The shared predicate only catches *loosened* modes, not *over-tight* /
+   invalid ones (Codex round-2 finding).** `insecureEntries` tests
+   `(mode & 0o077) !== 0` — it flags a group/world bit but treats a
+   traversal-broken `0600` or `000` `secrets/` dir as "clean." A `0600` `secrets/`
+   (no owner-execute → cannot be traversed) or a `000` `secrets/` is a
+   **non-functional credential store**, yet doctor/`sync --dry-run` report it as
+   fine and repair never fixes it. This WP switches the predicate to
+   **expected-mode equality** — the enumerator carries each entry's expected mode
+   (dirs `0700`, files `0600`) and the predicate flags the full
+   `(mode & 0o777) !== expectedMode` deviation — so over-tight and invalid modes
+   are detected and repaired too, and the doctor message stops speaking only of
+   "readable by other users."
 
 This WP therefore (a) extends the shared predicate to cover the A9 set — the same
 three surfaces that already handle the A5 set now repair, warn, and banner the A9
-set for free — **and** (b) makes the log writers private at write time.
+set for free — (b) makes the log **directory and file** private at write time
+(fail-closed), and (c) hardens the predicate to expected-mode equality so
+over-tight modes cannot masquerade as clean.
 
 **Iron-rule/no-scope-creep note.** The core directory is *already* `0700` (it is
 in the A5 dir set), so every file under it is protected from **other users** by
@@ -135,14 +155,21 @@ module.exports = { mkdirPrivate, writeFilePrivate, repairPrivateModes,
   Implementation notes. `config.yaml` and `install-manifest.json` live at the
   **core root**; `schedule.json`/`watermarks.json` live under `state/`.
 
-**The per-run log writers (the round-1 finding).** Both create their stream with
-a bare `fs.createWriteStream` (no `mode`), so a permissive umask leaks the log
-world-readable:
-- `src/cli/run-job.js:552` — `const logStream = fs.createWriteStream(logFile);`
-  (`logFile` = `logs/<name>/<runStamp>.log`).
-- `src/cli/dream.js:340` — `const logStream = fs.createWriteStream(path.join(
-  logDir, \`${date}.log\`), { flags: 'a' });` (append — a **pre-existing** log
-  file keeps its old mode unless explicitly re-chmodded).
+**The per-run log writers (round-1 + round-2 findings).** Each site creates the
+log **directory** and the log **stream** with a bare, mode-less call, so a
+permissive umask leaks both the dir (`0777`) and the file (`0666`):
+- `src/cli/run-job.js:550` — `fs.mkdirSync(logDir, { recursive: true });`
+  (`logDir` = `logs/<name>/`) and `:552` — `const logStream =
+  fs.createWriteStream(logFile);` (`logFile` = `logs/<name>/<runStamp>.log`).
+- `src/cli/dream.js:339` — `fs.mkdirSync(logDir, { recursive: true });`
+  (`logDir` = `logs/dream/`) and `:340` — `const logStream =
+  fs.createWriteStream(path.join(logDir, \`${date}.log\`), { flags: 'a' });`
+  (append — a **pre-existing** log file keeps its old mode unless explicitly
+  re-chmodded).
+
+`mkdirPrivate(dir)` already exists and is exported (creates recursive with
+`0700` + a defeat-the-umask chmod); the dir fix is a one-call swap. The file fix
+needs the new fail-closed `createLogStreamPrivate` (below).
 
 **`src/core/private-fs.js` internals available to reuse:** `chmodIfNeeded(p,
 mode)` (best-effort, win32 no-op, returns true iff changed) and the module-level
@@ -169,14 +196,14 @@ through this **unchanged**.
 
 | Action | Path | Notes |
 |--------|------|-------|
-| modify | src/core/private-fs.js | (a) Extend the single internal enumerator to the union of the A5 set **and** the A9 set: `secrets/` dir (`0700`), every regular file directly under `secrets/` (`0600`), the sensitive `state/` files `broker-grants.json`/`exec-pins.json`/`run-evidence.jsonl` (`0600`), **and** the four metadata files `config.yaml`/`install-manifest.json` (core root) + `state/schedule.json`/`state/watermarks.json` (`0600`, repair-only per the dated decision below). Add the A9 constants and export them alongside the A5 ones. `repairPrivateModes`/`insecureEntries`/`scanPrivateModes` keep their names/signatures and now cover the union. (b) Add and export `createLogStreamPrivate(file, opts)` — the shared `0600` log-stream helper the two log writers call. |
-| modify | src/cli/run-job.js | **ONLY** line 552's log-stream creation: replace the bare `fs.createWriteStream(logFile)` with `createLogStreamPrivate(logFile)` so the per-run log is `0600` under any umask. Touch nothing else in this file. |
-| modify | src/cli/dream.js | **ONLY** line 340's log-stream creation: replace the bare `fs.createWriteStream(<date>.log, { flags: 'a' })` with `createLogStreamPrivate(<date>.log, { flags: 'a' })`. Touch nothing else in this file. |
-| modify | src/cli/doctor.js | Fold the dedicated `secrets/`-dir `0700` check into the shared predicate: the `insecureEntries` loop now covers the `secrets/` dir **and** its files, so remove the redundant mode-comparison warn (keep the **"secrets directory missing"** hard `fail`). Single predicate, three surfaces — the module's stated invariant. |
-| modify | tests/unit/private-fs.test.js | Add the A9 cases below (secrets dir+files, grants/pins repair, the four metadata files repaired, permissive-umask, upgrade from 0755/0644, win32 no-op) **and** `createLogStreamPrivate` cases: fresh file under `umask 000` → `0600`; a pre-existing `0666` append target → chmod'd to `0600`; win32 chmod no-op. |
-| modify | tests/unit/scheduler-runjob.test.js | Assert the per-run log written by run-job's real writer path ends `0600` under a permissive umask (fresh-install acceptance runs the **actual** writer, not just the predicate). |
-| modify | tests/integration/dream.test.js | Assert the dream's `<date>.log` written by dream's real writer path ends `0600` under a permissive umask, including the append-into-a-legacy-`0666`-file case. |
-| modify | tests/unit/doctor.test.js | Assert a group/other-readable `secrets/` dir, token file, or metadata file is WARNed via the unified predicate; assert the missing-secrets `fail` still fires. |
+| modify | src/core/private-fs.js | (a) Extend the single internal enumerator to the union of the A5 set **and** the A9 set: `secrets/` dir (`0700`), every regular file directly under `secrets/` (`0600`), the sensitive `state/` files `broker-grants.json`/`exec-pins.json`/`run-evidence.jsonl` (`0600`), **each existing `logs/<job>` subdirectory (`0700`)**, **and** the four metadata files `config.yaml`/`install-manifest.json` (core root) + `state/schedule.json`/`state/watermarks.json` (`0600`, repair-only per the dated decision below). The enumerator carries each entry's **expected mode** (dirs `0700`, files `0600`). Add the A9 constants and export them alongside the A5 ones. `repairPrivateModes` sets each entry to its expected mode; `insecureEntries`/`scanPrivateModes` flag the full `(mode & 0o777) !== expectedMode` deviation (over-tight included) — names/signatures unchanged, now over the union. (b) Add and export the **fail-closed** `createLogStreamPrivate(file, opts)` — the shared `0600` log-stream helper the two log writers call (aborts the write if it cannot secure the fd; contract below). |
+| modify | src/cli/run-job.js | **ONLY** the two log sites: line 550's `fs.mkdirSync(logDir, {recursive:true})` → `mkdirPrivate(logDir)` (dir `0700`), and line 552's `fs.createWriteStream(logFile)` → `createLogStreamPrivate(logFile)` (file `0600`). Touch nothing else in this file. |
+| modify | src/cli/dream.js | **ONLY** the two log sites: line 339's `fs.mkdirSync(logDir, {recursive:true})` → `mkdirPrivate(logDir)`, and line 340's `fs.createWriteStream(<date>.log, { flags: 'a' })` → `createLogStreamPrivate(<date>.log, { flags: 'a' })`. Touch nothing else in this file. |
+| modify | src/cli/doctor.js | Fold the dedicated `secrets/`-dir `0700` check into the shared predicate: the `insecureEntries` loop now covers the `secrets/` dir **and** its files (and flags an over-tight `secrets/` too), so remove the redundant mode-comparison warn (keep the **"secrets directory missing"** hard `fail`). Update the shared-loop warn message so it no longer speaks only of "readable by other users" — it now covers wrong permissions in either direction (expected `0700`/`0600`). Single predicate, three surfaces — the module's stated invariant. |
+| modify | tests/unit/private-fs.test.js | Add the A9 cases below (secrets dir+files, grants/pins repair, the four metadata files repaired, **each `logs/<job>` dir repaired to `0700`**, **over-tight `0600` and `000` `secrets/` flagged + repaired to `0700`**, permissive-umask, upgrade from 0755/0644, win32 no-op) **and** `createLogStreamPrivate` cases: fresh file under `umask 000` → `0600`; a pre-existing `0666` append target → `0600`; **fchmod-fails → helper throws and ZERO log bytes are written**; win32 no-op (plain stream). |
+| modify | tests/unit/scheduler-runjob.test.js | Under a permissive umask, assert the per-run log **dir** (`0700`) **and** file (`0600`) written by run-job's real writer path (fresh-install acceptance runs the **actual** writer, not just the predicate). |
+| modify | tests/integration/dream.test.js | Under a permissive umask, assert the dream's log **dir** (`0700`) **and** `<date>.log` (`0600`) written by dream's real writer path, including the append-into-a-legacy-`0666`-file case. |
+| modify | tests/unit/doctor.test.js | Assert a group/other-readable **or over-tight** `secrets/` dir, token file, or metadata file is WARNed via the unified predicate; assert the missing-secrets `fail` still fires. |
 
 ### Exact contracts
 
@@ -212,46 +239,98 @@ const A9_PRIVATE_STATE_FILES = [
 const A9_PRIVATE_CORE_FILES = (paths) => [paths.config, paths.manifest];
 ```
 
-The enumerator, extended, returns `{dirs, files}` = **union of**:
-- dirs: the A5 dirs **plus** every existing `A9_PRIVATE_DIRS` entry (`secrets/`);
-- files: the A5 files **plus** every existing `A9_PRIVATE_STATE_FILES` file under
-  `state/` **plus** every existing `A9_PRIVATE_CORE_FILES` entry (`config.yaml`,
-  `install-manifest.json` at the core root) **plus every regular file directly
-  under `secrets/`** (one level, matched by `listFiles(paths.secrets, () =>
-  true)` — this is how the tokens + client JSON are covered without hard-coding
-  their names).
+The enumerator, extended, returns the **union** of the A5 and A9 sets, and now
+**carries each entry's expected mode** (dirs `0700`, files `0600`) so the
+predicate can flag over-tight modes (finding 7). Whether you return
+`{dirs, files}` (dirs implicitly expect `0700`, files `0600`) or a flat
+`[{path, expectedMode}]` list is the implementer's call — the invariant is that
+**one** enumerator feeds all three surfaces and every entry has a known expected
+mode. The union is:
+- dirs (expected `0700`): the A5 dirs **plus** every existing `A9_PRIVATE_DIRS`
+  entry (`secrets/`) **plus every existing `logs/<job>` subdirectory** (finding 8
+  — matched by reading `paths.logs` for its subdirectories, the same one-level
+  layer whose `*.log` files the A5 walk already covers);
+- files (expected `0600`): the A5 files **plus** every existing
+  `A9_PRIVATE_STATE_FILES` file under `state/` **plus** every existing
+  `A9_PRIVATE_CORE_FILES` entry (`config.yaml`, `install-manifest.json` at the
+  core root) **plus every regular file directly under `secrets/`** (one level,
+  matched by `listFiles(paths.secrets, () => true)` — this is how the tokens +
+  client JSON are covered without hard-coding their names).
 
 Export the A9 constants (`A9_PRIVATE_DIRS`, `A9_PRIVATE_STATE_FILES`,
 `A9_PRIVATE_CORE_FILES`) alongside the A5 ones. (Naming is the implementer's
 call; keep the single-enumerator invariant.)
 
-**The shared private log-stream helper `createLogStreamPrivate` (the round-1 log
-fix).** The two log writers must open their stream `0600` regardless of umask,
-including when appending into a **pre-existing** file (whose mode a fresh
-`createWriteStream(mode)` would not change). One helper owns both concerns so the
-writers change by one call each:
+**Predicate = expected-mode equality (finding 7).** `insecureEntries` must flag
+`(fs.statSync(p).mode & 0o777) !== expectedMode` for each entry — **not** the old
+`(mode & 0o077) !== 0`. This catches a loosened mode (`0755` dir, `0644` file)
+**and** an over-tight/invalid one (a `0600` or `000` `secrets/` that cannot be
+traversed — a broken store). `repairPrivateModes` chmods each flagged entry to
+its **expected** mode (not a fixed 0700/0600 by guess). `win32 → []` unchanged.
+
+**The shared private log-stream helper `createLogStreamPrivate` — FAIL-CLOSED
+(round-2 finding 6).** The two log writers must open their stream `0600`
+regardless of umask, including when appending into a **pre-existing** file (whose
+mode a fresh `createWriteStream(mode)` would not change). Crucially, if the mode
+cannot be secured, the helper must **abort the write** — it must **never** fall
+back to writing into a world-readable file. The POSIX path therefore opens the fd
+synchronously, `fchmodSync`es **that fd** (so there is no path-based TOCTOU and
+the stream uses the already-verified fd), and on any chmod/fchmod failure closes
+the fd and **throws** (the job fails loudly and surfaces through run-job's
+existing error path — see the rationale note below):
 
 ```js
+const { WienerdogError } = require('../core/errors'); // add this import
+
 /** Open a per-run log stream that is ALWAYS owner-only (0600), independent of
- *  umask and independent of a pre-existing file's mode. Creates with mode 0600,
- *  then best-effort re-chmods (covers the append-into-a-legacy-0666-file case).
+ *  umask and of a pre-existing file's mode — or FAIL: it never returns a stream
+ *  onto a file it could not secure to 0600.
+ *  POSIX: openSync(file, flags, 0o600) → fchmodSync(fd, 0o600) (covers the
+ *    append-into-a-legacy-0666 case, on the fd not the path); on fchmod failure
+ *    closeSync(fd) and THROW (never write into a world-readable file). The
+ *    returned stream is built on the ALREADY-VERIFIED fd.
  *  win32: no mode/chmod semantics — plain stream (POSIX-only guarantee, matching
- *  the rest of this module). Never throws on the chmod (best-effort).
+ *    the rest of this module).
  *  @param {string} file  absolute log path (its dir already exists — mkdir is
- *    the caller's job, unchanged)
- *  @param {{flags?: string}} [opts]  e.g. { flags: 'a' } for append (dream)
- *  @returns {import('fs').WriteStream} */
+ *    the caller's job, now mkdirPrivate)
+ *  @param {{flags?: string, openSync?, fchmodSync?, closeSync?}} [opts]
+ *    the *Sync seams are test injection only (to force an fchmod failure)
+ *  @returns {import('fs').WriteStream}
+ *  @throws {WienerdogError} if the fd cannot be secured to 0600 (POSIX) */
 function createLogStreamPrivate(file, opts = {}) {
   const flags = opts.flags || 'w';
-  const stream = fs.createWriteStream(file, { flags, mode: 0o600 });
-  chmodIfNeeded(file, 0o600); // WIN32 no-op; fixes a pre-existing 0666 append target
-  return stream;
+  if (WIN32) return fs.createWriteStream(file, { flags });
+  const openSync = opts.openSync || fs.openSync;
+  const fchmodSync = opts.fchmodSync || fs.fchmodSync;
+  const closeSync = opts.closeSync || fs.closeSync;
+  const fd = openSync(file, flags, 0o600); // atomic create-with-0600
+  try {
+    fchmodSync(fd, 0o600); // enforce 0600 even on a pre-existing append target
+  } catch (e) {
+    try { closeSync(fd); } catch { /* best-effort close */ }
+    throw new WienerdogError(
+      `refusing to write log ${file}: could not secure it to 0600 (${e && e.message})`,
+    );
+  }
+  return fs.createWriteStream(file, { fd }); // stream on the verified fd
 }
 ```
 
-`run-job.js:552` becomes `const logStream = createLogStreamPrivate(logFile);` and
-`dream.js:340` becomes `const logStream = createLogStreamPrivate(path.join(logDir,
-\`${date}.log\`), { flags: 'a' });`. Nothing else in those two files changes.
+`run-job.js` becomes `fs.mkdirSync(logDir, {recursive:true})` →
+`mkdirPrivate(logDir)` and `const logStream = fs.createWriteStream(logFile)` →
+`const logStream = createLogStreamPrivate(logFile)`; `dream.js` the analogous two
+swaps with `{ flags: 'a' }` on the stream. Nothing else in those two files
+changes.
+
+**Rationale for fail-closed (owner, round-2).** The trigger — a foreign-owned or
+un-chmoddable file sitting in your private `<core>/logs/` — is rare and itself
+alarming; a loud failure that stops the job is correct and its availability cost
+is ~nil. The thrown `WienerdogError` propagates through run-job's existing
+fail-loud error surfacing (the same path a pre-spawn setup error takes); this WP
+does **not** add new alerting plumbing to run-job (that would exceed the two-line
+touch) — the loud throw is the required behavior. The negative test injects a
+throwing `fchmodSync` seam and asserts the helper throws **and** the file has zero
+bytes.
 
 Every entry is best-effort and existence-guarded exactly like the A5 set (a
 missing `secrets/` or a missing pin file is simply skipped — this WP **repairs**,
@@ -260,18 +339,25 @@ no-op (POSIX-only guarantee, owner-approved). Deduplicate if a path could appear
 in both sets (it cannot today, but the union must not double-report).
 
 Resulting behavior (all three surfaces, for free):
-- `repairPrivateModes(paths)` → chmods a legacy `0755` `secrets/`→`0700` and a
-  legacy `0644` token/grant/pin/metadata file→`0600`, counting each change.
+- `repairPrivateModes(paths)` → chmods a legacy `0755` `secrets/`→`0700`, a
+  legacy `0644` token/grant/pin/metadata file→`0600`, a legacy `0777`
+  `logs/<job>` dir→`0700`, **and an over-tight `0600`/`000` `secrets/`→`0700`**,
+  counting each change.
 - `insecureEntries(paths)` / `scanPrivateModes(paths)` → now report a
-  group/other-accessible `secrets/` dir or token/grant/pin/metadata file (the
-  four metadata files included per the dated decision below).
+  wrong-moded `secrets/` dir (loosened **or** over-tight), token/grant/pin/
+  metadata file, or `logs/<job>` dir (the four metadata files included per the
+  dated decision below).
 
-**`src/cli/doctor.js` — fold the secrets check.** After the extension,
-`insecureEntries` already covers `secrets/` and its files, so the dedicated
-`mode === 0o700 ? ok : warn` comparison is redundant with (and would
-double-report against) the shared loop. Remove that comparison; **keep** the
-`dirExists(paths.secrets)` → `fail` "secrets directory missing" check and the
-win32 skip. The shared `insecureEntries` loop remains the single warn source.
+**`src/cli/doctor.js` — fold the secrets check + fix the message.** After the
+extension, `insecureEntries` already covers `secrets/` and its files (and flags an
+over-tight `secrets/`), so the dedicated `mode === 0o700 ? ok : warn` comparison
+is redundant with (and would double-report against) the shared loop. Remove that
+comparison; **keep** the `dirExists(paths.secrets)` → `fail` "secrets directory
+missing" check and the win32 skip. Update the shared-loop warn text so it no
+longer says only "readable by other users" — an over-tight entry is not
+other-readable — but names wrong permissions in either direction (e.g. "… has
+wrong permissions (expected 0700/0600) — run 'wienerdog sync' to repair"). The
+shared `insecureEntries` loop remains the single warn source.
 
 ### Example (POSIX)
 
@@ -280,14 +366,20 @@ win32 skip. The shared `insecureEntries` loop remains the single warn source.
 secrets/                       0755   secrets/google-token-read.json   0644
 state/broker-grants.json       0644   state/exec-pins.json             0644
 config.yaml                    0644   state/watermarks.json            0644
+logs/dream/                    0777
 
-wienerdog doctor      # WARNs each as "readable by other users" (secrets dir + files
-                      #   + grants/pins + config.yaml + watermarks.json)
-wienerdog sync        # repairPrivateModes → secrets/ 0700, every listed file 0600
+wienerdog doctor      # WARNs each as wrong-permissions (secrets dir + files
+                      #   + grants/pins + config.yaml + watermarks.json + log dir)
+wienerdog sync        # repairPrivateModes → secrets/ & logs/dream/ 0700, files 0600
 wienerdog doctor      # clean; scanPrivateModes → {insecure: 0}
 
-# separately, a FRESH log under a permissive umask is private at write time:
-umask 000; wienerdog run-job dream   # logs/dream/<stamp>.log is 0600, not 0666
+# an OVER-TIGHT secrets/ is now caught too (broken store, not "clean"):
+chmod 000 secrets/    ; wienerdog doctor   # WARNs secrets/ (expected 0700)
+                        wienerdog sync      # repairs 000 → 0700
+
+# separately, a FRESH log under a permissive umask is private at write time —
+# BOTH the dir and the file:
+umask 000; wienerdog run-job dream   # logs/dream/ is 0700 and <stamp>.log is 0600
 ```
 
 ## Implementation notes & constraints
@@ -329,11 +421,13 @@ umask 000; wienerdog run-job dream   # logs/dream/<stamp>.log is 0600, not 0666
   three surfaces cannot disagree; the A9 extension must preserve that.
 - **Shared-surface coordination with the A10 WPs.** `WP-a10-reap-mechanism` also
   edits `src/cli/run-job.js` and `src/cli/dream.js` (the watchdog/reap wiring).
-  This WP's edit to those two files is a **one-line stream-open swap** at the log
-  sites (`:552` / `:340`) and touches nothing near the watchdog — so the two WPs
-  edit disjoint regions, but they must not land on the same branch. Rebase on
-  whichever merges first and re-verify the exact line before editing (do not
-  assume line 552/340 is unchanged — locate the `fs.createWriteStream` log call).
+  This WP's edit to those two files is a **two-line swap at each log site** — the
+  `mkdirSync`→`mkdirPrivate` (`:550` / `:339`) and the
+  `createWriteStream`→`createLogStreamPrivate` (`:552` / `:340`) — and touches
+  nothing near the watchdog, so the two WPs edit disjoint regions, but they must
+  not land on the same branch. Rebase on whichever merges first and re-verify the
+  exact lines before editing (do not assume 550/552/339/340 are unchanged —
+  locate the `fs.mkdirSync(logDir…)` and `fs.createWriteStream` log calls).
 - `never mock process.platform` — inject `platform` where a test needs a specific
   OS (the module already gates on the module-level `WIN32`; for tests that must
   assert win32 behavior, follow the module's existing pattern).
@@ -341,16 +435,24 @@ umask 000; wienerdog run-job dream   # logs/dream/<stamp>.log is 0600, not 0666
 
 ## Security checklist
 
-- [ ] After the extension, a group- or other-accessible `secrets/` directory, a
-      `google-token-*.json`, `google-client.json`, `broker-grants.json`,
-      `exec-pins.json`, `config.yaml`, `install-manifest.json`, `schedule.json`,
-      or `watermarks.json` is (a) reported by `insecureEntries`/
+- [ ] After the extension, a wrong-moded (loosened **or** over-tight) `secrets/`
+      directory, a `google-token-*.json`, `google-client.json`,
+      `broker-grants.json`, `exec-pins.json`, `config.yaml`,
+      `install-manifest.json`, `schedule.json`, `watermarks.json`, or a
+      `logs/<job>` directory is (a) reported by `insecureEntries`/
       `scanPrivateModes`, (b) WARNed by `doctor`, (c) counted by the digest
-      banner, and (d) repaired to `0700`/`0600` by `repairPrivateModes` — all
-      from the one shared enumerator.
+      banner, and (d) repaired to its **expected** `0700`/`0600` by
+      `repairPrivateModes` — all from the one shared enumerator.
+- [ ] The predicate uses **expected-mode equality** (`(mode & 0o777) !==
+      expectedMode`), so a `0600` or `000` `secrets/` (traversal-broken store) is
+      flagged, not passed as clean.
 - [ ] A **freshly-created** per-run log (both `run-job` and `dream` writer paths)
-      is `0600` under `umask 000` — not `0666` — and a `dream` append into a
-      pre-existing `0666` log ends `0600` (the `createLogStreamPrivate` chmod).
+      under `umask 000` ends with its **directory `0700`** and its **file `0600`**
+      — not `0777`/`0666` — and a `dream` append into a pre-existing `0666` log
+      ends `0600` (the `createLogStreamPrivate` fchmod).
+- [ ] `createLogStreamPrivate` is **fail-closed**: if it cannot secure the fd to
+      `0600` it throws and writes **zero** bytes — it never returns a stream onto
+      a world-readable file (negative test with an injected throwing `fchmodSync`).
 - [ ] `repairPrivateModes` never creates `secrets/` or any file; a machine with
       no Google setup produces zero changes and zero warnings for the A9 set.
 - [ ] The private-modes guarantee stays `0700`/`0600` under a permissive umask
@@ -363,20 +465,25 @@ umask 000; wienerdog run-job dream   # logs/dream/<stamp>.log is 0600, not 0666
 - [ ] **[A9 — "Fresh install under permissive umask … ends with the declared
       private modes."]** Under a permissive umask, a freshly-written token
       (`gws/client.js`) and grant/pin (`writeFilePrivate`) are `0600` and
-      `secrets/` is `0700`; **and a freshly-written per-run log is `0600`** —
-      asserted by tests that set a permissive umask and (i) inspect the credential
-      writers' resulting modes and (ii) run the **actual** `run-job` and `dream`
-      log-writer paths (not just the predicate) and inspect the log file's mode.
+      `secrets/` is `0700`; **and a freshly-written per-run log dir is `0700` and
+      its file `0600`** — asserted by tests that set a permissive umask and (i)
+      inspect the credential writers' resulting modes and (ii) run the **actual**
+      `run-job` and `dream` log-writer paths (not just the predicate) and inspect
+      the log **dir and file** modes.
 - [ ] **[A9 — "… an upgrade from 0755/0644 state ends with the declared private
       modes."]** Given a pre-seeded `secrets/` at `0755` with a `0644` token, a
-      `0644` `broker-grants.json`, a `0644` `exec-pins.json`, and a `0644`
-      `config.yaml`/`watermarks.json`, `repairPrivateModes` changes each to
-      `0700`/`0600` and returns the correct `{changed}` count; a second call
-      returns `{changed: 0}` (idempotent).
+      `0644` `broker-grants.json`, a `0644` `exec-pins.json`, a `0644`
+      `config.yaml`/`watermarks.json`, and a `0777` `logs/<job>` dir,
+      `repairPrivateModes` changes each to its expected `0700`/`0600` and returns
+      the correct `{changed}` count; a second call returns `{changed: 0}`
+      (idempotent). A `0600` and a `000` `secrets/` are **also** repaired to
+      `0700` in the same pass.
 - [ ] `insecureEntries`/`scanPrivateModes` report exactly those insecure A9
-      entries (secrets + grants/pins + the four metadata files) before repair and
-      none after; `doctor` WARNs them via the unified loop (no duplicate secrets
-      warn), and still `fail`s when `secrets/` is missing.
+      entries (secrets — loosened and over-tight — + grants/pins + the four
+      metadata files + log dirs) before repair and none after; `doctor` WARNs them
+      via the unified loop (no duplicate secrets warn) with a message covering
+      wrong permissions in either direction, and still `fail`s when `secrets/` is
+      missing.
 - [ ] The A5 set's behavior is unchanged (existing `private-fs`/`doctor` tests
       still pass).
 - [ ] `npm test` and `npm run lint` are green.
@@ -387,10 +494,12 @@ umask 000; wienerdog run-job dream   # logs/dream/<stamp>.log is 0600, not 0666
 npm test -- --test-name-pattern "private-fs|doctor|scheduler-runjob|dream"
 npm test
 npm run lint
-# the predicate now names the A9 artifacts + metadata files + the log helper:
-grep -nE "secrets|broker-grants|exec-pins|schedule\.json|watermarks|A9_PRIVATE|createLogStreamPrivate" src/core/private-fs.js
-# the two log writers call the private helper (no bare createWriteStream remains):
-grep -n "createLogStreamPrivate" src/cli/run-job.js src/cli/dream.js
+# the predicate now names the A9 artifacts + metadata files + the log helper,
+# uses expected-mode equality, and is fail-closed on the log helper:
+grep -nE "secrets|broker-grants|exec-pins|schedule\.json|watermarks|A9_PRIVATE|createLogStreamPrivate|expectedMode|fchmodSync" src/core/private-fs.js
+# the two log writers call BOTH private helpers (no bare createWriteStream/mkdirSync
+# remains at the log sites):
+grep -nE "mkdirPrivate|createLogStreamPrivate" src/cli/run-job.js src/cli/dream.js
 ```
 
 ## Out of scope (do NOT do these)
@@ -400,7 +509,11 @@ grep -n "createLogStreamPrivate" src/cli/run-job.js src/cli/dream.js
   not here (per the A9 gap analysis).
 - **Log bounding/rotation** — already shipped (`rotateLogs`, WP-038) and the
   self-email tail exclusion (WP-124/EP3); do not re-implement (this WP only
-  changes the log-stream **mode**, not its content or rotation).
+  changes the log **dir/file mode**, not the log content or rotation).
+- **Adding new alerting plumbing to `run-job`** for the fail-closed log throw —
+  out of scope; the thrown `WienerdogError` surfaces through run-job's existing
+  fail-loud path. Broadening that is a separate WP (note under "Discovered
+  issues" if a reviewer wants a dedicated alert).
 - Changing the **metadata writers** (`config`/`manifest` writers, `jobs.js`
   `schedule.json`, `watermarks.js`) to write `0600` at write time — the dated
   decision keeps them repair-only (predicate + sync repair), writers unchanged.
