@@ -383,10 +383,15 @@ shared case list (A6) must add:
   in `npm test`: `exec-identity.js` public exports equal the EXACT path-free list
   `{createPins, loadPins, spawnPinnedSync, spawnPinned, EXEC_PINS_PATH}`; no module
   outside it imports an internal exec-path helper; no module feeds a pin-state field
-  into a `spawn*`/`exec*`; and `spawnPinned*` returns carry no `spawnfile`/
-  `spawnargs`. Mutation: any site reverted to a raw `spawnSync(realpath)`, an
-  internal helper exported/imported, or a raw `ChildProcess`/`spawnfile` returned ⇒
-  the zero-execution / boundary / leak assertion fails.
+  into a `spawn*`/`exec*`; `spawnPinned*` returns carry no `spawnfile`/`spawnargs`;
+  and **[R16] the async facade proxies no raw child event** — its `error` payload
+  exposes no `path`/`spawnargs`/`spawnfile`/`syscall`/`cause`. (iii) **[R16] facade
+  error-channel negative:** force `spawnPinned` failure with an invalid `cwd` (+ an
+  ENOENT target) ⇒ the emitted `error` carries only the logical `name` + a generic
+  code, NO bound command/args/path. Mutation: any site reverted to a raw
+  `spawnSync(realpath)`, an internal helper exported/imported, a raw `ChildProcess`/
+  `spawnfile` returned, or the **raw child `error` proxied** ⇒ the zero-execution /
+  boundary / leak / facade-error assertion fails.
 - **[R15] One tamper case PER digest-covered field** (the WP-156 authoritative
   set): the harness must include a single-field tamper for **each** of `run`,
   `model`, `timeoutMs` (inner), `outerTimeoutMs`, `maxInputBytes`, `vaultLayout`,

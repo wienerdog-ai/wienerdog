@@ -451,11 +451,18 @@ implemented as dated amendments in the six specs and detailed in `FIX-PLAN.md`.
    **[R13/R15] Terminal invariant — EXECUTION-only encapsulation (structural, not a
    textual scan, and not overclaimed):** *a pinned target is EXECUTED only through
    `spawnPinnedSync`/`spawnPinned`, which resolve → verify → bind-interpreter →
-   spawn.* Their returns must not leak a spawnable path — `spawnPinnedSync` returns
-   `{status, signal, stdout, stderr}` (no `spawnfile`/`spawnargs`; path-bearing
-   error text sanitized to the exec `name`), and `spawnPinned` returns a restricted
-   child facade (no `spawnfile`/`spawnargs`; a raw `ChildProcess` would leak the
-   realpath). The exec-path helpers (`resolvePinnedSpawn`, `bindInterpreter`,
+   spawn.* **[R16] SANITIZED-BY-CONSTRUCTION return surface — no raw child, event,
+   or error (sync or async) reaches a caller; a pinned target's realpath never
+   leaves `exec-identity.js`.** `spawnPinnedSync` returns `{status, signal, stdout,
+   stderr}` (no `spawnfile`/`spawnargs`; error text sanitized to the exec `name`).
+   `spawnPinned` returns a facade that **never forwards a raw Node child, native
+   emitter, event, or error**: `stdout`/`stderr` byte streams; `on`/`once` re-emit
+   only freshly-constructed `exit`→`{code,signal}` and `error`→a NEW `Error` with an
+   approved code + a `name`-only message and **no `.path`/`.spawnargs`/`.spawnfile`/
+   `.syscall`/`.cmd`/`.cause`** (closes the async-error leak: an invalid `cwd`
+   otherwise surfaces the realpath via the raw child `error`, acute for node-shebang
+   targets whose `spawnargs[0]` is the pinned realpath). The exec-path helpers
+   (`resolvePinnedSpawn`, `bindInterpreter`,
    `resolveExecutable`, `verifyExecutable`, `verifyPin`, `buildPin`, `probeVersion`)
    are **module-internal** (verified: no external importers). `loadPins`/`createPins`
    stay exported because they return path-bearing pin state as **DATA** (for the
@@ -468,8 +475,10 @@ implemented as dated amendments in the six specs and detailed in `FIX-PLAN.md`.
    `exec-identity.js` imports an internal exec-path helper; (c) no module feeds a
    pin-state return into a `spawn*`/`exec*`; (d) **[R15] no public exec-surface
    function accepts a spawn/exec callback param** (an injected callback would receive
-   the bound command+args and leak the path — the real spawn is module-private).
-   (Manual site enumeration had kept
+   the bound command+args and leak the path — the real spawn is module-private);
+   (e) **[R16] the async facade proxies no raw child event and its `error` payload
+   exposes no `path`/`spawnargs`/`spawnfile`/`syscall`/`cause`** (forced via an
+   invalid `cwd`/ENOENT target). (Manual site enumeration had kept
    missing sites — `captureClaudeVersion` was the 5th, found
    after R11 claimed "every site"; encapsulation removes the need to enumerate.)
 

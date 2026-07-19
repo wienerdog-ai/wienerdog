@@ -169,7 +169,7 @@ Nothing today resolves, verifies, or pins these executables.
 | modify | src/cli/adopt.js | **[R8:#3/R9:#2]** transactional pin preflight at the START of `adopt.run` — dry `createPins({dryRun:true})` resolves+verifies claude **and** git without writing; if either fails, ABORT before adopt's first mutation (no Git snapshot/config/scaffold; prior `exec-pins.json` byte-identical); only if both resolve, atomically commit the complete pin store, then proceed to adoption. See A5. |
 | modify | tests/integration/adopt-e2e.test.js | **[R9:#2]** failure test: pre-WP-154 install with claude unresolvable ⇒ `adopt` aborts with vault/config/manifest/prior-pin-store all byte-identical. |
 | modify | src/cli/run-job.js | **[R12/R13]** route `captureClaudeVersion` (~L256, called ~L633) through **`spawnPinnedSync('claude', …, ['--version'])`** (never a raw path) — node-shebang ⇒ runs via `process.execPath`; native ⇒ direct; PATH-resolving non-node ⇒ `'unknown'` without executing. Keep the raw claude path ONLY for the `basename==='claude'` label check. `defaultSendAlert` (~L318, `gen.nodePath()`=`process.execPath`) is already safe. |
-| create | tests/unit/pinned-exec-canary.test.js | **[R13/R15]** execution-only encapsulation-boundary guard: (a) `exec-identity.js` public exports equal the EXACT path-free, seam-free list `{createPins, loadPins, spawnPinnedSync, spawnPinned, EXEC_PINS_PATH}`; (b) no module outside `exec-identity.js` imports any internal exec-path helper (`resolvePinnedSpawn`/`bindInterpreter`/`resolveExecutable`/`verifyExecutable`/`verifyPin`/`buildPin`/`probeVersion`); (c) no module feeds a `loadPins`/`createPins` pin-state field (`.commandPath`/`.installDir`/`.realpath`) into a `spawn*`/`exec*` call; (d) **no public exec-surface function accepts a spawn/exec callback param** (`spawnPinnedSync`/`spawnPinned`/`createPins` signatures have no `spawnSync`/`spawn`/`exec` option); (e) `spawnPinned*` returns carry no `spawnfile`/`spawnargs`. |
+| create | tests/unit/pinned-exec-canary.test.js | **[R13/R15]** execution-only encapsulation-boundary guard: (a) `exec-identity.js` public exports equal the EXACT path-free, seam-free list `{createPins, loadPins, spawnPinnedSync, spawnPinned, EXEC_PINS_PATH}`; (b) no module outside `exec-identity.js` imports any internal exec-path helper (`resolvePinnedSpawn`/`bindInterpreter`/`resolveExecutable`/`verifyExecutable`/`verifyPin`/`buildPin`/`probeVersion`); (c) no module feeds a `loadPins`/`createPins` pin-state field (`.commandPath`/`.installDir`/`.realpath`) into a `spawn*`/`exec*` call; (d) **no public exec-surface function accepts a spawn/exec callback param** (`spawnPinnedSync`/`spawnPinned`/`createPins` signatures have no `spawnSync`/`spawn`/`exec` option); (e) `spawnPinned*` returns carry no `spawnfile`/`spawnargs`; (f) **[R16] the async facade proxies no raw child event — its `error` payload exposes no `path`/`spawnargs`/`spawnfile`/`syscall`/`cause`** (forced via an invalid `cwd`/ENOENT target). |
 
 ### Exact contracts
 
@@ -231,30 +231,40 @@ function verifyExecutable(realpath, platform, ctx) {}
  *  @returns {{command:string, args:string[]}} @throws {WienerdogError} */
 function bindInterpreter(realpath, env, platform) {}
 
-/** [R13/R15] THE ONLY public API to EXECUTE a pinned target. Resolves → verifies →
- *  bindInterpreter → spawns. Its RETURN must not expose a spawnable path (so a
- *  consumer cannot recover the realpath and re-spawn it directly, bypassing
- *  bindInterpreter): returns `{status, signal, stdout, stderr}` only — **no
- *  `spawnfile`/`spawnargs`**, and any path-bearing text in an error message is
- *  sanitized to the exec `name` (e.g. "claude"), not the realpath.
+/** [R13/R15/R16] THE ONLY public API to EXECUTE a pinned target. Resolves →
+ *  verifies → bindInterpreter → spawns. **SANITIZED-BY-CONSTRUCTION return:** no
+ *  raw child, event, or error ever reaches the caller — the realpath never leaves
+ *  exec-identity. Returns `{status, signal, stdout:Buffer, stderr:Buffer}` only:
+ *  **no `spawnfile`/`spawnargs`**, and on failure `error` is a **freshly
+ *  constructed** value with only an approved code/kind (e.g. 'ENOENT'/'spawn-failed')
+ *  and a message referring to the exec by its logical `name` — **no `.path`,
+ *  `.spawnargs`, `.spawnfile`, `.syscall`, `.cmd`, `.cause`, or path-bearing text.**
  *  @param {string} name 'claude'|'git'|'codex'
  *  @param {import('./paths').WienerdogPaths} paths
  *  @param {{args?:string[], env?:NodeJS.ProcessEnv, platform?:NodeJS.Platform,
- *           …spawnOpts}} [opts]
- *    **[R15] NO spawn/exec callback param** — the real spawn is module-private, so a
- *    consumer cannot inject a callback that would RECEIVE the bound command+args
- *    (native → realpath as command; node script → realpath in args[0]) and re-spawn
- *    it directly. Tests exercise it via marker executables or a NON-exported test
- *    factory (never on the public signature).
+ *           cwd?:string, timeout?:number, …safeSpawnOpts}} [opts]
+ *    **[R15] NO spawn/exec callback param** (real spawn is module-private; a callback
+ *    would receive the bound command+args and leak the path). Passthrough opts like
+ *    `cwd` are accepted, but a resulting spawn error is sanitized (below) so an
+ *    invalid `cwd` cannot surface the realpath. Tests exercise it via marker
+ *    executables or a NON-exported factory (never on the public signature).
  *  @returns {{status:number|null, signal:string|null, stdout:Buffer, stderr:Buffer}}
  *    @throws on drift/tamper/unsupported-interpreter (fail closed, no spawn). */
 function spawnPinnedSync(name, paths, opts) {}
 
-/** [R13/R15] Async variant, for a detached/streamed child (the dream brain).
- *  Returns a **restricted child facade** exposing only `{ stdout, stderr, stdin,
- *  pid, on/once (close/exit/error), kill }` — **NOT `spawnfile`/`spawnargs`** (a
- *  raw `ChildProcess` leaks the realpath via those). Never returns a path. Same
- *  `opts` as `spawnPinnedSync` — **NO spawn/exec callback param** [R15]. */
+/** [R13/R15/R16] Async variant (detached/streamed child, e.g. the dream brain).
+ *  **SANITIZED-BY-CONSTRUCTION facade — it NEVER forwards a raw Node child object,
+ *  native emitter, event, or error.** It returns
+ *  `{ stdout, stderr, stdin, pid, kill(signal?), on/once(evt, cb) }` where
+ *  `stdout`/`stderr` are byte streams (no path metadata), and `on`/`once` accept
+ *  ONLY these **re-emitted, freshly-constructed** events:
+ *    - `exit` ⇒ `{ code, signal }`
+ *    - `error` ⇒ a NEW `Error` with only an approved code/kind and a message that
+ *      names the exec by its logical `name` — **NO `.path`, `.spawnargs`,
+ *      `.spawnfile`, `.syscall`, `.cmd`, `.cause`, nested error, or path text.**
+ *  The raw `ChildProcess` and its native `error` (whose `.path`/`.spawnargs[0]`
+ *  carry the pinned realpath — acute for node-shebang targets) are never returned
+ *  or proxied. Same `opts` as `spawnPinnedSync`; **NO spawn/exec callback param**. */
 function spawnPinned(name, paths, opts) {}
 
 /** [INTERNAL — not exported] `<exe> --version`, bounded (10s), best-effort. MUST
@@ -627,8 +637,13 @@ callback param** — `spawnPinnedSync`/`spawnPinned`/`createPins` signatures car
 `spawnSync`/`spawn`/`exec` option (an injected callback would receive the bound
 command+args and leak the path; this is the WP-155 "test seam in the public API"
 class — the real spawn stays module-private, tests use marker executables or a
-non-exported factory); (e) `spawnPinned*` returns carry no `spawnfile`/`spawnargs`.
-The guarantee is **execution-only encapsulation**: a pinned
+non-exported factory); (e) `spawnPinned*` returns carry no `spawnfile`/`spawnargs`;
+(f) **[R16] the async facade proxies no raw child event and its `error` payload
+exposes no `path`/`spawnargs`/`spawnfile`/`syscall`/`cause`** (nor path-bearing
+message text) — SANITIZED-BY-CONSTRUCTION (see the facade contract above). No raw
+child, event, or error — sync or async — reaches a caller; a pinned target's
+realpath never leaves `exec-identity.js`. The guarantee is **execution-only
+encapsulation**: a pinned
 target is executed only through `spawnPinned*`, whose returns don't leak a
 spawnable path. The canary does NOT claim "no function ever returns a path"
 (`loadPins` legitimately does, as data).
@@ -723,8 +738,13 @@ valid descriptor binds.
   have no `spawnSync`/`spawn`/`exec` option). (c) **[R15] no path leak in the exec
   return:** `spawnPinnedSync`'s return has no `spawnfile`/`spawnargs` (and any
   path-bearing error text is sanitized to the exec `name`); `spawnPinned` returns
-  the restricted facade (no `spawnfile`/`spawnargs`). **Mutation:** revert
-  `captureClaudeVersion` to a raw `spawnSync(rawResolvedPath, …)` ⇒ its planted-node
-  zero-execution test fails; export an internal exec-path helper, import one
-  externally, add a `spawnSync` param to a public signature, or return a raw
-  `ChildProcess`/`spawnfile` ⇒ the boundary/leak canary fails.
+  the restricted facade (no `spawnfile`/`spawnargs`). (d) **[R16] facade
+  error-channel regression:** force a spawn failure (invalid `cwd` and/or an ENOENT
+  target) on `spawnPinned` ⇒ the emitted `error` event payload contains **NO**
+  bound command/args/path — no `.path`/`.spawnargs`/`.spawnfile`/`.syscall`/`.cause`
+  and no path-bearing message text — only the logical `name` + a generic code.
+  **Mutation:** revert `captureClaudeVersion` to a raw `spawnSync(rawResolvedPath,
+  …)` ⇒ its planted-node zero-execution test fails; export an internal exec-path
+  helper, import one externally, add a `spawnSync` param to a public signature,
+  return a raw `ChildProcess`/`spawnfile`, or **proxy the raw child `error`** ⇒ the
+  boundary/leak/facade-error canary fails.
