@@ -124,6 +124,26 @@ function parseAt(at) {
   return { hour: Number(h), minute: Number(m) };
 }
 
+/**
+ * The launcher argv AFTER the node executable, for a per-job entry (WP-157):
+ * `[launcher, name, --descriptor, descriptor, --expect-digest, expectDigest]`.
+ * The OS entry invokes the out-of-tree launcher (not the app bin directly), so
+ * it verifies app + descriptor integrity before any spawn.
+ * @param {{launcher:string, name:string, descriptor:string, expectDigest:string}} o
+ * @returns {string[]}
+ */
+function jobLaunchArgs(o) {
+  return [o.launcher, o.name, '--descriptor', o.descriptor, '--expect-digest', o.expectDigest];
+}
+
+/** The launcher argv AFTER node for a catch-up entry (WP-157): no per-job
+ *  descriptor — `[launcher, --catch-up, --expect-digest, expectDigest]` where
+ *  expectDigest is the app-tree digest bound at register time.
+ *  @param {{launcher:string, expectDigest:string}} o @returns {string[]} */
+function catchupLaunchArgs(o) {
+  return [o.launcher, '--catch-up', '--expect-digest', o.expectDigest];
+}
+
 /** Escape a value for insertion into XML character data (plist <string>). Order
  *  matters: & first. @param {string} s @returns {string} */
 function xmlEscape(s) {
@@ -134,12 +154,16 @@ function xmlEscape(s) {
 }
 
 /**
- * Render a per-job launchd plist. All paths ABSOLUTE (no $HOME/~).
- * @param {{name:string, hour:number, minute:number, node:string, bin:string,
- *          logDir:string}} o  logDir = <core>/logs/<name> (absolute)
+ * Render a per-job launchd plist. All paths ABSOLUTE (no $HOME/~). The entry
+ * invokes the out-of-tree launcher with the descriptor path + expect-digest
+ * (WP-157) — NOT the app bin directly.
+ * @param {{name:string, hour:number, minute:number, node:string, launcher:string,
+ *          descriptor:string, expectDigest:string, logDir:string}} o
+ *   logDir = <core>/logs/<name> (absolute)
  * @returns {string} the full plist XML
  */
 function launchdPlist(o) {
+  const args = jobLaunchArgs(o);
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -149,9 +173,7 @@ function launchdPlist(o) {
   <key>ProgramArguments</key>
   <array>
     <string>${xmlEscape(o.node)}</string>
-    <string>${xmlEscape(o.bin)}</string>
-    <string>run-job</string>
-    <string>${o.name}</string>
+${args.map((a) => `    <string>${xmlEscape(a)}</string>`).join('\n')}
   </array>
   <key>StartCalendarInterval</key>
   <dict>
@@ -172,12 +194,15 @@ function launchdPlist(o) {
 }
 
 /**
- * Render the single macOS catch-up plist (login + hourly). It invokes
- * `wienerdog run-job --catch-up` (WP-020). RunAtLoad true, plus hourly at :00.
- * @param {{node:string, bin:string, logDir:string}} o  logDir = <core>/logs/catchup
+ * Render the single macOS catch-up plist (login + hourly). It invokes the
+ * out-of-tree launcher with `--catch-up` + the app-tree expect-digest (WP-157).
+ * RunAtLoad true, plus hourly at :00.
+ * @param {{node:string, launcher:string, expectDigest:string, logDir:string}} o
+ *   logDir = <core>/logs/catchup
  * @returns {string} plist XML with Label 'ai.wienerdog.catchup'
  */
 function catchupPlist(o) {
+  const args = catchupLaunchArgs(o);
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -187,9 +212,7 @@ function catchupPlist(o) {
   <key>ProgramArguments</key>
   <array>
     <string>${xmlEscape(o.node)}</string>
-    <string>${xmlEscape(o.bin)}</string>
-    <string>run-job</string>
-    <string>--catch-up</string>
+${args.map((a) => `    <string>${xmlEscape(a)}</string>`).join('\n')}
   </array>
   <key>RunAtLoad</key>
   <true/>
@@ -244,17 +267,22 @@ function systemdQuote(s) {
 }
 
 /**
- * Render a systemd oneshot .service unit. All paths ABSOLUTE.
- * @param {{name:string, node:string, bin:string}} o
+ * Render a systemd oneshot .service unit. All paths ABSOLUTE. ExecStart invokes
+ * the out-of-tree launcher with the descriptor + expect-digest (WP-157). Paths
+ * (launcher, descriptor) are systemd-quoted; the name/flags/digest are a safe
+ * charset (`sha256:`+hex, `--…`, `^[a-z0-9-]+$`).
+ * @param {{name:string, node:string, launcher:string, descriptor:string,
+ *          expectDigest:string}} o
  * @returns {string} .service unit text
  */
 function systemdService(o) {
+  const execArgs = `${systemdQuote(o.launcher)} ${o.name} --descriptor ${systemdQuote(o.descriptor)} --expect-digest ${o.expectDigest}`;
   return `[Unit]
 Description=Wienerdog job: ${o.name}
 
 [Service]
 Type=oneshot
-ExecStart=${systemdQuote(o.node)} ${systemdQuote(o.bin)} run-job ${o.name}
+ExecStart=${systemdQuote(o.node)} ${execArgs}
 `;
 }
 
@@ -331,9 +359,10 @@ function windowsXmlEscape(s) {
 
 /**
  * Render the daily Windows dream task XML. All interpolated paths/userId are
- * XML-escaped; the bin path is additionally double-quoted inside <Arguments>.
- * @param {{name:string, hour:number, minute:number, node:string, bin:string,
- *          userId:string}} o
+ * XML-escaped; the launcher + descriptor paths are additionally double-quoted
+ * inside <Arguments> (WP-157: the entry invokes the out-of-tree launcher).
+ * @param {{name:string, hour:number, minute:number, node:string, launcher:string,
+ *          descriptor:string, expectDigest:string, userId:string}} o
  * @returns {string} the full Task Scheduler XML
  */
 function windowsDreamTaskXml(o) {
@@ -372,7 +401,7 @@ function windowsDreamTaskXml(o) {
   <Actions Context="Author">
     <Exec>
       <Command>${windowsXmlEscape(o.node)}</Command>
-      <Arguments>"${windowsXmlEscape(o.bin)}" run-job ${o.name}</Arguments>
+      <Arguments>"${windowsXmlEscape(o.launcher)}" ${o.name} --descriptor "${windowsXmlEscape(o.descriptor)}" --expect-digest ${windowsXmlEscape(o.expectDigest)}</Arguments>
     </Exec>
   </Actions>
 </Task>
@@ -380,9 +409,10 @@ function windowsDreamTaskXml(o) {
 }
 
 /**
- * Render the Windows catch-up task XML (ONLOGON + hourly). Invokes
- * `wienerdog run-job --catch-up`. Task name is the fixed literal 'catchup'.
- * @param {{node:string, bin:string, userId:string}} o
+ * Render the Windows catch-up task XML (ONLOGON + hourly). Invokes the
+ * out-of-tree launcher with `--catch-up` + the app-tree expect-digest (WP-157).
+ * Task name is the fixed literal 'catchup'.
+ * @param {{node:string, launcher:string, expectDigest:string, userId:string}} o
  * @returns {string} the full Task Scheduler XML
  */
 function windowsCatchupTaskXml(o) {
@@ -422,7 +452,7 @@ function windowsCatchupTaskXml(o) {
   <Actions Context="Author">
     <Exec>
       <Command>${windowsXmlEscape(o.node)}</Command>
-      <Arguments>"${windowsXmlEscape(o.bin)}" run-job --catch-up</Arguments>
+      <Arguments>"${windowsXmlEscape(o.launcher)}" --catch-up --expect-digest ${windowsXmlEscape(o.expectDigest)}</Arguments>
     </Exec>
   </Actions>
 </Task>

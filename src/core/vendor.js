@@ -108,6 +108,42 @@ function repointCurrent(paths, targetDir, opts = {}) {
 }
 
 /**
+ * Recursively clear the write bits on every regular FILE under `dir` (dirs left
+ * writable). Defense-in-depth on the published app tree (audit A7/F2, WP-157):
+ * an in-place overwrite of an app file now needs a chmod first. Directories are
+ * deliberately NOT made read-only, so uninstall's `rmSync(app, {recursive})`
+ * still unlinks the files without a manifest.js change (unlinking a read-only
+ * file from a writable dir succeeds on POSIX). The fire-time treeDigest check
+ * (launcher.js) is the primary defense; this only raises the bar on the naive
+ * overwrite. Best-effort — never throws. No-op on win32 (POSIX mode semantics).
+ * @param {string} dir
+ */
+function makeTreeFilesReadOnly(dir) {
+  if (process.platform === 'win32') return;
+  const walk = (d) => {
+    let entries;
+    try {
+      entries = fs.readdirSync(d, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const e of entries) {
+      const full = path.join(d, e.name);
+      if (e.isDirectory()) walk(full);
+      else if (e.isFile()) {
+        try {
+          const mode = fs.statSync(full).mode & 0o777;
+          fs.chmodSync(full, mode & ~0o222);
+        } catch {
+          /* best-effort */
+        }
+      }
+    }
+  };
+  walk(dir);
+}
+
+/**
  * Vendor the running package into the core and repoint `current`.
  * - Prod: copy the published files into <core>/app/<version>/ (idempotent: if
  *   that version dir already exists, do NOT re-copy), then repoint current.
@@ -138,11 +174,108 @@ function vendorSelf(paths, opts = {}) {
       fs.rmSync(staging, { recursive: true, force: true });
       copyTree(root, staging);
       fs.renameSync(staging, target); // atomic publish of the version dir
+      // A7/F2: make the published files read-only AFTER the atomic publish (never
+      // the dev checkout). Skipped on a re-vendor of the same version (the dir
+      // already exists → no re-copy), so idempotence is preserved.
+      makeTreeFilesReadOnly(target);
       copied = true;
     }
   }
   repointCurrent(paths, target);
+  // A7/F1/F2/F3 (WP-157): place the out-of-tree launcher the scheduler invokes.
+  // Its source is the RUNNING installer (packageRoot), not the vendored
+  // `root` — the launcher is the installer's own verifier and always ships with
+  // the package (a synthetic test `sourceRoot` need not carry it).
+  writeLauncher(paths, { manifest: opts.manifest });
   return { version, target, dev, copied };
+}
+
+/**
+ * Verify `<core>/app/current` resolves INSIDE `<core>/app` (realpath-canonical —
+ * no out-of-root symlink) and is owned by the current user (POSIX; win32 reduced
+ * to the containment check). The launcher inlines an equivalent (it cannot
+ * require this from the very tree it is verifying); this export is for doctor /
+ * tests. Note: a DEV install's `current` legitimately points at the checkout
+ * OUTSIDE `<core>/app`, so this returns ok:false for dev — callers gate it on
+ * the prod stance (WP-157).
+ * @param {import('./paths').WienerdogPaths} paths
+ * @param {NodeJS.Platform} [platform=process.platform]
+ * @returns {{ok:true, target:string}|{ok:false, why:string}}
+ */
+function verifyCurrentContainment(paths, platform = process.platform) {
+  const app = appDir(paths);
+  const link = currentLink(paths);
+  let outer;
+  let inner;
+  try {
+    outer = fs.realpathSync(app);
+    inner = fs.realpathSync(link);
+  } catch (err) {
+    return { ok: false, why: `cannot resolve app/current: ${err.message}` };
+  }
+  const rel = path.relative(outer, inner);
+  if (rel !== '' && (rel.startsWith('..') || path.isAbsolute(rel))) {
+    return { ok: false, why: `app/current resolves outside ${app}` };
+  }
+  if (platform !== 'win32') {
+    const uid = process.getuid ? process.getuid() : 0;
+    let st;
+    try {
+      st = fs.statSync(inner);
+    } catch (err) {
+      return { ok: false, why: `cannot stat app/current target: ${err.message}` };
+    }
+    if (st.uid !== uid && st.uid !== 0) {
+      return { ok: false, why: `app/current is owned by uid ${st.uid}, not the current user (${uid}) or root` };
+    }
+  }
+  return { ok: true, target: inner };
+}
+
+/** @param {import('./paths').WienerdogPaths} paths @returns {string} <core>/launcher/launch.js */
+function launcherPath(paths) {
+  return path.join(paths.core, 'launcher', 'launch.js');
+}
+
+/**
+ * Place the out-of-tree launcher at `<core>/launcher/launch.js` by copying the
+ * self-contained `src/scheduler/launcher.js` bytes OUT of the app tree (WP-157).
+ * It is a SECONDARY anchor: distinct from `app/current`, so a scoped write to
+ * the app tree cannot disable the fire-time verification. Idempotent (skip when
+ * byte-identical); records a `file` manifest entry once; mode 0755 (POSIX).
+ * @param {import('./paths').WienerdogPaths} paths
+ * @param {{manifest?: object, sourceRoot?: string}} [opts]  sourceRoot defaults
+ *   to packageRoot() — the launcher is the installer's own file, not vendored
+ *   app content.
+ * @returns {{path:string, changed:boolean}}
+ */
+function writeLauncher(paths, opts = {}) {
+  const root = opts.sourceRoot || packageRoot();
+  const src = path.join(root, 'src', 'scheduler', 'launcher.js');
+  const dest = launcherPath(paths);
+  const content = fs.readFileSync(src);
+  let same = false;
+  try {
+    same = fs.readFileSync(dest).equals(content);
+  } catch {
+    same = false;
+  }
+  let changed = false;
+  if (!same) {
+    fs.mkdirSync(path.dirname(dest), { recursive: true });
+    fs.writeFileSync(dest, content, { mode: 0o755 });
+    if (process.platform !== 'win32') fs.chmodSync(dest, 0o755);
+    changed = true;
+  }
+  if (opts.manifest) {
+    // Record the dir BEFORE the file: reverse() replays in reverse order, so the
+    // file (launch.js) is removed first and the now-empty launcher/ dir is
+    // rmdir'd after — otherwise the lingering dir keeps <core> non-empty and
+    // uninstall cannot remove the core.
+    recordOnce(opts.manifest, { kind: 'dir', path: path.dirname(dest) });
+    recordOnce(opts.manifest, { kind: 'file', path: dest });
+  }
+  return { path: dest, changed };
 }
 
 /** Record an entry only if no entry with the same kind+path exists. */
@@ -220,4 +353,5 @@ function writeShim(paths, opts = {}) {
 module.exports = {
   packageRoot, readVersion, appDir, currentLink, currentBin,
   isDevCheckout, copyTree, repointCurrent, vendorSelf, writeShim,
+  writeLauncher, launcherPath, verifyCurrentContainment, makeTreeFilesReadOnly,
 };

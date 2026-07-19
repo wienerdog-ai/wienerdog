@@ -6,6 +6,12 @@ const assert = require('node:assert/strict');
 const gen = require('../../src/scheduler/generators');
 const { WienerdogError } = require('../../src/core/errors');
 
+// WP-157: OS entries invoke the out-of-tree launcher with a descriptor path +
+// expect-digest, not the app bin directly. Shared fixtures for the goldens.
+const LAUNCHER = '/opt/wienerdog/launcher/launch.js';
+const DESC = '/opt/wienerdog/state/descriptors/daily-digest.json';
+const DIGEST = 'sha256:deadbeef';
+
 const EXPECTED_PLIST = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -15,9 +21,12 @@ const EXPECTED_PLIST = `<?xml version="1.0" encoding="UTF-8"?>
   <key>ProgramArguments</key>
   <array>
     <string>/usr/local/bin/node</string>
-    <string>/opt/wienerdog/bin/wienerdog.js</string>
-    <string>run-job</string>
+    <string>/opt/wienerdog/launcher/launch.js</string>
     <string>daily-digest</string>
+    <string>--descriptor</string>
+    <string>/opt/wienerdog/state/descriptors/daily-digest.json</string>
+    <string>--expect-digest</string>
+    <string>sha256:deadbeef</string>
   </array>
   <key>StartCalendarInterval</key>
   <dict>
@@ -45,9 +54,10 @@ const EXPECTED_CATCHUP = `<?xml version="1.0" encoding="UTF-8"?>
   <key>ProgramArguments</key>
   <array>
     <string>/usr/local/bin/node</string>
-    <string>/opt/wienerdog/bin/wienerdog.js</string>
-    <string>run-job</string>
+    <string>/opt/wienerdog/launcher/launch.js</string>
     <string>--catch-up</string>
+    <string>--expect-digest</string>
+    <string>sha256:deadbeef</string>
   </array>
   <key>RunAtLoad</key>
   <true/>
@@ -82,7 +92,7 @@ Description=Wienerdog job: daily-digest
 
 [Service]
 Type=oneshot
-ExecStart="/usr/bin/node" "/opt/wienerdog/bin/wienerdog.js" run-job daily-digest
+ExecStart="/usr/bin/node" "/opt/wienerdog/launcher/launch.js" daily-digest --descriptor "/opt/wienerdog/state/descriptors/daily-digest.json" --expect-digest sha256:deadbeef
 `;
 
 const EXPECTED_DREAM = `<?xml version="1.0" encoding="UTF-16"?>
@@ -120,7 +130,7 @@ const EXPECTED_DREAM = `<?xml version="1.0" encoding="UTF-16"?>
   <Actions Context="Author">
     <Exec>
       <Command>C:\\Program Files\\nodejs\\node.exe</Command>
-      <Arguments>"C:\\Users\\John Smith\\.wienerdog\\app\\current\\bin\\wienerdog.js" run-job dream</Arguments>
+      <Arguments>"C:\\Users\\John Smith\\.wienerdog\\launcher\\launch.js" dream --descriptor "C:\\Users\\John Smith\\.wienerdog\\state\\descriptors\\dream.json" --expect-digest sha256:deadbeef</Arguments>
     </Exec>
   </Actions>
 </Task>
@@ -162,7 +172,7 @@ const EXPECTED_WIN_CATCHUP = `<?xml version="1.0" encoding="UTF-16"?>
   <Actions Context="Author">
     <Exec>
       <Command>C:\\Program Files\\nodejs\\node.exe</Command>
-      <Arguments>"C:\\Users\\John Smith\\.wienerdog\\app\\current\\bin\\wienerdog.js" run-job --catch-up</Arguments>
+      <Arguments>"C:\\Users\\John Smith\\.wienerdog\\launcher\\launch.js" --catch-up --expect-digest sha256:deadbeef</Arguments>
     </Exec>
   </Actions>
 </Task>
@@ -174,7 +184,9 @@ test('scheduler-generators: launchdPlist matches the golden byte-for-byte', () =
     hour: 7,
     minute: 0,
     node: '/usr/local/bin/node',
-    bin: '/opt/wienerdog/bin/wienerdog.js',
+    launcher: LAUNCHER,
+    descriptor: DESC,
+    expectDigest: DIGEST,
     logDir: '/Users/ada/.wienerdog/logs/daily-digest',
   });
   assert.equal(out, EXPECTED_PLIST);
@@ -183,7 +195,8 @@ test('scheduler-generators: launchdPlist matches the golden byte-for-byte', () =
 test('scheduler-generators: catchupPlist matches the golden byte-for-byte', () => {
   const out = gen.catchupPlist({
     node: '/usr/local/bin/node',
-    bin: '/opt/wienerdog/bin/wienerdog.js',
+    launcher: LAUNCHER,
+    expectDigest: DIGEST,
     logDir: '/Users/ada/.wienerdog/logs/catchup',
   });
   assert.equal(out, EXPECTED_CATCHUP);
@@ -198,7 +211,9 @@ test('scheduler-generators: systemdService matches the golden byte-for-byte', ()
     gen.systemdService({
       name: 'daily-digest',
       node: '/usr/bin/node',
-      bin: '/opt/wienerdog/bin/wienerdog.js',
+      launcher: LAUNCHER,
+      descriptor: DESC,
+      expectDigest: DIGEST,
     }),
     EXPECTED_SERVICE
   );
@@ -210,13 +225,15 @@ test('scheduler-generators: xmlEscape escapes & < > in that order', () => {
   assert.equal(gen.xmlEscape('&<>'), '&amp;&lt;&gt;');
 });
 
-test('scheduler-generators: launchdPlist XML-escapes node/bin/logDir path values', () => {
+test('scheduler-generators: launchdPlist XML-escapes node/launcher/logDir path values', () => {
   const out = gen.launchdPlist({
     name: 'daily-digest',
     hour: 7,
     minute: 0,
     node: '/opt/a&b/node',
-    bin: '/opt/<wienerdog>/wienerdog.js',
+    launcher: '/opt/<wienerdog>/wienerdog.js',
+    descriptor: DESC,
+    expectDigest: DIGEST,
     logDir: '/var/log/a&b<c>d',
   });
   assert.match(out, /<string>\/opt\/a&amp;b\/node<\/string>/);
@@ -228,10 +245,11 @@ test('scheduler-generators: launchdPlist XML-escapes node/bin/logDir path values
   assert.doesNotMatch(out, /&(?!amp;|lt;|gt;)/);
 });
 
-test('scheduler-generators: catchupPlist XML-escapes node/bin/logDir path values', () => {
+test('scheduler-generators: catchupPlist XML-escapes node/launcher/logDir path values', () => {
   const out = gen.catchupPlist({
     node: '/opt/a&b/node',
-    bin: '/opt/<wienerdog>/wienerdog.js',
+    launcher: '/opt/<wienerdog>/wienerdog.js',
+    expectDigest: DIGEST,
     logDir: '/var/log/a&b<c>d',
   });
   assert.match(out, /<string>\/opt\/a&amp;b\/node<\/string>/);
@@ -247,7 +265,9 @@ test('scheduler-generators: launchdPlist is byte-identical to the golden for a n
     hour: 7,
     minute: 0,
     node: '/usr/local/bin/node',
-    bin: '/opt/wienerdog/bin/wienerdog.js',
+    launcher: LAUNCHER,
+    descriptor: DESC,
+    expectDigest: DIGEST,
     logDir: '/Users/ada/.wienerdog/logs/daily-digest',
   });
   assert.equal(out, EXPECTED_PLIST);
@@ -267,9 +287,9 @@ test('scheduler-generators: systemdQuote double-quotes and escapes \\, %, and " 
 
 test('scheduler-generators: systemdService quotes ExecStart paths and escapes %, \\, ", and spaces', () => {
   const node = '/opt/with space/100%node\\path"x';
-  const bin = '/opt/wienerdog/bin/wienerdog.js';
-  const out = gen.systemdService({ name: 'daily-digest', node, bin });
-  const expectedExecStart = `ExecStart=${gen.systemdQuote(node)} ${gen.systemdQuote(bin)} run-job daily-digest`;
+  const launcher = '/opt/wienerdog/launcher/launch.js';
+  const out = gen.systemdService({ name: 'daily-digest', node, launcher, descriptor: DESC, expectDigest: DIGEST });
+  const expectedExecStart = `ExecStart=${gen.systemdQuote(node)} ${gen.systemdQuote(launcher)} daily-digest --descriptor ${gen.systemdQuote(DESC)} --expect-digest ${DIGEST}`;
   assert.ok(out.includes(expectedExecStart), out);
   // the literal % must render doubled (%%), never a bare specifier-expandable %.
   assert.match(out, /100%%node/);
@@ -281,7 +301,9 @@ test('scheduler-generators: systemdService ExecStart matches the golden (quoted 
     gen.systemdService({
       name: 'daily-digest',
       node: '/usr/bin/node',
-      bin: '/opt/wienerdog/bin/wienerdog.js',
+      launcher: LAUNCHER,
+      descriptor: DESC,
+      expectDigest: DIGEST,
     }),
     EXPECTED_SERVICE
   );
@@ -375,7 +397,9 @@ test('scheduler-generators: windowsDreamTaskXml matches the golden byte-for-byte
     hour: 3,
     minute: 30,
     node: 'C:\\Program Files\\nodejs\\node.exe',
-    bin: 'C:\\Users\\John Smith\\.wienerdog\\app\\current\\bin\\wienerdog.js',
+    launcher: 'C:\\Users\\John Smith\\.wienerdog\\launcher\\launch.js',
+    descriptor: 'C:\\Users\\John Smith\\.wienerdog\\state\\descriptors\\dream.json',
+    expectDigest: DIGEST,
     userId: 'WS\\ada',
   });
   assert.equal(out, EXPECTED_DREAM);
@@ -391,18 +415,21 @@ test('scheduler-generators: windowsDreamTaskXml zero-pads hour/minute and XML-es
     hour: 3,
     minute: 5,
     node: 'C:\\node.exe',
-    bin: 'C:\\a & b\\wienerdog.js',
+    launcher: 'C:\\a & b\\launch.js',
+    descriptor: 'C:\\d & e\\dream.json',
+    expectDigest: DIGEST,
     userId: 'WS\\a<d>a',
   });
   assert.match(out, /<StartBoundary>2020-01-01T03:05:00<\/StartBoundary>/);
-  assert.match(out, /<Arguments>"C:\\a &amp; b\\wienerdog.js" run-job dream<\/Arguments>/);
+  assert.match(out, /<Arguments>"C:\\a &amp; b\\launch.js" dream --descriptor "C:\\d &amp; e\\dream.json" --expect-digest sha256:deadbeef<\/Arguments>/);
   assert.match(out, /<UserId>WS\\a&lt;d&gt;a<\/UserId>/);
 });
 
 test('scheduler-generators: windowsCatchupTaskXml matches the golden byte-for-byte', () => {
   const out = gen.windowsCatchupTaskXml({
     node: 'C:\\Program Files\\nodejs\\node.exe',
-    bin: 'C:\\Users\\John Smith\\.wienerdog\\app\\current\\bin\\wienerdog.js',
+    launcher: 'C:\\Users\\John Smith\\.wienerdog\\launcher\\launch.js',
+    expectDigest: DIGEST,
     userId: 'WS\\ada',
   });
   assert.equal(out, EXPECTED_WIN_CATCHUP);
@@ -410,7 +437,7 @@ test('scheduler-generators: windowsCatchupTaskXml matches the golden byte-for-by
   // trigger + the missed-run/battery settings (WP-074 / ADR-0018 amendment).
   assert.doesNotMatch(out, /<LogonTrigger>/);
   assert.match(out, /<Interval>PT1H<\/Interval>/);
-  assert.match(out, /run-job --catch-up/);
+  assert.match(out, /launch\.js" --catch-up --expect-digest/);
   assert.match(out, /<DisallowStartIfOnBatteries>false<\/DisallowStartIfOnBatteries>/);
   assert.match(out, /<StopIfGoingOnBatteries>false<\/StopIfGoingOnBatteries>/);
   assert.match(out, /<StartWhenAvailable>true<\/StartWhenAvailable>/);
@@ -422,7 +449,9 @@ test('scheduler-generators: windowsTaskXmlBytes prepends the UTF-16 LE BOM and r
     hour: 3,
     minute: 30,
     node: 'C:\\Program Files\\nodejs\\node.exe',
-    bin: 'C:\\Users\\John Smith\\.wienerdog\\app\\current\\bin\\wienerdog.js',
+    launcher: 'C:\\Users\\John Smith\\.wienerdog\\launcher\\launch.js',
+    descriptor: 'C:\\Users\\John Smith\\.wienerdog\\state\\descriptors\\dream.json',
+    expectDigest: DIGEST,
     userId: 'WS\\ada',
   });
   const buf = gen.windowsTaskXmlBytes(xml);

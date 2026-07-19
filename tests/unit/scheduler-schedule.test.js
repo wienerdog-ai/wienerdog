@@ -358,7 +358,12 @@ test('scheduler-schedule: add registers the platform entry, records manifest, sa
     // Catch-up plist ensured once.
     const catchPath = path.join(paths.home, 'Library', 'LaunchAgents', 'ai.wienerdog.catchup.plist');
     assert.ok(schedEntries.some((e) => e.path === catchPath), 'catch-up entry recorded');
-    assert.ok(fs.readFileSync(plistPath, 'utf8').includes('<string>run-job</string>'));
+    // WP-157: the entry invokes the out-of-tree launcher with the descriptor +
+    // expect-digest, not the app bin's `run-job` directly.
+    const plistText = fs.readFileSync(plistPath, 'utf8');
+    assert.ok(plistText.includes(path.join(paths.core, 'launcher', 'launch.js')), 'entry invokes the out-of-tree launcher');
+    assert.ok(plistText.includes('<string>--expect-digest</string>'), 'entry binds an expect-digest');
+    assert.ok(!plistText.includes('<string>run-job</string>'), 'entry no longer invokes run-job directly');
   } else {
     const base = 'wienerdog-daily-digest';
     const dir = gen.systemdUserDir(paths.home, process.env);
@@ -672,7 +677,8 @@ test('scheduler-schedule: win32 dispatch writes both XMLs, records reversible en
   const catchupText = catchupBytes.slice(2).toString('utf16le');
   assert.ok(dreamText.startsWith('<?xml version="1.0" encoding="UTF-16"?>'));
   assert.ok(dreamText.includes('<URI>\\Wienerdog\\dream</URI>'));
-  assert.ok(catchupText.includes('run-job --catch-up'));
+  // WP-157: the catch-up entry invokes the launcher with --catch-up + expect-digest.
+  assert.ok(catchupText.includes('launch.js" --catch-up --expect-digest'), catchupText);
   assert.ok(!catchupText.includes('<LogonTrigger>'), 'catchup task carries no LogonTrigger');
 
   const schedEntries = manifest.entries.filter((e) => e.kind === 'scheduler-entry');
@@ -827,16 +833,19 @@ test('scheduler-schedule: repointSchedules after add is a no-op (changed:0, no O
   assert.equal(calls.length, 0, 'no OS reload on an unchanged repoint');
 });
 
-test('scheduler-schedule: repointSchedules rewrites a stale bin path (changed:1)', { skip: !SCHED_SUPPORTED }, async () => {
+test('scheduler-schedule: repointSchedules rewrites a stale embedded node path (changed:1)', { skip: !SCHED_SUPPORTED }, async () => {
   const { env, paths } = setup();
   await runSchedule(env, ['add', 'dream', '--at', '03:30', '--job', 'dream'], () => ({ status: 0 }));
 
-  // Simulate an older version's entry: hand-edit the embedded bin to a stale path.
+  // Simulate an older version's entry: hand-edit the embedded node (the entry's
+  // <Command>/first arg) to a stale path. WP-157: the entry now invokes the
+  // stable out-of-tree launcher (<core>/launcher/launch.js) rather than a
+  // version-scoped bin, so the node path is the absolute value repoint migrates.
   const file = primaryEntryFile(paths, 'dream');
-  const stableBin = vendor.currentBin(paths);
-  const oldBin = '/old/npx-cache/node_modules/wienerdog/bin/wienerdog.js';
-  const stale = fs.readFileSync(file, 'utf8').split(stableBin).join(oldBin);
-  assert.ok(stale.includes(oldBin) && !stale.includes(stableBin), 'seeded a stale entry');
+  const stableNode = gen.nodePath();
+  const oldNode = '/old/versions/node/v1.0.0/bin/node';
+  const stale = fs.readFileSync(file, 'utf8').split(stableNode).join(oldNode);
+  assert.ok(stale.includes(oldNode) && !stale.includes(stableNode), 'seeded a stale entry');
   fs.writeFileSync(file, stale);
 
   const calls = [];
@@ -845,7 +854,7 @@ test('scheduler-schedule: repointSchedules rewrites a stale bin path (changed:1)
 
   assert.equal(res.changed, 1, 'the stale entry was rewritten');
   const after = fs.readFileSync(file, 'utf8');
-  assert.ok(after.includes(stableBin) && !after.includes(oldBin), 'entry now targets the stable bin');
+  assert.ok(after.includes(stableNode) && !after.includes(oldNode), 'entry now targets the current node');
   assert.ok(calls.length >= 1, 'the OS scheduler was reloaded');
 });
 

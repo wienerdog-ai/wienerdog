@@ -22,6 +22,47 @@ function defaultLoader(argv) {
   return schedulerSpawn(argv);
 }
 
+/** Absolute path to the out-of-tree launcher the OS entries invoke (WP-157).
+ *  @param {import('../core/paths').WienerdogPaths} paths @returns {string} */
+function launcherPathFor(paths) {
+  return path.join(paths.core, 'launcher', 'launch.js');
+}
+
+/**
+ * Compute the per-job launcher binding for the OS entry (WP-157): the launcher
+ * path, the descriptor path, and the entry-bound expect-digest (the re-derived
+ * descriptor digest). The digest is BEST-EFFORT — an install without a vault or
+ * a vendored app yet cannot derive it, so it degrades to '' (which the launcher
+ * treats as a mismatch, refusing fail-closed at fire time until a real
+ * `wienerdog sync` re-binds it). In production `sync` vendors the app before
+ * registering, so the digest is real.
+ * @param {import('../core/paths').WienerdogPaths} paths
+ * @param {string} name @param {NodeJS.Platform} platform
+ * @returns {{launcher:string, descriptor:string, expectDigest:string}}
+ */
+function jobLaunchBinding(paths, name, platform) {
+  const descriptor = require('../scheduler/descriptor');
+  const job = jobsLib.findJob(paths, name);
+  let expectDigest = '';
+  try {
+    if (job) expectDigest = descriptor.deriveDescriptorDigest(paths, job, { platform });
+  } catch {
+    expectDigest = ''; // fail-closed at fire time until sync re-binds a real digest
+  }
+  return { launcher: launcherPathFor(paths), descriptor: descriptor.descriptorPath(paths, name), expectDigest };
+}
+
+/** The catch-up entry's app-tree expect-digest (WP-157), best-effort ('' when
+ *  no vendored app yet). @param {import('../core/paths').WienerdogPaths} paths
+ *  @returns {string} */
+function catchupExpectDigest(paths) {
+  try {
+    return require('../scheduler/descriptor').appTreeDigest(paths);
+  } catch {
+    return '';
+  }
+}
+
 /** @param {string} p @returns {boolean} */
 function isFile(p) {
   try {
@@ -109,7 +150,12 @@ function ensureEntry(manifest, filePath, content, unload) {
  */
 function ensureCatchup(paths, manifest, loader, uid) {
   const logDir = path.join(paths.logs, 'catchup');
-  const content = gen.catchupPlist({ node: gen.nodePath(), bin: gen.wienerdogBin(paths), logDir });
+  const content = gen.catchupPlist({
+    node: gen.nodePath(),
+    launcher: launcherPathFor(paths),
+    expectDigest: catchupExpectDigest(paths),
+    logDir,
+  });
   const label = 'ai.wienerdog.catchup';
   const plistPath = path.join(gen.launchAgentsDir(paths.home), `${label}.plist`);
   const unload = ['launchctl', 'bootout', `gui/${uid}/${label}`];
@@ -132,7 +178,12 @@ function ensureCatchup(paths, manifest, loader, uid) {
 function ensureWindowsCatchup(paths, manifest, loader) {
   const userId = gen.windowsCurrentUserId();
   const content = gen.windowsTaskXmlBytes(
-    gen.windowsCatchupTaskXml({ node: gen.nodePath(), bin: gen.wienerdogBin(paths), userId })
+    gen.windowsCatchupTaskXml({
+      node: gen.nodePath(),
+      launcher: launcherPathFor(paths),
+      expectDigest: catchupExpectDigest(paths),
+      userId,
+    })
   );
   const xmlPath = gen.windowsTaskFile(paths, 'catchup');
   const taskName = gen.windowsTaskName('catchup'); // '\Wienerdog\catchup'
@@ -189,14 +240,16 @@ function registerPlatform(paths, manifest, o, loader, platform = process.platfor
  *  platform branch uniformly (WP-156). */
 function registerPlatformEntries(paths, manifest, o, loader, platform = process.platform) {
   const node = gen.nodePath();
-  const bin = gen.wienerdogBin(paths);
+  // WP-157: the OS entry invokes the out-of-tree launcher with the descriptor
+  // path + expect-digest, not the app bin directly.
+  const b = jobLaunchBinding(paths, o.name, platform);
 
   if (platform === 'darwin') {
     const uid = process.getuid();
     const logDir = path.join(paths.logs, o.name);
     const label = gen.launchdLabel(o.name);
     const plistPath = path.join(gen.launchAgentsDir(paths.home), `${label}.plist`);
-    const content = gen.launchdPlist({ ...o, node, bin, logDir });
+    const content = gen.launchdPlist({ ...o, node, launcher: b.launcher, descriptor: b.descriptor, expectDigest: b.expectDigest, logDir });
     const unload = ['launchctl', 'bootout', `gui/${uid}/${label}`];
     let loaded = true;
     let changed = ensureEntry(manifest, plistPath, content, unload);
@@ -217,7 +270,7 @@ function registerPlatformEntries(paths, manifest, o, loader, platform = process.
     const timerPath = path.join(dir, `${unitBase}.timer`);
     const servicePath = path.join(dir, `${unitBase}.service`);
     const timerText = gen.systemdTimer(o);
-    const serviceText = gen.systemdService({ name: o.name, node, bin });
+    const serviceText = gen.systemdService({ name: o.name, node, launcher: b.launcher, descriptor: b.descriptor, expectDigest: b.expectDigest });
     const timerUnload = ['systemctl', '--user', 'disable', '--now', `${unitBase}.timer`];
     const timerChanged = ensureEntry(manifest, timerPath, timerText, timerUnload);
     const serviceChanged = ensureEntry(manifest, servicePath, serviceText, null);
@@ -264,7 +317,9 @@ function registerPlatformEntries(paths, manifest, o, loader, platform = process.
         hour: o.hour,
         minute: o.minute,
         node,
-        bin,
+        launcher: b.launcher,
+        descriptor: b.descriptor,
+        expectDigest: b.expectDigest,
         userId,
       })
     );

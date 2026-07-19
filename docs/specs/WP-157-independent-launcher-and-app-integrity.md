@@ -1,7 +1,7 @@
 ---
 id: WP-157
 title: Independent launcher outside the app tree — verify current containment, app digest, descriptor digest, and prod/dev stance before spawn
-status: Ready
+status: In-Review
 model: opus
 size: M
 depends_on: [WP-144, WP-145, WP-156]

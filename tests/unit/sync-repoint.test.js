@@ -77,26 +77,28 @@ function setup() {
 }
 
 /**
- * The primary scheduler-entry file for a job on the current platform whose
- * content embeds the wienerdog bin path (the migration target): the launchd
- * plist on darwin, the systemd .service on Linux. `render(bin)` produces that
- * file's content for a given bin so we can seed an OLD-path version.
+ * The primary scheduler-entry file for a job on the current platform: the
+ * launchd plist on darwin, the systemd .service on Linux. WP-157: the entry
+ * invokes the out-of-tree launcher, so `render(node)` produces that file's
+ * content for a given NODE path (the absolute value repoint migrates now that
+ * the launcher path is stable) — seed an OLD node to simulate a stale entry.
  * @param {import('../../src/core/paths').WienerdogPaths} paths
  * @param {{name:string, hour:number, minute:number}} o
  */
 function primaryEntry(paths, o) {
-  const node = gen.nodePath();
+  const launcher = path.join(paths.core, 'launcher', 'launch.js');
+  const descriptor = path.join(paths.state, 'descriptors', `${o.name}.json`);
   const logDir = path.join(paths.logs, o.name);
   if (process.platform === 'darwin') {
     const label = gen.launchdLabel(o.name);
     const file = path.join(gen.launchAgentsDir(paths.home), `${label}.plist`);
     const unload = ['launchctl', 'bootout', `gui/${process.getuid()}/${label}`];
-    return { file, unload, render: (bin) => gen.launchdPlist({ ...o, node, bin, logDir }) };
+    return { file, unload, render: (node) => gen.launchdPlist({ ...o, node, launcher, descriptor, expectDigest: '', logDir }) };
   }
   const unitBase = gen.systemdUnitBase(o.name);
   const dir = gen.systemdUserDir(paths.home, process.env);
   const file = path.join(dir, `${unitBase}.service`);
-  return { file, unload: null, render: (bin) => gen.systemdService({ name: o.name, node, bin }) };
+  return { file, unload: null, render: (node) => gen.systemdService({ name: o.name, node, launcher, descriptor, expectDigest: '' }) };
 }
 
 /** Run sync.run with process.env pointed at the temp core and the loader no-op set. */
@@ -126,28 +128,30 @@ test('sync-repoint: rewrites a stale scheduler entry to the vendored bin, then i
   const job = { name: 'dream', at: '03:30', run: 'builtin:dream', timeoutMinutes: 20 };
   jobsLib.saveJob(paths, job);
 
-  // Seed an OLD-path entry as an older Wienerdog version would have left it: the
+  // Seed an OLD-path entry as an older/moved install would have left it: the
   // file exists on disk, a manifest scheduler-entry tracks it, and its embedded
-  // bin points at a now-stale npx-cache path.
-  const oldBin = path.join(env.HOME, '.npm', '_npx', 'deadbeef', 'node_modules', 'wienerdog', 'bin', 'wienerdog.js');
+  // node points at a now-stale path.
+  const oldNode = path.join(env.HOME, '.old', 'node-versions', 'v1.0.0', 'bin', 'node');
   const o = { name: job.name, hour: 3, minute: 30 };
   const entry = primaryEntry(paths, o);
   fs.mkdirSync(path.dirname(entry.file), { recursive: true });
-  fs.writeFileSync(entry.file, entry.render(oldBin));
+  fs.writeFileSync(entry.file, entry.render(oldNode));
   const manifest = manifestLib.load(paths);
   const rec = { kind: 'scheduler-entry', path: entry.file };
   if (entry.unload) rec.unload = entry.unload;
   manifestLib.record(manifest, rec);
   manifestLib.save(paths, manifest);
 
-  assert.ok(fs.readFileSync(entry.file, 'utf8').includes(oldBin), 'seeded file embeds the old bin');
+  assert.ok(fs.readFileSync(entry.file, 'utf8').includes(oldNode), 'seeded file embeds the old node');
 
   await runSync(env);
 
-  const stableBin = vendor.currentBin(paths);
+  const stableNode = gen.nodePath();
+  const launcher = path.join(paths.core, 'launcher', 'launch.js');
   const after = fs.readFileSync(entry.file, 'utf8');
-  assert.ok(after.includes(stableBin), 'entry now targets the stable vendored bin');
-  assert.ok(!after.includes(oldBin), 'the stale bin path is gone');
+  assert.ok(after.includes(stableNode), 'entry now targets the current node');
+  assert.ok(after.includes(launcher), 'entry invokes the stable out-of-tree launcher');
+  assert.ok(!after.includes(oldNode), 'the stale node path is gone');
 
   // A second sync leaves the entry byte-identical (content matches → no rewrite).
   const before = fs.readFileSync(entry.file);
@@ -159,11 +163,11 @@ test('sync-repoint: --dry-run repoints nothing', { skip: !SCHED_SUPPORTED }, asy
   const { env, paths } = setup();
   const job = { name: 'dream', at: '03:30', run: 'builtin:dream', timeoutMinutes: 20 };
   jobsLib.saveJob(paths, job);
-  const oldBin = '/old/checkout/bin/wienerdog.js';
+  const oldNode = '/old/checkout/bin/node';
   const o = { name: job.name, hour: 3, minute: 30 };
   const entry = primaryEntry(paths, o);
   fs.mkdirSync(path.dirname(entry.file), { recursive: true });
-  fs.writeFileSync(entry.file, entry.render(oldBin));
+  fs.writeFileSync(entry.file, entry.render(oldNode));
   const manifest = manifestLib.load(paths);
   const rec = { kind: 'scheduler-entry', path: entry.file };
   if (entry.unload) rec.unload = entry.unload;
@@ -172,5 +176,5 @@ test('sync-repoint: --dry-run repoints nothing', { skip: !SCHED_SUPPORTED }, asy
 
   await runSync(env, ['--dry-run']);
 
-  assert.ok(fs.readFileSync(entry.file, 'utf8').includes(oldBin), 'dry-run left the stale entry untouched');
+  assert.ok(fs.readFileSync(entry.file, 'utf8').includes(oldNode), 'dry-run left the stale entry untouched');
 });

@@ -376,3 +376,91 @@ test('vendor: writeShim.onPath reflects whether ~/.local/bin is on PATH', () => 
     process.env.PATH = savedPath;
   }
 });
+
+// ── WP-157: out-of-tree launcher, read-only publish, containment ────────────
+
+test('vendor: writeLauncher places launch.js OUTSIDE app/, records dir+file, idempotent (WP-157)', () => {
+  const paths = tempPaths();
+  const src = fakeSource('0.3.0');
+  const manifest = { version: 1, createdAt: '', entries: [] };
+  vendor.vendorSelf(paths, { sourceRoot: src, env: {}, manifest });
+
+  const launcher = vendor.launcherPath(paths);
+  assert.equal(launcher, path.join(paths.core, 'launcher', 'launch.js'));
+  assert.ok(fs.statSync(launcher).isFile(), 'launcher placed');
+  // OUTSIDE the app tree — a scoped write to app/ cannot disable it.
+  assert.ok(!launcher.startsWith(vendor.appDir(paths) + path.sep), 'launcher is not under app/');
+  if (process.platform !== 'win32') {
+    assert.equal(fs.statSync(launcher).mode & 0o111, 0o111, 'launcher is executable');
+  }
+  // Its bytes equal the packaged self-contained launcher source (installer file).
+  const pkgLauncher = fs.readFileSync(path.join(vendor.packageRoot(), 'src', 'scheduler', 'launcher.js'));
+  assert.ok(fs.readFileSync(launcher).equals(pkgLauncher), 'launcher copied from the installer, not the vendored fixture');
+  // The dir is recorded BEFORE the file so uninstall removes both (core empties).
+  const dirIdx = manifest.entries.findIndex((e) => e.kind === 'dir' && e.path === path.dirname(launcher));
+  const fileIdx = manifest.entries.findIndex((e) => e.kind === 'file' && e.path === launcher);
+  assert.ok(dirIdx !== -1 && fileIdx !== -1, 'dir + file recorded');
+  assert.ok(dirIdx < fileIdx, 'dir recorded before file (reverse removes file first)');
+
+  // Idempotent: a second vendor writes no duplicate entries and leaves it identical.
+  const bytes = fs.readFileSync(launcher);
+  vendor.vendorSelf(paths, { sourceRoot: src, env: {}, manifest });
+  assert.ok(fs.readFileSync(launcher).equals(bytes));
+  assert.equal(manifest.entries.filter((e) => e.kind === 'file' && e.path === launcher).length, 1);
+});
+
+test('vendor: the published version dir files are read-only after publish; dirs stay writable so uninstall works (WP-157)', { skip: process.platform === 'win32' }, () => {
+  const paths = tempPaths();
+  const src = fakeSource('0.4.0');
+  vendor.vendorSelf(paths, { sourceRoot: src, env: {} });
+  const versionDir = path.join(paths.core, 'app', '0.4.0');
+
+  const binFile = path.join(versionDir, 'bin', 'wienerdog.js');
+  assert.equal(fs.statSync(binFile).mode & 0o222, 0, 'a published file has no write bits');
+  // Directories are left writable so a recursive rmSync (uninstall) still unlinks.
+  assert.notEqual(fs.statSync(path.join(versionDir, 'bin')).mode & 0o200, 0, 'dirs remain owner-writable');
+  assert.doesNotThrow(() => fs.rmSync(versionDir, { recursive: true, force: true }), 'read-only files still removable');
+  assert.equal(fs.existsSync(versionDir), false);
+});
+
+test('vendor: an interrupted publish (staging removed before rename) leaves the previous valid current (WP-157)', () => {
+  const paths = tempPaths();
+  const v1 = fakeSource('1.0.0');
+  const manifest = { version: 1, createdAt: '', entries: [] };
+  vendor.vendorSelf(paths, { sourceRoot: v1, env: {}, manifest });
+  const link = vendor.currentLink(paths);
+  const before = fs.realpathSync(link);
+
+  // Simulate an interrupted upgrade to 2.0.0: the copy crashes mid-staging (no
+  // atomic rename ever happens). The prior current must stay intact + valid.
+  const v2 = fakeSource('2.0.0');
+  const origCp = fs.cpSync;
+  fs.cpSync = () => {
+    throw new Error('disk full mid-copy');
+  };
+  try {
+    assert.throws(() => vendor.vendorSelf(paths, { sourceRoot: v2, env: {}, manifest }), /disk full/);
+  } finally {
+    fs.cpSync = origCp;
+  }
+  assert.equal(fs.realpathSync(link), before, 'current still points at the prior valid version');
+  assert.ok(fs.existsSync(path.join(before, 'bin', 'wienerdog.js')), 'the prior version is intact');
+  assert.equal(fs.existsSync(path.join(paths.core, 'app', '2.0.0')), false, 'the interrupted version never published');
+});
+
+test('vendor: verifyCurrentContainment accepts a contained prod tree and rejects an out-of-root symlink (WP-157)', { skip: process.platform === 'win32' }, () => {
+  const paths = tempPaths();
+  const src = fakeSource('0.5.0');
+  vendor.vendorSelf(paths, { sourceRoot: src, env: {} });
+  const ok = vendor.verifyCurrentContainment(paths);
+  assert.equal(ok.ok, true, JSON.stringify(ok));
+  assert.equal(ok.target, fs.realpathSync(vendor.currentLink(paths)));
+
+  // Repoint current OUT of <core>/app (attacker symlink escape) → refuse.
+  const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-evil-'));
+  fs.rmSync(vendor.currentLink(paths), { force: true });
+  fs.symlinkSync(outside, vendor.currentLink(paths));
+  const bad = vendor.verifyCurrentContainment(paths);
+  assert.equal(bad.ok, false);
+  assert.match(bad.why, /outside/);
+});
