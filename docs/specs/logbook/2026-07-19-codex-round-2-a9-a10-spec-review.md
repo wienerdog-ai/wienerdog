@@ -117,5 +117,3 @@ merge-gate is expressed as a reap-mechanism DoD clause, not a third WP.
   acyclic and encoded the activation gate as a hard Definition-of-Done clause plus
   an Implementation-notes coordination note. reap-mechanism `depends_on` unchanged
   (`[WP-155, WP-157]`).
-</content>
-</invoke>
