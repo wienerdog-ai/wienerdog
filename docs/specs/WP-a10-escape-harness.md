@@ -62,9 +62,13 @@ posture the harness itself must honor.
   SIGKILLs the real descendant tree + groups, re-sweeping to two consecutive clean
   sweeps.
 - **`src/cli/run-job.js`** reaps on every child-exit path: on an abnormal settle
-  it `reapTree`s the middle's **group-A tree**, and for `builtin:dream` it
-  `reapGroup`s the **per-token** brain pidfile group
-  (`state/dream-brain.<token>.pid`) even when the middle `dream.js` died.
+  it reaps the middle's **group-A tree with BOTH** `reapTree(child.pid)` **and**
+  `reapGroup(child.pid)` (the negative-PGID group kill reaches a leaderless
+  reparented group-A member once the middle/group-leader has exited — after
+  `'close'`, `reapTree`'s ppid-closure alone finds nothing), and for
+  `builtin:dream` it `reapGroup`s the **per-token** brain pidfile group
+  (`state/dream-brain.<token>.pid`, group B) even when the middle `dream.js` died —
+  three reap operations, two group-A targets sharing `child.pid` plus one group-B.
 - **`src/cli/dream.js`** writes/removes the per-token brain pidfile and reaps via
   `reapTree` on the timeout path.
 - **`tests/integration/dream.test.js`** already uses `{ skip: process.platform
@@ -109,19 +113,30 @@ is not vacuously green.
 
 ### The three additional live proofs
 
-1. **SIGKILL-the-middle-while-a-group-A-descendant AND the brain live (findings 6
-   and 10, mandatory).** Stand up the real chain: a `run-job`-style supervisor mints
-   a run token and spawns the `supervised-child.js` middle, which spawns **both** a
-   long-sleeping **group-A descendant** (a plain child in the middle's own group)
-   **and** a re-detached long-sleeping "brain" (group B), and writes the per-token
-   brain pidfile (`state/dream-brain.<token>.pid`) — exactly the `builtin:dream`
-   wiring. `SIGKILL` the **middle** so its inner watchdog can never fire; then run
-   the supervisor's settle-path reap (abnormal close → `reapTree(child.pid)` for
-   group A **and** `reapGroup(brain.pgid)` for the per-token brain pidfile). Assert
-   **both** the group-A descendant pid and the brain pid are `ESRCH` and the
-   pidfile is deleted → **zero survivors**. Drive this through the real `run-job`
-   settle path (or a thin harness that invokes the same reap-on-close code), not a
-   reimplementation.
+1. **SIGKILL-the-middle-while-a-group-A-descendant AND the brain live (findings 6,
+   10, and R3-E/R4-B — mandatory).** Stand up the real chain: a `run-job`-style
+   supervisor mints a run token and spawns the `supervised-child.js` middle, which
+   spawns **both** a long-sleeping **group-A descendant** (a plain child in the
+   middle's own group — so once the middle dies this descendant is a **leaderless
+   reparented** group-A member, still carrying `child.pid` as its PGID) **and** a
+   re-detached long-sleeping "brain" (group B), and writes the per-token brain
+   pidfile (`state/dream-brain.<token>.pid`) — exactly the `builtin:dream` wiring.
+   `SIGKILL` the **middle** so its inner watchdog can never fire **and** so the
+   group-A leader is gone from the process table by the time the reap runs; then run
+   the supervisor's settle-path reap. On the abnormal `'close'` path that reap is
+   **three** operations (matching `WP-a10-reap-mechanism`): `reapTree(child.pid)`
+   **and** `reapGroup(child.pid)` for **group A** (two distinct group-A targets
+   sharing `child.pid` — `reapTree`'s ppid-closure finds nothing once the leader has
+   exited, so the **negative-PGID** `reapGroup(child.pid)` is what reaches the
+   leaderless reparented member), **and** `reapGroup(brain.pgid)` for the per-token
+   **group-B** brain pidfile. The test must drive the **REAL** post-`'close'` reap
+   path (the actual `run-job` settle code, or a thin harness invoking the exact same
+   reap-on-close function — not a reimplementation), and assert: **all three reap
+   operations occur**; the group-A descendant pid, having been reaped **via
+   `reapGroup(child.pid)`**, reaches `ESRCH`; the brain pid reaches `ESRCH`; and the
+   pidfile is deleted → **zero survivors**. (A two-call sequence that omits
+   `reapGroup(child.pid)` would leave the leaderless group-A member alive and make
+   this merge-gate hollow — the test must fail in that case.)
 
 2. **Fake-`ps`-in-PATH negative (finding 7).** Prepend `tests/fixtures/reap/` (or
    a temp dir holding `fake-ps`) to `PATH`, then run the **real** macOS reader
@@ -174,11 +189,16 @@ is not vacuously green.
       `ESRCH` after `reapTree`; the non-vacuity baseline shows at least one
       survives without the reap; case (e) setsid+double-fork is the recorded
       residual.
-- [ ] **[Middle-death, findings 6 + 10]** With the middle `SIGKILL`ed while
-      **both** a group-A descendant and the brain live, the supervisor's
-      settle-path reap (`reapTree(child.pid)` for group A + `reapGroup(brain.pgid)`
-      via the per-token pidfile) leaves **both** `ESRCH` and deletes the pidfile —
-      **zero survivors**.
+- [ ] **[Middle-death, findings 6 + 10 + R3-E/R4-B]** With the middle `SIGKILL`ed
+      while **both** a group-A descendant and the brain live, the supervisor's
+      **real** post-`'close'` settle-path reap runs **all three** operations —
+      `reapTree(child.pid)` **and** `reapGroup(child.pid)` for group A (the
+      negative-PGID group kill is what reaches the now-**leaderless reparented**
+      group-A member once the middle has exited) **plus** `reapGroup(brain.pgid)`
+      for the group-B brain via the per-token pidfile — asserted to all occur; the
+      leaderless group-A member and the brain both reach `ESRCH` and the pidfile is
+      deleted **before** fixture cleanup — **zero survivors**. (Omitting
+      `reapGroup(child.pid)` must fail this test.)
 - [ ] **[No bare ps, finding 7]** With a `fake-ps` earlier on `PATH`, the reap
       does not run it (marker absent) and still kills a real re-detached child.
 - [ ] **[TOCTOU group-retaining, finding 8a]** A **group-retaining** grandchild
@@ -198,6 +218,9 @@ npm test
 npm run lint
 # the residual and the middle-death/fake-ps/TOCTOU/group-A cases are present:
 grep -nE "setsid|double-fork|residual|ESRCH|dream-brain|reapGroup|group-A|fake-ps|two consecutive|rescan|reparent|interleav" tests/integration/reap-escape.test.js
+# R4-B: the middle-death proof drives BOTH group-A reaps (reapTree + reapGroup on
+# child.pid) so the leaderless reparented member is proven ESRCH:
+grep -nE "reapTree|reapGroup|leaderless|child\.pid" tests/integration/reap-escape.test.js
 ```
 
 ## Implementation notes & constraints

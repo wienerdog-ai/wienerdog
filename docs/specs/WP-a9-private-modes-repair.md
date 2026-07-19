@@ -197,11 +197,11 @@ through this **unchanged**.
 | Action | Path | Notes |
 |--------|------|-------|
 | modify | src/core/private-fs.js | (a) Extend the single internal enumerator to the union of the A5 set **and** the A9 set: `secrets/` dir (`0700`), every regular file directly under `secrets/` (`0600`), the sensitive `state/` files `broker-grants.json`/`exec-pins.json`/`run-evidence.jsonl` (`0600`), **each existing `logs/<job>` subdirectory (`0700`)**, **and** the four metadata files `config.yaml`/`install-manifest.json` (core root) + `state/schedule.json`/`state/watermarks.json` (`0600`, repair-only per the dated decision below). The enumerator carries each entry's **expected mode** (dirs `0700`, files `0600`). Add the A9 constants and export them alongside the A5 ones. `repairPrivateModes` is **TWO-PHASE** (round-3 finding): it chmods every enumerated private **dir** to `0700` **first**, THEN **re-enumerates** the now-traversable dir contents and chmods **files** to `0600` — a single up-front enumeration cannot see a `0644` file trapped inside a `000` (or non-executable) `secrets/`, because `listFiles`'s `readdirSync` fails while the dir is unreadable and returns `[]`, so a one-pass repair would fix the dir but leave the file `0644` until the next sync. `insecureEntries`/`scanPrivateModes` flag the full `(mode & 0o777) !== expectedMode` deviation (over-tight included) — names/signatures unchanged, now over the union. (b) Add and export the **fail-closed** `createLogStreamPrivate(file, opts)` — the shared `0600` log-stream helper the two log writers call (aborts the write if it cannot secure the fd; contract below). |
-| modify | src/cli/run-job.js | **ONLY** the two log sites: line 550's `fs.mkdirSync(logDir, {recursive:true})` → `mkdirPrivate(logDir)` (dir `0700`), and line 552's `fs.createWriteStream(logFile)` → `createLogStreamPrivate(logFile)` (file `0600`). Touch nothing else in this file. |
+| modify | src/cli/run-job.js | The two log sites **plus the minimal structural move that routes a log-open failure through run-job's EXISTING fail-loud branch (R4-A, round-4)** — no new alerting plumbing. (i) Swap line 550's `fs.mkdirSync(logDir, {recursive:true})` → `mkdirPrivate(logDir)` (dir `0700`) and line 552's `fs.createWriteStream(logFile)` → `createLogStreamPrivate(logFile)` (file `0600`). (ii) **Move that `mkdirPrivate(logDir)` + `createLogStreamPrivate(logFile)` pair INSIDE the existing `try` block** (the one that currently starts at ~line 560 and whose `catch (err) { failure = err }` feeds the step-7 error-watermark + `failLoud` + `throw` branch at ~:664–672). Today the open sits OUTSIDE/BEFORE that `try` (:548–552), so a throw from `createLogStreamPrivate`/`mkdirPrivate` escapes uncaught — in a normal run it writes **no** error watermark and fires **no** alert, and in catch-up it is swallowed by `catchUp`'s `catch` (~:710) under a now-false "runJob already failed loud" comment. Moving the open inside the `try` makes the throw hit the existing failure branch. (iii) Declare `let logStream = null;` **before** the `try` and guard the `finally`'s close as `if (logStream) await endStream(logStream);` (the open may now throw before `logStream` is assigned). `rotateLogs` (best-effort — returns on a missing/!dir logDir) and the skill-evidence block (already `try`-wrapped) tolerate the failure path unchanged. Touch nothing else in this file. |
 | modify | src/cli/dream.js | **ONLY** the two log sites: line 339's `fs.mkdirSync(logDir, {recursive:true})` → `mkdirPrivate(logDir)`, and line 340's `fs.createWriteStream(<date>.log, { flags: 'a' })` → `createLogStreamPrivate(<date>.log, { flags: 'a' })`. Touch nothing else in this file. |
 | modify | src/cli/doctor.js | Fold the dedicated `secrets/`-dir `0700` check into the shared predicate: the `insecureEntries` loop now covers the `secrets/` dir **and** its files (and flags an over-tight `secrets/` too), so remove the redundant mode-comparison warn (keep the **"secrets directory missing"** hard `fail`). Update the shared-loop warn message so it no longer speaks only of "readable by other users" — it now covers wrong permissions in either direction (expected `0700`/`0600`). Single predicate, three surfaces — the module's stated invariant. |
 | modify | tests/unit/private-fs.test.js | Add the A9 cases below (secrets dir+files, grants/pins repair, the four metadata files repaired, **each `logs/<job>` dir repaired to `0700`**, **over-tight `0600` and `000` `secrets/` flagged + repaired to `0700`**, **the round-3 COMBINED case: a `000` `secrets/` containing a `0644` token/client file → a SINGLE `repairPrivateModes` call chmods BOTH the dir to `0700` and the trapped file to `0600` (two-phase), and a follow-up `scanPrivateModes` returns `{insecure: 0}`**, permissive-umask, upgrade from 0755/0644, win32 no-op) **and** `createLogStreamPrivate` cases: fresh file under `umask 000` → `0600`; a pre-existing `0666` append target → `0600`; **fchmod-fails → helper throws and ZERO log bytes are written**; win32 no-op (plain stream). |
-| modify | tests/unit/scheduler-runjob.test.js | Under a permissive umask, assert the per-run log **dir** (`0700`) **and** file (`0600`) written by run-job's real writer path (fresh-install acceptance runs the **actual** writer, not just the predicate). |
+| modify | tests/unit/scheduler-runjob.test.js | (a) Under a permissive umask, assert the per-run log **dir** (`0700`) **and** file (`0600`) written by run-job's real writer path (fresh-install acceptance runs the **actual** writer, not just the predicate). (b) **R4-A wiring tests (round-4):** force a log-open failure through the **real** run-job path — via a real filesystem condition, **no new run-job seam** (e.g. pre-create a regular **file** at the `logs/<job>` path so `mkdirPrivate(logDir)` throws, or otherwise make the private open fail) — and assert, with an injected `opts.sendAlert` stub, that (i) **`runJob` writes the `last_status:'error'` watermark** (`readScheduleState`) **and fires the alert** (the stub is called), then rejects; and (ii) **`catchUp`** over that same overdue job likewise leaves the error watermark **and** the alert (proving `runJob` failed loud **before** `catchUp`'s `catch` swallows the throw) and still returns, marking the job failed. |
 | modify | tests/integration/dream.test.js | Under a permissive umask, assert the dream's log **dir** (`0700`) **and** `<date>.log` (`0600`) written by dream's real writer path, including the append-into-a-legacy-`0666`-file case. |
 | modify | tests/unit/doctor.test.js | Assert a group/other-readable **or over-tight** `secrets/` dir, token file, or metadata file is WARNed via the unified predicate; assert the missing-secrets `fail` still fires. |
 
@@ -341,18 +341,42 @@ function createLogStreamPrivate(file, opts = {}) {
 `run-job.js` becomes `fs.mkdirSync(logDir, {recursive:true})` →
 `mkdirPrivate(logDir)` and `const logStream = fs.createWriteStream(logFile)` →
 `const logStream = createLogStreamPrivate(logFile)`; `dream.js` the analogous two
-swaps with `{ flags: 'a' }` on the stream. Nothing else in those two files
-changes.
+swaps with `{ flags: 'a' }` on the stream. In `run-job.js` **the open pair must
+also move inside the existing `try`** (R4-A) so its throw reaches the fail-loud
+branch — declare `let logStream = null;` before the `try`, do the
+`mkdirPrivate`+`createLogStreamPrivate` at the top of the `try`, and guard the
+`finally` close with `if (logStream) …`. Nothing else in those two files changes.
 
-**Rationale for fail-closed (owner, round-2).** The trigger — a foreign-owned or
-un-chmoddable file sitting in your private `<core>/logs/` — is rare and itself
-alarming; a loud failure that stops the job is correct and its availability cost
-is ~nil. The thrown `WienerdogError` propagates through run-job's existing
-fail-loud error surfacing (the same path a pre-spawn setup error takes); this WP
-does **not** add new alerting plumbing to run-job (that would exceed the two-line
-touch) — the loud throw is the required behavior. The negative test injects a
-throwing `fchmodSync` seam and asserts the helper throws **and** the file has zero
-bytes.
+**Why the move is required (R4-A, round-4 — supersedes the earlier "surfaces
+through run-job's existing fail-loud path, no new handling" claim).** That earlier
+claim was **wrong about the current code**: the log stream is opened at
+`run-job.js:552`, **before** the `try` block that starts at `:560`. A throw from
+`createLogStreamPrivate` (or `mkdirPrivate`) at that point is **not** caught by the
+`catch (err) { failure = err }` at `:605`, so it never reaches the
+`writeScheduleState({last_status:'error'})` + `failLoud` branch at `:664–672`:
+**a normal run leaves no error watermark and fires no alert**, and in **catch-up**
+mode the `catch` at `~:710` swallows it under the comment "runJob already failed
+loud" — which is false, because runJob did **not** fail loud (it threw before the
+loud path). Moving the open inside the `try` is what makes the round-2 fail-loud
+guarantee actually hold. This is **not** new alerting plumbing — it reuses the
+existing error branch; the only structural change is the try-boundary move plus the
+`logStream` null-guard.
+
+**Rationale for fail-closed (owner, round-2, corrected round-4).** The trigger — a
+foreign-owned or un-chmoddable file sitting in your private `<core>/logs/` — is
+rare and itself alarming; a loud failure that stops the job is correct and its
+availability cost is ~nil. The thrown `WienerdogError` **must reach** run-job's
+existing fail-loud error surfacing (the `writeScheduleState` error watermark +
+`failLoud`) — but per R4-A that only happens once the log-open is moved **inside**
+the existing `try` (it currently sits before it, so today the throw escapes and
+neither the watermark nor the alert fires; catch-up silently swallows it). This WP
+therefore makes the small structural move above; it still adds **no** new alerting
+plumbing (it reuses the existing branch). Two tests prove it: the isolated helper
+negative test injects a throwing `fchmodSync` seam and asserts the helper throws
+**and** the file has zero bytes; **and** the wiring tests (below) force a log-open
+failure through the **real** `runJob` and `catchUp` paths and assert the persisted
+`last_status:'error'` watermark **and** an alert fire — not just the helper in
+isolation.
 
 Every entry is best-effort and existence-guarded exactly like the A5 set (a
 missing `secrets/` or a missing pin file is simply skipped — this WP **repairs**,
@@ -445,13 +469,18 @@ umask 000; wienerdog run-job dream   # logs/dream/ is 0700 and <stamp>.log is 06
   three surfaces cannot disagree; the A9 extension must preserve that.
 - **Shared-surface coordination with the A10 WPs.** `WP-a10-reap-mechanism` also
   edits `src/cli/run-job.js` and `src/cli/dream.js` (the watchdog/reap wiring).
-  This WP's edit to those two files is a **two-line swap at each log site** — the
-  `mkdirSync`→`mkdirPrivate` (`:550` / `:339`) and the
-  `createWriteStream`→`createLogStreamPrivate` (`:552` / `:340`) — and touches
-  nothing near the watchdog, so the two WPs edit disjoint regions, but they must
-  not land on the same branch. Rebase on whichever merges first and re-verify the
-  exact lines before editing (do not assume 550/552/339/340 are unchanged —
-  locate the `fs.mkdirSync(logDir…)` and `fs.createWriteStream` log calls).
+  In `dream.js` this WP is the **two-line swap at the log site**
+  (`mkdirSync`→`mkdirPrivate` `:339`, `createWriteStream`→`createLogStreamPrivate`
+  `:340`). In `run-job.js` it is the same two swaps (`:550` / `:552`) **plus the
+  R4-A structural move** of that open into the existing `try` and the `logStream`
+  null-guard on the `finally` — so this WP now touches the **top of the `try`
+  block and the `finally`**, which is closer to A10's reap wiring on the settle /
+  `'close'` / failure paths (`~:601–672`). The two WPs still edit largely disjoint
+  regions (log-open vs. reap-on-exit), but the overlap is real now — they **must
+  not** land on the same branch. Rebase on whichever merges first and re-verify by
+  **locating** the `fs.mkdirSync(logDir…)` / `fs.createWriteStream` log calls and
+  the enclosing `try`/`catch`/`finally` (do **not** assume 550/552/339/340 or the
+  try-boundary line are unchanged).
 - `never mock process.platform` — inject `platform` where a test needs a specific
   OS (the module already gates on the module-level `WIN32`; for tests that must
   assert win32 behavior, follow the module's existing pattern).
@@ -482,6 +511,13 @@ umask 000; wienerdog run-job dream   # logs/dream/ is 0700 and <stamp>.log is 06
 - [ ] `createLogStreamPrivate` is **fail-closed**: if it cannot secure the fd to
       `0600` it throws and writes **zero** bytes — it never returns a stream onto
       a world-readable file (negative test with an injected throwing `fchmodSync`).
+- [ ] **[R4-A]** A log-open failure inside `run-job` is routed through the
+      **existing** fail-loud branch: the log-dir/log-stream open is **inside** the
+      `try`, so a throw sets the `last_status:'error'` watermark **and** fires the
+      alert (`failLoud`) in a normal run, and in `catchUp` the throw is only
+      swallowed **after** `runJob` has already failed loud — asserted by the
+      real-path `runJob` **and** `catchUp` wiring tests, not just the helper's
+      isolated unit test.
 - [ ] `repairPrivateModes` never creates `secrets/` or any file; a machine with
       no Google setup produces zero changes and zero warnings for the A9 set.
 - [ ] The private-modes guarantee stays `0700`/`0600` under a permissive umask
@@ -532,6 +568,9 @@ grep -nE "secrets|broker-grants|exec-pins|schedule\.json|watermarks|A9_PRIVATE|c
 # the two log writers call BOTH private helpers (no bare createWriteStream/mkdirSync
 # remains at the log sites):
 grep -nE "mkdirPrivate|createLogStreamPrivate" src/cli/run-job.js src/cli/dream.js
+# R4-A: run-job's wiring tests force a log-open failure and assert the error
+# watermark + alert on BOTH the runJob and catchUp paths:
+grep -nE "sendAlert|last_status|catchUp|catch-up" tests/unit/scheduler-runjob.test.js
 ```
 
 ## Out of scope (do NOT do these)
@@ -542,17 +581,20 @@ grep -nE "mkdirPrivate|createLogStreamPrivate" src/cli/run-job.js src/cli/dream.
 - **Log bounding/rotation** — already shipped (`rotateLogs`, WP-038) and the
   self-email tail exclusion (WP-124/EP3); do not re-implement (this WP only
   changes the log **dir/file mode**, not the log content or rotation).
-- **Adding new alerting plumbing to `run-job`** for the fail-closed log throw —
-  out of scope; the thrown `WienerdogError` surfaces through run-job's existing
-  fail-loud path. Broadening that is a separate WP (note under "Discovered
-  issues" if a reviewer wants a dedicated alert).
+- **Adding NEW alerting plumbing to `run-job`** for the fail-closed log throw —
+  out of scope. This WP makes the throw reach run-job's **existing** fail-loud
+  branch by moving the log-open inside the current `try` (R4-A) and reusing that
+  branch — it adds no new alert path. A **dedicated** log-open alert (distinct
+  message/sink) is a separate WP (note under "Discovered issues" if a reviewer
+  wants one).
 - Changing the **metadata writers** (`config`/`manifest` writers, `jobs.js`
   `schedule.json`, `watermarks.js`) to write `0600` at write time — the dated
   decision keeps them repair-only (predicate + sync repair), writers unchanged.
 - Changing any **credential writer** (`gws/client.js`, `grant-store.js`,
   `exec-identity.js`) — they already write `0600`; this WP only extends the
   **predicate/repair** set for them. (The two **log** writers ARE changed — that
-  is this WP's round-1 fix — but only their stream-open call, nothing else.)
+  is this WP's round-1 fix — the dir/stream-open swap at each log site, plus in
+  `run-job` the R4-A move of that open inside the existing `try`; nothing else.)
 - Creating `secrets/` or seeding tokens — creation stays with `init`/`gws`.
 
 ## Definition of done

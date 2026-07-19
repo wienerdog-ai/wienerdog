@@ -129,13 +129,22 @@ state and act on:
   work after every per-job schedule is gone. (Linux/systemd has **no** catch-up
   entry — catch-up is launchd/schtasks only, per `schedule.js`.) The runbook must
   **remove and re-verify** the catch-up entry explicitly (contract step 1).
-- **The canonical way to reach zero running Wienerdog processes is to REBOOT
-  after removing every per-job schedule AND the catch-up entry — not per-platform
-  process forensics.** After a reboot, with nothing left to fire, zero Wienerdog
-  processes run, platform-independently, with no forensic guesswork. A
-  per-platform live-process check is kept **only** as an OPTIONAL confirmation for
-  users who genuinely cannot reboot; credential rotation begins only after proven
-  quiescence (a reboot, or two consecutive clean optional checks).
+- **The ONLY authoritative way to reach zero running Wienerdog processes is to
+  REBOOT after removing every per-job schedule AND the catch-up entry — not
+  per-platform process forensics (R4-C, round-4).** After a reboot, with nothing
+  left to fire, zero Wienerdog processes run, platform-independently, with no
+  forensic guesswork. A per-platform live-process grep is **NOT proof of
+  quiescence** and must never certify the machine clean: a prompt-injected run can
+  have spawned a **differently-named** helper (a `git`, a shell, an arbitrary
+  binary) that no `wienerdog|claude|codex` name-match and no one-level parent scan
+  will find, so a "nothing found" grep can be a **false clean** while a
+  stale-privilege child keeps writing/committing. Such a grep can only ever
+  *reveal* a still-live job (in which case the machine is definitely still
+  compromised — escalate), never *certify* a clean one. **Credential rotation
+  (step 3) begins only after a reboot.** A user who genuinely **cannot** reboot
+  must **stop and escalate** — treat the machine as still-compromised — rather than
+  grep-certify it clean. (This runbook is a human procedure; it does **not** ship a
+  recursive process-tree reaper — that is A10's mechanism work, out of scope here.)
 
 ## Deliverables (permission boundary — touch ONLY these)
 
@@ -143,7 +152,7 @@ state and act on:
 
 | Action | Path | Notes |
 |--------|------|-------|
-| create | docs/runbooks/incident.md | The general incident-drill runbook (house numbered-checklist format), covering the seven ordered A9 steps: (1) snapshot the `config.yaml` `jobs:` definitions (the restore source; `schedule.json` holds only watermarks), remove every per-job schedule **and** the shared catch-up entry, then reach proven quiescence by REBOOT (optional live-checks only if reboot is impossible); (2) preserve-evidence-privately; (3) revoke+rotate; (4) purge digest+managed-block; (5) clean git; (6) fail-closed byte-level acceptance drill (whole-file marker grep + one-sentinel-pair check per installed harness file); (7) re-authorize by reconstructing `schedule add` from the `jobs:` snapshot. |
+| create | docs/runbooks/incident.md | The general incident-drill runbook (house numbered-checklist format), covering the seven ordered A9 steps: (1) snapshot the `config.yaml` `jobs:` definitions (the restore source; `schedule.json` holds only watermarks), remove every per-job schedule **and** the shared catch-up entry, then reach proven quiescence by REBOOT (the **sole** authoritative proof — a pre-reboot process grep is a non-proof hint that can only *reveal* a live job; if you cannot reboot you **stop-and-escalate**, never grep-certify clean); (2) preserve-evidence-privately; (3) revoke+rotate; (4) purge digest+managed-block; (5) clean git; (6) fail-closed byte-level acceptance drill (whole-file marker grep + one-sentinel-pair check per installed harness file); (7) re-authorize by reconstructing `schedule add --job` for **builtin** jobs from the `jobs:` snapshot — a `skill:*` routine is frozen by the A0 pre-use gate (audit A1) and is NOT re-addable this release (do not promise a failing `--skill` command; only its snapshot definition is preserved for later). |
 | modify | docs/runbooks/secret-incident.md | Add one cross-link near the top: the secret leak is the credential-specific case of the general incident drill (link `incident.md`); for a general or suspected-compromise incident, start there. Do NOT rewrite its steps. |
 
 ### Exact contract — what `docs/runbooks/incident.md` must state
@@ -172,6 +181,9 @@ The detail of each:
      later plain re-add cannot losslessly restore the exact `at` / `run` /
      `timeout_minutes`. Copy the **`config.yaml` `jobs:` section** into the private
      incident folder (step 2) NOW; this snapshot is what step 7 re-authorizes from.
+     Copy **every** job's definition, including any `run: skill:<name>` routine:
+     a `skill:*` routine cannot be re-added this release (the A0 gate, step 7), so
+     this snapshot is the **only** record of its definition to re-add later.
      (You MAY also capture `state/schedule.json` as separate **watermark evidence**
      — but it is **not** the restore source.) Handle both with the same private
      folder discipline as the rest of the evidence in step 2 — it is why the
@@ -192,30 +204,30 @@ The detail of each:
        -TaskPath '\Wienerdog\' -ErrorAction SilentlyContinue` lists nothing.
      - Linux/systemd: nothing to do — there is no catch-up entry on this
        platform.
-   - **Reach proven quiescence — the canonical path is to REBOOT.** With every
-     per-job schedule and the catch-up entry removed, reboot the machine. After
-     the reboot nothing can have re-fired, so **zero** Wienerdog processes run —
-     platform-independently, with no process forensics. **Credential rotation
-     (step 3) begins only after this reboot.**
-   - **OPTIONAL — only if you genuinely cannot reboot:** confirm quiescence by
-     live-process check instead, and treat the machine as quiescent only after
-     **two consecutive clean checks**. Match on the process **command line /
-     tree**, not an executable path (the brain runs as `node …/wienerdog.js` and
-     as `claude` / `codex` — matching a `node`/`node.exe` binary path misses
-     them), and check **both** the Claude and the Codex brain plus the whole
-     descendant tree:
-     - macOS / Linux: `pgrep -fl 'wienerdog|claude|codex'` must print nothing;
-       for a live one, `pkill -f 'wienerdog'` (repeat until empty), then `kill -9
-       <pid>` for a straggler and its children (`pgrep -P <pid>`). macOS: also
-       confirm `launchctl list | grep -i wienerdog` is empty; Linux: also confirm
-       `systemctl --user list-timers | grep -i wienerdog` shows nothing active.
-     - Windows (PowerShell), match on **CommandLine**, not Path: `Get-CimInstance
-       Win32_Process | Where-Object { $_.CommandLine -match 'wienerdog|claude|codex' }`
-       must be empty; `Stop-Process -Id <pid> -Force` for any straggler.
-     - **Hard gate:** do not proceed to credential rotation until you have either
-       rebooted or seen two consecutive clean checks. If a check keeps finding a
-       live job, treat the machine as still-compromised and escalate rather than
-       continuing.
+   - **Reach proven quiescence — the ONLY authoritative path is to REBOOT.** With
+     every per-job schedule and the catch-up entry removed, reboot the machine.
+     After the reboot nothing can have re-fired, so **zero** Wienerdog processes
+     run — platform-independently, with no process forensics. **Credential rotation
+     (step 3) begins only after this reboot. A reboot is the sole proof of
+     quiescence this runbook accepts.**
+   - **A live-process grep is NOT proof — it can only catch a live job, never
+     certify a clean one (R4-C).** You MAY run a quick check *before* rebooting to
+     see whether an obvious Wienerdog process is still up — macOS / Linux `pgrep
+     -fl 'wienerdog|claude|codex'`, or Windows (PowerShell) `Get-CimInstance
+     Win32_Process | Where-Object { $_.CommandLine -match 'wienerdog|claude|codex' }`.
+     If it finds **anything**, the machine is **definitely still compromised**:
+     stop and escalate. But a **clean** result proves nothing and must **never** be
+     read as quiescence — a prompt-injected run can have spawned a
+     **differently-named** helper (a `git`, a shell, an arbitrary binary) with no
+     `wienerdog`/`claude`/`codex` in its name and no direct Wienerdog parent, which
+     this grep (and any one-level `pgrep -P` / name-substring scan) will miss. So
+     the grep is a non-authoritative hint only; **you still must reboot to be
+     sure.**
+   - **If you genuinely CANNOT reboot: STOP and escalate — do NOT certify clean.**
+     There is no grep-based substitute for the reboot. Treat the machine as
+     still-compromised (assume a stale-privilege child may still be running) and
+     escalate — do **not** proceed to credential rotation on a still-running
+     machine on the strength of a "nothing found" grep.
 
 2. **Preserve the evidence — into a folder that is private AND excluded from
    sync/backup FIRST, then copy.** Order matters: create and secure the
@@ -363,16 +375,25 @@ The detail of each:
    for step 7.
 
 7. **Re-authorize — only after a successful, recorded drill (step 6) and steps
-   1–5.** Re-add each schedule you removed by **reconstructing its exact command
-   from the `config.yaml` `jobs:` snapshot** you took in step 1: for every job in
-   the snapshot run `wienerdog schedule add <name> --at <HH:MM> --timeout
-   <minutes>` with **exactly one** of `--job <builtin>` (e.g. `--job dream` for a
-   `run: builtin:dream` job) or `--skill <name>` (for a `run: skill:<name>` job) —
-   the snapshot's `run:` value tells you which, and `at` / `timeout_minutes` give
-   the other two flags. (The routine menu `/wienerdog-routines` is fine for the
-   standard nightly dream.) Then run `wienerdog doctor` and confirm nothing is
-   flagged (permissions, scheduler load). Schedules come back **only** after the
-   acceptance drill has passed and been recorded — never before.
+   1–5.** Re-add each **builtin** schedule you removed by **reconstructing its
+   exact command from the `config.yaml` `jobs:` snapshot** you took in step 1: for
+   every job whose snapshot `run:` value is `builtin:<name>` (today that is
+   `builtin:dream`) run `wienerdog schedule add <name> --at <HH:MM> --job <builtin>
+   --timeout <minutes>` — `at` / `timeout_minutes` supply the other two flags. (The
+   routine menu `/wienerdog-routines` is fine for the standard nightly dream.)
+   - **A `skill:*` (external-content) routine CANNOT be re-added in this release —
+     do NOT run `wienerdog schedule add … --skill …` for it.** Skill-based routines
+     are frozen at the source by the A0 pre-use capability gate (audit A1):
+     `schedule add … --skill <name>` **fails closed** on a normal install with no
+     flag or environment override, so that command is simply rejected — this
+     runbook will not promise a command that cannot work. Instead, **preserve the
+     job's definition** (it is already in your step-1 `config.yaml` `jobs:`
+     snapshot — keep that snapshot) and re-add the routine **later**, once the
+     external-content-routine capability gate opens (tracked under audit A1). Do
+     not attempt the failing re-add now.
+   Then run `wienerdog doctor` and confirm nothing is flagged (permissions,
+   scheduler load). Schedules come back **only** after the acceptance drill has
+   passed and been recorded — never before.
 
 Keep every command exact and every claim traceable to a shipped mechanism (do
 not describe a "remove managed block" command — there is none; the mechanism is
@@ -402,24 +423,29 @@ fix-source → `memory approve` → `sync`). No jargon without a one-clause glos
       definitions** before removal (the restore source — `state/schedule.json`
       holds only watermarks, not job definitions), remove every per-job schedule
       **and** the shared catch-up entry, then reach proven quiescence by **reboot**
-      (optional live-checks only if reboot is impossible); (2) preserve evidence
+      (the **sole** authoritative proof — a pre-reboot process grep is a non-proof
+      hint, and a user who cannot reboot **stops and escalates**, never
+      grep-certifies clean); (2) preserve evidence
       into a **private, sync/backup-excluded** folder before any cleanup; (3)
       revoke+rotate credentials; (4) purge the compromised digest **and** managed
       block (fix source → `memory approve <note>` → `sync`); (5) clean git history;
       (6) the fail-closed byte-level acceptance drill proving the old
       digest/managed block is no longer injected; (7) re-authorize **only** after a
-      recorded drill pass, reconstructing each `schedule add` from the `jobs:`
-      snapshot.
+      recorded drill pass, reconstructing each **builtin** `schedule add --job` from
+      the `jobs:` snapshot — a `skill:*` routine is NOT re-addable this release (A0
+      gate), only its snapshot definition is preserved.
 - [ ] Step order puts "stop all jobs" strictly before credential rotation, and
       puts the acceptance drill strictly **before** re-authorization (A9
       acceptance): schedules are re-added only after a recorded drill pass.
 - [ ] The stop step states that `schedule remove` does **not** stop an
       already-running job **and leaves the shared catch-up entry**; it removes and
       re-verifies the catch-up entry (macOS `ai.wienerdog.catchup`, Windows
-      `\Wienerdog\catchup`; Linux has none); it makes **reboot** the canonical
-      quiescence proof and keeps an optional live-check (two consecutive clean,
-      matching the **command line / tree** for `claude` **and** `codex`, not a
-      binary path) that gates credential rotation.
+      `\Wienerdog\catchup`; Linux has none); it makes **reboot** the **sole
+      authoritative** quiescence proof and states plainly that a pre-reboot
+      live-process grep is **NOT proof** (it can only *reveal* a still-live job — a
+      differently-named injected helper escapes it — never *certify* a clean one);
+      credential rotation begins **only after a reboot**, and a user who cannot
+      reboot **stops and escalates** rather than grep-certifying clean.
 - [ ] The evidence-preservation step snapshots the **`config.yaml` `jobs:`
       definitions** (the restore source) **before** removal — optionally also
       `state/schedule.json` as watermark evidence — and names
@@ -445,6 +471,12 @@ fix-source → `memory approve` → `sync`). No jargon without a one-clause glos
       it — manually remove/quarantine it" (**not** `doctor`). The new-session
       observation is an optional extra, not the proof; the proof is tied to the
       ADR-0021 byte-gated injection.
+- [ ] **[R4-D]** The re-authorize step re-adds **only builtin** jobs via
+      `wienerdog schedule add … --job <builtin> …` reconstructed from the snapshot;
+      it explicitly states a `skill:*` routine is **frozen by the A0 pre-use gate
+      (audit A1)** and CANNOT be re-added this release (no `--skill` command
+      promised — it would fail closed), directing the user to **preserve the
+      snapshot definition** for later instead.
 - [ ] `docs/runbooks/secret-incident.md` gains a cross-link naming `incident.md`
       as the general drill (its existing steps are unchanged).
 - [ ] Every documented command/mechanism is one that already ships (no invented
@@ -461,8 +493,9 @@ grep -n "incident.md" docs/runbooks/secret-incident.md && echo "cross-link prese
 grep -nE "schedule (list|remove)|config\.yaml|jobs:|run-evidence\.jsonl|memory approve|wienerdog sync|managed block" docs/runbooks/incident.md
 # the restore snapshot is config.yaml jobs:, and schedule.json is only watermark evidence:
 grep -nE "config\.yaml.*jobs:|jobs:.*definition|watermark" docs/runbooks/incident.md
-# the catch-up removal + reboot-canonical quiescence + fixed optional live-check:
+# the catch-up removal + reboot-as-SOLE-proof + the grep-is-not-proof / escalate wording:
 grep -nE "ai\.wienerdog\.catchup|\\\\Wienerdog\\\\catchup|reboot|CommandLine|claude\|codex" docs/runbooks/incident.md
+grep -niE "not proof|non-proof|cannot reboot|escalate|sole" docs/runbooks/incident.md
 # private evidence handling: pre-copy exclusion + recursive perms + windows ACL:
 grep -nE "find .*-type d.*chmod 700|find .*-type f.*chmod 600|icacls|Time Machine|OneDrive" docs/runbooks/incident.md
 # the fail-closed byte-level drill: installed hook path + env + block conditions:
@@ -472,6 +505,9 @@ grep -nE "bin/session-start\.sh|WIENERDOG_HOME|WIENERDOG_JOB|additionalContext|h
 grep -niE "entire file|whole .*file|orphan|installed harness|single-harness" docs/runbooks/incident.md
 # memory approve uses a short name, not a path:
 grep -nE "memory approve (profile|preferences|goals|instructions|<note>)" docs/runbooks/incident.md
+# R4-D: re-authorize re-adds only builtin --job; skill:* is frozen (A0/A1) and not
+# re-addable, only its snapshot definition preserved:
+grep -nE "schedule add.*--job|frozen|A0|A1|not.*re-add|cannot be re-added" docs/runbooks/incident.md
 # the drill precedes re-authorization (drill line number < re-add line number):
 awk '/acceptance drill/{d=NR} /schedule add|routine menu|Re-authorize/{if(d){print "drill@"d" before re-auth@"NR; exit}}' docs/runbooks/incident.md
 ```
