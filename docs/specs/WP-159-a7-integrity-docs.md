@@ -290,3 +290,20 @@ describe the **fixed** code. Full context: `FIX-PLAN.md` cluster **C5**.
   launcher-file-write (2b) residual — an honest, deferred A12 item.
 - **A7 — GLOSSARY.** Add `vault layout` to the digest-covered field list in the
   `job descriptor` definition (WP-156 A2).
+
+### Round-2 follow-through (2026-07-19)
+
+- **[R2:F12] Catch-up hardening is split to WP-160.** Until WP-160 lands, the docs
+  must state plainly that **catch-up is not yet fail-closed per job** — do not
+  claim the config-drift guarantee for the catch-up path. Once WP-160 lands,
+  update to "catch-up verifies each due job against a digest bound into the
+  catch-up registration (not the editable entry file)."
+- **[R2:F5] Digest-covered knobs.** The `job descriptor` glossary/threat-model
+  list of digest-covered inputs is `run`, `model`, effective timeout (inner +
+  outer), `vault_layout`, `dream_max_input_bytes`, prompt/skill hash, exec pins,
+  app release digest — state this set. Also state that `WIENERDOG_FAKE_TODAY` /
+  `WIENERDOG_RUNJOB_TIMEOUT_MS` are **deleted** from production (no env can shift
+  the scheduled date/timeout), and the date derives from the system clock.
+- **[R2:F10] Dev.** State that a dev-stance install is verified by a
+  **config-fields-only** digest (tracked-source edits do not refuse) + a
+  bound-checkout-root containment, and supports git worktrees (`.git` as a file).

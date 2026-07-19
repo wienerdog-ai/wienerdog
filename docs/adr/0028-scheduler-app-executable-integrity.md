@@ -406,6 +406,12 @@ implemented as dated amendments in the six specs and detailed in `FIX-PLAN.md`.
    one anchor an in-scope (scoped-write) attacker cannot forge. The attended manual
    `dream` self-heal on a genuinely-absent store is retained and stated as an
    honest residual (attended, out of the unattended threat model).
+   **Round-2 refinement:** a *present* store missing the *requested* pin also fails
+   closed (a valid **partial** store — e.g. git pinned, claude absent — otherwise
+   let a later-planted `~/.local/bin/claude` digest-match and live-resolve, keeping
+   the bare-PATH bypass). Descriptor binding for the dream job **requires both
+   claude and git pins** present, not merely a non-empty `exec` map; codex stays
+   optional until a codex job is authorized.
 
 2. **The interpreter is verified, not just the script (Decision 1 refinement).**
    Structural verification of a pinned `#!/usr/bin/env node` script (the shape of
@@ -415,13 +421,20 @@ implemented as dated amendments in the six specs and detailed in `FIX-PLAN.md`.
    resolved + structurally verified. No PATH re-resolution of the interpreter.
 
 3. **Everything shaping the spawn is digest-covered — now including `vault_layout`
-   (Decision 3 refinement).** The `vault_layout` config (which changes the model's
-   authorized write locations via the dream prompt + `WIENERDOG_DREAM_LAYOUT` env)
-   was omitted from the descriptor digest. It is added as a first-class descriptor
-   field `vaultLayout`; editing it now requires `wienerdog sync`. The app-tree
-   digest encoding is also made injective (canonical-JSON of sorted `[relpath,
-   hash]` pairs; the prior `relpath\nhash\n` concatenation was collidable via
-   newline filenames).
+   and the other mutable inputs (Decision 3 refinement).** `vault_layout` (which
+   changes the model's authorized write locations via the dream prompt +
+   `WIENERDOG_DREAM_LAYOUT` env) was omitted; it is added as a first-class field
+   `vaultLayout`. **Round-2 refinement:** an audit found more uncovered mutable
+   inputs — `dream_max_input_bytes` (corpus size) and the effective **outer**
+   watchdog timeout are added to the digest too; and the test time/timeout ENV
+   seams `WIENERDOG_FAKE_TODAY` and `WIENERDOG_RUNJOB_TIMEOUT_MS` (a test seam in
+   the production dispatch path — same class as Decision 2) are **deleted** from
+   production (folded into WP-155), after which the date derives from the system
+   clock (not attacker-settable via env). The app-tree digest encoding is made
+   injective (canonical-JSON of sorted `[relpath, hash]` pairs; the prior
+   `relpath\nhash\n` concat was collidable via newline filenames) — and, because
+   the launcher keeps its **own** copy of the digest, **both** `descriptor.js` and
+   `launcher.js` are changed in lockstep with a cross-implementation equality test.
 
 4. **Pins are created before descriptors are written/bound (Decision 3/4
    interaction).** `sync` created pins *after* writing + digest-binding descriptors,
@@ -434,18 +447,33 @@ implemented as dated amendments in the six specs and detailed in `FIX-PLAN.md`.
    set — e.g. `environment.d`, `launchctl setenv`) executed attacker code in the
    launcher's own node process before `launch.js` ran. The OS scheduler entries now
    clear these vars for the node they launch (launchd `EnvironmentVariables`,
-   systemd `Environment=`, Windows `cmd /c set …`), and the launcher passes a
-   scrubbed env to its child spawn.
+   systemd `Environment=`), and the launcher passes a scrubbed env to its child
+   spawn. **Round-2 refinement:** on Windows the env-clear must use a non-shell or
+   fully-controlled bootstrap (a generated wrapper file, or PowerShell/absolute
+   `cmd` with a proven token encoder) — inline `cmd /c` with only XML escaping was
+   unsafe (`%VAR%` expansion / AutoRun in hostile paths).
 
 6. **Fail-closed on the catch-up path (Decision 3/4 refinement).** Catch-up
    verified only the app-tree digest and then ran jobs from mutable `config.yaml`,
    so a config change a normal fire refused was executed by the next catch-up.
-   Catch-up now verifies each due job's descriptor digest against the digest bound
-   into that job's own per-job OS entry (`readBoundDigest`), refusing on mismatch.
-   Dev stance is bound at registration (not read from a live `WIENERDOG_DEV` env at
-   fire time) and dev still verifies the descriptor digest + containment (it skips
-   only the unstable app-tree byte digest). Every verification exception becomes a
-   durable alert + zero spawn (never a bare throw with no alert).
+   Catch-up now verifies each due job's descriptor digest against an **authorized
+   per-job digest map bound into the catch-up OS registration itself** (the
+   loaded/registered args, or a live-registration query) — **never re-read from the
+   editable per-job entry file**, which is a user-writable source artifact an
+   in-scope attacker can forge without reloading the scheduler. Given its size this
+   is **split into WP-160 (catch-up per-job authorization)**. Every verification
+   exception becomes a durable alert + zero spawn (never a bare throw with no
+   alert).
+
+7. **Dev is a separate, runnable descriptor (Decision 3/4 refinement).** "Skip the
+   tree digest but still compare the full descriptor digest" is self-contradictory
+   (the full digest includes the tree digest) and, with dev's out-of-`<core>/app`
+   vendoring and `.git`-as-a-file worktrees, made dev permanently non-runnable. Dev
+   now binds a **config-fields-only** digest (excludes `treeDigest`/`version`) plus
+   the canonical checkout root; fire-time dev verifies that config digest + a
+   dev-specific containment (live `current` == bound root) + `.git`-dir-or-gitfile
+   liveness. Dev stance is bound at registration, not read from a live
+   `WIENERDOG_DEV` env at fire time.
 
 ### Residuals added to the Honest boundary (deferred to A12)
 

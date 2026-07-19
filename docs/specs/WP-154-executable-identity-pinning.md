@@ -422,9 +422,28 @@ distinguish three states via an internal `readPinStore(paths)` →
   wrong/foreign schema → `tampered`; valid `schema===1` → `ok`.
 - `verifyPin`: `tampered` ⇒ `{ok:false, why:'pin store unreadable or corrupt',
   drift:true}` (fail closed). `absent` + no pin for the name ⇒ `drift:false`
-  (genuine first-run self-heal). `ok` + no pin for the name ⇒ `drift:false`.
-- `resolvePinnedSpawn`: `drift:true` (incl. `tampered`) ⇒ **THROW**. `absent` ⇒
-  the existing live self-heal (genuine pre-first-sync **only**).
+  (genuine first-run self-heal). **`ok` (a store EXISTS) + no pin for the
+  REQUESTED name ⇒ `{ok:false, drift:true}` (fail closed) — [R2:F1], see A1b.**
+- `resolvePinnedSpawn`: `drift:true` (incl. `tampered` **and a present store
+  missing the requested pin**) ⇒ **THROW**. `absent` ⇒ the existing live
+  self-heal (genuine pre-first-sync **only**).
+
+**A1b — partial store must fail closed; dream binding requires claude AND git
+[R2:F1, Codex HIGH].** The first draft let `ok` + no named pin fall to
+`drift:false` → live resolve. But `createPins` writes a valid **partial** store
+when a command is briefly unresolved at sync (git pinned, claude absent → the
+descriptor binds an `exec` map WITHOUT claude), so a later-planted
+`~/.local/bin/claude` **digest-matches** (nothing to drift) and the no-pin path
+live-resolves the plant — the bare-PATH bypass survives without touching the
+store. **Corrected:** (i) once a store exists, a missing pin for the **requested**
+command is drift ⇒ THROW (live self-heal only when the whole store is `absent`);
+(ii) `buildDescriptor`/the sync bind step for `builtin:dream` **requires both
+`claude` and `git` pins present** — a non-empty `exec` map is not sufficient; if
+either is missing, refuse to bind/register the dream job (surface a hard notice)
+rather than binding a bypassing partial. `codex` stays optional until a codex job
+is authorized. Test: a partial store (git only) makes `resolvePinnedSpawn('claude')`
+throw (never live-resolve a plant), and one sync with claude unresolved does not
+bind a partial dream descriptor.
 - `loadPins(paths)` (used by `descriptor.buildDescriptor`) keeps returning
   `.pins` (tampered ⇒ `{}` ⇒ empty `exec` ⇒ launcher digest mismatch — fail
   closed on the scheduled path).

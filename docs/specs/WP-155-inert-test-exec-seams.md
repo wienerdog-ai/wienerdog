@@ -238,9 +238,10 @@ spawnable as pinned targets, no fixture edit needed.
 
 | Action | Path | Notes |
 |--------|------|-------|
-| modify | src/cli/run-job.js | **Delete** the `WIENERDOG_RUNJOB_CMD` env read + `shell:true` fake branch in `resolveCommand`; `resolveCommand` no longer reads any env. Add a JS-only `opts.resolveCommand` injection in `runJob` (default = the module `resolveCommand`). Update the two stale JSDoc references to the seam. No `shell: true` literal remains in the file. |
+| modify | src/cli/run-job.js | **Delete** the `WIENERDOG_RUNJOB_CMD` env read + `shell:true` fake branch in `resolveCommand`; `resolveCommand` no longer reads any env. Add a JS-only `opts.resolveCommand` injection in `runJob` (default = the module `resolveCommand`). Update the two stale JSDoc references to the seam. No `shell: true` literal remains in the file. **Fix-pass ([R2:F5]): also delete the `WIENERDOG_RUNJOB_TIMEOUT_MS` read in `resolveTimeoutMs` (~L271); inject via a JS-only `opts.timeoutMs`.** |
 | modify | src/core/dream/brain.js | **Delete** every `fakeCmd`/`WIENERDOG_DREAM_CMD` reference `spawnBrain` still contains after WP-154: the `const fakeCmd = …` line, the `if (fakeCmd)` dispatch branch, and the `!fakeCmd &&` guard on the version-probe. Leave WP-154's pinned resolution intact. |
-| modify | src/cli/dream.js | Change `run(argv)` → `run(argv, opts = {})`. **Delete** both env reads from the containment-probe gate (~L309): replace `if (!process.env.WIENERDOG_DREAM_CMD && process.env.WIENERDOG_SKIP_CONTAINMENT_PROBE !== '1')` with `if (!opts.skipContainmentProbe)`, and forward `probeCmd: opts.probeCmd` into the `runContainmentProbe(paths, {…})` call. No other behavior change; production passes no `opts`, so the probe always runs. |
+| modify | src/cli/dream.js | Change `run(argv)` → `run(argv, opts = {})`. **Delete** both env reads from the containment-probe gate (~L309): replace `if (!process.env.WIENERDOG_DREAM_CMD && process.env.WIENERDOG_SKIP_CONTAINMENT_PROBE !== '1')` with `if (!opts.skipContainmentProbe)`, and forward `probeCmd: opts.probeCmd` into the `runContainmentProbe(paths, {…})` call. **Fix-pass ([R2:F5]): also delete the `WIENERDOG_FAKE_TODAY` read in `today()` (~L32); inject via `opts.now`.** No other behavior change; production passes no `opts`. |
+| modify | src/core/vault.js | Fix-pass ([R2:F5]): **delete** the `WIENERDOG_FAKE_TODAY` production read (~L15) — a test time-seam in the dispatch path; tests inject the date via a JS-only dependency. Same class as the exec seams (nonexistence > inertness). |
 | modify | src/core/dream/containment-probe.js | **Delete** the `env.WIENERDOG_CONTAINMENT_PROBE_CMD` middle term at ~L136 (the `\|\|` alternative sitting before the WP-154 pinned resolve), so the command is `opts.probeCmd` falling back to the pinned resolve only. Nothing in the module reads any env var to choose or skip a spawn afterward. WP-154 has already replaced the bare `'claude'` fallback with the pinned resolve on this line — do not reintroduce a bare name. |
 | modify | tests/unit/scheduler-runjob.test.js | Convert every `withRun(..., { WIENERDOG_RUNJOB_CMD: fake }, ...)` call to inject the fake via `opts.resolveCommand`; drop `WIENERDOG_RUNJOB_CMD` from the `keys` array and the `resolveCommand` test's save/restore. Add the shell:false invariant + "env var has no effect" assertions (below). |
 | modify | tests/unit/routine-runtime.test.js | Drop the now-dead `WIENERDOG_RUNJOB_CMD` save/delete/restore in both cases (the module never reads env now). |
@@ -511,11 +512,13 @@ npm run lint
 
 - Resolving/verifying/pinning the executables — **WP-154** (this WP consumes the
   pin front door; it does not change how the real command is resolved).
-- Removing the `WIENERDOG_RUNJOB_TIMEOUT_MS` timeout knob or the
-  `WIENERDOG_UPDATE_FETCH_CMD` update-fetch seam — different (non-exec / timeout)
-  seams, **separate agenda item** (flag, do not touch). (The probe seams
-  `WIENERDOG_SKIP_CONTAINMENT_PROBE` / `WIENERDOG_CONTAINMENT_PROBE_CMD` are now
-  **in scope** — see the probe-seam amendment in Context.)
+- The `WIENERDOG_UPDATE_FETCH_CMD` update-fetch seam — different seam, separate
+  agenda item (flag, do not touch). (**Fix-pass 2026-07-19 [R2:F5]: the
+  `WIENERDOG_RUNJOB_TIMEOUT_MS` timeout seam and the `WIENERDOG_FAKE_TODAY` date
+  seam are now IN scope — this earlier "do not touch" carve-out is REVERSED. See
+  the Fix-pass amendments.** The probe seams `WIENERDOG_SKIP_CONTAINMENT_PROBE` /
+  `WIENERDOG_CONTAINMENT_PROBE_CMD` were already brought in by the probe-seam
+  amendment in Context.)
 - Cleaning the dead `delete env.WIENERDOG_DREAM_CMD` lines in `tests/scenarios/*`
   (decision above: left as harmless residue).
 - The job descriptor, digest binding, or the launcher — **WP-156 / WP-157**.
@@ -532,3 +535,34 @@ npm run lint
 
 > **Fork note:** work lands directly on `main` per the WORKING-NOTES; `branch:`/PR
 > fields are kept for template/upstream-porting fidelity.
+
+## Fix-pass amendments (2026-07-19)
+
+The round-2 design review (WP-156 F5) found that the exec seams are **not** the
+only test seams living in the production dispatch path: two **time/timeout** env
+seams shape the scheduled spawn and are settable by an in-scope scheduler-env
+write, defeating the "everything shaping the 03:30 spawn is digest-covered"
+invariant. Same class as this WP's exec seams — folded in here.
+
+### A1 — delete the production time/timeout env seams [Codex HIGH, R2:F5]
+
+- **`WIENERDOG_FAKE_TODAY`** — read on the production path in `src/core/vault.js`
+  (~L15) and `src/cli/dream.js` `today()` (~L32); it changes the date →
+  `DREAM_PROMPT` → daily-note location → `WIENERDOG_DREAM_LAYOUT`. **Delete** both
+  reads; inject the date via a JS-only dependency (`opts.now`), reachable only by
+  a JS caller — the CLI entry passes none, so production uses the system clock.
+- **`WIENERDOG_RUNJOB_TIMEOUT_MS`** — read in `src/cli/run-job.js`
+  `resolveTimeoutMs` (~L271) for the outer watchdog. **Delete**; inject via a
+  JS-only `opts.timeoutMs`.
+
+After deletion the date derives from the system clock (not attacker-controllable
+via env, and legitimately daily), so it needs no descriptor field; the outer
+timeout is added to the descriptor digest by WP-156 A2. Deliverables add
+`src/core/vault.js`; `run-job.js`/`dream.js` are already listed. **Acceptance /
+grep:** extend the seam grep to
+`grep -rnE 'WIENERDOG_FAKE_TODAY|WIENERDOG_RUNJOB_TIMEOUT_MS' src/` → empty; add a
+behavioral test that a set `WIENERDOG_FAKE_TODAY` has **zero** effect (the
+injected clock is used).
+
+**Note:** this reverses this WP's original "do not touch `WIENERDOG_RUNJOB_TIMEOUT_MS`"
+out-of-scope carve-out (now withdrawn — see Out of scope).

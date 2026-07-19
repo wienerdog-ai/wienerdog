@@ -102,7 +102,7 @@ lines) and returns before any mutation.
 | modify | src/cli/uninstall.js | Before the confirm prompt (interactive path), print the derived plan (reuse `reverse(..., {dryRun:true})` enumeration incl. the derived "would run" lines) so the user sees every derived command/path before consenting; `--yes` skips only the prompt, never widens validity. |
 | modify | tests/unit/manifest.test.js | Adversarial cases below. |
 | modify | tests/unit/uninstall.test.js | Prove the derived plan is shown before confirm and a poisoned `unload` never spawns. |
-| modify | src/scheduler/status.js | Fix-pass (2026-07-19): re-derive the sync-time heal probe/reload argv from validated identity + platform; NEVER read `entry.unload` into an executed argv (A2). |
+| modify | src/scheduler/status.js | Fix-pass (2026-07-19): read-only probe re-derived from identity+platform; NEVER read `entry.unload`; heal only CONFIGURED jobs by REGENERATING canonical content from config and registering that verified artifact — never register a found in-root file (A2, [R2:F34]). |
 | modify | src/cli/schedule.js | Fix-pass: `remove()` is a 2nd production caller of `reverseSchedulerEntry` with a duplicated `schedulerRoots`; mirror the root-set + validate-before-spawn (A3). |
 | modify | tests/unit/scheduler-status.test.js | Fix-pass: a poisoned `entry.unload` never spawns via the heal path; out-of-root path ⇒ zero probe/reload (A2). |
 | modify | tests/unit/scheduler-schedule.test.js | Fix-pass: `schedule remove` mirrors the reverser containment + validate-before-spawn ordering (A1/A3). |
@@ -298,15 +298,39 @@ that `reloadMissing` (L201, sync-time self-heal) **executes** via
 `schedulerSpawn`, and `probeAll` spawns a probe from it too. So the ADR-0027
 "never execute manifest-stored argv" claim is open on the heal path.
 **Corrected contract:** `entry.unload` is never read into any executed argv, on
-any path. Add `deriveProbeArgv` + `deriveReloadArgv` to `generators.js`
-(fully-anchored, basename+platform, mirroring `deriveUnloadArgv`; any file-path
-arg like `launchctl bootstrap <path>` / `schtasks /xml <path>` is
-`withinSchedulerRoot`-gated). Rewrite `status.js` to use them and gate every
-spawn behind the scheduler-root check. **This expands this WP's scope** to
-`src/scheduler/status.js` + `tests/unit/scheduler-status.test.js` (added to
-Deliverables) — coherent because it completes ADR-0027. Test: a poisoned
-`unload:['/bin/sh','-c','touch <canary>']` on a real in-root plist ⇒ the derived
-`bootstrap` runs, the canary never appears; out-of-root ⇒ zero probe/reload.
+any path. The **probe** (read-only) is re-derived from identity+platform
+(`deriveProbeArgv` in `generators.js`, fully-anchored). Rewrite `status.js` to
+use it and gate every spawn behind the scheduler-root check. **This expands this
+WP's scope** to `src/scheduler/status.js` + `tests/unit/scheduler-status.test.js`
+(added to Deliverables) — coherent because it completes ADR-0027.
+
+**[R2:F34] The heal must REGENERATE canonical content, not register a found
+in-root file [Codex CRITICAL].** The first draft re-derived the *identity* but
+still passed an in-root **file** to `launchctl bootstrap` / `schtasks /xml` /
+systemd load. Containment validates **location only** — not provenance, file
+type, job membership, or bytes. A manifest attacker adds a recognized in-root
+`ai.wienerdog.evil.plist` (or a static in-root symlink, or an ordinary malicious
+plist with arbitrary `ProgramArguments`), makes the probe report it "missing,"
+and trusted `sync` **registers it** — no scheduler-registration capability
+needed, because `sync` does the registering. **Corrected heal algorithm:**
+1. Enumerate **CONFIGURED, code-recognized** jobs (from `jobs.js` / validated
+   config) — do NOT iterate manifest entries to decide what to heal; an unknown
+   entry is never healed.
+2. For a configured job whose registration is missing (per the read-only probe):
+   **regenerate** the canonical plist/unit/xml from live validated config via the
+   SAME `generators.js` renderers `registerPlatform` uses; write it atomically
+   (temp+rename) to the canonical path after confirming that path is a **regular,
+   non-symlink** in-root file; **byte-verify** the written artifact.
+3. Register **that exact regenerated artifact** — the file-path arg to
+   `bootstrap`/`/xml` is the path we just wrote and verified, never one
+   discovered on disk.
+Reuse `schedule.js`'s regenerate-then-register path; `status.js` must not have a
+"load whatever file is there" branch. **Tests:** (i) poisoned
+`unload:['/bin/sh','-c','touch <canary>']` on a real in-root dream plist ⇒ heal
+regenerates+registers the canonical dream plist, canary never appears; (ii) a
+recognized in-root `ai.wienerdog.evil.plist` that is NOT a configured job ⇒ NOT
+healed/registered (zero register spawn for it); a static in-root symlink at a
+recognized name ⇒ not registered; (iii) out-of-root ⇒ zero probe/heal.
 
 ### A3 — boundary: `schedule.js` remove() [wd P1]
 

@@ -162,7 +162,7 @@ filename does not change), so unload still works after this WP.
 | create | tests/unit/launcher.test.js | `verifyAndResolve` pass + every mismatch (out-of-root current, app byte mutation, repoint, wrong descriptor digest, prod/dev mismatch) ⇒ refuse + zero spawn. |
 | modify | tests/unit/vendor.test.js | Assert the launcher is placed outside `app/`, the version dir is read-only, interrupted publish keeps old `current`, `verifyCurrentContainment` rejects an out-of-root symlink. |
 | modify | tests/unit/scheduler-generators.test.js | Assert entries invoke the launcher with the descriptor path + expect-digest; catch-up entries use `--catch-up`. |
-| modify | src/cli/run-job.js | Fix-pass (2026-07-19): catch-up must verify each due job's descriptor digest against its per-job entry-bound digest before running it (A5). If this pushes past size M, split to a new WP-160 (record the decision). |
+| modify | src/cli/run-job.js | Fix-pass (2026-07-19): catch-up must verify each due job's descriptor digest against the per-job digest map bound into the **catch-up OS registration** (loaded state), never the editable entry file (A5, [R2:F12]). **Recommend splitting to a new WP-160** — record the decision. |
 | modify | tests/unit/scheduler-schedule.test.js | Fix-pass: entry-argv + digest-binding change (boundary reconciliation, A9). |
 | modify | tests/unit/sync-repoint.test.js | Fix-pass: entry-argv reconciliation on repoint (boundary, A9). |
 
@@ -374,8 +374,14 @@ own node process, before `launch.js`** — bypassing every check. Env writes
 - **OS entry (primary):** launchd — `EnvironmentVariables` dict with
   `NODE_OPTIONS`→`""`, `NODE_PATH`→`""` (in `launchdPlist` + `catchupPlist`);
   systemd — `Environment=NODE_OPTIONS=` and `Environment=NODE_PATH=` under
-  `[Service]`; Windows — wrap in `cmd.exe /c set "NODE_OPTIONS="&&set
-  "NODE_PATH="&& "<node>" "<launcher>" …` (XML-escaped; recorded decision).
+  `[Service]`; **Windows — [R2:F8] do NOT use inline `cmd /c` with XML escaping**
+  (XML escaping does not stop cmd `%VAR%` expansion / AutoRun). Use a non-shell or
+  fully-controlled bootstrap with a proven encoder: a generated wrapper *file*
+  (recorded `file` entry, regular non-symlink, `.cmd` with batch `%%` rules or
+  `.ps1` via `powershell -NoProfile -ExecutionPolicy Bypass -File`), or — only if
+  inline is unavoidable — absolute `System32\cmd.exe /d /s /v:off /c` with a
+  dedicated cmd-token encoder (`% ! ^ & | < > ( ) "` + trailing backslashes) and
+  execution tests over hostile-but-valid paths/env. Record the choice.
 - **Launcher child spawn (defense-in-depth):** `main` spawns with a scrubbed copy
   of the env (`delete childEnv.NODE_OPTIONS; delete childEnv.NODE_PATH`).
 
@@ -400,14 +406,32 @@ unknown `--flag` refuses (fail closed). Test: `parseArgv(['--catch-up',
 1. Fire-time dev authority is the descriptor's **digest-bound** `appRelease.stance`
    + the on-disk `.git` liveness check; **remove `env.WIENERDOG_DEV` as a
    fire-time trigger** (bind stance at registration, not at fire).
-2. A `dev`-stance path skips only the **app-tree byte digest** (a live checkout is
-   legitimately edited) — it MUST still `deriveDescriptorDigest` vs
-   `--expect-digest` (catches `run`/`model`/`timeout`/`vault_layout` rewrites) and
-   verify containment.
-3. Catch-up performs no dev early-return before containment (+ per-job
+2. Catch-up performs no dev early-return before containment (+ per-job
    verification, A5). A `prod` entry over a `.git` tree still refuses.
-Tests: dev-stance + config rewrite ⇒ refuse; `WIENERDOG_DEV=1` in env does not
-disable checks; prod + planted `.git` ⇒ refuse.
+
+**[R2:F10] The dev path needs a separate descriptor — "skip tree digest but
+compare the full descriptor digest" is self-contradictory.** Three confirmed
+defects: (a) `deriveDescriptorDigest` INCLUDES `appRelease.treeDigest`, so any
+checkout edit changes the full digest ⇒ refuse (dev unusable); (b) dev vendoring
+points `app/current` OUTSIDE `<core>/app`, so `verifyCurrentContainment` rejects
+it; (c) `.git` is a **file** in git worktrees (our worktree + Gyula's dev
+machine), so a dir-only check makes dev permanently non-runnable.
+**Corrected fire-time dev path:**
+- Compare the **config-fields-only dev digest** (WP-156 A5:
+  `appRelease`→`{stance:'dev', root}`, excluding `treeDigest`/`version`) against
+  the dev `--expect-digest`. A tracked-source edit does not drift it; a
+  `config.yaml` `run`/`model`/`vault_layout`/… edit does ⇒ refuse.
+- **Dev containment:** verify the live `app/current` realpath **equals the bound
+  checkout `root`** (from the descriptor), not that it resolves inside
+  `<core>/app`. Catches a repoint while legitimizing the out-of-`<core>/app` dev
+  target.
+- **Dev liveness accepts a `.git` directory OR a worktree gitfile** (regular
+  file).
+Tests (add a **git-worktree** case): (i) dev worktree (`.git` is a file), edit a
+tracked file ⇒ still **runs**; (ii) dev + `config.yaml` `run` rewrite ⇒ refuse;
+(iii) dev `app/current` repointed off the bound root ⇒ refuse; (iv)
+`WIENERDOG_DEV=1` in env + prod descriptor ⇒ does not flip to dev; (v) prod +
+planted `.git` ⇒ refuse.
 
 ### A4 — every verification exception → alert, never a bare throw [Codex MED]
 
@@ -425,15 +449,29 @@ under `app/current` ⇒ refuse with an appended `alerts.jsonl` record + zero spa
 Catch-up verifies only the app-tree digest; `run-job --catch-up` then reads jobs
 from **mutable** `config.yaml` and calls `runJob` directly, so a config change a
 normal fire *refused* is *executed* by the next catch-up. **Corrected contract:**
-catch-up must not run a job whose live descriptor digest ≠ the digest **bound
-into that job's own per-job OS entry**. Add a generator helper
-`readBoundDigest(paths, jobName, platform)` (parse the plist/service/xml for the
-`--expect-digest` value); in the catch-up runner (`run-job --catch-up`), per due
-job: `deriveDescriptorDigest` vs `readBoundDigest`; mismatch/missing ⇒ refuse +
-alert + zero spawn. **Size flag:** if this pushes WP-157 past size M, split to a
-new **WP-160 (catch-up per-job authorization)** depending on WP-157 — record the
-decision. Tests: per-job digest mismatch ⇒ catch-up refuses (zero spawn); add
-macOS + Windows catch-up negatives (currently absent).
+catch-up must not run a job whose live descriptor digest ≠ its authorized digest.
+
+**[R2:F12] The anchor is the LOADED/registered catch-up entry, NEVER an editable
+per-job source file.** The first draft read each per-job entry **file**
+(plist/unit/retained XML) — a user-writable SOURCE artifact, not the loaded
+registration. An attacker edits `config.yaml` + the per-job source file to carry
+the newly-derived digest **without reloading** (reloading = re-registering =
+outside A7 scope); normal fires stay bound to the old *loaded* registration and
+refuse, but catch-up reads the forged FILE and runs. **Corrected:** at
+**registration** (registration privilege) bind a **canonical per-job digest map**
+into the **catch-up OS entry's own arguments** (the args launchd/systemd fire from
+and schtasks stores in the task DB — loaded state, not re-read from the editable
+file). The launcher receives the map from the OS-loaded argv and passes it to
+`run-job --catch-up`, which per due job compares `deriveDescriptorDigest` to the
+**argv map** (never a file read); mismatch/absent ⇒ refuse + alert + zero spawn.
+Acceptable alternative: query the **live registration** (`launchctl print` /
+`systemctl show` / `schtasks /query /xml` — all loaded/DB state), never the source
+file. **Size → SPLIT:** this is now large enough to **split into a new WP-160
+(catch-up per-job authorization)** depending on WP-157; land WP-157 with the
+other fixes and have WP-159 name catch-up as a pending gap until WP-160 lands.
+Tests: rewrite `config.yaml` `run` AND the per-job source file without reload ⇒
+catch-up still refuses (proves the file forge fails); add macOS + Windows catch-up
+negatives.
 
 ### A6 — `ensureCatchup` signature [Codex MED]
 

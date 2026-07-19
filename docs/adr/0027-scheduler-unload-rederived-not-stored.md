@@ -103,9 +103,21 @@ closed only the **uninstall reverser** (`manifest.js reverseSchedulerEntry` via
 **Clarified decision:** "never execute an argv sourced from the manifest; re-derive
 from platform + validated identity" applies to **every** scheduler-mutation path —
 uninstall reverse, `schedule remove`, and the sync-time heal (probe **and**
-reload). `generators.js` gains `deriveProbeArgv` and `deriveReloadArgv` alongside
-`deriveUnloadArgv` (same fully-anchored basename+platform derivation); any file-path
-argument a re-register command needs (e.g. `launchctl bootstrap <plist>`,
-`schtasks /xml <xml>`) is `withinSchedulerRoot`-gated before use. Also: the
+reload). `generators.js` gains `deriveProbeArgv` (read-only) alongside
+`deriveUnloadArgv` (same fully-anchored basename+platform derivation). The
 unregister spawn must occur **after** the root/basename validation, not before
-(the implementation had spawned first). Implemented as WP-145 fix-pass amendments.
+(the implementation had spawned first).
+
+**Round-2 amendment (2026-07-19) — the heal must REGENERATE, not register a found
+file.** Re-deriving the *identity* is not enough: passing an in-root **file** to
+`launchctl bootstrap` / `schtasks /xml` / systemd load validates **location only**,
+not provenance/type/bytes/job-membership. A manifest attacker who plants a
+recognized in-root `ai.wienerdog.*.plist` (or a symlink, or a plist with arbitrary
+`ProgramArguments`) and lets the probe report it "missing" gets trusted `sync` to
+**register it** — no scheduler-registration capability needed. Therefore the
+sync-time heal **regenerates** the canonical scheduler content from **live
+validated configuration** (for **configured, code-recognized jobs only**),
+atomically replaces / byte-verifies a **regular non-symlink** file in-root, and
+registers **that exact regenerated artifact**. Unknown manifest entries and
+found-on-disk files are **never** healed or registered. Implemented as WP-145
+fix-pass amendments.

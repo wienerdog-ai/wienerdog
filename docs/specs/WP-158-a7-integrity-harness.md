@@ -314,3 +314,21 @@ every launcher check and every digest-covered knob (`run`, `dream_model`,
   assertions) — a required, checked property.
 - The `dream_model`/`dream_timeout_minutes`/`vault_layout` cases reach and trip
   the **descriptor-digest** check (not `findJob`).
+
+### A7 — round-2 tamper-matrix additions (2026-07-19)
+
+The round-2 design review expanded the digest coverage and split catch-up; the
+shared case list (A6) must add:
+- **[R2:F5]** drift cases for `dream_max_input_bytes` and the **outer**
+  `timeout_minutes` (both now digest-covered), and a "seams deleted" cross-check
+  for `WIENERDOG_FAKE_TODAY` / `WIENERDOG_RUNJOB_TIMEOUT_MS` (setting them has
+  zero effect — same shape as case 8).
+- **[R2:F1]** a **partial pin store** case: a store with git but no claude ⇒ the
+  dream job does not bind/register (or `resolvePinnedSpawn('claude')` throws) —
+  a planted `~/.local/bin/claude` never runs.
+- **[R2:F10]** a **git-worktree dev** positive: a dev-stance install with `.git`
+  as a **file** + a tracked-source edit still runs (config-fields-only dev digest).
+- **[R2:F12]** a **catch-up file-forge** negative (belongs with **WP-160** once
+  it lands): editing `config.yaml` + the per-job entry **source file** (without
+  reload) still refuses at catch-up — the loaded-registration map is the anchor.
+  Until WP-160 lands, mark this case pending and note it in the README.

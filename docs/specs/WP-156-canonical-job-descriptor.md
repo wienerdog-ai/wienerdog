@@ -136,7 +136,8 @@ authorization record.
 | modify | src/cli/schedule.js | In `registerPlatform` (thus `add` + `repointSchedules`): after the OS entry is ensured, `writeDescriptor` for the job (idempotent; record its `file` manifest entry). Do NOT change the entry's argv here (WP-157). |
 | create | tests/unit/descriptor.test.js | Determinism + per-input digest-change + write/record + re-derive cases below. |
 | modify | tests/unit/scheduler-schedule.test.js | Assert `add`/`repointSchedules` write a descriptor file (0600) and record it; a legit uninstall removes it. |
-| modify | tests/unit/sync-repoint.test.js | Fix-pass (2026-07-19): real `sync.run` produces a non-empty descriptor `exec` and no digest drift after ONE sync (A1 ordering); newline-filename injectivity (A3). |
+| modify | tests/unit/sync-repoint.test.js | Fix-pass (2026-07-19): real `sync.run` produces a non-empty descriptor `exec` and no digest drift after ONE sync (A1 ordering); partial-store dream job not bound (A5/WP-154 R2:F1). |
+| modify | src/scheduler/launcher.js | Fix-pass (2026-07-19, [R2:F6]): the launcher's own `appTreeDigestOf` must adopt the SAME injective canonical-JSON encoding as `descriptor.appTreeDigest` — the two are byte-identical by contract. Digest algorithm only; WP-157 owns the launcher's other behavior. |
 
 ### Exact contracts
 
@@ -417,6 +418,18 @@ object shape above, the ADR-0028 descriptor block, and the Security-checklist
 "changing … yields a different digest" list. **Test:** mutate one `vault_layout`
 key ⇒ `deriveDescriptorDigest` changes (fails if the field is dropped).
 
+**[R2:F5] `vault_layout` is not the only uncovered mutable input.** Also add to
+the descriptor digest: **`maxInputBytes`** (`cfg.maxInputBytes` — the corpus size
+fed to the model) and the **effective outer watchdog timeout**
+(`job.timeoutMinutes` resolved value). Both are mutable config that shape the run;
+adding them keeps the invariant intact rather than carving an exception
+(fail-closed tie-break). The date seam `WIENERDOG_FAKE_TODAY` and the timeout
+seam `WIENERDOG_RUNJOB_TIMEOUT_MS` are **deleted from production** (a test seam in
+the dispatch path — folded into WP-155; see its amendment); after deletion the
+date derives from the system clock (not attacker-controllable via env, legitimately
+daily) and needs no digest field. Tests: mutating `dream_max_input_bytes` or the
+outer `timeout_minutes` each changes `deriveDescriptorDigest`.
+
 ### A3 — injective app-tree digest encoding [Codex MED]
 
 `appTreeDigest` hashes `entries.sort().join('')` where each entry is
@@ -425,8 +438,36 @@ boundary). **Corrected contract:** hash the canonical JSON of the sorted
 `[relpath, filehash]` pairs — `'sha256:' + sha256(JSON.stringify(sortedPairs))`
 (sort by `relpath`; `JSON.stringify` escapes `\n`/`"`). Keep symlink/dir
 exclusion + POSIX relpaths. Digest values change fork-wide (re-derived on next
-sync — acceptable). **Test:** two trees differing only by a newline in a filename
-produce different digests (fails on the old `\n` concat).
+sync — acceptable). **[R2:F6] Both implementations change together:** the launcher
+has its own `appTreeDigestOf` (launcher.js:107-123, doc-commented "MUST match …
+exactly") because it is self-contained out-of-tree; changing only `descriptor.js`
+makes every prod normal fire AND catch-up compare a canonical-JSON digest against
+a `\n`-concat digest ⇒ refuse. `src/scheduler/launcher.js` is added to this WP's
+Deliverables for the digest algorithm so both copies move in one PR. **Test:** two
+trees differing only by a newline in a filename produce different digests (fails
+on the old concat); AND a cross-implementation equality test
+(`descriptor.appTreeDigest === launcher.appTreeDigestOf` over normal, Unicode,
+quote, and newline-bearing filenames).
+
+### A5 — a separate dev descriptor (dev must be runnable) [Codex HIGH, R2:F10]
+
+The naive "dev skips the tree digest but still compares the full descriptor
+digest" is self-contradictory: `deriveDescriptorDigest` **includes**
+`appRelease.treeDigest`, so any checkout edit changes the digest ⇒ refuse; dev
+vendoring points `app/current` **outside** `<core>/app` (containment rejects it);
+and `.git` is a **file** in git worktrees (our worktree + Gyula's dev machine) so
+a dir-only check makes dev permanently non-runnable. **Corrected contract:**
+`deriveDescriptorDigest` gains a **stance-aware** mode (or a sibling
+`deriveDevDigest`) so that for `stance:'dev'` the fire-time comparison digest is
+computed over the descriptor with `appRelease` **reduced to
+`{stance:'dev', root:<canonical checkout root>}`** — EXCLUDING `treeDigest` and
+`version`, covering only the config-shaped fields (`run`, `model`, `timeoutMs`,
+`vaultLayout`, `maxInputBytes`, outer timeout, exec pins, `promptHash`,
+`vaultRoot`) plus the bound checkout `root`. Bind that dev digest at registration.
+(The launcher-side dev containment vs the bound root + `.git`-dir-or-gitfile
+liveness + the dev fire path live in WP-157 A3.) **Test:** a dev descriptor's
+digest is unchanged by a tracked-source edit but changes on a `run`/`model`/
+`vault_layout` edit.
 
 ### A4 — best-effort descriptor write surfaces on failure [wd P3]
 
