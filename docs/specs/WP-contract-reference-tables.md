@@ -227,31 +227,60 @@ trigger is waste).
 
 ## Acceptance criteria
 
-- [ ] `docs/specs/_TEMPLATE.md` contains a `## Contract reference` section
-      heading.
-- [ ] That section contains the `### Mirrored Surface Checklist` scaffold and
-      the 2-of-7 activation-trigger note (the phrase `two or more`).
-- [ ] The template's `### Exact contracts` block and `## Implementation notes &
-      constraints` heading are both still present and unmodified, with the new
-      section between them.
-- [ ] `.claude/agents/wd-architect.md` contains the `Own the contract-density
-      pattern (ADR-0031)` duty, referencing the `Mirrored Surface Checklist`.
-- [ ] `.claude/agents/wd-reviewer.md` contains the `Contract-density detector
-      (ADR-0031)` duty and the `Closed-Contract Drift Check`.
+Each criterion maps to a verification command below. The three `node -e` checks
+prove **completeness, single-occurrence, and correct position/ordering** at once,
+so a partial, misplaced, duplicated, or scaffold-truncated edit fails them — a
+plain grep for one key phrase would not. Each `node -e` script prints a single
+`… OK` line and exits `0` on success, or lists every defect and exits `1`.
+
+- [ ] **Template (`docs/specs/_TEMPLATE.md`).** The `## Contract reference`
+      section exists **exactly once** and is complete: the 2-of-7 activation-trigger
+      note carrying the phrase `two or more` **and all seven conditions
+      `(i)`–`(vii)`**; the `### Contract table(s)` canonical-table scaffold
+      including its header row `| Contract | Fact / rule | Value |`; and the
+      `### Mirrored Surface Checklist` scaffold with **all five** checklist items.
+      It sits **strictly after** the `### Exact contracts` block (proven via its
+      pre-existing `function doThing(dir, opts)` line) and **before** the
+      `## Implementation notes & constraints` heading — both of which remain
+      present and unmodified. Proven by the first `node -e` check.
+- [ ] **Architect (`.claude/agents/wd-architect.md`).** The
+      `Own the contract-density pattern (ADR-0031)` duty is present **in full and
+      exactly once** — 2-of-7 trigger recognition, authoring one canonical
+      reference table, the `Mirrored Surface Checklist` registration, and the
+      remedial extraction move (update-all-mirrors + register-new-mirrors) —
+      inserted **between** the existing `Record incident/chain retros` bullet and
+      the `Use GLOSSARY.md terms exactly.` bullet, both of which remain present.
+      Proven by the second `node -e` check.
+- [ ] **Reviewer (`.claude/agents/wd-reviewer.md`).** The
+      `Contract-density detector (ADR-0031)` duty is present **in full and exactly
+      once** — flagging dense inline prose, repeated same-contract-family findings,
+      and mirror drift, plus the light `Closed-Contract Drift Check` — appended
+      **after** the existing `escalate to wd-architect` sentence, with the
+      `Review procedure, strictly in this order:` list preserved. Proven by the
+      third `node -e` check.
 - [ ] `node scripts/check-frontmatter.js` passes (agent files still validate
       against the agent schema; specs still validate).
 - [ ] `npm run lint` passes.
 
 ## Verification steps (run these; paste output in the PR)
 
+Run every command from the repo root. Each of the three `node -e` checks must
+print its `… OK` line (exit `0`); any other output means the edit is partial,
+misplaced, duplicated, or truncated — fix it, do not proceed. These are
+shell-free literal checks (they run identically under zsh, bash, and CI) that
+read the target file and assert the section/duty is present **in full, exactly
+once, and in the correct position**.
+
 ```bash
-grep -n "## Contract reference" docs/specs/_TEMPLATE.md
-grep -n "Mirrored Surface Checklist" docs/specs/_TEMPLATE.md
-grep -n "two or more" docs/specs/_TEMPLATE.md
-grep -n "## Implementation notes & constraints" docs/specs/_TEMPLATE.md
-grep -n "Own the contract-density pattern (ADR-0031)" .claude/agents/wd-architect.md
-grep -n "Contract-density detector (ADR-0031)" .claude/agents/wd-reviewer.md
-grep -n "Closed-Contract Drift Check" .claude/agents/wd-reviewer.md
+# Edit 1 — docs/specs/_TEMPLATE.md: section complete, single, correctly ordered, adjacent content intact
+node -e "const t=require('fs').readFileSync('docs/specs/_TEMPLATE.md','utf8');const need=['## Contract reference','two or more','one canonical reference table','(i) an API','(ii) a **status','(iii) structured','(iv) **error','(v) the task','(vi) **multiple','(vii) the **same contract','### Contract table(s)','| Contract | Fact / rule | Value |','### Mirrored Surface Checklist','Deliverables-table cells that restate a path or rule','Acceptance criteria that assert its facts','Verification commands / greps','Current-state description','Operative prose steps that apply it'];const at=s=>t.indexOf(s);const count=s=>t.split(s).length-1;const bad=[];for(const s of need)if(at(s)===-1)bad.push('MISSING: '+s);for(const s of ['## Contract reference','### Contract table(s)','### Mirrored Surface Checklist']){const c=count(s);if(c>1||c<1)bad.push('NOT-EXACTLY-ONCE('+c+'): '+s);}const order=['### Exact contracts','function doThing(dir, opts)','## Contract reference','### Contract table(s)','### Mirrored Surface Checklist','## Implementation notes & constraints'];for(let i=1;i<order.length;i++){if(at(order[i-1])===-1)bad.push('MISSING-ANCHOR: '+order[i-1]);if(at(order[i])===-1)bad.push('MISSING-ANCHOR: '+order[i]);if(at(order[i-1])>=at(order[i]))bad.push('OUT-OF-ORDER: '+order[i-1]+' before '+order[i]);}if(bad.length){console.error(bad.join(' | '));process.exit(1);}console.log('TEMPLATE OK');"
+
+# Edit 2 — .claude/agents/wd-architect.md: owner-of-pattern duty in full, exactly once, correctly placed
+node -e "const t=require('fs').readFileSync('.claude/agents/wd-architect.md','utf8');const need=['Own the contract-density pattern (ADR-0031)','2-of-7 activation trigger fires','one canonical reference table','single place its facts are decided','Mirrored Surface Checklist that registers every mirror','remedial extraction move','update all registered mirrors','register any new mirror in the same pass'];const at=s=>t.indexOf(s);const bad=[];for(const s of need)if(at(s)===-1)bad.push('MISSING: '+s);const c=t.split('Own the contract-density pattern (ADR-0031)').length-1;if(c>1||c<1)bad.push('NOT-EXACTLY-ONCE('+c+'): duty bullet');const order=['Record incident/chain retros as dated','Own the contract-density pattern (ADR-0031)','Use GLOSSARY.md terms exactly.'];for(let i=1;i<order.length;i++){if(at(order[i-1])===-1)bad.push('MISSING-ANCHOR: '+order[i-1]);if(at(order[i])===-1)bad.push('MISSING-ANCHOR: '+order[i]);if(at(order[i-1])>=at(order[i]))bad.push('OUT-OF-ORDER: '+order[i-1]+' before '+order[i]);}if(bad.length){console.error(bad.join(' | '));process.exit(1);}console.log('ARCHITECT OK');"
+
+# Edit 3 — .claude/agents/wd-reviewer.md: detector duty + Closed-Contract Drift Check in full, exactly once, appended after the escalate sentence
+node -e "const t=require('fs').readFileSync('.claude/agents/wd-reviewer.md','utf8');const need=['Contract-density detector (ADR-0031)','one canonical reference table','same contract family across rounds','canonical-extraction pass','mirror drift','Closed-Contract Drift Check','does not silently reinterpret an already-settled canonical contract','route to wd-architect when a canonical table is missing'];const at=s=>t.indexOf(s);const count=s=>t.split(s).length-1;const bad=[];for(const s of need)if(at(s)===-1)bad.push('MISSING: '+s);for(const s of ['Contract-density detector (ADR-0031)','Closed-Contract Drift Check']){const c=count(s);if(c>1||c<1)bad.push('NOT-EXACTLY-ONCE('+c+'): '+s);}if(at('Review procedure, strictly in this order:')===-1)bad.push('MISSING-ANCHOR: Review procedure');const a=at('Two failed review rounds on the same WP means the spec is the bug');const b=at('Contract-density detector (ADR-0031)');if(a===-1)bad.push('MISSING-ANCHOR: escalate sentence');if(a>=b)bad.push('OUT-OF-ORDER: detector must follow escalate sentence');if(bad.length){console.error(bad.join(' | '));process.exit(1);}console.log('REVIEWER OK');"
+
 node scripts/check-frontmatter.js
 npm run lint
 ```
