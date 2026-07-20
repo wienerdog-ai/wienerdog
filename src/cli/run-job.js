@@ -207,14 +207,17 @@ function buildCleanEnv(paths, name, platform = process.platform) {
  *  the dream-brain leak — dies too). win32: the ABSOLUTE System32
  *  `taskkill /PID <pid> /T /F` with no bare-name fallback — pre-A10 tree-kill
  *  semantics, and NO leaderless-member guarantee (R5-2; deferred to
- *  WP-a10-windows-reap). Best-effort — never throws.
+ *  WP-a10-windows-reap). Best-effort — never throws; returns reapTree's
+ *  degradation diagnostic ({degraded, why} — F1 fix-pass: best-effort work
+ *  degrades VISIBLY, never silently); callers may ignore it.
  *  @param {number} pid child.pid
  *  @param {NodeJS.Platform} platform
  *  @param {{kill?: typeof process.kill, spawnSync?: typeof spawnSync,
  *           readTable?: () => Array<{pid:number, ppid:number, pgid:number}>|null,
- *           procRoot?: string, psPath?: string, maxSweeps?: number}} [seams] test injection */
+ *           procRoot?: string, psPath?: string, maxSweeps?: number}} [seams] test injection
+ *  @returns {{degraded: boolean, why: string|null}} */
 function killProcessTree(pid, platform, seams = {}) {
-  reap.reapTree(pid, platform, seams);
+  return reap.reapTree(pid, platform, seams);
 }
 
 /** Parse a per-run brain hand-up pidfile (`state/dream-brain.<token>.pid`).
@@ -267,13 +270,19 @@ function rmPidfile(file) {
  *     error outcome) — a live group surviving the job is the ADR-0004
  *     "nothing survives the job" violation. The escalation is BOUNDED — never
  *     an unbounded block-until-ESRCH (an unkillable D-state process is the
- *     ADR-0030 residual, surfaced by that same loud alert).
+ *     ADR-0030 residual, surfaced by that same loud alert). F3 (fix-pass
+ *     2026-07-20): the token pidfile of a group that STILL failed is returned
+ *     in `files` so the caller can release it AFTER failLoud has recorded the
+ *     durable alert — the alert is the record; no later run reads this token,
+ *     so keeping the file would be a never-read hollow leftover. (R7-2's
+ *     retain-for-backstop rule is unchanged where a later reader exists:
+ *     dream.js's finally, and this function's pre-escalation stage.)
  *
  * POSIX-only (R5-2): the caller does not invoke this on win32 — there is no
  * negative-PGID equivalent, `reapGroup`'s taskkill reaches only a live pid and
  * its live tree (no leaderless-member guarantee, pre-A10 behavior kept;
- * deferred to WP-a10-windows-reap), and win32 `reapGroup` returns
- * `{ reaped: true }` best-effort so the fail-loud path could never activate.
+ * deferred to WP-a10-windows-reap), and a win32 `{ reaped: false }` is a
+ * surfaced diagnostic (F2), never a fail-loud trigger.
  *
  * Best-effort otherwise: never throws (a missing/stale pidfile is a no-op).
  * @param {number|undefined} childPid
@@ -281,8 +290,10 @@ function rmPidfile(file) {
  * @param {NodeJS.Platform} platform
  * @param {typeof reap.reapGroup} reapGroupFn
  * @param {object} seams
- * @returns {Promise<string|null>} a failure reason when a findable group could
- *   not be reaped to quiescence; null when every group is verified quiescent
+ * @returns {Promise<{reason: string, files: string[]}|null>} a failure reason
+ *   (plus the surviving groups' token pidfiles, to release after the loud
+ *   record — F3) when a findable group could not be reaped to quiescence;
+ *   null when every group is verified quiescent
  */
 async function settleReaps(childPid, brainPidfile, platform, reapGroupFn, seams) {
   try {
@@ -315,21 +326,28 @@ async function settleReaps(childPid, brainPidfile, platform, reapGroupFn, seams)
     if (pending.length === 0) return null;
     // R8-1: ONE bounded FINAL escalation of each still-non-empty group.
     const survivors = [];
+    /** @type {string[]} */ const files = [];
     for (const p of pending) {
       const r = await reapGroupFn(p.pgid, platform, seams);
       if (r && r.reaped === true) {
         if (p.file) rmPidfile(p.file); // verified empty on escalation → release
       } else {
         survivors.push(p.label);
+        // F3: hand the still-retained token pidfile back so the caller can
+        // release it AFTER the durable fail-loud record — never a never-read
+        // hollow leftover.
+        if (p.file) files.push(p.file);
       }
     }
     if (survivors.length === 0) return null;
-    return (
-      `left a live process group behind: ${survivors.join(' and ')} could not be reaped to ` +
-      'quiescence after a bounded final escalation (repeated SIGKILL; members still present) — ' +
-      'nothing may survive a job (ADR-0004). A process wedged in an uninterruptible kernel ' +
-      'sleep is the documented ADR-0030 residual.'
-    );
+    return {
+      reason:
+        `left a live process group behind: ${survivors.join(' and ')} could not be reaped to ` +
+        'quiescence after a bounded final escalation (repeated SIGKILL; members still present) — ' +
+        'nothing may survive a job (ADR-0004). A process wedged in an uninterruptible kernel ' +
+        'sleep is the documented ADR-0030 residual.',
+      files,
+    };
   } catch {
     return null; // reap work is best-effort — never throws into the settle path
   }
@@ -871,12 +889,19 @@ async function runJob(paths, job, opts = {}) {
       : `job "${name}" failed: ${failure.message}`
     : code !== 0
       ? `job "${name}" exited ${code}`
-      : `job "${name}" ${reapFailure}`;
+      : `job "${name}" ${reapFailure.reason}`;
   if (reapFailure && (failure || code !== 0)) {
-    reason += ` — and it ${reapFailure}`;
+    reason += ` — and it ${reapFailure.reason}`;
   }
   jobsLib.writeScheduleState(paths, name, { last_status: 'error', last_error_at: nowIso() });
   await failLoud(paths, name, reason, opts);
+  // F3 (fix-pass 2026-07-20): the durable alert above IS the record of the
+  // un-reapable group — release the still-retained token pidfile(s) now. No
+  // later run ever reads this run's token, so keeping the file would be a
+  // never-read hollow leftover, not a diagnostic.
+  if (reapFailure) {
+    for (const f of reapFailure.files) rmPidfile(f);
+  }
   throw new WienerdogError(reason);
 }
 

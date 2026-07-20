@@ -157,9 +157,9 @@ test('reap: readProcessTable(darwin) refuses a relative psPath and a failed veri
   assert.equal(spawnCalls.length, 0, 'an unverified ps is NEVER spawned');
 });
 
-test('reap: reapTree(darwin) degrades to the legacy group-kill when /bin/ps is unverifiable', () => {
+test('reap: reapTree(darwin) degrades to the legacy group-kill when /bin/ps is unverifiable — and the degradation is VISIBLE', () => {
   const { calls, kill } = killRecorder();
-  reapTree(4242, 'darwin', {
+  const d = reapTree(4242, 'darwin', {
     kill,
     verifyPs: () => ({ ok: false, why: 'planted' }),
     spawnSync: () => {
@@ -168,6 +168,50 @@ test('reap: reapTree(darwin) degrades to the legacy group-kill when /bin/ps is u
     pollDelayMs: 0,
   });
   assert.deepEqual(calls, [[-4242, 'SIGKILL']], 'legacy single group-kill fallback');
+  assert.equal(d.degraded, true, 'F1: best-effort degradation is surfaced, never silent');
+  assert.match(d.why, /unavailable|fallback/i);
+});
+
+test('reap: F1 — a NON-ZERO-exit /bin/ps is never an authoritative table: null snapshot, legacy fallback, degradation surfaced', () => {
+  // Execution-proven repro: a failing/interrupted ps that still emitted one
+  // parseable partial row must NOT be treated as a complete snapshot — that
+  // would skip the legacy kill and silently omit a separately-detached
+  // descendant group.
+  const partial = () => ({ status: 1, stdout: '4242 1 4242\n' });
+  assert.equal(
+    readProcessTable('darwin', { spawnSync: partial, verifyPs: () => ({ ok: true }) }),
+    null,
+    'exit 1 + parseable partial stdout → the whole snapshot is unusable'
+  );
+  // A signalled ps (status null) is equally unusable.
+  assert.equal(
+    readProcessTable('darwin', {
+      spawnSync: () => ({ status: null, signal: 'SIGKILL', stdout: '1 0 1\n' }),
+      verifyPs: () => ({ ok: true }),
+    }),
+    null,
+    'a signalled ps yields no table'
+  );
+  // A spawn-level error object is unusable even with a zero status.
+  assert.equal(
+    readProcessTable('darwin', {
+      spawnSync: () => ({ status: 0, error: new Error('EAGAIN'), stdout: '1 0 1\n' }),
+      verifyPs: () => ({ ok: true }),
+    }),
+    null,
+    'a spawn error yields no table'
+  );
+  // reapTree therefore takes the legacy group-kill fallback AND reports it.
+  const { calls, kill } = killRecorder();
+  const d = reapTree(4242, 'darwin', {
+    kill,
+    spawnSync: partial,
+    verifyPs: () => ({ ok: true }),
+    pollDelayMs: 0,
+  });
+  assert.deepEqual(calls, [[-4242, 'SIGKILL']], 'legacy fallback fired — the partial table was rejected');
+  assert.equal(d.degraded, true, 'the degradation is observable in the returned diagnostic');
+  assert.match(d.why, /unavailable|fallback/i);
 });
 
 // -------------------------------------------------------------------------
@@ -359,24 +403,46 @@ test('reap: win32 reapTree shells the ABSOLUTE System32 taskkill /T /F — a PAT
   }
 });
 
-test('reap: win32 with System32 taskkill ABSENT is a diagnosed no-op — NEVER a bare-name fallback', async () => {
+test('reap: F2 — win32 with System32 taskkill ABSENT: diagnosed { reaped: false }, zero spawns, NEVER a bare-name fallback', async () => {
   const sr = fakeSystemRoot(false); // System32 exists, taskkill.exe does not
   try {
     /** @type {any[][]} */ const spawnCalls = [];
     const spawnSync = (cmd, args) => (spawnCalls.push([cmd, args]), { status: 0 });
-    reapTree(4242, 'win32', { spawnSync });
+    const d = reapTree(4242, 'win32', { spawnSync });
     const g = await reapGroup(4242, 'win32', { spawnSync });
     assert.equal(spawnCalls.length, 0, 'nothing spawned — no bare-name taskkill fallback exists');
-    assert.deepEqual(g, { reaped: true }, 'best-effort result (win32 never activates the POSIX fail-loud)');
+    assert.equal(g.reaped, false, 'the supervisor never claims the tree stopped when taskkill never ran');
+    assert.match(g.why, /absent/i, 'diagnostic names the cause');
+    assert.equal(d.degraded, true, 'reapTree surfaces the same degradation');
+    // The false is a surfaced DIAGNOSTIC only — the POSIX R8-1 fail-loud
+    // escalation does not activate on win32 (run-job never calls settleReaps
+    // there; asserted in scheduler-runjob.test.js).
   } finally {
     sr.restore();
   }
 });
 
-test('reap: win32 reapGroup shells the absolute taskkill and returns { reaped: true } best-effort — NO leaderless-member guarantee (R5-2)', async () => {
+test('reap: F2 — win32 reapGroup checks the taskkill exit: 0 and 128 (already gone) succeed, any other exit is { reaped: false }', async () => {
+  const sr = fakeSystemRoot(true);
+  try {
+    const withStatus = (status) => () => ({ status });
+    assert.deepEqual(await reapGroup(555, 'win32', { spawnSync: withStatus(0) }), { reaped: true }, 'exit 0 = killed');
+    assert.deepEqual(await reapGroup(555, 'win32', { spawnSync: withStatus(128) }), { reaped: true }, 'exit 128 = process not found — already gone');
+    const failed = await reapGroup(555, 'win32', { spawnSync: withStatus(5) });
+    assert.equal(failed.reaped, false, 'a non-zero/non-128 taskkill exit is NOT success');
+    assert.match(failed.why, /exited 5/);
+    const signalled = await reapGroup(555, 'win32', { spawnSync: () => ({ status: null, signal: 'SIGTERM' }) });
+    assert.equal(signalled.reaped, false, 'a signalled taskkill is NOT success');
+  } finally {
+    sr.restore();
+  }
+});
+
+test('reap: win32 reapGroup shells the absolute taskkill; { reaped: true } only on a checked success — NO leaderless-member guarantee (R5-2)', async () => {
   // win32 has no negative-PGID equivalent: taskkill reaches only a LIVE pid +
   // its LIVE tree, so the leaderless reparented member is NOT covered here
-  // (deferred to WP-a10-windows-reap); the return is best-effort by contract.
+  // (deferred to WP-a10-windows-reap); F2: the result is checked against the
+  // taskkill exit, not an unconditional best-effort true.
   const sr = fakeSystemRoot(true);
   try {
     /** @type {any[][]} */ const spawnCalls = [];
@@ -400,7 +466,9 @@ test('reap: win32 branch never throws when taskkill spawn fails', async () => {
       throw new Error('spawn failed');
     };
     assert.doesNotThrow(() => reapTree(1, 'win32', { spawnSync: boom }));
-    assert.deepEqual(await reapGroup(99, 'win32', { spawnSync: boom }), { reaped: true });
+    const g = await reapGroup(99, 'win32', { spawnSync: boom });
+    assert.equal(g.reaped, false, 'F2: a taskkill spawn failure is never reported as a reaped tree');
+    assert.match(g.why, /spawn/i);
   } finally {
     sr.restore();
   }

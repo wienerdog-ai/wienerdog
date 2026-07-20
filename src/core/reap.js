@@ -168,7 +168,12 @@ function readTablePs(psPath, sspawn, verify, platform) {
   } catch {
     return null;
   }
-  if (!r || r.error || typeof r.stdout !== 'string') return null;
+  // F1 (fix-pass 2026-07-20): a failing/interrupted/signalled ps is NOT an
+  // authoritative snapshot even when it emitted parseable partial rows —
+  // accepting a partial table as complete would let reapTree skip the legacy
+  // fallback and silently omit a separately-detached descendant group. Only a
+  // clean exit-0 table is usable; anything else → null → legacy group-kill.
+  if (!r || r.error || r.signal || r.status !== 0 || typeof r.stdout !== 'string') return null;
   /** @type {Array<{pid:number, ppid:number, pgid:number}>} */
   const rows = [];
   for (const line of r.stdout.split('\n')) {
@@ -188,10 +193,11 @@ function readTablePs(psPath, sspawn, verify, platform) {
  * Linux: `<procRoot>` (default '/proc') directly — no external binary.
  * darwin/bsd: the verified ABSOLUTE `psPath` (default '/bin/ps') — never 'ps'.
  * Returns `null` ONLY when the snapshot is unusable AS A WHOLE (unreadable
- * `<procRoot>` root, missing/unverifiable `/bin/ps` or a failed spawn, or zero
- * usable rows); a table with SOME rows (individual entries skipped for per-PID
- * races, R7-3) is returned, never nulled. The caller falls back to the legacy
- * group-kill only on `null`.
+ * `<procRoot>` root, missing/unverifiable `/bin/ps`, a failed / signalled /
+ * NON-ZERO-exit ps spawn (F1 — a partial table is never authoritative), or
+ * zero usable rows); a table with SOME rows (individual entries skipped for
+ * per-PID races, R7-3) is returned, never nulled. The caller falls back to the
+ * legacy group-kill only on `null`.
  * @param {NodeJS.Platform} platform  inject it — never mock process.platform
  * @param {{spawnSync?: typeof spawnSync, procRoot?: string, psPath?: string,
  *          verifyPs?: typeof verifyPsBinary}} [seams]
@@ -255,15 +261,27 @@ function safeTarget(id) {
   return true;
 }
 
+/** taskkill exit code for "process not found" — the target is already gone,
+ *  which is success for a reap. */
+const TASKKILL_NOT_FOUND = 128;
+
 /**
  * win32: the ABSOLUTE System32 `taskkill /PID <pid> /T /F` — the resolved path
  * is held in a variable and spawned only if it exists. An absent System32
- * taskkill.exe is a closed, diagnosed cleanup failure: a best-effort no-op,
- * NEVER a bare-name fallback (the Windows clean-run PATH front-loads the
- * user-writable ~/.local/bin ahead of System32 — a bare name is the same
+ * taskkill.exe is a closed, diagnosed cleanup failure, NEVER a bare-name
+ * fallback (the Windows clean-run PATH front-loads the user-writable
+ * ~/.local/bin ahead of System32 — a bare name is the same
  * executable-injection class as bare `ps`, and worse because it kills).
+ *
+ * F2 (fix-pass 2026-07-20): returns a CHECKED result instead of silently
+ * swallowing every failure — the supervisor must never claim the tree was
+ * stopped when taskkill never ran or failed. Success = exit 0, or exit 128
+ * ("process not found": the target is already gone). Absent exe, a spawn
+ * throw/error, a terminating signal, or any other exit is a failure with a
+ * diagnostic. Never throws.
  * @param {number} pid
  * @param {{spawnSync?: typeof spawnSync}} seams
+ * @returns {{ok: boolean, why: string|null}}
  */
 function taskkillTree(pid, seams) {
   const sspawn = seams.spawnSync || spawnSync;
@@ -275,12 +293,22 @@ function taskkillTree(pid, seams) {
   } catch {
     present = false;
   }
-  if (!present) return; // diagnosed no-op — never fall back to a bare-name taskkill
-  try {
-    sspawn(taskkillPath, ['/PID', String(pid), '/T', '/F']);
-  } catch {
-    /* best-effort */
+  if (!present) {
+    // Diagnosed no-op — never fall back to a bare-name taskkill.
+    return { ok: false, why: 'the System32 taskkill.exe is absent — cleanup was skipped (no bare-name fallback exists)' };
   }
+  let r;
+  try {
+    r = sspawn(taskkillPath, ['/PID', String(pid), '/T', '/F']);
+  } catch (err) {
+    return { ok: false, why: `taskkill could not be spawned: ${err.message}` };
+  }
+  if (!r || r.error) {
+    return { ok: false, why: `taskkill could not be spawned${r && r.error ? `: ${r.error.message}` : ''}` };
+  }
+  if (r.signal) return { ok: false, why: `taskkill was terminated by signal ${r.signal}` };
+  if (r.status === 0 || r.status === TASKKILL_NOT_FOUND) return { ok: true, why: null };
+  return { ok: false, why: `taskkill exited ${r.status}` };
 }
 
 /**
@@ -303,6 +331,11 @@ function taskkillTree(pid, seams) {
  *   ADR-0030 / A12 residual; the hermetic brain (A1) has no shell to produce
  *   one. Never kills pid 1, process.pid (the supervisor), or anything outside
  *   S ∪ (−G).
+ * F1 (fix-pass 2026-07-20): the return is a DIAGNOSTIC — best-effort work must
+ * degrade VISIBLY, never silently. `degraded: true` means the authoritative
+ * table was unavailable/lost (legacy single group-kill fallback), quiescence
+ * was not observed within the bound, or the win32 taskkill failed; callers may
+ * surface `why` but must not throw on it.
  * @param {number} pid           the immediate supervised child's pid
  * @param {NodeJS.Platform} platform  inject it — never mock process.platform
  * @param {{ kill?: typeof process.kill,
@@ -314,15 +347,16 @@ function taskkillTree(pid, seams) {
  *           `readTable` overrides the platform reader outright; `procRoot`
  *           (default '/proc') and `psPath` (default '/bin/ps') point the
  *           default reader at fixtures; `maxSweeps` default 5.
- * @returns {void}
+ * @returns {{degraded: boolean, why: string|null}}
  */
 function reapTree(pid, platform, seams = {}) {
   try {
     if (platform === 'win32') {
-      if (Number.isInteger(pid) && pid > 1) taskkillTree(pid, seams);
-      return;
+      if (!(Number.isInteger(pid) && pid > 1)) return { degraded: false, why: null }; // guarded no-op
+      const t = taskkillTree(pid, seams);
+      return t.ok ? { degraded: false, why: null } : { degraded: true, why: t.why };
     }
-    if (!safeTarget(pid)) return;
+    if (!safeTarget(pid)) return { degraded: false, why: null }; // guarded no-op
     const kill = seams.kill || process.kill;
     const maxSweeps =
       Number.isInteger(seams.maxSweeps) && seams.maxSweeps > 0 ? seams.maxSweeps : DEFAULT_MAX_SWEEPS;
@@ -337,13 +371,17 @@ function reapTree(pid, platform, seams = {}) {
 
     let table = snapshot();
     if (!table || table.length === 0) {
-      // Unusable snapshot → degrade to the legacy single group-kill; never throw.
+      // Unusable snapshot → degrade to the legacy single group-kill; never
+      // throw — but report the degradation (F1: never silent).
       try {
         kill(-pid, 'SIGKILL');
       } catch {
         /* already gone — best-effort */
       }
-      return;
+      return {
+        degraded: true,
+        why: 'the authoritative process table was unavailable — fell back to the legacy single group-kill',
+      };
     }
 
     let clean = 0;
@@ -352,7 +390,7 @@ function reapTree(pid, platform, seams = {}) {
       const extras = [...S].filter((p) => p !== pid && table.some((r) => r.pid === p));
       if (sweep > 0 && extras.length === 0) {
         clean += 1;
-        if (clean >= 2) return; // two consecutive clean sweeps — quiescent
+        if (clean >= 2) return { degraded: false, why: null }; // two consecutive clean sweeps — quiescent
       } else {
         clean = 0;
         // G = every process group any member of S belongs to.
@@ -380,11 +418,15 @@ function reapTree(pid, platform, seams = {}) {
       if (sweep < maxSweeps - 1) {
         if (!seams.readTable) sleepMs(delay); // real tables need a beat to settle
         table = snapshot();
-        if (!table) return; // observation degraded mid-loop — kills already sent
+        if (!table) {
+          // Observation lost mid-loop — kills already sent, quiescence unproven.
+          return { degraded: true, why: 'the process table became unusable mid-sweep — quiescence not verified' };
+        }
       }
     }
+    return { degraded: true, why: `quiescence was not observed within ${maxSweeps} sweeps` };
   } catch {
-    /* best-effort — NEVER throws into the watchdog */
+    return { degraded: true, why: 'unexpected reap error' }; // best-effort — NEVER throws into the watchdog
   }
 }
 
@@ -409,9 +451,14 @@ function reapTree(pid, platform, seams = {}) {
  *   LIVE pid and its LIVE child tree — there is NO negative-PGID equivalent,
  *   so it does NOT reach a leaderless reparented member once the group leader
  *   has exited; NO leaderless-member guarantee (deferred to
- *   WP-a10-windows-reap). win32 returns `{ reaped: true }` best-effort after
- *   the taskkill — it cannot verify the leaderless case it explicitly does not
- *   cover — so the POSIX fail-loud escalation never activates there.
+ *   WP-a10-windows-reap). F2 (fix-pass 2026-07-20): the win32 result is
+ *   CHECKED against the taskkill outcome — `{ reaped: true }` only when
+ *   taskkill exited 0 or 128 ("process not found" — already gone);
+ *   `{ reaped: false, why }` on an absent System32 taskkill.exe, a spawn
+ *   throw/error/signal, or any other exit — the supervisor never claims the
+ *   tree stopped when taskkill never ran or failed. That `false` is a surfaced
+ *   DIAGNOSTIC only: the R8-1 fail-loud escalation stays POSIX-only (run-job
+ *   does not activate the group-reap authority on win32 at all).
  * ASYNC by necessity: the settled group's last member is often the
  * supervisor's OWN just-SIGKILLed direct child, which stays a ZOMBIE — and a
  * zombie still counts as a live group member for kill() — until the
@@ -423,10 +470,11 @@ function reapTree(pid, platform, seams = {}) {
  * @param {NodeJS.Platform} platform  inject it — never mock process.platform
  * @param {{ kill?: typeof process.kill, spawnSync?: typeof spawnSync,
  *           maxPolls?: number, pollDelayMs?: number }} [seams]  maxPolls default 5
- * @returns {Promise<{ reaped: boolean }>}  reaped=true ONLY when the group
- *   reached VERIFIED quiescence (POSIX: `kill(-pgid, 0)` threw ESRCH within
- *   maxPolls; win32: best-effort after taskkill). reaped=false on a POSIX
- *   timeout with members still present — the caller MUST NOT delete a pidfile
+ * @returns {Promise<{ reaped: boolean, why?: string }>}  reaped=true ONLY when
+ *   the group reached VERIFIED quiescence (POSIX: `kill(-pgid, 0)` threw ESRCH
+ *   within maxPolls; win32: taskkill exited 0/128 — F2). reaped=false on a
+ *   POSIX timeout with members still present (or a failed win32 taskkill, with
+ *   a diagnostic `why`) — the caller MUST NOT delete a pidfile
  *   whose group is not yet verified empty (R7-2): the INNER caller (dream.js's
  *   finally) RETAINS the hand-up pidfile on reaped=false so run-job's backstop
  *   can retry; the FINAL caller (run-job — the last backstop, no later reader)
@@ -436,8 +484,12 @@ function reapTree(pid, platform, seams = {}) {
 async function reapGroup(pgid, platform, seams = {}) {
   try {
     if (platform === 'win32') {
-      if (Number.isInteger(pgid) && pgid > 1) taskkillTree(pgid, seams);
-      return { reaped: true }; // best-effort — no negative-PGID equivalent (R5-2)
+      if (!(Number.isInteger(pgid) && pgid > 1)) return { reaped: true }; // guarded no-op input
+      // F2: checked taskkill outcome — never claim success when it did not run
+      // or failed. Still NO leaderless-member guarantee (R5-2); the false here
+      // is a diagnostic, never a POSIX-style fail-loud trigger.
+      const t = taskkillTree(pgid, seams);
+      return t.ok ? { reaped: true } : { reaped: false, why: t.why };
     }
     if (!safeTarget(pgid)) {
       // Guarded/no-op input (pgid 1, the supervisor itself/its own group, or a

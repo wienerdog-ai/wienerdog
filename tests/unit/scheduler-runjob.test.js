@@ -813,6 +813,11 @@ test(
     assert.ok(seams.groupCalls.includes(55555), 'the brain group was retried in the escalation');
     assert.equal(jobsLib.readScheduleState(paths).dream.last_status, 'error');
     assert.equal(readAlerts(paths).length, 1, 'durable fail-loud alert recorded');
+    // F3 (fix-pass): the durable alert IS the record — the never-again-read
+    // token pidfile is released AFTER failLoud, never retained as a hollow
+    // leftover (no later run reads this run's token).
+    const leftover = fs.readdirSync(paths.state).filter((f) => f.startsWith('dream-brain.'));
+    assert.deepEqual(leftover, [], 'the token pidfile is deleted once the failure is loudly recorded');
   }
 );
 
