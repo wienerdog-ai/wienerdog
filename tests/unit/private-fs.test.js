@@ -820,3 +820,33 @@ test('private-fs: F6 — writeFilePrivate temp uses O_EXCL|O_NOFOLLOW and retrie
     assert.equal(modeOf(dest), 0o600);
   });
 });
+
+test('private-fs: F10/W4 — a concurrent temp substitution at rename is DETECTED (loud throw), not silently landed', { skip: !POSIX }, () => {
+  withUmask(0o022, () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-privfs-'));
+    const paths = pathsFor(root);
+    fs.mkdirSync(paths.state, { recursive: true });
+    fs.chmodSync(paths.core, 0o700);
+    fs.chmodSync(paths.state, 0o700);
+    const external = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-ext-sub-'));
+    const externalTarget = path.join(external, 'attacker-target');
+    fs.writeFileSync(externalTarget, 'ATTACKER', { mode: 0o644 });
+    const dest = path.join(paths.state, 'broker-grants.json');
+    // Simulate window 4: after our O_EXCL open+write, a concurrent process
+    // unlinks the temp and the rename lands a SUBSTITUTED symlink at dest. The
+    // renameSync seam plants a symlink at dest instead of moving our real temp.
+    const renameSync = (t, d) => {
+      try { fs.rmSync(t, { force: true }); } catch { /* our temp */ }
+      fs.symlinkSync(externalTarget, d); // substituted target
+    };
+
+    assert.throws(
+      () => writeFilePrivate(dest, '{"grants":[]}', { core: paths.core, renameSync }),
+      (e) => e instanceof WienerdogError && /temp was substituted between the private open and the rename/.test(e.message),
+      'the post-rename (dev,ino) check detects the substitution and throws loudly'
+    );
+    // The attacker's external target was NOT written through (detection is after
+    // the fact, but the write went to our fd, never to the substituted symlink).
+    assert.equal(fs.readFileSync(externalTarget, 'utf8'), 'ATTACKER', 'external target content unchanged');
+  });
+});

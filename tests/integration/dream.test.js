@@ -793,6 +793,48 @@ test('dream-integration: A5 private modes — digest.md 0600 after a dream; scra
   }
 });
 
+test('dream-integration: F9 — a symlinked core is REFUSED before any core write; nothing under the external tree changes', { skip: process.platform === 'win32' }, async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-dream-f9-'));
+  const extCore = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-dream-f9-extcore-'));
+  writeFile(extCore, 'config.yaml', `vault: ${path.join(root, 'vault')}\ndream_timeout_minutes: 5\n`);
+  fs.mkdirSync(path.join(extCore, 'state'), { recursive: true });
+  const coreLink = path.join(root, 'wd');
+  fs.symlinkSync(extCore, coreLink); // WIENERDOG_HOME points at a symlink to the external core
+
+  const snapshot = (base) => {
+    const out = {};
+    const walk = (d) => {
+      for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+        const abs = path.join(d, e.name);
+        const rel = path.relative(base, abs);
+        const mode = fs.lstatSync(abs).mode & 0o777;
+        if (e.isDirectory()) { out[rel] = `dir:${mode}`; walk(abs); }
+        else out[rel] = `${mode}:${fs.readFileSync(abs).toString('base64')}`;
+      }
+    };
+    walk(base);
+    return out;
+  };
+  const before = snapshot(extCore);
+
+  const saved = {};
+  for (const k of ENV_KEYS) saved[k] = process.env[k];
+  Object.assign(process.env, { HOME: root, WIENERDOG_HOME: coreLink, WIENERDOG_VAULT: path.join(root, 'vault') });
+  let thrown = null;
+  try {
+    await dream.run(['--yes'], { skipContainmentProbe: true, now: NOW });
+  } catch (e) {
+    thrown = e;
+  } finally {
+    for (const k of ENV_KEYS) {
+      if (saved[k] === undefined) delete process.env[k];
+      else process.env[k] = saved[k];
+    }
+  }
+  assert.ok(thrown && /is a symlink or not a directory/.test(thrown.message), `dream must refuse a symlinked core (got ${thrown && thrown.message})`);
+  assert.deepEqual(snapshot(extCore), before, 'an anomalous core → dream writes NOTHING under it (no lock, no scratch, no digest)');
+});
+
 test('dream-integration: WP-a9 — the real dream writer path leaves a 0700 log dir and a 0600 daily log under umask 000', { skip: process.platform === 'win32' }, async () => {
   const ctx = setup();
   // Pre-create pinFakeBrain's bin dir under the normal umask: a 0777 bin dir

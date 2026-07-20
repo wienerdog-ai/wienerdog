@@ -18,7 +18,7 @@ const tccguard = require('../scheduler/tccguard');
 const { requireCapability, CAPABILITY } = require('../core/safety-profile');
 const { detectPolicyHooks } = require('../core/policy-hooks');
 const { recordRunEvidence } = require('../core/run-evidence');
-const { mkdirPrivate, createLogStreamPrivate } = require('../core/private-fs');
+const { mkdirPrivate, createLogStreamPrivate, coreAnomalous } = require('../core/private-fs');
 const { settingsDigest } = require('../core/runtime-settings');
 const reap = require('../core/reap');
 
@@ -441,6 +441,17 @@ const RUN_STAMP_LOG_RE = /^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z\.log$/;
  *  NEVER rotated (that lexical-sort deletion destroyed evidence mid-incident).
  *  @param {string} dir */
 function rotateLogs(dir) {
+  // F11 (WP-a9, belt-and-suspenders): if the log dir is (now) a symlink, do NOT
+  // rotate through it — the caller already skips rotation when the private open
+  // was refused (F7), but a CONCURRENT swap-to-symlink after a successful open
+  // could otherwise let this following readdir+rmSync delete an external dir's
+  // files. Detection-not-prevention: a swap DURING the readdir→rmSync is the
+  // accepted A12 window (window 2 deletion); this only narrows it.
+  try {
+    if (fs.lstatSync(dir).isSymbolicLink()) return;
+  } catch {
+    return; // vanished → nothing to rotate
+  }
   let files;
   try {
     files = fs.readdirSync(dir);
@@ -638,6 +649,36 @@ function safeResolvePath(input, guard, hopCap = 40) {
 async function runJob(paths, job, opts = {}) {
   const name = job.name;
   const platform = opts.platform || process.platform;
+
+  // F9 (WP-a9, ADR-0027): if the Wienerdog core is a PRE-EXISTING symlink/non-dir
+  // (an untrusted root), NOTHING may be written/renamed/chmodded/deleted under it
+  // — on the success OR the failure path. Detect it ONCE up front; when anomalous,
+  // record every failure through a NON-CORE channel only (stderr + the injected
+  // email alert), never writeScheduleState (a core-local schedule.json write that
+  // FOLLOWS the symlink into the external tree) or failLoud→appendAlert (whose
+  // mkdirPrivate would refuse the core and its outer catch would SILENTLY swallow
+  // the alert). The private log open below already refuses on an anomalous core.
+  const coreAnom = coreAnomalous(paths);
+  /** @param {string} reason record a failure without touching an anomalous core. */
+  const recordFailure = async (reason) => {
+    if (coreAnom) {
+      process.stderr.write(
+        `wienerdog: job "${name}" failed AND the Wienerdog core (${paths.core}) is a symlink or not a directory — ` +
+          `refusing to write anything under it (no watermark, no durable alert). ${reason}\n`
+      );
+      // Non-core surface only: the email alert (reads config, writes nothing to
+      // the core). Best-effort; never throws.
+      try {
+        (opts.sendAlert || defaultSendAlert)(paths, name, `job ${name} failed`, reason);
+      } catch {
+        /* email best-effort */
+      }
+      return;
+    }
+    jobsLib.writeScheduleState(paths, name, { last_status: 'error', last_error_at: nowIso() });
+    await failLoud(paths, name, reason, opts);
+  };
+
   const vaultDir = readDreamConfig(paths.config).vault; // throws if no vault configured
   const cwd = vaultDir;
 
@@ -682,8 +723,7 @@ async function runJob(paths, job, opts = {}) {
     const reason =
       `refused: ${g.offending} is under a macOS protected folder (${g.prefix}) — ` +
       'move the vault to ~/wienerdog';
-    jobsLib.writeScheduleState(paths, name, { last_status: 'error', last_error_at: nowIso() });
-    await failLoud(paths, name, reason, opts);
+    await recordFailure(reason); // F9: skips core-local writers on an anomalous core
     throw new WienerdogError(`job "${name}" ${reason}`);
   }
 
@@ -922,18 +962,24 @@ async function runJob(paths, job, opts = {}) {
   if (reapFailure && (failure || code !== 0)) {
     reason += ` — and it ${reapFailure.reason}`;
   }
-  jobsLib.writeScheduleState(paths, name, { last_status: 'error', last_error_at: nowIso() });
-  const alertPersisted = await failLoud(paths, name, reason, opts);
-  // F3 + G2 (fix-pass 2026-07-20): the durable alert IS the record of the
-  // un-reapable group, so release the still-retained token pidfile(s) — but
-  // ONLY when that alert actually persisted (G2). If alerts.jsonl could not be
-  // written (disk exhaustion), the pidfile is the SOLE surviving record of the
-  // survivor's recovery identity (its PGID) — RETAIN it as the fallback rather
-  // than delete a never-recorded survivor. No later run reads this run's token,
-  // so a persisted alert makes the file a never-read hollow leftover; an
-  // unpersisted alert makes it the only recovery breadcrumb.
-  if (reapFailure && alertPersisted) {
-    for (const f of reapFailure.files) rmPidfile(f);
+  if (coreAnom) {
+    // F9: an anomalous core → surface via stderr + email only, write NOTHING
+    // under it (no watermark, no durable alert, no pidfile touch).
+    await recordFailure(reason);
+  } else {
+    jobsLib.writeScheduleState(paths, name, { last_status: 'error', last_error_at: nowIso() });
+    const alertPersisted = await failLoud(paths, name, reason, opts);
+    // F3 + G2 (WP-a10-reap fix-pass): the durable alert IS the record of the
+    // un-reapable group, so release the still-retained token pidfile(s) — but
+    // ONLY when that alert actually persisted (G2). If alerts.jsonl could not be
+    // written (disk exhaustion), the pidfile is the SOLE surviving record of the
+    // survivor's recovery identity (its PGID) — RETAIN it as the fallback rather
+    // than delete a never-recorded survivor. No later run reads this run's token,
+    // so a persisted alert makes the file a never-read hollow leftover; an
+    // unpersisted alert makes it the only recovery breadcrumb.
+    if (reapFailure && alertPersisted) {
+      for (const f of reapFailure.files) rmPidfile(f);
+    }
   }
   throw new WienerdogError(reason);
 }
@@ -1105,22 +1151,31 @@ async function catchUp(paths, opts = {}) {
  *  @returns {Promise<void>} */
 async function run(argv, opts = {}) {
   const paths = getPaths();
+  // F9 (WP-a9): a PRE-EXISTING symlink/non-dir core is untrusted — NOTHING may be
+  // written under it. The maybeRefresh (update-check.json) and refreshSchedulerStatus
+  // (scheduler-status.json) probes below both write UNDER the core (following the
+  // symlink into the external tree), so skip them on an anomalous core. The
+  // downstream runJob/catchUp still run and surface the failure via their own F9
+  // guards (stderr + the non-core email alert), writing nothing under the core.
+  const coreAnom = coreAnomalous(paths);
   // Bounded, once/24h, opt-out, silent on failure (ADR-0015). Never blocks/fails
   // the job. Fetch seam is injectable for hermetic tests. maybeRefresh already
   // never throws (WP-045); the try/catch is belt-and-suspenders and must never
   // alter the job's exit code.
-  try {
-    await maybeRefresh(paths, { fetchLatest: opts.fetchLatest });
-  } catch {
-    /* never affects the job */
-  }
-  // Keep the scheduler-load cache fresh on every run (esp. the hourly catch-up) so
-  // the digest can surface a configured-but-not-loaded job. Read-only probe;
-  // bounded, swallows its own errors — MUST never alter the job's exit code.
-  try {
-    require('../scheduler/status').refreshSchedulerStatus(paths, { probe: opts.probe });
-  } catch {
-    /* never affects the job */
+  if (!coreAnom) {
+    try {
+      await maybeRefresh(paths, { fetchLatest: opts.fetchLatest });
+    } catch {
+      /* never affects the job */
+    }
+    // Keep the scheduler-load cache fresh on every run (esp. the hourly catch-up) so
+    // the digest can surface a configured-but-not-loaded job. Read-only probe;
+    // bounded, swallows its own errors — MUST never alter the job's exit code.
+    try {
+      require('../scheduler/status').refreshSchedulerStatus(paths, { probe: opts.probe });
+    } catch {
+      /* never affects the job */
+    }
   }
   if (argv[0] === '--catch-up') {
     // The loaded catch-up registration (macOS + Windows) forwards the bound per-job

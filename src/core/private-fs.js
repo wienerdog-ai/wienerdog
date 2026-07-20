@@ -24,13 +24,16 @@ const { WienerdogError } = require('./errors');
  * chmod is a best-effort no-op, the scan reports {insecure: 0}, and WP-127
  * documents that Windows protection relies on the per-user profile ACLs.
  *
- * Never-follow guarantee (G2–G5 + F1–F6, ADR-0027) — stated HONESTLY, NOT as an
+ * Never-follow guarantee (G2–G5 + F1–F11, ADR-0027) — stated HONESTLY, NOT as an
  * unconditional "never follows symlinks". A PRE-EXISTING symlink is caught at
  * EVERY position × phase — `{root, intermediate, leaf}` × `{enumerate,
- * dir-chmod, file-chmod, 000-fallback, mkdir, open-write, temp-write}`:
+ * dir-chmod, file-chmod, 000-fallback, mkdir, open-write, temp-write}` AND on the
+ * FAILURE path (F9: an anomalous core → no core-local writer runs; the failure
+ * surfaces via a non-core channel, stderr + email):
  *  - ROOT: `coreRootContext` opens the core `O_DIRECTORY|O_NOFOLLOW` + fstat
  *    before trusting its realpath — a symlinked/non-dir core is an anomaly, NO
- *    descendant is enumerated/repaired, and every WRITE refuses (G5/F3/F5);
+ *    descendant is enumerated/repaired, every WRITE refuses, and the run-job/
+ *    dream failure paths write NOTHING under it (`coreAnomalous`; G5/F3/F5/F9);
  *  - INTERMEDIATE: repair revalidates each opened fd by (dev, ino) against the
  *    classifying lstat (a redirected open → different inode → refused, G3); the
  *    write helpers validate the whole in-core ancestor chain
@@ -42,25 +45,27 @@ const { WienerdogError } = require('./errors');
  *    `O_NOFOLLOW` (log stream) or a crypto-random `O_EXCL|O_NOFOLLOW` temp
  *    (`writeFilePrivate`, F6 — closes the predictable-temp-symlink class).
  * The RESIDUAL is ONLY the CLASS of concurrent OWNER-LEVEL swaps DURING an
- * operation — no pre-existing case, and NOT "only readdir". Three windows, all
+ * operation — no pre-existing case, and NOT "only readdir". FOUR windows, all
  * the SAME same-user concurrent-writer class ADR-0028 hands to A12 ("Honest
- * boundary — the A7 residual"); pure Node cannot close any (no
+ * boundary — the A7 residual"); pure Node cannot PREVENT any (no
  * openat/openat2/fdopendir; no portable fd-bound chmod for a mode-000 entry —
- * O_PATH absent on macOS, /proc Linux-only). Their consequences DIFFER — stated
- * per-window (do NOT claim uniform loudness):
- *   (1) readdir-enumeration → fd-bind (repair): the (dev, ino) fd-revalidation
- *       REFUSES the redirected open — no chmod, surfaced by the next scan.
- *   (2) root/ancestor validate → leaf op (repair AND write): the repair path
- *       still refuses via the (dev, ino) check, BUT the WRITE helpers
- *       (`createLogStreamPrivate`, `writeFilePrivate`) have NO post-open
- *       ancestry revalidation — after `assertInCoreAncestry` returns, a
- *       concurrent ancestor swap redirects the leaf create/`fchmod`/write/rename
- *       to an EXTERNAL target and the helper returns SUCCESSFULLY. So this
- *       window can SILENTLY mutate out-of-tree data (chmod/write/rename); pure
- *       Node cannot bind the leaf op to the verified ancestry without a
- *       directory-relative `openat`, so it is not closeable and not loud.
- *   (3) mode-000 lstat → path-`chmodSync` (`applyModeFallback`): worst case ONE
+ * O_PATH absent on macOS, /proc Linux-only). Consequences DIFFER — per-window
+ * (do NOT claim uniform loudness):
+ *   W1. readdir-enumeration → fd-bind (repair): the (dev, ino) fd-revalidation
+ *       REFUSES the redirected open — no chmod; surfaced by the next scan.
+ *   W2. ancestor validate/open → leaf op (repair AND write): the repair path
+ *       still refuses via (dev, ino), BUT the WRITE helpers have NO post-open
+ *       ancestry revalidation — after `assertInCoreAncestry`/the open, a
+ *       concurrent ancestor swap redirects the leaf op to an EXTERNAL target and
+ *       the helper returns SUCCESSFULLY. This window can SILENTLY chmod/write/
+ *       rename out-of-tree AND, via `rotateLogs`, silently DELETE external files
+ *       (F11 adds a cheap lstat-first guard that narrows but cannot close it).
+ *   W3. mode-000 lstat → path-`chmodSync` (`applyModeFallback`): worst case ONE
  *       chmod on a swapped target, surfaced LOUDLY via a thrown error.
+ *   W4. temp O_EXCL-open → rename-target substitution (`writeFilePrivate`): a
+ *       concurrent unlink+symlink at the temp name makes rename land a foreign
+ *       target. F10 DETECTS it (post-rename (dev,ino) lstat → loud throw) —
+ *       detection, NOT prevention (the race already happened).
  * In every window the attacker must ALREADY hold concurrent owner-level write
  * access inside the already-0700 core.
  */
@@ -229,7 +234,15 @@ function mkdirPrivate(dir, opts = {}) {
  * (rename never follows a symlink at `dest`). win32 keeps the plain atomic
  * temp+rename (POSIX-only hardening).
  * @param {string} dest @param {string|Buffer} data
- * @param {{core?:string, openSync?, fstatSync?, writeSync?, fchmodSync?, closeSync?}} [opts]
+ * F10 (concurrent, W4): after the O_EXCL open a concurrent same-owner process
+ * could unlink the temp entry and plant a symlink at that pathname, so the
+ * rename would move the SUBSTITUTED symlink onto `dest`. Pure Node cannot
+ * prevent this (no directory-relative rename), but this DETECTS it: it captures
+ * the opened fd's (dev, ino) and, after the rename, `lstat`s `dest` — a symlink
+ * or a (dev, ino) mismatch means the temp was substituted, so it THROWS
+ * (detection, not prevention — surfaced loudly instead of silently landing an
+ * attacker-selected symlink).
+ * @param {{core?:string, openSync?, fstatSync?, writeSync?, fchmodSync?, closeSync?, renameSync?}} [opts]
  *   `core` threads the caller's verified core; the *Sync seams are test-only. */
 function writeFilePrivate(dest, data, opts = {}) {
   const dir = path.dirname(dest);
@@ -245,6 +258,7 @@ function writeFilePrivate(dest, data, opts = {}) {
   const writeSync = opts.writeSync || fs.writeSync;
   const fchmodSync = opts.fchmodSync || fs.fchmodSync;
   const closeSync = opts.closeSync || fs.closeSync;
+  const renameSync = opts.renameSync || fs.renameSync;
   const buf = Buffer.isBuffer(data) ? data : Buffer.from(data);
   const flags = fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | O_NOFOLLOW;
   let tmp;
@@ -261,8 +275,13 @@ function writeFilePrivate(dest, data, opts = {}) {
       );
     }
   }
+  let fdDev;
+  let fdIno;
   try {
-    if (!fstatSync(fd).isFile()) throw new Error('temp is not a regular file');
+    const st = fstatSync(fd);
+    if (!st.isFile()) throw new Error('temp is not a regular file');
+    fdDev = st.dev;
+    fdIno = st.ino;
     let off = 0;
     while (off < buf.length) off += writeSync(fd, buf, off, buf.length - off, null);
     fchmodSync(fd, 0o600); // set the mode ON THE FD (no post-write path-following chmod)
@@ -284,7 +303,23 @@ function writeFilePrivate(dest, data, opts = {}) {
   } catch {
     /* best-effort */
   }
-  fs.renameSync(tmp, dest); // atomic; replaces a pre-existing dest (even a symlink) without following it
+  renameSync(tmp, dest); // atomic; replaces a pre-existing dest (even a symlink) without following it
+  // F10/W4 detection: confirm `dest` is the very inode we wrote — a symlink or a
+  // (dev,ino) mismatch means a concurrent temp substitution landed a foreign
+  // target. Detection-not-prevention (the race already happened); surface loudly.
+  try {
+    const after = fs.lstatSync(dest);
+    if (after.isSymbolicLink() || after.dev !== fdDev || after.ino !== fdIno) {
+      throw new WienerdogError(
+        `refusing to complete write ${dest}: its temp was substituted between the private open and the ` +
+          'rename (a concurrent same-owner swap — the destination is not the file we wrote); investigate ' +
+          'for a same-user attacker inside your Wienerdog core.'
+      );
+    }
+  } catch (e) {
+    if (e instanceof WienerdogError) throw e;
+    /* a transient post-rename lstat error is best-effort detection — do not fail a legit write */
+  }
 }
 
 /** Enumerate candidate NAMES in `dir` matching `keepName`, WITHOUT filtering by
@@ -882,6 +917,17 @@ function createLogStreamPrivate(file, opts = {}) {
   return fs.createWriteStream(file, { fd }); // stream on the verified fd
 }
 
+/** True IFF the Wienerdog core is a PRE-EXISTING symlink or a non-directory —
+ *  an untrusted root that NOTHING may be written/renamed/chmodded/deleted under
+ *  (F9). A missing core (nothing installed yet) is NOT anomalous. Callers on the
+ *  failure path use this to skip every core-local writer and surface loudly via
+ *  a non-core channel. POSIX-only (win32 → false, matching the module posture).
+ *  @param {import('./paths').WienerdogPaths} paths @returns {boolean} */
+function coreAnomalous(paths) {
+  if (WIN32) return false;
+  return coreRootContext(paths).coreAnomaly === true;
+}
+
 module.exports = {
   mkdirPrivate,
   writeFilePrivate,
@@ -889,6 +935,7 @@ module.exports = {
   repairPrivateModes,
   scanPrivateModes,
   insecureEntries,
+  coreAnomalous,
   A5_PRIVATE_DIRS,
   A5_PRIVATE_FILE_BASENAMES,
   A9_PRIVATE_DIRS,
