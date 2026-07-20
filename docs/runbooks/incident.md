@@ -412,20 +412,32 @@ top of the block:
 - `DECLARED_PATHS` / `$DeclaredPaths` — the **complete list of managed-block
   file PATHS** your **trusted inventory** knows are installed (one absolute path
   per line/entry) — from your own install notes or the persisted incident
-  evidence, **not** the possibly-tampered manifest. It is a **path list, not a
-  harness-name list**, so it can express **multiple installed roots for one
-  harness** (e.g. Codex at two custom roots) that a single `CODEX_HOME` can never
-  point at once. The declared paths are **unioned into** the must-check set: the
-  drill checks **every** managed-block file in the machine-authoritative set —
-  the post-sync manifest UNION an independent default-location probe UNION your
-  declared paths — so a root that only your inventory knows is still inspected.
-  A **duplicate** path is rejected outright (ordinal-exact); a declared path
-  whose harness `sync` **cannot detect** (its env var unset/wrong) is a
-  **BLOCK**, not a silent omission; a declared path **missing on disk** FAILS;
-  and every element of the union must be present and clean. The one case no
-  on-machine source can close — a root absent from the manifest AND from a
-  default location AND from your trusted inventory — is a **blocking residual:
-  STOP and escalate** (see the residual bullet after the blocks).
+  evidence, **not** the possibly-tampered manifest. **Declare EVERY installed
+  harness managed-block file, INCLUDING the default locations**
+  (`${HOME}/.claude/CLAUDE.md`, `${HOME}/.codex/AGENTS.md`) if Wienerdog was
+  installed there — the default two lines are pre-filled for exactly that, so keep
+  them if those harnesses are installed; only remove a line if that harness is
+  genuinely NOT installed. **The declaration is the authority; the
+  default-location probe is only a fail-closed BELT** for a default you forgot,
+  and it can recover a damaged block **only while some Wienerdog evidence survives**
+  (a sentinel or the marker) — a default block tampered beyond ALL evidence
+  (altered sentinels AND altered/absent marker) is indistinguishable from your own
+  non-Wienerdog file and the probe cannot find it, so **do not rely on the probe
+  as the sole discovery for default-location harnesses — declare them.** It is a
+  **path list, not a harness-name list**, so it can also express **multiple
+  installed roots for one harness** (e.g. Codex at two custom roots) that a single
+  `CODEX_HOME` can never point at once. The declared paths are **unioned into** the
+  must-check set: the drill checks **every** managed-block file in the
+  machine-authoritative set — the post-sync manifest UNION the fail-closed
+  default-probe UNION your declared paths. A **duplicate** path is rejected
+  outright (ordinal-exact); a declared path whose harness `sync` **cannot detect**
+  (its env var unset/wrong) is a **BLOCK**, not a silent omission; a declared path
+  **missing on disk** FAILS; and every element of the union must be present and
+  clean. The one case no on-machine source can close — an installed managed-block
+  file your trusted inventory does not name AND that neither the manifest nor the
+  probe can recover (an unknown custom root, OR a block at ANY location tampered
+  beyond all Wienerdog evidence) — is a **blocking residual: STOP and escalate**
+  (see the residual bullet after the blocks).
 
 The block also **pins the harness-detection environment**: it unsets
 `CLAUDE_CONFIG_DIR` and `CODEX_HOME` before `sync`, so `sync`'s adapter
@@ -770,11 +782,16 @@ sync then regenerated):
     CR/LF/NUL or a basename other than `CLAUDE.md`/`AGENTS.md`, or a **duplicate**
     managed-block path is a DRILL FAIL (a malformed or duplicate manifest must
     never normalize-then-pass).
-  - **An independent default-location probe** of `${HOME}/.claude/CLAUDE.md` and
-    `${HOME}/.codex/AGENTS.md` (HOME resolved as in Table A): any Wienerdog
-    managed block (a sentinel pair) found there is a must-check root **even if
-    the manifest, the env, or your declaration omits it** — closing the
-    default-directory omission independent of the mutable manifest.
+  - **An independent, fail-closed default-location probe** of
+    `${HOME}/.claude/CLAUDE.md` and `${HOME}/.codex/AGENTS.md` (HOME resolved as in
+    Table A): a default file bearing **any** Wienerdog evidence — **≥1 sentinel OR
+    the marker** — is a must-check root **even if the manifest, the env, or your
+    declaration omits it**, so a one-/zero-sentinel DAMAGED block is still
+    discovered. This is a **belt, not the authority**: it recovers only a block
+    that still bears some evidence; a default block tampered beyond ALL evidence
+    (altered sentinels AND altered/absent marker) is indistinguishable from a
+    non-Wienerdog file and the probe cannot find it — which is why you **declare**
+    your default-location harnesses (above), not lean on the probe.
   - **Your declared paths** (`DECLARED_PATHS` / `$DeclaredPaths`): the complete
     set of managed-block files your trusted inventory knows — **path-keyed, so it
     covers multiple roots for one harness and any non-default, non-current-env
@@ -809,24 +826,34 @@ sync then regenerated):
   the region is never byte-identical, so that compare would falsely fail;
   the three checks prove the block clean by construction). `doctor` is
   **not** proof here (Table D).
-- **Blocking residual — a root no trusted record knows (honest boundary).** The
-  three-source union closes every case where an installed managed-block file is
-  *knowable* on-machine: it is in the post-sync manifest (every current-env root
-  `sync` re-records), OR at a default location (the independent probe), OR in your
-  declared paths (every root your trusted inventory knows — **including multiple
-  roots per harness and non-default, non-current-env roots**). By construction the
-  ONLY way a genuinely-installed managed-block file escapes the checked set is if
-  it is in **none** of the three: not in the manifest, not at a default location,
-  and not in your trusted inventory. Such a root is **unknowable on-machine** — no
-  source knows it exists — so the drill **cannot certify the machine**. If you
-  cannot establish your **complete** inventory from trusted evidence (your own
-  install notes / the persisted incident evidence — **not** the possibly-tampered
-  manifest), treat it exactly like step 1's "cannot reboot": **STOP and
-  escalate** — do not read a DRILL PASS as proof. This is a principled, documented
-  boundary, gated by the same stop-and-escalate discipline (cf. ADR-0028's
-  honest-boundary posture and the A12 hand-off), not an open hole: the drill
-  enforces everything machine-checkable and this residual names precisely the part
-  that is not.
+- **Blocking residual — an installed block your trusted inventory doesn't name
+  AND the machine can't recover (honest boundary).** The three-source union checks
+  every installed managed-block file that is *recoverable* on-machine: it is in the
+  post-sync manifest (every current-env root `sync` re-records), OR the fail-closed
+  probe finds it at a default location **while it still bears some Wienerdog
+  evidence** (a sentinel or the marker), OR it is in your declared trusted-inventory
+  paths. An installed file escapes the checked set **iff** it is in **none** of the
+  three — and that has TWO shapes, both the **same** incomplete-inventory limit:
+  **(a)** an **unknown custom root** your inventory doesn't name; and **(b)** a
+  managed block **at ANY location, default included, tampered beyond ALL Wienerdog
+  evidence** (altered sentinels AND altered/absent marker) — which is
+  **indistinguishable on-machine from a user's own non-Wienerdog file**, so no
+  content-based probe can recover it (force-adding every default file would
+  false-FAIL legitimate non-Wienerdog files). In **both** shapes the defense is
+  identical and is a procedure, not a machine check: **declare your COMPLETE
+  trusted inventory** (every installed harness file, defaults included) — a
+  declared path enters must-check and, if its sentinels were altered, FAILS the
+  exactly-one-pair check. If you **cannot** establish your complete inventory from
+  trusted evidence (your own install notes / the persisted incident evidence —
+  **not** the possibly-tampered manifest), treat it exactly like step 1's "cannot
+  reboot": **STOP and escalate** — do not read a DRILL PASS as proof. This is a
+  principled, documented boundary (cf. ADR-0028's honest-boundary posture and the
+  A12 hand-off), not an open hole: the machine cannot tell a tampered-beyond-evidence
+  block from a non-Wienerdog file, so the complete-trusted-inventory declaration is
+  the authority and an incomplete inventory is stop-and-escalate. **Do not** read
+  this as "only a custom root can escape" (a default-location block tampered beyond
+  evidence escapes too), and **do not** believe the probe closes the
+  tampered-beyond-evidence case (it cannot).
 - *(Optional extra sanity check, NOT the proof.)* You may also start a
   **new** Claude Code / Codex session and confirm it does not surface the
   poisoned fact — a nicety, not the acceptance: the byte-level checks above

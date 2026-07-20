@@ -423,6 +423,31 @@ state and act on:
   > them (confirmed). The completeness claim is corrected: the damaged-default-block gap
   > was machine-checkable and is now closed; the sole residual remains the
   > unknown-custom-root incomplete-inventory case.
+  >
+  > **Fix-pass amendment 14 (2026-07-20, lock-pass — honest limit of content-based
+  > discovery + residual-accuracy correction; the probe code is already MAXIMAL, no code
+  > change):** the default-probe discovers by EXACT evidence (a real sentinel OR the exact
+  > marker), so a default block tampered beyond ALL evidence — altered sentinels
+  > (`beg1n`/`3nd`) AND an altered/split marker — bears no exact evidence and is NOT
+  > discovered; if the manifest omits it and the operator declared only the other file,
+  > DRILL PASS with the poisoned default file unchecked (Codex execution-repro). This is
+  > NOT a code bug: a block tampered beyond all Wienerdog evidence is INDISTINGUISHABLE
+  > on-machine from a user's own non-Wienerdog `CLAUDE.md` — "force-add every default file,
+  > failing if no valid pair" would false-FAIL legit files, and "an independent trusted
+  > record" is exactly the (tampered/incomplete) inventory. So the earlier residual claim
+  > ("only a non-default unknown custom root can escape") was TOO NARROW — it is the SAME
+  > incomplete-inventory limit, mis-scoped. Corrections (docs only, both prose + spec):
+  > (1) **declaration guidance** strengthened — the operator must declare their COMPLETE
+  > trusted inventory INCLUDING default locations; the probe is a fail-closed BELT, not
+  > the sole discovery; a declared default with altered sentinels then enters must-check
+  > and FAILS the exactly-one-pair check. (2) **residual corrected** — an installed block
+  > escapes iff in none of {manifest (tamperable), fail-closed probe (evidence-bearing
+  > only), declared}; the residual is any installed block the trusted inventory doesn't
+  > name AND the machine can't recover, which includes BOTH an unknown custom root AND a
+  > block at ANY location tampered beyond all evidence; both are the same
+  > declare-complete-inventory-or-stop-and-escalate case. (3) **completeness argument**
+  > updated accordingly; no overclaim. The verifier is UNCHANGED (byte-identical copies
+  > preserved).
 - **The ONLY authoritative way to reach zero running Wienerdog processes is to
   REBOOT after removing every per-job schedule AND the catch-up entry — not
   per-platform process forensics (R4-C, round-4).** After a reboot, with nothing
@@ -839,7 +864,12 @@ headless/`--yes` bypass — it is interactive and shows the exact bytes.
      writes both, so exactly one, or zero-plus-marker, is a tampered/compromised block; a
      file with neither is genuinely not Wienerdog-managed and correctly not flagged). The
      discovery search is whole-file/`Buffer.indexOf`, so a multi-line marker or a sentinel
-     anywhere is found (G1/round-5 part 1, hardened round-11); and (3) the
+     anywhere is found (G1/round-5 part 1, hardened round-11). **The probe is a fail-closed
+     BELT, not the authority (round-14):** it recovers only a block that still bears some
+     evidence, so a default block tampered beyond ALL evidence is indistinguishable from a
+     non-Wienerdog file and unrecoverable — the runbook's declaration guidance requires the
+     operator to declare default-location harnesses explicitly, not rely on the probe;
+     and (3) the
      **operator's declared PATH list** (`DECLARED_PATHS` / `$DeclaredPaths`) — an
      explicit ordinal list of managed-block FILE PATHS from trusted inventory, **not**
      harness names, so it expresses **multiple installed roots for one harness** and any
@@ -902,41 +932,50 @@ headless/`--yes` bypass — it is interactive and shows the exact bytes.
      whole-file byte-exact (`Buffer.indexOf`), so a **multi-line** marker matches and a
      duplicate sentinel pair on one line is counted. bash and PS are thereby provably
      identical (same verifier bytes).
-   - **Completeness argument (round-7, corrected round-11).** Reason explicitly about
+   - **Completeness argument (round-7, corrected round-11/14).** Reason explicitly about
      whether any genuinely-installed managed-block file can still be omitted from the
      checked set while DRILL PASS prints. The three sources cover: the **manifest** (every
-     current-env root `sync` re-records post-sync), the **fail-closed default-probe**
-     (every default location bearing any Wienerdog evidence — ≥1 sentinel OR the marker,
-     so a DAMAGED one-/zero-sentinel block no longer hides from its own discovery), and
-     the **declared paths** (every root trusted inventory knows — including multiple roots
-     per harness and non-default, non-current-env roots). Since checked == manifest ∪
-     probe ∪ declared, an installed file is omitted **iff** it is in none of the three:
-     NOT in the manifest AND NOT at a default location AND NOT declared. **A
-     sentinel-deleted damaged block at a KNOWN default location was a machine-checkable
-     gap (round-11 G1) — the file is at a default path but its discovery required an
-     intact pair — now closed by fail-closed discovery.** With that fixed, the sole
-     remaining omission is a root no on-machine source knows — **unknowable by
-     construction** — the documented stop-and-escalate residual. There is no fourth
-     omission path.
-   - **Blocking residual — a root no trusted record knows (round-5 G1 / round-7,
-     cf. ADR-0028 honest boundary / A12 hand-off).** Per the completeness argument,
-     the ONE case NOT machine-closable is a managed-block file that is in NONE of the
-     three sources: not in the (possibly-tampered) manifest, not at a default
-     location, AND not in the operator's declared paths because they cannot establish
-     their **complete** inventory from **trusted** evidence (own install notes /
-     persisted incident evidence — not the tampered manifest). Such a root no trusted
-     record names is invisible to every source — no on-machine source knows it exists,
-     so the drill **cannot certify the machine**.
-     The runbook documents this as a **BLOCKING residual**: like step 1's "cannot
-     reboot", the operator must **STOP and escalate** and must NOT read a DRILL PASS
-     as proof. The machine-enforced checks close every case where the harness set is
-     knowable (default-dir via the probe; any declared harness via the skip-BLOCK,
-     which forces the operator to point its env var at the real dir → `sync` detects
-     and records it → it is checked); the residual names exactly the part that is not
-     — a principled boundary in the same discipline as ADR-0028's A7-residual /
-     A12 hand-off, not an open hole. The runbook must NOT claim under-declaration can
-     never pass; it states the exact unclosable case and that it BLOCKS via
-     stop-and-escalate.
+     current-env root `sync` re-records post-sync, but MAY be tampered), the **fail-closed
+     default-probe** (a default location, but only while the block still bears SOME
+     Wienerdog evidence — ≥1 sentinel OR the marker; it CANNOT recover a block tampered
+     beyond all evidence, which is indistinguishable on-machine from a non-Wienerdog
+     file), and the **declared paths** (every root trusted inventory names — including
+     defaults, multiple roots per harness, and non-default/non-current-env roots). Since
+     checked == manifest ∪ probe ∪ declared, an installed file is omitted **iff** it is in
+     none of the three: NOT in the (tamperable) manifest AND NOT recoverable by the
+     evidence-bearing probe AND NOT declared. That omission has TWO shapes — **(a)** an
+     unknown custom root the inventory doesn't name, and **(b)** a block **at ANY
+     location, default included, tampered beyond ALL Wienerdog evidence** — but both are
+     the **same** limit: an installed file the operator's **complete trusted inventory**
+     would name but they failed to declare (or cannot establish). It is **unknowable by
+     construction** (the machine cannot tell shape (b) from a non-Wienerdog file), so the
+     complete-inventory declaration is the authority and an incomplete inventory is the
+     documented stop-and-escalate residual. There is no fourth omission path. (The
+     round-11 fail-closed probe closed the *evidence-bearing* damaged-default-block gap;
+     the *beyond-evidence* case was never machine-closable and belongs to this residual.)
+   - **Blocking residual — an installed block the trusted inventory doesn't name AND
+     the machine can't recover (round-5 G1 / round-7, corrected round-14; cf. ADR-0028
+     honest boundary / A12 hand-off).** Per the completeness argument, the ONE
+     non-machine-closable case is a managed-block file in NONE of the three sources, in
+     either of two shapes that are the **same** incomplete-inventory limit: **(a)** an
+     **unknown custom root** the inventory doesn't name; and **(b)** a managed block **at
+     ANY location, default included, tampered beyond ALL Wienerdog evidence** (altered
+     sentinels AND altered/absent marker) — **indistinguishable on-machine from a
+     non-Wienerdog file**, so no content-based probe can recover it (force-adding every
+     default file would false-FAIL legitimate non-Wienerdog files). In BOTH shapes the
+     defense is identical: **declare the COMPLETE trusted inventory** (every installed
+     harness file, defaults included) — a declared path enters must-check and, if its
+     sentinels were altered, FAILS the exactly-one-pair check. If the operator cannot
+     establish their complete inventory from **trusted** evidence, the drill **cannot
+     certify the machine**. The runbook documents this as a **BLOCKING residual**: like
+     step 1's "cannot reboot", **STOP and escalate**, never read a DRILL PASS as proof.
+     The runbook must **strengthen the declaration guidance** (declare complete inventory
+     INCLUDING default locations; the probe is a fail-closed BELT, not the sole
+     discovery), must **NOT** claim only a non-default custom root can escape (a
+     default-location block tampered beyond evidence escapes too), and must **NOT** claim
+     the probe closes the tampered-beyond-evidence case (it cannot). A principled
+     boundary in the same discipline as ADR-0028's A7-residual / A12 hand-off, not an
+     open hole.
    - **Drive the installed SessionStart hook — in the LAST step, after sync (F1).** Run
      the installed hook at `$CORE/bin/session-start.sh` (Table A; the adapter installs it
      under the core — `doctor` does **not** print the path) with `WIENERDOG_HOME` set to
@@ -1189,14 +1228,19 @@ the runbook never contains a bare operative `state/<file>` token.
       all hold or DRILL FAIL: `sync` clean (notice-tolerant); manifest validates;
       **must-check set (manifest ∪ probe ∪ declared, ordinal-deduped) == checked set**
       (≥1); every element present + verified; no adapter-skip. All PowerShell path
-      set-ops are ORDINAL (round-6 G1). **Completeness (round-7):** since checked ==
-      manifest ∪ probe ∪ declared, an installed managed-block file is omitted iff it is
-      in NONE of the three — NOT in the manifest, NOT at a default location, AND NOT
-      declared — which is exactly a root no on-machine source knows (unknowable by
-      construction). **That is the sole residual**, a documented **BLOCKING**
+      set-ops are ORDINAL (round-6 G1). **Completeness (round-7, corrected round-14):**
+      since checked == manifest ∪ fail-closed-probe ∪ declared, an installed managed-block
+      file is omitted iff it is in NONE of the three — the probe recovers only a block
+      still bearing SOME Wienerdog evidence (≥1 sentinel OR the marker), so the omission
+      has two shapes, both the SAME incomplete-inventory limit: **(a)** an unknown custom
+      root the inventory doesn't name, and **(b)** a block at ANY location (default
+      included) tampered beyond ALL evidence — indistinguishable on-machine from a
+      non-Wienerdog file. **That is the sole residual**, a documented **BLOCKING**
       stop-and-escalate (like step 1's "cannot reboot"), cross-referencing ADR-0028's
-      honest boundary / A12. There is no fourth omission path; it does **not** claim
-      under-declaration can never pass.
+      honest boundary / A12; the defense in both shapes is to declare the COMPLETE trusted
+      inventory (defaults included). There is no fourth omission path; the runbook does
+      **not** claim only a custom root can escape, nor that the probe closes the
+      tampered-beyond-evidence case.
 - [ ] **[Round-2 F2]** The PowerShell block passes the core path to `bash` as a
       **positional argument** (`bash -c '… "$1" …' _ "$coreFwd"`), never
       interpolated into the bash source, so a path containing an apostrophe,
@@ -1300,6 +1344,10 @@ diff <(awk '/cat > "\$WORK\/verify.js" <<.VERIFY.$/{f=1;next} f&&/^VERIFY$/{f=0}
 # Round-11 G1: fail-closed default-probe discovery — EITHER sentinel OR the marker (not an
 # intact pair), so a sentinel-deleted damaged default block is still discovered:
 grep -nE "FAIL-CLOSED discovery|occ\(b, SENT_B\) >= 1 \|\| occ\(b, SENT_E\) >= 1 \|\| has\(b, marker\)" docs/runbooks/incident.md
+# Round-14: declaration guidance requires declaring COMPLETE inventory INCLUDING defaults;
+# probe is a BELT not the authority; residual includes tampered-beyond-evidence at ANY
+# location (indistinguishable from a non-Wienerdog file), not only unknown custom roots:
+grep -niE "INCLUDING the default locations|belt, not the authority|tampered beyond ALL|beyond all Wienerdog evidence|indistinguishable on-machine|declare .* default-location harnesses" docs/runbooks/incident.md
 # Round-8 G1 negative: NO case-insensitive -ne/-eq on a basename, and NO default
 # (case-insensitive) switch on GetFileName, in PowerShell CODE (expect NO output):
 awk '/^```powershell$/{p=1;next} /^```$/{p=0} p' docs/runbooks/incident.md | grep -vE '^\s*#' | grep -nE "\-ne '(CLAUDE|AGENTS)\.md'|\-eq '(CLAUDE|AGENTS)\.md'|switch \(\[System\.IO\.Path\]::GetFileName" || true
