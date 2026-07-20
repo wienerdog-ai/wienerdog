@@ -31,7 +31,18 @@ const { WienerdogError } = require('./errors');
  * FAILURE path AND the whole top-level protected set (F9/F12/F13: a single
  * `mechanicsRootUntrusted` entry gate over core/state/logs/secrets refuses at
  * the top of `run()`/`dream.run` before ANY dispatch mode or writer; the failure
- * surfaces via a non-core channel, stderr + email):
+ * surfaces via a non-core channel, stderr + email).
+ *
+ * SCOPE (F15, honest): this WP's guarantee covers (1) the private-fs repair/write
+ * helpers for their OWN operations, and (2) the `mechanicsRootUntrusted` entry
+ * gate for the run-job/dream JOB DISPATCHERS. It does NOT cover OTHER mutating
+ * CLI entry points — notably `gws auth`→`writeSecretJson` (src/gws/*), and
+ * potentially sync/init/adopt/uninstall — which can still follow a pre-existing
+ * symlinked protected dir (e.g. a symlinked `secrets/`) and write out-of-tree.
+ * Hardening every mutating CLI entry point is a cross-cutting SEPARATE WP
+ * (candidate: fold those core writers onto the ancestry-validated private writer,
+ * or call `mechanicsRootUntrusted` at each CLI entry before persistence). Do NOT
+ * read this module as universal protection for all CLI paths.
  *  - ROOT: `coreRootContext` opens the core `O_DIRECTORY|O_NOFOLLOW` + fstat
  *    before trusting its realpath — a symlinked/non-dir core is an anomaly, NO
  *    descendant is enumerated/repaired, every WRITE refuses, and the entry gate
@@ -56,13 +67,20 @@ const { WienerdogError } = require('./errors');
  * (do NOT claim uniform loudness):
  *   W1. readdir-enumeration → fd-bind (repair): the (dev, ino) fd-revalidation
  *       REFUSES the redirected open — no chmod; surfaced by the next scan.
- *   W2. ancestor validate/open → leaf op (repair AND write): the repair path
- *       still refuses via (dev, ino), BUT the WRITE helpers have NO post-open
- *       ancestry revalidation — after `assertInCoreAncestry`/the open, a
- *       concurrent ancestor swap redirects the leaf op to an EXTERNAL target and
- *       the helper returns SUCCESSFULLY. This window can SILENTLY chmod/write/
- *       rename out-of-tree AND, via `rotateLogs`, silently DELETE external files
- *       (F11 adds a cheap lstat-first guard that narrows but cannot close it).
+ *   W2. ancestor/root validate → leaf op (repair AND write): the WRITE helpers
+ *       have NO post-open ancestry revalidation — after `assertInCoreAncestry`/
+ *       the open, a concurrent ancestor swap redirects the leaf op to an EXTERNAL
+ *       target and the helper returns SUCCESSFULLY: SILENTLY chmods/writes/renames
+ *       out-of-tree AND, via `rotateLogs`, silently DELETEs external files (F11's
+ *       cheap lstat-first guard narrows, not closes). The REPAIR path is NOT
+ *       uniformly safe here either (F17): `coreRootContext` opens the core fd +
+ *       fstat (proving the OPENED dir real) but derives `coreReal` from the
+ *       PATHNAME via `realpath` — a swap of the core PATH between open/fstat and
+ *       `realpath` makes the external dir the trusted root, so enumeration
+ *       captures the external descendants' REAL (dev,ino) and `applyModeSecure`'s
+ *       fd check PASSES → repair SILENTLY chmods out-of-tree. F17 adds a narrow
+ *       (retain the fd's (dev,ino), lstat the realpath'd result, refuse on
+ *       mismatch) that narrows but cannot close it (an ABA swap defeats it).
  *   W3. mode-000 lstat → path-`chmodSync` (`applyModeFallback`): worst case ONE
  *       chmod on a swapped target. The post-chmod (dev, ino) re-lstat surfaces it
  *       LOUDLY only if the substitution PERSISTS through revalidation — an ABA
@@ -241,6 +259,9 @@ function mkdirPrivate(dir, opts = {}) {
  * (no post-write path-following chmod); then an atomic rename replaces `dest`
  * (rename never follows a symlink at `dest`). win32 keeps the plain atomic
  * temp+rename (POSIX-only hardening).
+ * F16 (pre-existing): a pre-existing SYMLINK (or any non-regular-file) at `dest`
+ * is REFUSED + surfaced (throws) — a plain rename would silently replace it. A
+ * missing dest (create) or a real regular-file dest (atomic replace) is fine.
  * @param {string} dest @param {string|Buffer} data
  * F10 (concurrent, W4): after the O_EXCL open a concurrent same-owner process
  * could unlink the temp entry and plant a symlink at that pathname, so the
@@ -260,6 +281,21 @@ function writeFilePrivate(dest, data, opts = {}) {
     fs.writeFileSync(tmp, data, { mode: 0o600 });
     fs.renameSync(tmp, dest);
     return;
+  }
+  // F16: REFUSE a pre-existing symlink (or any non-regular-file) at `dest`. The
+  // O_EXCL temp protects the TEMP name and `rename` never follows a dest symlink,
+  // but a plain rename would SILENTLY replace a pre-existing `dest` symlink
+  // (e.g. `state/broker-grants.json`→/external) without refusing/surfacing it —
+  // violating the "every pre-existing symlink at every position is refused +
+  // surfaced" invariant. A missing dest (normal create) or a real regular-file
+  // dest (normal atomic replace) is fine; only a symlink / non-regular entry is
+  // the anomaly. lstat never follows.
+  const destLs = lstatOrNull(dest);
+  if (destLs && !destLs.isFile()) {
+    throw new WienerdogError(
+      `refusing to write ${dest}: a ${destLs.isSymbolicLink() ? 'symlink' : 'non-regular-file'} is in the way ` +
+        '(a private Wienerdog file must be a real regular file — investigate and remove it)'
+    );
   }
   const openSync = opts.openSync || fs.openSync;
   const fstatSync = opts.fstatSync || fs.fstatSync;
@@ -469,15 +505,32 @@ function coreRootContext(paths) {
     // failure (e.g. EIO) — fall back to an lstat re-classify — so a private
     // write never crashes on it.
     let isDir;
+    let fdStat = null;
     try {
-      isDir = fs.fstatSync(fd).isDirectory();
+      fdStat = fs.fstatSync(fd);
+      isDir = fdStat.isDirectory();
     } catch {
       const ls = lstatOrNull(paths.core);
       isDir = !!(ls && !ls.isSymbolicLink() && ls.isDirectory());
     }
     if (!isDir) return { coreReal: null, coreAnomaly: true };
     const coreReal = realpathOrNull(paths.core);
-    return coreReal ? { coreReal, coreAnomaly: false } : { coreReal: null, coreAnomaly: true };
+    if (!coreReal) return { coreReal: null, coreAnomaly: true };
+    // F17 narrow (detection-not-prevention): the fd proves the OPENED dir is
+    // real, but `realpath` re-resolves the PATHNAME — a concurrent swap of the
+    // core path AFTER open/fstat but BEFORE realpath could now point it at an
+    // external dir, making that the trusted root. When we have the fd's
+    // (dev,ino), confirm the realpath'd result is the SAME inode; a mismatch
+    // means the core path was swapped between open and realpath → refuse. This
+    // NARROWS (does not close — an ABA swap that restores the inode before this
+    // lstat still passes) the A12 root open→realpath window.
+    if (fdStat) {
+      const rp = lstatOrNull(coreReal);
+      if (!rp || rp.dev !== fdStat.dev || rp.ino !== fdStat.ino) {
+        return { coreReal: null, coreAnomaly: true };
+      }
+    }
+    return { coreReal, coreAnomaly: false };
   } finally {
     try {
       fs.closeSync(fd);

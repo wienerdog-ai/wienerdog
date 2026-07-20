@@ -850,3 +850,52 @@ test('private-fs: F10/W4 — a concurrent temp substitution at rename is DETECTE
     assert.equal(fs.readFileSync(externalTarget, 'utf8'), 'ATTACKER', 'external target content unchanged');
   });
 });
+
+test('private-fs: F16 — a PRE-EXISTING symlinked destination is REFUSED + surfaced; the symlink and its external target are UNCHANGED', { skip: !POSIX }, () => {
+  withUmask(0o022, () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-privfs-'));
+    const paths = pathsFor(root);
+    fs.mkdirSync(paths.state, { recursive: true });
+    fs.chmodSync(paths.core, 0o700);
+    fs.chmodSync(paths.state, 0o700);
+    const external = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-ext-dest-'));
+    const externalTarget = path.join(external, 'grants-target');
+    fs.writeFileSync(externalTarget, 'EXTERNAL', { mode: 0o644 });
+    const dest = path.join(paths.state, 'broker-grants.json');
+    // dest is a PRE-EXISTING symlink → external. A plain rename-over would
+    // silently delete this link; writeFilePrivate must refuse + surface.
+    fs.symlinkSync(externalTarget, dest);
+
+    assert.throws(
+      () => writeFilePrivate(dest, '{"grants":[]}', { core: paths.core }),
+      (e) => e instanceof WienerdogError && /a symlink is in the way/.test(e.message),
+      'a pre-existing symlinked dest is refused, not silently replaced'
+    );
+    // The dest symlink AND its external target are unchanged (byte + mode).
+    assert.equal(fs.lstatSync(dest).isSymbolicLink(), true, 'dest is still the symlink (not replaced)');
+    assert.equal(fs.readlinkSync(dest), externalTarget, 'dest still points at the external target');
+    assert.equal(fs.readFileSync(externalTarget, 'utf8'), 'EXTERNAL', 'external target content unchanged');
+    assert.equal(modeOf(externalTarget), 0o644, 'external target mode unchanged');
+    // No stray temp file left behind in state/.
+    assert.deepEqual(fs.readdirSync(paths.state), ['broker-grants.json'], 'no leftover temp file');
+  });
+});
+
+test('private-fs: F16 — a real regular-file destination is still atomically replaced (0600), a missing dest is created', { skip: !POSIX }, () => {
+  withUmask(0o022, () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-privfs-'));
+    const paths = pathsFor(root);
+    fs.mkdirSync(paths.state, { recursive: true });
+    fs.chmodSync(paths.core, 0o700);
+    fs.chmodSync(paths.state, 0o700);
+    const dest = path.join(paths.state, 'broker-grants.json');
+    // missing → created
+    writeFilePrivate(dest, 'first', { core: paths.core });
+    assert.equal(fs.readFileSync(dest, 'utf8'), 'first');
+    assert.equal(modeOf(dest), 0o600);
+    // real regular-file dest → atomically replaced (F16 refuses ONLY non-regular)
+    writeFilePrivate(dest, 'second', { core: paths.core });
+    assert.equal(fs.readFileSync(dest, 'utf8'), 'second');
+    assert.equal(modeOf(dest), 0o600);
+  });
+});
