@@ -205,6 +205,50 @@ test('private-fs: TWO-PHASE repair — a 000 secrets/ hiding a 0644 token is ful
   });
 });
 
+test('private-fs: FIXED-POINT repair — TWO nested unreadable dirs (logs/=000, logs/dream/=000) fully fixed by a SINGLE call (WP-a9 G1)', { skip: !POSIX }, () => {
+  withUmask(0o022, () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-privfs-'));
+    const paths = pathsFor(root);
+    fs.mkdirSync(path.join(paths.logs, 'dream'), { recursive: true });
+    fs.chmodSync(paths.core, 0o700);
+    fs.writeFileSync(path.join(paths.logs, 'dream', 'run.log'), 'log', { mode: 0o644 });
+    // Two nested levels of unreadable directory: one enumerate-then-repair pass
+    // can only open ONE level, so a fixed count of passes leaves the innermost
+    // file untouched. Chmod inner-first here so BOTH end 000.
+    fs.chmodSync(path.join(paths.logs, 'dream'), 0o000);
+    fs.chmodSync(paths.logs, 0o000);
+
+    repairPrivateModes(paths);
+    assert.equal(modeOf(paths.logs), 0o700, 'outer logs/ opened');
+    assert.equal(modeOf(path.join(paths.logs, 'dream')), 0o700, 'inner logs/dream/ opened');
+    assert.equal(modeOf(path.join(paths.logs, 'dream', 'run.log')), 0o600, 'the doubly-trapped log reached in ONE call');
+    assert.deepEqual(scanPrivateModes(paths), { insecure: 0 }, 'clean after a single repair call');
+  });
+});
+
+test('private-fs: FIXED-POINT repair — core/=000 hiding secrets/=000 hiding a 0644 token fixed by a SINGLE call (WP-a9 G1)', { skip: !POSIX }, () => {
+  withUmask(0o022, () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-privfs-'));
+    const paths = pathsFor(root);
+    fs.mkdirSync(paths.secrets, { recursive: true });
+    fs.writeFileSync(paths.config, 'vault: null\n', { mode: 0o644 });
+    fs.writeFileSync(path.join(paths.secrets, 'google-token-read.json'), '{}', { mode: 0o644 });
+    fs.writeFileSync(path.join(paths.secrets, 'google-client.json'), '{}', { mode: 0o644 });
+    // secrets/ is 000 AND its parent core/ is 000 — two nested unreadable levels
+    // above the trapped token/client files. Chmod inner-first.
+    fs.chmodSync(paths.secrets, 0o000);
+    fs.chmodSync(paths.core, 0o000);
+
+    repairPrivateModes(paths);
+    assert.equal(modeOf(paths.core), 0o700, 'outer core/ opened');
+    assert.equal(modeOf(paths.secrets), 0o700, 'inner secrets/ opened');
+    assert.equal(modeOf(path.join(paths.secrets, 'google-token-read.json')), 0o600, 'trapped token reached in ONE call');
+    assert.equal(modeOf(path.join(paths.secrets, 'google-client.json')), 0o600, 'trapped client JSON reached in ONE call');
+    assert.equal(modeOf(paths.config), 0o600, 'the core-root metadata file reached too');
+    assert.deepEqual(scanPrivateModes(paths), { insecure: 0 }, 'clean after a single repair call');
+  });
+});
+
 test('private-fs: repairPrivateModes never creates secrets/ or any file (repair, never create)', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-privfs-'));
   const paths = pathsFor(root);

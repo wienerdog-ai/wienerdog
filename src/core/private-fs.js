@@ -140,14 +140,18 @@ function listFiles(dir, keep) {
  * @param {import('./paths').WienerdogPaths} paths
  * @returns {{dirs:string[], files:string[]}}
  */
-function listPrivateEntries(paths) {
+/** The DIRECTORY half of the single enumerator (kept a separate internal
+ *  function so the fixed-point repair loop can enumerate dirs WITHOUT the
+ *  redundant per-iteration secrets/scratch file walk; `listPrivateEntries`
+ *  builds on it, so all surfaces still share one dir source).
+ *  @param {import('./paths').WienerdogPaths} paths @returns {string[]} */
+function listPrivateDirs(paths) {
   let jobDirs;
   try {
     jobDirs = fs.readdirSync(paths.logs, { withFileTypes: true }).filter((e) => e.isDirectory());
   } catch {
     jobDirs = [];
   }
-
   const dirSet = new Set();
   const dirCandidates = [
     ...A5_PRIVATE_DIRS(paths),
@@ -158,9 +162,14 @@ function listPrivateEntries(paths) {
     try {
       if (fs.statSync(d).isDirectory()) dirSet.add(d);
     } catch {
-      /* missing → skipped */
+      /* missing / parent unreadable → skipped */
     }
   }
+  return [...dirSet];
+}
+
+function listPrivateEntries(paths) {
+  const dirs = listPrivateDirs(paths);
 
   const fileSet = new Set();
   const fileCandidates = [
@@ -175,38 +184,78 @@ function listPrivateEntries(paths) {
       /* missing → skipped */
     }
   }
-  for (const job of jobDirs) {
-    for (const f of listFiles(path.join(paths.logs, job.name), (n) => n.endsWith('.log'))) fileSet.add(f);
+  // Every discovered logs/<job> subdir contributes its *.log files (the dir set
+  // already resolved which job dirs are traversable).
+  for (const d of dirs) {
+    if (path.dirname(d) === paths.logs) {
+      for (const f of listFiles(d, (n) => n.endsWith('.log'))) fileSet.add(f);
+    }
   }
   for (const f of listFiles(path.join(paths.state, 'dream-scratch'), (n) => n.endsWith('.json'))) fileSet.add(f);
   for (const f of listFiles(path.join(paths.state, 'quarantine'), () => true)) fileSet.add(f);
   for (const f of listFiles(paths.secrets, () => true)) fileSet.add(f);
-  return { dirs: [...dirSet], files: [...fileSet] };
+  return { dirs, files: [...fileSet] };
 }
 
+/** Defensive iteration cap for the fixed-point directory repair. The real
+ *  private tree is shallow (core → state → {dream-scratch,quarantine},
+ *  core → logs → <job>, core → secrets — depth 3), so a handful of passes
+ *  always converges; this cap only guards against a pathological/unbounded
+ *  spin and CANNOT be hit by the real layout. If it is ever hit the repair is
+ *  aborted (fail-closed) rather than reporting a partial repair as complete. */
+const MAX_DIR_REPAIR_PASSES = 64;
+
 /**
- * Repair wrong modes over the A5 ∪ A9 set: every existing dir → 0700, every
- * existing file → 0600 (over-tight modes included — expected-mode equality).
- * TWO-PHASE (WP-a9 round-3): phase 1 chmods every enumerated DIRECTORY to 0700
- * first — a 000/non-executable `secrets/` (or logs/) hides its contents from
- * the enumeration (`listFiles`'s readdirSync fails → []), so a one-pass repair
- * would fix the dir but leave a 0644 token trapped inside it until the NEXT
- * sync. Phase 2 then RE-RUNS the same enumerator (the now-0700 dirs yield
- * their contents) and chmods the newly visible dirs + every file. Idempotent;
- * best-effort per entry (a missing or odd entry is skipped, never throws);
- * win32 chmod is a no-op. Returns the count of entries actually changed for a
- * truthful doctor/sync line.
+ * Repair wrong modes over the A5 ∪ A9 set to their EXPECTED mode (dirs 0700,
+ * files 0600 — over-tight modes repaired too, expected-mode equality).
+ *
+ * FIXED-POINT DIRECTORY REPAIR, THEN A SINGLE FILE PASS (WP-a9 round-3 + G1).
+ * A 000/non-executable directory hides its contents from the enumeration
+ * (`readdirSync`/`statSync` fail through the unreadable parent → skipped), and
+ * this can nest to ANY depth (`logs/`=000 hiding `logs/<job>/`=000 hiding a
+ * `0644` log; `core/`=000 hiding `secrets/`=000 hiding a `0644` token). A fixed
+ * number of passes only opens a fixed number of levels, leaving a deeper file
+ * world-readable until the next sync — a fail-open in a security guard. So the
+ * DIRECTORY repair is a fixed-point LOOP: chmod every currently-discoverable
+ * private dir to 0700 and RE-ENUMERATE, repeating until the discoverable dir
+ * set stops growing (each newly-traversable dir can reveal deeper ones). The
+ * set is monotonic (a chmod only reveals more, never hides) and bounded by the
+ * finite tree, so it converges; the cap is purely defensive. Only AFTER every
+ * private dir is traversable does ONE fresh file enumeration run and chmod
+ * files to 0600 — so a token trapped under any nesting depth is reached in this
+ * single `repairPrivateModes` call, and a follow-up `scanPrivateModes` is
+ * `{insecure: 0}`.
+ *
+ * Best-effort per entry (a missing or un-chmoddable entry is skipped); win32
+ * chmod is a no-op. Returns the count of entries actually changed for a
+ * truthful doctor/sync line. Keeps the single-enumerator invariant: the dir
+ * loop and the file pass both derive from `listPrivateDirs`/`listPrivateEntries`
+ * that feed the three read surfaces.
  * @param {import('./paths').WienerdogPaths} paths @returns {{changed:number}}
+ * @throws {WienerdogError} if the directory repair does not converge within the
+ *   defensive cap (unreachable by the real layout — surfaced, never silent).
  */
 function repairPrivateModes(paths) {
   let changed = 0;
-  // Phase 1 — dirs first: make every unreadable/over-tight dir traversable.
-  for (const d of listPrivateEntries(paths).dirs) if (chmodIfNeeded(d, 0o700)) changed += 1;
-  // Phase 2 — re-enumerate (same enumerator — single-predicate invariant), then
-  // fix the newly visible dirs and every file.
-  const { dirs, files } = listPrivateEntries(paths);
-  for (const d of dirs) if (chmodIfNeeded(d, 0o700)) changed += 1;
-  for (const f of files) if (chmodIfNeeded(f, 0o600)) changed += 1;
+  // Fixed-point directory phase: repair discoverable private dirs to 0700 and
+  // re-enumerate until the discoverable set stops growing.
+  let prevCount = -1;
+  let pass = 0;
+  for (; pass < MAX_DIR_REPAIR_PASSES; pass += 1) {
+    const dirs = listPrivateDirs(paths);
+    for (const d of dirs) if (chmodIfNeeded(d, 0o700)) changed += 1;
+    if (dirs.length === prevCount) break; // no newly-revealed dir → fixed point
+    prevCount = dirs.length;
+  }
+  if (pass >= MAX_DIR_REPAIR_PASSES) {
+    throw new WienerdogError(
+      'private-modes repair did not converge within its bounded directory-repair cap — ' +
+        'the private directory tree is unexpectedly deep; repair aborted rather than reporting ' +
+        'a partially-repaired credential store as complete.'
+    );
+  }
+  // Every private dir is now traversable → one fresh file pass to 0600.
+  for (const f of listPrivateEntries(paths).files) if (chmodIfNeeded(f, 0o600)) changed += 1;
   return { changed };
 }
 
