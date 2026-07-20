@@ -225,6 +225,9 @@ test('broker-server: resolves on stdin EOF and reports exit code via the onExit 
 test('broker-server: `wienerdog gws _broker` speaks the handshake over real stdio and exits on EOF', async () => {
   // Since WP-141 the entry assembles the REAL registry for a known routine
   // (an isolated temp core: no credentials → verbs advertise but refuse).
+  // ADR-0026 amendment 1: the server-side allowlist advertises ONLY the
+  // routine's declared brokerVerbs, so daily-digest advertises exactly its four.
+  const { getProfile } = require('../../src/core/runtime-profile');
   const os = require('node:os');
   const fs = require('node:fs');
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-brokercli-'));
@@ -249,7 +252,12 @@ test('broker-server: `wienerdog gws _broker` speaks the handshake over real stdi
   assert.equal(replies.length, 2, 'initialize + tools/list replies, nothing else on stdout');
   assert.equal(replies[0].result.protocolVersion, '2025-11-25');
   assert.equal(replies[0].result.serverInfo.name, BROKER_SERVER_NAME);
-  assert.ok(replies[1].result.tools.length >= 8, 'the real WP-137 registry is advertised');
+  const declared = getProfile('daily-digest').brokerVerbs;
+  assert.deepEqual(
+    replies[1].result.tools.map((t) => t.name).sort(),
+    [...declared].sort(),
+    'the real registry advertises ONLY daily-digest’s declared brokerVerbs (server-side allowlist)'
+  );
 });
 
 test('broker-server: `gws _broker` stays hidden — absent from `wienerdog help` output', async () => {

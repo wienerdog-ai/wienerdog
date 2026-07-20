@@ -382,10 +382,18 @@ function resolveCommand(paths, job, profile) {
     // before ANY composition/staging — fail closed even for a hand-edited
     // config.yaml job. Still BLOCKED in production (no profile arg → frozen).
     requireCapability(CAPABILITY.EXTERNAL_CONTENT_ROUTINE, profile);
+    // Dual gate (ADR-0026 amendment 1): a broker-backed routine uses Google, so it
+    // also needs gws-use. Enforced HERE at the parent (the JS profile seam) — NOT
+    // inside the gws _broker subprocess, which reads FROZEN_PROFILE with no seam and
+    // would be untestable while frozen. Net semantics: routine Google access needs
+    // BOTH external-content-routine AND gws-use.
+    const routineRt = require('../core/routine-runtime');
+    const prof = require('../core/runtime-profile').getProfile(routineRt.profileIdForSkill(rest));
+    if (prof.mcp === 'broker') requireCapability(CAPABILITY.GWS_USE, profile);
     // Hermetic routine composition (WP-131, ADR-0025): code-owned profile
     // lookup (unknown skill → fail closed), staging cwd as the only writable
     // root, hook-free settings, verified skill body, broker MCP seam (A2).
-    return require('../core/routine-runtime').composeRoutineRun(paths, job);
+    return routineRt.composeRoutineRun(paths, job);
   }
   throw new WienerdogError(`unknown job run kind in "${job.run}"`);
 }

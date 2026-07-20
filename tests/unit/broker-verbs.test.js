@@ -78,12 +78,15 @@ function fakeServices() {
   };
 }
 
-/** Registry over fresh fakes; grant allowed unless overridden. */
+/** Registry over fresh fakes; grant allowed unless overridden. These verb-dispatch
+ *  tests exercise the whole verb table, so the server-side allowlist (ADR-0026
+ *  amendment 1) is opened to every verb unless a test overrides it. */
 function makeRegistry(overrides = {}) {
   const services = overrides.services || fakeServices();
   const registry = buildRegistry({
     services,
     routineId: 'daily-digest',
+    allowedVerbs: overrides.allowedVerbs || Object.keys(VERBS),
     grantCheck: overrides.grantCheck || (() => true),
     limitsState: overrides.limitsState,
   });

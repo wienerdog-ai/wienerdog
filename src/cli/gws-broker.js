@@ -102,6 +102,7 @@ async function assembleRegistry(paths, profile) {
   const inner = buildRegistry({
     services: compositeServices(byClass),
     routineId: profile.id,
+    allowedVerbs: profile.brokerVerbs, // server-side per-verb allowlist (ADR-0026 amendment 1)
     grantCheck: (routineId, kind) => {
       const decision = grantStore.grantCheck(paths, routineId, kind);
       if (decision.alert) process.stderr.write(`wienerdog broker: ${decision.alert}\n`);

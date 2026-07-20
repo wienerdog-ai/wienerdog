@@ -61,6 +61,7 @@ test('broker-e2e-negatives: send_digest_to_self with any external recipient fiel
     const registry = buildRegistry({
       services,
       routineId: 'daily-digest',
+      allowedVerbs: getProfile('daily-digest').brokerVerbs, // server-side allowlist (ADR-0026 amendment 1)
       grantCheck: () => true,
     });
     await assert.rejects(() =>
@@ -136,6 +137,7 @@ test('broker-e2e-negatives: a grant-store bit flip → send verb returns the fix
   const registry = buildRegistry({
     services,
     routineId: 'daily-digest',
+    allowedVerbs: getProfile('daily-digest').brokerVerbs, // server-side allowlist (ADR-0026 amendment 1)
     grantCheck: (rid, kind) => grantStore.grantCheck(paths, rid, kind).allowed,
   });
   const res = await registry.callTool('send_digest_to_self', { subject: 's', body: 'b' });

@@ -96,8 +96,11 @@ to `gws-broker.run(rest)` with NO profile (a subprocess cannot receive a JS seam
 | modify | src/cli/run-job.js | `resolveCommand` `skill:` branch: add `requireCapability(GWS_USE, profile)` for a broker-backed routine, beside the existing `external-content-routine` gate (parent-site, JS seam) |
 | modify | src/cli/gws-broker.js | pass `allowedVerbs: profile.brokerVerbs` to `buildRegistry` — NO startup `requireCapability` (leg C ruling) |
 | modify | src/gws/broker/registry.js | accept `allowedVerbs`; `listTools` advertises only those; `callTool` rejects an undeclared verb before dispatch |
-| modify | tests/unit/broker-registry.test.js | `listTools` == declared verbs only; an undeclared verb throws before dispatch |
+| create | tests/unit/broker-registry.test.js | `listTools` == declared verbs only; an undeclared verb throws before dispatch; absent/empty `allowedVerbs` fails closed |
 | modify | tests/unit/scheduler-runjob.test.js | `resolveCommand` for a broker routine throws under a blocked `gws-use` (even with `external-content-routine` allowed); composes under `allowAll()` |
+| modify | tests/unit/broker-verbs.test.js | its `makeRegistry` helper passes `allowedVerbs: Object.keys(VERBS)` (these tests exercise the whole verb table) — necessary consequence of the fail-closed allowlist |
+| modify | tests/unit/broker-e2e-negatives.test.js | its two `buildRegistry` calls pass `allowedVerbs: getProfile('daily-digest').brokerVerbs` — same consequence |
+| modify | tests/unit/broker-server.test.js | assert the advertised tool names equal the declared `brokerVerbs` (not `>= 8`) — the allowlist trims the advertised set |
 
 `tests/unit/broker-wiring.test.js` and `tests/scenarios/broker-e2e/` are
 **UNCHANGED** — the broker subprocess entry stays ungated (reachable only via the

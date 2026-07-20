@@ -23,24 +23,34 @@ const NO_GRANT_NOTICE =
  * Build the BrokerRegistry the WP-136 server consumes.
  * @param {{ services: {gmail?:object, calendar?:object, drive?:object},
  *           routineId: string,
+ *           allowedVerbs?: string[],
  *           grantCheck: (routineId: string, kind: string) => boolean,
  *           limitsState?: {counts: Map<string, number>} }} deps
+ *   `allowedVerbs` is the server-side per-verb allowlist (= the profile's
+ *   `brokerVerbs`, ADR-0026 amendment 1). Absent/empty ⇒ advertise nothing and
+ *   reject every call (fail closed — a broker profile always supplies its verbs).
  * @returns {import('./server').BrokerRegistry}
  */
 function buildRegistry(deps) {
   const { services, routineId, grantCheck } = deps;
+  const allowed = new Set(Array.isArray(deps.allowedVerbs) ? deps.allowedVerbs : []);
   const limitsState = deps.limitsState || createLimitsState();
 
   return {
     listTools() {
-      return Object.values(VERBS).map((v) => ({
-        name: v.name,
-        description: v.description,
-        inputSchema: v.inputSchema,
-      }));
+      return Object.values(VERBS)
+        .filter((v) => allowed.has(v.name))
+        .map((v) => ({
+          name: v.name,
+          description: v.description,
+          inputSchema: v.inputSchema,
+        }));
     },
 
     async callTool(name, args) {
+      // Server-side per-verb allowlist (ADR-0026 amendment 1): reject an
+      // undeclared verb BEFORE any service/validate/dispatch — zero side effect.
+      if (!allowed.has(name)) throw new WienerdogError('unknown broker verb');
       const verb = VERBS[name];
       if (!verb) throw new WienerdogError('unknown broker verb');
 

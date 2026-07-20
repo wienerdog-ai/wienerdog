@@ -405,6 +405,24 @@ test('scheduler-runjob: resolveCommand maps builtin:dream, skill:*, and rejects 
   );
 });
 
+test('scheduler-runjob: a broker routine is dual-gated — resolveCommand throws under a blocked gws-use even when external-content-routine is allowed (ADR-0026 amendment 1)', () => {
+  const { paths } = setup();
+  // A partial profile that OPENS external-content-routine but BLOCKS gws-use:
+  // the existing A0 gate passes, so any refusal must come from the new gws-use
+  // gate at the parent resolveCommand locus (the shared spawn site for scheduled
+  // AND catch-up routine runs).
+  const gwsBlocked = { ...allowAll(), 'gws-use': 'blocked' };
+  assert.throws(
+    () => runjob.resolveCommand(paths, { name: 'x', run: 'skill:wienerdog-daily-digest' }, gwsBlocked),
+    /"gws-use" is disabled/,
+    'a broker-backed routine refuses to compose while gws-use is blocked'
+  );
+  // Under allowAll() (both gates open) the same broker routine composes normally.
+  const s = runjob.resolveCommand(paths, { name: 'x', run: 'skill:wienerdog-daily-digest' }, allowAll());
+  assert.equal(s.command, 'claude', 'both gates open → the broker routine composes');
+  assert.equal(s.args.filter((a) => a === '--mcp-config').length, 1, 'the broker MCP config is wired');
+});
+
 test('scheduler-runjob: a set WIENERDOG_RUNJOB_CMD env var has ZERO effect — the seam no longer exists (WP-155)', () => {
   const { paths } = setup();
   const saved = process.env.WIENERDOG_RUNJOB_CMD;
