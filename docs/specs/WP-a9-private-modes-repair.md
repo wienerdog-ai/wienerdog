@@ -339,6 +339,46 @@ inherited; it is fixed here because this WP extended `repairPrivateModes` to the
 credential store (`secrets/`) and added the multi-level directory traversal,
 which is what turned the follow into a chmod-out-of-tree exposure.
 
+**AMENDED 2026-07-20 (Codex G3/G4) — leaf-only `O_NOFOLLOW` is not enough;
+revalidate the fd by `(dev, ino)`.** `O_NOFOLLOW` protects only the FINAL
+component: a concurrent swap of an **intermediate** directory (e.g.
+`logs/<job>` → symlink→`/external`) makes the leaf open land on
+`/external/outside.log`, and a bare `fchmod` would change that out-of-tree file.
+Pure Node has **no `openat`/`openat2`/`fdopendir`**, so this cannot be closed by
+opening each component relative to a verified parent fd. The real pure-Node
+close: **capture each entry's `(dev, ino)` at classification time** (the same
+`lstat` that classifies it) and, after the `O_NOFOLLOW` open, **`fstat` the fd
+and refuse the `fchmod` unless the fd's `(dev, ino)` equals the classified
+pair.** A redirected open lands on a DIFFERENT inode → mismatch → refuse +
+surface; `dev+ino` uniquely identify a file, so an attacker cannot fabricate a
+match for an external target (a hardlink to the same inode IS the same file, so
+chmodding it is chmodding the intended file). The **same** `(dev, ino)`
+revalidation guards the DIRECTORY chmod (dirs are opened `O_DIRECTORY|
+O_NOFOLLOW`, `fstat`-checked before `fchmod`). The `EACCES` fallback (G4) is
+narrowed: it fires **only** on a genuine `EACCES` whose fresh `lstat` confirms
+**not-a-symlink + expected kind + matching `(dev, ino)` + VERIFIED mode `000`**
+(a non-`000` `EACCES`/`EPERM`/`ELOOP`/`ENOTDIR`/`ENOENT`/`EIO` → refuse, never
+fall back), and after its `chmodSync` it **re-`lstat`s and refuses on any
+`(dev, ino)` change** (the chmod may have hit a swapped target — made
+observable).
+
+**The irreducible residual (documented, not chased).** A concurrent
+**owner-level** writer that swaps an intermediate directory component DURING the
+`readdirSync` enumeration itself — before any fd is bound — cannot be prevented
+in pure Node (`readdir` resolves through the path; there is no `fdopendir`/
+`openat`). This is the **same** same-user concurrent-writer class **ADR-0028**
+already hands to **A12** ("Honest boundary — the A7 residual"). The threat
+premise is explicit: the attacker must **already hold concurrent owner-level
+write access inside the already-`0700` core**; and because of the `(dev, ino)`
+revalidation the worst case is a **refused + surfaced** repair, **never a silent
+out-of-tree chmod**. The guarantee is therefore stated honestly — never-follow
+is enforced per classified entry via lstat-classification + `O_NOFOLLOW` +
+`(dev, ino)` fd-revalidation — **not** as an unconditional "never follows
+symlinks." (No native addon; no guarantee Node cannot provide.) *Follow-up for
+the architect:* `THREAT-MODEL.md` may want a one-line cross-reference to this
+`(dev,ino)`-revalidation residual under the A12 section — flagged, not edited
+here (out of this WP's Deliverables).
+
 **The shared private log-stream helper `createLogStreamPrivate` — FAIL-CLOSED
 (round-2 finding 6).** The two log writers must open their stream `0600`
 regardless of umask, including when appending into a **pre-existing** file (whose
