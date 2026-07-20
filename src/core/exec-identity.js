@@ -22,11 +22,36 @@
  * Honest boundary: in-place substitution of the user-owned target at its
  * unchanged path is NOT detected — that attacker could equally rewrite this
  * pin store; same-user native malware is A12's territory, not A7's.
+ *
+ * ── Fix-pass (2026-07-19, ADR-0028 amendments 1 & 2, FIX-PLAN C1) ──────────
+ * The In-Review design failed OPEN. This module is now fail-CLOSED on tamper
+ * and encapsulates execution:
+ *
+ *  - FAIL-CLOSED STORE STATE MACHINE. `readPinStore` distinguishes `absent`
+ *    (ENOENT — genuine first-run self-heal) from `tampered` (unreadable / bad
+ *    JSON / foreign schema — REFUSE). A store that EXISTS but lacks the
+ *    requested pin also fails closed (a valid partial store must not let a
+ *    later-planted binary live-resolve). [A1/A1b]
+ *  - INTERPRETER BINDING. A pinned `#!/usr/bin/env node` script (the shape of
+ *    claude/codex) re-resolves `node` via `env` from the job PATH; a planted
+ *    `node`/`env` would run. `bindInterpreter` is the single source of truth:
+ *    native → direct; node shebang → `process.execPath <script>`; absolute
+ *    NATIVE non-node interpreter → that interpreter; a PATH-resolving non-node
+ *    env shebang → THROW (never PATH-resolve an interpreter). [A2/R10/R13]
+ *  - EXECUTION-ONLY ENCAPSULATION. `spawnPinnedSync` / `spawnPinned` are the
+ *    ONLY public way to EXECUTE a pinned target; they resolve → verify → bind →
+ *    spawn and NEVER hand back a spawnable path or a raw child/event/error. The
+ *    exec-path helpers (resolveExecutable/verifyExecutable/readShebang/
+ *    bindInterpreter/verifyPin/resolvePinnedSpawn/buildPin/probeVersion) are
+ *    module-internal. `loadPins`/`createPins` stay exported because they return
+ *    pin state as DATA (descriptor digest + doctor/status) that no consumer
+ *    spawns. [R13/R15/R16]
  */
 
 const fs = require('node:fs');
 const path = require('node:path');
-const { spawnSync } = require('node:child_process');
+const EventEmitter = require('node:events');
+const { spawn, spawnSync } = require('node:child_process');
 
 const { WienerdogError } = require('./errors');
 const { writeFilePrivate } = require('./private-fs');
@@ -38,10 +63,22 @@ const EXEC_PINS_PATH = 'exec-pins.json';
 /** The executables the nightly jobs spawn. codex is optional (M4). */
 const PIN_NAMES = ['claude', 'git', 'codex'];
 
+/** Bounded first-line read for shebang classification. */
+const SHEBANG_READ_BYTES = 512;
+
+/** Best-effort version-probe bound. */
+const PROBE_TIMEOUT_MS = 10_000;
+
+/** Spawn error codes we surface verbatim (never path-bearing); anything else
+ *  collapses to a generic kind so no OS-detail leaks. */
+const APPROVED_ERROR_CODES = new Set(['ENOENT', 'EACCES', 'ETIMEDOUT', 'EAGAIN', 'ENOMEM', 'E2BIG', 'ENOEXEC']);
+
 /** @param {import('./paths').WienerdogPaths} paths @returns {string} */
 function storePath(paths) {
   return path.join(paths.state, EXEC_PINS_PATH);
 }
+
+// ── Resolution + structural verification (module-internal) ──────────────────
 
 /**
  * Resolve a bare exec name against a PATH, left-to-right, to its realpath —
@@ -128,17 +165,127 @@ function verifyExecutable(realpath, platform, ctx) {
   return { ok: true };
 }
 
+// ── Interpreter binding (module-internal) ───────────────────────────────────
+
 /**
- * `<exe> --version`, bounded (10s), best-effort — INFORMATIONAL only, never
- * compared (the structural pin, not the version, is the gate).
- * @param {string} realpath @param {NodeJS.ProcessEnv} env
- * @param {typeof spawnSync} [spawnSyncFn]  test seam
- * @returns {string} 'unknown' on any failure
+ * The first line of `realpath` if it begins with `#!`, else null. Bounded to a
+ * 512-byte first-line read so a huge/binary file cannot be slurped.
+ * @param {string} realpath @returns {string|null}
  */
-function probeVersion(realpath, env, spawnSyncFn) {
-  const fn = spawnSyncFn || spawnSync;
+function readShebang(realpath) {
+  let fd;
   try {
-    const r = fn(realpath, ['--version'], { env, timeout: 10_000, encoding: 'utf8' });
+    fd = fs.openSync(realpath, 'r');
+    const buf = Buffer.alloc(SHEBANG_READ_BYTES);
+    const n = fs.readSync(fd, buf, 0, SHEBANG_READ_BYTES, 0);
+    if (n < 2 || buf[0] !== 0x23 /* # */ || buf[1] !== 0x21 /* ! */) return null;
+    const firstLine = buf.slice(0, n).toString('utf8').split('\n')[0];
+    return firstLine.replace(/\r$/, '');
+  } catch {
+    return null;
+  } finally {
+    if (fd !== undefined) {
+      try {
+        fs.closeSync(fd);
+      } catch {
+        /* best-effort close */
+      }
+    }
+  }
+}
+
+/**
+ * [R11/R13] THE single interpreter-binding helper — the one source of truth for
+ * the four-case contract. Classify a verified realpath into a spawn spec so no
+ * caller ever PATH-resolves an interpreter:
+ *   - native binary (no shebang) ⇒ {command: realpath, args: []}
+ *   - node shebang (`env node` | `env -S node …` | `<abs>/node`) ⇒
+ *       {command: process.execPath, args: [realpath]}  (never PATH-resolve node)
+ *   - absolute NON-node interpreter (`#!/abs/interp`) ⇒ verifyExecutable(abs),
+ *       and the interpreter must itself be NATIVE (fail closed if it has its own
+ *       shebang — a script interpreter would recursively PATH-resolve its own
+ *       `#!/usr/bin/env x`); then {command: abs, args: [realpath]}, else THROW
+ *   - PATH-resolving non-node env shebang (`#!/usr/bin/env <non-node>`) or any
+ *       bare/relative interpreter ⇒ THROW (fail closed — never resolve `<x>`
+ *       through the job PATH, which front-loads attacker-writable ~/.local/bin)
+ * @param {string} realpath  absolute, already realpath-canonical + verified
+ * @param {NodeJS.ProcessEnv} env
+ * @param {NodeJS.Platform} platform
+ * @returns {{command:string, args:string[]}}
+ * @throws {WienerdogError} on an unsupported / recursive / PATH-resolving interpreter
+ */
+function bindInterpreter(realpath, env, platform) {
+  const shebang = readShebang(realpath);
+  if (!shebang) return { command: realpath, args: [] }; // native binary
+
+  const spec = shebang.slice(2).trim(); // strip '#!'
+  const tokens = spec.split(/\s+/).filter(Boolean);
+  const interp = tokens[0] || '';
+  const interpBase = path.basename(interp);
+
+  const unsupported = () =>
+    new WienerdogError(
+      'refusing to run the pinned executable: it uses an unsupported PATH-resolving interpreter — ' +
+        'investigate, or run `wienerdog sync` to re-pin after confirming the change is legitimate.'
+    );
+
+  if (interpBase === 'env') {
+    // `#!/usr/bin/env [-S] <prog> …` — find the program env would exec.
+    let prog = null;
+    for (let i = 1; i < tokens.length; i++) {
+      let t = tokens[i];
+      if (t === '-S') continue;
+      if (t.startsWith('-S')) {
+        t = t.slice(2).trim();
+        if (t === '') continue;
+      }
+      if (t.startsWith('-')) continue; // other env options
+      if (t.includes('=')) continue; // VAR=val assignment
+      prog = t;
+      break;
+    }
+    if (prog === 'node') return { command: process.execPath, args: [realpath] };
+    throw unsupported(); // PATH-resolving non-node env shebang
+  }
+
+  if (path.isAbsolute(interp)) {
+    if (interpBase === 'node') return { command: process.execPath, args: [realpath] };
+    // Absolute non-node interpreter: verify it AND require it to be native.
+    const v = verifyExecutable(interp, platform);
+    if (!v.ok) {
+      throw new WienerdogError(
+        `refusing to run the pinned executable: its interpreter failed verification (${v.why}).`
+      );
+    }
+    if (readShebang(interp) !== null) {
+      // A script interpreter would recursively PATH-resolve its own shebang.
+      throw new WienerdogError(
+        'refusing to run the pinned executable: its interpreter is itself a script (recursive interpreter) — unsupported.'
+      );
+    }
+    return { command: interp, args: [realpath] };
+  }
+
+  throw unsupported(); // bare/relative interpreter (e.g. `#!node`)
+}
+
+// ── Version probe + pin building (module-internal) ──────────────────────────
+
+/**
+ * `<exe> --version`, bounded, best-effort — INFORMATIONAL only, never compared
+ * (the structural pin, not the version, is the gate). MUST execute via
+ * `bindInterpreter` (a node-shebang probe runs `process.execPath <script>
+ * --version`), never `spawnSync(realpath)` directly. A THROW from
+ * `bindInterpreter` (unsupported PATH-resolving interpreter) PROPAGATES — it is
+ * not swallowed as 'unknown'; the caller (`buildPin`) refuses the exec.
+ * @param {string} realpath @param {NodeJS.ProcessEnv} env @param {NodeJS.Platform} platform
+ * @returns {string} 'unknown' on a benign probe failure
+ * @throws {WienerdogError} on an unsupported interpreter (from bindInterpreter)
+ */
+function probeVersion(realpath, env, platform) {
+  const { command, args } = bindInterpreter(realpath, env, platform); // THROW propagates
+  try {
+    const r = spawnSync(command, [...args, '--version'], { env, timeout: PROBE_TIMEOUT_MS, encoding: 'utf8' });
     const out = (r.stdout || '').trim().split('\n')[0].slice(0, 200);
     return r.status === 0 && out ? out : 'unknown';
   } catch {
@@ -147,23 +294,75 @@ function probeVersion(realpath, env, spawnSyncFn) {
 }
 
 /**
- * Build one pin (resolve + verify + probe).
+ * Build one pin (resolve + verify + bindInterpreter + probe). Calls
+ * `bindInterpreter` (via `probeVersion`) BEFORE recording — an unsupported
+ * PATH-resolving interpreter ⇒ the exec is REFUSED ({name, error}) WITHOUT ever
+ * executing the target.
  * @param {string} name @param {NodeJS.ProcessEnv} env @param {NodeJS.Platform} platform
- * @param {{spawnSync?:typeof spawnSync}} [seams]
  * @returns {{commandPath:string, installDir:string, version:string, pinnedAt:string}
  *          |{name:string, error:string}}
  */
-function buildPin(name, env, platform, seams = {}) {
+function buildPin(name, env, platform) {
   const hit = resolveExecutable(name, env, platform);
   if (!hit) return { name, error: `${name} not found on the job PATH` };
   const v = verifyExecutable(hit.realpath, platform);
   if (!v.ok) return { name, error: `${name} failed verification: ${v.why}` };
+  let version;
+  try {
+    version = probeVersion(hit.realpath, env, platform);
+  } catch (err) {
+    if (err instanceof WienerdogError) {
+      return { name, error: `${name} uses an unsupported interpreter — not pinned` };
+    }
+    throw err;
+  }
   return {
     commandPath: hit.path,
     installDir: path.dirname(hit.realpath),
-    version: probeVersion(hit.realpath, env, seams.spawnSync),
+    version,
     pinnedAt: new Date().toISOString(),
   };
+}
+
+// ── Pin store (fail-closed state machine) ───────────────────────────────────
+
+/**
+ * Read the pin store into a three-state result. ENOENT ⇒ `absent` (genuine
+ * first-run self-heal); an unreadable file / JSON-parse error / wrong-or-foreign
+ * schema ⇒ `tampered` (fail closed); a valid `schema===1` ⇒ `ok`.
+ * @param {import('./paths').WienerdogPaths} paths
+ * @returns {{state:'ok'|'absent'|'tampered', pins:object}}
+ */
+function readPinStore(paths) {
+  let raw;
+  try {
+    raw = fs.readFileSync(storePath(paths), 'utf8');
+  } catch (err) {
+    if (err && err.code === 'ENOENT') return { state: 'absent', pins: {} };
+    return { state: 'tampered', pins: {} }; // EACCES / EISDIR / other read error
+  }
+  let store;
+  try {
+    store = JSON.parse(raw);
+  } catch {
+    return { state: 'tampered', pins: {} };
+  }
+  if (store && store.schema === 1 && store.pins && typeof store.pins === 'object') {
+    return { state: 'ok', pins: store.pins };
+  }
+  return { state: 'tampered', pins: {} }; // foreign / wrong schema
+}
+
+/**
+ * Load the pin store's pins map, for DATA consumers (descriptor digest +
+ * doctor/status) that never spawn it. Missing/corrupt/foreign ⇒ {} (a tampered
+ * store yields an empty `exec` map ⇒ the launcher digest mismatches ⇒ fail
+ * closed on the scheduled path).
+ * @param {import('./paths').WienerdogPaths} paths
+ * @returns {object}
+ */
+function loadPins(paths) {
+  return readPinStore(paths).pins;
 }
 
 /**
@@ -174,7 +373,8 @@ function buildPin(name, env, platform, seams = {}) {
  * advance on auto-update without churning `pinnedAt`).
  * @param {import('./paths').WienerdogPaths} paths
  * @param {{env?:NodeJS.ProcessEnv, platform?:NodeJS.Platform, manifest?:object,
- *          dryRun?:boolean, spawnSync?:Function}} [opts]
+ *          dryRun?:boolean}} [opts]
+ *   NO spawn/exec callback param — the version probe's spawn is module-private.
  * @returns {{pins:object, notices:string[]}}  notices: unresolved/verify-failed execs
  */
 function createPins(paths, opts = {}) {
@@ -187,14 +387,14 @@ function createPins(paths, opts = {}) {
   /** @type {string[]} */
   const notices = [];
   for (const name of PIN_NAMES) {
-    const built = buildPin(name, env, platform, { spawnSync: opts.spawnSync });
+    const built = buildPin(name, env, platform);
     if ('error' in built) {
       // git/claude are required nightly; codex is optional until M4. All three
       // degrade to a notice — sync never fails over a missing executable.
       notices.push(
         name === 'git'
           ? 'git not found on the job PATH — nightly commit will fail until it is installed and you re-run sync'
-          : `${built.error} — not pinned${name === 'codex' ? ' (optional until Codex support lands)' : ''}`
+          : `${built.error}${name === 'codex' ? ' (optional until Codex support lands)' : ''}`
       );
       continue;
     }
@@ -207,7 +407,7 @@ function createPins(paths, opts = {}) {
 
   if (!opts.dryRun) {
     const store = { schema: 1, pins };
-    writeFilePrivate(storePath(paths), `${JSON.stringify(store, null, 2)}\n`);
+    writeFilePrivate(storePath(paths), `${JSON.stringify(store, null, 2)}\n`); // atomic (temp + rename)
     if (opts.manifest) {
       const entry = { kind: 'file', path: storePath(paths) };
       const exists = opts.manifest.entries.some((e) => e.kind === entry.kind && e.path === entry.path);
@@ -218,38 +418,35 @@ function createPins(paths, opts = {}) {
 }
 
 /**
- * Load the pin store's pins map. Missing/corrupt/foreign-schema ⇒ {}.
- * @param {import('./paths').WienerdogPaths} paths
- * @returns {object}
- */
-function loadPins(paths) {
-  try {
-    const store = JSON.parse(fs.readFileSync(storePath(paths), 'utf8'));
-    return store && store.schema === 1 && store.pins && typeof store.pins === 'object' ? store.pins : {};
-  } catch {
-    return {};
-  }
-}
-
-/**
- * Verify the CURRENT PATH resolution of `name` still matches its pin.
- * Re-resolves live, then requires: (a) live command path === pin.commandPath;
- * (b) dirname(live realpath) === pin.installDir (exact string equality — a
- * `brew upgrade` that moves a versioned Cellar dir fails safe by design);
- * (c) verifyExecutable(live realpath) passes. `version` is informational and
- * NEVER compared.
+ * Verify the CURRENT PATH resolution of `name` still matches its pin, over the
+ * fail-closed store state machine.
+ *   - `tampered` store ⇒ {ok:false, drift:true} (fail closed).
+ *   - `absent` store + no pin for name ⇒ {ok:false, drift:false} (genuine
+ *     first-run self-heal — the ONLY live-resolve path).
+ *   - `ok` store missing the requested pin ⇒ {ok:false, drift:true} (a valid
+ *     partial store must not let a later-planted binary live-resolve). [R2:F1]
+ *   - pin present ⇒ require (a) live command path === pin.commandPath;
+ *     (b) dirname(live realpath) === pin.installDir; (c) verifyExecutable passes.
+ * `version` is informational and NEVER compared.
  * @param {string} name @param {import('./paths').WienerdogPaths} paths
  * @param {{env?:NodeJS.ProcessEnv, platform?:NodeJS.Platform, uid?:number}} [opts]
  * @returns {{ok:true, path:string}|{ok:false, why:string, drift:boolean}}
- *   ok.path is the LIVE verified realpath. drift:true when a pin EXISTS but a
- *   check fails (⇒ caller must fail safe); drift:false when NO pin exists
- *   (first-run/upgrade — caller may self-heal with a live resolve).
+ *   ok.path is the LIVE verified realpath.
  */
 function verifyPin(name, paths, opts = {}) {
   const env = opts.env || process.env;
   const platform = opts.platform || process.platform;
-  const pin = loadPins(paths)[name];
-  if (!pin) return { ok: false, why: `no pin recorded for ${name}`, drift: false };
+  const { state, pins } = readPinStore(paths);
+
+  if (state === 'tampered') {
+    return { ok: false, why: 'the pin store is unreadable or corrupt', drift: true };
+  }
+  const pin = pins[name];
+  if (!pin) {
+    if (state === 'absent') return { ok: false, why: `no pin recorded for ${name}`, drift: false };
+    // A store EXISTS but has no pin for the requested name — fail closed.
+    return { ok: false, why: `${name} is not pinned in the existing pin store`, drift: true };
+  }
 
   const live = resolveExecutable(name, env, platform);
   if (!live) {
@@ -276,21 +473,19 @@ function verifyPin(name, paths, opts = {}) {
 }
 
 /**
- * The spawn accessor: the ABSOLUTE path to spawn, or a fail-safe throw.
- * - Pin exists + verifyPin ok ⇒ the LIVE verified realpath (never a stored
- *   path — the target moves on every auto-update; the pin authorizes the
- *   LOCATION, the live resolve supplies the file).
- * - Pin exists but drifted ⇒ THROW (fail safe — tamper and legit install-method
- *   change are indistinguishable here; the user must confirm and re-pin).
- * - No pin (never pinned) ⇒ live resolve + verify; the realpath on success,
- *   THROW on failure. (Self-heals the pre-first-sync window.)
+ * The internal spawn accessor: resolve + verify + bind, yielding the spawn spec
+ * `{command, args}` (never a bare path a caller could spawn arbitrarily).
+ *   - pin ok ⇒ bindInterpreter(LIVE verified realpath) (never a stored path).
+ *   - drifted / tampered / present-but-missing-pin ⇒ THROW (fail safe).
+ *   - absent store (never pinned) ⇒ live resolve + verify + bind (self-heals the
+ *     pre-first-sync window only).
  * @param {string} name @param {import('./paths').WienerdogPaths} paths
  * @param {NodeJS.ProcessEnv} env @param {NodeJS.Platform} platform
- * @returns {string} absolute realpath @throws {WienerdogError}
+ * @returns {{command:string, args:string[]}} @throws {WienerdogError}
  */
 function resolvePinnedSpawn(name, paths, env, platform) {
   const res = verifyPin(name, paths, { env, platform });
-  if (res.ok) return res.path;
+  if (res.ok) return bindInterpreter(res.path, env, platform);
   if (res.drift) {
     throw new WienerdogError(
       `refusing to run ${name}: ${res.why}. If this change is legitimate (e.g. you reinstalled or ` +
@@ -298,7 +493,7 @@ function resolvePinnedSpawn(name, paths, env, platform) {
         `a planted executable on the job PATH looks exactly like this.`
     );
   }
-  // No pin yet — resolve and verify live, once, right now.
+  // No store at all (never pinned) — resolve + verify + bind live, once, now.
   const live = resolveExecutable(name, env, platform);
   if (!live) {
     throw new WienerdogError(`${name} was not found on the job PATH — install it, then run \`wienerdog sync\`.`);
@@ -307,17 +502,137 @@ function resolvePinnedSpawn(name, paths, env, platform) {
   if (!v.ok) {
     throw new WienerdogError(`refusing to run ${name}: ${v.why}. Fix the installation, then run \`wienerdog sync\`.`);
   }
-  return live.realpath;
+  return bindInterpreter(live.realpath, env, platform);
 }
 
-module.exports = {
-  resolveExecutable,
-  verifyExecutable,
-  probeVersion,
-  buildPin,
-  createPins,
-  loadPins,
-  verifyPin,
-  resolvePinnedSpawn,
-  EXEC_PINS_PATH,
-};
+// ── Sanitized-by-construction execution facade (public) ─────────────────────
+
+/**
+ * Freshly-construct an approved-code error that names the exec by its LOGICAL
+ * `name` only — no `.path`/`.spawnargs`/`.spawnfile`/`.syscall`/`.cmd`/`.cause`
+ * and no path-bearing text (the raw child error's `.path`/`spawnargs[0]` carry
+ * the pinned realpath — acute for node-shebang targets).
+ * @param {Error & {code?:string}} rawErr @param {string} name @returns {Error & {code:string}}
+ */
+function sanitizeSpawnError(rawErr, name) {
+  const code = rawErr && APPROVED_ERROR_CODES.has(rawErr.code) ? rawErr.code : 'spawn-failed';
+  const e = /** @type {Error & {code:string}} */ (new Error(`${name} could not run (${code})`));
+  e.code = code;
+  return e;
+}
+
+/** Passthrough opts the sync spawn accepts (never `spawnfile`/`spawnargs`, never
+ *  a spawn/exec callback). */
+const SAFE_SYNC_OPTS = ['cwd', 'timeout', 'encoding', 'maxBuffer', 'input', 'killSignal', 'uid', 'gid'];
+/** Passthrough opts the async spawn accepts. */
+const SAFE_ASYNC_OPTS = ['cwd', 'detached', 'stdio', 'timeout', 'killSignal', 'uid', 'gid'];
+
+/** @param {object} opts @param {string[]} allow @param {NodeJS.ProcessEnv} env @returns {object} */
+function passthroughSpawnOpts(opts, allow, env) {
+  const out = { env };
+  for (const k of allow) if (opts[k] !== undefined) out[k] = opts[k];
+  return out;
+}
+
+/**
+ * [R13/R15/R16] THE ONLY public API to EXECUTE a pinned target SYNCHRONOUSLY.
+ * Resolves → verifies → bindInterpreter → spawns. SANITIZED-BY-CONSTRUCTION
+ * return: `{status, signal, stdout, stderr}` (no `spawnfile`/`spawnargs`/`pid`);
+ * a spawn error is surfaced as a fresh, sanitized `error` (approved code +
+ * `name`-only message), never the raw one.
+ * @param {string} name  'claude'|'git'|'codex'
+ * @param {import('./paths').WienerdogPaths} paths
+ * @param {{args?:string[], env?:NodeJS.ProcessEnv, platform?:NodeJS.Platform,
+ *          cwd?:string, timeout?:number, encoding?:BufferEncoding,
+ *          maxBuffer?:number, input?:string|Buffer}} [opts]
+ *   NO spawn/exec callback param (real spawn is module-private).
+ * @returns {{status:number|null, signal:string|null, stdout:(string|Buffer),
+ *            stderr:(string|Buffer), error?:Error}}
+ * @throws {WienerdogError} on drift/tamper/unsupported-interpreter (no spawn)
+ */
+function spawnPinnedSync(name, paths, opts = {}) {
+  const env = opts.env || process.env;
+  const platform = opts.platform || process.platform;
+  const { command, args } = resolvePinnedSpawn(name, paths, env, platform);
+  const jobArgs = Array.isArray(opts.args) ? opts.args : [];
+  const raw = spawnSync(command, [...args, ...jobArgs], passthroughSpawnOpts(opts, SAFE_SYNC_OPTS, env));
+  /** @type {{status:number|null, signal:string|null, stdout:any, stderr:any, error?:Error}} */
+  const result = {
+    status: raw.status == null ? null : raw.status,
+    signal: raw.signal == null ? null : raw.signal,
+    stdout: raw.stdout,
+    stderr: raw.stderr,
+  };
+  if (raw.error) result.error = sanitizeSpawnError(raw.error, name);
+  return result;
+}
+
+/**
+ * A restricted child facade that NEVER forwards a raw Node child, native
+ * emitter, event, or error. `stdout`/`stderr`/`stdin` are the child's byte
+ * streams; `on`/`once` re-emit ONLY freshly-constructed `exit`→{code,signal}
+ * and `error`→a sanitized new Error. `pid`/`kill` support the run-job watchdog.
+ * @param {import('child_process').ChildProcess} child @param {string} name
+ * @returns {{stdout:any, stderr:any, stdin:any, pid:number|undefined,
+ *            kill:(signal?:NodeJS.Signals|number)=>boolean,
+ *            on:Function, once:Function}}
+ */
+function makeChildFacade(child, name) {
+  const emitter = new EventEmitter();
+  // Trigger the constructed `exit` off the child's `close` (stdio flushed) so a
+  // consumer reading the stderr tail sees a complete stream.
+  child.on('close', (code, signal) => emitter.emit('exit', { code: code == null ? null : code, signal: signal == null ? null : signal }));
+  child.on('error', (err) => emitter.emit('error', sanitizeSpawnError(err, name)));
+  const facade = {
+    stdout: child.stdout,
+    stderr: child.stderr,
+    stdin: child.stdin,
+    get pid() {
+      return child.pid;
+    },
+    /** @param {NodeJS.Signals|number} [signal] */
+    kill(signal) {
+      return child.kill(signal);
+    },
+    /** @param {string} evt @param {Function} cb */
+    on(evt, cb) {
+      if (evt === 'exit' || evt === 'error') emitter.on(evt, cb);
+      return facade; // silently ignore any other (raw) event name
+    },
+    /** @param {string} evt @param {Function} cb */
+    once(evt, cb) {
+      if (evt === 'exit' || evt === 'error') emitter.once(evt, cb);
+      return facade;
+    },
+  };
+  return facade;
+}
+
+/**
+ * [R13/R15/R16] Async variant (detached/streamed child, e.g. the dream brain).
+ * SANITIZED-BY-CONSTRUCTION facade — see `makeChildFacade`. Same `opts` as
+ * `spawnPinnedSync`; NO spawn/exec callback param. A drift/tamper/unsupported
+ * throw propagates (fail loud) BEFORE any spawn.
+ * @param {string} name @param {import('./paths').WienerdogPaths} paths
+ * @param {{args?:string[], env?:NodeJS.ProcessEnv, platform?:NodeJS.Platform,
+ *          cwd?:string, detached?:boolean, stdio?:any, timeout?:number}} [opts]
+ * @returns {ReturnType<typeof makeChildFacade>} @throws {WienerdogError}
+ */
+function spawnPinned(name, paths, opts = {}) {
+  const env = opts.env || process.env;
+  const platform = opts.platform || process.platform;
+  const { command, args } = resolvePinnedSpawn(name, paths, env, platform);
+  const jobArgs = Array.isArray(opts.args) ? opts.args : [];
+  const child = spawn(command, [...args, ...jobArgs], passthroughSpawnOpts(opts, SAFE_ASYNC_OPTS, env));
+  return makeChildFacade(child, name);
+}
+
+// [R13/R15] EXECUTION-ONLY ENCAPSULATION. Public exec surface = the EXACT
+// path-free, seam-free list below. spawnPinnedSync/spawnPinned are the ONLY way
+// to EXECUTE a pinned target. loadPins/createPins return path-bearing pin state
+// as DATA (descriptor digest + doctor/status) that no consumer spawns. The
+// exec-path helpers (resolvePinnedSpawn, bindInterpreter, resolveExecutable,
+// verifyExecutable, readShebang, verifyPin, buildPin, probeVersion) are
+// MODULE-INTERNAL (verified: no external importers), so there is no way to
+// obtain-then-spawn a raw path.
+module.exports = { createPins, loadPins, spawnPinnedSync, spawnPinned, EXEC_PINS_PATH };

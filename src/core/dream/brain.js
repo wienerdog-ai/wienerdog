@@ -2,14 +2,13 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const { spawn, spawnSync } = require('node:child_process');
 
 const { defaultLayout, layoutPromptLines, resolveDailyPath } = require('../layout');
 const { redactOnly } = require('../secret-scan');
 const { getProfile, composeClaudeArgs } = require('../runtime-profile');
 const { ensureSettingsProfile, loadVendoredSkill, settingsDigest } = require('../runtime-settings');
 const { getPaths } = require('../paths');
-const { resolvePinnedSpawn } = require('../exec-identity');
+const { spawnPinned, spawnPinnedSync, loadPins } = require('../exec-identity');
 const { mkdirPrivate } = require('../private-fs');
 const { detectPolicyHooks } = require('../policy-hooks');
 const { recordRunEvidence } = require('../run-evidence');
@@ -162,19 +161,13 @@ function spawnBrain(o) {
   // seam (audit A7/F5, WP-155 deleted the fake-command env branch); tests
   // substitute a brain by pinning their fake in a temp WIENERDOG_HOME.
   const paths = getPaths(baseEnv);
-  let command;
+  const harnessName = harness === 'codex' ? 'codex' : 'claude';
   let args;
   let cwd;
   if (harness === 'codex') {
-    // A7 (WP-154): the verified pinned ABSOLUTE realpath, never the bare name —
-    // a fake planted earlier on the job PATH must never win. A drifted pin
-    // THROWS here (fail safe, before any spawn); the run-job watchdog/fail-loud
-    // surfaces it and the message points at `wienerdog sync` to re-pin.
-    command = resolvePinnedSpawn('codex', paths, baseEnv, platform);
     args = buildCodexArgs({ vaultDir, scratchDir, date, model, layout });
     cwd = vaultDir; // Codex path byte-unchanged (A11/P2 — its --cd vaultDir is the write fence)
   } else {
-    command = resolvePinnedSpawn('claude', paths, baseEnv, platform); // A7: pinned absolute, see above
     // WP-129 assets: the hook-free settings profile (idempotent write) + the
     // integrity-checked skill body inside buildClaudeArgs. A tampered skill
     // throws here — before the spawn (fail closed).
@@ -186,11 +179,19 @@ function spawnBrain(o) {
   }
 
   const startedAt = Date.now();
-  const child = spawn(command, args, {
+  // A7 (WP-154, R13/R15): spawn via the encapsulated pinned exec API — the
+  // verified pinned ABSOLUTE realpath (a node-shebang claude/codex runs as
+  // `process.execPath <script>`), never a bare name and never a raw path handed
+  // to the caller. A fake planted earlier on the job PATH must never win. A
+  // drifted/tampered/unsupported pin THROWS here (fail safe, before any spawn);
+  // the run-job watchdog/fail-loud surfaces it and points at `wienerdog sync`.
+  const child = spawnPinned(harnessName, paths, {
+    args,
     cwd,
     detached: true, // own process group so WP-017 can group-kill the whole tree
     stdio: ['ignore', 'pipe', 'pipe'],
     env: childEnv,
+    platform,
   });
 
   // Run evidence (WP-132, audit A1 point 8): record the dream's actual runtime
@@ -201,12 +202,28 @@ function spawnBrain(o) {
   if (harness !== 'codex') {
     try {
       let claudeVersion = 'unknown';
-      // The pinned absolute claude is version-probed for the evidence record
-      // (D-EVIDENCE: version + path, no hash).
+      // The pinned claude is version-probed via the encapsulated exec API (a
+      // node-shebang runs `process.execPath <script> --version`) for the
+      // evidence record (D-EVIDENCE: version + path, no hash).
       try {
-        const r = spawnSync(command, ['--version'], { env: childEnv, timeout: 10_000, encoding: 'utf8' });
+        const r = spawnPinnedSync('claude', paths, {
+          args: ['--version'],
+          env: childEnv,
+          platform,
+          timeout: 10_000,
+          encoding: 'utf8',
+        });
         const out = (r.stdout || '').trim().slice(0, 200);
         if (r.status === 0 && out) claudeVersion = out;
+      } catch {
+        /* best-effort */
+      }
+      // Pin state as DATA (R15: never spawned) — the pinned command path is
+      // recorded for the evidence trail; falls back to the logical name.
+      let execPath = 'claude';
+      try {
+        const pin = loadPins(paths).claude;
+        if (pin && pin.commandPath) execPath = pin.commandPath;
       } catch {
         /* best-effort */
       }
@@ -216,7 +233,7 @@ function spawnBrain(o) {
         job: 'dream',
         profileId: 'dream',
         claudeVersion,
-        execPath: command,
+        execPath,
         argv: args,
         settingsDigest: settingsIdx === -1 ? 'missing' : settingsDigest(args[settingsIdx + 1]),
         mcpDigest: 'none', // dream: --strict-mcp-config with no --mcp-config
@@ -258,9 +275,12 @@ function spawnBrain(o) {
     });
   }
 
+  // The facade re-emits only constructed events: `error` (a sanitized Error) and
+  // `exit` ({code, signal}) — fired off the child's `close` so the stderr tail
+  // is complete. No raw child/native emitter/event reaches this promise (R16).
   const done = new Promise((resolve, reject) => {
     child.on('error', reject);
-    child.on('close', (code) => resolve({ code, durationMs: Date.now() - startedAt, stderrTail }));
+    child.on('exit', ({ code }) => resolve({ code, durationMs: Date.now() - startedAt, stderrTail }));
   });
 
   return { child, done };

@@ -247,17 +247,23 @@ function argvFlagValue(args, flag) {
 }
 
 /**
- * Capture `claude --version` for the run-evidence record. ONLY spawns when the
- * resolved command IS claude — never a test fake (a fake may have side effects
- * when re-invoked) and never codex. Bounded, best-effort: 'unknown' on any
- * failure (D-EVIDENCE: version + path, no binary hash — integrity is A7).
- * @param {string} command @param {NodeJS.ProcessEnv} env @returns {string}
+ * Capture `claude --version` for the run-evidence record. ONLY probes when the
+ * resolved command IS claude (basename check on the raw path — never a test fake
+ * that may have side effects, never codex). A7 (WP-154, R12/R13): the actual
+ * execution goes through the ENCAPSULATED pinned exec API — a node-shebang claude
+ * runs `process.execPath <script> --version`; a PATH-resolving non-node claude
+ * ⇒ 'unknown' WITHOUT executing (spawnPinnedSync throws before any spawn). The
+ * raw `command` path is kept ONLY for the basename label check. Bounded,
+ * best-effort: 'unknown' on any failure (D-EVIDENCE: version + path, no hash).
+ * @param {string} command @param {NodeJS.ProcessEnv} env
+ * @param {import('../core/paths').WienerdogPaths} paths @returns {string}
  */
-function captureClaudeVersion(command, env) {
+function captureClaudeVersion(command, env, paths) {
   const base = path.basename(command).replace(/\.(cmd|exe)$/i, '');
   if (base !== 'claude') return 'unknown';
   try {
-    const r = spawnSync(command, ['--version'], { env, timeout: 10_000, encoding: 'utf8' });
+    const { spawnPinnedSync } = require('../core/exec-identity');
+    const r = spawnPinnedSync('claude', paths, { args: ['--version'], env, timeout: 10_000, encoding: 'utf8' });
     const out = (r.stdout || '').trim().slice(0, 200);
     return r.status === 0 && out ? out : 'unknown';
   } catch {
@@ -630,7 +636,7 @@ async function runJob(paths, job, opts = {}) {
         at: nowIso(),
         job: name,
         profileId,
-        claudeVersion: captureClaudeVersion(command, env),
+        claudeVersion: captureClaudeVersion(command, env, paths),
         execPath: command,
         argv: args,
         settingsDigest: settingsFile ? settingsDigest(settingsFile) : 'missing',
@@ -774,4 +780,8 @@ module.exports = {
   rotateLogs,
   failLoud,
   todaysFire,
+  // Exported for the WP-154 R12 zero-execution test only (marker-exec driven,
+  // not a spawn seam): captures `claude --version` via the encapsulated pinned
+  // exec API — never a raw spawn of a resolved path.
+  captureClaudeVersion,
 };

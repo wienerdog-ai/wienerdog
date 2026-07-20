@@ -237,6 +237,29 @@ async function run(argv) {
     );
   }
 
+  // 5a. A5 (WP-154): TRANSACTIONAL pin preflight — BEFORE adopt's first mutation
+  //     (the Git snapshot in step 6). The nightly dream spawns claude AND git by
+  //     verified absolute path (fail-closed on drift), and A1b refuses to bind a
+  //     dream job without BOTH pins. A dry createPins resolves + verifies each
+  //     WITHOUT writing; if either fails, ABORT here so vault/config/manifest and
+  //     any prior exec-pins.json stay byte-identical (never a half-adoption). Only
+  //     when both resolve do we atomically commit the complete pin store, then
+  //     proceed. (This WP owns the pin bootstrap; the descriptor/map binding on
+  //     this file is WP-catchup-per-job-authorization's.)
+  {
+    const { createPins } = require('../core/exec-identity');
+    const dry = createPins(paths, { dryRun: true });
+    if (!dry.pins.claude || !dry.pins.git) {
+      const missing = [!dry.pins.claude ? 'claude' : null, !dry.pins.git ? 'git' : null].filter(Boolean).join(' and ');
+      throw new WienerdogError(
+        `adoption needs a working ${missing} on your PATH — the nightly dream spawns ` +
+          `claude and git by a verified absolute path, so both must be installed and resolvable first. ` +
+          `Install ${missing}, then re-run \`wienerdog adopt\`. (Nothing has been changed.)`
+      );
+    }
+    if (!dryRun) createPins(paths, { manifest }); // atomic commit of the complete store
+  }
+
   // 6. Git prerequisite + initial snapshot — the revert-safety guarantee rests on it.
   //    Idempotent: take the snapshot whenever the repo has no HEAD commit yet, so a
   //    re-run after a crash mid-snapshot heals itself instead of skipping the block.

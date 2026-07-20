@@ -131,10 +131,32 @@ function setup(opts = {}) {
   return { root, home, core, vault, claude, codex };
 }
 
+/** Resolve `name` against `searchPath` the way exec-identity's resolveExecutable
+ *  does (first regular file with an exec bit wins), returning its command path +
+ *  install dir (dirname of the realpath), or null. @returns {{commandPath:string, installDir:string}|null} */
+function resolveOnPath(name, searchPath) {
+  for (const dir of String(searchPath).split(path.delimiter).filter(Boolean)) {
+    const cand = path.join(dir, name);
+    try {
+      const st = fs.statSync(cand);
+      if (st.isFile() && (st.mode & 0o111) !== 0) {
+        return { commandPath: cand, installDir: path.dirname(fs.realpathSync(cand)) };
+      }
+    } catch {
+      /* absent / unreadable — keep walking */
+    }
+  }
+  return null;
+}
+
 /** Install `fakeScriptPath` as the pinned `name` ('claude'|'codex') in `core`'s
  *  pin store (WP-154 schema), and return an env fragment that makes the REAL
- *  dispatch path (resolvePinnedSpawn → verifyPin → verifyExecutable → spawn)
- *  resolve and run it. Replaces the deleted fake-command env seam (WP-155).
+ *  dispatch path (spawnPinned* → verifyPin → verifyExecutable → spawn) resolve
+ *  and run it. Also pins the REAL `git` resolved off the SAME live PATH — the
+ *  fail-closed state machine (WP-154 A1b) now refuses to spawn a command absent
+ *  from an existing store, and the dream commits via a pinned `git`; a fake git
+ *  marker would break real vault commits, so the genuine git is pinned. Replaces
+ *  the deleted fake-command env seam (WP-155).
  *  @param {string} root @param {string} core @param {string} fakeScriptPath
  *  @param {string} [name='claude']
  *  @returns {{PATH:string, WIENERDOG_HOME:string}} env fragment to spread into env */
@@ -147,13 +169,22 @@ function pinFakeBrain(root, core, fakeScriptPath, name = 'claude') {
   const cmd = path.join(binDir, name);
   fs.copyFileSync(fakeScriptPath, cmd); // regular file (copy, not symlink)
   fs.chmodSync(cmd, 0o755);
-  const store = { schema: 1, pins: { [name]: {
-    commandPath: cmd, installDir: binDir, version: 'fake', pinnedAt: new Date().toISOString(),
-  } } };
+  const pins = {
+    [name]: { commandPath: cmd, installDir: binDir, version: 'fake', pinnedAt: new Date().toISOString() },
+  };
+  // The live PATH at dream time is `binDir` prepended to the inherited PATH —
+  // resolve git against exactly that so verifyPin's command-path/install-dir
+  // string equality holds against the same git the dream will spawn.
+  const livePath = binDir + path.delimiter + process.env.PATH;
+  const gitHit = resolveOnPath('git', livePath);
+  if (gitHit) {
+    pins.git = { commandPath: gitHit.commandPath, installDir: gitHit.installDir, version: 'fake', pinnedAt: new Date().toISOString() };
+  }
+  const store = { schema: 1, pins };
   const stateDir = path.join(core, 'state');
   fs.mkdirSync(stateDir, { recursive: true });
   fs.writeFileSync(path.join(stateDir, 'exec-pins.json'), JSON.stringify(store), { mode: 0o600 });
-  return { PATH: binDir + path.delimiter + process.env.PATH, WIENERDOG_HOME: core };
+  return { PATH: livePath, WIENERDOG_HOME: core };
 }
 
 /**

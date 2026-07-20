@@ -18,7 +18,11 @@ const os = require('node:os');
 const path = require('node:path');
 
 const launcher = require('../../src/scheduler/launcher');
-const { resolvePinnedSpawn } = require('../../src/core/exec-identity');
+// WP-154 R13/R15: the exec-path helpers (resolvePinnedSpawn/bindInterpreter/…)
+// are module-internal now; drive the encapsulated public exec API instead. A
+// drift/tamper/verify-failure THROWS inside spawnPinnedSync BEFORE any spawn, so
+// these negatives still assert the fail-safe refusal (the plant never runs).
+const { spawnPinnedSync } = require('../../src/core/exec-identity');
 const { WienerdogError } = require('../../src/core/errors');
 const {
   buildProdInstall,
@@ -197,7 +201,7 @@ test('a7-integrity-negatives: (5) a fake claude planted earlier on PATH is never
     const evil = writeFakeExec(evilDir, 'claude', 'echo pwned');
     const jobEnv = { ...fx.env, PATH: `${evilDir}:${fx.pinBin}` };
     assert.throws(
-      () => resolvePinnedSpawn('claude', fx.paths, jobEnv, process.platform),
+      () => spawnPinnedSync('claude', fx.paths, { env: jobEnv, platform: process.platform }),
       (err) => err instanceof WienerdogError && /wienerdog sync/.test(err.message)
     );
     // The pinned resolve returns the PINNED path, never the planted fake.
@@ -221,7 +225,7 @@ test('a7-integrity-negatives: (6a) repointing the pinned claude outside its inst
     fs.rmSync(fx.fakeClaude, { force: true });
     fs.symlinkSync(evil, fx.fakeClaude);
     const jobEnv = { ...fx.env, PATH: fx.pinBin };
-    assert.throws(() => resolvePinnedSpawn('claude', fx.paths, jobEnv, process.platform), WienerdogError);
+    assert.throws(() => spawnPinnedSync('claude', fx.paths, { env: jobEnv, platform: process.platform }), WienerdogError);
   } finally {
     cleanup(fx.root);
     cleanup(tmpDir);
@@ -233,7 +237,7 @@ test('a7-integrity-negatives: (6b) clearing the pinned target exec bit ⇒ throw
   try {
     fs.chmodSync(fx.fakeClaude, 0o644); // no exec bit
     const jobEnv = { ...fx.env, PATH: fx.pinBin };
-    assert.throws(() => resolvePinnedSpawn('claude', fx.paths, jobEnv, process.platform), WienerdogError);
+    assert.throws(() => spawnPinnedSync('claude', fx.paths, { env: jobEnv, platform: process.platform }), WienerdogError);
   } finally {
     cleanup(fx.root);
   }
@@ -244,7 +248,7 @@ test('a7-integrity-negatives: (6c) a group/other-writable ancestor of the pinned
   try {
     fs.chmodSync(fx.pinBin, 0o777); // ancestor now group/other-writable
     const jobEnv = { ...fx.env, PATH: fx.pinBin };
-    assert.throws(() => resolvePinnedSpawn('claude', fx.paths, jobEnv, process.platform), WienerdogError);
+    assert.throws(() => spawnPinnedSync('claude', fx.paths, { env: jobEnv, platform: process.platform }), WienerdogError);
   } finally {
     try {
       fs.chmodSync(fx.pinBin, 0o755);

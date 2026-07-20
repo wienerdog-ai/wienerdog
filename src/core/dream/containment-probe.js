@@ -24,7 +24,7 @@ const crypto = require('node:crypto');
 const { spawnSync } = require('node:child_process');
 const { getProfile, composeClaudeArgs } = require('../runtime-profile');
 const { ensureSettingsProfile } = require('../runtime-settings');
-const { resolvePinnedSpawn } = require('../exec-identity');
+const { spawnPinnedSync } = require('../exec-identity');
 
 /** The full deny set the composed argv must name (WP-128 expanded deny list). */
 const DENY_TOOLS = ['Bash', 'WebFetch', 'WebSearch', 'Task', 'Agent', 'Skill', 'Workflow', 'NotebookEdit'];
@@ -144,14 +144,17 @@ function runContainmentProbe(paths, opts = {}) {
   let workspace = null;
 
   try {
-    // A7 (WP-154): the production fallback is the verified pinned ABSOLUTE
-    // claude, never the bare name — a fake earlier on the job PATH must never
-    // be probe-spawned. Resolved INSIDE the try: resolvePinnedSpawn THROWS on
-    // drift, and the probe must never throw — the catch below maps it to an
-    // 'inconclusive' ProbeResult, which the caller treats as fail-closed.
+    // A7 (WP-154, R13/R15): the production fallback is the ENCAPSULATED pinned
+    // exec API (`spawnPinnedSync('claude', …)`) — the verified pinned ABSOLUTE
+    // claude (a node-shebang runs `process.execPath <script>`), never the bare
+    // name or a raw path. A fake earlier on the job PATH must never be
+    // probe-spawned. Resolved/spawned INSIDE the try: `spawnPinnedSync` THROWS
+    // on drift/tamper/unsupported, and the probe must never throw — the catch
+    // below maps it to an 'inconclusive' ProbeResult (the caller fails closed).
     // opts.probeCmd is the JS-only test seam (WP-155 deleted the env seam:
     // nothing here reads any env var to choose or skip the spawn).
-    const command = opts.probeCmd || resolvePinnedSpawn('claude', paths, env, opts.platform || process.platform);
+    const probeCmd = opts.probeCmd;
+    const platform = opts.platform || process.platform;
 
     workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-probe-'));
     const stagingDir = path.join(workspace, 'staging'); // the cwd + writable root
@@ -185,14 +188,32 @@ function runContainmentProbe(paths, opts = {}) {
     // Test-seam conveniences the real claude never reads (no Bash to read env);
     // a fake uses them to simulate a containment break deterministically.
     const childEnv = { ...env, WIENERDOG_PROBE_CANARY_PATH: canaryPath, WIENERDOG_PROBE_WRITE_PATH: writePath };
-    claudeVersion = captureVersion(command, childEnv, spawn);
 
-    const r = spawn(command, args, {
-      cwd: stagingDir,
-      env: childEnv,
-      encoding: 'utf8',
-      timeout: PROBE_TIMEOUT_MS,
-    });
+    // With the JS-only opts.probeCmd test seam, spawn it directly via opts.spawn;
+    // otherwise route through the encapsulated pinned exec API (throws on drift ⇒
+    // caught below ⇒ 'inconclusive', never spawns a fake).
+    let r;
+    if (probeCmd) {
+      claudeVersion = captureVersion(probeCmd, childEnv, spawn);
+      r = spawn(probeCmd, args, { cwd: stagingDir, env: childEnv, encoding: 'utf8', timeout: PROBE_TIMEOUT_MS });
+    } else {
+      const vr = spawnPinnedSync('claude', paths, {
+        args: ['--version'],
+        env: childEnv,
+        platform,
+        encoding: 'utf8',
+        timeout: 15_000,
+      });
+      claudeVersion = (vr.stdout || '').trim().split('\n')[0] || 'unknown';
+      r = spawnPinnedSync('claude', paths, {
+        args,
+        cwd: stagingDir,
+        env: childEnv,
+        platform,
+        encoding: 'utf8',
+        timeout: PROBE_TIMEOUT_MS,
+      });
+    }
     if (r.error) {
       return { outcome: 'inconclusive', claudeVersion, reason: `probe spawn failed: ${r.error.message}`, checks };
     }

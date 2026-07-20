@@ -29,6 +29,15 @@ const ENV_KEYS = [
   'PATH', // the fake claude's ~/.local/bin dir is prepended (WP-155)
 ];
 
+/** A `#!/bin/sh` executable named `name` in `dir` (mode 0700 dir, 0755 file). */
+function writeShExec(dir, name, body = 'exit 0') {
+  fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+  const p = path.join(dir, name);
+  fs.writeFileSync(p, `#!/bin/sh\n${body}\n`);
+  fs.chmodSync(p, 0o755);
+  return p;
+}
+
 /** @param {string} cwd @param {string[]} args */
 function git(cwd, args) {
   return execFileSync(
@@ -195,6 +204,62 @@ test('adopt-e2e: init → adopt → sync → dream through mapped tiers, one rev
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
+
+test(
+  'adopt-e2e: A5 pin preflight — claude unresolvable ⇒ adopt ABORTS before any mutation (vault/config/manifest/pin-store byte-identical)',
+  { skip: process.platform === 'win32' && 'the fake sh exec is POSIX-only' },
+  async () => {
+    const base = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-adopt-preflight-'));
+    const home = path.join(base, 'home');
+    const core = path.join(base, 'core');
+    const vault = path.join(base, 'vault');
+    // A PATH with git but NO claude — the dry preflight must fail closed on claude.
+    const gitbin = path.join(base, 'gitbin');
+
+    const saved = {};
+    for (const k of ENV_KEYS) saved[k] = process.env[k];
+    const origLog = console.log;
+    console.log = () => {};
+
+    try {
+      fs.mkdirSync(home, { recursive: true });
+      fs.mkdirSync(core, { recursive: true });
+      fs.mkdirSync(vault, { recursive: true });
+      fs.writeFileSync(path.join(vault, 'note.md'), '# note\n');
+      writeShExec(gitbin, 'git', 'echo "git version 2.0.0"'); // resolvable git, no claude
+
+      const configPath = path.join(core, 'config.yaml');
+      const configBefore = 'version: 1\nvault: null\nmemory_mode: standard\n';
+      fs.writeFileSync(configPath, configBefore);
+      const manifestPath = path.join(core, 'install-manifest.json');
+      const manifestBefore = JSON.stringify({
+        version: 1,
+        createdAt: 'x',
+        entries: [{ kind: 'file', path: configPath, hash: 'x' }],
+      });
+      fs.writeFileSync(manifestPath, manifestBefore);
+
+      Object.assign(process.env, { HOME: home, WIENERDOG_HOME: core, PATH: gitbin });
+      for (const k of ['WIENERDOG_VAULT', 'CLAUDE_CONFIG_DIR', 'CODEX_HOME']) delete process.env[k];
+
+      await assert.rejects(() => adopt.run([vault, '--yes']), /needs a working claude/);
+
+      // Fail-closed: NOTHING mutated (transactional abort before the first write).
+      assert.equal(fs.readFileSync(configPath, 'utf8'), configBefore, 'config byte-identical');
+      assert.equal(fs.readFileSync(manifestPath, 'utf8'), manifestBefore, 'manifest byte-identical');
+      assert.equal(fs.existsSync(path.join(core, 'state', 'exec-pins.json')), false, 'no pin store written');
+      assert.deepEqual(fs.readdirSync(vault).sort(), ['note.md'], 'vault dir untouched');
+      assert.equal(fs.existsSync(path.join(vault, '.git')), false, 'no git snapshot taken');
+    } finally {
+      console.log = origLog;
+      for (const k of ENV_KEYS) {
+        if (saved[k] === undefined) delete process.env[k];
+        else process.env[k] = saved[k];
+      }
+      fs.rmSync(base, { recursive: true, force: true });
+    }
+  }
+);
 
 test(
   'adopt-e2e: symlinked home — TCC guard refuses a Documents vault with zero writes',

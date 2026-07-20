@@ -3,11 +3,10 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
-const { spawnSync } = require('node:child_process');
 
 const { WienerdogError } = require('../errors');
 const { getPaths } = require('../paths');
-const { resolvePinnedSpawn } = require('../exec-identity');
+const { spawnPinnedSync } = require('../exec-identity');
 const { defaultLayout } = require('../layout');
 const { recordSkills, readRegistry } = require('./skill-registry');
 const { isCapabilityAllowed, CAPABILITY } = require('../safety-profile');
@@ -54,25 +53,29 @@ const MIN_RECURRENCE = 3;
  * Run git inside the vault. Args are passed as an array (never a shell string —
  * paths may contain spaces). Non-zero exit throws WienerdogError unless
  * allowFail is set (then the raw result is returned for inspection).
- * A7 (WP-154): git is spawned by its verified pinned ABSOLUTE realpath, never
- * the bare name — a fake `git` planted earlier on the job PATH must never win.
- * A drifted pin makes resolvePinnedSpawn THROW (fail safe, same WienerdogError
- * surface as the ENOENT hint below); the message points at `wienerdog sync`.
+ * A7 (WP-154, R13/R15): git is spawned through the encapsulated pinned exec
+ * API — its verified pinned ABSOLUTE realpath, never the bare name and never a
+ * raw path — so a fake `git` planted earlier on the job PATH can never win. A
+ * drifted/tampered/unsupported pin makes `spawnPinnedSync` THROW a
+ * WienerdogError (fail safe; the message points at `wienerdog sync`), the same
+ * surface the caller already handles.
  * @param {string} vaultDir
  * @param {string[]} args
  * @param {{allowFail?:boolean}} [opts]
- * @returns {import('child_process').SpawnSyncReturns<string>}
+ * @returns {{status:number|null, signal:string|null, stdout:string, stderr:string}}
  */
 function git(vaultDir, args, opts = {}) {
-  const gitPath = resolvePinnedSpawn('git', getPaths(), process.env, process.platform);
-  const res = spawnSync(gitPath, ['-C', vaultDir, ...args], { encoding: 'utf8' });
+  const res = spawnPinnedSync('git', getPaths(), {
+    args: ['-C', vaultDir, ...args],
+    env: process.env,
+    platform: process.platform,
+    encoding: 'utf8',
+  });
   if (res.error) {
-    const hint =
-      res.error.code === 'ENOENT'
-        ? ' — git was not found on the job PATH. Install git (https://git-scm.com/downloads)' +
-          ' or make sure it is on your PATH, then re-run the dream.'
-        : '';
-    throw new WienerdogError(`git could not run (${args[0]}): ${res.error.message}${hint}`);
+    // A post-verify spawn error is essentially unreachable (the realpath was
+    // just verified), but stay defensive; the error is already sanitized to the
+    // logical name + an approved code (no path leaks).
+    throw new WienerdogError(`git could not run (${args[0]}): ${res.error.message}`);
   }
   if (!opts.allowFail && res.status !== 0) {
     throw new WienerdogError(`git ${args[0]} failed: ${(res.stderr || '').trim()}`);
