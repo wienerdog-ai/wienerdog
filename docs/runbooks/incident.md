@@ -676,9 +676,11 @@ $manifestFiles = @($mbJson | ConvertFrom-Json)
 # root. Closes the default-dir omission even if the mutable manifest or the env drops it.
 $probeFiles = @()
 foreach ($pf in @("$homeDir\.claude\CLAUDE.md", "$homeDir\.codex\AGENTS.md")) {
-  if (Test-Path $pf) {
-    $hasB = Select-String -Path $pf -SimpleMatch $SentB -Quiet
-    $hasE = Select-String -Path $pf -SimpleMatch $SentE -Quiet
+  # -LiteralPath — a bare -Path/Test-Path GLOB-interprets [ ] * ? (legal in NTFS
+  # filenames), binding to a decoy; -LiteralPath is identity-exact (round-9 G1).
+  if (Test-Path -LiteralPath $pf -PathType Leaf) {
+    $hasB = Select-String -LiteralPath $pf -SimpleMatch $SentB -Quiet
+    $hasE = Select-String -LiteralPath $pf -SimpleMatch $SentE -Quiet
     if ($hasB -and $hasE) { $probeFiles += $pf }
   }
 }
@@ -709,8 +711,10 @@ foreach ($f in $mustSet) {
     default     { Fail "unexpected managed-block file: $f" }
   }
   if ($sync | Select-String -Pattern $skip -Quiet) { $sync; Fail "sync skipped the adapter for managed-block file $f (set its CLAUDE_CONFIG_DIR/CODEX_HOME to this root and re-run)" }
-  if (-not (Test-Path $f)) { Fail "managed-block file missing on disk: $f" }
-  if (Select-String -Path $f -SimpleMatch $marker -Quiet) { Fail "marker found in $f (whole-file grep)" }
+  # -LiteralPath — the file-identity ops bind to the EXACT path, never a glob decoy
+  # ([ ] * ? are legal NTFS filename chars); [IO.File]::ReadAllText is already literal (round-9 G1).
+  if (-not (Test-Path -LiteralPath $f -PathType Leaf)) { Fail "managed-block file missing on disk: $f" }
+  if (Select-String -LiteralPath $f -SimpleMatch $marker -Quiet) { Fail "marker found in $f (whole-file grep)" }
   $raw = [System.IO.File]::ReadAllText($f)
   $bm = [regex]::Matches($raw, [regex]::Escape($SentB))
   $em = [regex]::Matches($raw, [regex]::Escape($SentE))
@@ -750,7 +754,7 @@ $out | node -e '
   });' "$core\state\digest.md" $marker
 if ($LASTEXITCODE -ne 0) { Fail "hook envelope check" }
 # the regenerated (post-sync) digest, checked directly for the marker (belt-and-suspenders)
-if (Select-String -Path "$core\state\digest.md" -SimpleMatch $marker -Quiet) { Fail "marker present in the post-sync digest" }
+if (Select-String -LiteralPath "$core\state\digest.md" -SimpleMatch $marker -Quiet) { Fail "marker present in the post-sync digest" }
 Write-Host "DRILL PASS — $($mustSet.Count) managed-block file(s) checked (post-sync manifest UNION default-probe UNION declared); record this output with the date"
 ```
 

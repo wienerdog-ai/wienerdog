@@ -355,6 +355,25 @@ state and act on:
   > (confirmed, left unchanged). Audited: ZERO case-insensitive path/basename
   > comparisons remain in either block; the only case-insensitive ops left are on
   > integers / `$null` / exit codes.
+  >
+  > **Fix-pass amendment 11 (2026-07-20, lock-pass — PS filesystem-op audit):** the
+  > same PS path-identity class as round 8, now at the file-operation/glob layer.
+  > `Test-Path $f` and `Select-String -Path $f` GLOB-interpret `[ ] * ?` (legal NTFS
+  > filename chars), so a declared bracketed path `C:\H[1]\AGENTS.md` (poisoned) bound
+  > the identity ops to a clean decoy `C:\H1\AGENTS.md` while `[IO.File]::ReadAllText`
+  > read the literal poisoned file for the sentinel check → checked == must-check and
+  > DRILL PASS with the declared installed file still poisoned (Codex repro:
+  > `Select-String -Path 'docs/runbooks/[is]ncident.md'` resolved incident.md;
+  > `-LiteralPath` found no match). Fix: every PS filesystem op on a path IDENTITY uses
+  > `-LiteralPath` / a literal `[IO.File]` API — `Test-Path -LiteralPath $f -PathType
+  > Leaf`, `Select-String -LiteralPath …` (probe, whole-file marker grep, direct digest
+  > grep); `[IO.File]::ReadAllText` already literal. A COMPLETE PS-filesystem-op audit
+  > (every `Test-Path`/`Select-String`/`[IO.File]`/`[IO.Path]`/node `readFileSync`)
+  > confirms each is either literal-exact or not a path identity (a pipeline grep on
+  > `$sync` output / an env-drive `Remove-Item Env:` / a `[IO.Path]` string API). bash
+  > is immune (`[ -f "$f" ]` / `grep -F -- … "$f"` do not glob the quoted filename).
+  > Two surfaces now closed — round-8 comparisons ordinal AND round-9 file-ops literal —
+  > so ZERO path-identity betrayals remain in either block.
 - **The ONLY authoritative way to reach zero running Wienerdog processes is to
   REBOOT after removing every per-job schedule AND the catch-up entry — not
   per-platform process forensics (R4-C, round-4).** After a reboot, with nothing
@@ -794,7 +813,15 @@ headless/`--yes` bypass — it is interactive and shows the exact bytes.
      classified as a real harness file. Zero case-insensitive path/basename comparisons
      remain in either block (bash's `case "$bn" in CLAUDE.md|AGENTS.md)` is already
      byte-exact); the only case-insensitive operators left are on integers / `$null` /
-     exit codes.
+     exit codes. **Every PowerShell filesystem op on a path IDENTITY uses -LiteralPath /
+     a literal `[IO.File]` API (round-9 G1):** `Test-Path -LiteralPath $f -PathType Leaf`
+     and `Select-String -LiteralPath …` (probe, whole-file marker grep, and the direct
+     post-sync digest grep), because a bare `-Path`/`Test-Path` GLOB-interprets `[ ] * ?`
+     (legal NTFS filename chars) and would bind a bracketed declared path to a decoy;
+     `[IO.File]::ReadAllText` is already literal. Combined with the round-8 comparison
+     audit, the PS block has **zero path-identity betrayals** — every comparison ordinal
+     AND every filesystem op literal. bash is immune (`[ -f "$f" ]` / `grep -F -- "$f"`
+     do not glob the quoted filename arg).
    - **Completeness argument (round-7).** Reason explicitly about whether any
      genuinely-installed managed-block file can still be omitted from the checked set
      while DRILL PASS prints. The three sources cover: the **manifest** (every
@@ -1187,6 +1214,12 @@ awk '/^```powershell$/{p=1;next} /^```$/{p=0} p' docs/runbooks/incident.md | gre
 # Round-8 G1 negative: NO case-insensitive -ne/-eq on a basename, and NO default
 # (case-insensitive) switch on GetFileName, in PowerShell CODE (expect NO output):
 awk '/^```powershell$/{p=1;next} /^```$/{p=0} p' docs/runbooks/incident.md | grep -vE '^\s*#' | grep -nE "\-ne '(CLAUDE|AGENTS)\.md'|\-eq '(CLAUDE|AGENTS)\.md'|switch \(\[System\.IO\.Path\]::GetFileName" || true
+# Round-9 G1: PS filesystem ops on a path IDENTITY use -LiteralPath / literal [IO.File]:
+grep -nE "Test-Path -LiteralPath|Select-String -LiteralPath|\[System\.IO\.File\]::ReadAllText" docs/runbooks/incident.md
+# Round-9 G1 negative: NO glob-interpreting bare -Path / Test-Path on an identity in PS
+# CODE (Select-String -Pattern on $sync output is a pipeline grep, not a path — expect
+# NO output):
+awk '/^```powershell$/{p=1;next} /^```$/{p=0} p' docs/runbooks/incident.md | grep -vE '^\s*#' | grep -nE "Select-String -Path |Test-Path \\\$[A-Za-z]" || true
 # private evidence handling: pre-copy exclusion + recursive perms + windows ACL:
 grep -nE "find .*-type d.*chmod 700|find .*-type f.*chmod 600|icacls|Time Machine|OneDrive" docs/runbooks/incident.md
 # the fail-closed byte-level drill: installed hook path + env + block conditions:
