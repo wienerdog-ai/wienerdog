@@ -976,27 +976,45 @@ Contract deltas only — the design narrative above is unchanged.
    WP-154 fix-pass made every exec-path helper module-internal and the
    pinned-exec canary **bans the `verifyExecutable` identifier outside
    `exec-identity.js`** (execution-only encapsulation, R13/R15).
-3. **win32 `taskkill` is CHECKED, not unconditional best-effort** (replaces the
+3. **win32 `taskkill` is CHECKED, and ONLY exit 0 is success** (replaces the
    Exact-contract clause "win32 returns `{ reaped: true }` best-effort after
-   the taskkill"). `taskkillTree` returns `{ ok, why }`: success is exit `0`
-   or exit `128` ("process not found" — already gone); an **absent** System32
-   `taskkill.exe`, a spawn throw/error, a terminating signal, or any other
-   exit is a failure with a diagnostic. win32 `reapGroup` returns
-   `{ reaped: true }` only on that checked success, else `{ reaped: false,
-   why }`; win32 `reapTree` surfaces the same failure via its diagnostic
-   (item 5). The supervisor never claims the tree stopped when taskkill never
-   ran or failed. **Scope unchanged:** the win32 `{ reaped: false }` is a
-   surfaced diagnostic only — the R8-1 fail-loud escalation stays POSIX-only
-   (run-job does not activate the group-reap authority on win32), and the
-   R5-2 leaderless-member deferral to `WP-a10-windows-reap` stands.
+   the taskkill"). `taskkillTree` returns `{ ok, why }`: success is **exit `0`
+   ONLY**. Every non-zero exit — **including `128`** — a terminating signal, a
+   spawn throw/error, and an **absent** System32 `taskkill.exe` are failures
+   with a diagnostic. **G1 (2026-07-20):** exit `128` is NOT treated as
+   "already gone": Win32 error 128 is `ERROR_WAIT_NO_CHILDREN`, and an
+   executable can return 128 on an init failure (desktop-access / resource
+   exhaustion) BEFORE killing anything, so a LIVE tree can exit 128 — taskkill
+   publishes no exit-code contract making 128 uniquely "already gone". Since
+   win32 is POSIX-deferred (no leaderless guarantee; `settleReaps` / the R8-1
+   fail-loud escalation never run on win32), a false-negative `{ reaped: false }`
+   on a genuinely-gone tree is a harmless surfaced diagnostic while a
+   false-positive `{ reaped: true }` on a live tree is the real hazard — the
+   conservative exit-0-only rule is the safe one. win32 `reapGroup` returns
+   `{ reaped: true }` only on exit 0, else `{ reaped: false, why }`; win32
+   `reapTree` surfaces the same failure via its diagnostic (item 5). The
+   supervisor never claims the tree stopped when taskkill never ran or failed.
+   **Scope unchanged:** the win32 `{ reaped: false }` is a surfaced diagnostic
+   only — the R8-1 fail-loud escalation stays POSIX-only, and an authoritative
+   Windows liveness check (distinguishing "already gone" from "init-failed
+   live") is deferred to `WP-a10-windows-reap`.
 4. **The R8-1 final-fail-loud path RELEASES the token pidfile after the loud
-   record.** When the bounded final escalation still leaves a group
-   `{ reaped: false }`, `run-job` deletes the retained token pidfile **after**
-   `failLoud` has appended the durable alert — the alert is the record, and no
-   later run ever reads this run's token, so retention would be a never-read
-   hollow leftover. R7-2's retain-for-backstop rule is unchanged where a later
-   reader exists: `dream.js`'s finally (retains for run-job) and run-job's
-   pre-escalation stage.
+   record — but ONLY when that record actually persisted (G2, 2026-07-20).**
+   When the bounded final escalation still leaves a group `{ reaped: false }`,
+   `run-job` deletes the retained token pidfile **after** `failLoud` has
+   appended the durable alert — the alert is the record, and no later run ever
+   reads this run's token, so retention would be a never-read hollow leftover.
+   **But `failLoud` now returns whether the durable `appendAlert` actually
+   persisted** (it catches an append failure and still resolves); if
+   `state/alerts.jsonl` could not be written (disk exhaustion), the token
+   pidfile is the SOLE surviving record of the survivor's recovery identity
+   (its PGID), so `run-job` **RETAINS** it as the fallback rather than delete a
+   never-recorded survivor. (I chose to thread the boolean back from `failLoud`
+   — additive; its other callers ignore the return — over re-checking
+   `appendAlert` at the `runJob` layer, as the smaller honest change.) R7-2's
+   retain-for-backstop rule is unchanged where a later reader exists:
+   `dream.js`'s finally (retains for run-job) and run-job's pre-escalation
+   stage.
 5. **A non-zero / signalled / errored `/bin/ps` yields a `null` table.**
    `readTablePs` requires `status === 0`, no termination signal, and no spawn
    error; a failing/interrupted ps that emitted parseable *partial* rows is
