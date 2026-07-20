@@ -440,6 +440,7 @@ macOS / Linux (bash — paste as one block):
 HARNESSES='claude codex'   # DECLARE every harness in your TRUSTED inventory (see prose + residual)
 MARKER='<the exact poisoned text you are hunting>'
 CORE="$WIENERDOG_HOME"     # the step-0 core, re-exported after the reboot
+SENT_B='<!-- wienerdog:begin -->'; SENT_E='<!-- wienerdog:end -->'
 
 fail() { printf 'DRILL FAIL: %s\n' "$1"; exit 1; }
 WORK="$(mktemp -d)"; trap 'rm -rf "$WORK"' EXIT
@@ -464,34 +465,16 @@ for h in $HARNESSES; do
   esac
 done
 
-# (a) drive the installed hook fail-closed; byte-compare against the digest
-OUT="$(WIENERDOG_JOB= WIENERDOG_HOME="$CORE" "$CORE/bin/session-start.sh")" \
-  || fail "hook exited non-zero"
-[ -n "$OUT" ] || fail "hook printed nothing (fail-open output is NOT proof of clean)"
-printf '%s' "$OUT" | node -e '
-  let s = "";
-  process.stdin.on("data", (d) => (s += d));
-  process.stdin.on("end", () => {
-    let j; try { j = JSON.parse(s); } catch { console.error("malformed JSON"); process.exit(1); }
-    const h = (j && j.hookSpecificOutput) || {};
-    if (h.hookEventName !== "SessionStart") { console.error("wrong hookEventName"); process.exit(1); }
-    if (typeof h.additionalContext !== "string") { console.error("additionalContext is not a string"); process.exit(1); }
-    const digest = require("fs").readFileSync(process.argv[1], "utf8");
-    if (h.additionalContext !== digest) { console.error("injected bytes differ from the digest"); process.exit(1); }
-    if (h.additionalContext.includes(process.argv[2])) { console.error("poisoned marker is still injected"); process.exit(1); }
-  });' "$CORE/state/digest.md" "$MARKER" || fail "hook envelope check"
-
-# regenerated digest, checked directly (belt-and-suspenders)
-grep -qF -- "$MARKER" "$CORE/state/digest.md" && fail "marker still in the digest"
-
-# (b) run sync FIRST — idempotent; it REPAIRS the managed blocks AND re-records any
-# managed-block manifest entry a prior interrupted sync (or tampering) dropped
+# (1) run sync FIRST — idempotent; it REPAIRS the managed blocks AND re-records any
+# managed-block manifest entry a prior interrupted sync (or tampering) dropped. EVERY
+# digest / hook / marker / managed-block assertion below runs AFTER this, so the drill
+# proves the CURRENT (post-sync) state — never a stale pre-sync digest sync then changed (F1).
 SYNC_OUT="$(WIENERDOG_HOME="$CORE" wienerdog sync 2>&1)" \
   || { printf '%s\n' "$SYNC_OUT"; fail "sync exited non-zero"; }
 printf '%s\n' "$SYNC_OUT" | grep -qiE 'managed block not updated|digest not found|AGENTS\.override' \
   && { printf '%s\n' "$SYNC_OUT"; fail "sync reported a Table D BLOCK signal"; }
 
-# (c) DECLARED-harness skip is a BLOCK — a harness you declared that sync could not
+# (2) DECLARED-harness skip is a BLOCK — a harness you declared that sync could not
 # detect (its CLAUDE_CONFIG_DIR/CODEX_HOME unset or wrong on a custom-dir install)
 # must never be silently omitted. Evaluate the skip against the DECLARED set, not
 # only the manifest, so declaring 'codex' with CODEX_HOME unset → BLOCK.
@@ -504,7 +487,7 @@ for h in $declared_names; do
     && { printf '%s\n' "$SYNC_OUT"; fail "sync skipped a DECLARED harness ('$h') — set its CLAUDE_CONFIG_DIR/CODEX_HOME to the real install dir from your trusted inventory and re-run"; }
 done
 
-# (d) VALIDATE + read the POST-SYNC manifest managed-block paths, identity-preserving
+# (3) VALIDATE + read the POST-SYNC manifest managed-block paths, identity-preserving
 # (NUL-delimited). node REJECTS (→ DRILL FAIL) a manifest with: no entries array; a
 # managed-block path that is not an absolute string, has a CR/LF/NUL, or a basename
 # other than CLAUDE.md/AGENTS.md; or a DUPLICATE managed-block path. A malformed or
@@ -528,23 +511,25 @@ node -e '
   process.stdout.write(out.join("\0"));
 ' "$CORE/install-manifest.json" > "$WORK/manifest.nul" || fail "post-sync manifest failed validation"
 
-# (e) INDEPENDENT default-location probe — regardless of manifest/env/declaration, any
+# (4) INDEPENDENT default-location probe — regardless of manifest/env/declaration, any
 # Wienerdog managed block (a sentinel pair) at the DEFAULT harness path is a must-check
 # root. Closes the default-dir omission even if the mutable manifest or the env drops it.
 : > "$WORK/probe.nul"
 for pf in "$HOME/.claude/CLAUDE.md" "$HOME/.codex/AGENTS.md"; do
   [ -f "$pf" ] || continue
-  grep -qF -- '<!-- wienerdog:begin -->' "$pf" && grep -qF -- '<!-- wienerdog:end -->' "$pf" \
+  grep -qF -- "$SENT_B" "$pf" && grep -qF -- "$SENT_E" "$pf" \
     && printf '%s\0' "$pf" >> "$WORK/probe.nul"
 done
 
-# (f) MUST-CHECK set = post-sync manifest ∪ default-probe (deduped, NUL-safe)
+# (5) MUST-CHECK set = post-sync manifest ∪ default-probe (deduped, NUL-safe)
 sort -z -u "$WORK/manifest.nul" "$WORK/probe.nul" > "$WORK/must.nul"
 sort -z -u "$WORK/declared.nul" > "$WORK/declared.sorted"
 [ -s "$WORK/must.nul" ] || fail "no managed block in the manifest or at a default location — nothing to prove (a zero-harness machine cannot be certified by this drill)"
 echo "must-check managed-block files (post-sync manifest ∪ default-probe):"; tr '\0' '\n' < "$WORK/must.nul" | sed 's/^/  /'
 
-# (g) check EVERY must-check file (adapter not skipped + present + no marker + one pair)
+# (6) check EVERY must-check file: adapter not skipped + present + no marker + EXACTLY
+# one begin AND one end sentinel OCCURRENCE (count occurrences with grep -oF, NOT matching
+# lines — two sentinels on one line would evade grep -c), with begin BEFORE end (F2).
 : > "$WORK/checked.nul"
 while IFS= read -r -d '' f; do
   case "$f" in
@@ -556,17 +541,44 @@ while IFS= read -r -d '' f; do
     && { printf '%s\n' "$SYNC_OUT"; fail "sync skipped the adapter for managed-block file $f"; }
   [ -f "$f" ] || fail "managed-block file missing on disk: $f"
   grep -qF -- "$MARKER" "$f" && fail "marker found in $f (whole-file grep)"
-  b=$(grep -cF -- '<!-- wienerdog:begin -->' "$f")
-  e=$(grep -cF -- '<!-- wienerdog:end -->' "$f")
-  { [ "$b" -eq 1 ] && [ "$e" -eq 1 ]; } || fail "$f has $b begin / $e end sentinels (need exactly one pair)"
+  bcount=$(grep -oaF -- "$SENT_B" "$f" | wc -l | tr -d ' ')
+  ecount=$(grep -oaF -- "$SENT_E" "$f" | wc -l | tr -d ' ')
+  { [ "$bcount" -eq 1 ] && [ "$ecount" -eq 1 ]; } \
+    || fail "$f: $bcount begin / $ecount end sentinel occurrence(s) (need exactly one each)"
+  bpos=$(grep -boaF -- "$SENT_B" "$f" | head -1 | cut -d: -f1)
+  epos=$(grep -boaF -- "$SENT_E" "$f" | head -1 | cut -d: -f1)
+  [ "$bpos" -lt "$epos" ] || fail "$f: begin sentinel must precede end sentinel"
   printf '%s\0' "$f" >> "$WORK/checked.nul"
 done < "$WORK/must.nul"
 sort -z -u "$WORK/checked.nul" > "$WORK/checked.sorted"
 
-# (h) cross-checks: DECLARED set == must-check set, and CHECKED set == must-check set
+# (7) cross-checks: DECLARED set == must-check set, and CHECKED set == must-check set
 cmp -s "$WORK/declared.sorted" "$WORK/must.nul" \
   || fail "declared harness set != must-check set (post-sync manifest ∪ default-probe) — establish your COMPLETE harness inventory from TRUSTED records and declare every one; if you cannot, STOP and escalate (see the custom-root residual below)"
 cmp -s "$WORK/checked.sorted" "$WORK/must.nul" || fail "coverage gate: checked set != must-check set"
+
+# (8) POST-SYNC digest proof — runs AFTER sync so it verifies the CURRENT digest, not a
+# stale one sync may have regenerated (F1). The byte-compare is a TRUE byte compare
+# (Buffer.equals on raw bytes), not a lossy UTF-8 string compare that would treat
+# distinct invalid-UTF-8 bytes as equal via the U+FFFD replacement char (F3).
+OUT="$(WIENERDOG_JOB= WIENERDOG_HOME="$CORE" "$CORE/bin/session-start.sh")" \
+  || fail "hook exited non-zero"
+[ -n "$OUT" ] || fail "hook printed nothing (fail-open output is NOT proof of clean)"
+printf '%s' "$OUT" | node -e '
+  let s = "";
+  process.stdin.on("data", (d) => (s += d));
+  process.stdin.on("end", () => {
+    let j; try { j = JSON.parse(s); } catch { console.error("malformed JSON"); process.exit(1); }
+    const h = (j && j.hookSpecificOutput) || {};
+    if (h.hookEventName !== "SessionStart") { console.error("wrong hookEventName"); process.exit(1); }
+    if (typeof h.additionalContext !== "string") { console.error("additionalContext is not a string"); process.exit(1); }
+    const digest = require("fs").readFileSync(process.argv[1]);            // raw bytes — NO utf8 decode
+    if (!digest.equals(Buffer.from(h.additionalContext, "utf8"))) { console.error("injected bytes differ from the digest"); process.exit(1); }
+    if (h.additionalContext.includes(process.argv[2])) { console.error("poisoned marker is still injected"); process.exit(1); }
+  });' "$CORE/state/digest.md" "$MARKER" || fail "hook envelope check"
+# the regenerated (post-sync) digest, checked directly for the marker (belt-and-suspenders)
+grep -qF -- "$MARKER" "$CORE/state/digest.md" && fail "marker present in the post-sync digest"
+
 count=$(tr -cd '\0' < "$WORK/must.nul" | wc -c | tr -d ' ')
 echo "DRILL PASS — $count managed-block file(s) checked (post-sync manifest ∪ default-probe); record this output with the date"
 ```
@@ -578,6 +590,7 @@ Git Bash ships with Git for Windows, which Claude Code requires):
 $Harnesses = @('claude','codex')   # DECLARE every harness in your TRUSTED inventory (see prose + residual)
 $marker = '<the exact poisoned text you are hunting>'
 $core   = $env:WIENERDOG_HOME      # the step-0 core, re-exported after the reboot
+$SentB = '<!-- wienerdog:begin -->'; $SentE = '<!-- wienerdog:end -->'
 
 function Fail($msg) { Write-Host "DRILL FAIL: $msg"; exit 1 }
 
@@ -614,36 +627,15 @@ foreach ($h in $Harnesses) {
   }
 }
 
-# (a) drive the installed hook fail-closed; byte-compare against the digest
-# (positional argument passing - the path is NEVER interpolated into the bash source)
-$coreFwd = $core -replace '\\', '/'
-$out = bash -c 'WIENERDOG_JOB= WIENERDOG_HOME="$1" "$1/bin/session-start.sh"' _ "$coreFwd"
-if ($LASTEXITCODE -ne 0) { Fail "hook exited non-zero" }
-if ([string]::IsNullOrEmpty($out)) { Fail "hook printed nothing (fail-open output is NOT proof of clean)" }
-$out | node -e '
-  let s = "";
-  process.stdin.on("data", (d) => (s += d));
-  process.stdin.on("end", () => {
-    let j; try { j = JSON.parse(s); } catch { console.error("malformed JSON"); process.exit(1); }
-    const h = (j && j.hookSpecificOutput) || {};
-    if (h.hookEventName !== "SessionStart") { console.error("wrong hookEventName"); process.exit(1); }
-    if (typeof h.additionalContext !== "string") { console.error("additionalContext is not a string"); process.exit(1); }
-    const digest = require("fs").readFileSync(process.argv[1], "utf8");
-    if (h.additionalContext !== digest) { console.error("injected bytes differ from the digest"); process.exit(1); }
-    if (h.additionalContext.includes(process.argv[2])) { console.error("poisoned marker is still injected"); process.exit(1); }
-  });' "$core\state\digest.md" $marker
-if ($LASTEXITCODE -ne 0) { Fail "hook envelope check" }
-
-# regenerated digest, checked directly (belt-and-suspenders)
-if (Select-String -Path "$core\state\digest.md" -SimpleMatch $marker -Quiet) { Fail "marker still in the digest" }
-
-# (b) run sync FIRST - idempotent; it REPAIRS the managed blocks AND re-records any
-# managed-block manifest entry a prior interrupted sync (or tampering) dropped
+# (1) run sync FIRST - idempotent; it REPAIRS the managed blocks AND re-records any
+# managed-block manifest entry a prior interrupted sync (or tampering) dropped. EVERY
+# digest / hook / marker / managed-block assertion below runs AFTER this, so the drill
+# proves the CURRENT (post-sync) state - never a stale pre-sync digest sync then changed (F1).
 $sync = wienerdog sync 2>&1
 if ($LASTEXITCODE -ne 0) { $sync; Fail "sync exited non-zero" }
 if ($sync | Select-String -Pattern 'managed block not updated|digest not found|AGENTS\.override' -Quiet) { $sync; Fail "sync reported a Table D BLOCK signal" }
 
-# (c) DECLARED-harness skip is a BLOCK - a harness you declared that sync could not
+# (2) DECLARED-harness skip is a BLOCK - a harness you declared that sync could not
 # detect (its CLAUDE_CONFIG_DIR/CODEX_HOME unset or wrong on a custom-dir install)
 # must never be silently omitted. Evaluate the skip against the DECLARED set.
 foreach ($h in $declaredNames) {
@@ -654,7 +646,7 @@ foreach ($h in $declaredNames) {
   if ($sync | Select-String -Pattern $dskip -Quiet) { $sync; Fail "sync skipped a DECLARED harness ('$h') - set its CLAUDE_CONFIG_DIR/CODEX_HOME to the real install dir from your trusted inventory and re-run" }
 }
 
-# (d) VALIDATE + read the POST-SYNC manifest managed-block paths (as a JSON array, so
+# (3) VALIDATE + read the POST-SYNC manifest managed-block paths (as a JSON array, so
 # no shell normalization can collapse or alter identity). node REJECTS (-> DRILL FAIL)
 # a manifest with: no entries array; a managed-block path that is not an absolute
 # string, has a CR/LF/NUL, or a basename other than CLAUDE.md/AGENTS.md; or a DUPLICATE
@@ -680,26 +672,29 @@ $mbJson = node -e '
 if ($LASTEXITCODE -ne 0) { Fail "post-sync manifest failed validation" }
 $manifestFiles = @($mbJson | ConvertFrom-Json)
 
-# (e) INDEPENDENT default-location probe - regardless of manifest/env/declaration, any
+# (4) INDEPENDENT default-location probe - regardless of manifest/env/declaration, any
 # Wienerdog managed block (a sentinel pair) at the DEFAULT harness path is a must-check
 # root. Closes the default-dir omission even if the mutable manifest or the env drops it.
 $probeFiles = @()
 foreach ($pf in @("$homeDir\.claude\CLAUDE.md", "$homeDir\.codex\AGENTS.md")) {
   if (Test-Path $pf) {
-    $hasB = Select-String -Path $pf -SimpleMatch '<!-- wienerdog:begin -->' -Quiet
-    $hasE = Select-String -Path $pf -SimpleMatch '<!-- wienerdog:end -->' -Quiet
+    $hasB = Select-String -Path $pf -SimpleMatch $SentB -Quiet
+    $hasE = Select-String -Path $pf -SimpleMatch $SentE -Quiet
     if ($hasB -and $hasE) { $probeFiles += $pf }
   }
 }
 
-# (f) MUST-CHECK set = post-sync manifest UNION default-probe (ORDINAL dedup — a
+# (5) MUST-CHECK set = post-sync manifest UNION default-probe (ORDINAL dedup — a
 # case-distinct pair stays distinct, matching bash's sort -z -u)
 $mustSet = New-OrdinalSet (@($manifestFiles) + @($probeFiles))
 $declaredSet = New-OrdinalSet $declaredFiles
 if ($mustSet.Count -lt 1) { Fail "no managed block in the manifest or at a default location - nothing to prove (a zero-harness machine cannot be certified by this drill)" }
 Write-Host "must-check managed-block files (post-sync manifest UNION default-probe):"; $mustSet | ForEach-Object { Write-Host "  $_" }
 
-# (g) check EVERY must-check file (adapter not skipped + present + no marker + one pair)
+# (6) check EVERY must-check file: adapter not skipped + present + no marker + EXACTLY
+# one begin AND one end sentinel OCCURRENCE (regex Matches over the raw file text counts
+# OCCURRENCES, ordinal — not matching lines, which .Count on Select-String would), with
+# begin BEFORE end (F2).
 $checkedPaths = @()
 foreach ($f in $mustSet) {
   switch ([System.IO.Path]::GetFileName($f)) {
@@ -710,14 +705,16 @@ foreach ($f in $mustSet) {
   if ($sync | Select-String -Pattern $skip -Quiet) { $sync; Fail "sync skipped the adapter for managed-block file $f" }
   if (-not (Test-Path $f)) { Fail "managed-block file missing on disk: $f" }
   if (Select-String -Path $f -SimpleMatch $marker -Quiet) { Fail "marker found in $f (whole-file grep)" }
-  $b = @(Select-String -Path $f -SimpleMatch '<!-- wienerdog:begin -->').Count
-  $e = @(Select-String -Path $f -SimpleMatch '<!-- wienerdog:end -->').Count
-  if ($b -ne 1 -or $e -ne 1) { Fail "$f has $b begin / $e end sentinels (need exactly one pair)" }
+  $raw = [System.IO.File]::ReadAllText($f)
+  $bm = [regex]::Matches($raw, [regex]::Escape($SentB))
+  $em = [regex]::Matches($raw, [regex]::Escape($SentE))
+  if ($bm.Count -ne 1 -or $em.Count -ne 1) { Fail "$f`: $($bm.Count) begin / $($em.Count) end sentinel occurrence(s) (need exactly one each)" }
+  if ($bm[0].Index -ge $em[0].Index) { Fail "$f`: begin sentinel must precede end sentinel" }
   $checkedPaths += $f
 }
 $checkedSet = New-OrdinalSet $checkedPaths
 
-# (h) cross-checks: DECLARED set == must-check set, and CHECKED set == must-check set
+# (7) cross-checks: DECLARED set == must-check set, and CHECKED set == must-check set
 # (HashSet.SetEquals uses the set's ORDINAL comparer — never case-insensitive -eq/-ne)
 if (-not $declaredSet.SetEquals($mustSet)) {
   Write-Host "declared:"; $declaredSet | ForEach-Object { Write-Host "  $_" }
@@ -725,33 +722,70 @@ if (-not $declaredSet.SetEquals($mustSet)) {
   Fail "declared harness set != must-check set (post-sync manifest UNION default-probe) - establish your COMPLETE harness inventory from TRUSTED records and declare every one; if you cannot, STOP and escalate (see the custom-root residual below)"
 }
 if (-not $checkedSet.SetEquals($mustSet)) { Fail "coverage gate: checked set != must-check set" }
+
+# (8) POST-SYNC digest proof - runs AFTER sync so it verifies the CURRENT digest, not a
+# stale one sync may have regenerated (F1). The byte-compare is a TRUE byte compare
+# (Buffer.equals on raw bytes), not a lossy UTF-8 string compare (F3).
+# (positional argument passing - the path is NEVER interpolated into the bash source)
+$coreFwd = $core -replace '\\', '/'
+$out = bash -c 'WIENERDOG_JOB= WIENERDOG_HOME="$1" "$1/bin/session-start.sh"' _ "$coreFwd"
+if ($LASTEXITCODE -ne 0) { Fail "hook exited non-zero" }
+if ([string]::IsNullOrEmpty($out)) { Fail "hook printed nothing (fail-open output is NOT proof of clean)" }
+$out | node -e '
+  let s = "";
+  process.stdin.on("data", (d) => (s += d));
+  process.stdin.on("end", () => {
+    let j; try { j = JSON.parse(s); } catch { console.error("malformed JSON"); process.exit(1); }
+    const h = (j && j.hookSpecificOutput) || {};
+    if (h.hookEventName !== "SessionStart") { console.error("wrong hookEventName"); process.exit(1); }
+    if (typeof h.additionalContext !== "string") { console.error("additionalContext is not a string"); process.exit(1); }
+    const digest = require("fs").readFileSync(process.argv[1]);            // raw bytes — NO utf8 decode
+    if (!digest.equals(Buffer.from(h.additionalContext, "utf8"))) { console.error("injected bytes differ from the digest"); process.exit(1); }
+    if (h.additionalContext.includes(process.argv[2])) { console.error("poisoned marker is still injected"); process.exit(1); }
+  });' "$core\state\digest.md" $marker
+if ($LASTEXITCODE -ne 0) { Fail "hook envelope check" }
+# the regenerated (post-sync) digest, checked directly for the marker (belt-and-suspenders)
+if (Select-String -Path "$core\state\digest.md" -SimpleMatch $marker -Quiet) { Fail "marker present in the post-sync digest" }
 Write-Host "DRILL PASS — $($mustSet.Count) managed-block file(s) checked (post-sync manifest UNION default-probe); record this output with the date"
 ```
 
-What each part proves:
+What each part proves (note the whole sequence is **sync-first**: `wienerdog
+sync` runs before ANY digest / hook / marker / managed-block assertion, so every
+check verifies the CURRENT post-sync state, never a stale pre-sync digest that
+sync then regenerated):
 
-- **Drive the installed SessionStart hook with the injecting environment.**
-  The block runs the installed hook at `$CORE/bin/session-start.sh` (Table A;
-  `doctor` does **not** print the path) with `WIENERDOG_HOME` set to the
-  step-0 core and `WIENERDOG_JOB` **cleared** (an inherited `WIENERDOG_JOB`
-  makes the hook exit `0` with no output — a false "clean").
-- **Verify fail-closed.** The `node -e` script parses the JSON envelope and
-  BLOCKS (drill FAILS — do not re-authorize) on any of: empty stdout, a
-  JSON-parse failure, `hookSpecificOutput.hookEventName !== 'SessionStart'`,
-  or a non-string `additionalContext`. When it parses, it **byte-compares**
-  `additionalContext` to the bytes of `$CORE/state/digest.md` (Table A) —
-  they must be **identical** (the hook injects exactly those bytes) — AND
-  confirms the poisoned marker does not appear in `additionalContext`. It
-  then greps the regenerated digest file directly, belt-and-suspenders.
+- **Drive the installed SessionStart hook with the injecting environment —
+  AFTER sync.** The block runs the installed hook at `$CORE/bin/session-start.sh`
+  (Table A; `doctor` does **not** print the path) with `WIENERDOG_HOME` set to
+  the step-0 core and `WIENERDOG_JOB` **cleared** (an inherited `WIENERDOG_JOB`
+  makes the hook exit `0` with no output — a false "clean"). This runs in the
+  LAST step, after `sync` and the coverage checks, so it reads the digest `sync`
+  just (re)generated — if a changed input reintroduced the marker into a new
+  digest, the drill catches it here rather than passing on the old one.
+- **Verify fail-closed with a TRUE byte compare.** The `node -e` script parses
+  the JSON envelope and BLOCKS (drill FAILS — do not re-authorize) on any of:
+  empty stdout, a JSON-parse failure, `hookSpecificOutput.hookEventName !==
+  'SessionStart'`, or a non-string `additionalContext`. When it parses, it reads
+  `$CORE/state/digest.md` as **raw bytes** (`readFileSync` with NO encoding) and
+  compares with `digest.equals(Buffer.from(additionalContext, "utf8"))` — a
+  genuine byte compare. (A lossy `utf8`-string compare would decode invalid UTF-8
+  in a tampered digest to the U+FFFD replacement char and could read EQUAL where
+  the raw bytes differ.) It also confirms the poisoned marker is absent from
+  `additionalContext`, then greps the regenerated post-sync digest directly,
+  belt-and-suspenders.
 - **Check every managed-block file in the machine-authoritative set — the
   post-sync manifest UNION an independent default-location probe — not just what
   you declared.** The drill runs its `wienerdog sync` **first** (idempotent — it
   repairs the managed blocks and **re-records any `managed-block` manifest entry
   a prior interrupted sync or tampering had dropped**), then builds the
   must-check set from two independent sources and checks **every** file in it
-  with the Table D three-check conjunction (whole-file marker grep + exactly-one
-  sentinel pair, plus a FAIL if `sync` skipped that file's adapter or the file
-  is missing):
+  with the Table D three-check conjunction (whole-file marker grep + a sentinel
+  check that counts literal begin/end **occurrences** — `grep -oF | wc -l` in
+  bash, an ordinal regex-match count in PowerShell, so two sentinels on one line
+  read as two, not the single line `grep -c`/`Select-String(...).Count` would
+  report — requiring **exactly one begin AND exactly one end AND begin before
+  end** by byte/char offset, plus a FAIL if `sync` skipped that file's adapter or
+  the file is missing):
   - **The post-sync manifest** (`$CORE/install-manifest.json`): read
     identity-preserving after `node` **validates** it — a manifest with no
     entries array, a non-absolute/non-string managed-block path, a path with a

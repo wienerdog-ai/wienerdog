@@ -298,6 +298,24 @@ state and act on:
   > use `HashSet[string]` with `[System.StringComparer]::Ordinal` and compare with
   > `.SetEquals(...)`; no `Sort-Object -Unique` or `-eq`/`-ne` on paths remains. The
   > bash block was already ordinal (`sort -z -u`) — PS-only fix.
+  >
+  > **Fix-pass amendment 8 (2026-07-20, comprehensive QA pass):** three step-6
+  > false-pass paths, both blocks. **F1 (ordering):** the hook-envelope check, the
+  > additionalContext↔digest byte-compare, and the digest marker grep ran BEFORE
+  > `wienerdog sync`, which could then regenerate a different digest D1 (a changed
+  > identity/summary input reintroducing the marker) that nothing re-checked — DRILL
+  > PASS on the stale D0. The step is now strictly sync-first: sync → coverage →
+  > ALL hook/digest/marker checks, so every assertion is against the post-sync
+  > digest. **F2 (sentinel count):** the "exactly one pair" check used `grep -cF` /
+  > `Select-String(...).Count`, which count matching LINES — two sentinels on one
+  > line read as 1 and a duplicated-pair-on-one-line block passed. Now count literal
+  > OCCURRENCES (bash `grep -oF | wc -l`; PS ordinal `[regex]::Matches`) and assert
+  > exactly one begin AND one end AND begin-before-end by offset. **F3 (byte
+  > compare):** `readFileSync(path, "utf8")` decoded the digest, mapping invalid
+  > UTF-8 to U+FFFD, so a tampered digest whose hook exposes the replacement char
+  > compared EQUAL. Now read the digest as a raw Buffer (`readFileSync(path)`) and
+  > compare with `Buffer.equals(Buffer.from(additionalContext, "utf8"))` — a true
+  > byte compare; mirrored in the PowerShell block's embedded node.
 - **The ONLY authoritative way to reach zero running Wienerdog processes is to
   REBOOT after removing every per-job schedule AND the catch-up entry — not
   per-platform process forensics (R4-C, round-4).** After a reboot, with nothing
@@ -686,7 +704,12 @@ headless/`--yes` bypass — it is interactive and shows the exact bytes.
    environment and treat any empty/malformed output as a FAILURE, then byte-compare what
    it *would* inject against the digest. The runbook ships the drill as complete
    copy-paste blocks (bash + PowerShell) that stop at the first failure; a printed
-   "DRILL PASS" is the pass.
+   "DRILL PASS" is the pass. **The whole sequence is sync-first: `wienerdog sync`
+   runs before ANY digest / hook / marker / managed-block assertion (F1), so every
+   check verifies the CURRENT post-sync state — never a stale pre-sync digest that
+   sync then regenerated (a changed identity/summary input can reintroduce the
+   marker into a new digest D1 after a clean D0). The order reads sync → coverage
+   (manifest driver + probe + per-file checks) → hook/digest/marker proof.**
    - **Coverage is driven by the post-sync manifest UNION an independent
      default-location probe, gated where machine-checkable and STOP-AND-ESCALATE for
      the irreducible remainder (round-2 F1 / round-3 G1 / round-4 structural /
@@ -747,22 +770,26 @@ headless/`--yes` bypass — it is interactive and shows the exact bytes.
      A12 hand-off, not an open hole. The runbook must NOT claim under-declaration can
      never pass; it states the exact unclosable case and that it BLOCKS via
      stop-and-escalate.
-   - **Drive the installed SessionStart hook with the injecting environment.** Run the
-     installed hook at `$CORE/bin/session-start.sh` (Table A; the adapter installs it under
-     the core — `doctor` does **not** print the path) with `WIENERDOG_HOME` set to the
-     step-0 core and `WIENERDOG_JOB` **cleared** (an inherited `WIENERDOG_JOB` makes the
-     hook exit `0` with no output — a false "clean"):
-     `WIENERDOG_JOB= WIENERDOG_HOME="$CORE" "$CORE/bin/session-start.sh"`
-   - **Verify fail-closed.** Pipe that stdout through a tiny `node -e` that parses the JSON
-     envelope and BLOCKS (drill FAILS — do not re-authorize) on any of: empty stdout, a
-     JSON-parse failure, `hookSpecificOutput.hookEventName !== 'SessionStart'`, or a
-     non-string `additionalContext`. When it parses, **byte-compare** `additionalContext`
-     to the bytes of `$CORE/state/digest.md` (Table A) — they must be **identical** (the
-     hook injects exactly those bytes) — AND confirm a `grep -F` for the poisoned marker
-     over `additionalContext` finds nothing. A marker match, a mismatch against the
-     digest, or any block condition means STOP.
-   - **Grep the regenerated `$CORE/state/digest.md`** for the poisoned marker directly
-     (belt-and-suspenders against the decoded bytes above).
+   - **Drive the installed SessionStart hook — in the LAST step, after sync (F1).** Run
+     the installed hook at `$CORE/bin/session-start.sh` (Table A; the adapter installs it
+     under the core — `doctor` does **not** print the path) with `WIENERDOG_HOME` set to
+     the step-0 core and `WIENERDOG_JOB` **cleared** (an inherited `WIENERDOG_JOB` makes
+     the hook exit `0` with no output — a false "clean"):
+     `WIENERDOG_JOB= WIENERDOG_HOME="$CORE" "$CORE/bin/session-start.sh"`. Because it runs
+     after `sync`, it reads the digest `sync` just (re)generated.
+   - **Verify fail-closed with a TRUE byte compare (F3).** Pipe that stdout through a tiny
+     `node -e` that parses the JSON envelope and BLOCKS (drill FAILS — do not
+     re-authorize) on any of: empty stdout, a JSON-parse failure,
+     `hookSpecificOutput.hookEventName !== 'SessionStart'`, or a non-string
+     `additionalContext`. When it parses, read `$CORE/state/digest.md` as **raw bytes**
+     (`readFileSync` with **no** encoding) and compare with
+     `digest.equals(Buffer.from(h.additionalContext, "utf8"))` — a genuine byte compare,
+     **not** a `utf8`-string compare (which decodes invalid UTF-8 in a tampered digest to
+     the U+FFFD replacement char and could read EQUAL where the raw bytes differ). AND
+     confirm the poisoned marker is absent from `additionalContext`. A marker match, a
+     byte mismatch, or any block condition means STOP.
+   - **Grep the regenerated (post-sync) `$CORE/state/digest.md`** for the poisoned marker
+     directly (belt-and-suspenders).
    - **Check the managed block of every DECLARED harness file via the Table D three-check
      conjunction.** `sync` runs only the **detected** harness's adapter, and a
      single-harness (Claude-only **or** Codex-only) install is supported and tested — so
@@ -774,7 +801,12 @@ headless/`--yes` bypass — it is interactive and shows the exact bytes.
      re-authorization.) For each such file run all three Table D checks — the
      **notice-tolerant** clean `sync` (block only on the Table D **BLOCK** signals; the two
      constant Codex info notices are **ALLOWed**), the **whole-file** marker grep, and the
-     **exactly-one-sentinel-pair** check — and do **NOT** byte-compare the region against
+     **sentinel occurrence + ordering** check — count literal begin/end **occurrences**
+     (bash `grep -oF | wc -l`; PowerShell an ordinal regex-match count over the raw file
+     text), NOT matching lines (`grep -c` / `Select-String(...).Count` count lines, so two
+     sentinels on ONE line would evade a one-line count and pass a duplicated block, F2),
+     requiring **exactly one begin AND exactly one end AND begin before end** (by
+     byte/char offset) — and do **NOT** byte-compare the region against
      the raw `$CORE/state/digest.md` (Table D: `sync`'s trim+neutralize transform means the
      region is never byte-identical, so that compare would falsely fail; the three checks
      prove the block clean by construction). `doctor` is **not** proof here (Table D).
@@ -936,24 +968,31 @@ the runbook never contains a bare operative `state/<file>` token.
       in an already-secured destination; and re-applies modes **recursively** (every dir
       `0700`, every file `0600`) with a blocking re-verify (macOS/Linux `find`
       forms; Windows `icacls`).
-- [ ] The acceptance-drill step is **fail-closed**: it runs the installed
-      **`<core>/bin/session-start.sh`** with `WIENERDOG_HOME` set and
-      `WIENERDOG_JOB` cleared, BLOCKS on empty stdout / JSON-parse failure / wrong
-      `hookEventName` / non-string `additionalContext`, byte-compares
-      `additionalContext` to `$CORE/state/digest.md`, greps the regenerated digest,
+- [ ] The acceptance-drill step is **fail-closed** and **sync-first**: `wienerdog
+      sync` runs before ANY digest / hook / marker / managed-block assertion (F1), so
+      every check verifies the CURRENT post-sync state, not a stale pre-sync digest
+      sync then regenerated. It runs the installed **`<core>/bin/session-start.sh`**
+      with `WIENERDOG_HOME` set and `WIENERDOG_JOB` cleared, BLOCKS on empty stdout /
+      JSON-parse failure / wrong `hookEventName` / non-string `additionalContext`,
+      then does a **true byte compare** — reads the digest as **raw bytes**
+      (`readFileSync` no encoding) and `Buffer.equals(Buffer.from(additionalContext,
+      "utf8"))`, NOT a lossy `utf8`-string compare that would treat distinct
+      invalid-UTF-8 bytes as equal via U+FFFD (F3) — greps the regenerated digest,
       and checks the managed block of **every installed harness file** (both
       `CLAUDE.md` and `AGENTS.md` when both harnesses are installed, only the single
       present file on a single-harness install) via a **notice-tolerant** `sync`
       check **plus** an explicit check that (a) `grep -F`s the poisoned marker over
       the **ENTIRE** file (not only the sentinel region — a both-sentinels-deleted
       attack leaves poisoned text that `sync` appends around, still injected), and
-      (b) confirms exactly one sentinel pair (no orphaned out-of-sentinel remnant),
-      treating a **missing** pair as "`sync` appended a fresh block and the old
-      content is orphaned outside it — manually remove/quarantine it" (**not**
-      `doctor`); it does **NOT** byte-compare the sentinel region against the raw
-      `$CORE/state/digest.md` (`sync`'s trim+neutralize transform means the region
-      never equals the raw digest, so that compare would falsely fail on a clean
-      install — the three checks prove the block clean by construction). The
+      (b) counts literal begin/end sentinel **OCCURRENCES** (bash `grep -oF | wc -l`,
+      PowerShell ordinal regex-match count — NOT matching lines, so two sentinels on
+      one line cannot evade the check, F2), requiring exactly one begin AND one end
+      AND begin before end, treating a **missing** pair as "`sync` appended a fresh
+      block and the old content is orphaned outside it — manually remove/quarantine
+      it" (**not** `doctor`); it does **NOT** byte-compare the sentinel region against
+      the raw `$CORE/state/digest.md` (`sync`'s trim+neutralize transform means the
+      region never equals the raw digest, so that compare would falsely fail on a
+      clean install — the three checks prove the block clean by construction). The
       new-session observation is an optional extra, not the proof; the proof is tied
       to the ADR-0021 byte-gated injection.
 - [ ] **[Round-2 F1 / Round-3 G1 / Round-4 structural / Round-5 G1+G2]** The
@@ -1106,6 +1145,12 @@ grep -nE "memory approve (profile|preferences|goals|instructions|<note>)" docs/r
 grep -nE "schedule add.*--job|frozen|A0|A1|not.*re-add|cannot be re-added" docs/runbooks/incident.md
 # the drill precedes re-authorization (drill line number < re-add line number):
 awk '/acceptance drill/{d=NR} /schedule add|routine menu|Re-authorize/{if(d){print "drill@"d" before re-auth@"NR; exit}}' docs/runbooks/incident.md
+# amendment-8 F1: the hook/digest/marker checks run AFTER sync (step order sync-first);
+# amendment-8 F2: sentinel OCCURRENCE count (grep -oF|wc -l / regex Matches), not line count,
+# with begin-before-end; amendment-8 F3: TRUE byte compare via Buffer.equals (no utf8 decode):
+grep -nE "grep -oaF -- \"\\\$SENT|\[regex\]::Matches|begin sentinel must precede end sentinel|readFileSync\(process\.argv\[1\]\);|Buffer\.from\(h\.additionalContext" docs/runbooks/incident.md
+# and NO lossy utf8-string digest read remains in the hook-envelope node (expect NO output):
+grep -n 'readFileSync(process.argv\[1\], "utf8").*additionalContext\|additionalContext !== digest' docs/runbooks/incident.md || true
 ```
 
 ## Out of scope (do NOT do these)
