@@ -420,25 +420,58 @@ were unhardened, and the residual claim was an OVERCLAIM; corrected.**
   `(dev,ino)`) and now RE-`lstat`s after chmod; a `(dev,ino)` change → the repair
   **throws** (LOUD), never a silent `changed:0`.
 
-**The residual — the CLASS of concurrent owner-level swaps DURING the repair
-(NOT "only readdir").** After F1–F4, PRE-EXISTING symlinks are caught at **root**
-(`O_NOFOLLOW` open), **intermediate** (`(dev,ino)` fd-reval), **leaf** (lstat +
-`O_NOFOLLOW`, now incl. dynamic leaves), and the **write path** (`O_NOFOLLOW`
-open + lstat-first mkdir). The residual is three concurrent-swap **windows**, all
+**AMENDED 2026-07-20 (Codex position×phase close-out F5/F6) — the WRITE path is
+now hardened STRUCTURALLY at every position, and the residual claim (which was
+still false — F5/F6 were pre-existing-symlink write-path gaps) is corrected.**
+- **F5 (ROOT,WRITE)+(INTERMEDIATE,WRITE).** The write helpers protected only the
+  LEAF, so a symlinked ANCESTOR (`paths.core` or `paths.logs`) redirected the
+  create/chmod/write out-of-tree even with leaf `O_NOFOLLOW`. Fixed with ONE
+  shared `assertInCoreAncestry(target, core)` used by `mkdirPrivate`,
+  `createLogStreamPrivate`, and `writeFilePrivate`: anchored at the
+  `coreRootContext`-verified core (opened `O_DIRECTORY|O_NOFOLLOW`), it walks
+  every existing component from the core down to the target's parent and REFUSES
+  a symlink/non-dir at ANY of them (a symlinked core → refuse; a symlinked
+  intermediate → refuse). The verified core is threaded from the run-job/dream
+  log sites (`{ core: paths.core }`) or resolved once via `getPaths()`.
+- **F6 (LEAF,WRITE).** `writeFilePrivate`'s temp was `basename+PID` (predictable)
+  and `writeFileSync`'s default open FOLLOWS — a planted temp symlink truncated
+  its external target. Fixed completely (not a window): a **crypto-random** temp
+  name opened `O_WRONLY|O_CREAT|O_EXCL|O_NOFOLLOW` (mode `0600`) — `O_EXCL`
+  rejects any pre-existing file/symlink (`EEXIST` → fresh random name, bounded),
+  the write + `fchmod` go THROUGH the verified fd, then rename; the post-write
+  path-following `chmod` is removed. `O_EXCL`+random+`O_NOFOLLOW` is the standard
+  complete fix for the predictable-temp-symlink class.
+
+**Full never-follow guarantee — the position×phase matrix.** After G2–G5 +
+F1–F6, a PRE-EXISTING symlink is caught at EVERY position × phase:
+`{root, intermediate, leaf}` × `{enumerate, dir-chmod, file-chmod, 000-fallback,
+mkdir, open-write, temp-write}` — each cell refuses + surfaces (repair: root
+`O_NOFOLLOW`-open, intermediate `(dev,ino)` fd-reval, leaf lstat-classify incl.
+dynamic leaves; write: `assertInCoreAncestry` for root+intermediate, leaf
+`O_NOFOLLOW`/`O_EXCL`-random-temp).
+
+**The residual — ONLY the class of concurrent owner-level swaps DURING an
+operation** (NOT any pre-existing case, and NOT "only readdir"). Every window is
 the SAME same-user concurrent-writer class **ADR-0028** hands to **A12** ("Honest
-boundary — the A7 residual"): (1) the `readdir`-enumeration → fd-bind window
-(Node has no `openat`/`openat2`/`fdopendir`, so `readdir` resolves through the
-path); (2) the root open/lstat → `realpath` window in `coreRootContext`; (3) the
-mode-000 `lstat` → path-`chmodSync` window in `applyModeFallback` (worst case ONE
-chmod on a swapped target, surfaced LOUDLY by a thrown error). In every window
-the attacker must **already hold concurrent owner-level write access inside the
-already-`0700` core**; the `(dev,ino)` revalidation makes the worst case a
-REFUSED/LOUD repair, never a silent out-of-tree chmod. Do **not** claim "only
-readdir remains" and do **not** claim an unconditional "never follows symlinks".
-(No native addon; no portable 000-fd-chmod exists in pure Node.) *Follow-up for
-the architect:* `THREAT-MODEL.md` may want a one-line cross-reference to this
-three-window residual under the A12 section — flagged, not edited here (out of
-this WP's Deliverables).
+boundary — the A7 residual"), and pure Node cannot close any of them (no
+`openat`/`openat2`/`fdopendir`, no portable fd-bound chmod for a mode-000 entry —
+confirmed: `O_PATH` absent on macOS, `/proc` Linux-only):
+  1. **`readdir`-enumeration → fd-bind** (repair): a swap of an intermediate dir
+     after `readdir` names it but before the leaf fd is bound.
+  2. **root/ancestor validation → leaf op** (repair AND write): a swap of the
+     core or an intermediate ancestor after `assertInCoreAncestry`/`coreRootContext`
+     verifies it but before the leaf `open`/`chmod`/`write`.
+  3. **mode-000 `lstat` → path-`chmodSync`** (`applyModeFallback`): worst case ONE
+     chmod on a swapped target, surfaced LOUDLY by a thrown error.
+In every window the attacker must **already hold concurrent owner-level write
+access inside the already-`0700` core**, and the `(dev,ino)` revalidation +
+loud-throw make the worst case a REFUSED/LOUD operation, never a silent
+out-of-tree chmod/write. Do **not** claim any pre-existing symlink case remains
+open, do **not** claim "only readdir", and do **not** claim an unconditional
+"never follows symlinks" (the three concurrent-swap windows are the honest
+residual). *Follow-up for the architect:* `THREAT-MODEL.md` may want a one-line
+cross-reference to this three-window residual under the A12 section — flagged,
+not edited here (out of this WP's Deliverables).
 
 **The shared private log-stream helper `createLogStreamPrivate` — FAIL-CLOSED
 (round-2 finding 6).** The two log writers must open their stream `0600`
