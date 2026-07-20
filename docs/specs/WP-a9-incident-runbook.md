@@ -226,6 +226,22 @@ state and act on:
   > positional argument (`bash -c '… "$1" …' _ "$coreFwd"`), and both blocks
   > were audited to pass every path as a quoted variable/argument, never
   > rebuilt into nested shell source.
+  >
+  > **Fix-pass amendment 4 (2026-07-20, adversarial-review round 3):** **G1** —
+  > a duplicate declaration impersonated full coverage: the round-2 gate
+  > incremented `declared` and `checked` per token without deduping, so
+  > `HARNESSES='claude claude'` on a dual-harness install printed DRILL PASS
+  > (checked=2, declared=2) while the real `AGENTS.md` kept orphaned poison
+  > that `sync` appends around and never blocks on. The gate is now
+  > duplicate-proof and manifest-anchored: a repeated harness name FAILS
+  > outright; the number of unique declared harnesses must equal the manifest's
+  > `managed-block` entry count (an env-independent anchor, so under-declaring
+  > cannot dodge a harness and a custom-dir install does not false-fail — the
+  > count is extracted with the same dependency-free `node -e` used to LIST the
+  > entries); and the number of unique checked file PATHS (not loop iterations)
+  > must equal both. All three counts must agree or the drill FAILS. The
+  > manifest-list-only-for-humans reconciliation from round 2 is kept AND now
+  > backed by the machine count check.
 - **The ONLY authoritative way to reach zero running Wienerdog processes is to
   REBOOT after removing every per-job schedule AND the catch-up entry — not
   per-platform process forensics (R4-C, round-4).** After a reboot, with nothing
@@ -620,11 +636,22 @@ headless/`--yes` bypass — it is interactive and shows the exact bytes.
      lists every harness Wienerdog was installed into (`claude`, `codex`, or both),
      cross-checkable against the `managed-block` entries the block prints from
      `$CORE/install-manifest.json` (via a dependency-free `node -e` — node is
-     guaranteed). The script FAILS (exit nonzero, no PASS) when the declared list is
-     empty, when any declared harness's file is missing, when `sync` printed one of
-     its exact adapter-skip messages ("not detected; skipping adapter" / "config is
-     no longer present; skipping adapter", `sync.js:317–329`) for a DECLARED harness,
-     or when the count of checked files differs from the declared count. It also
+     guaranteed). The **coverage gate is duplicate-proof and manifest-anchored
+     (round-2 F1 / round-3 G1)**: a harness declared **twice** FAILS outright (a
+     repeated name is surfaced operator error, not silently collapsed); the count of
+     **unique declared** harnesses must equal the number of `managed-block` entries in
+     `$CORE/install-manifest.json` (the same dependency-free `node -e` yields the
+     count — an **env-independent** anchor that blocks under-declaring to dodge a
+     harness yet never false-fails a custom-dir install, since a COUNT match is
+     independent of install-time-vs-drill-time dir differences, which is why the
+     path→harness reconciliation stays operator-side); and the count of **unique
+     checked file PATHS** (not loop iterations) must equal both. The script also FAILS
+     (exit nonzero, no PASS) when the declared list is empty, when any declared
+     harness's file is missing, when `sync` printed one of its exact adapter-skip
+     messages ("not detected; skipping adapter" / "config is no longer present;
+     skipping adapter", `sync.js:317–329`) for a DECLARED harness, or when any of the
+     three counts (unique-declared, manifest managed-block, unique-checked) disagree.
+     It also
      **pins the harness-detection environment** — unsetting `CLAUDE_CONFIG_DIR` and
      `CODEX_HOME` BEFORE `sync` and the file checks (both variables steer
      `detectHarnesses` AND the file paths, so an ambient redirect would hide the real
@@ -839,19 +866,26 @@ the runbook never contains a bare operative `state/<file>` token.
       install — the three checks prove the block clean by construction). The
       new-session observation is an optional extra, not the proof; the proof is tied
       to the ADR-0021 byte-gated injection.
-- [ ] **[Round-2 F1]** The drill's harness coverage is **machine-enforced, not a
-      judgment call**: the copy-paste blocks take an explicit operator declaration
-      of the installed harness set (`HARNESSES` / `$Harnesses`), print the
-      `managed-block` entries from `$CORE/install-manifest.json` (dependency-free
-      `node -e`) so the declaration can be verified, **pin the harness-detection
-      environment by unsetting `CLAUDE_CONFIG_DIR` and `CODEX_HOME` before `sync`
-      and the file checks** (custom-dir installs consciously set the matching
-      variable inside the block), and FAIL — printing no PASS — on an empty
-      declaration, a missing declared harness file, a `sync` adapter-skip message
-      ("not detected; skipping adapter" / "config is no longer present; skipping
-      adapter") naming a declared harness, or a checked-file count that differs
-      from the declared count. A zero-harness or hidden-harness environment can
-      therefore never print DRILL PASS.
+- [ ] **[Round-2 F1 / Round-3 G1]** The drill's harness coverage is
+      **machine-enforced, not a judgment call**: the copy-paste blocks take an
+      explicit operator declaration of the installed harness set (`HARNESSES` /
+      `$Harnesses`), print the `managed-block` entries from
+      `$CORE/install-manifest.json` (dependency-free `node -e`) so the declaration
+      can be verified, **pin the harness-detection environment by unsetting
+      `CLAUDE_CONFIG_DIR` and `CODEX_HOME` before `sync` and the file checks**
+      (custom-dir installs consciously set the matching variable inside the block),
+      and FAIL — printing no PASS — on an empty declaration, a **duplicate** harness
+      declaration (a repeated name is rejected outright, not collapsed), a missing
+      declared harness file, or a `sync` adapter-skip message ("not detected;
+      skipping adapter" / "config is no longer present; skipping adapter") naming a
+      declared harness. The **coverage gate anchors three counts that must all
+      agree**: the number of **unique declared** harnesses, the number of
+      `managed-block` entries in the manifest (an **env-independent** count anchor —
+      so under-declaring cannot dodge a harness, without false-failing a custom-dir
+      install), and the number of **unique checked file PATHS** (not loop
+      iterations, so a duplicate declaration cannot inflate coverage). A
+      zero-harness, hidden-harness, duplicate-declaration, or under-declared
+      environment can therefore never print DRILL PASS.
 - [ ] **[Round-2 F2]** The PowerShell block passes the core path to `bash` as a
       **positional argument** (`bash -c '… "$1" …' _ "$coreFwd"`), never
       interpolated into the bash source, so a path containing an apostrophe,
@@ -930,9 +964,12 @@ grep -niE "not proof|non-proof|cannot reboot|escalate|sole" docs/runbooks/incide
 # Wienerdog OS registrations per platform (zero results required):
 grep -nE "launchctl list \| grep ai\.wienerdog|list-timers 'wienerdog-\*'|list-units 'wienerdog-\*'|Get-ScheduledTask -TaskPath" docs/runbooks/incident.md
 # Round-2 F1: the drill declares the installed harness set, pins the detection env,
-# cross-checks the manifest, blocks on a declared harness's adapter-skip, and
-# enforces checked==declared; round-2 F2: the PS->bash core path is positional:
-grep -nE "HARNESSES=|\\\$Harnesses|managed-block|unset CLAUDE_CONFIG_DIR CODEX_HOME|Remove-Item Env:|skipping adapter|checked.*declared|bash -c '.*\"\\\$1\"" docs/runbooks/incident.md
+# cross-checks the manifest, blocks on a declared harness's adapter-skip; round-2 F2:
+# the PS->bash core path is positional:
+grep -nE "HARNESSES=|\\\$Harnesses|managed-block|unset CLAUDE_CONFIG_DIR CODEX_HOME|Remove-Item Env:|skipping adapter|bash -c '.*\"\\\$1\"" docs/runbooks/incident.md
+# Round-3 G1: the coverage gate rejects duplicate declarations, counts UNIQUE checked
+# paths, and anchors unique-declared to the manifest managed-block COUNT (all agree):
+grep -nE "declared more than once|unique_declared|uniqueDeclared|MANIFEST_COUNT|manifestCount|unique_checked|uniqueChecked|sort -u|Sort-Object -Unique" docs/runbooks/incident.md
 # private evidence handling: pre-copy exclusion + recursive perms + windows ACL:
 grep -nE "find .*-type d.*chmod 700|find .*-type f.*chmod 600|icacls|Time Machine|OneDrive" docs/runbooks/incident.md
 # the fail-closed byte-level drill: installed hook path + env + block conditions:

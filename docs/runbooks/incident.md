@@ -451,6 +451,22 @@ node -e '
   const m = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
   for (const e of m.entries || []) if (e.kind === "managed-block") console.log("  " + e.path);
 ' "$CORE/install-manifest.json" || fail "could not read $CORE/install-manifest.json"
+# env-INDEPENDENT coverage anchor: how many managed blocks the machine actually has
+MANIFEST_COUNT="$(node -e '
+  const m = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+  process.stdout.write(String((m.entries || []).filter((e) => e.kind === "managed-block").length));
+' "$CORE/install-manifest.json")" || fail "could not count managed blocks in $CORE/install-manifest.json"
+
+# NORMALIZE the declaration: reject any duplicate outright, build the unique set,
+# and anchor its size to the manifest (a count match is env-independent, so it does
+# NOT false-fail a custom-dir install — unlike a path match, kept operator-side)
+seen=' '; unique_declared=0
+for h in $HARNESSES; do
+  case "$seen" in *" $h "*) fail "harness '$h' declared more than once";; esac
+  seen="$seen$h "; unique_declared=$((unique_declared+1))
+done
+[ "$unique_declared" -eq "$MANIFEST_COUNT" ] \
+  || fail "declared $unique_declared harness(es) but the manifest records $MANIFEST_COUNT managed block(s) — under/over-declaring cannot dodge a harness"
 
 # (a) drive the installed hook fail-closed; byte-compare against the digest
 OUT="$(WIENERDOG_JOB= WIENERDOG_HOME="$CORE" "$CORE/bin/session-start.sh")" \
@@ -477,9 +493,8 @@ SYNC_OUT="$(WIENERDOG_HOME="$CORE" wienerdog sync 2>&1)" \
   || { printf '%s\n' "$SYNC_OUT"; fail "sync exited non-zero"; }
 printf '%s\n' "$SYNC_OUT" | grep -qiE 'managed block not updated|digest not found|AGENTS\.override' \
   && { printf '%s\n' "$SYNC_OUT"; fail "sync reported a Table D BLOCK signal"; }
-declared=0; checked=0
+checked_list=""
 for h in $HARNESSES; do
-  declared=$((declared+1))
   case "$h" in
     claude) f="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/CLAUDE.md"
             skip='Claude Code (not detected|config is no longer present); skipping adapter' ;;
@@ -494,11 +509,15 @@ for h in $HARNESSES; do
   b=$(grep -cF -- '<!-- wienerdog:begin -->' "$f")
   e=$(grep -cF -- '<!-- wienerdog:end -->' "$f")
   { [ "$b" -eq 1 ] && [ "$e" -eq 1 ]; } || fail "$f has $b begin / $e end sentinels (need exactly one pair)"
-  checked=$((checked+1))
+  checked_list="$checked_list$f
+"
 done
-{ [ "$checked" -ge 1 ] && [ "$checked" -eq "$declared" ]; } \
-  || fail "checked $checked of $declared declared harness files"
-echo "DRILL PASS — $checked harness file(s) checked; record this output with the date"
+# count UNIQUE checked file PATHS (newline-delimited, space-safe), then the net gate:
+# unique-checked == unique-declared == manifest managed-block count, and at least one.
+unique_checked=$(printf '%s' "$checked_list" | sort -u | grep -c .)
+{ [ "$unique_checked" -ge 1 ] && [ "$unique_checked" -eq "$unique_declared" ] && [ "$unique_declared" -eq "$MANIFEST_COUNT" ]; } \
+  || fail "coverage gate: unique_checked=$unique_checked unique_declared=$unique_declared manifest=$MANIFEST_COUNT (all must agree)"
+echo "DRILL PASS — $unique_checked unique harness file(s) checked; record this output with the date"
 ```
 
 Windows (PowerShell — paste as one block; the hook is a bash script, and
@@ -522,6 +541,19 @@ if (-not $Harnesses -or $Harnesses.Count -eq 0) { Fail "Harnesses list is empty 
 Write-Host "manifest managed-block entries:"
 node -e 'const m = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); for (const e of m.entries || []) if (e.kind === "managed-block") console.log("  " + e.path);' "$core\install-manifest.json"
 if ($LASTEXITCODE -ne 0) { Fail "could not read $core\install-manifest.json" }
+# env-INDEPENDENT coverage anchor: how many managed blocks the machine actually has
+$manifestCount = [int](node -e 'const m = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); process.stdout.write(String((m.entries || []).filter((e) => e.kind === "managed-block").length));' "$core\install-manifest.json")
+if ($LASTEXITCODE -ne 0) { Fail "could not count managed blocks in $core\install-manifest.json" }
+
+# NORMALIZE the declaration: reject any duplicate outright, build the unique set,
+# and anchor its size to the manifest (a count match is env-independent, so it does
+# NOT false-fail a custom-dir install - unlike a path match, kept operator-side)
+$seen = @(); $uniqueDeclared = 0
+foreach ($h in $Harnesses) {
+  if ($seen -contains $h) { Fail "harness '$h' declared more than once" }
+  $seen += $h; $uniqueDeclared++
+}
+if ($uniqueDeclared -ne $manifestCount) { Fail "declared $uniqueDeclared harness(es) but the manifest records $manifestCount managed block(s) - under/over-declaring cannot dodge a harness" }
 
 # (a) drive the installed hook fail-closed; byte-compare against the digest
 # (positional argument passing - the path is NEVER interpolated into the bash source)
@@ -551,7 +583,7 @@ $sync = wienerdog sync 2>&1
 if ($LASTEXITCODE -ne 0) { $sync; Fail "sync exited non-zero" }
 if ($sync | Select-String -Pattern 'managed block not updated|digest not found|AGENTS\.override' -Quiet) { $sync; Fail "sync reported a Table D BLOCK signal" }
 $homeDir = if ($env:HOME) { $env:HOME } else { $env:USERPROFILE }  # HOME before USERPROFILE, matching the code
-$checked = 0
+$checkedPaths = @()
 foreach ($h in $Harnesses) {
   switch ($h) {
     'claude' { $f = if ($env:CLAUDE_CONFIG_DIR) { "$($env:CLAUDE_CONFIG_DIR)\CLAUDE.md" } else { "$homeDir\.claude\CLAUDE.md" }
@@ -566,10 +598,15 @@ foreach ($h in $Harnesses) {
   $b = @(Select-String -Path $f -SimpleMatch '<!-- wienerdog:begin -->').Count
   $e = @(Select-String -Path $f -SimpleMatch '<!-- wienerdog:end -->').Count
   if ($b -ne 1 -or $e -ne 1) { Fail "$f has $b begin / $e end sentinels (need exactly one pair)" }
-  $checked++
+  $checkedPaths += $f
 }
-if ($checked -lt 1 -or $checked -ne $Harnesses.Count) { Fail "checked $checked of $($Harnesses.Count) declared harness files" }
-Write-Host "DRILL PASS — $checked harness file(s) checked; record this output with the date"
+# count UNIQUE checked file PATHS, then the net gate: unique-checked == unique-declared
+# == manifest managed-block count, and at least one.
+$uniqueChecked = @($checkedPaths | Sort-Object -Unique).Count
+if ($uniqueChecked -lt 1 -or $uniqueChecked -ne $uniqueDeclared -or $uniqueDeclared -ne $manifestCount) {
+  Fail "coverage gate: unique_checked=$uniqueChecked unique_declared=$uniqueDeclared manifest=$manifestCount (all must agree)"
+}
+Write-Host "DRILL PASS — $uniqueChecked unique harness file(s) checked; record this output with the date"
 ```
 
 What each part proves:
@@ -594,11 +631,20 @@ What each part proves:
   `AGENTS.md` exactly as you declared. What used to be operator judgment is
   now machine-enforced: a DECLARED harness whose file is missing FAILS the
   drill (installed-but-missing is a failure — while an undeclared,
-  un-installed harness's absent file never blocks), a DECLARED harness whose
-  adapter `sync` skipped FAILS the drill (the script greps `sync`'s exact
-  skip messages — "not detected; skipping adapter" / "config is no longer
-  present; skipping adapter"), and a checked-file count that differs from the
-  declared count FAILS the drill. The `sync` check stays **notice-tolerant**
+  un-installed harness's absent file never blocks), and a DECLARED harness
+  whose adapter `sync` skipped FAILS the drill (the script greps `sync`'s
+  exact skip messages — "not detected; skipping adapter" / "config is no
+  longer present; skipping adapter"). The **coverage gate** is duplicate-proof
+  and anchored to the machine, not just to what you typed: a harness declared
+  **twice** FAILS outright (a repeated name is operator error, surfaced — not
+  silently collapsed), the number of **unique** declared harnesses must equal
+  the count of `managed-block` entries in `$CORE/install-manifest.json` (an
+  **env-independent count** check — so you cannot under-declare to skip a
+  harness, and it never false-fails a custom-dir install because a count is
+  independent of install-time-vs-drill-time directory differences, which is
+  why the path→harness reconciliation stays operator-side), and the number of
+  **unique checked file paths** must equal both — all three counts must agree
+  or the drill FAILS. The `sync` check stays **notice-tolerant**
   by construction: it fails only on a non-zero exit or a concrete Table D
   BLOCK message ("managed block not updated", missing digest, a shadowing
   `AGENTS.override`) and lets the two constant Codex info notices pass.
