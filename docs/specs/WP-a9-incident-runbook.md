@@ -337,6 +337,24 @@ state and act on:
   > probe ∪ declared, so an installed file is omitted iff in NONE of the three — a root
   > no trusted record knows — the unchanged stop-and-escalate residual. No fourth
   > omission path.
+  >
+  > **Fix-pass amendment 10 (2026-07-20, lock-pass):** PowerShell basename VALIDATION
+  > and CLASSIFICATION are now ordinal/case-sensitive (round-6 made the SET ops ordinal
+  > but this layer was missed). PS's `-ne` (validator) and default `switch`
+  > (classification) are CASE-INSENSITIVE, so on case-sensitive NTFS a wrong-case DECOY
+  > (`C:\Custom\agents.md`, one clean sentinel pair) passed validation, classified as
+  > Codex, and entered must-check ∪ checked — while the real uppercase POISONED
+  > `C:\Custom\AGENTS.md` (manifest entry removed, non-default, another Codex root
+  > current so sync ran without a skip) stayed outside all three sources → DRILL PASS.
+  > Fix: the validator uses `[System.StringComparer]::Ordinal.Equals($bn, 'CLAUDE.md'/
+  > 'AGENTS.md')` and the classification uses `switch -CaseSensitive`, so only an
+  > exact-case `CLAUDE.md`/`AGENTS.md` basename validates + classifies; a wrong-case
+  > decoy is REJECTED at validation (before sync), forcing the operator to declare the
+  > correct-case path from trusted inventory → then it is checked → FAIL on the poison.
+  > bash's `case "$bn" in CLAUDE.md|AGENTS.md)` was already byte-exact/case-sensitive
+  > (confirmed, left unchanged). Audited: ZERO case-insensitive path/basename
+  > comparisons remain in either block; the only case-insensitive ops left are on
+  > integers / `$null` / exit codes.
 - **The ONLY authoritative way to reach zero running Wienerdog processes is to
   REBOOT after removing every per-job schedule AND the catch-up entry — not
   per-platform process forensics (R4-C, round-4).** After a reboot, with nothing
@@ -767,7 +785,16 @@ headless/`--yes` bypass — it is interactive and shows the exact bytes.
      set-operations and equality are ORDINAL (byte-exact) to match bash's `sort -z -u`
      (round-6 G1):** the must-check/declared/checked sets use a `HashSet[string]` built
      with `[System.StringComparer]::Ordinal` and compare with `.SetEquals(...)` — never
-     `Sort-Object -Unique` or `-eq`/`-ne` on paths.
+     `Sort-Object -Unique` or `-eq`/`-ne` on paths. **The PowerShell declared-path
+     basename VALIDATION and the harness CLASSIFICATION are also ordinal/case-sensitive
+     (round-8 G1):** the validator uses `[System.StringComparer]::Ordinal.Equals($bn,
+     'CLAUDE.md'/'AGENTS.md')` (not case-insensitive `-ne`) and the classification uses
+     `switch -CaseSensitive` — so a wrong-case decoy basename (`agents.md`) is REJECTED
+     at validation before sync as an invalid managed-block path, never accepted and
+     classified as a real harness file. Zero case-insensitive path/basename comparisons
+     remain in either block (bash's `case "$bn" in CLAUDE.md|AGENTS.md)` is already
+     byte-exact); the only case-insensitive operators left are on integers / `$null` /
+     exit codes.
    - **Completeness argument (round-7).** Reason explicitly about whether any
      genuinely-installed managed-block file can still be omitted from the checked set
      while DRILL PASS prints. The three sources cover: the **manifest** (every
@@ -1151,11 +1178,15 @@ grep -nE "DECLARED_PATHS|\\\$DeclaredPaths|declared path is not absolute|declare
 # identity-preserving (no sort -u normalization of raw paths):
 grep -nE "no entries array|is not an absolute string|CR/LF/NUL|unexpected managed-block basename|duplicate managed-block path|failed validation|ConvertFrom-Json" docs/runbooks/incident.md
 # Round-6 G1: PowerShell path set-ops are ORDINAL (HashSet + StringComparer::Ordinal +
-# SetEquals), never case-insensitive Sort-Object -Unique / -eq / -ne on paths:
-grep -nE "StringComparer\]::Ordinal|New-OrdinalSet|SetEquals|HashSet\[string\]" docs/runbooks/incident.md
+# SetEquals); round-8 G1: basename validation + classification are ordinal/case-sensitive
+# (Ordinal.Equals + switch -CaseSensitive):
+grep -nE "StringComparer\]::Ordinal|New-OrdinalSet|SetEquals|HashSet\[string\]|Ordinal\.Equals|switch -CaseSensitive" docs/runbooks/incident.md
 # and NO Sort-Object -Unique survives in PowerShell CODE (comments may name it as a
 # warning; strip comment lines first — expect NO output):
 awk '/^```powershell$/{p=1;next} /^```$/{p=0} p' docs/runbooks/incident.md | grep -vE '^\s*#' | grep -n "Sort-Object -Unique" || true
+# Round-8 G1 negative: NO case-insensitive -ne/-eq on a basename, and NO default
+# (case-insensitive) switch on GetFileName, in PowerShell CODE (expect NO output):
+awk '/^```powershell$/{p=1;next} /^```$/{p=0} p' docs/runbooks/incident.md | grep -vE '^\s*#' | grep -nE "\-ne '(CLAUDE|AGENTS)\.md'|\-eq '(CLAUDE|AGENTS)\.md'|switch \(\[System\.IO\.Path\]::GetFileName" || true
 # private evidence handling: pre-copy exclusion + recursive perms + windows ACL:
 grep -nE "find .*-type d.*chmod 700|find .*-type f.*chmod 600|icacls|Time Machine|OneDrive" docs/runbooks/incident.md
 # the fail-closed byte-level drill: installed hook path + env + block conditions:

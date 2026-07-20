@@ -627,7 +627,11 @@ $homeDir = if ($env:HOME) { $env:HOME } else { $env:USERPROFILE }  # HOME before
 foreach ($dp in $DeclaredPaths) {
   if (-not [System.IO.Path]::IsPathRooted($dp)) { Fail "declared path is not absolute: $dp" }
   $bn = [System.IO.Path]::GetFileName($dp)
-  if ($bn -ne 'CLAUDE.md' -and $bn -ne 'AGENTS.md') { Fail "declared path basename must be CLAUDE.md or AGENTS.md: $dp" }
+  # ORDINAL (case-sensitive) basename check — -ne is CASE-INSENSITIVE and would accept a
+  # wrong-case decoy (agents.md) whose real uppercase counterpart stays out of coverage.
+  if (-not [System.StringComparer]::Ordinal.Equals($bn, 'CLAUDE.md') -and -not [System.StringComparer]::Ordinal.Equals($bn, 'AGENTS.md')) {
+    Fail "not a managed-block file: basename must be exactly CLAUDE.md or AGENTS.md: $dp"
+  }
 }
 $declaredSet = New-OrdinalSet $DeclaredPaths
 if ($declaredSet.Count -lt 1) { Fail "DeclaredPaths is empty - list every managed-block file your TRUSTED inventory knows is installed" }
@@ -697,7 +701,9 @@ Write-Host "must-check managed-block files (post-sync manifest UNION default-pro
 # with begin BEFORE end (F2).
 $checkedPaths = @()
 foreach ($f in $mustSet) {
-  switch ([System.IO.Path]::GetFileName($f)) {
+  # switch -CaseSensitive (ordinal) — the default switch is CASE-INSENSITIVE and would
+  # classify a wrong-case basename as a real harness file (round-7 G1 / round-8).
+  switch -CaseSensitive ([System.IO.Path]::GetFileName($f)) {
     'CLAUDE.md' { $skip = 'Claude Code (not detected|config is no longer present); skipping adapter' }
     'AGENTS.md' { $skip = 'Codex CLI (not detected|config is no longer present); skipping adapter' }
     default     { Fail "unexpected managed-block file: $f" }
