@@ -403,17 +403,54 @@ against the digest.
 
 The two blocks below run the whole drill and stop at the first failure — a
 "DRILL PASS" line at the end is a real pass. Each check maps to a bullet
-explained after the blocks. Set the first line (`MARKER` / `$marker`) to the
-exact poisoned text you are hunting (plain text, not a regular expression),
-and run in a session where the step-1 re-export already set `WIENERDOG_HOME`.
+explained after the blocks. Before running, set the two operator inputs at the
+top of the block:
+
+- `MARKER` / `$marker` — the exact poisoned text you are hunting (plain text,
+  not a regular expression).
+- `HARNESSES` / `$Harnesses` — **declare every harness Wienerdog was installed
+  into** (`claude`, `codex`, or both). The script FAILS — no pass is printed —
+  if the list is empty, if any declared harness's file is missing, if `sync`
+  skipped a declared harness's adapter, or if the number of files actually
+  checked differs from the declared count, so an environment that hides your
+  real files cannot produce a false pass. Verify your declaration against the
+  install manifest: the block prints every `managed-block` entry recorded in
+  `$CORE/install-manifest.json` (a `CLAUDE.md` path = the `claude` harness, an
+  `AGENTS.md` path = the `codex` harness) — reconcile any difference before
+  trusting a pass.
+
+The block also **pins the harness-detection environment**: it unsets
+`CLAUDE_CONFIG_DIR` and `CODEX_HOME` before `sync` and the file checks, so
+both the file loop and `sync`'s adapter detection use the real default
+directories — an ambient redirect of either variable would otherwise make
+your real `CLAUDE.md`/`AGENTS.md` invisible to every check at once. If (and
+only if) you INSTALLED Wienerdog into a custom Claude/Codex directory, edit
+the block to set the matching variable to that directory instead of unsetting
+it.
+
+Run in a session where the step-1 re-export already set `WIENERDOG_HOME`.
 
 macOS / Linux (bash — paste as one block):
 
 ```bash
+HARNESSES='claude codex'   # DECLARE every installed harness: 'claude', 'codex', or 'claude codex'
 MARKER='<the exact poisoned text you are hunting>'
-CORE="$WIENERDOG_HOME"   # the step-0 core, re-exported after the reboot
+CORE="$WIENERDOG_HOME"     # the step-0 core, re-exported after the reboot
 
 fail() { printf 'DRILL FAIL: %s\n' "$1"; exit 1; }
+
+# pin the harness-detection env BEFORE sync and the file checks (see prose above);
+# set the matching variable here instead ONLY for a custom-dir install
+unset CLAUDE_CONFIG_DIR CODEX_HOME
+case "$HARNESSES" in *[a-z]*) ;; *) fail "HARNESSES is empty — declare every installed harness";; esac
+
+# manifest cross-check: print the recorded managed-block entries so you can
+# verify the HARNESSES declaration (CLAUDE.md = claude, AGENTS.md = codex)
+echo "manifest managed-block entries:"
+node -e '
+  const m = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+  for (const e of m.entries || []) if (e.kind === "managed-block") console.log("  " + e.path);
+' "$CORE/install-manifest.json" || fail "could not read $CORE/install-manifest.json"
 
 # (a) drive the installed hook fail-closed; byte-compare against the digest
 OUT="$(WIENERDOG_JOB= WIENERDOG_HOME="$CORE" "$CORE/bin/session-start.sh")" \
@@ -435,33 +472,61 @@ printf '%s' "$OUT" | node -e '
 # regenerated digest, checked directly (belt-and-suspenders)
 grep -qF -- "$MARKER" "$CORE/state/digest.md" && fail "marker still in the digest"
 
-# (b) Table D three-check conjunction, per installed harness file
+# (b) Table D three-check conjunction, per DECLARED harness file
 SYNC_OUT="$(WIENERDOG_HOME="$CORE" wienerdog sync 2>&1)" \
   || { printf '%s\n' "$SYNC_OUT"; fail "sync exited non-zero"; }
 printf '%s\n' "$SYNC_OUT" | grep -qiE 'managed block not updated|digest not found|AGENTS\.override' \
   && { printf '%s\n' "$SYNC_OUT"; fail "sync reported a Table D BLOCK signal"; }
-for f in "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/CLAUDE.md" "${CODEX_HOME:-$HOME/.codex}/AGENTS.md"; do
-  [ -f "$f" ] || continue  # un-installed harness; if this harness IS installed, a missing file is a FAILURE
+declared=0; checked=0
+for h in $HARNESSES; do
+  declared=$((declared+1))
+  case "$h" in
+    claude) f="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/CLAUDE.md"
+            skip='Claude Code (not detected|config is no longer present); skipping adapter' ;;
+    codex)  f="${CODEX_HOME:-$HOME/.codex}/AGENTS.md"
+            skip='Codex CLI (not detected|config is no longer present); skipping adapter' ;;
+    *) fail "unknown harness '$h' (declare: claude codex)" ;;
+  esac
+  printf '%s\n' "$SYNC_OUT" | grep -qE "$skip" \
+    && { printf '%s\n' "$SYNC_OUT"; fail "sync skipped the DECLARED harness '$h'"; }
+  [ -f "$f" ] || fail "declared harness '$h' has no file at $f (installed-but-missing is a FAILURE)"
   grep -qF -- "$MARKER" "$f" && fail "marker found in $f (whole-file grep)"
   b=$(grep -cF -- '<!-- wienerdog:begin -->' "$f")
   e=$(grep -cF -- '<!-- wienerdog:end -->' "$f")
   { [ "$b" -eq 1 ] && [ "$e" -eq 1 ]; } || fail "$f has $b begin / $e end sentinels (need exactly one pair)"
+  checked=$((checked+1))
 done
-echo "DRILL PASS — record this output with the date"
+{ [ "$checked" -ge 1 ] && [ "$checked" -eq "$declared" ]; } \
+  || fail "checked $checked of $declared declared harness files"
+echo "DRILL PASS — $checked harness file(s) checked; record this output with the date"
 ```
 
 Windows (PowerShell — paste as one block; the hook is a bash script, and
 Git Bash ships with Git for Windows, which Claude Code requires):
 
 ```powershell
+$Harnesses = @('claude','codex')   # DECLARE every installed harness: 'claude', 'codex', or both
 $marker = '<the exact poisoned text you are hunting>'
-$core   = $env:WIENERDOG_HOME   # the step-0 core, re-exported after the reboot
+$core   = $env:WIENERDOG_HOME      # the step-0 core, re-exported after the reboot
 
 function Fail($msg) { Write-Host "DRILL FAIL: $msg"; exit 1 }
 
+# pin the harness-detection env BEFORE sync and the file checks (see prose above);
+# set the matching variable here instead ONLY for a custom-dir install
+Remove-Item Env:CLAUDE_CONFIG_DIR -ErrorAction SilentlyContinue
+Remove-Item Env:CODEX_HOME -ErrorAction SilentlyContinue
+if (-not $Harnesses -or $Harnesses.Count -eq 0) { Fail "Harnesses list is empty - declare every installed harness" }
+
+# manifest cross-check: print the recorded managed-block entries so you can
+# verify the Harnesses declaration (CLAUDE.md = claude, AGENTS.md = codex)
+Write-Host "manifest managed-block entries:"
+node -e 'const m = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); for (const e of m.entries || []) if (e.kind === "managed-block") console.log("  " + e.path);' "$core\install-manifest.json"
+if ($LASTEXITCODE -ne 0) { Fail "could not read $core\install-manifest.json" }
+
 # (a) drive the installed hook fail-closed; byte-compare against the digest
+# (positional argument passing - the path is NEVER interpolated into the bash source)
 $coreFwd = $core -replace '\\', '/'
-$out = bash -c "WIENERDOG_JOB= WIENERDOG_HOME='$coreFwd' '$coreFwd/bin/session-start.sh'"
+$out = bash -c 'WIENERDOG_JOB= WIENERDOG_HOME="$1" "$1/bin/session-start.sh"' _ "$coreFwd"
 if ($LASTEXITCODE -ne 0) { Fail "hook exited non-zero" }
 if ([string]::IsNullOrEmpty($out)) { Fail "hook printed nothing (fail-open output is NOT proof of clean)" }
 $out | node -e '
@@ -481,24 +546,33 @@ if ($LASTEXITCODE -ne 0) { Fail "hook envelope check" }
 # regenerated digest, checked directly (belt-and-suspenders)
 if (Select-String -Path "$core\state\digest.md" -SimpleMatch $marker -Quiet) { Fail "marker still in the digest" }
 
-# (b) Table D three-check conjunction, per installed harness file
+# (b) Table D three-check conjunction, per DECLARED harness file
 $sync = wienerdog sync 2>&1
 if ($LASTEXITCODE -ne 0) { $sync; Fail "sync exited non-zero" }
 if ($sync | Select-String -Pattern 'managed block not updated|digest not found|AGENTS\.override' -Quiet) { $sync; Fail "sync reported a Table D BLOCK signal" }
 $homeDir = if ($env:HOME) { $env:HOME } else { $env:USERPROFILE }  # HOME before USERPROFILE, matching the code
-$claudeDir = if ($env:CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR } else { "$homeDir\.claude" }
-$codexDir  = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { "$homeDir\.codex" }
-foreach ($f in @("$claudeDir\CLAUDE.md", "$codexDir\AGENTS.md")) {
-  if (-not (Test-Path $f)) { continue }  # un-installed harness; if installed, a missing file is a FAILURE
+$checked = 0
+foreach ($h in $Harnesses) {
+  switch ($h) {
+    'claude' { $f = if ($env:CLAUDE_CONFIG_DIR) { "$($env:CLAUDE_CONFIG_DIR)\CLAUDE.md" } else { "$homeDir\.claude\CLAUDE.md" }
+               $skip = 'Claude Code (not detected|config is no longer present); skipping adapter' }
+    'codex'  { $f = if ($env:CODEX_HOME) { "$($env:CODEX_HOME)\AGENTS.md" } else { "$homeDir\.codex\AGENTS.md" }
+               $skip = 'Codex CLI (not detected|config is no longer present); skipping adapter' }
+    default  { Fail "unknown harness '$h' (declare: claude, codex)" }
+  }
+  if ($sync | Select-String -Pattern $skip -Quiet) { $sync; Fail "sync skipped the DECLARED harness '$h'" }
+  if (-not (Test-Path $f)) { Fail "declared harness '$h' has no file at $f (installed-but-missing is a FAILURE)" }
   if (Select-String -Path $f -SimpleMatch $marker -Quiet) { Fail "marker found in $f (whole-file grep)" }
   $b = @(Select-String -Path $f -SimpleMatch '<!-- wienerdog:begin -->').Count
   $e = @(Select-String -Path $f -SimpleMatch '<!-- wienerdog:end -->').Count
   if ($b -ne 1 -or $e -ne 1) { Fail "$f has $b begin / $e end sentinels (need exactly one pair)" }
+  $checked++
 }
-Write-Host "DRILL PASS — record this output with the date"
+if ($checked -lt 1 -or $checked -ne $Harnesses.Count) { Fail "checked $checked of $($Harnesses.Count) declared harness files" }
+Write-Host "DRILL PASS — $checked harness file(s) checked; record this output with the date"
 ```
 
-What each part proves, and the two judgment calls the script cannot make:
+What each part proves:
 
 - **Drive the installed SessionStart hook with the injecting environment.**
   The block runs the installed hook at `$CORE/bin/session-start.sh` (Table A;
@@ -513,25 +587,28 @@ What each part proves, and the two judgment calls the script cannot make:
   they must be **identical** (the hook injects exactly those bytes) — AND
   confirms the poisoned marker does not appear in `additionalContext`. It
   then greps the regenerated digest file directly, belt-and-suspenders.
-- **Check the managed block of every INSTALLED harness file via the Table D
+- **Check the managed block of every DECLARED harness file via the Table D
   three-check conjunction.** `sync` runs only the **detected** harness's
   adapter, and a single-harness (Claude-only **or** Codex-only) install is
   supported — so the loop applies the Table D checks to `CLAUDE.md` **and/or**
-  `AGENTS.md` per the install. **Judgment call 1:** the loop skips an absent
-  file, which is correct for an *un-installed* harness — but an **installed**
-  harness's file being missing is a FAILURE; you know which harnesses you
-  installed, so confirm every installed one's file was actually checked. The
-  script's `sync` check is **notice-tolerant** by construction: it fails only
-  on a non-zero exit or a concrete Table D BLOCK message ("managed block not
-  updated", missing digest, a shadowing `AGENTS.override`) and lets the two
-  constant Codex info notices pass. **Judgment call 2:** also read the `sync`
-  output yourself for a *skipped installed adapter* (an installed harness
-  whose adapter did not run) — there is no single greppable string for that,
-  and it is a Table D BLOCK signal. Do **NOT** add a byte-compare of the
-  sentinel region against the raw `$CORE/state/digest.md` (Table D: `sync`'s
-  trim+neutralize transform means the region is never byte-identical, so that
-  compare would falsely fail; the three checks prove the block clean by
-  construction). `doctor` is **not** proof here (Table D).
+  `AGENTS.md` exactly as you declared. What used to be operator judgment is
+  now machine-enforced: a DECLARED harness whose file is missing FAILS the
+  drill (installed-but-missing is a failure — while an undeclared,
+  un-installed harness's absent file never blocks), a DECLARED harness whose
+  adapter `sync` skipped FAILS the drill (the script greps `sync`'s exact
+  skip messages — "not detected; skipping adapter" / "config is no longer
+  present; skipping adapter"), and a checked-file count that differs from the
+  declared count FAILS the drill. The `sync` check stays **notice-tolerant**
+  by construction: it fails only on a non-zero exit or a concrete Table D
+  BLOCK message ("managed block not updated", missing digest, a shadowing
+  `AGENTS.override`) and lets the two constant Codex info notices pass.
+  Still skim the `sync` output once yourself — anything unexpected beyond
+  the two constant notices deserves a look before you trust the pass. Do
+  **NOT** add a byte-compare of the sentinel region against the raw
+  `$CORE/state/digest.md` (Table D: `sync`'s trim+neutralize transform means
+  the region is never byte-identical, so that compare would falsely fail;
+  the three checks prove the block clean by construction). `doctor` is
+  **not** proof here (Table D).
 - *(Optional extra sanity check, NOT the proof.)* You may also start a
   **new** Claude Code / Codex session and confirm it does not surface the
   poisoned fact — a nicety, not the acceptance: the byte-level checks above

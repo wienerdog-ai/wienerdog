@@ -208,6 +208,24 @@ state and act on:
   > the sentinels" — with both sentinels deleted it APPENDS, and the orphaned
   > poison must be removed by hand) and **F7** (`repointSchedules` citation
   > `sync.js:214` → `sync.js:221`).
+  >
+  > **Fix-pass amendment 3 (2026-07-20, adversarial-review round 2):** two
+  > execution-reproduced findings on the step-6 drill blocks. **F1** — a
+  > zero-harness false PASS: `CLAUDE_CONFIG_DIR`/`CODEX_HOME` steer BOTH the
+  > script's file loop AND `sync`'s `detectHarnesses`, so redirecting them hid
+  > every real harness file while the loop silently skipped absent files and
+  > still printed PASS. The drill contract now requires an explicit operator
+  > declaration of the installed harness set, a manifest cross-check listing
+  > (`managed-block` entries via `node -e`), env pinning (unset both variables
+  > before `sync` and the file checks), treating `sync`'s exact adapter-skip
+  > messages as BLOCK for a declared harness, and a checked==declared (≥1)
+  > count gate — the former "judgment call" prose is superseded by these
+  > script-enforced checks. **F2** — the PowerShell block interpolated the
+  > core path into single-quoted bash source, so an apostrophe in the path
+  > (C:/Users/O'Brien/…) broke parsing; the hook path now travels as a bash
+  > positional argument (`bash -c '… "$1" …' _ "$coreFwd"`), and both blocks
+  > were audited to pass every path as a quoted variable/argument, never
+  > rebuilt into nested shell source.
 - **The ONLY authoritative way to reach zero running Wienerdog processes is to
   REBOOT after removing every per-job schedule AND the catch-up entry — not
   per-platform process forensics (R4-C, round-4).** After a reboot, with nothing
@@ -594,7 +612,24 @@ headless/`--yes` bypass — it is interactive and shows the exact bytes.
    missing `node`, or when `WIENERDOG_JOB` is set — so empty output is **NOT** proof of a
    clean digest), run it **fail-closed**: drive the installed hook with the right
    environment and treat any empty/malformed output as a FAILURE, then byte-compare what
-   it *would* inject against the digest.
+   it *would* inject against the digest. The runbook ships the drill as complete
+   copy-paste blocks (bash + PowerShell) that stop at the first failure; a printed
+   "DRILL PASS" is the pass.
+   - **The operator DECLARES the installed harness set, and the script enforces it
+     (round-2 F1).** The block's first operator input (`HARNESSES` / `$Harnesses`)
+     lists every harness Wienerdog was installed into (`claude`, `codex`, or both),
+     cross-checkable against the `managed-block` entries the block prints from
+     `$CORE/install-manifest.json` (via a dependency-free `node -e` — node is
+     guaranteed). The script FAILS (exit nonzero, no PASS) when the declared list is
+     empty, when any declared harness's file is missing, when `sync` printed one of
+     its exact adapter-skip messages ("not detected; skipping adapter" / "config is
+     no longer present; skipping adapter", `sync.js:317–329`) for a DECLARED harness,
+     or when the count of checked files differs from the declared count. It also
+     **pins the harness-detection environment** — unsetting `CLAUDE_CONFIG_DIR` and
+     `CODEX_HOME` BEFORE `sync` and the file checks (both variables steer
+     `detectHarnesses` AND the file paths, so an ambient redirect would hide the real
+     files from every check at once); a custom-dir installer consciously sets the
+     matching variable inside the block instead.
    - **Drive the installed SessionStart hook with the injecting environment.** Run the
      installed hook at `$CORE/bin/session-start.sh` (Table A; the adapter installs it under
      the core — `doctor` does **not** print the path) with `WIENERDOG_HOME` set to the
@@ -611,14 +646,15 @@ headless/`--yes` bypass — it is interactive and shows the exact bytes.
      digest, or any block condition means STOP.
    - **Grep the regenerated `$CORE/state/digest.md`** for the poisoned marker directly
      (belt-and-suspenders against the decoded bytes above).
-   - **Check the managed block of every INSTALLED harness file via the Table D three-check
+   - **Check the managed block of every DECLARED harness file via the Table D three-check
      conjunction.** `sync` runs only the **detected** harness's adapter, and a
      single-harness (Claude-only **or** Codex-only) install is supported and tested — so
-     apply the Table D checks to `CLAUDE.md` **and/or** `AGENTS.md` per the install: both
-     files when both harnesses are installed, or only the single present file on a
-     single-harness install. (An installed harness's file being **missing** is a failure;
-     an *un-installed* harness's absent file is not — do not let a legitimately absent
-     file block re-authorization.) For each such file run all three Table D checks — the
+     apply the Table D checks to `CLAUDE.md` **and/or** `AGENTS.md` exactly as declared:
+     both files when both harnesses are installed, or only the single present file on a
+     single-harness install. (A DECLARED harness's file being **missing** is a
+     script-enforced failure — installed-but-missing; an *un-declared*, un-installed
+     harness's absent file never blocks — do not let a legitimately absent file block
+     re-authorization.) For each such file run all three Table D checks — the
      **notice-tolerant** clean `sync` (block only on the Table D **BLOCK** signals; the two
      constant Codex info notices are **ALLOWed**), the **whole-file** marker grep, and the
      **exactly-one-sentinel-pair** check — and do **NOT** byte-compare the region against
@@ -803,6 +839,25 @@ the runbook never contains a bare operative `state/<file>` token.
       install — the three checks prove the block clean by construction). The
       new-session observation is an optional extra, not the proof; the proof is tied
       to the ADR-0021 byte-gated injection.
+- [ ] **[Round-2 F1]** The drill's harness coverage is **machine-enforced, not a
+      judgment call**: the copy-paste blocks take an explicit operator declaration
+      of the installed harness set (`HARNESSES` / `$Harnesses`), print the
+      `managed-block` entries from `$CORE/install-manifest.json` (dependency-free
+      `node -e`) so the declaration can be verified, **pin the harness-detection
+      environment by unsetting `CLAUDE_CONFIG_DIR` and `CODEX_HOME` before `sync`
+      and the file checks** (custom-dir installs consciously set the matching
+      variable inside the block), and FAIL — printing no PASS — on an empty
+      declaration, a missing declared harness file, a `sync` adapter-skip message
+      ("not detected; skipping adapter" / "config is no longer present; skipping
+      adapter") naming a declared harness, or a checked-file count that differs
+      from the declared count. A zero-harness or hidden-harness environment can
+      therefore never print DRILL PASS.
+- [ ] **[Round-2 F2]** The PowerShell block passes the core path to `bash` as a
+      **positional argument** (`bash -c '… "$1" …' _ "$coreFwd"`), never
+      interpolated into the bash source, so a path containing an apostrophe,
+      spaces, or hostile text cannot break or inject into the hook invocation;
+      the bash block references `$CORE` only as a quoted variable and neither
+      block rebuilds a path into nested shell source anywhere.
 - [ ] **[R8-5]** The managed-block `sync` check is **notice-tolerant**: it blocks
       the drill **only** on a concrete integrity failure — a non-zero `sync` exit, a
       "managed block not updated" / out-of-sync message for an installed file, a
@@ -874,6 +929,10 @@ grep -niE "not proof|non-proof|cannot reboot|escalate|sole" docs/runbooks/incide
 # F1: the blocking re-verify's FIFTH check independently enumerates remaining
 # Wienerdog OS registrations per platform (zero results required):
 grep -nE "launchctl list \| grep ai\.wienerdog|list-timers 'wienerdog-\*'|list-units 'wienerdog-\*'|Get-ScheduledTask -TaskPath" docs/runbooks/incident.md
+# Round-2 F1: the drill declares the installed harness set, pins the detection env,
+# cross-checks the manifest, blocks on a declared harness's adapter-skip, and
+# enforces checked==declared; round-2 F2: the PS->bash core path is positional:
+grep -nE "HARNESSES=|\\\$Harnesses|managed-block|unset CLAUDE_CONFIG_DIR CODEX_HOME|Remove-Item Env:|skipping adapter|checked.*declared|bash -c '.*\"\\\$1\"" docs/runbooks/incident.md
 # private evidence handling: pre-copy exclusion + recursive perms + windows ACL:
 grep -nE "find .*-type d.*chmod 700|find .*-type f.*chmod 600|icacls|Time Machine|OneDrive" docs/runbooks/incident.md
 # the fail-closed byte-level drill: installed hook path + env + block conditions:
