@@ -533,6 +533,89 @@ test('scheduler-runjob: R4-A — catchUp over a log-open failure leaves the erro
   assert.deepEqual(alerts, ['job dream failed'], 'the alert fired on the catch-up path too');
 });
 
+test('scheduler-runjob: F7 — a symlinked core/logs/<job> log dir fails loud and rotateLogs deletes NO external files', { skip: process.platform === 'win32' }, async () => {
+  // Build an external dir holding >LOG_KEEP (14) timestamp-shaped logs; if
+  // rotateLogs ran through the refused symlink it would delete files[14:].
+  const plantExternalLogs = (n) => {
+    const ext = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-ext-logs-'));
+    for (let i = 0; i < n; i += 1) {
+      fs.writeFileSync(path.join(ext, `2026-07-04T00-00-${String(i).padStart(2, '0')}-000Z.log`), 'x');
+    }
+    return ext;
+  };
+  const countLogs = (d) => fs.readdirSync(d).filter((f) => /Z\.log$/.test(f)).length;
+
+  // --- (a) symlinked logs/<job>: core+logs real, logs/dream → external ---
+  {
+    const { root, env, paths } = setup();
+    jobsLib.saveJob(paths, { name: 'dream', at: '03:30', run: 'builtin:dream', timeoutMinutes: 20 });
+    const fake = writeScript(root, 'ok.sh', ['#!/bin/sh', 'exit 0']);
+    const ext = plantExternalLogs(20);
+    fs.symlinkSync(ext, path.join(paths.logs, 'dream')); // logs/dream IS a symlink to the external dir
+    /** @type {string[]} */ const alerts = [];
+    const sendAlert = (_p, _n, subject) => (alerts.push(subject), { status: 0 });
+
+    await assert.rejects(
+      withRun(env, {}, ['dream'], { resolveCommand: fakeResolve(fake), sendAlert, loader: noopLoader }),
+      /symlink is in the way|ancestor .* is a symlink|core is a symlink/
+    );
+    assert.equal(jobsLib.readScheduleState(paths).dream.last_status, 'error', 'failed loud (error watermark)');
+    assert.deepEqual(alerts, ['job dream failed'], 'fail-loud alert fired');
+    assert.equal(countLogs(ext), 20, 'rotateLogs deleted NO external files through the symlinked logs/<job>');
+  }
+
+  // --- (b) symlinked logs/: core real, logs → external ---
+  {
+    const { root, env, paths } = setup();
+    jobsLib.saveJob(paths, { name: 'dream', at: '03:30', run: 'builtin:dream', timeoutMinutes: 20 });
+    const fake = writeScript(root, 'ok.sh', ['#!/bin/sh', 'exit 0']);
+    fs.rmSync(paths.logs, { recursive: true, force: true });
+    const ext = plantExternalLogs(20);
+    fs.mkdirSync(path.join(ext, 'dream'), { recursive: true });
+    for (let i = 0; i < 20; i += 1) {
+      fs.writeFileSync(path.join(ext, 'dream', `2026-07-04T00-00-${String(i).padStart(2, '0')}-000Z.log`), 'x');
+    }
+    fs.symlinkSync(ext, paths.logs); // logs/ IS a symlink to the external dir
+    /** @type {string[]} */ const alerts = [];
+    const sendAlert = (_p, _n, subject) => (alerts.push(subject), { status: 0 });
+
+    await assert.rejects(
+      withRun(env, {}, ['dream'], { resolveCommand: fakeResolve(fake), sendAlert, loader: noopLoader }),
+      /ancestor .* is a symlink|symlink is in the way|core is a symlink/
+    );
+    assert.equal(jobsLib.readScheduleState(paths).dream.last_status, 'error', 'failed loud');
+    assert.equal(countLogs(path.join(ext, 'dream')), 20, 'no external files deleted through the symlinked logs/');
+  }
+
+  // --- (c) symlinked core: relocate the real core to external, symlink core → it ---
+  {
+    const { root, env, paths } = setup();
+    jobsLib.saveJob(paths, { name: 'dream', at: '03:30', run: 'builtin:dream', timeoutMinutes: 20 });
+    const fake = writeScript(root, 'ok.sh', ['#!/bin/sh', 'exit 0']);
+    const extCore = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-ext-core-'));
+    // Move the real core's contents (config, manifest, state, logs) into extCore.
+    for (const name of fs.readdirSync(paths.core)) {
+      fs.renameSync(path.join(paths.core, name), path.join(extCore, name));
+    }
+    fs.rmSync(paths.core, { recursive: true, force: true });
+    fs.mkdirSync(path.join(extCore, 'logs', 'dream'), { recursive: true });
+    for (let i = 0; i < 20; i += 1) {
+      fs.writeFileSync(path.join(extCore, 'logs', 'dream', `2026-07-04T00-00-${String(i).padStart(2, '0')}-000Z.log`), 'x');
+    }
+    fs.symlinkSync(extCore, paths.core); // core IS a symlink to the external core
+    /** @type {string[]} */ const alerts = [];
+    const sendAlert = (_p, _n, subject) => (alerts.push(subject), { status: 0 });
+
+    await assert.rejects(
+      withRun(env, {}, ['dream'], { resolveCommand: fakeResolve(fake), sendAlert, loader: noopLoader }),
+      /core is a symlink|ancestor .* is a symlink|symlink is in the way/
+    );
+    // The error watermark is written under the (symlinked) core's state — read it back through the same paths.
+    assert.equal(jobsLib.readScheduleState(paths).dream.last_status, 'error', 'failed loud');
+    assert.equal(countLogs(path.join(extCore, 'logs', 'dream')), 20, 'no external files deleted through the symlinked core');
+  }
+});
+
 // -------------------------------------------------------------------------
 // run-job <name> — non-zero exit
 // -------------------------------------------------------------------------

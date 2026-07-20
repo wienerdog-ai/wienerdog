@@ -839,8 +839,16 @@ async function runJob(paths, job, opts = {}) {
     if (logStream) await endStream(logStream);
   }
 
-  // 5. Rotate logs after the run.
-  rotateLogs(logDir);
+  // 5. Rotate logs after the run — ONLY if we privately opened the log dir/file
+  //    (F7, WP-a9). A thrown mkdirPrivate/createLogStreamPrivate (a symlinked
+  //    core/logs/<job> ancestor or leaf) leaves logStream null; rotateLogs uses
+  //    a FOLLOWING readdirSync + rmSync, so running it on a log dir we refused
+  //    to open privately would delete files THROUGH the symlink (an external
+  //    dir's >LOG_KEEP timestamp-shaped files) before the loud failure is even
+  //    recorded. Rotating a dir we could not privately open is meaningless
+  //    anyway — skip it. (The guard makes rotateLogs unreachable on the symlink
+  //    path, so it needs no separate lstat-first hardening.)
+  if (logStream) rotateLogs(logDir);
 
   // 5a. Run evidence (WP-132, audit A1 point 8): record what actually ran for
   //     a skill: routine, success or failure — best-effort, never affects the
