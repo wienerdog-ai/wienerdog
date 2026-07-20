@@ -1054,6 +1054,66 @@ description — all get the explicit `<core>` prefix. When you must caution agai
 the relative form, write it as `state/…` (an ellipsis, not a concrete filename) so
 the runbook never contains a bare operative `state/<file>` token.
 
+## Contract reference (ADR-0031)
+
+**Trigger fires (2-of-7).** (iv) the drill's fail/precedence behavior + `sync`'s
+resurrection heal are error/fallback/precedence contracts; (v) the drill crosses
+an authority boundary — the tool's `install-manifest.json` / `sync` records what is
+installed, but the runbook's operator owns the incident-time interpretation; (vii)
+each of these contracts is stated in the Deliverables cell, acceptance criteria,
+verification greps, and operative prose. ≥2 true → the discipline applies.
+
+**Canonical sources.** This WP's five dense contracts already live as the five
+canonical reference tables **Tables A–E** in the *Exact contract* section above
+(path resolution; per-platform scheduler artifacts + the resurrection rule; restore
+rules; the managed-block drill gate; `memory approve` allowed names). Those tables
+are embedded byte-identically in `docs/runbooks/incident.md`, and every operative
+step cites its table ("resolve the core (Table A)") rather than re-deciding its
+facts. This retrofit does **not** move the tables — it registers their mirrors so a
+future finding moves the table and every mirror in one pass.
+
+### Mirrored Surface Checklist
+
+Each canonical table's mirrors *within this spec* (update-all-mirrors on any table
+edit; register-new-mirrors on review). A checked box = the surface exists and
+defers to its table (it summarizes, never re-decides).
+
+- **Table A — Core & path resolution** — mirrors:
+  - [x] Deliverables cell — the `incident.md` step-0-preamble description
+  - [x] Acceptance — `[R7-1/R8-4]` (step-0 preamble, `HOME` before `USERPROFILE`), `[R8-2]` (persist across reboot), `[R8-3]` (`<core>` prefix, no bare relative `state/…`)
+  - [x] Verification — the `doctor`/`core directory exists`/`CORE-PATH`/`HOME` greps + the R8-3 negative grep
+  - [x] Operative prose — step 0 + the "every later path uses `$CORE`" rule
+- **Table B — Scheduler artifacts + resurrection rule** — mirrors:
+  - [x] Deliverables cell — the step-1 catch-up-removal + reboot description
+  - [x] Acceptance — the stop-step criterion (schedule remove leaves the catch-up entry; the five-check blocking re-verify incl. zero `config.yaml` jobs; reboot-as-sole-proof) and `[R5-1]` (`sync` `reloadMissing`/`repairCatchup` heal from `config.yaml`)
+  - [x] Verification — the `catchup`/`reloadMissing`/`config.yaml … jobs`/`reboot` greps
+  - [x] Operative prose — step 1 (stop + catch-up removal + blocking re-verify + reboot)
+- **Table C — Restore rules** — mirrors:
+  - [x] Deliverables cell — snapshot `config.yaml jobs:`, re-authorize builtin
+  - [x] Acceptance — `[R4-D]` (re-add builtin-only) and the evidence-snapshot criterion (`config.yaml jobs:` is the restore source, not `schedule.json`)
+  - [x] Verification — the `config.yaml.*jobs:`/`schedule add`/`watermark` greps
+  - [x] Operative prose — step 1 snapshot + step 7 re-authorize
+- **Table D — Managed-block drill gate** — mirrors:
+  - [x] Deliverables cell — the step-6 fail-closed drill description
+  - [x] Acceptance — the fail-closed + sync-first drill criterion, the coverage criterion `[Round-2 F1 / Round-3 G1 / Round-4 structural / Round-5 G1+G2 / Round-7 G1]`, `[Round-2 F2]` (positional bash arg), `[R8-5]` (notice-tolerant), and the completeness-proof / stop-and-escalate residual
+  - [x] Verification — the shared-node-`occ`/`Buffer.indexOf`/verifier-byte-identical/`session-start`/`Buffer.from(h.additionalContext` greps
+  - [x] Operative prose — step 6 (the drill) + the completeness/residual narrative
+- **Table E — `memory approve` allowed names** — mirrors:
+  - [x] Deliverables cell — the step-4 re-ratify description
+  - [x] Acceptance — the purge-step criterion (re-ratify the corrected note by short name only)
+  - [x] Verification — the `memory approve (profile|preferences|goals|instructions)` grep
+  - [x] Operative prose — step 4 re-ratify
+
+> **Compliance note (2026-07-20).** Retrofit per ADR-0031, ratified after this WP's
+> extraction was already done — the ADR cites this runbook as the *extraction*
+> precedent (Tables A–E → round-9 clean) but explicitly not yet a checklist exemplar.
+> This section closes that gap: the tables were the canonical sources all along; this
+> registers their mirrors. Live evidence for the discipline surfaced in this WP's own
+> final review — two operative-prose passages (the sentinel-occurrence mechanism) had
+> drifted from the round-10 shared-node-verifier reality and were corrected in
+> lockstep (Table D mirror set); a registered checklist would have caught that up
+> front.
+
 ## Implementation notes & constraints
 
 - **Docs-only.** The Deliverables table is exhaustive; do not edit `src/` or
