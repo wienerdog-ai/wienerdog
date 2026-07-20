@@ -359,11 +359,21 @@ function taskkillTree(pid, seams) {
 function reapTree(pid, platform, seams = {}) {
   try {
     if (platform === 'win32') {
-      if (!(Number.isInteger(pid) && pid > 1)) return { degraded: false, why: null }; // guarded no-op
+      // G1-residual twin (fix-pass 2026-07-20): a refused/invalid target is
+      // reported as degraded (cleanup NOT performed), never a clean
+      // { degraded: false } — same "refused to act must not read as success"
+      // rule as reapGroup.
+      if (!(Number.isInteger(pid) && pid > 1)) {
+        return { degraded: true, why: `win32: refused unsafe pid ${pid} — no reap performed` };
+      }
       const t = taskkillTree(pid, seams);
       return t.ok ? { degraded: false, why: null } : { degraded: true, why: t.why };
     }
-    if (!safeTarget(pid)) return { degraded: false, why: null }; // guarded no-op
+    if (!safeTarget(pid)) {
+      // G1-residual twin: a refused target (pid 1, the supervisor itself / its
+      // own group, or a non-integer) performed no reap → degraded, not clean.
+      return { degraded: true, why: `refused unsafe pid ${pid} — no reap performed` };
+    }
     const kill = seams.kill || process.kill;
     const maxSweeps =
       Number.isInteger(seams.maxSweeps) && seams.maxSweeps > 0 ? seams.maxSweeps : DEFAULT_MAX_SWEEPS;
@@ -493,17 +503,29 @@ function reapTree(pid, platform, seams = {}) {
 async function reapGroup(pgid, platform, seams = {}) {
   try {
     if (platform === 'win32') {
-      if (!(Number.isInteger(pgid) && pgid > 1)) return { reaped: true }; // guarded no-op input
-      // F2: checked taskkill outcome — never claim success when it did not run
-      // or failed. Still NO leaderless-member guarantee (R5-2); the false here
-      // is a diagnostic, never a POSIX-style fail-loud trigger.
+      // G1-residual (fix-pass 2026-07-20): an unsafe/invalid target (pgid 1, 0,
+      // negative, or non-integer from a corrupt pidfile) is REFUSED, not
+      // certified — "refused to act" must never report { reaped: true } (a
+      // fail-open that contradicts the exit-0-only contract). It never spawns
+      // taskkill.
+      if (!(Number.isInteger(pgid) && pgid > 1)) {
+        return { reaped: false, why: `win32: refused unsafe pgid ${pgid} — not a confirmed kill` };
+      }
+      // F2/G1: checked taskkill outcome — never claim success when it did not
+      // run or failed. Still NO leaderless-member guarantee (R5-2); the false
+      // here is a diagnostic, never a POSIX-style fail-loud trigger.
       const t = taskkillTree(pgid, seams);
       return t.ok ? { reaped: true } : { reaped: false, why: t.why };
     }
     if (!safeTarget(pgid)) {
-      // Guarded/no-op input (pgid 1, the supervisor itself/its own group, or a
-      // non-integer from a corrupt pidfile): nothing this primitive may touch.
-      return { reaped: true };
+      // G1-residual: an unsafe/invalid target (pgid 1, the supervisor itself /
+      // its own group, or a non-integer from a corrupt pidfile) is REFUSED —
+      // nothing this primitive may signal, so it is NOT a confirmed reap.
+      // (This was the SAME fail-open as the win32 branch — flagged and fixed to
+      // match: refused → { reaped: false }, never a success-shaped result. The
+      // valid-target already-empty case is different: there safeTarget passes,
+      // the real negative-PGID probe throws ESRCH, and THAT is { reaped: true }.)
+      return { reaped: false, why: `refused unsafe pgid ${pgid} — not a confirmed kill` };
     }
     const kill = seams.kill || process.kill;
     const maxPolls =

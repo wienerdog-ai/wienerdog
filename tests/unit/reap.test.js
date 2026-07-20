@@ -289,6 +289,26 @@ test('reap: reapTree never kills pid 1, process.pid, or anything outside the clo
   assert.ok(!targets.includes(process.pid) && !targets.includes(-process.pid), 'never the supervisor');
 });
 
+test('reap: G1-residual twin — reapTree REFUSES an unsafe pid with { degraded: true, why } and performs no reap (POSIX + win32)', () => {
+  const sr = fakeSystemRoot(true);
+  try {
+    for (const bad of [1, 0, -5, NaN, process.pid]) {
+      const { calls, kill } = killRecorder();
+      const d = reapTree(bad, 'linux', { kill, readTable: () => [{ pid: 10, ppid: 1, pgid: 10 }], pollDelayMs: 0 });
+      assert.equal(d.degraded, true, `pid ${bad}: refused → cleanup NOT performed, reported degraded`);
+      assert.match(d.why, /refused unsafe pid/i);
+      assert.equal(calls.length, 0, 'a refused target is never signalled');
+    }
+    // win32 refused target → degraded, and taskkill is never spawned.
+    /** @type {any[][]} */ const spawnCalls = [];
+    const w = reapTree(1, 'win32', { spawnSync: (c, a) => (spawnCalls.push([c, a]), { status: 0 }) });
+    assert.equal(w.degraded, true, 'win32 refused pid → degraded');
+    assert.equal(spawnCalls.length, 0, 'win32 refused target never spawns taskkill');
+  } finally {
+    sr.restore();
+  }
+});
+
 test('reap: reapTree never throws — bad table, throwing readTable, throwing kill', () => {
   const throwingKill = () => {
     throw Object.assign(new Error('gone'), { code: 'ESRCH' });
@@ -364,13 +384,13 @@ test('reap: R7-2 — reapGroup returns the checked { reaped: false } when the bo
   assert.ok(calls.filter((c) => c[1] === 0).length === 3, 'exactly maxPolls probes');
 });
 
-test('reap: reapGroup guards — never targets pgid 1, process.pid, or the supervisor\'s own group; never throws', async () => {
+test('reap: G1-residual — reapGroup REFUSES an unsafe pgid (1/0/-5/NaN/self) with { reaped: false, why } and ZERO signals, never a fail-open true', async () => {
   const { calls, kill } = killRecorder();
-  assert.deepEqual(await reapGroup(1, 'linux', { kill }), { reaped: true });
-  assert.deepEqual(await reapGroup(0, 'linux', { kill }), { reaped: true });
-  assert.deepEqual(await reapGroup(-5, 'linux', { kill }), { reaped: true });
-  assert.deepEqual(await reapGroup(NaN, 'linux', { kill }), { reaped: true });
-  assert.deepEqual(await reapGroup(process.pid, 'linux', { kill }), { reaped: true });
+  for (const bad of [1, 0, -5, NaN, process.pid]) {
+    const r = await reapGroup(bad, 'linux', { kill });
+    assert.equal(r.reaped, false, `pgid ${bad}: refused-to-act is NOT a confirmed kill`);
+    assert.match(r.why, /refused unsafe pgid/, 'diagnostic names the refusal');
+  }
   assert.equal(calls.length, 0, 'a guarded target is never signalled at all');
   // A kill seam that throws a non-ESRCH error never escapes (checked false).
   const r = await reapGroup(777777, 'linux', {
@@ -437,6 +457,22 @@ test('reap: F2/G1 — win32 reapGroup trusts ONLY taskkill exit 0; exit 128 (and
     assert.match(failed.why, /exited 5/);
     const signalled = await reapGroup(555, 'win32', { spawnSync: () => ({ status: null, signal: 'SIGTERM' }) });
     assert.equal(signalled.reaped, false, 'a signalled taskkill is NOT success');
+  } finally {
+    sr.restore();
+  }
+});
+
+test('reap: G1-residual — win32 reapGroup REFUSES an unsafe pgid with { reaped: false, why } and NEVER spawns taskkill', async () => {
+  const sr = fakeSystemRoot(true); // taskkill.exe present — prove it is still not spawned
+  try {
+    /** @type {any[][]} */ const spawnCalls = [];
+    const spawnSync = (cmd, args) => (spawnCalls.push([cmd, args]), { status: 0 });
+    for (const bad of [1, 0, -5, NaN]) {
+      const r = await reapGroup(bad, 'win32', { spawnSync });
+      assert.equal(r.reaped, false, `pgid ${bad}: refused → NOT a confirmed kill (no fail-open true)`);
+      assert.match(r.why, /refused unsafe pgid/i);
+    }
+    assert.equal(spawnCalls.length, 0, 'a refused target NEVER spawns taskkill — it certified nothing');
   } finally {
     sr.restore();
   }
