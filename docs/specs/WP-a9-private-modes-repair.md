@@ -500,6 +500,32 @@ whole protected set; W3 detection is conditional.**
   swap defeats detection and silently chmods one external target." (Same ABA
   caveat applies to W4's post-rename detection.)
 
+**AMENDED 2026-07-20 (Codex entry-gate verify F15/F16/F17).**
+- **F16 (LEAF dest, PRE-EXISTING — FIXED).** `writeFilePrivate` protected the
+  TEMP name (`O_EXCL` random) and `rename` never follows a dest symlink, but a
+  plain rename SILENTLY replaced a pre-existing `dest` symlink (e.g.
+  `state/broker-grants.json`→/external) — neither refused nor surfaced, violating
+  the "every pre-existing symlink at every position is refused+surfaced"
+  invariant. Fixed: `lstat` the destination first and REFUSE (throw
+  `WienerdogError`) if it is a symlink or any non-regular-file (a missing dest =
+  normal create; a real regular-file dest = normal atomic replace).
+- **F17 (W2 REPAIR variant — wording + narrow).** See the corrected W2 residual:
+  `coreRootContext`'s open→`realpath` window lets a concurrent core-path swap make
+  the repair silently chmod out-of-tree. Added the narrow (retain the opened fd's
+  `(dev,ino)`, lstat the realpath'd result, refuse on mismatch — detection-not-
+  prevention; an ABA swap defeats it) and corrected the residual to state repair
+  is NOT uniformly safe in W2.
+- **F15 (OTHER CLI ENTRY POINTS, PRE-EXISTING — OUT OF SCOPE, documented).** The
+  `mechanicsRootUntrusted` entry gate covers the run-job/dream JOB DISPATCHERS,
+  and the private-fs helpers cover their own operations. It does NOT cover OTHER
+  mutating CLI entry points — notably `gws auth`→`writeSecretJson` (src/gws/*),
+  and potentially sync/init/adopt/uninstall — which can still follow a
+  pre-existing symlinked protected dir (a symlinked `secrets/`) and write
+  out-of-tree with no refusal. `writeSecretJson`/`gws auth` are NOT in this WP's
+  Deliverables (touching them would break the file boundary), and gating every
+  mutating CLI entry point spans many subsystems = a SEPARATE WP. This WP does
+  NOT claim universal protection. See Out of scope for the follow-up candidate.
+
 **Full never-follow guarantee — the position×phase matrix + the failure path.**
 After G2–G5 + F1–F14, a PRE-EXISTING symlink is caught at EVERY position × phase
 `{root, intermediate, leaf}` × `{enumerate, dir-chmod, file-chmod, 000-fallback,
@@ -520,11 +546,18 @@ confirmed: `O_PATH` absent on macOS, `/proc` Linux-only). **Consequences DIFFER
 — per-window (do NOT claim uniform loudness):**
   1. **W1 `readdir`-enumeration → fd-bind** (repair): the `(dev,ino)`
      fd-revalidation **REFUSES** the redirected open (no chmod; next scan surfaces).
-  2. **W2 ancestor validate/open → leaf op** (repair AND write): repair still
-     refuses via `(dev,ino)`; the WRITE helpers have NO post-open ancestry
-     revalidation, so a concurrent ancestor swap can **SILENTLY** redirect
-     chmod/write/rename to an EXTERNAL target AND, via `rotateLogs`, silently
-     **DELETE** external files (F11 narrows, does not close). Not loud.
+  2. **W2 ancestor/root validate → leaf op** (repair AND write): the WRITE
+     helpers have NO post-open ancestry revalidation, so a concurrent ancestor
+     swap can **SILENTLY** redirect chmod/write/rename to an EXTERNAL target AND,
+     via `rotateLogs`, silently **DELETE** external files (F11 narrows, does not
+     close). The REPAIR path is **NOT uniformly safe** either (F17): `coreRootContext`
+     opens the core fd + fstat (proving the OPENED dir real) but derives `coreReal`
+     from the PATHNAME via `realpath` — a swap of the core PATH between open/fstat
+     and `realpath` makes the external dir the trusted root, so enumeration
+     captures the external descendants' real `(dev,ino)` and `applyModeSecure`'s fd
+     check PASSES → repair **SILENTLY** chmods out-of-tree. F17 adds a narrow
+     (retain the fd's `(dev,ino)`, lstat the realpath'd result, refuse on mismatch)
+     that narrows but cannot close it (an ABA swap defeats it). W2 is **not loud**.
   3. **W3 mode-000 `lstat` → path-`chmodSync`** (`applyModeFallback`): worst case
      ONE chmod on a swapped target. The post-chmod `(dev,ino)` re-lstat surfaces
      it **LOUDLY only if the substitution PERSISTS** — an **ABA swap** (restore
@@ -858,6 +891,18 @@ grep -nE "sendAlert|last_status|catchUp|catch-up" tests/unit/scheduler-runjob.te
   is this WP's round-1 fix — the dir/stream-open swap at each log site, plus in
   `run-job` the R4-A move of that open inside the existing `try`; nothing else.)
 - Creating `secrets/` or seeding tokens — creation stays with `init`/`gws`.
+- **Gating OTHER mutating CLI entry points against an untrusted mechanics root
+  (F15) — OUT OF SCOPE, FOLLOW-UP WP.** `gws auth`→`writeSecretJson` (src/gws/*)
+  and potentially `sync`/`init`/`adopt`/`uninstall` can still write under a
+  pre-existing symlinked protected dir (e.g. a symlinked `secrets/`→/external)
+  with no refusal — they are not run-job/dream and do not pass through the
+  `mechanicsRootUntrusted` entry gate, and those files are not in this WP's
+  Deliverables. **Candidate follow-up WP:** "gate all mutating CLI entry points
+  against an untrusted mechanics root — fold `writeSecretJson` and other core
+  writers onto the ancestry-validated private writer (`writeFilePrivate`), or
+  call `mechanicsRootUntrusted` at each CLI entry before persistence." This WP's
+  claim is scoped to the private-fs helpers + the run-job/dream dispatchers; it
+  does NOT claim universal CLI protection.
 
 ## Definition of done
 
