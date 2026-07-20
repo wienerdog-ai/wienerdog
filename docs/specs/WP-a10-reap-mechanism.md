@@ -953,3 +953,57 @@ grep -nE "ENOENT|vanish|churn|mid-scan|skip" tests/unit/reap.test.js
    `fix(security): reap the findable descendant tree to quiescence on every exit path (WP-a10-reap-mechanism)`.
 4. PR template filled, including "Decisions made" (or "none") and `Generated-by:`.
 5. This spec's `status:` flipped to `In-Review` in the same PR.
+
+## Fix-pass amendment (2026-07-20)
+
+Adversarial review of the In-Review implementation (wd-reviewer APPROVE with
+reconciliations; Codex NO-SHIP with two execution-proven fail-open findings).
+Contract deltas only — the design narrative above is unchanged.
+
+1. **`reapGroup` is async** — `Promise<{ reaped: boolean, why?: string }>`,
+   with the inter-poll delay awaited on the event loop. A synchronous poll
+   blocks libuv's `waitpid`, so the supervisor's OWN just-SIGKILLed direct
+   child stays a zombie — and a zombie still counts as a live group member for
+   `kill()` — meaning `kill(-pgid, 0)` could never reach `ESRCH` and **every
+   timeout would spuriously report `{ reaped: false }`**. The checked-result
+   semantics, bounds (`maxPolls`), and never-throws contract are unchanged; all
+   callers (`run-job` settle, `dream.js` finally and the R10-1 guard) `await`
+   it.
+2. **The verification seam is `verifyPs`, reimplemented locally in `reap.js`**
+   (identical structural checks: regular file, execute bit, owner ∈ {uid,
+   root}, no group/other-writable non-root ancestor). The spec's original
+   "reuse `exec-identity.verifyExecutable`" is unimplementable as written: the
+   WP-154 fix-pass made every exec-path helper module-internal and the
+   pinned-exec canary **bans the `verifyExecutable` identifier outside
+   `exec-identity.js`** (execution-only encapsulation, R13/R15).
+3. **win32 `taskkill` is CHECKED, not unconditional best-effort** (replaces the
+   Exact-contract clause "win32 returns `{ reaped: true }` best-effort after
+   the taskkill"). `taskkillTree` returns `{ ok, why }`: success is exit `0`
+   or exit `128` ("process not found" — already gone); an **absent** System32
+   `taskkill.exe`, a spawn throw/error, a terminating signal, or any other
+   exit is a failure with a diagnostic. win32 `reapGroup` returns
+   `{ reaped: true }` only on that checked success, else `{ reaped: false,
+   why }`; win32 `reapTree` surfaces the same failure via its diagnostic
+   (item 5). The supervisor never claims the tree stopped when taskkill never
+   ran or failed. **Scope unchanged:** the win32 `{ reaped: false }` is a
+   surfaced diagnostic only — the R8-1 fail-loud escalation stays POSIX-only
+   (run-job does not activate the group-reap authority on win32), and the
+   R5-2 leaderless-member deferral to `WP-a10-windows-reap` stands.
+4. **The R8-1 final-fail-loud path RELEASES the token pidfile after the loud
+   record.** When the bounded final escalation still leaves a group
+   `{ reaped: false }`, `run-job` deletes the retained token pidfile **after**
+   `failLoud` has appended the durable alert — the alert is the record, and no
+   later run ever reads this run's token, so retention would be a never-read
+   hollow leftover. R7-2's retain-for-backstop rule is unchanged where a later
+   reader exists: `dream.js`'s finally (retains for run-job) and run-job's
+   pre-escalation stage.
+5. **A non-zero / signalled / errored `/bin/ps` yields a `null` table.**
+   `readTablePs` requires `status === 0`, no termination signal, and no spawn
+   error; a failing/interrupted ps that emitted parseable *partial* rows is
+   NOT an authoritative snapshot (accepting it would skip the legacy fallback
+   and silently omit a separately-detached descendant group — execution-proven).
+   `null` → the legacy group-kill fallback, and the degradation is **visible**:
+   `reapTree` now returns a diagnostic `{ degraded: boolean, why }` (legacy
+   fallback, table lost mid-sweep, quiescence not observed within `maxSweeps`,
+   or a failed win32 taskkill) instead of `void` — still best-effort,
+   never-throws.
