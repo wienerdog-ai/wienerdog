@@ -163,7 +163,7 @@ test('secrets directory is created with mode 0700', { skip: process.platform ===
   );
 });
 
-test('a pre-existing secrets directory is left at its own mode (never chmod\'d)', { skip: process.platform === 'win32' }, () => {
+test('a pre-existing secrets directory is repaired to 0700 (WP-a9) but never claimed in the manifest', { skip: process.platform === 'win32' }, () => {
   const { core, env } = tempEnv();
   const secrets = path.join(core, 'secrets');
   fs.mkdirSync(secrets, { recursive: true });
@@ -171,7 +171,11 @@ test('a pre-existing secrets directory is left at its own mode (never chmod\'d)'
   const r = run(['init', '--yes'], env);
   assert.equal(r.status, 0);
   const mode = fs.statSync(secrets).mode & 0o777;
-  assert.equal(mode, 0o755, 'init must not re-permission a secrets dir it did not create');
+  // Pre-WP-a9 this asserted the 0755 was left untouched. init's embedded sync
+  // now runs the A9 private-modes repair, so a legacy loosened secrets/ ends
+  // 0700 (the upgrade-repair acceptance). Ownership is unchanged: init still
+  // never RECORDS a pre-existing secrets dir in the manifest (reversibility).
+  assert.equal(mode, 0o700, "init's sync repairs a legacy 0755 secrets dir (WP-a9)");
   const manifest = JSON.parse(fs.readFileSync(path.join(core, 'install-manifest.json'), 'utf8'));
   assert.ok(
     !manifest.entries.some((e) => e.kind === 'dir' && e.path === secrets),

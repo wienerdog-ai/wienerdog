@@ -18,6 +18,7 @@ const tccguard = require('../scheduler/tccguard');
 const { requireCapability, CAPABILITY } = require('../core/safety-profile');
 const { detectPolicyHooks } = require('../core/policy-hooks');
 const { recordRunEvidence } = require('../core/run-evidence');
+const { mkdirPrivate, createLogStreamPrivate } = require('../core/private-fs');
 const { settingsDigest } = require('../core/runtime-settings');
 const reap = require('../core/reap');
 
@@ -736,11 +737,10 @@ async function runJob(paths, job, opts = {}) {
     });
   }
 
-  // 3. Per-run log file (mkdir -p the job's log dir).
+  // 3. Per-run log location. The dir/stream OPEN happens INSIDE the try below
+  //    (R4-A, WP-a9): a private-open failure must reach the step-7
+  //    error-watermark + failLoud branch, not escape uncaught.
   const logDir = path.join(paths.logs, name);
-  fs.mkdirSync(logDir, { recursive: true });
-  const logFile = path.join(logDir, `${runStamp()}.log`);
-  const logStream = fs.createWriteStream(logFile);
 
   // 4. Watchdog: detached child (own process group), race exit vs timeout, kill
   //    the whole tree on timeout, always clear the timer (reuse dream.js's shape).
@@ -749,7 +749,16 @@ async function runJob(paths, job, opts = {}) {
   let code = null;
   let failure = null;
   let reapFailure = null;
+  let logStream = null;
   try {
+    // Per-run log dir (0700) + stream (0600) — umask-independent and
+    // fail-closed (WP-a9): mkdirPrivate defeats a permissive umask on the dir,
+    // createLogStreamPrivate secures the fd to 0600 or throws (it never writes
+    // into a file it could not secure). A throw here lands in the catch below
+    // and takes the existing fail-loud branch.
+    mkdirPrivate(logDir);
+    logStream = createLogStreamPrivate(path.join(logDir, `${runStamp()}.log`));
+
     const child = spawn(command, args, {
       cwd: spawnCwd,
       // POSIX: detach into its own process group so the watchdog can kill the
@@ -826,7 +835,8 @@ async function runJob(paths, job, opts = {}) {
   } catch (err) {
     failure = err;
   } finally {
-    await endStream(logStream);
+    // The open may have thrown before logStream was assigned (R4-A).
+    if (logStream) await endStream(logStream);
   }
 
   // 5. Rotate logs after the run.

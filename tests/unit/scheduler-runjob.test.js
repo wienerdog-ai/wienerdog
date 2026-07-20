@@ -455,6 +455,82 @@ test('scheduler-runjob: a successful job writes last_success, tees a log, exits 
   assert.equal(gotSecret, '', 'the non-allowlisted secret did not reach the child');
 });
 
+test('scheduler-runjob: WP-a9 — the real writer path leaves a 0700 log dir and a 0600 log file under umask 000', { skip: process.platform === 'win32' }, async () => {
+  const { root, env, paths } = setup();
+  jobsLib.saveJob(paths, { name: 'dream', at: '03:30', run: 'builtin:dream', timeoutMinutes: 20 });
+  const fake = writeScript(root, 'ok.sh', ['#!/bin/sh', 'echo out', 'exit 0']);
+
+  const prevUmask = process.umask(0o000); // the permissive-umask fresh install
+  try {
+    await withRun(env, {}, ['dream'], {
+      resolveCommand: fakeResolve(fake),
+      sendAlert: () => ({ status: 0 }),
+      loader: noopLoader,
+    });
+  } finally {
+    process.umask(prevUmask);
+  }
+
+  const logDir = path.join(paths.logs, 'dream');
+  assert.equal(fs.statSync(logDir).mode & 0o777, 0o700, 'per-run log dir is 0700, not 0777');
+  const logs = fs.readdirSync(logDir).filter((f) => f.endsWith('.log'));
+  assert.equal(logs.length, 1);
+  assert.equal(fs.statSync(path.join(logDir, logs[0])).mode & 0o777, 0o600, 'per-run log file is 0600, not 0666');
+});
+
+// -------------------------------------------------------------------------
+// R4-A (WP-a9): a log-open failure takes run-job's EXISTING fail-loud branch —
+// error watermark + alert — on both the runJob and catchUp paths. The failure
+// is forced through a REAL filesystem condition: a regular FILE pre-created at
+// the logs/<job> path makes mkdirPrivate(logDir) throw inside the try.
+// -------------------------------------------------------------------------
+
+test('scheduler-runjob: R4-A — a log-open failure writes the error watermark, fires the alert, and rejects (runJob)', async () => {
+  const { root, env, paths } = setup();
+  jobsLib.saveJob(paths, { name: 'dream', at: '03:30', run: 'builtin:dream', timeoutMinutes: 20 });
+  const fake = writeScript(root, 'ok.sh', ['#!/bin/sh', 'exit 0']);
+  // The real filesystem condition: a plain file where the job's log DIR must go.
+  fs.writeFileSync(path.join(paths.logs, 'dream'), 'not a directory');
+  /** @type {string[]} */ const alerts = [];
+  const sendAlert = (_p, _n, subject) => (alerts.push(subject), { status: 0 });
+
+  await assert.rejects(
+    withRun(env, {}, ['dream'], { resolveCommand: fakeResolve(fake), sendAlert, loader: noopLoader }),
+    /job "dream" failed/
+  );
+
+  const state = jobsLib.readScheduleState(paths);
+  assert.equal(state.dream.last_status, 'error', 'the error watermark IS written (the throw hit the existing branch)');
+  assert.ok(state.dream.last_error_at, 'last_error_at stamped');
+  assert.deepEqual(alerts, ['job dream failed'], 'the fail-loud alert fired');
+  const durable = readAlerts(paths);
+  assert.equal(durable.length, 1, 'one durable alert recorded');
+});
+
+test('scheduler-runjob: R4-A — catchUp over a log-open failure leaves the error watermark + alert and still returns', async () => {
+  const { root, env, paths } = setup();
+  jobsLib.saveJob(paths, { name: 'dream', at: '09:00', run: 'builtin:dream', timeoutMinutes: 20 });
+  const fake = writeScript(root, 'ok.sh', ['#!/bin/sh', 'exit 0']);
+  fs.writeFileSync(path.join(paths.logs, 'dream'), 'not a directory');
+  const now = new Date();
+  now.setHours(10, 0, 0, 0); // past the 09:00 fire; no watermark → overdue
+  /** @type {string[]} */ const alerts = [];
+  const sendAlert = (_p, _n, subject) => (alerts.push(subject), { status: 0 });
+
+  // catchUp must RESOLVE (its catch swallows the throw) — but only AFTER runJob
+  // failed loud: the watermark and alert prove the loud path ran first.
+  await withRun(env, {}, ['--catch-up'], {
+    resolveCommand: fakeResolve(fake),
+    now,
+    sendAlert,
+    loader: noopLoader,
+  });
+
+  const state = jobsLib.readScheduleState(paths);
+  assert.equal(state.dream.last_status, 'error', 'runJob failed loud BEFORE catchUp swallowed the throw');
+  assert.deepEqual(alerts, ['job dream failed'], 'the alert fired on the catch-up path too');
+});
+
 // -------------------------------------------------------------------------
 // run-job <name> — non-zero exit
 // -------------------------------------------------------------------------

@@ -793,6 +793,45 @@ test('dream-integration: A5 private modes — digest.md 0600 after a dream; scra
   }
 });
 
+test('dream-integration: WP-a9 — the real dream writer path leaves a 0700 log dir and a 0600 daily log under umask 000', { skip: process.platform === 'win32' }, async () => {
+  const ctx = setup();
+  // Pre-create pinFakeBrain's bin dir under the normal umask: a 0777 bin dir
+  // would (correctly) trip exec-identity's group/other-writable ancestor
+  // refusal, which is not what this test probes.
+  fs.mkdirSync(path.join(fs.realpathSync(ctx.root), 'bin'), { recursive: true, mode: 0o755 });
+  const prevUmask = process.umask(0o000); // the permissive-umask fresh install
+  let thrown;
+  try {
+    ({ thrown } = await runDream(ctx, ['--yes']));
+  } finally {
+    process.umask(prevUmask);
+  }
+  assert.equal(thrown, null, thrown && thrown.message);
+
+  const logDir = path.join(ctx.core, 'logs', 'dream');
+  assert.equal(fs.statSync(logDir).mode & 0o777, 0o700, 'dream log dir is 0700, not 0777');
+  const logFile = path.join(logDir, `${DATE}.log`);
+  assert.equal(fs.statSync(logFile).mode & 0o777, 0o600, 'dream daily log is 0600, not 0666');
+});
+
+test('dream-integration: WP-a9 — appending into a legacy 0666 daily log re-secures it to 0600 (and the dir to 0700)', { skip: process.platform === 'win32' }, async () => {
+  const ctx = setup();
+  // The legacy pre-hardening state: a 0777 log dir holding a 0666 daily log.
+  const logDir = path.join(ctx.core, 'logs', 'dream');
+  fs.mkdirSync(logDir, { recursive: true });
+  fs.chmodSync(logDir, 0o777);
+  const logFile = path.join(logDir, `${DATE}.log`);
+  fs.writeFileSync(logFile, 'legacy line\n');
+  fs.chmodSync(logFile, 0o666);
+
+  const { thrown } = await runDream(ctx, ['--yes']);
+  assert.equal(thrown, null, thrown && thrown.message);
+
+  assert.equal(fs.statSync(logDir).mode & 0o777, 0o700, 'legacy 0777 log dir repaired at write time');
+  assert.equal(fs.statSync(logFile).mode & 0o777, 0o600, 'legacy 0666 daily log secured before any byte was appended');
+  assert.ok(fs.readFileSync(logFile, 'utf8').startsWith('legacy line\n'), 'append semantics preserved');
+});
+
 // ── WP-135: pre-dream containment self-check wiring ─────────────────────────
 
 const { spawnBrain } = require('../../src/core/dream/brain');

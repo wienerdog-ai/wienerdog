@@ -351,26 +351,29 @@ async function run(_argv) {
     check('fail', `vault is set to ${vaultPath} but that folder is missing — run /wienerdog-setup, or 'wienerdog init --fresh-vault' for the default`);
   }
 
-  // secrets directory permissions (skip on Windows).
+  // secrets directory presence (skip on Windows). Its PERMISSIONS — including
+  // an over-tight, traversal-broken mode — are covered by the shared private-
+  // modes predicate below (WP-a9), so there is no dedicated mode check here
+  // (it would double-report against the shared loop).
   if (process.platform === 'win32') {
     check('ok', 'secrets permission check skipped (Windows)');
   } else if (!dirExists(paths.secrets)) {
     check('fail', `secrets directory missing (${paths.secrets})`);
   } else {
-    const mode = fs.statSync(paths.secrets).mode & 0o777;
-    if (mode === 0o700) check('ok', 'secrets directory permissions are 0700');
-    else check('warn', `secrets directory permissions are ${mode.toString(8)} (expected 700)`);
+    check('ok', `secrets directory present (${paths.secrets})`);
   }
 
-  // A5 private-modes check (WP-126, ADR-0024): READ-ONLY — doctor never
-  // mutates (WP-070 invariant); `wienerdog sync` is the fixer. Same predicate
-  // as sync --dry-run and the digest banner (private-fs.insecureEntries), so
-  // the three surfaces can never disagree. Skipped on win32 (no POSIX modes;
+  // Private-modes check over the A5 ∪ A9 set (WP-126 + WP-a9, ADR-0024):
+  // READ-ONLY — doctor never mutates (WP-070 invariant); `wienerdog sync` is
+  // the fixer. Same predicate as sync --dry-run and the digest banner
+  // (private-fs.insecureEntries), so the three surfaces can never disagree.
+  // Flags deviation in EITHER direction (a world-readable 0644 file AND an
+  // over-tight 000 secrets/ are both wrong). Skipped on win32 (no POSIX modes;
   // owner-approved posture — per-user profile ACLs carry Windows).
   if (process.platform !== 'win32') {
     const { insecureEntries } = require('../core/private-fs');
     for (const p of insecureEntries(paths)) {
-      check('warn', `${p} is readable by other users — run 'wienerdog sync' to harden it`);
+      check('warn', `${p} has wrong permissions (expected 0700 for folders, 0600 for files) — run 'wienerdog sync' to repair it`);
     }
   }
 

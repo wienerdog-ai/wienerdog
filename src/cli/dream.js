@@ -13,7 +13,7 @@ const { collectExtracts, cleanScratch, MIN_TRUNCATE_BYTES } = require('../core/d
 const { spawnBrain, buildClaudeArgs } = require('../core/dream/brain');
 const { readVaultLayout } = require('../core/layout');
 const { renderDigest, listSecretQuarantine } = require('../core/digest');
-const { writeFilePrivate, scanPrivateModes } = require('../core/private-fs');
+const { writeFilePrivate, scanPrivateModes, mkdirPrivate, createLogStreamPrivate } = require('../core/private-fs');
 const { reapTree, reapGroup } = require('../core/reap');
 const { ensureSettingsProfile } = require('../core/runtime-settings');
 const { runContainmentProbe } = require('../core/dream/containment-probe');
@@ -438,8 +438,10 @@ async function run(argv, opts = {}) {
 
     // 11. Run the brain under the watchdog.
     const logDir = path.join(paths.logs, 'dream');
-    fs.mkdirSync(logDir, { recursive: true });
-    const logStream = fs.createWriteStream(path.join(logDir, `${date}.log`), { flags: 'a' });
+    mkdirPrivate(logDir); // 0700 log dir, independent of umask (WP-a9)
+    // 0600 log stream, fail-closed — secures a pre-existing (legacy 0666)
+    // append target on the fd before any byte is written (WP-a9).
+    const logStream = createLogStreamPrivate(path.join(logDir, `${date}.log`), { flags: 'a' });
     // A10 (ADR-0030): the per-run hand-up token, set by the run-job supervisor
     // in the child env before it spawned us. Strictly-shaped (16 hex chars —
     // exactly what run-job mints) so it can never smuggle a path segment into

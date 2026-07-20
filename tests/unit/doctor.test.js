@@ -637,9 +637,9 @@ test('doctor: WARNs on world-readable A5 artifacts and is clean once private; ne
   fs.chmodSync(state, 0o755);
 
   const warned = run(['doctor'], env);
-  assert.match(warned.stdout, /\[warn\] .*digest\.md is readable by other users — run 'wienerdog sync' to harden it/);
-  assert.match(warned.stdout, /\[warn\] .*alerts\.jsonl is readable by other users/);
-  assert.match(warned.stdout, /\[warn\] .*state is readable by other users/);
+  assert.match(warned.stdout, /\[warn\] .*digest\.md has wrong permissions \(expected 0700 for folders, 0600 for files\) — run 'wienerdog sync' to repair it/);
+  assert.match(warned.stdout, /\[warn\] .*alerts\.jsonl has wrong permissions/);
+  assert.match(warned.stdout, /\[warn\] .*state has wrong permissions/);
   // doctor never mutates (WP-070): modes are unchanged after the run.
   assert.equal(fs.statSync(path.join(state, 'digest.md')).mode & 0o777, 0o644);
   assert.equal(fs.statSync(state).mode & 0o777, 0o755);
@@ -648,5 +648,47 @@ test('doctor: WARNs on world-readable A5 artifacts and is clean once private; ne
   fs.chmodSync(path.join(state, 'digest.md'), 0o600);
   fs.chmodSync(path.join(state, 'alerts.jsonl'), 0o600);
   const clean = run(['doctor'], env);
-  assert.ok(!clean.stdout.includes('is readable by other users'), clean.stdout);
+  assert.ok(!clean.stdout.includes('has wrong permissions'), clean.stdout);
+});
+
+test('doctor: WARNs on loosened A9 artifacts — secrets/, a token, metadata — via the ONE unified predicate (WP-a9)', { skip: process.platform === 'win32' }, () => {
+  const { env, core } = tempEnv();
+  run(['init', '--yes'], env);
+  const secrets = path.join(core, 'secrets');
+  fs.mkdirSync(secrets, { recursive: true });
+  fs.writeFileSync(path.join(secrets, 'google-token-read.json'), '{}', { mode: 0o644 });
+  fs.chmodSync(secrets, 0o755);
+  fs.chmodSync(path.join(core, 'config.yaml'), 0o644);
+
+  const r = run(['doctor'], env);
+  assert.equal(r.status, 0, 'wrong modes are warns, not hard fails');
+  assert.match(r.stdout, /\[warn\] .*secrets has wrong permissions .*run 'wienerdog sync' to repair it/);
+  assert.match(r.stdout, /\[warn\] .*google-token-read\.json has wrong permissions/);
+  assert.match(r.stdout, /\[warn\] .*config\.yaml has wrong permissions/);
+  // The dedicated secrets mode-comparison is GONE — no duplicate warn source.
+  assert.doesNotMatch(r.stdout, /secrets directory permissions are/);
+  assert.match(r.stdout, /\[ok\] secrets directory present/);
+});
+
+test('doctor: an OVER-TIGHT 000 secrets/ (broken store) is WARNed too, not passed as clean (WP-a9)', { skip: process.platform === 'win32' }, () => {
+  const { env, core } = tempEnv();
+  run(['init', '--yes'], env);
+  const secrets = path.join(core, 'secrets');
+  fs.mkdirSync(secrets, { recursive: true });
+  fs.chmodSync(secrets, 0o000);
+
+  const r = run(['doctor'], env);
+  fs.chmodSync(secrets, 0o700); // restore for cleanup
+  assert.equal(r.status, 0);
+  assert.match(r.stdout, /\[warn\] .*secrets has wrong permissions \(expected 0700 for folders, 0600 for files\)/);
+});
+
+test('doctor: a MISSING secrets directory still hard-fails (exit 1) (WP-a9 keeps the A5-era fail)', { skip: process.platform === 'win32' }, () => {
+  const { env, core } = tempEnv();
+  run(['init', '--yes'], env);
+  fs.rmSync(path.join(core, 'secrets'), { recursive: true, force: true });
+
+  const r = run(['doctor'], env);
+  assert.equal(r.status, 1);
+  assert.match(r.stdout, /\[fail\] secrets directory missing/);
 });
