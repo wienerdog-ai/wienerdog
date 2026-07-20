@@ -140,12 +140,14 @@ switch (mode) {
   }
 
   case 'latefork': {
-    // TOCTOU (finding 8a): THIS middle — the reap-target root, whose pid is in
-    // the reap's closure set S by definition even once it is a zombie — keeps
-    // forking group-retaining sleepers on a tight timer WHILE the reap sweeps.
-    // A grandchild spawned between the snapshot and the kill keeps ppid = this
-    // middle and the middle's own pgid, so a later rescan finds and kills it.
-    // BOUNDED (40 forks) so the kill–rescan loop always terminates.
+    // TOCTOU (finding 8a): THIS middle keeps forking group-retaining sleepers
+    // into its OWN group over a WIDE window (~1.2s) so a short run-job watchdog
+    // timeout deterministically fires while the middle is STILL forking — the
+    // real settle then reaps the whole live-forking group A to quiescence. Each
+    // sleeper is detached:false, so it stays in the middle's pgid (== the
+    // middle's pid, since run-job spawns the middle detached) — a findable
+    // group-A member reached by the negative-PGID reapGroup(child.pid). BOUNDED
+    // (40 forks) so the fixture always stops on its own.
     let n = 0;
     const t = setInterval(() => {
       if (n >= 40) {
@@ -157,13 +159,14 @@ switch (mode) {
       record('late', g.pid);
       if (n === 3) {
         // Finding 14 (best-effort timer, owner round-2): ONE setsid child
-        // spawned mid-teardown — the fork/setsid interleaving probe for the
-        // kill-induced late-reparent ADR-0030 residual. Recorded only; the
-        // harness never asserts it reaped and builds no barrier machinery.
+        // spawned mid-stream — the fork/setsid interleaving probe for the
+        // kill-induced late-reparent ADR-0030 residual (its OWN new session, so
+        // it leaves group A). Recorded only; the harness never asserts it
+        // reaped and builds no barrier machinery to force the interleave.
         const s = spawnVariant(['sleep'], true);
         record('late-setsid', s.pid);
       }
-    }, 4);
+    }, 30);
     keepAlive();
     break;
   }

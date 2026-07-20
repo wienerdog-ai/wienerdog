@@ -108,6 +108,28 @@ async function waitEsrch(pid, what, ms = 5000) {
   await waitFor(() => !isAlive(pid), ms, `${what} (pid ${pid}) to reach ESRCH`);
 }
 
+/** True while ANY member of process GROUP `pgid` still exists — the
+ *  negative-PGID probe kill(-pgid, 0) succeeds. ESRCH (no member) → false;
+ *  EPERM (a member exists but is unsignalable) counts as alive.
+ *  @param {number} pgid */
+function groupAlive(pgid) {
+  try {
+    process.kill(-pgid, 0);
+    return true;
+  } catch (e) {
+    return e && e.code === 'EPERM';
+  }
+}
+
+/** Poll the whole process GROUP to ESRCH (kill(-pgid, 0) throws). The key
+ *  anti-vacuity/anti-flake assertion: an UNRECORDED late member (the
+ *  SIGKILL-before-record race) cannot hide behind a green test, because group
+ *  quiescence is asserted at the group level, not only over recorded pids.
+ *  @param {number} pgid @param {string} what @param {number} [ms] */
+async function waitGroupEsrch(pgid, what, ms = 6000) {
+  await waitFor(() => !groupAlive(pgid), ms, `${what} (pgid ${pgid}) to reach GROUP ESRCH`);
+}
+
 /** Fixture-pid tracker: everything spawned is registered and group+pid
  *  SIGKILLed in the test's finally — no orphan survives even a FAILED run. */
 function tracker() {
@@ -329,61 +351,108 @@ test('reap-escape: fake-ps planted FIRST on PATH is never executed — the reap 
 });
 
 // ---------------------------------------------------------------------------
-// Late fork during teardown (findings 8a + 14): the kill–rescan loop closes
-// the snapshot→kill TOCTOU for group-retaining late forks.
+// Late fork during teardown (findings 8a + 14) — WHAT THIS HARNESS HONESTLY
+// PROVES, and the boundary it does not (Codex round-2 finding, addressed).
+//
+// The claim "reapTree's TWO-consecutive-clean-sweep rescan catches a late fork"
+// CANNOT be gated by a LIVE test: reapTree's first sweep SIGKILLs the whole
+// findable closure — including the ONLY process able to fork a still-findable
+// child (any forker is itself a ppid-descendant, so it dies in sweep 0). A
+// still-findable descendant appearing AFTER the first real group-kill is
+// therefore impossible to produce on demand without freezing the reaper
+// mid-loop — the deterministic snapshot/fork/setsid barrier the owner
+// explicitly forbade (round-2). reapTree's rescan is a defensive race-closer
+// for a kernel-scheduling window; it is gated deterministically at the UNIT
+// level with an injected fake table in WP-a10-reap-mechanism
+// (tests/unit/reap.test.js — "a child forked between sweeps is caught by the
+// re-scan", asserting i >= 4 == two consecutive clean snapshots), where the
+// one-sweep mutation genuinely bites (see the PR's mutation-proof).
+//
+// So the honest LIVE proof (Codex's sanctioned alternative): drive and certify
+// the COMPLETE timeout settle path — the real run-job watchdog fires while the
+// middle is STILL forking group-retaining sleepers, reapTree(child.pid) runs on
+// the live middle (its best-effort timeout-row extra), and the settle-path
+// reapGroup(child.pid) negative-PGID kill polls the whole group to VERIFIED
+// quiescence. We then assert GROUP-LEVEL ESRCH (kill(-child.pid, 0) throws),
+// which certifies EVERY member is gone — including an UNRECORDED late fork the
+// SIGKILL removed before its record('late', pid) line ran (the flake/vacuity
+// hole Codex named). The leaderless/late class is carried by reapGroup, exactly
+// as the settle-path reap matrix + ADR-0030 state — never claimed for reapTree.
 // ---------------------------------------------------------------------------
 
-test('reap-escape: TOCTOU — group-retaining grandchildren forked WHILE the reap sweeps are caught by the rescan loop within the sweep cap', { skip: WIN32_SKIP }, async () => {
-  // Finding 8a, required green. The MIDDLE ITSELF (the reap-target root) keeps
-  // forking group-retaining sleepers on a tight timer while the reap sweeps: a
-  // grandchild forked between the snapshot and the kill keeps ppid = middle
-  // and the middle's pgid, and — because the root's zombie row persists in the
-  // table for the whole sync reap (this test process, its parent, is blocked
-  // and cannot waitpid yet) — the closure-based rescan still FINDS it and the
-  // next sweep's group kill reaches it, closing the snapshot→kill TOCTOU.
-  //
-  // LIVE-HARNESS LESSON (recorded; see the PR's Discovered issues): an earlier
-  // shape of this attack put the late forks under an INTERMEDIATE forker whose
-  // zombie init reaps immediately — a straggler forked concurrently with the
-  // group kill (posix_spawn granularity) then becomes leaderless with NO ppid
-  // ancestry and evades reapTree's closure rescan entirely (clean sweeps while
-  // it lives). That straggler class remains findable ONLY by the checked
-  // negative-PGID reapGroup(child.pid), which production runs on every settle
-  // path — reapTree is the timeout row's best-effort extra, exactly as the
-  // settle-path reap matrix states.
+test('reap-escape: TOCTOU (finding 8a) — the COMPLETE timeout settle over a live-forking group-retaining middle reaches GROUP-level ESRCH, unrecorded late members included (reapTree closure + checked reapGroup poll both drain group A; the group-level probe is the anti-vacuity guarantee)', { skip: WIN32_SKIP }, async () => {
   const t = tracker();
   const { out } = tmpOut();
+  const { paths } = setupCore();
+  /** @type {number[]} */ const groupCalls = [];
+  /** @type {number[]} */ const treeCalls = [];
   try {
-    const middle = spawnMiddle('latefork', out, [], t);
-    // Let the attack get going: a bounded stream of group-retaining sleepers
-    // every few ms — some land AFTER the reap's first snapshot, the exact
-    // snapshot→kill TOCTOU window.
-    await waitRoles(out, ['middle'], t);
-    await waitFor(() => readRoles(out).filter((r) => r.role === 'late').length >= 3, 6000, 'late-forked grandchildren');
-    const r = reapLib.reapTree(middle, process.platform);
-    // Two consecutive clean sweeps within maxSweeps: the kill–rescan loop
-    // terminated without exceeding its sweep cap (a degraded result would mean
-    // quiescence was NOT observed — the TOCTOU left something findable behind).
-    assert.equal(r.degraded, false, `kill–rescan reached quiescence within the sweep cap (why: ${r.why})`);
-    await waitEsrch(middle, 'the middle');
+    const promise = runjob
+      .runJob(paths, DREAM_JOB, {
+        ...baseJobOpts(),
+        resolveCommand: middleResolve(['latefork', out]),
+        timeoutMs: 350, // fires while the middle is still forking (30ms × 40 ≈ 1.2s)
+        reapGroup: async (pgid, platform, seams) => {
+          groupCalls.push(pgid);
+          return reapLib.reapGroup(pgid, platform, seams); // the REAL checked group reap — the carrier
+        },
+        reapTree: (pid, platform) => {
+          treeCalls.push(pid);
+          return runjob.killProcessTree(pid, platform, {}); // the REAL timeout-row best-effort reapTree
+        },
+      })
+      .then(
+        () => null,
+        (e) => e
+      );
+    // The middle is up and actively forking group-retaining sleepers.
+    const roles = await waitRoles(out, ['middle'], t);
+    await waitFor(() => readRoles(out).filter((r) => r.role === 'late').length >= 3, 6000, 'a live stream of group-retaining late forks');
+    assert.ok(isAlive(roles.middle), 'the middle is still forking when the watchdog is about to fire');
+
+    const thrown = await promise;
+    assert.ok(thrown, 'the watchdog timeout fired while the middle was live-forking');
+    assert.match(thrown.message, /timed out/);
+
+    // Both settle primitives ran: the timeout-row reapTree(child.pid) over the
+    // still-alive middle (a NON-empty ppid-closure here, so it does reap group
+    // A — unlike the leaderless R11-1 case) AND the checked negative-PGID
+    // reapGroup(child.pid) that polls the group to VERIFIED quiescence.
+    // Defense-in-depth: measured with the mutation-proof, EITHER alone drains
+    // this live-middle group A (reapTree no-op → reapGroup drains; reapGroup
+    // lie → reapTree drains), so neither is uniquely load-bearing HERE — the
+    // guarantee this case certifies is that the COMPLETE path reaches group
+    // quiescence, not which primitive did it.
+    assert.deepEqual(treeCalls, [roles.middle], 'the timeout row runs reapTree(child.pid) over the live middle');
+    assert.ok(groupCalls.includes(roles.middle), 'the settle-path checked reapGroup(child.pid) also ran');
+
+    // THE KEY ANTI-VACUITY / ANTI-FLAKE ASSERTION (Codex round-2): the whole
+    // group A reaches ESRCH. This covers an UNRECORDED late member (SIGKILLed
+    // before its record('late', pid) line ran) — a per-pid-only assertion would
+    // miss it and green over a live process; the group-level probe cannot. It
+    // bites a TOTAL reap failure (reapTree no-op AND reapGroup lie together
+    // leave group A live → this assertion fails), verified in the mutation-proof.
+    await waitGroupEsrch(roles.middle, 'the middle\'s process group A (all group-retaining late forks, recorded or not)');
+    await waitEsrch(roles.middle, 'the middle');
+    // Belt: every INDIVIDUALLY recorded group-retaining late fork is also gone.
     for (const row of readRoles(out)) {
       t.track(row.pid);
-      if (row.role === 'late-setsid') continue; // the finding-14 probe — recorded, never asserted
-      await waitEsrch(row.pid, `late-fork fixture ${row.role}`);
+      if (row.role === 'late-setsid') continue; // finding-14 residual — recorded, never asserted (see below)
+      await waitEsrch(row.pid, `recorded group-retaining late fork (${row.role})`);
     }
-    // Finding 14 — kill-induced late reparent: the ONE 'late-setsid' child the
-    // middle spawns mid-teardown (a new session AFTER the first snapshot,
-    // reparented to init by the reaper's OWN kill of its parent) can survive
-    // both clean sweeps. That timed snapshot/fork/setsid interleaving is the
-    // self-induced kernel-level ADR-0030 residual: RECORDED here as the honest
-    // boundary via a best-effort timer only — never asserted reaped, and per
-    // the owner's round-2 ruling no deterministic snapshot/fork/setsid
-    // test-barrier machinery is built to force the interleaving.
+    // Finding 14 — kill-induced late reparent: the ONE 'late-setsid' child took
+    // its OWN new session (detached), so it LEAVES group A and, once its
+    // parent's exit reparents it to init, has no ppid ancestry — it can outlive
+    // both the reapTree closure and the group A reapGroup. That is the
+    // self-induced kernel-level ADR-0030 residual: RECORDED here, never asserted
+    // reaped, and (owner round-2) no barrier machinery is built to force it. It
+    // is OUTSIDE group A, so the GROUP-ESRCH assertion above is unaffected by
+    // it. The tracker's finally reaps it (ADR-0004 — the harness leaks nothing).
   } finally {
     t.cleanup();
     for (const row of readRoles(out)) {
       try {
-        process.kill(row.pid, 'SIGKILL'); // stragglers appended after the sweep
+        process.kill(row.pid, 'SIGKILL'); // stragglers appended after the settle
       } catch {
         /* already gone */
       }
