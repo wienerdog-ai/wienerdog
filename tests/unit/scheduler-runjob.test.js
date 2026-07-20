@@ -494,9 +494,11 @@ test('scheduler-runjob: R4-A — a log-open failure writes the error watermark, 
   /** @type {string[]} */ const alerts = [];
   const sendAlert = (_p, _n, subject) => (alerts.push(subject), { status: 0 });
 
+  // The lstat-first mkdirPrivate (WP-a9 F1b) refuses the non-directory with a
+  // WienerdogError; run-job surfaces its message directly as the failure reason.
   await assert.rejects(
     withRun(env, {}, ['dream'], { resolveCommand: fakeResolve(fake), sendAlert, loader: noopLoader }),
-    /job "dream" failed/
+    /non-directory is in the way/
   );
 
   const state = jobsLib.readScheduleState(paths);

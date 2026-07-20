@@ -409,7 +409,7 @@ test('private-fs: G4a — a NON-000 EACCES (write-only 0200 file) is refused, ne
   });
 });
 
-test('private-fs: G4b — a (dev,ino) change between the fallback lstat and re-lstat refuses the 000-dir chmod', { skip: !POSIX }, () => {
+test('private-fs: F4 — a (dev,ino) change between the fallback lstat and re-lstat surfaces LOUDLY (repair throws)', { skip: !POSIX }, () => {
   withUmask(0o022, () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-privfs-'));
     const paths = pathsFor(root);
@@ -420,9 +420,10 @@ test('private-fs: G4b — a (dev,ino) change between the fallback lstat and re-l
     const real = fs.lstatSync(paths.secrets);
     const chmodCalls = [];
     // Real open (000 → EACCES → fallback). chmodSync is a NOOP so the real dir
-    // stays 000 (still surfaced). lstatSync seam: first (pre-chmod) call returns
-    // the real 000 stat; the post-chmod re-lstat returns a DIFFERENT inode →
-    // the (dev,ino) mismatch must refuse (simulating a swapped target).
+    // stays 000. lstatSync seam: first (pre-chmod) call returns the real 000
+    // stat; the post-chmod re-lstat returns a DIFFERENT inode → the mode-000
+    // window swap must surface LOUDLY: repairPrivateModes THROWS (F4), not a
+    // silent changed:0.
     let lstatCalls = 0;
     const seams = {
       chmodSync: (p, m) => chmodCalls.push([p, m]),
@@ -434,11 +435,12 @@ test('private-fs: G4b — a (dev,ino) change between the fallback lstat and re-l
       },
     };
 
-    const r = repairPrivateModes(paths, seams);
-    assert.deepEqual(chmodCalls, [[paths.secrets, 0o700]], 'the fallback DID attempt the chmod');
-    assert.equal(r.changed, 0, 'but the post-chmod (dev,ino) mismatch refused it → not counted');
-    assert.equal(modeOf(paths.secrets), 0o000, 'noop chmod seam left it 000 → still surfaced');
-    assert.ok(insecureEntries(paths).includes(paths.secrets), 'surfaced');
+    assert.throws(
+      () => repairPrivateModes(paths, seams),
+      (err) => err instanceof WienerdogError && /changed identity between the permission read and the chmod/.test(err.message),
+      'the mode-000 post-chmod swap is surfaced loudly, not a silent changed:0'
+    );
+    assert.deepEqual(chmodCalls, [[paths.secrets, 0o700]], 'the fallback DID attempt the chmod before detecting the swap');
   });
 });
 
@@ -504,6 +506,47 @@ test('private-fs: G5 — a REAL core reached via a symlinked ANCESTOR is NOT a f
     assert.equal(modeOf(path.join(realRoot, 'wd', 'secrets')), 0o700, 'secrets/ repaired');
     assert.equal(modeOf(path.join(realRoot, 'wd', 'secrets', 'google-token.json')), 0o600, 'token repaired');
     assert.deepEqual(scanPrivateModes(paths), { insecure: 0 }, 'clean after repair — no false ancestor anomaly');
+  });
+});
+
+test('private-fs: F2 — a DYNAMIC leaf symlink in EVERY dynamic collection is surfaced as an anomaly and never chmodded', { skip: !POSIX }, () => {
+  withUmask(0o022, () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-privfs-'));
+    const paths = pathsFor(root);
+    // Real, correctly-moded private dirs so ONLY the dynamic leaf symlinks stand out.
+    fs.mkdirSync(paths.secrets, { recursive: true });
+    fs.mkdirSync(path.join(paths.state, 'dream-scratch'), { recursive: true });
+    fs.mkdirSync(path.join(paths.state, 'quarantine'), { recursive: true });
+    fs.mkdirSync(path.join(paths.logs, 'dream'), { recursive: true });
+    for (const d of [paths.core, paths.state, paths.logs, paths.secrets,
+      path.join(paths.state, 'dream-scratch'), path.join(paths.state, 'quarantine'),
+      path.join(paths.logs, 'dream')]) fs.chmodSync(d, 0o700);
+
+    // One external 0644 file per dynamic collection, each reached via a leaf symlink
+    // whose NAME matches that collection's filter.
+    const external = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-ext-leaf-'));
+    const targets = {
+      [path.join(paths.secrets, 'google-token.json')]: path.join(external, 'sec-target'),
+      [path.join(paths.logs, 'dream', 'run.log')]: path.join(external, 'log-target'),
+      [path.join(paths.state, 'dream-scratch', 'a.json')]: path.join(external, 'scratch-target'),
+      [path.join(paths.state, 'quarantine', 'q.md')]: path.join(external, 'quar-target'),
+    };
+    for (const [link, tgt] of Object.entries(targets)) {
+      fs.writeFileSync(tgt, 'x', { mode: 0o644 });
+      fs.symlinkSync(tgt, link);
+    }
+
+    const flagged = insecureEntries(paths);
+    for (const link of Object.keys(targets)) {
+      assert.ok(flagged.includes(link), `dynamic leaf symlink surfaced as anomaly: ${link}`);
+    }
+    assert.equal(scanPrivateModes(paths).insecure, 4, 'exactly the four dynamic leaf symlinks are flagged');
+
+    repairPrivateModes(paths);
+    for (const [link, tgt] of Object.entries(targets)) {
+      assert.equal(fs.lstatSync(link).isSymbolicLink(), true, `${link} still the symlink`);
+      assert.equal(modeOf(tgt), 0o644, `external target of ${link} NOT chmodded`);
+    }
   });
 });
 
@@ -633,4 +676,41 @@ test('private-fs: createLogStreamPrivate on win32 is a plain stream (no chmod se
   const stream = createLogStreamPrivate(file);
   await writeAndEnd(stream, 'x');
   assert.equal(fs.readFileSync(file, 'utf8'), 'x');
+});
+
+test('private-fs: F1a — createLogStreamPrivate REFUSES a pre-existing symlinked log; external target + bytes UNCHANGED', { skip: !POSIX }, () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-privfs-log-'));
+  const external = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-ext-log-'));
+  const externalFile = path.join(external, 'outside.log');
+  fs.writeFileSync(externalFile, 'external content\n', { mode: 0o644 });
+  // The daily log path IS a pre-existing symlink → the external file.
+  const logPath = path.join(root, 'daily.log');
+  fs.symlinkSync(externalFile, logPath);
+
+  // Both append and truncate sites must refuse (O_NOFOLLOW → ELOOP → throw).
+  for (const flags of ['a', 'w']) {
+    assert.throws(
+      () => createLogStreamPrivate(logPath, { flags }),
+      (err) => err instanceof WienerdogError && /without following a symlink|could not secure/.test(err.message),
+      `flags=${flags} must fail-closed on a symlinked target`
+    );
+  }
+  assert.equal(modeOf(externalFile), 0o644, 'the external target was NOT chmodded to 0600');
+  assert.equal(fs.readFileSync(externalFile, 'utf8'), 'external content\n', 'no bytes written through the symlink');
+});
+
+test('private-fs: F1b — mkdirPrivate REFUSES a pre-existing symlinked logs/<job>; external dir UNCHANGED', { skip: !POSIX }, () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-privfs-log-'));
+  const external = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-ext-dir-'));
+  fs.chmodSync(external, 0o777);
+  const logDir = path.join(root, 'logs', 'dream');
+  fs.mkdirSync(path.join(root, 'logs'), { recursive: true });
+  fs.symlinkSync(external, logDir); // logs/dream IS a symlink to the external dir
+
+  assert.throws(
+    () => mkdirPrivate(logDir),
+    (err) => err instanceof WienerdogError && /symlink is in the way/.test(err.message),
+    'mkdirPrivate must refuse a symlinked target before any chmod'
+  );
+  assert.equal(modeOf(external), 0o777, 'the external dir was NOT chmodded to 0700');
 });
