@@ -488,18 +488,33 @@ broker:
    effect). The client-side allowlist stays; this is redundant defense-in-depth on the
    authoritative (server) side.
 
-2. **The broker is dual-gated: `external-content-routine` AND `gws-use`.** Today the
+2. **Routine Google access is dual-gated (`external-content-routine` AND `gws-use`),
+   enforced at the PARENT spawn locus — NOT inside the broker subprocess.** Today the
    broker's reachability is governed only by `external-content-routine` (upstream:
-   `run-job` refuses to compose a routine while it is blocked); `gws-broker.js` never
-   calls `requireCapability(GWS_USE)`, so the `gws-use` description ("reading or
-   sending Gmail, Calendar, and Drive is disabled") overclaims relative to the broker.
-   **Decision:** `gws-broker.js` calls `requireCapability(GWS_USE)` at startup (fail
-   closed before any MCP byte). Routine Google access now requires BOTH gates —
-   semantically honest (the broker IS the routine Gmail/Cal/Drive path) and
-   defense-in-depth against a future partial un-gate (a release that opened
-   `external-content-routine` but kept `gws-use` closed would still deny routine Google
-   access). In the 0.10.0 flip both gates open together, so this changes nothing
-   functionally now; it fixes the mapping and the description overclaim without editing
-   `safety-profile.js`.
+   `run-job` refuses to compose a routine while it is blocked); nothing requires
+   `gws-use`, so the `gws-use` description ("reading or sending Gmail, Calendar, and
+   Drive is disabled") overclaims relative to the broker. **Decision:** add
+   `requireCapability(GWS_USE, profile)` in `run-job.js` `resolveCommand`'s `skill:`
+   branch (for a broker-backed routine), beside the existing `external-content-routine`
+   gate. Routine Google access now requires BOTH gates — semantically honest (the
+   broker IS the routine Gmail/Cal/Drive path) and defense-in-depth against a future
+   partial un-gate. In the 0.10.0 flip both gates open together, so this changes
+   nothing functionally now; it fixes the mapping and the description overclaim without
+   editing `safety-profile.js`.
 
-Implemented by **WP-broker-verb-allowlist-and-gws-gate**.
+   **Why the gate is at the parent, not inside the `gws _broker` subprocess
+   (design-gate R1 leg C):** an in-subprocess `requireCapability(GWS_USE)` was
+   rejected because the broker subprocess reads `FROZEN_PROFILE` with **no env/seam
+   override by design** — so it is **untestable while frozen** (the direct-spawn
+   `tests/unit/broker-wiring.test.js` and `run-broker-e2e.js` expect `gws _broker` to
+   start, and a subprocess cannot receive a JS `allowAll()` profile). The parent gate,
+   where the JS `profile` seam already lives beside the `external-content-routine`
+   gate, is the **testable equivalent** with identical net semantics; the broker
+   subprocess is only ever reachable via the gated parent, so its ungated entry is
+   safe, and the `broker-wiring`/`broker-e2e` tests stay unchanged. `gws-use` honesty
+   holds without gating the retired interactive path: `wienerdog grant`'s
+   `authenticatedAddress → getProfile` can no longer reach Google (the combined-token
+   `getServices` is retired and throws), so it degrades to `null`.
+
+Implemented by **WP-broker-verb-allowlist-and-gws-gate** (parent gate + server-side
+allowlist) and **WP-gws-retire-dead-send-path** (the retired interactive path).

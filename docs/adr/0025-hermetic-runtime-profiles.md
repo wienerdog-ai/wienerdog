@@ -333,16 +333,28 @@ consolidates the user's own transcripts. Amendment 2 already anticipated this
 (WP-135 Out-of-scope: "If a routine is ever un-gated, wiring the same probe into its
 spawn is a future WP").
 
-**Decision.** Before ANY routine brain spawns (`run-job.js`), a bounded live canary
-probe of the routine's REAL hermetic composition runs and **fails closed** exactly
-as the dream's (D-PROBE-INCONCLUSIVE = HALT; D-PROBE-STRICTNESS ground-truth gates;
-D-PROBE-CADENCE once per run). `runContainmentProbe` is generalized to any capability
-profile (dream unchanged; routine profiles compose their containment argv). The
-broker MCP is orthogonal to the escape canary (the probe prompt never calls a broker
-verb), so the probe validates the escape-relevant flags: non-empty `--tools`
-allowlist, the full deny list, `--strict-mcp-config`, `--setting-sources ""`,
-out-of-`--add-dir` read blocked, out-of-staging write blocked. Static argv unit
-tests alone are NOT acceptable to gate on (the audit's standing rule).
+**Decision.** Before ANY routine brain spawns, a bounded live canary probe runs and
+**fails closed** exactly as the dream's (D-PROBE-INCONCLUSIVE = HALT;
+D-PROBE-STRICTNESS ground-truth gates; D-PROBE-CADENCE once per run).
+
+- **The canary composes a BROKER-FREE containment-only profile** derived from the
+  target routine's profile — same containment flags (`--tools`, `--disallowedTools`,
+  `--permission-mode`, `--strict-mcp-config`, `--setting-sources ""`, the staging/
+  add-dir shape) but **`mcp:'empty'` and NO `--mcp-config`**. Using the real
+  broker-backed profile was rejected (design-gate R1 leg B): it would spawn the probe
+  under live broker wiring/credentials, coupling the containment decision to broker
+  availability and making a probe failure ambiguous (containment break vs broker/
+  launch-order problem). The broker is orthogonal to the escape canary; the canary
+  never composes a broker MCP config and never calls a broker verb. `runContainmentProbe`
+  is generalized to any profile id; the dream (already `mcp:'empty'`) is unchanged.
+- **The probe runs at the single shared `runJob` spawn locus** that ALL THREE
+  production routine paths converge on — interactive `run-job`, the scheduled/launcher
+  `run-job`, and the catch-up loop (`catchUp → runJob`) — so one call site gates all
+  three.
+- The probe asserts the escape-relevant properties: non-empty `--tools` allowlist,
+  the full deny list, `--strict-mcp-config`, `--setting-sources ""`, out-of-`--add-dir`
+  read blocked, out-of-staging write blocked. Static argv unit tests alone are NOT
+  acceptable to gate on (the audit's standing rule).
 
 **Residuals (recorded, not blocking):** **N1** — on a managed/admin-policy machine a
 routine runs non-hermetically (managed hooks `disableAllHooks` cannot override); the

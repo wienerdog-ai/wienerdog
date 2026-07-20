@@ -4,7 +4,7 @@ title: Pre-routine live containment self-check (un-gate external-content-routine
 status: Draft
 model: opus
 size: M
-depends_on: []
+depends_on: [WP-broker-verb-allowlist-and-gws-gate]
 adrs: [ADR-0004, ADR-0009, ADR-0025]
 epic: p0-ungate
 ---
@@ -36,8 +36,23 @@ content (a poisoned email): a routine-side live probe is REQUIRED before un-gati
 WP-135 explicitly anticipated this ("If a routine is ever un-gated, wiring the same
 probe into its spawn is a future WP").
 
-This WP generalizes the existing dream probe to any capability profile and runs it
-fail-closed before every routine brain spawn.
+This WP generalizes the existing dream probe to run against a **broker-free
+containment-only canary profile** derived from the target routine's profile, and
+runs it fail-closed at the single shared routine spawn locus.
+
+**Design-gate R1 (leg B) rulings baked in below:**
+
+- **The probe canary composes a dedicated BROKER-FREE profile, NOT the real
+  broker-backed routine profile.** Routine profiles are `mcp:'broker'` with real
+  `brokerVerbs`; reusing one for the canary would spawn the probe under live broker
+  wiring/credentials, coupling the containment decision to broker availability and
+  turning a probe failure into an ambiguous signal (containment break vs broker/
+  launch-order problem). The canary carries ONLY the containment-relevant flags of
+  the target routine profile, with `mcp:'empty'` and **no** `--mcp-config`. The
+  canary never composes a broker MCP config and never calls a broker verb — the
+  broker is orthogonal to the escape canary.
+- **The probe runs at the single shared `runJob` spawn locus** that ALL routine
+  spawn paths converge on (see the three production paths in Current state).
 
 ## Current state
 
@@ -56,18 +71,30 @@ fail-closed before every routine brain spawn.
 `src/cli/dream.js` runs it (~l.434) between the fast-path returns and the brain,
 throwing `WienerdogError` on a non-`pass` outcome (fail-closed HALT).
 
-`src/cli/run-job.js` `runJob(paths, job, opts)`:
+`src/cli/run-job.js` `runJob(paths, job, opts)` is the **single shared spawn locus**
+that ALL THREE production routine paths converge on:
+
+1. **interactive** — `wienerdog run-job <name>` → `run(argv)` → `runJob`;
+2. **scheduled/launcher** — the OS scheduler (launchd/systemd/schtasks) shells out to
+   `wienerdog run-job <name>` → the same `run(argv)` → `runJob`;
+3. **catch-up** — `run-job --catch-up` → `catchUp(paths, opts)` →
+   `doRun = opts.runJob || runJob; await doRun(paths, job, opts)` (l.1088, 1101).
+
+`runJob`:
 - Calls `resolveCommand(paths, job, opts.profile)` (l.712). For a `skill:` job this
   calls `requireCapability(EXTERNAL_CONTENT_ROUTINE, opts.profile)` FIRST (blocked in
-  production → throws before composition), then `composeRoutineRun` → `{command, args,
-  cwd, shell}`.
+  production → throws before composition; `WP-broker-verb-allowlist-and-gws-gate`
+  adds the `gws-use` gate here too), then `composeRoutineRun` → `{command, args, cwd,
+  shell}`.
 - Spawns at l.780 with the composed `cwd`. Test/harness seams: `opts.resolveCommand`
-  (fake command), `opts.profile` (`allowAll()` code seam).
+  (fake command), `opts.profile` (`allowAll()` code seam), `opts.runJob` (catch-up).
 
-`src/core/routine-runtime.js` exports `composeRoutineRun(paths, job)` and
-`ensureBrokerMcpConfig(paths, profile)` (writes the per-run broker MCP config,
-returns its absolute path, or null for `mcp:'empty'`). `runtime-profile.js`
-`getProfile(id)` and `PROFILES` describe each routine (all three are `mcp:'broker'`).
+Placing the probe in `runJob` before the spawn therefore covers ALL THREE paths with
+one call site. `runtime-profile.js` `getProfile(id)`, `PROFILES` describe each
+routine (all three `mcp:'broker'`); `composeClaudeArgs(profile, ctx)` emits no
+`--mcp-config` and requires no `brokerVerbs` when `profile.mcp === 'empty'`.
+`routine-runtime.js` `profileIdForSkill(skillId)` maps a skill id to its profile id
+(throws `RuntimeProfileError` on unknown).
 
 ## Deliverables (permission boundary — touch ONLY these)
 
@@ -75,40 +102,50 @@ returns its absolute path, or null for `mcp:'empty'`). `runtime-profile.js`
 
 | Action | Path | Notes |
 |--------|------|-------|
-| modify | src/core/dream/containment-probe.js | `runContainmentProbe(paths, {profileId='dream', …})`; a routine profile composes its containment argv (real broker MCP config via `ensureBrokerMcpConfig`), probe prompt, temp add-dirs; dream path byte-unchanged |
-| modify | src/cli/run-job.js | run the routine probe fail-closed before the `skill:` brain spawn (after `resolveCommand`, before `spawn`); skippable via test seam; HALT on non-`pass` |
-| modify | tests/unit/containment-probe.test.js | pass/fail/inconclusive for a routine `profileId` via the `probeCmd` fake; dream default unchanged |
-| modify | tests/unit/scheduler-runjob.test.js | a `skill:` spawn is gated on a probe `pass`; a fail/inconclusive halts (no spawn, fail-loud) |
+| modify | src/core/dream/containment-probe.js | `runContainmentProbe(paths, {profileId='dream', …})`; a routine `profileId` composes a BROKER-FREE canary profile (`mcp:'empty'`, `mcpConfigPath:null`, no broker verb) carrying the routine's containment flags; probe prompt, temp add-dirs; dream path byte-unchanged |
+| modify | src/cli/run-job.js | run the routine probe fail-closed in `runJob` before the `skill:` brain spawn (the single locus covering interactive + scheduled + catch-up); skippable via test seam; HALT on non-`pass` |
+| modify | tests/unit/containment-probe.test.js | pass/fail/inconclusive for a routine `profileId` via the `probeCmd` fake; canary composes `mcp:'empty'` (no `--mcp-config`); dream default unchanged |
+| modify | tests/unit/scheduler-runjob.test.js | a `skill:` spawn is gated on a probe `pass`; a fail/inconclusive halts (no spawn, fail-loud); assert the CATCH-UP path (`catchUp → runJob`) is gated too, not just the interactive branch |
 
 ### Exact contracts
 
-**1. `runContainmentProbe` — generalize to a profile id.** Add `opts.profileId`
-(default `'dream'`). Resolve `const profile = getProfile(opts.profileId)`. For a
-`mcp:'broker'` profile, compose with the real per-run broker config so the probe
-tests the EXACT production MCP posture (the canary prompt never calls a broker verb,
-so no credential is exercised; the broker child is bounded and reaped with the
-probe):
+**1. `runContainmentProbe` — generalize to a profile id via a BROKER-FREE canary.**
+Add `opts.profileId` (default `'dream'`). Resolve the target profile, then derive a
+containment-only **canary profile**: same containment flags (`tools`,
+`disallowedTools`, `permissionMode`) but **`mcp:'empty'`** and never a broker MCP
+config. The dream is already `mcp:'empty'`, so it is its own canary (byte-unchanged);
+a routine's canary strips the broker wiring:
 
 ```js
-const { ensureBrokerMcpConfig } = require('../routine-runtime');
 // … inside runContainmentProbe, after building the temp workspace:
-const profile = getProfile(opts.profileId || 'dream');
-const mcpConfigPath = profile.mcp === 'broker' ? ensureBrokerMcpConfig(paths, profile) : null;
+const target = getProfile(opts.profileId || 'dream');
+// BROKER-FREE canary (design-gate R1 leg B): the containment envelope of the target
+// profile with the broker removed. The broker is orthogonal to the escape canary; a
+// live broker in the probe would couple the containment decision to broker
+// availability and make a probe failure ambiguous. The canary carries ONLY the
+// containment-relevant flags and NEVER composes a --mcp-config or calls a broker verb.
+const profile = target.mcp === 'broker'
+  ? { ...target, id: `${target.id}-canary`, mcp: 'empty' }   // brokerVerbs unused when mcp==='empty'
+  : target;                                                   // dream: already broker-free
 const composed = composeClaudeArgs(profile, {
   prompt: probePrompt(canaryPath, writePath),
-  addDirs: [allowedDir, stagingDir],   // temp probe dirs, not the routine's real staging
+  addDirs: [allowedDir, stagingDir],   // temp probe dirs mirroring the routine's staging+readable add-dir shape
   settingsPath,
-  mcpConfigPath,
+  mcpConfigPath: null,                 // NEVER a broker config — mcp:'empty' emits no --mcp-config
   model,
   appendSystemPrompt: null,            // the probe prompt, never the routine skill body
 });
 ```
 
-Everything else (temp workspace, static argv checks, ground-truth gates,
-`permission_denials`, `finally` cleanup, never-throws) is UNCHANGED. `argvStaticOk`
-already checks non-empty `--tools`, the full deny list, `--strict-mcp-config`, and
-`--setting-sources ""` — all present in a routine argv too. The dream path
-(`profileId` absent/`'dream'`) is byte-for-byte unchanged.
+`composeClaudeArgs` requires `brokerVerbs` and an `mcpConfigPath` ONLY when
+`mcp === 'broker'`; with the canary's `mcp:'empty'` it emits no `--mcp-config` and no
+`--allowedTools`, so no broker is composed. Everything else (temp workspace, static
+argv checks, ground-truth gates, `permission_denials`, `finally` cleanup,
+never-throws) is UNCHANGED. `argvStaticOk` already checks non-empty `--tools`, the
+full deny list, `--strict-mcp-config`, and `--setting-sources ""` — all present in
+the canary argv (they are the containment-relevant flags, identical to the routine's
+minus the broker). The dream path (`profileId` absent/`'dream'`) is byte-for-byte
+unchanged. `ensureBrokerMcpConfig` is NOT called by the probe.
 
 **2. `run-job.js` — run the routine probe fail-closed before the spawn.** After
 `resolveCommand` returns a routine composition (a `skill:` job) and before the
@@ -134,10 +171,13 @@ if (job.run.startsWith('skill:') && !opts.skipContainmentProbe) {
 }
 ```
 
-Place it AFTER `resolveCmd(...)` (l.712) and BEFORE the `spawn` (l.780), using the
-already-built `env`. The `builtin:dream` path is unaffected (its probe is in
-`dream.js`). `opts.skipContainmentProbe`/`opts.probeCmd` are code seams (tests only);
-production sets neither.
+Place it in `runJob`, AFTER `resolveCmd(...)` (l.712) and BEFORE the `spawn` (l.780),
+using the already-built `env`. This is the **single shared spawn locus** — all three
+production routine paths (interactive `run-job`, scheduled/launcher `run-job`, and
+`catchUp → runJob`) reach the spawn through here, so one call site gates all three.
+The `builtin:dream` path is unaffected (its probe is in `dream.js`).
+`opts.skipContainmentProbe`/`opts.probeCmd` are code seams (tests only); production
+sets neither.
 
 ## Implementation notes & constraints
 
@@ -150,10 +190,15 @@ production sets neither.
   cache is the same deferred optimization noted in WP-135, NOT built here.
 - **The probe never mutates the real config**, reads a real secret, or leaks the
   canary (temp-only, cleaned up in a `finally`) — inherited unchanged from WP-135.
-- **The broker MCP is orthogonal to the escape canary** — the probe proves the
-  escape-containment flags hold WITH the routine's MCP posture loaded; the broker's
-  credential containment is A2's boundary (proven by `scenarios:broker-e2e`) and the
-  tool-inventory containment is WP-133's negative harness.
+- **The broker MCP is orthogonal to the escape canary; the canary is BROKER-FREE**
+  (design-gate R1 leg B). The probe composes a `mcp:'empty'` canary derived from the
+  routine profile's containment flags — it NEVER composes a `--mcp-config`, spawns
+  the broker, or calls a broker verb. This keeps a probe failure meaning purely
+  "containment envelope failure," decoupled from broker availability / launch order.
+  The broker's credential containment is A2's boundary (proven live by
+  `scenarios:broker-e2e`, LP2); the tool-inventory containment is WP-133's negative
+  harness (LP1). This probe is NOT a hostile-content containment proof — it is the
+  runtime tripwire on the containment envelope the real routine depends on.
 - **Managed-policy residual (N1, ADR-0025 Amendment 3):** on a managed machine a
   routine still runs non-hermetically (WARN-and-proceed, WP-132); the probe does not
   change that trusted-admin case. Recorded, not blocked.
@@ -163,21 +208,27 @@ production sets neither.
 
 - [ ] A routine brain spawns ⟺ the routine's containment probe returned `pass` on
       the actually-installed Claude; a `fail`/`inconclusive` HALTS the routine
-      fail-closed (durable alert, no spawn). The probe composes the routine's REAL
-      hermetic argv (non-empty `--tools`, full deny list, `--strict-mcp-config`,
+      fail-closed (durable alert, no spawn), at the single `runJob` locus covering
+      interactive + scheduled + catch-up. The probe composes a BROKER-FREE canary
+      (`mcp:'empty'`, no `--mcp-config`, no broker verb) carrying the routine's
+      containment flags (non-empty `--tools`, full deny list, `--strict-mcp-config`,
       `--setting-sources ""`, temp add-dirs) and asserts the escape ground truth
-      (canary unread, no out-of-staging write). It never touches the real config,
-      reads a real secret, or leaks the canary; it is skipped under the test seams
-      so `npm test` spends no quota.
+      (canary unread, no out-of-staging write). It never composes a broker, touches
+      the real config, reads a real secret, or leaks the canary; it is skipped under
+      the test seams so `npm test` spends no quota.
 
 ## Acceptance criteria
 
 - [ ] `runContainmentProbe(paths, {profileId:'daily-digest', probeCmd: fake})`
       returns `pass`/`fail`/`inconclusive` from the fake exactly as the dream path,
-      and NEVER throws; the dream default (`profileId` absent) is unchanged.
+      and NEVER throws; the composed canary argv has NO `--mcp-config` (broker-free);
+      the dream default (`profileId` absent) is unchanged.
 - [ ] `runJob` for a `skill:` job runs the probe before spawning; a probe `pass`
       proceeds, a `fail`/`inconclusive` throws `WienerdogError` (no spawn) and fails
       loud; the probe is skipped under `opts.skipContainmentProbe`.
+- [ ] The CATCH-UP path is gated: `catchUp` (→ `runJob`) for a `skill:` job runs the
+      probe and halts on a `fail`/`inconclusive` (asserted, not just the interactive
+      `run-job <name>` branch).
 - [ ] `builtin:dream` dispatch and the dream's own WP-135 probe are unchanged.
 - [ ] `wienerdog safety` shows all five gates BLOCKED (`safety-profile.js` untouched).
 - [ ] `npm test` and `npm run lint` pass (no live Claude, no quota).

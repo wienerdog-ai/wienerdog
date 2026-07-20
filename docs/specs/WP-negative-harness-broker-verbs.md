@@ -42,6 +42,14 @@ a-live-broker property. This WP does NOT duplicate the broker-e2e proof; it fixe
 `run-negative.js` and points the README at `run-broker-e2e.js` for the routine
 hostile-content proof.
 
+**Design-gate R1 (leg B) — no CI over-claim.** The pure allowlist filter this WP
+extracts is unit-tested in `npm test` as a **REGRESSION guard on the harness's own
+logic** — it is NOT a routine-containment proof, and this WP does NOT make `npm test`
+/ CI cover routine containment. The containment proofs stay LIVE and subscription-
+gated: **LP1** (`scenarios:negative`) and **LP2** (`scenarios:broker-e2e`), run by the
+maintainer before the flip. The README and code comments must not claim CI coverage
+of routine containment.
+
 ## Current state
 
 `tests/scenarios/negative/run-negative.js`:
