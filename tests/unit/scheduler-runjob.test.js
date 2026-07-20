@@ -822,6 +822,43 @@ test(
 );
 
 test(
+  'scheduler-runjob: G2 — when the durable alert append FAILS, the survivor token pidfile is RETAINED (the only recovery record)',
+  { skip: REAP_SKIP_WIN32 },
+  async () => {
+    // If state/alerts.jsonl cannot be written (disk exhaustion), failLoud does
+    // NOT persist the survivor's reason/PGID — so deleting the retained pidfile
+    // would erase the ONLY on-disk recovery identity. G2: retain it instead.
+    const { root, env, paths } = setup();
+    jobsLib.saveJob(paths, { name: 'dream', at: '03:30', run: 'builtin:dream', timeoutMinutes: 20 });
+    const fake = writeScript(root, 'mid.sh', [
+      '#!/bin/sh',
+      'printf \'{"pid": 55555, "pgid": 55555}\' > "$WIENERDOG_HOME/state/dream-brain.$WIENERDOG_DREAM_RUN_TOKEN.pid"',
+      'exit 0',
+    ]);
+    // Force appendAlert to throw: make alerts.jsonl a DIRECTORY so the atomic
+    // appendFileSync fails EISDIR → failLoud returns { persisted: false }.
+    fs.mkdirSync(path.join(paths.state, 'alerts.jsonl'));
+    const seams = reapSeams([{ reaped: false }, { reaped: false }, { reaped: false }, { reaped: false }]);
+    await assert.rejects(
+      withRun(env, {}, ['dream'], {
+        resolveCommand: fakeResolve(fake),
+        sendAlert: () => ({ status: 0 }),
+        loader: noopLoader,
+        reapTree: seams.reapTree,
+        reapGroup: seams.reapGroup,
+      }),
+      /could not be reaped/
+    );
+    assert.equal(jobsLib.readScheduleState(paths).dream.last_status, 'error', 'error watermark still written');
+    // The durable alert did NOT persist (alerts.jsonl is an unwritable dir).
+    const leftover = fs.readdirSync(paths.state).filter((f) => f.startsWith('dream-brain.') && f.endsWith('.pid'));
+    assert.equal(leftover.length, 1, 'the survivor pidfile is RETAINED as the fallback recovery record when no alert persisted');
+    const body = JSON.parse(fs.readFileSync(path.join(paths.state, leftover[0]), 'utf8'));
+    assert.equal(body.pgid, 55555, 'the retained pidfile still carries the survivor PGID');
+  }
+);
+
+test(
   'scheduler-runjob: cross-run isolation — a run reaps ONLY its own token pidfile, never another run\'s live brain',
   { skip: REAP_SKIP_WIN32 },
   async () => {

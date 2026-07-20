@@ -493,12 +493,21 @@ function defaultSendAlert(paths, name, subject, body) {
  * pointer. NO raw log tail: email leaves the machine and is durably stored by
  * the mail provider, so a detector miss there would be unrecoverable; the
  * user opens the local private log for the tail.
+ * G2 (fix-pass 2026-07-20): returns whether the DURABLE alert append actually
+ * persisted (`appendAlert` returned without throwing). Additive — existing
+ * callers ignore it; the R8-1 pidfile-release path uses it so it never deletes
+ * the sole retained survivor identity when no durable record exists (see
+ * runJob). Conservative by construction: a throw from the post-append
+ * compaction rewrite also yields `false` (the atomic append already put the
+ * record on disk, but we err toward RETAINING the pidfile — a false-negative
+ * keeps the recovery identity, a false-positive would lose it).
  * @param {import('../core/paths').WienerdogPaths} paths
  * @param {string} name @param {string} reason
  * @param {{sendAlert?: typeof defaultSendAlert}} opts
- * @returns {Promise<void>}
+ * @returns {Promise<boolean>} true iff the durable alert append succeeded
  */
 async function failLoud(paths, name, reason, opts = {}) {
+  let persisted = false;
   try {
     const logHint = `${tilde(paths.home, path.join(paths.logs, name))}/`;
     appendAlert(paths, {
@@ -507,6 +516,7 @@ async function failLoud(paths, name, reason, opts = {}) {
       reason,
       log_hint: logHint,
     });
+    persisted = true; // the durable append returned without throwing
     const send = opts.sendAlert || defaultSendAlert;
     const subject = `job ${name} failed`;
     const body = `${reason}\n\nDetails: ${logHint}`.trim();
@@ -518,6 +528,7 @@ async function failLoud(paths, name, reason, opts = {}) {
   } catch {
     // Fail-loud is best-effort; never mask the original failure.
   }
+  return persisted;
 }
 
 /** Split an absolute path into its non-empty components, keeping '.' and '..'.
@@ -894,12 +905,16 @@ async function runJob(paths, job, opts = {}) {
     reason += ` — and it ${reapFailure.reason}`;
   }
   jobsLib.writeScheduleState(paths, name, { last_status: 'error', last_error_at: nowIso() });
-  await failLoud(paths, name, reason, opts);
-  // F3 (fix-pass 2026-07-20): the durable alert above IS the record of the
-  // un-reapable group — release the still-retained token pidfile(s) now. No
-  // later run ever reads this run's token, so keeping the file would be a
-  // never-read hollow leftover, not a diagnostic.
-  if (reapFailure) {
+  const alertPersisted = await failLoud(paths, name, reason, opts);
+  // F3 + G2 (fix-pass 2026-07-20): the durable alert IS the record of the
+  // un-reapable group, so release the still-retained token pidfile(s) — but
+  // ONLY when that alert actually persisted (G2). If alerts.jsonl could not be
+  // written (disk exhaustion), the pidfile is the SOLE surviving record of the
+  // survivor's recovery identity (its PGID) — RETAIN it as the fallback rather
+  // than delete a never-recorded survivor. No later run reads this run's token,
+  // so a persisted alert makes the file a never-read hollow leftover; an
+  // unpersisted alert makes it the only recovery breadcrumb.
+  if (reapFailure && alertPersisted) {
     for (const f of reapFailure.files) rmPidfile(f);
   }
   throw new WienerdogError(reason);

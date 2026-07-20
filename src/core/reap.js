@@ -261,10 +261,6 @@ function safeTarget(id) {
   return true;
 }
 
-/** taskkill exit code for "process not found" — the target is already gone,
- *  which is success for a reap. */
-const TASKKILL_NOT_FOUND = 128;
-
 /**
  * win32: the ABSOLUTE System32 `taskkill /PID <pid> /T /F` — the resolved path
  * is held in a variable and spawned only if it exists. An absent System32
@@ -273,12 +269,21 @@ const TASKKILL_NOT_FOUND = 128;
  * ~/.local/bin ahead of System32 — a bare name is the same
  * executable-injection class as bare `ps`, and worse because it kills).
  *
- * F2 (fix-pass 2026-07-20): returns a CHECKED result instead of silently
+ * F2/G1 (fix-pass 2026-07-20): returns a CHECKED result instead of silently
  * swallowing every failure — the supervisor must never claim the tree was
- * stopped when taskkill never ran or failed. Success = exit 0, or exit 128
- * ("process not found": the target is already gone). Absent exe, a spawn
- * throw/error, a terminating signal, or any other exit is a failure with a
- * diagnostic. Never throws.
+ * stopped when taskkill never ran or failed. Success = **exit 0 ONLY**. Every
+ * non-zero exit (INCLUDING 128), a terminating signal, a spawn throw/error,
+ * and an absent exe are failures with a diagnostic. G1: exit 128 is NOT
+ * treated as "already gone" — Win32 error 128 is ERROR_WAIT_NO_CHILDREN and an
+ * executable can return 128 on an init failure (desktop-access / resource
+ * exhaustion) BEFORE killing anything, so a LIVE tree can exit 128; taskkill
+ * publishes no exit-code contract making 128 uniquely "already gone". Since
+ * win32 is POSIX-deferred (no leaderless guarantee; settleReaps / the R8-1
+ * fail-loud escalation never run on win32), a false-negative `{ ok: false }`
+ * on a genuinely-gone tree is a harmless surfaced diagnostic, while a
+ * false-positive `{ ok: true }` on a live tree is the real hazard — so the
+ * conservative exit-0-only rule is the safe one. An authoritative Windows
+ * liveness check is deferred to WP-a10-windows-reap. Never throws.
  * @param {number} pid
  * @param {{spawnSync?: typeof spawnSync}} seams
  * @returns {{ok: boolean, why: string|null}}
@@ -307,8 +312,10 @@ function taskkillTree(pid, seams) {
     return { ok: false, why: `taskkill could not be spawned${r && r.error ? `: ${r.error.message}` : ''}` };
   }
   if (r.signal) return { ok: false, why: `taskkill was terminated by signal ${r.signal}` };
-  if (r.status === 0 || r.status === TASKKILL_NOT_FOUND) return { ok: true, why: null };
-  return { ok: false, why: `taskkill exited ${r.status}` };
+  // G1: ONLY exit 0 is success — 128 (ERROR_WAIT_NO_CHILDREN) can be an init
+  // failure BEFORE any kill, so it must not falsely certify a live tree.
+  if (r.status === 0) return { ok: true, why: null };
+  return { ok: false, why: `taskkill exited ${r.status} — not a confirmed kill (only exit 0 is trusted on win32)` };
 }
 
 /**
@@ -451,14 +458,16 @@ function reapTree(pid, platform, seams = {}) {
  *   LIVE pid and its LIVE child tree — there is NO negative-PGID equivalent,
  *   so it does NOT reach a leaderless reparented member once the group leader
  *   has exited; NO leaderless-member guarantee (deferred to
- *   WP-a10-windows-reap). F2 (fix-pass 2026-07-20): the win32 result is
- *   CHECKED against the taskkill outcome — `{ reaped: true }` only when
- *   taskkill exited 0 or 128 ("process not found" — already gone);
- *   `{ reaped: false, why }` on an absent System32 taskkill.exe, a spawn
- *   throw/error/signal, or any other exit — the supervisor never claims the
- *   tree stopped when taskkill never ran or failed. That `false` is a surfaced
- *   DIAGNOSTIC only: the R8-1 fail-loud escalation stays POSIX-only (run-job
- *   does not activate the group-reap authority on win32 at all).
+ *   WP-a10-windows-reap). F2/G1 (fix-pass 2026-07-20): the win32 result is
+ *   CHECKED against the taskkill outcome — `{ reaped: true }` ONLY when
+ *   taskkill exited 0. Every non-zero exit (INCLUDING 128 — an executable can
+ *   return 128 on an init failure before killing anything, so it must not
+ *   falsely certify a live tree), a terminating signal, a spawn throw/error,
+ *   or an absent System32 taskkill.exe → `{ reaped: false, why }` — the
+ *   supervisor never claims the tree stopped when taskkill never ran or
+ *   failed. That `false` is a surfaced DIAGNOSTIC only: the R8-1 fail-loud
+ *   escalation stays POSIX-only (run-job does not activate the group-reap
+ *   authority on win32 at all).
  * ASYNC by necessity: the settled group's last member is often the
  * supervisor's OWN just-SIGKILLed direct child, which stays a ZOMBIE — and a
  * zombie still counts as a live group member for kill() — until the
@@ -472,7 +481,7 @@ function reapTree(pid, platform, seams = {}) {
  *           maxPolls?: number, pollDelayMs?: number }} [seams]  maxPolls default 5
  * @returns {Promise<{ reaped: boolean, why?: string }>}  reaped=true ONLY when
  *   the group reached VERIFIED quiescence (POSIX: `kill(-pgid, 0)` threw ESRCH
- *   within maxPolls; win32: taskkill exited 0/128 — F2). reaped=false on a
+ *   within maxPolls; win32: taskkill exited 0 ONLY — F2/G1). reaped=false on a
  *   POSIX timeout with members still present (or a failed win32 taskkill, with
  *   a diagnostic `why`) — the caller MUST NOT delete a pidfile
  *   whose group is not yet verified empty (R7-2): the INNER caller (dream.js's

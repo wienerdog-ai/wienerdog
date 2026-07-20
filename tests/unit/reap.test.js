@@ -422,14 +422,18 @@ test('reap: F2 — win32 with System32 taskkill ABSENT: diagnosed { reaped: fals
   }
 });
 
-test('reap: F2 — win32 reapGroup checks the taskkill exit: 0 and 128 (already gone) succeed, any other exit is { reaped: false }', async () => {
+test('reap: F2/G1 — win32 reapGroup trusts ONLY taskkill exit 0; exit 128 (and any other non-zero) is { reaped: false }', async () => {
   const sr = fakeSystemRoot(true);
   try {
     const withStatus = (status) => () => ({ status });
     assert.deepEqual(await reapGroup(555, 'win32', { spawnSync: withStatus(0) }), { reaped: true }, 'exit 0 = killed');
-    assert.deepEqual(await reapGroup(555, 'win32', { spawnSync: withStatus(128) }), { reaped: true }, 'exit 128 = process not found — already gone');
+    // G1: 128 (ERROR_WAIT_NO_CHILDREN) can be an init failure BEFORE any kill —
+    // a live tree can exit 128, so it must NOT falsely certify a reap.
+    const notFound = await reapGroup(555, 'win32', { spawnSync: withStatus(128) });
+    assert.equal(notFound.reaped, false, 'exit 128 is NOT trusted as "already gone" — a live tree can exit 128');
+    assert.match(notFound.why, /exited 128|only exit 0/i);
     const failed = await reapGroup(555, 'win32', { spawnSync: withStatus(5) });
-    assert.equal(failed.reaped, false, 'a non-zero/non-128 taskkill exit is NOT success');
+    assert.equal(failed.reaped, false, 'a non-zero taskkill exit is NOT success');
     assert.match(failed.why, /exited 5/);
     const signalled = await reapGroup(555, 'win32', { spawnSync: () => ({ status: null, signal: 'SIGTERM' }) });
     assert.equal(signalled.reaped, false, 'a signalled taskkill is NOT success');
