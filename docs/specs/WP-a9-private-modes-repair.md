@@ -455,23 +455,34 @@ operation** (NOT any pre-existing case, and NOT "only readdir"). Every window is
 the SAME same-user concurrent-writer class **ADR-0028** hands to **A12** ("Honest
 boundary — the A7 residual"), and pure Node cannot close any of them (no
 `openat`/`openat2`/`fdopendir`, no portable fd-bound chmod for a mode-000 entry —
-confirmed: `O_PATH` absent on macOS, `/proc` Linux-only):
+confirmed: `O_PATH` absent on macOS, `/proc` Linux-only). **Their consequences
+DIFFER — stated per-window (F8 correction: window 2 is NOT loud for writes):**
   1. **`readdir`-enumeration → fd-bind** (repair): a swap of an intermediate dir
-     after `readdir` names it but before the leaf fd is bound.
+     after `readdir` names it but before the leaf fd is bound → the `(dev,ino)`
+     fd-revalidation **REFUSES** the redirected open (no chmod; surfaced by the
+     next scan).
   2. **root/ancestor validation → leaf op** (repair AND write): a swap of the
-     core or an intermediate ancestor after `assertInCoreAncestry`/`coreRootContext`
-     verifies it but before the leaf `open`/`chmod`/`write`.
+     core or an intermediate ancestor after
+     `assertInCoreAncestry`/`coreRootContext` verifies it but before the leaf op.
+     On the **repair** path the `(dev,ino)` check still refuses. On the **WRITE**
+     path this can **SILENTLY** redirect chmod/write/rename to an EXTERNAL target:
+     `createLogStreamPrivate`/`writeFilePrivate` do NOT re-validate the ancestry
+     after the leaf `open` (the fd is already bound to a file in the swapped-in
+     external dir), so they `fchmod`/write/rename it and **return successfully**
+     — no throw, no surfacing. Pure Node cannot bind the leaf op to the verified
+     ancestry without a directory-relative `openat`, so this window is neither
+     closeable nor loud (accepted A12 residual; NOT claimed as loud).
   3. **mode-000 `lstat` → path-`chmodSync`** (`applyModeFallback`): worst case ONE
-     chmod on a swapped target, surfaced LOUDLY by a thrown error.
+     chmod on a swapped target, surfaced **LOUDLY** by a thrown error.
 In every window the attacker must **already hold concurrent owner-level write
-access inside the already-`0700` core**, and the `(dev,ino)` revalidation +
-loud-throw make the worst case a REFUSED/LOUD operation, never a silent
-out-of-tree chmod/write. Do **not** claim any pre-existing symlink case remains
-open, do **not** claim "only readdir", and do **not** claim an unconditional
-"never follows symlinks" (the three concurrent-swap windows are the honest
-residual). *Follow-up for the architect:* `THREAT-MODEL.md` may want a one-line
-cross-reference to this three-window residual under the A12 section — flagged,
-not edited here (out of this WP's Deliverables).
+access inside the already-`0700` core**. Do **not** claim any pre-existing
+symlink case remains open, do **not** claim "only readdir", do **not** claim an
+unconditional "never follows symlinks", and do **not** claim window 2 is loud —
+window 1 refuses, window 2 (write) can silently redirect, window 3 throws.
+*Follow-up for the architect:* `THREAT-MODEL.md` may want a one-line
+cross-reference to this three-window residual (with window 2's silent-write
+caveat) under the A12 section — flagged, not edited here (out of this WP's
+Deliverables).
 
 **The shared private log-stream helper `createLogStreamPrivate` — FAIL-CLOSED
 (round-2 finding 6).** The two log writers must open their stream `0600`

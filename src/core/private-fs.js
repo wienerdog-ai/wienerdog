@@ -46,15 +46,23 @@ const { WienerdogError } = require('./errors');
  * the SAME same-user concurrent-writer class ADR-0028 hands to A12 ("Honest
  * boundary — the A7 residual"); pure Node cannot close any (no
  * openat/openat2/fdopendir; no portable fd-bound chmod for a mode-000 entry —
- * O_PATH absent on macOS, /proc Linux-only):
- *   (1) readdir-enumeration → fd-bind (repair);
- *   (2) root/ancestor validate → leaf op (repair AND write);
- *   (3) mode-000 lstat → path-`chmodSync` (`applyModeFallback` — worst case ONE
- *       chmod on a swapped target, surfaced LOUDLY via a thrown error).
+ * O_PATH absent on macOS, /proc Linux-only). Their consequences DIFFER — stated
+ * per-window (do NOT claim uniform loudness):
+ *   (1) readdir-enumeration → fd-bind (repair): the (dev, ino) fd-revalidation
+ *       REFUSES the redirected open — no chmod, surfaced by the next scan.
+ *   (2) root/ancestor validate → leaf op (repair AND write): the repair path
+ *       still refuses via the (dev, ino) check, BUT the WRITE helpers
+ *       (`createLogStreamPrivate`, `writeFilePrivate`) have NO post-open
+ *       ancestry revalidation — after `assertInCoreAncestry` returns, a
+ *       concurrent ancestor swap redirects the leaf create/`fchmod`/write/rename
+ *       to an EXTERNAL target and the helper returns SUCCESSFULLY. So this
+ *       window can SILENTLY mutate out-of-tree data (chmod/write/rename); pure
+ *       Node cannot bind the leaf op to the verified ancestry without a
+ *       directory-relative `openat`, so it is not closeable and not loud.
+ *   (3) mode-000 lstat → path-`chmodSync` (`applyModeFallback`): worst case ONE
+ *       chmod on a swapped target, surfaced LOUDLY via a thrown error.
  * In every window the attacker must ALREADY hold concurrent owner-level write
- * access inside the already-0700 core; the (dev, ino) revalidation + loud-throw
- * make the worst case a REFUSED/LOUD operation, never a silent out-of-tree
- * chmod/write.
+ * access inside the already-0700 core.
  */
 
 const WIN32 = process.platform === 'win32';
