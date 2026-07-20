@@ -32,6 +32,7 @@ const ENV_KEYS = [
   'CODEX_HOME',
   'WIENERDOG_FAKE_TODAY',
   'WIENERDOG_FAKE_BRAIN_MODE',
+  'WIENERDOG_DREAM_RUN_TOKEN', // WP-a10: run-job's per-run brain hand-up token
   'PATH', // pinFakeBrain prepends the fake-brain bin dir (WP-155)
 ];
 
@@ -219,6 +220,7 @@ async function runDream(ctx, argv, extraEnv = {}, opts = {}) {
     ...extraEnv,
   });
   if (extraEnv.WIENERDOG_FAKE_BRAIN_MODE === undefined) delete process.env.WIENERDOG_FAKE_BRAIN_MODE;
+  if (extraEnv.WIENERDOG_DREAM_RUN_TOKEN === undefined) delete process.env.WIENERDOG_DREAM_RUN_TOKEN;
 
   const logs = [];
   const origLog = console.log;
@@ -875,6 +877,208 @@ test('dream-integration: opts.skipContainmentProbe skips the probe — the JS-on
   });
   assert.equal(thrown, null, thrown && thrown.message);
   assert.equal(commitCount(ctx.vault), before + 1, 'the dream committed — the probe never ran');
+});
+
+// ── WP-a10-reap-mechanism: brain hand-up pidfile + reap-to-quiescence wiring ─
+
+const reapLib = require('../../src/core/reap');
+
+/** A well-formed per-run token exactly as run-job mints it (16 hex chars). */
+const TOKEN = 'a1b2c3d4e5f60718';
+
+/** @param {ReturnType<typeof setup>} ctx @returns {string} this token's pidfile path */
+function tokenPidfile(ctx) {
+  return path.join(ctx.core, 'state', `dream-brain.${TOKEN}.pid`);
+}
+
+test('dream-integration: a supervised run writes the per-token brain pidfile at spawn, PROVES group-B quiescence, then removes it (R6-2/R7-2)', async () => {
+  const ctx = setup();
+  const pidfilePath = tokenPidfile(ctx);
+  /** @type {{pgid:number, pidfilePresent:boolean, body:string|null}[]} */ const reapCalls = [];
+  const { thrown } = await runDream(ctx, ['--yes'], { WIENERDOG_DREAM_RUN_TOKEN: TOKEN }, {
+    // The seam is invoked in the finally BEFORE the pidfile unlink — the
+    // hand-up must still be on disk (and parseable) at reap time.
+    reapGroup: (pgid) => {
+      let body = null;
+      try {
+        body = fs.readFileSync(pidfilePath, 'utf8');
+      } catch {
+        body = null;
+      }
+      reapCalls.push({ pgid, pidfilePresent: fs.existsSync(pidfilePath), body });
+      return { reaped: true };
+    },
+  });
+  assert.equal(thrown, null, thrown && thrown.message);
+  assert.equal(reapCalls.length, 1, 'reapGroup(child.pid) runs once in the finally');
+  assert.ok(Number.isInteger(reapCalls[0].pgid) && reapCalls[0].pgid > 1, 'the brain pgid (== its pid, spawned detached)');
+  assert.equal(reapCalls[0].pidfilePresent, true, 'reap ordered strictly BEFORE the pidfile unlink');
+  const handed = JSON.parse(reapCalls[0].body);
+  assert.deepEqual(handed, { pid: reapCalls[0].pgid, pgid: reapCalls[0].pgid }, 'the hand-up carries {pid, pgid}');
+  assert.equal(fs.existsSync(pidfilePath), false, 'the pidfile is removed on normal completion — only AFTER { reaped: true }');
+});
+
+test('dream-integration: R6-2 — a brain-leader NON-ZERO exit still reaps group B BEFORE deleting the pidfile', async () => {
+  // Not a timeout: the brain 'close's non-zero, runBrainWithWatchdog throws,
+  // and the finally must reapGroup(child.pid) (a surviving same-PGID group-B
+  // child would otherwise leak — the inner watchdog fires only on timeout, and
+  // run-job's backstop reaps group B only while the pidfile is present).
+  const ctx = setup();
+  const pidfilePath = tokenPidfile(ctx);
+  /** @type {{pgid:number, pidfilePresent:boolean}[]} */ const reapCalls = [];
+  const { thrown } = await runDream(
+    ctx,
+    ['--yes'],
+    { WIENERDOG_DREAM_RUN_TOKEN: TOKEN, WIENERDOG_FAKE_BRAIN_MODE: 'crash' },
+    {
+      reapGroup: (pgid) => {
+        reapCalls.push({ pgid, pidfilePresent: fs.existsSync(pidfilePath) });
+        return { reaped: true };
+      },
+    }
+  );
+  assert.ok(thrown, 'the run fails on the brain exit');
+  assert.match(thrown.message, /dream brain exited 1/);
+  assert.equal(reapCalls.length, 1, 'group B reaped on the non-timeout settle too');
+  assert.equal(reapCalls[0].pidfilePresent, true, 'the reap seam is invoked and ordered BEFORE the pidfile unlink');
+  assert.equal(fs.existsSync(pidfilePath), false, 'deleted only after the verified { reaped: true }');
+});
+
+test('dream-integration: R7-2 — an injected { reaped: false } RETAINS the pidfile for run-job\'s backstop retry', async () => {
+  const ctx = setup();
+  const pidfilePath = tokenPidfile(ctx);
+  const { thrown } = await runDream(
+    ctx,
+    ['--yes'],
+    { WIENERDOG_DREAM_RUN_TOKEN: TOKEN, WIENERDOG_FAKE_BRAIN_MODE: 'crash' },
+    {
+      // The bounded poll "timed out with a member still present": the hand-up
+      // must NOT be released — never delete a pidfile whose group is not yet
+      // verified empty.
+      reapGroup: () => ({ reaped: false }),
+    }
+  );
+  assert.ok(thrown);
+  assert.match(thrown.message, /dream brain exited 1/);
+  assert.equal(fs.existsSync(pidfilePath), true, 'pidfile RETAINED on { reaped: false } so run-job can retry reapGroup(brain.pgid)');
+});
+
+test('dream-integration: the watchdog timeout reaps the detached fake brain via the injected reapTree seam — no orphan survives', async () => {
+  // The fake brain is spawned detached into its OWN group (the re-detached
+  // shape relative to the middle's group): the pre-A10 inline kill(-child.pid)
+  // is replaced by the authoritative-table reapTree, injected here as a
+  // recording seam that delegates to the real reap. (A middle killed in the
+  // sub-ms spawn→hand-up window writes no pidfile at all — the documented
+  // ADR-0030 residual, a best-effort no-op for the backstop, not asserted
+  // reaped here.)
+  const ctx = setup({ timeoutMinutes: 0.02 }); // ~1.2s watchdog
+  /** @type {number[]} */ const treeCalls = [];
+  const { thrown } = await runDream(ctx, ['--yes'], { WIENERDOG_FAKE_BRAIN_MODE: 'hang' }, {
+    reapTree: (pid, platform, seams) => {
+      treeCalls.push(pid);
+      reapLib.reapTree(pid, platform, seams); // really reap — the assertion below proves no orphan
+    },
+  });
+  assert.ok(thrown);
+  assert.match(thrown.message, /timed out/);
+  assert.equal(treeCalls.length, 1, 'the timeout path reaps via the injected reapTree seam');
+  const brainPid = treeCalls[0];
+  assert.ok(Number.isInteger(brainPid) && brainPid > 1);
+  // The brain must be gone (poll briefly — SIGKILL delivery + init reaping).
+  const deadline = Date.now() + 2000;
+  let alive = true;
+  while (Date.now() < deadline) {
+    try {
+      process.kill(brainPid, 0);
+      alive = true;
+    } catch (e) {
+      alive = e.code === 'EPERM';
+      if (!alive) break;
+    }
+    await new Promise((r) => setTimeout(r, 25));
+  }
+  assert.equal(alive, false, 'no orphaned brain survives the timeout reap');
+});
+
+test('dream-integration: R10-1 — a THROWING hand-up write reaps the just-spawned brain group and FAILS the run ({ reaped: true } branch)', async () => {
+  // writeFilePrivate is fallible I/O (disk-full / permission / temp→final
+  // rename): when it throws AFTER the brain spawned, NO identity was handed up
+  // — run-job's pidfile-gated backstop can never retry this group, so
+  // dream.js's guard is the only reaper holding child.pid and must finish the
+  // job here, then FAIL the run (never proceed into the brain race).
+  const ctx = setup();
+  const before = commitCount(ctx.vault);
+  /** @type {number[]} */ const reapCalls = [];
+  const { thrown } = await runDream(ctx, ['--yes'], { WIENERDOG_DREAM_RUN_TOKEN: TOKEN }, {
+    writeFilePrivate: () => {
+      throw new Error('disk full (injected write-fail)');
+    },
+    reapGroup: async (pgid, platform, seams) => {
+      reapCalls.push(pgid);
+      await reapLib.reapGroup(pgid, platform, seams); // really kill the live brain
+      return { reaped: true };
+    },
+  });
+  assert.ok(thrown, 'the run FAILS — never a silent unsupervised continuation');
+  assert.equal(thrown.constructor.name, 'WienerdogError');
+  assert.match(thrown.message, /could not record the brain's process id/);
+  assert.equal(reapCalls.length, 1, 'the guard reaps exactly once when the first reap verifies empty');
+  assert.ok(reapCalls[0] > 1, 'the reap seam is invoked on child.pid (the brain group)');
+  assert.equal(fs.existsSync(tokenPidfile(ctx)), false, 'no pidfile was handed up (the write failed)');
+  assert.equal(commitCount(ctx.vault), before, 'the brain race never ran — no commit');
+});
+
+test('dream-integration: R10-1/R11-3 — write-fail guard { reaped: false → true }: ONE bounded escalation reaps, the run still fails', async () => {
+  const ctx = setup();
+  /** @type {number[]} */ const reapCalls = [];
+  const script = [{ reaped: false }, { reaped: true }];
+  const { thrown } = await runDream(ctx, ['--yes'], { WIENERDOG_DREAM_RUN_TOKEN: TOKEN }, {
+    writeFilePrivate: () => {
+      throw new Error('rename failed (injected)');
+    },
+    reapGroup: async (pgid, platform, seams) => {
+      reapCalls.push(pgid);
+      await reapLib.reapGroup(pgid, platform, seams); // really kill the live brain
+      return script.shift();
+    },
+  });
+  assert.ok(thrown);
+  assert.match(thrown.message, /could not record the brain's process id/);
+  assert.ok(!/could not be reaped to quiescence/.test(thrown.message), 'escalation reached { reaped: true } — no survivor claim');
+  assert.equal(reapCalls.length, 2, 'exactly ONE bounded final escalation (unified with R8-1)');
+  assert.equal(reapCalls[0], reapCalls[1], 'the escalation retries the SAME brain group while still holding child.pid');
+});
+
+test('dream-integration: R11-3 — write-fail guard { reaped: false → false }: a survivor-specific error names the un-reaped brain group', async () => {
+  const ctx = setup();
+  /** @type {number[]} */ const reapCalls = [];
+  const { thrown } = await runDream(ctx, ['--yes'], { WIENERDOG_DREAM_RUN_TOKEN: TOKEN }, {
+    writeFilePrivate: () => {
+      throw new Error('EDQUOT (injected)');
+    },
+    reapGroup: async (pgid, platform, seams) => {
+      reapCalls.push(pgid);
+      await reapLib.reapGroup(pgid, platform, seams); // really kill the live brain regardless of the scripted result
+      return { reaped: false };
+    },
+  });
+  assert.ok(thrown, 'NOT a silent pass — the survivor is surfaced LOUDLY (error outcome via run-job)');
+  assert.match(thrown.message, /could not be reaped to quiescence/, 'survivor-specific message');
+  assert.ok(thrown.message.includes(String(reapCalls[0])), 'names the un-reaped brain group (child.pid)');
+  assert.equal(reapCalls.length, 2, 'the escalation call count stays BOUNDED — never an unbounded block-until-ESRCH');
+});
+
+test('dream-integration: a standalone run (no run token) writes no hand-up pidfile', async () => {
+  const ctx = setup();
+  /** @type {number[]} */ const reapCalls = [];
+  const { thrown } = await runDream(ctx, ['--yes'], {}, {
+    reapGroup: (pgid) => (reapCalls.push(pgid), { reaped: true }),
+  });
+  assert.equal(thrown, null, thrown && thrown.message);
+  const state = path.join(ctx.core, 'state');
+  const pidfiles = fs.readdirSync(state).filter((f) => f.startsWith('dream-brain.'));
+  assert.deepEqual(pidfiles, [], 'no per-token pidfile on the standalone path');
+  assert.equal(reapCalls.length, 0, 'no token → no hand-up, no finally group reap (the inner watchdog covers the brain)');
 });
 
 test('dream-integration: a passing probe result is recorded in the dream run evidence (WP-135)', async () => {

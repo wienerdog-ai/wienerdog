@@ -3,6 +3,7 @@
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const crypto = require('node:crypto');
 const { spawn, spawnSync } = require('node:child_process');
 
 const { getPaths } = require('../core/paths');
@@ -18,6 +19,7 @@ const { requireCapability, CAPABILITY } = require('../core/safety-profile');
 const { detectPolicyHooks } = require('../core/policy-hooks');
 const { recordRunEvidence } = require('../core/run-evidence');
 const { settingsDigest } = require('../core/runtime-settings');
+const reap = require('../core/reap');
 
 /**
  * `wienerdog run-job <name>` is the short-lived wrapper the OS scheduler launches
@@ -196,24 +198,140 @@ function buildCleanEnv(paths, name, platform = process.platform) {
   return env;
 }
 
-/** Kill a job's child process tree. POSIX: signal the process GROUP (negative
- *  pid). Windows: taskkill /PID <pid> /T /F (no POSIX process groups exist, and
- *  a negative-PID kill throws EINVAL/ESRCH there). Best-effort — never throws
- *  (the child may already be gone).
+/** Kill a job's child process tree — since WP-a10-reap-mechanism a thin
+ *  wrapper over the authoritative-table `reapTree` (audit A10, ADR-0030):
+ *  POSIX reads the real process table (Linux /proc, macOS the verified
+ *  absolute /bin/ps — never a PATH-winnable bare `ps`), SIGKILLs the full
+ *  ppid-descendant closure plus every group those descendants belong to, and
+ *  re-sweeps to two consecutive clean snapshots (so a re-detached descendant —
+ *  the dream-brain leak — dies too). win32: the ABSOLUTE System32
+ *  `taskkill /PID <pid> /T /F` with no bare-name fallback — pre-A10 tree-kill
+ *  semantics, and NO leaderless-member guarantee (R5-2; deferred to
+ *  WP-a10-windows-reap). Best-effort — never throws.
  *  @param {number} pid child.pid
  *  @param {NodeJS.Platform} platform
- *  @param {{kill?: typeof process.kill, spawnSync?: typeof spawnSync}} [seams] test injection */
+ *  @param {{kill?: typeof process.kill, spawnSync?: typeof spawnSync,
+ *           readTable?: () => Array<{pid:number, ppid:number, pgid:number}>|null,
+ *           procRoot?: string, psPath?: string, maxSweeps?: number}} [seams] test injection */
 function killProcessTree(pid, platform, seams = {}) {
-  const kill = seams.kill || process.kill;
-  const sspawn = seams.spawnSync || spawnSync;
+  reap.reapTree(pid, platform, seams);
+}
+
+/** Parse a per-run brain hand-up pidfile (`state/dream-brain.<token>.pid`).
+ *  A missing/garbage pidfile is a best-effort no-op → null.
+ *  @param {string} file @returns {{pid:number|null, pgid:number}|null} */
+function readBrainPidfile(file) {
   try {
-    if (platform === 'win32') {
-      sspawn('taskkill', ['/PID', String(pid), '/T', '/F']);
-    } else {
-      kill(-pid, 'SIGKILL'); // kill the process GROUP → whole tree
-    }
+    const o = JSON.parse(fs.readFileSync(file, 'utf8'));
+    const pgid = Number(o && o.pgid);
+    if (!Number.isInteger(pgid) || pgid <= 1) return null;
+    return { pid: Number.isInteger(Number(o.pid)) ? Number(o.pid) : null, pgid };
   } catch {
-    // already gone / not killable — best-effort
+    return null;
+  }
+}
+
+/** Best-effort pidfile removal. @param {string} file */
+function rmPidfile(file) {
+  try {
+    fs.rmSync(file, { force: true });
+  } catch {
+    /* best-effort */
+  }
+}
+
+/**
+ * Settle-path group reaps for a settled job child (audit A10, ADR-0030 — the
+ * `reapGroup` cells of the settle-path reap matrix). Runs on EVERY settle path
+ * (timeout, 'error', abnormal 'close', AND a clean 'close' — R9-1: a clean
+ * middle exit does not prove group A is empty; a plain group-A child that did
+ * not inherit the stdio pipe can survive it and reparent to init still
+ * carrying `childPid` as its PGID; per the matrix `reapTree(child.pid)` stays
+ * on the timeout row ONLY, since after the leader exits its ppid-closure is
+ * empty — a pointless no-op here):
+ *
+ *  1. Group A — the CHECKED `reapGroup(childPid)`: the negative-PGID
+ *     `kill(-child.pid)` is the only primitive that reaches a leaderless
+ *     reparented group-A member once the middle (the group-A leader, whose pid
+ *     IS the group-A pgid — spawned detached) has exited.
+ *  2. Group B — for `builtin:dream`, read THIS run's per-token brain pidfile
+ *     and, when present, `reapGroup(brain.pgid)`; delete the pidfile ONLY on a
+ *     verified `{ reaped: true }` (R7-2).
+ *  3. R8-1 FINAL backstop: run-job is the LAST reader of its own token pidfile
+ *     — no later run ever reads another run's token — so a `{ reaped: false }`
+ *     must NOT silently certify the job clean (nor rely on a never-read
+ *     retained pidfile). Perform ONE bounded final escalation (a further
+ *     bounded `reapGroup` re-poll/re-kill of each still-non-empty group); a
+ *     group that is STILL non-empty is returned as a failure reason so the
+ *     caller fails LOUD (failLoud alert + `last_status:'error'` watermark +
+ *     error outcome) — a live group surviving the job is the ADR-0004
+ *     "nothing survives the job" violation. The escalation is BOUNDED — never
+ *     an unbounded block-until-ESRCH (an unkillable D-state process is the
+ *     ADR-0030 residual, surfaced by that same loud alert).
+ *
+ * POSIX-only (R5-2): the caller does not invoke this on win32 — there is no
+ * negative-PGID equivalent, `reapGroup`'s taskkill reaches only a live pid and
+ * its live tree (no leaderless-member guarantee, pre-A10 behavior kept;
+ * deferred to WP-a10-windows-reap), and win32 `reapGroup` returns
+ * `{ reaped: true }` best-effort so the fail-loud path could never activate.
+ *
+ * Best-effort otherwise: never throws (a missing/stale pidfile is a no-op).
+ * @param {number|undefined} childPid
+ * @param {string|null} brainPidfile  this run's token pidfile path, or null
+ * @param {NodeJS.Platform} platform
+ * @param {typeof reap.reapGroup} reapGroupFn
+ * @param {object} seams
+ * @returns {Promise<string|null>} a failure reason when a findable group could
+ *   not be reaped to quiescence; null when every group is verified quiescent
+ */
+async function settleReaps(childPid, brainPidfile, platform, reapGroupFn, seams) {
+  try {
+    /** @type {{label:string, pgid:number, file:string|null}[]} */
+    const pending = [];
+    // Group A — every settle path (the checked negative-PGID kill; R9-1).
+    if (Number.isInteger(childPid) && childPid > 1) {
+      const rA = await reapGroupFn(childPid, platform, seams);
+      if (!rA || rA.reaped !== true) {
+        pending.push({ label: `the job's process group (pgid ${childPid})`, pgid: childPid, file: null });
+      }
+    }
+    // Group B — builtin:dream, when THIS run's per-token pidfile is present.
+    if (brainPidfile) {
+      const brain = readBrainPidfile(brainPidfile);
+      if (brain) {
+        const rB = await reapGroupFn(brain.pgid, platform, seams);
+        if (rB && rB.reaped === true) {
+          // Delete ONLY on verified-empty ({ reaped: true }) — R7-2.
+          rmPidfile(brainPidfile);
+        } else {
+          pending.push({
+            label: `the dream brain's process group (pgid ${brain.pgid})`,
+            pgid: brain.pgid,
+            file: brainPidfile,
+          });
+        }
+      }
+    }
+    if (pending.length === 0) return null;
+    // R8-1: ONE bounded FINAL escalation of each still-non-empty group.
+    const survivors = [];
+    for (const p of pending) {
+      const r = await reapGroupFn(p.pgid, platform, seams);
+      if (r && r.reaped === true) {
+        if (p.file) rmPidfile(p.file); // verified empty on escalation → release
+      } else {
+        survivors.push(p.label);
+      }
+    }
+    if (survivors.length === 0) return null;
+    return (
+      `left a live process group behind: ${survivors.join(' and ')} could not be reaped to ` +
+      'quiescence after a bounded final escalation (repeated SIGKILL; members still present) — ' +
+      'nothing may survive a job (ADR-0004). A process wedged in an uninterruptible kernel ' +
+      'sleep is the documented ADR-0030 residual.'
+    );
+  } catch {
+    return null; // reap work is best-effort — never throws into the settle path
   }
 }
 
@@ -476,6 +594,8 @@ function safeResolvePath(input, guard, hopCap = 40) {
  *          detectPolicyHooks?: typeof detectPolicyHooks,
  *          resolveCommand?: typeof resolveCommand,
  *          timeoutMs?: number,
+ *          reapTree?: typeof killProcessTree,
+ *          reapGroup?: typeof reap.reapGroup,
  *          profile?: Record<string,string>}} [opts] `opts.profile` is the
  *   WP-142 harness code seam (see safety-profile.js): reachable ONLY by a JS
  *   caller — the CLI entry never passes one, so production stays frozen.
@@ -544,6 +664,24 @@ async function runJob(paths, job, opts = {}) {
   const { command, args, shell, cwd: composedCwd } = resolveCmd(paths, job, opts.profile);
   const spawnCwd = composedCwd || cwd;
 
+  // 2a. Per-run brain hand-up token (audit A10, ADR-0030): minted BEFORE the
+  //     spawn so dream.js can write `state/dream-brain.<token>.pid` the moment
+  //     it spawns the detached brain (group B), and THIS supervisor can reap
+  //     that group on any settle — even when the middle died before its own
+  //     cleanup could run. Per-run (never a shared global pidfile): each
+  //     supervisor reads ONLY its own token's file, so a second, lock-losing
+  //     concurrent dream can never read+kill the first run's live brain.
+  //     POSIX-only (R5-2): on win32 the group-reap authority does NOT activate
+  //     — no token is minted, and the win32 path keeps the pre-A10
+  //     timeout-path absolute `taskkill /T /F` behavior only (leaderless-
+  //     member case deferred to WP-a10-windows-reap).
+  let brainPidfile = null;
+  if (job.run === 'builtin:dream' && platform !== 'win32') {
+    const runToken = crypto.randomBytes(8).toString('hex');
+    env.WIENERDOG_DREAM_RUN_TOKEN = runToken;
+    brainPidfile = path.join(paths.state, `dream-brain.${runToken}.pid`);
+  }
+
   // 2b. Managed-policy hook preflight (WP-132, D-POLICY-HOOK): a managed/admin
   //     policy can inject hooks disableAllHooks cannot override. That is the
   //     admin's own trusted config (trusted-computing-base residual, not an
@@ -581,6 +719,7 @@ async function runJob(paths, job, opts = {}) {
   const started = Date.now();
   let code = null;
   let failure = null;
+  let reapFailure = null;
   try {
     const child = spawn(command, args, {
       cwd: spawnCwd,
@@ -614,10 +753,24 @@ async function runJob(paths, job, opts = {}) {
       child.on('error', reject);
       child.on('close', (c) => resolve(c));
     });
+    // Reap seams (test-only, WP-155 idiom): production never sets them, so the
+    // scheduled path always uses the real authoritative-table reap.
+    const reapTreeFn = opts.reapTree || killProcessTree;
+    const reapGroupFn = opts.reapGroup || reap.reapGroup;
     let timer = null;
     const watchdog = new Promise((_resolve, reject) => {
       timer = setTimeout(() => {
-        killProcessTree(child.pid, platform, opts); // POSIX group-kill / win32 taskkill /T /F
+        // Timeout row of the settle-path reap matrix (the ONLY row that runs
+        // reapTree): while the middle is still alive its ppid-closure
+        // enumerates + kills the group-A descendants incl. a re-detached one.
+        // Best-effort EXTRA, not a liveness-dependent guarantee — the timer
+        // races the child's 'close' event (not 'exit'), so a descendant
+        // holding the inherited stdio pipe open can delay 'close' past the
+        // middle's real exit and this can fire post-exit (then the closure is
+        // empty, a harmless no-op); the checked group reaps below carry the
+        // guarantee. On win32 this IS the pre-A10 behavior: the absolute
+        // System32 taskkill /T /F while the middle is alive.
+        reapTreeFn(child.pid, platform, opts);
         reject(new WienerdogError(`job "${name}" timed out after ${job.timeoutMinutes} min`));
       }, timeoutMs);
     });
@@ -625,6 +778,21 @@ async function runJob(paths, job, opts = {}) {
       code = await Promise.race([done, watchdog]);
     } finally {
       if (timer) clearTimeout(timer);
+      // Settle-path reap matrix (audit A10, ADR-0030): on EVERY settle path —
+      // timeout, spawn 'error', abnormal 'close', AND a clean 'close' (exit 0;
+      // R9-1: a clean exit does not prove group A is empty) — reap group A via
+      // the CHECKED reapGroup(child.pid) and, for builtin:dream, group B via
+      // reapGroup(brain.pgid) from this run's token pidfile. reapTree is NOT
+      // run here (the leader has exited on the non-timeout rows — its
+      // ppid-closure is empty, a pointless no-op). A { reaped: false } takes
+      // the R8-1 bounded final escalation inside settleReaps; a group that
+      // still won't reap fails the job LOUD below (never certified clean —
+      // ADR-0004). POSIX-only (R5-2): on win32 the group-reap authority does
+      // NOT activate (no negative-PGID equivalent, no leaderless-member
+      // guarantee — pre-A10 taskkill behavior kept; WP-a10-windows-reap).
+      if (platform !== 'win32') {
+        reapFailure = await settleReaps(child.pid, brainPidfile, platform, reapGroupFn, opts);
+      }
     }
   } catch (err) {
     failure = err;
@@ -675,7 +843,7 @@ async function runJob(paths, job, opts = {}) {
   //    capability ever exercised. The catch-up map is minted ONLY by attended,
   //    user-invoked registration (sync/schedule add/init/adopt). Here we do at most
   //    a READ-ONLY "catch-up entry missing" notice — never write, never load.
-  if (!failure && code === 0) {
+  if (!failure && code === 0 && !reapFailure) {
     jobsLib.writeScheduleState(paths, name, { last_success: nowIso(), last_status: 'ok' });
     clearAlerts(paths, name);
     if (platform === 'darwin' || platform === 'win32') {
@@ -691,12 +859,22 @@ async function runJob(paths, job, opts = {}) {
     return;
   }
 
-  // 7. Failure/timeout → watermark, fail-loud, throw.
-  const reason = failure
+  // 7. Failure/timeout → watermark, fail-loud, throw. R8-1 (the ONE deliberate
+  //    outcome change of WP-a10-reap-mechanism): a job whose settle-path reap
+  //    left a findable live group behind — even after a clean exit 0 — is NOT
+  //    certified clean: the FINAL backstop fails loud (durable alert +
+  //    last_status:'error' watermark + error outcome) instead of silently
+  //    completing while a group survives the job (ADR-0004).
+  let reason = failure
     ? failure instanceof WienerdogError
       ? failure.message
       : `job "${name}" failed: ${failure.message}`
-    : `job "${name}" exited ${code}`;
+    : code !== 0
+      ? `job "${name}" exited ${code}`
+      : `job "${name}" ${reapFailure}`;
+  if (reapFailure && (failure || code !== 0)) {
+    reason += ` — and it ${reapFailure}`;
+  }
   jobsLib.writeScheduleState(paths, name, { last_status: 'error', last_error_at: nowIso() });
   await failLoud(paths, name, reason, opts);
   throw new WienerdogError(reason);

@@ -14,6 +14,7 @@ const { spawnBrain, buildClaudeArgs } = require('../core/dream/brain');
 const { readVaultLayout } = require('../core/layout');
 const { renderDigest, listSecretQuarantine } = require('../core/digest');
 const { writeFilePrivate, scanPrivateModes } = require('../core/private-fs');
+const { reapTree, reapGroup } = require('../core/reap');
 const { ensureSettingsProfile } = require('../core/runtime-settings');
 const { runContainmentProbe } = require('../core/dream/containment-probe');
 const identityApprovals = require('../core/identity-approvals');
@@ -107,27 +108,94 @@ function printPlan(sel, cfg, vaultDir, date, layout, settingsPath) {
  * Run the brain under a hard watchdog. Guarantees the child process tree and the
  * timer are gone before it returns, on BOTH the normal and timeout paths
  * (ADR-0004: nothing outlives the job).
+ *
+ * Supervised path (audit A10, ADR-0030): when run-job minted a per-run token
+ * (`WIENERDOG_DREAM_RUN_TOKEN`), the brain's identity is handed UP to the outer
+ * supervisor via the per-token pidfile `state/dream-brain.<token>.pid`
+ * ({pid, pgid} — the brain is spawned detached, so its pid IS its pgid),
+ * written ATOMICALLY via writeFilePrivate immediately after the spawn (the
+ * spawn→hand-up window is sub-ms; a middle that dies inside that gap before
+ * the write is the documented ADR-0030 residual). run-job reads ONLY its own
+ * run's token pidfile, so a concurrent run can never reap another run's brain.
+ * Standalone runs (no token) write no hand-up pidfile — the inner watchdog
+ * reaps the brain directly.
  * @param {{vaultDir:string, scratchDir:string, date:string, model:string|null,
  *          layout:import('../core/layout').VaultLayout,
  *          timeoutMs:number, logStream:NodeJS.WritableStream,
- *          containmentProbe?:{outcome:string, claudeVersion:string}}} o
+ *          containmentProbe?:{outcome:string, claudeVersion:string},
+ *          paths?:import('../core/paths').WienerdogPaths,
+ *          runToken?:string|null,
+ *          platform?:NodeJS.Platform,
+ *          seams?:{reapTree?: typeof reapTree, reapGroup?: typeof reapGroup,
+ *                  writeFilePrivate?: typeof writeFilePrivate,
+ *                  pollDelayMs?: number}}} o
+ *   `platform` is injected (never mock process.platform); `seams` is the
+ *   JS-only test-injection idiom (WP-155) for the reap primitives and the
+ *   R10-1 hand-up write-failure guard.
  */
 async function runBrainWithWatchdog(o) {
   const { vaultDir, scratchDir, date, model, layout, timeoutMs, logStream, containmentProbe } = o;
+  const platform = o.platform || process.platform;
+  const seams = o.seams || {};
+  const reapTreeFn = seams.reapTree || reapTree;
+  const reapGroupFn = seams.reapGroup || reapGroup;
+  const writePrivate = seams.writeFilePrivate || writeFilePrivate;
   const { child, done } = spawnBrain({
     vaultDir, scratchDir, date, model, layout, env: process.env, logStream, containmentProbe,
   });
 
+  // Hand the brain's identity UP to the outer supervisor, per-run token.
+  const pidfile =
+    o.runToken && o.paths && Number.isInteger(child.pid) && child.pid > 1
+      ? path.join(o.paths.state, `dream-brain.${o.runToken}.pid`)
+      : null;
+  if (pidfile) {
+    try {
+      // Atomic 0600 temp+rename, immediately post-spawn (sub-ms hand-up window).
+      writePrivate(pidfile, `${JSON.stringify({ pid: child.pid, pgid: child.pid })}\n`);
+    } catch (err) {
+      // R10-1: the hand-up write is FALLIBLE I/O (disk-full / permission /
+      // temp→final rename) and it failed AFTER the brain was spawned. No
+      // identity was handed up, so run-job's backstop (which reaps group B
+      // ONLY when the pidfile is present) can NEVER retry this group — this
+      // guard is the only reaper holding child.pid, and it must finish the job
+      // here: reap the just-spawned brain group NOW and FAIL the run (never
+      // proceed into the brain race as if supervised, never a silent exit).
+      // Distinct from the accepted sub-ms spawn→hand-up-window residual
+      // (there the write never runs; here the write itself failed).
+      let r = await reapGroupFn(child.pid, platform, seams);
+      if (!r || r.reaped !== true) {
+        // R11-3, unified with R8-1: on { reaped: false } do ONE bounded FINAL
+        // escalation while still holding child.pid (bounded — never an
+        // unbounded block-until-ESRCH; the unkillable D-state group is the
+        // ADR-0030 residual, surfaced loudly below).
+        r = await reapGroupFn(child.pid, platform, seams);
+        if (!r || r.reaped !== true) {
+          // Survivor-specific fail-loud: name the un-reaped brain group so
+          // run-job's alert + error watermark surface the surviving group.
+          throw new WienerdogError(
+            `dream failed: could not record the brain's process id for supervision ` +
+              `(${err.message}) AND the brain's process group ${child.pid} could not be reaped to ` +
+              'quiescence after a bounded escalation — a dream process may still be running ' +
+              '(ADR-0004; see ADR-0030).'
+          );
+        }
+      }
+      throw new WienerdogError(
+        `dream failed: could not record the brain's process id for supervision (${err.message}); ` +
+          'the brain was stopped and this run was aborted.'
+      );
+    }
+  }
+
   let timer = null;
   const watchdog = new Promise((_resolve, reject) => {
     timer = setTimeout(() => {
-      // Kill the whole process GROUP (WP-008 spawned the child detached, so its
-      // pid is the group leader) → the entire child tree dies.
-      try {
-        process.kill(-child.pid, 'SIGKILL');
-      } catch {
-        // Already gone — nothing to kill.
-      }
+      // Reap the brain's REAL descendant tree from the authoritative process
+      // table (audit A10 — replaces the single inline group-kill): a brain
+      // child that re-detached into its own group is still a ppid-descendant
+      // and dies too. Best-effort; never throws.
+      reapTreeFn(child.pid, platform, seams);
       reject(new WienerdogError(`dream timed out after ${Math.round(timeoutMs / 60000)} min`));
     }, timeoutMs);
   });
@@ -140,6 +208,31 @@ async function runBrainWithWatchdog(o) {
     }
   } finally {
     if (timer) clearTimeout(timer);
+    if (pidfile) {
+      // R6-2/R7-2 — PROVE group-B quiescence BEFORE releasing the hand-up, on
+      // EVERY settle where the brain leader has exited (not only on timeout:
+      // on a non-timeout brain-leader non-zero exit a same-PGID group-B child
+      // can survive the leader, and neither the inner watchdog — timeout-only
+      // — nor run-job — whose backstop reaps group B only while the pidfile is
+      // present — would reap it if this finally dropped the pidfile first).
+      // Order is load-bearing: FIRST the checked reapGroup(child.pid) — the
+      // negative-PGID kill that reaps surviving members even after the leader
+      // exited (brain pgid == child.pid) — THEN remove the pidfile ONLY on a
+      // verified { reaped: true }. On { reaped: false } (the bounded poll
+      // timed out with a member still present) RETAIN the pidfile so
+      // run-job's settle backstop can retry reapGroup(brain.pgid) — never
+      // delete a pidfile whose group is not yet verified empty. (reapGroup is
+      // idempotent: an already-empty group is a harmless ESRCH probe and
+      // returns { reaped: true } at once, so the clean path costs nothing.)
+      const r = await reapGroupFn(child.pid, platform, seams);
+      if (r && r.reaped === true) {
+        try {
+          fs.rmSync(pidfile, { force: true }); // unlink only after the verified reap
+        } catch {
+          /* best-effort */
+        }
+      }
+    }
   }
 }
 
@@ -149,14 +242,21 @@ async function runBrainWithWatchdog(o) {
  * Exit 1 = expected failure (WienerdogError): no vault, dirty tree, brain
  *          failure/timeout, git error.
  * @param {string[]} argv
- * @param {{skipContainmentProbe?:boolean, probeCmd?:string, now?:Date}} [opts]
+ * @param {{skipContainmentProbe?:boolean, probeCmd?:string, now?:Date,
+ *          platform?:NodeJS.Platform,
+ *          reapTree?: typeof reapTree, reapGroup?: typeof reapGroup,
+ *          writeFilePrivate?: typeof writeFilePrivate,
+ *          pollDelayMs?: number}} [opts]
  *   TEST-ONLY (WP-155, same idiom as run-job's opts): reachable only by a JS
  *   caller — bin/wienerdog.js calls run(rest) with argv only, so production
  *   sees opts = {} and ALWAYS runs the probe against the WP-154 pinned claude.
  *   skipContainmentProbe: skip the pre-dream containment self-check (a fake
  *   brain cannot satisfy a live probe). probeCmd: forwarded to
  *   runContainmentProbe's opts.probeCmd DI seam. now: injected clock (replaces
- *   the deleted date env seam). No env var can do any of these.
+ *   the deleted date env seam). platform + the reap/writeFilePrivate seams
+ *   (WP-a10-reap-mechanism) inject the watchdog-reap primitives and the R10-1
+ *   hand-up write-failure guard — never mock process.platform. No env var can
+ *   do any of these.
  * @returns {Promise<void>}
  */
 async function run(argv, opts = {}) {
@@ -340,6 +440,13 @@ async function run(argv, opts = {}) {
     const logDir = path.join(paths.logs, 'dream');
     fs.mkdirSync(logDir, { recursive: true });
     const logStream = fs.createWriteStream(path.join(logDir, `${date}.log`), { flags: 'a' });
+    // A10 (ADR-0030): the per-run hand-up token, set by the run-job supervisor
+    // in the child env before it spawned us. Strictly-shaped (16 hex chars —
+    // exactly what run-job mints) so it can never smuggle a path segment into
+    // the pidfile name; anything else is treated as absent (standalone run —
+    // no hand-up pidfile, the inner watchdog reaps the brain directly).
+    const rawToken = process.env.WIENERDOG_DREAM_RUN_TOKEN;
+    const runToken = typeof rawToken === 'string' && /^[a-f0-9]{16}$/.test(rawToken) ? rawToken : null;
     try {
       await runBrainWithWatchdog({
         vaultDir,
@@ -352,6 +459,17 @@ async function run(argv, opts = {}) {
         containmentProbe: containmentProbe
           ? { outcome: containmentProbe.outcome, claudeVersion: containmentProbe.claudeVersion }
           : null,
+        paths,
+        runToken,
+        platform: opts.platform || process.platform,
+        // JS-only seams (WP-155 idiom): reap primitives + the R10-1 hand-up
+        // write guard; production passes no opts, so the real ones always run.
+        seams: {
+          reapTree: opts.reapTree,
+          reapGroup: opts.reapGroup,
+          writeFilePrivate: opts.writeFilePrivate,
+          pollDelayMs: opts.pollDelayMs,
+        },
       });
     } catch (err) {
       // Brain failed/timed out: discard its partial, unvalidated writes, then fail.

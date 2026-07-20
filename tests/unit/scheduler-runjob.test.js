@@ -276,28 +276,54 @@ test('scheduler-runjob: buildCleanEnv POSIX shape is byte-identical for the 2-ar
 });
 
 // -------------------------------------------------------------------------
-// killProcessTree — POSIX group-kill vs win32 taskkill (both CI-testable via seams)
+// killProcessTree — now a wrapper over the authoritative-table reapTree
+// (WP-a10-reap-mechanism); POSIX table reap vs win32 ABSOLUTE taskkill
 // -------------------------------------------------------------------------
 
-test('scheduler-runjob: killProcessTree(win32) invokes taskkill /PID <pid> /T /F and nothing else', () => {
-  /** @type {any[]} */ const spawnCalls = [];
-  /** @type {any[]} */ const killCalls = [];
-  const seams = {
-    spawnSync: (cmd, args) => (spawnCalls.push([cmd, args]), { status: 0 }),
-    kill: (...a) => (killCalls.push(a), undefined),
+/** Point process.env.SystemRoot at a fixture; when `withExe`, an (empty)
+ *  `System32/taskkill.exe` exists there. Returns {taskkill, restore}. */
+function fakeSystemRoot(withExe) {
+  const systemRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-runjob-sysroot-'));
+  fs.mkdirSync(path.join(systemRoot, 'System32'), { recursive: true });
+  const taskkill = path.join(systemRoot, 'System32', 'taskkill.exe');
+  if (withExe) fs.writeFileSync(taskkill, 'fake');
+  const saved = process.env.SystemRoot;
+  process.env.SystemRoot = systemRoot;
+  return {
+    taskkill,
+    restore: () => {
+      if (saved === undefined) delete process.env.SystemRoot;
+      else process.env.SystemRoot = saved;
+    },
   };
-  runjob.killProcessTree(4242, 'win32', seams);
-  assert.deepEqual(spawnCalls, [['taskkill', ['/PID', '4242', '/T', '/F']]], 'taskkill argv');
-  assert.equal(killCalls.length, 0, 'never signals a POSIX process group on win32');
+}
+
+test('scheduler-runjob: killProcessTree(win32) shells the ABSOLUTE System32 taskkill /PID <pid> /T /F — never a bare name', () => {
+  const sr = fakeSystemRoot(true);
+  try {
+    /** @type {any[]} */ const spawnCalls = [];
+    /** @type {any[]} */ const killCalls = [];
+    const seams = {
+      spawnSync: (cmd, args) => (spawnCalls.push([cmd, args]), { status: 0 }),
+      kill: (...a) => (killCalls.push(a), undefined),
+    };
+    runjob.killProcessTree(4242, 'win32', seams);
+    assert.deepEqual(spawnCalls, [[sr.taskkill, ['/PID', '4242', '/T', '/F']]], 'absolute System32 taskkill argv');
+    assert.notEqual(spawnCalls[0][0], 'taskkill', 'a taskkill planted earlier on PATH is never consulted');
+    assert.equal(killCalls.length, 0, 'never signals a POSIX process group on win32');
+  } finally {
+    sr.restore();
+  }
 });
 
-test('scheduler-runjob: killProcessTree(POSIX) signals the process GROUP and never taskkill', () => {
+test('scheduler-runjob: killProcessTree(POSIX) group-kills via the reap (legacy fallback on an unusable table), never taskkill', () => {
   for (const platform of ['linux', 'darwin']) {
     /** @type {any[]} */ const spawnCalls = [];
     /** @type {any[]} */ const killCalls = [];
     const seams = {
       spawnSync: (cmd, args) => (spawnCalls.push([cmd, args]), { status: 0 }),
       kill: (...a) => (killCalls.push(a), undefined),
+      readTable: () => null, // unusable snapshot → the legacy negative-PID group-kill
     };
     runjob.killProcessTree(4242, platform, seams);
     assert.deepEqual(killCalls, [[-4242, 'SIGKILL']], `${platform}: negative-PID group SIGKILL`);
@@ -305,15 +331,42 @@ test('scheduler-runjob: killProcessTree(POSIX) signals the process GROUP and nev
   }
 });
 
+test('scheduler-runjob: killProcessTree reaps a RE-DETACHED grandchild via the real descendant tree, not only group A', () => {
+  // The middle 100 (group A = 100) has a grandchild 200 that re-detached into
+  // its OWN group (200) — the pre-A10 kill(-100) never reached it. The
+  // authoritative-table reap enumerates the ppid-closure and kills both the
+  // descendant pid AND its group.
+  const table = [
+    { pid: 100, ppid: 1, pgid: 100 },
+    { pid: 200, ppid: 100, pgid: 200 }, // re-detached: own group, still a ppid-descendant
+  ];
+  let emptied = false;
+  /** @type {any[]} */ const killCalls = [];
+  runjob.killProcessTree(100, 'linux', {
+    kill: (...a) => (killCalls.push(a), undefined),
+    readTable: () => (emptied ? [] : ((emptied = true), table)),
+    pollDelayMs: 0,
+  });
+  const targets = killCalls.map((c) => c[0]);
+  assert.ok(targets.includes(-200), 'the re-detached grandchild GROUP is killed');
+  assert.ok(targets.includes(200), 'the re-detached grandchild pid is killed');
+  assert.ok(targets.includes(-100), 'group A is still killed too');
+});
+
 test('scheduler-runjob: killProcessTree never throws when its seam throws (child already gone)', () => {
   const throwingKill = () => {
     throw Object.assign(new Error('no such process'), { code: 'ESRCH' });
   };
   const throwingSpawn = () => {
-    throw new Error('taskkill missing');
+    throw new Error('taskkill exploded');
   };
-  assert.doesNotThrow(() => runjob.killProcessTree(1, 'linux', { kill: throwingKill }));
-  assert.doesNotThrow(() => runjob.killProcessTree(1, 'win32', { spawnSync: throwingSpawn }));
+  assert.doesNotThrow(() => runjob.killProcessTree(999999, 'linux', { kill: throwingKill, readTable: () => null }));
+  const sr = fakeSystemRoot(true);
+  try {
+    assert.doesNotThrow(() => runjob.killProcessTree(999999, 'win32', { spawnSync: throwingSpawn }));
+  } finally {
+    sr.restore();
+  }
 });
 
 // -------------------------------------------------------------------------
@@ -537,6 +590,286 @@ test('scheduler-runjob: a hanging job hits the watchdog (opts.timeoutMs); a set 
   // killed it (rare, only under pathological scheduling). The watchdog firing is
   // already proven by the /timed out/ rejection and last_status === 'error'
   // above; there is no PID to assert on, so nothing more to check.
+});
+
+// -------------------------------------------------------------------------
+// WP-a10-reap-mechanism: the settle-path reap matrix + the per-token brain
+// pidfile hand-up + the R8-1 final-backstop escalation (audit A10, ADR-0030)
+// -------------------------------------------------------------------------
+
+const REAP_SKIP_WIN32 = process.platform === 'win32' && 'POSIX group-reap semantics (R5-2: win32 authority deferred to WP-a10-windows-reap)';
+
+/** Injected reap seams: recorders + a scripted reapGroup result sequence
+ *  (defaults to { reaped: true } once the script runs out). */
+function reapSeams(groupResults = []) {
+  /** @type {number[]} */ const treeCalls = [];
+  /** @type {number[]} */ const groupCalls = [];
+  const results = [...groupResults];
+  return {
+    treeCalls,
+    groupCalls,
+    reapTree: (pid, platform) => {
+      treeCalls.push(pid);
+      runjob.killProcessTree(pid, platform, {}); // still really reap — no orphan survives the test
+    },
+    reapGroup: (pgid) => {
+      groupCalls.push(pgid);
+      return results.length > 0 ? results.shift() : { reaped: true };
+    },
+  };
+}
+
+test(
+  'scheduler-runjob: TIMEOUT settle reaps group A via BOTH reapTree(child.pid) AND the checked reapGroup(child.pid) (matrix timeout row)',
+  { skip: REAP_SKIP_WIN32 },
+  async () => {
+    const { root, env, paths } = setup();
+    jobsLib.saveJob(paths, { name: 'dream', at: '03:30', run: 'builtin:dream', timeoutMinutes: 20 });
+    const fake = writeScript(root, 'hang.sh', ['#!/bin/sh', 'sleep 30']);
+    const seams = reapSeams();
+    await assert.rejects(
+      withRun(env, {}, ['dream'], {
+        resolveCommand: fakeResolve(fake),
+        timeoutMs: 1500,
+        sendAlert: () => ({ status: 0 }),
+        loader: noopLoader,
+        reapTree: seams.reapTree,
+        reapGroup: seams.reapGroup,
+      }),
+      /timed out/
+    );
+    assert.equal(seams.treeCalls.length, 1, 'reapTree runs on the timeout row (best-effort extra while the middle may live)');
+    assert.ok(Number.isInteger(seams.treeCalls[0]) && seams.treeCalls[0] > 1, 'reapTree got the child pid');
+    assert.deepEqual(seams.groupCalls, [seams.treeCalls[0]], 'the checked reapGroup(child.pid) ALSO runs on timeout');
+    assert.equal(jobsLib.readScheduleState(paths).dream.last_status, 'error');
+  }
+);
+
+test(
+  'scheduler-runjob: an ABNORMAL close (non-zero exit) reaps group A via reapGroup(child.pid) ONLY — reapTree is NOT invoked (matrix)',
+  { skip: REAP_SKIP_WIN32 },
+  async () => {
+    // Once the group-A leader has exited, reapTree's ppid-closure is empty (a
+    // pointless no-op); the negative-PGID reapGroup(child.pid) is what reaches
+    // a leaderless reparented group-A member.
+    const { root, env, paths } = setup();
+    jobsLib.saveJob(paths, { name: 'dream', at: '03:30', run: 'builtin:dream', timeoutMinutes: 20 });
+    const fake = writeScript(root, 'fail.sh', ['#!/bin/sh', 'exit 3']);
+    const seams = reapSeams();
+    await assert.rejects(
+      withRun(env, {}, ['dream'], {
+        resolveCommand: fakeResolve(fake),
+        sendAlert: () => ({ status: 0 }),
+        loader: noopLoader,
+        reapTree: seams.reapTree,
+        reapGroup: seams.reapGroup,
+      }),
+      /exited 3/
+    );
+    assert.equal(seams.treeCalls.length, 0, 'reapTree is NOT run on the abnormal-close row');
+    assert.equal(seams.groupCalls.length, 1, 'the checked reapGroup(child.pid) reaps group A');
+    assert.ok(seams.groupCalls[0] > 1, 'reapGroup got the child pid (group-A pgid)');
+  }
+);
+
+test(
+  'scheduler-runjob: R9-1 — a CLEAN close (exit 0) STILL reaps group A via reapGroup(child.pid), and NOT via reapTree (matrix)',
+  { skip: REAP_SKIP_WIN32 },
+  async () => {
+    // A clean middle exit does not prove group A is empty: a plain group-A
+    // child that did not inherit the stdio pipe can survive it, reparented to
+    // init and still carrying child.pid as its PGID. (This run writes NO brain
+    // pidfile, which also exercises the spawn→hand-up-boundary shape: a
+    // missing per-token pidfile is a best-effort no-op — the documented
+    // ADR-0030 sub-ms residual, not asserted reaped.)
+    const { root, env, paths } = setup();
+    jobsLib.saveJob(paths, { name: 'dream', at: '03:30', run: 'builtin:dream', timeoutMinutes: 20 });
+    const fake = writeScript(root, 'ok.sh', ['#!/bin/sh', 'exit 0']);
+    const seams = reapSeams();
+    await withRun(env, {}, ['dream'], {
+      resolveCommand: fakeResolve(fake),
+      sendAlert: () => ({ status: 0 }),
+      loader: noopLoader,
+      reapTree: seams.reapTree,
+      reapGroup: seams.reapGroup,
+    });
+    assert.equal(seams.treeCalls.length, 0, 'reapTree is NOT run on the clean-close row');
+    assert.equal(seams.groupCalls.length, 1, 'reapGroup(child.pid) runs on EVERY settle path — clean close included');
+    assert.equal(jobsLib.readScheduleState(paths).dream.last_status, 'ok', 'an initial { reaped: true } settles clean');
+  }
+);
+
+test(
+  'scheduler-runjob: R9-1/R8-1 — a clean close whose group-A reap stays { reaped: false } escalates once, then FAILS LOUD (error outcome)',
+  { skip: REAP_SKIP_WIN32 },
+  async () => {
+    const { root, env, paths } = setup();
+    jobsLib.saveJob(paths, { name: 'dream', at: '03:30', run: 'builtin:dream', timeoutMinutes: 20 });
+    const fake = writeScript(root, 'ok.sh', ['#!/bin/sh', 'exit 0']);
+    // { reaped: false } persisting ACROSS the bounded final escalation.
+    const seams = reapSeams([{ reaped: false }, { reaped: false }]);
+    /** @type {string[]} */ const alerts = [];
+    await assert.rejects(
+      withRun(env, {}, ['dream'], {
+        resolveCommand: fakeResolve(fake),
+        sendAlert: (_p, _n, subject) => (alerts.push(subject), { status: 0 }),
+        loader: noopLoader,
+        reapTree: seams.reapTree,
+        reapGroup: seams.reapGroup,
+      }),
+      /live process group|could not be reaped/,
+      'run-job does NOT silently certify the job clean while a findable group is live'
+    );
+    assert.equal(seams.groupCalls.length, 2, 'initial reap + exactly ONE bounded final escalation (never unbounded)');
+    assert.equal(jobsLib.readScheduleState(paths).dream.last_status, 'error', 'error watermark written (R8-1)');
+    assert.deepEqual(alerts, ['job dream failed'], 'failLoud fired');
+    const durable = readAlerts(paths);
+    assert.equal(durable.length, 1, 'durable alerts.jsonl record');
+    assert.match(durable[0].reason, /could not be reaped to quiescence/);
+  }
+);
+
+test(
+  'scheduler-runjob: R8-1 — a { reaped: false } that the bounded escalation RESOLVES to { reaped: true } settles clean',
+  { skip: REAP_SKIP_WIN32 },
+  async () => {
+    const { root, env, paths } = setup();
+    jobsLib.saveJob(paths, { name: 'dream', at: '03:30', run: 'builtin:dream', timeoutMinutes: 20 });
+    const fake = writeScript(root, 'ok.sh', ['#!/bin/sh', 'exit 0']);
+    const seams = reapSeams([{ reaped: false }, { reaped: true }]); // false → true
+    await withRun(env, {}, ['dream'], {
+      resolveCommand: fakeResolve(fake),
+      sendAlert: () => ({ status: 0 }),
+      loader: noopLoader,
+      reapTree: seams.reapTree,
+      reapGroup: seams.reapGroup,
+    });
+    assert.equal(seams.groupCalls.length, 2, 'one escalation call, then done');
+    assert.equal(jobsLib.readScheduleState(paths).dream.last_status, 'ok', 'a resolved escalation is a clean settle');
+  }
+);
+
+test(
+  'scheduler-runjob: builtin:dream mints a per-run token, and the settle reaps the handed-up brain group + deletes the pidfile on { reaped: true }',
+  { skip: REAP_SKIP_WIN32 },
+  async () => {
+    const { root, env, paths } = setup();
+    jobsLib.saveJob(paths, { name: 'dream', at: '03:30', run: 'builtin:dream', timeoutMinutes: 20 });
+    const tokenMarker = path.join(root, 'token.txt');
+    // The fake middle hands up a brain identity exactly like dream.js would:
+    // it writes state/dream-brain.<its own token>.pid with a {pid, pgid} body.
+    const fake = writeScript(root, 'mid.sh', [
+      '#!/bin/sh',
+      `printf '%s' "$WIENERDOG_DREAM_RUN_TOKEN" > ${JSON.stringify(tokenMarker)}`,
+      'printf \'{"pid": 55555, "pgid": 55555}\' > "$WIENERDOG_HOME/state/dream-brain.$WIENERDOG_DREAM_RUN_TOKEN.pid"',
+      'exit 0',
+    ]);
+    const seams = reapSeams();
+    await withRun(env, {}, ['dream'], {
+      resolveCommand: fakeResolve(fake),
+      sendAlert: () => ({ status: 0 }),
+      loader: noopLoader,
+      reapTree: seams.reapTree,
+      reapGroup: seams.reapGroup,
+    });
+    const token = fs.readFileSync(tokenMarker, 'utf8').trim();
+    assert.match(token, /^[a-f0-9]{16}$/, 'a fresh per-run token was minted BEFORE spawn and passed via env');
+    assert.ok(seams.groupCalls.includes(55555), 'the handed-up brain group (group B) is reaped via reapGroup(brain.pgid)');
+    assert.equal(
+      fs.existsSync(path.join(paths.state, `dream-brain.${token}.pid`)),
+      false,
+      'the per-token pidfile is deleted once its group is VERIFIED empty ({ reaped: true })'
+    );
+    assert.equal(jobsLib.readScheduleState(paths).dream.last_status, 'ok');
+  }
+);
+
+test(
+  'scheduler-runjob: R8-1 — a brain group that stays { reaped: false } across the final escalation drives failLoud + error outcome (the FINAL backstop)',
+  { skip: REAP_SKIP_WIN32 },
+  async () => {
+    const { root, env, paths } = setup();
+    jobsLib.saveJob(paths, { name: 'dream', at: '03:30', run: 'builtin:dream', timeoutMinutes: 20 });
+    const fake = writeScript(root, 'mid.sh', [
+      '#!/bin/sh',
+      'printf \'{"pid": 55555, "pgid": 55555}\' > "$WIENERDOG_HOME/state/dream-brain.$WIENERDOG_DREAM_RUN_TOKEN.pid"',
+      'exit 0',
+    ]);
+    // Group A and group B both stay non-empty across the escalation.
+    const seams = reapSeams([{ reaped: false }, { reaped: false }, { reaped: false }, { reaped: false }]);
+    await assert.rejects(
+      withRun(env, {}, ['dream'], {
+        resolveCommand: fakeResolve(fake),
+        sendAlert: () => ({ status: 0 }),
+        loader: noopLoader,
+        reapTree: seams.reapTree,
+        reapGroup: seams.reapGroup,
+      }),
+      /could not be reaped/,
+      'no later run ever reads another run\'s token pidfile — the FINAL backstop must not rely on retention, it fails LOUD'
+    );
+    // Bounded: initial A + initial B + ONE escalation each — never an unbounded block-until-ESRCH.
+    assert.equal(seams.groupCalls.length, 4, 'bounded final escalation');
+    assert.ok(seams.groupCalls.includes(55555), 'the brain group was retried in the escalation');
+    assert.equal(jobsLib.readScheduleState(paths).dream.last_status, 'error');
+    assert.equal(readAlerts(paths).length, 1, 'durable fail-loud alert recorded');
+  }
+);
+
+test(
+  'scheduler-runjob: cross-run isolation — a run reaps ONLY its own token pidfile, never another run\'s live brain',
+  { skip: REAP_SKIP_WIN32 },
+  async () => {
+    const { root, env, paths } = setup();
+    jobsLib.saveJob(paths, { name: 'dream', at: '03:30', run: 'builtin:dream', timeoutMinutes: 20 });
+    // A concurrent (first) run's live hand-up under a DIFFERENT token.
+    const foreign = path.join(paths.state, 'dream-brain.ffffffffffffffff.pid');
+    fs.writeFileSync(foreign, '{"pid": 77777, "pgid": 77777}');
+    const fake = writeScript(root, 'mid.sh', [
+      '#!/bin/sh',
+      'printf \'{"pid": 55555, "pgid": 55555}\' > "$WIENERDOG_HOME/state/dream-brain.$WIENERDOG_DREAM_RUN_TOKEN.pid"',
+      'exit 0',
+    ]);
+    const seams = reapSeams();
+    await withRun(env, {}, ['dream'], {
+      resolveCommand: fakeResolve(fake),
+      sendAlert: () => ({ status: 0 }),
+      loader: noopLoader,
+      reapTree: seams.reapTree,
+      reapGroup: seams.reapGroup,
+    });
+    assert.ok(seams.groupCalls.includes(55555), 'own brain group reaped');
+    assert.ok(!seams.groupCalls.includes(77777), 'the OTHER run\'s live brain is never touched');
+    assert.ok(fs.existsSync(foreign), 'the other run\'s token pidfile is left for ITS supervisor');
+  }
+);
+
+test('scheduler-runjob: R5-2 — on win32 the group-reap authority does NOT activate (pre-A10 behavior kept; POSIX-only guarantee)', async () => {
+  // The leaderless-member reap rests on negative-PGID kill semantics that
+  // win32 lacks; the win32 settle path keeps the pre-A10 timeout-only
+  // taskkill /T /F behavior and never invokes the checked group reap (its
+  // best-effort { reaped: true } could also never drive the fail-loud path).
+  const { root, env, paths } = setup();
+  jobsLib.saveJob(paths, { name: 'dream', at: '03:30', run: 'builtin:dream', timeoutMinutes: 20 });
+  const tokenMarker = path.join(root, 'token.txt');
+  const fake = writeScript(root, 'ok.sh', [
+    '#!/bin/sh',
+    `printf '%s' "$WIENERDOG_DREAM_RUN_TOKEN" > ${JSON.stringify(tokenMarker)}`,
+    'exit 0',
+  ]);
+  const seams = reapSeams();
+  await withRun(env, {}, ['dream'], {
+    resolveCommand: fakeResolve(fake),
+    platform: 'win32',
+    sendAlert: () => ({ status: 0 }),
+    loader: noopLoader,
+    reapTree: seams.reapTree,
+    reapGroup: seams.reapGroup,
+  });
+  assert.equal(seams.groupCalls.length, 0, 'no reapGroup on win32 — the authority does not activate');
+  assert.equal(seams.treeCalls.length, 0, 'no timeout fired, so no tree reap either');
+  assert.equal(fs.readFileSync(tokenMarker, 'utf8').trim(), '', 'no per-run token is minted on win32');
+  assert.equal(jobsLib.readScheduleState(paths).dream.last_status, 'ok');
 });
 
 // -------------------------------------------------------------------------
