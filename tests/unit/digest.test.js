@@ -555,6 +555,94 @@ test('listSecretQuarantine: lists sanitized basenames; missing dir → []', () =
   assert.deepEqual(listSecretQuarantine(stateDir), ['2026-07-17-leak.md'], 'dotfiles/tmp excluded, content never read');
 });
 
+// ── A3 hash-gate TOCTOU + accurate banner reason (WP-identity-digest-hashgate-toctou) ──
+
+test('TOCTOU closed: each identity file is read exactly once per render (hash+parse share one read)', () => {
+  const tmp = tmpVault();
+  const map = approvals(tmp); // computed before the seam so its reads are not counted
+  const idDir = path.join(tmp, '06-Identity');
+  const targets = ['profile.md', 'preferences.md', 'goals.md', 'instructions.md'].map((f) => path.join(idDir, f));
+  /** @type {Map<string, number>} */
+  const counts = new Map();
+  const realRead = fs.readFileSync;
+  // Seam: digest.js shares this module object, so rebinding readFileSync counts
+  // exactly the reads the render performs. A TOCTOU second read would show as 2.
+  fs.readFileSync = (p, ...rest) => {
+    if (typeof p === 'string' && targets.includes(p)) counts.set(p, (counts.get(p) || 0) + 1);
+    return realRead(p, ...rest);
+  };
+  let digest;
+  try {
+    digest = renderDigest(tmp, undefined, { identityApprovals: map });
+  } finally {
+    fs.readFileSync = realRead;
+  }
+  for (const t of targets) {
+    assert.equal(counts.get(t), 1, `exactly one read of ${path.basename(t)} — no second read, no TOCTOU window`);
+  }
+  assert.ok(digest.includes('Ada Kovács'), 'approved identity still injected via the single read');
+});
+
+test('the injected identity body derives from the hashed bytes, not a post-gate re-read', () => {
+  const tmp = tmpVault();
+  const map = approvals(tmp);
+  const profileAbs = path.join(tmp, '06-Identity', 'profile.md');
+  const realRead = fs.readFileSync;
+  let profileReads = 0;
+  // On any read AFTER the first (the hashed one), swap in unapproved content —
+  // exactly what a concurrent writer / symlink swap would do in a TOCTOU window.
+  // The fixed gate reads once and parses that same buffer, so the swap never lands.
+  fs.readFileSync = (p, ...rest) => {
+    if (p === profileAbs) {
+      profileReads += 1;
+      if (profileReads > 1) return Buffer.from('---\nid: p\ntype: identity\n---\n\nTAMPERED-SWAP\n');
+    }
+    return realRead(p, ...rest);
+  };
+  let digest;
+  try {
+    digest = renderDigest(tmp, undefined, { identityApprovals: map });
+  } finally {
+    fs.readFileSync = realRead;
+  }
+  assert.ok(digest.includes('Ada Kovács'), 'body comes from the first (hashed) read');
+  assert.ok(!digest.includes('TAMPERED-SWAP'), 'no post-hash re-read can inject unapproved content');
+});
+
+test('banner reason: unrecorded file → "not yet approved"; recorded-but-changed → "changed since…"', () => {
+  // Never-approved: present on disk, no slot in the supplied approvals map.
+  const tmp1 = tmpVault();
+  const map1 = approvals(tmp1);
+  delete map1['06-identity/profile.md'];
+  const d1 = renderDigest(tmp1, undefined, { identityApprovals: map1 });
+  assert.ok(!d1.includes('Ada Kovács'), 'unapproved profile omitted');
+  assert.ok(
+    d1.includes('profile.md (not yet approved — run `wienerdog memory approve`)'),
+    'never-approved reason names the file'
+  );
+  assert.ok(!d1.includes('profile.md (changed since you last approved it)'), 'not the changed reason');
+  assert.ok(d1.includes('## Preferences'), 'other approved sections still render');
+
+  // Recorded-but-changed: approved baseline, then a one-byte edit.
+  const tmp2 = tmpVault();
+  const map2 = approvals(tmp2);
+  fs.appendFileSync(path.join(tmp2, '06-Identity', 'profile.md'), 'x');
+  const d2 = renderDigest(tmp2, undefined, { identityApprovals: map2 });
+  assert.ok(d2.includes('profile.md (changed since you last approved it)'), 'changed reason for a recorded file');
+  assert.ok(!d2.includes('not yet approved'), 'not the never-approved reason');
+});
+
+test('parseNoteResult is exported and pure (no fs): same classification on already-read text', () => {
+  const { parseNoteResult } = require('../../src/core/digest');
+  assert.equal(typeof parseNoteResult, 'function', 'exported for reuse (daily-summary bounded read)');
+  const ok = parseNoteResult('---\nid: p\ntype: identity\norigin: interview\nstatus: active\n---\n\n# Title\n\nHello.\n');
+  assert.equal(ok.exclusion, null, 'well-formed trusted note → no exclusion');
+  assert.ok(ok.note.body.includes('# Title') && ok.note.body.includes('Hello.'), 'body carried through');
+  assert.equal(parseNoteResult('---\nderived_from_untrusted: true\n---\n\nx\n').exclusion, 'untrusted-exact');
+  assert.equal(parseNoteResult('---\nderived_from_untrusted: True\n---\n\nx\n').exclusion, 'untrusted-invalid');
+  assert.equal(parseNoteResult('---\n  bad: indent\n---\n\nx\n').exclusion, 'malformed');
+});
+
 test('insecureModes: a positive count renders the fixed banner in the prefix; 0/absent stay golden (WP-126)', () => {
   const golden = fs.readFileSync(GOLDEN, 'utf8');
   const withBanner = renderDigest(FIXTURE, undefined, { identityApprovals: approvals(FIXTURE), insecureModes: 3 });

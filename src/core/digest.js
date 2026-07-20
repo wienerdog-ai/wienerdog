@@ -51,13 +51,16 @@ const DigestCaps = {
  * @param {string} filePath
  * @returns {ReadNoteResult}
  */
-function readNote(filePath) {
-  let text;
-  try {
-    text = fs.readFileSync(filePath, 'utf8');
-  } catch {
-    return { note: null, exclusion: 'absent' };
-  }
+/**
+ * The parse + provenance gate on ALREADY-READ text (no fs). Same exclusion
+ * classes as {@link readNote}, minus 'absent' (which only a failed read yields).
+ * Factored out so the identity gate can hash a buffer AND parse the SAME buffer
+ * (no second read → no TOCTOU window); also reused by the daily-summary bounded
+ * read. Pure.
+ * @param {string} text
+ * @returns {ReadNoteResult}
+ */
+function parseNoteResult(text) {
   const fm = parse(text);
   // Malformed block → exclude unconditionally (fail-closed uniformity), warn.
   if (fm.malformed) return { note: null, exclusion: 'malformed' };
@@ -67,6 +70,16 @@ function readNote(filePath) {
   // undefined (absent) or exactly false → trusted → render.
   const data = Object.fromEntries(fm.fields); // shape stability for the return type
   return { note: { data, body: fm.body }, exclusion: null };
+}
+
+function readNote(filePath) {
+  let text;
+  try {
+    text = fs.readFileSync(filePath, 'utf8');
+  } catch {
+    return { note: null, exclusion: 'absent' };
+  }
+  return parseNoteResult(text);
 }
 
 /** @param {string} line @returns {boolean} */
@@ -390,11 +403,20 @@ function renderDigest(vaultDir, layout = defaultLayout(), opts = {}) {
     // bare test render with no map omits identity SILENTLY (fail closed).
     const foldedRel = foldKey(`${layout.identity_dir}/${file}`);
     if (approvals[foldedRel] !== hashBytes(bytes)) {
-      if (opts.identityApprovals !== undefined) identityExclusions.push({ file, reason: 'changed since you last approved it' });
+      if (opts.identityApprovals !== undefined) {
+        // Accurate reason: an unrecorded file was never approved; a differing
+        // hash for a recorded file changed since approval.
+        const reason = approvals[foldedRel] === undefined
+          ? 'not yet approved — run `wienerdog memory approve`'
+          : 'changed since you last approved it';
+        identityExclusions.push({ file, reason });
+      }
       continue;
     }
     // WP-114 provenance gate on top (structured result → SAME exclusion list).
-    const r = readNote(abs);
+    // Parse the SAME bytes just hashed (no second read → no TOCTOU window): the
+    // injected body derives from exactly the buffer whose hash passed the gate.
+    const r = parseNoteResult(bytes.toString('utf8'));
     if (!r.note) {
       if (r.exclusion === 'malformed') identityExclusions.push({ file, reason: 'malformed frontmatter' });
       else if (r.exclusion === 'untrusted-invalid') identityExclusions.push({ file, reason: 'unclear derived_from_untrusted value' });
@@ -521,4 +543,4 @@ function listSecretQuarantine(stateDir) {
   }
 }
 
-module.exports = { renderDigest, listSecretQuarantine, DigestCaps };
+module.exports = { renderDigest, listSecretQuarantine, parseNoteResult, DigestCaps };
