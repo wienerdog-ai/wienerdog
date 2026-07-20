@@ -12,6 +12,7 @@ const {
   seedApprovals, identityStatus,
 } = require('../../src/core/identity-approvals');
 const { defaultLayout } = require('../../src/core/layout');
+const { allowAll } = require('../../src/core/safety-profile');
 
 /** Fresh temp state dir + vault with the four identity files. */
 function setup() {
@@ -82,6 +83,32 @@ test('seedApprovals records present files once (source setup) and NEVER re-seeds
   fs.appendFileSync(path.join(vaultDir, '06-Identity', 'profile.md'), 'tampered\n');
   assert.deepEqual(seedApprovals(stateDir, vaultDir, layout).seeded, []);
   assert.equal(readRegistry(stateDir).approvals[key].approved_blob_hash, originalHash, 'stale hash kept');
+});
+
+test('seedApprovals no-ops under an allowed gate (allowAll) even for first-appearance files', () => {
+  const { stateDir, vaultDir } = setup();
+  const layout = defaultLayout();
+  // Gate open (dream may author these) → the no-TTY auto-seed refuses: writes
+  // nothing, records nothing. Ratification is TTY `memory approve` only.
+  assert.deepEqual(seedApprovals(stateDir, vaultDir, layout, allowAll()).seeded, []);
+  assert.equal(fs.existsSync(registryPath(stateDir)), false, 'no registry written');
+  assert.deepEqual(readRegistry(stateDir).approvals, {});
+});
+
+test('seedApprovals under allowAll re-seeds nothing on registry loss (fail closed, not fail open)', () => {
+  const { stateDir, vaultDir } = setup();
+  const layout = defaultLayout();
+  // Simulate registry loss: readRegistry → {approvals:{}}. With the gate open the
+  // "re-seed all four from current (possibly dream-modified) bytes" path is refused.
+  assert.deepEqual(seedApprovals(stateDir, vaultDir, layout, allowAll()).seeded, []);
+  assert.deepEqual(readRegistry(stateDir).approvals, {});
+});
+
+test('seedApprovals still seeds under a blocked profile (frozen-era behavior unchanged)', () => {
+  const { stateDir, vaultDir } = setup();
+  const layout = defaultLayout();
+  // The default profile is the production (frozen → blocked) profile: seeds as today.
+  assert.equal(seedApprovals(stateDir, vaultDir, layout).seeded.length, 4);
 });
 
 test('seedApprovals skips absent files and seeds them on a later sync when they appear', () => {

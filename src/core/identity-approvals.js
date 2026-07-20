@@ -5,6 +5,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 
 const { WienerdogError } = require('./errors');
+const { isCapabilityAllowed, CAPABILITY } = require('./safety-profile');
 
 // The identity trust registry (audit A3, ADR-0021): a code-owned 0600 JSON file
 // recording, per injected identity file, the sha256 of the EXACT bytes a human
@@ -132,16 +133,23 @@ function approvalsFromVault(vaultDir, layout) {
 }
 
 /**
- * FIRST-TIME seed only: record the current exact-byte hash of each present
- * injected identity file that has NO record yet (source 'setup'). NEVER re-seeds
- * an existing record (a change requires `wienerdog memory approve`, WP-117 —
+ * FIRST-TIME seed only, and ONLY while identity-auto-activation is BLOCKED
+ * (ADR-0021 amendment 1): record the current exact-byte hash of each present
+ * injected identity file that has NO record yet (source 'setup'). When the gate is
+ * ALLOWED the dream may author these files, so a no-TTY "trust current bytes" seed
+ * would auto-trust dream output — refused (returns {seeded:[]}, writes nothing);
+ * ratification then goes through `wienerdog memory approve` (recordApproval, TTY).
+ * NEVER re-seeds an existing record (a change requires `memory approve`, WP-117 —
  * re-seeding on change would let a post-setup tamper become approved by running
- * `sync`, forbidden by ADR-0021). Persists iff something was added.
+ * `sync`, forbidden by ADR-0021). Persists iff something was added. `profile`
+ * defaults to the production profile (a code seam for tests only).
  * @param {string} stateDir @param {string} vaultDir
  * @param {import('./layout').VaultLayout} layout
+ * @param {Record<string,string>} [profile]
  * @returns {{seeded: string[]}} folded keys added
  */
-function seedApprovals(stateDir, vaultDir, layout) {
+function seedApprovals(stateDir, vaultDir, layout, profile) {
+  if (isCapabilityAllowed(CAPABILITY.IDENTITY_AUTO_ACTIVATION, profile)) return { seeded: [] };
   const registry = readRegistry(stateDir);
   /** @type {string[]} */
   const seeded = [];

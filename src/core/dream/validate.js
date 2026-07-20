@@ -766,8 +766,14 @@ function validateAndCommit(o) {
 
   // Tier-3 directories resolve from the layout (mapped identity + skills dirs);
   // the floor thresholds above are layout-independent.
-  const tier3Prefixes = [layout.identity_dir + '/', layout.skills_dir + '/'];
-  const isTier3 = (rel) => tier3Prefixes.some((p) => rel.startsWith(p));
+  // The identity-dir prefix matches case-insensitively (mirror isInjectedIdentity,
+  // WP-116/ADR-0021): a case-variant identity dir (e.g. 06-identity/) is the same
+  // inode on a case-insensitive FS, so its write must still enter the Tier-3 block
+  // and hit the freeze revert. The skills-dir prefix stays case-sensitive.
+  const idPrefix = (layout.identity_dir + '/').toLowerCase();
+  const skillsPrefix = layout.skills_dir + '/';
+  const isTier3 = (rel) =>
+    String(rel).toLowerCase().startsWith(idPrefix) || rel.startsWith(skillsPrefix);
 
   // Preconditions (the caller checks these before the brain runs; re-assert).
   assertGitRepo(vaultDir);

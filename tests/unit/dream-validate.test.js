@@ -196,6 +196,20 @@ test('dream-validate: a case-variant add (06-Identity/Profile.md) also hits the 
   );
 });
 
+test('dream-validate: a case-variant identity DIR add (06-identity/profile.md) hits the freeze branch under the frozen profile', () => {
+  const { vault, scratch } = tempVault();
+  // Lowercase DIR spelling: before the case-insensitive isTier3 fix this never
+  // entered the Tier-3 block (case-sensitive prefix), so the freeze revert was
+  // never consulted — yet on a case-insensitive FS it is the same identity dir.
+  writeVault(vault, '06-identity/profile.md', FM({ confidence: '0.9', recurrence: '3', derived_from_untrusted: 'false' }));
+  const res = validateAndCommit({ vaultDir: vault, scratchDir: scratch, date: '2026-07-02', expectedScratch: [] });
+  assert.equal(fs.existsSync(path.join(vault, '06-identity/profile.md')), false, 'reverted, not committed');
+  assert.ok(
+    res.reverted.some((r) => r.path === '06-identity/profile.md' && /identity activation is frozen/.test(r.reason)),
+    'case-variant dir recorded as reverted with the identity-frozen reason'
+  );
+});
+
 test('dream-validate: passing { profile: allowAll() } keeps a floor-passing injected identity write (Tier-3-governed, not a blanket ban)', () => {
   const { vault, scratch } = tempVault();
   writeVault(vault, '06-Identity/profile.md', FM({ confidence: '0.9', recurrence: '3', derived_from_untrusted: 'false' }));
