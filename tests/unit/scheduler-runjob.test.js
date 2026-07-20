@@ -533,115 +533,104 @@ test('scheduler-runjob: R4-A — catchUp over a log-open failure leaves the erro
   assert.deepEqual(alerts, ['job dream failed'], 'the alert fired on the catch-up path too');
 });
 
-test('scheduler-runjob: F7/F9 — a symlinked core/logs/<job> fails loud, rotateLogs deletes NO external files, and an anomalous core takes ZERO writes', { skip: process.platform === 'win32' }, async () => {
-  // Build an external dir holding >LOG_KEEP (14) timestamp-shaped logs; if
-  // rotateLogs ran through the refused symlink it would delete files[14:].
-  const plantExternalLogs = (n) => {
-    const ext = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-ext-logs-'));
-    for (let i = 0; i < n; i += 1) {
-      fs.writeFileSync(path.join(ext, `2026-07-04T00-00-${String(i).padStart(2, '0')}-000Z.log`), 'x');
+const countLogs = (d) => fs.readdirSync(d).filter((f) => /Z\.log$/.test(f)).length;
+
+/** Snapshot a whole tree: relpath → `mode:base64` for files, `dir:mode` for dirs. */
+const treeSnapshot = (base) => {
+  const out = {};
+  const walk = (d) => {
+    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+      const abs = path.join(d, e.name);
+      const rel = path.relative(base, abs);
+      const mode = fs.lstatSync(abs).mode & 0o777;
+      if (e.isDirectory()) { out[rel] = `dir:${mode}`; walk(abs); }
+      else out[rel] = `${mode}:${fs.readFileSync(abs).toString('base64')}`;
     }
-    return ext;
   };
-  const countLogs = (d) => fs.readdirSync(d).filter((f) => /Z\.log$/.test(f)).length;
+  walk(base);
+  return out;
+};
 
-  // --- (a) symlinked logs/<job>: core+logs real, logs/dream → external ---
-  {
-    const { root, env, paths } = setup();
-    jobsLib.saveJob(paths, { name: 'dream', at: '03:30', run: 'builtin:dream', timeoutMinutes: 20 });
-    const fake = writeScript(root, 'ok.sh', ['#!/bin/sh', 'exit 0']);
-    const ext = plantExternalLogs(20);
-    fs.symlinkSync(ext, path.join(paths.logs, 'dream')); // logs/dream IS a symlink to the external dir
-    /** @type {string[]} */ const alerts = [];
-    const sendAlert = (_p, _n, subject) => (alerts.push(subject), { status: 0 });
-
-    await assert.rejects(
-      withRun(env, {}, ['dream'], { resolveCommand: fakeResolve(fake), sendAlert, loader: noopLoader }),
-      /symlink is in the way|ancestor .* is a symlink|core is a symlink/
-    );
-    assert.equal(jobsLib.readScheduleState(paths).dream.last_status, 'error', 'failed loud (error watermark)');
-    assert.deepEqual(alerts, ['job dream failed'], 'fail-loud alert fired');
-    assert.equal(countLogs(ext), 20, 'rotateLogs deleted NO external files through the symlinked logs/<job>');
+test('scheduler-runjob: F7 — a symlinked logs/<job> fails loud (real core watermark) and rotateLogs deletes NO external files', { skip: process.platform === 'win32' }, async () => {
+  const { root, env, paths } = setup();
+  jobsLib.saveJob(paths, { name: 'dream', at: '03:30', run: 'builtin:dream', timeoutMinutes: 20 });
+  const fake = writeScript(root, 'ok.sh', ['#!/bin/sh', 'exit 0']);
+  const ext = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-ext-logs-'));
+  for (let i = 0; i < 20; i += 1) {
+    fs.writeFileSync(path.join(ext, `2026-07-04T00-00-${String(i).padStart(2, '0')}-000Z.log`), 'x');
   }
+  // logs/<job> is a DEEPER path (not a top-level protected dir), so it is NOT the
+  // entry gate's job — it is refused per-write by mkdirPrivate, and rotateLogs is
+  // skipped on the refused open. core/state/logs are all real here.
+  fs.symlinkSync(ext, path.join(paths.logs, 'dream'));
+  /** @type {string[]} */ const alerts = [];
+  const sendAlert = (_p, _n, subject) => (alerts.push(subject), { status: 0 });
 
-  // --- (b) symlinked logs/: core real, logs → external ---
-  {
+  await assert.rejects(
+    withRun(env, {}, ['dream'], { resolveCommand: fakeResolve(fake), sendAlert, loader: noopLoader }),
+    /symlink is in the way|ancestor .* is a symlink/
+  );
+  assert.equal(jobsLib.readScheduleState(paths).dream.last_status, 'error', 'failed loud (real-core error watermark)');
+  assert.deepEqual(alerts, ['job dream failed'], 'fail-loud alert fired');
+  assert.equal(countLogs(ext), 20, 'rotateLogs deleted NO external files through the symlinked logs/<job>');
+});
+
+test('scheduler-runjob: F12/F13 — the entry gate refuses EVERY top-level protected symlink (core/state/logs/secrets) on named-job AND empty catch-up, ZERO external writes', { skip: process.platform === 'win32' }, async () => {
+  for (const target of ['core', 'state', 'logs', 'secrets']) {
     const { root, env, paths } = setup();
     jobsLib.saveJob(paths, { name: 'dream', at: '03:30', run: 'builtin:dream', timeoutMinutes: 20 });
     const fake = writeScript(root, 'ok.sh', ['#!/bin/sh', 'exit 0']);
-    fs.rmSync(paths.logs, { recursive: true, force: true });
-    const ext = plantExternalLogs(20);
-    fs.mkdirSync(path.join(ext, 'dream'), { recursive: true });
-    for (let i = 0; i < 20; i += 1) {
-      fs.writeFileSync(path.join(ext, 'dream', `2026-07-04T00-00-${String(i).padStart(2, '0')}-000Z.log`), 'x');
+
+    // `ext` is the external dir the chosen protected path is a symlink to; snapshot
+    // it before and assert byte+mode-identical after both dispatches.
+    let ext;
+    if (target === 'core') {
+      // Relocate the whole real core to `ext`, then symlink core → ext.
+      ext = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-ext-core-'));
+      for (const name of fs.readdirSync(paths.core)) fs.renameSync(path.join(paths.core, name), path.join(ext, name));
+      fs.rmSync(paths.core, { recursive: true, force: true });
+      fs.mkdirSync(path.join(ext, 'logs', 'dream'), { recursive: true });
+      fs.symlinkSync(ext, paths.core);
+    } else {
+      // core stays REAL; replace ONLY the one protected subdir with a symlink to
+      // an external dir (state/logs/secrets), isolating that single anomaly.
+      ext = fs.mkdtempSync(path.join(os.tmpdir(), `wd-ext-${target}-`));
+      const linkPath = paths[target];
+      fs.rmSync(linkPath, { recursive: true, force: true }); // setup() made state/logs real; secrets is absent
+      if (target === 'logs') fs.mkdirSync(path.join(ext, 'dream'), { recursive: true });
+      fs.symlinkSync(ext, linkPath);
     }
-    fs.symlinkSync(ext, paths.logs); // logs/ IS a symlink to the external dir
+    // Plant 20 timestamp logs in the external logs/<job> dir so a rogue rotateLogs
+    // would delete files[14:] — assert none are.
+    const extJobLogs = target === 'logs' ? path.join(ext, 'dream') : path.join(ext, 'logs', 'dream');
+    if (fs.existsSync(extJobLogs)) {
+      for (let i = 0; i < 20; i += 1) {
+        fs.writeFileSync(path.join(extJobLogs, `2026-07-04T00-00-${String(i).padStart(2, '0')}-000Z.log`), 'x');
+      }
+    }
+
+    const before = treeSnapshot(ext);
     /** @type {string[]} */ const alerts = [];
     const sendAlert = (_p, _n, subject) => (alerts.push(subject), { status: 0 });
 
+    // (i) named-job dispatch → gate refuses at entry (before probes/runJob).
     await assert.rejects(
       withRun(env, {}, ['dream'], { resolveCommand: fakeResolve(fake), sendAlert, loader: noopLoader }),
-      /ancestor .* is a symlink|symlink is in the way|core is a symlink/
+      /symlink or non-directory at a top-level protected path/,
+      `${target}: named-job dispatch must refuse at the entry gate`
     );
-    assert.equal(jobsLib.readScheduleState(paths).dream.last_status, 'error', 'failed loud');
-    assert.equal(countLogs(path.join(ext, 'dream')), 20, 'no external files deleted through the symlinked logs/');
-  }
-
-  // --- (c) F9: symlinked CORE → ZERO external mutations + loud NON-CORE surface ---
-  {
-    const { root, env, paths } = setup();
-    jobsLib.saveJob(paths, { name: 'dream', at: '03:30', run: 'builtin:dream', timeoutMinutes: 20 });
-    const fake = writeScript(root, 'ok.sh', ['#!/bin/sh', 'exit 0']);
-    const extCore = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-ext-core-'));
-    // Relocate the real core's contents into extCore, then symlink core → extCore.
-    for (const name of fs.readdirSync(paths.core)) {
-      fs.renameSync(path.join(paths.core, name), path.join(extCore, name));
-    }
-    fs.rmSync(paths.core, { recursive: true, force: true });
-    fs.mkdirSync(path.join(extCore, 'logs', 'dream'), { recursive: true });
-    for (let i = 0; i < 20; i += 1) {
-      fs.writeFileSync(path.join(extCore, 'logs', 'dream', `2026-07-04T00-00-${String(i).padStart(2, '0')}-000Z.log`), 'x');
-    }
-    fs.symlinkSync(extCore, paths.core); // core IS a pre-existing symlink to the external core
-
-    // Snapshot the WHOLE external tree (relpath → mode:content|dir) before the run.
-    const snapshot = (base) => {
-      const out = {};
-      const walk = (d) => {
-        for (const e of fs.readdirSync(d, { withFileTypes: true })) {
-          const abs = path.join(d, e.name);
-          const rel = path.relative(base, abs);
-          const mode = fs.lstatSync(abs).mode & 0o777;
-          if (e.isDirectory()) {
-            out[rel] = `dir:${mode}`;
-            walk(abs);
-          } else {
-            out[rel] = `${mode}:${fs.readFileSync(abs).toString('base64')}`;
-          }
-        }
-      };
-      walk(base);
-      return out;
-    };
-    const before = snapshot(extCore);
-    /** @type {string[]} */ const alerts = [];
-    const sendAlert = (_p, _n, subject) => (alerts.push(subject), { status: 0 });
-
-    // update_check:false keeps run()'s maybeRefresh a no-op, so nothing writes the
-    // external core before runJob's F9 guard routes the failure to stderr+email.
+    // (ii) EMPTY catch-up dispatch (F13) → gate refuses BEFORE catchUp runs.
     await assert.rejects(
-      withRun(env, {}, ['dream'], { resolveCommand: fakeResolve(fake), sendAlert, loader: noopLoader }),
-      /core is a symlink or not a directory|core is a symlink/
+      withRun(env, {}, ['--catch-up'], { resolveCommand: fakeResolve(fake), sendAlert, loader: noopLoader, now: new Date() }),
+      /symlink or non-directory at a top-level protected path/,
+      `${target}: catch-up dispatch must refuse at the entry gate`
     );
 
-    // (a) ZERO external mutations anywhere in the external tree (byte+mode).
-    assert.deepEqual(snapshot(extCore), before, 'an anomalous core → NOTHING written/renamed/chmodded/deleted under it');
-    // (b) loud via the NON-CORE channel (the injected email alert), NOT appendAlert.
-    assert.deepEqual(alerts, ['job dream failed'], 'failure surfaced via the non-core email channel');
-    // (c) NO schedule.json watermark written in the external tree.
-    assert.equal(fs.existsSync(path.join(extCore, 'state', 'schedule.json')), false, 'no watermark written through the symlinked core');
-    assert.equal(fs.existsSync(path.join(extCore, 'state', 'alerts.jsonl')), false, 'no durable alert written through the symlinked core');
-    assert.equal(countLogs(path.join(extCore, 'logs', 'dream')), 20, 'rotateLogs deleted no external files');
+    assert.deepEqual(treeSnapshot(ext), before, `${target}: an untrusted root → ZERO external mutations (no watermark, no lock, no probe cache)`);
+    assert.deepEqual(alerts, ['job dream failed', 'job catchup failed'], `${target}: both dispatches surfaced via the non-core email channel`);
+    if (fs.existsSync(extJobLogs)) {
+      assert.equal(countLogs(extJobLogs), 20, `${target}: rotateLogs deleted no external files`);
+    }
   }
 });
 

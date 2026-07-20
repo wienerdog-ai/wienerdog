@@ -831,7 +831,7 @@ test('dream-integration: F9 — a symlinked core is REFUSED before any core writ
       else process.env[k] = saved[k];
     }
   }
-  assert.ok(thrown && /is a symlink or not a directory/.test(thrown.message), `dream must refuse a symlinked core (got ${thrown && thrown.message})`);
+  assert.ok(thrown && /symlink or non-directory at a top-level protected path/.test(thrown.message), `dream must refuse a symlinked core (got ${thrown && thrown.message})`);
   assert.deepEqual(snapshot(extCore), before, 'an anomalous core → dream writes NOTHING under it (no lock, no scratch, no digest)');
 });
 

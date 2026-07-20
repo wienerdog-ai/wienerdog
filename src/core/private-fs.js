@@ -28,12 +28,15 @@ const { WienerdogError } = require('./errors');
  * unconditional "never follows symlinks". A PRE-EXISTING symlink is caught at
  * EVERY position × phase — `{root, intermediate, leaf}` × `{enumerate,
  * dir-chmod, file-chmod, 000-fallback, mkdir, open-write, temp-write}` AND on the
- * FAILURE path (F9: an anomalous core → no core-local writer runs; the failure
+ * FAILURE path AND the whole top-level protected set (F9/F12/F13: a single
+ * `mechanicsRootUntrusted` entry gate over core/state/logs/secrets refuses at
+ * the top of `run()`/`dream.run` before ANY dispatch mode or writer; the failure
  * surfaces via a non-core channel, stderr + email):
  *  - ROOT: `coreRootContext` opens the core `O_DIRECTORY|O_NOFOLLOW` + fstat
  *    before trusting its realpath — a symlinked/non-dir core is an anomaly, NO
- *    descendant is enumerated/repaired, every WRITE refuses, and the run-job/
- *    dream failure paths write NOTHING under it (`coreAnomalous`; G5/F3/F5/F9);
+ *    descendant is enumerated/repaired, every WRITE refuses, and the entry gate
+ *    (`mechanicsRootUntrusted` over core/state/logs/secrets) refuses every
+ *    dispatch — runJob, catchUp (named + empty), dream, probes (G5/F3/F5/F9/F12/F13);
  *  - INTERMEDIATE: repair revalidates each opened fd by (dev, ino) against the
  *    classifying lstat (a redirected open → different inode → refused, G3); the
  *    write helpers validate the whole in-core ancestor chain
@@ -61,11 +64,16 @@ const { WienerdogError } = require('./errors');
  *       rename out-of-tree AND, via `rotateLogs`, silently DELETE external files
  *       (F11 adds a cheap lstat-first guard that narrows but cannot close it).
  *   W3. mode-000 lstat → path-`chmodSync` (`applyModeFallback`): worst case ONE
- *       chmod on a swapped target, surfaced LOUDLY via a thrown error.
+ *       chmod on a swapped target. The post-chmod (dev, ino) re-lstat surfaces it
+ *       LOUDLY only if the substitution PERSISTS through revalidation — an ABA
+ *       swap (restore the original inode before the final lstat) DEFEATS the
+ *       check and chmods one external target SILENTLY (F14). Detection is
+ *       conditional, NOT unconditional loudness.
  *   W4. temp O_EXCL-open → rename-target substitution (`writeFilePrivate`): a
  *       concurrent unlink+symlink at the temp name makes rename land a foreign
  *       target. F10 DETECTS it (post-rename (dev,ino) lstat → loud throw) —
- *       detection, NOT prevention (the race already happened).
+ *       detection, NOT prevention, and (like W3) an ABA swap that restores the
+ *       inode before the check defeats detection.
  * In every window the attacker must ALREADY hold concurrent owner-level write
  * access inside the already-0700 core.
  */
@@ -917,15 +925,24 @@ function createLogStreamPrivate(file, opts = {}) {
   return fs.createWriteStream(file, { fd }); // stream on the verified fd
 }
 
-/** True IFF the Wienerdog core is a PRE-EXISTING symlink or a non-directory —
- *  an untrusted root that NOTHING may be written/renamed/chmodded/deleted under
- *  (F9). A missing core (nothing installed yet) is NOT anomalous. Callers on the
- *  failure path use this to skip every core-local writer and surface loudly via
- *  a non-core channel. POSIX-only (win32 → false, matching the module posture).
+/** True IFF ANY top-level protected directory the runtime writes to —
+ *  `core`, `state`, `logs`, OR `secrets` — is a PRE-EXISTING symlink or a
+ *  non-directory (F9/F12): an UNTRUSTED mechanics root that NOTHING may be
+ *  written/renamed/chmodded/deleted under. Each is classified by the same
+ *  `coreRootContext` `O_DIRECTORY|O_NOFOLLOW`+fstat logic (a symlink/non-dir →
+ *  anomaly; a MISSING dir → NOT anomalous, a fresh install the writers create
+ *  real). This is the SINGLE ENTRY GATE — `run()` and `dream.run` call it once,
+ *  before ANY dispatch mode or writer, and refuse via a non-core channel on
+ *  true. (Deeper paths — `logs/<job>`, `secrets/<file>` — stay covered per-write
+ *  by `assertInCoreAncestry`; this gate covers the top-level dirs.) POSIX-only
+ *  (win32 → false, matching the module posture).
  *  @param {import('./paths').WienerdogPaths} paths @returns {boolean} */
-function coreAnomalous(paths) {
+function mechanicsRootUntrusted(paths) {
   if (WIN32) return false;
-  return coreRootContext(paths).coreAnomaly === true;
+  for (const dir of [paths.core, paths.state, paths.logs, paths.secrets]) {
+    if (dir && coreRootContext({ core: dir }).coreAnomaly === true) return true;
+  }
+  return false;
 }
 
 module.exports = {
@@ -935,7 +952,7 @@ module.exports = {
   repairPrivateModes,
   scanPrivateModes,
   insecureEntries,
-  coreAnomalous,
+  mechanicsRootUntrusted,
   A5_PRIVATE_DIRS,
   A5_PRIVATE_FILE_BASENAMES,
   A9_PRIVATE_DIRS,

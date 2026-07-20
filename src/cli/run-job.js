@@ -18,7 +18,7 @@ const tccguard = require('../scheduler/tccguard');
 const { requireCapability, CAPABILITY } = require('../core/safety-profile');
 const { detectPolicyHooks } = require('../core/policy-hooks');
 const { recordRunEvidence } = require('../core/run-evidence');
-const { mkdirPrivate, createLogStreamPrivate, coreAnomalous } = require('../core/private-fs');
+const { mkdirPrivate, createLogStreamPrivate, mechanicsRootUntrusted } = require('../core/private-fs');
 const { settingsDigest } = require('../core/runtime-settings');
 const reap = require('../core/reap');
 
@@ -649,36 +649,13 @@ function safeResolvePath(input, guard, hopCap = 40) {
 async function runJob(paths, job, opts = {}) {
   const name = job.name;
   const platform = opts.platform || process.platform;
-
-  // F9 (WP-a9, ADR-0027): if the Wienerdog core is a PRE-EXISTING symlink/non-dir
-  // (an untrusted root), NOTHING may be written/renamed/chmodded/deleted under it
-  // — on the success OR the failure path. Detect it ONCE up front; when anomalous,
-  // record every failure through a NON-CORE channel only (stderr + the injected
-  // email alert), never writeScheduleState (a core-local schedule.json write that
-  // FOLLOWS the symlink into the external tree) or failLoud→appendAlert (whose
-  // mkdirPrivate would refuse the core and its outer catch would SILENTLY swallow
-  // the alert). The private log open below already refuses on an anomalous core.
-  const coreAnom = coreAnomalous(paths);
-  /** @param {string} reason record a failure without touching an anomalous core. */
-  const recordFailure = async (reason) => {
-    if (coreAnom) {
-      process.stderr.write(
-        `wienerdog: job "${name}" failed AND the Wienerdog core (${paths.core}) is a symlink or not a directory — ` +
-          `refusing to write anything under it (no watermark, no durable alert). ${reason}\n`
-      );
-      // Non-core surface only: the email alert (reads config, writes nothing to
-      // the core). Best-effort; never throws.
-      try {
-        (opts.sendAlert || defaultSendAlert)(paths, name, `job ${name} failed`, reason);
-      } catch {
-        /* email best-effort */
-      }
-      return;
-    }
-    jobsLib.writeScheduleState(paths, name, { last_status: 'error', last_error_at: nowIso() });
-    await failLoud(paths, name, reason, opts);
-  };
-
+  // NOTE (F9/F12/F13): runJob assumes a TRUSTED mechanics root — the single entry
+  // gate in run() (and dream.run) refuses BEFORE any dispatch when core/state/
+  // logs/secrets is a pre-existing symlink/non-dir, so the core-local writers
+  // below (writeScheduleState watermark, failLoud→appendAlert) run only on a real
+  // core. catchUp reaches runJob only via that gated run(), so it inherits the
+  // guarantee. (Deeper log-path symlinks are still refused per-write by
+  // mkdirPrivate/assertInCoreAncestry; rotateLogs is guarded on the private open.)
   const vaultDir = readDreamConfig(paths.config).vault; // throws if no vault configured
   const cwd = vaultDir;
 
@@ -723,7 +700,8 @@ async function runJob(paths, job, opts = {}) {
     const reason =
       `refused: ${g.offending} is under a macOS protected folder (${g.prefix}) — ` +
       'move the vault to ~/wienerdog';
-    await recordFailure(reason); // F9: skips core-local writers on an anomalous core
+    jobsLib.writeScheduleState(paths, name, { last_status: 'error', last_error_at: nowIso() });
+    await failLoud(paths, name, reason, opts);
     throw new WienerdogError(`job "${name}" ${reason}`);
   }
 
@@ -962,24 +940,21 @@ async function runJob(paths, job, opts = {}) {
   if (reapFailure && (failure || code !== 0)) {
     reason += ` — and it ${reapFailure.reason}`;
   }
-  if (coreAnom) {
-    // F9: an anomalous core → surface via stderr + email only, write NOTHING
-    // under it (no watermark, no durable alert, no pidfile touch).
-    await recordFailure(reason);
-  } else {
-    jobsLib.writeScheduleState(paths, name, { last_status: 'error', last_error_at: nowIso() });
-    const alertPersisted = await failLoud(paths, name, reason, opts);
-    // F3 + G2 (WP-a10-reap fix-pass): the durable alert IS the record of the
-    // un-reapable group, so release the still-retained token pidfile(s) — but
-    // ONLY when that alert actually persisted (G2). If alerts.jsonl could not be
-    // written (disk exhaustion), the pidfile is the SOLE surviving record of the
-    // survivor's recovery identity (its PGID) — RETAIN it as the fallback rather
-    // than delete a never-recorded survivor. No later run reads this run's token,
-    // so a persisted alert makes the file a never-read hollow leftover; an
-    // unpersisted alert makes it the only recovery breadcrumb.
-    if (reapFailure && alertPersisted) {
-      for (const f of reapFailure.files) rmPidfile(f);
-    }
+  // The mechanicsRootUntrusted entry gate (top of run()) refuses an anomalous
+  // core before any dispatch, so runJob only ever runs on a trusted core — the
+  // failure path writes the watermark + fail-loud alert normally.
+  jobsLib.writeScheduleState(paths, name, { last_status: 'error', last_error_at: nowIso() });
+  const alertPersisted = await failLoud(paths, name, reason, opts);
+  // F3 + G2 (WP-a10-reap fix-pass): the durable alert IS the record of the
+  // un-reapable group, so release the still-retained token pidfile(s) — but
+  // ONLY when that alert actually persisted (G2). If alerts.jsonl could not be
+  // written (disk exhaustion), the pidfile is the SOLE surviving record of the
+  // survivor's recovery identity (its PGID) — RETAIN it as the fallback rather
+  // than delete a never-recorded survivor. No later run reads this run's token,
+  // so a persisted alert makes the file a never-read hollow leftover; an
+  // unpersisted alert makes it the only recovery breadcrumb.
+  if (reapFailure && alertPersisted) {
+    for (const f of reapFailure.files) rmPidfile(f);
   }
   throw new WienerdogError(reason);
 }
@@ -1151,31 +1126,48 @@ async function catchUp(paths, opts = {}) {
  *  @returns {Promise<void>} */
 async function run(argv, opts = {}) {
   const paths = getPaths();
-  // F9 (WP-a9): a PRE-EXISTING symlink/non-dir core is untrusted — NOTHING may be
-  // written under it. The maybeRefresh (update-check.json) and refreshSchedulerStatus
-  // (scheduler-status.json) probes below both write UNDER the core (following the
-  // symlink into the external tree), so skip them on an anomalous core. The
-  // downstream runJob/catchUp still run and surface the failure via their own F9
-  // guards (stderr + the non-core email alert), writing nothing under the core.
-  const coreAnom = coreAnomalous(paths);
+
+  // ── SINGLE ENTRY GATE (F9/F12/F13, ADR-0027) ─────────────────────────────
+  // If ANY top-level protected directory (core/state/logs/secrets) is a
+  // pre-existing symlink/non-dir, the mechanics root is UNTRUSTED — refuse
+  // IMMEDIATELY, before EVERY dispatch mode (runJob, catchUp) AND before the
+  // probes below (maybeRefresh/refreshSchedulerStatus both write under the core,
+  // following the symlink into the external tree). Surface via a NON-CORE
+  // channel ONLY (stderr + the injected email alert); write/rename/chmod/delete
+  // NOTHING under any protected dir; exit non-zero. This one gate dominates
+  // every path so no runtime writer can run on an untrusted root.
+  if (mechanicsRootUntrusted(paths)) {
+    const jobName = argv[0] === '--catch-up' ? 'catchup' : argv[0] || 'run-job';
+    const reason =
+      `refused: the Wienerdog mechanics root under ${paths.core} has a symlink or non-directory at a ` +
+      'top-level protected path (core/state/logs/secrets) — refusing to read or write anything under it. ' +
+      'Investigate and remove it.';
+    process.stderr.write(`wienerdog: ${reason}\n`);
+    try {
+      (opts.sendAlert || defaultSendAlert)(paths, jobName, `job ${jobName} failed`, reason);
+    } catch {
+      /* email best-effort; the non-zero exit below is the primary loud surface */
+    }
+    throw new WienerdogError(reason);
+  }
+
   // Bounded, once/24h, opt-out, silent on failure (ADR-0015). Never blocks/fails
   // the job. Fetch seam is injectable for hermetic tests. maybeRefresh already
   // never throws (WP-045); the try/catch is belt-and-suspenders and must never
-  // alter the job's exit code.
-  if (!coreAnom) {
-    try {
-      await maybeRefresh(paths, { fetchLatest: opts.fetchLatest });
-    } catch {
-      /* never affects the job */
-    }
-    // Keep the scheduler-load cache fresh on every run (esp. the hourly catch-up) so
-    // the digest can surface a configured-but-not-loaded job. Read-only probe;
-    // bounded, swallows its own errors — MUST never alter the job's exit code.
-    try {
-      require('../scheduler/status').refreshSchedulerStatus(paths, { probe: opts.probe });
-    } catch {
-      /* never affects the job */
-    }
+  // alter the job's exit code. (Safe here: the entry gate above already refused
+  // an untrusted root, so these probes never write under a symlinked core.)
+  try {
+    await maybeRefresh(paths, { fetchLatest: opts.fetchLatest });
+  } catch {
+    /* never affects the job */
+  }
+  // Keep the scheduler-load cache fresh on every run (esp. the hourly catch-up) so
+  // the digest can surface a configured-but-not-loaded job. Read-only probe;
+  // bounded, swallows its own errors — MUST never alter the job's exit code.
+  try {
+    require('../scheduler/status').refreshSchedulerStatus(paths, { probe: opts.probe });
+  } catch {
+    /* never affects the job */
   }
   if (argv[0] === '--catch-up') {
     // The loaded catch-up registration (macOS + Windows) forwards the bound per-job

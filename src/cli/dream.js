@@ -13,7 +13,7 @@ const { collectExtracts, cleanScratch, MIN_TRUNCATE_BYTES } = require('../core/d
 const { spawnBrain, buildClaudeArgs } = require('../core/dream/brain');
 const { readVaultLayout } = require('../core/layout');
 const { renderDigest, listSecretQuarantine } = require('../core/digest');
-const { writeFilePrivate, scanPrivateModes, mkdirPrivate, createLogStreamPrivate, coreAnomalous } = require('../core/private-fs');
+const { writeFilePrivate, scanPrivateModes, mkdirPrivate, createLogStreamPrivate, mechanicsRootUntrusted } = require('../core/private-fs');
 const { reapTree, reapGroup } = require('../core/reap');
 const { ensureSettingsProfile } = require('../core/runtime-settings');
 const { runContainmentProbe } = require('../core/dream/containment-probe');
@@ -265,15 +265,17 @@ async function run(argv, opts = {}) {
   // 1. Resolve config + date.
   const paths = getPaths();
 
-  // F9 (WP-a9, ADR-0027): if the Wienerdog core is a PRE-EXISTING symlink/non-dir
-  // (an untrusted root), refuse BEFORE any core-local writer runs — acquireLock,
-  // collectExtracts (rm+mkdir+write under state/), cleanScratch, releaseLock, and
-  // the digest/ledger writes all live under the core and would FOLLOW the symlink
-  // into the external tree. Throw (→ non-zero exit, loud) writing NOTHING under it.
-  if (coreAnomalous(paths)) {
+  // SINGLE ENTRY GATE (F9/F12/F13, ADR-0027): if ANY top-level protected dir
+  // (core/state/logs/secrets) is a PRE-EXISTING symlink/non-dir, refuse BEFORE
+  // any core-local writer — acquireLock, collectExtracts (rm+mkdir+write under
+  // state/), cleanScratch, releaseLock, and the digest/ledger writes all live
+  // under the mechanics root and would FOLLOW the symlink into the external tree.
+  // Throw (→ non-zero exit, loud) writing NOTHING under it.
+  if (mechanicsRootUntrusted(paths)) {
     throw new WienerdogError(
-      `dream refused: the Wienerdog core (${paths.core}) is a symlink or not a directory — ` +
-        'refusing to write anything under it. Investigate and remove it.'
+      `dream refused: the Wienerdog mechanics root under ${paths.core} has a symlink or non-directory at a ` +
+        'top-level protected path (core/state/logs/secrets) — refusing to write anything under it. ' +
+        'Investigate and remove it.'
     );
   }
 
