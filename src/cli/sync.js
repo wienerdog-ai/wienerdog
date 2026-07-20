@@ -210,6 +210,13 @@ async function run(argv, opts = {}) {
     // Migrate existing OS scheduler entries to the stable vendored bin (ADR-0013).
     // Idempotent: only stale entries are rewritten+reloaded; a clean re-sync is a
     // no-op. Never fails sync — an unschedulable job degrades to a notice.
+    //
+    // WP-catchup-per-job-authorization [R6]: this attended `sync` → `repointSchedules` call is the SOLE
+    // owner of catch-up REPAIR + TEARDOWN. repointSchedules re-mints the per-job
+    // digest map for every job, restores a LOADED catch-up registration the OS
+    // dropped (regenerating the canonical entry + correct bound map), and tears the
+    // entry + map down cleanly on final-job removal. The generic reloadMissing heal
+    // below never touches the catch-up entry.
     const { repointSchedules } = require('./schedule');
     const r = repointSchedules(paths, manifest, { loader: opts.loader });
     if (r.changed > 0) console.log(`wienerdog: repointed ${r.changed} schedule(s) to the vendored app.`);

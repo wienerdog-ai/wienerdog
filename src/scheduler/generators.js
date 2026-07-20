@@ -168,12 +168,72 @@ function jobLaunchArgs(o) {
   return [o.launcher, o.name, '--descriptor', o.descriptor, '--expect-digest', o.expectDigest];
 }
 
-/** The launcher argv AFTER node for a catch-up entry (WP-157): no per-job
- *  descriptor — `[launcher, --catch-up, --expect-digest, expectDigest]` where
- *  expectDigest is the app-tree digest bound at register time.
- *  @param {{launcher:string, expectDigest:string}} o @returns {string[]} */
+/** The launcher argv AFTER node for a catch-up entry (WP-157 + WP-catchup-per-job-authorization):
+ *  no per-job descriptor — `[launcher, --catch-up, --expect-digest, expectDigest]`
+ *  where expectDigest is the app-tree digest bound at register time. When a per-job
+ *  digest MAP is bound (macOS + Windows — the two platforms with a separate catch-up
+ *  registration), `--job-digests <base64url(canonicalJSON)>` is appended as ONE opaque
+ *  token; the catch-up runner decodes it and union-authorizes every job BEFORE running
+ *  any. The token is minted under registration privilege from the loaded/registered
+ *  state — never re-read from an editable per-job entry file (the WP-catchup-per-job-authorization anchor).
+ *  @param {{launcher:string, expectDigest:string, jobDigests?:string}} o
+ *  @returns {string[]} */
 function catchupLaunchArgs(o) {
-  return [o.launcher, '--catch-up', '--expect-digest', o.expectDigest];
+  const args = [o.launcher, '--catch-up', '--expect-digest', o.expectDigest];
+  if (typeof o.jobDigests === 'string' && o.jobDigests !== '') args.push('--job-digests', o.jobDigests);
+  return args;
+}
+
+/** Canonical JSON for the flat per-job digest map bound into the catch-up entry:
+ *  keys sorted, no whitespace variance — deterministic (WP-catchup-per-job-authorization). One entry per
+ *  authorized job, value = deriveDescriptorDigest.
+ *  @param {Record<string,string>} map @returns {string} */
+function canonicalJobDigestsJson(map) {
+  /** @type {Record<string,string>} */ const sorted = {};
+  for (const k of Object.keys(map).sort()) sorted[k] = map[k];
+  return JSON.stringify(sorted);
+}
+
+/** base64url(canonical JSON) transport token for the catch-up entry argv
+ *  (WP-catchup-per-job-authorization [R4:#3]). base64url carries no shell/XML metacharacters, so it
+ *  survives Windows `CommandLineToArgvW` and systemd `ExecStart` quoting where raw
+ *  JSON does not. @param {Record<string,string>} map @returns {string} */
+function encodeJobDigests(map) {
+  return Buffer.from(canonicalJobDigestsJson(map || {}), 'utf8').toString('base64url');
+}
+
+/** Max bytes accepted for a `--job-digests` token (and its decoded JSON). */
+const JOB_DIGESTS_MAX_BYTES = 64 * 1024;
+
+/** Strict, BOUNDED decoder for the catch-up `--job-digests` token (WP-catchup-per-job-authorization
+ *  [R4:#3]): length cap → base64url decode → JSON.parse → shape-validate (a plain
+ *  object of `<jobName> → "sha256:<64 hex>"`). Any malformed / oversized / shape-
+ *  invalid input ⇒ `{ok:false}` — NEVER a thrown crash; the caller turns that into
+ *  a durable alert + zero spawn.
+ *  @param {unknown} token @param {{maxBytes?:number}} [opts]
+ *  @returns {{ok:true, map:Record<string,string>}|{ok:false, reason:string}} */
+function decodeJobDigests(token, opts = {}) {
+  const maxBytes = opts.maxBytes || JOB_DIGESTS_MAX_BYTES;
+  try {
+    if (typeof token !== 'string' || token === '') return { ok: false, reason: 'no --job-digests token bound' };
+    if (token.length > maxBytes) return { ok: false, reason: '--job-digests token exceeds the size cap' };
+    if (!/^[A-Za-z0-9_-]+$/.test(token)) return { ok: false, reason: '--job-digests token is not base64url' };
+    const json = Buffer.from(token, 'base64url').toString('utf8');
+    if (json.length > maxBytes) return { ok: false, reason: 'decoded --job-digests exceeds the size cap' };
+    const parsed = JSON.parse(json);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return { ok: false, reason: '--job-digests is not a JSON object' };
+    }
+    for (const [k, v] of Object.entries(parsed)) {
+      if (!/^[a-z0-9][a-z0-9-]*$/.test(k)) return { ok: false, reason: `--job-digests has an invalid job name ${JSON.stringify(k)}` };
+      if (typeof v !== 'string' || !/^sha256:[0-9a-f]{64}$/.test(v)) {
+        return { ok: false, reason: `--job-digests has an invalid digest for "${k}"` };
+      }
+    }
+    return { ok: true, map: /** @type {Record<string,string>} */ (parsed) };
+  } catch (err) {
+    return { ok: false, reason: `--job-digests decode failed: ${err.message}` };
+  }
 }
 
 /**
@@ -273,8 +333,11 @@ ${launchdEnvDict(o.home)}  <key>StartCalendarInterval</key>
 /**
  * Render the single macOS catch-up plist (login + hourly). It invokes the
  * out-of-tree launcher with `--catch-up` + the app-tree expect-digest (WP-157).
- * RunAtLoad true, plus hourly at :00.
- * @param {{node:string, launcher:string, expectDigest:string, home:string, logDir:string}} o
+ * RunAtLoad true, plus hourly at :00. When `jobDigests` is present it is bound into
+ * the entry argv as `--job-digests <base64url>` (WP-catchup-per-job-authorization) — the loaded per-job
+ * authorization map the catch-up runner union-authorizes against.
+ * @param {{node:string, launcher:string, expectDigest:string, home:string, logDir:string,
+ *          jobDigests?:string}} o
  *   logDir = <core>/logs/catchup; home = the bound authorized home
  * @returns {string} plist XML with Label 'ai.wienerdog.catchup'
  */
@@ -668,6 +731,59 @@ function ensureCatchup(paths, opts = {}) {
   return { changed: true };
 }
 
+/**
+ * TEARDOWN PRIMITIVE (WP-catchup-per-job-authorization [R5/R8]): remove the catch-up OS entry + its
+ * bound map when NO jobs remain. Invoked ONLY by `repointSchedules` (the sole
+ * catch-up repair/teardown owner) on final-job removal — never runtime. Best-effort
+ * + idempotent: unregisters via the loader, deletes the entry file(s), and drops the
+ * matching manifest entries. macOS (catchupPlist) + Windows (schtasks task + wrapper)
+ * only; other platforms have no separate catch-up registration to tear down.
+ * @param {import('../core/paths').WienerdogPaths} paths
+ * @param {import('../core/manifest').Manifest} manifest
+ * @param {{loader?: (argv:string[])=>{status:number}, platform?: NodeJS.Platform}} [opts]
+ * @returns {{removed:boolean}}
+ */
+function teardownCatchup(paths, manifest, opts = {}) {
+  const platform = opts.platform || process.platform;
+  const loader = opts.loader || defaultCatchupLoader;
+  /** @type {string[]} */ const files = [];
+  if (platform === 'darwin') {
+    const label = 'ai.wienerdog.catchup';
+    const plistPath = path.join(launchAgentsDir(paths.home), `${label}.plist`);
+    if (typeof process.getuid === 'function') {
+      try {
+        loader(['launchctl', 'bootout', `gui/${process.getuid()}/${label}`]);
+      } catch {
+        /* best-effort unregister */
+      }
+    }
+    files.push(plistPath);
+  } else if (platform === 'win32') {
+    try {
+      loader(['schtasks', '/delete', '/tn', windowsTaskName('catchup'), '/f']);
+    } catch {
+      /* best-effort unregister */
+    }
+    files.push(windowsTaskFile(paths, 'catchup'), windowsWrapperFile(paths, 'catchup'));
+  } else {
+    return { removed: false };
+  }
+  let removed = false;
+  const targets = new Set(files);
+  const before = manifest.entries.length;
+  manifest.entries = manifest.entries.filter((e) => !targets.has(e.path));
+  if (manifest.entries.length !== before) removed = true;
+  for (const f of files) {
+    try {
+      fs.rmSync(f, { force: true });
+      removed = true;
+    } catch {
+      /* best-effort */
+    }
+  }
+  return { removed };
+}
+
 module.exports = {
   nodePath,
   wienerdogBin,
@@ -696,7 +812,13 @@ module.exports = {
   windowsDreamTaskXml,
   windowsCatchupTaskXml,
   windowsTaskXmlBytes,
+  catchupLaunchArgs,
+  encodeJobDigests,
+  decodeJobDigests,
+  canonicalJobDigestsJson,
+  JOB_DIGESTS_MAX_BYTES,
   scheduledEnvPairs,
   ensureCatchup,
+  teardownCatchup,
   defaultCatchupLoader,
 };

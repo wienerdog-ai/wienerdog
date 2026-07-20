@@ -241,6 +241,72 @@ test('scheduler-generators: catchupPlist matches the golden byte-for-byte', () =
   assert.equal(out, EXPECTED_CATCHUP);
 });
 
+// WP-catchup-per-job-authorization: the catch-up entry binds the per-job digest MAP as a
+// base64url `--job-digests` token (macOS + Windows). The map is the loaded-state
+// authorization anchor; the run-job runner decodes + union-authorizes against it.
+
+test('scheduler-generators: encodeJobDigests → decodeJobDigests round-trips a canonical, key-sorted map', () => {
+  const map = { dream: `sha256:${'a'.repeat(64)}`, backup: `sha256:${'b'.repeat(64)}` };
+  const token = gen.encodeJobDigests(map);
+  // base64url: no +/=, no XML/shell metacharacters — safe as one argv value.
+  assert.match(token, /^[A-Za-z0-9_-]+$/);
+  // Canonical: keys sorted regardless of insertion order → deterministic token.
+  assert.equal(token, gen.encodeJobDigests({ backup: map.backup, dream: map.dream }));
+  const decoded = gen.decodeJobDigests(token);
+  assert.equal(decoded.ok, true);
+  assert.deepEqual(decoded.map, map);
+});
+
+test('scheduler-generators: catchupPlist binds --job-digests when a map token is supplied', () => {
+  const token = gen.encodeJobDigests({ dream: `sha256:${'c'.repeat(64)}` });
+  const out = gen.catchupPlist({
+    node: '/usr/local/bin/node',
+    launcher: LAUNCHER,
+    expectDigest: DIGEST,
+    jobDigests: token,
+    home: HOME,
+    logDir: '/Users/ada/.wienerdog/logs/catchup',
+  });
+  assert.match(out, /<string>--job-digests<\/string>/, 'the map flag is present');
+  assert.match(out, new RegExp(`<string>${token}</string>`), 'the exact bound token is present');
+  // Round-trips back to the map the launcher forwards to the catch-up runner.
+  const between = out.slice(out.indexOf('--job-digests'));
+  const bound = between.match(/<string>([A-Za-z0-9_-]+)<\/string>/)[1];
+  assert.deepEqual(gen.decodeJobDigests(bound).map, { dream: `sha256:${'c'.repeat(64)}` });
+});
+
+test('scheduler-generators: the Windows catch-up wrapper carries --job-digests bare (base64url is metachar-free)', () => {
+  const token = gen.encodeJobDigests({ dream: `sha256:${'d'.repeat(64)}` });
+  const w = gen.windowsLauncherWrapper({
+    node: 'C:\\node.exe',
+    launcher: 'C:\\wd\\launch.js',
+    home: 'C:\\Users\\ada',
+    launchArgs: ['--catch-up', '--expect-digest', DIGEST, '--job-digests', token],
+  });
+  // base64url matches the wrapper's safe-charset test, so the token is UNQUOTED.
+  assert.match(w, new RegExp(`--job-digests ${token}(\\r\\n|$)`));
+});
+
+test('scheduler-generators: decodeJobDigests fails closed on malformed / oversized / shape-invalid input (never throws)', () => {
+  // Not base64url.
+  assert.equal(gen.decodeJobDigests('not base64url !!!').ok, false);
+  // Absent.
+  assert.equal(gen.decodeJobDigests(undefined).ok, false);
+  assert.equal(gen.decodeJobDigests('').ok, false);
+  // Valid base64url but not a JSON object.
+  assert.equal(gen.decodeJobDigests(Buffer.from('[1,2,3]', 'utf8').toString('base64url')).ok, false);
+  assert.equal(gen.decodeJobDigests(Buffer.from('"x"', 'utf8').toString('base64url')).ok, false);
+  // Object with a non-digest value.
+  assert.equal(gen.decodeJobDigests(Buffer.from('{"dream":"nope"}', 'utf8').toString('base64url')).ok, false);
+  // Object with an invalid job name.
+  assert.equal(gen.decodeJobDigests(Buffer.from(`{"../evil":"sha256:${'a'.repeat(64)}"}`, 'utf8').toString('base64url')).ok, false);
+  // Oversized token (> cap) — refused before any decode.
+  const huge = 'A'.repeat(gen.JOB_DIGESTS_MAX_BYTES + 1);
+  assert.equal(gen.decodeJobDigests(huge).ok, false);
+  // Empty map is VALID (a real empty registration → refuse-all at catch-up).
+  assert.deepEqual(gen.decodeJobDigests(gen.encodeJobDigests({})).map, {});
+});
+
 test('scheduler-generators: systemdTimer matches the golden byte-for-byte', () => {
   assert.equal(gen.systemdTimer({ name: 'daily-digest', hour: 7, minute: 0 }), EXPECTED_TIMER);
 });

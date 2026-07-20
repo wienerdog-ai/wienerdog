@@ -320,11 +320,18 @@ function verifyAndResolve(p, name, o) {
  * and refuses here — fail-closed for the catch-up path, acceptable for the
  * intermediate (the per-job dev fire path still runs). The whole computation is
  * wrapped so any fs error becomes a refusal, never a bare throw (F13).
+ * WP-catchup-per-job-authorization: the loaded catch-up registration also binds a per-job digest MAP
+ * (`--job-digests <base64url>`, macOS + Windows). The launcher treats it as an
+ * OPAQUE token — it NEVER decodes/validates the map and NEVER reads a per-job entry
+ * file to obtain a digest; it merely FORWARDS the loaded token into the catch-up
+ * runner argv, where the bounded decoder + union-authorization live. `jobDigests` is
+ * the LAST param so WP-157's 4-arg callers stay byte-compatible.
  * @param {{appDir:string, appCurrent:string}} p @param {string} expectDigest
  * @param {NodeJS.ProcessEnv} env @param {NodeJS.Platform} platform
+ * @param {string} [jobDigests]  opaque base64url map token from the loaded entry
  * @returns {{ok:true, command:string, args:string[]}|{ok:false, reason:string}}
  */
-function verifyCatchup(p, expectDigest, env, platform) {
+function verifyCatchup(p, expectDigest, env, platform, jobDigests) {
   try {
     let target;
     try {
@@ -333,6 +340,7 @@ function verifyCatchup(p, expectDigest, env, platform) {
       return { ok: false, reason: `cannot resolve app/current: ${err.message}` };
     }
     const runArgs = [path.join(target, 'bin', 'wienerdog.js'), 'run-job', '--catch-up'];
+    if (typeof jobDigests === 'string' && jobDigests !== '') runArgs.push('--job-digests', jobDigests);
     const contain = verifyContainment(p, platform);
     if (!contain.ok) return { ok: false, reason: contain.why };
     if (appTreeDigestOf(target) !== expectDigest) {
@@ -346,8 +354,9 @@ function verifyCatchup(p, expectDigest, env, platform) {
 
 /** Boolean flags (present ⇒ true, consume NO following token). */
 const BOOL_FLAGS = new Set(['catch-up']);
-/** Value-taking flags (consume argv[i+1]). */
-const VALUE_FLAGS = new Set(['descriptor', 'expect-digest']);
+/** Value-taking flags (consume argv[i+1]). `--job-digests` (WP-catchup-per-job-authorization) carries
+ *  the opaque base64url per-job digest map bound into the catch-up registration. */
+const VALUE_FLAGS = new Set(['descriptor', 'expect-digest', 'job-digests']);
 
 /** Schema-aware argv parse (WP-157 F11). `--catch-up` is boolean; `--descriptor`
  *  and `--expect-digest` take a value; ANY unknown `--flag` fails closed (returns
@@ -379,7 +388,7 @@ function parseArgv(argv) {
 /**
  * CLI entry the OS scheduler invokes:
  *   node <core>/launcher/launch.js <name> --descriptor <p> --expect-digest <d>
- *   node <core>/launcher/launch.js --catch-up --expect-digest <d>
+ *   node <core>/launcher/launch.js --catch-up --expect-digest <d> [--job-digests <b64>]
  * ok ⇒ spawn `node <currentBin> run-job <name|--catch-up>` (inherit stdio; exit
  * with the child's code) — the ONLY place a model/app spawn happens. refuse ⇒
  * append a fixed durable alert, write the reason to stderr, exit NON-ZERO,
@@ -416,7 +425,7 @@ function main(argv, opts = {}) {
   if (error) return refuse(name || 'unknown', error);
 
   const verdict = isCatchup
-    ? verifyCatchup(p, flags['expect-digest'], env, platform)
+    ? verifyCatchup(p, flags['expect-digest'], env, platform, flags['job-digests'])
     : verifyAndResolve(p, name, {
         descriptorPath: flags.descriptor,
         expectDigest: flags['expect-digest'],

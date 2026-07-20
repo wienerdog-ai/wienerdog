@@ -668,15 +668,21 @@ async function runJob(paths, job, opts = {}) {
 
   const secs = Math.round((Date.now() - started) / 1000);
 
-  // 6. Success → watermark + (darwin) ensure the catch-up entry exists.
+  // 6. Success → watermark. A runtime/nightly success must NOT re-register or
+  //    re-mint the catch-up authorization map (WP-catchup-per-job-authorization [R5]): re-binding the
+  //    loaded map from the (since-mutated) config would authorize a statically-added
+  //    job B after unrelated job A succeeds, with NO scheduler-registration
+  //    capability ever exercised. The catch-up map is minted ONLY by attended,
+  //    user-invoked registration (sync/schedule add/init/adopt). Here we do at most
+  //    a READ-ONLY "catch-up entry missing" notice — never write, never load.
   if (!failure && code === 0) {
     jobsLib.writeScheduleState(paths, name, { last_success: nowIso(), last_status: 'ok' });
     clearAlerts(paths, name);
-    if (process.platform === 'darwin') {
+    if (platform === 'darwin' || platform === 'win32') {
       try {
-        gen.ensureCatchup(paths, { loader: opts.loader });
+        noticeIfCatchupMissing(paths, platform);
       } catch {
-        // Non-fatal: the primary installer of the catch-up entry is `schedule add`.
+        /* read-only notice is best-effort */
       }
     }
     process.stdout.write(
@@ -705,35 +711,132 @@ function todaysFire(at, now) {
   return fire;
 }
 
+/** Read-only presence check for the catch-up entry (WP-catchup-per-job-authorization [R5]). Emits a
+ *  notice when the entry file is absent; NEVER writes/registers — minting/repair is
+ *  an attended-only path (sync/schedule add/init/adopt). macOS + Windows only.
+ *  @param {import('../core/paths').WienerdogPaths} paths @param {NodeJS.Platform} platform */
+function noticeIfCatchupMissing(paths, platform) {
+  let entry;
+  if (platform === 'darwin') entry = path.join(gen.launchAgentsDir(paths.home), 'ai.wienerdog.catchup.plist');
+  else if (platform === 'win32') entry = gen.windowsTaskFile(paths, 'catchup');
+  else return;
+  try {
+    fs.accessSync(entry);
+  } catch {
+    process.stderr.write(
+      "wienerdog: note — the catch-up entry is missing; run 'wienerdog sync' to restore missed-run recovery.\n"
+    );
+  }
+}
+
 /**
- * run-job --catch-up: run every job overdue vs today's fire time (machine was
- * off when it should have fired). A single job's failure does not abort the rest.
+ * run-job --catch-up: run every AUTHORIZED job overdue vs today's fire time (the
+ * machine was off when it should have fired). A single job's failure does not abort
+ * the rest.
+ *
+ * WP-catchup-per-job-authorization: catch-up is authorized against the per-job digest MAP bound into
+ * the LOADED catch-up OS registration (macOS + Windows) and forwarded by the launcher
+ * as an opaque base64url `--job-digests` token — NEVER re-read from an editable
+ * per-job entry file or `config.yaml`. The token is decoded with a strict bounded
+ * decoder (malformed/oversized ⇒ durable alert + ZERO spawn). Authorization runs over
+ * the UNION of bound ∪ configured job names and PRECEDES due-filtering ([R4:#1]): an
+ * addition / removal / descriptor drift (incl. an `at`-rewrite-to-future) ALERTS +
+ * runs nothing for that job, rather than being silently suppressed by being made
+ * not-due. Only jobs whose live `deriveDescriptorDigest` matches the bound map are
+ * eligible; due-ness is then computed from that already-authorized schedule.
+ *
+ * When NO token is bound (a pre-WP registration not yet re-synced, a Linux per-job
+ * replay, or a manual invocation), there is no all-job map to authorize against and
+ * catch-up degrades to the legacy config-driven behavior (WP-157's explicitly-
+ * incomplete intermediate); an attended `sync` re-mints the token and enforcement
+ * activates. Stripping the token from the loaded registration needs
+ * scheduler-registration capability (A12), so this cannot be leveraged in-scope.
  * @param {import('../core/paths').WienerdogPaths} paths
  * @param {{now?:Date, sendAlert?: typeof defaultSendAlert,
- *          loader?: (argv:string[])=>{status:number}, platform?: NodeJS.Platform}} [opts]
+ *          loader?: (argv:string[])=>{status:number}, platform?: NodeJS.Platform,
+ *          jobDigests?: string,
+ *          deriveDigest?: (job:object)=>string,
+ *          runJob?: typeof runJob}} [opts]  `jobDigests` is the bound base64url map
+ *   token (from run()'s argv or the launcher). `deriveDigest`/`runJob` are code seams
+ *   for tests only (the idiom used across this file); production sets neither.
  * @returns {Promise<void>}
  */
 async function catchUp(paths, opts = {}) {
+  const platform = opts.platform || process.platform;
   const now = opts.now || new Date();
   const jobs = jobsLib.listJobs(paths);
+  const liveByName = new Map(jobs.map((j) => [j.name, j]));
+
+  // Decode the bound per-job digest map. Present-but-unreadable ⇒ hard refusal
+  // (durable alert + zero spawn, never a crash). Absent ⇒ legacy no-map path.
+  const hasToken = opts.jobDigests !== undefined && opts.jobDigests !== null && opts.jobDigests !== '';
+  let map = null;
+  if (hasToken) {
+    const decoded = gen.decodeJobDigests(opts.jobDigests);
+    if (!decoded.ok) {
+      await failLoud(
+        paths,
+        'catchup',
+        `wienerdog: catch-up refused — the bound job-authorization map is unreadable (${decoded.reason}); no jobs were run. Run 'wienerdog sync' to re-bind it.`,
+        opts
+      );
+      process.stdout.write('wienerdog: catch-up refused — unreadable authorization map; nothing run.\n');
+      return;
+    }
+    map = decoded.map;
+  }
+
+  const derive =
+    opts.deriveDigest ||
+    ((job) => require('../scheduler/descriptor').deriveDescriptorDigest(paths, job, { platform }));
+
+  /** @type {{name:string, job:{name:string, at:string, run:string, timeoutMinutes:number}}[]} */
+  const authorized = [];
+  if (map) {
+    // AUTHORIZE the UNION of bound ∪ configured names BEFORE due-filtering.
+    const names = new Set([...Object.keys(map), ...liveByName.keys()]);
+    for (const name of names) {
+      const bound = map[name];
+      const job = liveByName.get(name);
+      let live;
+      try {
+        live = job ? derive(job) : undefined;
+      } catch {
+        live = undefined;
+      }
+      if (bound === undefined) {
+        await failLoud(paths, name, `wienerdog: catch-up refused "${name}" — it is not in the authorized job map (added since the last 'wienerdog sync'); it was NOT run.`, opts);
+      } else if (live === undefined) {
+        await failLoud(paths, name, `wienerdog: catch-up refused "${name}" — it is authorized but no longer in your config (removed since the last 'wienerdog sync'); it was NOT run.`, opts);
+      } else if (live !== bound) {
+        await failLoud(paths, name, `wienerdog: catch-up refused "${name}" — its descriptor changed since it was scheduled (run/model/at/… drift); run 'wienerdog sync' to re-authorize it. It was NOT run.`, opts);
+      } else {
+        authorized.push({ name, job });
+      }
+    }
+  } else {
+    for (const job of jobs) authorized.push({ name: job.name, job });
+  }
+
+  // Due-filtering runs ONLY over already-authorized jobs, from the authorized schedule.
+  const doRun = opts.runJob || runJob;
   const state = jobsLib.readScheduleState(paths);
   /** @type {string[]} */ const ran = [];
   /** @type {string[]} */ const notOverdue = [];
-
-  for (const job of jobs) {
+  for (const { name, job } of authorized) {
     const fire = todaysFire(job.at, now);
-    const last = state[job.name] && state[job.name].last_success;
+    const last = state[name] && state[name].last_success;
     const overdue = now >= fire && (!last || new Date(last) < fire);
     if (!overdue) {
-      notOverdue.push(job.name);
+      notOverdue.push(name);
       continue;
     }
     try {
-      await runJob(paths, job, opts);
-      ran.push(`${job.name} (ok)`);
+      await doRun(paths, job, opts);
+      ran.push(`${name} (ok)`);
     } catch {
-      // runJob already recorded the error watermark and failed loud.
-      ran.push(`${job.name} (failed)`);
+      // doRun already recorded the error watermark and failed loud.
+      ran.push(`${name} (failed)`);
     }
   }
 
@@ -775,7 +878,11 @@ async function run(argv, opts = {}) {
     /* never affects the job */
   }
   if (argv[0] === '--catch-up') {
-    await catchUp(paths, opts);
+    // The loaded catch-up registration (macOS + Windows) forwards the bound per-job
+    // digest map as `--job-digests <base64url>` (WP-catchup-per-job-authorization); catchUp decodes +
+    // union-authorizes against it. A test may inject opts.jobDigests directly.
+    const jobDigests = opts.jobDigests !== undefined ? opts.jobDigests : argvFlagValue(argv, '--job-digests');
+    await catchUp(paths, { ...opts, jobDigests });
     return;
   }
   const name = argv[0];

@@ -182,6 +182,10 @@ async function run(argv) {
   await require('./sync').run(argv, { suppressSandboxWarning: true, harnesses });
 
   if (vaultStep) {
+    // WP-catchup-per-job-authorization [R7]: `init` is a first-class attended MINT caller —
+    // ensureDreamSchedule → registerPlatform mints the catch-up per-job digest map
+    // from the freshly-derived dream descriptor (init does not necessarily run
+    // `sync` for scheduling). No config-trusted or stale map.
     const { ensureDreamSchedule } = require('./schedule');
     const d = ensureDreamSchedule(paths);
     console.log('\nwienerdog: installed with a fresh vault.');

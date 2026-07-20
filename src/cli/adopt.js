@@ -389,6 +389,10 @@ async function run(argv) {
   vendorSelf(paths, { manifest });
   writeShim(paths, { manifest });
   manifestLib.save(paths, manifest);
+  // WP-catchup-per-job-authorization [R7]: `adopt` is a first-class attended MINT caller — it does
+  // NOT call `sync`, so ensureDreamSchedule → registerPlatform mints the catch-up
+  // per-job digest map here, from the freshly-derived dream descriptor (built on the
+  // complete pin store committed by the WP-154 preflight above), never a stale map.
   const { ensureDreamSchedule } = require('./schedule');
   const dream = ensureDreamSchedule(paths);
 

@@ -63,6 +63,31 @@ function catchupExpectDigest(paths) {
   }
 }
 
+/**
+ * Compute the base64url per-job digest MAP bound into the catch-up entry
+ * (WP-catchup-per-job-authorization — macOS + Windows). `{ <jobName>: deriveDescriptorDigest }` over
+ * EVERY configured job, from freshly-validated descriptors derived in THIS attended
+ * run (never a retained source file or stale map). A job whose descriptor cannot be
+ * derived is OMITTED — it is then treated as unauthorized (fail-closed ADD alert) at
+ * catch-up rather than run without a verifiable anchor. The result is one opaque
+ * token the catch-up runner decodes + union-authorizes against.
+ * @param {import('../core/paths').WienerdogPaths} paths
+ * @param {NodeJS.Platform} platform
+ * @returns {string} base64url(canonical JSON); base64url('{}') when no jobs derive
+ */
+function catchupJobDigests(paths, platform) {
+  const descriptor = require('../scheduler/descriptor');
+  /** @type {Record<string,string>} */ const map = {};
+  for (const job of jobsLib.listJobs(paths)) {
+    try {
+      map[job.name] = descriptor.deriveDescriptorDigest(paths, job, { platform });
+    } catch {
+      /* omit → fail-closed (ADD alert) at catch-up */
+    }
+  }
+  return gen.encodeJobDigests(map);
+}
+
 /** @param {string} p @returns {boolean} */
 function isFile(p) {
   try {
@@ -167,15 +192,19 @@ function ensureFile(manifest, filePath, content) {
  * @param {import('../core/manifest').Manifest} manifest
  * @param {(argv:string[])=>{status:number}} loader
  * @param {number} uid
+ * @param {string} [jobDigests]  base64url per-job digest map (WP-catchup-per-job-authorization) bound
+ *   into the entry argv; recomputed on every mint so the loaded entry always
+ *   carries the authorized set for the current jobs.
  * @returns {{loaded:boolean}} loaded=true when nothing needed loading, else the
  *   status===0 of the bootstrap call.
  */
-function ensureCatchup(paths, manifest, loader, uid) {
+function ensureCatchup(paths, manifest, loader, uid, jobDigests) {
   const logDir = path.join(paths.logs, 'catchup');
   const content = gen.catchupPlist({
     node: gen.nodePath(),
     launcher: launcherPathFor(paths),
     expectDigest: catchupExpectDigest(paths),
+    jobDigests,
     home: paths.home,
     logDir,
   });
@@ -195,19 +224,23 @@ function ensureCatchup(paths, manifest, loader, uid) {
  * @param {import('../core/paths').WienerdogPaths} paths
  * @param {import('../core/manifest').Manifest} manifest
  * @param {(argv:string[])=>{status:number}} loader
+ * @param {string} [jobDigests]  base64url per-job digest map (WP-catchup-per-job-authorization) bound
+ *   into the wrapper's launch argv as `--job-digests <b64>`.
  * @returns {{loaded:boolean}} loaded=true when nothing needed loading, else the
  *   status===0 of the schtasks /create call.
  */
-function ensureWindowsCatchup(paths, manifest, loader) {
+function ensureWindowsCatchup(paths, manifest, loader, jobDigests) {
   const userId = gen.windowsCurrentUserId();
   // WP-157 F8: write the env-scrubbing cmd wrapper (manifest `file` entry) and
   // point the task's <Command> at it — the XML has no per-task env element.
   const wrapperPath = gen.windowsWrapperFile(paths, 'catchup');
+  const launchArgs = ['--catch-up', '--expect-digest', catchupExpectDigest(paths)];
+  if (typeof jobDigests === 'string' && jobDigests !== '') launchArgs.push('--job-digests', jobDigests);
   const wrapperContent = gen.windowsLauncherWrapper({
     node: gen.nodePath(),
     launcher: launcherPathFor(paths),
     home: paths.home,
-    launchArgs: ['--catch-up', '--expect-digest', catchupExpectDigest(paths)],
+    launchArgs,
   });
   ensureFile(manifest, wrapperPath, wrapperContent);
   const content = gen.windowsTaskXmlBytes(
@@ -287,7 +320,9 @@ function registerPlatformEntries(paths, manifest, o, loader, platform = process.
     let changed = ensureEntry(manifest, plistPath, content, unload);
     if (changed) loaded = loader(['launchctl', 'bootstrap', `gui/${uid}`, plistPath]).status === 0;
     // Catch-up entry: login + hourly (macOS StartCalendarInterval misses power-off).
-    const cu = ensureCatchup(paths, manifest, loader, uid);
+    // MINT the per-job digest map from freshly-derived descriptors (WP-catchup-per-job-authorization) —
+    // this attended register path is one of the four authorized mint callers.
+    const cu = ensureCatchup(paths, manifest, loader, uid, catchupJobDigests(paths, platform));
     return { platform: 'launchd', changed, loaded: loaded && cu.loaded };
   }
 
@@ -369,7 +404,8 @@ function registerPlatformEntries(paths, manifest, o, loader, platform = process.
     let loaded = true;
     if (changed) loaded = loader(['schtasks', '/create', '/tn', taskName, '/xml', dreamXmlPath, '/f']).status === 0;
     // Catch-up task (ONLOGON + hourly): the missed-run mechanism, mirroring macOS.
-    const cu = ensureWindowsCatchup(paths, manifest, loader);
+    // MINT the per-job digest map from freshly-derived descriptors (WP-catchup-per-job-authorization).
+    const cu = ensureWindowsCatchup(paths, manifest, loader, catchupJobDigests(paths, platform));
     return { platform: 'schtasks', changed, loaded: loaded && cu.loaded };
   }
 
@@ -384,13 +420,21 @@ function registerPlatformEntries(paths, manifest, o, loader, platform = process.
  * targets the stable vendored bin. Idempotent — registerPlatform rewrites+reloads
  * only when content changed. A job on a platform that cannot be scheduled
  * (unsupported OS / non-systemd Linux) is skipped with a notice, never a throw.
+ * WP-catchup-per-job-authorization [R6]: `repointSchedules` is the SOLE catch-up REPAIR + TEARDOWN
+ * owner. After repointing per-job entries it (a) tears the catch-up entry + map
+ * down cleanly when no jobs remain, or (b) repairs a LOADED catch-up registration
+ * the OS silently dropped (file/manifest can be intact) by regenerating the
+ * canonical entry with the correct bound base64url map and forcing a reload. The
+ * generic `reloadMissing` heal never touches the catch-up entry.
  * @param {import('../core/paths').WienerdogPaths} paths
  * @param {import('../core/manifest').Manifest} manifest
- * @param {{loader?: (argv:string[])=>{status:number}}} [opts]
+ * @param {{loader?: (argv:string[])=>{status:number}, platform?: NodeJS.Platform,
+ *          probe?: (argv:string[])=>('loaded'|'missing'|'unknown')}} [opts]
  * @returns {{repointed:number, changed:number, descriptorFailures:number, notices:string[]}}
  */
 function repointSchedules(paths, manifest, opts = {}) {
   const loader = opts.loader || defaultLoader;
+  const platform = opts.platform || process.platform;
   const jobs = jobsLib.listJobs(paths);
   let repointed = 0;
   let changed = 0;
@@ -405,7 +449,7 @@ function repointSchedules(paths, manifest, opts = {}) {
       continue;
     }
     try {
-      const res = registerPlatform(paths, manifest, { name: job.name, hour: hm.hour, minute: hm.minute }, loader);
+      const res = registerPlatform(paths, manifest, { name: job.name, hour: hm.hour, minute: hm.minute }, loader, platform);
       repointed += 1;
       if (res.changed) changed += 1;
       if (res.descriptorFailed) descriptorFailures += 1;
@@ -416,7 +460,82 @@ function repointSchedules(paths, manifest, opts = {}) {
       notices.push(`could not repoint "${job.name}": ${err.message}`);
     }
   }
+  try {
+    const cu = repairCatchup(paths, manifest, { loader, platform, probe: opts.probe });
+    if (cu.notice) notices.push(cu.notice);
+  } catch {
+    /* catch-up repair/teardown is best-effort — never fails a sync */
+  }
   return { repointed, changed, descriptorFailures, notices };
+}
+
+/**
+ * WP-catchup-per-job-authorization [R6/R8]: the catch-up REPAIR + TEARDOWN body owned solely by
+ * `repointSchedules`. macOS (catchupPlist) + Windows (schtasks) only — Linux has no
+ * separate catch-up registration (its per-job `.timer Persistent=true` replays the
+ * already-descriptor-authorized per-job `.service`), so this is a no-op there.
+ *   - NO jobs remain → tear the catch-up entry + map down cleanly (gen.teardownCatchup).
+ *   - jobs remain → the per-job register loop already re-minted the map; if the LOADED
+ *     registration is missing (a system update can drop it while the file stays),
+ *     regenerate the canonical entry with the current bound map and force a reload.
+ * @param {import('../core/paths').WienerdogPaths} paths
+ * @param {import('../core/manifest').Manifest} manifest
+ * @param {{loader?: (argv:string[])=>{status:number}, platform?: NodeJS.Platform,
+ *          probe?: (argv:string[])=>('loaded'|'missing'|'unknown')}} [opts]
+ * @returns {{notice?:string}}
+ */
+function repairCatchup(paths, manifest, opts = {}) {
+  const platform = opts.platform || process.platform;
+  if (platform !== 'darwin' && platform !== 'win32') return {}; // Linux: no catch-up map
+  const loader = opts.loader || defaultLoader;
+  const jobs = jobsLib.listJobs(paths);
+
+  if (jobs.length === 0) {
+    const t = gen.teardownCatchup(paths, manifest, { loader, platform });
+    return t.removed ? { notice: 'catch-up entry torn down — no scheduled jobs remain.' } : {};
+  }
+
+  const jobDigests = catchupJobDigests(paths, platform);
+  const roots = schedulerRootsFor(paths);
+  const probe = opts.probe || require('../scheduler/status').defaultProbe;
+
+  if (platform === 'darwin') {
+    const uid = process.getuid();
+    const plistPath = path.join(gen.launchAgentsDir(paths.home), 'ai.wienerdog.catchup.plist');
+    const probeArgv = gen.deriveProbeArgv(plistPath, platform);
+    if (!probeArgv || probe(probeArgv) !== 'missing') return {};
+    const content = gen.catchupPlist({
+      node: gen.nodePath(),
+      launcher: launcherPathFor(paths),
+      expectDigest: catchupExpectDigest(paths),
+      jobDigests,
+      home: paths.home,
+      logDir: path.join(paths.logs, 'catchup'),
+    });
+    if (!writeCanonicalSchedule(plistPath, content) || !manifestLib.withinSchedulerRoot(plistPath, roots)) return {};
+    const loaded = loader(['launchctl', 'bootstrap', `gui/${uid}`, plistPath]).status === 0;
+    return loaded ? { notice: 'restored the missing catch-up registration.' } : { notice: "catch-up entry rewritten but the OS scheduler did not accept it — run 'wienerdog doctor'." };
+  }
+
+  // win32
+  const userId = gen.windowsCurrentUserId();
+  const xmlPath = gen.windowsTaskFile(paths, 'catchup');
+  const probeArgv = gen.deriveProbeArgv(xmlPath, platform);
+  if (!probeArgv || probe(probeArgv) !== 'missing') return {};
+  const wrapperPath = gen.windowsWrapperFile(paths, 'catchup');
+  const launchArgs = ['--catch-up', '--expect-digest', catchupExpectDigest(paths)];
+  if (jobDigests) launchArgs.push('--job-digests', jobDigests);
+  const wrapperContent = gen.windowsLauncherWrapper({
+    node: gen.nodePath(),
+    launcher: launcherPathFor(paths),
+    home: paths.home,
+    launchArgs,
+  });
+  const content = gen.windowsTaskXmlBytes(gen.windowsCatchupTaskXml({ wrapper: wrapperPath, userId }));
+  if (!writeCanonicalSchedule(wrapperPath, wrapperContent)) return {};
+  if (!writeCanonicalSchedule(xmlPath, content) || !manifestLib.withinSchedulerRoot(xmlPath, roots)) return {};
+  const loaded = loader(['schtasks', '/create', '/tn', gen.windowsTaskName('catchup'), '/xml', xmlPath, '/f']).status === 0;
+  return loaded ? { notice: 'restored the missing catch-up registration.' } : { notice: "catch-up task rewritten but the OS scheduler did not accept it — run 'wienerdog doctor'." };
 }
 
 /** The known scheduler roots for `paths` (LaunchAgents / systemd user dir /
@@ -665,8 +784,18 @@ function remove(argv, loader) {
     manifestLib.reverseSchedulerEntry(entry, false, removed, skipped, removedSet, schedulerOpts);
   }
   manifest.entries = manifest.entries.filter((e) => !matched.includes(e));
-  manifestLib.save(paths, manifest);
   jobsLib.removeJob(paths, name);
+  // WP-catchup-per-job-authorization [R8]: `schedule remove` DELEGATES catch-up teardown to
+  // `repointSchedules` (the sole teardown owner) rather than tearing it down
+  // directly — removing the FINAL job tears the catch-up entry + map down cleanly;
+  // a non-final removal re-mints the map without the removed job. Best-effort: the
+  // job and its per-job entries are already gone regardless.
+  try {
+    repointSchedules(paths, manifest, { loader });
+  } catch {
+    /* catch-up teardown/rebind is best-effort */
+  }
+  manifestLib.save(paths, manifest);
 
   if (removed.length === 0) {
     // Validate-before-spawn (F33): reverseSchedulerEntry now unregisters ONLY a
