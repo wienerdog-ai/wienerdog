@@ -694,8 +694,8 @@ preflight at the very START of `adopt.run`, before adopt's first mutation:**
 Place this at the top of `adopt.run`, before the Git/snapshot mutation — NOT near
 `ensureDreamSchedule`. **Deliverables:** `src/cli/adopt.js` (added to the table
 above) for the pin preflight/commit (this WP owns `createPins`); the descriptor/
-map binding on the same file is WP-160's (serialized: WP-154 preflight first,
-WP-160 mint after). This requires `createPins` to support a **`dryRun`** that
+map binding on the same file is WP-catchup-per-job-authorization's (serialized: WP-154 preflight first,
+WP-catchup-per-job-authorization mint after). This requires `createPins` to support a **`dryRun`** that
 resolves+verifies per name without writing — extend its `opts` (already typed
 `{dryRun?:boolean}` in the exec-identity contract). **Test:** pre-WP-154 install,
 claude unresolvable ⇒ adopt aborts with vault/config/manifest/prior-pin-store all

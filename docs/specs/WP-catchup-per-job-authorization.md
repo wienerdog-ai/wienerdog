@@ -1,15 +1,15 @@
 ---
-id: WP-160
+id: WP-catchup-per-job-authorization
 title: Catch-up per-job authorization — bind an authorized per-job digest map into the catch-up OS registration; verify each due job before it runs
 status: Draft
 model: opus
 size: M
 depends_on: [WP-156, WP-157]
 adrs: [ADR-0004, ADR-0013, ADR-0028]
-branch: wp/160-catchup-per-job-authorization
+branch: wp/catchup-per-job-authorization
 ---
 
-# WP-160: Catch-up per-job authorization (audit A7 — catch-up hardening)
+# WP-catchup-per-job-authorization: Catch-up per-job authorization (audit A7 — catch-up hardening)
 
 ## Context (read this, nothing else)
 
@@ -92,7 +92,7 @@ for the scoped-write class only.
 | modify | src/cli/sync.js | **[R6/R9:#3]** the attended sync flow (its `repointSchedules` call) is the sole owner of catch-up **repair + teardown** (mint is done by all four attended callers — see the canonical invariant) — orchestrate the query+repair here; the map (re)bind + repair logic itself lives in `repointSchedules` (`schedule.js`, already listed). |
 | modify | src/scheduler/status.js | **[R6]** `reloadMissing` is **excluded from the catch-up entry entirely** — it neither creates, authorizes, nor reloads it (catch-up repair/teardown is repointSchedules' sole responsibility). |
 | modify | src/cli/init.js | **[R7]** `init`'s `ensureDreamSchedule` mints the catch-up map from freshly-validated descriptors (first-install; init does not necessarily run `sync`). No config-trusted/stale map. |
-| modify | src/cli/adopt.js | **[R7]** `adopt`'s `ensureDreamSchedule` mints the catch-up map from freshly-validated descriptors — adopt does NOT call `sync`, so it is a first-class attended mint caller. **[R8:#3]** adopt runs no `createPins` today, so a legacy/pre-WP-154 install (config.yaml but no `exec-pins.json`) has no pins, and WP-154/156 require claude+git pins before binding a dream descriptor → adopt needs a **transactional pin preflight at the START of `adopt.run`** (dry resolve+verify claude+git → abort before any mutation on failure → atomic commit) — see **WP-154 A5 [R9:#2]**, which owns that step. The descriptor/map **mint** here (WP-160) runs only after WP-154's preflight has committed a complete pin store. `src/cli/adopt.js` is in both WPs' Deliverables (preflight under WP-154, mint under WP-160; serialized). |
+| modify | src/cli/adopt.js | **[R7]** `adopt`'s `ensureDreamSchedule` mints the catch-up map from freshly-validated descriptors — adopt does NOT call `sync`, so it is a first-class attended mint caller. **[R8:#3]** adopt runs no `createPins` today, so a legacy/pre-WP-154 install (config.yaml but no `exec-pins.json`) has no pins, and WP-154/156 require claude+git pins before binding a dream descriptor → adopt needs a **transactional pin preflight at the START of `adopt.run`** (dry resolve+verify claude+git → abort before any mutation on failure → atomic commit) — see **WP-154 A5 [R9:#2]**, which owns that step. The descriptor/map **mint** here (WP-catchup-per-job-authorization) runs only after WP-154's preflight has committed a complete pin store. `src/cli/adopt.js` is in both WPs' Deliverables (preflight under WP-154, mint under WP-catchup-per-job-authorization; serialized). |
 | create | tests/unit/catchup-authorization.test.js | The negatives below. |
 | modify | tests/unit/scheduler-generators.test.js | Assert the catch-up entry carries `--job-digests` with a canonical map. |
 
@@ -124,7 +124,7 @@ base64url per-job digest map is bound into the **macOS `catchupPlist`** and the
 `.timer Persistent=true` replays the **normal per-job `.service`**, already
 authorized by that job's normal per-job `--expect-digest` (WP-157) — so Linux
 catch-up needs no all-job map and must **not** introduce a duplicate all-job
-dispatch. All WP-160 map machinery (bind, decode, union-authorize) is
+dispatch. All WP-catchup-per-job-authorization map machinery (bind, decode, union-authorize) is
 macOS/Windows only.
 
 **Anchor rule (the whole point).** The authorized digest for a job on the
@@ -172,7 +172,7 @@ Enumerated catch-up registration/reload paths + the required stance:
 | `sync.js:197` / `status.js:185` `reloadMissing` (generic sync-time heal) | attended (runs under `sync`) | **never touches the catch-up entry** | **[R6]** The generic heal re-registers missing CANONICAL per-job entries (WP-145) but is **excluded** from the catch-up entry entirely. Catch-up **repair/teardown** belongs to `repointSchedules`; **mint** belongs to any attended registration caller above. |
 | `doctor` | attended, read-only | **never mints/touches** | Read-only presence report only. |
 
-**CANONICAL OWNERSHIP INVARIANT [R7/R9:#3] (stated verbatim in WP-160, ADR-0028
+**CANONICAL OWNERSHIP INVARIANT [R7/R9:#3] (stated verbatim in WP-catchup-per-job-authorization, ADR-0028
 item 6, and FIX-PLAN C8):** *All four attended, user-invoked callers —
 `sync`/`repointSchedules`, `schedule add`, `init`, `adopt` — may MINT/register the
 catch-up map from freshly-validated descriptors; `repointSchedules` ALONE owns
@@ -315,8 +315,8 @@ npm run lint
 ## Definition of done
 
 1. All verification steps pass locally; output pasted into the PR body.
-2. Branch `wp/160-catchup-per-job-authorization`; conventional commits; PR titled
-   `feat(security): catch-up per-job authorization via loaded registration (WP-160)`.
+2. Branch `wp/catchup-per-job-authorization`; conventional commits; PR titled
+   `feat(security): catch-up per-job authorization via loaded registration (WP-catchup-per-job-authorization)`.
 3. PR template filled, including "Decisions made" (or "none") and `Generated-by:`.
 4. This spec's `status:` flipped to `In-Review` in the same PR.
 

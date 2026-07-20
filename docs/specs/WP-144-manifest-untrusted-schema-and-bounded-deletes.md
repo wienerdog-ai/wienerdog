@@ -273,7 +273,7 @@ npm run lint
 ## Fix-pass amendments (2026-07-19)
 
 Review found a delete-time TOCTOU and an isolation gap. Full implementer contract
-+ tests: `FIX-PLAN.md` cluster **C6**. No new files (all edits within
+and tests: `FIX-PLAN.md` cluster **C6**. No new files (all edits within
 `src/core/manifest.js` + the two listed test files). Real file is
 `src/core/manifest.js` (the report said `src/cli/manifest.js`).
 

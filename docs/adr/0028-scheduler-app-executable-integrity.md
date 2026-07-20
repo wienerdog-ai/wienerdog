@@ -529,7 +529,7 @@ implemented as dated amendments in the six specs and detailed in `FIX-PLAN.md`.
    `cmd` with a proven token encoder) — inline `cmd /c` with only XML escaping was
    unsafe (`%VAR%` expansion / AutoRun in hostile paths).
 
-6. **Catch-up per-job authorization — PENDING until WP-160 (Decision 3/4
+6. **Catch-up per-job authorization — PENDING until WP-catchup-per-job-authorization (Decision 3/4
    refinement).** Catch-up verified only the app-tree digest and then ran jobs
    from mutable `config.yaml`, so a config change a normal fire refused was
    executed by the next catch-up. The fix binds an **authorized per-job digest map
@@ -537,11 +537,11 @@ implemented as dated amendments in the six specs and detailed in `FIX-PLAN.md`.
    live-registration query) — **never re-read from the editable per-job entry
    file**, which is a user-writable source artifact an in-scope attacker can forge
    without reloading the scheduler. **[R3] This is delivered by the materialized
-   `WP-160` (Draft); WP-157 ships the normal per-job fire enforcement but leaves
-   catch-up authorization PENDING, so catch-up is NOT yet fail-closed until WP-160
-   lands** (WP-158/WP-159 `depends_on: WP-160`). Every verification exception (on
+   `WP-catchup-per-job-authorization` (Draft); WP-157 ships the normal per-job fire enforcement but leaves
+   catch-up authorization PENDING, so catch-up is NOT yet fail-closed until WP-catchup-per-job-authorization
+   lands** (WP-158/WP-159 `depends_on: WP-catchup-per-job-authorization`). Every verification exception (on
    both paths) becomes a durable alert + zero spawn (never a bare throw with no
-   alert). **[R4] WP-160 authorizes the union of bound ∪ configured jobs BEFORE
+   alert). **[R4] WP-catchup-per-job-authorization authorizes the union of bound ∪ configured jobs BEFORE
    deciding due-ness** (so an `at`-rewrite-to-future or a removal alerts rather
    than silently suppressing), and transports the per-job digest map as
    **base64url(canonical JSON)** with a bounded decoder (raw JSON argv is not
@@ -559,7 +559,7 @@ implemented as dated amendments in the six specs and detailed in `FIX-PLAN.md`.
    must not re-bind the loaded map from a since-mutated config (else a statically
    added job B gets authorized after unrelated job A succeeds, with no
    scheduler-registration capability). **[R6/R7/R9:#3] Canonical ownership
-   invariant (stated verbatim in ADR-0028, WP-160, and FIX-PLAN C8):** *All four
+   invariant (stated verbatim in ADR-0028, WP-catchup-per-job-authorization, and FIX-PLAN C8):** *All four
    attended, user-invoked callers — `sync`/`repointSchedules`, `schedule add`,
    `init`, `adopt` — may MINT/register the catch-up map from freshly-validated
    descriptors; `repointSchedules` ALONE owns repair + teardown; `schedule remove`

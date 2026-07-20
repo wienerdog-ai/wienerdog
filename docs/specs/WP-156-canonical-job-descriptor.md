@@ -196,7 +196,7 @@ authorization). All paths absolute.
 > `outerTimeoutMs`←resolved job.timeoutMinutes; `maxInputBytes`←cfg.maxInputBytes;
 > `vaultLayout`←readVaultLayout(config); `vaultRoot`←cfg.vault; `home`←bound home;
 > `schedule`←{at: job.at, timezone}; `exec`←loadPins (claude+git required); `appRelease`←vendor.
-
+>
 > **RESOLVED (OWNER-APPROVED 2026-07-18, A7 walkthrough) — `model` joins the
 > descriptor.** The ratified A7 rule is "everything that shapes the 03:30 spawn
 > argv is digest-covered, no exceptions." `cfg.model` flows into the brain spawn
@@ -514,7 +514,7 @@ suppress the job — with no drift. **Corrected contract:** thread `job.at` (fro
 name `timezone`, never `tz`), canonicalized so it folds into `descriptorDigest`. Treat `at` exactly like
 `model`/`timeout`/`vaultLayout`: an `at` edit now requires `wienerdog sync`. This
 field flows into the normal per-job digest **and** the catch-up per-job map
-(WP-160). **Test:** an `at`-only rewrite changes `deriveDescriptorDigest` and, at
+(WP-catchup-per-job-authorization). **Test:** an `at`-only rewrite changes `deriveDescriptorDigest` and, at
 fire/catch-up time, is **REFUSED** (not run, not silently suppressed) — drop the
 `schedule` field ⇒ the `at` rewrite no longer drifts ⇒ fails.
 

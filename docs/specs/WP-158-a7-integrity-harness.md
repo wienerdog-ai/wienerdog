@@ -4,7 +4,7 @@ title: A7 integrity containment proof — end-to-end negative harness for the sc
 status: In-Review
 model: opus
 size: M
-depends_on: [WP-154, WP-155, WP-156, WP-157, WP-160]
+depends_on: [WP-154, WP-155, WP-156, WP-157, WP-catchup-per-job-authorization]
 adrs: [ADR-0004, ADR-0009, ADR-0013, ADR-0028]
 branch: wp/158-a7-integrity-harness
 ---
@@ -330,11 +330,11 @@ shared case list (A6) must add:
   as a **file** + a tracked-source edit still runs (dev digest = full descriptor
   minus `appRelease.treeDigest`+`version` only); an `at`/`home` edit on the dev
   install still **refuses** (schedule/home retained in the dev digest — R15).
-- **[R2:F12]** a **catch-up file-forge** negative (belongs with **WP-160** once
+- **[R2:F12]** a **catch-up file-forge** negative (belongs with **WP-catchup-per-job-authorization** once
   it lands): editing `config.yaml` + the per-job entry **source file** (without
   reload) still refuses at catch-up — the loaded-registration map is the anchor.
-  Until WP-160 lands, mark this case pending and note it in the README. (WP-158
-  now `depends_on: WP-160`, so the harness ships with this case executable.)
+  Until WP-catchup-per-job-authorization lands, mark this case pending and note it in the README. (WP-158
+  now `depends_on: WP-catchup-per-job-authorization`, so the harness ships with this case executable.)
 - **[R3:#3]** an **`at`-only schedule rewrite** case: rewriting a job's `at` in
   `config.yaml` (no other change) ⇒ digest drift ⇒ refuse at both the normal fire
   and catch-up (not run, not silently suppressed). Fails if `schedule` is dropped
@@ -349,23 +349,23 @@ shared case list (A6) must add:
   credential root — the child resolves the **bound** home. Fails if the roots
   reconstruct from `env.HOME||os.homedir()`.
 - **[R4:#1]** **catch-up job-removal / at-rewrite alert** cases (belong with
-  **WP-160**): removing an authorized job, or rewriting its `at` to a future time,
+  **WP-catchup-per-job-authorization**): removing an authorized job, or rewriting its `at` to a future time,
   each produces a durable **alert** with zero spawn — NOT silent suppression
   (proves authorization precedes due-filtering).
-- **[R4:#3 / R8:#2]** **catch-up transport** cases (WP-160), **macOS + Windows
+- **[R4:#3 / R8:#2]** **catch-up transport** cases (WP-catchup-per-job-authorization), **macOS + Windows
   only**: the base64url `--job-digests` round-trips; a malformed/oversized value ⇒
   durable alert + zero spawn (no parse crash). **On Linux there is NO map** —
   assert instead that the per-job `.timer Persistent=true` invokes the NORMAL
   per-job `.service` carrying its own `--expect-digest`, and that **no separate
   all-job catch-up registration exists** on Linux.
-- **[R5]** **runtime-mint** negative (WP-160): statically add/modify job B in
+- **[R5]** **runtime-mint** negative (WP-catchup-per-job-authorization): statically add/modify job B in
   `config.yaml`, then let unchanged authorized job A succeed on its normal fire ⇒
   A's success does NOT reload the catch-up entry and does NOT authorize B; the
   next catch-up **refuses B** (alert + zero spawn). Plus an attended-`sync`
   positive: removing a job (incl. the final job) cleanly refreshes/tears down the
   map. Fails if the runtime post-success `ensureCatchup` still re-binds from
   config.
-- **[R6]** **missing-registration heal** (WP-160): source file + manifest intact
+- **[R6]** **missing-registration heal** (WP-catchup-per-job-authorization): source file + manifest intact
   and canonical but the LOADED catch-up registration missing ⇒ ONE attended
   `sync` restores it with the correct bound base64url map (assert the loaded
   entry's argv); and the generic `reloadMissing`, run alone, NEVER creates/

@@ -162,7 +162,7 @@ filename does not change), so unload still works after this WP.
 | create | tests/unit/launcher.test.js | `verifyAndResolve` pass + every mismatch (out-of-root current, app byte mutation, repoint, wrong descriptor digest, prod/dev mismatch) ⇒ refuse + zero spawn. |
 | modify | tests/unit/vendor.test.js | Assert the launcher is placed outside `app/`, the version dir is read-only, interrupted publish keeps old `current`, `verifyCurrentContainment` rejects an out-of-root symlink. |
 | modify | tests/unit/scheduler-generators.test.js | Assert entries invoke the launcher with the descriptor path + expect-digest; catch-up entries use `--catch-up`. |
-| modify | src/cli/run-job.js | Fix-pass (2026-07-19, [R3:#4]): scheduled-env allowlist — drop `CLAUDE_CONFIG_DIR`/`CODEX_HOME`/`ANTHROPIC_API_KEY` from `ENV_PASSTHROUGH`; reconstruct the config roots deterministically in `buildCleanEnv`; ensure Windows `APPDATA`/`LOCALAPPDATA` cannot override the bound config root (A10). (Catch-up per-job verification moved to **WP-160**.) |
+| modify | src/cli/run-job.js | Fix-pass (2026-07-19, [R3:#4]): scheduled-env allowlist — drop `CLAUDE_CONFIG_DIR`/`CODEX_HOME`/`ANTHROPIC_API_KEY` from `ENV_PASSTHROUGH`; reconstruct the config roots deterministically in `buildCleanEnv`; ensure Windows `APPDATA`/`LOCALAPPDATA` cannot override the bound config root (A10). (Catch-up per-job verification moved to **WP-catchup-per-job-authorization**.) |
 | modify | tests/unit/scheduler-schedule.test.js | Fix-pass: entry-argv + digest-binding change (boundary reconciliation, A9). |
 | modify | tests/unit/sync-repoint.test.js | Fix-pass: entry-argv reconciliation on repoint (boundary, A9). |
 
@@ -404,7 +404,7 @@ unknown `--flag` refuses (fail closed). Test: `parseArgv(['--catch-up',
 (L210-215) and catch-up path (L268) return `ok:true` before any digest check.
 **Corrected contract:**
 1. Fire-time dev authority is the descriptor's **digest-bound** `appRelease.stance`
-   + the on-disk `.git` liveness check; **remove `env.WIENERDOG_DEV` as a
+   and the on-disk `.git` liveness check; **remove `env.WIENERDOG_DEV` as a
    fire-time trigger** (bind stance at registration, not at fire).
 2. Catch-up performs no dev early-return before containment (+ per-job
    verification, A5). A `prod` entry over a `.git` tree still refuses.
@@ -463,15 +463,15 @@ refuse, but catch-up reads the forged FILE and runs. **Corrected:** at
 **registration** (registration privilege) bind a **canonical per-job digest map**
 into the **catch-up OS entry's own arguments** (the args launchd/systemd fire from
 and schtasks stores in the task DB — loaded state, not re-read from the editable
-file). **[R3:#2] SPLIT — materialized as `docs/specs/WP-160-catchup-per-job-
+file). **[R3:#2] SPLIT — materialized as `docs/specs/WP-catchup-per-job-authorization-catchup-per-job-
 authorization.md`** (Draft, `depends_on:[WP-156, WP-157]`), with the full
 contract (per-job digest map bound into the catch-up registration argv,
 `run-job --catch-up` comparison, macOS/Windows negatives). **WP-157 lands as an
 explicitly-incomplete intermediate for the catch-up path**: it ships the normal
 per-job fire enforcement but NOT catch-up authorization. Machine-visible: WP-158
-and WP-159 now `depends_on: WP-160`, so the harness/docs cannot ship claiming
-catch-up is covered before WP-160 lands. ADR-0028 states catch-up authorization
-is **PENDING until WP-160**. (See WP-160 for the anchor rule + tests.)
+and WP-159 now `depends_on: WP-catchup-per-job-authorization`, so the harness/docs cannot ship claiming
+catch-up is covered before WP-catchup-per-job-authorization lands. ADR-0028 states catch-up authorization
+is **PENDING until WP-catchup-per-job-authorization**. (See WP-catchup-per-job-authorization for the anchor rule + tests.)
 
 ### A6 — `ensureCatchup` signature [Codex MED]
 
@@ -507,7 +507,7 @@ Spec wording now matches the impl; no code change.
 - Deliverables add `tests/unit/scheduler-schedule.test.js` +
   `tests/unit/sync-repoint.test.js` (the entry-argv/digest-binding change
   legitimately touches both) and `src/cli/run-job.js` (A5, unless split to
-  WP-160). All added to the table above.
+  WP-catchup-per-job-authorization). All added to the table above.
 - Refuse text points to `wienerdog doctor`, which reads no A7 state
   (`alerts.jsonl`/pins/descriptor). Change the message to point at the real
   surface — the alert appears in the **next digest banner**; remedy is
@@ -569,5 +569,5 @@ Windows `APPDATA`) does **not** alter the authorized execution context (the chil
 sees the canonical wienerdog config roots; no ambient key). **Size note:** if
 this exceeds WP-157's budget, split to a materialized `WP-163-scheduled-env-
 allowlist` (depending on WP-157; WP-158/WP-159 then also depend on it) — do not
-ship it as prose-only (the WP-160 lesson). The deterministic-reconstruction
+ship it as prose-only (the WP-catchup-per-job-authorization lesson). The deterministic-reconstruction
 approach is compact and expected to fit WP-157.

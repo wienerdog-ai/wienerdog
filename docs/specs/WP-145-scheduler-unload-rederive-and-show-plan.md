@@ -328,12 +328,12 @@ Reuse `schedule.js`'s regenerate-then-register path; `status.js` must not have a
 
 **[R5/R6] The heal is EXCLUDED from the catch-up entry entirely.** `reloadMissing`
 re-registers missing CANONICAL per-job entries under attended `sync`, but per
-WP-160 [R6] it must **not** create, authorize, or reload the **catch-up** entry at
+WP-catchup-per-job-authorization [R6] it must **not** create, authorize, or reload the **catch-up** entry at
 all — catch-up register/repair/teardown is owned solely by `repointSchedules`
 (which runs in the same attended `sync` and both (re)binds the map AND repairs a
 missing loaded registration). This gives the missing-catch-up-registration case a
 single coherent owner and keeps the authorization anchor (the digest map)
-attended-only. See WP-160's attended-authorization boundary table.
+attended-only. See WP-catchup-per-job-authorization's attended-authorization boundary table.
 
 **[R3:#1] Honest residual — the verify→register reopen race is A12, not closed
 here.** After byte-verifying the regenerated file, `launchctl`/`schtasks`/
@@ -358,7 +358,7 @@ recognized name ⇒ not registered; (iii) out-of-root ⇒ zero probe/heal.
 
 `src/cli/schedule.js` `remove()` (L512-522) is a 2nd production caller of
 `reverseSchedulerEntry` with a **byte-duplicated** `schedulerRoots`; the root-set
-+ validate-before-spawn change must be mirrored here or `schedule remove`
+and validate-before-spawn change must be mirrored here or `schedule remove`
 diverges from uninstall. Added to Deliverables:
 `src/cli/schedule.js` + `tests/unit/scheduler-schedule.test.js`.
 

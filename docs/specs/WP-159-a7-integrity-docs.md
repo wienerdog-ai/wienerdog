@@ -4,7 +4,7 @@ title: A7 documentation — honest scheduler/app/executable integrity claims, th
 status: In-Review
 model: sonnet
 size: M
-depends_on: [WP-154, WP-155, WP-156, WP-157, WP-160]
+depends_on: [WP-154, WP-155, WP-156, WP-157, WP-catchup-per-job-authorization]
 adrs: [ADR-0004, ADR-0013, ADR-0028]
 branch: wp/159-a7-integrity-docs
 ---
@@ -266,7 +266,7 @@ describe the **fixed** code. Full context: `FIX-PLAN.md` cluster **C5**.
 - **A1 — catch-up config drift [Codex HIGH → fixed in WP-157 A5].** After the
   WP-157 catch-up per-job-descriptor fix, "config drift ⇒ zero model spawn" holds
   on catch-up too — but the docs must state that catch-up is verified **per job**
-  (not app-tree-only). If WP-157 A5 is split to WP-160 and not yet landed, scope
+  (not app-tree-only). If WP-157 A5 is split to WP-catchup-per-job-authorization and not yet landed, scope
   the claim to the normal fire and name catch-up as a pending gap. Do not
   overclaim.
 - **A2 — "every scheduled spawn is pinned" is false [Codex HIGH].** Scope the pin
@@ -303,9 +303,9 @@ describe the **fixed** code. Full context: `FIX-PLAN.md` cluster **C5**.
 
 ### Round-2 follow-through (2026-07-19)
 
-- **[R2:F12] Catch-up hardening is split to WP-160.** Until WP-160 lands, the docs
+- **[R2:F12] Catch-up hardening is split to WP-catchup-per-job-authorization.** Until WP-catchup-per-job-authorization lands, the docs
   must state plainly that **catch-up is not yet fail-closed per job** — do not
-  claim the config-drift guarantee for the catch-up path. Once WP-160 lands,
+  claim the config-drift guarantee for the catch-up path. Once WP-catchup-per-job-authorization lands,
   update to "catch-up verifies each due job against a digest bound into the
   catch-up registration (not the editable entry file)."
 - **[R2:F5/R15] Digest-covered knobs (the WP-156 authoritative set).** The `job
@@ -340,13 +340,13 @@ describe the **fixed** code. Full context: `FIX-PLAN.md` cluster **C5**.
   canonical scheduler file, but registration reopens the path; an active
   concurrent writer at heal time (A12) could swap it. A *static* planted file is
   defeated. Do not claim the scheduler receives the exact verified bytes.
-- **[R3:#2] Catch-up.** Because WP-159 now `depends_on: WP-160`, the docs may
-  state catch-up is fail-closed per job only if WP-160 has landed; otherwise name
+- **[R3:#2] Catch-up.** Because WP-159 now `depends_on: WP-catchup-per-job-authorization`, the docs may
+  state catch-up is fail-closed per job only if WP-catchup-per-job-authorization has landed; otherwise name
   it as a pending gap (see the round-2 A1 note).
 - **[R4:#2] Bound home.** The scheduled-environment claim must include that the
   **home directory** (parent of the credential/config roots) is bound at
   registration + digest-covered, so a hostile ambient `HOME` cannot relocate the
   model's credential/config account.
-- **[R4:#1] Catch-up alerts, not silent suppression.** State (once WP-160 lands)
+- **[R4:#1] Catch-up alerts, not silent suppression.** State (once WP-catchup-per-job-authorization lands)
   that catch-up authorizes the full job set before deciding due-ness, so an `at`
   rewrite or a job removal produces an alert rather than a silent skip.
