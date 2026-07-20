@@ -312,6 +312,33 @@ derive from the same `listPrivateDirs`/`listPrivateEntries` that feed the three
 read surfaces (this also removes the redundant per-iteration `secrets/` file
 walk the old phase-1 full enumeration incurred).
 
+**AMENDED 2026-07-20 (Codex G2) — the enumeration AND the chmod NEVER follow a
+symlink (ADR-0027 never-follow bar).** The enumerator classifies every candidate
+with `lstat`, not `stat`: a private path that is a **symlink** — or whose
+`realpath` **escapes the canonical core** — is an **anomaly**, returned in a
+third `{dirs, files, anomalies}` bucket and **surfaced** by `insecureEntries`/
+`scanPrivateModes` (so doctor WARNs it with a distinct "…is a symlink where
+Wienerdog expects a private file or folder — it was NOT repaired…" message),
+**never** added to `dirs`/`files`, **never** traversed into, **never** chmodded
+through. Files are walked ONLY out of real, in-core dirs (`dirSet` membership),
+so a symlinked `secrets/`/`logs/<job>` can never enumerate — or re-permission —
+an out-of-tree target. Containment is realpath-vs-realpath (`withinCore`), so a
+symlinked ancestor of the core (e.g. `/var`→`/private/var`) is not a false
+escape. The chmod itself is TOCTOU-safe: `applyModeSecure` opens the path
+`O_RDONLY|O_NOFOLLOW` (dirs add `O_DIRECTORY`), `fstat`s the fd to confirm kind +
+mode, and `fchmod`s that verified descriptor — a swap-to-symlink between
+enumeration and chmod trips `O_NOFOLLOW` at open (`ELOOP`/`ENOTDIR`) and is
+**refused** (surfaced, not followed). The one case `O_RDONLY` cannot open is an
+owner-owned **unreadable (mode `000`) real** dir/file — exactly the fixed-point
+loop's target — which falls back to an `lstat`-guarded path `chmod` (reject a
+symlink, confirm the kind, then `chmodSync`, which needs only ownership). Pattern
+reused from `manifest.js` F30/WP-144 (`O_NOFOLLOW` = `fs.constants.O_NOFOLLOW ||
+0`, a win32 no-op; realpath-canonical containment). **Attribution:** the
+`statSync`-follow in `chmodIfNeeded`/enumeration was A5-era behavior this WP
+inherited; it is fixed here because this WP extended `repairPrivateModes` to the
+credential store (`secrets/`) and added the multi-level directory traversal,
+which is what turned the follow into a chmod-out-of-tree exposure.
+
 **The shared private log-stream helper `createLogStreamPrivate` — FAIL-CLOSED
 (round-2 finding 6).** The two log writers must open their stream `0600`
 regardless of umask, including when appending into a **pre-existing** file (whose
