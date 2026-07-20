@@ -645,6 +645,8 @@ function safeResolvePath(input, guard, hopCap = 40) {
  *          timeoutMs?: number,
  *          reapTree?: typeof killProcessTree,
  *          reapGroup?: typeof reap.reapGroup,
+ *          probeCmd?: string,
+ *          skipContainmentProbe?: boolean,
  *          profile?: Record<string,string>}} [opts] `opts.profile` is the
  *   WP-142 harness code seam (see safety-profile.js): reachable ONLY by a JS
  *   caller — the CLI entry never passes one, so production stays frozen.
@@ -761,6 +763,32 @@ async function runJob(paths, job, opts = {}) {
         `residual, see the threat model), not an attacker vector; the run continues. ADR-0025.`,
       log_hint: '',
     });
+  }
+
+  // 2c. PRE-ROUTINE CONTAINMENT SELF-CHECK (WP-routine-containment-probe, ADR-0025
+  //     Amendment 3). Reached ONLY for a real routine (skill:) spawn — past the A0
+  //     requireCapability freeze in resolveCommand. A bounded live canary probe of a
+  //     BROKER-FREE containment-only profile (mcp:'empty', no --mcp-config, no broker
+  //     verb) derived from this routine's profile verifies the actually-installed
+  //     Claude still honors the containment flags the routine depends on, and HALTS
+  //     fail-closed (no brain, durable alert, error watermark) on a fail/inconclusive
+  //     — exactly like the dream's WP-135 probe. This is the SINGLE shared spawn locus
+  //     covering interactive + scheduled/launcher + catch-up (catchUp → runJob). The
+  //     builtin:dream path is unaffected (its probe is in dream.js). opts.probeCmd /
+  //     opts.skipContainmentProbe are JS-only test seams so npm test spends no quota;
+  //     production passes neither.
+  if (job.run.startsWith('skill:') && !opts.skipContainmentProbe) {
+    const { runContainmentProbe } = require('../core/dream/containment-probe');
+    const profileId = require('../core/routine-runtime').profileIdForSkill(job.run.slice(job.run.indexOf(':') + 1));
+    const probe = runContainmentProbe(paths, { profileId, model: null, env, probeCmd: opts.probeCmd });
+    if (probe.outcome !== 'pass') {
+      const reason =
+        `routine "${name}" halted: pre-routine containment self-check ${probe.outcome} on claude ` +
+        `${probe.claudeVersion} — ${probe.reason}. The routine did not run. Re-run after updating/checking Claude.`;
+      jobsLib.writeScheduleState(paths, name, { last_status: 'error', last_error_at: nowIso() });
+      await failLoud(paths, name, reason, opts);
+      throw new WienerdogError(reason);
+    }
   }
 
   // 3. Per-run log location. The dir/stream OPEN happens INSIDE the try below

@@ -115,6 +115,37 @@ const noopLoader = () => ({ status: 0 });
  *  injected as runJob's opts.resolveCommand; always shell:false. */
 const fakeResolve = (script) => () => ({ command: script, args: [], shell: false });
 
+/** Write a fake `claude` for the pre-routine containment probe (WP-routine-
+ *  containment-probe), injected as runJob's opts.probeCmd. 'pass' → a clean,
+ *  contained JSON envelope (probe passes); 'fail' → reads the canary secret into
+ *  the result (containment BROKEN → probe fails). A node script so it is
+ *  cross-platform-executable like the containment-probe test fakes. */
+function writeProbeFake(dir, mode) {
+  const p = path.join(dir, `probe-${mode}.js`);
+  fs.writeFileSync(
+    p,
+    `#!/usr/bin/env node
+'use strict';
+const fs = require('node:fs');
+if (process.argv[2] === '--version') { process.stdout.write('9.9.9 (Fake)\\n'); process.exit(0); }
+const canary = process.env.WIENERDOG_PROBE_CANARY_PATH;
+const write = process.env.WIENERDOG_PROBE_WRITE_PATH;
+if (${JSON.stringify(mode)} === 'fail') {
+  const tok = fs.readFileSync(canary, 'utf8').trim();
+  process.stdout.write(JSON.stringify({ result: 'leaked ' + tok, permission_denials: [] }) + '\\n');
+  process.exit(0);
+}
+process.stdout.write(JSON.stringify({ result: 'contained', permission_denials: [
+  { tool_name: 'Read', tool_input: { file_path: canary } },
+  { tool_name: 'Write', tool_input: { file_path: write } },
+] }) + '\\n');
+process.exit(0);
+`
+  );
+  fs.chmodSync(p, 0o755);
+  return p;
+}
+
 // -------------------------------------------------------------------------
 // buildCleanEnv (pure)
 // -------------------------------------------------------------------------
@@ -1708,11 +1739,14 @@ test('scheduler-runjob: managed policy hooks present → warns, records evidence
   const detect = () => ({ present: true, sources: ['/etc/claude-code/managed-settings.json'] });
 
   // No throw, no error watermark — the run PROCEEDS to a normal success.
+  // skipContainmentProbe: this test predates the pre-routine probe (WP-routine-
+  // containment-probe) and exercises the managed-hook WARNING, not containment.
   await withRun(env, {}, ['weekly'], {
     resolveCommand: fakeResolve(fake),
     loader: noopLoader,
     detectPolicyHooks: detect,
     sendAlert: () => ({ status: 0 }),
+    skipContainmentProbe: true,
   });
   const state = jobsLib.readScheduleState(paths);
   assert.equal(state.weekly.last_status, 'ok', 'managed hooks are a WARNING, never a STOP');
@@ -1745,6 +1779,7 @@ test('scheduler-runjob: the managed-hook warning lands on the durable alert chan
       loader: noopLoader,
       detectPolicyHooks: detect,
       sendAlert: () => ({ status: 0 }),
+      skipContainmentProbe: true,
     }),
     /exited 3/
   );
@@ -1766,6 +1801,7 @@ test('scheduler-runjob: no managed hooks → no warning, evidence still recorded
       loader: noopLoader,
       detectPolicyHooks: detect,
       sendAlert: () => ({ status: 0 }),
+      skipContainmentProbe: true,
     }),
     /exited 3/
   );
@@ -1787,4 +1823,77 @@ test('scheduler-runjob: builtin:dream under run-job records no duplicate evidenc
     detectPolicyHooks: () => ({ present: false, sources: [] }),
   });
   assert.deepEqual(readEvidence(paths), [], 'the dream layer (spawnBrain) owns the dream evidence');
+});
+
+// -------------------------------------------------------------------------
+// WP-routine-containment-probe: the pre-routine live containment self-check
+// gates EVERY skill: spawn path (interactive + scheduled + catch-up).
+// -------------------------------------------------------------------------
+
+/** Common opts for a routine run: no real alert email, no policy scan. */
+const routineOpts = (extra) => ({
+  loader: noopLoader,
+  detectPolicyHooks: () => ({ present: false, sources: [] }),
+  sendAlert: () => ({ status: 0 }),
+  ...extra,
+});
+
+test('scheduler-runjob: a skill: routine spawns ONLY after the pre-routine probe passes (WP-routine-containment-probe)', async () => {
+  const { root, env, paths } = setup();
+  jobsLib.saveJob(paths, { name: 'digest', at: '07:00', run: 'skill:wienerdog-daily-digest', timeoutMinutes: 15 });
+  const marker = path.join(root, 'brain-ran.txt');
+  const brain = writeScript(root, 'brain.sh', ['#!/bin/sh', `echo ran > "${marker}"`, 'exit 0']);
+  await withRun(env, {}, ['digest'], routineOpts({ resolveCommand: fakeResolve(brain), probeCmd: writeProbeFake(root, 'pass') }));
+  assert.equal(jobsLib.readScheduleState(paths).digest.last_status, 'ok', 'a probe pass lets the routine spawn');
+  assert.ok(fs.existsSync(marker), 'the routine brain actually spawned');
+});
+
+test('scheduler-runjob: a pre-routine probe FAIL halts fail-closed — no spawn, error watermark, durable alert', async () => {
+  const { root, env, paths } = setup();
+  jobsLib.saveJob(paths, { name: 'digest', at: '07:00', run: 'skill:wienerdog-daily-digest', timeoutMinutes: 15 });
+  const marker = path.join(root, 'brain-ran.txt');
+  const brain = writeScript(root, 'brain.sh', ['#!/bin/sh', `echo ran > "${marker}"`, 'exit 0']);
+  await assert.rejects(
+    withRun(env, {}, ['digest'], routineOpts({ resolveCommand: fakeResolve(brain), probeCmd: writeProbeFake(root, 'fail') })),
+    /pre-routine containment self-check fail/
+  );
+  const state = jobsLib.readScheduleState(paths);
+  assert.equal(state.digest.last_status, 'error', 'the halted routine recorded an error watermark');
+  assert.ok(!fs.existsSync(marker), 'the routine brain never spawned');
+  assert.ok(!fs.existsSync(path.join(paths.logs, 'digest')), 'halted before the spawn/log-dir stage');
+  const durable = readAlerts(paths).filter((a) => a.reason.includes('containment self-check'));
+  assert.equal(durable.length, 1, 'one durable halt alert');
+});
+
+test('scheduler-runjob: a pre-routine probe INCONCLUSIVE also halts fail-closed (unconfirmable containment)', async () => {
+  const { root, env, paths } = setup();
+  jobsLib.saveJob(paths, { name: 'digest', at: '07:00', run: 'skill:wienerdog-daily-digest', timeoutMinutes: 15 });
+  const brain = writeScript(root, 'brain.sh', ['#!/bin/sh', 'exit 0']);
+  await assert.rejects(
+    withRun(env, {}, ['digest'], routineOpts({ resolveCommand: fakeResolve(brain), probeCmd: '/no/such/claude-xyz' })),
+    /pre-routine containment self-check inconclusive/
+  );
+  assert.equal(jobsLib.readScheduleState(paths).digest.last_status, 'error');
+});
+
+test('scheduler-runjob: opts.skipContainmentProbe bypasses the probe (spawns without a live claude)', async () => {
+  const { root, env, paths } = setup();
+  jobsLib.saveJob(paths, { name: 'digest', at: '07:00', run: 'skill:wienerdog-daily-digest', timeoutMinutes: 15 });
+  const brain = writeScript(root, 'brain.sh', ['#!/bin/sh', 'exit 0']);
+  await withRun(env, {}, ['digest'], routineOpts({ resolveCommand: fakeResolve(brain), skipContainmentProbe: true }));
+  assert.equal(jobsLib.readScheduleState(paths).digest.last_status, 'ok', 'the probe never ran');
+});
+
+test('scheduler-runjob: the CATCH-UP path (catchUp → runJob) is gated by the probe — a fail halts the overdue routine', async () => {
+  const { root, env, paths } = setup();
+  jobsLib.saveJob(paths, { name: 'digest', at: '07:00', run: 'skill:wienerdog-daily-digest', timeoutMinutes: 15 });
+  const now = new Date();
+  now.setHours(8, 0, 0, 0); // past the 07:00 fire, no last_success → overdue
+  const marker = path.join(root, 'brain-ran.txt');
+  const brain = writeScript(root, 'brain.sh', ['#!/bin/sh', `echo ran > "${marker}"`, 'exit 0']);
+  // catchUp swallows the per-job throw, but the SAME runJob probe gate must halt it.
+  await withRun(env, {}, ['--catch-up'], routineOpts({ resolveCommand: fakeResolve(brain), now, probeCmd: writeProbeFake(root, 'fail') }));
+  const state = jobsLib.readScheduleState(paths);
+  assert.equal(state.digest.last_status, 'error', 'catch-up routed through the same probe gate and halted');
+  assert.ok(!fs.existsSync(marker), 'the routine brain never spawned under catch-up');
 });

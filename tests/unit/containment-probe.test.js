@@ -72,6 +72,13 @@ function probe(mode) {
   return runContainmentProbe(paths, { model: null, env: { ...process.env }, probeCmd });
 }
 
+/** Run the probe for a routine `profileId` against a fake in `mode`. */
+function probeRoutine(profileId, mode) {
+  const { paths, root } = tempPaths();
+  const probeCmd = writeFake(root, mode);
+  return runContainmentProbe(paths, { profileId, model: null, env: { ...process.env }, probeCmd });
+}
+
 test('containment-probe: a contained fake passes with denials corroborated', () => {
   const r = probe('contained');
   assert.equal(r.outcome, 'pass', r.reason);
@@ -204,4 +211,71 @@ test('containment-probe: with a valid pin and no probeCmd, the PINNED absolute c
   assert.equal(r.outcome, 'inconclusive');
   assert.match(r.reason, /probe error: .*claude/);
   assert.equal(fs.existsSync(marker), false, 'the planted fake was never probe-spawned');
+});
+
+// --- WP-routine-containment-probe: a routine profileId probes a BROKER-FREE canary ---
+
+test('containment-probe: a routine profileId (daily-digest) passes on a contained fake, exactly as the dream path', () => {
+  const r = probeRoutine('daily-digest', 'contained');
+  assert.equal(r.outcome, 'pass', r.reason);
+  assert.equal(r.checks.canaryAbsent, true);
+  assert.equal(r.checks.writeBlocked, true);
+});
+
+test('containment-probe: a routine profileId fails on a canary read and is inconclusive on unparseable output (never throws)', () => {
+  const f = probeRoutine('daily-digest', 'read-canary');
+  assert.equal(f.outcome, 'fail');
+  assert.equal(f.checks.canaryAbsent, false);
+  let i;
+  assert.doesNotThrow(() => {
+    i = probeRoutine('daily-digest', 'unparseable');
+  });
+  assert.equal(i.outcome, 'inconclusive');
+});
+
+test('containment-probe: a routine profileId composes a BROKER-FREE canary — no --mcp-config, no --allowedTools (design-gate R1 leg B)', () => {
+  const { paths } = tempPaths();
+  const calls = [];
+  const spawn = (command, args, opts) => {
+    calls.push({ command, args, opts });
+    if (args[0] === '--version') return { stdout: '9.9.9\n', status: 0 };
+    return { stdout: JSON.stringify({ result: 'ok', permission_denials: [] }) + '\n', status: 0 };
+  };
+  // daily-digest is an mcp:'broker' profile with brokerVerbs — the canary must
+  // strip ALL of that (mcp:'empty', no config, no verb allowlist).
+  const r = runContainmentProbe(paths, {
+    profileId: 'daily-digest',
+    model: null,
+    env: { ...process.env },
+    probeCmd: 'claude',
+    spawn,
+  });
+  assert.equal(r.outcome, 'pass', r.reason);
+  const args = calls.find((c) => c.args.includes('-p')).args;
+  assert.ok(!args.includes('--mcp-config'), 'the canary never composes a broker MCP config');
+  assert.ok(!args.includes('--allowedTools'), 'the canary never emits a broker verb allowlist');
+  // …but it carries the routine's full containment envelope.
+  assert.equal(args[args.indexOf('--tools') + 1], 'Read', "the routine's tool allowlist");
+  const deny = args[args.indexOf('--disallowedTools') + 1].split(',');
+  for (const t of ['Bash', 'WebFetch', 'WebSearch', 'Task', 'Agent', 'Skill', 'Workflow', 'NotebookEdit']) {
+    assert.ok(deny.includes(t));
+  }
+  assert.ok(args.includes('--strict-mcp-config'));
+  assert.equal(args[args.indexOf('--setting-sources') + 1], '');
+  assert.equal(r.checks.argvStatic, true);
+});
+
+test('containment-probe: the dream default (profileId absent) is unchanged — broker-free with the dream tool set', () => {
+  const { paths } = tempPaths();
+  const calls = [];
+  const spawn = (command, args) => {
+    calls.push({ args });
+    if (args[0] === '--version') return { stdout: '9.9.9\n', status: 0 };
+    return { stdout: JSON.stringify({ result: 'ok', permission_denials: [] }) + '\n', status: 0 };
+  };
+  const r = runContainmentProbe(paths, { model: null, env: { ...process.env }, probeCmd: 'claude', spawn });
+  assert.equal(r.outcome, 'pass');
+  const args = calls.find((c) => c.args.includes('-p')).args;
+  assert.ok(!args.includes('--mcp-config'), 'the dream canary is already broker-free');
+  assert.equal(args[args.indexOf('--tools') + 1], 'Read,Write,Edit,Glob,Grep', 'dream tool set unchanged');
 });

@@ -126,11 +126,15 @@ function corroborateDenials(env, canaryPath, writePath) {
 }
 
 /**
- * Run ONE bounded live canary probe of the real dream hermetic composition.
+ * Run ONE bounded live canary probe of the real hermetic composition for a
+ * profile. The dream (default) probes its own composition; a routine profileId
+ * probes a BROKER-FREE containment-only canary derived from it (ADR-0025
+ * Amendment 3, WP-routine-containment-probe).
  * @param {import('../paths').WienerdogPaths} paths
- * @param {{model:string|null, env?:NodeJS.ProcessEnv, spawn?:typeof spawnSync, probeCmd?:string,
- *          platform?:NodeJS.Platform}} opts  platform defaults to process.platform
- *   (never mock process.platform — inject it)
+ * @param {{model:string|null, profileId?:string, env?:NodeJS.ProcessEnv,
+ *          spawn?:typeof spawnSync, probeCmd?:string,
+ *          platform?:NodeJS.Platform}} opts  profileId defaults to 'dream';
+ *   platform defaults to process.platform (never mock process.platform — inject it)
  * @returns {ProbeResult}
  */
 function runContainmentProbe(paths, opts = {}) {
@@ -171,7 +175,17 @@ function runContainmentProbe(paths, opts = {}) {
     fs.writeFileSync(canaryPath, `${canaryToken}\n`);
 
     const settingsPath = ensureSettingsProfile(paths);
-    const profile = getProfile('dream');
+    // BROKER-FREE canary (ADR-0025 Amendment 3, design-gate R1 leg B): the
+    // containment envelope of the target profile with the broker removed. The
+    // broker is orthogonal to the escape canary; a live broker in the probe would
+    // couple the containment decision to broker availability and make a probe
+    // failure ambiguous. The canary carries ONLY the containment-relevant flags
+    // and NEVER composes a --mcp-config or calls a broker verb. The dream is
+    // already mcp:'empty', so its canary IS the real dream composition (byte-
+    // unchanged when profileId is absent/'dream').
+    const target = getProfile(opts.profileId || 'dream');
+    const profile =
+      target.mcp === 'broker' ? { ...target, id: `${target.id}-canary`, mcp: 'empty' } : target;
     const composed = composeClaudeArgs(profile, {
       prompt: probePrompt(canaryPath, writePath),
       addDirs: [allowedDir, stagingDir],
