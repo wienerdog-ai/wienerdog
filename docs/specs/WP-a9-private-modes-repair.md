@@ -389,26 +389,56 @@ distinguish a user's deliberate external core from an attacker's redirect
 without more trust, so we surface it (doctor WARNs the core as a symlink anomaly)
 and repair nothing beneath — strictly better than chmodding an external tree.
 
-**The irreducible residual (documented, not chased).** With ROOT (G5),
-INTERMEDIATE (G3 `(dev,ino)` fd-revalidation), and LEAF (G2 lstat +
-`O_NOFOLLOW`) all closed, **every PRE-EXISTING symlink at any path-component
-position is now caught.** The ONLY remaining residual is a concurrent
-**owner-level** writer that swaps an intermediate directory component DURING the
-`readdirSync` enumeration itself — before any fd is bound — which cannot be
-prevented in pure Node (`readdir` resolves through the path; there is no
-`fdopendir`/`openat`/`openat2`). This is the **same** same-user concurrent-writer
-class **ADR-0028** already hands to **A12** ("Honest boundary — the A7
-residual"). The threat premise is explicit: the attacker must **already hold
-concurrent owner-level write access inside the already-`0700` core**; and because
-of the `(dev, ino)` revalidation the worst case even then is a **refused +
-surfaced** repair, **never a silent out-of-tree chmod**. The guarantee is stated
-honestly — never-follow is enforced per classified entry via lstat-classification
-plus `O_NOFOLLOW` plus `(dev, ino)` fd-revalidation plus the root lstat gate —
-**not** as an unconditional "never follows symlinks"; the symlink-follow class is fully
-closed **except** that one concurrent-swap-during-`readdir` window. (No native
-addon; no guarantee Node cannot provide.) *Follow-up for the architect:*
-`THREAT-MODEL.md` may want a one-line cross-reference to this residual under the
-A12 section — flagged, not edited here (out of this WP's Deliverables).
+**AMENDED 2026-07-20 (Codex comprehensive close-out F1–F4) — two whole surfaces
+were unhardened, and the residual claim was an OVERCLAIM; corrected.**
+- **F1 (WRITE PATH).** `createLogStreamPrivate`/`mkdirPrivate` — the WP's
+  ORIGINAL fresh-install-private-logs surface — never got never-follow. The
+  helper's `openSync(file, 'a', 0600)` had **no `O_NOFOLLOW`**, so a pre-existing
+  symlinked `YYYY-MM-DD.log`/`logFile` → `fchmod` + append **out of the core**;
+  `mkdirPrivate`'s following `mkdir`/`chmod` chmodded a symlinked `logs/<job>`
+  target. Fixed: `createLogStreamPrivate` opens with **numeric flags incl.
+  `O_NOFOLLOW`** (`O_WRONLY|O_CREAT|O_APPEND` / `…|O_TRUNC`, mode `0600`) and
+  `fstat`-validates a regular file before writing (a symlink → `ELOOP` →
+  fail-closed, zero bytes); `mkdirPrivate` **lstat-refuses** a pre-existing
+  symlink/non-dir at the final component before any chmod.
+- **F2 (DYNAMIC LEAVES).** `listFiles` filtered `Dirent.isFile()` BEFORE
+  classification, so a symlink's `isFile()===false` **dropped it before it could
+  become an anomaly** — repair correctly skipped it, but doctor/sync/digest
+  reported CLEAN. So "leaf coverage" held only for STATICALLY-NAMED files.
+  Fixed: `listNames` enumerates candidate NAMES keeping symlink Dirents, and
+  EVERY dynamic candidate (`secrets/`, `logs/<job>/`, `dream-scratch/`,
+  `quarantine/`) is lstat-classified → a symlinked leaf is an anomaly (surfaced).
+- **F3 (ROOT, tightened).** `coreRootContext` now opens the core
+  `O_DIRECTORY|O_NOFOLLOW` + `fstat` (a pre-existing symlinked core → `ELOOP` →
+  anomaly, closed hard), and `repairPrivateModes` **binds ONE context** for the
+  whole operation (no per-pass recompute, so trust can't flip mid-repair).
+- **F4 (mode-000 fallback, made LOUD).** A mode-000 entry cannot be opened
+  `O_RDONLY|O_NOFOLLOW` (EACCES) and pure Node has **no portable fd-bound chmod**
+  for it (Linux `O_PATH`+`/proc/self/fd` is non-portable — no `O_PATH` on macOS,
+  no `/proc`; confirmed), so the path-based `chmodSync` and its `lstat→chmod`
+  window are irreducible. The fallback stays narrowed (EACCES + verified-000 +
+  `(dev,ino)`) and now RE-`lstat`s after chmod; a `(dev,ino)` change → the repair
+  **throws** (LOUD), never a silent `changed:0`.
+
+**The residual — the CLASS of concurrent owner-level swaps DURING the repair
+(NOT "only readdir").** After F1–F4, PRE-EXISTING symlinks are caught at **root**
+(`O_NOFOLLOW` open), **intermediate** (`(dev,ino)` fd-reval), **leaf** (lstat +
+`O_NOFOLLOW`, now incl. dynamic leaves), and the **write path** (`O_NOFOLLOW`
+open + lstat-first mkdir). The residual is three concurrent-swap **windows**, all
+the SAME same-user concurrent-writer class **ADR-0028** hands to **A12** ("Honest
+boundary — the A7 residual"): (1) the `readdir`-enumeration → fd-bind window
+(Node has no `openat`/`openat2`/`fdopendir`, so `readdir` resolves through the
+path); (2) the root open/lstat → `realpath` window in `coreRootContext`; (3) the
+mode-000 `lstat` → path-`chmodSync` window in `applyModeFallback` (worst case ONE
+chmod on a swapped target, surfaced LOUDLY by a thrown error). In every window
+the attacker must **already hold concurrent owner-level write access inside the
+already-`0700` core**; the `(dev,ino)` revalidation makes the worst case a
+REFUSED/LOUD repair, never a silent out-of-tree chmod. Do **not** claim "only
+readdir remains" and do **not** claim an unconditional "never follows symlinks".
+(No native addon; no portable 000-fd-chmod exists in pure Node.) *Follow-up for
+the architect:* `THREAT-MODEL.md` may want a one-line cross-reference to this
+three-window residual under the A12 section — flagged, not edited here (out of
+this WP's Deliverables).
 
 **The shared private log-stream helper `createLogStreamPrivate` — FAIL-CLOSED
 (round-2 finding 6).** The two log writers must open their stream `0600`
