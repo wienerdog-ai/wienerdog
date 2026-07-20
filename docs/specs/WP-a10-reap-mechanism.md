@@ -998,6 +998,21 @@ Contract deltas only — the design narrative above is unchanged.
    only — the R8-1 fail-loud escalation stays POSIX-only, and an authoritative
    Windows liveness check (distinguishing "already gone" from "init-failed
    live") is deferred to `WP-a10-windows-reap`.
+   **G1-residual (2026-07-20) — a REFUSED target is never certified.** The
+   invalid/unsafe-target guard in BOTH primitives now returns a failure shape,
+   not a success one: `reapGroup(pgid)` on an unsafe pgid (1, 0, negative, or a
+   non-integer from a corrupt pidfile; POSIX also the supervisor's own pid/pgid)
+   returns `{ reaped: false, why: 'refused unsafe pgid … — not a confirmed
+   kill' }` with **zero** taskkill/signal calls, and `reapTree(pid)` on the same
+   returns `{ degraded: true, why: 'refused unsafe … — no reap performed' }`.
+   "Refused to act" must never read as `{ reaped: true }` / `{ degraded: false }`
+   — that was a fail-open of the certify-without-verifying class, present on
+   **both** POSIX and win32 (the POSIX guard had the same bug; both flagged and
+   fixed to match). This is distinct from the VALID-target already-empty case
+   (there `safeTarget` passes, the real negative-PGID probe throws `ESRCH`, and
+   THAT is the legitimate `{ reaped: true }`). Not presently reachable via
+   in-tree callers (they validate pgids), but these are exported primitives the
+   escape harness drives directly.
 4. **The R8-1 final-fail-loud path RELEASES the token pidfile after the loud
    record — but ONLY when that record actually persisted (G2, 2026-07-20).**
    When the bounded final escalation still leaves a group `{ reaped: false }`,
