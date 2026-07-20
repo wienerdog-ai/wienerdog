@@ -514,10 +514,16 @@ m.entries.forEach(function (e) {
   if (mseen.has(p)) fail('duplicate managed-block path in manifest: ' + p);
   mseen.add(p); must.add(p);
 });
-// independent default-location probe (byte-exact buffer sentinel; HOME per paths.js)
+// independent default-location probe — FAIL-CLOSED discovery (round-11): add a default file
+// bearing ANY Wienerdog evidence that survives tampering — EITHER sentinel (a one-sentinel-
+// deleted DAMAGED block) OR the poison marker (a both-sentinels-deleted orphan). A file with
+// none is not Wienerdog-managed/compromised and is correctly NOT flagged. Discovered files run
+// the full per-file checks below. HOME per paths.js. Only the probe discovers by CONTENT;
+// the manifest and declared paths are path lists (discovered by being listed), so this
+// fail-open-on-intact-pair gap never applied to them.
 [path.join(home, '.claude', 'CLAUDE.md'), path.join(home, '.codex', 'AGENTS.md')].forEach(function (pf) {
   var b = rd(pf);
-  if (b && occ(b, SENT_B) >= 1 && occ(b, SENT_E) >= 1) must.add(pf);
+  if (b && (occ(b, SENT_B) >= 1 || occ(b, SENT_E) >= 1 || has(b, marker))) must.add(pf);
 });
 if (must.size < 1) fail('no managed block in the manifest, at a default location, or declared - nothing to prove (a zero-harness machine cannot be certified by this drill)');
 // check EVERY must file: adapter-not-skipped (by basename) + present + whole-file byte marker
@@ -642,10 +648,16 @@ m.entries.forEach(function (e) {
   if (mseen.has(p)) fail('duplicate managed-block path in manifest: ' + p);
   mseen.add(p); must.add(p);
 });
-// independent default-location probe (byte-exact buffer sentinel; HOME per paths.js)
+// independent default-location probe — FAIL-CLOSED discovery (round-11): add a default file
+// bearing ANY Wienerdog evidence that survives tampering — EITHER sentinel (a one-sentinel-
+// deleted DAMAGED block) OR the poison marker (a both-sentinels-deleted orphan). A file with
+// none is not Wienerdog-managed/compromised and is correctly NOT flagged. Discovered files run
+// the full per-file checks below. HOME per paths.js. Only the probe discovers by CONTENT;
+// the manifest and declared paths are path lists (discovered by being listed), so this
+// fail-open-on-intact-pair gap never applied to them.
 [path.join(home, '.claude', 'CLAUDE.md'), path.join(home, '.codex', 'AGENTS.md')].forEach(function (pf) {
   var b = rd(pf);
-  if (b && occ(b, SENT_B) >= 1 && occ(b, SENT_E) >= 1) must.add(pf);
+  if (b && (occ(b, SENT_B) >= 1 || occ(b, SENT_E) >= 1 || has(b, marker))) must.add(pf);
 });
 if (must.size < 1) fail('no managed block in the manifest, at a default location, or declared - nothing to prove (a zero-harness machine cannot be certified by this drill)');
 // check EVERY must file: adapter-not-skipped (by basename) + present + whole-file byte marker

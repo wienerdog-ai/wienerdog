@@ -404,6 +404,25 @@ state and act on:
   > qualified → the verifier's fully-qualified check rejects `C:foo` / `\foo`. The whole
   > PS path-identity class (round-6/7/8/9 + this round) is now closed by construction:
   > PS handles no path identity at all.
+  >
+  > **Fix-pass amendment 13 (2026-07-20, lock-pass — fail-closed default-probe
+  > discovery):** the default-probe (in the shared verifier) added a default-location
+  > file to must-check only when BOTH sentinels were present, so a sentinel-deleted
+  > DAMAGED block at a KNOWN default location hid from its own discovery — never entered
+  > must-check, so its marker / missing-pair / adapter-skip went unchecked → false DRILL
+  > PASS (Codex execution-repro: begin-only `AGENTS.md` with multi-line poison,
+  > manifest-omitted, sync-skipped → exit 0). This is NOT the unknown-custom-root residual
+  > (the file is at a default location). Fix (both byte-identical verifier copies):
+  > discover a default file bearing ANY tamper-surviving Wienerdog evidence — **≥1
+  > sentinel (begin OR end) OR the poison marker** — via whole-file `Buffer.indexOf`;
+  > once discovered, the existing per-file checks catch the damage/poison → DRILL FAIL. A
+  > file with neither sentinels nor marker is genuinely not Wienerdog-managed and is
+  > correctly NOT flagged (no false FAIL on a user's own non-Wienerdog `CLAUDE.md`). Only
+  > the PROBE discovers by content; the manifest and declared sources are path lists
+  > (discovered by being listed), so this fail-open-on-intact-pair gap never applied to
+  > them (confirmed). The completeness claim is corrected: the damaged-default-block gap
+  > was machine-checkable and is now closed; the sole residual remains the
+  > unknown-custom-root incomplete-inventory case.
 - **The ONLY authoritative way to reach zero running Wienerdog processes is to
   REBOOT after removing every per-job schedule AND the catch-up entry — not
   per-platform process forensics (R4-C, round-4).** After a reboot, with nothing
@@ -813,7 +832,14 @@ headless/`--yes` bypass — it is interactive and shows the exact bytes.
      emitted identity-preserving (NUL-delimited in bash, JSON array in PowerShell);
      (2) an **independent probe** of the DEFAULT harness locations
      `${HOME}/.claude/CLAUDE.md` and `${HOME}/.codex/AGENTS.md` (HOME per `paths.js`,
-     before `USERPROFILE`) for a sentinel pair (G1/round-5 part 1); and (3) the
+     before `USERPROFILE`) — **fail-closed discovery (round-11):** the file is added to
+     must-check if it bears ANY Wienerdog evidence that survives tampering — **either
+     sentinel** (a one-sentinel-deleted DAMAGED block) OR **the poison marker** (a
+     both-sentinels-deleted orphan) — NOT requiring an intact pair (Wienerdog always
+     writes both, so exactly one, or zero-plus-marker, is a tampered/compromised block; a
+     file with neither is genuinely not Wienerdog-managed and correctly not flagged). The
+     discovery search is whole-file/`Buffer.indexOf`, so a multi-line marker or a sentinel
+     anywhere is found (G1/round-5 part 1, hardened round-11); and (3) the
      **operator's declared PATH list** (`DECLARED_PATHS` / `$DeclaredPaths`) — an
      explicit ordinal list of managed-block FILE PATHS from trusted inventory, **not**
      harness names, so it expresses **multiple installed roots for one harness** and any
@@ -876,17 +902,22 @@ headless/`--yes` bypass — it is interactive and shows the exact bytes.
      whole-file byte-exact (`Buffer.indexOf`), so a **multi-line** marker matches and a
      duplicate sentinel pair on one line is counted. bash and PS are thereby provably
      identical (same verifier bytes).
-   - **Completeness argument (round-7).** Reason explicitly about whether any
-     genuinely-installed managed-block file can still be omitted from the checked set
-     while DRILL PASS prints. The three sources cover: the **manifest** (every
-     current-env root `sync` re-records post-sync), the **default-probe** (every default
-     location), and the **declared paths** (every root trusted inventory knows —
-     including multiple roots per harness and non-default, non-current-env roots). Since
-     checked == manifest ∪ probe ∪ declared, an installed file is omitted **iff** it is
-     in none of the three: NOT in the manifest AND NOT at a default location AND NOT
-     declared. That is exactly a root no on-machine source knows — **unknowable by
-     construction** — which is the documented stop-and-escalate residual. There is no
-     fourth omission path.
+   - **Completeness argument (round-7, corrected round-11).** Reason explicitly about
+     whether any genuinely-installed managed-block file can still be omitted from the
+     checked set while DRILL PASS prints. The three sources cover: the **manifest** (every
+     current-env root `sync` re-records post-sync), the **fail-closed default-probe**
+     (every default location bearing any Wienerdog evidence — ≥1 sentinel OR the marker,
+     so a DAMAGED one-/zero-sentinel block no longer hides from its own discovery), and
+     the **declared paths** (every root trusted inventory knows — including multiple roots
+     per harness and non-default, non-current-env roots). Since checked == manifest ∪
+     probe ∪ declared, an installed file is omitted **iff** it is in none of the three:
+     NOT in the manifest AND NOT at a default location AND NOT declared. **A
+     sentinel-deleted damaged block at a KNOWN default location was a machine-checkable
+     gap (round-11 G1) — the file is at a default path but its discovery required an
+     intact pair — now closed by fail-closed discovery.** With that fixed, the sole
+     remaining omission is a root no on-machine source knows — **unknowable by
+     construction** — the documented stop-and-escalate residual. There is no fourth
+     omission path.
    - **Blocking residual — a root no trusted record knows (round-5 G1 / round-7,
      cf. ADR-0028 honest boundary / A12 hand-off).** Per the completeness argument,
      the ONE case NOT machine-closable is a managed-block file that is in NONE of the
@@ -1142,9 +1173,10 @@ the runbook never contains a bare operative `state/<file>` token.
       (rejecting → DRILL FAIL: no entries array; a non-absolute/non-string path; a
       CR/LF/NUL in a path; a basename other than `CLAUDE.md`/`AGENTS.md`; or a
       **duplicate** managed-block path — G2, emitted identity-preserving so nothing
-      normalizes-then-passes); (2) an **independent probe** of
-      `${HOME}/.claude/CLAUDE.md` + `${HOME}/.codex/AGENTS.md` for a sentinel pair
-      (round-5 G1, closing the default-dir omission regardless of manifest/env); and
+      normalizes-then-passes); (2) an **independent, fail-closed probe** of
+      `${HOME}/.claude/CLAUDE.md` + `${HOME}/.codex/AGENTS.md` — discovered on **≥1
+      sentinel OR the marker** (round-5 G1 + round-11: a sentinel-deleted damaged block
+      at a default location no longer hides from its own discovery); and
       (3) the operator's **declared PATH list** (`DECLARED_PATHS` / `$DeclaredPaths`) —
       an explicit ordinal list of managed-block FILE PATHS from trusted inventory,
       **not** harness names, so it expresses **multiple installed roots for one
@@ -1265,6 +1297,9 @@ grep -nE "SHARED byte-exact verifier|FULLY QUALIFIED|Buffer\.indexOf|Buffer\.fro
 # the verifier is byte-identical in both blocks (bash heredoc == PS here-string):
 diff <(awk '/cat > "\$WORK\/verify.js" <<.VERIFY.$/{f=1;next} f&&/^VERIFY$/{f=0} f{print}' docs/runbooks/incident.md) \
      <(awk "/\\\$verify = @'\$/{f=1;next} f&&/^'@\$/{f=0} f{print}" docs/runbooks/incident.md) >/dev/null && echo "verifier byte-identical — OK"
+# Round-11 G1: fail-closed default-probe discovery — EITHER sentinel OR the marker (not an
+# intact pair), so a sentinel-deleted damaged default block is still discovered:
+grep -nE "FAIL-CLOSED discovery|occ\(b, SENT_B\) >= 1 \|\| occ\(b, SENT_E\) >= 1 \|\| has\(b, marker\)" docs/runbooks/incident.md
 # Round-8 G1 negative: NO case-insensitive -ne/-eq on a basename, and NO default
 # (case-insensitive) switch on GetFileName, in PowerShell CODE (expect NO output):
 awk '/^```powershell$/{p=1;next} /^```$/{p=0} p' docs/runbooks/incident.md | grep -vE '^\s*#' | grep -nE "\-ne '(CLAUDE|AGENTS)\.md'|\-eq '(CLAUDE|AGENTS)\.md'|switch \(\[System\.IO\.Path\]::GetFileName" || true
