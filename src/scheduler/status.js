@@ -3,51 +3,65 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const manifestLib = require('../core/manifest');
+const generators = require('./generators');
+const jobsLib = require('./jobs');
 
 const STATUS_FILE = 'scheduler-status.json';
 
 /** status.json path. @param {import('../core/paths').WienerdogPaths} paths @returns {string} */
 function statusPath(paths) { return path.join(paths.state, STATUS_FILE); }
 
+/** The known scheduler roots for `paths` (LaunchAgents / systemd user dir /
+ *  <core>/schedules). @param {import('../core/paths').WienerdogPaths} paths
+ *  @returns {string[]} */
+function schedulerRoots(paths) {
+  return [
+    generators.launchAgentsDir(paths.home),
+    generators.systemdUserDir(paths.home, process.env),
+    path.join(paths.core, 'schedules'),
+  ];
+}
+
+/** Lexical (no-fs) containment: is `p` inside one of `roots`? Used to gate the
+ *  read-only probe without requiring the schedule file to exist on disk (a
+ *  registered-but-file-absent entry is still probeable). `platform` selects the
+ *  path separator flavor so a win32 entry checked on POSIX resolves correctly.
+ *  @param {string} p @param {string[]} roots @param {NodeJS.Platform} platform
+ *  @returns {boolean} */
+function lexicallyInRoot(p, roots, platform) {
+  const P = platform === 'win32' ? path.win32 : path.posix;
+  const abs = P.resolve(p);
+  return roots.some((root) => {
+    const rel = P.relative(P.resolve(root), abs);
+    return rel !== '' && !rel.startsWith('..') && !P.isAbsolute(rel);
+  });
+}
+
 /**
- * Describe one registered scheduler entry from its manifest record: the human
- * name, the scheduler kind, and the READ-ONLY probe + RELOAD argv derived from
- * the stored `unload` argv and file path. Entries with no `unload` (the systemd
- * .service) or an unrecognized shape → null (skipped by callers).
- * @param {{path:string, unload?:string[]}} entry
+ * Describe one registered scheduler entry: the human name, the scheduler kind,
+ * and the READ-ONLY probe argv — all RE-DERIVED from the file's basename
+ * identity, NEVER from the untrusted stored `entry.unload` (audit A8, ADR-0027
+ * amendment, WP-145 fix-pass F34). An unrecognized basename → null (skipped by
+ * callers). No `reload` argv is produced here: the sync-time heal REGENERATES
+ * canonical content from validated config (see reloadMissing → schedule.reloadJob),
+ * never a reload command reconstructed from the manifest.
+ * @param {{path:string}} entry
+ * @param {NodeJS.Platform} [platform]  basename-separator flavor (default host)
  * @returns {{name:string, scheduler:'launchd'|'systemd'|'schtasks',
- *            probe:string[], reload:string[]}|null}
+ *            probe:string[]}|null}
  */
-function describeEntry(entry) {
-  const u = entry.unload;
-  if (!Array.isArray(u) || u.length === 0) return null;
-  const base = path.basename(entry.path);
-  if (u[0] === 'launchctl' && u[1] === 'bootout') {
-    // u[2] = 'gui/<uid>/<label>'
-    return {
-      name: base.replace(/^ai\.wienerdog\./, '').replace(/\.plist$/, ''),
-      scheduler: 'launchd',
-      probe: ['launchctl', 'print', u[2]],
-      reload: ['launchctl', 'bootstrap', u[2].split('/').slice(0, 2).join('/'), entry.path],
-    };
+function describeEntry(entry, platform = process.platform) {
+  const probe = generators.deriveProbeArgv(entry.path, platform);
+  if (!probe) return null;
+  const base = (platform === 'win32' ? path.win32 : path.posix).basename(entry.path);
+  if (base.endsWith('.plist')) {
+    return { name: base.replace(/^ai\.wienerdog\./, '').replace(/\.plist$/, ''), scheduler: 'launchd', probe };
   }
-  if (u[0] === 'systemctl') {
-    const unit = u[u.length - 1]; // '<unitBase>.timer'
-    return {
-      name: base.replace(/^wienerdog-/, '').replace(/\.timer$/, ''),
-      scheduler: 'systemd',
-      probe: ['systemctl', '--user', 'is-active', unit],
-      reload: ['systemctl', '--user', 'enable', '--now', unit],
-    };
+  if (base.endsWith('.timer')) {
+    return { name: base.replace(/^wienerdog-/, '').replace(/\.timer$/, ''), scheduler: 'systemd', probe };
   }
-  if (u[0] === 'schtasks' && u[1] === '/delete') {
-    const taskName = u[3]; // '\Wienerdog\<name>'
-    return {
-      name: base.replace(/^wienerdog-/, '').replace(/\.xml$/, ''),
-      scheduler: 'schtasks',
-      probe: ['schtasks', '/query', '/tn', taskName],
-      reload: ['schtasks', '/create', '/tn', taskName, '/xml', entry.path, '/f'],
-    };
+  if (base.endsWith('.xml')) {
+    return { name: base.replace(/^wienerdog-/, '').replace(/\.xml$/, ''), scheduler: 'schtasks', probe };
   }
   return null;
 }
@@ -72,24 +86,31 @@ function defaultProbe(argv) {
 }
 
 /**
- * Probe every registered scheduler entry. Read-only. `opts.probe` is the injected
+ * Probe every registered scheduler entry. Read-only. The probe argv is
+ * RE-DERIVED from each entry's basename identity (never the stored `unload` —
+ * ADR-0027), and every entry is gated behind a scheduler-root containment check,
+ * so an out-of-root poisoned entry is never probed. `opts.probe` is the injected
  * seam (default defaultProbe). `WIENERDOG_SCHEDULER_PROBE` — a JSON map
  * `{ "<name>": "loaded"|"missing"|"unknown" }` — overrides by name (subprocess
  * test seam, mirrors WIENERDOG_UPDATE_FETCH_CMD). Never throws.
  * @param {import('../core/paths').WienerdogPaths} paths
- * @param {{probe?: (argv:string[])=>('loaded'|'missing'|'unknown')}} [opts]
+ * @param {{probe?: (argv:string[])=>('loaded'|'missing'|'unknown'),
+ *          platform?: NodeJS.Platform}} [opts]
  * @returns {Array<{name:string, scheduler:string, status:'loaded'|'missing'|'unknown'}>}
  */
 function probeAll(paths, opts = {}) {
+  const platform = opts.platform || process.platform;
   const probe = opts.probe || defaultProbe;
   let envMap = null;
   try { envMap = JSON.parse(process.env.WIENERDOG_SCHEDULER_PROBE || 'null'); } catch { envMap = null; }
   let manifest;
   try { manifest = manifestLib.load(paths); } catch { return []; }
+  const roots = schedulerRoots(paths);
   const out = [];
   for (const e of manifest.entries || []) {
     if (e.kind !== 'scheduler-entry') continue;
-    const d = describeEntry(e);
+    if (!lexicallyInRoot(e.path, roots, platform)) continue; // out-of-root → no probe
+    const d = describeEntry(e, platform);
     if (!d) continue;
     const status = envMap && Object.prototype.hasOwnProperty.call(envMap, d.name)
       ? envMap[d.name]
@@ -172,35 +193,72 @@ function doctorSchedulerChecks(paths, opts = {}) {
   return out;
 }
 
+/** The canonical (probed) schedule file for a job on `platform`: the launchd
+ *  plist, the systemd .timer, or the Windows task XML. Code-derived from the job
+ *  name — never read from the manifest. Unsupported platform → null.
+ *  @param {import('../core/paths').WienerdogPaths} paths @param {string} name
+ *  @param {NodeJS.Platform} platform @returns {string|null} */
+function canonicalProbePath(paths, name, platform) {
+  if (platform === 'darwin') {
+    return path.join(generators.launchAgentsDir(paths.home), `${generators.launchdLabel(name)}.plist`);
+  }
+  if (platform === 'linux') {
+    return path.join(generators.systemdUserDir(paths.home, process.env), `${generators.systemdUnitBase(name)}.timer`);
+  }
+  if (platform === 'win32') {
+    return generators.windowsTaskFile(paths, name);
+  }
+  return null;
+}
+
 /**
- * HEAL: re-load any registered entry the OS has lost. The ONLY mutation in this
- * module — used by `sync`, never by doctor/digest/run-job. For each entry that
- * probes 'missing', run its reload argv through the loader seam (defaultLoader,
- * which honors WIENERDOG_LOADER_NOOP and WP-071's guard). Never throws.
+ * HEAL: re-register any CONFIGURED job whose OS registration the scheduler has
+ * lost. The ONLY mutation in this module — used by `sync`, never by
+ * doctor/digest/run-job. Never throws.
+ *
+ * ADR-0027 amendment + WP-145 fix-pass F34 (R2/R5/R6): the heal
+ *   1. enumerates CONFIGURED, code-recognized jobs from validated config
+ *      (`jobs.js`) — it NEVER iterates manifest entries to decide what to heal,
+ *      so an attacker-planted in-root `ai.wienerdog.evil.plist` (or a symlink) is
+ *      never healed, and the stored `entry.unload` is never read into any argv;
+ *   2. probes each job's canonical registration with the RE-DERIVED read-only
+ *      probe argv (deriveProbeArgv), gated behind the scheduler-root check;
+ *   3. for a missing one, delegates to `schedule.reloadJob`, which REGENERATES
+ *      the canonical plist/unit/xml from validated config, atomically replaces +
+ *      byte-verifies a regular non-symlink in-root file, and registers from that
+ *      path (the verify→register reopen race is an accepted A12 residual).
+ * The catch-up registration is NOT a configured job, so it is excluded here
+ * ENTIRELY [R5/R6] — its repair/teardown is owned solely by `repointSchedules`.
  * @param {import('../core/paths').WienerdogPaths} paths
  * @param {{loader?: (argv:string[])=>{status:number},
- *          probe?: (argv:string[])=>('loaded'|'missing'|'unknown')}} [opts]
+ *          probe?: (argv:string[])=>('loaded'|'missing'|'unknown'),
+ *          platform?: NodeJS.Platform}} [opts]
  * @returns {{reloaded:string[], failed:string[]}}
  */
 function reloadMissing(paths, opts = {}) {
-  const loader = opts.loader || require('../cli/schedule').defaultLoader;
+  const platform = opts.platform || process.platform;
+  const schedule = require('../cli/schedule');
+  const loader = opts.loader || schedule.defaultLoader;
   const probe = opts.probe || defaultProbe;
   let envMap = null;
   try { envMap = JSON.parse(process.env.WIENERDOG_SCHEDULER_PROBE || 'null'); } catch { envMap = null; }
   /** @type {string[]} */ const reloaded = [];
   /** @type {string[]} */ const failed = [];
-  let manifest;
-  try { manifest = manifestLib.load(paths); } catch { return { reloaded, failed }; }
-  for (const e of manifest.entries || []) {
-    if (e.kind !== 'scheduler-entry') continue;
-    const d = describeEntry(e);
-    if (!d) continue;
-    const status = envMap && Object.prototype.hasOwnProperty.call(envMap, d.name) ? envMap[d.name] : probe(d.probe);
+  let jobs;
+  try { jobs = jobsLib.listJobs(paths); } catch { return { reloaded, failed }; }
+  for (const job of jobs) {
+    const canonical = canonicalProbePath(paths, job.name, platform);
+    if (!canonical) continue; // unsupported platform → nothing to probe/heal
+    const probeArgv = generators.deriveProbeArgv(canonical, platform);
+    if (!probeArgv) continue; // unrecognized identity → never healed
+    const status = envMap && Object.prototype.hasOwnProperty.call(envMap, job.name)
+      ? envMap[job.name]
+      : probe(probeArgv);
     if (status !== 'missing') continue;
-    let r;
-    try { r = loader(d.reload); } catch { r = { status: 1 }; }
-    if (r && r.status === 0) reloaded.push(d.name);
-    else failed.push(d.name);
+    let ok = false;
+    try { ok = schedule.reloadJob(paths, job, loader, platform); } catch { ok = false; }
+    if (ok) reloaded.push(job.name);
+    else failed.push(job.name);
   }
   return { reloaded, failed };
 }

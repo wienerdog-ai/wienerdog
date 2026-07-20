@@ -1152,6 +1152,39 @@ test('WP-145 reverse: a foreign plist in a recognized scheduler root is preserve
   assert.ok(res.skipped.includes(foreign));
 });
 
+test('WP-145/F33 reverse: a RECOGNIZED-basename scheduler-entry OUT of every root spawns NOTHING and is preserved (validate before spawn)', () => {
+  const paths = tempPaths();
+  const manifest = makeInstall(paths);
+  // A platform-correct, wienerdog-recognized basename (so deriveUnloadArgv WOULD
+  // fire on this host), but placed OUTSIDE every scheduler root (directly in
+  // HOME). The first-pass derived + spawned the unregister BEFORE the root gate;
+  // post-F33 the containment check runs FIRST → zero spawn, file preserved.
+  let base;
+  if (process.platform === 'darwin') base = 'ai.wienerdog.evil.plist';
+  else if (process.platform === 'win32') base = 'wienerdog-evil.xml';
+  else base = 'wienerdog-evil.timer';
+  const evil = path.join(paths.home, base);
+  fs.writeFileSync(evil, 'x');
+  manifestLib.record(manifest, { kind: 'scheduler-entry', path: evil });
+
+  const spawnMod = require('../../src/scheduler/spawn');
+  const origSpawn = spawnMod.schedulerSpawn;
+  /** @type {string[][]} */ const calls = [];
+  spawnMod.schedulerSpawn = (argv) => { calls.push(argv); return { status: 0 }; };
+  const savedXdg = process.env.XDG_CONFIG_HOME;
+  delete process.env.XDG_CONFIG_HOME;
+  let res;
+  try {
+    res = manifestLib.reverse(paths, manifest);
+  } finally {
+    spawnMod.schedulerSpawn = origSpawn;
+    if (savedXdg !== undefined) process.env.XDG_CONFIG_HOME = savedXdg;
+  }
+  assert.equal(calls.length, 0, 'no unregister spawns for an out-of-root recognized basename (F33)');
+  assert.equal(fs.existsSync(evil), true, 'the out-of-root file is preserved');
+  assert.ok(res.skipped.includes(evil));
+});
+
 test('WP-145 withinSchedulerRoot: containment AND wienerdog basename are both required', () => {
   const paths = tempPaths();
   const laDir = path.join(paths.home, 'Library', 'LaunchAgents');

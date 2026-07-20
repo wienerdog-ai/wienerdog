@@ -290,9 +290,22 @@ function reverseSettingsEntry(entry, dryRun, removed, skipped, removedSet, fd, t
 function reverseSchedulerEntry(entry, dryRun, removed, skipped, removedSet, opts = {}) {
   const platform = opts.platform || process.platform;
   const schedulerRoots = opts.schedulerRoots || [];
-  // Audit A8 / ADR-0027 (WP-145): the manifest is UNTRUSTED, so the stored
-  // `entry.unload` argv is NEVER read or executed — a poisoned
-  // {unload:['/bin/sh','-c','…']} must spawn nothing. The unregister command is
+  // F33 (WP-145 fix-pass): VALIDATE BEFORE SPAWN. The first-pass derived the
+  // unregister argv and fired `schedulerSpawn` BEFORE the root/basename gate, so
+  // a recognized-but-out-of-root entry (e.g. /tmp/ai.wienerdog.evil.plist) ran
+  // `launchctl bootout` anyway — violating this WP's own "out-of-root spawns
+  // nothing". Bound the entry FIRST: only a recognized wienerdog schedule file
+  // inside a known scheduler root (LaunchAgents / systemd user dir /
+  // <core>/schedules) may be unregistered or removed. Out-of-root or an
+  // unrecognized basename → preserve, derive nothing, spawn nothing.
+  if (!withinSchedulerRoot(entry.path, schedulerRoots)) {
+    process.stderr.write(`wienerdog: preserving ${entry.path} — not a recognized Wienerdog schedule file\n`);
+    skipped.push(entry.path);
+    return;
+  }
+  // Only now: audit A8 / ADR-0027 — the manifest is UNTRUSTED, so the stored
+  // `entry.unload` argv is NEVER read or executed (a poisoned
+  // {unload:['/bin/sh','-c','…']} spawns nothing). The unregister command is
   // re-derived, code-owned, from the file's basename identity + platform
   // (fully-anchored regexes; nothing from the manifest reaches the argv).
   // Required lazily to keep manifest.js free of a static scheduler dependency
@@ -311,14 +324,6 @@ function reverseSchedulerEntry(entry, dryRun, removed, skipped, removedSet, opts
         /* ignore — unregistration is best-effort */
       }
     }
-  }
-  // Bound the file removal (WP-145): only a recognized wienerdog schedule file
-  // inside a known scheduler root (LaunchAgents / systemd user dir /
-  // <core>/schedules) may be deleted; anything else is preserved.
-  if (!withinSchedulerRoot(entry.path, schedulerRoots)) {
-    process.stderr.write(`wienerdog: preserving ${entry.path} — not a recognized Wienerdog schedule file\n`);
-    skipped.push(entry.path);
-    return;
   }
   if (!isFile(entry.path)) {
     skipped.push(entry.path);

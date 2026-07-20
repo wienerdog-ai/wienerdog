@@ -419,6 +419,111 @@ function repointSchedules(paths, manifest, opts = {}) {
   return { repointed, changed, descriptorFailures, notices };
 }
 
+/** The known scheduler roots for `paths` (LaunchAgents / systemd user dir /
+ *  <core>/schedules). Mirrors the set reverse() bounds scheduler deletes to.
+ *  @param {import('../core/paths').WienerdogPaths} paths @returns {string[]} */
+function schedulerRootsFor(paths) {
+  return [
+    gen.launchAgentsDir(paths.home),
+    gen.systemdUserDir(paths.home, process.env),
+    path.join(paths.core, 'schedules'),
+  ];
+}
+
+/**
+ * Write REGENERATED canonical scheduler content to a CODE-DERIVED path for the
+ * heal path (WP-145 fix-pass R2:F34). The path itself is trusted (built from a
+ * validated job name under our own dirs), but the FILE at it is UNTRUSTED: refuse
+ * to write onto anything that is not already a regular non-symlink file (a
+ * planted symlink / directory / special → fail closed), so the heal can never be
+ * tricked into registering an attacker's artifact. A truly-absent file (ENOENT)
+ * is written fresh. Atomic temp+rename, then byte-verify the on-disk bytes.
+ * @param {string} filePath @param {string|Buffer} content @returns {boolean}
+ *   true when the canonical file now holds exactly `content`.
+ */
+function writeCanonicalSchedule(filePath, content) {
+  const buf = Buffer.isBuffer(content) ? content : Buffer.from(content);
+  try {
+    if (!fs.lstatSync(filePath).isFile()) return false; // symlink / dir / special → refuse
+  } catch (err) {
+    if (err.code !== 'ENOENT') return false;
+  }
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  const tmp = `${filePath}.${process.pid}.heal.tmp`;
+  fs.writeFileSync(tmp, buf);
+  fs.renameSync(tmp, filePath);
+  return fs.readFileSync(filePath).equals(buf); // byte-verify
+}
+
+/**
+ * HEAL one CONFIGURED job's OS registration by REGENERATING its canonical
+ * scheduler file from validated config and (re)registering it — never trusting a
+ * found-on-disk artifact (WP-145 fix-pass R2:F34, ADR-0027 amendment). The OS can
+ * silently drop a registration (a system update) while the file stays on disk;
+ * `repointSchedules` no-ops on identical content, so this forces the reload.
+ *
+ * Security: the canonical path is code-derived from a validated job name;
+ * `writeCanonicalSchedule` refuses to replace anything but a regular non-symlink
+ * file (planted symlink/dir → fail closed), atomically replaces it and
+ * byte-verifies; the path is re-checked in-root (realpath containment) IMMEDIATELY
+ * before the register spawn. A STATIC planted file is thereby defeated; the
+ * verify→register reopen race (a concurrent writer at heal time) is an accepted
+ * A12 residual (see ADR-0028 / WP-159). This heals ONLY the named per-job entry;
+ * the catch-up registration is owned by `repointSchedules` and is never touched.
+ * @param {import('../core/paths').WienerdogPaths} paths
+ * @param {{name:string, at:string}} job  a validated config job
+ * @param {(argv:string[])=>{status:number}} loader
+ * @param {NodeJS.Platform} platform  injected (never mock process.platform)
+ * @returns {boolean} true when the OS accepted the reload.
+ */
+function reloadJob(paths, job, loader, platform) {
+  if (!/^[a-z0-9][a-z0-9-]*$/.test(job.name)) return false;
+  const { hour, minute } = gen.parseAt(job.at); // throws on a bad time → caller treats as failed
+  const node = gen.nodePath();
+  const b = jobLaunchBinding(paths, job.name, platform);
+  const roots = schedulerRootsFor(paths);
+
+  if (platform === 'darwin') {
+    const uid = process.getuid();
+    const logDir = path.join(paths.logs, job.name);
+    const label = gen.launchdLabel(job.name);
+    const plistPath = path.join(gen.launchAgentsDir(paths.home), `${label}.plist`);
+    const content = gen.launchdPlist({ name: job.name, hour, minute, node, launcher: b.launcher, descriptor: b.descriptor, expectDigest: b.expectDigest, home: paths.home, logDir });
+    if (!writeCanonicalSchedule(plistPath, content)) return false;
+    if (!manifestLib.withinSchedulerRoot(plistPath, roots)) return false;
+    return loader(['launchctl', 'bootstrap', `gui/${uid}`, plistPath]).status === 0;
+  }
+
+  if (platform === 'linux') {
+    const unitBase = gen.systemdUnitBase(job.name);
+    const dir = gen.systemdUserDir(paths.home, process.env);
+    const timerPath = path.join(dir, `${unitBase}.timer`);
+    const servicePath = path.join(dir, `${unitBase}.service`);
+    const timerText = gen.systemdTimer({ name: job.name, hour, minute });
+    const serviceText = gen.systemdService({ name: job.name, node, launcher: b.launcher, descriptor: b.descriptor, expectDigest: b.expectDigest, home: paths.home });
+    if (!writeCanonicalSchedule(servicePath, serviceText)) return false;
+    if (!writeCanonicalSchedule(timerPath, timerText)) return false;
+    if (!manifestLib.withinSchedulerRoot(timerPath, roots)) return false;
+    loader(['systemctl', '--user', 'daemon-reload']); // best-effort
+    return loader(['systemctl', '--user', 'enable', '--now', `${unitBase}.timer`]).status === 0;
+  }
+
+  if (platform === 'win32') {
+    const taskName = gen.windowsTaskName(job.name); // validates + throws on a hostile name
+    const userId = gen.windowsCurrentUserId();
+    const wrapperPath = gen.windowsWrapperFile(paths, job.name);
+    const wrapperContent = gen.windowsLauncherWrapper({ node, launcher: b.launcher, home: paths.home, launchArgs: [job.name, '--descriptor', b.descriptor, '--expect-digest', b.expectDigest] });
+    if (!writeCanonicalSchedule(wrapperPath, wrapperContent)) return false;
+    const xmlPath = gen.windowsTaskFile(paths, job.name);
+    const content = gen.windowsTaskXmlBytes(gen.windowsDreamTaskXml({ name: job.name, hour, minute, wrapper: wrapperPath, userId }));
+    if (!writeCanonicalSchedule(xmlPath, content)) return false;
+    if (!manifestLib.withinSchedulerRoot(xmlPath, roots)) return false;
+    return loader(['schtasks', '/create', '/tn', taskName, '/xml', xmlPath, '/f']).status === 0;
+  }
+
+  return false;
+}
+
 /**
  * Silently ensure the nightly dream is scheduled at 03:30 (ADR-0014). Idempotent:
  * if a `dream` job already exists, no-op. Degrades (no throw) on a platform where
@@ -549,17 +654,13 @@ function remove(argv, loader) {
   const removed = [];
   const skipped = [];
   const removedSet = new Set();
-  // WP-145 (ADR-0027): the unregister argv is re-derived from the file's
-  // basename identity + platform, never the stored entry.unload; the file
-  // removal is bounded to the known scheduler roots.
-  const schedulerOpts = {
-    platform: process.platform,
-    schedulerRoots: [
-      gen.launchAgentsDir(paths.home),
-      gen.systemdUserDir(paths.home, process.env),
-      path.join(paths.core, 'schedules'),
-    ],
-  };
+  // F35 (WP-145 fix-pass): `schedule remove` is a 2nd production caller of the
+  // shared reverser — teardown is DELEGATED to reverseSchedulerEntry with the
+  // SAME scheduler-root set uninstall uses (via the shared schedulerRootsFor),
+  // so containment + validate-before-spawn (F33) can never diverge from
+  // uninstall. The unregister argv is re-derived from the file's basename
+  // identity, never the stored entry.unload (ADR-0027).
+  const schedulerOpts = { platform: process.platform, schedulerRoots: schedulerRootsFor(paths) };
   for (const entry of matched) {
     manifestLib.reverseSchedulerEntry(entry, false, removed, skipped, removedSet, schedulerOpts);
   }
@@ -568,20 +669,13 @@ function remove(argv, loader) {
   jobsLib.removeJob(paths, name);
 
   if (removed.length === 0) {
-    // No schedule FILE was present to delete (already removed, or never registered).
-    // But reverseSchedulerEntry runs the DERIVED unregister argv BEFORE checking
-    // the file (WP-145: derive, then the root-bound/isFile guards), so a
-    // best-effort OS-unregister command may still have RUN even with zero file
-    // deletions. Report the count (0) AND the same best-effort qualifier as the
-    // non-empty branch; do NOT assert the OS entry was "already gone" — that is
-    // not known here.
-    process.stdout.write(`wienerdog: removed "${name}" from Wienerdog's schedule — deleted 0 schedule files and ran the derived OS-unregister command(s) best-effort (no schedule file was present to delete).\n`);
+    // Validate-before-spawn (F33): reverseSchedulerEntry now unregisters ONLY a
+    // recognized in-root schedule file that is present — so zero deletions means
+    // no derived OS-unregister command ran either (nothing was there to act on).
+    process.stdout.write(`wienerdog: removed "${name}" from Wienerdog's schedule — no schedule file was present to unregister or delete (already absent).\n`);
   } else {
     const fileWord = removed.length === 1 ? 'file' : 'files';
-    const absentTail = skipped.length > 0
-      ? `; ${skipped.length} file${skipped.length === 1 ? ' was' : 's were'} already absent`
-      : '';
-    process.stdout.write(`wienerdog: removed "${name}" from Wienerdog's schedule — deleted ${removed.length} schedule ${fileWord} and ran the derived OS-unregister command(s) best-effort${absentTail}.\n`);
+    process.stdout.write(`wienerdog: removed "${name}" from Wienerdog's schedule — unregistered and deleted ${removed.length} schedule ${fileWord} best-effort.\n`);
   }
 }
 
@@ -641,4 +735,4 @@ async function run(argv, { loader = defaultLoader, profile } = {}) {
   }
 }
 
-module.exports = { run, defaultLoader, repointSchedules, ensureDreamSchedule, registerPlatform };
+module.exports = { run, defaultLoader, repointSchedules, ensureDreamSchedule, registerPlatform, reloadJob };

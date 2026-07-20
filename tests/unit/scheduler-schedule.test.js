@@ -544,13 +544,16 @@ test('scheduler-schedule: registerPlatform emits no secondary-call warnings when
 // best-effort" statement, never "unloaded" / "already gone".
 // -------------------------------------------------------------------------
 
-test('scheduler-schedule: remove reports the zero-removal wording (count + best-effort unregister, no "unloaded"/"already gone") when the schedule file is already gone', async () => {
+test('scheduler-schedule: remove reports the zero-removal wording (nothing present, no "unloaded") and SPAWNS NOTHING for an out-of-root entry (F33 validate-before-spawn)', async () => {
   const { env, paths, root } = setup();
   const manifest = manifestLib.load(paths);
-  // A recorded scheduler-entry whose FILE was never written (or already removed) —
-  // reverseSchedulerEntry still runs its `unload` argv best-effort before checking
-  // the file, so removed.length stays 0 while a command may still have run.
+  // A recorded scheduler-entry with a RECOGNIZED basename but OUT of every
+  // scheduler root (directly in HOME, not LaunchAgents). Post-F33, remove()
+  // (via the shared reverser) validates containment BEFORE deriving/spawning, so
+  // NO unregister command runs and the file is preserved — never the first-pass
+  // "spawn then check" behavior.
   const file = path.join(root, `${gen.launchdLabel('ghost-job')}.plist`);
+  fs.writeFileSync(file, 'x'); // exists, but out-of-root
   const marker = path.join(root, 'zero-removal-unload-ran');
   manifestLib.record(manifest, {
     kind: 'scheduler-entry',
@@ -571,14 +574,9 @@ test('scheduler-schedule: remove reports the zero-removal wording (count + best-
   }
 
   assert.ok(!fs.existsSync(marker), 'the stored unload argv never runs (WP-145 derives instead)');
-  assert.ok(
-    spyCalls.every((argv) => ['launchctl', 'systemctl', 'schtasks'].includes(argv[0])),
-    'only a code-derived command may fire best-effort'
-  );
-  assert.match(
-    out,
-    /deleted 0 schedule files and ran the derived OS-unregister command\(s\) best-effort \(no schedule file was present to delete\)/
-  );
+  assert.equal(spyCalls.length, 0, 'an out-of-root entry unregisters NOTHING (validate-before-spawn, F33)');
+  assert.ok(fs.existsSync(file), 'the out-of-root file is preserved, not deleted');
+  assert.match(out, /no schedule file was present to unregister or delete \(already absent\)/);
   assert.ok(!/unloaded/.test(out), 'never claims "unloaded"');
   assert.ok(!/already gone/i.test(out), 'never claims the OS entry was "already gone"');
   assert.equal(jobsLib.findJob(paths, 'ghost-job'), null, 'job definition still dropped');
@@ -619,7 +617,7 @@ test('scheduler-schedule: a normal removal reports removed.length (N=2), not the
 
   assert.ok(!fs.existsSync(marker), 'the stored unload argv never runs (WP-145 derives instead)');
   assert.ok(!fs.existsSync(timerPath) && !fs.existsSync(servicePath), 'both files deleted');
-  assert.match(out, /deleted 2 schedule files and ran the derived OS-unregister command\(s\) best-effort/);
+  assert.match(out, /unregistered and deleted 2 schedule files best-effort/);
   assert.ok(!/its schedule file/.test(out), 'does not misreport with the singular "its schedule file"');
   assert.ok(!/unloaded/.test(out), 'never claims "unloaded"');
 });
@@ -812,6 +810,41 @@ test('scheduler-schedule: remove after a win32 register reverses the dream entry
   const after = manifestLib.load(paths);
   assert.ok(!after.entries.some((e) => e.kind === 'scheduler-entry' && e.path === dreamXml), 'dream entry gone');
   assert.ok(after.entries.some((e) => e.kind === 'scheduler-entry' && e.path === catchupXml), 'catch-up entry kept');
+});
+
+// -------------------------------------------------------------------------
+// WP-145 fix-pass (F34): reloadJob REGENERATES canonical content from validated
+// config and never trusts a found-on-disk artifact.
+// -------------------------------------------------------------------------
+
+test('scheduler-schedule: reloadJob regenerates the canonical plist (attacker bytes overwritten) then registers it; a symlink is refused (F34)', { skip: process.platform === 'win32' }, () => {
+  const { paths } = setup();
+  jobsLib.saveJob(paths, { name: 'dream', at: '03:30', run: 'builtin:dream', timeoutMinutes: 20 });
+  const laDir = path.join(paths.home, 'Library', 'LaunchAgents');
+  fs.mkdirSync(laDir, { recursive: true });
+  const plistPath = path.join(laDir, 'ai.wienerdog.dream.plist');
+  // A found-on-disk plist with attacker-chosen ProgramArguments — must NOT be
+  // registered as-is; the heal regenerates the canonical content first.
+  fs.writeFileSync(plistPath, '<plist>ATTACKER ProgramArguments</plist>\n');
+
+  /** @type {string[][]} */ const calls = [];
+  const ok = schedule.reloadJob(paths, { name: 'dream', at: '03:30' }, (a) => (calls.push(a), { status: 0 }), 'darwin');
+  assert.equal(ok, true);
+  assert.deepEqual(calls, [['launchctl', 'bootstrap', `gui/${process.getuid()}`, plistPath]]);
+  const after = fs.readFileSync(plistPath, 'utf8');
+  assert.ok(!after.includes('ATTACKER'), 'the found file is regenerated from canonical config, not trusted');
+  assert.ok(after.includes('<key>Label</key>') && after.includes('ai.wienerdog.dream'), 'canonical plist rendered');
+
+  // A planted symlink at the canonical path is refused (fail closed, zero register).
+  fs.rmSync(plistPath);
+  const target = path.join(paths.home, 'evil-target');
+  fs.writeFileSync(target, 'x');
+  fs.symlinkSync(target, plistPath);
+  /** @type {string[][]} */ const calls2 = [];
+  const ok2 = schedule.reloadJob(paths, { name: 'dream', at: '03:30' }, (a) => (calls2.push(a), { status: 0 }), 'darwin');
+  assert.equal(ok2, false, 'a symlink at the canonical path is not healed');
+  assert.equal(calls2.length, 0, 'nothing is registered');
+  assert.equal(fs.lstatSync(plistPath).isSymbolicLink(), true, 'the symlink is left as-is');
 });
 
 // -------------------------------------------------------------------------

@@ -8,7 +8,16 @@ const path = require('node:path');
 
 const { getPaths } = require('../../src/core/paths');
 const manifestLib = require('../../src/core/manifest');
+const jobsLib = require('../../src/scheduler/jobs');
+const gen = require('../../src/scheduler/generators');
 const status = require('../../src/scheduler/status');
+
+const isPosix = process.platform !== 'win32';
+
+// Hermeticity: CI may set XDG_CONFIG_HOME to the real ~/.config, which
+// systemdUserDir() prefers over $HOME. Unset it (this file runs in its own
+// `node --test` process) so scheduler roots resolve under the temp HOME.
+delete process.env.XDG_CONFIG_HOME;
 
 /**
  * Build an isolated temp core with a manifest holding the given scheduler + other
@@ -37,54 +46,52 @@ const launchdEntry = (home, name) => ({
 });
 
 // ---------------------------------------------------------------------------
-// describeEntry — derives probe + reload argv from the stored unload argv
+// describeEntry — RE-DERIVES the read-only probe from the basename IDENTITY,
+// never from the untrusted stored unload argv (ADR-0027, WP-145 fix-pass F34).
+// No reload argv is produced here (the heal regenerates canonical content).
 // ---------------------------------------------------------------------------
 
-test('describeEntry parses a launchd entry into read-only probe + reload argv', () => {
-  const entry = launchdEntry('/home/ada', 'dream');
+test('describeEntry re-derives the launchd probe from the basename (ignores unload); uid comes from process.getuid', () => {
+  // A poisoned unload must be irrelevant — the probe is derived from the path.
+  const entry = { ...launchdEntry('/home/ada', 'dream'), unload: ['/bin/sh', '-c', 'evil'] };
   const d = status.describeEntry(entry);
   assert.deepEqual(d, {
     name: 'dream',
     scheduler: 'launchd',
-    probe: ['launchctl', 'print', 'gui/501/ai.wienerdog.dream'],
-    reload: ['launchctl', 'bootstrap', 'gui/501', entry.path],
+    probe: ['launchctl', 'print', `gui/${process.getuid()}/ai.wienerdog.dream`],
   });
 });
 
-test('describeEntry parses a systemd timer entry (probes the .timer, not the .service)', () => {
+test('describeEntry re-derives a systemd timer probe from the basename (probes the .timer)', () => {
   const entry = {
     kind: 'scheduler-entry',
     path: '/home/ada/.config/systemd/user/wienerdog-dream.timer',
-    unload: ['systemctl', '--user', 'disable', '--now', 'wienerdog-dream.timer'],
+    unload: ['/bin/sh', '-c', 'evil'], // ignored
   };
-  const d = status.describeEntry(entry);
-  assert.deepEqual(d, {
+  assert.deepEqual(status.describeEntry(entry), {
     name: 'dream',
     scheduler: 'systemd',
     probe: ['systemctl', '--user', 'is-active', 'wienerdog-dream.timer'],
-    reload: ['systemctl', '--user', 'enable', '--now', 'wienerdog-dream.timer'],
   });
 });
 
-test('describeEntry parses a schtasks entry', () => {
+test('describeEntry re-derives a schtasks probe from the basename', () => {
   const entry = {
     kind: 'scheduler-entry',
     path: '/c/core/schedules/wienerdog-dream.xml',
-    unload: ['schtasks', '/delete', '/tn', '\\Wienerdog\\dream', '/f'],
+    unload: ['/bin/sh', '-c', 'evil'], // ignored
   };
-  const d = status.describeEntry(entry);
-  assert.deepEqual(d, {
+  assert.deepEqual(status.describeEntry(entry), {
     name: 'dream',
     scheduler: 'schtasks',
     probe: ['schtasks', '/query', '/tn', '\\Wienerdog\\dream'],
-    reload: ['schtasks', '/create', '/tn', '\\Wienerdog\\dream', '/xml', entry.path, '/f'],
   });
 });
 
-test('describeEntry returns null for an entry with no unload (systemd .service) or unknown shape', () => {
+test('describeEntry returns null for an unrecognized basename (systemd .service or foreign)', () => {
   assert.equal(status.describeEntry({ path: '/x/wienerdog-dream.service' }), null);
-  assert.equal(status.describeEntry({ path: '/x/y', unload: [] }), null);
-  assert.equal(status.describeEntry({ path: '/x/y', unload: ['weird', 'thing'] }), null);
+  assert.equal(status.describeEntry({ path: '/x/com.apple.thing.plist' }), null);
+  assert.equal(status.describeEntry({ path: '/x/foreign.txt' }), null);
 });
 
 // ---------------------------------------------------------------------------
@@ -234,45 +241,133 @@ test('renderSchedulerStatusLine: empty when nothing is missing', () => {
 });
 
 // ---------------------------------------------------------------------------
-// reloadMissing — the ONLY mutation; heals only entries that probe missing
+// reloadMissing — the ONLY mutation. It heals ONLY configured, code-recognized
+// jobs by REGENERATING canonical content (ADR-0027, WP-145 fix-pass F34), never
+// by iterating manifest entries or executing a stored unload argv, and never
+// touches the catch-up entry [R5/R6].
 // ---------------------------------------------------------------------------
 
-test('reloadMissing calls the loader ONLY for entries that probe missing', () => {
-  const { root, paths } = setup((home) => [launchdEntry(home, 'dream'), launchdEntry(home, 'catchup')]);
+/** Write a minimal config so jobsLib can read/upsert jobs. */
+function withConfig(paths, jobs = []) {
+  fs.writeFileSync(paths.config, 'version: 1\nvault: /x/vault\n');
+  for (const j of jobs) jobsLib.saveJob(paths, { at: '03:30', run: 'builtin:dream', timeoutMinutes: 20, ...j });
+}
+
+const laPath = (paths, name) =>
+  path.join(paths.home, 'Library', 'LaunchAgents', `ai.wienerdog.${name}.plist`);
+
+test('reloadMissing REGENERATES the canonical plist for a configured missing job; the poisoned entry.unload never runs (F34)', () => {
+  const { root, paths } = setup();
+  withConfig(paths, [{ name: 'dream' }]);
+  // A real in-root dream plist with ATTACKER bytes, plus a manifest entry
+  // carrying a poisoned unload argv the heal must never read or execute.
+  const plistPath = laPath(paths, 'dream');
+  fs.mkdirSync(path.dirname(plistPath), { recursive: true });
+  fs.writeFileSync(plistPath, '<plist>ATTACKER</plist>\n');
+  const canary = path.join(root, 'canary.txt');
+  const manifest = manifestLib.load(paths);
+  manifestLib.record(manifest, { kind: 'scheduler-entry', path: plistPath, unload: ['/bin/sh', '-c', `touch ${canary}`] });
+  manifestLib.save(paths, manifest);
+
   /** @type {string[][]} */ const calls = [];
-  const loader = (argv) => { calls.push(argv); return { status: 0 }; };
-  const probe = (argv) => (argv[2].endsWith('dream') ? 'missing' : 'loaded');
-  const res = status.reloadMissing(paths, { loader, probe });
+  const res = status.reloadMissing(paths, { loader: (a) => (calls.push(a), { status: 0 }), probe: () => 'missing', platform: 'darwin' });
+
   assert.deepEqual(res.reloaded, ['dream']);
-  assert.equal(calls.length, 1, 'loaded entry is NOT reloaded');
-  assert.deepEqual(calls[0], [
-    'launchctl', 'bootstrap', 'gui/501',
-    path.join(root, 'Library', 'LaunchAgents', 'ai.wienerdog.dream.plist'),
-  ]);
+  assert.ok(!fs.existsSync(canary), 'the stored unload argv is NEVER executed (ADR-0027)');
+  assert.deepEqual(calls, [['launchctl', 'bootstrap', `gui/${process.getuid()}`, plistPath]]);
+  const after = fs.readFileSync(plistPath, 'utf8');
+  assert.ok(!after.includes('ATTACKER'), 'the found file is NOT registered — canonical content is regenerated');
+  assert.ok(after.includes('<key>Label</key>') && after.includes('ai.wienerdog.dream'), 'canonical plist was written');
 });
 
-test('reloadMissing reloads nothing when all entries are loaded', () => {
-  const { paths } = setup((home) => [launchdEntry(home, 'dream'), launchdEntry(home, 'catchup')]);
+test('reloadMissing heals ONLY configured jobs — a recognized in-root non-configured plist is never registered (F34)', () => {
+  const { paths } = setup();
+  withConfig(paths, [{ name: 'dream' }]);
+  const laDir = path.join(paths.home, 'Library', 'LaunchAgents');
+  fs.mkdirSync(laDir, { recursive: true });
+  const evil = path.join(laDir, 'ai.wienerdog.evil.plist');
+  fs.writeFileSync(evil, '<plist>EVIL</plist>\n');
+  // A manifest attacker also records a scheduler-entry for it — irrelevant, the
+  // heal iterates CONFIGURED jobs, not manifest entries.
+  const manifest = manifestLib.load(paths);
+  manifestLib.record(manifest, { kind: 'scheduler-entry', path: evil, unload: ['launchctl', 'bootout', 'gui/0/ai.wienerdog.evil'] });
+  manifestLib.save(paths, manifest);
+
+  /** @type {string[][]} */ const calls = [];
+  const res = status.reloadMissing(paths, { loader: (a) => (calls.push(a), { status: 0 }), probe: () => 'missing', platform: 'darwin' });
+
+  assert.deepEqual(res.reloaded, ['dream']);
+  assert.ok(calls.every((a) => !a.some((x) => String(x).includes('evil'))), 'the non-configured evil plist is never registered');
+  assert.equal(fs.readFileSync(evil, 'utf8'), '<plist>EVIL</plist>\n', 'the evil plist is left untouched (not healed)');
+});
+
+test('reloadMissing refuses to heal onto a symlink at the canonical path (fail closed, zero register)', { skip: !isPosix }, () => {
+  const { paths } = setup();
+  withConfig(paths, [{ name: 'dream' }]);
+  const plistPath = laPath(paths, 'dream');
+  fs.mkdirSync(path.dirname(plistPath), { recursive: true });
+  const target = path.join(paths.home, 'evil-target');
+  fs.writeFileSync(target, 'x');
+  fs.symlinkSync(target, plistPath); // planted symlink at the canonical name
+
+  /** @type {string[][]} */ const calls = [];
+  const res = status.reloadMissing(paths, { loader: (a) => (calls.push(a), { status: 0 }), probe: () => 'missing', platform: 'darwin' });
+
+  assert.deepEqual(res.failed, ['dream']);
+  assert.equal(calls.length, 0, 'a planted symlink is never registered');
+  assert.equal(fs.lstatSync(plistPath).isSymbolicLink(), true, 'the symlink is left as-is (not followed or overwritten)');
+});
+
+test('reloadMissing NEVER creates or registers the catch-up entry [R5/R6]', () => {
+  const { paths } = setup((home) => [
+    // A manifest catch-up scheduler-entry with a poisoned unload — must be ignored.
+    { kind: 'scheduler-entry', path: path.join(home, 'Library', 'LaunchAgents', 'ai.wienerdog.catchup.plist'), unload: ['/bin/sh', '-c', 'evil'] },
+  ]);
+  withConfig(paths, [{ name: 'dream' }]); // catch-up is NOT a configured job
+  /** @type {string[][]} */ const calls = [];
+  const res = status.reloadMissing(paths, { loader: (a) => (calls.push(a), { status: 0 }), probe: () => 'missing', platform: 'darwin' });
+  assert.deepEqual(res.reloaded, ['dream']);
+  assert.ok(calls.every((a) => !a.some((x) => String(x).includes('catchup'))), 'the heal never reloads the catch-up entry');
+  assert.equal(fs.existsSync(laPath(paths, 'catchup')), false, 'the heal never writes a catch-up plist');
+});
+
+test('reloadMissing does zero probe/reload when there is no configured job (out-of-root manifest entry is never consulted)', () => {
+  const { paths } = setup((home) => [
+    { kind: 'scheduler-entry', path: '/tmp/ai.wienerdog.evil.plist', unload: ['/bin/sh', '-c', 'evil'] },
+  ]);
+  withConfig(paths, []); // no jobs
+  let probes = 0;
+  let loads = 0;
+  const res = status.reloadMissing(paths, { loader: () => (loads++, { status: 0 }), probe: () => (probes++, 'missing'), platform: 'darwin' });
+  assert.deepEqual(res, { reloaded: [], failed: [] });
+  assert.equal(probes, 0, 'nothing configured → nothing probed (manifest entries are never iterated for heal)');
+  assert.equal(loads, 0, 'nothing reloaded');
+});
+
+test('reloadMissing reloads nothing when every configured job is loaded', () => {
+  const { paths } = setup();
+  withConfig(paths, [{ name: 'dream' }]);
   let called = 0;
-  const res = status.reloadMissing(paths, { loader: () => { called += 1; return { status: 0 }; }, probe: () => 'loaded' });
+  const res = status.reloadMissing(paths, { loader: () => (called++, { status: 0 }), probe: () => 'loaded', platform: 'darwin' });
   assert.deepEqual(res.reloaded, []);
   assert.equal(called, 0);
 });
 
 test('reloadMissing never throws when the loader throws (best-effort heal)', () => {
-  const { paths } = setup((home) => [launchdEntry(home, 'dream')]);
+  const { paths } = setup();
+  withConfig(paths, [{ name: 'dream' }]);
   const loader = () => { throw new Error('boom'); };
   let res;
-  assert.doesNotThrow(() => { res = status.reloadMissing(paths, { loader, probe: () => 'missing' }); });
-  assert.deepEqual(res.reloaded, []); // a throw is treated as status 1 → not reloaded
-  assert.deepEqual(res.failed, ['dream']); // it is surfaced as a failed heal, not hidden
+  assert.doesNotThrow(() => { res = status.reloadMissing(paths, { loader, probe: () => 'missing', platform: 'darwin' }); });
+  assert.deepEqual(res.reloaded, []);
+  assert.deepEqual(res.failed, ['dream']);
 });
 
 test('reloadMissing splits reloaded vs failed on the loader exit status', () => {
-  const { paths } = setup((home) => [launchdEntry(home, 'dream'), launchdEntry(home, 'catchup')]);
-  // Both probe missing; the loader rejects dream (status 1) but accepts catchup.
-  const loader = (argv) => ({ status: argv[argv.length - 1].endsWith('dream.plist') ? 1 : 0 });
-  const res = status.reloadMissing(paths, { loader, probe: () => 'missing' });
-  assert.deepEqual(res.reloaded, ['catchup']);
+  const { paths } = setup();
+  withConfig(paths, [{ name: 'dream' }, { name: 'digest', at: '07:00' }]);
+  const loader = (argv) => ({ status: argv[argv.length - 1].endsWith('ai.wienerdog.dream.plist') ? 1 : 0 });
+  const res = status.reloadMissing(paths, { loader, probe: () => 'missing', platform: 'darwin' });
+  assert.deepEqual(res.reloaded, ['digest']);
   assert.deepEqual(res.failed, ['dream']);
 });

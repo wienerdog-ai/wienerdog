@@ -112,6 +112,38 @@ function deriveUnloadArgv(schedulePath, platform, env = process.env) {
 }
 
 /**
+ * Re-derive a schedule file's READ-ONLY probe argv from its basename identity
+ * (audit A8, ADR-0027 amendment, WP-145 fix-pass F34). Mirrors deriveUnloadArgv
+ * but produces a NON-mutating "is this job registered?" query — the sync-time
+ * heal (`status.js`) and doctor read it back instead of executing the untrusted
+ * stored `entry.unload`. The scheduler kind is inferred from the basename SHAPE
+ * (`*.plist` → launchd, `wienerdog-*.timer` → systemd, `wienerdog-*.xml` →
+ * schtasks), which is disjoint across schedulers and therefore host-agnostic —
+ * `platform` only selects the basename separator flavor. Fully-anchored regexes
+ * keep `/`, `\`, `..`, and spaces in a poisoned filename out of the argv.
+ * @param {string} schedulePath
+ * @param {NodeJS.Platform} [platform]  basename separator flavor (default host)
+ * @param {NodeJS.ProcessEnv} [env]  reserved (defaults to process.env)
+ * @returns {string[]|null}  the read-only probe argv, or null for a foreign
+ *   basename or a uid-less darwin (no probe target).
+ */
+function deriveProbeArgv(schedulePath, platform = process.platform, env = process.env) {
+  const base = (platform === 'win32' ? path.win32 : path.posix).basename(schedulePath);
+  let m;
+  if ((m = base.match(/^(ai\.wienerdog\.[a-z0-9][a-z0-9-]*)\.plist$/))) {
+    if (typeof process.getuid !== 'function') return null;
+    return ['launchctl', 'print', `gui/${process.getuid()}/${m[1]}`];
+  }
+  if ((m = base.match(/^(wienerdog-[a-z0-9][a-z0-9-]*)\.timer$/))) {
+    return ['systemctl', '--user', 'is-active', `${m[1]}.timer`];
+  }
+  if ((m = base.match(/^wienerdog-([a-z0-9][a-z0-9-]*)\.xml$/))) {
+    return ['schtasks', '/query', '/tn', `\\Wienerdog\\${m[1]}`];
+  }
+  return null;
+}
+
+/**
  * Parse a 24-hour "HH:MM" clock string.
  * @param {string} at
  * @returns {{hour:number, minute:number}}
@@ -644,6 +676,7 @@ module.exports = {
   launchdLabel,
   systemdUnitBase,
   deriveUnloadArgv,
+  deriveProbeArgv,
   parseAt,
   xmlEscape,
   launchdPlist,
