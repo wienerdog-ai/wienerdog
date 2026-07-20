@@ -154,7 +154,6 @@ function spawnBrain(o) {
     // fake brain reads it. The default fake brain ignores it too and writes the
     // default paths, which under the default layout are the mapped paths.
     WIENERDOG_DREAM_LAYOUT: JSON.stringify({ ...layout, daily_today: resolveDailyPath(layout, date) }),
-    // WIENERDOG_FAKE_TODAY passes through from baseEnv unchanged.
   };
 
   // The brain command is resolved ONLY via WP-154's pinned front door — no env

@@ -474,7 +474,7 @@ test('scheduler-runjob: the run-job log tee redacts a secret in child output (WP
 // run-job <name> — hang → watchdog kill-tree
 // -------------------------------------------------------------------------
 
-test('scheduler-runjob: a hanging job hits the watchdog, kills the tree, records error', async () => {
+test('scheduler-runjob: a hanging job hits the watchdog (opts.timeoutMs); a set WIENERDOG_RUNJOB_TIMEOUT_MS has ZERO effect (WP-155)', async () => {
   const { root, env, paths } = setup();
   jobsLib.saveJob(paths, { name: 'dream', at: '03:30', run: 'builtin:dream', timeoutMinutes: 20 });
   const pidFile = path.join(root, 'child.pid');
@@ -485,9 +485,15 @@ test('scheduler-runjob: a hanging job hits the watchdog, kills the tree, records
   ]);
   const sendAlert = () => ({ status: 0 });
 
+  // The outer timeout comes from the JS-only opts.timeoutMs seam. A large
+  // WIENERDOG_RUNJOB_TIMEOUT_MS env var (the deleted seam) is IGNORED — the job
+  // still times out at 2s. Mutation: reintroduce the env read → resolveTimeoutMs
+  // returns 600000 → the job does not time out in the window → /timed out/ never
+  // rejects → this test fails.
   await assert.rejects(
-    withRun(env, { WIENERDOG_RUNJOB_TIMEOUT_MS: '2000' }, ['dream'], {
+    withRun(env, { WIENERDOG_RUNJOB_TIMEOUT_MS: '600000' }, ['dream'], {
       resolveCommand: fakeResolve(fake),
+      timeoutMs: 2000,
       sendAlert,
       loader: noopLoader,
     }),

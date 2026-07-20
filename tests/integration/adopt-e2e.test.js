@@ -17,6 +17,11 @@ const POWERUSER_FIXTURE = path.resolve(__dirname, '../fixtures/poweruser-vault')
 const FAKE_BRAIN = path.resolve(__dirname, '../fixtures/adopt/fake-brain-mapped.js');
 const INJ_FIXTURE = path.resolve(__dirname, '../fixtures/dream/transcripts/claude-injection.jsonl');
 const DATE = '2026-07-03';
+// WP-155: the WIENERDOG_FAKE_TODAY env seam is deleted from production; inject
+// the clock via dream.run's JS-only opts.now (local noon → resolveDate yields
+// DATE in any timezone). The env var is still set for the fake-brain FIXTURE.
+const [DY, DM, DD] = DATE.split('-').map(Number);
+const NOW = new Date(DY, DM - 1, DD, 12, 0, 0);
 
 const ENV_KEYS = [
   'HOME',
@@ -181,7 +186,7 @@ test('adopt-e2e: init → adopt → sync → dream through mapped tiers, one rev
     //    brain is the PINNED fake claude (sync pinned it above); the probe is
     //    skipped via the JS-only opts seam (a fake brain cannot satisfy it).
     const before = commitCount(adopted);
-    await dream.run(['--yes'], { skipContainmentProbe: true });
+    await dream.run(['--yes'], { skipContainmentProbe: true, now: NOW });
     assert.equal(commitCount(adopted), before + 1, 'exactly one dream commit');
 
     const tracked = git(adopted, ['ls-files']);

@@ -10,10 +10,12 @@ const manifestLib = require('./manifest');
 
 const TEMPLATE_ROOT = path.join(__dirname, '..', '..', 'templates', 'vault');
 
-/** @returns {string} today's date as YYYY-MM-DD, or WIENERDOG_FAKE_TODAY if set. */
-function today() {
-  if (process.env.WIENERDOG_FAKE_TODAY) return process.env.WIENERDOG_FAKE_TODAY;
-  return new Date().toISOString().slice(0, 10);
+/** Today's date as YYYY-MM-DD (UTC). The date env seam (audit A7/F5, WP-155) was
+ *  deleted from production; tests inject the clock via a JS-only `opts.now`.
+ *  @param {Date} [now] injected clock; defaults to the system clock.
+ *  @returns {string} */
+function today(now = new Date()) {
+  return now.toISOString().slice(0, 10);
 }
 
 /** @param {string[]} args @param {string} cwd @returns {boolean} true if git exited 0. */
@@ -80,7 +82,8 @@ function walkTemplateFiles(dir) {
  * never overwritten. Initializes a git repo with one commit if targetDir was
  * not already a git repo.
  * @param {string} targetDir
- * @param {{dryRun?: boolean, manifest?: object}} [opts]
+ * @param {{dryRun?: boolean, manifest?: object, now?: Date}} [opts]
+ *   `opts.now` is a JS-only injected clock for tests (WP-155); production omits it.
  * @returns {{created: string[], skipped: string[]}}
  */
 async function scaffoldVault(targetDir, opts = {}) {
@@ -89,7 +92,7 @@ async function scaffoldVault(targetDir, opts = {}) {
 
   const created = [];
   const skipped = [];
-  const date = today();
+  const date = today(opts.now);
 
   const relFiles = walkTemplateFiles(TEMPLATE_ROOT);
   for (const rel of relFiles) {
@@ -139,12 +142,13 @@ const IDENTITY_STUBS = ['profile.md', 'preferences.md', 'goals.md', 'instruction
  * (vault-dir / vault-file), so the adopted vault is never removed on uninstall.
  * @param {string} targetDir  the adopted vault
  * @param {import('./layout').VaultLayout} layout
- * @param {{dryRun?: boolean, manifest?: object}} [opts]
+ * @param {{dryRun?: boolean, manifest?: object, now?: Date}} [opts]
+ *   `opts.now` is a JS-only injected clock for tests (WP-155); production omits it.
  * @returns {{createdDirs: string[], seededFiles: string[], skipped: string[]}}
  */
 function scaffoldMappedDirs(targetDir, layout, opts = {}) {
   const { dryRun = false, manifest } = opts;
-  const date = today();
+  const date = today(opts.now);
 
   /** @type {string[]} */ const createdDirs = [];
   /** @type {string[]} */ const seededFiles = [];

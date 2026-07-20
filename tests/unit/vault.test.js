@@ -25,19 +25,29 @@ function gitLog(dir) {
 
 test('scaffoldVault creates the full tree and matches the golden fixture', async () => {
   const target = tempDir('wd-vault-golden-');
-  const prevFakeToday = process.env.WIENERDOG_FAKE_TODAY;
-  process.env.WIENERDOG_FAKE_TODAY = '2026-01-01';
-  try {
-    const { created, skipped } = await scaffoldVault(target);
-    assert.equal(skipped.length, 0);
-    assert.ok(created.length > 0);
-  } finally {
-    if (prevFakeToday === undefined) delete process.env.WIENERDOG_FAKE_TODAY;
-    else process.env.WIENERDOG_FAKE_TODAY = prevFakeToday;
-  }
+  // WP-155: the WIENERDOG_FAKE_TODAY env seam is deleted; inject the clock via
+  // opts.now (a UTC midnight so today() is timezone-independent for the golden).
+  const { created, skipped } = await scaffoldVault(target, { now: new Date('2026-01-01T00:00:00Z') });
+  assert.equal(skipped.length, 0);
+  assert.ok(created.length > 0);
 
   const { equal, diffs } = compareTrees(target, goldenDir);
   assert.ok(equal, `tree differs from golden fixture:\n${diffs.join('\n')}`);
+});
+
+test('scaffoldVault: a set WIENERDOG_FAKE_TODAY has ZERO effect — the injected clock is used (WP-155)', async () => {
+  const target = tempDir('wd-vault-noenv-');
+  const saved = process.env.WIENERDOG_FAKE_TODAY;
+  process.env.WIENERDOG_FAKE_TODAY = '2099-12-31'; // the date the deleted env seam would have used
+  try {
+    await scaffoldVault(target, { now: new Date('2026-01-01T00:00:00Z') });
+  } finally {
+    if (saved === undefined) delete process.env.WIENERDOG_FAKE_TODAY;
+    else process.env.WIENERDOG_FAKE_TODAY = saved;
+  }
+  const profile = fs.readFileSync(path.join(target, '06-Identity', 'profile.md'), 'utf8');
+  assert.match(profile, /2026-01-01/, 'the injected clock date is used in scaffolded content');
+  assert.ok(!profile.includes('2099-12-31'), 'the WIENERDOG_FAKE_TODAY env var is ignored (seam deleted)');
 });
 
 test('scaffoldVault initializes a git repo with exactly one commit', async () => {

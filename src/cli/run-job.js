@@ -271,11 +271,13 @@ function captureClaudeVersion(command, env, paths) {
   }
 }
 
-/** Resolve the watchdog timeout in ms (WIENERDOG_RUNJOB_TIMEOUT_MS is a test seam).
- *  @param {{timeoutMinutes:number}} job @returns {number} */
-function resolveTimeoutMs(job) {
-  const override = Number(process.env.WIENERDOG_RUNJOB_TIMEOUT_MS);
-  if (Number.isFinite(override) && override > 0) return override;
+/** Resolve the outer watchdog timeout in ms. The timeout env seam (audit A7/F5,
+ *  WP-155) was deleted from production; tests inject via runJob's JS-only
+ *  `opts.timeoutMs`, reachable only by a JS caller.
+ *  @param {{timeoutMinutes:number}} job @param {number} [overrideMs] test-only seam
+ *  @returns {number} */
+function resolveTimeoutMs(job, overrideMs) {
+  if (Number.isFinite(overrideMs) && overrideMs > 0) return overrideMs;
   const min = job.timeoutMinutes > 0 ? job.timeoutMinutes : 15;
   return min * 60_000;
 }
@@ -459,12 +461,14 @@ function safeResolvePath(input, guard, hopCap = 40) {
  *          platform?: NodeJS.Platform,
  *          detectPolicyHooks?: typeof detectPolicyHooks,
  *          resolveCommand?: typeof resolveCommand,
+ *          timeoutMs?: number,
  *          profile?: Record<string,string>}} [opts] `opts.profile` is the
  *   WP-142 harness code seam (see safety-profile.js): reachable ONLY by a JS
  *   caller — the CLI entry never passes one, so production stays frozen.
- *   `opts.resolveCommand` (WP-155) is the same idiom: a code seam for tests
- *   only, replacing the deleted fake-command env seam — `run(argv)` never
- *   sets it, so production always uses the module resolveCommand.
+ *   `opts.resolveCommand` and `opts.timeoutMs` (WP-155) are the same idiom:
+ *   code seams for tests only, replacing the deleted fake-command / outer-timeout
+ *   env seams — `run(argv)` never sets them, so production always uses the module
+ *   resolveCommand and the config-derived timeout.
  * @returns {Promise<void>}
  */
 async function runJob(paths, job, opts = {}) {
@@ -559,7 +563,7 @@ async function runJob(paths, job, opts = {}) {
 
   // 4. Watchdog: detached child (own process group), race exit vs timeout, kill
   //    the whole tree on timeout, always clear the timer (reuse dream.js's shape).
-  const timeoutMs = resolveTimeoutMs(job);
+  const timeoutMs = resolveTimeoutMs(job, opts.timeoutMs);
   const started = Date.now();
   let code = null;
   let failure = null;

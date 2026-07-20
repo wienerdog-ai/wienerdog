@@ -27,10 +27,11 @@ const {
   restoreVaultToHead,
 } = require('../core/dream/validate');
 
-/** @returns {string} today's date as local YYYY-MM-DD, or WIENERDOG_FAKE_TODAY. */
-function resolveDate() {
-  if (process.env.WIENERDOG_FAKE_TODAY) return process.env.WIENERDOG_FAKE_TODAY;
-  const d = new Date();
+/** Today's date as local YYYY-MM-DD. The date env seam (audit A7/F5, WP-155) was
+ *  deleted from production; tests inject the clock via the JS-only `opts.now`.
+ *  @param {Date} [d] injected clock; defaults to the system clock.
+ *  @returns {string} */
+function resolveDate(d = new Date()) {
   const yyyy = d.getFullYear();
   const mm = String(d.getMonth() + 1).padStart(2, '0');
   const dd = String(d.getDate()).padStart(2, '0');
@@ -148,13 +149,14 @@ async function runBrainWithWatchdog(o) {
  * Exit 1 = expected failure (WienerdogError): no vault, dirty tree, brain
  *          failure/timeout, git error.
  * @param {string[]} argv
- * @param {{skipContainmentProbe?:boolean, probeCmd?:string}} [opts]
+ * @param {{skipContainmentProbe?:boolean, probeCmd?:string, now?:Date}} [opts]
  *   TEST-ONLY (WP-155, same idiom as run-job's opts): reachable only by a JS
  *   caller — bin/wienerdog.js calls run(rest) with argv only, so production
  *   sees opts = {} and ALWAYS runs the probe against the WP-154 pinned claude.
  *   skipContainmentProbe: skip the pre-dream containment self-check (a fake
  *   brain cannot satisfy a live probe). probeCmd: forwarded to
- *   runContainmentProbe's opts.probeCmd DI seam. No env var can do either.
+ *   runContainmentProbe's opts.probeCmd DI seam. now: injected clock (replaces
+ *   the deleted date env seam). No env var can do any of these.
  * @returns {Promise<void>}
  */
 async function run(argv, opts = {}) {
@@ -165,7 +167,7 @@ async function run(argv, opts = {}) {
   const cfg = readDreamConfig(paths.config); // throws WienerdogError when no vault
   const vaultDir = cfg.vault;
   const layout = readVaultLayout(paths.config);
-  const date = resolveDate();
+  const date = resolveDate(opts.now);
 
   // 2. Vault must be a git repo (read-only check; fail fast without the lock).
   assertGitRepo(vaultDir);

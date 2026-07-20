@@ -16,6 +16,13 @@ const { Limits } = require('../../src/core/transcripts');
 const FAKE_BRAIN = path.resolve(__dirname, '../fixtures/dream/fake-brain.js');
 const INJ_FIXTURE = path.resolve(__dirname, '../fixtures/dream/transcripts/claude-injection.jsonl');
 const DATE = '2026-07-02';
+// WP-155: the WIENERDOG_FAKE_TODAY env seam is deleted from production; the
+// integration tests inject the clock via dream.run's JS-only opts.now. Build a
+// local-noon Date so resolveDate (local components) yields exactly DATE in any
+// timezone. The env var is still set for the fake-brain FIXTURE (a test file,
+// not production src) which reads its own date from the inherited env.
+const [DY, DM, DD] = DATE.split('-').map(Number);
+const NOW = new Date(DY, DM - 1, DD, 12, 0, 0);
 
 const ENV_KEYS = [
   'HOME',
@@ -220,7 +227,7 @@ async function runDream(ctx, argv, extraEnv = {}, opts = {}) {
   console.warn = (...a) => logs.push(a.join(' '));
   let thrown = null;
   try {
-    await dream.run(argv, { skipContainmentProbe: true, ...opts });
+    await dream.run(argv, { skipContainmentProbe: true, now: NOW, ...opts });
   } catch (e) {
     thrown = e;
   } finally {
@@ -233,6 +240,23 @@ async function runDream(ctx, argv, extraEnv = {}, opts = {}) {
   }
   return { output: logs.join('\n'), thrown };
 }
+
+// ── WP-155: the deleted date env seam has zero effect ───────────────────────
+
+test('dream-integration: a set WIENERDOG_FAKE_TODAY has ZERO effect — dream derives the date from the injected clock (WP-155)', async () => {
+  const ctx = setup();
+  // A bogus env date the deleted WIENERDOG_FAKE_TODAY seam would have used, and a
+  // DIFFERENT injected clock. --dry-run prints the resolved date before any brain
+  // spawn, so this isolates dream.js's date resolution from the fake-brain fixture.
+  const { output } = await runDream(
+    ctx,
+    ['--dry-run'],
+    { WIENERDOG_FAKE_TODAY: '2099-12-31' },
+    { now: new Date(2026, 6, 2, 12, 0, 0) }
+  );
+  assert.match(output, /date: 2026-07-02/, 'the plan date comes from the injected clock, not the env var');
+  assert.ok(!output.includes('2099-12-31'), 'the WIENERDOG_FAKE_TODAY env var is ignored (seam deleted)');
+});
 
 // ── the full happy path + all gate outcomes ─────────────────────────────────
 
