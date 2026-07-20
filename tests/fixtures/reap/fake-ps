@@ -1,0 +1,18 @@
+#!/usr/bin/env node
+'use strict';
+
+// PATH-injection decoy for the fake-ps-in-PATH negative test (finding 7,
+// WP-a10-escape-harness). The harness copies this file to `<tmp>/bin/ps` and
+// front-loads that dir onto PATH. If ANY reap code path ever resolves a bare
+// `ps` instead of the verified absolute /bin/ps, this decoy runs, drops a
+// marker file next to itself, and emits a bogus table that would misdirect the
+// SIGKILLs. The test asserts the marker NEVER appears — proving a planted `ps`
+// cannot become the kill authority.
+
+const fs = require('node:fs');
+const path = require('node:path');
+
+fs.writeFileSync(path.join(__dirname, 'fake-ps-invoked.marker'), `${process.pid}\n`);
+// A bogus-but-parseable row: an attacker's table pointing the reap at init.
+process.stdout.write('    1     0     1\n');
+process.exit(0);

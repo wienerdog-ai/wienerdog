@@ -1,7 +1,7 @@
 ---
 id: WP-a10-escape-harness
 title: Live escape-negative harness for the reap — setsid/double-fork matrix, SIGKILL-the-middle-while-brain-lives, fake-ps-in-PATH negative, timed fork/setsid interleaving attack
-status: Ready
+status: In-Review
 model: opus
 size: M
 depends_on: [WP-a10-reap-mechanism]
@@ -179,12 +179,31 @@ is not vacuously green.
    (simulate a child that spawns siblings during teardown). Two cases, and only
    the first is a required green:
    - **Group-retaining late fork (required green).** The late grandchild keeps its
-     parent's group (no `setsid`), so it is a findable descendant. Assert the
-     **kill–rescan-to-quiescence** loop still ends with zero reachable descendants
-     — the late-forked grandchild is caught by a later sweep, closing the
-     snapshot→kill TOCTOU. Bound the fixture's fork count so the loop terminates
-     (it must, given `maxSweeps`), and assert the reap returns without exceeding
-     its sweep cap.
+     parent's group (no `setsid`), so it is a findable group-A member. **Honest
+     boundary (Codex round-2, addressed).** A LIVE test **cannot** deterministically
+     gate `reapTree`'s *two-consecutive-clean-sweep* rescan: `reapTree`'s first sweep
+     SIGKILLs the whole findable ppid-closure, which includes the **only** process
+     able to fork a still-findable child (any forker is itself a ppid-descendant, so
+     it dies in sweep 0). A still-findable descendant appearing *after* the first
+     real group-kill is therefore impossible to produce on demand without freezing
+     the reaper mid-loop — the deterministic snapshot/fork/setsid barrier the owner
+     forbade. `reapTree`'s rescan is a defensive race-closer for a kernel-scheduling
+     window and is **gated at the UNIT level** in `WP-a10-reap-mechanism`
+     (`tests/unit/reap.test.js` "a child forked between sweeps is caught by the
+     re-scan", asserting two consecutive clean snapshots — the **one-sweep mutation
+     bites there**, not in the live harness). The LIVE harness instead drives and
+     certifies the **COMPLETE timeout settle path**: the real `run-job` watchdog
+     fires while the middle is **still forking** group-retaining sleepers,
+     `reapTree(child.pid)` runs over the live (non-empty-closure) middle **and** the
+     settle-path checked `reapGroup(child.pid)` polls the group to verified
+     quiescence, and the test asserts **group-level ESRCH** (`kill(-child.pid, 0)`
+     throws) — which certifies **every** member is gone, **including an unrecorded
+     late fork** the SIGKILL removed before its record line ran (the anti-vacuity
+     hole a per-pid-only assertion leaves open). Defense-in-depth: with the middle
+     alive either primitive alone drains group A, so the guarantee certified is that
+     the complete path reaches group quiescence, not which primitive did it — the
+     leaderless/late class is carried by `reapGroup` per the settle-path matrix +
+     ADR-0030. Bound the fixture's fork count so it always terminates.
    - **Kill-induced late reparent (DOCUMENTED RESIDUAL — not a required green,
      finding 14).** A late grandchild that `setsid`s into a **new session AFTER the
      first snapshot** and is then reparented to `init` by the reaper's **own** kill
@@ -421,9 +440,13 @@ is not vacuously green.
       fail this test.
 - [ ] **[No bare ps, finding 7]** With a `fake-ps` earlier on `PATH`, the reap
       does not run it (marker absent) and still kills a real re-detached child.
-- [ ] **[TOCTOU group-retaining, finding 8a]** A **group-retaining** grandchild
-      forked while the reap sweeps is still gone after the kill–rescan loop; the
-      loop terminates within `maxSweeps`.
+- [ ] **[TOCTOU group-retaining, finding 8a]** A middle that keeps forking
+      **group-retaining** children while the **real** `run-job` timeout settle runs
+      leaves the whole group at **group-level ESRCH** (`kill(-child.pid, 0)` throws)
+      — unrecorded late members included. `reapTree`'s two-consecutive-clean rescan
+      is **not** live-gatable (the forker dies in sweep 0); it is unit-gated in
+      `WP-a10-reap-mechanism`, where the one-sweep mutation bites. The live harness
+      certifies the complete settle path reaches group quiescence.
 - [ ] **[Kill-induced late reparent, finding 14]** The setsid-after-snapshot,
       reparent-via-kill case is **recorded** as the ADR-0030 residual — not
       asserted reaped, and no deterministic test-barrier machinery is built.
