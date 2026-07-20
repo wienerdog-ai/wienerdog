@@ -442,46 +442,74 @@ still false — F5/F6 were pre-existing-symlink write-path gaps) is corrected.**
   path-following `chmod` is removed. `O_EXCL`+random+`O_NOFOLLOW` is the standard
   complete fix for the predictable-temp-symlink class.
 
-**Full never-follow guarantee — the position×phase matrix.** After G2–G5 +
-F1–F6, a PRE-EXISTING symlink is caught at EVERY position × phase:
+**AMENDED 2026-07-20 (Codex lock-pass F9/F10/F11) — the FAILURE path is now
+hardened (F9, pre-existing), and the residual is the COMPLETE 4-window
+concurrent set.**
+- **F9 (FAILURE PATH, PRE-EXISTING — FIXED).** A symlinked core made
+  `mkdirPrivate` refuse the log open (good), but the failure branch then
+  UNCONDITIONALLY called `writeScheduleState` (writing/renaming `schedule.json`
+  in the EXTERNAL tree, following the symlink) and `failLoud`→`appendAlert`
+  (whose `mkdirPrivate` refused the core and whose outer catch SILENTLY swallowed
+  the alert) — a silent external write AND no alert. Fixed: an exported
+  `coreAnomalous(paths)` predicate; `runJob` detects it ONCE and, when anomalous,
+  routes every failure through a NON-CORE channel only (stderr + the injected
+  email alert) — no `writeScheduleState`, no `appendAlert`; `run()` also skips
+  its `maybeRefresh`/`refreshSchedulerStatus` probes (both write under the core);
+  and `dream.run` refuses at the top, before `acquireLock`/scratch/digest. The
+  invariant: an anomalous core → NOTHING written/renamed/chmodded/deleted under
+  it on the success OR failure path, and the run exits non-zero loudly via a
+  channel that does not touch the core. (The prior F7 test read the watermark
+  through the symlink — asserting the bug; it now snapshots the whole external
+  tree byte+mode and asserts it is unchanged.)
+- **F10 (W4, CONCURRENT — DETECTED).** After the `O_EXCL` temp open, a concurrent
+  same-owner unlink+symlink at the temp name makes `rename` land a foreign
+  target. `writeFilePrivate` now captures the fd's `(dev,ino)` and post-rename
+  `lstat`s `dest`, throwing on a symlink / inode mismatch — detection, NOT
+  prevention (pure Node has no directory-relative rename to close it).
+- **F11 (W2 deletion, CONCURRENT — DOCUMENTED + narrowed).** A concurrent
+  `logs/<job>` swap after a successful open lets `rotateLogs`'s following
+  `readdirSync`+`rmSync` DELETE external files. `rotateLogs` gains a cheap
+  lstat-first guard (skip if the dir is now a symlink) that narrows but cannot
+  close the `readdir`→`rmSync` window.
+
+**Full never-follow guarantee — the position×phase matrix + the failure path.**
+After G2–G5 + F1–F11, a PRE-EXISTING symlink is caught at EVERY position × phase
 `{root, intermediate, leaf}` × `{enumerate, dir-chmod, file-chmod, 000-fallback,
-mkdir, open-write, temp-write}` — each cell refuses + surfaces (repair: root
-`O_NOFOLLOW`-open, intermediate `(dev,ino)` fd-reval, leaf lstat-classify incl.
-dynamic leaves; write: `assertInCoreAncestry` for root+intermediate, leaf
-`O_NOFOLLOW`/`O_EXCL`-random-temp).
+mkdir, open-write, temp-write}` AND on the FAILURE path (F9) — each cell
+refuses-and-surfaces (repair: root `O_NOFOLLOW`-open, intermediate `(dev,ino)`
+fd-reval, leaf lstat-classify incl. dynamic leaves; write: `assertInCoreAncestry`
+plus leaf `O_NOFOLLOW`/`O_EXCL`-random-temp; failure: `coreAnomalous` → non-core
+surface).
 
 **The residual — ONLY the class of concurrent owner-level swaps DURING an
-operation** (NOT any pre-existing case, and NOT "only readdir"). Every window is
-the SAME same-user concurrent-writer class **ADR-0028** hands to **A12** ("Honest
-boundary — the A7 residual"), and pure Node cannot close any of them (no
+operation** (NOT any pre-existing case, and NOT "only readdir"). **FOUR** windows,
+all the SAME same-user concurrent-writer class **ADR-0028** hands to **A12**
+("Honest boundary — the A7 residual"); pure Node cannot PREVENT any (no
 `openat`/`openat2`/`fdopendir`, no portable fd-bound chmod for a mode-000 entry —
-confirmed: `O_PATH` absent on macOS, `/proc` Linux-only). **Their consequences
-DIFFER — stated per-window (F8 correction: window 2 is NOT loud for writes):**
-  1. **`readdir`-enumeration → fd-bind** (repair): a swap of an intermediate dir
-     after `readdir` names it but before the leaf fd is bound → the `(dev,ino)`
-     fd-revalidation **REFUSES** the redirected open (no chmod; surfaced by the
-     next scan).
-  2. **root/ancestor validation → leaf op** (repair AND write): a swap of the
-     core or an intermediate ancestor after
-     `assertInCoreAncestry`/`coreRootContext` verifies it but before the leaf op.
-     On the **repair** path the `(dev,ino)` check still refuses. On the **WRITE**
-     path this can **SILENTLY** redirect chmod/write/rename to an EXTERNAL target:
-     `createLogStreamPrivate`/`writeFilePrivate` do NOT re-validate the ancestry
-     after the leaf `open` (the fd is already bound to a file in the swapped-in
-     external dir), so they `fchmod`/write/rename it and **return successfully**
-     — no throw, no surfacing. Pure Node cannot bind the leaf op to the verified
-     ancestry without a directory-relative `openat`, so this window is neither
-     closeable nor loud (accepted A12 residual; NOT claimed as loud).
-  3. **mode-000 `lstat` → path-`chmodSync`** (`applyModeFallback`): worst case ONE
-     chmod on a swapped target, surfaced **LOUDLY** by a thrown error.
+confirmed: `O_PATH` absent on macOS, `/proc` Linux-only). **Consequences DIFFER
+— per-window (do NOT claim uniform loudness):**
+  1. **W1 `readdir`-enumeration → fd-bind** (repair): the `(dev,ino)`
+     fd-revalidation **REFUSES** the redirected open (no chmod; next scan surfaces).
+  2. **W2 ancestor validate/open → leaf op** (repair AND write): repair still
+     refuses via `(dev,ino)`; the WRITE helpers have NO post-open ancestry
+     revalidation, so a concurrent ancestor swap can **SILENTLY** redirect
+     chmod/write/rename to an EXTERNAL target AND, via `rotateLogs`, silently
+     **DELETE** external files (F11 narrows, does not close). Not loud.
+  3. **W3 mode-000 `lstat` → path-`chmodSync`** (`applyModeFallback`): worst case
+     ONE chmod on a swapped target, surfaced **LOUDLY** by a thrown error.
+  4. **W4 temp `O_EXCL`-open → rename-target substitution** (`writeFilePrivate`):
+     a concurrent unlink+symlink at the temp name lands a foreign target;
+     **DETECTED** post-rename (`(dev,ino)` lstat → loud throw), detection not
+     prevention.
 In every window the attacker must **already hold concurrent owner-level write
 access inside the already-`0700` core**. Do **not** claim any pre-existing
-symlink case remains open, do **not** claim "only readdir", do **not** claim an
-unconditional "never follows symlinks", and do **not** claim window 2 is loud —
-window 1 refuses, window 2 (write) can silently redirect, window 3 throws.
-*Follow-up for the architect:* `THREAT-MODEL.md` may want a one-line
-cross-reference to this three-window residual (with window 2's silent-write
-caveat) under the A12 section — flagged, not edited here (out of this WP's
+symlink case remains open (including the failure path), do **not** claim "only
+readdir", do **not** claim an unconditional "never follows symlinks", and do
+**not** claim a concurrent window is closed — W1 refuses, W2 can silently
+redirect/delete, W3 throws, W4 is detected-not-prevented. *Follow-up for the
+architect:* `THREAT-MODEL.md` may want a one-line cross-reference to this
+four-window residual (with W2's silent write/delete and W4's detect-not-prevent
+caveats) under the A12 section — flagged, not edited here (out of this WP's
 Deliverables).
 
 **The shared private log-stream helper `createLogStreamPrivate` — FAIL-CLOSED
