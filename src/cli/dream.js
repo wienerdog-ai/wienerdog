@@ -438,10 +438,10 @@ async function run(argv, opts = {}) {
 
     // 11. Run the brain under the watchdog.
     const logDir = path.join(paths.logs, 'dream');
-    mkdirPrivate(logDir); // 0700 log dir, independent of umask (WP-a9)
-    // 0600 log stream, fail-closed — secures a pre-existing (legacy 0666)
-    // append target on the fd before any byte is written (WP-a9).
-    const logStream = createLogStreamPrivate(path.join(logDir, `${date}.log`), { flags: 'a' });
+    mkdirPrivate(logDir, { core: paths.core }); // 0700 log dir, umask-independent, symlink-refusing (WP-a9)
+    // 0600 log stream, fail-closed — refuses a symlinked ancestor/leaf and
+    // secures a pre-existing (legacy 0666) append target on the fd (WP-a9).
+    const logStream = createLogStreamPrivate(path.join(logDir, `${date}.log`), { flags: 'a', core: paths.core });
     // A10 (ADR-0030): the per-run hand-up token, set by the run-job supervisor
     // in the child env before it spawned us. Strictly-shaped (16 hex chars —
     // exactly what run-job mints) so it can never smuggle a path segment into

@@ -756,8 +756,8 @@ async function runJob(paths, job, opts = {}) {
     // createLogStreamPrivate secures the fd to 0600 or throws (it never writes
     // into a file it could not secure). A throw here lands in the catch below
     // and takes the existing fail-loud branch.
-    mkdirPrivate(logDir);
-    logStream = createLogStreamPrivate(path.join(logDir, `${runStamp()}.log`));
+    mkdirPrivate(logDir, { core: paths.core });
+    logStream = createLogStreamPrivate(path.join(logDir, `${runStamp()}.log`), { core: paths.core });
 
     const child = spawn(command, args, {
       cwd: spawnCwd,

@@ -2,6 +2,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const crypto = require('node:crypto');
 const { WienerdogError } = require('./errors');
 
 /**
@@ -23,36 +24,37 @@ const { WienerdogError } = require('./errors');
  * chmod is a best-effort no-op, the scan reports {insecure: 0}, and WP-127
  * documents that Windows protection relies on the per-user profile ACLs.
  *
- * Never-follow guarantee (G2/G3/G4/G5 + F1/F2/F3/F4, ADR-0027) — stated
- * HONESTLY, NOT as an unconditional "never follows symlinks". A PRE-EXISTING
- * symlink at ANY path-component position — AND on the write path — is caught:
- *  - ROOT: `coreRootContext` opens the core `O_DIRECTORY|O_NOFOLLOW` and fstats
- *    it before trusting its realpath — a symlinked/non-dir core is an anomaly
- *    and NO descendant is enumerated or repaired (G5/F3b);
- *  - INTERMEDIATE: each opened fd is revalidated by (dev, ino) against the
- *    classifying lstat, so a swap that redirects the open to a different inode
- *    is refused (G3);
+ * Never-follow guarantee (G2–G5 + F1–F6, ADR-0027) — stated HONESTLY, NOT as an
+ * unconditional "never follows symlinks". A PRE-EXISTING symlink is caught at
+ * EVERY position × phase — `{root, intermediate, leaf}` × `{enumerate,
+ * dir-chmod, file-chmod, 000-fallback, mkdir, open-write, temp-write}`:
+ *  - ROOT: `coreRootContext` opens the core `O_DIRECTORY|O_NOFOLLOW` + fstat
+ *    before trusting its realpath — a symlinked/non-dir core is an anomaly, NO
+ *    descendant is enumerated/repaired, and every WRITE refuses (G5/F3/F5);
+ *  - INTERMEDIATE: repair revalidates each opened fd by (dev, ino) against the
+ *    classifying lstat (a redirected open → different inode → refused, G3); the
+ *    write helpers validate the whole in-core ancestor chain
+ *    (`assertInCoreAncestry`) so a symlinked intermediate dir refuses (F5);
  *  - LEAF: EVERY candidate — statically-named AND dynamically-enumerated
  *    (`secrets/`, `logs/<job>/`, `dream-scratch/`, `quarantine/`; `listNames`
- *    keeps symlink Dirents) — is lstat-classified: a symlink/escape is an
- *    `anomaly` (surfaced, never repaired) and the chmod opens O_RDONLY|O_NOFOLLOW
- *    with a (dev, ino) check (G2/F2);
- *  - WRITE PATH: `mkdirPrivate` lstat-refuses a pre-existing symlinked/non-dir
- *    target, and `createLogStreamPrivate` opens with numeric flags incl.
- *    O_NOFOLLOW + fstats a regular file before writing/fchmod (F1) — so a
- *    fresh-install private log never follows a planted symlink out of the core.
- * The RESIDUAL is the CLASS of concurrent OWNER-LEVEL swaps DURING the repair —
- * NOT "only readdir". Three windows, all the SAME same-user concurrent-writer
- * class ADR-0028 hands to A12 ("Honest boundary — the A7 residual"):
- *   (1) the readdir-enumeration → fd-bind window (Node has no
- *       openat/openat2/fdopendir, so readdir resolves through the path);
- *   (2) the root open/lstat → realpath window in `coreRootContext` (F3c);
- *   (3) the mode-000 lstat → path-`chmodSync` window in `applyModeFallback`
- *       (F4 — no portable fd-bound chmod for a 000 entry; worst case ONE chmod
- *       on a swapped target, and that is surfaced LOUDLY via a thrown error).
+ *    keeps symlink Dirents) — is lstat-classified (symlink/escape → anomaly,
+ *    G2/F2); repair chmods via an `O_NOFOLLOW` fd + (dev, ino); writes open
+ *    `O_NOFOLLOW` (log stream) or a crypto-random `O_EXCL|O_NOFOLLOW` temp
+ *    (`writeFilePrivate`, F6 — closes the predictable-temp-symlink class).
+ * The RESIDUAL is ONLY the CLASS of concurrent OWNER-LEVEL swaps DURING an
+ * operation — no pre-existing case, and NOT "only readdir". Three windows, all
+ * the SAME same-user concurrent-writer class ADR-0028 hands to A12 ("Honest
+ * boundary — the A7 residual"); pure Node cannot close any (no
+ * openat/openat2/fdopendir; no portable fd-bound chmod for a mode-000 entry —
+ * O_PATH absent on macOS, /proc Linux-only):
+ *   (1) readdir-enumeration → fd-bind (repair);
+ *   (2) root/ancestor validate → leaf op (repair AND write);
+ *   (3) mode-000 lstat → path-`chmodSync` (`applyModeFallback` — worst case ONE
+ *       chmod on a swapped target, surfaced LOUDLY via a thrown error).
  * In every window the attacker must ALREADY hold concurrent owner-level write
- * access inside the already-0700 core; the (dev, ino) revalidation makes the
- * worst case a REFUSED/LOUD repair, never a silent out-of-tree chmod.
+ * access inside the already-0700 core; the (dev, ino) revalidation + loud-throw
+ * make the worst case a REFUSED/LOUD operation, never a silent out-of-tree
+ * chmod/write.
  */
 
 const WIN32 = process.platform === 'win32';
@@ -104,6 +106,9 @@ const A9_PRIVATE_CORE_FILES = (paths) => [paths.config, paths.manifest];
 
 /** chmod `p` to `mode` unless it already has it. Best-effort: a vanished or
  *  odd path is skipped; win32 is a no-op. Returns true iff the mode changed.
+ *  NOTE (audit): path-based statSync/chmodSync FOLLOW symlinks. Only ever called
+ *  on a lstat-first-confirmed real directory with a validated in-core ancestry
+ *  (mkdirPrivate); the residual lstat→chmod window is the documented A12 window.
  *  @param {string} p @param {number} mode @returns {boolean} */
 function chmodIfNeeded(p, mode) {
   if (WIN32) return false;
@@ -117,18 +122,79 @@ function chmodIfNeeded(p, mode) {
 }
 
 /**
+ * Validate that the in-core ANCESTOR chain of a write `target` is all-real —
+ * no symlink at the core itself or at ANY intermediate directory between the
+ * core and the target's parent (F5, ADR-0027). Leaf-only `O_NOFOLLOW` protects
+ * only the final component; a symlinked ancestor still redirects the leaf
+ * open/chmod/write to an out-of-tree file. Walk down from the
+ * `coreRootContext`-verified core:
+ *  - a symlinked/non-dir CORE (`coreAnomaly`) → refuse (never trust the root);
+ *  - a MISSING core → nothing pre-exists beneath it to be a symlink → allow
+ *    (a fresh install; `mkdir` will create the chain as real dirs);
+ *  - each EXISTING component from core to the parent must be a real directory;
+ *    the first non-existent component means the rest don't exist either → allow.
+ * A `target` NOT under the core is outside this guard's scope (the leaf-level
+ * `O_NOFOLLOW`/`O_EXCL` still applies). `core` may be passed by the caller (the
+ * run-job/dream log sites) or resolved once via `getPaths()`. POSIX-only
+ * (win32 → no-op, matching the module's posture). Best-effort on a resolution
+ * failure (skip rather than crash a write).
+ * @param {string} target absolute path being created/written
+ * @param {string} [coreOverride] the caller's verified core (else getPaths())
+ * @throws {WienerdogError} when the core or any in-core ancestor is a symlink /
+ *   non-directory. */
+function assertInCoreAncestry(target, coreOverride) {
+  if (WIN32) return;
+  let core = coreOverride;
+  if (!core) {
+    try {
+      core = require('./paths').getPaths().core;
+    } catch {
+      return; // cannot resolve the core → rely on the leaf O_NOFOLLOW/O_EXCL guard
+    }
+  }
+  const ctx = coreRootContext({ core });
+  if (ctx.coreAnomaly) {
+    throw new WienerdogError(
+      `refusing to write under ${core}: the Wienerdog core is a symlink or not a directory — ` +
+        'never following it to an out-of-tree location (investigate and remove it)'
+    );
+  }
+  if (ctx.coreReal === null) return; // missing core → fresh install, nothing to follow
+  const parent = path.dirname(target);
+  const rel = path.relative(core, parent);
+  if (rel === '' || rel === '.') return; // parent IS the core (already verified real)
+  if (rel.startsWith('..') || path.isAbsolute(rel)) return; // target not under core → out of scope
+  let cur = core;
+  for (const comp of rel.split(path.sep)) {
+    cur = path.join(cur, comp);
+    const ls = lstatOrNull(cur);
+    if (!ls) break; // does not exist yet → deeper components don't either → nothing to follow
+    if (ls.isSymbolicLink() || !ls.isDirectory()) {
+      throw new WienerdogError(
+        `refusing to write ${target}: its ancestor ${cur} is a ${ls.isSymbolicLink() ? 'symlink' : 'non-directory'} ` +
+          '(a Wienerdog private path must have an all-real in-core ancestry — investigate and remove it)'
+      );
+    }
+  }
+}
+
+/**
  * Create `dir` (recursive) private to the owner (0700), independent of umask:
  * mkdir with mode then chmod (the explicit chmod defeats a permissive umask).
  * Idempotent; the chmod is best-effort and a no-op on win32.
  *
- * Never-follow (F1b, ADR-0027): lstat the FINAL component FIRST and REFUSE a
- * pre-existing symlink or non-directory before any chmod — a symlinked
- * `logs/<job>` must not have its external target chmodded/written through. A
- * missing dir is created; a real dir is (re)hardened to 0700.
+ * Never-follow (F1b/F5, ADR-0027): first VALIDATE THE IN-CORE ANCESTOR CHAIN
+ * (a symlinked core or intermediate dir → refuse), then lstat the FINAL
+ * component and REFUSE a pre-existing symlink/non-directory before any chmod —
+ * a symlinked `logs/<job>` (or a symlinked ancestor above it) must never have
+ * its external target chmodded/written through. A missing dir is created; a
+ * real dir is (re)hardened to 0700.
  * @param {string} dir
- * @throws {WienerdogError} when the final component pre-exists as a symlink or
- *   a non-directory. */
-function mkdirPrivate(dir) {
+ * @param {{core?:string}} [opts] `core` = the caller's verified core (else getPaths())
+ * @throws {WienerdogError} on a symlinked ancestor OR a symlink/non-dir at the
+ *   final component. */
+function mkdirPrivate(dir, opts = {}) {
+  assertInCoreAncestry(dir, opts.core);
   const ls = lstatOrNull(dir);
   if (ls) {
     if (ls.isSymbolicLink() || !ls.isDirectory()) {
@@ -144,19 +210,73 @@ function mkdirPrivate(dir) {
 }
 
 /**
- * Atomically write `data` to `dest` as a 0600 file (temp + rename + final
- * chmod), mirroring identity-approvals.writeRegistry / ledger.writeLedger.
- * Ensures the parent dir exists and is 0700.
+ * Atomically write `data` to `dest` as a 0600 file, never following a symlink
+ * at the destination, its temp, or any in-core ancestor (F5/F6, ADR-0027).
+ * `mkdirPrivate` validates the ancestry + parent dir; the temp is created with
+ * a CRYPTO-RANDOM name and `O_WRONLY|O_CREAT|O_EXCL|O_NOFOLLOW` (mode 0600), so
+ * a pre-existing file/symlink at the name is rejected (`EEXIST` → fresh random
+ * name, bounded) — closing the classic predictable-temp-symlink hole completely,
+ * not just narrowing a window. The write + `fchmod` go THROUGH the verified fd
+ * (no post-write path-following chmod); then an atomic rename replaces `dest`
+ * (rename never follows a symlink at `dest`). win32 keeps the plain atomic
+ * temp+rename (POSIX-only hardening).
  * @param {string} dest @param {string|Buffer} data
- */
-function writeFilePrivate(dest, data) {
+ * @param {{core?:string, openSync?, fstatSync?, writeSync?, fchmodSync?, closeSync?}} [opts]
+ *   `core` threads the caller's verified core; the *Sync seams are test-only. */
+function writeFilePrivate(dest, data, opts = {}) {
   const dir = path.dirname(dest);
-  mkdirPrivate(dir);
-  const tmp = path.join(dir, `.${path.basename(dest)}.${process.pid}.tmp`);
-  fs.writeFileSync(tmp, data, { mode: 0o600 });
-  chmodIfNeeded(tmp, 0o600);
-  fs.renameSync(tmp, dest);
-  chmodIfNeeded(dest, 0o600);
+  mkdirPrivate(dir, opts);
+  if (WIN32) {
+    const tmp = path.join(dir, `.${path.basename(dest)}.${process.pid}.tmp`);
+    fs.writeFileSync(tmp, data, { mode: 0o600 });
+    fs.renameSync(tmp, dest);
+    return;
+  }
+  const openSync = opts.openSync || fs.openSync;
+  const fstatSync = opts.fstatSync || fs.fstatSync;
+  const writeSync = opts.writeSync || fs.writeSync;
+  const fchmodSync = opts.fchmodSync || fs.fchmodSync;
+  const closeSync = opts.closeSync || fs.closeSync;
+  const buf = Buffer.isBuffer(data) ? data : Buffer.from(data);
+  const flags = fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | O_NOFOLLOW;
+  let tmp;
+  let fd = null;
+  for (let attempt = 0; ; attempt += 1) {
+    tmp = path.join(dir, `.${path.basename(dest)}.${crypto.randomBytes(8).toString('hex')}.tmp`);
+    try {
+      fd = openSync(tmp, flags, 0o600); // O_EXCL: EEXIST if ANYTHING (incl. a symlink) is at the name
+      break;
+    } catch (e) {
+      if (e && e.code === 'EEXIST' && attempt < 8) continue; // fresh random name, bounded
+      throw new WienerdogError(
+        `refusing to write ${dest}: could not create a private temp file (${(e && e.code) || (e && e.message)})`
+      );
+    }
+  }
+  try {
+    if (!fstatSync(fd).isFile()) throw new Error('temp is not a regular file');
+    let off = 0;
+    while (off < buf.length) off += writeSync(fd, buf, off, buf.length - off, null);
+    fchmodSync(fd, 0o600); // set the mode ON THE FD (no post-write path-following chmod)
+  } catch (e) {
+    try {
+      closeSync(fd);
+    } catch {
+      /* best-effort */
+    }
+    try {
+      fs.rmSync(tmp, { force: true });
+    } catch {
+      /* best-effort */
+    }
+    throw new WienerdogError(`refusing to write ${dest}: could not write the private temp file (${e && e.message})`);
+  }
+  try {
+    closeSync(fd);
+  } catch {
+    /* best-effort */
+  }
+  fs.renameSync(tmp, dest); // atomic; replaces a pre-existing dest (even a symlink) without following it
 }
 
 /** Enumerate candidate NAMES in `dir` matching `keepName`, WITHOUT filtering by
@@ -293,7 +413,18 @@ function coreRootContext(paths) {
     return { coreReal: null, coreAnomaly: true }; // ELOOP/ENOTDIR/other → untrusted root
   }
   try {
-    if (!fs.fstatSync(fd).isDirectory()) return { coreReal: null, coreAnomaly: true };
+    // The O_DIRECTORY|O_NOFOLLOW open already GUARANTEED a real (non-symlink)
+    // directory; the fstat is belt-and-suspenders. Tolerate a transient fstat
+    // failure (e.g. EIO) — fall back to an lstat re-classify — so a private
+    // write never crashes on it.
+    let isDir;
+    try {
+      isDir = fs.fstatSync(fd).isDirectory();
+    } catch {
+      const ls = lstatOrNull(paths.core);
+      isDir = !!(ls && !ls.isSymbolicLink() && ls.isDirectory());
+    }
+    if (!isDir) return { coreReal: null, coreAnomaly: true };
     const coreReal = realpathOrNull(paths.core);
     return coreReal ? { coreReal, coreAnomaly: false } : { coreReal: null, coreAnomaly: true };
   } finally {
@@ -699,13 +830,16 @@ function scanPrivateModes(paths) {
  *  win32: no O_NOFOLLOW/mode semantics — plain stream (POSIX-only guarantee).
  *  @param {string} file  absolute log path (its dir already exists — mkdir is
  *    the caller's job, now the lstat-first mkdirPrivate)
- *  @param {{flags?: string, openSync?, fstatSync?, fchmodSync?, closeSync?}} [opts]
- *    the *Sync seams are test injection only
+ *  @param {{flags?: string, core?:string, openSync?, fstatSync?, fchmodSync?, closeSync?}} [opts]
+ *    `core` threads the caller's verified core (F5 ancestry); the *Sync seams
+ *    are test injection only
  *  @returns {import('fs').WriteStream}
- *  @throws {WienerdogError} if the fd cannot be opened privately or secured to 0600 */
+ *  @throws {WienerdogError} if a symlinked in-core ancestor is found, or the fd
+ *    cannot be opened privately or secured to 0600 */
 function createLogStreamPrivate(file, opts = {}) {
   const flags = opts.flags || 'w';
   if (WIN32) return fs.createWriteStream(file, { flags });
+  assertInCoreAncestry(file, opts.core); // F5: a symlinked core/logs ancestor → refuse before opening the leaf
   const openSync = opts.openSync || fs.openSync;
   const fstatSync = opts.fstatSync || fs.fstatSync;
   const fchmodSync = opts.fchmodSync || fs.fchmodSync;

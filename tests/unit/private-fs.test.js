@@ -714,3 +714,109 @@ test('private-fs: F1b — mkdirPrivate REFUSES a pre-existing symlinked logs/<jo
   );
   assert.equal(modeOf(external), 0o777, 'the external dir was NOT chmodded to 0700');
 });
+
+test('private-fs: F5 — a symlinked CORE or LOGS ancestor makes the write helpers REFUSE; external tree UNCHANGED', { skip: !POSIX }, () => {
+  withUmask(0o022, () => {
+    // (1) symlinked CORE: paths.core → external tree.
+    {
+      const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-privfs-'));
+      const paths = pathsFor(root);
+      const external = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-ext-core-'));
+      fs.chmodSync(external, 0o755);
+      fs.mkdirSync(path.join(external, 'logs', 'dream'), { recursive: true });
+      fs.chmodSync(path.join(external, 'logs', 'dream'), 0o777);
+      const externalLog = path.join(external, 'logs', 'dream', 'x.log');
+      fs.writeFileSync(externalLog, 'ext', { mode: 0o644 });
+      fs.symlinkSync(external, paths.core); // core IS a symlink
+
+      const logDir = path.join(paths.logs, 'dream');
+      assert.throws(() => mkdirPrivate(logDir, { core: paths.core }),
+        (e) => e instanceof WienerdogError && /core is a symlink/.test(e.message), 'mkdirPrivate refuses a symlinked core');
+      assert.throws(() => createLogStreamPrivate(path.join(logDir, 'y.log'), { core: paths.core }),
+        (e) => e instanceof WienerdogError && /core is a symlink/.test(e.message), 'createLogStreamPrivate refuses a symlinked core');
+      assert.equal(modeOf(path.join(external, 'logs', 'dream')), 0o777, 'external logs/dream NOT chmodded');
+      assert.equal(modeOf(externalLog), 0o644, 'external log NOT touched');
+    }
+    // (2) symlinked intermediate LOGS: core real, logs → external dir.
+    {
+      const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-privfs-'));
+      const paths = pathsFor(root);
+      fs.mkdirSync(paths.core, { recursive: true });
+      fs.chmodSync(paths.core, 0o700);
+      const external = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-ext-logs-'));
+      fs.chmodSync(external, 0o755);
+      fs.mkdirSync(path.join(external, 'dream'), { recursive: true });
+      fs.chmodSync(path.join(external, 'dream'), 0o777);
+      fs.symlinkSync(external, paths.logs); // logs IS a symlink (intermediate ancestor)
+
+      const logDir = path.join(paths.logs, 'dream');
+      assert.throws(() => mkdirPrivate(logDir, { core: paths.core }),
+        (e) => e instanceof WienerdogError && /ancestor .* is a symlink/.test(e.message), 'mkdirPrivate refuses a symlinked logs ancestor');
+      assert.throws(() => createLogStreamPrivate(path.join(logDir, 'z.log'), { core: paths.core }),
+        (e) => e instanceof WienerdogError && /ancestor .* is a symlink/.test(e.message), 'createLogStreamPrivate refuses a symlinked logs ancestor');
+      assert.equal(modeOf(path.join(external, 'dream')), 0o777, 'external logs/<job> NOT chmodded via the symlinked ancestor');
+    }
+  });
+});
+
+test('private-fs: F6 — writeFilePrivate ignores a planted PREDICTABLE temp symlink; external target byte+mode UNCHANGED, dest a real 0600 file', { skip: !POSIX }, () => {
+  withUmask(0o022, () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-privfs-'));
+    const paths = pathsFor(root);
+    fs.mkdirSync(paths.state, { recursive: true });
+    fs.chmodSync(paths.core, 0o700);
+    fs.chmodSync(paths.state, 0o700);
+    const external = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-ext-tmp-'));
+    const externalTarget = path.join(external, 'stolen');
+    fs.writeFileSync(externalTarget, 'SECRET', { mode: 0o644 });
+    const dest = path.join(paths.state, 'broker-grants.json');
+    // Plant the OLD predictable temp name (basename + PID) as a symlink → external.
+    const predictable = path.join(paths.state, `.broker-grants.json.${process.pid}.tmp`);
+    fs.symlinkSync(externalTarget, predictable);
+
+    writeFilePrivate(dest, '{"grants":[]}', { core: paths.core });
+
+    // The random temp name never touched the predictable symlink's external target.
+    assert.equal(fs.readFileSync(externalTarget, 'utf8'), 'SECRET', 'external target bytes UNCHANGED');
+    assert.equal(modeOf(externalTarget), 0o644, 'external target mode UNCHANGED');
+    assert.equal(fs.readlinkSync(predictable), externalTarget, 'the planted predictable symlink was never followed/replaced');
+    // dest is a real in-core 0600 file with our content.
+    assert.equal(fs.lstatSync(dest).isSymbolicLink(), false, 'dest is a real file, not a symlink');
+    assert.equal(fs.readFileSync(dest, 'utf8'), '{"grants":[]}');
+    assert.equal(modeOf(dest), 0o600, 'dest is 0600');
+  });
+});
+
+test('private-fs: F6 — writeFilePrivate temp uses O_EXCL|O_NOFOLLOW and retries on EEXIST at the random name', { skip: !POSIX }, () => {
+  withUmask(0o022, () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-privfs-'));
+    const paths = pathsFor(root);
+    fs.mkdirSync(paths.state, { recursive: true });
+    fs.chmodSync(paths.core, 0o700);
+    fs.chmodSync(paths.state, 0o700);
+    const dest = path.join(paths.state, 'watermarks.json');
+    let calls = 0;
+    let sawExcl = false;
+    let sawNofollow = false;
+    const realOpen = fs.openSync;
+    const openSync = (p, flags, mode) => {
+      if (typeof flags === 'number') {
+        sawExcl = sawExcl || (flags & fs.constants.O_EXCL) !== 0;
+        sawNofollow = sawNofollow || (flags & (fs.constants.O_NOFOLLOW || 0)) !== 0;
+      }
+      calls += 1;
+      if (calls === 1) {
+        const e = new Error('EEXIST: file already exists'); // simulate a collision/symlink at the first random name
+        e.code = 'EEXIST';
+        throw e;
+      }
+      return realOpen(p, flags, mode);
+    };
+
+    writeFilePrivate(dest, 'data', { core: paths.core, openSync });
+    assert.ok(sawExcl && sawNofollow, 'the temp is opened O_EXCL|O_NOFOLLOW');
+    assert.ok(calls >= 2, 'EEXIST at the first random name → retried with a fresh random name');
+    assert.equal(fs.readFileSync(dest, 'utf8'), 'data');
+    assert.equal(modeOf(dest), 0o600);
+  });
+});
