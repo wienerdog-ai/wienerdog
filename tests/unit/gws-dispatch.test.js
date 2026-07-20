@@ -8,21 +8,7 @@ const os = require('node:os');
 const path = require('node:path');
 
 const { getPaths } = require('../../src/core/paths');
-/** WP-139 retired the product write path for the legacy YAML block
- *  (grant.saveGrant is gone); gmail.send still READS it until WP-141, so these
- *  tests seed the block by hand. */
-function seedLegacyGrant(paths, g) {
-  const lines = [
-    '# --- wienerdog:grants (managed by `wienerdog grant`; do not edit by hand) ---',
-    'grants:',
-    `  - routine: ${g.routine}`,
-    '    to:',
-  ];
-  for (const addr of g.to) lines.push(`      - ${addr}`);
-  lines.push('# --- end wienerdog:grants ---');
-  const cfg = fs.readFileSync(paths.config, 'utf8');
-  fs.writeFileSync(paths.config, `${cfg}\n${lines.join('\n')}\n`);
-}
+const { WienerdogError } = require('../../src/core/errors');
 
 const client = require('../../src/gws/client');
 const grantStore = require('../../src/gws/broker/grant-store');
@@ -39,6 +25,9 @@ const bin = path.join(repoRoot, 'bin', 'wienerdog.js');
  * `getServices` out of this module at load time.
  */
 let currentServices;
+// Capture the genuine (throwing) getServices before we monkeypatch it, so the
+// retirement-lock test below can assert the real combined-token accessor throws.
+const realGetServices = client.getServices;
 client.getServices = () => currentServices;
 // WP-140: the cal bridge selects a per-class credential via getServicesForClass;
 // the same stub serves every class in these dispatch tests.
@@ -144,83 +133,38 @@ function decode(raw) {
   return Buffer.from(raw, 'base64url').toString('utf8');
 }
 
-test('gws-dispatch: gmail send without a grant degrades to draft + verbatim notice', async () => {
-  const { paths, env } = initPaths();
-  const s = stubGmail();
-  currentServices = s.services;
-
-  const output = await captureStdout(() =>
-    withEnv(env, () =>
-      gwsIndex.run(
-        ['gmail', 'send', '--to', 'a@b.com', '--subject', 's', '--body', 'b'],
-        { profile: allowAll() }
-      )
-    )
+test('gws-dispatch: getServices() (combined-token path) is RETIRED — it throws', () => {
+  // Retirement lock (WP-gws-retire-dead-send-path): a regression re-enabling the
+  // combined-token accessor would resurrect the forgeable legacy-grant send path.
+  // Asserts the GENUINE implementation (captured before this file's monkeypatch).
+  assert.throws(
+    () => realGetServices(),
+    (err) => err instanceof WienerdogError && /least-scope credentials/.test(err.message)
   );
-
-  assert.equal(s.calls.send.length, 0);
-  assert.equal(s.calls.drafts.length, 1);
-  assert.match(output, /No matching send grant \(no send grant for this routine\)/);
-  assert.match(output, /saved a draft instead/);
-  assert.match(output, /wienerdog grant send --routine <name> --to <recipients>/);
-  void paths;
 });
 
-test('gws-dispatch: gmail send with a matching --routine grant sends for real', async () => {
-  const { paths, env } = initPaths();
-  seedLegacyGrant(paths, { routine: 'daily-digest', to: ['a@b.com'] });
-  const s = stubGmail();
-  currentServices = s.services;
-
-  await captureStdout(() =>
-    withEnv(env, () =>
-      gwsIndex.run(
-        [
-          'gmail',
-          'send',
-          '--to',
-          'a@b.com',
-          '--subject',
-          's',
-          '--body',
-          'b',
-          '--routine',
-          'daily-digest',
-        ],
-        { profile: allowAll() }
-      )
-    )
-  );
-
-  assert.equal(s.calls.send.length, 1);
-  assert.equal(s.calls.drafts.length, 0);
-  assert.match(decode(s.calls.send[0].requestBody.raw), /To: a@b\.com/);
-});
-
-test('gws-dispatch: WIENERDOG_JOB env supplies the routine when --routine is absent', async () => {
-  const { paths, env } = initPaths();
-  seedLegacyGrant(paths, { routine: 'daily-digest', to: ['a@b.com'] });
-  const s = stubGmail();
-  currentServices = s.services;
-
-  const savedJob = process.env.WIENERDOG_JOB;
-  process.env.WIENERDOG_JOB = 'daily-digest';
+test('gws-dispatch: _alert resolves its service via getServicesForClass(paths, SEND)', async () => {
+  const { env } = initPaths();
+  const s = stubGmail('owner@example.com');
+  const seenClasses = [];
+  const savedForClass = client.getServicesForClass;
+  client.getServicesForClass = (_paths, cls) => {
+    seenClasses.push(cls);
+    return s.services;
+  };
   try {
     await captureStdout(() =>
       withEnv(env, () =>
-        gwsIndex.run(
-          ['gmail', 'send', '--to', 'a@b.com', '--subject', 's', '--body', 'b'],
-          { profile: allowAll() }
-        )
+        gwsIndex.run(['_alert', '--subject', 's', '--body', 'b'], { profile: allowAll() })
       )
     );
   } finally {
-    if (savedJob === undefined) delete process.env.WIENERDOG_JOB;
-    else process.env.WIENERDOG_JOB = savedJob;
+    client.getServicesForClass = savedForClass;
   }
 
+  assert.deepEqual(seenClasses, ['SEND']);
   assert.equal(s.calls.send.length, 1);
-  assert.equal(s.calls.drafts.length, 0);
+  assert.match(decode(s.calls.send[0].requestBody.raw), /To: owner@example\.com/);
 });
 
 test('gws-dispatch: _alert is invoked with exactly {subject, body}', async () => {
@@ -316,53 +260,24 @@ test('gws-dispatch: repeatable --attendee accumulates through to cal add-event',
   ]);
 });
 
-test('gws dispatch: gmail read accepts --id flag form', async () => {
-  const { env } = initPaths();
-  const calls = [];
-  currentServices = {
-    gmail: {
-      users: {
-        messages: {
-          get: async (o) => {
-            calls.push(o);
-            return { data: { id: o.id, snippet: '', payload: { headers: [] } } };
-          },
-        },
-      },
-    },
+test('gws-dispatch freeze: a gws-use verb (_alert) fails closed with the disabled error before any credential load', async () => {
+  let forClassCalls = 0;
+  const savedForClass = client.getServicesForClass;
+  client.getServicesForClass = () => {
+    forClassCalls++;
+    return currentServices;
   };
-  await withEnv(env, () =>
-    captureStdout(() =>
-      gwsIndex.run(['gmail', 'read', '--id', 'msg-42', '--json'], { profile: allowAll() })
-    )
-  );
-  assert.equal(calls[0].id, 'msg-42');
-});
-
-test('gws-dispatch freeze: gmail search fails closed with the gws-use disabled error before any API call', async () => {
-  const calls = { list: [], get: [] };
-  currentServices = {
-    gmail: {
-      users: {
-        messages: {
-          list: async (args) => {
-            calls.list.push(args);
-            return { data: { messages: [] } };
-          },
-          get: async (args) => {
-            calls.get.push(args);
-            return { data: {} };
-          },
-        },
-      },
-    },
-  };
-
-  // No opts passed -> the frozen A0 profile applies; no env/argv override exists.
-  await assert.rejects(gwsIndex.run(['gmail', 'search', 'x']), /disabled in this release/);
-
-  assert.equal(calls.list.length, 0);
-  assert.equal(calls.get.length, 0);
+  try {
+    // No opts passed -> the frozen A0 profile applies; no env/argv override exists.
+    // The freeze must throw BEFORE the handler resolves a credential.
+    await assert.rejects(
+      gwsIndex.run(['_alert', '--subject', 's', '--body', 'b']),
+      /disabled in this release/
+    );
+  } finally {
+    client.getServicesForClass = savedForClass;
+  }
+  assert.equal(forClassCalls, 0);
 });
 
 test('gws-dispatch freeze: auth fails closed with the google-setup disabled error before the client JSON is read', async () => {

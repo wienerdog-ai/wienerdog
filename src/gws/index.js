@@ -2,7 +2,7 @@
 
 const { getPaths } = require('../core/paths');
 const { WienerdogError } = require('../core/errors');
-const { getServices } = require('./client');
+const { CAPABILITY_CLASS } = require('./broker/constants');
 const { ensureGoogleReady } = require('./deps');
 const { requireCapability, CAPABILITY } = require('../core/safety-profile');
 
@@ -109,35 +109,11 @@ function require_(value, name) {
  * The `<group> <verb>` dispatch table. Each handler lazily requires its
  * module so a group whose module is not shipped yet fails only when invoked,
  * without touching this file.
- * @type {Record<string, (ctx:{paths:object, flags:object, services:()=>object})=>Promise<*>>}
+ * @type {Record<string, (ctx:{paths:object, flags:object})=>Promise<*>>}
  */
 const DISPATCH = {
   'auth': ({ paths, flags }) =>
     require('./auth').run(paths, { clientPath: require_(flags.client, '--client') }),
-  'gmail search': ({ flags, services }) =>
-    require('./gmail').search(services(), {
-      query: require_(flags.positionals[0], '<query>'),
-      max: flags.max,
-    }),
-  'gmail read': ({ flags, services }) =>
-    require('./gmail').read(services(), {
-      // --id is captured as a structured flag; bare positional kept as fallback
-      id: require_(flags.id ?? flags.positionals[0], '<id>'),
-    }),
-  'gmail draft': ({ flags, services }) =>
-    require('./gmail').draft(services(), {
-      to: require_(flags.to, '--to'),
-      subject: require_(flags.subject, '--subject'),
-      body: require_(flags.body, '--body'),
-    }),
-  'gmail send': ({ paths, flags, services }) =>
-    require('./gmail').send(services(), {
-      to: flags.to,
-      subject: flags.subject,
-      body: flags.body,
-      routine: resolveRoutine(flags),
-      paths,
-    }),
   // Since WP-140 `cal` gets NO generic full-scope services: the calendar
   // bridge selects a least-scope credential per verb (READ for list/show,
   // CALENDAR_WRITE + a calendar_write grant for add-event).
@@ -150,9 +126,13 @@ const DISPATCH = {
       },
       flags
     ),
-  'drive': ({ flags, services }) => require('./drive').run(services(), flags),
-  '_alert': ({ flags, services }) =>
-    require('./alert').run(services(), { subject: flags.subject, body: flags.body }),
+  // The fail-loud watchdog email resolves its credential via the least-scope
+  // SEND class (never the retired combined-token getServices).
+  '_alert': ({ paths, flags }) =>
+    require('./alert').run(
+      require('./client').getServicesForClass(paths, CAPABILITY_CLASS.SEND),
+      { subject: flags.subject, body: flags.body }
+    ),
 };
 
 /**
@@ -167,18 +147,7 @@ function render(key, result, json) {
     process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
     return;
   }
-  if (key === 'gmail search' && Array.isArray(result)) {
-    for (const m of result) {
-      process.stdout.write(`${m.date}  ${m.from}  ${m.subject}\n`);
-    }
-  } else if (key === 'gmail read') {
-    process.stdout.write(
-      `From: ${result.from}\nTo: ${result.to}\nDate: ${result.date}\n` +
-        `Subject: ${result.subject}\n\n${result.body}\n`
-    );
-  } else if (key === 'gmail draft') {
-    process.stdout.write(`Draft created (draftId ${result.draftId}).\n`);
-  } else if (key === 'auth') {
+  if (key === 'auth') {
     const who = result.email ? ` as ${result.email}` : '';
     process.stdout.write(`Connected to Google${who}. Token saved to ${result.tokenPath}.\n`);
   } else {
@@ -227,11 +196,8 @@ async function run(argv, opts = {}) {
   // read — never for `auth` (it installs deps itself), and a no-op for unauthed
   // users (getServices then surfaces the connect-Google flow). WP-102.
   if (key !== 'auth') await ensureGoogleReady(paths);
-  // Build services lazily so `auth` (which needs no token) never loads one.
-  let cached;
-  const services = () => (cached || (cached = getServices(paths)));
 
-  const result = await handler({ paths, flags, services });
+  const result = await handler({ paths, flags });
   render(key, result, flags.json);
 }
 

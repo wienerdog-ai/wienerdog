@@ -85,6 +85,8 @@ gmail-send/interactive verbs — i.e. it validates DEAD code.
 | modify | src/gws/gmail.js | delete `send` (the forgeable legacy-grant reader); keep `search`/`read`/`draft`/`buildMime` |
 | modify | src/gws/grant.js | remove `parseGrants` + `findGrant` (+ the `END` constant) if grep confirms orphaned; keep `isSendAllowed` + `hasLegacyYamlGrants` (+ `BEGIN`) |
 | modify | tests/unit/gws-dispatch.test.js | drop the dead gmail-send/interactive assertions; add a `getServices()`-throws test; assert `_alert` uses the SEND-class service |
+| modify | tests/unit/gws-send.test.js | delete the 5 dead `gmail.send` tests (keep the 2 `alert.run` tests) — `send()` is retired |
+| modify | tests/unit/gws-gmail.test.js | drop the `send()`-routed CRLF-injection test + its orphaned `grantedPaths` helper; WP-085 coverage is preserved by the existing live-path `buildMime` CRLF tests |
 
 ### Exact contracts
 
