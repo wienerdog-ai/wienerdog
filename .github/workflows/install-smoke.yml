@@ -1,0 +1,33 @@
+name: install-smoke
+
+# End-to-end install lifecycle on a CLEAN runner — the one gate the unit suite
+# cannot cover. The scheduler unit tests inject a fake loader (no real OS
+# scheduler), and a maintainer cannot run a real install on their own machine
+# without colliding with their live Wienerdog agent. A fresh CI runner has no
+# such collision, so this exercises init -> sync -> doctor -> safety -> the
+# incident-drill managed-block check -> catch-up teardown -> uninstall against a
+# real install in a throwaway HOME. Live scheduler registration (launchd
+# gui-domain / systemd --user) needs a login session runners may lack, so it is
+# best-effort inside the script and never asserted.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  smoke:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install dependencies
+        run: npm ci || npm i
+      - name: Install lifecycle smoke
+        run: bash scripts/smoke-install.sh
