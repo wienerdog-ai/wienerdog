@@ -1,5 +1,10 @@
 # Runbook: secret incident (a leaked credential reached the vault)
 
+This is the credential-specific case of the general incident drill. If you
+suspect a broader compromise — the machine itself, or your injected
+identity/context, not just one leaked credential — start at
+[`incident.md`](incident.md) instead.
+
 Wienerdog scrubs secret-looking text at four points before it is committed, logged,
 or shown to you (see [`docs/THREAT-MODEL.md`](../THREAT-MODEL.md), T4). That
 scrubbing is **best-effort, not proof** — an unusual or encoded credential can

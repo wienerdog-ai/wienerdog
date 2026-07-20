@@ -1,7 +1,7 @@
 ---
 id: WP-a9-incident-runbook
 title: Add the general incident-drill runbook — stop schedules, preserve evidence, rotate credentials, purge injected digest/managed block, clean git history, re-authorize
-status: Ready
+status: In-Review
 model: sonnet
 size: S
 depends_on: []
@@ -86,8 +86,9 @@ hardcodes `~/.wienerdog`, or that jumps straight to Windows
 `$env:USERPROFILE\.wienerdog` when `HOME` is set, is **wrong on a
 custom-`WIENERDOG_HOME` or HOME-set install**: it would unregister the OS task while
 leaving the REAL `<core>/schedules/wienerdog-catchup.xml` and its manifest entry
-intact — every check passes, then step 4's `wienerdog sync` `reloadMissing`
-resurrects catch-up before the drill. The **code-authoritative** way to learn the
+intact — every check passes, then step 4's `wienerdog sync` (healing from the
+REAL install's `config.yaml`, which still lists every job) re-arms catch-up
+before the drill. The **code-authoritative** way to learn the
 core is `wienerdog doctor`, which prints a `core directory exists (<path>)` line
 where `<path>` is exactly `getPaths().core` (`src/cli/doctor.js:322`) — reading it
 from `doctor` is guaranteed to match what `sync`/`schedule`/`memory approve` act on.
@@ -155,27 +156,298 @@ state and act on:
   work after every per-job schedule is gone. (Linux/systemd has **no** catch-up
   entry — catch-up is launchd/schtasks only, per `schedule.js`.) The runbook must
   **remove and re-verify** the catch-up entry explicitly (contract step 1).
-- **`wienerdog sync` RE-REGISTERS a merely-unregistered catch-up entry — so
-  unregister-only is not enough; the scheduler FILE and manifest entry must go
-  too (R5-1).** `sync` calls `status.reloadMissing` (verified: `sync.js:197`),
-  which walks **`install-manifest.json`** (`<core>/install-manifest.json`) and,
-  for any `scheduler-entry` whose OS registration probes as **missing** but whose
-  manifest entry **and scheduler file survive**, re-registers it via the platform
-  reload command — `launchctl bootstrap` / `systemctl enable --now` /
-  `schtasks /create /xml` (verified: `status.js:31/40/49`). The catch-up entry's
-  file (`entry.path`: macOS `~/Library/LaunchAgents/ai.wienerdog.catchup.plist`,
-  Windows `<core>/schedules/wienerdog-catchup.xml`) and its manifest record both
-  survive an unregister-only stop, so the **next `wienerdog sync`** (step 4 and
-  again in the step-6 drill) would **resurrect** the catch-up job — re-arming the
-  machine *before* the acceptance drill and re-authorization. This is
-  **cross-platform** (all three reload commands exist), not Windows-only, though
-  the Windows stop text is the weakest today. The fix (contract step 1): the
-  catch-up stop must **delete the scheduler file AND remove the catch-up entry
-  from `install-manifest.json`** — not merely unregister — so `reloadMissing` has
-  nothing to resurrect. (Named `schedule remove` already deletes a job's own file
-  within the scheduler roots and drops its manifest entry, so a per-job-removed
-  job cannot be resurrected; the catch-up is the one gap, because per-job `remove`
-  deliberately leaves it.)
+- **`wienerdog sync` re-arms schedules from `config.yaml` — so deleting files or
+  manifest entries alone is NOT enough; the `jobs:` list must be EMPTY before any
+  later `sync` (R5-1; mechanism amended 2026-07-20, see note below).** `sync`
+  heals **from validated config, regenerating canonical content** — it never
+  trusts (or needs) a surviving scheduler file or manifest entry:
+  `status.reloadMissing` (verified: `sync.js:239` → `status.js:238`) walks the
+  **`config.yaml` `jobs:` list** and, for any job whose canonical OS registration
+  probes as **missing**, re-registers it via `schedule.reloadJob` (regenerated
+  bytes — a deleted file/manifest entry does not stop it); and `repointSchedules`
+  → `repairCatchup` (verified: `sync.js:221`, `schedule.js:588`) **regenerates +
+  re-registers the shared catch-up entry whenever at least one job remains** in
+  `config.yaml` (macOS/Windows; `reloadMissing` itself never touches catch-up),
+  and tears the catch-up entry + map down cleanly when **zero** jobs remain. So
+  the **next `wienerdog sync`** (step 4 and again in the step-6 drill) re-arms
+  the machine *before* the acceptance drill and re-authorization unless the
+  `jobs:` list is empty. The fix (contract step 1): remove **every** job with
+  `schedule remove <name>` — it deletes that job's scheduler file + manifest
+  entry AND drops the job from `config.yaml`; removing the FINAL job also tears
+  down catch-up via the delegated best-effort `repointSchedules` — then remove
+  the catch-up entry **by hand** anyway (unregister + delete FILE + drop manifest
+  entry: the immediate disarm, and defense-in-depth for a failed best-effort
+  auto-teardown), and **block on `config.yaml` listing ZERO jobs** before any
+  later `sync`.
+
+  > **Fix-pass amendment (2026-07-20):** the original R5-1 text described the
+  > pre-`WP-catchup-per-job-authorization` heal — `reloadMissing` (then
+  > `sync.js:197`, `status.js:31/40/49`) re-registering any surviving manifest
+  > `scheduler-entry`, catch-up included. The A7/A8 blocker-fix pass (this
+  > branch) moved catch-up repair/teardown to `repointSchedules`/`repairCatchup`
+  > and made every heal regenerate-from-config. The operative steps are
+  > unchanged; the resurrection mechanism, its code citations, and the blocking
+  > re-verify (which now includes the empty-`jobs:` check) are updated in this
+  > spec and the runbook to match the code this WP ships on.
+  >
+  > **Fix-pass amendment 2 (2026-07-20, adversarial-review round):** four review
+  > findings changed what this spec prescribes. **F1** — the per-job OS unregister
+  > is best-effort (a Windows imported task survives XML deletion), so the Table B
+  > blocking re-verify gains a FIFTH check: an independent per-platform enumeration
+  > of Wienerdog OS registrations (launchd `ai.wienerdog.*` labels, systemd
+  > `wienerdog-*` units, `\Wienerdog\` tasks — names verified against
+  > `generators.js` `launchdLabel`/`systemdUnitBase`/`windowsTaskName`) must return
+  > nothing. **F2** — the post-reboot sub-step order was a dead end on a custom
+  > core (`doctor` reads the CURRENT env, so running it before the re-export
+  > reports the DEFAULT core and the equality check fails unrecoverably); the
+  > order is now read-record → validate → export `WIENERDOG_HOME` → then `doctor`
+  > equality. **F4** — the step-1 `jobs:` snapshot targeted the step-2 evidence
+  > folder before it existed; the folder's creation + permissioning +
+  > backup-exclusion now open step 1, and step 2 copies into the already-secured
+  > folder. Also **F5** (step 4 no longer claims `sync` "overwrites only inside
+  > the sentinels" — with both sentinels deleted it APPENDS, and the orphaned
+  > poison must be removed by hand) and **F7** (`repointSchedules` citation
+  > `sync.js:214` → `sync.js:221`).
+  >
+  > **Fix-pass amendment 3 (2026-07-20, adversarial-review round 2):** two
+  > execution-reproduced findings on the step-6 drill blocks. **F1** — a
+  > zero-harness false PASS: `CLAUDE_CONFIG_DIR`/`CODEX_HOME` steer BOTH the
+  > script's file loop AND `sync`'s `detectHarnesses`, so redirecting them hid
+  > every real harness file while the loop silently skipped absent files and
+  > still printed PASS. The drill contract now requires an explicit operator
+  > declaration of the installed harness set, a manifest cross-check listing
+  > (`managed-block` entries via `node -e`), env pinning (unset both variables
+  > before `sync` and the file checks), treating `sync`'s exact adapter-skip
+  > messages as BLOCK for a declared harness, and a checked==declared (≥1)
+  > count gate — the former "judgment call" prose is superseded by these
+  > script-enforced checks. **F2** — the PowerShell block interpolated the
+  > core path into single-quoted bash source, so an apostrophe in the path
+  > (C:/Users/O'Brien/…) broke parsing; the hook path now travels as a bash
+  > positional argument (`bash -c '… "$1" …' _ "$coreFwd"`), and both blocks
+  > were audited to pass every path as a quoted variable/argument, never
+  > rebuilt into nested shell source.
+  >
+  > **Fix-pass amendment 4 (2026-07-20, adversarial-review round 3):** **G1** —
+  > a duplicate declaration impersonated full coverage: the round-2 gate
+  > incremented `declared` and `checked` per token without deduping, so
+  > `HARNESSES='claude claude'` on a dual-harness install printed DRILL PASS
+  > (checked=2, declared=2) while the real `AGENTS.md` kept orphaned poison
+  > that `sync` appends around and never blocks on. The gate is now
+  > duplicate-proof and manifest-anchored: a repeated harness name FAILS
+  > outright; the number of unique declared harnesses must equal the manifest's
+  > `managed-block` entry count (an env-independent anchor, so under-declaring
+  > cannot dodge a harness and a custom-dir install does not false-fail — the
+  > count is extracted with the same dependency-free `node -e` used to LIST the
+  > entries); and the number of unique checked file PATHS (not loop iterations)
+  > must equal both. All three counts must agree or the drill FAILS. The
+  > manifest-list-only-for-humans reconciliation from round 2 is kept AND now
+  > backed by the machine count check.
+  >
+  > **Fix-pass amendment 5 (2026-07-20, adversarial-review round 4 — STRUCTURAL):**
+  > this is the THIRD finding on the same coverage anchor (round 3 duplicate →
+  > round 4 count → this: pre-sync staleness), so the fix is structural, not
+  > another point-patch. The round-3 `MANIFEST_COUNT` was captured **before** the
+  > drill's `wienerdog sync`, but sync REPAIRS a missing `managed-block` manifest
+  > entry (`applyManagedBlock`/`recordOnce` re-records one it finds absent). So a
+  > dual-harness install whose pre-sync manifest was missing the Codex entry gave
+  > count=1; an operator declaring `claude` passed 1/1/1; then sync restored the
+  > Codex entry and appended around the AGENTS.md orphan — DRILL PASS with Codex
+  > installed and UNCHECKED. Root cause: any anchor captured before sync, and any
+  > operator-declared set, can disagree with the REAL installed set. The fix drives
+  > coverage from the **post-sync** manifest: run sync FIRST, then read the
+  > `managed-block` PATHS and check every one; the operator declaration is demoted
+  > to a cross-check (duplicate-reject + declared-set-must-equal-manifest-set). This
+  > dissolves the round-2 custom-dir concern that kept path comparison operator-side:
+  > the drill pins the detection env and sync writes the manifest with the
+  > CURRENTLY-resolved paths, so post-sync the manifest paths ARE the drill-time
+  > paths — a post-sync path comparison is env-consistent where a pre-sync/install-
+  > time one was not. Do not re-fix this back to a count or a pre-sync read.
+  >
+  > **Fix-pass amendment 6 (2026-07-20, adversarial-review round 5 — honest
+  > boundary):** two findings; the high (**G1**) exposes a fundamental limit, so it
+  > is enforced-where-checkable AND documented as a blocking residual. G1: on a
+  > CUSTOM-directory install whose pre-sync manifest is missing a harness AND whose
+  > env for that harness is unset, `detectHarnesses` reports it absent → `sync`
+  > skips + cannot re-record the custom path → the post-sync manifest driver omits
+  > it → a matching under-declaration passes with the custom file unchecked. No
+  > single on-machine source (mutable manifest, operator-restored env, detection)
+  > knows the full harness set. Fix, two parts: (1) an **independent default-location
+  > probe** (`${HOME}/.claude/CLAUDE.md`, `${HOME}/.codex/AGENTS.md`) adds any
+  > sentinel-bearing block to the must-check set regardless of manifest/env; (2)
+  > **declared-harness-skip is a BLOCK** (evaluated against the declared set, so
+  > declaring a harness whose env is unset stops the drill), and the runbook
+  > REQUIRES declaring every harness from **trusted** inventory (not the manifest)
+  > with its env var set. The irreducible remainder — a custom-root harness no
+  > trusted record names — is a documented **BLOCKING residual: STOP and escalate**
+  > (cf. ADR-0028 honest boundary / A12), same discipline as step 1's "cannot
+  > reboot". **G2:** the manifest emitter normalized before validating (a
+  > trailing-newline path collapsed to an existing one; duplicate entries collapsed
+  > 2→1 and passed). Fix: `node` VALIDATES inside (entries array; absolute string
+  > paths; allowed basenames; no CR/LF/NUL; no duplicate managed-block paths) and
+  > REJECTS → DRILL FAIL, then emits identity-preserving (NUL-delimited bash / JSON
+  > array PowerShell) — a malformed or duplicate manifest FAILS, never
+  > normalize-then-passes. Mirrored in both blocks.
+  >
+  > **Fix-pass amendment 7 (2026-07-20, adversarial-review round 6):** PowerShell
+  > path identity is now ORDINAL (byte-exact), matching bash. PS's
+  > `Sort-Object -Unique` and `-eq`/`-ne` are CASE-INSENSITIVE, so two case-distinct
+  > managed-block paths (`C:\Harness\AGENTS.md` vs `C:\harness\AGENTS.md` — distinct
+  > files on a case-sensitive NTFS directory, Windows 10+) collapsed to one and only
+  > one was checked; a stale-clean + current-poisoned pair then printed DRILL PASS
+  > with the poisoned file unchecked. The must-check, declared, and checked sets now
+  > use `HashSet[string]` with `[System.StringComparer]::Ordinal` and compare with
+  > `.SetEquals(...)`; no `Sort-Object -Unique` or `-eq`/`-ne` on paths remains. The
+  > bash block was already ordinal (`sort -z -u`) — PS-only fix.
+  >
+  > **Fix-pass amendment 8 (2026-07-20, comprehensive QA pass):** three step-6
+  > false-pass paths, both blocks. **F1 (ordering):** the hook-envelope check, the
+  > additionalContext↔digest byte-compare, and the digest marker grep ran BEFORE
+  > `wienerdog sync`, which could then regenerate a different digest D1 (a changed
+  > identity/summary input reintroducing the marker) that nothing re-checked — DRILL
+  > PASS on the stale D0. The step is now strictly sync-first: sync → coverage →
+  > ALL hook/digest/marker checks, so every assertion is against the post-sync
+  > digest. **F2 (sentinel count):** the "exactly one pair" check used `grep -cF` /
+  > `Select-String(...).Count`, which count matching LINES — two sentinels on one
+  > line read as 1 and a duplicated-pair-on-one-line block passed. Now count literal
+  > OCCURRENCES (bash `grep -oF | wc -l`; PS ordinal `[regex]::Matches`) and assert
+  > exactly one begin AND one end AND begin-before-end by offset. **F3 (byte
+  > compare):** `readFileSync(path, "utf8")` decoded the digest, mapping invalid
+  > UTF-8 to U+FFFD, so a tampered digest whose hook exposes the replacement char
+  > compared EQUAL. Now read the digest as a raw Buffer (`readFileSync(path)`) and
+  > compare with `Buffer.equals(Buffer.from(additionalContext, "utf8"))` — a true
+  > byte compare; mirrored in the PowerShell block's embedded node.
+  >
+  > **Fix-pass amendment 9 (2026-07-20, comprehensive QA — coverage model final
+  > form):** the operator declaration was harness NAMES, each resolving to exactly ONE
+  > current `CLAUDE_CONFIG_DIR`/`CODEX_HOME` path, so it could not express MULTIPLE
+  > installed roots for one harness (Codex at two case-distinct custom roots). Trigger:
+  > the incident-tampered manifest omits the second root, `CODEX_HOME` points to the
+  > first, neither is at a default location → sync re-records only the current root and
+  > the name-keyed declaration cannot name the other, so the omitted installed file is
+  > never checked yet DRILL PASS prints — OUTSIDE the documented residual, since trusted
+  > inventory KNOWS both roots. Fix (coverage model's final form): the declaration is
+  > now an explicit ORDINAL LIST OF managed-block FILE PATHS (`DECLARED_PATHS` /
+  > `$DeclaredPaths`), multiple roots per harness allowed, dedup-with-reject, and it is
+  > **unioned into** the must-check set (manifest ∪ probe ∪ declared). Every element is
+  > checked; the declared→harness mapping for the adapter-skip-BLOCK and adapter
+  > classification is by PATH BASENAME. Net gate: must-check (all three, ordinal-deduped)
+  > == checked. The name-model `declared == must` cross-check is removed (subsumed:
+  > declared ⊆ must by union, and coverage now comes from the union directly). The
+  > **completeness argument** (recorded in the step-6 contract): checked == manifest ∪
+  > probe ∪ declared, so an installed file is omitted iff in NONE of the three — a root
+  > no trusted record knows — the unchanged stop-and-escalate residual. No fourth
+  > omission path.
+  >
+  > **Fix-pass amendment 10 (2026-07-20, lock-pass):** PowerShell basename VALIDATION
+  > and CLASSIFICATION are now ordinal/case-sensitive (round-6 made the SET ops ordinal
+  > but this layer was missed). PS's `-ne` (validator) and default `switch`
+  > (classification) are CASE-INSENSITIVE, so on case-sensitive NTFS a wrong-case DECOY
+  > (`C:\Custom\agents.md`, one clean sentinel pair) passed validation, classified as
+  > Codex, and entered must-check ∪ checked — while the real uppercase POISONED
+  > `C:\Custom\AGENTS.md` (manifest entry removed, non-default, another Codex root
+  > current so sync ran without a skip) stayed outside all three sources → DRILL PASS.
+  > Fix: the validator uses `[System.StringComparer]::Ordinal.Equals($bn, 'CLAUDE.md'/
+  > 'AGENTS.md')` and the classification uses `switch -CaseSensitive`, so only an
+  > exact-case `CLAUDE.md`/`AGENTS.md` basename validates + classifies; a wrong-case
+  > decoy is REJECTED at validation (before sync), forcing the operator to declare the
+  > correct-case path from trusted inventory → then it is checked → FAIL on the poison.
+  > bash's `case "$bn" in CLAUDE.md|AGENTS.md)` was already byte-exact/case-sensitive
+  > (confirmed, left unchanged). Audited: ZERO case-insensitive path/basename
+  > comparisons remain in either block; the only case-insensitive ops left are on
+  > integers / `$null` / exit codes.
+  >
+  > **Fix-pass amendment 11 (2026-07-20, lock-pass — PS filesystem-op audit):** the
+  > same PS path-identity class as round 8, now at the file-operation/glob layer.
+  > `Test-Path $f` and `Select-String -Path $f` GLOB-interpret `[ ] * ?` (legal NTFS
+  > filename chars), so a declared bracketed path `C:\H[1]\AGENTS.md` (poisoned) bound
+  > the identity ops to a clean decoy `C:\H1\AGENTS.md` while `[IO.File]::ReadAllText`
+  > read the literal poisoned file for the sentinel check → checked == must-check and
+  > DRILL PASS with the declared installed file still poisoned (Codex repro:
+  > `Select-String -Path 'docs/runbooks/[is]ncident.md'` resolved incident.md;
+  > `-LiteralPath` found no match). Fix: every PS filesystem op on a path IDENTITY uses
+  > `-LiteralPath` / a literal `[IO.File]` API — `Test-Path -LiteralPath $f -PathType
+  > Leaf`, `Select-String -LiteralPath …` (probe, whole-file marker grep, direct digest
+  > grep); `[IO.File]::ReadAllText` already literal. A COMPLETE PS-filesystem-op audit
+  > (every `Test-Path`/`Select-String`/`[IO.File]`/`[IO.Path]`/node `readFileSync`)
+  > confirms each is either literal-exact or not a path identity (a pipeline grep on
+  > `$sync` output / an env-drive `Remove-Item Env:` / a `[IO.Path]` string API). bash
+  > is immune (`[ -f "$f" ]` / `grep -F -- … "$f"` do not glob the quoted filename).
+  > Two surfaces now closed — round-8 comparisons ordinal AND round-9 file-ops literal —
+  > so ZERO path-identity betrayals remain in either block.
+  >
+  > **Fix-pass amendment 12 (2026-07-20, lock-pass — proactive path-identity surface
+  > sweep + structural fix):** three more PowerShell path-identity surfaces were found
+  > (encoding, multi-line content search, rootedness). Rather than fix three and risk a
+  > fifth, the drill's identity-critical logic moved into ONE SHARED byte-exact node
+  > verifier invoked by both blocks (thin per-platform shims remain for env pinning,
+  > sync, hook). The chosen approach and the full surface audit:
+  >
+  > | Surface | How pinned | bash | PS |
+  > |---|---|---|---|
+  > | (a) string comparison | ordinal — node `Set`/`===` exact-string keys | ✓ (`sort -z -u`) | ✓ (node) |
+  > | (b) filesystem addressing / globbing | node `fs.readFileSync` literal, no glob | ✓ (quoted args) | ✓ (node) |
+  > | (c) representation/encoding (node↔shell) | declared paths via env (wide); node reads manifest/files itself; hook stdout via raw-byte file — never console codepage | ✓ | ✓ (node) |
+  > | (d) rootedness | node fully-qualified check (drive+sep/UNC on win, `/` on posix); `C:foo` / `\foo` REJECTED | ✓ | ✓ (node) |
+  > | (e) content search line-vs-whole-file | node `Buffer.indexOf` whole-file byte match — multi-line marker matches | ✓ (node) | ✓ (node) |
+  > | (f) Unicode normalization (NFC/NFD) | byte-distinct = distinct must-check entries, each verified against the OS-resolved file → redundant, never omitted (no normalization; bash+PS agree) | ✓ | ✓ |
+  > | (g) Windows path quirks | trailing dot/space, 8.3, ADS `:stream` → non-exact basename REJECTED; `/`-vs-`\`, UNC-vs-drive, redundant seps → byte-distinct entries, each verified; `.`/`..` segment REJECTED (canonical) | ✓ | ✓ (node) |
+  >
+  > **G1 (encoding):** the round-9 node emitter wrote UTF-8 JSON but PS captured native
+  > stdout in the console codepage (CP437 on Win PS 5.1) → a non-ASCII manifest path
+  > mojibaked, letting a clean mojibake decoy enter checked while the real poisoned file
+  > was omitted. Dissolved: node reads the manifest itself (no node→PS path crossing);
+  > declared paths cross PS→node via env (wide). **G2 (multi-line marker):**
+  > `Select-String -SimpleMatch` / `grep -F` are line-oriented, so a contiguous
+  > multi-line marker never matched though the file contained it → whole-file
+  > `Buffer.indexOf` (fixes BOTH blocks — bash's `grep -F` had the same gap).
+  > **G3 (drive-relative):** `[IO.Path]::IsPathRooted('C:foo')` is true but not fully
+  > qualified → the verifier's fully-qualified check rejects `C:foo` / `\foo`. The whole
+  > PS path-identity class (round-6/7/8/9 + this round) is now closed by construction:
+  > PS handles no path identity at all.
+  >
+  > **Fix-pass amendment 13 (2026-07-20, lock-pass — fail-closed default-probe
+  > discovery):** the default-probe (in the shared verifier) added a default-location
+  > file to must-check only when BOTH sentinels were present, so a sentinel-deleted
+  > DAMAGED block at a KNOWN default location hid from its own discovery — never entered
+  > must-check, so its marker / missing-pair / adapter-skip went unchecked → false DRILL
+  > PASS (Codex execution-repro: begin-only `AGENTS.md` with multi-line poison,
+  > manifest-omitted, sync-skipped → exit 0). This is NOT the unknown-custom-root residual
+  > (the file is at a default location). Fix (both byte-identical verifier copies):
+  > discover a default file bearing ANY tamper-surviving Wienerdog evidence — **≥1
+  > sentinel (begin OR end) OR the poison marker** — via whole-file `Buffer.indexOf`;
+  > once discovered, the existing per-file checks catch the damage/poison → DRILL FAIL. A
+  > file with neither sentinels nor marker is genuinely not Wienerdog-managed and is
+  > correctly NOT flagged (no false FAIL on a user's own non-Wienerdog `CLAUDE.md`). Only
+  > the PROBE discovers by content; the manifest and declared sources are path lists
+  > (discovered by being listed), so this fail-open-on-intact-pair gap never applied to
+  > them (confirmed). The completeness claim is corrected: the damaged-default-block gap
+  > was machine-checkable and is now closed; the sole residual remains the
+  > unknown-custom-root incomplete-inventory case.
+  >
+  > **Fix-pass amendment 14 (2026-07-20, lock-pass — honest limit of content-based
+  > discovery + residual-accuracy correction; the probe code is already MAXIMAL, no code
+  > change):** the default-probe discovers by EXACT evidence (a real sentinel OR the exact
+  > marker), so a default block tampered beyond ALL evidence — altered sentinels
+  > (`beg1n`/`3nd`) AND an altered/split marker — bears no exact evidence and is NOT
+  > discovered; if the manifest omits it and the operator declared only the other file,
+  > DRILL PASS with the poisoned default file unchecked (Codex execution-repro). This is
+  > NOT a code bug: a block tampered beyond all Wienerdog evidence is INDISTINGUISHABLE
+  > on-machine from a user's own non-Wienerdog `CLAUDE.md` — "force-add every default file,
+  > failing if no valid pair" would false-FAIL legit files, and "an independent trusted
+  > record" is exactly the (tampered/incomplete) inventory. So the earlier residual claim
+  > ("only a non-default unknown custom root can escape") was TOO NARROW — it is the SAME
+  > incomplete-inventory limit, mis-scoped. Corrections (docs only, both prose + spec):
+  > (1) **declaration guidance** strengthened — the operator must declare their COMPLETE
+  > trusted inventory INCLUDING default locations; the probe is a fail-closed BELT, not
+  > the sole discovery; a declared default with altered sentinels then enters must-check
+  > and FAILS the exactly-one-pair check. (2) **residual corrected** — an installed block
+  > escapes iff in none of {manifest (tamperable), fail-closed probe (evidence-bearing
+  > only), declared}; the residual is any installed block the trusted inventory doesn't
+  > name AND the machine can't recover, which includes BOTH an unknown custom root AND a
+  > block at ANY location tampered beyond all evidence; both are the same
+  > declare-complete-inventory-or-stop-and-escalate case. (3) **completeness argument**
+  > updated accordingly; no overclaim. The verifier is UNCHANGED (byte-identical copies
+  > preserved).
 - **The ONLY authoritative way to reach zero running Wienerdog processes is to
   REBOOT after removing every per-job schedule AND the catch-up entry — not
   per-platform process forensics (R4-C, round-4).** After a reboot, with nothing
@@ -199,7 +471,7 @@ state and act on:
 
 | Action | Path | Notes |
 |--------|------|-------|
-| create | docs/runbooks/incident.md | The general incident-drill runbook (house numbered-checklist format), opening with a **step 0 preamble** that resolves the ONE authoritative core by reading `wienerdog doctor`'s `core directory exists (<path>)` line (the code-authoritative `getPaths().core`), cross-checked against the exact code-mirrored order — `WIENERDOG_HOME`, else `HOME`, else the platform account homedir, then `.wienerdog` (mirroring `paths.js:54–55`; `HOME` is tried **before** `USERPROFILE` on Windows, R8-4) — DISPLAYS it, has the user CONFIRM it (`config.yaml`, `state/`, `install-manifest.json`), **persists it durably OUTSIDE the core so it survives the step-1 reboot** and, after the reboot, RE-RESOLVES + RE-CONFIRMS + RE-EXPORTS `WIENERDOG_HOME` for every later command (R8-2), and requires every later path (the catch-up XML/plist, the install manifest, the evidence copy, the digest grep, the SessionStart hook, and all verifications) to use that SAME `<core>` — never a hardcoded `~/.wienerdog` / `$env:USERPROFILE\.wienerdog`, and never a bare relative `state/…` (R7-1/R8-3); then the seven ordered A9 steps: (1) snapshot the `<core>/config.yaml` `jobs:` definitions (the restore source; `schedule.json` holds only watermarks), remove every per-job schedule **and** the shared catch-up entry — the catch-up removal deleting its scheduler FILE **and** its `install-manifest.json` entry, not merely unregistering it, so `sync`'s `reloadMissing` cannot resurrect it — then reach proven quiescence by REBOOT (the **sole** authoritative proof — a pre-reboot process grep is a non-proof hint that can only *reveal* a live job; if you cannot reboot you **stop-and-escalate**, never grep-certify clean); (2) preserve-evidence-privately; (3) revoke+rotate; (4) purge digest+managed-block; (5) clean git; (6) fail-closed acceptance drill (SessionStart-hook `additionalContext` byte-compare against the raw `state/digest.md`, plus a three-check managed-block proof — clean `sync` (notice-tolerant: the two constant Codex info notices are allowed; only concrete integrity failures block, R8-5) + whole-file marker grep + one-sentinel-pair check per installed harness file; **no** region-vs-raw-digest byte-compare, which would falsely fail because `sync` trims+neutralizes); (7) re-authorize by reconstructing `schedule add --job` for **builtin** jobs from the `jobs:` snapshot — a `skill:*` routine is frozen by the A0 pre-use gate (audit A1) and is NOT re-addable this release (do not promise a failing `--skill` command; only its snapshot definition is preserved for later). |
+| create | docs/runbooks/incident.md | The general incident-drill runbook (house numbered-checklist format), opening with a **step 0 preamble** that resolves the ONE authoritative core by reading `wienerdog doctor`'s `core directory exists (<path>)` line (the code-authoritative `getPaths().core`), cross-checked against the exact code-mirrored order — `WIENERDOG_HOME`, else `HOME`, else the platform account homedir, then `.wienerdog` (mirroring `paths.js:54–55`; `HOME` is tried **before** `USERPROFILE` on Windows, R8-4) — DISPLAYS it, has the user CONFIRM it (`config.yaml`, `state/`, `install-manifest.json`), **persists it durably OUTSIDE the core so it survives the step-1 reboot** and, after the reboot, RE-READS the persisted record + RE-EXPORTS `WIENERDOG_HOME` from it + only THEN re-confirms via `doctor` (in that order — `doctor` reads the current env, R8-2/F2) for every later command, and requires every later path (the catch-up XML/plist, the install manifest, the evidence copy, the digest grep, the SessionStart hook, and all verifications) to use that SAME `<core>` — never a hardcoded `~/.wienerdog` / `$env:USERPROFILE\.wienerdog`, and never a bare relative `state/…` (R7-1/R8-3); then the seven ordered A9 steps: (1) create+secure the private evidence folder FIRST (F4), snapshot the `<core>/config.yaml` `jobs:` definitions into it (the restore source; `schedule.json` holds only watermarks), remove every per-job schedule (`schedule remove`, which also drops each job from `config.yaml`) **and** the shared catch-up entry — the catch-up removal deleting its scheduler FILE **and** its `install-manifest.json` entry, not merely unregistering it, and blocking on `config.yaml` listing **zero** `jobs:` entries AND a zero-result independent per-platform enumeration of Wienerdog OS registrations (F1) so `sync`'s config-driven heal (`reloadMissing`/`repairCatchup`) cannot re-arm anything and no best-effort-unregister failure survives unseen — then reach proven quiescence by REBOOT (the **sole** authoritative proof — a pre-reboot process grep is a non-proof hint that can only *reveal* a live job; if you cannot reboot you **stop-and-escalate**, never grep-certify clean); (2) preserve-evidence-privately; (3) revoke+rotate; (4) purge digest+managed-block; (5) clean git; (6) fail-closed acceptance drill (SessionStart-hook `additionalContext` byte-compare against the raw `state/digest.md`, plus a three-check managed-block proof — clean `sync` (notice-tolerant: the two constant Codex info notices are allowed; only concrete integrity failures block, R8-5) + whole-file marker grep + one-sentinel-pair check per installed harness file; **no** region-vs-raw-digest byte-compare, which would falsely fail because `sync` trims+neutralizes); (7) re-authorize by reconstructing `schedule add --job` for **builtin** jobs from the `jobs:` snapshot — a `skill:*` routine is frozen by the A0 pre-use gate (audit A1) and is NOT re-addable this release (do not promise a failing `--skill` command; only its snapshot definition is preserved for later). |
 | modify | docs/runbooks/secret-incident.md | Add one cross-link near the top: the secret leak is the credential-specific case of the general incident drill (link `incident.md`); for a general or suspected-compromise incident, start there. Do NOT rewrite its steps. |
 
 ### Exact contract — what `docs/runbooks/incident.md` must state
@@ -260,13 +532,19 @@ relative `state/…`.
 | persisted CORE-PATH record | `~/wienerdog-incident-<date>-CORE-PATH.txt` | survives the step-1 reboot; also noted off-machine |
 
 **Table B — Scheduler artifacts per platform.** `schedule remove <job>` unregisters
-(best-effort) and deletes only **that job's own** file + manifest entry, and stops
-only **future** fires (a job running *right now* keeps running). It **leaves the
-shared catch-up entry**. **Resurrection rule:** `wienerdog sync` calls `reloadMissing`
-(`sync.js:197`), which **re-registers** any manifest `scheduler-entry` whose OS
-registration is missing but whose **manifest entry AND scheduler file survive** — so
-the catch-up stop must delete the **FILE and the manifest entry**, not merely
-unregister.
+(best-effort) and deletes only **that job's own** file + manifest entry, **drops the
+job from `config.yaml`**, and stops only **future** fires (a job running *right now*
+keeps running). It **leaves the shared catch-up entry** (removing the FINAL job also
+tears catch-up down, but only best-effort). **Resurrection rule:** `wienerdog sync`
+re-arms schedules **from `config.yaml`**, regenerating canonical content:
+`reloadMissing` (`sync.js:239`) re-registers a missing per-job registration for
+every job still listed in `config.yaml`, and `repairCatchup` (`schedule.js:588`)
+regenerates + re-registers the shared catch-up entry whenever **at least one job
+remains** (tearing it down when zero remain) — deleted files or manifest entries do
+not stop either heal. So the block that matters is an **empty `jobs:` list**; the
+catch-up stop below still deletes the **FILE and the manifest entry** (immediate
+disarm + defense-in-depth for the best-effort auto-teardown), not merely
+unregisters.
 
 | Platform | Per-job registration | Catch-up label / file | Stop-the-catch-up (all three: unregister + delete file + drop manifest entry) |
 |---|---|---|---|
@@ -274,9 +552,27 @@ unregister.
 | Windows | Task Scheduler `\Wienerdog\<job>` | `\Wienerdog\catchup` / `$core\schedules\wienerdog-catchup.xml` | `Unregister-ScheduledTask -TaskPath '\Wienerdog\' -TaskName 'catchup' -Confirm:$false`; delete the XML; delete its `scheduler-entry` from `$core\install-manifest.json` |
 | Linux | systemd `--user` | **none** (no catch-up on Linux) | nothing to do |
 
-**Blocking dual re-verify** (do not proceed until ALL hold): the OS registration is
+**Blocking re-verify** (do not proceed until ALL FIVE hold): the OS registration is
 gone AND the scheduler file is gone AND `install-manifest.json` has no catch-up
-`scheduler-entry`.
+`scheduler-entry` AND `$CORE/config.yaml` lists **zero** `jobs:` entries (the heal
+source — a surviving job re-arms itself and catch-up on the next `sync`) AND an
+**independent enumeration of Wienerdog OS registrations returns nothing** — the
+per-job OS unregister is best-effort, so a failed one (on Windows, an imported
+Task Scheduler task survives XML deletion) can leave an armed registration that
+none of the other four checks see once `config.yaml` and the manifest are clean:
+
+- macOS: `launchctl list | grep ai.wienerdog` must print **nothing** (per-job
+  labels are `ai.wienerdog.<job>`; catch-up is `ai.wienerdog.catchup`).
+- Linux: `systemctl --user list-timers 'wienerdog-*' --all` and
+  `systemctl --user list-units 'wienerdog-*' --all` must list **no** units
+  (units are `wienerdog-<job>.timer` / `wienerdog-<job>.service`).
+- Windows (PowerShell): `Get-ScheduledTask -TaskPath '\Wienerdog\'
+  -ErrorAction SilentlyContinue` must return **nothing** (every Wienerdog task,
+  catch-up included, lives under `\Wienerdog\`).
+
+A hit in any of these means an armed registration survived — unregister it with
+the platform's own command (the Table B "Stop-the-catch-up" column shows the
+shapes) and re-run the enumeration until it is empty.
 
 **Table C — Restore rules (step 7).** Restore **source** = the `config.yaml` `jobs:`
 section (each job's `name` / `at` / `run` / `timeout_minutes`), snapshotted in step 1.
@@ -370,9 +666,22 @@ headless/`--yes` bypass — it is interactive and shows the exact bytes.
 
 1. **Stop everything that can fire, then reach proven quiescence — before anything
    else.** In order:
-   - **Snapshot the job DEFINITIONS first (Table A / Table C restore source).** Copy the
-     `config.yaml` `jobs:` section (Table A: `$CORE/config.yaml`) into the step-2 private
-     evidence folder NOW — **every** job, including each `run: skill:<name>` routine (its
+   - **Create the private evidence folder FIRST — before anything is removed.** The
+     snapshot below needs a safe destination that exists BEFORE `schedule remove`
+     mutates the source, so the incident evidence folder is created, permissioned, and
+     backup-excluded now, at the start of step 1 (step 2 then copies the remaining
+     evidence into the same folder). Put it at the Table A evidence-folder path
+     (`~/wienerdog-incident-<date>/`, outside the core) and outside any synced/backed-up
+     path (not under iCloud Drive / Dropbox / OneDrive / Google Drive):
+     - macOS / Linux: `mkdir -m 700 ~/wienerdog-incident-<date>`, and add that folder to
+       your backup exclusions *before* anything is copied in (Time Machine: System
+       Settings → Time Machine → Options → add the folder).
+     - Windows (PowerShell): create the folder, then strip inherited access and grant only
+       your account — `icacls <folder> /inheritance:r /grant:r "$($env:USERNAME):(OI)(CI)F"`
+       — and exclude it from File History / OneDrive backup, all before copying.
+   - **Snapshot the job DEFINITIONS next (Table A / Table C restore source).** Copy the
+     `config.yaml` `jobs:` section (Table A: `$CORE/config.yaml`) into that folder
+     NOW — **every** job, including each `run: skill:<name>` routine (its
      only record for later, Table C). `schedule remove` mutates `config.yaml` and
      `schedule list` omits `timeout_minutes`, so this snapshot — **not** `schedule.json`
      (watermark-only, Table A/C) — is what step 7 restores from. You MAY also copy
@@ -383,34 +692,46 @@ headless/`--yes` bypass — it is interactive and shows the exact bytes.
      stops **future** fires (best-effort OS unregister) and does **not** stop a job
      running **right now** (proven separately below); you re-add in step 7.
    - **Remove the shared catch-up entry (Table B) — unregister + delete its scheduler
-     FILE + drop its `install-manifest.json` entry, then the Table B blocking dual
-     re-verify.** Per-job `remove` deliberately leaves it, so remove it by hand using the
-     Table B "Stop-the-catch-up" commands for your platform. **Unregister-only is NOT
-     enough** (Table B resurrection rule: the next `wienerdog sync` — step 4 and again in
-     the step-6 drill — would re-register any `scheduler-entry` whose file + manifest
-     entry survive). When editing `install-manifest.json`, delete **only** the catch-up
-     `scheduler-entry` (the object whose `unload` argv names `ai.wienerdog.catchup` /
-     `\Wienerdog\catchup`), no unrelated entries. **Linux: nothing to do.** Do not
-     proceed until the Table B dual re-verify passes (OS registration gone AND scheduler
-     file gone AND no catch-up manifest entry); a surviving file+entry means `sync` will
-     re-arm the machine — STOP and fix it.
+     FILE + drop its `install-manifest.json` entry, then the Table B blocking
+     re-verify.** Removing the FINAL job auto-tears catch-up down only best-effort, so
+     remove it by hand using the Table B "Stop-the-catch-up" commands for your platform.
+     **Unregister-only is NOT enough** (Table B resurrection rule: the next `wienerdog
+     sync` — step 4 and again in the step-6 drill — regenerates + re-registers catch-up
+     from `config.yaml` whenever any job remains listed there). When editing
+     `install-manifest.json`, delete **only** the catch-up `scheduler-entry` (the object
+     whose `unload` argv names `ai.wienerdog.catchup` / `\Wienerdog\catchup`), no
+     unrelated entries. **Linux: nothing to do.** Do not proceed until the Table B
+     blocking re-verify passes — all FIVE checks: OS registration gone AND scheduler
+     file gone AND no catch-up manifest entry AND `config.yaml` lists zero `jobs:`
+     entries AND the Table B **independent per-platform enumeration** of Wienerdog OS
+     registrations (launchd labels / systemd units / `\Wienerdog\` tasks) returns
+     **nothing** — the per-job unregister is best-effort, so a failed one leaves an
+     armed registration the config/manifest checks cannot see. A surviving `jobs:`
+     entry or a surviving OS registration means the machine can still fire — STOP and
+     fix it.
    - **Reach proven quiescence — the ONLY authoritative path is to REBOOT.** With every
      per-job schedule and the catch-up entry removed, reboot the machine. After the reboot
      nothing can have re-fired, so **zero** Wienerdog processes run — platform-
      independently, with no process forensics. **Credential rotation (step 3) begins only
      after this reboot. A reboot is the sole proof of quiescence this runbook accepts.**
-   - **After the reboot: RE-RESOLVE, RE-CONFIRM, and RE-EXPORT the core before ANY further
-     command (R8-2).** The reboot wiped your `$CORE`/`$core` shell variable and any
-     one-shot `WIENERDOG_HOME` export, so a fresh shell would silently re-default the core
-     — re-introducing exactly the wrong-directory bug step 0 guards against. In the new
-     post-reboot session, before running anything else:
-     1. Re-resolve the core as in step 0 (read `wienerdog doctor`, Table A) and **confirm
-        it equals the value in `wienerdog-incident-<date>-CORE-PATH.txt`**. If they differ,
-        STOP and reconcile.
+   - **After the reboot: RE-READ the persisted record, RE-EXPORT the core, THEN
+     re-confirm via `doctor` — in that order, before ANY further command (R8-2).** The
+     reboot wiped your `$CORE`/`$core` shell variable and any one-shot `WIENERDOG_HOME`
+     export, so a fresh shell would silently re-default the core — re-introducing
+     exactly the wrong-directory bug step 0 guards against. The order matters:
+     `doctor` reports the core from the CURRENT environment, so running it before the
+     re-export would report the DEFAULT core on a custom-core install and the equality
+     check would fail with no way forward. In the new post-reboot session, before
+     running anything else:
+     1. **Read the persisted record** (`wienerdog-incident-<date>-CORE-PATH.txt`,
+        Table A) and validate it: an absolute path to an existing directory that holds
+        the `config.yaml` / `state/` / `install-manifest.json` triple (Table A). If
+        not → STOP and reconcile.
      2. **Re-export it for the whole session:** macOS / Linux `export
         WIENERDOG_HOME="$CORE"`; Windows (PowerShell) `$env:WIENERDOG_HOME = "$core"`.
-     3. Re-verify the `config.yaml` / `state/` / `install-manifest.json` triple (Table A),
-        as in step 0.
+     3. **THEN run `wienerdog doctor`** and require its `core directory exists
+        (<path>)` line to EQUAL the persisted value. A mismatch means your session is
+        not acting on the confirmed core — STOP and reconcile.
      From here on, **every** post-reboot Wienerdog command — `wienerdog sync`, `wienerdog
      memory approve`, `wienerdog schedule add`, `wienerdog doctor`, and the drill hook run
      in step 6 — MUST run with `WIENERDOG_HOME` set to this `$CORE` (the export above does
@@ -430,23 +751,15 @@ headless/`--yes` bypass — it is interactive and shows the exact bytes.
      (assume a stale-privilege child may still be running) and escalate — do **not**
      proceed to credential rotation on the strength of a "nothing found" grep.
 
-2. **Preserve the evidence — secure the destination FIRST, then copy.** Create and
-   secure the folder *before* any sensitive bytes land in it. **Treat every copy as
-   potentially sensitive** — redaction is best-effort (a boundary-split or encoded secret
-   can survive in a log; ADR-0024), so this is your incident timeline but is **not**
-   guaranteed secret-free.
-   - **Create the private, sync/backup-excluded folder BEFORE copying anything in.** Put
-     it at the Table A evidence-folder path (`~/wienerdog-incident-<date>/`, outside the
-     core) and outside any synced/backed-up path (not under iCloud Drive / Dropbox /
-     OneDrive / Google Drive):
-     - macOS / Linux: `mkdir -m 700 ~/wienerdog-incident-<date>`, and add that folder to
-       your backup exclusions *before* the copy (Time Machine: System Settings → Time
-       Machine → Options → add the folder).
-     - Windows (PowerShell): create the folder, then strip inherited access and grant only
-       your account — `icacls <folder> /inheritance:r /grant:r "$($env:USERNAME):(OI)(CI)F"`
-       — and exclude it from File History / OneDrive backup, all before copying.
+2. **Preserve the evidence — into the already-secured folder from step 1.** The private,
+   sync/backup-excluded folder was created, permissioned, and backup-excluded at the
+   START of step 1 (so the `jobs:` snapshot had a safe destination); re-check it is still
+   private and still outside every synced path before copying more into it. **Treat every
+   copy as potentially sensitive** — redaction is best-effort (a boundary-split or
+   encoded secret can survive in a log; ADR-0024), so this is your incident timeline but
+   is **not** guaranteed secret-free.
    - **Copy the evidence in** — all Table A paths: the `$CORE/config.yaml` `jobs:` snapshot
-     (the step-1 restore source), `$CORE/state/run-evidence.jsonl`,
+     (already there from step 1), `$CORE/state/run-evidence.jsonl`,
      `$CORE/state/alerts.jsonl`, and the relevant `$CORE/logs/<job>/` files; optionally
      `$CORE/state/schedule.json` too (watermark evidence, not the restore source). Also
      move the step-0 `wienerdog-incident-<date>-CORE-PATH.txt` record (Table A) into this
@@ -485,16 +798,24 @@ headless/`--yes` bypass — it is interactive and shows the exact bytes.
      re-injected until you re-ratify it: run `wienerdog memory approve <note>` on the
      corrected note with a **Table E** short name (never a file path) — only the bytes you
      just reviewed can ever be injected again.
-   - **Before you run `sync`, confirm step 1's catch-up removal is complete (Table B
-     resurrection rule).** `wienerdog sync` also runs `reloadMissing` (`sync.js:197`); if
-     step 1 left the catch-up file or its `install-manifest.json` entry in place, this
-     `sync` will resurrect the catch-up job here — re-arming the machine before the drill.
-     `sync` must **not** be able to reactivate ANY schedule before step 7: do not run it
-     until step 1's Table B dual re-verify passed.
+   - **Before you run `sync`, confirm step 1's stop is complete (Table B resurrection
+     rule).** `wienerdog sync` heals schedules from `config.yaml` (`reloadMissing` +
+     `repairCatchup`); if step 1 left ANY job in the `jobs:` list, this `sync` will
+     re-register that job's schedule AND regenerate + re-register the catch-up entry
+     here — re-arming the machine before the drill. `sync` must **not** be able to
+     reactivate ANY schedule before step 7: do not run it until step 1's Table B
+     blocking re-verify (including the zero-`jobs:` check) passed.
    - Run `wienerdog sync` — it re-renders a clean `$CORE/state/digest.md` and re-writes
      the CLAUDE.md / AGENTS.md **managed block** (the sentinel-delimited region Wienerdog
-     owns) from the current, corrected identity. `sync` overwrites only inside the
-     sentinels and re-derives the block, so a clean sync restores a hand-tampered block.
+     owns) from the current, corrected identity. When the file holds exactly one valid
+     sentinel pair, `sync` replaces only the content between the sentinels — so a block
+     whose TEXT was tampered is restored. But when BOTH sentinel markers were deleted,
+     `sync` cannot find the block and **APPENDS a fresh one — the poisoned text survives
+     elsewhere in the file** (Table D's whole-file grep exists for exactly this case):
+     locate and remove/quarantine the orphaned text by hand, re-run `sync`, and re-run
+     the step-6 drill. (One sentinel missing, or duplicated sentinels, makes `sync`
+     refuse with a "managed block not updated" message — resolve the markers by hand,
+     then re-run `sync`.)
    - Also review `$CORE/state/quarantine/` (Windows `$core\state\quarantine\`; Table A;
      cross-link `secret-incident.md` step 3 for the true-positive/false-positive handling)
      — again the explicit resolved path, never a bare relative `state/…`.
@@ -513,34 +834,186 @@ headless/`--yes` bypass — it is interactive and shows the exact bytes.
    missing `node`, or when `WIENERDOG_JOB` is set — so empty output is **NOT** proof of a
    clean digest), run it **fail-closed**: drive the installed hook with the right
    environment and treat any empty/malformed output as a FAILURE, then byte-compare what
-   it *would* inject against the digest.
-   - **Drive the installed SessionStart hook with the injecting environment.** Run the
-     installed hook at `$CORE/bin/session-start.sh` (Table A; the adapter installs it under
-     the core — `doctor` does **not** print the path) with `WIENERDOG_HOME` set to the
-     step-0 core and `WIENERDOG_JOB` **cleared** (an inherited `WIENERDOG_JOB` makes the
-     hook exit `0` with no output — a false "clean"):
-     `WIENERDOG_JOB= WIENERDOG_HOME="$CORE" "$CORE/bin/session-start.sh"`
-   - **Verify fail-closed.** Pipe that stdout through a tiny `node -e` that parses the JSON
-     envelope and BLOCKS (drill FAILS — do not re-authorize) on any of: empty stdout, a
-     JSON-parse failure, `hookSpecificOutput.hookEventName !== 'SessionStart'`, or a
-     non-string `additionalContext`. When it parses, **byte-compare** `additionalContext`
-     to the bytes of `$CORE/state/digest.md` (Table A) — they must be **identical** (the
-     hook injects exactly those bytes) — AND confirm a `grep -F` for the poisoned marker
-     over `additionalContext` finds nothing. A marker match, a mismatch against the
-     digest, or any block condition means STOP.
-   - **Grep the regenerated `$CORE/state/digest.md`** for the poisoned marker directly
-     (belt-and-suspenders against the decoded bytes above).
-   - **Check the managed block of every INSTALLED harness file via the Table D three-check
+   it *would* inject against the digest. The runbook ships the drill as complete
+   copy-paste blocks (bash + PowerShell) that stop at the first failure; a printed
+   "DRILL PASS" is the pass. **The whole sequence is sync-first: `wienerdog sync`
+   runs before ANY digest / hook / marker / managed-block assertion (F1), so every
+   check verifies the CURRENT post-sync state — never a stale pre-sync digest that
+   sync then regenerated (a changed identity/summary input can reintroduce the
+   marker into a new digest D1 after a clean D0). The order reads sync → coverage
+   (manifest driver + probe + per-file checks) → hook/digest/marker proof.**
+   - **Coverage = the post-sync manifest UNION an independent default-location probe
+     UNION the operator's declared PATH list (the coverage model's final form),
+     machine-enforced where checkable and STOP-AND-ESCALATE for the irreducible
+     remainder (round-2 F1 / round-3 G1 / round-4 structural / round-5 G1+G2 / round-7
+     G1).** The blocks run the drill's `wienerdog sync` **first** (idempotent; it
+     REPAIRS the managed blocks — `applyManagedBlock`/`recordOnce` re-records any
+     `managed-block` manifest entry a prior interrupted sync or tampering dropped), then
+     build the must-check set from **three independent sources**: (1) the **post-sync**
+     `$CORE/install-manifest.json` managed-block PATHS, read after a `node` **validation**
+     that REJECTS (→ DRILL FAIL) a manifest with no entries array, a
+     non-absolute/non-string managed-block path, a path with a CR/LF/NUL, a basename
+     other than `CLAUDE.md`/`AGENTS.md`, or a **duplicate** managed-block path (G2),
+     emitted identity-preserving (NUL-delimited in bash, JSON array in PowerShell);
+     (2) an **independent probe** of the DEFAULT harness locations
+     `${HOME}/.claude/CLAUDE.md` and `${HOME}/.codex/AGENTS.md` (HOME per `paths.js`,
+     before `USERPROFILE`) — **fail-closed discovery (round-11):** the file is added to
+     must-check if it bears ANY Wienerdog evidence that survives tampering — **either
+     sentinel** (a one-sentinel-deleted DAMAGED block) OR **the poison marker** (a
+     both-sentinels-deleted orphan) — NOT requiring an intact pair (Wienerdog always
+     writes both, so exactly one, or zero-plus-marker, is a tampered/compromised block; a
+     file with neither is genuinely not Wienerdog-managed and correctly not flagged). The
+     discovery search is whole-file/`Buffer.indexOf`, so a multi-line marker or a sentinel
+     anywhere is found (G1/round-5 part 1, hardened round-11). **The probe is a fail-closed
+     BELT, not the authority (round-14):** it recovers only a block that still bears some
+     evidence, so a default block tampered beyond ALL evidence is indistinguishable from a
+     non-Wienerdog file and unrecoverable — the runbook's declaration guidance requires the
+     operator to declare default-location harnesses explicitly, not rely on the probe;
+     and (3) the
+     **operator's declared PATH list** (`DECLARED_PATHS` / `$DeclaredPaths`) — an
+     explicit ordinal list of managed-block FILE PATHS from trusted inventory, **not**
+     harness names, so it expresses **multiple installed roots for one harness** and any
+     non-default, non-current-env root the manifest and probe cannot see (round-7 G1).
+     The declared list is validated (each absolute, basename `CLAUDE.md`/`AGENTS.md`) and
+     **dedup-with-reject** (a repeated path FAILS, ordinal-exact). Every file in the
+     union is checked with the Table D three-check conjunction, plus a FAIL if `sync`
+     skipped that file's adapter (its exact messages, `sync.js:317–329`) — classified by
+     BASENAME (`CLAUDE.md`→claude, `AGENTS.md`→codex), so a **declared** path whose
+     harness `sync` skipped BLOCKs (declared ⊆ must) — or the file is missing on disk (a
+     declared path missing here FAILS). Net gate (all hold or DRILL FAIL): `sync` clean
+     (notice-tolerant); manifest validates; **must-check set (manifest ∪ probe ∪
+     declared, ordinal-deduped) == checked set** (≥1); every element present + verified;
+     no adapter-skip. This is **env-consistent** because the block pins the detection env
+     (unset `CLAUDE_CONFIG_DIR`/`CODEX_HOME`, or the custom-dir user sets one root
+     `sync` should record and lists ALL roots in the declared paths) and `sync` writes
+     the manifest with the **currently-resolved** paths. **All PowerShell path
+     set-operations and equality are ORDINAL (byte-exact) to match bash's `sort -z -u`
+     (round-6 G1):** the must-check/declared/checked sets use a `HashSet[string]` built
+     with `[System.StringComparer]::Ordinal` and compare with `.SetEquals(...)` — never
+     `Sort-Object -Unique` or `-eq`/`-ne` on paths. **The PowerShell declared-path
+     basename VALIDATION and the harness CLASSIFICATION are also ordinal/case-sensitive
+     (round-8 G1):** the validator uses `[System.StringComparer]::Ordinal.Equals($bn,
+     'CLAUDE.md'/'AGENTS.md')` (not case-insensitive `-ne`) and the classification uses
+     `switch -CaseSensitive` — so a wrong-case decoy basename (`agents.md`) is REJECTED
+     at validation before sync as an invalid managed-block path, never accepted and
+     classified as a real harness file. Zero case-insensitive path/basename comparisons
+     remain in either block (bash's `case "$bn" in CLAUDE.md|AGENTS.md)` is already
+     byte-exact); the only case-insensitive operators left are on integers / `$null` /
+     exit codes. **Every PowerShell filesystem op on a path IDENTITY uses -LiteralPath /
+     a literal `[IO.File]` API (round-9 G1):** `Test-Path -LiteralPath $f -PathType Leaf`
+     and `Select-String -LiteralPath …` (probe, whole-file marker grep, and the direct
+     post-sync digest grep), because a bare `-Path`/`Test-Path` GLOB-interprets `[ ] * ?`
+     (legal NTFS filename chars) and would bind a bracketed declared path to a decoy;
+     `[IO.File]::ReadAllText` is already literal. Combined with the round-8 comparison
+     audit, the PS block has **zero path-identity betrayals** — every comparison ordinal
+     AND every filesystem op literal. bash is immune (`[ -f "$f" ]` / `grep -F -- "$f"`
+     do not glob the quoted filename arg).
+   - **STRUCTURAL: one SHARED byte-exact node verifier does ALL identity-critical work
+     (round-10).** Rather than pin each PowerShell path-identity surface separately (a
+     recurring class — case, glob, encoding, rootedness, line-vs-whole-file), the drill
+     ships **both blocks as thin platform shims** (env pinning, `wienerdog sync`, hook
+     invocation) around the **same** node script — byte-identical in both — that reads
+     the manifest, validates the declared paths, runs the default probe, computes the
+     manifest∪probe∪declared union, checks every file, and does the hook/digest
+     byte-compare. Because node (not PS) does every comparison (ordinal string keys),
+     search (`Buffer.indexOf`, whole-file, multi-line-safe), and file read
+     (`fs.readFileSync`, literal), the **entire PS/Windows path-identity class is
+     eliminated**: PowerShell never compares, globs, re-encodes, or reads a managed-block
+     path. Declared paths reach node only via **env** (wide, no console codepage);
+     manifest/probe/harness files are read by node from disk; the hook stdout is written
+     to a file as **raw bytes** (never through the PS console codepage) and read by node.
+     The verifier also validates each declared/manifest path as **fully qualified**
+     (`isPathFullyQualified`-equivalent: drive+separator or UNC on Windows, leading `/`
+     on POSIX — a drive-relative `C:foo` or current-drive-rooted `\foo` is REJECTED),
+     **canonical** (no `.`/`..` segment), and **exact-case** basename, and treats
+     byte-distinct forms of the same file (NFC/NFD, `/`-vs-`\`, UNC-vs-drive) as distinct
+     must-check entries — each independently verified against the file the OS resolves it
+     to (redundant, never omitting). The marker search and sentinel checks are
+     whole-file byte-exact (`Buffer.indexOf`), so a **multi-line** marker matches and a
+     duplicate sentinel pair on one line is counted. bash and PS are thereby provably
+     identical (same verifier bytes).
+   - **Completeness argument (round-7, corrected round-11/14).** Reason explicitly about
+     whether any genuinely-installed managed-block file can still be omitted from the
+     checked set while DRILL PASS prints. The three sources cover: the **manifest** (every
+     current-env root `sync` re-records post-sync, but MAY be tampered), the **fail-closed
+     default-probe** (a default location, but only while the block still bears SOME
+     Wienerdog evidence — ≥1 sentinel OR the marker; it CANNOT recover a block tampered
+     beyond all evidence, which is indistinguishable on-machine from a non-Wienerdog
+     file), and the **declared paths** (every root trusted inventory names — including
+     defaults, multiple roots per harness, and non-default/non-current-env roots). Since
+     checked == manifest ∪ probe ∪ declared, an installed file is omitted **iff** it is in
+     none of the three: NOT in the (tamperable) manifest AND NOT recoverable by the
+     evidence-bearing probe AND NOT declared. That omission has TWO shapes — **(a)** an
+     unknown custom root the inventory doesn't name, and **(b)** a block **at ANY
+     location, default included, tampered beyond ALL Wienerdog evidence** — but both are
+     the **same** limit: an installed file the operator's **complete trusted inventory**
+     would name but they failed to declare (or cannot establish). It is **unknowable by
+     construction** (the machine cannot tell shape (b) from a non-Wienerdog file), so the
+     complete-inventory declaration is the authority and an incomplete inventory is the
+     documented stop-and-escalate residual. There is no fourth omission path. (The
+     round-11 fail-closed probe closed the *evidence-bearing* damaged-default-block gap;
+     the *beyond-evidence* case was never machine-closable and belongs to this residual.)
+   - **Blocking residual — an installed block the trusted inventory doesn't name AND
+     the machine can't recover (round-5 G1 / round-7, corrected round-14; cf. ADR-0028
+     honest boundary / A12 hand-off).** Per the completeness argument, the ONE
+     non-machine-closable case is a managed-block file in NONE of the three sources, in
+     either of two shapes that are the **same** incomplete-inventory limit: **(a)** an
+     **unknown custom root** the inventory doesn't name; and **(b)** a managed block **at
+     ANY location, default included, tampered beyond ALL Wienerdog evidence** (altered
+     sentinels AND altered/absent marker) — **indistinguishable on-machine from a
+     non-Wienerdog file**, so no content-based probe can recover it (force-adding every
+     default file would false-FAIL legitimate non-Wienerdog files). In BOTH shapes the
+     defense is identical: **declare the COMPLETE trusted inventory** (every installed
+     harness file, defaults included) — a declared path enters must-check and, if its
+     sentinels were altered, FAILS the exactly-one-pair check. If the operator cannot
+     establish their complete inventory from **trusted** evidence, the drill **cannot
+     certify the machine**. The runbook documents this as a **BLOCKING residual**: like
+     step 1's "cannot reboot", **STOP and escalate**, never read a DRILL PASS as proof.
+     The runbook must **strengthen the declaration guidance** (declare complete inventory
+     INCLUDING default locations; the probe is a fail-closed BELT, not the sole
+     discovery), must **NOT** claim only a non-default custom root can escape (a
+     default-location block tampered beyond evidence escapes too), and must **NOT** claim
+     the probe closes the tampered-beyond-evidence case (it cannot). A principled
+     boundary in the same discipline as ADR-0028's A7-residual / A12 hand-off, not an
+     open hole.
+   - **Drive the installed SessionStart hook — in the LAST step, after sync (F1).** Run
+     the installed hook at `$CORE/bin/session-start.sh` (Table A; the adapter installs it
+     under the core — `doctor` does **not** print the path) with `WIENERDOG_HOME` set to
+     the step-0 core and `WIENERDOG_JOB` **cleared** (an inherited `WIENERDOG_JOB` makes
+     the hook exit `0` with no output — a false "clean"):
+     `WIENERDOG_JOB= WIENERDOG_HOME="$CORE" "$CORE/bin/session-start.sh"`. Because it runs
+     after `sync`, it reads the digest `sync` just (re)generated.
+   - **Verify fail-closed with a TRUE byte compare (F3).** Pipe that stdout through a tiny
+     `node -e` that parses the JSON envelope and BLOCKS (drill FAILS — do not
+     re-authorize) on any of: empty stdout, a JSON-parse failure,
+     `hookSpecificOutput.hookEventName !== 'SessionStart'`, or a non-string
+     `additionalContext`. When it parses, read `$CORE/state/digest.md` as **raw bytes**
+     (`readFileSync` with **no** encoding) and compare with
+     `digest.equals(Buffer.from(h.additionalContext, "utf8"))` — a genuine byte compare,
+     **not** a `utf8`-string compare (which decodes invalid UTF-8 in a tampered digest to
+     the U+FFFD replacement char and could read EQUAL where the raw bytes differ). AND
+     confirm the poisoned marker is absent from `additionalContext`. A marker match, a
+     byte mismatch, or any block condition means STOP.
+   - **Grep the regenerated (post-sync) `$CORE/state/digest.md`** for the poisoned marker
+     directly (belt-and-suspenders).
+   - **Check the managed block of every DECLARED harness file via the Table D three-check
      conjunction.** `sync` runs only the **detected** harness's adapter, and a
      single-harness (Claude-only **or** Codex-only) install is supported and tested — so
-     apply the Table D checks to `CLAUDE.md` **and/or** `AGENTS.md` per the install: both
-     files when both harnesses are installed, or only the single present file on a
-     single-harness install. (An installed harness's file being **missing** is a failure;
-     an *un-installed* harness's absent file is not — do not let a legitimately absent
-     file block re-authorization.) For each such file run all three Table D checks — the
+     apply the Table D checks to `CLAUDE.md` **and/or** `AGENTS.md` exactly as declared:
+     both files when both harnesses are installed, or only the single present file on a
+     single-harness install. (A DECLARED harness's file being **missing** is a
+     script-enforced failure — installed-but-missing; an *un-declared*, un-installed
+     harness's absent file never blocks — do not let a legitimately absent file block
+     re-authorization.) For each such file run all three Table D checks — the
      **notice-tolerant** clean `sync` (block only on the Table D **BLOCK** signals; the two
      constant Codex info notices are **ALLOWed**), the **whole-file** marker grep, and the
-     **exactly-one-sentinel-pair** check — and do **NOT** byte-compare the region against
+     **sentinel occurrence + ordering** check — count literal begin/end **occurrences**
+     via the shared node verifier's `occ()` (whole-file `Buffer.indexOf` scan on both
+     platforms, amendment 10/12), NOT matching lines (a line-oriented `grep -c` /
+     `Select-String(...).Count` would let two sentinels on ONE line evade a one-line
+     count and pass a duplicated block, F2), requiring **exactly one begin AND exactly
+     one end AND begin before end** (by byte offset) — and do **NOT** byte-compare the
+     region against
      the raw `$CORE/state/digest.md` (Table D: `sync`'s trim+neutralize transform means the
      region is never byte-identical, so that compare would falsely fail; the three checks
      prove the block clean by construction). `doctor` is **not** proof here (Table D).
@@ -581,6 +1054,66 @@ description — all get the explicit `<core>` prefix. When you must caution agai
 the relative form, write it as `state/…` (an ellipsis, not a concrete filename) so
 the runbook never contains a bare operative `state/<file>` token.
 
+## Contract reference (ADR-0031)
+
+**Trigger fires (2-of-7).** (iv) the drill's fail/precedence behavior + `sync`'s
+resurrection heal are error/fallback/precedence contracts; (v) the drill crosses
+an authority boundary — the tool's `install-manifest.json` / `sync` records what is
+installed, but the runbook's operator owns the incident-time interpretation; (vii)
+each of these contracts is stated in the Deliverables cell, acceptance criteria,
+verification greps, and operative prose. ≥2 true → the discipline applies.
+
+**Canonical sources.** This WP's five dense contracts already live as the five
+canonical reference tables **Tables A–E** in the *Exact contract* section above
+(path resolution; per-platform scheduler artifacts + the resurrection rule; restore
+rules; the managed-block drill gate; `memory approve` allowed names). Those tables
+are embedded byte-identically in `docs/runbooks/incident.md`, and every operative
+step cites its table ("resolve the core (Table A)") rather than re-deciding its
+facts. This retrofit does **not** move the tables — it registers their mirrors so a
+future finding moves the table and every mirror in one pass.
+
+### Mirrored Surface Checklist
+
+Each canonical table's mirrors *within this spec* (update-all-mirrors on any table
+edit; register-new-mirrors on review). A checked box = the surface exists and
+defers to its table (it summarizes, never re-decides).
+
+- **Table A — Core & path resolution** — mirrors:
+  - [x] Deliverables cell — the `incident.md` step-0-preamble description
+  - [x] Acceptance — `[R7-1/R8-4]` (step-0 preamble, `HOME` before `USERPROFILE`), `[R8-2]` (persist across reboot), `[R8-3]` (`<core>` prefix, no bare relative `state/…`)
+  - [x] Verification — the `doctor`/`core directory exists`/`CORE-PATH`/`HOME` greps + the R8-3 negative grep
+  - [x] Operative prose — step 0 + the "every later path uses `$CORE`" rule
+- **Table B — Scheduler artifacts + resurrection rule** — mirrors:
+  - [x] Deliverables cell — the step-1 catch-up-removal + reboot description
+  - [x] Acceptance — the stop-step criterion (schedule remove leaves the catch-up entry; the five-check blocking re-verify incl. zero `config.yaml` jobs; reboot-as-sole-proof) and `[R5-1]` (`sync` `reloadMissing`/`repairCatchup` heal from `config.yaml`)
+  - [x] Verification — the `catchup`/`reloadMissing`/`config.yaml … jobs`/`reboot` greps
+  - [x] Operative prose — step 1 (stop + catch-up removal + blocking re-verify + reboot)
+- **Table C — Restore rules** — mirrors:
+  - [x] Deliverables cell — snapshot `config.yaml jobs:`, re-authorize builtin
+  - [x] Acceptance — `[R4-D]` (re-add builtin-only) and the evidence-snapshot criterion (`config.yaml jobs:` is the restore source, not `schedule.json`)
+  - [x] Verification — the `config.yaml.*jobs:`/`schedule add`/`watermark` greps
+  - [x] Operative prose — step 1 snapshot + step 7 re-authorize
+- **Table D — Managed-block drill gate** — mirrors:
+  - [x] Deliverables cell — the step-6 fail-closed drill description
+  - [x] Acceptance — the fail-closed + sync-first drill criterion, the coverage criterion `[Round-2 F1 / Round-3 G1 / Round-4 structural / Round-5 G1+G2 / Round-7 G1]`, `[Round-2 F2]` (positional bash arg), `[R8-5]` (notice-tolerant), and the completeness-proof / stop-and-escalate residual
+  - [x] Verification — the shared-node-`occ`/`Buffer.indexOf`/verifier-byte-identical/`session-start`/`Buffer.from(h.additionalContext` greps
+  - [x] Operative prose — step 6 (the drill) + the completeness/residual narrative
+- **Table E — `memory approve` allowed names** — mirrors:
+  - [x] Deliverables cell — the step-4 re-ratify description
+  - [x] Acceptance — the purge-step criterion (re-ratify the corrected note by short name only)
+  - [x] Verification — the `memory approve (profile|preferences|goals|instructions)` grep
+  - [x] Operative prose — step 4 re-ratify
+
+> **Compliance note (2026-07-20).** Retrofit per ADR-0031, ratified after this WP's
+> extraction was already done — the ADR cites this runbook as the *extraction*
+> precedent (Tables A–E → round-9 clean) but explicitly not yet a checklist exemplar.
+> This section closes that gap: the tables were the canonical sources all along; this
+> registers their mirrors. Live evidence for the discipline surfaced in this WP's own
+> final review — two operative-prose passages (the sentinel-occurrence mechanism) had
+> drifted from the round-10 shared-node-verifier reality and were corrected in
+> lockstep (Table D mirror set); a registered checklist would have caught that up
+> front.
+
 ## Implementation notes & constraints
 
 - **Docs-only.** The Deliverables table is exhaustive; do not edit `src/` or
@@ -619,14 +1152,18 @@ the runbook never contains a bare operative `state/<file>` token.
 - [ ] **[R8-2]** Step 0 **persists** the confirmed absolute core path durably
       OUTSIDE the core (a home-dir `wienerdog-incident-<date>-CORE-PATH.txt` record
       that survives the reboot, plus an off-machine note) BEFORE the step-1 reboot;
-      and step 1, **after** the reboot, has a mandatory sub-step that RE-RESOLVES the
-      core (via `doctor`), RE-CONFIRMS it equals the recorded value, RE-EXPORTS
-      `WIENERDOG_HOME` for the session (`export WIENERDOG_HOME="$CORE"` /
-      `$env:WIENERDOG_HOME="$core"`), and re-verifies the `config.yaml`/`state/`/
-      `install-manifest.json` triple — so every post-reboot command (`sync`, `memory
-      approve`, `schedule add`, `doctor`, the drill hook) runs against the SAME core,
-      never a re-defaulted one. It states that the `$CORE`/`$core` shell variable and
-      a one-shot `WIENERDOG_HOME` export do **not** survive a reboot.
+      and step 1, **after** the reboot, has a mandatory sub-step that — in this
+      order — READS the persisted CORE-PATH record and validates it (absolute
+      existing directory holding the `config.yaml`/`state/`/`install-manifest.json`
+      triple), RE-EXPORTS `WIENERDOG_HOME` from it for the session
+      (`export WIENERDOG_HOME="$CORE"` / `$env:WIENERDOG_HOME="$core"`), and only
+      THEN runs `doctor`, requiring its reported core to EQUAL the persisted value
+      (mismatch → STOP and reconcile) — never `doctor` first, which on a custom-core
+      install would report the DEFAULT core and dead-end the equality check — so
+      every post-reboot command (`sync`, `memory approve`, `schedule add`, `doctor`,
+      the drill hook) runs against the SAME core, never a re-defaulted one. It
+      states that the `$CORE`/`$core` shell variable and a one-shot
+      `WIENERDOG_HOME` export do **not** survive a reboot.
 - [ ] **[R8-3]** Every operative path under the core in the runbook uses the
       resolved prefix (`$CORE/state/…` / `$core\state\…`), never a bare relative
       `state/…`: the `digest.md` delete, the `quarantine/` review, the
@@ -640,8 +1177,9 @@ the runbook never contains a bare operative `state/<file>` token.
       definitions** before removal (the restore source — `state/schedule.json`
       holds only watermarks, not job definitions), remove every per-job schedule
       **and** the shared catch-up entry (deleting the catch-up scheduler FILE
-      **and** its `install-manifest.json` entry, not merely unregistering, so
-      `sync`'s `reloadMissing` cannot resurrect it), then reach proven quiescence
+      **and** its `install-manifest.json` entry, not merely unregistering, and
+      blocking on zero `config.yaml` `jobs:` entries so `sync`'s config-driven
+      heal cannot re-arm anything), then reach proven quiescence
       by **reboot**
       (the **sole** authoritative proof — a pre-reboot process grep is a non-proof
       hint, and a user who cannot reboot **stops and escalates**, never
@@ -663,49 +1201,114 @@ the runbook never contains a bare operative `state/<file>` token.
       Linux has none) by deleting its **scheduler FILE** (macOS LaunchAgents plist,
       Windows `<core>\schedules\wienerdog-catchup.xml`) **and** its
       `install-manifest.json` entry — not merely unregistering — and **blocks on a
-      dual re-verify that BOTH the OS registration AND the scheduler file are gone
-      (plus no catch-up manifest entry)** so `sync`'s `reloadMissing` cannot
-      resurrect it; it makes **reboot** the **sole authoritative** quiescence proof
+      five-check re-verify that the OS registration AND the scheduler file are gone,
+      no catch-up manifest entry remains, `config.yaml` lists zero `jobs:`
+      entries, AND an independent per-platform enumeration of Wienerdog OS
+      registrations (macOS `launchctl list | grep ai.wienerdog`; Linux
+      `systemctl --user list-timers/list-units 'wienerdog-*' --all`; Windows
+      `Get-ScheduledTask -TaskPath '\Wienerdog\'`) returns nothing** — the per-job
+      unregister is best-effort, so a failed one (a Windows imported task surviving
+      XML deletion) is invisible to the config/manifest checks — so `sync`'s
+      config-driven heal has nothing to re-arm catch-up from and no armed
+      registration survives unseen; it
+      makes **reboot** the **sole authoritative** quiescence proof
       and states plainly that a pre-reboot live-process grep is **NOT proof** (it
       can only *reveal* a still-live job — a differently-named injected helper
       escapes it — never *certify* a clean one); credential rotation begins **only
       after a reboot**, and a user who cannot reboot **stops and escalates** rather
       than grep-certifying clean.
-- [ ] **[R5-1]** The purge step (step 4) warns that `wienerdog sync` runs
-      `reloadMissing`, which re-registers any manifest `scheduler-entry` whose OS
-      registration is missing but whose scheduler file survives; it states plainly
-      that `sync` must **not** be able to reactivate ANY schedule before step 7, so
-      the step-1 catch-up removal (file **and** manifest entry) must be complete and
-      dual-verified before any `sync`.
+- [ ] **[R5-1]** The purge step (step 4) warns that `wienerdog sync` heals
+      schedules from `config.yaml` (`reloadMissing` re-registers a missing per-job
+      registration for any job still listed; `repairCatchup` regenerates +
+      re-registers catch-up while any job remains); it states plainly that `sync`
+      must **not** be able to reactivate ANY schedule before step 7, so step 1's
+      blocking re-verify — including the zero-`jobs:` check — must have passed
+      before any `sync`.
 - [ ] The evidence-preservation step snapshots the **`config.yaml` `jobs:`
       definitions** (the restore source) **before** removal — optionally also
       `state/schedule.json` as watermark evidence — and names
       `state/run-evidence.jsonl`, `state/alerts.jsonl`, and
       `logs/<job>/`; treats them as **potentially sensitive** (best-effort
-      redaction, not secret-free); creates+verifies a private, sync/backup-excluded
-      folder **before** copying; and re-applies modes **recursively** (every dir
+      redaction, not secret-free); creates+verifies the private, sync/backup-excluded
+      folder at the **START of step 1** (before any `schedule remove` mutates the
+      snapshot source) so every copy — the step-1 `jobs:` snapshot included — lands
+      in an already-secured destination; and re-applies modes **recursively** (every dir
       `0700`, every file `0600`) with a blocking re-verify (macOS/Linux `find`
       forms; Windows `icacls`).
-- [ ] The acceptance-drill step is **fail-closed**: it runs the installed
-      **`<core>/bin/session-start.sh`** with `WIENERDOG_HOME` set and
-      `WIENERDOG_JOB` cleared, BLOCKS on empty stdout / JSON-parse failure / wrong
-      `hookEventName` / non-string `additionalContext`, byte-compares
-      `additionalContext` to `$CORE/state/digest.md`, greps the regenerated digest,
+- [ ] The acceptance-drill step is **fail-closed** and **sync-first**: `wienerdog
+      sync` runs before ANY digest / hook / marker / managed-block assertion (F1), so
+      every check verifies the CURRENT post-sync state, not a stale pre-sync digest
+      sync then regenerated. It runs the installed **`<core>/bin/session-start.sh`**
+      with `WIENERDOG_HOME` set and `WIENERDOG_JOB` cleared, BLOCKS on empty stdout /
+      JSON-parse failure / wrong `hookEventName` / non-string `additionalContext`,
+      then does a **true byte compare** — reads the digest as **raw bytes**
+      (`readFileSync` no encoding) and `Buffer.equals(Buffer.from(additionalContext,
+      "utf8"))`, NOT a lossy `utf8`-string compare that would treat distinct
+      invalid-UTF-8 bytes as equal via U+FFFD (F3) — greps the regenerated digest,
       and checks the managed block of **every installed harness file** (both
       `CLAUDE.md` and `AGENTS.md` when both harnesses are installed, only the single
       present file on a single-harness install) via a **notice-tolerant** `sync`
-      check **plus** an explicit check that (a) `grep -F`s the poisoned marker over
+      check **plus** an explicit check that (a) scans the poisoned marker over
       the **ENTIRE** file (not only the sentinel region — a both-sentinels-deleted
       attack leaves poisoned text that `sync` appends around, still injected), and
-      (b) confirms exactly one sentinel pair (no orphaned out-of-sentinel remnant),
-      treating a **missing** pair as "`sync` appended a fresh block and the old
-      content is orphaned outside it — manually remove/quarantine it" (**not**
-      `doctor`); it does **NOT** byte-compare the sentinel region against the raw
-      `$CORE/state/digest.md` (`sync`'s trim+neutralize transform means the region
-      never equals the raw digest, so that compare would falsely fail on a clean
-      install — the three checks prove the block clean by construction). The
+      (b) counts literal begin/end sentinel **OCCURRENCES** via the shared node
+      verifier's `occ()` (whole-file `Buffer.indexOf`, both platforms — NOT matching
+      lines, so two sentinels on one line cannot evade the check, F2), requiring
+      exactly one begin AND one end AND begin before end, treating a **missing** pair
+      as "`sync` appended a fresh block and the old content is orphaned outside it —
+      manually remove/quarantine
+      it" (**not** `doctor`); it does **NOT** byte-compare the sentinel region against
+      the raw `$CORE/state/digest.md` (`sync`'s trim+neutralize transform means the
+      region never equals the raw digest, so that compare would falsely fail on a
+      clean install — the three checks prove the block clean by construction). The
       new-session observation is an optional extra, not the proof; the proof is tied
       to the ADR-0021 byte-gated injection.
+- [ ] **[Round-2 F1 / Round-3 G1 / Round-4 structural / Round-5 G1+G2 / Round-7 G1]**
+      The drill's coverage set is the **post-sync manifest UNION an independent
+      default-location probe UNION the operator's declared PATH list** (the coverage
+      model's final, path-keyed form), machine-enforced where checkable and a
+      documented STOP-AND-ESCALATE residual where not. The copy-paste blocks run
+      `wienerdog sync` **first** (idempotent; re-records any dropped `managed-block`
+      entry), then build the must-check set from THREE sources: (1) the **post-sync**
+      manifest managed-block PATHS — read only after `node` **VALIDATES** the manifest
+      (rejecting → DRILL FAIL: no entries array; a non-absolute/non-string path; a
+      CR/LF/NUL in a path; a basename other than `CLAUDE.md`/`AGENTS.md`; or a
+      **duplicate** managed-block path — G2, emitted identity-preserving so nothing
+      normalizes-then-passes); (2) an **independent, fail-closed probe** of
+      `${HOME}/.claude/CLAUDE.md` + `${HOME}/.codex/AGENTS.md` — discovered on **≥1
+      sentinel OR the marker** (round-5 G1 + round-11: a sentinel-deleted damaged block
+      at a default location no longer hides from its own discovery); and
+      (3) the operator's **declared PATH list** (`DECLARED_PATHS` / `$DeclaredPaths`) —
+      an explicit ordinal list of managed-block FILE PATHS from trusted inventory,
+      **not** harness names, so it expresses **multiple installed roots for one
+      harness** and any non-default, non-current-env root the manifest/probe cannot see
+      (round-7 G1); validated (absolute + `CLAUDE.md`/`AGENTS.md` basename) and
+      dedup-with-reject (a repeated path FAILS, ordinal-exact). Every file in the union
+      is checked with the Table D three-check conjunction, classified by BASENAME for
+      the adapter-skip watch (so a **declared** path whose harness `sync` skipped
+      BLOCKs, declared ⊆ must), and a declared path missing on disk FAILS. Net gate —
+      all hold or DRILL FAIL: `sync` clean (notice-tolerant); manifest validates;
+      **must-check set (manifest ∪ probe ∪ declared, ordinal-deduped) == checked set**
+      (≥1); every element present + verified; no adapter-skip. All PowerShell path
+      set-ops are ORDINAL (round-6 G1). **Completeness (round-7, corrected round-14):**
+      since checked == manifest ∪ fail-closed-probe ∪ declared, an installed managed-block
+      file is omitted iff it is in NONE of the three — the probe recovers only a block
+      still bearing SOME Wienerdog evidence (≥1 sentinel OR the marker), so the omission
+      has two shapes, both the SAME incomplete-inventory limit: **(a)** an unknown custom
+      root the inventory doesn't name, and **(b)** a block at ANY location (default
+      included) tampered beyond ALL evidence — indistinguishable on-machine from a
+      non-Wienerdog file. **That is the sole residual**, a documented **BLOCKING**
+      stop-and-escalate (like step 1's "cannot reboot"), cross-referencing ADR-0028's
+      honest boundary / A12; the defense in both shapes is to declare the COMPLETE trusted
+      inventory (defaults included). There is no fourth omission path; the runbook does
+      **not** claim only a custom root can escape, nor that the probe closes the
+      tampered-beyond-evidence case.
+- [ ] **[Round-2 F2]** The PowerShell block passes the core path to `bash` as a
+      **positional argument** (`bash -c '… "$1" …' _ "$coreFwd"`), never
+      interpolated into the bash source, so a path containing an apostrophe,
+      spaces, or hostile text cannot break or inject into the hook invocation;
+      the bash block references `$CORE` only as a quoted variable and neither
+      block rebuilds a path into nested shell source anywhere.
 - [ ] **[R8-5]** The managed-block `sync` check is **notice-tolerant**: it blocks
       the drill **only** on a concrete integrity failure — a non-zero `sync` exit, a
       "managed block not updated" / out-of-sync message for an installed file, a
@@ -770,9 +1373,50 @@ grep -nE "config\.yaml.*jobs:|jobs:.*definition|watermark" docs/runbooks/inciden
 # the catch-up removal + reboot-as-SOLE-proof + the grep-is-not-proof / escalate wording:
 grep -nE "ai\.wienerdog\.catchup|\\\\Wienerdog\\\\catchup|reboot|CommandLine|claude\|codex" docs/runbooks/incident.md
 # R5-1: catch-up removal deletes the scheduler FILE + install-manifest.json entry
-# (not just unregister), and sync's reloadMissing cannot resurrect a surviving entry:
+# (not just unregister), and the config-driven heal (reloadMissing/repairCatchup)
+# has nothing to re-arm once config.yaml lists zero jobs:
 grep -nE "install-manifest\.json|reloadMissing|resurrect|re-register|scheduler file|catchup\.plist|wienerdog-catchup\.xml" docs/runbooks/incident.md
 grep -niE "not proof|non-proof|cannot reboot|escalate|sole" docs/runbooks/incident.md
+# F1: the blocking re-verify's FIFTH check independently enumerates remaining
+# Wienerdog OS registrations per platform (zero results required):
+grep -nE "launchctl list \| grep ai\.wienerdog|list-timers 'wienerdog-\*'|list-units 'wienerdog-\*'|Get-ScheduledTask -TaskPath" docs/runbooks/incident.md
+# Round-2 F1 (env pinning) + round-2 F2 (PS->bash core path is positional):
+grep -nE "managed-block|unset CLAUDE_CONFIG_DIR CODEX_HOME|Remove-Item Env:|skipping adapter|bash -c '.*\"\\\$1\"" docs/runbooks/incident.md
+# Round-3 G1: dedup-with-reject on declared paths + ordinal set dedup:
+grep -nE "declared path is listed more than once|sort -z -u|Sort-Object -Unique" docs/runbooks/incident.md
+# Round-4 structural: sync runs FIRST; coverage driven by the POST-SYNC manifest (not a
+# pre-sync count), unioned with probe + declared:
+grep -nE "post-sync manifest|managed-block file|must-check|checked set != must-check set" docs/runbooks/incident.md
+# Round-5 G1: independent default-location probe + declared-adapter-skip-as-BLOCK +
+# the BLOCKING RESIDUAL (stop-and-escalate honest boundary):
+grep -nE "default-location probe|default.probe|\.claude/CLAUDE\.md|\.codex/AGENTS\.md|skipped the adapter for managed-block|trusted inventory|STOP and escalate|blocking residual|ADR-0028|A12" docs/runbooks/incident.md
+# Round-7 G1: the declaration is an ORDINAL LIST OF managed-block PATHS (not harness
+# names), multiple roots per harness, unioned into the must-check set; completeness:
+grep -nE "DECLARED_PATHS|\\\$DeclaredPaths|declared path is not absolute|declared path basename|manifest .* default-probe .* declared|manifest UNION default-probe UNION declared|multiple .* roots per harness|MULTIPLE roots per harness" docs/runbooks/incident.md
+# Round-5 G2: node VALIDATES the manifest before emitting (reject malformed/duplicate),
+# identity-preserving (no sort -u normalization of raw paths):
+grep -nE "no entries array|is not an absolute string|CR/LF/NUL|unexpected managed-block basename|duplicate managed-block path|failed validation|ConvertFrom-Json" docs/runbooks/incident.md
+# Round-10 STRUCTURAL: ONE shared byte-exact node verifier does all identity-critical work
+# (fully-qualified check, ordinal Set, Buffer.indexOf whole-file/multi-line marker, literal
+# fs.readFileSync, Buffer.equals digest compare) — invoked by both blocks:
+grep -nE "SHARED byte-exact verifier|FULLY QUALIFIED|Buffer\.indexOf|Buffer\.from|whole-file, byte-exact, multi-line-safe|process\.platform === 'win32'" docs/runbooks/incident.md
+# the verifier is byte-identical in both blocks (bash heredoc == PS here-string):
+diff <(awk '/cat > "\$WORK\/verify.js" <<.VERIFY.$/{f=1;next} f&&/^VERIFY$/{f=0} f{print}' docs/runbooks/incident.md) \
+     <(awk "/\\\$verify = @'\$/{f=1;next} f&&/^'@\$/{f=0} f{print}" docs/runbooks/incident.md) >/dev/null && echo "verifier byte-identical — OK"
+# Round-11 G1: fail-closed default-probe discovery — EITHER sentinel OR the marker (not an
+# intact pair), so a sentinel-deleted damaged default block is still discovered:
+grep -nE "FAIL-CLOSED discovery|occ\(b, SENT_B\) >= 1 \|\| occ\(b, SENT_E\) >= 1 \|\| has\(b, marker\)" docs/runbooks/incident.md
+# Round-14: declaration guidance requires declaring COMPLETE inventory INCLUDING defaults;
+# probe is a BELT not the authority; residual includes tampered-beyond-evidence at ANY
+# location (indistinguishable from a non-Wienerdog file), not only unknown custom roots:
+grep -niE "INCLUDING the default locations|belt, not the authority|tampered beyond ALL|beyond all Wienerdog evidence|indistinguishable on-machine|declare .* default-location harnesses" docs/runbooks/incident.md
+# Round-8 G1 negative: NO case-insensitive -ne/-eq on a basename, and NO default
+# (case-insensitive) switch on GetFileName, in PowerShell CODE (expect NO output):
+awk '/^```powershell$/{p=1;next} /^```$/{p=0} p' docs/runbooks/incident.md | grep -vE '^\s*#' | grep -nE "\-ne '(CLAUDE|AGENTS)\.md'|\-eq '(CLAUDE|AGENTS)\.md'|switch \(\[System\.IO\.Path\]::GetFileName" || true
+# Round-9/10 G1 negative: PS handles NO managed-block path identity — NO Sort-Object -Unique,
+# NO bare -Path / Test-Path on a $var, NO Select-String on a managed-block file in PS CODE
+# (Test-Path/-LiteralPath on $work/$pf temp are shim-only; managed-block reads are node's):
+awk '/^```powershell$/{p=1;next} /^```$/{p=0} p' docs/runbooks/incident.md | grep -vE '^\s*#' | grep -nE "Sort-Object -Unique|Select-String -Path \\\$|Select-String -LiteralPath \\\$f|Test-Path .*\\\$f " || true
 # private evidence handling: pre-copy exclusion + recursive perms + windows ACL:
 grep -nE "find .*-type d.*chmod 700|find .*-type f.*chmod 600|icacls|Time Machine|OneDrive" docs/runbooks/incident.md
 # the fail-closed byte-level drill: installed hook path + env + block conditions:
@@ -795,6 +1439,13 @@ grep -nE "memory approve (profile|preferences|goals|instructions|<note>)" docs/r
 grep -nE "schedule add.*--job|frozen|A0|A1|not.*re-add|cannot be re-added" docs/runbooks/incident.md
 # the drill precedes re-authorization (drill line number < re-add line number):
 awk '/acceptance drill/{d=NR} /schedule add|routine menu|Re-authorize/{if(d){print "drill@"d" before re-auth@"NR; exit}}' docs/runbooks/incident.md
+# amendment-8 F1: the hook/digest/marker checks run AFTER sync (step order sync-first);
+# amendment-8 F2 / amendment-10/12: sentinel OCCURRENCE count via the shared node verifier's
+# occ() (whole-file Buffer.indexOf), not line count, with begin-before-end; amendment-8 F3:
+# TRUE byte compare via Buffer.equals (no utf8 decode):
+grep -nE "function occ|Buffer\.indexOf|begin sentinel must precede end sentinel|Buffer\.from\(h\.additionalContext" docs/runbooks/incident.md
+# and NO lossy utf8-string digest read remains in the hook-envelope node (expect NO output):
+grep -n 'readFileSync(process.argv\[1\], "utf8").*additionalContext\|additionalContext !== digest' docs/runbooks/incident.md || true
 ```
 
 ## Out of scope (do NOT do these)
