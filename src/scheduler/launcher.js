@@ -102,24 +102,26 @@ function verifyContainment(p, platform) {
   return { ok: true, target };
 }
 
-/** Content-address a resolved tree: sha256 over the sorted
- *  `${posixRelpath}\n${sha256(bytes)}\n` list of every regular file (symlinks/
- *  dirs excluded). MUST match src/scheduler/descriptor.js appTreeDigest exactly.
+/** Content-address a resolved tree INJECTIVELY: sha256 over the canonical JSON
+ *  of the `[posixRelpath, sha256(bytes)]` pairs, sorted by relpath, for every
+ *  regular file (symlinks/dirs excluded). JSON.stringify escapes `\n`/`"` so no
+ *  filename can forge a record boundary. MUST match src/scheduler/descriptor.js
+ *  appTreeDigestOf EXACTLY (both copies move together — WP-156 F6/A3).
  *  @param {string} root  already-realpath-resolved dir @returns {string} 'sha256:…' */
 function appTreeDigestOf(root) {
-  /** @type {string[]} */
-  const lines = [];
+  /** @type {Array<[string, string]>} */
+  const pairs = [];
   const walk = (dir, rel) => {
     for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
       const full = path.join(dir, e.name);
       const childRel = rel === '' ? e.name : `${rel}/${e.name}`;
       if (e.isDirectory()) walk(full, childRel);
-      else if (e.isFile()) lines.push(`${childRel}\n${sha256(fs.readFileSync(full))}\n`);
+      else if (e.isFile()) pairs.push([childRel, sha256(fs.readFileSync(full))]);
     }
   };
   walk(root, '');
-  lines.sort();
-  return `sha256:${sha256(lines.join(''))}`;
+  pairs.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+  return `sha256:${sha256(JSON.stringify(pairs))}`;
 }
 
 /** Dev checkout? A `.git` dir at `root`, or WIENERDOG_DEV=1 — matches

@@ -230,6 +230,10 @@ function registerPlatform(paths, manifest, o, loader, platform = process.platfor
         `wienerdog: could not write the job descriptor for "${o.name}" (${err.message}) — ` +
           `run 'wienerdog sync' once the install is complete.\n`
       );
+      // A4/F7: surface the failure so `sync` does not report success while a
+      // descriptor failed to write (post-WP-157 a missing descriptor = silent
+      // nightly fail-closed). The caller (repointSchedules) counts these.
+      return { ...res, descriptorFailed: true };
     }
   }
   return res;
@@ -346,13 +350,14 @@ function registerPlatformEntries(paths, manifest, o, loader, platform = process.
  * @param {import('../core/paths').WienerdogPaths} paths
  * @param {import('../core/manifest').Manifest} manifest
  * @param {{loader?: (argv:string[])=>{status:number}}} [opts]
- * @returns {{repointed:number, changed:number, notices:string[]}}
+ * @returns {{repointed:number, changed:number, descriptorFailures:number, notices:string[]}}
  */
 function repointSchedules(paths, manifest, opts = {}) {
   const loader = opts.loader || defaultLoader;
   const jobs = jobsLib.listJobs(paths);
   let repointed = 0;
   let changed = 0;
+  let descriptorFailures = 0;
   /** @type {string[]} */ const notices = [];
   for (const job of jobs) {
     let hm;
@@ -366,6 +371,7 @@ function repointSchedules(paths, manifest, opts = {}) {
       const res = registerPlatform(paths, manifest, { name: job.name, hour: hm.hour, minute: hm.minute }, loader);
       repointed += 1;
       if (res.changed) changed += 1;
+      if (res.descriptorFailed) descriptorFailures += 1;
       if (res.changed && !res.loaded) {
         notices.push(`"${job.name}" schedule file written but the OS scheduler did not accept it — run 'wienerdog doctor'.`);
       }
@@ -373,7 +379,7 @@ function repointSchedules(paths, manifest, opts = {}) {
       notices.push(`could not repoint "${job.name}": ${err.message}`);
     }
   }
-  return { repointed, changed, notices };
+  return { repointed, changed, descriptorFailures, notices };
 }
 
 /**

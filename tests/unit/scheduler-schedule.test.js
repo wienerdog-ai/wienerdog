@@ -964,9 +964,27 @@ function plantAppTree(paths) {
   fs.symlinkSync(versionDir, path.join(paths.core, 'app', 'current'));
 }
 
+/** Plant claude+git exec pins so the dream descriptor's WP-156 A1b required-pin
+ *  gate is satisfied (buildDescriptor refuses to bind the dream job otherwise). */
+function plantPins(paths) {
+  fs.mkdirSync(paths.state, { recursive: true });
+  fs.writeFileSync(
+    path.join(paths.state, 'exec-pins.json'),
+    JSON.stringify({
+      schema: 1,
+      pins: {
+        claude: { commandPath: '/x/bin/claude', installDir: '/x/share/claude', version: '9', pinnedAt: 't' },
+        git: { commandPath: '/usr/bin/git', installDir: '/usr/bin', version: 'g', pinnedAt: 't' },
+      },
+    }),
+    { mode: 0o600 }
+  );
+}
+
 test('scheduler-schedule: add writes a 0600 job descriptor, records it once, and re-add is a no-op (WP-156)', { skip: !SCHED_SUPPORTED }, async () => {
   const { env, paths } = setup();
   plantAppTree(paths);
+  plantPins(paths);
   await runSchedule(env, ['add', 'dream', '--at', '03:30', '--job', 'dream'], () => ({ status: 0 }));
 
   const descPath = path.join(paths.state, 'descriptors', 'dream.json');
@@ -987,9 +1005,29 @@ test('scheduler-schedule: add writes a 0600 job descriptor, records it once, and
   assert.equal(entries2.length, 1, 'no duplicate manifest entry on re-add');
 });
 
+test('scheduler-schedule: repointSchedules surfaces a non-zero descriptor-write-failure count (WP-156 A4/F7)', { skip: !SCHED_SUPPORTED }, async () => {
+  const { env, paths } = setup();
+  // A dream job with NO pins (and no app tree) → writeDescriptor throws inside
+  // registerPlatform → the failure is COUNTED, not swallowed silently.
+  jobsLib.saveJob(paths, { name: 'dream', at: '03:30', run: 'builtin:dream', timeoutMinutes: 20 });
+  const saved = { HOME: process.env.HOME, WIENERDOG_HOME: process.env.WIENERDOG_HOME };
+  process.env.HOME = env.HOME;
+  process.env.WIENERDOG_HOME = env.WIENERDOG_HOME;
+  let r;
+  try {
+    const manifest = manifestLib.load(paths);
+    r = schedule.repointSchedules(paths, manifest, { loader: () => ({ status: 0 }) });
+  } finally {
+    process.env.HOME = saved.HOME;
+    process.env.WIENERDOG_HOME = saved.WIENERDOG_HOME;
+  }
+  assert.ok(r.descriptorFailures >= 1, 'a failed descriptor write is counted (drops to 0 if the count is not tracked)');
+});
+
 test('scheduler-schedule: repointSchedules refreshes the descriptor; a legit uninstall reverse removes it (WP-156)', { skip: !SCHED_SUPPORTED }, async () => {
   const { env, paths } = setup();
   plantAppTree(paths);
+  plantPins(paths);
   await runSchedule(env, ['add', 'dream', '--at', '03:30', '--job', 'dream'], () => ({ status: 0 }));
   const descPath = path.join(paths.state, 'descriptors', 'dream.json');
   fs.rmSync(descPath); // simulate a lost descriptor — sync's repoint restores it

@@ -36,11 +36,35 @@ function sha256(bytes) {
 }
 
 /**
- * Content-address the vendored app tree: sha256 over the sorted list of
- * `${relpath}\n${sha256(file bytes)}\n` for every regular file under the
- * resolved target of `<core>/app/current` (symlinks/dirs excluded; relpaths
- * POSIX-normalized and sorted). Deterministic across machines for identical
- * bytes.
+ * Content-address a resolved tree INJECTIVELY (audit A7 F6/A3): sha256 over the
+ * canonical JSON of the `[relpath, sha256(file bytes)]` pairs, sorted by relpath,
+ * for every regular file under `root` (symlinks/dirs excluded; relpaths
+ * POSIX-normalized). `JSON.stringify` escapes `\n`/`"`, so no filename can forge
+ * a record boundary the old `${relpath}\n${hash}\n` concat allowed. MUST stay
+ * byte-identical to `src/scheduler/launcher.js appTreeDigestOf` — the launcher
+ * has its own self-contained copy it compares against at fire time.
+ * @param {string} root  already-realpath-resolved dir @returns {string} 'sha256:…'
+ */
+function appTreeDigestOf(root) {
+  /** @type {Array<[string, string]>} */
+  const pairs = [];
+  const walk = (dir, rel) => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, e.name);
+      const childRel = rel === '' ? e.name : `${rel}/${e.name}`; // POSIX separators, always
+      if (e.isDirectory()) walk(full, childRel);
+      else if (e.isFile()) pairs.push([childRel, sha256(fs.readFileSync(full))]);
+      // symlinks / specials excluded — content, not link topology, is addressed
+    }
+  };
+  walk(root, '');
+  pairs.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+  return `sha256:${sha256(JSON.stringify(pairs))}`;
+}
+
+/**
+ * Content-address the vendored app tree under the resolved target of
+ * `<core>/app/current`. Deterministic across machines for identical bytes.
  * @param {import('../core/paths').WienerdogPaths} paths
  * @returns {string} 'sha256:…'
  * @throws {WienerdogError} when app/current is missing/unresolvable
@@ -53,20 +77,7 @@ function appTreeDigest(paths) {
   } catch (err) {
     throw new WienerdogError(`cannot resolve the vendored app at ${currentLink(paths)}: ${err.message}`);
   }
-  /** @type {string[]} */
-  const entries = [];
-  const walk = (dir, rel) => {
-    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
-      const full = path.join(dir, e.name);
-      const childRel = rel === '' ? e.name : `${rel}/${e.name}`; // POSIX separators, always
-      if (e.isDirectory()) walk(full, childRel);
-      else if (e.isFile()) entries.push(`${childRel}\n${sha256(fs.readFileSync(full))}\n`);
-      // symlinks / specials excluded — content, not link topology, is addressed
-    }
-  };
-  walk(root, '');
-  entries.sort();
-  return `sha256:${sha256(entries.join(''))}`;
+  return appTreeDigestOf(root);
 }
 
 /**
@@ -104,22 +115,29 @@ function profileAndPromptHash(run) {
  * Build the descriptor for a job from LIVE inputs (config run/model/timeout,
  * pins, app tree, prompt/skill body).
  * @param {import('../core/paths').WienerdogPaths} paths
- * @param {{name:string, run:string, timeoutMinutes?:number}} job
+ * @param {{name:string, run:string, at?:string, timeoutMinutes?:number}} job
  * @param {{env?:NodeJS.ProcessEnv, platform?:NodeJS.Platform, vaultRoot?:string,
- *          model?:string|null, timeoutMs?:number}} [opts]
- *   `vaultRoot`, `model`, and `timeoutMs` all come from the same
+ *          model?:string|null, timeoutMs?:number, maxInputBytes?:number,
+ *          outerTimeoutMs?:number, vaultLayout?:object, home?:string,
+ *          timezone?:string}} [opts]
+ *   `vaultRoot`, `model`, `timeoutMs`, and `maxInputBytes` all come from the same
  *   `readDreamConfig(paths.config)` read: vaultRoot=cfg.vault, model=cfg.model
  *   (`dream_model`, null when unset), timeoutMs=cfg.timeoutMs — the EFFECTIVE
- *   dream watchdog + lock-deadline timeout (`dream_timeout_minutes`, default
- *   20 min ⇒ 1_200_000 ms). NOT `job.timeoutMinutes` (that governs only the
- *   run-job OUTER watchdog). Passing them in `opts` is a test override;
- *   production reads them from config.
+ *   INNER dream watchdog + lock-deadline timeout (`dream_timeout_minutes`,
+ *   default 20 min ⇒ 1_200_000 ms). NOT `job.timeoutMinutes`. `outerTimeoutMs`
+ *   is the EFFECTIVE run-job OUTER watchdog (resolved from job.timeoutMinutes,
+ *   default 15 min). `vaultLayout`=readVaultLayout(config). `home`=the bound
+ *   authorized home (paths.home). Passing any in `opts` is a test override.
  * @returns {object} the descriptor (canonicalize sorts keys — field order here
  *   is readability only)
  */
 function buildDescriptor(paths, job, opts = {}) {
   const env = opts.env || process.env;
-  const cfgNeeded = opts.vaultRoot === undefined || opts.timeoutMs === undefined || opts.model === undefined;
+  const cfgNeeded =
+    opts.vaultRoot === undefined ||
+    opts.timeoutMs === undefined ||
+    opts.model === undefined ||
+    opts.maxInputBytes === undefined;
   const cfg = cfgNeeded ? readDreamConfig(paths.config) : null;
   const { profileId, promptHash } = profileAndPromptHash(job.run);
 
@@ -134,6 +152,26 @@ function buildDescriptor(paths, job, opts = {}) {
     exec[name] = { commandPath: pins[name].commandPath, installDir: pins[name].installDir };
   }
 
+  // [R2:F1 / A1b] REFUSE to bind a partial exec map for the dream job. A valid
+  // partial store (git pinned, claude briefly absent) must NOT be authorized:
+  // the launcher's honest-boundary backstop relies on `exec` being NON-EMPTY
+  // (claude + git) at bind time, so a later-planted `~/.local/bin/claude` would
+  // digest-match an exec map that has no claude entry to drift. codex is optional
+  // until a codex job is authorized. This gates BOTH the write (writeDescriptor)
+  // and the entry's expect-digest (jobLaunchBinding → deriveDescriptorDigest),
+  // so an unpinned install fails closed at fire time rather than binding a
+  // bypassing partial.
+  if (job.run === 'builtin:dream') {
+    for (const req of ['claude', 'git']) {
+      if (!exec[req]) {
+        throw new WienerdogError(
+          `refusing to authorize the dream job: ${req} is not pinned — install ${req} and run ` +
+            '`wienerdog sync` so its identity is recorded before the job is bound.'
+        );
+      }
+    }
+  }
+
   const { currentLink, readVersion, isDevCheckout } = require('../core/vendor');
   let appRoot;
   try {
@@ -142,24 +180,42 @@ function buildDescriptor(paths, job, opts = {}) {
     throw new WienerdogError(`cannot resolve the vendored app at ${currentLink(paths)}: ${err.message}`);
   }
 
+  const outerMin = job.timeoutMinutes > 0 ? job.timeoutMinutes : 15;
+  const vaultLayout =
+    opts.vaultLayout !== undefined ? opts.vaultLayout : require('../core/layout').readVaultLayout(paths.config);
+  const stance = isDevCheckout(appRoot, env) ? 'dev' : 'prod';
+
   return {
     schema: 1,
     job: job.name,
     run: job.run,
     profileId,
     promptHash,
+    // Inner brain watchdog + lock deadline (dream_timeout_minutes).
     timeoutMs: opts.timeoutMs !== undefined ? opts.timeoutMs : cfg.timeoutMs,
+    // Outer run-job watchdog (job.timeoutMinutes resolved; F5/R2:F5).
+    outerTimeoutMs: opts.outerTimeoutMs !== undefined ? opts.outerTimeoutMs : outerMin * 60_000,
+    // Corpus size fed to the model (dream_max_input_bytes; F5/R2:F5).
+    maxInputBytes: opts.maxInputBytes !== undefined ? opts.maxInputBytes : cfg.maxInputBytes,
     model: opts.model !== undefined ? opts.model : cfg.model,
+    // Effective vault layout — shapes DREAM_PROMPT + the model's write locations
+    // (F5/A2). Canonicalize sorts its keys, so it folds deterministically.
+    vaultLayout,
     vaultRoot: opts.vaultRoot !== undefined ? opts.vaultRoot : cfg.vault,
+    // The BOUND authorized home — its parent reconstructs the cred/config roots
+    // (A7/R4:#2); a hostile HOME must drift the digest.
+    home: opts.home !== undefined ? opts.home : paths.home,
+    // Effective schedule + timezone semantics (A6/R3:#3) — an `at` rewrite drifts.
+    schedule: { at: job.at !== undefined ? job.at : null, timezone: opts.timezone || 'local' },
     node: process.execPath,
     exec,
-    appRelease: {
-      version: readVersion(appRoot),
-      treeDigest: appTreeDigest(paths),
-      // Dev checkouts are live-edited trees: the digest is computed but not
-      // stable — WP-157 enforces integrity only for "prod"; record truthfully.
-      stance: isDevCheckout(appRoot, env) ? 'dev' : 'prod',
-    },
+    appRelease:
+      stance === 'dev'
+        ? // Dev checkouts are live-edited: the digest reduces appRelease to
+          // {stance, root} (excludes treeDigest+version) so a tracked-source edit
+          // stays runnable; every OTHER field is retained + digest-covered.
+          { version: readVersion(appRoot), treeDigest: appTreeDigest(paths), stance: 'dev', root: appRoot }
+        : { version: readVersion(appRoot), treeDigest: appTreeDigest(paths), stance: 'prod' },
   };
 }
 
@@ -182,9 +238,24 @@ function canonicalize(d) {
   return JSON.stringify(sortValue(d));
 }
 
-/** @param {object} d @returns {string} 'sha256:' + sha256(canonicalize(d)) */
+/**
+ * Apply the DEV-STANCE reduction before digesting: for a dev descriptor the
+ * digest reduces `appRelease` to `{stance:'dev', root}` (excludes the unstable
+ * `treeDigest`+`version`), so a tracked-source edit does NOT drift the digest but
+ * EVERY other field (run/model/vaultLayout/schedule/home/…) still does. A prod
+ * descriptor is digested whole. [R2:F10/A5/R15]
+ * @param {object} d @returns {object}
+ */
+function reduceForDigest(d) {
+  if (d && d.appRelease && d.appRelease.stance === 'dev') {
+    return { ...d, appRelease: { stance: 'dev', root: d.appRelease.root } };
+  }
+  return d;
+}
+
+/** @param {object} d @returns {string} 'sha256:' + sha256(canonicalize(reduced d)) */
 function descriptorDigest(d) {
-  return `sha256:${sha256(canonicalize(d))}`;
+  return `sha256:${sha256(canonicalize(reduceForDigest(d)))}`;
 }
 
 /**
@@ -236,6 +307,7 @@ function deriveDescriptorDigest(paths, job, opts = {}) {
 
 module.exports = {
   appTreeDigest,
+  appTreeDigestOf,
   buildDescriptor,
   canonicalize,
   descriptorDigest,

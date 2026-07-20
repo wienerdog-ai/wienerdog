@@ -168,6 +168,32 @@ async function run(argv, opts = {}) {
 
   const manifest = manifestMod.load(paths);
 
+  // A7 (WP-154, ADR-0028): pin claude/git/codex by command path + install dir.
+  // Resolution runs under the SAME clean PATH the nightly job builds — pinning
+  // under the interactive shell PATH would false-drift every night whenever the
+  // shell orders the claude/git dirs differently than buildCleanEnv does.
+  // Idempotent re-pin on every sync (sync IS the explicit "confirm and re-pin"
+  // step the fail-safe message points at). Dry-run: count only, no writes.
+  //
+  // ORDERING INVARIANT (WP-156 F4/A1): createPins runs ABOVE repointSchedules so
+  // the descriptor written at repoint embeds the just-created pins. If the
+  // descriptor were bound with exec:{} before pins existed, the next fire would
+  // re-derive a NON-empty exec and the launcher would refuse (nightly fail-closed
+  // until a 2nd sync); worse, an empty-exec bind lets a later-planted claude
+  // digest-match (WP-154 A1b backstop depends on exec being non-empty at bind).
+  {
+    const { createPins } = require('../core/exec-identity');
+    const { buildCleanEnv } = require('./run-job');
+    const pinEnv = buildCleanEnv(paths, 'sync');
+    if (dryRun) {
+      const r = createPins(paths, { env: pinEnv, dryRun: true });
+      console.log(`wienerdog: would pin ${Object.keys(r.pins).length} executable(s).`);
+    } else {
+      const r = createPins(paths, { env: pinEnv, manifest });
+      for (const n of r.notices) console.log(`wienerdog: ${n}`);
+    }
+  }
+
   // Vendor the running package into the core and write the PATH shim so every
   // long-lived reference (scheduler entries, self-invocations) targets a stable
   // app/current bin, and bare `wienerdog` resolves (ADR-0013). Dry-run makes no
@@ -187,6 +213,15 @@ async function run(argv, opts = {}) {
     const { repointSchedules } = require('./schedule');
     const r = repointSchedules(paths, manifest, { loader: opts.loader });
     if (r.changed > 0) console.log(`wienerdog: repointed ${r.changed} schedule(s) to the vendored app.`);
+    // A4/F7: a non-zero descriptor-write-failure count is surfaced so sync never
+    // reports success while a job descriptor failed to write (silent nightly
+    // fail-closed once WP-157 enforces the digest).
+    if (r.descriptorFailures > 0) {
+      console.log(
+        `wienerdog: WARNING — ${r.descriptorFailures} job descriptor(s) could not be written; ` +
+          `the affected job(s) will fail closed at fire time until the next successful 'wienerdog sync'.`
+      );
+    }
     for (const n of r.notices) console.log(`  note: ${n}`);
 
     // Heal any registered scheduler entry the OS silently lost (repoint no-ops on
@@ -202,25 +237,6 @@ async function run(argv, opts = {}) {
       console.log(`wienerdog: WARNING — could not reload ${heal.failed.length} scheduled job(s): ${heal.failed.join(', ')}. Run 'wienerdog doctor' for details.`);
     }
     status.refreshSchedulerStatus(paths);
-  }
-
-  // A7 (WP-154, ADR-0028): pin claude/git/codex by command path + install dir.
-  // Resolution runs under the SAME clean PATH the nightly job builds — pinning
-  // under the interactive shell PATH would false-drift every night whenever the
-  // shell orders the claude/git dirs differently than buildCleanEnv does.
-  // Idempotent re-pin on every sync (sync IS the explicit "confirm and re-pin"
-  // step the fail-safe message points at). Dry-run: count only, no writes.
-  {
-    const { createPins } = require('../core/exec-identity');
-    const { buildCleanEnv } = require('./run-job');
-    const pinEnv = buildCleanEnv(paths, 'sync');
-    if (dryRun) {
-      const r = createPins(paths, { env: pinEnv, dryRun: true });
-      console.log(`wienerdog: would pin ${Object.keys(r.pins).length} executable(s).`);
-    } else {
-      const r = createPins(paths, { env: pinEnv, manifest });
-      for (const n of r.notices) console.log(`wienerdog: ${n}`);
-    }
   }
 
   /** @type {{changed: string[], unchanged: string[], notices: string[]}} */

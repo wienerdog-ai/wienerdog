@@ -209,6 +209,19 @@ test('launcher: the inlined appTreeDigest matches descriptor.js byte-for-byte (d
   assert.equal(launcher.appTreeDigestOf(target), descriptorMod.appTreeDigest(paths));
 });
 
+test('launcher: appTreeDigestOf === descriptor.appTreeDigestOf over normal/unicode/quote/newline filenames (cross-impl, WP-156 F6)', () => {
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'wd-xtree-')));
+  const names = ['normal.txt', 'ünïcödé.md', 'quote".js', 'new\nline.txt', path.join('sub', 'dir', 'deep.json')];
+  for (const n of names) {
+    const full = path.join(root, n);
+    fs.mkdirSync(path.dirname(full), { recursive: true });
+    fs.writeFileSync(full, `content-of-${n}`);
+  }
+  // The two independent implementations MUST agree byte-for-byte over hostile
+  // filenames — any drift makes every prod fire AND catch-up refuse.
+  assert.equal(launcher.appTreeDigestOf(root), descriptorMod.appTreeDigestOf(root));
+});
+
 test('launcher: a dev install runs on stance match (descriptor dev + live dev)', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-launch-dev-'));
   // A small fake dev checkout (a `.git` dir marks it dev) — fast, and the dev
@@ -224,6 +237,18 @@ test('launcher: a dev install runs on stance match (descriptor dev + live dev)',
   fs.mkdirSync(paths.state, { recursive: true });
   fs.writeFileSync(paths.config, `version: 1\nvault: ${path.join(root, 'vault')}\n`);
   vendor.vendorSelf(paths, { sourceRoot: checkout, env }); // .git → dev: current → the checkout
+  // WP-156 A1b: the dream descriptor refuses to bind without claude+git pins.
+  fs.writeFileSync(
+    path.join(paths.state, 'exec-pins.json'),
+    JSON.stringify({
+      schema: 1,
+      pins: {
+        claude: { commandPath: '/x/bin/claude', installDir: '/x/share/claude', version: '9', pinnedAt: 't' },
+        git: { commandPath: '/usr/bin/git', installDir: '/usr/bin', version: 'g', pinnedAt: 't' },
+      },
+    }),
+    { mode: 0o600 }
+  );
   jobsLib.saveJob(paths, DREAM_JOB);
   const { path: descriptorPath, digest } = descriptorMod.writeDescriptor(paths, DREAM_JOB, { env });
   const r = launcher.verifyAndResolve(corePathsOf(paths), 'dream', { descriptorPath, expectDigest: digest, env });

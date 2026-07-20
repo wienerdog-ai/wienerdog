@@ -20,6 +20,7 @@ const jobsLib = require('../../src/scheduler/jobs');
 const gen = require('../../src/scheduler/generators');
 const vendor = require('../../src/core/vendor');
 const sync = require('../../src/cli/sync');
+const descriptorMod = require('../../src/scheduler/descriptor');
 
 // Hermeticity: CI sets XDG_CONFIG_HOME to the real ~/.config, which
 // systemdUserDir() prefers over $HOME. Unset it (this file runs in its own
@@ -157,6 +158,58 @@ test('sync-repoint: rewrites a stale scheduler entry to the vendored bin, then i
   const before = fs.readFileSync(entry.file);
   await runSync(env);
   assert.ok(fs.readFileSync(entry.file).equals(before), 'second sync is a no-op on the entry');
+});
+
+test('sync-repoint: after ONE real sync the dream descriptor has non-empty exec AND the entry binds the current digest — no drift (WP-156 F4/A1)', { skip: !SCHED_SUPPORTED }, async () => {
+  // The F4/A1 ordering fix: createPins runs ABOVE repointSchedules, so the
+  // descriptor written at repoint embeds the pins. Reverting the order (or
+  // dropping the A1b gate) makes the FIRST sync bind exec:{} (or write no
+  // descriptor), so a single sync would fail this — the classic "nightly
+  // fail-closed until a 2nd sync" P1.
+  const home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'wd-f4-')));
+  const vaultDir = path.join(home, 'vault');
+  fs.mkdirSync(vaultDir, { recursive: true });
+  const env = {
+    HOME: home,
+    WIENERDOG_HOME: path.join(home, 'wd'),
+    CLAUDE_CONFIG_DIR: path.join(home, 'absent-claude'),
+    CODEX_HOME: path.join(home, 'absent-codex'),
+  };
+  const paths = getPaths(env);
+  fs.mkdirSync(paths.core, { recursive: true });
+  fs.mkdirSync(paths.state, { recursive: true });
+  fs.mkdirSync(paths.logs, { recursive: true });
+  const cfg = `version: 1\nvault: ${vaultDir}\n`;
+  fs.writeFileSync(paths.config, cfg);
+  manifestLib.save(paths, {
+    version: 1,
+    createdAt: new Date().toISOString(),
+    entries: [{ kind: 'dir', path: paths.core }, { kind: 'file', path: paths.config, hash: sha256(cfg) }],
+  });
+
+  // A resolvable fake `claude` on the clean job PATH (buildCleanEnv front-loads
+  // ~/.local/bin); real `git` resolves from the system PATH the clean env keeps.
+  const localBin = path.join(home, '.local', 'bin');
+  fs.mkdirSync(localBin, { recursive: true });
+  const fakeClaude = path.join(localBin, 'claude');
+  fs.writeFileSync(fakeClaude, '#!/bin/sh\nexit 0\n');
+  fs.chmodSync(fakeClaude, 0o755);
+
+  jobsLib.saveJob(paths, { name: 'dream', at: '03:30', run: 'builtin:dream', timeoutMinutes: 20 });
+
+  await runSync(env);
+
+  const desc = JSON.parse(fs.readFileSync(path.join(paths.state, 'descriptors', 'dream.json'), 'utf8'));
+  assert.ok(desc.exec && desc.exec.claude, 'descriptor exec has claude after ONE sync');
+  assert.ok(desc.exec.git, 'descriptor exec has git after ONE sync');
+
+  // The digest re-derived NOW equals the one bound into the OS entry during the
+  // same sync (inputs unchanged ⇒ no drift after a single sync).
+  const job = jobsLib.findJob(paths, 'dream');
+  const digest = descriptorMod.deriveDescriptorDigest(paths, job, { platform: process.platform });
+  const entry = primaryEntry(paths, { name: 'dream', hour: 3, minute: 30 });
+  const entryText = fs.readFileSync(entry.file, 'utf8');
+  assert.ok(entryText.includes(digest), 'the OS entry binds the current descriptor digest (no drift after one sync)');
 });
 
 test('sync-repoint: --dry-run repoints nothing', { skip: !SCHED_SUPPORTED }, async () => {

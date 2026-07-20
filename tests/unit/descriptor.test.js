@@ -10,7 +10,9 @@ const descriptor = require('../../src/scheduler/descriptor');
 const { getPaths } = require('../../src/core/paths');
 const { WienerdogError } = require('../../src/core/errors');
 
-const DREAM_JOB = { name: 'dream', run: 'builtin:dream', timeoutMinutes: 20 };
+const crypto = require('node:crypto');
+
+const DREAM_JOB = { name: 'dream', run: 'builtin:dream', at: '03:30', timeoutMinutes: 20 };
 
 /**
  * A temp core with a minimal vendored app tree (app/current → app/0.0.1) and a
@@ -81,6 +83,73 @@ test('descriptor: every covered input changes the digest (run, vault, model, tim
   mustDiffer('app tree', descriptor.deriveDescriptorDigest(paths, DREAM_JOB));
 });
 
+test('descriptor: the WP-156 fix-pass fields each change the digest (maxInputBytes, outerTimeoutMs, vaultLayout, home, schedule.at)', () => {
+  const { paths } = setup();
+  const base = descriptor.deriveDescriptorDigest(paths, DREAM_JOB);
+  const seen = new Set([base]);
+  const mustDiffer = (label, digest) => {
+    assert.ok(!seen.has(digest), `${label} must change the digest (dropping the field would let a static edit stay digest-equivalent)`);
+    seen.add(digest);
+  };
+  mustDiffer('maxInputBytes', descriptor.deriveDescriptorDigest(paths, DREAM_JOB, { maxInputBytes: 123 }));
+  mustDiffer('outerTimeoutMs', descriptor.deriveDescriptorDigest(paths, DREAM_JOB, { outerTimeoutMs: 999_000 }));
+  mustDiffer('vaultLayout', descriptor.deriveDescriptorDigest(paths, DREAM_JOB, { vaultLayout: { daily_dir: '99-Weird' } }));
+  mustDiffer('home', descriptor.deriveDescriptorDigest(paths, DREAM_JOB, { home: '/somewhere/else' }));
+  mustDiffer('schedule.at', descriptor.deriveDescriptorDigest(paths, { ...DREAM_JOB, at: '04:45' }));
+});
+
+test('descriptor: appTreeDigestOf is injective — a newline in a filename cannot forge a record boundary (A3/F6)', () => {
+  const h = (s) => crypto.createHash('sha256').update(s).digest('hex');
+  const H1 = h('x'); // the hash of file `a`'s content
+  // Tree X: files `a`(content x) and `b`(content y).
+  const rootX = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'wd-injx-')));
+  fs.writeFileSync(path.join(rootX, 'a'), 'x');
+  fs.writeFileSync(path.join(rootX, 'b'), 'y');
+  // Tree Y: ONE file whose NAME embeds a\n<H1>\nb, content y. Under the OLD
+  // `${relpath}\n${hash}\n` concat both trees serialize to `a\n<H1>\nb\n<H2>\n`
+  // → identical digest (the forgeable boundary). Canonical-JSON escapes the
+  // newline, so the two now differ.
+  const rootY = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'wd-injy-')));
+  fs.writeFileSync(path.join(rootY, `a\n${H1}\nb`), 'y');
+  assert.notEqual(
+    descriptor.appTreeDigestOf(rootX),
+    descriptor.appTreeDigestOf(rootY),
+    'the injective encoding distinguishes a newline-forged filename from two real files'
+  );
+});
+
+test('descriptor: a partial pin store (git only, claude absent) REFUSES to bind the dream descriptor (A1b/R2:F1)', () => {
+  const { paths } = setup({ pins: false });
+  // A VALID store with git but NO claude — the exact partial createPins writes
+  // when claude is briefly unresolved at sync.
+  fs.writeFileSync(
+    path.join(paths.state, 'exec-pins.json'),
+    JSON.stringify({ schema: 1, pins: { git: { commandPath: '/usr/bin/git', installDir: '/usr/bin', version: 'g', pinnedAt: 't' } } }),
+    { mode: 0o600 }
+  );
+  assert.throws(
+    () => descriptor.buildDescriptor(paths, DREAM_JOB),
+    (e) => e instanceof WienerdogError && /claude is not pinned/.test(e.message),
+    'binding the dream descriptor with a claude-less exec map must fail closed'
+  );
+  assert.throws(() => descriptor.writeDescriptor(paths, DREAM_JOB), WienerdogError);
+});
+
+test('descriptor: a dev descriptor digest ignores tracked-source edits but drifts on ANY config-field edit (A5)', () => {
+  const { paths } = setup();
+  fs.mkdirSync(path.join(paths.core, 'app', '0.0.1', '.git')); // → dev stance
+  const base = descriptor.deriveDescriptorDigest(paths, DREAM_JOB);
+  // A tracked-source byte edit does NOT drift the dev digest (treeDigest excluded).
+  fs.appendFileSync(path.join(paths.core, 'app', '0.0.1', 'bin', 'wienerdog.js'), '// dev edit\n');
+  assert.equal(descriptor.deriveDescriptorDigest(paths, DREAM_JOB), base, 'tracked-source edit does not drift the dev digest');
+  // But EVERY config-shaped field edit DOES (no config-fields-only subset).
+  assert.notEqual(descriptor.deriveDescriptorDigest(paths, DREAM_JOB, { model: 'opus' }), base, 'model edit drifts');
+  assert.notEqual(descriptor.deriveDescriptorDigest(paths, DREAM_JOB, { vaultLayout: { daily_dir: 'X' } }), base, 'vault_layout edit drifts');
+  assert.notEqual(descriptor.deriveDescriptorDigest(paths, { ...DREAM_JOB, at: '05:00' }), base, 'schedule.at edit drifts');
+  assert.notEqual(descriptor.deriveDescriptorDigest(paths, { ...DREAM_JOB, run: 'skill:wienerdog-weekly-review' }), base, 'run edit drifts');
+  assert.notEqual(descriptor.deriveDescriptorDigest(paths, DREAM_JOB, { home: '/other' }), base, 'home edit drifts');
+});
+
 test('descriptor: pin version/pinnedAt do NOT drift the digest (auto-update stays silent)', () => {
   const { paths } = setup();
   const base = descriptor.deriveDescriptorDigest(paths, DREAM_JOB);
@@ -126,6 +195,11 @@ test('descriptor: buildDescriptor fields — schema, profile, stance, exec ident
   assert.equal(d.profileId, 'dream');
   assert.match(d.promptHash, /^sha256:/);
   assert.equal(d.timeoutMs, 1_200_000, 'effective default: 20 min in ms (readDreamConfig)');
+  assert.equal(d.outerTimeoutMs, 1_200_000, 'outer watchdog: job.timeoutMinutes (20) in ms');
+  assert.equal(d.maxInputBytes, 8_000_000, 'dream_max_input_bytes default');
+  assert.ok(d.vaultLayout && typeof d.vaultLayout === 'object', 'effective vault layout is captured');
+  assert.equal(typeof d.home, 'string', 'the bound authorized home is captured');
+  assert.deepEqual(d.schedule, { at: '03:30', timezone: 'local' }, 'schedule + timezone captured');
   assert.equal(d.model, null, 'dream_model unset → null (no --model)');
   assert.equal(d.node, process.execPath);
   assert.deepEqual(d.exec.claude, { commandPath: '/x/bin/claude', installDir: '/x/share/claude/versions' });
