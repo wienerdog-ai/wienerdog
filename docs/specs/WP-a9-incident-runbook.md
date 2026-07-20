@@ -316,6 +316,27 @@ state and act on:
   > compared EQUAL. Now read the digest as a raw Buffer (`readFileSync(path)`) and
   > compare with `Buffer.equals(Buffer.from(additionalContext, "utf8"))` — a true
   > byte compare; mirrored in the PowerShell block's embedded node.
+  >
+  > **Fix-pass amendment 9 (2026-07-20, comprehensive QA — coverage model final
+  > form):** the operator declaration was harness NAMES, each resolving to exactly ONE
+  > current `CLAUDE_CONFIG_DIR`/`CODEX_HOME` path, so it could not express MULTIPLE
+  > installed roots for one harness (Codex at two case-distinct custom roots). Trigger:
+  > the incident-tampered manifest omits the second root, `CODEX_HOME` points to the
+  > first, neither is at a default location → sync re-records only the current root and
+  > the name-keyed declaration cannot name the other, so the omitted installed file is
+  > never checked yet DRILL PASS prints — OUTSIDE the documented residual, since trusted
+  > inventory KNOWS both roots. Fix (coverage model's final form): the declaration is
+  > now an explicit ORDINAL LIST OF managed-block FILE PATHS (`DECLARED_PATHS` /
+  > `$DeclaredPaths`), multiple roots per harness allowed, dedup-with-reject, and it is
+  > **unioned into** the must-check set (manifest ∪ probe ∪ declared). Every element is
+  > checked; the declared→harness mapping for the adapter-skip-BLOCK and adapter
+  > classification is by PATH BASENAME. Net gate: must-check (all three, ordinal-deduped)
+  > == checked. The name-model `declared == must` cross-check is removed (subsumed:
+  > declared ⊆ must by union, and coverage now comes from the union directly). The
+  > **completeness argument** (recorded in the step-6 contract): checked == manifest ∪
+  > probe ∪ declared, so an installed file is omitted iff in NONE of the three — a root
+  > no trusted record knows — the unchanged stop-and-escalate residual. No fourth
+  > omission path.
 - **The ONLY authoritative way to reach zero running Wienerdog processes is to
   REBOOT after removing every per-job schedule AND the catch-up entry — not
   per-platform process forensics (R4-C, round-4).** After a reboot, with nothing
@@ -710,56 +731,63 @@ headless/`--yes` bypass — it is interactive and shows the exact bytes.
    sync then regenerated (a changed identity/summary input can reintroduce the
    marker into a new digest D1 after a clean D0). The order reads sync → coverage
    (manifest driver + probe + per-file checks) → hook/digest/marker proof.**
-   - **Coverage is driven by the post-sync manifest UNION an independent
-     default-location probe, gated where machine-checkable and STOP-AND-ESCALATE for
-     the irreducible remainder (round-2 F1 / round-3 G1 / round-4 structural /
-     round-5 G1+G2).** The blocks run the drill's `wienerdog sync` **first**
-     (idempotent; it REPAIRS the managed blocks — `applyManagedBlock`/`recordOnce`
-     re-records any `managed-block` manifest entry a prior interrupted sync or
-     tampering dropped), then build the must-check set from **two independent
-     sources**: (1) the **post-sync** `$CORE/install-manifest.json` managed-block
-     PATHS, read after a `node` **validation** that REJECTS (→ DRILL FAIL) a manifest
-     with no entries array, a non-absolute/non-string managed-block path, a path with
-     a CR/LF/NUL, a basename other than `CLAUDE.md`/`AGENTS.md`, or a **duplicate**
-     managed-block path (a malformed/duplicate manifest must never normalize-then-pass,
-     G2), emitted identity-preserving (NUL-delimited in bash, JSON array in PowerShell);
-     and (2) an **independent probe** of the DEFAULT harness locations
+   - **Coverage = the post-sync manifest UNION an independent default-location probe
+     UNION the operator's declared PATH list (the coverage model's final form),
+     machine-enforced where checkable and STOP-AND-ESCALATE for the irreducible
+     remainder (round-2 F1 / round-3 G1 / round-4 structural / round-5 G1+G2 / round-7
+     G1).** The blocks run the drill's `wienerdog sync` **first** (idempotent; it
+     REPAIRS the managed blocks — `applyManagedBlock`/`recordOnce` re-records any
+     `managed-block` manifest entry a prior interrupted sync or tampering dropped), then
+     build the must-check set from **three independent sources**: (1) the **post-sync**
+     `$CORE/install-manifest.json` managed-block PATHS, read after a `node` **validation**
+     that REJECTS (→ DRILL FAIL) a manifest with no entries array, a
+     non-absolute/non-string managed-block path, a path with a CR/LF/NUL, a basename
+     other than `CLAUDE.md`/`AGENTS.md`, or a **duplicate** managed-block path (G2),
+     emitted identity-preserving (NUL-delimited in bash, JSON array in PowerShell);
+     (2) an **independent probe** of the DEFAULT harness locations
      `${HOME}/.claude/CLAUDE.md` and `${HOME}/.codex/AGENTS.md` (HOME per `paths.js`,
-     before `USERPROFILE`) for a sentinel pair — any managed block there is a
-     must-check root **regardless of manifest/env/declaration**, closing the
-     default-dir omission independent of the mutable manifest (G1 part 1). Every file
-     in the union is checked with the Table D three-check conjunction, plus a FAIL if
-     `sync` skipped that file's adapter (its exact messages, `sync.js:317–329`) or the
-     file is missing on disk. The `HARNESSES`/`$Harnesses` declaration is a
-     **cross-check + a skip-gate**: a **duplicate** name FAILS outright; **a DECLARED
-     harness that `sync` could not detect (its `CLAUDE_CONFIG_DIR`/`CODEX_HOME`
-     unset/wrong) is a BLOCK — evaluated against the DECLARED set, not only the
-     manifest**, so declaring `codex` with `CODEX_HOME` unset stops the drill instead
-     of silently omitting the harness (G1 part 2); and the drill FAILS unless the
-     declared set equals the must-check set. Net gate (all hold or DRILL FAIL): `sync`
-     clean (notice-tolerant); manifest validates; must-check set (manifest ∪
-     default-probe) == checked set (resolved path, deduped, ≥1); no adapter-skip for
-     any of them; no declared-harness skip; every envelope + managed-block check
-     passed; declaration == must-check set. This is **env-consistent** because the
-     block pins the detection env (unset `CLAUDE_CONFIG_DIR`/`CODEX_HOME`, or the
-     custom-dir user sets EACH to a trusted-inventory root) and `sync` writes the
-     manifest with the **currently-resolved** paths — so the post-sync manifest paths
-     ARE the drill-time paths (do not "simplify" back to a pre-sync count or read).
-     **All PowerShell path set-operations and equality are ORDINAL (byte-exact) to
-     match bash's `sort -z -u` (round-6 G1):** the must-check/declared/checked sets
-     use a `HashSet[string]` built with `[System.StringComparer]::Ordinal` and compare
-     with `.SetEquals(...)` — never `Sort-Object -Unique` or `-eq`/`-ne` on paths,
-     which are case-insensitive and would collapse two case-distinct managed-block
-     paths (distinct files on a case-sensitive NTFS directory) into one and check only
-     one.
-   - **Blocking residual — the honest boundary (round-5 G1, cf. ADR-0028 honest
-     boundary / A12 hand-off).** One case is NOT machine-closable: a
-     **custom-directory** install whose manifest was tampered in the incident AND
-     whose complete harness inventory the operator cannot establish from **trusted**
-     evidence (own install notes / persisted incident evidence — not the tampered
-     manifest). A harness at a custom root that no trusted record names is invisible
-     to the manifest, the default-probe, and (if undeclared) the skip-gate — no
-     on-machine source knows it exists, so the drill **cannot certify the machine**.
+     before `USERPROFILE`) for a sentinel pair (G1/round-5 part 1); and (3) the
+     **operator's declared PATH list** (`DECLARED_PATHS` / `$DeclaredPaths`) — an
+     explicit ordinal list of managed-block FILE PATHS from trusted inventory, **not**
+     harness names, so it expresses **multiple installed roots for one harness** and any
+     non-default, non-current-env root the manifest and probe cannot see (round-7 G1).
+     The declared list is validated (each absolute, basename `CLAUDE.md`/`AGENTS.md`) and
+     **dedup-with-reject** (a repeated path FAILS, ordinal-exact). Every file in the
+     union is checked with the Table D three-check conjunction, plus a FAIL if `sync`
+     skipped that file's adapter (its exact messages, `sync.js:317–329`) — classified by
+     BASENAME (`CLAUDE.md`→claude, `AGENTS.md`→codex), so a **declared** path whose
+     harness `sync` skipped BLOCKs (declared ⊆ must) — or the file is missing on disk (a
+     declared path missing here FAILS). Net gate (all hold or DRILL FAIL): `sync` clean
+     (notice-tolerant); manifest validates; **must-check set (manifest ∪ probe ∪
+     declared, ordinal-deduped) == checked set** (≥1); every element present + verified;
+     no adapter-skip. This is **env-consistent** because the block pins the detection env
+     (unset `CLAUDE_CONFIG_DIR`/`CODEX_HOME`, or the custom-dir user sets one root
+     `sync` should record and lists ALL roots in the declared paths) and `sync` writes
+     the manifest with the **currently-resolved** paths. **All PowerShell path
+     set-operations and equality are ORDINAL (byte-exact) to match bash's `sort -z -u`
+     (round-6 G1):** the must-check/declared/checked sets use a `HashSet[string]` built
+     with `[System.StringComparer]::Ordinal` and compare with `.SetEquals(...)` — never
+     `Sort-Object -Unique` or `-eq`/`-ne` on paths.
+   - **Completeness argument (round-7).** Reason explicitly about whether any
+     genuinely-installed managed-block file can still be omitted from the checked set
+     while DRILL PASS prints. The three sources cover: the **manifest** (every
+     current-env root `sync` re-records post-sync), the **default-probe** (every default
+     location), and the **declared paths** (every root trusted inventory knows —
+     including multiple roots per harness and non-default, non-current-env roots). Since
+     checked == manifest ∪ probe ∪ declared, an installed file is omitted **iff** it is
+     in none of the three: NOT in the manifest AND NOT at a default location AND NOT
+     declared. That is exactly a root no on-machine source knows — **unknowable by
+     construction** — which is the documented stop-and-escalate residual. There is no
+     fourth omission path.
+   - **Blocking residual — a root no trusted record knows (round-5 G1 / round-7,
+     cf. ADR-0028 honest boundary / A12 hand-off).** Per the completeness argument,
+     the ONE case NOT machine-closable is a managed-block file that is in NONE of the
+     three sources: not in the (possibly-tampered) manifest, not at a default
+     location, AND not in the operator's declared paths because they cannot establish
+     their **complete** inventory from **trusted** evidence (own install notes /
+     persisted incident evidence — not the tampered manifest). Such a root no trusted
+     record names is invisible to every source — no on-machine source knows it exists,
+     so the drill **cannot certify the machine**.
      The runbook documents this as a **BLOCKING residual**: like step 1's "cannot
      reboot", the operator must **STOP and escalate** and must NOT read a DRILL PASS
      as proof. The machine-enforced checks close every case where the harness set is
@@ -995,36 +1023,40 @@ the runbook never contains a bare operative `state/<file>` token.
       clean install — the three checks prove the block clean by construction). The
       new-session observation is an optional extra, not the proof; the proof is tied
       to the ADR-0021 byte-gated injection.
-- [ ] **[Round-2 F1 / Round-3 G1 / Round-4 structural / Round-5 G1+G2]** The
-      drill's harness coverage is driven by the **post-sync manifest UNION an
-      independent default-location probe**, machine-enforced where checkable and a
+- [ ] **[Round-2 F1 / Round-3 G1 / Round-4 structural / Round-5 G1+G2 / Round-7 G1]**
+      The drill's coverage set is the **post-sync manifest UNION an independent
+      default-location probe UNION the operator's declared PATH list** (the coverage
+      model's final, path-keyed form), machine-enforced where checkable and a
       documented STOP-AND-ESCALATE residual where not. The copy-paste blocks run
       `wienerdog sync` **first** (idempotent; re-records any dropped `managed-block`
-      entry), then build the must-check set from (1) the **post-sync** manifest
-      managed-block PATHS — read only after `node` **VALIDATES** the manifest
+      entry), then build the must-check set from THREE sources: (1) the **post-sync**
+      manifest managed-block PATHS — read only after `node` **VALIDATES** the manifest
       (rejecting → DRILL FAIL: no entries array; a non-absolute/non-string path; a
       CR/LF/NUL in a path; a basename other than `CLAUDE.md`/`AGENTS.md`; or a
       **duplicate** managed-block path — G2, emitted identity-preserving so nothing
-      normalizes-then-passes) and (2) an **independent probe** of
+      normalizes-then-passes); (2) an **independent probe** of
       `${HOME}/.claude/CLAUDE.md` + `${HOME}/.codex/AGENTS.md` for a sentinel pair
-      (G1 part 1, closing the default-dir omission regardless of manifest/env). Every
-      file in the union is checked with the Table D three-check conjunction. The
-      `HARNESSES`/`$Harnesses` declaration is a **cross-check + skip-gate**: a
-      **duplicate** name FAILS; **a declared harness `sync` could not detect
-      (`CLAUDE_CONFIG_DIR`/`CODEX_HOME` unset/wrong) is a BLOCK evaluated against the
-      DECLARED set** (G1 part 2 — declaring `codex` with `CODEX_HOME` unset stops the
-      drill, never a silent omission); and the drill FAILS unless the declared set
-      equals the must-check set. Net gate — all hold or DRILL FAIL: `sync` clean
-      (notice-tolerant); manifest validates; must-check set (manifest ∪ probe) ==
-      checked set (resolved path, deduped, ≥1); no adapter-skip / no declared-harness
-      skip; every envelope + managed-block check passed; declaration == must-check
-      set. **The runbook documents the one unclosable case as a BLOCKING residual**
-      (a custom-directory harness absent from BOTH the tampered manifest AND the
-      operator's trusted inventory): no on-machine source knows it, so the drill
-      **cannot certify** — **STOP and escalate**, like step 1's "cannot reboot",
-      cross-referencing ADR-0028's honest boundary / the A12 hand-off. It does **not**
-      claim under-declaration can never pass; it names the exact case and that it
-      blocks via stop-and-escalate.
+      (round-5 G1, closing the default-dir omission regardless of manifest/env); and
+      (3) the operator's **declared PATH list** (`DECLARED_PATHS` / `$DeclaredPaths`) —
+      an explicit ordinal list of managed-block FILE PATHS from trusted inventory,
+      **not** harness names, so it expresses **multiple installed roots for one
+      harness** and any non-default, non-current-env root the manifest/probe cannot see
+      (round-7 G1); validated (absolute + `CLAUDE.md`/`AGENTS.md` basename) and
+      dedup-with-reject (a repeated path FAILS, ordinal-exact). Every file in the union
+      is checked with the Table D three-check conjunction, classified by BASENAME for
+      the adapter-skip watch (so a **declared** path whose harness `sync` skipped
+      BLOCKs, declared ⊆ must), and a declared path missing on disk FAILS. Net gate —
+      all hold or DRILL FAIL: `sync` clean (notice-tolerant); manifest validates;
+      **must-check set (manifest ∪ probe ∪ declared, ordinal-deduped) == checked set**
+      (≥1); every element present + verified; no adapter-skip. All PowerShell path
+      set-ops are ORDINAL (round-6 G1). **Completeness (round-7):** since checked ==
+      manifest ∪ probe ∪ declared, an installed managed-block file is omitted iff it is
+      in NONE of the three — NOT in the manifest, NOT at a default location, AND NOT
+      declared — which is exactly a root no on-machine source knows (unknowable by
+      construction). **That is the sole residual**, a documented **BLOCKING**
+      stop-and-escalate (like step 1's "cannot reboot"), cross-referencing ADR-0028's
+      honest boundary / A12. There is no fourth omission path; it does **not** claim
+      under-declaration can never pass.
 - [ ] **[Round-2 F2]** The PowerShell block passes the core path to `bash` as a
       **positional argument** (`bash -c '… "$1" …' _ "$coreFwd"`), never
       interpolated into the bash source, so a path containing an apostrophe,
@@ -1102,18 +1134,19 @@ grep -niE "not proof|non-proof|cannot reboot|escalate|sole" docs/runbooks/incide
 # F1: the blocking re-verify's FIFTH check independently enumerates remaining
 # Wienerdog OS registrations per platform (zero results required):
 grep -nE "launchctl list \| grep ai\.wienerdog|list-timers 'wienerdog-\*'|list-units 'wienerdog-\*'|Get-ScheduledTask -TaskPath" docs/runbooks/incident.md
-# Round-2 F1: the drill declares the installed harness set, pins the detection env,
-# cross-checks the manifest, blocks on a declared harness's adapter-skip; round-2 F2:
-# the PS->bash core path is positional:
-grep -nE "HARNESSES=|\\\$Harnesses|managed-block|unset CLAUDE_CONFIG_DIR CODEX_HOME|Remove-Item Env:|skipping adapter|bash -c '.*\"\\\$1\"" docs/runbooks/incident.md
-# Round-3 G1: the coverage gate rejects duplicate declarations and dedups paths:
-grep -nE "declared more than once|sort -u|Sort-Object -Unique" docs/runbooks/incident.md
-# Round-4 structural: sync runs FIRST, coverage is driven by the POST-SYNC manifest
-# managed-block paths (not a pre-sync count), unioned with the default-probe:
-grep -nE "post-sync manifest|managed-block file|must-check|declared harness set != must-check" docs/runbooks/incident.md
-# Round-5 G1: independent default-location probe + declared-harness-skip-as-BLOCK +
-# the custom-root BLOCKING RESIDUAL (stop-and-escalate honest boundary):
-grep -nE "default-location probe|default.probe|\.claude/CLAUDE\.md|\.codex/AGENTS\.md|skipped a DECLARED harness|trusted inventory|STOP and escalate|blocking residual|ADR-0028|A12" docs/runbooks/incident.md
+# Round-2 F1 (env pinning) + round-2 F2 (PS->bash core path is positional):
+grep -nE "managed-block|unset CLAUDE_CONFIG_DIR CODEX_HOME|Remove-Item Env:|skipping adapter|bash -c '.*\"\\\$1\"" docs/runbooks/incident.md
+# Round-3 G1: dedup-with-reject on declared paths + ordinal set dedup:
+grep -nE "declared path is listed more than once|sort -z -u|Sort-Object -Unique" docs/runbooks/incident.md
+# Round-4 structural: sync runs FIRST; coverage driven by the POST-SYNC manifest (not a
+# pre-sync count), unioned with probe + declared:
+grep -nE "post-sync manifest|managed-block file|must-check|checked set != must-check set" docs/runbooks/incident.md
+# Round-5 G1: independent default-location probe + declared-adapter-skip-as-BLOCK +
+# the BLOCKING RESIDUAL (stop-and-escalate honest boundary):
+grep -nE "default-location probe|default.probe|\.claude/CLAUDE\.md|\.codex/AGENTS\.md|skipped the adapter for managed-block|trusted inventory|STOP and escalate|blocking residual|ADR-0028|A12" docs/runbooks/incident.md
+# Round-7 G1: the declaration is an ORDINAL LIST OF managed-block PATHS (not harness
+# names), multiple roots per harness, unioned into the must-check set; completeness:
+grep -nE "DECLARED_PATHS|\\\$DeclaredPaths|declared path is not absolute|declared path basename|manifest .* default-probe .* declared|manifest UNION default-probe UNION declared|multiple .* roots per harness|MULTIPLE roots per harness" docs/runbooks/incident.md
 # Round-5 G2: node VALIDATES the manifest before emitting (reject malformed/duplicate),
 # identity-preserving (no sort -u normalization of raw paths):
 grep -nE "no entries array|is not an absolute string|CR/LF/NUL|unexpected managed-block basename|duplicate managed-block path|failed validation|ConvertFrom-Json" docs/runbooks/incident.md
