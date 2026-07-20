@@ -407,7 +407,8 @@ explained after the blocks. Before running, set the two operator inputs at the
 top of the block:
 
 - `MARKER` / `$marker` — the exact poisoned text you are hunting (plain text,
-  not a regular expression).
+  not a regular expression; **may be multi-line** — it is matched whole-file,
+  byte-exact, so a contiguous multi-line marker is found).
 - `DECLARED_PATHS` / `$DeclaredPaths` — the **complete list of managed-block
   file PATHS** your **trusted inventory** knows are installed (one absolute path
   per line/entry) — from your own install notes or the persisted incident
@@ -442,151 +443,126 @@ macOS / Linux (bash — paste as one block):
 
 ```bash
 # DECLARED_PATHS: the COMPLETE list of managed-block files your TRUSTED INVENTORY knows
-# are installed — ONE absolute path per line, MULTIPLE roots per harness allowed (e.g. two
-# custom Codex roots). This is the operator's cross-check contribution to coverage; it is
-# UNIONED into the must-check set below, so a root that sync's single-value env cannot
-# detect is still checked because you declared it. The default two lines fit a standard
-# install — replace/extend them from your inventory.
+# are installed — ONE absolute path per line, MULTIPLE roots per harness allowed. The
+# default two lines fit a standard install — replace/extend them from your inventory.
 DECLARED_PATHS="$HOME/.claude/CLAUDE.md
 $HOME/.codex/AGENTS.md"
-MARKER='<the exact poisoned text you are hunting>'
+MARKER='<the exact poisoned text you are hunting>'   # may be MULTI-LINE; matched whole-file, byte-exact
 CORE="$WIENERDOG_HOME"     # the step-0 core, re-exported after the reboot
-SENT_B='<!-- wienerdog:begin -->'; SENT_E='<!-- wienerdog:end -->'
 
 fail() { printf 'DRILL FAIL: %s\n' "$1"; exit 1; }
 WORK="$(mktemp -d)"; trap 'rm -rf "$WORK"' EXIT
 
-# pin the harness-detection env BEFORE sync (see prose above). It steers which single root
-# sync DETECTS and re-records per harness; the declared paths cover every OTHER installed
-# root. For a CUSTOM-directory install, set CLAUDE_CONFIG_DIR / CODEX_HOME to the root sync
-# should record, and list ALL roots (including it) in DECLARED_PATHS.
+# pin the harness-detection env BEFORE sync (see prose). It steers which single root sync
+# DETECTS and re-records; the declared paths cover every OTHER installed root. Custom-dir:
+# set CLAUDE_CONFIG_DIR / CODEX_HOME to the root sync should record, and list ALL roots in
+# DECLARED_PATHS.
 unset CLAUDE_CONFIG_DIR CODEX_HOME
 
-# parse + VALIDATE the declared PATH list (ordinal, dedup-with-reject): each line an
-# absolute path whose basename is CLAUDE.md or AGENTS.md; a repeated path is rejected.
-: > "$WORK/declared.nul"
-while IFS= read -r dp; do
-  [ -n "$dp" ] || continue
-  case "$dp" in /*) ;; *) fail "declared path is not absolute: $dp";; esac
-  case "$dp" in */CLAUDE.md|*/AGENTS.md) ;; *) fail "declared path basename must be CLAUDE.md or AGENTS.md: $dp";; esac
-  printf '%s\0' "$dp" >> "$WORK/declared.nul"
-done <<EOF
-$DECLARED_PATHS
-EOF
-[ -s "$WORK/declared.nul" ] || fail "DECLARED_PATHS is empty — list every managed-block file your TRUSTED inventory knows is installed"
-sort -z -u "$WORK/declared.nul" > "$WORK/declared.sorted"
-dt=$(tr -cd '\0' < "$WORK/declared.nul" | wc -c | tr -d ' ')
-du=$(tr -cd '\0' < "$WORK/declared.sorted" | wc -c | tr -d ' ')
-[ "$dt" -eq "$du" ] || fail "a declared path is listed more than once (ordinal-exact)"
+# The SHARED byte-exact verifier (identical bytes in both blocks) does ALL identity-critical
+# work in ONE cross-platform node script: path validation (fully-qualified, canonical,
+# exact-case basename), manifest read, default probe, the manifest∪probe∪declared union, and
+# every per-file whole-file byte-exact marker + sentinel check, plus the hook/digest
+# byte-compare. NO managed-block path is ever compared / globbed / re-encoded by the shell,
+# so PowerShell's case-/glob-/codepage-/rootedness footguns cannot apply (round-10).
+cat > "$WORK/verify.js" <<'VERIFY'
+'use strict';
+var fs = require('fs'), path = require('path'), os = require('os');
+var core = process.env.WIENERDOG_HOME || '';
+var marker = process.env.WD_MARKER || '';
+var syncOut = process.env.WD_SYNC || '';
+var home = process.env.HOME || os.homedir();
+var hookFile = process.env.WD_HOOK_FILE || '';
+var declared = (process.env.WD_DECLARED || '').split(/\r?\n/).filter(function (s) { return s.length; });
+var SENT_B = '<!-- wienerdog:begin -->', SENT_E = '<!-- wienerdog:end -->';
+var isWin = process.platform === 'win32';
+function fail(m) { process.stdout.write('DRILL FAIL: ' + m + '\n'); process.exit(1); }
+// path identity: FULLY QUALIFIED (drive+sep or UNC on win; leading / on posix), CANONICAL
+// (no . / .. segment), EXACT-case basename — all byte-exact, platform-correct.
+function fq(p) { return isWin ? (/^[A-Za-z]:[\\/]/.test(p) || /^[\\/]{2}[^\\/]/.test(p)) : p.charAt(0) === '/'; }
+function dotseg(p) { return p.split(/[\\/]+/).some(function (s) { return s === '.' || s === '..'; }); }
+function base(p) { var a = p.split(/[\\/]/); return a[a.length - 1]; }
+function rd(p) { try { return fs.readFileSync(p); } catch (e) { return null; } }        // literal read, no glob
+function occ(b, s) { var t = Buffer.from(s), n = 0, i = 0; while ((i = b.indexOf(t, i)) >= 0) { n++; i += t.length; } return n; }
+function idx(b, s) { return b.indexOf(Buffer.from(s)); }
+function has(b, s) { return s.length > 0 && b.indexOf(Buffer.from(s)) >= 0; }            // whole-file, byte-exact, multi-line-safe
+// notice-tolerant: block only on a concrete Table D signal (the two Codex info notices pass)
+if (/managed block not updated|digest not found|AGENTS\.override/i.test(syncOut)) fail('sync reported a Table D BLOCK signal');
+// validate + collect DECLARED paths (dedup-with-reject, ordinal exact-string keys)
+if (declared.length < 1) fail('DECLARED_PATHS is empty - list every managed-block file your trusted inventory knows is installed');
+var must = new Set();
+declared.forEach(function (dp) {
+  if (!fq(dp)) fail('declared path is not FULLY QUALIFIED (drive-relative / current-drive-rooted rejected): ' + dp);
+  if (dotseg(dp)) fail('declared path has a "." or ".." segment (must be canonical): ' + dp);
+  var b = base(dp);
+  if (b !== 'CLAUDE.md' && b !== 'AGENTS.md') fail('not a managed-block file: basename must be exactly CLAUDE.md or AGENTS.md: ' + dp);
+  if (must.has(dp)) fail('a declared path is listed more than once (ordinal-exact): ' + dp);
+  must.add(dp);
+});
+// validate + read POST-SYNC manifest managed-block paths
+var mtxt; try { mtxt = fs.readFileSync(path.join(core, 'install-manifest.json'), 'utf8'); } catch (e) { fail('cannot read install-manifest.json'); }
+var m; try { m = JSON.parse(mtxt); } catch (e) { fail('manifest is not valid JSON'); }
+if (!m || !Array.isArray(m.entries)) fail('manifest has no entries array');
+var mseen = new Set();
+m.entries.forEach(function (e) {
+  if (!e || e.kind !== 'managed-block') return;
+  var p = e.path;
+  if (typeof p !== 'string' || !fq(p)) fail('manifest managed-block path is not fully qualified: ' + JSON.stringify(p));
+  if (/[\r\n\0]/.test(p)) fail('manifest managed-block path contains CR/LF/NUL');
+  var b = base(p);
+  if (b !== 'CLAUDE.md' && b !== 'AGENTS.md') fail('manifest managed-block basename unexpected: ' + b);
+  if (mseen.has(p)) fail('duplicate managed-block path in manifest: ' + p);
+  mseen.add(p); must.add(p);
+});
+// independent default-location probe (byte-exact buffer sentinel; HOME per paths.js)
+[path.join(home, '.claude', 'CLAUDE.md'), path.join(home, '.codex', 'AGENTS.md')].forEach(function (pf) {
+  var b = rd(pf);
+  if (b && occ(b, SENT_B) >= 1 && occ(b, SENT_E) >= 1) must.add(pf);
+});
+if (must.size < 1) fail('no managed block in the manifest, at a default location, or declared - nothing to prove (a zero-harness machine cannot be certified by this drill)');
+// check EVERY must file: adapter-not-skipped (by basename) + present + whole-file byte marker
+// (multi-line safe) + exactly one begin AND one end sentinel OCCURRENCE + begin before end
+var claudeSkip = /Claude Code (not detected|config is no longer present); skipping adapter/;
+var codexSkip = /Codex CLI (not detected|config is no longer present); skipping adapter/;
+must.forEach(function (f) {
+  var skip = base(f) === 'CLAUDE.md' ? claudeSkip : codexSkip;
+  if (skip.test(syncOut)) fail('sync skipped the adapter for managed-block file ' + f + ' (set its CLAUDE_CONFIG_DIR/CODEX_HOME to this root and re-run)');
+  var buf = rd(f);
+  if (buf === null) fail('managed-block file missing on disk: ' + f);
+  if (has(buf, marker)) fail('marker found in ' + f + ' (whole-file, byte-exact, multi-line-safe)');
+  var bc = occ(buf, SENT_B), ec = occ(buf, SENT_E);
+  if (bc !== 1 || ec !== 1) fail(f + ': ' + bc + ' begin / ' + ec + ' end sentinel occurrence(s) (need exactly one each)');
+  if (idx(buf, SENT_B) >= idx(buf, SENT_E)) fail(f + ': begin sentinel must precede end sentinel');
+});
+// POST-SYNC digest proof: hook envelope (TRUE byte compare) + digest marker (whole-file byte)
+var digestBuf = rd(path.join(core, 'state', 'digest.md'));
+if (digestBuf === null) fail('post-sync digest missing');
+var hookBuf = hookFile ? rd(hookFile) : null;
+if (hookBuf === null || hookBuf.length === 0) fail('hook printed nothing (fail-open output is NOT proof of clean)');
+var j; try { j = JSON.parse(hookBuf.toString('utf8')); } catch (e) { fail('hook output is malformed JSON'); }
+var h = (j && j.hookSpecificOutput) || {};
+if (h.hookEventName !== 'SessionStart') fail('hook wrong hookEventName');
+if (typeof h.additionalContext !== 'string') fail('hook additionalContext is not a string');
+if (!digestBuf.equals(Buffer.from(h.additionalContext, 'utf8'))) fail('injected bytes differ from the digest (true byte compare)');
+if (marker.length && h.additionalContext.indexOf(marker) >= 0) fail('poisoned marker is still injected');
+if (has(digestBuf, marker)) fail('marker present in the post-sync digest');
+process.stdout.write('DRILL PASS - ' + must.size + ' managed-block file(s) checked (post-sync manifest UNION default-probe UNION declared), byte-exact; record this output with the date\n');
+VERIFY
 
-# (1) run sync FIRST — idempotent; it REPAIRS the managed blocks AND re-records any
-# managed-block manifest entry a prior interrupted sync (or tampering) dropped. EVERY
-# digest / hook / marker / managed-block assertion below runs AFTER this, so the drill
-# proves the CURRENT (post-sync) state — never a stale pre-sync digest sync then changed (F1).
+# (1) run sync FIRST — every digest/hook/marker/managed-block assertion runs AFTER this (F1);
+# the verifier reads only the post-sync state.
 SYNC_OUT="$(WIENERDOG_HOME="$CORE" wienerdog sync 2>&1)" \
   || { printf '%s\n' "$SYNC_OUT"; fail "sync exited non-zero"; }
-printf '%s\n' "$SYNC_OUT" | grep -qiE 'managed block not updated|digest not found|AGENTS\.override' \
-  && { printf '%s\n' "$SYNC_OUT"; fail "sync reported a Table D BLOCK signal"; }
 
-# (2) VALIDATE + read the POST-SYNC manifest managed-block paths, identity-preserving
-# (NUL-delimited). node REJECTS (→ DRILL FAIL) a manifest with: no entries array; a
-# managed-block path that is not an absolute string, has a CR/LF/NUL, or a basename
-# other than CLAUDE.md/AGENTS.md; or a DUPLICATE managed-block path. A malformed or
-# duplicate manifest must FAIL, never normalize-then-pass.
-node -e '
-  const fs = require("fs"), path = require("path");
-  let m; try { m = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); }
-  catch { console.error("manifest is not valid JSON"); process.exit(1); }
-  if (!m || !Array.isArray(m.entries)) { console.error("manifest has no entries array"); process.exit(1); }
-  const seen = new Set(), out = [];
-  for (const e of m.entries) {
-    if (!e || e.kind !== "managed-block") continue;
-    const p = e.path;
-    if (typeof p !== "string" || !path.isAbsolute(p)) { console.error("managed-block path is not an absolute string"); process.exit(1); }
-    if (/[\r\n\0]/.test(p)) { console.error("managed-block path contains CR/LF/NUL"); process.exit(1); }
-    const b = path.basename(p);
-    if (b !== "CLAUDE.md" && b !== "AGENTS.md") { console.error("unexpected managed-block basename: " + b); process.exit(1); }
-    if (seen.has(p)) { console.error("duplicate managed-block path: " + p); process.exit(1); }
-    seen.add(p); out.push(p);
-  }
-  process.stdout.write(out.join("\0"));
-' "$CORE/install-manifest.json" > "$WORK/manifest.nul" || fail "post-sync manifest failed validation"
+# (2) drive the installed hook (post-sync) — WIENERDOG_JOB cleared so it injects — writing
+# its RAW stdout BYTES to a file the verifier reads (never through a console codepage).
+WIENERDOG_JOB= WIENERDOG_HOME="$CORE" "$CORE/bin/session-start.sh" > "$WORK/hook.out" 2>/dev/null || true
 
-# (3) INDEPENDENT default-location probe — regardless of manifest/env/declaration, any
-# Wienerdog managed block (a sentinel pair) at the DEFAULT harness path is a must-check
-# root. Closes the default-dir omission even if the mutable manifest or the env drops it.
-: > "$WORK/probe.nul"
-for pf in "$HOME/.claude/CLAUDE.md" "$HOME/.codex/AGENTS.md"; do
-  [ -f "$pf" ] || continue
-  grep -qF -- "$SENT_B" "$pf" && grep -qF -- "$SENT_E" "$pf" \
-    && printf '%s\0' "$pf" >> "$WORK/probe.nul"
-done
-
-# (4) MUST-CHECK set = post-sync manifest ∪ default-probe ∪ DECLARED paths (ordinal-deduped).
-# Unioning the declared paths forces every root your trusted inventory knows — INCLUDING
-# multiple custom roots for one harness, and roots sync's single-value env cannot detect —
-# into the checked set (G1). The ONLY omission left is a root that is NOT in the manifest,
-# NOT at a default location, AND NOT declared — unknowable on-machine → the documented
-# stop-and-escalate residual below.
-sort -z -u "$WORK/manifest.nul" "$WORK/probe.nul" "$WORK/declared.nul" > "$WORK/must.nul"
-[ -s "$WORK/must.nul" ] || fail "no managed block in the manifest, at a default location, or declared — nothing to prove (a zero-harness machine cannot be certified by this drill)"
-echo "must-check managed-block files (post-sync manifest ∪ default-probe ∪ declared):"; tr '\0' '\n' < "$WORK/must.nul" | sed 's/^/  /'
-
-# (5) check EVERY must-check file: adapter not skipped for its BASENAME harness (CLAUDE.md→
-# claude, AGENTS.md→codex — so a DECLARED path whose harness sync skipped BLOCKs, since
-# declared ⊆ must) + present on disk (a declared path missing here FAILS) + no marker +
-# EXACTLY one begin AND one end sentinel OCCURRENCE (count occurrences with grep -oF, NOT
-# matching lines — two sentinels on one line would evade grep -c), with begin BEFORE end (F2).
-: > "$WORK/checked.nul"
-while IFS= read -r -d '' f; do
-  case "$f" in
-    */CLAUDE.md) skip='Claude Code (not detected|config is no longer present); skipping adapter' ;;
-    */AGENTS.md) skip='Codex CLI (not detected|config is no longer present); skipping adapter' ;;
-    *) fail "unexpected managed-block file: $f" ;;
-  esac
-  printf '%s\n' "$SYNC_OUT" | grep -qE "$skip" \
-    && { printf '%s\n' "$SYNC_OUT"; fail "sync skipped the adapter for managed-block file $f (set its CLAUDE_CONFIG_DIR/CODEX_HOME to this root and re-run)"; }
-  [ -f "$f" ] || fail "managed-block file missing on disk: $f"
-  grep -qF -- "$MARKER" "$f" && fail "marker found in $f (whole-file grep)"
-  bcount=$(grep -oaF -- "$SENT_B" "$f" | wc -l | tr -d ' ')
-  ecount=$(grep -oaF -- "$SENT_E" "$f" | wc -l | tr -d ' ')
-  { [ "$bcount" -eq 1 ] && [ "$ecount" -eq 1 ]; } \
-    || fail "$f: $bcount begin / $ecount end sentinel occurrence(s) (need exactly one each)"
-  bpos=$(grep -boaF -- "$SENT_B" "$f" | head -1 | cut -d: -f1)
-  epos=$(grep -boaF -- "$SENT_E" "$f" | head -1 | cut -d: -f1)
-  [ "$bpos" -lt "$epos" ] || fail "$f: begin sentinel must precede end sentinel"
-  printf '%s\0' "$f" >> "$WORK/checked.nul"
-done < "$WORK/must.nul"
-sort -z -u "$WORK/checked.nul" > "$WORK/checked.sorted"
-
-# (6) coverage gate: the CHECKED set must EQUAL the must-check set (manifest ∪ probe ∪
-# declared) and be non-empty — every source element was inspected and verified clean.
-cmp -s "$WORK/checked.sorted" "$WORK/must.nul" || fail "coverage gate: checked set != must-check set"
-
-# (7) POST-SYNC digest proof — runs AFTER sync so it verifies the CURRENT digest, not a
-# stale one sync may have regenerated (F1). The byte-compare is a TRUE byte compare
-# (Buffer.equals on raw bytes), not a lossy UTF-8 string compare that would treat
-# distinct invalid-UTF-8 bytes as equal via the U+FFFD replacement char (F3).
-OUT="$(WIENERDOG_JOB= WIENERDOG_HOME="$CORE" "$CORE/bin/session-start.sh")" \
-  || fail "hook exited non-zero"
-[ -n "$OUT" ] || fail "hook printed nothing (fail-open output is NOT proof of clean)"
-printf '%s' "$OUT" | node -e '
-  let s = "";
-  process.stdin.on("data", (d) => (s += d));
-  process.stdin.on("end", () => {
-    let j; try { j = JSON.parse(s); } catch { console.error("malformed JSON"); process.exit(1); }
-    const h = (j && j.hookSpecificOutput) || {};
-    if (h.hookEventName !== "SessionStart") { console.error("wrong hookEventName"); process.exit(1); }
-    if (typeof h.additionalContext !== "string") { console.error("additionalContext is not a string"); process.exit(1); }
-    const digest = require("fs").readFileSync(process.argv[1]);            // raw bytes — NO utf8 decode
-    if (!digest.equals(Buffer.from(h.additionalContext, "utf8"))) { console.error("injected bytes differ from the digest"); process.exit(1); }
-    if (h.additionalContext.includes(process.argv[2])) { console.error("poisoned marker is still injected"); process.exit(1); }
-  });' "$CORE/state/digest.md" "$MARKER" || fail "hook envelope check"
-# the regenerated (post-sync) digest, checked directly for the marker (belt-and-suspenders)
-grep -qF -- "$MARKER" "$CORE/state/digest.md" && fail "marker present in the post-sync digest"
-
-count=$(tr -cd '\0' < "$WORK/must.nul" | wc -c | tr -d ' ')
-echo "DRILL PASS — $count managed-block file(s) checked (post-sync manifest ∪ default-probe ∪ declared); record this output with the date"
+# (3) run the shared verifier with the post-sync inputs. Paths reach node only via env
+# (declared list) or are read by node from disk (manifest/probe/harness files) — node
+# decides, and prints DRILL PASS / DRILL FAIL with the right exit code.
+WIENERDOG_HOME="$CORE" HOME="$HOME" WD_MARKER="$MARKER" WD_DECLARED="$DECLARED_PATHS" \
+  WD_SYNC="$SYNC_OUT" WD_HOOK_FILE="$WORK/hook.out" node "$WORK/verify.js"
 ```
 
 Windows (PowerShell — paste as one block; the hook is a bash script, and
@@ -597,165 +573,136 @@ $DeclaredPaths = @(
   "$env:USERPROFILE\.claude\CLAUDE.md"     # DECLARE the COMPLETE list of managed-block files your
   "$env:USERPROFILE\.codex\AGENTS.md"      # TRUSTED INVENTORY knows is installed — one absolute path
 )                                          # per entry, MULTIPLE roots per harness allowed. Replace/extend.
-$marker = '<the exact poisoned text you are hunting>'
+$marker = '<the exact poisoned text you are hunting>'   # may be MULTI-LINE; matched whole-file, byte-exact
 $core   = $env:WIENERDOG_HOME      # the step-0 core, re-exported after the reboot
-$SentB = '<!-- wienerdog:begin -->'; $SentE = '<!-- wienerdog:end -->'
 
 function Fail($msg) { Write-Host "DRILL FAIL: $msg"; exit 1 }
+$work = Join-Path ([System.IO.Path]::GetTempPath()) ("wd-drill-" + [guid]::NewGuid())
+New-Item -ItemType Directory -Path $work | Out-Null
+try {
+  # pin the harness-detection env BEFORE sync (see prose). It steers which single root sync
+  # DETECTS and re-records; the declared paths cover every OTHER installed root. Custom-dir:
+  # set CLAUDE_CONFIG_DIR / CODEX_HOME to the root sync should record, and list ALL roots in
+  # $DeclaredPaths.
+  Remove-Item Env:CLAUDE_CONFIG_DIR -ErrorAction SilentlyContinue
+  Remove-Item Env:CODEX_HOME -ErrorAction SilentlyContinue
+  $homeDir = if ($env:HOME) { $env:HOME } else { $env:USERPROFILE }  # HOME before USERPROFILE, matching the code
 
-# ORDINAL (byte-exact) path set — PowerShell's Sort-Object -Unique and -eq/-ne are
-# CASE-INSENSITIVE, which would collapse two case-distinct managed-block paths
-# (distinct files on a case-sensitive NTFS directory, Windows 10+) into one and check
-# only one. These match bash's `sort -z -u` (ordinal). Never use Sort-Object -Unique
-# or -eq/-ne on paths anywhere in this block.
-function New-OrdinalSet { param([string[]]$Items)
-  $s = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
-  foreach ($i in $Items) { if ($null -ne $i -and $i -ne '') { [void]$s.Add($i) } }
-  ,$s
+  # The SHARED byte-exact verifier — the SAME node script as the bash block (identical bytes)
+  # does ALL identity-critical work in ONE cross-platform program: PowerShell never compares,
+  # globs, re-encodes, or reads a managed-block path, so its case-/glob-/codepage-/rootedness
+  # footguns cannot apply (round-10). It is pure ASCII on the wire; declared paths reach node
+  # via env (wide, no console codepage) and node reads every file itself.
+  $verify = @'
+'use strict';
+var fs = require('fs'), path = require('path'), os = require('os');
+var core = process.env.WIENERDOG_HOME || '';
+var marker = process.env.WD_MARKER || '';
+var syncOut = process.env.WD_SYNC || '';
+var home = process.env.HOME || os.homedir();
+var hookFile = process.env.WD_HOOK_FILE || '';
+var declared = (process.env.WD_DECLARED || '').split(/\r?\n/).filter(function (s) { return s.length; });
+var SENT_B = '<!-- wienerdog:begin -->', SENT_E = '<!-- wienerdog:end -->';
+var isWin = process.platform === 'win32';
+function fail(m) { process.stdout.write('DRILL FAIL: ' + m + '\n'); process.exit(1); }
+// path identity: FULLY QUALIFIED (drive+sep or UNC on win; leading / on posix), CANONICAL
+// (no . / .. segment), EXACT-case basename — all byte-exact, platform-correct.
+function fq(p) { return isWin ? (/^[A-Za-z]:[\\/]/.test(p) || /^[\\/]{2}[^\\/]/.test(p)) : p.charAt(0) === '/'; }
+function dotseg(p) { return p.split(/[\\/]+/).some(function (s) { return s === '.' || s === '..'; }); }
+function base(p) { var a = p.split(/[\\/]/); return a[a.length - 1]; }
+function rd(p) { try { return fs.readFileSync(p); } catch (e) { return null; } }        // literal read, no glob
+function occ(b, s) { var t = Buffer.from(s), n = 0, i = 0; while ((i = b.indexOf(t, i)) >= 0) { n++; i += t.length; } return n; }
+function idx(b, s) { return b.indexOf(Buffer.from(s)); }
+function has(b, s) { return s.length > 0 && b.indexOf(Buffer.from(s)) >= 0; }            // whole-file, byte-exact, multi-line-safe
+// notice-tolerant: block only on a concrete Table D signal (the two Codex info notices pass)
+if (/managed block not updated|digest not found|AGENTS\.override/i.test(syncOut)) fail('sync reported a Table D BLOCK signal');
+// validate + collect DECLARED paths (dedup-with-reject, ordinal exact-string keys)
+if (declared.length < 1) fail('DECLARED_PATHS is empty - list every managed-block file your trusted inventory knows is installed');
+var must = new Set();
+declared.forEach(function (dp) {
+  if (!fq(dp)) fail('declared path is not FULLY QUALIFIED (drive-relative / current-drive-rooted rejected): ' + dp);
+  if (dotseg(dp)) fail('declared path has a "." or ".." segment (must be canonical): ' + dp);
+  var b = base(dp);
+  if (b !== 'CLAUDE.md' && b !== 'AGENTS.md') fail('not a managed-block file: basename must be exactly CLAUDE.md or AGENTS.md: ' + dp);
+  if (must.has(dp)) fail('a declared path is listed more than once (ordinal-exact): ' + dp);
+  must.add(dp);
+});
+// validate + read POST-SYNC manifest managed-block paths
+var mtxt; try { mtxt = fs.readFileSync(path.join(core, 'install-manifest.json'), 'utf8'); } catch (e) { fail('cannot read install-manifest.json'); }
+var m; try { m = JSON.parse(mtxt); } catch (e) { fail('manifest is not valid JSON'); }
+if (!m || !Array.isArray(m.entries)) fail('manifest has no entries array');
+var mseen = new Set();
+m.entries.forEach(function (e) {
+  if (!e || e.kind !== 'managed-block') return;
+  var p = e.path;
+  if (typeof p !== 'string' || !fq(p)) fail('manifest managed-block path is not fully qualified: ' + JSON.stringify(p));
+  if (/[\r\n\0]/.test(p)) fail('manifest managed-block path contains CR/LF/NUL');
+  var b = base(p);
+  if (b !== 'CLAUDE.md' && b !== 'AGENTS.md') fail('manifest managed-block basename unexpected: ' + b);
+  if (mseen.has(p)) fail('duplicate managed-block path in manifest: ' + p);
+  mseen.add(p); must.add(p);
+});
+// independent default-location probe (byte-exact buffer sentinel; HOME per paths.js)
+[path.join(home, '.claude', 'CLAUDE.md'), path.join(home, '.codex', 'AGENTS.md')].forEach(function (pf) {
+  var b = rd(pf);
+  if (b && occ(b, SENT_B) >= 1 && occ(b, SENT_E) >= 1) must.add(pf);
+});
+if (must.size < 1) fail('no managed block in the manifest, at a default location, or declared - nothing to prove (a zero-harness machine cannot be certified by this drill)');
+// check EVERY must file: adapter-not-skipped (by basename) + present + whole-file byte marker
+// (multi-line safe) + exactly one begin AND one end sentinel OCCURRENCE + begin before end
+var claudeSkip = /Claude Code (not detected|config is no longer present); skipping adapter/;
+var codexSkip = /Codex CLI (not detected|config is no longer present); skipping adapter/;
+must.forEach(function (f) {
+  var skip = base(f) === 'CLAUDE.md' ? claudeSkip : codexSkip;
+  if (skip.test(syncOut)) fail('sync skipped the adapter for managed-block file ' + f + ' (set its CLAUDE_CONFIG_DIR/CODEX_HOME to this root and re-run)');
+  var buf = rd(f);
+  if (buf === null) fail('managed-block file missing on disk: ' + f);
+  if (has(buf, marker)) fail('marker found in ' + f + ' (whole-file, byte-exact, multi-line-safe)');
+  var bc = occ(buf, SENT_B), ec = occ(buf, SENT_E);
+  if (bc !== 1 || ec !== 1) fail(f + ': ' + bc + ' begin / ' + ec + ' end sentinel occurrence(s) (need exactly one each)');
+  if (idx(buf, SENT_B) >= idx(buf, SENT_E)) fail(f + ': begin sentinel must precede end sentinel');
+});
+// POST-SYNC digest proof: hook envelope (TRUE byte compare) + digest marker (whole-file byte)
+var digestBuf = rd(path.join(core, 'state', 'digest.md'));
+if (digestBuf === null) fail('post-sync digest missing');
+var hookBuf = hookFile ? rd(hookFile) : null;
+if (hookBuf === null || hookBuf.length === 0) fail('hook printed nothing (fail-open output is NOT proof of clean)');
+var j; try { j = JSON.parse(hookBuf.toString('utf8')); } catch (e) { fail('hook output is malformed JSON'); }
+var h = (j && j.hookSpecificOutput) || {};
+if (h.hookEventName !== 'SessionStart') fail('hook wrong hookEventName');
+if (typeof h.additionalContext !== 'string') fail('hook additionalContext is not a string');
+if (!digestBuf.equals(Buffer.from(h.additionalContext, 'utf8'))) fail('injected bytes differ from the digest (true byte compare)');
+if (marker.length && h.additionalContext.indexOf(marker) >= 0) fail('poisoned marker is still injected');
+if (has(digestBuf, marker)) fail('marker present in the post-sync digest');
+process.stdout.write('DRILL PASS - ' + must.size + ' managed-block file(s) checked (post-sync manifest UNION default-probe UNION declared), byte-exact; record this output with the date\n');
+'@
+  # write the verifier as ASCII bytes (the script is pure ASCII; the declared paths / marker
+  # travel via env, never inside the script)
+  [System.IO.File]::WriteAllText("$work\verify.js", $verify, [System.Text.Encoding]::ASCII)
+
+  # (1) run sync FIRST (F1) — the verifier reads only the post-sync state.
+  $sync = wienerdog sync 2>&1
+  if ($LASTEXITCODE -ne 0) { $sync; Fail "sync exited non-zero" }
+
+  # (2) drive the installed hook (post-sync) via bash; bash writes the RAW stdout BYTES to a
+  # file the verifier reads — never captured through the PS console codepage (round-10 G1).
+  $coreFwd = $core -replace '\\', '/'
+  $hookOut = "$work\hook.out"; $hookFwd = $hookOut -replace '\\', '/'
+  bash -c 'WIENERDOG_JOB= WIENERDOG_HOME="$1" "$1/bin/session-start.sh" > "$2"' _ $coreFwd $hookFwd
+
+  # (3) run the shared verifier. Paths cross to node ONLY via env (wide, no console codepage);
+  # node reads every file itself and decides — PS handles no path identity.
+  $env:WIENERDOG_HOME = $core
+  $env:HOME = $homeDir
+  $env:WD_MARKER = $marker
+  $env:WD_DECLARED = ($DeclaredPaths -join "`n")
+  $env:WD_SYNC = ($sync | Out-String)
+  $env:WD_HOOK_FILE = $hookOut
+  node "$work\verify.js"
+  exit $LASTEXITCODE
+} finally {
+  Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
 }
-
-# pin the harness-detection env BEFORE sync (see prose above). It steers which single root
-# sync DETECTS and re-records per harness; the declared paths cover every OTHER installed
-# root. For a CUSTOM-directory install, set CLAUDE_CONFIG_DIR / CODEX_HOME to the root sync
-# should record, and list ALL roots (including it) in $DeclaredPaths.
-Remove-Item Env:CLAUDE_CONFIG_DIR -ErrorAction SilentlyContinue
-Remove-Item Env:CODEX_HOME -ErrorAction SilentlyContinue
-
-# VALIDATE the declared PATH list (ordinal, dedup-with-reject): each an absolute path whose
-# basename is CLAUDE.md or AGENTS.md; a repeated path is rejected.
-$homeDir = if ($env:HOME) { $env:HOME } else { $env:USERPROFILE }  # HOME before USERPROFILE, matching the code
-foreach ($dp in $DeclaredPaths) {
-  if (-not [System.IO.Path]::IsPathRooted($dp)) { Fail "declared path is not absolute: $dp" }
-  $bn = [System.IO.Path]::GetFileName($dp)
-  # ORDINAL (case-sensitive) basename check — -ne is CASE-INSENSITIVE and would accept a
-  # wrong-case decoy (agents.md) whose real uppercase counterpart stays out of coverage.
-  if (-not [System.StringComparer]::Ordinal.Equals($bn, 'CLAUDE.md') -and -not [System.StringComparer]::Ordinal.Equals($bn, 'AGENTS.md')) {
-    Fail "not a managed-block file: basename must be exactly CLAUDE.md or AGENTS.md: $dp"
-  }
-}
-$declaredSet = New-OrdinalSet $DeclaredPaths
-if ($declaredSet.Count -lt 1) { Fail "DeclaredPaths is empty - list every managed-block file your TRUSTED inventory knows is installed" }
-if ($declaredSet.Count -ne @($DeclaredPaths).Count) { Fail "a declared path is listed more than once (ordinal-exact)" }
-
-# (1) run sync FIRST - idempotent; it REPAIRS the managed blocks AND re-records any
-# managed-block manifest entry a prior interrupted sync (or tampering) dropped. EVERY
-# digest / hook / marker / managed-block assertion below runs AFTER this, so the drill
-# proves the CURRENT (post-sync) state - never a stale pre-sync digest sync then changed (F1).
-$sync = wienerdog sync 2>&1
-if ($LASTEXITCODE -ne 0) { $sync; Fail "sync exited non-zero" }
-if ($sync | Select-String -Pattern 'managed block not updated|digest not found|AGENTS\.override' -Quiet) { $sync; Fail "sync reported a Table D BLOCK signal" }
-
-# (2) VALIDATE + read the POST-SYNC manifest managed-block paths (as a JSON array, so
-# no shell normalization can collapse or alter identity). node REJECTS (-> DRILL FAIL)
-# a manifest with: no entries array; a managed-block path that is not an absolute
-# string, has a CR/LF/NUL, or a basename other than CLAUDE.md/AGENTS.md; or a DUPLICATE
-# managed-block path. A malformed or duplicate manifest must FAIL, never normalize-pass.
-$mbJson = node -e '
-  const fs = require("fs"), path = require("path");
-  let m; try { m = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); }
-  catch { console.error("manifest is not valid JSON"); process.exit(1); }
-  if (!m || !Array.isArray(m.entries)) { console.error("manifest has no entries array"); process.exit(1); }
-  const seen = new Set(), out = [];
-  for (const e of m.entries) {
-    if (!e || e.kind !== "managed-block") continue;
-    const p = e.path;
-    if (typeof p !== "string" || !path.isAbsolute(p)) { console.error("managed-block path is not an absolute string"); process.exit(1); }
-    if (/[\r\n\0]/.test(p)) { console.error("managed-block path contains CR/LF/NUL"); process.exit(1); }
-    const b = path.basename(p);
-    if (b !== "CLAUDE.md" && b !== "AGENTS.md") { console.error("unexpected managed-block basename: " + b); process.exit(1); }
-    if (seen.has(p)) { console.error("duplicate managed-block path: " + p); process.exit(1); }
-    seen.add(p); out.push(p);
-  }
-  process.stdout.write(JSON.stringify(out));
-' "$core\install-manifest.json"
-if ($LASTEXITCODE -ne 0) { Fail "post-sync manifest failed validation" }
-$manifestFiles = @($mbJson | ConvertFrom-Json)
-
-# (3) INDEPENDENT default-location probe - regardless of manifest/env/declaration, any
-# Wienerdog managed block (a sentinel pair) at the DEFAULT harness path is a must-check
-# root. Closes the default-dir omission even if the mutable manifest or the env drops it.
-$probeFiles = @()
-foreach ($pf in @("$homeDir\.claude\CLAUDE.md", "$homeDir\.codex\AGENTS.md")) {
-  # -LiteralPath — a bare -Path/Test-Path GLOB-interprets [ ] * ? (legal in NTFS
-  # filenames), binding to a decoy; -LiteralPath is identity-exact (round-9 G1).
-  if (Test-Path -LiteralPath $pf -PathType Leaf) {
-    $hasB = Select-String -LiteralPath $pf -SimpleMatch $SentB -Quiet
-    $hasE = Select-String -LiteralPath $pf -SimpleMatch $SentE -Quiet
-    if ($hasB -and $hasE) { $probeFiles += $pf }
-  }
-}
-
-# (4) MUST-CHECK set = post-sync manifest UNION default-probe UNION DECLARED paths (ORDINAL
-# dedup — a case-distinct pair stays distinct). Unioning the declared paths forces every
-# root your trusted inventory knows - INCLUDING multiple custom roots for one harness, and
-# roots sync's single-value env cannot detect - into the checked set (G1). The ONLY omission
-# left is a root NOT in the manifest, NOT at a default location, AND NOT declared - unknowable
-# on-machine -> the documented stop-and-escalate residual below.
-$mustSet = New-OrdinalSet (@($manifestFiles) + @($probeFiles) + @($DeclaredPaths))
-if ($mustSet.Count -lt 1) { Fail "no managed block in the manifest, at a default location, or declared - nothing to prove (a zero-harness machine cannot be certified by this drill)" }
-Write-Host "must-check managed-block files (post-sync manifest UNION default-probe UNION declared):"; $mustSet | ForEach-Object { Write-Host "  $_" }
-
-# (5) check EVERY must-check file: adapter not skipped for its BASENAME harness (CLAUDE.md->
-# claude, AGENTS.md->codex - so a DECLARED path whose harness sync skipped BLOCKs, since
-# declared is a subset of must) + present on disk (a declared path missing here FAILS) + no
-# marker + EXACTLY one begin AND one end sentinel OCCURRENCE (regex Matches over the raw file
-# text counts OCCURRENCES, ordinal - not matching lines, which .Count on Select-String would),
-# with begin BEFORE end (F2).
-$checkedPaths = @()
-foreach ($f in $mustSet) {
-  # switch -CaseSensitive (ordinal) — the default switch is CASE-INSENSITIVE and would
-  # classify a wrong-case basename as a real harness file (round-7 G1 / round-8).
-  switch -CaseSensitive ([System.IO.Path]::GetFileName($f)) {
-    'CLAUDE.md' { $skip = 'Claude Code (not detected|config is no longer present); skipping adapter' }
-    'AGENTS.md' { $skip = 'Codex CLI (not detected|config is no longer present); skipping adapter' }
-    default     { Fail "unexpected managed-block file: $f" }
-  }
-  if ($sync | Select-String -Pattern $skip -Quiet) { $sync; Fail "sync skipped the adapter for managed-block file $f (set its CLAUDE_CONFIG_DIR/CODEX_HOME to this root and re-run)" }
-  # -LiteralPath — the file-identity ops bind to the EXACT path, never a glob decoy
-  # ([ ] * ? are legal NTFS filename chars); [IO.File]::ReadAllText is already literal (round-9 G1).
-  if (-not (Test-Path -LiteralPath $f -PathType Leaf)) { Fail "managed-block file missing on disk: $f" }
-  if (Select-String -LiteralPath $f -SimpleMatch $marker -Quiet) { Fail "marker found in $f (whole-file grep)" }
-  $raw = [System.IO.File]::ReadAllText($f)
-  $bm = [regex]::Matches($raw, [regex]::Escape($SentB))
-  $em = [regex]::Matches($raw, [regex]::Escape($SentE))
-  if ($bm.Count -ne 1 -or $em.Count -ne 1) { Fail "$f`: $($bm.Count) begin / $($em.Count) end sentinel occurrence(s) (need exactly one each)" }
-  if ($bm[0].Index -ge $em[0].Index) { Fail "$f`: begin sentinel must precede end sentinel" }
-  $checkedPaths += $f
-}
-$checkedSet = New-OrdinalSet $checkedPaths
-
-# (6) coverage gate: the CHECKED set must EQUAL the must-check set (manifest UNION probe
-# UNION declared) and be non-empty (HashSet.SetEquals uses the set's ORDINAL comparer).
-if (-not $checkedSet.SetEquals($mustSet)) {
-  Write-Host "checked:"; $checkedSet | ForEach-Object { Write-Host "  $_" }
-  Write-Host "must-check:"; $mustSet | ForEach-Object { Write-Host "  $_" }
-  Fail "coverage gate: checked set != must-check set"
-}
-
-# (7) POST-SYNC digest proof - runs AFTER sync so it verifies the CURRENT digest, not a
-# stale one sync may have regenerated (F1). The byte-compare is a TRUE byte compare
-# (Buffer.equals on raw bytes), not a lossy UTF-8 string compare (F3).
-# (positional argument passing - the path is NEVER interpolated into the bash source)
-$coreFwd = $core -replace '\\', '/'
-$out = bash -c 'WIENERDOG_JOB= WIENERDOG_HOME="$1" "$1/bin/session-start.sh"' _ "$coreFwd"
-if ($LASTEXITCODE -ne 0) { Fail "hook exited non-zero" }
-if ([string]::IsNullOrEmpty($out)) { Fail "hook printed nothing (fail-open output is NOT proof of clean)" }
-$out | node -e '
-  let s = "";
-  process.stdin.on("data", (d) => (s += d));
-  process.stdin.on("end", () => {
-    let j; try { j = JSON.parse(s); } catch { console.error("malformed JSON"); process.exit(1); }
-    const h = (j && j.hookSpecificOutput) || {};
-    if (h.hookEventName !== "SessionStart") { console.error("wrong hookEventName"); process.exit(1); }
-    if (typeof h.additionalContext !== "string") { console.error("additionalContext is not a string"); process.exit(1); }
-    const digest = require("fs").readFileSync(process.argv[1]);            // raw bytes — NO utf8 decode
-    if (!digest.equals(Buffer.from(h.additionalContext, "utf8"))) { console.error("injected bytes differ from the digest"); process.exit(1); }
-    if (h.additionalContext.includes(process.argv[2])) { console.error("poisoned marker is still injected"); process.exit(1); }
-  });' "$core\state\digest.md" $marker
-if ($LASTEXITCODE -ne 0) { Fail "hook envelope check" }
-# the regenerated (post-sync) digest, checked directly for the marker (belt-and-suspenders)
-if (Select-String -LiteralPath "$core\state\digest.md" -SimpleMatch $marker -Quiet) { Fail "marker present in the post-sync digest" }
-Write-Host "DRILL PASS — $($mustSet.Count) managed-block file(s) checked (post-sync manifest UNION default-probe UNION declared); record this output with the date"
 ```
 
 What each part proves (note the whole sequence is **sync-first**: `wienerdog
@@ -763,38 +710,48 @@ sync` runs before ANY digest / hook / marker / managed-block assertion, so every
 check verifies the CURRENT post-sync state, never a stale pre-sync digest that
 sync then regenerated):
 
-- **Drive the installed SessionStart hook with the injecting environment —
-  AFTER sync.** The block runs the installed hook at `$CORE/bin/session-start.sh`
-  (Table A; `doctor` does **not** print the path) with `WIENERDOG_HOME` set to
-  the step-0 core and `WIENERDOG_JOB` **cleared** (an inherited `WIENERDOG_JOB`
-  makes the hook exit `0` with no output — a false "clean"). This runs in the
-  LAST step, after `sync` and the coverage checks, so it reads the digest `sync`
-  just (re)generated — if a changed input reintroduced the marker into a new
-  digest, the drill catches it here rather than passing on the old one.
-- **Verify fail-closed with a TRUE byte compare.** The `node -e` script parses
-  the JSON envelope and BLOCKS (drill FAILS — do not re-authorize) on any of:
-  empty stdout, a JSON-parse failure, `hookSpecificOutput.hookEventName !==
-  'SessionStart'`, or a non-string `additionalContext`. When it parses, it reads
-  `$CORE/state/digest.md` as **raw bytes** (`readFileSync` with NO encoding) and
-  compares with `digest.equals(Buffer.from(additionalContext, "utf8"))` — a
-  genuine byte compare. (A lossy `utf8`-string compare would decode invalid UTF-8
-  in a tampered digest to the U+FFFD replacement char and could read EQUAL where
-  the raw bytes differ.) It also confirms the poisoned marker is absent from
-  `additionalContext`, then greps the regenerated post-sync digest directly,
-  belt-and-suspenders.
+- **One shared byte-exact verifier does all the identity-critical work.** Both
+  blocks are thin platform shims — env pinning, `wienerdog sync`, and the hook
+  invocation — around the **same** node script (byte-identical in both). That
+  verifier reads the manifest, validates the declared paths, runs the
+  default-location probe, computes the manifest∪probe∪declared union, checks every
+  file, and does the hook/digest byte-compare — **in node, cross-platform,
+  byte-exact**. This is deliberate: path identity is compared, searched, and
+  read only by node (ordinal string keys, `Buffer.indexOf`, `fs.readFileSync`),
+  so PowerShell/Windows footguns — case-insensitive comparison, filename globbing
+  (`[ ] * ?`), console-codepage re-encoding of non-ASCII paths, drive-relative
+  "rooted" paths, and line-oriented content search — **cannot apply**: PS never
+  compares, globs, re-encodes, or reads a managed-block path. Managed-block paths
+  reach node only via env (declared list — wide, no console codepage) or are read
+  by node directly from disk (manifest / probe / harness files); nothing crosses
+  back to the shell as a path it must act on. bash was already byte-exact; the
+  shared verifier keeps bash and PS provably identical.
+- **Drive the installed hook AFTER sync, fail-closed, TRUE byte compare.** The
+  shims run the installed hook at `$CORE/bin/session-start.sh` (Table A) with
+  `WIENERDOG_HOME` set and `WIENERDOG_JOB` **cleared** (an inherited
+  `WIENERDOG_JOB` makes the hook exit `0` with no output — a false "clean"),
+  writing its **raw stdout bytes** to a file the verifier reads (bash directly;
+  PS via `bash` so the bytes never pass through the console codepage). The
+  verifier BLOCKS on empty output / JSON-parse failure / wrong `hookEventName` /
+  non-string `additionalContext`, then reads `$CORE/state/digest.md` as **raw
+  bytes** and compares `digest.equals(Buffer.from(additionalContext, "utf8"))` —
+  a genuine byte compare (a lossy `utf8`-string compare would map invalid UTF-8 to
+  U+FFFD and read EQUAL where the raw bytes differ), confirms the marker is absent
+  from `additionalContext` (**ordinal `indexOf`, multi-line-safe**), and greps the
+  post-sync digest bytes directly. It runs after `sync`, so it verifies the digest
+  `sync` just (re)generated.
 - **Check every managed-block file in the machine-authoritative set — the
   post-sync manifest UNION an independent default-location probe UNION your
-  declared paths.** The drill runs its `wienerdog sync` **first** (idempotent — it
+  declared paths.** The verifier runs after `wienerdog sync` (idempotent — it
   repairs the managed blocks and **re-records any `managed-block` manifest entry
   a prior interrupted sync or tampering had dropped**), then builds the
   must-check set from **three** independent sources and checks **every** file in it
-  with the Table D three-check conjunction (whole-file marker grep + a sentinel
-  check that counts literal begin/end **occurrences** — `grep -oF | wc -l` in
-  bash, an ordinal regex-match count in PowerShell, so two sentinels on one line
-  read as two, not the single line `grep -c`/`Select-String(...).Count` would
-  report — requiring **exactly one begin AND exactly one end AND begin before
-  end** by byte/char offset, plus a FAIL if `sync` skipped that file's adapter or
-  the file is missing):
+  with the Table D three-check conjunction (a **whole-file, byte-exact,
+  multi-line-safe** marker search — `Buffer.indexOf`, so a contiguous multi-line
+  poison marker matches — plus a sentinel check that counts literal begin/end
+  **occurrences** across the whole file, requiring **exactly one begin AND exactly
+  one end AND begin before end** by byte offset, plus a FAIL if `sync` skipped that
+  file's adapter or the file is missing):
   - **The post-sync manifest** (`$CORE/install-manifest.json`): read
     identity-preserving after `node` **validates** it — a manifest with no
     entries array, a non-absolute/non-string managed-block path, a path with a
@@ -809,8 +766,14 @@ sync then regenerated):
   - **Your declared paths** (`DECLARED_PATHS` / `$DeclaredPaths`): the complete
     set of managed-block files your trusted inventory knows — **path-keyed, so it
     covers multiple roots for one harness and any non-default, non-current-env
-    root** that neither the manifest nor the probe can see. Each declared path is
-    checked; one missing on disk FAILS, one whose harness `sync` skipped BLOCKs.
+    root** that neither the manifest nor the probe can see. Each is validated
+    (**fully qualified** — a drive-relative `C:foo` or current-drive-rooted `\foo`
+    is rejected; **canonical** — no `.`/`..` segment; **exact-case** basename
+    `CLAUDE.md`/`AGENTS.md`), deduped ordinal-exact, then checked; one missing on
+    disk FAILS, one whose harness `sync` skipped BLOCKs. Byte-distinct forms of the
+    same file (NFC vs NFD, `/` vs `\`, UNC vs drive) are treated as **distinct
+    entries, each verified** against the file the OS resolves it to — redundant,
+    never omitting.
   A harness whose manifest entry was missing pre-sync is re-recorded by sync and
   thus checked; a managed block at a default location is caught by the probe; a
   root only your inventory knows is caught by the declared paths. This is

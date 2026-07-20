@@ -374,6 +374,36 @@ state and act on:
   > is immune (`[ -f "$f" ]` / `grep -F -- … "$f"` do not glob the quoted filename).
   > Two surfaces now closed — round-8 comparisons ordinal AND round-9 file-ops literal —
   > so ZERO path-identity betrayals remain in either block.
+  >
+  > **Fix-pass amendment 12 (2026-07-20, lock-pass — proactive path-identity surface
+  > sweep + structural fix):** three more PowerShell path-identity surfaces were found
+  > (encoding, multi-line content search, rootedness). Rather than fix three and risk a
+  > fifth, the drill's identity-critical logic moved into ONE SHARED byte-exact node
+  > verifier invoked by both blocks (thin per-platform shims remain for env pinning,
+  > sync, hook). The chosen approach and the full surface audit:
+  >
+  > | Surface | How pinned | bash | PS |
+  > |---|---|---|---|
+  > | (a) string comparison | ordinal — node `Set`/`===` exact-string keys | ✓ (`sort -z -u`) | ✓ (node) |
+  > | (b) filesystem addressing / globbing | node `fs.readFileSync` literal, no glob | ✓ (quoted args) | ✓ (node) |
+  > | (c) representation/encoding (node↔shell) | declared paths via env (wide); node reads manifest/files itself; hook stdout via raw-byte file — never console codepage | ✓ | ✓ (node) |
+  > | (d) rootedness | node fully-qualified check (drive+sep/UNC on win, `/` on posix); `C:foo` / `\foo` REJECTED | ✓ | ✓ (node) |
+  > | (e) content search line-vs-whole-file | node `Buffer.indexOf` whole-file byte match — multi-line marker matches | ✓ (node) | ✓ (node) |
+  > | (f) Unicode normalization (NFC/NFD) | byte-distinct = distinct must-check entries, each verified against the OS-resolved file → redundant, never omitted (no normalization; bash+PS agree) | ✓ | ✓ |
+  > | (g) Windows path quirks | trailing dot/space, 8.3, ADS `:stream` → non-exact basename REJECTED; `/`-vs-`\`, UNC-vs-drive, redundant seps → byte-distinct entries, each verified; `.`/`..` segment REJECTED (canonical) | ✓ | ✓ (node) |
+  >
+  > **G1 (encoding):** the round-9 node emitter wrote UTF-8 JSON but PS captured native
+  > stdout in the console codepage (CP437 on Win PS 5.1) → a non-ASCII manifest path
+  > mojibaked, letting a clean mojibake decoy enter checked while the real poisoned file
+  > was omitted. Dissolved: node reads the manifest itself (no node→PS path crossing);
+  > declared paths cross PS→node via env (wide). **G2 (multi-line marker):**
+  > `Select-String -SimpleMatch` / `grep -F` are line-oriented, so a contiguous
+  > multi-line marker never matched though the file contained it → whole-file
+  > `Buffer.indexOf` (fixes BOTH blocks — bash's `grep -F` had the same gap).
+  > **G3 (drive-relative):** `[IO.Path]::IsPathRooted('C:foo')` is true but not fully
+  > qualified → the verifier's fully-qualified check rejects `C:foo` / `\foo`. The whole
+  > PS path-identity class (round-6/7/8/9 + this round) is now closed by construction:
+  > PS handles no path identity at all.
 - **The ONLY authoritative way to reach zero running Wienerdog processes is to
   REBOOT after removing every per-job schedule AND the catch-up entry — not
   per-platform process forensics (R4-C, round-4).** After a reboot, with nothing
@@ -822,6 +852,30 @@ headless/`--yes` bypass — it is interactive and shows the exact bytes.
      audit, the PS block has **zero path-identity betrayals** — every comparison ordinal
      AND every filesystem op literal. bash is immune (`[ -f "$f" ]` / `grep -F -- "$f"`
      do not glob the quoted filename arg).
+   - **STRUCTURAL: one SHARED byte-exact node verifier does ALL identity-critical work
+     (round-10).** Rather than pin each PowerShell path-identity surface separately (a
+     recurring class — case, glob, encoding, rootedness, line-vs-whole-file), the drill
+     ships **both blocks as thin platform shims** (env pinning, `wienerdog sync`, hook
+     invocation) around the **same** node script — byte-identical in both — that reads
+     the manifest, validates the declared paths, runs the default probe, computes the
+     manifest∪probe∪declared union, checks every file, and does the hook/digest
+     byte-compare. Because node (not PS) does every comparison (ordinal string keys),
+     search (`Buffer.indexOf`, whole-file, multi-line-safe), and file read
+     (`fs.readFileSync`, literal), the **entire PS/Windows path-identity class is
+     eliminated**: PowerShell never compares, globs, re-encodes, or reads a managed-block
+     path. Declared paths reach node only via **env** (wide, no console codepage);
+     manifest/probe/harness files are read by node from disk; the hook stdout is written
+     to a file as **raw bytes** (never through the PS console codepage) and read by node.
+     The verifier also validates each declared/manifest path as **fully qualified**
+     (`isPathFullyQualified`-equivalent: drive+separator or UNC on Windows, leading `/`
+     on POSIX — a drive-relative `C:foo` or current-drive-rooted `\foo` is REJECTED),
+     **canonical** (no `.`/`..` segment), and **exact-case** basename, and treats
+     byte-distinct forms of the same file (NFC/NFD, `/`-vs-`\`, UNC-vs-drive) as distinct
+     must-check entries — each independently verified against the file the OS resolves it
+     to (redundant, never omitting). The marker search and sentinel checks are
+     whole-file byte-exact (`Buffer.indexOf`), so a **multi-line** marker matches and a
+     duplicate sentinel pair on one line is counted. bash and PS are thereby provably
+     identical (same verifier bytes).
    - **Completeness argument (round-7).** Reason explicitly about whether any
      genuinely-installed managed-block file can still be omitted from the checked set
      while DRILL PASS prints. The three sources cover: the **manifest** (every
@@ -1204,22 +1258,20 @@ grep -nE "DECLARED_PATHS|\\\$DeclaredPaths|declared path is not absolute|declare
 # Round-5 G2: node VALIDATES the manifest before emitting (reject malformed/duplicate),
 # identity-preserving (no sort -u normalization of raw paths):
 grep -nE "no entries array|is not an absolute string|CR/LF/NUL|unexpected managed-block basename|duplicate managed-block path|failed validation|ConvertFrom-Json" docs/runbooks/incident.md
-# Round-6 G1: PowerShell path set-ops are ORDINAL (HashSet + StringComparer::Ordinal +
-# SetEquals); round-8 G1: basename validation + classification are ordinal/case-sensitive
-# (Ordinal.Equals + switch -CaseSensitive):
-grep -nE "StringComparer\]::Ordinal|New-OrdinalSet|SetEquals|HashSet\[string\]|Ordinal\.Equals|switch -CaseSensitive" docs/runbooks/incident.md
-# and NO Sort-Object -Unique survives in PowerShell CODE (comments may name it as a
-# warning; strip comment lines first — expect NO output):
-awk '/^```powershell$/{p=1;next} /^```$/{p=0} p' docs/runbooks/incident.md | grep -vE '^\s*#' | grep -n "Sort-Object -Unique" || true
+# Round-10 STRUCTURAL: ONE shared byte-exact node verifier does all identity-critical work
+# (fully-qualified check, ordinal Set, Buffer.indexOf whole-file/multi-line marker, literal
+# fs.readFileSync, Buffer.equals digest compare) — invoked by both blocks:
+grep -nE "SHARED byte-exact verifier|FULLY QUALIFIED|Buffer\.indexOf|Buffer\.from|whole-file, byte-exact, multi-line-safe|process\.platform === 'win32'" docs/runbooks/incident.md
+# the verifier is byte-identical in both blocks (bash heredoc == PS here-string):
+diff <(awk '/cat > "\$WORK\/verify.js" <<.VERIFY.$/{f=1;next} f&&/^VERIFY$/{f=0} f{print}' docs/runbooks/incident.md) \
+     <(awk "/\\\$verify = @'\$/{f=1;next} f&&/^'@\$/{f=0} f{print}" docs/runbooks/incident.md) >/dev/null && echo "verifier byte-identical — OK"
 # Round-8 G1 negative: NO case-insensitive -ne/-eq on a basename, and NO default
 # (case-insensitive) switch on GetFileName, in PowerShell CODE (expect NO output):
 awk '/^```powershell$/{p=1;next} /^```$/{p=0} p' docs/runbooks/incident.md | grep -vE '^\s*#' | grep -nE "\-ne '(CLAUDE|AGENTS)\.md'|\-eq '(CLAUDE|AGENTS)\.md'|switch \(\[System\.IO\.Path\]::GetFileName" || true
-# Round-9 G1: PS filesystem ops on a path IDENTITY use -LiteralPath / literal [IO.File]:
-grep -nE "Test-Path -LiteralPath|Select-String -LiteralPath|\[System\.IO\.File\]::ReadAllText" docs/runbooks/incident.md
-# Round-9 G1 negative: NO glob-interpreting bare -Path / Test-Path on an identity in PS
-# CODE (Select-String -Pattern on $sync output is a pipeline grep, not a path — expect
-# NO output):
-awk '/^```powershell$/{p=1;next} /^```$/{p=0} p' docs/runbooks/incident.md | grep -vE '^\s*#' | grep -nE "Select-String -Path |Test-Path \\\$[A-Za-z]" || true
+# Round-9/10 G1 negative: PS handles NO managed-block path identity — NO Sort-Object -Unique,
+# NO bare -Path / Test-Path on a $var, NO Select-String on a managed-block file in PS CODE
+# (Test-Path/-LiteralPath on $work/$pf temp are shim-only; managed-block reads are node's):
+awk '/^```powershell$/{p=1;next} /^```$/{p=0} p' docs/runbooks/incident.md | grep -vE '^\s*#' | grep -nE "Sort-Object -Unique|Select-String -Path \\\$|Select-String -LiteralPath \\\$f|Test-Path .*\\\$f " || true
 # private evidence handling: pre-copy exclusion + recursive perms + windows ACL:
 grep -nE "find .*-type d.*chmod 700|find .*-type f.*chmod 600|icacls|Time Machine|OneDrive" docs/runbooks/incident.md
 # the fail-closed byte-level drill: installed hook path + env + block conditions:
