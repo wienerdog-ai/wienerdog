@@ -22,6 +22,23 @@ const { WienerdogError } = require('./errors');
  * win32 posture (OWNER-APPROVED 2026-07-17): POSIX modes do not exist there —
  * chmod is a best-effort no-op, the scan reports {insecure: 0}, and WP-127
  * documents that Windows protection relies on the per-user profile ACLs.
+ *
+ * Never-follow guarantee (G2/G3/G4, ADR-0027) — stated HONESTLY: the repair
+ * never chmods through a symlink OR onto an out-of-tree file. It enforces this
+ * at EACH classified entry — lstat-classification (a symlinked/escaping private
+ * path is an `anomaly`: surfaced, never repaired) + an O_RDONLY|O_NOFOLLOW open
+ * + a (dev, ino) fd-revalidation against the classifying lstat before fchmod
+ * (so an intermediate-directory swap that redirects the open to a different
+ * inode is refused, not chmodded). The ONE case pure Node cannot close is a
+ * concurrent OWNER-LEVEL writer that swaps an intermediate directory component
+ * DURING the readdir enumeration itself, before any fd binding — Node has no
+ * openat/openat2/fdopendir, so readdir resolves through the path. That is the
+ * SAME same-user concurrent-writer class ADR-0028 hands to A12 ("Honest
+ * boundary — the A7 residual"): the attacker must ALREADY hold concurrent
+ * owner-level write access inside the already-0700 core, and the (dev, ino)
+ * revalidation means the worst case is a REFUSED + surfaced repair, never a
+ * silent out-of-tree chmod. Do NOT read this as an unconditional
+ * "never follows symlinks."
  */
 
 const WIN32 = process.platform === 'win32';
@@ -153,21 +170,36 @@ function withinCore(real, coreReal) {
   return real === coreReal || real.startsWith(coreReal + path.sep);
 }
 
+/** True iff `st`'s (dev, ino) equals the expected pair. An undefined expectation
+ *  (a non-repair caller) is permissive. dev+ino uniquely identify a file, so an
+ *  attacker cannot fabricate a match for an out-of-tree file; a hardlink to the
+ *  same inode IS the same inode (chmodding it chmods the intended file).
+ *  @param {import('fs').Stats} st @param {number} [dev] @param {number} [ino]
+ *  @returns {boolean} */
+function sameInode(st, dev, ino) {
+  if (dev === undefined || ino === undefined) return true;
+  return st.dev === dev && st.ino === ino;
+}
+
 /**
  * Classify an enumerated private path WITHOUT following symlinks (audit A9 /
- * G2, ADR-0027 never-follow bar). Returns the kind when the path is a REAL
- * (non-symlink) entry of the expected type whose canonical location stays
- * within the core; 'anomaly' when it is a symlink OR its realpath escapes the
- * core (surfaced, never repaired-through); null when it is missing or the wrong
- * kind (skipped). @param {string} p @param {'dir'|'file'} kind
- * @param {string|null} coreReal @returns {'dir'|'file'|'anomaly'|null} */
+ * G2, ADR-0027 never-follow bar). Records the classifying lstat's (dev, ino)
+ * so the repair can revalidate the opened fd is the SAME file (G3 — closes an
+ * intermediate-component swap that leaf-only O_NOFOLLOW misses). Returns the
+ * entry record when the path is a REAL (non-symlink) entry of the expected type
+ * whose canonical location stays within the core; `{kind:'anomaly'}` when it is
+ * a symlink OR its realpath escapes the core (surfaced, never repaired-through);
+ * null when it is missing or the wrong kind (skipped).
+ * @param {string} p @param {'dir'|'file'} kind @param {string|null} coreReal
+ * @returns {{kind:'dir'|'file', path:string, dev:number, ino:number}
+ *           | {kind:'anomaly'} | null} */
 function classifyPrivatePath(p, kind, coreReal) {
   const ls = lstatOrNull(p);
   if (!ls) return null; // missing / parent unreadable
-  if (ls.isSymbolicLink()) return 'anomaly'; // a private path is a symlink → surface, never follow
+  if (ls.isSymbolicLink()) return { kind: 'anomaly' }; // a private path is a symlink → surface, never follow
   if (kind === 'dir' ? !ls.isDirectory() : !ls.isFile()) return null; // wrong kind → skip
-  if (!withinCore(realpathOrNull(p), coreReal)) return 'anomaly'; // escapes the core → surface
-  return kind;
+  if (!withinCore(realpathOrNull(p), coreReal)) return { kind: 'anomaly' }; // escapes the core → surface
+  return { kind, path: p, dev: ls.dev, ino: ls.ino };
 }
 
 /** The DIRECTORY half of the single enumerator (kept a separate internal
@@ -175,46 +207,45 @@ function classifyPrivatePath(p, kind, coreReal) {
  *  redundant per-iteration secrets/scratch file walk; `listPrivateEntries`
  *  builds on it, so all surfaces still share one dir source). Never follows a
  *  symlink: a symlinked/escaping private dir is returned under `anomalies`, not
- *  `dirs` — so it is neither traversed nor chmodded, only surfaced.
+ *  `dirs` — so it is neither traversed nor chmodded, only surfaced. Each dir is
+ *  an `{path, dev, ino}` record so the repair can revalidate the opened fd.
  *  @param {import('./paths').WienerdogPaths} paths
- *  @returns {{dirs:string[], anomalies:string[]}} */
+ *  @returns {{dirs:{path:string,dev:number,ino:number}[], anomalies:string[]}} */
 function listPrivateDirs(paths) {
   const coreReal = realpathOrNull(paths.core);
-  const dirSet = new Set();
+  const dirMap = new Map(); // path → {path, dev, ino}
   const anomalies = new Set();
-
-  for (const d of [...A5_PRIVATE_DIRS(paths), ...A9_PRIVATE_DIRS(paths)]) {
+  const consider = (d) => {
     const c = classifyPrivatePath(d, 'dir', coreReal);
-    if (c === 'dir') dirSet.add(d);
-    else if (c === 'anomaly') anomalies.add(d);
-  }
+    if (!c) return;
+    if (c.kind === 'anomaly') anomalies.add(d);
+    else dirMap.set(d, c);
+  };
+
+  for (const d of [...A5_PRIVATE_DIRS(paths), ...A9_PRIVATE_DIRS(paths)]) consider(d);
 
   // logs/<job> subdirs — only READ logs/ when it is itself a real, contained,
   // traversable dir (a symlinked logs/ is an anomaly above and never read).
-  if (dirSet.has(paths.logs)) {
+  if (dirMap.has(paths.logs)) {
     let jobEntries = [];
     try {
       jobEntries = fs.readdirSync(paths.logs, { withFileTypes: true });
     } catch {
       jobEntries = [];
     }
-    for (const e of jobEntries) {
-      const jp = path.join(paths.logs, e.name);
-      const c = classifyPrivatePath(jp, 'dir', coreReal); // re-lstat: don't trust the Dirent
-      if (c === 'dir') dirSet.add(jp);
-      else if (c === 'anomaly') anomalies.add(jp);
-    }
+    for (const e of jobEntries) consider(path.join(paths.logs, e.name)); // re-lstat inside: don't trust the Dirent
   }
-  return { dirs: [...dirSet], anomalies: [...anomalies] };
+  return { dirs: [...dirMap.values()], anomalies: [...anomalies] };
 }
 
 /**
  * The SINGLE enumerator behind all three surfaces (doctor warn, sync
  * repair/scan, digest banner) — the A5 ∪ A9 union, never following a symlink:
- * `{dirs, files, anomalies}`. `dirs` (expected 0700) and `files` (expected
- * 0600) are REAL, in-core entries safe to chmod; `anomalies` are enumerated
- * private paths that are symlinks or escape the core — surfaced (so the
- * predicate flags them and doctor WARNs) but NEVER repaired-through.
+ * `{dirs, files, anomalies}`. `dirs`/`files` are `{path, dev, ino}` records of
+ * REAL, in-core entries safe to chmod (the dev/ino lets the repair revalidate
+ * the fd it opens); `anomalies` are enumerated private paths that are symlinks
+ * or escape the core — surfaced (so the predicate flags them and doctor WARNs)
+ * but NEVER repaired-through.
  *  - dirs: the A5 dirs, `secrets/`, and every existing `logs/<job>` subdir.
  *  - files: the four A5 state/ basenames, the A9 state/ files (grants, pins,
  *    run evidence, schedule.json, watermarks.json), the two core-root metadata
@@ -227,43 +258,49 @@ function listPrivateDirs(paths) {
  * are walked ONLY out of real, contained dirs (`dirSet` membership), so a
  * symlinked `secrets/`/`logs/<job>` is never enumerated into.
  * @param {import('./paths').WienerdogPaths} paths
- * @returns {{dirs:string[], files:string[], anomalies:string[]}}
+ * @returns {{dirs:{path:string,dev:number,ino:number}[],
+ *            files:{path:string,dev:number,ino:number}[], anomalies:string[]}}
  */
 function listPrivateEntries(paths) {
   const coreReal = realpathOrNull(paths.core);
   const { dirs, anomalies: dirAnomalies } = listPrivateDirs(paths);
-  const dirSet = new Set(dirs);
+  const dirPaths = new Set(dirs.map((d) => d.path));
   const anomalies = new Set(dirAnomalies);
 
-  const fileSet = new Set();
-  const fileCandidates = [
+  const fileMap = new Map(); // path → {path, dev, ino}
+  const considerFile = (f) => {
+    const c = classifyPrivatePath(f, 'file', coreReal);
+    if (!c) return;
+    if (c.kind === 'anomaly') anomalies.add(f);
+    else fileMap.set(f, c);
+  };
+
+  for (const f of [
     ...A5_PRIVATE_FILE_BASENAMES.map((base) => path.join(paths.state, base)),
     ...A9_PRIVATE_STATE_FILES.map((base) => path.join(paths.state, base)),
     ...A9_PRIVATE_CORE_FILES(paths),
-  ];
-  for (const f of fileCandidates) {
-    const c = classifyPrivatePath(f, 'file', coreReal);
-    if (c === 'file') fileSet.add(f);
-    else if (c === 'anomaly') anomalies.add(f);
+  ]) {
+    considerFile(f);
   }
-  // Walk files ONLY out of real, contained dirs (dirSet membership) so a
+  // Walk files ONLY out of real, contained dirs (dirPaths membership) so a
   // symlinked secrets//logs/<job> is never followed. `listFiles` itself skips
-  // symlinked children (lstat-based isFile()).
+  // symlinked children (lstat-based isFile()); considerFile re-lstats each for
+  // its dev/ino + containment.
   for (const d of dirs) {
-    if (path.dirname(d) === paths.logs) {
-      for (const f of listFiles(d, (n) => n.endsWith('.log'))) fileSet.add(f);
+    if (path.dirname(d.path) === paths.logs) {
+      for (const f of listFiles(d.path, (n) => n.endsWith('.log'))) considerFile(f);
     }
   }
-  if (dirSet.has(path.join(paths.state, 'dream-scratch'))) {
-    for (const f of listFiles(path.join(paths.state, 'dream-scratch'), (n) => n.endsWith('.json'))) fileSet.add(f);
+  if (dirPaths.has(path.join(paths.state, 'dream-scratch'))) {
+    for (const f of listFiles(path.join(paths.state, 'dream-scratch'), (n) => n.endsWith('.json'))) considerFile(f);
   }
-  if (dirSet.has(path.join(paths.state, 'quarantine'))) {
-    for (const f of listFiles(path.join(paths.state, 'quarantine'), () => true)) fileSet.add(f);
+  if (dirPaths.has(path.join(paths.state, 'quarantine'))) {
+    for (const f of listFiles(path.join(paths.state, 'quarantine'), () => true)) considerFile(f);
   }
-  if (dirSet.has(paths.secrets)) {
-    for (const f of listFiles(paths.secrets, () => true)) fileSet.add(f);
+  if (dirPaths.has(paths.secrets)) {
+    for (const f of listFiles(paths.secrets, () => true)) considerFile(f);
   }
-  return { dirs, files: [...fileSet], anomalies: [...anomalies] };
+  return { dirs, files: [...fileMap.values()], anomalies: [...anomalies] };
 }
 
 /** Defensive iteration cap for the fixed-point directory repair. The real
@@ -281,22 +318,29 @@ const O_NOFOLLOW = fs.constants.O_NOFOLLOW || 0;
 const O_DIRECTORY = fs.constants.O_DIRECTORY || 0;
 
 /**
- * TOCTOU-safe chmod that NEVER follows a symlink (audit A9 / G2, ADR-0027).
- * Opens the path O_RDONLY|O_NOFOLLOW (dirs add O_DIRECTORY), `fstat`s the fd to
- * confirm the kind + current mode, and `fchmod`s that verified descriptor — a
- * swap-to-symlink between enumeration and chmod then trips O_NOFOLLOW at open
- * (ELOOP/ENOTDIR) → the entry is REFUSED, never chmodded through the link.
+ * TOCTOU-safe chmod that NEVER follows a symlink (audit A9 / G2 + G3,
+ * ADR-0027). Opens the path O_RDONLY|O_NOFOLLOW (dirs add O_DIRECTORY),
+ * `fstat`s the fd to confirm the kind + current mode, REVALIDATES that the fd's
+ * (dev, ino) equals the pair captured when the entry was classified, and only
+ * then `fchmod`s that verified descriptor:
+ *  - a swap-to-symlink at the LEAF between enumeration and chmod trips
+ *    O_NOFOLLOW at open (ELOOP/ENOTDIR) → REFUSED;
+ *  - a swap of an INTERMEDIATE directory component (which leaf-only O_NOFOLLOW
+ *    cannot catch — the open then lands on a different, out-of-tree inode) is
+ *    caught by the (dev, ino) mismatch → REFUSED, so the external file is never
+ *    chmodded. dev+ino uniquely identify a file; an attacker cannot fabricate a
+ *    match for an out-of-tree target (G3).
  *
- * An owner-owned but UNREADABLE real dir/file (e.g. mode 000 — the fixed-point
- * loop's whole reason to exist) cannot be opened O_RDONLY (EACCES), so that one
- * case falls back to an lstat-guarded path chmod: re-lstat (reject a symlink),
- * confirm the kind, then `chmodSync` (chmod needs only ownership, not read).
- * The fallback's residual is a microscopic re-lstat→chmod window on a
- * first-touch 000 entry only; every readable entry uses the fd path with no
- * path-based window. `seams` inject the *Sync calls for tests (a forced ELOOP).
+ * An owner-owned but UNREADABLE real dir/file (VERIFIED mode 000 — the
+ * fixed-point loop's whole reason to exist) cannot be opened O_RDONLY (EACCES),
+ * so ONLY that case falls back to an lstat-guarded path chmod (below). Every
+ * other open error — EPERM, ELOOP, ENOTDIR, ENOENT, EIO, … — is REFUSED, never
+ * fallen back (G4a). `seams` inject the *Sync calls + the expected (dev, ino)
+ * for tests (a forced ELOOP / a redirected-inode fd).
  *
  * @param {string} p @param {number} expectedMode @param {boolean} isDir
- * @param {{openSync?,fstatSync?,fchmodSync?,closeSync?,lstatSync?,chmodSync?}} [seams]
+ * @param {{openSync?,fstatSync?,fchmodSync?,closeSync?,lstatSync?,chmodSync?,
+ *          expectedDev?:number, expectedIno?:number}} [seams]
  * @returns {'changed'|'unchanged'|'refused'} 'refused' = a symlink/swap/error —
  *   surfaced by the read predicate, never silently treated as clean. */
 function applyModeSecure(p, expectedMode, isDir, seams = {}) {
@@ -305,20 +349,24 @@ function applyModeSecure(p, expectedMode, isDir, seams = {}) {
   const fstatSync = seams.fstatSync || fs.fstatSync;
   const fchmodSync = seams.fchmodSync || fs.fchmodSync;
   const closeSync = seams.closeSync || fs.closeSync;
+  const { expectedDev, expectedIno } = seams;
   let fd = null;
   try {
     fd = openSync(p, fs.constants.O_RDONLY | O_NOFOLLOW | (isDir ? O_DIRECTORY : 0));
   } catch (e) {
-    // EACCES/EPERM on a real unreadable entry (000) → lstat-guarded fallback.
-    // ELOOP/ENOTDIR (a symlink at the final component) or anything else → refuse.
-    if (e && (e.code === 'EACCES' || e.code === 'EPERM')) {
-      return applyModeFallback(p, expectedMode, isDir, seams);
+    // ONLY a genuine EACCES (an unreadable real entry) may fall back — and the
+    // fallback itself re-verifies mode-000 + (dev,ino). Everything else refuses.
+    if (e && e.code === 'EACCES') {
+      return applyModeFallback(p, expectedMode, isDir, expectedDev, expectedIno, seams);
     }
     return 'refused';
   }
   try {
     const st = fstatSync(fd);
     if (isDir ? !st.isDirectory() : !st.isFile()) return 'refused';
+    // (dev,ino) revalidation (G3): the fd MUST be the file we classified. An
+    // intermediate-component swap redirects the open to a different inode.
+    if (!sameInode(st, expectedDev, expectedIno)) return 'refused';
     if ((st.mode & 0o777) === expectedMode) return 'unchanged';
     fchmodSync(fd, expectedMode);
     return 'changed';
@@ -335,28 +383,43 @@ function applyModeSecure(p, expectedMode, isDir, seams = {}) {
   }
 }
 
-/** lstat-guarded path chmod for an unreadable-but-owned (000) entry the fd path
- *  cannot open. Rejects a symlink and a kind mismatch before chmod.
+/** lstat-guarded path chmod for an unreadable-but-owned real entry the fd path
+ *  cannot open (G4). Reached ONLY on an EACCES open. Refuses unless a fresh
+ *  lstat confirms: not a symlink, the expected kind, (dev,ino) == classification,
+ *  and VERIFIED mode 000 (a non-000 EACCES — e.g. a write-only 0200 file — is
+ *  refused, not chmodded). After chmod it RE-LSTATs and refuses on any (dev,ino)
+ *  change (the chmod may have hit a swapped target — surface it). This shrinks
+ *  the fallback's window to the same irreducible A12 residual as the fd path.
  *  @param {string} p @param {number} expectedMode @param {boolean} isDir
- *  @param {object} seams @returns {'changed'|'unchanged'|'refused'} */
-function applyModeFallback(p, expectedMode, isDir, seams = {}) {
+ *  @param {number} [expectedDev] @param {number} [expectedIno] @param {object} seams
+ *  @returns {'changed'|'unchanged'|'refused'} */
+function applyModeFallback(p, expectedMode, isDir, expectedDev, expectedIno, seams = {}) {
   const lstatSync = seams.lstatSync || fs.lstatSync;
   const chmodSync = seams.chmodSync || fs.chmodSync;
-  let ls;
+  let before;
   try {
-    ls = lstatSync(p);
+    before = lstatSync(p);
   } catch {
     return 'refused';
   }
-  if (ls.isSymbolicLink()) return 'refused'; // never follow
-  if (isDir ? !ls.isDirectory() : !ls.isFile()) return 'refused';
-  if ((ls.mode & 0o777) === expectedMode) return 'unchanged';
+  if (before.isSymbolicLink()) return 'refused'; // never follow
+  if (isDir ? !before.isDirectory() : !before.isFile()) return 'refused';
+  if (!sameInode(before, expectedDev, expectedIno)) return 'refused'; // not the classified file
+  if ((before.mode & 0o777) !== 0o000) return 'refused'; // VERIFIED mode-000 only (G4a)
   try {
     chmodSync(p, expectedMode);
-    return 'changed';
   } catch {
     return 'refused';
   }
+  // G4b: confirm the chmod hit the same inode we verified (surface a swap).
+  let after;
+  try {
+    after = lstatSync(p);
+  } catch {
+    return 'refused';
+  }
+  if (after.isSymbolicLink() || !sameInode(after, expectedDev, expectedIno)) return 'refused';
+  return 'changed';
 }
 
 /**
@@ -402,12 +465,17 @@ function applyModeFallback(p, expectedMode, isDir, seams = {}) {
 function repairPrivateModes(paths, opts = {}) {
   let changed = 0;
   // Fixed-point directory phase: repair discoverable REAL private dirs to 0700
-  // (never following a symlink) and re-enumerate until the set stops growing.
+  // (never following a symlink; fd revalidated by (dev,ino)) and re-enumerate
+  // until the set stops growing. A permanently-anomalous/refused entry drops out
+  // of `dirs` (or stays wrong-moded) and the count stabilizes, so the loop
+  // always terminates — an un-repairable entry is surfaced, never spun on.
   let prevCount = -1;
   let pass = 0;
   for (; pass < MAX_DIR_REPAIR_PASSES; pass += 1) {
     const { dirs } = listPrivateDirs(paths);
-    for (const d of dirs) if (applyModeSecure(d, 0o700, true, opts) === 'changed') changed += 1;
+    for (const d of dirs) {
+      if (applyModeSecure(d.path, 0o700, true, { ...opts, expectedDev: d.dev, expectedIno: d.ino }) === 'changed') changed += 1;
+    }
     if (dirs.length === prevCount) break; // no newly-revealed dir → fixed point
     prevCount = dirs.length;
   }
@@ -420,7 +488,7 @@ function repairPrivateModes(paths, opts = {}) {
   }
   // Every real private dir is now traversable → one fresh file pass to 0600.
   for (const f of listPrivateEntries(paths).files) {
-    if (applyModeSecure(f, 0o600, false, opts) === 'changed') changed += 1;
+    if (applyModeSecure(f.path, 0o600, false, { ...opts, expectedDev: f.dev, expectedIno: f.ino }) === 'changed') changed += 1;
   }
   return { changed };
 }
@@ -450,9 +518,9 @@ function insecureEntries(paths) {
     [dirs, 0o700],
     [files, 0o600],
   ]) {
-    for (const p of list) {
-      const ls = lstatOrNull(p);
-      if (ls && (ls.mode & 0o777) !== expectedMode) out.add(p);
+    for (const e of list) {
+      const ls = lstatOrNull(e.path);
+      if (ls && (ls.mode & 0o777) !== expectedMode) out.add(e.path);
     }
   }
   for (const a of anomalies) out.add(a); // symlink / escapes-core → surfaced, never repaired

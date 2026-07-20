@@ -333,6 +333,115 @@ test('private-fs: G2 — a swap-to-symlink (forced ELOOP openSync seam) on logs/
   });
 });
 
+test('private-fs: G3 — an intermediate-swap redirects the file open to a different inode → fchmod REFUSED, external untouched', { skip: !POSIX }, () => {
+  withUmask(0o022, () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-privfs-'));
+    const paths = pathsFor(root);
+    fs.mkdirSync(path.join(paths.logs, 'dream'), { recursive: true });
+    fs.chmodSync(paths.core, 0o700);
+    fs.chmodSync(paths.logs, 0o700);
+    fs.chmodSync(path.join(paths.logs, 'dream'), 0o700);
+    const coreLog = path.join(paths.logs, 'dream', 'run.log');
+    fs.writeFileSync(coreLog, 'in', { mode: 0o644 });
+    // The out-of-tree file an intermediate-dir swap would redirect the open to.
+    const external = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-ext-'));
+    const externalFile = path.join(external, 'outside.log');
+    fs.writeFileSync(externalFile, 'out', { mode: 0o644 });
+
+    // Simulate the swap: when repair opens the classified core log, the open
+    // lands on the EXTERNAL file's fd (different inode). The (dev,ino)
+    // revalidation must then refuse the fchmod.
+    let externalFd = null;
+    const openSync = (p, flags, mode) => {
+      if (p === coreLog) {
+        externalFd = fs.openSync(externalFile, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW || 0));
+        return externalFd;
+      }
+      return fs.openSync(p, flags, mode);
+    };
+
+    repairPrivateModes(paths, { openSync });
+    assert.equal(modeOf(externalFile), 0o644, 'the redirected external file was NOT chmodded to 0600');
+    assert.equal(modeOf(coreLog), 0o644, 'the core log stayed wrong-moded (refused), so it is surfaced');
+    assert.ok(insecureEntries(paths).includes(coreLog), 'the refused entry is surfaced by the predicate');
+  });
+});
+
+test('private-fs: G3 — the same (dev,ino) revalidation guards the DIRECTORY chmod', { skip: !POSIX }, () => {
+  withUmask(0o022, () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-privfs-'));
+    const paths = pathsFor(root);
+    fs.mkdirSync(path.join(paths.logs, 'dream'), { recursive: true });
+    fs.chmodSync(paths.core, 0o700);
+    fs.chmodSync(paths.logs, 0o700);
+    fs.chmodSync(path.join(paths.logs, 'dream'), 0o777); // wants repair
+    const target = path.join(paths.logs, 'dream');
+    const external = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-ext-'));
+    fs.chmodSync(external, 0o777);
+
+    const openSync = (p, flags, mode) => {
+      if (p === target) return fs.openSync(external, fs.constants.O_RDONLY | (fs.constants.O_DIRECTORY || 0));
+      return fs.openSync(p, flags, mode);
+    };
+
+    repairPrivateModes(paths, { openSync });
+    assert.equal(modeOf(external), 0o777, 'the redirected external dir was NOT chmodded to 0700');
+    assert.equal(modeOf(target), 0o777, 'the target dir stayed wrong-moded (refused) and is surfaced');
+    assert.ok(insecureEntries(paths).includes(target), 'surfaced');
+  });
+});
+
+test('private-fs: G4a — a NON-000 EACCES (write-only 0200 file) is refused, never falls back to chmod', { skip: !POSIX }, () => {
+  withUmask(0o022, () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-privfs-'));
+    const paths = pathsFor(root);
+    fs.mkdirSync(paths.state, { recursive: true });
+    fs.chmodSync(paths.core, 0o700);
+    fs.chmodSync(paths.state, 0o700);
+    const f = path.join(paths.state, 'broker-grants.json');
+    fs.writeFileSync(f, '{}');
+    fs.chmodSync(f, 0o200); // write-only → O_RDONLY EACCES, but NOT mode-000
+
+    const r = repairPrivateModes(paths);
+    assert.equal(modeOf(f), 0o200, 'a non-000 EACCES file is refused, not chmodded to 0600');
+    assert.equal(r.changed, 0, 'nothing counted as changed for it');
+    assert.ok(insecureEntries(paths).includes(f), 'surfaced as wrong-moded');
+  });
+});
+
+test('private-fs: G4b — a (dev,ino) change between the fallback lstat and re-lstat refuses the 000-dir chmod', { skip: !POSIX }, () => {
+  withUmask(0o022, () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-privfs-'));
+    const paths = pathsFor(root);
+    fs.mkdirSync(paths.secrets, { recursive: true });
+    fs.chmodSync(paths.core, 0o700);
+    fs.chmodSync(paths.secrets, 0o000); // the only repairable entry; forces the EACCES fallback
+
+    const real = fs.lstatSync(paths.secrets);
+    const chmodCalls = [];
+    // Real open (000 → EACCES → fallback). chmodSync is a NOOP so the real dir
+    // stays 000 (still surfaced). lstatSync seam: first (pre-chmod) call returns
+    // the real 000 stat; the post-chmod re-lstat returns a DIFFERENT inode →
+    // the (dev,ino) mismatch must refuse (simulating a swapped target).
+    let lstatCalls = 0;
+    const seams = {
+      chmodSync: (p, m) => chmodCalls.push([p, m]),
+      lstatSync: (p) => {
+        if (p !== paths.secrets) return fs.lstatSync(p);
+        lstatCalls += 1;
+        if (lstatCalls === 1) return real; // pre-chmod: real 000, matching dev/ino
+        return { ...real, ino: real.ino + 1, isSymbolicLink: () => false, isDirectory: () => true, mode: real.mode };
+      },
+    };
+
+    const r = repairPrivateModes(paths, seams);
+    assert.deepEqual(chmodCalls, [[paths.secrets, 0o700]], 'the fallback DID attempt the chmod');
+    assert.equal(r.changed, 0, 'but the post-chmod (dev,ino) mismatch refused it → not counted');
+    assert.equal(modeOf(paths.secrets), 0o000, 'noop chmod seam left it 000 → still surfaced');
+    assert.ok(insecureEntries(paths).includes(paths.secrets), 'surfaced');
+  });
+});
+
 test('private-fs: repairPrivateModes never creates secrets/ or any file (repair, never create)', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-privfs-'));
   const paths = pathsFor(root);
