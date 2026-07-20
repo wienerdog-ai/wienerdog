@@ -313,6 +313,120 @@ test(
 );
 
 test(
+  'adopt-e2e: a FAILED existing-schedule rebind is SURFACED (not silent success) + entries still bind the adopted vault, and a subsequent sync-heal RETRIES the reload — A7 hardening 2 fix #2',
+  { skip: process.platform === 'win32' && 'the fake sh brain is POSIX-only' },
+  async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-adopt-rebindfail-'));
+    const adopted = path.join(root, 'adopted');
+    const home = path.join(root, 'home');
+    const core = path.join(root, 'core');
+    const defaultVault = path.join(root, 'default-vault');
+    const claude = path.join(root, 'claude');
+    const codex = path.join(root, 'codex-absent');
+
+    const saved = {};
+    for (const k of ENV_KEYS) saved[k] = process.env[k];
+    const origLog = console.log;
+    /** @type {string[]} */ const logs = [];
+
+    try {
+      fs.cpSync(POWERUSER_FIXTURE, adopted, { recursive: true });
+      const adoptedReal = fs.realpathSync(adopted);
+      fs.mkdirSync(home, { recursive: true });
+      fs.mkdirSync(core, { recursive: true });
+      const localBin = path.join(home, '.local', 'bin');
+      fs.mkdirSync(localBin, { recursive: true });
+      fs.copyFileSync(FAKE_BRAIN, path.join(localBin, 'claude'));
+      fs.chmodSync(path.join(localBin, 'claude'), 0o755);
+
+      Object.assign(process.env, {
+        HOME: home,
+        WIENERDOG_HOME: core,
+        WIENERDOG_VAULT: defaultVault,
+        CLAUDE_CONFIG_DIR: claude,
+        CODEX_HOME: codex,
+        PATH: localBin + path.delimiter + process.env.PATH,
+        // init's own scheduling loads cleanly under NOOP; the adopt rebind below is
+        // driven by an INJECTED loader (opts.loader), so NOOP does not mask it.
+        WIENERDOG_LOADER_NOOP: '1',
+      });
+      delete process.env.WIENERDOG_FAKE_TODAY;
+
+      const { getPaths } = require('../../src/core/paths');
+      const gen = require('../../src/scheduler/generators');
+      const jobsLib = require('../../src/scheduler/jobs');
+      const descriptorMod = require('../../src/scheduler/descriptor');
+      const status = require('../../src/scheduler/status');
+      const paths = getPaths(process.env);
+
+      // init schedules the nightly dream against the DEFAULT vault (dream job now exists).
+      console.log = () => {};
+      await init.run(['--yes', '--fresh-vault']);
+      assert.ok(jobsLib.findJob(paths, 'dream'), 'precondition: dream job scheduled by init');
+
+      // adopt with an injected scheduler loader that FAILS every reload (status 1).
+      logs.length = 0;
+      console.log = (...a) => logs.push(a.join(' '));
+      await adopt.run([adopted, '--yes'], { loader: () => ({ status: 1 }) });
+      console.log = origLog;
+      const out = logs.join('\n');
+
+      // (a) The rebind failure is SURFACED loudly with the `wienerdog sync`
+      //     remediation — NOT swallowed as unqualified success. Mutation: revert
+      //     adopt to discard the repointSchedules result → no WARNING → this fails.
+      assert.match(out, /WARNING: your already-scheduled jobs could not be fully re-activated/, out);
+      assert.match(out, /wienerdog sync/, 'the remediation names `wienerdog sync`');
+
+      // (b) The canonical entries were STILL rewritten to the adopted vault (idempotency
+      //     will not suppress a later retry): the loaded per-job digest + catch-up map
+      //     reflect the ADOPTED vault, so `sync` only needs to reload.
+      const adoptedJob = jobsLib.findJob(paths, 'dream');
+      const adoptedDigest = descriptorMod.deriveDescriptorDigest(paths, adoptedJob, { platform: process.platform });
+      const descPath = descriptorMod.descriptorPath(paths, 'dream');
+      assert.equal(JSON.parse(fs.readFileSync(descPath, 'utf8')).vaultRoot, adoptedReal, 'descriptor rebound to the adopted vault');
+
+      const readEntry = (p) => {
+        const buf = fs.readFileSync(p);
+        return buf[0] === 0xff && buf[1] === 0xfe ? buf.slice(2).toString('utf16le') : buf.toString('utf8');
+      };
+      let perJobEntry;
+      let catchupEntry = null;
+      if (process.platform === 'darwin') {
+        perJobEntry = path.join(gen.launchAgentsDir(paths.home), 'ai.wienerdog.dream.plist');
+        catchupEntry = path.join(gen.launchAgentsDir(paths.home), 'ai.wienerdog.catchup.plist');
+      } else {
+        perJobEntry = path.join(gen.systemdUserDir(paths.home, process.env), 'wienerdog-dream.service');
+      }
+      assert.ok(readEntry(perJobEntry).includes(adoptedDigest), 'per-job entry binds the ADOPTED-vault digest even though the reload failed');
+      if (catchupEntry) {
+        const m = readEntry(catchupEntry).match(/--job-digests[\s\S]*?([A-Za-z0-9_-]{16,})/);
+        assert.ok(m && gen.decodeJobDigests(m[1]).map.dream === adoptedDigest, 'catch-up map binds the ADOPTED-vault dream digest');
+      }
+
+      // (c) A subsequent invocation RETRIES the rebind: sync's heal reloads the entry
+      //     the OS did not accept (probe reports it missing) — idempotency does not
+      //     suppress it. The reload targets the ADOPTED-vault entry.
+      /** @type {string[][]} */ const retryCalls = [];
+      const heal = status.reloadMissing(paths, {
+        loader: (a) => { retryCalls.push(a); return { status: 0 }; },
+        probe: () => 'missing',
+        platform: process.platform,
+      });
+      assert.deepEqual(heal.reloaded, ['dream'], 'the subsequent sync-heal reloaded the dream (retry, not suppressed)');
+      assert.ok(retryCalls.length >= 1, 'the retry actually issued an OS reload');
+      assert.ok(readEntry(perJobEntry).includes(adoptedDigest), 'the reloaded entry still binds the ADOPTED-vault digest');
+    } finally {
+      console.log = origLog;
+      for (const k of ENV_KEYS) {
+        if (saved[k] === undefined) delete process.env[k];
+        else process.env[k] = saved[k];
+      }
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  }
+);
+
+test(
   'adopt-e2e: A5 pin preflight — claude unresolvable ⇒ adopt ABORTS before any mutation (vault/config/manifest/pin-store byte-identical)',
   { skip: process.platform === 'win32' && 'the fake sh exec is POSIX-only' },
   async () => {

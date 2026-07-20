@@ -710,7 +710,12 @@ test('scheduler-schedule: win32 dispatch writes both XMLs, records reversible en
   ]);
 });
 
-test('scheduler-schedule: a second identical win32 dispatch is idempotent (no rewrite, no loader call)', () => {
+// A7 hardening 2 (ADR-0028): verified idempotency. An unchanged re-register no
+// longer skips on the source-XML match alone — it QUERIES the LOADED task and
+// skips `/create` ONLY when the loaded Command/Arguments verifiably equal
+// canonical. A loader that reports the canonical loaded task ⇒ query, no /create,
+// no file rewrite.
+test('scheduler-schedule: a second win32 dispatch verifies the loaded task and skips /create when it matches (no rewrite)', () => {
   const { paths } = setup();
   const manifest = manifestLib.load(paths);
   schedule.registerPlatform(paths, manifest, { name: 'dream', hour: 3, minute: 30 }, () => ({ status: 0 }), 'win32');
@@ -719,18 +724,106 @@ test('scheduler-schedule: a second identical win32 dispatch is idempotent (no re
   const dreamXml = gen.windowsTaskFile(paths, 'dream');
   const mtimeBefore = fs.statSync(dreamXml).mtimeMs;
 
+  // A loader that answers `/query /xml` with the canonical on-disk task XML — i.e.
+  // the LOADED task matches canonical, so the verified postcondition skips /create.
+  const loadedXmlFor = (name) => {
+    const buf = fs.readFileSync(gen.windowsTaskFile(paths, name));
+    return buf.slice(2).toString('utf16le'); // past the UTF-16 BOM
+  };
   /** @type {string[][]} */ const calls = [];
+  const loader = (a) => {
+    calls.push(a);
+    if (a[1] === '/query') {
+      const name = a[a.indexOf('/tn') + 1].split('\\').pop();
+      try {
+        return { status: 0, stdout: loadedXmlFor(name) };
+      } catch {
+        return { status: 1 };
+      }
+    }
+    return { status: 0 };
+  };
   const manifest2 = manifestLib.load(paths);
-  const res = schedule.registerPlatform(
-    paths,
-    manifest2,
-    { name: 'dream', hour: 3, minute: 30 },
-    (a) => (calls.push(a), { status: 0 }),
-    'win32'
-  );
+  const res = schedule.registerPlatform(paths, manifest2, { name: 'dream', hour: 3, minute: 30 }, loader, 'win32');
   assert.equal(res.changed, false, 'unchanged re-register reports changed:false');
-  assert.equal(calls.length, 0, 'no loader calls on an unchanged re-register');
+  assert.ok(
+    calls.every((a) => a[1] === '/query'),
+    'the only loader calls are read-only /query verifications'
+  );
+  assert.equal(calls.filter((a) => a[1] === '/create').length, 0, 'no /create on a verified match');
   assert.equal(fs.statSync(dreamXml).mtimeMs, mtimeBefore, 'the XML file was not rewritten');
+});
+
+// The security-critical inverse (mutation-sensitive): when the LOADED task's args
+// do NOT match canonical — a stale legacy-.cmd-wrapper task, a --job-digests-
+// stripped catch-up task, or a prior /create that failed while an old task stayed
+// loaded — an unchanged re-register RE-ISSUES `/create /f` (does not skip). Revert
+// the fix to skip-on-XML-match and this assertion goes red.
+test('scheduler-schedule: a second win32 dispatch RE-REGISTERS (/create /f) when the loaded task args do not match canonical', () => {
+  const { paths } = setup();
+  const manifest = manifestLib.load(paths);
+  schedule.registerPlatform(paths, manifest, { name: 'dream', hour: 3, minute: 30 }, () => ({ status: 0 }), 'win32');
+  manifestLib.save(paths, manifest);
+
+  const dreamXml = gen.windowsTaskFile(paths, 'dream');
+  const catchupXml = gen.windowsTaskFile(paths, 'catchup');
+  const mtimeBefore = fs.statSync(dreamXml).mtimeMs;
+
+  // A stale/tampered loaded task for BOTH the dream and the catch-up: the query
+  // returns a task whose <Arguments> were rewritten (here: the whole authorization
+  // command replaced with an attacker payload). Neither matches canonical.
+  const staleTaskXml =
+    '<?xml version="1.0" encoding="UTF-16"?>\n<Task>\n  <Actions>\n    <Exec>\n' +
+    '      <Command>C:\\Windows\\System32\\cmd.exe</Command>\n' +
+    '      <Arguments>/c "start evil.exe"</Arguments>\n' +
+    '    </Exec>\n  </Actions>\n</Task>\n';
+  /** @type {string[][]} */ const calls = [];
+  const loader = (a) => {
+    calls.push(a);
+    if (a[1] === '/query') return { status: 0, stdout: staleTaskXml };
+    return { status: 0 };
+  };
+  const manifest2 = manifestLib.load(paths);
+  const res = schedule.registerPlatform(paths, manifest2, { name: 'dream', hour: 3, minute: 30 }, loader, 'win32');
+
+  assert.equal(res.changed, false, 'source XML unchanged (changed:false) — the skip path is what is under test');
+  const creates = calls.filter((a) => a[1] === '/create');
+  // Both the per-job dream AND the catch-up task are force-replaced with /create /f.
+  assert.deepEqual(
+    creates.map((a) => a[a.indexOf('/tn') + 1]).sort(),
+    ['\\Wienerdog\\catchup', '\\Wienerdog\\dream'],
+    'BOTH the stale dream and catch-up loaded tasks were force re-registered'
+  );
+  assert.ok(
+    creates.every((a) => a.includes('/f')),
+    'the force-replace flag /f is present on every re-register'
+  );
+  assert.equal(res.loaded, true, 'a successful force re-register reports loaded:true');
+  assert.equal(fs.statSync(dreamXml).mtimeMs, mtimeBefore, 'the canonical XML file itself was not rewritten (only re-registered)');
+});
+
+// A7 hardening 2: a dead legacy .cmd/.ps1 wrapper (file + its manifest `file`
+// entry) under <core>/schedules is removed on (re)register — it was a live mutable
+// execution surface after the inline-<Arguments> switch. Mutation: drop the sweep
+// and the wrapper file/entry survive → this fails.
+test('scheduler-schedule: win32 register removes a legacy .cmd wrapper file AND its manifest entry', () => {
+  const { paths } = setup();
+  const manifest = manifestLib.load(paths);
+  const dir = gen.windowsTasksDir(paths);
+  fs.mkdirSync(dir, { recursive: true });
+  const wrapper = path.join(dir, 'wienerdog-dream.cmd');
+  fs.writeFileSync(wrapper, '@echo off\r\nnode evil.js %*\r\n');
+  manifestLib.record(manifest, { kind: 'file', path: wrapper });
+  assert.ok(fs.existsSync(wrapper), 'legacy wrapper seeded');
+
+  schedule.registerPlatform(paths, manifest, { name: 'dream', hour: 3, minute: 30 }, () => ({ status: 0 }), 'win32');
+
+  assert.equal(fs.existsSync(wrapper), false, 'the legacy .cmd wrapper file was deleted');
+  assert.equal(
+    manifest.entries.some((e) => e.kind === 'file' && e.path === wrapper),
+    false,
+    'the legacy wrapper manifest entry was dropped'
+  );
 });
 
 test('scheduler-schedule: ensureDreamSchedule(platform:win32) schedules the dream (not "unsupported")', () => {

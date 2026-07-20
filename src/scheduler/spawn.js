@@ -16,7 +16,10 @@ const { WienerdogError } = require('../core/errors');
  *      HOME-scoped — a temp-HOME test still hits the real agent).
  *   3. Otherwise → real spawnSync (production).
  * @param {string[]} argv  e.g. ['launchctl','bootout','gui/501/ai.wienerdog.dream']
- * @returns {{status:number}}
+ * @returns {{status:number, stdout?:string}} `stdout` (best-effort UTF-8) is
+ *   surfaced so the Windows verified-registration postcondition can read a
+ *   `schtasks /query /xml` back and compare the LOADED task's Command/Arguments to
+ *   canonical (A7 hardening 2, ADR-0028). Mutation callers ignore it.
  */
 function schedulerSpawn(argv) {
   if (process.env.WIENERDOG_LOADER_NOOP) return { status: 0 };
@@ -28,8 +31,8 @@ function schedulerSpawn(argv) {
         'still mutate the real user agent.)'
     );
   }
-  const r = spawnSync(argv[0], argv.slice(1));
-  return { status: r.status == null ? 1 : r.status };
+  const r = spawnSync(argv[0], argv.slice(1), { encoding: 'utf8' });
+  return { status: r.status == null ? 1 : r.status, stdout: typeof r.stdout === 'string' ? r.stdout : '' };
 }
 
 module.exports = { schedulerSpawn };

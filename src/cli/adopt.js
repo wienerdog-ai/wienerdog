@@ -127,8 +127,11 @@ function printLayout(layout) {
  * recorded under manifest kinds uninstall skips, so uninstall leaves the vault
  * exactly as found.
  * @param {string[]} argv
+ * @param {{loader?: (argv:string[])=>{status:number}}} [opts]  scheduler loader
+ *   seam (tests inject a spy so the existing-schedule rebind never touches the real
+ *   OS scheduler); production omits it and the default loader is used.
  */
-async function run(argv) {
+async function run(argv, opts = {}) {
   const dryRun = argv.includes('--dry-run');
   const yes = argv.includes('--yes');
   const rawPath = argv.find((a) => !a.startsWith('--'));
@@ -394,7 +397,7 @@ async function run(argv) {
   // per-job digest map here, from the freshly-derived dream descriptor (built on the
   // complete pin store committed by the WP-154 preflight above), never a stale map.
   const { ensureDreamSchedule, repointSchedules } = require('./schedule');
-  const dream = ensureDreamSchedule(paths);
+  const dream = ensureDreamSchedule(paths, { loader: opts.loader });
   // A7 hardening pass: adopt just changed the descriptor-covered vault root +
   // layout. `ensureDreamSchedule` no-ops when a dream job ALREADY existed
   // (pre-adoption), which would leave that job's OS entry / descriptor / catch-up
@@ -402,14 +405,29 @@ async function run(argv) {
   // on descriptor drift until a separate `sync`. Re-derive + re-register EVERY
   // existing job through `repointSchedules` (the sole repair/mint owner) so the
   // loaded per-job digest and the catch-up map reflect the ADOPTED vault. Idempotent
-  // for the just-created dream (identical content → no reload); best-effort so an
-  // unsupported platform never fails adoption.
+  // for the just-created dream (identical content → no reload); an unsupported
+  // platform never fails adoption.
+  //
+  // A7 hardening 2 (ADR-0028): the existing-job rebind is a CHECKED postcondition,
+  // not fire-and-forget. Discarding `repointSchedules`' result (notices /
+  // descriptorFailures) or swallowing a throw would let adoption print unqualified
+  // success while a loaded entry stays bound to the PRE-adoption vault — and because
+  // the canonical file was already written, idempotency could suppress a later
+  // silent retry. Capture the outcome so completion surfaces the failure loudly with
+  // the `wienerdog sync` remediation (which re-drives the reload despite idempotency).
+  /** @type {string[]} */ let rebindNotices = [];
+  let rebindFailed = false;
   try {
     const rebindManifest = manifestLib.load(paths);
-    repointSchedules(paths, rebindManifest);
+    const r = repointSchedules(paths, rebindManifest, { loader: opts.loader });
     manifestLib.save(paths, rebindManifest);
-  } catch {
-    /* re-binding existing schedules is best-effort — adoption already succeeded */
+    rebindNotices = r.notices || [];
+    if (rebindNotices.length > 0 || (r.descriptorFailures || 0) > 0) rebindFailed = true;
+  } catch (err) {
+    // A thrown rebind (not the unsupported-platform degrade, which does not throw
+    // here) must NOT be swallowed as success.
+    rebindFailed = true;
+    rebindNotices = [err && err.message ? err.message : String(err)];
   }
 
   // 12. Next steps.
@@ -424,6 +442,17 @@ async function run(argv) {
     console.log('  Nightly dreaming: could not be auto-scheduled on this system yet — run `wienerdog dream` manually.');
   } else if (dream.reason === 'load-failed') {
     console.log('  Nightly dreaming: was set up but your computer\'s scheduler did not accept it yet — run `wienerdog doctor` to see why, then `wienerdog sync` to retry.');
+  }
+  // A7 hardening 2 (ADR-0028): a FAILED existing-schedule rebind is surfaced
+  // loudly — never as unqualified success. The canonical entries were rewritten to
+  // the adopted vault, so `wienerdog sync` re-drives the OS reload (idempotency does
+  // not suppress it — sync's heal reloads any entry the OS has not accepted).
+  if (rebindFailed) {
+    console.log(
+      '  WARNING: your already-scheduled jobs could not be fully re-activated for the adopted vault yet.'
+    );
+    for (const n of rebindNotices) console.log(`    - ${n}`);
+    console.log('  Run `wienerdog sync` to finish re-activating them (and `wienerdog doctor` if it persists).');
   }
   if (dirExists(paths.vault)) {
     console.log(`\nThe default vault at ${paths.vault} is now unused — you can delete it if you like.`);

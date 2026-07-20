@@ -165,6 +165,101 @@ function ensureEntry(manifest, filePath, content, unload) {
 }
 
 /**
+ * Read a LOADED Windows scheduled task back and decide whether its bound
+ * Command/Arguments MATCH the canonical values (A7 hardening 2, ADR-0028). The
+ * verified-registration postcondition rests on this: idempotency is keyed off the
+ * LOADED task (the trust anchor stored in the Task Scheduler DB), NEVER the source
+ * XML file alone — a scoped schedule-file writer cannot change the loaded task
+ * without registration privilege, but CAN leave a stale mutable-wrapper task
+ * loaded while the canonical file on disk matches. Returns true ONLY when the
+ * loaded task verifiably equals canonical; any other state (task missing, query
+ * failed, unreadable/UTF-16 output we cannot parse, or a real mismatch) ⇒ false,
+ * so the caller force-registers (fail-safe — never trust an unverifiable state).
+ * @param {(argv:string[])=>{status:number, stdout?:string}} loader
+ * @param {string} taskName  '\Wienerdog\<name>'
+ * @param {string} expectCommand  canonical <Command> (unescaped) — cmd.exe path
+ * @param {string} expectArgline  canonical <Arguments> (unescaped)
+ * @returns {boolean}
+ */
+function windowsLoadedTaskMatches(loader, taskName, expectCommand, expectArgline) {
+  let r;
+  try {
+    r = loader(['schtasks', '/query', '/tn', taskName, '/xml']);
+  } catch {
+    return false;
+  }
+  if (!r || r.status !== 0 || typeof r.stdout !== 'string' || r.stdout === '') return false;
+  const exec = gen.parseWindowsTaskExec(r.stdout);
+  if (!exec) return false;
+  return exec.command === expectCommand && exec.arguments === expectArgline;
+}
+
+/**
+ * Register a Windows scheduled task as a VERIFIED postcondition, not fire-and-
+ * forget (A7 hardening 2, ADR-0028). When the canonical XML bytes CHANGED, always
+ * `/create /f`. When they did NOT change, do NOT skip on the source-file match
+ * alone: VERIFY the LOADED task's Command/Arguments equal canonical and skip ONLY
+ * on a verified match; otherwise (a stale legacy-wrapper task still loaded, a
+ * `--job-digests`-stripped catch-up task, a prior `/create` that failed while an
+ * old task stayed loaded) force-replace with `/create /f`. A subsequent sync that
+ * still cannot verify a match re-issues `/create /f` again — the retry is the
+ * next sync, so a stale loaded task is never silently left in place.
+ * @param {(argv:string[])=>{status:number, stdout?:string}} loader
+ * @param {string} taskName  '\Wienerdog\<name>'
+ * @param {string} xmlPath  the canonical on-disk task XML
+ * @param {{command:string, argline:string, changed:boolean}} o
+ * @returns {boolean} true when the task is registered (the `/create` exited 0, or
+ *   a verified-match skip).
+ */
+function ensureWindowsTaskRegistered(loader, taskName, xmlPath, o) {
+  if (!o.changed && windowsLoadedTaskMatches(loader, taskName, o.command, o.argline)) {
+    return true; // loaded task verifiably equals canonical → idempotent skip
+  }
+  return loader(['schtasks', '/create', '/tn', taskName, '/xml', xmlPath, '/f']).status === 0;
+}
+
+/**
+ * Migration cleanup (A7 hardening 2, ADR-0028): remove any legacy Windows
+ * scheduler WRAPPER file (`wienerdog-*.cmd` / `*.ps1` under `<core>/schedules`)
+ * AND its manifest `file` entry. The inline-`<Arguments>` switch made such a
+ * wrapper dead code, and a wrapper is a REOPENED mutable file at the scoped
+ * schedule-write surface (it carried the env scrub + `--descriptor`/`--expect-digest`
+ * /`--job-digests`), so leaving it is a live arbitrary-execution surface. Runs on
+ * every Windows (re)register. Best-effort; returns whether anything was removed.
+ * @param {import('../core/paths').WienerdogPaths} paths
+ * @param {import('../core/manifest').Manifest} manifest
+ * @returns {boolean}
+ */
+function sweepLegacyWindowsWrappers(paths, manifest) {
+  const dir = gen.windowsTasksDir(paths);
+  const isWrapper = (p) =>
+    /^wienerdog-[a-z0-9][a-z0-9-]*\.(cmd|ps1)$/i.test(path.basename(p)) &&
+    path.resolve(path.dirname(p)) === path.resolve(dir);
+  let removed = false;
+  const wrapperEntries = manifest.entries.filter((e) => e.kind === 'file' && isWrapper(e.path));
+  if (wrapperEntries.length > 0) {
+    manifest.entries = manifest.entries.filter((e) => !wrapperEntries.includes(e));
+    removed = true;
+  }
+  try {
+    for (const f of fs.readdirSync(dir)) {
+      const p = path.join(dir, f);
+      if (isWrapper(p)) {
+        try {
+          fs.rmSync(p, { force: true });
+          removed = true;
+        } catch {
+          /* best-effort */
+        }
+      }
+    }
+  } catch {
+    /* schedules dir may not exist yet */
+  }
+  return removed;
+}
+
+/**
  * Ensure the macOS catch-up plist exists and is registered (once, idempotent).
  * @param {import('../core/paths').WienerdogPaths} paths
  * @param {import('../core/manifest').Manifest} manifest
@@ -230,10 +325,18 @@ function ensureWindowsCatchup(paths, manifest, loader, jobDigests) {
   const xmlPath = gen.windowsTaskFile(paths, 'catchup');
   const taskName = gen.windowsTaskName('catchup'); // '\Wienerdog\catchup'
   const unload = ['schtasks', '/delete', '/tn', taskName, '/f'];
-  if (ensureEntry(manifest, xmlPath, content, unload)) {
-    return { loaded: loader(['schtasks', '/create', '/tn', taskName, '/xml', xmlPath, '/f']).status === 0 };
-  }
-  return { loaded: true };
+  // A7 hardening 2 (ADR-0028): register as a VERIFIED postcondition. Never skip
+  // /create on a source-XML match alone — a stale loaded catch-up task with the
+  // `--job-digests` map stripped would otherwise survive. Verify the loaded task's
+  // Command/Arguments equal canonical; force /create /f on any mismatch.
+  const changed = ensureEntry(manifest, xmlPath, content, unload);
+  return {
+    loaded: ensureWindowsTaskRegistered(loader, taskName, xmlPath, {
+      command: gen.windowsCmdExePath(),
+      argline,
+      changed,
+    }),
+  };
 }
 
 /**
@@ -384,8 +487,19 @@ function registerPlatformEntries(paths, manifest, o, loader, platform = process.
     );
     const unload = ['schtasks', '/delete', '/tn', taskName, '/f'];
     const changed = ensureEntry(manifest, dreamXmlPath, content, unload);
-    let loaded = true;
-    if (changed) loaded = loader(['schtasks', '/create', '/tn', taskName, '/xml', dreamXmlPath, '/f']).status === 0;
+    // A7 hardening 2 (ADR-0028): remove any dead legacy .cmd/.ps1 wrapper (file +
+    // manifest entry) — the inline-<Arguments> switch left them a live mutable
+    // execution surface.
+    sweepLegacyWindowsWrappers(paths, manifest);
+    // Verified-registration postcondition (A7 hardening 2): never skip /create on a
+    // source-XML match alone. When unchanged, verify the LOADED task equals canonical
+    // and force /create /f on any mismatch (a stale legacy-wrapper task, a failed
+    // prior /create) — the loaded task is the trust anchor, not the source file.
+    const loaded = ensureWindowsTaskRegistered(loader, taskName, dreamXmlPath, {
+      command: gen.windowsCmdExePath(),
+      argline,
+      changed,
+    });
     // Catch-up task (ONLOGON + hourly): the missed-run mechanism, mirroring macOS.
     // MINT the per-job digest map from freshly-derived descriptors (WP-catchup-per-job-authorization).
     const cu = ensureWindowsCatchup(paths, manifest, loader, catchupJobDigests(paths, platform));

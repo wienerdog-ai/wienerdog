@@ -695,3 +695,52 @@ decisions above.
 5. **Orphan removed.** `generators.ensureCatchup` (the token-LESS catch-up backstop
    whose sole production caller the catch-up WP removed) is deleted with its export
    and test — a future caller would have re-opened the no-`--job-digests` bypass.
+
+## Amendment (2026-07-20) — A7 hardening 2 (Codex re-verification residuals)
+
+The re-verification sweep after the first hardening found two failure-path
+residuals. Both refine — not reverse — the decisions above.
+
+1. **[R16 completion] Windows registration is a VERIFIED postcondition keyed off
+   the LOADED task, not the source XML file.** Fix #1 (2026-07-20) bound the
+   authorization command into the registered `<Arguments>`, but the register call
+   was still fire-and-forget and the idempotency skip keyed off the SOURCE XML file
+   plus a manifest entry, NOT the loaded task's Command/Arguments. So a first
+   `schtasks /create` that FAILED while an OLD task stayed loaded (a legacy
+   `.cmd`-wrapper task, or any prior registration) left the canonical XML written and
+   the manifest entry recorded — and a later `sync`, seeing the matching source XML
+   and entry, SKIPPED `/create`, leaving the stale mutable-wrapper task loaded. A
+   scoped schedule-file writer could then edit that still-loaded wrapper → arbitrary
+   scheduled execution without registration privilege. **Corrected contract:** on an
+   unchanged source XML, the register path QUERIES the loaded task
+   (`schtasks /query /tn <name> /xml`) and compares the bound `<Command>`/`<Arguments>`
+   (XML-unescaped, via `generators.parseWindowsTaskExec`) to canonical; it skips
+   `/create` ONLY on a verified match. Any other state — a real mismatch, a stripped
+   `--job-digests` catch-up task, a missing/failed query, or output it cannot parse —
+   force-replaces with `/create /f` (fail-safe: an unverifiable loaded task is never
+   trusted). A subsequent sync that still cannot verify a match re-issues `/create /f`
+   again, so the retry is simply the next sync and a stale loaded task is never
+   silently left in place. Applies to BOTH the per-job dream and the catch-up task
+   (the map-stripping bypass). The `schedulerSpawn` chokepoint now surfaces `stdout`
+   so the query is readable; mutation callers ignore it.
+
+2. **[R16 companion] Legacy `.cmd`/`.ps1` wrapper cleanup.** The inline-`<Arguments>`
+   switch (fix #1) made any pre-existing Windows scheduler wrapper file dead, but a
+   wrapper is a REOPENED mutable file at the scoped schedule-write surface (it carried
+   the env scrub + `--descriptor`/`--expect-digest`/`--job-digests`). Every Windows
+   (re)register now sweeps `<core>/schedules/wienerdog-*.cmd|ps1` — deleting both the
+   FILE and its manifest `file` entry — so the dead wrapper is not a live
+   arbitrary-execution surface.
+
+3. **[R7 completion] `adopt`'s existing-schedule rebind is a CHECKED postcondition.**
+   Fix #3 routed adopt through `repointSchedules`, but adopt DISCARDED its result
+   (`notices`/`descriptorFailures`) and swallowed thrown errors — so a scheduler
+   reload failure left the loaded entry bound to the OLD digest/map while adoption
+   still printed completion, and because the canonical file was already written,
+   idempotency could suppress a later silent retry. **Corrected contract:** adopt
+   inspects `repointSchedules`' result; any failed re-register/reload
+   (`notices.length > 0` or `descriptorFailures > 0`) or a thrown rebind is surfaced
+   LOUDLY at completion with the `wienerdog sync` remediation (sync's heal reloads any
+   entry the OS has not accepted, so idempotency does not suppress the retry) — never
+   an unqualified success. adopt takes an injected `loader` seam so the rebind is
+   tested without touching the real OS scheduler.

@@ -593,6 +593,43 @@ function windowsXmlEscape(s) {
     .replace(/'/g, '&apos;');
 }
 
+/** Inverse of windowsXmlEscape — decode the five predefined XML entities back to
+ *  their literal characters. `&amp;` LAST so an already-decoded `<`/`>`/`"`/`'`
+ *  is not re-processed. Used to compare a LOADED task's <Command>/<Arguments>
+ *  (read back via `schtasks /query /xml`) against the canonical unescaped values.
+ *  @param {string} s @returns {string} */
+function windowsXmlUnescape(s) {
+  return String(s)
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, '&');
+}
+
+/**
+ * Extract the first `<Exec>` action's `<Command>` and `<Arguments>` (both
+ * XML-UNESCAPED) from a Task Scheduler XML document — the bytes `schtasks /query
+ * /tn <name> /xml` prints for a LOADED task (A7 hardening 2, ADR-0028). The
+ * verified-registration postcondition compares these against the canonical
+ * cmd.exe path + argline; a value that does not match (a stale legacy-wrapper
+ * task, a `--job-digests`-stripped catch-up task) forces a `/create /f` re-register.
+ * `<Arguments>` is optional (absent → ''); a document with no `<Command>` ⇒ null
+ * (unverifiable → the caller force-registers, fail-safe).
+ * @param {string} xml
+ * @returns {{command:string, arguments:string}|null}
+ */
+function parseWindowsTaskExec(xml) {
+  if (typeof xml !== 'string') return null;
+  const cmd = xml.match(/<Command>([\s\S]*?)<\/Command>/);
+  if (!cmd) return null;
+  const args = xml.match(/<Arguments>([\s\S]*?)<\/Arguments>/);
+  return {
+    command: windowsXmlUnescape(cmd[1]),
+    arguments: args ? windowsXmlUnescape(args[1]) : '',
+  };
+}
+
 /**
  * Render the daily Windows dream task XML. The task's <Command> is the absolute
  * `cmd.exe` and its <Arguments> carry the COMPLETE authorization command bound
@@ -796,6 +833,8 @@ module.exports = {
   windowsCmdArguments,
   windowsCurrentUserId,
   windowsXmlEscape,
+  windowsXmlUnescape,
+  parseWindowsTaskExec,
   windowsDreamTaskXml,
   windowsCatchupTaskXml,
   windowsTaskXmlBytes,
