@@ -867,6 +867,51 @@ test('scheduler-schedule: ensureDreamSchedule returns reason:load-failed when th
   assert.ok(jobsLib.findJob(paths, 'dream'), 'dream job persisted despite the load failure');
 });
 
+// A7 hardening (re-verify #2): a FAILED forced re-registration must be reported
+// even when the source XML is UNCHANGED (changed:false). A stale loaded task whose
+// `/create /f` is rejected returns {changed:false, loaded:false}; the reporting
+// gate keys off `!res.loaded`, NOT `res.changed && !res.loaded`. Mutation: restore
+// the `res.changed &&` gate and the notice disappears (a scoped writer could then
+// recreate the swept wrapper against a still-loaded stale task, silently). Verified
+// at both repointSchedules and the schedule-add (ensureDreamSchedule) callers.
+test('scheduler-schedule: a failed forced re-register with UNCHANGED source XML is surfaced (changed:false, loaded:false)', () => {
+  const { paths } = setup();
+  // Seed a configured dream + canonical XML + manifest entry with a success loader.
+  schedule.ensureDreamSchedule(paths, { loader: () => ({ status: 0 }), platform: 'win32' });
+
+  // A stale loaded task (query returns non-canonical) whose forced /create /f is REJECTED.
+  const staleTaskXml =
+    '<?xml version="1.0" encoding="UTF-16"?>\n<Task>\n  <Actions>\n    <Exec>\n' +
+    '      <Command>C:\\Windows\\System32\\cmd.exe</Command>\n' +
+    '      <Arguments>/c "start evil.exe"</Arguments>\n' +
+    '    </Exec>\n  </Actions>\n</Task>\n';
+  const loader = (a) => {
+    if (a[1] === '/query') return { status: 0, stdout: staleTaskXml };
+    if (a[1] === '/create') return { status: 1 }; // forced re-register rejected
+    return { status: 0 };
+  };
+
+  // registerPlatform reaches the precise bug state: source unchanged, load failed.
+  const m1 = manifestLib.load(paths);
+  const rp = schedule.registerPlatform(paths, m1, { name: 'dream', hour: 3, minute: 30 }, loader, 'win32');
+  assert.equal(rp.changed, false, 'source XML unchanged');
+  assert.equal(rp.loaded, false, 'the forced /create /f was rejected');
+
+  // repointSchedules must SURFACE it (the `!res.loaded` gate), not swallow it.
+  const m2 = manifestLib.load(paths);
+  const r = schedule.repointSchedules(paths, m2, { loader, platform: 'win32' });
+  assert.ok(
+    r.notices.some((n) => /"dream".*did not accept it/.test(n)),
+    'a failed forced re-register is reported even though the source XML did not change'
+  );
+
+  // schedule-add path (ensureDreamSchedule on a fresh install) fails loud on the same state.
+  const { paths: paths2 } = setup();
+  const res2 = schedule.ensureDreamSchedule(paths2, { loader, platform: 'win32' });
+  assert.equal(res2.scheduled, false, 'schedule-add reports failure, not unqualified success');
+  assert.equal(res2.reason, 'load-failed');
+});
+
 test('scheduler-schedule: add fails loud (throws) when the OS scheduler rejects the new task', { skip: !SCHED_SUPPORTED }, async () => {
   const { env } = setup();
   const loader = () => ({ status: 1 }); // schtasks/launchctl/systemctl rejects it

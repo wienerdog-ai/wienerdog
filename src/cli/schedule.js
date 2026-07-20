@@ -550,7 +550,11 @@ function repointSchedules(paths, manifest, opts = {}) {
       repointed += 1;
       if (res.changed) changed += 1;
       if (res.descriptorFailed) descriptorFailures += 1;
-      if (res.changed && !res.loaded) {
+      // Report every load failure, NOT only when the source file changed: a
+      // Windows forced re-registration (stale loaded task, source XML unchanged)
+      // can fail with changed=false — the loaded task is the trust anchor, so a
+      // failed register must surface even when the source bytes are idempotent.
+      if (!res.loaded) {
         notices.push(`"${job.name}" schedule file written but the OS scheduler did not accept it — run 'wienerdog doctor'.`);
       }
     } catch (err) {
@@ -765,7 +769,9 @@ function ensureDreamSchedule(paths, opts = {}) {
   }
   manifestLib.save(paths, manifest);
   // The schedule file is written but the OS scheduler rejected it: surface truthfully.
-  if (res.changed && !res.loaded) return { scheduled: false, reason: 'load-failed', at };
+  // Any load failure (incl. a forced re-registration with unchanged source XML)
+  // must fail loud — the loaded task is the trust anchor, not the source bytes.
+  if (!res.loaded) return { scheduled: false, reason: 'load-failed', at };
   return { scheduled: true, at };
 }
 
