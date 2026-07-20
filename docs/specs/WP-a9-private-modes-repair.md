@@ -527,7 +527,7 @@ whole protected set; W3 detection is conditional.**
   NOT claim universal protection. See Out of scope for the follow-up candidate.
 
 **Full never-follow guarantee — the position×phase matrix + the failure path.**
-After G2–G5 + F1–F14, a PRE-EXISTING symlink is caught at EVERY position × phase
+After G2–G5 + F1–F17, a PRE-EXISTING symlink is caught at EVERY position × phase
 `{root, intermediate, leaf}` × `{enumerate, dir-chmod, file-chmod, 000-fallback,
 mkdir, open-write, temp-write}` AND on the FAILURE path AND for the whole
 top-level protected set on EVERY dispatch mode — each refuses-and-surfaces

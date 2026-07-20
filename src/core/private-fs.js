@@ -24,7 +24,7 @@ const { WienerdogError } = require('./errors');
  * chmod is a best-effort no-op, the scan reports {insecure: 0}, and WP-127
  * documents that Windows protection relies on the per-user profile ACLs.
  *
- * Never-follow guarantee (G2–G5 + F1–F11, ADR-0027) — stated HONESTLY, NOT as an
+ * Never-follow guarantee (G2–G5 + F1–F17, ADR-0027) — stated HONESTLY, NOT as an
  * unconditional "never follows symlinks". A PRE-EXISTING symlink is caught at
  * EVERY position × phase — `{root, intermediate, leaf}` × `{enumerate,
  * dir-chmod, file-chmod, 000-fallback, mkdir, open-write, temp-write}` AND on the
