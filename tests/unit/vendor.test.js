@@ -287,6 +287,21 @@ test('vendor: dev mode is detected from a .git dir at the source root', () => {
   assert.equal(fs.realpathSync(vendor.currentLink(paths)), fs.realpathSync(src));
 });
 
+test('vendor: dev mode is detected from a .git FILE (git worktree) at the source root (WP-157 F10)', () => {
+  const paths = tempPaths();
+  const src = fakeSource('1.0.0');
+  // A git WORKTREE (our own dev machine + Gyula's) has `.git` as a regular FILE,
+  // not a directory. isDevCheckout must treat it as dev so a worktree install
+  // produces a dev-stance descriptor the launcher can verify — a dir-only check
+  // would make worktree dev permanently non-runnable.
+  fs.writeFileSync(path.join(src, '.git'), 'gitdir: /repo/.git/worktrees/wt\n');
+
+  const r = vendor.vendorSelf(paths, { sourceRoot: src, env: {} });
+  assert.equal(r.dev, true, 'a .git FILE (worktree) is detected as dev');
+  assert.equal(r.copied, false);
+  assert.equal(fs.realpathSync(vendor.currentLink(paths)), fs.realpathSync(src));
+});
+
 test('vendor: currentBin is <core>/app/current/bin/wienerdog.js', () => {
   const paths = tempPaths();
   assert.equal(

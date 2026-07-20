@@ -231,3 +231,66 @@ test('sync-repoint: --dry-run repoints nothing', { skip: !SCHED_SUPPORTED }, asy
 
   assert.ok(fs.readFileSync(entry.file, 'utf8').includes(oldNode), 'dry-run left the stale entry untouched');
 });
+
+// WP-157 A10/R3:#4 + R4: the scheduled execution environment is a defined
+// allowlist. run-job's buildCleanEnv reconstructs the config roots
+// DETERMINISTICALLY beneath the bound home, and CLAUDE_CONFIG_DIR / CODEX_HOME /
+// ANTHROPIC_API_KEY are NO LONGER passed through — an in-scope scheduler-env
+// writer cannot move the model account / credential root / config root without a
+// digest drift. (Placed here because scheduler-runjob.test.js is outside WP-157's
+// Deliverables; see the PR "Discovered issues".)
+test('sync-repoint: buildCleanEnv drops ambient CLAUDE_CONFIG_DIR/CODEX_HOME/ANTHROPIC_API_KEY and rebuilds config roots under the bound home (A10)', () => {
+  const runjob = require('../../src/cli/run-job');
+  const { paths } = setup();
+  const saved = {
+    CLAUDE_CONFIG_DIR: process.env.CLAUDE_CONFIG_DIR,
+    CODEX_HOME: process.env.CODEX_HOME,
+    ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
+  };
+  // Simulate a hostile environment.d / launchctl setenv write.
+  process.env.CLAUDE_CONFIG_DIR = '/evil/claude';
+  process.env.CODEX_HOME = '/evil/codex';
+  process.env.ANTHROPIC_API_KEY = 'sk-evil';
+  try {
+    const clean = runjob.buildCleanEnv(paths, 'dream');
+    // Config roots are code-derived from the BOUND home, never the ambient value.
+    assert.equal(clean.CLAUDE_CONFIG_DIR, path.join(paths.home, '.claude'), 'CLAUDE_CONFIG_DIR reconstructed under the bound home');
+    assert.equal(clean.CODEX_HOME, path.join(paths.home, '.codex'), 'CODEX_HOME reconstructed under the bound home');
+    assert.notEqual(clean.CLAUDE_CONFIG_DIR, '/evil/claude', 'ambient CLAUDE_CONFIG_DIR does not leak through');
+    assert.notEqual(clean.CODEX_HOME, '/evil/codex', 'ambient CODEX_HOME does not leak through');
+    // No inherited API key on the scheduled path (subscription-authed, ADR-0009).
+    assert.equal(clean.ANTHROPIC_API_KEY, undefined, 'ANTHROPIC_API_KEY is not carried into the scheduled env');
+  } finally {
+    for (const k of Object.keys(saved)) {
+      if (saved[k] === undefined) delete process.env[k];
+      else process.env[k] = saved[k];
+    }
+  }
+});
+
+test('sync-repoint: buildCleanEnv(win32) pins config roots under the bound home so ambient APPDATA/CLAUDE_CONFIG_DIR cannot move them (A10)', () => {
+  const runjob = require('../../src/cli/run-job');
+  const { paths } = setup();
+  const keys = ['CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'ANTHROPIC_API_KEY', 'APPDATA', 'SystemRoot'];
+  const saved = {};
+  for (const k of keys) saved[k] = process.env[k];
+  process.env.CLAUDE_CONFIG_DIR = 'C:\\evil\\claude';
+  process.env.CODEX_HOME = 'C:\\evil\\codex';
+  process.env.ANTHROPIC_API_KEY = 'sk-evil';
+  process.env.APPDATA = 'C:\\Users\\Evil\\AppData\\Roaming';
+  process.env.SystemRoot = 'C:\\Windows';
+  try {
+    const clean = runjob.buildCleanEnv(paths, 'dream', 'win32');
+    assert.equal(clean.CLAUDE_CONFIG_DIR, path.join(paths.home, '.claude'));
+    assert.equal(clean.CODEX_HOME, path.join(paths.home, '.codex'));
+    assert.notEqual(clean.CLAUDE_CONFIG_DIR, 'C:\\evil\\claude');
+    assert.equal(clean.ANTHROPIC_API_KEY, undefined);
+    // APPDATA still passes through (PATH/tooling) but does NOT determine the config root.
+    assert.equal(clean.APPDATA, 'C:\\Users\\Evil\\AppData\\Roaming');
+  } finally {
+    for (const k of keys) {
+      if (saved[k] === undefined) delete process.env[k];
+      else process.env[k] = saved[k];
+    }
+  }
+});

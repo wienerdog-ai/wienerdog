@@ -22,11 +22,17 @@ function currentLink(paths) { return path.join(appDir(paths), 'current'); }
  *  @param {import('./paths').WienerdogPaths} paths @returns {string} */
 function currentBin(paths) { return path.join(currentLink(paths), 'bin', 'wienerdog.js'); }
 
-/** Dev checkout? A `.git` dir at `root`, or WIENERDOG_DEV=1.
+/** Dev checkout? A `.git` at `root` that is a DIRECTORY (normal clone) OR a
+ *  regular FILE (git worktree — our own dev machine + Gyula's), or WIENERDOG_DEV=1.
+ *  The dir-or-file rule matches the launcher's fire-time isDev so a worktree dev
+ *  install produces a `dev`-stance descriptor the launcher can then verify (F10).
  *  @param {string} root @param {NodeJS.ProcessEnv} [env] @returns {boolean} */
 function isDevCheckout(root, env = process.env) {
   if (env.WIENERDOG_DEV === '1') return true;
-  try { return fs.statSync(path.join(root, '.git')).isDirectory(); } catch { return false; }
+  try {
+    const st = fs.statSync(path.join(root, '.git'));
+    return st.isDirectory() || st.isFile();
+  } catch { return false; }
 }
 
 /** Copy the COPY_INCLUDE entries from srcRoot into destRoot (overwrite).

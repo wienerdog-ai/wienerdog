@@ -144,6 +144,31 @@ function catchupLaunchArgs(o) {
   return [o.launcher, '--catch-up', '--expect-digest', o.expectDigest];
 }
 
+/**
+ * The COMPLETE environment binding every scheduled OS entry sets (WP-157 F8 +
+ * A10/R4). Ordered [key, value] pairs:
+ *  - NODE_OPTIONS / NODE_PATH → '' : neutralize the code-loading Node vars. An
+ *    inherited `NODE_OPTIONS=--require <evil>` would otherwise run attacker code
+ *    in the launcher's OWN node process BEFORE launch.js — bypassing every check.
+ *  - HOME → the bound authorized home : a hostile ambient/`environment.d` HOME
+ *    must not relocate the credential/config account (its parent).
+ *  - CLAUDE_CONFIG_DIR / CODEX_HOME / ANTHROPIC_API_KEY → '' : drop ambient
+ *    credential/config overrides; run-job's buildCleanEnv reconstructs the config
+ *    roots deterministically beneath the bound home and the scheduled dream is
+ *    subscription-authed (ADR-0009), never an inherited API key.
+ * @param {string} home  the absolute bound home @returns {Array<[string,string]>}
+ */
+function scheduledEnvPairs(home) {
+  return [
+    ['HOME', home],
+    ['NODE_OPTIONS', ''],
+    ['NODE_PATH', ''],
+    ['CLAUDE_CONFIG_DIR', ''],
+    ['CODEX_HOME', ''],
+    ['ANTHROPIC_API_KEY', ''],
+  ];
+}
+
 /** Escape a value for insertion into XML character data (plist <string>). Order
  *  matters: & first. @param {string} s @returns {string} */
 function xmlEscape(s) {
@@ -153,13 +178,33 @@ function xmlEscape(s) {
     .replace(/>/g, '&gt;');
 }
 
+/** Render the launchd `EnvironmentVariables` dict block (2-space indented under
+ *  the plist <dict>) that binds the scheduled env (WP-157 F8/A10). launchd sets
+ *  these for the job, overriding whatever the user session inherited.
+ *  @param {string} home @returns {string} */
+function launchdEnvDict(home) {
+  const rows = scheduledEnvPairs(home)
+    .map(([k, v]) => `    <key>${k}</key>\n    <string>${xmlEscape(v)}</string>`)
+    .join('\n');
+  return `  <key>EnvironmentVariables</key>\n  <dict>\n${rows}\n  </dict>\n`;
+}
+
+/** Render systemd `[Service]` `Environment=` lines binding the scheduled env
+ *  (WP-157 F8/A10). A quoted value covers spaces/`%`; an empty value clears the
+ *  inherited one. @param {string} home @returns {string} */
+function systemdEnvLines(home) {
+  return scheduledEnvPairs(home)
+    .map(([k, v]) => `Environment=${k}=${v === '' ? '' : systemdQuote(v)}`)
+    .join('\n');
+}
+
 /**
  * Render a per-job launchd plist. All paths ABSOLUTE (no $HOME/~). The entry
  * invokes the out-of-tree launcher with the descriptor path + expect-digest
  * (WP-157) — NOT the app bin directly.
  * @param {{name:string, hour:number, minute:number, node:string, launcher:string,
- *          descriptor:string, expectDigest:string, logDir:string}} o
- *   logDir = <core>/logs/<name> (absolute)
+ *          descriptor:string, expectDigest:string, home:string, logDir:string}} o
+ *   logDir = <core>/logs/<name> (absolute); home = the bound authorized home
  * @returns {string} the full plist XML
  */
 function launchdPlist(o) {
@@ -175,7 +220,7 @@ function launchdPlist(o) {
     <string>${xmlEscape(o.node)}</string>
 ${args.map((a) => `    <string>${xmlEscape(a)}</string>`).join('\n')}
   </array>
-  <key>StartCalendarInterval</key>
+${launchdEnvDict(o.home)}  <key>StartCalendarInterval</key>
   <dict>
     <key>Hour</key>
     <integer>${o.hour}</integer>
@@ -197,8 +242,8 @@ ${args.map((a) => `    <string>${xmlEscape(a)}</string>`).join('\n')}
  * Render the single macOS catch-up plist (login + hourly). It invokes the
  * out-of-tree launcher with `--catch-up` + the app-tree expect-digest (WP-157).
  * RunAtLoad true, plus hourly at :00.
- * @param {{node:string, launcher:string, expectDigest:string, logDir:string}} o
- *   logDir = <core>/logs/catchup
+ * @param {{node:string, launcher:string, expectDigest:string, home:string, logDir:string}} o
+ *   logDir = <core>/logs/catchup; home = the bound authorized home
  * @returns {string} plist XML with Label 'ai.wienerdog.catchup'
  */
 function catchupPlist(o) {
@@ -214,7 +259,7 @@ function catchupPlist(o) {
     <string>${xmlEscape(o.node)}</string>
 ${args.map((a) => `    <string>${xmlEscape(a)}</string>`).join('\n')}
   </array>
-  <key>RunAtLoad</key>
+${launchdEnvDict(o.home)}  <key>RunAtLoad</key>
   <true/>
   <key>StartCalendarInterval</key>
   <dict>
@@ -271,8 +316,10 @@ function systemdQuote(s) {
  * the out-of-tree launcher with the descriptor + expect-digest (WP-157). Paths
  * (launcher, descriptor) are systemd-quoted; the name/flags/digest are a safe
  * charset (`sha256:`+hex, `--…`, `^[a-z0-9-]+$`).
+ * The `Environment=` lines bind the scheduled env (WP-157 F8/A10): clear
+ * NODE_OPTIONS/NODE_PATH + the ambient credential/config roots and bind HOME.
  * @param {{name:string, node:string, launcher:string, descriptor:string,
- *          expectDigest:string}} o
+ *          expectDigest:string, home:string}} o
  * @returns {string} .service unit text
  */
 function systemdService(o) {
@@ -282,6 +329,7 @@ Description=Wienerdog job: ${o.name}
 
 [Service]
 Type=oneshot
+${systemdEnvLines(o.home)}
 ExecStart=${systemdQuote(o.node)} ${execArgs}
 `;
 }
@@ -331,6 +379,54 @@ function windowsTaskFile(paths, name) {
 }
 
 /**
+ * Basename of a job's cmd wrapper (WP-157 F8): Task Scheduler XML has NO per-task
+ * environment element, so a fully-controlled `.cmd` clears the code-loading Node
+ * vars + ambient credential/config roots and binds HOME/USERPROFILE before it
+ * invokes node+launcher. 'dream' → 'wienerdog-dream.cmd'.
+ * @param {string} name @returns {string}
+ */
+function windowsWrapperFileName(name) {
+  return `wienerdog-${name}.cmd`;
+}
+
+/**
+ * Absolute path to a job's cmd wrapper (under <core>/schedules, manifest-tracked
+ * as a regular non-symlink file, reversed with the entry).
+ * @param {import('../core/paths').WienerdogPaths} paths @param {string} name
+ * @returns {string}
+ */
+function windowsWrapperFile(paths, name) {
+  return path.join(windowsTasksDir(paths), windowsWrapperFileName(name));
+}
+
+/**
+ * Render the Windows `.cmd` wrapper the scheduled task invokes (WP-157 F8/A10).
+ * Batch content is authored ENTIRELY here (not interpolated from hostile argv),
+ * CRLF line-endings. It `set "VAR="`-clears NODE_OPTIONS/NODE_PATH and the ambient
+ * credential/config roots (run-job reconstructs them deterministically), binds
+ * HOME/USERPROFILE to the authorized home, THEN runs `"<node>" "<launcher>"
+ * <launchArgs>`. Node/launcher/paths are double-quoted; the safe-charset
+ * flags/name/digest are bare.
+ * RESIDUAL (recorded): a literal `%` in an absolute core path is still batch-
+ * expandable on the final exec line — accepted (core paths live under the user
+ * home, not attacker-chosen); the security-critical clears use quoted empty
+ * assignments that are `%`-safe.
+ * @param {{node:string, launcher:string, home:string, launchArgs:string[]}} o
+ * @returns {string} the .cmd file content (CRLF)
+ */
+function windowsLauncherWrapper(o) {
+  const line = (s) => `${s}\r\n`;
+  const clears = ['NODE_OPTIONS', 'NODE_PATH', 'CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'ANTHROPIC_API_KEY'];
+  let out = line('@echo off');
+  for (const k of clears) out += line(`set "${k}="`);
+  out += line(`set "HOME=${o.home}"`);
+  out += line(`set "USERPROFILE=${o.home}"`);
+  const argStr = o.launchArgs.map((a) => (/^[A-Za-z0-9:._-]+$/.test(a) ? a : `"${a}"`)).join(' ');
+  out += line(`"${o.node}" "${o.launcher}" ${argStr}`);
+  return out;
+}
+
+/**
  * The XML <UserId> for the current user: 'DOMAIN\\user' when both USERDOMAIN and
  * USERNAME are present, else the bare USERNAME (Task Scheduler resolves a bare
  * username to the local account; the domain-qualified form is preferred).
@@ -358,11 +454,12 @@ function windowsXmlEscape(s) {
 }
 
 /**
- * Render the daily Windows dream task XML. All interpolated paths/userId are
- * XML-escaped; the launcher + descriptor paths are additionally double-quoted
- * inside <Arguments> (WP-157: the entry invokes the out-of-tree launcher).
- * @param {{name:string, hour:number, minute:number, node:string, launcher:string,
- *          descriptor:string, expectDigest:string, userId:string}} o
+ * Render the daily Windows dream task XML. The task's <Command> is the cmd
+ * wrapper (WP-157 F8), which scrubs/binds the scheduled env before invoking
+ * node+launcher — the XML has no per-task env element, so the wrapper is the only
+ * fully-controlled place to clear NODE_OPTIONS/NODE_PATH. The wrapper path is
+ * XML-escaped.
+ * @param {{name:string, hour:number, minute:number, wrapper:string, userId:string}} o
  * @returns {string} the full Task Scheduler XML
  */
 function windowsDreamTaskXml(o) {
@@ -400,8 +497,7 @@ function windowsDreamTaskXml(o) {
   </Settings>
   <Actions Context="Author">
     <Exec>
-      <Command>${windowsXmlEscape(o.node)}</Command>
-      <Arguments>"${windowsXmlEscape(o.launcher)}" ${o.name} --descriptor "${windowsXmlEscape(o.descriptor)}" --expect-digest ${windowsXmlEscape(o.expectDigest)}</Arguments>
+      <Command>${windowsXmlEscape(o.wrapper)}</Command>
     </Exec>
   </Actions>
 </Task>
@@ -409,10 +505,11 @@ function windowsDreamTaskXml(o) {
 }
 
 /**
- * Render the Windows catch-up task XML (ONLOGON + hourly). Invokes the
- * out-of-tree launcher with `--catch-up` + the app-tree expect-digest (WP-157).
- * Task name is the fixed literal 'catchup'.
- * @param {{node:string, launcher:string, expectDigest:string, userId:string}} o
+ * Render the Windows catch-up task XML (ONLOGON + hourly). The <Command> is the
+ * catch-up cmd wrapper (WP-157 F8), which scrubs/binds the scheduled env before
+ * invoking node+launcher with `--catch-up` + the app-tree expect-digest. Task
+ * name is the fixed literal 'catchup'.
+ * @param {{wrapper:string, userId:string}} o
  * @returns {string} the full Task Scheduler XML
  */
 function windowsCatchupTaskXml(o) {
@@ -451,8 +548,7 @@ function windowsCatchupTaskXml(o) {
   </Settings>
   <Actions Context="Author">
     <Exec>
-      <Command>${windowsXmlEscape(o.node)}</Command>
-      <Arguments>"${windowsXmlEscape(o.launcher)}" --catch-up --expect-digest ${windowsXmlEscape(o.expectDigest)}</Arguments>
+      <Command>${windowsXmlEscape(o.wrapper)}</Command>
     </Exec>
   </Actions>
 </Task>
@@ -502,7 +598,23 @@ function ensureCatchup(paths, opts = {}) {
   const loader = opts.loader || defaultCatchupLoader;
   const uid = process.getuid();
   const logDir = path.join(paths.logs, 'catchup');
-  const content = catchupPlist({ node: nodePath(), bin: wienerdogBin(paths), logDir });
+  // F14: catchupPlist takes {node, launcher, expectDigest, home, logDir} — the
+  // removed `bin` field rendered a "undefined" argv. The launcher + app-tree
+  // expect-digest are best-effort (empty when no vendored app yet → the launcher
+  // fails closed at fire time).
+  let expectDigest = '';
+  try {
+    expectDigest = require('./descriptor').appTreeDigest(paths);
+  } catch {
+    expectDigest = '';
+  }
+  const content = catchupPlist({
+    node: nodePath(),
+    launcher: require('../core/vendor').launcherPath(paths),
+    expectDigest,
+    home: paths.home,
+    logDir,
+  });
   const label = 'ai.wienerdog.catchup';
   const plistPath = path.join(launchAgentsDir(paths.home), `${label}.plist`);
   const unload = ['launchctl', 'bootout', `gui/${uid}/${label}`];
@@ -543,11 +655,15 @@ module.exports = {
   windowsTasksDir,
   windowsTaskFileName,
   windowsTaskFile,
+  windowsWrapperFileName,
+  windowsWrapperFile,
+  windowsLauncherWrapper,
   windowsCurrentUserId,
   windowsXmlEscape,
   windowsDreamTaskXml,
   windowsCatchupTaskXml,
   windowsTaskXmlBytes,
+  scheduledEnvPairs,
   ensureCatchup,
   defaultCatchupLoader,
 };

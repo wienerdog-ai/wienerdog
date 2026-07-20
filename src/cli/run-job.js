@@ -29,13 +29,18 @@ const { settingsDigest } = require('../core/runtime-settings');
 
 /** How many per-run *.log files to keep in a job's log dir. */
 const LOG_KEEP = 14;
-/** Env vars carried through from the launching env into the clean job env. */
+/** Env vars carried through from the launching env into the clean job env.
+ *  A7/A10 (WP-157 R3:#4): CLAUDE_CONFIG_DIR / CODEX_HOME / ANTHROPIC_API_KEY are
+ *  DELIBERATELY NOT here — an in-scope scheduler-env write (environment.d /
+ *  launchctl setenv) to any of them would move the model's credential root,
+ *  config root, or account with NO descriptor drift (the authentication trust
+ *  boundary). The config roots are reconstructed deterministically beneath the
+ *  bound home in buildCleanEnv; the scheduled dream is subscription-authed
+ *  (ADR-0009), never an inherited API key. Only the wienerdog-owned path overrides
+ *  (WIENERDOG_HOME half-sandbox + WIENERDOG_VAULT) pass through. */
 const ENV_PASSTHROUGH = [
   'WIENERDOG_HOME',
   'WIENERDOG_VAULT',
-  'CLAUDE_CONFIG_DIR',
-  'CODEX_HOME',
-  'ANTHROPIC_API_KEY',
 ];
 
 /** Windows-essential env vars carried through (on win32 only) in addition to
@@ -140,6 +145,11 @@ function buildCleanEnv(paths, name, platform = process.platform) {
       // routine; disable the Claude client's >2min MCP auto-backgrounding.
       CLAUDE_CODE_MCP_AUTO_BACKGROUND_MS: '0',
     };
+    // A7/A10 (WP-157): the config roots are code-derived from the BOUND home
+    // (paths.home = the launcher-asserted HOME/USERPROFILE), never inherited — an
+    // ambient CLAUDE_CONFIG_DIR/CODEX_HOME/APPDATA cannot relocate them.
+    env.CLAUDE_CONFIG_DIR = path.join(paths.home, '.claude');
+    env.CODEX_HOME = path.join(paths.home, '.codex');
     // USERPROFILE is set explicitly above and absent from WIN_ENV_PASSTHROUGH, so
     // neither passthrough loop overwrites the deterministic homedir. No USER on
     // win32 (that's a POSIX/Keychain concern); USERNAME/USERDOMAIN pass through.
@@ -174,6 +184,10 @@ function buildCleanEnv(paths, name, platform = process.platform) {
     // routine; disable the Claude client's >2min MCP auto-backgrounding.
     CLAUDE_CODE_MCP_AUTO_BACKGROUND_MS: '0',
   };
+  // A7/A10 (WP-157): config roots reconstructed deterministically beneath the
+  // BOUND home (never an inherited CLAUDE_CONFIG_DIR/CODEX_HOME).
+  env.CLAUDE_CONFIG_DIR = path.join(paths.home, '.claude');
+  env.CODEX_HOME = path.join(paths.home, '.codex');
   const user = resolveUsername();
   if (user) env.USER = user;
   for (const k of ENV_PASSTHROUGH) {

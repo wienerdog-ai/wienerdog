@@ -677,9 +677,24 @@ test('scheduler-schedule: win32 dispatch writes both XMLs, records reversible en
   const catchupText = catchupBytes.slice(2).toString('utf16le');
   assert.ok(dreamText.startsWith('<?xml version="1.0" encoding="UTF-16"?>'));
   assert.ok(dreamText.includes('<URI>\\Wienerdog\\dream</URI>'));
-  // WP-157: the catch-up entry invokes the launcher with --catch-up + expect-digest.
-  assert.ok(catchupText.includes('launch.js" --catch-up --expect-digest'), catchupText);
+  // WP-157 F8: both tasks' <Command> is the env-scrubbing cmd wrapper (the
+  // launcher/args moved INTO the wrapper, which clears NODE_OPTIONS/NODE_PATH +
+  // binds HOME before node). The wrappers are recorded as reversible `file`
+  // entries and their content clears the code-loading vars.
+  const dreamWrapper = gen.windowsWrapperFile(paths, 'dream');
+  const catchupWrapper = gen.windowsWrapperFile(paths, 'catchup');
+  assert.ok(dreamText.includes(`<Command>${dreamWrapper}</Command>`), dreamText);
+  assert.ok(catchupText.includes(`<Command>${catchupWrapper}</Command>`), catchupText);
   assert.ok(!catchupText.includes('<LogonTrigger>'), 'catchup task carries no LogonTrigger');
+  assert.ok(fs.existsSync(dreamWrapper) && fs.existsSync(catchupWrapper), 'both cmd wrappers written');
+  const dreamWrapText = fs.readFileSync(dreamWrapper, 'utf8');
+  assert.match(dreamWrapText, /set "NODE_OPTIONS="/, 'wrapper clears NODE_OPTIONS before node');
+  assert.match(dreamWrapText, /--catch-up|--descriptor/, 'wrapper carries the launch args');
+  assert.ok(fs.readFileSync(catchupWrapper, 'utf8').includes('--catch-up'), 'catch-up wrapper runs --catch-up');
+  // The wrappers are reversible `file` manifest entries.
+  const fileEntries = manifest.entries.filter((e) => e.kind === 'file');
+  assert.ok(fileEntries.some((e) => e.path === dreamWrapper), 'dream wrapper recorded as a file entry');
+  assert.ok(fileEntries.some((e) => e.path === catchupWrapper), 'catch-up wrapper recorded as a file entry');
 
   const schedEntries = manifest.entries.filter((e) => e.kind === 'scheduler-entry');
   const dreamEntry = schedEntries.find((e) => e.path === dreamXml);

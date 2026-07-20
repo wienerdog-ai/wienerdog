@@ -124,12 +124,17 @@ function appTreeDigestOf(root) {
   return `sha256:${sha256(JSON.stringify(pairs))}`;
 }
 
-/** Dev checkout? A `.git` dir at `root`, or WIENERDOG_DEV=1 — matches
- *  vendor.isDevCheckout. @param {string} root @param {NodeJS.ProcessEnv} env @returns {boolean} */
-function isDev(root, env) {
-  if (env.WIENERDOG_DEV === '1') return true;
+/** Fire-time dev-liveness probe (WP-157 F10): a `.git` DIRECTORY (normal clone)
+ *  OR a `.git` regular FILE (git worktree — our own dev machine, and Gyula's).
+ *  Deliberately does NOT consult `env.WIENERDOG_DEV`: an attacker who controls the
+ *  scheduler-inherited env must NOT be able to flip enforcement to the unverified
+ *  dev path — the DIGEST-BOUND descriptor stance is the authority, this only
+ *  confirms on-disk liveness. Matches vendor.isDevCheckout's dir-or-file rule.
+ *  @param {string} root @returns {boolean} */
+function isDev(root) {
   try {
-    return fs.statSync(path.join(root, '.git')).isDirectory();
+    const st = fs.statSync(path.join(root, '.git'));
+    return st.isDirectory() || st.isFile();
   } catch {
     return false;
   }
@@ -184,108 +189,186 @@ function readDescriptorFile(descriptorPath) {
   }
 }
 
+/** Build the env used to RE-DERIVE the descriptor digest at fire time. Binds the
+ *  authorized home (digest-covered, WP-157 R4/A10) so a hostile ambient HOME
+ *  cannot relocate the credential/config root without drifting the digest, and
+ *  drops WIENERDOG_DEV so an inherited value can no longer flip a prod install to
+ *  the unverified dev path (F10). Code-loading vars are irrelevant to a pure
+ *  digest re-derivation but are dropped for cleanliness (F8).
+ *  @param {NodeJS.ProcessEnv} env @param {string|undefined} boundHome
+ *  @returns {NodeJS.ProcessEnv} */
+function derivationEnv(env, boundHome) {
+  const e = { ...env };
+  delete e.WIENERDOG_DEV;
+  delete e.NODE_OPTIONS;
+  delete e.NODE_PATH;
+  delete e.CLAUDE_CONFIG_DIR;
+  delete e.CODEX_HOME;
+  delete e.ANTHROPIC_API_KEY;
+  if (boundHome !== undefined) {
+    e.HOME = boundHome;
+    e.USERPROFILE = boundHome;
+  }
+  return e;
+}
+
+/** Re-derive the descriptor digest from the LIVE inputs, requiring the derivation
+ *  code from the (already integrity-verified, or dev) app tree. Returns undefined
+ *  when no job of that name exists. THROWS on any require/derivation error — the
+ *  caller's try/catch converts it to a durable-alert refusal (F13).
+ *  @param {string} target realpath of app/current @param {string} name
+ *  @param {NodeJS.ProcessEnv} env @param {NodeJS.Platform} platform
+ *  @returns {string|undefined} */
+function reDeriveDigest(target, name, env, platform) {
+  const getPaths = require(path.join(target, 'src', 'core', 'paths')).getPaths;
+  const { findJob } = require(path.join(target, 'src', 'scheduler', 'jobs'));
+  const { deriveDescriptorDigest } = require(path.join(target, 'src', 'scheduler', 'descriptor'));
+  const fullPaths = getPaths(env);
+  const job = findJob(fullPaths, name);
+  if (!job) return undefined;
+  return deriveDescriptorDigest(fullPaths, job, { platform, env });
+}
+
 /**
- * Pure verifier — reads live state, performs NO spawn.
+ * Pure verifier — reads live state, performs NO spawn. The ENTIRE verdict
+ * computation is wrapped so ANY exception (unreadable/renamed file mid-walk,
+ * a failed lazy require) becomes a fixed refusal the caller turns into a durable
+ * alert — never a bare throw that looks like a missed job (F13).
  * @param {{core:string, state:string, appDir:string, appCurrent:string}} p  inlined core paths
  * @param {string} name  job name (never the '--catch-up' sentinel — main handles that)
  * @param {{descriptorPath:string, expectDigest:string, env?:NodeJS.ProcessEnv, platform?:NodeJS.Platform}} o
- * @returns {{ok:true, command:string, args:string[]}|{ok:false, reason:string}}
+ * @returns {{ok:true, command:string, args:string[], home?:string}|{ok:false, reason:string}}
  */
 function verifyAndResolve(p, name, o) {
   const env = o.env || process.env;
   const platform = o.platform || process.platform;
-
-  const descriptor = readDescriptorFile(o.descriptorPath);
-  if (!descriptor) return { ok: false, reason: `descriptor ${o.descriptorPath} is missing or unreadable` };
-  const stance = descriptor.appRelease && descriptor.appRelease.stance;
-
-  let target;
   try {
-    target = fs.realpathSync(p.appCurrent);
+    const descriptor = readDescriptorFile(o.descriptorPath);
+    if (!descriptor) return { ok: false, reason: `descriptor ${o.descriptorPath} is missing or unreadable` };
+    const stance = descriptor.appRelease && descriptor.appRelease.stance;
+    const boundHome = typeof descriptor.home === 'string' ? descriptor.home : undefined;
+
+    let target;
+    try {
+      target = fs.realpathSync(p.appCurrent);
+    } catch (err) {
+      return { ok: false, reason: `cannot resolve app/current: ${err.message}` };
+    }
+    const liveDev = isDev(target);
+    const derivEnv = derivationEnv(env, boundHome);
+    const runArgs = [path.join(target, 'bin', 'wienerdog.js'), 'run-job', name];
+
+    // Stance must match: a prod entry over a dev-looking tree (planted .git) or a
+    // dev entry over a prod tree is refused — never a silent downgrade.
+    if (stance === 'dev') {
+      if (!liveDev) return { ok: false, reason: 'descriptor stance is dev but the live app is not a dev checkout' };
+      // Dev containment: the live app/current must resolve to EXACTLY the bound
+      // checkout root (dev vendors the checkout itself, OUTSIDE <core>/app, so the
+      // prod containment invariant does not apply — but a repoint off the bound
+      // root is still caught).
+      const boundRoot = descriptor.appRelease && descriptor.appRelease.root;
+      if (!boundRoot || path.resolve(target) !== path.resolve(boundRoot)) {
+        return { ok: false, reason: 'the dev app/current does not resolve to the authorized checkout root (repointed since sync)' };
+      }
+      // Dev digest: the reduction excludes only treeDigest+version, so a tracked-
+      // source edit stays runnable but ANY config-field edit (run/model/schedule/
+      // home/…) drifts and refuses.
+      const dd = reDeriveDigest(target, name, derivEnv, platform);
+      if (dd === undefined) return { ok: false, reason: `no job named "${name}" in config — nothing authorized to run` };
+      if (dd !== o.expectDigest) {
+        return { ok: false, reason: 'the job descriptor changed since it was scheduled (run/model/timeout/schedule/home/pin drift) — a `wienerdog sync` is required to re-authorize it' };
+      }
+      return { ok: true, command: process.execPath, args: runArgs, home: boundHome };
+    }
+    if (stance !== 'prod') return { ok: false, reason: `descriptor stance ${JSON.stringify(stance)} is not prod or dev` };
+    if (liveDev) return { ok: false, reason: 'descriptor stance is prod but the live app looks like a dev checkout (.git present)' };
+
+    // PROD verification.
+    const contain = verifyContainment(p, platform);
+    if (!contain.ok) return { ok: false, reason: contain.why };
+
+    const liveTree = appTreeDigestOf(target);
+    const expectTree = descriptor.appRelease && descriptor.appRelease.treeDigest;
+    if (liveTree !== expectTree) {
+      return { ok: false, reason: 'the live app tree does not match the descriptor (app files changed since sync)' };
+    }
+
+    // Tree verified byte-identical to the descriptor ⇒ it is now SAFE to require
+    // the descriptor-derivation code from the verified tree. deriveDescriptorDigest
+    // re-derives from LIVE config/pins/app and must equal the entry-bound digest —
+    // catching a config.yaml run/model/timeout/schedule/home/pin edit made without
+    // `sync`.
+    const derived = reDeriveDigest(target, name, derivEnv, platform);
+    if (derived === undefined) return { ok: false, reason: `no job named "${name}" in config — nothing authorized to run` };
+    if (derived !== o.expectDigest) {
+      return { ok: false, reason: 'the job descriptor changed since it was scheduled (run/model/timeout/schedule/home/pin/app drift) — a `wienerdog sync` is required to re-authorize it' };
+    }
+
+    return { ok: true, command: process.execPath, args: runArgs, home: boundHome };
   } catch (err) {
-    return { ok: false, reason: `cannot resolve app/current: ${err.message}` };
+    return { ok: false, reason: `integrity check errored: ${err.message}` };
   }
-  const liveDev = isDev(target, env);
-
-  // Stance must match: a prod entry over a dev-looking tree (planted .git) or a
-  // dev entry over a prod tree is refused — never a silent downgrade.
-  if (stance === 'dev') {
-    if (!liveDev) return { ok: false, reason: 'descriptor stance is dev but the live app is not a dev checkout' };
-    // Dev checkouts are live-edited — a treeDigest over an edited tree is not
-    // stable, so integrity is not enforceable; the stance match is the guard.
-    return { ok: true, command: process.execPath, args: [path.join(target, 'bin', 'wienerdog.js'), 'run-job', name] };
-  }
-  if (stance !== 'prod') return { ok: false, reason: `descriptor stance ${JSON.stringify(stance)} is not prod or dev` };
-  if (liveDev) return { ok: false, reason: 'descriptor stance is prod but the live app looks like a dev checkout (.git present)' };
-
-  // PROD verification.
-  const contain = verifyContainment(p, platform);
-  if (!contain.ok) return { ok: false, reason: contain.why };
-
-  const liveTree = appTreeDigestOf(target);
-  const expectTree = descriptor.appRelease && descriptor.appRelease.treeDigest;
-  if (liveTree !== expectTree) {
-    return { ok: false, reason: 'the live app tree does not match the descriptor (app files changed since sync)' };
-  }
-
-  // Tree verified byte-identical to the descriptor ⇒ it is now SAFE to require
-  // the descriptor-derivation code from the verified tree. deriveDescriptorDigest
-  // re-derives from LIVE config/pins/app and must equal the entry-bound digest —
-  // catching a config.yaml run/model/timeout/pin edit made without `sync`.
-  let derived;
-  try {
-    const getPaths = require(path.join(target, 'src', 'core', 'paths')).getPaths;
-    const { findJob } = require(path.join(target, 'src', 'scheduler', 'jobs'));
-    const { deriveDescriptorDigest } = require(path.join(target, 'src', 'scheduler', 'descriptor'));
-    const fullPaths = getPaths(env);
-    const job = findJob(fullPaths, name);
-    if (!job) return { ok: false, reason: `no job named "${name}" in config — nothing authorized to run` };
-    derived = deriveDescriptorDigest(fullPaths, job, { platform, env });
-  } catch (err) {
-    return { ok: false, reason: `could not re-derive the descriptor digest: ${err.message}` };
-  }
-  if (derived !== o.expectDigest) {
-    return { ok: false, reason: 'the job descriptor changed since it was scheduled (run/model/timeout/pin/app drift) — a `wienerdog sync` is required to re-authorize it' };
-  }
-
-  return { ok: true, command: process.execPath, args: [path.join(target, 'bin', 'wienerdog.js'), 'run-job', name] };
 }
 
 /**
- * Verify + resolve the catch-up spawn. No per-job descriptor: verify containment
- * (prod) + the live app tree hash equals the entry-bound `--expect-digest`; a
- * dev install skips the (unstable) tree hash, mirroring the per-job dev path.
+ * Verify + resolve the catch-up spawn. WP-157 ships catch-up as an explicitly-
+ * INCOMPLETE intermediate: it enforces containment + the app-tree hash against the
+ * entry-bound `--expect-digest`, but NOT per-job descriptor authorization (that is
+ * WP-catchup-per-job-authorization). There is deliberately NO dev early-return: an inherited env or a
+ * planted `.git` can no longer skip the tree-hash check (F10). A dev install
+ * (whose `current` legitimately resolves OUTSIDE `<core>/app`) fails containment
+ * and refuses here — fail-closed for the catch-up path, acceptable for the
+ * intermediate (the per-job dev fire path still runs). The whole computation is
+ * wrapped so any fs error becomes a refusal, never a bare throw (F13).
  * @param {{appDir:string, appCurrent:string}} p @param {string} expectDigest
  * @param {NodeJS.ProcessEnv} env @param {NodeJS.Platform} platform
  * @returns {{ok:true, command:string, args:string[]}|{ok:false, reason:string}}
  */
 function verifyCatchup(p, expectDigest, env, platform) {
-  let target;
   try {
-    target = fs.realpathSync(p.appCurrent);
+    let target;
+    try {
+      target = fs.realpathSync(p.appCurrent);
+    } catch (err) {
+      return { ok: false, reason: `cannot resolve app/current: ${err.message}` };
+    }
+    const runArgs = [path.join(target, 'bin', 'wienerdog.js'), 'run-job', '--catch-up'];
+    const contain = verifyContainment(p, platform);
+    if (!contain.ok) return { ok: false, reason: contain.why };
+    if (appTreeDigestOf(target) !== expectDigest) {
+      return { ok: false, reason: 'the live app tree does not match the scheduled digest (app files changed since sync)' };
+    }
+    return { ok: true, command: process.execPath, args: runArgs };
   } catch (err) {
-    return { ok: false, reason: `cannot resolve app/current: ${err.message}` };
+    return { ok: false, reason: `integrity check errored: ${err.message}` };
   }
-  const runArgs = [path.join(target, 'bin', 'wienerdog.js'), 'run-job', '--catch-up'];
-  if (isDev(target, env)) return { ok: true, command: process.execPath, args: runArgs };
-  const contain = verifyContainment(p, platform);
-  if (!contain.ok) return { ok: false, reason: contain.why };
-  if (appTreeDigestOf(target) !== expectDigest) {
-    return { ok: false, reason: 'the live app tree does not match the scheduled digest (app files changed since sync)' };
-  }
-  return { ok: true, command: process.execPath, args: runArgs };
 }
 
-/** Parse `--flag value` pairs out of argv, returning {positionals, flags}.
- *  @param {string[]} argv @returns {{positionals:string[], flags:Record<string,string>}} */
+/** Boolean flags (present ⇒ true, consume NO following token). */
+const BOOL_FLAGS = new Set(['catch-up']);
+/** Value-taking flags (consume argv[i+1]). */
+const VALUE_FLAGS = new Set(['descriptor', 'expect-digest']);
+
+/** Schema-aware argv parse (WP-157 F11). `--catch-up` is boolean; `--descriptor`
+ *  and `--expect-digest` take a value; ANY unknown `--flag` fails closed (returns
+ *  an `error`). This fixes the bug where the old value-taking `--catch-up` ate the
+ *  following `--expect-digest`, making every prod catch-up refuse.
+ *  @param {string[]} argv
+ *  @returns {{positionals:string[], flags:Record<string,string|boolean>, error?:string}} */
 function parseArgv(argv) {
   const positionals = [];
-  /** @type {Record<string,string>} */ const flags = {};
+  /** @type {Record<string,string|boolean>} */ const flags = {};
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a.startsWith('--')) {
-      flags[a.slice(2)] = argv[i + 1];
-      i += 1;
+      const key = a.slice(2);
+      if (BOOL_FLAGS.has(key)) {
+        flags[key] = true;
+      } else if (VALUE_FLAGS.has(key)) {
+        flags[key] = argv[++i];
+      } else {
+        return { positionals, flags, error: `unknown flag ${a}` };
+      }
     } else {
       positionals.push(a);
     }
@@ -312,9 +395,25 @@ function main(argv, opts = {}) {
   const spawn = opts.spawn || spawnSync;
   const exit = opts.exit || ((code) => process.exit(code));
   const p = resolveCorePaths(env);
-  const { positionals, flags } = parseArgv(argv);
-  const isCatchup = positionals[0] === '--catch-up' || flags['catch-up'] !== undefined || positionals.includes('--catch-up');
+  const { positionals, flags, error } = parseArgv(argv);
+  const isCatchup = flags['catch-up'] === true;
   const name = isCatchup ? '--catch-up' : positionals[0];
+
+  /** Refuse: fixed durable alert (never a bare throw — F13) pointing at the real
+   *  surface (the next digest banner) + the real remedy (`wienerdog sync`), NOT
+   *  `wienerdog doctor` which reads no A7 state (F27). Zero spawn, non-zero exit. */
+  const refuse = (jobName, why) => {
+    const reason =
+      `wienerdog: refusing to run "${jobName}" — ${why} (integrity mismatch); no job was run. ` +
+      'This alert will appear in your next digest. If the change was intentional, run ' +
+      '`wienerdog sync`; otherwise investigate.';
+    appendRefuseAlert(p, jobName, reason);
+    process.stderr.write(`${reason}\n`);
+    exit(1);
+    return 1;
+  };
+
+  if (error) return refuse(name || 'unknown', error);
 
   const verdict = isCatchup
     ? verifyCatchup(p, flags['expect-digest'], env, platform)
@@ -325,21 +424,31 @@ function main(argv, opts = {}) {
         platform,
       });
 
-  if (!verdict.ok) {
-    const reason = `wienerdog: refusing to run "${name}" — ${verdict.reason} (integrity mismatch); no job was run. Run \`wienerdog doctor\`.`;
-    appendRefuseAlert(p, name, reason);
-    process.stderr.write(`${reason}\n`);
-    exit(1);
-    return 1;
+  if (!verdict.ok) return refuse(name, verdict.reason);
+
+  // Child spawn env (defense-in-depth, F8 + A10/R4): scrub the code-loading Node
+  // vars (they run attacker code in a child node before its own main) and the
+  // ambient credential/config roots (reconstructed deterministically by run-job's
+  // buildCleanEnv), and re-assert the digest-bound authorized home so an ambient
+  // HOME/USERPROFILE cannot move the credential/config account.
+  const childEnv = { ...env };
+  delete childEnv.NODE_OPTIONS;
+  delete childEnv.NODE_PATH;
+  delete childEnv.CLAUDE_CONFIG_DIR;
+  delete childEnv.CODEX_HOME;
+  delete childEnv.ANTHROPIC_API_KEY;
+  if (verdict.home !== undefined) {
+    childEnv.HOME = verdict.home;
+    if (platform === 'win32') childEnv.USERPROFILE = verdict.home;
   }
 
-  const r = spawn(verdict.command, verdict.args, { stdio: 'inherit', env });
+  const r = spawn(verdict.command, verdict.args, { stdio: 'inherit', env: childEnv });
   const code = r && typeof r.status === 'number' ? r.status : 1;
   exit(code);
   return code;
 }
 
-module.exports = { verifyAndResolve, verifyCatchup, appTreeDigestOf, verifyContainment, main };
+module.exports = { verifyAndResolve, verifyCatchup, appTreeDigestOf, verifyContainment, parseArgv, main };
 
 // When the vendored copy at <core>/launcher/launch.js is executed by the OS
 // scheduler, run main with the real argv.

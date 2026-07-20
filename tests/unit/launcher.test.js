@@ -222,22 +222,24 @@ test('launcher: appTreeDigestOf === descriptor.appTreeDigestOf over normal/unico
   assert.equal(launcher.appTreeDigestOf(root), descriptorMod.appTreeDigestOf(root));
 });
 
-test('launcher: a dev install runs on stance match (descriptor dev + live dev)', () => {
+/**
+ * A fully-wired DEV install: the running package (with src/, so the launcher can
+ * re-derive the dev digest from the tree) copied to a checkout marked dev by a
+ * `.git`, vendored (current → the checkout, OUTSIDE <core>/app), pins, a saved
+ * dream job, and a dev-stance descriptor.
+ * @param {'dir'|'file'} gitKind  a `.git` DIRECTORY (clone) or FILE (worktree)
+ */
+function setupDev(gitKind = 'file') {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-launch-dev-'));
-  // A small fake dev checkout (a `.git` dir marks it dev) — fast, and the dev
-  // path never walks/re-requires the tree, so a minimal source suffices.
   const checkout = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-launch-devsrc-'));
-  fs.mkdirSync(path.join(checkout, 'bin'), { recursive: true });
-  fs.mkdirSync(path.join(checkout, '.git'));
-  fs.writeFileSync(path.join(checkout, 'bin', 'wienerdog.js'), '// dev bin\n');
-  fs.writeFileSync(path.join(checkout, 'package.json'), '{"version":"0.0.0-dev"}\n');
-
+  vendor.copyTree(prodSource(), checkout); // real src/ so the dev digest is re-derivable
+  if (gitKind === 'file') fs.writeFileSync(path.join(checkout, '.git'), 'gitdir: /elsewhere/.git/worktrees/x\n');
+  else fs.mkdirSync(path.join(checkout, '.git'));
   const env = { HOME: root, WIENERDOG_HOME: path.join(root, 'wd') };
   const paths = getPaths(env);
   fs.mkdirSync(paths.state, { recursive: true });
   fs.writeFileSync(paths.config, `version: 1\nvault: ${path.join(root, 'vault')}\n`);
   vendor.vendorSelf(paths, { sourceRoot: checkout, env }); // .git → dev: current → the checkout
-  // WP-156 A1b: the dream descriptor refuses to bind without claude+git pins.
   fs.writeFileSync(
     path.join(paths.state, 'exec-pins.json'),
     JSON.stringify({
@@ -251,7 +253,212 @@ test('launcher: a dev install runs on stance match (descriptor dev + live dev)',
   );
   jobsLib.saveJob(paths, DREAM_JOB);
   const { path: descriptorPath, digest } = descriptorMod.writeDescriptor(paths, DREAM_JOB, { env });
-  const r = launcher.verifyAndResolve(corePathsOf(paths), 'dream', { descriptorPath, expectDigest: digest, env });
+  return { root, checkout, env, paths, corePaths: corePathsOf(paths), descriptorPath, digest };
+}
+
+test('launcher: a git-WORKTREE dev install (.git is a FILE) runs, and a tracked-source edit still runs (F10)', () => {
+  const { env, corePaths, descriptorPath, digest, paths } = setupDev('file');
+  let r = launcher.verifyAndResolve(corePaths, 'dream', { descriptorPath, expectDigest: digest, env });
   assert.equal(r.ok, true, r.reason);
   assert.deepEqual(r.args.slice(1), ['run-job', 'dream']);
+  // Editing a TRACKED source file does NOT drift the dev digest (it excludes the
+  // tree digest) — dev stays runnable.
+  const target = fs.realpathSync(path.join(paths.core, 'app', 'current'));
+  fs.appendFileSync(path.join(target, 'package.json'), '\n');
+  r = launcher.verifyAndResolve(corePaths, 'dream', { descriptorPath, expectDigest: digest, env });
+  assert.equal(r.ok, true, 'a tracked-source edit still runs on dev: ' + r.reason);
+});
+
+test('launcher: a `.git` DIRECTORY dev install runs (F10)', () => {
+  const { env, corePaths, descriptorPath, digest } = setupDev('dir');
+  const r = launcher.verifyAndResolve(corePaths, 'dream', { descriptorPath, expectDigest: digest, env });
+  assert.equal(r.ok, true, r.reason);
+});
+
+test('launcher: dev + a config run-action rewrite ⇒ refuse (dev config-digest drifts, F10)', () => {
+  const { env, corePaths, descriptorPath, digest, paths } = setupDev('file');
+  jobsLib.saveJob(paths, { ...DREAM_JOB, run: 'skill:wienerdog-weekly-review' });
+  const r = launcher.verifyAndResolve(corePaths, 'dream', { descriptorPath, expectDigest: digest, env });
+  assert.equal(r.ok, false);
+  assert.match(r.reason, /descriptor changed since it was scheduled/);
+});
+
+test('launcher: dev app/current repointed OFF the bound checkout root ⇒ refuse (dev containment, F10)', () => {
+  const { env, corePaths, descriptorPath, digest, paths } = setupDev('file');
+  const other = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-launch-devother-'));
+  vendor.copyTree(prodSource(), other);
+  fs.writeFileSync(path.join(other, '.git'), 'gitdir: /elsewhere\n');
+  fs.rmSync(path.join(paths.core, 'app', 'current'), { force: true });
+  fs.symlinkSync(other, path.join(paths.core, 'app', 'current'));
+  const r = launcher.verifyAndResolve(corePaths, 'dream', { descriptorPath, expectDigest: digest, env });
+  assert.equal(r.ok, false);
+  assert.match(r.reason, /authorized checkout root/);
+});
+
+test('launcher: WIENERDOG_DEV=1 in the scheduler env + a PROD descriptor does NOT flip to dev (F10)', () => {
+  const { env, corePaths, descriptorPath, digest } = setupProd();
+  // A hostile inherited WIENERDOG_DEV must NOT downgrade a prod install to the
+  // unverified dev path — the prod stance + full tree verification still runs.
+  const hostile = { ...env, WIENERDOG_DEV: '1' };
+  const r = launcher.verifyAndResolve(corePaths, 'dream', { descriptorPath, expectDigest: digest, env: hostile });
+  assert.equal(r.ok, true, 'prod install still verifies+runs, not a dev fail-open: ' + r.reason);
+  assert.deepEqual(r.args.slice(1), ['run-job', 'dream']);
+});
+
+// -------------------------------------------------------------------------
+// F11: schema-aware parseArgv
+// -------------------------------------------------------------------------
+
+test('launcher: parseArgv treats --catch-up as boolean, not value-taking (F11)', () => {
+  const r = launcher.parseArgv(['--catch-up', '--expect-digest', 'D']);
+  assert.equal(r.flags['catch-up'], true);
+  assert.equal(r.flags['expect-digest'], 'D', '--catch-up must NOT swallow the following --expect-digest');
+  assert.equal(r.error, undefined);
+});
+
+test('launcher: parseArgv fails closed on an unknown flag (F11)', () => {
+  const r = launcher.parseArgv(['dream', '--descriptor', 'd', '--evil', 'x']);
+  assert.ok(r.error, 'an unknown flag is an error, not a silent consume');
+  assert.match(r.error, /unknown flag --evil/);
+});
+
+test('launcher: main on --catch-up + --expect-digest verifies the tree and spawns catch-up (F11 end-to-end)', () => {
+  const { env, paths } = setupProd();
+  const target = fs.realpathSync(path.join(paths.core, 'app', 'current'));
+  const treeDigest = launcher.appTreeDigestOf(target);
+  const calls = [];
+  const code = launcher.main(['--catch-up', '--expect-digest', treeDigest], {
+    env,
+    platform: process.platform,
+    spawn: (command, args) => {
+      calls.push({ command, args });
+      return { status: 0 };
+    },
+    exit: () => {},
+  });
+  assert.equal(code, 0);
+  assert.equal(calls.length, 1);
+  assert.deepEqual(calls[0].args.slice(1), ['run-job', '--catch-up']);
+});
+
+// -------------------------------------------------------------------------
+// F8 / A10 / R4: env scrub + bound HOME on the child spawn
+// -------------------------------------------------------------------------
+
+test('launcher: main scrubs NODE_OPTIONS/NODE_PATH and binds HOME on the child spawn env (F8/R4)', () => {
+  const { env, descriptorPath, digest, paths } = setupProd();
+  const hostile = {
+    ...env,
+    NODE_OPTIONS: '--require /evil.js',
+    NODE_PATH: '/evil/modules',
+    CLAUDE_CONFIG_DIR: '/evil/claude',
+    CODEX_HOME: '/evil/codex',
+    ANTHROPIC_API_KEY: 'sk-evil',
+  };
+  let childEnv = null;
+  launcher.main(['dream', '--descriptor', descriptorPath, '--expect-digest', digest], {
+    env: hostile,
+    platform: process.platform,
+    spawn: (_c, _a, opts) => {
+      childEnv = opts.env;
+      return { status: 0 };
+    },
+    exit: () => {},
+  });
+  assert.ok(childEnv, 'spawned');
+  assert.equal(childEnv.NODE_OPTIONS, undefined, 'NODE_OPTIONS scrubbed from the child');
+  assert.equal(childEnv.NODE_PATH, undefined, 'NODE_PATH scrubbed from the child');
+  assert.equal(childEnv.CLAUDE_CONFIG_DIR, undefined, 'ambient CLAUDE_CONFIG_DIR scrubbed');
+  assert.equal(childEnv.CODEX_HOME, undefined, 'ambient CODEX_HOME scrubbed');
+  assert.equal(childEnv.ANTHROPIC_API_KEY, undefined, 'ambient ANTHROPIC_API_KEY scrubbed');
+  assert.equal(childEnv.HOME, paths.home, 'HOME bound to the descriptor-recorded authorized home');
+});
+
+test('launcher: a hostile ambient HOME does NOT move the authorized root — the bound home wins (R4)', () => {
+  const { env, corePaths, descriptorPath, digest, paths } = setupProd();
+  const hostileHome = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-launch-evilhome-'));
+  const hostile = { ...env, HOME: hostileHome };
+  // The re-derivation binds the descriptor's home, so a hostile ambient HOME
+  // does NOT drift the digest — the run still verifies.
+  const r = launcher.verifyAndResolve(corePaths, 'dream', { descriptorPath, expectDigest: digest, env: hostile });
+  assert.equal(r.ok, true, r.reason);
+  // And the child spawn re-asserts the bound home, not the hostile one.
+  let childEnv = null;
+  launcher.main(['dream', '--descriptor', descriptorPath, '--expect-digest', digest], {
+    env: hostile,
+    platform: process.platform,
+    spawn: (_c, _a, opts) => {
+      childEnv = opts.env;
+      return { status: 0 };
+    },
+    exit: () => {},
+  });
+  assert.equal(childEnv.HOME, paths.home, 'child HOME is the bound authorized home, not the hostile ambient one');
+  assert.notEqual(childEnv.HOME, hostileHome);
+});
+
+// -------------------------------------------------------------------------
+// F13: every verification exception → durable alert, never a bare throw
+// -------------------------------------------------------------------------
+
+test('launcher: an fs error during verification ⇒ refuse + durable alert + ZERO spawn (F13)', { skip: process.platform === 'win32' }, () => {
+  const { env, descriptorPath, digest, paths } = setupProd();
+  const target = fs.realpathSync(path.join(paths.core, 'app', 'current'));
+  // Make a file under app/current unreadable so the tree walk throws mid-hash.
+  const victim = path.join(target, 'package.json');
+  fs.chmodSync(victim, 0o000);
+  let spawned = false;
+  const origErr = process.stderr.write;
+  process.stderr.write = () => true;
+  let code;
+  try {
+    code = launcher.main(['dream', '--descriptor', descriptorPath, '--expect-digest', digest], {
+      env,
+      platform: process.platform,
+      spawn: () => {
+        spawned = true;
+        return { status: 0 };
+      },
+      exit: () => {},
+    });
+  } finally {
+    process.stderr.write = origErr;
+    try {
+      fs.chmodSync(victim, 0o644);
+    } catch {
+      /* ignore */
+    }
+  }
+  assert.equal(spawned, false, 'no spawn when verification throws');
+  assert.equal(code, 1);
+  const alerts = fs.readFileSync(path.join(paths.state, 'alerts.jsonl'), 'utf8');
+  assert.match(alerts, /refusing to run/, 'a durable alert is appended even on a thrown error');
+});
+
+// -------------------------------------------------------------------------
+// F27: refuse text points at the digest banner + `wienerdog sync`, not doctor
+// -------------------------------------------------------------------------
+
+test('launcher: the refuse text points at the next digest + `wienerdog sync`, never `wienerdog doctor` (F27)', () => {
+  const { env, descriptorPath, digest, paths } = setupProd();
+  jobsLib.saveJob(paths, { ...DREAM_JOB, run: 'skill:wienerdog-weekly-review' }); // drift
+  const origErr = process.stderr.write;
+  let stderr = '';
+  process.stderr.write = (s) => {
+    stderr += s;
+    return true;
+  };
+  try {
+    launcher.main(['dream', '--descriptor', descriptorPath, '--expect-digest', digest], {
+      env,
+      platform: process.platform,
+      spawn: () => ({ status: 0 }),
+      exit: () => {},
+    });
+  } finally {
+    process.stderr.write = origErr;
+  }
+  assert.match(stderr, /wienerdog sync/, 'points at the real remedy');
+  assert.match(stderr, /next digest/, 'points at the real surface');
+  assert.doesNotMatch(stderr, /wienerdog doctor/, 'no longer points at doctor (reads no A7 state)');
 });

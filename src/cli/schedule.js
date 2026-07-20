@@ -140,6 +140,28 @@ function ensureEntry(manifest, filePath, content, unload) {
 }
 
 /**
+ * Write a regular `file` (WP-157 Windows env-scrub wrapper) idempotently and
+ * record a `file` manifest entry once. Unlike ensureEntry (scheduler-entry), the
+ * wrapper is plain content the OS entry's <Command> points at.
+ * @param {import('../core/manifest').Manifest} manifest
+ * @param {string} filePath @param {string|Buffer} content
+ */
+function ensureFile(manifest, filePath, content) {
+  const buf = Buffer.isBuffer(content) ? content : Buffer.from(content);
+  let onDisk = false;
+  try {
+    onDisk = fs.readFileSync(filePath).equals(buf);
+  } catch {
+    onDisk = false;
+  }
+  const hasEntry = manifest.entries.some((e) => e.kind === 'file' && e.path === filePath);
+  if (onDisk && hasEntry) return;
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.writeFileSync(filePath, buf);
+  if (!hasEntry) manifestLib.record(manifest, { kind: 'file', path: filePath });
+}
+
+/**
  * Ensure the macOS catch-up plist exists and is registered (once, idempotent).
  * @param {import('../core/paths').WienerdogPaths} paths
  * @param {import('../core/manifest').Manifest} manifest
@@ -154,6 +176,7 @@ function ensureCatchup(paths, manifest, loader, uid) {
     node: gen.nodePath(),
     launcher: launcherPathFor(paths),
     expectDigest: catchupExpectDigest(paths),
+    home: paths.home,
     logDir,
   });
   const label = 'ai.wienerdog.catchup';
@@ -177,13 +200,18 @@ function ensureCatchup(paths, manifest, loader, uid) {
  */
 function ensureWindowsCatchup(paths, manifest, loader) {
   const userId = gen.windowsCurrentUserId();
+  // WP-157 F8: write the env-scrubbing cmd wrapper (manifest `file` entry) and
+  // point the task's <Command> at it — the XML has no per-task env element.
+  const wrapperPath = gen.windowsWrapperFile(paths, 'catchup');
+  const wrapperContent = gen.windowsLauncherWrapper({
+    node: gen.nodePath(),
+    launcher: launcherPathFor(paths),
+    home: paths.home,
+    launchArgs: ['--catch-up', '--expect-digest', catchupExpectDigest(paths)],
+  });
+  ensureFile(manifest, wrapperPath, wrapperContent);
   const content = gen.windowsTaskXmlBytes(
-    gen.windowsCatchupTaskXml({
-      node: gen.nodePath(),
-      launcher: launcherPathFor(paths),
-      expectDigest: catchupExpectDigest(paths),
-      userId,
-    })
+    gen.windowsCatchupTaskXml({ wrapper: wrapperPath, userId })
   );
   const xmlPath = gen.windowsTaskFile(paths, 'catchup');
   const taskName = gen.windowsTaskName('catchup'); // '\Wienerdog\catchup'
@@ -253,7 +281,7 @@ function registerPlatformEntries(paths, manifest, o, loader, platform = process.
     const logDir = path.join(paths.logs, o.name);
     const label = gen.launchdLabel(o.name);
     const plistPath = path.join(gen.launchAgentsDir(paths.home), `${label}.plist`);
-    const content = gen.launchdPlist({ ...o, node, launcher: b.launcher, descriptor: b.descriptor, expectDigest: b.expectDigest, logDir });
+    const content = gen.launchdPlist({ ...o, node, launcher: b.launcher, descriptor: b.descriptor, expectDigest: b.expectDigest, home: paths.home, logDir });
     const unload = ['launchctl', 'bootout', `gui/${uid}/${label}`];
     let loaded = true;
     let changed = ensureEntry(manifest, plistPath, content, unload);
@@ -274,7 +302,7 @@ function registerPlatformEntries(paths, manifest, o, loader, platform = process.
     const timerPath = path.join(dir, `${unitBase}.timer`);
     const servicePath = path.join(dir, `${unitBase}.service`);
     const timerText = gen.systemdTimer(o);
-    const serviceText = gen.systemdService({ name: o.name, node, launcher: b.launcher, descriptor: b.descriptor, expectDigest: b.expectDigest });
+    const serviceText = gen.systemdService({ name: o.name, node, launcher: b.launcher, descriptor: b.descriptor, expectDigest: b.expectDigest, home: paths.home });
     const timerUnload = ['systemctl', '--user', 'disable', '--now', `${unitBase}.timer`];
     const timerChanged = ensureEntry(manifest, timerPath, timerText, timerUnload);
     const serviceChanged = ensureEntry(manifest, servicePath, serviceText, null);
@@ -315,15 +343,24 @@ function registerPlatformEntries(paths, manifest, o, loader, platform = process.
     const taskName = gen.windowsTaskName(o.name); // '\Wienerdog\<name>'
     const userId = gen.windowsCurrentUserId();
     const dreamXmlPath = gen.windowsTaskFile(paths, o.name);
+    // WP-157 F8: write the env-scrubbing cmd wrapper (manifest `file` entry) and
+    // point the task's <Command> at it — the XML has no per-task env element, so
+    // this is the only fully-controlled place to clear NODE_OPTIONS/NODE_PATH and
+    // bind HOME before node runs.
+    const wrapperPath = gen.windowsWrapperFile(paths, o.name);
+    const wrapperContent = gen.windowsLauncherWrapper({
+      node,
+      launcher: b.launcher,
+      home: paths.home,
+      launchArgs: [o.name, '--descriptor', b.descriptor, '--expect-digest', b.expectDigest],
+    });
+    ensureFile(manifest, wrapperPath, wrapperContent);
     const content = gen.windowsTaskXmlBytes(
       gen.windowsDreamTaskXml({
         name: o.name,
         hour: o.hour,
         minute: o.minute,
-        node,
-        launcher: b.launcher,
-        descriptor: b.descriptor,
-        expectDigest: b.expectDigest,
+        wrapper: wrapperPath,
         userId,
       })
     );
