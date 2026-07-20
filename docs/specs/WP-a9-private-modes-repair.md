@@ -362,22 +362,53 @@ fall back), and after its `chmodSync` it **re-`lstat`s and refuses on any
 `(dev, ino)` change** (the chmod may have hit a swapped target — made
 observable).
 
-**The irreducible residual (documented, not chased).** A concurrent
+**AMENDED 2026-07-20 (Codex G5) — the ROOT component too: lstat the core BEFORE
+trusting it as the containment root.** The `(dev, ino)` revalidation closes an
+intermediate swap, but a symlinked **core** defeated it from a different angle:
+`listPrivateDirs`/`listPrivateEntries` derived `coreReal = realpath(paths.core)`
+*before* checking whether `paths.core` itself is a symlink. A symlinked
+`~/.wienerdog`/`WIENERDOG_HOME`→`/outside/wd` made the external target the
+trusted root, so `state/`/`logs/`/`secrets/` beneath it classified as genuinely
+**contained** (their realpath IS under that target), the repair captured their
+real (external) inodes, and the `(dev, ino)` check **passed** (they truly are
+those inodes — just external) → `fchmod` modified the out-of-tree tree
+(reproduced: `{changed:3}`). This is NOT the readdir-time residual — the symlink
+**pre-exists**, so it is closeable at the root. Fix: a single shared
+`coreRootContext(paths)` **lstats the core's OWN final component first**; a
+symlinked (or present-but-not-a-directory) core is surfaced as the **sole**
+anomaly and **no descendant is enumerated or repaired** (`{dirs:[], files:[],
+anomalies:[core]}`); a missing core is skipped with no anomaly; only a **real**
+core yields `coreReal` and descends. `listPrivateEntries` computes that context
+ONCE and shares it with `listPrivateDirs` so the two can never diverge. A real
+core reached through a **symlinked ANCESTOR** (macOS `/Users`→`…/Data/Users`,
+`/var`→`/private/var`) is NOT a false anomaly — lstat refuses to follow only the
+core's own final component, and `withinCore` is realpath-vs-realpath, so a
+firmlinked/symlinked ancestor of a real core still classifies its descendants as
+contained. Refuse-at-root is the honest never-follow behavior: we cannot
+distinguish a user's deliberate external core from an attacker's redirect
+without more trust, so we surface it (doctor WARNs the core as a symlink anomaly)
+and repair nothing beneath — strictly better than chmodding an external tree.
+
+**The irreducible residual (documented, not chased).** With ROOT (G5),
+INTERMEDIATE (G3 `(dev,ino)` fd-revalidation), and LEAF (G2 lstat +
+`O_NOFOLLOW`) all closed, **every PRE-EXISTING symlink at any path-component
+position is now caught.** The ONLY remaining residual is a concurrent
 **owner-level** writer that swaps an intermediate directory component DURING the
-`readdirSync` enumeration itself — before any fd is bound — cannot be prevented
-in pure Node (`readdir` resolves through the path; there is no `fdopendir`/
-`openat`). This is the **same** same-user concurrent-writer class **ADR-0028**
-already hands to **A12** ("Honest boundary — the A7 residual"). The threat
-premise is explicit: the attacker must **already hold concurrent owner-level
-write access inside the already-`0700` core**; and because of the `(dev, ino)`
-revalidation the worst case is a **refused + surfaced** repair, **never a silent
-out-of-tree chmod**. The guarantee is therefore stated honestly — never-follow
-is enforced per classified entry via lstat-classification + `O_NOFOLLOW` +
-`(dev, ino)` fd-revalidation — **not** as an unconditional "never follows
-symlinks." (No native addon; no guarantee Node cannot provide.) *Follow-up for
-the architect:* `THREAT-MODEL.md` may want a one-line cross-reference to this
-`(dev,ino)`-revalidation residual under the A12 section — flagged, not edited
-here (out of this WP's Deliverables).
+`readdirSync` enumeration itself — before any fd is bound — which cannot be
+prevented in pure Node (`readdir` resolves through the path; there is no
+`fdopendir`/`openat`/`openat2`). This is the **same** same-user concurrent-writer
+class **ADR-0028** already hands to **A12** ("Honest boundary — the A7
+residual"). The threat premise is explicit: the attacker must **already hold
+concurrent owner-level write access inside the already-`0700` core**; and because
+of the `(dev, ino)` revalidation the worst case even then is a **refused +
+surfaced** repair, **never a silent out-of-tree chmod**. The guarantee is stated
+honestly — never-follow is enforced per classified entry via lstat-classification
+plus `O_NOFOLLOW` plus `(dev, ino)` fd-revalidation plus the root lstat gate —
+**not** as an unconditional "never follows symlinks"; the symlink-follow class is fully
+closed **except** that one concurrent-swap-during-`readdir` window. (No native
+addon; no guarantee Node cannot provide.) *Follow-up for the architect:*
+`THREAT-MODEL.md` may want a one-line cross-reference to this residual under the
+A12 section — flagged, not edited here (out of this WP's Deliverables).
 
 **The shared private log-stream helper `createLogStreamPrivate` — FAIL-CLOSED
 (round-2 finding 6).** The two log writers must open their stream `0600`
