@@ -249,6 +249,90 @@ test('private-fs: FIXED-POINT repair — core/=000 hiding secrets/=000 hiding a 
   });
 });
 
+test('private-fs: G2 — a symlinked secrets/ is NOT followed/chmodded and IS flagged as an anomaly', { skip: !POSIX }, () => {
+  withUmask(0o022, () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-privfs-'));
+    const paths = pathsFor(root);
+    fs.mkdirSync(paths.core, { recursive: true });
+    fs.chmodSync(paths.core, 0o700);
+    // An external owned dir with a 0644 file — the target the symlink points at.
+    const external = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-external-'));
+    fs.chmodSync(external, 0o755);
+    const externalFile = path.join(external, 'shared.json');
+    fs.writeFileSync(externalFile, '{}', { mode: 0o644 });
+    // secrets/ IS a symlink to that external dir.
+    fs.symlinkSync(external, paths.secrets);
+
+    // Flagged as an anomaly by the read predicate (and doctor/digest count it).
+    assert.ok(insecureEntries(paths).includes(paths.secrets), 'symlinked secrets/ is flagged');
+    assert.equal(scanPrivateModes(paths).insecure >= 1, true);
+
+    const r = repairPrivateModes(paths);
+    // The external target and its file are UNTOUCHED — repair never followed the link.
+    assert.equal(fs.lstatSync(paths.secrets).isSymbolicLink(), true, 'secrets/ is still the symlink (not replaced)');
+    assert.equal(modeOf(external), 0o755, 'external target dir mode untouched');
+    assert.equal(modeOf(externalFile), 0o644, 'external file mode untouched — not chmodded to 0600');
+    // Still flagged after repair (repair cannot fix an anomaly — surfaced, not silent).
+    assert.ok(insecureEntries(paths).includes(paths.secrets), 'still flagged after repair');
+    assert.equal(typeof r.changed, 'number');
+  });
+});
+
+test('private-fs: G2 — a symlinked logs/<job> is not followed/chmodded and is flagged', { skip: !POSIX }, () => {
+  withUmask(0o022, () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-privfs-'));
+    const paths = pathsFor(root);
+    fs.mkdirSync(paths.logs, { recursive: true });
+    fs.chmodSync(paths.core, 0o700);
+    fs.chmodSync(paths.logs, 0o700);
+    const external = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-external-'));
+    fs.chmodSync(external, 0o755);
+    const externalLog = path.join(external, 'foreign.log');
+    fs.writeFileSync(externalLog, 'x', { mode: 0o644 });
+    // logs/dream IS a symlink to the external dir.
+    fs.symlinkSync(external, path.join(paths.logs, 'dream'));
+
+    assert.ok(insecureEntries(paths).includes(path.join(paths.logs, 'dream')), 'symlinked logs/<job> flagged');
+    repairPrivateModes(paths);
+    assert.equal(fs.lstatSync(path.join(paths.logs, 'dream')).isSymbolicLink(), true, 'still the symlink');
+    assert.equal(modeOf(external), 0o755, 'external target untouched');
+    assert.equal(modeOf(externalLog), 0o644, 'external log not chmodded — not followed');
+  });
+});
+
+test('private-fs: G2 — a swap-to-symlink (forced ELOOP openSync seam) on logs/<job> is refused; the rest still repairs', { skip: !POSIX }, () => {
+  withUmask(0o022, () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-privfs-'));
+    const paths = pathsFor(root);
+    fs.mkdirSync(path.join(paths.logs, 'dream'), { recursive: true });
+    fs.mkdirSync(paths.state, { recursive: true });
+    fs.chmodSync(paths.core, 0o700);
+    fs.chmodSync(paths.state, 0o700);
+    fs.chmodSync(paths.logs, 0o700);
+    fs.chmodSync(path.join(paths.logs, 'dream'), 0o777); // wants repair to 0700
+    fs.writeFileSync(path.join(paths.state, 'broker-grants.json'), '{}', { mode: 0o644 }); // repairs fine
+
+    const target = path.join(paths.logs, 'dream');
+    // Simulate a swap-to-symlink between enumeration and chmod: openSync ELOOPs
+    // ONLY for the target dir, delegating every other path to the real openSync.
+    const openSync = (p, flags, mode) => {
+      if (p === target) {
+        const err = new Error('ELOOP: too many symbolic links');
+        err.code = 'ELOOP';
+        throw err;
+      }
+      return fs.openSync(p, flags, mode);
+    };
+
+    const r = repairPrivateModes(paths, { openSync });
+    assert.equal(modeOf(target), 0o777, 'the refused (ELOOP) entry was NOT chmodded');
+    assert.equal(modeOf(path.join(paths.state, 'broker-grants.json')), 0o600, 'the rest of the repair still completed');
+    assert.ok(r.changed >= 1, 'other entries were repaired');
+    // Surfaced: the still-0777 real dir is reported by the predicate.
+    assert.ok(insecureEntries(paths).includes(target), 'the refused entry stays flagged (surfaced, not silent)');
+  });
+});
+
 test('private-fs: repairPrivateModes never creates secrets/ or any file (repair, never create)', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-privfs-'));
   const paths = pathsFor(root);

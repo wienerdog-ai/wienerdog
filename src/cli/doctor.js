@@ -373,7 +373,20 @@ async function run(_argv) {
   if (process.platform !== 'win32') {
     const { insecureEntries } = require('../core/private-fs');
     for (const p of insecureEntries(paths)) {
-      check('warn', `${p} has wrong permissions (expected 0700 for folders, 0600 for files) — run 'wienerdog sync' to repair it`);
+      // G2 (ADR-0027): a private path that is a SYMLINK is an anomaly the repair
+      // deliberately refuses to follow (chmodding through it could touch data
+      // outside Wienerdog), so it needs a distinct, non-"sync will fix it" hint.
+      let isLink = false;
+      try {
+        isLink = fs.lstatSync(p).isSymbolicLink();
+      } catch {
+        /* vanished → treat as a plain wrong-permissions entry */
+      }
+      if (isLink) {
+        check('warn', `${p} is a symlink where Wienerdog expects a private file or folder — it was NOT repaired (following it could change permissions outside Wienerdog); investigate and replace it with a real path`);
+      } else {
+        check('warn', `${p} has wrong permissions (expected 0700 for folders, 0600 for files) — run 'wienerdog sync' to repair it`);
+      }
     }
   }
 

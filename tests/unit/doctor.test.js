@@ -683,6 +683,20 @@ test('doctor: an OVER-TIGHT 000 secrets/ (broken store) is WARNed too, not passe
   assert.match(r.stdout, /\[warn\] .*secrets has wrong permissions \(expected 0700 for folders, 0600 for files\)/);
 });
 
+test('doctor: a SYMLINKED secrets/ is WARNed as a not-repaired anomaly, distinct from wrong-permissions (WP-a9 G2)', { skip: process.platform === 'win32' }, () => {
+  const { env, core } = tempEnv();
+  run(['init', '--yes'], env);
+  const secrets = path.join(core, 'secrets');
+  const external = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-ext-'));
+  fs.rmSync(secrets, { recursive: true, force: true });
+  fs.symlinkSync(external, secrets);
+
+  const r = run(['doctor'], env);
+  // Not a hard fail (the dir "exists" via the link), but a distinct anomaly warn.
+  assert.match(r.stdout, /\[warn\] .*secrets is a symlink where Wienerdog expects a private file or folder — it was NOT repaired/);
+  assert.doesNotMatch(r.stdout, /secrets has wrong permissions/, 'a symlink anomaly is not reported as a plain wrong-permissions entry');
+});
+
 test('doctor: a MISSING secrets directory still hard-fails (exit 1) (WP-a9 keeps the A5-era fail)', { skip: process.platform === 'win32' }, () => {
   const { env, core } = tempEnv();
   run(['init', '--yes'], env);

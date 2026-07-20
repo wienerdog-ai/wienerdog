@@ -113,7 +113,9 @@ function writeFilePrivate(dest, data) {
 }
 
 /** @param {string} dir @param {(name:string)=>boolean} keep
- *  @returns {string[]} absolute paths of matching regular files in `dir` (one level) */
+ *  @returns {string[]} absolute paths of matching regular files in `dir` (one
+ *  level). `withFileTypes` + `e.isFile()` is lstat-based — a symlinked child is
+ *  NOT reported as a file, so this never follows a link out of the dir. */
 function listFiles(dir, keep) {
   let entries;
   try {
@@ -124,10 +126,95 @@ function listFiles(dir, keep) {
   return entries.filter((e) => e.isFile() && keep(e.name)).map((e) => path.join(dir, e.name));
 }
 
+/** @param {string} p @returns {import('fs').Stats|null} lstat (never follows). */
+function lstatOrNull(p) {
+  try {
+    return fs.lstatSync(p);
+  } catch {
+    return null;
+  }
+}
+
+/** @param {string} p @returns {string|null} realpath, or null when unresolvable. */
+function realpathOrNull(p) {
+  try {
+    return fs.realpathSync(p);
+  } catch {
+    return null;
+  }
+}
+
+/** Is the canonical `real` at or beneath the canonical `coreReal`? Both sides
+ *  are realpaths, so a symlinked ancestor of the core (e.g. /var → /private/var)
+ *  never causes a false escape. Fail-closed when either is missing.
+ *  @param {string|null} real @param {string|null} coreReal @returns {boolean} */
+function withinCore(real, coreReal) {
+  if (!real || !coreReal) return false;
+  return real === coreReal || real.startsWith(coreReal + path.sep);
+}
+
+/**
+ * Classify an enumerated private path WITHOUT following symlinks (audit A9 /
+ * G2, ADR-0027 never-follow bar). Returns the kind when the path is a REAL
+ * (non-symlink) entry of the expected type whose canonical location stays
+ * within the core; 'anomaly' when it is a symlink OR its realpath escapes the
+ * core (surfaced, never repaired-through); null when it is missing or the wrong
+ * kind (skipped). @param {string} p @param {'dir'|'file'} kind
+ * @param {string|null} coreReal @returns {'dir'|'file'|'anomaly'|null} */
+function classifyPrivatePath(p, kind, coreReal) {
+  const ls = lstatOrNull(p);
+  if (!ls) return null; // missing / parent unreadable
+  if (ls.isSymbolicLink()) return 'anomaly'; // a private path is a symlink → surface, never follow
+  if (kind === 'dir' ? !ls.isDirectory() : !ls.isFile()) return null; // wrong kind → skip
+  if (!withinCore(realpathOrNull(p), coreReal)) return 'anomaly'; // escapes the core → surface
+  return kind;
+}
+
+/** The DIRECTORY half of the single enumerator (kept a separate internal
+ *  function so the fixed-point repair loop can enumerate dirs WITHOUT the
+ *  redundant per-iteration secrets/scratch file walk; `listPrivateEntries`
+ *  builds on it, so all surfaces still share one dir source). Never follows a
+ *  symlink: a symlinked/escaping private dir is returned under `anomalies`, not
+ *  `dirs` — so it is neither traversed nor chmodded, only surfaced.
+ *  @param {import('./paths').WienerdogPaths} paths
+ *  @returns {{dirs:string[], anomalies:string[]}} */
+function listPrivateDirs(paths) {
+  const coreReal = realpathOrNull(paths.core);
+  const dirSet = new Set();
+  const anomalies = new Set();
+
+  for (const d of [...A5_PRIVATE_DIRS(paths), ...A9_PRIVATE_DIRS(paths)]) {
+    const c = classifyPrivatePath(d, 'dir', coreReal);
+    if (c === 'dir') dirSet.add(d);
+    else if (c === 'anomaly') anomalies.add(d);
+  }
+
+  // logs/<job> subdirs — only READ logs/ when it is itself a real, contained,
+  // traversable dir (a symlinked logs/ is an anomaly above and never read).
+  if (dirSet.has(paths.logs)) {
+    let jobEntries = [];
+    try {
+      jobEntries = fs.readdirSync(paths.logs, { withFileTypes: true });
+    } catch {
+      jobEntries = [];
+    }
+    for (const e of jobEntries) {
+      const jp = path.join(paths.logs, e.name);
+      const c = classifyPrivatePath(jp, 'dir', coreReal); // re-lstat: don't trust the Dirent
+      if (c === 'dir') dirSet.add(jp);
+      else if (c === 'anomaly') anomalies.add(jp);
+    }
+  }
+  return { dirs: [...dirSet], anomalies: [...anomalies] };
+}
+
 /**
  * The SINGLE enumerator behind all three surfaces (doctor warn, sync
- * repair/scan, digest banner) — the A5 ∪ A9 union: {dirs, files}. Every dir
- * carries the implicit expected mode 0700, every file 0600.
+ * repair/scan, digest banner) — the A5 ∪ A9 union, never following a symlink:
+ * `{dirs, files, anomalies}`. `dirs` (expected 0700) and `files` (expected
+ * 0600) are REAL, in-core entries safe to chmod; `anomalies` are enumerated
+ * private paths that are symlinks or escape the core — surfaced (so the
+ * predicate flags them and doctor WARNs) but NEVER repaired-through.
  *  - dirs: the A5 dirs, `secrets/`, and every existing `logs/<job>` subdir.
  *  - files: the four A5 state/ basenames, the A9 state/ files (grants, pins,
  *    run evidence, schedule.json, watermarks.json), the two core-root metadata
@@ -136,40 +223,17 @@ function listFiles(dir, keep) {
  *    quarantined copy, and every regular file directly under `secrets/`
  *    (tokens + client JSON, no fixed basename list).
  * Existence-guarded (a missing entry is skipped — this module repairs, it
- * never creates) and de-duplicated (the union must not double-report).
+ * never creates) and de-duplicated (the union must not double-report). Files
+ * are walked ONLY out of real, contained dirs (`dirSet` membership), so a
+ * symlinked `secrets/`/`logs/<job>` is never enumerated into.
  * @param {import('./paths').WienerdogPaths} paths
- * @returns {{dirs:string[], files:string[]}}
+ * @returns {{dirs:string[], files:string[], anomalies:string[]}}
  */
-/** The DIRECTORY half of the single enumerator (kept a separate internal
- *  function so the fixed-point repair loop can enumerate dirs WITHOUT the
- *  redundant per-iteration secrets/scratch file walk; `listPrivateEntries`
- *  builds on it, so all surfaces still share one dir source).
- *  @param {import('./paths').WienerdogPaths} paths @returns {string[]} */
-function listPrivateDirs(paths) {
-  let jobDirs;
-  try {
-    jobDirs = fs.readdirSync(paths.logs, { withFileTypes: true }).filter((e) => e.isDirectory());
-  } catch {
-    jobDirs = [];
-  }
-  const dirSet = new Set();
-  const dirCandidates = [
-    ...A5_PRIVATE_DIRS(paths),
-    ...A9_PRIVATE_DIRS(paths),
-    ...jobDirs.map((job) => path.join(paths.logs, job.name)),
-  ];
-  for (const d of dirCandidates) {
-    try {
-      if (fs.statSync(d).isDirectory()) dirSet.add(d);
-    } catch {
-      /* missing / parent unreadable → skipped */
-    }
-  }
-  return [...dirSet];
-}
-
 function listPrivateEntries(paths) {
-  const dirs = listPrivateDirs(paths);
+  const coreReal = realpathOrNull(paths.core);
+  const { dirs, anomalies: dirAnomalies } = listPrivateDirs(paths);
+  const dirSet = new Set(dirs);
+  const anomalies = new Set(dirAnomalies);
 
   const fileSet = new Set();
   const fileCandidates = [
@@ -178,23 +242,28 @@ function listPrivateEntries(paths) {
     ...A9_PRIVATE_CORE_FILES(paths),
   ];
   for (const f of fileCandidates) {
-    try {
-      if (fs.statSync(f).isFile()) fileSet.add(f);
-    } catch {
-      /* missing → skipped */
-    }
+    const c = classifyPrivatePath(f, 'file', coreReal);
+    if (c === 'file') fileSet.add(f);
+    else if (c === 'anomaly') anomalies.add(f);
   }
-  // Every discovered logs/<job> subdir contributes its *.log files (the dir set
-  // already resolved which job dirs are traversable).
+  // Walk files ONLY out of real, contained dirs (dirSet membership) so a
+  // symlinked secrets//logs/<job> is never followed. `listFiles` itself skips
+  // symlinked children (lstat-based isFile()).
   for (const d of dirs) {
     if (path.dirname(d) === paths.logs) {
       for (const f of listFiles(d, (n) => n.endsWith('.log'))) fileSet.add(f);
     }
   }
-  for (const f of listFiles(path.join(paths.state, 'dream-scratch'), (n) => n.endsWith('.json'))) fileSet.add(f);
-  for (const f of listFiles(path.join(paths.state, 'quarantine'), () => true)) fileSet.add(f);
-  for (const f of listFiles(paths.secrets, () => true)) fileSet.add(f);
-  return { dirs, files: [...fileSet] };
+  if (dirSet.has(path.join(paths.state, 'dream-scratch'))) {
+    for (const f of listFiles(path.join(paths.state, 'dream-scratch'), (n) => n.endsWith('.json'))) fileSet.add(f);
+  }
+  if (dirSet.has(path.join(paths.state, 'quarantine'))) {
+    for (const f of listFiles(path.join(paths.state, 'quarantine'), () => true)) fileSet.add(f);
+  }
+  if (dirSet.has(paths.secrets)) {
+    for (const f of listFiles(paths.secrets, () => true)) fileSet.add(f);
+  }
+  return { dirs, files: [...fileSet], anomalies: [...anomalies] };
 }
 
 /** Defensive iteration cap for the fixed-point directory repair. The real
@@ -204,6 +273,91 @@ function listPrivateEntries(paths) {
  *  spin and CANNOT be hit by the real layout. If it is ever hit the repair is
  *  aborted (fail-closed) rather than reporting a partial repair as complete. */
 const MAX_DIR_REPAIR_PASSES = 64;
+
+/** F30/ADR-0027 never-follow flags. Undefined on win32 → 0 (no-op there — the
+ *  realpath-canonical containment above is the win32 bound, and chmod is a
+ *  WIN32 no-op regardless). */
+const O_NOFOLLOW = fs.constants.O_NOFOLLOW || 0;
+const O_DIRECTORY = fs.constants.O_DIRECTORY || 0;
+
+/**
+ * TOCTOU-safe chmod that NEVER follows a symlink (audit A9 / G2, ADR-0027).
+ * Opens the path O_RDONLY|O_NOFOLLOW (dirs add O_DIRECTORY), `fstat`s the fd to
+ * confirm the kind + current mode, and `fchmod`s that verified descriptor — a
+ * swap-to-symlink between enumeration and chmod then trips O_NOFOLLOW at open
+ * (ELOOP/ENOTDIR) → the entry is REFUSED, never chmodded through the link.
+ *
+ * An owner-owned but UNREADABLE real dir/file (e.g. mode 000 — the fixed-point
+ * loop's whole reason to exist) cannot be opened O_RDONLY (EACCES), so that one
+ * case falls back to an lstat-guarded path chmod: re-lstat (reject a symlink),
+ * confirm the kind, then `chmodSync` (chmod needs only ownership, not read).
+ * The fallback's residual is a microscopic re-lstat→chmod window on a
+ * first-touch 000 entry only; every readable entry uses the fd path with no
+ * path-based window. `seams` inject the *Sync calls for tests (a forced ELOOP).
+ *
+ * @param {string} p @param {number} expectedMode @param {boolean} isDir
+ * @param {{openSync?,fstatSync?,fchmodSync?,closeSync?,lstatSync?,chmodSync?}} [seams]
+ * @returns {'changed'|'unchanged'|'refused'} 'refused' = a symlink/swap/error —
+ *   surfaced by the read predicate, never silently treated as clean. */
+function applyModeSecure(p, expectedMode, isDir, seams = {}) {
+  if (WIN32) return 'unchanged';
+  const openSync = seams.openSync || fs.openSync;
+  const fstatSync = seams.fstatSync || fs.fstatSync;
+  const fchmodSync = seams.fchmodSync || fs.fchmodSync;
+  const closeSync = seams.closeSync || fs.closeSync;
+  let fd = null;
+  try {
+    fd = openSync(p, fs.constants.O_RDONLY | O_NOFOLLOW | (isDir ? O_DIRECTORY : 0));
+  } catch (e) {
+    // EACCES/EPERM on a real unreadable entry (000) → lstat-guarded fallback.
+    // ELOOP/ENOTDIR (a symlink at the final component) or anything else → refuse.
+    if (e && (e.code === 'EACCES' || e.code === 'EPERM')) {
+      return applyModeFallback(p, expectedMode, isDir, seams);
+    }
+    return 'refused';
+  }
+  try {
+    const st = fstatSync(fd);
+    if (isDir ? !st.isDirectory() : !st.isFile()) return 'refused';
+    if ((st.mode & 0o777) === expectedMode) return 'unchanged';
+    fchmodSync(fd, expectedMode);
+    return 'changed';
+  } catch {
+    return 'refused';
+  } finally {
+    if (fd !== null) {
+      try {
+        closeSync(fd);
+      } catch {
+        /* best-effort close */
+      }
+    }
+  }
+}
+
+/** lstat-guarded path chmod for an unreadable-but-owned (000) entry the fd path
+ *  cannot open. Rejects a symlink and a kind mismatch before chmod.
+ *  @param {string} p @param {number} expectedMode @param {boolean} isDir
+ *  @param {object} seams @returns {'changed'|'unchanged'|'refused'} */
+function applyModeFallback(p, expectedMode, isDir, seams = {}) {
+  const lstatSync = seams.lstatSync || fs.lstatSync;
+  const chmodSync = seams.chmodSync || fs.chmodSync;
+  let ls;
+  try {
+    ls = lstatSync(p);
+  } catch {
+    return 'refused';
+  }
+  if (ls.isSymbolicLink()) return 'refused'; // never follow
+  if (isDir ? !ls.isDirectory() : !ls.isFile()) return 'refused';
+  if ((ls.mode & 0o777) === expectedMode) return 'unchanged';
+  try {
+    chmodSync(p, expectedMode);
+    return 'changed';
+  } catch {
+    return 'refused';
+  }
+}
 
 /**
  * Repair wrong modes over the A5 ∪ A9 set to their EXPECTED mode (dirs 0700,
@@ -226,24 +380,34 @@ const MAX_DIR_REPAIR_PASSES = 64;
  * single `repairPrivateModes` call, and a follow-up `scanPrivateModes` is
  * `{insecure: 0}`.
  *
- * Best-effort per entry (a missing or un-chmoddable entry is skipped); win32
+ * NEVER FOLLOWS A SYMLINK (G2, ADR-0027): only REAL, in-core `dirs`/`files`
+ * are repaired — a symlinked/escaping private path is an `anomaly` (surfaced by
+ * the read predicate, never chmodded through), and each chmod goes through the
+ * O_NOFOLLOW `applyModeSecure` fd so a swap-to-symlink mid-repair is refused,
+ * not followed to an out-of-tree target.
+ *
+ * Best-effort per entry (a missing/symlinked/un-chmoddable entry is skipped —
+ * and remains flagged by the predicate, never silently certified clean); win32
  * chmod is a no-op. Returns the count of entries actually changed for a
  * truthful doctor/sync line. Keeps the single-enumerator invariant: the dir
  * loop and the file pass both derive from `listPrivateDirs`/`listPrivateEntries`
- * that feed the three read surfaces.
- * @param {import('./paths').WienerdogPaths} paths @returns {{changed:number}}
+ * that feed the three read surfaces. `opts` forwards the *Sync test seams to
+ * `applyModeSecure` (a forced-ELOOP TOCTOU test); production passes none.
+ * @param {import('./paths').WienerdogPaths} paths
+ * @param {{openSync?,fstatSync?,fchmodSync?,closeSync?,lstatSync?,chmodSync?}} [opts]
+ * @returns {{changed:number}}
  * @throws {WienerdogError} if the directory repair does not converge within the
  *   defensive cap (unreachable by the real layout — surfaced, never silent).
  */
-function repairPrivateModes(paths) {
+function repairPrivateModes(paths, opts = {}) {
   let changed = 0;
-  // Fixed-point directory phase: repair discoverable private dirs to 0700 and
-  // re-enumerate until the discoverable set stops growing.
+  // Fixed-point directory phase: repair discoverable REAL private dirs to 0700
+  // (never following a symlink) and re-enumerate until the set stops growing.
   let prevCount = -1;
   let pass = 0;
   for (; pass < MAX_DIR_REPAIR_PASSES; pass += 1) {
-    const dirs = listPrivateDirs(paths);
-    for (const d of dirs) if (chmodIfNeeded(d, 0o700)) changed += 1;
+    const { dirs } = listPrivateDirs(paths);
+    for (const d of dirs) if (applyModeSecure(d, 0o700, true, opts) === 'changed') changed += 1;
     if (dirs.length === prevCount) break; // no newly-revealed dir → fixed point
     prevCount = dirs.length;
   }
@@ -254,38 +418,45 @@ function repairPrivateModes(paths) {
         'a partially-repaired credential store as complete.'
     );
   }
-  // Every private dir is now traversable → one fresh file pass to 0600.
-  for (const f of listPrivateEntries(paths).files) if (chmodIfNeeded(f, 0o600)) changed += 1;
+  // Every real private dir is now traversable → one fresh file pass to 0600.
+  for (const f of listPrivateEntries(paths).files) {
+    if (applyModeSecure(f, 0o600, false, opts) === 'changed') changed += 1;
+  }
   return { changed };
 }
 
 /**
- * READ-ONLY list of A5 ∪ A9 entries whose mode deviates from the expected one
- * in EITHER direction — (mode & 0o777) !== 0700 for dirs / 0600 for files — so
- * a loosened 0755/0644 AND an over-tight 0600/000 dir (a traversal-broken
- * credential store) are both flagged. Never chmods. POSIX only (win32 → []).
- * The single predicate behind doctor's WARNs, sync --dry-run's would-repair
- * count, and the digest insecure-modes banner — so those surfaces can never
- * disagree.
+ * READ-ONLY list of insecure A5 ∪ A9 entries. Two classes, both surfaced so
+ * doctor WARNs / the digest banner counts them and neither is silently clean:
+ *  - a REAL entry whose mode deviates from the expected one in EITHER direction
+ *    — (mode & 0o777) !== 0700 for dirs / 0600 for files — so a loosened
+ *    0755/0644 AND an over-tight 0600/000 dir (a traversal-broken credential
+ *    store) are both flagged;
+ *  - an ANOMALY: a private path that is a SYMLINK or resolves outside the core
+ *    (G2, ADR-0027) — repair refuses to follow it, so it stays flagged until a
+ *    human replaces it with a real in-core path.
+ * Mode reads use `lstat` (the entries are already classified non-symlink real,
+ * so lstat mode == stat mode — but lstat never follows). Never chmods. POSIX
+ * only (win32 → []). The single predicate behind doctor's WARNs, sync
+ * --dry-run's would-repair count, and the digest banner — those surfaces can
+ * never disagree.
  * @param {import('./paths').WienerdogPaths} paths @returns {string[]}
  */
 function insecureEntries(paths) {
   if (WIN32) return [];
-  const { dirs, files } = listPrivateEntries(paths);
-  const out = [];
+  const { dirs, files, anomalies } = listPrivateEntries(paths);
+  const out = new Set();
   for (const [list, expectedMode] of [
     [dirs, 0o700],
     [files, 0o600],
   ]) {
     for (const p of list) {
-      try {
-        if ((fs.statSync(p).mode & 0o777) !== expectedMode) out.push(p);
-      } catch {
-        /* vanished → skipped */
-      }
+      const ls = lstatOrNull(p);
+      if (ls && (ls.mode & 0o777) !== expectedMode) out.add(p);
     }
   }
-  return out;
+  for (const a of anomalies) out.add(a); // symlink / escapes-core → surfaced, never repaired
+  return [...out];
 }
 
 /**
