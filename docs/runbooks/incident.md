@@ -581,6 +581,17 @@ $core   = $env:WIENERDOG_HOME      # the step-0 core, re-exported after the rebo
 
 function Fail($msg) { Write-Host "DRILL FAIL: $msg"; exit 1 }
 
+# ORDINAL (byte-exact) path set — PowerShell's Sort-Object -Unique and -eq/-ne are
+# CASE-INSENSITIVE, which would collapse two case-distinct managed-block paths
+# (distinct files on a case-sensitive NTFS directory, Windows 10+) into one and check
+# only one. These match bash's `sort -z -u` (ordinal). Never use Sort-Object -Unique
+# or -eq/-ne on paths anywhere in this block.
+function New-OrdinalSet { param([string[]]$Items)
+  $s = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+  foreach ($i in $Items) { if ($null -ne $i -and $i -ne '') { [void]$s.Add($i) } }
+  ,$s
+}
+
 # pin the harness-detection env BEFORE sync (see prose above). For a CUSTOM-directory
 # install, set CLAUDE_CONFIG_DIR / CODEX_HOME here to EACH harness root from your
 # trusted inventory instead of removing - every declared harness must be detectable.
@@ -681,15 +692,16 @@ foreach ($pf in @("$homeDir\.claude\CLAUDE.md", "$homeDir\.codex\AGENTS.md")) {
   }
 }
 
-# (f) MUST-CHECK set = post-sync manifest UNION default-probe (deduped)
-$must = @(@($manifestFiles) + @($probeFiles) | Sort-Object -Unique)
-$declaredSorted = @($declaredFiles | Sort-Object -Unique)
-if ($must.Count -lt 1) { Fail "no managed block in the manifest or at a default location - nothing to prove (a zero-harness machine cannot be certified by this drill)" }
-Write-Host "must-check managed-block files (post-sync manifest UNION default-probe):"; $must | ForEach-Object { Write-Host "  $_" }
+# (f) MUST-CHECK set = post-sync manifest UNION default-probe (ORDINAL dedup — a
+# case-distinct pair stays distinct, matching bash's sort -z -u)
+$mustSet = New-OrdinalSet (@($manifestFiles) + @($probeFiles))
+$declaredSet = New-OrdinalSet $declaredFiles
+if ($mustSet.Count -lt 1) { Fail "no managed block in the manifest or at a default location - nothing to prove (a zero-harness machine cannot be certified by this drill)" }
+Write-Host "must-check managed-block files (post-sync manifest UNION default-probe):"; $mustSet | ForEach-Object { Write-Host "  $_" }
 
 # (g) check EVERY must-check file (adapter not skipped + present + no marker + one pair)
 $checkedPaths = @()
-foreach ($f in $must) {
+foreach ($f in $mustSet) {
   switch ([System.IO.Path]::GetFileName($f)) {
     'CLAUDE.md' { $skip = 'Claude Code (not detected|config is no longer present); skipping adapter' }
     'AGENTS.md' { $skip = 'Codex CLI (not detected|config is no longer present); skipping adapter' }
@@ -703,16 +715,17 @@ foreach ($f in $must) {
   if ($b -ne 1 -or $e -ne 1) { Fail "$f has $b begin / $e end sentinels (need exactly one pair)" }
   $checkedPaths += $f
 }
-$checkedSorted = @($checkedPaths | Sort-Object -Unique)
+$checkedSet = New-OrdinalSet $checkedPaths
 
 # (h) cross-checks: DECLARED set == must-check set, and CHECKED set == must-check set
-if (($declaredSorted -join "`n") -ne ($must -join "`n")) {
-  Write-Host "declared:"; $declaredSorted | ForEach-Object { Write-Host "  $_" }
-  Write-Host "must-check:"; $must | ForEach-Object { Write-Host "  $_" }
+# (HashSet.SetEquals uses the set's ORDINAL comparer — never case-insensitive -eq/-ne)
+if (-not $declaredSet.SetEquals($mustSet)) {
+  Write-Host "declared:"; $declaredSet | ForEach-Object { Write-Host "  $_" }
+  Write-Host "must-check:"; $mustSet | ForEach-Object { Write-Host "  $_" }
   Fail "declared harness set != must-check set (post-sync manifest UNION default-probe) - establish your COMPLETE harness inventory from TRUSTED records and declare every one; if you cannot, STOP and escalate (see the custom-root residual below)"
 }
-if (($checkedSorted -join "`n") -ne ($must -join "`n")) { Fail "coverage gate: checked set != must-check set" }
-Write-Host "DRILL PASS — $($must.Count) managed-block file(s) checked (post-sync manifest UNION default-probe); record this output with the date"
+if (-not $checkedSet.SetEquals($mustSet)) { Fail "coverage gate: checked set != must-check set" }
+Write-Host "DRILL PASS — $($mustSet.Count) managed-block file(s) checked (post-sync manifest UNION default-probe); record this output with the date"
 ```
 
 What each part proves:

@@ -287,6 +287,17 @@ state and act on:
   > REJECTS → DRILL FAIL, then emits identity-preserving (NUL-delimited bash / JSON
   > array PowerShell) — a malformed or duplicate manifest FAILS, never
   > normalize-then-passes. Mirrored in both blocks.
+  >
+  > **Fix-pass amendment 7 (2026-07-20, adversarial-review round 6):** PowerShell
+  > path identity is now ORDINAL (byte-exact), matching bash. PS's
+  > `Sort-Object -Unique` and `-eq`/`-ne` are CASE-INSENSITIVE, so two case-distinct
+  > managed-block paths (`C:\Harness\AGENTS.md` vs `C:\harness\AGENTS.md` — distinct
+  > files on a case-sensitive NTFS directory, Windows 10+) collapsed to one and only
+  > one was checked; a stale-clean + current-poisoned pair then printed DRILL PASS
+  > with the poisoned file unchecked. The must-check, declared, and checked sets now
+  > use `HashSet[string]` with `[System.StringComparer]::Ordinal` and compare with
+  > `.SetEquals(...)`; no `Sort-Object -Unique` or `-eq`/`-ne` on paths remains. The
+  > bash block was already ordinal (`sort -z -u`) — PS-only fix.
 - **The ONLY authoritative way to reach zero running Wienerdog processes is to
   REBOOT after removing every per-job schedule AND the catch-up entry — not
   per-platform process forensics (R4-C, round-4).** After a reboot, with nothing
@@ -711,6 +722,13 @@ headless/`--yes` bypass — it is interactive and shows the exact bytes.
      custom-dir user sets EACH to a trusted-inventory root) and `sync` writes the
      manifest with the **currently-resolved** paths — so the post-sync manifest paths
      ARE the drill-time paths (do not "simplify" back to a pre-sync count or read).
+     **All PowerShell path set-operations and equality are ORDINAL (byte-exact) to
+     match bash's `sort -z -u` (round-6 G1):** the must-check/declared/checked sets
+     use a `HashSet[string]` built with `[System.StringComparer]::Ordinal` and compare
+     with `.SetEquals(...)` — never `Sort-Object -Unique` or `-eq`/`-ne` on paths,
+     which are case-insensitive and would collapse two case-distinct managed-block
+     paths (distinct files on a case-sensitive NTFS directory) into one and check only
+     one.
    - **Blocking residual — the honest boundary (round-5 G1, cf. ADR-0028 honest
      boundary / A12 hand-off).** One case is NOT machine-closable: a
      **custom-directory** install whose manifest was tampered in the incident AND
@@ -1060,6 +1078,12 @@ grep -nE "default-location probe|default.probe|\.claude/CLAUDE\.md|\.codex/AGENT
 # Round-5 G2: node VALIDATES the manifest before emitting (reject malformed/duplicate),
 # identity-preserving (no sort -u normalization of raw paths):
 grep -nE "no entries array|is not an absolute string|CR/LF/NUL|unexpected managed-block basename|duplicate managed-block path|failed validation|ConvertFrom-Json" docs/runbooks/incident.md
+# Round-6 G1: PowerShell path set-ops are ORDINAL (HashSet + StringComparer::Ordinal +
+# SetEquals), never case-insensitive Sort-Object -Unique / -eq / -ne on paths:
+grep -nE "StringComparer\]::Ordinal|New-OrdinalSet|SetEquals|HashSet\[string\]" docs/runbooks/incident.md
+# and NO Sort-Object -Unique survives in PowerShell CODE (comments may name it as a
+# warning; strip comment lines first — expect NO output):
+awk '/^```powershell$/{p=1;next} /^```$/{p=0} p' docs/runbooks/incident.md | grep -vE '^\s*#' | grep -n "Sort-Object -Unique" || true
 # private evidence handling: pre-copy exclusion + recursive perms + windows ACL:
 grep -nE "find .*-type d.*chmod 700|find .*-type f.*chmod 600|icacls|Time Machine|OneDrive" docs/runbooks/incident.md
 # the fail-closed byte-level drill: installed hook path + env + block conditions:
