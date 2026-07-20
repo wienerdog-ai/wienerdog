@@ -243,13 +243,15 @@ pre-authorized nightly slot into persistent execution **without registering its
 own scheduler entry**. A test-exec seam left in the dispatch code (F5) was a sixth
 surface: an environment variable that chose what a job runs.
 
-**What A7 enforces (WP-154..WP-157, ADR-0028)**:
+**What A7 enforces (WP-154..WP-158, WP-catchup-per-job-authorization, ADR-0028)**:
 
 - **Canonical digest-bound job descriptor.** Each scheduled job has a code-owned
-  descriptor — its `run` action, capability profile, prompt/skill content hash,
-  effective timeout, configured model, vault root, the absolute [executable
-  identities](GLOSSARY.md), and the [app release digest](GLOSSARY.md) — reduced to
-  a **descriptor digest** that is **bound into the OS scheduler entry**. Runtime
+  descriptor covering the full digest-covered field set (see [job
+  descriptor](GLOSSARY.md) for the exact list: run action, capability profile,
+  prompt/skill hash, model, inner + outer timeouts, max input bytes, vault layout,
+  vault root, bound home, schedule, node path, [executable
+  identities](GLOSSARY.md), and [app release digest](GLOSSARY.md)) — reduced to a
+  **descriptor digest** that is **bound into the OS scheduler entry**. Runtime
   edits to `config.yaml` or the app tree do **not** change what runs until an
   explicit `wienerdog sync` re-derives and re-binds the digest; at fire time any
   mismatch **fails closed** — a fixed durable alert and **zero model spawn**, no
@@ -266,16 +268,21 @@ surface: an environment variable that chose what a job runs.
   planted `.git` — is refused, never silently downgraded to the unverified dev
   path). The published version dir's files are made read-only after the atomic
   publish; an interrupted update leaves the previous valid `current` intact.
-- **Structurally pinned external executables.** `claude`/`git`/`codex` are
-  resolved and **pinned** at install/sync by command path + install dir (with
-  structural verification — regular file, exec bit, owner, no group/other-writable
-  ancestor — at spawn), and the nightly job spawns the live verified absolute path.
-  A fake planted earlier on `PATH` is refused on command-path/install-dir drift; a
-  routine auto-update (a new version file under the same install dir) passes
-  silently, while an install-method change (e.g. → Homebrew) **fails safe** until
-  re-pinned. Deliberately **no content hash** (WP-154): Claude Code self-updates
-  several times a day, so a hash/exact-realpath gate would alarm on every
-  legitimate update and train the user to ignore it.
+- **Structurally pinned external executables — scoped to three spawn sites.**
+  `claude`/`git`/`codex` are resolved and **pinned** at install/sync by command
+  path + install dir (with structural verification — regular file, exec bit,
+  owner, no group/other-writable ancestor — at spawn). The pin is enforced at
+  every place the nightly dream actually spawns one of these: the **dream brain**
+  (`claude`/`codex`), the **vault git commit**, and the pre-dream **containment
+  probe**. A fake planted earlier on `PATH` is refused on command-path/install-dir
+  drift; a routine auto-update (a new version file under the same install dir)
+  passes silently, while an install-method change (e.g. → Homebrew) **fails safe**
+  until re-pinned. Deliberately **no content hash** (WP-154): Claude Code
+  self-updates several times a day, so a hash/exact-realpath gate would alarm on
+  every legitimate update and train the user to ignore it. **Not yet covered:**
+  the [routine](GLOSSARY.md) runtime (morning digest, inbox triage, and other
+  catalog routines) still spawns Claude by bare command name — routine pinning is
+  a documented follow-up, not a claim this release makes.
 - **No test-exec seams in the dispatch code.** WP-155 **deletes**
   `WIENERDOG_RUNJOB_CMD`, `WIENERDOG_DREAM_CMD`, and the probe env seams
   (`WIENERDOG_SKIP_CONTAINMENT_PROBE`, `WIENERDOG_CONTAINMENT_PROBE_CMD`). There is
@@ -285,6 +292,45 @@ surface: an environment variable that chose what a job runs.
   containment self-check. The end-to-end negative harness (WP-158) drives the real
   launcher/pin path against each tamper and asserts zero model spawn, with a
   non-vacuity control proving the clean baseline does run.
+- **Catch-up is authorized per job, not just by the app tree.** A machine that was
+  off or asleep at the scheduled time runs missed jobs later (catch-up). On
+  **macOS and Windows**, catch-up now checks each missed job against the same
+  digest-bound authorization used for a normal fire — an authorized-job map bound
+  into the **loaded catch-up OS registration** at `wienerdog sync`/`schedule
+  add`/`init`/adopt time (never re-read from an editable per-job entry file). A
+  job added, removed, or changed since the last sync **alerts and does not run**,
+  the same fail-closed posture as a normal fire — never a silent skip. **On
+  Linux**, there is no separate catch-up map: the native systemd timer
+  (`Persistent=true`) simply replays the same per-job unit that a normal fire
+  uses, which is already digest-authorized on its own. **Honest boundary:** a
+  catch-up fire that carries no authorization token at all — a pre-sync
+  registration, or a manual invocation — has nothing to check against and falls
+  back to the pre-hardening, config-driven behavior until the next `wienerdog
+  sync` mints the token. An OS-registered catch-up entry always carries the token
+  once synced; stripping it back out of an already-registered entry needs
+  scheduler-registration privilege, which is outside A7's scope (A12's).
+- **Enforcement reductions, stated where the guarantees are made.** A
+  **dev**-stance install (a checkout, not the packaged app) skips the app-tree
+  byte digest — tracked-source edits are expected there — but still verifies the
+  dev-reduced descriptor digest (every field except `treeDigest`/`version`) and
+  dev containment (the live app resolves to the authorized checkout root). On
+  **Windows**, executable verification is reduced to "is this a regular file at
+  the pinned location" — the owner/mode/ancestor-writable checks that run on
+  macOS/Linux do not apply (no equivalent POSIX concept), and the generated
+  Windows batch wrapper has one accepted residual: a literal `%` in an absolute
+  core path is still batch-expandable on the final exec line (the security-critical
+  environment clears use `%`-safe quoted assignments; core paths live under the
+  user's own home, not attacker-chosen text). **Linux catch-up**, as above, has no
+  authorization map at all — it relies entirely on the normal per-job path already
+  being authorized.
+- **Where a refusal surfaces.** A launcher or catch-up refusal is a durable alert
+  rendered in the **digest banner** (the line at the top of the next injected
+  session digest) plus a best-effort alert email — the same fail-loud channel as
+  every other scheduled-job failure (T6). `wienerdog doctor` does **not** read any
+  A7 state today (no descriptor, no pin, no alert, no drift check) — wiring it up
+  is a documented follow-up (candidate WP-162), not built in this pass. The
+  runbook and the launcher's own refuse text point to the digest banner and
+  `wienerdog sync`, never to `doctor`.
 
 **Honest residual (A12).** This protects **scoped core writes** and **detects
 drift** between attended `sync`s; it is **not an OS boundary**. The independent
@@ -298,6 +344,32 @@ that can write `config.yaml`, `app/current`, or `~/.local/bin` but can neither
 re-register the OS scheduler entry nor overwrite the launcher file — and makes a
 `config.yaml` + manifest rewrite alone unable to make a drifted state verify. Do
 not read this as "your scheduled AI can never be tampered with".
+
+**Three accepted A12 residuals (same class, stated identically in ADR-0028).**
+Each is an *active concurrent writer* at a specific moment — not a static planted
+file, which every one of these checks already defeats:
+
+- **Launcher verify-to-use (hash-then-reopen) race.** The launcher hashes the app
+  tree, then reopens that same on-disk tree to `require` its verifiers and spawn
+  `bin/wienerdog.js`. Spawning `node` against an on-disk tree is intrinsically
+  reopen-based; a TOCTOU-free design needs the deferred "2b" in-memory bootstrap
+  (see ADR-0028). Not claimed as TOCTOU-free.
+- **Heal verify→register reopen race (WP-145).** The sync-time heal regenerates a
+  canonical scheduler file from validated config, byte-verifies it, then
+  `launchctl`/`schtasks`/`systemd` **reopen the pathname** to register it — a
+  concurrent writer could swap the file between verify and register. The heal
+  does not claim the scheduler receives the exact verified bytes.
+- **Uninstall ancestor-replacement race (WP-144).** The uninstall reverser
+  resolves a target's realpath and re-validates containment, but the subsequent
+  `fs` operations re-walk the pathname; renaming an ancestor directory and
+  replacing it with a symlink between the realpath call and the operation
+  redirects it (Node has no `openat`/`unlinkat`; a native addon would violate
+  ADR-0004). The **static** in-place symlink swap is closed (realpath +
+  `O_NOFOLLOW` on the final component); an **active concurrent ancestor-rename at
+  uninstall time** is not.
+
+None of these three is claimed as closed — each is deferred to A12, the same
+territory as the launcher-file-write residual above.
 
 ## Privacy posture
 

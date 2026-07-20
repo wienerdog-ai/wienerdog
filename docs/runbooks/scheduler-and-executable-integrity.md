@@ -26,8 +26,10 @@ If everything matches, the run proceeds. If anything doesn't, the run **refuses*
 
 ## What a drift / mismatch alert means
 
-You'll see a durable alert (in `wienerdog doctor` output, and — if email alerts
-are configured — a note) saying a scheduled job **refused to run** because of an
+You'll see a durable alert in the **digest banner** — a line at the top of your
+next injected session digest (`~/.wienerdog/state/digest.md`), so it's one of the
+first things your AI shows you — and, if email alerts are configured, a
+notification email. It says a scheduled job **refused to run** because of an
 integrity mismatch. That means one of the checked things changed since your last
 `wienerdog sync`:
 
@@ -77,13 +79,32 @@ what changed under `~/.wienerdog` before re-authorizing it.
   version and re-binds everything as part of the sync. Wienerdog never
   auto-updates itself; it only tells you the command.
 
-## What `wienerdog doctor` reports
+## Where to check status (and where not to look)
 
-`wienerdog doctor` surfaces the current integrity state in plain language:
-whether each scheduled job's authorization record is present and matches, whether
-the app fingerprint verifies, whether Claude/Git are resolvable at their pinned
-locations, and any outstanding drift alerts with the exact remedy. If a run
-refused, `doctor` is where you see why and what to do.
+As of this release, `wienerdog doctor` does **not** read any of the state this
+runbook is about — it doesn't show the authorization record, the pin store, the
+app fingerprint, or a drift alert. The one place a mismatch surfaces is the
+**digest banner** described above, plus an alert email if you've configured one.
+If you don't see a banner, nothing has refused. Wiring `doctor` up to show this
+directly is a planned follow-up, not built yet.
+
+## Catching up after downtime
+
+If your machine was off or asleep at the scheduled time, Wienerdog runs missed
+jobs later (catch-up) rather than skipping them. On **macOS and Windows**,
+catch-up checks each missed job against the same authorization record a normal
+run uses — bound in the last time you ran `wienerdog sync` (or added a routine,
+or ran initial setup). A job that was added, removed, or changed since then is
+refused with an alert, exactly like a normal run — never silently skipped and
+never silently run with stale rules. On **Linux**, catch-up works differently:
+the OS timer itself replays the normal per-job run, which is already checked the
+same way every night, so there's no separate catch-up check to describe.
+
+One honest edge case: a catch-up entry that hasn't been through a `sync` yet (a
+brand-new install before its first sync, or a manual invocation) has nothing to
+check against yet, and falls back to running the job as currently configured —
+the same "only checked once you've synced" rule every integrity check here
+follows. Running `wienerdog sync` activates it.
 
 ## What this does and does not protect
 
@@ -93,6 +114,21 @@ tree, or `~/.local/bin` but cannot re-register the OS scheduler entry or overwri
 the launcher itself. Against that, a changed `config.yaml` or app tree is
 **detected and refused**, not silently run.
 
+**What's pinned today.** The pinning above covers the three things the nightly
+dream actually spawns: Claude (or Codex), Git for the vault commit, and the
+pre-dream containment check. It does not yet cover routines you add from the
+catalog (morning digest, inbox triage, and so on) — those still run Claude by
+its plain command name. Pinning them is a planned follow-up.
+
+**A couple of places the check is lighter.** On a developer checkout (not the
+packaged install almost everyone has), the app-code fingerprint is skipped —
+your own tracked source is expected to change — but the rest of the
+authorization record (what runs, the model, the timeout, the schedule, and so
+on) is still checked and still refuses on a mismatch. On Windows, the check that
+Claude/Git haven't moved is lighter than on Mac/Linux: it confirms they're still
+a regular file at the pinned location, but doesn't check file ownership or
+permissions the way Mac/Linux do (Windows has no equivalent concept).
+
 **It does not** protect against arbitrary software running on your computer *as
 you*. Anything running under your own user account can already read and rewrite
 the same files — including the launcher file that does the checking. Defending
@@ -100,4 +136,6 @@ against that is a different, OS-level problem (it needs a launcher anchored
 outside your own write access, and OS user-presence checks), and Wienerdog does
 not claim to solve it. In short: this **detects drift between the times you run
 `sync`**; it is **not** a wall against same-user native malware. See the
-[threat model](../THREAT-MODEL.md) (T8) for the honest boundary.
+[threat model](../THREAT-MODEL.md) (T8) for the honest boundary — including three
+specific timing windows (mid-verify file swaps at fire, heal, and uninstall time)
+that are accepted as the same same-user-native residual, not claimed as closed.
