@@ -442,6 +442,71 @@ test('private-fs: G4b — a (dev,ino) change between the fallback lstat and re-l
   });
 });
 
+test('private-fs: G5 — a symlinked CORE is refused as the root; NOTHING beneath the external target is chmodded', { skip: !POSIX }, () => {
+  withUmask(0o022, () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-privfs-'));
+    const paths = pathsFor(root); // paths.core = root/wd (does not exist yet)
+    // The EXTERNAL tree the attacker's symlinked core would point at, with the
+    // usual wrong modes.
+    const external = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-ext-core-'));
+    fs.chmodSync(external, 0o755);
+    fs.mkdirSync(path.join(external, 'state'), { recursive: true });
+    fs.chmodSync(path.join(external, 'state'), 0o755);
+    fs.mkdirSync(path.join(external, 'logs', 'dream'), { recursive: true });
+    fs.chmodSync(path.join(external, 'logs'), 0o755);
+    fs.chmodSync(path.join(external, 'logs', 'dream'), 0o777);
+    fs.mkdirSync(path.join(external, 'secrets'), { recursive: true });
+    fs.chmodSync(path.join(external, 'secrets'), 0o755);
+    fs.writeFileSync(path.join(external, 'secrets', 'google-token.json'), '{}', { mode: 0o644 });
+    fs.writeFileSync(path.join(external, 'state', 'broker-grants.json'), '{}', { mode: 0o644 });
+    fs.writeFileSync(path.join(external, 'config.yaml'), 'vault: null\n', { mode: 0o644 });
+    // core IS a symlink to that external tree.
+    fs.symlinkSync(external, paths.core);
+
+    // Predicate surfaces ONLY the core anomaly.
+    assert.deepEqual(insecureEntries(paths), [paths.core], 'only the symlinked core is flagged');
+
+    const r = repairPrivateModes(paths);
+    assert.equal(r.changed, 0, 'nothing beneath an untrusted core is chmodded');
+    // Every external mode is byte-for-byte unchanged.
+    assert.equal(modeOf(external), 0o755, 'external core dir untouched');
+    assert.equal(modeOf(path.join(external, 'state')), 0o755, 'external state/ untouched');
+    assert.equal(modeOf(path.join(external, 'logs', 'dream')), 0o777, 'external logs/dream/ untouched');
+    assert.equal(modeOf(path.join(external, 'secrets')), 0o755, 'external secrets/ untouched');
+    assert.equal(modeOf(path.join(external, 'secrets', 'google-token.json')), 0o644, 'external token untouched');
+    assert.equal(modeOf(path.join(external, 'state', 'broker-grants.json')), 0o644, 'external grant untouched');
+    assert.equal(modeOf(path.join(external, 'config.yaml')), 0o644, 'external config untouched');
+    // Still the sole anomaly after repair (surfaced, never fixed-through).
+    assert.deepEqual(insecureEntries(paths), [paths.core]);
+  });
+});
+
+test('private-fs: G5 — a REAL core reached via a symlinked ANCESTOR is NOT a false anomaly and repairs fully', { skip: !POSIX }, () => {
+  withUmask(0o022, () => {
+    const realRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-realroot-'));
+    // A symlinked ANCESTOR above a REAL core (mirrors macOS /Users→…/Data/Users).
+    const ancestorLink = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'wd-anc-')), 'home');
+    fs.symlinkSync(realRoot, ancestorLink); // ancestorLink → realRoot (a real dir)
+    const paths = pathsFor(ancestorLink); // core = ancestorLink/wd — a REAL dir under a symlinked ancestor
+    // Build a real nested tree with wrong modes UNDER the real root.
+    fs.mkdirSync(path.join(realRoot, 'wd', 'state'), { recursive: true });
+    fs.chmodSync(path.join(realRoot, 'wd'), 0o755);
+    fs.chmodSync(path.join(realRoot, 'wd', 'state'), 0o755);
+    fs.mkdirSync(path.join(realRoot, 'wd', 'secrets'), { recursive: true });
+    fs.chmodSync(path.join(realRoot, 'wd', 'secrets'), 0o755);
+    fs.writeFileSync(path.join(realRoot, 'wd', 'secrets', 'google-token.json'), '{}', { mode: 0o644 });
+
+    // Not flagged as a core anomaly — the core's FINAL component is a real dir.
+    assert.ok(!insecureEntries(paths).includes(paths.core) || modeOf(paths.core) !== 0o700, 'core is enumerated as a real dir, not a symlink anomaly');
+    const r = repairPrivateModes(paths);
+    assert.ok(r.changed >= 3, `the real tree under a symlinked ancestor repairs fully (got ${r.changed})`);
+    assert.equal(modeOf(paths.core), 0o700, 'real core repaired');
+    assert.equal(modeOf(path.join(realRoot, 'wd', 'secrets')), 0o700, 'secrets/ repaired');
+    assert.equal(modeOf(path.join(realRoot, 'wd', 'secrets', 'google-token.json')), 0o600, 'token repaired');
+    assert.deepEqual(scanPrivateModes(paths), { insecure: 0 }, 'clean after repair — no false ancestor anomaly');
+  });
+});
+
 test('private-fs: repairPrivateModes never creates secrets/ or any file (repair, never create)', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-privfs-'));
   const paths = pathsFor(root);

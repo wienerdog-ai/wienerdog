@@ -697,6 +697,19 @@ test('doctor: a SYMLINKED secrets/ is WARNed as a not-repaired anomaly, distinct
   assert.doesNotMatch(r.stdout, /secrets has wrong permissions/, 'a symlink anomaly is not reported as a plain wrong-permissions entry');
 });
 
+test('doctor: a SYMLINKED core is WARNed as a not-repaired anomaly (WP-a9 G5)', { skip: process.platform === 'win32' }, () => {
+  const { env, core, root } = tempEnv();
+  run(['init', '--yes'], env);
+  // Replace the real core with a symlink to an external copy of it, so the
+  // private-modes predicate sees the core's final component as a symlink.
+  const external = path.join(root, 'external-core');
+  fs.renameSync(core, external);
+  fs.symlinkSync(external, core);
+
+  const r = run(['doctor'], env);
+  assert.match(r.stdout, /\[warn\] .*wd is a symlink where Wienerdog expects a private file or folder — it was NOT repaired/);
+});
+
 test('doctor: a MISSING secrets directory still hard-fails (exit 1) (WP-a9 keeps the A5-era fail)', { skip: process.platform === 'win32' }, () => {
   const { env, core } = tempEnv();
   run(['init', '--yes'], env);

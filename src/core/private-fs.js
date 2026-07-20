@@ -23,22 +23,28 @@ const { WienerdogError } = require('./errors');
  * chmod is a best-effort no-op, the scan reports {insecure: 0}, and WP-127
  * documents that Windows protection relies on the per-user profile ACLs.
  *
- * Never-follow guarantee (G2/G3/G4, ADR-0027) — stated HONESTLY: the repair
- * never chmods through a symlink OR onto an out-of-tree file. It enforces this
- * at EACH classified entry — lstat-classification (a symlinked/escaping private
- * path is an `anomaly`: surfaced, never repaired) + an O_RDONLY|O_NOFOLLOW open
- * + a (dev, ino) fd-revalidation against the classifying lstat before fchmod
- * (so an intermediate-directory swap that redirects the open to a different
- * inode is refused, not chmodded). The ONE case pure Node cannot close is a
- * concurrent OWNER-LEVEL writer that swaps an intermediate directory component
- * DURING the readdir enumeration itself, before any fd binding — Node has no
- * openat/openat2/fdopendir, so readdir resolves through the path. That is the
- * SAME same-user concurrent-writer class ADR-0028 hands to A12 ("Honest
- * boundary — the A7 residual"): the attacker must ALREADY hold concurrent
- * owner-level write access inside the already-0700 core, and the (dev, ino)
- * revalidation means the worst case is a REFUSED + surfaced repair, never a
- * silent out-of-tree chmod. Do NOT read this as an unconditional
- * "never follows symlinks."
+ * Never-follow guarantee (G2/G3/G4/G5, ADR-0027) — stated HONESTLY: the repair
+ * never chmods through a symlink OR onto an out-of-tree file. A PRE-EXISTING
+ * symlink at ANY path-component position is caught:
+ *  - ROOT: `coreRootContext` lstats the core's OWN final component before
+ *    trusting its realpath — a symlinked/non-dir core is an anomaly and NO
+ *    descendant is enumerated or repaired (G5);
+ *  - INTERMEDIATE: each opened fd is revalidated by (dev, ino) against the
+ *    classifying lstat, so a swap that redirects the open to a different inode
+ *    is refused (G3);
+ *  - LEAF: lstat-classification marks a symlinked/escaping entry an `anomaly`
+ *    (surfaced, never repaired) and the chmod opens O_RDONLY|O_NOFOLLOW (G2).
+ * The ONLY residual is a concurrent OWNER-LEVEL writer that swaps an
+ * intermediate directory component DURING the readdir enumeration itself,
+ * before any fd binding — Node has no openat/openat2/fdopendir, so readdir
+ * resolves through the path. That is the SAME same-user concurrent-writer class
+ * ADR-0028 hands to A12 ("Honest boundary — the A7 residual"): the attacker
+ * must ALREADY hold concurrent owner-level write access inside the already-0700
+ * core, and the (dev, ino) revalidation means even then the worst case is a
+ * REFUSED + surfaced repair, never a silent out-of-tree chmod. Do NOT read this
+ * as an unconditional "never follows symlinks" — it is "every pre-existing
+ * symlink is caught; the lone concurrent-swap-during-readdir window is the
+ * documented A12 residual."
  */
 
 const WIN32 = process.platform === 'win32';
@@ -202,17 +208,56 @@ function classifyPrivatePath(p, kind, coreReal) {
   return { kind, path: p, dev: ls.dev, ino: ls.ino };
 }
 
+/**
+ * The ONE verified root context every surface shares (G5): lstat the core's
+ * FINAL component BEFORE trusting its realpath as the containment root. Three
+ * outcomes:
+ *  - missing → `{coreReal:null, coreAnomaly:false}`: nothing installed here,
+ *    enumerate/repair nothing (no anomaly — a not-yet-installed machine is not
+ *    "insecure");
+ *  - a SYMLINK, or present-but-not-a-directory → `{coreReal:null,
+ *    coreAnomaly:true}`: the core itself is untrusted — a symlinked
+ *    `~/.wienerdog`→`/outside/wd` would make the external target the trusted
+ *    root and let descendants classify as legitimately-contained (their
+ *    realpath IS under the external target) and be chmodded. Refuse: surface
+ *    ONLY the core anomaly and repair NOTHING beneath it. We cannot distinguish
+ *    a user's deliberate external core from an attacker's redirect without more
+ *    trust, so refuse-and-surface is the honest never-follow behavior;
+ *  - a real directory → `{coreReal:realpath(core), coreAnomaly:false}`: the
+ *    trusted root. `realpath` canonicalizes a symlinked/firmlinked ANCESTOR
+ *    (e.g. macOS `/Users`→`/System/Volumes/Data/Users`, `/var`→`/private/var`)
+ *    — lstat only refuses to follow the core's OWN final component, so a real
+ *    core reached through a symlinked ancestor is NOT a false anomaly, and
+ *    `withinCore` (realpath-vs-realpath) keeps descendants contained.
+ * @param {import('./paths').WienerdogPaths} paths
+ * @returns {{coreReal:string|null, coreAnomaly:boolean}} */
+function coreRootContext(paths) {
+  const ls = lstatOrNull(paths.core);
+  if (!ls) return { coreReal: null, coreAnomaly: false }; // missing → skip all, no anomaly
+  if (ls.isSymbolicLink() || !ls.isDirectory()) return { coreReal: null, coreAnomaly: true }; // untrusted root
+  return { coreReal: realpathOrNull(paths.core), coreAnomaly: false };
+}
+
 /** The DIRECTORY half of the single enumerator (kept a separate internal
  *  function so the fixed-point repair loop can enumerate dirs WITHOUT the
  *  redundant per-iteration secrets/scratch file walk; `listPrivateEntries`
  *  builds on it, so all surfaces still share one dir source). Never follows a
  *  symlink: a symlinked/escaping private dir is returned under `anomalies`, not
  *  `dirs` — so it is neither traversed nor chmodded, only surfaced. Each dir is
- *  an `{path, dev, ino}` record so the repair can revalidate the opened fd.
+ *  an `{path, dev, ino}` record so the repair can revalidate the opened fd. The
+ *  root context is verified FIRST (G5): a symlinked/non-dir core enumerates NO
+ *  descendants. Accepts a precomputed `ctx` so `listPrivateEntries` shares the
+ *  identical root verification (the two functions must never diverge).
  *  @param {import('./paths').WienerdogPaths} paths
+ *  @param {{coreReal:string|null, coreAnomaly:boolean}} [ctx]
  *  @returns {{dirs:{path:string,dev:number,ino:number}[], anomalies:string[]}} */
-function listPrivateDirs(paths) {
-  const coreReal = realpathOrNull(paths.core);
+function listPrivateDirs(paths, ctx = coreRootContext(paths)) {
+  if (ctx.coreReal === null) {
+    // core missing (no anomaly) OR core is a symlink/non-dir (surface it, repair
+    // nothing beneath — never trust an untrusted root's external target).
+    return { dirs: [], anomalies: ctx.coreAnomaly ? [paths.core] : [] };
+  }
+  const coreReal = ctx.coreReal;
   const dirMap = new Map(); // path → {path, dev, ino}
   const anomalies = new Set();
   const consider = (d) => {
@@ -262,8 +307,16 @@ function listPrivateDirs(paths) {
  *            files:{path:string,dev:number,ino:number}[], anomalies:string[]}}
  */
 function listPrivateEntries(paths) {
-  const coreReal = realpathOrNull(paths.core);
-  const { dirs, anomalies: dirAnomalies } = listPrivateDirs(paths);
+  // Verify the root ONCE and share it with listPrivateDirs (G5): the two must
+  // never diverge on whether the core is a trusted, real, in-place directory.
+  const ctx = coreRootContext(paths);
+  const { dirs, anomalies: dirAnomalies } = listPrivateDirs(paths, ctx);
+  if (ctx.coreReal === null) {
+    // Untrusted/absent core → no descendants enumerated (only the core anomaly,
+    // if any, carried up from listPrivateDirs).
+    return { dirs: [], files: [], anomalies: dirAnomalies };
+  }
+  const coreReal = ctx.coreReal;
   const dirPaths = new Set(dirs.map((d) => d.path));
   const anomalies = new Set(dirAnomalies);
 
