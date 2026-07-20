@@ -472,14 +472,44 @@ concurrent set.**
   lstat-first guard (skip if the dir is now a symlink) that narrows but cannot
   close the `readdir`→`rmSync` window.
 
+**AMENDED 2026-07-20 (Codex lock-verify F12/F13/F14) — one ENTRY GATE over the
+whole protected set; W3 detection is conditional.**
+- **F12/F13 (PRE-EXISTING — FIXED, structurally).** The F9 fix was placed
+  per-writer/per-mode and so missed two paths: `coreAnomalous` checked only
+  `paths.core` (a symlinked `paths.state` still let `writeScheduleState`/
+  `acquireLock` follow it externally — F12), and `run()` guarded only the probes
+  then dispatched `catchUp` UNGUARDED (a symlinked core + empty external config →
+  `catchUp` "nothing overdue" → exit 0, no refusal — F13). Replaced with a
+  SINGLE predicate `mechanicsRootUntrusted(paths)` covering the FULL top-level
+  protected set — `core` AND `state` AND `logs` AND `secrets` (each classified by
+  the `coreRootContext` `O_DIRECTORY|O_NOFOLLOW`+fstat logic; a symlink/non-dir at
+  ANY → untrusted; a MISSING dir → not untrusted) — called ONCE at the very top
+  of `run()` (before EVERY dispatch mode AND the probes) and at the top of
+  `dream.run` (before lock/scratch/digest/ledger). On untrusted → refuse via a
+  NON-CORE channel only (stderr + the injected `sendAlert`) and exit non-zero,
+  writing NOTHING under any protected dir. This ONE gate DOMINATES every dispatch
+  path, so the per-writer `recordFailure` special-casing in `runJob` was removed
+  (it now assumes a trusted root, guaranteed by the gate). Deeper paths
+  (`logs/<job>`, `secrets/<file>`) stay covered per-write by
+  `assertInCoreAncestry` + the F7 `rotateLogs` open-guard.
+- **F14 (W3 — wording correction).** The mode-000 `applyModeFallback` post-chmod
+  `(dev,ino)` re-lstat is NOT unconditional loudness: an ABA swap (verify inode A
+  at 000, swap to a symlink→B for the `chmodSync`, restore A before the final
+  lstat) passes the check and chmods one external target SILENTLY. W3 is
+  "detected loudly ONLY if the substitution persists through revalidation; an ABA
+  swap defeats detection and silently chmods one external target." (Same ABA
+  caveat applies to W4's post-rename detection.)
+
 **Full never-follow guarantee — the position×phase matrix + the failure path.**
-After G2–G5 + F1–F11, a PRE-EXISTING symlink is caught at EVERY position × phase
+After G2–G5 + F1–F14, a PRE-EXISTING symlink is caught at EVERY position × phase
 `{root, intermediate, leaf}` × `{enumerate, dir-chmod, file-chmod, 000-fallback,
-mkdir, open-write, temp-write}` AND on the FAILURE path (F9) — each cell
-refuses-and-surfaces (repair: root `O_NOFOLLOW`-open, intermediate `(dev,ino)`
-fd-reval, leaf lstat-classify incl. dynamic leaves; write: `assertInCoreAncestry`
-plus leaf `O_NOFOLLOW`/`O_EXCL`-random-temp; failure: `coreAnomalous` → non-core
-surface).
+mkdir, open-write, temp-write}` AND on the FAILURE path AND for the whole
+top-level protected set on EVERY dispatch mode — each refuses-and-surfaces
+(repair: root `O_NOFOLLOW`-open, intermediate `(dev,ino)` fd-reval, leaf
+lstat-classify incl. dynamic leaves; write: `assertInCoreAncestry` plus leaf
+`O_NOFOLLOW`/`O_EXCL`-random-temp; entry: `mechanicsRootUntrusted` over
+core/state/logs/secrets → single gate → non-core surface, dominating runJob,
+catchUp (named + empty), dream, the probes, and both failure branches).
 
 **The residual — ONLY the class of concurrent owner-level swaps DURING an
 operation** (NOT any pre-existing case, and NOT "only readdir"). **FOUR** windows,
@@ -496,21 +526,27 @@ confirmed: `O_PATH` absent on macOS, `/proc` Linux-only). **Consequences DIFFER
      chmod/write/rename to an EXTERNAL target AND, via `rotateLogs`, silently
      **DELETE** external files (F11 narrows, does not close). Not loud.
   3. **W3 mode-000 `lstat` → path-`chmodSync`** (`applyModeFallback`): worst case
-     ONE chmod on a swapped target, surfaced **LOUDLY** by a thrown error.
+     ONE chmod on a swapped target. The post-chmod `(dev,ino)` re-lstat surfaces
+     it **LOUDLY only if the substitution PERSISTS** — an **ABA swap** (restore
+     the original inode before the final lstat) DEFEATS detection and silently
+     chmods one external target (F14). Conditional detection, NOT unconditional
+     loudness.
   4. **W4 temp `O_EXCL`-open → rename-target substitution** (`writeFilePrivate`):
      a concurrent unlink+symlink at the temp name lands a foreign target;
      **DETECTED** post-rename (`(dev,ino)` lstat → loud throw), detection not
-     prevention.
+     prevention — and (like W3) an ABA swap that restores the inode before the
+     check defeats detection.
 In every window the attacker must **already hold concurrent owner-level write
 access inside the already-`0700` core**. Do **not** claim any pre-existing
-symlink case remains open (including the failure path), do **not** claim "only
-readdir", do **not** claim an unconditional "never follows symlinks", and do
-**not** claim a concurrent window is closed — W1 refuses, W2 can silently
-redirect/delete, W3 throws, W4 is detected-not-prevented. *Follow-up for the
-architect:* `THREAT-MODEL.md` may want a one-line cross-reference to this
-four-window residual (with W2's silent write/delete and W4's detect-not-prevent
-caveats) under the A12 section — flagged, not edited here (out of this WP's
-Deliverables).
+symlink case remains open (including the failure path and the whole top-level
+protected set), do **not** claim "only readdir", do **not** claim an
+unconditional "never follows symlinks", and do **not** claim a concurrent window
+is closed or unconditionally loud — W1 refuses, W2 can silently redirect/delete,
+W3/W4 are detected only if the substitution persists (an ABA swap defeats them).
+*Follow-up for the architect:* `THREAT-MODEL.md` may want a one-line
+cross-reference to this four-window residual (with W2's silent write/delete and
+W3/W4's ABA-swap detect-not-prevent caveats) under the A12 section — flagged, not
+edited here (out of this WP's Deliverables).
 
 **The shared private log-stream helper `createLogStreamPrivate` — FAIL-CLOSED
 (round-2 finding 6).** The two log writers must open their stream `0600`
