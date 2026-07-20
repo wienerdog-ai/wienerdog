@@ -142,3 +142,45 @@ here so no downstream doc overclaims.
 - **Case-fold the bytes before hashing** (to make the registry case-insensitive).
   Rejected: normalization before hashing collides distinct byte sequences and
   destroys tamper precision. Path identity is folded; content identity is exact.
+
+## Amendments
+
+### Amendment 1 (2026-07-20) — `seedApprovals` auto-seed is coupled to the `identity-auto-activation` gate
+
+The 0.10.0 un-freeze opens `identity-auto-activation` (the dream may now edit
+identity files; `validate.js` no longer reverts them). That **breaks the premise**
+of Decision.3(a)'s seed-on-first-attended-sync convenience. The pre-takeover
+double-gate review PoC-proved the resulting hole (finding I-1): `seedApprovals`
+records `source:'setup'` for ANY injected identity file lacking a record — with no
+TTY, no bytes shown. This was sound ONLY because the WP-112 freeze guaranteed the
+dream could never author these files. With the gate open, two paths escalate:
+**(a)** the dream writes a **first-appearance** identity file setup never created →
+the next `sync` auto-seeds the dream's bytes trusted; **(b)** **registry loss**
+(`readRegistry` → `{approvals:{}}`) makes the next `sync` re-seed ALL FOUR from
+current (possibly dream-modified) bytes — the documented "fail closed" becomes
+fail-OPEN.
+
+**Resolution: `seedApprovals` auto-seed is gate-coupled.** It records
+`source:'setup'` bytes with no TTY **only while `identity-auto-activation` is
+BLOCKED** (the dream provably cannot have authored the files). When the gate is
+ALLOWED, `seedApprovals` writes nothing; every first-appearance / post-loss /
+changed injected identity file is ratified through the TTY `wienerdog memory
+approve` path (`recordApproval`, WP-117 — **not** gate-coupled; it is the human
+ratification path and works regardless of the gate). This closes both bypasses:
+unrecorded/dream-authored bytes are never auto-trusted once the gate is open; a lost
+registry re-seeds nothing (all four fail closed until re-approved).
+
+**Also (write-side case hardening, defense in depth):** `validate.js`'s `isTier3`
+identity-dir prefix match is made **case-insensitive** (mirroring the already
+case-insensitive `isInjectedIdentity`), so a dream write to a case-variant
+identity path (`06-identity/profile.md` on a case-insensitive FS) still hits the
+freeze branch while the gate is blocked.
+
+**This supersedes Decision.3(a)'s "OWNER-APPROVED seed-on-first-attended-sync" for
+the un-gated posture.** That decision stands ONLY while `identity-auto-activation`
+is blocked. **Accepted residual:** with the gate open, a fresh/adopting user's four
+identity notes are not auto-seeded at first sync; the digest's identity-exclusion
+banner guides the user to ratify each via `memory approve`. A `memory approve --all`
+convenience and/or seeding at the attended, code-owned setup/adopt authorship moment
+(pre-dream, provably human-authored) is a deferred enhancement if the onboarding
+friction proves unacceptable. Implemented by **WP-identity-seed-gate-couple**.

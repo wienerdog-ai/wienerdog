@@ -315,3 +315,41 @@ native code (A12) and executable integrity (A7) remain out of scope, unchanged.
 The WP-135 `DECISION NEEDED` blocks (D-PROBE-INCONCLUSIVE, D-PROBE-STRICTNESS, D-PROBE-CADENCE)
 carry the per-decision record; WP-133's D-CLAUDE-PIN block is amended to point here as the
 resolution of the production-safety question.
+
+### Amendment 3 (2026-07-20) — routine containment is RUNTIME-SELF-VERIFIED; a routine-side live probe is REQUIRED before un-gating
+
+The 0.10.0 un-freeze opens `external-content-routine`. This amendment resolves the
+open architectural question the pre-takeover review routed here: **is static-only
+containment acceptable for routines, or is a routine-side live probe required?**
+
+**Resolution: a routine-side live containment probe is REQUIRED.** The same
+argument that justified WP-135's pre-dream self-check applies with MORE force to
+routines. WP-135 added a live self-check because an unverified hermetic runtime must
+not run over attacker-influenceable content, and the `--setting-sources ""`
+exclusion is an empirically-measured property of one Claude build (2.1.212) a future
+Claude could regress. A routine ingests genuinely hostile **external** content (a
+poisoned email) — so a routine needs the live tripwire *more* than the dream, which
+consolidates the user's own transcripts. Amendment 2 already anticipated this
+(WP-135 Out-of-scope: "If a routine is ever un-gated, wiring the same probe into its
+spawn is a future WP").
+
+**Decision.** Before ANY routine brain spawns (`run-job.js`), a bounded live canary
+probe of the routine's REAL hermetic composition runs and **fails closed** exactly
+as the dream's (D-PROBE-INCONCLUSIVE = HALT; D-PROBE-STRICTNESS ground-truth gates;
+D-PROBE-CADENCE once per run). `runContainmentProbe` is generalized to any capability
+profile (dream unchanged; routine profiles compose their containment argv). The
+broker MCP is orthogonal to the escape canary (the probe prompt never calls a broker
+verb), so the probe validates the escape-relevant flags: non-empty `--tools`
+allowlist, the full deny list, `--strict-mcp-config`, `--setting-sources ""`,
+out-of-`--add-dir` read blocked, out-of-staging write blocked. Static argv unit
+tests alone are NOT acceptable to gate on (the audit's standing rule).
+
+**Residuals (recorded, not blocking):** **N1** — on a managed/admin-policy machine a
+routine runs non-hermetically (managed hooks `disableAllHooks` cannot override); the
+WP-132 preflight WARNs and proceeds, defensible because managed settings are the
+admin's trusted computing base, not an attacker vector. **N2** — plugin exclusion
+relies on `--setting-sources ""` (no `disableAllPlugins` analog); it is the thinnest
+defense-in-depth surface and is **subsumed by the live probe**, which verifies the
+flags actually held on the installed Claude. Implemented by
+**WP-routine-containment-probe**; the dev-time comprehensive proof stays WP-133's
+negative harness, fixed for the wired broker by **WP-negative-harness-broker-verbs**.

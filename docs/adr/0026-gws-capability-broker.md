@@ -469,3 +469,37 @@ Restricted-scope verification cost/process (WP-143 docs; advisory only).
   lifecycle self-check).
 - **Build the broker inside A1.** Rejected there (ADR-0025): coupling the credential
   boundary to the containment boundary; A1 left the seam, A2 fills it.
+
+## Amendments
+
+### Amendment 1 (2026-07-20) — server-side per-verb allowlist + the broker is dual-gated behind `gws-use`
+
+The 0.10.0 un-freeze double-gate review surfaced two hardening items on the shipped
+broker:
+
+1. **Server-side per-verb allowlist.** `buildRegistry` advertises `Object.values(VERBS)`
+   (all verbs) and `callTool` dispatches any `VERBS[name]` whose class credential
+   loaded — the per-verb restriction is ONLY client-side (`--allowedTools
+   mcp__wienerdog-broker__<verb>`). No escalation today, but a future *mutating* verb
+   added to an already-loaded capability class would be executable server-side without
+   a code review of the routine's `brokerVerbs`. **Decision:** `buildRegistry` takes
+   `allowedVerbs = profile.brokerVerbs`; `listTools` advertises and `callTool`
+   dispatches ONLY those verbs (an undeclared verb → "unknown broker verb", zero side
+   effect). The client-side allowlist stays; this is redundant defense-in-depth on the
+   authoritative (server) side.
+
+2. **The broker is dual-gated: `external-content-routine` AND `gws-use`.** Today the
+   broker's reachability is governed only by `external-content-routine` (upstream:
+   `run-job` refuses to compose a routine while it is blocked); `gws-broker.js` never
+   calls `requireCapability(GWS_USE)`, so the `gws-use` description ("reading or
+   sending Gmail, Calendar, and Drive is disabled") overclaims relative to the broker.
+   **Decision:** `gws-broker.js` calls `requireCapability(GWS_USE)` at startup (fail
+   closed before any MCP byte). Routine Google access now requires BOTH gates —
+   semantically honest (the broker IS the routine Gmail/Cal/Drive path) and
+   defense-in-depth against a future partial un-gate (a release that opened
+   `external-content-routine` but kept `gws-use` closed would still deny routine Google
+   access). In the 0.10.0 flip both gates open together, so this changes nothing
+   functionally now; it fixes the mapping and the description overclaim without editing
+   `safety-profile.js`.
+
+Implemented by **WP-broker-verb-allowlist-and-gws-gate**.
