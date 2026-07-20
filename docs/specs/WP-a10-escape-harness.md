@@ -1,7 +1,7 @@
 ---
 id: WP-a10-escape-harness
 title: Live escape-negative harness for the reap — setsid/double-fork matrix, SIGKILL-the-middle-while-brain-lives, fake-ps-in-PATH negative, timed fork/setsid interleaving attack
-status: Ready
+status: In-Review
 model: opus
 size: M
 depends_on: [WP-a10-reap-mechanism]
