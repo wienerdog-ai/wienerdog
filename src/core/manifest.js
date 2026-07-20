@@ -166,14 +166,23 @@ function reverseSymlink(entry, dryRun, removed, skipped, removedSet) {
  * user relocated mid-file uninstalls to exactly one blank line between the
  * surrounding regions. Delete the file only if we created it and nothing
  * else remains.
+ *
+ * F30 (delete-time binding): the caller opens the O_NOFOLLOW-verified regular
+ * file once and passes the fd + its canonical path `target`; read+modify+write
+ * go through that SAME fd so the final-component identity cannot change between
+ * read and write (a swap-to-symlink would already have tripped O_NOFOLLOW at
+ * open). The `target` is a canonical parent + O_NOFOLLOW-checked basename, used
+ * only for the createdFile delete (which needs a pathname, not an fd).
  * @param {ManifestEntry} entry
  * @param {boolean} dryRun
  * @param {string[]} removed @param {string[]} skipped @param {Set<string>} removedSet
+ * @param {number} fd  open (O_RDWR|O_NOFOLLOW, or O_RDONLY under dryRun) fd
+ * @param {string} target  canonical parent + O_NOFOLLOW-checked basename
  */
-function reverseManagedBlock(entry, dryRun, removed, skipped, removedSet) {
+function reverseManagedBlock(entry, dryRun, removed, skipped, removedSet, fd, target) {
   let content;
   try {
-    content = fs.readFileSync(entry.path, 'utf8');
+    content = fs.readFileSync(fd, 'utf8'); // reads the whole file (fresh fd @ offset 0)
   } catch {
     skipped.push(entry.path);
     return;
@@ -204,10 +213,12 @@ function reverseManagedBlock(entry, dryRun, removed, skipped, removedSet) {
   const remaining = before + after;
 
   if (entry.createdFile === true && remaining.trim() === '') {
-    if (!dryRun) fs.rmSync(entry.path, { force: true });
+    if (!dryRun) fs.rmSync(target, { force: true });
     removedSet.add(entry.path);
   } else if (!dryRun) {
-    fs.writeFileSync(entry.path, remaining);
+    const buf = Buffer.from(remaining);
+    fs.ftruncateSync(fd, 0);
+    fs.writeSync(fd, buf, 0, buf.length, 0);
   }
   removed.push(entry.path);
 }
@@ -216,14 +227,20 @@ function reverseManagedBlock(entry, dryRun, removed, skipped, removedSet) {
  * Reverse a 'settings-entry' entry: drop the hook commands we merged in, then
  * prune any now-empty groups / event arrays / the hooks key. Delete the file
  * only if we created it and it is now `{}`.
+ *
+ * F30 (delete-time binding): the caller opens the O_NOFOLLOW-verified regular
+ * file once and passes the fd + its canonical path `target`; read+modify+write
+ * go through that SAME fd (the delete needs the pathname `target`).
  * @param {ManifestEntry} entry
  * @param {boolean} dryRun
  * @param {string[]} removed @param {string[]} skipped @param {Set<string>} removedSet
+ * @param {number} fd  open (O_RDWR|O_NOFOLLOW, or O_RDONLY under dryRun) fd
+ * @param {string} target  canonical parent + O_NOFOLLOW-checked basename
  */
-function reverseSettingsEntry(entry, dryRun, removed, skipped, removedSet) {
+function reverseSettingsEntry(entry, dryRun, removed, skipped, removedSet, fd, target) {
   let raw;
   try {
-    raw = fs.readFileSync(entry.path, 'utf8');
+    raw = fs.readFileSync(fd, 'utf8'); // reads the whole file (fresh fd @ offset 0)
   } catch {
     skipped.push(entry.path);
     return;
@@ -248,10 +265,12 @@ function reverseSettingsEntry(entry, dryRun, removed, skipped, removedSet) {
   }
 
   if (entry.createdFile === true && Object.keys(settings).length === 0) {
-    if (!dryRun) fs.rmSync(entry.path, { force: true });
+    if (!dryRun) fs.rmSync(target, { force: true });
     removedSet.add(entry.path);
   } else if (!dryRun) {
-    fs.writeFileSync(entry.path, `${JSON.stringify(settings, null, 2)}\n`);
+    const buf = Buffer.from(`${JSON.stringify(settings, null, 2)}\n`);
+    fs.ftruncateSync(fd, 0);
+    fs.writeSync(fd, buf, 0, buf.length, 0);
   }
   removed.push(entry.path);
 }
@@ -505,6 +524,10 @@ function reverse(paths, manifest, { dryRun = false } = {}) {
   // so withinAllowedRoot additionally basename-allowlists the two shim names.
   const localBin = path.join(paths.home, '.local', 'bin');
   const allowedRoots = [paths.core, paths.claudeDir, paths.codexDir, localBin];
+  // F30 (audit A8): refuse to follow a symlink on the FINAL component of a
+  // read-then-write target. Undefined on win32 (no O_NOFOLLOW) → 0 (no-op there;
+  // those platforms keep the realpath-canonical containment above as the bound).
+  const O_NOFOLLOW = fs.constants.O_NOFOLLOW || 0;
   // Scheduler containment roots + platform for reverseSchedulerEntry (WP-145).
   // generators.js is required lazily — it statically requires this module, so a
   // top-level import would cycle; at reverse() call time both are fully loaded.
@@ -563,7 +586,22 @@ function reverse(paths, manifest, { dryRun = false } = {}) {
       // the LEGITIMATE file entry (Wienerdog records config only as
       // {kind:'file', path, hash}):
       if (entry.kind === 'file' && isFile(entry.path) && entry.hash) {
-        if (sha256File(entry.path) === entry.hash) {
+        // F30/F31 (audit A8): the config hash is read INSIDE its own try/catch —
+        // this runs ABOVE the per-entry isolation try below, so an unreadable
+        // config (EACCES / EISDIR-after-swap / ELOOP) must fail safe here rather
+        // than throw past the sweep and wedge every uninstall retry.
+        let currentHash;
+        try {
+          currentHash = sha256File(entry.path);
+        } catch (err) {
+          // Cannot verify → do NOT defer (leave config in place); keep sweeping.
+          process.stderr.write(
+            `wienerdog: could not verify ${entry.path} (${err.code || err.message}) — leaving config in place\n`
+          );
+          skipped.push(entry.path);
+          continue;
+        }
+        if (currentHash === entry.hash) {
           // UNMODIFIED → deferred: uninstall.js deletes it LAST (after the sweep,
           // after the manifest). Store the CANONICAL path (not a normalized
           // alias); add to removedSet so the core still counts as empty. Carry the
@@ -585,67 +623,149 @@ function reverse(paths, manifest, { dryRun = false } = {}) {
       continue;
     }
     // ── end global guard ─────────────────────────────────────────────────────
-    // ── PER-ENTRY ERROR ISOLATION + ROOT BOUND (audit A8, WP-144) ────────────
+    // ── PER-ENTRY ERROR ISOLATION + ROOT BOUND + DELETE-TIME BINDING (A8) ─────
     // One throwing reverser must never abort the whole uninstall (that made the
     // install permanently un-uninstallable — every retry hit the same entry).
-    // The containment check lives INSIDE the try so an fs error during realpath
-    // resolution also fails safe (preserve, not crash).
+    // The containment check + realpath resolution live INSIDE the try so an fs
+    // error also fails safe (preserve, not crash).
+    //
+    // F30 (delete-time binding): the WP-144 gate canonicalized the entry path but
+    // the reversers then acted on the LEXICAL path — a swapped intermediate
+    // symlink could redirect the op out of root. Every mutating kind now
+    // RE-VALIDATES containment on the realpath-RESOLVED target and performs its
+    // fs ops on that canonical path (file/dir), or on a parent-canonicalized path
+    // opened with O_NOFOLLOW on the final component (managed-block/settings-entry),
+    // or unlinks the link itself after validating the canonical parent (symlink).
+    // The STATIC symlink swap is closed here; the concurrent ancestor-replacement
+    // race (realpath returns a string, path-based ops re-walk it; Node has no
+    // openat/unlinkat and a native addon would violate ADR-0004) is an accepted
+    // A12 residual (see ADR-0028 / WP-159), the same class as the launcher and
+    // heal verify→use races. The per-kind ownership proofs (hash, isSymlink,
+    // hashDir/lstat, surgical edits) are UNCHANGED.
     try {
-      if (MUTATING_KINDS.has(entry.kind) && !withinAllowedRoot(entry.path, allowedRoots, localBin)) {
-        // A poisoned/hand-edited entry pointing outside every Wienerdog-owned
-        // root (e.g. {kind:'file', path:'~/taxes.pdf'}) — PRESERVE, never delete.
-        process.stderr.write(
-          `wienerdog: preserving ${entry.path} — outside every Wienerdog-owned root (not deleting)\n`
-        );
-        skipped.push(entry.path);
-        continue;
+      if (MUTATING_KINDS.has(entry.kind)) {
+        // F32: an already-removed target (not even a dangling symlink) is skipped
+        // SILENTLY as already-gone — BEFORE the containment gate, so an idempotent
+        // re-run never prints the misleading "outside every root" line (realpath
+        // on a missing path throws → contains=false → the wrong notice).
+        if (!fs.existsSync(entry.path) && !isSymlink(entry.path)) {
+          skipped.push(entry.path);
+          continue;
+        }
       }
-      if (entry.kind === 'file') {
-        // (manifest/config already handled by the global guard above.)
-        if (!isFile(entry.path)) {
+      if (entry.kind === 'file' || entry.kind === 'dir'
+        || entry.kind === 'vendored-tree' || entry.kind === 'copied-skill') {
+        // F30: resolve once, re-validate containment on the RESOLVED (canonical,
+        // symlink-free) path. An out-of-root resolution → PRESERVE.
+        const resolved = fs.realpathSync(entry.path);
+        if (!withinAllowedRoot(resolved, allowedRoots, localBin)) {
+          process.stderr.write(
+            `wienerdog: preserving ${entry.path} — outside every Wienerdog-owned root (not deleting)\n`
+          );
           skipped.push(entry.path);
           continue;
         }
-        if (entry.hash && sha256File(entry.path) !== entry.hash) {
-          // We recorded this file's content at write time; it differs now → the
-          // user (or another writer) changed it. Prove-before-delete: keep it,
-          // don't destroy an edit.
-          process.stderr.write(`wienerdog: keeping ${entry.path} — modified since install\n`);
-          skipped.push(entry.path);
-          continue;
+        if (entry.kind === 'file') {
+          // (manifest/config already handled by the global guard above.)
+          if (!isFile(resolved)) {
+            skipped.push(entry.path);
+            continue;
+          }
+          if (entry.hash && sha256File(resolved) !== entry.hash) {
+            // We recorded this file's content at write time; it differs now → the
+            // user (or another writer) changed it. Prove-before-delete: keep it,
+            // don't destroy an edit.
+            process.stderr.write(`wienerdog: keeping ${entry.path} — modified since install\n`);
+            skipped.push(entry.path);
+            continue;
+          }
+          if (!dryRun) fs.rmSync(resolved, { force: true });
+          removedSet.add(entry.path);
+          removed.push(entry.path);
+        } else if (entry.kind === 'dir') {
+          // (The core is handled by the global guard above and never reaches here.)
+          if (!isDir(resolved)) {
+            skipped.push(entry.path);
+            continue;
+          }
+          // removedSet holds LEXICAL entry.path children, so build the child list
+          // from entry.path (not resolved) to keep the "virtually empty" match.
+          const remaining = fs
+            .readdirSync(resolved)
+            .map((child) => path.join(entry.path, child))
+            .filter((child) => !removedSet.has(child));
+          if (remaining.length > 0) {
+            skipped.push(entry.path);
+            continue;
+          }
+          if (!dryRun) fs.rmdirSync(resolved);
+          removedSet.add(entry.path);
+          removed.push(entry.path);
+        } else if (entry.kind === 'vendored-tree') {
+          // Ownership proof unchanged (sameResolvedDir === appRoot is realpath-based).
+          reverseVendoredTree(entry, dryRun, removed, skipped, removedSet, appRoot);
+        } else {
+          // copied-skill: ownership proof unchanged (parent realpath + wienerdog-*
+          // + lstat real-dir + hashDir fingerprint). lstat MUST stay on entry.path
+          // — resolving it would defeat the anti-symlink gate.
+          reverseCopiedSkill(entry, dryRun, removed, skipped, removedSet, skillsRoots);
         }
-        if (!dryRun) fs.rmSync(entry.path, { force: true });
-        removedSet.add(entry.path);
-        removed.push(entry.path);
-      } else if (entry.kind === 'dir') {
-        // (The core is handled by the global guard above and never reaches here.)
-        if (!isDir(entry.path)) {
-          skipped.push(entry.path);
-          continue;
-        }
-        const remaining = fs
-          .readdirSync(entry.path)
-          .map((child) => path.join(entry.path, child))
-          .filter((child) => !removedSet.has(child));
-        if (remaining.length > 0) {
-          skipped.push(entry.path);
-          continue;
-        }
-        if (!dryRun) fs.rmdirSync(entry.path);
-        removedSet.add(entry.path);
-        removed.push(entry.path);
       } else if (entry.kind === 'symlink') {
+        // F30: validate the canonical PARENT is in-bounds, then reverseSymlink
+        // lstat+unlinks the LINK ITSELF (it must NOT resolve through the link).
+        const target = path.join(fs.realpathSync(path.dirname(entry.path)), path.basename(entry.path));
+        if (!withinAllowedRoot(target, allowedRoots, localBin)) {
+          process.stderr.write(
+            `wienerdog: preserving ${entry.path} — outside every Wienerdog-owned root (not deleting)\n`
+          );
+          skipped.push(entry.path);
+          continue;
+        }
         reverseSymlink(entry, dryRun, removed, skipped, removedSet);
-      } else if (entry.kind === 'managed-block') {
-        reverseManagedBlock(entry, dryRun, removed, skipped, removedSet);
-      } else if (entry.kind === 'settings-entry') {
-        reverseSettingsEntry(entry, dryRun, removed, skipped, removedSet);
+      } else if (entry.kind === 'managed-block' || entry.kind === 'settings-entry') {
+        // F30: canonicalize the PARENT, then open the final component with
+        // O_NOFOLLOW so a symlink at the recorded path (a swap-to-symlink)
+        // refuses (ELOOP) instead of letting the read+modify+write escape. All IO
+        // goes through the ONE fd (read → modify → truncate+write).
+        const target = path.join(fs.realpathSync(path.dirname(entry.path)), path.basename(entry.path));
+        if (!withinAllowedRoot(target, allowedRoots, localBin)) {
+          process.stderr.write(
+            `wienerdog: preserving ${entry.path} — outside every Wienerdog-owned root (not deleting)\n`
+          );
+          skipped.push(entry.path);
+          continue;
+        }
+        const flags = (dryRun ? fs.constants.O_RDONLY : fs.constants.O_RDWR) | O_NOFOLLOW;
+        let fd;
+        try {
+          fd = fs.openSync(target, flags);
+        } catch (err) {
+          if (err.code === 'ELOOP') {
+            // The recorded path is (now) a symlink — refuse to follow it.
+            process.stderr.write(
+              `wienerdog: preserving ${entry.path} — recorded path is a symlink (refusing to follow)\n`
+            );
+            skipped.push(entry.path);
+            continue;
+          }
+          if (err.code === 'ENOENT') {
+            skipped.push(entry.path);
+            continue;
+          }
+          throw err;
+        }
+        try {
+          if (entry.kind === 'managed-block') {
+            reverseManagedBlock(entry, dryRun, removed, skipped, removedSet, fd, target);
+          } else {
+            reverseSettingsEntry(entry, dryRun, removed, skipped, removedSet, fd, target);
+          }
+        } finally {
+          fs.closeSync(fd);
+        }
       } else if (entry.kind === 'scheduler-entry') {
+        // Not root-bounded here (WP-145 re-derives + bounds it via its own root set).
         reverseSchedulerEntry(entry, dryRun, removed, skipped, removedSet, schedulerOpts);
-      } else if (entry.kind === 'vendored-tree') {
-        reverseVendoredTree(entry, dryRun, removed, skipped, removedSet, appRoot);
-      } else if (entry.kind === 'copied-skill') {
-        reverseCopiedSkill(entry, dryRun, removed, skipped, removedSet, skillsRoots);
       } else if (entry.kind === 'vault-file' || entry.kind === 'vault-dir') {
         // The vault is the user's treasure — always preserved (ADR-0010, ADR-0019).
         // No filesystem action; NOT added to removedSet (it lives outside the core).

@@ -525,6 +525,51 @@ test('WP-144 uninstall: a poisoned external path is preserved and a malformed se
   assert.equal(fs.existsSync(core), false, 'the core (and its manifest) is fully removed — not wedged');
 });
 
+test('WP-144/F31 reverse: an UNREADABLE config no longer aborts the sweep — later entries still reverse, ledger retained for deletion', (t) => {
+  const isPosix = process.platform !== 'win32';
+  const isRoot = typeof process.getuid === 'function' && process.getuid() === 0;
+  if (!isPosix || isRoot) return t.skip('needs POSIX permission enforcement (non-root)');
+  const crypto = require('node:crypto');
+  const { getPaths } = require('../../src/core/paths');
+  const manifestLib = require('../../src/core/manifest');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-f31-'));
+  const paths = getPaths({ HOME: root, WIENERDOG_HOME: path.join(root, 'wd') });
+  fs.mkdirSync(paths.core, { recursive: true });
+  fs.mkdirSync(paths.logs);
+  fs.mkdirSync(paths.secrets, { mode: 0o700 });
+  const content = `vault: ${path.join(root, 'vault')}\n`;
+  fs.writeFileSync(paths.config, content);
+  const hash = crypto.createHash('sha256').update(content).digest('hex');
+  const manifest = { version: 1, createdAt: new Date().toISOString(), entries: [] };
+  // config recorded LAST → reversed FIRST, so a throw here (pre-fix) would abort
+  // before the dirs are swept; the dir removals prove the sweep continued past it.
+  manifestLib.record(manifest, { kind: 'dir', path: paths.core });
+  manifestLib.record(manifest, { kind: 'dir', path: paths.logs });
+  manifestLib.record(manifest, { kind: 'dir', path: paths.secrets });
+  manifestLib.record(manifest, { kind: 'file', path: paths.config, hash });
+  manifestLib.save(paths, manifest);
+  // Make the config unreadable: the deferred-config sha256File(readFileSync) hits
+  // EACCES. Pre-fix that hash ran ABOVE the per-entry try and aborted the sweep.
+  fs.chmodSync(paths.config, 0o000);
+
+  let res;
+  try {
+    assert.doesNotThrow(() => {
+      res = manifestLib.reverse(paths, manifest, {});
+    }, 'an unreadable config must NOT abort the whole sweep (F31)');
+  } finally {
+    fs.chmodSync(paths.config, 0o600); // restore so tmp cleanup can proceed
+  }
+
+  assert.ok(res.skipped.includes(paths.config), 'the unverifiable config is left in place, reported skipped');
+  assert.equal(res.deferredConfig, null, 'an unverifiable config is NOT deferred for deletion');
+  assert.ok(
+    res.removed.includes(paths.logs) && res.removed.includes(paths.secrets),
+    'entries after the throwing config still reverse — the sweep ran to completion'
+  );
+  assert.equal(fs.existsSync(paths.manifest), true, 'reverse() retains the ledger for uninstall.js to delete');
+});
+
 test('WP-145 uninstall: the interactive path shows the derived plan (incl. would-run) BEFORE the confirm prompt', () => {
   const { root, core, env } = tempEnv();
   run(['init', '--yes'], env);

@@ -1171,3 +1171,97 @@ test('WP-145 withinSchedulerRoot: containment AND wienerdog basename are both re
     'right name outside every scheduler root is still out-of-bounds'
   );
 });
+
+// ── WP-144 fix-pass (FIX-PLAN C6): F30 delete-time binding + F32 crash-retry ──
+
+test('WP-144/F30 reverse: a file reached through a STATIC in-root dir symlink to an out-of-root tree is PRESERVED (bind to resolved path)', (t) => {
+  if (!isPosix) return t.skip('symlink creation may be unavailable');
+  const paths = tempPaths();
+  const manifest = makeInstall(paths);
+  fs.mkdirSync(paths.claudeDir, { recursive: true });
+  // An out-of-root directory holding a precious user file.
+  const outside = path.join(paths.home, 'outside');
+  fs.mkdirSync(outside, { recursive: true });
+  const secret = path.join(outside, 'secret.txt');
+  fs.writeFileSync(secret, 'SECRET');
+  // A directory symlink INSIDE an allowed root that resolves OUT of root. The
+  // recorded entry path traverses it. Static (created before reverse runs).
+  const link = path.join(paths.claudeDir, 'link');
+  fs.symlinkSync(outside, link);
+  const entryPath = path.join(link, 'secret.txt'); // realpath → <home>/outside/secret.txt
+  manifestLib.record(manifest, { kind: 'file', path: entryPath });
+
+  const res = manifestLib.reverse(paths, manifest, {});
+
+  // The op is bound to the realpath-RESOLVED target, which is out of root →
+  // preserved. If the reverser deleted the lexical/resolved path without the
+  // containment re-validation, secret.txt would be gone.
+  assert.equal(fs.readFileSync(secret, 'utf8'), 'SECRET', 'the out-of-root file is untouched');
+  assert.ok(res.skipped.includes(entryPath), 'the symlink-reached entry is reported skipped');
+  assert.ok(!res.removed.includes(entryPath));
+});
+
+test('WP-144/F30 reverse: a managed-block entry whose recorded path is a symlink is REFUSED (O_NOFOLLOW), the pointed-at file is not rewritten', (t) => {
+  if (!isPosix) return t.skip('symlink creation / O_NOFOLLOW needs POSIX');
+  const paths = tempPaths();
+  const manifest = makeInstall(paths);
+  fs.mkdirSync(paths.claudeDir, { recursive: true });
+  // A real IN-ROOT file that DOES carry our managed block (so a follow-through
+  // read+write WOULD strip the block and rewrite it).
+  const real = path.join(paths.claudeDir, 'real.md');
+  const realContent = `# user notes\n\n${MB_BEGIN}\nbody\n${MB_END}\n`;
+  fs.writeFileSync(real, realContent);
+  // The recorded managed-block path is a SYMLINK to that in-root file. Containment
+  // passes (parent + target resolve in-root); only O_NOFOLLOW stops the rewrite.
+  const linkMd = path.join(paths.claudeDir, 'CLAUDE.md');
+  fs.symlinkSync(real, linkMd);
+  manifestLib.record(manifest, { kind: 'managed-block', path: linkMd, createdFile: false });
+
+  const origWrite = process.stderr.write.bind(process.stderr);
+  let err = '';
+  process.stderr.write = (chunk) => { err += chunk; return true; };
+  let res;
+  try {
+    res = manifestLib.reverse(paths, manifest, {});
+  } finally {
+    process.stderr.write = origWrite;
+  }
+
+  assert.equal(fs.readFileSync(real, 'utf8'), realContent, 'the pointed-at file is NOT rewritten through the symlink');
+  assert.equal(fs.lstatSync(linkMd).isSymbolicLink(), true, 'the symlink itself is untouched');
+  assert.ok(res.skipped.includes(linkMd), 'the symlinked managed-block entry is skipped');
+  assert.ok(!res.removed.includes(linkMd));
+  assert.match(err, /refusing to follow/, 'the O_NOFOLLOW refusal is disclosed');
+});
+
+test('WP-144/F32 reverse: a second reverse of an already-removed in-bounds file emits NO false "outside every root" notice', () => {
+  const paths = tempPaths();
+  const manifest = makeInstall(paths);
+  const extra = path.join(paths.core, 'notes.md');
+  const content = '# notes\n';
+  fs.writeFileSync(extra, content);
+  const hash = crypto.createHash('sha256').update(content).digest('hex');
+  manifestLib.record(manifest, { kind: 'file', path: extra, hash });
+  manifestLib.save(paths, manifest);
+  const reloaded = manifestLib.load(paths);
+
+  // First reverse removes the in-bounds file (and the empty tracked dirs).
+  const first = manifestLib.reverse(paths, reloaded, {});
+  assert.ok(first.removed.includes(extra));
+  assert.equal(fs.existsSync(extra), false);
+
+  // Second (idempotent) reverse: the target is already gone. It must be skipped
+  // SILENTLY as already-removed — not slandered as "outside every root".
+  const origWrite = process.stderr.write.bind(process.stderr);
+  let err = '';
+  process.stderr.write = (chunk) => { err += chunk; return true; };
+  let second;
+  try {
+    second = manifestLib.reverse(paths, reloaded, {});
+  } finally {
+    process.stderr.write = origWrite;
+  }
+  assert.doesNotMatch(err, /outside every Wienerdog-owned root/, 'no false out-of-root notice on the retry');
+  assert.doesNotMatch(err, /could not reverse/, 'an already-removed entry is skipped SILENTLY, not as a scary error');
+  assert.ok(second.skipped.includes(extra), 'the already-removed file is reported skipped');
+});
