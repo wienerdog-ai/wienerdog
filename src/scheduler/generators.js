@@ -4,7 +4,6 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const { WienerdogError } = require('../core/errors');
-const manifestLib = require('../core/manifest');
 const { schedulerSpawn } = require('./spawn');
 
 /**
@@ -238,21 +237,31 @@ function decodeJobDigests(token, opts = {}) {
 
 /**
  * The COMPLETE environment binding every scheduled OS entry sets (WP-157 F8 +
- * A10/R4). Ordered [key, value] pairs:
+ * A10/R4 + the A7 hardening pass). Ordered [key, value] pairs:
+ *  - HOME → the bound authorized home : a hostile ambient/`environment.d` HOME
+ *    must not relocate the credential/config account (its parent).
+ *  - WIENERDOG_HOME → the registration-time core : the launcher picks its core +
+ *    alert-state dir + the app tree it verifies from this var. Binding it in the
+ *    loaded OS entry (which needs registration privilege to change) overrides a
+ *    hostile ambient/`environment.d`/`launchctl setenv` WIENERDOG_HOME, so the
+ *    scheduled fire always verifies and refuses against the REGISTRATION-time
+ *    core — never an attacker-relocated one — and a legit non-default install's
+ *    core flows through without depending on the interactive shell override.
  *  - NODE_OPTIONS / NODE_PATH → '' : neutralize the code-loading Node vars. An
  *    inherited `NODE_OPTIONS=--require <evil>` would otherwise run attacker code
  *    in the launcher's OWN node process BEFORE launch.js — bypassing every check.
- *  - HOME → the bound authorized home : a hostile ambient/`environment.d` HOME
- *    must not relocate the credential/config account (its parent).
  *  - CLAUDE_CONFIG_DIR / CODEX_HOME / ANTHROPIC_API_KEY → '' : drop ambient
  *    credential/config overrides; run-job's buildCleanEnv reconstructs the config
  *    roots deterministically beneath the bound home and the scheduled dream is
  *    subscription-authed (ADR-0009), never an inherited API key.
- * @param {string} home  the absolute bound home @returns {Array<[string,string]>}
+ * @param {string} home  the absolute bound home
+ * @param {string} core  the absolute registration-time core ($WIENERDOG_HOME)
+ * @returns {Array<[string,string]>}
  */
-function scheduledEnvPairs(home) {
+function scheduledEnvPairs(home, core) {
   return [
     ['HOME', home],
+    ['WIENERDOG_HOME', core],
     ['NODE_OPTIONS', ''],
     ['NODE_PATH', ''],
     ['CLAUDE_CONFIG_DIR', ''],
@@ -273,9 +282,9 @@ function xmlEscape(s) {
 /** Render the launchd `EnvironmentVariables` dict block (2-space indented under
  *  the plist <dict>) that binds the scheduled env (WP-157 F8/A10). launchd sets
  *  these for the job, overriding whatever the user session inherited.
- *  @param {string} home @returns {string} */
-function launchdEnvDict(home) {
-  const rows = scheduledEnvPairs(home)
+ *  @param {string} home @param {string} core @returns {string} */
+function launchdEnvDict(home, core) {
+  const rows = scheduledEnvPairs(home, core)
     .map(([k, v]) => `    <key>${k}</key>\n    <string>${xmlEscape(v)}</string>`)
     .join('\n');
   return `  <key>EnvironmentVariables</key>\n  <dict>\n${rows}\n  </dict>\n`;
@@ -283,9 +292,9 @@ function launchdEnvDict(home) {
 
 /** Render systemd `[Service]` `Environment=` lines binding the scheduled env
  *  (WP-157 F8/A10). A quoted value covers spaces/`%`; an empty value clears the
- *  inherited one. @param {string} home @returns {string} */
-function systemdEnvLines(home) {
-  return scheduledEnvPairs(home)
+ *  inherited one. @param {string} home @param {string} core @returns {string} */
+function systemdEnvLines(home, core) {
+  return scheduledEnvPairs(home, core)
     .map(([k, v]) => `Environment=${k}=${v === '' ? '' : systemdQuote(v)}`)
     .join('\n');
 }
@@ -295,8 +304,9 @@ function systemdEnvLines(home) {
  * invokes the out-of-tree launcher with the descriptor path + expect-digest
  * (WP-157) — NOT the app bin directly.
  * @param {{name:string, hour:number, minute:number, node:string, launcher:string,
- *          descriptor:string, expectDigest:string, home:string, logDir:string}} o
- *   logDir = <core>/logs/<name> (absolute); home = the bound authorized home
+ *          descriptor:string, expectDigest:string, home:string, core:string, logDir:string}} o
+ *   logDir = <core>/logs/<name> (absolute); home = the bound authorized home;
+ *   core = the registration-time core bound into WIENERDOG_HOME
  * @returns {string} the full plist XML
  */
 function launchdPlist(o) {
@@ -312,7 +322,7 @@ function launchdPlist(o) {
     <string>${xmlEscape(o.node)}</string>
 ${args.map((a) => `    <string>${xmlEscape(a)}</string>`).join('\n')}
   </array>
-${launchdEnvDict(o.home)}  <key>StartCalendarInterval</key>
+${launchdEnvDict(o.home, o.core)}  <key>StartCalendarInterval</key>
   <dict>
     <key>Hour</key>
     <integer>${o.hour}</integer>
@@ -336,9 +346,10 @@ ${launchdEnvDict(o.home)}  <key>StartCalendarInterval</key>
  * RunAtLoad true, plus hourly at :00. When `jobDigests` is present it is bound into
  * the entry argv as `--job-digests <base64url>` (WP-catchup-per-job-authorization) — the loaded per-job
  * authorization map the catch-up runner union-authorizes against.
- * @param {{node:string, launcher:string, expectDigest:string, home:string, logDir:string,
- *          jobDigests?:string}} o
- *   logDir = <core>/logs/catchup; home = the bound authorized home
+ * @param {{node:string, launcher:string, expectDigest:string, home:string, core:string,
+ *          logDir:string, jobDigests?:string}} o
+ *   logDir = <core>/logs/catchup; home = the bound authorized home;
+ *   core = the registration-time core bound into WIENERDOG_HOME
  * @returns {string} plist XML with Label 'ai.wienerdog.catchup'
  */
 function catchupPlist(o) {
@@ -354,7 +365,7 @@ function catchupPlist(o) {
     <string>${xmlEscape(o.node)}</string>
 ${args.map((a) => `    <string>${xmlEscape(a)}</string>`).join('\n')}
   </array>
-${launchdEnvDict(o.home)}  <key>RunAtLoad</key>
+${launchdEnvDict(o.home, o.core)}  <key>RunAtLoad</key>
   <true/>
   <key>StartCalendarInterval</key>
   <dict>
@@ -412,9 +423,10 @@ function systemdQuote(s) {
  * (launcher, descriptor) are systemd-quoted; the name/flags/digest are a safe
  * charset (`sha256:`+hex, `--…`, `^[a-z0-9-]+$`).
  * The `Environment=` lines bind the scheduled env (WP-157 F8/A10): clear
- * NODE_OPTIONS/NODE_PATH + the ambient credential/config roots and bind HOME.
+ * NODE_OPTIONS/NODE_PATH + the ambient credential/config roots, bind HOME, and
+ * bind WIENERDOG_HOME to the registration-time core (A7 hardening pass).
  * @param {{name:string, node:string, launcher:string, descriptor:string,
- *          expectDigest:string, home:string}} o
+ *          expectDigest:string, home:string, core:string}} o
  * @returns {string} .service unit text
  */
 function systemdService(o) {
@@ -424,7 +436,7 @@ Description=Wienerdog job: ${o.name}
 
 [Service]
 Type=oneshot
-${systemdEnvLines(o.home)}
+${systemdEnvLines(o.home, o.core)}
 ExecStart=${systemdQuote(o.node)} ${execArgs}
 `;
 }
@@ -474,51 +486,84 @@ function windowsTaskFile(paths, name) {
 }
 
 /**
- * Basename of a job's cmd wrapper (WP-157 F8): Task Scheduler XML has NO per-task
- * environment element, so a fully-controlled `.cmd` clears the code-loading Node
- * vars + ambient credential/config roots and binds HOME/USERPROFILE before it
- * invokes node+launcher. 'dream' → 'wienerdog-dream.cmd'.
- * @param {string} name @returns {string}
- */
-function windowsWrapperFileName(name) {
-  return `wienerdog-${name}.cmd`;
+ * Absolute path to the system `cmd.exe` the scheduled task runs as its <Command>
+ * (A7 hardening pass, ADR-0028 R16). Resolved from `SystemRoot`/`windir` (a
+ * root-protected value) so the entry never depends on a bare-name PATH lookup;
+ * '`C:\Windows`' is the fixed fallback when neither is set (e.g. off-Windows
+ * rendering under test). @param {NodeJS.ProcessEnv} [env] @returns {string} */
+function windowsCmdExePath(env = process.env) {
+  const sysRoot = env.SystemRoot || env.windir || 'C:\\Windows';
+  return path.win32.join(sysRoot, 'System32', 'cmd.exe');
 }
 
 /**
- * Absolute path to a job's cmd wrapper (under <core>/schedules, manifest-tracked
- * as a regular non-symlink file, reversed with the entry).
- * @param {import('../core/paths').WienerdogPaths} paths @param {string} name
- * @returns {string}
+ * Encode ONE value for embedding inside a DOUBLE-QUOTED cmd.exe token — either
+ * `"<value>"` on the exec line or the RHS of `set "VAR=<value>"` (A7 hardening
+ * pass, ADR-0028 R16). Inside double quotes cmd.exe treats `& | < > ( ) ^` and
+ * spaces literally, so the only cmd-parse breakers are the double-quote itself
+ * and `%` expansion:
+ *  - `"` is illegal in a Windows path AND absent from our controlled digest/map
+ *    charset → THROW (never silently truncate the bound command).
+ *  - a run of TRAILING backslashes is doubled: `…\` immediately before the
+ *    closing `"` would otherwise escape that quote for `CommandLineToArgvW` (the
+ *    splitter the child node uses on its argv), so the pair that meets the quote
+ *    must be literal.
+ *  - `%` is the documented ADR-0028 residual — a literal `%` in a core-owned path
+ *    is still cmd-expandable; core paths live under the user home (code-derived,
+ *    not attacker-chosen), so this is accepted, not closed here.
+ * @param {string} s @returns {string}
  */
-function windowsWrapperFile(paths, name) {
-  return path.join(windowsTasksDir(paths), windowsWrapperFileName(name));
+function cmdQuotedToken(s) {
+  const str = String(s);
+  if (str.includes('"')) {
+    throw new WienerdogError(
+      `cannot bind a Windows scheduler value containing a double-quote: ${JSON.stringify(str)}`
+    );
+  }
+  return str.replace(/\\+$/, (run) => run + run);
+}
+
+/** Render one launch-argv token for the cmd exec line: a safe-charset token
+ *  (flags, the validated job name, `sha256:`+hex digest, base64url map) stays
+ *  BARE; anything else (a path, which may contain spaces / `&` / `%`) is
+ *  double-quoted via cmdQuotedToken. @param {string} a @returns {string} */
+function cmdArgToken(a) {
+  return /^[A-Za-z0-9:._-]+$/.test(a) ? a : `"${cmdQuotedToken(a)}"`;
 }
 
 /**
- * Render the Windows `.cmd` wrapper the scheduled task invokes (WP-157 F8/A10).
- * Batch content is authored ENTIRELY here (not interpolated from hostile argv),
- * CRLF line-endings. It `set "VAR="`-clears NODE_OPTIONS/NODE_PATH and the ambient
- * credential/config roots (run-job reconstructs them deterministically), binds
- * HOME/USERPROFILE to the authorized home, THEN runs `"<node>" "<launcher>"
- * <launchArgs>`. Node/launcher/paths are double-quoted; the safe-charset
- * flags/name/digest are bare.
- * RESIDUAL (recorded): a literal `%` in an absolute core path is still batch-
- * expandable on the final exec line — accepted (core paths live under the user
- * home, not attacker-chosen); the security-critical clears use quoted empty
- * assignments that are `%`-safe.
- * @param {{node:string, launcher:string, home:string, launchArgs:string[]}} o
- * @returns {string} the .cmd file content (CRLF)
+ * Build the cmd.exe `<Arguments>` string that scrubs+binds the scheduled env and
+ * invokes node+launcher (A7 hardening pass, ADR-0028 R16). The COMPLETE
+ * authorization command is bound into the REGISTERED task arguments (stored in
+ * the Task Scheduler DB at `/create` — changing them needs registration
+ * privilege), NOT a reopened wrapper file a scoped config-writer could edit
+ * without re-registering. `%SystemRoot%\System32\cmd.exe /d /s /v:off /c "…"`:
+ * `/d` skips AutoRun, `/s` strips exactly the outer quote pair, `/v:off` keeps
+ * `!` literal. Each `set "VAR=…"` clears or binds one scheduled var (WIENERDOG_HOME
+ * → the registration-time core; HOME/USERPROFILE → the bound home; NODE_OPTIONS
+ * /NODE_PATH + cred/config roots cleared), then node runs the launcher with the
+ * bound descriptor/digest/map. Every embedded path/value goes through the cmd
+ * token encoder.
+ * The commands are joined with `&` (UNCONDITIONAL sequencing), NOT `&&`: clearing
+ * an ALREADY-unset variable (`set "NODE_OPTIONS="`) returns errorlevel 1, which
+ * `&&` would treat as failure and abort the chain before node ever runs. `&` runs
+ * every clear/bind regardless and lets node's exit code become cmd's (`/c` returns
+ * the last command's code). No attacker-controlled command is in the chain (all
+ * `set` + the fixed node spawn), so unconditional sequencing is safe.
+ * @param {{node:string, launcher:string, home:string, core:string, launchArgs:string[]}} o
+ * @returns {string} the argument string for the task's <Arguments> element
  */
-function windowsLauncherWrapper(o) {
-  const line = (s) => `${s}\r\n`;
-  const clears = ['NODE_OPTIONS', 'NODE_PATH', 'CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'ANTHROPIC_API_KEY'];
-  let out = line('@echo off');
-  for (const k of clears) out += line(`set "${k}="`);
-  out += line(`set "HOME=${o.home}"`);
-  out += line(`set "USERPROFILE=${o.home}"`);
-  const argStr = o.launchArgs.map((a) => (/^[A-Za-z0-9:._-]+$/.test(a) ? a : `"${a}"`)).join(' ');
-  out += line(`"${o.node}" "${o.launcher}" ${argStr}`);
-  return out;
+function windowsCmdArguments(o) {
+  const sets = [];
+  for (const [k, v] of scheduledEnvPairs(o.home, o.core)) {
+    sets.push(v === '' ? `set "${k}="` : `set "${k}=${cmdQuotedToken(v)}"`);
+  }
+  // USERPROFILE is the Windows homedir the child (and os.homedir()) resolves;
+  // bind it to the authorized home too so an ambient USERPROFILE cannot move it.
+  sets.push(`set "USERPROFILE=${cmdQuotedToken(o.home)}"`);
+  const exec = `"${cmdQuotedToken(o.node)}" "${cmdQuotedToken(o.launcher)}" ${o.launchArgs.map(cmdArgToken).join(' ')}`;
+  const inner = [...sets, exec].join(' & ');
+  return `/d /s /v:off /c "${inner}"`;
 }
 
 /**
@@ -549,12 +594,14 @@ function windowsXmlEscape(s) {
 }
 
 /**
- * Render the daily Windows dream task XML. The task's <Command> is the cmd
- * wrapper (WP-157 F8), which scrubs/binds the scheduled env before invoking
- * node+launcher — the XML has no per-task env element, so the wrapper is the only
- * fully-controlled place to clear NODE_OPTIONS/NODE_PATH. The wrapper path is
+ * Render the daily Windows dream task XML. The task's <Command> is the absolute
+ * `cmd.exe` and its <Arguments> carry the COMPLETE authorization command bound
+ * into the registered task (A7 hardening pass, ADR-0028 R16) — the env scrub/bind
+ * (incl. WIENERDOG_HOME, NODE_OPTIONS) and the node+launcher invocation with the
+ * bound descriptor/expect-digest live in the registered `<Arguments>`, which needs
+ * registration privilege to change, NOT a reopened wrapper file. Both are
  * XML-escaped.
- * @param {{name:string, hour:number, minute:number, wrapper:string, userId:string}} o
+ * @param {{name:string, hour:number, minute:number, command:string, argline:string, userId:string}} o
  * @returns {string} the full Task Scheduler XML
  */
 function windowsDreamTaskXml(o) {
@@ -592,7 +639,8 @@ function windowsDreamTaskXml(o) {
   </Settings>
   <Actions Context="Author">
     <Exec>
-      <Command>${windowsXmlEscape(o.wrapper)}</Command>
+      <Command>${windowsXmlEscape(o.command)}</Command>
+      <Arguments>${windowsXmlEscape(o.argline)}</Arguments>
     </Exec>
   </Actions>
 </Task>
@@ -600,11 +648,12 @@ function windowsDreamTaskXml(o) {
 }
 
 /**
- * Render the Windows catch-up task XML (ONLOGON + hourly). The <Command> is the
- * catch-up cmd wrapper (WP-157 F8), which scrubs/binds the scheduled env before
- * invoking node+launcher with `--catch-up` + the app-tree expect-digest. Task
- * name is the fixed literal 'catchup'.
- * @param {{wrapper:string, userId:string}} o
+ * Render the Windows catch-up task XML (hourly). The <Command> is the absolute
+ * `cmd.exe` and its <Arguments> carry the bound scrub/bind + `node <launcher>
+ * --catch-up --expect-digest <d> [--job-digests <b64>]` (A7 hardening pass,
+ * ADR-0028 R16) — the authorization map is bound into the REGISTERED task args,
+ * not a reopened wrapper file. Task name is the fixed literal 'catchup'.
+ * @param {{command:string, argline:string, userId:string}} o
  * @returns {string} the full Task Scheduler XML
  */
 function windowsCatchupTaskXml(o) {
@@ -643,7 +692,8 @@ function windowsCatchupTaskXml(o) {
   </Settings>
   <Actions Context="Author">
     <Exec>
-      <Command>${windowsXmlEscape(o.wrapper)}</Command>
+      <Command>${windowsXmlEscape(o.command)}</Command>
+      <Arguments>${windowsXmlEscape(o.argline)}</Arguments>
     </Exec>
   </Actions>
 </Task>
@@ -657,15 +707,6 @@ function windowsTaskXmlBytes(xml) {
   return Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(xml, 'utf16le')]);
 }
 
-/** @param {string} p @returns {boolean} */
-function isFile(p) {
-  try {
-    return fs.statSync(p).isFile();
-  } catch {
-    return false;
-  }
-}
-
 /**
  * Default loader: register the catch-up plist with real launchd. Tests inject a
  * spy via opts.loader so they never touch the real scheduler.
@@ -677,67 +718,12 @@ function defaultCatchupLoader(argv) {
 }
 
 /**
- * Ensure the macOS catch-up plist exists and is registered. Idempotent: if the
- * plist file already exists with identical content AND a manifest entry tracks
- * it, nothing is written or loaded. Darwin only (no-op on other platforms).
- * Records a `scheduler-entry` manifest entry (with the catch-up unload argv) the
- * first time it writes the file, mirroring schedule.js. This is a runtime
- * backstop invoked by run-job after a job succeeds; the primary installer of the
- * entry is WP-013's `schedule add`.
- * @param {import('../core/paths').WienerdogPaths} paths
- * @param {{loader?: (argv:string[])=>{status:number}}} opts
- * @returns {{changed:boolean}}
- */
-function ensureCatchup(paths, opts = {}) {
-  if (process.platform !== 'darwin') return { changed: false };
-  const loader = opts.loader || defaultCatchupLoader;
-  const uid = process.getuid();
-  const logDir = path.join(paths.logs, 'catchup');
-  // F14: catchupPlist takes {node, launcher, expectDigest, home, logDir} — the
-  // removed `bin` field rendered a "undefined" argv. The launcher + app-tree
-  // expect-digest are best-effort (empty when no vendored app yet → the launcher
-  // fails closed at fire time).
-  let expectDigest = '';
-  try {
-    expectDigest = require('./descriptor').appTreeDigest(paths);
-  } catch {
-    expectDigest = '';
-  }
-  const content = catchupPlist({
-    node: nodePath(),
-    launcher: require('../core/vendor').launcherPath(paths),
-    expectDigest,
-    home: paths.home,
-    logDir,
-  });
-  const label = 'ai.wienerdog.catchup';
-  const plistPath = path.join(launchAgentsDir(paths.home), `${label}.plist`);
-  const unload = ['launchctl', 'bootout', `gui/${uid}/${label}`];
-
-  const manifest = manifestLib.load(paths);
-  const identical = isFile(plistPath) && fs.readFileSync(plistPath, 'utf8') === content;
-  const hasEntry = manifest.entries.some(
-    (e) => e.kind === 'scheduler-entry' && e.path === plistPath
-  );
-  if (identical && hasEntry) return { changed: false };
-
-  fs.mkdirSync(path.dirname(plistPath), { recursive: true });
-  fs.writeFileSync(plistPath, content);
-  if (!hasEntry) {
-    manifestLib.record(manifest, { kind: 'scheduler-entry', path: plistPath, unload });
-    manifestLib.save(paths, manifest);
-  }
-  loader(['launchctl', 'bootstrap', `gui/${uid}`, plistPath]);
-  return { changed: true };
-}
-
-/**
  * TEARDOWN PRIMITIVE (WP-catchup-per-job-authorization [R5/R8]): remove the catch-up OS entry + its
  * bound map when NO jobs remain. Invoked ONLY by `repointSchedules` (the sole
  * catch-up repair/teardown owner) on final-job removal — never runtime. Best-effort
- * + idempotent: unregisters via the loader, deletes the entry file(s), and drops the
- * matching manifest entries. macOS (catchupPlist) + Windows (schtasks task + wrapper)
- * only; other platforms have no separate catch-up registration to tear down.
+ * + idempotent: unregisters via the loader, deletes the entry file, and drops the
+ * matching manifest entry. macOS (catchupPlist) + Windows (schtasks task) only;
+ * other platforms have no separate catch-up registration to tear down.
  * @param {import('../core/paths').WienerdogPaths} paths
  * @param {import('../core/manifest').Manifest} manifest
  * @param {{loader?: (argv:string[])=>{status:number}, platform?: NodeJS.Platform}} [opts]
@@ -764,7 +750,7 @@ function teardownCatchup(paths, manifest, opts = {}) {
     } catch {
       /* best-effort unregister */
     }
-    files.push(windowsTaskFile(paths, 'catchup'), windowsWrapperFile(paths, 'catchup'));
+    files.push(windowsTaskFile(paths, 'catchup'));
   } else {
     return { removed: false };
   }
@@ -804,9 +790,10 @@ module.exports = {
   windowsTasksDir,
   windowsTaskFileName,
   windowsTaskFile,
-  windowsWrapperFileName,
-  windowsWrapperFile,
-  windowsLauncherWrapper,
+  windowsCmdExePath,
+  cmdQuotedToken,
+  cmdArgToken,
+  windowsCmdArguments,
   windowsCurrentUserId,
   windowsXmlEscape,
   windowsDreamTaskXml,
@@ -818,7 +805,6 @@ module.exports = {
   canonicalJobDigestsJson,
   JOB_DIGESTS_MAX_BYTES,
   scheduledEnvPairs,
-  ensureCatchup,
   teardownCatchup,
   defaultCatchupLoader,
 };

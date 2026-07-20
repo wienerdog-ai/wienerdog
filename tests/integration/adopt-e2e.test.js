@@ -211,6 +211,108 @@ test('adopt-e2e: init → adopt → sync → dream through mapped tiers, one rev
 });
 
 test(
+  'adopt-e2e: adopting over an ALREADY-scheduled dream rebinds the per-job digest + catch-up map to the ADOPTED vault (no follow-up sync) — A7 hardening fix #3',
+  { skip: process.platform === 'win32' && 'the fake sh brain is POSIX-only' },
+  async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-adopt-rebind-'));
+    const adopted = path.join(root, 'adopted');
+    const home = path.join(root, 'home');
+    const core = path.join(root, 'core');
+    const defaultVault = path.join(root, 'default-vault');
+    const claude = path.join(root, 'claude');
+    const codex = path.join(root, 'codex-absent');
+
+    const saved = {};
+    for (const k of ENV_KEYS) saved[k] = process.env[k];
+    const origLog = console.log;
+    console.log = () => {};
+
+    try {
+      fs.cpSync(POWERUSER_FIXTURE, adopted, { recursive: true });
+      const adoptedReal = fs.realpathSync(adopted);
+      fs.mkdirSync(home, { recursive: true });
+      fs.mkdirSync(core, { recursive: true });
+      const localBin = path.join(home, '.local', 'bin');
+      fs.mkdirSync(localBin, { recursive: true });
+      fs.copyFileSync(FAKE_BRAIN, path.join(localBin, 'claude'));
+      fs.chmodSync(path.join(localBin, 'claude'), 0o755);
+
+      Object.assign(process.env, {
+        HOME: home,
+        WIENERDOG_HOME: core,
+        WIENERDOG_VAULT: defaultVault,
+        CLAUDE_CONFIG_DIR: claude,
+        CODEX_HOME: codex,
+        PATH: localBin + path.delimiter + process.env.PATH,
+        // Neutralize the real OS scheduler; the ENTRY FILES are still written with
+        // the bound digest/map, which is what we assert.
+        WIENERDOG_LOADER_NOOP: '1',
+      });
+      delete process.env.WIENERDOG_FAKE_TODAY;
+
+      const { getPaths } = require('../../src/core/paths');
+      const gen = require('../../src/scheduler/generators');
+      const jobsLib = require('../../src/scheduler/jobs');
+      const descriptorMod = require('../../src/scheduler/descriptor');
+      const paths = getPaths(process.env);
+
+      // init --fresh-vault schedules the nightly dream (against the DEFAULT vault) —
+      // so when adopt runs, a dream JOB ALREADY exists (the pre-existing-job path
+      // that ensureDreamSchedule no-ops on). Without the fix, adopt's
+      // ensureDreamSchedule no-ops and NEVER re-derives/writes the descriptor bound
+      // to the adopted vault (it would refuse fire-closed until a separate `sync`).
+      await init.run(['--yes', '--fresh-vault']);
+      assert.ok(jobsLib.findJob(paths, 'dream'), 'precondition: dream job already scheduled by init');
+
+      // adopt the power-user vault — WITHOUT any follow-up `sync`.
+      await adopt.run([adopted, '--yes']);
+
+      // The descriptor is re-derived + re-registered to the ADOPTED vault via
+      // repointSchedules (the fix) — not the create-only ensureDreamSchedule that
+      // no-ops on the pre-existing job. Without the fix this file is absent.
+      const descPath = descriptorMod.descriptorPath(paths, 'dream');
+      const postDesc = JSON.parse(fs.readFileSync(descPath, 'utf8'));
+      assert.equal(postDesc.vaultRoot, adoptedReal, 'descriptor rebound to the adopted vault after adopt (no sync)');
+
+      // The LOADED per-job digest (bound into the OS entry) reflects the adopted vault.
+      const adoptedJob = jobsLib.findJob(paths, 'dream');
+      const adoptedDigest = descriptorMod.deriveDescriptorDigest(paths, adoptedJob, { platform: process.platform });
+      const readEntry = (p) => {
+        const buf = fs.readFileSync(p);
+        return buf[0] === 0xff && buf[1] === 0xfe ? buf.slice(2).toString('utf16le') : buf.toString('utf8');
+      };
+      let perJobEntry;
+      let catchupEntry = null;
+      if (process.platform === 'darwin') {
+        perJobEntry = path.join(gen.launchAgentsDir(paths.home), 'ai.wienerdog.dream.plist');
+        catchupEntry = path.join(gen.launchAgentsDir(paths.home), 'ai.wienerdog.catchup.plist');
+      } else {
+        // linux: the systemd .service carries --expect-digest; no separate catch-up map.
+        perJobEntry = path.join(gen.systemdUserDir(paths.home, process.env), 'wienerdog-dream.service');
+      }
+      const perJobText = readEntry(perJobEntry);
+      assert.ok(perJobText.includes(adoptedDigest), 'the per-job OS entry binds the ADOPTED-vault expect-digest');
+
+      if (catchupEntry) {
+        const catchupText = readEntry(catchupEntry);
+        const m = catchupText.match(/--job-digests[\s\S]*?([A-Za-z0-9_-]{16,})/);
+        assert.ok(m, 'the catch-up entry binds a --job-digests map');
+        const decoded = gen.decodeJobDigests(m[1]);
+        assert.equal(decoded.ok, true, 'the bound catch-up map decodes');
+        assert.equal(decoded.map.dream, adoptedDigest, 'the catch-up map authorizes the ADOPTED-vault dream digest');
+      }
+    } finally {
+      console.log = origLog;
+      for (const k of ENV_KEYS) {
+        if (saved[k] === undefined) delete process.env[k];
+        else process.env[k] = saved[k];
+      }
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  }
+);
+
+test(
   'adopt-e2e: A5 pin preflight — claude unresolvable ⇒ adopt ABORTS before any mutation (vault/config/manifest/pin-store byte-identical)',
   { skip: process.platform === 'win32' && 'the fake sh exec is POSIX-only' },
   async () => {

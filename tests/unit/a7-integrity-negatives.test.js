@@ -59,6 +59,9 @@ function runLauncher(fx, descriptorPath, digest, env) {
   try {
     code = launcher.main(['dream', '--descriptor', descriptorPath || fx.descriptorPath, '--expect-digest', digest || fx.digest], {
       env: env || fx.env,
+      // A7 hardening pass: production anchors the core to the launcher's own file
+      // location; the harness pins it to the fixture core.
+      core: fx.paths.core,
       platform: process.platform,
       spawn,
       exit: () => {},

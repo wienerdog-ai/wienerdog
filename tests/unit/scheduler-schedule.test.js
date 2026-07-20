@@ -675,24 +675,27 @@ test('scheduler-schedule: win32 dispatch writes both XMLs, records reversible en
   const catchupText = catchupBytes.slice(2).toString('utf16le');
   assert.ok(dreamText.startsWith('<?xml version="1.0" encoding="UTF-16"?>'));
   assert.ok(dreamText.includes('<URI>\\Wienerdog\\dream</URI>'));
-  // WP-157 F8: both tasks' <Command> is the env-scrubbing cmd wrapper (the
-  // launcher/args moved INTO the wrapper, which clears NODE_OPTIONS/NODE_PATH +
-  // binds HOME before node). The wrappers are recorded as reversible `file`
-  // entries and their content clears the code-loading vars.
-  const dreamWrapper = gen.windowsWrapperFile(paths, 'dream');
-  const catchupWrapper = gen.windowsWrapperFile(paths, 'catchup');
-  assert.ok(dreamText.includes(`<Command>${dreamWrapper}</Command>`), dreamText);
-  assert.ok(catchupText.includes(`<Command>${catchupWrapper}</Command>`), catchupText);
+  // A7 hardening pass (ADR-0028 R16): both tasks' <Command> is the absolute
+  // cmd.exe and the COMPLETE authorization command (env scrub/bind incl.
+  // WIENERDOG_HOME/NODE_OPTIONS + node+launcher with the bound descriptor/digest)
+  // is bound INLINE in the REGISTERED <Arguments> — never a reopened wrapper file.
+  const cmdExe = gen.windowsCmdExePath();
+  assert.ok(dreamText.includes(`<Command>${gen.windowsXmlEscape(cmdExe)}</Command>`), dreamText);
+  assert.ok(catchupText.includes(`<Command>${gen.windowsXmlEscape(cmdExe)}</Command>`), catchupText);
+  // The auth args are inline in <Arguments>, not a separate .cmd file. (This bare
+  // test install has no vendored app yet, so --expect-digest is empty — the
+  // launcher fails closed until a real `sync` binds a digest; the point is the
+  // flag+descriptor are bound INLINE in the registered arguments.)
+  assert.match(dreamText, /<Arguments>.*--descriptor.*--expect-digest/, dreamText);
+  assert.match(dreamText, /set &quot;WIENERDOG_HOME=/, 'binds WIENERDOG_HOME inline (fix #2)');
+  assert.match(dreamText, /set &quot;NODE_OPTIONS=&quot;/, 'clears NODE_OPTIONS inline before node');
+  assert.match(catchupText, /<Arguments>.*--catch-up.*--expect-digest/, catchupText);
   assert.ok(!catchupText.includes('<LogonTrigger>'), 'catchup task carries no LogonTrigger');
-  assert.ok(fs.existsSync(dreamWrapper) && fs.existsSync(catchupWrapper), 'both cmd wrappers written');
-  const dreamWrapText = fs.readFileSync(dreamWrapper, 'utf8');
-  assert.match(dreamWrapText, /set "NODE_OPTIONS="/, 'wrapper clears NODE_OPTIONS before node');
-  assert.match(dreamWrapText, /--catch-up|--descriptor/, 'wrapper carries the launch args');
-  assert.ok(fs.readFileSync(catchupWrapper, 'utf8').includes('--catch-up'), 'catch-up wrapper runs --catch-up');
-  // The wrappers are reversible `file` manifest entries.
-  const fileEntries = manifest.entries.filter((e) => e.kind === 'file');
-  assert.ok(fileEntries.some((e) => e.path === dreamWrapper), 'dream wrapper recorded as a file entry');
-  assert.ok(fileEntries.some((e) => e.path === catchupWrapper), 'catch-up wrapper recorded as a file entry');
+  // No wrapper .cmd file is written or recorded — the trust anchor is the
+  // registered <Arguments>, not a mutable file.
+  assert.ok(!dreamText.includes('.cmd'), 'no wrapper .cmd referenced in the dream task');
+  assert.ok(!catchupText.includes('.cmd'), 'no wrapper .cmd referenced in the catch-up task');
+  assert.equal(manifest.entries.filter((e) => e.kind === 'file' && /\.cmd$/.test(e.path)).length, 0, 'no wrapper .cmd file manifest entry');
 
   const schedEntries = manifest.entries.filter((e) => e.kind === 'scheduler-entry');
   const dreamEntry = schedEntries.find((e) => e.path === dreamXml);

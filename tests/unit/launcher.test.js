@@ -149,6 +149,7 @@ test('launcher: main refuses on drift — appends a durable alert, exits non-zer
   try {
     code = launcher.main(argv, {
       env,
+      core: paths.core,
       platform: process.platform,
       spawn: () => {
         spawned = true;
@@ -168,11 +169,12 @@ test('launcher: main refuses on drift — appends a durable alert, exits non-zer
 });
 
 test('launcher: main on a valid install spawns exactly the run-job child and returns its code', () => {
-  const { env, descriptorPath, digest } = setupProd();
+  const { env, descriptorPath, digest, paths } = setupProd();
   const calls = [];
   const argv = ['dream', '--descriptor', descriptorPath, '--expect-digest', digest];
   const code = launcher.main(argv, {
     env,
+    core: paths.core,
     platform: process.platform,
     spawn: (command, args) => {
       calls.push({ command, args });
@@ -329,6 +331,7 @@ test('launcher: main on --catch-up + --expect-digest verifies the tree and spawn
   const calls = [];
   const code = launcher.main(['--catch-up', '--expect-digest', treeDigest], {
     env,
+    core: paths.core,
     platform: process.platform,
     spawn: (command, args) => {
       calls.push({ command, args });
@@ -358,6 +361,7 @@ test('launcher: main scrubs NODE_OPTIONS/NODE_PATH and binds HOME on the child s
   let childEnv = null;
   launcher.main(['dream', '--descriptor', descriptorPath, '--expect-digest', digest], {
     env: hostile,
+    core: paths.core,
     platform: process.platform,
     spawn: (_c, _a, opts) => {
       childEnv = opts.env;
@@ -386,6 +390,7 @@ test('launcher: a hostile ambient HOME does NOT move the authorized root — the
   let childEnv = null;
   launcher.main(['dream', '--descriptor', descriptorPath, '--expect-digest', digest], {
     env: hostile,
+    core: paths.core,
     platform: process.platform,
     spawn: (_c, _a, opts) => {
       childEnv = opts.env;
@@ -395,6 +400,83 @@ test('launcher: a hostile ambient HOME does NOT move the authorized root — the
   });
   assert.equal(childEnv.HOME, paths.home, 'child HOME is the bound authorized home, not the hostile ambient one');
   assert.notEqual(childEnv.HOME, hostileHome);
+});
+
+// -------------------------------------------------------------------------
+// A7 hardening pass (fix #2): the core is ANCHORED to the launcher's own
+// location, never an ambient WIENERDOG_HOME.
+// -------------------------------------------------------------------------
+
+test('launcher: a hostile ambient WIENERDOG_HOME does NOT relocate verification or the refuse alert — the anchored core wins (fix #2)', () => {
+  const { env, descriptorPath, digest, paths } = setupProd();
+  jobsLib.saveJob(paths, { ...DREAM_JOB, run: 'skill:wienerdog-weekly-review' }); // drift → refuse
+  const evilCore = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-launch-evilcore-'));
+  fs.mkdirSync(path.join(evilCore, 'state'), { recursive: true });
+  const hostile = { ...env, WIENERDOG_HOME: evilCore };
+  let spawned = false;
+  const origErr = process.stderr.write;
+  process.stderr.write = () => true;
+  try {
+    launcher.main(['dream', '--descriptor', descriptorPath, '--expect-digest', digest], {
+      env: hostile,
+      core: paths.core, // the anchored core (production derives it from __filename)
+      platform: process.platform,
+      spawn: () => {
+        spawned = true;
+        return { status: 0 };
+      },
+      exit: () => {},
+    });
+  } finally {
+    process.stderr.write = origErr;
+  }
+  assert.equal(spawned, false, 'no spawn on drift');
+  // The durable refuse alert lands under the ANCHORED state dir, not the hostile core.
+  const anchored = fs.readFileSync(path.join(paths.state, 'alerts.jsonl'), 'utf8');
+  assert.match(anchored, /refusing to run/, 'alert lands under the anchored state dir');
+  assert.equal(fs.existsSync(path.join(evilCore, 'state', 'alerts.jsonl')), false, 'no alert under the hostile ambient core');
+});
+
+test('launcher: a copied byte-identical tree + hostile WIENERDOG_HOME — the child still gets the anchored core (fix #2)', () => {
+  const { env, descriptorPath, digest, paths } = setupProd();
+  const evilCore = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-launch-evilcore2-'));
+  const hostile = { ...env, WIENERDOG_HOME: evilCore };
+  let childEnv = null;
+  launcher.main(['dream', '--descriptor', descriptorPath, '--expect-digest', digest], {
+    env: hostile,
+    core: paths.core,
+    platform: process.platform,
+    spawn: (_c, _a, opts) => {
+      childEnv = opts.env;
+      return { status: 0 };
+    },
+    exit: () => {},
+  });
+  assert.ok(childEnv, 'spawned');
+  // The child (run-job) resolves its core/state/locks/logs from the ANCHORED core,
+  // so an ambient/copied-tree WIENERDOG_HOME cannot relocate them.
+  assert.equal(childEnv.WIENERDOG_HOME, paths.core, 'child WIENERDOG_HOME is the anchored core');
+  assert.notEqual(childEnv.WIENERDOG_HOME, evilCore);
+});
+
+test('launcher: production anchors the core to the launcher file location (path.dirname^2), independent of env', () => {
+  // The vendored launcher lives at <core>/launcher/launch.js, so its own path is
+  // the registration-time anchor. verify main derives <core> from opts.launcherFile.
+  const { env, descriptorPath, digest, paths } = setupProd();
+  const launcherFile = path.join(paths.core, 'launcher', 'launch.js');
+  let childEnv = null;
+  launcher.main(['dream', '--descriptor', descriptorPath, '--expect-digest', digest], {
+    env: { ...env, WIENERDOG_HOME: '/somewhere/evil' },
+    launcherFile, // production passes none → uses __filename of the vendored copy
+    platform: process.platform,
+    spawn: (_c, _a, opts) => {
+      childEnv = opts.env;
+      return { status: 0 };
+    },
+    exit: () => {},
+  });
+  assert.ok(childEnv, 'spawned — the anchored core resolved the app tree');
+  assert.equal(childEnv.WIENERDOG_HOME, paths.core, 'anchored core = dirname(dirname(launcherFile))');
 });
 
 // -------------------------------------------------------------------------
@@ -414,6 +496,7 @@ test('launcher: an fs error during verification ⇒ refuse + durable alert + ZER
   try {
     code = launcher.main(['dream', '--descriptor', descriptorPath, '--expect-digest', digest], {
       env,
+      core: paths.core,
       platform: process.platform,
       spawn: () => {
         spawned = true;
@@ -451,6 +534,7 @@ test('launcher: the refuse text points at the next digest + `wienerdog sync`, ne
   try {
     launcher.main(['dream', '--descriptor', descriptorPath, '--expect-digest', digest], {
       env,
+      core: paths.core,
       platform: process.platform,
       spawn: () => ({ status: 0 }),
       exit: () => {},

@@ -11,9 +11,11 @@ const { WienerdogError } = require('../../src/core/errors');
 const LAUNCHER = '/opt/wienerdog/launcher/launch.js';
 const DESC = '/opt/wienerdog/state/descriptors/daily-digest.json';
 const DIGEST = 'sha256:deadbeef';
-// WP-157 F8/A10/R4: every OS entry binds the scheduled env (clears the code-
-// loading Node vars + ambient cred/config roots, binds the authorized HOME).
+// WP-157 F8/A10/R4 + A7 hardening pass: every OS entry binds the scheduled env
+// (clears the code-loading Node vars + ambient cred/config roots, binds the
+// authorized HOME, and binds WIENERDOG_HOME to the registration-time core).
 const HOME = '/Users/ada';
+const CORE = '/Users/ada/.wienerdog';
 
 const EXPECTED_PLIST = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -35,6 +37,8 @@ const EXPECTED_PLIST = `<?xml version="1.0" encoding="UTF-8"?>
   <dict>
     <key>HOME</key>
     <string>/Users/ada</string>
+    <key>WIENERDOG_HOME</key>
+    <string>/Users/ada/.wienerdog</string>
     <key>NODE_OPTIONS</key>
     <string></string>
     <key>NODE_PATH</key>
@@ -81,6 +85,8 @@ const EXPECTED_CATCHUP = `<?xml version="1.0" encoding="UTF-8"?>
   <dict>
     <key>HOME</key>
     <string>/Users/ada</string>
+    <key>WIENERDOG_HOME</key>
+    <string>/Users/ada/.wienerdog</string>
     <key>NODE_OPTIONS</key>
     <string></string>
     <key>NODE_PATH</key>
@@ -126,6 +132,7 @@ Description=Wienerdog job: daily-digest
 [Service]
 Type=oneshot
 Environment=HOME="/Users/ada"
+Environment=WIENERDOG_HOME="/Users/ada/.wienerdog"
 Environment=NODE_OPTIONS=
 Environment=NODE_PATH=
 Environment=CLAUDE_CONFIG_DIR=
@@ -134,86 +141,33 @@ Environment=ANTHROPIC_API_KEY=
 ExecStart="/usr/bin/node" "/opt/wienerdog/launcher/launch.js" daily-digest --descriptor "/opt/wienerdog/state/descriptors/daily-digest.json" --expect-digest sha256:deadbeef
 `;
 
-const EXPECTED_DREAM = `<?xml version="1.0" encoding="UTF-16"?>
-<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
-  <RegistrationInfo>
-    <Author>Wienerdog</Author>
-    <Description>Wienerdog nightly dream (memory consolidation).</Description>
-    <URI>\\Wienerdog\\dream</URI>
-  </RegistrationInfo>
-  <Triggers>
-    <CalendarTrigger>
-      <StartBoundary>2020-01-01T03:30:00</StartBoundary>
-      <Enabled>true</Enabled>
-      <ScheduleByDay>
-        <DaysInterval>1</DaysInterval>
-      </ScheduleByDay>
-    </CalendarTrigger>
-  </Triggers>
-  <Principals>
-    <Principal id="Author">
-      <UserId>WS\\ada</UserId>
-      <LogonType>InteractiveToken</LogonType>
-      <RunLevel>LeastPrivilege</RunLevel>
-    </Principal>
-  </Principals>
-  <Settings>
-    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
-    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
-    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
-    <StartWhenAvailable>true</StartWhenAvailable>
-    <Enabled>true</Enabled>
-    <ExecutionTimeLimit>PT1H</ExecutionTimeLimit>
-    <Priority>7</Priority>
-  </Settings>
-  <Actions Context="Author">
-    <Exec>
-      <Command>C:\\Users\\John Smith\\.wienerdog\\schedules\\wienerdog-dream.cmd</Command>
-    </Exec>
-  </Actions>
-</Task>
-`;
-
-const EXPECTED_WIN_CATCHUP = `<?xml version="1.0" encoding="UTF-16"?>
-<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
-  <RegistrationInfo>
-    <Author>Wienerdog</Author>
-    <Description>Wienerdog catch-up: runs any dream missed while off or logged off.</Description>
-    <URI>\\Wienerdog\\catchup</URI>
-  </RegistrationInfo>
-  <Triggers>
-    <TimeTrigger>
-      <StartBoundary>2020-01-01T00:00:00</StartBoundary>
-      <Enabled>true</Enabled>
-      <Repetition>
-        <Interval>PT1H</Interval>
-        <StopAtDurationEnd>false</StopAtDurationEnd>
-      </Repetition>
-    </TimeTrigger>
-  </Triggers>
-  <Principals>
-    <Principal id="Author">
-      <UserId>WS\\ada</UserId>
-      <LogonType>InteractiveToken</LogonType>
-      <RunLevel>LeastPrivilege</RunLevel>
-    </Principal>
-  </Principals>
-  <Settings>
-    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
-    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
-    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
-    <StartWhenAvailable>true</StartWhenAvailable>
-    <Enabled>true</Enabled>
-    <ExecutionTimeLimit>PT1H</ExecutionTimeLimit>
-    <Priority>7</Priority>
-  </Settings>
-  <Actions Context="Author">
-    <Exec>
-      <Command>C:\\Users\\John Smith\\.wienerdog\\schedules\\wienerdog-catchup.cmd</Command>
-    </Exec>
-  </Actions>
-</Task>
-`;
+// A7 hardening pass (ADR-0028 R16): the Windows task binds the COMPLETE
+// authorization command into the REGISTERED <Arguments> (cmd.exe as <Command>),
+// not a reopened wrapper file. Fixtures for the cmd-argument golden.
+const WIN_NODE = 'C:\\Program Files\\nodejs\\node.exe';
+const WIN_LAUNCHER = 'C:\\Users\\ada\\.wienerdog\\launcher\\launch.js';
+const WIN_DESC = 'C:\\Users\\ada\\.wienerdog\\state\\descriptors\\dream.json';
+const WIN_HOME = 'C:\\Users\\ada';
+const WIN_CORE = 'C:\\Users\\ada\\.wienerdog';
+// Off-Windows, windowsCmdExePath falls back to C:\Windows (no SystemRoot).
+const WIN_CMD = 'C:\\Windows\\System32\\cmd.exe';
+// The exact bound argument string: `%SystemRoot%\System32\cmd.exe /d /s /v:off
+// /c "…"` scrubbing+binding every scheduled env var then invoking node+launcher
+// with the bound descriptor/expect-digest. This is the mutation-sensitive golden;
+// the XML tests only assert it is embedded (XML-escaped) verbatim.
+const EXPECTED_DREAM_ARGS =
+  '/d /s /v:off /c "' +
+  'set "HOME=C:\\Users\\ada" & ' +
+  'set "WIENERDOG_HOME=C:\\Users\\ada\\.wienerdog" & ' +
+  'set "NODE_OPTIONS=" & ' +
+  'set "NODE_PATH=" & ' +
+  'set "CLAUDE_CONFIG_DIR=" & ' +
+  'set "CODEX_HOME=" & ' +
+  'set "ANTHROPIC_API_KEY=" & ' +
+  'set "USERPROFILE=C:\\Users\\ada" & ' +
+  '"C:\\Program Files\\nodejs\\node.exe" "C:\\Users\\ada\\.wienerdog\\launcher\\launch.js" ' +
+  'dream --descriptor "C:\\Users\\ada\\.wienerdog\\state\\descriptors\\dream.json" ' +
+  '--expect-digest sha256:deadbeef"';
 
 test('scheduler-generators: launchdPlist matches the golden byte-for-byte', () => {
   const out = gen.launchdPlist({
@@ -225,6 +179,7 @@ test('scheduler-generators: launchdPlist matches the golden byte-for-byte', () =
     descriptor: DESC,
     expectDigest: DIGEST,
     home: HOME,
+    core: CORE,
     logDir: '/Users/ada/.wienerdog/logs/daily-digest',
   });
   assert.equal(out, EXPECTED_PLIST);
@@ -236,6 +191,7 @@ test('scheduler-generators: catchupPlist matches the golden byte-for-byte', () =
     launcher: LAUNCHER,
     expectDigest: DIGEST,
     home: HOME,
+    core: CORE,
     logDir: '/Users/ada/.wienerdog/logs/catchup',
   });
   assert.equal(out, EXPECTED_CATCHUP);
@@ -265,6 +221,7 @@ test('scheduler-generators: catchupPlist binds --job-digests when a map token is
     expectDigest: DIGEST,
     jobDigests: token,
     home: HOME,
+    core: CORE,
     logDir: '/Users/ada/.wienerdog/logs/catchup',
   });
   assert.match(out, /<string>--job-digests<\/string>/, 'the map flag is present');
@@ -275,16 +232,21 @@ test('scheduler-generators: catchupPlist binds --job-digests when a map token is
   assert.deepEqual(gen.decodeJobDigests(bound).map, { dream: `sha256:${'c'.repeat(64)}` });
 });
 
-test('scheduler-generators: the Windows catch-up wrapper carries --job-digests bare (base64url is metachar-free)', () => {
+test('scheduler-generators: the Windows catch-up cmd Arguments carry --job-digests bare inline (base64url is metachar-free)', () => {
   const token = gen.encodeJobDigests({ dream: `sha256:${'d'.repeat(64)}` });
-  const w = gen.windowsLauncherWrapper({
+  const argline = gen.windowsCmdArguments({
     node: 'C:\\node.exe',
     launcher: 'C:\\wd\\launch.js',
     home: 'C:\\Users\\ada',
+    core: 'C:\\Users\\ada\\.wienerdog',
     launchArgs: ['--catch-up', '--expect-digest', DIGEST, '--job-digests', token],
   });
-  // base64url matches the wrapper's safe-charset test, so the token is UNQUOTED.
-  assert.match(w, new RegExp(`--job-digests ${token}(\\r\\n|$)`));
+  // base64url matches the bare cmd-token charset, so the token is UNQUOTED and
+  // bound INLINE in the registered arguments — not a separate mutable file.
+  assert.match(argline, new RegExp(`--job-digests ${token}"$`));
+  // The whole command is a single cmd.exe /c string; nothing references a .cmd file.
+  assert.match(argline, /^\/d \/s \/v:off \/c "/);
+  assert.doesNotMatch(argline, /\.cmd\b/);
 });
 
 test('scheduler-generators: decodeJobDigests fails closed on malformed / oversized / shape-invalid input (never throws)', () => {
@@ -320,6 +282,7 @@ test('scheduler-generators: systemdService matches the golden byte-for-byte', ()
       descriptor: DESC,
       expectDigest: DIGEST,
       home: HOME,
+      core: CORE,
     }),
     EXPECTED_SERVICE
   );
@@ -341,6 +304,7 @@ test('scheduler-generators: launchdPlist XML-escapes node/launcher/logDir path v
     descriptor: DESC,
     expectDigest: DIGEST,
     home: HOME,
+    core: CORE,
     logDir: '/var/log/a&b<c>d',
   });
   assert.match(out, /<string>\/opt\/a&amp;b\/node<\/string>/);
@@ -358,6 +322,7 @@ test('scheduler-generators: catchupPlist XML-escapes node/launcher/logDir path v
     launcher: '/opt/<wienerdog>/wienerdog.js',
     expectDigest: DIGEST,
     home: HOME,
+    core: CORE,
     logDir: '/var/log/a&b<c>d',
   });
   assert.match(out, /<string>\/opt\/a&amp;b\/node<\/string>/);
@@ -377,6 +342,7 @@ test('scheduler-generators: launchdPlist is byte-identical to the golden for a n
     descriptor: DESC,
     expectDigest: DIGEST,
     home: HOME,
+    core: CORE,
     logDir: '/Users/ada/.wienerdog/logs/daily-digest',
   });
   assert.equal(out, EXPECTED_PLIST);
@@ -414,6 +380,7 @@ test('scheduler-generators: systemdService ExecStart matches the golden (quoted 
       descriptor: DESC,
       expectDigest: DIGEST,
       home: HOME,
+      core: CORE,
     }),
     EXPECTED_SERVICE
   );
@@ -501,62 +468,88 @@ test('scheduler-generators: windowsXmlEscape escapes the five entities and keeps
   );
 });
 
-test('scheduler-generators: windowsDreamTaskXml matches the golden byte-for-byte', () => {
-  const out = gen.windowsDreamTaskXml({
-    name: 'dream',
-    hour: 3,
-    minute: 30,
-    wrapper: 'C:\\Users\\John Smith\\.wienerdog\\schedules\\wienerdog-dream.cmd',
-    userId: 'WS\\ada',
+// A7 hardening pass (ADR-0028 R16): windowsCmdArguments binds the COMPLETE
+// authorization command; windowsCmdExePath is the cmd.exe <Command>.
+
+test('scheduler-generators: windowsCmdExePath resolves the absolute cmd.exe (SystemRoot, else C:\\Windows fallback)', () => {
+  assert.equal(gen.windowsCmdExePath({ SystemRoot: 'D:\\Win' }), 'D:\\Win\\System32\\cmd.exe');
+  assert.equal(gen.windowsCmdExePath({ windir: 'E:\\W' }), 'E:\\W\\System32\\cmd.exe');
+  assert.equal(gen.windowsCmdExePath({}), 'C:\\Windows\\System32\\cmd.exe');
+});
+
+test('scheduler-generators: windowsCmdArguments binds env scrub/bind + node+launcher inline, byte-for-byte', () => {
+  const argline = gen.windowsCmdArguments({
+    node: WIN_NODE,
+    launcher: WIN_LAUNCHER,
+    home: WIN_HOME,
+    core: WIN_CORE,
+    launchArgs: ['dream', '--descriptor', WIN_DESC, '--expect-digest', DIGEST],
   });
-  assert.equal(out, EXPECTED_DREAM);
+  assert.equal(argline, EXPECTED_DREAM_ARGS);
+  // WIENERDOG_HOME is bound to the registration-time core (fix #2) and NODE_OPTIONS
+  // is cleared BEFORE node runs; both are INLINE in the registered arguments.
+  assert.match(argline, /set "WIENERDOG_HOME=C:\\Users\\ada\\.wienerdog"/);
+  assert.ok(argline.indexOf('set "NODE_OPTIONS="') < argline.indexOf('"C:\\Program Files\\nodejs\\node.exe"'));
+  // No authorization datum lives in a reopened file — it's one cmd.exe /c string.
+  assert.doesNotMatch(argline, /\.cmd\b/);
+});
+
+test('scheduler-generators: cmdQuotedToken doubles trailing backslashes and throws on an embedded quote', () => {
+  assert.equal(gen.cmdQuotedToken('C:\\Users\\ada'), 'C:\\Users\\ada');
+  assert.equal(gen.cmdQuotedToken('C:\\dir\\'), 'C:\\dir\\\\'); // trailing \\ doubled
+  assert.equal(gen.cmdQuotedToken('C:\\a & b\\x'), 'C:\\a & b\\x'); // & literal in quotes
+  assert.throws(() => gen.cmdQuotedToken('C:\\a"b'), WienerdogError);
+});
+
+test('scheduler-generators: windowsDreamTaskXml binds cmd.exe <Command> + the bound <Arguments> (A7 hardening pass, R16)', () => {
+  const argline = gen.windowsCmdArguments({
+    node: WIN_NODE, launcher: WIN_LAUNCHER, home: WIN_HOME, core: WIN_CORE,
+    launchArgs: ['dream', '--descriptor', WIN_DESC, '--expect-digest', DIGEST],
+  });
+  const out = gen.windowsDreamTaskXml({
+    name: 'dream', hour: 3, minute: 5, command: WIN_CMD, argline, userId: 'WS\\a<d>a',
+  });
+  assert.match(out, /<StartBoundary>2020-01-01T03:05:00<\/StartBoundary>/);
+  // <Command> is cmd.exe; <Arguments> is the bound argline, XML-escaped verbatim.
+  assert.match(out, /<Command>C:\\Windows\\System32\\cmd\.exe<\/Command>/);
+  assert.ok(out.includes(`<Arguments>${gen.windowsXmlEscape(argline)}</Arguments>`), out);
+  // The auth args live in the REGISTERED <Arguments> (needs registration privilege
+  // to change), NOT a reopened .cmd wrapper file.
+  assert.doesNotMatch(out, /\.cmd\b/);
+  // The expect-digest is carried INLINE (escaped) inside <Arguments>.
+  assert.match(out, /--expect-digest sha256:deadbeef/);
+  assert.match(out, /<UserId>WS\\a&lt;d&gt;a<\/UserId>/);
   // battery + missed-run settings the dream depends on (ADR-0018).
   assert.match(out, /<DisallowStartIfOnBatteries>false<\/DisallowStartIfOnBatteries>/);
-  assert.match(out, /<StopIfGoingOnBatteries>false<\/StopIfGoingOnBatteries>/);
   assert.match(out, /<StartWhenAvailable>true<\/StartWhenAvailable>/);
 });
 
-test('scheduler-generators: windowsDreamTaskXml zero-pads hour/minute and XML-escapes the wrapper Command + userId (WP-157 F8)', () => {
-  const out = gen.windowsDreamTaskXml({
-    name: 'dream',
-    hour: 3,
-    minute: 5,
-    wrapper: 'C:\\a & b\\wienerdog-dream.cmd',
-    userId: 'WS\\a<d>a',
+test('scheduler-generators: windowsCatchupTaskXml binds cmd.exe <Command> + the catch-up <Arguments> with --job-digests inline (R16)', () => {
+  const token = gen.encodeJobDigests({ dream: `sha256:${'e'.repeat(64)}` });
+  const argline = gen.windowsCmdArguments({
+    node: WIN_NODE, launcher: WIN_LAUNCHER, home: WIN_HOME, core: WIN_CORE,
+    launchArgs: ['--catch-up', '--expect-digest', DIGEST, '--job-digests', token],
   });
-  assert.match(out, /<StartBoundary>2020-01-01T03:05:00<\/StartBoundary>/);
-  // WP-157 F8: the task Command is the env-scrubbing cmd wrapper (node/launcher/
-  // descriptor/digest moved INTO the wrapper), XML-escaped; no <Arguments>.
-  assert.match(out, /<Command>C:\\a &amp; b\\wienerdog-dream.cmd<\/Command>/);
-  assert.doesNotMatch(out, /<Arguments>/);
-  assert.match(out, /<UserId>WS\\a&lt;d&gt;a<\/UserId>/);
-});
-
-test('scheduler-generators: windowsCatchupTaskXml matches the golden byte-for-byte', () => {
-  const out = gen.windowsCatchupTaskXml({
-    wrapper: 'C:\\Users\\John Smith\\.wienerdog\\schedules\\wienerdog-catchup.cmd',
-    userId: 'WS\\ada',
-  });
-  assert.equal(out, EXPECTED_WIN_CATCHUP);
-  // no LogonTrigger (it needs admin to register); hourly TimeTrigger is the sole
-  // trigger + the missed-run/battery settings (WP-074 / ADR-0018 amendment).
+  const out = gen.windowsCatchupTaskXml({ command: WIN_CMD, argline, userId: 'WS\\ada' });
+  // no LogonTrigger (needs admin); hourly TimeTrigger only + missed-run settings.
   assert.doesNotMatch(out, /<LogonTrigger>/);
   assert.match(out, /<Interval>PT1H<\/Interval>/);
-  // WP-157 F8: the Command is the env-scrubbing catch-up cmd wrapper.
-  assert.match(out, /<Command>.*wienerdog-catchup\.cmd<\/Command>/);
-  assert.doesNotMatch(out, /<Arguments>/);
+  assert.match(out, /<Command>C:\\Windows\\System32\\cmd\.exe<\/Command>/);
+  assert.ok(out.includes(`<Arguments>${gen.windowsXmlEscape(argline)}</Arguments>`), out);
+  // The per-job digest MAP is bound INLINE in the registered arguments, not a file.
+  assert.match(out, new RegExp(`--job-digests ${token}`));
+  assert.doesNotMatch(out, /\.cmd\b/);
   assert.match(out, /<DisallowStartIfOnBatteries>false<\/DisallowStartIfOnBatteries>/);
-  assert.match(out, /<StopIfGoingOnBatteries>false<\/StopIfGoingOnBatteries>/);
   assert.match(out, /<StartWhenAvailable>true<\/StartWhenAvailable>/);
 });
 
 test('scheduler-generators: windowsTaskXmlBytes prepends the UTF-16 LE BOM and round-trips', () => {
+  const argline = gen.windowsCmdArguments({
+    node: WIN_NODE, launcher: WIN_LAUNCHER, home: WIN_HOME, core: WIN_CORE,
+    launchArgs: ['dream', '--descriptor', WIN_DESC, '--expect-digest', DIGEST],
+  });
   const xml = gen.windowsDreamTaskXml({
-    name: 'dream',
-    hour: 3,
-    minute: 30,
-    wrapper: 'C:\\Users\\John Smith\\.wienerdog\\schedules\\wienerdog-dream.cmd',
-    userId: 'WS\\ada',
+    name: 'dream', hour: 3, minute: 30, command: WIN_CMD, argline, userId: 'WS\\ada',
   });
   const buf = gen.windowsTaskXmlBytes(xml);
   assert.ok(Buffer.isBuffer(buf));
@@ -576,88 +569,65 @@ test('scheduler-generators: windowsTaskXmlBytes prepends the UTF-16 LE BOM and r
 // vars + ambient credential/config roots and bind the authorized HOME.
 // -------------------------------------------------------------------------
 
-test('scheduler-generators: launchdPlist EnvironmentVariables clears NODE_OPTIONS/NODE_PATH + binds HOME (F8/R4)', () => {
+test('scheduler-generators: launchdPlist EnvironmentVariables clears NODE_OPTIONS/NODE_PATH + binds HOME + WIENERDOG_HOME (F8/R4 + fix #2)', () => {
   const out = gen.launchdPlist({
     name: 'daily-digest', hour: 7, minute: 0, node: '/n', launcher: LAUNCHER,
-    descriptor: DESC, expectDigest: DIGEST, home: '/Users/bob', logDir: '/l',
+    descriptor: DESC, expectDigest: DIGEST, home: '/Users/bob', core: '/Users/bob/.wienerdog', logDir: '/l',
   });
   assert.match(out, /<key>EnvironmentVariables<\/key>/);
   // NODE_OPTIONS + NODE_PATH set to the empty string (launchd overrides inherited).
   assert.match(out, /<key>NODE_OPTIONS<\/key>\n\s*<string><\/string>/);
   assert.match(out, /<key>NODE_PATH<\/key>\n\s*<string><\/string>/);
   assert.match(out, /<key>HOME<\/key>\n\s*<string>\/Users\/bob<\/string>/);
+  // fix #2: WIENERDOG_HOME bound to the registration-time core, overriding ambient.
+  assert.match(out, /<key>WIENERDOG_HOME<\/key>\n\s*<string>\/Users\/bob\/\.wienerdog<\/string>/);
   assert.match(out, /<key>CLAUDE_CONFIG_DIR<\/key>\n\s*<string><\/string>/);
   assert.match(out, /<key>ANTHROPIC_API_KEY<\/key>\n\s*<string><\/string>/);
 });
 
-test('scheduler-generators: catchupPlist EnvironmentVariables clears NODE_OPTIONS/NODE_PATH + binds HOME (F8/R4)', () => {
-  const out = gen.catchupPlist({ node: '/n', launcher: LAUNCHER, expectDigest: DIGEST, home: '/Users/bob', logDir: '/l' });
+test('scheduler-generators: catchupPlist EnvironmentVariables clears NODE_OPTIONS/NODE_PATH + binds HOME + WIENERDOG_HOME (F8/R4 + fix #2)', () => {
+  const out = gen.catchupPlist({ node: '/n', launcher: LAUNCHER, expectDigest: DIGEST, home: '/Users/bob', core: '/Users/bob/.wienerdog', logDir: '/l' });
   assert.match(out, /<key>NODE_OPTIONS<\/key>\n\s*<string><\/string>/);
   assert.match(out, /<key>NODE_PATH<\/key>\n\s*<string><\/string>/);
   assert.match(out, /<key>HOME<\/key>\n\s*<string>\/Users\/bob<\/string>/);
+  assert.match(out, /<key>WIENERDOG_HOME<\/key>\n\s*<string>\/Users\/bob\/\.wienerdog<\/string>/);
 });
 
-test('scheduler-generators: systemdService Environment= clears NODE_OPTIONS/NODE_PATH + binds HOME (F8/R4)', () => {
-  const out = gen.systemdService({ name: 'x', node: '/n', launcher: LAUNCHER, descriptor: DESC, expectDigest: DIGEST, home: '/home/bob' });
+test('scheduler-generators: systemdService Environment= clears NODE_OPTIONS/NODE_PATH + binds HOME + WIENERDOG_HOME (F8/R4 + fix #2)', () => {
+  const out = gen.systemdService({ name: 'x', node: '/n', launcher: LAUNCHER, descriptor: DESC, expectDigest: DIGEST, home: '/home/bob', core: '/home/bob/.wienerdog' });
   assert.match(out, /^Environment=NODE_OPTIONS=$/m);
   assert.match(out, /^Environment=NODE_PATH=$/m);
   assert.match(out, /^Environment=HOME="\/home\/bob"$/m);
+  // fix #2: WIENERDOG_HOME bound to the registration-time core.
+  assert.match(out, /^Environment=WIENERDOG_HOME="\/home\/bob\/\.wienerdog"$/m);
   assert.match(out, /^Environment=CLAUDE_CONFIG_DIR=$/m);
   assert.match(out, /^Environment=ANTHROPIC_API_KEY=$/m);
   // The clears precede ExecStart so the launcher's node never sees them.
   assert.ok(out.indexOf('Environment=NODE_OPTIONS=') < out.indexOf('ExecStart='));
 });
 
-test('scheduler-generators: the Windows cmd wrapper clears NODE_OPTIONS/NODE_PATH + cred roots and binds HOME before node (F8/A10)', () => {
-  const w = gen.windowsLauncherWrapper({
+test('scheduler-generators: windowsCmdArguments clears NODE_OPTIONS/NODE_PATH + cred roots and binds HOME + WIENERDOG_HOME before node (F8/A10 + fix #2)', () => {
+  const argline = gen.windowsCmdArguments({
     node: 'C:\\node.exe',
     launcher: 'C:\\wd\\launch.js',
     home: 'C:\\Users\\Bob',
+    core: 'C:\\Users\\Bob\\.wienerdog',
     launchArgs: ['dream', '--descriptor', 'C:\\wd\\d.json', '--expect-digest', DIGEST],
   });
   // Security-critical clears use quoted empty assignments (%-safe).
-  assert.match(w, /set "NODE_OPTIONS="/);
-  assert.match(w, /set "NODE_PATH="/);
-  assert.match(w, /set "CLAUDE_CONFIG_DIR="/);
-  assert.match(w, /set "CODEX_HOME="/);
-  assert.match(w, /set "ANTHROPIC_API_KEY="/);
-  assert.match(w, /set "HOME=C:\\Users\\Bob"/);
-  assert.match(w, /set "USERPROFILE=C:\\Users\\Bob"/);
+  assert.match(argline, /set "NODE_OPTIONS="/);
+  assert.match(argline, /set "NODE_PATH="/);
+  assert.match(argline, /set "CLAUDE_CONFIG_DIR="/);
+  assert.match(argline, /set "CODEX_HOME="/);
+  assert.match(argline, /set "ANTHROPIC_API_KEY="/);
+  assert.match(argline, /set "HOME=C:\\Users\\Bob"/);
+  assert.match(argline, /set "USERPROFILE=C:\\Users\\Bob"/);
+  // fix #2: WIENERDOG_HOME bound to the registration-time core.
+  assert.match(argline, /set "WIENERDOG_HOME=C:\\Users\\Bob\\.wienerdog"/);
   // The clears come BEFORE the node invocation (so the launcher's node is clean).
-  assert.ok(w.indexOf('set "NODE_OPTIONS="') < w.indexOf('"C:\\node.exe"'));
+  assert.ok(argline.indexOf('set "NODE_OPTIONS="') < argline.indexOf('"C:\\node.exe"'));
   // node + launcher quoted; the descriptor path (spaces-capable) quoted; flags bare.
-  assert.match(w, /"C:\\node.exe" "C:\\wd\\launch.js" dream --descriptor "C:\\wd\\d.json" --expect-digest sha256:deadbeef/);
-  // CRLF line endings (canonical for .cmd).
-  assert.ok(w.includes('\r\n'));
-});
-
-test('scheduler-generators: the Windows wrapper path helpers namespace under <core>/schedules', () => {
-  const { getPaths } = require('../../src/core/paths');
-  const paths = getPaths({ HOME: '/home/ada', WIENERDOG_HOME: '/home/ada/.wienerdog' });
-  assert.equal(gen.windowsWrapperFileName('dream'), 'wienerdog-dream.cmd');
-  const path = require('node:path');
-  assert.equal(gen.windowsWrapperFile(paths, 'catchup'), path.join(paths.core, 'schedules', 'wienerdog-catchup.cmd'));
-});
-
-test('scheduler-generators: ensureCatchup backstop renders the launcher + real args, never "undefined" (F14)', { skip: process.platform !== 'darwin' }, () => {
-  const fs = require('node:fs');
-  const os = require('node:os');
-  const path = require('node:path');
-  const { getPaths } = require('../../src/core/paths');
-  const vendor = require('../../src/core/vendor');
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-gen-catchup-'));
-  const paths = getPaths({ HOME: root, WIENERDOG_HOME: path.join(root, 'wd') });
-  fs.mkdirSync(paths.state, { recursive: true });
-  const calls = [];
-  const res = gen.ensureCatchup(paths, { loader: (a) => (calls.push(a), { status: 0 }) });
-  assert.equal(res.changed, true);
-  const plistPath = path.join(gen.launchAgentsDir(paths.home), 'ai.wienerdog.catchup.plist');
-  const text = fs.readFileSync(plistPath, 'utf8');
-  // Old bug: catchupPlist got {node, bin, logDir} → launcher undefined → a
-  // "<string>undefined</string>" argv. F14 passes {node, launcher, expectDigest,
-  // home, logDir}.
-  assert.doesNotMatch(text, /undefined/, 'no "undefined" argv (F14 signature)');
-  assert.ok(text.includes(vendor.launcherPath(paths)), 'renders the out-of-tree launcher path');
-  assert.match(text, /<string>--catch-up<\/string>/, 'runs --catch-up');
-  assert.match(text, /<key>EnvironmentVariables<\/key>/, 'binds the scrubbed env (F8)');
+  assert.match(argline, /"C:\\node.exe" "C:\\wd\\launch.js" dream --descriptor "C:\\wd\\d.json" --expect-digest sha256:deadbeef/);
+  // cmd.exe /c wrapper with AutoRun disabled and delayed expansion off.
+  assert.match(argline, /^\/d \/s \/v:off \/c "/);
 });

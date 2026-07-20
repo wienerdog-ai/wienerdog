@@ -393,8 +393,24 @@ async function run(argv) {
   // NOT call `sync`, so ensureDreamSchedule → registerPlatform mints the catch-up
   // per-job digest map here, from the freshly-derived dream descriptor (built on the
   // complete pin store committed by the WP-154 preflight above), never a stale map.
-  const { ensureDreamSchedule } = require('./schedule');
+  const { ensureDreamSchedule, repointSchedules } = require('./schedule');
   const dream = ensureDreamSchedule(paths);
+  // A7 hardening pass: adopt just changed the descriptor-covered vault root +
+  // layout. `ensureDreamSchedule` no-ops when a dream job ALREADY existed
+  // (pre-adoption), which would leave that job's OS entry / descriptor / catch-up
+  // map bound to the PRE-adoption vault — so normal AND catch-up fires would refuse
+  // on descriptor drift until a separate `sync`. Re-derive + re-register EVERY
+  // existing job through `repointSchedules` (the sole repair/mint owner) so the
+  // loaded per-job digest and the catch-up map reflect the ADOPTED vault. Idempotent
+  // for the just-created dream (identical content → no reload); best-effort so an
+  // unsupported platform never fails adoption.
+  try {
+    const rebindManifest = manifestLib.load(paths);
+    repointSchedules(paths, rebindManifest);
+    manifestLib.save(paths, rebindManifest);
+  } catch {
+    /* re-binding existing schedules is best-effort — adoption already succeeded */
+  }
 
   // 12. Next steps.
   console.log('\nwienerdog: adoption complete.');

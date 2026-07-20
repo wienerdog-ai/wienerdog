@@ -302,13 +302,26 @@ surface: an environment variable that chose what a job runs.
   the same fail-closed posture as a normal fire — never a silent skip. **On
   Linux**, there is no separate catch-up map: the native systemd timer
   (`Persistent=true`) simply replays the same per-job unit that a normal fire
-  uses, which is already digest-authorized on its own. **Honest boundary:** a
-  catch-up fire that carries no authorization token at all — a pre-sync
-  registration, or a manual invocation — has nothing to check against and falls
-  back to the pre-hardening, config-driven behavior until the next `wienerdog
-  sync` mints the token. An OS-registered catch-up entry always carries the token
-  once synced; stripping it back out of an already-registered entry needs
-  scheduler-registration privilege, which is outside A7's scope (A12's).
+  uses, which is already digest-authorized on its own. **Honest boundary — the
+  token-absent disposition splits by sub-case:** *stripping* the token from an
+  already-registered entry, a *manual* `run-job --catch-up`, or a *direct*
+  launcher call each needs scheduler-registration privilege or a local shell —
+  A12 (arbitrary same-user), outside A7's scope. But a **pre-WP catch-up
+  registration that was never re-synced** (an install whose code was upgraded
+  out-of-band and never ran an attended `sync`) is **NOT blanket-A12**: it carries
+  no token, so a scoped `config.yaml` writer can reach the token-less, config-
+  driven legacy path. This is a **bounded residual** — the normal update→sync path
+  re-mints the token and closes it; only an install that upgrades its code yet
+  never runs `sync` stays exposed. An OS-registered catch-up entry always carries
+  the token once synced.
+- **Catch-up relies on the OS-entry HOME binding; it does not re-assert a per-job
+  bound HOME.** A normal fire has a per-job descriptor whose digest-covered `home`
+  the launcher re-asserts; catch-up has no per-job descriptor, so its child keeps
+  the HOME the OS entry bound at registration (launchd `EnvironmentVariables` /
+  systemd `Environment=` / the Windows cmd arguments). This asymmetry (WP-157
+  review) is intentional — the registration-time HOME binding is the anchor for
+  catch-up. The `WIENERDOG_HOME` core, by contrast, is re-anchored by the launcher
+  from its own on-disk location for both paths.
 - **Enforcement reductions, stated where the guarantees are made.** A
   **dev**-stance install (a checkout, not the packaged app) skips the app-tree
   byte digest — tracked-source edits are expected there — but still verifies the
@@ -316,11 +329,16 @@ surface: an environment variable that chose what a job runs.
   dev containment (the live app resolves to the authorized checkout root). On
   **Windows**, executable verification is reduced to "is this a regular file at
   the pinned location" — the owner/mode/ancestor-writable checks that run on
-  macOS/Linux do not apply (no equivalent POSIX concept), and the generated
-  Windows batch wrapper has one accepted residual: a literal `%` in an absolute
-  core path is still batch-expandable on the final exec line (the security-critical
-  environment clears use `%`-safe quoted assignments; core paths live under the
-  user's own home, not attacker-chosen text). **Linux catch-up**, as above, has no
+  macOS/Linux do not apply (no equivalent POSIX concept). The Windows scheduler
+  task binds its COMPLETE authorization command (the env scrub/bind and the
+  node+launcher invocation with the bound descriptor + expect-digest, and for
+  catch-up the per-job digest map) into the **registered `<Arguments>`** of an
+  absolute `cmd.exe` — stored in the Task Scheduler DB, so changing it needs
+  registration privilege — not a reopened wrapper file a scoped config-writer could
+  edit. One accepted residual remains: a literal `%` in an absolute core path is
+  still cmd-expandable (the security-critical environment clears use `%`-safe
+  quoted assignments; core paths live under the user's own home, not attacker-chosen
+  text). **Linux catch-up**, as above, has no
   authorization map at all — it relies entirely on the normal per-job path already
   being authorized.
 - **Where a refusal surfaces.** A launcher or catch-up refusal is a durable alert

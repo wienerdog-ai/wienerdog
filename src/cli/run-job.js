@@ -745,12 +745,21 @@ function noticeIfCatchupMissing(paths, platform) {
  * not-due. Only jobs whose live `deriveDescriptorDigest` matches the bound map are
  * eligible; due-ness is then computed from that already-authorized schedule.
  *
- * When NO token is bound (a pre-WP registration not yet re-synced, a Linux per-job
- * replay, or a manual invocation), there is no all-job map to authorize against and
- * catch-up degrades to the legacy config-driven behavior (WP-157's explicitly-
- * incomplete intermediate); an attended `sync` re-mints the token and enforcement
- * activates. Stripping the token from the loaded registration needs
- * scheduler-registration capability (A12), so this cannot be leveraged in-scope.
+ * When NO token is bound there is no all-job map to authorize against and catch-up
+ * degrades to the legacy config-driven behavior (WP-157's explicitly-incomplete
+ * intermediate); an attended `sync` re-mints the token and enforcement activates.
+ * The token-absent disposition splits by sub-case, stated honestly:
+ *   - STRIP the token from the loaded registration, a MANUAL `run-job --catch-up`
+ *     invocation, or a DIRECT launcher call: each needs scheduler-registration
+ *     capability or a local shell — A12 (arbitrary same-user), out of A7's scope.
+ *   - A PRE-WP catch-up registration that was never re-synced (an out-of-band
+ *     upgrade whose new bytes landed but which never ran an attended `sync`): NOT
+ *     blanket-A12 — a scoped config-writer CAN reach the token-less legacy path
+ *     until that sync. It is a BOUNDED residual: the normal update→sync path
+ *     re-mints the token and closes it; only an install that upgrades the code yet
+ *     never runs `sync` stays exposed. Recorded in ADR-0028 + THREAT-MODEL.
+ *   - A Linux per-job replay never carries a map by design (its `.timer
+ *     Persistent=true` replays the already-descriptor-authorized `.service`).
  * @param {import('../core/paths').WienerdogPaths} paths
  * @param {{now?:Date, sendAlert?: typeof defaultSendAlert,
  *          loader?: (argv:string[])=>{status:number}, platform?: NodeJS.Platform,

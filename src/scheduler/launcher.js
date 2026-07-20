@@ -34,7 +34,6 @@
  */
 
 const fs = require('node:fs');
-const os = require('node:os');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { spawnSync } = require('node:child_process');
@@ -44,12 +43,27 @@ function sha256(b) {
   return crypto.createHash('sha256').update(b).digest('hex');
 }
 
-/** Minimal path resolution — enough for containment / tree hash / descriptor
- *  read WITHOUT requiring src/core/paths.js from the (unverified) app tree.
- *  @param {NodeJS.ProcessEnv} env @returns {{core:string, state:string, appDir:string, appCurrent:string}} */
-function resolveCorePaths(env) {
-  const home = env.HOME || os.homedir();
-  const core = env.WIENERDOG_HOME && env.WIENERDOG_HOME !== '' ? env.WIENERDOG_HOME : path.join(home, '.wienerdog');
+/**
+ * The ANCHORED core — the launcher's OWN on-disk location, not ambient
+ * `WIENERDOG_HOME` (A7 hardening pass, ADR-0028). The launcher is vendored at
+ * `<core>/launcher/launch.js` and the OS entry invokes it by absolute path, so
+ * `path.dirname(path.dirname(<launcher file>))` is the registration-time core an
+ * attacker cannot relocate with an `environment.d`/`launchctl setenv`
+ * `WIENERDOG_HOME` write. The OS entry ALSO binds `WIENERDOG_HOME=<core>` (so the
+ * child's `getPaths` agrees), but the launcher does not TRUST that env value —
+ * it re-derives the core from its own path and re-asserts it into the child env.
+ * @param {string} launcherFile  the launcher's absolute path (default __filename)
+ * @returns {string} the anchored core dir
+ */
+function anchoredCore(launcherFile = __filename) {
+  return path.dirname(path.dirname(launcherFile));
+}
+
+/** Build the inlined core paths from an ALREADY-ANCHORED core — verification,
+ *  the app tree, and the durable refuse-alert state dir all hang off it, never an
+ *  ambient-`WIENERDOG_HOME`-derived one.
+ *  @param {string} core @returns {{core:string, state:string, appDir:string, appCurrent:string}} */
+function corePathsFrom(core) {
   return {
     core,
     state: path.join(core, 'state'),
@@ -190,14 +204,17 @@ function readDescriptorFile(descriptorPath) {
 }
 
 /** Build the env used to RE-DERIVE the descriptor digest at fire time. Binds the
- *  authorized home (digest-covered, WP-157 R4/A10) so a hostile ambient HOME
- *  cannot relocate the credential/config root without drifting the digest, and
- *  drops WIENERDOG_DEV so an inherited value can no longer flip a prod install to
- *  the unverified dev path (F10). Code-loading vars are irrelevant to a pure
- *  digest re-derivation but are dropped for cleanliness (F8).
+ *  ANCHORED core into WIENERDOG_HOME (A7 hardening pass) so the re-derivation reads
+ *  config/pins from the registration-time core, never an ambient-WIENERDOG_HOME-
+ *  relocated one. Binds the authorized home (digest-covered, WP-157 R4/A10) so a
+ *  hostile ambient HOME cannot relocate the credential/config root without drifting
+ *  the digest, and drops WIENERDOG_DEV so an inherited value can no longer flip a
+ *  prod install to the unverified dev path (F10). Code-loading vars are irrelevant
+ *  to a pure digest re-derivation but are dropped for cleanliness (F8).
  *  @param {NodeJS.ProcessEnv} env @param {string|undefined} boundHome
+ *  @param {string} boundCore  the anchored core → WIENERDOG_HOME
  *  @returns {NodeJS.ProcessEnv} */
-function derivationEnv(env, boundHome) {
+function derivationEnv(env, boundHome, boundCore) {
   const e = { ...env };
   delete e.WIENERDOG_DEV;
   delete e.NODE_OPTIONS;
@@ -205,6 +222,7 @@ function derivationEnv(env, boundHome) {
   delete e.CLAUDE_CONFIG_DIR;
   delete e.CODEX_HOME;
   delete e.ANTHROPIC_API_KEY;
+  if (boundCore !== undefined) e.WIENERDOG_HOME = boundCore;
   if (boundHome !== undefined) {
     e.HOME = boundHome;
     e.USERPROFILE = boundHome;
@@ -255,7 +273,7 @@ function verifyAndResolve(p, name, o) {
       return { ok: false, reason: `cannot resolve app/current: ${err.message}` };
     }
     const liveDev = isDev(target);
-    const derivEnv = derivationEnv(env, boundHome);
+    const derivEnv = derivationEnv(env, boundHome, p.core);
     const runArgs = [path.join(target, 'bin', 'wienerdog.js'), 'run-job', name];
 
     // Stance must match: a prod entry over a dev-looking tree (planted .git) or a
@@ -395,7 +413,9 @@ function parseArgv(argv) {
  * spawn NOTHING.
  * @param {string[]} argv  process.argv.slice(2)
  * @param {{env?:NodeJS.ProcessEnv, platform?:NodeJS.Platform, spawn?:typeof spawnSync,
- *          exit?:(code:number)=>void}} [opts]  test seams; production passes none
+ *          exit?:(code:number)=>void, core?:string, launcherFile?:string}} [opts]
+ *   test seams; production passes none. `core`/`launcherFile` let a unit test
+ *   pin the anchored core (production derives it from the launcher's own path).
  * @returns {number} the exit code (also passed to opts.exit / process.exit)
  */
 function main(argv, opts = {}) {
@@ -403,7 +423,12 @@ function main(argv, opts = {}) {
   const platform = opts.platform || process.platform;
   const spawn = opts.spawn || spawnSync;
   const exit = opts.exit || ((code) => process.exit(code));
-  const p = resolveCorePaths(env);
+  // The core is ANCHORED to the launcher's own on-disk location (A7 hardening
+  // pass) — an ambient/`environment.d` WIENERDOG_HOME cannot relocate verification
+  // state or the durable refuse alert. The OS entry also binds WIENERDOG_HOME, but
+  // the launcher does not trust that env value for its own paths.
+  const core = opts.core || anchoredCore(opts.launcherFile);
+  const p = corePathsFrom(core);
   const { positionals, flags, error } = parseArgv(argv);
   const isCatchup = flags['catch-up'] === true;
   const name = isCatchup ? '--catch-up' : positionals[0];
@@ -435,17 +460,22 @@ function main(argv, opts = {}) {
 
   if (!verdict.ok) return refuse(name, verdict.reason);
 
-  // Child spawn env (defense-in-depth, F8 + A10/R4): scrub the code-loading Node
-  // vars (they run attacker code in a child node before its own main) and the
-  // ambient credential/config roots (reconstructed deterministically by run-job's
-  // buildCleanEnv), and re-assert the digest-bound authorized home so an ambient
-  // HOME/USERPROFILE cannot move the credential/config account.
+  // Child spawn env (defense-in-depth, F8 + A10/R4 + A7 hardening pass): scrub the
+  // code-loading Node vars (they run attacker code in a child node before its own
+  // main) and the ambient credential/config roots (reconstructed deterministically
+  // by run-job's buildCleanEnv); re-assert the ANCHORED core into WIENERDOG_HOME so
+  // an ambient value (or a copied byte-identical tree) cannot make the child
+  // relocate its state/locks/logs; and re-assert the digest-bound authorized home
+  // so an ambient HOME/USERPROFILE cannot move the credential/config account.
+  // (Catch-up has no per-job descriptor, so verdict.home is undefined and the child
+  // keeps the OS-entry-bound HOME — the intentional WP-157-review asymmetry.)
   const childEnv = { ...env };
   delete childEnv.NODE_OPTIONS;
   delete childEnv.NODE_PATH;
   delete childEnv.CLAUDE_CONFIG_DIR;
   delete childEnv.CODEX_HOME;
   delete childEnv.ANTHROPIC_API_KEY;
+  childEnv.WIENERDOG_HOME = core;
   if (verdict.home !== undefined) {
     childEnv.HOME = verdict.home;
     if (platform === 'win32') childEnv.USERPROFILE = verdict.home;

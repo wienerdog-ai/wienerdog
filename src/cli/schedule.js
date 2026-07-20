@@ -165,28 +165,6 @@ function ensureEntry(manifest, filePath, content, unload) {
 }
 
 /**
- * Write a regular `file` (WP-157 Windows env-scrub wrapper) idempotently and
- * record a `file` manifest entry once. Unlike ensureEntry (scheduler-entry), the
- * wrapper is plain content the OS entry's <Command> points at.
- * @param {import('../core/manifest').Manifest} manifest
- * @param {string} filePath @param {string|Buffer} content
- */
-function ensureFile(manifest, filePath, content) {
-  const buf = Buffer.isBuffer(content) ? content : Buffer.from(content);
-  let onDisk = false;
-  try {
-    onDisk = fs.readFileSync(filePath).equals(buf);
-  } catch {
-    onDisk = false;
-  }
-  const hasEntry = manifest.entries.some((e) => e.kind === 'file' && e.path === filePath);
-  if (onDisk && hasEntry) return;
-  fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  fs.writeFileSync(filePath, buf);
-  if (!hasEntry) manifestLib.record(manifest, { kind: 'file', path: filePath });
-}
-
-/**
  * Ensure the macOS catch-up plist exists and is registered (once, idempotent).
  * @param {import('../core/paths').WienerdogPaths} paths
  * @param {import('../core/manifest').Manifest} manifest
@@ -206,6 +184,7 @@ function ensureCatchup(paths, manifest, loader, uid, jobDigests) {
     expectDigest: catchupExpectDigest(paths),
     jobDigests,
     home: paths.home,
+    core: paths.core,
     logDir,
   });
   const label = 'ai.wienerdog.catchup';
@@ -231,20 +210,22 @@ function ensureCatchup(paths, manifest, loader, uid, jobDigests) {
  */
 function ensureWindowsCatchup(paths, manifest, loader, jobDigests) {
   const userId = gen.windowsCurrentUserId();
-  // WP-157 F8: write the env-scrubbing cmd wrapper (manifest `file` entry) and
-  // point the task's <Command> at it — the XML has no per-task env element.
-  const wrapperPath = gen.windowsWrapperFile(paths, 'catchup');
+  // A7 hardening pass (ADR-0028 R16): the catch-up authorization command — the env
+  // scrub/bind AND node+launcher with the app-tree expect-digest + the per-job
+  // digest MAP — is bound into the REGISTERED task's <Arguments> (cmd.exe as
+  // <Command>), not a reopened wrapper file. Stripping/editing --job-digests then
+  // needs registration privilege (schtasks /create), closing the legacy bypass.
   const launchArgs = ['--catch-up', '--expect-digest', catchupExpectDigest(paths)];
   if (typeof jobDigests === 'string' && jobDigests !== '') launchArgs.push('--job-digests', jobDigests);
-  const wrapperContent = gen.windowsLauncherWrapper({
+  const argline = gen.windowsCmdArguments({
     node: gen.nodePath(),
     launcher: launcherPathFor(paths),
     home: paths.home,
+    core: paths.core,
     launchArgs,
   });
-  ensureFile(manifest, wrapperPath, wrapperContent);
   const content = gen.windowsTaskXmlBytes(
-    gen.windowsCatchupTaskXml({ wrapper: wrapperPath, userId })
+    gen.windowsCatchupTaskXml({ command: gen.windowsCmdExePath(), argline, userId })
   );
   const xmlPath = gen.windowsTaskFile(paths, 'catchup');
   const taskName = gen.windowsTaskName('catchup'); // '\Wienerdog\catchup'
@@ -314,7 +295,7 @@ function registerPlatformEntries(paths, manifest, o, loader, platform = process.
     const logDir = path.join(paths.logs, o.name);
     const label = gen.launchdLabel(o.name);
     const plistPath = path.join(gen.launchAgentsDir(paths.home), `${label}.plist`);
-    const content = gen.launchdPlist({ ...o, node, launcher: b.launcher, descriptor: b.descriptor, expectDigest: b.expectDigest, home: paths.home, logDir });
+    const content = gen.launchdPlist({ ...o, node, launcher: b.launcher, descriptor: b.descriptor, expectDigest: b.expectDigest, home: paths.home, core: paths.core, logDir });
     const unload = ['launchctl', 'bootout', `gui/${uid}/${label}`];
     let loaded = true;
     let changed = ensureEntry(manifest, plistPath, content, unload);
@@ -337,7 +318,7 @@ function registerPlatformEntries(paths, manifest, o, loader, platform = process.
     const timerPath = path.join(dir, `${unitBase}.timer`);
     const servicePath = path.join(dir, `${unitBase}.service`);
     const timerText = gen.systemdTimer(o);
-    const serviceText = gen.systemdService({ name: o.name, node, launcher: b.launcher, descriptor: b.descriptor, expectDigest: b.expectDigest, home: paths.home });
+    const serviceText = gen.systemdService({ name: o.name, node, launcher: b.launcher, descriptor: b.descriptor, expectDigest: b.expectDigest, home: paths.home, core: paths.core });
     const timerUnload = ['systemctl', '--user', 'disable', '--now', `${unitBase}.timer`];
     const timerChanged = ensureEntry(manifest, timerPath, timerText, timerUnload);
     const serviceChanged = ensureEntry(manifest, servicePath, serviceText, null);
@@ -378,24 +359,26 @@ function registerPlatformEntries(paths, manifest, o, loader, platform = process.
     const taskName = gen.windowsTaskName(o.name); // '\Wienerdog\<name>'
     const userId = gen.windowsCurrentUserId();
     const dreamXmlPath = gen.windowsTaskFile(paths, o.name);
-    // WP-157 F8: write the env-scrubbing cmd wrapper (manifest `file` entry) and
-    // point the task's <Command> at it — the XML has no per-task env element, so
-    // this is the only fully-controlled place to clear NODE_OPTIONS/NODE_PATH and
-    // bind HOME before node runs.
-    const wrapperPath = gen.windowsWrapperFile(paths, o.name);
-    const wrapperContent = gen.windowsLauncherWrapper({
+    // A7 hardening pass (ADR-0028 R16): the COMPLETE authorization command — the
+    // env scrub/bind (WIENERDOG_HOME, HOME, NODE_OPTIONS, …) AND node+launcher with
+    // the bound descriptor/expect-digest — is bound into the REGISTERED task's
+    // <Arguments> (cmd.exe as <Command>), stored in the Task Scheduler DB at
+    // /create. It is NOT a reopened wrapper file a scoped config-writer could edit
+    // without registration privilege.
+    const argline = gen.windowsCmdArguments({
       node,
       launcher: b.launcher,
       home: paths.home,
+      core: paths.core,
       launchArgs: [o.name, '--descriptor', b.descriptor, '--expect-digest', b.expectDigest],
     });
-    ensureFile(manifest, wrapperPath, wrapperContent);
     const content = gen.windowsTaskXmlBytes(
       gen.windowsDreamTaskXml({
         name: o.name,
         hour: o.hour,
         minute: o.minute,
-        wrapper: wrapperPath,
+        command: gen.windowsCmdExePath(),
+        argline,
         userId,
       })
     );
@@ -510,6 +493,7 @@ function repairCatchup(paths, manifest, opts = {}) {
       expectDigest: catchupExpectDigest(paths),
       jobDigests,
       home: paths.home,
+      core: paths.core,
       logDir: path.join(paths.logs, 'catchup'),
     });
     if (!writeCanonicalSchedule(plistPath, content) || !manifestLib.withinSchedulerRoot(plistPath, roots)) return {};
@@ -522,17 +506,16 @@ function repairCatchup(paths, manifest, opts = {}) {
   const xmlPath = gen.windowsTaskFile(paths, 'catchup');
   const probeArgv = gen.deriveProbeArgv(xmlPath, platform);
   if (!probeArgv || probe(probeArgv) !== 'missing') return {};
-  const wrapperPath = gen.windowsWrapperFile(paths, 'catchup');
   const launchArgs = ['--catch-up', '--expect-digest', catchupExpectDigest(paths)];
   if (jobDigests) launchArgs.push('--job-digests', jobDigests);
-  const wrapperContent = gen.windowsLauncherWrapper({
+  const argline = gen.windowsCmdArguments({
     node: gen.nodePath(),
     launcher: launcherPathFor(paths),
     home: paths.home,
+    core: paths.core,
     launchArgs,
   });
-  const content = gen.windowsTaskXmlBytes(gen.windowsCatchupTaskXml({ wrapper: wrapperPath, userId }));
-  if (!writeCanonicalSchedule(wrapperPath, wrapperContent)) return {};
+  const content = gen.windowsTaskXmlBytes(gen.windowsCatchupTaskXml({ command: gen.windowsCmdExePath(), argline, userId }));
   if (!writeCanonicalSchedule(xmlPath, content) || !manifestLib.withinSchedulerRoot(xmlPath, roots)) return {};
   const loaded = loader(['schtasks', '/create', '/tn', gen.windowsTaskName('catchup'), '/xml', xmlPath, '/f']).status === 0;
   return loaded ? { notice: 'restored the missing catch-up registration.' } : { notice: "catch-up task rewritten but the OS scheduler did not accept it — run 'wienerdog doctor'." };
@@ -607,7 +590,7 @@ function reloadJob(paths, job, loader, platform) {
     const logDir = path.join(paths.logs, job.name);
     const label = gen.launchdLabel(job.name);
     const plistPath = path.join(gen.launchAgentsDir(paths.home), `${label}.plist`);
-    const content = gen.launchdPlist({ name: job.name, hour, minute, node, launcher: b.launcher, descriptor: b.descriptor, expectDigest: b.expectDigest, home: paths.home, logDir });
+    const content = gen.launchdPlist({ name: job.name, hour, minute, node, launcher: b.launcher, descriptor: b.descriptor, expectDigest: b.expectDigest, home: paths.home, core: paths.core, logDir });
     if (!writeCanonicalSchedule(plistPath, content)) return false;
     if (!manifestLib.withinSchedulerRoot(plistPath, roots)) return false;
     return loader(['launchctl', 'bootstrap', `gui/${uid}`, plistPath]).status === 0;
@@ -619,7 +602,7 @@ function reloadJob(paths, job, loader, platform) {
     const timerPath = path.join(dir, `${unitBase}.timer`);
     const servicePath = path.join(dir, `${unitBase}.service`);
     const timerText = gen.systemdTimer({ name: job.name, hour, minute });
-    const serviceText = gen.systemdService({ name: job.name, node, launcher: b.launcher, descriptor: b.descriptor, expectDigest: b.expectDigest, home: paths.home });
+    const serviceText = gen.systemdService({ name: job.name, node, launcher: b.launcher, descriptor: b.descriptor, expectDigest: b.expectDigest, home: paths.home, core: paths.core });
     if (!writeCanonicalSchedule(servicePath, serviceText)) return false;
     if (!writeCanonicalSchedule(timerPath, timerText)) return false;
     if (!manifestLib.withinSchedulerRoot(timerPath, roots)) return false;
@@ -630,11 +613,9 @@ function reloadJob(paths, job, loader, platform) {
   if (platform === 'win32') {
     const taskName = gen.windowsTaskName(job.name); // validates + throws on a hostile name
     const userId = gen.windowsCurrentUserId();
-    const wrapperPath = gen.windowsWrapperFile(paths, job.name);
-    const wrapperContent = gen.windowsLauncherWrapper({ node, launcher: b.launcher, home: paths.home, launchArgs: [job.name, '--descriptor', b.descriptor, '--expect-digest', b.expectDigest] });
-    if (!writeCanonicalSchedule(wrapperPath, wrapperContent)) return false;
+    const argline = gen.windowsCmdArguments({ node, launcher: b.launcher, home: paths.home, core: paths.core, launchArgs: [job.name, '--descriptor', b.descriptor, '--expect-digest', b.expectDigest] });
     const xmlPath = gen.windowsTaskFile(paths, job.name);
-    const content = gen.windowsTaskXmlBytes(gen.windowsDreamTaskXml({ name: job.name, hour, minute, wrapper: wrapperPath, userId }));
+    const content = gen.windowsTaskXmlBytes(gen.windowsDreamTaskXml({ name: job.name, hour, minute, command: gen.windowsCmdExePath(), argline, userId }));
     if (!writeCanonicalSchedule(xmlPath, content)) return false;
     if (!manifestLib.withinSchedulerRoot(xmlPath, roots)) return false;
     return loader(['schtasks', '/create', '/tn', taskName, '/xml', xmlPath, '/f']).status === 0;

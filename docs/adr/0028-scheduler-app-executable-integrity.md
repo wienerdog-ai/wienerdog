@@ -611,6 +611,17 @@ implemented as dated amendments in the six specs and detailed in `FIX-PLAN.md`.
   A12. Not claimed as closed.
 - The `makeTreeFilesReadOnly` control is **files-only** (best-effort friction,
   defeated by a same-user `chmod`); the app-tree digest is the real guard.
+- **[A7 hardening pass] Catch-up token-absent — a pre-WP registration never
+  re-synced is a BOUNDED residual, not blanket-A12.** The token-absent catch-up
+  disposition splits: *stripping* the bound `--job-digests` from an already-
+  registered entry, a *manual* `run-job --catch-up`, or a *direct* launcher call
+  each need scheduler-registration privilege or a local shell — A12. BUT a
+  **pre-WP catch-up registration whose code was upgraded out-of-band and never ran
+  an attended `sync`** carries no token, so a scoped `config.yaml` writer reaches
+  the token-less legacy path. This is bounded: the normal update→sync path re-mints
+  the token and closes it; the residual is only an install that upgrades code yet
+  never runs `sync`. Stated identically in `docs/THREAT-MODEL.md` and the
+  `run-job.js` `catchUp` doc-comment.
 
 ### Refuse-surface decision
 
@@ -618,3 +629,69 @@ The launcher refuse text pointed to `wienerdog doctor`, which reads no A7 state.
 The durable alert surfaces in the **digest banner** (`alerts.jsonl`); the refuse
 text and runbook point there + to `wienerdog sync`. Wiring `doctor` to A7 state is
 a deferred follow-up (candidate WP-162), not built in this pass.
+
+## Amendment (2026-07-20) — A7 hardening pass (final Codex adversarial sweep)
+
+The cumulative A7 implementation was swept once more; three integration/platform
+defects were fixed on top of the green clusters. These refine — not reverse — the
+decisions above.
+
+1. **[R16] The Windows loaded-registration trust anchor is the REGISTERED
+   `<Arguments>`, never a mutable wrapper file.** Amendment #5 (2026-07-19)
+   permitted a generated `.cmd`/`.ps1` wrapper as one option for the Windows
+   env-scrub. That option is **withdrawn**: the wrapper is a REOPENED file at the
+   same scoped-write surface as `config.yaml`, so it carried ALL the authorization
+   data (the `NODE_OPTIONS`/`NODE_PATH` scrub, `--descriptor`, `--expect-digest`,
+   and the catch-up `--job-digests` map) in a place an attacker with a scoped
+   schedule-file write could edit **without registration privilege** — stripping
+   `--job-digests` (legacy catch-up bypass), changing `--expect-digest`, or
+   replacing the body with arbitrary code before the launcher. **Corrected
+   contract:** the Task Scheduler task registers absolute `%SystemRoot%\System32\
+   cmd.exe` as `<Command>` and binds the COMPLETE command into `<Arguments>`
+   (`/d /s /v:off /c "set "NODE_OPTIONS=" && … && set "WIENERDOG_HOME=<core>" && …
+   && "<node>" "<launcher>" <name> --descriptor "<p>" --expect-digest <d>
+   [--job-digests <b64>]"`). `<Arguments>` is stored in the Task Scheduler DB at
+   `/create`; changing it needs registration privilege — the same anchor class as
+   launchd's loaded `ProgramArguments`/systemd's `ExecStart`. Every embedded
+   path/value goes through a cmd-token encoder (double-quote → throw; trailing
+   backslashes doubled; `& | < > ( ) ^` literal inside quotes; the digest/map are
+   base64url/hex, already safe). The wrapper file — and its `file` manifest entry
+   — is removed. The `%`-in-core-path residual is unchanged and accepted.
+
+2. **[A10/R4 extension] The registration-time core is bound + re-anchored.** The
+   launcher picked its core (and thus its verification state, locks, logs, and the
+   durable refuse alert) from ambient `WIENERDOG_HOME`, which scheduler entries did
+   not bind — an `environment.d`/`launchctl setenv` write could point verification
+   and the refusal alert at an attacker-selected core, a copied byte-identical tree
+   could relocate the child's state with no descriptor drift, and a legit non-default
+   `WIENERDOG_HOME` install failed when the scheduler did not inherit the shell
+   override. **Corrected contract:** every OS entry binds `WIENERDOG_HOME=<core>`
+   (launchd `EnvironmentVariables` / systemd `Environment=` / the Windows cmd
+   arguments), AND the launcher re-anchors the core from its **own on-disk
+   location** (`path.dirname(path.dirname(<launcher file>))`, since it is vendored
+   at `<core>/launcher/launch.js` and invoked by absolute path) rather than
+   trusting the ambient env value — so it targets the refuse alert at the anchored
+   state dir, re-derives the descriptor from the anchored core, and re-asserts the
+   anchored `WIENERDOG_HOME` into the child spawn. The legit non-default core flows
+   through the binding without the shell override.
+
+3. **[R7 extension] `adopt` re-binds an existing dream schedule.** `adopt` mutates
+   the descriptor-covered vault root/layout then called create-only
+   `ensureDreamSchedule`, which no-ops when a dream job already exists — leaving the
+   OS entry/descriptor/catch-up map bound to the PRE-adoption vault (normal AND
+   catch-up fires refuse on descriptor drift until a separate `sync`). **Corrected
+   contract:** after mutating config, adopt routes through `repointSchedules` (the
+   sole repair/mint owner) to re-derive + re-register EVERY existing job, so the
+   loaded per-job digest and the catch-up map reflect the adopted vault with no
+   follow-up `sync`.
+
+4. **Catch-up HOME asymmetry (intentional).** Catch-up has no per-job descriptor,
+   so — unlike a normal fire, which re-asserts the digest-covered `home` — its child
+   keeps the HOME the OS entry bound at registration. Catch-up intentionally relies
+   on that OS-entry HOME binding and does not re-assert a per-job bound HOME (the
+   WP-157-review asymmetry). The `WIENERDOG_HOME` core is re-anchored for both paths
+   (fix #2).
+
+5. **Orphan removed.** `generators.ensureCatchup` (the token-LESS catch-up backstop
+   whose sole production caller the catch-up WP removed) is deleted with its export
+   and test — a future caller would have re-opened the no-`--job-digests` bypass.
