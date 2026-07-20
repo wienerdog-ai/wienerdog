@@ -408,25 +408,26 @@ top of the block:
 
 - `MARKER` / `$marker` — the exact poisoned text you are hunting (plain text,
   not a regular expression).
-- `HARNESSES` / `$Harnesses` — **declare every harness Wienerdog was installed
-  into** (`claude`, `codex`, or both). The script FAILS — no pass is printed —
-  if the list is empty, if any declared harness's file is missing, if `sync`
-  skipped a declared harness's adapter, or if the number of files actually
-  checked differs from the declared count, so an environment that hides your
-  real files cannot produce a false pass. Verify your declaration against the
-  install manifest: the block prints every `managed-block` entry recorded in
-  `$CORE/install-manifest.json` (a `CLAUDE.md` path = the `claude` harness, an
-  `AGENTS.md` path = the `codex` harness) — reconcile any difference before
-  trusting a pass.
+- `HARNESSES` / `$Harnesses` — a **cross-check** declaration of every harness
+  Wienerdog was installed into (`claude`, `codex`, or both). It is NOT what
+  drives coverage — the drill runs `sync` first and then checks **every**
+  `managed-block` file the **post-sync** `$CORE/install-manifest.json` lists,
+  whatever you typed (see the coverage bullet after the blocks) — but the drill
+  FAILS if your declared set does not match that post-sync manifest set, so a
+  mis-declaration is surfaced. A duplicate name is rejected outright. You cannot
+  under-declare to dodge a harness: `sync` re-records a missing managed-block
+  entry, so the omitted harness reappears in the driving set and is checked
+  anyway.
 
 The block also **pins the harness-detection environment**: it unsets
 `CLAUDE_CONFIG_DIR` and `CODEX_HOME` before `sync` and the file checks, so
-both the file loop and `sync`'s adapter detection use the real default
+`sync`'s adapter detection and manifest write use the real default
 directories — an ambient redirect of either variable would otherwise make
-your real `CLAUDE.md`/`AGENTS.md` invisible to every check at once. If (and
-only if) you INSTALLED Wienerdog into a custom Claude/Codex directory, edit
-the block to set the matching variable to that directory instead of unsetting
-it.
+your real `CLAUDE.md`/`AGENTS.md` invisible. If (and only if) you INSTALLED
+Wienerdog into a custom Claude/Codex directory, edit the block to set the
+matching variable to that directory instead of unsetting it — `sync` then
+records the manifest with those custom paths, and the post-sync
+manifest-driven checks follow them.
 
 Run in a session where the step-1 re-export already set `WIENERDOG_HOME`.
 
@@ -444,29 +445,20 @@ fail() { printf 'DRILL FAIL: %s\n' "$1"; exit 1; }
 unset CLAUDE_CONFIG_DIR CODEX_HOME
 case "$HARNESSES" in *[a-z]*) ;; *) fail "HARNESSES is empty — declare every installed harness";; esac
 
-# manifest cross-check: print the recorded managed-block entries so you can
-# verify the HARNESSES declaration (CLAUDE.md = claude, AGENTS.md = codex)
-echo "manifest managed-block entries:"
-node -e '
-  const m = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
-  for (const e of m.entries || []) if (e.kind === "managed-block") console.log("  " + e.path);
-' "$CORE/install-manifest.json" || fail "could not read $CORE/install-manifest.json"
-# env-INDEPENDENT coverage anchor: how many managed blocks the machine actually has
-MANIFEST_COUNT="$(node -e '
-  const m = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
-  process.stdout.write(String((m.entries || []).filter((e) => e.kind === "managed-block").length));
-' "$CORE/install-manifest.json")" || fail "could not count managed blocks in $CORE/install-manifest.json"
-
-# NORMALIZE the declaration: reject any duplicate outright, build the unique set,
-# and anchor its size to the manifest (a count match is env-independent, so it does
-# NOT false-fail a custom-dir install — unlike a path match, kept operator-side)
-seen=' '; unique_declared=0
+# resolve the DECLARED harness files (reject duplicates); this is the operator
+# CROSS-CHECK — the post-sync manifest (below) is the authoritative driver
+seen=' '; declared_files=""
 for h in $HARNESSES; do
   case "$seen" in *" $h "*) fail "harness '$h' declared more than once";; esac
-  seen="$seen$h "; unique_declared=$((unique_declared+1))
+  seen="$seen$h "
+  case "$h" in
+    claude) declared_files="$declared_files${CLAUDE_CONFIG_DIR:-$HOME/.claude}/CLAUDE.md
+" ;;
+    codex)  declared_files="$declared_files${CODEX_HOME:-$HOME/.codex}/AGENTS.md
+" ;;
+    *) fail "unknown harness '$h' (declare: claude codex)" ;;
+  esac
 done
-[ "$unique_declared" -eq "$MANIFEST_COUNT" ] \
-  || fail "declared $unique_declared harness(es) but the manifest records $MANIFEST_COUNT managed block(s) — under/over-declaring cannot dodge a harness"
 
 # (a) drive the installed hook fail-closed; byte-compare against the digest
 OUT="$(WIENERDOG_JOB= WIENERDOG_HOME="$CORE" "$CORE/bin/session-start.sh")" \
@@ -488,36 +480,61 @@ printf '%s' "$OUT" | node -e '
 # regenerated digest, checked directly (belt-and-suspenders)
 grep -qF -- "$MARKER" "$CORE/state/digest.md" && fail "marker still in the digest"
 
-# (b) Table D three-check conjunction, per DECLARED harness file
+# (b) run sync FIRST — idempotent; it REPAIRS the managed blocks AND re-records any
+# managed-block manifest entry a prior interrupted sync (or tampering) dropped
 SYNC_OUT="$(WIENERDOG_HOME="$CORE" wienerdog sync 2>&1)" \
   || { printf '%s\n' "$SYNC_OUT"; fail "sync exited non-zero"; }
 printf '%s\n' "$SYNC_OUT" | grep -qiE 'managed block not updated|digest not found|AGENTS\.override' \
   && { printf '%s\n' "$SYNC_OUT"; fail "sync reported a Table D BLOCK signal"; }
-checked_list=""
-for h in $HARNESSES; do
-  case "$h" in
-    claude) f="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/CLAUDE.md"
-            skip='Claude Code (not detected|config is no longer present); skipping adapter' ;;
-    codex)  f="${CODEX_HOME:-$HOME/.codex}/AGENTS.md"
-            skip='Codex CLI (not detected|config is no longer present); skipping adapter' ;;
-    *) fail "unknown harness '$h' (declare: claude codex)" ;;
+
+# (c) the POST-SYNC manifest is the AUTHORITATIVE must-check set: sync just re-recorded
+# every managed-block file it owns, so a harness whose entry was missing is now listed
+# and cannot be skipped by under-declaring. Read the managed-block PATHS post-sync.
+echo "post-sync manifest managed-block files:"
+manifest_files="$(node -e '
+  const m = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+  for (const e of m.entries || []) if (e.kind === "managed-block") console.log(e.path);
+' "$CORE/install-manifest.json")" || fail "could not read $CORE/install-manifest.json"
+manifest_files="$(printf '%s\n' "$manifest_files" | sed '/^$/d' | sort -u)"
+[ -n "$manifest_files" ] || fail "post-sync manifest has no managed-block entries — nothing to prove"
+printf '%s\n' "$manifest_files" | sed 's/^/  /'
+
+# check EVERY post-sync managed-block file (the DRIVER — runs regardless of the
+# declaration, so a repaired-but-undeclared harness is still checked)
+checked_files=""
+while IFS= read -r f; do
+  [ -n "$f" ] || continue
+  case "$f" in
+    */CLAUDE.md) skip='Claude Code (not detected|config is no longer present); skipping adapter' ;;
+    */AGENTS.md) skip='Codex CLI (not detected|config is no longer present); skipping adapter' ;;
+    *) fail "unexpected managed-block file in the manifest: $f" ;;
   esac
   printf '%s\n' "$SYNC_OUT" | grep -qE "$skip" \
-    && { printf '%s\n' "$SYNC_OUT"; fail "sync skipped the DECLARED harness '$h'"; }
-  [ -f "$f" ] || fail "declared harness '$h' has no file at $f (installed-but-missing is a FAILURE)"
+    && { printf '%s\n' "$SYNC_OUT"; fail "sync skipped the adapter for managed-block file $f"; }
+  [ -f "$f" ] || fail "managed-block file missing on disk: $f"
   grep -qF -- "$MARKER" "$f" && fail "marker found in $f (whole-file grep)"
   b=$(grep -cF -- '<!-- wienerdog:begin -->' "$f")
   e=$(grep -cF -- '<!-- wienerdog:end -->' "$f")
   { [ "$b" -eq 1 ] && [ "$e" -eq 1 ]; } || fail "$f has $b begin / $e end sentinels (need exactly one pair)"
-  checked_list="$checked_list$f
+  checked_files="$checked_files$f
 "
-done
-# count UNIQUE checked file PATHS (newline-delimited, space-safe), then the net gate:
-# unique-checked == unique-declared == manifest managed-block count, and at least one.
-unique_checked=$(printf '%s' "$checked_list" | sort -u | grep -c .)
-{ [ "$unique_checked" -ge 1 ] && [ "$unique_checked" -eq "$unique_declared" ] && [ "$unique_declared" -eq "$MANIFEST_COUNT" ]; } \
-  || fail "coverage gate: unique_checked=$unique_checked unique_declared=$unique_declared manifest=$MANIFEST_COUNT (all must agree)"
-echo "DRILL PASS — $unique_checked unique harness file(s) checked; record this output with the date"
+done <<EOF
+$manifest_files
+EOF
+
+# (d) operator cross-check: the DECLARED set must equal the post-sync manifest set
+# (catches a mis-declaration — the manifest already drove the checks above regardless)
+declared_sorted="$(printf '%s\n' "$declared_files" | sed '/^$/d' | sort -u)"
+if [ "$declared_sorted" != "$manifest_files" ]; then
+  echo "declared:"; printf '%s\n' "$declared_sorted" | sed 's/^/  /'
+  echo "post-sync manifest:"; printf '%s\n' "$manifest_files" | sed 's/^/  /'
+  fail "declared harness set does not match the post-sync manifest managed-block set"
+fi
+# net gate: the set of files actually checked equals the manifest driver set (>=1)
+checked_sorted="$(printf '%s\n' "$checked_files" | sed '/^$/d' | sort -u)"
+[ "$checked_sorted" = "$manifest_files" ] || fail "coverage gate: checked set != post-sync manifest set"
+count=$(printf '%s\n' "$manifest_files" | grep -c .)
+echo "DRILL PASS — $count managed-block file(s) checked (manifest-driven); record this output with the date"
 ```
 
 Windows (PowerShell — paste as one block; the hook is a bash script, and
@@ -536,24 +553,19 @@ Remove-Item Env:CLAUDE_CONFIG_DIR -ErrorAction SilentlyContinue
 Remove-Item Env:CODEX_HOME -ErrorAction SilentlyContinue
 if (-not $Harnesses -or $Harnesses.Count -eq 0) { Fail "Harnesses list is empty - declare every installed harness" }
 
-# manifest cross-check: print the recorded managed-block entries so you can
-# verify the Harnesses declaration (CLAUDE.md = claude, AGENTS.md = codex)
-Write-Host "manifest managed-block entries:"
-node -e 'const m = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); for (const e of m.entries || []) if (e.kind === "managed-block") console.log("  " + e.path);' "$core\install-manifest.json"
-if ($LASTEXITCODE -ne 0) { Fail "could not read $core\install-manifest.json" }
-# env-INDEPENDENT coverage anchor: how many managed blocks the machine actually has
-$manifestCount = [int](node -e 'const m = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); process.stdout.write(String((m.entries || []).filter((e) => e.kind === "managed-block").length));' "$core\install-manifest.json")
-if ($LASTEXITCODE -ne 0) { Fail "could not count managed blocks in $core\install-manifest.json" }
-
-# NORMALIZE the declaration: reject any duplicate outright, build the unique set,
-# and anchor its size to the manifest (a count match is env-independent, so it does
-# NOT false-fail a custom-dir install - unlike a path match, kept operator-side)
-$seen = @(); $uniqueDeclared = 0
+# resolve the DECLARED harness files (reject duplicates); this is the operator
+# CROSS-CHECK - the post-sync manifest (below) is the authoritative driver
+$homeDir = if ($env:HOME) { $env:HOME } else { $env:USERPROFILE }  # HOME before USERPROFILE, matching the code
+$seen = @(); $declaredFiles = @()
 foreach ($h in $Harnesses) {
   if ($seen -contains $h) { Fail "harness '$h' declared more than once" }
-  $seen += $h; $uniqueDeclared++
+  $seen += $h
+  switch ($h) {
+    'claude' { $declaredFiles += if ($env:CLAUDE_CONFIG_DIR) { "$($env:CLAUDE_CONFIG_DIR)\CLAUDE.md" } else { "$homeDir\.claude\CLAUDE.md" } }
+    'codex'  { $declaredFiles += if ($env:CODEX_HOME) { "$($env:CODEX_HOME)\AGENTS.md" } else { "$homeDir\.codex\AGENTS.md" } }
+    default  { Fail "unknown harness '$h' (declare: claude, codex)" }
+  }
 }
-if ($uniqueDeclared -ne $manifestCount) { Fail "declared $uniqueDeclared harness(es) but the manifest records $manifestCount managed block(s) - under/over-declaring cannot dodge a harness" }
 
 # (a) drive the installed hook fail-closed; byte-compare against the digest
 # (positional argument passing - the path is NEVER interpolated into the bash source)
@@ -578,35 +590,52 @@ if ($LASTEXITCODE -ne 0) { Fail "hook envelope check" }
 # regenerated digest, checked directly (belt-and-suspenders)
 if (Select-String -Path "$core\state\digest.md" -SimpleMatch $marker -Quiet) { Fail "marker still in the digest" }
 
-# (b) Table D three-check conjunction, per DECLARED harness file
+# (b) run sync FIRST - idempotent; it REPAIRS the managed blocks AND re-records any
+# managed-block manifest entry a prior interrupted sync (or tampering) dropped
 $sync = wienerdog sync 2>&1
 if ($LASTEXITCODE -ne 0) { $sync; Fail "sync exited non-zero" }
 if ($sync | Select-String -Pattern 'managed block not updated|digest not found|AGENTS\.override' -Quiet) { $sync; Fail "sync reported a Table D BLOCK signal" }
-$homeDir = if ($env:HOME) { $env:HOME } else { $env:USERPROFILE }  # HOME before USERPROFILE, matching the code
+
+# (c) the POST-SYNC manifest is the AUTHORITATIVE must-check set: sync just re-recorded
+# every managed-block file it owns, so a harness whose entry was missing is now listed
+# and cannot be skipped by under-declaring. Read the managed-block PATHS post-sync.
+Write-Host "post-sync manifest managed-block files:"
+$manifestFiles = @(node -e 'const m = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); for (const e of m.entries || []) if (e.kind === "managed-block") console.log(e.path);' "$core\install-manifest.json")
+if ($LASTEXITCODE -ne 0) { Fail "could not read $core\install-manifest.json" }
+$manifestFiles = @($manifestFiles | Where-Object { $_ -ne '' } | Sort-Object -Unique)
+if ($manifestFiles.Count -lt 1) { Fail "post-sync manifest has no managed-block entries - nothing to prove" }
+$manifestFiles | ForEach-Object { Write-Host "  $_" }
+
+# check EVERY post-sync managed-block file (the DRIVER - runs regardless of the
+# declaration, so a repaired-but-undeclared harness is still checked)
 $checkedPaths = @()
-foreach ($h in $Harnesses) {
-  switch ($h) {
-    'claude' { $f = if ($env:CLAUDE_CONFIG_DIR) { "$($env:CLAUDE_CONFIG_DIR)\CLAUDE.md" } else { "$homeDir\.claude\CLAUDE.md" }
-               $skip = 'Claude Code (not detected|config is no longer present); skipping adapter' }
-    'codex'  { $f = if ($env:CODEX_HOME) { "$($env:CODEX_HOME)\AGENTS.md" } else { "$homeDir\.codex\AGENTS.md" }
-               $skip = 'Codex CLI (not detected|config is no longer present); skipping adapter' }
-    default  { Fail "unknown harness '$h' (declare: claude, codex)" }
+foreach ($f in $manifestFiles) {
+  switch ([System.IO.Path]::GetFileName($f)) {
+    'CLAUDE.md' { $skip = 'Claude Code (not detected|config is no longer present); skipping adapter' }
+    'AGENTS.md' { $skip = 'Codex CLI (not detected|config is no longer present); skipping adapter' }
+    default     { Fail "unexpected managed-block file in the manifest: $f" }
   }
-  if ($sync | Select-String -Pattern $skip -Quiet) { $sync; Fail "sync skipped the DECLARED harness '$h'" }
-  if (-not (Test-Path $f)) { Fail "declared harness '$h' has no file at $f (installed-but-missing is a FAILURE)" }
+  if ($sync | Select-String -Pattern $skip -Quiet) { $sync; Fail "sync skipped the adapter for managed-block file $f" }
+  if (-not (Test-Path $f)) { Fail "managed-block file missing on disk: $f" }
   if (Select-String -Path $f -SimpleMatch $marker -Quiet) { Fail "marker found in $f (whole-file grep)" }
   $b = @(Select-String -Path $f -SimpleMatch '<!-- wienerdog:begin -->').Count
   $e = @(Select-String -Path $f -SimpleMatch '<!-- wienerdog:end -->').Count
   if ($b -ne 1 -or $e -ne 1) { Fail "$f has $b begin / $e end sentinels (need exactly one pair)" }
   $checkedPaths += $f
 }
-# count UNIQUE checked file PATHS, then the net gate: unique-checked == unique-declared
-# == manifest managed-block count, and at least one.
-$uniqueChecked = @($checkedPaths | Sort-Object -Unique).Count
-if ($uniqueChecked -lt 1 -or $uniqueChecked -ne $uniqueDeclared -or $uniqueDeclared -ne $manifestCount) {
-  Fail "coverage gate: unique_checked=$uniqueChecked unique_declared=$uniqueDeclared manifest=$manifestCount (all must agree)"
+
+# (d) operator cross-check: the DECLARED set must equal the post-sync manifest set
+# (catches a mis-declaration - the manifest already drove the checks above regardless)
+$declaredSorted = @($declaredFiles | Sort-Object -Unique)
+if (($declaredSorted -join "`n") -ne ($manifestFiles -join "`n")) {
+  Write-Host "declared:"; $declaredSorted | ForEach-Object { Write-Host "  $_" }
+  Write-Host "post-sync manifest:"; $manifestFiles | ForEach-Object { Write-Host "  $_" }
+  Fail "declared harness set does not match the post-sync manifest managed-block set"
 }
-Write-Host "DRILL PASS — $uniqueChecked unique harness file(s) checked; record this output with the date"
+# net gate: the set of files actually checked equals the manifest driver set (>=1)
+$checkedSorted = @($checkedPaths | Sort-Object -Unique)
+if (($checkedSorted -join "`n") -ne ($manifestFiles -join "`n")) { Fail "coverage gate: checked set != post-sync manifest set" }
+Write-Host "DRILL PASS — $($manifestFiles.Count) managed-block file(s) checked (manifest-driven); record this output with the date"
 ```
 
 What each part proves:
@@ -624,27 +653,32 @@ What each part proves:
   they must be **identical** (the hook injects exactly those bytes) — AND
   confirms the poisoned marker does not appear in `additionalContext`. It
   then greps the regenerated digest file directly, belt-and-suspenders.
-- **Check the managed block of every DECLARED harness file via the Table D
-  three-check conjunction.** `sync` runs only the **detected** harness's
-  adapter, and a single-harness (Claude-only **or** Codex-only) install is
-  supported — so the loop applies the Table D checks to `CLAUDE.md` **and/or**
-  `AGENTS.md` exactly as you declared. What used to be operator judgment is
-  now machine-enforced: a DECLARED harness whose file is missing FAILS the
-  drill (installed-but-missing is a failure — while an undeclared,
-  un-installed harness's absent file never blocks), and a DECLARED harness
-  whose adapter `sync` skipped FAILS the drill (the script greps `sync`'s
-  exact skip messages — "not detected; skipping adapter" / "config is no
-  longer present; skipping adapter"). The **coverage gate** is duplicate-proof
-  and anchored to the machine, not just to what you typed: a harness declared
-  **twice** FAILS outright (a repeated name is operator error, surfaced — not
-  silently collapsed), the number of **unique** declared harnesses must equal
-  the count of `managed-block` entries in `$CORE/install-manifest.json` (an
-  **env-independent count** check — so you cannot under-declare to skip a
-  harness, and it never false-fails a custom-dir install because a count is
-  independent of install-time-vs-drill-time directory differences, which is
-  why the path→harness reconciliation stays operator-side), and the number of
-  **unique checked file paths** must equal both — all three counts must agree
-  or the drill FAILS. The `sync` check stays **notice-tolerant**
+- **Check the managed block of every managed-block file the POST-SYNC manifest
+  lists — the manifest drives coverage, not your declaration.** This is the
+  structural closure of the coverage question: the drill runs its `wienerdog
+  sync` **first** (idempotent — it repairs the managed blocks and, crucially,
+  **re-records any `managed-block` manifest entry a prior interrupted sync or
+  tampering had dropped**), then reads the `managed-block` PATHS from the
+  **post-sync** `$CORE/install-manifest.json` and checks **every one** with the
+  Table D three-check conjunction (whole-file marker grep + exactly-one
+  sentinel pair, and a FAIL if `sync` skipped that file's adapter or the file
+  is missing on disk). Because the set comes from the manifest *after* sync
+  re-recorded it, a harness whose entry was missing pre-sync — the case where
+  an operator could previously under-declare and dodge it — is now in the
+  must-check set and gets checked regardless of what you typed. This is
+  **env-consistent** on a custom-dir install for a subtle but solid reason: the
+  drill pins the harness-detection environment (unset `CLAUDE_CONFIG_DIR` /
+  `CODEX_HOME`, or the custom-dir user sets them), and `sync` writes the
+  manifest with the **currently-resolved** paths — so post-sync the manifest
+  paths *are* the drill-time paths, and comparing/deriving files from them can
+  never point off-machine. (This is why a **post-sync** path comparison is
+  safe where an install-time / pre-sync one was not — do not "simplify" it back
+  to a pre-sync count or an operator-count anchor; that reintroduces the exact
+  hole this closes.) Your `HARNESSES` declaration remains as a **cross-check**:
+  a duplicate is rejected outright, and the drill FAILS if your declared set
+  does not equal the post-sync manifest set (catching a mis-declaration — e.g.
+  you thought only Claude was installed but the machine also has Codex). The
+  `sync` check stays **notice-tolerant**
   by construction: it fails only on a non-zero exit or a concrete Table D
   BLOCK message ("managed block not updated", missing digest, a shadowing
   `AGENTS.override`) and lets the two constant Codex info notices pass.

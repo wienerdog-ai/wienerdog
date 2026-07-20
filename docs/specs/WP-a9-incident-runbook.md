@@ -242,6 +242,26 @@ state and act on:
   > must equal both. All three counts must agree or the drill FAILS. The
   > manifest-list-only-for-humans reconciliation from round 2 is kept AND now
   > backed by the machine count check.
+  >
+  > **Fix-pass amendment 5 (2026-07-20, adversarial-review round 4 — STRUCTURAL):**
+  > this is the THIRD finding on the same coverage anchor (round 3 duplicate →
+  > round 4 count → this: pre-sync staleness), so the fix is structural, not
+  > another point-patch. The round-3 `MANIFEST_COUNT` was captured **before** the
+  > drill's `wienerdog sync`, but sync REPAIRS a missing `managed-block` manifest
+  > entry (`applyManagedBlock`/`recordOnce` re-records one it finds absent). So a
+  > dual-harness install whose pre-sync manifest was missing the Codex entry gave
+  > count=1; an operator declaring `claude` passed 1/1/1; then sync restored the
+  > Codex entry and appended around the AGENTS.md orphan — DRILL PASS with Codex
+  > installed and UNCHECKED. Root cause: any anchor captured before sync, and any
+  > operator-declared set, can disagree with the REAL installed set. The fix drives
+  > coverage from the **post-sync** manifest: run sync FIRST, then read the
+  > `managed-block` PATHS and check every one; the operator declaration is demoted
+  > to a cross-check (duplicate-reject + declared-set-must-equal-manifest-set). This
+  > dissolves the round-2 custom-dir concern that kept path comparison operator-side:
+  > the drill pins the detection env and sync writes the manifest with the
+  > CURRENTLY-resolved paths, so post-sync the manifest paths ARE the drill-time
+  > paths — a post-sync path comparison is env-consistent where a pre-sync/install-
+  > time one was not. Do not re-fix this back to a count or a pre-sync read.
 - **The ONLY authoritative way to reach zero running Wienerdog processes is to
   REBOOT after removing every per-job schedule AND the catch-up entry — not
   per-platform process forensics (R4-C, round-4).** After a reboot, with nothing
@@ -631,32 +651,37 @@ headless/`--yes` bypass — it is interactive and shows the exact bytes.
    it *would* inject against the digest. The runbook ships the drill as complete
    copy-paste blocks (bash + PowerShell) that stop at the first failure; a printed
    "DRILL PASS" is the pass.
-   - **The operator DECLARES the installed harness set, and the script enforces it
-     (round-2 F1).** The block's first operator input (`HARNESSES` / `$Harnesses`)
-     lists every harness Wienerdog was installed into (`claude`, `codex`, or both),
-     cross-checkable against the `managed-block` entries the block prints from
-     `$CORE/install-manifest.json` (via a dependency-free `node -e` — node is
-     guaranteed). The **coverage gate is duplicate-proof and manifest-anchored
-     (round-2 F1 / round-3 G1)**: a harness declared **twice** FAILS outright (a
-     repeated name is surfaced operator error, not silently collapsed); the count of
-     **unique declared** harnesses must equal the number of `managed-block` entries in
-     `$CORE/install-manifest.json` (the same dependency-free `node -e` yields the
-     count — an **env-independent** anchor that blocks under-declaring to dodge a
-     harness yet never false-fails a custom-dir install, since a COUNT match is
-     independent of install-time-vs-drill-time dir differences, which is why the
-     path→harness reconciliation stays operator-side); and the count of **unique
-     checked file PATHS** (not loop iterations) must equal both. The script also FAILS
-     (exit nonzero, no PASS) when the declared list is empty, when any declared
-     harness's file is missing, when `sync` printed one of its exact adapter-skip
-     messages ("not detected; skipping adapter" / "config is no longer present;
-     skipping adapter", `sync.js:317–329`) for a DECLARED harness, or when any of the
-     three counts (unique-declared, manifest managed-block, unique-checked) disagree.
-     It also
-     **pins the harness-detection environment** — unsetting `CLAUDE_CONFIG_DIR` and
-     `CODEX_HOME` BEFORE `sync` and the file checks (both variables steer
-     `detectHarnesses` AND the file paths, so an ambient redirect would hide the real
-     files from every check at once); a custom-dir installer consciously sets the
-     matching variable inside the block instead.
+   - **The POST-SYNC manifest DRIVES coverage; the operator declaration is a
+     cross-check (round-2 F1 / round-3 G1 / round-4 structural).** The blocks run the
+     drill's `wienerdog sync` **first** (idempotent; it REPAIRS the managed blocks —
+     `applyManagedBlock`/`recordOnce` re-records any `managed-block` manifest entry a
+     prior interrupted sync or tampering dropped), THEN read the `managed-block` PATHS
+     from the **post-sync** `$CORE/install-manifest.json` (the same dependency-free
+     `node -e` — node is guaranteed) and check **every one** with the Table D
+     three-check conjunction, plus a FAIL if `sync` skipped that file's adapter (its
+     exact messages, `sync.js:317–329`) or the file is missing on disk. Because the
+     must-check set is derived from the manifest *after* sync re-recorded it, a harness
+     whose entry was missing pre-sync — the case an operator could previously dodge by
+     under-declaring — is now in the driving set and is checked regardless of the
+     declaration. This is **env-consistent** on a custom-dir install precisely because
+     the block pins the harness-detection env (unset `CLAUDE_CONFIG_DIR`/`CODEX_HOME`,
+     or the custom-dir user sets them) and `sync` writes the manifest with the
+     **currently-resolved** paths, so the post-sync manifest paths ARE the drill-time
+     paths — a post-sync path comparison can never point off-machine (this is why an
+     install-time / **pre-sync** count-or-path anchor was unsafe and this one is not; do
+     not "simplify" it back to a pre-sync count). The `HARNESSES`/`$Harnesses`
+     declaration stays a **cross-check**: a **duplicate** name is rejected outright
+     (surfaced operator error, not collapsed), and the drill FAILS if the declared set
+     does not equal the post-sync manifest managed-block set (catching a
+     mis-declaration). The net gate (all must hold or DRILL FAIL): `sync` ran clean
+     (notice-tolerant); the set of post-sync managed-block files == the set the drill
+     checked (by resolved path, deduped, ≥1); no adapter-skip for any of them; every
+     envelope + managed-block check passed; the operator declaration matches the
+     manifest set. It also **pins the harness-detection environment** — unsetting
+     `CLAUDE_CONFIG_DIR` and `CODEX_HOME` BEFORE `sync` and the file checks (both steer
+     `detectHarnesses` AND the manifest paths `sync` writes, so an ambient redirect
+     would hide the real files); a custom-dir installer consciously sets the matching
+     variable inside the block instead.
    - **Drive the installed SessionStart hook with the injecting environment.** Run the
      installed hook at `$CORE/bin/session-start.sh` (Table A; the adapter installs it under
      the core — `doctor` does **not** print the path) with `WIENERDOG_HOME` set to the
@@ -866,26 +891,29 @@ the runbook never contains a bare operative `state/<file>` token.
       install — the three checks prove the block clean by construction). The
       new-session observation is an optional extra, not the proof; the proof is tied
       to the ADR-0021 byte-gated injection.
-- [ ] **[Round-2 F1 / Round-3 G1]** The drill's harness coverage is
-      **machine-enforced, not a judgment call**: the copy-paste blocks take an
-      explicit operator declaration of the installed harness set (`HARNESSES` /
-      `$Harnesses`), print the `managed-block` entries from
-      `$CORE/install-manifest.json` (dependency-free `node -e`) so the declaration
-      can be verified, **pin the harness-detection environment by unsetting
-      `CLAUDE_CONFIG_DIR` and `CODEX_HOME` before `sync` and the file checks**
-      (custom-dir installs consciously set the matching variable inside the block),
-      and FAIL — printing no PASS — on an empty declaration, a **duplicate** harness
-      declaration (a repeated name is rejected outright, not collapsed), a missing
-      declared harness file, or a `sync` adapter-skip message ("not detected;
-      skipping adapter" / "config is no longer present; skipping adapter") naming a
-      declared harness. The **coverage gate anchors three counts that must all
-      agree**: the number of **unique declared** harnesses, the number of
-      `managed-block` entries in the manifest (an **env-independent** count anchor —
-      so under-declaring cannot dodge a harness, without false-failing a custom-dir
-      install), and the number of **unique checked file PATHS** (not loop
-      iterations, so a duplicate declaration cannot inflate coverage). A
-      zero-harness, hidden-harness, duplicate-declaration, or under-declared
-      environment can therefore never print DRILL PASS.
+- [ ] **[Round-2 F1 / Round-3 G1 / Round-4 structural]** The drill's harness
+      coverage is **driven by the post-sync manifest, not the operator
+      declaration** — the structural closure of a finding-class that recurred at
+      three sites (declared set → count anchor → pre-sync staleness). The copy-paste
+      blocks run the drill's `wienerdog sync` **first** (idempotent; it re-records
+      any `managed-block` manifest entry a prior interrupted sync or tampering
+      dropped), then read the `managed-block` PATHS from the **post-sync**
+      `$CORE/install-manifest.json` (dependency-free `node -e`) and check **every
+      one** with the Table D three-check conjunction — so a harness whose entry was
+      missing pre-sync (the under-declare dodge) is re-recorded by sync and checked
+      anyway. They **pin the harness-detection environment** (unset
+      `CLAUDE_CONFIG_DIR`/`CODEX_HOME` before `sync`; custom-dir installs set the
+      matching variable), which is what makes the post-sync manifest PATHS
+      env-consistent (they are the drill-time resolved paths `sync` just wrote — so a
+      post-sync path comparison never points off-machine, unlike a pre-sync one). The
+      operator `HARNESSES`/`$Harnesses` declaration is a **cross-check** only: a
+      **duplicate** name FAILS outright, and the drill FAILS if the declared set does
+      not equal the post-sync manifest set. Net gate — all hold or DRILL FAIL: `sync`
+      clean (notice-tolerant); the set of post-sync managed-block files equals the set
+      the drill checked (resolved path, deduped, ≥1); no adapter-skip for any of them;
+      every envelope + managed-block check passed; declaration matches the manifest
+      set. A zero-harness, hidden-harness, duplicate-declaration, under-declared, or
+      pre-sync-stale-manifest environment can therefore never print DRILL PASS.
 - [ ] **[Round-2 F2]** The PowerShell block passes the core path to `bash` as a
       **positional argument** (`bash -c '… "$1" …' _ "$coreFwd"`), never
       interpolated into the bash source, so a path containing an apostrophe,
@@ -967,9 +995,12 @@ grep -nE "launchctl list \| grep ai\.wienerdog|list-timers 'wienerdog-\*'|list-u
 # cross-checks the manifest, blocks on a declared harness's adapter-skip; round-2 F2:
 # the PS->bash core path is positional:
 grep -nE "HARNESSES=|\\\$Harnesses|managed-block|unset CLAUDE_CONFIG_DIR CODEX_HOME|Remove-Item Env:|skipping adapter|bash -c '.*\"\\\$1\"" docs/runbooks/incident.md
-# Round-3 G1: the coverage gate rejects duplicate declarations, counts UNIQUE checked
-# paths, and anchors unique-declared to the manifest managed-block COUNT (all agree):
-grep -nE "declared more than once|unique_declared|uniqueDeclared|MANIFEST_COUNT|manifestCount|unique_checked|uniqueChecked|sort -u|Sort-Object -Unique" docs/runbooks/incident.md
+# Round-3 G1: the coverage gate rejects duplicate declarations and dedups paths:
+grep -nE "declared more than once|sort -u|Sort-Object -Unique" docs/runbooks/incident.md
+# Round-4 structural: sync runs FIRST, coverage is driven by the POST-SYNC manifest
+# managed-block paths (not a pre-sync count), with the declaration demoted to a
+# declared-set == manifest-set cross-check:
+grep -nE "post-sync manifest|manifest_files|manifestFiles|managed-block file|driver|declared harness set does not match|checked set != post-sync manifest set" docs/runbooks/incident.md
 # private evidence handling: pre-copy exclusion + recursive perms + windows ACL:
 grep -nE "find .*-type d.*chmod 700|find .*-type f.*chmod 600|icacls|Time Machine|OneDrive" docs/runbooks/incident.md
 # the fail-closed byte-level drill: installed hook path + env + block conditions:
