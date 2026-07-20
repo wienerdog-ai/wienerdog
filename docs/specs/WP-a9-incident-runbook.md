@@ -1,7 +1,7 @@
 ---
 id: WP-a9-incident-runbook
 title: Add the general incident-drill runbook — stop schedules, preserve evidence, rotate credentials, purge injected digest/managed block, clean git history, re-authorize
-status: Ready
+status: In-Review
 model: sonnet
 size: S
 depends_on: []
@@ -1008,11 +1008,12 @@ headless/`--yes` bypass — it is interactive and shows the exact bytes.
      **notice-tolerant** clean `sync` (block only on the Table D **BLOCK** signals; the two
      constant Codex info notices are **ALLOWed**), the **whole-file** marker grep, and the
      **sentinel occurrence + ordering** check — count literal begin/end **occurrences**
-     (bash `grep -oF | wc -l`; PowerShell an ordinal regex-match count over the raw file
-     text), NOT matching lines (`grep -c` / `Select-String(...).Count` count lines, so two
-     sentinels on ONE line would evade a one-line count and pass a duplicated block, F2),
-     requiring **exactly one begin AND exactly one end AND begin before end** (by
-     byte/char offset) — and do **NOT** byte-compare the region against
+     via the shared node verifier's `occ()` (whole-file `Buffer.indexOf` scan on both
+     platforms, amendment 10/12), NOT matching lines (a line-oriented `grep -c` /
+     `Select-String(...).Count` would let two sentinels on ONE line evade a one-line
+     count and pass a duplicated block, F2), requiring **exactly one begin AND exactly
+     one end AND begin before end** (by byte offset) — and do **NOT** byte-compare the
+     region against
      the raw `$CORE/state/digest.md` (Table D: `sync`'s trim+neutralize transform means the
      region is never byte-identical, so that compare would falsely fail; the three checks
      prove the block clean by construction). `doctor` is **not** proof here (Table D).
@@ -1187,14 +1188,15 @@ the runbook never contains a bare operative `state/<file>` token.
       and checks the managed block of **every installed harness file** (both
       `CLAUDE.md` and `AGENTS.md` when both harnesses are installed, only the single
       present file on a single-harness install) via a **notice-tolerant** `sync`
-      check **plus** an explicit check that (a) `grep -F`s the poisoned marker over
+      check **plus** an explicit check that (a) scans the poisoned marker over
       the **ENTIRE** file (not only the sentinel region — a both-sentinels-deleted
       attack leaves poisoned text that `sync` appends around, still injected), and
-      (b) counts literal begin/end sentinel **OCCURRENCES** (bash `grep -oF | wc -l`,
-      PowerShell ordinal regex-match count — NOT matching lines, so two sentinels on
-      one line cannot evade the check, F2), requiring exactly one begin AND one end
-      AND begin before end, treating a **missing** pair as "`sync` appended a fresh
-      block and the old content is orphaned outside it — manually remove/quarantine
+      (b) counts literal begin/end sentinel **OCCURRENCES** via the shared node
+      verifier's `occ()` (whole-file `Buffer.indexOf`, both platforms — NOT matching
+      lines, so two sentinels on one line cannot evade the check, F2), requiring
+      exactly one begin AND one end AND begin before end, treating a **missing** pair
+      as "`sync` appended a fresh block and the old content is orphaned outside it —
+      manually remove/quarantine
       it" (**not** `doctor`); it does **NOT** byte-compare the sentinel region against
       the raw `$CORE/state/digest.md` (`sync`'s trim+neutralize transform means the
       region never equals the raw digest, so that compare would falsely fail on a
@@ -1378,9 +1380,10 @@ grep -nE "schedule add.*--job|frozen|A0|A1|not.*re-add|cannot be re-added" docs/
 # the drill precedes re-authorization (drill line number < re-add line number):
 awk '/acceptance drill/{d=NR} /schedule add|routine menu|Re-authorize/{if(d){print "drill@"d" before re-auth@"NR; exit}}' docs/runbooks/incident.md
 # amendment-8 F1: the hook/digest/marker checks run AFTER sync (step order sync-first);
-# amendment-8 F2: sentinel OCCURRENCE count (grep -oF|wc -l / regex Matches), not line count,
-# with begin-before-end; amendment-8 F3: TRUE byte compare via Buffer.equals (no utf8 decode):
-grep -nE "grep -oaF -- \"\\\$SENT|\[regex\]::Matches|begin sentinel must precede end sentinel|readFileSync\(process\.argv\[1\]\);|Buffer\.from\(h\.additionalContext" docs/runbooks/incident.md
+# amendment-8 F2 / amendment-10/12: sentinel OCCURRENCE count via the shared node verifier's
+# occ() (whole-file Buffer.indexOf), not line count, with begin-before-end; amendment-8 F3:
+# TRUE byte compare via Buffer.equals (no utf8 decode):
+grep -nE "function occ|Buffer\.indexOf|begin sentinel must precede end sentinel|Buffer\.from\(h\.additionalContext" docs/runbooks/incident.md
 # and NO lossy utf8-string digest read remains in the hook-envelope node (expect NO output):
 grep -n 'readFileSync(process.argv\[1\], "utf8").*additionalContext\|additionalContext !== digest' docs/runbooks/incident.md || true
 ```
