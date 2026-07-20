@@ -165,7 +165,7 @@ state and act on:
   **`config.yaml` `jobs:` list** and, for any job whose canonical OS registration
   probes as **missing**, re-registers it via `schedule.reloadJob` (regenerated
   bytes — a deleted file/manifest entry does not stop it); and `repointSchedules`
-  → `repairCatchup` (verified: `sync.js:214`, `schedule.js:588`) **regenerates +
+  → `repairCatchup` (verified: `sync.js:221`, `schedule.js:588`) **regenerates +
   re-registers the shared catch-up entry whenever at least one job remains** in
   `config.yaml` (macOS/Windows; `reloadMissing` itself never touches catch-up),
   and tears the catch-up entry + map down cleanly when **zero** jobs remain. So
@@ -189,6 +189,25 @@ state and act on:
   > unchanged; the resurrection mechanism, its code citations, and the blocking
   > re-verify (which now includes the empty-`jobs:` check) are updated in this
   > spec and the runbook to match the code this WP ships on.
+  >
+  > **Fix-pass amendment 2 (2026-07-20, adversarial-review round):** four review
+  > findings changed what this spec prescribes. **F1** — the per-job OS unregister
+  > is best-effort (a Windows imported task survives XML deletion), so the Table B
+  > blocking re-verify gains a FIFTH check: an independent per-platform enumeration
+  > of Wienerdog OS registrations (launchd `ai.wienerdog.*` labels, systemd
+  > `wienerdog-*` units, `\Wienerdog\` tasks — names verified against
+  > `generators.js` `launchdLabel`/`systemdUnitBase`/`windowsTaskName`) must return
+  > nothing. **F2** — the post-reboot sub-step order was a dead end on a custom
+  > core (`doctor` reads the CURRENT env, so running it before the re-export
+  > reports the DEFAULT core and the equality check fails unrecoverably); the
+  > order is now read-record → validate → export `WIENERDOG_HOME` → then `doctor`
+  > equality. **F4** — the step-1 `jobs:` snapshot targeted the step-2 evidence
+  > folder before it existed; the folder's creation + permissioning +
+  > backup-exclusion now open step 1, and step 2 copies into the already-secured
+  > folder. Also **F5** (step 4 no longer claims `sync` "overwrites only inside
+  > the sentinels" — with both sentinels deleted it APPENDS, and the orphaned
+  > poison must be removed by hand) and **F7** (`repointSchedules` citation
+  > `sync.js:214` → `sync.js:221`).
 - **The ONLY authoritative way to reach zero running Wienerdog processes is to
   REBOOT after removing every per-job schedule AND the catch-up entry — not
   per-platform process forensics (R4-C, round-4).** After a reboot, with nothing
@@ -212,7 +231,7 @@ state and act on:
 
 | Action | Path | Notes |
 |--------|------|-------|
-| create | docs/runbooks/incident.md | The general incident-drill runbook (house numbered-checklist format), opening with a **step 0 preamble** that resolves the ONE authoritative core by reading `wienerdog doctor`'s `core directory exists (<path>)` line (the code-authoritative `getPaths().core`), cross-checked against the exact code-mirrored order — `WIENERDOG_HOME`, else `HOME`, else the platform account homedir, then `.wienerdog` (mirroring `paths.js:54–55`; `HOME` is tried **before** `USERPROFILE` on Windows, R8-4) — DISPLAYS it, has the user CONFIRM it (`config.yaml`, `state/`, `install-manifest.json`), **persists it durably OUTSIDE the core so it survives the step-1 reboot** and, after the reboot, RE-RESOLVES + RE-CONFIRMS + RE-EXPORTS `WIENERDOG_HOME` for every later command (R8-2), and requires every later path (the catch-up XML/plist, the install manifest, the evidence copy, the digest grep, the SessionStart hook, and all verifications) to use that SAME `<core>` — never a hardcoded `~/.wienerdog` / `$env:USERPROFILE\.wienerdog`, and never a bare relative `state/…` (R7-1/R8-3); then the seven ordered A9 steps: (1) snapshot the `<core>/config.yaml` `jobs:` definitions (the restore source; `schedule.json` holds only watermarks), remove every per-job schedule (`schedule remove`, which also drops each job from `config.yaml`) **and** the shared catch-up entry — the catch-up removal deleting its scheduler FILE **and** its `install-manifest.json` entry, not merely unregistering it, and blocking on `config.yaml` listing **zero** `jobs:` entries so `sync`'s config-driven heal (`reloadMissing`/`repairCatchup`) cannot re-arm anything — then reach proven quiescence by REBOOT (the **sole** authoritative proof — a pre-reboot process grep is a non-proof hint that can only *reveal* a live job; if you cannot reboot you **stop-and-escalate**, never grep-certify clean); (2) preserve-evidence-privately; (3) revoke+rotate; (4) purge digest+managed-block; (5) clean git; (6) fail-closed acceptance drill (SessionStart-hook `additionalContext` byte-compare against the raw `state/digest.md`, plus a three-check managed-block proof — clean `sync` (notice-tolerant: the two constant Codex info notices are allowed; only concrete integrity failures block, R8-5) + whole-file marker grep + one-sentinel-pair check per installed harness file; **no** region-vs-raw-digest byte-compare, which would falsely fail because `sync` trims+neutralizes); (7) re-authorize by reconstructing `schedule add --job` for **builtin** jobs from the `jobs:` snapshot — a `skill:*` routine is frozen by the A0 pre-use gate (audit A1) and is NOT re-addable this release (do not promise a failing `--skill` command; only its snapshot definition is preserved for later). |
+| create | docs/runbooks/incident.md | The general incident-drill runbook (house numbered-checklist format), opening with a **step 0 preamble** that resolves the ONE authoritative core by reading `wienerdog doctor`'s `core directory exists (<path>)` line (the code-authoritative `getPaths().core`), cross-checked against the exact code-mirrored order — `WIENERDOG_HOME`, else `HOME`, else the platform account homedir, then `.wienerdog` (mirroring `paths.js:54–55`; `HOME` is tried **before** `USERPROFILE` on Windows, R8-4) — DISPLAYS it, has the user CONFIRM it (`config.yaml`, `state/`, `install-manifest.json`), **persists it durably OUTSIDE the core so it survives the step-1 reboot** and, after the reboot, RE-READS the persisted record + RE-EXPORTS `WIENERDOG_HOME` from it + only THEN re-confirms via `doctor` (in that order — `doctor` reads the current env, R8-2/F2) for every later command, and requires every later path (the catch-up XML/plist, the install manifest, the evidence copy, the digest grep, the SessionStart hook, and all verifications) to use that SAME `<core>` — never a hardcoded `~/.wienerdog` / `$env:USERPROFILE\.wienerdog`, and never a bare relative `state/…` (R7-1/R8-3); then the seven ordered A9 steps: (1) create+secure the private evidence folder FIRST (F4), snapshot the `<core>/config.yaml` `jobs:` definitions into it (the restore source; `schedule.json` holds only watermarks), remove every per-job schedule (`schedule remove`, which also drops each job from `config.yaml`) **and** the shared catch-up entry — the catch-up removal deleting its scheduler FILE **and** its `install-manifest.json` entry, not merely unregistering it, and blocking on `config.yaml` listing **zero** `jobs:` entries AND a zero-result independent per-platform enumeration of Wienerdog OS registrations (F1) so `sync`'s config-driven heal (`reloadMissing`/`repairCatchup`) cannot re-arm anything and no best-effort-unregister failure survives unseen — then reach proven quiescence by REBOOT (the **sole** authoritative proof — a pre-reboot process grep is a non-proof hint that can only *reveal* a live job; if you cannot reboot you **stop-and-escalate**, never grep-certify clean); (2) preserve-evidence-privately; (3) revoke+rotate; (4) purge digest+managed-block; (5) clean git; (6) fail-closed acceptance drill (SessionStart-hook `additionalContext` byte-compare against the raw `state/digest.md`, plus a three-check managed-block proof — clean `sync` (notice-tolerant: the two constant Codex info notices are allowed; only concrete integrity failures block, R8-5) + whole-file marker grep + one-sentinel-pair check per installed harness file; **no** region-vs-raw-digest byte-compare, which would falsely fail because `sync` trims+neutralizes); (7) re-authorize by reconstructing `schedule add --job` for **builtin** jobs from the `jobs:` snapshot — a `skill:*` routine is frozen by the A0 pre-use gate (audit A1) and is NOT re-addable this release (do not promise a failing `--skill` command; only its snapshot definition is preserved for later). |
 | modify | docs/runbooks/secret-incident.md | Add one cross-link near the top: the secret leak is the credential-specific case of the general incident drill (link `incident.md`); for a general or suspected-compromise incident, start there. Do NOT rewrite its steps. |
 
 ### Exact contract — what `docs/runbooks/incident.md` must state
@@ -293,10 +312,27 @@ unregisters.
 | Windows | Task Scheduler `\Wienerdog\<job>` | `\Wienerdog\catchup` / `$core\schedules\wienerdog-catchup.xml` | `Unregister-ScheduledTask -TaskPath '\Wienerdog\' -TaskName 'catchup' -Confirm:$false`; delete the XML; delete its `scheduler-entry` from `$core\install-manifest.json` |
 | Linux | systemd `--user` | **none** (no catch-up on Linux) | nothing to do |
 
-**Blocking re-verify** (do not proceed until ALL FOUR hold): the OS registration is
+**Blocking re-verify** (do not proceed until ALL FIVE hold): the OS registration is
 gone AND the scheduler file is gone AND `install-manifest.json` has no catch-up
 `scheduler-entry` AND `$CORE/config.yaml` lists **zero** `jobs:` entries (the heal
-source — a surviving job re-arms itself and catch-up on the next `sync`).
+source — a surviving job re-arms itself and catch-up on the next `sync`) AND an
+**independent enumeration of Wienerdog OS registrations returns nothing** — the
+per-job OS unregister is best-effort, so a failed one (on Windows, an imported
+Task Scheduler task survives XML deletion) can leave an armed registration that
+none of the other four checks see once `config.yaml` and the manifest are clean:
+
+- macOS: `launchctl list | grep ai.wienerdog` must print **nothing** (per-job
+  labels are `ai.wienerdog.<job>`; catch-up is `ai.wienerdog.catchup`).
+- Linux: `systemctl --user list-timers 'wienerdog-*' --all` and
+  `systemctl --user list-units 'wienerdog-*' --all` must list **no** units
+  (units are `wienerdog-<job>.timer` / `wienerdog-<job>.service`).
+- Windows (PowerShell): `Get-ScheduledTask -TaskPath '\Wienerdog\'
+  -ErrorAction SilentlyContinue` must return **nothing** (every Wienerdog task,
+  catch-up included, lives under `\Wienerdog\`).
+
+A hit in any of these means an armed registration survived — unregister it with
+the platform's own command (the Table B "Stop-the-catch-up" column shows the
+shapes) and re-run the enumeration until it is empty.
 
 **Table C — Restore rules (step 7).** Restore **source** = the `config.yaml` `jobs:`
 section (each job's `name` / `at` / `run` / `timeout_minutes`), snapshotted in step 1.
@@ -390,9 +426,22 @@ headless/`--yes` bypass — it is interactive and shows the exact bytes.
 
 1. **Stop everything that can fire, then reach proven quiescence — before anything
    else.** In order:
-   - **Snapshot the job DEFINITIONS first (Table A / Table C restore source).** Copy the
-     `config.yaml` `jobs:` section (Table A: `$CORE/config.yaml`) into the step-2 private
-     evidence folder NOW — **every** job, including each `run: skill:<name>` routine (its
+   - **Create the private evidence folder FIRST — before anything is removed.** The
+     snapshot below needs a safe destination that exists BEFORE `schedule remove`
+     mutates the source, so the incident evidence folder is created, permissioned, and
+     backup-excluded now, at the start of step 1 (step 2 then copies the remaining
+     evidence into the same folder). Put it at the Table A evidence-folder path
+     (`~/wienerdog-incident-<date>/`, outside the core) and outside any synced/backed-up
+     path (not under iCloud Drive / Dropbox / OneDrive / Google Drive):
+     - macOS / Linux: `mkdir -m 700 ~/wienerdog-incident-<date>`, and add that folder to
+       your backup exclusions *before* anything is copied in (Time Machine: System
+       Settings → Time Machine → Options → add the folder).
+     - Windows (PowerShell): create the folder, then strip inherited access and grant only
+       your account — `icacls <folder> /inheritance:r /grant:r "$($env:USERNAME):(OI)(CI)F"`
+       — and exclude it from File History / OneDrive backup, all before copying.
+   - **Snapshot the job DEFINITIONS next (Table A / Table C restore source).** Copy the
+     `config.yaml` `jobs:` section (Table A: `$CORE/config.yaml`) into that folder
+     NOW — **every** job, including each `run: skill:<name>` routine (its
      only record for later, Table C). `schedule remove` mutates `config.yaml` and
      `schedule list` omits `timeout_minutes`, so this snapshot — **not** `schedule.json`
      (watermark-only, Table A/C) — is what step 7 restores from. You MAY also copy
@@ -412,26 +461,37 @@ headless/`--yes` bypass — it is interactive and shows the exact bytes.
      `install-manifest.json`, delete **only** the catch-up `scheduler-entry` (the object
      whose `unload` argv names `ai.wienerdog.catchup` / `\Wienerdog\catchup`), no
      unrelated entries. **Linux: nothing to do.** Do not proceed until the Table B
-     blocking re-verify passes (OS registration gone AND scheduler file gone AND no
-     catch-up manifest entry AND `config.yaml` lists zero `jobs:` entries); a surviving
-     `jobs:` entry means `sync` will re-arm the machine — STOP and fix it.
+     blocking re-verify passes — all FIVE checks: OS registration gone AND scheduler
+     file gone AND no catch-up manifest entry AND `config.yaml` lists zero `jobs:`
+     entries AND the Table B **independent per-platform enumeration** of Wienerdog OS
+     registrations (launchd labels / systemd units / `\Wienerdog\` tasks) returns
+     **nothing** — the per-job unregister is best-effort, so a failed one leaves an
+     armed registration the config/manifest checks cannot see. A surviving `jobs:`
+     entry or a surviving OS registration means the machine can still fire — STOP and
+     fix it.
    - **Reach proven quiescence — the ONLY authoritative path is to REBOOT.** With every
      per-job schedule and the catch-up entry removed, reboot the machine. After the reboot
      nothing can have re-fired, so **zero** Wienerdog processes run — platform-
      independently, with no process forensics. **Credential rotation (step 3) begins only
      after this reboot. A reboot is the sole proof of quiescence this runbook accepts.**
-   - **After the reboot: RE-RESOLVE, RE-CONFIRM, and RE-EXPORT the core before ANY further
-     command (R8-2).** The reboot wiped your `$CORE`/`$core` shell variable and any
-     one-shot `WIENERDOG_HOME` export, so a fresh shell would silently re-default the core
-     — re-introducing exactly the wrong-directory bug step 0 guards against. In the new
-     post-reboot session, before running anything else:
-     1. Re-resolve the core as in step 0 (read `wienerdog doctor`, Table A) and **confirm
-        it equals the value in `wienerdog-incident-<date>-CORE-PATH.txt`**. If they differ,
-        STOP and reconcile.
+   - **After the reboot: RE-READ the persisted record, RE-EXPORT the core, THEN
+     re-confirm via `doctor` — in that order, before ANY further command (R8-2).** The
+     reboot wiped your `$CORE`/`$core` shell variable and any one-shot `WIENERDOG_HOME`
+     export, so a fresh shell would silently re-default the core — re-introducing
+     exactly the wrong-directory bug step 0 guards against. The order matters:
+     `doctor` reports the core from the CURRENT environment, so running it before the
+     re-export would report the DEFAULT core on a custom-core install and the equality
+     check would fail with no way forward. In the new post-reboot session, before
+     running anything else:
+     1. **Read the persisted record** (`wienerdog-incident-<date>-CORE-PATH.txt`,
+        Table A) and validate it: an absolute path to an existing directory that holds
+        the `config.yaml` / `state/` / `install-manifest.json` triple (Table A). If
+        not → STOP and reconcile.
      2. **Re-export it for the whole session:** macOS / Linux `export
         WIENERDOG_HOME="$CORE"`; Windows (PowerShell) `$env:WIENERDOG_HOME = "$core"`.
-     3. Re-verify the `config.yaml` / `state/` / `install-manifest.json` triple (Table A),
-        as in step 0.
+     3. **THEN run `wienerdog doctor`** and require its `core directory exists
+        (<path>)` line to EQUAL the persisted value. A mismatch means your session is
+        not acting on the confirmed core — STOP and reconcile.
      From here on, **every** post-reboot Wienerdog command — `wienerdog sync`, `wienerdog
      memory approve`, `wienerdog schedule add`, `wienerdog doctor`, and the drill hook run
      in step 6 — MUST run with `WIENERDOG_HOME` set to this `$CORE` (the export above does
@@ -451,23 +511,15 @@ headless/`--yes` bypass — it is interactive and shows the exact bytes.
      (assume a stale-privilege child may still be running) and escalate — do **not**
      proceed to credential rotation on the strength of a "nothing found" grep.
 
-2. **Preserve the evidence — secure the destination FIRST, then copy.** Create and
-   secure the folder *before* any sensitive bytes land in it. **Treat every copy as
-   potentially sensitive** — redaction is best-effort (a boundary-split or encoded secret
-   can survive in a log; ADR-0024), so this is your incident timeline but is **not**
-   guaranteed secret-free.
-   - **Create the private, sync/backup-excluded folder BEFORE copying anything in.** Put
-     it at the Table A evidence-folder path (`~/wienerdog-incident-<date>/`, outside the
-     core) and outside any synced/backed-up path (not under iCloud Drive / Dropbox /
-     OneDrive / Google Drive):
-     - macOS / Linux: `mkdir -m 700 ~/wienerdog-incident-<date>`, and add that folder to
-       your backup exclusions *before* the copy (Time Machine: System Settings → Time
-       Machine → Options → add the folder).
-     - Windows (PowerShell): create the folder, then strip inherited access and grant only
-       your account — `icacls <folder> /inheritance:r /grant:r "$($env:USERNAME):(OI)(CI)F"`
-       — and exclude it from File History / OneDrive backup, all before copying.
+2. **Preserve the evidence — into the already-secured folder from step 1.** The private,
+   sync/backup-excluded folder was created, permissioned, and backup-excluded at the
+   START of step 1 (so the `jobs:` snapshot had a safe destination); re-check it is still
+   private and still outside every synced path before copying more into it. **Treat every
+   copy as potentially sensitive** — redaction is best-effort (a boundary-split or
+   encoded secret can survive in a log; ADR-0024), so this is your incident timeline but
+   is **not** guaranteed secret-free.
    - **Copy the evidence in** — all Table A paths: the `$CORE/config.yaml` `jobs:` snapshot
-     (the step-1 restore source), `$CORE/state/run-evidence.jsonl`,
+     (already there from step 1), `$CORE/state/run-evidence.jsonl`,
      `$CORE/state/alerts.jsonl`, and the relevant `$CORE/logs/<job>/` files; optionally
      `$CORE/state/schedule.json` too (watermark evidence, not the restore source). Also
      move the step-0 `wienerdog-incident-<date>-CORE-PATH.txt` record (Table A) into this
@@ -515,8 +567,15 @@ headless/`--yes` bypass — it is interactive and shows the exact bytes.
      blocking re-verify (including the zero-`jobs:` check) passed.
    - Run `wienerdog sync` — it re-renders a clean `$CORE/state/digest.md` and re-writes
      the CLAUDE.md / AGENTS.md **managed block** (the sentinel-delimited region Wienerdog
-     owns) from the current, corrected identity. `sync` overwrites only inside the
-     sentinels and re-derives the block, so a clean sync restores a hand-tampered block.
+     owns) from the current, corrected identity. When the file holds exactly one valid
+     sentinel pair, `sync` replaces only the content between the sentinels — so a block
+     whose TEXT was tampered is restored. But when BOTH sentinel markers were deleted,
+     `sync` cannot find the block and **APPENDS a fresh one — the poisoned text survives
+     elsewhere in the file** (Table D's whole-file grep exists for exactly this case):
+     locate and remove/quarantine the orphaned text by hand, re-run `sync`, and re-run
+     the step-6 drill. (One sentinel missing, or duplicated sentinels, makes `sync`
+     refuse with a "managed block not updated" message — resolve the markers by hand,
+     then re-run `sync`.)
    - Also review `$CORE/state/quarantine/` (Windows `$core\state\quarantine\`; Table A;
      cross-link `secret-incident.md` step 3 for the true-positive/false-positive handling)
      — again the explicit resolved path, never a bare relative `state/…`.
@@ -641,14 +700,18 @@ the runbook never contains a bare operative `state/<file>` token.
 - [ ] **[R8-2]** Step 0 **persists** the confirmed absolute core path durably
       OUTSIDE the core (a home-dir `wienerdog-incident-<date>-CORE-PATH.txt` record
       that survives the reboot, plus an off-machine note) BEFORE the step-1 reboot;
-      and step 1, **after** the reboot, has a mandatory sub-step that RE-RESOLVES the
-      core (via `doctor`), RE-CONFIRMS it equals the recorded value, RE-EXPORTS
-      `WIENERDOG_HOME` for the session (`export WIENERDOG_HOME="$CORE"` /
-      `$env:WIENERDOG_HOME="$core"`), and re-verifies the `config.yaml`/`state/`/
-      `install-manifest.json` triple — so every post-reboot command (`sync`, `memory
-      approve`, `schedule add`, `doctor`, the drill hook) runs against the SAME core,
-      never a re-defaulted one. It states that the `$CORE`/`$core` shell variable and
-      a one-shot `WIENERDOG_HOME` export do **not** survive a reboot.
+      and step 1, **after** the reboot, has a mandatory sub-step that — in this
+      order — READS the persisted CORE-PATH record and validates it (absolute
+      existing directory holding the `config.yaml`/`state/`/`install-manifest.json`
+      triple), RE-EXPORTS `WIENERDOG_HOME` from it for the session
+      (`export WIENERDOG_HOME="$CORE"` / `$env:WIENERDOG_HOME="$core"`), and only
+      THEN runs `doctor`, requiring its reported core to EQUAL the persisted value
+      (mismatch → STOP and reconcile) — never `doctor` first, which on a custom-core
+      install would report the DEFAULT core and dead-end the equality check — so
+      every post-reboot command (`sync`, `memory approve`, `schedule add`, `doctor`,
+      the drill hook) runs against the SAME core, never a re-defaulted one. It
+      states that the `$CORE`/`$core` shell variable and a one-shot
+      `WIENERDOG_HOME` export do **not** survive a reboot.
 - [ ] **[R8-3]** Every operative path under the core in the runbook uses the
       resolved prefix (`$CORE/state/…` / `$core\state\…`), never a bare relative
       `state/…`: the `digest.md` delete, the `quarantine/` review, the
@@ -686,9 +749,16 @@ the runbook never contains a bare operative `state/<file>` token.
       Linux has none) by deleting its **scheduler FILE** (macOS LaunchAgents plist,
       Windows `<core>\schedules\wienerdog-catchup.xml`) **and** its
       `install-manifest.json` entry — not merely unregistering — and **blocks on a
-      re-verify that the OS registration AND the scheduler file are gone, no
-      catch-up manifest entry remains, AND `config.yaml` lists zero `jobs:`
-      entries** so `sync`'s config-driven heal has nothing to re-arm it from; it
+      five-check re-verify that the OS registration AND the scheduler file are gone,
+      no catch-up manifest entry remains, `config.yaml` lists zero `jobs:`
+      entries, AND an independent per-platform enumeration of Wienerdog OS
+      registrations (macOS `launchctl list | grep ai.wienerdog`; Linux
+      `systemctl --user list-timers/list-units 'wienerdog-*' --all`; Windows
+      `Get-ScheduledTask -TaskPath '\Wienerdog\'`) returns nothing** — the per-job
+      unregister is best-effort, so a failed one (a Windows imported task surviving
+      XML deletion) is invisible to the config/manifest checks — so `sync`'s
+      config-driven heal has nothing to re-arm catch-up from and no armed
+      registration survives unseen; it
       makes **reboot** the **sole authoritative** quiescence proof
       and states plainly that a pre-reboot live-process grep is **NOT proof** (it
       can only *reveal* a still-live job — a differently-named injected helper
@@ -707,8 +777,10 @@ the runbook never contains a bare operative `state/<file>` token.
       `state/schedule.json` as watermark evidence — and names
       `state/run-evidence.jsonl`, `state/alerts.jsonl`, and
       `logs/<job>/`; treats them as **potentially sensitive** (best-effort
-      redaction, not secret-free); creates+verifies a private, sync/backup-excluded
-      folder **before** copying; and re-applies modes **recursively** (every dir
+      redaction, not secret-free); creates+verifies the private, sync/backup-excluded
+      folder at the **START of step 1** (before any `schedule remove` mutates the
+      snapshot source) so every copy — the step-1 `jobs:` snapshot included — lands
+      in an already-secured destination; and re-applies modes **recursively** (every dir
       `0700`, every file `0600`) with a blocking re-verify (macOS/Linux `find`
       forms; Windows `icacls`).
 - [ ] The acceptance-drill step is **fail-closed**: it runs the installed
@@ -799,6 +871,9 @@ grep -nE "ai\.wienerdog\.catchup|\\\\Wienerdog\\\\catchup|reboot|CommandLine|cla
 # has nothing to re-arm once config.yaml lists zero jobs:
 grep -nE "install-manifest\.json|reloadMissing|resurrect|re-register|scheduler file|catchup\.plist|wienerdog-catchup\.xml" docs/runbooks/incident.md
 grep -niE "not proof|non-proof|cannot reboot|escalate|sole" docs/runbooks/incident.md
+# F1: the blocking re-verify's FIFTH check independently enumerates remaining
+# Wienerdog OS registrations per platform (zero results required):
+grep -nE "launchctl list \| grep ai\.wienerdog|list-timers 'wienerdog-\*'|list-units 'wienerdog-\*'|Get-ScheduledTask -TaskPath" docs/runbooks/incident.md
 # private evidence handling: pre-copy exclusion + recursive perms + windows ACL:
 grep -nE "find .*-type d.*chmod 700|find .*-type f.*chmod 600|icacls|Time Machine|OneDrive" docs/runbooks/incident.md
 # the fail-closed byte-level drill: installed hook path + env + block conditions:

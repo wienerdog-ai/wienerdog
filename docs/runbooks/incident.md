@@ -71,7 +71,16 @@ the macOS catch-up LaunchAgent plist (Table A, "Outside the core").
 The rest of this runbook refers back to these five tables instead of restating
 paths, labels, or commands inline.
 
-**Table A — Core & path resolution.**
+**Table A — Core & path resolution.** The **core** directory is resolved once, up
+front, as: **`WIENERDOG_HOME` (if set) → else `<home>/.wienerdog`, where `<home>` =
+`HOME` (if set) → else the platform account homedir** (`paths.js:54–55`:
+`home = HOME || os.homedir()`, `core = $WIENERDOG_HOME || <home>/.wienerdog`; on
+Windows `HOME` is honored **before** `USERPROFILE`). Read it **authoritatively** from
+`wienerdog doctor`'s `core directory exists (<path>)` line (`<path>` is exactly
+`getPaths().core`, `doctor.js:322`), then cross-check against that order. Everywhere
+the runbook writes `<core>` it means POSIX `$CORE` / Windows `$core` — **never** a
+hardcoded `~/.wienerdog` / `$env:USERPROFILE\.wienerdog`, and **never** a bare
+relative `state/…`.
 
 | Artifact | Path under the core (POSIX `$CORE/…` / Windows `$core\…`) | Note |
 |---|---|---|
@@ -95,21 +104,20 @@ paths, labels, or commands inline.
 | incident evidence folder | `~/wienerdog-incident-<date>/` | private, sync/backup-excluded (step 2) |
 | persisted CORE-PATH record | `~/wienerdog-incident-<date>-CORE-PATH.txt` | survives the step-1 reboot; also noted off-machine |
 
-**Table B — Scheduler artifacts per platform.** `schedule remove <job>`
-unregisters (best-effort) and deletes only **that job's own** file + manifest
-entry, **drops the job from `config.yaml`**, and stops only **future** fires
-(a job running *right now* keeps running). It **leaves the shared catch-up
-entry** (removing the FINAL job also tears catch-up down, but only
-best-effort). **Resurrection rule:** `wienerdog sync` re-arms schedules **from
-`config.yaml`**, regenerating canonical content: `reloadMissing`
-(`sync.js:239`) re-registers a missing per-job registration for every job
-still listed in `config.yaml`, and `repairCatchup` (`schedule.js:588`)
-regenerates + re-registers the shared catch-up entry whenever **at least one
-job remains** (tearing it down when zero remain) — deleted files or manifest
-entries do not stop either heal. So the block that matters is an **empty
-`jobs:` list**; the catch-up stop below still deletes the **FILE and the
-manifest entry** (immediate disarm + defense-in-depth for the best-effort
-auto-teardown), not merely unregisters.
+**Table B — Scheduler artifacts per platform.** `schedule remove <job>` unregisters
+(best-effort) and deletes only **that job's own** file + manifest entry, **drops the
+job from `config.yaml`**, and stops only **future** fires (a job running *right now*
+keeps running). It **leaves the shared catch-up entry** (removing the FINAL job also
+tears catch-up down, but only best-effort). **Resurrection rule:** `wienerdog sync`
+re-arms schedules **from `config.yaml`**, regenerating canonical content:
+`reloadMissing` (`sync.js:239`) re-registers a missing per-job registration for
+every job still listed in `config.yaml`, and `repairCatchup` (`schedule.js:588`)
+regenerates + re-registers the shared catch-up entry whenever **at least one job
+remains** (tearing it down when zero remain) — deleted files or manifest entries do
+not stop either heal. So the block that matters is an **empty `jobs:` list**; the
+catch-up stop below still deletes the **FILE and the manifest entry** (immediate
+disarm + defense-in-depth for the best-effort auto-teardown), not merely
+unregisters.
 
 | Platform | Per-job registration | Catch-up label / file | Stop-the-catch-up (all three: unregister + delete file + drop manifest entry) |
 |---|---|---|---|
@@ -117,36 +125,51 @@ auto-teardown), not merely unregisters.
 | Windows | Task Scheduler `\Wienerdog\<job>` | `\Wienerdog\catchup` / `$core\schedules\wienerdog-catchup.xml` | `Unregister-ScheduledTask -TaskPath '\Wienerdog\' -TaskName 'catchup' -Confirm:$false`; delete the XML; delete its `scheduler-entry` from `$core\install-manifest.json` |
 | Linux | systemd `--user` | **none** (no catch-up on Linux) | nothing to do |
 
-**Blocking re-verify** (do not proceed until ALL FOUR hold): the OS
-registration is gone AND the scheduler file is gone AND
-`install-manifest.json` has no catch-up `scheduler-entry` AND
-`$CORE/config.yaml` lists **zero** `jobs:` entries (the heal source — a
-surviving job re-arms itself and catch-up on the next `sync`).
+**Blocking re-verify** (do not proceed until ALL FIVE hold): the OS registration is
+gone AND the scheduler file is gone AND `install-manifest.json` has no catch-up
+`scheduler-entry` AND `$CORE/config.yaml` lists **zero** `jobs:` entries (the heal
+source — a surviving job re-arms itself and catch-up on the next `sync`) AND an
+**independent enumeration of Wienerdog OS registrations returns nothing** — the
+per-job OS unregister is best-effort, so a failed one (on Windows, an imported
+Task Scheduler task survives XML deletion) can leave an armed registration that
+none of the other four checks see once `config.yaml` and the manifest are clean:
 
-**Table C — Restore rules (step 7).** Restore **source** = the `config.yaml`
-`jobs:` section (each job's `name` / `at` / `run` / `timeout_minutes`),
-snapshotted in step 1. **Not** `schedule.json` (watermark-only: `last_success` /
-`last_status` / `last_error_at`).
+- macOS: `launchctl list | grep ai.wienerdog` must print **nothing** (per-job
+  labels are `ai.wienerdog.<job>`; catch-up is `ai.wienerdog.catchup`).
+- Linux: `systemctl --user list-timers 'wienerdog-*' --all` and
+  `systemctl --user list-units 'wienerdog-*' --all` must list **no** units
+  (units are `wienerdog-<job>.timer` / `wienerdog-<job>.service`).
+- Windows (PowerShell): `Get-ScheduledTask -TaskPath '\Wienerdog\'
+  -ErrorAction SilentlyContinue` must return **nothing** (every Wienerdog task,
+  catch-up included, lives under `\Wienerdog\`).
+
+A hit in any of these means an armed registration survived — unregister it with
+the platform's own command (the Table B "Stop-the-catch-up" column shows the
+shapes) and re-run the enumeration until it is empty.
+
+**Table C — Restore rules (step 7).** Restore **source** = the `config.yaml` `jobs:`
+section (each job's `name` / `at` / `run` / `timeout_minutes`), snapshotted in step 1.
+**Not** `schedule.json` (watermark-only: `last_success` / `last_status` /
+`last_error_at`).
 
 | `run:` type | Re-addable this release? | How |
 |---|---|---|
 | `builtin:<name>` (today `builtin:dream`) | **Yes** | `wienerdog schedule add <name> --at <HH:MM> --job <builtin> --timeout <minutes>` (rebuilt from the snapshot) |
 | `skill:<name>` | **No** — frozen by the A0 pre-use gate (audit A1); `--skill` fails closed | preserve-only: keep the snapshot definition, re-add later when the gate opens |
 
-**Table D — Managed-block drill gate (step 6).** Prove the block via a
-**three-check conjunction** on **each installed harness file** (`CLAUDE.md`
-and/or `AGENTS.md`; a single-harness install legitimately has only one): (1) a
-**notice-tolerant** clean `sync`, (2) a `grep -F` of the poisoned marker over
-the **ENTIRE** file (a both-sentinels-deleted attack leaves poison that `sync`
-appends around — a region-only grep would falsely pass), (3) **exactly one**
-`<!-- wienerdog:begin -->` … `<!-- wienerdog:end -->` pair (duplicated =
-failure; missing = `sync` appended a fresh block and the old content is
-orphaned outside it → manually remove/quarantine, re-`sync`, re-drill). **Do
-NOT** byte-compare the sentinel region against the raw `$CORE/state/digest.md`
-— `sync` trims + neutralizes, so the region is never byte-identical and such a
-compare falsely fails on a clean install. `doctor` does **not** verify
-managed-block / sentinel integrity — never treat a clean `doctor` as proof
-here.
+**Table D — Managed-block drill gate (step 6).** Prove the block via a **three-check
+conjunction** on **each installed harness file** (`CLAUDE.md` and/or `AGENTS.md`; a
+single-harness install legitimately has only one): (1) a **notice-tolerant** clean
+`sync`, (2) a `grep -F` of the poisoned marker over the **ENTIRE** file (a
+both-sentinels-deleted attack leaves poison that `sync` appends around — a region-only
+grep would falsely pass), (3) **exactly one** `<!-- wienerdog:begin -->` …
+`<!-- wienerdog:end -->` pair (duplicated = failure; missing = `sync` appended a fresh
+block and the old content is orphaned outside it → manually remove/quarantine,
+re-`sync`, re-drill). **Do NOT** byte-compare the sentinel region against the raw
+`$CORE/state/digest.md` — `sync` trims + neutralizes, so the region is never
+byte-identical and such a compare falsely fails on a clean install. `doctor` does
+**not** verify managed-block / sentinel integrity — never treat a clean `doctor` as
+proof here.
 
 | Signal from `sync` | Verdict |
 |---|---|
@@ -158,11 +181,10 @@ here.
 | `/hooks` hook-trust notice (Codex, every clean sync) | **ALLOW** (informational) |
 | "skills aren't slash commands" notice (Codex, every clean sync) | **ALLOW** (informational) |
 
-**Table E — `wienerdog memory approve <note>` arguments.** `<note>` is one of
-these **fixed short names** only (verified against `memory.js`'s `KNOWN`
-allowlist); it accepts **no** arbitrary file path (no `06-Identity/…`, no `..`,
-no `/`) and has no headless/`--yes` bypass — it is interactive and shows the
-exact bytes.
+**Table E — `wienerdog memory approve <note>` arguments.** `<note>` is one of these
+**fixed short names** only (verified against `memory.js`'s `KNOWN` allowlist); it
+accepts **no** arbitrary file path (no `06-Identity/…`, no `..`, no `/`) and has no
+headless/`--yes` bypass — it is interactive and shows the exact bytes.
 
 | Allowed `<note>` | Or its `.md` basename |
 |---|---|
@@ -175,15 +197,29 @@ exact bytes.
 
 ### 1. Stop everything that can fire, then reach proven quiescence
 
-- **Snapshot the job DEFINITIONS first (Table A / Table C restore source).**
-  Copy the `config.yaml` `jobs:` section (`$CORE/config.yaml`) into the step-2
-  private evidence folder NOW — **every** job, including each `run:
-  skill:<name>` routine (its only record for later, Table C). `schedule
-  remove` mutates `config.yaml` and `schedule list` omits `timeout_minutes`,
-  so this snapshot — **not** `$CORE/state/schedule.json` (watermark-only,
-  Table A/C) — is what step 7 restores from. You MAY also copy
-  `$CORE/state/schedule.json` as watermark evidence. Handle both with the
-  step-2 private-folder discipline.
+- **Create the private evidence folder FIRST — before anything is removed.**
+  The snapshot below needs a safe destination that exists BEFORE `schedule
+  remove` mutates the source, so the incident evidence folder is created,
+  permissioned, and backup-excluded now, at the start of step 1 (step 2 then
+  copies the remaining evidence into the same folder). Put it at the Table A
+  evidence-folder path (`~/wienerdog-incident-<date>/`, outside the core) and
+  outside any synced/backed-up path (not under iCloud Drive / Dropbox /
+  OneDrive / Google Drive):
+  - macOS / Linux: `mkdir -m 700 ~/wienerdog-incident-<date>`, and add that
+    folder to your backup exclusions *before* anything is copied in (Time
+    Machine: System Settings → Time Machine → Options → add the folder).
+  - Windows (PowerShell): create the folder, then strip inherited access and
+    grant only your account —
+    `icacls <folder> /inheritance:r /grant:r "$($env:USERNAME):(OI)(CI)F"` —
+    and exclude it from File History / OneDrive backup, all before copying.
+- **Snapshot the job DEFINITIONS next (Table A / Table C restore source).**
+  Copy the `config.yaml` `jobs:` section (`$CORE/config.yaml`) into that
+  folder NOW — **every** job, including each `run: skill:<name>` routine (its
+  only record for later, Table C). `schedule remove` mutates `config.yaml` and
+  `schedule list` omits `timeout_minutes`, so this snapshot — **not**
+  `$CORE/state/schedule.json` (watermark-only, Table A/C) — is what step 7
+  restores from. You MAY also copy `$CORE/state/schedule.json` as watermark
+  evidence. Handle both with the step-2 private-folder discipline.
 - **Unregister every per-job schedule (Table B).** Run `wienerdog schedule
   list`, then `wienerdog schedule remove <name>` for every job. `remove` only
   stops **future** fires (best-effort OS unregister) and does **not** stop a
@@ -200,31 +236,42 @@ exact bytes.
   `scheduler-entry` (the object whose `unload` argv names
   `ai.wienerdog.catchup` / `\Wienerdog\catchup`), no unrelated entries.
   **Linux: nothing to do.** Do not proceed until the Table B **blocking
-  re-verify** passes (OS registration gone AND scheduler file gone AND no
-  catch-up manifest entry AND `config.yaml` lists zero `jobs:` entries); a
-  surviving `jobs:` entry means `sync` will re-arm the machine — STOP and
-  fix it.
+  re-verify** passes — all FIVE checks: OS registration gone AND scheduler
+  file gone AND no catch-up manifest entry AND `config.yaml` lists zero
+  `jobs:` entries AND the Table B **independent per-platform enumeration** of
+  Wienerdog OS registrations (launchd labels / systemd units / `\Wienerdog\`
+  tasks) returns **nothing** — the per-job unregister is best-effort, so a
+  failed one leaves an armed registration the config/manifest checks cannot
+  see. A surviving `jobs:` entry or a surviving OS registration means the
+  machine can still fire — STOP and fix it.
 - **Reach proven quiescence — the ONLY authoritative path is to REBOOT.** With
   every per-job schedule and the catch-up entry removed, reboot the machine.
   After the reboot nothing can have re-fired, so **zero** Wienerdog processes
   run — platform-independently, with no process forensics needed.
   **Credential rotation (step 3) begins only after this reboot.** A reboot is
   the **sole** proof of quiescence this runbook accepts.
-- **After the reboot: re-resolve, re-confirm, and re-export the core before
-  ANY further command.** The reboot wiped your `$CORE`/`$core` shell variable
-  and any one-shot `WIENERDOG_HOME` export, so a fresh shell would silently
-  re-default the core — re-introducing the wrong-directory risk step 0
-  guards against. In the new post-reboot session, before running anything
-  else:
-  1. Re-resolve the core exactly as in step 0 (read `wienerdog doctor`, Table
-     A) and **confirm it equals the value recorded in
-     `wienerdog-incident-<date>-CORE-PATH.txt`**. If they differ, STOP and
-     reconcile.
+- **After the reboot: re-read the persisted record, re-export the core, THEN
+  re-confirm via `doctor` — in that order, before ANY further command.** The
+  reboot wiped your `$CORE`/`$core` shell variable and any one-shot
+  `WIENERDOG_HOME` export, so a fresh shell would silently re-default the
+  core — re-introducing the wrong-directory risk step 0 guards against. The
+  order matters: `doctor` reports the core from the CURRENT environment, so
+  running it before the re-export would report the DEFAULT core on a
+  custom-core install and the equality check would fail with no way forward.
+  In the new post-reboot session, before running anything else:
+  1. **Read the persisted record** (`wienerdog-incident-<date>-CORE-PATH.txt`,
+     Table A) and validate it: an absolute path to an existing directory that
+     holds the `config.yaml` / `state/` / `install-manifest.json` triple
+     (Table A, as checked in step 0). If not → STOP and reconcile.
+     - macOS / Linux: `CORE="$(cat "$HOME/wienerdog-incident-<date>-CORE-PATH.txt")"; ls "$CORE/config.yaml" "$CORE/state" "$CORE/install-manifest.json"`
+     - Windows (PowerShell): `$core = (Get-Content "$env:USERPROFILE\wienerdog-incident-<date>-CORE-PATH.txt").Trim()`,
+       then the three `Test-Path` checks from step 0.
   2. **Re-export it for the whole session:** macOS / Linux `export
      WIENERDOG_HOME="$CORE"`; Windows (PowerShell) `$env:WIENERDOG_HOME =
      "$core"`.
-  3. Re-verify the `config.yaml` / `state/` / `install-manifest.json` triple
-     (Table A), as in step 0.
+  3. **THEN run `wienerdog doctor`** and require its `core directory exists
+     (<path>)` line to EQUAL the persisted value. A mismatch means your
+     session is not acting on the confirmed core — STOP and reconcile.
 
   From here on, **every** post-reboot Wienerdog command — `wienerdog sync`,
   `wienerdog memory approve`, `wienerdog schedule add`, `wienerdog doctor`,
@@ -251,30 +298,21 @@ exact bytes.
 
 ### 2. Preserve the evidence
 
-Create and secure the destination folder *before* any sensitive bytes land in
-it. **Treat every copy as potentially sensitive** — redaction is best-effort
-(a boundary-split or encoded secret can survive in a log), so this is your
-incident timeline but is **not** guaranteed secret-free.
+The private, sync/backup-excluded folder was created, permissioned, and
+backup-excluded at the START of step 1 (so the `jobs:` snapshot had a safe
+destination); re-check it is still private and still outside every synced path
+before copying more into it. **Treat every copy as potentially sensitive** —
+redaction is best-effort (a boundary-split or encoded secret can survive in a
+log), so this is your incident timeline but is **not** guaranteed secret-free.
 
-- **Create the private, sync/backup-excluded folder BEFORE copying anything
-  in.** Put it at the Table A evidence-folder path
-  (`~/wienerdog-incident-<date>/`, outside the core) and outside any
-  synced/backed-up path (not under iCloud Drive / Dropbox / OneDrive / Google
-  Drive):
-  - macOS / Linux: `mkdir -m 700 ~/wienerdog-incident-<date>`, and add that
-    folder to your backup exclusions *before* the copy (Time Machine: System
-    Settings → Time Machine → Options → add the folder).
-  - Windows (PowerShell): create the folder, then strip inherited access and
-    grant only your account —
-    `icacls <folder> /inheritance:r /grant:r "$($env:USERNAME):(OI)(CI)F"` —
-    and exclude it from File History / OneDrive backup, all before copying.
 - **Copy the evidence in** — all Table A paths: the `$CORE/config.yaml`
-  `jobs:` snapshot (the step-1 restore source), `$CORE/state/run-evidence.jsonl`,
+  `jobs:` snapshot (already there from step 1), `$CORE/state/run-evidence.jsonl`,
   `$CORE/state/alerts.jsonl`, and the relevant `$CORE/logs/<job>/` files;
   optionally `$CORE/state/schedule.json` too (watermark evidence, not the
   restore source). Also move the step-0
   `wienerdog-incident-<date>-CORE-PATH.txt` record into this folder so the
-  confirmed core path is filed alongside the timeline.
+  confirmed core path is filed alongside the timeline — do this only AFTER
+  the step-1 post-reboot re-resolve has used it.
 - **Re-apply private modes recursively, then re-verify (blocking).** The
   copies leave Wienerdog's own `0700`/`0600` protection when they land
   elsewhere, so restore it over the **whole tree** — a plain `chmod 600 …/*`
@@ -323,13 +361,21 @@ This stops the poisoned identity/context from entering new sessions:
   list, this `sync` will re-register that job's schedule AND regenerate +
   re-register the catch-up entry here — re-arming the machine before the
   drill. `sync` must **not** be able to reactivate ANY schedule before
-  step 7: do not run it until step 1's Table B blocking re-verify (including
-  the zero-`jobs:` check) passed.
+  step 7: do not run it until step 1's Table B blocking re-verify (all five
+  checks, including the zero-`jobs:` check and the independent OS-registration
+  enumeration) passed.
 - Run `wienerdog sync` — it re-renders a clean `$CORE/state/digest.md` and
   re-writes the CLAUDE.md / AGENTS.md **managed block** (the
   sentinel-delimited region Wienerdog owns) from the current, corrected
-  identity. `sync` overwrites only inside the sentinels and re-derives the
-  block, so a clean sync restores a hand-tampered block.
+  identity. When the file holds exactly one valid sentinel pair, `sync`
+  replaces only the content between the sentinels — so a block whose TEXT was
+  tampered is restored. But when BOTH sentinel markers were deleted, `sync`
+  cannot find the block and **APPENDS a fresh one — the poisoned text survives
+  elsewhere in the file** (Table D's whole-file grep exists for exactly this
+  case): locate and remove/quarantine the orphaned text by hand, re-run
+  `sync`, and re-run the step-6 drill. (One sentinel missing, or duplicated
+  sentinels, makes `sync` refuse with a "managed block not updated" message —
+  resolve the markers by hand, then re-run `sync`.)
 - Also review `$CORE/state/quarantine/` (Windows `$core\state\quarantine\`;
   Table A; see [`secret-incident.md`](secret-incident.md) step 3 for the
   true-positive/false-positive handling) — again the explicit resolved path,
@@ -355,51 +401,145 @@ drive the installed hook with the right environment and treat any
 empty/malformed output as a FAILURE, then byte-compare what it *would* inject
 against the digest.
 
+The two blocks below run the whole drill and stop at the first failure — a
+"DRILL PASS" line at the end is a real pass. Each check maps to a bullet
+explained after the blocks. Set the first line (`MARKER` / `$marker`) to the
+exact poisoned text you are hunting (plain text, not a regular expression),
+and run in a session where the step-1 re-export already set `WIENERDOG_HOME`.
+
+macOS / Linux (bash — paste as one block):
+
+```bash
+MARKER='<the exact poisoned text you are hunting>'
+CORE="$WIENERDOG_HOME"   # the step-0 core, re-exported after the reboot
+
+fail() { printf 'DRILL FAIL: %s\n' "$1"; exit 1; }
+
+# (a) drive the installed hook fail-closed; byte-compare against the digest
+OUT="$(WIENERDOG_JOB= WIENERDOG_HOME="$CORE" "$CORE/bin/session-start.sh")" \
+  || fail "hook exited non-zero"
+[ -n "$OUT" ] || fail "hook printed nothing (fail-open output is NOT proof of clean)"
+printf '%s' "$OUT" | node -e '
+  let s = "";
+  process.stdin.on("data", (d) => (s += d));
+  process.stdin.on("end", () => {
+    let j; try { j = JSON.parse(s); } catch { console.error("malformed JSON"); process.exit(1); }
+    const h = (j && j.hookSpecificOutput) || {};
+    if (h.hookEventName !== "SessionStart") { console.error("wrong hookEventName"); process.exit(1); }
+    if (typeof h.additionalContext !== "string") { console.error("additionalContext is not a string"); process.exit(1); }
+    const digest = require("fs").readFileSync(process.argv[1], "utf8");
+    if (h.additionalContext !== digest) { console.error("injected bytes differ from the digest"); process.exit(1); }
+    if (h.additionalContext.includes(process.argv[2])) { console.error("poisoned marker is still injected"); process.exit(1); }
+  });' "$CORE/state/digest.md" "$MARKER" || fail "hook envelope check"
+
+# regenerated digest, checked directly (belt-and-suspenders)
+grep -qF -- "$MARKER" "$CORE/state/digest.md" && fail "marker still in the digest"
+
+# (b) Table D three-check conjunction, per installed harness file
+SYNC_OUT="$(WIENERDOG_HOME="$CORE" wienerdog sync 2>&1)" \
+  || { printf '%s\n' "$SYNC_OUT"; fail "sync exited non-zero"; }
+printf '%s\n' "$SYNC_OUT" | grep -qiE 'managed block not updated|digest not found|AGENTS\.override' \
+  && { printf '%s\n' "$SYNC_OUT"; fail "sync reported a Table D BLOCK signal"; }
+for f in "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/CLAUDE.md" "${CODEX_HOME:-$HOME/.codex}/AGENTS.md"; do
+  [ -f "$f" ] || continue  # un-installed harness; if this harness IS installed, a missing file is a FAILURE
+  grep -qF -- "$MARKER" "$f" && fail "marker found in $f (whole-file grep)"
+  b=$(grep -cF -- '<!-- wienerdog:begin -->' "$f")
+  e=$(grep -cF -- '<!-- wienerdog:end -->' "$f")
+  { [ "$b" -eq 1 ] && [ "$e" -eq 1 ]; } || fail "$f has $b begin / $e end sentinels (need exactly one pair)"
+done
+echo "DRILL PASS — record this output with the date"
+```
+
+Windows (PowerShell — paste as one block; the hook is a bash script, and
+Git Bash ships with Git for Windows, which Claude Code requires):
+
+```powershell
+$marker = '<the exact poisoned text you are hunting>'
+$core   = $env:WIENERDOG_HOME   # the step-0 core, re-exported after the reboot
+
+function Fail($msg) { Write-Host "DRILL FAIL: $msg"; exit 1 }
+
+# (a) drive the installed hook fail-closed; byte-compare against the digest
+$coreFwd = $core -replace '\\', '/'
+$out = bash -c "WIENERDOG_JOB= WIENERDOG_HOME='$coreFwd' '$coreFwd/bin/session-start.sh'"
+if ($LASTEXITCODE -ne 0) { Fail "hook exited non-zero" }
+if ([string]::IsNullOrEmpty($out)) { Fail "hook printed nothing (fail-open output is NOT proof of clean)" }
+$out | node -e '
+  let s = "";
+  process.stdin.on("data", (d) => (s += d));
+  process.stdin.on("end", () => {
+    let j; try { j = JSON.parse(s); } catch { console.error("malformed JSON"); process.exit(1); }
+    const h = (j && j.hookSpecificOutput) || {};
+    if (h.hookEventName !== "SessionStart") { console.error("wrong hookEventName"); process.exit(1); }
+    if (typeof h.additionalContext !== "string") { console.error("additionalContext is not a string"); process.exit(1); }
+    const digest = require("fs").readFileSync(process.argv[1], "utf8");
+    if (h.additionalContext !== digest) { console.error("injected bytes differ from the digest"); process.exit(1); }
+    if (h.additionalContext.includes(process.argv[2])) { console.error("poisoned marker is still injected"); process.exit(1); }
+  });' "$core\state\digest.md" $marker
+if ($LASTEXITCODE -ne 0) { Fail "hook envelope check" }
+
+# regenerated digest, checked directly (belt-and-suspenders)
+if (Select-String -Path "$core\state\digest.md" -SimpleMatch $marker -Quiet) { Fail "marker still in the digest" }
+
+# (b) Table D three-check conjunction, per installed harness file
+$sync = wienerdog sync 2>&1
+if ($LASTEXITCODE -ne 0) { $sync; Fail "sync exited non-zero" }
+if ($sync | Select-String -Pattern 'managed block not updated|digest not found|AGENTS\.override' -Quiet) { $sync; Fail "sync reported a Table D BLOCK signal" }
+$homeDir = if ($env:HOME) { $env:HOME } else { $env:USERPROFILE }  # HOME before USERPROFILE, matching the code
+$claudeDir = if ($env:CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR } else { "$homeDir\.claude" }
+$codexDir  = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { "$homeDir\.codex" }
+foreach ($f in @("$claudeDir\CLAUDE.md", "$codexDir\AGENTS.md")) {
+  if (-not (Test-Path $f)) { continue }  # un-installed harness; if installed, a missing file is a FAILURE
+  if (Select-String -Path $f -SimpleMatch $marker -Quiet) { Fail "marker found in $f (whole-file grep)" }
+  $b = @(Select-String -Path $f -SimpleMatch '<!-- wienerdog:begin -->').Count
+  $e = @(Select-String -Path $f -SimpleMatch '<!-- wienerdog:end -->').Count
+  if ($b -ne 1 -or $e -ne 1) { Fail "$f has $b begin / $e end sentinels (need exactly one pair)" }
+}
+Write-Host "DRILL PASS — record this output with the date"
+```
+
+What each part proves, and the two judgment calls the script cannot make:
+
 - **Drive the installed SessionStart hook with the injecting environment.**
-  Run the installed hook at `$CORE/bin/session-start.sh` (Table A; `doctor`
-  does **not** print the path) with `WIENERDOG_HOME` set to the step-0 core
-  and `WIENERDOG_JOB` **cleared** (an inherited `WIENERDOG_JOB` makes the hook
-  exit `0` with no output — a false "clean"):
-  ```
-  WIENERDOG_JOB= WIENERDOG_HOME="$CORE" "$CORE/bin/session-start.sh"
-  ```
-- **Verify fail-closed.** Pipe that stdout through a small `node -e` script
-  that parses the JSON envelope and BLOCKS (drill FAILS — do not
-  re-authorize) on any of: empty stdout, a JSON-parse failure,
-  `hookSpecificOutput.hookEventName !== 'SessionStart'`, or a non-string
-  `additionalContext`. When it parses, **byte-compare** `additionalContext`
-  to the bytes of `$CORE/state/digest.md` (Table A) — they must be
-  **identical** (the hook injects exactly those bytes) — AND confirm a `grep
-  -F` for the poisoned marker over `additionalContext` finds nothing. A
-  marker match, a mismatch against the digest, or any block condition means
-  STOP.
-- **Grep the regenerated `$CORE/state/digest.md`** for the poisoned marker
-  directly (belt-and-suspenders against the decoded bytes above).
+  The block runs the installed hook at `$CORE/bin/session-start.sh` (Table A;
+  `doctor` does **not** print the path) with `WIENERDOG_HOME` set to the
+  step-0 core and `WIENERDOG_JOB` **cleared** (an inherited `WIENERDOG_JOB`
+  makes the hook exit `0` with no output — a false "clean").
+- **Verify fail-closed.** The `node -e` script parses the JSON envelope and
+  BLOCKS (drill FAILS — do not re-authorize) on any of: empty stdout, a
+  JSON-parse failure, `hookSpecificOutput.hookEventName !== 'SessionStart'`,
+  or a non-string `additionalContext`. When it parses, it **byte-compares**
+  `additionalContext` to the bytes of `$CORE/state/digest.md` (Table A) —
+  they must be **identical** (the hook injects exactly those bytes) — AND
+  confirms the poisoned marker does not appear in `additionalContext`. It
+  then greps the regenerated digest file directly, belt-and-suspenders.
 - **Check the managed block of every INSTALLED harness file via the Table D
   three-check conjunction.** `sync` runs only the **detected** harness's
   adapter, and a single-harness (Claude-only **or** Codex-only) install is
-  supported and tested — so apply the Table D checks to `CLAUDE.md`
-  **and/or** `AGENTS.md` per the install: both files when both harnesses are
-  installed, or only the single present file on a single-harness install. (An
-  installed harness's file being **missing** is a failure; an *un-installed*
-  harness's absent file is not — do not let a legitimately absent file block
-  re-authorization.) For each such file run all three Table D checks — the
-  **notice-tolerant** clean `sync` (block only on the Table D **BLOCK**
-  signals; the two constant Codex info notices are **ALLOWed**), the
-  **whole-file** marker grep, and the **exactly-one-sentinel-pair** check —
-  and do **NOT** byte-compare the region against the raw
-  `$CORE/state/digest.md` (Table D: `sync`'s trim+neutralize transform means
-  the region is never byte-identical, so that compare would falsely fail; the
-  three checks prove the block clean by construction). `doctor` is **not**
-  proof here (Table D).
+  supported — so the loop applies the Table D checks to `CLAUDE.md` **and/or**
+  `AGENTS.md` per the install. **Judgment call 1:** the loop skips an absent
+  file, which is correct for an *un-installed* harness — but an **installed**
+  harness's file being missing is a FAILURE; you know which harnesses you
+  installed, so confirm every installed one's file was actually checked. The
+  script's `sync` check is **notice-tolerant** by construction: it fails only
+  on a non-zero exit or a concrete Table D BLOCK message ("managed block not
+  updated", missing digest, a shadowing `AGENTS.override`) and lets the two
+  constant Codex info notices pass. **Judgment call 2:** also read the `sync`
+  output yourself for a *skipped installed adapter* (an installed harness
+  whose adapter did not run) — there is no single greppable string for that,
+  and it is a Table D BLOCK signal. Do **NOT** add a byte-compare of the
+  sentinel region against the raw `$CORE/state/digest.md` (Table D: `sync`'s
+  trim+neutralize transform means the region is never byte-identical, so that
+  compare would falsely fail; the three checks prove the block clean by
+  construction). `doctor` is **not** proof here (Table D).
 - *(Optional extra sanity check, NOT the proof.)* You may also start a
   **new** Claude Code / Codex session and confirm it does not surface the
   poisoned fact — a nicety, not the acceptance: the byte-level checks above
   are the proof (the injection is byte-gated).
 
-Record the drill result (all checks above, clean). This is met only when the
-drill passes and is recorded — that recorded pass is the precondition for
-step 7.
+Record the drill result (the full "DRILL PASS" output, the sync output you
+reviewed, and the date). This is met only when the drill passes and is
+recorded — that recorded pass is the precondition for step 7.
 
 ### 7. Re-authorize — only after a successful, recorded drill (step 6)
 
