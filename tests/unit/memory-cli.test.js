@@ -11,6 +11,14 @@ const { readRegistry, fileHash, seedApprovals } = require('../../src/core/identi
 const { defaultLayout } = require('../../src/core/layout');
 const { WienerdogError } = require('../../src/core/errors');
 
+// A fully-blocked profile (the pre-0.10.0 frozen shape). seedApprovals only seeds
+// when identity-auto-activation is BLOCKED; the released profile now defaults to
+// all-allowed, so pre-seed the "already approved" fixtures via the blocked seam.
+const BLOCKED = Object.freeze(Object.fromEntries(
+  ['google-setup', 'gws-use', 'external-content-routine', 'daily-summary-injection', 'identity-auto-activation']
+    .map((g) => [g, 'blocked'])
+));
+
 /** Temp core (config.yaml + state) + vault with the four identity files. */
 function setup() {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-memcli-'));
@@ -97,7 +105,7 @@ test('--yes does NOT bypass the confirmation', async () => {
 test('re-approving an unchanged file is idempotent and never prompts', async () => {
   const { vault, paths } = setup();
   // Seed (the attended-sync path) so the current bytes are already approved.
-  seedApprovals(paths.state, vault, defaultLayout());
+  seedApprovals(paths.state, vault, defaultLayout(), BLOCKED);
   const out = await withStdout(() =>
     memory.run(['approve', 'profile'], {
       paths,
@@ -111,7 +119,7 @@ test('re-approving an unchanged file is idempotent and never prompts', async () 
 
 test('replacing a previously approved version says so before prompting', async () => {
   const { vault, paths } = setup();
-  seedApprovals(paths.state, vault, defaultLayout());
+  seedApprovals(paths.state, vault, defaultLayout(), BLOCKED);
   fs.appendFileSync(path.join(vault, '06-Identity', 'profile.md'), 'later edit\n');
   const out = await withStdout(() =>
     memory.run(['approve', 'profile'], { paths, promptFn: async () => 'approve' })

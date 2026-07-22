@@ -14,6 +14,15 @@ const {
 const { defaultLayout } = require('../../src/core/layout');
 const { allowAll } = require('../../src/core/safety-profile');
 
+// A fully-blocked profile (the pre-0.10.0 frozen shape). seedApprovals only seeds
+// when identity-auto-activation is BLOCKED; the released profile now defaults to
+// all-allowed (no-op auto-seed), so these tests pass this explicit blocked profile
+// via the `profile` seam to keep exercising the frozen-era seeding behavior.
+const BLOCKED = Object.freeze(Object.fromEntries(
+  ['google-setup', 'gws-use', 'external-content-routine', 'daily-summary-injection', 'identity-auto-activation']
+    .map((g) => [g, 'blocked'])
+));
+
 /** Fresh temp state dir + vault with the four identity files. */
 function setup() {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-idappr-'));
@@ -67,7 +76,7 @@ test('writeRegistry persists atomically at mode 0600 and round-trips', () => {
 test('seedApprovals records present files once (source setup) and NEVER re-seeds', () => {
   const { stateDir, vaultDir } = setup();
   const layout = defaultLayout();
-  const first = seedApprovals(stateDir, vaultDir, layout);
+  const first = seedApprovals(stateDir, vaultDir, layout, BLOCKED);
   assert.equal(first.seeded.length, 4, 'all four present files seeded');
   const reg1 = readRegistry(stateDir);
   const key = '06-identity/profile.md';
@@ -76,12 +85,12 @@ test('seedApprovals records present files once (source setup) and NEVER re-seeds
   assert.equal(originalHash, fileHash(vaultDir, '06-Identity/profile.md'));
 
   // Second call: nothing new to seed.
-  assert.deepEqual(seedApprovals(stateDir, vaultDir, layout).seeded, []);
+  assert.deepEqual(seedApprovals(stateDir, vaultDir, layout, BLOCKED).seeded, []);
 
   // Change the file → seed must NOT update the recorded hash (fail closed until
   // a human ratifies via `wienerdog memory approve`, WP-117).
   fs.appendFileSync(path.join(vaultDir, '06-Identity', 'profile.md'), 'tampered\n');
-  assert.deepEqual(seedApprovals(stateDir, vaultDir, layout).seeded, []);
+  assert.deepEqual(seedApprovals(stateDir, vaultDir, layout, BLOCKED).seeded, []);
   assert.equal(readRegistry(stateDir).approvals[key].approved_blob_hash, originalHash, 'stale hash kept');
 });
 
@@ -107,18 +116,18 @@ test('seedApprovals under allowAll re-seeds nothing on registry loss (fail close
 test('seedApprovals still seeds under a blocked profile (frozen-era behavior unchanged)', () => {
   const { stateDir, vaultDir } = setup();
   const layout = defaultLayout();
-  // The default profile is the production (frozen → blocked) profile: seeds as today.
-  assert.equal(seedApprovals(stateDir, vaultDir, layout).seeded.length, 4);
+  // An explicit fully-blocked profile reproduces the frozen-era behavior: seeds all four.
+  assert.equal(seedApprovals(stateDir, vaultDir, layout, BLOCKED).seeded.length, 4);
 });
 
 test('seedApprovals skips absent files and seeds them on a later sync when they appear', () => {
   const { stateDir, vaultDir } = setup();
   const layout = defaultLayout();
   fs.rmSync(path.join(vaultDir, '06-Identity', 'goals.md'));
-  assert.equal(seedApprovals(stateDir, vaultDir, layout).seeded.length, 3);
+  assert.equal(seedApprovals(stateDir, vaultDir, layout, BLOCKED).seeded.length, 3);
   // goals.md appears later (human writes it) → next sync seeds just that one.
   fs.writeFileSync(path.join(vaultDir, '06-Identity', 'goals.md'), 'goals\n');
-  assert.deepEqual(seedApprovals(stateDir, vaultDir, layout).seeded, ['06-identity/goals.md']);
+  assert.deepEqual(seedApprovals(stateDir, vaultDir, layout, BLOCKED).seeded, ['06-identity/goals.md']);
 });
 
 test('approvalsMap keeps only string hashes; approvalsFromVault mirrors current bytes', () => {
@@ -136,7 +145,7 @@ test('identityStatus classifies ok / mismatch / unapproved / absent', () => {
   const { stateDir, vaultDir } = setup();
   const layout = defaultLayout();
   fs.rmSync(path.join(vaultDir, '06-Identity', 'instructions.md'));
-  seedApprovals(stateDir, vaultDir, layout); // seeds the three present files
+  seedApprovals(stateDir, vaultDir, layout, BLOCKED); // seeds the three present files
   fs.appendFileSync(path.join(vaultDir, '06-Identity', 'profile.md'), 'edit\n'); // → mismatch
   fs.writeFileSync(path.join(vaultDir, '06-Identity', 'instructions.md'), 'late\n'); // present, unseeded here
   const status = identityStatus(vaultDir, layout, readRegistry(stateDir));

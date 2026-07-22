@@ -12,6 +12,18 @@ const adopt = require('../../src/cli/adopt');
 const sync = require('../../src/cli/sync');
 const dream = require('../../src/cli/dream');
 const { readVaultLayout } = require('../../src/core/layout');
+const idApprovals = require('../../src/core/identity-approvals');
+
+// A fully-blocked profile (the pre-0.10.0 frozen shape). The released profile now
+// defaults to all-allowed. sync's internal seedApprovals no-ops under the allowed
+// default (auto-activation on → no auto-trust), and renderDigest has no profile seam
+// from the sync CLI. So we pre-seed identity approvals via this blocked seam to keep
+// the "digest surfaces the adopted identity" checkpoint; the daily summary, which
+// sync now injects (daily-summary-injection allowed), is asserted as present below.
+const BLOCKED = Object.freeze(Object.fromEntries(
+  ['google-setup', 'gws-use', 'external-content-routine', 'daily-summary-injection', 'identity-auto-activation']
+    .map((g) => [g, 'blocked'])
+));
 
 const POWERUSER_FIXTURE = path.resolve(__dirname, '../fixtures/poweruser-vault');
 const FAKE_BRAIN = path.resolve(__dirname, '../fixtures/adopt/fake-brain-mapped.js');
@@ -169,17 +181,20 @@ test('adopt-e2e: init → adopt → sync → dream through mapped tiers, one rev
     assert.match(cfg, /name: dream/, 'adopt scheduled the nightly dream');
     assert.match(cfg, /at: "03:30"/, 'dream scheduled at 03:30');
 
-    // 5. sync → digest rendered from the REAL identity notes. A0 pre-use freeze
-    //    (WP-109/WP-112): daily-summary-injection is blocked in production — sync
-    //    calls renderDigest with no profile, so the nested daily Summary is NOT
-    //    injected even though it exists in the adopted vault.
+    // 5. sync → digest rendered from the REAL identity notes. Pre-seed the
+    //    identity approvals via the blocked-profile seam (the released profile now
+    //    defaults to all-allowed, where sync's auto-seed no-ops) so the digest still
+    //    surfaces the adopted identity. daily-summary-injection is now ALLOWED and
+    //    sync's renderDigest has no profile seam, so the nested daily Summary IS
+    //    injected from the adopted vault.
+    idApprovals.seedApprovals(path.join(core, 'state'), adopted, layout, BLOCKED);
     await sync.run([]);
     const digest = fs.readFileSync(path.join(core, 'state', 'digest.md'), 'utf8');
     assert.match(digest, /Priya Nair/, 'digest reflects the real identity profile');
-    assert.doesNotMatch(
+    assert.match(
       digest,
       /Interviewed two coastal-town planners/,
-      'nested daily Summary is NOT injected under the frozen default'
+      'nested daily Summary is injected now that daily-summary-injection is allowed'
     );
 
     // 6. dream → writes through the mapped tiers, exactly one new commit. The

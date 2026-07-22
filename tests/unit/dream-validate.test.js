@@ -22,6 +22,15 @@ const { defaultLayout } = require('../../src/core/layout');
 const { readRegistry, recordSkills } = require('../../src/core/dream/skill-registry');
 const { allowAll } = require('../../src/core/safety-profile');
 
+// A fully-blocked profile (the pre-0.10.0 frozen shape). The released profile now
+// defaults to all-allowed, so a bare validateAndCommit no longer reverts an injected
+// identity write. Passing this via `o.profile` keeps exercising the freeze branch
+// (identity-auto-activation blocked → the write is reverted).
+const BLOCKED = Object.freeze(Object.fromEntries(
+  ['google-setup', 'gws-use', 'external-content-routine', 'daily-summary-injection', 'identity-auto-activation']
+    .map((g) => [g, 'blocked'])
+));
+
 /** @param {string} cwd @param {string[]} args */
 function git(cwd, args) {
   return execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf8' });
@@ -161,7 +170,7 @@ test('dream-validate: a frozen add of an injected identity file is reverted even
   const { vault, scratch } = tempVault();
   // Passes the Tier-3 numeric floor — proving the freeze overrides it.
   writeVault(vault, '06-Identity/profile.md', FM({ confidence: '0.9', recurrence: '3', derived_from_untrusted: 'false' }));
-  const res = validateAndCommit({ vaultDir: vault, scratchDir: scratch, date: '2026-07-02', expectedScratch: [] });
+  const res = validateAndCommit({ vaultDir: vault, scratchDir: scratch, date: '2026-07-02', expectedScratch: [], profile: BLOCKED });
   assert.equal(fs.existsSync(path.join(vault, '06-Identity/profile.md')), false, 'reverted, not committed');
   assert.ok(
     res.reverted.some((r) => r.path === '06-Identity/profile.md' && /identity activation is frozen/.test(r.reason)),
@@ -174,7 +183,7 @@ test('dream-validate: a frozen modification of an existing injected identity fil
   const { vault, scratch } = tempVault({ '06-Identity/preferences.md': original });
   // Brain overwrites the human-authored file, even with a floor-passing rewrite.
   writeVault(vault, '06-Identity/preferences.md', FM({ confidence: '0.95', recurrence: '5', derived_from_untrusted: 'false' }));
-  const res = validateAndCommit({ vaultDir: vault, scratchDir: scratch, date: '2026-07-02', expectedScratch: [] });
+  const res = validateAndCommit({ vaultDir: vault, scratchDir: scratch, date: '2026-07-02', expectedScratch: [], profile: BLOCKED });
   assert.equal(fs.readFileSync(path.join(vault, '06-Identity/preferences.md'), 'utf8'), original, 'restored to original bytes');
   assert.ok(
     res.reverted.some((r) => r.path === '06-Identity/preferences.md' && /identity activation is frozen/.test(r.reason))
@@ -188,7 +197,7 @@ test('dream-validate: a case-variant add (06-Identity/Profile.md) also hits the 
   // (bypassing the freeze) while the digest's literal profile.md read resolved to
   // the SAME inode on a case-insensitive filesystem.
   writeVault(vault, '06-Identity/Profile.md', FM({ confidence: '0.9', recurrence: '3', derived_from_untrusted: 'false' }));
-  const res = validateAndCommit({ vaultDir: vault, scratchDir: scratch, date: '2026-07-02', expectedScratch: [] });
+  const res = validateAndCommit({ vaultDir: vault, scratchDir: scratch, date: '2026-07-02', expectedScratch: [], profile: BLOCKED });
   assert.equal(fs.existsSync(path.join(vault, '06-Identity/Profile.md')), false, 'reverted, not committed');
   assert.ok(
     res.reverted.some((r) => r.path === '06-Identity/Profile.md' && /identity activation is frozen/.test(r.reason)),
@@ -202,7 +211,7 @@ test('dream-validate: a case-variant identity DIR add (06-identity/profile.md) h
   // entered the Tier-3 block (case-sensitive prefix), so the freeze revert was
   // never consulted — yet on a case-insensitive FS it is the same identity dir.
   writeVault(vault, '06-identity/profile.md', FM({ confidence: '0.9', recurrence: '3', derived_from_untrusted: 'false' }));
-  const res = validateAndCommit({ vaultDir: vault, scratchDir: scratch, date: '2026-07-02', expectedScratch: [] });
+  const res = validateAndCommit({ vaultDir: vault, scratchDir: scratch, date: '2026-07-02', expectedScratch: [], profile: BLOCKED });
   assert.equal(fs.existsSync(path.join(vault, '06-identity/profile.md')), false, 'reverted, not committed');
   assert.ok(
     res.reverted.some((r) => r.path === '06-identity/profile.md' && /identity activation is frozen/.test(r.reason)),

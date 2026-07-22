@@ -12,6 +12,14 @@ const {
 const { defaultLayout } = require('../../src/core/layout');
 const { WienerdogError } = require('../../src/core/errors');
 
+// A fully-blocked profile (the pre-0.10.0 frozen shape). seedApprovals only seeds
+// when identity-auto-activation is BLOCKED; the released profile now defaults to
+// all-allowed, so seed this contrast case via the explicit blocked profile seam.
+const BLOCKED = Object.freeze(Object.fromEntries(
+  ['google-setup', 'gws-use', 'external-content-routine', 'daily-summary-injection', 'identity-auto-activation']
+    .map((g) => [g, 'blocked'])
+));
+
 function setup() {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-record-'));
   const stateDir = path.join(tmp, 'state');
@@ -36,12 +44,12 @@ test('recordApproval hashes the CURRENT exact bytes and persists at 0600', () =>
 test('recordApproval OVERWRITES an existing setup record (unlike seedApprovals)', () => {
   const { stateDir, vaultDir } = setup();
   const rel = '06-Identity/profile.md';
-  seedApprovals(stateDir, vaultDir, defaultLayout());
+  seedApprovals(stateDir, vaultDir, defaultLayout(), BLOCKED);
   const seededHash = readRegistry(stateDir).approvals['06-identity/profile.md'].approved_blob_hash;
 
   fs.appendFileSync(path.join(vaultDir, rel), 'human edit\n');
   // seedApprovals must NOT update it…
-  seedApprovals(stateDir, vaultDir, defaultLayout());
+  seedApprovals(stateDir, vaultDir, defaultLayout(), BLOCKED);
   assert.equal(readRegistry(stateDir).approvals['06-identity/profile.md'].approved_blob_hash, seededHash);
   // …but recordApproval (the human ratification path) does.
   const { hash } = recordApproval(stateDir, vaultDir, rel, 'approved');

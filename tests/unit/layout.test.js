@@ -16,6 +16,14 @@ const { renderDigest } = require('../../src/core/digest');
 const { allowAll } = require('../../src/core/safety-profile');
 const { approvalsFromVault } = require('../../src/core/identity-approvals');
 
+// A fully-blocked profile (the pre-0.10.0 frozen shape). The released profile now
+// defaults to all-allowed; passing this via `opts.profile` blocks
+// `daily-summary-injection` so the "gate blocked → no daily block" coverage holds.
+const BLOCKED = Object.freeze(Object.fromEntries(
+  ['google-setup', 'gws-use', 'external-content-routine', 'daily-summary-injection', 'identity-auto-activation']
+    .map((g) => [g, 'blocked'])
+));
+
 const POWERUSER_FIXTURE = path.join(__dirname, '..', 'fixtures', 'poweruser-vault');
 
 /** The block WP-026 writes for a nested-daily power-user vault. */
@@ -227,23 +235,24 @@ test('layoutPromptLines with vaultDir prefixes EVERY tier line (WP-130 seam)', (
   assert.ok(rel.some((l) => l === 'Daily log file for today: 07-Daily/2026-07-03.md'));
 });
 
-test('renderDigest with the power-user layout: frozen default omits the nested daily (identity + project still render)', () => {
+test('renderDigest with the power-user layout: daily blocked via profile seam omits the nested daily (identity + project still render)', () => {
   const powerUser = { ...defaultLayout(), daily_dir: '05-Daily', daily_filename: 'YYYY/MM/YYYY-MM-DD.md' };
   const digest = renderDigest(POWERUSER_FIXTURE, powerUser, {
     identityApprovals: approvalsFromVault(POWERUSER_FIXTURE, powerUser),
+    profile: BLOCKED,
   });
   // Identity content (distinct persona, cannot match the default golden).
   assert.ok(digest.includes('Priya Nair'), 'identity profile content present');
   assert.ok(digest.includes('## Preferences'), 'preferences section header present');
   // Project listed under Active projects.
   assert.ok(digest.includes('- field-study'), 'project listed');
-  // A0 pre-use freeze (WP-109/WP-112): daily-summary-injection is blocked by
-  // default, even though the recursive walk would otherwise find this nested daily.
+  // A0 pre-use gate (WP-109/WP-112): with daily-summary-injection blocked via the
+  // profile seam, the recursive walk still finds this nested daily but it is suppressed.
   assert.ok(
     !digest.includes('Interviewed two coastal-town planners'),
-    'nested daily summary omitted under the frozen default'
+    'nested daily summary omitted when the gate is blocked'
   );
-  assert.ok(!digest.includes('## Latest daily log'), 'daily block omitted under the frozen default');
+  assert.ok(!digest.includes('## Latest daily log'), 'daily block omitted when the gate is blocked');
 });
 
 test('renderDigest with the power-user layout + { profile: allowAll() } finds the nested daily (gate, not removal)', () => {

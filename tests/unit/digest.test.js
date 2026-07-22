@@ -20,16 +20,26 @@ const { defaultLayout } = require('../../src/core/layout');
 const FIXTURE = path.join(__dirname, '..', 'fixtures', 'identity-filled');
 const GOLDEN = path.join(__dirname, '..', 'golden', 'digest-default.md');
 
+// A fully-blocked profile (the pre-0.10.0 frozen shape). The released profile now
+// defaults to all-allowed, so a bare renderDigest would inject the daily block and
+// diverge from the golden. Passing this via the `opts.profile` seam blocks
+// `daily-summary-injection`, keeping the golden the no-daily reference and preserving
+// the "gate blocked → no daily block" regression coverage (any future re-gate).
+const BLOCKED = Object.freeze(Object.fromEntries(
+  ['google-setup', 'gws-use', 'external-content-routine', 'daily-summary-injection', 'identity-auto-activation']
+    .map((g) => [g, 'blocked'])
+));
+
 /** The A3 hash-gate approvals map for a vault's CURRENT bytes (trust-what-is-here). */
 function approvals(vaultDir) {
   return approvalsFromVault(vaultDir, defaultLayout());
 }
 
-test('renderDigest on the fixture equals the golden byte-for-byte (frozen: no daily block)', () => {
-  const actual = renderDigest(FIXTURE, undefined, { identityApprovals: approvals(FIXTURE) });
+test('renderDigest on the fixture equals the golden byte-for-byte (daily blocked via profile seam: no daily block)', () => {
+  const actual = renderDigest(FIXTURE, undefined, { identityApprovals: approvals(FIXTURE), profile: BLOCKED });
   const golden = fs.readFileSync(GOLDEN, 'utf8');
   assert.equal(actual, golden);
-  assert.ok(!actual.includes('## Latest daily log'), 'daily-summary-injection gate is frozen by default');
+  assert.ok(!actual.includes('## Latest daily log'), 'daily-summary-injection blocked → no daily block');
 });
 
 test('renderDigest with NO approvals map injects no identity (A3 fail closed)', () => {
@@ -141,12 +151,12 @@ test('renderDigest prepends opts.updateLine; empty leaves the golden byte-identi
   const golden = fs.readFileSync(GOLDEN, 'utf8');
   // No update line (and no alerts) → unchanged from the golden.
   assert.equal(
-    renderDigest(FIXTURE, undefined, { updateLine: '', identityApprovals: approvals(FIXTURE) }),
+    renderDigest(FIXTURE, undefined, { updateLine: '', identityApprovals: approvals(FIXTURE), profile: BLOCKED }),
     golden
   );
   // A non-empty update line is prepended, then a blank line, then the body.
   const line = '> [!note] A newer Wienerdog is available (0.2.1 → 0.3.0). Update with: npx wienerdog@latest sync';
-  const withLine = renderDigest(FIXTURE, undefined, { updateLine: line, identityApprovals: approvals(FIXTURE) });
+  const withLine = renderDigest(FIXTURE, undefined, { updateLine: line, identityApprovals: approvals(FIXTURE), profile: BLOCKED });
   assert.equal(withLine, `${line}\n\n${golden}`);
 });
 
@@ -154,12 +164,12 @@ test('renderDigest prepends opts.schedulerLine; empty leaves the golden byte-ide
   const golden = fs.readFileSync(GOLDEN, 'utf8');
   // No scheduler line (and no alerts/update) → unchanged from the golden.
   assert.equal(
-    renderDigest(FIXTURE, undefined, { schedulerLine: '', identityApprovals: approvals(FIXTURE) }),
+    renderDigest(FIXTURE, undefined, { schedulerLine: '', identityApprovals: approvals(FIXTURE), profile: BLOCKED }),
     golden
   );
   // A non-empty scheduler line is prepended, then a blank line, then the body.
   const line = "> [!warning] Wienerdog: the scheduled job \"dream\" is set up but not currently active in your computer's scheduler. Run 'wienerdog sync' to reactivate it. (This can happen after some system updates.)";
-  const withLine = renderDigest(FIXTURE, undefined, { schedulerLine: line, identityApprovals: approvals(FIXTURE) });
+  const withLine = renderDigest(FIXTURE, undefined, { schedulerLine: line, identityApprovals: approvals(FIXTURE), profile: BLOCKED });
   assert.equal(withLine, `${line}\n\n${golden}`);
 });
 
@@ -167,14 +177,14 @@ test('renderDigest prepends opts.quarantineLine; empty/absent leaves the golden 
   const golden = fs.readFileSync(GOLDEN, 'utf8');
   // No quarantine line (and no alerts) → unchanged from the golden.
   assert.equal(
-    renderDigest(FIXTURE, undefined, { quarantineLine: '', identityApprovals: approvals(FIXTURE) }),
+    renderDigest(FIXTURE, undefined, { quarantineLine: '', identityApprovals: approvals(FIXTURE), profile: BLOCKED }),
     golden
   );
   // A non-empty quarantine line is prepended, then a blank line, then the body.
   const line =
     '> [!warning] Wienerdog: 1 session transcript(s) could not be read and were skipped — huge.jsonl (over-ceiling). ' +
     'Dreaming continues over your other sessions; a skipped file is retried automatically if it changes.';
-  const withLine = renderDigest(FIXTURE, undefined, { quarantineLine: line, identityApprovals: approvals(FIXTURE) });
+  const withLine = renderDigest(FIXTURE, undefined, { quarantineLine: line, identityApprovals: approvals(FIXTURE), profile: BLOCKED });
   assert.equal(withLine, `${line}\n\n${golden}`);
 });
 
@@ -184,7 +194,7 @@ test('renderDigest places quarantineLine after alerts and before schedulerLine/u
   const schedulerLine = '> [!warning] Wienerdog: the scheduled job "dream" is set up but not currently active';
   const updateLine = '> [!note] update available';
   const alerts = [{ job: 'dream', at: '2026-07-04T03:30:00.000Z', reason: 'boom', log_hint: 'logs/dream/' }];
-  const out = renderDigest(FIXTURE, undefined, { alerts, quarantineLine, schedulerLine, updateLine, identityApprovals: approvals(FIXTURE) });
+  const out = renderDigest(FIXTURE, undefined, { alerts, quarantineLine, schedulerLine, updateLine, identityApprovals: approvals(FIXTURE), profile: BLOCKED });
   const alertIdx = out.indexOf('has failed');
   const quarIdx = out.indexOf(quarantineLine);
   const schedIdx = out.indexOf(schedulerLine);
@@ -203,7 +213,7 @@ test('renderDigest orders the prefix alerts → schedulerLine → updateLine →
   const schedulerLine = '> [!warning] Wienerdog: the scheduled job "dream" is set up but not currently active';
   const updateLine = '> [!note] update available';
   const alerts = [{ job: 'dream', at: '2026-07-04T03:30:00.000Z', reason: 'boom', log_hint: 'logs/dream/' }];
-  const out = renderDigest(FIXTURE, undefined, { alerts, schedulerLine, updateLine, identityApprovals: approvals(FIXTURE) });
+  const out = renderDigest(FIXTURE, undefined, { alerts, schedulerLine, updateLine, identityApprovals: approvals(FIXTURE), profile: BLOCKED });
   const alertIdx = out.indexOf('has failed'); // alert block body (distinct from scheduler warning)
   const schedIdx = out.indexOf(schedulerLine);
   const updIdx = out.indexOf(updateLine);
@@ -596,7 +606,7 @@ test('EP4: a would-be-oversized daily note is read bounded below SCAN_MAX_BYTES,
 });
 
 test('EP4: clean fixtures stay byte-identical to the golden (gate is a no-op)', () => {
-  const actual = renderDigest(FIXTURE, undefined, { identityApprovals: approvals(FIXTURE) });
+  const actual = renderDigest(FIXTURE, undefined, { identityApprovals: approvals(FIXTURE), profile: BLOCKED });
   assert.equal(actual, fs.readFileSync(GOLDEN, 'utf8'));
 });
 
@@ -614,8 +624,8 @@ test('secretQuarantine: a non-empty list renders the fixed pending-review banner
 
 test('secretQuarantine: empty or absent renders no banner (golden byte-identical)', () => {
   const golden = fs.readFileSync(GOLDEN, 'utf8');
-  assert.equal(renderDigest(FIXTURE, undefined, { identityApprovals: approvals(FIXTURE), secretQuarantine: [] }), golden);
-  assert.equal(renderDigest(FIXTURE, undefined, { identityApprovals: approvals(FIXTURE) }), golden);
+  assert.equal(renderDigest(FIXTURE, undefined, { identityApprovals: approvals(FIXTURE), secretQuarantine: [], profile: BLOCKED }), golden);
+  assert.equal(renderDigest(FIXTURE, undefined, { identityApprovals: approvals(FIXTURE), profile: BLOCKED }), golden);
 });
 
 test('secretQuarantine: a hostile basename is re-sanitized before it reaches the banner (defense in depth)', () => {
@@ -752,6 +762,6 @@ test('insecureModes: a positive count renders the fixed banner in the prefix; 0/
   assert.ok(withBanner.indexOf('readable by other users') < withBanner.indexOf("# Who you're working with"), 'banner is in the prefix');
   const bannerLine = withBanner.split('\n').find((l) => l.includes('readable by other users'));
   assert.ok(bannerLine && !/[/\\]/.test(bannerLine.replace('`wienerdog sync`', '').replace('`wienerdog doctor`', '')), 'no paths in the banner line');
-  assert.equal(renderDigest(FIXTURE, undefined, { identityApprovals: approvals(FIXTURE), insecureModes: 0 }), golden);
-  assert.equal(renderDigest(FIXTURE, undefined, { identityApprovals: approvals(FIXTURE) }), golden);
+  assert.equal(renderDigest(FIXTURE, undefined, { identityApprovals: approvals(FIXTURE), insecureModes: 0, profile: BLOCKED }), golden);
+  assert.equal(renderDigest(FIXTURE, undefined, { identityApprovals: approvals(FIXTURE), profile: BLOCKED }), golden);
 });

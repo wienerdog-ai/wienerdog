@@ -13,6 +13,14 @@ const idApprovals = require('../../src/core/identity-approvals');
 const { defaultLayout } = require('../../src/core/layout');
 const { Limits } = require('../../src/core/transcripts');
 
+// A fully-blocked profile (the pre-0.10.0 frozen shape). seedApprovals only seeds
+// when identity-auto-activation is BLOCKED; the released profile now defaults to
+// all-allowed, so simulate the attended-sync first-time seed via this blocked seam.
+const BLOCKED = Object.freeze(Object.fromEntries(
+  ['google-setup', 'gws-use', 'external-content-routine', 'daily-summary-injection', 'identity-auto-activation']
+    .map((g) => [g, 'blocked'])
+));
+
 const FAKE_BRAIN = path.resolve(__dirname, '../fixtures/dream/fake-brain.js');
 const INJ_FIXTURE = path.resolve(__dirname, '../fixtures/dream/transcripts/claude-injection.jsonl');
 const DATE = '2026-07-02';
@@ -267,8 +275,9 @@ test('dream-integration: full run commits valid tiers, reverts injection + weak 
   // A3 hash gate (WP-116): simulate the attended sync's first-time seed so the
   // dream's registry read finds approved hashes. The dream itself never seeds;
   // profile.md is freeze-protected (WP-112), so the seeded hash still matches
-  // at the step-15 render.
-  idApprovals.seedApprovals(path.join(ctx.core, 'state'), ctx.vault, defaultLayout());
+  // at the step-15 render. Pass an explicit blocked profile so the seed happens
+  // (the released profile now defaults to all-allowed, where seedApprovals no-ops).
+  idApprovals.seedApprovals(path.join(ctx.core, 'state'), ctx.vault, defaultLayout(), BLOCKED);
   const before = commitCount(ctx.vault);
 
   const { output, thrown } = await runDream(ctx, ['--yes']);

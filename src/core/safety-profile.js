@@ -13,11 +13,11 @@ const CAPABILITY = {
 /** Fixed, plain-language description per gate (control-plane text; used by the
  *  preflight and the fail-closed message). */
 const DESCRIPTION = {
-  'google-setup': 'connecting a Google account is disabled',
-  'gws-use': 'reading or sending Gmail, Calendar, and Drive is disabled',
-  'external-content-routine': 'scheduling skill-based routines that read external content is disabled',
-  'daily-summary-injection': 'injecting the daily note summary into the session digest is disabled',
-  'identity-auto-activation': 'automatic dream edits to your identity files are disabled',
+  'google-setup': 'connecting a Google account',
+  'gws-use': 'reading or sending Gmail, Calendar, and Drive',
+  'external-content-routine': 'scheduling skill-based routines that read external content',
+  'daily-summary-injection': 'injecting the daily note summary into the session digest',
+  'identity-auto-activation': 'automatic dream edits to your identity files',
 };
 
 /** Deterministic gate order for the preflight + JSON. */
@@ -30,11 +30,11 @@ const ORDER = [
  *  CODE CHANGE to this constant in a future release — never a runtime toggle,
  *  env var, or CLI flag. Object.freeze prevents same-process mutation. */
 const FROZEN_PROFILE = Object.freeze({
-  'google-setup': 'blocked',
-  'gws-use': 'blocked',
-  'external-content-routine': 'blocked',
-  'daily-summary-injection': 'blocked',
-  'identity-auto-activation': 'blocked',
+  'google-setup': 'allowed',
+  'gws-use': 'allowed',
+  'external-content-routine': 'allowed',
+  'daily-summary-injection': 'allowed',
+  'identity-auto-activation': 'allowed',
 });
 
 /** @param {string} name @param {Record<string,string>} [profile]

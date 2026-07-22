@@ -17,6 +17,14 @@ const vendor = require('../../src/core/vendor');
 const schedule = require('../../src/cli/schedule');
 const { allowAll } = require('../../src/core/safety-profile');
 
+// A fully-blocked profile (the pre-0.10.0 frozen shape). The released profile now
+// defaults to all-allowed, so a bare `add --skill` is no longer refused. Passing this
+// via the `profile` seam still exercises the A0 fail-closed refusal.
+const BLOCKED = Object.freeze(Object.fromEntries(
+  ['google-setup', 'gws-use', 'external-content-routine', 'daily-summary-injection', 'identity-auto-activation']
+    .map((g) => [g, 'blocked'])
+));
+
 // Hermeticity: CI sets XDG_CONFIG_HOME to the real ~/.config, which
 // systemdUserDir() prefers over $HOME. Unset it (this file runs in its own
 // `node --test` process) so systemd units resolve under the temp HOME, never a
@@ -305,7 +313,7 @@ test('scheduler-schedule: add validates name, --at, and exactly-one-of skill/job
 // install cannot create or execute an external-content routine headlessly.
 // -------------------------------------------------------------------------
 
-test('scheduler-schedule: add --skill is refused (frozen) — no job written, no OS registration', async () => {
+test('scheduler-schedule: add --skill is refused under a blocked profile — no job written, no OS registration', async () => {
   const { env, paths } = setup();
   /** @type {string[][]} */ const calls = [];
   const loader = (argv) => {
@@ -314,7 +322,7 @@ test('scheduler-schedule: add --skill is refused (frozen) — no job written, no
   };
 
   await assert.rejects(
-    runSchedule(env, ['add', 'daily-digest', '--at', '07:00', '--skill', 'x'], loader),
+    runSchedule(env, ['add', 'daily-digest', '--at', '07:00', '--skill', 'x'], loader, BLOCKED),
     /disabled in this release/
   );
 
