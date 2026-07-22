@@ -28,6 +28,12 @@ function tempEnv() {
       // to — and removed from — the temp tree, never the developer's real
       // ~/.local/bin. Detection uses the config-dir overrides below.
       HOME: root,
+      // Isolate the systemd user dir too: it derives from XDG_CONFIG_HOME (falling
+      // back to HOME/.config). The CI Linux runners SET XDG_CONFIG_HOME on the
+      // host, which — spread in above — would otherwise point systemdUserDir()
+      // outside `root`, so a planted `root/.config/systemd/user/*.timer` entry
+      // reads as "not in a scheduler root" and its unregister is never derived.
+      XDG_CONFIG_HOME: path.join(root, '.config'),
       WIENERDOG_HOME: core,
       WIENERDOG_VAULT: path.join(root, 'vault'),
       CLAUDE_CONFIG_DIR: path.join(root, 'absent-claude'),

@@ -334,13 +334,24 @@ test('the same mismatch with NO approvals map omits silently (bare test render)'
   assert.ok(!digest.includes(BANNER), 'no banner without a supplied map');
 });
 
-test('case-fold: Profile.md (capital P) shares one approval slot with profile.md', () => {
+test('case-fold: Profile.md (capital P) shares one approval slot with profile.md', (t) => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-digest-case-'));
   const idDir = path.join(tmp, '06-Identity');
   fs.mkdirSync(idDir, { recursive: true });
   // Only a capital-P Profile.md exists (plus one normal file for contrast).
   fs.copyFileSync(path.join(FIXTURE, '06-Identity', 'preferences.md'), path.join(idDir, 'preferences.md'));
   fs.copyFileSync(path.join(FIXTURE, '06-Identity', 'profile.md'), path.join(idDir, 'Profile.md'));
+
+  // This whole scenario — a lone capital-P Profile.md reached through the
+  // digest's literal lowercase `profile.md` read — only exists on a
+  // case-INSENSITIVE FS (macOS default). On a case-sensitive FS (Linux CI) the
+  // two spellings are distinct files, the literal read genuinely misses, and
+  // there is nothing to fold: the invariant is vacuous, not violated. Skip
+  // rather than assert a claim that only holds on one filesystem class.
+  if (!fs.existsSync(path.join(idDir, 'profile.md'))) {
+    t.skip('case-sensitive filesystem: Profile.md and profile.md are distinct files');
+    return;
+  }
 
   // On a case-insensitive FS the digest's literal profile.md read resolves to the
   // same inode; the approvals map holds only FOLDED keys, so the one slot covers
