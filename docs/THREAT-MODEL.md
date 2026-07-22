@@ -21,31 +21,41 @@ Wienerdog auto-writes persistent memory derived from conversation transcripts, i
 - **Model output**: partially trusted — it may have been steered by untrusted input in its context.
 - The dreaming job's *input* (transcripts) therefore always contains untrusted content and is treated as data, never as instructions.
 
-## T0 — Pre-use safety profile (fail-closed freeze)
+## T0 — Pre-use safety profile (code-owned capability gates)
 
 Wienerdog ships a **code-owned safety profile** (`src/core/safety-profile.js`):
-the powerful capabilities below are **BLOCKED by default** and can be opened only
-by a reviewed code change in a future release — never at runtime, and never by an
-environment variable or CLI flag. This exists so a partially configured machine
-can never be mistaken for an approved one (2026-07-15 audit, action A0). Inspect
-the gates with `wienerdog safety`.
+five capability gates whose status changes ONLY by a reviewed code change to the
+constant — never at runtime, and never by an environment variable or CLI flag. So
+a gate can never be opened by a misconfigured machine, a hostile input, or a flag.
+Inspect the gates with `wienerdog safety`.
 
-Currently frozen (each fails closed before any side effect):
-- **`google-setup`** — connecting a Google account (`gws auth`) fails before the
-  OAuth browser opens.
-- **`gws-use`** — every `gws` read/draft/send/calendar/drive verb fails before a
-  credential is loaded.
-- **`external-content-routine`** — scheduling or running a `skill:` routine fails
-  before a model is spawned (`builtin:dream` is unaffected).
-- **`daily-summary-injection`** — the daily note Summary is not injected into the
-  session digest.
-- **`identity-auto-activation`** — the nightly dream may not change the four
-  injected identity files (`06-Identity/{profile,preferences,goals,instructions}.md`);
-  identity stays human-authored.
+The 2026-07-15 audit (action A0) initially shipped every gate **frozen (blocked)**
+until its P0 hardening landed. In **0.10.0** all five were opened after that
+hardening cleared review — each capability is now **allowed**, protected by the
+mechanism named beside it (which fails closed if it ever fails):
+- **`google-setup`** / **`gws-use`** — connecting Google + every read/draft/send/
+  calendar/drive verb. Backed by least-scope **split credentials** (read vs draft
+  vs send-only), a contained **capability broker** that alone holds the credentials
+  and enforces a fixed server-side verb allowlist, and OAuth state+PKCE. A routine
+  reaches Google only through the broker, gated behind BOTH `external-content-routine`
+  and `gws-use`; the self-only alert/digest resolve your address under the read
+  permission and send under the send-only one.
+- **`external-content-routine`** — scheduling/running a `skill:` routine. Backed by
+  a hermetic runtime profile (empty setting-sources, strict MCP, explicit tool
+  allowlist) with a **live per-run containment probe** that HALTS the routine
+  fail-closed if the installed Claude no longer honors the containment flags
+  (`builtin:dream` is unaffected).
+- **`daily-summary-injection`** — the mixed-provenance daily Summary is injected
+  inside a code-owned **untrusted-data fence** (treated as data, not instructions),
+  from a bounded read, behind the provenance + secret gates.
+- **`identity-auto-activation`** — the nightly dream may author the four injected
+  identity files again, but nothing it writes is trusted into a session until a
+  human **ratifies the exact bytes** (`wienerdog memory approve`); `sync` no longer
+  auto-trusts them.
 
-These gates open only after the corresponding P0 hardening lands and a human
-go decision (audit actions A1–A6). Until then the permitted profile is a local,
-Google-disabled, dream-only evaluation.
+A gate could be re-frozen the same way it was opened — a reviewed code change to the
+constant. The invariant is the mechanism (no runtime/env/flag override), not the
+current values.
 
 ## T1 — Persistent prompt injection via memory (the defining threat)
 
@@ -133,9 +143,9 @@ The lifecycle's own artifacts — `digest.md`, `alerts.jsonl`, `transcript-ledge
 
 **Mitigations (ADR-0007 + the A2 capability broker, ADR-0026)**: a routine reaches Google **only** through the **capability broker** — a local, per-job stdio process that alone holds the OAuth credentials and exposes only **fixed verbs** (least-scope credentials, server-side schemas, byte/count/rate limits, an exact one-Google-method-per-verb allowlist). The model never sees a token, a raw Google client, or a generic send, and cannot start `googleapis` itself. The default unattended send is **`send_digest_to_self`** — a **zero-address-input** verb: it takes no recipient, the broker resolves the recipient to the authenticated self address, and an external address supplied in the arguments is **schema-rejected with zero API calls**. Third-party unattended send stays disabled. A send still requires a **send grant** scoped to `(routine, kind)`, which now lives in the **broker grant store** (`state/broker-grants.json`, 0600), mutated **only** by the interactive TTY typed-word `wienerdog grant` path (no `--yes`/env/headless) and carrying an **exact-byte integrity marker** the broker verifies at send time — a mismatch **fails closed** (no send/draft/calendar write) with a fixed alert. Ungranted sends return a fail-visible notice (fail-safe, fail-visible); the dream job has no `gws` access at all; `_alert` remains a fixed-template self-send.
 
-**Residual (accepted, v1) — honest boundary (A12).** The grant store's integrity marker and the broker's checks are **tamper-evidence between attended human actions, not an OS boundary**: a same-user *native* actor (arbitrary code running as the same OS user) can read the same 0600 tokens and rewrite the same 0600 grant store and its marker alike — the marker is not a cryptographic signature and does not claim unforgeability. What this design actually contains is a **hijacked model** (the audited threat): A1 gives the routine no Bash, no writes outside its staging dir, and no network; A2 gives it no raw credential and only fixed verbs. A model steered by a poisoned email therefore cannot forge a grant, widen a scope, name a new recipient, or reach a disallowed Google method — proven end-to-end by the WP-142 poisoned-email containment harness. This is the same single-user-machine file-permission boundary that guards the OAuth tokens (T4); a keyed MAC on grants is deliberately **not** built (a same-user-readable key is not a boundary and would only imply a false guarantee). Revisit if grants ever move outside a single-user-machine trust model.
+**Residual (accepted, v1) — honest boundary (A12).** The grant store's integrity marker and the broker's checks are **tamper-evidence between attended human actions, not an OS boundary**: a same-user *native* actor (arbitrary code running as the same OS user) can read the same 0600 tokens and rewrite the same 0600 grant store and its marker alike — the marker is not a cryptographic signature and does not claim unforgeability. What this design actually contains is a **hijacked model** (the audited threat): A1 gives the routine no Bash, no writes outside its staging dir, and no network; A2 gives it no raw credential and only fixed verbs. A model steered by a poisoned email therefore cannot forge a grant, widen a scope, name a new recipient, or reach a disallowed Google method — enforced by A1's restricted routine argv (no Bash, no out-of-staging write, no network) and A2's fixed broker verbs. (The live end-to-end poisoned-email harness that exercises this is being re-fitted to the current Claude runtime — WP-scenario-harness-auth-repair; the containment itself is enforced by the argv + broker design, unit-verified and design-reviewed.) This is the same single-user-machine file-permission boundary that guards the OAuth tokens (T4); a keyed MAC on grants is deliberately **not** built (a same-user-readable key is not a boundary and would only imply a false guarantee). Revisit if grants ever move outside a single-user-machine trust model.
 
-As of the A0 pre-use freeze (T0), the entire `gws` path — including any send — is disabled behind the `gws-use` capability gate, so no outbound send is reachable at all until the gate is opened.
+In **0.10.0** the `gws-use` gate is **open** (T0): the outbound path is reachable but contained by the broker mechanisms above — least-scope split credentials, fixed server-side verbs, zero-address self-only unattended send, and the integrity-checked send grant — so a hijacked model still cannot forge a grant, widen a scope, name a new recipient, or reach a disallowed Google method.
 
 ## T4b — OAuth handshake integrity (loopback state + PKCE)
 
