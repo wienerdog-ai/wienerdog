@@ -14,6 +14,14 @@ const client = require('../../src/gws/client');
 const grantStore = require('../../src/gws/broker/grant-store');
 const { allowAll } = require('../../src/core/safety-profile');
 
+// A fully-blocked profile (the pre-0.10.0 frozen shape). The released profile now
+// defaults to all-allowed, so a bare dispatch no longer fails closed. Passing this
+// via `opts.profile` still exercises the A0 fail-closed refusal before any credential load.
+const BLOCKED = Object.freeze(Object.fromEntries(
+  ['google-setup', 'gws-use', 'external-content-routine', 'daily-summary-injection', 'identity-auto-activation']
+    .map((g) => [g, 'blocked'])
+));
+
 const repoRoot = path.join(__dirname, '..', '..');
 const bin = path.join(repoRoot, 'bin', 'wienerdog.js');
 
@@ -143,14 +151,17 @@ test('gws-dispatch: getServices() (combined-token path) is RETIRED — it throws
   );
 });
 
-test('gws-dispatch: _alert resolves its service via getServicesForClass(paths, SEND)', async () => {
+test('gws-dispatch: _alert resolves getProfile via READ and sends via SEND (send scope cannot getProfile) — WP-gws-getprofile-via-read', async () => {
   const { env } = initPaths();
-  const s = stubGmail('owner@example.com');
+  // Distinct per-class stubs prove the self-address is resolved under READ and
+  // the send happens under SEND — a single shared stub would pass vacuously.
+  const readStub = stubGmail('owner@example.com');
+  const sendStub = stubGmail('owner@example.com');
   const seenClasses = [];
   const savedForClass = client.getServicesForClass;
   client.getServicesForClass = (_paths, cls) => {
     seenClasses.push(cls);
-    return s.services;
+    return cls === 'READ' ? readStub.services : sendStub.services;
   };
   try {
     await captureStdout(() =>
@@ -162,9 +173,13 @@ test('gws-dispatch: _alert resolves its service via getServicesForClass(paths, S
     client.getServicesForClass = savedForClass;
   }
 
-  assert.deepEqual(seenClasses, ['SEND']);
-  assert.equal(s.calls.send.length, 1);
-  assert.match(decode(s.calls.send[0].requestBody.raw), /To: owner@example\.com/);
+  assert.deepEqual(seenClasses, ['READ', 'SEND']);
+  // getProfile hit READ only; send hit SEND only — the least-scope split holds.
+  assert.equal(readStub.calls.profile, 1, 'getProfile resolved under READ');
+  assert.equal(readStub.calls.send.length, 0, 'no send under READ');
+  assert.equal(sendStub.calls.profile, 0, 'getProfile NOT called under SEND (gmail.send cannot getProfile)');
+  assert.equal(sendStub.calls.send.length, 1, 'send happened under SEND');
+  assert.match(decode(sendStub.calls.send[0].requestBody.raw), /To: owner@example\.com/);
 });
 
 test('gws-dispatch: _alert is invoked with exactly {subject, body}', async () => {
@@ -268,10 +283,10 @@ test('gws-dispatch freeze: a gws-use verb (_alert) fails closed with the disable
     return currentServices;
   };
   try {
-    // No opts passed -> the frozen A0 profile applies; no env/argv override exists.
+    // Explicit fully-blocked profile via the seam; no env/argv override exists.
     // The freeze must throw BEFORE the handler resolves a credential.
     await assert.rejects(
-      gwsIndex.run(['_alert', '--subject', 's', '--body', 'b']),
+      gwsIndex.run(['_alert', '--subject', 's', '--body', 'b'], { profile: BLOCKED }),
       /disabled in this release/
     );
   } finally {
@@ -283,7 +298,7 @@ test('gws-dispatch freeze: a gws-use verb (_alert) fails closed with the disable
 test('gws-dispatch freeze: auth fails closed with the google-setup disabled error before the client JSON is read', async () => {
   // A path that does not exist: the freeze must throw the "disabled" error
   // BEFORE the auth handler ever attempts to read it, not a file-read error.
-  await assert.rejects(gwsIndex.run(['auth', '--client', '/nope.json']), (err) => {
+  await assert.rejects(gwsIndex.run(['auth', '--client', '/nope.json'], { profile: BLOCKED }), (err) => {
     assert.match(err.message, /disabled in this release/);
     assert.doesNotMatch(err.message, /could not read the client JSON/);
     return true;

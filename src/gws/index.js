@@ -128,11 +128,24 @@ const DISPATCH = {
     ),
   // The fail-loud watchdog email resolves its credential via the least-scope
   // SEND class (never the retired combined-token getServices).
-  '_alert': ({ paths, flags }) =>
-    require('./alert').run(
-      require('./client').getServicesForClass(paths, CAPABILITY_CLASS.SEND),
-      { subject: flags.subject, body: flags.body }
-    ),
+  '_alert': ({ paths, flags }) => {
+    // getProfile needs a read scope (gmail.send cannot getProfile — Google API):
+    // resolve the self-address under READ, send under SEND. The composite keeps
+    // alert.run's services.gmail.users.{getProfile,messages.send} shape unchanged
+    // and keeps SEND send-only (WP-gws-getprofile-via-read).
+    const client = require('./client');
+    const read = client.getServicesForClass(paths, CAPABILITY_CLASS.READ);
+    const send = client.getServicesForClass(paths, CAPABILITY_CLASS.SEND);
+    const services = {
+      gmail: {
+        users: {
+          getProfile: (p) => read.gmail.users.getProfile(p),
+          messages: { send: (p) => send.gmail.users.messages.send(p) },
+        },
+      },
+    };
+    return require('./alert').run(services, { subject: flags.subject, body: flags.body });
+  },
 };
 
 /**

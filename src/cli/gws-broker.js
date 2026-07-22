@@ -40,10 +40,13 @@ function parseArgs(argv) {
 
 /**
  * Build one least-scope services view per METHOD from the per-class service
- * objects: reads route to the READ credential, drafts.create to DRAFT,
- * getProfile + messages.send to SEND. A method whose class credential was not
- * loaded simply does not exist — the verb fails closed. (No broker verb uses
- * CALENDAR_WRITE in v1; that class belongs to the interactive `cal add-event`.)
+ * objects: reads AND getProfile route to the READ credential, drafts.create to
+ * DRAFT, messages.send to SEND. getProfile is a READ method — the SEND scope
+ * (gmail.send) cannot call it (Google API), so the self-address is resolved
+ * under READ while the send stays send-only under SEND (WP-gws-getprofile-via-read).
+ * A method whose class credential was not loaded simply does not exist — the verb
+ * fails closed. (No broker verb uses CALENDAR_WRITE in v1; that class belongs to
+ * the interactive `cal add-event`.)
  * @param {Partial<Record<string, {gmail?:object, calendar?:object, drive?:object}>>} byClass
  * @returns {{gmail?:object, calendar?:object, drive?:object}}
  */
@@ -60,11 +63,14 @@ function compositeServices(byClass) {
   if (read && read.gmail) {
     messages.list = (p) => read.gmail.users.messages.list(p);
     messages.get = (p) => read.gmail.users.messages.get(p);
+    // getProfile needs a read scope — gmail.send cannot call it (Google API).
+    // Resolve the self-address under READ; the send stays send-only under SEND.
+    // send_digest_to_self runs only under daily-digest, which also loads READ.
+    users.getProfile = (p) => read.gmail.users.getProfile(p);
   }
   const send = byClass.SEND;
   if (send && send.gmail) {
     messages.send = (p) => send.gmail.users.messages.send(p);
-    users.getProfile = (p) => send.gmail.users.getProfile(p);
   }
   if (Object.keys(messages).length > 0) users.messages = messages;
   const draft = byClass.DRAFT;
@@ -158,4 +164,7 @@ async function run(argv) {
   await runBrokerServer({ registry });
 }
 
-module.exports = { run };
+// compositeServices is exported for the getProfile-routing regression test
+// (WP-gws-getprofile-via-read) — the live broker-e2e that also covers it is not
+// part of `npm test`, so the routing must be lockable in CI.
+module.exports = { run, compositeServices };
