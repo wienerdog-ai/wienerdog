@@ -39,16 +39,21 @@ jobs:
           node-version: 20
       - name: Install dependencies
         run: npm ci || npm i
-      # The macOS runner's Homebrew git resolves through /opt/homebrew/Cellar,
-      # which is group-writable and user-owned — so Wienerdog's exec-path
-      # hardening (exec-identity.js: no group/other-writable non-root ancestor)
-      # correctly REFUSES it, failing every integration test that spawns git.
-      # Prefer the root-owned system git (/usr/bin/git, mode 755, root:wheel
-      # ancestors) which passes the same hardening. This is a runner-env fix, not
-      # a relaxation — the group-writable rejection stays fully enforced + unit-tested.
-      - name: Prefer root-owned system git (macOS)
+      # The macOS runner's git is Homebrew's (/opt/homebrew/bin/git), which
+      # resolves through a group-writable /opt/homebrew/Cellar — correctly
+      # refused by Wienerdog's exec-path hardening (exec-identity.js: no
+      # group/other-writable non-root ancestor). The dream/adopt jobs resolve git
+      # on a FIXED clean PATH (run-job.js buildCleanEnv) that lists
+      # /opt/homebrew/bin ahead of /usr/bin, so createPins tries to pin this git
+      # and can't. Unlink it so the clean PATH falls through to the root-owned
+      # system git (/usr/bin/git, mode 755, root:wheel ancestors) which passes
+      # the same hardening. Runner-env fix, NOT a relaxation — the group-writable
+      # rejection stays fully enforced and unit-tested.
+      - name: Use root-owned system git, not group-writable Homebrew git (macOS)
         if: runner.os == 'macOS'
-        run: echo "/usr/bin" >> "$GITHUB_PATH"
+        run: |
+          brew unlink git || true
+          command -v git && git --version
       - name: Test
         run: npm test
 
