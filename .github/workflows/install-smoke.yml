@@ -29,5 +29,11 @@ jobs:
           node-version: 20
       - name: Install dependencies
         run: npm ci || npm i
+      # Same as ci.yml: prefer the root-owned system git so any git the install
+      # lifecycle spawns passes the exec-path hardening (the runner's Homebrew
+      # git resolves through a group-writable /opt/homebrew/Cellar).
+      - name: Prefer root-owned system git (macOS)
+        if: runner.os == 'macOS'
+        run: echo "/usr/bin" >> "$GITHUB_PATH"
       - name: Install lifecycle smoke
         run: bash scripts/smoke-install.sh

@@ -56,7 +56,11 @@ occ() {
   }
   node -e 'const fs=require("fs");const b=fs.readFileSync(process.argv[1]);const n=Buffer.from(process.argv[2]);let c=0,i=0;while((i=b.indexOf(n,i))>=0){c++;i+=n.length;}process.stdout.write(String(c));' "$1" "$2"
 }
-mode_of() { stat -f '%Lp' "$1" 2>/dev/null || stat -c '%a' "$1"; }
+# GNU form FIRST: `stat -f` on GNU means "filesystem status" (not format), so
+# `stat -f '%Lp'` exits 0 with a verbose FS dump on Linux and the `||` fallback
+# never fires. `stat -c` is rejected by BSD stat (non-zero), so BSD falls through
+# to `-f '%Lp'`. This order returns the octal mode on both GNU and BSD.
+mode_of() { stat -c '%a' "$1" 2>/dev/null || stat -f '%Lp' "$1"; }
 
 echo "== 1. init (fresh vault, both adapters) =="
 WD init --yes --fresh-vault </dev/null
