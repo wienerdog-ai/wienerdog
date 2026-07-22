@@ -129,7 +129,13 @@ function composeRoutineRun(paths, job) {
   const addDirs = [cwd]; // staging stays the SOLE writable target
   if (snapshot.snapshotDir) addDirs.push(snapshot.snapshotDir); // read intent only
   const args = composeClaudeArgs(profile, {
-    prompt: `/${skillId}`, // the routine trigger
+    // Plain-text trigger — NOT a bare `/${skillId}` slash command. Claude Code
+    // ≥2.1.216 parses a prompt that is *only* a slash command as a command
+    // lookup and hard-errors "Unknown command" on an unregistered one (the
+    // hermetic `--setting-sources ''` run registers no skills), so the routine
+    // brain never ran. The skill's instructions are delivered via
+    // --append-system-prompt below; this line just tells the brain to start.
+    prompt: `Run the ${skillId} routine now. Follow the instructions in your system prompt and use only your available tools.`,
     addDirs,
     settingsPath,
     mcpConfigPath: ensureBrokerMcpConfig(paths, profile), // the filled A2 seam (or null for mcp:'empty')

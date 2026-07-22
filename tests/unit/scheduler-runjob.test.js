@@ -14,6 +14,14 @@ const runjob = require('../../src/cli/run-job');
 const { readAlerts, ALERTS_FILE } = require('../../src/core/alerts');
 const { allowAll } = require('../../src/core/safety-profile');
 
+// A fully-blocked profile (the pre-0.10.0 frozen shape). The released profile now
+// defaults to all-allowed, so a bare resolveCommand no longer refuses a skill: job.
+// Passing this via the `profile` seam still exercises the A0 fail-closed refusal.
+const BLOCKED = Object.freeze(Object.fromEntries(
+  ['google-setup', 'gws-use', 'external-content-routine', 'daily-summary-injection', 'identity-auto-activation']
+    .map((g) => [g, 'blocked'])
+));
+
 /** @param {string} c @returns {string} */
 function sha256(c) {
   return crypto.createHash('sha256').update(c).digest('hex');
@@ -417,7 +425,10 @@ test('scheduler-runjob: resolveCommand maps builtin:dream, skill:*, and rejects 
   const s = runjob.resolveCommand(paths, { name: 'x', run: 'skill:wienerdog-weekly-review' }, allowAll());
   assert.equal(s.command, 'claude');
   assert.equal(s.args[0], '-p');
-  assert.equal(s.args[1], '/wienerdog-weekly-review');
+  // Plain-text trigger, NOT a bare `/wienerdog-weekly-review` slash command
+  // (Claude ≥2.1.216 errors "Unknown command" on a bare one) — names the routine.
+  assert.ok(!/^\s*\/\S+\s*$/.test(s.args[1]), 'trigger is not a bare slash command');
+  assert.ok(s.args[1].includes('wienerdog-weekly-review'), 'trigger names the routine');
   assert.ok(s.args.includes('--tools'), 'hermetic argv restricts built-ins');
   assert.ok(s.cwd.endsWith(path.join('routine-run', 'weekly-review')), 'spawn cwd is the staging dir');
   assert.equal(s.shell, false, 'skill composition is shell:false too');
@@ -427,11 +438,11 @@ test('scheduler-runjob: resolveCommand maps builtin:dream, skill:*, and rejects 
   assert.equal(b.args.filter((a) => a === '--mcp-config').length, 1);
   assert.throws(() => runjob.resolveCommand(paths, { name: 'x', run: 'builtin:frobnicate' }), /unknown builtin/);
   assert.throws(() => runjob.resolveCommand(paths, { name: 'x', run: 'weird:thing' }), /unknown job run kind/);
-  // A0 pre-use freeze (WP-109/111): without a profile, the `skill:` branch is
-  // refused BEFORE returning the `claude` argv — a hand-edited config.yaml
-  // `skill:` job cannot spawn a model.
+  // A0 pre-use gate (WP-109/111): under a fully-blocked profile, the `skill:` branch
+  // is refused BEFORE returning the `claude` argv — a hand-edited config.yaml
+  // `skill:` job cannot spawn a model when the gate is blocked.
   assert.throws(
-    () => runjob.resolveCommand(paths, { name: 'x', run: 'skill:wienerdog-daily-digest' }),
+    () => runjob.resolveCommand(paths, { name: 'x', run: 'skill:wienerdog-daily-digest' }, BLOCKED),
     /disabled in this release/
   );
 });

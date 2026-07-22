@@ -19,6 +19,14 @@ const runjob = require('../../src/cli/run-job');
 const { getPaths } = require('../../src/core/paths');
 const { allowAll } = require('../../src/core/safety-profile');
 
+// A fully-blocked profile (the pre-0.10.0 frozen shape). The released profile now
+// defaults to all-allowed; passing this via the `profile` seam still exercises the
+// A0 gate that must throw BEFORE any composition/staging.
+const BLOCKED = Object.freeze(Object.fromEntries(
+  ['google-setup', 'gws-use', 'external-content-routine', 'daily-summary-injection', 'identity-auto-activation']
+    .map((g) => [g, 'blocked'])
+));
+
 const POSIX = process.platform !== 'win32';
 
 const DENY_TOOLS = ['Bash', 'WebFetch', 'WebSearch', 'Task', 'Agent', 'Skill', 'Workflow', 'NotebookEdit'];
@@ -89,7 +97,13 @@ test('routine-runtime: composeRoutineRun (weekly-review) is fully hermetic with 
   assert.deepEqual(fs.readdirSync(r.cwd), ['vault-snapshot'], 'staging holds only the read-only snapshot');
 
   const args = r.args;
-  assert.equal(flagValue(args, '-p'), '/wienerdog-weekly-review');
+  // The trigger must NOT be a bare slash command — Claude Code ≥2.1.216 parses a
+  // prompt that is only `/wienerdog-weekly-review` as a command lookup and errors
+  // "Unknown command", so the routine never runs. It must be plain text that
+  // names the routine (the skill body is delivered via --append-system-prompt).
+  const prompt = flagValue(args, '-p');
+  assert.ok(!/^\s*\/\S+\s*$/.test(prompt), 'trigger is not a bare slash command');
+  assert.ok(prompt.includes('wienerdog-weekly-review'), 'trigger names the routine');
   assert.equal(flagValue(args, '--tools'), 'Read', 'explicit MINIMAL allowlist, never empty');
   const deny = (flagValue(args, '--disallowedTools') || '').split(',');
   for (const t of DENY_TOOLS) assert.ok(deny.includes(t), `deny list names ${t}`);
@@ -138,11 +152,11 @@ test('routine-runtime: an unmapped skill: job cannot compose (fail closed before
 
 // --- the A0 gate stays first ---
 
-test('routine-runtime: in production the gate throws BEFORE composing — no staging created', () => {
+test('routine-runtime: a blocked gate throws BEFORE composing — no staging created', () => {
   // WP-155 deleted resolveCommand's env seam, so no env save/restore is needed.
   const paths = tempPaths();
   assert.throws(
-    () => runjob.resolveCommand(paths, { name: 'digest', run: 'skill:wienerdog-weekly-review' }),
+    () => runjob.resolveCommand(paths, { name: 'digest', run: 'skill:wienerdog-weekly-review' }, BLOCKED),
     /disabled in this release/
   );
   assert.ok(
