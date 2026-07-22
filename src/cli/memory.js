@@ -69,6 +69,7 @@ async function run(argv, opts = {}) {
   }
 
   const arg = argv[1] || '';
+  const all = arg === '--all';
   // Own-property lookup only: a plain-object bracket read would resolve
   // inherited prototype members (toString, constructor, …) and leak past the
   // allowlist to a filesystem read (reviewer finding, WP-117).
@@ -77,59 +78,81 @@ async function run(argv, opts = {}) {
     : Object.values(KNOWN).includes(arg)
       ? arg
       : null;
-  if (!basename) {
-    throw new WienerdogError('approve which identity note? one of: profile, preferences, goals, instructions');
+  if (!all && !basename) {
+    throw new WienerdogError('approve which identity note? one of: profile, preferences, goals, instructions — or --all');
   }
 
   const vaultDir = readVaultPath(paths.config);
   if (!vaultDir) throw new WienerdogError('no vault configured — run /wienerdog-setup first');
   const layout = readVaultLayout(paths.config);
-  const rel = `${layout.identity_dir}/${basename}`;
+  const registry = idApprovals.readRegistry(paths.state);
+  const approvals = idApprovals.approvalsMap(registry);
+  const out = process.stdout;
 
-  let bytes;
-  try {
-    bytes = fs.readFileSync(path.join(vaultDir, rel));
-  } catch {
-    throw new WienerdogError(`identity file not found: ${rel}`);
+  // The target set: --all iterates the FIXED KNOWN allowlist (never an arbitrary
+  // path); a single approve targets one allowlisted basename. For each, read the
+  // exact bytes and compare to any recorded approval.
+  const targets = all ? Object.values(KNOWN) : [basename];
+  /** @type {Array<{rel:string, basename:string, bytes:Buffer, approvedHash:string|undefined}>} */
+  const pending = [];
+  for (const bn of targets) {
+    const rel = `${layout.identity_dir}/${bn}`;
+    let bytes;
+    try {
+      bytes = fs.readFileSync(path.join(vaultDir, rel));
+    } catch {
+      // --all silently skips a note that does not exist on disk; a single
+      // approve of a missing note is an error, as before.
+      if (all) continue;
+      throw new WienerdogError(`identity file not found: ${rel}`);
+    }
+    const approvedHash = approvals[idApprovals.foldKey(rel)];
+    if (idApprovals.hashBytes(bytes) === approvedHash) continue; // already approved → skip
+    pending.push({ rel, basename: bn, bytes, approvedHash });
   }
 
-  const currentHash = idApprovals.hashBytes(bytes);
-  const registry = idApprovals.readRegistry(paths.state);
-  const approvedHash = idApprovals.approvalsMap(registry)[idApprovals.foldKey(rel)];
-
-  const out = process.stdout;
-  if (approvedHash === currentHash) {
-    out.write(`wienerdog: "${basename}" is already approved (no change).\n`);
+  if (pending.length === 0) {
+    out.write(
+      all
+        ? 'wienerdog: all identity notes are already approved (no change).\n'
+        : `wienerdog: "${basename}" is already approved (no change).\n`
+    );
     return;
   }
 
-  // Display EXACTLY what will be approved: the full bytes, then provenance as
-  // evidence. The human decides by reading the actual text — a forged
-  // `false/0.9/3` frontmatter changes nothing about what gets ratified.
-  out.write(`You are about to approve the CURRENT exact bytes of ${rel}:\n`);
-  out.write('----------------------------------------------------------------\n');
-  out.write(bytes.toString('utf8'));
-  if (!bytes.toString('utf8').endsWith('\n')) out.write('\n');
-  out.write('----------------------------------------------------------------\n');
-  const fm = parse(bytes.toString('utf8'));
-  for (const field of EVIDENCE_FIELDS) {
-    if (fm.fields.has(field)) {
-      out.write(`  ${field}: ${fm.fields.get(field)} (evidence only — not proof)\n`);
+  // Display EXACTLY what will be approved for EACH note — the full bytes, then
+  // provenance as evidence. The human decides by reading the actual text; a
+  // forged `false/0.9/3` frontmatter changes nothing about what gets ratified.
+  // One typed-word confirmation ratifies the batch: the see-the-bytes boundary
+  // is preserved (every note's bytes are shown), only the prompt count drops.
+  for (const p of pending) {
+    out.write(`You are about to approve the CURRENT exact bytes of ${p.rel}:\n`);
+    out.write('----------------------------------------------------------------\n');
+    out.write(p.bytes.toString('utf8'));
+    if (!p.bytes.toString('utf8').endsWith('\n')) out.write('\n');
+    out.write('----------------------------------------------------------------\n');
+    const fm = parse(p.bytes.toString('utf8'));
+    for (const field of EVIDENCE_FIELDS) {
+      if (fm.fields.has(field)) {
+        out.write(`  ${field}: ${fm.fields.get(field)} (evidence only — not proof)\n`);
+      }
+    }
+    if (p.approvedHash !== undefined) {
+      out.write('This REPLACES the previously approved version of this note.\n');
     }
   }
-  if (approvedHash !== undefined) {
-    out.write('This REPLACES the previously approved version of this note.\n');
-  }
 
-  const answer = await promptFn('Type the word "approve" to confirm these exact bytes (anything else cancels): ');
+  const noun = pending.length === 1 ? 'these exact bytes' : `these ${pending.length} notes' exact bytes`;
+  const answer = await promptFn(`Type the word "approve" to confirm ${noun} (anything else cancels): `);
   if (String(answer).trim() !== 'approve') {
     out.write('Cancelled.\n');
     return;
   }
 
-  idApprovals.recordApproval(paths.state, vaultDir, rel, 'approved');
+  for (const p of pending) idApprovals.recordApproval(paths.state, vaultDir, p.rel, 'approved');
+  const names = pending.map((p) => `"${p.basename}"`).join(', ');
   out.write(
-    `wienerdog: approved "${basename}" — it will be injected into your session digest on the next \`wienerdog sync\`.\n`
+    `wienerdog: approved ${names} — ${pending.length === 1 ? 'it' : 'they'} will be injected into your session digest on the next \`wienerdog sync\`.\n`
   );
 }
 

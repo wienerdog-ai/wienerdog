@@ -173,3 +173,52 @@ test('a missing identity file and a missing vault config throw WienerdogError', 
     /no vault configured/
   );
 });
+
+test('memory approve --all ratifies every pending identity note with ONE confirmation', async () => {
+  const { vault, paths } = setup();
+  let prompts = 0;
+  const out = await withStdout(() =>
+    memory.run(['approve', '--all'], { paths, promptFn: async () => { prompts += 1; return 'approve'; } })
+  );
+  assert.equal(prompts, 1, 'a single typed-word confirmation for the batch');
+  const reg = readRegistry(paths.state);
+  for (const f of ['profile.md', 'preferences.md', 'goals.md', 'instructions.md']) {
+    const rec = reg.approvals[`06-identity/${f}`];
+    assert.ok(rec && rec.source === 'approved', `${f} approved`);
+    assert.equal(rec.approved_blob_hash, fileHash(vault, `06-Identity/${f}`));
+    assert.ok(out.includes(`content of ${f}`), `${f} bytes shown before approval`);
+  }
+});
+
+test('memory approve --all only ratifies the PENDING notes (skips already-approved)', async () => {
+  const { vault, paths } = setup();
+  seedApprovals(paths.state, vault, defaultLayout(), BLOCKED); // all four recorded at current bytes
+  fs.appendFileSync(path.join(vault, '06-Identity', 'goals.md'), 'a human edit\n'); // only goals now pending
+  const out = await withStdout(() =>
+    memory.run(['approve', '--all'], { paths, promptFn: async () => 'approve' })
+  );
+  assert.ok(out.includes('a human edit'), 'the pending note is shown');
+  assert.ok(!out.includes('content of profile.md'), 'an already-approved note is NOT re-shown');
+  assert.ok(out.includes('approved "goals.md"') && !out.includes('"profile.md"'), 'only goals approved');
+  const reg = readRegistry(paths.state);
+  assert.equal(reg.approvals['06-identity/goals.md'].approved_blob_hash, fileHash(vault, '06-Identity/goals.md'));
+});
+
+test('memory approve --all is a no-op when everything is already approved', async () => {
+  const { vault, paths } = setup();
+  seedApprovals(paths.state, vault, defaultLayout(), BLOCKED);
+  const out = await withStdout(() =>
+    memory.run(['approve', '--all'], { paths, promptFn: async () => assert.fail('must not prompt when nothing pending') })
+  );
+  assert.ok(out.includes('all identity notes are already approved'), 'no-op message');
+});
+
+test('memory approve --all cancels on anything but "approve" and records nothing', async () => {
+  const { paths } = setup();
+  const out = await withStdout(() =>
+    memory.run(['approve', '--all'], { paths, promptFn: async () => 'yes' })
+  );
+  assert.ok(out.includes('Cancelled.'), 'cancelled');
+  const reg = readRegistry(paths.state);
+  assert.equal(Object.keys(reg.approvals || {}).length, 0, 'nothing recorded on cancel');
+});
