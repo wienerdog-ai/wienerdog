@@ -530,7 +530,7 @@ function appendToIdentity(vaultDir, file, line) {
 
 test('EP4: an approved identity note with a quarantine-severity secret is omitted + bannered', () => {
   const tmp = tmpVault();
-  appendToIdentity(tmp, 'preferences.md', 'my Stripe key is sk_live_51ABCDEF0123456789abcdefXYZ');
+  appendToIdentity(tmp, 'preferences.md', 'my Stripe key is sk_live_a1b2c3d4e5f6g7h8');
 
   const digest = renderDigest(tmp, undefined, { identityApprovals: approvals(tmp) });
 
