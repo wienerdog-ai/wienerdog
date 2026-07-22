@@ -58,7 +58,8 @@ Tests assert the preflight / `wienerdog safety` show all five BLOCKED.
 
 | Action | Path | Notes |
 |--------|------|-------|
-| modify | src/core/safety-profile.js | set every `FROZEN_PROFILE` value to `'allowed'` (keep the constant name/shape/`Object.freeze`; it is now the released profile) |
+| modify | src/core/safety-profile.js | set every `FROZEN_PROFILE` value to `'allowed'` (keep the constant name/shape/`Object.freeze`; it is now the released profile); make the DESCRIPTION strings state-neutral (drop "…is disabled"); correct the constant's stale "Every gate BLOCKED" JSDoc |
+| modify | src/cli/safety.js | reframe the `wienerdog safety` header/footer: they hardcoded "pre-use freeze / stays BLOCKED / no override for a **blocked** gate", all false once gates are allowed — now "Wienerdog capability status … no environment or CLI-flag override". State-coupled to the flip. |
 | modify | tests covering `capabilityStatus` / preflight / `safety` | assert all five `'allowed'` |
 
 ### Exact contract

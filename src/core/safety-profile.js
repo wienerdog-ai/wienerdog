@@ -26,9 +26,11 @@ const ORDER = [
   'daily-summary-injection', 'identity-auto-activation',
 ];
 
-/** THE FROZEN PROFILE (A0). Every gate BLOCKED. Opening a gate is a REVIEWED
- *  CODE CHANGE to this constant in a future release — never a runtime toggle,
- *  env var, or CLI flag. Object.freeze prevents same-process mutation. */
+/** THE RELEASED PROFILE. In 0.10.0 every gate is ALLOWED — the A0 pre-use freeze
+ *  was lifted after its blocker fixes cleared review (WP-flip-frozen-profile-allowed).
+ *  The name FROZEN_PROFILE is retained (it is the single code-owned gate profile);
+ *  a gate's status changes ONLY by a REVIEWED CODE CHANGE to this constant — never a
+ *  runtime toggle, env var, or CLI flag. Object.freeze prevents same-process mutation. */
 const FROZEN_PROFILE = Object.freeze({
   'google-setup': 'allowed',
   'gws-use': 'allowed',

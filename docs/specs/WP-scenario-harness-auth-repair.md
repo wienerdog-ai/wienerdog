@@ -3,7 +3,7 @@ id: WP-scenario-harness-auth-repair
 title: Repair the live scenario harnesses (LP1/LP2) to run an authenticated brain + working broker on macOS
 status: Draft
 model: opus
-size: L
+size: M
 depends_on: [WP-routine-plaintext-trigger, WP-gws-getprofile-via-read]
 adrs: [ADR-0009, ADR-0025]
 epic: p0-ungate
