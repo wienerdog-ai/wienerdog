@@ -139,8 +139,9 @@ array; never read file contents) and pass it in.
 
 ### Worked example (assert in digest.test.js)
 
-Given an approved+trusted `preferences.md` whose body contains
-`my Stripe key is sk_live_51ABCDEF0123456789abcdefXYZ`:
+Given an approved+trusted `preferences.md` whose body contains a live Stripe
+secret key — `my Stripe key is sk_live_<24+-char-secret>` (placeholder written so
+this doc is not itself flagged by secret scanners):
 
 ```
 renderDigest(vault, layout, { identityApprovals:<approved> })
