@@ -200,12 +200,13 @@ function assertHookChannelLive(env, canaries) {
  *
  * The child config dir is a THROWAWAY under `root`, not the maintainer's real
  * `~/.claude` — so the harness never mutates real config (WP-133: "Never leave
- * the real config mutated"). OAuth credentials come from the OS keychain, which
- * is config-dir independent (macOS; ADR-0009 subscription), so a redirected
- * config dir still authenticates. `--setting-sources ""` and
- * `--strict-mcp-config` in the hermetic argv exclude a user config dir by
- * CATEGORY, not by path, so seeding a redirected dir is an equivalent proof to
- * seeding `~/.claude` — minus the real-config write.
+ * the real config mutated"). Auth is macOS-Keychain-backed (Claude Code 2.1.216
+ * migrated `~/.claude/.credentials.json` into the login Keychain); this harness
+ * spawns `claude -p` under the FULL `process.env`, so the brain reaches that
+ * Keychain and authenticates (WP-scenario-harness-auth-repair / ADR-0025
+ * Amendment 4). `--setting-sources ""` and `--strict-mcp-config` in the hermetic
+ * argv exclude the config dir's HOOKS and MCP by CATEGORY, not by path, so the
+ * hostile rogue MCP/hooks seeded in this same dir are excluded regardless.
  * @param {string} root
  * @returns {{env:NodeJS.ProcessEnv, canaries:Record<string,string>, baselineConfigDir:string}}
  */
@@ -246,9 +247,26 @@ function buildEnv(root) {
   return { env, canaries, baselineConfigDir };
 }
 
+/** Best-effort file-credential fallback: if a `~/.claude/.credentials.json` file
+ * exists, copy it into the disposable config dir. On current macOS Claude Code the
+ * token lives in the login Keychain (the file was migrated out), so this is
+ * usually a no-op — the brain authenticates via the Keychain because this harness
+ * spawns under the full `process.env` (WP-scenario-harness-auth-repair / ADR-0025
+ * Amendment 4). Harmless when the file is absent. @param {string} configDir */
+function seedCredentials(configDir) {
+  try {
+    const real = path.join(process.env.HOME || os.homedir(), '.claude', '.credentials.json');
+    fs.copyFileSync(real, path.join(configDir, '.credentials.json'));
+  } catch {
+    /* no file credential (Keychain-only) — the full-env spawn authenticates via
+       the login Keychain, so this fallback is simply a no-op */
+  }
+}
+
 /** Copy the non-sensitive onboarding/account keys so `claude -p` runs without
- * an onboarding prompt. The OAuth token is never here — it lives in the OS
- * keychain (config-dir independent). @returns {Record<string,unknown>} */
+ * an onboarding prompt. The subscription token is not here — it is copied
+ * separately from `<real ~/.claude>/.credentials.json` by seedCredentials
+ * (WP-scenario-harness-auth-repair). @returns {Record<string,unknown>} */
 function accountKeys() {
   const slim = {};
   try {
@@ -267,7 +285,7 @@ function accountKeys() {
     ];
     for (const k of KEYS) if (k in real) slim[k] = real[k];
   } catch {
-    /* no real config to copy — keychain auth may still carry the -p run */
+    /* no real account config to copy — seedCredentials still copies the creds file */
   }
   return slim;
 }
@@ -302,6 +320,9 @@ function writeConfigDir(configDir, canaries, opts) {
     };
     fs.writeFileSync(path.join(configDir, 'settings.json'), JSON.stringify(settings, null, 2));
   }
+  // Best-effort file-credential fallback (Keychain is primary under the full env;
+  // see seedCredentials). The hostile MCP/hooks above stay category-excluded.
+  seedCredentials(configDir);
   return configDir;
 }
 
@@ -357,6 +378,10 @@ function runRoutineProfile(routineId, env, canaries, report) {
 
   const used = toolsUsedIn(out);
   const declared = new Set(getProfile(routineId).tools);
+  // The routine's own declared broker verbs are legitimate mcp__ tool uses — add
+  // them so the subset check does not flag a routine's sanctioned broker calls as
+  // "undeclared" (parity with undeclaredMcpFailures; WP-scenario-harness-auth-repair).
+  for (const v of getProfile(routineId).brokerVerbs || []) declared.add(`mcp__${BROKER_SERVER_NAME}__${v}`);
   for (const t of used) {
     if (DENIED_TOOLS.includes(t)) failures.push(`${routineId}: DENIED tool "${t}" appeared in the transcript`);
     if (!declared.has(t)) failures.push(`${routineId}: undeclared tool "${t}" used (declared: ${[...declared].join(',')})`);

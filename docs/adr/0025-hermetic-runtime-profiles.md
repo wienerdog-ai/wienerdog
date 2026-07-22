@@ -365,3 +365,51 @@ defense-in-depth surface and is **subsumed by the live probe**, which verifies t
 flags actually held on the installed Claude. Implemented by
 **WP-routine-containment-probe**; the dev-time comprehensive proof stays WP-133's
 negative harness, fixed for the wired broker by **WP-negative-harness-broker-verbs**.
+
+### Amendment 4 (2026-07-22) — the live scenario harnesses run the brain under the REAL home, not a redirected one
+
+The two live-proof harnesses — WP-133's `negative` and WP-142's `broker-e2e` —
+were found (during the 0.10.0 un-freeze) to have never actually run an
+authenticated brain with a working broker; every prior "PASS" was VACUOUS. Three
+harness-only facts, now settled (product code unchanged; fixed by
+**WP-scenario-harness-auth-repair**):
+
+- **Auth is macOS-Keychain-backed, and `buildCleanEnv` can only reach it under
+  launchd.** During the 0.10.0 live-proofing (2026-07-22) Claude Code 2.1.216 was
+  observed to store its OAuth token in the login **Keychain** (`security` item
+  `Claude Code-credentials`) and to have **migrated `~/.claude/.credentials.json`
+  out of existence**. So the earlier "creds are file-based, copy the file in" model
+  is obsolete. What actually determines auth is whether the spawned brain can reach
+  the Keychain:
+  - **launchd (production):** the scheduled dream/routines inherit the gui-session
+    Keychain, so `buildCleanEnv` authenticates — **verified** by the 03:30
+    2026-07-22 dream committing under `buildCleanEnv`.
+  - **full `process.env` (terminal):** the Keychain is reachable, so the `negative`
+    harness (which spawns `claude -p` under the full env) authenticates — LP1 runs
+    green and non-vacuous.
+  - **`buildCleanEnv` from a terminal:** the minimal env cannot reach the Keychain,
+    so `broker-e2e` (which goes through `runJob → buildCleanEnv`) **401s from a
+    terminal even with a freshly-refreshed session**, despite the identical path
+    working under launchd.
+
+  `broker-e2e` still runs the brain under the **real home** (drops the `HOME`
+  override) — correct for a launchd/gui-session run — and short-circuits with an
+  explicit `AUTH-BLOCKED` message (not a false containment failure) when the
+  transcript shows the terminal Keychain 401. The **terminal live-containment
+  proof is `scenarios:negative`**; the positive read-path proof (`broker-e2e`)
+  needs a launchd/gui session, or a future `run-job` change that lets the brain
+  reach the Keychain under `buildCleanEnv`. This is an environment limitation, NOT
+  a Wienerdog containment gap and NOT a product bug (production auth works).
+- **The broker MCP launcher must be present.** The broker command resolves to
+  `vendor.currentBin` = `<core>/app/current/bin/wienerdog.js` (the WP-157
+  out-of-tree launcher). A harness that publishes no vendored app leaves that path
+  dangling → the routine sees "No such tool available". `broker-e2e` symlinks
+  `<core>/app/current` at the repo checkout so the broker launches the real code
+  while `WIENERDOG_HOME=<core>` keeps the seeded fake-Google + per-class tokens.
+- **The watchdog `_alert` is not a routine call.** When a routine fails, the
+  run-job watchdog fires a structurally self-only `gws _alert` (`getProfile` +
+  `messages.send` to the authenticated account itself), identifiable by its
+  code-owned `[wienerdog alert]` subject (`src/gws/alert.js`). The broker-e2e
+  allowlist, self-target, and grant-flip assertions exclude it; `getProfile` is
+  treated as always-allowed (the benign, read-only, self-address primitive every
+  send resolves through).
