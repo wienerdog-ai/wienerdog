@@ -136,10 +136,10 @@ being in "Testing" mode (redo the publish step in Step 3).
 Run a single read-only check and confirm it succeeds:
 
 ```bash
-wienerdog gws gmail search "in:inbox" --max 1
+wienerdog gws cal list --max 1
 ```
 
-If this prints a message (or comes back empty) with no error, Google is
+If this prints an event (or comes back empty) with no error, Google is
 connected and Wienerdog can now read their Gmail, Calendar, and Drive, and
 draft email. If it errors and tells them to run `wienerdog gws auth`,
 something in the steps above didn't finish — walk back through Steps 3

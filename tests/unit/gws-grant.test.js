@@ -67,7 +67,7 @@ function legacyBlock(grants) {
   return `${lines.join('\n')}\n`;
 }
 
-// --- legacy parse (read-only path kept for the frozen gmail.send) ------------
+// --- legacy parse (read-only; no product caller since WP-gws-retire-dead-send-path removed gmail.js send) ------------
 
 test('parseGrants still reads a legacy YAML block (read-only); absent section → []', () => {
   const grants = [

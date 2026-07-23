@@ -54,7 +54,7 @@ test('google-setup-skill: drives the auth command', () => {
 });
 
 test('google-setup-skill: drives the read-only verify command', () => {
-  assert.ok(text.includes('wienerdog gws gmail search'), 'verify command missing');
+  assert.ok(text.includes('wienerdog gws cal list'), 'verify command missing');
   assert.ok(text.includes('--max 1'), '--max 1 flag missing');
 });
 

@@ -82,9 +82,10 @@ function parseFlags(argv) {
 }
 
 /**
- * Resolve the routine for a `gmail send` grant lookup: `--routine` flag, else
- * `WIENERDOG_JOB` env, else null. Never invents a routine — absent everywhere
- * means null, which `gmail.send` treats as ungranted (degrade to draft).
+ * Resolve the routine for a grant lookup (currently `cal add-event`'s
+ * calendar_write grant): `--routine` flag, else `WIENERDOG_JOB` env, else
+ * null. Never invents a routine — absent everywhere means null, which the
+ * grant check treats as ungranted (the verb is not run).
  * @param {{routine?:string}} flags
  * @returns {string|null}
  */
