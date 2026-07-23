@@ -1,7 +1,7 @@
 ---
 id: WP-161-scenario-harness-scheduler-leak
 title: Stop the live scenario harnesses from leaking real OS scheduler entries into the maintainer's machine
-status: Ready
+status: In-Review
 model: sonnet
 size: M
 depends_on: []

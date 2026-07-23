@@ -22,6 +22,7 @@ const os = require('node:os');
 const { spawnSync } = require('node:child_process');
 
 const { gradeNote } = require('./rubric');
+const scg = require('./scheduler-guard');
 
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
 const WIENERDOG_BIN = path.join(REPO_ROOT, 'bin', 'wienerdog.js');
@@ -287,6 +288,7 @@ async function main() {
   /** @type {string[]} */
   const failures = [];
   let root = null;
+  let shim = null; // scheduler-guard loader-shim dir (WP-161), needed in `finally`
   // Real config dir's skill install (set up below, restored in `finally`).
   let skillBackup = null; // path we moved a pre-existing skill to, or null
   let installedSkill = false; // did we create realSkillDest?
@@ -327,8 +329,15 @@ async function main() {
 
     // 3. Seed: init the core + vault, then plant the fixtures under the
     // collection override (not the config dir).
+    // `init` is the ONE subprocess that schedules (ensureDreamSchedule under
+    // --fresh-vault) and needs no subscription auth, so it runs under a
+    // sandboxed init-env (temp HOME + XDG_CONFIG_HOME, LOADER_NOOP, a
+    // fail-closed loader shim on PATH) — never the real scheduler dirs
+    // (WP-161). The `dream` subprocess below stays on the unchanged `env`.
     console.log('scenarios: seeding harness (wienerdog init --fresh-vault --yes)...');
-    const initRes = runWienerdog(['init', '--fresh-vault', '--yes'], env);
+    shim = scg.makeLoaderShimDir(root);
+    const initEnv = scg.buildInitEnv(env, root, shim);
+    const initRes = runWienerdog(['init', '--fresh-vault', '--yes'], initEnv);
     if (initRes.stdout) console.log(initRes.stdout);
     if (initRes.status !== 0) {
       failures.push(`wienerdog init exited ${initRes.status}: ${(initRes.stderr || '').trim()}`);
@@ -467,6 +476,13 @@ async function main() {
     } catch (err) {
       console.error(`scenarios: WARNING — could not restore ${realSkillDest}: ${err.message}`);
     }
+    // MANDATORY ORDER (Codex F7): assertNoLoaderInvoked reads shim.logPath,
+    // which lives under `root`, so it MUST run BEFORE fs.rmSync(root) — a
+    // deleted log would read as a false clean and mask a LOADER_NOOP
+    // regression. assertNoRealSchedulerLeak reads the REAL scheduler dir (not
+    // `root`), so it is order-independent; it also runs here regardless.
+    if (shim) failures.push(...scg.assertNoLoaderInvoked(shim));
+    if (root) failures.push(...scg.assertNoRealSchedulerLeak(root));
     if (root) fs.rmSync(root, { recursive: true, force: true });
   }
 

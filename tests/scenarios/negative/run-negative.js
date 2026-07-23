@@ -27,6 +27,8 @@ const REPO_ROOT = path.resolve(__dirname, '..', '..', '..');
 const WIENERDOG_BIN = path.join(REPO_ROOT, 'bin', 'wienerdog.js');
 const FIXTURES_DIR = path.join(__dirname, 'fixtures');
 
+const scg = require('../scheduler-guard');
+
 const { listRoutineProfileIds, getProfile } = require('../../../src/core/runtime-profile');
 const { composeRoutineRun } = require('../../../src/core/routine-runtime');
 const { getPaths } = require('../../../src/core/paths');
@@ -406,8 +408,13 @@ function runRoutineProfile(routineId, env, canaries, report) {
   return failures;
 }
 
-/** Run the dream profile's live negative case against the hostile fixture. */
-function runDream(env, canaries) {
+/**
+ * Run the dream profile's live negative case against the hostile fixture.
+ * `initEnv` is the sandboxed env for the `init` call ONLY (WP-161 — `init` is
+ * the one subprocess that schedules); `env` (unchanged) is used for the
+ * auth-sensitive `dream` subprocess (ADR-0009 — do not touch it).
+ */
+function runDream(env, canaries, initEnv) {
   const failures = [];
   // Seed the hostile transcript the dream will consolidate.
   const projDir = path.join(env.WIENERDOG_CLAUDE_DIR, 'projects', 'hostile');
@@ -416,7 +423,7 @@ function runDream(env, canaries) {
     fs.copyFileSync(path.join(FIXTURES_DIR, f), path.join(projDir, f));
   }
 
-  const initRes = runWienerdog(['init', '--fresh-vault', '--yes'], env);
+  const initRes = runWienerdog(['init', '--fresh-vault', '--yes'], initEnv);
   if (initRes.status !== 0) {
     failures.push(`dream: wienerdog init exited ${initRes.status}: ${(initRes.stderr || '').trim()}`);
     return failures;
@@ -457,12 +464,18 @@ async function main() {
   const failures = [];
   const report = { live: [], failClosed: [] };
   let root = null;
+  let shim = null; // scheduler-guard loader-shim dir (WP-161), needed in `finally`
 
   try {
     root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-negative-'));
     // buildEnv seeds a disposable hostile CLAUDE_CONFIG_DIR (Bash rule + hook +
     // rogue MCP) under root; the real ~/.claude is never touched.
     const { env, canaries, baselineConfigDir } = buildEnv(root);
+    // `init` (inside runDream) is the ONE subprocess that schedules — sandbox
+    // ONLY its env (temp HOME + XDG_CONFIG_HOME, LOADER_NOOP, a fail-closed
+    // loader shim on PATH); `dream` stays on the unchanged `env` (WP-161).
+    shim = scg.makeLoaderShimDir(root);
+    const initEnv = scg.buildInitEnv(env, root, shim);
 
     // 1. Version record (advisory — production safety is WP-135's self-check).
     const version = claudeVersion(env);
@@ -481,7 +494,7 @@ async function main() {
 
     // 3. Dream profile — the only job reachable through today's frozen posture.
     console.log('scenarios:negative: running the hermetic DREAM against the hostile fixture...');
-    failures.push(...runDream(env, canaries));
+    failures.push(...runDream(env, canaries, initEnv));
 
     // 4. Every routine profile — live where composable, fail-closed otherwise.
     for (const routineId of listRoutineProfileIds()) {
@@ -491,6 +504,13 @@ async function main() {
 
     console.log(`scenarios:negative: ran live = [${report.live.join(', ')}]; asserted fail-closed = [${report.failClosed.join(', ')}]`);
   } finally {
+    // MANDATORY ORDER (Codex F7): assertNoLoaderInvoked reads shim.logPath,
+    // which lives under `root`, so it MUST run BEFORE fs.rmSync(root) — a
+    // deleted log would read as a false clean and mask a LOADER_NOOP
+    // regression. assertNoRealSchedulerLeak reads the REAL scheduler dir (not
+    // `root`), so it is order-independent; it also runs here regardless.
+    if (shim) failures.push(...scg.assertNoLoaderInvoked(shim));
+    if (root) failures.push(...scg.assertNoRealSchedulerLeak(root));
     if (root) fs.rmSync(root, { recursive: true, force: true });
   }
 
