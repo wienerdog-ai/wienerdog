@@ -1,7 +1,7 @@
 ---
 id: WP-flip-frozen-profile-allowed
 title: Flip FROZEN_PROFILE all→allowed (0.10.0 un-freeze — terminal, human-go step)
-status: Draft
+status: Done
 model: opus
 size: S
 depends_on: [WP-daily-summary-untrusted-fence, WP-identity-seed-gate-couple, WP-identity-digest-hashgate-toctou, WP-routine-containment-probe, WP-negative-harness-broker-verbs, WP-gws-retire-dead-send-path, WP-broker-verb-allowlist-and-gws-gate]

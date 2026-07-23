@@ -1,7 +1,7 @@
 ---
 id: WP-159
 title: A7 documentation — honest scheduler/app/executable integrity claims, threat model, glossary, runbook
-status: In-Review
+status: Done
 model: sonnet
 size: M
 depends_on: [WP-154, WP-155, WP-156, WP-157, WP-catchup-per-job-authorization]

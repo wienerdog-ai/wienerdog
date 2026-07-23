@@ -1,7 +1,7 @@
 ---
 id: WP-identity-seed-gate-couple
 title: Couple seedApprovals to the identity gate; case-insensitive write-side freeze (un-gate identity-auto-activation)
-status: Draft
+status: Done
 model: opus
 size: M
 depends_on: []

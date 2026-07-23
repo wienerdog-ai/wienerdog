@@ -1,7 +1,7 @@
 ---
 id: WP-routine-plaintext-trigger
 title: Routine trigger is plain text, not a bare slash command (Claude ≥2.1.216 compat)
-status: Draft
+status: Done
 model: opus
 size: S
 depends_on: [WP-routine-containment-probe]

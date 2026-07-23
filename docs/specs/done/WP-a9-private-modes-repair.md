@@ -1,7 +1,7 @@
 ---
 id: WP-a9-private-modes-repair
 title: Extend the private-modes predicate to the whole mechanics root — secrets/, grants, tokens, client JSON, exec pins — so a permissive-umask install and a legacy 0755/0644 upgrade both end private
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: [WP-154]

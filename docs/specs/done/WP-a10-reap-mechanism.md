@@ -1,7 +1,7 @@
 ---
 id: WP-a10-reap-mechanism
 title: Reap the findable descendant tree to quiescence on every exit path — authoritative process table (no bare ps), brain-PID hand-up, kill–rescan loop
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: [WP-155, WP-157]

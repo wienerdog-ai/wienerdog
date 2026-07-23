@@ -1,7 +1,7 @@
 ---
 id: WP-catchup-per-job-authorization
 title: Catch-up per-job authorization — bind an authorized per-job digest map into the catch-up OS registration; verify each due job before it runs
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: [WP-156, WP-157]

@@ -1,7 +1,7 @@
 ---
 id: WP-102
 title: gws read-path self-heal + disambiguated deps error (fix the post-upgrade dead-end)
-status: In-Review
+status: Done
 model: sonnet
 size: S
 depends_on: []

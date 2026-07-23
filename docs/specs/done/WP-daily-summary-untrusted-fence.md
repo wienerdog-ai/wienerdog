@@ -1,7 +1,7 @@
 ---
 id: WP-daily-summary-untrusted-fence
 title: Inject the daily summary as untrusted-fenced, bounded data (un-gate daily-summary-injection)
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: [WP-identity-digest-hashgate-toctou]

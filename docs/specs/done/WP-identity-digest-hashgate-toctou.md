@@ -1,7 +1,7 @@
 ---
 id: WP-identity-digest-hashgate-toctou
 title: Close the identity digest hash-gate TOCTOU (hash+parse one read) and give an accurate banner reason
-status: Draft
+status: Done
 model: opus
 size: S
 depends_on: []

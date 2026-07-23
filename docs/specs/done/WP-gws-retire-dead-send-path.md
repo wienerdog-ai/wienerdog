@@ -1,7 +1,7 @@
 ---
 id: WP-gws-retire-dead-send-path
 title: Retire the dead interactive gmail/drive dispatch + forgeable legacy grant read; rewire the fail-loud alert
-status: Draft
+status: Done
 model: opus
 size: M
 depends_on: []

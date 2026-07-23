@@ -1,7 +1,7 @@
 ---
 id: WP-gws-getprofile-via-read
 title: Resolve the self-address via the READ credential, not SEND (getProfile scope fix — ST1)
-status: Draft
+status: Done
 model: opus
 size: S
 depends_on: [WP-broker-verb-allowlist-and-gws-gate, WP-gws-retire-dead-send-path]

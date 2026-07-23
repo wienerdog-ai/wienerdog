@@ -1,7 +1,7 @@
 ---
 id: WP-107
 title: doctor flags stale/foreign wienerdog session hooks whose script is gone
-status: In-Review
+status: Done
 model: sonnet
 size: S
 depends_on: [WP-106]

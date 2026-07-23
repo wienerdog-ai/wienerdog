@@ -1,7 +1,7 @@
 ---
 id: WP-routine-containment-probe
 title: Pre-routine live containment self-check (un-gate external-content-routine)
-status: Draft
+status: Done
 model: opus
 size: M
 depends_on: [WP-broker-verb-allowlist-and-gws-gate]

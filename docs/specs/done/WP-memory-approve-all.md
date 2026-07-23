@@ -1,7 +1,7 @@
 ---
 id: WP-memory-approve-all
 title: memory approve --all convenience (batch-ratify pending identity notes)
-status: Draft
+status: Done
 model: opus
 size: S
 depends_on: [WP-identity-seed-gate-couple]

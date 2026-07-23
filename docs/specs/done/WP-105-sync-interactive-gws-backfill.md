@@ -1,7 +1,7 @@
 ---
 id: WP-105
 title: sync interactive backfill of the on-demand googleapis install (headless-only users)
-status: In-Review
+status: Done
 model: sonnet
 size: S
 depends_on: [WP-102]

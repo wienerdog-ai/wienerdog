@@ -1,7 +1,7 @@
 ---
 id: WP-broker-verb-allowlist-and-gws-gate
 title: Broker server-side per-verb allowlist + fold the broker behind gws-use
-status: Draft
+status: Done
 model: opus
 size: M
 depends_on: []

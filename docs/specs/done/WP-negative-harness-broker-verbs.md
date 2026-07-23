@@ -1,7 +1,7 @@
 ---
 id: WP-negative-harness-broker-verbs
 title: Fix the live negative containment harness for the wired-broker routines
-status: Draft
+status: Done
 model: sonnet
 size: M
 depends_on: [WP-broker-verb-allowlist-and-gws-gate]
