@@ -57,8 +57,15 @@ test('dream-brain: buildClaudeArgs composes the hermetic argv (WP-130), no model
   assert.ok(!args.includes('--model'));
 
   // The prompt carries the paths (Bash is off; the skill reads them from text).
+  // The trigger must NOT be a bare slash command — Claude Code ≥2.1.216 (and,
+  // per the 2026-07-24 incident, 2.1.217) parses a `-p` prompt whose first line
+  // is a slash command as a command lookup and errors "Unknown command", so the
+  // brain never runs. It must be plain text that names the dream routine (the
+  // skill body is delivered via --append-system-prompt).
   const prompt = flagValue(args, '-p');
-  assert.ok(prompt.includes('/wienerdog-dream'));
+  assert.ok(!/^\s*\/\S+\s*$/.test(prompt), 'trigger is not a bare slash command');
+  assert.ok(!prompt.split('\n')[0].startsWith('/'), 'first line does not start with a slash');
+  assert.ok(prompt.includes('wienerdog-dream'), 'trigger names the routine');
   assert.ok(prompt.includes('/s'));
   assert.ok(prompt.includes('/v'));
   assert.ok(prompt.includes('2026-07-02'));
@@ -237,6 +244,95 @@ test('dream-brain: spawnBrain done resolves a stderrTail on nonzero exit', async
   assert.equal(result.code, 4);
   assert.equal(typeof result.stderrTail, 'string');
   assert.match(result.stderrTail, /brain boom: API drop mid-run/);
+});
+
+// ── WP-dream-plaintext-trigger: the non-vacuity signal (whole-output form) ──
+// The signal fires ONLY when the run's entire output is the single bare
+// "Unknown command: /<name>" CLI diagnostic (ANSI-stripped, trimmed) — on
+// stdout when it fits the retained head, or on stderr when the fully-captured
+// stdout trims to empty (whitespace-only stdout still falls through).
+// A marker-shaped line amid real output must never fire it (false-abort /
+// retry-DoS protection; the dream-level ABORT is additionally gated on an
+// untouched vault — see the dream integration tests). >STDOUT_HEAD_MAX banner
+// before the marker is the documented accepted residual.
+
+/** Spawn an inline exit-0-capable sh fake brain; resolve spawnBrain's done. */
+async function runShBrain(scriptLines) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-brain-'));
+  const fakeCmd = path.join(root, 'fake-brain.sh');
+  fs.writeFileSync(
+    fakeCmd,
+    ['#!/bin/sh', 'if [ "$1" = "--version" ]; then exit 0; fi', ...scriptLines, ''].join('\n')
+  );
+  fs.chmodSync(fakeCmd, 0o755);
+  const vaultDir = path.join(root, 'vault');
+  fs.mkdirSync(vaultDir);
+  const { done } = spawnBrain({
+    vaultDir,
+    scratchDir: path.join(root, 'scratch'),
+    date: '2026-07-04',
+    model: null,
+    env: { ...process.env, ...pinFakeBrain(root, path.join(root, 'core'), fakeCmd) },
+  });
+  return done;
+}
+
+test('dream-brain: sawUnknownCommand=true when the bare diagnostic is the entire stdout (WP-dream-plaintext-trigger)', async () => {
+  const result = await runShBrain(['echo "Unknown command: /wienerdog-dream"', 'exit 0']);
+  assert.equal(result.code, 0);
+  assert.equal(result.sawUnknownCommand, true);
+});
+
+test('dream-brain: sawUnknownCommand=true for an ANSI-colored bare diagnostic (WP-dream-plaintext-trigger)', async () => {
+  const result = await runShBrain(["printf '\\033[31mUnknown command: /wienerdog-dream\\033[0m\\n'", 'exit 0']);
+  assert.equal(result.code, 0);
+  assert.equal(result.sawUnknownCommand, true);
+});
+
+test('dream-brain: sawUnknownCommand=true for a stderr-only bare diagnostic with empty stdout (WP-dream-plaintext-trigger)', async () => {
+  const result = await runShBrain(['echo "Unknown command: /wienerdog-dream" 1>&2', 'exit 0']);
+  assert.equal(result.code, 0);
+  assert.equal(result.sawUnknownCommand, true);
+});
+
+test('dream-brain: sawUnknownCommand=true for a stderr bare diagnostic with WHITESPACE-only stdout (normalized-empty fallback)', async () => {
+  // A stdout of just "\n" must not defeat the stderr fallback — the branch
+  // requires the fully-captured stdout to TRIM to empty, not to be zero bytes.
+  const result = await runShBrain(["printf '\\n'", 'echo "Unknown command: /wienerdog-dream" 1>&2', 'exit 0']);
+  assert.equal(result.code, 0);
+  assert.equal(result.sawUnknownCommand, true);
+});
+
+test('dream-brain: sawUnknownCommand=false for a normal brain run', async () => {
+  const result = await runShBrain(['echo "normal brain output"', 'exit 0']);
+  assert.equal(result.code, 0);
+  assert.equal(result.sawUnknownCommand, false);
+});
+
+test('dream-brain: sawUnknownCommand=false when the marker line appears AMID real output (no false abort)', async () => {
+  const result = await runShBrain([
+    'echo "Consolidating sessions..."',
+    'echo "Unknown command: /wienerdog-dream"',
+    'echo "Done consolidating."',
+    'exit 0',
+  ]);
+  assert.equal(result.code, 0);
+  assert.equal(result.sawUnknownCommand, false);
+});
+
+test('dream-brain: sawUnknownCommand=false when the marker follows a >STDOUT_HEAD_MAX banner (accepted residual)', async () => {
+  const result = await runShBrain([
+    // >4096 bytes of banner before the diagnostic: the whole-output
+    // discriminator deliberately does NOT fire (documented residual — the
+    // plaintext trigger is the primary defense; the residual failure mode is
+    // the pre-fix vacuous run, not a new risk).
+    'i=0',
+    'while [ $i -lt 300 ]; do echo "startup banner padding line $i"; i=$((i+1)); done',
+    'echo "Unknown command: /wienerdog-dream"',
+    'exit 0',
+  ]);
+  assert.equal(result.code, 0);
+  assert.equal(result.sawUnknownCommand, false);
 });
 
 test('dream-brain: a secret in brain output is redacted in the teed log AND stderrTail (WP-124 EP3)', async () => {

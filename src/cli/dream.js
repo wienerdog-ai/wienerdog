@@ -206,6 +206,50 @@ async function runBrainWithWatchdog(o) {
       const tail = (result.stderrTail || '').trim();
       throw new WienerdogError(`dream brain exited ${result.code}${tail ? `: ${tail}` : ''}`);
     }
+    if (result.sawUnknownCommand) {
+      // COMPOUND GUARD (maintainer amendment, 2026-07-24 Codex round 2): the
+      // text signal alone is attacker-influenceable (transcripts are
+      // untrusted — a steered brain could END its output with the bare marker
+      // line). A genuine CLI prompt-rejection performs NO work, so the abort
+      // additionally requires the vault to be untouched since run start (the
+      // tree was asserted clean immediately before the brain spawned):
+      // rejection ⇒ zero writes, so requiring a clean vault can never miss a
+      // genuine rejection. A writes-performing run that merely emits the
+      // marker does NOT abort here — it proceeds into validateAndCommit's
+      // existing validation/revert machinery, killing the nightly retry-DoS
+      // on the same transcript. The clean-tree probe reuses assertCleanTree
+      // (the pinned-git `status --porcelain` emptiness check already imported
+      // here), which throws for TWO distinct reasons that must be
+      // discriminated (maintainer amendment, Codex round 3):
+      //   - DIRTY TREE (its semantic failure, a fixed literal message): the
+      //     brain wrote something → suppress the abort and proceed.
+      //   - GIT EXECUTION failure (spawn/pin/repo error): the probe yields NO
+      //     evidence either way — fail closed, don't guess. Rethrow so the
+      //     outer catch restores the vault and the run fails loud with no
+      //     commit and no ledger advance. A transient git error costs one
+      //     loud failed run (self-healing retry next night); treating it as
+      //     "dirty" would let a do-nothing run be certified ok — the original
+      //     incident class. Both classes are WienerdogError with no code
+      //     field, so the dirty case is matched by its stable message prefix.
+      let vaultUntouched = true;
+      try {
+        assertCleanTree(vaultDir);
+      } catch (probeErr) {
+        if (probeErr instanceof WienerdogError && probeErr.message.startsWith('vault has uncommitted changes')) {
+          vaultUntouched = false; // dirty tree — the brain performed writes
+        } else {
+          throw probeErr; // probe could not run — no evidence; fail loud
+        }
+      }
+      if (vaultUntouched) {
+        throw new WienerdogError(
+          'dream aborted: the brain did not run — Claude rejected the trigger prompt as an ' +
+            'unknown slash command (no sessions were consolidated; nothing was committed and the ' +
+            'transcript ledger was not advanced, so these sessions are retried next run). ' +
+            'Update/repair Claude Code and re-run `wienerdog sync`.'
+        );
+      }
+    }
   } finally {
     if (timer) clearTimeout(timer);
     if (pidfile) {

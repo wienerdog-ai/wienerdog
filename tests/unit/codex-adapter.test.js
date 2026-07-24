@@ -336,7 +336,10 @@ test('buildCodexArgs produces the sandboxed invocation', () => {
   assert.ok(joined.includes('-c approval_policy=never'));
   assert.ok(joined.includes('-c sandbox_workspace_write.network_access=false'));
   assert.ok(argsNoModel.includes('--skip-git-repo-check'));
-  assert.ok(joined.includes('/wienerdog-dream'));
+  // The positional prompt shares DREAM_PROMPT: the Table A plain-text trigger,
+  // never the retired bare-slash '/wienerdog-dream' (WP-dream-plaintext-trigger).
+  assert.ok(joined.includes('Run the wienerdog-dream memory-consolidation routine now. Follow the instructions in your system prompt and use only your available tools.'));
+  assert.ok(!joined.includes('/wienerdog-dream'));
   assert.ok(joined.includes('/s'));
   assert.ok(joined.includes('/v'));
   assert.ok(joined.includes('2026-07-03'));

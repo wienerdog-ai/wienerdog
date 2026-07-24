@@ -36,6 +36,48 @@ if (process.env.WIENERDOG_FAKE_BRAIN_MODE === 'crash') {
   process.exit(1);
 }
 
+// Non-vacuity guard test (2026-07-24 incident): the real hermetic `claude -p`
+// rejected the (then bare-slash) trigger as an unknown command, wrote that
+// message to STDOUT, and still exited 0 — consolidating nothing. This models
+// that exact failure: no vault writes at all, so a missing non-vacuity guard
+// would let the orchestrator commit a vacuous "0 notes, 0 skills" run.
+if (process.env.WIENERDOG_FAKE_BRAIN_MODE === 'unknown-command') {
+  process.stdout.write('Unknown command: /wienerdog-dream\n');
+  process.exit(0);
+}
+
+// Stderr-channel rejection variant (maintainer amendment, Codex round 2): the
+// CLI diagnostic lands on STDERR while stdout carries only whitespace — the
+// normalized-empty stdout fallback must still signal, and (no writes) the
+// compound guard must still abort.
+if (process.env.WIENERDOG_FAKE_BRAIN_MODE === 'unknown-command-stderr') {
+  process.stdout.write('\n');
+  process.stderr.write('Unknown command: /wienerdog-dream\n');
+  process.exit(0);
+}
+
+// Probe-execution-failure test (maintainer amendment, Codex round 3): the
+// brain writes NOTHING and emits the bare diagnostic — and plants the flag
+// that makes the test's pinned git wrapper fail `status` calls from here on,
+// modeling a TRANSIENT git failure at exactly the post-brain clean-tree
+// probe. The guard must not guess ("no evidence" is not "dirty"): the run
+// must fail loud with no commit and no ledger advance.
+if (process.env.WIENERDOG_FAKE_BRAIN_MODE === 'bare-marker-break-git') {
+  fs.writeFileSync(path.join(process.env.WIENERDOG_HOME, 'git-break.flag'), '1');
+  process.stdout.write('Unknown command: /wienerdog-dream\n');
+  process.exit(0);
+}
+
+// Near-marker false-positive test (WP-dream-plaintext-trigger maintainer
+// amendment): a legit dream (or attacker-shaped transcript content echoed by
+// the brain) whose REAL multi-line output merely CONTAINS the diagnostic line
+// must NOT trip the non-vacuity guard — the signal fires only when that line
+// is the run's ENTIRE output. Emits the near-marker output, then falls through
+// to the normal successful writes below (the run must proceed and commit).
+if (process.env.WIENERDOG_FAKE_BRAIN_MODE === 'near-marker') {
+  process.stdout.write('Consolidating sessions...\nUnknown command: /wienerdog-dream\nDone consolidating.\n');
+}
+
 // Concurrency test (2026-07-07 incident): a second dream deleted this run's live
 // scratch mid-read, so the brain found its inputs gone and — degrading gracefully —
 // wrote only a failure-documentation note, then exited 0. The orchestrator's
@@ -87,5 +129,15 @@ if (scratch) {
 
 // 6. Dream report — one-line body; the pipeline appends its enforcement section.
 write(path.join('reports', 'dreams', `${date}.md`), `# Dream report — ${date}\n\nConsolidated recent sessions.\n`);
+
+// Anti-DoS proof (maintainer amendment, Codex round 2): a brain that performed
+// the NORMAL valid writes above but whose ENTIRE stdout is exactly the bare
+// marker line (injection-steered output — transcripts are untrusted). The text
+// signal fires, but the vault is dirty, so the compound guard must NOT abort:
+// the run proceeds into validateAndCommit and commits normally. Aborting here
+// would roll back valid writes and retry the same transcript nightly.
+if (process.env.WIENERDOG_FAKE_BRAIN_MODE === 'bare-marker-after-writes') {
+  process.stdout.write('Unknown command: /wienerdog-dream\n');
+}
 
 process.exit(0);

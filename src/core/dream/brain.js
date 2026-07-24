@@ -16,6 +16,26 @@ const { recordRunEvidence } = require('../run-evidence');
 /** Cap on the brain-stderr tail attached to spawnBrain's `done` result (bytes). */
 const STDERR_TAIL_MAX = 4096;
 
+/** Cap on the brain-stdout HEAD retained to detect the non-vacuity marker. */
+const STDOUT_HEAD_MAX = 4096;
+
+/** ANSI CSI escape sequences — stripped before the bare-diagnostic test. */
+const ANSI_RE = /\x1b\[[0-9;]*[A-Za-z]/g;
+
+/**
+ * True when `text` — after ANSI-stripping and trimming — is EXACTLY one CLI
+ * `Unknown command: /<name>` diagnostic line and nothing else. The whole-output
+ * requirement is load-bearing: a real dream emits substantial output, so a
+ * marker-shaped line amid real content (e.g. attacker-influenced transcript
+ * text echoed by the brain) can never match — only the genuine CLI rejection,
+ * whose single diagnostic line IS the run's entire output, does.
+ * @param {string} text
+ * @returns {boolean}
+ */
+function isBareUnknownCommand(text) {
+  return /^Unknown command: \/\S+$/.test(text.replace(ANSI_RE, '').trim());
+}
+
 /**
  * The prompt that triggers the dream skill and hands it the paths. Bash is off
  * in the sandbox, so the skill cannot read env vars — the paths (and the layout)
@@ -31,7 +51,7 @@ const STDERR_TAIL_MAX = 4096;
 function DREAM_PROMPT(scratchDir, vaultDir, date, layout) {
   const lay = layout || defaultLayout();
   return [
-    '/wienerdog-dream',
+    'Run the wienerdog-dream memory-consolidation routine now. Follow the instructions in your system prompt and use only your available tools.',
     '',
     `Scratch extracts directory (read-only inputs): ${scratchDir}`,
     `Vault directory (your only write target): ${vaultDir}`,
@@ -139,7 +159,8 @@ function ensureBrainStaging(paths) {
  *          logStream?:NodeJS.WritableStream}} o
  *   platform  the run's platform (never mock process.platform — inject it)
  * @returns {{ child: import('child_process').ChildProcess,
- *             done: Promise<{code:number|null, durationMs:number, stderrTail:string}> }}
+ *             done: Promise<{code:number|null, durationMs:number, stderrTail:string,
+ *                            sawUnknownCommand:boolean}> }}
  */
 function spawnBrain(o) {
   const { vaultDir, scratchDir, date, model, harness, env, logStream, containmentProbe } = o;
@@ -268,9 +289,33 @@ function spawnBrain(o) {
       if (logStream) logStream.write(redacted);
     });
   }
-  if (logStream && child.stdout) {
+  // Bounded rolling HEAD of the brain's stdout + a cheap total-length counter
+  // (WP-dream-plaintext-trigger, 2026-07-24 incident): a hermetic `claude -p`
+  // that rejects the trigger as an unknown slash command emits ONLY the
+  // "Unknown command: ..." diagnostic (usually stdout, possibly ANSI-colored
+  // or on stderr) and still exits 0, so the non-vacuity signal cannot come
+  // from the exit code. Attached unconditionally (not only when logStream is
+  // set). The whole-output discriminator below fires only when that diagnostic
+  // is the run's ENTIRE output; the stderr branch fires when the entire stdout
+  // was captured AND (ANSI-stripped) trims to empty — so whitespace-only
+  // stdout plus a stderr diagnostic still signals (maintainer amendment,
+  // Codex round 2). NOTE: this boolean is TEXT evidence only — the ABORT
+  // decision in dream.js is compound: it additionally requires the vault to be
+  // untouched since run start, because a genuine CLI rejection performs no
+  // work (see runBrainWithWatchdog). ACCEPTED RESIDUAL (maintainer decision,
+  // 2026-07-24 Codex review): a hypothetical >STDOUT_HEAD_MAX startup banner
+  // preceding the rejection is NOT detected — the PRIMARY defense is the
+  // plain-text trigger itself; this guard is defense-in-depth for a
+  // reintroduced-slash regression, and the residual failure mode is the
+  // pre-fix status quo (a vacuous run), not a new risk.
+  let stdoutHead = '';
+  let stdoutTotalLen = 0;
+  if (child.stdout) {
     child.stdout.on('data', (chunk) => {
-      logStream.write(redactOnly(chunk.toString('utf8')));
+      const redacted = redactOnly(chunk.toString('utf8'));
+      stdoutTotalLen += redacted.length;
+      stdoutHead = (stdoutHead + redacted).slice(0, STDOUT_HEAD_MAX);
+      if (logStream) logStream.write(redacted);
     });
   }
 
@@ -279,7 +324,17 @@ function spawnBrain(o) {
   // is complete. No raw child/native emitter/event reaches this promise (R16).
   const done = new Promise((resolve, reject) => {
     child.on('error', reject);
-    child.on('exit', ({ code }) => resolve({ code, durationMs: Date.now() - startedAt, stderrTail }));
+    child.on('exit', ({ code }) =>
+      resolve({
+        code,
+        durationMs: Date.now() - startedAt,
+        stderrTail,
+        sawUnknownCommand:
+          stdoutTotalLen <= STDOUT_HEAD_MAX &&
+          (isBareUnknownCommand(stdoutHead) ||
+            (stdoutHead.replace(ANSI_RE, '').trim() === '' && isBareUnknownCommand(stderrTail))),
+      })
+    );
   });
 
   return { child, done };

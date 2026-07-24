@@ -593,6 +593,148 @@ test('dream-integration: a brain whose inputs vanish mid-run records no ledger o
   assert.equal(fs.existsSync(path.join(ctx.core, 'state', 'dream-scratch')), false);
 });
 
+test('dream-integration: a brain that rejects the trigger as an unknown command fails loud, makes no commit, and advances no ledger (WP-dream-plaintext-trigger)', async () => {
+  // The 2026-07-24 production incident: the hermetic `claude -p` rejected the
+  // (then bare-slash) trigger, wrote "Unknown command: ..." to stdout, wrote
+  // NOTHING to the vault, and still exited 0. Without the non-vacuity guard,
+  // run() would have nothing to catch — scratchIntact passes (inputs
+  // untouched), validateAndCommit commits "0 notes, 0 skills", and
+  // recordProcessed advances the ledger, silently losing the fed sessions.
+  const ctx = setup();
+  const before = commitCount(ctx.vault);
+
+  const { output, thrown } = await runDream(ctx, ['--yes'], { WIENERDOG_FAKE_BRAIN_MODE: 'unknown-command' });
+
+  // Fail loud.
+  assert.ok(thrown, 'expected a WienerdogError throw');
+  assert.match(thrown.message, /unknown slash command/);
+  // No dream commit.
+  assert.equal(commitCount(ctx.vault), before);
+  assert.equal(git(ctx.vault, ['status', '--porcelain']).trim(), '');
+  // No processed record — the sessions are retried next run.
+  assert.equal(readLedgerFile(ctx.core), null);
+  // Never reported success.
+  assert.ok(!/dream committed/.test(output));
+  // Teardown still ran: lock released, scratch gone.
+  assert.equal(fs.existsSync(path.join(ctx.core, 'state', 'dream.lock')), false);
+  assert.equal(fs.existsSync(path.join(ctx.core, 'state', 'dream-scratch')), false);
+});
+
+test('dream-integration: a marker line AMID real brain output does NOT trip the guard — the run commits normally (WP-dream-plaintext-trigger)', async () => {
+  // The false-positive half of the whole-output discriminator (maintainer
+  // amendment after Codex review): a brain whose real multi-line output merely
+  // CONTAINS "Unknown command: /wienerdog-dream" (legit dream prose, or
+  // attacker-shaped transcript content echoed back) must NOT be aborted —
+  // otherwise the same transcript would be retried and re-aborted forever
+  // (retry-DoS). The signal fires only when the line is the ENTIRE output.
+  const ctx = setup();
+  const before = commitCount(ctx.vault);
+
+  const { output, thrown } = await runDream(ctx, ['--yes'], { WIENERDOG_FAKE_BRAIN_MODE: 'near-marker' });
+  assert.equal(thrown, null, thrown && thrown.message);
+
+  // The run proceeded normally: one dream commit, ledger advanced.
+  assert.equal(commitCount(ctx.vault), before + 1);
+  assert.match(output, /dream committed/);
+  const ledger = readLedgerFile(ctx.core);
+  assert.ok(ledger, 'ledger written');
+  assert.equal(ledgerRecord(ledger, 'inj.jsonl').outcome, 'processed');
+});
+
+test('dream-integration: a WRITES-performing brain whose entire stdout is the bare marker does NOT abort — commits normally (anti-DoS, WP-dream-plaintext-trigger)', async () => {
+  // Codex round 2 scenario: an injection-steered brain performs VALID vault
+  // writes but ends with the bare "Unknown command: /x" line as its entire
+  // stdout. The text signal fires — but the vault is dirty, so the compound
+  // guard must NOT abort: aborting would roll back valid writes and retry the
+  // same (untrusted, attacker-shaped) transcript nightly = persistent dream
+  // DoS. The run must proceed into validateAndCommit and commit normally.
+  const ctx = setup();
+  const before = commitCount(ctx.vault);
+
+  const { output, thrown } = await runDream(ctx, ['--yes'], { WIENERDOG_FAKE_BRAIN_MODE: 'bare-marker-after-writes' });
+  assert.equal(thrown, null, thrown && thrown.message);
+
+  // Committed and advanced — no abort, no rollback, no retry loop.
+  assert.equal(commitCount(ctx.vault), before + 1);
+  assert.match(output, /dream committed/);
+  const ledger = readLedgerFile(ctx.core);
+  assert.ok(ledger, 'ledger written');
+  assert.equal(ledgerRecord(ledger, 'inj.jsonl').outcome, 'processed');
+});
+
+test('dream-integration: a stderr-channel rejection with whitespace-only stdout still aborts — no commit, no ledger (WP-dream-plaintext-trigger)', async () => {
+  // The stderr variant of the genuine rejection: diagnostic on STDERR, stdout
+  // just "\n" (the normalized-empty fallback), NO writes. Both halves of the
+  // compound guard hold — text signal + untouched vault — so the run aborts.
+  const ctx = setup();
+  const before = commitCount(ctx.vault);
+
+  const { output, thrown } = await runDream(ctx, ['--yes'], { WIENERDOG_FAKE_BRAIN_MODE: 'unknown-command-stderr' });
+
+  assert.ok(thrown, 'expected a WienerdogError throw');
+  assert.match(thrown.message, /unknown slash command/);
+  assert.equal(commitCount(ctx.vault), before);
+  assert.equal(git(ctx.vault, ['status', '--porcelain']).trim(), '');
+  assert.equal(readLedgerFile(ctx.core), null);
+  assert.ok(!/dream committed/.test(output));
+});
+
+test('dream-integration: a probe git EXECUTION failure after a bare-marker brain fails loud — never certifies a no-op (WP-dream-plaintext-trigger)', { skip: process.platform === 'win32' }, async () => {
+  // Codex round 3: the brain writes nothing + emits the bare diagnostic, and
+  // the post-brain clean-tree probe fails TRANSIENTLY on git execution (not
+  // because the tree is dirty). Treating that throw as "dirty" would suppress
+  // the abort; git recovers; validateAndCommit certifies the vacuous run and
+  // advances the ledger — the original incident class. The probe must instead
+  // RETHROW: no evidence either way → fail closed, one loud failed run, no
+  // commit, no ledger advance; the sessions are retried next night.
+  const ctx = setup();
+  const before = commitCount(ctx.vault);
+
+  // Pre-plant a stateful git wrapper in the bin dir pinFakeBrain pins from
+  // (WP-155 pinned-fakes idiom): it delegates to the real git until the fake
+  // brain plants the break flag, then fails EXACTLY ONE `status` call (the
+  // probe) — the flag is cleared before failing, so git "recovers"
+  // immediately. The transience is load-bearing for mutation strength: under
+  // a mutant catch that swallows the probe error and proceeds, git has
+  // already recovered, so validateAndCommit SUCCEEDS and silently certifies
+  // the vacuous run (thrown null, commit made, ledger advanced) — only the
+  // correct rethrow can fail this run. A persistent failure would let
+  // validateAndCommit's own identical "git status failed" mask the mutant.
+  const realGit = resolveOnPath('git', process.env.PATH).commandPath;
+  const flag = path.join(ctx.core, 'git-break.flag');
+  const binDir = path.join(fs.realpathSync(ctx.root), 'bin');
+  fs.mkdirSync(binDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(binDir, 'git'),
+    [
+      '#!/bin/sh',
+      `if [ -f "${flag}" ]; then`,
+      '  for a in "$@"; do',
+      '    if [ "$a" = "status" ]; then',
+      `      rm -f "${flag}"`,
+      '      echo "fatal: transient git failure (test)" 1>&2',
+      '      exit 128',
+      '    fi',
+      '  done',
+      'fi',
+      `exec "${realGit}" "$@"`,
+      '',
+    ].join('\n')
+  );
+  fs.chmodSync(path.join(binDir, 'git'), 0o755);
+
+  const { output, thrown } = await runDream(ctx, ['--yes'], { WIENERDOG_FAKE_BRAIN_MODE: 'bare-marker-break-git' });
+
+  // Loud failure carrying the PROBE's error, not a silent certification.
+  assert.ok(thrown, 'expected a loud failure');
+  assert.match(thrown.message, /git status failed/);
+  // No commit, no ledger record; vault restored clean by the outer catch.
+  assert.equal(commitCount(ctx.vault), before);
+  assert.equal(git(ctx.vault, ['status', '--porcelain']).trim(), '');
+  assert.equal(readLedgerFile(ctx.core), null);
+  assert.ok(!/dream committed/.test(output));
+});
+
 // ── WP-119: per-file quarantine ledger (audit A6, ADR-0023) ─────────────────
 
 test('dream-integration: an over-ceiling transcript is quarantined while the valid neighbour is consolidated', async () => {

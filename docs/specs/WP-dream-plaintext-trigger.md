@@ -1,7 +1,7 @@
 ---
 id: WP-dream-plaintext-trigger
 title: Dream trigger is plain text (not a leading slash command) + a dream non-vacuity guard
-status: Ready
+status: In-Review
 model: sonnet
 size: S
 depends_on: []
@@ -141,6 +141,7 @@ so no golden updates are needed.
 | modify | tests/unit/dream-brain.test.js | Flip the `includes('/wienerdog-dream')` assertion to: the `-p` prompt is NOT a bare slash command and names `wienerdog-dream` (mirror `8d6b186`'s routine test). Add a `spawnBrain` test: a fake brain that prints `Unknown command: /wienerdog-dream` to stdout and exits 0 resolves `done` with `sawUnknownCommand === true`; a normal brain resolves `false`. |
 | modify | tests/fixtures/dream/fake-brain.js | Add a `WIENERDOG_FAKE_BRAIN_MODE === 'unknown-command'` branch: `process.stdout.write('Unknown command: /wienerdog-dream\n')` then `process.exit(0)`, writing NOTHING to the vault (models the real failure). |
 | modify | tests/integration/dream.test.js | Add a test (mirror the `vanish-scratch` test ~line 568): running the dream with `WIENERDOG_FAKE_BRAIN_MODE: 'unknown-command'` throws (fails loud), makes NO commit (commit count unchanged), writes NO ledger record for the fed transcript, and leaves the vault clean. |
+| modify | tests/unit/codex-adapter.test.js | one-line assertion update — the Codex positional prompt shares DREAM_PROMPT; expect the Table A plain-text trigger, not the retired '/wienerdog-dream' (added by maintainer amendment after implementation surfaced the literal-match) |
 
 ### Exact contracts
 
@@ -157,28 +158,55 @@ element changes:
 
 ```js
 /** Cap on the brain-stdout HEAD retained to detect the non-vacuity marker. */
-const STDOUT_HEAD_MAX = 1024;
+const STDOUT_HEAD_MAX = 4096;
+// (maintainer amendment, 2026-07-24 Codex review — whole-output discriminator)
 // ...inside spawnBrain: attach a child.stdout 'data' handler UNCONDITIONALLY
 // (today it is attached only when logStream is set). Per chunk, redact, then:
+//   stdoutTotalLen += redacted.length;                              // cheap counter
 //   stdoutHead = (stdoutHead + redacted).slice(0, STDOUT_HEAD_MAX); // keep the HEAD
 //   if (logStream) logStream.write(redacted);                       // unchanged tee
-// done resolves the existing fields PLUS:
-//   sawUnknownCommand: /^Unknown command:/m.test(stdoutHead)
+// isBareUnknownCommand(text): strip ANSI (/\x1b\[[0-9;]*[A-Za-z]/g), trim, then
+// test the ENTIRE remaining text against /^Unknown command: \/\S+$/ — i.e. the
+// whole output is exactly one CLI diagnostic line, nothing else.
+// done resolves the existing fields PLUS (round 2 — stderr branch normalized):
+//   sawUnknownCommand:
+//     stdoutTotalLen <= STDOUT_HEAD_MAX &&
+//     (isBareUnknownCommand(stdoutHead) ||
+//       (stdoutHead.replace(ANSI_RE, '').trim() === '' && isBareUnknownCommand(stderrTail)))
+// Accepted residual (JSDoc-documented): a >STDOUT_HEAD_MAX startup banner
+// preceding the rejection is not detected — the plaintext trigger is the
+// primary defense; the residual failure mode is the pre-fix vacuous run.
 ```
 
 `done` result shape becomes `{ code, durationMs, stderrTail, sawUnknownCommand }`.
 
 `runBrainWithWatchdog` abort (in `dream.js`, immediately after the existing
-`result.code !== 0` branch):
+`result.code !== 0` branch) — COMPOUND per Table A row *Abort behavior*: the
+text signal AND an untouched vault (probed by reusing the already-imported
+`assertCleanTree`, i.e. pinned-git `status --porcelain` emptiness; round 3 —
+its throws are DISCRIMINATED: dirty tree suppresses the abort, a git EXECUTION
+failure rethrows loudly because a probe that cannot run yields no evidence):
 
 ```js
 if (result.sawUnknownCommand) {
-  throw new WienerdogError(
-    'dream aborted: the brain did not run — Claude rejected the trigger prompt as an ' +
-      'unknown slash command (no sessions were consolidated; nothing was committed and the ' +
-      'transcript ledger was not advanced, so these sessions are retried next run). ' +
-      'Update/repair Claude Code and re-run `wienerdog sync`.'
-  );
+  let vaultUntouched = true;
+  try {
+    assertCleanTree(vaultDir);
+  } catch (probeErr) {
+    if (probeErr instanceof WienerdogError && probeErr.message.startsWith('vault has uncommitted changes')) {
+      vaultUntouched = false; // dirty tree — the brain performed writes
+    } else {
+      throw probeErr; // probe could not run — no evidence; fail loud
+    }
+  }
+  if (vaultUntouched) {
+    throw new WienerdogError(
+      'dream aborted: the brain did not run — Claude rejected the trigger prompt as an ' +
+        'unknown slash command (no sessions were consolidated; nothing was committed and the ' +
+        'transcript ledger was not advanced, so these sessions are retried next run). ' +
+        'Update/repair Claude Code and re-run `wienerdog sync`.'
+    );
+  }
 }
 ```
 
@@ -196,10 +224,11 @@ is the single source of truth; every other mention defers to it.
 |----------|-------------|-------------------|
 | Trigger | The dream `-p` prompt's first line | `Run the wienerdog-dream memory-consolidation routine now. Follow the instructions in your system prompt and use only your available tools.` |
 | Trigger | Leading slash anywhere in the `-p` prompt | FORBIDDEN — no line may start with `/` (regex reference: the whole prompt must not match `/^\s*\/\S+\s*$/` and its first line must not start with `/`) |
-| Marker | Non-vacuity failure signal | brain **stdout** HEAD matches `/^Unknown command:/m` |
+| Marker | Non-vacuity failure signal — TEXT half of a compound signal (maintainer amendments, 2026-07-24 Codex rounds 1+2) | the run's ENTIRE output is a single bare CLI diagnostic: `isBareUnknownCommand(text)` = ANSI-strip (`/\x1b\[[0-9;]*[A-Za-z]/g`) + trim, then whole-text match `/^Unknown command: \/\S+$/`. `sawUnknownCommand` = `stdoutTotalLen <= STDOUT_HEAD_MAX` AND (`isBareUnknownCommand(stdoutHead)` OR (stdoutHead ANSI-stripped trims to `''` AND `isBareUnknownCommand(stderrTail)`)). The stderr branch is normalized-empty: it requires the ENTIRE stdout captured AND trimming to empty, so whitespace-only stdout (e.g. `"\n"`) does not defeat it. A marker-shaped line amid real output can never match (a real dream emits substantial stdout). |
 | Signal field | `spawnBrain` `done` result | gains `sawUnknownCommand: boolean` (alongside `code`, `durationMs`, `stderrTail`) |
-| Capture bound | stdout retained for the match | first `STDOUT_HEAD_MAX = 1024` bytes (redacted), kept as a HEAD (marker is the first output line) |
-| Abort behavior | when `sawUnknownCommand` is true | `runBrainWithWatchdog` throws `WienerdogError` → `dream.js` `catch` restores the vault → **no `validateAndCommit`, no `recordProcessed`, no ledger advance** → `run-job` fails loud (durable alert + `last_status:'error'`, nonzero exit) |
+| Capture bound | stdout retained for the match | first `STDOUT_HEAD_MAX = 4096` bytes (redacted), kept as a HEAD, plus a cheap `stdoutTotalLen` counter of total redacted bytes seen |
+| Accepted residual | marker preceded by a >`STDOUT_HEAD_MAX` startup banner | NOT detected (documented in the guard's JSDoc) — the PRIMARY defense is the plain-text trigger; this guard is defense-in-depth for a reintroduced-slash regression, and the residual failure mode is the pre-fix status quo (a vacuous run), not a new risk |
+| Abort behavior | COMPOUND: when `sawUnknownCommand` is true AND the vault is untouched since run start; probe failures DISCRIMINATED (maintainer amendments, 2026-07-24 Codex rounds 2+3) | `runBrainWithWatchdog` re-checks the vault tree (pinned-git `status --porcelain` emptiness via the already-imported `assertCleanTree`; the tree was asserted clean immediately before the brain spawned). Probe outcomes: **CLEAN** → throw the abort `WienerdogError` (a genuine CLI rejection performs no work, so this can never miss it). **DIRTY tree** (assertCleanTree's semantic failure — matched by the stable `vault has uncommitted changes` message prefix on a `WienerdogError`; both failure classes are `WienerdogError` with no code field, so message-prefix matching is the only discriminator) → suppress the abort; a writes-performing run that merely emits the marker (injection-steered — transcripts are untrusted) proceeds into `validateAndCommit`'s validation/revert machinery instead (kills the nightly retry-DoS). **GIT EXECUTION failure** (spawn/pin/repo error — any other throw) → RETHROW loudly: a probe that cannot run yields NO evidence either way — fail closed, don't guess; a transient git error costs one loud failed run (self-healing retry next night), never a silent certification of a do-nothing run. On abort/rethrow: `dream.js` `catch` restores the vault → **no `validateAndCommit`, no `recordProcessed`, no ledger advance** → `run-job` fails loud (durable alert + `last_status:'error'`, nonzero exit) |
 | Non-goal | broader "zero tool activity" detection | OUT of scope (fragile, false-positive-prone); the marker is the only signal this WP adds |
 
 ### Mirrored Surface Checklist
