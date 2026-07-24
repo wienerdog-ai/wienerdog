@@ -129,16 +129,28 @@ assignment:
 // roots are reconstructed deterministically beneath the BOUND home and are NEVER
 // inherited — this env is built FROM SCRATCH, so an ambient CLAUDE_CONFIG_DIR/
 // CODEX_HOME can never leak in (CLAUDE_CONFIG_DIR is absent from ENV_PASSTHROUGH).
-// CLAUDE_CONFIG_DIR is OMITTED when the home is unredirected (paths.home ===
-// os.homedir()): with it set, claude >=2.1.216 ignores the macOS login Keychain
-// — its ONLY credential store since it migrated ~/.claude/.credentials.json out
-// of existence — and 401s. Omitting it lets claude use its own default resolution
-// (HOME/.claude, where HOME is code-set to paths.home, PLUS the Keychain),
-// restoring production subscription auth in BOTH terminal and launchd. When the
-// home IS redirected (a harness/sandbox: paths.home !== os.homedir()), KEEP it
-// explicit so the brain stays strictly confined to the redirected config and can
-// never fall through to the real user's Keychain.
-if (paths.home !== os.homedir()) {
+// CLAUDE_CONFIG_DIR is OMITTED when the home is the REAL login home (paths.home
+// === os.userInfo().homedir): with it set, claude >=2.1.216 ignores the macOS
+// login Keychain — its ONLY credential store since it migrated
+// ~/.claude/.credentials.json out of existence — and 401s. Omitting it lets
+// claude use its own default resolution (HOME/.claude, where HOME is code-set to
+// paths.home, PLUS the Keychain), restoring production subscription auth in BOTH
+// terminal and launchd. The baseline MUST be os.userInfo().homedir (passwd,
+// env-independent), NOT os.homedir() (which reads $HOME live, so a HOME-redirected
+// sandbox would falsely compare equal and reach the real Keychain). If
+// os.userInfo() throws, realLoginHome stays null and the var is KEPT — fail
+// closed (a loud 401, never a silent Keychain exposure). When the home is
+// redirected (a harness/sandbox: paths.home !== the real login home), KEEP it
+// explicit so the brain stays confined to the redirected config. Accepted
+// residual: this confinement relies on claude continuing to honor
+// CLAUDE_CONFIG_DIR as a Keychain-suppressing signal (see Amendment 5).
+let realLoginHome = null;
+try {
+  realLoginHome = os.userInfo().homedir;
+} catch {
+  realLoginHome = null; // fail closed below → KEEP the var
+}
+if (realLoginHome === null || paths.home !== realLoginHome) {
   env.CLAUDE_CONFIG_DIR = path.join(paths.home, '.claude');
 }
 env.CODEX_HOME = path.join(paths.home, '.codex');
