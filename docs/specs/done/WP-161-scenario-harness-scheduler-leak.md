@@ -1,7 +1,7 @@
 ---
 id: WP-161-scenario-harness-scheduler-leak
 title: Stop the live scenario harnesses from leaking real OS scheduler entries into the maintainer's machine
-status: In-Review
+status: Done
 model: sonnet
 size: M
 depends_on: []
@@ -438,3 +438,18 @@ grep -n "buildInitEnv\|assertNoRealSchedulerLeak\|assertNoLoaderInvoked" \
 
 > **Fork note:** work lands directly on `main` per the WORKING-NOTES; `branch:`/PR
 > fields are kept for template/upstream-porting fidelity.
+
+## Outcome (2026-07-24)
+
+Shipped in `249b164` after a five-round double gate (wd-reviewer APPROVE ×4;
+Codex adversarial rounds forced 11 hardenings, final residual adjudicated and
+documented). **Gated live proof: PASS** — maintainer ran
+`WIENERDOG_RUN_SCENARIOS=1 npm run scenarios:negative` on claude 2.1.217
+(newer than last-certified 2.1.214): all three routines ran live, every canary
+untouched, tool inventory ⊆ declared, no loader-invoked/leak failures; after
+the run, `~/Library/LaunchAgents` and `launchctl list` held only the real
+`ai.wienerdog.{dream,catchup}` entries and the dream plist still pointed at
+`~/.wienerdog/launcher/launch.js`. The harness's dream leg halted pre-run on an
+exec-pin drift inside its own sandbox (temp core pinned homebrew-path claude,
+probe resolved the `~/.local/bin` install) — that is the WP-154 fail-closed
+probe working as designed, unrelated to this WP's scheduler containment.
