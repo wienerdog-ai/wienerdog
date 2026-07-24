@@ -1,7 +1,7 @@
 ---
 id: WP-cleanenv-keychain-auth
 title: buildCleanEnv must not suppress claude's Keychain auth on an unredirected home
-status: Ready
+status: In-Review
 model: sonnet
 size: S
 depends_on: []
@@ -163,16 +163,33 @@ DEFER to it.
 
 | Var | Branch / condition | Emitted value | Why |
 |-----|--------------------|---------------|-----|
-| `CLAUDE_CONFIG_DIR` | POSIX, home **unredirected** (`paths.home === os.homedir()`) | **ABSENT (omitted)** | claude falls back to its own default resolution: `HOME/.claude` (HOME is code-set to `paths.home`) **plus** the macOS login Keychain — the only credential store on claude ≥ 2.1.216. Setting it suppresses the Keychain → 401. |
-| `CLAUDE_CONFIG_DIR` | POSIX, home **redirected** (`paths.home !== os.homedir()`) | `path.join(paths.home, '.claude')` | Strict confinement to the redirected config; Keychain deliberately suppressed so a harness/sandbox never reaches the real user's live credentials. |
+| `CLAUDE_CONFIG_DIR` | POSIX, home **unredirected** (`paths.home === os.userInfo().homedir`) | **ABSENT (omitted)** | claude falls back to its own default resolution: `HOME/.claude` (HOME is code-set to `paths.home`) **plus** the macOS login Keychain — the only credential store on claude ≥ 2.1.216. Setting it suppresses the Keychain → 401. |
+| `CLAUDE_CONFIG_DIR` | POSIX, home **redirected** (`paths.home !== os.userInfo().homedir`), or `os.userInfo()` **throws** (fail closed) | `path.join(paths.home, '.claude')` | Confinement to the redirected config; Keychain deliberately suppressed so a harness/sandbox does not reach the real user's live credentials. Residual: this relies on claude continuing to honor the var as a Keychain-suppressing signal (ADR-0025 Amendment 5, owner-accepted). |
 | `CLAUDE_CONFIG_DIR` | **win32** (any home) | `path.join(paths.home, '.claude')` (unchanged) | Windows auth is file-based under `USERPROFILE`; no Keychain; not in incident scope. Claude-only, POSIX-only fix. |
 | `CODEX_HOME` | **all** branches (unchanged) | `path.join(paths.home, '.codex')` | Codex auth is file-based (`~/.codex/auth.json`); no evidence any codex version stores auth outside `CODEX_HOME`, so no Keychain-suppression defect. Codex question recorded as a follow-up (Out of scope). |
 | `HOME` | POSIX (unchanged) | `paths.home` | The deterministic bound home from which claude derives `~/.claude`; keeps the config root pinned to `paths.home` even when `CLAUDE_CONFIG_DIR` is omitted. |
 | Never-inherited invariant | all | `CLAUDE_CONFIG_DIR`/`CODEX_HOME`/`ANTHROPIC_API_KEY` are NOT in `ENV_PASSTHROUGH` | Env is built from scratch; omitting a var does not admit any ambient value. |
 
-The comparison is a literal string `===`: in production both `paths.home` and
-`os.homedir()` derive from the same `$HOME` value, so no canonicalization is needed
-(and none is added — realpath'ing here would be unrequested scope).
+The comparison is a literal string `===`; no canonicalization is added
+(realpath'ing here would be unrequested scope).
+
+> **Amendment (2026-07-24, Codex adversarial review — maintainer-directed).** The
+> unredirected baseline is `os.userInfo().homedir` (passwd/getpwuid — env-
+> independent), NOT `os.homedir()` as this spec originally said: `os.homedir()`
+> on POSIX reads `process.env.HOME` live, so a HOME-redirected harness/sandbox
+> (the real redirection mechanism) would move BOTH sides of the comparison,
+> wrongly take the omit branch, and expose the real login Keychain to a
+> sandboxed brain. If `os.userInfo()` throws (no passwd entry), the guard fails
+> CLOSED (the var is kept — loud 401, never silent exposure). References to
+> `os.homedir()` as the baseline elsewhere in this spec (Current state, Exact
+> contracts, Security analysis, Acceptance criteria, Verification steps, the
+> original ADR Amendment 5 text) predate this amendment and are superseded by
+> this table. Additionally, the redirected branch's confinement is an
+> owner-accepted fail-open residual (it relies on claude honoring
+> `CLAUDE_CONFIG_DIR` as a Keychain-suppressing signal), and the three new
+> scheduler-runjob tests pass `'darwin'` explicitly (they would otherwise hit
+> the win32 branch on Windows), plus a fourth entrypoint-shaped test proves the
+> HOME-redirected `getPaths(process.env)` path KEEPS the var.
 
 ### Mirrored Surface Checklist (each defers to Table A)
 
@@ -181,7 +198,7 @@ The comparison is a literal string `===`: in production both `paths.home` and
 - [x] Verification commands / greps — the node two-branch one-liner + `--test-name-pattern buildCleanEnv` + the `grep '\.CLAUDE_CONFIG_DIR *='` sole-site check.
 - [x] Current-state description — the unconditional-set-sites + inheritance chain.
 - [x] Operative prose — Exact contracts, Security analysis, ADR Amendment 5 text.
-- [x] Tests — the three new scheduler-runjob tests + the sync-repoint redirected-branch annotation.
+- [x] Tests — the four new scheduler-runjob tests (three per the original spec, `'darwin'`-pinned, plus the entrypoint-shaped HOME-redirect test per the Amendment) + the sync-repoint redirected-branch annotation.
 
 ## Security analysis (this WP touches the A7/A10 / ADR-0025 clean-env boundary)
 

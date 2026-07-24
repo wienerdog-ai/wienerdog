@@ -413,3 +413,66 @@ harness-only facts, now settled (product code unchanged; fixed by
   allowlist, self-target, and grant-flip assertions exclude it; `getProfile` is
   treated as always-allowed (the benign, read-only, self-address primitive every
   send resolves through).
+
+### Amendment 5 (2026-07-24) — CLAUDE_CONFIG_DIR, not launchd-vs-terminal, is what suppressed Keychain auth; buildCleanEnv omits it on an unredirected home
+
+Amendment 4 diagnosed the auth failure as an environment limitation — "launchd
+reaches the gui-session Keychain, a terminal `buildCleanEnv` does not." **That
+diagnosis was wrong.** A 16-experiment spike (WP-broker-e2e-terminal-auth) and a
+production-confirmed incident (2026-07-24, claude 2.1.217) established the true
+mechanism:
+
+- claude ≥ 2.1.216 **migrated its OAuth token into the macOS login Keychain**
+  (`security` item `Claude Code-credentials`) and **deleted
+  `~/.claude/.credentials.json`**. The Keychain is now its only credential store.
+- When `CLAUDE_CONFIG_DIR` is set in the child env — **even to the exact default
+  `~/.claude`** — claude looks ONLY for file credentials and ignores the Keychain,
+  so it 401s (`OAuth session expired and could not be refreshed`). This is true in
+  **both** launchd and terminal contexts; it is NOT launchd-vs-terminal.
+  `buildCleanEnv`'s POSIX branch always set `CLAUDE_CONFIG_DIR`, so it always
+  suppressed the Keychain. Amendment 4's earlier "launchd works" observation was a
+  transient artifact (a not-yet-expired file/session and a pre-auth "Unknown
+  command" slash rejection that masked the error); once the file cred was gone and
+  expired, launchd 401'd too, surfaced by the 0.10.0 non-vacuity guard.
+- Spike experiments D1 (terminal) and L1 (launchd): the identical minimal env
+  **without** `CLAUDE_CONFIG_DIR` authenticates in both contexts.
+
+**The fix (WP-cleanenv-keychain-auth, discriminator amended in Codex adversarial
+review):** `buildCleanEnv` (POSIX) OMITS `CLAUDE_CONFIG_DIR` when the home is
+unredirected — `paths.home === os.userInfo().homedir`, the passwd/getpwuid real
+login home, deliberately NOT `os.homedir()`: `os.homedir()` reads `$HOME` live, so
+a HOME-redirected harness/sandbox (the real redirection mechanism) would move BOTH
+sides of the comparison, wrongly take the omit branch, and expose the real login
+Keychain to a sandboxed brain. With the var omitted, claude uses its own default
+resolution — `HOME/.claude` (HOME is code-set to `paths.home`) plus the Keychain —
+restoring the pre-0.10.0 production auth path in terminal and launchd alike. When
+the home IS redirected (a harness/sandbox: `paths.home !== os.userInfo().homedir`),
+the var is KEPT explicit so the brain is confined to the redirected config. If
+`os.userInfo()` throws (no passwd entry), the guard fails CLOSED: the var is kept —
+suppressing the Keychain yields a loud 401, never a silent exposure of real
+credentials to a possibly-redirected run.
+
+**Accepted residual (redirected branch, fail-open):** the redirected-execution
+credential confinement depends on claude continuing to honor an explicit
+`CLAUDE_CONFIG_DIR` as a Keychain-suppressing signal. claude auto-updates and its
+version is not gated, and the containment probe checks tools/filesystem, not the
+credential source — so if a future claude consults the Keychain even with
+`CLAUDE_CONFIG_DIR` set, a redirected brain could reach the real user's Keychain.
+This residual is owner-accepted (OS/account-level keychain isolation is out of
+scope); the misclassification path itself fails closed via the `os.userInfo()`
+guard above.
+
+**Hermetic argument:** omitting a var from an env built FROM SCRATCH is not
+inheritance — `CLAUDE_CONFIG_DIR` is absent from `ENV_PASSTHROUGH`, so no ambient
+value ever reaches the child; the config root stays code-bound via the explicit
+`HOME`; `ANTHROPIC_API_KEY` remains stripped (ADR-0009). The only behavior change is
+claude's internal default resolution regaining Keychain access — identical to what
+production had before 0.10.0. `CODEX_HOME` is unchanged (codex auth is file-based
+under `~/.codex`; no Keychain-suppression defect observed). Win32 is unchanged
+(file-based auth under `USERPROFILE`).
+
+**Consequence for the harnesses:** WP-133 `negative` (terminal, full `process.env`)
+is unaffected. WP-142 `broker-e2e`, which goes through `runJob → buildCleanEnv` under
+the real (unredirected) home, now reaches the Keychain from a terminal — the LP2
+unblock. Its `AUTH-BLOCKED` short-circuit removal is WP-broker-e2e-terminal-auth's
+own follow-up, not this WP.

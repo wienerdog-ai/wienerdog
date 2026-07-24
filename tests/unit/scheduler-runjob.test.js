@@ -314,6 +314,58 @@ test('scheduler-runjob: buildCleanEnv POSIX shape is byte-identical for the 2-ar
   assert.ok(base.PATH.includes('/opt/homebrew/bin'), 'POSIX PATH keeps its dirs');
 });
 
+test('scheduler-runjob: buildCleanEnv(POSIX), unredirected home, omits CLAUDE_CONFIG_DIR (ADR-0025 Amendment 5, WP-cleanenv-keychain-auth)', () => {
+  // The unredirected baseline is os.userInfo().homedir (passwd/getpwuid,
+  // env-independent) — NOT os.homedir(), which reads $HOME live.
+  const realLoginHome = os.userInfo().homedir;
+  const clean = runjob.buildCleanEnv({ home: realLoginHome }, 'dream', 'darwin');
+  assert.ok(!('CLAUDE_CONFIG_DIR' in clean), 'unredirected home: CLAUDE_CONFIG_DIR absent so claude reaches the Keychain');
+  assert.equal(clean.CODEX_HOME, path.join(realLoginHome, '.codex'), 'CODEX_HOME stays unconditional');
+  assert.equal(clean.HOME, realLoginHome);
+});
+
+test('scheduler-runjob: buildCleanEnv(POSIX), redirected home, keeps CLAUDE_CONFIG_DIR explicit and confined', () => {
+  const { paths } = setup(); // paths.home is a temp dir, never the real login home
+  const clean = runjob.buildCleanEnv(paths, 'dream', 'darwin');
+  assert.equal(clean.CLAUDE_CONFIG_DIR, path.join(paths.home, '.claude'), 'redirected home: CLAUDE_CONFIG_DIR present + confined');
+  assert.equal(clean.CODEX_HOME, path.join(paths.home, '.codex'));
+});
+
+test('scheduler-runjob: buildCleanEnv(POSIX), unredirected home + hostile ambient CLAUDE_CONFIG_DIR, still omits it (omission != inheritance)', () => {
+  const saved = process.env.CLAUDE_CONFIG_DIR;
+  process.env.CLAUDE_CONFIG_DIR = '/evil/claude';
+  try {
+    const clean = runjob.buildCleanEnv({ home: os.userInfo().homedir }, 'dream', 'darwin');
+    assert.ok(!('CLAUDE_CONFIG_DIR' in clean), 'hostile ambient value is never admitted, even omitted');
+  } finally {
+    if (saved === undefined) delete process.env.CLAUDE_CONFIG_DIR;
+    else process.env.CLAUDE_CONFIG_DIR = saved;
+  }
+});
+
+test('scheduler-runjob: buildCleanEnv(POSIX), HOME-redirected entrypoint (getPaths(process.env)), KEEPS CLAUDE_CONFIG_DIR', { skip: process.platform === 'win32' ? 'POSIX $HOME/os.homedir semantics' : false }, () => {
+  // The real redirection mechanism: a harness/sandbox redirects via
+  // process.env.HOME, and run-job calls getPaths(process.env). os.homedir()
+  // follows $HOME live (POSIX-only; on win32 it reads USERPROFILE), so a
+  // `paths.home === os.homedir()` discriminator would wrongly take the omit
+  // branch here and expose the real login Keychain to a sandboxed brain;
+  // os.userInfo().homedir (passwd-based) does not move.
+  const savedHome = process.env.HOME;
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-redir-home-'));
+  process.env.HOME = root;
+  try {
+    const paths = getPaths(process.env); // the entrypoint shape run-job uses
+    assert.equal(paths.home, root, 'paths.home follows the redirected HOME');
+    assert.equal(os.homedir(), root, 'os.homedir() moves with $HOME — why it cannot be the baseline');
+    assert.notEqual(os.userInfo().homedir, root, 'the passwd login home does not move with $HOME');
+    const clean = runjob.buildCleanEnv(paths, 'dream', 'darwin');
+    assert.equal(clean.CLAUDE_CONFIG_DIR, path.join(root, '.claude'), 'redirected-HOME run keeps the var -> confined');
+  } finally {
+    if (savedHome === undefined) delete process.env.HOME;
+    else process.env.HOME = savedHome;
+  }
+});
+
 // -------------------------------------------------------------------------
 // killProcessTree — now a wrapper over the authoritative-table reapTree
 // (WP-a10-reap-mechanism); POSIX table reap vs win32 ABSOLUTE taskkill

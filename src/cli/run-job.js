@@ -38,7 +38,10 @@ const LOG_KEEP = 14;
  *  launchctl setenv) to any of them would move the model's credential root,
  *  config root, or account with NO descriptor drift (the authentication trust
  *  boundary). The config roots are reconstructed deterministically beneath the
- *  bound home in buildCleanEnv; the scheduled dream is subscription-authed
+ *  bound home in buildCleanEnv (CODEX_HOME always; CLAUDE_CONFIG_DIR only when
+ *  the home is redirected — ADR-0025 Amendment 5, WP-cleanenv-keychain-auth: an
+ *  explicit CLAUDE_CONFIG_DIR makes claude >=2.1.216 ignore the macOS Keychain,
+ *  its only credential store); the scheduled dream is subscription-authed
  *  (ADR-0009), never an inherited API key. Only the wienerdog-owned path overrides
  *  (WIENERDOG_HOME half-sandbox + WIENERDOG_VAULT) pass through. */
 const ENV_PASSTHROUGH = [
@@ -187,9 +190,38 @@ function buildCleanEnv(paths, name, platform = process.platform) {
     // routine; disable the Claude client's >2min MCP auto-backgrounding.
     CLAUDE_CODE_MCP_AUTO_BACKGROUND_MS: '0',
   };
-  // A7/A10 (WP-157): config roots reconstructed deterministically beneath the
-  // BOUND home (never an inherited CLAUDE_CONFIG_DIR/CODEX_HOME).
-  env.CLAUDE_CONFIG_DIR = path.join(paths.home, '.claude');
+  // A7/A10 + Keychain (WP-cleanenv-keychain-auth, ADR-0025 Amendment 5): config
+  // roots are reconstructed deterministically beneath the BOUND home and are NEVER
+  // inherited — this env is built FROM SCRATCH, so an ambient CLAUDE_CONFIG_DIR/
+  // CODEX_HOME can never leak in (CLAUDE_CONFIG_DIR is absent from ENV_PASSTHROUGH).
+  // CLAUDE_CONFIG_DIR is OMITTED when the home is unredirected: with it set,
+  // claude >=2.1.216 ignores the macOS login Keychain — its ONLY credential store
+  // since it migrated ~/.claude/.credentials.json out of existence — and 401s.
+  // Omitting it lets claude use its own default resolution (HOME/.claude, where
+  // HOME is code-set to paths.home, PLUS the Keychain), restoring production
+  // subscription auth in BOTH terminal and launchd. The unredirected baseline is
+  // os.userInfo().homedir (passwd/getpwuid — ENV-INDEPENDENT), deliberately NOT
+  // os.homedir(): os.homedir() reads $HOME live, so a HOME-redirected
+  // harness/sandbox (the real redirection mechanism) would move BOTH sides of the
+  // comparison, wrongly take the omit branch, and expose the real login Keychain
+  // to a sandboxed brain. When the home IS redirected (paths.home !==
+  // os.userInfo().homedir), KEEP the var explicit so the brain is confined to the
+  // redirected config. That confinement relies on claude continuing to honor an
+  // explicit CLAUDE_CONFIG_DIR as a Keychain-suppressing signal — an
+  // owner-accepted fail-open residual (Amendment 5), since claude auto-updates
+  // and the containment probe checks tools/filesystem, not credential source.
+  // If os.userInfo() throws (no passwd entry), fail CLOSED: keep the var —
+  // suppressing the Keychain yields a loud 401, never a silent exposure of real
+  // credentials to a possibly-redirected run.
+  let realLoginHome = null;
+  try {
+    realLoginHome = os.userInfo().homedir;
+  } catch {
+    // fail closed: treat as redirected below
+  }
+  if (realLoginHome === null || paths.home !== realLoginHome) {
+    env.CLAUDE_CONFIG_DIR = path.join(paths.home, '.claude');
+  }
   env.CODEX_HOME = path.join(paths.home, '.codex');
   const user = resolveUsername();
   if (user) env.USER = user;

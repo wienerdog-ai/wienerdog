@@ -234,14 +234,20 @@ test('sync-repoint: --dry-run repoints nothing', { skip: !SCHED_SUPPORTED }, asy
 
 // WP-157 A10/R3:#4 + R4: the scheduled execution environment is a defined
 // allowlist. run-job's buildCleanEnv reconstructs the config roots
-// DETERMINISTICALLY beneath the bound home, and CLAUDE_CONFIG_DIR / CODEX_HOME /
-// ANTHROPIC_API_KEY are NO LONGER passed through — an in-scope scheduler-env
-// writer cannot move the model account / credential root / config root without a
-// digest drift. (Placed here because scheduler-runjob.test.js is outside WP-157's
+// DETERMINISTICALLY beneath the bound home, and CODEX_HOME / ANTHROPIC_API_KEY
+// are NO LONGER passed through — an in-scope scheduler-env writer cannot move
+// the model account / credential root / config root without a digest drift.
+// CLAUDE_CONFIG_DIR is reconstructed under the bound home ONLY when that home is
+// REDIRECTED (paths.home !== os.userInfo().homedir, the env-independent passwd
+// login home — as here via setup()'s temp HOME); on an unredirected home it is
+// OMITTED instead so claude reaches the macOS login Keychain (ADR-0025
+// Amendment 5, WP-cleanenv-keychain-auth) — this test exercises the redirected
+// branch only. (Placed here because scheduler-runjob.test.js is outside WP-157's
 // Deliverables; see the PR "Discovered issues".)
 test('sync-repoint: buildCleanEnv drops ambient CLAUDE_CONFIG_DIR/CODEX_HOME/ANTHROPIC_API_KEY and rebuilds config roots under the bound home (A10)', () => {
   const runjob = require('../../src/cli/run-job');
   const { paths } = setup();
+  assert.notEqual(paths.home, os.userInfo().homedir, 'this test exercises the REDIRECTED branch (Table A row 2), not the unredirected Keychain branch');
   const saved = {
     CLAUDE_CONFIG_DIR: process.env.CLAUDE_CONFIG_DIR,
     CODEX_HOME: process.env.CODEX_HOME,
