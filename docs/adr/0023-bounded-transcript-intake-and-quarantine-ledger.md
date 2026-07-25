@@ -159,3 +159,79 @@ an OS-boundary residual (ACTION-LIST A13), out of scope here.
 - **An async streaming reader (`readline`).** Rejected for now: `collectExtracts` is
   synchronous and single-writer under the dream lock; a synchronous fixed-chunk
   `readSync` loop keeps the call path and tests simple with zero new dependencies.
+
+## Amendments
+
+### Amendment 1 (2026-07-25) — a secret-reverted run defers its inputs, with a bounded, fingerprint-independent retry
+
+Decision §2's "Three outcomes, distinctly" did not anticipate a run in which the
+brain exited 0, the inputs were intact and the commit succeeded, but ADR-0024's
+EP2 staged-output secret gate **reverted** the derived note. Such a run consumed
+nothing — the reverted note is not committed and will not regenerate — yet the
+implementation recorded every transcript it read as `processed`. Observed twice
+on the maintainer's machine (2026-07-24 and 2026-07-25, three notes reverted each
+night): a detector false positive became **permanent memory loss**, precisely the
+WP-048/WP-069 starvation class this ADR exists to make impossible.
+
+**Resolution, in four parts.**
+
+1. **A transcript whose derived output was secret-reverted is not `processed`.**
+   This is a restatement of the principle already in §2 ("only a file actually
+   consumed is marked `processed`"), not a new one.
+2. **A fourth record kind, `deferred`, carries a bounded deferral counter.**
+   Capacity deferral keeps its "no negative record at all" semantics, unchanged.
+   A secret-revert deferral instead writes a record `{outcome:'deferred',
+   reason:'secret-revert', deferrals:n}`. It is **not** a negative record: the
+   selection rule returns *select* for it, exactly as if no record existed. Its
+   only purpose is to bound the retry.
+3. **The counter ignores the fingerprint, and an exhausted quarantine is
+   sticky.** §2's general rule — a record whose fingerprint differs is retried —
+   resets on any `size:mtimeMs:dev:ino` change. A transcript that is still being
+   appended to changes every night, so a fingerprint-keyed counter would reset
+   every night and bound nothing; and because the byte budget is water-filled
+   newest-mtime-first, that same file would win the budget every night and
+   starve genuinely new sessions — the WP-048 class in a new dress. Therefore
+   the deferral counter is computed **independently of the fingerprint**, and a
+   `quarantined` record whose reason is `secret-revert-exhausted` is skipped
+   **regardless of** the fingerprint. This is a narrow, reason-scoped exception:
+   the intake reasons (`over-ceiling`, `too-many-lines`, `read-error`) keep §2's
+   retry-on-change behaviour unchanged.
+4. **Exactly one thing resets the bound, and it is evidence that the world
+   changed.** A run that commits with **zero** secret reverts records the files
+   it consumed as `processed`, which erases their counters — the system heals
+   itself the moment the cause is gone. Nothing else resets it: no timer, no
+   automatic clear on a later run, no daemon (ADR-0004), and deliberately **no
+   side effect of any other command** — a reset an unattended `wienerdog update`
+   or a scripted `wienerdog sync` can trigger is not a human decision. Clearing
+   an *exhausted* transcript is a separate, explicitly authorized recovery action
+   specified in `WP-quarantine-review-cli`; until that ships an exhausted
+   transcript stays skipped, which is not data loss — the transcript file is
+   untouched and the withheld note is byte-identical in `state/quarantine/`, so
+   only its consolidation waits.
+
+**The bound.** A file may accumulate **three** deferrals; the **fourth**
+consecutive secret-reverted run that consumes it quarantines it instead, with the
+code-owned reason `secret-revert-exhausted`. The human is warned on the first
+night and every night after, so the quarantine lands roughly 72 hours after the
+first warning.
+
+**Consequences.** Deferral is run-scoped: there is no trustworthy mapping from a
+reverted vault note back to the transcripts it derived from, so a run with any
+secret revert defers **all** of that run's consumed transcripts. Reprocessing
+them re-commits content that run already committed, which the dream's note-update
+path tolerates. A transcript merely co-consumed with the offender across three
+consecutive reverted runs is quarantined alongside it — accepted, because
+attribution is impossible and the alternative is an unbounded nightly retry.
+Unlike the pre-amendment behaviour this is loud (a durable digest banner names
+the files and says where the withheld copies are), non-destructive (the
+transcript file is untouched and the withheld note's bytes are byte-identical in
+`state/quarantine/`) and self-healing while the deferrals last (part 4). Records
+stay keyed by case-folded absolute path (§2, unchanged), so a rename or rotation
+hands the file a fresh budget and a file appearing at a reused path inherits the
+record left there; neither harness renames or rotates a transcript, so both are
+named residuals in the work package rather than claims of impossibility.
+
+**What is unchanged.** The WP-069 state-advance safety gate — brain exited 0 AND
+inputs intact AND commit succeeded — is untouched; this amendment only adds a
+fourth condition before recording `processed`, never a weaker one. Capacity
+deferral still records nothing at all.

@@ -9,6 +9,7 @@ const { writeFilePrivate, repairPrivateModes, scanPrivateModes } = require('../c
 const identityApprovals = require('../core/identity-approvals');
 const { renderUpdateLine } = require('../core/update-check');
 const { readAlerts } = require('../core/alerts');
+const ledgerLib = require('../core/dream/ledger');
 const { readVaultLayout } = require('../core/layout');
 const { detectHarnesses } = require('../core/detect');
 const manifestMod = require('../core/manifest');
@@ -278,6 +279,12 @@ async function run(argv, opts = {}) {
       updateLine: renderUpdateLine(paths),
       identityApprovals: identityApprovals.approvalsMap(idReg),
       secretQuarantine: listSecretQuarantine(paths.state), // EP4 pending-review banner (WP-125)
+      // ADR-0023: the transcript-quarantine banner is re-rendered in EVERY
+      // digest while a quarantine is active — sync dropping it was the
+      // 2026-07-25 hole. Read-only: sync never writes the ledger and never
+      // clears the secret-revert bound. readLedger never throws (missing or
+      // corrupt → an empty ledger → '', which renderDigest's filter drops).
+      quarantineLine: ledgerLib.quarantineBannerLine(ledgerLib.readLedger(paths.state)),
       insecureModes: scanPrivateModes(paths).insecure, // post-repair on a real sync (WP-126)
     });
     const dest = path.join(paths.state, 'digest.md');

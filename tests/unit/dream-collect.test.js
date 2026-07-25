@@ -342,6 +342,111 @@ test('dream-collect: capacity sub-floor budget defers the session whole (no reco
   assert.equal(result.newlyQuarantined.length, 0);
 });
 
+// ---- capacity fairness after a secret-revert exhaustion (ADR-0023 Amendment 1) ----
+
+/** The discovery record collectExtracts would build for a real file on disk.
+ *  @param {string} file @returns {object} */
+function discOf(file) {
+  const st = fs.statSync(file);
+  return { harness: 'claude', path: file, mtimeMs: st.mtimeMs, size: st.size, dev: st.dev, ino: st.ino };
+}
+
+/** The A/B fixture: two ~103 KB claude transcripts under one 40 000-byte budget,
+ *  with the OFFENDER the NEWER of the two (as an actively-appended transcript
+ *  always is). The equal share (20 000) is below MIN_TRUNCATE_BYTES, so the
+ *  water-fill defers the oldest whole — only the LEDGER differs between A and B.
+ *  @returns {{paths:object, offender:string, fresh:string}} */
+function fairnessFixture() {
+  const paths = tempPaths();
+  writeClaude(paths, 'offender', 25, 4000, new Date('2026-01-03T00:00:00Z'));
+  writeClaude(paths, 'fresh', 25, 4000, new Date('2026-01-02T00:00:00Z'));
+  const dir = path.join(paths.claudeDir, 'projects', 'proj');
+  return { paths, offender: path.join(dir, 'offender.jsonl'), fresh: path.join(dir, 'fresh.jsonl') };
+}
+
+test('dream-collect: B — a DEFERRED offender is still a candidate and starves the newer session out of the budget', () => {
+  const { paths, offender } = fairnessFixture();
+  // A secret-revert deferral at the offender's CURRENT fingerprint. It is not a
+  // negative record: the file is re-selected, wins the newest-mtime-first
+  // water-fill, and the genuinely fresh session is capacity-deferred with NO
+  // record. (Before the fix a `deferred` record read as skip-processed, so the
+  // offender would not even be a candidate — this is the B5 proof.)
+  const ledger = ledgerLib.recordSecretDeferred(emptyLedger(), discOf(offender), 1);
+
+  const result = collectExtracts(paths, ledger, 40_000);
+
+  assert.deepEqual(result.processed.map((d) => path.basename(d.path)), ['offender.jsonl']);
+  assert.equal(result.entries[0].truncatedToFit, true, 'the offender is truncated to its 40 000 grant');
+  assert.deepEqual(result.deferred.map((d) => d.session_id), ['fresh'], 'the new session is starved');
+  assert.equal(result.newlyQuarantined.length, 0);
+});
+
+test('dream-collect: A — an EXHAUSTED offender is not a candidate at all, so the fresh session gets the budget', () => {
+  const { paths, offender, fresh } = fairnessFixture();
+  // Same two files, same budget — only the ledger differs. The exhausted record
+  // carries a deliberately STALE fingerprint (the appended-transcript case): the
+  // sticky skip must ignore it, or the offender is re-selected forever.
+  const ledger = {
+    ...emptyLedger(),
+    files: {
+      [ledgerLib.foldKey(offender)]: {
+        fingerprint: '1:1:1:1',
+        outcome: 'quarantined',
+        reason: ledgerLib.SECRET_REVERT_EXHAUSTED_REASON,
+        updated_at: '2026-01-04T00:00:00.000Z',
+        harness: 'claude',
+      },
+    },
+  };
+
+  const result = collectExtracts(paths, ledger, 40_000);
+
+  assert.deepEqual(result.processed.map((d) => path.basename(d.path)), ['fresh.jsonl']);
+  assert.equal(result.entries[0].session_id, 'fresh');
+  // The offender never enters the byte budget: not processed, not deferred, and
+  // not re-quarantined at intake.
+  const named = (list) => list.some((x) => (x.path || '').endsWith('offender.jsonl') || x.session_id === 'offender');
+  assert.equal(named(result.processed), false);
+  assert.equal(named(result.deferred), false);
+  assert.equal(named(result.newlyQuarantined), false);
+  assert.ok(fs.existsSync(offender) && fs.existsSync(fresh), 'a skip is never a deletion');
+});
+
+test('dream-collect: rotating an exhausted transcript hands the rotated file a fresh budget (residual R4)', () => {
+  // This test DOCUMENTS Table E rows E4/E5 — a rotation gives the rotated file a
+  // fresh budget under path keys, and the replacement at the old path inherits
+  // the record. Neither harness rotates transcripts, so this characterises
+  // behaviour rather than requiring it.
+  const { paths, offender } = fairnessFixture();
+  const ledger = {
+    ...emptyLedger(),
+    files: {
+      [ledgerLib.foldKey(offender)]: {
+        fingerprint: '1:1:1:1',
+        outcome: 'quarantined',
+        reason: ledgerLib.SECRET_REVERT_EXHAUSTED_REASON,
+        updated_at: '2026-01-04T00:00:00.000Z',
+        harness: 'claude',
+      },
+    },
+  };
+
+  // Keep the `.jsonl` suffix: claude discovery skips any other name, so an
+  // `offender + '.1'` target would drop out of discovery and pin nothing.
+  const rotated = offender.replace(/\.jsonl$/, '.1.jsonl');
+  fs.renameSync(offender, rotated);
+  // A new session file appears at the old, still-exhausted path.
+  writeClaude(paths, 'offender', 1, 10, new Date('2026-01-06T00:00:00Z'));
+
+  const result = collectExtracts(paths, ledger, 400_000);
+
+  const processed = result.processed.map((d) => path.basename(d.path)).sort();
+  assert.ok(processed.includes('offender.1.jsonl'), 'E4 — the rotated file has no record: a fresh budget');
+  assert.equal(processed.includes('offender.jsonl'), false, 'E5 — the replacement inherits the sticky exhausted record');
+  assert.equal(result.deferred.some((d) => d.session_id === 'offender'), false);
+  assert.equal(result.newlyQuarantined.some((q) => q.path.endsWith('/offender.jsonl')), false);
+});
+
 // ---- one file at a time (the F1 fix) ----
 
 test('dream-collect: a backlog of near-limit files collects under a constrained heap (one file resident at a time)', () => {
