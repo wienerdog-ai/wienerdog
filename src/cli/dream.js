@@ -364,22 +364,16 @@ async function run(argv, opts = {}) {
     // Regenerate the injected session digest from the CURRENT ledger (atomic
     // temp + rename). The quarantine banner is re-derived from the ledger every
     // render — durable while a quarantine is active, self-clearing after the
-    // file leaves quarantine. activeQuarantines exposes basenames + a code-owned
-    // reason enum only (never content, never a full path), so no untrusted
-    // bytes reach the injected digest (same rule as formatAlerts).
+    // file leaves quarantine. quarantineBannerLine exposes basenames + a
+    // code-owned reason enum only (never content, never a full path), so no
+    // untrusted bytes reach the injected digest (same rule as formatAlerts).
     // A3 hash gate (WP-116, ADR-0021): the dream NEVER seeds — it reads the
     // registry established at the last attended sync/approval and enforces, so
     // a nightly corruption fails closed against that baseline.
     const regenerateDigest = () => {
       fs.mkdirSync(paths.state, { recursive: true });
       const idReg = identityApprovals.readRegistry(paths.state);
-      const q = ledgerLib.activeQuarantines(ledger);
-      const quarantineLine =
-        q.length > 0
-          ? `> [!warning] Wienerdog: ${q.length} session transcript(s) could not be read and were skipped — ` +
-            `${q.map((e) => `${e.file} (${e.reason})`).join(', ')}. Dreaming continues over your other sessions; ` +
-            'a skipped file is retried automatically if it changes.'
-          : '';
+      const quarantineLine = ledgerLib.quarantineBannerLine(ledger);
       const digest = renderDigest(vaultDir, layout, {
         alerts: readAlerts(paths),
         updateLine: renderUpdateLine(paths),
@@ -568,12 +562,45 @@ async function run(argv, opts = {}) {
     });
 
     // 14. Record the per-file outcomes — only now: brain 0 + inputs intact +
-    //     commit ok (the exact WP-069 watermark-safety property, per-file). A
-    //     capacity-deferred file is in NEITHER processed nor newlyQuarantined →
-    //     no record → naturally retried next run (the WP-048/069 starvation
-    //     fix, structural — no scalar can jump past an unconsolidated session).
-    for (const d of sel.processed) ledger = ledgerLib.recordProcessed(ledger, d);
+    //     commit ok (the WP-069 watermark-safety property, per-file), AND the
+    //     EP2 secret gate reverted nothing. A secret-reverted run consumed
+    //     nothing: the reverted note is not committed and will not regenerate,
+    //     so marking its sources `processed` is the 2026-07-24/25
+    //     permanent-memory-loss bug. Those files are DEFERRED (retried next run,
+    //     like capacity-deferred) up to SECRET_REVERT_MAX_DEFERRALS, then fall
+    //     through to ADR-0023's quarantined outcome. Table C. Fail closed on the
+    //     counter: anything that is not a non-negative safe integer counts as
+    //     "this run reverted", never as zero.
+    const reverts = res.secretReverts;
+    const revertsKnown = Number.isSafeInteger(reverts) && reverts >= 0;
+    const cleanRun = revertsKnown && reverts === 0;
+    let deferredCount = 0;
+    let quarantinedCount = 0;
+    for (const d of sel.processed) {
+      if (cleanRun) {
+        ledger = ledgerLib.recordProcessed(ledger, d);
+        continue;
+      }
+      const prior = ledgerLib.secretDeferralCount(ledger, d);
+      if (prior >= ledgerLib.SECRET_REVERT_MAX_DEFERRALS) {
+        ledger = ledgerLib.recordSecretExhausted(ledger, d);
+        quarantinedCount += 1;
+      } else {
+        ledger = ledgerLib.recordSecretDeferred(ledger, d, prior + 1);
+        deferredCount += 1;
+      }
+    }
     ledgerLib.writeLedger(paths.state, ledger);
+    // Counts only — no basenames, no paths, no content, no matched value.
+    if (!cleanRun) {
+      console.log(
+        ledgerLib.secretRevertSummaryLine({
+          withheld: revertsKnown ? reverts : 0,
+          deferred: deferredCount,
+          quarantined: quarantinedCount,
+        })
+      );
+    }
 
     // 15. Regenerate the injected session digest (atomic temp + rename),
     //     including the durable quarantine banner from the current ledger.

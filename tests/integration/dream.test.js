@@ -1313,6 +1313,166 @@ test('dream-integration: a standalone run (no run token) writes no hand-up pidfi
   assert.equal(reapCalls.length, 0, 'no token → no hand-up, no finally group reap (the inner watchdog covers the brain)');
 });
 
+// ── WP-secret-revert-defers-ledger: a secret-reverted run defers its inputs ──
+
+/** The transcript planted by setup(). @param {ReturnType<typeof setup>} ctx */
+function injPath(ctx) {
+  return path.join(ctx.claude, 'projects', 'proj', 'inj.jsonl');
+}
+
+/** Append one more user turn, so the transcript's fingerprint changes exactly
+ *  the way an actively-appended session's does every night. This is what makes
+ *  the bound a real bound: the deferral counter must ignore it.
+ *  @param {string} file @param {string} text */
+function appendTurn(file, text) {
+  fs.appendFileSync(
+    file,
+    JSON.stringify({
+      type: 'user',
+      sessionId: 'inj-1',
+      cwd: '/home/ada/proj',
+      timestamp: '2026-07-01T11:00:00.000Z',
+      message: { role: 'user', content: text },
+    }) + '\n'
+  );
+}
+
+/** Run the secret-note dream on a DISTINCT day, so the episode below reads as
+ *  four consecutive nights rather than four repeats of one. The clock arrives
+ *  through dream.run's JS-only `opts.now` seam — WIENERDOG_FAKE_TODAY was deleted
+ *  from production by WP-155 and has no effect here (asserted at the top of this
+ *  file). Nothing about the assertions depends on the date advancing.
+ *  @param {ReturnType<typeof setup>} ctx @param {number} day */
+function runSecretDream(ctx, day) {
+  return runDream(
+    ctx,
+    ['--yes'],
+    { WIENERDOG_FAKE_BRAIN_MODE: 'secret-note' },
+    { now: new Date(2026, 6, day, 12, 0, 0) }
+  );
+}
+
+test('dream-integration: the 2026-07-24/25 regression — a secret-reverted run DEFERS its transcript instead of marking it processed', async () => {
+  // The bug: the brain exited 0, the inputs were intact and the commit
+  // succeeded, but the EP2 staged-output gate reverted the derived note — and
+  // the run still recorded every transcript it read as `processed`, so the
+  // content could never regenerate. It must be DEFERRED instead.
+  const ctx = setup();
+  const before = commitCount(ctx.vault);
+
+  const { output, thrown } = await runSecretDream(ctx, 3);
+  assert.equal(thrown, null, thrown && thrown.message);
+
+  // The run still committed — only the offending note was withheld.
+  assert.equal(commitCount(ctx.vault), before + 1);
+  assert.match(output, /dream committed/);
+  assert.ok(!git(ctx.vault, ['ls-files']).includes('00-Inbox/session-rollup.md'), 'the planted note was not committed');
+
+  const rec = ledgerRecord(readLedgerFile(ctx.core), 'inj.jsonl');
+  assert.ok(rec, 'the consumed transcript still has a record');
+  assert.equal(rec.outcome, 'deferred', 'NOT processed — the run consumed nothing');
+  assert.equal(rec.reason, 'secret-revert');
+  assert.equal(rec.deferrals, 1);
+
+  // The withheld bytes survive, and the transcript file is untouched.
+  assert.ok(fs.readdirSync(path.join(ctx.core, 'state', 'quarantine')).length > 0, 'the withheld copy is preserved');
+  assert.ok(fs.existsSync(injPath(ctx)), 'the session file itself is untouched');
+});
+
+test('dream-integration: the secret-revert summary is printed and carries counts only — no basename, no matched value', async () => {
+  const ctx = setup();
+  const { output, thrown } = await runSecretDream(ctx, 3);
+  assert.equal(thrown, null, thrown && thrown.message);
+
+  assert.match(
+    output,
+    /the secret check withheld 1 note\(s\); 1 session transcript\(s\) will be retried on the next run and 0 were skipped/
+  );
+  assert.ok(!output.includes('AKIA'), 'the matched value never reaches the console');
+  assert.ok(!output.includes('inj.jsonl'), 'no transcript basename reaches the console line');
+  assert.ok(!output.includes('session-rollup'), 'no withheld-note name reaches the console line');
+});
+
+test('dream-integration: the bounded episode — three deferrals, then an exhausted quarantine that an append cannot reset', async () => {
+  // The L1 test: inj.jsonl is APPENDED TO before every run, so its fingerprint
+  // changes every time. A fingerprint-keyed counter would reset to 1 each night
+  // and bound nothing — and because the water-fill is newest-mtime-first, that
+  // same file would keep winning the budget.
+  const ctx = setup();
+  const inj = injPath(ctx);
+  const ledgerPath = path.join(ctx.core, 'state', 'transcript-ledger.json');
+
+  const r1 = await runSecretDream(ctx, 3);
+  assert.equal(r1.thrown, null, r1.thrown && r1.thrown.message);
+  assert.equal(ledgerRecord(readLedgerFile(ctx.core), 'inj.jsonl').deferrals, 1);
+
+  for (const [day, expected] of [[4, 2], [5, 3]]) {
+    appendTurn(inj, `another turn before night ${day}`);
+    const r = await runSecretDream(ctx, day);
+    assert.equal(r.thrown, null, r.thrown && r.thrown.message);
+    const rec = ledgerRecord(readLedgerFile(ctx.core), 'inj.jsonl');
+    assert.equal(rec.outcome, 'deferred', `night ${day} still defers`);
+    assert.equal(rec.deferrals, expected, `night ${day} records deferral ${expected}`);
+  }
+
+  // Night 4: the deferrals are spent → quarantine, with the code-owned reason.
+  appendTurn(inj, 'another turn before the fourth night');
+  const r4 = await runSecretDream(ctx, 6);
+  assert.equal(r4.thrown, null, r4.thrown && r4.thrown.message);
+  const spent = ledgerRecord(readLedgerFile(ctx.core), 'inj.jsonl');
+  assert.equal(spent.outcome, 'quarantined');
+  assert.equal(spent.reason, 'secret-revert-exhausted');
+  assert.equal('deferrals' in spent, false);
+  // The exact failure a fingerprint-keyed counter produces.
+  assert.ok(
+    !(spent.outcome === 'deferred' && spent.deferrals === 1),
+    'the appended file did NOT restart the count at 1'
+  );
+  assert.match(r4.output, /0 session transcript\(s\) will be retried on the next run and 1 were skipped/);
+
+  // The exhaustion is loud in the regenerated digest, and names no command.
+  const digest = fs.readFileSync(path.join(ctx.core, 'state', 'digest.md'), 'utf8');
+  assert.ok(digest.includes('are no longer being dreamed over'), 'the durable banner is rendered by the dream');
+  assert.ok(digest.includes('inj.jsonl'), 'it names the sanitized basename');
+  assert.ok(digest.includes('The withheld copies are in state/quarantine/'));
+  assert.ok(!digest.includes(ctx.claude), 'the banner carries no full path');
+
+  // Stickiness: however much the file changes, an exhausted record is not reopened.
+  const bytes = fs.readFileSync(ledgerPath, 'utf8');
+  const afterExhaustion = commitCount(ctx.vault);
+  appendTurn(inj, 'still being appended to every night');
+  const r5 = await runSecretDream(ctx, 7);
+  assert.equal(r5.thrown, null, r5.thrown && r5.thrown.message);
+  assert.match(r5.output, /nothing new to dream/);
+  assert.equal(commitCount(ctx.vault), afterExhaustion, 'no commit');
+  assert.equal(fs.readFileSync(ledgerPath, 'utf8'), bytes, 'the run-4 record is byte-identical (same updated_at)');
+
+  // Fair capacity after exhaustion: a NEW session gets the full budget of three,
+  // never a collateral quarantine.
+  const projDir = path.join(ctx.claude, 'projects', 'proj');
+  fs.writeFileSync(
+    path.join(projDir, 'fresh.jsonl'),
+    JSON.stringify({
+      type: 'user',
+      sessionId: 'fresh-1',
+      cwd: '/home/ada/proj',
+      timestamp: '2026-07-01T12:00:00.000Z',
+      message: { role: 'user', content: 'a genuinely new session' },
+    }) + '\n'
+  );
+  appendTurn(inj, 'and appended again, so it is still the newest file');
+  const r6 = await runSecretDream(ctx, 8);
+  assert.equal(r6.thrown, null, r6.thrown && r6.thrown.message);
+  const ledger6 = readLedgerFile(ctx.core);
+  const fresh = ledgerRecord(ledger6, 'fresh.jsonl');
+  assert.equal(fresh.outcome, 'deferred');
+  assert.equal(fresh.reason, 'secret-revert');
+  assert.equal(fresh.deferrals, 1, 'a newly-appearing session starts at 1 — a full fresh budget');
+  const still = ledgerRecord(ledger6, 'inj.jsonl');
+  assert.equal(still.outcome, 'quarantined');
+  assert.equal(still.reason, 'secret-revert-exhausted');
+});
+
 test('dream-integration: a passing probe result is recorded in the dream run evidence (WP-135)', async () => {
   // Drive spawnBrain directly with a containmentProbe option (the dream.js →
   // spawnBrain threading), using the fake brain so no real claude is spawned.

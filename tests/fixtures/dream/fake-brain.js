@@ -140,4 +140,18 @@ if (process.env.WIENERDOG_FAKE_BRAIN_MODE === 'bare-marker-after-writes') {
   process.stdout.write('Unknown command: /wienerdog-dream\n');
 }
 
+// Secret-revert mode (WP-secret-revert-defers-ledger): one ordinary Tier-1
+// note whose body carries a labelled-rule match (`AKIA[0-9A-Z]{12,}` →
+// 'aws-key'), so validateAndCommit's EP2 gate reverts exactly this note and
+// increments secretReverts, while the rest of the run commits normally. Not a
+// real credential and not a high-entropy blob — the labelled rule is the stable
+// half of the detector. The note is re-created identically on every run (the
+// previous run's revert removed it), so each run produces exactly one revert.
+if (process.env.WIENERDOG_FAKE_BRAIN_MODE === 'secret-note') {
+  write(
+    '00-Inbox/session-rollup.md',
+    ['---', 'type: note', 'derived_from_untrusted: false', '---', '', 'Ada rotated the key AKIAQQQQQQQQQQQQQQQQ during the session.', ''].join('\n')
+  );
+}
+
 process.exit(0);
