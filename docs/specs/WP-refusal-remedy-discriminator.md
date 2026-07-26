@@ -580,6 +580,18 @@ notes:
 Do not run `wienerdog sync` — this check could not confirm the app files are the ones you installed, so syncing is not the safe next step. Reinstall Wienerdog from a trusted source, then investigate.
 ```
 
+**R-T2 has two kinds of mirror, and only one of them is checkable by bytes.** The
+`REMEDY_TAIL.reinstall` literal copies R-T2's *text*, and T2 pins it byte for
+byte. The user-facing prose in Table M restates R-T2's *meaning* in its own words,
+and no byte check can reach it — which is how round 3 came to correct R-T2 itself
+while leaving **M2** and **M1c** carrying round 2's rejected outcome prediction
+(*"syncing would authorize those files as they are"*) verbatim. That is the same
+failure as the round-2 staleness of the code block, one level up: the canonical
+string was fixed and its restatements were not. Both were corrected in round 4.
+The constraint every restatement is bound by — *state the conclusion, never
+predict what `sync` would do* — is registered as its own entry in the Mirrored
+Surface Checklist, with the surfaces it binds and its gate.
+
 ### Table S — which return site gets which class (canonical)
 
 **The rule is block R-P, above.** This table is R-P *applied*, not restated: for
@@ -719,7 +731,7 @@ M2-old / M2-new (the tail of one bullet; the em dash is part of the anchor):
 ```
 
 ```text
-— the job refuses with an alert instead (fail closed). For a `config.yaml` edit the fix is one `wienerdog sync`; when the check couldn't confirm the **app files** themselves, the alert deliberately does *not* tell you to sync — syncing would authorize those files as they are — and asks you to reinstall from a trusted source instead.
+— the job refuses with an alert instead (fail closed). For a `config.yaml` edit the fix is one `wienerdog sync`; when the check couldn't confirm the **app files** themselves, the alert deliberately does *not* tell you to sync — syncing is not the safe next step there — and asks you to reinstall from a trusted source instead.
 ```
 
 M3a-old / M3a-new:
@@ -755,11 +767,11 @@ be completed at all — an unreadable authorization record, a `current` pointer 
 now leads somewhere unexpected, an error part-way through. The alert does not
 claim to know which, and neither should you until you have looked.
 
-`sync` re-vendors Wienerdog by running out of whatever folder `current` leads to.
-So on this class of alert, syncing would authorize whatever is in that folder,
-sight unseen — it would finish the job for anything that put it there, not undo
-it. The order is therefore reversed: **reinstall first, investigate second, and
-don't sync at all.**
+`sync` re-vendors Wienerdog by running out of whatever folder `current` leads
+to, and that folder is exactly what this check could not confirm. So syncing is
+not the safe next step on this class of alert, whichever of those causes turns
+out to be yours. The order is therefore reversed: **reinstall first, investigate
+second, and don't sync at all.**
 
 Reinstall from a trusted source — a copy of Wienerdog that is not a git checkout
 and is not the folder this install already runs from. The
@@ -811,6 +823,48 @@ below mirrors them:**
 - [ ] Out of scope → the `src/core/alerts.js` / `src/core/digest.js` bullet
       (it restates R-T2's measured length and the 2000-char cap)
 
+**R-T2's semantic constraint — a mirror of its MEANING, not of its bytes**
+(registered in round 4). R-T2 *asserts no cause and predicts no outcome*: it says
+what the reader should not do, never what `wienerdog sync` would do if run. T2's
+byte-identity assertion enforces the **text** at the one surface that copies it
+verbatim; it cannot reach a surface that restates R-T2 in its own words, which is
+why round 3's correction of R-T2 left two prose mirrors stale and no check
+noticed. Every surface that restates R-T2's meaning is registered here, and each
+must state a conclusion, not a prediction:
+
+- [ ] **M2-new** (README bullet) — now *"syncing is not the safe next step
+      there"*. It carried round 2's *"syncing would authorize those files as they
+      are"* for a full round after R-T2 itself was corrected; fixed in round 4
+- [ ] **M1c**, second paragraph (runbook) — now *"So syncing is not the safe next
+      step on this class of alert, whichever of those causes turns out to be
+      yours."* It carried the same round-2 prediction stated **universally**
+      (*"syncing would authorize whatever is in that folder, sight unseen"*) plus a
+      second one (*"it would finish the job for anything that put it there"*); both
+      are false at Table S rows 2 and 13, where `app/current` cannot be resolved
+      and `sync` does not start at all. Both dropped in round 4
+- [ ] **M3a-new / M3b-new** (threat model) — re-read in round 4 against this
+      constraint and left as they stand. M3a's *"`sync` re-vendors by running out
+      of the very tree in question"* states the **mechanism** of `sync` — the same
+      fact R-P states under "Why nothing weaker will do", and the reason the advice
+      is withheld — not an outcome for the refusal at hand; M3b names no mechanism
+      at all. If either is ever reworded, re-read it against this entry first
+- [ ] **R-T2's own round-1/round-2 history bullets** and Implementation notes →
+      "Why one `reinstall` tail and not one per cause" — these **quote** the
+      rejected wordings as history and are the only places in this spec where they
+      may appear. The gate below deliberately does not scan this spec
+- [ ] **Checkable form — verification step 4's prediction sweep.**
+      `grep -cE "would authorize|would install|would finish"` over the three
+      delivered prose files plus `src/scheduler/launcher.js`. Executed both
+      directions this session: `0` in all four on the pre-change tree **and** `0`
+      after Table M's six replacements are applied to a scratch copy; re-injecting
+      round 2's *"syncing would authorize those files as they are"* into M2 takes
+      README's count to `1` and grep's exit to `0`. It is a **violation detector,
+      not a completion detector** — it reads `0` on an untouched tree too, so it is
+      paired with, never a substitute for, the five stale-form gates that prove the
+      work landed. It cannot catch a *novel* prediction phrased without those three
+      verbs; that residue is a **review obligation**, recorded here so coverage is
+      not overstated
+
 Table S and **block R-P** (the positional proof and its application). R-P is the
 canonical statement; Table S is R-P applied; **everything below mirrors R-P**:
 
@@ -849,9 +903,10 @@ canonical home; the table's rows only say which block goes where:**
 - [ ] Current state §7 (the three quoted false statements)
 - [ ] Acceptance criteria AC10, AC11
 - [ ] Verification step 4 — **all five stale-form gates** (M1a, M1b, M2, M3a,
-      M3b), the GLOSSARY-link count and the recovery-command counts. Every one of
-      Table M's five replacements must have a gate here; adding a Table M row
-      without adding its gate is the omission round 2 caught
+      M3b), the GLOSSARY-link count, the recovery-command counts and the
+      **prediction sweep** (registered above under R-T2's semantic constraint).
+      Every one of Table M's five replacements must have a gate here; adding a
+      Table M row without adding its gate is the omission round 2 caught
 - [ ] Out of scope → `docs/GLOSSARY.md` and `docs/adr/0028-…`
 - [ ] **The citation of `WP-stance-authority-containment` Table G row 1 / D6** —
       appears in Context (S1 and the amplification), in Table M's "The citation"
@@ -1043,6 +1098,9 @@ state this explicitly in the PR body:
 - AC8 (no reason string changed) is enforced by verification step 2's
   **reason-drift diff** (the `diff` of the two normalized reason-line sets) plus
   the unchanged a7 scenario, not by a dedicated test.
+- AC15's residue (a prediction about what `sync` would do, phrased without the
+  three verbs the prediction sweep greps for) is enforced by review only. The
+  sweep catches the wordings review has actually seen; it cannot catch a new one.
 - AC10/AC11 (Table M's six items across three files) are enforced by verification
   step 4 and by review; prose is not unit-testable. Five of the six are
   replacements with a stale-form gate each (M1a, M1b, M2, M3a, M3b); the sixth,
@@ -1130,6 +1188,14 @@ before they reach the digest.
       passed on the path that reached it, and `'reinstall'` when none had; the
       ternary appears exactly **once** in the file; `verifyCatchup` has no `tied`
       flag (T10; verification step 2, `tied`).
+- [ ] **AC15** R-T2's **semantic constraint** holds at every surface that restates
+      it: no prose you land predicts what `wienerdog sync` *would do* — M2 and M1c
+      state the conclusion (*syncing is not the safe next step*), and M3a/M3b state
+      the mechanism and the rule, not an outcome. Gated by verification step 4's
+      **prediction sweep** reading `0` in all four files; the residue it cannot
+      catch (a novel prediction phrased without those three verbs) is a review
+      obligation. See the Mirrored Surface Checklist entry "R-T2's semantic
+      constraint" for the full list of bound surfaces.
 
 ## Verification steps (run these; paste output in the PR)
 
@@ -1153,9 +1219,16 @@ red on a correct implementation and green on no implementation at all). Round 2'
 sweep claimed "every gate was proven in both directions" while enumerating only
 three buckets, and review then found **two** gates that were in none of them and
 that had *both* of the other faults. That claim is therefore re-established here
-**gate by gate**, not in the abstract. Every row below was executed this session on
-a correct state and on a deliberately broken one, and judged by **exit code**
-(step 3 is the one exception, and its row says why).
+**gate by gate**, not in the abstract. Every WP-specific gate below was executed on
+a correct state and on a deliberately broken one, and judged by **exit code**, with
+two stated exceptions that carry their reason in their own row: **step 3**, whose
+verdict is a printed test name because both outcomes exit 0; and **steps 5–7**
+(`npm test`, the a7 scenario, `npm run lint`), which are whole-suite regression
+gates — green before this WP and green after — with no red state that corresponds
+to the work being absent. Three rows are **violation detectors** rather than
+completion detectors (the recovery sweep, the prediction sweep, and steps 5–7):
+they are `0`/green on an untouched tree too, so each is paired with a completion
+gate and none is read as evidence the work landed.
 
 **The table's own completeness is part of the gate.** Three separate rounds have
 falsified a blanket "the gates are complete" claim — an acceptance criterion with
@@ -1165,17 +1238,28 @@ about it. So: **every command in steps 1 through 7 has a row in this table, and
 adding a command means adding its row in the same edit.** Presence in the table
 is itself the thing to check.
 
+**And a row can be wrong in the other direction: correct commands, backwards
+record.** Round 4 found the five stale-prose gates' verdict columns swapped — the
+"proved green on" cell described the pre-change tree (where the marker is
+**absent**, i.e. red) and "proved red on" described the applied replacement (where
+it prints, i.e. green). The commands' polarity was right the whole time; only this
+table's account of them was inverted, which is worse than useless, because a
+reader auditing the table would "fix" a working gate. The rows were re-measured
+and rewritten in round 4 with the direction actually observed. **Write the row
+from the run you just did, not from the outcome you expect.**
+
 | gate | verdict comes from | proved green on | proved red on |
 |---|---|---|---|
-| step 1 `node tests/run.js …` | process exit + `fail 0` | the implemented tree | reverting D4 on Table S row 9 ⇒ T5 fails |
+| step 1 `node tests/run.js …` | process exit + `fail 0` **and the ten `remedy: …` ✔ lines being present** — `fail 0` alone is true of an untouched tree too, so the presence of T1–T10 is part of this verdict, not commentary on it | the implemented tree: `fail 0` with ten `remedy: …` ✔ lines | reverting D4 on Table S row 9 ⇒ T5 fails; and an untouched tree, which reaches `fail 0` with **zero** `remedy: …` lines |
 | step 2 `before`/`stale`/`after`/`sync`/`tied` | five `grep -c` outputs assigned to **variables**; no `\|\|`/`&&` marker reads grep's status, and each assignment already swallows the exit-1-on-zero with `\|\| true` (`before` is guarded instead, by `test "$before" -gt 0`) | `baseline=17 stale=0 conforming=17 sync=4 tied=1` ⇒ `GATE-OK` | (a) one site reverted ⇒ `stale=1 conforming=16`; (b) one `reinstall` promoted ⇒ `sync=5`; (c) the ternary dropped ⇒ `tied=0`. All three ⇒ `GATE-FAIL` |
 | step 2 `GATE-OK`/`GATE-FAIL` marker | `test`'s exit status, never grep's | as above | as above |
 | step 2 **reason-drift `diff`** | **the raw exit code of `diff`** — there is no `\|\|` marker to get backwards | a token-only correct transformation, **committed** ⇒ `exit=0` | one character changed in any reason string ⇒ `exit=1` and the differing lines print |
 | step 3 `node tests/run.js --test-name-pattern … <file>` | **the ✔ line naming T1** — *not* the count and *not* the exit code. A pattern that matches nothing prints `tests 1  pass 1  fail 0` and **exits 0**, with the ✔ line naming the *file*; a genuine single match prints identical counts. Executed both this session against a scratch fixture. So the row requires the ✔ line to read `remedy: refusalText('sync') is byte-identical to the shipped banner`, and `pass 1  fail 0` alongside it | the implemented tree | mutating one character of `REMEDY_TAIL.sync` ⇒ `fail 1`, non-zero exit. Also red-by-inspection if the flag is moved after the path: the run becomes all 27 tests (executed) |
-| step 4, five `grep -n PAT file \|\| echo "<X>-OK"` | grep exits 1 (stale form absent) ⇒ marker prints; exits 0 (present) ⇒ no marker | the five anchors, each matching **exactly once** on the pre-change tree — so on the pre-change tree each prints its line, `exit=0`, and **no** marker: the correct red state | applying the replacement makes each anchor vanish ⇒ marker prints |
-| step 4 `grep -c "production/dev stance"` | printed count, no marker | `1` after M1c lands | `0` on the pre-change tree (executed) |
-| step 4 `grep -cE` recovery sweep | printed per-file counts, no marker | the stated baseline (executed: `1 / 3 / 2 / 0`) | any count going **up** |
-| steps 5, 6, 7 | process exit codes of `npm test`, the a7 scenario and `npm run lint` | — | — |
+| step 4, five `grep -n PAT file \|\| echo "<X>-OK"` (one row, all five gates, each measured separately) | the marker's presence, which follows grep's status: grep exits **1** (stale form absent) ⇒ marker prints ⇒ **green**; exits **0** (stale form still present) ⇒ no marker ⇒ **red** | the tree with Table M's replacements applied: every anchor is gone, all five greps exit **1**, all five `*-OK` markers print (executed round 4 on a scratch copy of the three files with all six Table M edits applied — `M1a/M1b/M2/M3a/M3b grep_exit=1`) | the pre-change tree, where each anchor matches **exactly once**: every grep prints its stale line and exits **0**, and **no** marker prints (executed round 4 — `M1a/M1b/M2/M3a/M3b grep_exit=0`). **Round 3 recorded these two columns swapped**; the commands were right and the record of them was not |
+| step 4 `grep -c "production/dev stance"` | printed count, no marker | `1` after M1c lands (executed round 4 on the scratch copy) | `0` on the pre-change tree (executed) |
+| step 4 `grep -cE` recovery sweep | printed per-file counts, no marker. A **violation detector**, like the sweep below — the baseline is also the untouched tree's value | the stated baseline, which the replacements must not move (executed round 4: `1 / 3 / 2` on the pre-change tree **and** on the replacements-applied copy; `0` for `launcher.js`) | any count going **up** — e.g. adding a recovery command to M1c, M2 or M3 |
+| step 4 **prediction sweep** `grep -cE "would authorize\|would install\|would finish"` | printed per-file counts, no marker. A **violation detector**, not a completion detector: `0` is also the untouched tree's value, so it is paired with the five stale-form gates, never a substitute for them | `0` in all four files — executed round 4 on the pre-change tree (grep exit **1**) and on the replacements-applied copy (grep exit **1**) | re-injecting round 2's *"syncing would authorize those files as they are"* into M2 ⇒ `README.md:1`, grep exit **0** (executed round 4) |
+| steps 5, 6, 7 | process exit codes of `npm test`, the a7 scenario and `npm run lint`; a non-zero exit is the failure and there is no marker to invert | green on the pre-change tree **and** required green on the implemented one — these are **regression** gates, so "green" is the same state before and after | step 6 only: change any reason string ⇒ that case's `reasonRe` fails (stated in step 6). Steps 5 and 7 have no WP-specific red input — they detect a regression, never the absence of this WP's work, which is what the step-1 to step-4 gates are for |
 
 **Two round-2 gates were rewritten because that sweep is what caught them.** Both
 had passed review twice:
@@ -1319,11 +1403,12 @@ grep -n "For almost every mismatch" docs/runbooks/scheduler-and-executable-integ
 grep -n '## The fix: `wienerdog sync`' docs/runbooks/scheduler-and-executable-integrity.md || echo "RUNBOOK-M1A-OK"
 grep -c "production/dev stance" docs/runbooks/scheduler-and-executable-integrity.md
 grep -cE "npx wienerdog|wienerdog update|npm install -g" docs/runbooks/scheduler-and-executable-integrity.md README.md docs/THREAT-MODEL.md src/scheduler/launcher.js
+grep -cE "would authorize|would install|would finish" README.md docs/runbooks/scheduler-and-executable-integrity.md docs/THREAT-MODEL.md src/scheduler/launcher.js
 ```
 
 Expect all **five** `*-OK` markers (each stale claim gone), `1` for the GLOSSARY
-link, and — for the last grep — **exactly** these counts, which are the measured
-pre-change baseline and must not move:
+link, and — for the recovery sweep — **exactly** these counts, which are the
+measured pre-change baseline and must not move:
 
 ```text
 docs/runbooks/scheduler-and-executable-integrity.md:1
@@ -1336,12 +1421,30 @@ src/scheduler/launcher.js:0
 already names `npx wienerdog@latest sync`; it is not yours to touch. README's
 three are its install instructions.) AC11 fails if any count goes up.
 
-Executed against the pre-change tree this session: each of the five `grep -n`
-gates prints its stale line, **exits 0**, and prints **no** `*-OK` marker; the
-GLOSSARY-link count is `0`. That is the red state, proven by exit code.
+**The last grep is the prediction sweep (AC15).** Expect `0` from **all four**
+files. It enforces R-T2's semantic constraint on the prose that restates it: the
+three rejected verbs are the ones round 1 and round 2 actually used, and round 3
+left two of them standing in M2 and M1c after R-T2 itself had been corrected (see
+the Mirrored Surface Checklist entry "R-T2's semantic constraint"). Transcribe
+Table M's blocks exactly and this stays `0`; write your own wording about what
+`sync` *would do* and it will not. It is a **violation detector, not a completion
+detector** — `0` is also what an untouched tree prints, so it proves nothing on
+its own and is paired with the five stale-form gates above, which are what prove
+the work landed.
+
+Executed against the pre-change tree (round 4, by exit code): each of the five
+`grep -n` gates prints its stale line, **exits 0**, and prints **no** `*-OK`
+marker; the GLOSSARY-link count is `0`; the prediction sweep is `0` in all four
+files. That is the red state for the five gates. Executed again against a scratch
+copy of the three files with all six Table M edits applied: every anchor grep
+**exits 1**, all five markers print, the GLOSSARY count is `1`, the recovery
+counts are unchanged at `1 / 3 / 2 / 0`, and the prediction sweep is still `0` —
+the green state, also by exit code.
 *Red inputs:* leave one stale sentence in place (its `grep -n` exits 0 and the
-`*-OK` marker is absent); or add a recovery command to M1c, M2 or M3 (that file's
-count in the last grep goes up).
+`*-OK` marker is absent); add a recovery command to M1c, M2 or M3 (that file's
+count in the recovery sweep goes up); or reintroduce round 2's *"syncing would
+authorize those files as they are"* into M2 (executed: the prediction sweep prints
+`README.md:1` and grep exits 0).
 
 **5. Nothing else regressed.**
 
@@ -1458,7 +1561,8 @@ Expect green (markdownlint + frontmatter schema).
 
 1. All verification steps (0 through 7) pass locally; output pasted into the PR
    body, including the `GATE-OK` line, the `reason-drift exit=0` line, all five
-   `*-OK` prose markers, and the a7 scenario's `PASS`. Step 0's sweep is restated
+   `*-OK` prose markers, the prediction sweep's four `:0` counts, and the a7
+   scenario's `PASS`. Step 0's sweep is restated
    in one line: that every gate you ran or added was proven by **exit code** to be
    correctly polarized, non-vacuous, and green-on-correct-work rather than
    green-on-no-work.
@@ -1477,7 +1581,8 @@ Expect green (markdownlint + frontmatter schema).
    invocations it ships are **cited** from `WP-stance-authority-containment`
    Table G row 1 / D6 and were not re-derived, re-worded or copied here.
 6. The PR body lists the review-only criteria named under "Test index" — AC8,
-   AC10, AC11, and the correctness against block R-P of Table S's **four** literal
+   AC10, AC11, AC15's ungreppable residue, and the correctness against block R-P
+   of Table S's **four** literal
    `sync` sites plus the eleven literal `reinstall` sites — so the reviewer knows
    which claims no test can make. (Row 12's two outcomes *are* tested, by T10.)
 7. The PR body states, in one line, that no text you wrote implies `wienerdog
