@@ -1101,6 +1101,58 @@ restatement into a citation or a quotation of it, and register every mirror here
 **Round-5 adds one rule to the move: a clause promoted INTO the canonical text must
 be executed and registered in the same pass — promotion is not a copy operation.**
 
+**Round-6 adds a mechanical half to that rule, because a discipline nobody can run
+is a promise.** Five consecutive rounds each produced at least one restatement or
+quotation of this spec's own canonical text that was never checked against its
+source, and round-5's grep-based retarget provably missed a line-wrapped instance.
+One part of that class is cheaply decidable and is now a check: **every fragment
+the D6 mapping table quotes must appear verbatim in the D6 body it claims to
+render**, whitespace- and emphasis-normalized so line wraps and `**` do not
+matter. It is an architect/reviewer step run before this spec leaves Draft — it is
+**not** one of the Verification commands below, it touches no Deliverable, and it
+is deliberately not wired into `npm run lint`:
+
+```bash
+cat > /tmp/spec-quote-check.js <<'EOF'
+const fs=require('fs');
+const L=fs.readFileSync(process.argv[2],'utf8').split('\n');
+const norm=s=>s.replace(/[*_]/g,'').replace(/\s+/g,' ').trim();
+const a=L.findIndex(l=>l.includes('production/dev stance** entry')),
+      b=L.findIndex(l=>l.startsWith("Keep the entry's existing"));
+const body=norm(L.slice(a,b).filter(l=>l.startsWith('> ')).map(l=>l.slice(2)).join(' '));
+const h=L.findIndex(l=>l.startsWith('| Canonical scope statement'));
+let bad=0;
+for(let i=h+2;i<L.length&&L[i].startsWith('|');i++){
+  const cell=L[i].split('|')[2];
+  for(const m of cell.matchAll(/\*"([^"]+)"\*/g))
+    for(const frag of m[1].split('…')){
+      const f=norm(frag).replace(/^[\s,;.—-]+|[\s,;.—-]+$/g,'');
+      if(f && !body.includes(f)){bad++;console.log('row '+(i-h-1)+' NOT VERBATIM: '+f);}
+    }
+}
+console.log(bad?`FAIL (${bad})`:'PASS');
+process.exit(bad?1:0);
+EOF
+node /tmp/spec-quote-check.js docs/specs/WP-stance-authority-containment.md
+# PASS, exit 0. Round-6 ran it on the round-5 text first: it printed
+# `row 6 NOT VERBATIM: …` (that cell compressed the recovery list instead of
+# quoting it, and was rewritten as a real quotation), and it is the shape of
+# check that kills a MECHANISM cell whose sentence exists nowhere in the spec.
+# Cells may elide with `…`; each piece between elisions must still be verbatim.
+```
+
+**Considered and rejected: the same check for mirror *registration*.** Mirrors are
+registered here by prose description ("Current state §9c's 'Read that as the matrix
+result it is' paragraph"), not by a literal phrase, so no grep can decide whether a
+given occurrence is registered; and the canonical phrases legitimately recur in
+Table G, in the refutation lists, and inside `main` baselines quoted verbatim. Such
+a check would emit mostly false positives, and — worse — a green run would read as
+proof of registration it cannot supply. **Registration stays a human obligation**,
+carried by the standing rule in Context (*"if you find a restatement that is not
+registered … register it in the same pass"*). Recorded as a **residual**: round 6
+registered two mirrors that had gone four rounds unregistered, and nothing
+mechanical guarantees a third is not still out there.
+
 **Contract 1 — "what an A7-scoped write cannot do". Canonical: the subsection
 "Table G — canonical scope statement"** (qualifier (i) scope = DATA inputs, never
 "file content"; qualifier (ii) temporal bound = "until the next attended
@@ -1112,6 +1164,7 @@ of which cites or quotes that subsection and adds nothing:
 - [ ] Context → "What this WP does NOT close" (the earliest mirror an implementer reads)
 - [ ] Context → the "One clause … quoted, not endorsed" paragraph
 - [ ] Context → the "The canonical statement of that scope is …" paragraph (the qualifier list)
+- [ ] **Context → the V9 one-line invariant** (*"an attended `sync` carries containment forward, **or refuses**; no A7-scoped **data** write changes it"*, with its qualifier-(iii) note) — round-6 registration; it is the densest single-sentence form of the contract in the spec and it sat unregistered while rounds 1–5 corrected the paragraphs around it
 - [ ] Deliverables → sizing paragraph's *"no A7-scoped **data** write decides containment"*
 - [ ] "Exact contracts" → `installStance`'s `SCOPE:` block and `vendorSelf`'s `SELF-RESYNC`/`SCOPE:` block (these ship into `src/`, so all three qualifiers **and** the mechanism wording must survive into the source comments — this is the mirror round-4 promoted from without auditing)
 - [ ] **Table G row 1's headline and its in-cell mechanism note** (*"nothing in the tree selects the target"*; *"`readVersion(root)` still runs"*) — round-5 registration
@@ -1120,6 +1173,7 @@ of which cites or quotes that subsection and adds nothing:
 - [ ] Implementation notes → "What the corrected statement is" and the capability-shrink blockquote
 - [ ] Implementation notes → **the "objection a reviewer will raise" paragraph's closing clause** about which signal the cross-check now rests on — round-5 registration
 - [ ] Implementation notes → "Why D9 is a subtraction and not a fifth guard" (its mechanism sentence) — round-5 registration
+- [ ] Implementation notes → **D9 step 2's `SELF-RESYNC:` inline comment** (*"let NO signal inside that tree select the target"*; *"`readVersion` still runs above"*; *"a tampered version refuses the call"*) — round-6 registration, and **this one ships into `src/core/vendor.js`**: it is the third source-resident mirror alongside `installStance`'s and `vendorSelf`'s JSDoc blocks, so all three qualifiers and the mechanism wording must survive into it
 - [ ] Implementation notes → **D9 step 3's note that `readVersion(root)` still runs on every call** — round-5 registration; this note is what contradicted the round-4 cell, and it was right
 - [ ] Implementation notes → **Migration (Table F), the "What the attacker gains by provoking that sync" paragraph** — this one was registered in round 3 and did **not** move; round-4 rewrote it
 - [ ] Implementation notes → **D6's clause-by-clause mapping table** (it must map all three qualifiers, not two)
@@ -1265,9 +1319,9 @@ and is what this WP actually buys:
 That is the whole value proposition, stated exactly: the **known
 digest-invisible** downgrade is removed. Every remaining *known* app-tree route to
 the reduced path is a **content change**, so it is caught by C3 on any fire
-before the next attended `sync` — and **only** until that sync (Table G's last
-row, qualifier (ii)) — and the residue, repointing `current`, is a capability the
-shipped design already concedes to A12.
+before the next attended `sync` — and **only** until that sync (qualifier (ii) of
+"Table G — canonical scope statement") — and the residue, repointing `current`,
+is a capability the shipped design already concedes to A12.
 
 **The word "known" is load-bearing and was added in round-4.** "Digest-invisible"
 is strictly larger than "empty directory": `launcher.js:133` pushes only
@@ -1434,8 +1488,9 @@ calls `readVersion(appRoot)` too (`:217`, `:218`), and a single choke point mean
 the traversal string can never reach either the vendored directory name or the
 descriptor's `version` field. A throw from the descriptor path is fail-closed —
 `verifyAndResolve` wraps the whole verdict computation and turns any exception
-into a refusal (`launcher.js:335-337`), and on prod the version is already pinned
-by the tree digest before that code runs.
+into a refusal (the `try` opens at `launcher.js:263`; the `catch` at `:326-328`
+returns `ok: false` with reason `integrity check errored: <err.message>`), and on
+prod the version is already pinned by the tree digest before that code runs.
 
 Verified this session against `isSemver` specifically: the repo's own `0.10.0`,
 the fixtures' `0.0.1` and `build.js:38`'s `V2_VERSION = '999.0.0-a7test'` all
@@ -1604,8 +1659,8 @@ The mapping, clause by clause, so the derivation is checkable:
 | (i) SCOPE — code substitution **does** move the stance | *"Code written into the app tree is a different matter and is not covered … a replaced source file executes at the next attended `wienerdog sync` and can move the stance"* |
 | (ii) TEMPORAL BOUND — **until the next attended `sync`** | *"only until that sync — every scheduled run before it refuses … a run after it need not"* |
 | (iii) DISJUNCTION — carried forward **or the call refuses** | *"either leaves `current` exactly where it already pointed, **or** … stops with a tamper message and changes nothing at all"* |
-| MECHANISM — tree data cannot **select** containment; it is not "not consulted" | *"nothing inside that tree chooses where `current` ends up … That version is the one value the installer still reads out of the tree; it is checked, and it cannot steer the install anywhere"* |
-| Table G row 1's recovery list (with its round-5 correction) | *"a **non-dev source root** — `npx …`, `wienerdog update`, a global install **invoked by its own path**, uninstall/reinstall. Two things that look like recovery and are not: a plain `git clone` … and a bare `wienerdog sync` after that global install"* |
+| MECHANISM — tree data cannot **select** containment; it is not "not consulted" | *"nothing inside that tree chooses where `current` ends up … Nothing the installer reads out of that tree feeds that decision. It does still read the tree's `package.json` version — that is the version number it reports back to you — and that value is checked, so a tampered one stops the sync rather than steering it."* |
+| Table G row 1's recovery list (with its round-5 correction) | *"run the installer **from a non-dev source root** — `npx wienerdog@latest sync`, a `wienerdog update` to a newer version, a global `npm install -g wienerdog` **invoked by its own path** … or uninstall/reinstall. Two things that look like recovery and are not: a plain `git clone` … and a bare `wienerdog sync` after that global install"* |
 
 **Five wordings this entry must never revert to, with the command that kills
 each.** Each was in a shipped draft of this spec; each was executed by a reviewer
@@ -1789,9 +1844,11 @@ behaviour are the misclassified ones, and for them the change *is* the fix.
       mint-time half, for DATA-shaped writes.** Binding the stance to containment
       is only sound if an A7 write cannot decide containment. `vendorSelf` runs
       from inside the app tree on every prod `sync` and read two of its files
-      (`package.json` version, `.git`); D8 and D9 remove both (Table G). V9 gates
-      the resulting invariant and **fails on `main`**, which is the proof that it
-      is asserting something. Do not ship D1–D4 without D8/D9: the combination
+      (`package.json` version, `.git`); D8 and D9 remove both **as inputs that can
+      select containment** — `readVersion` still runs and is validated (Table G
+      rows 1-2), `isDevCheckout` is not called on the self-resync arm (row 1). V9
+      gates the resulting invariant and **fails on `main`**, which is the proof
+      that it is asserting something. Do not ship D1–D4 without D8/D9: the combination
       without them converts a fire-time refusal into a `dev` mint (Current state
       §9b).
 - [ ] **The mint-time half is NOT closed against code-substituting writes, and
