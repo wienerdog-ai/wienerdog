@@ -682,9 +682,16 @@ untouched):
 Two things this export is **not** licence for. It does not change
 `repairCatchup`'s behavior, signature or callers — `repointSchedules` stays its
 only production caller, and this WP adds no CLI surface. And it does not make
-`repairCatchup` a supported API: it is exported for the same reason `reloadJob`
-already is, namely that another module in this repo must reach it. Verification
-step 5 greps for it so the export cannot be silently dropped.
+`repairCatchup` a supported API: it is exported for the same **structural**
+reason `reloadJob` already is — another file in this repo must reach it across a
+module boundary. The two differ in *which* file, and the distinction is worth
+stating plainly rather than glossing: `reloadJob` is reached by a production
+module (`src/scheduler/status.js:257` calls `schedule.reloadJob`), whereas
+`repairCatchup`'s consumer is this WP's **test** file. That is a narrower claim,
+not a weaker one, and nothing external is widened by it: `package.json` declares
+`bin` only — no `main`, no `exports` — so `src/cli/schedule.js` is unreachable by
+any consumer of the published package, and this WP adds no CLI surface.
+Verification step 5 greps for the export so it cannot be silently dropped.
 
 **Bootstrap-first is back-compatible with the existing suite, verified at
 `efd1489`:** `tests/unit/scheduler-schedule.test.js:982` asserts
@@ -1198,14 +1205,34 @@ There are exactly three seams:
 Four rules follow, and every acceptance criterion that touches a row must
 satisfy them in addition to its own assertion:
 
-- **R1 — no test in this WP deletes `WIENERDOG_LOADER_NOOP` or
-  `WIENERDOG_TEST_NO_REAL_SCHEDULER`.** Injecting `opts.run` is what gets past
-  `defaultProbe` steps 1-2 (see "Exact contracts"), so the deletion ritual at
+- **R1 — no test in this WP deletes `WIENERDOG_TEST_NO_REAL_SCHEDULER`.**
+  Injecting `opts.run` is what gets past `defaultProbe` steps 1-2 (see "Exact
+  contracts"), so the deletion ritual at
   `tests/unit/scheduler-status.test.js:102-116` must **not** be copied into the
-  new file. This is the whole point of the `run`-gating: with the vars intact,
-  `schedulerSpawn`'s throw stays armed for every test in this WP, so a heal that
-  slipped past R2 fails loudly instead of mutating the maintainer's launchd.
-  Machine-checked by verification step 5's negative grep; mutation M17.
+  new file — it deletes **both** neutralizers, and its
+  `WIENERDOG_TEST_NO_REAL_SCHEDULER` line is the forbidden one. With that var
+  intact, `schedulerSpawn`'s throw stays armed for every test in this WP, so a
+  heal that slipped past R2 fails loudly instead of mutating the maintainer's
+  launchd.
+  **The rule is scoped to the guard var deliberately (round 7), because the two
+  neutralizers are not symmetric.** `src/scheduler/spawn.js:24-33` checks
+  `WIENERDOG_LOADER_NOOP` **first** and returns `{status:0}`, and
+  `WIENERDOG_TEST_NO_REAL_SCHEDULER` **second** and throws. So deleting
+  `WIENERDOG_LOADER_NOOP` while the guard var stays set strictly **RE-ARMS** the
+  throw — it is the safe direction, and AC-3 *requires* it, because that var is
+  **absent** from the suite env (`tests/run.js:7` sets only the guard var) and
+  AC-3 must restore it to absent after setting it.
+  **Setting `WIENERDOG_LOADER_NOOP` is permitted only in AC-3's neutralizer
+  assertion, and only inside a `try … finally` that restores it to ABSENT**,
+  using the repo's own idiom at `tests/unit/scheduler-status.test.js:118-127`
+  (`if (saved === undefined) delete process.env.WIENERDOG_LOADER_NOOP; else …`).
+  Leaving it set is the one way to silently disarm AC-14 layer (ii) for every
+  test that follows, since `spawn.js:25` returns `{status:0}` *before* the throw
+  at `:26`. (`process.env.WIENERDOG_LOADER_NOOP = ''` also re-arms the throw —
+  executed this session: THREW, because every consumer tests truthiness — but it
+  does not restore the env to absent, so use `delete`.)
+  Machine-checked by verification step 5b's negative grep, which is scoped to
+  `WIENERDOG_TEST_NO_REAL_SCHEDULER` alone for exactly this reason; mutation M17.
 - **R2 — where `opts.loader` is MANDATORY it is a recording stub**: it pushes its
   argv onto an array and returns a canned `{status}` **without spawning**. The AC
   asserts the recorded list with `assert.deepEqual` against the exact expected
@@ -1373,7 +1400,7 @@ is the recovery either way.
 - [ ] Implementation notes → "Test seams in the new tests"
 - [ ] Security checklist bullet 3 (what backstops a mutation in these tests)
 - [ ] Acceptance criteria AC-3, AC-3b (the one no-seam exception to the row), AC-4, AC-5, AC-12b, AC-14
-- [ ] Verification step 5b's negative grep for `delete process.env.WIENERDOG_` (R1). **Step 5c is DELETED** — R2 is now enforced at runtime (the armed suite guard plus AC-5a/AC-9a's `{reloaded, failed}` assertions and every criterion's recorded-argv `deepEqual`), not by any structural check on the test file's source; step 5c's replacement comment is the record of why, and it forbids re-adding one
+- [ ] Verification step 5b's negative grep, scoped in round 7 to `delete process.env.WIENERDOG_TEST_NO_REAL_SCHEDULER` (R1) — the `LOADER_NOOP` alternation was removed because R1 *requires* that deletion in AC-3's restore-to-absent `finally`, and the grep was rejecting a conforming test. AC-3's restoration idiom is a mirror of R1 too. **Step 5c is DELETED** — R2 is now enforced at runtime (the armed suite guard plus AC-5a/AC-9a's `{reloaded, failed}` assertions and every criterion's recorded-argv `deepEqual`), not by any structural check on the test file's source; step 5c's replacement comment is the record of why, and it forbids re-adding one
 - [ ] Current state: `status.js:80-86` (the neutralizer order), `spawn.js:24-36`, `schedule.js:565` + `sync.js:222` + `adopt.js:422` + `schedule.js:895` (the three attended production callers that reach `repairCatchup`'s mutation)
 - [ ] Mutation checks M12, M13, M16, M17, M19, **M20 (repurposed in round 5 — it now removes an `opts.loader` and must redden a TEST, not a grep)**
 - [ ] **`docs/adr/0018-windows-scheduled-dreaming.md`** — the 2026-07-07
@@ -1452,13 +1479,18 @@ is the recovery either way.
 - **Test seams in the new tests — Table C decides this; do not improvise.**
   `npm test` (`tests/run.js:7`) sets `WIENERDOG_TEST_NO_REAL_SCHEDULER` for the
   whole suite, and this WP keeps it that way: injecting `opts.run` is what gets
-  past `defaultProbe` steps 1-2, so **no new test deletes an env var** (Table C
-  R1) and `schedulerSpawn`'s throw stays armed throughout. `opts.loader` is
-  mandatory wherever a heal is reachable (R2). Do **not** copy the
-  save/`delete`/restore pattern at `tests/unit/scheduler-status.test.js:102-116`
-  — it belongs to a pre-existing test that has no `run` seam, and reproducing it
-  is exactly how a WP-mandated test issues a real `launchctl bootout` against the
-  maintainer's launchd.
+  past `defaultProbe` steps 1-2, so **no new test deletes
+  `WIENERDOG_TEST_NO_REAL_SCHEDULER`** (Table C R1) and `schedulerSpawn`'s throw
+  stays armed throughout. `opts.loader` is mandatory wherever a heal is
+  reachable (R2). Do **not** copy the save/`delete`/restore pattern at
+  `tests/unit/scheduler-status.test.js:102-116` — it belongs to a pre-existing
+  test that has no `run` seam, it deletes the guard var, and reproducing it is
+  exactly how a WP-mandated test issues a real `launchctl bootout` against the
+  maintainer's launchd. The *other* neutralizer is different: AC-3 must set
+  `WIENERDOG_LOADER_NOOP` and restore it to absent with `delete` in a `finally`
+  (the idiom at `tests/unit/scheduler-status.test.js:118-127`) — deleting that
+  one re-arms the throw, and **leaving it set** is what would disarm it for the
+  rest of the file. Table C R1 states both halves; do not improvise either.
 - **Do not add a new alert channel — and here is the ACTUAL reason.** An earlier
   draft rejected `state/alerts.jsonl` on the grounds that "a successful run could
   clear a still-hijacked entry". **That premise is false** — see the Current-state
@@ -1985,7 +2017,8 @@ mechanism.
       `{kind:'launchd', argv:[…]}`, `{kind:'systemd', argv:null}`,
       `{kind:'schtasks', argv:[…]}`, and `null` for an unrecognized basename.
 - [ ] **AC-3** `defaultProbe` returns, all through an injected `opts.run` and
-      with **no env var deleted** (Table C R1): `mismatched` for an exit-0 record
+      with **`WIENERDOG_TEST_NO_REAL_SCHEDULER` never deleted** (Table C R1):
+      `mismatched` for an exit-0 record
       whose loaded argv names a launcher outside this core; `unverified` when the
       identity query fails, when its output is indeterminate, **and when `expect`
       is omitted entirely**; `unknown` when `expect.identityArgv` is `null`;
@@ -1995,6 +2028,31 @@ mechanism.
       (which `npm test` already sets) — this is the pair of assertions that pins
       the seam-gating in "Exact contracts", so it must show that the *same* input
       returns `unknown` without `run` and a real verdict with it.
+      **How to set and restore `WIENERDOG_LOADER_NOOP` — mandatory, and NOT a
+      style point (Table C R1).** That var is **absent** from the suite env:
+      `tests/run.js:7` sets only `WIENERDOG_TEST_NO_REAL_SCHEDULER`. So this
+      assertion must set it and restore it to **absent**, using the repo's own
+      idiom at `tests/unit/scheduler-status.test.js:118-127`:
+      ```js
+      const saved = process.env.WIENERDOG_LOADER_NOOP;
+      process.env.WIENERDOG_LOADER_NOOP = '1';
+      try {
+        assert.equal(status.defaultProbe(argv, expect, {}), 'unknown');
+      } finally {
+        if (saved === undefined) delete process.env.WIENERDOG_LOADER_NOOP;
+        else process.env.WIENERDOG_LOADER_NOOP = saved;
+      }
+      ```
+      That `delete` is **permitted** and is not what verification step 5b
+      rejects — 5b is scoped to `WIENERDOG_TEST_NO_REAL_SCHEDULER`, and deleting
+      `WIENERDOG_LOADER_NOOP` while the guard var stays set strictly *re-arms*
+      `schedulerSpawn`'s throw. **Leaving `WIENERDOG_LOADER_NOOP` set instead of
+      restoring it silently breaks the WP:** `src/scheduler/spawn.js:25` returns
+      `{status:0}` *before* the throw at `:26`, so every test after this one
+      would run with `schedulerSpawn` neutralized and AC-14 layer (ii) would not
+      hold. `= ''` re-arms the throw but does not restore the env to absent — use
+      `delete`. The `WIENERDOG_TEST_NO_REAL_SCHEDULER` half of this pair needs no
+      setup at all (it is already set) and must be neither deleted nor restored.
       **Every canned `launchctl print` fixture in this criterion must put a path
       that EXISTS in the `arguments` block's FIRST entry** — use
       `process.execPath`, which is guaranteed present and is what a real entry
@@ -2004,7 +2062,8 @@ mechanism.
 - [ ] **AC-3c** *(step 8b — the deleted-node regression, **its own named test**)*
       Name it
       `entry-identity: defaultProbe grades a record whose execution position no longer exists as mismatched`.
-      Same shape as AC-3 (injected `opts.run`, no env var deleted): a canned
+      Same shape as AC-3 (injected `opts.run`; this criterion touches the env not
+      at all — no set, no delete): a canned
       `launchctl print` whose `arguments` block has **our launcher in `args[1]`**
       — so `loadedEntryTargets` returns `verdict:'match'` — and, in `args[0]`, a
       path inside a `mkdtemp` directory that the test **creates and then deletes**
@@ -2262,9 +2321,14 @@ mechanism.
       analysis of the test file's source text.** Three layers, in the order they
       fire:
       **(i) R1, mechanically checked by verification step 5b** — the file
-      contains no `delete process.env.WIENERDOG_…`, so
-      `WIENERDOG_TEST_NO_REAL_SCHEDULER` (set for the whole suite by
-      `tests/run.js:7`) stays set for every test here. Mutation M17.
+      contains no `delete process.env.WIENERDOG_TEST_NO_REAL_SCHEDULER`, so that
+      var (set for the whole suite by `tests/run.js:7`) stays set for every test
+      here. Mutation M17. AC-3's `finally` *may* delete `WIENERDOG_LOADER_NOOP`
+      and 5b does not reject that — deleting it while the guard var stays set
+      re-arms the throw — but AC-3 **must** restore that var to absent, because
+      `spawn.js:25` returns `{status:0}` before the throw at `:26`, so a leaked
+      `WIENERDOG_LOADER_NOOP` would disarm layer (ii) for every test that
+      follows. That restoration is part of AC-3, not of this layer.
       **(ii) the armed suite guard — the real guarantee.** With that var set, any
       call that reaches `schedule.defaultLoader` hits `schedulerSpawn`'s throw
       (`src/scheduler/spawn.js:26`) **before** a `launchctl` / `systemctl` /
@@ -2435,19 +2499,37 @@ grep -n "schedulerLine" src/cli/dream.js || { echo "MISSING: schedulerLine in dr
 grep -n "schedulerLine" src/cli/sync.js  || { echo "MISSING: schedulerLine in sync.js"; exit 1; }
 
 # 5b. Table C R1, MECHANICALLY CHECKED (AC-14(i)). No test in this WP may delete
-#     a neutralizer env var: doing so disarms schedulerSpawn's throw for that
-#     test body, and a heal reached without opts.loader then issues a REAL
-#     `launchctl bootout` + `bootstrap` against the per-user-global label. Must
-#     exit 1 while any such line is present (mutation M17).
+#     WIENERDOG_TEST_NO_REAL_SCHEDULER: that is the ONLY deletion that disarms
+#     schedulerSpawn's throw (spawn.js:24-33 checks LOADER_NOOP first and returns
+#     {status:0}; the guard var second and throws). After such a deletion a heal
+#     reached without opts.loader issues a REAL `launchctl bootout` +
+#     `bootstrap` against the per-user-global label. Must exit 1 while any such
+#     line is present (mutation M17).
+#     SCOPED TO THE GUARD VAR IN ROUND 7 — the earlier form also matched
+#     `delete process.env.WIENERDOG_LOADER_NOOP`, which AC-3 REQUIRES in its
+#     restore-to-absent `finally` (that var is absent from the suite env), so it
+#     rejected a conforming test. The narrowing is LOSSLESS: the ritual R1 exists
+#     to keep out (tests/unit/scheduler-status.test.js:102-116) deletes BOTH
+#     vars, so its guard-var line is still caught. Both directions executed this
+#     session against fixtures written to a `mkdtemp` dir:
+#       (a) a minimally-written conforming AC-3 test whose finally reads
+#           `if (saved === undefined) delete process.env.WIENERDOG_LOADER_NOOP;`
+#           → OLD regex MATCHED (the defect: "FAIL" on a conforming test);
+#             NEW regex NO MATCH → "OK". Accepted.
+#       (b) lines 102-116 of scheduler-status.test.js, verbatim
+#           → OLD regex matched 2 lines; NEW regex matched the
+#             `delete process.env.WIENERDOG_TEST_NO_REAL_SCHEDULER` line.
+#             Still rejected.
 #     THIS ONE SURVIVED THE 5c DELETION ON PURPOSE, and the difference matters:
 #     it greps for ONE LITERAL STATEMENT that no conforming test in this WP has
 #     any reason to contain. It makes no attempt to decide what a line "is", so
 #     it has no bypass class to chase. Its only false-reject is a COMMENT that
-#     quotes the literal — so do not quote `delete process.env.WIENERDOG_…` in a
-#     comment in the test file; the prohibition lives in this spec, not there.
-if grep -nE "delete[[:space:]]+process\.env\.WIENERDOG_(LOADER_NOOP|TEST_NO_REAL_SCHEDULER)" \
+#     quotes that one literal — so do not write
+#     `delete process.env.WIENERDOG_TEST_NO_REAL_SCHEDULER` in a comment in the
+#     test file; the prohibition lives in this spec, not there.
+if grep -nE "delete[[:space:]]+process\.env\.WIENERDOG_TEST_NO_REAL_SCHEDULER" \
      tests/unit/scheduler-entry-identity.test.js; then
-  echo "FAIL: a test deletes a neutralizer env var — see Table C R1"; exit 1
+  echo "FAIL: a test deletes the suite guard var — see Table C R1"; exit 1
 else
   echo "OK: the suite guard stays armed for every test in this WP"
 fi
@@ -2718,3 +2800,14 @@ mutations is at the edge of one implementer pass. The architect recommends
 `WP-scheduler-entry-identity-windows` (Table B's `schtasks` row, Table B1, AC-1's
 schtasks fixtures, M18/M22/M23/M24/M29) as a dependent WP, leaving the launchd
 leg here. The owner may decline; this WP is executable either way, just long.
+**Do not split before items 9 and 10 are answered**, and note the split is less
+clean than it looks: the Windows leg would still need Table A, Table C's seam
+rules and the `expect` plumbing, so the shared surface does not shrink much.
+**If the split is elected, it must be executed by wd-architect as a full spec
+pass that RE-DERIVES AC-13's enumeration and verification step 1's literal
+count in BOTH resulting WPs — not by moving rows between files.** That is not a
+formality: this exact class of drift is what review caught in round 4 (step 1's
+literal `26` against a gate of `-ge 21`) and again in round 5 (M28 unregistered,
+M7 unmandated). The Deliverables table, the mutation numbering, AC-13's
+enumeration and step 1's literal are four mirrors of one contract, and a
+row-moving edit desynchronizes all four.
