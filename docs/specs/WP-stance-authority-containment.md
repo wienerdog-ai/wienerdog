@@ -1,7 +1,7 @@
 ---
 id: WP-stance-authority-containment
 title: Bind the prod/dev stance to containment, not to a signal an app-tree data write can produce
-status: Draft
+status: Ready
 model: opus
 size: M
 depends_on: []
@@ -10,6 +10,17 @@ epic: audit-a7
 ---
 
 # WP-stance-authority-containment: containment decides the stance
+
+> **DISPATCH STATUS — 2026-07-26: READY. Nothing blocks this WP, and nothing
+> further is required from the owner before an implementer starts.**
+> Both adversarial review legs returned APPROVE after nine rounds. The one
+> owner-authority point — **Definition of done item 7**, the sign-off on D9's
+> deliberate behaviour change — was **granted verbally in session on 2026-07-26**
+> and is transcribed inside that item. The transcription is a decision record,
+> **not** a signature: it is deliberately not an `OWNER-SIGNED` line, and this
+> spec keys no gate on one. **Discovered issue 6.6 (the per-platform recovery
+> procedure) stays OPEN and routed — the sign-off does not close it**; it is a
+> PR-body entry, not a dispatch blocker.
 
 ## Context (read this, nothing else)
 
@@ -1412,8 +1423,8 @@ Registered mirrors:
 - [ ] Migration Table F, the row-5 note (*"runs the installer from a **non-dev** source root"*)
 - [ ] Implementation notes → "Why D9 is a subtraction and not a fifth guard"
 - [ ] Table G row 1's own scope paragraph (*"Converting a dev install to prod is now an attended act"*)
-- [ ] **Definition of done item 7** — the owner sign-off rests on this contract; since round 7 it names **what** he signs (the property, the two shipped entries, the stated macOS/Linux scope, and the routing of the rest), not "the list is true"
-- [ ] **Definition of done item 6.6** — round-7 registration; it is the routed remainder of this contract and must stay consistent with the round-7 shipping rule and with item 7
+- [ ] **Definition of done item 7** — the owner sign-off rests on this contract; since round 7 it names **what** he signs (the property, the two shipped entries, the stated macOS/Linux scope, and the routing of the rest), not "the list is true". **Granted in session on 2026-07-26** and transcribed inside that item — a decision record, deliberately not an `OWNER-SIGNED` line; if this contract is ever widened, the grant does not stretch with it and must be re-sought
+- [ ] **Definition of done item 6.6** — round-7 registration; it is the routed remainder of this contract and must stay consistent with the round-7 shipping rule and with item 7. **Still open and routed**: the 2026-07-26 sign-off does not close it
 
 **Contract 2 carries TWO RULES, not just a list.** Round-5's standing rule: every
 entry must name an invocation whose source root is provably non-dev **and**
@@ -2957,12 +2968,16 @@ false`, `PASS`, exit 0.
       per platform", whose acceptance criterion is **execution on each supported
       platform**. Rationale for routing rather than guessing is in Table G row 1's
       round-7 shipping rule. Do **not** add commands to D6 to close this.
-7. **Owner sign-off, requested explicitly in the PR body, not assumed.** D9
+      **The 2026-07-26 owner sign-off (item 7) explicitly does NOT close this
+      entry** — it is part of what he was told he is *not* signing off on.
+7. **Owner sign-off — REQUESTED AND GRANTED IN SESSION on 2026-07-26. Record it
+   in the PR body; do not re-request it.** D9
    deliberately changes one behaviour: a non-contained install is no longer
    silently converted to prod by a `vendorSelf` whose source root is that same
    tree (Table G row 1; it reaches both `vendorSelf` call sites,
-   `src/cli/sync.js:204` and `src/cli/adopt.js:392`). Ask **Gyula** to sign off on
-   that change. **What he is signing, stated exactly, because round 7 changed it:**
+   `src/cli/sync.js:204` and `src/cli/adopt.js:392`). **Gyula** was asked to sign
+   off on that change and did.
+   **What he signed, stated exactly, because round 7 changed it:**
    (a) that the behaviour change is intended, and (b) that what D6 ships as its
    recovery — **the property** (run the installer from **a non-dev source root**:
    a copy that is not a git checkout and is not the tree this install already runs
@@ -2970,11 +2985,30 @@ false`, `PASS`, exit 0.
    user-typed path**, **plus the stated scope "on POSIX systems (executed on
    macOS)"**, **with the
    per-platform procedure routed out as Discovered issue 6.6** — is enough to ship
-   the change now. He is **not** signing off on a complete cross-platform recovery
+   the change now. He did **not** sign off on a complete cross-platform recovery
    menu; that is exactly what round 7 removed from this WP, and item 6.6 is the
    commitment that replaces it. Quote Table G row 1's property sentence and its two
-   entries verbatim in the request; do not paraphrase, and do not add a third
-   entry.
+   entries verbatim in the PR body, beside the transcription below; do not
+   paraphrase, and do not add a third entry — **that quotation is the exact scope
+   of what was granted**, and a PR body that quotes more is claiming a sign-off he
+   did not give.
+
+   > **OWNER-RATIFIED IN SESSION (TRANSCRIBED, NOT OWNER-TYPED)** — 2026-07-26.
+   > Gyula ruled verbally in session on D9's deliberate behaviour change:
+   > **"sign-off granted."** What he granted is exactly (a) and (b) above and
+   > nothing wider — (a) that the behaviour change is intended, and (b) that what
+   > D6 ships (the property, the two executed path-free invocations, the stated
+   > scope "on POSIX systems (executed on macOS)", with the per-platform procedure
+   > routed out as Discovered issue 6.6) is enough to ship now. He did **not**
+   > grant a complete cross-platform recovery menu. **Discovered issue 6.6 stays
+   > OPEN and routed; this sign-off does not close it.**
+   >
+   > Transcribed by the orchestrating session, **not typed by Gyula**. It is a
+   > decision record, not a signature: it is deliberately **not** an
+   > `OWNER-SIGNED` line and must never be rewritten as one. This item asks for
+   > the owner's *decision* and keys no gate on an owner-typed marker, so under
+   > this project's convention the transcribed ruling **does satisfy item 7** —
+   > and nothing further needs to be typed by Gyula for this WP.
    The reason it needs a signature rather than a note: the recovery appears in
    **no** user-facing text today, and **five** successive drafts documented a
    recovery that does not work. Round 3 found `install.sh` does not recover

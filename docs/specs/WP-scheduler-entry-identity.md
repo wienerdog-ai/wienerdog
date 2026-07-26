@@ -1,7 +1,7 @@
 ---
 id: WP-scheduler-entry-identity
 title: Verify a scheduler entry's LOADED program identity, not its presence, in the product health probe and heal
-status: Draft
+status: Ready
 model: opus
 size: M
 depends_on: []
@@ -10,6 +10,19 @@ epic: scheduler-integrity
 ---
 
 # WP-scheduler-entry-identity: identity, not presence (product side)
+
+> **DISPATCH STATUS — 2026-07-26: READY. No owner decision blocks this WP, and
+> nothing further is required from the owner before an implementer starts.**
+> Both adversarial review legs returned APPROVE after eight rounds. The three
+> places this WP touches owner authority are all settled: **Definition of done
+> item 8**'s ratification marker was typed by Gyula himself in ADR-0018 and only
+> needs *verifying* with the anchored grep in that item; **items 9 and 10** were
+> ruled verbally in session on 2026-07-26 and are transcribed under
+> "Owner decisions" at the end of this spec. **Item 11 is advisory and blocks
+> nothing.** Those transcriptions are decision records, **not** signatures — they
+> are deliberately not `OWNER-SIGNED` lines and satisfy no gate that demands one.
+> The only gate here that demands an owner-typed marker is item 8's, and that
+> marker already exists.
 
 ## Context (read this, nothing else)
 
@@ -585,8 +598,10 @@ success. No new file and no new format — `state/scheduler-status.json` already
 the durable scheduler-health channel.
 **Both qualifiers are load-bearing and neither is hedging.** "Whenever the write
 lands": Residual 10, and why this WP deliberately does **not** gate the
-replacement on it. "And the re-probe agrees": **Residual 8, which round 5
-reclassifies from an accepted residual to an OPEN DEFECT routed to the owner.**
+replacement on it — the owner ruled that ungated form permissible on 2026-07-26
+(disposition 4, Reading B). "And the re-probe agrees": **Residual 8, which round 5
+reclassified from an accepted residual to a real defect, and which the owner
+accepted on 2026-07-26 as a known-open defect this WP ships with.**
 The marker re-probes rather than persisting the verdict that triggered the heal,
 and on the very transient-failure path the next paragraph relies on, the re-probe
 can succeed and persist `loaded` for the unchanged record — leaving the cache
@@ -1404,7 +1419,7 @@ call, for every entry that enters the heal set. The first two rows are why (C3).
 | Observed status | 1st `bootstrap` | `bootout` issued? | 2nd `bootstrap` | Pre-destructive marker refresh | End state on a crash mid-sequence |
 |---|---|---|---|---|---|
 | `missing`, and the label really is absent | succeeds (nothing loaded) | **no** | not reached | **attempted** (before the 1st bootstrap) | n/a — no destructive step is reached |
-| `missing`, but the label is in fact still loaded — a **transient** presence-query failure (step 4 maps `r.error` and any non-zero exit to `missing`) | **fails** (label already loaded) | **yes** | issued | **attempted** (before the 1st bootstrap) | whatever the marker's live probe found (†)(‡) — usually `missing`/`mismatched`/`unverified`, **but `loaded` when the transient failure has cleared by the time the marker re-probes**, which leaves the cache optimistic across the destructive window (Residual 8 — OPEN DEFECT, routed to the owner). `doctor`'s live probe reports `missing` either way |
+| `missing`, but the label is in fact still loaded — a **transient** presence-query failure (step 4 maps `r.error` and any non-zero exit to `missing`) | **fails** (label already loaded) | **yes** | issued | **attempted** (before the 1st bootstrap) | whatever the marker's live probe found (†)(‡) — usually `missing`/`mismatched`/`unverified`, **but `loaded` when the transient failure has cleared by the time the marker re-probes**, which leaves the cache optimistic across the destructive window (Residual 8 — a known-open defect, ACCEPTED by the owner on 2026-07-26). `doctor`'s live probe reports `missing` either way |
 | `mismatched` | fails (label already loaded) | yes | issued | **attempted** (before the 1st bootstrap) | cache says `mismatched` (†)(‡); digest template F persists; `doctor`'s live probe reports `missing` |
 | `unverified` | fails (label already loaded) | yes | issued | **attempted** (before the 1st bootstrap) | cache says `unverified` (†)(‡); digest template U persists; `doctor`'s live probe reports `missing` |
 | `loaded` / `unknown` | never called | no | no | **not attempted** — not in the heal set, so no replacement call happens at all | n/a |
@@ -1416,9 +1431,11 @@ loop's own presence query grades a still-loaded label `missing`; if the transien
 condition has cleared when the marker re-probes, the marker persists `loaded` for
 that same unchanged record and the cache is optimistic exactly across the
 `bootout` window. That needs **no concurrency and no external mutation**.
-**Residual 8 is therefore an OPEN DEFECT routed to the owner, not an accepted
-residual** — an earlier draft of this table asserted "never a stale `loaded`"
-here, and that claim is false.
+**Residual 8 is therefore a real defect, not a modelling artefact** — an earlier
+draft of this table asserted "never a stale `loaded`" here, and that claim is
+false. It was routed to the owner and **accepted on 2026-07-26 as a known-open
+defect this WP ships with** (transcribed under Residual 8); the follow-up
+`WP-scheduler-marker-persists-verdict` stays routed.
 
 (‡) **"Attempted", not "written".** `refreshSchedulerStatus`
 (`src/scheduler/status.js:131-140`) swallows every `mkdir`/`write`/`rename`
@@ -1428,9 +1445,10 @@ a failed write durable. When the write does not land, the pre-existing cache
 contents are left intact — possibly a stale `loaded` from the last
 `run-job` refresh (`src/cli/run-job.js:1236`) — and the "End state" column above
 degrades to that stale value for exactly the crash window. The replacement
-**still proceeds** — and **whether it may** is an owner decision, not this
+**still proceeds** — and **whether it may** was an owner decision, not this
 spec's: Residual 10 and round-2/3 disposition 4 set out the two readings of
-ADR-0018:294-296, and Definition of done item 9 routes it. `doctor`'s live probe
+ADR-0018:294-296, Definition of done item 9 routed it, and the owner ruled on
+2026-07-26 that **Reading B governs — so it may**. `doctor`'s live probe
 is the recovery either way.
 
 ### Mirrored Surface Checklist
@@ -1539,11 +1557,11 @@ is the recovery either way.
       `repairCatchup` marker had no gate at all
 - [ ] Verification grep for `darwinReplaceEntry`, **and for `refreshSchedulerStatus` in `src/cli/schedule.js`** (0 matches on `main` — discriminating)
 - [ ] Current state: `schedule.js:714`, `:618`, `:287`, `:402`; `status.js:131-140`
-      (`refreshSchedulerStatus` re-probes — Residual 8, an OPEN DEFECT — **and swallows every write
+      (`refreshSchedulerStatus` re-probes — Residual 8, a known-open defect the owner accepted on 2026-07-26 — **and swallows every write
       error** — Residual 10)
 - [ ] Implementation notes → "Why bootstrap first" and "Why the marker, and why
       it is UNCONDITIONAL" (including the `markerAttempted` naming rule)
-- [ ] Residuals 3, **8 (an OPEN DEFECT routed to the owner as of round 5 — the marker's re-probe can persist `loaded` with no concurrency at all; Table E row 2 and the `(†)` footnote were corrected to match)** and 10 (the crash window; the marker's best-effort write)
+- [ ] Residuals 3, **8 (a real defect as of round 5, routed to the owner and ACCEPTED by him on 2026-07-26 as known-open — the marker's re-probe can persist `loaded` with no concurrency at all; Table E row 2 and the `(†)` footnote were corrected to match, and both now carry the accepted disposition)** and 10 (the crash window; the marker's best-effort write — the ungated replacement was ruled permissible on 2026-07-26, Reading B)
 - [ ] Mutation checks M8, M9, M10, M21, M26, M27
 - [ ] **`docs/adr/0018-windows-scheduled-dreaming.md`** — decision 2's
       bootstrap-first ordering, its rejection of bootout-first, and the
@@ -1663,7 +1681,10 @@ Recorded here so a reviewer sees an argued decision rather than a silent drop.
    `mismatched` instead, which removes the collision that motivated the entry.
    See the "Naming" note under Table A.
 4. **Gating the destructive replacement on the marker having been persisted —
-   NOT AN ARCHITECT'S CALL. ROUTED TO THE OWNER, BOTH READINGS PRESENTED.**
+   NOT AN ARCHITECT'S CALL. ROUTED TO THE OWNER, BOTH READINGS PRESENTED, AND
+   RULED ON 2026-07-26: Reading B governs, so this disposition STANDS AS
+   WRITTEN.** Both readings are kept below deliberately: they are the record of
+   how the question was settled, not an open question.
    Round 2's Codex leg asked for `refreshSchedulerStatus` to report success and
    for the `bootout` to be skipped when it failed. The **observation** behind it
    is correct and is recorded (`markerAttempted`, Table E's `(‡)` footnote,
@@ -1692,12 +1713,24 @@ Recorded here so a reviewer sees an argued decision rather than a silent drop.
      performed unconditionally, therefore the requirement is met; naming the
      residual honestly is the correct disposition.
 
-   **The architect does not pick.** Which reading governs is an authority
-   question about signed text, and neither an architect nor a reviewer may settle
-   it. **This WP cannot proceed past this point until the owner chooses.** It is
-   Definition of done item 9.
+   **The architect did not pick — the owner did.** Which reading governs is an
+   authority question about signed text, and neither an architect nor a reviewer
+   may settle it. It was Definition of done item 9, and it is now answered:
 
-   **If the owner picks Reading B**, the three reasons the ungated form was
+   > **OWNER-RATIFIED IN SESSION (TRANSCRIBED, NOT OWNER-TYPED)** — 2026-07-26.
+   > Gyula ruled verbally in session, in one word: **"refresh"**. **Reading B
+   > (wd-reviewer) governs**: the signed sentence mandates that the durable cache
+   > be *refreshed* before a destructive replacement, **not** that the replacement
+   > be abandoned when the refresh fails. **Reading A (Codex) is not the governing
+   > reading**, so the residual-and-honesty disposition below is not a waiver of
+   > signed text. Transcribed by the orchestrating session, **not typed by
+   > Gyula**: a decision record, not a signature, deliberately **not** an
+   > `OWNER-SIGNED` line, and satisfying no gate that requires one.
+
+   **Do not delete Reading A and do not reopen the choice in a later round.** The
+   side-by-side presentation above is the record of how this was settled.
+
+   **Reading B governs, so** the three reasons the ungated form was
    preferred stand and belong in the PR's "Decisions made", in order of weight.
    (i) When `state/scheduler-status.json` cannot be written, the durable channel
    is already dead on that machine — `run-job`'s hourly refresh and `sync`'s
@@ -1709,12 +1742,14 @@ Recorded here so a reviewer sees an argued decision rather than a silent drop.
    exact failure this WP exists to end. (iii) `doctor`'s live probe is unaffected
    by an unwritable state dir and still reports `mismatched` with exit 1, so the
    user is not left silent either way.
-   **If the owner picks Reading A**, this WP is blocked on an ADR-0018 amendment
+   **Had the owner picked Reading A — he did not** — this WP would have been
+   blocked on an ADR-0018 amendment
    that either (a) qualifies the postcondition to match a best-effort writer, or
    (b) requires the replacement to be abandoned on a failed refresh — in which
-   case `refreshSchedulerStatus` must first be made to report persistence, which
-   is `WP-scheduler-status-write-observable` (Residual 10) and a prerequisite of
-   this WP rather than a follow-up. Either way the ADR's unconditional
+   case `refreshSchedulerStatus` would first have had to report persistence, which
+   is `WP-scheduler-status-write-observable` (Residual 10) and would have been a
+   prerequisite of this WP rather than a follow-up. That branch is recorded so the
+   counterfactual stays visible; **it is moot**. Either way the ADR's unconditional
    *"leaves a pessimistic record"* clause is still reported as a Discovered issue
    (disposition 5); do not edit the ADR from this WP.
 5. **Two ADR-side inaccuracies are reported, NOT fixed here.** `docs/adr/0018-…:297`
@@ -1724,7 +1759,9 @@ Recorded here so a reviewer sees an argued decision rather than a silent drop.
    Decision 2's *"so a process killed mid-replacement leaves a pessimistic
    record"* is likewise unconditional where the writer is best-effort
    (disposition 4, and the subject of the owner decision in Definition of done
-   item 9). The ADR is **owner-signed and deliberately not a deliverable**; per this spec's own Mirrored Surface rule a divergence is
+   item 9 — **ruled 2026-07-26 for Reading B, which settles which reading governs
+   but leaves this wording imprecision to the amendment**).
+   The ADR is **owner-signed and deliberately not a deliverable**; per this spec's own Mirrored Surface rule a divergence is
    resolved by amending the ADR in its own pass. Put both under **"Discovered
    issues"** in the PR body with the proposed follow-up slug
    `WP-adr-0018-healer-and-marker-precision`. Do not edit the ADR to make them
@@ -1839,10 +1876,15 @@ Recorded here so a reviewer sees an argued decision rather than a silent drop.
    time path therefore keeps the pre-existing ambiguity. Owner: architect.
    Follow-up: make `parseWindowsTaskExec` extract a single `<Exec>` element and
    pair within it, proposed slug `WP-windows-task-exec-pairing`.
-8. **OPEN DEFECT (not an accepted residual): the pre-destructive marker
-   RE-PROBES rather than persisting the verdict that triggered the heal.**
-   *(Routed to the owner. Two consecutive rounds produced two different accepting
-   arguments and BOTH were falsified. This spec does not offer a third.)*
+8. **KNOWN-OPEN DEFECT, ACCEPTED BY THE OWNER FOR NOW (2026-07-26): the
+   pre-destructive marker RE-PROBES rather than persisting the verdict that
+   triggered the heal.**
+   *(Routed to the owner and RULED — the transcription sits at the end of
+   "Routing" below. Two consecutive rounds produced two different accepting
+   arguments and BOTH were falsified. This spec does not offer a third, and the
+   ruling is not one: it accepts the defect, it does not justify it. Everything
+   from here to "Routing" is the round-5 text, unchanged — only the disposition
+   changed, from open blocker to accepted known-open defect.)*
 
    **What the code does.** `refreshSchedulerStatus` (`src/scheduler/status.js:131-140`)
    runs `probeAll` and writes what it finds *now*, not the verdict that put the
@@ -1894,9 +1936,26 @@ Recorded here so a reviewer sees an argued decision rather than a silent drop.
    owner-signed text says the cache is refreshed *"from the live probe"* and
    persisting the observed verdict reads against that wording. An architect may
    not override owner-signed text from inside a WP. **Owner: Gyula.** Follow-up:
-   `WP-scheduler-marker-persists-verdict`, carrying the ADR amendment with it.
-   Until the owner rules, treat this as a known open defect of this WP — say so
-   in the PR body; do not restate it as an accepted tradeoff.
+   `WP-scheduler-marker-persists-verdict`, carrying the ADR amendment with it —
+   **still routed; the ruling below does not close it.**
+
+   > **OWNER-RATIFIED IN SESSION (TRANSCRIBED, NOT OWNER-TYPED)** — 2026-07-26.
+   > Gyula ruled verbally in session: **"ship as a known-open defect for now."**
+   > This WP therefore ships with the defect **stated**, as an **accepted**
+   > residual rather than an open blocker. **"For now" is his own qualifier and is
+   > load-bearing:** it accepts the current state; it does **not** close the
+   > underlying defect and it is **not** a third accepting argument — the two
+   > falsified accepting grounds above and Codex's recorded dissent stand exactly
+   > as written. `WP-scheduler-marker-persists-verdict` (the single-entry writer in
+   > `src/scheduler/status.js` plus the ADR-0018 amendment) **remains routed**.
+   > Transcribed by the orchestrating session, **not typed by Gyula**: a decision
+   > record, not a signature, deliberately **not** an `OWNER-SIGNED` line, and
+   > satisfying no gate that requires one.
+
+   **The PR body must still name this as a known open defect in those words**, and
+   must still not restate it as an accepted **tradeoff**. What the owner accepted
+   is *shipping with* the defect; he did not accept the argument that the defect is
+   harmless, because no such argument survived review.
 
 9. **The EXECUTION POSITION is authenticated for existence only, and THE ENTIRE
    LAUNCHER ARGUMENT TAIL is not authenticated at all.** Stated exactly, because
@@ -1963,11 +2022,13 @@ Recorded here so a reviewer sees an argued decision rather than a silent drop.
     marker column says *attempted*. Atomic rename prevents a **partial** file; it
     does not make a **failed** write durable. When the write does not land, the
     previous cache contents survive — possibly a stale `loaded` from the last
-    `run-job` refresh — and the destructive replacement **proceeds anyway**;
-    **whether that is permissible under ADR-0018:294-296 is an OWNER decision**
-    — disposition 4 sets out both readings and Definition of done item 9 routes
-    it; the three reasons the ungated form was preferred apply only if the owner
-    picks Reading B.
+    `run-job` refresh — and the destructive replacement **proceeds anyway**.
+    **Whether that is permissible under ADR-0018:294-296 was an OWNER decision, and
+    it is RULED: Reading B governs, so it is permissible** (2026-07-26, transcribed
+    under disposition 4 and again under "Owner decisions"). Disposition 4 keeps
+    both readings on the page as the record of how it was settled, and the three
+    reasons the ungated form was preferred therefore apply. **This residual stands
+    as written — it is not a blocker.**
     Recovery is `doctor`'s live probe, which never reads the cache. Owner:
     architect. Follow-up: make `refreshSchedulerStatus` report persistence and
     decide the fail-closed direction in a spec of its own; proposed slug
@@ -2911,39 +2972,77 @@ The scenario harnesses (`WIENERDOG_RUN_SCENARIOS`) consume quota and need a real
    deliberately not a deliverable). If the status line does **not** read as
    above, stop and ask the owner rather than proceeding or editing it.
 
-### Owner decisions this WP is BLOCKED on
+### Owner decisions — ALL RULED; none blocks this WP
 
 Item 8 above and items 9-10 below are the three places this WP touches owner
-authority. Item 8 is already settled (the amendment is ratified — verify it).
-**Items 9 and 10 are not, and an implementer must not start until the owner has
-ruled on both.** Neither is an ambiguity an implementer may resolve with
-CLAUDE.md's "choose the simpler option": both are questions about what
-owner-signed text means or whether a defect may ship, and an architect may not
-settle either. Item 11 is advisory and blocks nothing.
+authority, and **all three are now settled**. Item 8 was already settled when
+this spec was written (the amendment is ratified — verify it, do not request it).
+**Items 9 and 10 were the two that blocked dispatch, and Gyula ruled on both
+verbally in session on 2026-07-26**; the transcription is immediately below.
+Neither was an ambiguity an implementer could have resolved with CLAUDE.md's
+"choose the simpler option" — both were questions about what owner-signed text
+means or whether a defect may ship, and an architect may not settle either, which
+is why they were routed rather than decided here. Item 11 is advisory and blocks
+nothing. **An implementer may now start.**
+
+> **OWNER-RATIFIED IN SESSION (TRANSCRIBED, NOT OWNER-TYPED)** — 2026-07-26.
+>
+> Gyula ruled verbally in session on items 9 and 10 on 2026-07-26. **Transcribed
+> here by the orchestrating session; not typed by Gyula.** This is the record of
+> a decision, not a signature. It is deliberately **not** an `OWNER-SIGNED` line,
+> it does not satisfy any gate that requires one, and it must never be rewritten
+> as one. The single gate in this spec that *does* require an owner-typed marker
+> is **Definition of done item 8**, and that marker already exists — Gyula typed
+> it into `docs/adr/0018-windows-scheduled-dreaming.md:204` on 2026-07-26.
+> **Nothing further needs to be typed by Gyula for this WP.**
+>
+> - **Item 9 — the ADR-0018:294-296 reading. Gyula: "refresh".**
+>   **Reading B (wd-reviewer) GOVERNS.** The signed sentence mandates that the
+>   durable cache be *refreshed* before a destructive replacement; it does **not**
+>   mandate that the replacement be **abandoned** when that refresh fails.
+>   **Reading A (Codex) — that the sentence states a forbidden postcondition, so a
+>   WP residual cannot waive it — is therefore NOT the governing reading.**
+>   Consequence: disposition 4's honesty-plus-residual disposition and Residual 10
+>   **stand as written** — `markerAttempted`, an unconditional best-effort refresh,
+>   and no gating of the destruction on confirmed persistence. Both readings stay
+>   on the page under disposition 4 as the record of how the question was settled;
+>   **do not reopen it in a later round.**
+> - **Item 10 — Residual 8. Gyula: "ship as a known-open defect for now."**
+>   Residual 8 is **accepted** — a known-open defect this WP ships with, rather
+>   than an open blocker. **"For now" is Gyula's own qualifier and is
+>   load-bearing:** this accepts the current state; it does **not** close the
+>   underlying defect, and it is **not** a third accepting argument. Residual 8's
+>   own text is unchanged and stays unchanged — the two falsified accepting
+>   grounds and Codex's recorded dissent included. The follow-up remains routed: a
+>   single-entry writer in `src/scheduler/status.js` plus an ADR-0018 amendment,
+>   `WP-scheduler-marker-persists-verdict`. The PR body must still name Residual 8
+>   as a known open defect in those words.
 
 **Item 9 — does ADR-0018:294-296's pre-destructive-marker sentence permit a
-BEST-EFFORT refresh?**
+BEST-EFFORT refresh? RULED 2026-07-26: yes — Reading B governs.**
 The two review legs read the same signed sentence oppositely; both readings are
-set out verbatim under disposition 4. **Reading A (Codex):** it states a
-postcondition, so an invisible refresh failure waives signed text and the WP needs
-an amendment first. **Reading B (wd-reviewer):** it mandates the refresh, not the
-abandonment of the replacement when the refresh fails, so the honest-residual
-disposition is consistent with it. Disposition 4 states what changes under each.
-**Owner: Gyula. Until this is answered, the `refreshSchedulerStatus` marker rule
-in "Exact contracts" and Table E is provisional.**
+set out verbatim under disposition 4 and both are kept there. **Reading A
+(Codex):** it states a postcondition, so an invisible refresh failure waives
+signed text and the WP needs an amendment first. **Reading B (wd-reviewer):** it
+mandates the refresh, not the abandonment of the replacement when the refresh
+fails, so the honest-residual disposition is consistent with it. Disposition 4
+states what changes under each. **The owner picked Reading B** (transcribed
+above), so the `refreshSchedulerStatus` marker rule in "Exact contracts" and
+Table E is **settled, not provisional** — implement it as written.
 
-**Item 10 — Residual 8 is an OPEN DEFECT, not an accepted residual; does it
-block?**
+**Item 10 — Residual 8 is a real defect, not a modelling artefact; does it block?
+RULED 2026-07-26: no — it ships, stated, as a known-open defect.**
 The pre-destructive marker re-probes instead of persisting the heal verdict, and
 a **transient** presence-query failure alone (no concurrency, no external
 mutation) makes it persist `loaded` immediately before a `bootout`. Two rounds
 produced two accepting arguments and both were falsified; this spec offers no
-third. Closing it needs a single-entry writer in `src/scheduler/status.js` **and**
-an ADR-0018 amendment, because the signed text says the cache is refreshed
-*"from the live probe"*. **Owner: Gyula** — decide whether this WP ships with the
-defect stated (and `WP-scheduler-marker-persists-verdict` follows) or is blocked
-on the amendment. If it ships, the PR body must name it as a known open defect in
-those words.
+third, and the owner's ruling is not one either — it accepts the defect, it does
+not justify it. Closing it in code needs a single-entry writer in
+`src/scheduler/status.js` **and** an ADR-0018 amendment, because the signed text
+says the cache is refreshed *"from the live probe"*. **The owner ruled that this
+WP ships with the defect stated**, and `WP-scheduler-marker-persists-verdict`
+follows, carrying the ADR amendment. The PR body must name it as a known open
+defect in those words.
 
 **Item 11 (advisory, not blocking) — split the Windows leg?**
 See "ARCHITECT'S SIZING NOTE" under Deliverables. 28 mandated named tests and 30
@@ -2951,7 +3050,8 @@ mutations is at the edge of one implementer pass. The architect recommends
 `WP-scheduler-entry-identity-windows` (Table B's `schtasks` row, Table B1, AC-1's
 schtasks fixtures, M18/M22/M23/M24/M29/M30) as a dependent WP, leaving the launchd
 leg here. The owner may decline; this WP is executable either way, just long.
-**Do not split before items 9 and 10 are answered**, and note the split is less
+**Items 9 and 10 are now answered** (transcribed above), so the precondition that
+used to hold this split back is met — note, though, that the split is less
 clean than it looks: the Windows leg would still need Table A, Table C's seam
 rules and the `expect` plumbing, so the shared surface does not shrink much.
 **If the split is elected, it must be executed by wd-architect as a full spec
