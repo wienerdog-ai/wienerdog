@@ -1488,13 +1488,39 @@ authority. **Keep the two G-row sets identical**; if one moves, move both.
 
 | # | Fact | Rule | Why it is not optional |
 |---|------|------|------------------------|
-| G1 | **runner** | `npm test -- …` or `node tests/run.js` — never a bare `node --test` | `tests/run.js:7` is the only place `WIENERDOG_TEST_NO_REAL_SCHEDULER` is set, and that backstop is what makes `schedulerSpawn` throw instead of mutating the real per-user scheduler. Executed at efd1489: under `node --test` a child sees it undefined; under `npm test` it sees "1" |
+| G1 | **runner** | `node tests/run.js` — never a bare `node --test`. `npm test -- …` is equivalent; `tests/run.js` forwards argv unchanged, so the reporter and pattern flags work identically | `tests/run.js:7` is the only place `WIENERDOG_TEST_NO_REAL_SCHEDULER` is set. A bare `node --test` leaves it undefined and disarms the suite-wide real-scheduler backstop ADR-0018:172-180 declares binding |
 | G1b | **runner exit status** | Capture the runner's exit status and **fail the gate on a non-zero status BEFORE any counting**. The capture pattern, stated once: `tap=$(<runner …>); rc=$?` on the next statement, then `[ "$rc" -eq 0 ] \|\| { echo …; exit 1; }` | Counting `ok` records says nothing about records that are **not** `ok`, or about failures that emit no record at all. A **selected** test that fails emits `not ok` and simply lowers the count — which an aggregate `>=` floor with any slack absorbs — and a **file-level hook** failure (a throwing `after`) leaves every selected `ok` record intact while the run is red. Both make the counts meaningless, so the status is checked first. **`$(…)` swallows the status if you do not save it immediately** — `$?` must be read on the very next statement, and never write `local tap=$(…)`, which overwrites it with `local`'s own status |
-| G2 | **host prerequisite** | `process.platform !== 'win32'` **and** `typeof process.getuid === 'function'` **and** `process.getuid() !== 0` — evaluated **by `node`**, never by the shell | It must be the *same runtime the tests use*, because that is the runtime whose `process.platform` decides which tests skip. A shell test such as `[ "$(id -u)" -ne 0 ]` is **not** equivalent: under Git Bash/MSYS on non-root Windows `id -u` is non-zero, so a shell-only guard proceeds on a host where `process.platform === 'win32'` and every `!isPosix` test skips |
-| G3 | **selection** | `--test-name-pattern` is a **regex**. Escape `(` `)` `[` `]` `{` `}` `.` `*` `+` `?` `\|` `^` `$` in any test name pasted into it | A pattern that matches nothing **exits 0** — the file wrapper counts as "pass 1" — so an unescaped paste silently proves nothing |
+| G2 | **host prerequisite** | `process.platform !== 'win32'` **and** `typeof process.getuid === 'function'` **and** `process.getuid() !== 0` — evaluated **by `node`**, never by the shell | It must be the *same runtime the tests use*, because that is the runtime whose `process.platform` decides which tests skip. A shell test such as `[ "$(id -u)" -ne 0 ]` is **not** equivalent: under Git Bash/MSYS on non-root Windows `id -u` is non-zero, so a shell-only guard proceeds on a host where `process.platform === 'win32'` and every platform-guarded test silently skips |
+| G3 | **selection** | `--test-name-pattern` is a **regex**. Escape `(` `)` `[` `]` `{` `}` `.` `*` `+` `?` `\|` `^` `$` in any test name pasted into it | A pattern that matches nothing **exits 0** — the file wrapper counts as "pass 1" — so an unescaped paste selects nothing while reporting success, and silently proves nothing |
 | G4 | **counting** | Count only TAP records matching the step's anchored family prefix, then subtract every record carrying a directive: `# SKIP` **and** `# TODO` | node:test renders both a skipped and an unexecuted-todo subtest as an `ok` line that the anchored grep matches. Converting a required test to `test.todo(...)` must **lower** the count, not preserve it |
 | G5 | **substitution defense** | **Zero** selected records may carry a directive. A selected record with `# SKIP` or `# TODO` is **itself a failure**, checked separately from and *before* the floor | The floor is an aggregate `>=`, so without this check N unrelated passing names in the same family can silently stand in for N skipped **required** ones and still clear the floor. G2 makes the common host cases red; G5 is the structural guarantee that does not depend on knowing the host |
-| G6 | **floor** | `>= N`, where N is **derived and re-enumerated**, never incremented narratively, and carries **zero slack** | Rounds 1-3 grew step 1's floor by narrative increments (15 → 18 → 21 → 26) and round 4 found the gate still literally reading `-ge 21`. Re-enumerate; do not increment |
+| G6 | **floor** | `>= N`, where N is **derived and re-enumerated**, never incremented narratively, and carries **zero slack** | Slack lets a missing required name pass. Zero slack means "miss one and the gate is red" — the property the floor exists for. Re-enumerate on every change; never increment |
+
+**The seven rows above are BYTE-IDENTICAL to Table E in
+`docs/specs/WP-scheduler-loaded-record-tripwire.md`, and verification step 9
+asserts it.** That is what makes them one contract rather than two that merely
+agree today. **Nothing spec-specific may enter a G-row** — a row that mentions
+this spec's test names, floors or platform guards is no longer true for the
+other instance, and the invariant becomes false the moment it is written. Put
+such material in the per-spec notes below, or in the mirror's own parameter
+block.
+
+**Per-spec notes (NOT canonical — these apply to this spec only).**
+
+- **On G1.** Here the backstop is what makes `schedulerSpawn` **throw** instead
+  of mutating the real per-user scheduler. Executed at efd1489: a child under
+  `node --test <file>` sees `WIENERDOG_TEST_NO_REAL_SCHEDULER=undefined`; under
+  `npm test` it sees `"1"`.
+- **On G2.** Step 1's file carries **17** `{ skip: !isPosix }` guards. Step 2's
+  family is exposed too: `tests/unit/scheduler-status.test.js:305`
+  (*"reloadMissing refuses to heal onto a symlink at the canonical path"*) is
+  `{ skip: !isPosix }` **and** matches step 2's pattern.
+- **On G6.** Rounds 1-3 grew step 1's floor by narrative increments
+  (15 → 18 → 21 → 26) and round 4 found the gate still literally reading
+  `-ge 21`; the post-gate round 4 then found step 2 carrying `8` against a
+  13-name selector. Both are the same mistake G6 forbids. This spec's floor
+  values (**28** and **13**) are parameters of their mirrors, not facts of the
+  gate.
 
 **G2 and G5 overlap deliberately, and both stay.** G5 alone would catch every
 host defect G2 catches — but it reports them as "a required name was skipped",
@@ -1642,7 +1668,12 @@ real cause, with the fix. G5 is the backstop for the cases G2 cannot enumerate.
       *passing-not-skipped-not-todo* qualifier (G4, G6)
 - [ ] **`docs/specs/WP-scheduler-loaded-record-tripwire.md`'s Table E** — the
       sibling document's copy of this same contract. Cross-document mirror,
-      required by ADR-0005 and allowed by ADR-0031; keep the G-rows identical
+      required by ADR-0005 and allowed by ADR-0031; keep the G-rows identical.
+      **Byte-identity is ASSERTED by verification step 9**, so this is the one
+      registered mirror you cannot forget to update — the gate will tell you
+- [ ] **Verification step 9** — the byte-comparison itself. It owns the *row
+      count* (7) and the two compared paths; if a row is added to the contract,
+      raise the count there in the same pass
 
 ## Implementation notes & constraints
 
@@ -2977,6 +3008,33 @@ if [ "$rc" -ne 0 ]; then
     || { echo "FAIL: doctor exited $rc with no [fail] line — that is a crash, not a health verdict"; exit 1; }
   echo "NOTE: exit=$rc is explained by the [fail] line(s) above. If one of them is a scheduler line, it is a REAL FINDING about this machine — say so in the PR."
 fi
+
+# 9. TABLE F ≡ TABLE E — the canonical G-rows are ONE contract carried in two
+#    documents (ADR-0005's One-Document Rule requires the local copy; ADR-0031
+#    allows it as a mirrored summary). Both tables claim to be byte-identical;
+#    this step is what makes that claim checkable instead of aspirational.
+#    Compared BY PATH, tripwire first, entry-identity second:
+#      docs/specs/WP-scheduler-loaded-record-tripwire.md   → Table E
+#      docs/specs/WP-scheduler-entry-identity.md           → Table F
+#    PROVES: no row of this contract has drifted between the two specs.
+#    RED WHEN: any row differs by a single byte (caught by `diff`'s EXIT CODE,
+#    not by reading its output), or either file does not carry all seven rows.
+#
+#    THE NON-VACUITY GUARD IS THE POINT OF THE ROW COUNT. Two empty extractions
+#    `diff` clean, so a renamed heading, a reformatted table or a deleted row
+#    would otherwise report agreement — the vacuous-anchor failure this spec has
+#    hit before. Assert SEVEN on each side first, and never build this on
+#    `grep -c`, whose exit-1-on-zero has silently "passed" in this repo before.
+TW=docs/specs/WP-scheduler-loaded-record-tripwire.md
+EI=docs/specs/WP-scheduler-entry-identity.md
+rows() { grep -E '^\| G[0-9b]+ \| ' "$1"; }
+na=$(rows "$TW" | wc -l | tr -d ' ')
+nb=$(rows "$EI" | wc -l | tr -d ' ')
+echo "canonical G-rows: $TW -> $na ; $EI -> $nb"
+[ "$na" -eq 7 ] || { echo "FAIL: expected 7 canonical G-rows in $TW, found $na — a MISSING row must not read as agreement"; exit 1; }
+[ "$nb" -eq 7 ] || { echo "FAIL: expected 7 canonical G-rows in $EI, found $nb — a MISSING row must not read as agreement"; exit 1; }
+diff <(rows "$TW") <(rows "$EI") || { echo "FAIL: Table E and Table F have DIVERGED — the rows above differ. Fix BOTH, do not fork the contract"; exit 1; }
+echo "OK: all 7 canonical G-rows are byte-identical across the two specs"
 ```
 
 The scenario harnesses (`WIENERDOG_RUN_SCENARIOS`) consume quota and need a real
