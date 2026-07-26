@@ -361,6 +361,16 @@ half stops Wienerdog from mis-reporting a poisoned record, and the harness half
 stops Wienerdog's own tests from creating one and lets a stale one be seen. Any
 claim that this class is closed requires both.
 
-> **OWNER APPROVAL**
->
-> (empty — for Gyula)
+**Architect note (2026-07-26, architect-authored — this is NOT an owner
+signature and confers no approval).** An empty `OWNER APPROVAL` block sat here
+until 2026-07-26. It was vestigial and it was the only one of its kind in
+`docs/adr/`: this ADR's ratification is recorded by the owner-typed
+`OWNER-SIGNED 2026-07-25` line at the head of the file, and the 2026-07-25
+amendment's ratification by the owner-typed
+`Status: **Accepted. OWNER-SIGNED 2026-07-26.**` line above it. An empty
+approval block underneath two signed markers reads as an approval still
+outstanding, which is false, so it was removed rather than left to contradict
+them. **The authoritative ratification marker for the 2026-07-25 amendment is
+its own status line**; nothing downstream may key on an approval block. No
+`OWNER-SIGNED` line, no Decision, and no amendment text was modified, moved or
+retyped by this note.

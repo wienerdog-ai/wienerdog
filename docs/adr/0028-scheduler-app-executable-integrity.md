@@ -747,9 +747,18 @@ residuals. Both refine — not reverse — the decisions above.
    an unqualified success. adopt takes an injected `loader` seam so the rebind is
    tested without touching the real OS scheduler.
 
-## Amendment (2026-07-25) — dev stops content-addressing a live tree, and stance is never selected from inside the tree (proposed)
+## Amendment (2026-07-25) — dev stops content-addressing a live tree, and stance is never selected from inside the tree
 
 Status: **Accepted. OWNER-SIGNED 2026-07-26.**
+
+**Architect note (2026-07-26, architect-authored — this is NOT an owner
+signature and confers no approval).** This heading ended with the word
+`(proposed)` until 2026-07-26, contradicting the owner-typed status line
+directly beneath it. The trailing `(proposed)` was removed from the **heading
+text only**. **The authoritative ratification marker for this amendment is the
+status line above**; nothing may key on the heading. The status line, the
+`OWNER-SIGNED 2026-07-25` line at the head of the file, and every Decision and
+amendment body in this ADR are untouched by this note.
 
 This amendment records four things: a small correction to the dev descriptor, a
 **rejection** of the change that was proposed alongside it, the durable rule the
