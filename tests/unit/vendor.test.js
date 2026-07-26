@@ -8,6 +8,11 @@ const path = require('node:path');
 
 const { getPaths } = require('../../src/core/paths');
 const vendor = require('../../src/core/vendor');
+const launcher = require('../../src/scheduler/launcher');
+const { WienerdogError } = require('../../src/core/errors');
+// The A7 fixture builder is IMPORTED, never edited (it is not a deliverable of
+// WP-stance-authority-containment).
+const { stubForeignOwner, corePathsOf } = require('../scenarios/a7-integrity/fixtures/build');
 
 /** Fresh temp core; returns resolved paths. */
 function tempPaths() {
@@ -263,17 +268,22 @@ test('vendor: repointCurrent rewrite path runs the orphan sweep on win32', () =>
   assert.equal(fs.realpathSync(vendor.currentLink(paths)), fs.realpathSync(newTarget));
 });
 
-test('vendor: dev mode via WIENERDOG_DEV links current at the checkout, copies nothing', () => {
+// T1 (converts the pre-WP-stance-authority-containment "dev mode via
+// WIENERDOG_DEV" test). No environment variable may select a verification path
+// (Table D), so WIENERDOG_DEV is now INERT: the `.git`-free source is copied and
+// `current` stays contained ⇒ the install is prod. AC9.
+test('vendor: WIENERDOG_DEV=1 is INERT — a .git-free source is still copied and current stays contained', () => {
   const paths = tempPaths();
   const src = fakeSource('9.9.9');
 
   const r = vendor.vendorSelf(paths, { sourceRoot: src, env: { WIENERDOG_DEV: '1' } });
-  assert.equal(r.dev, true);
-  assert.equal(r.copied, false);
-  assert.equal(r.target, src);
+  assert.equal(r.dev, false, 'an env var cannot select the reduced (dev) path');
+  assert.equal(r.copied, true, 'the published files are copied, exactly as without the var');
   const app = path.join(paths.core, 'app');
-  assert.equal(fs.existsSync(path.join(app, '9.9.9')), false, 'no frozen snapshot in dev mode');
-  assert.equal(fs.realpathSync(vendor.currentLink(paths)), fs.realpathSync(src), 'current → checkout root');
+  assert.equal(fs.realpathSync(path.join(app, '9.9.9')), fs.realpathSync(r.target), 'a frozen snapshot IS published');
+  assert.equal(vendor.installStance(paths), 'prod', 'containment decides the stance, not the environment');
+  const rel = path.relative(fs.realpathSync(app), fs.realpathSync(vendor.currentLink(paths)));
+  assert.ok(rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel), 'current resolves INSIDE <core>/app');
 });
 
 test('vendor: dev mode is detected from a .git dir at the source root', () => {
@@ -478,4 +488,216 @@ test('vendor: verifyCurrentContainment accepts a contained prod tree and rejects
   const bad = vendor.verifyCurrentContainment(paths);
   assert.equal(bad.ok, false);
   assert.match(bad.why, /outside/);
+});
+
+// ── WP-stance-authority-containment: containment decides the stance ─────────
+
+/** A prod-shaped install: `current` → `<core>/app/<version>` (contained). */
+function containedInstall(version = '0.6.0') {
+  const paths = tempPaths();
+  vendor.vendorSelf(paths, { sourceRoot: fakeSource(version), env: {} });
+  return paths;
+}
+
+/** A dev-shaped install: `current` → a checkout OUTSIDE `<core>/app`. */
+function outsideInstall(version = '0.6.0') {
+  const paths = tempPaths();
+  const checkout = fakeSource(version);
+  fs.writeFileSync(path.join(checkout, '.git'), 'gitdir: /elsewhere\n');
+  vendor.vendorSelf(paths, { sourceRoot: checkout, env: {} });
+  return { paths, checkout };
+}
+
+// T2 — AC3 + AC4. Table A at the MINT side.
+test('vendor: installStance is decided by containment, fails closed, and never consults ownership', { skip: process.platform === 'win32' }, () => {
+  // contained ⇒ prod
+  const prod = containedInstall('0.6.0');
+  assert.equal(vendor.installStance(prod), 'prod');
+
+  // a planted `.git` INSIDE the app tree does NOT downgrade it (the whole point)
+  fs.mkdirSync(path.join(fs.realpathSync(vendor.currentLink(prod)), '.git'));
+  assert.equal(vendor.installStance(prod), 'prod', 'a planted .git cannot select the reduced path');
+
+  // outside ⇒ dev
+  const { paths: dev } = outsideInstall('0.6.1');
+  assert.equal(vendor.installStance(dev), 'dev');
+
+  // AC3 — fail closed to the ENFORCED path on every unresolvable shape.
+  const missing = tempPaths();
+  fs.mkdirSync(vendor.appDir(missing), { recursive: true });
+  assert.equal(vendor.installStance(missing), 'prod', 'missing current ⇒ prod');
+  fs.symlinkSync(path.join(os.tmpdir(), 'wd-does-not-exist-stance'), vendor.currentLink(missing));
+  assert.equal(vendor.installStance(missing), 'prod', 'dangling current ⇒ prod');
+  const noApp = tempPaths();
+  assert.equal(vendor.installStance(noApp), 'prod', 'unresolvable <core>/app ⇒ prod');
+
+  // AC4 — OWNERSHIP MUST NEVER SELECT AN ARM. Both halves in one test, so an
+  // implementation delegating to verifyCurrentContainment (which also fails on a
+  // foreign uid) cannot pass: it would return 'dev' here.
+  const owned = containedInstall('0.6.2');
+  const target = fs.realpathSync(vendor.currentLink(owned)); // the resolved TARGET is what is stat'd
+  const restore = stubForeignOwner(target);
+  try {
+    assert.equal(vendor.verifyCurrentContainment(owned).ok, false, 'the stub really fires (non-vacuity)');
+    assert.equal(vendor.installStance(owned), 'prod', 'a foreign-owned current must NOT select the reduced path');
+  } finally {
+    restore();
+  }
+});
+
+// T3 — AC10. Enforced, not documented (Table D).
+test('vendor: no .js under src/ outside the launcher reads WIENERDOG_DEV (with a non-vacuity control)', () => {
+  const srcRoot = path.join(vendor.packageRoot(), 'src');
+  const allowed = path.join(srcRoot, 'scheduler', 'launcher.js');
+  /** @type {string[]} */ const offenders = [];
+  let visited = 0;
+  let homeHits = 0;
+  const walk = (dir) => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) walk(full);
+      else if (e.isFile() && e.name.endsWith('.js')) {
+        visited += 1;
+        const text = fs.readFileSync(full, 'utf8');
+        if (text.includes('WIENERDOG_HOME')) homeHits += 1;
+        if (full !== allowed && text.includes('WIENERDOG_DEV')) offenders.push(full);
+      }
+    }
+  };
+  walk(srcRoot);
+  // Non-vacuity: a walker that silently visits nothing would pass forever.
+  assert.ok(visited >= 60, `the walk visited ${visited} .js files under src/ (expected >= 60)`);
+  assert.ok(homeHits >= 5, `the walk found WIENERDOG_HOME in ${homeHits} files (expected >= 5)`);
+  assert.deepEqual(offenders, [], 'WIENERDOG_DEV survives ONLY as the launcher\'s defensive scrub');
+});
+
+// T4 — AC11. The two independent implementations of Table A must agree.
+test('vendor: launcher.liveStance ≡ vendor.installStance over every install shape', { skip: process.platform === 'win32' }, () => {
+  /** @type {Array<{name:string, paths:object}>} */
+  const shapes = [];
+  shapes.push({ name: 'contained prod', paths: containedInstall('0.7.0') });
+  shapes.push({ name: 'non-contained dev', paths: outsideInstall('0.7.1').paths });
+
+  const missing = tempPaths();
+  fs.mkdirSync(vendor.appDir(missing), { recursive: true });
+  shapes.push({ name: 'missing current', paths: missing });
+
+  // Table E row 7's discriminator: capture the core paths FIRST, then remove
+  // <core>/app entirely. A naive `containedIn(...) ? 'prod' : 'dev'` fails OPEN
+  // here and this shape is the only one that catches it.
+  const gone = tempPaths();
+  fs.mkdirSync(vendor.appDir(gone), { recursive: true });
+  const goneCore = corePathsOf(gone);
+  fs.rmSync(vendor.appDir(gone), { recursive: true, force: true });
+  shapes.push({ name: 'unresolvable <core>/app', paths: gone, corePaths: goneCore });
+
+  const seen = new Set();
+  for (const s of shapes) {
+    const mint = vendor.installStance(s.paths);
+    const fire = launcher.liveStance(s.corePaths || corePathsOf(s.paths));
+    assert.equal(fire, mint, `${s.name}: the fire-time and mint-time implementations disagree`);
+    seen.add(mint);
+  }
+  // Without this, two constant functions would satisfy the equality.
+  assert.ok(seen.has('prod') && seen.has('dev'), `both stances must occur across the shapes (saw ${[...seen].join(',')})`);
+});
+
+// T11 — AC17. D8 reuses the existing `isSemver`; the test drives readVersion and
+// deliberately imports NO predicate of its own.
+test('vendor: readVersion refuses a tampered package.json version, and accepts real ones', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-ver-'));
+  const set = (v) => fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: 'wienerdog', version: v }));
+
+  const refused = ['../../escaped', 'a/b', 'current', 'Current', 'current.tmp.9', 'Current.tmp.9', '0.10.0.', '', null, 42];
+  for (const v of refused) {
+    set(v);
+    assert.throws(
+      () => vendor.readVersion(root),
+      (err) => {
+        assert.equal(err.name, 'WienerdogError', `${JSON.stringify(v)} must be a WienerdogError`);
+        assert.ok(err instanceof WienerdogError);
+        assert.ok(err.message.includes(path.join(root, 'package.json')), 'the message names the package.json path');
+        return true;
+      },
+      `version ${JSON.stringify(v)} must be refused, not sanitised`
+    );
+  }
+
+  for (const v of ['0.10.0', '0.0.1', '1.2.3-rc.1+build.7', '999.0.0-a7test']) {
+    set(v);
+    assert.equal(vendor.readVersion(root), v, `version ${JSON.stringify(v)} must be accepted`);
+  }
+});
+
+// T12 — AC16. The FIVE GATED shapes of "Table G — canonical scope statement":
+// an attended `sync` carries containment forward, OR refuses; no A7-scoped DATA
+// write changes it. The sixth (symlink) shape is V9's KNOWN-OPEN row and is
+// deliberately NOT asserted here — a test that must fail is not a test.
+test('vendor: an attended sync carries containment forward or refuses — no DATA-shaped A7 write moves it', { skip: process.platform === 'win32' }, () => {
+  const REPO = vendor.packageRoot();
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-syncinv-'));
+
+  const contained = (core) => {
+    const app = path.join(core, 'app');
+    try {
+      const rel = path.relative(fs.realpathSync(app), fs.realpathSync(path.join(app, 'current')));
+      return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+    } catch {
+      return 'UNRESOLVABLE';
+    }
+  };
+
+  const run = (name, { outside, write }) => {
+    const base = path.join(root, name);
+    const core = path.join(base, 'core');
+    const app = path.join(core, 'app');
+    const paths = { core, home: base, state: path.join(core, 'state') };
+    const start = outside ? path.join(base, 'checkout') : path.join(app, '0.0.1');
+    fs.mkdirSync(start, { recursive: true });
+    fs.mkdirSync(app, { recursive: true });
+    vendor.copyTree(REPO, start);
+    fs.symlinkSync(start, path.join(app, 'current'));
+    const before = contained(core);
+    if (write === 'git') fs.writeFileSync(path.join(start, '.git'), 'gitdir: /elsewhere\n');
+    if (write === 'version') {
+      const pj = path.join(start, 'package.json');
+      fs.chmodSync(pj, 0o644);
+      const j = JSON.parse(fs.readFileSync(pj, 'utf8'));
+      j.version = '../../escaped';
+      fs.writeFileSync(pj, JSON.stringify(j, null, 2));
+    }
+    let after;
+    try {
+      // Required THROUGH app/current — that is what makes packageRoot() the app
+      // tree, exactly as the ~/.local/bin shim makes it on a real install.
+      require(path.join(app, 'current', 'src', 'core', 'vendor')).vendorSelf(paths, {});
+      after = contained(core);
+    } catch {
+      after = 'REFUSED';
+    }
+    return { before, after };
+  };
+
+  const base = run('contained-clean', { outside: false, write: 'none' });
+  const gitP = run('contained-plant-git', { outside: false, write: 'git' });
+  const verP = run('contained-bad-version', { outside: false, write: 'version' });
+  const outB = run('outside-clean', { outside: true, write: 'none' });
+  const outG = run('outside-plant-git', { outside: true, write: 'git' });
+
+  // Oracle guards on the STARTING shapes, never on the outcome under test.
+  for (const [n, r] of [['contained-clean', base], ['contained-plant-git', gitP], ['contained-bad-version', verP]]) {
+    assert.equal(r.before, true, `${n} must start contained`);
+  }
+  for (const [n, r] of [['outside-clean', outB], ['outside-plant-git', outG]]) {
+    assert.equal(r.before, false, `${n} must start outside`);
+  }
+
+  // The clean baselines are CARRIED FORWARD — without these two an
+  // implementation that inverts every row satisfies the neighbour comparisons.
+  assert.equal(base.after, base.before, 'contained-clean is carried forward unchanged');
+  assert.equal(outB.after, outB.before, 'outside-clean is carried forward unchanged');
+  // The planted rows track their baseline, or the call refuses (qualifier iii).
+  assert.equal(gitP.after, base.after, 'a planted .git does not move containment');
+  assert.ok(verP.after === base.after || verP.after === 'REFUSED', 'a tampered version refuses rather than moving containment');
+  assert.equal(outG.after, outB.after, 'a planted .git does not move containment on a non-contained install');
 });

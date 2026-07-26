@@ -1,6 +1,11 @@
 'use strict';
 const fs = require('node:fs');
 const path = require('node:path');
+const { WienerdogError } = require('./errors');
+// D8 (WP-stance-authority-containment, Table G row 2): NO new predicate. The
+// existing, length-guarded `isSemver` already guards the IDENTICAL
+// `path.join(appDir(paths), version)` construction in src/core/tarball.js.
+const { isSemver } = require('./update-check');
 
 // Published-files list to vendor (matches package.json "files" + package.json
 // itself). NEVER copies node_modules or .git (not in this list). ADR-0013.
@@ -9,9 +14,21 @@ const COPY_INCLUDE = ['bin', 'src', 'skills', 'templates', 'package.json'];
 /** Root of the RUNNING package (…/wienerdog). @returns {string} */
 function packageRoot() { return path.resolve(__dirname, '..', '..'); }
 
-/** @param {string} root @returns {string} version from <root>/package.json */
+/** @param {string} root @returns {string} version from <root>/package.json
+ *  @throws {WienerdogError} when the value is not strict semver — an app tree
+ *  whose package.json declares one is tampered, and `path.join(app, version)`
+ *  would escape `<core>/app`, collide with the `current` symlink (any case, on
+ *  a case-insensitive FS) or evade repointCurrent's `current.tmp.` sweep
+ *  (WP-stance-authority-containment D8, Table G row 2). */
 function readVersion(root) {
-  return JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).version;
+  const v = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).version;
+  if (!isSemver(v)) {
+    throw new WienerdogError(
+      `refusing to use ${path.join(root, 'package.json')}: "version" is ${JSON.stringify(v)}, ` +
+        'which is not a plain version token — the app tree looks tampered; reinstall Wienerdog.'
+    );
+  }
+  return v;
 }
 
 /** @param {import('./paths').WienerdogPaths} paths @returns {string} <core>/app */
@@ -23,12 +40,12 @@ function currentLink(paths) { return path.join(appDir(paths), 'current'); }
 function currentBin(paths) { return path.join(currentLink(paths), 'bin', 'wienerdog.js'); }
 
 /** Dev checkout? A `.git` at `root` that is a DIRECTORY (normal clone) OR a
- *  regular FILE (git worktree — our own dev machine + Gyula's), or WIENERDOG_DEV=1.
- *  The dir-or-file rule matches the launcher's fire-time isDev so a worktree dev
- *  install produces a `dev`-stance descriptor the launcher can then verify (F10).
- *  @param {string} root @param {NodeJS.ProcessEnv} [env] @returns {boolean} */
-function isDevCheckout(root, env = process.env) {
-  if (env.WIENERDOG_DEV === '1') return true;
+ *  regular FILE (git worktree). Decides copy-vs-link in `vendorSelf` ONLY — it
+ *  is NOT the stance authority (that is `installStance`) and it deliberately
+ *  takes no `env`: no environment variable may select a verification path
+ *  (WP-stance-authority-containment, Table D).
+ *  @param {string} root @returns {boolean} */
+function isDevCheckout(root) {
   try {
     const st = fs.statSync(path.join(root, '.git'));
     return st.isDirectory() || st.isFile();
@@ -156,22 +173,56 @@ function makeTreeFilesReadOnly(dir) {
  * - Dev: point current at the checkout root itself (no copy).
  * Records the vendored-tree manifest entry once. Never throws on an already-
  * present version. Single-writer assumption (install is not concurrent).
+ *
+ * SELF-RESYNC: when the running installer IS the tree `app/current` already
+ * resolves to (the shim path on every install), `current` is left pointing
+ * exactly where it pointed and NO signal inside that tree can SELECT that
+ * target: `isDevCheckout` is not called at all, and `target` is the realpath of
+ * `current` itself. `readVersion(root)` still runs (it always did — it is the
+ * returned/printed `version`), but its value cannot reach the target path and is
+ * strict-semver validated, so a tampered version REFUSES the call instead of
+ * moving containment. Against DATA-shaped A7 writes an attended `sync` therefore
+ * carries containment forward, OR refuses (V9).
+ * SCOPE: this says nothing about an A7 write that REPLACES this module's code
+ * or relocates packageRoot() via a symlink — the mint runs out of the tree it
+ * is vendoring, so that channel is structural and is NOT closed here
+ * (WP-stance-authority-containment, Table G rows S1/S2; the fire-time tree
+ * digest catches it until the next attended sync). Changing an install's stance
+ * otherwise requires running the installer from a DIFFERENT, NON-DEV source root
+ * (a git checkout links itself in place and stays dev), which is an attended
+ * act — WP-stance-authority-containment Table G row 1's recovery property.
  * @param {import('./paths').WienerdogPaths} paths
  * @param {{manifest?: object, env?: NodeJS.ProcessEnv, sourceRoot?: string}} [opts]
+ *   `env` is accepted and IGNORED — no environment variable may select a
+ *   verification path (Table D).
  * @returns {{version:string, target:string, dev:boolean, copied:boolean}}
+ *   `dev` is now `installStance(paths) === 'dev'`, evaluated AFTER the repoint,
+ *   so the value `src/cli/sync.js:206` prints agrees with Table A.
  */
 function vendorSelf(paths, opts = {}) {
-  const env = opts.env || process.env;
   const root = opts.sourceRoot || packageRoot();
   const version = readVersion(root);
-  const dev = isDevCheckout(root, env);
   const app = appDir(paths);
   fs.mkdirSync(app, { recursive: true });
   if (opts.manifest) recordOnce(opts.manifest, { kind: 'vendored-tree', path: app });
 
+  // SELF-RESYNC: the running installer IS the tree `app/current` already
+  // resolves to. Carry containment forward: let NO signal inside that tree
+  // select the target — `isDevCheckout` is not called, and `target` is the
+  // realpath of `current` itself. (`readVersion` still runs above; its value
+  // cannot reach `target` and is semver-validated, so a tampered version
+  // refuses the call.) Table G row 1 + canonical scope statement;
+  // ADR-0028 amendment §3 mint-time half.
+  let selfResync = false;
+  try {
+    selfResync = fs.realpathSync(currentLink(paths)) === fs.realpathSync(root);
+  } catch { selfResync = false; }
+
   let target;
   let copied = false;
-  if (dev) {
+  if (selfResync) {
+    target = fs.realpathSync(currentLink(paths));
+  } else if (isDevCheckout(root)) {
     target = root;
   } else {
     target = path.join(app, version);
@@ -188,12 +239,50 @@ function vendorSelf(paths, opts = {}) {
     }
   }
   repointCurrent(paths, target);
+  // Table G row 3: the returned `dev` is CONTAINMENT-derived (Table A), not
+  // `.git`-derived, and is evaluated AFTER the repoint — so `src/cli/sync.js`'s
+  // message cannot contradict the descriptor the same `sync` mints.
+  const dev = installStance(paths) === 'dev';
   // A7/F1/F2/F3 (WP-157): place the out-of-tree launcher the scheduler invokes.
   // Its source is the RUNNING installer (packageRoot), not the vendored
   // `root` — the launcher is the installer's own verifier and always ships with
   // the package (a synthetic test `sourceRoot` need not carry it).
   writeLauncher(paths, { manifest: opts.manifest });
   return { version, target, dev, copied };
+}
+
+/**
+ * The install's STANCE, decided by CONTAINMENT of `<core>/app/current` inside
+ * `<core>/app` — the one property an A7-scoped DATA write into the app tree
+ * cannot forge (ADR-0028 amendment §3/§4, WP-stance-authority-containment).
+ * Consults NO signal inside the tree: not `.git`, not any environment variable
+ * (the dev-mode env var is deleted outright — Table D; naming it here would put
+ * the token back under `src/`, which AC10 forbids), not any file under
+ * `app/current`. Fails CLOSED: any unresolvable path ⇒ 'prod',
+ * the ENFORCED path. MUST stay behaviourally identical to the launcher's inlined
+ * `liveStance` (a cross-implementation test pins that).
+ * Deliberately does NOT delegate to `verifyCurrentContainment` below, and the
+ * small duplication is the point: that function ALSO fails on POSIX ownership,
+ * so delegating would let a foreign-owned `current` select the REDUCED
+ * verification path. Ownership must never select an arm (Table A).
+ * SCOPE: an app-tree write that replaces the MINT'S OWN CODE still moves
+ * containment, because the attended mint runs out of the tree it is vendoring.
+ * That channel is known-open and owner-routed; the app release digest covers it
+ * until the next attended `sync`. Do not add a guard for it here.
+ * @param {import('./paths').WienerdogPaths} paths
+ * @returns {'prod'|'dev'}
+ */
+function installStance(paths) {
+  let outer;
+  let inner;
+  try {
+    outer = fs.realpathSync(appDir(paths));
+    inner = fs.realpathSync(currentLink(paths));
+  } catch {
+    return 'prod'; // fail closed to the ENFORCED path
+  }
+  const rel = path.relative(outer, inner);
+  return rel !== '' && (rel.startsWith('..') || path.isAbsolute(rel)) ? 'dev' : 'prod';
 }
 
 /**
@@ -360,4 +449,5 @@ module.exports = {
   packageRoot, readVersion, appDir, currentLink, currentBin,
   isDevCheckout, copyTree, repointCurrent, vendorSelf, writeShim,
   writeLauncher, launcherPath, verifyCurrentContainment, makeTreeFilesReadOnly,
+  installStance,
 };

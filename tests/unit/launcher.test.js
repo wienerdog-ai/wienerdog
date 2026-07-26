@@ -118,13 +118,76 @@ test('launcher: a wrong entry-bound expect-digest ⇒ refuse (A7 bullet 3: confi
   assert.match(r.reason, /descriptor changed since it was scheduled/);
 });
 
-test('launcher: a prod descriptor over a dev-looking tree (planted .git) ⇒ refuse, no silent downgrade', () => {
+// T7(a) — converts the pre-WP-stance-authority-containment "planted .git ⇒
+// refuse" test. The plant no longer needs refusing because it no longer selects
+// anything: an EMPTY `.git` directory contributes zero pairs to appTreeDigestOf
+// (only isFile() entries are pushed), so the tree digest is unchanged and the
+// prod arm verifies exactly as before. Table B row 1.
+test('launcher: a prod descriptor over a tree with a planted .git still VERIFIES — the plant selects nothing', () => {
   const { env, corePaths, descriptorPath, digest, paths } = setupProd();
   const target = fs.realpathSync(path.join(paths.core, 'app', 'current'));
-  fs.mkdirSync(path.join(target, '.git')); // downgrade attempt
+  const before = launcher.appTreeDigestOf(target);
+  fs.mkdirSync(path.join(target, '.git')); // the former downgrade attempt
+  assert.equal(launcher.appTreeDigestOf(target), before, 'an empty .git dir is invisible to the app release digest');
+  const r = launcher.verifyAndResolve(corePaths, 'dream', { descriptorPath, expectDigest: digest, env });
+  assert.equal(r.ok, true, 'the plant does not downgrade and does not refuse: ' + r.reason);
+  assert.deepEqual(r.args.slice(1), ['run-job', 'dream']);
+  assert.equal(launcher.liveStance(corePaths), 'prod', 'the LIVE stance is containment, not .git');
+});
+
+// T7(b) — AC5. Table B row 4, reason C1. The migration path for every descriptor
+// minted under the old rule on a contained tree.
+test('launcher: a dev-stance descriptor over a CONTAINED tree ⇒ refuse (C1), before any require from the app tree', () => {
+  const { env, corePaths, descriptorPath, digest } = setupProd();
+  const d = JSON.parse(fs.readFileSync(descriptorPath, 'utf8'));
+  d.appRelease.stance = 'dev';
+  fs.writeFileSync(descriptorPath, JSON.stringify(d));
   const r = launcher.verifyAndResolve(corePaths, 'dream', { descriptorPath, expectDigest: digest, env });
   assert.equal(r.ok, false);
-  assert.match(r.reason, /looks like a dev checkout/);
+  assert.match(r.reason, /authorized for a dev checkout but app\/current now resolves inside/);
+  // The reason names the real <core>/app path, matching its live analogue C2.
+  assert.ok(r.reason.includes(corePaths.appDir), 'the refusal interpolates the real appDir');
+});
+
+// T8 — AC8. The attack end to end, at unit level, through the REAL sync order:
+// the vendorSelf CALL (required THROUGH app/current, so packageRoot() is the app
+// tree exactly as the shim makes it) BEFORE the descriptor write.
+test('launcher: plant .git + one attended sync ⇒ still prod, and an app-code tamper is refused with a durable C3 alert', () => {
+  const { env, corePaths, paths } = setupProd();
+  const app0 = fs.realpathSync(path.join(paths.core, 'app', 'current'));
+  fs.writeFileSync(path.join(app0, '.git'), 'gitdir: /elsewhere\n'); // 1. the A7-scoped write
+
+  // 2. ONE attended `wienerdog sync`, in sync.js's own order.
+  require(path.join(app0, 'src', 'core', 'vendor')).vendorSelf(paths, { env });
+  const app = fs.realpathSync(path.join(paths.core, 'app', 'current'));
+  const w = descriptorMod.writeDescriptor(paths, DREAM_JOB, { env });
+  assert.equal(JSON.parse(fs.readFileSync(w.path, 'utf8')).appRelease.stance, 'prod', 'the plant did not downgrade the mint');
+
+  // 3. tamper app CODE — a content change, so it MUST drift the tree digest.
+  const f = path.join(app, 'src', 'core', 'errors.js');
+  try { fs.chmodSync(f, 0o644); } catch { /* already writable */ }
+  fs.appendFileSync(f, '\n// attacker payload marker\n');
+
+  // 4. fire.
+  const calls = [];
+  const origErr = process.stderr.write;
+  process.stderr.write = () => true;
+  let code;
+  try {
+    code = launcher.main(['dream', '--descriptor', w.path, '--expect-digest', w.digest], {
+      env,
+      core: paths.core,
+      platform: process.platform,
+      spawn: (command, args) => { calls.push({ command, args }); return { status: 0 }; },
+      exit: () => {},
+    });
+  } finally {
+    process.stderr.write = origErr;
+  }
+  assert.equal(code, 1, 'non-zero exit');
+  assert.equal(calls.length, 0, 'ZERO spawn');
+  const alerts = fs.readFileSync(path.join(corePaths.state, 'alerts.jsonl'), 'utf8');
+  assert.match(alerts, /the live app tree does not match the descriptor/, 'the RIGHT refusal (C3), durably recorded');
 });
 
 test('launcher: a missing descriptor ⇒ refuse', () => {
@@ -226,9 +289,16 @@ test('launcher: appTreeDigestOf === descriptor.appTreeDigestOf over normal/unico
 
 /**
  * A fully-wired DEV install: the running package (with src/, so the launcher can
- * re-derive the dev digest from the tree) copied to a checkout marked dev by a
- * `.git`, vendored (current → the checkout, OUTSIDE <core>/app), pins, a saved
- * dream job, and a dev-stance descriptor.
+ * re-derive the dev digest from the tree) copied to an out-of-tree checkout,
+ * vendored (current → the checkout, OUTSIDE <core>/app), pins, a saved dream
+ * job, and a dev-stance descriptor.
+ *
+ * What makes this install `dev` is CONTAINMENT — `current` resolves outside
+ * `<core>/app` (WP-stance-authority-containment, Table A). The `.git` written
+ * below is NOT the stance signal any more; it is what makes `vendorSelf` LINK
+ * the checkout in place instead of copying it into `<core>/app`, so it must
+ * stay. (This is not a self-resync: the temp checkout is not where `current`
+ * points when `vendorSelf` runs — Table G row 1.)
  * @param {'dir'|'file'} gitKind  a `.git` DIRECTORY (clone) or FILE (worktree)
  */
 function setupDev(gitKind = 'file') {

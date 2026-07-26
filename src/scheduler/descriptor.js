@@ -116,10 +116,14 @@ function profileAndPromptHash(run) {
  * pins, app tree, prompt/skill body).
  * @param {import('../core/paths').WienerdogPaths} paths
  * @param {{name:string, run:string, at?:string, timeoutMinutes?:number}} job
- * @param {{env?:NodeJS.ProcessEnv, platform?:NodeJS.Platform, vaultRoot?:string,
+ * @param {{platform?:NodeJS.Platform, vaultRoot?:string,
  *          model?:string|null, timeoutMs?:number, maxInputBytes?:number,
  *          outerTimeoutMs?:number, vaultLayout?:object, home?:string,
  *          timezone?:string}} [opts]
+ *   No field of the descriptor is environment-derived any more
+ *   (WP-stance-authority-containment D3): the stance comes from containment, so
+ *   `buildDescriptor`'s output is a function of on-disk state alone. Call sites
+ *   that still pass `opts.env` are harmless and are deliberately not edited.
  *   `vaultRoot`, `model`, `timeoutMs`, and `maxInputBytes` all come from the same
  *   `readDreamConfig(paths.config)` read: vaultRoot=cfg.vault, model=cfg.model
  *   (`dream_model`, null when unset), timeoutMs=cfg.timeoutMs — the EFFECTIVE
@@ -132,7 +136,6 @@ function profileAndPromptHash(run) {
  *   is readability only)
  */
 function buildDescriptor(paths, job, opts = {}) {
-  const env = opts.env || process.env;
   const cfgNeeded =
     opts.vaultRoot === undefined ||
     opts.timeoutMs === undefined ||
@@ -172,7 +175,7 @@ function buildDescriptor(paths, job, opts = {}) {
     }
   }
 
-  const { currentLink, readVersion, isDevCheckout } = require('../core/vendor');
+  const { currentLink, readVersion, installStance } = require('../core/vendor');
   let appRoot;
   try {
     appRoot = fs.realpathSync(currentLink(paths));
@@ -183,7 +186,9 @@ function buildDescriptor(paths, job, opts = {}) {
   const outerMin = job.timeoutMinutes > 0 ? job.timeoutMinutes : 15;
   const vaultLayout =
     opts.vaultLayout !== undefined ? opts.vaultLayout : require('../core/layout').readVaultLayout(paths.config);
-  const stance = isDevCheckout(appRoot, env) ? 'dev' : 'prod';
+  // The stance is decided by CONTAINMENT, never by a signal an A7-scoped write
+  // into the app tree can produce (WP-stance-authority-containment, Table A).
+  const stance = installStance(paths);
 
   return {
     schema: 1,

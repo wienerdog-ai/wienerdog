@@ -1,7 +1,7 @@
 ---
 id: WP-stance-authority-containment
 title: Bind the prod/dev stance to containment, not to a signal an app-tree data write can produce
-status: Ready
+status: In-Review
 model: opus
 size: M
 depends_on: []

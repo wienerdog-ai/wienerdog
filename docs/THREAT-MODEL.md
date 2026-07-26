@@ -274,9 +274,17 @@ surface: an environment variable that chose what a job runs.
   the model it verifies: `current` resolves inside `<core>/app` and is user-owned;
   the live app tree content-addresses to the descriptor's app release digest; the
   re-derived descriptor digest equals the entry-bound value; and the
-  **production/dev stance** matches (a prod entry over a dev-looking tree — e.g. a
-  planted `.git` — is refused, never silently downgraded to the unverified dev
-  path). The published version dir's files are made read-only after the atomic
+  **production/dev stance** matches, where the stance is decided by containment
+  alone — an install is dev only when `app/current` resolves outside
+  `<core>/app`, so no A7-scoped *data* input (a planted `.git`, a rewritten
+  `package.json` version, an environment variable) can select the reduced
+  verification path at fire time **or** at mint time, and a disagreement between
+  the bound and live stance is refused in either direction. This does **not**
+  extend to an app-tree write that replaces the app's own code: the attended mint
+  runs out of the app tree, so such a write is code execution at the next
+  attended CLI run. That channel is covered by the app release digest — it
+  changes the tree, so any fire before the next attended `wienerdog sync` refuses
+  — and it is out of this control's scope. The published version dir's files are made read-only after the atomic
   publish; an interrupted update leaves the previous valid `current` intact.
 - **Structurally pinned external executables — scoped to three spawn sites.**
   `claude`/`git`/`codex` are resolved and **pinned** at install/sync by command
