@@ -692,6 +692,7 @@ family is a row below.
 | # | Fact | Rule | Why it is not optional |
 |---|------|------|------------------------|
 | G1 | **runner** | `node tests/run.js` — never a bare `node --test`. `npm test -- …` is equivalent | `tests/run.js:7` is the only place `WIENERDOG_TEST_NO_REAL_SCHEDULER=1` is set. A bare `node --test` leaves it undefined and disarms the suite-wide real-scheduler backstop ADR-0018:172-180 declares binding |
+| G1b | **runner exit status** | Capture the runner's exit status and **fail the gate on a non-zero status BEFORE any counting**. The capture pattern, stated once: `tap=$(<runner …>); rc=$?` on the next statement, then `[ "$rc" -eq 0 ] \|\| { echo …; exit 1; }` | Counting `ok` records says nothing about records that are **not** `ok`, or about failures that emit no record at all. A **selected** test that fails emits `not ok` and simply lowers the count — which an aggregate `>=` floor with any slack absorbs — and a **file-level hook** failure (a throwing `after`) leaves every selected `ok` record intact while the run is red. Both make the counts meaningless, so the status is checked first. **`$(…)` swallows the status if you do not save it immediately** — `$?` must be read on the very next statement, and never write `local tap=$(…)`, which overwrites it with `local`'s own status |
 | G2 | **host prerequisite** | `process.platform !== 'win32'` **and** `typeof process.getuid === 'function'` **and** `process.getuid() !== 0` — evaluated **by `node`**, never by the shell | It must be the *same runtime the tests use*, because that is the runtime whose `process.platform` decides which tests skip. A shell test such as `[ "$(id -u)" -ne 0 ]` is **not** equivalent: under Git Bash/MSYS on non-root Windows `id -u` is non-zero, so a shell-only guard proceeds on a host where `process.platform === 'win32'` and the win32-guarded tests all skip |
 | G3 | **selection** | `--test-name-pattern` is a **regex**. Escape `(` `)` `[` `]` `{` `}` `.` `*` `+` `?` `\|` `^` `$` in any test name pasted into it | A pattern that matches nothing **exits 0** — the file wrapper counts as "pass 1" — so an unescaped paste makes a survived mutation indistinguishable from correct code |
 | G4 | **counting** | Count only TAP records matching the step's anchored family prefix, then subtract every record carrying a directive: `# SKIP` **and** `# TODO` | node:test renders both a skipped and an unexecuted-todo subtest as an `ok` line that the anchored grep matches. Converting a required test to `test.todo(...)` must **lower** the count, not preserve it |
@@ -811,7 +812,9 @@ surfaces that mirror it:
 
 - [ ] **Verification step 1** — the single runnable instance of the gate in this
       spec. It supplies the three parameters (runner invocation, anchored family
-      prefix, floor) and cites G1-G6 for every rule; it must not restate one
+      prefix, floor) and cites G1-G6 for every rule; it must not restate one.
+      **Enforcement order is itself a G-fact:** G2 (host) → run → G1b (exit
+      status) → count → G5 (directives) → G6 (floor)
 - [ ] **Acceptance criterion AC-9** — the floor's value and the
       *passing-not-skipped-not-todo* qualifier (G4, G6)
 - [ ] **Current state → "The non-vacuity gate's command, executed at `6eb2d30`"**
@@ -1367,8 +1370,9 @@ output.
 #    its checklist registers, in one pass.
 #
 #    PROVES: your new tests actually run AND the pre-existing ones still do.
-#    RED WHEN: the host is not a non-root POSIX one (G2); any selected required
-#    name is skipped or todo (G5); or fewer than 37 required names passed (G6).
+#    RED WHEN: the host is not a non-root POSIX one (G2); the runner exits
+#    non-zero (G1b); any selected required name is skipped or todo (G5); or fewer
+#    than 37 required names passed (G6).
 #
 #    Measured inputs to the floor (NOT rules — see Current state for the
 #    derivation): 22 pre-existing named subtests on `main` at 6eb2d30, plus the
@@ -1389,7 +1393,11 @@ if (!posix || process.getuid() === 0) {
 console.log(`prerequisite OK (G2): platform=${process.platform} uid=${process.getuid()}`);'
 
 tap=$(node tests/run.js --test-reporter=tap --test-name-pattern "scheduler-leak-guard" \
-        tests/unit/scheduler-leak-guard.test.js)
+        tests/unit/scheduler-leak-guard.test.js); rc=$?
+# G1b — the runner's exit status, read on the statement after the capture and
+#       enforced BEFORE any counting. Counting `ok` records cannot see a `not ok`
+#       or a file-level hook failure that emits no record at all.
+[ "$rc" -eq 0 ] || { echo "GATE FAILED (Table E G1b): the runner exited $rc — a failing test or a file-level hook makes every count below meaningless"; exit 1; }
 sel() { printf '%s\n' "$tap" | grep -E "^ok [0-9]+ - scheduler-leak-guard: "; }
 n=$(sel | grep -vE "# (SKIP|TODO)" | wc -l | tr -d ' ')
 d=$(sel | grep -E "# (SKIP|TODO)" | wc -l | tr -d ' ')

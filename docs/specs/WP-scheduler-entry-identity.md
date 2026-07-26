@@ -1489,6 +1489,7 @@ authority. **Keep the two G-row sets identical**; if one moves, move both.
 | # | Fact | Rule | Why it is not optional |
 |---|------|------|------------------------|
 | G1 | **runner** | `npm test -- …` or `node tests/run.js` — never a bare `node --test` | `tests/run.js:7` is the only place `WIENERDOG_TEST_NO_REAL_SCHEDULER` is set, and that backstop is what makes `schedulerSpawn` throw instead of mutating the real per-user scheduler. Executed at efd1489: under `node --test` a child sees it undefined; under `npm test` it sees "1" |
+| G1b | **runner exit status** | Capture the runner's exit status and **fail the gate on a non-zero status BEFORE any counting**. The capture pattern, stated once: `tap=$(<runner …>); rc=$?` on the next statement, then `[ "$rc" -eq 0 ] \|\| { echo …; exit 1; }` | Counting `ok` records says nothing about records that are **not** `ok`, or about failures that emit no record at all. A **selected** test that fails emits `not ok` and simply lowers the count — which an aggregate `>=` floor with any slack absorbs — and a **file-level hook** failure (a throwing `after`) leaves every selected `ok` record intact while the run is red. Both make the counts meaningless, so the status is checked first. **`$(…)` swallows the status if you do not save it immediately** — `$?` must be read on the very next statement, and never write `local tap=$(…)`, which overwrites it with `local`'s own status |
 | G2 | **host prerequisite** | `process.platform !== 'win32'` **and** `typeof process.getuid === 'function'` **and** `process.getuid() !== 0` — evaluated **by `node`**, never by the shell | It must be the *same runtime the tests use*, because that is the runtime whose `process.platform` decides which tests skip. A shell test such as `[ "$(id -u)" -ne 0 ]` is **not** equivalent: under Git Bash/MSYS on non-root Windows `id -u` is non-zero, so a shell-only guard proceeds on a host where `process.platform === 'win32'` and every `!isPosix` test skips |
 | G3 | **selection** | `--test-name-pattern` is a **regex**. Escape `(` `)` `[` `]` `{` `}` `.` `*` `+` `?` `\|` `^` `$` in any test name pasted into it | A pattern that matches nothing **exits 0** — the file wrapper counts as "pass 1" — so an unescaped paste silently proves nothing |
 | G4 | **counting** | Count only TAP records matching the step's anchored family prefix, then subtract every record carrying a directive: `# SKIP` **and** `# TODO` | node:test renders both a skipped and an unexecuted-todo subtest as an `ok` line that the anchored grep matches. Converting a required test to `test.todo(...)` must **lower** the count, not preserve it |
@@ -1621,6 +1622,9 @@ real cause, with the fix. G5 is the backstop for the cases G2 cannot enumerate.
 
 **Table F (the non-vacuity gate)** — surfaces that mirror it:
 
+- [ ] **Enforcement order is itself a G-fact**, and both instances follow it:
+      G2 (host, hoisted to step 0 since both share it) → run → G1b (exit status)
+      → count → G5 (directives) → G6 (floor)
 - [ ] **Verification step 1** — the new suite's instance. Parameters: the
       `tests/unit/scheduler-entry-identity.test.js` invocation (G1), the anchored
       prefix `^ok [0-9]+ - entry-identity:` **with its trailing space** (G4),
@@ -1628,7 +1632,9 @@ real cause, with the fix. G5 is the backstop for the cases G2 cannot enumerate.
 - [ ] **Verification step 2** — the touched existing suite's instance.
       Parameters: the `tests/unit/scheduler-status.test.js` invocation (G1), the
       anchored prefix `^ok [0-9]+ - (defaultProbe|probeAll|reloadMissing|doctorSchedulerChecks)`
-      (G4), floor **8** (G6). **Two instances, one contract** — this is the pair
+      (G4), floor **13** (G6) — **re-enumerated in round 4**; it read `8` against
+      a selector returning 13, i.e. five names of slack, which G6 forbids.
+      **Two instances, one contract** — this is the pair
       that made the extraction necessary: through round 2 they carried
       independently-authored copies of the machinery and step 2's was a round
       behind step 1's
@@ -2730,11 +2736,13 @@ console.log(`prerequisite OK (G2): platform=${process.platform} uid=${process.ge
 #    sibling tripwire spec's Table E.
 #
 #    PROVES: the tests this WP requires actually ran.
-#    RED WHEN: a selected required name is skipped or todo (G5), or fewer than 28
-#    required names passed (G6). Measured control, same runner at efd1489: the
-#    pattern "zzz-nope" selects 0.
+#    RED WHEN: the runner exits non-zero (G1b); a selected required name is
+#    skipped or todo (G5); or fewer than 28 required names passed (G6). Measured
+#    control, same runner at efd1489: the pattern "zzz-nope" selects 0.
 tap=$(npm test --silent -- --test-reporter=tap --test-name-pattern "entry-identity" \
-        tests/unit/scheduler-entry-identity.test.js)
+        tests/unit/scheduler-entry-identity.test.js); rc=$?
+# G1b — read on the statement after the capture, enforced BEFORE any counting.
+[ "$rc" -eq 0 ] || { echo "GATE FAILED (Table F G1b): the runner exited $rc — a failing test or a file-level hook makes every count below meaningless"; exit 1; }
 sel() { printf '%s\n' "$tap" | grep -E "^ok [0-9]+ - entry-identity: "; }
 n=$(sel | grep -vE "# (SKIP|TODO)" | wc -l | tr -d ' ')
 d=$(sel | grep -E "# (SKIP|TODO)" | wc -l | tr -d ' ')
@@ -2746,7 +2754,17 @@ echo "named passing subtests: $n   directive-carrying selected records: $d"
 #    instance of the SAME gate. Table F decides every rule; parameters only:
 #      runner invocation → npm test -- … tests/unit/scheduler-status.test.js        (G1)
 #      anchored family prefix → the four selected name roots                        (G4)
-#      floor → 8                                                                    (G6)
+#      floor → 13                                                                   (G6)
+#    THE FLOOR IS 13, NOT 8 — re-enumerated, not incremented. Through round 3 this
+#    step carried a floor of 8 against a selector that returns 13, i.e. FIVE names
+#    of slack, which is exactly what G6 forbids: up to five required tests could
+#    fail or vanish and the gate would still report green. Derivation, measured by
+#    execution on this host: 13 names on `main` at c216a00, and 13 on the
+#    implementation branch — this WP adds NO new name to this family; it RENAMES
+#    exactly one (Table D's record: "defaultProbe maps exit 0 → loaded, non-zero →
+#    missing, spawn error → missing" becomes "defaultProbe maps exit 0 WITHOUT AN
+#    EXPECTATION → unverified, …"). So 12 carried unchanged + 1 renamed + 0 new =
+#    13, ZERO slack. Re-enumerate the same way if you add or rename another.
 #    Note what G4's anchoring buys, measured at efd1489 on `main`: an UNANCHORED
 #    "^ok [0-9]+ - " returns 1 even for the bogus pattern "zzz-nope" (it matches
 #    the file wrapper); the anchored form returns 0 for "zzz-nope" and 13 for the
@@ -2756,13 +2774,15 @@ echo "named passing subtests: $n   directive-carrying selected records: $d"
 #    this pattern.
 tap=$(npm test --silent -- --test-reporter=tap \
         --test-name-pattern "defaultProbe|probeAll|reloadMissing|doctorSchedulerChecks" \
-        tests/unit/scheduler-status.test.js)
+        tests/unit/scheduler-status.test.js); rc=$?
+# G1b — read on the statement after the capture, enforced BEFORE any counting.
+[ "$rc" -eq 0 ] || { echo "GATE FAILED (Table F G1b): the runner exited $rc — a failing test or a file-level hook makes every count below meaningless"; exit 1; }
 sel() { printf '%s\n' "$tap" | grep -E "^ok [0-9]+ - (defaultProbe|probeAll|reloadMissing|doctorSchedulerChecks)"; }
 n=$(sel | grep -vE "# (SKIP|TODO)" | wc -l | tr -d ' ')
 d=$(sel | grep -E "# (SKIP|TODO)" | wc -l | tr -d ' ')
 echo "named passing subtests: $n   directive-carrying selected records: $d"
 [ "$d" -eq 0 ] || { echo "VACUOUS — $d selected REQUIRED name(s) carried # SKIP/# TODO (Table F G5)"; exit 1; }
-[ "$n" -ge 8 ] || { echo "VACUOUS OR INCOMPLETE — selected $n named subtests (Table F G6, floor 8)"; exit 1; }
+[ "$n" -ge 13 ] || { echo "VACUOUS OR INCOMPLETE — selected $n named subtests (Table F G6, floor 13)"; exit 1; }
 
 # 3. No regression anywhere, including the golden files.
 npm test
