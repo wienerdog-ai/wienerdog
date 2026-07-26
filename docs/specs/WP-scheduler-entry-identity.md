@@ -181,7 +181,7 @@ Every claim below was read in the tree at commit `efd1489`.
   behavior: the widened heal set, the pre-destructive marker, and
   `darwinReplaceEntry`'s `bootout`. All three are **attended** commands. Any
   statement that `sync` is the sole healer is **false** — see the correction
-  under "Round-2 dispositions" item 5 and Residual 8.
+  under "Round-2 / 3 / 5 review dispositions" item 5 and Residual 8.
 - `src/cli/schedule.js:619` and `:639` — on a successful repair `repairCatchup`
   returns `{ notice: 'restored the missing catch-up registration.' }`; on a
   failed one, `"catch-up entry rewritten but the OS scheduler did not accept it
@@ -198,7 +198,7 @@ Every claim below was read in the tree at commit `efd1489`.
 - `src/cli/sync.js:219-247` — ordering inside `sync`: `repointSchedules`
   (which calls `repairCatchup`) → `reloadMissing` → `refreshSchedulerStatus`.
   `sync` never sets `process.exitCode`; a failed heal prints a `WARNING` line
-  and exits 0. That stays true (see "Round-2 dispositions").
+  and exits 0. That stays true (see "Round-2 / 3 / 5 review dispositions").
 - `src/scheduler/spawn.js:24-36` — `schedulerSpawn`, the single mutation
   chokepoint; returns `{status, stdout}` with `encoding:'utf8'`, and throws
   loudly under `WIENERDOG_TEST_NO_REAL_SCHEDULER`.
@@ -292,7 +292,7 @@ Every claim below was read in the tree at commit `efd1489`.
 |--------|------|-------|
 | modify | src/scheduler/generators.js | add `launcherPath`, `deriveIdentityArgv`, `loadedEntryTargets` (+ export all three); no existing function's behavior changes. **No new constant** — Table B1's `BARE` production reuses `cmdArgToken`'s existing charset (`:530-532`) and `cmdArgToken` is already exported |
 | modify | src/scheduler/status.js | `defaultProbe` gains `expect` + `opts.run`; taxonomy per Table A; **step 8b's `fs.existsSync` on the execution position** (Table B, Residual 9); `probeAll` / `reloadMissing` build `expect` and forward `opts.run`; `renderSchedulerStatusLine` + `doctorSchedulerChecks` + `reloadMissing` handle the new members; pre-destructive marker refresh — **unconditional**, once per call, before the first replacement call (Table E) |
-| modify | src/cli/schedule.js | `launcherPathFor` delegates to `generators.launcherPath`; new local `darwinReplaceEntry`; `reloadJob` + `repairCatchup` darwin use it; `repairCatchup` heal-gate + `expect` per Table A + the same **unconditional** pre-destructive marker (Table E) + the notice discipline of disposition 4 |
+| modify | src/cli/schedule.js | `launcherPathFor` delegates to `generators.launcherPath`; new local `darwinReplaceEntry`; `reloadJob` + `repairCatchup` darwin use it; `repairCatchup` heal-gate + `expect` per Table A + the same **unconditional** pre-destructive marker (Table E) + the notice discipline of disposition 7; **add `repairCatchup` to `module.exports`** — a one-token change, authorized here and gated by verification step 5, see "Why `repairCatchup` is exported" |
 | modify | src/cli/doctor.js | comment only — the "never a hard fail" note at lines 401-403 becomes accurate for Table A. NO logic change |
 | modify | src/cli/dream.js | ONE added argument at the `renderDigest` call (line ~377): `schedulerLine: require('../scheduler/status').renderSchedulerStatusLine(paths),`. Nothing else |
 | modify | tests/unit/scheduler-status.test.js | ONLY the assertions named in Table D |
@@ -310,14 +310,33 @@ which is the opposite of what the Deliverables table is for. Do not edit it.
 edit**, and **one is a single added object property** (`dream.js`). Genuine new
 non-test source is ≈195 lines across three files (round 3 added Table B1's
 alphabet + end-anchored grammar, step 8b, `repairCatchup`'s marker and its notice
-discipline — ≈45 lines), still inside the `≤ ~400 lines` bound. **`src/cli/adopt.js`
-and `src/cli/sync.js` are deliberately NOT rows** even though round 3 examined
-both: dispositions 1 and 6 record why each was rejected rather than added. This spec's
+discipline — ≈45 lines; round 5 added one exported name, one `path.win32.resolve`
+pair in condition (c0) rule 4, and **deleted** a verification step — net ≈+3
+lines), still inside the `≤ ~400 lines` bound. **`src/cli/adopt.js`,
+`src/cli/sync.js` and `src/core/paths.js` are deliberately NOT rows** even though
+rounds 3 and 5 examined all three: dispositions 1, 6(b) and 7 record why each was
+rejected rather than added. This spec's
 own `status:` flip is always allowed without listing (see `_TEMPLATE.md`) and is
 **not** counted above. The harness/tripwire half of the original draft has been
 split out to `WP-scheduler-loaded-record-tripwire` (4 files, no `src/` import),
 which is what brought this WP back inside the bound. Do not treat any of this as
 licence to widen scope.
+
+**ARCHITECT'S SIZING NOTE — read before scheduling this WP (round 5).** The
+*source* diff is small and inside every bound; the **executable surface is not**.
+This spec now carries 5 canonical tables, 16 criteria, **28 mandated named
+tests** (AC-13 enumerates them) and **29 mutation checks**, and round 5 added no
+named test but did add a mutation (M29) and two owner decisions. That is at or
+past what one implementer session can execute in a single pass, and the
+reviewer flagged it in round 4. **The recommended split, if the owner wants one,
+is the Windows leg**: Table B's `schtasks` row + Table B1 + AC-1's schtasks
+fixtures + M18/M22/M23/M24/M29 move to `WP-scheduler-entry-identity-windows`,
+depending on this WP; what stays is the launchd leg, the taxonomy, the probe seam,
+the heal and the marker. The split is clean because the two legs share only
+`loadedEntryTargets`'s signature, which the remaining WP still defines. **This is
+a recommendation, not a decision** — splitting a spec the owner has already
+reviewed four times has its own cost, so it is listed with the owner decisions in
+Definition of done rather than executed unilaterally.
 
 ### Exact contracts
 
@@ -530,12 +549,19 @@ existing record (Table E). If the process dies mid-replacement, the durable
 cache must not still say `loaded` from a stale earlier refresh. Writing it from
 the live probe **before the replacement call** — the canonical phrase; use it
 verbatim everywhere — makes the cache pessimistic for that window **whenever the
-write lands**; `sync`'s trailing `refreshSchedulerStatus` (`src/cli/sync.js:247`)
-clears it on success. No new file and no new format —
-`state/scheduler-status.json` already is the durable scheduler-health channel.
-The "whenever the write lands" qualifier is load-bearing and is **not** hedging:
-see Residual 10 for what happens when it does not, and for why this WP
-deliberately does **not** gate the replacement on it.
+write lands and the re-probe agrees with the heal verdict**;
+`sync`'s trailing `refreshSchedulerStatus` (`src/cli/sync.js:247`) clears it on
+success. No new file and no new format — `state/scheduler-status.json` already is
+the durable scheduler-health channel.
+**Both qualifiers are load-bearing and neither is hedging.** "Whenever the write
+lands": Residual 10, and why this WP deliberately does **not** gate the
+replacement on it. "And the re-probe agrees": **Residual 8, which round 5
+reclassifies from an accepted residual to an OPEN DEFECT routed to the owner.**
+The marker re-probes rather than persisting the verdict that triggered the heal,
+and on the very transient-failure path the next paragraph relies on, the re-probe
+can succeed and persist `loaded` for the unchanged record — leaving the cache
+**optimistic** across the `bootout`, which is the opposite of what this marker is
+for. **Do not write anywhere that the marker guarantees a pessimistic record.**
 
 The condition an earlier draft had here — *write it only when the observed
 status is not `missing`* — was **wrong, and its removal is load-bearing**. The
@@ -625,6 +651,41 @@ function darwinReplaceEntry(loader, uid, label, plistPath) {
 - The linux and win32 register calls are unchanged (`systemctl --user enable
   --now` and `schtasks /create … /f` already replace).
 
+**Why `repairCatchup` is exported (and why the alternative does not work).**
+Add `repairCatchup` to `src/cli/schedule.js`'s `module.exports`, which at
+`efd1489` is exactly:
+
+```js
+module.exports = { run, defaultLoader, repointSchedules, ensureDreamSchedule, registerPlatform, reloadJob };
+```
+
+Without it **AC-9c, AC-12b and AC-12c are literally unwritable**, and this WP's
+own criteria would be unproducible — the failure mode a spec must never ship.
+Executed this session against a `mkdtemp` copy of `src/` (the repo tree itself
+untouched):
+
+- with the export added, `schedule.repairCatchup(paths, manifest, { probe: () => 'missing', loader: rec, platform: 'darwin' })`
+  records **exactly one** loader call,
+  `['launchctl','bootstrap','gui/<uid>','<temp home>/Library/LaunchAgents/ai.wienerdog.catchup.plist']`,
+  and `state/scheduler-status.json` does **not** exist at that first call on
+  unmodified code — precisely the red-before / green-after property AC-9c needs;
+- driving the same fixture through the **exported** `repointSchedules` instead
+  records **three** loader calls, the first being the per-job
+  `ai.wienerdog.dream` bootstrap from `registerPlatform` and the catch-up entry
+  appearing twice (once from `ensureCatchup` at register time, once from
+  `repairCatchup`). So "the recording loader's **first** call" cannot be an
+  assertion about `repairCatchup` at all through that seam. `repointSchedules`
+  also calls `repairCatchup(paths, manifest, { loader, platform, probe: opts.probe })`
+  and does **not** forward `opts.run` (`schedule.js:565`), so AC-12b's
+  no-`opts.probe` construction is unreachable through it too.
+
+Two things this export is **not** licence for. It does not change
+`repairCatchup`'s behavior, signature or callers — `repointSchedules` stays its
+only production caller, and this WP adds no CLI surface. And it does not make
+`repairCatchup` a supported API: it is exported for the same reason `reloadJob`
+already is, namely that another module in this repo must reach it. Verification
+step 5 greps for it so the export cannot be silently dropped.
+
 **Bootstrap-first is back-compatible with the existing suite, verified at
 `efd1489`:** `tests/unit/scheduler-schedule.test.js:982` asserts
 `assert.deepEqual(calls, [['launchctl','bootstrap',`gui/${uid}`,plistPath]])`
@@ -646,8 +707,13 @@ schedulerLine: require('../scheduler/status').renderSchedulerStatusLine(paths),
 
 `renderSchedulerStatusLine` is **cache-only** (it reads
 `state/scheduler-status.json`; it never probes and never spawns), so the nightly
-path stays read-only and ADR-0018's read/heal split is preserved: `sync` remains
-the sole healer. Do not add any other argument, and do not reorder the object.
+path stays read-only and ADR-0018's read/heal split is preserved: **the nightly
+`dream` path adds no heal.** Do **not** write "`sync` remains the sole healer"
+anywhere — that claim is false on `main` (`repairCatchup` is reachable from
+`sync.js:222`, `adopt.js:422` and `schedule.js:895`; see Current state and
+disposition 5). The property this argument preserves is narrower and true:
+`dream` reads the cache and heals nothing. Do not add any other argument, and do
+not reorder the object.
 
 ## Contract reference
 
@@ -672,6 +738,15 @@ two rounds on the seam family, B1 after two rounds on Table B's condition family
 rule that produced them, stated so it does not have to be rediscovered: **when a
 second finding lands in the same contract family, the table is the bug — extract
 the sub-contract instead of patching the condition again.**
+
+**Round 5 applied the circuit-breaker's OTHER outcome: subtraction.** A per-line
+structural check on the test file's JavaScript source (verification step 5c) had
+been respecified three times and broken three times, in both directions. There is
+no sub-contract to extract there — the mechanism itself is unbuildable with a
+zero-dependency toolchain — so it was **deleted** and its guarantee re-expressed
+at runtime (AC-14). Extraction is the move when the contract is real and the
+statement of it is wrong; subtraction is the move when the *mechanism* cannot
+exist. Both are the circuit-breaker; neither is another refinement.
 
 ### Table A — entry status taxonomy (canonical)
 
@@ -776,7 +851,7 @@ position. **No row uses a substring test.**
 |---|---|---|---|---|---|---|
 | `launchd` | `['launchctl','print','gui/<uid>/<label>']` | the block that starts at the line whose **trimmed** content is `arguments = {` and ends at the line whose trimmed content is `}`; one argument per line, trimmed | `args[0]`, or `null` when the block did not parse or `args.length < 1` | `args[1] === expectLauncher` | `args.length >= 2` and `args[1] !== expectLauncher` | no `arguments = {` line; no closing `}` line; `args.length < 2` |
 | `systemd` | `null` — **identity query DECLARED UNIMPLEMENTED** (see Residual 1) | — | always `null` | never | never | never — `defaultProbe` step 6 returns `unknown` before any parse, so `loadedEntryTargets` is never called with `kind:'systemd'`. If it is anyway, it returns `{verdict:'indeterminate', exec:null}` |
-| `schtasks` | `['schtasks','/query','/tn','\Wienerdog\<name>','/xml']` | `parseWindowsTaskExec(stdout)` → `{command, arguments}` (generators.js:622), gated by condition (0) | Table B1's `NODE` capture, or `null` when the split or the grammar rejected the string | **all six** of (0)-(d) below | (0), (a), (b) hold, the Table B1 split and grammar both parse, and **(d) fails** — a launcher that is not ours sits in the launcher position | `parseWindowsTaskExec` → `null`; any of (0), (a), (b), (c) fails; the Table B1 split fails (an odd `"` count); **(d) holds but (c0) fails**; `cmdQuotedToken(expectLauncher)` throws |
+| `schtasks` | `['schtasks','/query','/tn','\Wienerdog\<name>','/xml']` | `parseWindowsTaskExec(stdout)` → `{command, arguments}` (generators.js:622), gated by condition (0) | Table B1's `NODE` capture, or `null` when the split or the grammar rejected the string | **all six** of (0)-(d) below | (0), (a), (b) hold, the Table B1 split and grammar both parse, and **(d) fails** — a launcher that is not ours sits in the launcher position | `parseWindowsTaskExec` → `null`; any of (0), (a), (b), (c) fails; **the Table B1 split fails** (B1 decides when — do not restate its rule here); **(d) holds but (c0) fails**; `cmdQuotedToken(expectLauncher)` throws |
 
 **Evaluation order is part of the contract**: `(0) → (a) → (b) → the Table B1
 split → (c) → (d) → (c0)`. Only (d) can produce `mismatch`; every other failure
@@ -827,11 +902,53 @@ evaluation order is the one stated above):
      `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `ANTHROPIC_API_KEY` — each have the
      **empty** captured value (the generator emits the literal `set "NAME="` for
      them);
-  4. `WIENERDOG_HOME`'s value equals `generators.cmdQuotedToken(core)`, where
-     `core` is `path.win32.dirname(path.win32.dirname(expectLauncher))` — the
+  4. `WIENERDOG_HOME`'s bound value and the core derived from the expectation
+     are equal **as `path.win32.resolve()`-normalized paths** — NOT as raw
+     strings. Let `captured` be rule 1's capture 2 for the `WIENERDOG_HOME` bind
+     and `core` be `path.win32.dirname(path.win32.dirname(expectLauncher))` (the
      launcher is `<core>\launcher\launch.js`, so the core IS derivable from the
-     expectation. Use `path.win32` explicitly so the fixtures parse identically
-     on a POSIX test host;
+     expectation). Then:
+     `path.win32.isAbsolute(captured)` must hold — otherwise `indeterminate`,
+     and the `isAbsolute` gate is what keeps the comparison independent of
+     `process.cwd()` (`path.win32.resolve('evil')` prepends the cwd; an absolute
+     win32 path is returned unchanged) — and
+     `path.win32.resolve(captured) === path.win32.resolve(core)`.
+     Use `path.win32` explicitly, on **both** sides, so the fixtures parse
+     identically on a POSIX test host.
+
+     **Do NOT write the raw form `captured === generators.cmdQuotedToken(core)`.
+     It false-`indeterminate`s a HEALTHY non-default core, and that is a
+     regression versus `main`.** `assertSafeOverride` (`src/core/paths.js:21-31`)
+     validates `WIENERDOG_HOME` for absoluteness and rejects `.`/`..`, then
+     returns the value **verbatim, unnormalized**, while `launcherPath` is a
+     `path.join` and therefore normalizes. The two sides can differ on nothing
+     but separator flavor and a trailing separator. Executed this session against
+     arglines built by the real `windowsCmdArguments`:
+
+     | `WIENERDOG_HOME` in the argline | raw equality | `path.win32.resolve()` equality |
+     |---|---|---|
+     | `C:\Users\bob\.wienerdog` (the default shape) | rule 4 passes | rule 4 passes — **unchanged** |
+     | `C:\Users\bob\.wienerdog\` (trailing separator) | **`indeterminate`** — `cmdQuotedToken` doubles the trailing backslash run, so the bind carries `C:\Users\bob\.wienerdog\\` | rule 4 passes |
+     | `C:/Users/bob/.wienerdog` (forward slashes) | **`indeterminate`** | rule 4 passes |
+     | a genuinely **foreign** core bound while `expectLauncher` names ours (the incident's temp-core shape) | `indeterminate` | `indeterminate` — **the normalization does NOT over-accept**, which is the direction that matters for (c0)'s purpose |
+
+     Under the raw form those two supported shapes give permanent `unverified` →
+     permanent `doctor` warn → digest template U forever → `schtasks /create /f`
+     on **every** `sync`, rewriting the same non-normalized string, so it never
+     converges. That is the permanent-warn-plus-churn mode Residual 1 cites as
+     the reason systemd was declared unimplemented, and `main`'s shipping
+     `windowsLoadedTaskMatches` (`src/cli/schedule.js:184-195`) does **not** have
+     it: it compares the same raw string on both sides and matches. Note also
+     that `resolve()` needs no cmd-decoding step — `cmdQuotedToken` only doubles a
+     **trailing** backslash run, and `resolve()` collapses trailing separators.
+
+     **Why here and not in `src/core/paths.js`.** Normalizing `paths.core` at
+     construction would fix it too, but it needs `src/core/paths.js` in
+     Deliverables (an 8th file, over the README bound) and it changes the
+     identity of a security-validated value used by every other consumer of
+     `paths.core` — manifest containment, uninstall roots, the launcher's own
+     containment check. This WP's blast radius must not include that. Normalize
+     at the comparison, where the skew actually is;
   5. `HOME` and `USERPROFILE` have the **same, non-empty** value as each other —
      the generator binds both to the one `o.home`, which this function cannot
      derive from `expectLauncher`, so equality-plus-non-empty is the strongest
@@ -961,7 +1078,26 @@ Capture 1 is `NODE`, the **execution position** — returned as `exec`, never
 compared (Table B; Residual 9). Capture 2 is `LAUNCHER`, what condition (d)
 compares. The `( " " ARG )*` tail is the region the round-2 prefix match left
 completely unvalidated, and end-anchoring it is the single change that closes
-every appended vector.
+every appended **operator** vector — a `&`, `|`, `<`, `>`, `(`, `)`, `^` or `%`
+appended anywhere in the tail now falls outside `BARE` and outside `QTOKEN`, so
+the grammar rejects it.
+
+**What end-anchoring does NOT close, stated because a canonical table must not
+assert more than it delivers.** The grammar constrains the tail's **lexical
+shape**; it does not authenticate the tail's **content**. Anything satisfying
+`ARG := QTOKEN | BARE` still grades `match`. Executed by the reviewer against
+this grammar: a space followed by a bare `evil.exe` appended (it is a token from
+`cmdArgToken`'s own charset) → `match`; a space followed by `"C:\evil.exe"` →
+`match`; the canonical
+`--descriptor` value swapped to `"C:\evil\forged.json"` → `match`; the
+`--expect-digest` value swapped to `sha256:deadbeef` → `match`; a space followed
+by `--job-digests <attacker base64url map>` appended → `match`. The launchd row
+has the identical hole by construction: Table B decides `match` on `args[1]` alone,
+so `args[2..]` — the launcher's own `--descriptor` and `--expect-digest`
+authorization arguments — are equally uncompared. **This entire argument tail is
+named in Residual 9**, which also records that the routed follow-up
+`WP-scheduler-stable-exec-position` does **not** close it. Do not read this
+grammar as an authorization check on what the launcher is told to do.
 
 **The closure property: `BARE` must BE `cmdArgToken`'s charset, not resemble it.**
 The safety argument above ("an injected operator cannot survive either check")
@@ -1057,7 +1193,7 @@ There are exactly three seams:
 | `probeAll(paths, opts)` | **mandatory** when `opts.probe` is absent | optional; **forbidden** in AC-4 | **not accepted** | no |
 | `doctorSchedulerChecks(paths, opts)` | **mandatory** when `opts.probe` is absent | optional | **not accepted** | no |
 | `reloadMissing(paths, opts)` | **mandatory** when `opts.probe` is absent | optional; **forbidden** in AC-5 | **MANDATORY, unconditionally** | **yes** — `schedule.reloadJob` |
-| `repairCatchup(paths, manifest, opts)` | **mandatory** when `opts.probe` is absent | optional; **forbidden** in AC-12b | **MANDATORY, unconditionally** | **yes** — `darwinReplaceEntry` / `schtasks /create /f`, reached from **three** attended production callers (`sync.js:222`, `adopt.js:422`, `schedule.js:895`) |
+| `repairCatchup(paths, manifest, opts)` — **called DIRECTLY via the export this WP adds**, never through `repointSchedules` (see "Why `repairCatchup` is exported") | **mandatory** when `opts.probe` is absent | optional; **forbidden** in AC-12b | **MANDATORY, unconditionally** | **yes** — `darwinReplaceEntry` / `schtasks /create /f`, reached from **three** attended production callers (`sync.js:222`, `adopt.js:422`, `schedule.js:895`) |
 
 Four rules follow, and every acceptance criterion that touches a row must
 satisfy them in addition to its own assertion:
@@ -1070,31 +1206,26 @@ satisfy them in addition to its own assertion:
   `schedulerSpawn`'s throw stays armed for every test in this WP, so a heal that
   slipped past R2 fails loudly instead of mutating the maintainer's launchd.
   Machine-checked by verification step 5's negative grep; mutation M17.
-- **R2 — where `opts.loader` is MANDATORY it is a recording stub, injected
-  INLINE at every call site**: it pushes its argv onto an array and returns a
-  canned `{status}` **without spawning**. The AC asserts the recorded list with
-  `assert.deepEqual` against the exact expected argv sequence — never `.some(…)`
-  / `.length > 0`, which cannot distinguish "the calls I expected" from "those
-  plus others". *Inline* is a hard requirement, not a style note: the `loader:`
-  key must appear on the **same source line** as each `reloadMissing(` /
-  `repairCatchup(` call, and that line must be **one statement with no comment on
-  it**, because that is exactly what verification step 5c enforces.
-  **Be precise about what 5c is.** It is a **per-line** structural backstop, not
-  a semantic per-call-site proof — no zero-dependency check in this repo parses
-  JavaScript. Its three clauses (an inline `loader:`; exactly one `;`; no `//`
-  or `/*`) exist because each was an executed bypass of a weaker form: a
-  file-wide count of `loader:` keys against a file-wide count of mutating calls
-  is satisfied by `reloadMissing(paths);` plus an unrelated `{loader: …}`
-  literal; a bare per-line `loader:` grep is satisfied by
-  `status.reloadMissing(paths); schedule.repairCatchup(paths, m, {loader: s});`
-  (the first call unstubbed) and by
-  `status.reloadMissing(paths); // loader: injected above` (a comment blessing
-  the line). **The real guarantee is defence in depth**, and 5c is its outermost
-  layer: the ACs' `assert.deepEqual` on the recorded argv list is what actually
-  proves the right calls happened, and R1's armed suite guard is what makes an
-  escaped call throw in `schedulerSpawn` (`src/scheduler/spawn.js:26`) before any
-  `launchctl` runs. 5c's job is to stop a *sloppy* test from silently leaning on
-  the backstop.
+- **R2 — where `opts.loader` is MANDATORY it is a recording stub**: it pushes its
+  argv onto an array and returns a canned `{status}` **without spawning**. The AC
+  asserts the recorded list with `assert.deepEqual` against the exact expected
+  argv sequence — never `.some(…)` / `.length > 0`, which cannot distinguish "the
+  calls I expected" from "those plus others".
+  **How R2 is enforced: at RUNTIME, not by reading the test file's source text.**
+  Round 3 additionally required the `loader:` key to sit inline on the call's own
+  line so a per-line check could police it. That check went through three forms,
+  each executed and broken **in both directions**, and it is **deleted** — see
+  verification step 5c's replacement comment, which records every bypass and
+  every false reject and forbids a fourth attempt (ADR-0031's loop
+  circuit-breaker: subtract the mechanism, keep the guarantee). **The inline /
+  one-statement / no-comment formatting constraints are withdrawn with it.**
+  What remains is stronger because it is executable: R1 keeps
+  `WIENERDOG_TEST_NO_REAL_SCHEDULER` set, so an unstubbed call hits
+  `schedulerSpawn`'s throw (`src/scheduler/spawn.js:26`) before any scheduler
+  process is created. Executed this session: it **throws out of `repairCatchup`**,
+  and in `reloadMissing` it is swallowed into `failed` (`status.js:259`) — which
+  is exactly why AC-5a and AC-9a additionally assert the returned
+  `{reloaded, failed}`. AC-14 states the three layers in order.
 - **R3 — a criterion that claims to exercise `expect` construction must NOT pass
   `opts.probe`.** `opts.probe` replaces `defaultProbe` entirely, so
   `probeAll`/`reloadMissing`/`repairCatchup`'s own `expect` build is unreachable
@@ -1139,15 +1270,21 @@ call, for every entry that enters the heal set. The first two rows are why (C3).
 | Observed status | 1st `bootstrap` | `bootout` issued? | 2nd `bootstrap` | Pre-destructive marker refresh | End state on a crash mid-sequence |
 |---|---|---|---|---|---|
 | `missing`, and the label really is absent | succeeds (nothing loaded) | **no** | not reached | **attempted** (before the 1st bootstrap) | n/a — no destructive step is reached |
-| `missing`, but the label is in fact still loaded — a **transient** presence-query failure (step 4 maps `r.error` and any non-zero exit to `missing`) | **fails** (label already loaded) | **yes** | issued | **attempted** (before the 1st bootstrap) | whatever the marker's live probe found — `missing`, `mismatched` or `unverified`, never a stale `loaded` (‡); `doctor`'s live probe reports `missing` |
+| `missing`, but the label is in fact still loaded — a **transient** presence-query failure (step 4 maps `r.error` and any non-zero exit to `missing`) | **fails** (label already loaded) | **yes** | issued | **attempted** (before the 1st bootstrap) | whatever the marker's live probe found (†)(‡) — usually `missing`/`mismatched`/`unverified`, **but `loaded` when the transient failure has cleared by the time the marker re-probes**, which leaves the cache optimistic across the destructive window (Residual 8 — OPEN DEFECT, routed to the owner). `doctor`'s live probe reports `missing` either way |
 | `mismatched` | fails (label already loaded) | yes | issued | **attempted** (before the 1st bootstrap) | cache says `mismatched` (†)(‡); digest template F persists; `doctor`'s live probe reports `missing` |
 | `unverified` | fails (label already loaded) | yes | issued | **attempted** (before the 1st bootstrap) | cache says `unverified` (†)(‡); digest template U persists; `doctor`'s live probe reports `missing` |
 | `loaded` / `unknown` | never called | no | no | **not attempted** — not in the heal set, so no replacement call happens at all | n/a |
 
 (†) The marker re-probes rather than persisting the verdict that triggered the
 heal, so what lands in the cache is what the live probe found at that instant —
-normally the same member. Residual 8 records the single case where the two can
-differ and why it is accepted rather than closed.
+usually the same member. **It is not always.** A transient failure of the heal
+loop's own presence query grades a still-loaded label `missing`; if the transient
+condition has cleared when the marker re-probes, the marker persists `loaded` for
+that same unchanged record and the cache is optimistic exactly across the
+`bootout` window. That needs **no concurrency and no external mutation**.
+**Residual 8 is therefore an OPEN DEFECT routed to the owner, not an accepted
+residual** — an earlier draft of this table asserted "never a stale `loaded`"
+here, and that claim is false.
 
 (‡) **"Attempted", not "written".** `refreshSchedulerStatus`
 (`src/scheduler/status.js:131-140`) swallows every `mkdir`/`write`/`rename`
@@ -1157,8 +1294,10 @@ a failed write durable. When the write does not land, the pre-existing cache
 contents are left intact — possibly a stale `loaded` from the last
 `run-job` refresh (`src/cli/run-job.js:1236`) — and the "End state" column above
 degrades to that stale value for exactly the crash window. The replacement
-**still proceeds**: Residual 10 states why gating it was considered and
-deliberately rejected, and names `doctor`'s live probe as the recovery.
+**still proceeds** — and **whether it may** is an owner decision, not this
+spec's: Residual 10 and round-2/3 disposition 4 set out the two readings of
+ADR-0018:294-296, and Definition of done item 9 routes it. `doctor`'s live probe
+is the recovery either way.
 
 ### Mirrored Surface Checklist
 
@@ -1166,13 +1305,15 @@ deliberately rejected, and names `doctor`'s live probe as the recovery.
 
 - [ ] Deliverables rows for `src/scheduler/status.js`, `src/cli/schedule.js`, `src/cli/doctor.js`, `src/cli/dream.js`
 - [ ] "Exact contracts" → `defaultProbe` steps 5-8 **and step 8b**, `probeAll`'s `expect`, `reloadMissing`'s `HEAL_SET`, `repairCatchup`'s heal gate **and its notice discipline**
-- [ ] Acceptance criteria AC-3, AC-3c, AC-4, AC-5, AC-6, AC-7, AC-12, AC-12b
+- [ ] Acceptance criteria AC-3, AC-3c, AC-4, AC-5, AC-6, AC-7, AC-12, AC-12b **and AC-12c** (the notice discipline is a Table A fact — which observed member gets which notice — so it belongs on this row; its absence here in round 3 was the same partial-registration drift this checklist exists to prevent)
 - [ ] Verification greps for `'mismatched'` / `'unverified'` in `src/scheduler/status.js`
 - [ ] Current state: `status.js:85`, `status.js:159-171`, `status.js:181-194`, `status.js:257`, `schedule.js:607/626`, `schedule.js:619/639` (the notice strings), `generators.js:20-22` (`nodePath` = `process.execPath`, why step 8b exists)
 - [ ] Table D (the one existing assertion it invalidates)
 - [ ] Table E (which statuses reach the destructive path)
 - [ ] The **"why a deleted execution-position program is `mismatched` and NOT a sixth member"** note, which is the one place this WP reads owner-signed ADR text rather than restating it
-- [ ] Mutation checks M3, M4, M5, M6, M7, M11, M12, M13, M14, M25
+- [ ] Mutation checks M3, M4, M5, M6, M7, M11, M12, M13, M14, M25 **and M28**
+      (M28 appeared in **no** table's checklist before round 5 — structurally the
+      same drift that left the `repairCatchup` marker ungated until AC-9c)
 - [ ] **`docs/adr/0018-windows-scheduled-dreaming.md` — the 2026-07-25 amendment,
       decisions 1-2** (it names the members, the fail-closed default and the
       `doctor` severities). It is **not** a Deliverables row (nobody edits it from
@@ -1192,7 +1333,7 @@ deliberately rejected, and names `doctor`'s live probe as the recovery.
 - [ ] Acceptance criteria AC-1 (including fixture (ii-b), the poisoned canonical bind), AC-2, AC-3c
 - [ ] Verification greps for `loadedEntryTargets` / `deriveIdentityArgv`; the darwin real-machine step 7 (**which asserts `.verdict`, not a bare string**)
 - [ ] Current state: `generators.js:20-22`, `:129-143`, `:261-270` (the canonical binding set condition (c0) binds to), `:494-497`, `:516-524`, `:530-532`, `:556-567`, `:622-631`; `schedule.js:184-195`
-- [ ] Mutation checks M1, M2, M15, M18, M22, M25
+- [ ] Mutation checks M1, M2, M15, M18, M22, **M29** (condition (c0) rule 4's normalized comparison), M25
 - [ ] The **evaluation order** `(0) → (a) → (b) → the Table B1 split → (c) → (d) → (c0)` and
       the reason (d) outranks (c0) — mirrored in AC-1 (ii-b) and in the
       "Why (0), (a), (b) and (c0) map to `indeterminate`" note
@@ -1224,13 +1365,17 @@ deliberately rejected, and names `doctor`'s live probe as the recovery.
 **Table C (test seams)** — surfaces that mirror it:
 
 - [ ] "Exact contracts" → `defaultProbe`'s seam resolution and steps 1-2, the
-      `probeAll` / `reloadMissing` / `repairCatchup` forwarding snippets
+      `probeAll` / `reloadMissing` / `repairCatchup` forwarding snippets, **and
+      "Why `repairCatchup` is exported"** (the export is a seam fact: it is what
+      makes AC-9c / AC-12b / AC-12c writable at all)
+- [ ] Deliverables row for `src/cli/schedule.js` (the `module.exports` addition)
+      and verification step 5's anchored exports-line grep
 - [ ] Implementation notes → "Test seams in the new tests"
 - [ ] Security checklist bullet 3 (what backstops a mutation in these tests)
 - [ ] Acceptance criteria AC-3, AC-3b (the one no-seam exception to the row), AC-4, AC-5, AC-12b, AC-14
-- [ ] Verification step 5b's negative grep for `delete process.env.WIENERDOG_`, and step 5c's **three-clause per-line** structural check (inline `loader:`; exactly one `;`; no comment)
+- [ ] Verification step 5b's negative grep for `delete process.env.WIENERDOG_` (R1). **Step 5c is DELETED** — R2 is now enforced at runtime (the armed suite guard plus AC-5a/AC-9a's `{reloaded, failed}` assertions and every criterion's recorded-argv `deepEqual`), not by any structural check on the test file's source; step 5c's replacement comment is the record of why, and it forbids re-adding one
 - [ ] Current state: `status.js:80-86` (the neutralizer order), `spawn.js:24-36`, `schedule.js:565` + `sync.js:222` + `adopt.js:422` + `schedule.js:895` (the three attended production callers that reach `repairCatchup`'s mutation)
-- [ ] Mutation checks M12, M13, M16, M17, M19, M20
+- [ ] Mutation checks M12, M13, M16, M17, M19, **M20 (repurposed in round 5 — it now removes an `opts.loader` and must redden a TEST, not a grep)**
 - [ ] **`docs/adr/0018-windows-scheduled-dreaming.md`** — the 2026-07-07
       amendment's decision 2 invariant (*every scheduler mutation goes through
       `schedulerSpawn`; every scheduler test uses a seam AND is backstopped by
@@ -1250,11 +1395,11 @@ deliberately rejected, and names `doctor`'s live probe as the recovery.
       `repairCatchup` marker had no gate at all
 - [ ] Verification grep for `darwinReplaceEntry`, **and for `refreshSchedulerStatus` in `src/cli/schedule.js`** (0 matches on `main` — discriminating)
 - [ ] Current state: `schedule.js:714`, `:618`, `:287`, `:402`; `status.js:131-140`
-      (`refreshSchedulerStatus` re-probes — Residual 8 — **and swallows every write
+      (`refreshSchedulerStatus` re-probes — Residual 8, an OPEN DEFECT — **and swallows every write
       error** — Residual 10)
 - [ ] Implementation notes → "Why bootstrap first" and "Why the marker, and why
       it is UNCONDITIONAL" (including the `markerAttempted` naming rule)
-- [ ] Residuals 3, 8 and 10 (the crash window; the marker's re-probe race; the marker's best-effort write)
+- [ ] Residuals 3, **8 (an OPEN DEFECT routed to the owner as of round 5 — the marker's re-probe can persist `loaded` with no concurrency at all; Table E row 2 and the `(†)` footnote were corrected to match)** and 10 (the crash window; the marker's best-effort write)
 - [ ] Mutation checks M8, M9, M10, M21, M26, M27
 - [ ] **`docs/adr/0018-windows-scheduled-dreaming.md`** — decision 2's
       bootstrap-first ordering, its rejection of bootout-first, and the
@@ -1343,7 +1488,7 @@ deliberately rejected, and names `doctor`'s live probe as the recovery.
 - **Ambiguity → choose the simpler option** and record it under "Decisions
   made" in the PR body. Do NOT expand scope to resolve ambiguity.
 
-### Round-2 and round-3 review dispositions (things deliberately NOT done)
+### Round-2 / 3 / 5 review dispositions (things deliberately NOT done)
 
 Recorded here so a reviewer sees an argued decision rather than a silent drop.
 
@@ -1368,14 +1513,45 @@ Recorded here so a reviewer sees an argued decision rather than a silent drop.
 3. **No `docs/GLOSSARY.md` entry.** Resolved by renaming `foreign` →
    `mismatched` instead, which removes the collision that motivated the entry.
    See the "Naming" note under Table A.
-4. **The destructive replacement is NOT gated on the marker having been
-   persisted — REJECTED with reasons, not overlooked.** Round 2's Codex leg asked
-   for `refreshSchedulerStatus` to report success and for the `bootout` to be
-   skipped when it failed. The observation behind it is correct and is fixed
-   (`markerAttempted`, the `(‡)` footnote, Residual 10); the **remedy** is
-   rejected. Three reasons, in order of weight. (i) When
-   `state/scheduler-status.json` cannot be written, the durable channel is
-   already dead on that machine — `run-job`'s hourly refresh and `sync`'s
+4. **Gating the destructive replacement on the marker having been persisted —
+   NOT AN ARCHITECT'S CALL. ROUTED TO THE OWNER, BOTH READINGS PRESENTED.**
+   Round 2's Codex leg asked for `refreshSchedulerStatus` to report success and
+   for the `bootout` to be skipped when it failed. The **observation** behind it
+   is correct and is recorded (`markerAttempted`, Table E's `(‡)` footnote,
+   Residual 10): with `EACCES`/`ENOSPC` the refresh silently fails, a stale
+   `loaded` cache survives, the replacement proceeds anyway, and a kill after the
+   `bootout` reproduces the outcome ADR-0018's signed postcondition describes as
+   excluded.
+
+   **This turns on what owner-signed text MEANS, and the two review legs read it
+   oppositely.** `docs/adr/0018-windows-scheduled-dreaming.md:294-296` reads, in
+   full: *"Before any destructive replacement, the durable status cache is
+   refreshed from the live probe, so a process killed mid-replacement leaves a
+   pessimistic record rather than a stale `loaded` one."*
+
+   - **Reading A (Codex — the WP is blocked).** The sentence states a
+     *postcondition*, not just a step: "leaves a pessimistic record rather than a
+     stale `loaded` one" is the guaranteed outcome. A best-effort refresh whose
+     failure is invisible does not deliver it, so shipping the ungated
+     replacement **waives a signed postcondition**. In Codex's words: *"The
+     tradeoff may be reasonable policy, but it requires an owner amendment; a WP
+     residual cannot waive the current signed postcondition."*
+   - **Reading B (wd-reviewer — the disposition is sound).** The sentence
+     mandates that the cache be *refreshed* before a destructive replacement; the
+     "so …" clause states the intent of doing so, not an independent obligation
+     to **abandon** the replacement when the refresh fails. The refresh is
+     performed unconditionally, therefore the requirement is met; naming the
+     residual honestly is the correct disposition.
+
+   **The architect does not pick.** Which reading governs is an authority
+   question about signed text, and neither an architect nor a reviewer may settle
+   it. **This WP cannot proceed past this point until the owner chooses.** It is
+   Definition of done item 9.
+
+   **If the owner picks Reading B**, the three reasons the ungated form was
+   preferred stand and belong in the PR's "Decisions made", in order of weight.
+   (i) When `state/scheduler-status.json` cannot be written, the durable channel
+   is already dead on that machine — `run-job`'s hourly refresh and `sync`'s
    trailing refresh use the same swallowing writer — so gating does not make the
    cache honest, it only withholds the repair. (ii) The harm gating prevents needs
    **two** independent failures at once (an unwritable state dir **and** a kill
@@ -1383,30 +1559,57 @@ Recorded here so a reviewer sees an argued decision rather than a silent drop.
    needs only the first, and it is the refusal to repair a hijacked entry — the
    exact failure this WP exists to end. (iii) `doctor`'s live probe is unaffected
    by an unwritable state dir and still reports `mismatched` with exit 1, so the
-   user is not left silent either way. ADR-0018's signed decision 2 requires the
-   cache to be *refreshed* before a destructive replacement; it does not require
-   the replacement to be abandoned when the refresh fails, so this is a reading
-   of the signed text, not a deviation from it — but the ADR's *"so a process
-   killed mid-replacement leaves a pessimistic record"* clause is unconditional
-   where the code is best-effort, which is an ADR-side precision gap. Report it as
-   a Discovered issue (see disposition 5); do not edit the ADR.
+   user is not left silent either way.
+   **If the owner picks Reading A**, this WP is blocked on an ADR-0018 amendment
+   that either (a) qualifies the postcondition to match a best-effort writer, or
+   (b) requires the replacement to be abandoned on a failed refresh — in which
+   case `refreshSchedulerStatus` must first be made to report persistence, which
+   is `WP-scheduler-status-write-observable` (Residual 10) and a prerequisite of
+   this WP rather than a follow-up. Either way the ADR's unconditional
+   *"leaves a pessimistic record"* clause is still reported as a Discovered issue
+   (disposition 5); do not edit the ADR from this WP.
 5. **Two ADR-side inaccuracies are reported, NOT fixed here.** `docs/adr/0018-…:297`
    says *"`sync` remains the sole healer"*; executed at `efd1489`, `repairCatchup`
    is reachable from `sync.js:222`, `adopt.js:422` and `schedule.js:895` — the
    claim is false on `main`, before this WP, and this spec no longer repeats it.
    Decision 2's *"so a process killed mid-replacement leaves a pessimistic
    record"* is likewise unconditional where the writer is best-effort
-   (disposition 4). The ADR is **owner-signed and deliberately not a
-   deliverable**; per this spec's own Mirrored Surface rule a divergence is
+   (disposition 4, and the subject of the owner decision in Definition of done
+   item 9). The ADR is **owner-signed and deliberately not a deliverable**; per this spec's own Mirrored Surface rule a divergence is
    resolved by amending the ADR in its own pass. Put both under **"Discovered
    issues"** in the PR body with the proposed follow-up slug
    `WP-adr-0018-healer-and-marker-precision`. Do not edit the ADR to make them
    agree, and do not treat either as a blocker for this WP.
-6. **`repairCatchup`'s success notice is narrowed rather than rewritten, and
+6. **Round 5: two SUBTRACTIONS and one one-token addition — recorded so they read
+   as decisions, not drift.**
+   (a) **Verification step 5c is DELETED, not refined.** Three successive forms
+   of a per-line structural check on the test file's JavaScript source were
+   specified and all three were executed and broken **in both directions** (the
+   third accepts `status.reloadMissing(paths, (schedule.repairCatchup(paths, m, { loader: rec }), {}));`
+   — one statement, one `;`, an inline `loader:`, no comment, outer call
+   unstubbed — and rejects conforming calls whose options object contains a
+   string with `;` or `//`, an inline `https://…` fixture being the ordinary
+   case). ADR-0031's loop circuit-breaker says subtract, and the guarantee it was
+   approximating already exists at runtime (AC-14 layers (ii) and (iii)). The
+   round-3 formatting constraints it imposed are withdrawn with it. Mutation M20
+   is repurposed to redden a **test** instead of a grep.
+   (b) **Table B condition (c0) rule 4 compares `path.win32.resolve()`-normalized
+   paths**, not raw strings — a healthy non-default `$WIENERDOG_HOME` (trailing
+   separator, or forward slashes) otherwise gets permanent `unverified` plus a
+   `schtasks /create /f` on every `sync` that never converges. `src/core/paths.js`
+   was **rejected** as the place to fix it: it would be an 8th deliverable and
+   would change the identity of a security-validated value for every other
+   consumer. Mutation M29 gates it.
+   (c) **`repairCatchup` is added to `src/cli/schedule.js`'s `module.exports`.**
+   AC-9c, AC-12b and AC-12c are literally unwritable without it — executed
+   evidence under "Why `repairCatchup` is exported". No behavior, signature or
+   caller changes; verification step 5 greps the exports line so it cannot be
+   dropped.
+7. **`repairCatchup`'s success notice is narrowed rather than rewritten, and
    `src/cli/adopt.js` is NOT touched.** See the notice discipline under "Exact
    contracts". The alternative — teaching `adopt`'s `rebindFailed` heuristic to
    distinguish "repaired an `unverified` entry" from "repaired a `missing` one" —
-   would add an 8th deliverable file and change an unrelated command's
+   would add another deliverable file and change an unrelated command's
    success/failure semantics to fix a problem this WP creates at the notice
    source. Fix it at the source.
 
@@ -1451,7 +1654,7 @@ Recorded here so a reviewer sees an argued decision rather than a silent drop.
    this WP over the size bound again. Owner: architect. Follow-up: a small WP
    replacing the `accessSync` with the same identity probe, proposed slug
    `WP-catchup-notice-identity`.
-5. **`wienerdog sync` exit code on a failed heal** — see Round-2 disposition 1.
+5. **`wienerdog sync` exit code on a failed heal** — see disposition 1.
    Owner: Gyula (it is a CLI contract change).
 6. **A same-user actor who controls the OS scheduler is out of scope** (A7/A12
    territory, ADR-0028): this WP detects and repairs accidental and stale
@@ -1470,55 +1673,96 @@ Recorded here so a reviewer sees an argued decision rather than a silent drop.
    time path therefore keeps the pre-existing ambiguity. Owner: architect.
    Follow-up: make `parseWindowsTaskExec` extract a single `<Exec>` element and
    pair within it, proposed slug `WP-windows-task-exec-pairing`.
-8. **The pre-destructive marker RE-PROBES rather than persisting the verdict that
-   triggered the heal.** *(Both review legs examined this one and reached
-   OPPOSITE conclusions. Owner: read both before deciding — this residual
-   deliberately presents the disagreement rather than resolving it by
-   assertion.)*
-   `refreshSchedulerStatus` (`src/scheduler/status.js:131-140`) runs `probeAll`
-   and writes what it finds *now*, not the verdict that put the entry in the heal
-   set. If another Wienerdog process repaired the same label between this
-   process's heal verdict and this marker write, the marker persists `loaded`
-   moments before this process's `bootout` — the one input under which the marker
-   is optimistic rather than pessimistic.
+8. **OPEN DEFECT (not an accepted residual): the pre-destructive marker
+   RE-PROBES rather than persisting the verdict that triggered the heal.**
+   *(Routed to the owner. Two consecutive rounds produced two different accepting
+   arguments and BOTH were falsified. This spec does not offer a third.)*
 
-   **The case for accepting it (leg 2, traced).** The two probes can only
-   disagree if an **external process mutates the loaded record between them**:
-   `launchctl print` is deterministic for an unchanged record, so the marker's
-   `probeAll` and the heal loop's own probe return the same verdict absent
-   outside interference. That requires a **second concurrent healer**. No
-   unattended path heals — `run-job` refreshes the cache but never heals
-   (`status.js:257`) — so the second process must be one of the three **attended**
-   healers (`wienerdog sync`, `wienerdog adopt`, `wienerdog schedule remove`; see
-   Current state), overlapping this one. The window is two adjacent synchronous
-   spawns, and the next attended run's trailing `refreshSchedulerStatus`
-   (`src/cli/sync.js:247`) plus `doctor`'s live probe both correct it.
-   **Correction to an earlier draft of this residual:** it claimed "the only
-   healer is the attended `wienerdog sync`". That is **false** — there are three
-   — so the concurrency argument is weaker than it was written, and it is
-   restated above at its true strength rather than at its flattering one.
+   **What the code does.** `refreshSchedulerStatus` (`src/scheduler/status.js:131-140`)
+   runs `probeAll` and writes what it finds *now*, not the verdict that put the
+   entry in the heal set. Two probes of the same entry, moments apart, decide
+   what lands in the durable cache immediately before a `bootout`.
 
-   **The dissent (leg 1).** Codex judges this an **open behavioral defect**, not
+   **The falsification — no concurrency is required, and this is the second time
+   the accepting grounds were wrong.** Round 3 argued "only a second concurrent
+   healer can make the marker optimistic". Round 4 narrowed it to "only an
+   external mutation can make the two probes disagree, because `launchctl print`
+   is deterministic for an unchanged record". Both are false, and a **single
+   process on an idle machine** defeats them:
+
+   1. the heal loop's presence query fails **transiently** — a killed spawn, a
+      busy `launchctl`, any `r.error`. `defaultProbe` step 4 maps that to
+      `missing` for a label that is in fact still loaded;
+   2. the entry enters the heal set, and the marker's `refreshSchedulerStatus`
+      re-probes. That second query **succeeds** (the transient condition is gone)
+      and grades the **unchanged** record `loaded`, which is what gets persisted;
+   3. `darwinReplaceEntry`'s first `bootstrap` fails, because the label really is
+      occupied, so `bootout` issues;
+   4. a kill between the `bootout` and the second `bootstrap` leaves **no entry**
+      while the durable cache says `loaded`.
+
+   The two probes read the same unchanged record and disagreed because the
+   **first** one failed, not because anything was mutated. That falsifies the
+   determinism premise directly, and with it Table E row 2's former claim that
+   the cache is "never a stale `loaded`" — which is why that cell now says the
+   opposite. Note this is the *same* transient-failure path that the
+   "Why the marker is UNCONDITIONAL" note relies on to justify writing the marker
+   at all: the spec cannot invoke that path to argue the marker is necessary and
+   then assume it away to argue the marker is sufficient.
+
+   **The dissent that was right (leg 1, Codex).** An open behavioral defect, not
    an acceptable residual: concurrency is an ordinary operating condition rather
-   than an adversarial or A12-only one, `src/scheduler/status.js` is already a
-   deliverable so the fix would need no new file, and ADR-0018's postcondition is
-   not qualified by "unless two attended commands overlap".
+   than an A12-only one, `src/scheduler/status.js` is already a deliverable so the
+   fix needs no new file, and ADR-0018's postcondition is not qualified.
 
-   **Why it is nonetheless deferred rather than closed here.** Closing it means
-   persisting the *observed* status for the entry being replaced instead of
-   re-probing, which needs a new targeted single-entry writer in `status.js` —
-   and, decisively, it reads against ADR-0018's **owner-signed** wording *"the
-   durable status cache is refreshed **from the live probe**"*. An architect may
-   not override owner-signed text from inside a WP, so this needs its own
-   amendment pass whichever leg is right. Owner: Gyula (it is an ADR amendment).
-   Follow-up: proposed slug `WP-scheduler-marker-persists-verdict`, which carries
-   the ADR amendment with it.
-9. **The EXECUTION POSITION is authenticated for existence only, never for
-   identity.** Stated exactly, because this is the boundary of what a `loaded`
-   verdict means: **a record graded `loaded` may start ANY program that exists on
-   disk, provided our launcher sits in the launcher position immediately after
-   it** (`args[0]`/`args[1]` on launchd; Table B1's `NODE`/`LAUNCHER` on
-   schtasks). `defaultProbe` step 8b closes the *accidental* half of this — a
+   **What is still true and is NOT in dispute.** The three production callers
+   (`sync.js:222`, `adopt.js:422`, `schedule.js:895`), the correction that
+   `sync` is not the sole healer, and the fact that no unattended path heals
+   (`status.js:257`) were all re-verified in round 4 and stand.
+
+   **Routing — this is the honest disposition, and it is not a justification.**
+   *We know of no accepting argument that survives review.* Closing it in code
+   means persisting the **observed** status for the entry being replaced instead
+   of re-probing, which needs (a) a new targeted single-entry writer in
+   `src/scheduler/status.js`, and (b) an **ADR-0018 amendment**, because the
+   owner-signed text says the cache is refreshed *"from the live probe"* and
+   persisting the observed verdict reads against that wording. An architect may
+   not override owner-signed text from inside a WP. **Owner: Gyula.** Follow-up:
+   `WP-scheduler-marker-persists-verdict`, carrying the ADR amendment with it.
+   Until the owner rules, treat this as a known open defect of this WP — say so
+   in the PR body; do not restate it as an accepted tradeoff.
+
+9. **The EXECUTION POSITION is authenticated for existence only, and THE ENTIRE
+   LAUNCHER ARGUMENT TAIL is not authenticated at all.** Stated exactly, because
+   this is the boundary of what a `loaded` verdict means: **a record graded
+   `loaded` may start ANY program that exists on disk, provided our launcher sits
+   in the launcher position immediately after it — and may pass that launcher ANY
+   arguments whatsoever** (`args[0]`/`args[1]` on launchd, with `args[2..]`
+   uncompared; Table B1's `NODE`/`LAUNCHER` on schtasks, with the
+   `( " " ARG )*` tail constrained only in lexical shape).
+
+   **The argument tail is not a footnote — it carries the launcher's own
+   authorization.** `--descriptor` names the job descriptor `launch.js` will
+   execute and `--expect-digest` is the digest it checks that descriptor against
+   (`generators.js:534-567`); `--job-digests` carries the catch-up authorization
+   map. Executed by the reviewer against Table B1's end-anchored grammar, all
+   five still grade `match`: a space plus a bare `evil.exe` appended; a space plus
+   a quoted `"C:\evil.exe"`; `--descriptor` swapped to `"C:\evil\forged.json"`;
+   `--expect-digest` swapped to `sha256:deadbeef`; and a space plus
+   `--job-digests <attacker map>` appended. The launchd row is the same by
+   construction. So end-anchoring closed every appended **operator** vector and
+   nothing else; Table B1 says so in those words.
+
+   **The routed follow-up does NOT cover this.**
+   `WP-scheduler-stable-exec-position` (below) makes the **execution position**
+   comparable. It says nothing about the argument tail, so that follow-up alone
+   would leave this residual half-open. Closing the tail needs its own decision —
+   compare the whole launch argv against what `windowsCmdArguments` /
+   `launchdPlist` would emit for this install, which is a stricter contract than
+   this WP's `unverified`-on-any-deviation posture can absorb without a Windows
+   round-trip verification (Residual 2). Proposed slug for the tail:
+   `WP-scheduler-argument-tail-identity`. Owner: architect. Both follow-ups are
+   needed; neither subsumes the other. `defaultProbe` step 8b closes the *accidental* half of this — a
    node binary deleted by a `brew upgrade` / `nvm uninstall` / package removal,
    which is the incident restated with "node path" for "launcher path" — because
    a path that no longer exists is a definite failure. It does **not** close the
@@ -1554,7 +1798,10 @@ Recorded here so a reviewer sees an argued decision rather than a silent drop.
     does not make a **failed** write durable. When the write does not land, the
     previous cache contents survive — possibly a stale `loaded` from the last
     `run-job` refresh — and the destructive replacement **proceeds anyway**;
-    disposition 4 states the three reasons that was chosen over gating.
+    **whether that is permissible under ADR-0018:294-296 is an OWNER decision**
+    — disposition 4 sets out both readings and Definition of done item 9 routes
+    it; the three reasons the ungated form was preferred apply only if the owner
+    picks Reading B.
     Recovery is `doctor`'s live probe, which never reads the cache. Owner:
     architect. Follow-up: make `refreshSchedulerStatus` report persistence and
     decide the fail-closed direction in a spec of its own; proposed slug
@@ -1660,7 +1907,20 @@ mechanism.
       assertion — a record whose exec segment names a **foreign** launcher **and**
       whose `WIENERDOG_HOME` bind names that foreign core (the incident's own
       temp-core shape) → **`mismatch`, not `indeterminate`**, because (d) is
-      evaluated before (c0). Mutations M18 and M22 both target this test;
+      evaluated before (c0). Assert in the same named test **the HEALTHY
+      NON-DEFAULT CORE fixtures (rule 4's normalization)** — this is the round-4
+      regression, and without them a healthy Windows install with a supported
+      `$WIENERDOG_HOME` warns forever and re-registers on every `sync`. Build the
+      argline with `generators.windowsCmdArguments` passing `core` **exactly as a
+      user may set `WIENERDOG_HOME`** — `assertSafeOverride`
+      (`src/core/paths.js:21-31`) returns it verbatim, so the two supported skews
+      are real — and pass `launcher = path.win32.join(core,'launcher','launch.js')`:
+      `C:\Users\bob\.wienerdog\` (trailing separator) → **`match`**, and
+      `C:/Users/bob/.wienerdog` (forward slashes) → **`match`**. Executed this
+      session: under the raw comparison both return `indeterminate`, and under the
+      `path.win32.resolve()` comparison both return `match` while the default
+      shape `C:\Users\bob\.wienerdog` is unchanged. Mutations M18, M22 and M29
+      all target this test;
       (iii) **two `<Exec>` elements** (Table B condition (0)) where Exec₁ is a
       foreign command and Exec₂ is our canonical action → `indeterminate`;
       (iv) an **odd** double-quote count in the inner string → `indeterminate`;
@@ -1815,16 +2075,37 @@ mechanism.
       single entry is `mismatched` when the canned `arguments` block's second
       entry is a temp-dir launcher, and `loaded` when it is
       `generators.launcherPath(paths)`.
-- [ ] **AC-5** *(same gap, heal side)* `reloadMissing` end-to-end, **`opts.probe`
-      forbidden**, `opts.run` injected the same way and `opts.loader` a recording
-      stub (Table C R2 — mandatory here, because this criterion drives the heal).
-      Two separately-named tests:
-      **AC-5a** a configured job whose canned identity output names a foreign
-      launcher IS healed — `assert.deepEqual` on the recorded loader argv list
-      against the exact expected sequence;
+- [ ] **AC-5** *(same gap, heal side)* `reloadMissing` end-to-end, `opts.loader` a
+      recording stub (Table C R2 — mandatory here, because this criterion drives
+      the heal). **Three separately-named tests**, the first two with
+      **`opts.probe` forbidden** and `opts.run` injected:
+      **AC-5a** — name it
+      `entry-identity: reloadMissing heals a configured job whose loaded record names a foreign launcher`.
+      A configured job whose canned identity output names a foreign launcher IS
+      healed: `assert.deepEqual` on the recorded loader argv list against the
+      exact expected sequence, **and** `assert.deepEqual` on the return value
+      against `{reloaded: ['dream'], failed: []}`.
+      **The return-value assertion is not decoration — it is the runtime
+      replacement for the deleted verification step 5c** (AC-14 layer (iii)).
+      `reloadMissing` swallows a throwing loader into `failed` (`status.js:259`),
+      so an omitted `opts.loader` produces an EMPTY recorded list and
+      `{reloaded: [], failed: ['dream']}` rather than an error — executed this
+      session. Mutation M20 is exactly that omission and must redden this test;
       **AC-5b** *(the negative)* the same setup with the canned output naming
       `generators.launcherPath(paths)` heals **nothing** — the recorded loader
-      argv list is `[]` and `reloaded`/`failed` are both empty.
+      argv list is `[]` and `reloaded`/`failed` are both empty;
+      **AC-5c** *(the `unverified` member — the test M7 names and no criterion
+      previously mandated)* name it
+      `entry-identity: reloadMissing heals an unverified entry`.
+      `opts.probe: () => 'unverified'` (this one MAY use `opts.probe`: it exercises
+      the `HEAL_SET` membership, not the `expect` construction — Table C R3) with
+      the recording `opts.loader`: the job IS healed, asserted with
+      `assert.deepEqual` on the recorded argv list and on
+      `{reloaded: ['dream'], failed: []}`. Mutation M7 drops `'unverified'` from
+      `HEAL_SET` and must redden it. **Before round 5 M7 named a test no criterion
+      required** — the same ungated-mutation drift that left the `repairCatchup`
+      marker with no gate until AC-9c, and the reason the Mirrored Surface
+      Checklist now registers M28 too.
 - [ ] **AC-6** `doctorSchedulerChecks` maps the five members to the Table A
       severities (`mismatched` → `fail`), and the `loaded` / `missing` message
       strings are byte-identical to today's.
@@ -1842,14 +2123,19 @@ mechanism.
       `state/scheduler-status.json` at **every** call and records what it saw
       (`{exists, parsed}`), so both assertions are about the file **at the moment
       of the first loader call**, never about its state afterwards.
-      **AC-9a** *(the C3 regression — the one that must exist)* a configured job
-      whose canned presence result is a **non-zero exit** — i.e. observed
-      `missing` — is healed, and at the recording loader's **first** call the file
-      already exists, parses, and has a `checked_at` string plus an `entries`
-      array. The marker is therefore written **even for an observed `missing`**,
-      because that verdict can be a transient presence-query failure on a label
-      the very next `bootout` will destroy (Table E, row 2). Mutation M21 re-adds
-      the old `status !== 'missing'` condition and must turn **this** test red.
+      **AC-9a** *(the C3 regression — the one that must exist)* Name it
+      `entry-identity: reloadMissing writes the durable marker even for an observed missing entry`.
+      A configured job whose canned presence result is a **non-zero exit** — i.e.
+      observed `missing` — is healed, and at the recording loader's **first** call
+      the file already exists, parses, and has a `checked_at` string plus an
+      `entries` array. Assert the return value too —
+      `{reloaded: ['dream'], failed: []}` — for the AC-14 layer (iii) reason
+      spelled out under AC-5a: an omitted `opts.loader` is swallowed into `failed`
+      rather than thrown, and this assertion is what makes it red. The marker is
+      written **even for an observed `missing`**, because that verdict can be a
+      transient presence-query failure on a label the very next `bootout` will
+      destroy (Table E, row 2). Mutation M21 re-adds the old
+      `status !== 'missing'` condition and must turn **this** test red.
       **AC-9b** *(the negative)* with `opts.probe` reporting `loaded` for every
       job, the recorded loader argv list is `[]` **and
       `state/scheduler-status.json` does not exist** — the marker is tied to a
@@ -1859,10 +2145,23 @@ mechanism.
       **AC-9c** *(the SECOND destructive site — the one round 2 found ungated)*
       Name it
       `entry-identity: repairCatchup writes the durable marker before its first replacement call`.
+      **Call `schedule.repairCatchup` DIRECTLY** — this WP adds it to
+      `src/cli/schedule.js`'s `module.exports` for exactly this reason (see "Why
+      `repairCatchup` is exported"). Do **not** route through `repointSchedules`:
+      executed this session, that seam makes the per-job `ai.wienerdog.dream`
+      bootstrap the **first** loader call and registers the catch-up entry twice,
+      so "the first loader call" is not an assertion about `repairCatchup` at all
+      — the criterion would be unwritable.
       `repairCatchup` on **darwin**, driven the same way (`opts.run` injected,
       `opts.probe` absent, a recording `opts.loader` that reads
       `state/scheduler-status.json` at every call). Assert that at the recording
       loader's **first** call the file already exists and parses.
+      **Executed evidence that this is producible and discriminating** (mkdtemp
+      copy of `src/`, repo tree untouched): with the export added and the current
+      unmodified body, the direct call records exactly one loader call,
+      `['launchctl','bootstrap','gui/<uid>','<temp home>/Library/LaunchAgents/ai.wienerdog.catchup.plist']`,
+      and `state/scheduler-status.json` does **not** exist at it — so the
+      assertion is red before the change and green after.
       **Why this criterion is mandatory and why its absence was a real hole.**
       The marker rule is stated as "unconditional at BOTH destructive sites", but
       AC-9a/AC-9b both drive a **configured job** through `reloadMissing`, and the
@@ -1898,17 +2197,26 @@ mechanism.
       even here, because a repair fires), it repairs on `missing`, `mismatched`
       and `unverified`, and returns `{}` with an **empty** recorded loader argv
       list on `loaded` and `unknown`.
+      **AC-12, AC-12b and AC-12c all call `schedule.repairCatchup` DIRECTLY**, via
+      the export this WP adds to `src/cli/schedule.js`'s `module.exports` — see
+      "Why `repairCatchup` is exported" for the executed evidence that
+      `repointSchedules` cannot carry these three criteria (it prepends per-job
+      loader calls, registers the catch-up entry twice, and does not forward
+      `opts.run` at all, which alone makes AC-12b unwritable through it).
 - [ ] **AC-12b** *(the `expect` construction, modelled on AC-5)* `repairCatchup`
       driven with **no `opts.probe`** (Table C), `opts.run` injected and
       `opts.loader` a recording stub. Two separately-named tests:
       **AC-12b-i** a canned poisoned `arguments` block (second entry = a temp-dir
       launcher) produces a repair — `assert.deepEqual` on the recorded loader
-      argv list; **AC-12b-ii** a canned block naming
+      argv list. (No `{reloaded, failed}` analogue is needed here: `repairCatchup`
+      has no such return, and an omitted `opts.loader` **throws** out of it rather
+      than being swallowed — executed this session — so the test fails outright.)
+      **AC-12b-ii** a canned block naming
       `generators.launcherPath(paths)` produces `{}` and an **empty** recorded
       loader argv list. Without this criterion, dropping `const expect = null`
       into `src/cli/schedule.js:607`/`:626` turns nothing red — and the catch-up
       entry is the exact one that was hijacked 76 times.
-- [ ] **AC-12c** *(the notice discipline — "Exact contracts", disposition 6)*
+- [ ] **AC-12c** *(the notice discipline — "Exact contracts", disposition 7)*
       `repairCatchup` (darwin), `opts.probe` injected, a recording `opts.loader`
       returning `{status:0}` so the repair **succeeds**: observed `missing`
       returns the notice `'restored the missing catch-up registration.'`
@@ -1923,49 +2231,70 @@ mechanism.
       a hijacked one. Mutation M28 targets it.
 - [ ] **AC-13** Every new test name is prefixed `entry-identity:` (with a
       trailing space), and the non-vacuity gate in verification step 1 reports at
-      least **26** **named** passing subtests. (15 → 18: AC-5 and AC-12b are each
-      two named tests and AC-1 gained fixtures. 18 → 21: **AC-1 (ii-b)** the
-      poisoned-binding fixture, **AC-3b** the no-seam subprocess path, and
-      **AC-9b** — AC-9 was two named tests, not one. **21 → 26 in round 3, all
-      five mandated by name in their criteria:** **AC-1 (vii)** the writer/checker
-      closure family, **AC-1 (ix)** the Residual 9 boundary fixture,
-      **AC-3c** the deleted-execution-position regression, **AC-9c** the second
-      destructive site's marker, and **AC-12c** the notice discipline. The gate is
-      a floor, so writing more is fine; writing fewer than the criteria mandate is
-      what it catches.)
-- [ ] **AC-14** *(Table C, mechanically checked)* No test in this WP spawns a
-      real scheduler client. Two conditions, both checked by verification
-      step 5: (i) the file contains **no** `delete process.env.WIENERDOG_…`
-      (R1 — the neutralizers stay set, so `schedulerSpawn`'s throw stays armed);
-      (ii) **every source line containing a `reloadMissing(` or `repairCatchup(`
-      call carries an inline `loader:`, is exactly ONE statement (exactly one
-      `;`), and carries no `//` or `/*` comment** (R2).
-      **Call this what it is: a per-LINE structural backstop, not a per-call-site
-      proof.** A line is not a call site, and nothing in this repo's zero-
-      dependency toolchain parses JavaScript. Each of the three clauses exists
-      because a weaker form was **executed and bypassed**: a file-wide count of
-      `loader:` keys against a file-wide count of mutating calls is satisfied by
-      `reloadMissing(paths);` plus an unrelated `{loader: stub}` literal; a
-      per-line `loader:` grep alone is satisfied by
-      `status.reloadMissing(paths); schedule.repairCatchup(paths, m, {loader: stub});`
-      — the second call blesses the line while the **first** runs unstubbed — and
-      by `status.reloadMissing(paths); // loader: injected above`, where a comment
-      blesses it. The one-statement clause kills the first family; the no-comment
-      clause kills the second.
-      **What actually guarantees safety is defence in depth**, and this check is
-      only its outermost layer: the ACs' `assert.deepEqual` on each recorded
-      loader argv list is the real proof that the intended calls happened, and
-      R1's armed suite guard means an escaped call throws in `schedulerSpawn`
-      (`src/scheduler/spawn.js:26`) before any `launchctl` runs.
-      Consequences for how you write the file, all deliberate: **do not** factor
-      the opts object into a variable, **do not** wrap the call so `loader:` lands
-      on the next line, **do not** put two mutating calls on one line, and **do
-      not** comment a mutating-call line (put the comment on the line above). A
-      `for (const s of […]) repairCatchup(paths, m, { probe: () => s, loader: rec });`
-      is fine — a `for-of` header has no `;`. A C-style `for` loop on the same
-      line is not; use `for-of`. The check fails closed (a commented-out mutating
-      call trips it too); if that bites, delete the comment rather than weaken the
-      check.
+      least **28** **named** passing subtests.
+      **The number is RE-DERIVED in round 5 by enumeration, not carried forward.**
+      Rounds 1-3 grew it by narrative increments (15 → 18 → 21 → 26) and the
+      round-4 review found the gate still literally reading `-ge 21`, i.e. counts
+      of 21-25 passed while failing this criterion — and the five round-3 tests
+      are precisely the ones that make M23, M24, M25, M26/M27 and M28 reddenable,
+      so an implementer who skipped all five still passed. Do not increment this
+      number again; re-enumerate. The 28 are:
+      **(a) 22 tests named by a mutation row** — one per distinct name in the
+      Mutation checks table: M1, M2, M3, M4, M5, M6, M7 (AC-5c), M8, M9,
+      M10/M21 (AC-9a), M11, M12, M13 (AC-5b), M15, M16 (AC-12b-ii),
+      M18/M22/M29 (AC-1 (ii-b)), M19 (AC-3b), M20 (AC-5a),
+      M23/M24 (AC-1 (vii)), M25 (AC-3c), M26/M27 (AC-9c), M28 (AC-12c).
+      Where two or three mutations name the same test it counts **once**; M14 and
+      M17 name a verification step, not a test, so they count zero.
+      **(b) 6 more mandated by a criterion but targeted by no mutation** —
+      AC-1 (ix) the Residual 9 boundary, AC-9b, AC-12b-i, AC-2, AC-12's
+      five-member gate, and AC-15.
+      Everything else a criterion asks for (AC-1's (i)-(viii) fixtures beyond the
+      named ones, AC-3's remaining mappings and its seam-gating pair, AC-7's
+      order/empty/byte-identity assertions) may be folded into the tests above, so
+      it is **not** counted here. The gate is a floor: writing more is fine;
+      writing fewer than the criteria mandate is what it catches. **If you add or
+      remove a named test, update this enumeration AND the literal in verification
+      step 1 in the same edit** — they drifted apart once already.
+- [ ] **AC-14** *(Table C, and what is and is NOT mechanically checked)* No test
+      in this WP spawns a real scheduler client. **This criterion rests on a
+      RUNTIME guarantee plus the criteria's own assertions — not on any structural
+      analysis of the test file's source text.** Three layers, in the order they
+      fire:
+      **(i) R1, mechanically checked by verification step 5b** — the file
+      contains no `delete process.env.WIENERDOG_…`, so
+      `WIENERDOG_TEST_NO_REAL_SCHEDULER` (set for the whole suite by
+      `tests/run.js:7`) stays set for every test here. Mutation M17.
+      **(ii) the armed suite guard — the real guarantee.** With that var set, any
+      call that reaches `schedule.defaultLoader` hits `schedulerSpawn`'s throw
+      (`src/scheduler/spawn.js:26`) **before** a `launchctl` / `systemctl` /
+      `schtasks` process is created. Executed this session against a `mkdtemp`
+      copy of `src/` with no `opts.loader` injected:
+      `reloadMissing(paths, { probe: () => 'missing', platform: 'darwin' })`
+      returns `{reloaded: [], failed: ['dream']}` (the throw is swallowed into
+      `failed` at `status.js:259` — nothing real ran), and
+      `repairCatchup(paths, manifest, { probe: () => 'missing', platform: 'darwin' })`
+      **throws** `WienerdogError: refusing to invoke the real OS scheduler in a
+      test: launchctl bootstrap gui/501 …`.
+      **(iii) the criteria themselves.** Every criterion that drives a heal
+      asserts the **recorded** loader argv list with `assert.deepEqual` — never
+      `.some(…)` / `.length > 0`. An unstubbed `reloadMissing` records nothing, so
+      those assertions fail; and because the throw is swallowed rather than
+      propagated there, **AC-5a and AC-9a additionally assert the returned
+      `{reloaded, failed}` explicitly** (`reloaded: ['dream'], failed: []` on a
+      successful heal), which is what makes the swallowed case red at runtime
+      rather than merely unproven. An unstubbed `repairCatchup` throws, so every
+      criterion driving it (AC-9c, AC-12, AC-12b, AC-12c) fails outright.
+      **There is deliberately NO per-line structural check.** Three successive
+      forms of one were specified and all three were executed and broken in both
+      directions; verification step 5c's replacement comment records each form,
+      its bypass and its false-reject, and forbids a fourth. ADR-0031's loop
+      circuit-breaker is what ended it: **subtract the mechanism, keep the
+      guarantee.** Consequently the round-3 constraints that existed only to feed
+      that check are **withdrawn** — you may factor an options object into a
+      variable, wrap a call across lines, or comment a call line. The one thing
+      you may not do is call `reloadMissing` or `repairCatchup` without an
+      injected `opts.loader`, and layers (ii) and (iii) are what catch it.
       Plus, by construction, every call that reaches `defaultProbe` steps 3-8b
       passes `opts.run` — except AC-3b's subprocess, which reaches them with no
       seam and cannot spawn a scheduler client either (see AC-3b).
@@ -2009,7 +2338,7 @@ confirm it **fails**, then revert. Paste the resulting table into the PR.
 | M17 | in the new test file, add `delete process.env.WIENERDOG_TEST_NO_REAL_SCHEDULER;` at the top of any test | verification step 5's negative grep exits 1 |
 | M18 | `loadedEntryTargets` condition (c0): replace the canonical-binding-set check with the old shape test — `every non-final segment matches /^set "[A-Za-z_][A-Za-z0-9_]*=[^"]*"$/` | `entry-identity: schtasks (c0) binds to the canonical set, and (d) outranks it` (AC-1 (ii-b)) — **M22 is its evaluation-order partner and targets the same named test; they are numbered apart, not mis-transcribed** |
 | M19 | `defaultProbe` step 7: `run(expect.identityArgv)` instead of `RUN(expect.identityArgv)` | `entry-identity: defaultProbe reaches the identity query with NO run seam (subprocess)` (AC-3b) — the child throws `TypeError` and exits non-zero |
-| M20 | in the new test file, factor one mutating call's options object into a variable, so `loader:` no longer appears on the call's own line | verification step 5c prints that line and exits 1 |
+| M20 | in the new test file, **delete the `loader:` key from AC-5a's `reloadMissing` call** (leaving `opts.run` in place), so the call falls through to `schedule.defaultLoader` | `entry-identity: reloadMissing heals a configured job whose loaded record names a foreign launcher` (AC-5a) — the recorded argv list is `[]` and the return is `{reloaded: [], failed: ['dream']}` because `schedulerSpawn` throws (`spawn.js:26`) and `status.js:259` swallows it. **This is the round-5 replacement for the deleted verification step 5c**: the same property, checked by running code instead of by grepping JavaScript source |
 | M21 | `reloadMissing`: re-add the `status !== 'missing' &&` condition in front of the pre-destructive marker | `entry-identity: reloadMissing writes the durable marker even for an observed missing entry` (AC-9a) |
 | M22 | `loadedEntryTargets` schtasks branch: evaluate (c0) **before** (d) | **the same named test as M18** — the temp-core hijack fixture returns `indeterminate` instead of `mismatch` |
 | M23 | Table B1's exec grammar: drop the trailing `$` anchor (back to a round-2 prefix match) | `entry-identity: schtasks exec grammar shares cmdArgToken's bare alphabet and rejects every unquoted operator` (AC-1 (vii)) plus the (viii) assertions — executed: all three append fixtures return `match` again |
@@ -2018,6 +2347,7 @@ confirm it **fails**, then revert. Paste the resulting table into the PR.
 | M26 | `repairCatchup`: delete its pre-destructive `refreshSchedulerStatus` call | `entry-identity: repairCatchup writes the durable marker before its first replacement call` (AC-9c) |
 | M27 | `repairCatchup`: gate its pre-destructive marker on `status !== 'missing'` | the same named test as M26 (AC-9c) — M26 removes the marker, M27 re-conditions it, exactly as M10/M21 do for `reloadMissing` |
 | M28 | `repairCatchup`: return `{ notice: 'restored the missing catch-up registration.' }` for **every** successful repair, not only an observed `missing` | `entry-identity: repairCatchup emits the "restored the missing" notice only for an observed missing entry` (AC-12c) |
+| M29 | Table B condition (c0) **rule 4**: revert the normalized comparison to the raw one — `captured === cmdQuotedToken(core)` instead of `path.win32.resolve(captured) === path.win32.resolve(core)` | **the same named test as M18/M22** (AC-1 (ii-b)) — the two healthy non-default-core fixtures return `indeterminate` instead of `match` (executed) |
 
 **Why M13 and M16 name the NEGATIVE test.** Passing `null` as `expect` makes
 every entry with a record `unverified`, and `unverified ∈ HEAL_SET` (Table A) —
@@ -2050,7 +2380,7 @@ n=$(npm test --silent -- --test-reporter=tap --test-name-pattern "entry-identity
       tests/unit/scheduler-entry-identity.test.js \
       | grep -E "^ok [0-9]+ - entry-identity: " | wc -l | tr -d ' ')
 echo "named passing subtests: $n"
-[ "$n" -ge 21 ] || { echo "VACUOUS OR INCOMPLETE — the pattern selected $n named subtests"; exit 1; }
+[ "$n" -ge 28 ] || { echo "VACUOUS OR INCOMPLETE — the pattern selected $n named subtests"; exit 1; }
 
 # 2. The touched existing suite, same gate (Table D changes two of its records).
 #    The grep is ANCHORED ON THE SELECTED NAMES, not on a bare "^ok N - ".
@@ -2091,6 +2421,13 @@ for pat in "'mismatched'" "'unverified'" "opts.run" "existsSync"; do
   grep -n "$pat" src/scheduler/status.js || { echo "MISSING: $pat in status.js"; exit 1; }
 done
 grep -n "darwinReplaceEntry" src/cli/schedule.js || { echo "MISSING: darwinReplaceEntry"; exit 1; }
+# The export AC-9c / AC-12b / AC-12c are written against. ANCHORED on the exports
+# line, not a bare name grep: `repairCatchup` already matches twice in this file
+# on `main` (its declaration at :588 and its call at :565), so a bare grep is NOT
+# discriminating. Executed: the anchored form exits 1 on `main` and 0 once the
+# name is added to module.exports.
+grep -nE "^module\.exports = \{.*\brepairCatchup\b" src/cli/schedule.js \
+  || { echo "MISSING: repairCatchup is not exported — AC-9c/AC-12b/AC-12c cannot be written"; exit 1; }
 # The SECOND destructive site's marker (AC-9c / M26). 0 matches on `main`.
 grep -n "refreshSchedulerStatus" src/cli/schedule.js || { echo "MISSING: repairCatchup's pre-destructive marker"; exit 1; }
 grep -n "schedulerLine" src/cli/dream.js || { echo "MISSING: schedulerLine in dream.js"; exit 1; }
@@ -2102,6 +2439,12 @@ grep -n "schedulerLine" src/cli/sync.js  || { echo "MISSING: schedulerLine in sy
 #     test body, and a heal reached without opts.loader then issues a REAL
 #     `launchctl bootout` + `bootstrap` against the per-user-global label. Must
 #     exit 1 while any such line is present (mutation M17).
+#     THIS ONE SURVIVED THE 5c DELETION ON PURPOSE, and the difference matters:
+#     it greps for ONE LITERAL STATEMENT that no conforming test in this WP has
+#     any reason to contain. It makes no attempt to decide what a line "is", so
+#     it has no bypass class to chase. Its only false-reject is a COMMENT that
+#     quotes the literal — so do not quote `delete process.env.WIENERDOG_…` in a
+#     comment in the test file; the prohibition lives in this spec, not there.
 if grep -nE "delete[[:space:]]+process\.env\.WIENERDOG_(LOADER_NOOP|TEST_NO_REAL_SCHEDULER)" \
      tests/unit/scheduler-entry-identity.test.js; then
   echo "FAIL: a test deletes a neutralizer env var — see Table C R1"; exit 1
@@ -2109,52 +2452,51 @@ else
   echo "OK: the suite guard stays armed for every test in this WP"
 fi
 
-# 5c. Table C R2, MECHANICALLY CHECKED (AC-14(ii)). THIRD FORM — the first two
-#     were each executed and bypassed, so read this comment before "simplifying"
-#     it back.
+# 5c. DELETED IN ROUND 5 — DO NOT RE-ADD IT IN ANY FORM.
+#     Three consecutive review rounds produced three forms of a per-line
+#     structural check on JavaScript source, and every form was executed and
+#     broken IN BOTH DIRECTIONS. ADR-0031's loop circuit-breaker applies: the
+#     move is to SUBTRACT, not to refine a fourth time.
 #
-#     Form 1 compared the file's TOTAL `loader:` count with its TOTAL
-#     mutating-call count. Bypassed by:
+#     Form 1 (file-wide counts) was bypassed by
 #       reloadMissing(paths); repairCatchup(paths, m, {loader: s}); const x = {loader: s};
-#
-#     Form 2 required `loader:` on every LINE carrying a mutating call. Also
-#     bypassed — executed this session, all three exit 0 under form 2:
+#     Form 2 (a per-line `loader:` grep) was bypassed by
 #       status.reloadMissing(paths); schedule.repairCatchup(paths, m, {loader: s});
 #       status.reloadMissing(paths); // loader: required by AC-14
-#       status.reloadMissing(paths); status.reloadMissing(paths, { probe, loader: r });
-#     In the first and third the FIRST call runs unstubbed against the real
-#     per-user-global launchd while the second call (or a comment) blesses the
-#     line. A LINE IS NOT A CALL SITE. Note the irony that form 2's own comment
-#     cited almost exactly counterexample 1 as what form 1 missed — and form 2
-#     missed it too, because it is a single line. Verify by executing, never by
-#     reading.
+#     Form 3 (inline `loader:` + exactly one `;` + no comment) was bypassed by
+#       status.reloadMissing(paths, (schedule.repairCatchup(paths, m, { loader: rec }), {}));
+#     — one statement, one `;`, an inline `loader:`, no comment, and the OUTER
+#     reloadMissing still has NO loader (executed this session: exit 0). Form 3
+#     also FALSE-REJECTS valid JavaScript: a conforming single-statement call
+#     whose options object contains a string or template with a `;`, or a string
+#     containing `//` — an inline `https://…` fixture is the ordinary case —
+#     exits 1 (both executed this session: exit 1).
 #
-#     Form 3 (below) adds the two clauses that make a line a call site: exactly
-#     ONE statement terminator, and no comment. It is a node one-liner rather
-#     than a grep pipeline because it must report WHY each line failed. Node is
-#     already required to run the suite; this adds no dependency.
+#     WHAT REPLACES IT IS A RUNTIME GUARANTEE, NOT A TEXTUAL ONE. Table C R1
+#     keeps WIENERDOG_TEST_NO_REAL_SCHEDULER set for every test in this WP
+#     (tests/run.js:7 sets it; step 5b checks no test deletes it), so ANY call
+#     that reaches defaultLoader hits schedulerSpawn's throw at
+#     src/scheduler/spawn.js:26 BEFORE any launchctl/systemctl/schtasks process
+#     is created. Executed this session against a mkdtemp copy of src/, with the
+#     var set and no opts.loader injected:
+#       status.reloadMissing(paths, { probe: () => 'missing', platform: 'darwin' })
+#         => { reloaded: [], failed: ['dream'] }   (the throw is swallowed at
+#            status.js:259 into `failed` — no real scheduler was invoked)
+#       schedule.repairCatchup(paths, manifest, { probe: () => 'missing', platform: 'darwin' })
+#         => THROWS WienerdogError: "refusing to invoke the real OS scheduler in
+#            a test: launchctl bootstrap gui/501 …"
+#     The repairCatchup leg reddens on its own — it THROWS, so every criterion
+#     that drives it (AC-9c, AC-12, AC-12b, AC-12c) fails outright if its loader
+#     is missing. The reloadMissing leg is caught by the criteria themselves,
+#     which is why AC-5a and AC-9a each assert `reloaded`/`failed` explicitly in
+#     addition to their recorded-argv deepEqual: an unstubbed call yields
+#     `{reloaded: [], failed: ['dream']}` and an EMPTY recorded list, so it turns
+#     those tests red at runtime. That is the belt-and-braces layer, and it needs
+#     no source-text analysis.
 #
-#     Proven RED this session against all three bypasses above and GREEN against
-#         status.reloadMissing(paths, { run, loader: rec });
-#         for (const s of members) schedule.repairCatchup(paths, manifest, { probe: () => s, loader: rec });
-#     Also red for `const o = {loader: rec};` + `reloadMissing(paths, o);` (M20)
-#     and for a call wrapped so `loader:` lands on the next line.
-node -e '
-const fs = require("node:fs");
-const f = "tests/unit/scheduler-entry-identity.test.js";
-const bad = [];
-fs.readFileSync(f, "utf8").split("\n").forEach((l, i) => {
-  if (!/(reloadMissing|repairCatchup)\(/.test(l)) return;
-  const why = [];
-  const semis = (l.match(/;/g) || []).length;
-  if (!l.includes("loader:")) why.push("no inline loader:");
-  if (semis !== 1) why.push(semis + " statement terminators on this line (must be exactly 1)");
-  if (l.includes("//") || l.includes("/*")) why.push("a comment on this line could bless it");
-  if (why.length) bad.push("  " + (i + 1) + ": " + why.join("; ") + "\n      " + l.trim());
-});
-if (bad.length) { console.error("FAIL - Table C R2, per call site:\n" + bad.join("\n")); process.exit(1); }
-console.log("OK: every mutating call site is one statement, with an inline loader, uncommented");
-'
+#     If a future round wants a mechanical per-call-site check, it needs a real
+#     JavaScript parser, which this repo's zero-dependency toolchain does not
+#     have. A grep is not one. Do not try again.
 
 # 6. NEGATIVE grep: the presence-only mapping must be GONE. This must exit 1
 #    when the old line is still present. Executed against `main` at efd1489 it
@@ -2290,7 +2632,7 @@ The scenario harnesses (`WIENERDOG_RUN_SCENARIOS`) consume quota and need a real
    `defaultProbe` double-spawn on darwin, the `foreign`→`mismatched` rename, the
    **corrected** `alerts.jsonl` rationale, the bootstrap-first ordering,
    **step 8b's existence check and the fact that it maps to `mismatched` rather
-   than a sixth taxonomy member**, **`repairCatchup`'s notice discipline**, and
+   than a sixth taxonomy member**, **`repairCatchup`'s notice discipline**, **the `repairCatchup` export and why the three catch-up criteria need it**, **condition (c0) rule 4's `path.win32.resolve()` normalization**, **the deletion of verification step 5c and the runtime guarantee that replaces it**, and
    anything else chosen under ambiguity — and `Generated-by:`.
    **"Discovered issues" must contain the two ADR-side items from
    disposition 5** (`docs/adr/0018-…:297`'s *"sync remains the sole healer"*,
@@ -2335,3 +2677,44 @@ The scenario harnesses (`WIENERDOG_RUN_SCENARIOS`) consume quota and need a real
    architect note records why. The implementer **does not edit the ADR** (it is
    deliberately not a deliverable). If the status line does **not** read as
    above, stop and ask the owner rather than proceeding or editing it.
+
+### Owner decisions this WP is BLOCKED on
+
+Item 8 above and items 9-10 below are the three places this WP touches owner
+authority. Item 8 is already settled (the amendment is ratified — verify it).
+**Items 9 and 10 are not, and an implementer must not start until the owner has
+ruled on both.** Neither is an ambiguity an implementer may resolve with
+CLAUDE.md's "choose the simpler option": both are questions about what
+owner-signed text means or whether a defect may ship, and an architect may not
+settle either. Item 11 is advisory and blocks nothing.
+
+**Item 9 — does ADR-0018:294-296's pre-destructive-marker sentence permit a
+BEST-EFFORT refresh?**
+The two review legs read the same signed sentence oppositely; both readings are
+set out verbatim under disposition 4. **Reading A (Codex):** it states a
+postcondition, so an invisible refresh failure waives signed text and the WP needs
+an amendment first. **Reading B (wd-reviewer):** it mandates the refresh, not the
+abandonment of the replacement when the refresh fails, so the honest-residual
+disposition is consistent with it. Disposition 4 states what changes under each.
+**Owner: Gyula. Until this is answered, the `refreshSchedulerStatus` marker rule
+in "Exact contracts" and Table E is provisional.**
+
+**Item 10 — Residual 8 is an OPEN DEFECT, not an accepted residual; does it
+block?**
+The pre-destructive marker re-probes instead of persisting the heal verdict, and
+a **transient** presence-query failure alone (no concurrency, no external
+mutation) makes it persist `loaded` immediately before a `bootout`. Two rounds
+produced two accepting arguments and both were falsified; this spec offers no
+third. Closing it needs a single-entry writer in `src/scheduler/status.js` **and**
+an ADR-0018 amendment, because the signed text says the cache is refreshed
+*"from the live probe"*. **Owner: Gyula** — decide whether this WP ships with the
+defect stated (and `WP-scheduler-marker-persists-verdict` follows) or is blocked
+on the amendment. If it ships, the PR body must name it as a known open defect in
+those words.
+
+**Item 11 (advisory, not blocking) — split the Windows leg?**
+See "ARCHITECT'S SIZING NOTE" under Deliverables. 28 mandated named tests and 29
+mutations is at the edge of one implementer pass. The architect recommends
+`WP-scheduler-entry-identity-windows` (Table B's `schtasks` row, Table B1, AC-1's
+schtasks fixtures, M18/M22/M23/M24/M29) as a dependent WP, leaving the launchd
+leg here. The owner may decline; this WP is executable either way, just long.
