@@ -6,7 +6,7 @@
   "properties": {
     "id": { "type": "string", "pattern": "^WP-[a-z0-9]+(-[a-z0-9]+)*$" },
     "title": { "type": "string" },
-    "status": { "type": "string", "enum": ["Draft", "Ready", "In-Progress", "In-Review", "Done"] },
+    "status": { "type": "string", "enum": ["Draft", "Ready", "In-Progress", "In-Review", "Done", "Superseded"] },
     "model": { "type": "string", "enum": ["sonnet", "opus"] },
     "size": { "type": "string", "enum": ["S", "M"] },
     "depends_on": { "type": "array" },
