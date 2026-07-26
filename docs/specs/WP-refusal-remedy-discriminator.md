@@ -859,7 +859,8 @@ must state a conclusion, not a prediction:
       after Table M's six replacements are applied to a scratch copy; re-injecting
       round 2's *"syncing would authorize those files as they are"* into M2 takes
       README's count to `1` and grep's exit to `0`. It is a **violation detector,
-      not a completion detector** — it reads `0` on an untouched tree too, so it is
+      not a completion detector** (`kind: regression` in the verification gate
+      table) — it reads `0` on an untouched tree too, so it is
       paired with, never a substitute for, the five stale-form gates that prove the
       work landed. It cannot catch a *novel* prediction phrased without those three
       verbs; that residue is a **review obligation**, recorded here so coverage is
@@ -1219,16 +1220,36 @@ red on a correct implementation and green on no implementation at all). Round 2'
 sweep claimed "every gate was proven in both directions" while enumerating only
 three buckets, and review then found **two** gates that were in none of them and
 that had *both* of the other faults. That claim is therefore re-established here
-**gate by gate**, not in the abstract. Every WP-specific gate below was executed on
-a correct state and on a deliberately broken one, and judged by **exit code**, with
-two stated exceptions that carry their reason in their own row: **step 3**, whose
-verdict is a printed test name because both outcomes exit 0; and **steps 5–7**
-(`npm test`, the a7 scenario, `npm run lint`), which are whole-suite regression
-gates — green before this WP and green after — with no red state that corresponds
-to the work being absent. Three rows are **violation detectors** rather than
-completion detectors (the recovery sweep, the prediction sweep, and steps 5–7):
-they are `0`/green on an untouched tree too, so each is paired with a completion
-gate and none is read as evidence the work landed.
+**gate by gate**, not in the abstract. Every gate below was executed on a correct
+state and on a deliberately broken one, and judged by **exit code**, with one
+stated exception that carries its reason in its own row: **step 3**, whose verdict
+is a printed test name because both outcomes exit 0.
+
+**Two different red inputs, and the `kind` column that keeps them apart.** Round 5
+falsified this table's claim that `npm test` and `npm run lint` had "no WP-specific
+red input". They do: `npm test` is `node tests/run.js` (`package.json:22`), which
+runs the **whole** suite — the 27 `launcher:` tests included — so any mutation that
+reddens `tests/unit/launcher.test.js` reddens `npm test` too (executed: one reason
+string mutated ⇒ launcher-only `exit=1`, full suite `exit=1`, `fail 3`). What those
+gates lack is something else: an **absent-work** red state. On an untouched tree
+T1–T10 do not exist and no prose has moved, so they are green on a tree where none
+of the work was done. *"Has no red input"* and *"has no absent-work red input"* are
+different properties, and collapsing them is what produced step 1's defect two
+rounds ago and this one. So every row now carries a **`kind`**:
+
+- **completion** — red on an untouched tree. Its green state is itself evidence the
+  work landed. Six rows: step 1, both step-2 count rows, step 3, step 4's five
+  stale-form greps, step 4's GLOSSARY-link count.
+- **regression** — green on an untouched tree, so its green state is **never**
+  evidence the work landed; it only catches work that went wrong. Six rows: step 2's
+  reason-drift `diff`, step 4's recovery and prediction sweeps, and steps 5, 6 and 7.
+  Every one of them still has a mutation red input, recorded in its own row, and each
+  is paired with a completion gate that does prove the work landed.
+
+Read "green" on a **regression** row as *nothing broke*, never as *it is done*. The
+reverse mistake — a gate that goes red on a correct implementation and green on no
+implementation at all — is the **inverted** fault that round 2's sweep missed twice
+(the README M2 anchor, below), and it is neither of these kinds; it is a broken gate.
 
 **The table's own completeness is part of the gate.** Three separate rounds have
 falsified a blanket "the gates are complete" claim — an acceptance criterion with
@@ -1248,18 +1269,20 @@ reader auditing the table would "fix" a working gate. The rows were re-measured
 and rewritten in round 4 with the direction actually observed. **Write the row
 from the run you just did, not from the outcome you expect.**
 
-| gate | verdict comes from | proved green on | proved red on |
-|---|---|---|---|
-| step 1 `node tests/run.js …` | process exit + `fail 0` **and the ten `remedy: …` ✔ lines being present** — `fail 0` alone is true of an untouched tree too, so the presence of T1–T10 is part of this verdict, not commentary on it | the implemented tree: `fail 0` with ten `remedy: …` ✔ lines | reverting D4 on Table S row 9 ⇒ T5 fails; and an untouched tree, which reaches `fail 0` with **zero** `remedy: …` lines |
-| step 2 `before`/`stale`/`after`/`sync`/`tied` | five `grep -c` outputs assigned to **variables**; no `\|\|`/`&&` marker reads grep's status, and each assignment already swallows the exit-1-on-zero with `\|\| true` (`before` is guarded instead, by `test "$before" -gt 0`) | `baseline=17 stale=0 conforming=17 sync=4 tied=1` ⇒ `GATE-OK` | (a) one site reverted ⇒ `stale=1 conforming=16`; (b) one `reinstall` promoted ⇒ `sync=5`; (c) the ternary dropped ⇒ `tied=0`. All three ⇒ `GATE-FAIL` |
-| step 2 `GATE-OK`/`GATE-FAIL` marker | `test`'s exit status, never grep's | as above | as above |
-| step 2 **reason-drift `diff`** | **the raw exit code of `diff`** — there is no `\|\|` marker to get backwards | a token-only correct transformation, **committed** ⇒ `exit=0` | one character changed in any reason string ⇒ `exit=1` and the differing lines print |
-| step 3 `node tests/run.js --test-name-pattern … <file>` | **the ✔ line naming T1** — *not* the count and *not* the exit code. A pattern that matches nothing prints `tests 1  pass 1  fail 0` and **exits 0**, with the ✔ line naming the *file*; a genuine single match prints identical counts. Executed both this session against a scratch fixture. So the row requires the ✔ line to read `remedy: refusalText('sync') is byte-identical to the shipped banner`, and `pass 1  fail 0` alongside it | the implemented tree | mutating one character of `REMEDY_TAIL.sync` ⇒ `fail 1`, non-zero exit. Also red-by-inspection if the flag is moved after the path: the run becomes all 27 tests (executed) |
-| step 4, five `grep -n PAT file \|\| echo "<X>-OK"` (one row, all five gates, each measured separately) | the marker's presence, which follows grep's status: grep exits **1** (stale form absent) ⇒ marker prints ⇒ **green**; exits **0** (stale form still present) ⇒ no marker ⇒ **red** | the tree with Table M's replacements applied: every anchor is gone, all five greps exit **1**, all five `*-OK` markers print (executed round 4 on a scratch copy of the three files with all six Table M edits applied — `M1a/M1b/M2/M3a/M3b grep_exit=1`) | the pre-change tree, where each anchor matches **exactly once**: every grep prints its stale line and exits **0**, and **no** marker prints (executed round 4 — `M1a/M1b/M2/M3a/M3b grep_exit=0`). **Round 3 recorded these two columns swapped**; the commands were right and the record of them was not |
-| step 4 `grep -c "production/dev stance"` | printed count, no marker | `1` after M1c lands (executed round 4 on the scratch copy) | `0` on the pre-change tree (executed) |
-| step 4 `grep -cE` recovery sweep | printed per-file counts, no marker. A **violation detector**, like the sweep below — the baseline is also the untouched tree's value | the stated baseline, which the replacements must not move (executed round 4: `1 / 3 / 2` on the pre-change tree **and** on the replacements-applied copy; `0` for `launcher.js`) | any count going **up** — e.g. adding a recovery command to M1c, M2 or M3 |
-| step 4 **prediction sweep** `grep -cE "would authorize\|would install\|would finish"` | printed per-file counts, no marker. A **violation detector**, not a completion detector: `0` is also the untouched tree's value, so it is paired with the five stale-form gates, never a substitute for them | `0` in all four files — executed round 4 on the pre-change tree (grep exit **1**) and on the replacements-applied copy (grep exit **1**) | re-injecting round 2's *"syncing would authorize those files as they are"* into M2 ⇒ `README.md:1`, grep exit **0** (executed round 4) |
-| steps 5, 6, 7 | process exit codes of `npm test`, the a7 scenario and `npm run lint`; a non-zero exit is the failure and there is no marker to invert | green on the pre-change tree **and** required green on the implemented one — these are **regression** gates, so "green" is the same state before and after | step 6 only: change any reason string ⇒ that case's `reasonRe` fails (stated in step 6). Steps 5 and 7 have no WP-specific red input — they detect a regression, never the absence of this WP's work, which is what the step-1 to step-4 gates are for |
+| gate | kind | verdict comes from | proved green on | proved red on |
+|---|---|---|---|---|
+| step 1 `node tests/run.js …` | completion | process exit + `fail 0` **and the ten `remedy: …` ✔ lines being present** — `fail 0` alone is true of an untouched tree too, so the presence of T1–T10 is part of this verdict, not commentary on it | the implemented tree: `fail 0` with ten `remedy: …` ✔ lines | reverting D4 on Table S row 9 ⇒ T5 fails; and an untouched tree, which reaches `fail 0` with **zero** `remedy: …` lines |
+| step 2 `before`/`stale`/`after`/`sync`/`tied` | completion | five `grep -c` outputs assigned to **variables**; no `\|\|`/`&&` marker reads grep's status, and each assignment already swallows the exit-1-on-zero with `\|\| true` (`before` is guarded instead, by `test "$before" -gt 0`) | `baseline=17 stale=0 conforming=17 sync=4 tied=1` ⇒ `GATE-OK` | (a) one site reverted ⇒ `stale=1 conforming=16`; (b) one `reinstall` promoted ⇒ `sync=5`; (c) the ternary dropped ⇒ `tied=0`. All three ⇒ `GATE-FAIL` |
+| step 2 `GATE-OK`/`GATE-FAIL` marker | completion | `test`'s exit status, never grep's | as above | as above, **plus the untouched tree**: executed round 5 on the pre-change tree ⇒ `baseline=17 stale=17 conforming=0 sync=0 tied=0` ⇒ `GATE-FAIL`. This is the row that makes step 2 a completion gate |
+| step 2 **reason-drift `diff`** | regression | **the raw exit code of `diff`** — there is no `\|\|` marker to get backwards | a token-only correct transformation, **committed** ⇒ `exit=0`. **Also `exit=0` on the untouched tree** (executed round 5): with no change, the two normalized line sets are trivially equal, which is what makes this a regression gate — it can only catch a reason string that *moved*, never work that was never done. Paired with the step-2 count rows above, which are red on an untouched tree | one character changed in any reason string ⇒ `exit=1` and the differing lines print |
+| step 3 `node tests/run.js --test-name-pattern … <file>` | completion | **the ✔ line naming T1** — *not* the count and *not* the exit code. A pattern that matches nothing prints `tests 1  pass 1  fail 0` and **exits 0**, with the ✔ line naming the *file*; a genuine single match prints identical counts. Executed both this session against a scratch fixture. So the row requires the ✔ line to read `remedy: refusalText('sync') is byte-identical to the shipped banner`, and `pass 1  fail 0` alongside it | the implemented tree | mutating one character of `REMEDY_TAIL.sync` ⇒ `fail 1`, non-zero exit. **And the untouched tree** (executed round 5): `tests 1  pass 1  fail 0`, `exit=0`, but the ✔ line reads `tests/unit/launcher.test.js` — verdict **red**, which is what makes this a completion gate despite the zero exit. Also red-by-inspection if the flag is moved after the path: the run becomes all 27 tests (executed) |
+| step 4, five `grep -n PAT file \|\| echo "<X>-OK"` (one row, all five gates, each measured separately) | completion | the marker's presence, which follows grep's status: grep exits **1** (stale form absent) ⇒ marker prints ⇒ **green**; exits **0** (stale form still present) ⇒ no marker ⇒ **red** | the tree with Table M's replacements applied: every anchor is gone, all five greps exit **1**, all five `*-OK` markers print (executed round 4 on a scratch copy of the three files with all six Table M edits applied — `M1a/M1b/M2/M3a/M3b grep_exit=1`) | the pre-change tree, where each anchor matches **exactly once**: every grep prints its stale line and exits **0**, and **no** marker prints (executed round 4 — `M1a/M1b/M2/M3a/M3b grep_exit=0`). **Round 3 recorded these two columns swapped**; the commands were right and the record of them was not |
+| step 4 `grep -c "production/dev stance"` | completion | printed count, no marker | `1` after M1c lands (executed round 4 on the scratch copy) | `0` on the pre-change tree (executed round 4, re-confirmed round 5) |
+| step 4 `grep -cE` recovery sweep | regression | printed per-file counts, no marker. A **violation detector**, like the sweep below — the baseline is also the untouched tree's value | the stated baseline, which the replacements must not move (executed round 4: `1 / 3 / 2` on the pre-change tree **and** on the replacements-applied copy; `0` for `launcher.js`) | any count going **up** — e.g. adding a recovery command to M1c, M2 or M3 |
+| step 4 **prediction sweep** `grep -cE "would authorize\|would install\|would finish"` | regression | printed per-file counts, no marker. A **violation detector**, not a completion detector: `0` is also the untouched tree's value, so it is paired with the five stale-form gates, never a substitute for them | `0` in all four files — executed round 4 on the pre-change tree (grep exit **1**) and on the replacements-applied copy (grep exit **1**) | re-injecting round 2's *"syncing would authorize those files as they are"* into M2 ⇒ `README.md:1`, grep exit **0** (executed round 4) |
+| step 5 `npm test` | regression | the process exit code; a non-zero exit is the failure and there is no marker to invert | the untouched pre-change tree — executed round 5: `exit=0`, `tests 1671, pass 1666, fail 0, skipped 5`. **Green on a tree where none of this WP's work was done**, because T1–T10 do not exist there; that is what makes it regression-kind, *not* an absence of red inputs | it **does** have WP-specific mutation red inputs. `npm test` is `node tests/run.js` (`package.json:22`) with no path, so it runs the whole suite, and the 27 `launcher:` tests are in it (executed round 5, counted in a full run). Any mutation that reddens `tests/unit/launcher.test.js` therefore reddens `npm test`: proved round 5 with a proxy mutation of one reason string in `src/scheduler/launcher.js` on a scratch copy ⇒ launcher-file run `exit=1` (`fail 1`) **and** full-suite `exit=1` (`fail 3` — the launcher unit test plus two `a7-integrity-negatives` cases). The step-1 red input (revert D4 at Table S row 9 ⇒ T5 fails) reddens this step by the same mechanism once T1–T10 exist; a proxy was used because they do not exist pre-implementation |
+| step 6 a7 scenario `npm run scenarios:a7-integrity` | regression | the process exit code + the printed `PASS`/`FAIL` line | the untouched pre-change tree — executed round 5: `PASS`, `exit=0`. Green with none of the work done, so its green is never evidence the work landed | change any reason string ⇒ that case's `reasonRe` fails. Executed round 5 on the scratch copy with one reason string mutated ⇒ `FAIL (2 failure(s))`, `exit=1` |
+| step 7 `npm run lint` | regression | the process exit code of `scripts/lint.js`; a non-zero exit is the failure | the untouched pre-change tree — executed round 5: `exit=0`, `lint passed`. Green with none of the work done | it **does** have a WP-specific mutation red input: all three prose deliverables are inside markdownlint's globs (`docs/**/*.md` for the runbook and threat model, `*.md` for `README.md` — `scripts/lint.js:54-58`), so a Table M transcription that breaks a markdownlint rule reddens it. Proved round 5 in both files by injecting a heading-level skip: runbook ⇒ `MD001` at `:143`, `npm run lint exit=1`; `README.md` ⇒ `MD001` at `:86`, markdownlint `exit=1`. Note `MD013` (line length) is **off** (`package.json:51`), so long transcribed lines are fine |
 
 **Two round-2 gates were rewritten because that sweep is what caught them.** Both
 had passed review twice:
@@ -1281,10 +1304,22 @@ had passed review twice:
    `` fail closed; the fix is one ``, which M2-old has and M2-new does not
    (executed both directions; matches exactly once on the pre-change tree).
 
-If you add a gate, prove it the same way, and prove all three properties: correct
-polarity, non-vacuity (it can fail), and that it is **green on correct work and red
-on absent work** — not the reverse. Run it on the correct state and on a
-deliberately broken copy, and paste `echo "exit=$?"` for both.
+If you add a gate, prove it the same way, and prove four properties: correct
+polarity; non-vacuity (it can fail); a mutation red input (some deliberately broken
+version of the correct work turns it red); and its **kind**, measured by running it
+on an **untouched** tree — red there ⇒ `completion`, green there ⇒ `regression`.
+Never infer the kind from the command's shape; the last two rounds each got it
+wrong that way. Run it on the correct state, on a deliberately broken copy, **and**
+on the untouched tree, and paste `echo "exit=$?"` for all three. A `regression` gate
+is only admissible alongside a `completion` gate for the same acceptance criterion;
+alone, it proves nothing about whether the work landed.
+
+**Mirrors of this table** (registered round 5 — the table decides, these repeat).
+Change a row and change its mirror in the same edit: the `**Kind: …**` paragraph
+under step 2's reason-drift block, under step 4's prediction sweep, and under steps
+5, 6 and 7; the "violation detector" wording in the Mirrored Surface Checklist entry
+"Checkable form — verification step 4's prediction sweep"; and every `*Red input:*`
+line in steps 1–7. No other surface in this spec states a gate's kind or verdict.
 
 **1. The new tests, and the existing ones next to them.**
 
@@ -1355,6 +1390,13 @@ scratch git repo on a **committed**, token-only-correct transformation of the re
 file ⇒ `exit=0`; with one character changed in the `is not prod or dev` reason ⇒
 `exit=1` and the pair prints. `$before` being non-zero (asserted above) is what
 rules out the degenerate "two empty streams compare equal" case.
+
+**Kind: regression** (see the gate table). On an untouched tree the two normalized
+sets are trivially equal and this prints `exit=0` (executed round 5), so a green
+here says only *no reason string moved* — never *the remedy work landed*. The
+`GATE-OK`/`GATE-FAIL` block above is the completion gate it is paired with; that
+one prints `GATE-FAIL` on an untouched tree (executed round 5:
+`baseline=17 stale=17 conforming=0 sync=0 tied=0`).
 
 **3. The `sync` banner is byte-identical to today's.**
 
@@ -1427,10 +1469,11 @@ three rejected verbs are the ones round 1 and round 2 actually used, and round 3
 left two of them standing in M2 and M1c after R-T2 itself had been corrected (see
 the Mirrored Surface Checklist entry "R-T2's semantic constraint"). Transcribe
 Table M's blocks exactly and this stays `0`; write your own wording about what
-`sync` *would do* and it will not. It is a **violation detector, not a completion
-detector** — `0` is also what an untouched tree prints, so it proves nothing on
-its own and is paired with the five stale-form gates above, which are what prove
-the work landed.
+`sync` *would do* and it will not. It is **kind: regression** in the gate table — a
+violation detector, not a completion detector: `0` is also what an untouched tree
+prints, so it proves nothing on its own and is paired with the five stale-form
+gates above, which are `kind: completion` and are what prove the work landed. The
+recovery sweep on the line above is regression-kind for the same reason.
 
 Executed against the pre-change tree (round 4, by exit code): each of the five
 `grep -n` gates prints its stale line, **exits 0**, and prints **no** `*-OK`
@@ -1458,6 +1501,15 @@ T10 carries `{ skip: process.platform === 'win32' }` like the F13 test whose
 `chmod` recipe its second half reuses, so on Windows expect nine more passes and
 one more skip.
 
+**Kind: regression** (see the gate table). This is the same 27-`launcher:`-test
+file as step 1 plus the rest of the suite — `node tests/run.js` with no path runs
+everything — so step 1's red input reddens this too. It is *not* redundant with
+step 1: step 1 reads the ten `remedy:` ✔ lines and so is red on an untouched tree,
+while this step is green there and only tells you nothing else broke.
+*Red input:* the step-1 red input (revert D4 on Table S row 9 ⇒ T5 fails) ⇒ `fail`
+non-zero here as well; measured round 5 with a proxy mutation (one reason string
+changed) ⇒ full-suite `exit=1`, `fail 3`.
+
 **6. The A7 integrity proof still holds.**
 
 ```bash
@@ -1466,8 +1518,11 @@ WIENERDOG_RUN_SCENARIOS=1 WIENERDOG_TEST_NO_REAL_SCHEDULER=1 npm run scenarios:a
 
 Expect `PASS` (executed green on this branch before the change). Its six
 `reasonRe` regexes match reason fragments only, so a correct implementation
-cannot move them. *Red input:* change any reason string — the corresponding case
-fails with a reason mismatch.
+cannot move them. **Kind: regression** (see the gate table) — `PASS` here is also
+what the untouched tree prints, so it never shows the work landed.
+*Red input:* change any reason string — the corresponding case fails with a reason
+mismatch. Executed round 5 on a scratch copy with one reason string mutated ⇒
+`FAIL (2 failure(s))`, `exit=1`.
 
 **7. Lint.**
 
@@ -1476,6 +1531,18 @@ npm run lint
 ```
 
 Expect green (markdownlint + frontmatter schema).
+
+**Kind: regression** (see the gate table), but it is not input-free: markdownlint's
+globs cover all three prose deliverables — `docs/**/*.md` for
+`docs/runbooks/scheduler-and-executable-integrity.md` and `docs/THREAT-MODEL.md`,
+`*.md` for `README.md` (`scripts/lint.js:54-58`) — and the frontmatter layer covers
+this spec's own status flip.
+*Red input:* a Table M transcription that breaks a markdownlint rule. Measured
+round 5 by appending a `####` subsection under an `##` heading: the runbook ⇒
+`MD001/heading-increment` at `:143` and `npm run lint exit=1`; `README.md` ⇒ `MD001`
+at `:86` and markdownlint `exit=1`. `MD013` (line length) is disabled
+(`package.json:51`), so a long transcribed line is not a violation; a skipped
+heading level, a bare `#` duplicate or a missing final newline is.
 
 ## Out of scope (do NOT do these)
 
