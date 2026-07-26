@@ -67,36 +67,100 @@ function describeEntry(entry, platform = process.platform) {
 }
 
 /**
- * Default read-only probe: run `argv` and map the exit code. Honors the test
- * seams so a test NEVER touches the real OS scheduler:
- *   - WIENERDOG_LOADER_NOOP set        → 'unknown' (neutralized, mirrors the loader)
- *   - WIENERDOG_TEST_NO_REAL_SCHEDULER → 'unknown' (WP-071's guard; read-only, so
- *                                        we skip rather than throw)
- * Otherwise spawnSync (read-only): exit 0 → 'loaded'; any other exit / spawn error
- *   → 'missing'. Never throws.
- * @param {string[]} argv
- * @returns {'loaded'|'missing'|'unknown'}
+ * @typedef {'loaded'|'missing'|'mismatched'|'unverified'|'unknown'} EntryStatus
  */
-function defaultProbe(argv) {
-  if (process.env.WIENERDOG_LOADER_NOOP) return 'unknown';
-  if (process.env.WIENERDOG_TEST_NO_REAL_SCHEDULER) return 'unknown';
-  const r = spawnSync(argv[0], argv.slice(1), { stdio: 'ignore' });
-  if (r.error) return 'missing';
-  return r.status === 0 ? 'loaded' : 'missing';
+
+/**
+ * @typedef {{launcher:string, kind:'launchd'|'systemd'|'schtasks',
+ *            identityArgv:string[]|null}} IdentityExpectation
+ */
+
+/** The statuses a `sync`-time heal re-registers. `loaded` and `unknown` are left
+ *  alone: one is healthy, the other claims nothing. */
+const HEAL_SET = new Set(['missing', 'mismatched', 'unverified']);
+
+/** The real read-only spawn behind `defaultProbe`. Captures stdout (the identity
+ *  query's output IS the answer) instead of the old `stdio:'ignore'`.
+ *  @param {string[]} a @returns {{status:number|null, stdout?:string, error?:Error}} */
+function defaultRun(a) {
+  return spawnSync(a[0], a.slice(1), { encoding: 'utf8' });
+}
+
+/**
+ * Read-only probe of ONE registered entry. A scheduler entry's health is the
+ * IDENTITY of the program the OS will actually execute, not the fact that a
+ * record exists: `launchctl print` exits 0 for a hijacked record, which is how a
+ * catch-up agent fired 76 times against a deleted launcher while this probe
+ * reported `loaded` (WP-scheduler-entry-identity).
+ *
+ * `expect` carries the identity query and the launcher this install owns; it is
+ * MANDATORY — omitting it yields 'unverified', never 'loaded'. There is
+ * deliberately NO presence-only mode and no default for `expect`: a probe that
+ * cannot say WHAT will run must not claim health.
+ * `opts.run` is the TEST-ONLY spawn seam so the identity logic is unit-testable
+ * with canned scheduler output and NEVER touches a real scheduler. No production
+ * caller passes it, which is why the two neutralizer checks below are gated on it
+ * being absent: injecting the read seam IS the neutralization, so no test has to
+ * delete WIENERDOG_TEST_NO_REAL_SCHEDULER and the mutation backstop stays armed.
+ * Never throws.
+ * @param {string[]} argv  the presence-probe argv (generators.deriveProbeArgv)
+ * @param {IdentityExpectation|null} [expect]
+ * @param {{run?: (argv:string[]) => {status:number|null, stdout?:string, error?:Error}}} [opts]
+ * @returns {EntryStatus}
+ */
+function defaultProbe(argv, expect, opts = {}) {
+  const run = typeof opts.run === 'function' ? opts.run : null;
+  const RUN = run || defaultRun; // bound ONCE — steps 3 and 7 must use the SAME one
+  if (!run && process.env.WIENERDOG_LOADER_NOOP) return 'unknown'; // 1
+  if (!run && process.env.WIENERDOG_TEST_NO_REAL_SCHEDULER) return 'unknown'; // 2
+  const r = RUN(argv); // 3
+  if (r.error || r.status !== 0) return 'missing'; // 4
+  if (!expect || !expect.kind || !expect.launcher) return 'unverified'; // 5 — fail CLOSED
+  if (expect.identityArgv == null) return 'unknown'; // 6 — kind recognized, query unimplemented
+  const r2 = RUN(expect.identityArgv); // 7 — the SAME RUN, never a bare run(…)
+  if (r2.error || r2.status !== 0 || typeof r2.stdout !== 'string') return 'unverified';
+  const { verdict, exec } = generators.loadedEntryTargets(r2.stdout, expect.kind, expect.launcher); // 8
+  if (verdict === 'mismatch') return 'mismatched';
+  if (verdict === 'indeterminate') return 'unverified';
+  // 8b — a `match` proves only that OUR launcher sits in the launcher position.
+  // The program the OS will actually START is `exec`; when it no longer exists
+  // (a `brew upgrade node && brew cleanup` deletes the version-pinned execPath
+  // the entry was registered with) every fire dies in posix_spawn before a line
+  // of Wienerdog code runs. That is a definite failure, so it is `mismatched`
+  // (heal + doctor fail), not `loaded` and not `unverified`. existsSync never
+  // throws — it returns false on every error, the fail-closed direction.
+  if (typeof exec === 'string' && exec !== '' && fs.existsSync(exec)) return 'loaded';
+  return 'mismatched';
+}
+
+/** Build the identity expectation for one schedule file. null when the basename
+ *  is one `deriveIdentityArgv` does not recognize — `defaultProbe` step 5 then
+ *  fails closed to 'unverified' rather than claiming health.
+ *  @param {import('../core/paths').WienerdogPaths} paths @param {string} schedulePath
+ *  @param {NodeJS.Platform} platform @returns {IdentityExpectation|null} */
+function identityExpectation(paths, schedulePath, platform) {
+  const idn = generators.deriveIdentityArgv(schedulePath, platform);
+  if (!idn) return null;
+  return { launcher: generators.launcherPath(paths), kind: idn.kind, identityArgv: idn.argv };
 }
 
 /**
  * Probe every registered scheduler entry. Read-only. The probe argv is
  * RE-DERIVED from each entry's basename identity (never the stored `unload` —
  * ADR-0027), and every entry is gated behind a scheduler-root containment check,
- * so an out-of-root poisoned entry is never probed. `opts.probe` is the injected
- * seam (default defaultProbe). `WIENERDOG_SCHEDULER_PROBE` — a JSON map
- * `{ "<name>": "loaded"|"missing"|"unknown" }` — overrides by name (subprocess
- * test seam, mirrors WIENERDOG_UPDATE_FETCH_CMD). Never throws.
+ * so an out-of-root poisoned entry is never probed. Each entry's IDENTITY
+ * expectation is built here (the launcher this install owns + the re-derived
+ * identity query) and passed to the probe — the line whose absence reproduced the
+ * incident. `opts.probe` is the injected seam (default defaultProbe) and
+ * `opts.run` is defaultProbe's read seam, forwarded unchanged.
+ * `WIENERDOG_SCHEDULER_PROBE` — a JSON map `{ "<name>": <EntryStatus> }` —
+ * overrides by name (subprocess test seam, mirrors WIENERDOG_UPDATE_FETCH_CMD);
+ * its values are used verbatim and are not validated. Never throws.
  * @param {import('../core/paths').WienerdogPaths} paths
- * @param {{probe?: (argv:string[])=>('loaded'|'missing'|'unknown'),
+ * @param {{probe?: (argv:string[], expect:IdentityExpectation|null, opts:object)=>EntryStatus,
+ *          run?: (argv:string[])=>{status:number|null, stdout?:string, error?:Error},
  *          platform?: NodeJS.Platform}} [opts]
- * @returns {Array<{name:string, scheduler:string, status:'loaded'|'missing'|'unknown'}>}
+ * @returns {Array<{name:string, scheduler:string, status:EntryStatus}>}
  */
 function probeAll(paths, opts = {}) {
   const platform = opts.platform || process.platform;
@@ -112,9 +176,10 @@ function probeAll(paths, opts = {}) {
     if (!lexicallyInRoot(e.path, roots, platform)) continue; // out-of-root → no probe
     const d = describeEntry(e, platform);
     if (!d) continue;
+    const expect = identityExpectation(paths, e.path, platform);
     const status = envMap && Object.prototype.hasOwnProperty.call(envMap, d.name)
       ? envMap[d.name]
-      : probe(d.probe);
+      : probe(d.probe, expect, { run: opts.run });
     out.push({ name: d.name, scheduler: d.scheduler, status });
   }
   return out;
@@ -125,7 +190,7 @@ function probeAll(paths, opts = {}) {
  * Atomic temp+rename (mirrors update-check.writeState). No-op-safe when there are
  * no scheduler entries.
  * @param {import('../core/paths').WienerdogPaths} paths
- * @param {{probe?: (argv:string[])=>('loaded'|'missing'|'unknown')}} [opts]
+ * @param {{probe?: Function, run?: Function, platform?: NodeJS.Platform}} [opts]
  * @returns {void}
  */
 function refreshSchedulerStatus(paths, opts = {}) {
@@ -149,34 +214,67 @@ function readSchedulerStatus(paths) {
   } catch { return { entries: [] }; }
 }
 
+/** Whole-word pluralization helpers for the callout templates. Never per-character
+ *  suffixes — a broken safety message is the WP-068 false-reassurance class.
+ *  @param {string[]} names @returns {{names:string, one:boolean}} */
+function nameList(names) {
+  return { names: names.map((n) => `"${n}"`).join(', '), one: names.length === 1 };
+}
+
 /**
- * Fixed-template digest callout from the cache (control-plane text only, no
- * untrusted input — the names are our own `[a-z0-9-]` job names). '' when no
- * entry is 'missing'. Mirrors renderUpdateLine (cache-only, no probe).
+ * Fixed-template digest callouts from the cache (control-plane text only, no
+ * untrusted input — the names are our own `[a-z0-9-]` job names). One callout per
+ * non-empty bucket, in the order mismatched (F), unverified (U), missing (M),
+ * joined by a BLANK LINE: consecutive `>` lines separated by a single newline are
+ * ONE Obsidian blockquote, which would merge three different remediations under
+ * one title. '' when all three buckets are empty. Mirrors renderUpdateLine
+ * (cache-only, no probe).
  * @param {import('../core/paths').WienerdogPaths} paths
  * @returns {string}
  */
 function renderSchedulerStatusLine(paths) {
-  const missing = readSchedulerStatus(paths).entries.filter((e) => e.status === 'missing').map((e) => e.name);
-  if (missing.length === 0) return '';
-  const names = missing.map((n) => `"${n}"`).join(', ');
-  // Select whole words for the noun/verb/pronoun so pluralization can't drift on
-  // spacing (a broken safety message is the WP-068 false-reassurance failure class).
-  const noun = missing.length === 1 ? 'job' : 'jobs';
-  const verb = missing.length === 1 ? 'is' : 'are';
-  const pronoun = missing.length === 1 ? 'it' : 'them';
-  return `> [!warning] Wienerdog: the scheduled ${noun} ${names} ${verb} ` +
-    `set up but not currently active in your computer's scheduler. Run 'wienerdog sync' to reactivate ` +
-    `${pronoun}. (This can happen after some system updates.)`;
+  const entries = readSchedulerStatus(paths).entries;
+  const bucket = (s) => entries.filter((e) => e.status === s).map((e) => e.name);
+  const out = [];
+
+  const f = bucket('mismatched');
+  if (f.length > 0) {
+    const { names, one } = nameList(f);
+    out.push(`> [!warning] Wienerdog: the scheduled ${one ? 'job' : 'jobs'} ${names} ` +
+      `${one ? 'is' : 'are'} registered in your computer's scheduler, but the program ` +
+      `${one ? 'it' : 'they'} would run is either not part of this Wienerdog installation or no longer ` +
+      `on this computer, so ${one ? 'it' : 'they'} cannot run. Run 'wienerdog sync' to re-register ` +
+      `${one ? 'it' : 'them'} from this installation.`);
+  }
+
+  const u = bucket('unverified');
+  if (u.length > 0) {
+    const { names, one } = nameList(u);
+    out.push('> [!warning] Wienerdog: Wienerdog could not read back what your computer\'s scheduler will ' +
+      `actually run for the scheduled ${one ? 'job' : 'jobs'} ${names}, so it cannot confirm ` +
+      `${one ? 'it is' : 'they are'} still wired to this installation. Run 'wienerdog sync' to re-register ` +
+      `${one ? 'it' : 'them'}, then run 'wienerdog doctor'.`);
+  }
+
+  const m = bucket('missing');
+  if (m.length > 0) {
+    const { names, one } = nameList(m);
+    out.push(`> [!warning] Wienerdog: the scheduled ${one ? 'job' : 'jobs'} ${names} ${one ? 'is' : 'are'} ` +
+      'set up but not currently active in your computer\'s scheduler. Run \'wienerdog sync\' to reactivate ' +
+      `${one ? 'it' : 'them'}. (This can happen after some system updates.)`);
+  }
+
+  return out.join('\n\n');
 }
 
 /**
  * doctor lines: one per registered entry, LIVE read-only probe. 'loaded' → ok,
- * 'missing' → warn (actionable, NOT a hard fail), 'unknown' → omitted (can't
- * determine — unsupported platform or neutralized). Read-only.
+ * 'missing'/'unverified' → warn (actionable), 'mismatched' → FAIL (the entry
+ * cannot work — a foreign launcher, or an execution position that no longer
+ * exists), 'unknown' → omitted (no verdict is attempted by design). Read-only.
  * @param {import('../core/paths').WienerdogPaths} paths
- * @param {{probe?: (argv:string[])=>('loaded'|'missing'|'unknown')}} [opts]
- * @returns {Array<{status:'ok'|'warn', msg:string}>}
+ * @param {{probe?: Function, run?: Function, platform?: NodeJS.Platform}} [opts]
+ * @returns {Array<{status:'ok'|'warn'|'fail', msg:string}>}
  */
 function doctorSchedulerChecks(paths, opts = {}) {
   const out = [];
@@ -187,6 +285,20 @@ function doctorSchedulerChecks(paths, opts = {}) {
       out.push({
         status: 'warn',
         msg: `scheduled job '${e.name}' is configured but NOT loaded in ${e.scheduler} — run 'wienerdog sync' to reload it`,
+      });
+    } else if (e.status === 'mismatched') {
+      out.push({
+        status: 'fail',
+        msg: `scheduled job '${e.name}' is registered in ${e.scheduler} but the program it would run is not ` +
+          'this Wienerdog install\'s, or no longer exists on this computer, so it cannot work — ' +
+          'run \'wienerdog sync\' to re-register it from this install',
+      });
+    } else if (e.status === 'unverified') {
+      out.push({
+        status: 'warn',
+        msg: `scheduled job '${e.name}' is registered in ${e.scheduler} but Wienerdog could not read back ` +
+          'the program it runs, so it cannot confirm the entry belongs to this install — ' +
+          'run \'wienerdog sync\' to re-register it, then \'wienerdog doctor\' again',
       });
     } // 'unknown' → no line
   }
@@ -229,9 +341,13 @@ function canonicalProbePath(paths, name, platform) {
  *      path (the verify→register reopen race is an accepted A12 residual).
  * The catch-up registration is NOT a configured job, so it is excluded here
  * ENTIRELY [R5/R6] — its repair/teardown is owned solely by `repointSchedules`.
+ *
+ * The heal set is `{missing, mismatched, unverified}`: a record that exists but
+ * runs the wrong program is exactly as broken as an absent one, and on darwin the
+ * replacement is bootstrap-first, so a working-but-unverifiable entry is only torn
+ * down after launchd itself refuses the bootstrap.
  * @param {import('../core/paths').WienerdogPaths} paths
- * @param {{loader?: (argv:string[])=>{status:number},
- *          probe?: (argv:string[])=>('loaded'|'missing'|'unknown'),
+ * @param {{loader?: (argv:string[])=>{status:number}, probe?: Function, run?: Function,
  *          platform?: NodeJS.Platform}} [opts]
  * @returns {{reloaded:string[], failed:string[]}}
  */
@@ -245,16 +361,28 @@ function reloadMissing(paths, opts = {}) {
   /** @type {string[]} */ const reloaded = [];
   /** @type {string[]} */ const failed = [];
   let jobs;
+  let markerAttempted = false;
   try { jobs = jobsLib.listJobs(paths); } catch { return { reloaded, failed }; }
   for (const job of jobs) {
     const canonical = canonicalProbePath(paths, job.name, platform);
     if (!canonical) continue; // unsupported platform → nothing to probe/heal
     const probeArgv = generators.deriveProbeArgv(canonical, platform);
     if (!probeArgv) continue; // unrecognized identity → never healed
+    const expect = identityExpectation(paths, canonical, platform);
     const status = envMap && Object.prototype.hasOwnProperty.call(envMap, job.name)
       ? envMap[job.name]
-      : probe(probeArgv);
-    if (status !== 'missing') continue;
+      : probe(probeArgv, expect, { run: opts.run });
+    if (!HEAL_SET.has(status)) continue;
+    // Pre-destructive durable marker (ADR-0018, 2026-07-25 amendment decision 2),
+    // UNCONDITIONAL and once per call, before the FIRST replacement call. The
+    // observed status does not predict whether a destructive step is reached: a
+    // TRANSIENT presence-query failure grades a still-loaded label `missing`, and
+    // the replacement then boots it out. BEST-EFFORT — refreshSchedulerStatus
+    // swallows every write error, hence `markerAttempted`, never `markerWritten`.
+    if (!markerAttempted) {
+      refreshSchedulerStatus(paths, opts);
+      markerAttempted = true;
+    }
     let ok = false;
     try { ok = schedule.reloadJob(paths, job, loader, platform); } catch { ok = false; }
     if (ok) reloaded.push(job.name);

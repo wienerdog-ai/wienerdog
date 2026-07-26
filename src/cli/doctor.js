@@ -399,8 +399,11 @@ async function run(_argv) {
   );
 
   // Scheduler-load health: one line per registered entry via a LIVE read-only
-  // probe (authoritative — catches even the all-jobs-unloaded case). A missing
-  // entry is a warn (actionable), never a hard fail; doctor never mutates.
+  // probe of what the OS will ACTUALLY run (authoritative — catches a hijacked or
+  // stale loaded record, which a file check cannot see). A missing or
+  // unverifiable entry is a warn (actionable); an entry registered to run a
+  // program outside this install — or one that no longer exists — is a hard fail
+  // (exit 1), because it cannot work. doctor never mutates.
   const { doctorSchedulerChecks } = require('../scheduler/status');
   for (const c of doctorSchedulerChecks(paths)) check(c.status, c.msg);
 

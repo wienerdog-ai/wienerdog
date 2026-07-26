@@ -32,6 +32,17 @@ function wienerdogBin(paths) {
 }
 
 /**
+ * Absolute path to the out-of-tree launcher every OS scheduler entry invokes
+ * (WP-157): `<core>/launcher/launch.js`. THE single source — src/cli/schedule.js's
+ * launcherPathFor now delegates here so the two can never drift.
+ * @param {import('../core/paths').WienerdogPaths} paths
+ * @returns {string}
+ */
+function launcherPath(paths) {
+  return path.join(paths.core, 'launcher', 'launch.js');
+}
+
+/**
  * macOS LaunchAgents dir.
  * @param {string} home
  * @returns {string}
@@ -138,6 +149,37 @@ function deriveProbeArgv(schedulePath, platform = process.platform, env = proces
   }
   if ((m = base.match(/^wienerdog-([a-z0-9][a-z0-9-]*)\.xml$/))) {
     return ['schtasks', '/query', '/tn', `\\Wienerdog\\${m[1]}`];
+  }
+  return null;
+}
+
+/**
+ * Re-derive the READ-ONLY query whose STDOUT carries a registered entry's LOADED
+ * EXEC IDENTITY — what the OS will actually run, as the OS itself reports it.
+ * Basename-shape derivation, fully anchored, exactly like deriveProbeArgv
+ * (ADR-0027: never read an argv out of the manifest). `platform` selects only the
+ * basename separator flavor.
+ * Returns `{kind, argv:null}` for a RECOGNIZED scheduler kind whose identity
+ * query is DECLARED UNIMPLEMENTED (systemd today — WP-scheduler-entry-identity
+ * Table B, Residual 1); returns `null` only for a basename this function does not
+ * recognize at all, so "systemd, deliberately not verified" stays distinguishable
+ * from "a fourth scheduler someone forgot to add here".
+ * @param {string} schedulePath
+ * @param {NodeJS.Platform} [platform]  basename separator flavor (default host)
+ * @returns {{argv:string[]|null, kind:'launchd'|'systemd'|'schtasks'}|null}
+ */
+function deriveIdentityArgv(schedulePath, platform = process.platform) {
+  const base = (platform === 'win32' ? path.win32 : path.posix).basename(schedulePath);
+  let m;
+  if ((m = base.match(/^(ai\.wienerdog\.[a-z0-9][a-z0-9-]*)\.plist$/))) {
+    if (typeof process.getuid !== 'function') return null;
+    return { kind: 'launchd', argv: ['launchctl', 'print', `gui/${process.getuid()}/${m[1]}`] };
+  }
+  if (/^wienerdog-[a-z0-9][a-z0-9-]*\.timer$/.test(base)) {
+    return { kind: 'systemd', argv: null }; // identity query declared unimplemented
+  }
+  if ((m = base.match(/^wienerdog-([a-z0-9][a-z0-9-]*)\.xml$/))) {
+    return { kind: 'schtasks', argv: ['schtasks', '/query', '/tn', `\\Wienerdog\\${m[1]}`, '/xml'] };
   }
   return null;
 }
@@ -630,6 +672,150 @@ function parseWindowsTaskExec(xml) {
   };
 }
 
+/** The launchd `arguments = { … }` block of a `launchctl print` record, one
+ *  TRIMMED argument per line. null when the block never opened or never closed
+ *  (an indeterminate record — we refuse to guess). PURE: string work only.
+ *  @param {string} stdout @returns {string[]|null} */
+function launchdLoadedArgs(stdout) {
+  const lines = String(stdout).split('\n');
+  const start = lines.findIndex((l) => l.trim() === 'arguments = {');
+  if (start === -1) return null;
+  const args = [];
+  for (let i = start + 1; i < lines.length; i += 1) {
+    const t = lines[i].trim();
+    if (t === '}') return args;
+    args.push(t);
+  }
+  return null; // no closing brace → the block did not parse
+}
+
+/** Table B1 consumer 1 — split a cmd.exe inner command chain at each ` & ` that
+ *  lies OUTSIDE a double-quoted region (the only delimiter windowsCmdArguments
+ *  emits). An ODD total `"` count is unparseable → null (fail closed). A ` & `
+ *  inside a `set "VAR=…"` value or a quoted exec argument is never a split point,
+ *  which is what keeps a home like `C:\Users\Bob & Alice` working.
+ *  @param {string} inner @returns {string[]|null} */
+function splitCmdChain(inner) {
+  if ((inner.match(/"/g) || []).length % 2 !== 0) return null;
+  const segs = [];
+  let cur = '';
+  let inQuote = false;
+  for (let i = 0; i < inner.length; i += 1) {
+    const ch = inner[i];
+    if (ch === '"') {
+      inQuote = !inQuote;
+      cur += ch;
+      continue;
+    }
+    if (!inQuote && inner.startsWith(' & ', i)) {
+      segs.push(cur);
+      cur = '';
+      i += 2;
+      continue;
+    }
+    cur += ch;
+  }
+  segs.push(cur);
+  return segs;
+}
+
+/**
+ * Table B condition (c0): is everything before the exec segment EXACTLY the
+ * canonical env-binding set — bound by NAME and, where derivable, by VALUE, never
+ * by the syntactic shape of a `set` command? A shape test would admit
+ * `set "NODE_OPTIONS=--require C:\evil.js"`, which loads attacker code inside the
+ * launcher's own node process before launch.js's first line (the very hazard
+ * scheduledEnvPairs scrubs).
+ * The expected name list and the scrubbed-to-empty set are READ FROM
+ * `scheduledEnvPairs` rather than restated, so the checker cannot drift from the
+ * writer. Rule 4a mirrors `assertSafeOverride`'s component scan
+ * (src/core/paths.js) — same split regex, same two component tests — because our
+ * writer provably cannot emit a `WIENERDOG_HOME` bind with a `.`/`..` component.
+ * @param {string[]} binds  every chain segment except the last
+ * @param {string} expectLauncher  `<core>\launcher\launch.js`
+ * @returns {boolean}
+ */
+function canonicalWindowsBinds(binds, expectLauncher) {
+  const pairs = scheduledEnvPairs('H', 'C'); // sentinel home/core: only names + emptiness matter
+  const expectedNames = [...pairs.map(([k]) => k), 'USERPROFILE'];
+  const scrubbed = new Set(pairs.filter(([, v]) => v === '').map(([k]) => k));
+  if (binds.length !== expectedNames.length) return false; // rule 2 (no extras, none missing)
+  const bound = new Map();
+  for (let i = 0; i < binds.length; i += 1) {
+    const m = binds[i].match(/^set "([A-Za-z_][A-Za-z0-9_]*)=([^"]*)"$/); // rule 1
+    if (!m) return false;
+    if (m[1] !== expectedNames[i]) return false; // rule 2 (in order)
+    if (scrubbed.has(m[1]) && m[2] !== '') return false; // rule 3
+    bound.set(m[1], m[2]);
+  }
+  // rule 4 — WIENERDOG_HOME must be a value our own writer could have emitted AND
+  // name the same core as the expectation (the launcher is <core>\launcher\launch.js).
+  const captured = bound.get('WIENERDOG_HOME');
+  const core = path.win32.dirname(path.win32.dirname(expectLauncher));
+  const comps = captured.split(/[\\/]+/); // 4a — BEFORE any normalization
+  if (comps.includes('..') || comps.includes('.')) return false;
+  if (!path.win32.isAbsolute(captured)) return false; // 4b
+  if (path.win32.resolve(captured) !== path.win32.resolve(core)) return false; // 4c
+  // rule 5 — the generator binds HOME and USERPROFILE to the one `o.home`.
+  const home = bound.get('HOME');
+  return home !== '' && home === bound.get('USERPROFILE');
+}
+
+/**
+ * Decide whether a LOADED scheduler record runs OUR launcher, and report the
+ * program the OS will actually START. `stdout` is the raw output of
+ * deriveIdentityArgv().argv.
+ *
+ * PURE: parses, compares, never executes, never touches the filesystem (no fs
+ * call of any kind — the existence check on `exec` belongs to status.js's
+ * defaultProbe step 8b), and never derives a path FROM THE PARSED TEXT. It does
+ * derive the expected core from `expectLauncher`, which is code-owned input.
+ * `verdict` is decided by the LAUNCHER position; `exec` is the EXECUTION
+ * position, reported and never compared — a record graded `match` may still start
+ * any program that exists, provided our launcher is its first argument
+ * (WP-scheduler-entry-identity Residual 9).
+ * NEVER THROWS — any internal throw (e.g. cmdQuotedToken on a `"` in
+ * expectLauncher) is returned as `{verdict:'indeterminate', exec:null}`.
+ * @param {string} stdout
+ * @param {'launchd'|'systemd'|'schtasks'} kind
+ * @param {string} expectLauncher  an absolute path (generators.launcherPath)
+ * @returns {{verdict:'match'|'mismatch'|'indeterminate', exec:string|null}}
+ */
+function loadedEntryTargets(stdout, kind, expectLauncher) {
+  try {
+    if (kind === 'launchd') {
+      const args = launchdLoadedArgs(stdout);
+      if (!args) return { verdict: 'indeterminate', exec: null };
+      const exec = args.length >= 1 ? args[0] : null;
+      if (args.length < 2) return { verdict: 'indeterminate', exec };
+      return { verdict: args[1] === expectLauncher ? 'match' : 'mismatch', exec };
+    }
+    if (kind !== 'schtasks') return { verdict: 'indeterminate', exec: null }; // systemd: never called
+    // Evaluation order is part of the contract: (0) → (a) → (b) → split → (c) →
+    // (d) → (c0). Only (d) can produce `mismatch`; (d) outranks (c0) so a foreign
+    // launcher stays the loudest verdict even when the bind chain is also foreign.
+    if ((String(stdout).match(/<Exec\b/g) || []).length !== 1) return { verdict: 'indeterminate', exec: null }; // (0)
+    const parsed = parseWindowsTaskExec(stdout);
+    if (!parsed) return { verdict: 'indeterminate', exec: null };
+    if (parsed.command !== windowsCmdExePath()) return { verdict: 'indeterminate', exec: null }; // (a)
+    const envelope = parsed.arguments.match(/^\/d \/s \/v:off \/c "([\s\S]*)"$/); // (b)
+    if (!envelope) return { verdict: 'indeterminate', exec: null };
+    const segs = splitCmdChain(envelope[1]);
+    if (!segs) return { verdict: 'indeterminate', exec: null };
+    // (c) Table B1's END-ANCHORED exec grammar. BARE is cmdArgToken's own bare
+    // charset (see cmdArgToken above) — widening one without the other is exactly
+    // the writer/checker drift the closure family in the tests pins down.
+    const m = segs[segs.length - 1].match(/^"([^"]*)" "([^"]*)"((?: (?:"[^"]*"|[A-Za-z0-9:._-]+))*)$/);
+    if (!m) return { verdict: 'indeterminate', exec: null };
+    const exec = m[1];
+    if (m[2] !== cmdQuotedToken(expectLauncher)) return { verdict: 'mismatch', exec }; // (d)
+    if (!canonicalWindowsBinds(segs.slice(0, -1), expectLauncher)) return { verdict: 'indeterminate', exec }; // (c0)
+    return { verdict: 'match', exec };
+  } catch {
+    return { verdict: 'indeterminate', exec: null };
+  }
+}
+
 /**
  * Render the daily Windows dream task XML. The task's <Command> is the absolute
  * `cmd.exe` and its <Arguments> carry the COMPLETE authorization command bound
@@ -810,12 +996,15 @@ function teardownCatchup(paths, manifest, opts = {}) {
 module.exports = {
   nodePath,
   wienerdogBin,
+  launcherPath,
   launchAgentsDir,
   systemdUserDir,
   launchdLabel,
   systemdUnitBase,
   deriveUnloadArgv,
   deriveProbeArgv,
+  deriveIdentityArgv,
+  loadedEntryTargets,
   parseAt,
   xmlEscape,
   launchdPlist,

@@ -98,7 +98,7 @@ test('describeEntry returns null for an unrecognized basename (systemd .service 
 // defaultProbe — exit-code → status mapping (the incident's read-only probe)
 // ---------------------------------------------------------------------------
 
-test('defaultProbe maps exit 0 → loaded, non-zero → missing, spawn error → missing', () => {
+test('defaultProbe maps exit 0 without an expectation → unverified, non-zero → missing, spawn error → missing', () => {
   const saved = {
     noop: process.env.WIENERDOG_LOADER_NOOP,
     guard: process.env.WIENERDOG_TEST_NO_REAL_SCHEDULER,
@@ -107,7 +107,8 @@ test('defaultProbe maps exit 0 → loaded, non-zero → missing, spawn error →
   delete process.env.WIENERDOG_TEST_NO_REAL_SCHEDULER;
   try {
     const node = process.execPath; // harmless real spawn — never the OS scheduler
-    assert.equal(status.defaultProbe([node, '-e', 'process.exit(0)']), 'loaded');
+    // A probe with no identity expectation must NOT claim health (fail closed).
+    assert.equal(status.defaultProbe([node, '-e', 'process.exit(0)']), 'unverified');
     assert.equal(status.defaultProbe([node, '-e', 'process.exit(3)']), 'missing');
     assert.equal(status.defaultProbe(['wd-no-such-binary-xyz-42']), 'missing');
   } finally {
