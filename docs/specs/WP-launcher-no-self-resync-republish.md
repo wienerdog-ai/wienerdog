@@ -1,7 +1,7 @@
 ---
 id: WP-launcher-no-self-resync-republish
 title: Stop a self-resync from re-publishing the out-of-tree launcher out of the app tree
-status: Draft
+status: Ready
 model: sonnet
 size: S
 depends_on: [WP-stance-authority-containment]
@@ -10,6 +10,26 @@ epic: audit-a7
 ---
 
 # WP-launcher-no-self-resync-republish: a self-resync carries the launcher forward
+
+> **DISPATCH STATUS — 2026-07-26: READY, and NOT dispatchable yet — the
+> dependency below is the reason, and it is the only one.** Both adversarial
+> review legs returned APPROVE — **wd-reviewer at round 2, Codex at round 3** —
+> with no class-(a) or class-(b) findings outstanding. Nothing further is
+> required from the architect or the owner on the design.
+> **`depends_on` is not yet satisfied**: `WP-stance-authority-containment` is
+> `Ready`, not `Done`. `Ready` here means *design-complete and approved*, which
+> `docs/specs/README.md` gates **separately** from dependencies — "an
+> implementer may only pick up a `Ready` spec whose `depends_on` are all
+> `Done`". **Do not dispatch this WP until `WP-stance-authority-containment`
+> has merged.** On a tree without it this spec does not merely regress, it does
+> not resolve: D2's call site names D9's `selfResync` and `dev`, the carry arm
+> throws D8's `WienerdogError`, and T1/T4 assert on D1's `installStance` — none
+> of which exists yet.
+> Four items are **routed to the owner and non-blocking**, reviewed and accepted
+> as such by both legs: **Residual R-dev**, the carried-forward-corrupt-launcher
+> disclosure, the refused-`adopt` manifest-ordering disclosure, and the cross-WP
+> constraint on `WP-refusal-remedy-discriminator`. All four ride along in the PR
+> body (Definition of done item 7); none is a precondition for starting.
 
 ## Context (read this, nothing else)
 
@@ -454,13 +474,15 @@ spot.
       paragraph, which must all name the same placement: *before* D9's branch).
 - [ ] **Table M mutation rows** — every Table L row and every AC needs a
       mutation partner; M6 is the "both arms" row's, added in round 2.
-- [ ] **Residual R-dev** — its own block above, plus **six** citing surfaces,
+- [ ] **Residual R-dev** — its own block above, plus **seven** citing surfaces,
       enumerated because a round-3 review found the count stale at "four":
       (1) Table L's "Why `!dev`" row, (2) Table L's "Not closed by this WP" row,
       (3) Implementation notes → **D3**, (4) the Out-of-scope
       **`docs/THREAT-MODEL.md`** bullet, (5) the Out-of-scope **dev-side guard**
-      bullet, (6) **Definition of done item 7**. A seventh gets registered here
-      on the spot.
+      bullet, (6) **Definition of done item 7**, (7) the **dispatch-status
+      banner** at the head of this spec, registered at the `Ready` flip — a
+      name-only citation that carries no part of R-dev's treatment. An eighth
+      gets registered here on the spot.
 - [ ] **Shipped JSDoc prose in `src/`** — the `carryForward` `@param` text and
       the corrected call-site comment; these ship to users' disks and are the
       mirror most likely to drift.
@@ -482,7 +504,10 @@ spot.
       **`src/scheduler/launcher.js`** bullet and (2) **Definition of done item 7,
       bullet 3**. The operative instruction — "must not promise launcher
       repair" — is unchanged by the narrowing and must read identically in all
-      three.
+      three. The **dispatch-status banner** names this constraint as a routed,
+      non-blocking item and deliberately carries **no** operative wording; it is
+      a name-only citation, registered here at the `Ready` flip so it is not
+      mistaken for a fourth copy.
 
 ## Implementation notes & constraints
 
