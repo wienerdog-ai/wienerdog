@@ -3,7 +3,7 @@ id: WP-refusal-remedy-discriminator
 title: Choose the refusal remedy from a structured verdict class, so an app-tree tamper never tells the user to run `wienerdog sync`
 status: Draft
 model: sonnet
-size: S
+size: M
 depends_on: [WP-stance-authority-containment]
 adrs: [ADR-0004, ADR-0028, ADR-0031]
 epic: audit-a7
@@ -219,19 +219,21 @@ to `<core>/state/alerts.jsonl`; `src/core/alerts.js:47` caps each field at
 `MAX_FIELD_CHARS = 2000`; `src/core/digest.js` `formatAlerts` renders
 `lastReason` verbatim into the banner. **Banner length is per reason string**, so
 it is stated per reason and never as a single before/after pair. Swapping tail
-R-T1 for tail R-T2 is a fixed **+129** characters for the same reason: the new
-banner is always *longer* than today's, never shorter. Measured this session
-against the live reason strings and the R-T1/R-T2 blocks below:
+R-T1 for tail R-T2 is a fixed **+124** characters for the same reason: the new
+banner is always *longer* than today's, never shorter. Measured this session by
+executing the R-T0/R-T1/R-T2 blocks below against the live reason strings **and
+each site's real `jobName`** (row 15's is the `--catch-up` sentinel, not `dream` —
+a round-2 mismeasurement, corrected here):
 
-| reason (Table S row) | today (R-T1 tail) | after this WP |
-|---|---|---|
-| prod tree mismatch (row 9) | 273 | **402** (R-T2) |
-| catch-up tree mismatch (row 15) | 279 | **408** (R-T2) |
-| dev `current` repointed (row 4) | 286 | **415** (R-T2) |
-| dev descriptor drift (row 6) | 340 | 340 — keeps R-T1, unchanged |
-| prod descriptor drift (row 11) | 344 | 344 — keeps R-T1, unchanged |
+| reason (Table S row) | `jobName` | today (R-T1 tail) | after this WP |
+|---|---|---|---|
+| prod tree mismatch (row 9) | `dream` | 273 | **397** (R-T2) |
+| catch-up tree mismatch (row 15) | `--catch-up` | 284 | **408** (R-T2) |
+| dev `current` repointed (row 4) | `dream` | 286 | **410** (R-T2) |
+| dev descriptor drift (row 6) | `dream` | 340 | 340 — keeps R-T1, unchanged |
+| prod descriptor drift (row 11) | `dream` | 344 | 344 — keeps R-T1, unchanged |
 
-The longest fixed-length banner this WP can produce is **415**. The only reason
+The longest fixed-length banner this WP can produce is **410**. The only reason
 string with no fixed length is the two outer `catch` sites' `integrity check
 errored: ${err.message}`, whose length is `err.message`'s — unbounded today and
 unbounded after, and handled by the same 2000-char field cap as today. Nothing
@@ -247,21 +249,23 @@ byte-identity against a literal, which is the stronger and stabler check.
 <!-- Always allowed without listing: this spec file itself (the status flip)
      and package-lock.json. Everything else must be listed. -->
 
-Five files. New non-test source is ≈ 26 lines (one lookup object, two small pure
-functions, one changed closure signature, two changed call sites, plus a
-one-token `remedy:` added to each existing verdict-return line). The three prose
-edits are supplied verbatim in Table M — transcribe them, do not compose.
+Five files. New non-test source is ≈ 30 lines (one lookup object, two small pure
+functions, one changed closure signature, two changed call sites, one `let tied`
+declaration plus two assignments, plus a one-token `remedy:` added to each
+existing verdict-return line). The three prose edits are supplied verbatim in
+Table M — transcribe them, do not compose.
 
 | Action | Path | Notes |
 |--------|------|-------|
-| modify | src/scheduler/launcher.js | **D1** — add `REMEDY_TAIL`, `refusalText` and `remedyOf` (Exact contracts) and **export `refusalText` and `remedyOf`**. **D2** — `refuse` takes a third parameter and delegates to `refusalText`; its doc comment (`:436-438`) is rewritten per Table R. **D3** — both `refuse` call sites pass a remedy explicitly (`:450` → `'reinstall'`; `:461` → `remedyOf(verdict)`, **not** a bare `verdict.remedy` — see Table R's ownership row). **D4** — every `return { ok: false, reason: … }` in `verifyAndResolve` and `verifyCatchup` gains `remedy: '<class>'` per **Table S**, in the exact token order `{ ok: false, remedy: '<class>', reason: … }`. **D5** — the `@returns` of both verifiers gains `remedy:'sync'\|'reinstall'`; **three** doc comments drop the word "fixed" per Table R's doc-comment row — the header bullet at `:15`, `appendRefuseAlert` at `:157`, and `main`'s own doc comment at `:412`. Nothing else: `verifyContainment`, `containedIn`, `appTreeDigestOf`, `liveStance`, `appendRefuseAlert`'s **body**, `readDescriptorFile`, `derivationEnv`, `reDeriveDigest`, `parseArgv`, and every verification rule in either verifier are untouched — **no reason string changes**. |
-| modify | tests/unit/launcher.test.js | **T1–T9** (Test index). Append only, at the end of the file, under a new banner comment. **The existing test at `:525` (F27) must pass unmodified**, as must every other existing test. |
+| modify | src/scheduler/launcher.js | **D1** — add `REMEDY_TAIL`, `refusalText` and `remedyOf` (Exact contracts) and **export `refusalText` and `remedyOf`**. **D2** — `refuse` takes a third parameter and delegates to `refusalText`; its doc comment (`:436-438`) is rewritten per Table R. **D3** — both `refuse` call sites pass a remedy explicitly (`:450` → `'reinstall'`; `:461` → `remedyOf(verdict)`, **not** a bare `verdict.remedy` — see Table R's ownership row). **D4** — every `return { ok: false, reason: … }` in `verifyAndResolve` and `verifyCatchup` gains a `remedy` per **Table S**, in the exact token order `{ ok: false, remedy: …, reason: … }`. Fifteen of the sixteen carry a **literal** `'sync'`/`'reinstall'`; the sixteenth is Table S row 12, which carries the **ternary** `tied ? 'sync' : 'reinstall'` (D6). **D5** — the `@returns` of both verifiers gains `remedy:'sync'\|'reinstall'`; **three** doc comments drop the word "fixed" per Table R's doc-comment row — the header bullet at `:15`, `appendRefuseAlert` at `:157`, and `main`'s own doc comment at `:412`. **D6 — the `tied` provision (block R-P).** In `verifyAndResolve` only: declare `let tied = false;` immediately **before** the `try`, and set `tied = true;` on the statement immediately **after** each tie-back check's failure return — once on the dev arm (after the bound-root equality) and once on the prod arm (after the tree-digest comparison). Exact code in Exact contracts. `verifyCatchup` gets **no** flag. Nothing else: `verifyContainment`, `containedIn`, `appTreeDigestOf`, `liveStance`, `appendRefuseAlert`'s **body**, `readDescriptorFile`, `derivationEnv`, `reDeriveDigest`, `parseArgv`, and every verification **rule** in either verifier are untouched — **no reason string changes**, and D6 adds no check, no branch and no early return, only three assignments and one read. |
+| modify | tests/unit/launcher.test.js | **T1–T10** (Test index). Append only, at the end of the file, under a new banner comment. **The existing test at `:525` (F27) must pass unmodified**, as must every other existing test. |
 | modify | docs/runbooks/scheduler-and-executable-integrity.md | **M1** — the `## The fix: …` heading, its first sentence, and one appended subsection. Exact text in Table M. No other line. |
 | modify | README.md | **M2** — the tail of the "Scheduled runs are verified before they run" bullet only. Exact text in Table M. The `[^a7-boundary]` footnote marker and the footnote itself are unchanged. No other line. |
 | modify | docs/THREAT-MODEL.md | **M3** — two sentences, anchored by quoted text (not line number). Exact text in Table M. No other line. |
 
 Not Deliverables, deliberately: `docs/adr/0028-scheduler-app-executable-integrity.md`
 (ratified, owner-signed — routed), `docs/GLOSSARY.md`, `src/core/vendor.js`,
+`src/cli/schedule.js` (the catch-up registration — routed; see "Out of scope"),
 `src/core/alerts.js`, `src/core/digest.js`, `src/core/exec-identity.js`,
 `tests/scenarios/a7-integrity/**`, and `memory/lessons/inbox.md`. See "Out of
 scope" for each, with its reason.
@@ -278,7 +282,8 @@ scope" for each, with its reason.
 const REMEDY_TAIL = {
   sync: 'If the change was intentional, run `wienerdog sync`; otherwise investigate.',
   reinstall:
-    'Do not run `wienerdog sync` — it would install the app files as they are now. ' +
+    'Do not run `wienerdog sync` — this check could not confirm the app files are ' +
+    'the ones you installed, so syncing is not the safe next step. ' +
     'Reinstall Wienerdog from a trusted source, then investigate.',
 };
 
@@ -309,9 +314,51 @@ function remedyOf(verdict) {
 }
 ```
 
+**The two `REMEDY_TAIL` literals above are a MIRROR, not a source.** Their
+canonical home is blocks **R-T1** and **R-T2** under Table R. Concatenate the
+`+`-joined fragments and compare the result to the fence, byte for byte, before
+you write anything else — the round-2 draft of this spec updated R-T2 and left
+this code block carrying the previous wording, and a fragment-matching test did
+not notice. **T2 now asserts byte-identity against a literal copy of R-T2**
+precisely so a stale-but-plausible tail cannot pass. If the fence and the code
+block ever disagree again, **the fence wins**; report it as a spec bug.
+
 `Object.hasOwn` is a Node 16.9+ builtin, so it is available on this project's
 Node ≥ 18 floor and adds no `require` — the launcher's self-containment rule
 (`launcher.js:16-26`) is not affected.
+
+```js
+// src/scheduler/launcher.js — the `tied` provision inside verifyAndResolve (D6).
+// Block R-P evaluated at RUN time for the one return site whose POSITION cannot
+// decide it: the outer `catch`, which is reachable both before and after the
+// tie-back. Three assignments and one read; no new check, branch or early return.
+function verifyAndResolve(p, name, o) {
+  const env = o.env || process.env;
+  const platform = o.platform || process.platform;
+  /** Has the tie-back check (dev: bound-root identity; prod: content address)
+   *  already EXECUTED AND PASSED on the path we are on? Block R-P. */
+  let tied = false;
+  try {
+    // …unchanged…
+      if (!boundRoot || path.resolve(target) !== path.resolve(boundRoot)) {
+        return { ok: false, remedy: 'reinstall', reason: '…' };   // Table S row 4
+      }
+      tied = true; // dev arm: app/current proven to BE the authorized checkout root
+    // …unchanged…
+    if (liveTree !== expectTree) {
+      return { ok: false, remedy: 'reinstall', reason: '…' };     // Table S row 9
+    }
+    tied = true;   // prod arm: the live tree proven byte-identical to the descriptor
+    // …unchanged…
+  } catch (err) {
+    // Table S row 12 — the ONLY site whose class is not a literal.
+    return { ok: false, remedy: tied ? 'sync' : 'reinstall', reason: `integrity check errored: ${err.message}` };
+  }
+}
+```
+
+`verifyCatchup` gets **no** flag and **no** ternary: it contains no tie-back check
+at all, so its outer `catch` (Table S row 16) is unconditionally `'reinstall'`.
 
 ```js
 // src/scheduler/launcher.js — CHANGED closure inside `main` (D2, D3)
@@ -343,6 +390,11 @@ if (!verdict.ok) return refuse(name, verdict.reason, remedyOf(verdict)); // was:
 // Token order is fixed so one grep can verify the whole file: `remedy` BEFORE
 // `reason`, because a reason string may contain colons, quotes and braces.
 return { ok: false, remedy: 'reinstall', reason: 'the live app tree does not match the descriptor (app files changed since sync)' };
+
+// …and the ONE site (Table S row 12) whose class is dynamic. Same token order,
+// same single line, so the same grep still sees it — the value is a ternary, not
+// a literal, and verification step 2 counts it separately.
+return { ok: false, remedy: tied ? 'sync' : 'reinstall', reason: `integrity check errored: ${err.message}` };
 ```
 
 ```js
@@ -397,7 +449,7 @@ decided. Operative prose cites all three; it does not restate them.
 |------|-------|
 | **Field name** | `remedy`, on the `{ok:false}` verdict returned by `verifyAndResolve` and `verifyCatchup` |
 | **Type** | string, exhaustively one of `'sync'` \| `'reinstall'`. There is no third value and none may be added without amending this table |
-| **Class selection rule** | block **R-P** below — the single statement of when `'sync'` may be assigned, and the only place that decision is made. `'sync'` means R-P holds at this return point; `'reinstall'` means it does not. Neither class means anything else, here or anywhere in this spec |
+| **Class selection rule** | block **R-P** below — the single statement of when `'sync'` may be returned, and the only place that decision is made. `'sync'` means R-P holds on the path that reached this return; `'reinstall'` means it does not or could not be established. Neither class means anything else, here or anywhere in this spec. R-P is decided **statically by position** at fifteen of the sixteen sites and **at run time by the `tied` flag** at the sixteenth (Table S row 12) — one rule, two ways of evaluating it, no exception |
 | **`'sync'` tail (verbatim, unchanged from today)** | block **R-T1** below |
 | **`'reinstall'` tail (verbatim, NEW)** | block **R-T2** below |
 | **Fail-closed default** | **`'reinstall'`.** Selection is `REMEDY_TAIL[remedy === 'sync' ? 'sync' : 'reinstall']` — only the exact string `'sync'` reaches the permissive tail. Absent, `undefined`, `null`, `''`, any unknown value, and any object-key-shaped string all resolve to `'reinstall'` |
@@ -407,11 +459,11 @@ decided. Operative prose cites all three; it does not restate them.
 | **Unchanged mechanics** | zero spawn, exit 1, one `appendRefuseAlert` call, the same stderr write, `wienerdog doctor` still never named |
 | **Doc-comment consequence** | the launcher's word **"fixed"** becomes wrong in **three** comments — header bullet `:15` *"a fixed durable alert"*; `appendRefuseAlert` `:157` *"fixed, code-owned reason"*; `main`'s doc comment `:412` *"append a fixed durable alert"*. The alert body is still **code-owned** but is no longer a single fixed sentence. Replace "fixed, code-owned" with "code-owned" and "a fixed durable alert" with "a code-owned durable alert" in all three; change nothing else in them |
 
-#### R-P — the positional proof (the ONE statement of when `sync` may be recommended)
+#### R-P — the executed-proof rule (the ONE statement of when `sync` may be recommended)
 
-A refusal return site carries `remedy: 'sync'` **iff it lies strictly after the
-check that ties the live `app/current` to what the descriptor authorized** — so
-that check has already **executed and passed** on every path reaching the site:
+A refusal **returns** `remedy: 'sync'` **iff, on the path that reached it, the
+check that ties the live `app/current` to what the descriptor authorized has
+already executed and PASSED.** The two tie-back checks are:
 
 - in `verifyAndResolve`'s **prod arm**: the tree-digest comparison
   `liveTree !== expectTree`, today `src/scheduler/launcher.js:310`;
@@ -419,9 +471,43 @@ that check has already **executed and passed** on every path reaching the site:
   `path.resolve(target) !== path.resolve(boundRoot)`, today
   `src/scheduler/launcher.js:288`.
 
-Everything else is `remedy: 'reinstall'`: sites **before** either check, the two
-checks' **own** failure returns, sites on paths that reach neither check, and
-every site in `verifyCatchup` (it has no such check followed by any refusal).
+**How the rule is evaluated.** At fifteen of the sixteen return sites, *position*
+settles it: a site that lies strictly after a tie-back check is reached only on
+paths where that check passed, so it carries the literal `'sync'`; everything else
+carries the literal `'reinstall'` — sites **before** either check, the two checks'
+**own** failure returns, sites on paths that reach neither check, and every site in
+`verifyCatchup` (which contains no tie-back check at all).
+
+**The one site position cannot settle: `verifyAndResolve`'s outer `catch`** (Table
+S row 12). It is reachable from **both** sides. `reDeriveDigest` is called at
+`src/scheduler/launcher.js:319`, *after* `:310` has proven the tree byte-identical,
+and its own doc comment says it **THROWS** on any require/derivation error — so an
+unpinned `claude`, an unreadable `exec-pins.json` or a config parse error lands in
+that `catch` over a tree that was just confirmed. Executed on a real temp prod
+install with `<core>/state/exec-pins.json` removed and the app tree untouched:
+
+```text
+{"ok":false,"reason":"integrity check errored: refusing to authorize the dream job: claude is not pinned — install claude and run `wienerdog sync` so its identity is recorded before the job is bound."}
+```
+
+That refusal's own reason string tells the user to sync, and it is right to. For
+this site alone, R-P is therefore evaluated **at run time**, by a `tied` flag set
+the instant either tie-back check passes (D6). This is not an exception to R-P and
+must not be written as one: the flag is R-P's condition — "has already executed and
+passed on the path that reached this return" — measured directly instead of
+inferred from position. Where position and the flag both apply they agree; the flag
+is used only where position is silent.
+
+`verifyCatchup`'s outer `catch` (row 16) gets **no** flag: there is no tie-back
+check in that function for a flag to observe, so R-P cannot hold there under either
+evaluation.
+
+**The TOCTOU this does not open.** Between `:310` and `:319` an attacker who can
+still write the tree could swap files after the digest passed, making `tied` true
+over a tree that is no longer the authorized one. That race already grants
+arbitrary code execution — `reDeriveDigest` `require`s from that tree — so an
+attacker who wins it has no need of the banner; and the identical race already sits
+under rows 10 and 11, which R-P authorizes as `'sync'`. The flag widens nothing.
 
 **Why nothing weaker will do.** `wienerdog sync` re-vendors the install *by
 running out of whatever tree `app/current` resolves to at exec time* — the user's
@@ -458,57 +544,104 @@ R-T1 — the `'sync'` tail (unchanged from today):
 If the change was intentional, run `wienerdog sync`; otherwise investigate.
 ```
 
-R-T2 — the `'reinstall'` tail (new). **It asserts no cause.** One tail is shared
-by all twelve `reinstall` sites, and only *some* of them are a tree mismatch: an
-unreadable descriptor, a containment failure, an invalid stance and an outer
-exception can all fire over a perfectly intact tree. A tail that said *"it would
-install the app files as they are now"* (round 1) asserted a cause that is false
-at most of those sites. This wording states only what R-P actually establishes —
-that the check **could not confirm** the files, which is true at all twelve —
-and what `sync` would then do. Splitting the class per cause was rejected as the
-more complex option; see Implementation notes:
+R-T2 — the `'reinstall'` tail (new). **It asserts no cause and predicts no
+outcome.** One tail is shared by **thirteen emitters**: the twelve verdict sites of
+Table S that can return `'reinstall'` (eleven that always do, plus row 12 whenever
+its `tied` flag is false), plus the argv-parse `refuse` call site
+(`src/scheduler/launcher.js:450`, Exact contracts), which passes `'reinstall'`
+directly and returns no verdict at all. Every clause below had to be made true at
+all thirteen, and two rounds of review found it was not:
+
+- **Round 1** said *"it would install the app files as they are now"* — a **cause**
+  claim, false wherever the tree is intact (an unreadable descriptor, a containment
+  failure, an invalid stance, an argv error).
+- **Round 2** replaced it with *"…could not confirm the app files are the ones you
+  installed, **and sync would authorize them as they are**"* — the cause claim was
+  gone, but the second half is an **outcome prediction**, and it is false at Table S
+  rows 2 and 13, where `app/current` cannot be resolved at all: the user's shim is
+  literally `exec node "<core>/app/current/bin/wienerdog.js" "$@"`, so `sync` does
+  not authorize anything there, it fails to start. Round 2's first half was also
+  false at row 12's post-tie-back throws — fixed at the source by R-P's `tied`
+  provision, which moves those returns to `'sync'`, so *"could not confirm"* is now
+  true at every site where this tail can still fire.
+- **Round 3, below.** The second clause states a **conclusion about what to do**,
+  not a prediction about what `sync` would do. It is true whether `sync` would
+  authorize a hostile tree (rows 3, 4, 9, 15), do nothing useful (row 1), or fail to
+  launch at all (rows 2, 13).
+
+A reviewer proposed *"this refusal does not establish that sync is safe"*, which is
+also universally true; it was **not** taken because CLAUDE.md requires plain
+language for knowledge workers and that phrasing is epistemic-negation register.
+The clause below says the same thing in the imperative the reader needs. Splitting
+the class per cause was rejected as the more complex option; see Implementation
+notes:
 
 ```text
-Do not run `wienerdog sync` — this check could not confirm the app files are the ones you installed, and sync would authorize them as they are. Reinstall Wienerdog from a trusted source, then investigate.
+Do not run `wienerdog sync` — this check could not confirm the app files are the ones you installed, so syncing is not the safe next step. Reinstall Wienerdog from a trusted source, then investigate.
 ```
 
 ### Table S — which return site gets which class (canonical)
 
 **The rule is block R-P, above.** This table is R-P *applied*, not restated: for
-each site it records the position relative to the tie-back check (`:288` on the
-dev arm, `:310` on the prod arm) and the class that position yields. If a row and
-R-P ever disagree, **R-P wins and the row is a bug** — report it, do not follow
-it.
+each site it records its position relative to the tie-back check — the bound-root
+equality `path.resolve(target) !== path.resolve(boundRoot)` on the dev arm, the
+tree-digest comparison `liveTree !== expectTree` on the prod arm — and the class
+that position yields. **R-P alone carries line numbers for those two checks**, and
+qualifies them with "today"; this table names them by code expression because
+`WP-stance-authority-containment` deletes a site *between* them, so any number
+written here would already be stale. If a row and R-P ever disagree, **R-P wins and
+the row is a bug** — report it, do not follow it.
 
 Sites in source order, on the tree you will have (i.e. **after**
 `WP-stance-authority-containment` has landed):
 
-| # | Function / position | Position vs. R-P's check | Reason fragment (identity only — do NOT change these strings) | Class |
+| # | Function / position | Position vs. R-P's check ("dev-arm check" = the bound-root equality; "prod-arm check" = the tree-digest comparison) | Reason fragment (identity only — do NOT change these strings) | Class |
 |---|---|---|---|---|
 | 1 | `verifyAndResolve`, descriptor read | before both | `is missing or unreadable` | `reinstall` |
 | 2 | `verifyAndResolve`, realpath of `app/current` | before both | `cannot resolve app/current:` | `reinstall` |
-| 3 | dev arm, live stance is not dev (**C1**) | **before `:288`** | `authorized for a dev checkout but app/current now resolves inside` | **`reinstall`** ← round-2 fix |
-| 4 | dev arm, bound-root equality | **is `:288`'s own failure return** | `does not resolve to the authorized checkout root` | **`reinstall`** ← round-2 fix |
-| 5 | dev arm, job absent from config | after `:288` | `nothing authorized to run` | `sync` |
-| 6 | dev arm, reduced-descriptor drift | after `:288` | `the job descriptor changed since it was scheduled` | `sync` |
+| 3 | dev arm, live stance is not dev (**C1**) | **before the dev-arm check** | `authorized for a dev checkout but app/current now resolves inside` | **`reinstall`** ← round-2 fix |
+| 4 | dev arm, bound-root equality | **is the dev-arm check's own failure return** | `does not resolve to the authorized checkout root` | **`reinstall`** ← round-2 fix |
+| 5 | dev arm, job absent from config | after the dev-arm check | `nothing authorized to run` | `sync` |
+| 6 | dev arm, reduced-descriptor drift | after the dev-arm check | `the job descriptor changed since it was scheduled` | `sync` |
 | 7 | stance is neither prod nor dev | reaches neither | `is not prod or dev` | `reinstall` |
-| 8 | prod arm, `verifyContainment` propagation (`contain.why`) | before `:310` | *(interpolated helper text)* | `reinstall` |
-| 9 | prod arm, **tree digest comparison** | **is `:310`'s own failure return** | `the live app tree does not match the descriptor` | **`reinstall`** ← the round-1 fix |
-| 10 | prod arm, job absent from config | after `:310` | `nothing authorized to run` | `sync` |
-| 11 | prod arm, descriptor drift | after `:310` | `the job descriptor changed since it was scheduled` | `sync` |
-| 12 | `verifyAndResolve` outer `catch` | any position, incl. before | `integrity check errored:` | `reinstall` |
+| 8 | prod arm, `verifyContainment` propagation (`contain.why`) | before the prod-arm check | *(interpolated helper text)* | `reinstall` |
+| 9 | prod arm, **tree digest comparison** | **is the prod-arm check's own failure return** | `the live app tree does not match the descriptor` | **`reinstall`** ← the round-1 fix |
+| 10 | prod arm, job absent from config | after the prod-arm check | `nothing authorized to run` | `sync` |
+| 11 | prod arm, descriptor drift | after the prod-arm check | `the job descriptor changed since it was scheduled` | `sync` |
+| 12 | `verifyAndResolve` outer `catch` | **reachable from both sides — position is silent** | `integrity check errored:` | **`tied ? 'sync' : 'reinstall'`** ← round-3 fix (D6) |
 | 13 | `verifyCatchup`, realpath of `app/current` | no such check in this fn | `cannot resolve app/current:` | `reinstall` |
 | 14 | `verifyCatchup`, `verifyContainment` propagation | no such check in this fn | *(interpolated helper text)* | `reinstall` |
 | 15 | `verifyCatchup`, **tree digest comparison** | no such check in this fn | `does not match the scheduled digest` | **`reinstall`** ← the round-1 fix |
 | 16 | `verifyCatchup` outer `catch` | no such check in this fn | `integrity check errored:` | `reinstall` |
 
-**Counts: 16 sites, 4 `sync` (rows 5, 6, 10, 11), 12 `reinstall`.**
+**Counts: 16 sites — 4 carry the literal `'sync'` (rows 5, 6, 10, 11), 11 carry
+the literal `'reinstall'`, and 1 (row 12) carries the ternary.** So the tail R-T2
+can fire at **twelve** verdict sites (the eleven literals, plus row 12 whenever
+`tied` is false) and R-T1 at **five** (the four literals, plus row 12 whenever
+`tied` is true). Verification step 2 counts the literals and the ternary
+separately: `sync=4`, `tied=1`.
 
 Rows 3 and 4 changed class in round 2. Round 1 assigned them `sync` on the
-strength of the descriptor's `dev` stance; R-P now requires an executed
-comparison, and these are the two sites where live state has just contradicted
-the descriptor. Rows 5 and 6 keep `sync` because they sit *after* `:288` — the
-distinction round 1 collapsed.
+strength of the descriptor's `dev` stance; R-P requires an executed comparison, and
+these are the two sites where live state has just contradicted the descriptor.
+Rows 5 and 6 keep `sync` because they sit *after* the dev-arm bound-root equality —
+the distinction round 1 collapsed. Row 12 changed in round 3: it was flatly
+`reinstall`, which made R-T2's *"could not confirm the app files"* false on the
+post-tie-back throws that reach it and put a banner in front of the user whose
+reason said *run `wienerdog sync`* and whose tail said *do not*. See R-P.
+
+**Row 14 is the normal state of every dev install — read this before you file it as
+a bug.** `verifyCatchup` has no dev arm by design: `src/scheduler/launcher.js:335-339`
+says a dev install *"fails containment and refuses here — fail-closed for the
+catch-up path, acceptable for the intermediate"*. Executed against a healthy
+`setupDev`-shaped install this session, `verifyCatchup` returns
+`{"ok":false,"reason":"app/current does not resolve inside …/wd/app"}` ⇒ row 14 ⇒
+`reinstall`. Nothing about that is wrong under R-P — containment failed, so nothing
+was confirmed — but the consequence is stated plainly under "Known consequence" in
+Implementation notes, and it is **not** to be softened here. In particular, do
+**not** add an `isDev(target)` test to `verifyCatchup` to pick a gentler tail: a
+planted `.git` is attacker-controlled, that is precisely the downgrade F10 exists
+to prevent, and it would carve the first real exception into R-P.
 
 **STOP RULE.** On this branch's HEAD (before the dependency lands) the file has
 **17** sites: one extra `reinstall`-class site, the prod-arm
@@ -659,7 +792,11 @@ below mirrors them:**
 - [ ] Deliverables cell for `src/scheduler/launcher.js` (D1, D2, D3, D5 — "per Table R")
 - [ ] Exact contracts → the `REMEDY_TAIL` / `refusalText` / `remedyOf` code block
       and its JSDoc (the literals there must be byte-equal to R-T1 and R-T2, and
-      the template literal's prefix byte-equal to R-T0 including its trailing space)
+      the template literal's prefix byte-equal to R-T0 including its trailing
+      space). **This is the mirror that went stale in round 2** — R-T2 was
+      rewritten and this block was not, and T2's three fragment regexes still
+      passed against the old wording. T2 is now a byte-identity assertion, and the
+      paragraph under the code block tells the implementer the fence wins
 - [ ] Exact contracts → the `module.exports` line and the five worked examples
 - [ ] Current state §1 (today's single banner) and §3 (the banner that must survive byte-for-byte)
 - [ ] Current state §8 (the per-reason length table) — mirrors R-T1/R-T2's lengths only
@@ -678,20 +815,28 @@ Table S and **block R-P** (the positional proof and its application). R-P is the
 canonical statement; Table S is R-P applied; **everything below mirrors R-P**:
 
 - [ ] Table S itself — its rule paragraph must cite R-P and must not restate it
-- [ ] Deliverables cell for `src/scheduler/launcher.js` (D4 — "per Table S")
+- [ ] Deliverables cell for `src/scheduler/launcher.js` (D4 and **D6**, the `tied`
+      provision — "per Table S" / "per block R-P")
 - [ ] Exact contracts → the fixed `{ ok: false, remedy: …, reason: … }` token order
+      **and its ternary variant**, plus the `tied`-provision code block
 - [ ] Context → the symlink-repoint / dev-checkout-B paragraph (it is R-P's
       motivating attack, not an independent claim)
+- [ ] Current state §3 (the descriptor-drift contrast — it restates R-P's per-arm
+      tie-back semantics in prose: content address on prod, checkout-root identity
+      on dev). **Registered in round 3; it was previously listed only under Table R**
 - [ ] Current state §4 (the executed grep counts) and its "16, not 17" pointer
 - [ ] Table M's M3a-new and M3b-new replacements (both state R-P in user-facing
       prose: `sync` only after the tie-back, "or for an authorized mutable dev
       checkout")
-- [ ] Acceptance criteria AC5, AC6, AC7
-- [ ] Verification step 2 (the four greps + the git-derived baseline)
-- [ ] Test index rows T5, T6, T7, T8
-- [ ] Implementation notes → "Do not string-match the reason"
-- [ ] Out of scope → the "reclassifying sites beyond Table S" item and the
-      ADR-0028 correction wording
+- [ ] Acceptance criteria AC5, AC6, AC7, **AC14** (the `tied` provision)
+- [ ] Verification step 2 (the five counts + the git-derived baseline + the
+      reason-drift diff)
+- [ ] Test index rows T5, T6, T7, T8, **T10**
+- [ ] Implementation notes → "Do not string-match the reason", **"Why the outer
+      `catch` is decided at run time"** and **"Known consequence: row 14 on a dev
+      install"**
+- [ ] Out of scope → the "reclassifying sites beyond Table S" item, the ADR-0028
+      correction wording, and the routed `ensureCatchup`-on-dev item
 
 Table M (the user-facing prose and the citation). **The prose itself lives in the
 `M1a-old`…`M3b-new` and `M1c` fenced blocks beneath Table M — that is its
@@ -738,22 +883,73 @@ a single expression (`remedy === 'sync' ? … : …`) that cannot be got wrong. 
 cost is that the class name is presentation-shaped; that is acceptable because
 the verdict already carries a fully presentation-shaped field (`reason`).
 
-**Why one `reinstall` tail and not one per cause (recorded decision, round 2).**
-Review found that round 1's tail asserted a cause — *"it would install the app
-files as they are now"* — that is only true at the tree-mismatch sites, while the
-same tail also fires for a missing descriptor, a containment failure, an invalid
-stance, an outer exception, a catch-up setup failure and an argv error, several of
-which can happen over a perfectly intact tree. Two options were on the table:
-split the class per cause, or stop the text asserting a cause. **The simpler
-option was taken**: R-T2 now states only what R-P establishes at every one of the
-twelve sites — the check could not confirm the files — plus what `sync` would then
-do. Splitting the class would have re-introduced exactly the cause taxonomy the
-previous note rejects, and would have needed its own fail-closed default per
-cause. The cost is a slightly vaguer banner; the runbook subsection M1c carries
-the nuance instead, which is where a user who wants it will be.
+**Why one `reinstall` tail and not one per cause (recorded decision, rounds 2–3).**
+Round 1's tail asserted a **cause** — *"it would install the app files as they are
+now"* — true only at the tree-mismatch sites, while the same tail also fires for a
+missing descriptor, a containment failure, an invalid stance, an outer exception, a
+catch-up containment failure and an argv error. Round 2 removed the cause but added
+an **outcome prediction** — *"and sync would authorize them as they are"* — false at
+Table S rows 2 and 13, where `app/current` cannot be resolved and `sync` therefore
+cannot start at all. Both times the option of splitting the class per cause was on
+the table and both times **the simpler option was taken**: make the one sentence
+true everywhere. R-T2's final clause states a conclusion (*syncing is not the safe
+next step*), not a prediction, which holds whether `sync` would authorize a hostile
+tree, do nothing useful, or fail to launch. Splitting would have re-introduced
+exactly the cause taxonomy the previous note rejects, and would have needed its own
+fail-closed default per cause. The cost is a slightly vaguer banner; the runbook
+subsection M1c carries the nuance instead, which is where a user who wants it will
+be.
+
+**Why the outer `catch` is decided at run time (recorded decision, round 3).**
+Table S row 12 is the only site whose class a reader cannot settle by looking at
+where it sits, and review proved the consequence rather than arguing it: on a real
+temp prod install with the app tree untouched and `<core>/state/exec-pins.json`
+removed, `reDeriveDigest` throws *after* the tree-digest comparison has passed, and
+the resulting reason string is *"…install claude and run `wienerdog sync` so its
+identity is recorded…"*. A flat `'reinstall'` there produces a banner that tells the
+user to sync and then forbids it, over app files that were **confirmed**. Two
+resolutions were offered: (a) weaken R-T2 so it claims nothing about confirmation,
+or (b) carry a `tied` flag and let the `catch` return the class R-P actually
+yields. **(b) was taken, and (a)'s valid part was taken too but for a different
+reason** — see the R-T2 note above. (a) alone was rejected because it leaves the
+self-contradiction standing: the user is still told both to sync and not to sync,
+and the tail is merely *non-false* instead of *right*. (b) costs one `let`, two
+assignments and one read, adds no check and no branch to the verification flow, and
+is R-P's own condition measured rather than inferred — so it needed no exception in
+R-P and got none. The TOCTOU objection is answered inside R-P. Do **not** widen the
+flag: it is set only where a tie-back check has *passed*, never where one was
+skipped, and `verifyCatchup` gets none.
+
+**Known consequence: row 14 fires on every dev install, including this repo's own
+(recorded decision, round 3).** `ensureCatchup` (`src/cli/schedule.js:409`) is
+called unconditionally on macOS registration with no stance gating, so a dev
+install carries a login + hourly catch-up entry. `verifyCatchup` has no dev arm by
+design, so every one of those fires refuses at Table S row 14 — executed this
+session against a healthy `setupDev`-shaped install:
+`{"ok":false,"reason":"app/current does not resolve inside …/wd/app"}`. Today that
+refusal ends *"If the change was intentional, run `wienerdog sync`"*; after this WP
+it ends *"…could not confirm the app files … Reinstall Wienerdog from a trusted
+source."* `formatAlerts` (`src/core/digest.js:288-309`) collapses alerts per job, so
+the effect is **one persistent banner line** in every injected digest, reading
+*"the "--catch-up" job has failed N times since …"* with that tail, and it **never
+clears**, because catch-up structurally never succeeds on a dev install. **On the
+maintainer's own dogfooding machine that is a standing "reinstall Wienerdog from a
+trusted source" warning.** This is accepted, not fixed, and it is stated here so it
+is discovered in the spec rather than in production. The reasons: the class is
+*correct* under R-P (containment failed, so nothing was confirmed); the only way to
+soften it is to consult live `isDev(target)`, which a planted `.git` controls and
+which F10 exists to prevent; a third tail would mean a third class, which Table R
+forbids; and the real defect — registering a catch-up entry whose path is
+documented to always refuse on dev — lives in `src/cli/schedule.js`, a different
+contract and not a Deliverable here. It is routed under "Out of scope" as a
+Discovered issue. Today's wording is *also* wrong on that banner, so this WP does
+not create the false alert; it makes an already-false alert alarming, which is the
+part the owner needs to weigh.
 
 **Fail closed three times, deliberately.** (1) Every site sets `remedy`
-explicitly (Table S). (2) The production read is `remedyOf(verdict)`, which
+explicitly (Table S) — including row 12, whose ternary is still an explicit
+classification, just one evaluated at run time rather than written as a literal.
+(2) The production read is `remedyOf(verdict)`, which
 requires the verdict to **own** the field. (3) `refusalText` defaults to
 `'reinstall'` for anything that is not the exact string `'sync'`. Layer 1 is what
 makes a reviewer think about each site; layer 3 is what protects a site added by a
@@ -774,10 +970,17 @@ byte-for-byte, for every reason string (Current state §8 lists the per-reason
 lengths; do not treat any single number as "the" banner length). Note the single
 trailing space that block R-T0 ends with, before the tail is interpolated — today
 it sits at the end of the second string literal (`'…run '`), and in `refusalText`
-it sits inside the template literal after `digest.`. The existing F27 test at
-`tests/unit/launcher.test.js:525` drives a **prod descriptor drift** (Table S row
-11, still `sync`) and asserts `/wienerdog sync/` — if it goes red you have changed
-the wrong class.
+it sits inside the template literal after `digest.`.
+
+**F27 cannot detect a wrong class — do not rely on it.** The existing F27 test
+(`tests/unit/launcher.test.js:525`, assertions at `:545-547`) drives a **prod
+descriptor drift** (Table S row 11, still `sync`) but asserts only
+`/wienerdog sync/`, `/next digest/` and `doesNotMatch(/wienerdog doctor/)` — and
+**R-T2 contains the literal string "Do not run `wienerdog sync`"**, so
+`/wienerdog sync/` matches under *either* tail. Executed this session against the
+R-T2 banner for row 11's reason: all three F27 assertions pass. F27's job is to
+keep `doctor` out of the banner and it still does that; the guard against a wrong
+class on row 11 is **T7's own `doesNotMatch(/Do not run/)`**, and nothing else.
 
 **The launcher is not repaired by `sync` (cross-WP constraint).** Once the sibling
 `WP-launcher-no-self-resync-republish` merges, an attended `wienerdog sync` no
@@ -812,29 +1015,32 @@ Prefix every new test name with `remedy:` followed by a single space, so
 | id | Test | Asserts | Mutation partner that reddens it |
 |----|------|---------|----------------------------------|
 | **T1** | `remedy: refusalText('sync') is byte-identical to the shipped banner` | `refusalText('dream', REASON, 'sync')` `assert.equal`s a literal copy of the whole banner, written out in the test. **Assert byte-identity, never a length** — the banner's length is the reason string's length plus a constant, so "the" banner has no single length (Current state §8 lists five). If you want a sanity number: with `REASON` = the prod tree-mismatch string (Table S row 9) the result is 273 chars; with the prod descriptor-drift string (row 11) it is 344 | change one character of `REMEDY_TAIL.sync` |
-| **T2** | `remedy: refusalText('reinstall') withholds sync and names a reinstall` | the result `match`es `/Do not run/` and `/Reinstall Wienerdog from a trusted source/`, and `doesNotMatch(/If the change was intentional/)` | swap the two `REMEDY_TAIL` values |
-| **T3** | `remedy: an absent or unknown remedy falls back to reinstall (fail closed)` | for each of `undefined`, `null`, `''`, `'bogus'`, `'SYNC'`, `'__proto__'`, `'constructor'`, `'toString'` the result carries the reinstall tail and **not** `/If the change was intentional/` | change the selector to `REMEDY_TAIL[remedy] \|\| REMEDY_TAIL.reinstall` (passes for the first four, **fails** for the last three) |
+| **T2** | `remedy: refusalText('reinstall') is byte-identical to the canonical reinstall banner` | **`assert.equal` against a literal copy of block R-T0 (with the same `jobName`/`why`) followed by a literal copy of block R-T2, written out in the test.** Then, and only as a readability aid, `doesNotMatch(/If the change was intentional/)`. **A fragment check is NOT acceptable here** — the round-2 draft carried a different R-T2 wording in its Exact contract, and three fragment regexes (`/Do not run/`, `/Reinstall Wienerdog from a trusted source/`, `doesNotMatch(/If the change was intentional/)`) all passed against the stale text. Byte-identity is what makes the code block a checked mirror of the fence instead of an unchecked one | swap the two `REMEDY_TAIL` values; **and** restore round 2's tail (`…and sync would authorize them as they are.`), which the old fragment form did not catch and this form does |
+| **T3** | `remedy: an absent or unknown remedy falls back to reinstall (fail closed)` | for each of `undefined`, `null`, `''`, `'bogus'`, `'SYNC'`, `'__proto__'`, `'constructor'`, `'toString'` the result carries the reinstall tail and **not** `/If the change was intentional/` | change the selector to `REMEDY_TAIL[remedy] \|\| REMEDY_TAIL.reinstall` (passes for the first **five** — `'SYNC'` is not a key on `REMEDY_TAIL` either, so it falls through to the `\|\|` exactly as `undefined`, `null`, `''` and `'bogus'` do; **fails** for the last three, which resolve to `Object.prototype` members) |
 | **T4** | `remedy: only the exact string 'sync' selects the sync tail` | `refusalText(j,w,'sync')` carries the sync tail; no other input in T3's list does | change the selector to `remedy !== 'reinstall' ? 'sync' : 'reinstall'` |
 | **T5** | `remedy: a prod app-tree mutation refuses with remedy 'reinstall' and a banner that forbids sync` | reuse `setupProd()`; make `<app tree>/package.json` writable and append bytes; `verifyAndResolve(...)` returns `ok:false`, `remedy === 'reinstall'`, and `/app tree does not match the descriptor/`; then drive `main` with an injected `spawn` and assert **zero spawn**, **exit 1**, the alert file `match`es `/Do not run/` and `doesNotMatch(/If the change was intentional/)` | set that site's class back to `'sync'` |
 | **T6** | `remedy: a catch-up tree mismatch refuses with remedy 'reinstall'` | `verifyCatchup(corePaths, 'sha256:nope', env, process.platform)` returns `remedy === 'reinstall'` and `/does not match the scheduled digest/` | set that site's class to `'sync'` |
-| **T7** | `remedy: a prod descriptor drift keeps remedy 'sync' and the unchanged banner` | reuse `setupProd()`; `jobsLib.saveJob(paths, {...DREAM_JOB, run: 'skill:wienerdog-weekly-review'})`; `verifyAndResolve(...)` returns `remedy === 'sync'` (Table S **row 11**); `main`'s stderr matches `/If the change was intentional/` and `doesNotMatch(/Do not run/)` | set that site's class to `'reinstall'` (this also reddens the existing F27 test — that is the point) |
-| **T8** | `remedy: a repointed dev app/current refuses with remedy 'reinstall'` | **Table S row 4 — the round-2 fix, which had no test at all in round 1.** Reuse `setupDev('file')` and the repoint recipe already used by the existing test at `tests/unit/launcher.test.js:288-299`: copy `prodSource()` into a second temp dir, plant a `.git` file in it, `fs.rmSync` the `current` symlink and `fs.symlinkSync` it to that dir. Then `verifyAndResolve(...)` returns `ok:false`, `remedy === 'reinstall'`, `/authorized checkout root/`; drive `main` with an injected `spawn` and assert **zero spawn**, **exit 1**, and a banner that `match`es `/Do not run/` and `doesNotMatch(/If the change was intentional/)` | set row 4's class back to `'sync'` (this is exactly round 1's assignment, so this partner reddening is the regression guard for the finding) |
+| **T7** | `remedy: a prod descriptor drift keeps remedy 'sync' and the unchanged banner` | reuse `setupProd()`; `jobsLib.saveJob(paths, {...DREAM_JOB, run: 'skill:wienerdog-weekly-review'})`; `verifyAndResolve(...)` returns `remedy === 'sync'` (Table S **row 11**); `main`'s stderr matches `/If the change was intentional/` and **`doesNotMatch(/Do not run/)`, which is the only assertion in the file that catches this mutation** | set that site's class to `'reinstall'`. **The existing F27 test does NOT go red on this** — it asserts `/wienerdog sync/`, which R-T2 also contains ("Do not run \`wienerdog sync\`"); executed, all three F27 assertions pass under R-T2. T7's own `doesNotMatch(/Do not run/)` is the guard |
+| **T8** | `remedy: a repointed dev app/current refuses with remedy 'reinstall'` | **Table S row 4 — the round-2 fix, which had no test at all in round 1.** Reuse `setupDev('file')` and the repoint recipe already used by the existing test at `tests/unit/launcher.test.js:288-298`: copy `prodSource()` into a second temp dir, plant a `.git` file in it, `fs.rmSync` the `current` symlink and `fs.symlinkSync` it to that dir. Then `verifyAndResolve(...)` returns `ok:false`, `remedy === 'reinstall'`, `/authorized checkout root/`; drive `main` with an injected `spawn` and assert **zero spawn**, **exit 1**, and a banner that `match`es `/Do not run/` and `doesNotMatch(/If the change was intentional/)` | set row 4's class back to `'sync'` (this is exactly round 1's assignment, so this partner reddening is the regression guard for the finding) |
 | **T9** | `remedy: an INHERITED remedy does not select the sync tail (ownership)` | in a `try`/`finally` that deletes it again, set `Object.prototype.remedy = 'sync'`; then for `const v = { ok: false, reason: REASON }` (no own `remedy`) assert `v.remedy === 'sync'` (the hazard is real), `remedyOf(v) === undefined`, and `refusalText('dream', REASON, remedyOf(v))` carries the **reinstall** tail with `doesNotMatch(/If the change was intentional/)`. Also assert `remedyOf({ok:false, remedy:'sync', reason:REASON}) === 'sync'` so the ownership check is not simply disabling the field | replace `remedyOf`'s body with `return verdict.remedy;` — T9's `remedyOf(v) === undefined` and reinstall-tail assertions both go red, while every other test in the file stays green |
+| **T10** | `remedy: the outer catch follows the tie-back — after it 'sync', before it 'reinstall'` | **Block R-P's `tied` provision (D6), Table S row 12.** Two halves, both driving `verifyAndResolve` directly. **(a) after:** reuse `setupProd()`, assert the install is healthy (`ok === true`), then `fs.rmSync(path.join(paths.state, 'exec-pins.json'), {force:true})` and re-run — expect `ok:false`, `/integrity check errored:/`, and **`remedy === 'sync'`**. Executed this session, the reason is *"integrity check errored: refusing to authorize the dream job: claude is not pinned — install claude and run `wienerdog sync` so its identity is recorded before the job is bound."* — the app tree is untouched, the tie-back passed, so `sync` is the correct advice. **(b) before:** reuse the existing F13 recipe at `tests/unit/launcher.test.js:486-519` — `fs.chmodSync(<app tree>/package.json, 0o000)` so the tree walk throws *before* the digest comparison — and expect `ok:false`, `/integrity check errored:/`, **`remedy === 'reinstall'`**. Restore the mode in a `finally` exactly as that test does. Skip on `win32`, same as F13 | (a) hardcode the `catch` to `'reinstall'` — half (a) goes red; (b) hardcode it to `'sync'`, or move `tied = true` above its tie-back check — half (b) goes red. Both halves are needed: either mutation alone leaves the other half green |
 
 `setupProd()`, `corePathsOf()` and `DREAM_JOB` already exist at the top of the
-file (`:15-64`), and `setupDev(gitKind)` at `:232-258` — reuse all four, do not
-add new fixtures.
+file — `DREAM_JOB` at `:15`, `corePathsOf` at `:18-25`, `prodSource` at `:36-42`,
+`setupProd` at `:44-65` — and `setupDev(gitKind)` at `:234-259`. Reuse all of
+them; do not add new fixtures.
 
 **T9 hygiene.** It mutates `Object.prototype`, which leaks into every test that
 runs after it in the same process. Restore it in a `finally` (`delete
-Object.prototype.remedy;`) and place T9 **last** in the appended block. Do not
-make any other test depend on it.
+Object.prototype.remedy;`) and place T9 **last** in the appended block — after
+T10. Do not make any other test depend on it.
 
 **Criteria without a test partner, enforced by review instead of by test** —
 state this explicitly in the PR body:
 
-- AC8 (no reason string changed) is enforced by verification step 2's third grep
-  plus the unchanged a7 scenario, not by a dedicated test.
+- AC8 (no reason string changed) is enforced by verification step 2's
+  **reason-drift diff** (the `diff` of the two normalized reason-line sets) plus
+  the unchanged a7 scenario, not by a dedicated test.
 - AC10/AC11 (Table M's six items across three files) are enforced by verification
   step 4 and by review; prose is not unit-testable. Five of the six are
   replacements with a stale-form gate each (M1a, M1b, M2, M3a, M3b); the sixth,
@@ -843,11 +1049,12 @@ state this explicitly in the PR body:
   the only occurrence of that phrase in the file, so the count moves from 0 to 1
   exactly when M1c lands.
 - Block R-P (position, not text) is a property of how the code reads. The greps
-  prove every site carries a class and that the permissive class has exactly
-  **four** members; they cannot prove the four are the *right* four. Tests T5–T8
-  pin four of the sixteen sites directly (rows 4, 9, 11, 15); the other twelve are
-  a review obligation, and **R-P** — not Table S's rows — is what the reviewer
-  checks each site against.
+  prove every site carries a class, that the literal permissive class has exactly
+  **four** members, and that the ternary appears exactly **once**; they cannot
+  prove those are the *right* four and the right one. Tests T5–T8 and T10 pin five
+  of the sixteen sites directly (rows 4, 9, 11, 12 — both of row 12's outcomes —
+  and 15); the other eleven are a review obligation, and **R-P** — not Table S's
+  rows — is what the reviewer checks each site against.
 
 ## Security checklist
 
@@ -879,26 +1086,27 @@ before they reach the digest.
 
 - [ ] **AC1** `refusalText(job, why, 'sync')` is byte-identical to the banner
       `main` produces today for the same inputs (T1).
-- [ ] **AC2** `refusalText(job, why, 'reinstall')` ends with Table R's reinstall
-      tail and contains no `If the change was intentional` (T2).
+- [ ] **AC2** `refusalText(job, why, 'reinstall')` is **byte-identical** to block
+      R-T0 followed by block R-T2 for the same inputs — asserted against a literal
+      copy of R-T2, not against regex fragments (T2).
 - [ ] **AC3** An absent, empty, unknown or object-key-shaped `remedy` yields the
       reinstall tail (T3), **and** a verdict that does not *own* a `remedy` yields
       the reinstall tail even when `Object.prototype.remedy === 'sync'` — the
       production read is `remedyOf(verdict)`, never a bare `verdict.remedy` (T9).
 - [ ] **AC4** Only the exact string `'sync'` yields the sync tail (T4).
 - [ ] **AC5** Every `{ok:false}` return in `verifyAndResolve` and `verifyCatchup`
-      carries `remedy: 'sync'` or `remedy: 'reinstall'`, in the token order
-      `{ ok: false, remedy: …, reason: … }`; no site remains on the old shape
-      (verification step 2, greps 1 and 2).
-- [ ] **AC6** Exactly **4** sites carry `remedy: 'sync'`, and they are Table S
-      rows **5, 6, 10, 11** — every one of them strictly after block R-P's
-      tie-back check (`:288` on the dev arm, `:310` on the prod arm)
-      (verification step 2, grep 3 + review).
+      carries a `remedy`, in the token order `{ ok: false, remedy: …, reason: … }`;
+      no site remains on the old shape (verification step 2, `stale` and
+      `conforming`).
+- [ ] **AC6** Exactly **4** sites carry the literal `remedy: 'sync'`, and they are
+      Table S rows **5, 6, 10, 11** — every one of them strictly after block R-P's
+      tie-back check (the bound-root equality on the dev arm, the tree-digest
+      comparison on the prod arm) (verification step 2, `sync` + review).
 - [ ] **AC7** The number of conforming sites equals the number of refusal return
       sites before the change (verification step 2, git-derived baseline).
 - [ ] **AC8** No reason string, no verification rule, and no
-      `verifyContainment`/`appendRefuseAlert` body changed (verification step 2,
-      grep 4; a7 scenario green).
+      `verifyContainment`/`appendRefuseAlert` body changed (verification step 2's
+      reason-drift `diff`; a7 scenario green).
 - [ ] **AC9** A prod app-tree mutation, a catch-up tree mismatch and a **repointed
       dev `app/current`** all refuse with `remedy: 'reinstall'`, spawn nothing,
       exit 1, and write an alert whose text forbids `sync` (T5, T6, T8). A prod
@@ -915,6 +1123,11 @@ before they reach the digest.
 - [ ] **AC13** Running the verification commands twice produces identical output;
       nothing in this WP writes state (idempotent by construction — it adds no
       writer).
+- [ ] **AC14** Block R-P's `tied` provision (D6) holds: `verifyAndResolve`'s outer
+      `catch` returns `'sync'` when a tie-back check had already executed and
+      passed on the path that reached it, and `'reinstall'` when none had; the
+      ternary appears exactly **once** in the file; `verifyCatchup` has no `tied`
+      flag (T10; verification step 2, `tied`).
 
 ## Verification steps (run these; paste output in the PR)
 
@@ -932,24 +1145,49 @@ exception: it prints `0` *and* exits 1 on zero matches. So a gate written as
 `grep -c PAT file && echo OK` fires on **presence**. Getting this backwards makes
 a gate pass on the violation and fail on the correct state.
 
-Every gate in this spec was swept for polarity this session and each was proven in
-**both** directions by its **exit code**, not by its printed output:
+And polarity is only half of it. A gate can also be **vacuous** (it fires its
+marker no matter what the tree contains) or **inverted against the work** (it goes
+red on a correct implementation and green on no implementation at all). Round 2's
+sweep claimed "every gate was proven in both directions" while enumerating only
+three buckets, and review then found **two** gates that were in none of them and
+that had *both* of the other faults. That claim is therefore re-established here
+**gate by gate**, not in the abstract. Every row below was executed this session on
+a correct state and on a deliberately broken one, and judged by **exit code**:
 
-- All "stale form is gone" gates in step 4 use `grep -n PAT file || echo "<X>-OK"`.
-  `grep -n` prints nothing and exits 1 when the stale form is absent ⇒ the marker
-  prints; it prints the line and exits 0 when the stale form is present ⇒ no
-  marker. Correct polarity, verified: on the pre-change tree every one of the five
-  prints its stale line and **no** marker.
-- Step 2 assigns `grep -c` output to shell variables and compares them with
-  `test`. No `||`/`&&` marker depends on grep's exit status there, so the
-  `grep -c` exit-1-on-zero behaviour cannot invert the gate; the one place it
-  could bite (`stale=$(grep -c … || true)`) already swallows it, and the script
-  does not run under `set -e`.
-- Step 4's two counting commands (`grep -c "production/dev stance"` and the
-  `grep -cE` recovery-command sweep) are compared by eye against stated expected
-  counts and carry no marker at all.
+| gate | verdict comes from | proved green on | proved red on |
+|---|---|---|---|
+| step 1 `node tests/run.js …` | process exit + `fail 0` | the implemented tree | reverting D4 on Table S row 9 ⇒ T5 fails |
+| step 2 `before`/`stale`/`after`/`sync`/`tied` | five `grep -c` outputs assigned to **variables**; no `\|\|`/`&&` marker reads grep's status, and each assignment already swallows the exit-1-on-zero with `\|\| true` (`before` is guarded instead, by `test "$before" -gt 0`) | `baseline=17 stale=0 conforming=17 sync=4 tied=1` ⇒ `GATE-OK` | (a) one site reverted ⇒ `stale=1 conforming=16`; (b) one `reinstall` promoted ⇒ `sync=5`; (c) the ternary dropped ⇒ `tied=0`. All three ⇒ `GATE-FAIL` |
+| step 2 `GATE-OK`/`GATE-FAIL` marker | `test`'s exit status, never grep's | as above | as above |
+| step 2 **reason-drift `diff`** | **the raw exit code of `diff`** — there is no `\|\|` marker to get backwards | a token-only correct transformation, **committed** ⇒ `exit=0` | one character changed in any reason string ⇒ `exit=1` and the differing lines print |
+| step 4, five `grep -n PAT file \|\| echo "<X>-OK"` | grep exits 1 (stale form absent) ⇒ marker prints; exits 0 (present) ⇒ no marker | the five anchors, each matching **exactly once** on the pre-change tree — so on the pre-change tree each prints its line, `exit=0`, and **no** marker: the correct red state | applying the replacement makes each anchor vanish ⇒ marker prints |
+| step 4 `grep -c "production/dev stance"` | printed count, no marker | `1` after M1c lands | `0` on the pre-change tree (executed) |
+| step 4 `grep -cE` recovery sweep | printed per-file counts, no marker | the stated baseline (executed: `1 / 3 / 2 / 0`) | any count going **up** |
+| steps 5, 6, 7 | process exit codes of `npm test`, the a7 scenario and `npm run lint` | — | — |
 
-If you add a gate, prove it the same way: run it on the correct state and on a
+**Two round-2 gates were rewritten because that sweep is what caught them.** Both
+had passed review twice:
+
+1. **The AC8 gate** was `git diff -U0 -- src/scheduler/launcher.js | … || echo
+   "NO-REASON-DRIFT"`. `git diff` with **no rev** compares worktree to index, so
+   once you commit on `wp/<slug>` — which git discipline requires before you open
+   the PR — the diff is empty and the marker fires unconditionally. Executed on a
+   clean tree with zero changes: prints `NO-REASON-DRIFT`, `exit=0`. It was *also*
+   inverted: `grep -v "remedy:"` filters added lines but keeps every **deleted**
+   old `{ ok: false, reason: …}` line, so a correct transformation printed all
+   sixteen deletions and no marker (executed). Replaced by the `diff` of two
+   normalized line **sets**, which is immune to both.
+2. **The README M2 gate** searched for `` the fix is one `wienerdog sync` `` — a
+   substring **M2-new deliberately keeps** for the `config.yaml` case. Executed
+   against the intended new text: grep exits 0 and `README-M2-OK` is **absent**,
+   while deleting the replacement outright produces the marker. The gate punished
+   correct work and rewarded doing nothing. Re-anchored on
+   `` fail closed; the fix is one ``, which M2-old has and M2-new does not
+   (executed both directions; matches exactly once on the pre-change tree).
+
+If you add a gate, prove it the same way, and prove all three properties: correct
+polarity, non-vacuity (it can fail), and that it is **green on correct work and red
+on absent work** — not the reverse. Run it on the correct state and on a
 deliberately broken copy, and paste `echo "exit=$?"` for both.
 
 **1. The new tests, and the existing ones next to them.**
@@ -958,7 +1196,7 @@ deliberately broken copy, and paste `echo "exit=$?"` for both.
 node tests/run.js tests/unit/launcher.test.js
 ```
 
-Expect `fail 0`, and all **nine** `remedy: …` tests present.
+Expect `fail 0`, and all **ten** `remedy: …` tests present.
 *Red input:* revert D4 on Table S row 9 (drop its `remedy`, restoring the old
 shape) — T5 fails, because the banner then carries the sync tail.
 
@@ -971,34 +1209,56 @@ rewritten to `<sha>.js`, so `git show` dies with *"ambiguous argument
 Verified this session: unbraced ⇒ fatal under zsh, `17` under bash; braced ⇒ `17`
 under both.
 
+**`conforming` must accept the ternary.** Fifteen sites carry a literal class and
+one (Table S row 12) carries `tied ? 'sync' : 'reinstall'`. `conforming` therefore
+matches `remedy: [^,]+,` — any single-token-through-first-comma value — while
+`sync` still counts only the literal `'sync'` (so AC6's **4** is unaffected) and
+`tied` counts the ternary, which must appear exactly **once**. A `remedy:` value
+can never itself contain a comma, so `[^,]+` cannot over-run into `reason:`.
+
 ```bash
 BASE=$(git merge-base HEAD main)
 before=$(git show "${BASE}:src/scheduler/launcher.js" | grep -c "return { ok: false, reason:")
 stale=$(grep -c "return { ok: false, reason:" src/scheduler/launcher.js || true)
-after=$(grep -c "return { ok: false, remedy: '\(sync\|reinstall\)', reason:" src/scheduler/launcher.js || true)
+after=$(grep -cE "return \{ ok: false, remedy: [^,]+, reason:" src/scheduler/launcher.js || true)
 sync=$(grep -c "return { ok: false, remedy: 'sync', reason:" src/scheduler/launcher.js || true)
-echo "baseline=$before stale=$stale conforming=$after sync=$sync"
-test "$before" -gt 0 && test "$stale" -eq 0 && test "$after" -eq "$before" && test "$sync" -eq 4 && echo GATE-OK || echo GATE-FAIL
+tied=$(grep -c "remedy: tied ? 'sync' : 'reinstall', reason:" src/scheduler/launcher.js || true)
+echo "baseline=$before stale=$stale conforming=$after sync=$sync tied=$tied"
+test "$before" -gt 0 && test "$stale" -eq 0 && test "$after" -eq "$before" && test "$sync" -eq 4 && test "$tied" -eq 1 && echo GATE-OK || echo GATE-FAIL
 ```
 
-Expect `stale=0`, `conforming=$baseline`, `sync=4`, `GATE-OK`. These greps were
-executed against a mechanically transformed copy of the current file: baseline
-17, conforming 17, sync 4. The `test "$before" -gt 0` guard is what makes a
-broken `git show` fail loudly instead of silently comparing against zero.
-*Red inputs, each executed on a scratch copy:* (a) revert one site to the old
-shape ⇒ `stale=1`, `conforming=16` ≠ baseline; (b) promote one `reinstall` site
-to `sync` ⇒ `sync=5`. Both print `GATE-FAIL`.
+Expect `stale=0`, `conforming=$baseline`, `sync=4`, `tied=1`, `GATE-OK`. Executed
+this session against a mechanically transformed copy of the current file in a
+scratch `mktemp -d` git repo: `baseline=17 stale=0 conforming=17 sync=4 tied=1
+GATE-OK`. The `test "$before" -gt 0` guard is what makes a broken `git show` fail
+loudly instead of silently comparing against zero.
+*Red inputs, each executed on that scratch copy:* (a) revert one site to the old
+shape ⇒ `stale=1 conforming=16` ≠ baseline; (b) promote one `reinstall` site to
+`sync` ⇒ `sync=5`; (c) drop the ternary (hardcode row 12 to `'reinstall'`) ⇒
+`tied=0`. All three print `GATE-FAIL`.
 *Non-vacuity:* `before` is derived from git, not hardcoded, and is asserted
 non-zero; `grep -c` is line-oriented and every site is a single line.
 
-Then confirm no reason string moved (AC8):
+Then confirm no reason string moved (AC8). **Do not use `git diff` with no rev
+here** — it compares worktree to index, so it goes empty the moment you commit,
+and any `|| echo` marker hanging off it fires unconditionally (step 0). Compare
+the two **sets of reason lines** instead, normalizing the added `remedy:` token
+away so a correct transformation is a no-op:
 
 ```bash
-git diff -U0 -- src/scheduler/launcher.js | grep -E "^[+-].*reason:" | grep -v "remedy:" || echo "NO-REASON-DRIFT"
+# same shell as the block above — reuses $BASE
+diff <(git show "${BASE}:src/scheduler/launcher.js" | grep "return { ok: false, reason:") \
+     <(sed -E "s/return \{ ok: false, remedy: [^,]+, reason:/return { ok: false, reason:/" src/scheduler/launcher.js | grep "return { ok: false, reason:")
+echo "reason-drift exit=$?   # 0 ⇒ NO REASON DRIFT; 1 ⇒ a reason string moved (the lines print above)"
 ```
 
-Expect `NO-REASON-DRIFT` — every changed `reason:` line is a line that gained a
-`remedy:` token. *Red input:* edit any reason string; the diff line prints.
+**The exit code *is* the verdict — there is no marker to get backwards.** `sed -E`
+is required: BSD `sed` (macOS) has no `\|` alternation in BRE, and the normalizer
+must also flatten the ternary form, which `[^,]+` does. Executed this session in a
+scratch git repo on a **committed**, token-only-correct transformation of the real
+file ⇒ `exit=0`; with one character changed in the `is not prod or dev` reason ⇒
+`exit=1` and the pair prints. `$before` being non-zero (asserted above) is what
+rules out the degenerate "two empty streams compare equal" case.
 
 **3. The `sync` banner is byte-identical to today's.**
 
@@ -1015,8 +1275,16 @@ M2 and M3a; M1a and M3b could be left unapplied with every gate still green.
 Both stale forms are single-line literals matching exactly once on the pre-change
 tree, so the two added gates are non-vacuous.
 
+**The M2 anchor must be a substring M2-new does NOT keep.** Round 2 anchored on
+`` the fix is one `wienerdog sync` `` — which M2-new deliberately retains for the
+`config.yaml` case — so the gate went red on correct work and green on no work at
+all (step 0). The anchor is now `` fail closed; the fix is one ``: present in
+M2-old, absent from M2-new, matching exactly once on the pre-change tree. Executed
+both directions this session. Check any anchor you add the same way — read the
+replacement text and confirm the anchor is gone from it.
+
 ```bash
-grep -n "the fix is one \`wienerdog sync\`" README.md || echo "README-M2-OK"
+grep -n "fail closed; the fix is one" README.md || echo "README-M2-OK"
 grep -n "The one remedy is \`wienerdog sync\`" docs/THREAT-MODEL.md || echo "THREATMODEL-M3A-OK"
 grep -n "point to the digest banner and" docs/THREAT-MODEL.md || echo "THREATMODEL-M3B-OK"
 grep -n "For almost every mismatch" docs/runbooks/scheduler-and-executable-integrity.md || echo "RUNBOOK-M1B-OK"
@@ -1054,8 +1322,10 @@ npm test
 ```
 
 Expect `fail 0`. Baseline on this branch before the change: `tests 1671, pass
-1666, fail 0, skipped 5` — afterwards, **nine** more passes (T1–T9) and the same
-zero.
+1666, fail 0, skipped 5` — afterwards, **ten** more (T1–T10) and the same zero.
+T10 carries `{ skip: process.platform === 'win32' }` like the F13 test whose
+`chmod` recipe its second half reuses, so on Windows expect nine more passes and
+one more skip.
 
 **6. The A7 integrity proof still holds.**
 
@@ -1092,10 +1362,23 @@ Expect green (markdownlint + frontmatter schema).
   which quietly told the reader the only open question was whether *more* sites
   should be conservative — and that framing is exactly why two sites that were
   wrongly `sync` went unexamined for a round. The open question is symmetric:
-  **any** row whose position relative to `:288`/`:310` you read differently from
-  Table S is a finding, whichever class it moves toward. Note it under "Discovered
-  issues" in the PR body, choose `'reinstall'` for the implementation (the
-  conservative class, per Implementation notes), and leave the table alone.
+  **any** row whose position relative to the two tie-back checks (the dev-arm
+  bound-root equality, the prod-arm tree-digest comparison) you read differently
+  from Table S is a finding, whichever class it moves toward. Note it under
+  "Discovered issues" in the PR body, choose `'reinstall'` for the implementation
+  (the conservative class, per Implementation notes), and leave the table alone.
+- **Gating, moving or removing the macOS catch-up registration.**
+  `ensureCatchup` (`src/cli/schedule.js:409`) registers a login + hourly catch-up
+  entry unconditionally on macOS, with no stance gating, even though `verifyCatchup`
+  is documented (`src/scheduler/launcher.js:335-339`) to always refuse on a dev
+  install. The consequence for this WP is stated under "Known consequence" in
+  Implementation notes: a permanent `reinstall`-tail banner in every digest on
+  every dev install, the maintainer's own included. **Do not touch
+  `src/cli/schedule.js`** — it is not a Deliverable and the registration rule is a
+  different contract. Record it under "Discovered issues" in the PR body as a
+  candidate sibling WP, quoting the executed `verifyCatchup` refusal from
+  Implementation notes, so the owner can decide whether the entry should exist on
+  dev at all.
 - **`docs/adr/0028-scheduler-app-executable-integrity.md`.** Ratified and
   owner-signed. Three of its claims become false —
   §3 *"the single remedy is always `wienerdog sync`"* (`:185`); Alternatives
@@ -1125,7 +1408,7 @@ Expect green (markdownlint + frontmatter schema).
   field name, not a product noun. Do not edit this file.
 - **`src/core/alerts.js`, `src/core/digest.js`.** The alerting mechanism and the
   digest banner are unchanged. Per-reason lengths are in Current state §8 — the
-  longest fixed-length banner this WP can produce is **415** chars against a
+  longest fixed-length banner this WP can produce is **410** chars against a
   2000-char field cap; nothing truncates and nothing needs widening.
 - **`src/core/exec-identity.js:491,503`.** Its `refusing to run <name>: …`
   messages also name `wienerdog sync`. They belong to the attended CLI's
@@ -1146,24 +1429,29 @@ Expect green (markdownlint + frontmatter schema).
 ## Definition of done
 
 1. All verification steps (0 through 7) pass locally; output pasted into the PR
-   body, including the `GATE-OK` line, all five `*-OK` prose markers, and the a7
-   scenario's `PASS`. Step 0's polarity sweep is restated in one line: that every
-   gate you ran or added was proven in both directions by **exit code**.
+   body, including the `GATE-OK` line, the `reason-drift exit=0` line, all five
+   `*-OK` prose markers, and the a7 scenario's `PASS`. Step 0's sweep is restated
+   in one line: that every gate you ran or added was proven by **exit code** to be
+   correctly polarized, non-vacuous, and green-on-correct-work rather than
+   green-on-no-work.
 2. Conventional commits; PR titled
    `fix(scheduler): choose the refusal remedy from a structured verdict class (WP-refusal-remedy-discriminator)`.
 3. PR template filled, including "Decisions made" (or "none") and
-   `Generated-by:`. "Discovered issues" names **five** routed items: ADR-0028's
+   `Generated-by:`. "Discovered issues" names **six** routed items: ADR-0028's
    three false claims (`:185`, `:336`, `:630-632`) with the correction wording
-   from "Out of scope", and `WP-stance-authority-containment`'s Table B row 4
+   from "Out of scope"; `WP-stance-authority-containment`'s Table B row 4
    (`:780`) and Table F row 3 (`:2031`), which Table S row 3's reclassification
-   falsifies. Do not edit either file.
+   falsifies; and the unconditional macOS catch-up registration
+   (`src/cli/schedule.js:409`) that makes Table S row 14 fire forever on every dev
+   install. Do not edit any of those files.
 4. This spec's `status:` flipped to `In-Review` in the same PR.
 5. The PR body states, in one line, that the recovery property and the two
    invocations it ships are **cited** from `WP-stance-authority-containment`
    Table G row 1 / D6 and were not re-derived, re-worded or copied here.
 6. The PR body lists the review-only criteria named under "Test index" — AC8,
-   AC10, AC11 and the correctness of Table S's **four** `sync` sites against block
-   R-P — so the reviewer knows which claims no test can make.
+   AC10, AC11, and the correctness against block R-P of Table S's **four** literal
+   `sync` sites plus the eleven literal `reinstall` sites — so the reviewer knows
+   which claims no test can make. (Row 12's two outcomes *are* tested, by T10.)
 7. The PR body states, in one line, that no text you wrote implies `wienerdog
    sync` repairs or re-publishes `<core>/launcher/launch.js` (the
    `WP-launcher-no-self-resync-republish` constraint in Context).
