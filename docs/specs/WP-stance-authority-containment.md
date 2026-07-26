@@ -1178,53 +1178,109 @@ be executed and registered in the same pass — promotion is not a copy operatio
 is a promise.** Five consecutive rounds each produced at least one restatement or
 quotation of this spec's own canonical text that was never checked against its
 source, and round-5's grep-based retarget provably missed a line-wrapped instance.
-One part of that class is cheaply decidable and is now a check: **every fragment
-the D6 mapping table quotes must appear verbatim in the D6 body it claims to
-render**, whitespace- and emphasis-normalized so line wraps and `**` do not
-matter. It is an architect/reviewer step run before this spec leaves Draft — it is
-**not** one of the Verification commands below, it touches no Deliverable, and it
-is deliberately not wired into `npm run lint`:
+Two parts of that class are cheaply decidable and are now checks, both
+whitespace- and emphasis-normalized so line wraps and `**` do not matter:
+
+- **Check A — D6 fidelity (round 6).** Every fragment the D6 mapping table quotes
+  must appear verbatim in the D6 body it claims to render. **Anchor the body span
+  on the D6 heading line itself**, not on the phrase "production/dev stance
+  entry": the first line matching that phrase is the **Deliverables cell**, and a
+  span opened there runs on for eleven hundred lines and swallows two unrelated
+  blockquotes — including the canonical MECHANISM blockquote. Check A was written
+  precisely to catch a cell that quotes the CANONICAL SOURCE instead of D6's
+  RENDERING of it, and with that anchor such a cell passes green. Round 8
+  corrected the anchor; the check still passes.
+- **Check B — registration fidelity (round 8).** Every fragment **this checklist
+  itself** marks with `*"…"*` must appear verbatim somewhere in the spec
+  **outside** this checklist. Round 8 added it because a registration that was
+  never verbatim survived rounds 4–7 and both legs of check A: Contract 2's
+  Table F row-5 entry quoted "a different source root" where the row itself says
+  *"a **non-dev** source root"*. That is not cosmetic. This checklist is the
+  index a future round consults to learn what a mirror says, so a stale quotation
+  here reconciles the mirror in the **wrong direction** — here, by restoring the
+  exact wording round 4 executed and falsified (a *different* source root that is
+  a git checkout does not recover: `isDevCheckout(<repo root>) === true`).
+
+**Convention check B depends on, and which is now binding inside this
+subsection:** `*"…"*` asserts "this text exists verbatim elsewhere in the
+spec". Text this spec deliberately **removed** is quoted with plain double
+quotes instead, so the check needs no exemption list and can therefore only miss,
+never wrongly accuse. Both checks are an architect/reviewer step run before this
+spec leaves Draft — they are **not** Verification commands below, they touch no
+Deliverable, and they are deliberately not wired into `npm run lint`:
 
 ```bash
-cat > /tmp/spec-quote-check.js <<'EOF'
+GATE="$(mktemp -d "${TMPDIR:-/tmp}/wd-gate.XXXXXX")"   # never a fixed /tmp path
+cat > "$GATE/spec-quote-check.js" <<'EOF'
 const fs=require('fs');
 const L=fs.readFileSync(process.argv[2],'utf8').split('\n');
 const norm=s=>s.replace(/[*_]/g,'').replace(/\s+/g,' ').trim();
-const a=L.findIndex(l=>l.includes('production/dev stance** entry')),
+const strip=s=>s.replace(/^(?:\/\/ ?|> ?|\| ?|- \[[ x]\] ?|- )+/,'');
+const clean=f=>norm(f).replace(/^[\s,;.—-]+|[\s,;.—-]+$/g,'');
+let bad=0;
+// A. Every fragment the D6 mapping table quotes is verbatim in the D6 body.
+const a=L.findIndex(l=>l.startsWith('`docs/GLOSSARY.md:30` — replace')),
       b=L.findIndex(l=>l.startsWith("Keep the entry's existing"));
 const body=norm(L.slice(a,b).filter(l=>l.startsWith('> ')).map(l=>l.slice(2)).join(' '));
 const h=L.findIndex(l=>l.startsWith('| Canonical scope statement'));
-let bad=0;
 for(let i=h+2;i<L.length&&L[i].startsWith('|');i++){
   const cell=L[i].split('|')[2];
   for(const m of cell.matchAll(/\*"([^"]+)"\*/g))
     for(const frag of m[1].split('…')){
-      const f=norm(frag).replace(/^[\s,;.—-]+|[\s,;.—-]+$/g,'');
-      if(f && !body.includes(f)){bad++;console.log('row '+(i-h-1)+' NOT VERBATIM: '+f);}
+      const f=clean(frag);
+      if(f && !body.includes(f)){bad++;console.log('A row '+(i-h-1)+' NOT VERBATIM: '+f);}
     }
 }
+// B. Every `*"…"*` in this checklist is verbatim somewhere outside it.
+const cs=L.findIndex(l=>l.startsWith('### Mirrored Surface Checklist'));
+let ce=cs+1; while(ce<L.length&&!L[ce].startsWith('## '))ce++;
+const hay=L.filter((l,i)=>i<cs||i>=ce).map(l=>strip(norm(l))).join(' ').replace(/\s+/g,' ');
+let fence=false,reg='';
+for(let i=cs;i<ce;i++){
+  if(L[i].startsWith('```')){fence=!fence;continue;}   // skip this script itself
+  if(!fence)reg+=' '+L[i];                             // join: quotations wrap lines
+}
+for(const m of reg.replace(/\s+/g,' ').matchAll(/\*"([^"]+)"\*/g))
+  for(const frag of m[1].split('…')){
+    const f=clean(frag);
+    if(f && !hay.includes(f)){bad++;console.log('B REGISTRATION NOT VERBATIM: '+f);}
+  }
 console.log(bad?`FAIL (${bad})`:'PASS');
 process.exit(bad?1:0);
 EOF
-node /tmp/spec-quote-check.js docs/specs/WP-stance-authority-containment.md
-# PASS, exit 0. Round-6 ran it on the round-5 text first: it printed
+node "$GATE/spec-quote-check.js" docs/specs/WP-stance-authority-containment.md
+# PASS, exit 0. Round-6 ran check A on the round-5 text first: it printed
 # `row 6 NOT VERBATIM: …` (that cell compressed the recovery list instead of
 # quoting it, and was rewritten as a real quotation), and it is the shape of
 # check that kills a MECHANISM cell whose sentence exists nowhere in the spec.
-# Cells may elide with `…`; each piece between elisions must still be verbatim.
+# Round-8 ran check B on the round-7 text first. It printed two lines out of the
+# 19 quoted fragments in this subsection:
+#   B REGISTRATION NOT VERBATIM: runs the installer from a different source root
+#   B REGISTRATION NOT VERBATIM: `vendorSelf` reads exactly two inputs from ...
+# The first is the Contract-2 miss described above and was fixed. The second is
+# the round-7 entry deliberately quoting KILLED text; round 8 re-marked it with
+# plain double quotes per the convention above rather than exempting it in code,
+# which is why the script carries no exemption list. Nothing else fired: zero
+# false positives. Both checks elide with `…`; each piece between elisions must
+# still be verbatim.
 ```
 
-**Considered and rejected: the same check for mirror *registration*.** Mirrors are
-registered here by prose description ("Current state §9c's 'Read that as the matrix
-result it is' paragraph"), not by a literal phrase, so no grep can decide whether a
-given occurrence is registered; and the canonical phrases legitimately recur in
-Table G, in the refutation lists, and inside `main` baselines quoted verbatim. Such
-a check would emit mostly false positives, and — worse — a green run would read as
-proof of registration it cannot supply. **Registration stays a human obligation**,
-carried by the standing rule in Context (*"if you find a restatement that is not
-registered … register it in the same pass"*). Recorded as a **residual**: round 6
-registered two mirrors that had gone four rounds unregistered, and nothing
-mechanical guarantees a third is not still out there.
+**Still considered and rejected: a check for mirror *registration coverage*** —
+"is this occurrence of a canonical phrase registered at all?", which is a
+different question from check B's "does a registration quote its target
+faithfully?". Mirrors are registered here by prose description ("Current state
+§9c's 'Read that as the matrix result it is' paragraph"), not by a literal
+phrase, so no grep can decide whether a given occurrence is registered; and the
+canonical phrases legitimately recur in Table G, in the refutation lists, and
+inside `main` baselines quoted verbatim. Such a check would emit mostly false
+positives, and — worse — a green run would read as proof of registration it
+cannot supply. **Coverage stays a human obligation**, carried by the standing
+rule in Context (*"if you find a restatement that is not registered … register it
+in the same pass"*). Recorded as a **residual**: round 6 registered two mirrors
+that had gone four rounds unregistered, round 7 registered two more, and nothing
+mechanical guarantees a fifth is not still out there. Check B narrows only the
+other failure mode — a mirror that *is* registered, under a quotation that was
+never true of it.
 
 **Contract 1 — "what an A7-scoped write cannot do". Canonical: the subsection
 "Table G — canonical scope statement"** (qualifier (i) scope = DATA inputs, never
@@ -1238,7 +1294,7 @@ of which cites or quotes that subsection and adds nothing:
 - [ ] Context → the "One clause … quoted, not endorsed" paragraph
 - [ ] Context → the "The canonical statement of that scope is …" paragraph (the qualifier list)
 - [ ] **Context → the V9 one-line invariant** (*"an attended `sync` carries containment forward, **or refuses**; no A7-scoped **data** write changes it"*, with its qualifier-(iii) note) — round-6 registration; it is the densest single-sentence form of the contract in the spec and it sat unregistered while rounds 1–5 corrected the paragraphs around it
-- [ ] **Context → "The mint-time half of the rule is the hard half"**, specifically its **two-inputs count** — round-7 registration. Through round 6 it read *"`vendorSelf` reads exactly **two** inputs from that tree"*, which is false as a **read** claim (`writeLauncher` reads a third, row S1) and is exactly the read/select conflation the MECHANISM paragraph forbids. It now counts the inputs that can **select containment** and names the third read. This is the first prose an implementer meets, and it sat unregistered while round 6 fixed the identical defect in Security checklist bullet 3
+- [ ] **Context → "The mint-time half of the rule is the hard half"**, specifically its **two-inputs count** — round-7 registration. Through round 6 it read "`vendorSelf` reads exactly **two** inputs from that tree" (plain quotes, per the convention above: that wording was removed, so it must not assert its own presence), which is false as a **read** claim (`writeLauncher` reads a third, row S1) and is exactly the read/select conflation the MECHANISM paragraph forbids. It now counts the inputs that can **select containment** and names the third read. This is the first prose an implementer meets, and it sat unregistered while round 6 fixed the identical defect in Security checklist bullet 3
 - [ ] Deliverables → sizing paragraph's *"no A7-scoped **data** write decides containment"*
 - [ ] "Exact contracts" → `installStance`'s `SCOPE:` block and `vendorSelf`'s `SELF-RESYNC`/`SCOPE:` block (these ship into `src/`, so all three qualifiers **and** the mechanism wording must survive into the source comments — this is the mirror round-4 promoted from without auditing)
 - [ ] **Table G row 1's headline and its in-cell mechanism note** (*"nothing in the tree selects the target"*; *"`readVersion(root)` still runs"*) — round-5 registration
@@ -1247,7 +1303,7 @@ of which cites or quotes that subsection and adds nothing:
 - [ ] Implementation notes → "What the corrected statement is" and the capability-shrink blockquote
 - [ ] Implementation notes → **the "objection a reviewer will raise" paragraph's closing clause** about which signal the cross-check now rests on — round-5 registration
 - [ ] Implementation notes → "Why D9 is a subtraction and not a fifth guard" (its mechanism sentence) — round-5 registration
-- [ ] Implementation notes → **D9 step 2's `SELF-RESYNC:` inline comment** (*"let NO signal inside that tree select the target"*; *"`readVersion` still runs above"*; *"a tampered version refuses the call"*) — round-6 registration, and **this one ships into `src/core/vendor.js`**: it is the third source-resident mirror alongside `installStance`'s and `vendorSelf`'s JSDoc blocks, so all three qualifiers and the mechanism wording must survive into it
+- [ ] Implementation notes → **D9 step 2's `SELF-RESYNC:` inline comment** (*"let NO signal inside that tree select the target"*; *"`readVersion` still runs above"*; *"a tampered version refuses the call"*) — round-6 registration, and **this one ships into `src/core/vendor.js`**: it is the third source-resident mirror alongside `installStance`'s and `vendorSelf`'s JSDoc blocks. **What must survive into this comment specifically is the MECHANISM wording (*select*, never *not consulted*) and qualifier (iii)'s refusal arm** — round-8 correction; through round 7 this line demanded all three qualifiers, which the prescribed comment does not carry and should not: qualifiers (i) DATA scope and (ii) the temporal bound are carried by `vendorSelf`'s `SELF-RESYNC`/`SCOPE:` JSDoc block **directly above it in the same file** (previous bullet), and duplicating them into an inline comment inside the function body buys nothing and adds a fourth place to keep in sync
 - [ ] Implementation notes → **D9 step 3's note that `readVersion(root)` still runs on every call** — round-5 registration; this note is what contradicted the round-4 cell, and it was right
 - [ ] Implementation notes → **Migration (Table F), the "What the attacker gains by provoking that sync" paragraph** — this one was registered in round 3 and did **not** move; round-4 rewrote it
 - [ ] Implementation notes → **D6's clause-by-clause mapping table** (it must map all three qualifiers, not two)
@@ -1267,7 +1323,7 @@ both the round-5 standing rule and the round-7 shipping rule ship into D6.
 Registered mirrors:
 
 - [ ] **D6 — `docs/GLOSSARY.md:30`**'s closing sentences
-- [ ] Migration Table F, the row-5 note (*"runs the installer from a different source root"*)
+- [ ] Migration Table F, the row-5 note (*"runs the installer from a **non-dev** source root"*)
 - [ ] Implementation notes → "Why D9 is a subtraction and not a fifth guard"
 - [ ] Table G row 1's own scope paragraph (*"Converting a dev install to prod is now an attended act"*)
 - [ ] **Definition of done item 7** — the owner sign-off rests on this contract; since round 7 it names **what** he signs (the property, the two shipped entries, the stated macOS/Linux scope, and the routing of the rest), not "the list is true"
@@ -1347,7 +1403,7 @@ one capability: changing what `<core>/app/current` resolves to … writing *into
 the tree cannot change it". The second half was wrong. Writing into the tree
 changes what `current` resolves to **through the next attended `sync`**, because
 `vendorSelf` runs from inside that tree (Current state §9a) and reads two of its
-files: `package.json`'s `version`, which lands in `path.join(app, version)` and
+files **that can select containment**: `package.json`'s `version`, which lands in `path.join(app, version)` and
 can traverse out (§9b, executed), and `.git`, which selects link-over-copy.
 Containment was not a property of the design; it was an output of a function the
 attacker had two inputs into.
@@ -1727,9 +1783,10 @@ with three rows whose ids, guards and outcomes match `cases.js` exactly:
 > dev install back to prod is an attended act, and what makes it work is a
 > property rather than one particular command: you must run the installer **from a
 > non-dev source root** — a copy of Wienerdog that is **not** a git checkout and is
-> **not** the tree this install already runs from. On macOS and Linux, two commands
-> are known to satisfy that: `npx wienerdog@latest sync`, and a `wienerdog update`
-> that installs a newer version. A plain `git clone` is **not** one of them: the
+> **not** the tree this install already runs from. On POSIX systems (executed on
+> macOS), two commands are known to satisfy that: `npx wienerdog@latest sync`,
+> and a `wienerdog update` that installs a newer version. A plain `git clone` is
+> **not** one of them: the
 > installer links a checkout in place, so the install stays dev. (On Windows the
 > same property applies; the exact commands are not documented yet.) (A7, WP-157,
 > WP-stance-authority-containment).
@@ -1756,7 +1813,7 @@ The mapping, clause by clause, so the derivation is checkable:
 | (ii) TEMPORAL BOUND — **until the next attended `sync`** | *"only until that sync — every scheduled run before it refuses … a run after it need not"* |
 | (iii) DISJUNCTION — carried forward **or the call refuses** | *"either leaves `current` exactly where it already pointed, **or** … stops with a tamper message and changes nothing at all"* |
 | MECHANISM — tree data cannot **select** containment; it is not "not consulted" | *"nothing inside that tree chooses where `current` ends up … Nothing the installer reads out of that tree feeds that decision. It does still read the tree's `package.json` version — that is the version number it reports back to you — and that value is checked, so a tampered one stops the sync rather than steering it."* |
-| Table G row 1's recovery **property**, plus the only two entries that pass the round-7 shipping rule, plus the one platform-neutral non-recovery | *"you must run the installer **from a non-dev source root** — a copy of Wienerdog that is **not** a git checkout and is **not** the tree this install already runs from. On macOS and Linux, two commands are known to satisfy that: `npx wienerdog@latest sync`, and a `wienerdog update` that installs a newer version. A plain `git clone` is **not** one of them"* |
+| Table G row 1's recovery **property**, plus the only two entries that pass the round-7 shipping rule, plus the one platform-neutral non-recovery | *"you must run the installer **from a non-dev source root** — a copy of Wienerdog that is **not** a git checkout and is **not** the tree this install already runs from. On POSIX systems (executed on macOS), two commands are known to satisfy that: `npx wienerdog@latest sync`, and a `wienerdog update` that installs a newer version. A plain `git clone` is **not** one of them"* |
 
 **Five wordings this entry must never revert to, with the command that kills
 each.** Each was in a shipped draft of this spec; each was executed by a reviewer
@@ -1811,8 +1868,15 @@ global-binary path form is POSIX-only; "uninstall, then reinstall" names no
 invocation). **Round 7 therefore changed the shape of what this entry ships**: the
 canonical fact is the *property*, the entry names only the two invocations that
 were executed **and** require the user to type no filesystem path, and it states
-its own verification scope ("on macOS and Linux") instead of implying every
-platform. The per-platform procedure is owner-routed (Definition of done item
+its own verification scope ("on POSIX systems (executed on macOS)") instead of
+implying every platform. **Round 8 narrowed that scope string too**: rounds 5–7
+wrote "on macOS and Linux", but the executed matrix header says *(round 5, on
+macOS/POSIX)* and both shipped entries record *Executed: matrix row 1 (POSIX)* /
+*row 2 (POSIX)* — no Linux run is on record. The inference to Linux is sound
+(neither entry's mechanism depends on filesystem layout), but round-5's standing
+rule is verification **by execution**, and this is the shipped user-facing
+sentence. State the executed scope; do not launder an inference into it.
+The per-platform procedure is owner-routed (Definition of done item
 6.6). If you are tempted to add a command here, read Table G row 1's round-7
 shipping rule first — five of the last five additions were wrong.
 
@@ -1948,9 +2012,10 @@ behaviour are the misclassified ones, and for them the change *is* the fix.
 - [ ] **The signal is not *choosable* by this WP's adversary either — the
       mint-time half, for DATA-shaped writes.** Binding the stance to containment
       is only sound if an A7 write cannot decide containment. `vendorSelf` runs
-      from inside the app tree on every prod `sync` and read two of its files
-      (`package.json` version, `.git`); D8 and D9 remove both **as inputs that can
-      select containment** — `readVersion` still runs and is validated (Table G
+      from inside the app tree on every prod `sync` and reads two of its files
+      **that can select containment** (`package.json` version, `.git`); D8 and D9
+      remove **both of those selectors** — `readVersion` still runs and is
+      validated (Table G
       rows 1-2), `isDevCheckout` is not called on the self-resync arm (row 1). V9
       gates the resulting invariant and **fails on `main`**, which is the proof
       that it is asserting something. Do not ship D1–D4 without D8/D9: the combination
@@ -2795,7 +2860,8 @@ false`, `PASS`, exit 0.
       D6 ships the recovery **property** plus the only two invocations that were
       executed *and* require the user to type no filesystem path
       (`npx wienerdog@latest sync`; a `wienerdog update` to a newer version), with
-      its verification scope stated in the text ("on macOS and Linux"). Windows is
+      its verification scope stated in the text ("on POSIX systems (executed on
+      macOS)"). Windows is
       a supported install target (schtasks) and has **no** documented recovery
       command: the round-5 form `"$(npm prefix -g)/bin/wienerdog" sync` is
       POSIX-only (Windows npm puts its shims directly under the prefix, and global
@@ -2815,7 +2881,8 @@ false`, `PASS`, exit 0.
    recovery — **the property** (run the installer from **a non-dev source root**:
    a copy that is not a git checkout and is not the tree this install already runs
    from), **plus the two invocations that were executed and require no
-   user-typed path**, **plus the stated scope "on macOS and Linux"**, **with the
+   user-typed path**, **plus the stated scope "on POSIX systems (executed on
+   macOS)"**, **with the
    per-platform procedure routed out as Discovered issue 6.6** — is enough to ship
    the change now. He is **not** signing off on a complete cross-platform recovery
    menu; that is exactly what round 7 removed from this WP, and item 6.6 is the
@@ -2834,13 +2901,23 @@ false`, `PASS`, exit 0.
    either**: `writeShim` puts `$HOME/.local/bin/wienerdog` in front of the npm
    global bin on the PATH `src/cli/sync.js:209` tells the user to set, and
    `package.json` declares no `postinstall`, so bare `wienerdog` re-enters the same
-   install through `app/current` and self-resyncs. The list now carries a **standing
-   rule** — every entry names an invocation whose source root is provably non-dev
-   and provably not the current install's own tree, and is **verified by execution**
-   before being listed — and its executed matrix is printed under that paragraph.
+   install through `app/current` and self-resyncs. **Round 7 subtracted the two
+   entries that replaced those** — the global-binary form
+   `"$(npm prefix -g)/bin/wienerdog" sync`, whose written path does not exist on
+   Windows, and "uninstall, then reinstall", which names no invocation at all —
+   which is where the count of five comes from. Table G row 1 therefore now
+   carries **two rules**, not one: round-5's — every entry names an invocation
+   whose source root is provably non-dev and provably not the current install's
+   own tree, and is **verified by execution** before being listed — and round-7's
+   shipping rule, that an entry reaches user-facing prose only if **the user
+   supplies no filesystem path**. The executed matrix is printed under that
+   paragraph, and it is evidence for the property, not a menu.
    D6 puts the corrected recovery into `docs/GLOSSARY.md`; the sign-off is that this
    is enough — and the reviewer's standing point applies: the sign-off is warranted
    **because** the recovery is documented, so a documented recovery with a broken
-   entry on it is not a typo. **Quote the corrected list in the sign-off request;
-   do not paraphrase it.**
+   entry on it is not a typo. **What to quote is stated above** — the property
+   sentence and the two entries, verbatim, and nothing else. There is no longer a
+   "corrected list" to quote: round 7 replaced the list with a property plus two
+   entries, and a request that quotes anything more is asking for a signature on
+   something this WP did not execute.
 8. This spec's `status:` flipped to `In-Review` in the same PR.
