@@ -3,6 +3,8 @@
 Status: Accepted (amends ADR-0014; extends ADR-0013)
 Date: 2026-07-06
 
+OWNER-SIGNED 2026-07-25
+
 ## Context
 
 ADR-0014 made the nightly dream schedule itself at 03:30 the moment a vault is
@@ -196,3 +198,169 @@ tester's report (Windows 11 Pro, hu-HU, non-elevated, Developer Mode off, v0.6.4
    post-logon catch-up can lag up to ~1h (the next hourly tick) instead of firing at
    logon — within Wienerdog's existing "within an hour" catch-up guarantee. This
    supersedes decision point 2's "ONLOGON trigger + hourly" for Windows.
+
+## Amendment (2026-07-25): the health invariant is the LOADED entry's program IDENTITY, not its presence
+
+Status: **Accepted. OWNER-SIGNED 2026-07-26.**
+
+Amends the 2026-07-07
+amendment, decision points 1 and 2. Born from the **third recurrence** of the
+silent-scheduler class, confirmed first-hand on the owner's machine: the
+`ai.wienerdog.catchup` LaunchAgent had fired **76 times** against a deleted
+launcher path inside a long-since-removed scenario-harness temp core
+(`/var/folders/…/T/wd-negative-UezlJP/core/launcher/launch.js`). Every fire died
+with `MODULE_NOT_FOUND` inside node's module loader — before any Wienerdog code
+ran — so there was no refusal, no durable alert, and no product log. The
+`.plist` file on disk was correct throughout; only the **loaded record** was
+poisoned, because launchd labels are per-user-global and a harness registration
+from a temp core simply overwrote the record for the real label without touching
+the real file.
+
+Three checks existed and all three passed clean, because all three read the
+artifact that was fine:
+
+- the 2026-07-07 amendment's health probe mapped **exit code 0 → `loaded`**;
+  `launchctl print` exits 0 for a hijacked record, so
+  `state/scheduler-status.json` reported `catchup: "loaded"` and `wienerdog
+  doctor` printed a green line for weeks;
+- the WP-161 scenario-harness leak observer scanned `~/Library/LaunchAgents`
+  for stray **plist files** referencing the run's temp root; a registration that
+  clobbers an existing label leaves no new file, so it reported clean;
+- a human repair session on 2026-07-23 inspected the plist **files**, found them
+  clean, and recorded "catchup plist clean".
+
+Three decisions follow.
+
+1. **Presence is not health; identity is — and a probe that cannot establish
+   identity must not claim health.** A registered scheduler entry is `loaded`
+   only when the scheduler's OWN record of what it will execute names **this
+   install's independent launcher** (`<core>/launcher/launch.js`), in the
+   **execution position** the scheduler itself reports — never merely somewhere
+   in the record's text. The probe therefore reads the loaded record back —
+   launchd `launchctl print`'s `arguments` block (`arguments[1]`), Windows
+   `schtasks /query /tn <name> /xml`'s `<Command>` plus the launcher token of the
+   `<Arguments>` exec segment — and compares positionally. A substring test is
+   explicitly forbidden: the registered Windows argline embeds core paths in its
+   `set "VAR=…"` chain, so "the launcher appears in the argline" is true of a
+   task that never invokes it. "Execution position" is read strictly: on Windows
+   the task must declare exactly **one** action, and **nothing but the canonical
+   `set "VAR=…"` binds may precede the launcher in the `cmd.exe` command chain**
+   — a chain that runs something else first is not a position in which our
+   launcher is what the scheduler executes, even though our launcher is also in
+   it. Anything that cannot be established maps to `unverified`, never to
+   `loaded`. This generalizes the verification Windows has had
+   since the A7 hardening pass (ADR-0028, `windowsLoadedTaskMatches`), which
+   reads a registered task back at *register* time; the same read now also gates
+   the *health* verdict.
+
+   The corollary is the part that matters: **the default is fail-closed.** A
+   recognized entry for which no identity expectation can be derived, an identity
+   query that fails, and an output that cannot be parsed unambiguously all map to
+   `unverified` — never to `loaded`. There is no presence-only mode. This
+   **supersedes** the 2026-07-07 amendment's "exit 0 = loaded; anything else =
+   not loaded".
+
+2. **A hijacked entry is a distinct, worse state than a missing one, and it is
+   a hard `doctor` failure.** The 2026-07-07 amendment's "a missing entry is an
+   actionable WARN, never a hard fail" stands for `missing`, but the entry-status
+   taxonomy gains `mismatched` (a record exists and runs a program outside this
+   install → `doctor` **fails**, exit 1) and `unverified` (a record exists but no
+   identity verdict could be reached → warn). The member is named `mismatched`
+   rather than `foreign` because `foreign` already means the opposite thing three
+   lines away in the same subsystem: `deriveProbeArgv` returns `null` for a
+   "foreign basename", which causes the entry to be **skipped**, whereas a
+   foreign *record* is the loudest failure the taxonomy has.
+
+   Both are surfaced through the **existing** scheduler channel —
+   `state/scheduler-status.json` plus the digest callout built by WP-070 — with
+   no new alert channel, and both are healed by the one command allowed to mutate
+   the scheduler, `wienerdog sync`. For that channel to be real, the nightly
+   `dream` digest regeneration must pass `schedulerLine` to `renderDigest`; it
+   did not, so every nightly rewrite erased the scheduler callout and only an
+   attended `sync` restored it. That is the same hole ADR-0023 closed once for
+   the transcript-quarantine banner, and it is closed here for the same reason.
+
+   To make the advice ("run `wienerdog sync`") true rather than aspirational, the
+   darwin heal must be able to replace an already-loaded record, which a bare
+   `launchctl bootstrap` cannot. It does so **bootstrap-first**: attempt
+   `bootstrap`, and only when launchd refuses it — the signal that a record is
+   already loaded under the label — issue `bootout` and `bootstrap` again. The
+   naive bootout-first order is rejected: `unverified` is in the heal set and is
+   what any read-back deviation on a perfectly healthy entry produces, so
+   bootout-first would tear down a working job and then fail to restore it,
+   leaving the user with **no scheduled job at all** — strictly worse than the
+   start state. Bootstrap-first is also strictly cheaper for the common `missing`
+   case (one spawn, no teardown) and never enters a destructive path for it.
+   Before any destructive replacement, the durable status cache is refreshed from
+   the live probe, so a process killed mid-replacement leaves a pessimistic
+   record rather than a stale `loaded` one. doctor and the digest remain strictly
+   read-only; `sync` remains the sole healer.
+
+3. **A test-containment observer must read the loaded record, not the file.**
+   The 2026-07-07 amendment's invariant — *every scheduler mutation goes through
+   `schedulerSpawn`; every scheduler test uses a seam AND is backstopped by the
+   suite guard* — is retained in full. Retaining it constrains decision 1's
+   probe: the neutralizer env vars that make `schedulerSpawn` throw are the same
+   ones the probe consults, so a probe that could only be exercised by *deleting*
+   them would disarm the backstop for exactly the tests that drive a heal. The
+   probe therefore treats **the presence of its injected read seam** as the
+   neutralization and consults the env vars only when no seam was injected, so
+   no test needs to delete one. The invariant is then also extended: the
+   scenario harnesses' post-run
+   observer must additionally enumerate the **loaded** per-user registrations and
+   fail the run when any Wienerdog-named record will execute a program inside a
+   temp directory. It must be immune to the very containment machinery it runs
+   inside: it invokes the scheduler client by **absolute path** (so the
+   harness's PATH loader-shim cannot intercept it), takes no `env` parameter (so
+   the sandboxed init env cannot reach it), does not read
+   `WIENERDOG_LOADER_NOOP` or `WIENERDOG_TEST_NO_REAL_SCHEDULER` (those
+   neutralize the *product's* loader; honoring them would let the leaking
+   configuration disable its own detector), reads no schedule file, and matches
+   against the whole OS temp directory rather than only the current run's root —
+   so a **stale** leak from an earlier run cannot hide. This closes the specific
+   gap that let the 2026-07-22 poisoned record survive WP-161's gate.
+
+**Scope and honesty about platforms.** Decision 1's identity check is
+implemented for **launchd and Task Scheduler only**. The launchd format was
+verified first-hand on a real macOS host; the Windows format rests on the
+`parseWindowsTaskExec` parser that already ships and is already relied upon at
+register time, with every round-trip deviation mapping to `unverified` (a warn
+that still heals) rather than to a hard failure, and with a mandatory owner
+Windows-VPS confirmation. **systemd identity is declared unimplemented, not
+merely unverified**: the exact output of
+`systemctl --user show <unit>.service --property=ExecStart` could not be
+confirmed on a real Linux host, and specifying it anyway would give every Linux
+install `unverified` on every entry — a permanent warn plus a bootout-and-
+re-register of both units on *every* `sync`, which is not idempotent in the sense
+CLAUDE.md requires. A systemd entry therefore yields `unknown`: no doctor line,
+no digest callout, no heal, no churn. Linux keeps full `missing` detection, since
+absence is decided before identity. Implementing the systemd row is a named,
+dated residual, not an oversight.
+
+Decision 3's observer is likewise implemented for **launchd only**: on Linux a
+`systemd --user` manager's unit search path is fixed when the manager starts and
+is not moved by a child process's `XDG_CONFIG_HOME`, so a harness cannot make it
+load a unit from a temp dir at all — the only reachable leak shape writes a unit
+*file* into the real user dir, which WP-161's file observer already catches; on
+Windows the WP-161 "no `schtasks` interceptor, no Windows CI runner" residual is
+unchanged. Both no-op arms print a residual notice on every run, so the gap stays
+owner-visible rather than silent. Every unverifiable per-record condition in the
+observer fails closed; the single tolerated exception (a label listed and then
+unloaded between the two reads) prints a notice, so no disposition is silent.
+
+This amendment does not claim protection against a same-user actor who re-poisons
+the record after every check — that remains A7/A12 territory (ADR-0028).
+
+**Implemented by two work packages, and by neither alone.** Decisions 1 and 2 are
+implemented by **WP-scheduler-entry-identity** (the product's probe, taxonomy,
+digest wiring and heal). Decision 3 is implemented by
+**WP-scheduler-loaded-record-tripwire** (the scenario harnesses' loaded-record
+observer). The two touch disjoint files, share no imports, and may merge in
+either order — but **neither closes the incident class on its own**: the product
+half stops Wienerdog from mis-reporting a poisoned record, and the harness half
+stops Wienerdog's own tests from creating one and lets a stale one be seen. Any
+claim that this class is closed requires both.
+
+> **OWNER APPROVAL**
+>
+> (empty — for Gyula)

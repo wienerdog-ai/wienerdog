@@ -3,6 +3,8 @@
 Status: Accepted
 Date: 2026-07-19
 
+OWNER-SIGNED 2026-07-25
+
 > **OWNER-APPROVED (2026-07-19).** The owner ratified the A7 architectural
 > decision — how the unattended nightly run trusts its scheduler entry, its
 > vendored app code, and the external executables it spawns. The four decisions
@@ -744,3 +746,220 @@ residuals. Both refine — not reverse — the decisions above.
    entry the OS has not accepted, so idempotency does not suppress the retry) — never
    an unqualified success. adopt takes an injected `loader` seam so the rebind is
    tested without touching the real OS scheduler.
+
+## Amendment (2026-07-25) — dev stops content-addressing a live tree, and stance is never selected from inside the tree (proposed)
+
+Status: **Accepted. OWNER-SIGNED 2026-07-26.**
+
+This amendment records four things: a small correction to the dev descriptor, a
+**rejection** of the change that was proposed alongside it, the durable rule the
+rejection establishes, and — as an **unresolved violation of that rule** — the
+per-job dev path as it ships today. It refines, in one part explicitly
+**reaffirms**, and in one part **corrects an earlier claim of** the decisions
+above.
+
+### 1. The dev descriptor no longer computes an app release digest
+
+Amendment #7 (2026-07-19) ruled that a dev-stance install binds a **reduced**
+descriptor digest: `appRelease` collapses to `{stance:'dev', root}`, excluding
+`treeDigest` and `version`. `buildDescriptor` nevertheless *computed*
+`appTreeDigest` for the dev `appRelease` and recorded it, even though
+`reduceForDigest` rebuilds `{stance, root}` from scratch and therefore never
+digests it — and no dev code path reads it either.
+
+Hashing a **live** checkout is not free and not safe. Measured on the
+maintainer's install at `efd1489`: **8,922** regular files — 3,341 under `.git/`,
+4,905 under `node_modules/`, 676 of product source and docs, i.e. **92.4%** of the
+work on files that are not product code — at 0.35–0.57 s per warm pass, once per
+job on every dev derivation. Worse than the cost: the walk stats a directory
+entry and then reads it, so a concurrent `git`/`npm`/editor write that unlinks
+the file in between raises `ENOENT` inside `appTreeDigestOf`, which propagates out
+of `buildDescriptor` and surfaces as a **refusal** — `integrity check errored: …`
+for the nightly dream, and inside `catchUp` the misleading *"it is authorized but
+no longer in your config"*. It also made `writeDescriptor`'s documented
+idempotency ("unchanged inputs ⇒ byte-identical file") false on dev.
+
+**Corrected contract.** The dev `appRelease` records `{version, stance, root}` and
+computes **no** `treeDigest`. The prod `appRelease` is unchanged
+(`{version, treeDigest, stance}`), and the prod fire still compares the live tree
+to it. The dev **digest** is provably unchanged: `reduceForDigest` constructs
+`{stance, root}` from scratch, so the presence or absence of `treeDigest` cannot
+reach it — **no dev per-job entry needs re-minting, and no user action is
+required.**
+
+### 2. WP-157's catch-up refusal on a dev install STANDS
+
+A change proposed alongside §1 — make the catch-up `--expect-digest` stance-shaped
+(`dev:<checkout root>`) and give `verifyCatchup` a dev branch that verifies dev
+liveness, the bound root and the presence of the `--job-digests` token instead of
+hashing the tree — is **rejected**. Catch-up keeps refusing on a dev-stance
+install: `app/current` legitimately resolves outside `<core>/app`, containment
+refuses, and that is the disposition WP-157 shipped and `launcher.js`'s own doc
+comment records. This paragraph reverses nothing; it declines to reverse
+something.
+
+The rejection is on security grounds, demonstrated against real code by two
+independent review legs, in two orderings:
+
+**Ordering A — the env-var door.** `isDevCheckout(root)` honours
+`env.WIENERDOG_DEV === '1'` (`src/core/vendor.js:31`). Setting that variable is a
+**scoped write** (a shell profile, `~/.config/environment.d/*.conf`, `launchctl
+setenv`) — A7's adversary, not A12's. On a **prod** install: set the variable →
+the next attended `wienerdog sync` mints `dev:<core>/app/<version>` for a tree
+that is a real prod tree → a scoped write plants a `.git` into that app tree → at
+fire time dev liveness passes and the bound-root comparison passes **trivially**,
+because the bound root *is* the live target → catch-up spawns with **no tree hash
+at all**. The launcher already refuses to read `WIENERDOG_DEV` for its fire-time
+probe and says why in its own words (`src/scheduler/launcher.js:143-146`).
+
+**Ordering B — the `.git` door, which closing ordering A does not close.** The
+proposed fix was to mint with `isDevCheckout(root, {})` — on-disk `.git` only.
+But a `.git` file is **also** an A7-scoped write, and it need only be planted
+*before* the attended sync. On a **prod** install: plant `.git` in the prod app
+tree → the next `sync` derives the descriptor **and** mints the anchor through
+that same oracle, so both classify prod as dev → the sync registers
+`dev:<prod app root>` together with a valid dev-reduced per-job map → every
+fire-time check thereafter passes. Verified directly against
+`src/core/vendor.js`, with no environment variable set: `isDevCheckout(root, {})`
+returns `false` on a clean prod tree and `true` once `<root>/.git` exists as a
+regular file, and the resulting anchor is `dev:<core>/app/<version>` — a path
+contained inside `<core>/app`.
+
+Ordering B is reachable, not theoretical. `makeTreeFilesReadOnly`
+(`src/core/vendor.js:127-150`) chmods **files** only, so the published version
+directories keep their write bit and a new file can be created inside them; the
+A7 tamper matrix's own `3-stance` case plants exactly this file; and `vendorSelf`
+does not clean it up — it skips the re-copy when the version dir already exists
+(`vendor.js:178`) and its `isDevCheckout` call (`vendor.js:167`) tests the
+*installer's* package root, never `app/current`.
+
+**The per-job digest map cannot backstop either ordering.** The map's enforcement
+(`decodeJobDigests` + union authorization) runs inside `run-job.js` — i.e. inside
+the very app tree whose integrity the dropped hash was the only remaining
+statement about. An attacker who has already written into that tree controls the
+code that would check the map.
+
+**And the shipped code is safe today, which is what makes this a regression
+rather than a restatement.** Under ordering B on unmodified `main`, plant-then-sync
+re-mints a `sha256:` anchor that **covers** the planted `.git`; the tree is pinned
+from that moment, and any further tamper refuses on the tree-digest comparison.
+After the proposed change the dev-classified tree would never be content-addressed
+again. Two claims made for the proposal collapse with it and are withdrawn: that
+"a planted `.git` is a new file, so the tree hash already refuses" (true only
+while the anchor stays `sha256:`) and that "no legitimate prod value can reach the
+dev branch" (the `dev:` value *is* legitimately minted — from a tampered tree).
+
+### 3. The durable rule — stance is never selected by a signal inside the A7-writable tree
+
+This is the part worth ratifying, and it generalizes Decision 4(d):
+
+> **No mechanism may choose between the enforced (prod) and reduced (dev)
+> verification paths on the basis of a signal that an A7-scoped write can
+> produce.** `env.WIENERDOG_DEV` and an on-disk `.git` are both such signals. This
+> holds at **mint** time as well as at fire time: binding the decision into a
+> registration only moves the attack one attended `sync` earlier, it does not
+> remove it, because the mint reads the same tree the attacker can write.
+
+Amendment #7's "dev stance is bound at registration, not read from a live
+`WIENERDOG_DEV` env at fire time" is the fire-time half of this rule. This
+amendment adds the mint-time half, which the two orderings above show is the
+half that was missing.
+
+#### The shipped per-job dev path VIOLATES this rule — unresolved, not survivable
+
+An earlier draft of this amendment claimed the rule is already respected on the
+per-job path, because the dev branch's `reDeriveDigest(...) === expectDigest`
+check (`launcher.js:294-297`) supplies a second, independent enforcement. **That
+claim is withdrawn as false**, for two reasons verified against `efd1489`:
+
+1. **`reDeriveDigest` is not independent — it executes from the tree in
+   question.** It `require`s `src/core/paths`, `src/scheduler/jobs` and
+   `src/scheduler/descriptor` **from `target`**, the live dev-classified app tree
+   (`launcher.js:240-248`). An attacker who has written into that tree controls
+   the code that would check him. The **prod** branch makes the same call only
+   *after* `appTreeDigestOf(target) === descriptor.appRelease.treeDigest` passes,
+   and says why in its own comment (`launcher.js:314-316`: *"Tree verified
+   byte-identical … ⇒ it is now SAFE to require the descriptor-derivation code
+   from the verified tree"*). That safety predicate does not hold on dev.
+2. **The dev branch deliberately never hashes the tree.** It checks `liveDev`,
+   bound-root equality and `reDeriveDigest` — **config fields only**, as its own
+   comment states (*"the reduction excludes only treeDigest+version, so a
+   tracked-source edit stays runnable"*). `appTreeDigestOf` is called on the prod
+   branch alone (`launcher.js:308`). "Every config-shaped field stays
+   digest-covered" is true and beside the point: **no** statement about app code
+   is enforced on a dev fire.
+
+The launcher's stance cross-check does refuse in **both** directions — a dev
+descriptor over a `.git`-less tree (`launcher.js:288`) and a prod descriptor over
+a `.git`-bearing tree (`:302`) — which kills the env-var-only variant of ordering
+A: `WIENERDOG_DEV=1` alone mints a dev descriptor the fire-time liveness probe
+then rejects. **But planting `.git` satisfies the mint and the liveness probe
+alike.** `makeTreeFilesReadOnly` (`vendor.js:127-150`) chmods **files** only, so a
+published version directory keeps its write bit; plant `.git` there, wait for one
+attended `wienerdog sync`, and the install is classified dev with its app code
+never content-addressed again.
+
+**This is a different registration from ordering B above, and that difference is
+why the false claim survived review.** Ordering B concerns the **catch-up
+anchor**, which binds the raw `appTreeDigest` — so plant-then-sync re-mints a
+`sha256:` anchor *covering* the planted file, the tree is pinned from that moment,
+and further tamper refuses. The **per-job** path has no such pin: `reduceForDigest`
+strips `treeDigest` for dev, so the per-job digest pins nothing about app code.
+Both statements are true, about different registrations. §2's rejection of dev
+catch-up rests on ordering B and stands unaffected.
+
+**Disposition: an unresolved violation of §3's rule, not an accepted risk.** The
+prerequisite is **`WP-stance-authority-containment`** (in drafting), which binds
+stance to the discriminator an attacker cannot forge by writing *into* the tree:
+realpath containment inside `<core>/app` (`src/core/vendor.js:200-206`). Until it
+lands, a scoped write into a prod app tree can obtain a permanently un-hashed
+per-job execution path. Two constraints hold meanwhile: no new reduced path may be
+built on the `.git`/`WIENERDOG_DEV` oracle (§2), and `buildDescriptor`'s
+`isDevCheckout(appRoot, env)` — which additionally honours the ambient env — is
+left exactly as it is for that WP to replace wholesale, not patched piecemeal.
+
+**`WP-dev-descriptor-no-tree-hash` does not create this exposure.** The
+`treeDigest` §1 stops recording was already **write-only** on dev: `reduceForDigest`
+never digested it and no dev code path ever read it (its sole reader,
+`launcher.js:309`, is the prod branch). The set of things a dev fire enforces is
+identical before and after §1. Read this section as a correction to an earlier
+claim, not as a regression introduced by §1.
+
+### 4. Containment is the stance authority — specced, not deferred
+
+The discriminator this codebase actually relies on to tell the two stances apart
+is **containment**, not `.git`: a prod `app/current` realpaths **inside**
+`<core>/app` and a dev one legitimately does not (`src/core/vendor.js:200-206`
+states this in its own words; the prod-path use of it is `verifyContainment` at
+`src/scheduler/launcher.js:305`). Unlike `.git` and `WIENERDOG_DEV`, that property
+cannot be forged by writing *into* the app tree, which is why it is the authority
+§3's violation must be resolved against. **`WP-stance-authority-containment`** (in
+drafting) owns that work. **Dev catch-up stays rejected regardless** (§2):
+resolving stance authority removes the mint forgery, not containment's legitimate
+failure on a genuine dev tree, and reopening dev catch-up needs its own WP and its
+own owner ruling.
+
+Consequences, stated plainly:
+
+- **A7 is not closed.** §3 records the shipped per-job dev path as an open
+  violation of this amendment's own durable rule: a `.git` planted in a prod app
+  tree before an attended `sync` yields a dev-classified install whose app code is
+  never content-addressed again. `WP-stance-authority-containment` is the fix; §1
+  neither causes nor worsens it.
+- **Nothing is re-minted and no user action is required.** §1 cannot change any
+  digest; §2 changes no behaviour at all. A dev install's stale descriptor keeps a
+  `treeDigest` nobody reads until the next attended `sync` rewrites the file.
+- **Catch-up remains structurally unavailable on a dev install**, with a durable
+  alert naming `wienerdog sync` that will not make it available. That is a known,
+  accepted cost of the fail-closed posture, not an oversight — and after two
+  review rounds it is the *deliberate* disposition rather than an inherited one.
+  A dev install's missed jobs are recovered by running them attended.
+- **The `appTreeDigestOf` scope is deliberately NOT changed** (no `.git`
+  exclusion, no `node_modules` exclusion, no git-derived file selection). It stays
+  a git-agnostic content address of whatever is under `app/current`. Deriving its
+  scope from git state would make prod integrity depend on
+  `.gitignore`/`.git/info/exclude` — writable at exactly the scoped-write surface
+  A7 defends against — and would require the self-contained launcher to consult
+  `git`, which it cannot do without loading pin code from the very tree it is
+  verifying. The instability that scoping was meant to cure exists only on dev,
+  and §1 removes it by dev not content-addressing its tree at all.
