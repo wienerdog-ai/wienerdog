@@ -29,7 +29,7 @@ Durable decisions live here so they are made once, not re-litigated per session 
 | [0021](0021-identity-trust-registry.md) | Human-ratified identity memory with an exact-byte trust registry | Accepted |
 | [0022](0022-single-strict-frontmatter-parser.md) | One strict, fail-closed frontmatter parser for security-bearing notes | Accepted |
 | [0023](0023-bounded-transcript-intake-and-quarantine-ledger.md) | Bounded streaming transcript intake and a per-file quarantine ledger | Accepted |
-| [0024](0024-layered-secret-lifecycle.md) | Layered secret lifecycle — one shared scanner, four fail-closed persistence gates | Accepted |
+| [0024](0024-layered-secret-lifecycle.md) | Layered secret lifecycle — one shared scanner, four fail-closed persistence gates | Accepted (EP2 amendment and the high-entropy-as-`redact` rejection narrowly superseded by 0034; EP4 unchanged) |
 | [0025](0025-hermetic-runtime-profiles.md) | Hermetic runtime profiles — code-owned capability composition | Accepted |
 | [0026](0026-gws-capability-broker.md) | GWS capability broker — credential-holding per-job stdio broker, fixed verbs | Accepted |
 | [0027](0027-scheduler-unload-rederived-not-stored.md) | Re-derive scheduler unload — never execute manifest-stored argv | Accepted |
@@ -37,3 +37,6 @@ Durable decisions live here so they are made once, not re-litigated per session 
 | [0029](0029-spec-identity-and-derived-views.md) | Slug spec identity; frontmatter authority; views generated, never hand-written | Accepted |
 | [0030](0030-bounded-user-level-process-supervision.md) | Bounded user-level process supervision — reap the findable descendant tree to quiescence; adversarial full-detach is A12 | Accepted |
 | [0031](0031-contract-reference-tables-single-source.md) | A dense contract's single source of truth is one canonical reference table; registered mirrored surfaces defer to it and move with it | Accepted |
+| [0032](0032-daily-summary-untrusted-fence.md) | Daily-summary injection is untrusted-fenced, bounded data | Accepted |
+| [0033](0033-human-ratified-exact-value-secret-allowlist.md) | Human-ratified exact-value secret allowlist | Superseded by 0034 (never ratified — nothing in it is in force) |
+| [0034](0034-accidental-persistence-threat-model.md) | The secret fence's threat model is accidental persistence, not deliberate exfiltration | Accepted (supersedes 0024's WP-123 EP2 amendment and its high-entropy-as-`redact` rejection, context-free case only; supersedes 0033) |
