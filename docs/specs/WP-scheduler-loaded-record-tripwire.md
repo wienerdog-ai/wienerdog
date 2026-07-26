@@ -738,7 +738,12 @@ surfaces that mirror it:
 - [ ] The bootstrap-first repair-advice rationale immediately below the template
       (the `;`-not-`&&`-not-`||` argument) — it explains the template's last
       line; it must not restate it as a separate contract
-- [ ] Table A's two `LEAK` failure-class rows
+- [ ] Table A's single `LEAK` failure-class row — the per-record
+      "some argument is temp-origin" row. It is the only row in the table whose
+      *Failure class* cell is `LEAK`; every other failure row is `UNVERIFIABLE`
+      (Table D's checklist above registers **two** rows because both the
+      temp-origin and the not-temp-origin rows mirror that predicate — only the
+      first of them mirrors this message)
 - [ ] Table C's "the repair advice cannot become destructive-first or
       conditionally chained" row
 - [ ] Table D's *"which is inside a temp directory"* bullet — that sentence lives
