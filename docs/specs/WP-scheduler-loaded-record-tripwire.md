@@ -1141,9 +1141,11 @@ assertion in this WP may read one**.
       block, below the block, or commented out all fail. Gated by M8 and M8b.
 - [ ] **AC-9** Every new test name is prefixed `scheduler-leak-guard:` (with a
       trailing space), and the non-vacuity gate in verification step 1 reports at
-      least **37** named passing subtests — **passing, not skipped**: step 1
-      filters `# SKIP` records out, so this is a POSIX-host floor (see step 1's
-      comment). That floor is **derived, not
+      least **37** named passing subtests — **passing: not skipped, not todo**.
+      Step 1 filters `# SKIP` and `# TODO` records out and **enforces a non-root
+      POSIX host**, because one of the six guarded tests also skips under
+      `getuid() === 0` (see step 1's comment; as root the floor false-reds at
+      36). That floor is **derived, not
       invented**: 22 pre-existing named subtests on `main` (counted by execution
       at `6eb2d30`; see Current state) **plus the 15 distinct test names the
       Mutation checks table requires to exist** — count them from the table: 22
@@ -1321,20 +1323,39 @@ output.
 #      pattern "scheduler-leak-guard" → 22 named subtests
 #      pattern "zzz-nope"             → 0 named subtests
 #
-#    SKIPPED SUBTESTS MUST NOT COUNT. node:test renders a skipped subtest as
-#    `ok N - <name> # SKIP` — an `ok` record that `^ok [0-9]+ - ` matches. This
-#    file carries 6 `{ skip: process.platform === 'win32' }` guards, so without
-#    the `grep -v` below a Windows host would satisfy the floor with records for
-#    tests that never executed. Executed on this runner (Node 25.9.0) against a
-#    two-test probe: `ok 1 - <name> # SKIP` / `ok 2 - <name>` — the filter drops
-#    the first and keeps the second.
-#    CONSEQUENCE, stated rather than papered over: this is a POSIX-host gate. On
-#    win32 the 6 guarded tests skip, the count is 31, and the gate is RED — which
-#    is correct, because the darwin arm this WP adds is unverified there
-#    (Table B's win32 row; CI has no Windows runner).
+#    NON-PASS TAP RECORDS MUST NOT COUNT. node:test renders BOTH a skipped and
+#    an unexecuted-todo subtest as an `ok` line that `^ok [0-9]+ - ` matches:
+#    `ok N - <name> # SKIP` and `ok N - <name> # TODO`. Either one would satisfy
+#    a count floor with a test that never ran — the exact vacuity this gate
+#    exists to prevent, reintroduced through the back door. Converting a required
+#    test to `test.todo(...)` must LOWER the count, not preserve it. Executed on
+#    this runner (Node 25.9.0) against a three-test probe:
+#      ok 1 - <name> # TODO      ← dropped by the filter
+#      ok 2 - <name> # SKIP      ← dropped by the filter
+#      ok 3 - <name>             ← counted
+#      # pass 1 / # skipped 1 / # todo 1   (exit 0 — the run itself is GREEN)
+#    Hence `grep -vE "# (SKIP|TODO)"` below, not a bare `grep -v "# SKIP"`.
+#
+#    PREREQUISITE — run this gate as a NON-ROOT POSIX user; it is ENFORCED on
+#    the line below, not merely documented. Two things skip on this file:
+#      - 5 tests guarded `{ skip: process.platform === 'win32' }`
+#      - 1 test (`assertNoLoaderInvoked — an UNWRITABLE log at assert time`,
+#        tests/unit/scheduler-leak-guard.test.js:177-181) guarded
+#        `win32 || (typeof process.getuid === 'function' && process.getuid() === 0)`
+#        — it needs POSIX permission enforcement, which root does not experience.
+#    So the floor of 37 has ZERO slack on a non-root POSIX host, is 36 as root
+#    (a FALSE red), and 31 on win32. Rather than make the arithmetic UID-aware —
+#    which would mean carrying a second floor and still having to prove all 37
+#    names exist — the gate DECLARES the host it is valid on and refuses to run
+#    anywhere else. That is the simpler of the two options and it cannot report a
+#    misleading green. On win32 the gate is RED and that is correct: the darwin
+#    arm this WP adds is unverified there (Table B's win32 row; CI has no Windows
+#    runner). Containerized runners commonly default to root — if this fires,
+#    re-run as an ordinary user; do NOT lower the floor.
+[ "$(id -u)" -ne 0 ] || { echo "PREREQUISITE UNMET: run this gate as a NON-ROOT POSIX user (as root the unwritable-log test skips and the floor of 37 false-reds at 36)"; exit 1; }
 n=$(node tests/run.js --test-reporter=tap --test-name-pattern "scheduler-leak-guard" \
       tests/unit/scheduler-leak-guard.test.js \
-      | grep -E "^ok [0-9]+ - scheduler-leak-guard: " | grep -v "# SKIP" \
+      | grep -E "^ok [0-9]+ - scheduler-leak-guard: " | grep -vE "# (SKIP|TODO)" \
       | wc -l | tr -d ' ')
 #    PROVES: your new tests actually run AND the pre-existing ones still do.
 #    RED WHEN: any required test name is missing or failing (floor not met), or

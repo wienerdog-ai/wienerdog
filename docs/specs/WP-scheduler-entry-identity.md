@@ -2510,9 +2510,9 @@ mechanism.
       a hijacked one. Mutation M28 targets it.
 - [ ] **AC-13** Every new test name is prefixed `entry-identity:` (with a
       trailing space), and the non-vacuity gate in verification step 1 reports at
-      least **28** **named** passing subtests — **passing, not skipped**: step 1
-      filters `# SKIP` records out, so this is a POSIX-host floor (see step 1's
-      comment).
+      least **28** **named** passing subtests — **passing: not skipped, not
+      todo**: step 1 filters `# SKIP` and `# TODO` records out, so this is a
+      POSIX-host floor (see step 1's comment).
       **The number is RE-DERIVED in round 5 by enumeration, not carried forward.**
       Rounds 1-3 grew it by narrative increments (15 → 18 → 21 → 26) and the
       round-4 review found the gate still literally reading `-ge 21`, i.e. counts
@@ -2668,20 +2668,25 @@ split into two separately-named tests rather than one test with two assertions.
 #      pattern "scheduler-leak-guard" → 22 named subtests
 #      pattern "zzz-nope"             → 0 named subtests
 #
-#    SKIPPED SUBTESTS MUST NOT COUNT. node:test renders a skipped subtest as
-#    `ok N - <name> # SKIP` — an `ok` record that `^ok [0-9]+ - ` matches on its
-#    own. This file carries 17 `{ skip: !isPosix }` guards, so without the
-#    `grep -v` below a non-POSIX host would satisfy the floor of 28 with records
-#    for tests that never executed — the exact vacuity this gate exists to
-#    prevent, reintroduced through the back door. Executed on this runner
-#    (Node 25.9.0) against a two-test probe: `ok 1 - <name> # SKIP` /
-#    `ok 2 - <name>` — the filter drops the first and keeps the second.
-#    CONSEQUENCE, stated rather than papered over: this is a POSIX-host gate. On
-#    a non-POSIX host the 17 guarded tests skip, the count falls below 28, and
-#    the gate is RED — which is correct, because what it certifies did not run.
+#    NON-PASS TAP RECORDS MUST NOT COUNT. node:test renders BOTH a skipped and
+#    an unexecuted-todo subtest as an `ok` line that `^ok [0-9]+ - ` matches on
+#    its own: `ok N - <name> # SKIP` and `ok N - <name> # TODO`. Either would
+#    satisfy the floor of 28 with a test that never executed — the exact vacuity
+#    this gate exists to prevent, reintroduced through the back door. Converting
+#    a required test to `test.todo(...)` must LOWER the count, not preserve it.
+#    Executed on this runner (Node 25.9.0) against a three-test probe:
+#      ok 1 - <name> # TODO      ← dropped by the filter
+#      ok 2 - <name> # SKIP      ← dropped by the filter
+#      ok 3 - <name>             ← counted
+#      # pass 1 / # skipped 1 / # todo 1   (exit 0 — the run itself is GREEN)
+#    Hence `grep -vE "# (SKIP|TODO)"`, not a bare `grep -v "# SKIP"`.
+#    CONSEQUENCE, stated rather than papered over: this is a POSIX-host gate.
+#    This file carries 17 `{ skip: !isPosix }` guards, so on a non-POSIX host the
+#    count falls below 28 and the gate is RED — which is correct, because what it
+#    certifies did not run.
 n=$(npm test --silent -- --test-reporter=tap --test-name-pattern "entry-identity" \
       tests/unit/scheduler-entry-identity.test.js \
-      | grep -E "^ok [0-9]+ - entry-identity: " | grep -v "# SKIP" \
+      | grep -E "^ok [0-9]+ - entry-identity: " | grep -vE "# (SKIP|TODO)" \
       | wc -l | tr -d ' ')
 echo "named passing subtests: $n"
 [ "$n" -ge 28 ] || { echo "VACUOUS OR INCOMPLETE — the pattern selected $n named subtests"; exit 1; }
@@ -2692,10 +2697,17 @@ echo "named passing subtests: $n"
 #    bogus pattern "zzz-nope" (it matches the file wrapper) — i.e. it is the very
 #    vacuity the step-1 comment warns about. The anchored form below returns 0
 #    for "zzz-nope" and 13 for the real pattern.
+#    SAME `# SKIP` / `# TODO` EXCLUSION AS STEP 1, and for the same reason — this
+#    gate has the identical exposure: `tests/unit/scheduler-status.test.js:305`
+#    (*"reloadMissing refuses to heal onto a symlink at the canonical path"*) is
+#    guarded `{ skip: !isPosix }` AND matches this pattern, so on a non-POSIX
+#    host it would otherwise count toward the floor of 8 without executing.
+#    POSIX-host gate, same as step 1.
 n=$(npm test --silent -- --test-reporter=tap \
       --test-name-pattern "defaultProbe|probeAll|reloadMissing|doctorSchedulerChecks" \
       tests/unit/scheduler-status.test.js \
       | grep -E "^ok [0-9]+ - (defaultProbe|probeAll|reloadMissing|doctorSchedulerChecks)" \
+      | grep -vE "# (SKIP|TODO)" \
       | wc -l | tr -d ' ')
 echo "named passing subtests: $n"
 [ "$n" -ge 8 ] || { echo "VACUOUS OR INCOMPLETE — selected $n named subtests"; exit 1; }
