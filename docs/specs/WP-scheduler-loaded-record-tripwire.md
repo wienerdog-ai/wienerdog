@@ -858,9 +858,16 @@ surfaces that mirror it:
       authority: if a G-row changes here, change it there in the same pass.
       **Byte-identity is ASSERTED by verification step 7**, so this is the one
       registered mirror you cannot forget to update — the gate will tell you
-- [ ] **Verification step 7** — the byte-comparison itself. It owns the *row
-      count* (7) and the two compared paths; if a row is added to the contract,
-      raise the count there in the same pass
+- [ ] **Verification step 7** — the byte-comparison itself. It owns the
+      **expected identifier sequence** `G1 G1b G2 G3 G4 G5 G6` and the two
+      compared paths. Adding, removing, renaming or reordering a G-row means
+      editing that literal sequence in the **same pass**, in **both** specs —
+      the step will not let you forget. It carries **no row count**; the
+      sequence subsumes one, and re-adding arithmetic beside it is a regression
+      (see the step's own note)
+- [ ] **The step body itself, in both specs** — from `TW=` to the final `echo`
+      it is byte-identical across the two documents; only the step *number*
+      differs (7 here, 9 there). Edit it in both or not at all
 
 Neither the ADR nor the logbook is in this WP's Deliverables and **neither may be
 edited from this branch**; they are registered so a future change to Table A, B,
@@ -1581,30 +1588,43 @@ console.log("    executes anything under the OS temp dir");
 
 # 7. TABLE E ≡ TABLE F — the canonical G-rows are ONE contract carried in two
 #    documents (ADR-0005's One-Document Rule requires the local copy; ADR-0031
-#    allows it as a mirrored summary). Both tables claim to be byte-identical;
-#    this step is what makes that claim checkable instead of aspirational.
+#    allows it as a mirrored summary).
+#
+#    THE INVARIANT, STATED EXACTLY: both files carry exactly the rows
+#    G1 G1b G2 G3 G4 G5 G6, IN THAT ORDER, byte-identically.
+#
 #    Compared BY PATH, tripwire first, entry-identity second:
 #      docs/specs/WP-scheduler-loaded-record-tripwire.md   → Table E
 #      docs/specs/WP-scheduler-entry-identity.md           → Table F
-#    PROVES: no row of this contract has drifted between the two specs.
-#    RED WHEN: any row differs by a single byte (caught by `diff`'s EXIT CODE,
-#    not by reading its output), or either file does not carry all seven rows.
 #
-#    THE NON-VACUITY GUARD IS THE POINT OF THE ROW COUNT. Two empty extractions
-#    `diff` clean, so a renamed heading, a reformatted table or a deleted row
-#    would otherwise report agreement — the vacuous-anchor failure this spec has
-#    hit before. Assert SEVEN on each side first, and never build this on
-#    `grep -c`, whose exit-1-on-zero has silently "passed" in this repo before.
+#    NOTE FOR THE NEXT EDITOR — THERE IS NO COUNT GUARD, AND ADDING ONE BACK IS A
+#    REGRESSION. Two consecutive review rounds landed findings on this step's
+#    guard: a `-eq 7` count cannot see a SUBSTITUTED id (rename G6→G7 in both
+#    files and the count is still 7, the diff still clean, the message still
+#    "OK") nor a DUPLICATED one, and two empty extractions diff clean. The fix
+#    was not a third arithmetic patch: the identifier COLUMN is compared against
+#    the literal expected sequence, independently per file, BEFORE the content
+#    diff. That one construction closes count, order, substitution, duplication
+#    and emptiness at once, because it checks the invariant itself rather than a
+#    proxy for it. Do not add a guard beside it — extend the sequence instead.
+#
+#    ONE PHYSICAL LINE PER ROW is enforced by SUBTRACTION, not by a further
+#    check: a markdown table row is a single line by construction, and the
+#    extractor anchors BOTH ends (`^\|` … `\|$`), so a row wrapped across two
+#    lines loses its closing pipe, drops out of the extraction, and reddens the
+#    sequence check below. Verified in the red direction.
+#
+#    The body below, from `TW=` to the final `echo`, is BYTE-IDENTICAL to the
+#    same step in the sibling spec; only the step NUMBER differs.
 TW=docs/specs/WP-scheduler-loaded-record-tripwire.md
 EI=docs/specs/WP-scheduler-entry-identity.md
-rows() { grep -E '^\| G[0-9b]+ \| ' "$1"; }
-na=$(rows "$TW" | wc -l | tr -d ' ')
-nb=$(rows "$EI" | wc -l | tr -d ' ')
-echo "canonical G-rows: $TW -> $na ; $EI -> $nb"
-[ "$na" -eq 7 ] || { echo "FAIL: expected 7 canonical G-rows in $TW, found $na — a MISSING row must not read as agreement"; exit 1; }
-[ "$nb" -eq 7 ] || { echo "FAIL: expected 7 canonical G-rows in $EI, found $nb — a MISSING row must not read as agreement"; exit 1; }
+rows() { grep -E '^\| G[0-9b]+ \| .*\|$' "$1"; }
+ids()  { rows "$1" | awk -F'|' '{print $2}' | tr -d ' '; }
+expected_ids() { printf 'G1\nG1b\nG2\nG3\nG4\nG5\nG6\n'; }
+diff <(expected_ids) <(ids "$TW") || { echo "FAIL: $TW does not carry exactly G1 G1b G2 G3 G4 G5 G6 in that order"; exit 1; }
+diff <(expected_ids) <(ids "$EI") || { echo "FAIL: $EI does not carry exactly G1 G1b G2 G3 G4 G5 G6 in that order"; exit 1; }
 diff <(rows "$TW") <(rows "$EI") || { echo "FAIL: Table E and Table F have DIVERGED — the rows above differ. Fix BOTH, do not fork the contract"; exit 1; }
-echo "OK: all 7 canonical G-rows are byte-identical across the two specs"
+echo "OK: both specs carry G1 G1b G2 G3 G4 G5 G6 in order, byte-identically"
 ```
 
 **Do NOT run the scenario harnesses** (`npm run scenarios`,
