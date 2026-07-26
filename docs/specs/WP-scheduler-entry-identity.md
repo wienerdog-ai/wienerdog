@@ -3056,6 +3056,13 @@ fi
 #    row pattern therefore allows optional whitespace around the id and after
 #    the final pipe, and `ids()` trims per field. A compact duplicate now shows
 #    up as an extra `G6` in the sequence; nothing else was added.
+#    LEADING INDENTATION IS THE SAME CLASS, at the one position the widen above
+#    missed: GFM allows a block-level construct up to THREE leading spaces, so
+#    `  |G6|…|` still renders as a table row while `^\|` never saw it. The anchor
+#    is therefore ` {0,3}\|` — literal spaces, bounded at three ON PURPOSE. Do
+#    NOT relax it to `[[:space:]]*`: that would also accept tabs and 4+ spaces,
+#    which GFM renders as an indented CODE BLOCK rather than a row, so matching
+#    them would make the check red on text that is not a table row at all.
 #
 #    THREAT MODEL — READ THIS BEFORE PROPOSING A STRONGER EXTRACTOR.
 #    This check exists to catch ACCIDENTAL, format-conforming drift by
@@ -3076,7 +3083,7 @@ fi
 #    same step in the sibling spec; only the step NUMBER differs.
 TW=docs/specs/WP-scheduler-loaded-record-tripwire.md
 EI=docs/specs/WP-scheduler-entry-identity.md
-rows() { grep -E '^\|[[:space:]]*G[0-9b]+[[:space:]]*\|.*\|[[:space:]]*$' "$1"; }
+rows() { grep -E '^ {0,3}\|[[:space:]]*G[0-9b]+[[:space:]]*\|.*\|[[:space:]]*$' "$1"; }
 ids()  { rows "$1" | awk -F'|' '{gsub(/[[:space:]]/, "", $2); print $2}'; }
 expected_ids() { printf 'G1\nG1b\nG2\nG3\nG4\nG5\nG6\n'; }
 diff <(expected_ids) <(ids "$TW") || { echo "FAIL: $TW does not carry exactly G1 G1b G2 G3 G4 G5 G6, once each, in that order"; exit 1; }
