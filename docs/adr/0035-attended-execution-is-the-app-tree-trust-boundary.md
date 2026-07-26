@@ -1,29 +1,39 @@
 # ADR-0035: An app-tree write is code execution at the next attended run — A7's boundary is re-scoped, not re-guarded
 
-Status: Proposed
+Status: Accepted
 Date: 2026-07-26
+OWNER-SIGNED 2026-07-26
 
-> **This ADR is a decision request, not a decision.** Nothing below is ratified.
-> The owner approved *drafting* it; the architect wrote it. No agent may add a
-> signature line, and no sentence here may be cited as approval. See "What the
-> owner is being asked to decide".
+> **Drafted as a decision request; ratified by the owner on 2026-07-26.** The
+> architect wrote this ADR to put one question to the owner, and that question
+> is preserved verbatim below rather than erased. The owner decided it on
+> 2026-07-26 and signed the line above himself; what he ratified is the
+> architect's recommendation, **Option 1 — accept the residual and re-scope
+> A7's claim**. The Decision section is therefore in force. Two things his
+> signature deliberately did **not** do: it did not amend ADR-0028, whose
+> "Honest boundary" narrowing (Decision item 3) remains a separate, still
+> outstanding owner act, and it did not enact the amendment text proposed
+> under "Proposed amendment to ADR-0028", which is an offer and not in force.
+> No agent wrote the signature line above; no agent may write, move or
+> reformat one.
 
-## What the owner is being asked to decide
+## What the owner decided
 
-One question, in one sentence:
+The ADR was drafted to put one question, in one sentence:
 
 > **Do we build out-of-tree verification for attended CLI runs, or do we accept
 > that a write into `<core>/app` is same-user code execution and correct every
 > claim that says otherwise?**
 
-The architect's recommendation is the second. Ratifying it commits the owner to
-five things, listed in full under "Decision" so none of them arrives as a
-surprise: A7 stops claiming to defend the app tree against attended execution;
-`docs/THREAT-MODEL.md`'s A7 residual paragraph is factually wrong today and gets
-corrected; ADR-0028's "Honest boundary" needs a dated amendment **which is a
-separate owner act, not this one**; no seventh guard gets built; and the
-out-of-tree attended entry point is recorded as a documented next increment with
-a named revisit trigger, exactly as ADR-0028 did for its "2b" bootstrap.
+The architect recommended the second, and on 2026-07-26 the owner chose it.
+Ratification commits him to five things, listed in full under "Decision" so
+none of them arrives as a surprise: A7 stops claiming to defend the app tree
+against attended execution; `docs/THREAT-MODEL.md`'s A7 residual paragraph is
+factually wrong today and **still awaits its correction**; ADR-0028's "Honest
+boundary" needs a dated amendment **which is a separate owner act that this
+signature did not perform**; no seventh guard gets built; and the out-of-tree
+attended entry point is recorded as a documented next increment with a named
+revisit trigger, exactly as ADR-0028 did for its "2b" bootstrap.
 
 ## Context
 
@@ -160,7 +170,11 @@ is.
 
 ## Options considered
 
-### Option 1 — Accept the residual; re-scope A7's claim (RECOMMENDED)
+The five options below are recorded as they were weighed, before the decision.
+Option 1 is the one the owner ratified; Options 2–5 were not adopted, and
+Option 2's status as the documented next increment is fixed under "Decision".
+
+### Option 1 — Accept the residual; re-scope A7's claim (ADOPTED — ratified 2026-07-26)
 
 Build no new mechanism. Ship the two gated work packages. Correct every document
 that says A7 defends the app tree against an attended run, and state the
@@ -177,7 +191,8 @@ guarantee.
 - **Costs:** the honest claim is weaker and harder to market. `docs/VISION.md`,
   `README.md` and the integrity runbook all need their A7 sentences narrowed.
   A dated amendment to ADR-0028's "Honest boundary" is required — and ADR-0028
-  is owner-signed, so that amendment is **a separate owner act** (see below).
+  is owner-signed, so that amendment is **a separate owner act** (see below),
+  still outstanding as of 2026-07-26 and not performed by ratifying this ADR.
 - **Does not close:** S2, S3, the general form, or `R-dev`. All four stay open
   and named.
 - **What could go wrong:** documenting a residual is how residuals become
@@ -271,8 +286,8 @@ mint reads it.
 
 ## Decision
 
-**Adopt Option 1.** A7's boundary is re-scoped to what it actually holds, and no
-seventh guard is built.
+**Option 1 is adopted**, ratified by the owner on 2026-07-26. A7's boundary is
+re-scoped to what it actually holds, and no seventh guard is built.
 
 The durable rule this establishes:
 
@@ -283,7 +298,10 @@ The durable rule this establishes:
 > integrity guarantee holds **only for scheduled fires that occur before the next
 > attended run**, and every statement of it must carry that bound.
 
-Ratifying this commits the owner to all five of the following.
+Ratification committed the owner to all five of the following. **The signature
+performed none of items 1, 2 or 3** — each names work or an owner act that was
+still outstanding when this ADR was signed and is outstanding until someone does
+it. Items 4 and 5 are standing prohibitions, in force from 2026-07-26.
 
 1. **The two gated work packages ship as scoped, and neither is asked to do
    more.** `WP-refusal-remedy-discriminator` closes the amplification;
@@ -296,27 +314,41 @@ Ratifying this commits the owner to all five of the following.
    cannot disable the fire-time verification"*, recorded as **known false** by
    `WP-stance-authority-containment` Table G row S1) all state the temporal
    bound. This needs its own work package; it is not free and it is not this
-   ADR.
+   ADR. **No such work package exists as of 2026-07-26**, so those sentences —
+   `docs/THREAT-MODEL.md:369-372` above all — are still shipped and still false.
+   Ratifying this ADR corrected none of them; writing that work package is the
+   outstanding act.
 3. **ADR-0028 needs a dated amendment, and that is a separate act the owner must
-   take.** ADR-0028 is Accepted and OWNER-SIGNED; its "Honest boundary" currently
-   protects *"scoped writes that reach `config.yaml`, the app tree, and/or the
-   install manifest but NOT the launcher file."* The **app tree** must leave that
-   list, because an app-tree write reaches the launcher file transitively. **This
-   ADR does not amend ADR-0028 and must not be read as having done so.** The
-   proposed amendment text is below.
+   still take.** ADR-0028 is Accepted and OWNER-SIGNED; its "Honest boundary"
+   currently protects *"scoped writes that reach `config.yaml`, the app tree,
+   and/or the install manifest but NOT the launcher file."* The **app tree**
+   must leave that list, because an app-tree write reaches the launcher file
+   transitively. **This ADR does not amend ADR-0028 and must not be read as
+   having done so.** The owner's 2026-07-26 signature is on *this* file only:
+   as of that date ADR-0028's "Honest boundary" is unchanged and still names the
+   app tree in its protected class. It is the single easiest thing for a later
+   reader to assume was handled here; it was not. The proposed amendment text is
+   below, unsigned.
 4. **S2, S3 and `R-dev` stay open, named, and un-guarded.** They are recorded in
    `WP-stance-authority-containment` Table G row S2, in this ADR's instance
    table, and in `WP-launcher-no-self-resync-republish`'s Residual R-dev
-   respectively. Adding a guard for any of them is a violation of this ADR.
-5. **Option 2 is recorded as the documented next increment, not built.** Same
+   respectively. Ratification closed none of the three and was never going to —
+   staying open is the decision, not a gap in it. Adding a guard for any of them
+   is a violation of this ADR.
+5. **Option 2 is recorded as the documented next increment, and was not built by
+   this decision.** It stays unbuilt until one of the revisit triggers below
+   fires. Same
    treatment ADR-0028 gave its "2b" bootstrap: written down with its costs, with
    a named revisit trigger, so the next session neither re-derives it nor starts
    it by accident.
 
 ### Proposed amendment to ADR-0028 (for the owner's separate signature)
 
-Not in force. Offered so the act is one signature rather than one design
-session:
+**Not in force, and not enacted by the owner's 2026-07-26 signature on this
+ADR** — that signature ratified ADR-0035 and nothing else. The text below is
+offered so the remaining act is one signature rather than one design session; it
+takes effect only when it appears in `docs/adr/0028-scheduler-app-executable-integrity.md`
+over the owner's own dated marker:
 
 > **Amendment (date TBD) — the app tree leaves the protected class.** The
 > "Honest boundary" section's protected class is narrowed: A7 protects scoped
@@ -364,22 +396,24 @@ session:
   Wienerdog will say so in its own documentation rather than let a reader infer
   otherwise from a launcher that sounds stronger than it is.
 - **Nothing here starts a process.** Every option was screened against ADR-0004
-  first; the recommended one adds no code at all.
+  first; the adopted one adds no code at all.
 
 ## Relations to prior ADRs
 
-- **ADR-0004 (no-daemon invariant).** Honored. The recommendation builds nothing;
+- **ADR-0004 (no-daemon invariant).** Honored. The adopted option builds nothing;
   the options that were weighed and declined would each have been files and
   verify-then-spawn logic, never a resident process.
-- **ADR-0028 (scheduler, app and executable integrity).** Not amended by this
-  ADR. Decision 4's out-of-tree launcher stands; its "Honest boundary" needs the
-  narrowing proposed above, as a separate owner act. ADR-0028's 2026-07-25
+- **ADR-0028 (scheduler, app and executable integrity).** **Not amended by this
+  ADR, and not amended by its ratification.** Decision 4's out-of-tree launcher
+  stands; its "Honest boundary" still needs the narrowing proposed above, which
+  remains a separate owner act, outstanding as of 2026-07-26. ADR-0028's
+  2026-07-25
   amendment §3 established that *stance* is never selected by a signal an
   A7-scoped write can produce; this ADR is the generalization of that rule from
   stance selection to **execution**.
 - **ADR-0013 (vendored install).** Unchanged. The version-named `app/<version>/`
   layout and the `current` symlink stay exactly as they are — Option 4, the only
-  option that would have disturbed them, is not recommended.
+  option that would have disturbed them, was not adopted.
 - **ADR-0034 (the secret fence's threat model).** Same structural move, different
   subsystem: when a review loop relocates a defect instead of closing it, the
   missing artifact is a ratified statement of what the mechanism is for.
