@@ -250,6 +250,31 @@ Every claim below was read in the tree at commit `efd1489`.
   launcher's OWN node process BEFORE launch.js — bypassing every check."*
   Table B condition (c0) binds to **this list**, not to the shape of a `set`
   command, for exactly that reason.
+- `src/core/paths.js:21-31` — `assertSafeOverride(name, value)`. On a SET value it
+  requires `path.isAbsolute(value)` and rejects a `.` or `..` **component**, with
+  the component scan at **`:23-29`** being literally
+  `const segs = value.split(/[\\/]+/)` … `segs.includes('..') || segs.includes('.')`.
+  `getPaths` runs `WIENERDOG_HOME` through it (`:55`) and otherwise falls back to
+  `path.join(home, '.wienerdog')`. **This is the canonical statement of what a
+  usable `WIENERDOG_HOME` is, and Table B condition (c0) rule 4a mirrors it
+  instead of restating it.** Every `windowsCmdArguments` call site passes
+  `core: paths.core` (`src/cli/schedule.js:315-320`, `:471-476`, `:629-634`,
+  `:734`), so **our writer provably cannot emit a `WIENERDOG_HOME` bind whose
+  value has a `.`/`..` component**: the override branch throws and the fallback
+  branch's `path.join` collapses it. Executed: `getPaths` throws on
+  `WIENERDOG_HOME=/home/bob/.wienerdog/child/..`, and the fallback yields
+  `/home/bob/.wienerdog` for `HOME ∈ {'/home/bob','/home/bob/','/home/./bob','/home/bob/x/..'}`.
+  **This file is NOT a deliverable and is not edited** (Deliverables note;
+  disposition 6(b)).
+- `src/scheduler/launcher.js:426-431`, `:217-231`, `:472-478` — the vendored
+  launcher **does not trust the bound `WIENERDOG_HOME`**: it anchors its core to
+  its own on-disk location (`anchoredCore(__filename)`) and overwrites
+  `WIENERDOG_HOME` with that anchored value for both the fire-time digest
+  re-derivation (`derivationEnv`) and the child spawn
+  (`childEnv.WIENERDOG_HOME = core`). **Consequence, stated because it is easy to
+  get backwards:** a poisoned bind value never reaches `assertSafeOverride` at
+  fire time, so such a record **does** fire. Rule 4a's justification is
+  therefore *"our writer cannot have emitted it"*, **never** *"it cannot run"*.
 - `src/cli/schedule.js:184-195` — `windowsLoadedTaskMatches` compares a LOADED
   task's parsed Command/Arguments against canonical, and force-re-registers on
   any non-match.
@@ -312,7 +337,9 @@ non-test source is ≈195 lines across three files (round 3 added Table B1's
 alphabet + end-anchored grammar, step 8b, `repairCatchup`'s marker and its notice
 discipline — ≈45 lines; round 5 added one exported name, one `path.win32.resolve`
 pair in condition (c0) rule 4, and **deleted** a verification step — net ≈+3
-lines), still inside the `≤ ~400 lines` bound. **`src/cli/adopt.js`,
+lines; round 8 added condition (c0) **rule 4a**, a two-line component check
+mirroring `src/core/paths.js:23-29` — net ≈+2 lines), still inside the
+`≤ ~400 lines` bound. **`src/cli/adopt.js`,
 `src/cli/sync.js` and `src/core/paths.js` are deliberately NOT rows** even though
 rounds 3 and 5 examined all three: dispositions 1, 6(b) and 7 record why each was
 rejected rather than added. This spec's
@@ -325,12 +352,13 @@ licence to widen scope.
 **ARCHITECT'S SIZING NOTE — read before scheduling this WP (round 5).** The
 *source* diff is small and inside every bound; the **executable surface is not**.
 This spec now carries 5 canonical tables, 16 criteria, **28 mandated named
-tests** (AC-13 enumerates them) and **29 mutation checks**, and round 5 added no
-named test but did add a mutation (M29) and two owner decisions. That is at or
+tests** (AC-13 enumerates them) and **30 mutation checks**, and rounds 5 and 8
+each added no named test but did add a mutation (M29, M30) — round 5 also added
+two owner decisions. That is at or
 past what one implementer session can execute in a single pass, and the
 reviewer flagged it in round 4. **The recommended split, if the owner wants one,
 is the Windows leg**: Table B's `schtasks` row + Table B1 + AC-1's schtasks
-fixtures + M18/M22/M23/M24/M29 move to `WP-scheduler-entry-identity-windows`,
+fixtures + M18/M22/M23/M24/M29/M30 move to `WP-scheduler-entry-identity-windows`,
 depending on this WP; what stays is the launchd leg, the taxonomy, the probe seam,
 the heal and the marker. The split is clean because the two legs share only
 `loadedEntryTargets`'s signature, which the remaining WP still defines. **This is
@@ -368,7 +396,9 @@ function deriveIdentityArgv(schedulePath, platform = process.platform)
  *  `exec` belongs to defaultProbe step 8b), and never derives a path FROM THE
  *  PARSED TEXT. It does derive the expected core from `expectLauncher` —
  *  `path.win32.dirname` twice, Table B condition (c0) rule 4 — which is
- *  code-owned input, not scheduler output.
+ *  code-owned input, not scheduler output, and therefore needs no component
+ *  check of its own (rule 4a screens the PARSED value only; the expectation
+ *  already passed `assertSafeOverride` in this same process, `paths.js:55`).
  *  `verdict` is decided by the LAUNCHER position; `exec` is the EXECUTION
  *  position, reported and never compared (Table B, Table B1, Residual 9). `exec`
  *  is set whenever it could be parsed — including alongside a 'mismatch' — and
@@ -909,16 +939,80 @@ evaluation order is the one stated above):
      `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `ANTHROPIC_API_KEY` — each have the
      **empty** captured value (the generator emits the literal `set "NAME="` for
      them);
-  4. `WIENERDOG_HOME`'s bound value and the core derived from the expectation
-     are equal **as `path.win32.resolve()`-normalized paths** — NOT as raw
-     strings. Let `captured` be rule 1's capture 2 for the `WIENERDOG_HOME` bind
-     and `core` be `path.win32.dirname(path.win32.dirname(expectLauncher))` (the
-     launcher is `<core>\launcher\launch.js`, so the core IS derivable from the
-     expectation). Then:
-     `path.win32.isAbsolute(captured)` must hold — otherwise `indeterminate`,
-     and the `isAbsolute` gate is what keeps the comparison independent of
-     `process.cwd()` (`path.win32.resolve('evil')` prepends the cwd; an absolute
-     win32 path is returned unchanged) — and
+  4. `WIENERDOG_HOME`'s bound value must be a value **our own writer could have
+     emitted**, and must name the same core as the expectation. Let `captured` be
+     rule 1's capture 2 for the `WIENERDOG_HOME` bind and `core` be
+     `path.win32.dirname(path.win32.dirname(expectLauncher))` (the launcher is
+     `<core>\launcher\launch.js`, so the core IS derivable from the
+     expectation). Apply, **in this order**:
+
+     **4a — the component check, evaluated BEFORE any normalization.** Split
+     `captured` on `/[\\/]+/`; if the resulting array contains a `'.'` or a
+     `'..'` component → `indeterminate`. **This rule is a MIRROR of
+     `assertSafeOverride`'s own component scan (`src/core/paths.js:23-29`) —
+     `segs = value.split(/[\\/]+/)`, reject on
+     `segs.includes('..') || segs.includes('.')`. That function is the canonical
+     statement of what a usable `WIENERDOG_HOME` is; use its split regex and its
+     two component tests verbatim and do NOT re-derive an equivalent by hand.**
+     (Three review rounds of this spec have now lost a fact by restating a rule
+     that already existed in code; cite, do not restate.) Only the **component**
+     half of that function is mirrored — its absoluteness half is 4b below, which
+     must say `path.win32.isAbsolute` rather than the platform-native
+     `path.isAbsolute` the real function uses, because AC-1 parses Windows
+     arglines on a POSIX host. A trailing separator is **not** a `.` component
+     (`'C:\Users\bob\.wienerdog\'.split(/[\\/]+/)` ends in `''`, executed), and a
+     **leading-dot directory name** like `.wienerdog` is not one either — the test
+     is component **equality**, never a substring or a `startsWith('.')`.
+
+     **Why 4a is needed even with 4c's normalization.**
+     `path.win32.resolve()` maps many distinct strings onto the same directory,
+     so 4c alone accepts strings that are *not* the canonical bind. Executed this
+     session against arglines built by the real `windowsCmdArguments`, with
+     `expectLauncher = C:\Users\bob\.wienerdog\launcher\launch.js`: a bind of
+     `C:\Users\bob\.wienerdog\child\..` resolves to `C:\Users\bob\.wienerdog`,
+     passes 4c, reaches (d), and is graded **`match` → `loaded` → a green
+     `doctor`** — while `assertSafeOverride` rejects that exact value. Same for
+     `C:\Users\bob\.wienerdog\.\`. That is the round-4 defect's mirror image
+     (over-acceptance instead of over-rejection) and it is closed here, not by
+     widening 4c.
+
+     **The reason is "our writer provably cannot emit it", NOT "it cannot fire" —
+     state it correctly.** The tempting argument is that such a record dies at
+     fire time because `assertSafeOverride` throws on it. **That argument is
+     false and must not be written into this spec.** The vendored launcher
+     ANCHORS its core to its own on-disk location
+     (`src/scheduler/launcher.js:426-431`, `anchoredCore(__filename)`) and then
+     **overwrites** `WIENERDOG_HOME` with that anchored value for both the
+     fire-time digest re-derivation (`:217-231`, `derivationEnv`) and the child
+     spawn (`:472-478`, `childEnv.WIENERDOG_HOME = core`) — so the bound value
+     never reaches `assertSafeOverride` at fire time at all. The record **would**
+     fire. What is true, and is the whole reason (c0) rejects it, is that **we
+     could not have written it**: every `windowsCmdArguments` call site passes
+     `core: paths.core` (`schedule.js:315-320`, `:471-476`, `:629-634`, `:734`),
+     and `paths.core` is either an `assertSafeOverride`-validated override — which
+     rejects `.`/`..` components — or `path.join(home, '.wienerdog')`, which
+     collapses them. Executed: `getPaths({HOME:'/home/bob',
+     WIENERDOG_HOME:'/home/bob/.wienerdog/child/..'})` **throws**, and the
+     fallback branch yields `/home/bob/.wienerdog` for every one of
+     `HOME ∈ {'/home/bob', '/home/bob/', '/home/./bob', '/home/bob/x/..'}`. A bind
+     carrying such a component therefore did not come from us, and (c0)'s charter
+     is "**exactly** the canonical env-binding set" — not "any spelling that
+     denotes the same directory".
+     **And 4a cannot regress a healthy install** — the round-4 failure mode, which
+     is the one to check every time this rule is tightened. A user who sets
+     `WIENERDOG_HOME` to such a value gets a `WienerdogError` out of `getPaths` on
+     **every** wienerdog command, so no install can be running with one. 4a can
+     only fire on a record we did not write, and its verdict there is
+     `indeterminate` → `unverified` → a warn plus **one** heal that re-registers
+     the canonical argline, after which it is idempotent — not the permanent
+     warn-plus-churn Residual 1 rules out.
+
+     **4b — absoluteness.** `path.win32.isAbsolute(captured)` must hold —
+     otherwise `indeterminate`. This gate is what keeps the comparison
+     independent of `process.cwd()` (`path.win32.resolve('evil')` prepends the
+     cwd; an absolute win32 path is returned unchanged).
+
+     **4c — the normalized comparison.**
      `path.win32.resolve(captured) === path.win32.resolve(core)`.
      Use `path.win32` explicitly, on **both** sides, so the fixtures parse
      identically on a POSIX test host.
@@ -929,15 +1023,28 @@ evaluation order is the one stated above):
      validates `WIENERDOG_HOME` for absoluteness and rejects `.`/`..`, then
      returns the value **verbatim, unnormalized**, while `launcherPath` is a
      `path.join` and therefore normalizes. The two sides can differ on nothing
-     but separator flavor and a trailing separator. Executed this session against
-     arglines built by the real `windowsCmdArguments`:
+     but separator flavor and a trailing separator — and **with 4a in force that
+     is exactly the residual skew 4c is allowed to absorb**, which is what makes
+     4c a normalizer rather than a loophole. Executed this session against
+     arglines built by the real `windowsCmdArguments`, with
+     `expectLauncher = C:\Users\bob\.wienerdog\launcher\launch.js` throughout —
+     the third column is **the rule as specified above (4a+4b+4c)** and is the one
+     an implementer must reproduce:
 
-     | `WIENERDOG_HOME` in the argline | raw equality | `path.win32.resolve()` equality |
-     |---|---|---|
-     | `C:\Users\bob\.wienerdog` (the default shape) | rule 4 passes | rule 4 passes — **unchanged** |
-     | `C:\Users\bob\.wienerdog\` (trailing separator) | **`indeterminate`** — `cmdQuotedToken` doubles the trailing backslash run, so the bind carries `C:\Users\bob\.wienerdog\\` | rule 4 passes |
-     | `C:/Users/bob/.wienerdog` (forward slashes) | **`indeterminate`** | rule 4 passes |
-     | a genuinely **foreign** core bound while `expectLauncher` names ours (the incident's temp-core shape) | `indeterminate` | `indeterminate` — **the normalization does NOT over-accept**, which is the direction that matters for (c0)'s purpose |
+     | `WIENERDOG_HOME` in the argline | raw equality | `resolve()` alone (rounds 5-7) | **4a + 4b + 4c (this rule)** |
+     |---|---|---|---|
+     | `C:\Users\bob\.wienerdog` (the default shape) | `match` | `match` | **`match`** — unchanged |
+     | `C:\Users\bob\.wienerdog\` (trailing separator) | **`indeterminate`** — `cmdQuotedToken` doubles the trailing backslash run, so the bind carries `C:\Users\bob\.wienerdog\\` | `match` | **`match`** — 4a does not fire (the split's last element is `''`, not `'.'`) |
+     | `C:/Users/bob/.wienerdog` (forward slashes) | **`indeterminate`** | `match` | **`match`** |
+     | `C:\Users\bob\.wienerdog\child\..` (climb-and-return) | `indeterminate` | **`match` — the over-acceptance Codex found: a record graded healthy that our writer cannot emit** | **`indeterminate`** — 4a rejects the `'..'` component |
+     | `C:\Users\bob\.wienerdog\.\` (same directory, non-canonical spelling) | `indeterminate` | **`match`** | **`indeterminate`** — 4a rejects the `'.'` component |
+     | a genuinely **foreign** core bound while `expectLauncher` names ours (the incident's temp-core shape) | `indeterminate` | `indeterminate` | **`indeterminate`** |
+     | a **foreign launcher** in the exec position **and** a foreign core in the bind | `mismatch` | `mismatch` | **`mismatch`** — (d) still outranks (c0), unchanged |
+
+     Read the round-5 claim that "the normalization does not over-accept" as
+     **withdrawn**: rounds 5-7 proved only that it does not accept a *foreign
+     directory*, and rows 4-5 show it did accept **non-canonical spellings of the
+     right directory**. 4a is what makes the withdrawn claim true.
 
      Under the raw form those two supported shapes give permanent `unverified` →
      permanent `doctor` warn → digest template U forever → `schtasks /create /f`
@@ -1359,8 +1466,18 @@ is the recovery either way.
 - [ ] `defaultProbe` step 8 and **step 8b** — the only consumers of `exec`
 - [ ] Acceptance criteria AC-1 (including fixture (ii-b), the poisoned canonical bind), AC-2, AC-3c
 - [ ] Verification greps for `loadedEntryTargets` / `deriveIdentityArgv`; the darwin real-machine step 7 (**which asserts `.verdict`, not a bare string**)
-- [ ] Current state: `generators.js:20-22`, `:129-143`, `:261-270` (the canonical binding set condition (c0) binds to), `:494-497`, `:516-524`, `:530-532`, `:556-567`, `:622-631`; `schedule.js:184-195`
-- [ ] Mutation checks M1, M2, M15, M18, M22, **M29** (condition (c0) rule 4's normalized comparison), M25
+- [ ] Current state: `generators.js:20-22`, `:129-143`, `:261-270` (the canonical binding set condition (c0) binds to), `:494-497`, `:516-524`, `:530-532`, `:556-567`, `:622-631`; `schedule.js:184-195`; **`paths.js:21-31` (rule 4a's source of truth) and `launcher.js:426-431`/`:217-231`/`:472-478` (why rule 4a's justification is writer-canonicality, not runnability)**
+- [ ] Mutation checks M1, M2, M15, M18, M22, **M29** (condition (c0) rule 4's normalized comparison), **M30** (rule 4a's pre-normalization component check), M25
+- [ ] **`src/core/paths.js:23-29` — `assertSafeOverride`'s component scan
+      (`segs = value.split(/[\\/]+/)`; reject on
+      `segs.includes('..') || segs.includes('.')`), which condition (c0) **rule
+      4a** mirrors rather than restates.** It is **not** a Deliverables row
+      (nothing in this WP edits it — disposition 6(b) records why) and it is not
+      owner-signed prose but shipping code, so the mirror is kept true by citing
+      it at the point of use in rule 4a and in AC-1 (ii-b). If a future change
+      widens or narrows that function's component rule, rule 4a follows it in the
+      same pass — never the reverse, and never by hand-copying a
+      similar-looking regex
 - [ ] The **evaluation order** `(0) → (a) → (b) → the Table B1 split → (c) → (d) → (c0)` and
       the reason (d) outranks (c0) — mirrored in AC-1 (ii-b) and in the
       "Why (0), (a), (b) and (c0) map to `indeterminate`" note
@@ -1626,12 +1743,29 @@ Recorded here so a reviewer sees an argued decision rather than a silent drop.
    round-3 formatting constraints it imposed are withdrawn with it. Mutation M20
    is repurposed to redden a **test** instead of a grep.
    (b) **Table B condition (c0) rule 4 compares `path.win32.resolve()`-normalized
-   paths**, not raw strings — a healthy non-default `$WIENERDOG_HOME` (trailing
-   separator, or forward slashes) otherwise gets permanent `unverified` plus a
-   `schtasks /create /f` on every `sync` that never converges. `src/core/paths.js`
+   paths** (rule 4c), not raw strings — a healthy non-default `$WIENERDOG_HOME`
+   (trailing separator, or forward slashes) otherwise gets permanent `unverified`
+   plus a `schtasks /create /f` on every `sync` that never converges.
+   `src/core/paths.js`
    was **rejected** as the place to fix it: it would be an 8th deliverable and
    would change the identity of a security-validated value for every other
    consumer. Mutation M29 gates it.
+   **Round 8 bounded that normalization with rule 4a**, a component check applied
+   **before** it: round 6 review found `resolve()` alone accepts non-canonical
+   *spellings* of the right directory (`…\.wienerdog\child\..`,
+   `…\.wienerdog\.\`) and grades them `match` → `loaded` → green `doctor`, even
+   though `paths.core` — the only value any call site ever passes as `core` — can
+   never contain such a component. 4a is stated as a **mirror of
+   `assertSafeOverride`'s component scan (`src/core/paths.js:23-29`)** and cites
+   it rather than restating it; that file is still not a deliverable and is still
+   not edited. **Decided deliberately for `…\.wienerdog\.\`: it is REJECTED**,
+   even though it denotes the same directory and the round-6 reviewer read it as
+   a correct `match` on directory-equivalence grounds. (c0)'s charter is
+   "**exactly** the canonical env-binding set", and directory equivalence is not
+   canonicality — our writer cannot emit that string, so a record carrying it is
+   not one of ours and `unverified` (a warn plus one idempotent heal) is the
+   honest grade. Mutation M30 gates 4a; M29 does not, because reverting to the
+   raw comparison rejects both spellings for an unrelated reason.
    (c) **`repairCatchup` is added to `src/cli/schedule.js`'s `module.exports`.**
    AC-9c, AC-12b and AC-12c are literally unwritable without it — executed
    evidence under "Why `repairCatchup` is exported". No behavior, signature or
@@ -1951,8 +2085,20 @@ mechanism.
       `C:/Users/bob/.wienerdog` (forward slashes) → **`match`**. Executed this
       session: under the raw comparison both return `indeterminate`, and under the
       `path.win32.resolve()` comparison both return `match` while the default
-      shape `C:\Users\bob\.wienerdog` is unchanged. Mutations M18, M22 and M29
-      all target this test;
+      shape `C:\Users\bob\.wienerdog` is unchanged.
+      Assert in the same named test **the two NON-CANONICAL SPELLINGS rule 4a
+      rejects**, built the same way (same `core` value passed to
+      `windowsCmdArguments` and to `path.win32.join(core,'launcher','launch.js')`
+      — so the *expectation* is the canonical
+      `C:\Users\bob\.wienerdog\launcher\launch.js` in both, because
+      `path.win32.join` collapses the component):
+      `C:\Users\bob\.wienerdog\child\..` → **`indeterminate`**, and
+      `C:\Users\bob\.wienerdog\.\` → **`indeterminate`**. These are the round-6
+      finding: executed this session, both return **`match`** under a rule 4 that
+      normalizes without 4a — a record `launchctl`/`schtasks` reports fine, that
+      grades `loaded`, that shows green in `doctor`, and that our own writer
+      provably cannot emit (`getPaths` throws on the first and collapses the
+      second). Mutations M18, M22, M29 and M30 all target this test;
       (iii) **two `<Exec>` elements** (Table B condition (0)) where Exec₁ is a
       foreign command and Exec₂ is our canonical action → `indeterminate`;
       (iv) an **odd** double-quote count in the inner string → `indeterminate`;
@@ -2301,10 +2447,14 @@ mechanism.
       **(a) 22 tests named by a mutation row** — one per distinct name in the
       Mutation checks table: M1, M2, M3, M4, M5, M6, M7 (AC-5c), M8, M9,
       M10/M21 (AC-9a), M11, M12, M13 (AC-5b), M15, M16 (AC-12b-ii),
-      M18/M22/M29 (AC-1 (ii-b)), M19 (AC-3b), M20 (AC-5a),
+      M18/M22/M29/M30 (AC-1 (ii-b)), M19 (AC-3b), M20 (AC-5a),
       M23/M24 (AC-1 (vii)), M25 (AC-3c), M26/M27 (AC-9c), M28 (AC-12c).
-      Where two or three mutations name the same test it counts **once**; M14 and
+      Where two or more mutations name the same test it counts **once**; M14 and
       M17 name a verification step, not a test, so they count zero.
+      **Round 8 re-derived this, it did not assume it:** the round-8 revision added
+      mutation M30 and two AC-1 (ii-b) fixtures, both of which land in a test name
+      already counted here, so the distinct-name count is still 22 and the floor is
+      still 28. Nothing in this enumeration moved.
       **(b) 6 more mandated by a criterion but targeted by no mutation** —
       AC-1 (ix) the Residual 9 boundary, AC-9b, AC-12b-i, AC-2, AC-12's
       five-member gate, and AC-15.
@@ -2412,6 +2562,7 @@ confirm it **fails**, then revert. Paste the resulting table into the PR.
 | M27 | `repairCatchup`: gate its pre-destructive marker on `status !== 'missing'` | the same named test as M26 (AC-9c) — M26 removes the marker, M27 re-conditions it, exactly as M10/M21 do for `reloadMissing` |
 | M28 | `repairCatchup`: return `{ notice: 'restored the missing catch-up registration.' }` for **every** successful repair, not only an observed `missing` | `entry-identity: repairCatchup emits the "restored the missing" notice only for an observed missing entry` (AC-12c) |
 | M29 | Table B condition (c0) **rule 4**: revert the normalized comparison to the raw one — `captured === cmdQuotedToken(core)` instead of `path.win32.resolve(captured) === path.win32.resolve(core)` | **the same named test as M18/M22** (AC-1 (ii-b)) — the two healthy non-default-core fixtures return `indeterminate` instead of `match` (executed) |
+| M30 | Table B condition (c0) **rule 4a**: delete the pre-normalization component check (leave 4b+4c — i.e. exactly the rounds 5-7 rule) | **the same named test as M18/M22/M29** (AC-1 (ii-b)) — the `…\child\..` and `…\.wienerdog\.\` fixtures return `match` instead of `indeterminate` (executed). It needs its own row because **M29 does not cover it**: reverting to the raw comparison happens to reject both spellings for the wrong reason, so M29 stays red without 4a existing at all. **Adds NO new named test** — the fixtures live in the AC-1 (ii-b) test M18/M22/M29 already name, so AC-13's floor is unmoved |
 
 **Why M13 and M16 name the NEGATIVE test.** Passing `null` as `expect` makes
 every entry with a record `unverified`, and `unverified ∈ HEAL_SET` (Table A) —
@@ -2714,7 +2865,7 @@ The scenario harnesses (`WIENERDOG_RUN_SCENARIOS`) consume quota and need a real
    `defaultProbe` double-spawn on darwin, the `foreign`→`mismatched` rename, the
    **corrected** `alerts.jsonl` rationale, the bootstrap-first ordering,
    **step 8b's existence check and the fact that it maps to `mismatched` rather
-   than a sixth taxonomy member**, **`repairCatchup`'s notice discipline**, **the `repairCatchup` export and why the three catch-up criteria need it**, **condition (c0) rule 4's `path.win32.resolve()` normalization**, **the deletion of verification step 5c and the runtime guarantee that replaces it**, and
+   than a sixth taxonomy member**, **`repairCatchup`'s notice discipline**, **the `repairCatchup` export and why the three catch-up criteria need it**, **condition (c0) rule 4's `path.win32.resolve()` normalization (4c) and the `assertSafeOverride`-mirroring component check that bounds it (4a) — including why `…\.wienerdog\.\` is rejected despite denoting the right directory**, **the deletion of verification step 5c and the runtime guarantee that replaces it**, and
    anything else chosen under ambiguity — and `Generated-by:`.
    **"Discovered issues" must contain the two ADR-side items from
    disposition 5** (`docs/adr/0018-…:297`'s *"sync remains the sole healer"*,
@@ -2795,10 +2946,10 @@ on the amendment. If it ships, the PR body must name it as a known open defect i
 those words.
 
 **Item 11 (advisory, not blocking) — split the Windows leg?**
-See "ARCHITECT'S SIZING NOTE" under Deliverables. 28 mandated named tests and 29
+See "ARCHITECT'S SIZING NOTE" under Deliverables. 28 mandated named tests and 30
 mutations is at the edge of one implementer pass. The architect recommends
 `WP-scheduler-entry-identity-windows` (Table B's `schtasks` row, Table B1, AC-1's
-schtasks fixtures, M18/M22/M23/M24/M29) as a dependent WP, leaving the launchd
+schtasks fixtures, M18/M22/M23/M24/M29/M30) as a dependent WP, leaving the launchd
 leg here. The owner may decline; this WP is executable either way, just long.
 **Do not split before items 9 and 10 are answered**, and note the split is less
 clean than it looks: the Windows leg would still need Table A, Table C's seam
