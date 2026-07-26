@@ -548,20 +548,24 @@ runs on every exit path, which is why it goes there and not after the block.
 
 ## Contract reference
 
-The ADR-0031 activation test fires on **3 of 7**: (ii) a result taxonomy is
+The ADR-0031 activation test fires on **4 of 7**: (ii) a result taxonomy is
 introduced (clean / skip+notice / `LEAK` failure / `UNVERIFIABLE` failure, per
 call); (iii) structured parsing of `launchctl print` output — both the domain's
 `services` block and each record's `arguments` block
 is introduced; (iv) error/precedence behavior — which unverifiable condition
-fails closed and which single one is tolerated — is new and load-bearing.
+fails closed and which single one is tolerated — is new and load-bearing;
+(vii) the same contract appears in multiple mirrored surfaces — which is what
+drove the **Table E** extraction below.
 
-Four canonical tables follow. **Table A** owns every call disposition and the
+Five canonical tables follow. **Table A** owns every call disposition and the
 failure class that goes with it; **Table B** owns platform coverage; **Table C**
 owns the recursion-hazard properties; **Table D** owns the temp-origin predicate
-and exactly what bounds its completeness claim. A fifth canonical surface is not
+and exactly what bounds its completeness claim; **Table E** owns the
+non-vacuity gate — how a verification step proves the required tests actually
+ran. A sixth canonical surface is not
 a table but a string: **the contracted `LEAK` message** in "Exact contracts"
 owns that message's exact text, because AC-12 now asserts it by equality. All
-five are registered in the Mirrored Surface Checklist.
+six are registered in the Mirrored Surface Checklist.
 
 ### Table A — per-call disposition (canonical)
 
@@ -671,6 +675,36 @@ whole OS temp directory rather than only the current run's root"*, and it fails
 only for programs inside a temp directory. Nothing here widens, narrows, or
 contradicts a signed sentence, and **no ADR edit is required by this WP**.
 
+### Table E — the non-vacuity gate (canonical)
+
+Every fact about how a verification step proves **"the required tests actually
+ran"** is decided here. The gate instance in verification step 1 cites this
+table and supplies only its three parameters; it must not restate a rule.
+
+**Why this table exists.** Two consecutive Codex adversarial rounds landed
+findings on this one contract family — round 1 on `# SKIP` counting and a
+root-host false red, round 2 on platform enforcement and required-name
+substitution. That is ADR-0031's loop circuit-breaker condition verbatim
+(`docs/runbooks/codex-review.md`), so the machinery was **extracted here**
+instead of being patched a third time in place. Every earlier finding in this
+family is a row below.
+
+| # | Fact | Rule | Why it is not optional |
+|---|------|------|------------------------|
+| G1 | **runner** | `node tests/run.js` — never a bare `node --test`. `npm test -- …` is equivalent | `tests/run.js:7` is the only place `WIENERDOG_TEST_NO_REAL_SCHEDULER=1` is set. A bare `node --test` leaves it undefined and disarms the suite-wide real-scheduler backstop ADR-0018:172-180 declares binding |
+| G2 | **host prerequisite** | `process.platform !== 'win32'` **and** `typeof process.getuid === 'function'` **and** `process.getuid() !== 0` — evaluated **by `node`**, never by the shell | It must be the *same runtime the tests use*, because that is the runtime whose `process.platform` decides which tests skip. A shell test such as `[ "$(id -u)" -ne 0 ]` is **not** equivalent: under Git Bash/MSYS on non-root Windows `id -u` is non-zero, so a shell-only guard proceeds on a host where `process.platform === 'win32'` and the win32-guarded tests all skip |
+| G3 | **selection** | `--test-name-pattern` is a **regex**. Escape `(` `)` `[` `]` `{` `}` `.` `*` `+` `?` `\|` `^` `$` in any test name pasted into it | A pattern that matches nothing **exits 0** — the file wrapper counts as "pass 1" — so an unescaped paste makes a survived mutation indistinguishable from correct code |
+| G4 | **counting** | Count only TAP records matching the step's anchored family prefix, then subtract every record carrying a directive: `# SKIP` **and** `# TODO` | node:test renders both a skipped and an unexecuted-todo subtest as an `ok` line that the anchored grep matches. Converting a required test to `test.todo(...)` must **lower** the count, not preserve it |
+| G5 | **substitution defense** | **Zero** selected records may carry a directive. A selected record with `# SKIP` or `# TODO` is **itself a failure**, checked separately from and *before* the floor | The floor is an aggregate `>=`, so without this check N unrelated passing names in the same family can silently stand in for N skipped **required** ones and still clear the floor. G2 makes the common host cases red; G5 is the structural guarantee that does not depend on knowing the host |
+| G6 | **floor** | `>= N`, where N is **derived and re-enumerated**, never incremented narratively, and carries **zero slack** | Slack lets a missing required name pass. Zero slack means "miss one and the gate is red" — the property the floor exists for |
+
+**G2 and G5 overlap deliberately, and both stay.** G5 alone would catch every
+host defect G2 catches (on win32 six selected records carry `# SKIP`; as root,
+one does) — but it reports them as "a required name was skipped", which sends
+the reader hunting for a deleted test. G2 fires first and names the real cause,
+with the fix ("re-run as an ordinary user on a POSIX host"). G5 is the backstop
+for the cases G2 cannot enumerate.
+
 ### Mirrored Surface Checklist
 
 **Table A (per-call disposition)** — surfaces that mirror it:
@@ -772,6 +806,26 @@ surfaces that mirror it:
       bootstrap-first heal that the template's two repair steps encode. Changing
       the repair steps' order or separator contradicts that ADR and needs an
       amendment first, in a separate pass
+
+**Table E (the non-vacuity gate)** — surfaces that mirror it:
+
+- [ ] **Verification step 1** — the single runnable instance of the gate in this
+      spec. It supplies the three parameters (runner invocation, anchored family
+      prefix, floor) and cites G1-G6 for every rule; it must not restate one
+- [ ] **Acceptance criterion AC-9** — the floor's value and the
+      *passing-not-skipped-not-todo* qualifier (G4, G6)
+- [ ] **Current state → "The non-vacuity gate's command, executed at `6eb2d30`"**
+      paragraph — the 22-on-`main` measurement and the `37 = 22 + 15` derivation
+      (G6). It states the measured numbers, not the rules
+- [ ] **"The command, stated once" block** above the Mutation checks table — it
+      mirrors **G1 and G3** (the runner, and the regex-escaping rule) for the
+      mutation runs, which are a *different* use of the same two facts
+- [ ] Mutation check **M2** — the one row whose test name needs G3's escaping
+- [ ] **`docs/specs/WP-scheduler-entry-identity.md`'s Table F** — a *different
+      document* carrying its own local copy of this same contract, which
+      ADR-0005's One-Document Rule **requires** and ADR-0031's cross-document
+      boundary explicitly allows. It is a mirrored summary, not a second
+      authority: if a G-row changes here, change it there in the same pass
 
 Neither the ADR nor the logbook is in this WP's Deliverables and **neither may be
 edited from this branch**; they are registered so a future change to Table A, B,
@@ -1141,11 +1195,10 @@ assertion in this WP may read one**.
       block, below the block, or commented out all fail. Gated by M8 and M8b.
 - [ ] **AC-9** Every new test name is prefixed `scheduler-leak-guard:` (with a
       trailing space), and the non-vacuity gate in verification step 1 reports at
-      least **37** named passing subtests — **passing: not skipped, not todo**.
-      Step 1 filters `# SKIP` and `# TODO` records out and **enforces a non-root
-      POSIX host**, because one of the six guarded tests also skips under
-      `getuid() === 0` (see step 1's comment; as root the floor false-reds at
-      36). That floor is **derived, not
+      least **37** named passing subtests — **passing: not skipped, not todo**,
+      per **Table E G4/G6**, on a host satisfying **Table E G2** and with **zero**
+      selected records carrying a directive (**G5**). Table E decides those rules;
+      what this criterion owns is the **value 37**, which is **derived, not
       invented**: 22 pre-existing named subtests on `main` (counted by execution
       at `6eb2d30`; see Current state) **plus the 15 distinct test names the
       Mutation checks table requires to exist** — count them from the table: 22
@@ -1236,14 +1289,14 @@ node tests/run.js --test-name-pattern "<the test name from the last column>" \
 `npm test -- --test-name-pattern "<name>"` is equivalent and also acceptable.)
 Rows whose cell names a **verification step** are run by executing that step.
 
-**`--test-name-pattern` is a REGEX, not a literal — escape the metacharacters.**
-Pasting a test name verbatim is wrong whenever the name contains `(`, `)`, `[`,
-`]`, `{`, `}`, `.`, `*`, `+`, `?`, `|`, `^` or `$`. A pattern that matches
-nothing **exits 0** (the file wrapper counts as "pass 1", the same vacuity
-verification step 1 gates against), so an unescaped paste makes a *survived*
-mutation indistinguishable from correct code — the mutation check silently
-proves nothing. **Exactly one row below is affected: M2**, whose test name ends
-in `(domain print and record print)`. Run it as:
+**`--test-name-pattern` is a REGEX, not a literal — escape the metacharacters
+(Table E G3).** G3 decides this rule and G1 decides the runner; both apply here
+as well as in verification step 1, which is why the Mirrored Surface Checklist
+registers this block. A pattern that matches nothing **exits 0**, so an
+unescaped paste makes a *survived* mutation indistinguishable from correct code
+— the mutation check silently proves nothing. **Exactly one row below is
+affected: M2**, whose test name ends in `(domain print and record print)`. Run
+it as:
 
 ```bash
 node tests/run.js --test-name-pattern \
@@ -1304,69 +1357,50 @@ grep for a property the guard's own output can be asserted on** — assert the
 output.
 
 ```bash
-# 1. The guard suite, with a MACHINE-CHECKED non-vacuity gate. A bare
-#    `--test-name-pattern` that matches nothing exits 0 with "pass 1", because
-#    the FILE wrapper counts as a passing test — executed on this runner at
-#    efd1489 against tests/unit/scheduler-status.test.js with the pattern
-#    "zzz-definitely-nonexistent-pattern-42": exit 0, "ℹ pass 1". So count NAMED
-#    subtest records in the TAP stream instead.
+# 1. The guard suite, behind the NON-VACUITY GATE. Every rule below is decided by
+#    "Table E — the non-vacuity gate (canonical)"; this step is a registered
+#    mirror of it and supplies only three parameters:
+#      runner invocation → node tests/run.js … tests/unit/scheduler-leak-guard.test.js   (G1)
+#      anchored family prefix → "^ok [0-9]+ - scheduler-leak-guard: "                    (G4)
+#      floor → 37                                                                        (G6)
+#    Do NOT restate a G-rule here; if one is wrong, fix Table E and every surface
+#    its checklist registers, in one pass.
 #
-#    RUN IT THROUGH `node tests/run.js`, NOT a bare `node --test`. tests/run.js:7
-#    is the only place WIENERDOG_TEST_NO_REAL_SCHEDULER=1 is set; a bare
-#    `node --test` leaves it undefined, which disarms the suite-wide
-#    real-scheduler backstop ADR-0018:172-180 declares binding and drains M5 of
-#    discrimination. tests/run.js forwards argv to `node --test` unchanged, so
-#    the reporter and pattern flags work identically.
-#
-#    Executed evidence that this gate discriminates — this exact command, this
-#    runner, at 6eb2d30, against THIS file on `main`:
-#      pattern "scheduler-leak-guard" → 22 named subtests
-#      pattern "zzz-nope"             → 0 named subtests
-#
-#    NON-PASS TAP RECORDS MUST NOT COUNT. node:test renders BOTH a skipped and
-#    an unexecuted-todo subtest as an `ok` line that `^ok [0-9]+ - ` matches:
-#    `ok N - <name> # SKIP` and `ok N - <name> # TODO`. Either one would satisfy
-#    a count floor with a test that never ran — the exact vacuity this gate
-#    exists to prevent, reintroduced through the back door. Converting a required
-#    test to `test.todo(...)` must LOWER the count, not preserve it. Executed on
-#    this runner (Node 25.9.0) against a three-test probe:
-#      ok 1 - <name> # TODO      ← dropped by the filter
-#      ok 2 - <name> # SKIP      ← dropped by the filter
-#      ok 3 - <name>             ← counted
-#      # pass 1 / # skipped 1 / # todo 1   (exit 0 — the run itself is GREEN)
-#    Hence `grep -vE "# (SKIP|TODO)"` below, not a bare `grep -v "# SKIP"`.
-#
-#    PREREQUISITE — run this gate as a NON-ROOT POSIX user; it is ENFORCED on
-#    the line below, not merely documented. Two things skip on this file:
-#      - 5 tests guarded `{ skip: process.platform === 'win32' }`
-#      - 1 test (`assertNoLoaderInvoked — an UNWRITABLE log at assert time`,
-#        tests/unit/scheduler-leak-guard.test.js:177-181) guarded
-#        `win32 || (typeof process.getuid === 'function' && process.getuid() === 0)`
-#        — it needs POSIX permission enforcement, which root does not experience.
-#    So the floor of 37 has ZERO slack on a non-root POSIX host, is 36 as root
-#    (a FALSE red), and 31 on win32. Rather than make the arithmetic UID-aware —
-#    which would mean carrying a second floor and still having to prove all 37
-#    names exist — the gate DECLARES the host it is valid on and refuses to run
-#    anywhere else. That is the simpler of the two options and it cannot report a
-#    misleading green. On win32 the gate is RED and that is correct: the darwin
-#    arm this WP adds is unverified there (Table B's win32 row; CI has no Windows
-#    runner). Containerized runners commonly default to root — if this fires,
-#    re-run as an ordinary user; do NOT lower the floor.
-[ "$(id -u)" -ne 0 ] || { echo "PREREQUISITE UNMET: run this gate as a NON-ROOT POSIX user (as root the unwritable-log test skips and the floor of 37 false-reds at 36)"; exit 1; }
-n=$(node tests/run.js --test-reporter=tap --test-name-pattern "scheduler-leak-guard" \
-      tests/unit/scheduler-leak-guard.test.js \
-      | grep -E "^ok [0-9]+ - scheduler-leak-guard: " | grep -vE "# (SKIP|TODO)" \
-      | wc -l | tr -d ' ')
 #    PROVES: your new tests actually run AND the pre-existing ones still do.
-#    RED WHEN: any required test name is missing or failing (floor not met), or
-#    the pattern matches nothing (0). The floor is 22 (pre-existing, counted
-#    above) + 15 (the distinct test names the Mutation checks table requires:
-#    22 rows - 3 that name a verification step - 4 duplicates from the five
-#    AC-12 rows sharing one name) = 37, with ZERO slack. Re-derived in the
-#    round-5 pass and unchanged. See AC-9; raise it if you add a mutation row
-#    with a NEW test name.
-echo "named passing subtests: $n"
-[ "$n" -ge 37 ] || { echo "VACUOUS OR INCOMPLETE — the pattern selected $n named subtests"; exit 1; }
+#    RED WHEN: the host is not a non-root POSIX one (G2); any selected required
+#    name is skipped or todo (G5); or fewer than 37 required names passed (G6).
+#
+#    Measured inputs to the floor (NOT rules — see Current state for the
+#    derivation): 22 pre-existing named subtests on `main` at 6eb2d30, plus the
+#    15 distinct test names the Mutation checks table requires = 37, ZERO slack.
+#    Raise it in the same PR if you add a mutation row with a NEW test name.
+#    Same command with the pattern "zzz-nope" → 0, which is how we know the gate
+#    discriminates.
+
+# G2 — the host prerequisite, evaluated by NODE and not by the shell, because
+#      node's process.platform is what decides which tests skip. `id -u` is
+#      non-zero under Git Bash/MSYS on Windows and would let the gate proceed
+#      on a host where six required tests skip.
+node -e 'const posix = process.platform !== "win32" && typeof process.getuid === "function";
+if (!posix || process.getuid() === 0) {
+  console.error(`PREREQUISITE UNMET (Table E G2): need a NON-ROOT POSIX host; saw platform=${process.platform} uid=${typeof process.getuid === "function" ? process.getuid() : "n/a"}`);
+  process.exit(1);
+}
+console.log(`prerequisite OK (G2): platform=${process.platform} uid=${process.getuid()}`);'
+
+tap=$(node tests/run.js --test-reporter=tap --test-name-pattern "scheduler-leak-guard" \
+        tests/unit/scheduler-leak-guard.test.js)
+sel() { printf '%s\n' "$tap" | grep -E "^ok [0-9]+ - scheduler-leak-guard: "; }
+n=$(sel | grep -vE "# (SKIP|TODO)" | wc -l | tr -d ' ')
+d=$(sel | grep -E "# (SKIP|TODO)" | wc -l | tr -d ' ')
+echo "named passing subtests: $n   directive-carrying selected records: $d"
+
+# G5 — the substitution defense, checked BEFORE the floor so its message is the
+#      one you see. Without it, N unrelated passing names in this family can
+#      stand in for N skipped REQUIRED ones and still clear an aggregate `>=`.
+[ "$d" -eq 0 ] || { echo "VACUOUS — $d selected REQUIRED name(s) carried # SKIP/# TODO (Table E G5); extra passing names may NOT substitute for them"; exit 1; }
+# G6 — the floor.
+[ "$n" -ge 37 ] || { echo "VACUOUS OR INCOMPLETE — the pattern selected $n named subtests (Table E G6, floor 37)"; exit 1; }
 
 # 2. No regression anywhere, including the golden files.
 #    PROVES: nothing outside this WP's four files broke — the whole unit suite
