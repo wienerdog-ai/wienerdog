@@ -1,7 +1,7 @@
 ---
 id: WP-refusal-remedy-discriminator
 title: Choose the refusal remedy from a structured verdict class, so an app-tree tamper never tells the user to run `wienerdog sync`
-status: Draft
+status: Ready
 model: sonnet
 size: M
 depends_on: [WP-stance-authority-containment]
@@ -10,6 +10,34 @@ epic: audit-a7
 ---
 
 # WP-refusal-remedy-discriminator: the remedy is a class, not a constant
+
+> **DISPATCH STATUS — 2026-07-26: READY, and NOT dispatchable yet — the
+> dependency below is the reason, and it is the only one.** Both adversarial
+> review legs returned APPROVE after **five** review rounds (`5cb585d` →
+> `358e251`) — wd-reviewer, and Codex on its closing confirmation of the round-5
+> text, which found **no eighth qualifying defect**: gate table accurate, the
+> 6 completion / 6 regression split correct, the untouched-tree gate polarities
+> reproduced, R-P and its revised proof rule internally consistent, every mirror
+> matching its table. Nothing further is required from the architect or the owner
+> on the design.
+> **`depends_on` is not yet satisfied**: `WP-stance-authority-containment` is
+> `Ready`, not `Done`. `Ready` here means *design-complete and approved*, which
+> `docs/specs/README.md` gates **separately** from dependencies — "an implementer
+> may only pick up a `Ready` spec whose `depends_on` are all `Done`". **Do not
+> dispatch this WP until `WP-stance-authority-containment` has merged.** On a tree
+> without it, `docs/GLOSSARY.md`'s **production/dev stance** entry still names no
+> commands, so M1c's *"names the commands that qualify"* is false; the file still
+> carries **17** refusal sites rather than Table S's 16 (the STOP RULE covers the
+> counts, not this); and that spec's own Table C row C1 would later rewrite a site
+> on top of D4's `remedy` token without knowing the token exists.
+> Eight items are **routed and non-blocking**, reviewed and accepted as such by
+> both legs: the **six** Discovered issues of Definition of done item 3 (ADR-0028's
+> three false claims, `WP-stance-authority-containment`'s two falsified cells, and
+> `src/cli/schedule.js:409`); the **accepted dev-install consequence** under
+> Implementation notes' "Known consequence" — one persistent digest banner line on
+> the owner's own dogfooding machine; and the
+> `WP-launcher-no-self-resync-republish` cross-WP constraint in Context. All ride
+> along in the PR body; none is a precondition for starting.
 
 ## Context (read this, nothing else)
 
@@ -915,6 +943,14 @@ canonical home; the table's rows only say which block goes where:**
       item 5. It is a **citation, never a copy**: if that spec's recovery property
       or its D6 entry list changes, nothing here needs re-wording, and nothing
       here may be re-worded to "match" it
+- [ ] **The dispatch-status banner at the head of this spec** (registered at the
+      `Ready` flip). It names the `depends_on` dependency, the six routed
+      Discovered issues, the accepted dev-install consequence and the
+      `WP-launcher-no-self-resync-republish` cross-WP constraint **by name only**,
+      and carries no part of any of their treatments — not the recovery property,
+      not R-P, not R-T2's wording, not the "must not promise launcher repair"
+      instruction. If any of those changes the banner needs no re-wording, and it
+      may not be re-worded to "match" one
 
 ## Implementation notes & constraints
 
