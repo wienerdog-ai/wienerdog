@@ -122,9 +122,19 @@ inside the app tree**: `wienerdog sync` goes through the shim at
 `<core>/app/current/bin/wienerdog.js`, Node resolves module filenames through
 symlinks, and `packageRoot()` therefore returns `<core>/app/<version>` — the
 A7-writable tree itself. Executed this session (see Current state §9): it does.
-`vendorSelf` reads exactly **two** inputs from that tree, and this WP must remove
-both of their influence over containment, or binding the stance to containment
-merely relocates the hole a fourth time:
+**Two** of the inputs `vendorSelf` reads out of that tree can *select* containment,
+and this WP must remove both, or binding the stance to containment merely
+relocates the hole a fourth time. **That is a count of the inputs that can select
+containment — not a count of what the mint reads**, and the distinction is the one
+this spec's own rule line insists on (*"tree data cannot select containment"*,
+never *"tree data is not consulted"*). `vendorSelf` reads a **third** file out of
+that same tree: it ends with `writeLauncher(paths, …)` and passes no `sourceRoot`
+(`vendor.js:195`), so `:259` falls back to `packageRoot()` and it reads
+`<app tree>/src/scheduler/launcher.js` — **on the self-resync arm too**. That is a
+**code** read, it is Table G row **S1**, it is known-open and owner-routed, and it
+is exactly why every claim in this WP is scoped to **data**. (Registered mirror of
+"Table G — canonical scope statement", MECHANISM paragraph.) The two inputs that
+**select**:
 
 1. `readVersion(root)` (`vendor.js:13-15`) does `JSON.parse(…).version` with
    **zero validation**, and `package.json` is in `COPY_INCLUDE` (`vendor.js:7`) so
@@ -645,7 +655,7 @@ function readVersion(root)     // body unchanged except the validation + throw
  *  digest catches it until the next attended sync). Changing an install's stance
  *  otherwise requires running the installer from a DIFFERENT, NON-DEV source root
  *  (a git checkout links itself in place and stays dev), which is an attended
- *  act — WP-stance-authority-containment Table G row 1's recovery list.
+ *  act — WP-stance-authority-containment Table G row 1's recovery property.
  *  @returns {{version:string, target:string, dev:boolean, copied:boolean}}
  *    `dev` is now `installStance(paths) === 'dev'`, evaluated AFTER the repoint,
  *    so the value `src/cli/sync.js:206` prints agrees with Table A. */
@@ -860,8 +870,8 @@ never a security property (it is what an A7-planted `.git` suppressed) and it wa
 a real hazard: a maintainer whose worktree gitfile went missing would have had
 their dev install copied into `<core>/app/<version>` and repointed behind their
 back. Converting a dev install to prod is now an attended act: run the installer
-from a **different, non-dev** source root — the recovery paragraph below is the
-canonical list and a git checkout is **not** on it. Verified this session — install,
+from a **different, non-dev** source root — the recovery paragraph below states
+that property canonically, and a git checkout does **not** satisfy it. Verified this session — install,
 upgrade-from-a-new-source and self-resync all behave exactly as before
 (Implementation notes → "How the mint-time leg is closed").
 
@@ -885,53 +895,101 @@ verified this session: `tests/integration/adopt-e2e.test.js` contains no match f
 `vendorSelf`, `app/current`, `appDir` or `contained` — so nothing goes red; it is
 called out so a reviewer does not have to discover it.
 
-**The recovery path — CANONICAL. D6's last sentence and Definition of done item 7
-cite this list; neither may paraphrase it.** The sign-off in item 7 rests on this
-list being true, and round-4 review found one entry on it false, so it is stated
-once, here, with its mechanism.
+**The recovery path — CANONICAL. D6's shipped prose and Definition of done item 7
+cite this paragraph; neither may paraphrase it.** What is canonical here is a
+**property**. Round 7 subtracted the *enumeration* down to the two entries this WP
+can actually stand behind, and routed the rest; the reason is recorded below
+rather than absorbed, because the enumeration is the thing that keeps failing.
 
-Converting a non-contained (**dev**) install back to **prod** requires running the
-installer from **a non-dev source root** — that phrase, in those words, is what
-every restatement must carry. The mechanism: on the non-self-resync arm (row 1)
-`isDevCheckout(root)` still decides copy-vs-link, so a source root that has a
-`.git` takes `target = root`, `repointCurrent` points `current` at *that
-checkout* — still **outside** `<core>/app` — and the install stays **dev**.
-Executed round-4, identically on a conforming D1+D2+D8+D9 tree and on `main`:
-source root with `.git` ⇒ `dev`; source root without ⇒ `prod`.
+**THE PROPERTY — this is the canonical fact, and it is what every restatement must
+carry.** Converting a non-contained (**dev**) install back to **prod** requires an
+attended run whose **source root** — the directory `packageRoot()` resolves to,
+i.e. where Node loaded `vendor.js` from — is **provably not a dev checkout** (no
+`.git` at that root) **and provably not the tree `app/current` already resolves
+to**. The short form, in these words: run the installer from **a non-dev source
+root**. The mechanism: on the non-self-resync arm (row 1) `isDevCheckout(root)`
+still decides copy-vs-link, so a source root that has a `.git` takes
+`target = root`, `repointCurrent` points `current` at *that checkout* — still
+**outside** `<core>/app` — and the install stays **dev**. Executed round-4,
+identically on a conforming D1+D2+D8+D9 tree and on `main`: source root with
+`.git` ⇒ `dev`; source root without ⇒ `prod`. **The property is
+platform-independent** — it is decided by the presence of `.git` and by a
+`realpath` comparison, and neither has a platform-specific form.
 
-**STANDING RULE for this list, added in round 5 because the class is now
-undeniable.** Three consecutive review rounds each killed a *different* entry on
-it, and every one of the three was listed in one round and falsified by execution
-in the next: `install.sh` (listed round 2, killed round 3), an explicitly invoked
-fresh git checkout (listed round 3, killed round 4), a bare `wienerdog sync` after
+**STANDING RULE for entries, added in round 5 because the class was already
+undeniable.** Three consecutive review rounds each killed a *different* entry, and
+every one was listed in one round and falsified by execution in the next:
+`install.sh` (listed round 2, killed round 3), an explicitly invoked fresh git
+checkout (listed round 3, killed round 4), a bare `wienerdog sync` after
 `npm install -g` (listed round 4, killed round 5). Each false entry was written
-from *intent* rather than from execution. So: **every entry on this list must
-name an invocation whose source root is provably NOT a dev checkout AND is
-provably NOT the tree `app/current` already resolves to, and must be verified by
-running it before it is listed.** Naming the package manager is not enough — the
-entry must name the *invocation*, because what decides the outcome is which file
-Node loads `vendor.js` from (that is `packageRoot()`, hence `sourceRoot`), not
-which command installed it. The three corrections below are kept in the spec as
-corrections, not silently absorbed, precisely so the class stays visible.
+from *intent* rather than from execution. So: **every entry must name an
+invocation whose source root is provably NOT a dev checkout AND is provably NOT
+the tree `app/current` already resolves to, and must be verified by running it
+before it is listed.** Naming the package manager is not enough — the entry must
+name the *invocation*, because what decides the outcome is which file Node loads
+`vendor.js` from (that is `packageRoot()`, hence `sourceRoot`), not which command
+installed it. The corrections below are kept in the spec as corrections, not
+silently absorbed, precisely so the class stays visible.
 
-So the paths that **do** convert are exactly those whose source root is neither a
-git checkout nor the current install's own tree:
+**ROUND-7 SHIPPING RULE — a second condition, added because the round-5 rule was
+not sufficient and was violated by the pass that wrote it.** Round-7 review killed
+two more entries: one that named a **POSIX-only path** (a directory that does not
+exist on Windows) and one that named **no invocation at all**, which the round-5
+rule already forbade. That is five defective entries in five rounds, and the thing
+that fails is always the enumeration, never the property. So, in addition to the
+round-5 rule: **an entry may ship into user-facing prose (D6) only if the user
+supplies no filesystem path** — the invocation names a command and lets npm, npx
+or Wienerdog's own code compute the source root. An entry that requires the user
+to type a path is platform-shaped (path layout differs per platform), this WP can
+execute only POSIX, and an unverifiable path is precisely how a nonexistent
+Windows directory got as far as D6 — the text this WP ships into
+`docs/GLOSSARY.md` — in round 5.
+
+**The entries that satisfy both rules and therefore ship into D6 — exactly two:**
 
 - `npx wienerdog@latest sync` — runs `<npm cache>/…/wienerdog/bin/wienerdog.js`,
-  an npm/tarball extraction: no `.git`, and not where `current` points;
+  an npm/tarball extraction: no `.git`, and not where `current` points. The user
+  types no path; npx computes the root. Executed: matrix row 1 (POSIX).
 - a `wienerdog update` that lands a **newer** packaged version — `update.js:45-48`
   spawns the NEW `<core>/app/<newver>/bin/wienerdog.js sync`, a different root
-  from `current` and `.git`-free;
-- a global `npm install -g wienerdog` followed by **invoking the global binary by
-  its own path** — `"$(npm prefix -g)/bin/wienerdog" sync` — whose `packageRoot()`
-  is `<npm prefix>/lib/node_modules/wienerdog`, `.git`-free and not where
-  `current` points. **Bare `wienerdog sync` after that global install is NOT
-  recovery** (see below);
-- uninstall, then reinstall — `<core>` is gone, so the reinstall's non-dev source
-  root vendors a fresh contained tree.
+  from `current` and `.git`-free. The path is built by Wienerdog's own
+  `path.join`, not typed by the user. Executed: matrix row 2 (POSIX).
+
+**The two entries round 7 subtracted, each with the rule it broke.** Both stay
+here as executed evidence for the *property*; neither ships to D6.
+
+- **A global `npm install -g wienerdog` invoked by the binary's own path.** Round 5
+  listed `"$(npm prefix -g)/bin/wienerdog" sync`. The *invocation* converts on
+  POSIX (matrix row 3b, executed), but the written form is **POSIX-only**: on
+  Windows npm places its executable shims directly **under the prefix**
+  (`%APPDATA%\npm\wienerdog.cmd`), not under `<prefix>/bin`, and global packages
+  live at `<prefix>\node_modules\…`, not `<prefix>/lib/node_modules`. The shipped
+  command therefore named a path that does not exist on a **supported install
+  target** (this project ships schtasks scheduling for Windows), and nobody on this
+  WP can execute the Windows form to derive a correct one. Breaks the round-7 rule.
+- **"Uninstall, then reinstall."** Round 5 listed it, and it names **no
+  invocation** — which the round-5 rule, introduced by that same pass, forbids.
+  After `wienerdog uninstall`, running `wienerdog init` **from a fresh git
+  checkout** produces another **dev** install: that is matrix row X, executed, the
+  case this list already knows does not convert. The round-5 parenthetical
+  "(fresh `<core>`, tarball root)" named the root that was probed, not a command a
+  user would run to obtain it. Matrix row 4 is relabelled below as the property
+  probe it actually was. Breaks the round-5 rule.
+
+**OWNER ROUTING — the per-platform recovery procedure is not this WP's to write.**
+Writing "here is how you recover, on each supported platform" is user-facing,
+multi-platform operational documentation; it needs per-platform execution, and this
+WP has no Windows host. Carrying it here produced a defect in **every round in
+which it existed**. It is therefore routed to the owner as its own documentation
+task, with per-platform verification as its acceptance criterion (Discovered
+issues → Definition of done item 6.6). What this WP ships is the property plus the
+two path-free entries above, with their verification scope stated in D6's own text.
 
 **Three** things that are **not** recovery, each corrected in a different review
-round:
+round. Only the **fresh git checkout** one ships to D6 — its mechanism is `.git`
+presence, which is platform-neutral. The bare-`wienerdog` one is POSIX-shaped (see
+its bullet) and with the global-binary entry subtracted it has no referent in
+user-facing text anyway; `install.sh` was never in D6:
 
 - **Bare `wienerdog sync` after `npm install -g wienerdog`.** Round-4 listed this
   ("a global `npm install -g wienerdog` followed by `wienerdog sync`") and it is
@@ -945,7 +1003,14 @@ round:
   on the maintainer's own machine this session: `$HOME/.local/bin` is PATH
   position 4 and `/opt/homebrew/bin` (this box's `npm prefix -g`) position 5;
   `which wienerdog` resolves to the shim, which execs
-  `~/.wienerdog/app/current/bin/wienerdog.js`.
+  `~/.wienerdog/app/current/bin/wienerdog.js`. **This refutation is POSIX-scoped
+  and round 7 says so rather than shipping it further:** it rests on
+  `$HOME/.local/bin` preceding npm's global bin, and the instruction that puts it
+  there (`src/cli/sync.js:209`) is a bash `export PATH=…` line. On Windows
+  `writeShim` additionally writes `~/.local/bin/wienerdog.cmd`
+  (`vendor.js:326-329`) but nothing places `~/.local/bin` on a Windows PATH by
+  default, so the PATH-precedence premise may simply not hold there. Unverified on
+  Windows; not shipped to D6.
 - **An explicitly invoked fresh git checkout.** Round-3 listed this and it is
   **false**: from a different checkout `selfResync` is false but
   `isDevCheckout(root)` is **true**, so the non-self branch sets `target = root`,
@@ -955,23 +1020,31 @@ round:
   makes `:88` print *"wienerdog: already installed, nothing to do."* and return
   **before** `vendorSelf` on an existing install (executed).
 
-**The executed matrix (round 5), on a conforming D1+D2+D8+D9 tree.** Each row
-starts from a **dev** install (`current` → an out-of-`<core>/app` checkout with a
-`.git`) and runs `vendorSelf` out of that entry point's own tree, which is what
-makes `packageRoot()` — and therefore `sourceRoot` — the entry point's root:
+**The executed matrix (round 5, on macOS/POSIX), on a conforming D1+D2+D8+D9
+tree.** Each row starts from a **dev** install (`current` → an out-of-`<core>/app`
+checkout with a `.git`) and runs `vendorSelf` out of that entry point's own tree,
+which is what makes `packageRoot()` — and therefore `sourceRoot` — the entry
+point's root. **Read this as evidence for THE PROPERTY, not as a recovery menu**:
+rows 3b and 4 are probes of source roots, not entries a user can be told to run
+(round 7; see the subtraction bullets above). Row 4's round-5 label was
+"uninstall + reinstall"; round 7 relabels it to name what was actually probed —
+the `before`/`after` values are the measured ones and are unchanged.
 
 ```
 1. npx wienerdog@latest sync  (npm cache root)           before=dev   after=prod
 2. wienerdog update  (spawns <core>/app/<new>/bin)       before=dev   after=prod
 3a. npm i -g + bare `wienerdog sync` (shim wins PATH)    before=dev   after=dev
-3b. "$(npm prefix -g)/bin/wienerdog" sync  (global root) before=dev   after=prod
-4. uninstall + reinstall  (fresh <core>, tarball root)   before=dev   after=prod
+3b. global npm binary's own root (POSIX layout) [probe]  before=dev   after=prod
+4. fresh <core> + tarball source root           [probe]  before=dev   after=prod
 X. explicit fresh GIT CHECKOUT source root               before=dev   after=dev
-PASS: every listed recovery entry converts dev→prod; every non-entry stays dev
+PASS: every source root that is neither a dev checkout nor the install's own tree
+      converted dev→prod; every root that is one of those stayed dev
 ```
 
-Nobody is stranded, but the working recovery is the four-item list above, and
-**3a and X are on the list of things that look like recovery and are not.**
+Nobody is stranded: the property holds on all six rows, and the two invocations
+this WP ships (rows 1 and 2) are on it. **3a and X are the shapes that look like
+recovery and are not**, and X is why "uninstall, then reinstall" is not an entry —
+the reinstall a user is most likely to perform is a git checkout.
 
 ### Table G — canonical scope statement
 
@@ -1165,6 +1238,7 @@ of which cites or quotes that subsection and adds nothing:
 - [ ] Context → the "One clause … quoted, not endorsed" paragraph
 - [ ] Context → the "The canonical statement of that scope is …" paragraph (the qualifier list)
 - [ ] **Context → the V9 one-line invariant** (*"an attended `sync` carries containment forward, **or refuses**; no A7-scoped **data** write changes it"*, with its qualifier-(iii) note) — round-6 registration; it is the densest single-sentence form of the contract in the spec and it sat unregistered while rounds 1–5 corrected the paragraphs around it
+- [ ] **Context → "The mint-time half of the rule is the hard half"**, specifically its **two-inputs count** — round-7 registration. Through round 6 it read *"`vendorSelf` reads exactly **two** inputs from that tree"*, which is false as a **read** claim (`writeLauncher` reads a third, row S1) and is exactly the read/select conflation the MECHANISM paragraph forbids. It now counts the inputs that can **select containment** and names the third read. This is the first prose an implementer meets, and it sat unregistered while round 6 fixed the identical defect in Security checklist bullet 3
 - [ ] Deliverables → sizing paragraph's *"no A7-scoped **data** write decides containment"*
 - [ ] "Exact contracts" → `installStance`'s `SCOPE:` block and `vendorSelf`'s `SELF-RESYNC`/`SCOPE:` block (these ship into `src/`, so all three qualifiers **and** the mechanism wording must survive into the source comments — this is the mirror round-4 promoted from without auditing)
 - [ ] **Table G row 1's headline and its in-cell mechanism note** (*"nothing in the tree selects the target"*; *"`readVersion(root)` still runs"*) — round-5 registration
@@ -1184,21 +1258,43 @@ of which cites or quotes that subsection and adds nothing:
 - [ ] **D7 — `docs/THREAT-MODEL.md:277-279`** (the only mirror that carried both round-3 qualifiers through — it is the model the others were re-derived from)
 
 **Contract 2 — "how a non-contained install is converted back to prod". Canonical:
-Table G row 1's "The recovery path" paragraph** (the mandatory phrase is **"a
-non-dev source root"**; a git checkout is **not** one). Registered mirrors:
+Table G row 1's "The recovery path" paragraph.** What is canonical is **THE
+PROPERTY** — an attended run whose source root is provably not a dev checkout and
+provably not the tree `app/current` already resolves to; the mandatory phrase is
+**"a non-dev source root"**, and a git checkout is **not** one. The *enumeration*
+is subordinate to it and, since round 7, is bounded: only invocations that pass
+both the round-5 standing rule and the round-7 shipping rule ship into D6.
+Registered mirrors:
 
 - [ ] **D6 — `docs/GLOSSARY.md:30`**'s closing sentences
 - [ ] Migration Table F, the row-5 note (*"runs the installer from a different source root"*)
 - [ ] Implementation notes → "Why D9 is a subtraction and not a fifth guard"
 - [ ] Table G row 1's own scope paragraph (*"Converting a dev install to prod is now an attended act"*)
-- [ ] **Definition of done item 7** — the owner sign-off rests on this list being true
+- [ ] **Definition of done item 7** — the owner sign-off rests on this contract; since round 7 it names **what** he signs (the property, the two shipped entries, the stated macOS/Linux scope, and the routing of the rest), not "the list is true"
+- [ ] **Definition of done item 6.6** — round-7 registration; it is the routed remainder of this contract and must stay consistent with the round-7 shipping rule and with item 7
 
-**Contract 2 carries a STANDING RULE, not just a list** (round-5): every entry must
-name an invocation whose source root is provably non-dev **and** provably not the
-tree `app/current` already resolves to, and must be **verified by execution** before
-it is listed. Three consecutive rounds each falsified a different entry written from
-intent — `install.sh`, a fresh git checkout, a bare-`wienerdog` global install — and
-the corrections are kept visible in the paragraph rather than absorbed.
+**Contract 2 carries TWO RULES, not just a list.** Round-5's standing rule: every
+entry must name an invocation whose source root is provably non-dev **and**
+provably not the tree `app/current` already resolves to, and must be **verified by
+execution** before it is listed. Round-7's shipping rule: an entry may ship into
+user-facing prose (D6) only if **the user supplies no filesystem path**. Five
+consecutive rounds each falsified at least one entry written from intent —
+`install.sh`, a fresh git checkout, a bare-`wienerdog` global install, a POSIX-only
+global-binary path, and "uninstall, then reinstall" (which named no invocation at
+all, violating the rule its own pass introduced). All five corrections are kept
+visible in the paragraph rather than absorbed. **The lesson round 7 drew is
+structural, not editorial:** the property survived every round untouched and the
+enumeration failed in every round, so the enumeration was subtracted to what this
+WP can execute and the per-platform procedure was routed out (Definition of done
+item 6.6). Do not re-grow the list here.
+
+- [ ] **Table G row 1 → the ROUND-7 SHIPPING RULE paragraph and the two
+      subtraction bullets** — round-7 registration; they are where an entry is
+      admitted or refused, so a future round that wants to add a command must
+      amend them rather than the list
+- [ ] **Implementation notes → D6's rationale paragraph** (*"Five are now on
+      record …"*) — round-7 registration; it is the count of falsified entries and
+      it must match the two rules above
 
 Everything else in this spec:
 
@@ -1212,7 +1308,7 @@ Everything else in this spec:
 - [ ] Mutation checks (Table E) rows 1–10
 - [ ] Test index rows T1–T12
 - [ ] **Out of scope → the S1/S2 bullet and the `refuse()`-banner bullet**
-- [ ] **Definition of done item 6** — the five Discovered-issues entries mirror Table G rows S1/S2 and §10's amplification note
+- [ ] **Definition of done item 6** — **six** Discovered-issues entries since round 7; **6.3–6.5** mirror Table G rows S1/S2 and §10's amplification note (**6.6** is registered under Contract 2)
 - [ ] **Table G row 2's `isSemver` reuse** is mirrored in the "Exact contracts" require line, the D8 note, AC17's vector list and T11 — there is **no** predicate literal anywhere in this spec any more, and none may be reintroduced
 
 Out of this spec (all are Deliverables of this WP, so they move in the same PR):
@@ -1628,14 +1724,14 @@ with three rows whose ids, guards and outcomes match `cases.js` exactly:
 > the tree no longer matches the descriptor; a run *after* it need not. The
 > launcher re-observes containment at fire time and refuses whenever it disagrees
 > with the stance bound into the job descriptor, in either direction. Converting a
-> dev install to prod is an attended act: run the installer **from a non-dev source
-> root** — `npx wienerdog@latest sync`, a `wienerdog update` to a newer version, a
-> global `npm install -g wienerdog` **invoked by its own path**
-> (`"$(npm prefix -g)/bin/wienerdog" sync`), or uninstall/reinstall. Two things
-> that look like recovery and are not: a plain `git clone` (the installer links a
-> checkout in place, so the install stays dev), and a bare `wienerdog sync` after
-> that global install (the managed shim in `~/.local/bin` comes first on your PATH,
-> so it just re-enters the same install) (A7, WP-157,
+> dev install back to prod is an attended act, and what makes it work is a
+> property rather than one particular command: you must run the installer **from a
+> non-dev source root** — a copy of Wienerdog that is **not** a git checkout and is
+> **not** the tree this install already runs from. On macOS and Linux, two commands
+> are known to satisfy that: `npx wienerdog@latest sync`, and a `wienerdog update`
+> that installs a newer version. A plain `git clone` is **not** one of them: the
+> installer links a checkout in place, so the install stays dev. (On Windows the
+> same property applies; the exact commands are not documented yet.) (A7, WP-157,
 > WP-stance-authority-containment).
 
 Keep the entry's existing leading bullet and bolded term, and its trailing
@@ -1660,7 +1756,7 @@ The mapping, clause by clause, so the derivation is checkable:
 | (ii) TEMPORAL BOUND — **until the next attended `sync`** | *"only until that sync — every scheduled run before it refuses … a run after it need not"* |
 | (iii) DISJUNCTION — carried forward **or the call refuses** | *"either leaves `current` exactly where it already pointed, **or** … stops with a tamper message and changes nothing at all"* |
 | MECHANISM — tree data cannot **select** containment; it is not "not consulted" | *"nothing inside that tree chooses where `current` ends up … Nothing the installer reads out of that tree feeds that decision. It does still read the tree's `package.json` version — that is the version number it reports back to you — and that value is checked, so a tampered one stops the sync rather than steering it."* |
-| Table G row 1's recovery list (with its round-5 correction) | *"run the installer **from a non-dev source root** — `npx wienerdog@latest sync`, a `wienerdog update` to a newer version, a global `npm install -g wienerdog` **invoked by its own path** … or uninstall/reinstall. Two things that look like recovery and are not: a plain `git clone` … and a bare `wienerdog sync` after that global install"* |
+| Table G row 1's recovery **property**, plus the only two entries that pass the round-7 shipping rule, plus the one platform-neutral non-recovery | *"you must run the installer **from a non-dev source root** — a copy of Wienerdog that is **not** a git checkout and is **not** the tree this install already runs from. On macOS and Linux, two commands are known to satisfy that: `npx wienerdog@latest sync`, and a `wienerdog update` that installs a newer version. A plain `git clone` is **not** one of them"* |
 
 **Five wordings this entry must never revert to, with the command that kills
 each.** Each was in a shipped draft of this spec; each was executed by a reviewer
@@ -1707,9 +1803,18 @@ run `wienerdog sync`. A missing qualifier here states the amplification hazard
 The recovery sentence is also the sign-off item below: today the recovery from
 D9's deliberate behaviour change appears in **no** user-facing text, and this
 entry is where it becomes user-facing — which is why the corrections to it are
-load-bearing and not typo fixes. Two of them are now on record: round-4's (a git
-checkout does **not** recover) and round-5's (a bare `wienerdog` after
-`npm install -g` does **not** recover either — the managed shim wins the PATH).
+load-bearing and not typo fixes. **Five** are now on record — round-3's
+(`install.sh` does not recover), round-4's (a git checkout does **not** recover),
+round-5's (a bare `wienerdog` after `npm install -g` does **not** recover either —
+the managed shim wins the PATH), and round-7's two subtractions (the
+global-binary path form is POSIX-only; "uninstall, then reinstall" names no
+invocation). **Round 7 therefore changed the shape of what this entry ships**: the
+canonical fact is the *property*, the entry names only the two invocations that
+were executed **and** require the user to type no filesystem path, and it states
+its own verification scope ("on macOS and Linux") instead of implying every
+platform. The per-platform procedure is owner-routed (Definition of done item
+6.6). If you are tempted to add a command here, read Table G row 1's round-7
+shipping rule first — five of the last five additions were wrong.
 
 `docs/THREAT-MODEL.md:277-279` — replace the clause
 *"and the **production/dev stance** matches (a prod entry over a dev-looking tree
@@ -1810,7 +1915,7 @@ re-mint `prod` — the draft's row was wrong. After D9 the row is right for a ne
 reason: the self-resync branch carries the non-contained target forward, so the
 install stays a dev checkout and re-mints `dev`. The user who *wants* the
 conversion to prod runs the installer from a **non-dev** source root — Table G
-row 1's canonical recovery list; a git checkout is not one of them, it links
+row 1's canonical recovery property; a git checkout does not satisfy it, it links
 itself in place and the install stays dev. The correction matters because the difference between those two
 behaviours on `main` was selectable by planting a `.git` — the A2 finding — and
 D9 is what removes the choice rather than picking a side.
@@ -2391,9 +2496,10 @@ is **not** a finding and must not stall you. A mismatch **between your own two
 halves** is.
 
 ```bash
-# ── V9 (change) — THE MINT-TIME GATE (AC16, Table G). Does an A7-scoped DATA
-#     write change the containment an attended `sync` leaves behind? Five gated
-#     install shapes plus one reported-but-ungated KNOWN-OPEN shape (S2, §10b);
+# ── V9 (change) — THE MINT-TIME GATE (AC16, Table G). The invariant, with BOTH
+#     arms of qualifier (iii): an attended `sync` carries containment forward, OR
+#     the call refuses; no A7-scoped DATA write changes it. Five gated install
+#     shapes plus one reported-but-ungated KNOWN-OPEN shape (S2, §10b);
 #     `vendorSelf` is required THROUGH app/current so packageRoot() is the app
 #     tree, exactly as the shim makes it.
 #
@@ -2490,9 +2596,13 @@ const okContained = gitP.after === base.after && (verP.after === base.after || v
 const okOutside = outG.after === outB.after;
 const ok = okBaselines && okContained && okOutside;
 console.log(`KNOWN-OPEN (S2, §10b) contained-symlink-vendor carried forward: ${carried(symP)}  ← REPORTED, NOT GATED`);
+// Both verdict strings carry BOTH arms of qualifier (iii). A conforming
+// `contained-bad-version` row takes the REFUSES arm (after=REFUSED), so a PASS
+// line that said only "carries containment forward" would claim less than the
+// run proved and less than the canonical statement says — round-7 finding.
 console.log(ok
-  ? 'PASS: sync carries containment forward against DATA-shaped A7 writes'
-  : 'FAIL: an A7-scoped data write changed the containment an attended sync established');
+  ? 'PASS: every shape carried its containment forward, OR refused — no DATA-shaped A7 write changed it'
+  : 'FAIL: a shape neither carried its containment forward NOR refused — see the rows above');
 process.exitCode = ok ? 0 : 1;
 JS
 node "$SCRIPTS/v9-sync-containment.js" "$(mktemp -d "${TMPDIR:-/tmp}/wd-v9.XXXXXX")"; echo "EXIT=$?"
@@ -2504,8 +2614,12 @@ node "$SCRIPTS/v9-sync-containment.js" "$(mktemp -d "${TMPDIR:-/tmp}/wd-v9.XXXXX
 #   outside-plant-git          start=false  A7 write=git      after=false
 #   contained-symlink-vendor   start=true   A7 write=symlink  after=false      ← S2
 #   KNOWN-OPEN … carried forward: false  ← REPORTED, NOT GATED
-#   FAIL: an A7-scoped data write changed the containment an attended sync established
+#   FAIL: a shape neither carried its containment forward NOR refused — see the rows above
 #   EXIT=1
+# Round 7 re-executed this whole block after changing the two verdict literals
+# (the six row lines and the KNOWN-OPEN line are produced by unmodified code and
+# came back byte-identical to the round-4/5 measurement; only the verdict line is
+# new). It is the CURRENT literal, not a hand-edited one.
 # required after: `contained-bad-version` reads `REFUSED` with D8's message,
 #   `outside-clean` reads `after=false` (baseline carried), PASS, EXIT=0 — and
 #   `contained-symlink-vendor` STILL reads `after=false` / `carried forward:
@@ -2654,8 +2768,8 @@ false`, `PASS`, exit 0.
 5. Conventional commits; PR titled
    `fix(scheduler): bind the prod/dev stance to containment (WP-stance-authority-containment)`.
 6. PR template filled, including "Decisions made" (or "none"), `Generated-by:`,
-   and "Discovered issues" with **exactly these five** entries — recounted in
-   round-3 review; it was two:
+   and "Discovered issues" with **exactly these six** entries — recounted in
+   round-3 review (it was two) and again in round 7, which added 6.6:
    1. `docs/specs/WP-dev-descriptor-no-tree-hash.md`'s Test index still builds dev
       fixtures with `fs.mkdirSync(path.join(paths.core,'app','0.0.1','.git'))`, an
       idiom this WP invalidates. Architect's fix, not yours.
@@ -2677,15 +2791,39 @@ false`, `PASS`, exit 0.
    5. **The refusal banner amplifies S1** — `launcher.js:442-443` tells the user to run
       `wienerdog sync` after a C3 integrity refusal, which under S1 is the act
       that installs the attacker's launcher. User-facing hazard; owner-routed.
+   6. **The per-platform recovery procedure is undocumented, and deliberately so.**
+      D6 ships the recovery **property** plus the only two invocations that were
+      executed *and* require the user to type no filesystem path
+      (`npx wienerdog@latest sync`; a `wienerdog update` to a newer version), with
+      its verification scope stated in the text ("on macOS and Linux"). Windows is
+      a supported install target (schtasks) and has **no** documented recovery
+      command: the round-5 form `"$(npm prefix -g)/bin/wienerdog" sync` is
+      POSIX-only (Windows npm puts its shims directly under the prefix, and global
+      packages at `<prefix>\node_modules`), and no one on this WP has a Windows
+      host to derive and execute the correct form. Proposed disposition, for the
+      owner: a standalone documentation task, "recovering a dev-classified install,
+      per platform", whose acceptance criterion is **execution on each supported
+      platform**. Rationale for routing rather than guessing is in Table G row 1's
+      round-7 shipping rule. Do **not** add commands to D6 to close this.
 7. **Owner sign-off, requested explicitly in the PR body, not assumed.** D9
    deliberately changes one behaviour: a non-contained install is no longer
    silently converted to prod by a `vendorSelf` whose source root is that same
    tree (Table G row 1; it reaches both `vendorSelf` call sites,
    `src/cli/sync.js:204` and `src/cli/adopt.js:392`). Ask **Gyula** to sign off on
-   that change. The reason it needs a signature rather than a note: its only
-   recovery — run the installer from **a non-dev source root**, Table G row 1's
-   canonical recovery list, quoted there and not paraphrased here — appears in
-   **no** user-facing text today, and **three** successive drafts documented a
+   that change. **What he is signing, stated exactly, because round 7 changed it:**
+   (a) that the behaviour change is intended, and (b) that what D6 ships as its
+   recovery — **the property** (run the installer from **a non-dev source root**:
+   a copy that is not a git checkout and is not the tree this install already runs
+   from), **plus the two invocations that were executed and require no
+   user-typed path**, **plus the stated scope "on macOS and Linux"**, **with the
+   per-platform procedure routed out as Discovered issue 6.6** — is enough to ship
+   the change now. He is **not** signing off on a complete cross-platform recovery
+   menu; that is exactly what round 7 removed from this WP, and item 6.6 is the
+   commitment that replaces it. Quote Table G row 1's property sentence and its two
+   entries verbatim in the request; do not paraphrase, and do not add a third
+   entry.
+   The reason it needs a signature rather than a note: the recovery appears in
+   **no** user-facing text today, and **five** successive drafts documented a
    recovery that does not work. Round 3 found `install.sh` does not recover
    (`install.sh` invokes `wienerdog init`; `src/cli/init.js:87`'s guard makes
    `:88` print "already installed" and return before `vendorSelf`). Round 4 found
