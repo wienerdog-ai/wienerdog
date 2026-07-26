@@ -1207,7 +1207,36 @@ spec". Text this spec deliberately **removed** is quoted with plain double
 quotes instead, so the check needs no exemption list and can therefore only miss,
 never wrongly accuse. Both checks are an architect/reviewer step run before this
 spec leaves Draft — they are **not** Verification commands below, they touch no
-Deliverable, and they are deliberately not wired into `npm run lint`:
+Deliverable, and they are deliberately not wired into `npm run lint`.
+
+**Round 9: both checks now fail closed on their own inputs, because a gate that
+passes when it finds nothing is the more dangerous vacuity — a green run is read
+as proof.** Reviewed on the round-8 text, deleting the mapping-table header
+anchor still printed `PASS`: the verdict counted only mismatches, and a failed
+anchor search yields zero fragments to mismatch. The script therefore asserts
+every anchor it depends on — check A's D6 body start and end and its
+mapping-table header, check B's checklist heading and the closing `##` heading
+that bounds it — reports a missing one by name, asserts each located span is
+non-empty, and asserts a non-zero count against a floor: **check A ≥ 6 mapping
+rows and ≥ 10 quoted fragments; check B ≥ 14 quoted fragments.** Those are the
+counts this text yields today, and every run prints all three so the evidence is
+visible rather than inferred. Floors rather than exact counts, deliberately: this
+checklist grows every round by design, so an exact count would fire on each
+legitimate registration and train the next reader to bump the number without
+looking — the same reflex that produced the vacuous `PASS`. A floor fires only
+when coverage **shrinks**, which is the anchor-drift case. A legitimate shrink is
+possible (round 8 re-marked one registration to plain quotes per the convention
+above), so a floor failure prints as `COVERAGE FLOOR`, a distinct message class
+from `NOT VERBATIM`, and its remedy is to re-measure and lower the floor
+deliberately in the same pass — never to let it pass silently. The guards do not
+cost the one-directional property: each collection loop runs **only** when its
+own anchors resolved, so a missing anchor produces a vacuity failure and can
+never turn into a false accusation against a quotation that is in fact verbatim.
+They strengthen it, because the round-8 script could wrongly accuse. Executed:
+renaming check A's D6 *body* anchor rather than its table header left the body
+span empty and printed ten `NOT VERBATIM` lines against ten fragments that were
+verbatim — the silent `PASS` and the false accusation are the same missing-anchor
+bug read from its two ends, and one assertion closes both.
 
 ```bash
 GATE="$(mktemp -d "${TMPDIR:-/tmp}/wd-gate.XXXXXX")"   # never a fixed /tmp path
@@ -1217,44 +1246,101 @@ const L=fs.readFileSync(process.argv[2],'utf8').split('\n');
 const norm=s=>s.replace(/[*_]/g,'').replace(/\s+/g,' ').trim();
 const strip=s=>s.replace(/^(?:\/\/ ?|> ?|\| ?|- \[[ x]\] ?|- )+/,'');
 const clean=f=>norm(f).replace(/^[\s,;.—-]+|[\s,;.—-]+$/g,'');
-let bad=0;
+let bad=0,vac=0;
+// NON-VACUITY (round 9). A check that located nothing must FAIL, not report PASS
+// over an empty search. Floors are the counts this text yields; a floor firing
+// means coverage SHRANK — re-measure and lower it deliberately, never silently.
+// Every collection loop is guarded by its own anchors, which is what keeps the
+// one-directional property: a check may miss, it must never wrongly accuse.
+const MIN_A_ROWS=6, MIN_A_FRAGS=10, MIN_B_FRAGS=14;
+const at=(name,i)=>{if(i<0){vac++;console.log('ANCHOR NOT FOUND: '+name);}return i;};
+const floor=(name,n,min)=>{if(n<min){vac++;
+  console.log(`COVERAGE FLOOR: ${name}=${n}, expected >=${min}`);}};
 // A. Every fragment the D6 mapping table quotes is verbatim in the D6 body.
-const a=L.findIndex(l=>l.startsWith('`docs/GLOSSARY.md:30` — replace')),
-      b=L.findIndex(l=>l.startsWith("Keep the entry's existing"));
-const body=norm(L.slice(a,b).filter(l=>l.startsWith('> ')).map(l=>l.slice(2)).join(' '));
-const h=L.findIndex(l=>l.startsWith('| Canonical scope statement'));
-for(let i=h+2;i<L.length&&L[i].startsWith('|');i++){
+const a=at('A/D6 body start: "`docs/GLOSSARY.md:30` — replace"',
+        L.findIndex(l=>l.startsWith('`docs/GLOSSARY.md:30` — replace'))),
+      b=at('A/D6 body end: "Keep the entry\'s existing"',
+        L.findIndex(l=>l.startsWith("Keep the entry's existing"))),
+      h=at('A/mapping-table header: "| Canonical scope statement"',
+        L.findIndex(l=>l.startsWith('| Canonical scope statement')));
+let body='',aRows=0,aFrags=0;
+if(a>=0&&b>=0&&b<=a){vac++;console.log('ANCHOR ORDER: A/D6 body end precedes start');}
+if(a>=0&&b>a){
+  body=norm(L.slice(a,b).filter(l=>l.startsWith('> ')).map(l=>l.slice(2)).join(' '));
+  if(!body){vac++;console.log('ANCHOR EMPTY: A/D6 body span quotes nothing');}
+}
+if(h>=0&&body)for(let i=h+2;i<L.length&&L[i].startsWith('|');i++){
+  aRows++;
   const cell=L[i].split('|')[2];
   for(const m of cell.matchAll(/\*"([^"]+)"\*/g))
     for(const frag of m[1].split('…')){
       const f=clean(frag);
-      if(f && !body.includes(f)){bad++;console.log('A row '+(i-h-1)+' NOT VERBATIM: '+f);}
+      if(!f)continue;
+      aFrags++;
+      if(!body.includes(f)){bad++;console.log('A row '+(i-h-1)+' NOT VERBATIM: '+f);}
     }
 }
+floor('A rows',aRows,MIN_A_ROWS); floor('A fragments',aFrags,MIN_A_FRAGS);
 // B. Every `*"…"*` in this checklist is verbatim somewhere outside it.
-const cs=L.findIndex(l=>l.startsWith('### Mirrored Surface Checklist'));
-let ce=cs+1; while(ce<L.length&&!L[ce].startsWith('## '))ce++;
-const hay=L.filter((l,i)=>i<cs||i>=ce).map(l=>strip(norm(l))).join(' ').replace(/\s+/g,' ');
-let fence=false,reg='';
-for(let i=cs;i<ce;i++){
-  if(L[i].startsWith('```')){fence=!fence;continue;}   // skip this script itself
-  if(!fence)reg+=' '+L[i];                             // join: quotations wrap lines
-}
-for(const m of reg.replace(/\s+/g,' ').matchAll(/\*"([^"]+)"\*/g))
-  for(const frag of m[1].split('…')){
-    const f=clean(frag);
-    if(f && !hay.includes(f)){bad++;console.log('B REGISTRATION NOT VERBATIM: '+f);}
+const cs=at('B/checklist heading: "### Mirrored Surface Checklist"',
+         L.findIndex(l=>l.startsWith('### Mirrored Surface Checklist')));
+let ce=cs+1,bFrags=0; while(ce<L.length&&!L[ce].startsWith('## '))ce++;
+if(cs>=0&&ce>=L.length){vac++;console.log('ANCHOR NOT FOUND: B/checklist end ("## ")');}
+if(cs>=0&&ce<L.length){
+  const hay=L.filter((l,i)=>i<cs||i>=ce).map(l=>strip(norm(l))).join(' ').replace(/\s+/g,' ');
+  let fence=false,reg='';
+  for(let i=cs;i<ce;i++){
+    if(L[i].startsWith('```')){fence=!fence;continue;}   // skip this script itself
+    if(!fence)reg+=' '+L[i];                             // join: quotations wrap lines
   }
-console.log(bad?`FAIL (${bad})`:'PASS');
-process.exit(bad?1:0);
+  if(!hay){vac++;console.log('ANCHOR EMPTY: B/haystack outside the checklist');}
+  else for(const m of reg.replace(/\s+/g,' ').matchAll(/\*"([^"]+)"\*/g))
+    for(const frag of m[1].split('…')){
+      const f=clean(frag);
+      if(!f)continue;
+      bFrags++;
+      if(!hay.includes(f)){bad++;console.log('B REGISTRATION NOT VERBATIM: '+f);}
+    }
+}
+floor('B fragments',bFrags,MIN_B_FRAGS);
+console.log(`counts: A rows=${aRows} A frags=${aFrags} B frags=${bFrags}`);
+console.log(bad+vac?`FAIL (${bad} not-verbatim, ${vac} vacuity)`:'PASS');
+process.exit(bad+vac?1:0);
 EOF
 node "$GATE/spec-quote-check.js" docs/specs/WP-stance-authority-containment.md
-# PASS, exit 0. Round-6 ran check A on the round-5 text first: it printed
+# Round-9 evidence, all three runs against a copy of this file in "$GATE",
+# using the script text extracted from this very block:
+#   1. unmodified            -> counts: A rows=6 A frags=10 B frags=14 / PASS, exit 0
+#   2. mapping-table header anchor deleted
+#                            -> ANCHOR NOT FOUND: A/mapping-table header: …
+#                               COVERAGE FLOOR: A rows=0, expected >=6
+#                               COVERAGE FLOOR: A fragments=0, expected >=10
+#                               FAIL (0 not-verbatim, 3 vacuity), exit 1
+#      On the round-8 script this same mutation printed PASS, exit 0.
+#   2b. D6 body-start anchor renamed
+#                            -> ANCHOR NOT FOUND: A/D6 body start: …
+#                               plus the same two floors, FAIL, exit 1.
+#      This is the round-8 script's OTHER failure mode, and it is the mirror
+#      image of case 2: `a` went to -1, `L.slice(-1,b)` returned an empty span,
+#      and all TEN verbatim fragments were reported `A row … NOT VERBATIM` —
+#      ten false accusations, FAIL (10). Anchor assertions are therefore not
+#      only what stops the silent PASS; they are what makes "may miss, must
+#      never wrongly accuse" true in the missing-anchor case as well.
+#   3. the round-8 V1 shape reintroduced (Contract 2's row-5 registration put
+#      back to "a different source root")
+#                            -> B REGISTRATION NOT VERBATIM: runs the installer
+#                               from a different source root
+#                               counts: A rows=6 A frags=10 B frags=14
+#                               FAIL (1 not-verbatim, 0 vacuity), exit 1
+#      i.e. the fidelity check round 8 proved still works, unweakened.
+# Round-6 ran check A on the round-5 text first: it printed
 # `row 6 NOT VERBATIM: …` (that cell compressed the recovery list instead of
 # quoting it, and was rewritten as a real quotation), and it is the shape of
 # check that kills a MECHANISM cell whose sentence exists nowhere in the spec.
 # Round-8 ran check B on the round-7 text first. It printed two lines out of the
-# 19 quoted fragments in this subsection:
+# 14 quoted fragments this subsection then carried (round 9 re-ran that replay
+# and measured 14, from 13 elidable marks; the round-8 comment said 19, a count
+# written rather than executed — corrected here, the two printed lines stand):
 #   B REGISTRATION NOT VERBATIM: runs the installer from a different source root
 #   B REGISTRATION NOT VERBATIM: `vendorSelf` reads exactly two inputs from ...
 # The first is the Contract-2 miss described above and was fixed. The second is
