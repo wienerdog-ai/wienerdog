@@ -1010,7 +1010,9 @@ third class to resolve it.
 ### Test index (all in `tests/unit/launcher.test.js`, appended)
 
 Prefix every new test name with `remedy:` followed by a single space, so
-`--test-name-pattern "remedy: "` selects exactly this WP's tests.
+`node tests/run.js --test-name-pattern "remedy: " tests/unit/launcher.test.js`
+selects exactly this WP's tests. The flag must precede the file path — after it,
+node ignores it and runs the whole file (executed; see verification step 3).
 
 | id | Test | Asserts | Mutation partner that reddens it |
 |----|------|---------|----------------------------------|
@@ -1152,7 +1154,16 @@ sweep claimed "every gate was proven in both directions" while enumerating only
 three buckets, and review then found **two** gates that were in none of them and
 that had *both* of the other faults. That claim is therefore re-established here
 **gate by gate**, not in the abstract. Every row below was executed this session on
-a correct state and on a deliberately broken one, and judged by **exit code**:
+a correct state and on a deliberately broken one, and judged by **exit code**
+(step 3 is the one exception, and its row says why).
+
+**The table's own completeness is part of the gate.** Three separate rounds have
+falsified a blanket "the gates are complete" claim — an acceptance criterion with
+no gate, a gate anchored on a string the correct text keeps, and a command that
+had no row here at all and was a silent no-op precisely because nobody had argued
+about it. So: **every command in steps 1 through 7 has a row in this table, and
+adding a command means adding its row in the same edit.** Presence in the table
+is itself the thing to check.
 
 | gate | verdict comes from | proved green on | proved red on |
 |---|---|---|---|
@@ -1160,6 +1171,7 @@ a correct state and on a deliberately broken one, and judged by **exit code**:
 | step 2 `before`/`stale`/`after`/`sync`/`tied` | five `grep -c` outputs assigned to **variables**; no `\|\|`/`&&` marker reads grep's status, and each assignment already swallows the exit-1-on-zero with `\|\| true` (`before` is guarded instead, by `test "$before" -gt 0`) | `baseline=17 stale=0 conforming=17 sync=4 tied=1` ⇒ `GATE-OK` | (a) one site reverted ⇒ `stale=1 conforming=16`; (b) one `reinstall` promoted ⇒ `sync=5`; (c) the ternary dropped ⇒ `tied=0`. All three ⇒ `GATE-FAIL` |
 | step 2 `GATE-OK`/`GATE-FAIL` marker | `test`'s exit status, never grep's | as above | as above |
 | step 2 **reason-drift `diff`** | **the raw exit code of `diff`** — there is no `\|\|` marker to get backwards | a token-only correct transformation, **committed** ⇒ `exit=0` | one character changed in any reason string ⇒ `exit=1` and the differing lines print |
+| step 3 `node tests/run.js --test-name-pattern … <file>` | **the ✔ line naming T1** — *not* the count and *not* the exit code. A pattern that matches nothing prints `tests 1  pass 1  fail 0` and **exits 0**, with the ✔ line naming the *file*; a genuine single match prints identical counts. Executed both this session against a scratch fixture. So the row requires the ✔ line to read `remedy: refusalText('sync') is byte-identical to the shipped banner`, and `pass 1  fail 0` alongside it | the implemented tree | mutating one character of `REMEDY_TAIL.sync` ⇒ `fail 1`, non-zero exit. Also red-by-inspection if the flag is moved after the path: the run becomes all 27 tests (executed) |
 | step 4, five `grep -n PAT file \|\| echo "<X>-OK"` | grep exits 1 (stale form absent) ⇒ marker prints; exits 0 (present) ⇒ no marker | the five anchors, each matching **exactly once** on the pre-change tree — so on the pre-change tree each prints its line, `exit=0`, and **no** marker: the correct red state | applying the replacement makes each anchor vanish ⇒ marker prints |
 | step 4 `grep -c "production/dev stance"` | printed count, no marker | `1` after M1c lands | `0` on the pre-change tree (executed) |
 | step 4 `grep -cE` recovery sweep | printed per-file counts, no marker | the stated baseline (executed: `1 / 3 / 2 / 0`) | any count going **up** |
@@ -1263,10 +1275,26 @@ rules out the degenerate "two empty streams compare equal" case.
 **3. The `sync` banner is byte-identical to today's.**
 
 ```bash
-node tests/run.js tests/unit/launcher.test.js --test-name-pattern "remedy: refusalText\('sync'\)"
+node tests/run.js --test-name-pattern "remedy: refusalText\('sync'\)" tests/unit/launcher.test.js
 ```
 
-Expect 1 pass. *Red input:* change one character of `REMEDY_TAIL.sync`.
+**The flag must come *before* the file path.** `tests/run.js:8` forwards argv
+verbatim to `node --test`, and node silently ignores a `--test-name-pattern` that
+follows a positional path: executed this session, the flag-after-path form ran
+the whole file (`tests 27, pass 27, fail 0`) while the form above selects. Round
+3's draft carried the flag last, so its stated "Expect 1 pass" was unreachable.
+
+**The verdict is the printed test name, not the count and not the exit code.**
+When the pattern matches nothing, node reports the *file* as one passing entity —
+`tests 1  pass 1  fail 0`, exit 0, with the ✔ line naming
+`tests/unit/launcher.test.js` instead of a test. A genuine single match prints
+exactly the same counts. Both executed this session against a scratch fixture, so
+`pass 1` alone cannot tell them apart. Expect a ✔ line reading
+`remedy: refusalText('sync') is byte-identical to the shipped banner`, then
+`tests 1  pass 1  fail 0`. If the ✔ line is a file path, the pattern selected
+nothing and this step proved nothing.
+*Red input:* change one character of `REMEDY_TAIL.sync` — T1 fails, `fail 1`,
+non-zero exit.
 
 **4. The prose gates.**
 
