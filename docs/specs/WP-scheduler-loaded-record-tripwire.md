@@ -1,7 +1,7 @@
 ---
 id: WP-scheduler-loaded-record-tripwire
 title: Give the scenario harnesses a LOADED-RECORD tripwire that catches stale cross-run scheduler leaks
-status: Draft
+status: Ready
 model: opus
 size: M
 depends_on: []
@@ -10,6 +10,20 @@ epic: scheduler-integrity
 ---
 
 # WP-scheduler-loaded-record-tripwire: the harness must read the record, not the file
+
+> **DISPATCH STATUS — 2026-07-26: READY. No owner decision blocks this WP, and
+> nothing further is required from the owner before an implementer starts.**
+> Both adversarial review legs returned APPROVE — **wd-reviewer at round 3,
+> Codex at round 6** — with no class-(a) or class-(b) findings outstanding.
+> `depends_on` is **empty** and correctly so: this WP touches no `src/` file and
+> imports no product module, so it is order-independent with respect to its
+> sibling `WP-scheduler-entry-identity`. That sibling must also merge before the
+> incident class is closed (Definition of done item 5), but it gates nothing
+> here — the `LEAK` message's repair advice is true both before and after it
+> lands. **Residual 8** (the different-temp-base blind spot) and the **routed
+> launcher-identity follow-on** ("Considered and rejected this round") are
+> deliberate, reviewed scoping: a future WP and a PR-body statement
+> respectively, not dispatch blockers.
 
 ## Context (read this, nothing else)
 
