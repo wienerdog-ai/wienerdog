@@ -140,8 +140,10 @@ merely relocates the hole a fourth time:
    where a clean sync would have copied it inside.
 
 Both are fixed here, both by **subtraction** (Table G), and the result is a
-single checkable invariant, V9: *an attended `sync` carries containment forward
-verbatim; no A7-scoped **data** write changes it.*
+single checkable invariant, V9: *an attended `sync` carries containment forward,
+**or refuses**; no A7-scoped **data** write changes it.* (The "or refuses" arm is
+qualifier (iii) of "Table G — canonical scope statement" and is not optional — the
+rewritten-`version` shape takes exactly that arm.)
 
 **What this WP does NOT close, stated up front so no claim in it is read wider
 than it holds.** Round-3 review found — independently, from two reviewers, and
@@ -159,17 +161,21 @@ A7 inputs, and the code-substitution channel is named, gated by the fire-time
 tree digest **only until the next attended `sync`**, and **routed to the owner** —
 it is explicitly out of this WP's scope (Out of scope, Discovered issues).
 
-**The canonical statement of that scope is Table G's last row, and this paragraph
-is a citation of it, not a second source.** That row carries two qualifiers —
-(i) the scope is A7-scoped **DATA** inputs, never "file content", because code
-*is* file content; (ii) the digest control holds **only until the next attended
-`wienerdog sync`**. Three review rounds each found one of those qualifiers dropped
-in one downstream copy, so round-4 stopped paraphrasing: **every restatement of
-"what an A7 write cannot do" anywhere in this spec, in `docs/GLOSSARY.md` (D6) and
-in `docs/THREAT-MODEL.md` (D7) quotes or cites Table G's last row and adds nothing
-to it.** If you believe the scope is wrong, change that row first; if you find a
-restatement that is not registered in the Mirrored Surface Checklist, register it
-in the same pass.
+**The canonical statement of that scope is the subsection "Table G — canonical
+scope statement", and this paragraph is a citation of it, not a second source.**
+That subsection carries three qualifiers — (i) the scope is A7-scoped **DATA**
+inputs, never "file content", because code *is* file content; (ii) the digest
+control holds **only until the next attended `wienerdog sync`**; (iii) the
+conclusion is a **disjunction** — containment is carried forward **or the call
+refuses**. Four review rounds each found one of those qualifiers dropped in one
+downstream copy, so round-4 stopped paraphrasing: **every restatement of "what an
+A7 write cannot do" anywhere in this spec, in `docs/GLOSSARY.md` (D6) and in
+`docs/THREAT-MODEL.md` (D7) quotes or cites that subsection and adds nothing to
+it.** Round-5 added a fourth discipline after the extraction itself introduced a
+false mechanism clause: **a clause promoted INTO the canonical statement must be
+executed and registered like any other change to it.** If you believe the scope is
+wrong, change that subsection first; if you find a restatement that is not
+registered in the Mirrored Surface Checklist, register it in the same pass.
 
 That scoping is not a face-saving retreat, and the residue is worth shipping:
 an **empty `.git` directory contributes zero pairs to `appTreeDigestOf`**
@@ -485,7 +491,8 @@ ADR-0028-level decision.
 **What still holds, and why the WP is worth shipping anyway.** Both (a) and (b)
 are **code substitutions**, so both change `appTreeDigestOf` and are refused by
 any fire that happens **before** the next attended `sync` (reason C3 — the
-temporal bound is Table G's last row, qualifier (ii), and it is not optional).
+temporal bound is qualifier (ii) of Table G's canonical scope statement, and it is
+not optional).
 The plant this WP removes — an **empty `.git` directory** — contributes zero pairs
 to that digest (`launcher.js:133`), so it is invisible to the prod check *and*
 self-concealing. Closing the invisible channel while naming the visible one is a
@@ -505,8 +512,9 @@ exhaustive, and if you find another invisible route, that is a finding to raise 
 not a guard to add here (Out of scope).
 
 **AMPLIFICATION — a user-facing hazard, written down rather than left inferable.**
-`launcher.js`'s `refuse()` banner — the expression starts at `:441` and the
-sentence below is at **`:442-443`** — reads, verbatim: *"If the change was
+`launcher.js`'s `refuse()` banner — the `refuse` arrow function is `:439-448`, its
+`reason` string `:440-443`, and the sentence below is at **`:442-443`** — reads,
+verbatim: *"If the change was
 intentional, run `wienerdog sync`; otherwise investigate."* Combined with (a),
 a **C3 integrity refusal instructs the user to perform the exact act that
 installs the attacker's `launch.js`** — the refusal that detected the tamper is
@@ -623,9 +631,13 @@ function readVersion(root)     // body unchanged except the validation + throw
 /** …existing doc comment, plus:
  *  SELF-RESYNC: when the running installer IS the tree `app/current` already
  *  resolves to (the shim path on every install), `current` is left pointing
- *  exactly where it pointed and NO signal inside that tree is consulted —
- *  neither `.git` nor `version`. Containment is therefore carried forward
- *  verbatim by every attended `sync`, against DATA-shaped A7 writes (V9).
+ *  exactly where it pointed and NO signal inside that tree can SELECT that
+ *  target: `isDevCheckout` is not called at all, and `target` is the realpath of
+ *  `current` itself. `readVersion(root)` still runs (it always did — it is the
+ *  returned/printed `version`), but its value cannot reach the target path and is
+ *  strict-semver validated, so a tampered version REFUSES the call instead of
+ *  moving containment. Against DATA-shaped A7 writes an attended `sync` therefore
+ *  carries containment forward, OR refuses (V9).
  *  SCOPE: this says nothing about an A7 write that REPLACES this module's code
  *  or relocates packageRoot() via a symlink — the mint runs out of the tree it
  *  is vendoring, so that channel is structural and is NOT closed here
@@ -684,24 +696,44 @@ may consult, **this WP's scope boundary** and **the recovery path**). Table G wa
 added in the round-1 revision after review showed the stance rule is only as good
 as the function that establishes containment, and extended in round-3 with rows
 S1/S2 after review showed the same is true of the *code* that function is made of.
-Every statement about `readVersion`, `vendorSelf`, or **the reach of an A7-scoped
-write** anywhere in this spec defers to it — including every scoped claim in D6
-and D7. The version predicate is deliberately **not** a fourth canonical table:
-Table G row 2 delegates to the one that already exists (`isSemver`), so this spec
-contains no predicate literal to drift.
+Its two dense contracts each have their own named home — the subsection **"Table G
+— canonical scope statement"** and **Table G row 1's "The recovery path"
+paragraph** — because a contract that lives in a grid cell is a contract nobody can
+review (see below). Every statement about `readVersion`, `vendorSelf`, or **the
+reach of an A7-scoped write** anywhere in this spec defers to them — including
+every scoped claim in D6 and D7. The version predicate is deliberately **not** a
+fourth canonical table: Table G row 2 delegates to the one that already exists
+(`isSemver`), so this spec contains no predicate literal to drift.
 
 **Round-4 was an extraction pass, not another revision, and the reason is worth
 stating.** Rounds 1-3 each rewrote the *prose* describing the reach of an A7
 write, and each rewrite was falsified by execution in the next round — every time
-in a downstream **copy**, never in Table G's own last row. Under ADR-0031's loop
+in a downstream **copy**, never in the canonical text. Under ADR-0031's loop
 circuit-breaker the remedy is not a fourth paraphrase but the remedial extraction
 move: state the contract once, canonically; turn every restatement into a citation
-or a quotation of that one cell; register every mirror. Round-4 did that for
-**two** contracts — the scope boundary (Table G's last row) and the recovery path
-(Table G row 1's recovery paragraph, whose round-3 wording was itself falsified) —
-and the Mirrored Surface Checklist now lists both mirror sets explicitly. **If you
-are about to write a fresh sentence about what an A7 write can or cannot do, or
-about how a dev install converts to prod: don't. Quote the cell.**
+or a quotation of that one place; register every mirror. Round-4 did that for
+**two** contracts — the scope boundary and the recovery path (Table G row 1's
+recovery paragraph, whose round-3 wording was itself falsified) — and the Mirrored
+Surface Checklist lists both mirror sets explicitly. **If you are about to write a
+fresh sentence about what an A7 write can or cannot do, or about how a dev install
+converts to prod: don't. Quote the canonical text.**
+
+**Round-5 is what the extraction still missed, and it is the reason two more rules
+now attach to the canonical surfaces.** Round-4's extraction succeeded on what it
+targeted and failed on what it did not audit: it lifted the self-resync *mechanism*
+clause out of an unaudited mirror (`vendorSelf`'s JSDoc) straight into the
+canonical cell, where the clause turned out to be **false** by execution — a
+settled-contract reinterpretation by side effect, the cell's facts changed without
+the mechanism ever being registered as part of the contract. Two rules follow, and
+both are now stated at the canonical surfaces themselves:
+
+1. **Promotion is not a copy operation.** A clause promoted INTO a canonical
+   surface must be executed and registered in the same pass, exactly like any
+   other change to that surface.
+2. **A canonical contract does not live in a grid cell.** The scope statement was
+   ~1400 characters wedged under Before/After headers that meant nothing for it;
+   round-5 lifted it into its own subsection. Table G stays the index; the
+   contract has a readable, diffable home.
 
 ### Table A — the stance rule (canonical; every other statement defers to this)
 
@@ -776,20 +808,27 @@ otherwise pass this test forever.
 
 Table A says containment decides the stance. Table G is what makes that
 statement worth anything: it is the single place the inputs `vendorSelf` may
-consult are decided, **and** the single place this WP's scope boundary is
-decided. Rows 1-3 are **subtractions** and are the work. Rows S1 and S2 are
+consult are decided. Its two dense contracts live in named prose below it, not in
+its cells — **the recovery path** in row 1's "The recovery path" paragraph and
+**this WP's scope boundary** in the subsection "Table G — canonical scope
+statement". Rows 1-3 are **subtractions** and are the work. Rows S1 and S2 are
 **known-open channels, deliberately NOT fixed here**, listed in this table
 because its canonical scope is "the inputs that reach the mint" and an input
 channel that is omitted from the canonical table is a channel nobody re-reads.
 
 | # | Rule | Before | After |
 |---|------|--------|-------|
-| 1 | **Self-resync consults nothing in the tree.** When `fs.realpathSync(<core>/app/current)` equals `fs.realpathSync(sourceRoot)`, `target` is that realpath — no `isDevCheckout`, no `readVersion`-derived path, no copy | `isDevCheckout(root, env)` chose the branch on **every** call | the branch is chosen by *where `current` already points*; `isDevCheckout` runs only when the source root is a **different** tree |
+| 1 | **Self-resync: nothing in the tree selects the target.** When `fs.realpathSync(<core>/app/current)` equals `fs.realpathSync(sourceRoot)`, `target` is that realpath — no `isDevCheckout`, no `readVersion`-derived path, no copy. `readVersion(root)` **still runs** (it always did, `vendor.js:166`, unconditionally and before the branch) and its value is still returned and printed; row 2 is what makes that safe — see the canonical scope statement's mechanism paragraph | `isDevCheckout(root, env)` chose the branch on **every** call | the branch is chosen by *where `current` already points*; `isDevCheckout` runs only when the source root is a **different** tree |
 | 2 | **A version that is not strict semver is refused.** `readVersion` throws a `WienerdogError` unless `isSemver(v)` — the **existing, length-guarded** predicate at `src/core/update-check.js:20`, already used to guard the identical `path.join(appDir(paths), version)` construction at `src/core/tarball.js:36`/`:200`/`:202`. **No new predicate is introduced** | `JSON.parse(…).version`, unvalidated, straight into `path.join(app, version)` | `path.join(app, version)` provably yields a **direct child** of `<core>/app`, under **one** predicate shared by both call sites |
 | 3 | **The returned `dev` field is containment-derived**, not `.git`-derived: `installStance(paths) === 'dev'`, evaluated after `repointCurrent` | `isDevCheckout(root, env)` | agrees with Table A, so `src/cli/sync.js:206`'s message cannot contradict the descriptor |
 | **S1** | **`writeLauncher` re-publishes `<core>/launcher/launch.js` FROM the app tree** — `vendorSelf` calls it with no `sourceRoot` (`vendor.js:195`), so `root = packageRoot()` (`vendor.js:259`), which on a shim-reached prod install **is** `realpath(app/current)` | — | **UNCHANGED — known open.** Out of scope; **routed to the owner** (Discovered issues). Not in Deliverables; `writeLauncher` is explicitly listed as untouched in the `src/core/vendor.js` Deliverables cell. Detected by the fire-time tree digest (C3) until the next attended `sync`. Current state §10(a) |
 | **S2** | **A module-level symlink inside the app tree relocates `packageRoot()`** — Node resolves module filenames through symlinks, so a symlinked `src/core/vendor.js` sees the external checkout as `__dirname`, defeating row 1's realpath comparison and re-enabling the `.git` branch | — | **UNCHANGED — known open.** Out of scope; **routed to the owner**. Module resolution is not a Deliverable and no guard inside the substituted module can defend it. Detected by the fire-time tree digest (C3) until the next attended `sync`. Current state §10(b) |
-| — | **Resulting invariant (V9, AC16) — the CANONICAL scope statement.** This cell is the single place "what an A7-scoped write cannot do" is decided. Every restatement of it — in this spec, in `docs/GLOSSARY.md` (D6) and in `docs/THREAT-MODEL.md` (D7) — **quotes or cites this cell and adds nothing to it.** Three review rounds found this contract wrong in a *copy* every single time and never in this cell; the two qualifiers below are precisely what the copies dropped, so **dropping either is a class-(a) defect, not a wording preference** | — | **(i) SCOPE — A7-scoped *DATA* inputs, never "file content".** An attended `sync` carries containment forward verbatim against **data-shaped** A7 inputs: over V9's install-shape matrix, containment after `vendorSelf` equals containment before it, or the call refuses. The mechanism is row 1 (on a self-resync the honest mint reads **no** signal inside the tree it is re-vendoring) plus row 2 (the one signal it reads off a *different* root is validated). **Code is file content too**, so "no file *content*" is NOT a legal restatement: an app-tree write that replaces the mint's own code (rows S1/S2) **does** move the stance at the next attended `sync`. Executed round-4, on a **conforming D1+D2+D8+D9 tree**, no symlink involved — `chmod +w` and append plain bytes to `<core>/app/0.0.1/src/core/vendor.js`, then one `vendorSelf` required through `app/current`: `stance BEFORE: prod` → `stance AFTER one attended sync: dev`. **(ii) TEMPORAL BOUND — "until the next attended `wienerdog sync`".** The control that covers S1/S2 is the app release digest, and it holds **only up to that sync**: a code substitution changes the tree, so every fire **before** the sync refuses (C3); the sync itself re-mints from the substituted code — in the run above it left `current` pointing at an attacker checkout and the stance `dev`, where the reduced descriptor never hashes app code again — so a fire **after** it need not refuse. A restatement that says "the launcher refuses on that" **without** the temporal bound is false |
+
+**The invariant these rows buy (V9, AC16) is stated in its own subsection below —
+"Table G — canonical scope statement" — not in a cell of this grid.** Round-4 put
+it in a ~1400-character row whose Before/After headers meant nothing for it, and
+round-5 review found a false clause had been introduced into that cell without
+anyone noticing until execution. See that subsection for why, and cite it by name.
 
 Row 2's reuse is the subtraction, and it is why the round-2 draft's bespoke
 `VERSION_RE` is gone. `isSemver` already rejects every vector that predicate was
@@ -860,16 +899,53 @@ checkout* — still **outside** `<core>/app` — and the install stays **dev**.
 Executed round-4, identically on a conforming D1+D2+D8+D9 tree and on `main`:
 source root with `.git` ⇒ `dev`; source root without ⇒ `prod`.
 
-So the paths that **do** convert are exactly those whose source root is not a git
-checkout:
+**STANDING RULE for this list, added in round 5 because the class is now
+undeniable.** Three consecutive review rounds each killed a *different* entry on
+it, and every one of the three was listed in one round and falsified by execution
+in the next: `install.sh` (listed round 2, killed round 3), an explicitly invoked
+fresh git checkout (listed round 3, killed round 4), a bare `wienerdog sync` after
+`npm install -g` (listed round 4, killed round 5). Each false entry was written
+from *intent* rather than from execution. So: **every entry on this list must
+name an invocation whose source root is provably NOT a dev checkout AND is
+provably NOT the tree `app/current` already resolves to, and must be verified by
+running it before it is listed.** Naming the package manager is not enough — the
+entry must name the *invocation*, because what decides the outcome is which file
+Node loads `vendor.js` from (that is `packageRoot()`, hence `sourceRoot`), not
+which command installed it. The three corrections below are kept in the spec as
+corrections, not silently absorbed, precisely so the class stays visible.
 
-- `npx wienerdog@latest sync` — an npm/tarball extraction, no `.git`;
-- a `wienerdog update` that lands a **newer** packaged version — same;
-- a global `npm install -g wienerdog` followed by `wienerdog sync` — same;
-- uninstall, then reinstall.
+So the paths that **do** convert are exactly those whose source root is neither a
+git checkout nor the current install's own tree:
 
-Two things that are **not** recovery, both corrected in review:
+- `npx wienerdog@latest sync` — runs `<npm cache>/…/wienerdog/bin/wienerdog.js`,
+  an npm/tarball extraction: no `.git`, and not where `current` points;
+- a `wienerdog update` that lands a **newer** packaged version — `update.js:45-48`
+  spawns the NEW `<core>/app/<newver>/bin/wienerdog.js sync`, a different root
+  from `current` and `.git`-free;
+- a global `npm install -g wienerdog` followed by **invoking the global binary by
+  its own path** — `"$(npm prefix -g)/bin/wienerdog" sync` — whose `packageRoot()`
+  is `<npm prefix>/lib/node_modules/wienerdog`, `.git`-free and not where
+  `current` points. **Bare `wienerdog sync` after that global install is NOT
+  recovery** (see below);
+- uninstall, then reinstall — `<core>` is gone, so the reinstall's non-dev source
+  root vendors a fresh contained tree.
 
+**Three** things that are **not** recovery, each corrected in a different review
+round:
+
+- **Bare `wienerdog sync` after `npm install -g wienerdog`.** Round-4 listed this
+  ("a global `npm install -g wienerdog` followed by `wienerdog sync`") and it is
+  **false**. `writeShim` writes `$HOME/.local/bin/wienerdog` containing
+  `exec node "<core>/app/current/bin/wienerdog.js" "$@"` (`vendor.js:307`), and
+  `src/cli/sync.js:209` instructs the user to **PREPEND** that directory
+  (`export PATH="$HOME/.local/bin:$PATH"`), so the managed shim beats the npm
+  global bin — and `package.json` declares no `postinstall`, so `npm install -g`
+  on its own changes nothing at all. Bare `wienerdog` therefore re-enters through
+  `app/current`, `selfResync` is **true**, and the install stays `dev`. Verified
+  on the maintainer's own machine this session: `$HOME/.local/bin` is PATH
+  position 4 and `/opt/homebrew/bin` (this box's `npm prefix -g`) position 5;
+  `which wienerdog` resolves to the shim, which execs
+  `~/.wienerdog/app/current/bin/wienerdog.js`.
 - **An explicitly invoked fresh git checkout.** Round-3 listed this and it is
   **false**: from a different checkout `selfResync` is false but
   `isDevCheckout(root)` is **true**, so the non-self branch sets `target = root`,
@@ -879,41 +955,179 @@ Two things that are **not** recovery, both corrected in review:
   makes `:88` print *"wienerdog: already installed, nothing to do."* and return
   **before** `vendorSelf` on an existing install (executed).
 
-Nobody is stranded, but the working recovery is the four-item list above.
+**The executed matrix (round 5), on a conforming D1+D2+D8+D9 tree.** Each row
+starts from a **dev** install (`current` → an out-of-`<core>/app` checkout with a
+`.git`) and runs `vendorSelf` out of that entry point's own tree, which is what
+makes `packageRoot()` — and therefore `sourceRoot` — the entry point's root:
+
+```
+1. npx wienerdog@latest sync  (npm cache root)           before=dev   after=prod
+2. wienerdog update  (spawns <core>/app/<new>/bin)       before=dev   after=prod
+3a. npm i -g + bare `wienerdog sync` (shim wins PATH)    before=dev   after=dev
+3b. "$(npm prefix -g)/bin/wienerdog" sync  (global root) before=dev   after=prod
+4. uninstall + reinstall  (fresh <core>, tarball root)   before=dev   after=prod
+X. explicit fresh GIT CHECKOUT source root               before=dev   after=dev
+PASS: every listed recovery entry converts dev→prod; every non-entry stays dev
+```
+
+Nobody is stranded, but the working recovery is the four-item list above, and
+**3a and X are on the list of things that look like recovery and are not.**
+
+### Table G — canonical scope statement
+
+**Cite this subsection by name.** It is the single place *"what an A7-scoped write
+cannot do"* is decided — the resulting invariant of Table G rows 1-3, the thing V9
+gates and AC16 asserts. Every restatement of it, in this spec and in
+`docs/GLOSSARY.md` (D6) and `docs/THREAT-MODEL.md` (D7), **quotes or cites this
+subsection and adds nothing to it.** Registered mirrors are listed under
+Contract 1 in the Mirrored Surface Checklist.
+
+**Why it is a subsection and not a table row — read this before editing it.**
+Round-4 applied ADR-0031's remedial extraction and put this contract into a single
+~1400-character cell of the Table G grid, under **Before/After** column headers
+that mean nothing for it. Round-5 review then found a **false clause inside that
+cell**: the extraction had *promoted* text out of an unaudited mirror
+(`vendorSelf`'s JSDoc) into the canonical cell, so the cell's facts changed without
+the promoted mechanism ever being verified or registered. That is a settled-contract
+reinterpretation by side effect, and a 1400-character cell is where it hides.
+**The lesson, which is now a rule: promotion is not a copy operation — every clause
+promoted into this subsection must be executed and registered in the same pass.**
+
+**Four review rounds found this contract wrong in a *copy*; round 5 found it wrong
+here. The three qualifiers below are exactly what has been dropped or falsified,
+so dropping any of them is a class-(a) defect, not a wording preference.**
+
+**(i) SCOPE — A7-scoped *DATA* inputs, never "file content".** An attended `sync`
+carries containment forward against **data-shaped** A7 inputs: over V9's
+install-shape matrix, containment after `vendorSelf` equals containment before it,
+**or the call refuses** (qualifier (iii)). **Code is file content too**, so "no
+file *content*" is NOT a legal restatement: an app-tree write that replaces the
+mint's own code (rows S1/S2) **does** move the stance at the next attended `sync`.
+Executed round-4 and re-executed round-5, on a **conforming D1+D2+D8+D9 tree**, no
+symlink involved (this is not S2) — `chmod +w` and append plain bytes to
+`<core>/app/0.0.1/src/core/vendor.js`, then one `vendorSelf` required through
+`app/current`: `stance BEFORE: prod`, `app release digest changed by the write:
+true`, `current now resolves to the attacker's checkout`, `stance AFTER one
+attended sync: dev`.
+
+**(ii) TEMPORAL BOUND — "until the next attended `wienerdog sync`".** The control
+that covers S1/S2 is the app release digest, and it holds **only up to that sync**:
+a code substitution changes the tree, so every fire **before** the sync refuses
+(C3); the sync itself re-mints from the substituted code — in the run above it left
+`current` pointing at an attacker checkout and the stance `dev`, where the reduced
+descriptor never hashes app code again — so a fire **after** it need not refuse. A
+restatement that says "the launcher refuses on that" **without** the temporal bound
+is false.
+
+**(iii) THE CONCLUSION IS A DISJUNCTION — "carried forward **OR the call refuses**".**
+The invariant has two arms and both are load-bearing. The refusal arm is the entire
+behaviour of the `contained-bad-version` shape: V9's predicate allows it explicitly
+(`verP.after === base.after || verP.after === 'REFUSED'`), V9 prints `after=REFUSED`
+for it on a conforming tree, and Table F row 6 records it (*"the `sync` itself now
+fails loudly with D8's tamper message and mints nothing"*). Round-4 dropped this arm
+from **three** mirrors — D6's GLOSSARY body (*"carries containment forward
+unchanged"*), the Context paragraph's one-line statement of the invariant, and
+`vendorSelf`'s JSDoc (*"carried forward verbatim by every attended `sync`"*), which
+ships into `src/` — which is why it is now registered as a qualifier in its own
+right rather than left implicit in the word "verbatim". A user
+who reaches D6's GLOSSARY entry from a refusal banner (Current state §10,
+AMPLIFICATION) and is told only that containment is "carried forward unchanged" has
+the wrong model at the worst possible moment: the next attended `sync` may instead
+hard-fail and mint nothing. **A restatement that says only "carried forward" is
+false.**
+
+**THE MECHANISM — stated as what is true, corrected in round 5.** The false clause
+round 4 promoted into the canonical cell was *"on a self-resync the honest mint
+reads **no** signal inside the tree it is re-vendoring"*, rendered in D6 as *"it
+consults **no data** inside that tree — not `.git`, not `package.json`"*. **Both are
+false.** `src/core/vendor.js:166` — `const version = readVersion(root);` — runs
+**unconditionally, before the branch**, and D9's three edits do not move it; D9's
+own step 3 says so (*"`readVersion(root)` still runs on every call"*). Executed
+round-5 on a conforming tree, with `package.json`'s `version` rewritten to another
+**valid** semver:
+
+```
+packageRoot() === realpath(app/current) (self-resync) : true
+vendorSelf() returned version                        : "9.9.9"   <- read out of the app tree's package.json
+target carried forward                               : true
+sync.js:206 would print                              : wienerdog: vendored app 9.9.9.
+```
+
+What row 1 removes is not the *read* but the read's **reach**. On the self-resync
+arm `target` is `fs.realpathSync(currentLink(paths))`, so **no value read out of
+that tree can reach the target path**, and `isDevCheckout` is not called at all.
+The one value still read off that tree is validated by row 2, so a value that is
+not strict semver makes the call **throw**. V9's `contained-bad-version` row is a
+self-resync *shape*, and it never reaches the self-resync test at all: `readVersion`
+runs first and throws, so that row's `after=REFUSED` originates in **D8's
+validation**, not in any containment logic. So the accurate claim is:
+
+> On a self-resync, **no signal inside the tree can select the target**. The one
+> *data* value the honest mint still reads out of that tree (`package.json`'s
+> `version`, `vendor.js:166`) cannot reach the target path and is validated by
+> row 2, so a tampered value **refuses the sync** rather than moving containment. A
+> `version` rewritten to another *valid* semver changes only the version string
+> `vendorSelf` returns and `src/cli/sync.js:206` prints; containment is still
+> carried forward.
+
+**"Tree data cannot select containment" — never "tree data is not consulted".**
+Any restatement of the second form is a class-(a) defect.
+
+**One more read exists and is deliberately not counted above, so nobody discovers
+it as a contradiction.** `vendorSelf` ends with `writeLauncher(paths, …)` and no
+`sourceRoot`, so it also reads `<app tree>/src/scheduler/launcher.js` and
+re-publishes it over `<core>/launcher/launch.js` — on the self-resync arm too. That
+is a **code** read, it is Table G row **S1**, it is known-open and owner-routed, and
+it is exactly why qualifier (i) scopes this contract to **data**. The `version`
+sentence above is therefore about the mint's *data* reads on that arm, not a claim
+that `vendorSelf` opens exactly one file.
 
 ### Mirrored Surface Checklist
 
 Table A is the single place the stance rule is decided; Table C the single place
 the reason strings are decided; Table G the single place `vendorSelf`'s permitted
-inputs, **this WP's scope boundary** (last row) and **the recovery path** (row 1)
-are decided. Every surface that restates them is registered below so one finding
+inputs are decided, with **this WP's scope boundary** in the subsection "Table G —
+canonical scope statement" and **the recovery path** in row 1's "The recovery path"
+paragraph. Every surface that restates them is registered below so one finding
 updates all of them in one pass, and any new mirror found in review is added here
 on the spot.
 
-**Two dense contracts got their own canonical cell in round-4, after three rounds
-of review kept finding the same fact wrong in a copy.** ADR-0031's remedial
-extraction move was applied to both: pull the contract into one cell, convert
-every restatement into a citation or a quotation of it, and register every mirror
-here.
+**Two dense contracts got a canonical home of their own in round-4, after three
+rounds of review kept finding the same fact wrong in a copy; round-5 moved the
+first one out of the table grid into a named subsection, after a false clause was
+introduced into that cell during the extraction itself.** ADR-0031's remedial
+extraction move applies to both: pull the contract into one place, convert every
+restatement into a citation or a quotation of it, and register every mirror here.
+**Round-5 adds one rule to the move: a clause promoted INTO the canonical text must
+be executed and registered in the same pass — promotion is not a copy operation.**
 
-**Contract 1 — "what an A7-scoped write cannot do". Canonical: Table G's last
-row** (qualifier (i) scope = DATA inputs, never "file content"; qualifier (ii)
-temporal bound = "until the next attended `wienerdog sync`"). Registered mirrors,
-each of which now cites or quotes that cell and adds nothing:
+**Contract 1 — "what an A7-scoped write cannot do". Canonical: the subsection
+"Table G — canonical scope statement"** (qualifier (i) scope = DATA inputs, never
+"file content"; qualifier (ii) temporal bound = "until the next attended
+`wienerdog sync`"; qualifier (iii) the conclusion is a **disjunction** — carried
+forward **or the call refuses**; plus the MECHANISM paragraph — *tree data cannot
+select containment*, never *tree data is not consulted*). Registered mirrors, each
+of which cites or quotes that subsection and adds nothing:
 
 - [ ] Context → "What this WP does NOT close" (the earliest mirror an implementer reads)
 - [ ] Context → the "One clause … quoted, not endorsed" paragraph
+- [ ] Context → the "The canonical statement of that scope is …" paragraph (the qualifier list)
 - [ ] Deliverables → sizing paragraph's *"no A7-scoped **data** write decides containment"*
-- [ ] "Exact contracts" → `installStance`'s `SCOPE:` block and `vendorSelf`'s `SELF-RESYNC`/`SCOPE:` block (these ship into `src/`, so both qualifiers must survive into the source comments)
+- [ ] "Exact contracts" → `installStance`'s `SCOPE:` block and `vendorSelf`'s `SELF-RESYNC`/`SCOPE:` block (these ship into `src/`, so all three qualifiers **and** the mechanism wording must survive into the source comments — this is the mirror round-4 promoted from without auditing)
+- [ ] **Table G row 1's headline and its in-cell mechanism note** (*"nothing in the tree selects the target"*; *"`readVersion(root)` still runs"*) — round-5 registration
 - [ ] Current state §9c's "Read that as the matrix result it is" paragraph
 - [ ] Current state §10 → "What still holds", the "Digest-invisible is a larger set" paragraph, and "The general form"
 - [ ] Implementation notes → "What the corrected statement is" and the capability-shrink blockquote
+- [ ] Implementation notes → **the "objection a reviewer will raise" paragraph's closing clause** about which signal the cross-check now rests on — round-5 registration
+- [ ] Implementation notes → "Why D9 is a subtraction and not a fifth guard" (its mechanism sentence) — round-5 registration
+- [ ] Implementation notes → **D9 step 3's note that `readVersion(root)` still runs on every call** — round-5 registration; this note is what contradicted the round-4 cell, and it was right
 - [ ] Implementation notes → **Migration (Table F), the "What the attacker gains by provoking that sync" paragraph** — this one was registered in round 3 and did **not** move; round-4 rewrote it
-- [ ] Security checklist bullets 3–5
+- [ ] Implementation notes → **D6's clause-by-clause mapping table** (it must map all three qualifiers, not two)
+- [ ] Security checklist bullets **2**–5 (bullet 2 was registered in round-5; before that it sat unregistered under "Everything else")
 - [ ] AC16
 - [ ] V9's banner comment, its `PASS`/`FAIL` strings and its `KNOWN-OPEN` line
 - [ ] **D6 — `docs/GLOSSARY.md:30`** (rendered clause-by-clause; the mapping table is in Implementation notes → D5/D6/D7)
-- [ ] **D7 — `docs/THREAT-MODEL.md:277-279`** (the only mirror that carried both qualifiers through round 3 — it is the model the others were re-derived from)
+- [ ] **D7 — `docs/THREAT-MODEL.md:277-279`** (the only mirror that carried both round-3 qualifiers through — it is the model the others were re-derived from)
 
 **Contract 2 — "how a non-contained install is converted back to prod". Canonical:
 Table G row 1's "The recovery path" paragraph** (the mandatory phrase is **"a
@@ -925,6 +1139,13 @@ non-dev source root"**; a git checkout is **not** one). Registered mirrors:
 - [ ] Table G row 1's own scope paragraph (*"Converting a dev install to prod is now an attended act"*)
 - [ ] **Definition of done item 7** — the owner sign-off rests on this list being true
 
+**Contract 2 carries a STANDING RULE, not just a list** (round-5): every entry must
+name an invocation whose source root is provably non-dev **and** provably not the
+tree `app/current` already resolves to, and must be **verified by execution** before
+it is listed. Three consecutive rounds each falsified a different entry written from
+intent — `install.sh`, a fresh git checkout, a bare-`wienerdog` global install — and
+the corrections are kept visible in the paragraph rather than absorbed.
+
 Everything else in this spec:
 
 - [ ] Deliverables cells for `src/core/vendor.js` (D1/D2/D8/D9), `src/scheduler/descriptor.js` (D3), `src/scheduler/launcher.js` (D4)
@@ -933,7 +1154,7 @@ Everything else in this spec:
 - [ ] Verification commands V1, V2, V6, V7, V9 and their `main` baselines
 - [ ] Current state §1, §2, §3, §4, §6, §8, §9 (§10 is registered under Contract 1 above)
 - [ ] Implementation notes → "Why containment survives the attack it replaces", "How the mint-time leg is closed" (Migration/Table F is registered under Contract 1 above)
-- [ ] Security checklist bullets 1–2 and 6–9 (bullets 3–5 are registered under Contract 1 above)
+- [ ] Security checklist bullets 1 and 6–9 (bullets **2**–5 are registered under Contract 1 above)
 - [ ] Mutation checks (Table E) rows 1–10
 - [ ] Test index rows T1–T12
 - [ ] **Out of scope → the S1/S2 bullet and the `refuse()`-banner bullet**
@@ -981,11 +1202,17 @@ can traverse out (§9b, executed), and `.git`, which selects link-over-copy.
 Containment was not a property of the design; it was an output of a function the
 attacker had two inputs into.
 
-**What the corrected statement is.** After D8 and D9, the honest `vendorSelf`
-reads **no data** signal from the tree `current` resolves to. Three capabilities
-remain. The first two were already conceded; the third was found in round-3
-review and is the reason every claim in this spec is scoped to *data-shaped*
-inputs:
+**What the corrected statement is.** After D8 and D9, **no data signal the honest
+`vendorSelf` reads out of the tree `current` resolves to can select where `current`
+points.** It still *reads* one — `readVersion(root)` at `vendor.js:166`, which runs
+unconditionally and supplies the returned/printed `version` — but on a self-resync
+that value cannot reach the target path, and row 2 makes a non-semver value refuse
+the call outright. (An earlier draft of this paragraph said `vendorSelf` "reads no
+data signal" from that tree; that is the round-4 clause round-5 executed and
+falsified. The canonical wording is the MECHANISM paragraph of "Table G — canonical
+scope statement"; this paragraph cites it.) Three capabilities remain. The first
+two were already conceded; the third was found in round-3 review and is the reason
+every claim in this spec is scoped to *data-shaped* inputs:
 
 1. Writing the `current` symlink itself, or replacing a path component of its
    target that lies outside the app tree (swapping `<core>/app/<version>` for a
@@ -1003,10 +1230,11 @@ inputs:
    because the guard would live in the replaceable code. This channel is
    **known-open, out of scope, and routed to the owner** (Table G rows S1/S2).
 
-The invariant D8+D9 buy is **exactly** the one Table G's last row states and V9
-gates; this paragraph cites that row and adds nothing: **no A7-scoped *data* write
-changes the containment an attended `sync` leaves behind**, and the digest that
-covers the residue holds **only until the next attended `sync`**. That is a
+The invariant D8+D9 buy is **exactly** the one "Table G — canonical scope
+statement" states and V9 gates; this paragraph cites that subsection and adds
+nothing: **no A7-scoped *data* write changes the containment an attended `sync`
+leaves behind — the `sync` either carries it forward or refuses** — and the digest
+that covers the residue holds **only until the next attended `sync`**. That is a
 property, checkable in five lines, not an argument — and it is not the same
 sentence as "no A7-scoped write" or "no file *content*", both of which
 capability 3 falsifies in one command.
@@ -1065,8 +1293,13 @@ No — because the two observations are separated in time. The descriptor's stan
 was minted at the last attended `sync`; `liveStance` is observed at fire, which
 may be a month later. A repoint performed between the two flips the live
 observation and must refuse (Table B rows 2 and 4). This is structurally the same
-cross-check the launcher performs today, moved from a forgeable signal onto an
-unforgeable one.
+cross-check the launcher performs today, moved off a signal that an A7-scoped
+**data** write forges in one line (`mkdir .git`) onto one that it cannot select at
+all. **Containment is not "unforgeable" and must not be described that way** — a
+registered mirror of Contract 1, so it carries Contract 1's scope: rows S1/S2 move
+containment by substituting the mint's **code**, and capability 1 above moves it by
+writing `<core>/app` itself (A12). What is true is the narrower thing: no A7-scoped
+*data* write into the app tree can select it.
 
 ### How the mint-time leg is closed (D8 + D9)
 
@@ -1087,9 +1320,13 @@ chose reduced over enforced. That is a letter-for-letter violation of ADR-0028
 **Why D9 is a subtraction and not a fifth guard.** It does not add a check that
 inspects the attacker's write; it removes the call. On a self-resync there is
 nothing to decide — `current` already points somewhere and `vendorSelf` has
-nothing new to vendor — so the honest implementation reads no signal at all and
-carries the existing target forward. `isDevCheckout` survives only on the path
-where the source root is a *different* tree.
+nothing new to vendor — so the honest implementation **calls no oracle at all**
+(`isDevCheckout` is not invoked) and carries the existing target forward.
+`isDevCheckout` survives only on the path where the source root is a *different*
+tree. Note the precise claim, which is Contract 1's mechanism and not a stronger
+one: the self-resync arm consults no signal that could *select* the target. It
+still calls `readVersion(root)` — that never moved (`vendor.js:166`) — and row 2 is
+what makes the surviving read safe.
 
 **And the limit of that argument, stated because round-3 review found it.** "A
 *different* tree" is decided by `realpathSync(root)`, and `root` is
@@ -1220,8 +1457,12 @@ Table G rows 1 and 3. Three edits, in this order:
 
    ```js
    // SELF-RESYNC: the running installer IS the tree `app/current` already
-   // resolves to. Carry containment forward VERBATIM and consult no signal
-   // inside that tree (Table G row 1, ADR-0028 amendment §3 mint-time half).
+   // resolves to. Carry containment forward: let NO signal inside that tree
+   // select the target — `isDevCheckout` is not called, and `target` is the
+   // realpath of `current` itself. (`readVersion` still runs above; its value
+   // cannot reach `target` and is semver-validated, so a tampered version
+   // refuses the call.) Table G row 1 + canonical scope statement;
+   // ADR-0028 amendment §3 mint-time half.
    let selfResync = false;
    try {
      selfResync = fs.realpathSync(currentLink(paths)) === fs.realpathSync(root);
@@ -1241,8 +1482,15 @@ Table G rows 1 and 3. Three edits, in this order:
    `repointCurrent(paths, target)` and before `writeLauncher`. The returned shape
    is unchanged, so `src/cli/sync.js:206` needs no edit.
 
-`readVersion(root)` still runs on every call (the `version` field is returned and
-printed), and after D8 that is safe.
+**`readVersion(root)` still runs on every call**, self-resync included — it is
+`vendor.js:166`, unconditional and before the branch, and none of the three edits
+above moves it; the `version` field is returned and printed. After D8 that is safe,
+and the reason it is safe is Contract 1's mechanism: on the self-resync arm the
+value cannot reach `target`, and a value that is not strict semver throws. **Do not
+"tidy" this into a claim that the self-resync reads nothing from the tree** — that
+sentence was in the round-4 canonical cell and in D6, and round-5 executed it and
+found it false. This note is a registered mirror of "Table G — canonical scope
+statement".
 
 ### D3 — `src/scheduler/descriptor.js`
 
@@ -1308,47 +1556,58 @@ with three rows whose ids, guards and outcomes match `cases.js` exactly:
 > is decided by **containment**: an install is **dev** only when
 > `<core>/app/current` resolves *outside* `<core>/app`; every other case —
 > including a `.git` planted inside the app tree, an environment variable, or an
-> unresolvable path — is **prod**. An attended `wienerdog sync` carries
-> containment forward unchanged **against data written into the app tree**: when
-> the installer is the very tree it is re-vendoring, it consults **no data**
-> inside that tree — not `.git`, not `package.json` — so a planted `.git` or a
-> rewritten version cannot move an install between the two stances. **Code
-> written into the app tree is a different matter and is not covered**: the
-> installer runs out of that tree, so a replaced source file executes at the next
-> attended `wienerdog sync` and *can* move the stance. What covers that is the
-> **app release digest**, and only **until** that sync — every scheduled run
-> *before* it refuses, because the tree no longer matches the descriptor; a run
-> *after* it need not. The launcher re-observes containment at fire time and
-> refuses whenever it disagrees with the stance bound into the job descriptor, in
-> either direction. Converting a dev install to prod is an attended act: run the
-> installer from a **non-dev source root** — `npx wienerdog@latest sync`, a
-> `wienerdog update` to a newer version, a global `npm install -g wienerdog`, or
-> uninstall/reinstall. A plain `git clone` is **not** one of them: the installer
-> links a checkout in place, so the install stays dev (A7, WP-157,
+> unresolvable path — is **prod**. **Data written into the app tree cannot move an
+> install between the two stances.** When the installer is the very tree it is
+> re-vendoring, nothing inside that tree chooses where `current` ends up: an
+> attended `wienerdog sync` either leaves `current` exactly where it already
+> pointed, **or** — if that tree's `package.json` carries something that is not a
+> plain version number — **stops with a tamper message and changes nothing at
+> all**. (Nothing the installer reads out of that tree feeds that decision. It does
+> still read the tree's `package.json` version — that is the version number it
+> reports back to you — and that value is checked, so a tampered one stops the sync
+> rather than steering it.) **Code written into the
+> app tree is a different matter and is not covered**: the installer runs out of
+> that tree, so a replaced source file executes at the next attended `wienerdog
+> sync` and *can* move the stance. What covers that is the **app release digest**,
+> and only **until** that sync — every scheduled run *before* it refuses, because
+> the tree no longer matches the descriptor; a run *after* it need not. The
+> launcher re-observes containment at fire time and refuses whenever it disagrees
+> with the stance bound into the job descriptor, in either direction. Converting a
+> dev install to prod is an attended act: run the installer **from a non-dev source
+> root** — `npx wienerdog@latest sync`, a `wienerdog update` to a newer version, a
+> global `npm install -g wienerdog` **invoked by its own path**
+> (`"$(npm prefix -g)/bin/wienerdog" sync`), or uninstall/reinstall. Two things
+> that look like recovery and are not: a plain `git clone` (the installer links a
+> checkout in place, so the install stays dev), and a bare `wienerdog sync` after
+> that global install (the managed shim in `~/.local/bin` comes first on your PATH,
+> so it just re-enters the same install) (A7, WP-157,
 > WP-stance-authority-containment).
 
 Keep the entry's existing leading bullet and bolded term, and its trailing
 `(Not: …)` clause if present; change nothing else on the line.
 
-**This body is a rendering of Table G's last row, not a fresh paraphrase — and
-that is the point.** Three review rounds broke this one sentence three different
-ways, always in a *copy*, never in the canonical cell, so round-4 stopped
-rewriting it and extracted it. The body above carries Table G's last row's two
-mandatory qualifiers in plain language, and its final sentences carry Table G row
-1's canonical recovery list. **If you think any clause here is wrong, change
-Table G's last row (or row 1) first and re-derive this text from it.** Do not
-edit this text in place.
+**This body is a rendering of "Table G — canonical scope statement", not a fresh
+paraphrase — and that is the point.** Four review rounds broke this one entry four
+different ways: three times in the *copy* (round-4 extracted it for that reason),
+and once — round 5 — because the extraction promoted a **false mechanism clause**
+into the canonical text and this entry faithfully rendered it. The body above
+carries all **three** mandatory qualifiers in plain language plus the corrected
+mechanism, and its final sentences carry Table G row 1's canonical recovery list.
+**If you think any clause here is wrong, change the canonical subsection (or row 1)
+first and re-derive this text from it.** Do not edit this text in place.
 
 The mapping, clause by clause, so the derivation is checkable:
 
-| Table G's last row | Rendered here as |
+| Canonical scope statement | Rendered here as |
 |---|---|
-| (i) SCOPE — **data**, never "file content" | *"against data written into the app tree … consults no data inside that tree — not `.git`, not `package.json`"* |
+| (i) SCOPE — **data**, never "file content" | *"Data written into the app tree cannot move an install between the two stances"* |
 | (i) SCOPE — code substitution **does** move the stance | *"Code written into the app tree is a different matter and is not covered … a replaced source file executes at the next attended `wienerdog sync` and can move the stance"* |
 | (ii) TEMPORAL BOUND — **until the next attended `sync`** | *"only until that sync — every scheduled run before it refuses … a run after it need not"* |
-| Table G row 1's recovery list | *"a **non-dev source root** — `npx …`, `wienerdog update`, `npm install -g`, uninstall/reinstall. A plain `git clone` is not one of them"* |
+| (iii) DISJUNCTION — carried forward **or the call refuses** | *"either leaves `current` exactly where it already pointed, **or** … stops with a tamper message and changes nothing at all"* |
+| MECHANISM — tree data cannot **select** containment; it is not "not consulted" | *"nothing inside that tree chooses where `current` ends up … That version is the one value the installer still reads out of the tree; it is checked, and it cannot steer the install anywhere"* |
+| Table G row 1's recovery list (with its round-5 correction) | *"a **non-dev source root** — `npx …`, `wienerdog update`, a global install **invoked by its own path**, uninstall/reinstall. Two things that look like recovery and are not: a plain `git clone` … and a bare `wienerdog sync` after that global install"* |
 
-**Three wordings this entry must never revert to, with the command that kills
+**Five wordings this entry must never revert to, with the command that kills
 each.** Each was in a shipped draft of this spec; each was executed by a reviewer
 and failed.
 
@@ -1366,6 +1625,23 @@ and failed.
    for a fire **before** the next attended `sync`. After that sync the compromised
    mint has republished `launch.js` (S1) and re-minted the descriptor, and the
    install is `dev`, where the reduced descriptor never hashes app code again.
+4. *"it consults **no data** inside that tree — not `.git`, not `package.json`"*
+   (round 4, rendered from the round-4 canonical cell's *"reads **no** signal
+   inside the tree it is re-vendoring"*) — **false**. `vendor.js:166` calls
+   `readVersion(root)` unconditionally, before the branch, and D9 does not move it.
+   Executed round-5 on a conforming tree with the app tree's `package.json`
+   `version` rewritten to another **valid** semver:
+   `packageRoot() === realpath(app/current): true`,
+   `vendorSelf() returned version: "9.9.9"`, `target carried forward: true` — the
+   installer read that string out of the app tree and printed it. Say *"nothing
+   inside that tree chooses where `current` ends up"*, never *"nothing is read"*.
+5. **Any wording that drops the refusal arm** — e.g. round-4's *"carries
+   containment forward unchanged"* with no "or stops". A `version` that is not
+   strict semver makes the attended `sync` **hard-fail and mint nothing** (D8;
+   Table F row 6; V9's `contained-bad-version` row prints `after=REFUSED`). This
+   entry is read next to a banner telling the user to run `wienerdog sync`, so a
+   user who is promised "carried forward unchanged" and instead gets a refusal has
+   been given the wrong model at the worst moment.
 
 Shipping a GLOSSARY claim a reviewer can break in one command is the exact defect
 Current state §8 says this WP exists to remove. And note **where** this entry
@@ -1375,8 +1651,10 @@ run `wienerdog sync`. A missing qualifier here states the amplification hazard
 
 The recovery sentence is also the sign-off item below: today the recovery from
 D9's deliberate behaviour change appears in **no** user-facing text, and this
-entry is where it becomes user-facing — which is why round-4's correction to it
-(a git checkout does **not** recover) is load-bearing and not a typo fix.
+entry is where it becomes user-facing — which is why the corrections to it are
+load-bearing and not typo fixes. Two of them are now on record: round-4's (a git
+checkout does **not** recover) and round-5's (a bare `wienerdog` after
+`npm install -g` does **not** recover either — the managed shim wins the PATH).
 
 `docs/THREAT-MODEL.md:277-279` — replace the clause
 *"and the **production/dev stance** matches (a prod entry over a dev-looking tree
@@ -1442,8 +1720,9 @@ the OS entry with the new digest (WP-043). That is the defensible split: a silen
 fire-time re-mint would destroy the property outright, and a refusal that no
 command can clear would strand a user.
 
-**What the attacker gains by provoking that sync — scoped exactly as Table G's
-last row scopes it, because this paragraph is a registered mirror of it.** Round-3
+**What the attacker gains by provoking that sync — scoped exactly as "Table G —
+canonical scope statement" scopes it, because this paragraph is a registered mirror
+of it.** Round-3
 wrote here that *"the attacker gains nothing by provoking the sync, because after
 this WP the re-mint cannot produce `dev` for a contained tree"*. That is true of a
 **data**-shaped A7 write and **false** of a code-substituting one, and this
@@ -1493,10 +1772,19 @@ behaviour are the misclassified ones, and for them the change *is* the fix.
       strictly subsumed by `verifyContainment` two lines later (Table B row 2,
       preserved by the unmodified test at `tests/unit/launcher.test.js:101-112`
       and case `2c-escape`).
-- [ ] **The new stance signal is not writable by this WP's adversary.** Table A's
-      rule reads only the resolution of `<core>/app/current`; no file *inside*
-      `app/current` participates. The residual capability, and why it is already
-      conceded, is stated in "Why containment survives the attack it replaces".
+- [ ] **The new stance signal is not writable by this WP's adversary — with the
+      same scope every other claim here carries.** *(Registered mirror of "Table G —
+      canonical scope statement"; round-5 registration, after this bullet was found
+      stating an unqualified absolute that this WP's own executed counter-examples
+      falsify.)* Table A's rule reads only the resolution of `<core>/app/current`;
+      no file *inside* `app/current` participates, so **no A7-scoped DATA write
+      into the app tree can produce or select it**. That is the claim — not "no
+      write can". The residual **capabilities**, all three of them and why they are
+      already conceded, are stated in "Why containment survives the attack it
+      replaces": writing `<core>/app` itself (A12), running the installer from an
+      attacker-chosen source root (an attended command), and **replacing the mint's
+      own code** (S1/S2, which moves containment at the next attended `sync`,
+      executed).
 - [ ] **The signal is not *choosable* by this WP's adversary either — the
       mint-time half, for DATA-shaped writes.** Binding the stance to containment
       is only sound if an A7 write cannot decide containment. `vendorSelf` runs
@@ -1509,12 +1797,13 @@ behaviour are the misclassified ones, and for them the change *is* the fix.
 - [ ] **The mint-time half is NOT closed against code-substituting writes, and
       this WP says so rather than claiming otherwise.** The attended mint executes
       out of the A7-writable tree, so an app-tree write is code execution at the
-      next attended CLI run (Current state §10; Table G rows S1/S2). **Table G's
-      last row is the canonical scope statement and this bullet cites it**: every
-      claim in this spec, in `docs/GLOSSARY.md` (D6) and in
+      next attended CLI run (Current state §10; Table G rows S1/S2). **"Table G —
+      canonical scope statement" is the canonical text and this bullet cites it**:
+      every claim in this spec, in `docs/GLOSSARY.md` (D6) and in
       `docs/THREAT-MODEL.md` (D7) is scoped to **data-shaped** inputs (never "file
-      content" — code *is* file content) and bounded to **the next attended
-      `wienerdog sync`**. The residual channel is a **content** change, so it moves
+      content" — code *is* file content), bounded to **the next attended
+      `wienerdog sync`**, and stated as a **disjunction** (carried forward **or the
+      call refuses**). The residual channel is a **content** change, so it moves
       `appTreeDigestOf` and is refused (C3) on any fire **before** that sync — and
       not after it, because the sync re-mints from the substituted code. The
       empty-`.git` plant this WP removes is the only **known** digest-invisible
@@ -1525,7 +1814,8 @@ behaviour are the misclassified ones, and for them the change *is* the fix.
       structural and is routed to the owner.
 - [ ] **The refusal banner's remedy is a known hazard, recorded not repaired.**
       `launcher.js:442-443` tells the user *"If the change was intentional, run
-      `wienerdog sync`"* (the `refuse()` banner expression begins at `:441`).
+      `wienerdog sync`"* (the `refuse()` arrow function is `:439-448`; the `reason`
+      string it builds is `:440-443`).
       Under S1 a C3 refusal therefore instructs the user to
       run the command that publishes the attacker's `launch.js`. Do **not** edit
       that banner here — it is outside D4's scope; it is routed with S1
@@ -1637,19 +1927,25 @@ output *is* their success output — do not "fix" them by making them fail on `m
       `npm run lint` pass, and `git diff --stat` touches exactly the ten
       Deliverables paths plus this spec.
 - [ ] **AC16 (a `sync` cannot move containment — against DATA-shaped A7 writes)
-      *(change)*.** Over **six** install shapes — contained/clean, contained +
-      planted `.git`, contained + `package.json` version rewritten to
-      `"../../escaped"`, outside/clean, outside + planted `.git`, and
-      contained + **`src/core/vendor.js` replaced by a symlink to an out-of-tree
-      checkout** — the containment `vendorSelf` leaves behind equals the
-      containment it started with, or the call **refuses**, **and** the two clean
-      baselines are themselves carried forward unchanged. On `main` **two of the
-      five gated rows** change the outcome (`contained-bad-version`,
-      `outside-clean`), and so does the ungated sixth. The sixth row is §10b and is
-      **expected to FAIL on the branch too**: it is a known-open channel, so V9
-      reports it separately and does **not** gate on it (see V9's `KNOWN-OPEN`
-      line). This is Table G's last row, scoped exactly as that row states. (T12,
-      V9)
+      *(change)*.** Over the **five gated** install shapes — contained/clean,
+      contained + planted `.git`, contained + `package.json` version rewritten to
+      `"../../escaped"`, outside/clean, outside + planted `.git` — the containment
+      `vendorSelf` leaves behind equals the containment it started with, or the call
+      **refuses**, **and** the two clean baselines are themselves carried forward
+      unchanged. On `main` **two of those five** change the outcome
+      (`contained-bad-version`, `outside-clean`).
+      **A sixth shape is run, reported, and deliberately NOT gated**: contained +
+      **`src/core/vendor.js` replaced by a symlink to an out-of-tree checkout**
+      (`contained-symlink-vendor`). That shape is §10b / Table G row S2, a
+      known-open **code**-substitution channel outside this WP's scope, so it is
+      **outside the invariant above** and is **expected to print `after=false` on
+      `main` and on the branch alike** — V9 reports it on its own `KNOWN-OPEN` line
+      and its verdict does not depend on it. Stating the invariant over all six and
+      then exempting one would make the criterion contradict its own verifier; it is
+      stated over the gated five, which is exactly what V9 asserts. This criterion is
+      a registered mirror of "Table G — canonical scope statement" and carries that
+      subsection's three qualifiers, including the **or the call refuses** arm.
+      (T12, V9)
 - [ ] **AC17 (a tampered version is refused, not sanitised) *(change)*.**
       `readVersion` throws a `WienerdogError` whose message names the
       `package.json` path and the offending value, for `"../../escaped"`,
@@ -1701,7 +1997,7 @@ Two notes, because two of these rows are subtle:
 | T3 | tests/unit/vendor.test.js | source walk over `src/**/*.js` for `WIENERDOG_DEV`, with the ≥ 60-files / ≥ 5-`WIENERDOG_HOME` non-vacuity control (AC10) |
 | T4 | tests/unit/vendor.test.js | cross-implementation: `launcher.liveStance` ≡ `vendor.installStance` over four shapes, asserting both values occur (AC11) |
 | T11 | tests/unit/vendor.test.js | `readVersion` refuses `"../../escaped"`, `"a/b"`, `"current"`, **`"Current"`**, `"current.tmp.9"`, **`"Current.tmp.9"`**, **`"0.10.0."`**, `""`, `null`, a number; accepts `"0.10.0"`, `"0.0.1"`, `"1.2.3-rc.1+build.7"`, `"999.0.0-a7test"`. Assert the thrown error's `name === 'WienerdogError'` and that its message contains the package.json path (AC17). Do **not** write a local copy of the predicate in the test — import nothing; drive `readVersion` |
-| T12 | tests/unit/vendor.test.js | AC16, the **five gated** shapes of Table G's last row: for each, record containment before, apply the A7-scoped write, call `vendorSelf` **required through `<core>/app/current`** (not the test process's own `vendor` module — that is what makes `packageRoot()` the app tree), and assert containment after equals containment before, or that the call threw. Assert the five *starting* shapes are as intended, **and** assert the two clean baselines are carried forward unchanged (`contained-clean` stays contained, `outside-clean` stays outside), so an implementation that inverts every row cannot pass. The **sixth**, symlink shape (§10b) is V9's `KNOWN-OPEN` row and is **not** asserted here — a test that must fail is not a test |
+| T12 | tests/unit/vendor.test.js | AC16, the **five gated** shapes of "Table G — canonical scope statement": for each, record containment before, apply the A7-scoped write, call `vendorSelf` **required through `<core>/app/current`** (not the test process's own `vendor` module — that is what makes `packageRoot()` the app tree), and assert containment after equals containment before, or that the call threw. Assert the five *starting* shapes are as intended, **and** assert the two clean baselines are carried forward unchanged (`contained-clean` stays contained, `outside-clean` stays outside), so an implementation that inverts every row cannot pass. The **sixth**, symlink shape (§10b) is V9's `KNOWN-OPEN` row and is **not** asserted here — a test that must fail is not a test |
 | T5 | tests/unit/descriptor.test.js | **converts R2**: stance by containment — planted `.git` file/dir and `WIENERDOG_DEV=1` all yield `'prod'`; an out-of-app `current` yields `'dev'` (AC1, AC2) |
 | T6 | tests/unit/descriptor.test.js | **converts R1**: the dev-reduction test's fixture is rebuilt with `current` pointing OUTSIDE `<core>/app`; its assertions (tracked-source edit does not drift; model/layout/at/run/home edits do) stay **semantically identical** |
 | T7 | tests/unit/launcher.test.js | **converts R3**: (a) a prod fixture + a planted `.git` **directory** now `ok:true` (no downgrade, digest unchanged); (b) a descriptor with `stance` hand-set to `"dev"` over a contained tree ⇒ refuse with **C1** (AC5) |
@@ -2223,7 +2519,8 @@ false`, `PASS`, exit 0.
   paragraph is the hard boundary: **six** relocations of this hole are on record
   and every additive guard generated the next finding, so a sixth guard smuggled
   in here is an automatic REQUEST-CHANGES even if it works.
-- **`src/scheduler/launcher.js`'s `refuse()` banner (expression at `:439-448`).**
+- **`src/scheduler/launcher.js`'s `refuse()` banner (the arrow function is
+  `:439-448`; the `reason` string it builds is `:440-443`).**
   Its remedy line at **`:442-443`** — *"If the change was intentional, run
   `wienerdog sync`; otherwise investigate."* — combined with S1 makes a C3 refusal instruct the user to install the
   attacker's `launch.js` (Current state §10, AMPLIFICATION). It is a real
@@ -2331,14 +2628,24 @@ false`, `PASS`, exit 0.
    that change. The reason it needs a signature rather than a note: its only
    recovery — run the installer from **a non-dev source root**, Table G row 1's
    canonical recovery list, quoted there and not paraphrased here — appears in
-   **no** user-facing text today, and **two** successive drafts documented a
+   **no** user-facing text today, and **three** successive drafts documented a
    recovery that does not work. Round 3 found `install.sh` does not recover
    (`install.sh` invokes `wienerdog init`; `src/cli/init.js:87`'s guard makes
    `:88` print "already installed" and return before `vendorSelf`). Round 4 found
    the replacement entry *"an explicitly-invoked … fresh checkout"* does not
    recover either, because `isDevCheckout` is true for a git checkout, so the
-   install stays dev. D6 puts the corrected recovery into `docs/GLOSSARY.md`; the
-   sign-off is that this is enough — and the reviewer's standing point applies:
-   the sign-off is warranted **because** the recovery is documented, so a
-   documented recovery with a broken entry on it is not a typo.
+   install stays dev. **Round 5 found the next replacement, *"a global
+   `npm install -g wienerdog` followed by `wienerdog sync`"*, does not recover
+   either**: `writeShim` puts `$HOME/.local/bin/wienerdog` in front of the npm
+   global bin on the PATH `src/cli/sync.js:209` tells the user to set, and
+   `package.json` declares no `postinstall`, so bare `wienerdog` re-enters the same
+   install through `app/current` and self-resyncs. The list now carries a **standing
+   rule** — every entry names an invocation whose source root is provably non-dev
+   and provably not the current install's own tree, and is **verified by execution**
+   before being listed — and its executed matrix is printed under that paragraph.
+   D6 puts the corrected recovery into `docs/GLOSSARY.md`; the sign-off is that this
+   is enough — and the reviewer's standing point applies: the sign-off is warranted
+   **because** the recovery is documented, so a documented recovery with a broken
+   entry on it is not a typo. **Quote the corrected list in the sign-off request;
+   do not paraphrase it.**
 8. This spec's `status:` flipped to `In-Review` in the same PR.
