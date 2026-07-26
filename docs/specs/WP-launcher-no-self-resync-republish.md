@@ -93,8 +93,13 @@ self-resync and republishes.
 
 **The dependency is real, not notional.** This WP does not compute the
 self-resync predicate; it **consumes D9's**. D9 introduces `selfResync` and the
-containment-derived `dev` inside `vendorSelf`, immediately above the
-`writeLauncher` call. Recomputing either would create a second copy of a
+containment-derived `dev` inside `vendorSelf`. **`selfResync` is bound *before*
+D9's `if (selfResync) / else if (isDevCheckout)` branch — i.e. before
+`repointCurrent`, not immediately above the `writeLauncher` call**; `dev` is
+bound after `repointCurrent` and before `writeLauncher` (Exact contracts states
+both again). That placement of `selfResync` is load-bearing, not incidental, and
+**T3 is its gate** — see the last note under the Test index. Recomputing either
+would create a second copy of a
 canonical predicate — the mirror proliferation ADR-0031 forbids, and the failure
 class that cost `WP-stance-authority-containment` five review rounds. On a tree
 without D9 there is nothing to consume: `vendorSelf` has no `selfResync` binding
@@ -208,14 +213,14 @@ writable by design.
 
 A scratch copy of the repo with a minimal `WP-stance-authority-containment`
 D1+D9 (`installStance`, `selfResync`, containment-derived `dev`) plus this WP's
-change was run through a six-shape matrix. Measured results:
+change was run through a **seven**-shape matrix. Measured results:
 
 | shape | after the change |
 |---|---|
 | first install (no `app/current` yet) | `launch.js` placed, stance `prod`, `copied=true` |
 | prod self-resync, marker planted in the tree | marker **absent**; `launch.js` bytes **byte-identical** to before; stance still `prod`; sync succeeds |
 | prod self-resync, run twice | still byte-identical (idempotent) |
-| prod self-resync, `launch.js` deleted first | `WienerdogError` thrown, nothing published; a later run from a different source root restores a marker-free copy |
+| prod self-resync, `launch.js` deleted first | `WienerdogError` thrown, nothing published; a later run from a different source root republishes a marker-free copy — **from `packageRoot()`, not from that source root** (see the bytes-provenance note below) |
 | prod self-resync, `launch.js` replaced by a **directory** | `WienerdogError` thrown, nothing published — **and** the recovery run from a different source root throws too |
 | upgrade: `<core>/app/9.9.9` spawned as its own source root | `current` repointed to `9.9.9`, the **new** launcher published |
 | dev self-resync, maintainer edits the checkout's `launcher.js` | edit **is** published (workflow preserved) |
@@ -223,15 +228,36 @@ change was run through a six-shape matrix. Measured results:
 The same matrix on **unmodified `main`** reports the marker present in
 `<core>/launcher/launch.js` after one prod self-resync — the red input.
 
-**Provenance of the last row, stated so it is not read as more than it is.** The
-first six rows are prototype runs. The seventh was added in round 2 and its two
-halves come from a direct `mktemp -d` probe of the filesystem primitives
+**Provenance of the "`launch.js` replaced by a directory" row, stated so it is
+not read as more than it is** — named by content rather than by position, because
+the matrix has been reordered once and an ordinal is a mirror waiting to drift.
+Six of the seven rows are prototype runs. That one was added in round 2 and its
+two halves come from a direct `mktemp -d` probe of the filesystem primitives
 `writeLauncher` uses, not from a full prototype run: `fs.readFileSync` on a
 directory gives `EISDIR` (so the carry arm's single read throws → row 3), and
 `fs.writeFileSync` on that same directory also gives `EISDIR` (so the publish arm
 cannot complete the recovery either). The same probe measured `EACCES` on both
 calls for a mode-`000` file owned by a non-root user. T2 is what turns this from
 a probe into a gate.
+
+**Bytes-provenance of a recovery run, because two roots diverge here and the
+divergence is invisible unless stated.** `vendorSelf` binds
+`root = opts.sourceRoot || packageRoot()` (`vendor.js:165`) and uses it for the
+version, the stance and the copied tree — but it **never forwards `sourceRoot` to
+`writeLauncher`** (`vendor.js:195` on `main`; D2's replacement call at Exact
+contracts does not add it either). So `writeLauncher`'s publish arm always falls
+back to `packageRoot()` (`vendor.js:259`). Executed: `vendorSelf(paths,
+{sourceRoot: alt})` with a marker planted in `alt`'s `src/scheduler/launcher.js`
+publishes a `launch.js` **without** that marker. Consequence for the wording
+everywhere in this spec: a recovery run from a different source root is
+marker-free because its **`carryForward` is falsy and the bytes come from
+`packageRoot()`** — *not* because the source root was clean. Say it that way in
+AC6 and in T2's comments; the two coincide in the tests only because the test
+process's `packageRoot()` is the repo. **Do not "fix" this by forwarding
+`sourceRoot`** — that would be an out-of-scope behaviour change on the arm this
+WP does not touch, and it is already caught: `tests/unit/vendor.test.js:412-413`
+asserts the published bytes equal `packageRoot()`'s launcher, and AC4 requires
+that test to pass unmodified.
 
 ### 4. Existing tests: zero go red
 
@@ -403,30 +429,60 @@ spot.
       recording, registered in round 2).
 - [ ] **Verification commands / greps** — V1 (the four tests), V3 (the
       no-recomputation greps), V4 (the call-site grep). **Every one of them is
-      an exit-code gate**, not an eyeball check: a step whose printed output
-      looks right while `$?` says the opposite is a broken gate, and V3/V5 were
-      exactly that in round 1. Any new or edited step must be proven by running
-      it in both the correct and the violating state and pasting `$?` for each.
-- [ ] **Current-state description** — §3's six-shape matrix table.
+      an exit-code gate**, not an eyeball check, and the gate is the **whole
+      pasted block's** `$?`, not a printed line inside it. Two distinct failures
+      have already shipped here: round 1 inverted V3/V5 (`grep -c` printing `0`
+      while exiting `1`), and round 2 **masked** V1/V3/V4/V5/V7 by ending each
+      block with `echo "… exit=$?"`, so the block reported `exit=1` to a human
+      and exited `0` to anything checking status. The fixed form ends every
+      block with `rc=$?; echo "… exit=$rc"; (exit $rc)`. Any new or edited step
+      must be proven by running it in both the correct and the violating state
+      and pasting **the block's own `$?`** for each.
+- [ ] **Current-state description** — §3's **seven**-shape matrix table (the
+      seventh row landed in round 2; the count is itself a mirror and drifted,
+      so it is spelled out here, at §3's lead-in and in §3's provenance
+      paragraph — all three must agree), plus §3's bytes-provenance note, whose
+      claim about `sourceRoot` never reaching `writeLauncher` is mirrored in AC6
+      and in T2's comments.
 - [ ] **Operative prose steps** — Implementation notes D1, D2, D3, and the
       fail-closed paragraph (its recovery claim mirrors Table L's "Recovery from
       row 3" row).
 - [ ] **Test bodies** — T1–T4 in the Test index (each asserts one Table L row;
       T1 additionally asserts the "both arms" row's carry-arm half, T2 the row-3
-      message fields and both accepted failure shapes).
+      message fields and both accepted failure shapes, T3 the placement of D9's
+      `selfResync` binding — mirrored in AC7 and in Context's dependency
+      paragraph, which must all name the same placement: *before* D9's branch).
 - [ ] **Table M mutation rows** — every Table L row and every AC needs a
       mutation partner; M6 is the "both arms" row's, added in round 2.
-- [ ] **Residual R-dev** — its own block above; cited from Table L's "Why
-      `!dev`" and "Not closed by this WP" rows, from Out of scope, and from
-      Definition of done item 7. Four surfaces; a fifth gets registered here.
+- [ ] **Residual R-dev** — its own block above, plus **six** citing surfaces,
+      enumerated because a round-3 review found the count stale at "four":
+      (1) Table L's "Why `!dev`" row, (2) Table L's "Not closed by this WP" row,
+      (3) Implementation notes → **D3**, (4) the Out-of-scope
+      **`docs/THREAT-MODEL.md`** bullet, (5) the Out-of-scope **dev-side guard**
+      bullet, (6) **Definition of done item 7**. A seventh gets registered here
+      on the spot.
 - [ ] **Shipped JSDoc prose in `src/`** — the `carryForward` `@param` text and
       the corrected call-site comment; these ship to users' disks and are the
       mirror most likely to drift.
 - [ ] **The citation of `WP-stance-authority-containment` Table G rows S1/S2** —
-      registered per that spec's own discipline. It appears in Context, in
-      Table L's last row, in Implementation notes D3, and in Out of scope. Every
-      one of those four is a **citation by name**, never a restatement; if a
-      review finds a fifth, register it here rather than paraphrasing again.
+      registered per that spec's own discipline, in **six** places, enumerated
+      because a round-3 review found the count stale at "four": (1) Context,
+      (2) Table L's "Not closed by this WP" row, (3) Implementation notes → D3's
+      prose, (4) **the D3 JSDoc replacement block that ships in `src/`**,
+      (5) Out of scope, (6) **Definition of done item 6**. Every one is a
+      **citation by name**, never a restatement; a seventh gets registered here
+      rather than paraphrased again. Note that (4) and (6) cite **row S2 only**,
+      deliberately — this WP closes S1 and neither surface may outlive that.
+- [ ] **The cross-WP constraint on `WP-refusal-remedy-discriminator`** —
+      registered in round 3 after all three surfaces drifted to a universal
+      "on a prod install at all". Canonical wording lives in the fail-closed
+      paragraph of Implementation notes → D1: *sync no longer refreshes
+      `<core>/launcher/launch.js` **on a prod self-resync entered through
+      `app/current`***. Mirrored in (1) the Out-of-scope
+      **`src/scheduler/launcher.js`** bullet and (2) **Definition of done item 7,
+      bullet 3**. The operative instruction — "must not promise launcher
+      repair" — is unchanged by the narrowing and must read identically in all
+      three.
 
 ## Implementation notes & constraints
 
@@ -560,27 +616,54 @@ keeps failing. This is forced, not chosen — the only comparison source availab
 on the carry arm is the very tree the arm exists to distrust, so there is nothing
 honest to compare against. The recovery is the same one row 3 names:
 `npx wienerdog@latest sync` from a clean source root republishes. **Related
-cross-WP constraint:** after this WP `wienerdog sync` no longer refreshes
-`<core>/launcher/launch.js` on a prod install at all, so the sibling
+cross-WP constraint (stated in its exact scope — this is the canonical wording,
+mirrored in Out of scope and in Definition of done item 7):** after this WP
+`wienerdog sync` no longer refreshes `<core>/launcher/launch.js` **on a prod
+self-resync entered through `app/current`** — it still refreshes it on every
+other shape, which is exactly why `npx wienerdog@latest sync` is the recovery
+this spec names. The consequence for the sibling is unchanged by that narrowing:
+because the refusal banner's remedy is reached by a user running the shim'd
+`wienerdog sync`, which **is** that self-resync,
 `WP-refusal-remedy-discriminator`'s replacement remedy text **must not promise
-launcher repair** — recorded here because this WP is what makes it true; that
+launcher repair**. Recorded here because this WP is what makes it true; that
 spec's own revision carries it, and this WP does not open it.
 
-**What a refused sync leaves behind, stated narrowly.** The throw happens
-**after** `repointCurrent`, which on a self-resync resolves to the same target,
-so **`app/current`'s resolved target is unchanged** — that, and not "the install
-is exactly as it found it", is the true claim. Two things do move and neither is
-harmful: `repointCurrent` sweeps orphaned `current.tmp.*` entries on both its
-no-op and its rewrite path (`vendor.js:104-112`), and the real `sync` rewrites
-the executable pins **before** it ever calls `vendorSelf` (`createPins` at
-`src/cli/sync.js:186-194`, `vendorSelf` at `:204`), so with a stale pin and a
-missing launcher the pin is rewritten and then the sync throws. Nothing
-un-uninstallable is left: the throw precedes `writeLauncher`'s
-`if (opts.manifest)` block, `sync.js` saves the manifest only at `:339` — after
-`vendorSelf` — so the refused run persists no manifest at all, and the pins
-`createPins` wrote land under `paths.state`, which `disposeCoreMechanics` sweeps
-unconditionally whether or not the manifest knows about them
-(`src/core/manifest.js:917-935`).
+**What a refused sync leaves behind — scoped to the caller, because the two
+production callers differ.** The throw happens **after** `repointCurrent`, which
+on a self-resync resolves to the same target, so **`app/current`'s resolved
+target is unchanged** — that, and not "the install is exactly as it found it", is
+the true claim. Two things do move and neither is harmful: `repointCurrent`
+sweeps orphaned `current.tmp.*` entries on both its no-op and its rewrite path
+(`vendor.js:104-112`), and the real `sync` rewrites the executable pins **before**
+it ever calls `vendorSelf` (`createPins` at `src/cli/sync.js:186-194`,
+`vendorSelf` at `:204`), so with a stale pin and a missing launcher the pin is
+rewritten and then the sync throws.
+
+**Through `wienerdog sync`, nothing un-uninstallable is left.** The throw precedes
+`writeLauncher`'s `if (opts.manifest)` block, and `sync.js` saves the manifest
+only at `:339` — *after* `vendorSelf` — so the refused run persists **no manifest
+at all**, and the pins `createPins` wrote land under `paths.state`, which
+`disposeCoreMechanics` sweeps unconditionally whether or not the manifest knows
+about them (`src/core/manifest.js:917-935`).
+
+**Through `wienerdog adopt` that ordering is reversed, so the claim above does
+not carry.** `adopt` calls `manifestLib.save(paths, manifest)` at
+`src/cli/adopt.js:387` and only then `vendorSelf(paths, { manifest })` at `:392`
+(the second `save` at `:394` is never reached). A refused adopt therefore
+**persists a manifest** — one that already names the vendored tree
+(`recordOnce(… kind: 'vendored-tree' …)`, `vendor.js:170`, which runs before the
+throw) but **lacks the `<core>/launcher` dir and `launch.js` file entries**, while
+`repointCurrent` has already created `<core>/app/current`. `wienerdog uninstall`
+would then remove the app tree and leave a stray `<core>/launcher/…` behind if one
+exists at that path (`vendor.js:277-280` names that failure). This is **not a
+regression in kind** — on `main` today `writeLauncher`'s own `readFileSync(src)`
+throws from the identical position for a source root with no launcher — but this
+WP makes that throw far more reachable, so it is recorded rather than implied.
+It is **not** in scope to reorder `adopt.js`: that file is not a deliverable, the
+reordering is a behaviour change on a path this WP does not otherwise touch, and
+the recovery (`npx wienerdog@latest sync`, then `wienerdog adopt` again) is the
+same one row 3 already names. Raise it as a discovered issue in the PR body; do
+not fix it here.
 
 ### D2 — the call site
 
@@ -768,9 +851,16 @@ test('vendor: a prod self-resync with launch.js missing or unreadable fails clos
   assert.equal(fs.existsSync(launcher), false, 'nothing was published');
 
   // Recovery: a run from a DIFFERENT source root is not a self-resync and restores it.
+  // A different source root makes carryForward FALSY, so Table L row 1 runs. The
+  // bytes come from packageRoot() — vendorSelf never forwards sourceRoot to
+  // writeLauncher (Current state §3, bytes-provenance) — so the marker planted in
+  // the APP TREE cannot appear. The second assertion is belt-and-braces: under
+  // every implementation this spec contemplates the bytes are packageRoot()'s and
+  // it cannot fail. Keep it anyway — it is the tripwire if someone later forwards
+  // sourceRoot, which AC4 / vendor.test.js:412-413 also forbid.
   vendor.vendorSelf(paths, { sourceRoot: fullSource() });
-  assert.ok(fs.statSync(launcher).isFile(), 'a clean source root restores launch.js');
-  assert.equal(readsMarker(launcher, 'A7-PLANT-DELETED'), false, 'restored from the clean source');
+  assert.ok(fs.statSync(launcher).isFile(), 'a non-self-resync run republishes launch.js');
+  assert.equal(readsMarker(launcher, 'A7-PLANT-DELETED'), false, 'republished from packageRoot(), not the app tree');
 
   // --- Shape B: PRESENT BUT UNREADABLE (EISDIR). A directory is used rather
   // than a mode-000 file because root can read mode 000 and CI may run as root.
@@ -832,7 +922,7 @@ test('vendor: a dev self-resync still re-publishes launch.js from the checkout',
 });
 ```
 
-Seven notes on that file, so nothing in it reads as accidental:
+Eight notes on that file, so nothing in it reads as accidental:
 
 - `fullSource()` copies the **real** package (via the existing `copyTree`, the
   same idiom `tests/unit/launcher.test.js:36-42` uses) rather than a stub,
@@ -866,6 +956,18 @@ Seven notes on that file, so nothing in it reads as accidental:
   `throw new WienerdogError('launcher')`, which carries none of the three fields
   Table L row 3 requires. Each predicate therefore checks the destination path,
   the `err.code`, and the literal recovery command separately.
+- **T3 is not only an upgrade test — it is the live gate on *where* D9 binds
+  `selfResync`.** D9 binds it **before** its `if (selfResync) / else if
+  (isDevCheckout)` branch, i.e. before `repointCurrent`. Bind it *after*
+  `repointCurrent` instead and the predicate is computed against the link this
+  same call has just rewritten, so `wienerdog update`'s hand-off sync — which
+  spawns `<core>/app/<newver>/bin/wienerdog.js sync` (`src/cli/update.js:45-48`)
+  and repoints `current` to `<newver>` — becomes a self-resync, carries the old
+  launcher forward, and `<core>/launcher/launch.js` freezes at the
+  first-install version **forever**. Measured: a prototype with that placement
+  turns T3 **red** and leaves T1, T2 and T4 green. So if T3 fails and nothing
+  else does, look at the binding's position before you look at `writeLauncher`.
+  Do not "simplify" T3's separate `<core>/app/9.9.9` source root away.
 
 ## Security checklist
 
@@ -909,14 +1011,25 @@ Every criterion below has a mutation partner in Table M that reddens it.
       `npx wienerdog@latest sync` — and each is asserted separately, not implied
       by the error class. (T2; Table L row 3)
 - [ ] **AC6** — After AC5's `ENOENT` refusal, a `vendorSelf` from a **different**
-      source root restores `launch.js` from that clean source, marker-free. For
-      the `EISDIR` shape that same run **also throws** — the recovery requires
-      clearing the path first, and clearing it then completes. Both halves are
-      asserted, because both are claimed in prose (Implementation notes → D1,
-      Table L "Recovery from row 3"). (T2)
+      source root republishes `launch.js`, marker-free. **The bytes come from
+      `packageRoot()`, not from that source root** — `vendorSelf` never forwards
+      `sourceRoot` to `writeLauncher` (Current state §3, bytes-provenance note),
+      so what the different source root buys is a falsy `carryForward` and
+      therefore Table L row 1, not a change of byte source. Do not reword this
+      as "restores it from the clean source": that reading is false, and
+      *making* it true by forwarding `sourceRoot` is out of scope and would
+      redden `tests/unit/vendor.test.js:412-413` (AC4). For the `EISDIR` shape
+      that same run **also throws** — the recovery requires clearing the path
+      first, and clearing it then completes. Both halves are asserted, because
+      both are claimed in prose (Implementation notes → D1, Table L "Recovery
+      from row 3"). (T2)
 - [ ] **AC7** — A genuine upgrade — `<core>/app/9.9.9` acting as its own source
       root, the shape `src/cli/update.js:45-48` produces — repoints `current` to
-      `9.9.9` and publishes the **new** launcher. (T3; Table L row 1)
+      `9.9.9` and publishes the **new** launcher. This also pins **where D9 binds
+      `selfResync`**: bound after `repointCurrent` instead of before its branch,
+      this exact shape becomes a self-resync and `launch.js` would freeze at the
+      first-install version forever (Test index, last note — measured red on a
+      prototype with that placement). (T3; Table L row 1)
 - [ ] **AC8** — A **dev** self-resync still publishes: a maintainer's edit to the
       checkout's `src/scheduler/launcher.js` reaches `<core>/launcher/launch.js`.
       (T4; Table L row 1, the `!dev` gate)
@@ -949,11 +1062,11 @@ last column. Run these to prove the gates are not vacuous, then revert.
 | M1 | `carryForward: selfResync && !dev` → `carryForward: false` | T1 **and** T2 | `pass 2 / fail 2`; T3 and T4 stay green |
 | M2 | drop the gate: `carryForward: selfResync` | T4 only | `pass 3 / fail 1` |
 | M3 | replace the `throw` in the carry arm with a fall-through to the publish arm | T2 | expected red (row 3 is the only assertion of it) |
-| M4 | delete the `else` and always carry forward | T3 **and** T4 | expected red |
+| M4 | delete the `else` and always carry forward | **all four** — T3 and T4 are the *diagnostic* pair (they are the two that assert a publish must happen), but T1 and T2 fail too: their fixtures' **first install** then has no launcher to carry, so `writeLauncher` throws `ENOENT` before either test reaches its own assertion | **measured `pass 0 / fail 4`** |
 | M5 | recompute the predicate inside `writeLauncher` instead of taking `opts.carryForward` | V3 (match count `0` → non-zero, **and its exit status `0` → `1`**) | executed on the equivalent shape: count `1`, `$?` = `1` |
 | M6 | move the whole `if (opts.manifest) { … }` block **into** the `else` arm, next to the source read | **T1 only** — and that is the entire point: V1's other three tests, V2–V7, AC1–AC11 and M1–M5 all stay **green**, so T1's fresh-manifest assertion is the only thing standing between this mutation and a shipped uninstall bug | expected red (AC12 is its only assertion); the implementer confirms both halves — T1 red **and** everything else green |
 
-M1 and M2 were run end to end; M5's grep was run against both shapes. M3, M4 and
+M1, M2 and M4 were run end to end; M5's grep was run against both shapes. M3 and
 M6 are listed with their expected reddening and are the implementer's to confirm.
 For **M6, confirming that everything *else* stays green is as load-bearing as
 confirming T1 goes red** — paste both.
@@ -964,48 +1077,84 @@ All commands are read-only except the test runs, which write only inside
 `mkdtemp` directories. None touches `~/.wienerdog`, launchd, `gui/501` or a
 fixed `/tmp` path. Run from the repo root.
 
-**Read this before running any of them.** A verification step is its **exit
-status**, not its printed output. `grep -c` prints `0` and exits **1** when it
-finds nothing, and prints `1` and exits **0** when it finds a match — so a naked
-`grep -cE …` "expect 0" gate fails on the correct state and passes on the
-violation, exactly backwards. Round 1 shipped that inversion in V3 and V5; it
-survived a review that read the printed `0` and never checked `$?`. Every step
-below that has an exit-code contract is now written in the explicit
-`if …; then …; exit 1; fi` form inside `bash -c`, with `echo "exit=$?"` after it,
-and each was **executed in both the correct and the violating state** with both
-statuses recorded. `! grep -q …` is deliberately avoided: `set -e` does not abort
-on `! cmd`, a gotcha this project has already been bitten by. **Paste `exit=…`
-for every step, not just its stdout.**
+**Read this before running any of them.** A verification step is the **exit
+status of the whole pasted block**, not its printed output, and not the status of
+some command inside it. This spec has now had that wrong twice, in two different
+ways, and both survived a review:
 
-Sweep of all seven steps for the same inversion, done in this revision:
+1. **Round 1 — inversion.** `grep -c` prints `0` and exits **1** when it finds
+   nothing, and prints `1` and exits **0** when it finds a match, so a naked
+   `grep -cE …` "expect 0" gate failed on the correct state and passed on the
+   violation, exactly backwards. V3 and V5 shipped that.
+2. **Round 2 — masking.** The fix wrapped the logic in `bash -c '… exit 1 …'`
+   and then appended `echo "V3 exit=$?"`. That **reads** correctly — a human sees
+   `V3 exit=1` — but `echo` is the block's last command and it succeeds, so the
+   block's own status is **`0` on a failing gate**. Measured on a red tree: the
+   block printed `V4 exit=1` and exited `0`. V1, V3, V4, V5 and V7 all had it.
+   It is the round-1 defect one level up: correct to a reader, **vacuous to
+   anything checking status** — including a reviewer's `&&` chain, a CI step, and
+   Definition of done item 1, which asks for pasted output a reviewer may trust
+   *because* it says `exit=1`.
 
-| Step | Kind of gate | Inverted? |
-|---|---|---|
-| V1, V2 | `node tests/run.js` — nonzero exit on any failure | no |
-| V3 | was `grep -c`, "expect 0" | **yes — fixed below** |
-| V4 | `grep -n`, "expect one line" — correct polarity (exit 0 on the match it wants), but the *count* was ungated | no inversion; **count now gated** |
-| V5 | was `grep -c`, "expect 0" | **yes — fixed below** |
-| V6 | `git diff --name-only` — always exits 0; a **list comparison**, not an exit-code gate. Stated as such so no one mistakes its exit 0 for a pass. The enforcing gate is CI's `boundary-check` | n/a |
-| V7 | `npm run lint` — nonzero exit on any violation | no |
+**The form every exit-code step below now uses**, and the form any new or edited
+step must use — capture the status, print it, then **return it as the block's
+final command**:
+
+```bash
+bash -c '
+  …logic…
+  if <violation>; then echo "Vn FAIL — …"; exit 1; fi
+  echo "Vn PASS"
+'
+rc=$?; echo "Vn exit=$rc"; (exit $rc)
+```
+
+`(exit $rc)` is a subshell, so it sets the block's `$?` **without** killing an
+interactive shell the way a bare `exit $rc` would. Each block below was
+**executed in both the correct and the violating state**, and what was recorded
+is the **block's own `$?`**, not the printed line. `! grep -q …` is deliberately
+avoided: `set -e` does not abort on `! cmd`, a gotcha this project has already
+been bitten by. **When you paste, paste the block's own `$?` too** — e.g. run it,
+then `echo "block \$? = $?"` on the next line.
+
+Sweep of all seven steps, for both defects, done across rounds 2 and 3:
+
+| Step | Kind of gate | Round-1 inversion? | Round-2 masking? |
+|---|---|---|---|
+| V1 | `node tests/run.js` — nonzero exit on any failure | no | **yes — fixed below** |
+| V2 | `node tests/run.js` — nonzero exit on any failure | no | n/a (no `exit=` line was appended) |
+| V3 | was `grep -c`, "expect 0" | **yes — fixed round 2** | **yes — fixed below** |
+| V4 | `grep -n`, "expect one line" — correct polarity, but the *count* was ungated | no inversion; count gated in round 2 | **yes — fixed below** |
+| V5 | was `grep -c`, "expect 0" | **yes — fixed round 2** | **yes — fixed below** |
+| V6 | `git diff --name-only` — always exits 0; a **list comparison**, not an exit-code gate. Stated as such so no one mistakes its exit 0 for a pass. The enforcing gate is CI's `boundary-check` | n/a | n/a |
+| V7 | `npm run lint` — nonzero exit on any violation | no | **yes — fixed below** |
+
+No eighth inversion and no further masking exists in the steps below; the sweep
+that produced this table was re-run in round 3 over every block on the page.
 
 **V1 — the four new tests pass.**
 
 ```bash
 node tests/run.js tests/unit/vendor-selfresync.test.js
+rc=$?; echo "V1 exit=$rc"; (exit $rc)
 ```
 
-Expect `tests 4 / pass 4 / fail 0` **and `exit=0`** (append `; echo "V1 exit=$?"`
-— `tests/run.js` exits nonzero on any failure, so here the status and the counts
-agree, unlike V3/V5). It is still **four** tests: round 2 added assertions to T1
-and T2 rather than a fifth test, precisely so this count and M1's measured
-`pass 2 / fail 2` stay literally true.
+Expect `tests 4 / pass 4 / fail 0`, `V1 exit=0`, **and the block's own `$?` = 0**.
+`tests/run.js` exits nonzero on any failure, so here the status and the counts
+agree, unlike V3/V5. Measured both ways: against a passing file the block printed
+`V1 exit=0` and exited **0**; against a deliberately failing test file it printed
+`V1 exit=1` and exited **1**. It is still **four** tests: round 2 added
+assertions to T1 and T2 rather than a fifth test, precisely so this count and
+M1's measured `pass 2 / fail 2` stay literally true.
 
 **Red inputs, three of them, each proving a different gate is live:** Table M's
-M1 gives `pass 2 / fail 2`, the two failures being T1 and T2 by name; M4 reddens
-T3 and T4, so a `writeLauncher` that simply never publishes does not satisfy V1
-either; and **M6 reddens T1 alone while every other gate in this spec stays
-green** — that is the only signal separating a correct implementation from the
-uninstall bug described in Implementation notes → D1.
+M1 gives `pass 2 / fail 2`, the two failures being T1 and T2 by name; M4 gives
+`pass 0 / fail 4` — T3 and T4 are the diagnostic pair, but T1 and T2 fail too
+because their first install then has no launcher to carry (Table M, M4), so a
+`writeLauncher` that simply never publishes does not satisfy V1 either; and
+**M6 reddens T1 alone while every other gate in this spec stays green** — that is
+the only signal separating a correct implementation from the uninstall bug
+described in Implementation notes → D1.
 
 **V2 — the whole suite still passes.**
 
@@ -1016,8 +1165,10 @@ node tests/run.js
 Expect `fail 0`. Do not assert a literal test count: it depends on
 `WP-stance-authority-containment`'s own test edits, which land first. **Red
 input:** any change that reaches a non-self-resync path — e.g. M4 — reddens
-`tests/unit/vendor.test.js`'s WP-157 launcher test, which asserts the published
-bytes equal `packageRoot()`'s launcher.
+`tests/unit/vendor.test.js:397`, the WP-157 launcher test, whose very first
+`vendorSelf` is a first install that must publish and whose assertion at
+`:412-413` requires the published bytes to equal `packageRoot()`'s launcher.
+Under M4 it throws before reaching that assertion; either way it goes red.
 
 **V3 — `writeLauncher` does not recompute the predicate (Table L, AC10).**
 
@@ -1029,17 +1180,20 @@ echo "V3 matches: $hits"
 if [ "$hits" -ne 0 ]; then echo "V3 FAIL — writeLauncher recomputes the predicate"; exit 1; fi
 echo "V3 PASS"
 '
-echo "V3 exit=$?"
+rc=$?; echo "V3 exit=$rc"; (exit $rc)
 ```
 
-Correct state must print `V3 matches: 0` / `V3 PASS` / `V3 exit=0`. **Red
-input:** an implementation that recomputes `realpathSync(currentLink(paths))`
-inside `writeLauncher`. Executed on the equivalent shape — the identical block
-with the awk range changed to `vendorSelf`, whose body legitimately *does* carry
-the predicate — which printed `V3 matches: 1` / `V3 FAIL` / `V3 exit=1`. **Both
-statuses were measured at `016fe22`**; that is what makes this a gate rather than
-an inversion (the round-1 form printed the same `0` and exited **1** on the
-correct state).
+Correct state must print `V3 matches: 0` / `V3 PASS` / `V3 exit=0` **and the
+block itself must exit 0**. **Red input:** an implementation that recomputes
+`realpathSync(currentLink(paths))` inside `writeLauncher`. Executed against
+exactly that shape — a scratch copy of `vendor.js` carrying D1+D2 plus a
+`const cur = fs.realpathSync(currentLink(paths));` line inside the carry arm — the
+block printed `V3 matches: 1` / `V3 FAIL` / `V3 exit=1` **and exited 1**. On the
+same tree with that line removed it printed `V3 matches: 0` / `V3 PASS` /
+`V3 exit=0` **and exited 0**. Both of the block's own statuses were measured;
+that is what makes this a gate. For contrast, the round-2 form — identical but
+ending `echo "V3 exit=$?"` — printed `V3 exit=1` on the red tree and **exited
+0**.
 
 Sanity-check the range extraction separately, because an awk range that silently
 matched nothing would also print `0`:
@@ -1062,14 +1216,17 @@ for pat in "carryForward: selfResync && !dev" "if (opts.carryForward)"; do
 done
 echo "V4 PASS"
 '
-echo "V4 exit=$?"
+rc=$?; echo "V4 exit=$rc"; (exit $rc)
 ```
 
 Each pattern must count **exactly one**. `grep -cF` is fixed-string, so `&&` and
-`!` are literal. **Red input:** a call site that passes `carryForward: selfResync`
-(Table M's M2) makes the first count `0`, printing `V4 FAIL` and `exit=1`. A
-duplicated call site makes it `2` and fails the same way — the round-1 form
-printed both lines and exited `0` in that case.
+`!` are literal. Measured on a scratch tree carrying D1+D2: both counts `1`,
+`V4 PASS`, `V4 exit=0`, **block exit 0**. **Red input:** a call site that passes
+`carryForward: selfResync` (Table M's M2) makes the first count `0` — measured:
+`V4 [carryForward: selfResync && !dev] = 0` / `V4 FAIL` / `V4 exit=1`, **block
+exit 1**. A duplicated call site makes it `2` and fails the same way. This is the
+block on which the round-2 masking was first measured: the same red tree with the
+old `echo "V4 exit=$?"` ending printed `V4 exit=1` and **exited 0**.
 
 **V5 — ADR-0004 (AC11).**
 
@@ -1080,13 +1237,16 @@ echo "V5 matches: $hits"
 if [ "$hits" -ne 0 ]; then echo "V5 FAIL — ADR-0004: this WP starts nothing"; exit 1; fi
 echo "V5 PASS"
 '
-echo "V5 exit=$?"
+rc=$?; echo "V5 exit=$rc"; (exit $rc)
 ```
 
-Correct state must print `V5 matches: 0` / `V5 PASS` / `V5 exit=0` — measured at
-`016fe22` on `main`. **Red input:** any retry timer or watcher added to the carry
-arm makes `hits` non-zero and the block exit `1`. As with V3, the round-1 form
-exited `1` on the clean tree and would have exited `0` on a violation.
+Correct state must print `V5 matches: 0` / `V5 PASS` / `V5 exit=0` **and the
+block must exit 0** — measured on `main`'s `src/core/vendor.js` and again on a
+D1+D2 scratch tree. **Red input:** any retry timer or watcher added to the carry
+arm. Measured with a `setTimeout(() => {}, 0);` inserted into the carry arm:
+`V5 matches: 1` / `V5 FAIL` / `V5 exit=1`, **block exit 1**. As with V3, the
+round-1 form exited `1` on the clean tree, and the round-2 form exited `0` on the
+violating one.
 
 **V6 — the permission boundary (AC9).** This one is a **list comparison, not an
 exit-code gate**: `git diff --name-only` exits `0` whatever it prints, so its
@@ -1112,10 +1272,13 @@ adds a line here and `boundary-check` rejects the PR.
 
 ```bash
 npm run lint
-echo "V7 exit=$?"
+rc=$?; echo "V7 exit=$rc"; (exit $rc)
 ```
 
-Expect `V7 exit=0`.
+Expect `V7 exit=0` **and block exit 0**. Measured both ways on this repo: clean
+tree → `V7 exit=0`, block exit **0**; with a single markdownlint violation
+introduced into this spec file → `V7 exit=1`, block exit **1**. Under the round-2
+form the violating run printed `V7 exit=1` and exited **0**.
 
 ## Out of scope (do NOT do these)
 
@@ -1140,10 +1303,12 @@ Expect `V7 exit=0`.
   whose remedy text amplifies this defect. The sibling
   `WP-refusal-remedy-discriminator` is in flight on that file. Do not open it —
   not even to read. One consequence of *this* WP lands in *that* one and is
-  recorded in the fail-closed paragraph of Implementation notes → D1: after this
-  change `wienerdog sync` no longer refreshes `<core>/launcher/launch.js` on a
-  prod install, so that WP's replacement remedy text must not promise launcher
-  repair. Carrying that across is the owner's, not this implementer's.
+  recorded in the fail-closed paragraph of Implementation notes → D1 (which holds
+  the canonical wording): after this change `wienerdog sync` no longer refreshes
+  `<core>/launcher/launch.js` **on a prod self-resync entered through
+  `app/current`** — and the banner's remedy is reached by exactly that run — so
+  that WP's replacement remedy text must not promise launcher repair. Carrying
+  that across is the owner's, not this implementer's.
 - **Any dev-side guard for Residual R-dev.** It is stated, accepted and
   owner-routed in its own block above. Adding a guard here would be exactly the
   additive move the last bullet forbids, and it would break T4.
@@ -1167,6 +1332,12 @@ Expect `V7 exit=0`.
 1. All verification steps V1–V7 pass locally; output pasted into the PR body,
    including the V3, V4 and V5 counts **with their `exit=` lines**, and the V6
    file list. A step pasted without its exit status does not count as run.
+   **Each of V1, V3, V4, V5 and V7 must be pasted with the block's own `$?`, not
+   only its printed `exit=` line** — those two disagreed in round 2 (the printed
+   line said `1` while the block exited `0`), and the block's `$?` is the gate.
+   Run each block, then `echo "block \$? = $?"` on the following line and paste
+   that too. V2 and V6 are exempt: V2's status is the bare `node tests/run.js`
+   exit, and V6 is a list comparison whose exit status proves nothing.
 2. Table M's M1, M2 **and M6** run and reverted, with their measured pass/fail
    counts pasted into the PR body under "Mutation checks". For M6, paste both
    halves: T1 red, and V1's other three tests plus V2–V7 still green.
@@ -1179,10 +1350,10 @@ Expect `V7 exit=0`.
    *"Closes `WP-stance-authority-containment` Table G row S1. Row S2 and its
    general form remain open and owner-routed."* Whether row S1 is then marked
    closed on that `Ready` spec is the owner's call, not this PR's.
-7. The PR body carries **Residual R-dev** and the two disclosures forward to the
-   owner, verbatim from this spec, under "Discovered issues" — they are accepted
-   here but not ratified anywhere, and this PR is where they enter the owner's
-   queue:
+7. The PR body carries **Residual R-dev** and the three disclosures below forward
+   to the owner, verbatim from this spec, under "Discovered issues" — they are
+   accepted here but not ratified anywhere, and this PR is where they enter the
+   owner's queue (four bullets in total):
    - **R-dev** — on a dev install the launcher is still published from the
      checkout, so an actor limited to writing that one file still becomes the
      fire-time verifier at the next attended sync. Accepted for the workflow
@@ -1192,6 +1363,15 @@ Expect `V7 exit=0`.
      success while every scheduled fire keeps failing. Forced by the design, not
      chosen. Recovery is `npx wienerdog@latest sync`.
    - **The cross-WP consequence** — `wienerdog sync` no longer refreshes
-     `<core>/launcher/launch.js` on a prod install, so
-     `WP-refusal-remedy-discriminator`'s remedy text must not promise launcher
-     repair.
+     `<core>/launcher/launch.js` **on a prod self-resync entered through
+     `app/current`** (it still refreshes it on every other shape, which is why
+     `npx wienerdog@latest sync` is the recovery). Since the refusal banner's
+     remedy is reached by the shim'd `wienerdog sync`, which **is** that
+     self-resync, `WP-refusal-remedy-discriminator`'s remedy text must not
+     promise launcher repair.
+   - **A refused `adopt` persists a launcher-less manifest** — `adopt` saves the
+     manifest at `src/cli/adopt.js:387` *before* calling `vendorSelf` at `:392`,
+     so unlike `sync` a refused run leaves a manifest on disk that names the
+     vendored tree but not `<core>/launcher`. Not a regression in kind (`main`
+     throws from the same call site), but this WP makes the throw far more
+     reachable. Recorded, not fixed — `adopt.js` is not a deliverable.
