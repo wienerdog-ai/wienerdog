@@ -40,3 +40,4 @@ Durable decisions live here so they are made once, not re-litigated per session 
 | [0032](0032-daily-summary-untrusted-fence.md) | Daily-summary injection is untrusted-fenced, bounded data | Accepted |
 | [0033](0033-human-ratified-exact-value-secret-allowlist.md) | Human-ratified exact-value secret allowlist | Superseded by 0034 (never ratified — nothing in it is in force) |
 | [0034](0034-accidental-persistence-threat-model.md) | The secret fence's threat model is accidental persistence, not deliberate exfiltration | Accepted (supersedes 0024's WP-123 EP2 amendment and its high-entropy-as-`redact` rejection, context-free case only; supersedes 0033) |
+| [0035](0035-attended-execution-is-the-app-tree-trust-boundary.md) | An app-tree write is code execution at the next attended run — A7's boundary is re-scoped, not re-guarded | Proposed (would require a separate owner-signed amendment to 0028's Honest boundary) |
