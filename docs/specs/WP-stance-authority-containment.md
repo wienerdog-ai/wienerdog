@@ -608,8 +608,10 @@ proof that nothing else moved.
  * The install's STANCE, decided by CONTAINMENT of `<core>/app/current` inside
  * `<core>/app` — the one property an A7-scoped DATA write into the app tree
  * cannot forge (ADR-0028 amendment §3/§4, WP-stance-authority-containment).
- * Consults NO signal inside the tree: not `.git`, not `env.WIENERDOG_DEV`, not
- * any file under `app/current`. Fails CLOSED: any unresolvable path ⇒ 'prod',
+ * Consults NO signal inside the tree: not `.git`, not any environment variable
+ * (the dev-mode env var is deleted outright — Table D; naming it here would put
+ * the token back under `src/`, which AC10 forbids), not any file under
+ * `app/current`. Fails CLOSED: any unresolvable path ⇒ 'prod',
  * the ENFORCED path. MUST stay behaviourally identical to the launcher's inlined
  * `liveStance` (a cross-implementation test pins that).
  * SCOPE: an app-tree write that replaces the MINT'S OWN CODE still moves
@@ -1393,7 +1395,7 @@ of which cites or quotes that subsection and adds nothing:
 - [ ] **Context → the V9 one-line invariant** (*"an attended `sync` carries containment forward, **or refuses**; no A7-scoped **data** write changes it"*, with its qualifier-(iii) note) — round-6 registration; it is the densest single-sentence form of the contract in the spec and it sat unregistered while rounds 1–5 corrected the paragraphs around it
 - [ ] **Context → "The mint-time half of the rule is the hard half"**, specifically its **two-inputs count** — round-7 registration. Through round 6 it read "`vendorSelf` reads exactly **two** inputs from that tree" (plain quotes, per the convention above: that wording was removed, so it must not assert its own presence), which is false as a **read** claim (`writeLauncher` reads a third, row S1) and is exactly the read/select conflation the MECHANISM paragraph forbids. It now counts the inputs that can **select containment** and names the third read. This is the first prose an implementer meets, and it sat unregistered while round 6 fixed the identical defect in Security checklist bullet 3
 - [ ] Deliverables → sizing paragraph's *"no A7-scoped **data** write decides containment"*
-- [ ] "Exact contracts" → `installStance`'s `SCOPE:` block and `vendorSelf`'s `SELF-RESYNC`/`SCOPE:` block (these ship into `src/`, so all three qualifiers **and** the mechanism wording must survive into the source comments — this is the mirror round-4 promoted from without auditing)
+- [ ] "Exact contracts" → `installStance`'s `SCOPE:` block and `vendorSelf`'s `SELF-RESYNC`/`SCOPE:` block (these ship into `src/`, so all three qualifiers **and** the mechanism wording must survive into the source comments — this is the mirror round-4 promoted from without auditing). **Because this mirror ships into `src/core/vendor.js`, it is also bound by Table D: the prescribed JSDoc says *"not any environment variable"* and deliberately does NOT name the dev-mode env var.** Through the round-8 pass the prescribed comment spelled the token literally, which an implementer copying it faithfully would have put back under `src/` — red under AC10, T3 and V7, i.e. the spec's own gates would have failed the spec's own text. Keep the token out of every `.js` comment under `src/`; the launcher's `derivationEnv` scrub (Table D row 4) is the sole permitted occurrence
 - [ ] **Table G row 1's headline and its in-cell mechanism note** (*"nothing in the tree selects the target"*; *"`readVersion(root)` still runs"*) — round-5 registration
 - [ ] Current state §9c's "Read that as the matrix result it is" paragraph
 - [ ] Current state §10 → "What still holds", the "Digest-invisible is a larger set" paragraph, and "The general form"
@@ -2291,11 +2293,14 @@ output *is* their success output — do not "fix" them by making them fail on `m
 | 5 | `vendor.isDevCheckout`: re-add the `env` parameter and the `WIENERDOG_DEV` branch | T1 (AC9), T3 (AC10), **V7** |
 | 6 | `launcher.verifyAndResolve`: delete the dev arm's live-stance guard | T7 (AC5), T10 case `3c` |
 | 7 | `launcher.liveStance`: implement as `containedIn(p.appDir, p.appCurrent) ? 'prod' : 'dev'` (no explicit resolution guard — the **fail-open** form) | T4 (AC11) — the unresolvable-`<core>/app` shape |
-| 8 | `launcher.verifyAndResolve`: delete the prod arm's `verifyContainment` call | existing `tests/unit/launcher.test.js:101-112` (unmodified) + case `2c-escape` |
-| 9 | `vendor.readVersion`: delete the validation, restoring the bare `JSON.parse(…).version` | T11 (AC17), T12 (AC16), **V9** — the `contained-bad-version` row |
+| 8 | `launcher.verifyAndResolve`: delete the prod arm's `verifyContainment` call | case `2c-escape` (V-matrix) — **and that row alone** |
+| 9 | `vendor.readVersion`: delete the validation, restoring the bare `JSON.parse(…).version` | T11 (AC17) — **and T11 alone** |
 | 10 | `vendor.vendorSelf`: delete the `selfResync` branch (fall through to `isDevCheckout`) | T12 (AC16), **V9** — the `outside-*` rows diverge |
 
-Two notes, because two of these rows are subtle:
+Notes, because several of these rows are subtle. **Read the two "and that row
+alone" cells (rows 8 and 9) as the narrowings they are**: a mutation row that
+names a check which does NOT go red is worse than no row at all, because the
+implementer pastes a green result into the PR and calls the mutation caught.
 
 - **Row 3 is the one that matters most.** It is the plausible "simplify by
   reusing the existing helper" edit, and it silently routes a foreign-owned
@@ -2306,11 +2311,42 @@ Two notes, because two of these rows are subtle:
   trivially and row 7 passes. The unresolvable-`<core>/app` shape is the only one
   that discriminates; construct it by removing the `<core>/app` directory after
   capturing `corePathsOf(paths)`.
-- **Rows 9 and 10 are the mint-time pair.** Either one alone re-opens the hole
-  this WP exists to close, and neither is caught by any test that only looks at
+- **Row 8 names `2c-escape` and nothing else — do NOT add
+  `tests/unit/launcher.test.js:101-112` back.** That test
+  (*"repointing current OUT of `<core>/app` ⇒ refuse (A7 bullet 2)"*) asserts an
+  **alternation**: `assert.match(r.reason, /does not resolve inside|app tree does
+  not match/)`. Delete the prod arm's `verifyContainment` call and the
+  app-tree-digest guard still refuses, satisfying the **second** branch — so the
+  test stays GREEN under the mutation while appearing to gate it. Confirmed by
+  execution during the post-gate pass; `2c-escape` does go red. A regex
+  alternation is never a discriminator for a mutation that only removes one of
+  the alternatives.
+- **Rows 9 and 10 are the mint-time pair, but they are NOT interchangeable
+  discriminators.** Either one alone re-opens the hole this WP exists to close,
+  and neither is caught by any test that only looks at
   `installStance`/`liveStance` — both functions still behave correctly; it is the
-  *input* to them that moves. If T12 stays green under row 9 or row 10, T12 is not
-  asserting AC16.
+  *input* to them that moves. **What each row actually reddens, confirmed by
+  execution during the post-gate pass:**
+  - **Row 9 reddens T11 only.** It does **not** redden T12 or V9. Every V9 shape
+    is a **self-resync**, so `vendorSelf` takes Table G row 1's branch and the
+    target is `fs.realpathSync(currentLink(paths))` — a tampered `package.json`
+    `version` never reaches the target path, and containment is carried forward
+    either way. `readVersion`'s validation is what makes the
+    `contained-bad-version` row print `after=REFUSED` rather than `after=true`,
+    but V9's gate is
+    `verP.after === base.after || verP.after === 'REFUSED'` — it **allows both**
+    (see "V9's predicate allows it explicitly"), so the script still prints
+    `PASS` and exits 0 with the validation deleted. Only the human-readable row
+    line moves (`REFUSED` → `true`); the machine verdict does not. T11 — which drives
+    `readVersion` directly over the escape/`current`/non-semver corpus — is the
+    only check that discriminates.
+  - **Row 10 reddens T12 and V9**, independently of row 9: deleting the
+    `selfResync` branch falls through to `isDevCheckout`, the `outside-*` rows
+    diverge, and the gated verdict flips. That is why row 10 exists as a
+    separate row and why row 9 must not borrow its checks.
+
+  If T12 stays green under **row 10**, T12 is not asserting AC16. T12 staying
+  green under row 9 is expected and is not a defect in T12.
 
 ### Test index (what to write, and where)
 

@@ -485,9 +485,21 @@ call) — then runs in order. It never throws:
    `'unverified'`. **This is the fail-CLOSED default.** It fires for a
    derivation skew (a basename `deriveProbeArgv` recognizes and
    `deriveIdentityArgv` does not) and for any caller that forgets the argument.
-6. `expect.identityArgv === null` → `'unknown'`. The scheduler kind is
+6. `expect.identityArgv == null` → `'unknown'`. The scheduler kind is
    recognized and its identity query is *declared* unimplemented (Table B's
    systemd row). No health is claimed, no line is printed, nothing is healed.
+   **`==`, deliberately, not `===` — this is the `undefined` disposition and it
+   is part of the contract.** `IdentityExpectation.identityArgv` is typed
+   `string[]|null`, but nothing at runtime enforces that: a caller that builds
+   the object without the key, or a future `deriveIdentityArgv` branch that
+   falls off its end, yields `undefined`. Under `===` that `undefined` slips
+   past this step and reaches step 7, where `RUN(undefined)` throws a
+   `TypeError` out of a function this same contract declares **never throws** —
+   and `doctorSchedulerChecks` (`src/scheduler/status.js:181-194`) does not wrap
+   `probe(…)` in a try, so the throw escapes `wienerdog doctor`. Loose `== null`
+   catches `null` **and** `undefined` and fail-closes both to `'unknown'`, the
+   no-claim verdict. It is the ONLY loose equality this contract permits; every
+   other comparison in `defaultProbe` is strict.
 7. `RUN(expect.identityArgv)` — the **same `RUN` as step 3, never a bare
    `run(…)`**; `r2.error` or `r2.status !== 0` or
    `typeof r2.stdout !== 'string'` → `'unverified'`.
@@ -2228,7 +2240,8 @@ mechanism.
       `mismatched` for an exit-0 record
       whose loaded argv names a launcher outside this core; `unverified` when the
       identity query fails, when its output is indeterminate, **and when `expect`
-      is omitted entirely**; `unknown` when `expect.identityArgv` is `null`;
+      is omitted entirely**; `unknown` when `expect.identityArgv` is `null`
+      **or `undefined`** (step 6's `== null`, the never-throws fail-close);
       `loaded` on a match; `missing` on a non-zero presence exit. Assert
       separately that with **no** `opts.run` and `WIENERDOG_LOADER_NOOP` set the
       result is `unknown`, and likewise for `WIENERDOG_TEST_NO_REAL_SCHEDULER`
@@ -2497,7 +2510,9 @@ mechanism.
       a hijacked one. Mutation M28 targets it.
 - [ ] **AC-13** Every new test name is prefixed `entry-identity:` (with a
       trailing space), and the non-vacuity gate in verification step 1 reports at
-      least **28** **named** passing subtests.
+      least **28** **named** passing subtests — **passing, not skipped**: step 1
+      filters `# SKIP` records out, so this is a POSIX-host floor (see step 1's
+      comment).
       **The number is RE-DERIVED in round 5 by enumeration, not carried forward.**
       Rounds 1-3 grew it by narrative increments (15 → 18 → 21 → 26) and the
       round-4 review found the gate still literally reading `-ge 21`, i.e. counts
@@ -2598,7 +2613,7 @@ confirm it **fails**, then revert. Paste the resulting table into the PR.
 | M2 | `loadedEntryTargets` schtasks branch: replace conditions (a)-(d) with `arguments.includes('"' + cmdQuotedToken(expectLauncher) + '"')` | `entry-identity: schtasks does NOT match a task whose Command is not our cmd.exe and whose launcher token is only inside the set-chain` |
 | M3 | `defaultProbe`: `return 'loaded'` right after the presence spawn exits 0 (skip steps 5-8) | `entry-identity: defaultProbe returns mismatched for an exit-0 record naming a foreign launcher` |
 | M4 | `defaultProbe` step 5: `return 'loaded'` instead of `'unverified'` when `expect` is falsy | `entry-identity: defaultProbe with NO expectation returns unverified, never loaded` |
-| M5 | `defaultProbe` step 6: `return 'loaded'` instead of `'unknown'` for `identityArgv === null` | `entry-identity: a systemd entry yields unknown, not a health claim` |
+| M5 | `defaultProbe` step 6: `return 'loaded'` instead of `'unknown'` for `identityArgv == null` | `entry-identity: a systemd entry yields unknown, not a health claim` |
 | M6 | `doctorSchedulerChecks`: emit `'warn'` instead of `'fail'` for `mismatched` | `entry-identity: doctorSchedulerChecks maps mismatched to fail` |
 | M7 | `reloadMissing`: drop `'unverified'` from `HEAL_SET` | `entry-identity: reloadMissing heals an unverified entry` |
 | M8 | `reloadJob` darwin: swap `darwinReplaceEntry` back to a bare `bootstrap` | `entry-identity: reloadJob replaces a bootstrap-blocked label (darwin)` |
@@ -2652,9 +2667,22 @@ split into two separately-named tests rather than one test with two assertions.
 #    itself, same runner, same commit, against the existing guard suite:
 #      pattern "scheduler-leak-guard" → 22 named subtests
 #      pattern "zzz-nope"             → 0 named subtests
+#
+#    SKIPPED SUBTESTS MUST NOT COUNT. node:test renders a skipped subtest as
+#    `ok N - <name> # SKIP` — an `ok` record that `^ok [0-9]+ - ` matches on its
+#    own. This file carries 17 `{ skip: !isPosix }` guards, so without the
+#    `grep -v` below a non-POSIX host would satisfy the floor of 28 with records
+#    for tests that never executed — the exact vacuity this gate exists to
+#    prevent, reintroduced through the back door. Executed on this runner
+#    (Node 25.9.0) against a two-test probe: `ok 1 - <name> # SKIP` /
+#    `ok 2 - <name>` — the filter drops the first and keeps the second.
+#    CONSEQUENCE, stated rather than papered over: this is a POSIX-host gate. On
+#    a non-POSIX host the 17 guarded tests skip, the count falls below 28, and
+#    the gate is RED — which is correct, because what it certifies did not run.
 n=$(npm test --silent -- --test-reporter=tap --test-name-pattern "entry-identity" \
       tests/unit/scheduler-entry-identity.test.js \
-      | grep -E "^ok [0-9]+ - entry-identity: " | wc -l | tr -d ' ')
+      | grep -E "^ok [0-9]+ - entry-identity: " | grep -v "# SKIP" \
+      | wc -l | tr -d ' ')
 echo "named passing subtests: $n"
 [ "$n" -ge 28 ] || { echo "VACUOUS OR INCOMPLETE — the pattern selected $n named subtests"; exit 1; }
 

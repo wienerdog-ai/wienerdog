@@ -1141,7 +1141,9 @@ assertion in this WP may read one**.
       block, below the block, or commented out all fail. Gated by M8 and M8b.
 - [ ] **AC-9** Every new test name is prefixed `scheduler-leak-guard:` (with a
       trailing space), and the non-vacuity gate in verification step 1 reports at
-      least **37** named passing subtests. That floor is **derived, not
+      least **37** named passing subtests — **passing, not skipped**: step 1
+      filters `# SKIP` records out, so this is a POSIX-host floor (see step 1's
+      comment). That floor is **derived, not
       invented**: 22 pre-existing named subtests on `main` (counted by execution
       at `6eb2d30`; see Current state) **plus the 15 distinct test names the
       Mutation checks table requires to exist** — count them from the table: 22
@@ -1232,12 +1234,42 @@ node tests/run.js --test-name-pattern "<the test name from the last column>" \
 `npm test -- --test-name-pattern "<name>"` is equivalent and also acceptable.)
 Rows whose cell names a **verification step** are run by executing that step.
 
+**`--test-name-pattern` is a REGEX, not a literal — escape the metacharacters.**
+Pasting a test name verbatim is wrong whenever the name contains `(`, `)`, `[`,
+`]`, `{`, `}`, `.`, `*`, `+`, `?`, `|`, `^` or `$`. A pattern that matches
+nothing **exits 0** (the file wrapper counts as "pass 1", the same vacuity
+verification step 1 gates against), so an unescaped paste makes a *survived*
+mutation indistinguishable from correct code — the mutation check silently
+proves nothing. **Exactly one row below is affected: M2**, whose test name ends
+in `(domain print and record print)`. Run it as:
+
+```bash
+node tests/run.js --test-name-pattern \
+  "scheduler-leak-guard: loaded-record observer invokes the loader by ABSOLUTE path \(domain print and record print\)" \
+  tests/unit/scheduler-leak-guard.test.js
+```
+
+Executed on this runner (Node 25.9.0) against the finished branch's
+`tests/unit/scheduler-leak-guard.test.js`: the **unescaped** verbatim name
+selects **0** named subtests and exits 0 (TAP prints only
+`ok 1 - tests/unit/scheduler-leak-guard.test.js`, naming the FILE); the escaped
+form above selects **exactly 1**, and TAP names the TEST. The parenthesis-free
+prefix `"invokes the loader by ABSOLUTE path"` also selects exactly that one
+test and is an acceptable substitute. **Do not rename the test to avoid the
+escaping** — the name is contractual (AC-9's floor counts it; Table C's
+loader-shim row cites it via AC-4/M2).
+
+**How to tell a real selection from a vacuous one.** The `✔` / `ok` line must
+name the **test**, not the file. If the only record you get back is
+`ok 1 - tests/unit/scheduler-leak-guard.test.js`, your pattern matched nothing
+and the row is unproven.
+
 | # | Mutation | Must turn red |
 |---|----------|---------------|
 | M1 | `assertNoLoadedSchedulerLeak`: return `[]` when an argument matches a temp prefix | test `scheduler-leak-guard: loaded-record observer FAILS on a record whose loaded argv is under the OS temp dir` |
 | M1b | process only the **first** selected label (`labels.slice(0, 1)`) | test `scheduler-leak-guard: loaded-record observer does not stop at the FIRST selected label` |
 | M1c | process only the first **two** selected labels (`labels.slice(0, 2)`) | test `scheduler-leak-guard: loaded-record observer inspects EVERY selected label, including the last`. M1b's test passes under this mutation — that is why both rows exist |
-| M2 | change `LAUNCHCTL_PATH` to the bare `'launchctl'` | test `scheduler-leak-guard: loaded-record observer invokes the loader by ABSOLUTE path (domain print and record print)` |
+| M2 | change `LAUNCHCTL_PATH` to the bare `'launchctl'` | test `scheduler-leak-guard: loaded-record observer invokes the loader by ABSOLUTE path (domain print and record print)`. **The parentheses in this name are regex metacharacters — escape them (or use the parenthesis-free prefix) exactly as spelled out above the table; an unescaped verbatim paste selects zero tests and exits 0** |
 | M3 | treat **any** non-zero `print` exit as a skip (the fail-open the spec removes) | test `scheduler-leak-guard: a print exit of 1 or 112 is a FAILURE, not a skip` |
 | M3b | return `[]` when the domain print exits non-zero (e.g. `112`) instead of failing closed | test `scheduler-leak-guard: loaded-record observer fails closed when the domain cannot be enumerated` |
 | M3c | match the services-block opener with `line.trim().includes('services = {')` instead of exact trimmed equality | test `scheduler-leak-guard: a disabled services block is NOT accepted as the services block`. A bare no-opener fixture stays green under this mutation — only the `disabled services = {` decoy (AC-2b) turns it red, because `includes` then parses the disabled block, extracts zero labels and returns a false clean |
@@ -1288,9 +1320,22 @@ output.
 #    runner, at 6eb2d30, against THIS file on `main`:
 #      pattern "scheduler-leak-guard" → 22 named subtests
 #      pattern "zzz-nope"             → 0 named subtests
+#
+#    SKIPPED SUBTESTS MUST NOT COUNT. node:test renders a skipped subtest as
+#    `ok N - <name> # SKIP` — an `ok` record that `^ok [0-9]+ - ` matches. This
+#    file carries 6 `{ skip: process.platform === 'win32' }` guards, so without
+#    the `grep -v` below a Windows host would satisfy the floor with records for
+#    tests that never executed. Executed on this runner (Node 25.9.0) against a
+#    two-test probe: `ok 1 - <name> # SKIP` / `ok 2 - <name>` — the filter drops
+#    the first and keeps the second.
+#    CONSEQUENCE, stated rather than papered over: this is a POSIX-host gate. On
+#    win32 the 6 guarded tests skip, the count is 31, and the gate is RED — which
+#    is correct, because the darwin arm this WP adds is unverified there
+#    (Table B's win32 row; CI has no Windows runner).
 n=$(node tests/run.js --test-reporter=tap --test-name-pattern "scheduler-leak-guard" \
       tests/unit/scheduler-leak-guard.test.js \
-      | grep -E "^ok [0-9]+ - scheduler-leak-guard: " | wc -l | tr -d ' ')
+      | grep -E "^ok [0-9]+ - scheduler-leak-guard: " | grep -v "# SKIP" \
+      | wc -l | tr -d ' ')
 #    PROVES: your new tests actually run AND the pre-existing ones still do.
 #    RED WHEN: any required test name is missing or failing (floor not met), or
 #    the pattern matches nothing (0). The floor is 22 (pre-existing, counted
