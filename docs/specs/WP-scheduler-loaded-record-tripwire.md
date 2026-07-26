@@ -230,7 +230,13 @@ discriminates. **The threshold in AC-9 and verification step 1 is `37`, not
 `30`** — it is `22 + 15`, and the `15` is the count of distinct test names the
 Mutation checks table requires. (It was `35` before the round-4 pass added M3c
 and M14, each of which names a new test; re-derive it the same way if you add
-another.) **The slack is exactly zero**: every one of those
+another.) **Re-derived in the round-5 pass and unchanged at `37`**: that pass
+collapsed AC-12's four clauses into a single equality assertion **inside the same
+one test**, and added mutation rows M12b and M13c that **share** the existing
+AC-12 test name — so the table grew from 20 rows to 22 while the distinct-name
+count stayed at 15 (22 rows − 3 verification-step rows − 4 shared-name duplicates
+= 15). AC-11's rewrite added assertions to an existing test, not a new name.
+**The slack is exactly zero**: every one of those
 15 names must exist and pass or step 1 goes red, and it will not tell you which
 one is missing. Note the runner: `node tests/run.js …`, never a bare
 `node --test` (see Table C's neutralizer row and verification step 1).
@@ -380,17 +386,60 @@ class prefixes, and the class is decided by Table A's *Failure class* column:
 
 Both fail the run identically; the split exists so a human (and verification
 step 6) can tell "your machine is poisoned" from "this observer could not see"
-without re-deriving it from prose. Example of each:
+without re-deriving it from prose.
+
+**The contracted `LEAK` message (canonical — this is the one place its text is
+decided).** It is not an illustration. AC-12 asserts
+`assert.equal(msg, expectedLeakMessage(label, program))`, so every character
+below is contractual and **any** change to it turns that test red. That is
+correct, not brittle: this message routes a human through a destructive repair,
+and a silent edit to it is exactly the stale-text failure class this WP exists to
+fix. To change the wording, change it **here** first and update every mirror in
+the same pass (Mirrored Surface Checklist).
+
+The message is exactly **four lines joined by `\n`**, with no trailing newline,
+`<label>` the matched label and `<program>` the offending argument, both
+substituted verbatim. This construction is the normative form:
+
+```js
+[
+  'scheduler-guard: LEAK — the LOADED launchd record ' + label +
+    ' will execute ' + program +
+    ', which is inside a temp directory. A harness run clobbered the real' +
+    ' per-user label; the .plist FILE on disk is not the artifact at fault' +
+    ' and may look clean. Repair, IN THIS ORDER:',
+  '  1) wienerdog sync',
+  '  2) only if a re-run still reports this record:',
+  '     launchctl bootout gui/$(id -u)/' + label + ' ; wienerdog sync',
+].join('\n')
+```
+
+Whitespace is part of the contract: two spaces before `1)` and `2)`, five before
+`launchctl`, and exactly one space on each side of the `;`. Rendered with the
+incident's own label and path (line 1 is a single long line; it wraps only in
+your editor):
 
 ```text
-scheduler-guard: LEAK — the LOADED launchd record ai.wienerdog.catchup will execute
-/var/folders/…/T/wd-negative-UezlJP/core/launcher/launch.js, which is inside a temp
-directory. A harness run clobbered the real per-user label; the .plist FILE on disk is
-not the artifact at fault and may look clean. Repair, IN THIS ORDER:
+scheduler-guard: LEAK — the LOADED launchd record ai.wienerdog.catchup will execute /var/folders/zz/T/wd-negative-UezlJP/core/launcher/launch.js, which is inside a temp directory. A harness run clobbered the real per-user label; the .plist FILE on disk is not the artifact at fault and may look clean. Repair, IN THIS ORDER:
   1) wienerdog sync
   2) only if a re-run still reports this record:
      launchctl bootout gui/$(id -u)/ai.wienerdog.catchup ; wienerdog sync
 ```
+
+**If you factor this into a helper, define the helper ABOVE
+`assertNoLoadedSchedulerLeak`.** Verification step 4b asserts the observer is the
+**last** top-level `function` in the file; a `function leakMessage(…)` placed
+after it turns 4b red for the wrong reason.
+
+**The test must NOT import this template from `scheduler-guard.js`.** AC-12's
+expected string comes from an `expectedLeakMessage(label, program)` helper
+**written out in the test file**, built from the label and program of the record
+under test. An imported template moves with the mutation, and M12, M12b, M13,
+M13b and M13c would all stay green — the assertion would be a tautology.
+
+The `UNVERIFIABLE` messages are **not** contracted verbatim; only their
+`scheduler-guard: UNVERIFIABLE —` prefix is (Table A, AC-2, AC-2b). This one is
+illustrative only:
 
 ```text
 scheduler-guard: UNVERIFIABLE — could not enumerate the LOADED launchd records in
@@ -419,31 +468,38 @@ properties of step 2 are load-bearing and neither may be "simplified":
   earlier. Either way the user is left with a torn-down record and no healer.
   Only `;` makes the re-registration unconditional.
 
-**The marker line `Repair, IN THIS ORDER:` is contractual**, not decoration:
-AC-12 slices the message at it and asserts everything about the repair advice on
-that tail only, so prose added to the message's preamble can never satisfy those
-assertions on the guard's behalf.
+**Both properties are asserted on the RETURNED MESSAGE — and by EQUALITY, not by
+properties of it (AC-12).** The whole assertion is
+`assert.equal(msg, expectedLeakMessage(label, program))` against the contracted
+template above, rebuilt inside the test from the label and program of the record
+under test. Bootstrap-first ordering and the `;` separator are then true by
+construction: no other string equals the template.
 
-**Both properties are asserted on the RETURNED MESSAGE, not on the source
-(AC-12).** The decisive assertion is that the repair tail contains the **literal
-contracted sequence** `bootout gui/$(id -u)/<label> ; wienerdog sync` — the
-separator that must be present, not merely the absence of one that must not —
-plus `repair.indexOf('wienerdog sync') < repair.indexOf('bootout')` for the
-ordering. An absence-only check (`msg.includes('&&') === false`) is **not
-sufficient on its own**: `bootout … || wienerdog sync` passes it and strands the
-user exactly as `&&` does. That absence check is kept as a belt-and-braces, not
-as the load-bearing one. Earlier drafts enforced this with a source grep
-(``bootout[^"'`]*&&``); that grep was **executed during this pass and is wrong in
-both directions** — a file containing
-`"Repair: 1) launchctl bootout gui/$(id -u)/LABEL ; 2) wienerdog sync"`
-(destructive-first, exactly what the ADR rejects) **passes** it, while a
-*compliant* file whose comment records this very rationale **fails** it, because
-the character class has no quote to stop at inside a comment. It is also evaded
-by any source split (`"bootout … " + "&&" + " wienerdog sync"`). Asserting the
-function's output instead is immune to all three — the literal-sequence clause
-rejects the destructive-first string, is indifferent to comments, and sees the
-concatenated `&&` in the assembled message — and gets mutation partners
-(M12, M13, M13b) that a grep could not have.
+**Why equality, and why a fourth set of clauses is out of scope — the ADR-0031
+loop circuit-breaker.** Three consecutive review rounds each produced a
+weaker-than-intended assertion *about* this message, and each was evaded by a
+message that still stranded the user:
+
+| Round | Assertion shape | How it was evaded (all executed, not argued) |
+|---|---|---|
+| 2 | source grep ``bootout[^"'`]*&&`` | **passed** on `"Repair: 1) launchctl bootout gui/$(id -u)/LABEL ; 2) wienerdog sync"` — destructive-first, exactly what ADR-0018 rejects — and **failed** on a compliant file whose comment recorded this rationale, because the character class has no quote to stop at inside a comment. Also evaded by any source split (`"bootout … " + "&&" + " sync"`) |
+| 3 | absence-only `msg.includes('&&') === false` | `bootout … \|\| wienerdog sync` passes it and strands the user through the opposite branch: a `bootout` that **succeeds** skips the sync |
+| 4 | slice at the `Repair, IN THIS ORDER:` marker, then `indexOf` ordering + literal-sequence `includes` | (a) a repair block whose step 2 is `bootout … \|\| wienerdog sync` **followed by** a reference line carrying the contracted `;` sequence passes all four clauses, because `includes` only requires the sequence *somewhere*; (b) quoting the marker in the message **preamble** and renaming the real heading makes `indexOf` select the preamble occurrence, and all four clauses pass again |
+
+Every one of those is an assertion about a *property* of a string whose exact
+text this spec already pins. The correct assertion is therefore the string
+**itself**. Equality is immune to every row above by construction — there is no
+room for an extra `||` line, no marker to drain, no substring satisfiable from
+elsewhere in the message, and no source formatting to evade — and it subsumes
+both the ordering clause and the separator clause without stating either.
+**Do not replace it with a fourth set of clauses.** If some element of the
+message must legitimately vary, make that element a parameter of
+`expectedLeakMessage` — as `label` and `program` already are — rather than
+loosening the assertion.
+
+The marker line `Repair, IN THIS ORDER:` remains part of the contracted text, so
+it cannot drift silently; it is simply no longer load-bearing for slicing,
+because nothing slices any more.
 
 `wienerdog sync` cannot yet *replace* an already-loaded record until
 `WP-scheduler-entry-identity` merges (see that WP: today's `reloadJob` has no
@@ -488,7 +544,10 @@ fails closed and which single one is tolerated — is new and load-bearing.
 Four canonical tables follow. **Table A** owns every call disposition and the
 failure class that goes with it; **Table B** owns platform coverage; **Table C**
 owns the recursion-hazard properties; **Table D** owns the temp-origin predicate
-and exactly what bounds its completeness claim.
+and exactly what bounds its completeness claim. A fifth canonical surface is not
+a table but a string: **the contracted `LEAK` message** in "Exact contracts"
+owns that message's exact text, because AC-12 now asserts it by equality. All
+five are registered in the Mirrored Surface Checklist.
 
 ### Table A — per-call disposition (canonical)
 
@@ -549,7 +608,7 @@ requirement, not a nicety.
 | a stale leak from an earlier run **under the current OS temp base** cannot hide | Table D's prefix set covers the whole current OS temp dir (`os.tmpdir()` **and** its realpath), not just `tempRoot`. This is exactly ADR-0018 decision 3's bar; a leak under a *different* temp base is Residual 8, named rather than guarded | AC-3, M4 |
 | an unverifiable record cannot pass as clean | Table A: exactly one non-zero exit code (`113`) is tolerated, and it prints | AC-2, AC-2b, M3, M3b |
 | a domain this process cannot see cannot pass as clean | Table A's enumerate rows: the observer enumerates from `print gui/<uid>` — the **same domain** it reads from — and every way that call can fail (including `112`, no such domain) returns one `UNVERIFIABLE` failure. There is no path from "unreachable domain" to `[]`. The opener is matched by exact trimmed equality so a `disabled services = {` block cannot stand in for the real one | AC-2b, M3b, M3c |
-| the repair advice cannot become destructive-first or conditionally chained (`&&` **or** `\|\|`) | asserted on the returned `LEAK` string, not on the source, and scoped to the tail after the `Repair, IN THIS ORDER:` marker: `wienerdog sync` is named before any `bootout`, and the tail contains the **literal** `bootout gui/$(id -u)/<label> ; wienerdog sync` sequence. Absence of `&&` is a belt-and-braces, not the load-bearing clause — `\|\|` strands the user through the opposite branch | AC-12, M12, M13, M13b |
+| the repair advice cannot become destructive-first or conditionally chained (`&&` **or** `\|\|`) | the returned `LEAK` string is asserted by **equality** against the contracted template ("The contracted `LEAK` message"), rebuilt in the test from the label and program under test — not by properties of it, and not by a source grep. Bootstrap-first ordering and the unconditional `;` are true by construction; three earlier property-shaped formulations were each evaded (see the loop-circuit-breaker table in "Exact contracts") | AC-12, M12, M12b, M13, M13b, M13c |
 
 ### Table D — the temp-origin predicate (canonical)
 
@@ -642,7 +701,7 @@ contradicts a signed sentence, and **no ADR edit is required by this WP**.
 - [ ] Current state: the module header's "No `child_process` here" sentence and
       the `opts.env` note on `scheduler-guard.js:283`
 - [ ] Residual 6 (the no-`env` property is signature-review-enforced)
-- [ ] Mutation checks M2, M4, M5, M6, M8, M8b, M10, M12, M13, M13b
+- [ ] Mutation checks M2, M4, M5, M6, M8, M8b, M10, M12, M12b, M13, M13b, M13c
 - [ ] **`docs/adr/0018-windows-scheduled-dreaming.md`**, 2026-07-25 amendment,
       decision 3 — it restates the absolute-path, no-`env`, no-neutralizer,
       no-file and whole-temp-dir properties nearly verbatim
@@ -671,9 +730,34 @@ contradicts a signed sentence, and **no ADR edit is required by this WP**.
       therefore requires an ADR-0018 amendment first, in a separate pass. That is
       precisely the check the subtracted `wd-` mechanism skipped.
 
+**The contracted `LEAK` message** (canonical text, in "Exact contracts") —
+surfaces that mirror it:
+
+- [ ] "Exact contracts" → the `scheduler-guard: LEAK — …` bullet in the
+      failure-message shape list (prefix only) and the darwin arm's step 4
+- [ ] The bootstrap-first repair-advice rationale immediately below the template
+      (the `;`-not-`&&`-not-`||` argument) — it explains the template's last
+      line; it must not restate it as a separate contract
+- [ ] Table A's two `LEAK` failure-class rows
+- [ ] Table C's "the repair advice cannot become destructive-first or
+      conditionally chained" row
+- [ ] Table D's *"which is inside a temp directory"* bullet — that sentence lives
+      **inside** this template, so the two registrations resolve to one place on
+      purpose (same pattern as ADR-0018:347-349 above): an editor touching the
+      wording sees both
+- [ ] Acceptance criteria AC-1 (prefix + both names), AC-11 (the returned element
+      equals this template) and AC-12 (equality — the deciding assertion)
+- [ ] Verification step 6's `startsWith("scheduler-guard: LEAK — ")` filter
+- [ ] Mutation checks M11 (the prefix), M12, M12b, M13, M13b, M13c (the text)
+- [ ] **`docs/adr/0018-windows-scheduled-dreaming.md`:283-297** — the signed
+      bootstrap-first heal that the template's two repair steps encode. Changing
+      the repair steps' order or separator contradicts that ADR and needs an
+      amendment first, in a separate pass
+
 Neither the ADR nor the logbook is in this WP's Deliverables and **neither may be
 edited from this branch**; they are registered so a future change to Table A, B,
-C or D is known to require a separate pass over them.
+C, D or the contracted `LEAK` message is known to require a separate pass over
+them.
 
 **ADR-0018 scope determination, round 3 — re-done from the ADR text, not
 inherited.** Every change in this pass was checked sentence by sentence against
@@ -935,7 +1019,9 @@ assertion in this WP may read one**.
       argument when a loaded `ai.wienerdog.*` record's arguments block contains a
       path under the OS temp dir; and returns `[]` when **no** argument matches
       the Table D temp-origin predicate. Driven entirely by canned `opts.run`
-      output.
+      output. *(The message's full text is contracted elsewhere and AC-12 asserts
+      it by equality — assert the prefix and the two names here and nothing more,
+      so this criterion stays a mirror rather than a second contract.)*
 - [ ] **AC-1b** *(not only the first label)* with a canned domain print whose
       `services` block yields **two** matching labels — `ai.wienerdog.dream`
       **first** with a clean arguments block, `ai.wienerdog.catchup` **second**
@@ -1039,8 +1125,11 @@ assertion in this WP may read one**.
       least **37** named passing subtests. That floor is **derived, not
       invented**: 22 pre-existing named subtests on `main` (counted by execution
       at `6eb2d30`; see Current state) **plus the 15 distinct test names the
-      Mutation checks table requires to exist** (M1, M1b, M1c, M2, M3, M3b, M3c,
-      M4, M5, M6, M7, M9, M11, M14, and the one name M12, M13 and M13b share).
+      Mutation checks table requires to exist** — count them from the table: 22
+      rows, minus the 3 that name a *verification step* rather than a test (M8,
+      M8b, M10) = 19 test-naming rows, minus the 4 duplicates created by M12,
+      M12b, M13, M13b and M13c all sharing one name = **15** (M1, M1b, M1c, M2,
+      M3, M3b, M3c, M4, M5, M6, M7, M9, M11, M14, and the one AC-12 name).
       **Slack is
       exactly zero** — miss one name and the gate is red without telling you
       which. If you add a mutation row with a new test name, raise this floor in
@@ -1051,43 +1140,60 @@ assertion in this WP may read one**.
       deleted, and `makeLoaderShimDir` / `buildInitEnv` / `assertNoLoaderInvoked`
       / `assertNoRealSchedulerLeak` are unchanged.
 - [ ] **AC-11** Running the guard twice against the same canned input returns
-      identical results and mutates nothing (idempotent, read-only). Assert
-      **deep equality of the two returned arrays** and that the second call's
-      captured argv sequence equals the first's. Test name:
+      identical results and mutates nothing (idempotent, read-only). Use **AC-1's
+      leaking canned record**, so each call returns exactly one failure and that
+      failure is the contracted `LEAK` message — a clean fixture returns `[]`
+      twice and would make this criterion vacuous under M14. Test name:
       `scheduler-leak-guard: two calls on the same canned input return identical
       results`. Gated by M14, whose mutation hoists the `failures` accumulator to
       module scope — a real implementation shape under which call two returns
       call one's failures a second time.
-- [ ] **AC-12** *(the repair advice, asserted on the message not the source)*
-      take the `LEAK` string produced in AC-1 (whose canned record carries label
-      `<label>`) and assert, **in this order**:
-      1. `const i = msg.indexOf('Repair, IN THIS ORDER:')` is `>= 0`, and
-         `const repair = msg.slice(i)`. Clauses 2 and 3 are asserted on `repair`,
-         **not** on the whole message. This is what makes the ordering clause
-         independent of everything earlier in the message: a later prose addition
-         to the preamble that happens to say `wienerdog sync` cannot satisfy
-         clause 2 on the guard's behalf and silently drain M12. The marker
-         assertion is what keeps that true — change the marker text and this test
-         goes **red**, not vacuous.
-      2. `repair.indexOf('wienerdog sync')` and `repair.indexOf('bootout')` are
-         both `>= 0` (so the test cannot pass vacuously on a repair block that
-         mentions neither), **and**
-         `repair.indexOf('wienerdog sync') < repair.indexOf('bootout')` — the
-         healer is named before the destructive command; ADR-0018:283-297 rejects
-         bootout-first.
-      3. `repair.includes('bootout gui/$(id -u)/' + label + ' ; wienerdog sync')`
-         — the **literal contracted sequence, separator included**. Assert the
-         separator that must be there; do **not** settle for the absence of one
-         that must not. `bootout … || wienerdog sync` satisfies clauses 1, 2 and
-         an absence-of-`&&` check, and still strands the user: if `bootout`
-         **succeeds** the sync never runs, leaving no scheduled job at all — the
-         same outcome as `&&` reached through the opposite branch. Build the
-         expected substring from the label under test rather than hardcoding one,
-         so the assertion does not silently loosen if the canned label changes.
-      4. `msg.includes('&&') === false` over the whole message — retained as a
-         belt-and-braces on a token the message has no legitimate use for. It is
-         explicitly **not** the load-bearing clause; clause 3 is.
-      Gated by M12, M13 and M13b, all of which mutate the message itself.
+      **A bare `assert.deepEqual(first, second)` does NOT kill M14 and is
+      forbidden here.** Under M14 both calls return the **same array object**, so
+      call two mutates the object already held as `first`; `first` *is* `second`
+      and the comparison passes. Reproduced by execution during this pass:
+      `first === second` → `true`, both lengths `2`, assertion green. The captured
+      argv sequences are identical too, so that assertion does not save it either.
+      Assert all four of the following, in this order:
+      1. Call one into `first`, with its **own** capture array `callsA`; then,
+         **before call two**, take `const firstSnapshot = structuredClone(first)`
+         and `const firstCalls = structuredClone(callsA)` (`structuredClone` is a
+         global on Node ≥ 18).
+      2. `assert.equal(firstSnapshot.length, 1)` and
+         `assert.equal(firstSnapshot[0], expectedLeakMessage(label, program))` —
+         explicit cardinality and content, not just "the two agree".
+      3. Call two into `second`, with a **fresh** capture array `callsB`, then
+         `assert.notStrictEqual(first, second, 'each call must return a FRESH array')`,
+         `assert.equal(second.length, 1)` and
+         `assert.deepEqual(second, firstSnapshot)`.
+      4. `assert.deepEqual(callsB, firstCalls)` — same argv sequence, compared
+         against a snapshot, from two arrays that cannot alias because each call
+         got its own.
+      Verified by execution: under M14 the three assertions in step 3 each turn
+      red **independently** (`first === second`; `second.length` is `2`; the
+      snapshot comparison is `[x]` vs `[x, x]`), and all four steps are green
+      against a correct implementation.
+- [ ] **AC-12** *(the repair advice, asserted by EQUALITY on the message)* take
+      the `LEAK` string produced in AC-1, for a canned record with label `label`
+      and offending argument `program`, and assert exactly one thing —
+      `assert.equal(msg, expectedLeakMessage(label, program));` —
+      where `expectedLeakMessage` is a helper **written out in the test file**
+      (never imported from `scheduler-guard.js` — an imported template moves with
+      the mutation and every gate below stays green) reproducing the contracted
+      template in "Exact contracts" character for character, with `label` and
+      `program` taken from the record under test rather than hardcoded.
+      **That is the whole criterion.** Do not add positional clauses,
+      `indexOf` ordering checks, `includes` substring checks or an
+      absence-of-`&&` check alongside it: three earlier rounds shipped exactly
+      those shapes and each was evaded (see the loop-circuit-breaker table in
+      "Exact contracts"). Equality subsumes all of them, and it makes **any**
+      change to a contractual message red — which is the intent, because a silent
+      edit to a message that routes a human through a destructive repair is the
+      stale-text failure class this WP exists to fix.
+      Gated by M12, M12b, M13, M13b and M13c, all of which mutate the message
+      itself; all five share this one test. Verified by execution during this
+      pass: green on the contracted message, red on each of the five mutants and
+      on round 2's destructive-first-with-`;` string.
 
 ### Mutation checks (one-line source mutation → the test that must turn red)
 
@@ -1125,10 +1231,12 @@ Rows whose cell names a **verification step** are run by executing that step.
 | M9 | drop the exit-113 notice (skip silently) | test `scheduler-leak-guard: a listed-then-unloaded label is skipped WITH a notice` |
 | M10 | add `const env = opts.env \|\| process.env;` inside `assertNoLoadedSchedulerLeak` | **verification step 4b**'s scoped no-`opts.env` range check exits 1 |
 | M11 | change the `LEAK` prefix on the temp-origin failure to `UNVERIFIABLE` | test `scheduler-leak-guard: a temp-origin argument is classed LEAK, an unreadable record UNVERIFIABLE` |
-| M12 | swap the two repair steps in the `LEAK` message so `bootout` is named first | test `scheduler-leak-guard: the LEAK repair advice names the healer first and uses the unconditional ; separator` (caught by AC-12 clause 2) |
-| M13 | change the repair separator from `;` to `&&` in the `LEAK` message | the **same** test as M12 — caught by AC-12 clause 3 (the literal sequence no longer matches) and by clause 4 |
-| M13b | change the repair separator from `;` to `\|\|` in the `LEAK` message | the **same** test as M12 — caught by AC-12 clause **3 only**. Clauses 1, 2 and 4 all pass on `\|\|`, which is exactly why clause 3 exists: a `bootout` that SUCCEEDS then skips the sync and strands the user |
-| M14 | hoist the `failures` accumulator out of `assertNoLoadedSchedulerLeak` into module scope, so it persists across calls | test `scheduler-leak-guard: two calls on the same canned input return identical results` (AC-11) |
+| M12 | swap the two repair steps in the `LEAK` message so `bootout` is named first | test `scheduler-leak-guard: the LEAK message equals its contracted text exactly` |
+| M12b | leave the repair block correct but quote the marker `Repair, IN THIS ORDER:` in the message **preamble** and rename the real repair heading | the **same** test as M12. This is round 5's W2: it defeated the round-4 marker-slicing clauses (`indexOf` selected the *preamble* occurrence and all four clauses passed) and cannot defeat equality |
+| M13 | change the repair separator from `;` to `&&` in the `LEAK` message | the **same** test as M12 |
+| M13b | change the repair separator from `;` to `\|\|` in the `LEAK` message | the **same** test as M12. A `bootout` that SUCCEEDS then skips the sync and strands the user — the `&&` failure reached through the opposite branch |
+| M13c | change the separator to `\|\|` **and** append a reference line carrying the contracted `bootout gui/$(id -u)/<label> ; wienerdog sync` sequence | the **same** test as M12. This is round 5's W1: it defeated the round-4 literal-sequence `includes` clause (which only required the sequence to appear *somewhere*) and cannot defeat equality |
+| M14 | hoist the `failures` accumulator out of `assertNoLoadedSchedulerLeak` into module scope, so it persists across calls | test `scheduler-leak-guard: two calls on the same canned input return identical results` (AC-11) — but **only in AC-11's snapshot form**. A bare `deepEqual(first, second)` stays GREEN under this mutation because both calls return the same array object, so `first` *is* `second`; reproduced by execution. This is why AC-11 mandates the snapshot, the explicit cardinality and `notStrictEqual` |
 
 ## Verification steps (run these; paste output in the PR)
 
@@ -1167,9 +1275,11 @@ n=$(node tests/run.js --test-reporter=tap --test-name-pattern "scheduler-leak-gu
 #    PROVES: your new tests actually run AND the pre-existing ones still do.
 #    RED WHEN: any required test name is missing or failing (floor not met), or
 #    the pattern matches nothing (0). The floor is 22 (pre-existing, counted
-#    above) + 15 (the distinct test names the Mutation checks table requires)
-#    = 37, with ZERO slack. See AC-9; raise it if you add a mutation row with a
-#    new test name.
+#    above) + 15 (the distinct test names the Mutation checks table requires:
+#    22 rows - 3 that name a verification step - 4 duplicates from the five
+#    AC-12 rows sharing one name) = 37, with ZERO slack. Re-derived in the
+#    round-5 pass and unchanged. See AC-9; raise it if you add a mutation row
+#    with a NEW test name.
 echo "named passing subtests: $n"
 [ "$n" -ge 37 ] || { echo "VACUOUS OR INCOMPLETE — the pattern selected $n named subtests"; exit 1; }
 
