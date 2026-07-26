@@ -864,7 +864,10 @@ surfaces that mirror it:
       editing that literal sequence in the **same pass**, in **both** specs —
       the step will not let you forget. It carries **no row count**; the
       sequence subsumes one, and re-adding arithmetic beside it is a regression
-      (see the step's own note)
+      (see the step's own note). It also owns the step's **declared threat
+      model** — accidental format-conforming drift, NOT a deliberately evasive
+      encoding; "a more exotic encoding slips through" is out of scope there by
+      declaration, and the remedy for that class is review
 - [ ] **The step body itself, in both specs** — from `TW=` to the final `echo`
       it is byte-identical across the two documents; only the step *number*
       differs (7 here, 9 there). Edit it in both or not at all
@@ -1610,21 +1613,46 @@ console.log("    executes anything under the OS temp dir");
 #
 #    ONE PHYSICAL LINE PER ROW is enforced by SUBTRACTION, not by a further
 #    check: a markdown table row is a single line by construction, and the
-#    extractor anchors BOTH ends (`^\|` … `\|$`), so a row wrapped across two
-#    lines loses its closing pipe, drops out of the extraction, and reddens the
-#    sequence check below. Verified in the red direction.
+#    extractor anchors BOTH ends, so a row wrapped across two lines loses its
+#    closing pipe, drops out of the extraction, and reddens the sequence check
+#    below. Verified in the red direction.
+#
+#    SPACING VARIANTS MUST BE VISIBLE, NOT INVISIBLE. GFM also accepts compact
+#    rows (`|G6|…|`) and tolerates trailing spaces, and this repo does not
+#    enforce MD060 cell spacing. An extractor that recognised only the
+#    exactly-spaced form did not merely miss those rows — it made them
+#    INVISIBLE, so a compact SECOND `G6` with different text in each file passed
+#    every check while both rendered tables carried two disagreeing G6 rows. The
+#    row pattern therefore allows optional whitespace around the id and after
+#    the final pipe, and `ids()` trims per field. A compact duplicate now shows
+#    up as an extra `G6` in the sequence; nothing else was added.
+#
+#    THREAT MODEL — READ THIS BEFORE PROPOSING A STRONGER EXTRACTOR.
+#    This check exists to catch ACCIDENTAL, format-conforming drift by
+#    good-faith editors: the failure that actually happened four times in this
+#    spec's own history — a row edited in one file and not the other, a row
+#    renamed, a row dropped, a floor left stale. It does NOT defend against a
+#    deliberately evasive encoding: exotic pipe lookalikes, zero-width
+#    codepoints, HTML tables, a row crafted specifically to dodge a text-level
+#    extractor. It cannot, and no text-level extractor can — spec text is
+#    written and reviewed by trusted parties, and an editor motivated to defeat
+#    a grep will always defeat a grep. Findings of the form "here is a more
+#    exotic encoding this misses" are therefore OUT OF SCOPE for this step by
+#    declaration; the remedy for that class is code review, not more extraction
+#    machinery. "Can you construct a string that slips through" has no
+#    terminus, so the criterion is bounded by this threat model instead.
 #
 #    The body below, from `TW=` to the final `echo`, is BYTE-IDENTICAL to the
 #    same step in the sibling spec; only the step NUMBER differs.
 TW=docs/specs/WP-scheduler-loaded-record-tripwire.md
 EI=docs/specs/WP-scheduler-entry-identity.md
-rows() { grep -E '^\| G[0-9b]+ \| .*\|$' "$1"; }
-ids()  { rows "$1" | awk -F'|' '{print $2}' | tr -d ' '; }
+rows() { grep -E '^\|[[:space:]]*G[0-9b]+[[:space:]]*\|.*\|[[:space:]]*$' "$1"; }
+ids()  { rows "$1" | awk -F'|' '{gsub(/[[:space:]]/, "", $2); print $2}'; }
 expected_ids() { printf 'G1\nG1b\nG2\nG3\nG4\nG5\nG6\n'; }
-diff <(expected_ids) <(ids "$TW") || { echo "FAIL: $TW does not carry exactly G1 G1b G2 G3 G4 G5 G6 in that order"; exit 1; }
-diff <(expected_ids) <(ids "$EI") || { echo "FAIL: $EI does not carry exactly G1 G1b G2 G3 G4 G5 G6 in that order"; exit 1; }
+diff <(expected_ids) <(ids "$TW") || { echo "FAIL: $TW does not carry exactly G1 G1b G2 G3 G4 G5 G6, once each, in that order"; exit 1; }
+diff <(expected_ids) <(ids "$EI") || { echo "FAIL: $EI does not carry exactly G1 G1b G2 G3 G4 G5 G6, once each, in that order"; exit 1; }
 diff <(rows "$TW") <(rows "$EI") || { echo "FAIL: Table E and Table F have DIVERGED — the rows above differ. Fix BOTH, do not fork the contract"; exit 1; }
-echo "OK: both specs carry G1 G1b G2 G3 G4 G5 G6 in order, byte-identically"
+echo "OK: both specs carry G1 G1b G2 G3 G4 G5 G6 once each, in order, byte-identically"
 ```
 
 **Do NOT run the scenario harnesses** (`npm run scenarios`,
