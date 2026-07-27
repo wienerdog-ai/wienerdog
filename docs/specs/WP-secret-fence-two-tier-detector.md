@@ -1,7 +1,7 @@
 ---
 id: WP-secret-fence-two-tier-detector
 title: Make the secret detector two-tier — a slash-tiered entropy alphabet, separator-bound context, and quarantine severity on every labelled rule
-status: Ready
+status: In-Review
 model: opus
 size: M
 depends_on: []

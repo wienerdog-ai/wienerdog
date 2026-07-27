@@ -36,7 +36,7 @@ test('scanAndRedact: uppercase CLIENT_SECRET assignment (worked example)', () =>
   assert.ok(!text.includes('GOCSPX-abcd1234'), text);
   const finding = findingByLabel(findings, 'client_secret') || findingByLabel(findings, 'generic-secret');
   assert.ok(finding, JSON.stringify(findings));
-  assert.equal(finding.severity, SEVERITY.REDACT);
+  assert.equal(finding.severity, SEVERITY.QUARANTINE);
   assert.equal(finding.count, 1);
 });
 
@@ -52,7 +52,7 @@ test('scanAndRedact: JSON refresh_token value (worked example)', () => {
   assert.ok(text.includes('refresh_token'), text);
   const finding = findingByLabel(findings, 'refresh_token');
   assert.ok(finding, JSON.stringify(findings));
-  assert.equal(finding.severity, SEVERITY.REDACT);
+  assert.equal(finding.severity, SEVERITY.QUARANTINE);
 });
 
 test('scanAndRedact: PEM private key is redacted AND quarantine-flagged (worked example)', () => {
@@ -84,7 +84,7 @@ test('scanAndRedact: oversized input is withheld, not scanned (worked example)',
 test('corpus: uppercase REFRESH_TOKEN assignment', () => {
   const { text } = assertRedacted(
     'REFRESH_TOKEN=1//0abcDEFghiJKLmno-_pqr', '1//0abcDEFghiJKLmno-_pqr',
-    'refresh_token', SEVERITY.REDACT,
+    'refresh_token', SEVERITY.QUARANTINE,
   );
   assert.ok(text.includes('REFRESH_TOKEN='), text);
 });
@@ -92,7 +92,7 @@ test('corpus: uppercase REFRESH_TOKEN assignment', () => {
 test('corpus: Google refresh-token variant standalone (1//0…)', () => {
   assertRedacted(
     'saved 1//0gAbCdEfGhIjKlMnOpQrStUv to disk', '1//0gAbCdEfGhIjKlMnOpQrStUv',
-    'google-refresh-token', SEVERITY.REDACT,
+    'google-refresh-token', SEVERITY.QUARANTINE,
   );
 });
 
@@ -109,18 +109,18 @@ test('corpus: Google OAuth access token and API key', () => {
   assertRedacted('t ya29.a0AbCdEfGhIjKl end', 'ya29.a0AbCdEfGhIjKl', 'google-oauth');
   assertRedacted(
     'k AIzaSyA1bC2dE3fG4hI5jK6lM7nO8pQ9rS0tUvW end', 'AIzaSyA1bC2dE3fG4hI5jK6lM7nO8pQ9rS0tUvW',
-    'google-api-key', SEVERITY.REDACT,
+    'google-api-key', SEVERITY.QUARANTINE,
   );
 });
 
 test('corpus: Stripe live keys — secret forms quarantine, publishable redacts', () => {
   assertRedacted('s sk_live_a1b2c3d4e5f6g7h8 end', 'sk_live_a1b2c3d4e5f6g7h8', 'stripe-secret-key', SEVERITY.QUARANTINE);
   assertRedacted('r rk_live_a1b2c3d4e5f6g7h8 end', 'rk_live_a1b2c3d4e5f6g7h8', 'stripe-secret-key', SEVERITY.QUARANTINE);
-  assertRedacted('p pk_live_a1b2c3d4e5f6g7h8 end', 'pk_live_a1b2c3d4e5f6g7h8', 'stripe-key', SEVERITY.REDACT);
+  assertRedacted('p pk_live_a1b2c3d4e5f6g7h8 end', 'pk_live_a1b2c3d4e5f6g7h8', 'stripe-key', SEVERITY.QUARANTINE);
 });
 
 test('corpus: AWS key id redacts, AWS secret assignment quarantines', () => {
-  assertRedacted('id AKIAIOSFODNN7EXAMPLE end', 'AKIAIOSFODNN7EXAMPLE', 'aws-key', SEVERITY.REDACT);
+  assertRedacted('id AKIAIOSFODNN7EXAMPLE end', 'AKIAIOSFODNN7EXAMPLE', 'aws-key', SEVERITY.QUARANTINE);
   const { text } = assertRedacted(
     'aws_secret_access_key=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
     'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
@@ -137,7 +137,7 @@ test('corpus: AWS key id redacts, AWS secret assignment quarantines', () => {
 test('corpus: JSON string value under a sensitive key', () => {
   const { text } = assertRedacted(
     '{"token": "abcd efgh ijkl mnop qrst"}', 'abcd efgh ijkl mnop qrst',
-    'generic-secret', SEVERITY.REDACT,
+    'generic-secret', SEVERITY.QUARANTINE,
   );
   assert.ok(text.includes('"token"'), text);
 });
@@ -150,7 +150,7 @@ test('corpus: quoted assignment values', () => {
 test('corpus: values containing / + =', () => {
   assertRedacted(
     'client_secret=abc/def+ghi=jkl.mno~pqr', 'abc/def+ghi=jkl.mno~pqr',
-    'client_secret', SEVERITY.REDACT,
+    'client_secret', SEVERITY.QUARANTINE,
   );
 });
 
@@ -171,7 +171,7 @@ test('corpus: two matches of the same label aggregate count', () => {
 
 // --- high-entropy contextual detection ---
 
-test('entropy: an unlabelled high-entropy base64 run is quarantined', () => {
+test('entropy: an unlabelled high-entropy base64 run is redacted', () => {
   const blob = 'q7PmXz4KvR9tWc2LbN8dYfGh'; // 24 chars, all distinct → ~4.58 bits/char
   assert.equal(blob.length, ScanLimits.ENTROPY_MIN_LEN);
   const { text, findings } = scanAndRedact(`blob ${blob} end`);
@@ -179,8 +179,8 @@ test('entropy: an unlabelled high-entropy base64 run is quarantined', () => {
   assert.ok(text.includes('[REDACTED:high-entropy]'), text);
   const finding = findingByLabel(findings, 'high-entropy');
   assert.ok(finding, JSON.stringify(findings));
-  assert.equal(finding.severity, SEVERITY.QUARANTINE);
-  assert.equal(hasHardFinding(findings), true);
+  assert.equal(finding.severity, SEVERITY.REDACT);
+  assert.equal(hasHardFinding(findings), false);
 });
 
 test('entropy: long low-entropy runs are NOT flagged', () => {
