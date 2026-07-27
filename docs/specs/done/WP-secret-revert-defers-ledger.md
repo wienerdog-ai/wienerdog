@@ -1,7 +1,7 @@
 ---
 id: WP-secret-revert-defers-ledger
 title: A secret-reverted dream must not mark its source transcripts processed — defer them and bound the retry
-status: In-Review
+status: Done
 model: sonnet
 size: M
 depends_on: []

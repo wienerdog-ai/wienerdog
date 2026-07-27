@@ -2,6 +2,22 @@
 
 All notable changes to Wienerdog. Format: [Keep a Changelog](https://keepachangelog.com), versioning: SemVer (0.x until the installed file layout stabilizes — ADR-0003).
 
+## [0.11.0] — 2026-07-27
+
+This release continues 0.10.0's audit arc, closing four more ways Wienerdog's own scheduled-job machinery could be misled by a write into its own folders: the decision to run in "production" (strict checks) versus "developer mode" (relaxed), the health check's idea of what counts as a healthy job, the advice printed when a run refuses to start, and what a re-sync re-publishes. Alongside that, the nightly memory consolidation is gentler on a false alarm — a suspected secret now delays a night's memories instead of erasing them.
+
+### Fixed
+- **A wrongly-flagged secret no longer costs you a night's memories.** When the nightly memory consolidation's secret scanner reverts a note as a precaution, the sessions behind it are now deferred and retried on later nights (up to three tries, then quarantined with a visible notice) instead of being marked done and lost for good.
+- **The nightly memory consolidation starts reliably again.** A Claude Code update changed how its start signal gets interpreted, which could make a run silently do nothing. It now starts from a plain instruction instead, and checks that the run actually did something before calling it a success.
+- **Scheduled jobs on macOS authenticate reliably again.** A Claude Code update moved sign-in into the macOS Keychain, but the deliberately minimal environment Wienerdog builds for scheduled jobs was unintentionally telling Claude to ignore the Keychain — even on an ordinary install using your real home folder. Nightly runs and routines no longer fail to authenticate because of this.
+
+### Security & hardening
+- **Whether an install runs in production or developer mode can no longer be forged by writing a file into Wienerdog's own folder.** That choice is now derived from where the install actually lives on disk — a structural fact a data write can't produce — instead of a marker file or an environment variable (`WIENERDOG_DEV`, now removed entirely). Previously, planting one file into a production install could quietly downgrade it to developer mode's relaxed checks.
+- **The health check now verifies the scheduled job that's actually loaded, not just that one is registered.** `wienerdog doctor` — and the self-heal it triggers — now confirms the loaded entry still points at Wienerdog's own launcher and program, catching a swapped or stale entry that "something is registered" used to wave through as healthy.
+- **The advice printed when a scheduled run refuses to start is now chosen from what was actually found wrong.** If Wienerdog's own program files look tampered with, it no longer tells you to run `wienerdog sync` — doing so would re-copy the install from the very files in question. It now tells you to reinstall from the registry (`npx wienerdog@latest sync`) instead.
+- **Re-syncing an install no longer re-publishes its own launcher from the tree it's re-vendoring.** `wienerdog sync` now carries the existing, independently verified launcher forward untouched. If it's missing or unreadable, sync fails loudly with recovery steps instead of quietly rebuilding it from the tree it's supposed to be checking.
+- **Test infrastructure hardening.** The automated test harnesses now read back what the OS scheduler actually has loaded and fail loudly if a test ever leaks a real scheduled entry onto a developer's machine, plus assorted macOS/Linux CI portability fixes and a live-proof harness repair. No user-facing effect — this only tightens our own testing.
+
 ## [0.10.0] — 2026-07-22
 
 This is Wienerdog's biggest security release yet. Between 0.9.0 and this release, an independent audit went through every place Wienerdog reaches outside your own machine — connecting Google, the scheduled routines (morning digest, inbox triage, weekly review), the daily summary injected into every new session, and the nightly memory consolidation's ability to edit your identity notes — and found real gaps in each one. Every one of those capabilities was rebuilt and hardened before being turned back on. The result is the same conveniences as before, now running on narrower Google permissions, inside a locked-down execution environment that checks itself before every run, and with a human always confirming anything sensitive before it's trusted or sent.

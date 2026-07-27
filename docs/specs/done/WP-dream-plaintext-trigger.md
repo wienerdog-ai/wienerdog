@@ -1,7 +1,7 @@
 ---
 id: WP-dream-plaintext-trigger
 title: Dream trigger is plain text (not a leading slash command) + a dream non-vacuity guard
-status: In-Review
+status: Done
 model: sonnet
 size: S
 depends_on: []

@@ -1,7 +1,7 @@
 ---
 id: WP-cleanenv-keychain-auth
 title: buildCleanEnv must not suppress claude's Keychain auth on an unredirected home
-status: In-Review
+status: Done
 model: sonnet
 size: S
 depends_on: []
