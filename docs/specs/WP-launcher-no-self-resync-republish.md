@@ -1390,58 +1390,37 @@ fixed `/tmp` path. Run from the repo root.
 hygiene; it is the precondition that makes every other step mean what it says.
 
 ```bash
-(
-  set -u
-  # (1) Index flags FIRST: `git status` deliberately ignores worktree changes to
-  # files marked assume-unchanged or skip-worktree, so an empty porcelain proves
-  # nothing while any tracked file carries one. Tag letters, verified by
-  # execution on git 2.39.5: `h` assume-unchanged, `S` skip-worktree, `s` both —
-  # so lowercase-anything OR `S`.
-  # The probe and the filter are checked SEPARATELY and neither is allowed to
-  # fail silently: `|| true` on the whole pipeline would turn a broken
-  # `git ls-files` or an unrunnable `grep` into "no flags found".
-  lsout=$(git ls-files -v)
-  rc=$?
-  if [ "$rc" -ne 0 ]; then
-    echo "V0 FAIL — 'git ls-files -v' itself failed (exit $rc); the index-flag probe did not run, so the ABSENCE of flags is unestablished. Fix that before collecting any evidence"
-    exit 1
-  fi
-  flagged=$(printf '%s\n' "$lsout" | grep -E '^([a-z]|S) ')
-  grc=$?
-  if [ "$grc" -gt 1 ]; then
-    echo "V0 FAIL — the index-flag filter itself failed (grep exit $grc); the ABSENCE of flags is unestablished. Fix that before collecting any evidence"
-    exit 1
-  fi
-  if [ "$grc" -eq 0 ]; then
-    echo "V0 FAIL — tracked files carry assume-unchanged / skip-worktree index flags. git status cannot see edits to them, so a clean tree would prove nothing. Clear them with 'git update-index --no-assume-unchanged <path>' / '--no-skip-worktree <path>', then re-run ALL steps. Flagged:"
-    printf '%s\n' "$flagged"
-    exit 1
-  fi
+node <<'V0EOF'
+'use strict';
+// V0 — every gate below must describe the COMMITTED HEAD.
+// execFileSync THROWS on a nonzero exit and on a missing binary, and there is no
+// shell and no pipeline here, so a failed probe cannot read as a benign result.
+// An uncaught throw IS the fail-closed path. There are no catch blocks by design.
+const { execFileSync } = require('node:child_process');
+const git = (...a) => execFileSync('git', a, { encoding: 'utf8', maxBuffer: 64 << 20 });
 
-  # (2) `st=$(...)` makes the assignment's status the command substitution's
-  # status, and it is gone after the NEXT statement — so capture $? immediately
-  # (this repo's own G1b lesson). A failing `git status` must NOT read as "clean".
-  st=$(git status --porcelain)
-  rc=$?
-  if [ "$rc" -ne 0 ]; then
-    echo "V0 FAIL — git status itself failed (exit $rc); fix that before collecting any evidence"
-    exit 1
-  fi
-  if [ -n "$st" ]; then
-    echo "V0 FAIL — the tree has uncommitted or untracked changes; every verification result below must describe the committed HEAD. Commit or stash, then re-run ALL steps."
-    printf '%s\n' "$st"
-    exit 1
-  fi
-  # (3) The sha is part of the claim, so its probe is checked too: a PASS line
-  # naming an empty commit would attribute the evidence to nothing.
-  head=$(git rev-parse HEAD)
-  hrc=$?
-  if [ "$hrc" -ne 0 ]; then
-    echo "V0 FAIL — 'git rev-parse HEAD' failed (exit $hrc); there is no commit to attribute the evidence below to"
-    exit 1
-  fi
-  echo "V0 PASS — no index flags, index and worktree clean; every result below describes $head"
-)
+// (1) Index flags first: `git status` deliberately ignores worktree changes to
+// files marked assume-unchanged or skip-worktree, so a clean status proves
+// nothing while any tracked file carries one. Tag letters, verified by execution
+// on git 2.39.5: `h` assume-unchanged, `S` skip-worktree, `s` both.
+const flagged = git('ls-files', '-v').split('\n').filter((l) => /^([a-z]|S) /.test(l));
+if (flagged.length) {
+  console.error("V0 FAIL — tracked files carry assume-unchanged / skip-worktree index flags. git status cannot see edits to them, so a clean tree would prove nothing. Clear them with 'git update-index --no-assume-unchanged <path>' / '--no-skip-worktree <path>', then re-run ALL steps. Flagged:");
+  console.error(flagged.join('\n'));
+  process.exit(1);
+}
+
+// (2) Untracked files count as dirty: porcelain reports them as `??`, and an
+// untracked replacement is another way to make a gate read what HEAD lacks.
+const st = git('status', '--porcelain').trim();
+if (st !== '') {
+  console.error('V0 FAIL — the tree has uncommitted or untracked changes; every verification result below must describe the committed HEAD. Commit or stash, then re-run ALL steps.');
+  console.error(st);
+  process.exit(1);
+}
+
+console.log(`V0 PASS — no index flags, index and worktree clean; every result below describes ${git('rev-parse', 'HEAD').trim()}`);
+V0EOF
 rc=$?; echo "V0 exit=$rc"; (exit $rc)
 ```
 
@@ -1485,26 +1464,24 @@ only) printed `V0 PASS` and exited **0** over a `HEAD` carrying M2.
 | same, but `--assume-unchanged` set instead | `V0 PASS`, exit **0** | `V0 FAIL … Flagged:` / `h src/core/vendor.js`, exit **1** |
 | flags cleared, tree clean (worktree really *is* the bad `HEAD`) | `V0 PASS`, exit 0 | `V0 PASS`, exit **0** — correctly, and V1 then goes red (`pass 3 / fail 1`, T4) |
 
-**The probe and the filter are checked separately, and that is not style.** An
-earlier form wrote `flagged=$(git ls-files -v | grep -E '…' || true)`. Without
-`pipefail` the `|| true` applies to the **whole pipeline**, so a failure of
-`git ls-files` — or a `grep` that cannot run — becomes a successful assignment
-with an empty `flagged`, and V0 sails on to print
-`V0 PASS — no index flags…` **without ever having established that.** That is a
-straight contradiction of its own fail-closed contract, and it is an *accidental*
-degraded-dependency case, not evasion — exactly the class V0 is for. Measured,
-with a `git` shim that fails **only** `ls-files` while `git status` keeps working
-(the decisive shape, because a blanket failure would be caught later anyway):
+**A degraded `git` cannot read as "no flags".** `execFileSync` throws on any
+non-zero exit and on a missing binary, so the probe's failure and its benign
+result are not the same event. Measured with a `git` shim that fails **only**
+`ls-files` while `git status` keeps working — the decisive shape, because a
+blanket failure would be caught later anyway — and with `git` broken outright:
 
-| Degraded dependency | Earlier `\|\| true` form | Current split-probe form |
+| Degraded dependency | The shell forms this replaced | Current Node form |
 |---|---|---|
-| `git ls-files -v` exits 4, `git status` fine, tree clean | `V0 PASS — no index flags, index and worktree clean…`, exit **0** — a false claim | `V0 FAIL — 'git ls-files -v' itself failed (exit 4); the index-flag probe did not run, so the ABSENCE of flags is unestablished…`, exit **1** |
-| `grep` exits 2 (filter unrunnable) | `V0 PASS …`, exit **0** | `V0 FAIL — the index-flag filter itself failed (grep exit 2); the ABSENCE of flags is unestablished…`, exit **1** |
+| `git ls-files -v` fails, `git status` fine, tree clean | `V0 PASS — no index flags, index and worktree clean…`, exit **0** — a false claim | throws `Command failed: git ls-files -v`, exit **1** |
+| `git` broken outright | — | throws, exit **1** |
+| not a git repository at all | — | throws `fatal: not a git repository`, exit **1** |
 
-`grep`'s three statuses are distinguished rather than collapsed: **0** = flags
-found (fail with the flag message), **1** = no flags (the only path that
-proceeds), **>1** = the filter itself failed (fail closed). There is **no
-`|| true` anywhere in the block**.
+There is no filter process to break: the flag scan is a `String.split` and a
+regex inside the same process, so there is no second status to lose. This is the
+round-9 language change (see the "Why the five multi-stage gates are Node"
+section above) — two successive shell forms of this exact check false-PASSed,
+first by `|| true` over a pipeline and then by an unchecked `printf` feeding a
+`grep` that returned 1 on empty input.
 
 The tag letters were **verified by execution on git 2.39.5**, not recalled:
 `git ls-files -v` prints `h` for assume-unchanged, `S` for skip-worktree, and
@@ -1517,8 +1494,8 @@ matched.
 **untracked** files as `??`, so a stray new file counts as dirty — correct,
 because an untracked replacement is another way to make a gate read something
 `HEAD` does not contain. And a **failure of `git status` itself** fails closed
-rather than reading as "clean": `rc` is captured on the very next statement,
-because the next command would otherwise overwrite `$?`.
+rather than reading as "clean" — structurally now, because `execFileSync` throws
+rather than returning a status somebody has to remember to inspect.
 
 ### What V0 defends, and what it explicitly does not — read this before filing another bypass
 
@@ -1605,7 +1582,7 @@ round 6 to the two steps that round added (**V2b** and **V8**):
 
 | Step | Kind of gate | Round-1 inversion? | Round-2 masking? |
 |---|---|---|---|
-| V0 | no tracked file may carry an `assume-unchanged` / `skip-worktree` index flag, `git status --porcelain` must be empty, and `git status`'s own failure must fail closed. **Added round 6** after a review found a path-scoped clean check left every working-tree-reading gate maskable; **the index-flag check was added a round later**, after a review showed those flags make an empty porcelain meaningless | **no, by construction** — `st=$(…)`'s status is captured on the very next statement into `rc`, a nonzero `rc` is its own `exit 1`, and the index-flag probe captures `git ls-files`'s status and `grep`'s status **separately** (`grc` 0 = flags, 1 = none, >1 = filter failed), with no `\|\| true` to swallow either | no — ends `rc=$?; … (exit $rc)` |
+| V0 | no tracked file may carry an `assume-unchanged` / `skip-worktree` index flag, `git status --porcelain` must be empty, and any `git` failure must fail closed. **Added round 6**; index-flag check added round 7; **rewritten in Node round 9** | **no — structurally.** It is a Node script: `execFileSync` throws on any `git` failure, and the flag scan is an in-process regex, so there is no second status to capture and none to swallow | no — ends `rc=$?; … (exit $rc)` |
 | V1 | `node tests/run.js` — nonzero exit on any failure | no | **yes — fixed below** |
 | V2 | `node tests/run.js` — nonzero exit on any failure | no | n/a (no `exit=` line was appended) |
 | V3 | was `grep -c`, "expect 0" | **yes — fixed round 2** | **yes — fixed below** |
@@ -1614,7 +1591,7 @@ round 6 to the two steps that round added (**V2b** and **V8**):
 | V6 | `git diff --name-only` — always exits 0; a **list comparison**, not an exit-code gate. Stated as such so no one mistakes its exit 0 for a pass. The enforcing gate is CI's `boundary-check` | n/a | n/a |
 | V7 | `npm run lint` — nonzero exit on any violation | no | **yes — fixed below** |
 | V2b | `run-a7-integrity.js` — nonzero exit on any failure. **Added round 6** (the scenario gate `node tests/run.js` does not run) | no — written in the fixed form from the start | no — ends `rc=$?; … (exit $rc)` |
-| V8 | exact reconstruction of `HEAD`'s blob + `diff`, behind a clean-tree precondition. **Added round 6 and rewritten TWICE in it** — form 1 was two `grep -c` diff-shape counts (admits the vacuity counterexample, red arm (a)); form 2 asserted the invariant but `diff`ed the **working tree**, so a bad `HEAD` masked by an uncommitted edit passed (red arm (f), measured). Form 3 reads `git show HEAD:…` and refuses a dirty tree | **no, by construction** — `grep -c`'s status is captured into a variable and the gate is an explicit `[ "$n" -ne 1 ]` test; the outcome gate is `diff`'s status inside an `if` | no — ends `rc=$?; … (exit $rc)` |
+| V8 | exact in-process reconstruction of `HEAD`'s blob, behind a clean-tree precondition. **Four forms across rounds 6–9**: (1) two `grep -c` diff-shape counts — admits the vacuity counterexample, red arm (a); (2) asserted the invariant but compared the **working tree**, so a bad `HEAD` masked by an uncommitted edit passed — red arm (f); (3) read `git show HEAD:…` and refused a dirty tree, but its heredoc `cat` and reconstruction `awk` were unchecked, so a failing `cat` made a missing-D4 `HEAD` compare equal; (4) **Node** — blobs via `execFileSync`, D4's block a literal array, reconstruction and comparison in-process | **no — structurally.** Every external call throws on failure; there is no temp file, no filter process, and no status to forget | no — ends `rc=$?; … (exit $rc)` |
 
 ### The third defect class: a probe whose failure is indistinguishable from a benign result
 
@@ -1637,7 +1614,11 @@ page:
 | **(c)** | a numeric test on a possibly-empty variable, e.g. `[ "$n" -ne 1 ]` with `n=""` | bash errors `integer expression expected` and returns 2; **inside an `if` that reads as FALSE**, so the guard is skipped |
 
 **Result of the sweep, block by block. All twelve fenced `bash` blocks were
-examined; nothing was skipped.**
+examined; nothing was skipped.** *(Round 9 note: the five blocks marked "found,
+fixed" below were subsequently **rewritten in Node** — the shell fixes described
+in their Detail cells are the history that motivated the language change, not the
+code that ships. See "Why the five multi-stage gates are Node" immediately after
+this table.)*
 
 | Block | Verdict | Detail |
 |---|---|---|
@@ -1659,13 +1640,69 @@ examined; nothing was skipped.**
 exit-code gates — the `awk` sanity check and V6 — are called out as such rather
 than counted clean by omission.
 
-**The claim, restated as an outcome rather than an assertion:** after this sweep,
-**no block on this page has a probe whose failure is indistinguishable from a
-benign result** — verified by running each of the five fixed blocks with the
-relevant tool (`awk`, `grep`, `git ls-files`, `git status`) replaced by a
-`PATH`-shimmed stub that exits nonzero, and confirming each fails closed where
-its predecessor printed `PASS` at exit `0`. If you add or edit a block, re-run
-that sweep against shapes (a), (b) and (c) — do not grep for a construct.
+### Why the five multi-stage gates are Node, not shell
+
+**A sweep claim on this page has now been falsified three times, each by
+execution, and the third one ended the approach rather than patching it.**
+
+1. A claim based on grepping for `|| true` missed five instances that wore other
+   constructs.
+2. The shape-based sweep above fixed those — and its own fixes introduced new
+   producers: `printf '%s\n' "$lsout" | grep …` saved only `grep`'s status, so a
+   failing `printf` fed `grep` empty input, `grep` returned 1, and V0 read that
+   as "no flags" — **executed: `V0 PASS`, exit 0, with a flagged file present.**
+   The identical shape reappeared in V3.
+3. V8's reconstruction had the same defect one layer down: the heredoc `cat` and
+   the reconstruction `awk` were unchecked, so a failing `cat` left an empty
+   block file, `awk` inserted nothing, the reconstruction equalled `main`, and a
+   `HEAD` missing D4 compared **equal** — **executed on real blobs: `V8 PASS`.**
+
+The pattern is the finding. **In shell, fail-open is the default**: every stage
+added to satisfy the last review is a new producer whose failure reads as a
+benign value, so the class regenerates from its own fixes. Per this project's
+rule — *when a check keeps drawing findings, it is testing a proxy; ask what fact
+it stands for* — the fact is: **any probe failure must be indistinguishable from
+nothing except a loud non-zero exit.** That is the *default semantics of a real
+language*, not something to assemble stage-by-stage in `sh`.
+
+So the five gates that do multi-stage probing — **V0, V3, V4, V5, V8** — are now
+**Node scripts**, fed to `node` on **stdin via a quoted heredoc** (no temp file,
+no `cat`, no intermediate producer; if the heredoc cannot be set up the command
+itself fails). Node ≥ 18 is already this repo's floor. They use only
+`child_process.execFileSync` — which **throws** on a nonzero exit and on a
+missing binary, with **no shell and no pipeline** — plus `fs.readFileSync` and
+plain string/regex work. **An uncaught exception IS the fail-closed path**: every
+degraded-tool scenario from the rounds above becomes a thrown error and a
+non-zero exit *by construction*, not by bookkeeping.
+
+**Semantics, messages and red/green meanings are unchanged.** V1, V2, V2b and V7
+stay bare commands — their own exit status is already the gate — and V6 stays a
+list comparison.
+
+**The review obligation for future edits to these five blocks is now small and
+checkable:** *no `catch` clause, and no default-on-error fallback.* As written
+they contain neither a `try` nor a `catch`. Measured over all five block bodies
+concatenated:
+
+```
+grep -cE 'catch[[:space:]]*[({]'  →  0
+grep -cE 'try[[:space:]]*\{'      →  0
+```
+
+(A plain `grep -c catch` returns **5** — every hit is the comment line that says
+there are no catch blocks. The bare word is not the check; the clause is. Stating
+that distinction because an earlier round on this page shipped a sweep claim that
+matched comments and called it evidence.) Do **not** reintroduce a pipeline, a
+temp file written by a separate command, or a `try` that swallows. If you need a
+new probe, call it and let it throw.
+
+**The claim, restated as an outcome rather than an assertion:** **no block on
+this page has a probe whose failure is indistinguishable from a benign result.**
+For V1/V2/V2b/V7 that holds because the command's own status is the gate; for V6
+because it is explicitly not a gate; for V0/V3/V4/V5/V8 because a failed probe
+throws. Verified by executing every one of the five with its tools shimmed to
+fail, its input removed, and its semantic violations applied — the arm tables
+under each step.
 
 No further inversion and no further masking exists in the steps below; the sweep
 that produced this table was re-run in round 3 over every block on the page,
@@ -1738,19 +1775,36 @@ red.
 **V3 — `writeLauncher` does not recompute the predicate (Table L, AC10).**
 
 ```bash
-bash -c '
-body=$(awk "/^function writeLauncher/,/^}/" src/core/vendor.js)
-arc=$?
-if [ "$arc" -ne 0 ]; then echo "V3 FAIL — awk itself failed (exit $arc); the range was never extracted, so a count of 0 would be meaningless"; exit 1; fi
-if [ -z "$body" ]; then echo "V3 FAIL — the writeLauncher range extracted EMPTY; zero matches over nothing is not evidence"; exit 1; fi
-hits=$(printf "%s\n" "$body" | grep -cE "selfResync|currentLink|installStance|isDevCheckout|realpath")
-grc=$?
-if [ "$grc" -gt 1 ]; then echo "V3 FAIL — the filter itself failed (grep exit $grc); the match count is unestablished"; exit 1; fi
-case "$hits" in ""|*[!0-9]*) echo "V3 FAIL — non-numeric match count [$hits]; the probe produced no count"; exit 1;; esac
-echo "V3 matches: $hits"
-if [ "$hits" -ne 0 ]; then echo "V3 FAIL — writeLauncher recomputes the predicate"; exit 1; fi
-echo "V3 PASS"
-'
+node <<'V3EOF'
+'use strict';
+// V3 — writeLauncher must not recompute the self-resync predicate (Table L, AC10).
+// readFileSync throws if the file is gone; the range is located explicitly and a
+// range that does not resolve is a FAILURE, not "zero matches". No catch blocks.
+const fs = require('node:fs');
+const lines = fs.readFileSync('src/core/vendor.js', 'utf8').split('\n');
+
+const from = lines.findIndex((l) => /^function writeLauncher/.test(l));
+if (from < 0) {
+  console.error('V3 FAIL — `function writeLauncher` not found in src/core/vendor.js; the range was never located, so a count of 0 would be meaningless');
+  process.exit(1);
+}
+const rel = lines.slice(from).findIndex((l) => /^}/.test(l));
+if (rel < 0) {
+  console.error('V3 FAIL — no closing `}` after `function writeLauncher`; the range does not terminate, so a count of 0 would be meaningless');
+  process.exit(1);
+}
+const body = lines.slice(from, from + rel + 1);
+
+const hits = body.filter((l) => /selfResync|currentLink|installStance|isDevCheckout|realpath/.test(l));
+console.log(`V3 range: ${body.length} lines`);
+console.log(`V3 matches: ${hits.length}`);
+if (hits.length !== 0) {
+  console.error('V3 FAIL — writeLauncher recomputes the predicate');
+  console.error(hits.join('\n'));
+  process.exit(1);
+}
+console.log('V3 PASS');
+V3EOF
 rc=$?; echo "V3 exit=$rc"; (exit $rc)
 ```
 
@@ -1779,17 +1833,24 @@ plausible function length — not `0`, not `1`, and not the file's line count.
 **V4 — the call site is exactly the specified one (one occurrence each).**
 
 ```bash
-bash -c '
-for pat in "carryForward: selfResync && !dev" "if (opts.carryForward)"; do
-  n=$(grep -cF "$pat" src/core/vendor.js)
-  grc=$?
-  if [ "$grc" -gt 1 ]; then echo "V4 FAIL — the probe itself failed (grep exit $grc) for [$pat]; the count is unestablished"; exit 1; fi
-  case "$n" in ""|*[!0-9]*) echo "V4 FAIL — non-numeric count [$n] for [$pat]; the probe produced no count"; exit 1;; esac
-  echo "V4 [$pat] = $n"
-  if [ "$n" -ne 1 ]; then echo "V4 FAIL — expected exactly 1"; exit 1; fi
-done
-echo "V4 PASS"
-'
+node <<'V4EOF'
+'use strict';
+// V4 — the call site is exactly the specified one (one occurrence each).
+// Fixed-string, line-counted: the same thing `grep -cF` counted. readFileSync
+// throws if the file is gone. No catch blocks.
+const fs = require('node:fs');
+const lines = fs.readFileSync('src/core/vendor.js', 'utf8').split('\n');
+
+for (const pat of ['carryForward: selfResync && !dev', 'if (opts.carryForward)']) {
+  const n = lines.filter((l) => l.includes(pat)).length;
+  console.log(`V4 [${pat}] = ${n}`);
+  if (n !== 1) {
+    console.error('V4 FAIL — expected exactly 1');
+    process.exit(1);
+  }
+}
+console.log('V4 PASS');
+V4EOF
 rc=$?; echo "V4 exit=$rc"; (exit $rc)
 ```
 
@@ -1805,15 +1866,23 @@ old `echo "V4 exit=$?"` ending printed `V4 exit=1` and **exited 0**.
 **V5 — ADR-0004 (AC11).**
 
 ```bash
-bash -c '
-hits=$(grep -cE "setInterval|setTimeout|spawn|fs\.watch|daemon" src/core/vendor.js)
-grc=$?
-if [ "$grc" -gt 1 ]; then echo "V5 FAIL — the probe itself failed (grep exit $grc); the ABSENCE of these constructs is unestablished"; exit 1; fi
-case "$hits" in ""|*[!0-9]*) echo "V5 FAIL — non-numeric count [$hits]; the probe produced no count"; exit 1;; esac
-echo "V5 matches: $hits"
-if [ "$hits" -ne 0 ]; then echo "V5 FAIL — ADR-0004: this WP starts nothing"; exit 1; fi
-echo "V5 PASS"
-'
+node <<'V5EOF'
+'use strict';
+// V5 — ADR-0004 (AC11): this WP starts nothing. readFileSync throws if the file
+// is gone, so "no matches" can never come from "no file". No catch blocks.
+const fs = require('node:fs');
+const lines = fs.readFileSync('src/core/vendor.js', 'utf8').split('\n');
+
+const hits = lines.filter((l) => /setInterval|setTimeout|spawn|fs\.watch|daemon/.test(l));
+console.log(`V5 scanned: ${lines.length} lines`);
+console.log(`V5 matches: ${hits.length}`);
+if (hits.length !== 0) {
+  console.error('V5 FAIL — ADR-0004: this WP starts nothing');
+  console.error(hits.join('\n'));
+  process.exit(1);
+}
+console.log('V5 PASS');
+V5EOF
 rc=$?; echo "V5 exit=$rc"; (exit $rc)
 ```
 
@@ -1866,91 +1935,64 @@ gap to slip through, because there is exactly one permitted file content and V8
 computes it.
 
 ```bash
-(
-  set -u
-  # V8 verifies the COMMITTED state. Without this guard an uncommitted local
-  # edit can mask a bad HEAD: HEAD carries D4 plus a vacuity line, the working
-  # tree has that line removed, the comparison agrees, and the bad HEAD ships.
-  # Assigned, THEN the status is read: `[ -n "$(git status …)" ]` discards it, so
-  # a git status that fails with empty stdout would slip straight past the guard.
-  dirty=$(git status --porcelain -- tests/unit/vendor.test.js)
-  drc=$?
-  if [ "$drc" -ne 0 ]; then
-    echo "V8 FAIL — git status itself failed (exit $drc); the clean-tree precondition is unestablished"
-    exit 1
-  fi
-  if [ -n "$dirty" ]; then
-    echo "V8 FAIL — tests/unit/vendor.test.js has uncommitted changes. V8 verifies the COMMITTED HEAD; commit or stash first, then re-run."
-    exit 1
-  fi
+node <<'V8EOF'
+'use strict';
+// V8 — HEAD's tests/unit/vendor.test.js IS main's file plus exactly D4's block at
+// D4's anchor. Both blobs come from execFileSync (throws on any git failure), the
+// expected content is COMPUTED IN THIS PROCESS from a literal array — there is no
+// temp file, no heredoc, no external filter, and therefore no producer whose
+// failure could look like agreement. No catch blocks.
+const { execFileSync } = require('node:child_process');
+const git = (...a) => execFileSync('git', a, { encoding: 'utf8', maxBuffer: 64 << 20 });
+const P = 'tests/unit/vendor.test.js';
 
-  w=$(mktemp -d)
-  mrc=$?
-  if [ "$mrc" -ne 0 ] || [ -z "$w" ]; then
-    echo "V8 FAIL — 'mktemp -d' failed (exit $mrc); there is no scratch dir, so nothing below can be trusted"
-    exit 1
-  fi
-  git show main:tests/unit/vendor.test.js > "$w/base"
-  brc=$?
-  if [ "$brc" -ne 0 ]; then
-    echo "V8 FAIL — 'git show main:tests/unit/vendor.test.js' failed (exit $brc); the baseline is unestablished"
-    exit 1
-  fi
-  git show HEAD:tests/unit/vendor.test.js > "$w/head"
-  hrc=$?
-  if [ "$hrc" -ne 0 ]; then
-    echo "V8 FAIL — 'git show HEAD:tests/unit/vendor.test.js' failed (exit $hrc); HEAD's content is unestablished"
-    exit 1
-  fi
+// Clean-tree precondition: V8 verifies the COMMITTED HEAD, and an uncommitted
+// local edit can otherwise mask a bad HEAD (red arm (f)).
+const dirty = git('status', '--porcelain', '--', P).trim();
+if (dirty !== '') {
+  console.error(`V8 FAIL — ${P} has uncommitted changes. V8 verifies the COMMITTED HEAD; commit or stash first, then re-run.`);
+  console.error(dirty);
+  process.exit(1);
+}
 
-  # D4's anchor: the line its block is inserted immediately AFTER.
-  anchor="    fs.symlinkSync(start, path.join(app, 'current'));"
+const base = git('show', `main:${P}`);
+const head = git('show', `HEAD:${P}`);
 
-  # D4's block, verbatim. A quoted heredoc — nothing here is expanded.
-  cat > "$w/block" <<'D4BLOCK'
-    // A real installed core always has the out-of-tree launcher a first install
-    // published. This fixture hand-builds the core, so publish it by hand.
-    fs.mkdirSync(path.join(core, 'launcher'), { recursive: true });
-    fs.copyFileSync(
-      path.join(REPO, 'src', 'scheduler', 'launcher.js'),
-      path.join(core, 'launcher', 'launch.js')
-    );
-D4BLOCK
+const anchor = "    fs.symlinkSync(start, path.join(app, 'current'));";
+const block = [
+  '    // A real installed core always has the out-of-tree launcher a first install',
+  '    // published. This fixture hand-builds the core, so publish it by hand.',
+  "    fs.mkdirSync(path.join(core, 'launcher'), { recursive: true });",
+  '    fs.copyFileSync(',
+  "      path.join(REPO, 'src', 'scheduler', 'launcher.js'),",
+  "      path.join(core, 'launcher', 'launch.js')",
+  '    );',
+];
 
-  # The anchor must exist EXACTLY once in main. Zero matches must FAIL, never
-  # silently produce an unmodified reconstruction that then "agrees" with a HEAD
-  # which never applied D4.
-  # Probe and filter checked SEPARATELY, as in V0: `|| true` on the pipeline
-  # would turn an unrunnable grep into an empty `n`, whose `[ "$n" -ne 1 ]` test
-  # errors out and is read as FALSE — silently skipping this guard.
-  n=$(grep -cFx "$anchor" "$w/base")
-  grc=$?
-  if [ "$grc" -gt 1 ]; then
-    echo "V8 FAIL — the anchor probe itself failed (grep exit $grc); exactly-once is unestablished. Fix that before collecting any evidence"
-    exit 1
-  fi
-  if [ "$grc" -eq 1 ]; then n=0; fi
-  case "$n" in ""|*[!0-9]*) echo "V8 FAIL — non-numeric anchor count [$n]; the probe produced no count"; exit 1;; esac
-  echo "V8 anchor occurrences in main: $n"
-  if [ "$n" -ne 1 ]; then
-    echo "V8 FAIL — D4's anchor must occur EXACTLY once in main's tests/unit/vendor.test.js (found $n). Zero matches is a FAILURE, not agreement."
-    exit 1
-  fi
+const bl = base.split('\n');
+const at = bl.reduce((acc, l, i) => (l === anchor ? acc.concat(i) : acc), []);
+console.log(`V8 anchor occurrences in main: ${at.length}`);
+if (at.length !== 1) {
+  console.error(`V8 FAIL — D4's anchor must occur EXACTLY once in main's ${P} (found ${at.length}). Zero matches is a FAILURE, not agreement.`);
+  process.exit(1);
+}
 
-  # Reconstruct the ONLY content HEAD is permitted to have: main's file with
-  # D4's block inserted once, right after the anchor.
-  awk -v a="$anchor" -v bf="$w/block" '
-    { print }
-    $0 == a { while ((getline l < bf) > 0) print l; close(bf) }
-  ' "$w/base" > "$w/expected"
-
-  if diff -u -L expected -L "HEAD:tests/unit/vendor.test.js" "$w/expected" "$w/head"; then
-    echo "V8 PASS — HEAD's tests/unit/vendor.test.js is byte-for-byte main + D4's block at D4's anchor"
-  else
-    echo "V8 FAIL — HEAD's tests/unit/vendor.test.js is NOT main plus exactly D4's block at D4's anchor (diff above)"
-    exit 1
-  fi
-)
+const expected = bl.slice(0, at[0] + 1).concat(block, bl.slice(at[0] + 1)).join('\n');
+if (expected !== head) {
+  console.error(`V8 FAIL — HEAD's ${P} is NOT main plus exactly D4's block at D4's anchor`);
+  const e = expected.split('\n');
+  const h = head.split('\n');
+  const i = e.findIndex((l, k) => l !== h[k]);
+  if (i < 0) console.error(`  lines agree pairwise but the files differ in length: expected ${e.length}, HEAD ${h.length}`);
+  else {
+    console.error(`  first divergence at line ${i + 1} (expected ${e.length} lines, HEAD ${h.length}):`);
+    console.error(`    expected: ${JSON.stringify(e[i])}`);
+    console.error(`    HEAD:     ${JSON.stringify(h[i])}`);
+  }
+  process.exit(1);
+}
+console.log(`V8 PASS — HEAD's ${P} is byte-for-byte main + D4's block at D4's anchor`);
+V8EOF
 rc=$?; echo "V8 exit=$rc"; (exit $rc)
 ```
 
@@ -1958,10 +2000,10 @@ Correct state must print `V8 anchor occurrences in main: 1` /
 `V8 PASS — HEAD's tests/unit/vendor.test.js is byte-for-byte main + D4's block at
 D4's anchor` / `V8 exit=0` **and the block itself must exit 0** — measured on a
 committed, clean tree. **Run V8 after you commit**, not before: the first thing
-it does is refuse a dirty tree. Six details are deliberate:
+it does is refuse a dirty tree. Five details are deliberate:
 
 - **V8 reads `HEAD`'s blob, not the working tree.** `git show
-  HEAD:tests/unit/vendor.test.js` is materialised and `diff`ed; the path
+  HEAD:tests/unit/vendor.test.js` is compared in-process; the path
   `tests/unit/vendor.test.js` is never read as a file. **This is a round-6
   correction and reverting it re-opens a real hole** — see red arm (f).
 - **V8 keeps its own path-scoped clean check** — `git status --porcelain --
@@ -1977,35 +2019,26 @@ it does is refuse a dirty tree. Six details are deliberate:
   shape of red arm (f). **If you ever find yourself removing one, remove this
   one, not V0**: V0 is the sequence-level invariant and covers every gate; this
   is a local backstop for one gate.
-- **The whole thing is a `( … )` subshell, not `bash -c '…'`.** D4's block is
-  full of single quotes (`'launcher'`, `'src'`, …) and could not survive the
-  `bash -c '…'` wrapper the other steps use. A subshell keeps `exit 1` from
-  killing an interactive shell, exactly as `bash -c` did.
+- **D4's block is a literal array in the script, and the reconstruction is a
+  `slice`/`concat` in the same process.** There is no temp file, no heredoc `cat`
+  writing one, and no `awk` inserting into it — so there is no producer whose
+  failure could leave the block empty and make the reconstruction equal `main`.
+  That was a real, executed false-PASS in the shell form: `cat` fails, the block
+  file is empty, `awk` inserts nothing, and a `HEAD` missing D4 compares
+  **equal**. It cannot be expressed in this form.
 - **The zero-match guard is the trap this construction exists to avoid.** If the
-  anchor ever stops matching — a whitespace change on `main`, a re-indent — a
-  naive `awk` insertion produces a reconstruction *identical to `main`*, which
-  then compares **equal** to a `HEAD` that never applied D4. A silently vacuous
-  pass. `grep -cFx` (fixed-string, whole-line) must return exactly `1` or V8
-  fails loudly, and `-ne 1` catches duplicates too.
-- **`diff` is the gate, not a grep.** Its exit status is the block's, taken
-  inside an `if` where `set -u` cannot mask it, and its output is printed — with
-  `-L` labels, so a failure names `expected` and `HEAD:…` rather than two
-  `mktemp` paths.
-- **The anchor probe captures `grep`'s status instead of `|| true`-ing it**, the
-  same split V0 uses and for the same reason. The earlier form was
-  `n=$(grep -cFx … || true)`: if `grep` cannot run, `n` is **empty**,
-  `[ "$n" -ne 1 ]` errors with `integer expression expected` and status 2, the
-  `if` reads that as **false**, and the exactly-once guard is **silently
-  skipped**. Measured, and it is not theoretical — with `grep` stubbed to exit 2
-  *and* an anchor that no longer matches, the old form reconstructed a file
-  identical to `main`, compared it against a `HEAD` that also equalled `main`,
-  and printed **`V8 PASS — … byte-for-byte main + D4's block …`** at exit **0**
-  while D4 was not applied at all. The current form distinguishes `grc` **0**
-  (matched — `n` is the count), **1** (no match — `n` is `0`, which the
-  exactly-once test then correctly fails), and **>1** (the probe itself failed —
-  fail closed). Same red arm now prints
-  `V8 FAIL — the anchor probe itself failed (grep exit 2); exactly-once is
-  unestablished.` at exit **1**. There is no `|| true` in the block.
+  anchor ever stops matching — a whitespace change on `main`, a re-indent — an
+  insertion that silently does nothing produces a reconstruction *identical to
+  `main`*, which then compares **equal** to a `HEAD` that never applied D4. The
+  anchor occurrences are counted explicitly and **must be exactly 1**; `0` and
+  `>1` both fail loudly. Measured on the worst case — anchor absent **and** a
+  `HEAD` that lacks D4, i.e. the state where a skipped guard would pass
+  vacuously: `V8 anchor occurrences in main: 0` / `V8 FAIL … Zero matches is a
+  FAILURE, not agreement.`, exit **1**.
+- **The comparison is `expected !== head` on two strings**, not an external
+  `diff`, so there is no third tool to fail. On mismatch V8 prints the **first
+  diverging line number with both sides quoted** — more precise than a diff hunk
+  and deterministic across platforms.
 
 **Red inputs — six, all measured, all with the block's own `$?`.** Arms (a)–(d)
 are committed-state violations; (e) and (f) are the round-6 pair.
