@@ -1397,8 +1397,22 @@ hygiene; it is the precondition that makes every other step mean what it says.
   # nothing while any tracked file carries one. Tag letters, verified by
   # execution on git 2.39.5: `h` assume-unchanged, `S` skip-worktree, `s` both —
   # so lowercase-anything OR `S`.
-  flagged=$(git ls-files -v | grep -E '^([a-z]|S) ' || true)
-  if [ -n "$flagged" ]; then
+  # The probe and the filter are checked SEPARATELY and neither is allowed to
+  # fail silently: `|| true` on the whole pipeline would turn a broken
+  # `git ls-files` or an unrunnable `grep` into "no flags found".
+  lsout=$(git ls-files -v)
+  rc=$?
+  if [ "$rc" -ne 0 ]; then
+    echo "V0 FAIL — 'git ls-files -v' itself failed (exit $rc); the index-flag probe did not run, so the ABSENCE of flags is unestablished. Fix that before collecting any evidence"
+    exit 1
+  fi
+  flagged=$(printf '%s\n' "$lsout" | grep -E '^([a-z]|S) ')
+  grc=$?
+  if [ "$grc" -gt 1 ]; then
+    echo "V0 FAIL — the index-flag filter itself failed (grep exit $grc); the ABSENCE of flags is unestablished. Fix that before collecting any evidence"
+    exit 1
+  fi
+  if [ "$grc" -eq 0 ]; then
     echo "V0 FAIL — tracked files carry assume-unchanged / skip-worktree index flags. git status cannot see edits to them, so a clean tree would prove nothing. Clear them with 'git update-index --no-assume-unchanged <path>' / '--no-skip-worktree <path>', then re-run ALL steps. Flagged:"
     printf '%s\n' "$flagged"
     exit 1
@@ -1462,6 +1476,27 @@ only) printed `V0 PASS` and exited **0** over a `HEAD` carrying M2.
 | M2 committed, good bytes restored locally, `--skip-worktree` set | `V0 PASS`, exit **0** | `V0 FAIL … Flagged:` / `S src/core/vendor.js`, exit **1** |
 | same, but `--assume-unchanged` set instead | `V0 PASS`, exit **0** | `V0 FAIL … Flagged:` / `h src/core/vendor.js`, exit **1** |
 | flags cleared, tree clean (worktree really *is* the bad `HEAD`) | `V0 PASS`, exit 0 | `V0 PASS`, exit **0** — correctly, and V1 then goes red (`pass 3 / fail 1`, T4) |
+
+**The probe and the filter are checked separately, and that is not style.** An
+earlier form wrote `flagged=$(git ls-files -v | grep -E '…' || true)`. Without
+`pipefail` the `|| true` applies to the **whole pipeline**, so a failure of
+`git ls-files` — or a `grep` that cannot run — becomes a successful assignment
+with an empty `flagged`, and V0 sails on to print
+`V0 PASS — no index flags…` **without ever having established that.** That is a
+straight contradiction of its own fail-closed contract, and it is an *accidental*
+degraded-dependency case, not evasion — exactly the class V0 is for. Measured,
+with a `git` shim that fails **only** `ls-files` while `git status` keeps working
+(the decisive shape, because a blanket failure would be caught later anyway):
+
+| Degraded dependency | Earlier `\|\| true` form | Current split-probe form |
+|---|---|---|
+| `git ls-files -v` exits 4, `git status` fine, tree clean | `V0 PASS — no index flags, index and worktree clean…`, exit **0** — a false claim | `V0 FAIL — 'git ls-files -v' itself failed (exit 4); the index-flag probe did not run, so the ABSENCE of flags is unestablished…`, exit **1** |
+| `grep` exits 2 (filter unrunnable) | `V0 PASS …`, exit **0** | `V0 FAIL — the index-flag filter itself failed (grep exit 2); the ABSENCE of flags is unestablished…`, exit **1** |
+
+`grep`'s three statuses are distinguished rather than collapsed: **0** = flags
+found (fail with the flag message), **1** = no flags (the only path that
+proceeds), **>1** = the filter itself failed (fail closed). There is **no
+`|| true` anywhere in the block**.
 
 The tag letters were **verified by execution on git 2.39.5**, not recalled:
 `git ls-files -v` prints `h` for assume-unchanged, `S` for skip-worktree, and
@@ -1562,7 +1597,7 @@ round 6 to the two steps that round added (**V2b** and **V8**):
 
 | Step | Kind of gate | Round-1 inversion? | Round-2 masking? |
 |---|---|---|---|
-| V0 | no tracked file may carry an `assume-unchanged` / `skip-worktree` index flag, `git status --porcelain` must be empty, and `git status`'s own failure must fail closed. **Added round 6** after a review found a path-scoped clean check left every working-tree-reading gate maskable; **the index-flag check was added a round later**, after a review showed those flags make an empty porcelain meaningless | **no, by construction** — `st=$(…)`'s status is captured on the very next statement into `rc`, a nonzero `rc` is its own `exit 1`, and the flag check gates on `[ -n "$flagged" ]` rather than on `grep`'s status | no — ends `rc=$?; … (exit $rc)` |
+| V0 | no tracked file may carry an `assume-unchanged` / `skip-worktree` index flag, `git status --porcelain` must be empty, and `git status`'s own failure must fail closed. **Added round 6** after a review found a path-scoped clean check left every working-tree-reading gate maskable; **the index-flag check was added a round later**, after a review showed those flags make an empty porcelain meaningless | **no, by construction** — `st=$(…)`'s status is captured on the very next statement into `rc`, a nonzero `rc` is its own `exit 1`, and the index-flag probe captures `git ls-files`'s status and `grep`'s status **separately** (`grc` 0 = flags, 1 = none, >1 = filter failed), with no `\|\| true` to swallow either | no — ends `rc=$?; … (exit $rc)` |
 | V1 | `node tests/run.js` — nonzero exit on any failure | no | **yes — fixed below** |
 | V2 | `node tests/run.js` — nonzero exit on any failure | no | n/a (no `exit=` line was appended) |
 | V3 | was `grep -c`, "expect 0" | **yes — fixed round 2** | **yes — fixed below** |
