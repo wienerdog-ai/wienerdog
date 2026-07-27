@@ -574,21 +574,55 @@ spot.
       call-site contract. Since round 12 the attribution is narrower still: the
       establishing evidence is the **wd-reviewer diff read alone**, because
       **T1–T4 establish behavioural arm semantics only** and stay green under a
-      behaviour-preserving recomputation (measured). The registered mirrors of
-      that qualification are **eight**, enumerated because a round-13 review
-      found this list short at seven and the missed surface was contradicting the
-      round-12 table: (1) **AC10**, (2) **AC11**, (3) **Table L's
-      "Recomputation" row**, (4) **Table M row M5**, (5) the
-      **Security-checklist** V3 citation, (6) the Implementation-notes
-      "V3 screens…" line, (7) the **V3/V4 PASS-line texts** that ship inside the
-      blocks, and (8) **V4's red-arm row for the string/template-literal
-      residual** — the one that was missed, registered here on the spot. A ninth
-      gets registered here rather than left to drift; any surface claiming a
+      behaviour-preserving recomputation (measured). **The mirrors of that
+      qualification are enumerated as PHYSICAL, SEPARATELY-EDITABLE COPIES — 15
+      of them — not as groups.** Round 13 registered "eight" by collapsing
+      several copies into one entry ("the V3/V4 PASS-line texts"), and a round-14
+      review pointed out that anyone following the list could still edit a member
+      it named only collectively. Each entry below is one place a person opens
+      and changes:
+      (1) **AC10**; (2) **AC11**; (3) **Table L's "Recomputation" row**;
+      (4) **Table M row M5**; (5) the **Security-checklist** carry-arm bullet —
+      note it carries the attribution **without containing the test-range token
+      at all**, so a grep-based sweep misses it and only this enumeration catches
+      it;
+      (6) the **Implementation-notes "V3 screens…" line**;
+      (7) the **explanatory prose** in "V3 and V4 are TEXT-LEVEL SCREENS";
+      (8) the **three-row attribution table** in that same section;
+      (9) the **V3 block comment** (ships inside the V3 block);
+      (10) the **V3 `console.log` PASS statement** (ships inside the V3 block);
+      (11) the **V3 recorded green transcript** — *derived*;
+      (12) the **V4 block comment**; (13) the **V4 `console.log` PASS
+      statement**; (14) the **V4 recorded green transcript** — *derived*;
+      (15) **V4's red-arm row for the string/template-literal residual**.
+      **(11) and (14) are DERIVED copies: retranscribe them from a real run,
+      never hand-edit them** — the round-10 rule, which exists because a
+      hand-reworded transcript is fabricated evidence. A sixteenth gets
+      registered here rather than left to drift; any surface claiming a
       behavioural test proves a source-form contract is a defect** — **V8 (the
       `tests/unit/vendor.test.js` HEAD-blob reconstruction, added round 6)**.
       V0's requirement is mirrored in **Definition of done item 1** and in the
       **mutation-sweep caveat in item 2**; V8's local path-scoped clean check is
       a registered *backstop* for V0, not a second source of the rule.
+- [ ] **Audit units for the attribution sweep — stated once so the ambiguity
+      cannot recur.** Round 13 reported "25 mentions" and round 12 "24", against
+      a review that counted 27; all three were counting different things. The
+      three units, measured on this file, are:
+      **(a) matching LINES** for `/T1[–-]T4/` — **25**;
+      **(b) literal OCCURRENCES** — **27** (Table M's M5 row carries three on
+      one line, which is the whole gap between (a) and (b));
+      **(c) attribution MIRRORS**, i.e. physically separately-editable copies of
+      the qualification — **15**, enumerated above, plus this checklist bullet as
+      the registrar.
+      Of (a), **20 lines are attribution-bearing** and **5 are not** — the
+      Deliverables row for the test file, the Test-bodies checklist entry, and
+      three test-count arithmetic lines. **Quote the unit whenever you quote a
+      number**, and note that (c) is the only one that is complete: mirror (5)
+      carries the attribution without containing the token at all, so (a) and (b)
+      structurally cannot find it. Figures (a) and (b) count **content** surfaces
+      only: the enumeration above deliberately avoids spelling the token, so the
+      registry does not inflate the numbers it reports — which it did, by one,
+      while this bullet was being written.
       **Every one of them is
       an exit-code gate**, not an eyeball check, and the gate is the **whole
       pasted block's** `$?`, not a printed line inside it. Two distinct failures
