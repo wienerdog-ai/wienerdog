@@ -1368,7 +1368,7 @@ last column. Run these to prove the gates are not vacuous, then revert.
 | M4 | delete the `else` and always carry forward | **all four** — T3 and T4 are the *diagnostic* pair (they are the two that assert a publish must happen), but T1 and T2 fail too: their fixtures' **first install** then has no launcher to carry, so `writeLauncher` throws `ENOENT` before either test reaches its own assertion | **measured `pass 0 / fail 4`** |
 | M5 | recompute the predicate inside `writeLauncher` instead of taking `opts.carryForward` | V3 (match count `0` → non-zero, **and its exit status `0` → `1`**) | executed on the equivalent shape: count `1`, `$?` = `1` |
 | M6 | move the whole `if (opts.manifest) { … }` block **into** the `else` arm, next to the source read | **T1 only** — and that is the entire point: V1's other three tests, V2–V7, AC1–AC11 and M1–M5 all stay **green**, so T1's fresh-manifest assertion is the only thing standing between this mutation and a shipped uninstall bug | expected red (AC12 is its only assertion); the implementer confirms both halves — T1 red **and** everything else green |
-| M7 | revert **D4** — remove the seven lines from T12's `run()` helper, leaving D1/D2/D3 in place | **V2 and V8 both** — `tests/unit/vendor.test.js:636` (**T12**) goes red at `:697` with `'REFUSED' !== true`, and V8 fails because `HEAD`'s file is then `main`'s file with D4's block *missing*. This is the round-6 blocker itself, and M7 is what proves D4 is load-bearing rather than cosmetic. V1, V3, V4, V5 and V7 stay green. **M7 is NOT a substitute for V8's red arm (a)**: a vacuity line added alongside D4 keeps M7 green (V8's "Does M7 catch it?" row) | **measured on `d1c96e1`**: `tests 1681 / pass 1675 / fail 1 / skipped 5` without D4, versus `1681 / 1676 / 0 / 5` with it (both counts taken without T1–T4) |
+| M7 | revert **D4** — remove the seven lines from T12's `run()` helper **in the working tree, uncommitted**, leaving D1/D2/D3 in place | **V2 red and V8 red — for two different reasons, and the difference is the whole point of this cell.** **V2** is the real signal: `tests/unit/vendor.test.js:636` (**T12**) fails at `:697` with `'REFUSED' !== true`, which is what proves D4 load-bearing. **V8** goes red at its **dirty-path guard** (`… has uncommitted changes`), because M7 is by procedure an *uncommitted* edit — V8 never reaches a blob comparison, so **that red is NOT evidence about the reconstruction invariant** and must not be reported as if it were. **V0 is red too**, for the same procedural reason. V1, V3, V4, V5 and V7 stay green. The committed-state reconstruction failure is **V8 red arm (e)**, which is spec-validation evidence collected under the scratch-worktree procedure beside that arm — **not** something M7 produces. **M7 is also NOT a substitute for V8's red arm (a)**: a vacuity line added alongside D4 keeps M7 green (V8's "Does M7 catch it?" row) | **measured on `d1c96e1`**: `tests 1681 / pass 1675 / fail 1 / skipped 5` without D4, versus `1681 / 1676 / 0 / 5` with it (both counts taken without T1–T4) |
 
 M1, M2 and M4 were run end to end; M5's grep was run against both shapes; **M7
 was run end to end in round 6**, and its counterpart — D4's non-vacuity against
@@ -1392,9 +1392,21 @@ hygiene; it is the precondition that makes every other step mean what it says.
 ```bash
 (
   set -u
-  # `st=$(...)` makes the assignment's status the command substitution's status,
-  # and it is gone after the NEXT statement — so capture $? immediately (this
-  # repo's own G1b lesson). A failing `git status` must NOT read as "clean".
+  # (1) Index flags FIRST: `git status` deliberately ignores worktree changes to
+  # files marked assume-unchanged or skip-worktree, so an empty porcelain proves
+  # nothing while any tracked file carries one. Tag letters, verified by
+  # execution on git 2.39.5: `h` assume-unchanged, `S` skip-worktree, `s` both —
+  # so lowercase-anything OR `S`.
+  flagged=$(git ls-files -v | grep -E '^([a-z]|S) ' || true)
+  if [ -n "$flagged" ]; then
+    echo "V0 FAIL — tracked files carry assume-unchanged / skip-worktree index flags. git status cannot see edits to them, so a clean tree would prove nothing. Clear them with 'git update-index --no-assume-unchanged <path>' / '--no-skip-worktree <path>', then re-run ALL steps. Flagged:"
+    printf '%s\n' "$flagged"
+    exit 1
+  fi
+
+  # (2) `st=$(...)` makes the assignment's status the command substitution's
+  # status, and it is gone after the NEXT statement — so capture $? immediately
+  # (this repo's own G1b lesson). A failing `git status` must NOT read as "clean".
   st=$(git status --porcelain)
   rc=$?
   if [ "$rc" -ne 0 ]; then
@@ -1406,7 +1418,7 @@ hygiene; it is the precondition that makes every other step mean what it says.
     printf '%s\n' "$st"
     exit 1
   fi
-  echo "V0 PASS — index and worktree clean; every result below describes $(git rev-parse HEAD)"
+  echo "V0 PASS — no index flags, index and worktree clean; every result below describes $(git rev-parse HEAD)"
 )
 rc=$?; echo "V0 exit=$rc"; (exit $rc)
 ```
@@ -1436,12 +1448,67 @@ broken was confirmed separately: checked out unmasked, the same commit gives
 `tests 4 / pass 3 / fail 1`, the failure being T4 — M2's exact signature. Without
 V0 that `HEAD` is pushable with a full sheet of green evidence.
 
-**Two details are deliberate.** `git status --porcelain` reports **untracked**
-files as `??`, so a stray new file counts as dirty — correct, because an
-untracked replacement is another way to make a gate read something `HEAD` does
-not contain. And a **failure of `git status` itself** fails closed rather than
-reading as "clean": `rc` is captured on the very next statement, because the
-next command would otherwise overwrite `$?`.
+**The index-flag check, and why it comes first.** `git status` **deliberately
+ignores** worktree changes to files marked `assume-unchanged` or `skip-worktree`,
+so an empty porcelain proves nothing while any tracked file carries one. That
+turns the whole of V0 into a formality, and it was **measured**: on the same
+masked-M2 shape as above, but with `git update-index --skip-worktree
+src/core/vendor.js` set after committing M2 and restoring the good bytes,
+`git status --porcelain` printed **nothing** and the round-5-interim V0 (porcelain
+only) printed `V0 PASS` and exited **0** over a `HEAD` carrying M2.
+
+| State | V0 without the flag check | V0 with it |
+|---|---|---|
+| M2 committed, good bytes restored locally, `--skip-worktree` set | `V0 PASS`, exit **0** | `V0 FAIL … Flagged:` / `S src/core/vendor.js`, exit **1** |
+| same, but `--assume-unchanged` set instead | `V0 PASS`, exit **0** | `V0 FAIL … Flagged:` / `h src/core/vendor.js`, exit **1** |
+| flags cleared, tree clean (worktree really *is* the bad `HEAD`) | `V0 PASS`, exit 0 | `V0 PASS`, exit **0** — correctly, and V1 then goes red (`pass 3 / fail 1`, T4) |
+
+The tag letters were **verified by execution on git 2.39.5**, not recalled:
+`git ls-files -v` prints `h` for assume-unchanged, `S` for skip-worktree, and
+`s` when both are set — hence the `^([a-z]|S)` alternation plus a literal space,
+where the lowercase class also covers `s`. `H` (normal) and the other uppercase
+tags are states `git status` can already see, so they are deliberately not
+matched.
+
+**Two more details are deliberate.** `git status --porcelain` reports
+**untracked** files as `??`, so a stray new file counts as dirty — correct,
+because an untracked replacement is another way to make a gate read something
+`HEAD` does not contain. And a **failure of `git status` itself** fails closed
+rather than reading as "clean": `rc` is captured on the very next statement,
+because the next command would otherwise overwrite `$?`.
+
+### What V0 defends, and what it explicitly does not — read this before filing another bypass
+
+**V0 and V8 defend the ACCIDENTAL failure classes**: a dirty tree, a forgotten
+commit, a stale run, a mutation left in place after a sweep, an index flag set
+weeks ago for an unrelated reason. Those are the classes that have **actually
+occurred in this repository's history**, and they are the ones the measured red
+arms above reproduce.
+
+**They do not, and cannot, defend against an implementer deliberately
+constructing evasive local state.** Index flags are one instance; a
+`.git/info/exclude` entry, a doctored `diff` on the PATH, a filesystem overlay,
+or simply a fabricated paste are others, and the list has no end. **Self-collected
+evidence is inherently defeasible by its collector** — no gate an implementer
+runs on their own machine can close that, because the gate and the adversary are
+the same process. Hardening V0 further is a race with no fixed point, and this
+project has already paid for learning that twice.
+
+**The structural defence is elsewhere in the process, and it is mandatory**: the
+**wd-reviewer merge-gate leg independently re-runs every gate in a fresh
+checkout materialised from the pushed branch.** Index flags live in
+`.git/index`, which is **not** pushed; `.git/info/exclude` is not pushed; a
+local PATH is not pushed. None of the masked states above can survive into the
+reviewer's run — in each of them the pushed `HEAD` is the broken one, and a
+fresh checkout of it fails V1/V2 immediately.
+
+So, by declaration: **findings of the form "here is a more exotic way an
+implementer could evade V0 locally" are out of scope for V0.** They are not
+denied — they are real, and they are all real — they are *dispositioned*: the
+remedy is the independent re-run, which already exists and is not optional. A
+reviewer who wants assurance about `HEAD` should read the reviewer's run, not
+the implementer's paste. Do not add a further local guard for this class without
+an ADR that first explains what changed about that disposition.
 
 **Everything below assumes V0 passed in the same session.** If you commit
 anything after running V0 — including the spec's own `status:` flip — re-run V0
@@ -1495,7 +1562,7 @@ round 6 to the two steps that round added (**V2b** and **V8**):
 
 | Step | Kind of gate | Round-1 inversion? | Round-2 masking? |
 |---|---|---|---|
-| V0 | `git status --porcelain` must be empty, and `git status`'s own failure must fail closed. **Added round 6** after a review found that a path-scoped clean check left every working-tree-reading gate maskable | **no, by construction** — `st=$(…)`'s status is captured on the very next statement into `rc`, and a nonzero `rc` is its own `exit 1` | no — ends `rc=$?; … (exit $rc)` |
+| V0 | no tracked file may carry an `assume-unchanged` / `skip-worktree` index flag, `git status --porcelain` must be empty, and `git status`'s own failure must fail closed. **Added round 6** after a review found a path-scoped clean check left every working-tree-reading gate maskable; **the index-flag check was added a round later**, after a review showed those flags make an empty porcelain meaningless | **no, by construction** — `st=$(…)`'s status is captured on the very next statement into `rc`, a nonzero `rc` is its own `exit 1`, and the flag check gates on `[ -n "$flagged" ]` rather than on `grep`'s status | no — ends `rc=$?; … (exit $rc)` |
 | V1 | `node tests/run.js` — nonzero exit on any failure | no | **yes — fixed below** |
 | V2 | `node tests/run.js` — nonzero exit on any failure | no | n/a (no `exit=` line was appended) |
 | V3 | was `grep -c`, "expect 0" | **yes — fixed round 2** | **yes — fixed below** |
@@ -1793,13 +1860,32 @@ it does is refuse a dirty tree. Six details are deliberate:
 **Red inputs — six, all measured, all with the block's own `$?`.** Arms (a)–(d)
 are committed-state violations; (e) and (f) are the round-6 pair.
 
+**These arms are SPEC-VALIDATION evidence, already collected — they are not work
+the implementer repeats.** Every one of them requires a **committed** bad state,
+which the Table M mutation procedure forbids (Definition of done item 2: a
+mutation is a deliberately dirty tree and must never be committed). The two
+procedures do not conflict because they are not the same activity, and this
+paragraph exists so nobody tries to satisfy one with the other:
+
+- **Implementer, M7**: uncommitted revert of D4 ⇒ **V2 red at T12**, **V8 red at
+  its dirty-path guard**, V0 red. Paste those. Do not commit the mutation, and
+  do not claim V8 observed a missing-D4 reconstruction — it did not.
+- **Spec validation, arms (a)–(f)**: collected in a **disposable scratch
+  worktree** — `git worktree add` (or a throwaway branch), commit the violating
+  state there, run V8, record, then delete the branch/worktree so nothing
+  reaches the PR. That is how these six were measured, and the scratch branches
+  were deleted after. **Do not run this on your WP branch**, and never push a
+  commit created for it. If a reviewer wants arm (e) re-confirmed, it is
+  re-confirmed the same way — in a scratch worktree, not by committing a
+  mutation onto the branch under review.
+
 | # | Violating state | V8 prints | Block `$?` |
 |---|---|---|---|
 | a | **The Codex counterexample** — `if (fs.existsSync(path.join(core, 'launcher', 'launch.js'))) after = before;` added before `run()`'s `return`. Purely additive, contains no `assert` | the `diff` hunk showing that one added line, then `V8 FAIL` | **1** |
 | b | `:697` weakened from `assert.equal(base.after, base.before, …)` to `assert.ok(base.after === base.before \|\| base.after === 'REFUSED', …)` | the `diff` hunk, then `V8 FAIL` | **1** |
 | c | an extra `assert.ok(true, …)` merely *added* after `:697` | the `diff` hunk, then `V8 FAIL` | **1** |
 | d | the anchor absent from `main`'s file (probed by pointing the block at a non-existent anchor string) | `V8 anchor occurrences in main: 0` / `V8 FAIL — … Zero matches is a FAILURE, not agreement.` | **1** |
-| e | **bad `HEAD`, clean tree** — arm (a)'s line **committed**, nothing uncommitted | the `diff` hunk against `HEAD:…`, then `V8 FAIL` | **1** |
+| e | **bad `HEAD`, clean tree** — arm (a)'s line **committed**, nothing uncommitted. *Scratch-worktree spec validation; **not** what M7 produces — see the note above the table* | the `diff` hunk against `HEAD:…`, then `V8 FAIL` | **1** |
 | f | **bad `HEAD`, masked by the working tree** — arm (a)'s line committed, then removed locally and **left uncommitted**. This is the shape the round-6 review constructed | `V8 FAIL — tests/unit/vendor.test.js has uncommitted changes. …` | **1** |
 
 **Arm (f) is why V8 reads `HEAD`, and it is measured, not hypothetical.** On
@@ -1920,17 +2006,27 @@ form the violating run printed `V7 exit=1` and exited **0**.
    confirm V0 is green again before collecting or re-collecting any V-gate
    evidence. If V0 is red after your mutation sweep, you left a mutation in the
    tree — that is precisely the accident V0 exists to catch, and the numbers you
-   pasted above it are now describing the wrong commit. For M6,
+   pasted above it are now describing the wrong commit.
+   **Never commit a mutation**, and in particular do not commit one to make a
+   gate produce a committed-state failure: V8's red arms (a)–(f) are
+   **spec-validation evidence already collected in scratch worktrees** (see the
+   note above V8's arms table), not implementer work. For M6,
    paste both halves: T1 red, and V1's other three tests plus V2–V7 still green.
-   For **M7**, paste both halves too — and note **which** gates move, because a
-   round-6 review found this item contradicting Table M and demanding impossible
-   evidence. With D4 reverted, **V2 and V8 must BOTH be red**: T12 fails at
-   `tests/unit/vendor.test.js:697` with `'REFUSED' !== true` (V2), and V8 fails
-   because `HEAD`'s file is then `main`'s file with D4's block missing. The gates
-   that stay **green** are **V1, V3, V4, V5 and V7** — those are the ones to
-   paste as unaffected. Together that is what shows D4 is the *only* thing that
-   fixes it. **M7 does not substitute for V8's red arm (a)**: a vacuity line
-   added *alongside* D4 leaves M7 green.
+   For **M7**, paste both halves too — and note **which** gates move and **why**,
+   because two successive round-6 reviews found this item wrong: first
+   contradicting Table M, then demanding evidence its own no-commit rule makes
+   unobtainable. The single executable procedure is:
+   revert D4 **in the working tree, uncommitted**; then
+   **V2 is red** — T12 fails at `tests/unit/vendor.test.js:697` with
+   `'REFUSED' !== true`, and this is the signal that matters;
+   **V8 is red at its dirty-path guard**, not at the reconstruction — it never
+   reaches a blob comparison, so **do not paste it as evidence that `HEAD` lacks
+   D4**; **V0 is red** for the same procedural reason; and
+   **V1, V3, V4, V5 and V7 stay green** — those are the ones to paste as
+   unaffected. The committed-state reconstruction failure is **V8 red arm (e)**,
+   which is spec-validation evidence collected in a scratch worktree and is
+   **not** yours to reproduce. **M7 does not substitute for V8's red arm (a)**
+   either: a vacuity line added *alongside* D4 leaves M7 green.
 3. Conventional commits; PR titled
    `fix(vendor): carry the launcher forward on a self-resync (WP-launcher-no-self-resync-republish)`.
 4. PR template filled, including "Decisions made" (or "none") and
