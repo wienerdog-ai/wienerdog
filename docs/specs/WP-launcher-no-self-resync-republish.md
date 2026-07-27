@@ -567,9 +567,15 @@ spot.
 - [ ] **Acceptance criteria** — AC1–AC12 (AC12 is the carry arm's manifest
       recording, registered in round 2; **AC4 and AC9 were re-derived in round 6**
       and now defer to D4 for what "unmodified" excludes).
-- [ ] **Verification commands / greps** — V1 (the four tests), V3 (the
-      no-recomputation greps), V4 (the call-site grep), **V8 (the
-      `tests/unit/vendor.test.js` diff bound, added round 6)**. **Every one of them is
+- [ ] **Verification commands / greps** — **V0 (the Step-0 clean-tree
+      precondition, added round 6 — it is the gate that makes every other one
+      describe `HEAD` rather than the working tree)**, V1 (the four tests), V3
+      (the no-recomputation greps), V4 (the call-site grep), **V8 (the
+      `tests/unit/vendor.test.js` HEAD-blob reconstruction, added round 6)**.
+      V0's requirement is mirrored in **Definition of done item 1** and in the
+      **mutation-sweep caveat in item 2**; V8's local path-scoped clean check is
+      a registered *backstop* for V0, not a second source of the rule.
+      **Every one of them is
       an exit-code gate**, not an eyeball check, and the gate is the **whole
       pasted block's** `$?`, not a printed line inside it. Two distinct failures
       have already shipped here: round 1 inverted V3/V5 (`grep -c` printing `0`
@@ -1378,6 +1384,72 @@ All commands are read-only except the test runs, which write only inside
 `mkdtemp` directories. None touches `~/.wienerdog`, launchd, `gui/501` or a
 fixed `/tmp` path. Run from the repo root.
 
+### V0 — Step 0: the tree must be clean before ANY evidence is collected
+
+**Run this first, and re-run everything below it if it ever fails.** It is not
+hygiene; it is the precondition that makes every other step mean what it says.
+
+```bash
+(
+  set -u
+  # `st=$(...)` makes the assignment's status the command substitution's status,
+  # and it is gone after the NEXT statement — so capture $? immediately (this
+  # repo's own G1b lesson). A failing `git status` must NOT read as "clean".
+  st=$(git status --porcelain)
+  rc=$?
+  if [ "$rc" -ne 0 ]; then
+    echo "V0 FAIL — git status itself failed (exit $rc); fix that before collecting any evidence"
+    exit 1
+  fi
+  if [ -n "$st" ]; then
+    echo "V0 FAIL — the tree has uncommitted or untracked changes; every verification result below must describe the committed HEAD. Commit or stash, then re-run ALL steps."
+    printf '%s\n' "$st"
+    exit 1
+  fi
+  echo "V0 PASS — index and worktree clean; every result below describes $(git rev-parse HEAD)"
+)
+rc=$?; echo "V0 exit=$rc"; (exit $rc)
+```
+
+**Why this exists — the hole it closes, measured.** V1–V5, V2b and V7 all
+**execute or inspect working-tree code**; only V8 reads a committed blob, and
+until round 6 its clean-tree guard was scoped to `tests/unit/vendor.test.js`
+alone. That leaves a bypass which was **executed end to end**: commit a bad
+`src/core/vendor.js` — Table M's **M2** (`carryForward: selfResync`, dropping the
+`!dev` gate) — then restore that one file in the working tree **without
+committing**, leaving `vendor.test.js` clean. Measured on that exact state:
+
+| Gate | Result on the masked bad `HEAD` |
+|---|---|
+| **V0** | **FAIL, exit 1** — it prints the porcelain line for `src/core/vendor.js` (status `M`) |
+| V1 | `tests 4 / pass 4 / fail 0` — green |
+| V2 | `tests 1685 / pass 1680 / fail 0 / skipped 5` — green |
+| V3 | `0` matches — green |
+| V4 | both counts `1` — green |
+| V5 | `0` matches — green |
+| V6 | exactly the four allowed paths — green |
+| V7 | `lint exit=0` — green |
+| V8 | `V8 PASS`, exit 0 — green (HEAD's **test** blob really is `main` + D4) |
+
+Every gate but V0 passes while `HEAD` is broken. That the `HEAD` is genuinely
+broken was confirmed separately: checked out unmasked, the same commit gives
+`tests 4 / pass 3 / fail 1`, the failure being T4 — M2's exact signature. Without
+V0 that `HEAD` is pushable with a full sheet of green evidence.
+
+**Two details are deliberate.** `git status --porcelain` reports **untracked**
+files as `??`, so a stray new file counts as dirty — correct, because an
+untracked replacement is another way to make a gate read something `HEAD` does
+not contain. And a **failure of `git status` itself** fails closed rather than
+reading as "clean": `rc` is captured on the very next statement, because the
+next command would otherwise overwrite `$?`.
+
+**Everything below assumes V0 passed in the same session.** If you commit
+anything after running V0 — including the spec's own `status:` flip — re-run V0
+and every step under it. Evidence collected before a later commit describes a
+`HEAD` that no longer exists.
+
+### The exit-status discipline every other step follows
+
 **Read this before running any of them.** A verification step is the **exit
 status of the whole pasted block**, not its printed output, and not the status of
 some command inside it. This spec has now had that wrong twice, in two different
@@ -1423,6 +1495,7 @@ round 6 to the two steps that round added (**V2b** and **V8**):
 
 | Step | Kind of gate | Round-1 inversion? | Round-2 masking? |
 |---|---|---|---|
+| V0 | `git status --porcelain` must be empty, and `git status`'s own failure must fail closed. **Added round 6** after a review found that a path-scoped clean check left every working-tree-reading gate maskable | **no, by construction** — `st=$(…)`'s status is captured on the very next statement into `rc`, and a nonzero `rc` is its own `exit 1` | no — ends `rc=$?; … (exit $rc)` |
 | V1 | `node tests/run.js` — nonzero exit on any failure | no | **yes — fixed below** |
 | V2 | `node tests/run.js` — nonzero exit on any failure | no | n/a (no `exit=` line was appended) |
 | V3 | was `grep -c`, "expect 0" | **yes — fixed round 2** | **yes — fixed below** |
@@ -1686,13 +1759,19 @@ it does is refuse a dirty tree. Six details are deliberate:
   HEAD:tests/unit/vendor.test.js` is materialised and `diff`ed; the path
   `tests/unit/vendor.test.js` is never read as a file. **This is a round-6
   correction and reverting it re-opens a real hole** — see red arm (f).
-- **The clean-tree precondition is the other half of that fix**, and it is not
-  hygiene. `git status --porcelain -- tests/unit/vendor.test.js` must be empty.
-  Without it an implementer can commit a bad `HEAD`, remove the offending line
-  locally *without committing*, watch V8 and V2 go green, and push the bad
-  `HEAD` — measured, red arm (f). The two guards are a pair; neither alone
-  closes it, because reading `HEAD` alone would still let a dirty tree make
-  local V2 disagree with what V8 checked.
+- **V8 keeps its own path-scoped clean check** — `git status --porcelain --
+  tests/unit/vendor.test.js` must be empty — even though **V0 strictly subsumes
+  it** and it can therefore never fire in a run where V0 passed. It is kept
+  deliberately, and the reasoning is stated rather than left implied: V8 is the
+  one gate a reviewer is likely to run **standalone** to spot-check the fixture
+  claim, and in that run V0 has not necessarily been run at all. Its message
+  names the offending file, which is higher-signal than V0's tree-wide list. It
+  guards a *different* failure than V0 does for V8's own claim — V8 reads
+  `HEAD`'s blob regardless, so what the local check adds is a warning that
+  `HEAD` and the working tree disagree *about this file*, which is exactly the
+  shape of red arm (f). **If you ever find yourself removing one, remove this
+  one, not V0**: V0 is the sequence-level invariant and covers every gate; this
+  is a local backstop for one gate.
 - **The whole thing is a `( … )` subshell, not `bash -c '…'`.** D4's block is
   full of single quotes (`'launcher'`, `'src'`, …) and could not survive the
   `bash -c '…'` wrapper the other steps use. A subshell keeps `exit 1` from
@@ -1807,23 +1886,41 @@ form the violating run printed `V7 exit=1` and exited **0**.
 
 ## Definition of done
 
-1. All verification steps **V1–V8, including V2b**, pass locally; output pasted
+1. **V0 passes FIRST, and every other gate's output comes from a run in which it
+   did.** Paste V0's own output — including the `HEAD` sha it prints — at the top
+   of the verification block in the PR body. **A V0 failure invalidates
+   everything below it**: if V0 is red, no V1–V8 result collected in that state
+   counts as evidence, because V1–V5, V2b and V7 all execute or inspect
+   working-tree code and a dirty tree makes them describe something other than
+   the commit you are asking a reviewer to merge (V0's measured table shows all
+   of them green over a broken `HEAD`). Commit or stash, then re-run **all** of
+   them. The same applies if you commit anything *after* collecting evidence —
+   including this spec's `status:` flip: re-run V0 and every step under it.
+   Then: all verification steps **V0–V8, including V2b**, pass locally; output pasted
    into the PR body, including the V3, V4, V5 and V8 counts **with their `exit=`
    lines**, and the V6 file list. A step pasted without its exit status does not
-   count as run. **Each of V1, V2b, V3, V4, V5, V7 and V8 must be pasted with the
-   block's own `$?`, not only its printed `exit=` line** — those two disagreed in
-   round 2 (the printed line said `1` while the block exited `0`), and the
-   block's `$?` is the gate. Run each block, then `echo "block \$? = $?"` on the
-   following line and paste that too. V2 and V6 are exempt: V2's status is the
-   bare `node tests/run.js` exit, and V6 is a list comparison whose exit status
-   proves nothing.
+   count as run. **Each of V0, V1, V2b, V3, V4, V5, V7 and V8 must be pasted with
+   the block's own `$?`, not only its printed `exit=` line** — those two
+   disagreed in round 2 (the printed line said `1` while the block exited `0`),
+   and the block's `$?` is the gate. Run each block, then
+   `echo "block \$? = $?"` on the following line and paste that too. V2 and V6
+   are exempt: V2's status is the bare `node tests/run.js` exit, and V6 is a list
+   comparison whose exit status proves nothing.
    **Run V8 only after committing.** It verifies `HEAD`'s blob and refuses to run
    against a dirty `tests/unit/vendor.test.js` — deliberately, because an
    uncommitted local edit can otherwise mask a bad `HEAD` (V8, red arm (f)). A
    pasted V8 result taken on a dirty tree is not evidence; it is the failure
    message.
 2. Table M's M1, M2, **M6 and M7** run and reverted, with their measured
-   pass/fail counts pasted into the PR body under "Mutation checks". For M6,
+   pass/fail counts pasted into the PR body under "Mutation checks".
+   **The mutation checks are the one thing V0 does not gate, and that is not an
+   exception to it — it is what V0 is for.** A mutation check *is* a deliberately
+   dirty tree; its whole purpose is to measure a state that must never be
+   committed. So: run the mutations, record the counts, **revert**, and then
+   confirm V0 is green again before collecting or re-collecting any V-gate
+   evidence. If V0 is red after your mutation sweep, you left a mutation in the
+   tree — that is precisely the accident V0 exists to catch, and the numbers you
+   pasted above it are now describing the wrong commit. For M6,
    paste both halves: T1 red, and V1's other three tests plus V2–V7 still green.
    For **M7**, paste both halves too — and note **which** gates move, because a
    round-6 review found this item contradicting Table M and demanding impossible
