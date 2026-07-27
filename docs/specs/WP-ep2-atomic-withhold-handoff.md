@@ -119,17 +119,42 @@ itself a check-then-act with a window, so the candidate answers are an
 `O_CREAT|O_EXCL` placeholder taken at capture time and released after
 restoration, restoring through the index rather than through the working tree, or
 accepting a materially narrower window and disclosing it as a residual. **Prefer
-the one that has no window; disclose it honestly if none is available.**
+the one that has no window; disclose it honestly if none is available — and note
+that the placeholder candidate is NOT windowless, which round 9's walk found this
+paragraph implying.** Between the capture rename and the `O_CREAT|O_EXCL` create
+there is an instant in which the path is free and a writer can win it: the
+placeholder narrows the window to two syscalls rather than closing it. Say so
+where it is proposed, because a candidate that only looks windowless is worse
+than one that is honest about its width.
 
-**The deterministic test that pins it, so the real spec inherits the seam rather
-than re-deriving it:** patch the wrapper around the tracked `git checkout` (and
-`fs.rmSync` on the untracked arm) to **create a file at the original vault path
-immediately before delegating** — a replacement installed between the capture and
-the restoration. Assert: the gate **aborted**; the replacement is **still on
-disk, byte-identical to what the patch wrote**; the captured note is in
-`state/quarantine/`; the index entry was repaired; and no artefact claims the
-replacement was preserved. **That is the same seam shape as the predecessor's
-`RP-1`, pointed at the window this WP creates rather than the one it closes.**
+**THE ARM ASYMMETRY THIS DESIGN INTRODUCES, named because the stub did not name
+it (round 9).** After an atomic capture the two arms are no longer symmetric. On
+a **tracked** target the gate still performs a restoration, so a reappearance is
+something it can observe and abort on. On an **untracked** target the rename has
+already removed the path and there is **nothing left to restore** — the gate
+proceeds to Step 5's unconditional `git add -A`, and a file that reappeared at
+that path is **not observed at all**: it is simply staged and committed, which is
+the outcome this whole epic exists to prevent. **The predecessor discloses the
+underlying race as inherited; this asymmetry is NEW and is created by the
+rename-first design.** The real spec either observes the untracked path before
+Step 5 or discloses the gap as its own residual. It does not inherit it.
+
+**THE DETERMINISTIC TEST, and round 9 corrected the seam it names.** The round-8
+form patched the tracked `git checkout` **and `fs.rmSync`** — while this same stub
+says `fs.rmSync` **disappears** on the untracked arm, so half the test was
+anchored to a call the design removes. **An injection barrier, not a call
+wrapper:** the real spec exposes one seam **after the atomic capture and before
+any restoration or index repair**, and the test installs a file at the original
+vault path there. It is implementation-independent by construction — a race-free
+implementation still has that point, whereas `git checkout` and `fs.rmSync` may
+not survive the change, and a test anchored to them either becomes impossible or
+pressures the implementer into keeping obsolete destructive calls, which is the
+seam-disappearance failure this section already rejects. **Exercised on BOTH
+arms**, asserting at each restoration boundary: the gate **aborted** (tracked) or
+**observed the reappearance** (untracked); the replacement is **still on disk,
+byte-identical to what the barrier wrote**; the captured note is in
+`state/quarantine/`; the index entry was repaired without touching the working
+tree; and **no artefact claims the replacement was preserved**.
 
 **This is a change to the SHIPPED withhold path for every severity**, which is
 exactly why it is not in the predecessor: that WP's "Out of scope" forbids
