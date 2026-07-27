@@ -47,6 +47,28 @@ function setup({ pins = true } = {}) {
   return { root, paths };
 }
 
+/**
+ * The same install, repointed so `app/current` resolves OUTSIDE `<core>/app` —
+ * which is the ONE thing that makes an install `dev`
+ * (WP-stance-authority-containment, Table A). A `.git` anywhere in the tree is
+ * deliberately NOT part of this fixture: it no longer selects anything.
+ * @param {{git?: false|'dir'|'file'}} [o]  optionally plant a `.git` in the
+ *   checkout, to prove it changes nothing either way (AC2).
+ */
+function setupDevOutside(o = {}) {
+  const { root, paths } = setup();
+  const checkout = path.join(root, 'checkout');
+  fs.mkdirSync(path.join(checkout, 'bin'), { recursive: true });
+  fs.writeFileSync(path.join(checkout, 'package.json'), '{"version":"0.0.1"}\n');
+  fs.writeFileSync(path.join(checkout, 'bin', 'wienerdog.js'), '// app\n');
+  if (o.git === 'dir') fs.mkdirSync(path.join(checkout, '.git'));
+  if (o.git === 'file') fs.writeFileSync(path.join(checkout, '.git'), 'gitdir: /elsewhere\n');
+  const link = path.join(paths.core, 'app', 'current');
+  fs.rmSync(link, { force: true });
+  fs.symlinkSync(checkout, link);
+  return { root, paths, checkout };
+}
+
 test('descriptor: deriveDescriptorDigest is deterministic for unchanged inputs', () => {
   const { paths } = setup();
   const a = descriptor.deriveDescriptorDigest(paths, DREAM_JOB);
@@ -135,12 +157,16 @@ test('descriptor: a partial pin store (git only, claude absent) REFUSES to bind 
   assert.throws(() => descriptor.writeDescriptor(paths, DREAM_JOB), WienerdogError);
 });
 
+// T6 — converts the pre-WP-stance-authority-containment fixture idiom (a `.git`
+// planted INSIDE `<core>/app`, which is now a prod tree): the dev fixture is
+// built by pointing `current` OUTSIDE `<core>/app`. The assertions below are
+// semantically identical.
 test('descriptor: a dev descriptor digest ignores tracked-source edits but drifts on ANY config-field edit (A5)', () => {
-  const { paths } = setup();
-  fs.mkdirSync(path.join(paths.core, 'app', '0.0.1', '.git')); // → dev stance
+  const { paths, checkout } = setupDevOutside();
+  assert.equal(descriptor.buildDescriptor(paths, DREAM_JOB).appRelease.stance, 'dev', 'the fixture really is dev');
   const base = descriptor.deriveDescriptorDigest(paths, DREAM_JOB);
   // A tracked-source byte edit does NOT drift the dev digest (treeDigest excluded).
-  fs.appendFileSync(path.join(paths.core, 'app', '0.0.1', 'bin', 'wienerdog.js'), '// dev edit\n');
+  fs.appendFileSync(path.join(checkout, 'bin', 'wienerdog.js'), '// dev edit\n');
   assert.equal(descriptor.deriveDescriptorDigest(paths, DREAM_JOB), base, 'tracked-source edit does not drift the dev digest');
   // But EVERY config-shaped field edit DOES (no config-fields-only subset).
   assert.notEqual(descriptor.deriveDescriptorDigest(paths, DREAM_JOB, { model: 'opus' }), base, 'model edit drifts');
@@ -206,7 +232,7 @@ test('descriptor: buildDescriptor fields — schema, profile, stance, exec ident
   assert.deepEqual(d.exec.git, { commandPath: '/usr/bin/git', installDir: '/usr/bin' });
   assert.equal(d.appRelease.version, '0.0.1');
   assert.match(d.appRelease.treeDigest, /^sha256:/);
-  assert.equal(d.appRelease.stance, 'prod', 'no .git in the fixture tree');
+  assert.equal(d.appRelease.stance, 'prod', 'app/current resolves inside <core>/app');
 });
 
 test('descriptor: config dream_model and dream_timeout_minutes feed the descriptor (same read as the spawn)', () => {
@@ -253,9 +279,28 @@ test('descriptor: unknown run kinds and unprofiled skills fail closed', () => {
   assert.throws(() => descriptor.buildDescriptor(paths, { name: 'x', run: 'skill:attacker-skill' }), WienerdogError);
 });
 
-test('descriptor: a dev-checkout app records stance dev', () => {
+// T5 — converts the pre-WP-stance-authority-containment "a dev-checkout app
+// records stance dev" test. CONTAINMENT decides the stance (Table A): a signal
+// an A7-scoped write into the app tree can produce decides nothing. AC1 + AC2.
+test('descriptor: the stance is decided by containment — a planted .git or an env var cannot downgrade a prod install', () => {
   const { paths } = setup();
-  fs.mkdirSync(path.join(paths.core, 'app', '0.0.1', '.git')); // isDevCheckout marker
-  const d = descriptor.buildDescriptor(paths, DREAM_JOB);
-  assert.equal(d.appRelease.stance, 'dev');
+  const appTree = path.join(paths.core, 'app', '0.0.1');
+
+  // AC1 — a `.git` FILE, a `.git` DIRECTORY, and WIENERDOG_DEV=1 all mint prod.
+  fs.writeFileSync(path.join(appTree, '.git'), 'gitdir: /elsewhere\n');
+  assert.equal(descriptor.buildDescriptor(paths, DREAM_JOB).appRelease.stance, 'prod', 'planted .git FILE ⇒ prod');
+  fs.rmSync(path.join(appTree, '.git'));
+  fs.mkdirSync(path.join(appTree, '.git'));
+  assert.equal(descriptor.buildDescriptor(paths, DREAM_JOB).appRelease.stance, 'prod', 'planted .git DIR ⇒ prod');
+  const withEnv = descriptor.buildDescriptor(paths, DREAM_JOB, { env: { WIENERDOG_DEV: '1' } });
+  assert.equal(withEnv.appRelease.stance, 'prod', 'WIENERDOG_DEV=1 ⇒ prod (no env var selects a verification path)');
+});
+
+test('descriptor: an app/current resolving OUTSIDE <core>/app records stance dev, with or without a .git (AC2)', () => {
+  for (const git of [false, 'file', 'dir']) {
+    const { paths } = setupDevOutside({ git });
+    const d = descriptor.buildDescriptor(paths, DREAM_JOB);
+    assert.equal(d.appRelease.stance, 'dev', `non-contained current ⇒ dev (git: ${git})`);
+    assert.equal(typeof d.appRelease.root, 'string', 'the dev arm still binds the checkout root');
+  }
 });

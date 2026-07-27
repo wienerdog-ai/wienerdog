@@ -8,7 +8,12 @@
  * of the vendored bin directly. Before it spawns Node or the model it verifies:
  *   1. current containment + user ownership (prod);
  *   2. the live app tree content-addresses to the descriptor's treeDigest;
- *   3. prod/dev stance matches (no planted `.git` downgrade of a prod install);
+ *   3. prod/dev stance matches, where the LIVE stance is decided by CONTAINMENT
+ *      alone — an install is dev only when `app/current` resolves OUTSIDE
+ *      `<core>/app` — so no signal an A7-scoped data write into the app tree can
+ *      produce (a planted `.git`, `WIENERDOG_DEV`) selects the reduced path, and
+ *      a bound/live disagreement refuses in EITHER direction
+ *      (WP-stance-authority-containment, Table A/Table B);
  *   4. the re-derived descriptor digest equals the digest bound into the OS
  *      entry (`--expect-digest`) — the independent anchor that catches a scoped
  *      `config.yaml` `run`/`model`/`timeout`/pin edit made without `sync`.
@@ -138,20 +143,26 @@ function appTreeDigestOf(root) {
   return `sha256:${sha256(JSON.stringify(pairs))}`;
 }
 
-/** Fire-time dev-liveness probe (WP-157 F10): a `.git` DIRECTORY (normal clone)
- *  OR a `.git` regular FILE (git worktree — our own dev machine, and Gyula's).
- *  Deliberately does NOT consult `env.WIENERDOG_DEV`: an attacker who controls the
- *  scheduler-inherited env must NOT be able to flip enforcement to the unverified
- *  dev path — the DIGEST-BOUND descriptor stance is the authority, this only
- *  confirms on-disk liveness. Matches vendor.isDevCheckout's dir-or-file rule.
- *  @param {string} root @returns {boolean} */
-function isDev(root) {
+/** Fire-time LIVE stance, decided by CONTAINMENT of `app/current` inside
+ *  `<core>/app` — the one property an A7-scoped DATA write into the app tree
+ *  cannot forge (ADR-0028 amendment §3/§4, WP-stance-authority-containment
+ *  Table A). Consults NO signal inside the tree: not `.git`, not
+ *  `env.WIENERDOG_DEV`, not any file under `app/current`. Fails CLOSED: an
+ *  unresolvable `<core>/app` or `app/current` ⇒ 'prod', the ENFORCED path —
+ *  `containedIn` alone returns false there, which as a stance would be the
+ *  fail-OPEN direction, so the resolution is guarded explicitly.
+ *  A deliberate self-contained duplicate of vendor.installStance (this file
+ *  cannot require code from the tree it is verifying); a cross-implementation
+ *  test pins the two together.
+ *  @param {{appDir:string, appCurrent:string}} p @returns {'prod'|'dev'} */
+function liveStance(p) {
   try {
-    const st = fs.statSync(path.join(root, '.git'));
-    return st.isDirectory() || st.isFile();
+    fs.realpathSync(p.appDir);
+    fs.realpathSync(p.appCurrent);
   } catch {
-    return false;
+    return 'prod';
   }
+  return containedIn(p.appDir, p.appCurrent) ? 'prod' : 'dev';
 }
 
 /** Minimal durable alert append (fixed, code-owned reason — no secrets, so no
@@ -208,8 +219,10 @@ function readDescriptorFile(descriptorPath) {
  *  config/pins from the registration-time core, never an ambient-WIENERDOG_HOME-
  *  relocated one. Binds the authorized home (digest-covered, WP-157 R4/A10) so a
  *  hostile ambient HOME cannot relocate the credential/config root without drifting
- *  the digest, and drops WIENERDOG_DEV so an inherited value can no longer flip a
- *  prod install to the unverified dev path (F10). Code-loading vars are irrelevant
+ *  the digest, and drops WIENERDOG_DEV — now purely DEFENCE IN DEPTH against
+ *  reintroduction, since no code under `src/` reads that variable any more: the
+ *  stance is decided by containment at both mint and fire time
+ *  (WP-stance-authority-containment, Table D). Code-loading vars are irrelevant
  *  to a pure digest re-derivation but are dropped for cleanliness (F8).
  *  @param {NodeJS.ProcessEnv} env @param {string|undefined} boundHome
  *  @param {string} boundCore  the anchored core → WIENERDOG_HOME
@@ -272,14 +285,20 @@ function verifyAndResolve(p, name, o) {
     } catch (err) {
       return { ok: false, reason: `cannot resolve app/current: ${err.message}` };
     }
-    const liveDev = isDev(target);
+    // Computed BEFORE any require from the app tree (the dev arm's
+    // reDeriveDigest is the first thing that loads code from it).
+    const live = liveStance(p);
     const derivEnv = derivationEnv(env, boundHome, p.core);
     const runArgs = [path.join(target, 'bin', 'wienerdog.js'), 'run-job', name];
 
-    // Stance must match: a prod entry over a dev-looking tree (planted .git) or a
-    // dev entry over a prod tree is refused — never a silent downgrade.
+    // Stance must match, in EITHER direction, and the live observation is
+    // containment — not a `.git` an A7-scoped write can plant (Table A/Table B).
+    // A prod entry over a non-contained tree is refused by verifyContainment
+    // below (reason C2); a dev entry over a contained tree is refused here (C1).
     if (stance === 'dev') {
-      if (!liveDev) return { ok: false, reason: 'descriptor stance is dev but the live app is not a dev checkout' };
+      if (live !== 'dev') {
+        return { ok: false, reason: `the descriptor was authorized for a dev checkout but app/current now resolves inside ${p.appDir}` };
+      }
       // Dev containment: the live app/current must resolve to EXACTLY the bound
       // checkout root (dev vendors the checkout itself, OUTSIDE <core>/app, so the
       // prod containment invariant does not apply — but a repoint off the bound
@@ -299,9 +318,11 @@ function verifyAndResolve(p, name, o) {
       return { ok: true, command: process.execPath, args: runArgs, home: boundHome };
     }
     if (stance !== 'prod') return { ok: false, reason: `descriptor stance ${JSON.stringify(stance)} is not prod or dev` };
-    if (liveDev) return { ok: false, reason: 'descriptor stance is prod but the live app looks like a dev checkout (.git present)' };
 
-    // PROD verification.
+    // PROD verification. (No dedicated live-stance pre-check here: a prod
+    // descriptor over a `live === 'dev'` tree is exactly a non-contained
+    // `app/current`, which verifyContainment refuses on the next line with
+    // reason C2 — one branch is better than two.)
     const contain = verifyContainment(p, platform);
     if (!contain.ok) return { ok: false, reason: contain.why };
 
@@ -487,7 +508,7 @@ function main(argv, opts = {}) {
   return code;
 }
 
-module.exports = { verifyAndResolve, verifyCatchup, appTreeDigestOf, verifyContainment, parseArgv, main };
+module.exports = { verifyAndResolve, verifyCatchup, appTreeDigestOf, verifyContainment, liveStance, parseArgv, main };
 
 // When the vendored copy at <core>/launcher/launch.js is executed by the OS
 // scheduler, run main with the real argv.

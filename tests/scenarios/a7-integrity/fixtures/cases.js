@@ -25,7 +25,10 @@ const { poisonConfig, setConfigScalar, setJobFields } = require('./build');
 const REASON = {
   descriptorDigest: /the job descriptor changed since it was scheduled/,
   treeDigest: /the live app tree does not match the descriptor/,
-  stance: /looks like a dev checkout \(\.git present\)/,
+  // WP-stance-authority-containment C1: the stance is decided by CONTAINMENT, so
+  // the guard that fires is a bound-`dev` descriptor over a CONTAINED tree — not
+  // a planted `.git`, which now selects nothing.
+  stance: /authorized for a dev checkout but app\/current now resolves inside/,
   containment: /app\/current does not resolve inside/,
   devContainment: /does not resolve to the authorized checkout root/,
   devDigest: /the job descriptor changed since it was scheduled/,
@@ -127,11 +130,57 @@ function launcherCases() {
       },
       refuse: true, reasonRe: REASON.containment,
     },
+    // ── Stance (WP-stance-authority-containment). The stance is decided by
+    //    CONTAINMENT of `app/current` inside `<core>/app`, so a planted `.git`
+    //    can no longer select the reduced path — at fire time OR at mint time.
+    //    3a proves the plant survives one attended `sync` as `prod`; 3b proves
+    //    the app-code tamper it was meant to hide is still refused; 3c is the
+    //    surviving stance guard (a bound `dev` over a contained tree ⇒ C1).
     {
-      id: '3-stance', title: 'planted `.git` prod→dev downgrade ⇒ stance guard',
-      guard: 'stance',
+      id: '3a-plant-git-prod', title: 'planted `.git` + one attended sync ⇒ still prod, RUNS (no downgrade)',
+      guard: 'stance', refuse: false,
       mutate: (fx) => {
         fs.mkdirSync(path.join(fs.realpathSync(fx.corePaths.appCurrent), '.git'));
+        // One attended `wienerdog sync`, in sync.js's own order: the vendorSelf
+        // CALL (sync.js:204; :202 is its require) BEFORE the descriptor write,
+        // which happens inside repointSchedules (required sync.js:221, called
+        // :222). vendorSelf is required THROUGH app/current so packageRoot() is
+        // the app tree, exactly as the shim makes it — skipping this step is
+        // what would let this case pass while the mint still let `.git` decide.
+        const live = fs.realpathSync(fx.corePaths.appCurrent);
+        require(path.join(live, 'src', 'core', 'vendor')).vendorSelf(fx.paths, { env: fx.env });
+        const job = jobsLib.findJob(fx.paths, 'dream');
+        const w = descriptorMod.writeDescriptor(fx.paths, job, { env: fx.env });
+        fx.digest = w.digest;
+      },
+    },
+    {
+      id: '3b-plant-git-tamper', title: 'planted `.git` + sync + an app-code byte edit ⇒ app-tree-digest guard',
+      guard: 'app-tree-digest',
+      mutate: (fx) => {
+        fs.mkdirSync(path.join(fs.realpathSync(fx.corePaths.appCurrent), '.git'));
+        const live = fs.realpathSync(fx.corePaths.appCurrent);
+        require(path.join(live, 'src', 'core', 'vendor')).vendorSelf(fx.paths, { env: fx.env });
+        const job = jobsLib.findJob(fx.paths, 'dream');
+        const w = descriptorMod.writeDescriptor(fx.paths, job, { env: fx.env });
+        fx.digest = w.digest;
+        // The payload the plant used to conceal: a CODE change, so it drifts the
+        // app release digest and the prod arm refuses.
+        const f = path.join(fs.realpathSync(fx.corePaths.appCurrent), 'src', 'core', 'errors.js');
+        try { fs.chmodSync(f, 0o644); } catch { /* already writable */ }
+        fs.appendFileSync(f, '\n// attacker payload marker\n');
+      },
+      refuse: true, reasonRe: REASON.treeDigest,
+    },
+    {
+      id: '3c-stale-dev', title: 'descriptor bound `dev` over a CONTAINED tree ⇒ stance guard',
+      guard: 'stance',
+      mutate: (fx) => {
+        // Mutate the WRITTEN descriptor (a rebuild would classify prod and there
+        // would be nothing to test).
+        const d = JSON.parse(fs.readFileSync(fx.descriptorPath, 'utf8'));
+        d.appRelease.stance = 'dev';
+        fs.writeFileSync(fx.descriptorPath, JSON.stringify(d));
       },
       refuse: true, reasonRe: REASON.stance,
     },

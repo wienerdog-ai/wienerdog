@@ -49,7 +49,9 @@ Every case reaches and trips exactly one guard/field. `guard` names it.
 | 2a-tree | app byte mutation | app-tree-digest | refuse, "app tree does not match" |
 | 2b-repoint | repoint `current` to an in-app sibling | app-tree-digest | refuse |
 | 2c-escape | symlink `current` OUTSIDE `<core>/app` | containment | refuse, "does not resolve inside" |
-| 3-stance | plant `.git` (prod→dev downgrade) | stance | refuse, "looks like a dev checkout" |
+| 3a-plant-git-prod | plant `.git` in the prod app tree, re-mint | stance | RUNS — the plant does not downgrade |
+| 3b-plant-git-tamper | same plant + an app-code byte edit | app-tree-digest | refuse, "app tree does not match" |
+| 3c-stale-dev | descriptor says `dev`, `current` is contained | stance | refuse, "authorized for a dev checkout" |
 | 4 | rewrite config + a REAL manifest | descriptor-digest | refuse (entry digest is the anchor) |
 | 5 | plant a fake `claude` earlier on PATH | pin drift | throws pre-spawn, plant never runs |
 | 6a-c | pinned target: repoint / no exec bit / writable ancestor | pin structural | throws pre-spawn |
