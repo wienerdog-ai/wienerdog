@@ -11,20 +11,27 @@ epic: audit-a7
 
 # WP-launcher-no-self-resync-republish: a self-resync carries the launcher forward
 
-> **DISPATCH STATUS — 2026-07-26: READY, and NOT dispatchable yet — the
-> dependency below is the reason, and it is the only one.** Both adversarial
-> review legs returned APPROVE — **wd-reviewer at round 2, Codex at round 3** —
-> with no class-(a) or class-(b) findings outstanding. Nothing further is
-> required from the architect or the owner on the design.
-> **`depends_on` is not yet satisfied**: `WP-stance-authority-containment` is
-> `Ready`, not `Done`. `Ready` here means *design-complete and approved*, which
-> `docs/specs/README.md` gates **separately** from dependencies — "an
-> implementer may only pick up a `Ready` spec whose `depends_on` are all
-> `Done`". **Do not dispatch this WP until `WP-stance-authority-containment`
-> has merged.** On a tree without it this spec does not merely regress, it does
-> not resolve: D2's call site names D9's `selfResync` and `dev`, the carry arm
-> throws D8's `WienerdogError`, and T1/T4 assert on D1's `installStance` — none
-> of which exists yet.
+> **DISPATCH STATUS — 2026-07-27: READY and DISPATCHABLE.** `depends_on` is now
+> satisfied: `WP-stance-authority-containment` merged (`86d069e`, PR #113) and is
+> `Done`. Both adversarial review legs returned APPROVE — **wd-reviewer at
+> round 2, Codex at round 3** — with no class-(a) or class-(b) findings
+> outstanding.
+> **Amended 2026-07-27 (round 6), after a first dispatch was stopped by a
+> confirmed spec bug.** The dependency's merge added a test —
+> `tests/unit/vendor.test.js`'s **T12** — whose fixture hand-builds
+> `<core>/app/current` and calls `vendorSelf` **through** it with no
+> `sourceRoot`. That is a self-resync under D9, so D1/D2/D3 as written send it
+> down the carry arm, whose single read of `<core>/launcher/launch.js` throws
+> `ENOENT` because that fixture never published a launcher. Current state §4's
+> claim that no existing test is a self-resync was **read at `d2b1981`, before
+> the dependency landed, and is false on today's `main`**; §4 is corrected below
+> and re-verified at `d1c96e1`. The amendment adds **one** deliverable —
+> `tests/unit/vendor.test.js`, with a fixture-setup-only edit spelled out
+> verbatim in Implementation notes → **D4** — and re-derives AC4, AC9, V2, V6 and
+> the Test index note that rested on the false claim. **D1, D2 and D3 are
+> unchanged**: the fix is still a pure subtraction, and no guard was added to the
+> carry arm. Measured with D1+D2+D3 verbatim plus D4 on `d1c96e1`:
+> `tests 1681 / pass 1676 / fail 0 / skipped 5`.
 > Four items are **routed to the owner and non-blocking**, reviewed and accepted
 > as such by both legs: **Residual R-dev**, the carried-forward-corrupt-launcher
 > disclosure, the refused-`adopt` manifest-ordering disclosure, and the cross-WP
@@ -77,7 +84,8 @@ edit that banner in this WP** — a sibling WP owns `launcher.js`'s refusal bann
 and this WP touches no file under `src/scheduler/`.
 
 **Where this WP comes from, and why the dependency is real.**
-`docs/specs/WP-stance-authority-containment.md` (status `Ready`) records this
+`docs/specs/WP-stance-authority-containment.md` (status `Done` since `d1c96e1`;
+it was `Ready` when this WP was drafted) records this
 defect as **Table G row S1** — *known-open, out of scope, owner-routed* — with an
 explicit Out-of-scope bullet forbidding a fix inside that WP, and records the
 shipped comment at `vendor.js:249-250` (*"a scoped write to the app tree cannot
@@ -129,12 +137,16 @@ until `WP-stance-authority-containment` is `Done`.**
 
 ## Current state
 
-Everything below was read at commit `d2b1981` and, where it is a behavioural
-claim, **executed** during drafting. Line numbers are that commit's — i.e.
-**before** `WP-stance-authority-containment` lands. That WP edits `vendorSelf`'s
-body, so the line numbers inside `vendorSelf` will have shifted by the time you
-start; the anchors you need are the function names and the literal code below,
-not the numbers.
+§1, §2, §3 and §5 were read at commit `d2b1981` and, where they are behavioural
+claims, **executed** during drafting. Their line numbers are that commit's — i.e.
+**before** `WP-stance-authority-containment` landed. That WP edits `vendorSelf`'s
+body, so the line numbers inside `vendorSelf` have shifted; the anchors you need
+are the function names and the literal code below, not the numbers.
+
+**§4 is different and you must read it.** It was rewritten in round 6 at commit
+`d1c96e1` — `main` **with** the dependency merged — because its `d2b1981`
+version made a claim about the test suite that the dependency's own merge
+falsified. Everything in §4 was re-executed at `d1c96e1`.
 
 ### 1. The two functions, verbatim
 
@@ -279,19 +291,79 @@ WP does not touch, and it is already caught: `tests/unit/vendor.test.js:412-413`
 asserts the published bytes equal `packageRoot()`'s launcher, and AC4 requires
 that test to pass unmodified.
 
-### 4. Existing tests: zero go red
+### 4. Existing tests: exactly ONE goes red, and its fixture is the reason
 
-The full suite was run on two scratch trees — one with D1+D9 only, one with
-D1+D9 plus this WP's change. Both reported `tests 1671 / pass 1666 / fail 0 /
-skipped 5`. **This change reddens no existing test**, so no existing test file is
-a deliverable. The reason, verified by grep over all `vendorSelf(` call sites in
-`tests/`: every one of them passes an explicit `sourceRoot` that is a separate
-fixture directory, so `current` never resolves to the source root and no existing
-test is a self-resync. `tests/unit/vendor.test.js:397` (*"writeLauncher places
-launch.js OUTSIDE app/, records dir+file, idempotent (WP-157)"*) must therefore
-pass **unmodified** — it is this WP's proof that the non-self-resync path is
-untouched, including the first-install placement (Table L row 1) and the
-`dir`-before-`file` manifest order.
+**This section replaces a false claim. Read the correction, not the memory of
+it.** The `d2b1981` draft said, "verified by grep over all `vendorSelf(` call
+sites in `tests/`: every one of them passes an explicit `sourceRoot` … so no
+existing test is a self-resync," and concluded that no existing test file is a
+deliverable. **That is false on `main` today.** It was true of the tree it was
+read on and the dependency's own merge falsified it — the very test that trips is
+one `WP-stance-authority-containment` added. The spec was never re-verified
+against its dependency's merged tree; this section is that re-verification.
+
+**The grep, re-run at `d1c96e1`.** `grep -rn "vendorSelf(" tests/` returns **27**
+call sites. **Four** pass no `sourceRoot`, and all four are therefore
+`root = packageRoot()`, `require`d **through** `<core>/app/current`, so
+`realpath(current) === realpath(root)`. **All four are self-resyncs under D9's
+predicate, all four are `prod` under D1's containment-derived stance, and all
+four therefore take Table L's carry arm** once D2 ships. Executed, not reasoned:
+a probe `throw` planted in the carry arm fires in every one of them.
+
+| Call site | Test / case it belongs to | Does the carry arm trip? | Why |
+|---|---|---|---|
+| `tests/unit/vendor.test.js:673` | **T12** — *"vendor: an attended sync carries containment forward or refuses — no DATA-shaped A7 write moves it"* (`:636`), inside its `run()` fixture helper (`:650-679`) | **YES — this is the blocker** | `run()` hand-builds the core: it `copyTree`s the repo into `start`, `fs.symlinkSync(start, <core>/app/current)`, and calls `vendorSelf` — **without ever performing a first install**. Nothing has published `<core>/launcher/launch.js`, so the carry arm's single `fs.readFileSync(dest)` throws `ENOENT`, `vendorSelf` throws `WienerdogError`, `run()`'s `catch` records `after = 'REFUSED'`, and `:697` (`assert.equal(base.after, base.before, 'contained-clean is carried forward unchanged')`) fails with `'REFUSED' !== true` on the `contained-clean` shape |
+| `tests/unit/launcher.test.js:161` | **T8** — *"launcher: plant .git + one attended sync ⇒ still prod, and an app-code tamper is refused with a durable C3 alert"* (`:155`) | no | Its fixture `setupProd()` (`:44-63`) runs a **real first install** at `:50` — `vendor.vendorSelf(paths, { sourceRoot: prodSource(), env: {} })` — which takes Table L row 1 and publishes `<core>/launcher/launch.js`. The carry arm's read then succeeds |
+| `tests/scenarios/a7-integrity/fixtures/cases.js:151` | case **`3a-plant-git-prod`** | no | Its fixture `buildInstall()` (`tests/scenarios/a7-integrity/fixtures/build.js:108`) runs the same real first install with an explicit `sourceRoot`, publishing the launcher before the case's `mutate` ever self-resyncs |
+| `tests/scenarios/a7-integrity/fixtures/cases.js:163` | case **`3b-plant-git-tamper`** | no | Identical shape and identical fixture to `3a` |
+
+The distinction is not "self-resync or not" — all four are. It is **"does the
+fixture model a real installed core"**: three of them do, because a real install
+always has an out-of-tree launcher, and the fourth does not.
+
+**Measured at `d1c96e1`, three ways. All three are `node tests/run.js` WITHOUT
+this WP's new test file**, so the totals are directly comparable and the only
+moving number is the failure:
+
+| Tree | Result |
+|---|---|
+| `main`, unmodified | `tests 1681 / pass 1676 / fail 0 / skipped 5` |
+| `main` + D1 + D2 + D3 verbatim, **no** fixture change | `tests 1681 / pass 1675 / fail 1 / skipped 5` — the single failure is `tests/unit/vendor.test.js:697`, `'REFUSED' !== true` |
+| `main` + D1 + D2 + D3 verbatim + **D4** | `tests 1681 / pass 1676 / fail 0 / skipped 5` — identical to unmodified `main` |
+
+Add T1–T4 and every total rises by four; that is what the first dispatch
+measured on its own branch (`tests 1685 / pass 1679 / fail 1 / skipped 5`, the
+same single failure).
+
+The **scenario** suite is a separate gate — `.github/workflows/scenarios.yml`
+sets `WIENERDOG_RUN_SCENARIOS=1`, which `node tests/run.js` does **not** — so it
+was run separately. `WIENERDOG_RUN_SCENARIOS=1 node
+tests/scenarios/a7-integrity/run-a7-integrity.js` with D1+D2+D3 applied prints
+`PASS` and exits `0`, cases `3a`/`3b` included. **The scenario suite needs no
+fixture change.**
+
+Two consequences, and they are the whole of the amendment:
+
+1. **`tests/unit/vendor.test.js` IS a deliverable** — with one tightly scoped,
+   fixture-setup-only edit, spelled out verbatim in Implementation notes →
+   **D4** and permitted by **Deliverables row 3**. No assertion in that file may
+   change.
+2. **No code change follows from this.** `D1`, `D2` and `D3` are unchanged, and
+   **no guard was added to the carry arm**. This was checked, not assumed: the
+   third row above is D1/D2/D3 exactly as this spec writes them. The fix stays a
+   subtraction.
+
+**The `EISDIR` half of the same shape was checked too**, because "the carry arm
+throws" is not by itself the failure — a fixture whose `<core>/launcher` is
+occupied would fail the same way. It is not: `run()` creates nothing at that path
+at all.
+
+`tests/unit/vendor.test.js:397` (*"vendor: writeLauncher places launch.js OUTSIDE
+app/, records dir+file, idempotent (WP-157)"*) is **not** the test that moves and
+must still pass **unmodified** — it is this WP's proof that the non-self-resync
+path is untouched, including the first-install placement (Table L row 1) and the
+`dir`-before-`file` manifest order. D4's edit lands at roughly `:659`, after it,
+so `:397` and `:412-413` do not even shift.
 
 ### 5. The two callers, and which of them this reaches
 
@@ -313,15 +385,22 @@ the old version, so it is not a self-resync and it republishes normally
 |--------|------|-------|
 | modify | src/core/vendor.js | **D1** — `writeLauncher` gains the `carryForward` option and the carry-forward arm (Table L). The `if (opts.manifest)` block stays **below both arms**, shared — moving it into the `else` is the one mutation that passes every gate but AC12/T1 (Implementation notes → D1; Table M **M6**). **D2** — the `writeLauncher(…)` call at the end of `vendorSelf` passes `carryForward: selfResync && !dev`, reusing `WP-stance-authority-containment` D9's two existing bindings, and the call-site comment above it is corrected. **D3** — the false clause in `writeLauncher`'s JSDoc is **deleted** (Implementation notes → D3; it is a deletion, not a repair). Nothing else in the file: `vendorSelf`'s branch structure, `installStance`, `isDevCheckout`, `readVersion`, `repointCurrent`, `copyTree`, `makeTreeFilesReadOnly`, `writeShim`, `verifyCurrentContainment`, `launcherPath`, `recordOnce`, `COPY_INCLUDE` and the module's `require`s are untouched. |
 | create | tests/unit/vendor-selfresync.test.js | **T1–T4** (Test index). Four tests — no more, no fewer — verbatim in this spec. T1 additionally carries the **carry-arm manifest** assertion (AC12), the only gate on Table L's "both arms" row for that arm; T2 covers **both** accepted row-3 failure shapes and gates all three required message fields (AC5/AC6). Picked up automatically — `tests/run.js` shells out to `node --test` with no path filter, so `tests/unit/*.test.js` is auto-discovered. |
+| modify | tests/unit/vendor.test.js | **D4 — a FIXTURE-SETUP-ONLY edit inside T12's `run()` helper, and nothing else in the file.** Added round 6 because D1/D2/D3 redden this file's T12 (Current state §4); it is the only existing test they redden. The verbatim edit — seven added lines, zero removed, zero changed — is in Implementation notes → **D4**, which is the single place it is decided; this cell defers to it and must not restate it. **Hard limits, all grep-gated by V8:** the diff over this file must be **purely additive** (no `-` line), and **no line containing `assert` may be added, removed or changed**. Every assertion in T12 — including `:697`'s `contained-clean is carried forward unchanged`, `:700`–`:702`, and the `before`-shape oracle guards at `:688-693` — stays byte-identical, so what T12 proves is unchanged (Implementation notes → D4, "What D4 must not weaken"). Do **not** touch any other test in this file: `:397` and its `:412-413` assertion are AC4's proof and must pass unmodified. |
 
 Not deliverables, deliberately: `src/scheduler/launcher.js` (a sibling WP owns
 its refusal banner — do not open it), `src/cli/sync.js`, `src/cli/adopt.js`,
-`src/cli/update.js`, `src/core/manifest.js`, `tests/unit/vendor.test.js`,
-`tests/unit/launcher.test.js`, `tests/scenarios/a7-integrity/**`,
+`src/cli/update.js`, `src/core/manifest.js`, `tests/unit/launcher.test.js`,
+`tests/scenarios/a7-integrity/**` (including its `fixtures/`),
 `docs/THREAT-MODEL.md`, `docs/GLOSSARY.md`, `docs/adr/**`,
 `docs/specs/WP-stance-authority-containment.md`, and **`memory/lessons/inbox.md`**.
 See Out of scope for each. Several of them contain tests that must pass
-**unmodified** — that is this WP's proof that nothing else moved.
+**unmodified** — that is this WP's proof that nothing else moved. In particular
+`tests/unit/launcher.test.js:161` and
+`tests/scenarios/a7-integrity/fixtures/cases.js:151,163` **are** self-resyncs and
+**do** take the carry arm, and they pass **without any edit** because their
+fixtures perform a real first install first (Current state §4). If you find
+yourself wanting to change one of them, the implementation is wrong — stop and
+say so.
 
 ### Exact contracts
 
@@ -441,14 +520,25 @@ surface below mirrors it; a review finding updates Table L **and every mirror in
 the same pass**, and any new mirror found in review is registered here on the
 spot.
 
-- [ ] **Deliverables-table cells** — the `src/core/vendor.js` row (D1/D2/D3) and
-      the `tests/unit/vendor-selfresync.test.js` row.
+- [ ] **Deliverables-table cells** — the `src/core/vendor.js` row (D1/D2/D3),
+      the `tests/unit/vendor-selfresync.test.js` row, and the
+      `tests/unit/vendor.test.js` row (**D4**, registered in round 6).
+- [ ] **D4, the T12 fixture amendment** — registered in round 6. Its one
+      canonical locus is **Implementation notes → D4**, which holds the verbatim
+      edit, the option-weighing, and the non-vacuity measurements. It has
+      **six** mirrors, all citation-only: (1) the Deliverables `tests/unit/vendor.test.js`
+      row, (2) **Current state §4**, (3) **AC4**, (4) **AC9**, (5) **V6 + V8**,
+      (6) **Table M row M7**. The dispatch-status banner names it without
+      operative wording — a name-only citation, not a seventh mirror. A genuine
+      seventh gets registered here on the spot rather than restated.
 - [ ] **Exact contracts** — the `writeLauncher` JSDoc block and the call-site
       snippet.
 - [ ] **Acceptance criteria** — AC1–AC12 (AC12 is the carry arm's manifest
-      recording, registered in round 2).
+      recording, registered in round 2; **AC4 and AC9 were re-derived in round 6**
+      and now defer to D4 for what "unmodified" excludes).
 - [ ] **Verification commands / greps** — V1 (the four tests), V3 (the
-      no-recomputation greps), V4 (the call-site grep). **Every one of them is
+      no-recomputation greps), V4 (the call-site grep), **V8 (the
+      `tests/unit/vendor.test.js` diff bound, added round 6)**. **Every one of them is
       an exit-code gate**, not an eyeball check, and the gate is the **whole
       pasted block's** `$?`, not a printed line inside it. Two distinct failures
       have already shipped here: round 1 inverted V3/V5 (`grep -c` printing `0`
@@ -749,6 +839,117 @@ S1/S2", because this WP closes S1 and the shipped comment must not outlive that
 (Definition of done item 6); and it says the `dir`-then-`file` **pair**, matching
 Table L's "both arms" row, not `main`'s singular "a `file` manifest entry".
 
+### D4 — the T12 fixture amendment (`tests/unit/vendor.test.js`)
+
+**This subsection is the single place D4 is decided.** The Deliverables row, AC4,
+AC9, V6, V8, M7 and the Mirrored Surface Checklist all defer to it; none of them
+restates the edit.
+
+**Why it exists.** D1/D2/D3 redden exactly one existing test —
+`tests/unit/vendor.test.js`'s **T12**, at `:697` on its `contained-clean` shape,
+with `'REFUSED' !== true`. Current state §4 has the full mechanism and the three
+measured suite runs. In one line: T12's `run()` helper hand-builds
+`<core>/app/current` and self-resyncs through it **without ever performing a
+first install**, so nothing has published `<core>/launcher/launch.js` and the
+carry arm's single read throws `ENOENT`.
+
+**Why the fixture is what moves, and not the spec or the code.** Three options
+were weighed and the choice is recorded here rather than left open:
+
+1. **Except the failing shape in AC9/V2's expectations.** **Not viable.** `npm
+   test` runs the whole suite in CI on every PR and on `main`; a red test cannot
+   be excepted by spec prose. Rejected.
+2. **Add a guard to the carry arm** — e.g. fall back to publishing when `dest` is
+   absent. **Rejected, and it is the one thing this WP must never do**: it is
+   precisely the one-line bypass the fail-closed paragraph above exists to
+   refuse (delete the file, wait for the next attended sync). It would also
+   contradict Table L row 3, AC5 and T2. The subtraction stays a subtraction.
+3. **Amend the fixture so its "contained" shapes model a REAL installed core.**
+   **Chosen.** T12's own intent — from its own WP, `WP-stance-authority-containment`
+   AC16 — is *"an attended `sync` carries containment forward, or refuses"*. An
+   **attended sync of an installed core** is what it models, and a real installed
+   core **always** has an out-of-tree launcher, because the first install
+   published one. The fixture was simply missing a piece of the shape it claims
+   to build. Fixing that is a correction to the fixture, not a concession by the
+   test.
+
+**The verbatim edit.** In `run()`, immediately after the `fs.symlinkSync(...)`
+that creates `<core>/app/current` and before `const before = contained(core);`,
+insert these **seven** lines:
+
+```js
+    // A real installed core always has the out-of-tree launcher a first install
+    // published. This fixture hand-builds the core, so publish it by hand.
+    fs.mkdirSync(path.join(core, 'launcher'), { recursive: true });
+    fs.copyFileSync(
+      path.join(REPO, 'src', 'scheduler', 'launcher.js'),
+      path.join(core, 'launcher', 'launch.js')
+    );
+```
+
+so that the region reads:
+
+```js
+    vendor.copyTree(REPO, start);
+    fs.symlinkSync(start, path.join(app, 'current'));
+    // A real installed core always has the out-of-tree launcher a first install
+    // published. This fixture hand-builds the core, so publish it by hand.
+    fs.mkdirSync(path.join(core, 'launcher'), { recursive: true });
+    fs.copyFileSync(
+      path.join(REPO, 'src', 'scheduler', 'launcher.js'),
+      path.join(core, 'launcher', 'launch.js')
+    );
+    const before = contained(core);
+```
+
+Six details in it are deliberate:
+
+- **It is in `run()`, so it applies to all five shapes**, not only the contained
+  ones. A real dev install also has a published launcher (Table L row 1 publishes
+  on dev), so making only the contained shapes realistic would be a new asymmetry.
+  On the `outside-*` shapes `carryForward` is falsy and the publish arm overwrites
+  this file anyway — harmless either way.
+- **`REPO` is `run()`'s enclosing `const REPO = vendor.packageRoot();`** (`:637`),
+  already in scope. Add no new binding, no new `require`, no new helper.
+- **The bytes are `packageRoot()`'s `src/scheduler/launcher.js`** — byte-identical
+  to what `writeLauncher`'s publish arm would have written on a real first
+  install in this same process, since that arm also reads `packageRoot()`
+  (Current state §3, bytes-provenance). So the fixture models the real thing, not
+  a stand-in.
+- **`fs.mkdirSync(..., { recursive: true })` first**, because `<core>/launcher`
+  does not exist; `copyFileSync` would throw `ENOENT` on the directory.
+- **No mode is set.** T12 never executes or stats this file — the carry arm only
+  reads it. Do not add a `chmod`; it would be unused ceremony.
+- **Placed before `const before = contained(core)`** for readability only.
+  `contained()` inspects `<core>/app` and `<core>/app/current` and can never see
+  `<core>/launcher`, so the placement is not load-bearing — but keep it there so
+  the whole core-construction block reads as one unit.
+
+**What D4 must not weaken — checked by execution, not by argument.** T12 proves
+three things and D4 changes none of them, because **no assertion in the file
+moves**: the two clean baselines are carried forward unchanged (`:697`, `:698`),
+a planted `.git` does not move containment (`:700`, `:702`), and a tampered
+version refuses rather than moving it (`:701`); the `before`-shape oracle guards
+at `:688-693` are likewise untouched. Non-vacuity was re-measured against
+`WP-stance-authority-containment`'s **own** mutation rows for T12 — its row 9
+(`readVersion`: delete the validation) and row 10 (`vendorSelf`: delete the
+`selfResync` branch, falling through to `isDevCheckout`) — applied to
+**unmodified `main`**, each run twice, with and without D4:
+
+| Dependency mutation | `main`, no D4 | `main` + D4 |
+|---|---|---|
+| row 9 — `readVersion` validation deleted | `pass 29 / fail 1`, the failure being `tests/unit/vendor.test.js:636` (T12) | **identical** |
+| row 10 — `selfResync` branch deleted | `pass 29 / fail 1`, same test | **identical** |
+
+D4 also leaves T12 **green on unmodified `main`** (`tests 30 / pass 30 / fail 0`
+for the whole file), so the edit is behaviour-neutral without this WP and is not
+smuggling in a second change.
+
+**Nothing else in the file may change.** No assertion, no other test, no import,
+no helper. V8 is the exit-code gate: the diff over `tests/unit/vendor.test.js`
+must be purely additive and must not add, remove or alter a single line
+containing `assert`.
+
 ### General constraints
 
 - **ADR-0004 (IRON RULE): Wienerdog is just files.** This WP starts nothing, and
@@ -757,11 +958,13 @@ Table L's "both arms" row, not `main`'s singular "a `file` manifest entry".
 - Do not touch `src/scheduler/launcher.js`. A sibling WP owns its refusal banner
   and is in flight; opening that file is an automatic REQUEST-CHANGES here.
 - Do not edit `docs/specs/WP-stance-authority-containment.md`. Recording that
-  its Table G row S1 is closed is the owner's act on a `Ready` spec, not an
-  implementer's.
+  its Table G row S1 is closed is the owner's act — and now that that spec is
+  `Done`, editing it is doubly not an implementer's call.
 - Scratch fixtures live in `fs.mkdtempSync(path.join(os.tmpdir(), …))` — never a
   fixed `/tmp` path, never inside the repo, never touching `~/.wienerdog`,
-  launchd, or `gui/501`. The four tests below already follow this.
+  launchd, or `gui/501`. The four tests below already follow this, and so does
+  **D4**: its two writes land under `core`, which T12's `run()` derives from that
+  test's own `fs.mkdtempSync(path.join(os.tmpdir(), 'wd-syncinv-'))` root.
 - Never run bare `node --test`; the suite entry point is `node tests/run.js`,
   which sets `WIENERDOG_TEST_NO_REAL_SCHEDULER=1` for every child process.
 - Ambiguity → choose the simpler option and record it under "Decisions made" in
@@ -965,10 +1168,19 @@ Eight notes on that file, so nothing in it reads as accidental:
   `mkdtemp` core, so `shimVendor` never returns another test's module.
 - **T1's fresh-manifest block is the file's most load-bearing assertion and the
   easiest to mistake for redundancy.** It is the *only* place in the whole suite
-  where `writeLauncher` records a manifest entry on the carry arm: every other
-  `vendorSelf(` call site in `tests/` passes a fixture `sourceRoot`, so every one
-  of them takes the publish arm. Delete it and the mutation Table M **M6**
-  describes ships green. Do not "simplify" it into the earlier idempotence check.
+  where `writeLauncher` records a manifest entry on the carry arm. **The reason
+  was restated in round 6, because the original one was false** — it said "every
+  other `vendorSelf(` call site in `tests/` passes a fixture `sourceRoot`, so
+  every one of them takes the publish arm", and Current state §4 shows four call
+  sites take the **carry** arm. The claim survives on a different and verified
+  fact: **none of those four passes a `manifest`.** Re-checked at `d1c96e1` —
+  `tests/unit/vendor.test.js:673` passes `{}`, `tests/unit/launcher.test.js:161`
+  passes `{ env }`, and `tests/scenarios/a7-integrity/fixtures/cases.js:151,163`
+  pass `{ env: fx.env }`. With no `manifest`, `writeLauncher`'s
+  `if (opts.manifest)` block never runs, so none of them reaches the recording
+  and none of them can catch **M6**. Delete this block and the mutation Table M
+  **M6** describes ships green. Do not "simplify" it into the earlier idempotence
+  check.
 - **T2's shape B uses a directory, not a mode-`000` file, on purpose.** `root`
   can read a mode-`000` file, so an `EACCES` fixture is flaky wherever CI runs as
   root; `EISDIR` is deterministic for every uid. Shape B's third assertion pins
@@ -1025,8 +1237,16 @@ Every criterion below has a mutation partner in Table M that reddens it.
       `tests/unit/vendor.test.js:397` covers the duplicate-entry half on the
       publish arm and must pass unmodified)
 - [ ] **AC4** — A **first install** still places `<core>/launcher/launch.js`,
-      executable, with the `dir`-before-`file` manifest pair.
-      `tests/unit/vendor.test.js:397` passes **unmodified**. (Table L row 1)
+      executable, with the `dir`-before-`file` manifest pair. The test that
+      proves it — `tests/unit/vendor.test.js:397`, *"vendor: writeLauncher places
+      launch.js OUTSIDE app/, records dir+file, idempotent (WP-157)"*, including
+      its `:412-413` assertion that the published bytes are `packageRoot()`'s —
+      passes **unmodified**. *(re-derived in round 6)* "Unmodified" now means
+      **unmodified except the T12 fixture change specified in Deliverables row 3
+      (Implementation notes → D4)**, which is a different test in the same file
+      and lands after `:397`, so that test's lines do not even shift. The
+      **file** is a deliverable; **this test** is not permitted to move, and V8
+      gates that no assertion anywhere in the file moves. (Table L row 1)
 - [ ] **AC5** — On a prod self-resync with `<core>/launcher/launch.js`
       **unreadable for any reason**, `vendorSelf` throws a `WienerdogError` and
       **nothing** is written to that path. Both accepted shapes are covered:
@@ -1058,8 +1278,16 @@ Every criterion below has a mutation partner in Table M that reddens it.
 - [ ] **AC8** — A **dev** self-resync still publishes: a maintainer's edit to the
       checkout's `src/scheduler/launcher.js` reaches `<core>/launcher/launch.js`.
       (T4; Table L row 1, the `!dev` gate)
-- [ ] **AC9** — Zero existing tests change. `node tests/run.js` reports `fail 0`
-      and the diff touches only the two deliverable paths. (V2, V6)
+- [ ] **AC9** — *(re-derived in round 6 — it used to read "Zero existing tests
+      change", which D1/D2/D3 make impossible; see Current state §4.)* **Exactly
+      one** existing test file changes — `tests/unit/vendor.test.js` — and only
+      in the way Deliverables row 3 licenses: the T12 fixture-setup edit of
+      Implementation notes → **D4**, purely additive, with **no assertion added,
+      removed or altered** anywhere in the file (V8). No other existing test file
+      changes at all; in particular `tests/unit/launcher.test.js` and
+      `tests/scenarios/a7-integrity/**` are self-resyncs that pass **unedited**
+      (Current state §4). `node tests/run.js` reports `fail 0`, and the diff
+      touches only the **three** deliverable paths. (V2, V6, V8)
 - [ ] **AC10** — `writeLauncher`'s body does not recompute the self-resync
       predicate: no `selfResync`, `currentLink`, `installStance`, `isDevCheckout`
       or `realpath` inside it. (V3) — **review-enforced in addition**: a
@@ -1090,9 +1318,13 @@ last column. Run these to prove the gates are not vacuous, then revert.
 | M4 | delete the `else` and always carry forward | **all four** — T3 and T4 are the *diagnostic* pair (they are the two that assert a publish must happen), but T1 and T2 fail too: their fixtures' **first install** then has no launcher to carry, so `writeLauncher` throws `ENOENT` before either test reaches its own assertion | **measured `pass 0 / fail 4`** |
 | M5 | recompute the predicate inside `writeLauncher` instead of taking `opts.carryForward` | V3 (match count `0` → non-zero, **and its exit status `0` → `1`**) | executed on the equivalent shape: count `1`, `$?` = `1` |
 | M6 | move the whole `if (opts.manifest) { … }` block **into** the `else` arm, next to the source read | **T1 only** — and that is the entire point: V1's other three tests, V2–V7, AC1–AC11 and M1–M5 all stay **green**, so T1's fresh-manifest assertion is the only thing standing between this mutation and a shipped uninstall bug | expected red (AC12 is its only assertion); the implementer confirms both halves — T1 red **and** everything else green |
+| M7 | revert **D4** — remove the seven lines from T12's `run()` helper, leaving D1/D2/D3 in place | `tests/unit/vendor.test.js:636` (**T12**), at `:697` with `'REFUSED' !== true`. This is the round-6 blocker itself, and M7 is what proves D4 is load-bearing rather than cosmetic. V1, V3, V4, V5, V7 and V8 all stay green under it — **only V2 moves** | **measured on `d1c96e1`**: `tests 1681 / pass 1675 / fail 1 / skipped 5` without D4, versus `1681 / 1676 / 0 / 5` with it (both counts taken without T1–T4) |
 
-M1, M2 and M4 were run end to end; M5's grep was run against both shapes. M3 and
-M6 are listed with their expected reddening and are the implementer's to confirm.
+M1, M2 and M4 were run end to end; M5's grep was run against both shapes; **M7
+was run end to end in round 6**, and its counterpart — D4's non-vacuity against
+`WP-stance-authority-containment`'s own T12 mutation rows 9 and 10 — is measured
+in Implementation notes → D4. M3 and M6 are listed with their expected reddening
+and are the implementer's to confirm.
 For **M6, confirming that everything *else* stays green is as load-bearing as
 confirming T1 goes red** — paste both.
 
@@ -1142,7 +1374,8 @@ avoided: `set -e` does not abort on `! cmd`, a gotcha this project has already
 been bitten by. **When you paste, paste the block's own `$?` too** — e.g. run it,
 then `echo "block \$? = $?"` on the next line.
 
-Sweep of all seven steps, for both defects, done across rounds 2 and 3:
+Sweep of all steps, for both defects, done across rounds 2 and 3 and extended in
+round 6 to the two steps that round added (**V2b** and **V8**):
 
 | Step | Kind of gate | Round-1 inversion? | Round-2 masking? |
 |---|---|---|---|
@@ -1153,9 +1386,14 @@ Sweep of all seven steps, for both defects, done across rounds 2 and 3:
 | V5 | was `grep -c`, "expect 0" | **yes — fixed round 2** | **yes — fixed below** |
 | V6 | `git diff --name-only` — always exits 0; a **list comparison**, not an exit-code gate. Stated as such so no one mistakes its exit 0 for a pass. The enforcing gate is CI's `boundary-check` | n/a | n/a |
 | V7 | `npm run lint` — nonzero exit on any violation | no | **yes — fixed below** |
+| V2b | `run-a7-integrity.js` — nonzero exit on any failure. **Added round 6** (the scenario gate `node tests/run.js` does not run) | no — written in the fixed form from the start | no — ends `rc=$?; … (exit $rc)` |
+| V8 | `git diff` + two `grep -c` counts, "expect 0 and 0". **Added round 6** | **no, by construction** — each `grep -c` status is captured into a variable and the gate is an explicit `[ "$n" -ne 0 ]` test, never grep's own exit | no — ends `rc=$?; … (exit $rc)` |
 
-No eighth inversion and no further masking exists in the steps below; the sweep
-that produced this table was re-run in round 3 over every block on the page.
+No further inversion and no further masking exists in the steps below; the sweep
+that produced this table was re-run in round 3 over every block on the page, and
+again in round 6 over the two blocks that round added. Both new blocks were
+**executed in the correct state and in two distinct violating states**, and what
+is recorded for each is the **block's own `$?`**.
 
 **V1 — the four new tests pass.**
 
@@ -1187,13 +1425,38 @@ described in Implementation notes → D1.
 node tests/run.js
 ```
 
-Expect `fail 0`. Do not assert a literal test count: it depends on
-`WP-stance-authority-containment`'s own test edits, which land first. **Red
-input:** any change that reaches a non-self-resync path — e.g. M4 — reddens
-`tests/unit/vendor.test.js:397`, the WP-157 launcher test, whose very first
-`vendorSelf` is a first install that must publish and whose assertion at
-`:412-413` requires the published bytes to equal `packageRoot()`'s launcher.
-Under M4 it throws before reaching that assertion; either way it goes red.
+Expect `fail 0`. Do not assert a literal test count. For orientation only:
+`main` at `d1c96e1` is `tests 1681 / pass 1676 / fail 0 / skipped 5`, and adding
+T1–T4 takes the total to `1685`.
+
+**The one existing test you must watch here is T12**, `tests/unit/vendor.test.js:636`
+(*"vendor: an attended sync carries containment forward or refuses — no
+DATA-shaped A7 write moves it"*). **Without D4 it is RED** — measured
+`fail 1` at `:697`, `'REFUSED' !== true` — and that is not a regression to debug,
+it is the fixture gap Current state §4 documents and D4 closes. With D4 it is
+green. If it is red on your tree, apply D4 before looking anywhere else; if it is
+still red **with** D4, that is a real finding — stop and report it.
+
+**The scenario suite is a separate gate that `node tests/run.js` does not run.**
+`.github/workflows/scenarios.yml` sets `WIENERDOG_RUN_SCENARIOS=1`. Run it too:
+
+```bash
+WIENERDOG_RUN_SCENARIOS=1 node tests/scenarios/a7-integrity/run-a7-integrity.js
+rc=$?; echo "V2b exit=$rc"; (exit $rc)
+```
+
+Expect `PASS` and `V2b exit=0` **and block exit 0**. Its cases `3a-plant-git-prod`
+and `3b-plant-git-tamper` are self-resyncs that take the carry arm, and they need
+**no** fixture change — measured green with D1+D2+D3 applied. **Red input:** M4
+(always carry forward) breaks the fixture's own first install and the harness
+aborts.
+
+**Red input for V2 proper:** any change that reaches a non-self-resync path —
+e.g. M4 — reddens `tests/unit/vendor.test.js:397`, the WP-157 launcher test,
+whose very first `vendorSelf` is a first install that must publish and whose
+assertion at `:412-413` requires the published bytes to equal `packageRoot()`'s
+launcher. Under M4 it throws before reaching that assertion; either way it goes
+red.
 
 **V3 — `writeLauncher` does not recompute the predicate (Table L, AC10).**
 
@@ -1282,16 +1545,54 @@ exit status proves nothing. Read the list. The enforcing gate is CI's
 git diff --name-only main...HEAD
 ```
 
-Expect exactly:
+Expect exactly — **four** paths since round 6, `tests/unit/vendor.test.js` being
+the one D4 added:
 
 ```
 docs/specs/WP-launcher-no-self-resync-republish.md
 src/core/vendor.js
 tests/unit/vendor-selfresync.test.js
+tests/unit/vendor.test.js
 ```
 
 **Red input:** touching `src/scheduler/launcher.js` or `docs/THREAT-MODEL.md`
-adds a line here and `boundary-check` rejects the PR.
+adds a line here and `boundary-check` rejects the PR. `tests/unit/vendor.test.js`
+appearing in this list is **necessary but not sufficient** — V8 is what bounds
+*how* it changed.
+
+**V8 — the `tests/unit/vendor.test.js` edit is confined to D4's fixture setup
+(AC9, Deliverables row 3).** This is the gate that turns "the file is a
+deliverable" into "only the fixture moved". It is an exit-code gate.
+
+```bash
+bash -c '
+d=$(git diff -U0 main...HEAD -- tests/unit/vendor.test.js)
+dels=$(printf "%s\n" "$d" | grep -c "^-[^-]")
+asserts=$(printf "%s\n" "$d" | grep -cE "^[+-][^+-].*assert")
+echo "V8 removed lines: $dels  assert-touching lines: $asserts"
+if [ "$dels" -ne 0 ]; then echo "V8 FAIL — the D4 edit is purely additive; a removed line means something else moved"; exit 1; fi
+if [ "$asserts" -ne 0 ]; then echo "V8 FAIL — no assertion in vendor.test.js may be added, removed or altered"; exit 1; fi
+echo "V8 PASS"
+'
+rc=$?; echo "V8 exit=$rc"; (exit $rc)
+```
+
+Correct state must print `V8 removed lines: 0  assert-touching lines: 0` /
+`V8 PASS` / `V8 exit=0` **and the block itself must exit 0**. The `^-[^-]` and
+`^[+-][^+-]` patterns exclude the `---`/`+++` diff headers, and `-U0` removes
+context lines so only real changes are counted. `grep -c`'s own exit status is
+captured into a variable and never becomes the block's status — that is the
+round-1 inversion, and it is avoided here by construction.
+
+**Red inputs, both measured, and both with the block's own `$?`:** a diff that
+also weakens `:697` from `assert.equal(base.after, base.before, …)` to an
+`assert.ok(… || base.after === 'REFUSED')` prints
+`V8 removed lines: 1  assert-touching lines: 2` / `V8 FAIL` / `V8 exit=1` and the
+block exits **1**; a diff that merely *adds* an extra assertion prints
+`V8 removed lines: 0  assert-touching lines: 1` / `V8 FAIL` / `V8 exit=1` and the
+block exits **1** — deliberately, because adding an assertion to a test this WP
+does not own is out of scope too. On the D4-only diff both counts are `0` and the
+block exits **0**.
 
 **V7 — lint.**
 
@@ -1339,7 +1640,8 @@ form the violating run printed `V7 exit=1` and exited **0**.
   additive move the last bullet forbids, and it would break T4.
 - **`docs/specs/WP-stance-authority-containment.md`.** Do not flip a status, do
   not mark row S1 closed, do not add a note. Recording that the routing is closed
-  is the owner's act on a `Ready` spec.
+  is the owner's act, and that spec is now `Done` — an implementer never edits a
+  `Done` spec.
 - **`src/cli/sync.js`, `src/cli/adopt.js`, `src/cli/update.js`.** All three reach
   this code path and none needs an edit; the returned shapes are unchanged.
 - **`memory/lessons/inbox.md`.** `CLAUDE.md` forbids editing it on a WP branch
@@ -1354,18 +1656,22 @@ form the violating run printed `V7 exit=1` and exited **0**.
 
 ## Definition of done
 
-1. All verification steps V1–V7 pass locally; output pasted into the PR body,
-   including the V3, V4 and V5 counts **with their `exit=` lines**, and the V6
-   file list. A step pasted without its exit status does not count as run.
-   **Each of V1, V3, V4, V5 and V7 must be pasted with the block's own `$?`, not
-   only its printed `exit=` line** — those two disagreed in round 2 (the printed
-   line said `1` while the block exited `0`), and the block's `$?` is the gate.
-   Run each block, then `echo "block \$? = $?"` on the following line and paste
-   that too. V2 and V6 are exempt: V2's status is the bare `node tests/run.js`
-   exit, and V6 is a list comparison whose exit status proves nothing.
-2. Table M's M1, M2 **and M6** run and reverted, with their measured pass/fail
-   counts pasted into the PR body under "Mutation checks". For M6, paste both
-   halves: T1 red, and V1's other three tests plus V2–V7 still green.
+1. All verification steps **V1–V8, including V2b**, pass locally; output pasted
+   into the PR body, including the V3, V4, V5 and V8 counts **with their `exit=`
+   lines**, and the V6 file list. A step pasted without its exit status does not
+   count as run. **Each of V1, V2b, V3, V4, V5, V7 and V8 must be pasted with the
+   block's own `$?`, not only its printed `exit=` line** — those two disagreed in
+   round 2 (the printed line said `1` while the block exited `0`), and the
+   block's `$?` is the gate. Run each block, then `echo "block \$? = $?"` on the
+   following line and paste that too. V2 and V6 are exempt: V2's status is the
+   bare `node tests/run.js` exit, and V6 is a list comparison whose exit status
+   proves nothing.
+2. Table M's M1, M2, **M6 and M7** run and reverted, with their measured
+   pass/fail counts pasted into the PR body under "Mutation checks". For M6,
+   paste both halves: T1 red, and V1's other three tests plus V2–V7 still green.
+   For **M7**, paste both halves too: T12 red at `tests/unit/vendor.test.js:697`
+   with D4 reverted, and every other gate — V1, V3, V4, V5, V7, V8 — still green,
+   which is what shows D4 is the *only* thing that fixes it.
 3. Conventional commits; PR titled
    `fix(vendor): carry the launcher forward on a self-resync (WP-launcher-no-self-resync-republish)`.
 4. PR template filled, including "Decisions made" (or "none") and
@@ -1400,3 +1706,10 @@ form the violating run printed `V7 exit=1` and exited **0**.
      vendored tree but not `<core>/launcher`. Not a regression in kind (`main`
      throws from the same call site), but this WP makes the throw far more
      reachable. Recorded, not fixed — `adopt.js` is not a deliverable.
+8. The PR body states, under "Decisions made", that
+   `tests/unit/vendor.test.js` is a deliverable **because D1/D2/D3 redden its
+   T12**, and that the fix is the fixture (**D4**) and **not** a guard in the
+   carry arm — with M7's two halves as the evidence. This exists because the
+   first dispatch of this WP was stopped by exactly that question, and a reviewer
+   seeing an existing test file in the diff is entitled to see the answer without
+   reading the spec. One line plus M7's numbers; do not restate D4.
