@@ -1604,13 +1604,26 @@ costs the user a note, and it defers their transcripts. Zero is measured (M5: th
 one remaining withhold on the real vault is a labelled `aws-key` rule, not the
 entropy pass) and there is no argument for accepting even one *in that group*.
 
-C3-5 is nevertheless an equality on four ids rather than the flat "0 rows" an
-earlier revision asserted, for two reasons. Rows 29–31 are positive controls: a
+C3-5 is nevertheless an equality on **an id set — read it in C3-5, which is the
+only place it is written** — rather than the flat "0 rows" an earlier revision
+asserted, for **three** reasons. Rows 29–31 are positive controls: a
 corpus in which nothing withholds cannot detect a `SEP` that binds nothing.
-And row 32 is a genuine, measured `quarantine` false positive that this WP does
+Row 32 is a genuine, measured `quarantine` false positive that this WP does
 **not** remove — see "Accepted residuals" item 5, which states the argument for
 accepting it rather than leaving the "no argument for even one" claim standing
-while the corpus contradicts it.
+while the corpus contradicts it. **And rows 42 and 43 are the accepted
+metadata-suffix residuals** (residual 6): a sensitive keyword carrying a
+word-character suffix such as `_path` or `_id` still binds under A8, so a
+path-shaped run and a compact 32-hex UUID still reach `quarantine`. Neither is a
+regression — the shipped detector quarantines both today — and both were
+measured at zero occurrences on the vault and on this repository's tree.
+
+**This paragraph carried its own count until round 2 of the design gate — "an
+equality on four ids" — while C3-5's set had grown to six**, which is the exact
+restated-count drift the paragraph immediately above congratulates itself on
+having eliminated, one revision after eliminating it. The count is gone rather
+than corrected, for the same reason the C3-6 count was: **a count here is a
+second decider by construction.** Cite the row; never restate the set.
 
 C3-6 is likewise an **equality on an id set** — the set is **C3-6's own, read
 there and stated in no other place, this paragraph included** — because that set
@@ -1652,7 +1665,7 @@ below qualifies, and the contrast is the useful part.
 | register | mechanism | residual hand-maintained input | claim |
 |----------|-----------|--------------------------------|-------|
 | **the Deliverables prohibition list** (V-14) | `scripts/boundary-check.js` **parses the Deliverables table itself** and rejects any changed path not in it | **none for the enforcement.** The table's rows are a decision, not a copy of one; the prose prohibition list beside it is a message, not the gate | **complete** — the only one here, because the checker reads the decision |
-| **the restatement sweep** (V-15) | digests the entire non-block residue of both documents; **selects no line by content**, so no list can be short | its **region**: two named files, and on the spec side everything except (a) the fenced ` ```bash ` blocks and (b) the frontmatter `status:` line. Exclusion (a) is forced — `SWEEP_EXPECT` lives inside one, and a sweep reading its own expected value cannot converge. **Exclusion (b) is round 1's deadlock repair** and is exactly one line wide: `status:` is lifecycle bookkeeping the orchestrator moves twice per WP, and sweeping it made this spec's own Definition-of-done items 1 and 4 jointly unsatisfiable. V-15's negative probe 2b holds the width from both sides | **superset over its region.** A figure restated as prose *inside* a ` ```bash ` block is not swept, and neither is the `status:` value. Nothing puts prose in a bash block today; a review that finds some moves it out rather than widening the sweep. Every other frontmatter key — `id`, `title`, `depends_on`, `adrs`, `epic`, `size`, `model` — **is** swept, which probe 2b asserts rather than claims |
+| **the restatement sweep** (V-15) | digests the entire non-block residue of both documents; **selects no line by content**, so no list can be short | its **region**: two named files, and on the spec side everything except (a) the fenced ` ```bash ` blocks and (b) the frontmatter `status:` line. Exclusion (a) is forced — `SWEEP_EXPECT` lives inside one, and a sweep reading its own expected value cannot converge. **Exclusion (b) is round 1's deadlock repair** and is exactly one line wide: `status:` is lifecycle bookkeeping the orchestrator moves twice per WP, and sweeping it made this spec's own Definition-of-done items 1 and 4 jointly unsatisfiable. V-15's negative probe 2b holds the width from both sides — **and round 2 had to repair the probe itself before that claim was true**: its first form built its comparison copies with a `Draft`-only substitution, so it went vacuous the moment this spec flipped to `Ready` and stayed vacuous for the spec's whole post-dispatch life. The probe now normalizes the status to each of the three values in turn, measured red and green in both spec states | **superset over its region.** A figure restated as prose *inside* a ` ```bash ` block is not swept, and neither is the `status:` value. Nothing puts prose in a bash block today; a review that finds some moves it out rather than widening the sweep. Every other frontmatter key — `id`, `title`, `depends_on`, `adrs`, `epic`, `size`, `model` — **is** swept, which probe 2b asserts rather than claims |
 | **the A8 / M4e clause register** (V-29, C3-18) | digests Table A row A8 whole and the M4e register whole, so **any edit to either fails the build** and forces a reconciliation pass | the **pairing**. Nothing derives register rows from A8's clauses; a clause already written with no row stays missing silently, and that is what rounds 3, 4 and 5 each found, two clauses at a time | **not complete — change-detecting.** It guarantees notification of future drift, never that today's baseline agrees |
 | **the M-/V- id allocation** | a range **supplied by the orchestrator**, who is the only party that reads both legs | the orchestrator's reading, **and the instant it was taken**. Under the One-Document Rule (ADR-0005) **no check inside this leg can see the sibling's ids at all**, so this is irreducible, not lazy. Round 6 measured the sharper limit: round 5's supplied range was read *before* the sibling's own concurrent round-5 pass landed, so two of the ids it issued collided anyway. A supplied range is valid **only at the instant it is measured**, and one taken while either leg may still be under edit must be re-measured at write time | **not complete — dated, and only to the instant.** The spec states its own ids and the date checked, and asserts nothing about the sibling's. A leg-tagged id scheme would make this structural rather than procedural; it is recorded as a follow-up candidate, not done, under "Verification steps" |
 | **Table C's corpus** (C1, C2; C3-0, C3-5, C3-6) | counts asserted against the fixture module's own length; `quarantine` and `redact` dispositions asserted as **equalities on id sets**; each mutation asserted as an exact multi-row outcome | **which shapes get a row at all.** The corpus is a hand-chosen sample of measured classes, and C2's own header requires every `Expect` cell to have been *executed* — so a clause with no executed row has no row | **superset of the classes it contains.** Complete over its own rows and over nothing else. **The worked example moved in round 1 of the design gate and the replacement is the honest one.** It used to be the pre-separator quote slot, a *clause* with no row; that is now C2 row 44. What replaced it is a *class* with no row, found by an adversarial reviewer rather than by this register: the metadata-suffix binder residual, which existed under A8 from the moment A8 was written and which no corpus row reproduced until rows 42 and 43 were added. **A clause with no row is something this document's own registers can find; a class with no row is not**, because the corpus does not know what it is missing — that asymmetry is what this row's `superset` claim means and why it can never become `complete` |
@@ -1688,7 +1701,7 @@ decides what the mechanism actually guarantees.
 - [ ] **"Completeness registers and what actually bounds each"** mirrors: this
       checklist's intro (just above) and its M1–M6 bullet; the M4e
       "reconciliation, not completeness" paragraph and the register table's own
-      preamble; the C2 group prose that introduces rows 35–41; Table C3 rows
+      preamble; the C2 group prose that introduces rows 35–41 and 44; Table C3 rows
       **C3-0**, **C3-5**, **C3-6** and **C3-18**; the V-14, V-15 and V-29
       comment blocks; and Table A row **A8**'s header cell. **Every one of those
       describes a mechanism whose limits that table decides** — if a mechanism
@@ -1769,6 +1782,20 @@ decides what the mechanism actually guarantees.
       contains two adjacent quote characters, differing only in which side of the
       separator they sit, so writing either one wrong silently converts it into
       an ordinary row and the pair stops discriminating the two slots.
+      **Registered in round 2 of the design gate, and it is the surface the
+      round-1 mirror pass did not enumerate — which is exactly why it went
+      stale: the Implementation-notes lookback paragraph** ("Why the derivation
+      and not the arithmetic result"), **together with V-2e's comment copy of
+      the same figure.** That paragraph states a *measured floor* over "the rows
+      that must bind", so **every C2 row added to C3-5's id set can move it** —
+      rows 42/43 did, taking the floor from 16 to 17, and no surface was
+      updated because this bullet did not list the paragraph. It is a Table C
+      mirror in the strict sense (its figure is derived from C3-5's id set) even
+      though it lives under Implementation notes, and a review that adds or
+      removes a binding row updates it in the same pass. **Escalation note from
+      round 2: a third finding on the A8 register/bounds family means the
+      register's bounds are the bug, and the repair is a canonical extraction of
+      the lookback arithmetic rather than another point fix.**
       **Registered in round 1 of the design gate: rows 42, 43 and 44 and their
       whole mirror set.** Adding three C2 rows moved **C3-0** (the row count),
       **C3-5** (rows 42/43 join the `quarantine` id set), **C3-6** (row 44 joins
@@ -2104,10 +2131,23 @@ what an owner reads to know what to type**; the grep is derived from it.
   - **At the shipped bound, no behaviour distinguishes a derived lookback from a
     hard-coded one at all**, and it cannot: at `ENTROPY_CTX_FILLER_MAX = 20` the
     derived expression and the literal compute the same number, so they *are*
-    the same code. Measured 2026-07-26, the corpus is green for **every literal
-    from 16 upward** — 16 being the longest keyword-to-candidate span among the
-    rows that must *bind* (C2 rows 29–32), and rows 35–41 being rows that must
-    *not*. The lookback therefore has no behavioural holder at the shipped
+    the same code. **Re-measured 2026-07-27 over the FORTY-FOUR-row corpus: the
+    corpus is green for every literal from 17 upward** — 17 being the longest
+    keyword-to-candidate span among the rows that must *bind* (C2 rows 29–32,
+    **42 and 43**), and rows 35–41 and 44 being rows that must *not*.
+    **The figure was 16 until round 2 of the design gate, and rows 42/43
+    invalidated it without any surface being updated.** Row 42
+    spans **17**, one more than row 30's 16, so a literal
+    of 16 drops row 42 from `quarantine` to `clean` and breaks **C3-5**'s
+    equality. (Row 42's keyword-to-candidate distance counts the keyword
+    `credential`, the filler `_path`, the separator `:` and the space after
+    it.) Measured, the whole binding set `{29,30,31,32,42,43}`:
+    at 17 and above all forty-four rows are green; at **16** row 42 alone
+    misses; at 15 rows 30 and 42; at 14 rows 30, 32 and 42. This is the exact
+    drift class this document keeps finding — a measured bound restated in prose
+    and left behind when the corpus moved — and it is why the Table C mirror
+    bullet now registers this paragraph explicitly.
+    The lookback therefore has no behavioural holder at the shipped
     setting, which is why row 37 holds it **under M-5** rather than in the main
     suite, and why V-2e pins the declaration structurally.
 
@@ -2511,7 +2551,7 @@ valid only at the instant it is measured.
 | M-44 | quantify the **PRE-separator** quote/backtick slot **alone** — write `*` instead of `?` on the **first** of the two quote/backtick groups in `hasBoundContext`'s regex (the one that sits before the separator, i.e. the first of the pair M-39 quantifies together) and leave the second at `?` | AC-13 via C3-19: C2 row **44** must move from `redact` to `quarantine`, and **no other row moves at all**, row 41 included. Holds A8's pre-separator quote slot, which **round 5 recorded as unheld anywhere** and round 1 of the design gate closed. **This is the mutation that makes 41 and 44 a pair rather than a duplicate**: without it, an implementation with `*` before the separator and the required `?` after it passes row 41, passes M-39's observed outcome and passes every structural grep while violating canonical A8 — which is the contradiction of AC-15 Codex's round-1 review named. **Invisible to every grep in this document**, exactly like M-38 and M-39: the `SEP` declaration and the lookback line are byte-identical under it, so V-2, V-2e and both of V-12's pins stay green. **New id, re-measured across both leg files in this pass** with both files final and no agent writing to either; next free after it is **M-45** as of 2026-07-27, a dated snapshot rather than a reservation |
 | M-40 | replace `SEP` with the bare character class `[:=>]`, i.e. **drop** `:{1,3}=`, `=>` and `?=` | AC-13 via C3-11: C2 rows **29, 30, 31** fall from `quarantine` to `redact`. This is the mutation in the *dropping* direction, and it is what makes A8a's adoptions testable — without it a future edit could quietly restore the one-character rule M4c measured as a cliff |
 | M-41 | **add** `,` to `SEP` | AC-13 (C2 row 33 moves to `quarantine`) |
-| M-42 | make `hasBoundContext`'s keyword match **case-sensitive** — drop the `i` flag, or lower-case the haystack nowhere | **AC-13 via C3-5**: C2 rows **29, 31 and 32** fall from `quarantine` to `redact`, so C3-5's id set `{29, 30, 31, 32}` loses three members and its equality fails; C3-6 gains them and fails too. Row **30 does not move** — its keyword is the already-lower-case `secret` inside `secret_key` — which is what makes this mutation discriminate the *casing* rather than the keyword list. Holds A8's case-insensitivity clause, which the shipped `SENSITIVE_KEYS` constant and every rule that consumes it already assume (`SENSITIVE_KEYS` is spelled entirely in lower case; `secret-scan.js`'s own `labelForKey` normalises with `.toLowerCase()`), and which A8 did not state until round 5. Unlike M-5, M-13 and M-36 … M-39 this one is held by the **main suite**, not by a 35–41 negative control, so no new C2 row is needed |
+| M-42 | make `hasBoundContext`'s keyword match **case-sensitive** — drop the `i` flag, or lower-case the haystack nowhere | **AC-13 via C3-5**: C2 rows **29, 31 and 32** fall from `quarantine` to `redact`, so C3-5's id set loses three members — read the set in **C3-5**, which is the only place it is written; rows 30, 42 and 43 are what remain — and its equality fails; C3-6 gains the three and fails too. Row **30 does not move** — its keyword is the already-lower-case `secret` inside `secret_key` — which is what makes this mutation discriminate the *casing* rather than the keyword list. Holds A8's case-insensitivity clause, which the shipped `SENSITIVE_KEYS` constant and every rule that consumes it already assume (`SENSITIVE_KEYS` is spelled entirely in lower case; `secret-scan.js`'s own `labelForKey` normalises with `.toLowerCase()`), and which A8 did not state until round 5. Unlike M-5, M-13 and M-36 … M-39 this one is held by the **main suite**, not by a 35–41/44 negative control, so no new C2 row is needed |
 | M-43 | **add** `\|\|` to `SEP` | AC-13 (C2 row 34 moves to `quarantine`). **Renumbered in round 6** out of a cross-leg id collision — same mutation, same check, new number; the reallocation map under "Verification steps" carries the chain |
 
 M-3 is why C3-6 is an **equality on ids** rather than an upper bound: a rule that
@@ -2588,14 +2628,36 @@ therefore:
   before a sibling pass landed, is evidence of nothing. That is precisely what
   round 5 skipped and round 6 paid for, twice.
 - **This spec may state its own ids and the date the allocation was checked. It
-  may NOT assert what the other leg uses, or that a range is free.** Not "a range
-  no other leg uses", not "the sibling's ids are unaffected", not a list of the
-  sibling's numbers. **That rule was right and it held** — the sibling declines to
-  claim anything about leg 1's ids and had no collision of its own making, and
-  this leg copies the discipline. **Item 4 below was brought into line with it in
-  round 6** — it had carried a tail asserting whose the vacated numbers now are,
-  which is unverifiable from inside this leg; item 3 keeps its statement about
-  the *split*, which is traceable here, and says why the two differ.
+  may NOT assert what the other leg uses, or that a range is free — EXCEPT under
+  the carve-out below.** Not "a range no other leg uses", not "the sibling's ids
+  are unaffected", not an undated list of the sibling's numbers. **Item 4 below
+  was brought into line with it in round 6** — it had carried a tail asserting
+  whose the vacated numbers now are, which is unverifiable from inside this leg;
+  item 3 keeps its statement about the *split*, which is traceable here, and
+  says why the two differ.
+- **THE CARVE-OUT, added in round 2 of the design gate because BOTH legs were
+  relying on it while the rule forbade it.** The prohibition above is about
+  *unverifiable* claims — an agent inside one leg cannot see the sibling, so any
+  assertion it makes about the sibling's numbers is a guess. **That is not the
+  only way such a statement can be produced.** When a party holding BOTH FILES
+  FINAL, with no agent writing to either, enumerates the ids in both and records
+  the reading, the statement is a **measurement** and it is exactly as
+  trustworthy as the "re-measure at write time" bullet above demands. So:
+
+  > A cross-leg id statement is permitted **iff** it is (i) taken by a party
+  > holding both files final, (ii) **dated**, and (iii) stated as a
+  > **measurement, never a reservation**. It is valid at the instant it was
+  > taken and at no later instant.
+
+  Both legs now carry such a statement — this leg records that the sibling took
+  M-45 … M-48, the sibling records that M-34 … M-44 are this leg's — and both
+  are the *derivation* of their own "next free" figure, so deleting either would
+  leave that figure unexplained. **What is still forbidden is the undated,
+  unmeasured form**, which is what the rule was written against. Round 2 also
+  deleted a sentence here claiming "the sibling declines to claim anything about
+  leg 1's ids": the sibling no longer declines, and a rule that describes the
+  other document's behaviour is a cross-leg assertion of exactly the kind this
+  bullet forbids.
 - A reviewer who wants the allocation re-checked asks the orchestrator to
   re-read both files and re-issue the range. That is a cheap request and it is
   the only one that can be answered.
@@ -2779,7 +2841,9 @@ grep -q "add('basic-auth', SEVERITY.QUARANTINE)" src/core/secret-scan.js
 #      55;`. Measured 2026-07-26: a module carrying that literal passed both old
 #      greps. And nothing behavioural can help at the shipped bound, because
 #      there the expression and the literal compute the same number — measured,
-#      the corpus is green for EVERY literal from 16 upward. A grep is therefore
+#      the corpus is green for EVERY literal from 17 upward (re-measured
+#      2026-07-27 over all 44 rows; it was 16 before C2 rows 42/43 existed —
+#      row 42's binding spans 17). A grep is therefore
 #      the only structural holder available, so it pins the exact declaration.
 #      The `53` named below is not a decided figure: it is the one value a
 #      conforming module must NOT contain, and the Implementation notes are the
@@ -3141,7 +3205,9 @@ spec_prose()   { awk '/^```bash$/{f=1} !f{print} f&&/^```$/{f=0}' "$1"; }
 #      not a contract, and no mirror of it exists — it is lifecycle bookkeeping
 #      the orchestrator moves twice per WP by design. Everything else in the
 #      frontmatter (id, title, depends_on, adrs, epic, size, model) is STILL
-#      SWEPT, which NEGATIVE PROBE 4 below proves rather than asserts.
+#      SWEPT, which NEGATIVE PROBE 2b's second assertion below proves rather
+#      than asserts. (Round 2 corrected the pointer: there is no "probe 4" and
+#      never was — a dangling cross-reference to a probe that does not exist.)
 #      The repair is NOT "tell the implementer to skip V-15": a gate with a
 #      documented exemption is a gate nobody runs.
 spec_residue() {
@@ -3184,24 +3250,44 @@ fi
 #      still move it — without this, `sed '/^status: /d'` could be widened to
 #      `sed '/^[a-z_]*: /d'` by a later "tidy-up" and silently stop sweeping
 #      `depends_on`, `adrs` and `epic`, which ARE contract surfaces.
-V15_A="$(mktemp)"; V15_B="$(mktemp)"; V15_C="$(mktemp)"
-sed 's/^status: Draft$/status: Ready/'     "$SPEC" >"$V15_A"
-sed 's/^status: Draft$/status: In-Review/' "$SPEC" >"$V15_B"
+#      (a) IS WRITTEN AS A NORMALIZING SUBSTITUTION OVER ALL THREE VALUES, AND
+#      THAT IS ROUND 2'S REPAIR OF ROUND 1'S REPAIR. The first form built its
+#      comparison copies with `sed 's/^status: Draft$/status: Ready/'`, which
+#      substitutes ONLY while the status is literally `Draft`. The moment this
+#      spec flips to `Ready` — which is the transition the design gate exists to
+#      authorise — both copies become NO-OPS, all three digests are trivially
+#      equal, and the assertion passes unconditionally FOR THE WHOLE
+#      POST-DISPATCH LIFE OF THE SPEC. Measured in round 2 across the full
+#      matrix (spec status × exclusion present/removed × old form/new form):
+#        old form, Draft, exclusion removed -> FAILS (correct)
+#        old form, Ready, exclusion removed -> PASSES (VACUOUS — the deadlock is
+#                                              back and the probe cannot see it)
+#        new form, Draft, exclusion removed -> FAILS (correct)
+#        new form, Ready, exclusion removed -> FAILS (correct)
+#      The `.*` form normalizes FROM whatever the status currently is TO each of
+#      the three values, so every copy is a real rewrite regardless of the
+#      starting value, and each is compared against the unmodified spec's own
+#      sweep rather than against its siblings.
+V15_S="$(restatement_sweep "$SPEC" "$ADR" | shasum -a 256 | cut -d' ' -f1)"
+for v in Draft Ready In-Review; do
+  V15_T="$(mktemp)"
+  sed "s/^status: .*/status: $v/" "$SPEC" >"$V15_T"
+  V15_G="$(restatement_sweep "$V15_T" "$ADR" | shasum -a 256 | cut -d' ' -f1)"
+  rm -f "$V15_T"
+  if [ "$V15_G" != "$V15_S" ]; then
+    echo "FAIL V-15: the status: exclusion is not working — rewriting status to"
+    echo "           '$v' moved the residue, which is the deadlock this repair closed."
+    exit 1
+  fi
+done
+V15_C="$(mktemp)"
 sed 's/^epic: secret-lifecycle$/epic: secret-lifecycle-v2/' "$SPEC" >"$V15_C"
-V15_S="$(restatement_sweep "$SPEC"  "$ADR" | shasum -a 256 | cut -d' ' -f1)"
-V15_R="$(restatement_sweep "$V15_A" "$ADR" | shasum -a 256 | cut -d' ' -f1)"
-V15_I="$(restatement_sweep "$V15_B" "$ADR" | shasum -a 256 | cut -d' ' -f1)"
 V15_E="$(restatement_sweep "$V15_C" "$ADR" | shasum -a 256 | cut -d' ' -f1)"
-rm -f "$V15_A" "$V15_B" "$V15_C"
-if [ "$V15_R" != "$V15_S" ] || [ "$V15_I" != "$V15_S" ]; then
-  echo 'FAIL V-15: the status: exclusion is not working — a lifecycle status flip'
-  echo '           still moves the residue, which is the deadlock this repair closed.'
-  exit 1
-fi
+rm -f "$V15_C"
 if [ "$V15_E" = "$V15_S" ]; then
   echo 'FAIL V-15: the sweep is blind to a non-status frontmatter edit. The'
-  echo '           exclusion was widened past `status:` and depends_on / adrs /'
-  echo '           epic are no longer swept. Narrow it back; do not repin.'
+  echo '           exclusion was widened past the status line, so depends_on,'
+  echo '           adrs and epic are no longer swept. Narrow it back; do not repin.'
   exit 1
 fi
 
@@ -3231,7 +3317,7 @@ do
   fi
 done
 
-SWEEP_EXPECT=430817165e7097497131b7c6da98506e9289c033c31f623860a8b560e94f34ec
+SWEEP_EXPECT=94a563b6f0a3c4dfedd780ce3b153409c3cc4d04f422eab0d3d574c6d1a6eb86
 if [ "$SWEEP_BASE" != "$SWEEP_EXPECT" ]; then
   echo "FAIL V-15: the non-block prose residue of one of the two documents moved."
   echo "           got  $SWEEP_BASE"
