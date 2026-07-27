@@ -1769,7 +1769,7 @@ below qualifies, and the contrast is the useful part.
 | **the Deliverables prohibition list** (V-14) | `scripts/boundary-check.js` **parses the Deliverables table itself** and rejects any changed path not in it | **none for the enforcement.** The table's rows are a decision, not a copy of one; the prose prohibition list beside it is a message, not the gate | **complete** — the only one here, because the checker reads the decision |
 | **the restatement sweep** (V-15) | digests the entire non-block residue of both documents; **selects no line by content**, so no list can be short | its **region**: two named files, and on the spec side everything except (a) the fenced ` ```bash ` blocks and (b) the frontmatter `status:` line. Exclusion (a) is forced — `SWEEP_EXPECT` lives inside one, and a sweep reading its own expected value cannot converge. **Exclusion (b) is round 1's deadlock repair** and is exactly one line wide: `status:` is lifecycle bookkeeping the orchestrator moves twice per WP, and sweeping it made this spec's own Definition-of-done items 1 and 4 jointly unsatisfiable. V-15's negative probe 2b holds the width from both sides — **and the probe itself needed repairing twice before that claim was true.** Round 2: its first form built its comparison copies with a `Draft`-only substitution, so it went vacuous the moment this spec flipped to `Ready` and stayed vacuous for the spec's whole post-dispatch life; it now normalizes the status to each of the three values in turn, measured red and green in both spec states. Round 3: its negative half perturbed `epic:` alone while claiming to prove all seven non-status keys swept — true, but proven for one seventh, and blind to a widened exclusion that hides an `adrs:` edit (executed). It now loops over every non-status key | **superset over its region.** A figure restated as prose *inside* a ` ```bash ` block is not swept, and neither is the `status:` value. **Round 5's review found prose in a bash block — V-2e's ~30-line rationale, a registered Table L mirror — so the "nothing puts prose there today" clause was false, and it had been false while two rounds of figure sweeps certified the document clean.** Round 6 applied this row's own remedy and **moved it out rather than widening the sweep**; the rule stands, and it now has a worked instance rather than an assumption. Every other frontmatter key — `id`, `title`, `depends_on`, `adrs`, `epic`, `size`, `model` — **is** swept, which probe 2b asserts rather than claims |
 | **the A8 / M4e clause register** (V-29, C3-18) | digests Table A row A8 whole and the M4e register whole, so **any edit to either fails the build** and forces a reconciliation pass | the **pairing**. Nothing derives register rows from A8's clauses; a clause already written with no row stays missing silently, and that is what rounds 3, 4 and 5 each found, two clauses at a time | **not complete — change-detecting.** It guarantees notification of future drift, never that today's baseline agrees |
-| **the M-/V- id allocation** | **THE ALLOCATION PROCEDURE, run** — under "Verification steps". Per prefix (M and V enumerated separately, because one sorted list reports whichever prefix holds the larger numbers and hides the other); **definition-shaped** (a mutation TABLE ROW, a verification STEP HEADER — never a mention, which is what makes it self-excluding by construction rather than by an exclusion list); and **collision-detecting** (each leg enumerated separately, failing on any cross-leg definition outside the inherited shared set, where `sort -u` over a concatenation deduplicated the collision away) | **the moment it is run**, and **the inherited shared-V set** — `V-1 V-10 V-11 V-18` — which is a decision the procedure asserts rather than derives. *Round 8 corrected this cell's previous claim that "no check inside this leg can see the sibling's ids at all": the procedure reads both files, and the reviewers' two-file grep is what falsified the claim. What is true is narrower — no check an IMPLEMENTER runs inside one leg may assert the sibling's allocation as a standing fact, because the One-Document Rule (ADR-0005) forbids opening the sibling; the procedure is an architect/orchestrator act on both files at once.* | **not complete — valid only at the instant it is run.** It is a measurement, never a reservation, and **no surface in either leg states its output any more**: round 7's dated snapshot declared `M-52` free in the same commit that defined `M-52` here, which is the fourth collision this epic has paid for and the second a written-down figure caused. A leg-tagged id scheme would make collisions structurally impossible rather than detected; it is recorded as a follow-up candidate, not done, under "Verification steps" |
+| **the M-/V- id allocation** | **THE ALLOCATION PROCEDURE, run** — under "Verification steps". Per prefix (M and V enumerated separately, because one sorted list reports whichever prefix holds the larger numbers and hides the other); **definition-shaped** (a mutation TABLE ROW, a verification STEP HEADER — never a mention, which is what makes it self-excluding by construction rather than by an exclusion list); and **collision-detecting** (each leg enumerated separately, failing on any cross-leg definition outside the inherited shared set, where `sort -u` over a concatenation deduplicated the collision away) | **the moment it is run**, and **the shared-V set** — `V-1 V-10 V-11 V-18 V-33` — which is a decision the procedure asserts rather than derives. *Round 8 corrected this cell's previous claim that "no check inside this leg can see the sibling's ids at all": the procedure reads both files, and the reviewers' two-file grep is what falsified the claim. What is true is narrower — no check an IMPLEMENTER runs inside one leg may assert the sibling's allocation as a standing fact, because the One-Document Rule (ADR-0005) forbids opening the sibling; the procedure is an architect/orchestrator act on both files at once.* | **not complete — valid only at the instant it is run.** It is a measurement, never a reservation, and **no surface in either leg states its output any more**: round 7's dated snapshot declared `M-52` free in the same commit that defined `M-52` here, which is the fourth collision this epic has paid for and the second a written-down figure caused. A leg-tagged id scheme would make collisions structurally impossible rather than detected; it is recorded as a follow-up candidate, not done, under "Verification steps" |
 | **Table C's corpus** (C1, C2; C3-0, C3-5, C3-6) | counts asserted against the fixture module's own length; `quarantine` and `redact` dispositions asserted as **equalities on id sets**; each mutation asserted as an exact multi-row outcome | **which shapes get a row at all.** The corpus is a hand-chosen sample of measured classes, and C2's own header requires every `Expect` cell to have been *executed* — so a clause with no executed row has no row | **superset of the classes it contains.** Complete over its own rows and over nothing else. **The worked example moved in round 1 of the design gate and the replacement is the honest one.** It used to be the pre-separator quote slot, a *clause* with no row; that is now C2 row 44. What replaced it is a *class* with no row, found by an adversarial reviewer rather than by this register: the metadata-suffix binder residual, which existed under A8 from the moment A8 was written and which no corpus row reproduced until rows 42 and 43 were added. **A clause with no row is something this document's own registers can find; a class with no row is not**, because the corpus does not know what it is missing — that asymmetry is what this row's `superset` claim means and why it can never become `complete` |
 | **the in-fence canonical-mirror rule** (Table J row **J5**) | a **hand-written figure vocabulary**, grepped over this document's fenced blocks and dispositioned by a human | **all of it.** The vocabulary is the same kind of input round 5 deleted from V-15 and this document elsewhere condemns; it survives here because the figures it looks for are this leg's own and cannot be shared with the sibling without creating a cross-leg mirror. **It is executed by no V-step** — the grep sits beside the rule and a human runs it | **not complete — a disclosed manual spot-check.** *Round 9 added this row: round 8 asserted the rule with the vocabulary as its warrant and gave it no register row, which is the exact move this table's own closing rule forbids* |
 | **the Mirrored Surface Checklist** | **V-32**, which derives the *membership question* rather than the answer: it parses every table in this document, requires each to carry a schema disposition (`ids` — its first cells are contract ids that must be registered — or `data` — its rows are corpus/measurement data and the TABLE is what the Checklist registers, by a name V-32 asserts is really in the region), enumerates the accepted-residual ordinals, **fails on a table with no schema entry, on a first cell its table's pattern does not match, and on any id defined twice** | **two things, and round 8 states both rather than the round-7 cell's "none — a hand-written list".** (1) **The disposition per table** — one decision each, written in the schema, visible in the diff; the *set* of tables is derived, the *classification* is not. (2) **What "registered" means:** any `\b`-bounded mention of the id anywhere inside the Checklist region, tested against the region with whitespace collapsed. That is a PRESENCE test, not an agreement test — an id named in a bullet whose mirror set is wrong or stale still counts as registered | **not complete — it guarantees nothing is UNNAMED, and nothing more.** *Round 7 wrote this row as `none — a hand-written list of surfaces` in the same pass that mechanized it, which is this table's own forbidden move in reverse: a register that started deriving its input and did not say so. Round 8 also measured what round 7's enumerator actually saw — its regex could not match an id with a digit before the hyphen, so **all twenty Table C3 rows were outside the set it reported "0 unregistered" over**, and twelve of them were genuinely unregistered.* Its M1–M6 bullet was presented as complete in round 3 and was short by at least six surfaces; it is explicitly illustrative, with V-15's sweep doing the work it used to claim |
@@ -1808,7 +1808,7 @@ V-30/V-32 … and V-31 …". **Not one of those three ids is defined in this
 document**, and that is measured rather than asserted:
 `grep -ohE '^# V-[0-9]+[a-z]? '` over this leg's verification block returns
 `V-1 V-2 V-2b V-2c V-2d V-2e V-3 V-6 V-7 V-8 V-10 V-11 V-12 V-14 V-15 V-18
-V-19 V-21 V-29 V-32` and nothing else. Item 4 of the id convention forbids this
+V-19 V-21 V-29 V-32 V-33` and nothing else, re-measured at the head that ships. Item 4 of the id convention forbids this
 document saying whose the other three are; the sibling leg does carry its own
 equivalents, and which ids they wear is not this document's to state.* Four of round 2's blocking
 findings were one defect wearing four hats — a count copied into prose and left
@@ -2301,6 +2301,19 @@ decides what the mechanism actually guarantees.
       An edit to either is a two-leg edit plus ONE recomputation of V-33's
       literal — never a one-sided one, and never a recomputation without the
       matching edit.
+- [ ] **THE MACHINERY-RESIDUAL** — accepted residual 7, added in the final gate
+      pass. Its mirrors, and there are deliberately few, because the residual is
+      a disclosure rather than a contract: **Table J rows J1, J3, J4 and J6** and
+      **Table H rows H2, H3 and H6** (the entries that bound each); the
+      **"Completeness registers and what actually bounds each"** table, whose
+      `superset` and `not complete` rows are the per-mechanism form of the same
+      admission; and the **id convention**, for the evidence-hygiene entry.
+      **It states a SCOPE DECISION, not a defect**: the owner ruled after nine
+      gate rounds that product-behaviour findings are fixed and
+      verification-machinery findings are recorded. **If a later round closes one
+      of its entries, the entry moves out of the residual and into whatever check
+      now holds it — it is not simply deleted**, because the executed attack is
+      what makes the closure checkable.
 
 ### Owner signature form — canonical
 
@@ -2861,6 +2874,145 @@ requires is in Table C.
    class properly**, and rows 42/43 are the corpus rows it would flip; that is
    the right home for it, not this WP.
 
+7. **THE VERIFICATION MACHINERY'S COMPLETENESS IS BOUNDED, AND HERE IS WHAT IS
+   KNOWN TO BYPASS IT.**
+
+   **This is a deliberate scope decision, taken by the owner after nine rounds of
+   the design gate, and it is stated first so nothing below reads as an
+   oversight.** The rule the owner set: **product-behaviour defects get fixed
+   properly; verification-machinery defects become documented accepted residuals
+   and the spec ships.** Round 9's four review legs produced 38 findings. The
+   detector leg measured **zero product-behaviour defects** — it verified that
+   round 9 changed no Table A row, no corpus disposition, no Table L row and no
+   Exact-contracts block — and the EP2-gate leg found four, all of which are
+   fixed in the pass that adds this residual. **Everything listed below bounds
+   the spec's own self-consistency tooling. None of it changes what the shipped
+   code does, and none of it is a hole an implementer can fall into by following
+   the spec.**
+
+   **What actually gates shipping is the implementer's own double gate**, which
+   tests the *product*: `npm test`, the mutation table, the acceptance criteria
+   and the verification block's behavioural steps. The machinery below exists to
+   keep this document consistent with itself across revisions — a real job, and a
+   secondary one. **A reader who inherits this spec inherits the evidence rather
+   than the illusion**: every entry names its executed attack, so nobody has to
+   rediscover it, and nobody should read a green registration step as proof the
+   document is complete.
+
+   **The known bypasses, each with the attack that demonstrates it.**
+
+   **The terminology sweep's window is three lines (Table J row J3).** Executed:
+   a safety claim spread over **four** and over **five** consecutive lines
+   passes, because the window never holds both halves at once. Measured on both
+   legs, **roughly two thirds of sentences span four source lines or more**, so
+   this is the common case rather than a corner. *Accepted:* widening the window
+   re-creates the false-positive explosion that forced the bound in the first
+   place — an unbounded join produced co-occurrences between unrelated
+   paragraphs at a rate that would have the check ignored. *Closed by:* a
+   sentence-aware view (join to the next sentence terminator, not to a line
+   count), which is a different tool, not a bigger number.
+
+   **The safety vocabulary omits `reversib` (Table J row J1).** Executed: a
+   claim that a destructive step is *"safely reversible"* carries no J1 member
+   and passes. *Accepted:* the vocabulary is a stem list and every stem added
+   widens the false-positive surface; the omission was found by inspection, not
+   by a shipped surface saying it. *Closed by:* adding the stem and re-running
+   the allowlist's removal test, which will surface whatever it now catches.
+
+   **Allowlist entries are not required to be UNIQUE (Table J row J4).** J4 says
+   entries are *anchored*; it does not say each must match exactly one surface.
+   Executed: a registered fragment short enough to occur in more than one place
+   excuses a NEW claim written to contain it. *Accepted:* every entry currently
+   in the list was removal-tested live, so the live state is sound; the gap is
+   that nothing keeps it sound. *Closed by:* asserting each entry excises from
+   exactly one window, which the removal test already has the machinery for.
+
+   **V-2e still has a dead-shadow route.** The pins are scoped to
+   `hasBoundContext` and the module must contain exactly one backward slice,
+   which closes the demonstrated attack — but a token count still cannot tell a
+   *read* from a *mention*, and a sufficiently contrived arrangement inside the
+   function body will pass. *Accepted, and this one has a real behavioural
+   holder:* **C2 row 37 under mutation M-5** discriminates a derived lookback
+   from a frozen literal by outcome, not by text, and it is unaffected by any
+   textual dodge. *Closed by:* an executable probe that calls the shipped
+   `hasBoundContext` under a raised filler bound — behaviour, not grep.
+
+   **V-33 does not actually compare the two legs.** Each leg digests its OWN
+   copy against a literal both legs carry, which is the strongest form available
+   under ADR-0005 — no check inside a leg may open the sibling. Executed: if
+   both legs were edited identically and both literals recomputed, the
+   divergence a reader imagines is caught would not be. *Accepted:* the property
+   it really provides is *"this copy is the one the architect pinned"*, which is
+   what stops a one-sided edit. *Closed by:* a CI job outside either leg that
+   diffs the two sections — an orchestrator act, not a spec one.
+
+   **Table H row H2 misses tab-indented, double-space-separated and unbolded
+   acceptance criteria**, and the prose families have **no totality guard**.
+   Executed: a tab-indented bullet, one with two spaces after the checkbox, and
+   one whose id is not bolded are each invisible. **H8 gives the TABLE family a totality guard** — a table with no
+   schema entry fails — **and H2, H3 and H4 have no equivalent**, so a criterion,
+   a step header or a residual ordinal written in an unanticipated shape is
+   simply not enumerated. *Accepted:* both legs' live text uses one shape
+   throughout, so the live enumeration is complete. *Closed by:* a totality
+   guard per prose family — count the loose `AC-`/`V-`/ordinal tokens in their
+   own sections and assert the enumerated count matches.
+
+   **H6's boundary is asymmetric.** The lookbehind rejects an alphanumeric
+   neighbour; the lookahead rejects an alphanumeric neighbour **or a hyphen**.
+   A leading hyphen is therefore permitted, so a hypothetical `X-C3` would
+   register `C3`. Executed against both legs: **zero masking pairs exist**, so
+   nothing is masked today. *Accepted:* the asymmetry is deliberate — the
+   trailing hyphen is what stops `C3` matching `C3-19` — and symmetrising it
+   was not measured. *Closed by:* measuring a symmetric form against both legs
+   and adopting it if it moves nothing.
+
+   **H3 is wider in implementation than in its row.** The row says a
+   verification step is defined by its comment header; the implementation
+   matches that header anywhere in the file, not only inside the fenced
+   verification block. Executed: a step-header-shaped comment line written in ordinary prose is
+   enumerated as a definition. *Accepted:* the allocation procedure — the other
+   consumer of the same shape — **is** block-scoped, so the id-collision path is
+   sound; only the registration enumeration is wide. *Closed by:* scoping H3's
+   consumer in the registration step the way the allocation already scopes it.
+
+   **The residual family's boundary is the id, not the ordinal.** Executed:
+   `residual 6-a` registers `residual 6`, because the registration pattern for
+   the residual family is not the H6 boundary form. *Accepted:* no such ordinal
+   exists in either leg. *Closed by:* running the residual family through H6
+   like every other id.
+
+   **A backlogged id is never verified to be UNREGISTERED.** The backlog means
+   "not registered", the summary counts it as such, and nothing checks it: an id
+   that IS registered can sit on the backlog and be reported as not. Executed:
+   round 9 found three such entries on the detector leg by hand and removed
+   them. *Accepted:* the direction is safe — a backlogged id is under-claimed,
+   never over-claimed. *Closed by:* asserting every backlog entry is genuinely
+   absent from the Checklist region, which is one line.
+
+   **Cross-leg figures inside Tables J3 and J6 are stale by construction.** J3
+   quotes the EP2-gate leg's fence measurement and J6 its collision count;
+   because the section is byte-identical, the detector leg carries figures about
+   the sibling. Executed: both figures were true when written and neither is
+   re-measured by anything. *Accepted:* they are illustrative evidence inside a
+   rationale column, not values any check reads. *Closed by:* replacing them
+   with the reason and dropping the numbers, which moves the shared digest and
+   is therefore a two-leg edit.
+
+   **The evidence-hygiene class recurred and is not mechanized.** Rounds 8 and 9
+   each shipped at least one measurement composed rather than pasted — line
+   numbers matching no revision, a bare grep pasted beside a filtered table's
+   output, V-step enumerations and shared-set mirrors left stale by an edit in
+   the same commit, and the M-52 score restated with two different figures.
+   Every instance found has been corrected, and the corrections in this pass were
+   re-measured at the head that ships. *Accepted:* no check can tell a pasted
+   number from a plausible one. *Closed by:* the standing rule the gate already
+   states — **if a number is quoted anywhere in a spec, it is measured at the
+   head that ships it** — which is a discipline, enforced by review.
+
+   **What is NOT on this list, and the distinction is the point:** every finding
+   that touched what the shipped detector or the shipped gate does. Those were
+   fixed. This residual is the price of stopping, and the owner set it knowingly.
+
 ## Acceptance criteria
 
 Criterion ids are inherited from the parent spec `WP-secret-fence-two-tier-entropy`
@@ -3259,7 +3411,10 @@ Concretely, for this leg:
 1. An id inherited from the parent spec keeps its number **only while both legs
    use it for the same check** — that is the whole point of inheriting it, so a
    reader can trace a criterion across the split. V-1, V-10, V-11 and V-18 are
-   in that state and stay where they are.
+   in that state and stay where they are, **and V-33 joined them in round 9 as a
+   DELIBERATELY shared id** — not inherited, but the same check over the same
+   byte-identical section, which is the only other condition under which an id
+   may be shared.
 2. An id whose meaning **diverged** between the legs is reallocated **in this
    leg**, into the range the orchestrator issued: **M-34 … M-44 and V-21,
    V-29**, of which M-38 and M-39 are round 4's additions, M-42 is round 5's,
@@ -3284,7 +3439,7 @@ Concretely, for this leg:
    Surface Checklist's intro named `V-26`, `V-30` and `V-31` as "the mechanized
    examples **in this document**" when **none of the three is defined here** —
    measured, this leg's block defines `V-1 V-2 V-2b V-2c V-2d V-2e V-3 V-6 V-7
-   V-8 V-10 V-11 V-12 V-14 V-15 V-18 V-19 V-21 V-29 V-32` and nothing else — and
+   V-8 V-10 V-11 V-12 V-14 V-15 V-18 V-19 V-21 V-29 V-32 V-33` and nothing else — and
    V-32's own comment called its design "the V-26 treatment". Both now describe
    the mechanism and name only **V-32**, which is this leg's.
 
@@ -3378,6 +3533,16 @@ surfaces, which round 6's did not:
 All three moved literals were recomputed by the architect **once, at the end of
 this pass, and verified by running this document's own verification block** —
 the reconciliation C3-18 and V-15 each require, not a way around either.
+
+**What THE FINAL GATE PASS moved on the digest side.** **One literal:
+`SWEEP_EXPECT`.** Its value is not written in this paragraph, for the reason the
+round-8 note below gives. **Tables H and J were not touched**, so **V-33's
+cross-leg literal is unchanged and both legs still hash to it** — verified after
+the pass. Unchanged and verified byte-identical: `A8_EXPECT`, `M4E_EXPECT`,
+`M1_EXPECT`, `M5_EXPECT`, `E3_EXPECT`, `ER_EXPECT`, V-18 in both legs, both of
+V-21's ADR digests, and — in the sibling leg — V-11's owner-signature digest,
+V-20's provenance digest and the `## OWNER-APPROVED` block. **No owner line was
+written, no owner byte moved, and no status flipped.**
 
 **What ROUND 9 moved on the digest side.** **Two literals: `SWEEP_EXPECT`, and
 `V-33`'s new cross-leg digest over the shared check contracts.** Neither value is
@@ -4060,7 +4225,7 @@ do
   fi
 done
 
-SWEEP_EXPECT=bd42b5d31e0590dc34810053fbb94affb67a4b13b182bcd1064104871655be00
+SWEEP_EXPECT=913a56ecf83411a665d9c99a69c6f188c8612791067a212f393d3a4de5e4e0d6
 if [ "$SWEEP_BASE" != "$SWEEP_EXPECT" ]; then
   echo "FAIL V-15: the non-block prose residue of one of the two documents moved."
   echo "           got  $SWEEP_BASE"

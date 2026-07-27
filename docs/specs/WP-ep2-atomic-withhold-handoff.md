@@ -150,11 +150,31 @@ implementation still has that point, whereas `git checkout` and `fs.rmSync` may
 not survive the change, and a test anchored to them either becomes impossible or
 pressures the implementer into keeping obsolete destructive calls, which is the
 seam-disappearance failure this section already rejects. **Exercised on BOTH
-arms**, asserting at each restoration boundary: the gate **aborted** (tracked) or
-**observed the reappearance** (untracked); the replacement is **still on disk,
-byte-identical to what the barrier wrote**; the captured note is in
+arms**, asserting at each restoration boundary: the replacement is **still on
+disk, byte-identical to what the barrier wrote**; the captured note is in
 `state/quarantine/`; the index entry was repaired without touching the working
-tree; and **no artefact claims the replacement was preserved**.
+tree; and **no artefact claims the replacement was preserved**. On the **tracked**
+arm it additionally asserts the gate **aborted**.
+
+**THE UNTRACKED HALF IS CONDITIONAL, AND WHICH BRANCH THE REAL SPEC TOOK DECIDES
+IT (corrected in the final gate pass).** The mandate above permits two designs —
+observe the untracked path before Step 5, **or** disclose the gap as this WP's own
+residual — and the round-9 form of this test required observation on both arms,
+which makes the residual branch **unsatisfiable**: a spec that legitimately chose
+to disclose could not write a passing test. So:
+
+- **if the real spec makes observation MANDATORY on the untracked arm**, this test
+  asserts on that arm that the gate **observed the reappearance** and did not
+  stage it, exactly as the tracked arm asserts the abort;
+- **if the real spec instead DISCLOSES the gap**, that residual — the one covering
+  *a file reappearing at an untracked target's path after the capture is staged by
+  Step 5 unobserved* — is what this half of the test pins, in the shape `RP-1`
+  already uses: it asserts the **currently-specified outcome**, that the
+  replacement IS staged, and that **no artefact claims otherwise**.
+
+**One of the two must be written, and the real spec says which.** What is
+forbidden is the round-9 state: a mandate offering two branches beside a test that
+only one of them can pass.
 
 **This is a change to the SHIPPED withhold path for every severity**, which is
 exactly why it is not in the predecessor: that WP's "Out of scope" forbids
