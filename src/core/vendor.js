@@ -244,10 +244,16 @@ function vendorSelf(paths, opts = {}) {
   // message cannot contradict the descriptor the same `sync` mints.
   const dev = installStance(paths) === 'dev';
   // A7/F1/F2/F3 (WP-157): place the out-of-tree launcher the scheduler invokes.
-  // Its source is the RUNNING installer (packageRoot), not the vendored
-  // `root` — the launcher is the installer's own verifier and always ships with
-  // the package (a synthetic test `sourceRoot` need not carry it).
-  writeLauncher(paths, { manifest: opts.manifest });
+  // On a NON-self-resync its source is the running installer (`packageRoot()`),
+  // which is a different tree from the one `app/current` resolves to — a real
+  // upgrade, so publish. On a PROD self-resync `packageRoot()` IS that tree
+  // (the shim enters through `app/current`), so there is no newer launcher to
+  // offer and re-publishing would let one app-tree write become the fire-time
+  // verifier: carry the existing one forward instead
+  // (WP-launcher-no-self-resync-republish, Table L). A DEV self-resync still
+  // publishes — its `app/current` is the maintainer's checkout and its
+  // descriptor binds the reduced digest anyway (ADR-0028 amendment #7).
+  writeLauncher(paths, { manifest: opts.manifest, carryForward: selfResync && !dev });
   return { version, target, dev, copied };
 }
 
@@ -335,32 +341,61 @@ function launcherPath(paths) {
 /**
  * Place the out-of-tree launcher at `<core>/launcher/launch.js` by copying the
  * self-contained `src/scheduler/launcher.js` bytes OUT of the app tree (WP-157).
- * It is a SECONDARY anchor: distinct from `app/current`, so a scoped write to
- * the app tree cannot disable the fire-time verification. Idempotent (skip when
- * byte-identical); records a `file` manifest entry once; mode 0755 (POSIX).
+ * It is a SECONDARY anchor: it lives outside `app/current`. It is NOT by itself
+ * a complete defence against a write into the app tree — the bytes' honest
+ * source is `packageRoot()`, which on a shim-reached prod install IS that tree,
+ * which is why `carryForward` exists. Channels that remain open are owner-routed:
+ * see WP-stance-authority-containment, Table G row S2 (row S1 is the one
+ * `carryForward` closes), and this function's dev arm, which always publishes.
+ * Idempotent (skip when byte-identical); records the `<core>/launcher` dir entry
+ * and then the `launch.js` file entry, once each, on BOTH arms; mode 0755 (POSIX).
  * @param {import('./paths').WienerdogPaths} paths
- * @param {{manifest?: object, sourceRoot?: string}} [opts]  sourceRoot defaults
- *   to packageRoot() — the launcher is the installer's own file, not vendored
- *   app content.
- * @returns {{path:string, changed:boolean}}
+ * @param {{manifest?: object, sourceRoot?: string, carryForward?: boolean}} [opts]
+ *   carryForward: when true, DO NOT read `sourceRoot`/`packageRoot()` at all —
+ *   keep the launcher already at `<core>/launcher/launch.js`. Throws a
+ *   WienerdogError if that file is missing or unreadable. `sourceRoot` is
+ *   ignored when `carryForward` is true.
+ * @returns {{path:string, changed:boolean}}   changed is false on the carry arm
+ * @throws {WienerdogError} carryForward with no readable existing launcher. The
+ *   message MUST carry three fields: the absolute destination path, the failing
+ *   `err.code` (e.g. ENOENT / EISDIR / EACCES), and the recovery command
+ *   `npx wienerdog@latest sync`. All three are gated by T2.
  */
 function writeLauncher(paths, opts = {}) {
-  const root = opts.sourceRoot || packageRoot();
-  const src = path.join(root, 'src', 'scheduler', 'launcher.js');
   const dest = launcherPath(paths);
-  const content = fs.readFileSync(src);
-  let same = false;
-  try {
-    same = fs.readFileSync(dest).equals(content);
-  } catch {
-    same = false;
-  }
   let changed = false;
-  if (!same) {
-    fs.mkdirSync(path.dirname(dest), { recursive: true });
-    fs.writeFileSync(dest, content, { mode: 0o755 });
-    if (process.platform !== 'win32') fs.chmodSync(dest, 0o755);
-    changed = true;
+  if (opts.carryForward) {
+    // Table L row 2/3: a self-resync has no newer launcher to offer, and the
+    // only tree it could take one from is the tree it is re-vendoring. Prove
+    // the existing launcher is readable, then leave it alone. Fail CLOSED if it
+    // is not — re-publishing from the app tree is precisely what this arm exists
+    // to remove (WP-launcher-no-self-resync-republish).
+    try {
+      fs.readFileSync(dest);
+    } catch (err) {
+      throw new WienerdogError(
+        `the out-of-tree launcher at ${dest} is missing or unreadable (${err.code || err.message}), ` +
+        'and it is deliberately NOT re-published from the app tree this sync is re-vendoring. ' +
+        'If something else occupies that path, remove it first; then reinstall from a clean ' +
+        'source: `npx wienerdog@latest sync`.'
+      );
+    }
+  } else {
+    const root = opts.sourceRoot || packageRoot();
+    const src = path.join(root, 'src', 'scheduler', 'launcher.js');
+    const content = fs.readFileSync(src);
+    let same = false;
+    try {
+      same = fs.readFileSync(dest).equals(content);
+    } catch {
+      same = false;
+    }
+    if (!same) {
+      fs.mkdirSync(path.dirname(dest), { recursive: true });
+      fs.writeFileSync(dest, content, { mode: 0o755 });
+      if (process.platform !== 'win32') fs.chmodSync(dest, 0o755);
+      changed = true;
+    }
   }
   if (opts.manifest) {
     // Record the dir BEFORE the file: reverse() replays in reverse order, so the

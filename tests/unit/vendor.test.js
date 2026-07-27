@@ -657,6 +657,13 @@ test('vendor: an attended sync carries containment forward or refuses — no DAT
     fs.mkdirSync(app, { recursive: true });
     vendor.copyTree(REPO, start);
     fs.symlinkSync(start, path.join(app, 'current'));
+    // A real installed core always has the out-of-tree launcher a first install
+    // published. This fixture hand-builds the core, so publish it by hand.
+    fs.mkdirSync(path.join(core, 'launcher'), { recursive: true });
+    fs.copyFileSync(
+      path.join(REPO, 'src', 'scheduler', 'launcher.js'),
+      path.join(core, 'launcher', 'launch.js')
+    );
     const before = contained(core);
     if (write === 'git') fs.writeFileSync(path.join(start, '.git'), 'gitdir: /elsewhere\n');
     if (write === 'version') {
