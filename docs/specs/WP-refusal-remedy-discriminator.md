@@ -1,7 +1,7 @@
 ---
 id: WP-refusal-remedy-discriminator
 title: Choose the refusal remedy from a structured verdict class, so an app-tree tamper never tells the user to run `wienerdog sync`
-status: In-Review
+status: Done
 model: sonnet
 size: M
 depends_on: [WP-stance-authority-containment]

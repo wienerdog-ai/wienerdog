@@ -1,7 +1,7 @@
 ---
 id: WP-scheduler-loaded-record-tripwire
 title: Give the scenario harnesses a LOADED-RECORD tripwire that catches stale cross-run scheduler leaks
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: []
