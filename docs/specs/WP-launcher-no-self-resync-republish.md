@@ -1778,19 +1778,26 @@ red.
 node <<'V3EOF'
 'use strict';
 // V3 — writeLauncher must not recompute the self-resync predicate (Table L, AC10).
-// readFileSync throws if the file is gone; the range is located explicitly and a
-// range that does not resolve is a FAILURE, not "zero matches". No catch blocks.
+// readFileSync throws if the file is gone. The range is anchored on the EXACT
+// signature `function writeLauncher(` — the paren is load-bearing, so a
+// `function writeLauncherHelper(` declared earlier cannot select the range — and
+// there must be EXACTLY ONE. Zero means the range was never located; more than
+// one means it is ambiguous. Either is a FAILURE, not "zero matches".
+// No catch blocks.
 const fs = require('node:fs');
 const lines = fs.readFileSync('src/core/vendor.js', 'utf8').split('\n');
 
-const from = lines.findIndex((l) => /^function writeLauncher/.test(l));
-if (from < 0) {
-  console.error('V3 FAIL — `function writeLauncher` not found in src/core/vendor.js; the range was never located, so a count of 0 would be meaningless');
+const SIG = 'function writeLauncher(';
+const sigs = lines.reduce((a, l, i) => (l.startsWith(SIG) ? a.concat(i) : a), []);
+console.log(`V3 '${SIG}' signature lines: ${sigs.length}`);
+if (sigs.length !== 1) {
+  console.error(`V3 FAIL — expected EXACTLY ONE line starting '${SIG}' in src/core/vendor.js, found ${sigs.length}; the range is unlocatable or ambiguous, so a count of 0 would be meaningless`);
   process.exit(1);
 }
+const from = sigs[0];
 const rel = lines.slice(from).findIndex((l) => /^}/.test(l));
 if (rel < 0) {
-  console.error('V3 FAIL — no closing `}` after `function writeLauncher`; the range does not terminate, so a count of 0 would be meaningless');
+  console.error(`V3 FAIL — no closing '}' after '${SIG}'; the range does not terminate, so a count of 0 would be meaningless`);
   process.exit(1);
 }
 const body = lines.slice(from, from + rel + 1);
@@ -1808,20 +1815,31 @@ V3EOF
 rc=$?; echo "V3 exit=$rc"; (exit $rc)
 ```
 
-Correct state must print `V3 matches: 0` / `V3 PASS` / `V3 exit=0` **and the
-block itself must exit 0**. **Red input:** an implementation that recomputes
-`realpathSync(currentLink(paths))` inside `writeLauncher`. Executed against
-exactly that shape — a scratch copy of `vendor.js` carrying D1+D2 plus a
-`const cur = fs.realpathSync(currentLink(paths));` line inside the carry arm — the
-block printed `V3 matches: 1` / `V3 FAIL` / `V3 exit=1` **and exited 1**. On the
-same tree with that line removed it printed `V3 matches: 0` / `V3 PASS` /
-`V3 exit=0` **and exited 0**. Both of the block's own statuses were measured;
-that is what makes this a gate. For contrast, the round-2 form — identical but
-ending `echo "V3 exit=$?"` — printed `V3 exit=1` on the red tree and **exited
-0**.
+**Green, transcribed from a real run** (on `main`'s `src/core/vendor.js`; the
+range grows once D1 lands):
 
-Sanity-check the range extraction separately, because an awk range that silently
-matched nothing would also print `0`:
+```
+V3 'function writeLauncher(' signature lines: 1
+V3 range: 28 lines
+V3 matches: 0
+V3 PASS
+V3 exit=0
+```
+
+and the block itself exits **0**. Four red arms, all measured:
+
+| Red input | V3 prints | Block `$?` |
+|---|---|---|
+| a recompute inside `writeLauncher` — `const cur = fs.realpathSync(currentLink(paths));` | `signature lines: 1` / `range: 29 lines` / `matches: 1` / `V3 FAIL — writeLauncher recomputes the predicate` / the offending line, indented, `const cur = fs.realpathSync(currentLink(paths));` | **1** |
+| **prefix collision** — a `function writeLauncherHelper() {` declared *before* the real function, which recomputes the predicate | `V3 FAIL — writeLauncher recomputes the predicate` / the offending line. **The earlier prefix-regex form selected the helper and printed `V3 matches: 0` / `V3 PASS` at exit 0** — that is why the anchor is the exact signature `function writeLauncher(`, paren included | **1** |
+| **two** `function writeLauncher(` signatures | `V3 'function writeLauncher(' signature lines: 2` / `V3 FAIL — expected EXACTLY ONE line starting 'function writeLauncher(' … found 2; the range is unlocatable or ambiguous …` | **1** |
+| **zero** signatures (function renamed away) | same message with `found 0` | **1** |
+
+**V3 now reports its own range length**, so the vacuity this next command used to
+guard against — a range that matched nothing while still printing `0` — is
+covered by the gate itself (`V3 range: 28 lines` on `main`, `41` after D1).
+Keep this as an independent human cross-check if you want a second opinion from a
+different tool; it is **not** a gate and its output is not required in the PR:
 
 ```bash
 awk '/^function writeLauncher/,/^}/' src/core/vendor.js | wc -l
@@ -1835,17 +1853,26 @@ plausible function length — not `0`, not `1`, and not the file's line count.
 ```bash
 node <<'V4EOF'
 'use strict';
-// V4 — the call site is exactly the specified one (one occurrence each).
-// Fixed-string, line-counted: the same thing `grep -cF` counted. readFileSync
-// throws if the file is gone. No catch blocks.
+// V4 — the call site is exactly the specified one, in EXECUTABLE code.
+// Comments are blanked out before counting, because both literals appearing only
+// in a comment would otherwise satisfy the gate while D1/D2 were never applied.
+// Block comments (JSDoc included) and line comments are replaced by spaces,
+// NEWLINES PRESERVED, so line structure and the `grep -cF` line-counting
+// semantics are unchanged. readFileSync throws if the file is gone.
+// No catch blocks.
 const fs = require('node:fs');
-const lines = fs.readFileSync('src/core/vendor.js', 'utf8').split('\n');
+const raw = fs.readFileSync('src/core/vendor.js', 'utf8');
+const blank = (m) => m.replace(/[^\n]/g, ' ');
+const code = raw.replace(/\/\*[\s\S]*?\*\//g, blank).replace(/\/\/[^\n]*/g, blank);
 
+const rawLines = raw.split('\n');
+const codeLines = code.split('\n');
 for (const pat of ['carryForward: selfResync && !dev', 'if (opts.carryForward)']) {
-  const n = lines.filter((l) => l.includes(pat)).length;
-  console.log(`V4 [${pat}] = ${n}`);
+  const all = rawLines.filter((l) => l.includes(pat)).length;
+  const n = codeLines.filter((l) => l.includes(pat)).length;
+  console.log(`V4 [${pat}] = ${n} in code (${all} incl. comments)`);
   if (n !== 1) {
-    console.error('V4 FAIL — expected exactly 1');
+    console.error(`V4 FAIL — expected exactly 1 in executable code, found ${n}${all !== n ? ` (${all - n} match(es) are comment-only and do not count)` : ''}`);
     process.exit(1);
   }
 }
@@ -1854,14 +1881,26 @@ V4EOF
 rc=$?; echo "V4 exit=$rc"; (exit $rc)
 ```
 
-Each pattern must count **exactly one**. `grep -cF` is fixed-string, so `&&` and
-`!` are literal. Measured on a scratch tree carrying D1+D2: both counts `1`,
-`V4 PASS`, `V4 exit=0`, **block exit 0**. **Red input:** a call site that passes
-`carryForward: selfResync` (Table M's M2) makes the first count `0` — measured:
-`V4 [carryForward: selfResync && !dev] = 0` / `V4 FAIL` / `V4 exit=1`, **block
-exit 1**. A duplicated call site makes it `2` and fails the same way. This is the
-block on which the round-2 masking was first measured: the same red tree with the
-old `echo "V4 exit=$?"` ending printed `V4 exit=1` and **exited 0**.
+Each pattern must count **exactly one in executable code**. The match is a plain
+`String.includes` on each line, so `&&` and `!` are literal — no regex, no shell.
+**Green, transcribed from a real run on a tree carrying D1+D2:**
+
+```
+V4 [carryForward: selfResync && !dev] = 1 in code (1 incl. comments)
+V4 [if (opts.carryForward)] = 1 in code (1 incl. comments)
+V4 PASS
+V4 exit=0
+```
+
+and the block exits **0**. Both counts are printed — *in code* and *including
+comments* — so a divergence between them is visible even on a passing run. Red
+arms, measured:
+
+| Red input | V4 prints | Block `$?` |
+|---|---|---|
+| M2 — the call site passes `carryForward: selfResync` | `V4 [carryForward: selfResync && !dev] = 0 in code (0 incl. comments)` / `V4 FAIL — expected exactly 1 in executable code, found 0` | **1** |
+| **comment-only literals** — D1/D2 reverted to `main`'s shape while both literals appear only inside a `//` line comment and a `/* … */` block | `V4 [carryForward: selfResync && !dev] = 0 in code (1 incl. comments)` / `V4 FAIL — expected exactly 1 in executable code, found 0 (1 match(es) are comment-only and do not count)`. **The earlier raw line-count form printed `V4 PASS` at exit 0 on this exact state** — that is why comments are blanked out first | **1** |
+| a duplicated call site | count `2`, same FAIL path | **1** |
 
 **V5 — ADR-0004 (AC11).**
 
@@ -1886,13 +1925,31 @@ V5EOF
 rc=$?; echo "V5 exit=$rc"; (exit $rc)
 ```
 
-Correct state must print `V5 matches: 0` / `V5 PASS` / `V5 exit=0` **and the
-block must exit 0** — measured on `main`'s `src/core/vendor.js` and again on a
-D1+D2 scratch tree. **Red input:** any retry timer or watcher added to the carry
-arm. Measured with a `setTimeout(() => {}, 0);` inserted into the carry arm:
-`V5 matches: 1` / `V5 FAIL` / `V5 exit=1`, **block exit 1**. As with V3, the
-round-1 form exited `1` on the clean tree, and the round-2 form exited `0` on the
-violating one.
+**Green, transcribed from a real run** on `main`'s `src/core/vendor.js` (the line
+count grows once D1 lands):
+
+```
+V5 scanned: 454 lines
+V5 matches: 0
+V5 PASS
+V5 exit=0
+```
+
+and the block exits **0**. `V5 scanned:` is printed deliberately: a gate that
+reports "0 matches" without saying how much it looked at is one bad path away
+from being vacuous, and this is the cheapest way to make that visible.
+**Red input** — any retry timer or watcher. Measured with
+`setTimeout(() => {}, 0);` inserted into `writeLauncher`:
+
+```
+V5 scanned: 455 lines
+V5 matches: 1
+V5 FAIL — ADR-0004: this WP starts nothing
+  setTimeout(() => {}, 0);
+V5 exit=1
+```
+
+block exit **1**.
 
 **V6 — the permission boundary (AC9).** This one is a **list comparison, not an
 exit-code gate**: `git diff --name-only` exits `0` whatever it prints, so its
@@ -2062,14 +2119,24 @@ paragraph exists so nobody tries to satisfy one with the other:
   re-confirmed the same way — in a scratch worktree, not by committing a
   mutation onto the branch under review.
 
+**All six were re-run against the Node gate in round 10 and the cells below are
+its ACTUAL output.** They previously recorded `diff` hunks — output the shell
+forms produced and the current script *cannot*, because it compares strings
+in-process and reports the first divergent line. That staleness was a review
+finding, and the fix was to re-run rather than reword.
+
 | # | Violating state | V8 prints | Block `$?` |
 |---|---|---|---|
-| a | **The Codex counterexample** — `if (fs.existsSync(path.join(core, 'launcher', 'launch.js'))) after = before;` added before `run()`'s `return`. Purely additive, contains no `assert` | the `diff` hunk showing that one added line, then `V8 FAIL` | **1** |
-| b | `:697` weakened from `assert.equal(base.after, base.before, …)` to `assert.ok(base.after === base.before \|\| base.after === 'REFUSED', …)` | the `diff` hunk, then `V8 FAIL` | **1** |
-| c | an extra `assert.ok(true, …)` merely *added* after `:697` | the `diff` hunk, then `V8 FAIL` | **1** |
+| a | **The Codex counterexample** — `if (fs.existsSync(path.join(core, 'launcher', 'launch.js'))) after = before;` added before `run()`'s `return`. Purely additive, contains no `assert` | `anchor occurrences in main: 1` / `V8 FAIL — … is NOT main plus exactly D4's block …` / `first divergence at line 685 (expected 711 lines, HEAD 712)` / `expected: "    return { before, after };"` / `HEAD:     "    if (fs.existsSync(path.join(core, 'launcher', 'launch.js'))) after = before;"` | **1** |
+| b | `:697` weakened from `assert.equal(base.after, base.before, …)` to `assert.ok(base.after === base.before \|\| base.after === 'REFUSED', …)` | `first divergence at line 704 (expected 711 lines, HEAD 711)` / `expected: "  assert.equal(base.after, base.before, 'contained-clean is carried forward unchanged');"` / `HEAD:     "  assert.ok(base.after === base.before \|\| base.after === 'REFUSED', …);"` | **1** |
+| c | an extra `assert.ok(true, …)` merely *added* | `first divergence at line 705 (expected 711 lines, HEAD 712)` / `expected: "  assert.equal(outB.after, outB.before, 'outside-clean is carried forward unchanged');"` / `HEAD:     "  assert.ok(true, 'an extra assertion this WP does not own');"` | **1** |
 | d | the anchor absent from `main`'s file (probed by pointing the block at a non-existent anchor string) | `V8 anchor occurrences in main: 0` / `V8 FAIL — … Zero matches is a FAILURE, not agreement.` | **1** |
-| e | **bad `HEAD`, clean tree** — arm (a)'s line **committed**, nothing uncommitted. *Scratch-worktree spec validation; **not** what M7 produces — see the note above the table* | the `diff` hunk against `HEAD:…`, then `V8 FAIL` | **1** |
-| f | **bad `HEAD`, masked by the working tree** — arm (a)'s line committed, then removed locally and **left uncommitted**. This is the shape the round-6 review constructed | `V8 FAIL — tests/unit/vendor.test.js has uncommitted changes. …` | **1** |
+| e | **`HEAD` lacks D4 entirely** — the shape a missing fixture edit produces. *Scratch-worktree spec validation; **not** what M7 produces — see the note above the table* | `anchor occurrences in main: 1` / `first divergence at line 660 (expected 711 lines, HEAD 704)` / `expected: "    // A real installed core always has the out-of-tree launcher a first install"` / `HEAD:     "    const before = contained(core);"` | **1** |
+| f | **bad `HEAD`, masked by the working tree** — an uncommitted local edit to the target path. This is the shape the round-6 review constructed | `V8 FAIL — tests/unit/vendor.test.js has uncommitted changes. V8 verifies the COMMITTED HEAD; commit or stash first, then re-run.` / `M tests/unit/vendor.test.js` | **1** |
+
+The **green** arm, re-run in the same pass: `V8 anchor occurrences in main: 1` /
+`V8 PASS — HEAD's tests/unit/vendor.test.js is byte-for-byte main + D4's block at
+D4's anchor`, block exit **0**.
 
 **Arm (f) is why V8 reads `HEAD`, and it is measured, not hypothetical.** On
 exactly that state the **round-6-interim** V8 — same reconstruction, but
