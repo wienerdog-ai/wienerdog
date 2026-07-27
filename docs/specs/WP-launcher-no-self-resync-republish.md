@@ -575,11 +575,16 @@ spot.
       establishing evidence is the **wd-reviewer diff read alone**, because
       **T1–T4 establish behavioural arm semantics only** and stay green under a
       behaviour-preserving recomputation (measured). The registered mirrors of
-      that qualification are **AC10**, **AC11**, **Table L's "Recomputation"
-      row**, **Table M row M5**, the **Security-checklist** V3 citation, the
-      Implementation-notes "V3 screens…" line, and the **V3/V4 PASS-line texts**
-      that ship inside the blocks; any surface claiming a behavioural test proves
-      a source-form contract is a defect** — **V8 (the
+      that qualification are **eight**, enumerated because a round-13 review
+      found this list short at seven and the missed surface was contradicting the
+      round-12 table: (1) **AC10**, (2) **AC11**, (3) **Table L's
+      "Recomputation" row**, (4) **Table M row M5**, (5) the
+      **Security-checklist** V3 citation, (6) the Implementation-notes
+      "V3 screens…" line, (7) the **V3/V4 PASS-line texts** that ship inside the
+      blocks, and (8) **V4's red-arm row for the string/template-literal
+      residual** — the one that was missed, registered here on the spot. A ninth
+      gets registered here rather than left to drift; any surface claiming a
+      behavioural test proves a source-form contract is a defect** — **V8 (the
       `tests/unit/vendor.test.js` HEAD-blob reconstruction, added round 6)**.
       V0's requirement is mirrored in **Definition of done item 1** and in the
       **mutation-sweep caveat in item 2**; V8's local path-scoped clean check is
@@ -2038,7 +2043,7 @@ and the block exits **0**. Red arms, measured:
 | **comment-only literals** — D1/D2 reverted to `main`'s shape while both literals appear only inside a `//` line comment and a `/* … */` block | `= 0 in code, 1 raw` / `V4 FAIL — … got 0 in code and 1 raw. A raw count above the code count means the literal also appears in a comment, or a comment delimiter is hiding an executable occurrence — either way this screen refuses.` **The raw line-count form printed `V4 PASS` at exit 0 on this state** | **1** |
 | **delimiter blanking** *(round-11 arm)* — `/*` and `*/` inside two separate `//` comments, blanking an intervening **duplicate executable** `if (opts.carryForward)` | `= 1 in code, 2 raw` / same FAIL message. **Before round 11 this printed `1 in code (2 incl. comments)` / `V4 PASS` at exit 0** — the blanker itself manufacturing the pass | **1** |
 | a duplicated call site | counts `2`, same FAIL path | **1** |
-| **tokens only inside string / template literals** *(round-11 arm)* | `= 1 in code, 1 raw` / **`V4 PASS`, exit 0 — NOT CAUGHT.** Recorded here deliberately: no text scan can distinguish a string literal from executable code, which is precisely why this step is labelled a **screen** and why the call-site contract rests on T1–T4 and the diff review | **0** |
+| **tokens only inside string / template literals** *(round-11 arm)* | `= 1 in code, 1 raw` / **`V4 PASS`, exit 0 — NOT CAUGHT.** Recorded here deliberately: no text scan can distinguish a string literal from executable code, which is precisely why this step is labelled a **screen** and why the exact call-site contract is **established by the wd-reviewer diff read alone**. **T1–T4 do not establish it** — the behaviour-preserving `opts`-threading mutation leaves all four green (measured; "V3 and V4 are TEXT-LEVEL SCREENS", Table M **M5**) | **0** |
 
 **V5 — ADR-0004 (AC11).**
 
