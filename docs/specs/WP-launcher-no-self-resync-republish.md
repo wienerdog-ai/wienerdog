@@ -1432,7 +1432,15 @@ hygiene; it is the precondition that makes every other step mean what it says.
     printf '%s\n' "$st"
     exit 1
   fi
-  echo "V0 PASS — no index flags, index and worktree clean; every result below describes $(git rev-parse HEAD)"
+  # (3) The sha is part of the claim, so its probe is checked too: a PASS line
+  # naming an empty commit would attribute the evidence to nothing.
+  head=$(git rev-parse HEAD)
+  hrc=$?
+  if [ "$hrc" -ne 0 ]; then
+    echo "V0 FAIL — 'git rev-parse HEAD' failed (exit $hrc); there is no commit to attribute the evidence below to"
+    exit 1
+  fi
+  echo "V0 PASS — no index flags, index and worktree clean; every result below describes $head"
 )
 rc=$?; echo "V0 exit=$rc"; (exit $rc)
 ```
@@ -1608,11 +1616,61 @@ round 6 to the two steps that round added (**V2b** and **V8**):
 | V2b | `run-a7-integrity.js` — nonzero exit on any failure. **Added round 6** (the scenario gate `node tests/run.js` does not run) | no — written in the fixed form from the start | no — ends `rc=$?; … (exit $rc)` |
 | V8 | exact reconstruction of `HEAD`'s blob + `diff`, behind a clean-tree precondition. **Added round 6 and rewritten TWICE in it** — form 1 was two `grep -c` diff-shape counts (admits the vacuity counterexample, red arm (a)); form 2 asserted the invariant but `diff`ed the **working tree**, so a bad `HEAD` masked by an uncommitted edit passed (red arm (f), measured). Form 3 reads `git show HEAD:…` and refuses a dirty tree | **no, by construction** — `grep -c`'s status is captured into a variable and the gate is an explicit `[ "$n" -ne 1 ]` test; the outcome gate is `diff`'s status inside an `if` | no — ends `rc=$?; … (exit $rc)` |
 
+### The third defect class: a probe whose failure is indistinguishable from a benign result
+
+**A sweep claim in this spec has now been falsified once, and the correction is
+recorded rather than quietly replaced.** An earlier round asserted that "no
+status-swallowing construct remains" after grepping the page for `|| true`. That
+searched for a **construct**; the defect is a **property**, and a review then
+found five more instances the grep could not see. What follows is the sweep
+**method**, so the claim below is checkable rather than asserted.
+
+**The property.** A step is defective when a *failure of one of its own probes*
+produces the same output and status as a *benign result*. Three concrete shapes
+were searched for, block by block, over **every** fenced `bash` block on this
+page:
+
+| | Shape | Why it false-PASSes |
+|---|---|---|
+| **(a)** | a command substitution whose status is never read — including one written **inside `[ … ]`**, e.g. `[ -n "$(git status …)" ]` | the command fails with empty stdout, the test reads "empty", the guard is skipped |
+| **(b)** | a pipeline where an upstream stage's failure surfaces only as a downstream **count or empty string**, e.g. `awk … \| grep -c …` | `awk` dies, `grep` counts `0` over nothing, the step reports "0 matches" and passes |
+| **(c)** | a numeric test on a possibly-empty variable, e.g. `[ "$n" -ne 1 ]` with `n=""` | bash errors `integer expression expected` and returns 2; **inside an `if` that reads as FALSE**, so the guard is skipped |
+
+**Result of the sweep, block by block. All twelve fenced `bash` blocks were
+examined; nothing was skipped.**
+
+| Block | Verdict | Detail |
+|---|---|---|
+| **V0** | **1 found, fixed** | `$(git rev-parse HEAD)` interpolated into the PASS line, status unread — shape (a). Now assigned to `head` with `hrc` checked. (Its two earlier probes were already split.) |
+| *form template* | clean — not executable | the `…logic…` illustration of the `rc=$?; … (exit $rc)` shape |
+| **V1** | clean | a bare `node tests/run.js …` whose status *is* the gate |
+| **V2** | clean | bare `node tests/run.js`; its exit is the gate |
+| **V2b** | clean | bare scenario runner + `rc=$?` |
+| **V3** | **3 found, fixed** | shape (b): `awk … \| grep -c` — an `awk` failure became `0 matches`; shape (c): an unrunnable `grep` left `hits` empty; **and a vacuity hole neither Codex nor the `\|\| true` grep names** — an `awk` range that *succeeds* but extracts **nothing** also yields `0 matches`, which is not evidence. Now: `awk` status checked, extraction asserted **non-empty**, `grep` status split, count validated numeric |
+| *awk sanity block* | clean — not a gate | the human-read `awk … \| wc -l` range check. It stays: it is the reader's cross-check on the same vacuity V3 now closes structurally |
+| **V4** | **1 found, fixed** | shape (c): an unrunnable `grep` left `n` empty and the loop continued to PASS. Now `grc` split (`>1` fails closed) and `n` validated numeric |
+| **V5** | **1 found, fixed** | shape (c), identical to V4 — and it also covers a **missing file**, which makes `grep` exit 2 with empty stdout |
+| **V6** | clean — not a gate | `git diff --name-only`, a list comparison; the enforcing gate is CI `boundary-check` |
+| **V8** | **4 found, fixed** | shape (a): `[ -n "$(git status --porcelain -- …)" ]` discarded the status, so a failing `git status` with empty stdout bypassed the **clean-tree precondition entirely** — the instance the round-6 review cited. Plus `mktemp -d`, and **both** `git show` redirections, whose statuses were unread. All now assigned-then-checked; the anchor count is additionally validated numeric |
+| **V7** | clean | bare `npm run lint` + `rc=$?` |
+
+**Ten defects across five blocks**, every one of them measured red-then-green
+(the degraded-probe table under each step). The two blocks that are *not*
+exit-code gates — the `awk` sanity check and V6 — are called out as such rather
+than counted clean by omission.
+
+**The claim, restated as an outcome rather than an assertion:** after this sweep,
+**no block on this page has a probe whose failure is indistinguishable from a
+benign result** — verified by running each of the five fixed blocks with the
+relevant tool (`awk`, `grep`, `git ls-files`, `git status`) replaced by a
+`PATH`-shimmed stub that exits nonzero, and confirming each fails closed where
+its predecessor printed `PASS` at exit `0`. If you add or edit a block, re-run
+that sweep against shapes (a), (b) and (c) — do not grep for a construct.
+
 No further inversion and no further masking exists in the steps below; the sweep
-that produced this table was re-run in round 3 over every block on the page, and
-again in round 6 over the two blocks that round added. Both new blocks were
-**executed in the correct state and in two distinct violating states**, and what
-is recorded for each is the **block's own `$?`**.
+that produced this table was re-run in round 3 over every block on the page,
+again in round 6 over the two blocks that round added, and **exhaustively in
+round 8 under the definition above**.
 
 **V1 — the four new tests pass.**
 
@@ -1681,8 +1739,14 @@ red.
 
 ```bash
 bash -c '
-hits=$(awk "/^function writeLauncher/,/^}/" src/core/vendor.js \
-  | grep -cE "selfResync|currentLink|installStance|isDevCheckout|realpath")
+body=$(awk "/^function writeLauncher/,/^}/" src/core/vendor.js)
+arc=$?
+if [ "$arc" -ne 0 ]; then echo "V3 FAIL — awk itself failed (exit $arc); the range was never extracted, so a count of 0 would be meaningless"; exit 1; fi
+if [ -z "$body" ]; then echo "V3 FAIL — the writeLauncher range extracted EMPTY; zero matches over nothing is not evidence"; exit 1; fi
+hits=$(printf "%s\n" "$body" | grep -cE "selfResync|currentLink|installStance|isDevCheckout|realpath")
+grc=$?
+if [ "$grc" -gt 1 ]; then echo "V3 FAIL — the filter itself failed (grep exit $grc); the match count is unestablished"; exit 1; fi
+case "$hits" in ""|*[!0-9]*) echo "V3 FAIL — non-numeric match count [$hits]; the probe produced no count"; exit 1;; esac
 echo "V3 matches: $hits"
 if [ "$hits" -ne 0 ]; then echo "V3 FAIL — writeLauncher recomputes the predicate"; exit 1; fi
 echo "V3 PASS"
@@ -1718,6 +1782,9 @@ plausible function length — not `0`, not `1`, and not the file's line count.
 bash -c '
 for pat in "carryForward: selfResync && !dev" "if (opts.carryForward)"; do
   n=$(grep -cF "$pat" src/core/vendor.js)
+  grc=$?
+  if [ "$grc" -gt 1 ]; then echo "V4 FAIL — the probe itself failed (grep exit $grc) for [$pat]; the count is unestablished"; exit 1; fi
+  case "$n" in ""|*[!0-9]*) echo "V4 FAIL — non-numeric count [$n] for [$pat]; the probe produced no count"; exit 1;; esac
   echo "V4 [$pat] = $n"
   if [ "$n" -ne 1 ]; then echo "V4 FAIL — expected exactly 1"; exit 1; fi
 done
@@ -1740,6 +1807,9 @@ old `echo "V4 exit=$?"` ending printed `V4 exit=1` and **exited 0**.
 ```bash
 bash -c '
 hits=$(grep -cE "setInterval|setTimeout|spawn|fs\.watch|daemon" src/core/vendor.js)
+grc=$?
+if [ "$grc" -gt 1 ]; then echo "V5 FAIL — the probe itself failed (grep exit $grc); the ABSENCE of these constructs is unestablished"; exit 1; fi
+case "$hits" in ""|*[!0-9]*) echo "V5 FAIL — non-numeric count [$hits]; the probe produced no count"; exit 1;; esac
 echo "V5 matches: $hits"
 if [ "$hits" -ne 0 ]; then echo "V5 FAIL — ADR-0004: this WP starts nothing"; exit 1; fi
 echo "V5 PASS"
@@ -1801,14 +1871,37 @@ computes it.
   # V8 verifies the COMMITTED state. Without this guard an uncommitted local
   # edit can mask a bad HEAD: HEAD carries D4 plus a vacuity line, the working
   # tree has that line removed, the comparison agrees, and the bad HEAD ships.
-  if [ -n "$(git status --porcelain -- tests/unit/vendor.test.js)" ]; then
+  # Assigned, THEN the status is read: `[ -n "$(git status …)" ]` discards it, so
+  # a git status that fails with empty stdout would slip straight past the guard.
+  dirty=$(git status --porcelain -- tests/unit/vendor.test.js)
+  drc=$?
+  if [ "$drc" -ne 0 ]; then
+    echo "V8 FAIL — git status itself failed (exit $drc); the clean-tree precondition is unestablished"
+    exit 1
+  fi
+  if [ -n "$dirty" ]; then
     echo "V8 FAIL — tests/unit/vendor.test.js has uncommitted changes. V8 verifies the COMMITTED HEAD; commit or stash first, then re-run."
     exit 1
   fi
 
   w=$(mktemp -d)
+  mrc=$?
+  if [ "$mrc" -ne 0 ] || [ -z "$w" ]; then
+    echo "V8 FAIL — 'mktemp -d' failed (exit $mrc); there is no scratch dir, so nothing below can be trusted"
+    exit 1
+  fi
   git show main:tests/unit/vendor.test.js > "$w/base"
+  brc=$?
+  if [ "$brc" -ne 0 ]; then
+    echo "V8 FAIL — 'git show main:tests/unit/vendor.test.js' failed (exit $brc); the baseline is unestablished"
+    exit 1
+  fi
   git show HEAD:tests/unit/vendor.test.js > "$w/head"
+  hrc=$?
+  if [ "$hrc" -ne 0 ]; then
+    echo "V8 FAIL — 'git show HEAD:tests/unit/vendor.test.js' failed (exit $hrc); HEAD's content is unestablished"
+    exit 1
+  fi
 
   # D4's anchor: the line its block is inserted immediately AFTER.
   anchor="    fs.symlinkSync(start, path.join(app, 'current'));"
@@ -1837,6 +1930,7 @@ D4BLOCK
     exit 1
   fi
   if [ "$grc" -eq 1 ]; then n=0; fi
+  case "$n" in ""|*[!0-9]*) echo "V8 FAIL — non-numeric anchor count [$n]; the probe produced no count"; exit 1;; esac
   echo "V8 anchor occurrences in main: $n"
   if [ "$n" -ne 1 ]; then
     echo "V8 FAIL — D4's anchor must occur EXACTLY once in main's tests/unit/vendor.test.js (found $n). Zero matches is a FAILURE, not agreement."
