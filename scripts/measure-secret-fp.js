@@ -10,25 +10,32 @@
  * the command line.
  *
  * IT PRINTS COUNTS, RULE LABELS AND STRUCTURAL DESCRIPTIONS ONLY — never a
- * matched run, never a line of vault prose, never a path outside the
- * vault-relative form. Its output is meant to be pasted into a PR body, so
- * treat every byte of it as public.
+ * matched run, never a line of vault prose, never a filename, and NEVER THE
+ * VAULT PATH ITSELF. Its output is meant to be pasted into a PR body, so treat
+ * every byte of it as public: the documented invocation writes `~/Obsidian/…`,
+ * but the shell expands that to an absolute path carrying the developer's
+ * username and the vault's location, so the report prints a fixed placeholder
+ * instead of echoing the argument.
  *
- * The `today` column is the SHIPPED detector: the same labelled rules this WP
- * keeps (it changes their severity only, which a "does it fire" count cannot
- * see) plus a CONTEXT-FREE entropy pass over `[A-Za-z0-9+/=]{24,}` at the same
- * floor. The labelled half is observed through the shared module minus the one
- * label this WP ADDS (`basic-auth`); the entropy half is the twenty lines below.
+ * The `today` column is the SHIPPED detector, REPRODUCED IN ITS OWN ORDER:
+ * the labelled rules run FIRST and replace their matches, and only what
+ * survives reaches a CONTEXT-FREE entropy pass over `[A-Za-z0-9+/=]{24,}` at
+ * the same floor. Getting that order wrong counts a labelled credential as an
+ * entropy hit as well, which corrupts M1's source breakdown and its occurrence
+ * totals. The labelled half is observed through the shared module minus the one
+ * label this WP ADDS (`basic-auth`); the entropy half is the lines below.
  */
 'use strict';
 
 const fs = require('node:fs');
 const path = require('node:path');
 
-const { scanAndRedact } = require('../src/core/secret-scan');
+const { scanAndRedact, ScanLimits } = require('../src/core/secret-scan');
 
 const SKIP_DIRS = new Set(['.git', '.obsidian', '.trash']);
 const ADDED_BY_THIS_WP = 'basic-auth';
+// Never echo the argument: the documented invocation is a private absolute path.
+const VAULT_LABEL = '<the path given on the command line>';
 
 // --- the shipped, context-free entropy pass ---------------------------------
 
@@ -51,10 +58,47 @@ function bitsPerChar(run) {
   return bits;
 }
 
-/** The runs the SHIPPED detector would have replaced. @param {string} text @returns {string[]} */
-function shippedEntropyRuns(text) {
-  return (text.match(SHIPPED_CANDIDATE) || []).filter(
+/** The runs the SHIPPED entropy pass would have replaced, given the text AS THAT
+ *  PASS SEES IT — i.e. after the labelled rules have run.
+ *  @param {string} afterLabelled @returns {string[]} */
+function shippedEntropyRuns(afterLabelled) {
+  return (afterLabelled.match(SHIPPED_CANDIDATE) || []).filter(
     (run) => bitsPerChar(run) >= SHIPPED_MIN_BITS_PER_CHAR,
+  );
+}
+
+// --- the pipeline order -----------------------------------------------------
+
+// `scanAndRedact` runs the labelled rules first and the entropy pass second,
+// reading the entropy FLOOR from `ScanLimits` on every candidate. Putting the
+// floor out of reach therefore turns the entropy stage into a no-op and leaves
+// exactly the intermediate text the shipped entropy pass would have been handed:
+// labelled matches already replaced, nothing else touched. That is a use of the
+// module's own ordering rather than a second copy of eighteen rules — but it
+// depends on the floor being read at call time, so `assertEntropyIsSuppressible`
+// below proves it on a known-high-entropy probe and refuses to report if it ever
+// stops holding.
+
+/** @param {string} text @returns {string} the text after the labelled rules only */
+function afterLabelledRules(text) {
+  const floor = ScanLimits.ENTROPY_MIN_BITS_PER_CHAR;
+  ScanLimits.ENTROPY_MIN_BITS_PER_CHAR = Infinity;
+  try {
+    return scanAndRedact(text).text;
+  } finally {
+    ScanLimits.ENTROPY_MIN_BITS_PER_CHAR = floor;
+  }
+}
+
+/** @returns {boolean} true iff `afterLabelledRules` really suppresses the entropy stage */
+function assertEntropyIsSuppressible() {
+  const probe = 'blob q7PmXz4KvR9tWc2LbN8dYfGh end';
+  const suppressed = afterLabelledRules(probe);
+  const normal = scanAndRedact(probe);
+  return (
+    suppressed === probe &&
+    normal.findings.some((f) => f.label === 'high-entropy') &&
+    ScanLimits.ENTROPY_MIN_BITS_PER_CHAR === SHIPPED_MIN_BITS_PER_CHAR
   );
 }
 
@@ -94,16 +138,21 @@ function measure(vaultPath) {
   let proposedWithheld = 0;
   let proposedScrubbed = 0;
   let proposedUntouched = 0;
+  let addedLabelOccurrences = 0;
 
   for (const file of notes) {
     const text = fs.readFileSync(file, 'utf8');
     const { findings } = scanAndRedact(text);
 
-    // today
+    // today — the labelled rules run FIRST, and only what survives them reaches
+    // the shipped entropy pass.
     const labelled = findings.filter(
       (f) => f.label !== 'high-entropy' && f.label !== ADDED_BY_THIS_WP,
     );
-    const runs = shippedEntropyRuns(text);
+    for (const f of findings) {
+      if (f.label === ADDED_BY_THIS_WP) addedLabelOccurrences += f.count;
+    }
+    const runs = shippedEntropyRuns(afterLabelledRules(text));
     for (const run of runs) distinctRuns.add(run);
     entropyOccurrences += runs.length;
     for (const f of labelled) {
@@ -127,7 +176,7 @@ function measure(vaultPath) {
     .concat([...labelledOccurrences].sort().map(([l, n]) => `${l} ${n}`))
     .join('  |  ');
 
-  console.log(`vault: ${vaultPath}`);
+  console.log(`vault: ${VAULT_LABEL}`);
   console.log('');
   console.log('M1 — where the false positives come from (SHIPPED detector)');
   console.log(row('notes scanned', notes.length));
@@ -146,6 +195,14 @@ function measure(vaultPath) {
   console.log('Interim, with EP2 still keying on findings.length > 0 (this leg alone)');
   console.log(row('notes REVERTED by EP2, today', anyFindingToday));
   console.log(row('notes REVERTED by EP2, after this leg', proposedWithheld + proposedScrubbed));
+  if (addedLabelOccurrences > 0) {
+    console.log('');
+    console.log(
+      `NOTE: the '${ADDED_BY_THIS_WP}' rule this WP adds fired ${addedLabelOccurrences} time(s), so it`,
+    );
+    console.log("      consumed bodies the SHIPPED entropy pass would have seen. Today's");
+    console.log('      entropy figures above are understated by that much.');
+  }
   return 0;
 }
 
@@ -159,11 +216,21 @@ function main() {
   try {
     stat = fs.statSync(vaultPath);
   } catch {
-    console.error(`not a readable path: ${vaultPath}`);
+    console.error('not a readable path: the path given on the command line');
     return 2;
   }
   if (!stat.isDirectory()) {
-    console.error(`not a directory: ${vaultPath}`);
+    console.error('not a directory: the path given on the command line');
+    return 2;
+  }
+  if (!assertEntropyIsSuppressible()) {
+    console.error(
+      'the entropy stage can no longer be suppressed through ScanLimits, so the',
+    );
+    console.error(
+      "labelled rules cannot be isolated and today's figures would be wrong. Refusing",
+    );
+    console.error('to report. Reproduce the shipped pipeline another way; do not guess.');
     return 2;
   }
   return measure(vaultPath);
