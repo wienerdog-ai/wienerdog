@@ -1,7 +1,7 @@
 ---
 id: WP-secret-fence-ep2-redact-arm
 title: Make the EP2 staged-output gate consult severity — preserve the original, scrub only the added lines, and report the redaction
-status: Draft
+status: Ready
 model: opus
 size: M
 depends_on: [WP-secret-fence-two-tier-detector]
