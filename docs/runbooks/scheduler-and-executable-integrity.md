@@ -48,9 +48,10 @@ difference between "you changed it on purpose" and "something changed it," so it
 refuses either way and leaves the decision to you. That's the point: one skipped
 night is the cost of never silently running unauthorized code.
 
-## The fix: `wienerdog sync`
+## The fix — and the one case where `sync` is the wrong move
 
-For almost every mismatch, the fix is a single command:
+For most mismatches — you edited `config.yaml`, Claude or Git moved, you upgraded
+Wienerdog — the fix is a single command:
 
 ```bash
 wienerdog sync
@@ -65,6 +66,27 @@ verifies cleanly and proceeds.
 changed (you edited config, updated Claude, upgraded Wienerdog), re-sync and
 you're done. If you *don't* recognize the change, treat it as a signal: look at
 what changed under `~/.wienerdog` before re-authorizing it.
+
+### The one case where `sync` is the wrong move
+
+If the alert tells you **not** to run `wienerdog sync`, take it literally. That
+wording appears whenever the check stopped *before* it could confirm that the app
+files under `~/.wienerdog/app/current` are the ones you installed. Sometimes that
+is because the files no longer match; sometimes it is because the check could not
+be completed at all — an unreadable authorization record, a `current` pointer that
+now leads somewhere unexpected, an error part-way through. The alert does not
+claim to know which, and neither should you until you have looked.
+
+`sync` re-vendors Wienerdog by running out of whatever folder `current` leads
+to, and that folder is exactly what this check could not confirm. So syncing is
+not the safe next step on this class of alert, whichever of those causes turns
+out to be yours. The order is therefore reversed: **reinstall first, investigate
+second, and don't sync at all.**
+
+Reinstall from a trusted source — a copy of Wienerdog that is not a git checkout
+and is not the folder this install already runs from. The
+[production/dev stance](../GLOSSARY.md) entry names the commands that qualify.
+Then look at what changed under `~/.wienerdog` before you re-enable anything.
 
 ## Updating Claude, Git, or Wienerdog itself
 

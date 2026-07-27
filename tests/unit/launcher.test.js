@@ -616,3 +616,208 @@ test('launcher: the refuse text points at the next digest + `wienerdog sync`, ne
   assert.match(stderr, /next digest/, 'points at the real surface');
   assert.doesNotMatch(stderr, /wienerdog doctor/, 'no longer points at doctor (reads no A7 state)');
 });
+
+// -------------------------------------------------------------------------
+// WP-refusal-remedy-discriminator: the remedy is a class, not a constant.
+// Table R decides the two remedy classes and their sentences; Table S records
+// which return site gets which class; block R-P is the rule that assigns them.
+// -------------------------------------------------------------------------
+
+test("remedy: refusalText('sync') is byte-identical to the shipped banner", () => {
+  const REASON = 'the live app tree does not match the descriptor (app files changed since sync)';
+  const expected =
+    'wienerdog: refusing to run "dream" — the live app tree does not match the descriptor (app files changed since sync) ' +
+    '(integrity mismatch); no job was run. This alert will appear in your next digest. If the change was intentional, run ' +
+    '`wienerdog sync`; otherwise investigate.';
+  assert.equal(launcher.refusalText('dream', REASON, 'sync'), expected);
+});
+
+test("remedy: refusalText('reinstall') is byte-identical to the canonical reinstall banner", () => {
+  const REASON = 'the live app tree does not match the descriptor (app files changed since sync)';
+  const expected =
+    'wienerdog: refusing to run "dream" — the live app tree does not match the descriptor (app files changed since sync) ' +
+    '(integrity mismatch); no job was run. This alert will appear in your next digest. ' +
+    'Do not run `wienerdog sync` — this check could not confirm the app files are the ones you installed, so syncing is not the safe next step. ' +
+    'Reinstall Wienerdog from a trusted source, then investigate.';
+  const actual = launcher.refusalText('dream', REASON, 'reinstall');
+  assert.equal(actual, expected);
+  assert.doesNotMatch(actual, /If the change was intentional/);
+});
+
+test('remedy: an absent or unknown remedy falls back to reinstall (fail closed)', () => {
+  for (const bad of [undefined, null, '', 'bogus', 'SYNC', '__proto__', 'constructor', 'toString']) {
+    const text = launcher.refusalText('dream', 'W', bad);
+    assert.match(text, /Do not run `wienerdog sync`/, `remedy=${String(bad)} falls back to reinstall`);
+    assert.doesNotMatch(text, /If the change was intentional/, `remedy=${String(bad)} does not select the sync tail`);
+  }
+});
+
+test("remedy: only the exact string 'sync' selects the sync tail", () => {
+  assert.match(launcher.refusalText('dream', 'W', 'sync'), /If the change was intentional/);
+  for (const other of [undefined, null, '', 'bogus', 'SYNC', '__proto__', 'constructor', 'toString']) {
+    assert.doesNotMatch(launcher.refusalText('dream', 'W', other), /If the change was intentional/);
+  }
+});
+
+test("remedy: a prod app-tree mutation refuses with remedy 'reinstall' and a banner that forbids sync", () => {
+  const { env, corePaths, descriptorPath, digest, paths } = setupProd();
+  const target = fs.realpathSync(path.join(paths.core, 'app', 'current'));
+  const f = path.join(target, 'package.json');
+  try {
+    fs.chmodSync(f, 0o644);
+  } catch {
+    /* ignore */
+  }
+  fs.appendFileSync(f, '\n// tampered\n');
+  const r = launcher.verifyAndResolve(corePaths, 'dream', { descriptorPath, expectDigest: digest, env });
+  assert.equal(r.ok, false);
+  assert.equal(r.remedy, 'reinstall');
+  assert.match(r.reason, /app tree does not match the descriptor/);
+
+  const calls = [];
+  const origErr = process.stderr.write;
+  process.stderr.write = () => true;
+  let code;
+  try {
+    code = launcher.main(['dream', '--descriptor', descriptorPath, '--expect-digest', digest], {
+      env,
+      core: paths.core,
+      platform: process.platform,
+      spawn: (command, args) => {
+        calls.push({ command, args });
+        return { status: 0 };
+      },
+      exit: () => {},
+    });
+  } finally {
+    process.stderr.write = origErr;
+  }
+  assert.equal(calls.length, 0, 'zero spawn');
+  assert.equal(code, 1, 'exit 1');
+  const alerts = fs.readFileSync(path.join(paths.state, 'alerts.jsonl'), 'utf8');
+  assert.match(alerts, /Do not run/);
+  assert.doesNotMatch(alerts, /If the change was intentional/);
+});
+
+test("remedy: a catch-up tree mismatch refuses with remedy 'reinstall'", () => {
+  const { env, corePaths } = setupProd();
+  const wrong = launcher.verifyCatchup(corePaths, 'sha256:nope', env, process.platform);
+  assert.equal(wrong.ok, false);
+  assert.equal(wrong.remedy, 'reinstall');
+  assert.match(wrong.reason, /does not match the scheduled digest/);
+});
+
+test("remedy: a prod descriptor drift keeps remedy 'sync' and the unchanged banner", () => {
+  const { env, corePaths, descriptorPath, digest, paths } = setupProd();
+  jobsLib.saveJob(paths, { ...DREAM_JOB, run: 'skill:wienerdog-weekly-review' }); // Table S row 11
+  const r = launcher.verifyAndResolve(corePaths, 'dream', { descriptorPath, expectDigest: digest, env });
+  assert.equal(r.ok, false);
+  assert.equal(r.remedy, 'sync');
+  assert.match(r.reason, /descriptor changed since it was scheduled/);
+
+  const origErr = process.stderr.write;
+  let stderr = '';
+  process.stderr.write = (s) => {
+    stderr += s;
+    return true;
+  };
+  try {
+    launcher.main(['dream', '--descriptor', descriptorPath, '--expect-digest', digest], {
+      env,
+      core: paths.core,
+      platform: process.platform,
+      spawn: () => ({ status: 0 }),
+      exit: () => {},
+    });
+  } finally {
+    process.stderr.write = origErr;
+  }
+  assert.match(stderr, /If the change was intentional/);
+  assert.doesNotMatch(stderr, /Do not run/, "T7's own guard — F27 alone cannot catch a wrong class here");
+});
+
+test("remedy: a repointed dev app/current refuses with remedy 'reinstall'", () => {
+  const { env, corePaths, descriptorPath, digest, paths } = setupDev('file');
+  const other = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-launch-devother-remedy-'));
+  vendor.copyTree(prodSource(), other);
+  fs.writeFileSync(path.join(other, '.git'), 'gitdir: /elsewhere\n');
+  fs.rmSync(path.join(paths.core, 'app', 'current'), { force: true });
+  fs.symlinkSync(other, path.join(paths.core, 'app', 'current'));
+  const r = launcher.verifyAndResolve(corePaths, 'dream', { descriptorPath, expectDigest: digest, env });
+  assert.equal(r.ok, false);
+  assert.equal(r.remedy, 'reinstall');
+  assert.match(r.reason, /authorized checkout root/);
+
+  const calls = [];
+  const origErr = process.stderr.write;
+  process.stderr.write = () => true;
+  let code;
+  try {
+    code = launcher.main(['dream', '--descriptor', descriptorPath, '--expect-digest', digest], {
+      env,
+      core: paths.core,
+      platform: process.platform,
+      spawn: (command, args) => {
+        calls.push({ command, args });
+        return { status: 0 };
+      },
+      exit: () => {},
+    });
+  } finally {
+    process.stderr.write = origErr;
+  }
+  assert.equal(calls.length, 0, 'zero spawn');
+  assert.equal(code, 1, 'exit 1');
+  const alerts = fs.readFileSync(path.join(paths.state, 'alerts.jsonl'), 'utf8');
+  assert.match(alerts, /Do not run/);
+  assert.doesNotMatch(alerts, /If the change was intentional/);
+});
+
+test("remedy: the outer catch follows the tie-back — after it 'sync', before it 'reinstall'", { skip: process.platform === 'win32' }, () => {
+  const { env, corePaths, descriptorPath, digest, paths } = setupProd();
+
+  // (a) after: the tie-back (tree-digest comparison) has already passed when the
+  // catch is reached — remove exec-pins.json so reDeriveDigest throws AFTER it.
+  const healthy = launcher.verifyAndResolve(corePaths, 'dream', { descriptorPath, expectDigest: digest, env });
+  assert.equal(healthy.ok, true, healthy.reason);
+  fs.rmSync(path.join(paths.state, 'exec-pins.json'), { force: true });
+  const after = launcher.verifyAndResolve(corePaths, 'dream', { descriptorPath, expectDigest: digest, env });
+  assert.equal(after.ok, false);
+  assert.match(after.reason, /integrity check errored:/);
+  assert.equal(after.remedy, 'sync', 'the tie-back passed before this throw, so sync is the right advice');
+
+  // (b) before: make the tree walk throw BEFORE the tree-digest comparison runs
+  // (the F13 recipe) — reused from the existing F13 test above.
+  const target = fs.realpathSync(path.join(paths.core, 'app', 'current'));
+  const victim = path.join(target, 'package.json');
+  fs.chmodSync(victim, 0o000);
+  let before;
+  try {
+    before = launcher.verifyAndResolve(corePaths, 'dream', { descriptorPath, expectDigest: digest, env });
+  } finally {
+    try {
+      fs.chmodSync(victim, 0o644);
+    } catch {
+      /* ignore */
+    }
+  }
+  assert.equal(before.ok, false);
+  assert.match(before.reason, /integrity check errored:/);
+  assert.equal(before.remedy, 'reinstall', 'no tie-back had executed on this path');
+});
+
+test('remedy: an INHERITED remedy does not select the sync tail (ownership)', () => {
+  const REASON = 'W';
+  try {
+    Object.prototype.remedy = 'sync';
+    const v = { ok: false, reason: REASON };
+    assert.equal(v.remedy, 'sync', 'the hazard is real: a bare read inherits through the prototype chain');
+    assert.equal(launcher.remedyOf(v), undefined, 'remedyOf requires OWNERSHIP, not inheritance');
+    const text = launcher.refusalText('dream', REASON, launcher.remedyOf(v));
+    assert.match(text, /Do not run `wienerdog sync`/);
+    assert.doesNotMatch(text, /If the change was intentional/);
+    assert.equal(launcher.remedyOf({ ok: false, remedy: 'sync', reason: REASON }), 'sync', 'an OWN remedy still reads through');
+  } finally {
+    delete Object.prototype.remedy;
+  }
+});
