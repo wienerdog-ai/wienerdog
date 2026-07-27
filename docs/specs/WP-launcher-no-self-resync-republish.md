@@ -507,7 +507,7 @@ there is no predicate literal in this spec to drift.
 | Fact | Value |
 |------|-------|
 | **Who decides `carryForward`** | `vendorSelf`, as `selfResync && !dev` — both bindings are `WP-stance-authority-containment` D9's, already in scope |
-| **Recomputation** | forbidden — `writeLauncher`'s body must not mention `selfResync`, `currentLink`, `installStance`, `isDevCheckout` or `realpath` (V3 greps for this) |
+| **Recomputation** | forbidden — `writeLauncher`'s body must not mention `selfResync`, `currentLink`, `installStance`, `isDevCheckout` or `realpath`. **V3 screens the source text for this; T1–T4 and the diff review establish it** (V3 cannot see syntax — see "V3 and V4 are TEXT-LEVEL SCREENS") |
 | **Precedence** | `carryForward: true` wins over `sourceRoot`; `sourceRoot` is ignored, not merged |
 | **Why `!dev`** | **a workflow requirement, not a security claim.** A dev install's `app/current` **is** the maintainer's checkout; carrying forward would mean a maintainer's edit to `src/scheduler/launcher.js` never reaches the file the scheduler invokes, so the launcher could not be developed at all (T4 proves this, and T4 is the *only* thing this gate buys). It costs little because a dev descriptor binds the reduced digest that never hashes app code (ADR-0028 amendment #7). It is **not** true that nothing is defended by carrying forward on dev — see **Residual R-dev** below, which is accepted, not closed. The gate is at least not self-forging: `dev` is containment-derived (D9), and D8+D9 make containment unreachable by an A7-scoped **data** write |
 | **First install** | `carryForward` is falsy — D9's `selfResync` catches the unresolvable `app/current` and yields `false`. Row 1 applies; placement is unchanged (T-existing, `tests/unit/vendor.test.js:397`) |
@@ -569,8 +569,11 @@ spot.
       and now defer to D4 for what "unmodified" excludes).
 - [ ] **Verification commands / greps** — **V0 (the Step-0 clean-tree
       precondition, added round 6 — it is the gate that makes every other one
-      describe `HEAD` rather than the working tree)**, V1 (the four tests), V3
-      (the no-recomputation greps), V4 (the call-site grep), **V8 (the
+      describe `HEAD` rather than the working tree)**, V1 (the four tests),
+      **V3 and V4 — TEXT-LEVEL SCREENS since round 11, NOT proofs of AC10 or the
+      call-site contract; their establishing evidence is T1–T4 plus the diff
+      review, and AC10/AC11 and Table L's "Recomputation" row are registered
+      mirrors of that qualification** — **V8 (the
       `tests/unit/vendor.test.js` HEAD-blob reconstruction, added round 6)**.
       V0's requirement is mirrored in **Definition of done item 1** and in the
       **mutation-sweep caveat in item 2**; V8's local path-scoped clean check is
@@ -661,7 +664,8 @@ the implementer:
 
 The predicate is still computed **exactly once**, in `vendorSelf`, by
 `WP-stance-authority-containment` D9. This WP passes the **decision**, not the
-inputs. V3 gates that by grep.
+inputs. V3 **screens** the source text for a recomputation; T1–T4 and the diff
+review are what establish it.
 
 ### D1 — `writeLauncher` gains `carryForward`
 
@@ -1265,7 +1269,7 @@ Eight notes on that file, so nothing in it reads as accidental:
       `WP-stance-authority-containment` D8 and is **not** touched here.
 - [ ] The carry-forward arm reads exactly one path and it is not attacker-chosen:
       `<core>/launcher/launch.js`. It reads **nothing** from `sourceRoot` or
-      `packageRoot()` (V3 greps for this).
+      `packageRoot()` (V3 screens the source text for this; T2 and T1 execute it).
 - [ ] Fail-closed direction confirmed: an unreadable destination **throws**; it
       never falls back to the app tree (Table L row 3, AC5, T2).
 
@@ -1340,10 +1344,19 @@ Every criterion below has a mutation partner in Table M that reddens it.
       touches only the **three** deliverable paths. (V2, V6, V8)
 - [ ] **AC10** — `writeLauncher`'s body does not recompute the self-resync
       predicate: no `selfResync`, `currentLink`, `installStance`, `isDevCheckout`
-      or `realpath` inside it. (V3) — **review-enforced in addition**: a
-      reviewer confirms `selfResync` and `dev` are D9's bindings, not new ones.
+      or `realpath` inside it. *(Evidence re-derived in round 11, after a review
+      executed false-PASSes against the text gate.)* **Established by T1–T4** —
+      behavioural tests that execute the code and fail if the predicate is
+      recomputed or the gate dropped — **and by the wd-reviewer leg reading the
+      diff**, which confirms `selfResync` and `dev` are D9's bindings and not new
+      ones. **V3 is a text-level SCREEN over the source range, not the proof**:
+      it reads text, not syntax, so a token inside a string literal is invisible
+      to it (see "V3 and V4 are TEXT-LEVEL SCREENS"). Do not cite V3 alone for
+      this criterion.
 - [ ] **AC11** — ADR-0004 holds: `src/core/vendor.js` contains no
-      `setInterval`, `setTimeout`, `spawn`, `fs.watch` or daemon. (V5)
+      `setInterval`, `setTimeout`, `spawn`, `fs.watch` or daemon. (V5 — the same
+      text-screen caveat applies; V5 scans source text, and ADR-0004 compliance
+      is also visible to the reviewer in the diff)
 - [ ] **AC12** — The **carry** arm records the launcher's manifest pair. Calling
       `vendorSelf` on a prod self-resync with a **fresh empty** manifest
       (`{version:1, createdAt:'', entries:[]}` — the shape `manifest.load`
@@ -1366,7 +1379,7 @@ last column. Run these to prove the gates are not vacuous, then revert.
 | M2 | drop the gate: `carryForward: selfResync` | T4 only | `pass 3 / fail 1` |
 | M3 | replace the `throw` in the carry arm with a fall-through to the publish arm | T2 | expected red (row 3 is the only assertion of it) |
 | M4 | delete the `else` and always carry forward | **all four** — T3 and T4 are the *diagnostic* pair (they are the two that assert a publish must happen), but T1 and T2 fail too: their fixtures' **first install** then has no launcher to carry, so `writeLauncher` throws `ENOENT` before either test reaches its own assertion | **measured `pass 0 / fail 4`** |
-| M5 | recompute the predicate inside `writeLauncher` instead of taking `opts.carryForward` | V3 (match count `0` → non-zero, **and its exit status `0` → `1`**) | executed on the equivalent shape: count `1`, `$?` = `1` |
+| M5 | recompute the predicate inside `writeLauncher` instead of taking `opts.carryForward` | **T1–T4** (the establishing evidence) and, as a screen, V3 (match count `0` → non-zero, **and its exit status `0` → `1`**) | executed on the equivalent shape: V3 count `1`, `$?` = `1`. **V3 alone is not the gate** — a recomputation written so the text screen cannot see it still fails T1–T4 and is visible in the diff |
 | M6 | move the whole `if (opts.manifest) { … }` block **into** the `else` arm, next to the source read | **T1 only** — and that is the entire point: V1's other three tests, V2–V7, AC1–AC11 and M1–M5 all stay **green**, so T1's fresh-manifest assertion is the only thing standing between this mutation and a shipped uninstall bug | expected red (AC12 is its only assertion); the implementer confirms both halves — T1 red **and** everything else green |
 | M7 | revert **D4** — remove the seven lines from T12's `run()` helper **in the working tree, uncommitted**, leaving D1/D2/D3 in place | **V2 red and V8 red — for two different reasons, and the difference is the whole point of this cell.** **V2** is the real signal: `tests/unit/vendor.test.js:636` (**T12**) fails at `:697` with `'REFUSED' !== true`, which is what proves D4 load-bearing. **V8** goes red at its **dirty-path guard** (`… has uncommitted changes`), because M7 is by procedure an *uncommitted* edit — V8 never reaches a blob comparison, so **that red is NOT evidence about the reconstruction invariant** and must not be reported as if it were. **V0 is red too**, for the same procedural reason. V1, V3, V4, V5 and V7 stay green. The committed-state reconstruction failure is **V8 red arm (e)**, which is spec-validation evidence collected under the scratch-worktree procedure beside that arm — **not** something M7 produces. **M7 is also NOT a substitute for V8's red arm (a)**: a vacuity line added alongside D4 keeps M7 green (V8's "Does M7 catch it?" row) | **measured on `d1c96e1`**: `tests 1681 / pass 1675 / fail 1 / skipped 5` without D4, versus `1681 / 1676 / 0 / 5` with it (both counts taken without T1–T4) |
 
@@ -1772,22 +1785,79 @@ assertion at `:412-413` requires the published bytes to equal `packageRoot()`'s
 launcher. Under M4 it throws before reaching that assertion; either way it goes
 red.
 
-**V3 — `writeLauncher` does not recompute the predicate (Table L, AC10).**
+### V3 and V4 are TEXT-LEVEL SCREENS, not proofs — read this before citing them
+
+**A review executed the shipped V3/V4 bodies and produced false-PASSes**, and
+the honest fix was to change what they *claim*, not to keep escalating the
+regex. Both scan **source text**. Neither parses JavaScript, so neither can tell
+executable syntax from a token that merely appears in the file. Measured:
+
+| Shape | Before round 11 | After |
+|---|---|---|
+| V3: the sole `function writeLauncher(` line sits inside a **block comment**, the real implementation is an arrow function that recomputes the predicate | `range: 2 lines` / `matches: 0` / **`V3 PASS`**, exit 0 | **FAIL**, exit 1 |
+| V3: same, inside a **template literal** | `range: 2 lines` / `matches: 0` / **`V3 PASS`**, exit 0 | **FAIL**, exit 1 |
+| V4: `/*` and `*/` inside two separate `//` comments blank an intervening **duplicate executable** `if (opts.carryForward)` | `1 in code (2 incl. comments)` / **`V4 PASS`**, exit 0 | **FAIL**, exit 1 |
+| V4: both required tokens occur **only inside string / template literals** | `1 in code (1 incl. comments)` / **`V4 PASS`**, exit 0 | **still `V4 PASS`, exit 0 — NOT closed** |
+
+Three of the four are closed. **The fourth is not, and cannot be by any text
+scan** — that is the point of this subsection. AST parsing was considered and
+rejected: this repo has **zero runtime dependencies**, Node's stdlib ships no
+JavaScript parser, and a devDependency-based gate would break the copy-paste
+verification contract these steps exist to honour.
+
+**Exact-blob reconstruction — V8's technique — was assessed and does not apply
+here**, because D1/D2/D3 are **not byte-determined by this spec**. The evidence,
+stated so the judgement is checkable rather than asserted:
+
+1. **D3's replacement is a JSDoc *fragment*.** It shows neither the `/**`
+   opener, the `*/` closer, nor any `@param` / `@returns` / `@throws` line. The
+   complete final JSDoc appears **nowhere** in this spec.
+2. **Exact contracts shows a *different* partial JSDoc** — only the tag lines,
+   with no description. How the two fragments compose (order, blank lines,
+   whether `main`'s existing tags survive) is unspecified.
+3. **D1's snippet carries an explicit elision**:
+   `// …existing comment and the two recordOnce calls, UNCHANGED…`. It is a
+   template, not a literal.
+4. **Operator placement in the multi-line message is unconstrained** — the
+   snippet shows a trailing `+`; nothing in the spec forbids a leading `+`, and
+   both render identical behaviour.
+
+A reconstruction gate over `src/core/vendor.js` would therefore go **red on a
+correct implementation**, which is worse than a screen that is honest about its
+reach. D4 is different — seven literal lines at a literal anchor — which is
+exactly why **V8** can and does reconstruct.
+
+**So: V3 and V4 do not establish AC10 or the exact call-site contract.** They are
+cheap, fail-closed screens that catch the ordinary and accidental shapes. The
+**establishing** evidence is **T1–T4** — behavioural tests that execute the code
+and would fail if the predicate were recomputed or the gate dropped — plus the
+**wd-reviewer leg reading the diff**. Cite them that way. Do not write "V3 proves
+AC10"; it does not.
+
+**V3 — text screen: `writeLauncher` does not recompute the predicate (Table L, AC10).**
 
 ```bash
 node <<'V3EOF'
 'use strict';
-// V3 — writeLauncher must not recompute the self-resync predicate (Table L, AC10).
-// readFileSync throws if the file is gone. The range is anchored on the EXACT
-// signature `function writeLauncher(` — the paren is load-bearing, so a
-// `function writeLauncherHelper(` declared earlier cannot select the range — and
-// there must be EXACTLY ONE. Zero means the range was never located; more than
-// one means it is ambiguous. Either is a FAILURE, not "zero matches".
-// No catch blocks.
+// V3 — a TEXT-LEVEL SCREEN over writeLauncher's source range. It does NOT
+// establish AC10 by itself: it reads text, not syntax, so a token inside a
+// string literal is invisible to it. AC10's establishing evidence is T1-T4
+// (behavioural) plus the reviewer reading the diff. See the prose above.
+// What it does do, cheaply and fail-closed:
+//   - anchors on the EXACT signature `function writeLauncher(` (the paren is
+//     load-bearing: `writeLauncherHelper(` cannot select the range) and requires
+//     EXACTLY ONE such line — zero is unlocatable, more than one is ambiguous;
+//   - requires the extracted range to contain writeLauncher's own return
+//     statement, which D1 leaves untouched. A signature quoted inside a block
+//     comment or a template literal yields a range without it, so the screen
+//     refuses instead of reporting a vacuous "0 matches";
+//   - then scans the range for the forbidden identifiers.
+// readFileSync throws if the file is gone. No catch blocks.
 const fs = require('node:fs');
 const lines = fs.readFileSync('src/core/vendor.js', 'utf8').split('\n');
 
 const SIG = 'function writeLauncher(';
+const RET = 'return { path: dest, changed };';
 const sigs = lines.reduce((a, l, i) => (l.startsWith(SIG) ? a.concat(i) : a), []);
 console.log(`V3 '${SIG}' signature lines: ${sigs.length}`);
 if (sigs.length !== 1) {
@@ -1801,16 +1871,21 @@ if (rel < 0) {
   process.exit(1);
 }
 const body = lines.slice(from, from + rel + 1);
+console.log(`V3 range: ${body.length} lines`);
+
+if (!body.some((l) => l.includes(RET))) {
+  console.error(`V3 FAIL — the extracted range does not contain writeLauncher's return statement ('${RET}', which D1 leaves unchanged), so it is not the function body — most likely the signature was matched inside a comment or a string. A count of 0 over it would be meaningless`);
+  process.exit(1);
+}
 
 const hits = body.filter((l) => /selfResync|currentLink|installStance|isDevCheckout|realpath/.test(l));
-console.log(`V3 range: ${body.length} lines`);
 console.log(`V3 matches: ${hits.length}`);
 if (hits.length !== 0) {
   console.error('V3 FAIL — writeLauncher recomputes the predicate');
   console.error(hits.join('\n'));
   process.exit(1);
 }
-console.log('V3 PASS');
+console.log('V3 PASS (text-level screen only — AC10 is established by T1-T4 and the diff review)');
 V3EOF
 rc=$?; echo "V3 exit=$rc"; (exit $rc)
 ```
@@ -1822,18 +1897,26 @@ range grows once D1 lands):
 V3 'function writeLauncher(' signature lines: 1
 V3 range: 28 lines
 V3 matches: 0
-V3 PASS
+V3 PASS (text-level screen only — AC10 is established by T1-T4 and the diff review)
 V3 exit=0
 ```
 
-and the block itself exits **0**. Four red arms, all measured:
+and the block itself exits **0**. Six red arms, all measured:
 
 | Red input | V3 prints | Block `$?` |
 |---|---|---|
-| a recompute inside `writeLauncher` — `const cur = fs.realpathSync(currentLink(paths));` | `signature lines: 1` / `range: 29 lines` / `matches: 1` / `V3 FAIL — writeLauncher recomputes the predicate` / the offending line, indented, `const cur = fs.realpathSync(currentLink(paths));` | **1** |
+| a recompute inside `writeLauncher` — `const cur = fs.realpathSync(currentLink(paths));` | `signature lines: 1` / `range: 29 lines` / `matches: 1` / `V3 FAIL — writeLauncher recomputes the predicate` / the offending line, indented | **1** |
 | **prefix collision** — a `function writeLauncherHelper() {` declared *before* the real function, which recomputes the predicate | `V3 FAIL — writeLauncher recomputes the predicate` / the offending line. **The earlier prefix-regex form selected the helper and printed `V3 matches: 0` / `V3 PASS` at exit 0** — that is why the anchor is the exact signature `function writeLauncher(`, paren included | **1** |
 | **two** `function writeLauncher(` signatures | `V3 'function writeLauncher(' signature lines: 2` / `V3 FAIL — expected EXACTLY ONE line starting 'function writeLauncher(' … found 2; the range is unlocatable or ambiguous …` | **1** |
 | **zero** signatures (function renamed away) | same message with `found 0` | **1** |
+| **signature inside a BLOCK COMMENT**, real implementation an arrow function that recomputes the predicate *(round-11 arm)* | `signature lines: 1` / `range: 2 lines` / `V3 FAIL — the extracted range does not contain writeLauncher's return statement ('return { path: dest, changed };', which D1 leaves unchanged), so it is not the function body — most likely the signature was matched inside a comment or a string …`. **Before round 11 this printed `matches: 0` / `V3 PASS` at exit 0** | **1** |
+| **signature inside a TEMPLATE LITERAL**, same real implementation *(round-11 arm)* | identical output and message | **1** |
+
+**The return-statement check is what closes the last two**, and it is a screen,
+not a proof: it asserts the extracted range contains `return { path: dest,
+changed };` — the line D1 explicitly leaves in place — so a range harvested from
+a comment or a string cannot satisfy it. A sufficiently determined construction
+could still defeat it; that is why the heading above says *screen*.
 
 **V3 now reports its own range length**, so the vacuity this next command used to
 guard against — a range that matched nothing while still printing `0` — is
@@ -1848,18 +1931,22 @@ awk '/^function writeLauncher/,/^}/' src/core/vendor.js | wc -l
 Measured `28` on `main` today; after D1 it grows to roughly 40. It must be a
 plausible function length — not `0`, not `1`, and not the file's line count.
 
-**V4 — the call site is exactly the specified one (one occurrence each).**
+**V4 — text screen: the call site is exactly the specified one (one occurrence each).**
 
 ```bash
 node <<'V4EOF'
 'use strict';
-// V4 — the call site is exactly the specified one, in EXECUTABLE code.
-// Comments are blanked out before counting, because both literals appearing only
-// in a comment would otherwise satisfy the gate while D1/D2 were never applied.
-// Block comments (JSDoc included) and line comments are replaced by spaces,
-// NEWLINES PRESERVED, so line structure and the `grep -cF` line-counting
-// semantics are unchanged. readFileSync throws if the file is gone.
-// No catch blocks.
+// V4 — a TEXT-LEVEL SCREEN over the call site. It does NOT establish the exact
+// call-site contract by itself: a token inside a string or template literal is
+// indistinguishable from executable code to any text scan. The establishing
+// evidence is T1-T4 (behavioural) plus the reviewer reading the diff.
+// It is deliberately CONSERVATIVE: both the raw line count and the
+// comments-blanked count must be exactly 1. Requiring both means the comment
+// blanker can only ever cause a FAILURE, never a pass — an earlier form let
+// `/*` and `*/` sitting inside two separate `//` comments blank an intervening
+// duplicate call site (raw 2, code 1) and printed PASS.
+// Comments are blanked with newlines preserved, so line-counting semantics are
+// unchanged. readFileSync throws if the file is gone. No catch blocks.
 const fs = require('node:fs');
 const raw = fs.readFileSync('src/core/vendor.js', 'utf8');
 const blank = (m) => m.replace(/[^\n]/g, ' ');
@@ -1870,37 +1957,42 @@ const codeLines = code.split('\n');
 for (const pat of ['carryForward: selfResync && !dev', 'if (opts.carryForward)']) {
   const all = rawLines.filter((l) => l.includes(pat)).length;
   const n = codeLines.filter((l) => l.includes(pat)).length;
-  console.log(`V4 [${pat}] = ${n} in code (${all} incl. comments)`);
-  if (n !== 1) {
-    console.error(`V4 FAIL — expected exactly 1 in executable code, found ${n}${all !== n ? ` (${all - n} match(es) are comment-only and do not count)` : ''}`);
+  console.log(`V4 [${pat}] = ${n} in code, ${all} raw`);
+  if (n !== 1 || all !== 1) {
+    console.error(`V4 FAIL — expected exactly 1 occurrence, both in code and raw; got ${n} in code and ${all} raw.${all !== n ? ' A raw count above the code count means the literal also appears in a comment, or a comment delimiter is hiding an executable occurrence — either way this screen refuses.' : ''}`);
     process.exit(1);
   }
 }
-console.log('V4 PASS');
+console.log('V4 PASS (text-level screen only — the call-site contract is established by T1-T4 and the diff review)');
 V4EOF
 rc=$?; echo "V4 exit=$rc"; (exit $rc)
 ```
 
-Each pattern must count **exactly one in executable code**. The match is a plain
+Each pattern must count **exactly one — in code AND raw**. The match is a plain
 `String.includes` on each line, so `&&` and `!` are literal — no regex, no shell.
+**Requiring both counts is the round-11 correction**: with only the
+comments-blanked count gated, the blanker could *cause* a pass, and did (arm
+"delimiter blanking" below). Requiring both means the blanker can only ever
+produce a **failure**, never a pass — it is now strictly a tightening.
+
 **Green, transcribed from a real run on a tree carrying D1+D2:**
 
 ```
-V4 [carryForward: selfResync && !dev] = 1 in code (1 incl. comments)
-V4 [if (opts.carryForward)] = 1 in code (1 incl. comments)
-V4 PASS
+V4 [carryForward: selfResync && !dev] = 1 in code, 1 raw
+V4 [if (opts.carryForward)] = 1 in code, 1 raw
+V4 PASS (text-level screen only — the call-site contract is established by T1-T4 and the diff review)
 V4 exit=0
 ```
 
-and the block exits **0**. Both counts are printed — *in code* and *including
-comments* — so a divergence between them is visible even on a passing run. Red
-arms, measured:
+and the block exits **0**. Red arms, measured:
 
 | Red input | V4 prints | Block `$?` |
 |---|---|---|
-| M2 — the call site passes `carryForward: selfResync` | `V4 [carryForward: selfResync && !dev] = 0 in code (0 incl. comments)` / `V4 FAIL — expected exactly 1 in executable code, found 0` | **1** |
-| **comment-only literals** — D1/D2 reverted to `main`'s shape while both literals appear only inside a `//` line comment and a `/* … */` block | `V4 [carryForward: selfResync && !dev] = 0 in code (1 incl. comments)` / `V4 FAIL — expected exactly 1 in executable code, found 0 (1 match(es) are comment-only and do not count)`. **The earlier raw line-count form printed `V4 PASS` at exit 0 on this exact state** — that is why comments are blanked out first | **1** |
-| a duplicated call site | count `2`, same FAIL path | **1** |
+| M2 — the call site passes `carryForward: selfResync` | `V4 [carryForward: selfResync && !dev] = 0 in code, 0 raw` / `V4 FAIL — expected exactly 1 occurrence, both in code and raw; got 0 in code and 0 raw.` | **1** |
+| **comment-only literals** — D1/D2 reverted to `main`'s shape while both literals appear only inside a `//` line comment and a `/* … */` block | `= 0 in code, 1 raw` / `V4 FAIL — … got 0 in code and 1 raw. A raw count above the code count means the literal also appears in a comment, or a comment delimiter is hiding an executable occurrence — either way this screen refuses.` **The raw line-count form printed `V4 PASS` at exit 0 on this state** | **1** |
+| **delimiter blanking** *(round-11 arm)* — `/*` and `*/` inside two separate `//` comments, blanking an intervening **duplicate executable** `if (opts.carryForward)` | `= 1 in code, 2 raw` / same FAIL message. **Before round 11 this printed `1 in code (2 incl. comments)` / `V4 PASS` at exit 0** — the blanker itself manufacturing the pass | **1** |
+| a duplicated call site | counts `2`, same FAIL path | **1** |
+| **tokens only inside string / template literals** *(round-11 arm)* | `= 1 in code, 1 raw` / **`V4 PASS`, exit 0 — NOT CAUGHT.** Recorded here deliberately: no text scan can distinguish a string literal from executable code, which is precisely why this step is labelled a **screen** and why the call-site contract rests on T1–T4 and the diff review | **0** |
 
 **V5 — ADR-0004 (AC11).**
 
