@@ -1827,7 +1827,16 @@ D4BLOCK
   # The anchor must exist EXACTLY once in main. Zero matches must FAIL, never
   # silently produce an unmodified reconstruction that then "agrees" with a HEAD
   # which never applied D4.
-  n=$(grep -cFx "$anchor" "$w/base" || true)
+  # Probe and filter checked SEPARATELY, as in V0: `|| true` on the pipeline
+  # would turn an unrunnable grep into an empty `n`, whose `[ "$n" -ne 1 ]` test
+  # errors out and is read as FALSE — silently skipping this guard.
+  n=$(grep -cFx "$anchor" "$w/base")
+  grc=$?
+  if [ "$grc" -gt 1 ]; then
+    echo "V8 FAIL — the anchor probe itself failed (grep exit $grc); exactly-once is unestablished. Fix that before collecting any evidence"
+    exit 1
+  fi
+  if [ "$grc" -eq 1 ]; then n=0; fi
   echo "V8 anchor occurrences in main: $n"
   if [ "$n" -ne 1 ]; then
     echo "V8 FAIL — D4's anchor must occur EXACTLY once in main's tests/unit/vendor.test.js (found $n). Zero matches is a FAILURE, not agreement."
@@ -1888,9 +1897,21 @@ it does is refuse a dirty tree. Six details are deliberate:
   inside an `if` where `set -u` cannot mask it, and its output is printed — with
   `-L` labels, so a failure names `expected` and `HEAD:…` rather than two
   `mktemp` paths.
-- **`grep -c … || true`** keeps `set -u` from aborting on a zero match before the
-  guard can report it; the gate is the explicit `[ "$n" -ne 1 ]` test, never
-  grep's own status. That is the round-1 inversion, avoided by construction.
+- **The anchor probe captures `grep`'s status instead of `|| true`-ing it**, the
+  same split V0 uses and for the same reason. The earlier form was
+  `n=$(grep -cFx … || true)`: if `grep` cannot run, `n` is **empty**,
+  `[ "$n" -ne 1 ]` errors with `integer expression expected` and status 2, the
+  `if` reads that as **false**, and the exactly-once guard is **silently
+  skipped**. Measured, and it is not theoretical — with `grep` stubbed to exit 2
+  *and* an anchor that no longer matches, the old form reconstructed a file
+  identical to `main`, compared it against a `HEAD` that also equalled `main`,
+  and printed **`V8 PASS — … byte-for-byte main + D4's block …`** at exit **0**
+  while D4 was not applied at all. The current form distinguishes `grc` **0**
+  (matched — `n` is the count), **1** (no match — `n` is `0`, which the
+  exactly-once test then correctly fails), and **>1** (the probe itself failed —
+  fail closed). Same red arm now prints
+  `V8 FAIL — the anchor probe itself failed (grep exit 2); exactly-once is
+  unestablished.` at exit **1**. There is no `|| true` in the block.
 
 **Red inputs — six, all measured, all with the block's own `$?`.** Arms (a)–(d)
 are committed-state violations; (e) and (f) are the round-6 pair.
