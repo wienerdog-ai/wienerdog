@@ -10,12 +10,12 @@
  * the command line.
  *
  * IT PRINTS COUNTS, RULE LABELS AND STRUCTURAL DESCRIPTIONS ONLY — never a
- * matched run, never a line of vault prose, never a filename, and NEVER THE
- * VAULT PATH ITSELF. Its output is meant to be pasted into a PR body, so treat
- * every byte of it as public: the documented invocation writes `~/Obsidian/…`,
- * but the shell expands that to an absolute path carrying the developer's
- * username and the vault's location, so the report prints a fixed placeholder
- * instead of echoing the argument.
+ * matched run, never a line of vault prose, never a filename outside the
+ * vault-relative form, and NEVER THE VAULT PATH ITSELF. Its output is meant to
+ * be pasted into a PR body, so treat every byte of it as public: the documented
+ * invocation writes `~/Obsidian/…`, but the shell expands that to an absolute
+ * path carrying the developer's username and the vault's location, so the
+ * report prints a fixed placeholder instead of echoing the argument.
  *
  * The `today` column is the SHIPPED detector, REPRODUCED IN ITS OWN ORDER:
  * the labelled rules run FIRST and replace their matches, and only what
@@ -24,6 +24,14 @@
  * entropy hit as well, which corrupts M1's source breakdown and its occurrence
  * totals. The labelled half is observed through the shared module minus the one
  * label this WP ADDS (`basic-auth`); the entropy half is the lines below.
+ *
+ * THE EMULATION IS A PREVIOUS VERSION OF A PIPELINE, SO EVERY RULE THE CURRENT
+ * VERSION ADDS IS A SOURCE OF ERROR. It runs the module's CURRENT labelled
+ * stage, which includes `basic-auth` — a rule the shipped detector did not
+ * have. Where that rule matches, it consumes a body the shipped entropy pass
+ * would have been handed, and every M1 figure would be understated. This script
+ * therefore REFUSES TO EMIT any measurement on such a corpus rather than
+ * printing a caveat beside one: a number that is printed will be quoted.
  */
 'use strict';
 
@@ -138,7 +146,8 @@ function measure(vaultPath) {
   let proposedWithheld = 0;
   let proposedScrubbed = 0;
   let proposedUntouched = 0;
-  let addedLabelOccurrences = 0;
+  /** @type {string[]} vault-relative paths of notes the ADDED rule matched */
+  const addedLabelNotes = [];
 
   for (const file of notes) {
     const text = fs.readFileSync(file, 'utf8');
@@ -149,8 +158,8 @@ function measure(vaultPath) {
     const labelled = findings.filter(
       (f) => f.label !== 'high-entropy' && f.label !== ADDED_BY_THIS_WP,
     );
-    for (const f of findings) {
-      if (f.label === ADDED_BY_THIS_WP) addedLabelOccurrences += f.count;
+    if (findings.some((f) => f.label === ADDED_BY_THIS_WP)) {
+      addedLabelNotes.push(path.relative(vaultPath, file));
     }
     const runs = shippedEntropyRuns(afterLabelledRules(text));
     for (const run of runs) distinctRuns.add(run);
@@ -169,6 +178,34 @@ function measure(vaultPath) {
     if (findings.some((f) => f.severity === 'quarantine')) proposedWithheld += 1;
     else if (findings.length > 0) proposedScrubbed += 1;
     else proposedUntouched += 1;
+  }
+
+  // REFUSE TO EMIT, before a single figure is printed. `basic-auth` is a rule
+  // this WP ADDS; the shipped detector had none, so wherever it matched it
+  // consumed a body the shipped entropy pass would have been handed. Every M1
+  // figure below would be understated, and a warning beside a printed number
+  // does not make the number reproducible — it makes it quotable.
+  if (addedLabelNotes.length > 0) {
+    console.error('FAIL: the M1 baseline is NOT reproducible on this corpus.');
+    console.error('');
+    console.error(
+      `      The '${ADDED_BY_THIS_WP}' rule that this WP ADDS matched in ${addedLabelNotes.length} note(s).`,
+    );
+    console.error('      The shipped detector had no such rule, so it would have handed those');
+    console.error('      bodies to its entropy pass — but this emulation runs the module\'s');
+    console.error('      CURRENT labelled stage, which consumes them first. The note counts, the');
+    console.error('      source breakdown, the occurrence totals and the distinct-run count would');
+    console.error('      all be understated, so NOTHING is printed: there is no partial result to');
+    console.error('      quote.');
+    console.error('');
+    console.error('      Notes, vault-relative:');
+    for (const rel of addedLabelNotes) console.error(`        ${rel}`);
+    console.error('');
+    console.error('      Measuring THIS corpus needs a shipped-rule-only path: a labelled stage');
+    console.error('      built from the rules that pre-date this WP rather than from the module\'s');
+    console.error('      current one. That is deliberately NOT built here — it would be an');
+    console.error('      unpinned second copy of the rule list, checked by nothing.');
+    return 3;
   }
 
   const pct = notes.length ? ((100 * anyFindingToday) / notes.length).toFixed(1) : '0.0';
@@ -195,14 +232,6 @@ function measure(vaultPath) {
   console.log('Interim, with EP2 still keying on findings.length > 0 (this leg alone)');
   console.log(row('notes REVERTED by EP2, today', anyFindingToday));
   console.log(row('notes REVERTED by EP2, after this leg', proposedWithheld + proposedScrubbed));
-  if (addedLabelOccurrences > 0) {
-    console.log('');
-    console.log(
-      `NOTE: the '${ADDED_BY_THIS_WP}' rule this WP adds fired ${addedLabelOccurrences} time(s), so it`,
-    );
-    console.log("      consumed bodies the SHIPPED entropy pass would have seen. Today's");
-    console.log('      entropy figures above are understated by that much.');
-  }
   return 0;
 }
 
