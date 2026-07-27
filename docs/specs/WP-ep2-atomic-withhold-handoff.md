@@ -25,7 +25,17 @@ race in that WP's own guard. The architect analysed it, found the race
 and closing the race properly in a separate WP, and put the alternative to the
 owner. Recorded in the established form:
 
-> **OWNER-DECIDED IN SESSION — 2026-07-28 (TRANSCRIBED, NOT OWNER-TYPED).**
+**DATE CORRECTION — 2026-07-27, ROUND 8 OF THE DESIGN GATE, AND THE ERROR WAS
+THE COORDINATOR'S.** This record carried **2026-07-28**, as did four records in
+the predecessor. The ruling was taken in session on **2026-07-27**; the
+round-7.5 brief that commissioned the transcription stated 07-28 and the
+architect transcribed the brief's date rather than the session's. **Measured:**
+`a516c77`, the commit that wrote all five stamps, is authored `2026-07-27
+20:38:12 +0200` — a record cannot be dated after the commit that creates it.
+**Only the DATE moved.** The verbatim quotation, the scope clause and the
+transcription disclaimer are untouched, and no gate keys on this record.
+
+> **OWNER-DECIDED IN SESSION — 2026-07-27 (TRANSCRIBED, NOT OWNER-TYPED).**
 > Gyula Fehér answered in conversation; this record was written by the
 > architect, not by him. It records that the decision was taken — it is **not**
 > his signature and must never be treated as one, and **no gate keys on it**.
@@ -62,13 +72,64 @@ read.** Instead of `read → … → destroy`, the withhold becomes:
    syscall. After it the vault path no longer holds the note, so **there is no
    window in which the gate believes it has the bytes and does not**.
 2. Preserve into `state/quarantine/` from the file the gate now owns.
-3. Restore or drop the vault path as today (tracked → `git checkout HEAD --`;
-   untracked → the rename already removed it, then drop the index entry).
+3. Restore or drop the vault path — **and this step is where the race moves
+   rather than disappears; see immediately below.**
 
-**A concurrent save then resolves the safe way by construction.** An editor that
-writes in place writes to the inode the gate holds — captured. An editor that
-saves by atomic-rename creates a *new* file at the original path, which is not
-the note the gate was withholding and which the gate leaves alone.
+**A concurrent save resolves the safe way by construction ON THE CAPTURE.** An
+editor that writes in place writes to the inode the gate holds — captured. An
+editor that saves by atomic-rename creates a *new* file at the original path,
+which is not the note the gate was withholding.
+
+### The capture is atomic; the RESTORATION is not, and step 3 must say so
+
+**Raised by the adversarial reviewer in round 8 of the design gate on the
+predecessor, against this stub's own text.** Step 3 above originally read
+*"tracked → `git checkout HEAD --`; untracked → the rename already removed it,
+then drop the index entry"*, i.e. **exactly today's restoration**. That is not
+safe after an atomic capture — it **moves** the race rather than closing it:
+
+- the gate renames the note away, so the vault path is now **empty**;
+- **the note's owner (or the editor's atomic-rename save, or any other writer)
+  creates a file at that path in the window that follows** — which is precisely
+  the shape the capture was designed to tolerate;
+- the gate then runs `git checkout HEAD -- rel`, which **overwrites whatever is
+  at that path with HEAD's content.** The replacement is destroyed, and no
+  durable artefact holds it, because the gate preserved the *renamed* file and
+  has never read the replacement.
+
+**So the same read-then-destroy window survives, one step to the right.** The
+capture removed the window between "the gate believes it has the bytes" and "the
+gate destroys them"; it did not remove the window between "the gate believes the
+path is empty" and "the gate writes over it".
+
+**The design direction this stub mandates, therefore:**
+
+> **Tracked restoration must never overwrite a path that has REAPPEARED since
+> the capture.** Before restoring, the gate establishes that the vault path is
+> still absent. If a file is there, the gate **aborts, preserving both
+> versions** — the captured note is already in `state/quarantine/`, and the
+> replacement is left exactly where it is, untouched — and it repairs the index
+> entry **without writing to the working-tree path**. The predecessor's rule
+> governs unchanged: *never destroy the working-tree file unless some durable
+> artefact holds the bytes that are there now.*
+
+**How the absence is established is the real spec's first decision**, and it is
+flagged rather than answered here: a plain `fs.existsSync` before the checkout is
+itself a check-then-act with a window, so the candidate answers are an
+`O_CREAT|O_EXCL` placeholder taken at capture time and released after
+restoration, restoring through the index rather than through the working tree, or
+accepting a materially narrower window and disclosing it as a residual. **Prefer
+the one that has no window; disclose it honestly if none is available.**
+
+**The deterministic test that pins it, so the real spec inherits the seam rather
+than re-deriving it:** patch the wrapper around the tracked `git checkout` (and
+`fs.rmSync` on the untracked arm) to **create a file at the original vault path
+immediately before delegating** — a replacement installed between the capture and
+the restoration. Assert: the gate **aborted**; the replacement is **still on
+disk, byte-identical to what the patch wrote**; the captured note is in
+`state/quarantine/`; the index entry was repaired; and no artefact claims the
+replacement was preserved. **That is the same seam shape as the predecessor's
+`RP-1`, pointed at the window this WP creates rather than the one it closes.**
 
 **This is a change to the SHIPPED withhold path for every severity**, which is
 exactly why it is not in the predecessor: that WP's "Out of scope" forbids
@@ -79,11 +140,30 @@ changing the withhold path beyond three named exceptions, and this is a fourth.
 1. **The rename-first capture** in `quarantinePreserve` / the B3 withhold path,
    for `quarantine`-severity findings, unscannable binaries, and every
    redact-arm fall-through alike.
-2. **The predecessor's residual and its pinning test are re-derived.** `RP-1`
-   pins the race as *present*; when this WP lands, that row must fail. **It is
-   meant to** — the accepted residual it pins is retired in the same pass, and
-   the predecessor's Table K, Table R and Table B cells that describe the
-   check-then-destroy ordering are rewritten to the capture-then-destroy one.
+2. **The predecessor's residual and its pinning test are re-derived, and the
+   tripwire is re-aimed.** `RP-1` pins the race as *present*: it patches the
+   destructive call's seam to write over the target immediately before
+   delegating, and asserts the save is destroyed. When this WP lands that row
+   must stop passing, and the accepted residual it pins is retired in the same
+   pass, together with the predecessor's Table K, Table R and Table B cells that
+   describe the check-then-destroy ordering.
+
+   **CORRECTED IN ROUND 8: "RP-1 fails, therefore the race is closed" is not a
+   sound inference, and this stub previously made it.** RP-1's seam is the
+   *shipped* destructive call. This WP **removes or relocates that call** —
+   `fs.rmSync` on the untracked arm disappears entirely, since the rename already
+   removed the path — so **RP-1 can fail simply because its seam no longer
+   exists**, with the race intact one step to the right (see "The capture is
+   atomic; the RESTORATION is not"). A tripwire that fires on the disappearance
+   of its own hook proves nothing about the property it was watching.
+
+   **So the obligation on the real spec is stated as a property, not as a red
+   row:** when this WP lands, the predecessor's residual is retired **only if a
+   test asserts the race is CLOSED — that a write landing in the window is
+   preserved or aborted on, not destroyed** — and the replacement-during-
+   restoration test above is one half of that assertion. **RP-1 going red is a
+   prompt to check, never the evidence.** If the real spec finds it cannot make
+   that assertion, the residual stays open and says why.
 3. **The failure modes of the rename itself** — a cross-device `EXDEV`, a
    read-only vault, a path the gate cannot write beside — need their own outcome
    rows, because a failed capture must not fall back to the old read-and-trust
@@ -109,6 +189,13 @@ changing the withhold path beyond three named exceptions, and this is a fourth.
 2. **What does a failed rename do?** Almost certainly abort, on the predecessor's
    own rule — *never destroy the working-tree file unless some durable artefact
    holds the bytes that are there now* — but it needs its own row.
+2b. **How does the gate establish that the vault path is still ABSENT before it
+   restores?** This is the question "The capture is atomic; the RESTORATION is
+   not" raises and does not answer, and it is the first thing the real spec
+   decides — an `O_CREAT|O_EXCL` placeholder held across the window, restoration
+   through the index rather than the working tree, or a disclosed residual. **A
+   plain existence check before the checkout is not an answer**: it is the same
+   check-then-act shape one step down.
 3. **Does the same treatment extend to the redact arm's `scrubAddedLines`?** Its
    pre-rename comparison has the same shape, and the predecessor's residual
    covers that window too.
