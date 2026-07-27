@@ -511,6 +511,7 @@ async function main() {
     // `root`), so it is order-independent; it also runs here regardless.
     if (shim) failures.push(...scg.assertNoLoaderInvoked(shim));
     if (root) failures.push(...scg.assertNoRealSchedulerLeak(root));
+    if (root) failures.push(...scg.assertNoLoadedSchedulerLeak(root));
     if (root) fs.rmSync(root, { recursive: true, force: true });
   }
 

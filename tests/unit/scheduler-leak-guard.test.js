@@ -372,3 +372,593 @@ test('scheduler-leak-guard: F6 Linux XDG-scan branch — the observer honors XDG
   assert.equal(failures.length, 1);
   assert.match(failures[0], /wienerdog-dream\.timer/);
 });
+
+// ── assertNoLoadedSchedulerLeak: the LOADED-RECORD observer (tripwire 3) ──
+//
+// WHICH ARTIFACT THESE ASSERTIONS READ, AND WHY IT IS THE AUTHORITATIVE ONE:
+// every test below drives the observer off the OS scheduler's OWN record of
+// what it will execute — the `arguments = {` block of
+// `launchctl print gui/<uid>/<label>` — supplied as canned `opts.run` output.
+// The `.plist` file on disk is NOT authoritative and no assertion here reads
+// one: throughout the 2026-07-22 incident that file was perfectly correct
+// while the LOADED record for `ai.wienerdog.catchup` pointed at a deleted
+// harness temp core and failed hourly with MODULE_NOT_FOUND. `opts.run` is
+// injected in every test — none of them spawns a real `launchctl`.
+
+const UID = 501;
+const DOMAIN = `gui/${UID}`;
+
+/** @param {string} stdout @returns {{status:number, stdout:string, stderr:string}} a successful canned call. */
+function ok(stdout) {
+  return { status: 0, stdout, stderr: '' };
+}
+
+/**
+ * A canned `launchctl print gui/<uid>` stdout, in the shape observed live on
+ * macOS 26.5: a `services = {` block of three-field rows (PID, Status, Label),
+ * followed by a `disabled services = {` block that must NOT be mistaken for it.
+ * @param {string[]} labels @returns {string}
+ */
+function domainPrint(labels) {
+  return [
+    'com.apple.xpc.launchd.domain.gui.501 = {',
+    '\ttype = user',
+    '\tservices = {',
+    ...labels.map((l) => `\t\t       0      0 \t${l}`),
+    '\t}',
+    '\tdisabled services = {',
+    '\t\t"com.google.keystone.user.xpcservice" => enabled',
+    '\t}',
+    '}',
+  ].join('\n');
+}
+
+/**
+ * A canned `launchctl print gui/<uid>/<label>` stdout whose `arguments = {`
+ * block holds `args`, one per line — the live shape.
+ * @param {string} label @param {string[]} args @returns {string}
+ */
+function recordPrint(label, args) {
+  return [
+    `${label} = {`,
+    '\tactive count = 1',
+    `\tpath = /Users/u/Library/LaunchAgents/${label}.plist`,
+    '\targuments = {',
+    ...args.map((a) => `\t\t${a}`),
+    '\t}',
+    '}',
+  ].join('\n');
+}
+
+/**
+ * The injected `opts.run` seam: records every argv it is handed and answers
+ * from a target→result map. An unstubbed target throws, so a test can never
+ * silently pass over a call it did not expect.
+ * @param {string[][]} calls @param {Record<string, object>} byTarget
+ * @returns {(argv:string[]) => object}
+ */
+function makeRun(calls, byTarget) {
+  return (argv) => {
+    calls.push([...argv]);
+    const target = argv[2];
+    if (!Object.prototype.hasOwnProperty.call(byTarget, target)) {
+      throw new Error(`unexpected launchctl target in a canned run: ${target}`);
+    }
+    return byTarget[target];
+  };
+}
+
+/**
+ * The contracted LEAK message, reproduced HERE character for character rather
+ * than imported from scheduler-guard.js — an imported template would move with
+ * any mutation of the message and the equality assertion would be a tautology.
+ * @param {string} label @param {string} program @returns {string}
+ */
+function expectedLeakMessage(label, program) {
+  return [
+    'scheduler-guard: LEAK — the LOADED launchd record ' +
+      label +
+      ' will execute ' +
+      program +
+      ', which is inside a temp directory. A harness run clobbered the real' +
+      ' per-user label; the .plist FILE on disk is not the artifact at fault' +
+      ' and may look clean. Repair, IN THIS ORDER:',
+    '  1) wienerdog sync',
+    '  2) only if a re-run still reports this record:',
+    '     launchctl bootout gui/$(id -u)/' + label + ' ; wienerdog sync',
+  ].join('\n');
+}
+
+/**
+ * Run `fn` with the two product NEUTRALIZER env vars forced to the given
+ * values, restoring the originals in a `finally` so the suite-wide setting
+ * (WIENERDOG_TEST_NO_REAL_SCHEDULER=1 from tests/run.js) is not disturbed.
+ * Same shape as tests/unit/scheduler-guard.test.js's `withEnv`.
+ * @param {{guard?: string, noop?: string}} vals  undefined = delete the var
+ * @param {() => void} fn
+ */
+function withGuardEnv(vals, fn) {
+  const savedGuard = process.env.WIENERDOG_TEST_NO_REAL_SCHEDULER;
+  const savedNoop = process.env.WIENERDOG_LOADER_NOOP;
+  const set = (k, v) => {
+    if (v === undefined) delete process.env[k];
+    else process.env[k] = v;
+  };
+  set('WIENERDOG_TEST_NO_REAL_SCHEDULER', vals.guard);
+  set('WIENERDOG_LOADER_NOOP', vals.noop);
+  try {
+    fn();
+  } finally {
+    set('WIENERDOG_TEST_NO_REAL_SCHEDULER', savedGuard);
+    set('WIENERDOG_LOADER_NOOP', savedNoop);
+  }
+}
+
+const LEAK_PREFIX = 'scheduler-guard: LEAK — ';
+const UNVERIFIABLE_PREFIX = 'scheduler-guard: UNVERIFIABLE — ';
+
+test('scheduler-leak-guard: loaded-record observer FAILS on a record whose loaded argv is under the OS temp dir', () => {
+  // The incident's own shape: a LOADED record executing a launcher inside a
+  // harness temp core. The plist on disk is irrelevant and is never read.
+  const tempRoot = path.join(os.tmpdir(), 'wd-negative-UezlJP');
+  const program = path.join(tempRoot, 'core', 'launcher', 'launch.js');
+  const calls = [];
+  const out = scg.assertNoLoadedSchedulerLeak(tempRoot, {
+    platform: 'darwin',
+    uid: UID,
+    notice: () => {},
+    run: makeRun(calls, {
+      [DOMAIN]: ok(domainPrint(['ai.wienerdog.dream'])),
+      [`${DOMAIN}/ai.wienerdog.dream`]: ok(
+        recordPrint('ai.wienerdog.dream', ['/opt/homebrew/bin/node', program, 'dream'])
+      ),
+    }),
+  });
+  assert.equal(out.length, 1);
+  assert.ok(out[0].startsWith(LEAK_PREFIX), `expected a LEAK failure, got: ${out[0]}`);
+  assert.ok(out[0].includes('ai.wienerdog.dream'), 'the failure names the label');
+  assert.ok(out[0].includes(program), 'the failure names the offending argument');
+
+  // Converse: the same record shape with no temp-origin argument is a
+  // VERIFIED clean — the domain was reachable and every record was read.
+  const cleanCalls = [];
+  const clean = scg.assertNoLoadedSchedulerLeak(tempRoot, {
+    platform: 'darwin',
+    uid: UID,
+    notice: () => {},
+    run: makeRun(cleanCalls, {
+      [DOMAIN]: ok(domainPrint(['ai.wienerdog.dream'])),
+      [`${DOMAIN}/ai.wienerdog.dream`]: ok(
+        recordPrint('ai.wienerdog.dream', ['/opt/homebrew/bin/node', '/Users/u/.wienerdog/launcher/launch.js', 'dream'])
+      ),
+    }),
+  });
+  assert.deepEqual(clean, []);
+});
+
+test('scheduler-leak-guard: loaded-record observer does not stop at the FIRST selected label', () => {
+  const tempRoot = path.join(os.tmpdir(), 'wd-scenarios-AC1b');
+  const program = path.join(tempRoot, 'core', 'launcher', 'launch.js');
+  const calls = [];
+  const out = scg.assertNoLoadedSchedulerLeak(tempRoot, {
+    platform: 'darwin',
+    uid: UID,
+    notice: () => {},
+    run: makeRun(calls, {
+      [DOMAIN]: ok(domainPrint(['ai.wienerdog.dream', 'ai.wienerdog.catchup'])),
+      [`${DOMAIN}/ai.wienerdog.dream`]: ok(
+        recordPrint('ai.wienerdog.dream', ['/usr/bin/node', '/Users/u/.wienerdog/launcher/launch.js', 'dream'])
+      ),
+      [`${DOMAIN}/ai.wienerdog.catchup`]: ok(
+        recordPrint('ai.wienerdog.catchup', ['/usr/bin/node', program, 'catchup'])
+      ),
+    }),
+  });
+  assert.equal(out.length, 1, 'exactly one failure — the second, poisoned label');
+  assert.ok(out[0].includes('ai.wienerdog.catchup'), `the failure must name the SECOND label: ${out[0]}`);
+  const targets = calls.map((argv) => argv[2]);
+  assert.deepEqual(targets, [DOMAIN, `${DOMAIN}/ai.wienerdog.dream`, `${DOMAIN}/ai.wienerdog.catchup`]);
+});
+
+test('scheduler-leak-guard: loaded-record observer inspects EVERY selected label, including the last', () => {
+  // AC-1b alone is satisfied by `labels.slice(0, 2)`, a real implementation
+  // shape that still skips a poisoned THIRD label. Only this test proves the
+  // every-label property.
+  const tempRoot = path.join(os.tmpdir(), 'wd-scenarios-AC1c');
+  const program = path.join(tempRoot, 'core', 'launcher', 'launch.js');
+  const calls = [];
+  const out = scg.assertNoLoadedSchedulerLeak(tempRoot, {
+    platform: 'darwin',
+    uid: UID,
+    notice: () => {},
+    run: makeRun(calls, {
+      [DOMAIN]: ok(domainPrint(['ai.wienerdog.dream', 'ai.wienerdog.weekly', 'ai.wienerdog.catchup'])),
+      [`${DOMAIN}/ai.wienerdog.dream`]: ok(
+        recordPrint('ai.wienerdog.dream', ['/usr/bin/node', '/Users/u/.wienerdog/launcher/launch.js', 'dream'])
+      ),
+      [`${DOMAIN}/ai.wienerdog.weekly`]: ok(
+        recordPrint('ai.wienerdog.weekly', ['/usr/bin/node', '/Users/u/.wienerdog/launcher/launch.js', 'weekly'])
+      ),
+      [`${DOMAIN}/ai.wienerdog.catchup`]: ok(
+        recordPrint('ai.wienerdog.catchup', ['/usr/bin/node', program, 'catchup'])
+      ),
+    }),
+  });
+  assert.equal(out.length, 1);
+  assert.ok(out[0].includes('ai.wienerdog.catchup'), `the failure must name the THIRD label: ${out[0]}`);
+  const targets = calls.map((argv) => argv[2]);
+  assert.deepEqual(targets, [
+    DOMAIN,
+    `${DOMAIN}/ai.wienerdog.dream`,
+    `${DOMAIN}/ai.wienerdog.weekly`,
+    `${DOMAIN}/ai.wienerdog.catchup`,
+  ]);
+});
+
+test('scheduler-leak-guard: loaded-record observer invokes the loader by ABSOLUTE path (domain print and record print)', () => {
+  // The harness prepends a fail-closed loader-shim dir to PATH, so a bare
+  // `launchctl` could resolve to the guard's OWN containment machinery.
+  const tempRoot = path.join(os.tmpdir(), 'wd-scenarios-AC4');
+  const calls = [];
+  scg.assertNoLoadedSchedulerLeak(tempRoot, {
+    platform: 'darwin',
+    uid: UID,
+    notice: () => {},
+    run: makeRun(calls, {
+      [DOMAIN]: ok(domainPrint(['ai.wienerdog.dream'])),
+      [`${DOMAIN}/ai.wienerdog.dream`]: ok(
+        recordPrint('ai.wienerdog.dream', ['/usr/bin/node', '/Users/u/.wienerdog/launcher/launch.js', 'dream'])
+      ),
+    }),
+  });
+  assert.equal(calls.length, 2, 'one domain print plus one record print');
+  for (const argv of calls) {
+    assert.equal(argv[0], '/bin/launchctl', `every call must use the absolute loader path: ${JSON.stringify(argv)}`);
+  }
+});
+
+test('scheduler-leak-guard: a print exit of 1 or 112 is a FAILURE, not a skip', () => {
+  // 113 and ONLY 113 is tolerated. A blanket "any non-zero exit is a skip"
+  // would fail open in a module whose whole doctrine is fail-closed.
+  const tempRoot = path.join(os.tmpdir(), 'wd-scenarios-M3');
+  const label = 'ai.wienerdog.dream';
+  const forRecord = (recordResult) => {
+    const calls = [];
+    return scg.assertNoLoadedSchedulerLeak(tempRoot, {
+      platform: 'darwin',
+      uid: UID,
+      notice: () => {},
+      run: makeRun(calls, { [DOMAIN]: ok(domainPrint([label])), [`${DOMAIN}/${label}`]: recordResult }),
+    });
+  };
+
+  for (const status of [1, 112]) {
+    const out = forRecord({ status, stdout: '', stderr: 'boom' });
+    assert.equal(out.length, 1, `record print exit ${status} must be a failure, not a skip`);
+    assert.ok(out[0].startsWith(UNVERIFIABLE_PREFIX), `exit ${status} → UNVERIFIABLE, got: ${out[0]}`);
+    assert.ok(!out[0].startsWith(LEAK_PREFIX), `exit ${status} is not evidence of a leak`);
+  }
+});
+
+test('scheduler-leak-guard: loaded-record observer fails closed when the domain cannot be enumerated', () => {
+  // Table A's enumerate rows: there is NO path from "unreachable domain" to
+  // []. 112 is the load-bearing one — a headless/SSH session with no
+  // gui/<uid> domain must not print a green line over a domain it never saw.
+  const tempRoot = path.join(os.tmpdir(), 'wd-scenarios-M3b');
+  const enumerateWith = (domainResult) => {
+    const calls = [];
+    const out = scg.assertNoLoadedSchedulerLeak(tempRoot, {
+      platform: 'darwin',
+      uid: UID,
+      notice: () => {},
+      run: makeRun(calls, { [DOMAIN]: domainResult }),
+    });
+    return { out, calls };
+  };
+
+  const unterminated = ['com.apple.xpc.launchd.domain.gui.501 = {', '\tservices = {', '\t\t       0      0 \tai.wienerdog.dream'].join('\n');
+  const branches = [
+    ['spawn error', { error: new Error('spawn /bin/launchctl ENOENT'), status: null }],
+    ['exit 112 (no such domain — headless/SSH)', { status: 112, stdout: '', stderr: 'Could not find domain for user gui: 501' }],
+    ['non-string stdout', { status: 0, stdout: undefined, stderr: '' }],
+    ['unterminated services block', { status: 0, stdout: unterminated, stderr: '' }],
+  ];
+  for (const [name, domainResult] of branches) {
+    const { out, calls } = enumerateWith(domainResult);
+    assert.equal(out.length, 1, `${name} must yield exactly one failure`);
+    assert.ok(out[0].startsWith(UNVERIFIABLE_PREFIX), `${name} → UNVERIFIABLE, got: ${out[0]}`);
+    assert.ok(!out[0].startsWith(LEAK_PREFIX), `${name} is not evidence of a leak`);
+    assert.equal(calls.length, 1, `${name} must make ZERO per-record calls`);
+  }
+
+  // The verified clean: the domain WAS reachable and WAS enumerated, and it
+  // holds no Wienerdog registration.
+  const clean = enumerateWith(ok(domainPrint(['com.apple.Finder', 'com.google.keystone.user.agent'])));
+  assert.deepEqual(clean.out, []);
+  assert.equal(clean.calls.length, 1, 'no record print is issued when no label matches');
+});
+
+test('scheduler-leak-guard: a disabled services block is NOT accepted as the services block', () => {
+  // Exact trimmed EQUALITY on the opener. An `includes` implementation accepts
+  // the `disabled services = {` block, extracts zero labels (every row's last
+  // token is enabled/disabled) and returns a FALSE CLEAN where Table A
+  // requires UNVERIFIABLE. Without this decoy the rule is unfalsifiable.
+  const tempRoot = path.join(os.tmpdir(), 'wd-scenarios-M3c');
+  const decoy = [
+    'com.apple.xpc.launchd.domain.gui.501 = {',
+    '\ttype = user',
+    '\tdisabled services = {',
+    '\t\t"com.google.keystone.user.xpcservice" => enabled',
+    '\t\t"ai.wienerdog.dream" => disabled',
+    '\t}',
+    '}',
+  ].join('\n');
+  const calls = [];
+  const out = scg.assertNoLoadedSchedulerLeak(tempRoot, {
+    platform: 'darwin',
+    uid: UID,
+    notice: () => {},
+    run: makeRun(calls, { [DOMAIN]: ok(decoy) }),
+  });
+  assert.equal(out.length, 1, 'a domain print with no real services block is UNVERIFIABLE, never clean');
+  assert.ok(out[0].startsWith(UNVERIFIABLE_PREFIX), `expected UNVERIFIABLE, got: ${out[0]}`);
+  assert.equal(calls.length, 1, 'no record print may be issued');
+});
+
+test("scheduler-leak-guard: loaded-record observer catches a STALE leak from another run's temp root", () => {
+  // The 2026-07-22 record belonged to an EARLIER run: a tempRoot-only prefix
+  // set would report it clean, which is exactly how it survived for weeks.
+  const tempRoot = path.join(os.tmpdir(), 'wd-scenarios-THISRUN');
+  const staleRoot = path.join(os.tmpdir(), 'wd-negative-UezlJP');
+  const program = path.join(staleRoot, 'core', 'launcher', 'launch.js');
+  const calls = [];
+  const out = scg.assertNoLoadedSchedulerLeak(tempRoot, {
+    platform: 'darwin',
+    uid: UID,
+    notice: () => {},
+    run: makeRun(calls, {
+      [DOMAIN]: ok(domainPrint(['ai.wienerdog.catchup'])),
+      [`${DOMAIN}/ai.wienerdog.catchup`]: ok(
+        recordPrint('ai.wienerdog.catchup', ['/usr/bin/node', program, 'catchup'])
+      ),
+    }),
+  });
+  assert.equal(out.length, 1, "a leak under a SIBLING run's root must still be caught");
+  assert.ok(out[0].startsWith(LEAK_PREFIX));
+  assert.ok(out[0].includes(program));
+
+  // The converse pins Table D's single mechanism: a `wd-` path SEGMENT is not
+  // a temp marker (WIENERDOG_HOME=~/wd-dev is a legitimate install), so
+  // re-introducing a `wd-` rule turns this half red instead of shipping.
+  const cleanCalls = [];
+  const clean = scg.assertNoLoadedSchedulerLeak(tempRoot, {
+    platform: 'darwin',
+    uid: UID,
+    notice: () => {},
+    prefixes: ['/nonexistent-root'],
+    run: makeRun(cleanCalls, {
+      [DOMAIN]: ok(domainPrint(['ai.wienerdog.dream', 'ai.wienerdog.catchup'])),
+      [`${DOMAIN}/ai.wienerdog.dream`]: ok(
+        recordPrint('ai.wienerdog.dream', ['/usr/bin/node', '/Users/u/.wienerdog/launcher/launch.js', 'dream'])
+      ),
+      [`${DOMAIN}/ai.wienerdog.catchup`]: ok(
+        recordPrint('ai.wienerdog.catchup', ['/usr/bin/node', '/Users/u/wd-dev/launcher/launch.js', 'catchup'])
+      ),
+    }),
+  });
+  assert.deepEqual(clean, [], 'Table D has exactly one, location-shaped mechanism — no `wd-` segment rule');
+});
+
+test("scheduler-leak-guard: the product's neutralizer env vars do NOT silence the observer", () => {
+  // WIENERDOG_LOADER_NOOP and WIENERDOG_TEST_NO_REAL_SCHEDULER neutralize the
+  // PRODUCT's loader. Honoring them here would let the leaking configuration
+  // disable its own detector — and tests/run.js sets the second one for the
+  // whole suite, so such a guard would be dead under CI.
+  const tempRoot = path.join(os.tmpdir(), 'wd-scenarios-M5');
+  const program = path.join(tempRoot, 'core', 'launcher', 'launch.js');
+  withGuardEnv({ guard: '1', noop: '1' }, () => {
+    assert.equal(process.env.WIENERDOG_TEST_NO_REAL_SCHEDULER, '1');
+    assert.equal(process.env.WIENERDOG_LOADER_NOOP, '1');
+    const calls = [];
+    const out = scg.assertNoLoadedSchedulerLeak(tempRoot, {
+      platform: 'darwin',
+      uid: UID,
+      notice: () => {},
+      run: makeRun(calls, {
+        [DOMAIN]: ok(domainPrint(['ai.wienerdog.catchup'])),
+        [`${DOMAIN}/ai.wienerdog.catchup`]: ok(
+          recordPrint('ai.wienerdog.catchup', ['/usr/bin/node', program, 'catchup'])
+        ),
+      }),
+    });
+    assert.equal(out.length, 1, 'the neutralizers must not silence the observer');
+    assert.ok(out[0].startsWith(LEAK_PREFIX));
+  });
+});
+
+test('scheduler-leak-guard: the loaded-record observer reads NO scheduler artifact file', () => {
+  // The clean-looking plist must not be able to satisfy the observer: it was
+  // correct for the whole incident. fs.realpathSync(os.tmpdir()) is outside
+  // the spied set on purpose — it resolves a directory NAME and reads no
+  // content.
+  const tempRoot = path.join(os.tmpdir(), 'wd-scenarios-M6');
+  const program = path.join(tempRoot, 'core', 'launcher', 'launch.js');
+  const calls = [];
+  const run = makeRun(calls, {
+    [DOMAIN]: ok(domainPrint(['ai.wienerdog.catchup'])),
+    [`${DOMAIN}/ai.wienerdog.catchup`]: ok(
+      recordPrint('ai.wienerdog.catchup', ['/usr/bin/node', program, 'catchup'])
+    ),
+  });
+  const realReadFileSync = fs.readFileSync;
+  const realReaddirSync = fs.readdirSync;
+  const realOpenSync = fs.openSync;
+  let fsReads = 0;
+  let out;
+  try {
+    fs.readFileSync = (...a) => {
+      fsReads += 1;
+      return realReadFileSync(...a);
+    };
+    fs.readdirSync = (...a) => {
+      fsReads += 1;
+      return realReaddirSync(...a);
+    };
+    fs.openSync = (...a) => {
+      fsReads += 1;
+      return realOpenSync(...a);
+    };
+    out = scg.assertNoLoadedSchedulerLeak(tempRoot, { platform: 'darwin', uid: UID, notice: () => {}, run });
+  } finally {
+    fs.readFileSync = realReadFileSync;
+    fs.readdirSync = realReaddirSync;
+    fs.openSync = realOpenSync;
+  }
+  assert.equal(fsReads, 0, 'the observer must consult no scheduler artifact file');
+  assert.equal(out.length, 1);
+  assert.ok(out[0].startsWith(LEAK_PREFIX));
+});
+
+test("scheduler-leak-guard: opts.platform 'linux' does not take the darwin arm", () => {
+  // The operator-precedence trap: `(opts.platform || process.platform === 'darwin')`
+  // is truthy for ANY non-empty opts.platform, including 'linux'.
+  const notices = [];
+  const calls = [];
+  const run = (argv) => {
+    calls.push([...argv]);
+    throw new Error('the non-darwin arm must not invoke launchctl');
+  };
+  const notice = (m) => notices.push(m);
+
+  const linux = scg.assertNoLoadedSchedulerLeak('/tmp/wd-nonexistent', { platform: 'linux', uid: UID, run, notice });
+  assert.deepEqual(linux, []);
+  assert.equal(calls.length, 0, "opts.platform 'linux' must not take the darwin arm");
+  assert.equal(notices.length, 1, 'exactly one notice naming the linux residual');
+
+  const win = scg.assertNoLoadedSchedulerLeak('/tmp/wd-nonexistent', { platform: 'win32', uid: UID, run, notice });
+  assert.deepEqual(win, []);
+  assert.equal(calls.length, 0);
+  assert.equal(notices.length, 2, 'exactly one notice per call');
+});
+
+test('scheduler-leak-guard: a listed-then-unloaded label is skipped WITH a notice', () => {
+  // 113 is launchd's "could not find service … in domain" — a genuine race
+  // between the domain print and the record print. It is the ONLY tolerated
+  // non-zero exit, and no disposition in Table A is silent.
+  const tempRoot = path.join(os.tmpdir(), 'wd-scenarios-M9');
+  const notices = [];
+  const calls = [];
+  const out = scg.assertNoLoadedSchedulerLeak(tempRoot, {
+    platform: 'darwin',
+    uid: UID,
+    notice: (m) => notices.push(m),
+    run: makeRun(calls, {
+      [DOMAIN]: ok(domainPrint(['ai.wienerdog.dream'])),
+      [`${DOMAIN}/ai.wienerdog.dream`]: {
+        status: 113,
+        stdout: '',
+        stderr: 'Could not find service "ai.wienerdog.dream" in domain for user gui: 501',
+      },
+    }),
+  });
+  assert.deepEqual(out, [], 'exit 113 is a skip, not a failure');
+  assert.equal(notices.length, 1, 'the skip must PRINT');
+  assert.ok(notices[0].includes('ai.wienerdog.dream'), `the notice names the label: ${notices[0]}`);
+  assert.ok(notices[0].includes('113'), `the notice names the exit code: ${notices[0]}`);
+});
+
+test('scheduler-leak-guard: a temp-origin argument is classed LEAK, an unreadable record UNVERIFIABLE', () => {
+  // The two class prefixes are how a human tells "your machine is poisoned"
+  // from "this observer could not see". Both fail the run.
+  const tempRoot = path.join(os.tmpdir(), 'wd-scenarios-M11');
+  const program = path.join(tempRoot, 'core', 'launcher', 'launch.js');
+  const label = 'ai.wienerdog.catchup';
+  const forRecord = (recordResult) => {
+    const calls = [];
+    return scg.assertNoLoadedSchedulerLeak(tempRoot, {
+      platform: 'darwin',
+      uid: UID,
+      notice: () => {},
+      run: makeRun(calls, { [DOMAIN]: ok(domainPrint([label])), [`${DOMAIN}/${label}`]: recordResult }),
+    });
+  };
+
+  const leak = forRecord(ok(recordPrint(label, ['/usr/bin/node', program, 'catchup'])));
+  assert.equal(leak.length, 1);
+  assert.ok(leak[0].startsWith(LEAK_PREFIX), `a temp-origin argument is a LEAK, got: ${leak[0]}`);
+
+  const unreadable = [
+    ['spawn error', { error: new Error('spawn /bin/launchctl EAGAIN'), status: null }],
+    ['non-string stdout', { status: 0, stdout: undefined, stderr: '' }],
+    ['no arguments block', ok([`${label} = {`, '\tactive count = 1', '}'].join('\n'))],
+    ['unterminated arguments block', ok([`${label} = {`, '\targuments = {', `\t\t${program}`].join('\n'))],
+  ];
+  for (const [name, recordResult] of unreadable) {
+    const out = forRecord(recordResult);
+    assert.equal(out.length, 1, `${name} must yield exactly one failure`);
+    assert.ok(out[0].startsWith(UNVERIFIABLE_PREFIX), `${name} → UNVERIFIABLE, got: ${out[0]}`);
+    assert.ok(!out[0].startsWith(LEAK_PREFIX), `${name} is not evidence of a leak`);
+  }
+});
+
+test('scheduler-leak-guard: two calls on the same canned input return identical results', () => {
+  // Idempotent and read-only. A bare deepEqual(first, second) does NOT catch a
+  // module-scope accumulator: both calls would return the SAME array object,
+  // so `first` IS `second` and the comparison passes. Hence the snapshot, the
+  // explicit cardinality, and notStrictEqual.
+  const tempRoot = path.join(os.tmpdir(), 'wd-negative-UezlJP');
+  const label = 'ai.wienerdog.catchup';
+  const program = path.join(tempRoot, 'core', 'launcher', 'launch.js');
+  const responses = {
+    [DOMAIN]: ok(domainPrint([label])),
+    [`${DOMAIN}/${label}`]: ok(recordPrint(label, ['/opt/homebrew/bin/node', program, 'catchup'])),
+  };
+
+  const callsA = [];
+  const first = scg.assertNoLoadedSchedulerLeak(tempRoot, {
+    platform: 'darwin',
+    uid: UID,
+    notice: () => {},
+    run: makeRun(callsA, responses),
+  });
+  const firstSnapshot = structuredClone(first);
+  const firstCalls = structuredClone(callsA);
+  assert.equal(firstSnapshot.length, 1);
+  assert.equal(firstSnapshot[0], expectedLeakMessage(label, program));
+
+  const callsB = [];
+  const second = scg.assertNoLoadedSchedulerLeak(tempRoot, {
+    platform: 'darwin',
+    uid: UID,
+    notice: () => {},
+    run: makeRun(callsB, responses),
+  });
+  assert.notStrictEqual(first, second, 'each call must return a FRESH array');
+  assert.equal(second.length, 1);
+  assert.deepEqual(second, firstSnapshot);
+  assert.deepEqual(callsB, firstCalls);
+});
+
+test('scheduler-leak-guard: the LEAK message equals its contracted text exactly', () => {
+  // EQUALITY, not properties of the string. Three earlier review rounds each
+  // shipped a property-shaped assertion (source grep, absence-of-&&, marker
+  // slicing) and each was evaded by a message that still stranded the user.
+  // Equality subsumes the bootstrap-first ordering AND the unconditional `;`
+  // separator without restating either, and no substring satisfiable from
+  // elsewhere in the message can defeat it.
+  const tempRoot = path.join(os.tmpdir(), 'wd-negative-UezlJP');
+  const label = 'ai.wienerdog.catchup';
+  const program = path.join(tempRoot, 'core', 'launcher', 'launch.js');
+  const calls = [];
+  const out = scg.assertNoLoadedSchedulerLeak(tempRoot, {
+    platform: 'darwin',
+    uid: UID,
+    notice: () => {},
+    run: makeRun(calls, {
+      [DOMAIN]: ok(domainPrint([label])),
+      [`${DOMAIN}/${label}`]: ok(recordPrint(label, ['/opt/homebrew/bin/node', program, 'catchup'])),
+    }),
+  });
+  assert.equal(out.length, 1);
+  assert.equal(out[0], expectedLeakMessage(label, program));
+});

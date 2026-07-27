@@ -10,19 +10,42 @@
 // resolves the real launchd/systemd dirs and would register a REAL agent
 // pointing at the harness's temp core — an orphan once that temp core is
 // deleted. This module sandboxes only the `init` subprocess's env
-// (`buildInitEnv`) and adds two fail-closed tripwires: a PATH-shim that
+// (`buildInitEnv`) and installs three fail-closed tripwires: a PATH-shim that
 // captures + fails any real loader invocation (`makeLoaderShimDir` +
-// `assertNoLoaderInvoked`), and a report-only observer that scans the real
+// `assertNoLoaderInvoked`); a report-only observer that scans the real
 // scheduler dir(s) for anything this run actually leaked
-// (`assertNoRealSchedulerLeak`).
+// (`assertNoRealSchedulerLeak`); and a LOADED-RECORD observer that asks the OS
+// what every Wienerdog-named registration will actually execute
+// (`assertNoLoadedSchedulerLeak`).
 //
-// Zero deps, plain Node >= 18: only node:fs/os/path. No `child_process` here
-// — the shims are `sh` files written to disk, spawned only by the harnesses
-// (via the real `init` subprocess) or by the unit test that exercises them.
+// Zero deps, plain Node >= 18: node:fs/os/path plus node:child_process. The
+// `child_process` import exists for the loaded-record observer, which has to
+// ask the OS itself: a harness run that registers under an already-used
+// launchd label OVERWRITES the loaded record for that per-user-global label
+// and leaves the `.plist` file on disk untouched and perfectly correct, so no
+// amount of file reading can see it. That observer is strictly read-only
+// (`/bin/launchctl print` and nothing else) and reaches the OS through an
+// injectable `opts.run` seam, so no unit test ever spawns a real loader. The
+// shims themselves are still `sh` files written to disk, spawned only by the
+// harnesses (via the real `init` subprocess) or by the unit test that
+// exercises them.
 
+const { spawnSync } = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+
+/** The absolute launchd client path. ABSOLUTE BY CONTRACT: the harness prepends
+ *  a fail-closed loader-shim dir to the sandboxed init env's PATH, and a
+ *  bare-name lookup could resolve to that shim — the guard would then observe
+ *  its own containment machinery instead of the OS and report a false clean. */
+const LAUNCHCTL_PATH = '/bin/launchctl';
+
+/** Loaded-record label pattern. Deliberately looser than the product's
+ *  `[a-z0-9-]` job-name charset: the guard must be able to SEE a foreign-shaped
+ *  Wienerdog label, not only the ones we would have written. Fully anchored, no
+ *  `m` flag. */
+const LOADED_LABEL_PATTERN = /^ai\.wienerdog\.[a-z0-9.-]+$/;
 
 /** The four bare-name loader commands the product's scheduler chokepoint
  *  (`src/scheduler/spawn.js`'s `schedulerSpawn`) may invoke. */
@@ -353,4 +376,245 @@ function assertNoRealSchedulerLeak(tempRoot, opts = {}) {
   return failures;
 }
 
-module.exports = { makeLoaderShimDir, buildInitEnv, assertNoLoaderInvoked, assertNoRealSchedulerLeak };
+/**
+ * Tripwire 3: the LOADED-RECORD observer. Reads what the OS scheduler will
+ * ACTUALLY EXECUTE for every Wienerdog-named registration, and fails the run
+ * when any of it points into a temp directory. Deliberately takes NO `env`
+ * parameter — it must never be handed the sandboxed init env; the default
+ * `run` inherits the RUNNER's own environment.
+ * Reads NO scheduler artifact file: not the plist, not the systemd unit, not
+ * the manifest. That artifact was clean throughout the incident this exists to
+ * catch (the loaded record for `ai.wienerdog.catchup` pointed at a deleted
+ * harness temp core for weeks while its `.plist` on disk stayed correct).
+ * (`fs.realpathSync(os.tmpdir())` in the prefix step is a directory-name
+ * resolution, not an artifact read.)
+ *
+ * darwin: enumerate the loaded labels from the `services = {` block of
+ * `launchctl print gui/<uid>` — the SAME domain every record is then read
+ * from, so a domain this process cannot see fails closed instead of reporting
+ * an unexamined clean — then read each `ai.wienerdog.*` record's
+ * `arguments = {` block via `launchctl print gui/<uid>/<label>`. Every
+ * unverifiable condition is a failure; the single tolerated non-zero exit is
+ * `113` (launchd's "could not find service … in domain": a genuine
+ * listed-then-unloaded race), which is skipped WITH a printed notice.
+ * linux / win32 / anything else: returns `[]` and prints one notice naming the
+ * residual — a `systemd --user` manager's unit search path cannot be moved by
+ * a child process, and no `schtasks` interceptor exists.
+ *
+ * Failures carry one of exactly two class prefixes: `scheduler-guard: LEAK — `
+ * (a record was read and an argument is temp-origin — this machine is
+ * genuinely poisoned) or `scheduler-guard: UNVERIFIABLE — ` (the observer
+ * could not establish what a record will execute). Both fail the run.
+ *
+ * Strictly read-only: never issues `bootstrap`, `bootout` or any other
+ * mutation, and nothing it starts outlives the call (ADR-0004).
+ * @param {string} tempRoot  this run's temp root
+ * @param {{platform?:NodeJS.Platform,
+ *          run?: (argv:string[]) => {status:number|null, stdout?:string, error?:Error},
+ *          uid?: number, prefixes?: string[],
+ *          notice?: (msg:string) => void}} [opts]
+ * @returns {string[]} one loud, actionable failure per offending record; [] if clean
+ */
+function assertNoLoadedSchedulerLeak(tempRoot, opts = {}) {
+  const notice = opts.notice || ((m) => console.log(m));
+  // Parenthesised on purpose: `(opts.platform || process.platform === 'darwin')`
+  // parses as `opts.platform || (process.platform === 'darwin')`, which is
+  // truthy for ANY non-empty opts.platform — including 'linux'.
+  const isDarwin = (opts.platform || process.platform) === 'darwin';
+  if (!isDarwin) {
+    const platform = opts.platform || process.platform;
+    notice(
+      platform === 'linux'
+        ? 'scheduler-guard: note — the loaded-record observer is a no-op on linux. A running ' +
+            "`systemd --user` manager's unit search path is fixed when the MANAGER starts and is " +
+            "not moved by a child process's XDG_CONFIG_HOME, so a harness cannot load a unit from " +
+            'its temp dir; the only reachable leak shape is a unit FILE in the real user dir, ' +
+            'which assertNoRealSchedulerLeak already catches.'
+        : `scheduler-guard: note — the loaded-record observer is a no-op on ${platform}. ` +
+            'Accepted residual (WP-161): there is no schtasks PATH interceptor and no Windows CI runner.'
+    );
+    return [];
+  }
+
+  const run = opts.run || ((argv) => spawnSync(argv[0], argv.slice(1), { encoding: 'utf8' }));
+  const uid = opts.uid ?? process.getuid();
+  const domain = `gui/${uid}`;
+
+  // Table D — the ONE temp-origin mechanism, location-shaped. The whole OS temp
+  // base is in the prefix set (not just tempRoot) because a record poisoned by
+  // an EARLIER harness run sits under a SIBLING of this run's root; os.tmpdir()
+  // and its realpath differ on macOS and the poisoned argv used the non-realpath
+  // form, so both must be present.
+  let prefixes = opts.prefixes;
+  if (!prefixes) {
+    prefixes = [tempRoot, os.tmpdir()];
+    try {
+      prefixes.push(fs.realpathSync(os.tmpdir()));
+    } catch {
+      // Unresolvable realpath: just omit that third entry.
+    }
+  }
+  const bases = [];
+  for (const p of prefixes) {
+    const stripped = String(p).replace(/\/+$/, '');
+    if (stripped !== '' && !bases.includes(stripped)) bases.push(stripped);
+  }
+  const isTempOrigin = (a) => bases.some((p) => a === p || a.startsWith(`${p}/`));
+
+  /** @param {string} why @returns {string} */
+  const unverifiable = (why) => `scheduler-guard: UNVERIFIABLE — ${why}`;
+
+  /**
+   * Extract the body rows of the first block whose OPENING line trims to
+   * exactly `opener`, up to the next line trimming to exactly `}`.
+   * @param {string} stdout @param {string} opener
+   * @returns {{ok:boolean, reason?:string, rows?:string[]}}
+   */
+  const block = (stdout, opener) => {
+    const lines = stdout.split('\n');
+    // Exact trimmed EQUALITY, never includes(): the same output carries a
+    // `disabled services = {` block whose rows end in enabled/disabled, which
+    // would yield zero labels and a FALSE CLEAN.
+    const open = lines.findIndex((l) => l.trim() === opener);
+    if (open === -1) return { ok: false, reason: `no line whose trimmed content is exactly \`${opener}\`` };
+    for (let i = open + 1; i < lines.length; i += 1) {
+      if (lines[i].trim() === '}') return { ok: true, rows: lines.slice(open + 1, i) };
+    }
+    return { ok: false, reason: `the \`${opener}\` block is never closed by a line trimming to \`}\`` };
+  };
+
+  // ── Enumerate, from the SAME domain the records are read from ────────────
+  const enumerated = run([LAUNCHCTL_PATH, 'print', domain]);
+  if (enumerated && enumerated.error) {
+    return [
+      unverifiable(
+        `could not enumerate the LOADED launchd records in domain ${domain}: spawning ` +
+          `${LAUNCHCTL_PATH} failed (${enumerated.error.message}). The observer could not start, so ` +
+          'nothing behind it may be reported clean. This is NOT evidence of a leak.'
+      ),
+    ];
+  }
+  if (!enumerated || enumerated.status !== 0) {
+    const status = enumerated ? enumerated.status : null;
+    return [
+      unverifiable(
+        `could not enumerate the LOADED launchd records in domain ${domain} ` +
+          `(launchctl print exit ${status}). The observer cannot see this domain at all, so it ` +
+          'fails closed rather than reporting clean. This is NOT evidence of a leak: exit 112 is ' +
+          '"no such domain", which is what a headless/SSH session with no gui/<uid> domain ' +
+          'produces. Re-run from a GUI login session.'
+      ),
+    ];
+  }
+  if (typeof enumerated.stdout !== 'string') {
+    return [
+      unverifiable(
+        `could not enumerate the LOADED launchd records in domain ${domain}: launchctl print ` +
+          'exited 0 but produced no readable stdout. Fail-closed; NOT evidence of a leak.'
+      ),
+    ];
+  }
+  const services = block(enumerated.stdout, 'services = {');
+  if (!services.ok) {
+    return [
+      unverifiable(
+        `could not enumerate the LOADED launchd records in domain ${domain}: ${services.reason}. ` +
+          'The domain answered but its service list could not be located — an unparsed list is ' +
+          'not an empty list. Fail-closed; NOT evidence of a leak.'
+      ),
+    ];
+  }
+
+  const labels = [];
+  for (const row of services.rows) {
+    const trimmed = row.trim();
+    if (trimmed === '') continue;
+    // Observed live on macOS 26.5: every services row splits into exactly three
+    // whitespace-separated fields (PID, Status, Label), so the label is the last.
+    const label = trimmed.split(/\s+/).pop();
+    if (LOADED_LABEL_PATTERN.test(label)) labels.push(label);
+  }
+
+  // ── Read EVERY selected label's record — never stop at the first ─────────
+  const failures = [];
+  for (const label of labels) {
+    const record = run([LAUNCHCTL_PATH, 'print', `${domain}/${label}`]);
+    if (record && record.error) {
+      failures.push(
+        unverifiable(
+          `could not read the LOADED launchd record ${label}: spawning ${LAUNCHCTL_PATH} failed ` +
+            `(${record.error.message}). Fail-closed; NOT evidence of a leak.`
+        )
+      );
+      continue;
+    }
+    if (!record || record.status !== 0) {
+      const status = record ? record.status : null;
+      if (status === 113) {
+        // The ONLY tolerated non-zero exit: launchd's "could not find service …
+        // in domain" — the label was listed a moment ago and is no longer
+        // loaded, i.e. a genuine race. It prints; no disposition here is silent.
+        notice(
+          `scheduler-guard: note — label ${label} was listed but is no longer loaded ` +
+            '(launchctl print exit 113); skipped.'
+        );
+        continue;
+      }
+      failures.push(
+        unverifiable(
+          `could not read the LOADED launchd record ${label} (launchctl print exit ${status}). ` +
+            'Only exit 113 ("no such service in domain", a listed-then-unloaded race) is tolerated; ' +
+            'every other exit — 112 (no such domain), 64 (malformed target) — leaves what this ' +
+            'record will execute unknown. Fail-closed; NOT evidence of a leak.'
+        )
+      );
+      continue;
+    }
+    if (typeof record.stdout !== 'string') {
+      failures.push(
+        unverifiable(
+          `could not read the LOADED launchd record ${label}: launchctl print exited 0 but ` +
+            'produced no readable stdout. Fail-closed; NOT evidence of a leak.'
+        )
+      );
+      continue;
+    }
+    const args = block(record.stdout, 'arguments = {');
+    if (!args.ok) {
+      failures.push(
+        unverifiable(
+          `could not read what the LOADED launchd record ${label} will execute: ${args.reason}. ` +
+            'The record exists but its exec identity could not be read. Fail-closed; NOT evidence ' +
+            'of a leak.'
+        )
+      );
+      continue;
+    }
+    for (const row of args.rows) {
+      const program = row.trim();
+      if (program === '' || !isTempOrigin(program)) continue;
+      failures.push(
+        [
+          `scheduler-guard: LEAK — the LOADED launchd record ${label}` +
+            ` will execute ${program}` +
+            ', which is inside a temp directory. A harness run clobbered the real' +
+            ' per-user label; the .plist FILE on disk is not the artifact at fault' +
+            ' and may look clean. Repair, IN THIS ORDER:',
+          '  1) wienerdog sync',
+          '  2) only if a re-run still reports this record:',
+          `     launchctl bootout gui/$(id -u)/${label} ; wienerdog sync`,
+        ].join('\n')
+      );
+      break; // one failure per offending record
+    }
+  }
+  return failures;
+}
+
+module.exports = {
+  makeLoaderShimDir,
+  buildInitEnv,
+  assertNoLoaderInvoked,
+  assertNoRealSchedulerLeak,
+  assertNoLoadedSchedulerLeak,
+};
