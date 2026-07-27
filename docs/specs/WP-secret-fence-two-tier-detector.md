@@ -1490,7 +1490,7 @@ dispositions measurements rather than predictions.
 | 34 | `\| secret \|\| be54813a2602a78822e939663ab31c3eff164261 \|` | **redact** — negative control for A8a's exclusion of `\|\|`. A compact markdown table with an empty cell. Quarantines if `\|\|` joins `SEP` |
 | 35 | `the token rotation runbook lives here: Rt6Yh2Nk9Pw4Jm7Vx3Bq5Zd8` | **redact** — negative control for A8's filler **bound**. Keyword `token`, then **28** filler characters (all inside `[ \t\w.-]`), then the separator `:`, then a 24-character opaque id at 4.585 bits. 28 > 20, so nothing binds and the id falls to tier 1. **Quarantines if `ENTROPY_CTX_FILLER_MAX` rises to 40** (C3-12, mutation M-5). It does **not** move when the filler *class* widens — that is row 36's job |
 | 36 | `` credential ("legacy"): `Projects/example/wienerdog/current-state` `` | **clean** — negative control for A8's filler **class**. Keyword `credential`, then **11** filler characters — a space followed by `("legacy")`, three of which (`(`, `"`, `)`) are outside gitleaks' `[ \t\w.-]` — then the separator `:` and a backtick, then a path-shaped 34-character tier-2 run at 4.021 bits whose longest tier-1 sub-run is under the 24 floor. Under A8 the keyword cannot reach the separator, so the row is clean. **Quarantines if the filler class widens to `[^\n]`** (C3-13, mutation M-13). It does **not** move when the filler *bound* rises — that is row 35's job. The shape is the sanitized reproduction of the one real vault note M4b measures, and the candidate is row 26's, so the two rows differ only in binding mechanism |
-| 37 | `the authorization runbook and its rotation checklist here: Kb7Wm3Qx9Ld5Tz2Ph8Nr4Vg6` | **redact** — negative control for A8's filler **bound** *and* for `hasBoundContext`'s **lookback derivation**, which row 35 cannot hold. Keyword `authorization` (13 characters — the one A7 keyword that is not in `SENSITIVE_KEYS`, so no labelled rule consumes this row), then **40** filler characters — the words `runbook and its rotation checklist here` together with the space that precedes them, every one of the 40 inside `[ \t\w.-]`, then the separator `:` and one space, then a 24-character opaque id at 4.585 bits. 40 > 20, so nothing binds and the id falls to tier 1. Its **binding span is Table L's** — deliberately more than `21 + ENTROPY_CTX_FILLER_MAX + 12` evaluates to at the shipped bound. (That arithmetic result is **Table L row L3**'s; this cell refers to the expression.) **Under M-5 it rises to `quarantine` only if the lookback is derived**: at `ENTROPY_CTX_FILLER_MAX = 40` a derived lookback binds it, while a lookback frozen at its shipped-bound value starts the slice two characters inside `authorization`, leaving `thorization runbook and its rotation checklist here:` plus one trailing space — which contains no A7 keyword — so the row stays `redact` (C3-12, mutation M-5). It does **not** move when the filler *class* widens |
+| 37 | `the authorization runbook and its rotation checklist here: Kb7Wm3Qx9Ld5Tz2Ph8Nr4Vg6` | **redact** — negative control for A8's filler **bound** *and* for `hasBoundContext`'s **lookback derivation**, which row 35 cannot hold. Keyword `authorization` (13 characters — the one A7 keyword that is not in `SENSITIVE_KEYS`, so no labelled rule consumes this row), then **40** filler characters — the words `runbook and its rotation checklist here` together with the space that precedes them, every one of the 40 inside `[ \t\w.-]`, then the separator `:` and one space, then a 24-character opaque id at 4.585 bits. 40 > 20, so nothing binds and the id falls to tier 1. Its **binding span is Table L's** — deliberately more than `21 + ENTROPY_CTX_FILLER_MAX + 12` evaluates to at the shipped bound. (That arithmetic result is **Table L row L3**'s; this cell refers to the expression.) **Under M-5 it rises to `quarantine` only if the lookback is derived** — its span exceeds **Table L row L3**'s value, so a frozen literal truncates the slice and the row stays `redact`. **C3-12 states that asymmetry in full and this cell does not restate it.** It does **not** move when the filler *class* widens |
 | 38 | `rotate the authorization token before Friday:` + a newline + `Projects/example/wienerdog/current-state is unaffected` | **clean** — negative control for A8's **same-line** clause. The keyword (`authorization`, filler 20; also `token`, filler 14), the separator `:` and the candidate are all present and correctly ordered, and the **only** thing that must stop them binding is the newline between the separator and the candidate. A8 is same-line only, so nothing binds and the 34-character path-shaped tier-2 run `Projects/example/wienerdog/current` (4.021 bits, longest tier-1 sub-run 9 characters) is left alone. **Quarantines — destructively, on ordinary prose — under any implementation that reaches across the newline**, which is what a `\s*` between the separator and the candidate does (C3-14, mutation M-36). The newline is part of the fixture data, not this table's formatting |
 | 39 | `the authorization checklist: see Jd4Vn8Sc2Mq6Bx1Zt5Wf9Hk3 for detail` | **redact** — negative control for A8's **adjacency** clause: the candidate must follow the separator directly, with only optional whitespace and one optional quote or backtick between them. Keyword `authorization`, filler `checklist` plus its leading space (10 characters, well inside the bound), separator `:` — and then the word `see` sits between the separator and the 24-character opaque id at 4.585 bits. Under A8 nothing binds and the id falls to tier 1. **Quarantines under any implementation that also allows filler *after* the separator** (C3-15, mutation M-37) — the symmetric mistake to row 35's, and the clause M-5's own note leans on when it explains why raising the bound moves no row 1–28 |
 | 40 | `the authorization digest of the file == Kb7Wm3Qx9Ld5Tz2Ph8Nr4Vg6` | **redact** — negative control for A8's separator **cardinality**: exactly one token from `SEP`, never a run of them. Keyword `authorization`, then **exactly 20** filler characters — the words `digest of the file` together with the space that precedes them and the one that follows, every one of the 20 inside `[ \t\w.-]` — then **two** separator tokens `==`, then one space, then row 37's 24-character opaque id at 4.585 bits. Under A8 a single token leaves the second `=` stranded between the separator and the candidate, nothing binds, and the id falls to tier 1. **Quarantines under a binder that quantifies the separator — `(?:${SEP})+`** (C3-16, mutation M-38), which is the form M4f measures as a real false positive on this repository's own `docs/` tree. **The filler is exactly 20 characters on purpose**: that is what keeps the row unreachable under M-13 (a `[^\n]` filler would need a 21st character to cross the first `=`) and under M-5 (`=` is in no filler class at any bound), so this row moves under M-38 and under nothing else. M4f explains why it is a shortened reproduction rather than the measured `docs/` line |
@@ -1697,14 +1697,21 @@ moving is the pass; row 35 alone moving means the lookback is a literal.
 
 | # | fact | value |
 |---|------|-------|
-| **L1** | **the floor** — the smallest literal lookback under which all forty-four C2 rows still reach their `Expect` cell | **17**, i.e. the maximum span above. A literal at or above 17 is behaviourally indistinguishable from the derived expression *on this corpus* |
+| **L1** | **the floor** — the smallest literal lookback under which **every C2 row** still reaches its `Expect` cell (the row count is **C3-0**'s) | **17**, i.e. the maximum span above. A literal at or above 17 is behaviourally indistinguishable from the derived expression *on this corpus* |
 | **L2** | what breaks below the floor, measured row by row | **16** → row **42** alone misses; **15** → rows **30** and **42**; **14** → rows **30**, **32** and **42**. Each miss drops that row out of C3-5's set and fails its equality |
 | **L3** | the shipped value | the expression `21 + ScanLimits.ENTROPY_CTX_FILLER_MAX + 12` evaluates to **53** at the shipped bound — comfortably above L1, which is why **no main-suite row can see the difference** between the expression and a literal today |
 | **L4** | what the floor does **not** hold | **L1 is a corpus fact, not a contract.** A literal at 17 passes every row here and is still wrong: the *form* is Table A's (an expression over `ScanLimits`, never a result), and V-2e pins the declaration line for exactly that reason. **Do not read L1 as a licence to write 17** |
-| **L5** | the behavioural holder above the shipped value | **C2 row 37** — its span and the shipped value are in the rows above; this row states only the CONSEQUENCE. Under **M-5** a derived lookback binds row 37 and a literal frozen at the shipped value does not: the slice starts two characters inside the keyword `authorization` and no keyword survives. **That asymmetry is C3-12's**, and it is why row 35 alone moving under M-5 is a failure rather than a pass. *Round 5 wrote this row's figures a second time, four lines under the sub-table that decides them; round 6 reduced it to the pointer* |
+| **L5** | the behavioural holder above the shipped value | **C2 row 37** — its span is in the sub-table above and the asymmetry it produces under **M-5** is stated in full in **C3-12**. This row is a pointer to both and states neither. *Round 5 wrote the figures a second time here; round 6 reduced it to a pointer and round 7 removed the last restatement of the slice sentence* |
 
-**Its mirrors, and they are citations only.** **The full set, re-enumerated in
-round 6 after three of them were created unregistered in round 5:**
+**Its mirrors, and they are citations only.** **The numeric mirrors,
+re-enumerated in round 6 after three of them were created unregistered in round
+5 — and no longer claiming to be the complete set, because this document's own
+rule forbids a completeness claim without a derived check.** V-32 is that check
+for *registration*; nothing derives *this* list, so read it as the enumerated
+ones and add on sight:
+**the "Four canonical numeric surfaces" table** (its Table L row) and **the
+Contract-reference family index** (its Table L row) — both of which describe
+what Table L decides and were missing from this list until round 7;
 the Implementation-notes paragraph "Why the derivation and not the arithmetic
 result" (which keeps the *reasoning* and carries **no span, no floor, no
 lookback value and no id set**); **the Implementation-notes section "Why V-2e is
@@ -1759,7 +1766,20 @@ finding updates the table **and all of its mirrors** in one pass, and any new
 mirror found in review is registered here on the spot.
 
 **The round-2 rule, learned the expensive way: a mirror may cite a table row id;
-it may not restate a number the table decides.** Four of round 2's blocking
+it may not restate a number the table decides.**
+
+**NO NEW ABSOLUTE WITHOUT AN EXECUTED CHECK BESIDE IT — round 7's standing
+rule, and it is written here because three of round 6's blocking findings were
+that one class.** "Every", "none", "only", "the full set", "no surface may" —
+each of those is a claim about the *whole document*, and a claim about the whole
+document that nobody ran is a claim that the next review falsifies. Round 6
+shipped three: *"No surface in this document may say it does"* (falsified at two
+canonical cells), *"The full set"* (missing two members), and *"rejects every
+literal"* (true only of the declaration line). **So: write the absolute and the
+grep in the same edit, or write neither.** The three mechanized examples in this
+document are V-26 (Table Q's membership), V-30/V-32 (the Checklist's) and V-31
+(the safe/authorize universal); a fourth absolute with no check is a defect on
+sight, whichever surface carries it. Four of round 2's blocking
 findings were one defect wearing four hats — a count copied into prose and left
 behind when the table moved. Registering a numeric mirror is not enough, because
 nothing forces it to agree. The four numeric surfaces and their disjointness are
@@ -1809,7 +1829,9 @@ decides what the mechanism actually guarantees.
       **Verification:** V-2, V-2b, V-2c, V-2d, **V-2e**, V-3, V-12, V-19, and
       **V-29**, which digests A8's row whole.
       **Mutations:** M-1, M-2, M-3, M-5, M-6, M-13, M-14, M-15, M-34,
-      M-35, M-36, M-37, M-38, M-39, M-40, M-41, **M-42**, **M-43**, **M-44**.
+      M-35, M-36, M-37, M-38, M-39, M-40, M-41, **M-42**, **M-43**, **M-44**,
+      **M-52** (round 7 — the dead-declaration mutation that makes V-2e's
+      use-site pin distinguishable from its declaration pin).
       **Measurements:** M4a, M4b, M4c, M4d, M4e and **M4f** — if A8a's set or
       A16's rule changes, those blocks are wrong, not merely stale.
       **A future revision that moves a clause of A8 moves, in one pass:** its
@@ -1855,7 +1877,16 @@ decides what the mechanism actually guarantees.
       register-on-the-spot rule applies to a table's own author too.*
       **A mirror of this table may not live inside a ` ```bash ` fence**: the
       residue sweep cannot see there, which is how V-2e's block went stale
-      under two clean sweeps. **Table L is itself a C3-5 mirror in one direction only** — its
+      under two clean sweeps.
+      **The rows themselves, registered in round 7 because V-32 refused to
+      pass without them** — and that refusal is the mechanization earning its
+      place on its first run: **L1** (the floor) is mirrored by C3-12 and by
+      the Implementation-notes paragraph; **L2** (what breaks below it) by
+      nothing else, deliberately — it is the one row with no mirror and V-32
+      is what will notice if one appears; **L3** (the shipped value) by V-2e's
+      section and by M-5's cell; **L4** (the floor is not a permitted value) by
+      Table A row A8's form clause and by V-2e's section; **L5** (the
+      behavioural holder) by C3-12 and C2 row 37's cell. **Table L is itself a C3-5 mirror in one direction only** — its
       rows ARE C3-5's id set, so a row joining or leaving that set re-measures
       this table in the same pass, which is the coupling round 2 discovered
       by paying for it and round 3 found again in the repair.
@@ -2299,14 +2330,17 @@ what an owner reads to know what to type**; the grep is derived from it.
   `grep -cxF` is therefore the only structural holder available, and it rejects
   **every** literal, not a listed one.
 
-  **Why the second, "no bare literal" grep is GONE (round 6).** It was
-  structurally redundant, and keeping it cost a live figure in an unswept region.
-  The whole-line pin already requires the declaration to be exactly the
-  expression; **a second `const CTX_LOOKBACK_MAX` at module scope is a
-  `SyntaxError`**, so a conforming module cannot both satisfy the pin and carry a
-  literal declaration. The removed probe could only ever have fired on a literal
-  appearing somewhere else entirely in the module — which is not what V-2e is
-  for, and which C2 row 37 under M-5 catches behaviourally if it matters.
+  **Why the second, "no bare literal" grep is GONE — and what deleting it
+  NARROWED (round 6, corrected in round 7).** Round 6 called it "structurally
+  redundant", which overstates the case. What the whole-line pin rejects is every
+  literal **as the value of that declaration** — a second `const
+  CTX_LOOKBACK_MAX` at module scope is a `SyntaxError`, so the declaration cannot
+  be both the expression and a number. **It says nothing about a literal at the
+  USE site.** Deleting the probe therefore narrowed structural coverage to the
+  declaration line, leaving a use-site literal held only behaviourally, by C2 row
+  37 under M-5. **Round 7 restores the structural half rather than the probe**:
+  the identifier must occur at least twice, so a declaration the binder never
+  reads fails the build. Mutation **M-52** is what proves that pin fires.
 
   **What holds the lookback, then.** Two things, and both are needed.
   **(1) Structurally: this pin**, on the exact declaration, at module scope,
@@ -2695,6 +2729,7 @@ valid only at the instant it is measured.
 | M-37 | allow filler between the separator and the candidate — insert a second `[ \t\w.-]{0,ENTROPY_CTX_FILLER_MAX}` after the separator in `hasBoundContext`'s regex | AC-13 via C3-15: C2 row **39** must move from `redact` to `quarantine`, and no other row in **35–41/44** may move. Holds A8's adjacency requirement, which M-5's own note leans on to explain why raising the bound moves no row in 1–28 |
 | M-38 | quantify the separator — write `(?:${SEP})+` instead of `(?:${SEP})` at `hasBoundContext`'s use site, leaving the `SEP` declaration byte-identical | AC-13 via C3-16: C2 row **40** must move from `redact` to `quarantine`, and no other row in **35–41/44** may move. Holds A8's separator **cardinality**. **This mutation is invisible to every grep in this document** — measured 2026-07-26, a module carrying it passes V-2, V-2e and both of V-12's pins — and it was invisible to the corpus too until row 40 existed. It is also the one A8-clause loosening with a measured false positive on real prose (M4f) |
 | M-39 | quantify **both** quote/backtick slots — write `*` instead of `?` on both `["'\`]` groups in `hasBoundContext`'s regex | AC-13 via C3-17: C2 rows **41 and 44** must **both** move from `redact` to `quarantine`, and no other row in **35–41/44** may move. **Read which rows moved, not just the exit status** — row 41 alone moving means the pre-separator slot was left at `?`, which is a *different* implementation from the one this row mutates and is what M-44 isolates. Holds A8's quote/backtick **cardinality** as one whole clause. Same invisibility as M-38 to every grep and to all 39 pre-round-4 rows; unlike M-38 its measured `docs/` cost is zero lines (M4f). *Re-measured 2026-07-27 over all forty-four rows; the previous cell named row 41 alone, which was correct only while row 44 did not exist* |
+| M-52 | **the DEAD DECLARATION** — keep `const CTX_LOOKBACK_MAX = 21 + ScanLimits.ENTROPY_CTX_FILLER_MAX + 12;` exactly as V-2e pins it, and have `hasBoundContext` slice with a literal instead of reading it | **V-2e's use-site pin** (the identifier must occur at least twice) — and **AC-13 via C3-12** behaviourally, because under **M-5** the literal truncates row 37's binding and only row 35 moves. **This mutation is what makes the two halves of V-2e distinguishable**: the whole-line pin alone passes against it, since the declaration is byte-perfect and merely unused. *Round 6 deleted a probe on the grounds that the line pin "rejects every literal"; it rejects every literal AS THE VALUE OF THAT DECLARATION, which is a narrower claim, and this row is the gap it left* |
 | M-44 | quantify the **PRE-separator** quote/backtick slot **alone** — write `*` instead of `?` on the **first** of the two quote/backtick groups in `hasBoundContext`'s regex (the one that sits before the separator, i.e. the first of the pair M-39 quantifies together) and leave the second at `?` | AC-13 via C3-19: C2 row **44** must move from `redact` to `quarantine`, and **no other row moves at all**, row 41 included. Holds A8's pre-separator quote slot, which **round 5 recorded as unheld anywhere** and round 1 of the design gate closed. **This is the mutation that makes 41 and 44 a pair rather than a duplicate**: without it, an implementation with `*` before the separator and the required `?` after it passes row 41, passes M-39's observed outcome and passes every structural grep while violating canonical A8 — which is the contradiction of AC-15 Codex's round-1 review named. **Invisible to every grep in this document**, exactly like M-38 and M-39: the `SEP` declaration and the lookback line are byte-identical under it, so V-2, V-2e and both of V-12's pins stay green. **New id**, allocated under the id convention's measured-enumeration carve-out. **The next-free figure is NOT restated here** — it is decided once, in the id-convention section under "Verification steps", and this cell's own copy went stale the moment the sibling took M-45 … M-48 in the same pass. *Round 3 of the design gate: cite-not-restate, applied to an allocation figure for the same reason it applies to a corpus count.* |
 | M-40 | replace `SEP` with the bare character class `[:=>]`, i.e. **drop** `:{1,3}=`, `=>` and `?=` | AC-13 via C3-11: C2 rows **29, 30, 31** fall from `quarantine` to `redact`. This is the mutation in the *dropping* direction, and it is what makes A8a's adoptions testable — without it a future edit could quietly restore the one-character rule M4c measured as a cliff |
 | M-41 | **add** `,` to `SEP` | AC-13 (C2 row 33 moves to `quarantine`) |
@@ -2823,8 +2858,34 @@ a **third** naming scheme. **The cost exceeds the benefit this late and the call
 is the owner's**, so it is a candidate for the next epic that splits a spec, not
 a defect open against this one.
 
-Concretely, for this leg, as **re-measured by the orchestrator on 2026-07-26 with
-both leg specs final and no agent writing to either**:
+**THE ALLOCATION PROCEDURE — run it, do not quote it.** Three rounds of this
+gate produced three actual cross-leg collisions, and rounds 5 and 6 each left
+the two legs' own next-free statements contradicting each other. Every one of
+those failures was a **number written down**. So no surface in either leg states
+a next-free figure any more; they state **the command**, and it is run at write
+time:
+
+```bash
+# the next free M- and V- id across BOTH legs, derived, never recalled
+grep -ohE '\b[MV]-[0-9]+[a-z]?\b' \
+  docs/specs/WP-secret-fence-two-tier-detector.md \
+  docs/specs/WP-secret-fence-ep2-redact-arm.md \
+  | sort -u -t- -k2 -n | tail -5
+```
+
+**Why the command and not the leg-tagged scheme** (`D-M-nn` / `G-M-nn`, this
+document's own recorded alternative): the command is smaller, it needs no rename
+across two accumulated review histories, and it removes the failure mode
+completely rather than making it structurally impossible at the cost of a
+third naming scheme. **Leg-tagged ids remain a recorded follow-up candidate**
+and the owner's call, exactly as before.
+
+**A figure may appear only as a DATED SNAPSHOT, marked as one**, and the
+snapshot's job is to date the reading, never to reserve anything. Executed
+2026-07-27 across both files: **union max `M-51`, `V-32`** — so the next free
+are `M-52` and `V-33` *at that instant and no later one*.
+
+Concretely, for this leg:
 
 1. An id inherited from the parent spec keeps its number **only while both legs
    use it for the same check** — that is the whole point of inheriting it, so a
@@ -2857,12 +2918,11 @@ under the convention's own condition rather than carried forward.** The
 architect held BOTH leg files in a single revision pass, with both final and no
 agent writing to either, which is precisely the state the convention requires of
 the orchestrator; the reading was taken then, by enumerating every `M-nn` and
-`V-nn` occurrence in both documents. `M-44` was free and is now **live**. **Next
-free as of 2026-07-27: M-50 and V-30** — the sibling leg took **M-45 … M-49** in
-this epic's round-4 and round-5 passes, which is why the figure is 50 and not 45, and which is the whole
-argument for re-measuring at write time rather than quoting a previous round's
-snapshot. A dated snapshot of a reading taken at
-write time, valid at that instant, and not a reservation.
+`V-nn` occurrence in both documents. `M-44` was free and is now **live**.
+**Next free: RUN THE ALLOCATION PROCEDURE ABOVE.** This sentence stated a
+figure in rounds 5 and 6 and contradicted the sibling both times — which is
+precisely the argument for running the command rather than quoting a previous
+round's snapshot.
 
 **The reallocation map, recorded once so a PR comment or review note from ANY
 round can still be read.** Each chain runs left to right and the rightmost id is
@@ -2988,9 +3048,9 @@ grep -q "add('basic-auth', SEVERITY.QUARANTINE)" src/core/secret-scan.js
 #      mirror living here could go stale with every gate green. See that section.
 LOOKBACK_LINE='const CTX_LOOKBACK_MAX = 21 + ScanLimits.ENTROPY_CTX_FILLER_MAX + 12;'
 test "$(grep -cxF "$LOOKBACK_LINE" src/core/secret-scan.js)" = "1"
-#      THE BEHAVIOURAL HOLDER IS NOT THIS STEP. A grep cannot see a lookback
-#      that is merely too small; C2 row 37 under mutation M-5 can, and C3-12
-#      says what that must produce. Run M-5 and read WHICH rows moved.
+#      AND THE USE SITE — rationale in the Implementation notes, mutation M-52.
+test "$(grep -c 'CTX_LOOKBACK_MAX' src/core/secret-scan.js)" -ge "2"
+#      The behavioural holder is NOT this step — see the Implementation notes.
 
 # V-3  A10/A11: no labelled rule left at redact, the dead helpers are gone
 must_not 'severityForKey / QUARANTINE_KEYS still exist (A11 deletes them)' \
@@ -3268,13 +3328,15 @@ fi
 #      WHAT IS STILL HAND-DRAWN IS THE REGION, NOT A LIST, AND SAYING SO IS THE
 #      POINT. The sweep covers two named files, and on the spec side it covers
 #      everything except the fenced ```bash blocks and the frontmatter `status:`
-#      line (round 1's deadlock repair). So a vault-figure-shaped
-#      line written INSIDE one of those blocks is not swept — see the
-#      self-match note below for why that exclusion is forced rather than
-#      chosen, and "Completeness registers and what actually bounds each" for
-#      this gate's row in the one table that states every register's residual
-#      input side by side. The claim here is "complete over its region",
-#      never "complete".
+#      line (round 1's deadlock repair). So a figure-bearing line written
+#      INSIDE one of those blocks is not swept — and ROUND 5's REVIEW FOUND
+#      EXACTLY THAT: V-2e's rationale, a registered Table L mirror, was living
+#      in a fence and went stale under two clean sweeps. Round 6 moved it out
+#      rather than widening the sweep, which is this gate's own stated remedy,
+#      and the Checklist now forbids a Table L mirror inside a fence at all.
+#      See "Completeness registers and what actually bounds each" for this
+#      gate's row. The claim here is "complete over its region", never
+#      "complete".
 #
 #      THE COST, STATED RATHER THAN DISCOVERED: this is a HIGH-CHURN gate. Any
 #      prose edit to either document — a typo fix, a reworded criterion, a moved
@@ -3462,7 +3524,7 @@ do
   fi
 done
 
-SWEEP_EXPECT=c56112195d92444908f5962b717f485a76ff78c66ffca6d3d61589e78401c6ba
+SWEEP_EXPECT=60bfb5647afbe302dbe7ad94e8cb3e3fdac233ed90e80d6de0c10557bf056461
 if [ "$SWEEP_BASE" != "$SWEEP_EXPECT" ]; then
   echo "FAIL V-15: the non-block prose residue of one of the two documents moved."
   echo "           got  $SWEEP_BASE"
@@ -3706,6 +3768,77 @@ if [ "$PREC_DIGEST" != "57f298f2b9015d16680a3c0d8dd1943164c9019d43449ad9918569c2
   echo "           Same rule as above: do not recompute, do not edit the ADR."
   exit 1
 fi
+
+
+# V-32 THE REGISTRATION STEP — the Mirrored Surface Checklist, mechanized.
+#      The sibling leg carries the same step under a different id and for the
+#      same reason: FOUR CONSECUTIVE ROUNDS produced a blocking finding of one
+#      shape — a canonical row, mutation or accepted residual added and never
+#      registered here — and three of those rounds ASSERTED a completed walk
+#      that the next review falsified. This leg's own instance was round 5's
+#      three unregistered Table L mirrors. A fifth hand-walk fails the same way.
+#      SO THE CHECKLIST GETS THE V-26 TREATMENT: its membership is DERIVED from
+#      the document instead of recalled. This step enumerates every id the file
+#      DEFINES — the first cell of every table row, plus every accepted-residual
+#      ordinal — and fails unless each is either named inside the Checklist
+#      region or on the registered exclusion list below.
+#      ITS OUTPUT IS THE WALK.
+#      THE EXCLUSION LIST IS A DATED BACKLOG, not a claim that these ids need no
+#      registration. It is what makes the step fail-closed: a NEW id cannot be
+#      added without either registering it or adding a line here, and both are
+#      visible in the diff.
+node -e '
+const fs=require("fs");
+const file="docs/specs/WP-secret-fence-two-tier-detector.md";
+const lines=fs.readFileSync(file,"utf8").split("\n");
+const a=lines.findIndex((l)=>/^### Mirrored Surface Checklist\s*$/.test(l));
+if(a<0){console.error("FAIL V-32: the Mirrored Surface Checklist heading is missing.");process.exit(1);}
+let b=lines.findIndex((l,i)=>i>a&&/^### /.test(l)); if(b<0)b=lines.length;
+const region=lines.slice(a,b).join("\n");
+if(region.length<2000){console.error("FAIL V-32: the Checklist region is implausibly short ("+region.length+" bytes) — its terminator moved. Do not repin; report it.");process.exit(1);}
+const defs=new Map();
+for(let i=0;i<lines.length;i++){
+  const m=/^\|\s*(?:\*\*)?([A-Z]{1,3}-?[0-9]+[a-z]?)(?:\*\*)?\s*\|/.exec(lines[i]);
+  if(m&&!defs.has(m[1]))defs.set(m[1],i+1);
+}
+const ra=lines.findIndex((l)=>/^## Accepted residuals/.test(l));
+if(ra<0){console.error("FAIL V-32: the Accepted residuals heading is missing.");process.exit(1);}
+let rb=lines.findIndex((l,i)=>i>ra&&/^## /.test(l)); if(rb<0)rb=lines.length;
+for(let i=ra;i<rb;i++){const m=/^([0-9]+[a-z]?)\.\s+\*\*/.exec(lines[i]); if(m)defs.set("residual "+m[1],i+1);}
+const EXCLUDED=new Set(`
+A2 A3 A4 A11 A12 A13 A14
+S1 S2 S3 S4 S5 S6 S7
+M-4
+`.trim().split(/\s+/).concat(["residual 4"]));
+const missing=[];
+for(const [id,ln] of defs){
+  if(EXCLUDED.has(id))continue;
+  const pat=id.startsWith("residual ")
+    ? new RegExp("residual[s]?\\s*(\\*\\*)?"+id.slice(9)+"\\b")
+    : new RegExp("\\b"+id.replace(/-/g,"\\-")+"\\b");
+  if(!pat.test(region))missing.push(id+" (defined at line "+ln+")");
+}
+const stale=[...EXCLUDED].filter((id)=>!defs.has(id));
+if(stale.length){
+  console.error("FAIL V-32: the exclusion list names ids this document no longer defines:");
+  for(const x of stale)console.error("           "+x);
+  console.error("           Remove them — a stale exclusion silently widens the carve-out.");
+  process.exit(1);
+}
+if(missing.length){
+  console.error("FAIL V-32: "+missing.length+" id(s) are defined by this document but appear");
+  console.error("           NOWHERE in the Mirrored Surface Checklist and are not on the");
+  console.error("           registered exclusion list:");
+  for(const m of missing)console.error("           "+m);
+  console.error("");
+  console.error("           Register each one with its mirror set — or, if it genuinely");
+  console.error("           predates the mechanization, add it to the exclusion list WITH");
+  console.error("           the reason in the same commit. Do not delete this step.");
+  process.exit(1);
+}
+console.log("V-32 ok: "+defs.size+" ids defined, "+EXCLUDED.size+" on the dated exclusion backlog, "
+  +(defs.size-EXCLUDED.size)+" registered in the Checklist; 0 unregistered.");
+'
 
 # V-19 the glossary's GATE sentences are leg 2's and must be byte-unchanged here.
 #      Exact counts for the same reason as V-15: these are byte-unchanged PINS,

@@ -31,7 +31,9 @@ in the established form:
 > Verbatim: *"ADR-0019: C now + B as follow-on."*
 
 **Option C landed in `WP-secret-fence-ep2-redact-arm`** (its Table Q rows Q4 and
-Q6, its dream-report line, and its accepted residual 11): the product now *tells*
+Q6, its dream-report line, and **its accepted residual on the `wienerdog
+uninstall` interaction** — cited by subject rather than by ordinal, because that
+ordinal has renumbered twice as residuals were inserted ahead of it): the product now *tells*
 the user that the recovery copies are disposable and that `wienerdog uninstall`
 removes them. **This WP is option B** — the part that changes what uninstall
 actually does, and the ADR that currently forbids the change.

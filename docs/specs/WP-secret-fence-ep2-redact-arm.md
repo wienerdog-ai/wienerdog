@@ -302,12 +302,14 @@ owner can disagree with the reasoning rather than the conclusion:
 `state/`, so copy anything you want to keep out of it first"*; Q6's glossary
 sentence keeps its no-number rule and gains the word *disposable*; the dream
 report's second sentence becomes *"If the redaction was wrong, restore from that
-copy while it is there; otherwise delete it."*; and an **eleventh** accepted
+copy while it is there; otherwise delete it."*; and a **new** accepted
 residual records the uninstall interaction and points at the option-B follow-on.
-*(Round 2 of the design gate corrected the ordinal: this document already
-carries ten residuals — round 1 added residual 10 — so the new one is the
-eleventh. A miscounted ordinal in the owner-facing section is the kind of error
-that makes an owner-approved edit list ambiguous at implementation time.)*
+**It is the `wienerdog uninstall` residual, and this list names it by its
+subject rather than by an ordinal** — round 2 corrected the number once and
+round 6 renumbered it again when residual 11 was inserted ahead of it, so an
+ordinal in the owner-facing edit list is a citation that rots on every
+insertion. *Standing rule from round 7: **cite an accepted residual by its
+subject, not by its number**, in this document and in the follow-on stub.*
 
 **If the owner chooses A or B**, this spec is re-scoped before dispatch — its
 Deliverables table grows and Tables B, R and Q move — and that is a new revision
@@ -372,14 +374,15 @@ and never yields a worse outcome than its absence.
 | | option | what it does | what it costs |
 |---|--------|--------------|---------------|
 | **A — keep the fall-through** *(what this spec currently says)* | a failed redact arm falls through to B3 and withholds, exactly as the owner approved | the note is preserved and reverted; the run continues and commits every other note | **the inherited race remains on these paths**, disclosed as residual 11 |
-| **B — abort every redact-arm fall-through** | B5 and B5a stop raising a withhold and raise a `WienerdogError` instead — the whole dream run ends, nothing is committed | **zero data-loss risk on the new paths**, and a large simplification: **K4, R0b, FI-10, FI-11, FI-17, FI-18, FI-19, consequence 2's entire delete-the-copy machinery, M-31, M-45 and M-49 all lose their subjects or collapse** | **it deletes a behaviour the owner's approval names verbatim**, and one note's scrub failure now costs the whole run's commits |
+| **B — abort every redact-arm fall-through** | B5 and B5a stop raising a withhold and raise a `WienerdogError` instead — the whole dream run ends, nothing is committed | **zero data-loss risk on the new paths**, and a large simplification: **K4, R0b, FI-10, FI-11, FI-17, FI-18, FI-19, RP-1, consequence 2's entire delete machinery, accepted residual 10b, and mutations M-31, M-45, M-49, M-50 and M-51 all lose their subjects or collapse** | **it deletes a behaviour the owner's approval names verbatim**, and one note's scrub failure now costs the whole run's commits |
 
 ### Why this is the owner's call and not mine
 
 The first `OWNER-RATIFIED` blockquote's scope reads, in its own parenthetical:
-*"preserve the unredacted original **first**, scrub only the added lines second,
-**and fall through to withhold if the preserve failed**"*. **Option B removes
-precisely that clause.** The round-4 post-approval rule lets the architect record
+*"preserve the unredacted original first, scrub only the added lines second,
+and fall through to withhold if the preserve failed"* (quoted as written; the
+emphasis in the paragraph below is mine, not the approval's). **Option B
+removes precisely that last clause.** The round-4 post-approval rule lets the architect record
 a *content* change to an approved row; this is not a refinement of B5, it is the
 deletion of the behaviour the approval describes. The standing rule — *a signed
 approval is scoped by what was put to the owner* — points the same way.
@@ -1450,7 +1453,7 @@ fact about, so it encodes no threshold, length or alphabet number of leg 1's.
 | B3a | the **untracked** branch of that revert (`validate.js:944`) | **one added statement**: `git(vaultDir, ['add', '-A', '--', rel])` immediately after the `fs.rmSync`, so the index entry Step 3's opening `git add -A` created is dropped **now** rather than by Step 5. The tracked branch needs nothing: `git checkout HEAD -- rel` already rewrites the index to HEAD. **No `allowFail`** — if the index cannot be written, `git()` throws (`validate.js:80`), Step 4 never runs, and nothing is committed. See invariant **I1** under Table R for what this buys, and residual **7** for what it does not. This is the only line of the shipped withhold path this WP changes, and it moves no user-visible surface: Step 5's unconditional `git add -A` already produces the identical end state two statements later, so the change is purely *when* the window closes, never *what* the run ends up with |
 | B4 | findings, none of them `quarantine` | **redact**: `quarantinePreserve(…, 'redacted')` **first**, whose return shape its `@returns` decides; then `scrubAddedLines(vaultDir, rel, addedLineNumbers, preserved.bytes)`, which performs the index-first stage internally (**B10**) and **takes the preserved buffer as its scrub input rather than re-reading the target**; only then `secretRedactions += 1`. **Every one of those results is checked and the counter increments last.** **The captured buffer is passed, not re-fetched, and the pre-rename compare inside the scrub is part of the contract** — see "ONE CAPTURED BUFFER, AND A CHANGE CHECK BEFORE THE RENAME"; without them a mid-run editor save is scrubbed against stale line numbers and then overwritten, with the only copy of it destroyed. The exact outcome of each step, and which row runs next, is **Table R** — B4 does not restate it |
 | B5 | B4 and the **preserve** failed | **fall through to B3** — withhold instead. Never scrub a file whose original could not be preserved; that is the "permanent corruption" outcome the design exists to avoid. **This row IS the shared branch — `P` returned `null` — and it has TWO terminal outcomes, split by whether B3's own preserve then succeeds: Table R row R1 if it does, row R0 (via B3b) if it does not.** Do not call this branch "row R1": R1's definition requires B3's preserve to have succeeded, so naming the branch after it would apply R1's revert and index-clearing before the loss-prevention path is recognised. **See B3b, which is what stops this fall-through from becoming the loss it exists to prevent** |
-| **B3b** | **B3's OWN preserve returned `null` after ANY redact-arm fall-through, and no durable copy OF THE TARGET'S CURRENT BYTES can be shown to exist.** The condition is a **byte-identity test, not a copy-existence test**, and round 5 of the design gate is why — see below. Precisely: B3's `quarantinePreserve(…, 'withheld')` returned `null`, **and** it is not the case that some durable copy compares equal to the file now on disk. Two ways in: **(a)** the redact preserve also failed (**B5**), so no copy exists at all — Table R row **R0**; **(b)** the redact preserve succeeded, so `redacted/` holds the bytes captured at **K1**, but the file on disk now differs from them (or cannot be read to check) — Table R row **R0b** | **ABORT THE WHOLE GATE. Do NOT revert, do NOT remove, do NOT clear the index entry.** Raise a `WienerdogError` naming the path, which preserves failed, whether an identity check was possible, **and — whenever the `redacted/` copy survives — its basename.** **That last clause is round 6's design answer to a real gap**: on R0b the `redacted/` copy is the only record of the pre-save version, and it is otherwise **unannounced** — Q8's suffix belongs to consequence 2, which never runs on an abort, and `reverted[]` is never rendered because Step 4 is never reached. Two revisions claimed Q8 named it; it cannot. **The error message is the only surface that reaches the user on an abort, so it is the one that must carry the basename** — the alternative, leaving the copy unannounced, would put the user's only pre-save bytes in a folder nothing points at. Table R rows **R0** and **R0b**. <br>**Why this row exists, stated as the defect it repairs rather than as a principle.** Until round 1 of the design gate, B5 sent a failed redact-preserve into B3, and B3 called *the same preservation mechanism* — against the same `stateDir`, on the same filesystem, with the same permissions — and then **reverted the file or removed it regardless of whether that second preserve had also failed**. For the missing-`stateDir` case the row itself names, and for any shared ENOSPC or permission fault, the two preserves fail **together**, so the gate deleted an untracked note, or discarded tracked modifications, **with neither a redacted nor a withheld copy in existence**. The existing `(quarantine copy failed)` reason suffix *reported* that loss after causing it, and Table R had no outcome for it at all. <br>**Why aborting is the right answer and not merely the cautious one.** Every other failure in this arm has a recoverable resting place; this one does not. Leaving the file exactly where it is costs the user **nothing** — their note is still in the working tree, unmodified — and costs this run a loud, non-zero exit with no commit, which is the same outcome row **R9** already produces and which the dream job already knows how to report. The secret is *not* committed, because Step 4 and Step 5 never run. **The fail-closed property is preserved: nothing leaks. What changes is that nothing is destroyed either.** <br>**THE CROSS-PRODUCT THIS ROW WAS WIDENED TO CLOSE (round 5 of the design gate, found by the adversarial reviewer).** Round 1 wrote B3b as a *copy-existence* test — "no durable copy of the note exists anywhere" — and that is not the same question as "is the file I am about to destroy recoverable". The losing sequence, all four steps ordinary: the redact preserve captures bytes **A** into `redacted/`; **the note's owner saves bytes B over it mid-dream**; the scrub then fails for any reason at all (R2 … R7c); the fall-through reaches B3 and **B3's own preserve fails too**. Under the old condition a durable copy *did* exist — copy **A** — so B3b did not fire, consequence 2 kept A, and **B3 reverted or removed the working-tree file holding B.** Bytes **B** then exist nowhere. **The design's own worked example — an editor save mid-dream — walked straight into it**, and the two injections that look like they cover it each cover one axis: **FI-10** is preserve-failure with no concurrent change, **FI-16** is concurrent change with a *successful* second preserve. The destructive cell is the product, and nothing sat in it. <br>**Scope, so nobody widens it.** B3b fires only when B3's preserve returned `null` **and** byte identity with a durable copy could not be established. When B3's preserve fails but the `redacted/` copy **does** compare equal to the file on disk, the note is recoverable from that copy and the ordinary fall-through proceeds — that is consequence 2's first keep-combination (**FI-10**) and it is unchanged. When B3's preserve *succeeds*, rows R2–R7c are unchanged. **The rule underneath: never destroy the working-tree file unless some durable artefact holds THE BYTES THAT ARE THERE NOW.** |
+| **B3b** | **B3's OWN preserve returned `null` after ANY redact-arm fall-through, and no durable copy OF THE TARGET'S CURRENT BYTES can be shown to exist.** The condition is a **byte-identity test, not a copy-existence test**, and round 5 of the design gate is why — see below. Precisely: B3's `quarantinePreserve(…, 'withheld')` returned `null`, **and** it is not the case that some durable copy compares equal to the file now on disk. Two ways in: **(a)** the redact preserve also failed (**B5**), so no copy exists at all — Table R row **R0**; **(b)** the redact preserve succeeded, so `redacted/` holds the bytes captured at **K1**, but the file on disk now differs from them (or cannot be read to check) — Table R row **R0b** | **ABORT THE WHOLE GATE. Do NOT revert, do NOT remove, do NOT clear the index entry.** Raise a `WienerdogError` naming the path, which preserves failed, whether an identity check was possible, **and — whenever the `redacted/` copy survives — its basename.** **The message's content is decided in Table Q row Q18 and this cell restates none of it.** **That last clause is round 6's design answer to a real gap**: on R0b the `redacted/` copy is the only record of the pre-save version, and it is otherwise **unannounced** — Q8's suffix belongs to consequence 2, which never runs on an abort, and `reverted[]` is never rendered because Step 4 is never reached. Two revisions claimed Q8 named it; it cannot. **The error message is the only surface that reaches the user on an abort, so it is the one that must carry the basename** — the alternative, leaving the copy unannounced, would put the user's only pre-save bytes in a folder nothing points at. Table R rows **R0** and **R0b**. <br>**Why this row exists, stated as the defect it repairs rather than as a principle.** Until round 1 of the design gate, B5 sent a failed redact-preserve into B3, and B3 called *the same preservation mechanism* — against the same `stateDir`, on the same filesystem, with the same permissions — and then **reverted the file or removed it regardless of whether that second preserve had also failed**. For the missing-`stateDir` case the row itself names, and for any shared ENOSPC or permission fault, the two preserves fail **together**, so the gate deleted an untracked note, or discarded tracked modifications, **with neither a redacted nor a withheld copy in existence**. The existing `(quarantine copy failed)` reason suffix *reported* that loss after causing it, and Table R had no outcome for it at all. <br>**Why aborting is the right answer and not merely the cautious one.** Every other failure in this arm has a recoverable resting place; this one does not. Leaving the file exactly where it is costs the user **nothing** — their note is still in the working tree, unmodified — and costs this run a loud, non-zero exit with no commit, which is the same outcome row **R9** already produces and which the dream job already knows how to report. The secret is *not* committed, because Step 4 and Step 5 never run. **The fail-closed property is preserved: nothing leaks. What changes is that nothing is destroyed either.** <br>**THE CROSS-PRODUCT THIS ROW WAS WIDENED TO CLOSE (round 5 of the design gate, found by the adversarial reviewer).** Round 1 wrote B3b as a *copy-existence* test — "no durable copy of the note exists anywhere" — and that is not the same question as "is the file I am about to destroy recoverable". The losing sequence, all four steps ordinary: the redact preserve captures bytes **A** into `redacted/`; **the note's owner saves bytes B over it mid-dream**; the scrub then fails for any reason at all (R2 … R7c); the fall-through reaches B3 and **B3's own preserve fails too**. Under the old condition a durable copy *did* exist — copy **A** — so B3b did not fire, consequence 2 kept A, and **B3 reverted or removed the working-tree file holding B.** Bytes **B** then exist nowhere. **The design's own worked example — an editor save mid-dream — walked straight into it**, and the two injections that look like they cover it each cover one axis: **FI-10** is preserve-failure with no concurrent change, **FI-16** is concurrent change with a *successful* second preserve. The destructive cell is the product, and nothing sat in it. <br>**Scope, so nobody widens it.** B3b fires only when B3's preserve returned `null` **and** byte identity with a durable copy could not be established. When B3's preserve fails but the `redacted/` copy **does** compare equal to the file on disk, the note is recoverable from that copy and the ordinary fall-through proceeds — that is consequence 2's first keep-combination (**FI-10**) and it is unchanged. When B3's preserve *succeeds*, rows R2–R7c are unchanged. **The rule underneath: never destroy the working-tree file unless some durable artefact holds THE BYTES THAT ARE THERE NOW.** |
 | B5a | B4, the preserve succeeded, and the arm did not complete | **fall through to B3** — withhold instead, *before* Step 5 stages anything. `secretRedactions` is **not** incremented; `secretReverts` is, exactly as B3. **`secretRedactions` increments only after the scrubbed path has been staged** — never optimistically, never before the call. This row exists because Step 5's `git add -A` (`validate.js:978`) runs unconditionally: a B4 that ignored a failure would re-stage the *unmodified* working tree and commit the raw secret while reporting a successful redaction. B3 then runs unchanged, including **its own** `quarantinePreserve(…, 'withheld')`. **Which failures reach this row, and what each leaves on disk, is Table R rows R2–R7c.** Under B10's index-first ordering this gate writes nothing to the working-tree file on **every** one of them (R7c is the row where the file nevertheless differs from the captured bytes — because its owner changed it, which is the condition R7c detects), so B3's `withheld` copy is always the true original — that was not so before round 5 and it is the reason this row lost its special case. The fall-through also has to decide what becomes of the `redacted/` copy B4 already wrote, which would otherwise be an unannounced orphan on B12's capped FIFO; **Table R consequence 2 decides that, and this row does not restate it** |
 | B6 | user-facing surface, B3 | `state/quarantine/<date>-<name>` + the existing digest banner + the existing `## Reverted by orchestrator` report line |
 | B7 | user-facing surface, B4 | `state/quarantine/redacted/<date>-<name>` + the new `## Redacted in place (secret scan)` report section. **No digest banner** |
@@ -1532,6 +1535,7 @@ shipped behaviour is worse than no threat model.
 | **Q13** | `docs/THREAT-MODEL.md:427` — the A5 residual, `Each of the four persistence gates acts on *any* detector finding, not only a hard one` | **unchanged.** It says the gates do not *ignore* a soft finding, which stays true: after this WP EP2 acts on a redact-severity finding by scrubbing and preserving rather than by ignoring it | registered because the sweep returns it and the phrase "any detector finding" is one grep away from Q10's. The residual's subject is detection coverage, not disposition; Q10 is the disposition claim and it is the only one that moves |
 | **Q14** | `src/core/digest.js:567-568` — the code comment above the banner: `it renders while state/quarantine/ is non-empty and clears itself once the owner empties the directory` | both halves become claims about **withheld notes**: it renders while a withheld note is listed and clears once none are left. The rest of the comment block — the `WP-125 contract 5` provenance, the `OWNER-APPROVED` reference, the sanitized-basenames and never-read-content sentences — is byte-unchanged | **both halves are false after Q1 and the `listSecretQuarantine` change**, for the same two reasons Q1 gives, and this comment sits four lines above the string it describes. A stale comment beside a corrected string is the mechanism by which the *next* change re-derives the old contract. Its two lines join **V-5**'s permitted-removals list (`PERM5`) |
 | **Q15** | `src/core/private-fs.js:101-102` — the `A5_PRIVATE_DIRS` doc comment, today `state/quarantine is WP-123's staged-output secret quarantine — it can hold raw secret bytes` | keeps that sentence byte-identical and gains one clause for the new element, in **Q6's** form: `state/quarantine/redacted/` holds **the pre-scrub original of a note whose added lines the gate rewrote** — raw secret bytes likewise. **Not "of a note that was committed"** | the obvious phrasing is the one **Q6** outlaws, and an earlier revision of "The private-tree extension, exactly" prescribed it verbatim. Table R rows R2–R7c put a copy there for a note the gate then **withheld**, and consequence 2 keeps it in two of those combinations |
+| **Q18** | **`src/core/dream/validate.js` — the `WienerdogError` row B3b raises.** NEW copy, introduced by round 6's design answer and left ungated until round 7 | the message states: **the vault-relative path**; **which preserves failed**; **whether an identity check could be performed**; and **whenever the `redacted/` copy survives, its basename**. Metadata only — the path, the basename (already sanitized by `displayName`) and the outcome words; **never a matched byte, never a line of the note**. It must **not** reuse Q8's suffix wording: Q8 belongs to consequence 2, which never runs on an abort | **this is the ONLY surface that reaches the user on an abort**, and on row **R0b** the `redacted/` copy is the only record of the pre-save version. Step 4 never appends, so no report line exists; `reverted[]` is never rendered, so no CLI summary exists; no banner fires. **Without the basename in this message the user's only pre-save bytes sit in a folder nothing points at.** *Round 6 decided the content and shipped it with no Table Q row, no assertion and no mutation — the identical shape to the K4-throws hole the same round closed. Held by FI-17/FI-18/FI-19's assertions, AC-9's R0b cell, and mutation M-51* |
 | **Q16** | `docs/runbooks/incident.md:89` (the artifact table row `\| quarantine \| $CORE/state/quarantine/ \| reviewed in step 4 \|`) and `:379` (`Also review $CORE/state/quarantine/ … see secret-incident.md step 3`) | **unchanged, and the file is not in Deliverables.** Both are pointers: one names a path in a recovery inventory, the other delegates the handling to `docs/runbooks/secret-incident.md` step 3 — which **is** in Deliverables and gains the `redacted/` bullet (**Q4**) | the delegation is what makes this correct rather than lucky: the general incident runbook states no lifecycle claim and no disposition, so correcting step 3 of the secret runbook corrects this surface transitively. Registered in one row so the next sweep does not re-derive it, and so nobody widens the diff into a second runbook |
 | **Q17** | `src/core/dream/validate.js:900-903` — the Step-3 header comment, in **this WP's own primary file**. Two claims: `ANY detector finding … quarantine-preserves the working-tree file, then reverts it` and `` the sanitized `.text` is never written back (revert, never rewrite) `` | both are replaced by the true contract, **in Q10's words** — the same claim in the same voice, because the threat model and the code comment describe one behaviour and must not describe it two ways: a **quarantine**-severity finding (and unscannable binary content) preserves the working-tree file into `state/quarantine/` and reverts it, uncommitted; a findings set with **no** quarantine-severity finding is redacted in place — the unredacted original is preserved into `state/quarantine/redacted/` first, then only the lines this run added are replaced with their sanitized form and the note is committed, announced in the dream report. The superseded `OWNER-APPROVED 2026-07-17` citation goes with the clause it justified and is replaced by the authority that actually carries this WP: **ADR-0034 supersedes ADR-0024's WP-123 "reverts on ANY finding" amendment for this gate only, and EP4's gate is unchanged** — which is the first `OWNER-RATIFIED` blockquote's item 1, cited, not re-decided. **Lines `:897-899` (the section header and the "bytes THIS run is responsible for" sentence) stay byte-identical**; the four false lines reflow into the replacement, exactly as Q14's do. **The replacement must keep naming `state/quarantine/`** — it does above — or V-26's sweep emits a `-` line for this file | **the exact negation of this WP, four lines above the code it describes**, and the second clause is **Q10's second sentence in the same words**. The Deliverables row for `validate.js` enumerates that file's changes precisely and named none of this until round 7, so a byte-faithful implementer would have left it: **M-32's mutation shipped as the default**, in the one file every future reader of this gate opens first. Found by the reviewer **by hand, in round 7**, which falsifies this section's previous claim that the derived sweep meant "round 7 cannot find a fifth surface by hand" — see "The sweep's own pattern is a member of the contract" below. Bounded by **V-28** and mutated by **M-33** |
 
@@ -1762,7 +1766,12 @@ re-reading closes it: every check is at T0 and every destruction is at T1.
   bytes — the round-4 cross-product. **K4 never produces a worse outcome than
   its absence**, which is why it stays.
 - **It does NOT** make the revert safe. **No surface in this document may say
-  it does**, and round 6 removed the sentences that did.
+  it does** — and that is an assertion with a check beside it rather than a
+  claim: **verification step V-31's terminology sweep** greps the whole file for
+  `safe`/`authoriz*` near `revert`/`withhold`/`K3`/`K4` and fails on any hit
+  outside its registered list. Round 6 stated this universal and round 6's own
+  review falsified it at two canonical surfaces, which is why it now has a
+  grep instead of a promise.
 
 **THE RESIDUAL RACE IS INHERITED, NOT CREATED HERE, AND THAT IS THE WHOLE
 REASON IT IS A RESIDUAL RATHER THAN A BLOCKER.** Verified against shipped
@@ -1864,7 +1873,7 @@ The repair is a definition, not a qualifier:
 
 | # | outcome | `P` | `S` | working-tree file **at the instant `S` returned** | `redacted/` copy when the row finishes | index **when the row finishes** | next row | `secretRedactions` | `secretReverts` | in `reverted[]` | fault injection |
 |---|---------|-----|-----|---------------------------------------------------|----------------------------------------|----------------------------------|----------|--------------------|-----------------|-----------------|-----------------|
-| R1 | **the `redacted/` preserve failed AND B3's own `withheld` preserve then SUCCEEDED** — so a durable copy of the note does exist, in `state/quarantine/`, and the ordinary withhold is safe to perform. **The two conditions are BOTH part of the row's definition** (round 2 of the design gate; see the note under this table) | `null` | *not called* | **byte-unchanged** (nothing was written) | **none exists** — the redact preserve is what would have written it | **cleared** by B3 (tracked → HEAD; untracked → dropped by **B3a**) | **B5 → B3** | — | +1 | yes | FI-1, which is now a **path-specific** fault: only writes under `redacted/` fail, while a direct write into `quarantine/` succeeds |
+| R1 | **the `redacted/` preserve failed AND B3's own `withheld` preserve then SUCCEEDED** — so a durable copy of the note **as of K3** exists in `state/quarantine/`, and the ordinary withhold **proceeds** — subject to **residual 11**, the inherited race between that copy and the revert, which no cell of this table closes. **The two conditions are BOTH part of the row's definition** (round 2 of the design gate; see the note under this table) | `null` | *not called* | **byte-unchanged** (nothing was written) | **none exists** — the redact preserve is what would have written it | **cleared** by B3 (tracked → HEAD; untracked → dropped by **B3a**) | **B5 → B3** | — | +1 | yes | FI-1, which is now a **path-specific** fault: only writes under `redacted/` fail, while a direct write into `quarantine/` succeeds |
 | R2 | **read K2 THREW** — the pre-rename comparison read could not be performed at all. **R2 owns comparison-read EXCEPTIONS exclusively, and R7c owns byte mismatches exclusively (Table K row K2).** The two were both claiming a throwing read until round 3, with opposite artifact outcomes; the split is decided in K2 and the reason is one sentence: **a read error does not establish that the target changed**, so it must not trigger the keep-the-copy behaviour that exists because it did | `{name, bytes}` | `false` | **byte-unchanged** | **deleted** by the fall-through (consequence 2 — *kept* in either of its two keep-combinations) | **cleared** by B3/B3a | **B5a → B3** | — | +1 | yes | FI-2, and **FI-11**, which reuses this row as its vehicle |
 | R3 | a hunk line number is outside `1 … lines.length` | `{name, bytes}` | `false` | **byte-unchanged** — bounds are checked before any indexing and before any write | **deleted** (consequence 2 — *kept* in either of its two keep-combinations) | **cleared** by B3/B3a | **B5a → B3** | — | +1 | yes | FI-3 |
 | R4 | the re-scan of the rewritten added lines still finds something | `{name, bytes}` | `false` | **byte-unchanged** — verify precedes write | **deleted** (consequence 2 — *kept* in either of its two keep-combinations) | **cleared** by B3/B3a | **B5a → B3** | — | +1 | yes | FI-4 |
@@ -2119,7 +2128,7 @@ entirely on which:
   is touched.
 - **`scrubAddedLines` is exported** (Deliverables). Three cells cannot be reached
   any other way — see rows FI-3 and BU below.
-- **EVERY READ OF THE TARGET IS DECIDED IN TABLE D, AND THIS PREAMBLE RESTATES
+- **EVERY READ OF THE TARGET IS DECIDED IN TABLE K, AND THIS PREAMBLE RESTATES
   NO COUNT.** K1 is `quarantinePreserve(…, 'redacted')`'s Buffer read — the
   **arming** read, from which all counting starts; K2 is the pre-rename
   comparison; K3 is B3's own preserve on a fall-through; K4 is the identity read
@@ -2169,9 +2178,9 @@ entirely on which:
 | **FI-14** | **R0** — both preserves fail, permission denied | `fs.chmodSync(<stateDir>, 0o500)` **before the run, with `<stateDir>/quarantine/` NOT yet existing** — so `mkdirSync` fails `EACCES` for both destinations. Same two arms and assertions | gate | **the fixture precondition is mandatory and it is FI-1's, one level up**: if `<stateDir>/quarantine/` already exists and is owner-writable, the withheld preserve **succeeds** and the row passes vacuously as an ordinary R1. FI-1's executed note records the same trap for `redacted/`. Use a fixture private to this row. **And never run as root** — uid 0 ignores mode, so this row silently becomes an R8 |
 | **FI-15** | the **captured-buffer derivation** rule (rule 1) — **an OBSERVATION HARNESS, not a fault**: it perturbs nothing and produces no Table R row, because the property it proves is a property of the *success* row | **Patch THREE `node:fs` methods to DELEGATE FAITHFULLY and append to ONE ORDERED EVENT LOG** — `readFileSync` (record every call whose path resolves to `<vault>/<rel>`, with whether an encoding was passed, i.e. Buffer vs text), `writeFileSync` (record every call whose path contains `.wienerdog-scrub.`) and `renameSync` (same). **Counting starts at Table K's arming read K1**, exactly as FI-16's does. Drive an ordinary `redact` fixture to a completed **R8**. **Assert four things against the log:** (1) **exactly TWO** target reads occurred inside the arm — **K1** and **K2** — **counting only reads whose log index is below the rename event's**, which is what bounds the window at both ends and makes assertion (3) self-consistent; (2) the first was a **Buffer** read; (3) **the second read's index falls BETWEEN the temp write's and the rename's** — which is what "after the temp write and before the rename" means operationally; (4) the `redacted/` copy equals the captured bytes **and** the scrubbed target equals the per-line scrub of those same bytes. Restore all three patches and reset the log in a per-test `finally`, per this table's reachability rule 3. An implementation that re-reads the target for its scrub input makes a **third** read and fails (1) | gate | **ROUND 2 OF THE DESIGN GATE REPLACED THIS ROW'S MECHANISM BECAUSE THE OLD ONE WAS IMPOSSIBLE.** It said: patch `readFileSync` so that any read of the target *after* the arming read returns **different bytes**, then assert the run reaches **R8**. But **rule 2 MANDATES exactly such a read** — the pre-rename comparison — so a *conforming* implementation reads the poisoned bytes, correctly observes that the target changed, and takes **R7c**. It can never reach R8. The row asserted an outcome the correct design forbids, and would have failed against every conforming implementation while passing against none. **The property is real; only the way of observing it was wrong.** Counting is sound because it does not touch the bytes: on a completed R8 the conforming arm makes exactly the reads **Table K** lists for that path, and a content-re-reading one makes one more. **Round 3 found assertion (3) unobservable through a `readFileSync` patch alone** — "after the temp write and before the rename" names two events that patch never sees — which is why the mechanism now records writes and renames into the same ordered log and asserts an index ordering rather than a description. **A structural check still cannot substitute** — `grep -c 'fs.readFileSync(path.join(vaultDir, rel));'` returning `1` is satisfied by a module that reads once and reads the target again through any other spelling |
 | **FI-16** | **R7c** — the target changes between the capture and the comparison | **Patch `fs.readFileSync` on the shared `node:fs` object, counting calls whose path resolves to `<vault>/<rel>` from the preamble's arming read.** Delegate on call 1 (the capture). On call **2** — the rule-2 comparison — **first write different bytes over the target on disk** (the fixture's content plus one appended line), **then delegate the read**, so the comparison genuinely reads the modified file. The captured buffer and the comparison read now differ, so the arm must return `false` **without renaming**. Separately patch `fs.renameSync` to **record and delegate**. **Assert:** the recorded rename was **never invoked with a `.wienerdog-scrub.` source**; `S` returned `false`; the working-tree file holds the **modified** bytes; the run took **B5a → B3**; and consequence 2's keep-combination fired — **both** copies exist, their contents differ, and the report line carries Q8's suffix | helper **and** gate | **ROUND 2 ALSO REPLACED THIS ROW, and the old form was self-contradictory.** It patched `fs.renameSync` to write different bytes over the target *inside the patched rename* and then asserted **the rename was never invoked** — but the patch only executes when rename IS invoked, so the assertion could never hold, and the modification landed **after** the comparison had already completed and passed, where no comparison could prevent it. **The fix is to move the modification to strictly BEFORE the comparison read**, which is the only point at which rule 2 can act on it. <br>**It is the mirror of FI-11 on the success path, and neither covers the other.** FI-11 perturbs B3's preserve read on a row that was already failing; FI-16 perturbs the target on the row that was about to **succeed**, which is the only path where the gate would otherwise write over the user's save. **The helper level is not optional**: R7c's `false` return and its no-rename postcondition are `BU`-class cells, unassertable once B3 has run |
-| **FI-17** | **R0b** — the cross-product, TRACKED target | Combine the two axes that FI-10 and FI-16 each cover singly. **(1)** patch `fs.readFileSync` so that on **K2** it first writes different bytes over the target and then delegates — the FI-16 mechanism, which takes the arm to **R7c**; **(2)** patch `fs.writeFileSync` to throw `EACCES` for any path under `<stateDir>/quarantine/` that is **not** under `redacted/` — the FI-10 mechanism, which fails B3's own preserve. The redact preserve still succeeds, so `redacted/` holds the **pre-save** bytes while the target holds the **post-save** ones. **Assert:** the gate **threw**; the tracked file is **byte-identical to the post-save bytes** — *not* restored to `HEAD`; `git diff --cached` still shows the uncleared entry; `fs.appendFileSync` was never called; **both** the `redacted/` copy and the on-disk file survive and **differ from each other** | gate | **this is the destructive cell neither existing injection occupies**, and stating why is the point: **FI-10** is preserve-failure with **no** concurrent change (so the copy *is* of the current bytes and reverting is safe), **FI-16** is concurrent change with a **successful** second preserve (so a copy of the current bytes gets written). Only the product leaves a copy that is *not* of the bytes on disk while the code path that would delete them runs. **A test that varies one axis passes against the losing implementation** |
-| **FI-18** | **R0b** — the cross-product, UNTRACKED target | the same two patches, on an **untracked** target. **Assert the same five things, with the first two sharpened:** the file is **still on disk** (`fs.rmSync` never ran) and holds the post-save bytes | gate | **the untracked arm is the one that loses data irreversibly and it must be tested separately**, exactly as FI-12/13/14 are: a tracked file discarded by `git checkout HEAD --` loses only this run's modifications, while an untracked file removed by `fs.rmSync` is **gone**. Round 1 made that argument for R0 and round 5 makes it again for R0b, because the two rows share the abort and not the way in |
-| **FI-19** | **R0b** via K4's THROW, tracked and untracked | patch `fs.readFileSync` to throw `EACCES` on **K4** specifically — the read that follows a failed K3 — while letting K1 and K2 through. Reach the branch with FI-17's second patch (fail B3's own preserve). **Assert, on both arms:** the gate **threw**; **no `git checkout` and no `fs.rmSync` ran** against the target; the index entry was **not** cleared; the file is byte-identical to what was on disk before the arm. *(Assert the absence of the destructive calls directly — a `spawnPinnedSync` wrapper that records invocations, and a recording `fs.rmSync` — not merely the end state, because on a tracked file the end state of "checkout ran" and "checkout did not run" can coincide when the working tree already matched `HEAD`.)* | gate | **round 5 shipped K4's throw outcome untested, and the gap was exactly exploitable**: FI-17 and FI-18 change the target at **K2**, so K4 reads *differing bytes* and returns a mismatch. An implementation that aborts on mismatch but **reverts when K4 throws** satisfied every mandated arm while violating the recoverability rule. This row is the one that fails it |
+| **FI-17** | **R0b** — the cross-product, TRACKED target | Combine the two axes that FI-10 and FI-16 each cover singly. **(1)** patch `fs.readFileSync` so that on **K2** it first writes different bytes over the target and then delegates — the FI-16 mechanism, which takes the arm to **R7c**; **(2)** patch `fs.writeFileSync` to throw `EACCES` for any path under `<stateDir>/quarantine/` that is **not** under `redacted/` — the FI-10 mechanism, which fails B3's own preserve. The redact preserve still succeeds, so `redacted/` holds the **pre-save** bytes while the target holds the **post-save** ones. **Assert:** the gate **threw**; the tracked file is **byte-identical to the post-save bytes** — *not* restored to `HEAD`; `git diff --cached` still shows the uncleared entry; `fs.appendFileSync` was never called; **both** the `redacted/` copy and the on-disk file survive and **differ from each other**; **and the error names the surviving `redacted/` basename** (Table Q row **Q18**) | gate | **this is the destructive cell neither existing injection occupies**, and stating why is the point: **FI-10** is preserve-failure with **no** concurrent change (so the copy *is* of the bytes K3 saw and the revert proceeds, subject to residual 11), **FI-16** is concurrent change with a **successful** second preserve (so a copy of the current bytes gets written). Only the product leaves a copy that is *not* of the bytes on disk while the code path that would delete them runs. **A test that varies one axis passes against the losing implementation** |
+| **FI-18** | **R0b** — the cross-product, UNTRACKED target | the same two patches, on an **untracked** target. **Assert the same six things, with the first two sharpened:** the file is **still on disk** (`fs.rmSync` never ran) and holds the post-save bytes | gate | **the untracked arm is the one that loses data irreversibly and it must be tested separately**, exactly as FI-12/13/14 are: a tracked file discarded by `git checkout HEAD --` loses only this run's modifications, while an untracked file removed by `fs.rmSync` is **gone**. Round 1 made that argument for R0 and round 5 makes it again for R0b, because the two rows share the abort and not the way in |
+| **FI-19** | **R0b** via K4's THROW, tracked and untracked | **Three patches, and the fall-through trigger is the part round 6 got wrong.** **(1) THE TRIGGER — FI-7's `spawnPinnedSync` wrapper**, failing the single `['-C', vaultDir, 'update-index', '--add', '--cacheinfo', …]` invocation. That is **row R7 → B5a → B3**, and it is the cleanest fall-through available here because **it leaves the target byte-unchanged** — the rename never runs — which is what keeps this row's own "byte-identical to what was on disk before the arm" assertion true. **(2)** patch `fs.writeFileSync` to throw `EACCES` for any path under `<stateDir>/quarantine/` that is **not** under `redacted/` — FI-10's mechanism, so **K3's preserve returns `null`** (its read succeeds; its *write* is what fails). **(3)** patch `fs.readFileSync` to throw `EACCES` on **K4** — the identity read that follows a `null` from K3 — while letting K1 and K2 through. **Assert, on both arms:** the gate **threw**; **no `git checkout` and no `fs.rmSync` ran** against the target; the index entry was **not** cleared; the file is byte-identical to what was on disk before the arm; **and the error names the surviving `redacted/` basename** (Table Q row **Q18**). *(Assert the absence of the destructive calls directly — the same `spawnPinnedSync` wrapper records invocations, plus a recording `fs.rmSync` — not merely the end state, because on a tracked file the end states of "checkout ran" and "checkout did not run" coincide when the working tree already matched `HEAD`.)* | gate | **ROUND 6 SHIPPED THIS ROW UNPRODUCIBLE, and the reason is worth keeping.** It reached the branch "with FI-17's second patch" alone — but that patch fails writes under `quarantine/` **outside** `redacted/`, and **K1's preserve writes its temp INSIDE `redacted/`** while **the scrub's temp is in the vault**. Neither is touched, so the arm completes at **R8** and K3/K4 never execute: the row asserted an outcome its own mechanism could not reach, and **M-50 had nothing to redden**. A fall-through trigger is therefore mandatory, and it must be one that **does not touch the target** — FI-16's does (it rewrites the file at K2), which would falsify the byte-identity assertion; FI-7's does not |
 | **RP-1** | **residual 11** — the pre-revert race, tracked and untracked | **A RESIDUAL-PINNING ROW, not a fault the design prevents**, and labelled so nobody reads it as a passing safety property. Patch the `spawnPinnedSync` wrapper (tracked) or `fs.rmSync` (untracked) to **write different bytes over the target immediately before delegating** — i.e. simulate a save landing *after* K3/K4 and *before* the destruction. **Assert the currently-specified outcome: the save is destroyed**, no durable artifact holds it, and — the part that matters — **no artifact claims otherwise**: the report line, the reason string and the banner all describe the *pre-save* copy, which is the only thing that was ever preserved. | gate | **it makes the residual visible and makes any future closure break loudly.** Residual 11 is an inherited race this WP does not own; a test that pins it is how the follow-on `WP-ep2-atomic-withhold-handoff` will know it changed something. **If this row ever starts failing, the race was closed — update residual 11 and this row together; do not "fix" the assertion.** |
 | — | **R8** | no injection: an ordinary `redact`-severity fixture | gate | — |
 
@@ -2385,14 +2394,27 @@ finding updates the table **and all of its mirrors** in one pass, and any new
 mirror found in review is registered here on the spot.
 
 **The round-2 rule, learned the expensive way: a mirror may cite a table row id;
-it may not restate a number the table decides.** Four of round 2's blocking
+it may not restate a number the table decides.**
+
+**NO NEW ABSOLUTE WITHOUT AN EXECUTED CHECK BESIDE IT — round 7's standing
+rule, and it is written here because three of round 6's blocking findings were
+that one class.** "Every", "none", "only", "the full set", "no surface may" —
+each of those is a claim about the *whole document*, and a claim about the whole
+document that nobody ran is a claim that the next review falsifies. Round 6
+shipped three: *"No surface in this document may say it does"* (falsified at two
+canonical cells), *"The full set"* (missing two members), and *"rejects every
+literal"* (true only of the declaration line). **So: write the absolute and the
+grep in the same edit, or write neither.** The three mechanized examples in this
+document are V-26 (Table Q's membership), V-30/V-32 (the Checklist's) and V-31
+(the safe/authorize universal); a fourth absolute with no check is a defect on
+sight, whichever surface carries it. Four of round 2's blocking
 findings were one defect wearing four hats — a count copied into prose and left
 behind when the table moved. Registering a numeric mirror is not enough, because
 nothing forces it to agree. This document therefore holds exactly **two**
 numbers: the retention cap, decided in **Table N row N1**, and the derived rows
 **D1/D2**, which are decided in ADR-0034 and pinned by V-17. A bare number
-anywhere else here is a defect on sight — **with exactly three carve-outs, and no
-fourth may be added without registering it here**:
+anywhere else here is a defect on sight — **with exactly four carve-outs, and no
+fifth may be added without registering it here**:
 
 - **(i) the approval and answer records.** The `OWNER-ANSWERED` block in the
   Provenance section and the two `OWNER-RATIFIED IN SESSION` blocks (and the
@@ -2402,6 +2424,12 @@ fourth may be added without registering it here**:
   them is an owner action, never an editorial one. They are frozen even when the
   number they name is later found wrong — the repair for that would be a fresh
   approval, not an edit.
+- **(iv) A TEST'S OWN ASSERTION TEXT, which must be operational.** A Table T row
+  that says a test asserts "exactly two reads" is telling an implementer what to
+  write; replacing the figure with a citation would make the row unusable at the
+  keyboard. **The bound: the ASSERTION column may carry the number; the
+  rationale column may not**, and round 5 settled that split when it struck the
+  digits from FI-15's rationale and kept them in its assertions.
 - **(iii) ARITHMETIC RECORDS — registered in round 5 of the design gate, because
   it had become a de-facto carve-out without being written down.** A dated record
   of *why a figure was wrong* has to show the arithmetic — consequence 7's
@@ -2423,8 +2451,14 @@ written to stop.
 
 **How to audit this, and what does not count.** The audit is a substring grep of
 this file for the cap's digits (the number in **Table N row N1**). Being a
-substring grep it also returns line-number citations such as `digest.js:506` and
-`lines 650–676`, and the octal file modes in Table T. Those are not restatements
+substring grep it also returns line-number citations such as `digest.js:506`,
+`lines 650–676`, the octal file modes in Table T, **and — since round 5 —
+MUTATION IDS such as `M-50`, because `\b` matches across the hyphen.** Those
+four categories are not restatements of the cap and are not defects; **round 6's
+census reported eleven where the dispositioned table has seven, and the four
+extra were exactly the mutation ids.** Exempt them explicitly: the census grep is
+`grep -n '\b50\b' … | grep -v 'M-50'`, and any later mutation whose number
+contains the cap's digits is exempted the same way, in the same commit. Those are not restatements
 of the cap and are not defects — **only a bare number standing for the retention
 cap is**, and this paragraph deliberately contains none so that it is not itself
 a hit. **RE-RUN IN ROUND 5, AND THE COUNT IS EIGHT, NOT FIVE.** Round 4's paragraph
@@ -2575,6 +2609,22 @@ above; the rule applies identically to rows B4, B5, B10, B6, B7 and B13.
       can clear an overshoot, which is exactly the contradiction round 3
       found (AC-14 mandating a zero-redaction run prune back while N2 forbids
       it). The architect's decision on that pair is recorded under Table N.
+- [ ] **(b3) THE ROUND-6 AND ROUND-7 ADDITIONS.** Round 6 added **FI-19**,
+      **RP-1**, accepted residual **11**, B3b's basename clause and the
+      "K4 IS A FILTER, NOT AN AUTHORIZATION" subsection, and registered none of
+      them — the fourth consecutive round in which a canonical addition went
+      unregistered. Round 7 added **Q18**, **M-51**, **V-30**, **V-31** and
+      **V-32**. Their mirrors: **Q18** is decided in Table Q and mirrored by
+      B3b's action cell, FI-17/FI-18/FI-19's assertions, AC-9's R0b cell and
+      **M-51**; **FI-19** by Table K row K4's throw column, Table R row R0b and
+      **M-50**; **RP-1** by accepted residual **11**, which names it; the
+      **K4-filter subsection** by Table K row K4, Table B row B3b and residual
+      11; **residual 10b** by Table R row R0b and Table B row B3b.
+      **THIS BULLET IS THE LAST ONE THAT WILL EVER BE WRITTEN BY HAND.**
+      Verification step **V-30** now enumerates every id this document defines
+      and fails if one is neither named here nor on its registered exclusion
+      list. **Its output is the walk** — the rule below no longer depends on
+      anybody remembering to perform one.
 - [ ] **THE ROUND-1 ADDITIONS, registered in round 2 — and this bullet exists
       because NOT registering them cost six findings in one round.** Round 1
       added four things to the Table R / Table B family and did not walk any of
@@ -2599,8 +2649,8 @@ above; the rule applies identically to rows B4, B5, B10, B6, B7 and B13.
       the ENTIRE `P` column moves in the same edit, and the sweep is executed
       and pasted.**
       **(a) `quarantinePreserve`'s return type `boolean` →
-      the shape its `@returns` decides** — mirrors: **Table R's entire `P` column** (all
-      twelve rows, not the two that happened to be edited); the
+      the shape its `@returns` decides** — mirrors: **Table R's entire `P` column** (**every row of Table R** — round 5 wrote "all twelve" into the commit that
+      added a thirteenth, which is why this cites instead of counting); the
       `quarantinePreserve` JSDoc; Table B row **B4**; the
       `src/core/dream/validate.js` **Deliverables cell**; **the dream-report
       line's `<basename>` derivation AND Table R consequence 2's Q8 suffix** —
@@ -2623,10 +2673,10 @@ above; the rule applies identically to rows B4, B5, B10, B6, B7 and B13.
       modes; **AC-9**'s row count and its `redacted/`-cell listing; accepted
       residuals **10b** and **11**; **consequence 2**'s keep-combinations;
       **Table K**'s header and its position column; the **Table T** rows that
-      name the new injections; and mutations **M-49**/**M-50**. **Every one
-      was walked in round 6 and the walk is pasted in the PR body** — the
-      standing rule below says a walk is not performed until its output is
-      shown, and rounds 4 and 5 each asserted one that the gate falsified.
+      name the new injections; and mutations **M-49**/**M-50**. **The walk for every one of these is V-30's output**, and that is the whole
+      point of the mechanization: rounds 4, 5 and 6 each ASSERTED a completed
+      walk, and each next review falsified it. **No bullet in this Checklist may
+      claim a completed walk on any other basis.**
       **(b) Table B row B3b / Table R row R0 (the no-durable-copy abort)** —
       mirrors: invariant **I1**; **AC-24**'s exclusion list; **row R1's own
       definition**, which must exclude the case R0 owns; **FI-1**, which must
@@ -2662,7 +2712,7 @@ above; the rule applies identically to rows B4, B5, B10, B6, B7 and B13.
       `scrubAddedLines` JSDoc blocks under "Exact contracts" (they carry
       **signatures and argument meanings only** — every outcome sentence was
       deleted from them and lives in Table R); Table B rows **B3a**, **B4**,
-      **B5**, **B5a**, **B9a**, **B10**, **B12** and — **round 7's addition** —
+      **B5**, **B5a**, **B9a**, **B10**, **B12** and — **the pre-gate table's addition** —
       **B13**, which is a Table R mirror for a reason that has nothing to do with
       retention: consequence 2's byte-identity guard reads the withheld copy B3
       wrote moments earlier, and that read is sound only because nothing evicts
@@ -3356,7 +3406,9 @@ here.
       run: absent on R1 and R0 (no copy was ever written), absent on R2–R7b,
       **present on R7c and on R0b** (both keep it — the target changed, so the
       copy is the only record of the pre-save version), and present on R8 and
-      R9. It has **two**
+      R9. **On R0b the test must additionally assert that B3b's
+      `WienerdogError` NAMES that basename** (Table Q row **Q18**, mutation
+      **M-51**) — on an abort it is the only surface that reaches the user. It has **two**
       `redacted/`-cell extra cases, each with its own injection, and in both the
       copy must be
       **kept** and the report line must carry Q8's extra suffix naming it (Table
@@ -3562,16 +3614,27 @@ here.
 Mutation ids are inherited from the parent spec; the gaps (M-1 … M-6, M-13 …
 M-15) mutate `src/core/secret-scan.js` and belong to the detector leg.
 
-**Round 1 of the design gate added four rows — M-45 … M-48, and rounds 5 and 6 added M-49 and M-50 — and the allocation
+**Round 1 of the design gate added four rows — M-45 … M-48; rounds 5, 6 and 7 added M-49, M-50 and M-51 — and the allocation
 was re-measured at write time rather than continued from M-34.** The obvious next
 number after this leg's M-33 is M-34, and **M-34 … M-44 are the sibling's**;
 taking them would have been the fourth cross-leg collision this epic has paid
 for, committed by the party that could most easily have checked. The architect
 held **both** leg files in one revision pass, with both final and no agent
 writing to either — the condition the id convention names — enumerated every
-`M-nn` in both, and allocated from the top of the union. **Next free across both
-legs as of 2026-07-27: M-50.** A dated snapshot, not a reservation. **M-49 is
-this leg's, taken in round 5 for the cross-product abort.**
+`M-nn` in both, and allocated from the top of the union. **The procedure is now the command, stated in full in the detector leg's id
+convention and reproduced here so neither leg has to open the other:**
+
+```bash
+grep -ohE '\b[MV]-[0-9]+[a-z]?\b' \
+  docs/specs/WP-secret-fence-two-tier-detector.md \
+  docs/specs/WP-secret-fence-ep2-redact-arm.md \
+  | sort -u -t- -k2 -n | tail -5
+```
+
+**No surface in either leg states a next-free figure any more** — three rounds
+of collisions were all numbers written down. A figure may appear only as a
+**dated snapshot marked as one**; executed 2026-07-27, union max `M-51`/`V-32`,
+so next free `M-52`/`V-33` at that instant and no later one.
 
 **That paragraph names the sibling's numbers, which the id convention inherited
 from the parent spec forbids — so round 2 of the design gate AMENDED THE
@@ -3589,7 +3652,9 @@ to either**, is not a guess — it is the same measurement the convention's own
 
 Deleting the sentence was rejected as the repair: **the next-free figure is
 DERIVED from the sibling's allocation**, so removing the derivation would leave
-the figure unexplained and the next round would re-derive it wrongly. What stays
+it unexplained. **Round 7 removed the figure instead of the derivation** — the
+procedure above is the derivation, executable, and there is nothing left to go
+stale. What stays
 forbidden is the undated, unmeasured form — "a range no other leg uses", "the
 sibling's ids are unaffected" — which is what the rule was written against.
 
@@ -3620,6 +3685,7 @@ sibling's ids are unaffected" — which is what the rule was written against.
 | M-31 | drop the `Buffer.compare` from the fall-through's delete guard — delete the `redacted/` copy whenever B3's own preserve returned a basename | AC-9 (Table R consequence 2, the **FI-11** case: the note changed between the two preserve reads, so the only copy of its pre-edit bytes is destroyed and Q8's suffix is never appended) |
 | M-32 | leave the `src/core/digest.js:567-568` comment at its old text while making the banner edit | AC-27 (**Table Q row Q14**) |
 | M-33 | leave the `src/core/dream/validate.js:900-903` Step-3 header comment at its old text while making the gate change — i.e. **ship the code and keep the comment that states its negation** | AC-27 (**Table Q row Q17**), through **V-28**. This is the one mutation that was the *default* until round 7: no Deliverables cell named the comment, so a byte-faithful implementer would have left it |
+| **M-51** | **omit the basename from B3b's `WienerdogError`** — raise the abort naming the path and the failed preserves, but not the surviving `redacted/` copy | AC-9 (Table R row **R0b**), via **FI-17**, **FI-18** and **FI-19**, each of which asserts the message names it. **Table Q row Q18** decides the content. **Nothing else can catch this**: Step 4 never appends on an abort, so there is no report line to inspect; `reverted[]` is never rendered; no banner fires. The message is the only surface, which is exactly why it needed a row, an assertion and this mutation rather than a decided sentence |
 | **M-50** | **convert K4's catch path into an ordinary revert** — abort on a byte mismatch, but when the identity read THROWS, fall through and revert as if identity had been established | AC-9 (Table R row **R0b**, injection **FI-19**, tracked and untracked): the gate reverts a file it could not read, so it destroys bytes no artifact holds. **Every other mandated arm stays green under this mutation** — FI-17 and FI-18 change the target at K2, so K4 reads differing bytes and the mismatch branch aborts correctly. That is why FI-19 exists and why round 5's arm set was insufficient |
 | **M-49** | **weaken B3b's condition back to a copy-EXISTENCE test** — abort only when no durable copy exists at all, instead of when no durable copy of the target's **current bytes** can be shown to exist (i.e. drop the **K4** identity read) | AC-9 (Table R row **R0b**, injections **FI-17** and **FI-18**): with a `redacted/` copy present the weakened condition does not fire, B3 reverts, and the user's mid-dream save is destroyed while the surviving copy holds the pre-save bytes. **The untracked arm (FI-18) is where the loss is irreversible.** *This mutation is the shipped design of every revision before round 5 — like M-45, it is a default rather than a slip, which is why the row exists* |
 | **M-45** | **delete row B3b** — let B3 revert or remove the file after its own preserve failed, exactly as it did before round 1 of the design gate | AC-9 (Table R row **R0**, injections **FI-12/13/14**, and specifically their **untracked** arms: with B3b gone the note is `fs.rmSync`ed while neither `redacted/` nor `quarantine/` holds a copy, so the assertion that the file is still on disk fails). **This mutation IS the shipped behaviour of every revision before this one**, which is why it is in the table: the loss path was the default, not a slip |
@@ -4566,6 +4632,123 @@ must grep -qF 'exactly the bytes THIS run is responsible for' "$VJ"
 #      $QSWEEP is still in scope — V-26 runs above.
 must grep -qE "$QSWEEP" "$VJ"
 echo "V-28 ok: validate.js's own comment states the shipped contract (Q17)"
+
+# V-30 THE REGISTRATION STEP — the Mirrored Surface Checklist, mechanized.
+#      FOUR CONSECUTIVE ROUNDS produced a blocking finding of one shape: a
+#      canonical row, fault injection, mutation or accepted residual was added
+#      and never registered in the Checklist, and the review found it rather
+#      than the document. Rounds 3, 4, 5 and 6 each answered with a hand-walk;
+#      rounds 4, 5 and 6 each ASSERTED a completed walk that the next review
+#      falsified. A fifth hand-walk fails the same way.
+#      SO THE CHECKLIST GETS THE V-26 TREATMENT: its membership is DERIVED from
+#      the document instead of recalled. This step enumerates every id the file
+#      DEFINES — the first cell of every table row, plus every accepted-residual
+#      ordinal — and fails unless each one is either named inside the Checklist
+#      region or listed on the registered exclusion list below.
+#      ITS OUTPUT IS THE WALK. No surface in this document may claim a completed
+#      registration walk on any other basis.
+#      WHAT THE EXCLUSION LIST IS, STATED HONESTLY: a DATED BACKLOG, not a claim
+#      that these ids need no registration. They are the ids that predate the
+#      mechanization. The list is what makes the step fail-closed — a NEW id
+#      cannot be added without either registering it or adding a line here, and
+#      both are visible in the diff. Shrinking it is welcome; growing it needs a
+#      reason in the same commit.
+node -e '
+const fs=require("fs");
+const file="docs/specs/WP-secret-fence-ep2-redact-arm.md";
+const lines=fs.readFileSync(file,"utf8").split("\n");
+const a=lines.findIndex((l)=>/^### Mirrored Surface Checklist\s*$/.test(l));
+if(a<0){console.error("FAIL V-30: the Mirrored Surface Checklist heading is missing.");process.exit(1);}
+let b=lines.findIndex((l,i)=>i>a&&/^### /.test(l)); if(b<0)b=lines.length;
+const region=lines.slice(a,b).join("\n");
+if(region.length<2000){console.error("FAIL V-30: the Checklist region is implausibly short ("+region.length+" bytes) — its terminator moved. Do not repin; report it.");process.exit(1);}
+const defs=new Map();
+for(let i=0;i<lines.length;i++){
+  const m=/^\|\s*(?:\*\*)?([A-Z]{1,3}-?[0-9]+[a-z]?)(?:\*\*)?\s*\|/.exec(lines[i]);
+  if(m&&!defs.has(m[1]))defs.set(m[1],i+1);
+}
+const ra=lines.findIndex((l)=>/^## Accepted residuals/.test(l));
+if(ra<0){console.error("FAIL V-30: the Accepted residuals heading is missing.");process.exit(1);}
+let rb=lines.findIndex((l,i)=>i>ra&&/^## /.test(l)); if(rb<0)rb=lines.length;
+for(let i=ra;i<rb;i++){const m=/^([0-9]+[a-z]?)\.\s+\*\*/.exec(lines[i]); if(m)defs.set("residual "+m[1],i+1);}
+const EXCLUDED=new Set(`
+P1 P2 P3 P4 P6
+B1 B2 B8 B9
+Q9 Q16
+N3 N4 N5 N7
+K1 K3
+R3 R5 R7b R8 R9
+FI-3 FI-5a FI-5b FI-7b FI-8 FI-9 FI-10 FI-12 FI-13 FI-14
+S1 S2 S3 S4 S5 S6 S7
+M-8 M-9 M-11 M-23 M-24 M-24b M-25
+`.trim().split(/\s+/).concat(["residual 1","residual 2","residual 3","residual 4","residual 5","residual 7","residual 8","residual 12"]));
+const missing=[];
+for(const [id,ln] of defs){
+  if(EXCLUDED.has(id))continue;
+  const pat=id.startsWith("residual ")
+    ? new RegExp("residual[s]?\\s*(\\*\\*)?"+id.slice(9)+"\\b")
+    : new RegExp("\\b"+id.replace(/-/g,"\\-")+"\\b");
+  if(!pat.test(region))missing.push(id+" (defined at line "+ln+")");
+}
+const stale=[...EXCLUDED].filter((id)=>!defs.has(id));
+if(stale.length){
+  console.error("FAIL V-30: the exclusion list names ids this document no longer defines:");
+  for(const x of stale)console.error("           "+x);
+  console.error("           Remove them — a stale exclusion silently widens the carve-out.");
+  process.exit(1);
+}
+if(missing.length){
+  console.error("FAIL V-30: "+missing.length+" id(s) are defined by this document but appear");
+  console.error("           NOWHERE in the Mirrored Surface Checklist and are not on the");
+  console.error("           registered exclusion list:");
+  for(const m of missing)console.error("           "+m);
+  console.error("");
+  console.error("           This is the defect four consecutive review rounds found by hand.");
+  console.error("           Register each one in the Checklist with its mirror set — or, if it");
+  console.error("           genuinely predates the mechanization, add it to the exclusion list");
+  console.error("           WITH the reason in the same commit. Do not delete this step.");
+  process.exit(1);
+}
+console.log("V-30 ok: "+defs.size+" ids defined, "+EXCLUDED.size+" on the dated exclusion backlog, "
+  +(defs.size-EXCLUDED.size)+" registered in the Checklist; 0 unregistered.");
+'
+
+# V-31 THE TERMINOLOGY SWEEP — the safe/authorize universal, mechanized.
+#      Round 6 wrote "No surface in this document may say K4 makes the revert
+#      safe", and round 6's own review falsified it at two CANONICAL surfaces
+#      (Table R row R1's cell and FI-17's rationale). An absolute claim with no
+#      executed check beside it is the defect class this gate keeps finding, so
+#      the claim now carries its grep.
+#      SHAPED LIKE V-15, NOT LIKE A HEURISTIC. A first draft filtered hits by
+#      looking for negation words on the same line and it failed immediately on
+#      three legitimate ones, because the negation sits on the NEXT line — and it
+#      matched its own failure message besides. So: sweep the PROSE VIEW (fenced
+#      ```bash blocks removed, exactly as V-15 does and for the same self-match
+#      reason), then subtract a REGISTERED list of permitted substrings. Any
+#      residue is a surface asserting that a revert is safe.
+V31_TMP="$(mktemp)"
+cat >"$V31_TMP" <<'EOF'
+Everything that makes that destruction safe is a *check performed earlier*
+K3 succeeding does not make the revert safe either
+own composition note called the K3-success paths safe
+It does NOT** make the revert safe
+near `revert`/`withhold`/`K3`/`K4` and fails on any hit
+A RESIDUAL-PINNING ROW, not a fault the design prevents
+everything that makes that safe
+removed, was the claim that K4 made the revert safe
+EOF
+V31_BAD="$(awk '/^```bash$/{f=1} !f{print NR": "$0} f&&/^```$/{f=0}'     docs/specs/WP-secret-fence-ep2-redact-arm.md   | grep -E '(safe|authoriz)' | grep -iE 'revert|withhold|K3|K4|destro'   | grep -vFf "$V31_TMP" || true)"
+rm -f "$V31_TMP"
+if [ -n "$V31_BAD" ]; then
+  echo "FAIL V-31: a surface asserts that a revert is safe or authorized, rather than"
+  echo "           negating it, quoting a falsified claim, or describing the problem:"
+  printf '%s\n' "$V31_BAD"
+  echo "           Reword to FILTER language and cite residual 11 (the inherited race)."
+  echo "           If the new wording is legitimate, add its substring to the list ABOVE"
+  echo "           in the same commit — never widen the grep."
+  exit 1
+fi
+echo "V-31 ok: every safe/authorize hit near a revert is a registered negation, quotation or problem statement"
 ```
 
 For each Mutation-check row: apply the mutation, run the named command, paste the
