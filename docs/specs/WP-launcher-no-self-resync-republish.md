@@ -553,11 +553,15 @@ spot.
       seventh gets registered here on the spot rather than restated.
       **Mirror (5) carries D4's block verbatim a second time**, inside V8's
       heredoc — unavoidable, because V8 must *compute* the expected file to
-      assert the invariant rather than a proxy for it. That copy and D4's are the
-      only two, and a change to either is a change to both **in the same pass**.
-      V8's own red arm (a) is what makes the duplication safe: if the two ever
-      disagree, V8 fails on the correct implementation rather than passing on a
-      wrong one.
+      assert the invariant rather than a proxy for it. **The verbatim block
+      exists in exactly two places — D4's snippet and V8's heredoc — and a change
+      to either is a change to both in the same pass.** A round-6 review found a
+      **third** copy (a "so that the region reads…" example inside D4) that this
+      registration had omitted; it was **deleted**, not registered, so the count
+      here is now the whole truth. Anyone adding a third copy must delete it or
+      register it here instead. The duplication is safe in the one direction that
+      matters: if the copies disagree, V8 fails on a *correct* implementation
+      rather than passing on a wrong one.
 - [ ] **Exact contracts** — the `writeLauncher` JSDoc block and the call-site
       snippet.
 - [ ] **Acceptance criteria** — AC1–AC12 (AC12 is the carry arm's manifest
@@ -900,25 +904,17 @@ were weighed and the choice is recorded here rather than left open:
    to build. Fixing that is a correction to the fixture, not a concession by the
    test.
 
-**The verbatim edit.** In `run()`, immediately after the `fs.symlinkSync(...)`
-that creates `<core>/app/current` and before `const before = contained(core);`,
-insert these **seven** lines:
+**The verbatim edit.** In `run()`, insert these **seven** lines **immediately
+after** the anchor line
 
 ```js
-    // A real installed core always has the out-of-tree launcher a first install
-    // published. This fixture hand-builds the core, so publish it by hand.
-    fs.mkdirSync(path.join(core, 'launcher'), { recursive: true });
-    fs.copyFileSync(
-      path.join(REPO, 'src', 'scheduler', 'launcher.js'),
-      path.join(core, 'launcher', 'launch.js')
-    );
-```
-
-so that the region reads:
-
-```js
-    vendor.copyTree(REPO, start);
     fs.symlinkSync(start, path.join(app, 'current'));
+```
+
+(which is `run()`'s only occurrence, and V8 gates that it occurs exactly once),
+so they land between it and `const before = contained(core);`:
+
+```js
     // A real installed core always has the out-of-tree launcher a first install
     // published. This fixture hand-builds the core, so publish it by hand.
     fs.mkdirSync(path.join(core, 'launcher'), { recursive: true });
@@ -926,8 +922,13 @@ so that the region reads:
       path.join(REPO, 'src', 'scheduler', 'launcher.js'),
       path.join(core, 'launcher', 'launch.js')
     );
-    const before = contained(core);
 ```
+
+*(Round 6 review note: a "so that the region reads…" example block used to
+follow, showing the anchor and the block together. It was **deleted** — it was a
+**third** verbatim copy of the block, and the spec's own drift argument only
+accounted for two. The anchor line above plus V8's exactly-once check pin the
+location without it. Subtraction over addition, which is this WP's whole thesis.)*
 
 Six details in it are deliberate:
 
@@ -981,11 +982,14 @@ deliberately, because such a line is exactly what can make T12 vacuous (V8, red
 arm (a), measured).
 
 **V8 carries this block verbatim a second time**, in its heredoc, because it has
-to compute the expected file. Those are the only two copies in this spec.
-**Change one and you change the other in the same pass** — including the comment
-lines and the indentation, which are part of the byte comparison. This
-duplication is registered in the Mirrored Surface Checklist, and it is safe in
-the one direction that matters: if the copies drift, V8 goes red on a *correct*
+to compute the expected file. **Those are the only two copies, and that is now
+true rather than merely asserted**: a round-6 review counted **three** — the two
+above plus a "so that the region reads…" example block that used to sit right
+here — so the third was deleted rather than registered. Both survivors are
+registered in the Mirrored Surface Checklist. **Change one and you change the
+other in the same pass** — including the comment lines and the indentation,
+which are part of the byte comparison. The duplication is safe in the one
+direction that matters: if the copies drift, V8 goes red on a *correct*
 implementation rather than green on a wrong one.
 
 ### General constraints
@@ -1427,7 +1431,7 @@ round 6 to the two steps that round added (**V2b** and **V8**):
 | V6 | `git diff --name-only` — always exits 0; a **list comparison**, not an exit-code gate. Stated as such so no one mistakes its exit 0 for a pass. The enforcing gate is CI's `boundary-check` | n/a | n/a |
 | V7 | `npm run lint` — nonzero exit on any violation | no | **yes — fixed below** |
 | V2b | `run-a7-integrity.js` — nonzero exit on any failure. **Added round 6** (the scenario gate `node tests/run.js` does not run) | no — written in the fixed form from the start | no — ends `rc=$?; … (exit $rc)` |
-| V8 | exact reconstruction + `diff`. **Added round 6, and REWRITTEN in the same round** — its first form was two `grep -c` diff-shape counts, which a Codex review showed admits a vacuity counterexample (V8, red arm (a)). The replacement asserts the invariant, not a proxy for it | **no, by construction** — `grep -c`'s status is captured into a variable and the gate is an explicit `[ "$n" -ne 1 ]` test; the outcome gate is `diff`'s status inside an `if` | no — ends `rc=$?; … (exit $rc)` |
+| V8 | exact reconstruction of `HEAD`'s blob + `diff`, behind a clean-tree precondition. **Added round 6 and rewritten TWICE in it** — form 1 was two `grep -c` diff-shape counts (admits the vacuity counterexample, red arm (a)); form 2 asserted the invariant but `diff`ed the **working tree**, so a bad `HEAD` masked by an uncommitted edit passed (red arm (f), measured). Form 3 reads `git show HEAD:…` and refuses a dirty tree | **no, by construction** — `grep -c`'s status is captured into a variable and the gate is an explicit `[ "$n" -ne 1 ]` test; the outcome gate is `diff`'s status inside an `if` | no — ends `rc=$?; … (exit $rc)` |
 
 No further inversion and no further masking exists in the steps below; the sweep
 that produced this table was re-run in round 3 over every block on the page, and
@@ -1619,8 +1623,17 @@ computes it.
 ```bash
 (
   set -u
+  # V8 verifies the COMMITTED state. Without this guard an uncommitted local
+  # edit can mask a bad HEAD: HEAD carries D4 plus a vacuity line, the working
+  # tree has that line removed, the comparison agrees, and the bad HEAD ships.
+  if [ -n "$(git status --porcelain -- tests/unit/vendor.test.js)" ]; then
+    echo "V8 FAIL — tests/unit/vendor.test.js has uncommitted changes. V8 verifies the COMMITTED HEAD; commit or stash first, then re-run."
+    exit 1
+  fi
+
   w=$(mktemp -d)
   git show main:tests/unit/vendor.test.js > "$w/base"
+  git show HEAD:tests/unit/vendor.test.js > "$w/head"
 
   # D4's anchor: the line its block is inserted immediately AFTER.
   anchor="    fs.symlinkSync(start, path.join(app, 'current'));"
@@ -1637,8 +1650,8 @@ computes it.
 D4BLOCK
 
   # The anchor must exist EXACTLY once in main. Zero matches must FAIL, never
-  # silently produce an unmodified reconstruction that then "agrees" with an
-  # unmodified HEAD.
+  # silently produce an unmodified reconstruction that then "agrees" with a HEAD
+  # which never applied D4.
   n=$(grep -cFx "$anchor" "$w/base" || true)
   echo "V8 anchor occurrences in main: $n"
   if [ "$n" -ne 1 ]; then
@@ -1646,17 +1659,17 @@ D4BLOCK
     exit 1
   fi
 
-  # Reconstruct the ONLY file HEAD is permitted to have: main's file with D4's
-  # block inserted once, right after the anchor.
+  # Reconstruct the ONLY content HEAD is permitted to have: main's file with
+  # D4's block inserted once, right after the anchor.
   awk -v a="$anchor" -v bf="$w/block" '
     { print }
     $0 == a { while ((getline l < bf) > 0) print l; close(bf) }
   ' "$w/base" > "$w/expected"
 
-  if diff -u "$w/expected" tests/unit/vendor.test.js; then
-    echo "V8 PASS — HEAD is byte-for-byte main + D4's block at D4's anchor"
+  if diff -u -L expected -L "HEAD:tests/unit/vendor.test.js" "$w/expected" "$w/head"; then
+    echo "V8 PASS — HEAD's tests/unit/vendor.test.js is byte-for-byte main + D4's block at D4's anchor"
   else
-    echo "V8 FAIL — HEAD is NOT main plus exactly D4's block at D4's anchor (diff above)"
+    echo "V8 FAIL — HEAD's tests/unit/vendor.test.js is NOT main plus exactly D4's block at D4's anchor (diff above)"
     exit 1
   fi
 )
@@ -1664,10 +1677,22 @@ rc=$?; echo "V8 exit=$rc"; (exit $rc)
 ```
 
 Correct state must print `V8 anchor occurrences in main: 1` /
-`V8 PASS — HEAD is byte-for-byte main + D4's block at D4's anchor` /
-`V8 exit=0` **and the block itself must exit 0** — measured. Four details are
-deliberate:
+`V8 PASS — HEAD's tests/unit/vendor.test.js is byte-for-byte main + D4's block at
+D4's anchor` / `V8 exit=0` **and the block itself must exit 0** — measured on a
+committed, clean tree. **Run V8 after you commit**, not before: the first thing
+it does is refuse a dirty tree. Six details are deliberate:
 
+- **V8 reads `HEAD`'s blob, not the working tree.** `git show
+  HEAD:tests/unit/vendor.test.js` is materialised and `diff`ed; the path
+  `tests/unit/vendor.test.js` is never read as a file. **This is a round-6
+  correction and reverting it re-opens a real hole** — see red arm (f).
+- **The clean-tree precondition is the other half of that fix**, and it is not
+  hygiene. `git status --porcelain -- tests/unit/vendor.test.js` must be empty.
+  Without it an implementer can commit a bad `HEAD`, remove the offending line
+  locally *without committing*, watch V8 and V2 go green, and push the bad
+  `HEAD` — measured, red arm (f). The two guards are a pair; neither alone
+  closes it, because reading `HEAD` alone would still let a dirty tree make
+  local V2 disagree with what V8 checked.
 - **The whole thing is a `( … )` subshell, not `bash -c '…'`.** D4's block is
   full of single quotes (`'launcher'`, `'src'`, …) and could not survive the
   `bash -c '…'` wrapper the other steps use. A subshell keeps `exit 1` from
@@ -1679,13 +1704,15 @@ deliberate:
   pass. `grep -cFx` (fixed-string, whole-line) must return exactly `1` or V8
   fails loudly, and `-ne 1` catches duplicates too.
 - **`diff` is the gate, not a grep.** Its exit status is the block's, taken
-  inside an `if` where `set -u` cannot mask it, and its output is printed so a
-  failing run shows *what* diverged.
+  inside an `if` where `set -u` cannot mask it, and its output is printed — with
+  `-L` labels, so a failure names `expected` and `HEAD:…` rather than two
+  `mktemp` paths.
 - **`grep -c … || true`** keeps `set -u` from aborting on a zero match before the
   guard can report it; the gate is the explicit `[ "$n" -ne 1 ]` test, never
   grep's own status. That is the round-1 inversion, avoided by construction.
 
-**Red inputs — four, all measured, all with the block's own `$?`.**
+**Red inputs — six, all measured, all with the block's own `$?`.** Arms (a)–(d)
+are committed-state violations; (e) and (f) are the round-6 pair.
 
 | # | Violating state | V8 prints | Block `$?` |
 |---|---|---|---|
@@ -1693,19 +1720,30 @@ deliberate:
 | b | `:697` weakened from `assert.equal(base.after, base.before, …)` to `assert.ok(base.after === base.before \|\| base.after === 'REFUSED', …)` | the `diff` hunk, then `V8 FAIL` | **1** |
 | c | an extra `assert.ok(true, …)` merely *added* after `:697` | the `diff` hunk, then `V8 FAIL` | **1** |
 | d | the anchor absent from `main`'s file (probed by pointing the block at a non-existent anchor string) | `V8 anchor occurrences in main: 0` / `V8 FAIL — … Zero matches is a FAILURE, not agreement.` | **1** |
+| e | **bad `HEAD`, clean tree** — arm (a)'s line **committed**, nothing uncommitted | the `diff` hunk against `HEAD:…`, then `V8 FAIL` | **1** |
+| f | **bad `HEAD`, masked by the working tree** — arm (a)'s line committed, then removed locally and **left uncommitted**. This is the shape the round-6 review constructed | `V8 FAIL — tests/unit/vendor.test.js has uncommitted changes. …` | **1** |
 
-**Why arm (a) is the one that matters, stated so no one "simplifies" V8 back.**
-That single added line overwrites every measured outcome with the expected
-starting stance, so T12 asserts nothing. It was measured three ways:
+**Arm (f) is why V8 reads `HEAD`, and it is measured, not hypothetical.** On
+exactly that state the **round-6-interim** V8 — same reconstruction, but
+`diff`ing the *working-tree* path — printed `V8 anchor occurrences in main: 1` /
+`V8 PASS` and exited **0**, while `HEAD` carried the vacuity line
+(`git show HEAD:tests/unit/vendor.test.js | grep -c "after = before;"` → `1`).
+Local `V2` would agree with it, `boundary-check` only inspects the *path* list,
+and the bad `HEAD` pushes. The current form refuses at the first guard.
+
+**Why arm (a) is the one that started this, stated so no one "simplifies" V8
+back.** That single added line overwrites every measured outcome with the
+expected starting stance, so T12 asserts nothing. It was measured three ways:
 
 | Question | Measured |
 |---|---|
-| Does the **old**, proxy-based V8 catch it? | **No.** `V8 removed lines: 0  assert-touching lines: 0` / `V8 PASS`, block exit **0** |
+| Does the **first**, proxy-based V8 catch it? | **No.** `V8 removed lines: 0  assert-touching lines: 0` / `V8 PASS`, block exit **0** |
 | Does it actually make T12 vacuous? | **Yes.** With it present, `WP-stance-authority-containment`'s **T12 mutation row 10** — deleting the `selfResync` branch, which *must* redden T12 — leaves the file at `pass 30 / fail 0`. Without it, the same mutation gives `pass 29 / fail 1` |
 | Does **M7** catch it? | **No.** With D4 reverted and the line still present, `contained-clean` has no launcher, stays `REFUSED`, and T12 goes red exactly as M7 requires: `pass 29 / fail 1` |
 
-So V2, M7 and the old V8 could **all** be green while T12 proved nothing. Only
-the exact-reconstruction form closes that, and it does: arm (a) is red under it.
+So V2, M7 and the proxy V8 could **all** be green while T12 proved nothing. Only
+the exact-reconstruction form closes that, and only the `HEAD`-reading, clean-tree
+variant of it closes arm (f) as well.
 
 **V7 — lint.**
 
@@ -1779,12 +1817,23 @@ form the violating run printed `V7 exit=1` and exited **0**.
    following line and paste that too. V2 and V6 are exempt: V2's status is the
    bare `node tests/run.js` exit, and V6 is a list comparison whose exit status
    proves nothing.
+   **Run V8 only after committing.** It verifies `HEAD`'s blob and refuses to run
+   against a dirty `tests/unit/vendor.test.js` — deliberately, because an
+   uncommitted local edit can otherwise mask a bad `HEAD` (V8, red arm (f)). A
+   pasted V8 result taken on a dirty tree is not evidence; it is the failure
+   message.
 2. Table M's M1, M2, **M6 and M7** run and reverted, with their measured
    pass/fail counts pasted into the PR body under "Mutation checks". For M6,
    paste both halves: T1 red, and V1's other three tests plus V2–V7 still green.
-   For **M7**, paste both halves too: T12 red at `tests/unit/vendor.test.js:697`
-   with D4 reverted, and every other gate — V1, V3, V4, V5, V7, V8 — still green,
-   which is what shows D4 is the *only* thing that fixes it.
+   For **M7**, paste both halves too — and note **which** gates move, because a
+   round-6 review found this item contradicting Table M and demanding impossible
+   evidence. With D4 reverted, **V2 and V8 must BOTH be red**: T12 fails at
+   `tests/unit/vendor.test.js:697` with `'REFUSED' !== true` (V2), and V8 fails
+   because `HEAD`'s file is then `main`'s file with D4's block missing. The gates
+   that stay **green** are **V1, V3, V4, V5 and V7** — those are the ones to
+   paste as unaffected. Together that is what shows D4 is the *only* thing that
+   fixes it. **M7 does not substitute for V8's red arm (a)**: a vacuity line
+   added *alongside* D4 leaves M7 green.
 3. Conventional commits; PR titled
    `fix(vendor): carry the launcher forward on a self-resync (WP-launcher-no-self-resync-republish)`.
 4. PR template filled, including "Decisions made" (or "none") and
