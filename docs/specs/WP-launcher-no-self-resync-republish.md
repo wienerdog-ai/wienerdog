@@ -306,20 +306,40 @@ against its dependency's merged tree; this section is that re-verification.
 call sites. **Four** pass no `sourceRoot`, and all four are therefore
 `root = packageRoot()`, `require`d **through** `<core>/app/current`, so
 `realpath(current) === realpath(root)`. **All four are self-resyncs under D9's
-predicate, all four are `prod` under D1's containment-derived stance, and all
-four therefore take Table L's carry arm** once D2 ships. Executed, not reasoned:
-a probe `throw` planted in the carry arm fires in every one of them.
+predicate in every execution**, and **each of the four reaches Table L's carry
+arm in at least one execution** once D2 ships. Executed, not reasoned: a probe
+`throw` planted in the carry arm fires from every one of the four.
+
+**Static call sites are not executions, and the difference matters here.**
+Three of the four are prod in **every** execution and so always take the carry
+arm. The fourth — `tests/unit/vendor.test.js:673` — is a **single** call site
+that T12 executes **five** times through its `run()` helper, and those five
+executions split:
+
+| T12 shape | `app/current` resolves | `installStance` | `carryForward` | Arm |
+|---|---|---|---|---|
+| `contained-clean`, `contained-plant-git`, `contained-bad-version` | inside `<core>/app` | `prod` | `selfResync && !dev` = **true** | **carry** — the blocker |
+| `outside-clean`, `outside-plant-git` | **outside** `<core>/app` (a `<base>/checkout`) | `dev` | **false** | **publish** (Table L row 1) |
+
+So "all four take the carry arm" is true of call sites, **not** of every
+execution: T12 additionally has two **dev / publish-arm** executions, and the
+probe result above is a per-call-site result, not a per-execution one. This is
+also why **D4 publishes the launcher for all five shapes rather than only the
+contained three** — the two dev executions must keep taking the publish arm
+undisturbed, and they do, because the publish arm simply overwrites the file D4
+placed (Implementation notes → D4, first bullet).
 
 | Call site | Test / case it belongs to | Does the carry arm trip? | Why |
 |---|---|---|---|
-| `tests/unit/vendor.test.js:673` | **T12** — *"vendor: an attended sync carries containment forward or refuses — no DATA-shaped A7 write moves it"* (`:636`), inside its `run()` fixture helper (`:650-679`) | **YES — this is the blocker** | `run()` hand-builds the core: it `copyTree`s the repo into `start`, `fs.symlinkSync(start, <core>/app/current)`, and calls `vendorSelf` — **without ever performing a first install**. Nothing has published `<core>/launcher/launch.js`, so the carry arm's single `fs.readFileSync(dest)` throws `ENOENT`, `vendorSelf` throws `WienerdogError`, `run()`'s `catch` records `after = 'REFUSED'`, and `:697` (`assert.equal(base.after, base.before, 'contained-clean is carried forward unchanged')`) fails with `'REFUSED' !== true` on the `contained-clean` shape |
+| `tests/unit/vendor.test.js:673` | **T12** — *"vendor: an attended sync carries containment forward or refuses — no DATA-shaped A7 write moves it"* (`:636`), inside its `run()` fixture helper (`:650-679`) | **YES — this is the blocker** (in its **three prod executions**; its two dev executions take the publish arm — see the shape table above) | `run()` hand-builds the core: it `copyTree`s the repo into `start`, `fs.symlinkSync(start, <core>/app/current)`, and calls `vendorSelf` — **without ever performing a first install**. Nothing has published `<core>/launcher/launch.js`, so the carry arm's single `fs.readFileSync(dest)` throws `ENOENT`, `vendorSelf` throws `WienerdogError`, `run()`'s `catch` records `after = 'REFUSED'`, and `:697` (`assert.equal(base.after, base.before, 'contained-clean is carried forward unchanged')`) fails with `'REFUSED' !== true` on the `contained-clean` shape |
 | `tests/unit/launcher.test.js:161` | **T8** — *"launcher: plant .git + one attended sync ⇒ still prod, and an app-code tamper is refused with a durable C3 alert"* (`:155`) | no | Its fixture `setupProd()` (`:44-65`) runs a **real first install** at `:50` — `vendor.vendorSelf(paths, { sourceRoot: prodSource(), env: {} })` — which takes Table L row 1 and publishes `<core>/launcher/launch.js`. The carry arm's read then succeeds |
 | `tests/scenarios/a7-integrity/fixtures/cases.js:151` | case **`3a-plant-git-prod`** | no | Its fixture `buildInstall()` (`tests/scenarios/a7-integrity/fixtures/build.js:108`) runs the same real first install with an explicit `sourceRoot`, publishing the launcher before the case's `mutate` ever self-resyncs |
 | `tests/scenarios/a7-integrity/fixtures/cases.js:163` | case **`3b-plant-git-tamper`** | no | Identical shape and identical fixture to `3a` |
 
-The distinction is not "self-resync or not" — all four are. It is **"does the
-fixture model a real installed core"**: three of them do, because a real install
-always has an out-of-tree launcher, and the fourth does not.
+The distinction is not "self-resync or not" — all four are, in every execution.
+Nor is it "carry arm or not" — every one of the four reaches it. It is **"does
+the fixture model a real installed core"**: three of them do, because a real
+install always has an out-of-tree launcher, and the fourth does not.
 
 **Measured at `d1c96e1`, three ways. All three are `node tests/run.js` WITHOUT
 this WP's new test file**, so the totals are directly comparable and the only
@@ -385,7 +405,7 @@ the old version, so it is not a self-resync and it republishes normally
 |--------|------|-------|
 | modify | src/core/vendor.js | **D1** — `writeLauncher` gains the `carryForward` option and the carry-forward arm (Table L). The `if (opts.manifest)` block stays **below both arms**, shared — moving it into the `else` is the one mutation that passes every gate but AC12/T1 (Implementation notes → D1; Table M **M6**). **D2** — the `writeLauncher(…)` call at the end of `vendorSelf` passes `carryForward: selfResync && !dev`, reusing `WP-stance-authority-containment` D9's two existing bindings, and the call-site comment above it is corrected. **D3** — the false clause in `writeLauncher`'s JSDoc is **deleted** (Implementation notes → D3; it is a deletion, not a repair). Nothing else in the file: `vendorSelf`'s branch structure, `installStance`, `isDevCheckout`, `readVersion`, `repointCurrent`, `copyTree`, `makeTreeFilesReadOnly`, `writeShim`, `verifyCurrentContainment`, `launcherPath`, `recordOnce`, `COPY_INCLUDE` and the module's `require`s are untouched. |
 | create | tests/unit/vendor-selfresync.test.js | **T1–T4** (Test index). Four tests — no more, no fewer — verbatim in this spec. T1 additionally carries the **carry-arm manifest** assertion (AC12), the only gate on Table L's "both arms" row for that arm; T2 covers **both** accepted row-3 failure shapes and gates all three required message fields (AC5/AC6). Picked up automatically — `tests/run.js` shells out to `node --test` with no path filter, so `tests/unit/*.test.js` is auto-discovered. |
-| modify | tests/unit/vendor.test.js | **D4 — a FIXTURE-SETUP-ONLY edit inside T12's `run()` helper, and nothing else in the file.** Added round 6 because D1/D2/D3 redden this file's T12 (Current state §4); it is the only existing test they redden. The verbatim edit — seven added lines, zero removed, zero changed — is in Implementation notes → **D4**, which is the single place it is decided; this cell defers to it and must not restate it. **Hard limits, all grep-gated by V8:** the diff over this file must be **purely additive** (no `-` line), and **no line containing `assert` may be added, removed or changed**. Every assertion in T12 — including `:697`'s `contained-clean is carried forward unchanged`, `:700`–`:702`, and the `before`-shape oracle guards at `:688-693` — stays byte-identical, so what T12 proves is unchanged (Implementation notes → D4, "What D4 must not weaken"). Do **not** touch any other test in this file: `:397` and its `:412-413` assertion are AC4's proof and must pass unmodified. |
+| modify | tests/unit/vendor.test.js | **D4 — a FIXTURE-SETUP-ONLY edit inside T12's `run()` helper, and nothing else in the file.** Added round 6 because D1/D2/D3 redden this file's T12 (Current state §4); it is the only existing test they redden. The verbatim edit — seven added lines, zero removed, zero changed — is in Implementation notes → **D4**, which is the single place it is decided; this cell defers to it and must not restate it. **The hard limit, gated by V8:** this file at `HEAD` must be **byte-for-byte `main`'s file plus D4's block, inserted once at D4's anchor** — V8 reconstructs it and `diff`s. Nothing else, anywhere in the file, may move: not an assertion, not a helper, not a comment, not an import, and not an *added* line outside the block. Every assertion in T12 — including `:697`'s `contained-clean is carried forward unchanged`, `:700`–`:702`, and the `before`-shape oracle guards at `:688-693` — stays byte-identical, so what T12 proves is unchanged (Implementation notes → D4, "What D4 must not weaken"). Do **not** touch any other test in this file: `:397` and its `:412-413` assertion are AC4's proof and must pass unmodified. **V8 is deliberately not a diff-shape check** — "purely additive and `assert`-free" was V8's round-6-rejected first form, and a purely additive, `assert`-free line can make T12 vacuous (V8, red arm (a)). |
 
 Not deliverables, deliberately: `src/scheduler/launcher.js` (a sibling WP owns
 its refusal banner — do not open it), `src/cli/sync.js`, `src/cli/adopt.js`,
@@ -531,6 +551,13 @@ spot.
       (6) **Table M row M7**. The dispatch-status banner names it without
       operative wording — a name-only citation, not a seventh mirror. A genuine
       seventh gets registered here on the spot rather than restated.
+      **Mirror (5) carries D4's block verbatim a second time**, inside V8's
+      heredoc — unavoidable, because V8 must *compute* the expected file to
+      assert the invariant rather than a proxy for it. That copy and D4's are the
+      only two, and a change to either is a change to both **in the same pass**.
+      V8's own red arm (a) is what makes the duplication safe: if the two ever
+      disagree, V8 fails on the correct implementation rather than passing on a
+      wrong one.
 - [ ] **Exact contracts** — the `writeLauncher` JSDoc block and the call-site
       snippet.
 - [ ] **Acceptance criteria** — AC1–AC12 (AC12 is the carry arm's manifest
@@ -946,9 +973,20 @@ for the whole file), so the edit is behaviour-neutral without this WP and is not
 smuggling in a second change.
 
 **Nothing else in the file may change.** No assertion, no other test, no import,
-no helper. V8 is the exit-code gate: the diff over `tests/unit/vendor.test.js`
-must be purely additive and must not add, remove or alter a single line
-containing `assert`.
+no helper — **and no added line outside the block either**. V8 is the exit-code
+gate, and it does not check the *shape* of the diff: it reconstructs
+`main`'s file plus this block at this anchor and requires `HEAD`'s file to equal
+it byte for byte. A purely additive, `assert`-free line is still a V8 failure —
+deliberately, because such a line is exactly what can make T12 vacuous (V8, red
+arm (a), measured).
+
+**V8 carries this block verbatim a second time**, in its heredoc, because it has
+to compute the expected file. Those are the only two copies in this spec.
+**Change one and you change the other in the same pass** — including the comment
+lines and the indentation, which are part of the byte comparison. This
+duplication is registered in the Mirrored Surface Checklist, and it is safe in
+the one direction that matters: if the copies drift, V8 goes red on a *correct*
+implementation rather than green on a wrong one.
 
 ### General constraints
 
@@ -1283,7 +1321,9 @@ Every criterion below has a mutation partner in Table M that reddens it.
       one** existing test file changes — `tests/unit/vendor.test.js` — and only
       in the way Deliverables row 3 licenses: the T12 fixture-setup edit of
       Implementation notes → **D4**, purely additive, with **no assertion added,
-      removed or altered** anywhere in the file (V8). No other existing test file
+      removed or altered** anywhere in the file — V8 proves the stronger form,
+      that `HEAD`'s file **is** `main`'s file plus D4's block and nothing else.
+      No other existing test file
       changes at all; in particular `tests/unit/launcher.test.js` and
       `tests/scenarios/a7-integrity/**` are self-resyncs that pass **unedited**
       (Current state §4). `node tests/run.js` reports `fail 0`, and the diff
@@ -1318,7 +1358,7 @@ last column. Run these to prove the gates are not vacuous, then revert.
 | M4 | delete the `else` and always carry forward | **all four** — T3 and T4 are the *diagnostic* pair (they are the two that assert a publish must happen), but T1 and T2 fail too: their fixtures' **first install** then has no launcher to carry, so `writeLauncher` throws `ENOENT` before either test reaches its own assertion | **measured `pass 0 / fail 4`** |
 | M5 | recompute the predicate inside `writeLauncher` instead of taking `opts.carryForward` | V3 (match count `0` → non-zero, **and its exit status `0` → `1`**) | executed on the equivalent shape: count `1`, `$?` = `1` |
 | M6 | move the whole `if (opts.manifest) { … }` block **into** the `else` arm, next to the source read | **T1 only** — and that is the entire point: V1's other three tests, V2–V7, AC1–AC11 and M1–M5 all stay **green**, so T1's fresh-manifest assertion is the only thing standing between this mutation and a shipped uninstall bug | expected red (AC12 is its only assertion); the implementer confirms both halves — T1 red **and** everything else green |
-| M7 | revert **D4** — remove the seven lines from T12's `run()` helper, leaving D1/D2/D3 in place | `tests/unit/vendor.test.js:636` (**T12**), at `:697` with `'REFUSED' !== true`. This is the round-6 blocker itself, and M7 is what proves D4 is load-bearing rather than cosmetic. V1, V3, V4, V5, V7 and V8 all stay green under it — **only V2 moves** | **measured on `d1c96e1`**: `tests 1681 / pass 1675 / fail 1 / skipped 5` without D4, versus `1681 / 1676 / 0 / 5` with it (both counts taken without T1–T4) |
+| M7 | revert **D4** — remove the seven lines from T12's `run()` helper, leaving D1/D2/D3 in place | **V2 and V8 both** — `tests/unit/vendor.test.js:636` (**T12**) goes red at `:697` with `'REFUSED' !== true`, and V8 fails because `HEAD`'s file is then `main`'s file with D4's block *missing*. This is the round-6 blocker itself, and M7 is what proves D4 is load-bearing rather than cosmetic. V1, V3, V4, V5 and V7 stay green. **M7 is NOT a substitute for V8's red arm (a)**: a vacuity line added alongside D4 keeps M7 green (V8's "Does M7 catch it?" row) | **measured on `d1c96e1`**: `tests 1681 / pass 1675 / fail 1 / skipped 5` without D4, versus `1681 / 1676 / 0 / 5` with it (both counts taken without T1–T4) |
 
 M1, M2 and M4 were run end to end; M5's grep was run against both shapes; **M7
 was run end to end in round 6**, and its counterpart — D4's non-vacuity against
@@ -1387,7 +1427,7 @@ round 6 to the two steps that round added (**V2b** and **V8**):
 | V6 | `git diff --name-only` — always exits 0; a **list comparison**, not an exit-code gate. Stated as such so no one mistakes its exit 0 for a pass. The enforcing gate is CI's `boundary-check` | n/a | n/a |
 | V7 | `npm run lint` — nonzero exit on any violation | no | **yes — fixed below** |
 | V2b | `run-a7-integrity.js` — nonzero exit on any failure. **Added round 6** (the scenario gate `node tests/run.js` does not run) | no — written in the fixed form from the start | no — ends `rc=$?; … (exit $rc)` |
-| V8 | `git diff` + two `grep -c` counts, "expect 0 and 0". **Added round 6** | **no, by construction** — each `grep -c` status is captured into a variable and the gate is an explicit `[ "$n" -ne 0 ]` test, never grep's own exit | no — ends `rc=$?; … (exit $rc)` |
+| V8 | exact reconstruction + `diff`. **Added round 6, and REWRITTEN in the same round** — its first form was two `grep -c` diff-shape counts, which a Codex review showed admits a vacuity counterexample (V8, red arm (a)). The replacement asserts the invariant, not a proxy for it | **no, by construction** — `grep -c`'s status is captured into a variable and the gate is an explicit `[ "$n" -ne 1 ]` test; the outcome gate is `diff`'s status inside an `if` | no — ends `rc=$?; … (exit $rc)` |
 
 No further inversion and no further masking exists in the steps below; the sweep
 that produced this table was re-run in round 3 over every block on the page, and
@@ -1560,39 +1600,112 @@ adds a line here and `boundary-check` rejects the PR. `tests/unit/vendor.test.js
 appearing in this list is **necessary but not sufficient** — V8 is what bounds
 *how* it changed.
 
-**V8 — the `tests/unit/vendor.test.js` edit is confined to D4's fixture setup
-(AC9, Deliverables row 3).** This is the gate that turns "the file is a
-deliverable" into "only the fixture moved". It is an exit-code gate.
+**V8 — `tests/unit/vendor.test.js` at `HEAD` IS `main`'s file plus exactly D4's
+block at D4's anchor (AC9, Deliverables row 3).** This is the gate that turns
+"the file is a deliverable" into "only the fixture moved". It is an exit-code
+gate.
+
+**Read this before editing V8.** V8 was rewritten in **round 6** after a Codex
+review found the first version unsound, and the failure is worth naming because
+it is a class this project keeps paying for. The first version asserted
+**properties of the diff** — "no removed line", "no line containing `assert`" —
+as a *proxy* for "only the fixture moved". Proxies admit counterexamples. The
+measured one is below: a purely additive, `assert`-free line that makes T12
+**vacuous**. V8 now asserts the **invariant itself** — the file at `HEAD` is
+byte-for-byte reconstructible from `main`'s file plus D4's block — which has no
+gap to slip through, because there is exactly one permitted file content and V8
+computes it.
 
 ```bash
-bash -c '
-d=$(git diff -U0 main...HEAD -- tests/unit/vendor.test.js)
-dels=$(printf "%s\n" "$d" | grep -c "^-[^-]")
-asserts=$(printf "%s\n" "$d" | grep -cE "^[+-][^+-].*assert")
-echo "V8 removed lines: $dels  assert-touching lines: $asserts"
-if [ "$dels" -ne 0 ]; then echo "V8 FAIL — the D4 edit is purely additive; a removed line means something else moved"; exit 1; fi
-if [ "$asserts" -ne 0 ]; then echo "V8 FAIL — no assertion in vendor.test.js may be added, removed or altered"; exit 1; fi
-echo "V8 PASS"
-'
+(
+  set -u
+  w=$(mktemp -d)
+  git show main:tests/unit/vendor.test.js > "$w/base"
+
+  # D4's anchor: the line its block is inserted immediately AFTER.
+  anchor="    fs.symlinkSync(start, path.join(app, 'current'));"
+
+  # D4's block, verbatim. A quoted heredoc — nothing here is expanded.
+  cat > "$w/block" <<'D4BLOCK'
+    // A real installed core always has the out-of-tree launcher a first install
+    // published. This fixture hand-builds the core, so publish it by hand.
+    fs.mkdirSync(path.join(core, 'launcher'), { recursive: true });
+    fs.copyFileSync(
+      path.join(REPO, 'src', 'scheduler', 'launcher.js'),
+      path.join(core, 'launcher', 'launch.js')
+    );
+D4BLOCK
+
+  # The anchor must exist EXACTLY once in main. Zero matches must FAIL, never
+  # silently produce an unmodified reconstruction that then "agrees" with an
+  # unmodified HEAD.
+  n=$(grep -cFx "$anchor" "$w/base" || true)
+  echo "V8 anchor occurrences in main: $n"
+  if [ "$n" -ne 1 ]; then
+    echo "V8 FAIL — D4's anchor must occur EXACTLY once in main's tests/unit/vendor.test.js (found $n). Zero matches is a FAILURE, not agreement."
+    exit 1
+  fi
+
+  # Reconstruct the ONLY file HEAD is permitted to have: main's file with D4's
+  # block inserted once, right after the anchor.
+  awk -v a="$anchor" -v bf="$w/block" '
+    { print }
+    $0 == a { while ((getline l < bf) > 0) print l; close(bf) }
+  ' "$w/base" > "$w/expected"
+
+  if diff -u "$w/expected" tests/unit/vendor.test.js; then
+    echo "V8 PASS — HEAD is byte-for-byte main + D4's block at D4's anchor"
+  else
+    echo "V8 FAIL — HEAD is NOT main plus exactly D4's block at D4's anchor (diff above)"
+    exit 1
+  fi
+)
 rc=$?; echo "V8 exit=$rc"; (exit $rc)
 ```
 
-Correct state must print `V8 removed lines: 0  assert-touching lines: 0` /
-`V8 PASS` / `V8 exit=0` **and the block itself must exit 0**. The `^-[^-]` and
-`^[+-][^+-]` patterns exclude the `---`/`+++` diff headers, and `-U0` removes
-context lines so only real changes are counted. `grep -c`'s own exit status is
-captured into a variable and never becomes the block's status — that is the
-round-1 inversion, and it is avoided here by construction.
+Correct state must print `V8 anchor occurrences in main: 1` /
+`V8 PASS — HEAD is byte-for-byte main + D4's block at D4's anchor` /
+`V8 exit=0` **and the block itself must exit 0** — measured. Four details are
+deliberate:
 
-**Red inputs, both measured, and both with the block's own `$?`:** a diff that
-also weakens `:697` from `assert.equal(base.after, base.before, …)` to an
-`assert.ok(… || base.after === 'REFUSED')` prints
-`V8 removed lines: 1  assert-touching lines: 2` / `V8 FAIL` / `V8 exit=1` and the
-block exits **1**; a diff that merely *adds* an extra assertion prints
-`V8 removed lines: 0  assert-touching lines: 1` / `V8 FAIL` / `V8 exit=1` and the
-block exits **1** — deliberately, because adding an assertion to a test this WP
-does not own is out of scope too. On the D4-only diff both counts are `0` and the
-block exits **0**.
+- **The whole thing is a `( … )` subshell, not `bash -c '…'`.** D4's block is
+  full of single quotes (`'launcher'`, `'src'`, …) and could not survive the
+  `bash -c '…'` wrapper the other steps use. A subshell keeps `exit 1` from
+  killing an interactive shell, exactly as `bash -c` did.
+- **The zero-match guard is the trap this construction exists to avoid.** If the
+  anchor ever stops matching — a whitespace change on `main`, a re-indent — a
+  naive `awk` insertion produces a reconstruction *identical to `main`*, which
+  then compares **equal** to a `HEAD` that never applied D4. A silently vacuous
+  pass. `grep -cFx` (fixed-string, whole-line) must return exactly `1` or V8
+  fails loudly, and `-ne 1` catches duplicates too.
+- **`diff` is the gate, not a grep.** Its exit status is the block's, taken
+  inside an `if` where `set -u` cannot mask it, and its output is printed so a
+  failing run shows *what* diverged.
+- **`grep -c … || true`** keeps `set -u` from aborting on a zero match before the
+  guard can report it; the gate is the explicit `[ "$n" -ne 1 ]` test, never
+  grep's own status. That is the round-1 inversion, avoided by construction.
+
+**Red inputs — four, all measured, all with the block's own `$?`.**
+
+| # | Violating state | V8 prints | Block `$?` |
+|---|---|---|---|
+| a | **The Codex counterexample** — `if (fs.existsSync(path.join(core, 'launcher', 'launch.js'))) after = before;` added before `run()`'s `return`. Purely additive, contains no `assert` | the `diff` hunk showing that one added line, then `V8 FAIL` | **1** |
+| b | `:697` weakened from `assert.equal(base.after, base.before, …)` to `assert.ok(base.after === base.before \|\| base.after === 'REFUSED', …)` | the `diff` hunk, then `V8 FAIL` | **1** |
+| c | an extra `assert.ok(true, …)` merely *added* after `:697` | the `diff` hunk, then `V8 FAIL` | **1** |
+| d | the anchor absent from `main`'s file (probed by pointing the block at a non-existent anchor string) | `V8 anchor occurrences in main: 0` / `V8 FAIL — … Zero matches is a FAILURE, not agreement.` | **1** |
+
+**Why arm (a) is the one that matters, stated so no one "simplifies" V8 back.**
+That single added line overwrites every measured outcome with the expected
+starting stance, so T12 asserts nothing. It was measured three ways:
+
+| Question | Measured |
+|---|---|
+| Does the **old**, proxy-based V8 catch it? | **No.** `V8 removed lines: 0  assert-touching lines: 0` / `V8 PASS`, block exit **0** |
+| Does it actually make T12 vacuous? | **Yes.** With it present, `WP-stance-authority-containment`'s **T12 mutation row 10** — deleting the `selfResync` branch, which *must* redden T12 — leaves the file at `pass 30 / fail 0`. Without it, the same mutation gives `pass 29 / fail 1` |
+| Does **M7** catch it? | **No.** With D4 reverted and the line still present, `contained-clean` has no launcher, stays `REFUSED`, and T12 goes red exactly as M7 requires: `pass 29 / fail 1` |
+
+So V2, M7 and the old V8 could **all** be green while T12 proved nothing. Only
+the exact-reconstruction form closes that, and it does: arm (a) is red under it.
 
 **V7 — lint.**
 
