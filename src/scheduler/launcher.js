@@ -17,7 +17,7 @@
  *   4. the re-derived descriptor digest equals the digest bound into the OS
  *      entry (`--expect-digest`) — the independent anchor that catches a scoped
  *      `config.yaml` `run`/`model`/`timeout`/pin edit made without `sync`.
- * ANY mismatch ⇒ a fixed durable alert + non-zero exit + ZERO app/model spawn.
+ * ANY mismatch ⇒ a code-owned durable alert + non-zero exit + ZERO app/model spawn.
  *
  * SELF-CONTAINMENT (the load-bearing design point). This file's ONLY top-level
  * requires are Node builtins. The root-of-trust primitives — path resolution,
@@ -165,7 +165,7 @@ function liveStance(p) {
   return containedIn(p.appDir, p.appCurrent) ? 'prod' : 'dev';
 }
 
-/** Minimal durable alert append (fixed, code-owned reason — no secrets, so no
+/** Minimal durable alert append (code-owned reason — no secrets, so no
  *  redaction/compaction machinery from src/core/alerts.js is needed; this must
  *  work even when the app tree is the thing being refused).
  *  @param {{state:string}} p @param {string} job @param {string} reason */
@@ -268,14 +268,17 @@ function reDeriveDigest(target, name, env, platform) {
  * @param {{core:string, state:string, appDir:string, appCurrent:string}} p  inlined core paths
  * @param {string} name  job name (never the '--catch-up' sentinel — main handles that)
  * @param {{descriptorPath:string, expectDigest:string, env?:NodeJS.ProcessEnv, platform?:NodeJS.Platform}} o
- * @returns {{ok:true, command:string, args:string[], home?:string}|{ok:false, reason:string}}
+ * @returns {{ok:true, command:string, args:string[], home?:string}|{ok:false, remedy:'sync'|'reinstall', reason:string}}
  */
 function verifyAndResolve(p, name, o) {
   const env = o.env || process.env;
   const platform = o.platform || process.platform;
+  /** Has the tie-back check (dev: bound-root identity; prod: content address)
+   *  already EXECUTED AND PASSED on the path we are on? Block R-P. */
+  let tied = false;
   try {
     const descriptor = readDescriptorFile(o.descriptorPath);
-    if (!descriptor) return { ok: false, reason: `descriptor ${o.descriptorPath} is missing or unreadable` };
+    if (!descriptor) return { ok: false, remedy: 'reinstall', reason: `descriptor ${o.descriptorPath} is missing or unreadable` };
     const stance = descriptor.appRelease && descriptor.appRelease.stance;
     const boundHome = typeof descriptor.home === 'string' ? descriptor.home : undefined;
 
@@ -283,7 +286,7 @@ function verifyAndResolve(p, name, o) {
     try {
       target = fs.realpathSync(p.appCurrent);
     } catch (err) {
-      return { ok: false, reason: `cannot resolve app/current: ${err.message}` };
+      return { ok: false, remedy: 'reinstall', reason: `cannot resolve app/current: ${err.message}` };
     }
     // Computed BEFORE any require from the app tree (the dev arm's
     // reDeriveDigest is the first thing that loads code from it).
@@ -297,7 +300,7 @@ function verifyAndResolve(p, name, o) {
     // below (reason C2); a dev entry over a contained tree is refused here (C1).
     if (stance === 'dev') {
       if (live !== 'dev') {
-        return { ok: false, reason: `the descriptor was authorized for a dev checkout but app/current now resolves inside ${p.appDir}` };
+        return { ok: false, remedy: 'reinstall', reason: `the descriptor was authorized for a dev checkout but app/current now resolves inside ${p.appDir}` };
       }
       // Dev containment: the live app/current must resolve to EXACTLY the bound
       // checkout root (dev vendors the checkout itself, OUTSIDE <core>/app, so the
@@ -305,32 +308,34 @@ function verifyAndResolve(p, name, o) {
       // root is still caught).
       const boundRoot = descriptor.appRelease && descriptor.appRelease.root;
       if (!boundRoot || path.resolve(target) !== path.resolve(boundRoot)) {
-        return { ok: false, reason: 'the dev app/current does not resolve to the authorized checkout root (repointed since sync)' };
+        return { ok: false, remedy: 'reinstall', reason: 'the dev app/current does not resolve to the authorized checkout root (repointed since sync)' };
       }
+      tied = true; // dev arm: app/current proven to BE the authorized checkout root
       // Dev digest: the reduction excludes only treeDigest+version, so a tracked-
       // source edit stays runnable but ANY config-field edit (run/model/schedule/
       // home/…) drifts and refuses.
       const dd = reDeriveDigest(target, name, derivEnv, platform);
-      if (dd === undefined) return { ok: false, reason: `no job named "${name}" in config — nothing authorized to run` };
+      if (dd === undefined) return { ok: false, remedy: 'sync', reason: `no job named "${name}" in config — nothing authorized to run` };
       if (dd !== o.expectDigest) {
-        return { ok: false, reason: 'the job descriptor changed since it was scheduled (run/model/timeout/schedule/home/pin drift) — a `wienerdog sync` is required to re-authorize it' };
+        return { ok: false, remedy: 'sync', reason: 'the job descriptor changed since it was scheduled (run/model/timeout/schedule/home/pin drift) — a `wienerdog sync` is required to re-authorize it' };
       }
       return { ok: true, command: process.execPath, args: runArgs, home: boundHome };
     }
-    if (stance !== 'prod') return { ok: false, reason: `descriptor stance ${JSON.stringify(stance)} is not prod or dev` };
+    if (stance !== 'prod') return { ok: false, remedy: 'reinstall', reason: `descriptor stance ${JSON.stringify(stance)} is not prod or dev` };
 
     // PROD verification. (No dedicated live-stance pre-check here: a prod
     // descriptor over a `live === 'dev'` tree is exactly a non-contained
     // `app/current`, which verifyContainment refuses on the next line with
     // reason C2 — one branch is better than two.)
     const contain = verifyContainment(p, platform);
-    if (!contain.ok) return { ok: false, reason: contain.why };
+    if (!contain.ok) return { ok: false, remedy: 'reinstall', reason: contain.why };
 
     const liveTree = appTreeDigestOf(target);
     const expectTree = descriptor.appRelease && descriptor.appRelease.treeDigest;
     if (liveTree !== expectTree) {
-      return { ok: false, reason: 'the live app tree does not match the descriptor (app files changed since sync)' };
+      return { ok: false, remedy: 'reinstall', reason: 'the live app tree does not match the descriptor (app files changed since sync)' };
     }
+    tied = true; // prod arm: the live tree proven byte-identical to the descriptor
 
     // Tree verified byte-identical to the descriptor ⇒ it is now SAFE to require
     // the descriptor-derivation code from the verified tree. deriveDescriptorDigest
@@ -338,14 +343,15 @@ function verifyAndResolve(p, name, o) {
     // catching a config.yaml run/model/timeout/schedule/home/pin edit made without
     // `sync`.
     const derived = reDeriveDigest(target, name, derivEnv, platform);
-    if (derived === undefined) return { ok: false, reason: `no job named "${name}" in config — nothing authorized to run` };
+    if (derived === undefined) return { ok: false, remedy: 'sync', reason: `no job named "${name}" in config — nothing authorized to run` };
     if (derived !== o.expectDigest) {
-      return { ok: false, reason: 'the job descriptor changed since it was scheduled (run/model/timeout/schedule/home/pin/app drift) — a `wienerdog sync` is required to re-authorize it' };
+      return { ok: false, remedy: 'sync', reason: 'the job descriptor changed since it was scheduled (run/model/timeout/schedule/home/pin/app drift) — a `wienerdog sync` is required to re-authorize it' };
     }
 
     return { ok: true, command: process.execPath, args: runArgs, home: boundHome };
   } catch (err) {
-    return { ok: false, reason: `integrity check errored: ${err.message}` };
+    // Table S row 12 — the ONLY site whose class is not a literal.
+    return { ok: false, remedy: tied ? 'sync' : 'reinstall', reason: `integrity check errored: ${err.message}` };
   }
 }
 
@@ -368,7 +374,7 @@ function verifyAndResolve(p, name, o) {
  * @param {{appDir:string, appCurrent:string}} p @param {string} expectDigest
  * @param {NodeJS.ProcessEnv} env @param {NodeJS.Platform} platform
  * @param {string} [jobDigests]  opaque base64url map token from the loaded entry
- * @returns {{ok:true, command:string, args:string[]}|{ok:false, reason:string}}
+ * @returns {{ok:true, command:string, args:string[]}|{ok:false, remedy:'sync'|'reinstall', reason:string}}
  */
 function verifyCatchup(p, expectDigest, env, platform, jobDigests) {
   try {
@@ -376,18 +382,18 @@ function verifyCatchup(p, expectDigest, env, platform, jobDigests) {
     try {
       target = fs.realpathSync(p.appCurrent);
     } catch (err) {
-      return { ok: false, reason: `cannot resolve app/current: ${err.message}` };
+      return { ok: false, remedy: 'reinstall', reason: `cannot resolve app/current: ${err.message}` };
     }
     const runArgs = [path.join(target, 'bin', 'wienerdog.js'), 'run-job', '--catch-up'];
     if (typeof jobDigests === 'string' && jobDigests !== '') runArgs.push('--job-digests', jobDigests);
     const contain = verifyContainment(p, platform);
-    if (!contain.ok) return { ok: false, reason: contain.why };
+    if (!contain.ok) return { ok: false, remedy: 'reinstall', reason: contain.why };
     if (appTreeDigestOf(target) !== expectDigest) {
-      return { ok: false, reason: 'the live app tree does not match the scheduled digest (app files changed since sync)' };
+      return { ok: false, remedy: 'reinstall', reason: 'the live app tree does not match the scheduled digest (app files changed since sync)' };
     }
     return { ok: true, command: process.execPath, args: runArgs };
   } catch (err) {
-    return { ok: false, reason: `integrity check errored: ${err.message}` };
+    return { ok: false, remedy: 'reinstall', reason: `integrity check errored: ${err.message}` };
   }
 }
 
@@ -424,13 +430,52 @@ function parseArgv(argv) {
   return { positionals, flags };
 }
 
+/** The two refusal remedy classes and the sentence each one ends the banner with
+ *  (WP-refusal-remedy-discriminator, Table R). The class is chosen by the
+ *  verifier from WHERE in the verification flow it refused (Table S) — never by
+ *  matching the human-readable reason text.
+ *  @type {{sync: string, reinstall: string}} */
+const REMEDY_TAIL = {
+  sync: 'If the change was intentional, run `wienerdog sync`; otherwise investigate.',
+  reinstall:
+    'Do not run `wienerdog sync` — this check could not confirm the app files are ' +
+    'the ones you installed, so syncing is not the safe next step. ' +
+    'Reinstall Wienerdog from a trusted source, then investigate.',
+};
+
+/** The full refusal banner. FAILS CLOSED on the remedy: only the exact string
+ *  'sync' selects the permissive tail, so an absent, empty, unknown or
+ *  object-key-shaped value ('__proto__', 'constructor', …) gets the conservative
+ *  'reinstall' tail. Normalizes BEFORE indexing, so no caller-supplied string is
+ *  ever used as a lookup key.
+ *  @param {string} jobName @param {string} why @param {string} [remedy]
+ *  @returns {string} */
+function refusalText(jobName, why, remedy) {
+  const tail = REMEDY_TAIL[remedy === 'sync' ? 'sync' : 'reinstall'];
+  return (
+    `wienerdog: refusing to run "${jobName}" — ${why} (integrity mismatch); no job was run. ` +
+    `This alert will appear in your next digest. ${tail}`
+  );
+}
+
+/** The remedy a verdict ASKS for — read only if the verdict OWNS the field.
+ *  A refusal return site that forgets to set `remedy` must not INHERIT one:
+ *  `verdict.remedy` alone resolves through the prototype chain, so a single
+ *  `Object.prototype.remedy = 'sync'` anywhere in the process would silently
+ *  turn every unclassified future refusal into a `sync` recommendation. The
+ *  ownership check is what makes refusalText's fail-closed default actually
+ *  reachable. @param {object} verdict @returns {string|undefined} */
+function remedyOf(verdict) {
+  return verdict && Object.hasOwn(verdict, 'remedy') ? verdict.remedy : undefined;
+}
+
 /**
  * CLI entry the OS scheduler invokes:
  *   node <core>/launcher/launch.js <name> --descriptor <p> --expect-digest <d>
  *   node <core>/launcher/launch.js --catch-up --expect-digest <d> [--job-digests <b64>]
  * ok ⇒ spawn `node <currentBin> run-job <name|--catch-up>` (inherit stdio; exit
  * with the child's code) — the ONLY place a model/app spawn happens. refuse ⇒
- * append a fixed durable alert, write the reason to stderr, exit NON-ZERO,
+ * append a code-owned durable alert, write the reason to stderr, exit NON-ZERO,
  * spawn NOTHING.
  * @param {string[]} argv  process.argv.slice(2)
  * @param {{env?:NodeJS.ProcessEnv, platform?:NodeJS.Platform, spawn?:typeof spawnSync,
@@ -454,21 +499,20 @@ function main(argv, opts = {}) {
   const isCatchup = flags['catch-up'] === true;
   const name = isCatchup ? '--catch-up' : positionals[0];
 
-  /** Refuse: fixed durable alert (never a bare throw — F13) pointing at the real
-   *  surface (the next digest banner) + the real remedy (`wienerdog sync`), NOT
-   *  `wienerdog doctor` which reads no A7 state (F27). Zero spawn, non-zero exit. */
-  const refuse = (jobName, why) => {
-    const reason =
-      `wienerdog: refusing to run "${jobName}" — ${why} (integrity mismatch); no job was run. ` +
-      'This alert will appear in your next digest. If the change was intentional, run ' +
-      '`wienerdog sync`; otherwise investigate.';
+  /** Refuse: durable alert (never a bare throw — F13) pointing at the real surface
+   *  (the next digest banner) plus the remedy for THIS refusal's class, chosen from
+   *  the verdict's structured `remedy` field, never from the reason text
+   *  (WP-refusal-remedy-discriminator, Table R). `wienerdog doctor` is still never
+   *  named — it reads no A7 state (F27). Zero spawn, non-zero exit. */
+  const refuse = (jobName, why, remedy) => {
+    const reason = refusalText(jobName, why, remedy);
     appendRefuseAlert(p, jobName, reason);
     process.stderr.write(`${reason}\n`);
     exit(1);
     return 1;
   };
 
-  if (error) return refuse(name || 'unknown', error);
+  if (error) return refuse(name || 'unknown', error, 'reinstall');
 
   const verdict = isCatchup
     ? verifyCatchup(p, flags['expect-digest'], env, platform, flags['job-digests'])
@@ -479,7 +523,7 @@ function main(argv, opts = {}) {
         platform,
       });
 
-  if (!verdict.ok) return refuse(name, verdict.reason);
+  if (!verdict.ok) return refuse(name, verdict.reason, remedyOf(verdict));
 
   // Child spawn env (defense-in-depth, F8 + A10/R4 + A7 hardening pass): scrub the
   // code-loading Node vars (they run attacker code in a child node before its own
@@ -508,7 +552,7 @@ function main(argv, opts = {}) {
   return code;
 }
 
-module.exports = { verifyAndResolve, verifyCatchup, appTreeDigestOf, verifyContainment, liveStance, parseArgv, main };
+module.exports = { verifyAndResolve, verifyCatchup, appTreeDigestOf, verifyContainment, liveStance, parseArgv, refusalText, remedyOf, main };
 
 // When the vendored copy at <core>/launcher/launch.js is executed by the OS
 // scheduler, run main with the real argv.

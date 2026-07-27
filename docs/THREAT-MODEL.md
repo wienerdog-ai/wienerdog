@@ -265,7 +265,7 @@ surface: an environment variable that chose what a job runs.
   edits to `config.yaml` or the app tree do **not** change what runs until an
   explicit `wienerdog sync` re-derives and re-binds the digest; at fire time any
   mismatch **fails closed** — a fixed durable alert and **zero model spawn**, no
-  soft fallback, no "run anyway". The one remedy is `wienerdog sync`. Accepted UX
+  soft fallback, no "run anyway". The remedy depends on where in the verification flow the refusal happened: `wienerdog sync` is named only after the live `app/current` has been tied to what the descriptor authorized — by content address on a production install, or by bound-root identity for an authorized mutable dev checkout — which in practice means the `config.yaml`/descriptor-drift classes. Every refusal reached before that tie-back, including the app tree failing its content address, withholds the advice — `sync` re-vendors by running out of the very tree in question — and directs a reinstall from a non-dev source root instead (WP-refusal-remedy-discriminator). Accepted UX
   cost, stated plainly: a legitimate hand-edit of `config.yaml` without a
   follow-up `sync` makes the next scheduled dream refuse with a clear alert — one
   skipped night, not silent degradation.
@@ -365,8 +365,11 @@ surface: an environment variable that chose what a job runs.
   every other scheduled-job failure (T6). `wienerdog doctor` does **not** read any
   A7 state today (no descriptor, no pin, no alert, no drift check) — wiring it up
   is a documented follow-up (candidate WP-162), not built in this pass. The
-  runbook and the launcher's own refuse text point to the digest banner and
-  `wienerdog sync`, never to `doctor`.
+  runbook and the launcher's own refuse text point to the digest banner, never
+  to `doctor`; they name `wienerdog sync` only for refusals reached after the
+  live `app/current` has been tied to what the descriptor authorized — after
+  tree verification on a production install, or for an authorized mutable dev
+  checkout.
 
 **Honest residual (A12).** This protects **scoped core writes** and **detects
 drift** between attended `sync`s; it is **not an OS boundary**. The independent
