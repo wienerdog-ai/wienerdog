@@ -216,13 +216,16 @@ opens no socket, and sends nothing off the machine. Every path it may touch is
 enumerated in the **Deliverables** table below — that table is the only
 enumeration of them in this document, and it creates no file and deletes none.
 
-## OWNER DECISION REQUIRED — `redacted/` is the user's recovery original, and ADR-0019 deletes it
+## OWNER-DECIDED — `redacted/` is the user's recovery original, ADR-0019 deletes it, and the fix is option C
 
-**This section is not a design. It is a question for the owner, raised in round 1
-of the design gate by the adversarial reviewer, and it touches a RATIFIED ADR —
-so the architect states the options and a recommendation and decides nothing.
-This WP does not flip to `Ready` until the owner answers, because each answer
-changes a different part of this document.**
+**Raised in round 1 of the design gate by the adversarial reviewer, put to the
+owner because it touches a RATIFIED ADR, and answered on 2026-07-27 — see
+"ANSWERED" below, which is the decision; everything above it is the record of
+what was weighed.** *Round 7.5 corrected this heading and the conditional
+framing below: the section had carried "OWNER DECISION REQUIRED" and "if the
+owner chooses…" for four rounds after the owner had chosen, which is the same
+pending-versus-decided mismatch the fall-through section was corrected for in
+the same pass.*
 
 **The conflict, verified rather than argued.**
 
@@ -297,7 +300,8 @@ owner can disagree with the reasoning rather than the conclusion:
   path that does not disclose its own expiry — inside the boundary, in wording
   changes to rows this document already owns.
 
-**If the owner chooses C**, the concrete edits are: Q4's runbook bullet gains
+**The decided edits — option C** (written as conditionals until round 7.5, and
+now stated as what they are) are: Q4's runbook bullet gains
 *"and `wienerdog uninstall` removes this folder along with everything else under
 `state/`, so copy anything you want to keep out of it first"*; Q6's glossary
 sentence keeps its no-number rule and gains the word *disposable*; the dream
@@ -311,9 +315,9 @@ ordinal in the owner-facing edit list is a citation that rots on every
 insertion. *Standing rule from round 7: **cite an accepted residual by its
 subject, not by its number**, in this document and in the follow-on stub.*
 
-**If the owner chooses A or B**, this spec is re-scoped before dispatch — its
-Deliverables table grows and Tables B, R and Q move — and that is a new revision
-of this document, not an implementer's decision.
+**Options A and B were not chosen.** Had either been, this spec would have been
+re-scoped before dispatch — its Deliverables table grown and Tables B, R and Q
+moved. Retained as the considered-and-rejected record, not as a live branch.
 
 ### ANSWERED — 2026-07-27. The owner chose **C now, B as a follow-on**
 
@@ -349,49 +353,78 @@ add an uninstall exception, do not change the destination, and do not soften the
 report line beyond the wording Table Q decides. Anything past option C is the
 follow-on WP's, and re-opening the choice is an owner action.
 
-## OWNER DECISION REQUIRED — abort the redact-arm fall-through, or keep it?
+## OWNER-DECIDED — the redact-arm fall-through is KEPT (option A)
 
-**Raised in round 6 of the design gate by the adversarial reviewer. The architect
-states the options and a recommendation and decides nothing, because the only
-clean fix deletes a behaviour the owner's own approval names in its own words.**
+**Raised in round 6 of the design gate by the adversarial reviewer, put to the
+owner because the only clean alternative deletes a behaviour his own approval
+names in its own words, and answered on 2026-07-28.**
 
-**The problem in one paragraph.** Every withhold ends in a destructive operation
-— `git checkout HEAD -- rel` on a tracked file, `fs.rmSync` on an untracked one.
-Everything that makes that destruction safe is a *check performed earlier*: K3's
-preserve, K4's identity comparison. **A save landing between the check and the
-destruction is destroyed, and no check can close that window**, because the check
-is always at T0 and the destruction always at T1. On an untracked note the loss
-is irreversible.
+> **OWNER-DECIDED IN SESSION — 2026-07-28 (TRANSCRIBED, NOT OWNER-TYPED).**
+> Gyula Fehér answered this in conversation; this record was written by the
+> architect, not by him. It records that the decision was taken — it is **not**
+> his signature and must never be treated as one, and **no gate keys on it**
+> (rows **S5**/**S6** govern: the merge gate keys only on an owner-written
+> `OWNER-SIGNED` line, which no agent ever writes).
+> Verbatim: *"architect recommendation approved."*
+> **Scope of this decision: the architect's recommendation below — OPTION A.** The redact-arm fall-through to withhold
+> stays exactly as Table B rows B5/B5a describe it; accepted residual **11**
+> discloses the inherited pre-revert race; and
+> **`WP-ep2-atomic-withhold-handoff`** is the named follow-on that closes that
+> race properly, for every severity, by capturing the file with `rename(2)`
+> rather than by reading it and trusting the read.
 
-**Two facts bound how alarming this is, and both are verified.** (1) **The race is
-inherited, not created here** — shipped `main` reads the file at
+**What this settles.** Nothing in this spec changes — which is the point of
+choosing A, and was stated as such when the question was put. Every table
+already describes option A: **B5** and **B5a** fall through to **B3**, the note
+is preserved and reverted, the run continues and commits every other note. **An
+implementer implements what these tables say and does not invent a third path.**
+
+**What it does NOT settle**, stated so nothing reads as closed that is not:
+**residual 11 remains open as a residual.** The pre-revert race is disclosed,
+pinned by Table T row **RP-1**, and *not fixed here*. The decision is that this
+WP does not fix it, not that it is gone.
+
+### The problem, retained because the decision only makes sense with it
+
+Every withhold ends in a destructive operation — `git checkout HEAD -- rel` on a
+tracked file, `fs.rmSync` on an untracked one. Everything that makes that
+destruction safe is a *check performed earlier*: K3's preserve, K4's identity
+comparison. **A save landing between the check and the destruction is destroyed,
+and no check can close that window**, because the check is always at T0 and the
+destruction always at T1. On an untracked note the loss is irreversible.
+
+**Two facts bound how alarming this is, and both are verified.** (1) **The race
+is inherited, not created here** — shipped `main` reads the file at
 `validate.js:654` and then reverts, on every withhold, for every severity, since
 WP-123. (2) **K4 still helps**: it converts a *known* stale copy into an abort,
 and never yields a worse outcome than its absence.
 
-### The two options
+### The rejected alternative, retained as the considered-and-rejected record
+
+**This table is not a live choice. It is the record of what was weighed**, kept
+because a decision whose alternative has been deleted cannot be audited — and
+because if a later round proposes option B again, it must argue against this,
+not rediscover it.
 
 | | option | what it does | what it costs |
 |---|--------|--------------|---------------|
-| **A — keep the fall-through** *(what this spec currently says)* | a failed redact arm falls through to B3 and withholds, exactly as the owner approved | the note is preserved and reverted; the run continues and commits every other note | **the inherited race remains on these paths**, disclosed as residual 11 |
-| **B — abort every redact-arm fall-through** | B5 and B5a stop raising a withhold and raise a `WienerdogError` instead — the whole dream run ends, nothing is committed | **zero data-loss risk on the new paths**, and a large simplification: **K4, R0b, FI-10, FI-11, FI-17, FI-18, FI-19, RP-1, consequence 2's entire delete machinery, accepted residual 10b, and mutations M-31, M-45, M-49, M-50 and M-51 all lose their subjects or collapse** | **it deletes a behaviour the owner's approval names verbatim**, and one note's scrub failure now costs the whole run's commits |
+| **A — keep the fall-through** — **DECIDED 2026-07-28** | a failed redact arm falls through to B3 and withholds, exactly as the owner approved | the note is preserved and reverted; the run continues and commits every other note | **the inherited race remains on these paths**, disclosed as residual 11 |
+| B — abort every redact-arm fall-through — **REJECTED** | B5 and B5a stop raising a withhold and raise a `WienerdogError` instead — the whole dream run ends, nothing is committed | zero data-loss risk on the new paths, and a large simplification: **K4, R0b, FI-10, FI-11, FI-17, FI-18, FI-19, RP-1, consequence 2's entire delete machinery, accepted residual 10b, and mutations M-31, M-45, M-49, M-50 and M-51 would all lose their subjects or collapse** | **it deletes a behaviour the owner's approval names verbatim**, and one note's scrub failure costs the whole run's commits |
 
-### Why this is the owner's call and not mine
-
-The first `OWNER-RATIFIED` blockquote's scope reads, in its own parenthetical:
+**Why it was the owner's call rather than the architect's.** The first
+`OWNER-RATIFIED` blockquote's scope reads, in its own parenthetical:
 *"preserve the unredacted original first, scrub only the added lines second,
 and fall through to withhold if the preserve failed"* (quoted as written; the
-emphasis in the paragraph below is mine, not the approval's). **Option B
-removes precisely that last clause.** The round-4 post-approval rule lets the architect record
-a *content* change to an approved row; this is not a refinement of B5, it is the
-deletion of the behaviour the approval describes. The standing rule — *a signed
-approval is scoped by what was put to the owner* — points the same way.
+emphasis in the paragraph below is mine, not the approval's). **Option B would
+have removed precisely that last clause.** The round-4 post-approval rule lets
+the architect record a *content* change to an approved row; that would not have
+been a refinement of B5 but the deletion of the behaviour the approval
+describes. The standing rule — *a signed approval is scoped by what was put to
+the owner* — pointed the same way. There was also an observable-behaviour change
+beyond B5: under option B a single note's scrub failure ends the run, so notes
+that were fine lose their commit.
 
-There is also an observable-behaviour change beyond B5: under option B a single
-note's scrub failure ends the run, so **notes that were fine lose their commit**
-and the user's night of consolidation is lost rather than degraded.
-
-### The architect's recommendation: **A**, with residual 11 and a named follow-on
+### The recommendation the owner approved
 
 1. **Option B buys a guarantee against a race it does not own.** The window it
    closes on the fall-throughs is the same window `main` already ships on every
@@ -399,28 +432,18 @@ and the user's night of consolidation is lost rather than degraded.
    is worth doing properly: **take the file by `rename(2)` instead of reading it
    and trusting the read**, so the gate captures bytes by removing the path
    rather than by inspecting it. That fixes every severity at once. It is a
-   change to shipped withhold behaviour, so it is its own WP.
+   change to shipped withhold behaviour, so it is its own WP —
+   **`WP-ep2-atomic-withhold-handoff`**, now filed as a Draft stub at
+   `docs/specs/WP-ep2-atomic-withhold-handoff.md` with this ruling as its
+   mandate.
 2. **Option B's blast radius is the wrong shape.** A scrub failure is a
    *per-note* problem; ending the whole run makes it a per-run one. Rows R0, R0b
    and R9 already abort, and they do so precisely because on those rows there is
-   **no safe alternative** — here there is one, and it is the behaviour the owner
-   approved.
-3. **The simplification is real and I am not dismissing it.** If the owner
-   prefers the smaller design, say so and this spec loses roughly a third of its
-   failure machinery. **That trade is his to make**, not mine, because what is
-   being bought is his approved behaviour.
-
-**If the owner chooses A**, nothing in this spec changes — residual 11 already
-states the residual, and the follow-on is filed as
-`WP-ep2-atomic-withhold-handoff` (not yet written; named here so it is not lost).
-
-**If the owner chooses B**, this spec is re-scoped before dispatch: B5/B5a become
-aborts, and the machinery listed in the table above is deleted rather than
-adapted. **Prefer the smaller design — do not keep machinery whose reason has
-gone.** That is a new revision of this document, not an implementer's decision.
-
-**Until the owner answers, an implementer implements option A**, which is what
-every table in this document currently says, and does not invent a third path.
+   **no safe alternative** — here there is one, and it is the behaviour the
+   owner approved.
+3. **The simplification was real and was not dismissed.** It was put to the
+   owner as a genuine trade — roughly a third of this spec's failure machinery
+   against his approved behaviour — and he kept the behaviour.
 
 ## The threat model — this is the review criterion, not a suggestion
 
@@ -2916,7 +2939,7 @@ than:
   under `state/`, so anything worth keeping must be copied out first.** In the
   runbook's own plain voice, not in those words — it is a knowledge-worker
   document. **This bullet is REQUIRED by the owner's option-C ruling of
-  2026-07-27** (see "ANSWERED — 2026-07-27" under OWNER DECISION REQUIRED) and
+  2026-07-27** (see "ANSWERED — 2026-07-27" under the OWNER-DECIDED ADR-0019 section) and
   is the whole of what option C adds to the runbook. Without it the runbook
   documents a recovery path and conceals its expiry, which is the defect the
   ruling closes; `wienerdog uninstall` is the one event that removes these
@@ -3342,15 +3365,17 @@ restating a measurement it cannot reproduce.
     **Table T row RP-1 pins this residual as a test**, so the follow-on will
     know when it has changed something. The one in-scope alternative — aborting
     every fall-through instead of withholding — deletes a behaviour the owner's
-    approval names, and is put to him under "OWNER DECISION REQUIRED — abort the
-    redact-arm fall-through, or keep it?".
+    approval names, **was put to him, and was DECLINED on 2026-07-28 in favour of
+    the architect's recommendation** — see "OWNER-DECIDED — the redact-arm
+    fall-through is KEPT (option A)". This residual is therefore the decided
+    disposition of that race in this WP, not an open question.
 12. **`wienerdog uninstall` destroys every pre-scrub original, and this WP does
     not change that — it only stops the product concealing it.** `redacted/`
     lives under `state/`, which `disposeCoreMechanics` removes recursively
     (ADR-0019). A user who uninstalls before reviewing a redaction loses the only
     copy of that note's pre-scrub text, with no separate warning beyond the
     general uninstall disclosure. **Decided by the owner on 2026-07-27 as
-    option C** — see "ANSWERED — 2026-07-27" under OWNER DECISION REQUIRED — so
+    option C** — see "ANSWERED — 2026-07-27" under the OWNER-DECIDED ADR-0019 section — so
     what this WP ships is the *disclosure*: Table Q row **Q4** puts the fact in
     the recovery runbook, **Q6** puts the word *disposable* in the glossary, and
     the dream-report line says "restore from that copy **while it is there**".
@@ -4726,9 +4751,13 @@ console.log("V-30 ok: "+defs.size+" ids defined, "+EXCLUDED.size+" on the dated 
 #      ```bash blocks removed, exactly as V-15 does and for the same self-match
 #      reason), then subtract a REGISTERED list of permitted substrings. Any
 #      residue is a surface asserting that a revert is safe.
+#      THE ENTRIES ARE SHORT, WRAP-INDEPENDENT FRAGMENTS ON PURPOSE. A permitted
+#      sentence that gets REFLOWED stops matching a long entry and this step
+#      fires on a surface nobody changed in substance — which happened on its
+#      first reflow. Keep each entry inside one source line's worth of text.
 V31_TMP="$(mktemp)"
 cat >"$V31_TMP" <<'EOF'
-Everything that makes that destruction safe is a *check performed earlier*
+destruction safe is a *check performed earlier*
 K3 succeeding does not make the revert safe either
 own composition note called the K3-success paths safe
 It does NOT** make the revert safe
