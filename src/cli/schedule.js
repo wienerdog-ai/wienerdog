@@ -22,10 +22,36 @@ function defaultLoader(argv) {
   return schedulerSpawn(argv);
 }
 
+/** The statuses a heal re-registers (WP-scheduler-entry-identity Table A): a
+ *  record that runs the wrong program, or one whose identity could not be read
+ *  back, is healed exactly like an absent one. */
+const HEAL_SET = new Set(['missing', 'mismatched', 'unverified']);
+
 /** Absolute path to the out-of-tree launcher the OS entries invoke (WP-157).
+ *  Delegates to generators.launcherPath — the single source, so the health
+ *  probe's expectation and the registered entry can never drift apart.
  *  @param {import('../core/paths').WienerdogPaths} paths @returns {string} */
 function launcherPathFor(paths) {
-  return path.join(paths.core, 'launcher', 'launch.js');
+  return gen.launcherPath(paths);
+}
+
+/**
+ * Replace a launchd registration. BOOTSTRAP FIRST — it is non-destructive and
+ * succeeds outright when nothing is loaded under the label (the `missing` case,
+ * one spawn, no teardown). ONLY when bootstrap fails (which is what launchd does
+ * for an already-loaded label) do we tear the existing record down and bootstrap
+ * again. Never boots out a record it has not first proven bootstrap-blocked, so a
+ * working-but-unverifiable entry is never destroyed by a heal that then fails.
+ * The bootout's status is ignored on purpose: correctness must not depend on
+ * which error launchd returns.
+ * @param {(argv:string[])=>{status:number}} loader
+ * @param {number} uid @param {string} label @param {string} plistPath
+ * @returns {boolean} true when the final bootstrap exited 0
+ */
+function darwinReplaceEntry(loader, uid, label, plistPath) {
+  if (loader(['launchctl', 'bootstrap', `gui/${uid}`, plistPath]).status === 0) return true;
+  loader(['launchctl', 'bootout', `gui/${uid}/${label}`]);
+  return loader(['launchctl', 'bootstrap', `gui/${uid}`, plistPath]).status === 0;
 }
 
 /**
@@ -604,7 +630,10 @@ function repairCatchup(paths, manifest, opts = {}) {
     const uid = process.getuid();
     const plistPath = path.join(gen.launchAgentsDir(paths.home), 'ai.wienerdog.catchup.plist');
     const probeArgv = gen.deriveProbeArgv(plistPath, platform);
-    if (!probeArgv || probe(probeArgv) !== 'missing') return {};
+    const idn = gen.deriveIdentityArgv(plistPath, platform);
+    const expect = idn ? { launcher: gen.launcherPath(paths), kind: idn.kind, identityArgv: idn.argv } : null;
+    const observed = probeArgv ? probe(probeArgv, expect, { run: opts.run }) : null;
+    if (!probeArgv || !HEAL_SET.has(observed)) return {};
     const content = gen.catchupPlist({
       node: gen.nodePath(),
       launcher: launcherPathFor(paths),
@@ -615,15 +644,23 @@ function repairCatchup(paths, manifest, opts = {}) {
       logDir: path.join(paths.logs, 'catchup'),
     });
     if (!writeCanonicalSchedule(plistPath, content) || !manifestLib.withinSchedulerRoot(plistPath, roots)) return {};
-    const loaded = loader(['launchctl', 'bootstrap', `gui/${uid}`, plistPath]).status === 0;
-    return loaded ? { notice: 'restored the missing catch-up registration.' } : { notice: "catch-up entry rewritten but the OS scheduler did not accept it — run 'wienerdog doctor'." };
+    // Pre-destructive durable marker — UNCONDITIONAL, before the replacement call
+    // (the same rule as reloadMissing: an observed `missing` can be a transient
+    // presence-query failure on a label darwinReplaceEntry will then boot out).
+    require('../scheduler/status').refreshSchedulerStatus(paths, opts);
+    const loaded = darwinReplaceEntry(loader, uid, 'ai.wienerdog.catchup', plistPath);
+    if (!loaded) return { notice: "catch-up entry rewritten but the OS scheduler did not accept it — run 'wienerdog doctor'." };
+    return successNotice(observed);
   }
 
   // win32
   const userId = gen.windowsCurrentUserId();
   const xmlPath = gen.windowsTaskFile(paths, 'catchup');
   const probeArgv = gen.deriveProbeArgv(xmlPath, platform);
-  if (!probeArgv || probe(probeArgv) !== 'missing') return {};
+  const idn = gen.deriveIdentityArgv(xmlPath, platform);
+  const expect = idn ? { launcher: gen.launcherPath(paths), kind: idn.kind, identityArgv: idn.argv } : null;
+  const observed = probeArgv ? probe(probeArgv, expect, { run: opts.run }) : null;
+  if (!probeArgv || !HEAL_SET.has(observed)) return {};
   const launchArgs = ['--catch-up', '--expect-digest', catchupExpectDigest(paths)];
   if (jobDigests) launchArgs.push('--job-digests', jobDigests);
   const argline = gen.windowsCmdArguments({
@@ -635,8 +672,21 @@ function repairCatchup(paths, manifest, opts = {}) {
   });
   const content = gen.windowsTaskXmlBytes(gen.windowsCatchupTaskXml({ command: gen.windowsCmdExePath(), argline, userId }));
   if (!writeCanonicalSchedule(xmlPath, content) || !manifestLib.withinSchedulerRoot(xmlPath, roots)) return {};
+  require('../scheduler/status').refreshSchedulerStatus(paths, opts); // pre-destructive marker
   const loaded = loader(['schtasks', '/create', '/tn', gen.windowsTaskName('catchup'), '/xml', xmlPath, '/f']).status === 0;
-  return loaded ? { notice: 'restored the missing catch-up registration.' } : { notice: "catch-up task rewritten but the OS scheduler did not accept it — run 'wienerdog doctor'." };
+  if (!loaded) return { notice: "catch-up task rewritten but the OS scheduler did not accept it — run 'wienerdog doctor'." };
+  return successNotice(observed);
+}
+
+/** The success notice for a repaired catch-up entry. Only an observed `missing`
+ *  gets the shipped "restored the missing …" string: emitting it for a hijacked
+ *  or unreadable entry would state something false, and `wienerdog adopt` turns
+ *  ANY notice into a user-facing adoption failure (adopt.js's rebindFailed
+ *  heuristic) — which on Windows, where any task round-trip deviation grades
+ *  `unverified`, would report failure on a healthy install.
+ *  @param {string|null} observed @returns {{notice?:string}} */
+function successNotice(observed) {
+  return observed === 'missing' ? { notice: 'restored the missing catch-up registration.' } : {};
 }
 
 /** The known scheduler roots for `paths` (LaunchAgents / systemd user dir /
@@ -711,7 +761,7 @@ function reloadJob(paths, job, loader, platform) {
     const content = gen.launchdPlist({ name: job.name, hour, minute, node, launcher: b.launcher, descriptor: b.descriptor, expectDigest: b.expectDigest, home: paths.home, core: paths.core, logDir });
     if (!writeCanonicalSchedule(plistPath, content)) return false;
     if (!manifestLib.withinSchedulerRoot(plistPath, roots)) return false;
-    return loader(['launchctl', 'bootstrap', `gui/${uid}`, plistPath]).status === 0;
+    return darwinReplaceEntry(loader, uid, label, plistPath);
   }
 
   if (platform === 'linux') {
@@ -965,4 +1015,4 @@ async function run(argv, { loader = defaultLoader, profile } = {}) {
   }
 }
 
-module.exports = { run, defaultLoader, repointSchedules, ensureDreamSchedule, registerPlatform, reloadJob };
+module.exports = { run, defaultLoader, repointSchedules, ensureDreamSchedule, registerPlatform, reloadJob, repairCatchup };

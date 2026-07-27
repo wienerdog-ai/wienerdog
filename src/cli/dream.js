@@ -379,6 +379,9 @@ async function run(argv, opts = {}) {
         updateLine: renderUpdateLine(paths),
         identityApprovals: identityApprovals.approvalsMap(idReg),
         quarantineLine,
+        // Cache-only (no probe, no spawn, no heal): without this the nightly
+        // rewrite would wipe the scheduler callout sync wrote (ADR-0023 class).
+        schedulerLine: require('../scheduler/status').renderSchedulerStatusLine(paths),
         secretQuarantine: listSecretQuarantine(paths.state), // EP4 pending-review banner (WP-125)
         // Insecure-modes awareness banner (WP-126, OWNER-APPROVED): the nightly
         // path only READS modes — repair is sync's attended job, never here.
