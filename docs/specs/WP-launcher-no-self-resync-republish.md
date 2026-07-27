@@ -1,7 +1,7 @@
 ---
 id: WP-launcher-no-self-resync-republish
 title: Stop a self-resync from re-publishing the out-of-tree launcher out of the app tree
-status: In-Review
+status: Done
 model: sonnet
 size: S
 depends_on: [WP-stance-authority-containment]
