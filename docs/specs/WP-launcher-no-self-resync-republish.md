@@ -507,7 +507,7 @@ there is no predicate literal in this spec to drift.
 | Fact | Value |
 |------|-------|
 | **Who decides `carryForward`** | `vendorSelf`, as `selfResync && !dev` — both bindings are `WP-stance-authority-containment` D9's, already in scope |
-| **Recomputation** | forbidden — `writeLauncher`'s body must not mention `selfResync`, `currentLink`, `installStance`, `isDevCheckout` or `realpath`. **V3 screens the source text for this; T1–T4 and the diff review establish it** (V3 cannot see syntax — see "V3 and V4 are TEXT-LEVEL SCREENS") |
+| **Recomputation** | forbidden — `writeLauncher`'s body must not mention `selfResync`, `currentLink`, `installStance`, `isDevCheckout` or `realpath`. **V3 screens the source text for this; the wd-reviewer diff read ESTABLISHES it.** **T1–T4 do not** — a behaviour-preserving recomputation (bindings threaded through `opts`) leaves all four green, measured. See "V3 and V4 are TEXT-LEVEL SCREENS" |
 | **Precedence** | `carryForward: true` wins over `sourceRoot`; `sourceRoot` is ignored, not merged |
 | **Why `!dev`** | **a workflow requirement, not a security claim.** A dev install's `app/current` **is** the maintainer's checkout; carrying forward would mean a maintainer's edit to `src/scheduler/launcher.js` never reaches the file the scheduler invokes, so the launcher could not be developed at all (T4 proves this, and T4 is the *only* thing this gate buys). It costs little because a dev descriptor binds the reduced digest that never hashes app code (ADR-0028 amendment #7). It is **not** true that nothing is defended by carrying forward on dev — see **Residual R-dev** below, which is accepted, not closed. The gate is at least not self-forging: `dev` is containment-derived (D9), and D8+D9 make containment unreachable by an A7-scoped **data** write |
 | **First install** | `carryForward` is falsy — D9's `selfResync` catches the unresolvable `app/current` and yields `false`. Row 1 applies; placement is unchanged (T-existing, `tests/unit/vendor.test.js:397`) |
@@ -571,9 +571,15 @@ spot.
       precondition, added round 6 — it is the gate that makes every other one
       describe `HEAD` rather than the working tree)**, V1 (the four tests),
       **V3 and V4 — TEXT-LEVEL SCREENS since round 11, NOT proofs of AC10 or the
-      call-site contract; their establishing evidence is T1–T4 plus the diff
-      review, and AC10/AC11 and Table L's "Recomputation" row are registered
-      mirrors of that qualification** — **V8 (the
+      call-site contract. Since round 12 the attribution is narrower still: the
+      establishing evidence is the **wd-reviewer diff read alone**, because
+      **T1–T4 establish behavioural arm semantics only** and stay green under a
+      behaviour-preserving recomputation (measured). The registered mirrors of
+      that qualification are **AC10**, **AC11**, **Table L's "Recomputation"
+      row**, **Table M row M5**, the **Security-checklist** V3 citation, the
+      Implementation-notes "V3 screens…" line, and the **V3/V4 PASS-line texts**
+      that ship inside the blocks; any surface claiming a behavioural test proves
+      a source-form contract is a defect** — **V8 (the
       `tests/unit/vendor.test.js` HEAD-blob reconstruction, added round 6)**.
       V0's requirement is mirrored in **Definition of done item 1** and in the
       **mutation-sweep caveat in item 2**; V8's local path-scoped clean check is
@@ -664,8 +670,10 @@ the implementer:
 
 The predicate is still computed **exactly once**, in `vendorSelf`, by
 `WP-stance-authority-containment` D9. This WP passes the **decision**, not the
-inputs. V3 **screens** the source text for a recomputation; T1–T4 and the diff
-review are what establish it.
+inputs. V3 **screens** the source text for a recomputation; the **wd-reviewer
+diff read** is what establishes it. T1–T4 do **not** — a recomputation that
+threads D9's bindings through `opts` preserves every behaviour they observe and
+leaves all four green (measured; see "V3 and V4 are TEXT-LEVEL SCREENS").
 
 ### D1 — `writeLauncher` gains `carryForward`
 
@@ -1269,7 +1277,10 @@ Eight notes on that file, so nothing in it reads as accidental:
       `WP-stance-authority-containment` D8 and is **not** touched here.
 - [ ] The carry-forward arm reads exactly one path and it is not attacker-chosen:
       `<core>/launcher/launch.js`. It reads **nothing** from `sourceRoot` or
-      `packageRoot()` (V3 screens the source text for this; T2 and T1 execute it).
+      `packageRoot()`. T1 establishes the **observable** half — a marker planted
+      in the app tree never reaches `launch.js` — which is what this checklist
+      item is about. The **source-form** half ("the body mentions neither") is
+      screened by V3 and established by the reviewer diff read, not by any test.
 - [ ] Fail-closed direction confirmed: an unreadable destination **throws**; it
       never falls back to the app tree (Table L row 3, AC5, T2).
 
@@ -1344,19 +1355,26 @@ Every criterion below has a mutation partner in Table M that reddens it.
       touches only the **three** deliverable paths. (V2, V6, V8)
 - [ ] **AC10** — `writeLauncher`'s body does not recompute the self-resync
       predicate: no `selfResync`, `currentLink`, `installStance`, `isDevCheckout`
-      or `realpath` inside it. *(Evidence re-derived in round 11, after a review
-      executed false-PASSes against the text gate.)* **Established by T1–T4** —
-      behavioural tests that execute the code and fail if the predicate is
-      recomputed or the gate dropped — **and by the wd-reviewer leg reading the
-      diff**, which confirms `selfResync` and `dev` are D9's bindings and not new
-      ones. **V3 is a text-level SCREEN over the source range, not the proof**:
-      it reads text, not syntax, so a token inside a string literal is invisible
-      to it (see "V3 and V4 are TEXT-LEVEL SCREENS"). Do not cite V3 alone for
-      this criterion.
+      or `realpath` inside it. *(Evidence re-derived in round 11 and **corrected
+      again in round 12**, after a review showed the round-11 attribution was
+      still too generous.)* This is a **source-form** contract, and its violation
+      can be **behaviour-preserving** — threading D9's bindings through `opts`
+      and branching inside the function leaves **T1–T4 green**, measured
+      (`tests 4 / pass 4 / fail 0`). So:
+      **T1–T4 establish the behavioural arm semantics ONLY and do not establish
+      this criterion.** The **establishing evidence is the wd-reviewer
+      merge-gate diff read**, which this repo's double gate makes mandatory and
+      which confirms `selfResync` and `dev` are D9's bindings, not new ones.
+      **V3 is a text-level SCREEN**: it caught that exact mutation (measured,
+      FAIL exit 1) but cannot see syntax, so a token inside a string literal is
+      invisible to it. Do not cite V3 alone, and do not cite T1–T4, for this
+      criterion.
 - [ ] **AC11** — ADR-0004 holds: `src/core/vendor.js` contains no
-      `setInterval`, `setTimeout`, `spawn`, `fs.watch` or daemon. (V5 — the same
-      text-screen caveat applies; V5 scans source text, and ADR-0004 compliance
-      is also visible to the reviewer in the diff)
+      `setInterval`, `setTimeout`, `spawn`, `fs.watch` or daemon. Also a
+      **source-form** criterion: **V5 is a text-level screen** and **T1–T4 do not
+      establish it** — a daemon started outside the arms the tests exercise would
+      leave them green. The establishing evidence is the same **wd-reviewer diff
+      read**.
 - [ ] **AC12** — The **carry** arm records the launcher's manifest pair. Calling
       `vendorSelf` on a prod self-resync with a **fresh empty** manifest
       (`{version:1, createdAt:'', entries:[]}` — the shape `manifest.load`
@@ -1379,7 +1397,7 @@ last column. Run these to prove the gates are not vacuous, then revert.
 | M2 | drop the gate: `carryForward: selfResync` | T4 only | `pass 3 / fail 1` |
 | M3 | replace the `throw` in the carry arm with a fall-through to the publish arm | T2 | expected red (row 3 is the only assertion of it) |
 | M4 | delete the `else` and always carry forward | **all four** — T3 and T4 are the *diagnostic* pair (they are the two that assert a publish must happen), but T1 and T2 fail too: their fixtures' **first install** then has no launcher to carry, so `writeLauncher` throws `ENOENT` before either test reaches its own assertion | **measured `pass 0 / fail 4`** |
-| M5 | recompute the predicate inside `writeLauncher` instead of taking `opts.carryForward` | **T1–T4** (the establishing evidence) and, as a screen, V3 (match count `0` → non-zero, **and its exit status `0` → `1`**) | executed on the equivalent shape: V3 count `1`, `$?` = `1`. **V3 alone is not the gate** — a recomputation written so the text screen cannot see it still fails T1–T4 and is visible in the diff |
+| M5 | recompute the predicate inside `writeLauncher` instead of taking `opts.carryForward` | **V3 as a screen** (match count `0` → non-zero, **and its exit status `0` → `1`**), and **the reviewer's diff read** as the establishing evidence. **NOT T1–T4** | *(row corrected in round 12 — it previously claimed T1–T4 must redden, and its recorded measurement had only ever run V3.)* Executed on the canonical behaviour-preserving shape — `writeLauncher(paths, { manifest: opts.manifest, selfResync, dev })` with `if (opts.selfResync && !opts.dev)` inside: **T1–T4 stay GREEN**, `tests 4 / pass 4 / fail 0`. **V3 FAIL, `$?` = 1**, naming `if (opts.selfResync && !opts.dev) {`; **V4 FAIL, `$?` = 1**, call-site literal count `0`. A recomputation written so the screens cannot see it leaves *every* automated gate green — only the diff read catches that class |
 | M6 | move the whole `if (opts.manifest) { … }` block **into** the `else` arm, next to the source read | **T1 only** — and that is the entire point: V1's other three tests, V2–V7, AC1–AC11 and M1–M5 all stay **green**, so T1's fresh-manifest assertion is the only thing standing between this mutation and a shipped uninstall bug | expected red (AC12 is its only assertion); the implementer confirms both halves — T1 red **and** everything else green |
 | M7 | revert **D4** — remove the seven lines from T12's `run()` helper **in the working tree, uncommitted**, leaving D1/D2/D3 in place | **V2 red and V8 red — for two different reasons, and the difference is the whole point of this cell.** **V2** is the real signal: `tests/unit/vendor.test.js:636` (**T12**) fails at `:697` with `'REFUSED' !== true`, which is what proves D4 load-bearing. **V8** goes red at its **dirty-path guard** (`… has uncommitted changes`), because M7 is by procedure an *uncommitted* edit — V8 never reaches a blob comparison, so **that red is NOT evidence about the reconstruction invariant** and must not be reported as if it were. **V0 is red too**, for the same procedural reason. V1, V3, V4, V5 and V7 stay green. The committed-state reconstruction failure is **V8 red arm (e)**, which is spec-validation evidence collected under the scratch-worktree procedure beside that arm — **not** something M7 produces. **M7 is also NOT a substitute for V8's red arm (a)**: a vacuity line added alongside D4 keeps M7 green (V8's "Does M7 catch it?" row) | **measured on `d1c96e1`**: `tests 1681 / pass 1675 / fail 1 / skipped 5` without D4, versus `1681 / 1676 / 0 / 5` with it (both counts taken without T1–T4) |
 
@@ -1828,11 +1846,36 @@ reach. D4 is different — seven literal lines at a literal anchor — which is
 exactly why **V8** can and does reconstruct.
 
 **So: V3 and V4 do not establish AC10 or the exact call-site contract.** They are
-cheap, fail-closed screens that catch the ordinary and accidental shapes. The
-**establishing** evidence is **T1–T4** — behavioural tests that execute the code
-and would fail if the predicate were recomputed or the gate dropped — plus the
-**wd-reviewer leg reading the diff**. Cite them that way. Do not write "V3 proves
-AC10"; it does not.
+cheap, fail-closed screens that catch the ordinary and accidental shapes.
+
+**And neither do T1–T4 — a round-12 correction, measured.** The round-11 text
+said the establishing evidence was "T1–T4 plus the reviewer's diff read". That
+over-attributed, and a review demonstrated it: **a behaviour-preserving
+recomputation leaves all four tests green.** Thread D9's bindings through `opts`
+and branch on them inside the function —
+
+```js
+// call site
+writeLauncher(paths, { manifest: opts.manifest, selfResync, dev });
+// inside writeLauncher
+if (opts.selfResync && !opts.dev) {
+```
+
+— and every arm behaves exactly as before, so **T1–T4 report `tests 4 / pass 4 /
+fail 0`** (executed). AC10 and the call-site contract are **source-form**
+contracts, and a source-form contract whose violation can be behaviour-preserving
+is not provable by tests that only observe behaviour.
+
+**The correct attribution, and the one every mirror of this now carries:**
+
+| Evidence | What it establishes |
+|---|---|
+| **T1–T4** | the **behavioural arm semantics** — which arm runs, that the carry arm carries forward, that the publish arm publishes, that row 3 fails closed. Nothing about the *form* of the source |
+| **The wd-reviewer merge-gate diff read** | the **syntax-level contracts** — AC10 and the exact call site. This repo's double gate makes that read mandatory, and it is the **only** establishing evidence for them |
+| **V3 / V4** | **screens.** They catch literal forms cheaply — including the mutation above (measured: **V3 FAIL exit 1**, naming `if (opts.selfResync && !opts.dev) {`; **V4 FAIL exit 1**, call-site literal count `0`) — but they cannot see syntax, so they miss shape C |
+
+Cite them that way. Do not write "V3 proves AC10", and do not write "T1–T4
+prove AC10" either — neither does.
 
 **V3 — text screen: `writeLauncher` does not recompute the predicate (Table L, AC10).**
 
@@ -1841,8 +1884,10 @@ node <<'V3EOF'
 'use strict';
 // V3 — a TEXT-LEVEL SCREEN over writeLauncher's source range. It does NOT
 // establish AC10 by itself: it reads text, not syntax, so a token inside a
-// string literal is invisible to it. AC10's establishing evidence is T1-T4
-// (behavioural) plus the reviewer reading the diff. See the prose above.
+// string literal is invisible to it. AC10 is established by the wd-reviewer
+// merge-gate DIFF READ. T1-T4 do NOT establish it either — a
+// behaviour-preserving recomputation (D9's bindings threaded through opts)
+// leaves all four green, measured. See the prose above.
 // What it does do, cheaply and fail-closed:
 //   - anchors on the EXACT signature `function writeLauncher(` (the paren is
 //     load-bearing: `writeLauncherHelper(` cannot select the range) and requires
@@ -1885,7 +1930,7 @@ if (hits.length !== 0) {
   console.error(hits.join('\n'));
   process.exit(1);
 }
-console.log('V3 PASS (text-level screen only — AC10 is established by T1-T4 and the diff review)');
+console.log('V3 PASS (text-level screen only — AC10 is established by the reviewer diff read, not by this step and not by T1-T4)');
 V3EOF
 rc=$?; echo "V3 exit=$rc"; (exit $rc)
 ```
@@ -1897,7 +1942,7 @@ range grows once D1 lands):
 V3 'function writeLauncher(' signature lines: 1
 V3 range: 28 lines
 V3 matches: 0
-V3 PASS (text-level screen only — AC10 is established by T1-T4 and the diff review)
+V3 PASS (text-level screen only — AC10 is established by the reviewer diff read, not by this step and not by T1-T4)
 V3 exit=0
 ```
 
@@ -1939,7 +1984,8 @@ node <<'V4EOF'
 // V4 — a TEXT-LEVEL SCREEN over the call site. It does NOT establish the exact
 // call-site contract by itself: a token inside a string or template literal is
 // indistinguishable from executable code to any text scan. The establishing
-// evidence is T1-T4 (behavioural) plus the reviewer reading the diff.
+// evidence is the wd-reviewer merge-gate DIFF READ. T1-T4 do NOT establish it —
+// threading D9's bindings through opts preserves every behaviour they observe.
 // It is deliberately CONSERVATIVE: both the raw line count and the
 // comments-blanked count must be exactly 1. Requiring both means the comment
 // blanker can only ever cause a FAILURE, never a pass — an earlier form let
@@ -1963,7 +2009,7 @@ for (const pat of ['carryForward: selfResync && !dev', 'if (opts.carryForward)']
     process.exit(1);
   }
 }
-console.log('V4 PASS (text-level screen only — the call-site contract is established by T1-T4 and the diff review)');
+console.log('V4 PASS (text-level screen only — the call-site contract is established by the reviewer diff read, not by this step and not by T1-T4)');
 V4EOF
 rc=$?; echo "V4 exit=$rc"; (exit $rc)
 ```
@@ -1980,7 +2026,7 @@ produce a **failure**, never a pass — it is now strictly a tightening.
 ```
 V4 [carryForward: selfResync && !dev] = 1 in code, 1 raw
 V4 [if (opts.carryForward)] = 1 in code, 1 raw
-V4 PASS (text-level screen only — the call-site contract is established by T1-T4 and the diff review)
+V4 PASS (text-level screen only — the call-site contract is established by the reviewer diff read, not by this step and not by T1-T4)
 V4 exit=0
 ```
 
