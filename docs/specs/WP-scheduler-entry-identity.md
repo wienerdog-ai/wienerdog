@@ -485,9 +485,21 @@ call) — then runs in order. It never throws:
    `'unverified'`. **This is the fail-CLOSED default.** It fires for a
    derivation skew (a basename `deriveProbeArgv` recognizes and
    `deriveIdentityArgv` does not) and for any caller that forgets the argument.
-6. `expect.identityArgv === null` → `'unknown'`. The scheduler kind is
+6. `expect.identityArgv == null` → `'unknown'`. The scheduler kind is
    recognized and its identity query is *declared* unimplemented (Table B's
    systemd row). No health is claimed, no line is printed, nothing is healed.
+   **`==`, deliberately, not `===` — this is the `undefined` disposition and it
+   is part of the contract.** `IdentityExpectation.identityArgv` is typed
+   `string[]|null`, but nothing at runtime enforces that: a caller that builds
+   the object without the key, or a future `deriveIdentityArgv` branch that
+   falls off its end, yields `undefined`. Under `===` that `undefined` slips
+   past this step and reaches step 7, where `RUN(undefined)` throws a
+   `TypeError` out of a function this same contract declares **never throws** —
+   and `doctorSchedulerChecks` (`src/scheduler/status.js:181-194`) does not wrap
+   `probe(…)` in a try, so the throw escapes `wienerdog doctor`. Loose `== null`
+   catches `null` **and** `undefined` and fail-closes both to `'unknown'`, the
+   no-claim verdict. It is the ONLY loose equality this contract permits; every
+   other comparison in `defaultProbe` is strict.
 7. `RUN(expect.identityArgv)` — the **same `RUN` as step 3, never a bare
    `run(…)`**; `r2.error` or `r2.status !== 0` or
    `typeof r2.stdout !== 'string'` → `'unverified'`.
@@ -779,9 +791,12 @@ emits the identity facts while `status.js` owns their interpretation and
 contract; (vii) the same facts appear in Deliverables notes, acceptance criteria
 and verification greps.
 
-Five tables below are canonical: **A** (status taxonomy), **B** (per-platform
+Six tables below are canonical: **A** (status taxonomy), **B** (per-platform
 loaded-exec identity), **B1** (the Windows exec segment's shared token alphabet
-and end-anchored grammar), **C** (test seams per call site) and **E** (the darwin replacement).
+and end-anchored grammar), **C** (test seams per call site), **E** (the darwin
+replacement) and **F** (the non-vacuity gate — how a verification step proves
+the required tests actually ran; a cross-document mirror of the sibling tripwire
+spec's Table E, carried locally as ADR-0005 requires).
 **D** is not a contract — it is the closed list of existing assertions this WP
 invalidates. Tables **C** and **B1** were both extracted under ADR-0031's loop
 circuit-breaker after repeated point fixes on the same contract family: C after
@@ -1451,6 +1466,67 @@ ADR-0018:294-296, Definition of done item 9 routed it, and the owner ruled on
 2026-07-26 that **Reading B governs — so it may**. `doctor`'s live probe
 is the recovery either way.
 
+### Table F — the non-vacuity gate (canonical)
+
+Every fact about how a verification step proves **"the required tests actually
+ran"** is decided here. This spec has **two** instances of the gate —
+verification steps 1 and 2 — and each supplies only its three parameters and
+cites the G-rows; neither restates a rule.
+
+**Why this table exists.** Two consecutive Codex adversarial rounds landed
+findings on this one contract family — round 1 on `# SKIP` counting, round 2 on
+platform enforcement and required-name substitution. That is ADR-0031's loop
+circuit-breaker condition verbatim (`docs/runbooks/codex-review.md`), so the
+machinery was **extracted here** instead of being patched a third time in place.
+
+**This table is a cross-document mirrored summary.** The same contract is owned
+by `docs/specs/WP-scheduler-loaded-record-tripwire.md`'s Table E. ADR-0005's
+One-Document Rule **requires** this spec to carry its own local copy — an
+implementer reads only this spec and CLAUDE.md — and ADR-0031's cross-document
+boundary explicitly allows it as a mirrored summary rather than a second
+authority. **Keep the two G-row sets identical**; if one moves, move both.
+
+| # | Fact | Rule | Why it is not optional |
+|---|------|------|------------------------|
+| G1 | **runner** | `node tests/run.js` — never a bare `node --test`. `npm test -- …` is equivalent; `tests/run.js` forwards argv unchanged, so the reporter and pattern flags work identically | `tests/run.js:7` is the only place `WIENERDOG_TEST_NO_REAL_SCHEDULER` is set. A bare `node --test` leaves it undefined and disarms the suite-wide real-scheduler backstop ADR-0018:172-180 declares binding |
+| G1b | **runner exit status** | Capture the runner's exit status and **fail the gate on a non-zero status BEFORE any counting**. The capture pattern, stated once: `tap=$(<runner …>); rc=$?` on the next statement, then `[ "$rc" -eq 0 ] \|\| { echo …; exit 1; }` | Counting `ok` records says nothing about records that are **not** `ok`, or about failures that emit no record at all. A **selected** test that fails emits `not ok` and simply lowers the count — which an aggregate `>=` floor with any slack absorbs — and a **file-level hook** failure (a throwing `after`) leaves every selected `ok` record intact while the run is red. Both make the counts meaningless, so the status is checked first. **`$(…)` swallows the status if you do not save it immediately** — `$?` must be read on the very next statement, and never write `local tap=$(…)`, which overwrites it with `local`'s own status |
+| G2 | **host prerequisite** | `process.platform !== 'win32'` **and** `typeof process.getuid === 'function'` **and** `process.getuid() !== 0` — evaluated **by `node`**, never by the shell | It must be the *same runtime the tests use*, because that is the runtime whose `process.platform` decides which tests skip. A shell test such as `[ "$(id -u)" -ne 0 ]` is **not** equivalent: under Git Bash/MSYS on non-root Windows `id -u` is non-zero, so a shell-only guard proceeds on a host where `process.platform === 'win32'` and every platform-guarded test silently skips |
+| G3 | **selection** | `--test-name-pattern` is a **regex**. Escape `(` `)` `[` `]` `{` `}` `.` `*` `+` `?` `\|` `^` `$` in any test name pasted into it | A pattern that matches nothing **exits 0** — the file wrapper counts as "pass 1" — so an unescaped paste selects nothing while reporting success, and silently proves nothing |
+| G4 | **counting** | Count only TAP records matching the step's anchored family prefix, then subtract every record carrying a directive: `# SKIP` **and** `# TODO` | node:test renders both a skipped and an unexecuted-todo subtest as an `ok` line that the anchored grep matches. Converting a required test to `test.todo(...)` must **lower** the count, not preserve it |
+| G5 | **substitution defense** | **Zero** selected records may carry a directive. A selected record with `# SKIP` or `# TODO` is **itself a failure**, checked separately from and *before* the floor | The floor is an aggregate `>=`, so without this check N unrelated passing names in the same family can silently stand in for N skipped **required** ones and still clear the floor. G2 makes the common host cases red; G5 is the structural guarantee that does not depend on knowing the host |
+| G6 | **floor** | `>= N`, where N is **derived and re-enumerated**, never incremented narratively, and carries **zero slack** | Slack lets a missing required name pass. Zero slack means "miss one and the gate is red" — the property the floor exists for. Re-enumerate on every change; never increment |
+
+**The seven rows above are BYTE-IDENTICAL to Table E in
+`docs/specs/WP-scheduler-loaded-record-tripwire.md`, and verification step 9
+asserts it.** That is what makes them one contract rather than two that merely
+agree today. **Nothing spec-specific may enter a G-row** — a row that mentions
+this spec's test names, floors or platform guards is no longer true for the
+other instance, and the invariant becomes false the moment it is written. Put
+such material in the per-spec notes below, or in the mirror's own parameter
+block.
+
+**Per-spec notes (NOT canonical — these apply to this spec only).**
+
+- **On G1.** Here the backstop is what makes `schedulerSpawn` **throw** instead
+  of mutating the real per-user scheduler. Executed at efd1489: a child under
+  `node --test <file>` sees `WIENERDOG_TEST_NO_REAL_SCHEDULER=undefined`; under
+  `npm test` it sees `"1"`.
+- **On G2.** Step 1's file carries **17** `{ skip: !isPosix }` guards. Step 2's
+  family is exposed too: `tests/unit/scheduler-status.test.js:305`
+  (*"reloadMissing refuses to heal onto a symlink at the canonical path"*) is
+  `{ skip: !isPosix }` **and** matches step 2's pattern.
+- **On G6.** Rounds 1-3 grew step 1's floor by narrative increments
+  (15 → 18 → 21 → 26) and round 4 found the gate still literally reading
+  `-ge 21`; the post-gate round 4 then found step 2 carrying `8` against a
+  13-name selector. Both are the same mistake G6 forbids. This spec's floor
+  values (**28** and **13**) are parameters of their mirrors, not facts of the
+  gate.
+
+**G2 and G5 overlap deliberately, and both stay.** G5 alone would catch every
+host defect G2 catches — but it reports them as "a required name was skipped",
+which sends the reader hunting for a deleted test. G2 fires first and names the
+real cause, with the fix. G5 is the backstop for the cases G2 cannot enumerate.
+
 ### Mirrored Surface Checklist
 
 **Table A (status taxonomy)** — surfaces that mirror it:
@@ -1569,6 +1645,45 @@ is the recovery either way.
 - [ ] **`docs/specs/logbook/2026-07-25-third-scheduler-identity-incident.md`**
       (restates the ordering and why bootout-first was rejected). Verified
       consistent on 2026-07-25; not edited from this WP
+
+**Table F (the non-vacuity gate)** — surfaces that mirror it:
+
+- [ ] **Enforcement order is itself a G-fact**, and both instances follow it:
+      G2 (host, hoisted to step 0 since both share it) → run → G1b (exit status)
+      → count → G5 (directives) → G6 (floor)
+- [ ] **Verification step 1** — the new suite's instance. Parameters: the
+      `tests/unit/scheduler-entry-identity.test.js` invocation (G1), the anchored
+      prefix `^ok [0-9]+ - entry-identity:` **with its trailing space** (G4),
+      floor **28** (G6)
+- [ ] **Verification step 2** — the touched existing suite's instance.
+      Parameters: the `tests/unit/scheduler-status.test.js` invocation (G1), the
+      anchored prefix `^ok [0-9]+ - (defaultProbe|probeAll|reloadMissing|doctorSchedulerChecks)`
+      (G4), floor **13** (G6) — **re-enumerated in round 4**; it read `8` against
+      a selector returning 13, i.e. five names of slack, which G6 forbids.
+      **Two instances, one contract** — this is the pair
+      that made the extraction necessary: through round 2 they carried
+      independently-authored copies of the machinery and step 2's was a round
+      behind step 1's
+- [ ] **Acceptance criterion AC-13** — the floor's value and the
+      *passing-not-skipped-not-todo* qualifier (G4, G6)
+- [ ] **`docs/specs/WP-scheduler-loaded-record-tripwire.md`'s Table E** — the
+      sibling document's copy of this same contract. Cross-document mirror,
+      required by ADR-0005 and allowed by ADR-0031; keep the G-rows identical.
+      **Byte-identity is ASSERTED by verification step 9**, so this is the one
+      registered mirror you cannot forget to update — the gate will tell you
+- [ ] **Verification step 9** — the byte-comparison itself. It owns the
+      **expected identifier sequence** `G1 G1b G2 G3 G4 G5 G6` and the two
+      compared paths. Adding, removing, renaming or reordering a G-row means
+      editing that literal sequence in the **same pass**, in **both** specs —
+      the step will not let you forget. It carries **no row count**; the
+      sequence subsumes one, and re-adding arithmetic beside it is a regression
+      (see the step's own note). It also owns the step's **declared threat
+      model** — accidental format-conforming drift, NOT a deliberately evasive
+      encoding; "a more exotic encoding slips through" is out of scope there by
+      declaration, and the remedy for that class is review
+- [ ] **The step body itself, in both specs** — from `TW=` to the final `echo`
+      it is byte-identical across the two documents; only the step *number*
+      differs (9 here, 7 there). Edit it in both or not at all
 
 ## Implementation notes & constraints
 
@@ -2228,7 +2343,8 @@ mechanism.
       `mismatched` for an exit-0 record
       whose loaded argv names a launcher outside this core; `unverified` when the
       identity query fails, when its output is indeterminate, **and when `expect`
-      is omitted entirely**; `unknown` when `expect.identityArgv` is `null`;
+      is omitted entirely**; `unknown` when `expect.identityArgv` is `null`
+      **or `undefined`** (step 6's `== null`, the never-throws fail-close);
       `loaded` on a match; `missing` on a non-zero presence exit. Assert
       separately that with **no** `opts.run` and `WIENERDOG_LOADER_NOOP` set the
       result is `unknown`, and likewise for `WIENERDOG_TEST_NO_REAL_SCHEDULER`
@@ -2497,7 +2613,10 @@ mechanism.
       a hijacked one. Mutation M28 targets it.
 - [ ] **AC-13** Every new test name is prefixed `entry-identity:` (with a
       trailing space), and the non-vacuity gate in verification step 1 reports at
-      least **28** **named** passing subtests.
+      least **28** **named** passing subtests — **passing: not skipped, not
+      todo**, per **Table F G4/G6**, on a host satisfying **Table F G2** and with
+      **zero** selected records carrying a directive (**G5**). Table F decides
+      those rules; what this criterion owns is the **value 28**.
       **The number is RE-DERIVED in round 5 by enumeration, not carried forward.**
       Rounds 1-3 grew it by narrative increments (15 → 18 → 21 → 26) and the
       round-4 review found the gate still literally reading `-ge 21`, i.e. counts
@@ -2598,7 +2717,7 @@ confirm it **fails**, then revert. Paste the resulting table into the PR.
 | M2 | `loadedEntryTargets` schtasks branch: replace conditions (a)-(d) with `arguments.includes('"' + cmdQuotedToken(expectLauncher) + '"')` | `entry-identity: schtasks does NOT match a task whose Command is not our cmd.exe and whose launcher token is only inside the set-chain` |
 | M3 | `defaultProbe`: `return 'loaded'` right after the presence spawn exits 0 (skip steps 5-8) | `entry-identity: defaultProbe returns mismatched for an exit-0 record naming a foreign launcher` |
 | M4 | `defaultProbe` step 5: `return 'loaded'` instead of `'unverified'` when `expect` is falsy | `entry-identity: defaultProbe with NO expectation returns unverified, never loaded` |
-| M5 | `defaultProbe` step 6: `return 'loaded'` instead of `'unknown'` for `identityArgv === null` | `entry-identity: a systemd entry yields unknown, not a health claim` |
+| M5 | `defaultProbe` step 6: `return 'loaded'` instead of `'unknown'` for `identityArgv == null` | `entry-identity: a systemd entry yields unknown, not a health claim` |
 | M6 | `doctorSchedulerChecks`: emit `'warn'` instead of `'fail'` for `mismatched` | `entry-identity: doctorSchedulerChecks maps mismatched to fail` |
 | M7 | `reloadMissing`: drop `'unverified'` from `HEAL_SET` | `entry-identity: reloadMissing heals an unverified entry` |
 | M8 | `reloadJob` darwin: swap `darwinReplaceEntry` back to a bare `bootstrap` | `entry-identity: reloadJob replaces a bootstrap-blocked label (darwin)` |
@@ -2635,42 +2754,76 @@ split into two separately-named tests rather than one test with two assertions.
 ## Verification steps (run these; paste output in the PR)
 
 ```bash
-# 1. The new suite, with a MACHINE-CHECKED non-vacuity gate.
-#
-#    RUN IT THROUGH `npm test`, NOT `node --test`. Only tests/run.js:7 sets
-#    WIENERDOG_TEST_NO_REAL_SCHEDULER, and that is the backstop that makes
-#    schedulerSpawn THROW instead of mutating the real per-user scheduler.
-#    Executed at efd1489: a child under `node --test <file>` sees
-#    WIENERDOG_TEST_NO_REAL_SCHEDULER=undefined; under `npm test` it sees "1".
-#    tests/run.js forwards argv, so the flags below reach `node --test` intact.
-#
-#    A bare `--test-name-pattern` that matches nothing exits 0 with "pass 1",
-#    because the FILE wrapper counts as a passing test — executed on this runner
-#    at efd1489 against tests/unit/scheduler-status.test.js with the pattern
-#    "zzz-definitely-nonexistent-pattern-42": exit 0, "ℹ pass 1". So count NAMED
-#    subtest records in the TAP stream instead. Executed evidence for the gate
-#    itself, same runner, same commit, against the existing guard suite:
-#      pattern "scheduler-leak-guard" → 22 named subtests
-#      pattern "zzz-nope"             → 0 named subtests
-n=$(npm test --silent -- --test-reporter=tap --test-name-pattern "entry-identity" \
-      tests/unit/scheduler-entry-identity.test.js \
-      | grep -E "^ok [0-9]+ - entry-identity: " | wc -l | tr -d ' ')
-echo "named passing subtests: $n"
-[ "$n" -ge 28 ] || { echo "VACUOUS OR INCOMPLETE — the pattern selected $n named subtests"; exit 1; }
+# 0. THE HOST PREREQUISITE for the two non-vacuity gates below — Table F G2.
+#    Evaluated by NODE and not by the shell, because node's process.platform is
+#    what decides which tests skip. `id -u` is non-zero under Git Bash/MSYS on
+#    Windows and would let both gates proceed on a host where every `!isPosix`
+#    test skips. Run this ONCE; steps 1 and 2 both depend on it.
+node -e 'const posix = process.platform !== "win32" && typeof process.getuid === "function";
+if (!posix || process.getuid() === 0) {
+  console.error(`PREREQUISITE UNMET (Table F G2): need a NON-ROOT POSIX host; saw platform=${process.platform} uid=${typeof process.getuid === "function" ? process.getuid() : "n/a"}`);
+  process.exit(1);
+}
+console.log(`prerequisite OK (G2): platform=${process.platform} uid=${process.getuid()}`);'
 
-# 2. The touched existing suite, same gate (Table D changes two of its records).
-#    The grep is ANCHORED ON THE SELECTED NAMES, not on a bare "^ok N - ".
-#    Executed at efd1489 on `main`: the unanchored form returns 1 even for the
-#    bogus pattern "zzz-nope" (it matches the file wrapper) — i.e. it is the very
-#    vacuity the step-1 comment warns about. The anchored form below returns 0
-#    for "zzz-nope" and 13 for the real pattern.
-n=$(npm test --silent -- --test-reporter=tap \
-      --test-name-pattern "defaultProbe|probeAll|reloadMissing|doctorSchedulerChecks" \
-      tests/unit/scheduler-status.test.js \
-      | grep -E "^ok [0-9]+ - (defaultProbe|probeAll|reloadMissing|doctorSchedulerChecks)" \
-      | wc -l | tr -d ' ')
-echo "named passing subtests: $n"
-[ "$n" -ge 8 ] || { echo "VACUOUS OR INCOMPLETE — selected $n named subtests"; exit 1; }
+# 1. The new suite, behind the NON-VACUITY GATE. Every rule is decided by
+#    "Table F — the non-vacuity gate (canonical)"; this step is a registered
+#    mirror of it and supplies only three parameters:
+#      runner invocation → npm test -- … tests/unit/scheduler-entry-identity.test.js   (G1)
+#      anchored family prefix → "^ok [0-9]+ - entry-identity: "                        (G4)
+#      floor → 28                                                                      (G6)
+#    Do NOT restate a G-rule here; if one is wrong, fix Table F and every surface
+#    its checklist registers, in one pass — including step 2 below and the
+#    sibling tripwire spec's Table E.
+#
+#    PROVES: the tests this WP requires actually ran.
+#    RED WHEN: the runner exits non-zero (G1b); a selected required name is
+#    skipped or todo (G5); or fewer than 28 required names passed (G6). Measured
+#    control, same runner at efd1489: the pattern "zzz-nope" selects 0.
+tap=$(npm test --silent -- --test-reporter=tap --test-name-pattern "entry-identity" \
+        tests/unit/scheduler-entry-identity.test.js); rc=$?
+# G1b — read on the statement after the capture, enforced BEFORE any counting.
+[ "$rc" -eq 0 ] || { echo "GATE FAILED (Table F G1b): the runner exited $rc — a failing test or a file-level hook makes every count below meaningless"; exit 1; }
+sel() { printf '%s\n' "$tap" | grep -E "^ok [0-9]+ - entry-identity: "; }
+n=$(sel | grep -vE "# (SKIP|TODO)" | wc -l | tr -d ' ')
+d=$(sel | grep -E "# (SKIP|TODO)" | wc -l | tr -d ' ')
+echo "named passing subtests: $n   directive-carrying selected records: $d"
+[ "$d" -eq 0 ] || { echo "VACUOUS — $d selected REQUIRED name(s) carried # SKIP/# TODO (Table F G5); extra passing names may NOT substitute for them"; exit 1; }
+[ "$n" -ge 28 ] || { echo "VACUOUS OR INCOMPLETE — the pattern selected $n named subtests (Table F G6, floor 28)"; exit 1; }
+
+# 2. The touched existing suite (Table D changes two of its records) — the SECOND
+#    instance of the SAME gate. Table F decides every rule; parameters only:
+#      runner invocation → npm test -- … tests/unit/scheduler-status.test.js        (G1)
+#      anchored family prefix → the four selected name roots                        (G4)
+#      floor → 13                                                                   (G6)
+#    THE FLOOR IS 13, NOT 8 — re-enumerated, not incremented. Through round 3 this
+#    step carried a floor of 8 against a selector that returns 13, i.e. FIVE names
+#    of slack, which is exactly what G6 forbids: up to five required tests could
+#    fail or vanish and the gate would still report green. Derivation, measured by
+#    execution on this host: 13 names on `main` at c216a00, and 13 on the
+#    implementation branch — this WP adds NO new name to this family; it RENAMES
+#    exactly one (Table D's record: "defaultProbe maps exit 0 → loaded, non-zero →
+#    missing, spawn error → missing" becomes "defaultProbe maps exit 0 WITHOUT AN
+#    EXPECTATION → unverified, …"). So 12 carried unchanged + 1 renamed + 0 new =
+#    13, ZERO slack. Re-enumerate the same way if you add or rename another.
+#    Note what G4's anchoring buys, measured at efd1489 on `main`: an UNANCHORED
+#    "^ok [0-9]+ - " returns 1 even for the bogus pattern "zzz-nope" (it matches
+#    the file wrapper); the anchored form returns 0 for "zzz-nope" and 13 for the
+#    real pattern. G5 matters here specifically because
+#    tests/unit/scheduler-status.test.js:305 ("reloadMissing refuses to heal onto
+#    a symlink at the canonical path") is guarded `{ skip: !isPosix }` AND matches
+#    this pattern.
+tap=$(npm test --silent -- --test-reporter=tap \
+        --test-name-pattern "defaultProbe|probeAll|reloadMissing|doctorSchedulerChecks" \
+        tests/unit/scheduler-status.test.js); rc=$?
+# G1b — read on the statement after the capture, enforced BEFORE any counting.
+[ "$rc" -eq 0 ] || { echo "GATE FAILED (Table F G1b): the runner exited $rc — a failing test or a file-level hook makes every count below meaningless"; exit 1; }
+sel() { printf '%s\n' "$tap" | grep -E "^ok [0-9]+ - (defaultProbe|probeAll|reloadMissing|doctorSchedulerChecks)"; }
+n=$(sel | grep -vE "# (SKIP|TODO)" | wc -l | tr -d ' ')
+d=$(sel | grep -E "# (SKIP|TODO)" | wc -l | tr -d ' ')
+echo "named passing subtests: $n   directive-carrying selected records: $d"
+[ "$d" -eq 0 ] || { echo "VACUOUS — $d selected REQUIRED name(s) carried # SKIP/# TODO (Table F G5)"; exit 1; }
+[ "$n" -ge 13 ] || { echo "VACUOUS OR INCOMPLETE — selected $n named subtests (Table F G6, floor 13)"; exit 1; }
 
 # 3. No regression anywhere, including the golden files.
 npm test
@@ -2865,6 +3018,78 @@ if [ "$rc" -ne 0 ]; then
     || { echo "FAIL: doctor exited $rc with no [fail] line — that is a crash, not a health verdict"; exit 1; }
   echo "NOTE: exit=$rc is explained by the [fail] line(s) above. If one of them is a scheduler line, it is a REAL FINDING about this machine — say so in the PR."
 fi
+
+# 9. TABLE E ≡ TABLE F — the canonical G-rows are ONE contract carried in two
+#    documents (ADR-0005's One-Document Rule requires the local copy; ADR-0031
+#    allows it as a mirrored summary).
+#
+#    THE INVARIANT, STATED EXACTLY: both files carry exactly the rows
+#    G1 G1b G2 G3 G4 G5 G6, IN THAT ORDER, byte-identically.
+#
+#    Compared BY PATH, tripwire first, entry-identity second:
+#      docs/specs/WP-scheduler-loaded-record-tripwire.md   → Table E
+#      docs/specs/WP-scheduler-entry-identity.md           → Table F
+#
+#    NOTE FOR THE NEXT EDITOR — THERE IS NO COUNT GUARD, AND ADDING ONE BACK IS A
+#    REGRESSION. Two consecutive review rounds landed findings on this step's
+#    guard: a `-eq 7` count cannot see a SUBSTITUTED id (rename G6→G7 in both
+#    files and the count is still 7, the diff still clean, the message still
+#    "OK") nor a DUPLICATED one, and two empty extractions diff clean. The fix
+#    was not a third arithmetic patch: the identifier COLUMN is compared against
+#    the literal expected sequence, independently per file, BEFORE the content
+#    diff. That one construction closes count, order, substitution, duplication
+#    and emptiness at once, because it checks the invariant itself rather than a
+#    proxy for it. Do not add a guard beside it — extend the sequence instead.
+#
+#    ONE PHYSICAL LINE PER ROW is enforced by SUBTRACTION, not by a further
+#    check: a markdown table row is a single line by construction, and the
+#    extractor anchors BOTH ends, so a row wrapped across two lines loses its
+#    closing pipe, drops out of the extraction, and reddens the sequence check
+#    below. Verified in the red direction.
+#
+#    SPACING VARIANTS MUST BE VISIBLE, NOT INVISIBLE. GFM also accepts compact
+#    rows (`|G6|…|`) and tolerates trailing spaces, and this repo does not
+#    enforce MD060 cell spacing. An extractor that recognised only the
+#    exactly-spaced form did not merely miss those rows — it made them
+#    INVISIBLE, so a compact SECOND `G6` with different text in each file passed
+#    every check while both rendered tables carried two disagreeing G6 rows. The
+#    row pattern therefore allows optional whitespace around the id and after
+#    the final pipe, and `ids()` trims per field. A compact duplicate now shows
+#    up as an extra `G6` in the sequence; nothing else was added.
+#    LEADING INDENTATION IS THE SAME CLASS, at the one position the widen above
+#    missed: GFM allows a block-level construct up to THREE leading spaces, so
+#    `  |G6|…|` still renders as a table row while `^\|` never saw it. The anchor
+#    is therefore ` {0,3}\|` — literal spaces, bounded at three ON PURPOSE. Do
+#    NOT relax it to `[[:space:]]*`: that would also accept tabs and 4+ spaces,
+#    which GFM renders as an indented CODE BLOCK rather than a row, so matching
+#    them would make the check red on text that is not a table row at all.
+#
+#    THREAT MODEL — READ THIS BEFORE PROPOSING A STRONGER EXTRACTOR.
+#    This check exists to catch ACCIDENTAL, format-conforming drift by
+#    good-faith editors: the failure that actually happened four times in this
+#    spec's own history — a row edited in one file and not the other, a row
+#    renamed, a row dropped, a floor left stale. It does NOT defend against a
+#    deliberately evasive encoding: exotic pipe lookalikes, zero-width
+#    codepoints, HTML tables, a row crafted specifically to dodge a text-level
+#    extractor. It cannot, and no text-level extractor can — spec text is
+#    written and reviewed by trusted parties, and an editor motivated to defeat
+#    a grep will always defeat a grep. Findings of the form "here is a more
+#    exotic encoding this misses" are therefore OUT OF SCOPE for this step by
+#    declaration; the remedy for that class is code review, not more extraction
+#    machinery. "Can you construct a string that slips through" has no
+#    terminus, so the criterion is bounded by this threat model instead.
+#
+#    The body below, from `TW=` to the final `echo`, is BYTE-IDENTICAL to the
+#    same step in the sibling spec; only the step NUMBER differs.
+TW=docs/specs/WP-scheduler-loaded-record-tripwire.md
+EI=docs/specs/WP-scheduler-entry-identity.md
+rows() { grep -E '^ {0,3}\|[[:space:]]*G[0-9b]+[[:space:]]*\|.*\|[[:space:]]*$' "$1"; }
+ids()  { rows "$1" | awk -F'|' '{gsub(/[[:space:]]/, "", $2); print $2}'; }
+expected_ids() { printf 'G1\nG1b\nG2\nG3\nG4\nG5\nG6\n'; }
+diff <(expected_ids) <(ids "$TW") || { echo "FAIL: $TW does not carry exactly G1 G1b G2 G3 G4 G5 G6, once each, in that order"; exit 1; }
+diff <(expected_ids) <(ids "$EI") || { echo "FAIL: $EI does not carry exactly G1 G1b G2 G3 G4 G5 G6, once each, in that order"; exit 1; }
+diff <(rows "$TW") <(rows "$EI") || { echo "FAIL: Table E and Table F have DIVERGED — the rows above differ. Fix BOTH, do not fork the contract"; exit 1; }
+echo "OK: both specs carry G1 G1b G2 G3 G4 G5 G6 once each, in order, byte-identically"
 ```
 
 The scenario harnesses (`WIENERDOG_RUN_SCENARIOS`) consume quota and need a real
