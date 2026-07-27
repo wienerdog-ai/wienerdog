@@ -5,7 +5,7 @@ status: Draft
 model: opus
 size: M
 depends_on: [WP-secret-fence-ep2-redact-arm]
-adrs: [ADR-0004, ADR-0019, ADR-0024, ADR-0034]
+adrs: [ADR-0004, ADR-0019, ADR-0024, ADR-0034, ADR-0035]
 epic: secret-lifecycle
 ---
 
@@ -47,7 +47,7 @@ done the same thing for withheld notes in `state/quarantine/` since WP-123.
 `fs.rmSync(dir, { recursive: true, force: true })`, so a user who uninstalls
 before reviewing loses that text with no warning naming it. ADR-0019 also states
 an invariant this content sits on the wrong side of — reproduced verbatim from
-`docs/adr/0019-uninstall-disposes-core-mechanics.md`, lines 52–55:
+`docs/adr/0019-uninstall-disposes-core-mechanics.md`, lines 52–54:
 
 ```text
 The invariant this rests on — **nothing user-authored is ever written under the
