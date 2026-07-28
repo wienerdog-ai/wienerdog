@@ -135,6 +135,14 @@ instead of a blocked session.
   (PR diffs) — never by the orchestrator inline, and never by Codex itself.
 - A finding the owner rejects is recorded in the spec/PR as an accepted
   residual with a one-line reason.
+- **Prove a new gate in BOTH directions.** Red-before-work shows a check is not
+  vacuous; it does **not** show the check is not *over-strict*, because a check
+  that rejects the correct answer is also red before the work and looks identical
+  from that side. So run a new verification step twice: on the untouched tree
+  (expect red) **and** on a hand-constructed version of the expected finished
+  state, including the awkward-but-legal cases (expect green). Cheap — the second
+  run is a heredoc — and it is the only thing that catches a gate which will
+  punish the implementer for doing the work correctly.
 - **Loop circuit-breaker (ADR-0031).** If two consecutive review rounds land a
   finding on the *same* contract family, stop fixing finding-by-finding and do a
   contract-**extraction** pass instead: pull that contract into one canonical

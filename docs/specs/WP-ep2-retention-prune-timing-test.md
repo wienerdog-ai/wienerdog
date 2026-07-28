@@ -216,8 +216,13 @@ the assertion and the counts, not a verdict.*
       test's title occurs **exactly once**; the AC-3 pass/fail counts are present; the
       census row's **limb CELL equals `executed`**; and the mutation row no longer
       **states** the gap (the exact phrases `undetected-today gap` and its
-      `NOTHING — AND THAT IS THE POINT` disposition are absent). **Prose that
-      recounts the history stays legal** — a row saying "this recorded an undetected
+      `NOTHING — AND THAT IS THE POINT` disposition are absent). **Both directions are proven, not one**: the step is run on the untouched tree
+      (expect red — non-vacuity) **and** on hand-constructed expected post-work
+      rows that include a history-recounting sentence (expect green — not
+      over-strict). *Red-before-work and rejects-the-right-answer look identical
+      from one side, which is how an earlier draft of this step shipped a
+      bare-word ban that rejected the very sentence this criterion recommends.*
+      **Prose that recounts the history stays legal** — a row saying "this recorded an undetected
       gap until this WP closed it" is what *should* be written, and a check that
       forbade the word would be stricter than the contract it guards. *A whole-file grep cannot do this
       job and the earlier draft of this criterion tried: the routed slug already
@@ -230,8 +235,26 @@ the assertion and the counts, not a verdict.*
 ## Verification steps (run these; paste output in the PR)
 
 ```bash
-# 0. RE-VERIFY THE CURRENT STATE FIRST. If any of these is not where this spec
-#    says, stop and report it — do not work around it.
+# 0. THE DISPATCH BLOCKER, AND IT MUST BE RUN FIRST.
+#    ANY FAILURE HERE BLOCKS DISPATCH. Do not start, do not work around it,
+#    report it and stop — the two cells this WP edits do not exist yet.
+SPEC=docs/specs/done/WP-secret-fence-ep2-redact-arm.md
+
+# 0a. The AC-15 coverage census must exist. It arrived in PR #124; before that
+#     merge this grep finds nothing and this step is RED, which is the point.
+grep -q '^### AC-15 coverage census' "$SPEC" || {
+  echo "BLOCKED: the AC-15 coverage census is not in $SPEC."
+  echo "         PR #124 has not merged. Do not start this WP."; exit 1; }
+
+# 0b. The census must still carry M-48 on the 'gap' limb — i.e. nobody has done
+#     this work already. Cell equality, not a substring.
+limb=$(grep -m1 '^| \*\*M-48\*\* |' "$SPEC" | awk -F'|' '{gsub(/[* ]/,"",$3); print $3}')
+test "$limb" = "gap" || {
+  echo "BLOCKED: the census limb for M-48 is '$limb', expected 'gap'."
+  echo "         Either this work is already done or the census moved."; exit 1; }
+echo "ok: PR #124 is on main and the gap is still open"
+
+# 0c. Now the code and test claims this spec makes. Same rule: a miss stops you.
 grep -n 'Retention, once per run' src/core/dream/validate.js
 grep -n 'every basename this run wrote into' src/core/dream/validate.js
 grep -c 'EP2 retention:' tests/unit/dream-validate.test.js     # expect 5 before your change
@@ -265,22 +288,62 @@ grep -n '^| \*\*M-48\*\* |' "$SPEC" | tail -1 | cut -d: -f1 \
 grep -n '^| \*\*M-48\*\* |' "$SPEC" | head -1 | cut -d: -f1 \
   | xargs -I{} sed -n '{}p' "$SPEC" > /tmp/m48-census-row.txt
 
+# 5c. BOTH rows: the new test is named exactly once and the AC-3 counts are there.
 for f in /tmp/m48-mutation-row.txt /tmp/m48-census-row.txt; do
   echo "--- $f"
-  test -s "$f"                            || { echo "FAIL: row extracted EMPTY"; exit 1; }
+  test -s "$f"            || { echo "FAIL: row extracted EMPTY — the anchor moved"; exit 1; }
   n=$(grep -c -F "$TITLE" "$f" || true)
-  test "$n" = "1"                         || { echo "FAIL: new test title occurs $n times, want 1"; exit 1; }
-  grep -qF 'executed' "$f"                || { echo "FAIL: limb/word 'executed' absent"; exit 1; }
-  grep -qF 'fail 1' "$f"                  || { echo "FAIL: the AC-3 counts are absent"; exit 1; }
-  grep -qF 'undetected-today gap' "$f"    && { echo "FAIL: still says undetected-today gap"; exit 1; }
-  grep -qF 'NOTHING' "$f"                 && { echo "FAIL: still says NOTHING"; exit 1; }
-  grep -qwF 'gap' "$f"                    && { echo "FAIL: still carries the gap limb"; exit 1; }
-  echo "ok"
+  test "$n" = "1"         || { echo "FAIL: test title occurs $n times, want exactly 1"; exit 1; }
+  grep -qF "$COUNTS" "$f" || { echo "FAIL: the AC-3 counts ($COUNTS) are absent"; exit 1; }
+  echo "ok: names the test once, carries the counts"
 done
-#    NOTE the polarity: the three `grep -q … && { … exit 1; }` lines fail on
-#    PRESENCE. Under `set -e` a bare failing grep would abort the loop, which is
-#    why each is written as a printing branch. Adjust 'fail 1' to whatever your
-#    AC-3 run actually printed — do not paste a count you did not observe.
+
+# 5d. The CENSUS row ONLY: the limb is a CELL, so assert the cell, case-folded.
+limb=$(awk -F'|' '{gsub(/[* ]/,"",$3); print tolower($3)}' /tmp/m48-census-row.txt)
+test "$limb" = "executed" || { echo "FAIL: census limb is '$limb', want 'executed'"; exit 1; }
+echo "ok: census limb cell = executed"
+
+# 5e. The MUTATION row ONLY: it must no longer STATE the gap. Two exact phrases.
+grep -qF 'undetected-today gap' /tmp/m48-mutation-row.txt \
+  && { echo "FAIL: mutation row still states 'undetected-today gap'"; exit 1; }
+grep -qF 'NOTHING — AND THAT IS THE POINT' /tmp/m48-mutation-row.txt \
+  && { echo "FAIL: mutation row still carries the no-detector disposition"; exit 1; }
+echo "ok: mutation row no longer states the gap"
+
+#    FOUR THINGS ABOUT THIS STEP, all decided rather than incidental.
+#    (i) POLARITY. The two `grep -q … && { … exit 1; }` lines fail on PRESENCE.
+#        Under `set -e` a bare failing grep would abort the step, so each is a
+#        printing branch — the trap the parent spec's gate-polarity preamble records.
+#    (ii) NO BARE-WORD BAN. An earlier draft rejected the word `gap` anywhere in
+#        either row. That forbids honest history: a row reading "this recorded an
+#        undetected gap until this WP closed it" is exactly what SHOULD be written,
+#        and it is the sentence AC-6 itself recommends. A check stricter than the
+#        contract it guards is drift in the direction that reads like rigour.
+#    (iii) LIMB IS CENSUS-ONLY AND CASE-FOLDED. The mutation row carries no
+#        lowercase `executed` today and is not required to gain one; only the
+#        census carries a limb. `tolower` because neighbouring cells are mixed
+#        case, and cell EQUALITY — not a substring search — is the assertion.
+#    (iv) COUNTS. Set COUNTS to what your AC-3 run actually printed. Do not paste
+#        a figure you did not observe.
+
+# 5f. THE SECOND-DIRECTION PROOF — run this BEFORE you edit the real spec.
+#     Red-before-work proves a gate is not vacuous. It does NOT prove the gate is
+#     not OVER-STRICT: a check that rejects the correct answer is also red before
+#     the work and looks identical from that side. So construct the expected
+#     post-work rows by hand and assert the step goes GREEN on them.
+mkdir -p /tmp/second-direction
+#     Write the two rows you INTEND to ship — including a sentence that recounts
+#     the history, which is the case an over-strict check would reject:
+cat > /tmp/second-direction/census-row.txt <<'ROW'
+| **M-48** | **executed** | Closed by the new test. Recorded an undetected gap until this WP landed. <TITLE> ⇒ <COUNTS> |
+ROW
+cat > /tmp/second-direction/mutation-row.txt <<'ROW'
+| **M-48** | prune per call instead of per run | <TITLE> ⇒ <COUNTS>. This row recorded an undetected gap until this WP closed it |
+ROW
+#     Substitute your real TITLE/COUNTS into both, then re-run 5c/5d/5e against
+#     these two files instead of the extracted ones. EXPECT: every assertion ok.
+#     If any fails, the STEP is wrong and not your work — fix the step and say so
+#     in the PR under "Decisions made".
 
 # 6. The Done spec's own gates must stay green — you are editing inside them.
 #    Extract and run V-30 and V-31 from that spec's Verification steps, and
