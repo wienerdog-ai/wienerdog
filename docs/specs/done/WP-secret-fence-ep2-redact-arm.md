@@ -4478,8 +4478,8 @@ and not prose.**
 | M-20 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
 | M-21 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
 | M-22 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
-| **M-23** | **executed** | **Re-executed by this errata, 2026-07-28, in ISOLATION.** Drop `&& !created.has(e.name)`, keep the `(mtimeMs, name)` sort ⇒ **AC-14 case 2 RED** (cases 3 and 4 also red, case 1 green), `pass 2, fail 3`. The command and counts are in this row's own cell. Also `RED (ok)` in PR #122's sweep, but there as the pre-split conjoined row |
-| **M-23b** | **executed** | **Re-executed by this errata, 2026-07-28, in ISOLATION.** Drop the `mtimeMs` term, keep the exclusion ⇒ **AC-14 case 1 RED** only, `pass 4, fail 1`. Counts in this row's own cell. Round 5 corrected this row's mapping from case 2 to case 1 on the strength of that run |
+| **M-23** | **executed** | **RED:** `a run NEVER evicts its own copies, even when they are the oldest by both keys` — `pass 2, fail 3` — *narration follows the verdict and never substitutes for it:* re-executed by this errata, 2026-07-28, in ISOLATION; drop `&& !created.has(e.name)`, keep the `(mtimeMs, name)` sort; cases 3 and 4 also went red, case 1 stayed green. Also `RED (ok)` in PR #122's sweep, but there as the pre-split conjoined row |
+| **M-23b** | **executed** | **RED:** `the prune evicts by (mtimeMs, name), not by filename alone` — `pass 4, fail 1` — *narration follows the verdict:* re-executed by this errata, 2026-07-28, in ISOLATION; drop the `mtimeMs` term, keep the exclusion; that case only. Round 5 corrected this row's mapping from case 2 to case 1 on the strength of that run |
 | M-24 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
 | M-24b | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
 | M-25 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
@@ -6417,32 +6417,35 @@ const DATA_ROW_RULES = new Map([
          [/\b(?:GREEN|MISSED|UNCAUGHT|SURVIVED)\s*\(|\((?:missed|uncaught|survived|green)\)/i,
           "must NOT record a contradictory verdict — a swept row whose inherited result was anything but caught is an uncovered mutation wearing a covered row's limb"]],
       ],
+      // ── EXECUTED IS NO LONGER A PHRASE MATCH. Rounds 16 and 17 each patched a
+      //    phrase list and each was defeated the next round — "stayed GREEN", then
+      //    "passed unchanged" — which is this document's own two-consecutive-rounds
+      //    breaker condition. So the predicate went STRUCTURAL in round 18: the
+      //    evidence must open with a canonical verdict clause, and the target named
+      //    in it is COMPARED, as a string, against the PAIRED MUTATION ROW. The two
+      //    rows are already joined by id, so the comparison is one lookup.
+      //      **RED:** `<target>` — `<counts>`   then narration, which decides nothing
+      //    An attacker can no longer name someone else's target: a target that does
+      //    not occur verbatim in the paired row fails, whatever the prose says.
+      //    THE HONEST BOUNDARY: narration after the clause is not parsed, so a row
+      //    could still contradict itself in prose. What changed is that the VERDICT
+      //    POSITION is authoritative and derivable — the phrase lists below are kept
+      //    only as narration hygiene, and they decide nothing.
       executed: [
         [[/fail [1-9][0-9]*/, "must carry a POSITIVE failure count — `fail 0` is not a mutation that reddened anything"],
-         // TARGET-LINKED, round 17. Requiring `RED` anywhere in the cell let a row
-         // claim a verdict about something OTHER than its own target: "the new
-         // test stayed GREEN; an unrelated old test went RED, pass 5, fail 1"
-         // satisfied every earlier rule. The verdict must be BOUND to a named
-         // target — one emphasis span carrying both, which is the form both real
-         // rows already use ("**AC-14 case 2 RED**").
-         [/\*\*[^*]*\bRED\b[^*]*\*\*/, "must bind the RED verdict to a NAMED target in one span, not mention RED loose in the cell"]],
-        // THE SYMMETRIC HOLE, found by PROBING rather than by reading (round 14):
-        // an executed row could carry `RED`, a positive failure count AND a claim
-        // that the run passed — self-contradictory, and green. Non-detection is
-        // asserted as PHRASES, never as the bare word "green", because these rows
-        // legitimately report which cases stayed green ("cases 3 and 4 also red,
-        // case 1 green"). Measured across all 37 rows before enforcing: zero hits.
-        // `gap` is deliberately exempt — it is the one limb whose whole content IS
-        // a non-detection claim.
-        [[/\b(?:survived|uncaught|not caught|nothing failed|everything passed|all (?:tests )?passed|all green|\(missed\))\b/i,
-          "must NOT claim the run was not caught — an executed row asserts a mutation REDDENED something, and a row asserting both is a mislabel a reader cannot resolve"],
-         // AND MUST NOT CLAIM ITS TARGET STAYED GREEN. Measured: the binding
-         // predicate above is NECESSARY but NOT SUFFICIENT — an attacker can bold
-         // an unrelated RED and satisfy it, which was verified rather than assumed.
-         // This is the clause that actually catches the round-17 attack; zero hits
-         // across all 37 rows before enforcing.
-         [/\bstayed\s+green\b|\bremained\s+green\b|\bstill\s+green\b|\bstays\s+green\b|\bdid not (?:go )?red\b/i,
-          "must NOT record its own target as staying green — that is a row whose mutation was NOT caught, wearing the limb of one that was"]],
+         [/^\s*\*\*RED:\*\*\s+`[^`]+`\s+—\s+`[^`]+`/, "must OPEN with the canonical verdict clause **RED:** `<target>` — `<counts>`; a verdict stated only in prose is not derivable"]],
+        // ── THE PHRASE LISTS ARE RETIRED, round 18, and their retirement is the
+        //    point rather than an omission. Round 14 banned non-detection phrases;
+        //    round 17 added "stayed green"; round 18's attack was "passed
+        //    unchanged". Each list was defeated by the next synonym, which is a
+        //    losing game against free text — and worse, the round-17 ban FIRED ON
+        //    HONEST NARRATION the moment these cells were rewritten to report
+        //    which sibling cases stayed green, i.e. it had become a false-positive
+        //    generator as well as a bypassable one.
+        //    The verdict is now carried by the canonical clause and checked by the
+        //    cross-row target comparison; narration is free to describe the run in
+        //    whatever words are true, INCLUDING "case 1 stayed green".
+        [],
       ],
       gap: [
         [[/fail 0\b/, "must carry the zero-failure run that demonstrates the absence"],
@@ -6453,10 +6456,15 @@ const DATA_ROW_RULES = new Map([
   }],
 ]);
 const rowIds = new Map();
-const collect = (key, cell) => {
+const rowLines = new Map();   // key -> Map(id -> 1-based line), for cross-row comparison
+const collect = (key, cell, ln) => {
   if (!rowIds.has(key)) rowIds.set(key, new Map());
   const m = rowIds.get(key);
   m.set(cell, (m.get(cell) || 0) + 1);
+  if (ln !== undefined) {
+    if (!rowLines.has(key)) rowLines.set(key, new Map());
+    if (!rowLines.get(key).has(cell)) rowLines.get(key).set(cell, ln);
+  }
 };
 const firstCell = (line) => (line.split("|")[1] || "").trim().replace(/^\*\*|\*\*$/g, "").trim();
 let head = "(none)";
@@ -6472,7 +6480,7 @@ for (let i = 0; i < lines.length; i++) {
       if (!registered(s[1])) fail("the table at line " + (i + 1) + " is dispositioned as corpus/measurement DATA, so what the Checklist registers is the TABLE — but " + JSON.stringify(s[1]) + " is named nowhere in the Checklist region under H6's boundary form. Register it there, or reclassify the table. (An UNBOUNDED substring test would pass here on any longer name that contains this one: that was round 8's defect.)");
       const rule = DATA_ROW_RULES.get(s[1]);
       for (let j = i + 2; j < lines.length && /^\|/.test(lines[j]); j++) {
-        collect(key, firstCell(lines[j]));
+        collect(key, firstCell(lines[j]), j + 1);
         if (!rule) continue;
         const cells = lines[j].split("|").slice(1, -1);
         const norm = (c) => (c || "").trim().replace(/^\*\*|\*\*$/g, "").trim();
@@ -6492,7 +6500,7 @@ for (let i = 0; i < lines.length; i++) {
     } else {
       for (let j = i + 2; j < lines.length && /^\|/.test(lines[j]); j++) {
         const cell = firstCell(lines[j]);
-        collect(key, cell);
+        collect(key, cell, j + 1);
         if (!s[1].test(cell)) fail("row " + (j + 1) + " has first cell " + JSON.stringify(cell) + ", which its table pattern " + s[1] + " does not match. A mis-shaped id is invisible to registration (Table H row H1).");
         define(cell, j + 1, "contract-table id");
       }
@@ -6525,6 +6533,23 @@ for (const [k, s] of SCHEMA) {
   // other is a real asymmetry and is reported as one.
   const dupA = [...a].filter(([, n]) => n > 1).map(([x, n]) => x + "×" + n);
   const dupB = [...b].filter(([, n]) => n > 1).map(([x, n]) => x + "×" + n);
+  // ── ROUND 18: the EXECUTED target must occur verbatim in its PAIRED row. This
+  //    is the comparison the phrase lists could never be: two strings, from the two
+  //    rows the pairing already joins.
+  const norm = (t) => t.replace(/\s+/g, " ").trim();
+  for (const [id, ln] of (rowLines.get(k) || new Map())) {
+    const ev = (lines[ln - 1].split("|").slice(1, -1)[2] || "");
+    const limb = (lines[ln - 1].split("|").slice(1, -1)[1] || "").replace(/[*\s]/g, "");
+    if (limb !== "executed") continue;
+    const m = /^\s*\*\*RED:\*\*\s+`([^`]+)`/.exec(ev);
+    if (!m) fail("census row " + JSON.stringify(id) + " (line " + ln + ") claims limb \"executed\" but its evidence does not open with the canonical verdict clause.");
+    const target = norm(m[1]);
+    const partnerLn = (rowLines.get(s[2]) || new Map()).get(id);
+    if (!partnerLn) fail("census row " + JSON.stringify(id) + " has no paired mutation row to compare its target against.");
+    if (!norm(lines[partnerLn - 1]).includes(target))
+      fail("census row " + JSON.stringify(id) + " (line " + ln + ") names the target " + JSON.stringify(target.slice(0, 60)) + ", which does NOT occur in its paired mutation row (line " + partnerLn + "). An executed row must state the verdict for ITS OWN target — naming someone else's is how an uncaught mutation gets recorded as caught.");
+  }
+
   const onlyA = [...a.keys()].filter((x) => !b.has(x));
   const onlyB = [...b.keys()].filter((x) => !a.has(x));
   const mism = [...a].filter(([x, n]) => b.has(x) && b.get(x) !== n).map(([x, n]) => x + " (" + n + " vs " + b.get(x) + ")");

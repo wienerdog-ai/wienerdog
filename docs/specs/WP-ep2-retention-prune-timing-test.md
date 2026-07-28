@@ -411,6 +411,17 @@ the assertion and the counts, not a verdict.*
 #          grep's status. Without it errexit aborts before the message prints.
 set -euo pipefail
 #
+#    THE FENCE SWEEP, recorded rather than left implicit (round 18). This spec has
+#    exactly ONE fenced shell block — this one, lines 388-827 — so the regime above
+#    governs steps 0 through 6 and everything in them was audited against the two
+#    conventions, not just step 0. What that audit found beyond step 0: the three
+#    EXPECTED-RED mutation runs (AC-3/3b/3c) would have aborted the block at the
+#    first one, killing the later controls, the documentation checks, the full-suite
+#    run and the cleanup evidence; two `grep … && { … }` negatives that abort on
+#    their SUCCESS path; and two row extractions whose grep exits 1 when the row is
+#    gone, aborting with no diagnosis. All are fixed below and each carries its
+#    reason at the site.
+#
 #    EVERY CHECK BELOW READS AUTHORITATIVE MAIN, NEVER YOUR CHECKOUT. That is the
 #    whole shape of this step and it is not a detail: a dispatcher standing on a
 #    stale or topic branch would otherwise get a green record describing a tree the
@@ -678,7 +689,14 @@ echo "ok: deployed tree byte-identical throughout ($DEPLOYED_AFTER)"
 node tests/run.js --test-name-pattern "EP2 retention" tests/unit/dream-validate.test.js
 
 # 2. AC-3 — apply the N2-only mutation by hand, then:
+# ── set +e ISLAND (convention i): this run is EXPECTED TO FAIL, so its exit
+#    status is the answer and is read on the very next line.
+set +e
 node tests/run.js --test-name-pattern "EP2 retention" tests/unit/dream-validate.test.js
+rc=$?
+set -e
+test "$rc" != "0" || { echo "FAIL AC-3: the N2-only mutation did NOT redden the suite. The new test does not detect it."; exit 1; }
+echo "ok AC-3: reddened as required (exit $rc)"
 #    Expect: the new test FAILS and the other five still pass. Revert src/ and
 #    confirm `git status --short` shows no source file.
 
@@ -687,7 +705,14 @@ node tests/run.js --test-name-pattern "EP2 retention" tests/unit/dream-validate.
 #     Expect: the cardinality assertion still passes, the ORDERING assertion FAILS.
 #     If your test stays green here, it is asserting a count and calling it timing.
 #     Revert src/ and confirm `git status --short` shows no source file.
+# ── set +e ISLAND (convention i): this run is EXPECTED TO FAIL, so its exit
+#    status is the answer and is read on the very next line.
+set +e
 node tests/run.js --test-name-pattern "EP2 retention" tests/unit/dream-validate.test.js
+rc=$?
+set -e
+test "$rc" != "0" || { echo "FAIL AC-3b: the timing-only mutation did NOT redden the suite. The new test does not detect it."; exit 1; }
+echo "ok AC-3b: reddened as required (exit $rc)"
 
 # 3c. AC-3c — the LATE-IN-FINAL-ITERATION mutation. One call, fired once, moved
 #     inside the loop AFTER the trailing path's -U0 — e.g. relocate the comment and
@@ -701,7 +726,14 @@ node tests/run.js --test-name-pattern "EP2 retention" tests/unit/dream-validate.
 #     git event), and the STRUCTURAL assertion (b3) FAILS — "the prune call is at
 #     line N, INSIDE the scanTokens loop". If your test goes green here, its
 #     structural half is not brace-aware and (b) is decorative.
+# ── set +e ISLAND (convention i): this run is EXPECTED TO FAIL, so its exit
+#    status is the answer and is read on the very next line.
+set +e
 node tests/run.js --test-name-pattern "EP2 retention" tests/unit/dream-validate.test.js
+rc=$?
+set -e
+test "$rc" != "0" || { echo "FAIL AC-3c: the late-in-final-iteration mutation did NOT redden the suite. The new test does not detect it."; exit 1; }
+echo "ok AC-3c: reddened as required (exit $rc)"
 #     Revert src/ and confirm `git status --short` shows no source file.
 
 # 3. AC-4 — apply the N3-only mutation by hand, then the same command.
@@ -730,11 +762,16 @@ case "$COUNTS" in *'<the exact'*) echo "FAIL: COUNTS is still the placeholder"; 
 
 # 5a. the MUTATION row: the one line beginning with the M-48 cell in the
 #     "Mutation checks" table (the LAST of the two M-48 lines in the file).
-grep -n '^| \*\*M-48\*\* |' "$SPEC" | tail -1 | cut -d: -f1 \
-  | xargs -I{} sed -n '{}p' "$SPEC" > /tmp/m48-mutation-row.txt
+# PIPEFAIL-SAFE: `grep -n … | tail -1` is fine (tail reads to the end), but the
+# grep itself exits 1 when the row is gone, which under pipefail aborts with no
+# message. Capture, then assert, so the diagnosis survives.
+mrow=$(grep -n '^| \*\*M-48\*\* |' "$SPEC" | tail -1 | cut -d: -f1 || true)
+test -n "$mrow" || { echo "FAIL: no M-48 mutation row found in $SPEC"; exit 1; }
+sed -n "${mrow}p" "$SPEC" > /tmp/m48-mutation-row.txt
 # 5b. the CENSUS row: the FIRST of the two, inside the AC-15 coverage census.
-grep -n '^| \*\*M-48\*\* |' "$SPEC" | head -1 | cut -d: -f1 \
-  | xargs -I{} sed -n '{}p' "$SPEC" > /tmp/m48-census-row.txt
+crow=$(grep -n '^| \*\*M-48\*\* |' "$SPEC" | head -1 | cut -d: -f1 || true)
+test -n "$crow" || { echo "FAIL: no M-48 census row found in $SPEC"; exit 1; }
+sed -n "${crow}p" "$SPEC" > /tmp/m48-census-row.txt
 
 # 5c. BOTH rows: the new test is named exactly once and the AC-3 counts are there.
 for f in /tmp/m48-mutation-row.txt /tmp/m48-census-row.txt; do
@@ -752,10 +789,14 @@ test "$limb" = "executed" || { echo "FAIL: census limb is '$limb', want 'execute
 echo "ok: census limb cell = executed"
 
 # 5e. The MUTATION row ONLY: it must no longer STATE the gap. Two exact phrases.
-grep -qF 'undetected-today gap' /tmp/m48-mutation-row.txt \
-  && { echo "FAIL: mutation row still states 'undetected-today gap'"; exit 1; }
-grep -qF 'NOTHING — AND THAT IS THE POINT' /tmp/m48-mutation-row.txt \
-  && { echo "FAIL: mutation row still carries the no-detector disposition"; exit 1; }
+# WRITTEN AS `if`, NOT `grep … && { … }`. Under the declared `set -e` the `&&`
+# form aborts the script on its SUCCESS path — a non-matching grep exits 1, the
+# compound's status is 1, and errexit kills the block before anything else runs.
+# The polarity trap and the regime trap in one construct.
+if grep -qF 'undetected-today gap' /tmp/m48-mutation-row.txt; then
+  echo "FAIL: mutation row still states 'undetected-today gap'"; exit 1; fi
+if grep -qF 'NOTHING — AND THAT IS THE POINT' /tmp/m48-mutation-row.txt; then
+  echo "FAIL: mutation row still carries the no-detector disposition"; exit 1; fi
 echo "ok: mutation row no longer states the gap"
 
 #    FOUR THINGS ABOUT THIS STEP, all decided rather than incidental.
