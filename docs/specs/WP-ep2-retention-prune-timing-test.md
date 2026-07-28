@@ -264,7 +264,11 @@ the assertion and the counts, not a verdict.*
       cardinality cannot see** — the count assertion stays green and the ordering
       assertion must go red. Paste both runs. *Without this criterion the
       observational seam proves only half of N2, which states once **and** after the
-      loop.*
+      loop.* **The premise is proven at the EVENT level, not merely modelled:** the
+      round-12 review instrumented the real flow and observed that the timing-only
+      mutation produces `NUMSTAT` / `PRUNE_READ` event streams with **identical
+      cardinality and violated ordering** — exactly the pair of properties this
+      criterion separates, and the reason a count assertion alone would ship green.
 - [ ] **AC-4** The new test still **passes** under the N3-only mutation (drop
       `&& !created.has(e.name)`), demonstrating it isolates N2 rather than
       re-testing the exclusion the second existing test already holds.
@@ -342,12 +346,95 @@ test "$c" = "1" || {
 grep -q 'every basename this run wrote into' "$V" || {
   echo "BLOCKED: the run-scoped exclusion set's declaration is gone."; exit 1; }
 
-#     The TEST baseline is ASSERTED, not printed.
-t=$(grep -c 'EP2 retention:' tests/unit/dream-validate.test.js)
+#     The TEST baseline is ASSERTED BY EXACT TITLE, not by a prefix count. A count
+#     of five is also satisfied by five DIFFERENT tests — including an N2 test
+#     somebody already added under another name, which would dispatch you to do
+#     work that exists.
+T=tests/unit/dream-validate.test.js
+while IFS= read -r want; do
+  n=$(grep -c -F "$want" "$T")
+  test "$n" = "1" || {
+    echo "BLOCKED: expected exactly 1 test titled:"; echo "           $want"
+    echo "         found $n. The baseline this spec was written against has moved."
+    echo "         STOP AND REPORT."; exit 1; }
+done <<'TITLES'
+EP2 retention: the prune evicts by (mtimeMs, name), not by filename alone
+EP2 retention: a run NEVER evicts its own copies, even when they are the oldest by both keys
+EP2 retention: above the cap, the cap YIELDS; a zero-redaction run leaves the overshoot
+EP2 retention: above the cap from a FULL directory, the run keeps exactly its own copies
+EP2 retention: a B5/B5a fall-through never prunes, and the prune stays inside redacted/
+TITLES
+t=$(grep -c 'EP2 retention:' "$T")
 test "$t" = "5" || {
-  echo "BLOCKED: found $t 'EP2 retention:' tests, want exactly 5 before your change."
-  echo "         Someone has already added or removed one. STOP AND REPORT."; exit 1; }
-echo "ok: call site, exclusion set and the 5-test baseline all as this spec states"
+  echo "BLOCKED: found $t 'EP2 retention:' tests, want exactly 5 — a SIXTH exists."
+  echo "         Somebody may already have written this WP's test. STOP AND REPORT."; exit 1; }
+
+#     The HELPERS step 1 and your new test depend on. A refactor that renames these
+#     leaves every grep above green and blocks you after you have started.
+for h in 'function redactFixture(' 'const RUN =' 'const lsRedacted =' \
+         'const CAP = 50;' 'function seedRedacted(' 'function seedNotes('; do
+  grep -qF "$h" "$T" || {
+    echo "BLOCKED: the helper '$h' this spec builds on is gone from $T."
+    echo "         STOP AND REPORT — do not re-create it."; exit 1; }
+done
+echo "ok: call site, exclusion set, the 5 exact titles and the 6 helpers all as stated"
+
+# 0d. THE CENTRAL CURRENT-STATE CLAIM, EXECUTED — not read, not trusted.
+#     This spec's whole reason to exist is "the isolated N2 mutation reddens
+#     nothing". That claim was executed on 2026-07-28 and it is executable by
+#     construction, so the dispatch rule this repo adopted (re-run every EXECUTABLE
+#     current-state claim) makes running it here mandatory rather than optional.
+#     If it has stopped being true, somebody has already given N2 a detector and
+#     this WP is either done or has changed shape.
+#
+#     WHY A dispatch STEP MAY WRITE TO src/ AT ALL, stated rather than assumed:
+#     it writes only under `git` supervision, it refuses to run unless the file is
+#     already clean, it restores with `git checkout --`, and it verifies the
+#     restore by BLOB HASH before continuing. Nothing is left behind and nothing
+#     uncommitted can be destroyed. A probe that cannot meet those four conditions
+#     does not belong in a dispatch step; this one does.
+git diff --quiet -- "$V" && git diff --cached --quiet -- "$V" || {
+  echo "BLOCKED: $V has uncommitted changes. This probe restores with"
+  echo "         'git checkout --', which would destroy them. Commit or stash first."
+  exit 1; }
+BEFORE=$(git hash-object "$V")
+
+python3 - "$V" <<'MUT'
+import sys
+p = sys.argv[1]
+s = open(p, encoding='utf-8').read()
+call = '  if (secretRedactions > 0) pruneRedactedOriginals(stateDir, redactedCreated);'
+inc  = '          secretRedactions += 1; // increments LAST, only after the scrub is staged'
+if s.count(call) != 1 or s.count(inc) != 1:
+    print('PROBE-ANCHOR-MISS'); sys.exit(1)
+s = s.replace(call + '\n', '')
+s = s.replace(inc, inc + '\n          pruneRedactedOriginals(stateDir, redactedCreated);')
+open(p, 'w', encoding='utf-8').write(s)
+MUT
+probe_applied=$?
+
+set +e
+node tests/run.js --test-name-pattern "EP2 retention" "$T" >/tmp/n2-probe.out 2>&1
+probe_exit=$?
+set -e
+
+git checkout -- "$V"
+AFTER=$(git hash-object "$V")
+test "$BEFORE" = "$AFTER" || {
+  echo "BLOCKED: $V did NOT restore to its original blob ($BEFORE -> $AFTER)."
+  echo "         Fix the tree by hand before doing anything else."; exit 1; }
+echo "ok: src/ restored, blob verified identical"
+
+test "$probe_applied" = "0" || {
+  echo "BLOCKED: the probe's anchors are gone — the code this spec describes has moved."
+  echo "         STOP AND REPORT."; exit 1; }
+test "$probe_exit" = "0" || {
+  echo "BLOCKED: the N2-only mutation REDDENED something. This spec's central"
+  echo "         Current-state claim ('N2 has no detector') is no longer true:"
+  sed -n '1,40p' /tmp/n2-probe.out
+  echo "         Somebody has given N2 a detector. STOP AND REPORT — this WP is"
+  echo "         either already done or has changed shape."; exit 1; }
+echo "ok: the isolated N2 mutation still reddens nothing — the gap is real and open"
 
 # 1. AC-2 — green on unmodified src/
 node tests/run.js --test-name-pattern "EP2 retention" tests/unit/dream-validate.test.js

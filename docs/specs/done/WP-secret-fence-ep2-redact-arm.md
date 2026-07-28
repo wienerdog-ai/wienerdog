@@ -4409,7 +4409,41 @@ both differences and names which side each stray id is on.*
 **Proven red in both directions, executed 2026-07-28** (probe copies of this file; the
 real file was not modified): removing the census row for **M-24b** ⇒ *"in the PAIRED
 table only: M-24b"*, exit 1. Adding a census row for a fabricated **M-99** ⇒ *"in the
-DATA table only: M-99"*, exit 1. Control on the unmodified file ⇒ exit 0. **A gate
+DATA table only: M-99"*, exit 1. Duplicating a census row ⇒ *"DUPLICATED in the DATA
+table: M-24b×2"*, exit 1. Control on the unmodified file ⇒ exit 0.
+
+**AND THE SEMANTIC PROBES, recorded HERE rather than only in the pull request, which
+is the point of writing them down at all.** The pairing checks *identity*; these check
+*meaning*, and a probe that lives only in a PR body is a probe the next editor cannot
+re-run. All executed 2026-07-28 on probe copies, all exit 1, control exit 0:
+
+- **invalid limb** — rewrite M-48's limb to `nonsense`. The vocabulary is closed; a
+  limb nobody defined is a row nobody can act on.
+- **dropped column** — delete a row's evidence cell. A row short of a column silently
+  drops the field the next check reads.
+- **gap → executed** — relabel M-48, evidence untouched. **This is the attack the rule
+  exists for**: an *uncovered* mutation recorded as covered, and its routed WP
+  suppressed. Caught on the positive-failure-count requirement, because `fail 0` is
+  not a mutation that reddened anything.
+- **gap → swept** — relabel M-48. A swept row may carry no local counts, and M-48's
+  `fail 0` is one.
+- **executed → gap**, and **executed → swept** — relabel M-23. A gap needs a
+  zero-failure run and a routed WP; a swept row may carry no counts at all.
+- **swept → executed**, and **swept → gap** — relabel M-7. An inherited verdict has
+  neither a positive failure count nor a zero-failure run.
+- **executed evidence gutted** — keep the limb, remove the counts and the reddened
+  target. A limb without its evidence is the coverage claim this census exists to stop.
+- **executed keeps a target but loses its counts** — keep `RED`, drop `fail N`. Naming
+  a target is not the same as showing it went red.
+
+*Deliberately a list and not a table: V-30 keys a table's schema on the nearest
+preceding heading, so a second table under this one would need its own schema entry
+and its own Checklist registration — machinery for a narrative record. The step caught
+the first draft of this block, which is the gate working.*
+
+**Thirteen probes, all red; the unmodified file green.** The six mislabel directions are
+enumerated deliberately: with three limbs there are exactly six ways to wear another
+limb's evidence, and the predicates are only *mutually exclusive* if all six fail. **A gate
 proven red in one direction only is half-proven**, and the second direction here is
 not the same second direction a step's non-vacuity proof needs — that one asks whether
 the check accepts the correct answer; this one asks whether it catches drift on the
@@ -6353,10 +6387,32 @@ const DATA_ROW_RULES = new Map([
     // cell 2 is the LIMB. Exactly this vocabulary, nothing else.
     limb: ["swept", "executed", "gap"],
     // cell 3 is the EVIDENCE, and what it must carry depends on the limb it claims.
+    //   MUTUALLY EXCLUSIVE, and round 12 is why. The first form required only that
+    //   an `executed` row carry "pass N, fail N" — which `fail 0` satisfies. So
+    //   relabelling the M-48 gap row to `executed`, keeping its REDDENED-NOTHING
+    //   evidence untouched, passed: an UNCOVERED mutation recorded as covered, and
+    //   its routed WP silently suppressed. Each limb now states what it must have
+    //   AND what it must not, so no row can wear another limb's evidence:
+    //     swept    inherited verdict, NO local counts at all
+    //     executed a POSITIVE failure count and a named reddened target
+    //     gap      a ZERO failure count, NO positive one, and a routed WP slug
+    //   Verified before shipping: every one of the 37 rows satisfies its own limb
+    //   and FAILS the other two, so the three predicates partition the table.
     evidence: {
-      swept: [/#122/, "an inherited verdict must name the PR whose sweep recorded it"],
-      executed: [/pass \d+, fail \d+/, "an executed row must carry its pass/fail counts"],
-      gap: [/WP-[a-z0-9]+(-[a-z0-9]+)*/, "a gap row must name the WP routed to close it"],
+      swept: [
+        [[/#122/, "must name the PR whose sweep recorded it"]],
+        [[/fail \d/, "must NOT carry a local pass/fail count — a swept row's verdict is inherited, not measured here"]],
+      ],
+      executed: [
+        [[/fail [1-9][0-9]*/, "must carry a POSITIVE failure count — `fail 0` is not a mutation that reddened anything"],
+         [/\bRED\b/, "must name the target it reddened"]],
+        [],
+      ],
+      gap: [
+        [[/fail 0\b/, "must carry the zero-failure run that demonstrates the absence"],
+         [/WP-[a-z0-9]+(-[a-z0-9]+)*/, "must name the WP routed to close it"]],
+        [[/fail [1-9][0-9]*/, "must NOT carry a positive failure count — something went red, so this is not a gap"]],
+      ],
     },
   }],
 ]);
@@ -6388,8 +6444,14 @@ for (let i = 0; i < lines.length; i++) {
         if (cells.length !== rule.cols) fail(where + " has " + cells.length + " cells, want " + rule.cols + ". A row short of a column silently drops the field the next check reads.");
         const limb = norm(cells[1]);
         if (!rule.limb.includes(limb)) fail(where + " has limb " + JSON.stringify(limb) + ", which is not one of: " + rule.limb.join(" | ") + ". The vocabulary is closed — a limb nobody defined is a row nobody can act on.");
-        const [pat, why] = rule.evidence[limb];
-        if (!pat.test(cells[2] || "")) fail(where + " claims limb " + JSON.stringify(limb) + " but its evidence cell does not satisfy " + pat + " — " + why + ". A limb without its evidence is the coverage claim this census exists to stop.");
+        const ev = cells[2] || "";
+        const [must, mustNot] = rule.evidence[limb];
+        for (const [pat, why] of must) {
+          if (!pat.test(ev)) fail(where + " claims limb " + JSON.stringify(limb) + " but its evidence cell does not satisfy " + pat + " — it " + why + ". A limb without its evidence is the coverage claim this census exists to stop.");
+        }
+        for (const [pat, why] of mustNot) {
+          if (pat.test(ev)) fail(where + " claims limb " + JSON.stringify(limb) + " but its evidence cell matches " + pat + ", which that limb forbids — it " + why + ". The limbs are MUTUALLY EXCLUSIVE: a row wearing another limb's evidence is a mislabel, and a mislabel is how an uncovered mutation gets recorded as covered.");
+        }
       }
     } else {
       for (let j = i + 2; j < lines.length && /^\|/.test(lines[j]); j++) {
