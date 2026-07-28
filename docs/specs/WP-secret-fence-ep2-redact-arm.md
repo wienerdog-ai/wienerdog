@@ -2921,12 +2921,16 @@ above; the rule applies identically to rows B4, B5, B10, B6, B7 and B13.
       **carry** of the detector leg's two ADR digests rather than a new check and
       why an id change was required; **ADR-0034's own digest-disposition list in
       its 2026-07-28 errata block**, which names the same carry from the ADR
-      side; and **row F8 of the detector leg's frozen-surfaces table**, which is
-      the deciding surface for what that spec's archival retired and what it did
-      not. **Both literals are carried unchanged from the detector leg and this
-      document recomputes neither** — a mirror that re-derived them would be
-      asserting the ADR against itself. The two digests themselves are decided by
-      ADR-0034's bytes and by nothing in this file.
+      side; and **row F8 of the detector leg's frozen-surfaces table**, which
+      records the same carry as a reader's map and decides nothing. **This step's
+      own two literals are the guarantee** — no table, comment or bullet holds
+      any part of it, which is why editing any of those three mirrors weakens
+      nothing. **Both literals are carried unchanged from the detector leg and
+      this document recomputes neither**; a mirror that re-derived them would be
+      asserting the ADR against itself. The digests themselves are decided by
+      ADR-0034's bytes and by nothing in this file. The retirement invariant in
+      V-34's comment is an instruction to whoever edits the step, not a control,
+      and it is deliberately not mirrored anywhere.
 - [ ] **D1/D2** mirrors: the Context section's second and third paragraphs (which
       describe the problem's size in words, deliberately without digits); the
       B12/B13 growth-story paragraph after Table B, which cites D2 rather than
@@ -4641,6 +4645,32 @@ console.log("V-16 P6 ok: Authorization: Basic is quarantine and its body is full
 # V-34 THE OWNER-RATIFIED ADR IS UNEDITED. A PREFLIGHT STOP, like V-16, and for
 #      the same kind of reason: it checks something this WP depends on and does
 #      not own.
+#
+#      THE RETIREMENT INVARIANT, stated here because this is the check that
+#      performs a carry and this is where anyone about to undo one is reading:
+#
+#        A CHECK RETIRES ONLY WHEN A LIVE CHECK CARRIES ITS GUARANTEE, AND THE
+#        CARRYING CHECK NAMES WHAT IT CARRIES.
+#
+#      That is the whole rule. "Its spec reached `Done`" is not a reason, and an
+#      archived file is not a place a guarantee can live. This step is the second
+#      half of the rule discharged for ADR-0034's two digests: it names what it
+#      carries in the paragraph below. **Deleting this step retires nothing —
+#      it drops the guarantee**, because after the detector leg was archived
+#      there is no other holder.
+#      Round 3 of the gate moved this sentence here from a table in the archived
+#      leg that described the arrangement. The reasoning is recorded there and is
+#      worth one line: a narrative table naming itself the authority over
+#      retirement is an unguarded control, and the repair offered was a live check
+#      pinning the table. We removed the authority instead — the guarantees live
+#      in the checks that carry them and are pinned by their own literals, so the
+#      table went back to being a reader's map and the one load-bearing sentence
+#      came here. A gate over the table that describes gates is a map of a map.
+#      NOTE WHAT THIS COMMENT IS AND IS NOT: it is an instruction to whoever
+#      edits this step, not a control, and it is not itself under any digest —
+#      this leg's verification block is digested by nothing. That is deliberate
+#      and consistent with the paragraph above. The controls in this step are the
+#      two literals below.
 #      WHY THIS STEP EXISTS AT ALL, and it is not a new idea — it is a CARRY.
 #      These two digests were verification step V-21 of the detector leg. That
 #      leg is `status: Done` and filed under docs/specs/done/, and its
@@ -4651,8 +4681,9 @@ console.log("V-16 P6 ok: Authorization: Basic is quarantine and its body is full
 #      Decisions — or to the five conditions that say only the architect may
 #      touch a Decision's prose, and only to repair a dangling cross-reference —
 #      passing every check in the active suite. Found in the 2026-07-28 fix
-#      round; the detector leg's frozen-surfaces table records the same carry as
-#      its row F8, which is the one row of that table that does NOT retire.
+#      round; the detector leg's frozen-surfaces table records the same carry at
+#      its row F8, as a reader's map — that row holds nothing and this step needs
+#      nothing from it.
 #      **BOTH LITERALS ARE CARRIED UNCHANGED AND WERE NOT RECOMPUTED.** They are
 #      byte-identical to the values the detector leg carried; the 2026-07-28
 #      errata pass verified both were unmoved by it, which is what made the carry

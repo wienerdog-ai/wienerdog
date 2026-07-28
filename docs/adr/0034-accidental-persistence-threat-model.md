@@ -1022,10 +1022,12 @@ recomputes is how a stale pin survives:
   `E3_EXPECT`, `ER_EXPECT` and `SWEEP_EXPECT`. **Deliberately NOT recomputed;
   retired with the spec.** Leg 1 merged at `72f3e46`, is `status: Done` at
   `docs/specs/done/WP-secret-fence-two-tier-detector.md`, and its M-blocks are
-  the dated evidence the shipped work was accepted against. **What is frozen
-  there, and what succeeds each frozen surface, is decided in that spec's
-  frozen-surfaces table (Table F) and is not re-enumerated here** — these five
-  literals are its row **F7**, whose live successor is leg 2's D1/D2 and V-17.
+  the dated evidence the shipped work was accepted against. **The authority for
+  retiring these five is that leg 2's V-17 holds the same guarantee and pins its
+  own literals for it** — it greps this file's E1/E3 figures and that leg's
+  D1/D2 rows, on both sides, and it runs. That spec's frozen-surfaces table
+  (row **F7**) is a reader's map of the arrangement and decides nothing; the
+  rule the arrangement follows is stated at leg 2's **V-34**.
   `ER_EXPECT` would have moved on the three rows above alone: the V-15 note
   anticipating "adding ER-7 changes this digest" is that anticipation arriving.
 - **V-21's two digests** (this file's `## Decision` … `## The measured evidence`
@@ -1037,10 +1039,11 @@ recomputes is how a stale pin survives:
   Decisions and over the architect-only amendment licence — archiving that spec
   would have left an unauthorized edit to either passing the whole active suite.
   **Both literals move unchanged into leg 2 as verification step V-34**;
-  neither was recomputed. Table F row **F8** records the same carry, and it is
-  the one row of that table that does not retire — the rule being that a check
-  retires only when something else carries its guarantee, never merely because
-  its spec reached `Done`.
+  neither was recomputed. **The guarantee now lives in V-34's two literals and
+  nowhere else** — not in this bullet, and not in the frozen-surfaces table row
+  **F8** that also records the carry, which is a reader's map. The rule V-34
+  discharges is stated in V-34's own comment: *a check retires only when a live
+  check carries its guarantee, and the carrying check names what it carries.*
 - **V-18**, the ratified threat-model section mirrored in both legs, and
   **V-11**, over the owner's two signature lines — **untouched and verified**.
   Neither may ever be recomputed by anyone.
