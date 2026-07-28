@@ -26,6 +26,50 @@ round 2 (ask it to verify its own prior findings are fixed AND attack the new
 mechanisms) → repeat until clean → owner sign-off → specs move to Ready.
 ```
 
+## Dispatch-time re-verification (the last gate before an implementer starts)
+
+**`Ready` is not the same as "still true". Before a WP is handed to an
+implementer, re-run its executable Current-state claims. A stale one blocks
+dispatch and routes the spec back to wd-architect — it is never something the
+implementer works around.**
+
+The claims this covers are the ones the spec states as fact about the tree the
+implementer will find: line-number citations, `grep` sentinels, digests over
+files the WP does not own, "today's behaviour" descriptions, and permitted-removal
+bounds. The check is exactly the spec's own commands, run on current `main`. No
+new mechanism, no tooling, no schedule — this is one step in the dispatch
+conversation, stated once, here.
+
+**Why it exists.** A spec's Current-state section is verified once, at design
+time. Every dependency that merges between then and dispatch can falsify it,
+silently, without anyone editing the spec. Measured on the `secret-fence` epic:
+the specs count **seven** capture-drift instances in the epic
+(`docs/specs/done/WP-secret-fence-two-tier-detector.md:320`,
+`docs/specs/done/WP-secret-fence-ep2-redact-arm.md:618`), and the `0.11.0` batch
+merging on 2026-07-26–27 moved `main` underneath **both** legs at once — round 1
+of the design gate then found **seven stale citations across the two legs**, all
+from that single event and none of them a design error
+(`docs/specs/done/WP-secret-fence-two-tier-detector.md:326`).
+
+**And one of them was not cosmetic.** `WP-stance-authority-containment` rewrote
+`docs/THREAT-MODEL.md`'s stance clause, so the ep2 spec's V-27 sentinel grepped
+for a sentence that no longer existed. V-27 exited 1 **before an implementer
+could write a line**, while that spec's own Deliverables row and V-27's own
+failure text both forbade touching the region that would fix it — a hard
+deadlock, dispatched (`docs/specs/done/WP-secret-fence-ep2-redact-arm.md:629`).
+Re-running the claims at dispatch turns that into a five-minute architect edit
+instead of a blocked session.
+
+**Two rules follow.**
+
+- **Re-run, do not re-read.** A claim is stale or it is not; reading the spec
+  again cannot tell you which. If a claim has no runnable form, it was not an
+  executable Current-state claim and this gate does not cover it.
+- **A stale claim goes back to the architect, never to the implementer.** The
+  spec's Deliverables table is a permission boundary, so the file that would fix
+  a rotted citation is usually outside the implementer's reach — which is what
+  made the case above a deadlock rather than an inconvenience.
+
 ## How to run it
 
 - Design review: `/codex:adversarial-review` with focus text naming the exact
