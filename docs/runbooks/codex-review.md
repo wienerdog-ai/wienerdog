@@ -155,6 +155,14 @@ instead of a blocked session.
   job) and keep the body to the template plus the current round. **And note where
   the durable record belongs**: not the PR at all, but the spec, ADR or runbook the
   round changed, where the next reader can re-run it.
+- **Run a gate from a script, not from an inline shell one-liner.** A pattern
+  passed through nested quotes — `echo "… $(grep -E "$PAT" … ) …"` — silently
+  changes what the gate matched, and the result looks like the gate moved.
+  Measured on PR #124 round 14: that shape reported the pinned owner-signature
+  digest as MOVED when it was byte-identical, and that digest is one nobody may
+  ever recompute. **A false red on a never-recompute pin is one keystroke from
+  destroying it.** Put the gate in a file, quote once, and compare against the
+  literal there.
 - **Prove a new gate in BOTH directions.** Red-before-work shows a check is not
   vacuous; it does **not** show the check is not *over-strict*, because a check
   that rejects the correct answer is also red before the work and looks identical

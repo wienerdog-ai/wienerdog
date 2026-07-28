@@ -440,35 +440,54 @@ git diff --quiet -- "$V" && git diff --cached --quiet -- "$V" || {
   echo "BLOCKED: $V has uncommitted changes. This probe restores with"
   echo "         'git checkout --', which would destroy them. Commit or stash first."
   exit 1; }
-BEFORE=$(git hash-object "$V")
-OUT=$(mktemp -t n2probe)          # unique per run; never a shared /tmp path
+DEPLOYED_BEFORE=$(git hash-object "$V")
 
-#     TRAPS FIRST — INSTALLED BEFORE THE FIRST WRITE, CLEARED ONLY AFTER THE
-#     BLOB-VERIFIED RESTORE. This is not tidiness. **This checkout IS production
-#     for the machine that runs it**: the deploy symlink resolves into this tree,
-#     so a mutation stranded in `validate.js` by a Ctrl-C between the write and the
-#     restore is a LIVE INCIDENT — the next scheduled dream would prune with the
-#     wrong timing against the user's real vault. An untrapped probe turns one
-#     interrupted keystroke into that.
-#     (A disposable `git worktree` would dissolve the src/-safety question
-#     entirely and is the cleaner shape where it can be run; it is not used here
-#     because this spec's author could not EXECUTE that variant in their
-#     environment, and an unexecuted probe is exactly what this batch keeps
-#     rejecting. The trap form below was run in all four cases — see the PR.)
-restore() {
-  git checkout -- "$V" 2>/dev/null || true
-  rm -f "$OUT"
+#     ISOLATION: THE PROBE NEVER WRITES TO THIS TREE. It runs in a disposable
+#     `git worktree`, and that is a safety requirement rather than a preference.
+#     **This checkout is what the deploy symlink resolves to.** A probe that
+#     mutates `validate.js` here opens a window in which (a) the SCHEDULED DREAM
+#     can fire and LOAD the mutation into a real run — per-call prune timing
+#     against a real vault's quarantine copies, irreversible — and (b) a SIGKILL
+#     or a power loss strands it beyond the reach of any trap. Traps cannot close
+#     either one; not touching the live tree closes both by construction.
+#     *An earlier draft of this spec used traps on an in-place edit and justified
+#     it with "the worktree variant could not be executed here". That was wrong:
+#     what had failed was a single compound shell command rejected by the author's
+#     own tooling for its SHAPE, with the rejection literally saying to break it
+#     into separate commands — which was never retried. Re-examined and executed in
+#     round 14: `git worktree add --detach` works from any checkout, and the
+#     retention suite runs in a BARE worktree with NO `node_modules` at all
+#     (`tests/run.js` shells `node --test`; nothing on this path imports the
+#     project's one runtime dependency), so no install step is needed. Measured,
+#     not assumed.*
+WTBASE=$(mktemp -d)
+WT="$WTBASE/probe"
+OUT=$(mktemp -t n2probe)
+
+#     Cleanup is NOT suppressed. A worktree left behind is inert — the deployed
+#     tree was never written — but a cleanup failure you did not NOTICE is how
+#     "cleaned up" becomes a false report.
+cleanup() {
+  if [ -d "$WT" ]; then
+    git worktree remove --force "$WT" || {
+      echo "FATAL: could not remove the probe worktree at $WT."
+      echo "       It is INERT — the deployed tree was never written — but remove"
+      echo "       it by hand before continuing."
+      rm -f "$OUT"; exit 3; }
+  fi
+  rm -rf "$WTBASE"; rm -f "$OUT"
 }
-trap 'restore; echo "PROBE INTERRUPTED — src/ restored by trap"; exit 130' INT TERM
-trap 'restore' EXIT
+trap 'cleanup; echo "PROBE INTERRUPTED — nothing in the deployed tree was ever written"; exit 130' INT TERM
+trap cleanup EXIT
+
+git worktree add --detach "$WT" HEAD >/dev/null
 
 #     `set +e` MUST COVER THE MUTATION HEREDOC TOO, not just the test run. Under
-#     the block's `set -euo pipefail` a python that exits 1 kills the script BEFORE
-#     `probe_applied=$?`, so the anchor-miss diagnosis below would be unreachable
-#     dead text — the exact must_not class the parent spec's gate-polarity preamble
-#     names. The earlier draft wrapped the neighbouring command and not this one.
+#     this block's `set -euo pipefail` a python exiting 1 would kill the script
+#     BEFORE `probe_applied=$?`, making the anchor-miss diagnosis below unreachable
+#     dead text — a `must_not` the parent spec's gate-polarity preamble names.
 set +e
-python3 - "$V" <<'MUT'
+python3 - "$WT/$V" <<'MUT'
 import sys
 p = sys.argv[1]
 s = open(p, encoding='utf-8').read()
@@ -482,16 +501,9 @@ open(p, 'w', encoding='utf-8').write(s)
 MUT
 probe_applied=$?
 
-node tests/run.js --test-name-pattern "EP2 retention" "$T" >"$OUT" 2>&1
+( cd "$WT" && node tests/run.js --test-name-pattern "EP2 retention" "$T" ) >"$OUT" 2>&1
 probe_exit=$?
 set -e
-
-git checkout -- "$V"
-AFTER=$(git hash-object "$V")
-test "$BEFORE" = "$AFTER" || {
-  echo "BLOCKED: $V did NOT restore to its original blob ($BEFORE -> $AFTER)."
-  echo "         Fix the tree by hand before doing anything else."; exit 1; }
-echo "ok: src/ restored, blob verified identical"
 
 test "$probe_applied" = "0" || {
   echo "BLOCKED: the probe's anchors are gone — the code this spec describes has moved."
@@ -503,6 +515,15 @@ test "$probe_exit" = "0" || {
   echo "         Somebody has given N2 a detector. STOP AND REPORT — this WP is"
   echo "         either already done or has changed shape."; exit 1; }
 echo "ok: the isolated N2 mutation still reddens nothing — the gap is real and open"
+
+#     And the deployed tree is asserted untouched. It should be impossible for it
+#     to have changed; assert it anyway, because "impossible by construction" is
+#     the class of claim this whole work package exists to stop trusting.
+DEPLOYED_AFTER=$(git hash-object "$V")
+test "$DEPLOYED_BEFORE" = "$DEPLOYED_AFTER" || {
+  echo "FATAL: the DEPLOYED $V changed during the probe. It should never have been"
+  echo "       written at all. Investigate before running anything else."; exit 2; }
+echo "ok: deployed tree byte-identical throughout ($DEPLOYED_AFTER)"
 
 # 1. AC-2 — green on unmodified src/
 node tests/run.js --test-name-pattern "EP2 retention" tests/unit/dream-validate.test.js

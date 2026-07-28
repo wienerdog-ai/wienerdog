@@ -6400,13 +6400,36 @@ const DATA_ROW_RULES = new Map([
     //   and FAILS the other two, so the three predicates partition the table.
     evidence: {
       swept: [
-        [[/#122/, "must name the PR whose sweep recorded it"]],
-        [[/fail \d/, "must NOT carry a local pass/fail count — a swept row's verdict is inherited, not measured here"]],
+        [[/#122/, "must name the PR whose sweep recorded it"],
+         // AND THE INHERITED VERDICT MUST BE THE SUCCESSFUL ONE, in the exact form
+         // #122 recorded. Round 14: the rule required the reference and forbade a
+         // local count, but never asked what the inherited verdict SAID — so
+         // flipping a row's `RED (ok)` to `GREEN (missed)` left this step green
+         // while it claimed to have validated the row's meaning. A row that
+         // inherits a FAILURE is not a covered row.
+         [/RED \(ok\)/, "must carry the inherited verdict in #122's recorded form, `RED (ok)` — a swept row asserts the mutation WAS caught"]],
+        [[/fail \d/, "must NOT carry a local pass/fail count — a swept row's verdict is inherited, not measured here"],
+         // Scoped to the VERDICT FORM, not to the word: `executed` and `gap` rows
+         // legitimately say "case 1 green" when reporting which cases held, and a
+         // blanket ban on the word would reject honest per-case reporting. This
+         // matches a verdict token followed by its parenthetical, which is the
+         // shape #122's sweep uses and the shape the attack forged.
+         [/\b(?:GREEN|MISSED|UNCAUGHT|SURVIVED)\s*\(|\((?:missed|uncaught|survived|green)\)/i,
+          "must NOT record a contradictory verdict — a swept row whose inherited result was anything but caught is an uncovered mutation wearing a covered row's limb"]],
       ],
       executed: [
         [[/fail [1-9][0-9]*/, "must carry a POSITIVE failure count — `fail 0` is not a mutation that reddened anything"],
          [/\bRED\b/, "must name the target it reddened"]],
-        [],
+        // THE SYMMETRIC HOLE, found by PROBING rather than by reading (round 14):
+        // an executed row could carry `RED`, a positive failure count AND a claim
+        // that the run passed — self-contradictory, and green. Non-detection is
+        // asserted as PHRASES, never as the bare word "green", because these rows
+        // legitimately report which cases stayed green ("cases 3 and 4 also red,
+        // case 1 green"). Measured across all 37 rows before enforcing: zero hits.
+        // `gap` is deliberately exempt — it is the one limb whose whole content IS
+        // a non-detection claim.
+        [[/\b(?:survived|uncaught|not caught|nothing failed|everything passed|all (?:tests )?passed|all green|\(missed\))\b/i,
+          "must NOT claim the run was not caught — an executed row asserts a mutation REDDENED something, and a row asserting both is a mislabel a reader cannot resolve"]],
       ],
       gap: [
         [[/fail 0\b/, "must carry the zero-failure run that demonstrates the absence"],
