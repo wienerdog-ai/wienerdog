@@ -362,8 +362,10 @@ function ensureDarwinEntryRegistered(loader, uid, label, plistPath, o)
 ```js
   const printed = loader(['launchctl', 'print', `gui/${uid}/${label}`]);
   const isLoaded = !!printed && printed.status === 0;
-  // (a) verified skip — unchanged bytes AND the live record matches canonical
-  if (!o.changed && isLoaded && darwinLoadedMatches(printed.stdout || '', o.expect)) return true;
+  // (a) THE LIVE MATCH WINS — regardless of o.changed. The readback is the
+  //     evidence; `changed` is a statement about a FILE and must not force the
+  //     teardown of a record that already is what we would register.
+  if (isLoaded && darwinLoadedMatches(printed.stdout || '', o.expect)) return true;
   // (b) non-destructive attempt first (ADR-0018 ordering, preserved)
   if (loader(['launchctl', 'bootstrap', `gui/${uid}`, plistPath]).status === 0) return true;
   // (c) TEARDOWN ONLY WITH INDEPENDENT EVIDENCE THE LABEL IS LOADED
@@ -430,6 +432,34 @@ register changes no file and leaves the OS in the same state. What changes is th
 *call count* of a re-register. Table A's third column is the honest statement of
 that, and AC5 pins it per platform.
 
+### Table A1 — the skip decision, and why `changed` is not part of it (canonical)
+
+A round-5 draft gated the skip on `!o.changed`. **That was backwards**, and the
+round-5 bound exposed it: the bound ("anything reaching a teardown is already
+divergent") is a claim about the **readback**, while the gate consulted the
+**file**. `ensureEntry` returns `changed = true` for file-side reasons as mild as a
+**missing manifest entry** — with the disk plist canonical and the loaded record a
+complete live match. Such a healthy record went on to bootstrap-fail → `bootout` →
+replace, and a transient replacement failure then destroyed a working schedule.
+
+| Condition | Decision |
+|---|---|
+| `print` exits 0 **and** every Table A2 field matches | **skip the OS call — regardless of `changed`** |
+| anything else | attempt (step b), then teardown only under step (c)'s evidence |
+
+**What bookkeeping is still allowed on the skip path, exactly.** `ensureEntry` has
+already run before the helper is called, so its two **non-OS-mutating** side
+effects stand and are intended: the canonical bytes are written to disk, and the
+manifest gains its `scheduler-entry` record. Nothing else may happen on that path
+— no `launchctl` call of any kind, no status-cache write, no `onBeforeTeardown`.
+That is precisely what makes a `changed = true` + live-match register safe: the
+file and manifest converge to canonical while the OS is left alone, because the OS
+already holds what we would register.
+
+**Gate 3 (`!o.changed`) is DELETED**, along with its mutation row. The RB1 fixture
+(a `changed = true` register whose loaded record matches the NEW canonical argv)
+**flips from must-attempt to must-skip** — see AC1.
+
 ### Table A2 — what the verified skip compares (canonical)
 
 The round-4 contract compared the argv alone; CX-1 showed that proves **argv
@@ -444,10 +474,11 @@ canonical, because every plist Wienerdog has ever written carried the same one.
 | Canonical field | Compared? | How / why |
 |---|---|---|
 | `ProgramArguments` | **yes** | full array equality (`launchdLoadedArgs`) |
-| `StartCalendarInterval` Hour/Minute | **yes** | from the `descriptor` block of the trigger whose `stream` is `com.apple.launchd.calendarinterval` (`launchdLoadedCalendar`). **This is the CX-1 fix** — a record differing only in firing time previously passed |
-| `EnvironmentVariables` (the 7 `scheduledEnvPairs`) | **yes, by CONTAINMENT** | every canonical pair must be present with its value; launchd-injected keys (`OSLogRateLimit`, `XPC_SERVICE_NAME` — §7b) are ignored. Set-equality would never match |
+| `StartCalendarInterval` Minute | **yes** | from the `descriptor` block of the trigger whose `stream` is `com.apple.launchd.calendarinterval` (`launchdLoadedCalendar`) |
+| `StartCalendarInterval` Hour — **OPTIONAL by entry kind** | **yes**, as `hour: number\|null` | The per-job plist renders `Hour`; **`catchupPlist` renders `Minute` only, with no `Hour` key** (`generators.js:410-416`, and the live record shows `"Minute" => 0` alone). So `hour: null` means "the `Hour` key must be **ABSENT**" — it **matches** an absent key and **REFUSES** a present one. `null` is **not** a wildcard: `Hour 0` + `Minute 0` is *daily at midnight*, `Minute 0` alone is *hourly at :00* — two different schedules, and a present `"Hour" => 0` on a catch-up record must fail the match |
+| `EnvironmentVariables` (the 7 `scheduledEnvPairs`) | **yes, by CONTAINMENT, with the EMPTY STRING as a real value** | every canonical pair must be present with its value; launchd-injected keys (`OSLogRateLimit`, `XPC_SERVICE_NAME` — §7b) are ignored. Set-equality would never match. **Five of the seven canonical pairs are the ambient-scrub bindings and render as a `KEY =>` line with nothing after the arrow** (§7b fact 4) — a parser that skipped valueless lines would drop `NODE_OPTIONS`, `NODE_PATH`, `CLAUDE_CONFIG_DIR`, `CODEX_HOME` and `ANTHROPIC_API_KEY`, and would then grant a skip to a record **missing the entire scrub**. such a line parses to `[KEY, '']` and `''` is compared as a value |
 | `Label` | not compared | it is the *lookup key* — the record was fetched by it |
-| `ProcessType`, `RunAtLoad` | not compared | renderer **constants** (`Background`; `true` on catch-up) — cannot vary between two canonical renders |
+| `ProcessType`, `RunAtLoad` | not compared | renderer **constants** (`Background`; `true` on catch-up) — cannot vary between two canonical renders. **The "constant" claim is executed, not asserted:** `git log -S "ProcessType" -- src/scheduler/generators.js` and the same for `RunAtLoad` each return exactly one commit, `ae7720e` (WP-013, where the renderers were introduced) — neither literal has changed since, so no plist Wienerdog has ever written carries a different value |
 | `StandardOutPath` / `StandardErrorPath` | not compared | derived from `<core>/logs/<name>`; a moved core changes the launcher and descriptor paths, which **are** in the argv, so divergence is caught transitively |
 
 **Any block that fails to parse ⇒ no skip.** Same fail-safe direction as the argv:
@@ -460,9 +491,10 @@ parser mismatches, which means attempt.
 One behavior per row; **Trigger** names the guarantee destroyed, **Patch** is the
 edit. No ordinals. Assert the pattern selected exactly one named subtest.
 
-The darwin rows were **re-derived as one unit** — three times: after the full-argv
-comparison landed, after the owner-directed rollback amendment, and again after
-Table A2 widened the comparison to the calendar and env blocks. Not
+The darwin rows were **re-derived as one unit** — four times: after the full-argv
+comparison landed, after the owner-directed rollback amendment, after Table A2
+widened the comparison to the calendar and env blocks, and again after Table A1
+made the live match win over `changed`. Not
 adjusted row by row. The skip gate is three independent conditions, each with its
 own row so no mutation removes two at once; step (d)'s four properties each have
 their own row; and each row names the fixture that provably executes the mutated
@@ -473,9 +505,13 @@ branch (the recurring failure mode in this chain — see the gate-3 row).
 | darwin register cannot replace a loaded record | drop the teardown branch from `ensureDarwinEntryRegistered` | T1 |
 | darwin tears down without evidence the label is loaded | change the teardown guard to `if (false) return false;` — always tear down after a failed bootstrap | T2 |
 | the pre-destructive marker stops preceding the teardown | move `onBeforeTeardown()` below the `bootout` | **T1** — it is the only fixture that reaches a teardown |
-| darwin skips regardless of what is loaded (gate 1: `isLoaded`) | change the skip clause to `if (!o.changed && darwinLoadedMatches(…)) return true;` — drop the `isLoaded` conjunct | T3 case (iv) |
-| darwin skips regardless of the record's content (gate 2: the comparison) | change the skip clause to `if (!o.changed && isLoaded) return true;` — drop the comparison | T3 cases (ii), (iii), (v) |
-| darwin skips a changed file (gate 3: `!o.changed`) | drop the `!o.changed` conjunct | **T1** — **only because AC1 pins T1's `print` stdout to a record whose argv equals the NEW canonical** (see AC1). With an unpinned or stale stdout the comparison fails anyway and the mutated clause is false regardless, so the row would be vacuous — the RB1 finding |
+| darwin skips regardless of what is loaded (gate 1: `isLoaded`) | change the skip clause to `if (darwinLoadedMatches(…)) return true;` — drop the `isLoaded` conjunct | T3 case (iv) |
+| darwin skips regardless of the record's content (gate 2: the comparison) | change the skip clause to `if (isLoaded) return true;` — drop the comparison | T3 cases (ii), (iii), (v) |
+| **the live match stops winning over `changed`** (Table A1) | re-add the `!o.changed` conjunct to the skip clause | **T1** — its loaded record matches canonical while `changed` is true, so the mutated gate forces it to a teardown |
+| a healthy record is torn down over file-side bookkeeping | make the skip path also call `onBeforeTeardown()` or any `launchctl` verb | T1 (asserts exactly one call, the `print`) |
+| the catch-up `Hour` expectation becomes a wildcard | treat `expect.hour === null` as matching any loaded `Hour` | **T3 case (xii)** — a catch-up record carrying `"Hour" => 0` must REFUSE |
+| the catch-up shape loses its skip | expect `hour: 0` for catch-up instead of `hour: null` | **T3 case (xi)** — the healthy catch-up record would be attempted, not skipped |
+| the env parser drops valueless lines | skip `KEY =>` lines with nothing after the arrow | **T3 case (xiii)** — a record missing the whole ambient scrub would be skipped |
 | rollback does not restore the prior plist | delete the `fs.writeFileSync(plistPath, o.priorBytes)` line from step (d) | T2b |
 | rollback restores the file but not the record | delete the trailing `bootstrap` from step (d) | T2b |
 | rollback reports the failed replacement as success | make step (d) `return true` after a successful restore-bootstrap | T2b |
@@ -513,7 +549,8 @@ rounds 2-3, where an unregistered Deliverables cell shipped a wrong test set):
 - [ ] Acceptance criteria AC1-AC5 (rows 1-3), AC2's rollback set, AC6 (the four changed assertions), AC7 (row 4 preservation), AC8 (the marker), AC11 (D5)
 - [ ] Verification commands V2-V6
 - [ ] Table B rows, each naming its Table A / A2 row
-- [ ] **(+r5)** Current state §7b (the executed readback evidence behind Table A2) and Table A2 itself
+- [ ] **(+r5)** Current state §7b (the executed readback evidence behind Table A2 — four facts) and Table A2 itself
+- [ ] **(+r6)** **Table A1** (the skip decision tree and the allowed bookkeeping) — mirrored by the contract body's step (a), D1b, AC1's Table A1 fixture, AC5's recount, and the Table B live-match rows
 - [ ] Test index rows T1, T2, T2b, T3-T7
 - [ ] The banner's cross-spec mapping table — **both** macOS sites map to that spec's Table C row 5
 - [ ] Definition of done items 5 (that spec's 0a) and 6 (the ADR signature gate)
@@ -570,7 +607,8 @@ filesystem access, a spawn or a `require`, and neither throws — the same contr
 - `launchdLoadedEnv(stdout)` → `Map<string,string>|null`. Find the block whose
   **trimmed line is exactly** `environment = {` — never a suffix match, because
   `inherited environment = {` and `default environment = {` precede it (§7b fact 2)
-  — and parse its `KEY => value` lines, where an empty value is the empty string.
+  — and parse its `KEY => value` lines. **a `KEY =>` line with nothing after the arrow is a
+  valid pair whose value is the empty string** — never a skipped line (§7b fact 4).
   Unparseable ⇒ `null`.
 
 `darwinLoadedMatches` then applies Table A2: argv equality, calendar equality, and
@@ -902,13 +940,18 @@ mock `process.platform` — and no test may touch a real OS scheduler
 - [ ] **AC1 (Table A row 1 — replace, AND the marker ordering).** darwin,
       `changed` true, loader: `print` exits 0, first `bootstrap` non-zero, rest 0.
       Calls in order: `print` → `bootstrap` → `bootout` → `bootstrap`; result
-      `loaded: true`. **`print`'s stdout MUST be pinned to a record whose
-      `arguments` block equals the NEW canonical argv** — the real state it models
-      is a plist deleted or corrupted on disk and rewritten while launchd still
-      held the correct record. Without that pin the gate-3 mutation row (drop
-      `!o.changed`) is vacuous: with `changed` true the loaded record would hold
-      the OLD argv, `darwinLoadedMatches` would be false, and the mutated clause
-      would be false anyway, so T1 would stay green (RB1).
+      `loaded: true`. **`print`'s stdout MUST be pinned to a record that does NOT
+      match canonical** (an OLD argv), so the replace path is genuinely reached.
+      **T1 additionally carries the Table A1 fixture, which flips a round-5
+      assertion:** the same register with `changed = true` but a `print` stdout
+      matching canonical **completely** (argv + calendar + env) must now
+      **SKIP** — exactly one call, the `print`, zero mutating calls, `loaded:
+      true`. A round-5 draft asserted the opposite ("must attempt") because the
+      skip was gated on `!o.changed`; Table A1 deletes that gate, and this is the
+      assertion that pins it. Add **Codex's fixture** alongside it: a register
+      whose `changed` is true only because the **manifest entry is missing**, with
+      the disk plist canonical and the loaded record a complete match ⇒ **zero
+      mutating calls**, and the manifest entry is still recorded.
       **Additionally assert that `state/scheduler-status.json`
       already existed at the moment of the `bootout` call** (a loader that stats
       the file at every call and records the observation), which is ADR-0018
@@ -978,7 +1021,18 @@ mock `process.platform` — and no test may touch a real OS scheduler
       **alongside launchd's injected `OSLogRateLimit`/`XPC_SERVICE_NAME`** ⇒
       **skipped** — the containment semantics of Table A2, which set-equality
       would have broken;
-      (x) any one of the three blocks is unparseable ⇒ attempted.
+      (x) any one of the three blocks is unparseable ⇒ attempted;
+      (xi) **the catch-up shape (CX-2)** — a healthy unchanged catch-up entry whose
+      loaded record carries `"Minute" => 0` and **no `Hour` key**, matched against
+      `hour: null` ⇒ **skipped**: one `print`, zero mutating calls. Without this the
+      catch-up leg loses its skip permanently and bootstraps on every sync;
+      (xii) the same catch-up record but carrying `"Hour" => 0` ⇒ **attempted** —
+      `hour: null` refuses a present key, because `Hour 0 + Minute 0` is daily at
+      midnight while `Minute 0` alone is hourly at :00;
+      (xiii) **the empty-value fixture (C2)** — a loaded record whose env carries
+      `WIENERDOG_HOME` and `HOME` but **omits the five ambient-scrub keys** ⇒
+      **attempted**. A parser that skipped valueless lines would have skipped here,
+      granting a verified skip to a record with no scrub at all.
       **Call-count scoping (do not over-claim):** case (i) asserts zero *mutating*
       calls and exactly one `print` **from the per-job helper**. It is **not** one
       `print` per `registerPlatform` call — `registerPlatformEntries` registers the
@@ -999,8 +1053,11 @@ mock `process.platform` — and no test may touch a real OS scheduler
       exactly those two `systemctl` calls and no others. (T6)
       (iii) the shipped invariant test at `:389-397` stays green under its
       rewritten contract (AC6 item 4), and is the per-platform statement of Table
-      A's third column: darwin ⇒ **two** read-only `print`s (per-job + catch-up,
-      per AC3's call-count scoping) and **zero** mutating calls; linux ⇒ exactly
+      A's third column, **recounted from the Table A1 decision tree**: darwin ⇒
+      **two** read-only `print`s (per-job + catch-up, per AC3's call-count scoping)
+      and **zero** mutating calls — and this now holds whether `changed` is false
+      **or** true, since the live match wins either way, which is the property
+      Codex's missing-manifest-entry fixture pins; linux ⇒ exactly
       `daemon-reload` + `enable --now`, both idempotent.
 - [ ] **AC6 (exactly FOUR existing assertions change, each enumerated).** No other
       existing assertion in `tests/unit/scheduler-schedule.test.js` may be edited.

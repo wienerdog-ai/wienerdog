@@ -63,10 +63,17 @@ Concretely, three obligations, applied on every platform:
    blocked. Bootout-first remains rejected, for ADR-0018's original reason.
 3. **An unverified entry is retried, not skipped, and the evidence is a LIVE
    READBACK, and it must cover the whole REGISTRATION, not one field of it.**
-   Byte-identical files permit skipping the OS call only when a read performed *at
-   that moment* shows the OS holding what we would register — every field of it
-   that can vary between two renders, not merely the command line. The check
-   Windows already makes. A durable cache is explicitly **not**
+   The OS call may be skipped **only** when a read performed *at that moment* shows
+   the OS holding what we would register — every field of it that can vary between
+   two renders, not merely the command line. The check Windows already makes.
+   **The readback is the whole of the evidence: file state is neither sufficient
+   NOR necessary.** Not sufficient, because byte-identical files say nothing about
+   what the OS loaded. Not necessary either — an earlier draft of this obligation
+   made byte-identity a precondition, which meant a file rewritten for an incidental
+   reason (a missing bookkeeping record) forced the replacement of a record that was
+   already exactly right, putting a healthy schedule through a destructive path for
+   no benefit. A live match is permission to skip on its own; file and bookkeeping
+   convergence still happen, but they touch nothing the OS owns. A durable cache is explicitly **not**
    acceptable evidence: it is not written by every registration entry point, it
    cannot represent every platform's state, and it can record `loaded` for an
    entry the OS no longer holds (a crash between a teardown and its replacement
