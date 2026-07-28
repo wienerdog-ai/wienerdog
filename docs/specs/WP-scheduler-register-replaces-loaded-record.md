@@ -364,7 +364,7 @@ one new Proposed ADR, one test file extended. **M** — one session.
 | modify | docs/adr/README.md | **D0b** — the ADR index row for 0037. Written already by the architect alongside the ADR; the implementer does not touch it. Listed because it **is** in this branch's diff, and a Deliverables table that omits a changed file is exactly the boundary-gate failure this row fixes. |
 | modify | src/scheduler/generators.js | **D0** — add **four** names to `module.exports`, and add **two** new pure parsers (`launchdLoadedCalendar`, `launchdLoadedEnv` — D1b). Existing names exported unchanged:: `launchdLoadedArgs` (`:679-689`, used internally at `:787`) and `jobLaunchArgs` (`:208`, used internally at `:355`); the two new parsers are exported with them. Structural, not an API promise — the WP-114 precedent for `repairCatchup`. Audited, not assumed (see "Export audit" in Implementation notes): `catchupLaunchArgs` (`:1030`) and `loadedEntryTargets` (`:1007`) are **already** exported and need no change. |
 | modify | src/cli/schedule.js | **D1, D2, D3, D4 and D5** — the complete set, reconciled against the Implementation notes and the ACs: **D1** `darwinLoadedVerdict` + `ensureDarwinEntryRegistered` (new, non-exported, incl. the `plutil` preflight, the tri-state verdict, `verifyLoaded` and the rollback); **D2** the darwin per-job arm (`:429-431`, Table A row 1); **D3** `ensureCatchup` (`:314-317`, row 2); **D4** the linux arm (`:456-466`, row 3); **D5** `add()`'s guard at `:882` — drop the `changed &&` conjunct so it throws on ANY unloaded outcome (**required by AC11**; a cell that stopped at D4 would leave the user-facing false-success shipped). Nothing beyond those five — no probe, no heal, no notice string, no Windows path, and **`darwinReplaceEntry` itself is not edited** (it stays the heal path's primitive). |
-| modify | tests/unit/scheduler-schedule.test.js | **T1, T2, T2b, T2c, T2d, T2e, T3, T4, T5, T6, T7** — the complete Test index, enumerated rather than range-abbreviated because `T3-T7` silently excluded T2c/T2d/T2e (the `plutil` preflight, its existence gate, and the post-bootstrap verify). Plus the **four** existing assertions enumerated in AC6 — no others. |
+| modify | tests/unit/scheduler-schedule.test.js | **T1, T2, T2b, T2c, T2d, T2e, T2f, T3, T4, T5, T6, T7** — the complete Test index, enumerated rather than range-abbreviated because `T3-T7` silently excluded T2c/T2d/T2e (the `plutil` preflight, its existence gate, and the post-bootstrap verify). Plus the **four** existing assertions enumerated in AC6 — no others. |
 
 Not deliverables, deliberately: `src/scheduler/status.js`,
 `src/scheduler/launcher.js`, `src/cli/sync.js` (§10), `src/cli/doctor.js`,
@@ -385,8 +385,10 @@ from a new file — never edit it),
  * StartCalendarInterval Hour/Minute, and the EnvironmentVariables bindings by
  * CONTAINMENT (launchd injects keys of its own — Current state §7b fact 1).
  * The verdict vocabulary is **adopted verbatim from `loadedEntryTargets`**
- * (`generators.js:784`) — `'match' | 'mismatch' | 'indeterminate'` — so the two
- * readback consumers speak one language rather than two.
+ * (`generators.js:784`) and **extended by one member** for Table A2b's fatality
+ * tiering — `'match' | 'mismatch-fatal' | 'mismatch-benign' | 'indeterminate'`.
+ * The bare `'mismatch'` is NOT a value this function can return; it survives in
+ * this spec only as narration of the pre-tiering contract.
  *   'match'         — every block parsed AND every compared value equal.
  *   'mismatch-fatal'  — everything parsed AND a FATAL-tier field differs
  *                     (Table A2b). THE ONLY VERDICT THAT MAY AUTHORIZE A TEARDOWN.
@@ -401,7 +403,7 @@ from a new file — never edit it),
  * @param {{argv:string[], hour:number|null, minute:number, env:Array<[string,string]>,
  *          path:string, stdoutPath:string, stderrPath:string, spawnType:string}} expect
  *   the canonical values just rendered
- * @returns {'match'|'mismatch'|'indeterminate'}
+ * @returns {'match'|'mismatch-fatal'|'mismatch-benign'|'indeterminate'}
  */
 function darwinLoadedVerdict(stdout, expect)
 
@@ -425,7 +427,8 @@ function ensureDarwinEntryRegistered(loader, uid, label, plistPath, o)
 ```js
   const printed = loader(['launchctl', 'print', `gui/${uid}/${label}`]);
   const isLoaded = !!printed && printed.status === 0;
-  //     `verdict` is TRI-STATE: 'absent' | 'indeterminate' | 'mismatch' | 'match'.
+  //     `verdict` is FOUR-STATE plus the caller's 'absent': 'absent' |
+  //     'indeterminate' | 'mismatch-benign' | 'mismatch-fatal' | 'match'.
   const verdict = isLoaded ? darwinLoadedVerdict(printed.stdout || '', o.expect) : 'absent';
   // (a) THE LIVE MATCH WINS — regardless of o.changed. The readback is the
   //     evidence; `changed` is a statement about a FILE and must not force the
@@ -460,9 +463,17 @@ function ensureDarwinEntryRegistered(loader, uid, label, plistPath, o)
   if (loader(['launchctl', 'bootstrap', `gui/${uid}`, plistPath]).status === 0) return verifyLoaded();
   // (d) ROLLBACK — the replacement is unbootstrappable; restore the prior
   //     registration so no destruction window ships. Never returns true.
+  //     COMPARE-AND-SWAP: restore ONLY if the file still holds the bytes THIS
+  //     invocation wrote. If another invocation has written since, its bytes are
+  //     newer than ours and overwriting them would destroy a registration we
+  //     never inspected.
   if (o.priorBytes !== null) {
-    try { fs.writeFileSync(plistPath, o.priorBytes); } catch { return false; }
-    loader(['launchctl', 'bootstrap', `gui/${uid}`, plistPath]);
+    let current = null;
+    try { current = fs.readFileSync(plistPath); } catch { current = null; }
+    if (current !== null && current.equals(canonicalBytes)) {
+      try { fs.writeFileSync(plistPath, o.priorBytes); } catch { return false; }
+      loader(['launchctl', 'bootstrap', `gui/${uid}`, plistPath]);
+    }
   }
   return false;
 ```
@@ -717,6 +728,7 @@ branch (the recurring failure mode in this chain — see the gate-3 row).
 | the catch-up `Hour` expectation becomes a wildcard | treat `expect.hour === null` as matching any loaded `Hour` | **T3 case (xii)** — a catch-up record carrying `"Hour" => 0` must REFUSE |
 | the catch-up shape loses its skip | expect `hour: 0` for catch-up instead of `hour: null` | **T3 case (xi)** — the healthy catch-up record would be attempted, not skipped |
 | the env parser drops valueless lines | skip `KEY =>` lines with nothing after the arrow | **T3 case (xiii)** — a record missing the whole ambient scrub would be skipped |
+| **the rollback restore is unconditional** — the CX14-2 race defect | delete the compare-and-swap guard, restoring `priorBytes` without re-reading the file | **T2f** — write A, a concurrent write of B, then a teardown: the rollback must NOT restore A over B |
 | rollback does not restore the prior plist | delete the `fs.writeFileSync(plistPath, o.priorBytes)` line from step (d) | T2b |
 | rollback restores the file but not the record | delete the trailing `bootstrap` from step (d) | T2b |
 | rollback reports the failed replacement as success | make step (d) `return true` after a successful restore-bootstrap | T2b |
@@ -730,7 +742,7 @@ branch (the recurring failure mode in this chain — see the gate-3 row).
 | **the fatality tiers are collapsed** — the CX13-1 defect | make `darwinLoadedVerdict` return `'mismatch-fatal'` for any difference, dropping the Table A2b tiering | **T3 case (xxii)** — benign-only drift plus a failed replacement bootstrap must leave the existing record LOADED; the collapsed form boots it out |
 | a FATAL field is tiered benign | move `environment` (or the calendar) to the BENIGN tier | T3 case (xxii)'s sibling — a stale-env record must still reach the replace path |
 | **`'indeterminate'` authorizes a teardown** — the CX-1 defect | change the teardown guard to `if (verdict === 'absent') return false;`, i.e. let an unreadable record through | **T3 case (xiv)** — print exits 0 with unparseable stdout ⇒ a `bootout` appears |
-| the verdict collapses back to a boolean | make `darwinLoadedVerdict` return `'mismatch'` for any non-match, folding `'indeterminate'` into it | T3 case (xiv) |
+| the verdict collapses back to a boolean | make `darwinLoadedVerdict` return `'mismatch-fatal'` for any non-match, folding `'indeterminate'` into it | T3 case (xiv) |
 | darwin compares only the head of the argv — the round-2 defect | make `darwinLoadedVerdict` compare only `argv[0]` and `argv[1]` | **T3 case (v)** — the stale-tail fixture |
 | darwin compares the argv only — the round-4 defect (CX-1) | drop the calendar and env comparisons, keeping the argv | **T3 case (vii)** — the stale-`Hour` fixture |
 | the `path` gate is dropped — a record loaded from a foreign file passes | drop the `path = …` comparison | **T3 case (xv)** |
@@ -739,7 +751,7 @@ branch (the recurring failure mode in this chain — see the gate-3 row).
 | the `spawn type` gate is dropped, or compares the numeric code | drop it, or compare `(5)` instead of the word `background` | T3 case (xviii) |
 | **trigger uniqueness is not required** — the CX10-1 extra-trigger defect | select the first calendarinterval trigger instead of requiring exactly one | **T3 case (xix)** — a record with a second calendarinterval trigger must NOT skip |
 | **uniqueness counts only calendarinterval triggers** — the CX11-2 foreign-stream defect | revert to a stream-filtered count (`triggers.filter(t => t.stream === CAL).length === 1`) instead of counting the whole block | **T3 case (xx)** — one canonical calendar trigger PLUS a foreign-stream trigger must NOT skip |
-| a new field is missing and is treated as a mismatch | make an absent `path`/`program`/log-path/`spawn type` line yield `'mismatch'` instead of `'indeterminate'` | **T3 case (xxi)** — an absent line must not authorize a teardown |
+| a new field is missing and is treated as a mismatch | make an absent `path`/`program`/log-path/`spawn type` line yield `'mismatch-fatal'` instead of `'indeterminate'` | **T3 case (xxi)** — an absent line must not authorize a teardown |
 | the calendar gate is dropped alone | drop only the `launchdLoadedCalendar` comparison | T3 case (vii) |
 | the env gate is dropped alone | drop only the env containment comparison | T3 case (viii) |
 | env comparison becomes set-equality instead of containment | require the loaded env to have exactly the canonical key set | **T3 case (ix)** — it would reject a healthy record over launchd's injected keys |
@@ -767,7 +779,7 @@ rounds 2-3, where an unregistered Deliverables cell shipped a wrong test set):
 - [ ] **(+r4)** Implementation notes → D5 (`add()`'s guard) and AC11 — the CLI-surface mirror of ADR-0037's postcondition
 - [ ] **(+r4)** ADR-0037's Consequences — the rollback consequence and the withdrawn crash-marker promise both mirror this spec's rollback section
 - [ ] Implementation notes → Export audit, D0, D0b, D1, D1b, D2, D3, D4, D5, and **"Rollback — OWNER-DIRECTED"** (its four contract properties + the crash-window table)
-- [ ] Acceptance criteria AC1-AC5 (rows 1-3), AC2's rollback set, AC6 (the four changed assertions), AC7 (row 4 preservation), AC8 (the marker), AC11 (D5)
+- [ ] Acceptance criteria AC1, AC2 (incl. its rollback set), AC3, AC4, AC5 (rows 1-3), AC6 (the four changed assertions), AC7 (row 4 preservation), AC8 (the marker), AC9, AC10, AC11 (D5)
 - [ ] Verification commands V2-V6
 - [ ] Table B rows, each naming its Table A / A2 row
 - [ ] **(+r5)** Current state §7b (the executed readback evidence behind Table A2 — four facts) and Table A2 itself
@@ -799,11 +811,15 @@ than to every site of its kind. So the check now carries its own command, run on
 every pass:
 
 ```bash
-grep -nE "T[0-9][a-z]?-T[0-9]|D[0-9][a-z]?-D[0-9]" docs/specs/WP-scheduler-register-replaces-loaded-record.md
+grep -nE "T[0-9][a-z]?-T[0-9]|D[0-9][a-z]?-D[0-9]|AC[0-9]+[a-z]?-AC[0-9]" docs/specs/WP-scheduler-register-replaces-loaded-record.md
 ```
 
 **Expected output: only narration** — lines that *quote* a deleted abbreviation to
-explain why it was deleted. Any hit that is a live reference to a set is a defect:
+explain why it was deleted. The pattern covers `AC` ids too (round 15): the same
+insertion growth applies there, and `AC1-AC5` would exclude AC11 exactly as
+`T3-T7` excluded T2c. **At the round-15 push this returns 5 hits, every one
+narration** (this paragraph accounts for three of them). Any hit that is a live
+reference to a set is a defect:
 these id sets grow by insertion (T2b/T2c/T2d/T2e were inserted *before* T3, and
 D0b/D1b are lettered members inside a `D0-D5` span), so a range silently excludes
 new members the moment one is added. Enumerate; never abbreviate.
@@ -896,7 +912,8 @@ result exactly as Table A1 requires:
 | Observation | Verdict |
 |---|---|
 | **any** source returns its unparseable value — `launchdLoadedArgs` → `null`; `launchdLoadedCalendar` → outer `null`; `launchdLoadedEnv` → `null`; **or any of the four single-line fields is absent from the record** | **`'indeterminate'`** — the absence of evidence. Attempt the non-destructive bootstrap; **never** a teardown |
-| everything parsed, but any Table A2 value differs — argv length or element, calendar, a canonical env pair, `path`, `program`, either log path, or `spawn type` | **`'mismatch'`** — the ONLY verdict that may authorize a teardown |
+| everything parsed; every **FATAL**-tier field equal (Table A2b); only a **BENIGN**-tier field differs — either log path, `spawn type`, or `path` | **`'mismatch-benign'`** — no skip **and no teardown**. The record still does its authorized job |
+| everything parsed; a **FATAL**-tier field differs — argv length or element, `program`, calendar, trigger count/stream, or a canonical env pair | **`'mismatch-fatal'`** — the ONLY verdict that may authorize a teardown |
 | everything parsed and every Table A2 value equal | **`'match'`** — skip |
 
 **The four fields added in round 11 need no new parser family.** `path`, `program`,
@@ -905,7 +922,7 @@ the record (§7c), so one small reader — trim the line, split on the first ` =
 serves all four; `spawn type` uses the same reader and then compares only the
 **first word** of its value (`background`, from `background (5)`), because the
 numeric code is undocumented. **A field the reader cannot find is `'indeterminate'`,
-never `'mismatch'`**: an absent line is a readback we could not complete, and the
+never either `'mismatch-*'`**: an absent line is a readback we could not complete, and the
 round-9 rule that the absence of evidence must not authorize destruction applies to
 these fields exactly as it does to the three block parsers.
 
@@ -1143,6 +1160,29 @@ Four contract properties, all binding:
    no artifact of that record exists on disk — this spec's own
    "disk is not evidence" premise, applied to its own rollback.
 
+   **The restore is a COMPARE-AND-SWAP, not an unconditional write (CX14-2).**
+   Declaring registration single-invocation does not *enforce* it, and two attended
+   CLIs can overlap. Before restoring, re-read `plistPath` and restore **only if it
+   still equals the canonical bytes this invocation wrote**. If they differ, another
+   invocation has written since — its bytes are **newer** and describe a
+   registration we never inspected — so we **do not restore**, report
+   `loaded: false`, and fire §8's notice. No lock is introduced; serialization
+   stays routed as `WP-scheduler-register-serialization`.
+
+   **What the CAS does NOT close, traced rather than glossed.** It removes the
+   destructive half of the race — we can no longer overwrite a newer file. It does
+   **not** undo the `bootout`: the losing invocation may already have removed the
+   loaded entry, so the winner's newly written plist can be left on disk with no
+   loaded record. **Convergence:** the winner is still inside its own
+   `ensureDarwinEntryRegistered`. Its `print` finds the label absent (`verdict =
+   'absent'`), which forbids a teardown and takes the non-destructive attempt;
+   its `bootstrap` now succeeds precisely *because* the label was freed; and its
+   post-bootstrap verify confirms its own bytes. The race therefore ends with the
+   **newer** registration loaded and verified. If the winner had already passed its
+   bootstrap when the loser's `bootout` landed, its verify fails, it reports
+   `loaded: false` with the notice, and the next attended register converges it —
+   loud, never silent.
+
    **What rollback therefore guarantees, stated honestly:** it restores *the disk
    state that preceded this register*, and re-bootstraps it. When the last register
    succeeded (the common case) that **is** the prior registration and the guarantee
@@ -1309,7 +1349,10 @@ nothing in this branch should be read as owner approval of it.
 - [ ] The comparison is **allowlist-shaped and TRI-STATE**: `'match'` only when
       every parser succeeded **and** every Table A2 value is equal. An attacker who
       can alter any single argument, calendar field or canonical env pair gets
-      `'mismatch'` — an extra registration, never a skip. An attacker who can make
+      `'mismatch-fatal'` or `'mismatch-benign'` per Table A2b — an extra
+      registration, never a skip, and only a FATAL-tier alteration can reach a
+      teardown, so a cosmetic edit cannot be used to make us destroy a working
+      record. An attacker who can make
       the readback **unparseable** gets `'indeterminate'`, which buys **neither** a
       skip **nor** a teardown: degrading the readback can therefore neither
       certify a hostile record nor weaponize this code into destroying a healthy
@@ -1396,6 +1439,12 @@ mock `process.platform` — and no test may touch a real OS scheduler
       **bound**, not a recovery: it is the case where rollback provably cannot
       restore the destroyed record;
       (g) the restore's `bootstrap` itself fails ⇒ still `loaded: false`, no throw;
+      (g2) **the interleaved fixture (T2f, CX14-2)** — this invocation writes its
+      canonical bytes, a concurrent invocation then writes different bytes to the
+      same path, and the teardown proceeds. Assert the compare-and-swap **declines**
+      to restore (the file still holds the concurrent bytes, byte for byte), no
+      restoring `bootstrap` is issued, the result is `loaded: false`, and §8's
+      notice fires;
       (h) **the preflight rejects (T2c)** — `existsSync(PLUTIL)` true and the
       loader answers `{status: 1}` for `[PLUTIL,'-lint',plistPath]`, with a loaded
       mismatched record present ⇒ `loaded: false` and **no `bootout` anywhere**.
@@ -1417,7 +1466,7 @@ mock `process.platform` — and no test may touch a real OS scheduler
       with an unparseable one, since both must fail closed;
       (l) the same shape but the trailing `print` **matches** ⇒ `loaded: true`,
       call order `print` → `bootstrap` → `print`.
-      **Every fixture in this set pins `verdict === 'mismatch'`** — that is now the
+      **Every fixture in this set pins `verdict === 'mismatch-fatal'`** — that is now the
       only verdict that reaches a teardown at all (Table A1), so a rollback fixture
       whose readback is unparseable would be testing an unreachable path.
       Fixtures (e), (f) and (g) are the executable form of the two bounded windows
@@ -1575,6 +1624,7 @@ mock `process.platform` — and no test may touch a real OS scheduler
 | T2b | tests/unit/scheduler-schedule.test.js | the rollback set — restore file + re-bootstrap prior argv + `loaded:false` + notice + the `priorBytes === null` bound (AC2) |
 | T2c | tests/unit/scheduler-schedule.test.js | the `plutil` preflight — rejects (no `bootout`, absolute argv) and passes (AC2 h, j) |
 | T2d | tests/unit/scheduler-schedule.test.js | `existsSync(PLUTIL)` false ⇒ no `plutil` argv issued, register proceeds (AC2 i) |
+| T2f | tests/unit/scheduler-schedule.test.js | the interleaved-write fixture — the rollback's compare-and-swap declines to overwrite a concurrent invocation's newer bytes (AC2 g2) |
 | T2e | tests/unit/scheduler-schedule.test.js | **the post-bootstrap verify on the ABSENT-label path (CX9-1)** — bootstrap succeeds, trailing `print` mismatched or unparseable ⇒ `loaded:false`, no `bootout`; and the matching case ⇒ `loaded:true` (AC2 k, l) |
 | T4 | tests/unit/scheduler-schedule.test.js | catch-up through the same helper (AC4) |
 | T5 | tests/unit/scheduler-schedule.test.js | linux degraded reload ⇒ `loaded:false` + notice; null/missing results (AC5 i) |
