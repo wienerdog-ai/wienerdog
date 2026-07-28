@@ -414,13 +414,18 @@ set -euo pipefail
 #    THE FENCE SWEEP, recorded rather than left implicit (round 18). This spec has
 #    exactly ONE fenced shell block — this one, lines 388-827 — so the regime above
 #    governs steps 0 through 6 and everything in them was audited against the two
-#    conventions, not just step 0. What that audit found beyond step 0: the three
-#    EXPECTED-RED mutation runs (AC-3/3b/3c) would have aborted the block at the
-#    first one, killing the later controls, the documentation checks, the full-suite
-#    run and the cleanup evidence; two `grep … && { … }` negatives that abort on
-#    their SUCCESS path; and two row extractions whose grep exits 1 when the row is
-#    gone, aborting with no diagnosis. All are fixed below and each carries its
-#    reason at the site.
+#    conventions, not just step 0. What that audit found beyond step 0 — TWO real
+#    classes, corrected in round 19 from the three first reported:
+#      (1) the three EXPECTED-RED mutation runs (AC-3/3b/3c) would have aborted the
+#          block at the first one, killing the later controls, the documentation
+#          checks, the full-suite run and the cleanup evidence;
+#      (2) two row extractions whose `grep` exits 1 when the row is gone, aborting
+#          under `pipefail` with no diagnosis at all.
+#    A third was reported and WAS NOT REAL: `grep … && { … }` does not abort under
+#    `set -e`, because the left operand of `&&` is errexit-exempt. Measured on bash
+#    3.2.57 in round 19; the rewrite to `if` was kept for POLARITY, and the false
+#    reason is corrected at that site. Both real classes are fixed below and each
+#    carries its reason where it applies.
 #
 #    EVERY CHECK BELOW READS AUTHORITATIVE MAIN, NEVER YOUR CHECKOUT. That is the
 #    whole shape of this step and it is not a detail: a dispatcher standing on a
@@ -685,18 +690,75 @@ test "$DEPLOYED_BEFORE" = "$DEPLOYED_AFTER" || {
   echo "       written at all. Investigate before running anything else."; exit 2; }
 echo "ok: deployed tree byte-identical throughout ($DEPLOYED_AFTER)"
 
+# ── THE MUTATION-RUN ASSERTOR, defined once and used by AC-3, AC-3b, AC-3c and
+#    AC-4. Round 19: the earlier form asserted only a NON-ZERO SUITE EXIT, which
+#    a malformed hand edit, the WRONG mutation, or an unrelated pre-existing
+#    failure all satisfy — certifying the gate without the new test ever failing.
+#    This asserts WHICH test failed, which is the counts-not-names lesson's last
+#    instance in this spec.
+#
+#    TAP is used deliberately: `node --test-reporter=tap` emits one
+#    `ok N - <title>` / `not ok N - <title>` line per test, which is parseable;
+#    the default reporter's ✔/✖ glyphs are not a contract. DIRECTIVES are excluded
+#    — a line ending `# SKIP` or `# TODO` is not a pass, and counting it as one is
+#    the repo's own recorded TAP-counting defect.
+#
+#    $1 = expected disposition of the NEW test: "red" or "green"
+#    $2 = a label for the message
+assert_run() {
+  want="$1"; label="$2"
+  # ── set +e ISLAND: the run's exit is data, read on the very next line.
+  set +e
+  node tests/run.js --test-reporter=tap --test-name-pattern "EP2 retention" \
+       tests/unit/dream-validate.test.js > "$TAPOUT" 2>&1
+  rc=$?
+  set -e
+
+  ok_line()  { grep -E "^ok [0-9]+ - $1\$" "$TAPOUT" | grep -vE '# (SKIP|TODO)' | head -1; }
+  bad_line() { grep -E "^not ok [0-9]+ - $1\$" "$TAPOUT" | head -1; }
+
+  # (a) the NEW test is in the run at all, and has the disposition we expect.
+  if [ -z "$(ok_line "$(esc "$NEWTEST")")$(bad_line "$(esc "$NEWTEST")")" ]; then
+    echo "FAIL $label: the new test '$NEWTEST' did not RUN. A mutation that changes"
+    echo "     which tests execute proves nothing about this one."; exit 1; fi
+  if [ "$want" = "red" ] && [ -z "$(bad_line "$(esc "$NEWTEST")")" ]; then
+    echo "FAIL $label: the suite exit was $rc but the NEW test did not fail."
+    echo "     Something else went red — the gate would have certified on an"
+    echo "     unrelated failure. Check the mutation you applied."; exit 1; fi
+  if [ "$want" = "green" ] && [ -z "$(ok_line "$(esc "$NEWTEST")")" ]; then
+    echo "FAIL $label: the new test did NOT stay green, so it is not isolating"
+    echo "     what this spec says it isolates."; exit 1; fi
+
+  # (b) every baseline title must still PASS — except where the mutation is
+  #     expected to redden them too, which only AC-4 is.
+  if [ "${BASELINE_MUST_PASS:-1}" = "1" ]; then
+    while IFS= read -r want_t; do
+      [ -n "$want_t" ] || continue
+      test -n "$(ok_line "$(esc "$want_t")")" || {
+        echo "FAIL $label: baseline test failed or vanished: $want_t"
+        echo "     The mutation was not isolated to what this spec describes."; exit 1; }
+    done <<TITLES
+$BASELINES
+TITLES
+  fi
+  echo "ok $label: '$NEWTEST' is $want, baselines as expected (suite exit $rc)"
+}
+esc() { printf '%s' "$1" | sed 's/[.[\*^$()+?{|]/\\&/g'; }
+TAPOUT=$(mktemp -t taprun)
+NEWTEST='<the exact title of the test you added>'
+: "${NEWTEST:?set NEWTEST to your new test's exact title}"
+case "$NEWTEST" in *'<the exact'*) echo "FAIL: NEWTEST is still the placeholder"; exit 1;; esac
+BASELINES='EP2 retention: the prune evicts by (mtimeMs, name), not by filename alone
+EP2 retention: a run NEVER evicts its own copies, even when they are the oldest by both keys
+EP2 retention: above the cap, the cap YIELDS; a zero-redaction run leaves the overshoot
+EP2 retention: above the cap from a FULL directory, the run keeps exactly its own copies
+EP2 retention: a B5/B5a fall-through never prunes, and the prune stays inside redacted/'
+
 # 1. AC-2 — green on unmodified src/
 node tests/run.js --test-name-pattern "EP2 retention" tests/unit/dream-validate.test.js
 
 # 2. AC-3 — apply the N2-only mutation by hand, then:
-# ── set +e ISLAND (convention i): this run is EXPECTED TO FAIL, so its exit
-#    status is the answer and is read on the very next line.
-set +e
-node tests/run.js --test-name-pattern "EP2 retention" tests/unit/dream-validate.test.js
-rc=$?
-set -e
-test "$rc" != "0" || { echo "FAIL AC-3: the N2-only mutation did NOT redden the suite. The new test does not detect it."; exit 1; }
-echo "ok AC-3: reddened as required (exit $rc)"
+assert_run red "AC-3"   # asserts WHICH test failed, not merely that one did
 #    Expect: the new test FAILS and the other five still pass. Revert src/ and
 #    confirm `git status --short` shows no source file.
 
@@ -705,14 +767,7 @@ echo "ok AC-3: reddened as required (exit $rc)"
 #     Expect: the cardinality assertion still passes, the ORDERING assertion FAILS.
 #     If your test stays green here, it is asserting a count and calling it timing.
 #     Revert src/ and confirm `git status --short` shows no source file.
-# ── set +e ISLAND (convention i): this run is EXPECTED TO FAIL, so its exit
-#    status is the answer and is read on the very next line.
-set +e
-node tests/run.js --test-name-pattern "EP2 retention" tests/unit/dream-validate.test.js
-rc=$?
-set -e
-test "$rc" != "0" || { echo "FAIL AC-3b: the timing-only mutation did NOT redden the suite. The new test does not detect it."; exit 1; }
-echo "ok AC-3b: reddened as required (exit $rc)"
+assert_run red "AC-3b"   # asserts WHICH test failed, not merely that one did
 
 # 3c. AC-3c — the LATE-IN-FINAL-ITERATION mutation. One call, fired once, moved
 #     inside the loop AFTER the trailing path's -U0 — e.g. relocate the comment and
@@ -726,18 +781,24 @@ echo "ok AC-3b: reddened as required (exit $rc)"
 #     git event), and the STRUCTURAL assertion (b3) FAILS — "the prune call is at
 #     line N, INSIDE the scanTokens loop". If your test goes green here, its
 #     structural half is not brace-aware and (b) is decorative.
-# ── set +e ISLAND (convention i): this run is EXPECTED TO FAIL, so its exit
-#    status is the answer and is read on the very next line.
-set +e
-node tests/run.js --test-name-pattern "EP2 retention" tests/unit/dream-validate.test.js
-rc=$?
-set -e
-test "$rc" != "0" || { echo "FAIL AC-3c: the late-in-final-iteration mutation did NOT redden the suite. The new test does not detect it."; exit 1; }
-echo "ok AC-3c: reddened as required (exit $rc)"
+assert_run red "AC-3c"   # asserts WHICH test failed, not merely that one did
 #     Revert src/ and confirm `git status --short` shows no source file.
 
-# 3. AC-4 — apply the N3-only mutation by hand, then the same command.
-#    Expect: the SECOND existing test fails and YOUR test still passes.
+# 3. AC-4 — apply the N3-only mutation by hand (drop `&& !created.has(e.name)`),
+#    then assert EXECUTABLY that YOUR test stays green while the N3 baselines move.
+#    Round 19: this was a comment and nothing checked it, so a test that failed to
+#    isolate N2 passed AC-4 by inspection.
+BASELINE_MUST_PASS=0 assert_run green "AC-4 (N3-only control)"
+#    …and the N3 mutation must actually have done something, or the control is
+#    vacuous: exactly the three cases the recorded run names must be the ones red.
+for t in 'EP2 retention: a run NEVER evicts its own copies, even when they are the oldest by both keys' \
+         'EP2 retention: above the cap, the cap YIELDS; a zero-redaction run leaves the overshoot' \
+         'EP2 retention: above the cap from a FULL directory, the run keeps exactly its own copies'; do
+  grep -qE "^not ok [0-9]+ - $(esc "$t")\$" "$TAPOUT" || {
+    echo "FAIL AC-4: the N3-only mutation did not redden '$t'."
+    echo "     Either you applied a different edit or the baseline moved."; exit 1; }
+done
+echo "ok AC-4: N3-only mutation reddens its three cases and leaves the new test green"
 #    Revert src/ and confirm the tree is clean.
 
 # 4. AC-5
@@ -789,10 +850,22 @@ test "$limb" = "executed" || { echo "FAIL: census limb is '$limb', want 'execute
 echo "ok: census limb cell = executed"
 
 # 5e. The MUTATION row ONLY: it must no longer STATE the gap. Two exact phrases.
-# WRITTEN AS `if`, NOT `grep … && { … }`. Under the declared `set -e` the `&&`
-# form aborts the script on its SUCCESS path — a non-matching grep exits 1, the
-# compound's status is 1, and errexit kills the block before anything else runs.
-# The polarity trap and the regime trap in one construct.
+# WRITTEN AS `if`, NOT `grep … && { … }` — FOR POLARITY, and for nothing else.
+# `grep … && { echo FAIL; exit 1; }` fires its branch on a MATCH, i.e. it is a
+# negative assertion written to look like a positive one, and this repo's
+# gate-polarity preamble exists because that reads backwards under review.
+#
+# *Round 18 of this spec's review justified the same rewrite with a claim about
+# `set -e` — that a non-matching grep would abort the block on its SUCCESS path.
+# THAT CLAIM IS FALSE and was asserted from reading rather than running. POSIX
+# and bash exempt every command in an `&&`/`||` list except the one after the
+# final operator, so the left operand's failure never trips errexit. Measured on
+# the shipped bash 3.2.57: with `set -euo pipefail`, a non-matching
+# `grep -qF … && { … }` mid-script prints the following line and continues,
+# exit 0. (The one true edge is unrelated to errexit: as the LAST command of a
+# script the construct sets the script's exit status to 1 — here 5f, 5g and 6
+# follow, so it never was last.) The rewrite is kept because it is clearer; the
+# reason it was given was wrong.*
 if grep -qF 'undetected-today gap' /tmp/m48-mutation-row.txt; then
   echo "FAIL: mutation row still states 'undetected-today gap'"; exit 1; fi
 if grep -qF 'NOTHING — AND THAT IS THE POINT' /tmp/m48-mutation-row.txt; then

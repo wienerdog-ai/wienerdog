@@ -163,6 +163,16 @@ instead of a blocked session.
   ever recompute. **A false red on a never-recompute pin is one keystroke from
   destroying it.** Put the gate in a file, quote once, and compare against the
   literal there.
+- **A claim about how a tool behaves is a claim to be RUN, not read.** Four
+  instances on PR #124 alone: a spec citing a shell fence's options that the fence
+  did not declare; a review harness whose prepended setup changed what it measured;
+  "the worktree variant could not be executed here" when what had failed was one
+  command's *shape*; and an audit asserting that `grep … && { … }` aborts under
+  `set -e` — it does not, because the left operand of `&&` is errexit-exempt
+  (measured, bash 3.2.57). Three of the four *over*-claimed a hazard and one
+  under-claimed a capability, so the bias is not in one direction: the defect is
+  the missing run. **Paste the reproduction or do not state the behaviour** — and
+  when someone else's claim cannot be reproduced, the burden is on the run.
 - **Prove a new gate in BOTH directions.** Red-before-work shows a check is not
   vacuous; it does **not** show the check is not *over-strict*, because a check
   that rejects the correct answer is also red before the work and looks identical

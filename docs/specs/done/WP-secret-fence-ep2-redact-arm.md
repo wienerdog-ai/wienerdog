@@ -6541,13 +6541,33 @@ for (const [k, s] of SCHEMA) {
     const ev = (lines[ln - 1].split("|").slice(1, -1)[2] || "");
     const limb = (lines[ln - 1].split("|").slice(1, -1)[1] || "").replace(/[*\s]/g, "");
     if (limb !== "executed") continue;
-    const m = /^\s*\*\*RED:\*\*\s+`([^`]+)`/.exec(ev);
-    if (!m) fail("census row " + JSON.stringify(id) + " (line " + ln + ") claims limb \"executed\" but its evidence does not open with the canonical verdict clause.");
+    // Parse the WHOLE clause — target AND counts — so the positive-failure
+    // requirement is satisfied by the clause itself and not by any digits that
+    // happen to appear later in the narration.
+    const m = /^\s*\*\*RED:\*\*\s+`([^`]+)`\s+—\s+`([^`]+)`/.exec(ev);
+    if (!m) fail("census row " + JSON.stringify(id) + " (line " + ln + ") claims limb \"executed\" but its evidence does not open with the canonical verdict clause **RED:** `<target>` — `<counts>`.");
     const target = norm(m[1]);
+    const counts = m[2];
+    if (!/fail [1-9][0-9]*/.test(counts))
+      fail("census row " + JSON.stringify(id) + " (line " + ln + ") has counts " + JSON.stringify(counts) + " in its verdict clause with no POSITIVE failure count. Digits elsewhere in the narration do not count — the clause is the verdict.");
+    // ROUND 19: the id form is rejected outright. Every mutation row contains its
+    // own id, so `**RED:** \`M-23\`` satisfied a whole-row comparison while naming
+    // no test at all — and `M-23` is even a substring of `M-23b`. An id is not a
+    // target.
+    if (/^M-[0-9]+[a-z]?$/.test(target))
+      fail("census row " + JSON.stringify(id) + " (line " + ln + ") names " + JSON.stringify(target) + " as its target, which is a MUTATION ID, not a test. Every mutation row contains its own id, so this would compare a row against itself. Name the test or acceptance-criterion case the mutation reddens.");
+    if (target.length < 12)
+      fail("census row " + JSON.stringify(id) + " (line " + ln + ") names a target of " + target.length + " characters. A target that short cannot identify a test; it is a token that happens to occur in the partner row.");
     const partnerLn = (rowLines.get(s[2]) || new Map()).get(id);
     if (!partnerLn) fail("census row " + JSON.stringify(id) + " has no paired mutation row to compare its target against.");
-    if (!norm(lines[partnerLn - 1]).includes(target))
-      fail("census row " + JSON.stringify(id) + " (line " + ln + ") names the target " + JSON.stringify(target.slice(0, 60)) + ", which does NOT occur in its paired mutation row (line " + partnerLn + "). An executed row must state the verdict for ITS OWN target — naming someone else's is how an uncaught mutation gets recorded as caught.");
+    // Compare against the partner's MUST-FAIL CELL ONLY — the column that names
+    // what the mutation is supposed to redden. The id lives in cell 1 and the
+    // mutation description in cell 2; neither is a statement about the target.
+    const partnerCells = lines[partnerLn - 1].split("|").slice(1, -1);
+    const mustFail = norm(partnerCells[2] || "");
+    if (!mustFail) fail("the paired mutation row for " + JSON.stringify(id) + " (line " + partnerLn + ") has no Must-fail cell to compare against.");
+    if (!mustFail.includes(target))
+      fail("census row " + JSON.stringify(id) + " (line " + ln + ") names the target " + JSON.stringify(target.slice(0, 60)) + ", which does NOT occur in its paired mutation row's MUST-FAIL cell (line " + partnerLn + "). An executed row must state the verdict for the target its own row says the mutation reddens — naming anything else is how an uncaught mutation gets recorded as caught.");
   }
 
   const onlyA = [...a.keys()].filter((x) => !b.has(x));
