@@ -2,6 +2,17 @@
 
 All notable changes to Wienerdog. Format: [Keep a Changelog](https://keepachangelog.com), versioning: SemVer (0.x until the installed file layout stabilizes — ADR-0003).
 
+## [0.12.0] — 2026-07-28
+
+This release rebuilds the nightly memory consolidation's secret fence around a measured distinction: a real credential is random *within* a segment, while a file path or digest is random only *across* segments. The scanner no longer mistakes the identifiers technical notes are full of for credentials, and when it does flag a lone suspicious snippet, it now scrubs just that snippet instead of withholding the whole note.
+
+### Fixed
+- **Notes full of technical identifiers are no longer withheld wholesale as suspected secrets.** The scanner used to treat any long random-looking run of characters as a potential credential, so file paths, `sha256:` digests, git commit ids, and document ids — exactly what technical notes contain — routinely got a night's note reverted. The detector now separates credential-shaped runs from path-shaped ones and only escalates a path-shaped run when the text right before it reads like a secret being assigned (a keyword followed by `:` or `=`). Measured on a real vault, this took the false-alarm rate from over a hundred wrongly reverted notes to a single withheld one — and that one was a deliberately planted key-shaped example, i.e. a correct catch.
+
+### Security & hardening
+- **A suspicious snippet now costs a snippet, not the note.** When the scanner flags a random-looking run that has no credential context around it, the nightly consolidation now scrubs just that run in place (`[REDACTED:…]`) and keeps the rest of the note, instead of reverting the whole note. Before scrubbing, the exact pre-scrub original is preserved under `state/quarantine/redacted/` — local-only, private to your account, never committed anywhere, and capped at the most recent 50 — so a wrong redaction is always recoverable. Redactions are listed in the nightly report rather than raising an alert banner, since no action is needed to keep the note.
+- **Every named credential pattern now withholds the note for review.** Matches against the labelled provider rules (AWS keys, private-key blocks, bearer tokens, and the rest) are uniformly treated as hard findings that withhold the note — the scrub-in-place path is reserved for context-free random-looking runs, never for something that matches a known credential format.
+
 ## [0.11.0] — 2026-07-27
 
 This release continues 0.10.0's audit arc, closing four more ways Wienerdog's own scheduled-job machinery could be misled by a write into its own folders: the decision to run in "production" (strict checks) versus "developer mode" (relaxed), the health check's idea of what counts as a healthy job, the advice printed when a run refuses to start, and what a re-sync re-publishes. Alongside that, the nightly memory consolidation is gentler on a false alarm — a suspected secret now delays a night's memories instead of erasing them.
