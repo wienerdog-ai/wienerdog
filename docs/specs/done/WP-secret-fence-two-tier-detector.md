@@ -1,7 +1,7 @@
 ---
 id: WP-secret-fence-two-tier-detector
 title: Make the secret detector two-tier — a slash-tiered entropy alphabet, separator-bound context, and quarantine severity on every labelled rule
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: []
@@ -424,6 +424,41 @@ not an ambiguity. Say so in the PR and do not edit them** — they are not in th
 Deliverables table.
 
 ## The measurements this design rests on
+
+> **SUPERSEDED AS LIVE FIGURES ON 2026-07-28, AND FROZEN HERE DELIBERATELY.**
+> This WP merged as `72f3e46` and is `status: Done`. Re-measured on 2026-07-28
+> against the same vault, now 189 notes rather than 182, **every figure in M1, M2
+> and M5 moved and no structural fact and no conclusion did**. Those corrections
+> were filed where the durable record is: **ADR-0034 errata ER-7, ER-8 and
+> ER-9**, which correct evidence blocks E1, E2 and E3 in place and quote the
+> pre-edit bytes verbatim. Read the live figures there.
+>
+> **M1, M2 and M5 below are NOT updated to match, and that is a decision rather
+> than an oversight.** A completed work package is a dated record of what was
+> built and of the evidence it was accepted against; retro-fitting a corpus
+> measured two days after it merged would make this document describe evidence
+> that did not exist when the work was reviewed. The live mirror obligation moves
+> with the epic: it is now carried by **Table D rows D1/D2 of
+> `WP-secret-fence-ep2-redact-arm`**, which are *derived* rows citing ADR-0034
+> and are re-derived from it in the same pass, and by that leg's verification
+> step **V-17**, which greps this ADR on both sides. So exactly one live mirror
+> exists and it agrees with the canonical surface — which is the whole of what
+> ADR-0031 asks for.
+>
+> **Consequence for this document's own verification block, stated so nobody
+> "repairs" it.** V-15's four literals — `M1_EXPECT`, `M5_EXPECT`, `E3_EXPECT`
+> and `ER_EXPECT` — and its `SWEEP_EXPECT` are **retired with this spec and are
+> deliberately NOT recomputed.** `M1_EXPECT` holds the spec and ADR copies to
+> each other and the ADR copy has moved; `ER_EXPECT` moved the moment ER-7 was
+> written, exactly as its own note predicted. A red V-15 here is now a *statement
+> of that history*, not a defect to clear: **do not recompute those literals, do
+> not edit M1/M2/M5 to make them pass, and do not re-open this WP.** The ADR-0034
+> errata block dated 2026-07-28 names all five and records the same disposition.
+> Everything a live check still needs is in leg 2, whose suite runs.
+>
+> **V-18 (the ratified threat-model section, byte-identical in both legs) and
+> V-11 (the owner's signature lines) are untouched by any of this and were
+> verified green on 2026-07-28.** Neither may ever be recomputed, by anyone.
 
 Every number below was produced on **2026-07-26** against the shipped detector at
 `efd1489` and the maintainer's real vault (182 markdown files under
@@ -1040,7 +1075,7 @@ difference with identical totals and is not carried forward.)
 | Action | Path | Notes |
 |--------|------|-------|
 | modify | src/core/secret-scan.js | one canonical alphabet declaration; two derived tiers; the separator-bound context predicate; the severity-escalating `add` closure; every labelled rule at `quarantine` (**Table A**) |
-| create | tests/fixtures/secret-corpus.js | the credential fixture generators (**Table C1** — one generator per row of that table, and no others) and the FP corpus (**Table C2** — one entry per row, in order, ids matching). Data + pure functions, no assertions. **Counts are asserted against Table C3 row C3-0, not hard-coded here** |
+| create | tests/fixtures/secret-corpus.js | the credential fixture generators (**Table C1** — one generator per row of that table, and no others) and the FP corpus (**Table C2** — one entry per row, in order, ids matching), **plus the pre-WP-detector emulator `caughtByShippedDetector` that supplies the FN matrix's `today` column for every cell C3-3 does not transcribe — its construction and its bounds are Table C3 row C3-7's, not this cell's** *(named here 2026-07-28; the shipped module has always carried it and this row did not say so)*. Data + pure functions, no assertions. **Counts are asserted against Table C3 row C3-0, not hard-coded here** |
 | create | tests/unit/secret-fence.test.js | the tier-agreement closure, the FN regression matrix, the FP ceiling, the severity-escalation case, the mutation checks |
 | modify | tests/unit/secret-scan.test.js | ONLY the severity expectations **Table A** changes (lines 39, 55, 87, 95, 112, 119, 123, 140, 153), the entropy-pass assertions at 182–183, and **line 174** — that test's *name* is `'entropy: an unlabelled high-entropy base64 run is quarantined'` and after A6 it asserts `redact`, so the name is now false; rename it to say `is redacted` and change nothing else on that line |
 | create | scripts/measure-secret-fp.js | offline, opt-in, takes a vault path argument; **not** run by `npm test`; reproduces M1/M5 |
@@ -1299,7 +1334,7 @@ fence tests, the glossary and this spec.
 | A3 | tier-2 candidate | `[<CORE><WIDE_EXTRA>]{24,}` — exactly today's `[A-Za-z0-9+/=]{24,}` |
 | A4 | entropy floor, both tiers | `ENTROPY_MIN_BITS_PER_CHAR = 3.5`, unchanged |
 | A5 | tier-2 fires | candidate ≥ floor **AND** `hasBoundContext` → severity **`quarantine`**, whole candidate replaced |
-| A6 | tier-1 fires | any sub-run of a non-quarantined tier-2 candidate, ≥ 24 chars, ≥ floor → severity **`redact`**, that sub-run replaced. **No context required** — a bare pasted key with no keyword near it is exactly the accidental case, and it must still be scrubbed |
+| A6 | tier-1 fires | each **MAXIMAL** narrow-alphabet sub-run of a non-quarantined tier-2 candidate that is ≥ 24 chars **and** at or above the floor **measured over the whole of that maximal run** → severity **`redact`**, that sub-run replaced. **No context required** — a bare pasted key with no keyword near it is exactly the accidental case, and it must still be scrubbed. **"Maximal", never "any".** The tier-1 scan is one `String.prototype.replace` over `TIER1_CANDIDATE` (see the Exact-contracts block, which is the normative form and is byte-identical to the shipped code), and that regex consumes the longest run of `ENTROPY_CORE_CLASS` characters available at each position; no shorter window inside such a run is ever tested on its own. **Consequence, accepted and stated: residual 8** — a long low-entropy narrow run that CONTAINS a high-entropy 24-character window produces no finding. *Tightened 2026-07-28 from "any sub-run", which was wider than both the Exact-contracts block beside it and the shipped code, and which an implementer reading this row alone would have built as a sliding-window scan — a behaviour change with an unmeasured false-positive cost. Raised as advisory by round 1 of leg 1's merge review; the code was verified byte-identical to this document's own Exact-contracts block and was not touched* |
 | A7 | context keywords | the existing `SENSITIVE_KEYS` constant (lines 42–43) plus `authorization`. **Reuse the constant; do not write a second list** |
 | A8 | context binding — **eleven clauses, each with a line in M4e naming what holds it, or recording that nothing does. This row and the M4e register are each pinned WHOLE, by digest, in V-29 (C3-18): a clause added here moves the row's digest whether or not anybody flags it, and the register is reconciled in the same pass. The digest detects the change; the pairing itself is still a human reading — see "Completeness registers and what actually bounds each"** | a keyword from row A7, matched **case-insensitively** (`SENSITIVE_KEYS` is spelled entirely in lower case and every shipped rule consuming it carries the `i` flag, so a case-sensitive binder silently stops binding `apiKey`, `API_TOKEN` and `TOKEN_CHARS` — C2 rows 29/31/32, mutation M-42), then at most `ENTROPY_CTX_FILLER_MAX` (= 20) characters from the class `[ \t\w.-]` (gitleaks' own filler class — space, tab, word character, dot, hyphen; **not** "any non-newline character", which is strictly broader in the FP direction for no measured gain, see M4b), then **at most one** quote or backtick — the quantifier is `?` and never `*`; the same clause governs the second quote slot below, a `*` on the *post*-separator slot binds ordinary backticked-JSON documentation prose (M4f, C2 row 41) and a `*` on **this** slot alone binds C2 row 44, then optional whitespace, then **exactly one** separator TOKEN — the token is not quantified at all, and never `+`; `(?:${SEP})+` at the use site leaves the `SEP` declaration byte-identical and every structural grep green while it binds an ordinary `==` comparison in documentation (M4f, C2 row 40) — drawn from the set `SEP` in row A8a, itself a token of one to four characters rather than one character, then optional whitespace, then at most one quote or backtick (same clause as above), then the candidate, which follows the separator **directly**: nothing but those optional whitespace and quote characters may sit between them. Same line only — the search never crosses a newline. The backwards slice the implementation takes is **derived from `ScanLimits`**, never written as a literal (Implementation notes; V-2e pins the declaration, C2 row 37 under M-5 holds it behaviourally) |
 | A8a | `SEP`, the separator token set | **This row, not any code block, decides the set.** `SEP` is gitleaks' `generic-api-key` separator group (`config/gitleaks.toml:640`, fetched 2026-07-26: `` (?:=\|>\|:{1,3}=\|\|\|\|:\|=>\|\?=\|,) ``) **minus `,` and minus `\|\|`**, and the disposition of **every** member is recorded in the table below — a member dropped without a word is how an earlier revision lost Go and PHP assignment syntax. The regex-source form is `` :{1,3}=\|=>\|\?=\|[:=>] ``, **ordered longest-first**. That order is **defensive, not load-bearing today**: `hasBoundContext`'s regex is end-anchored, so a one-character alternative that swallows the first character of a two-character token fails the anchor and the engine backtracks into the longer form. Measured 2026-07-26, a shortest-first spelling produces **zero** C2 mismatches. Keep the order anyway — it stops being cosmetic anywhere the anchor does not force the backtrack — but V-12 pins the exact line, and the pin, not the ordering, is what makes A8a's membership a gate. Measurement for every row: M4a (the bar) and M4c (everything else) |
@@ -1611,7 +1646,7 @@ this is a contract, not a style preference (ADR-0031).
 | C3-4 | labelled-rule coverage | exactly the **14** C1 fixtures marked **labelled? = yes**: `anthropic-api-key`, `openai-legacy`, `github-pat`, `github-oauth`, `slack-bot-token`, `aws-access-key-id`, `google-api-key`, `google-oauth-ya29`, `google-client-secret`, `google-refresh-token`, `stripe-secret`, `jwt`, `private-key-block`, `authorization-basic`. Each is caught **100%** at **`quarantine`** severity in all four contexts. Asserted as an **equality on the id set** — a 15th fixture becoming labelled-covered must be a deliberate table edit. (`authorization-basic` is on this list *because of* A16; delete that rule and this row fails, which is mutation M-35) |
 | C3-5 | C2 corpus, `quarantine` severity | **exactly the id set {29, 30, 31, 32, 42, 43}** — an **equality**, not a ceiling, for the same reason C3-6 is one. Rows 29–31 are the separator positive controls and *must* withhold; row 32 is the accepted alphabet-prose residual; **rows 42 and 43 are the accepted metadata-suffix binder residuals added in round 1 of the design gate** (residual 6), and they are in this set because they really do quarantine and the corpus must say so rather than omit the class. **This equality is what holds TWO of A8's clauses in the main suite, needing no 35–44 negative control for either.** (a) **Case-insensitivity**: measured 2026-07-26, a case-sensitive binder drops rows 29, 31 and 32 to `redact` — their keywords are the `Key` of `apiKey` and the `TOKEN` of `API_TOKEN` and `TOKEN_CHARS` — while row 30's already-lower-case `secret` and rows 42/43's already-lower-case keywords stay put, so the set shrinks to `{30, 42, 43}` and this row fails (mutation **M-42**). (b) **The optional whitespace on each side of the separator**: measured 2026-07-27, removing both allowances drops **all six** members out of `quarantine` and the set becomes empty. **No row in 1–28 may withhold an artifact** — that is the destructive-outcome promise, it is unchanged, and rows 42/43 sit deliberately outside that range so that adding a measured residual can never be mistaken for relaxing it |
 | C3-6 | C2 corpus, `redact` severity | **exactly the id set {14, 15, 20, 24, 25, 27, 33, 34, 35, 37, 39, 40, 41, 44}** — an **equality**, not an upper bound. Row **44** joined it in round 1 of the design gate; it is the pre-separator quote control and becomes `quarantine` under M-44 and under M-39. A detector that fires on nothing satisfies "at most N" and must fail here. Rows 33 and 34 are the negative separator controls: they are `redact`, and they become `quarantine` under M-41 / M-43. Rows 35 and 37 are the filler-**bound** controls and become `quarantine` under M-5. Row 39 is the **adjacency** control and becomes `quarantine` under M-37; row 40 is the separator-**cardinality** control and becomes `quarantine` under M-38; row 41 is the quote-**cardinality** control and becomes `quarantine` under M-39. Rows 36 and 38 are the filler-**class** and **same-line** controls: both are `clean`, so both are in neither this set nor C3-5 — row 36 enters C3-5 under M-13 and row 38 under M-36, which is what breaks that equality in each case. **This row is the only place the set is written**; every other surface, this table's own commentary included, cites `C3-6` |
-| C3-7 | today's baseline column | the `today` numbers in C3-2/C3-3 are **constants transcribed from this table into the test file**, not regenerated. See "Why no dependency on the oracle WP" |
+| C3-7 | today's baseline column | **Two sources, and the split between them is the substance of this row.** (a) **The 18 cells C3-3 names** — its six fixtures × `bare`/`prose`/`table` — take `today` from the six numbers written **in C3-3 itself**: constants transcribed from this table into the test file, never regenerated, so a wrong "before" is a visible diff against a document on `main`. See "Why no dependency on the oracle WP". (b) **The other 138 of C3-0's 156 cells have no transcribed constant and never had one** — C3-2 needs a `today` for every cell and this table states six — so they are computed per cell by **`caughtByShippedDetector` in `tests/fixtures/secret-corpus.js`**, a re-implementation of the **pre-WP detector**: the module's own labelled findings *less* `high-entropy` and *less* the `basic-auth` rule that **A16** adds, OR a hand-written copy of the shipped context-free pass (`[A-Za-z0-9+/=]{24,}` at ≥ 3.5 bits/char, both literals written out in the fixture module and never read from `src/`). **What pins it, and how far.** The six transcribed constants are asserted against that function's own output to within 0.1 point across all 18 of C3-3's cells; three of them are fractional (38.1, 91.3, 96.5) and reproduce only if the emulator's alphabet, its 24-character length floor and its 3.5-bit floor are exactly the pre-WP ones, so a drifted entropy half cannot satisfy C3-3. For the remaining 138, **C3-2's set equality pins the emulator in one direction only**: an emulator that OVER-reports `today` on any of them makes that cell regress, the regressing set stops equalling C3-3's, and C3-2 fails; an emulator that UNDER-reports leaves `proposed ≥ today` true and is not caught. That asymmetry is stated rather than glossed — it is the honest bound, and it is fail-*safe* in the direction that matters, since a real regression can only be hidden by over-reporting the baseline. *Amended 2026-07-28. Round 1 of leg 1's merge review raised the gap between this row and C3-2 as advisory: C3-2 requires a per-cell `today` for all 156 cells, this row said only "transcribed constants", and the transcribed constants are six. The implementer supplied the rest through the reference above and disclosed it; the reviewer verified it exactly faithful to the real pre-WP detector across all 156 cells and all 44 C2 rows. **No code changed and none was asked for** — the amendment names the second source and states what bounds it* |
 | C3-8 | `SEVERITY.REDACT` producers in `src/core/secret-scan.js` | exactly **one** `add(…)` call site (A13), counted as **occurrences**, not lines |
 | C3-9 | severity escalation on a mixed note (A15) | a two-line input containing one bound tier-2 candidate and one bare tier-1 candidate yields **one** `high-entropy` finding at **`quarantine`** with `count` 2, **in both line orders**, and `hasHardFinding` is `true` for both. Asserted for both orders explicitly — a single-order test passes against the unescalated code |
 | C3-10 | C2 rows 26, 27, 28 under a `SEP` containing the vertical bar | rows **26 and 27** reach `quarantine`; row **28 stays clean**, because its longest tier-2 run (`src/core/secret`) is 15 characters and no `SEP` can lift it over the 24 floor. Asserted as that exact three-way outcome, not as "at least one of them fires" — the weaker form is satisfied by a mutation that reddens only row 26. Held by mutation row M-14, not by the main suite; it is what makes the A8a bar decision testable rather than documentary |
@@ -3012,6 +3047,41 @@ requires is in Table C.
    **What is NOT on this list, and the distinction is the point:** every finding
    that touched what the shipped detector or the shipped gate does. Those were
    fixed. This residual is the price of stopping, and the owner set it knowingly.
+8. **A high-entropy 24-character window buried inside a longer LOW-entropy
+   narrow run is not scrubbed.** Tier 1 tests entropy over the **maximal**
+   narrow-alphabet run (**Table A row A6**, which decides this and is the only
+   place the word "maximal" is decided), never over a window inside it, so
+   entropy computed across the whole run can fall below the floor while a
+   sub-window sits far above it.
+
+   *Measured 2026-07-28 against the shipped detector at `72f3e46`.* The probe is
+   `'blob ' + 'A'.repeat(40) + 'q7PmXz4KvR9tWc2LbN8dYfGh' + ' end'`: one maximal
+   64-character narrow run at **2.674** bits/char, containing a 24-character
+   window at **4.585**. `scanAndRedact` returns **zero findings** and the text
+   unchanged. The same string in isolation —
+   `'blob q7PmXz4KvR9tWc2LbN8dYfGh end'` — is one `redact` finding, which is what
+   isolates the cause to the surrounding run rather than to the window.
+
+   **Accepted, and this is a pre-existing residual rather than anything this WP
+   introduced.** Measured on the same probe, the **pre-WP** detector behaves
+   identically: its context-free pass matched the maximal `[A-Za-z0-9+/=]{24,}`
+   run and tested entropy over the whole of it, so the same 2.674 bits/char left
+   it silent. Nothing regressed; a limit that was always there is now written
+   down. Padding a secret with a long low-entropy prefix drawn from the same
+   alphabet is also **a deliberately shaped evasion**, which Decision 4 of
+   ADR-0034 puts out of scope by definition: it is not a published credential
+   format that stopped being caught, and it is not a false-positive class
+   measured on real prose.
+
+   *Closed by:* a windowed scan — evaluate every 24-character window of a
+   maximal narrow run rather than the run as a whole — which is **not** proposed
+   here and must not be adopted without measurement. The false-positive cost is
+   unmeasured and is plausibly large in the direction this WP exists to fix: the
+   whole finding of E2 is that path-shaped runs are high-entropy *across* their
+   segments, and a window scan is exactly what starts looking inside them.
+   *Raised as advisory by round 1 of leg 1's merge review, against A6's wording
+   rather than against the code; A6's wording was tightened to the maximal run in
+   the same pass and the code was not touched.*
 
 ## Acceptance criteria
 
@@ -3036,9 +3106,12 @@ diverged, so none moved.
 - [ ] **AC-3** A tier-2 candidate at or above the floor **with** bound context
       yields one `high-entropy` finding at `quarantine` (A5).
 - [ ] **AC-4** The same candidate **without** bound context yields `high-entropy`
-      findings at `redact` for each qualifying tier-1 sub-run, and none at
-      `quarantine` (A6). A low-entropy wide run containing a high-entropy narrow
-      sub-run still yields the `redact` finding.
+      findings at `redact` for each qualifying **maximal** tier-1 sub-run, and
+      none at `quarantine` (A6 — that row decides "maximal" and this criterion
+      restates nothing else about it). A low-entropy **wide** run containing a
+      high-entropy narrow sub-run still yields the `redact` finding; a low-entropy
+      **narrow** run containing a high-entropy window does not, which is
+      **residual 8** and not a failure of this criterion.
 - [ ] **AC-5** **Every** labelled rule emits `quarantine` — the set and its size
       are Table A row A10's to decide and are not restated here; `severityForKey`
       and `QUARANTINE_KEYS` no longer exist (A10, A11).
@@ -3329,7 +3402,7 @@ quoting a figure is neither, so the procedure cannot read its own answer.
 #      header in the detector was deduplicated away and the step stayed green.
 #      Occurrences are now preserved until the per-leg duplicate check has run,
 #      and deduplicated only for the cross-leg comparison.
-DET=docs/specs/WP-secret-fence-two-tier-detector.md
+DET=docs/specs/done/WP-secret-fence-two-tier-detector.md
 GATE=docs/specs/WP-secret-fence-ep2-redact-arm.md
 
 # A MUTATION is defined by a row of that leg's Mutation-checks table — the table
@@ -3778,7 +3851,7 @@ changed_set() {
 #      a failure here rather than a vacuous pass.
 test -n "$(changed_set)"
 # shellcheck disable=SC2046
-node scripts/boundary-check.js docs/specs/WP-secret-fence-two-tier-detector.md $(changed_set)
+node scripts/boundary-check.js docs/specs/done/WP-secret-fence-two-tier-detector.md $(changed_set)
 
 #      A louder message for the files most likely to be reached for by mistake.
 #      This list is NOT the enforcement — boundary-check.js above already covers
@@ -3831,7 +3904,7 @@ if { changed_set; echo 'memory/lessons/inbox.md'; } | leg2_guard >/dev/null; the
   exit 1
 fi
 #      and the premise is real: boundary-check.js accepts it for THIS spec.
-node scripts/boundary-check.js docs/specs/WP-secret-fence-two-tier-detector.md memory/lessons/inbox.md
+node scripts/boundary-check.js docs/specs/done/WP-secret-fence-two-tier-detector.md memory/lessons/inbox.md
 
 #      NEGATIVE PROBE 2 — `changed_set` really does see the working tree. An
 #      UNTRACKED file must appear in it; `git diff --name-only origin/main...`
@@ -3919,7 +3992,7 @@ must_not 'validate.js now references hasHardFinding — that is leg 2' \
 #      implementer, never on the spec side alone, and never by recomputing a
 #      digest without amending the ADR.
 ADR=docs/adr/0034-accidental-persistence-threat-model.md
-SPEC=docs/specs/WP-secret-fence-two-tier-detector.md
+SPEC=docs/specs/done/WP-secret-fence-two-tier-detector.md
 
 #      M1 (spec) and E1 (ADR) are BYTE-IDENTICAL blocks. One digest holds both
 #      copies AND their equality to each other, so neither can move alone.
@@ -4326,7 +4399,7 @@ v29_probe 'a register row reworded in M4e' \
 #      literal are unchanged, so the EP2-gate leg's copy of this digest still
 #      agrees; only the diagnostic is new.
 TM_DIGEST="$(awk '/^## The threat model /{f=1} /^## Current state$/{f=0} f' \
-  docs/specs/WP-secret-fence-two-tier-detector.md | shasum -a 256 | cut -d' ' -f1)"
+  docs/specs/done/WP-secret-fence-two-tier-detector.md | shasum -a 256 | cut -d' ' -f1)"
 if [ "$TM_DIGEST" != "77a67f3f2d52e27ed54c1ce7ec0bc29a03280147aab0ef2813fa3f3d62503871" ]; then
   echo "FAIL V-18: the ratified threat-model section has been edited."
   echo "           got  $TM_DIGEST"
@@ -4776,7 +4849,7 @@ grep -qx 'Status: Accepted' docs/adr/0034-accidental-persistence-threat-model.md
 #       ONE FILE ONLY (S4): this leg's authority is the ADR. This spec carries
 #       no owner signature and must not acquire one.
 grep -qE '^[> *]*OWNER-SIGNED[ —–-]*[0-9]{4}-[0-9]{2}-[0-9]{2}' docs/adr/0034-accidental-persistence-threat-model.md
-if grep -qE '^[> *]*OWNER-SIGNED' docs/specs/WP-secret-fence-two-tier-detector.md; then
+if grep -qE '^[> *]*OWNER-SIGNED' docs/specs/done/WP-secret-fence-two-tier-detector.md; then
   echo "FAIL V-11: an OWNER-SIGNED line appeared in this spec. No agent writes that line (S5),"
   echo "           and this leg needs none (S4). Remove it and report who added it."
   exit 1
