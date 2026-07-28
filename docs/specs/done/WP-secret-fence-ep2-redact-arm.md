@@ -6328,13 +6328,20 @@ const resRe = new RegExp(P_RES);
 
 const seen = new Set();
 let dataTables = 0;
-// key -> Set of that table's first-cell values, collected for BOTH dispositions so a
-// declared pairing can be compared after the walk. The ids branch already DEFINES its
-// cells; this records WHICH TABLE defined them, which `defs` alone does not carry.
+// key -> Map of that table's first-cell values to their OCCURRENCE COUNT, collected
+// for BOTH dispositions so a declared pairing can be compared after the walk. The ids
+// branch already DEFINES its cells; this records WHICH TABLE defined them, which
+// `defs` alone does not carry.
+//   COUNTS, NOT MEMBERSHIP, and round 10 is why: a Set makes a DUPLICATED row
+//   invisible — duplicate a census row and both sides still hold the same id, so the
+//   step reported 1:1 over a 2:1 census. The ids branch has `define()`'s
+//   duplicate guard (Table H row H5); a DATA table has no such guard, which is
+//   exactly the side that needed one.
 const rowIds = new Map();
 const collect = (key, cell) => {
-  if (!rowIds.has(key)) rowIds.set(key, new Set());
-  rowIds.get(key).add(cell);
+  if (!rowIds.has(key)) rowIds.set(key, new Map());
+  const m = rowIds.get(key);
+  m.set(cell, (m.get(cell) || 0) + 1);
 };
 const firstCell = (line) => (line.split("|")[1] || "").trim().replace(/^\*\*|\*\*$/g, "").trim();
 let head = "(none)";
@@ -6378,17 +6385,26 @@ for (const [k, s] of SCHEMA) {
   if (s[0] !== "data" || !s[2]) continue;
   pairings += 1;
   if (!SCHEMA.has(s[2])) fail("data table " + JSON.stringify(s[1]) + " declares a pairing with a schema key that does not exist:\n           " + s[2]);
-  const a = rowIds.get(k) || new Set();
-  const b = rowIds.get(s[2]) || new Set();
+  const a = rowIds.get(k) || new Map();
+  const b = rowIds.get(s[2]) || new Map();
   if (a.size === 0 || b.size === 0) fail("the pairing for " + JSON.stringify(s[1]) + " extracted an EMPTY side (" + a.size + " vs " + b.size + "). A pairing over an empty set is trivially satisfiable. Do not weaken it; report it.");
-  const onlyA = [...a].filter((x) => !b.has(x));
-  const onlyB = [...b].filter((x) => !a.has(x));
-  if (onlyA.length || onlyB.length) {
+  // MULTIPLICITY, not membership: a row present twice on one side and once on the
+  // other is a real asymmetry and is reported as one.
+  const dupA = [...a].filter(([, n]) => n > 1).map(([x, n]) => x + "×" + n);
+  const dupB = [...b].filter(([, n]) => n > 1).map(([x, n]) => x + "×" + n);
+  const onlyA = [...a.keys()].filter((x) => !b.has(x));
+  const onlyB = [...b.keys()].filter((x) => !a.has(x));
+  const mism = [...a].filter(([x, n]) => b.has(x) && b.get(x) !== n).map(([x, n]) => x + " (" + n + " vs " + b.get(x) + ")");
+  if (onlyA.length || onlyB.length || dupA.length || dupB.length || mism.length) {
     console.error("FAIL V-30: " + JSON.stringify(s[1]) + " is not 1:1 with the table it is paired to.");
     if (onlyA.length) console.error("           in the DATA table only: " + onlyA.join(" "));
     if (onlyB.length) console.error("           in the PAIRED table only: " + onlyB.join(" "));
-    console.error("           AC-15 claims exact coverage; add or remove the matching row in the");
-    console.error("           same commit. This is DERIVED here, not remembered from a dated run.");
+    if (dupA.length) console.error("           DUPLICATED in the DATA table: " + dupA.join(" "));
+    if (dupB.length) console.error("           DUPLICATED in the PAIRED table: " + dupB.join(" "));
+    if (mism.length) console.error("           differing multiplicity: " + mism.join(" "));
+    console.error("           " + JSON.stringify(s[1]) + " claims exact coverage; add or remove the");
+    console.error("           matching row in the same commit. This is DERIVED here, not");
+    console.error("           remembered from a dated run.");
     process.exit(1);
   }
 }
@@ -6417,7 +6433,7 @@ if (missing.length) {
 // H9: print what was checked, INCLUDING what was not. The backlog holds ids
 // that are genuinely unregistered mirrors; calling them nothing would make this
 // pasted artifact less honest than the source it came from.
-console.log("V-30 ok: " + defs.size + " ids defined across " + seen.size + " schema-dispositioned tables (" + dataTables + " corpus/measurement, registered by table; " + pairings + " declaring a 1:1 pairing, each checked in BOTH directions at " + (rowIds.get("### AC-15 coverage census — canonical: the evidence limb of every mutation row || | # | limb | evidence |") || new Set()).size + " rows) plus the acceptance-criterion, verification-step and accepted-residual families; "
+console.log("V-30 ok: " + defs.size + " ids defined across " + seen.size + " schema-dispositioned tables (" + dataTables + " corpus/measurement, registered by table; " + pairings + " declaring a 1:1 pairing, each checked in BOTH directions at " + (rowIds.get("### AC-15 coverage census — canonical: the evidence limb of every mutation row || | # | limb | evidence |") || new Map()).size + " distinct ids) plus the acceptance-criterion, verification-step and accepted-residual families; "
   + (defs.size - BACKLOG.size) + " registered in the Checklist under H6's boundary form; "
   + BACKLOG.size + " on the dated backlog and therefore NOT registered; 0 outside both.");
 REGEOF

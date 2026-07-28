@@ -163,18 +163,36 @@ therefore still protects them, so a fixture must make the prune **observably fir
 more than once**. Two shapes work and either is acceptable; pick one and say which
 in the PR:
 
-- **Observational** — a counting seam on `pruneRedactedOriginals`'s directory read
-  (`fs.readdirSync` on `<stateDir>/quarantine/redacted/`), asserting it is entered
-  **exactly once** across a run that completes **three** redactions. This is a
-  direct assertion of N2 and does not depend on cap arithmetic.
-- **Consequential** — a fixture seeded to the cap where the run completes several
-  redactions, arranged so a per-call prune evicts a **pre-existing** copy that a
-  per-run prune would keep. This asserts the user-visible consequence but is
-  sensitive to N5's yields-precedence, so check it against the third existing test
-  before relying on it.
+**There is exactly ONE strategy, and the second one this spec used to offer was
+removed because it is UNSATISFIABLE.**
 
-**Prefer the observational form.** It is what the row is about, it cannot be
-satisfied by accident, and its assertion names the fact directly.
+- **Observational — the only form** — a counting seam on `pruneRedactedOriginals`'s
+  directory read (`fs.readdirSync` on `<stateDir>/quarantine/redacted/`), asserting
+  it is entered **exactly once** across a run that completes **three** redactions.
+  It is a direct assertion of N2, it does not depend on cap arithmetic, and it
+  cannot be satisfied by accident.
+
+**The removed option, and why removing it is the point.** Until 2026-07-28 this
+spec also offered a *consequential* strategy — "a fixture seeded to the cap where a
+per-call prune evicts a pre-existing copy that a per-run prune would keep". **No
+such fixture exists.** With the exclusion set passed unchanged (which is what makes
+the mutation N2-*only*), every prune protects every copy created so far, both
+orderings draw deletions from the same pre-existing pool in the same
+`(mtimeMs, name)` order, and both stop at the cap or when candidates run out — so
+the **final states converge for every fixture**. An implementer who picked the
+documented option would have been asked for something that cannot be built.
+
+*Proven by execution, 2026-07-28, not argued.* A faithful model of
+`pruneRedactedOriginals` was driven under both orderings across **23,505**
+configurations — caps 3/5/12/50, seeded copies 0…cap+6, run sizes 0…cap+4, three
+`mtimeMs` regimes (monotone, all-tied, reversed against name order), plus
+non-date-prefixed files that inflate the total but are never candidates, plus a run
+copy whose basename collides with a pre-existing one. **Final-state differences
+found: 0.** The runs are recorded in PR #124's round-10 disposition.
+
+**What survives is the reason the observational seam is the right one anyway:** N2
+is a statement about *how many times something runs*, and a property of the call
+count is not visible in the final state at all. Assert the thing the row is about.
 
 ## Contract reference
 
@@ -254,10 +272,42 @@ test "$limb" = "gap" || {
   echo "         Either this work is already done or the census moved."; exit 1; }
 echo "ok: PR #124 is on main and the gap is still open"
 
-# 0c. Now the code and test claims this spec makes. Same rule: a miss stops you.
-grep -n 'Retention, once per run' src/core/dream/validate.js
-grep -n 'every basename this run wrote into' src/core/dream/validate.js
-grep -c 'EP2 retention:' tests/unit/dream-validate.test.js     # expect 5 before your change
+# 0c. The CODE claims — and these ASSERT rather than print, because the exact
+#     regression this WP exists to catch (the prune call moved into the B4 loop)
+#     leaves BOTH comments intact and is proven to leave all five existing
+#     retention tests green. Grepping for the comments alone would dispatch this
+#     WP against already-broken production code, and the baseline in step 1 would
+#     then fail with src/ outside your permission boundary.
+V=src/core/dream/validate.js
+
+#     The comment and the guarded call must be ADJACENT — one two-line pattern, so
+#     a call that moved away from its comment is caught even though both strings
+#     still exist somewhere in the file.
+n=$(awk '/Retention, once per run/ { c = NR }
+         c && NR == c + 1 && /if \(secretRedactions > 0\) pruneRedactedOriginals\(stateDir, redactedCreated\);/ { n++ }
+         END { print n + 0 }' "$V")
+test "$n" = "1" || {
+  echo "BLOCKED: the guarded post-loop prune call does not immediately follow its"
+  echo "         'Retention, once per run' comment ($n adjacent occurrence(s), want 1)."
+  echo "         Either the call moved — which is the N2 regression itself — or the"
+  echo "         code was refactored. STOP AND REPORT; do not start."; exit 1; }
+
+#     …and it must occur EXACTLY ONCE in the whole file, so a per-call copy added
+#     alongside the post-loop one is caught too.
+c=$(grep -c 'pruneRedactedOriginals(stateDir, redactedCreated)' "$V")
+test "$c" = "1" || {
+  echo "BLOCKED: pruneRedactedOriginals is called $c times, want exactly 1."
+  echo "         A second call site is the per-call form. STOP AND REPORT."; exit 1; }
+
+grep -q 'every basename this run wrote into' "$V" || {
+  echo "BLOCKED: the run-scoped exclusion set's declaration is gone."; exit 1; }
+
+#     The TEST baseline is ASSERTED, not printed.
+t=$(grep -c 'EP2 retention:' tests/unit/dream-validate.test.js)
+test "$t" = "5" || {
+  echo "BLOCKED: found $t 'EP2 retention:' tests, want exactly 5 before your change."
+  echo "         Someone has already added or removed one. STOP AND REPORT."; exit 1; }
+echo "ok: call site, exclusion set and the 5-test baseline all as this spec states"
 
 # 1. AC-2 — green on unmodified src/
 node tests/run.js --test-name-pattern "EP2 retention" tests/unit/dream-validate.test.js
