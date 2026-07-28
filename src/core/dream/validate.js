@@ -11,7 +11,7 @@ const { defaultLayout } = require('../layout');
 const { recordSkills, readRegistry } = require('./skill-registry');
 const { isCapabilityAllowed, CAPABILITY } = require('../safety-profile');
 const { parse, coerceScalar } = require('../frontmatter');
-const { scanAndRedact } = require('../secret-scan');
+const { scanAndRedact, hasHardFinding } = require('../secret-scan');
 const { displayName } = require('./ledger');
 
 // The four identity files the digest injects (direct children of identity_dir).
@@ -633,46 +633,321 @@ function revertPath(vaultDir, rel, untracked) {
   }
 }
 
+/** The pre-scrub originals the redact arm writes live one level down, so the
+ *  withhold banner (which lists direct FILE entries only) never mentions them. */
+const REDACTED_SUBDIR = 'redacted';
+
+/** How many pre-scrub originals `state/quarantine/redacted/` keeps
+ *  (OWNER-APPROVED). The copies a run creates are never evicted by that run,
+ *  so a run that redacts more notes than this ends above the cap and the next
+ *  redacting run prunes it back. `state/quarantine/` itself stays unbounded. */
+const REDACTED_RETENTION_CAP = 50;
+
 /**
- * Preserve the current working-tree bytes of a flagged vault file into the
- * staged-output quarantine directory `<stateDir>/quarantine/` (audit A5,
- * WP-123 OWNER-APPROVED): dir 0700, file 0600, atomic write (tmp + rename),
- * name `<date>-<sanitized-basename>` with a numeric suffix before the
- * extension on collision. Best-effort: any failure (including a missing
- * stateDir) returns false — the caller still reverts the vault file (fail
- * closed on the commit) and notes the failed copy in the reason string.
+ * Preserve the working-tree bytes of a flagged vault file into the private
+ * quarantine tree (audit A5, WP-123 OWNER-APPROVED): dir 0700, file 0600,
+ * atomic write (tmp + rename), name `<date>-<sanitized-basename>` with a
+ * numeric suffix before the extension on collision.
+ *
+ * Best-effort: any failure (including a missing stateDir) returns `null`.
+ * `null` is falsy exactly where the previous `false` was, so the withhold call
+ * site keeps its `if (!preserved)` shape.
+ *
  * @param {string|undefined} stateDir
  * @param {string} vaultDir
  * @param {string} rel  vault-relative path of the flagged file
  * @param {string} date  the dream run date (YYYY-MM-DD)
- * @returns {boolean} true iff the quarantine copy was written
+ * @param {'withheld'|'redacted'} [kind='withheld']  selects the destination:
+ *   'withheld' -> <stateDir>/quarantine/           (the note is NOT in the vault)
+ *   'redacted' -> <stateDir>/quarantine/redacted/  (the note IS in the vault, scrubbed)
+ * @returns {{name:string, bytes:Buffer}|null} the destination BASENAME actually
+ *   written TOGETHER WITH THE EXACT BYTES IT PRESERVED, or `null` on any
+ *   failure. The caller cannot reconstruct the name — `displayName` throws the
+ *   directories away and the collision loop appends `-1`, `-2`, … — and the
+ *   bytes are the redact arm's single source of truth (reading the file a
+ *   second time to obtain them is the TOCTOU this return closes).
  */
-function quarantinePreserve(stateDir, vaultDir, rel, date) {
+function quarantinePreserve(stateDir, vaultDir, rel, date, kind = 'withheld') {
+  // Code-supplied, never user input: a typo must fail loudly rather than write
+  // to a third directory. Deliberately OUTSIDE the try below, which is total.
+  if (kind !== 'withheld' && kind !== 'redacted') {
+    throw new WienerdogError(`quarantinePreserve: unknown kind ${JSON.stringify(kind)}`);
+  }
   let tmp = null;
   try {
-    if (!stateDir) return false;
+    if (!stateDir) return null;
     const content = fs.readFileSync(path.join(vaultDir, rel)); // Buffer → byte-identical copy
-    const qdir = path.join(stateDir, 'quarantine');
+    const qdir = kind === 'redacted'
+      ? path.join(stateDir, 'quarantine', REDACTED_SUBDIR)
+      : path.join(stateDir, 'quarantine');
     fs.mkdirSync(qdir, { recursive: true, mode: 0o700 });
     fs.chmodSync(qdir, 0o700);
     const base = displayName(rel); // shared attacker-safe basename sanitizer (WP-119/120)
     const ext = path.extname(base);
     const stem = base.slice(0, base.length - ext.length);
-    let dest = path.join(qdir, `${date}-${stem}${ext}`);
+    let name = `${date}-${stem}${ext}`;
+    let dest = path.join(qdir, name);
     for (let n = 1; fs.existsSync(dest); n += 1) {
-      dest = path.join(qdir, `${date}-${stem}-${n}${ext}`);
+      name = `${date}-${stem}-${n}${ext}`;
+      dest = path.join(qdir, name);
     }
     tmp = path.join(qdir, `.tmp-${process.pid}-${stem}${ext}`);
     fs.writeFileSync(tmp, content, { mode: 0o600 });
     fs.chmodSync(tmp, 0o600);
     fs.renameSync(tmp, dest);
-    return true;
+    return { name, bytes: content };
   } catch {
     try {
       if (tmp) fs.rmSync(tmp, { force: true });
     } catch { /* best-effort tmp cleanup; the caller reverts regardless */ }
-    return false;
+    return null;
   }
+}
+
+/**
+ * The 1-based line numbers THIS run added, read out of a `git diff -U0` hunk
+ * header. The header shape is not the obvious one: git omits `,<count>` on
+ * either side whenever that side's count is 1, and it omits them
+ * independently, so a pattern requiring `,b` never matches a single-line
+ * replacement (`@@ -2 +2 @@`) at all and one that reads a missing `,d` as 0
+ * never matches a single-line insertion (`@@ -2,0 +3 @@`). Both omissions fail
+ * closed — the scrub becomes a no-op and the note is withheld — which is why
+ * both are parsed here rather than discovered later.
+ * @param {string} diff  the raw `git diff --cached -U0 -- <rel>` output
+ * @returns {number[]} 1-based line numbers in the NEW file
+ */
+function addedLineNumbersFromDiff(diff) {
+  /** @type {number[]} */
+  const out = [];
+  for (const line of String(diff).split('\n')) {
+    // Anchored at ^ and indifferent to the trailing function-context string.
+    const m = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/.exec(line);
+    if (!m) continue;
+    const start = Number(m[3]);
+    const count = m[4] === undefined ? 1 : Number(m[4]); // absent → 1; 0 → pure deletion
+    for (let i = 0; i < count; i += 1) out.push(start + i);
+  }
+  return out;
+}
+
+/**
+ * Can these bytes be decoded as UTF-8 and re-encoded to exactly themselves?
+ *
+ * THE PER-LINE SCRUB HAS TO DECODE THE WHOLE NOTE, AND A DECODE IS ONLY SAFE IF
+ * IT ROUND-TRIPS. `Buffer.toString('utf8')` never fails: it replaces every
+ * invalid byte with U+FFFD. Re-encoding that string then writes three different
+ * bytes back — so on a Latin-1 (or otherwise not-quite-UTF-8) note the gate
+ * would rewrite lines it never touched, all over the file, while reporting that
+ * it replaced only the added ones. Git classifies such a file as TEXT whenever
+ * it holds no NUL byte, so the binary fail-closed branch does not catch it.
+ *
+ * A note that fails this check is withheld instead of scrubbed — the behaviour
+ * this gate had before the redact arm existed, which is the right default for a
+ * file that cannot be processed without risking its bytes.
+ * @param {Buffer} buf
+ * @returns {boolean}
+ */
+function isLosslessUtf8(buf) {
+  return Buffer.compare(Buffer.from(buf.toString('utf8'), 'utf8'), buf) === 0;
+}
+
+/**
+ * Rewrite exactly the lines THIS run added, replacing each with its sanitized
+ * form. Never touches a line the run did not add — a secret already committed
+ * in HEAD is not rewritten (ADR-0024's "the gate scans the added bytes").
+ *
+ * SANITIZATION UNIT: one line at a time. Each added line number L is replaced
+ * by `scanAndRedact(lines[L-1]).text`, not the joined blob the gate scanned —
+ * per-line keeps the line count fixed and keeps the rewrite local. It is
+ * equivalent to the blob scan because the only `redact`-severity producer is
+ * the context-free entropy tier, whose alphabet contains no whitespace.
+ *
+ * ORDER (INDEX-FIRST): compute → verify → write the sanitized bytes to a
+ * same-directory temp → STAGE the temp's blob in the git index at `rel` →
+ * only then rename the temp over the target. The git index is written STRICTLY
+ * BEFORE the working tree, so a kill inside the arm can only leave the index
+ * sanitized over a working tree holding the user's own unmodified text — never
+ * the other way round, which is the state a user reads as "the secret is gone"
+ * while a later `git commit` still ships it.
+ *
+ * NEVER THROWS: like `quarantinePreserve`, the whole body sits in one try and
+ * every exception returns false, so no failure of this helper can escape the
+ * caller's fall-through.
+ *
+ * @param {string} vaultDir
+ * @param {string} rel
+ * @param {number[]} addedLineNumbers  1-based line numbers in the NEW file
+ * @param {Buffer} captured  the EXACT bytes `quarantinePreserve` preserved for
+ *   this path — the scrub's only input. This helper NEVER reads the target to
+ *   obtain its content; it reads it once more immediately before the rename,
+ *   ONLY to compare against this buffer. A mismatch means the note's owner
+ *   changed it under the arm, so the scrub is abandoned without renaming and
+ *   the user's own save survives untouched.
+ * @returns {boolean} true iff the scrub is verified complete and staged
+ */
+function scrubAddedLines(vaultDir, rel, addedLineNumbers, captured) {
+  const target = path.join(vaultDir, rel);
+  let tmp = null;
+  try {
+    // Fail closed on a note whose bytes are not losslessly representable as
+    // UTF-8: decoding it would substitute U+FFFD for every invalid byte and the
+    // re-encode would then corrupt lines this run never added. The caller
+    // withholds instead. Held here rather than only at the call site so the
+    // exported helper is safe for every caller.
+    if (!isLosslessUtf8(captured)) return false;
+    const raw = captured.toString('utf8');
+    const trailingNewline = raw.endsWith('\n');
+    const lines = (trailingNewline ? raw.slice(0, -1) : raw).split('\n');
+    // Bounds FIRST, before any indexing and before any write.
+    for (const l of addedLineNumbers) {
+      if (!Number.isInteger(l) || l < 1 || l > lines.length) return false;
+    }
+    for (const l of addedLineNumbers) {
+      lines[l - 1] = scanAndRedact(lines[l - 1]).text;
+    }
+    const out = Buffer.from(lines.join('\n') + (trailingNewline ? '\n' : ''), 'utf8');
+    // A no-op means the rewrite and the gate's own scan disagree — a defect,
+    // and a defect in a secret gate withholds.
+    if (Buffer.compare(out, captured) === 0) return false;
+    // The verified-scrub postcondition: without it this helper can only report
+    // what it TRIED to do, and a silent failure commits the raw secret while
+    // the report announces a successful redaction.
+    for (const l of addedLineNumbers) {
+      if (scanAndRedact(lines[l - 1]).findings.length > 0) return false;
+    }
+    // Same-directory temp + rename. A truncating whole-file write would leave a
+    // half-scrubbed note on disk on ENOSPC/EIO, and the withhold fall-through
+    // would then preserve THAT as "the true original".
+    const mode = fs.statSync(target).mode & 0o777;
+    tmp = path.join(
+      path.dirname(target),
+      `.${path.basename(target)}.wienerdog-scrub.${process.pid}.tmp`
+    );
+    // `mode` is a CREATION mode and is filtered by the umask, so the explicit
+    // chmod is required — without it a 0644 note silently becomes 0600 on a
+    // machine with a tight umask, i.e. this gate re-permissions the user's file.
+    fs.writeFileSync(tmp, out, { mode });
+    fs.chmodSync(tmp, mode);
+    // ── Index-first stage. Every call allowFail + status-checked: the plain
+    //    helper throws on a non-zero exit, and a throw here would abort the run
+    //    instead of falling through to the withhold.
+    const staged = git(vaultDir, ['ls-files', '--stage', '--', rel], { allowFail: true });
+    if (staged.status !== 0) return false;
+    const gitMode = String(staged.stdout).trim().split(/\s+/)[0];
+    if (!gitMode) return false; // empty stdout — nothing staged at this path
+    // `--path rel` makes git apply the same .gitattributes clean filters and
+    // core.autocrlf conversion it would apply to the real path, so the blob is
+    // byte-identical to what `git add rel` produces after the rename.
+    const blob = git(vaultDir, ['hash-object', '-w', '--path', rel, '--', tmp], { allowFail: true });
+    if (blob.status !== 0) return false;
+    const sha = String(blob.stdout).trim();
+    if (!sha) return false;
+    const updated = git(
+      vaultDir,
+      ['update-index', '--add', '--cacheinfo', gitMode, sha, rel],
+      { allowFail: true }
+    );
+    if (updated.status !== 0) return false;
+    // The last act before the rename: re-read the target and compare it against
+    // the captured bytes. A mid-dream editor save lands here, and overwriting it
+    // would destroy the only copy of what the user actually wrote — the copy in
+    // `redacted/` holds the PRE-save bytes. The staged blob is the sanitized
+    // form, so abandoning here leaves nothing raw in the index.
+    if (Buffer.compare(fs.readFileSync(target), captured) !== 0) return false;
+    fs.renameSync(tmp, target);
+    tmp = null; // the rename IS the removal on this path
+    return true;
+  } catch {
+    return false;
+  } finally {
+    if (tmp) {
+      // The temp lives inside the vault, which Step 5's `git add -A` stages
+      // wholesale, so it must never survive the call.
+      try {
+        fs.rmSync(tmp, { force: true });
+      } catch { /* best-effort */ }
+    }
+  }
+}
+
+/**
+ * Keep `state/quarantine/redacted/` bounded. Runs ONCE per gate run, after the
+ * loop over changed paths, and only when at least one redaction completed — a
+ * run that failed never runs a delete path over the recovery directory.
+ *
+ * Never deletes a copy THIS run created: `(mtimeMs, name)` ordering falls back
+ * to the basename on a tie or a skewed clock, which sorts by note name within a
+ * date, so a copy the dream report is about to name could otherwise be evicted
+ * by the run that wrote it. The cap therefore yields — a run creating more
+ * copies than the cap ends above it, holding exactly its own.
+ *
+ * Best-effort: a failed prune is ignored and the arm still completes.
+ * @param {string|undefined} stateDir
+ * @param {Set<string>} created  every basename this run wrote into `redacted/`
+ */
+function pruneRedactedOriginals(stateDir, created) {
+  if (!stateDir) return;
+  try {
+    const dir = path.join(stateDir, 'quarantine', REDACTED_SUBDIR);
+    const entries = fs.readdirSync(dir, { withFileTypes: true }).filter((e) => e.isFile());
+    let total = entries.length;
+    if (total <= REDACTED_RETENTION_CAP) return;
+    const candidates = entries
+      .filter((e) => /^[0-9]{4}-[0-9]{2}-[0-9]{2}-/.test(e.name) && !created.has(e.name))
+      .map((e) => {
+        let mtimeMs = 0;
+        try {
+          mtimeMs = fs.statSync(path.join(dir, e.name)).mtimeMs;
+        } catch { /* unreadable → oldest */ }
+        return { name: e.name, mtimeMs };
+      })
+      .sort((a, b) => (a.mtimeMs - b.mtimeMs) || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+    for (const c of candidates) {
+      if (total <= REDACTED_RETENTION_CAP) break;
+      try {
+        fs.rmSync(path.join(dir, c.name), { force: true });
+        total -= 1;
+      } catch { /* best-effort */ }
+    }
+  } catch { /* best-effort: a failed prune never fails the arm */ }
+}
+
+/**
+ * The `WienerdogError` the gate raises when it would otherwise destroy a
+ * working-tree file that no durable artefact holds the current bytes of.
+ *
+ * It is the ONLY surface that reaches the user on an abort — the dream report
+ * is never appended, the reverted list is never rendered, and no banner fires —
+ * so it carries all four facts: which note, which copies could not be saved,
+ * whether the file on disk could be checked against a copy, and where a
+ * surviving copy is. Metadata only: the path, the already-sanitized basename
+ * and the outcome words, never a matched byte and never a line of the note.
+ *
+ * The path is rendered with `JSON.stringify` — a vault file name is chosen by
+ * whatever wrote the note, and a raw newline would forge a second line of
+ * output while a raw ANSI escape would reposition or hide what follows, in the
+ * terminal the user is reading to decide what happened to their note. The JSON
+ * string form is deterministic and reversible: it escapes every control
+ * character and `JSON.parse` returns the original path exactly, so two names
+ * that a lossy sanitizer would collapse together stay distinguishable.
+ *
+ * @param {string} rel  vault-relative path
+ * @param {string|null} redactedName  the surviving `redacted/` basename, if any
+ * @param {string} identity  what the on-disk check could establish
+ * @returns {string}
+ */
+function secretGateAbortMessage(rel, redactedName, identity) {
+  const which = redactedName === null
+    ? 'neither the redaction copy nor the withheld copy could be saved'
+    : 'the withheld copy could not be saved; the redaction copy was saved';
+  const where = redactedName === null
+    ? ''
+    : ` The unredacted original is state/quarantine/redacted/${redactedName}.`;
+  return (
+    `the secret check stopped before changing ${JSON.stringify(rel)}: ${which}, and the check ` +
+    `that the file on disk still matches a saved copy was ${identity}. Nothing was reverted, ` +
+    `removed or committed, so the note is exactly where it was.${where}`
+  );
 }
 
 /** @param {string} dir @returns {string[]} absolute file paths under dir, recursively. */
@@ -753,9 +1028,15 @@ function changedPaths(vaultDir) {
  *     (see the PR "Decisions made").
  * @returns {{ committed:string[], reverted:Array<{path:string,reason:string}>,
  *             outOfVault:string[], sha:string|null, counts:{notes:number,skills:number},
- *             secretReverts:number }}
- *   secretReverts = files reverted by the EP2 staged-output secret gate
- *   (WP-123); additive — these entries also appear in `reverted[]`.
+ *             secretReverts:number, secretRedactions:number }}
+ *   secretReverts = files WITHHELD by the EP2 staged-output secret gate
+ *   (WP-123) — a quarantine-severity finding, or unscannable binary content.
+ *   Unchanged meaning: content this run produced was NOT committed; the dream
+ *   CLI keys transcript deferral on it. Additive — these entries also appear in
+ *   `reverted[]`.
+ *   secretRedactions = files COMMITTED with this run's added lines scrubbed.
+ *   These consumed their transcripts normally and MUST NOT defer, which is why
+ *   they are counted separately and never enter `reverted[]`.
  */
 function validateAndCommit(o) {
   const { vaultDir, scratchDir, date, expectedScratch, scratchBaseline, stateDir } = o;
@@ -897,14 +1178,24 @@ function validateAndCommit(o) {
   // ── Step 3: EP2 staged-output secret gate (audit A5, ADR-0024, WP-123) ───
   // Stage the surviving changes and scan the git-computed staged ADDED lines of
   // every file — exactly the bytes THIS run is responsible for (a secret the
-  // human already committed in HEAD is not re-flagged). ANY detector finding
-  // (`findings.length > 0`, either severity — OWNER-APPROVED 2026-07-17)
-  // quarantine-preserves the working-tree file, then reverts it; the sanitized
-  // `.text` is never written back (revert, never rewrite).
+  // human already committed in HEAD is not re-flagged). A quarantine-severity
+  // finding (and unscannable binary content) preserves the working-tree file
+  // into `state/quarantine/` and reverts it, uncommitted. A findings set with
+  // NO quarantine-severity finding is redacted in place instead: the
+  // unredacted original is preserved into `state/quarantine/redacted/` first,
+  // then only the lines this run added are replaced with their sanitized form
+  // and the note is committed, announced in the dream report. ADR-0034
+  // supersedes ADR-0024's WP-123 "reverts on every finding" amendment for this
+  // gate only; EP4's digest gate is unchanged.
   git(vaultDir, ['add', '-A']);
   let secretReverts = 0;
+  let secretRedactions = 0;
   /** @type {Set<string>} rels reverted by this gate (excluded from registration) */
   const secretReverted = new Set();
+  /** @type {Array<{path:string, lines:number, labels:string, name:string}>} */
+  const secretRedacted = [];
+  /** @type {Set<string>} every basename this run wrote into quarantine/redacted/ */
+  const redactedCreated = new Set();
   const scanTokens = git(vaultDir, ['diff', '--cached', '--name-status', '-z']).stdout.split('\0');
   for (let i = 0; i < scanTokens.length; i++) {
     const status = scanTokens[i];
@@ -921,6 +1212,12 @@ function validateAndCommit(o) {
     const numstat = git(vaultDir, ['diff', '--cached', '--numstat', '-z', '--', rel]).stdout;
     const isBinary = /^-\t-\t/.test(numstat);
     let reason;
+    /** @type {{name:string, bytes:Buffer}|null} the redacted/ copy the arm wrote */
+    let redactCopy = null;
+    /** true once the redact arm was entered and did not complete */
+    let redactFellThrough = false;
+    /** true when the arm declined because the note is not lossless UTF-8 */
+    let notLosslessUtf8 = false;
     if (isBinary) {
       reason = 'reverted: staged content is binary and cannot be secret-scanned; not committed';
     } else {
@@ -936,18 +1233,104 @@ function validateAndCommit(o) {
       // Metadata-only reason: distinct code-owned labels, never the matched bytes.
       const labels = findings.map((f) => f.label);
       reason = `reverted: staged content matched a secret pattern (${labels.join(', ')}); not committed`;
+      if (!hasHardFinding(findings)) {
+        // ── The redact arm. Preserve the unredacted original FIRST, then scrub
+        //    only the lines this run added, against the very bytes that were
+        //    preserved. Never scrub a file whose original could not be
+        //    preserved: that is the permanent-corruption outcome this design
+        //    exists to avoid. Anything short of a verified, staged scrub falls
+        //    through to the withhold below, before Step 5 stages anything.
+        redactCopy = quarantinePreserve(stateDir, vaultDir, rel, date, 'redacted');
+        if (redactCopy) redactedCreated.add(redactCopy.name);
+        const addedLineNumbers = addedLineNumbersFromDiff(diff);
+        // A note whose bytes do not survive a UTF-8 round trip cannot be
+        // rewritten per line without changing bytes the run never added, so the
+        // arm declines it outright and the withhold below runs instead.
+        if (redactCopy && !isLosslessUtf8(redactCopy.bytes)) notLosslessUtf8 = true;
+        else if (redactCopy && scrubAddedLines(vaultDir, rel, addedLineNumbers, redactCopy.bytes)) {
+          secretRedacted.push({
+            path: rel,
+            lines: addedLineNumbers.length,
+            labels: labels.join(', '),
+            name: redactCopy.name,
+          });
+          secretRedactions += 1; // increments LAST, only after the scrub is staged
+          continue;
+        }
+        redactFellThrough = true;
+      }
     }
+    const tracked = git(vaultDir, ['cat-file', '-e', `HEAD:${rel}`], { allowFail: true }).status === 0;
     const preserved = quarantinePreserve(stateDir, vaultDir, rel, date);
-    if (git(vaultDir, ['cat-file', '-e', `HEAD:${rel}`], { allowFail: true }).status === 0) {
+    if (redactFellThrough && !preserved) {
+      // ── The abort. Never destroy the working-tree file unless some durable
+      //    artefact holds THE BYTES THAT ARE THERE NOW. A copy of some earlier
+      //    version is not that: the note's owner can have saved it mid-dream,
+      //    and reverting then destroys the only copy of what they wrote.
+      let identity = 'not performed, because there was no saved copy to compare against';
+      let recoverable = false;
+      if (redactCopy) {
+        try {
+          if (Buffer.compare(fs.readFileSync(path.join(vaultDir, rel)), redactCopy.bytes) === 0) {
+            recoverable = true;
+            identity = 'performed, and the file on disk matches the saved copy';
+          } else {
+            identity = 'performed, and the file on disk does NOT match the saved copy';
+          }
+        } catch {
+          // A read that cannot be performed cannot show the file is recoverable.
+          identity = 'attempted, but the file on disk could not be read at all';
+        }
+      }
+      if (!recoverable) {
+        throw new WienerdogError(
+          secretGateAbortMessage(rel, redactCopy ? redactCopy.name : null, identity)
+        );
+      }
+    }
+    if (tracked) {
       revertPath(vaultDir, rel, false); // tracked → restore HEAD (index + worktree)
     } else {
-      fs.rmSync(path.join(vaultDir, rel), { force: true, recursive: true }); // untracked add → remove (Step 5's add -A drops the index entry)
+      fs.rmSync(path.join(vaultDir, rel), { force: true, recursive: true }); // untracked add → remove
+      // Drop the index entry Step 3's opening `git add -A` created NOW rather
+      // than at Step 5, so no window exists in which the report is written over
+      // an index still holding this run's raw added bytes.
+      git(vaultDir, ['add', '-A', '--', rel]);
     }
     if (!preserved) reason += ' (quarantine copy failed)';
+    if (notLosslessUtf8) {
+      reason += ' (not rewritten: this note is not valid UTF-8 text, so the secret could not be '
+        + 'replaced without changing the rest of it)';
+    }
+    if (redactCopy) {
+      // Dispose of the redact arm's copy, LAST, after the revert succeeded.
+      // Delete it only when a byte-identical withheld copy demonstrably exists;
+      // anything else — the withheld preserve failed, either read threw, or the
+      // buffers differ — keeps it, because it is then the only copy of a version
+      // of the user's note that exists anywhere, and says so in the reason.
+      let identical = false;
+      if (preserved) {
+        try {
+          identical = Buffer.compare(
+            fs.readFileSync(path.join(stateDir, 'quarantine', REDACTED_SUBDIR, redactCopy.name)),
+            fs.readFileSync(path.join(stateDir, 'quarantine', preserved.name))
+          ) === 0;
+        } catch { identical = false; }
+      }
+      if (identical) {
+        try {
+          fs.rmSync(path.join(stateDir, 'quarantine', REDACTED_SUBDIR, redactCopy.name), { force: true });
+        } catch { /* best-effort: a stale duplicate, not a hazard */ }
+      } else {
+        reason += ` (the unredacted original is state/quarantine/${REDACTED_SUBDIR}/${redactCopy.name})`;
+      }
+    }
     reverted.push({ path: rel, reason });
     secretReverted.add(rel);
     secretReverts += 1;
   }
+  // Retention, once per run and only after a completed redaction.
+  if (secretRedactions > 0) pruneRedactedOriginals(stateDir, redactedCreated);
   // A gate-reverted new skill must not reach the ownership registry (Step 6).
   if (secretReverted.size > 0) {
     for (let i = newSkills.length - 1; i >= 0; i -= 1) {
@@ -973,6 +1356,24 @@ function validateAndCommit(o) {
     reportAbs,
     `\n## Reverted by orchestrator (policy enforcement)\n${enforcementLines.join('\n')}\n`
   );
+  // The redaction section is written only when there is something in it (an
+  // empty section is noise on the common path) and is appended AFTER the
+  // enforcement section, so that section's byte output is identical whether or
+  // not a redaction happened. Metadata only: the vault-relative path, a line
+  // count, the labels and the sanitized destination basename — never the
+  // matched bytes and never the scrubbed line's text.
+  if (secretRedacted.length > 0) {
+    const redactionLines = secretRedacted.map(
+      (r) =>
+        `- \`${r.path}\` — ${r.lines} line(s) scrubbed (${r.labels}); unredacted copy at ` +
+        `state/quarantine/${REDACTED_SUBDIR}/${r.name}. If the redaction was wrong, restore from ` +
+        'that copy while it is there; otherwise delete it.'
+    );
+    fs.appendFileSync(
+      reportAbs,
+      `\n## Redacted in place (secret scan)\n${redactionLines.join('\n')}\n`
+    );
+  }
 
   // ── Step 5: stage everything and make exactly ONE commit ─────────────────
   git(vaultDir, ['add', '-A']);
@@ -1020,6 +1421,7 @@ function validateAndCommit(o) {
     sha,
     counts: { notes, skills },
     secretReverts,
+    secretRedactions,
   };
 }
 
@@ -1030,4 +1432,5 @@ module.exports = {
   assertCleanTree,
   precommitSessionEdits,
   restoreVaultToHead,
+  scrubAddedLines,
 };

@@ -80,20 +80,26 @@ Canonical names. Use these exact terms in code, docs, specs, and prompts — nev
   or above the entropy floor, is `redact` and needs no context at all; the same
   run widened to include `/` is `quarantine` only when a sensitive keyword
   binds to it through a separator on the same line. Both tiers write the same
-  `[REDACTED:high-entropy]` token. Two
-  severities, `redact` and `quarantine`, but the *persistence* gates (staged
-  output, digest section) withhold on **any** finding of either severity; the
-  input and log/alert paths use `redactOnly` (inline redaction of every
-  match). `hasHardFinding` (quarantine-severity only) is an exported helper
-  for future gates; no shipped gate branches on it today.
+  `[REDACTED:high-entropy]` token. The two *persistence* gates read severity
+  differently. The staged-output gate (EP2) branches on it through
+  `hasHardFinding`: any `quarantine` finding still withholds and reverts the
+  whole note, while a findings set with no `quarantine` finding is redacted in
+  place — the unredacted original is preserved first, then only the lines that
+  run added are replaced with their sanitized form, and the note is committed.
+  The digest-section gate (EP4) is unchanged and still omits a section on any
+  finding of either severity. The input and log/alert paths still use
+  `redactOnly` (inline redaction of every match).
   (Not: "filter", "scrubber", "DLP".)
-- **secret quarantine** — the fail-closed outcome when a persistence gate that
-  cannot safely rewrite an artifact gets any `scanAndRedact` finding: the
-  brain's staged output is preserved into `state/quarantine/` (0700 dir, 0600
-  file, raw bytes intact, for the owner to review or restore) and reverted
-  rather than committed; a digest section with a finding is omitted rather
-  than injected redacted. Never a silent `[REDACTED]` rewrite of the user's
-  own text. See `docs/runbooks/secret-incident.md` for recovery.
+- **secret quarantine** — where the staged-output gate puts the user's own
+  bytes, in two places. `state/quarantine/` holds a **withheld** note — one the
+  gate would not commit at all — kept for as long as the owner leaves it there,
+  and announced by a digest banner. `state/quarantine/redacted/` holds the
+  pre-scrub original of a note **whose added lines the gate rewrote**: no
+  banner, a bounded number of the most recent copies, and disposable —
+  `wienerdog uninstall` removes it with everything else Wienerdog keeps. Both
+  are 0700 dirs holding 0600 files with the raw bytes intact, outside the vault
+  and never committed. A digest section with a finding is omitted rather than
+  injected redacted. See `docs/runbooks/secret-incident.md` for recovery.
 - **routine catalog** — the opt-in post-setup menu of ready-made routines (`/wienerdog-routines`); nothing is scheduled by default (ADR-0008).
 - **interview** — the `/wienerdog-setup` conversation that produces `06-Identity/` notes, from which CLAUDE.md/AGENTS.md managed blocks are rendered.
 - **memory_mode** — user preset for gate strictness: conservative | standard | eager.

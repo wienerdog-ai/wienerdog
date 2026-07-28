@@ -100,6 +100,8 @@ const WIN32 = process.platform === 'win32';
 
 /** The A5-scoped private DIRECTORIES (0700). state/quarantine is WP-123's
  *  staged-output secret quarantine — it can hold raw secret bytes.
+ *  state/quarantine/redacted holds the pre-scrub original of a note whose added
+ *  lines the gate rewrote — raw secret bytes likewise.
  *  @param {import('./paths').WienerdogPaths} paths @returns {string[]} */
 const A5_PRIVATE_DIRS = (paths) => [
   paths.core,
@@ -107,6 +109,7 @@ const A5_PRIVATE_DIRS = (paths) => [
   paths.logs,
   path.join(paths.state, 'dream-scratch'),
   path.join(paths.state, 'quarantine'),
+  path.join(paths.state, 'quarantine', 'redacted'),
 ];
 
 /** The A5-scoped private FILES directly under state/ (0600). */
@@ -655,6 +658,9 @@ function listPrivateEntries(paths, ctx = coreRootContext(paths)) {
   if (dirPaths.has(path.join(paths.state, 'quarantine'))) {
     for (const f of listNames(path.join(paths.state, 'quarantine'), () => true)) considerFile(f);
   }
+  if (dirPaths.has(path.join(paths.state, 'quarantine', 'redacted'))) {
+    for (const f of listNames(path.join(paths.state, 'quarantine', 'redacted'), () => true)) considerFile(f);
+  }
   if (dirPaths.has(paths.secrets)) {
     for (const f of listNames(paths.secrets, () => true)) considerFile(f);
   }
@@ -663,7 +669,8 @@ function listPrivateEntries(paths, ctx = coreRootContext(paths)) {
 
 /** Defensive iteration cap for the fixed-point directory repair. The real
  *  private tree is shallow (core → state → {dream-scratch,quarantine},
- *  core → logs → <job>, core → secrets — depth 3), so a handful of passes
+ *  core → state → quarantine → redacted, core → logs → <job>,
+ *  core → secrets — depth 4), so a handful of passes
  *  always converges; this cap only guards against a pathological/unbounded
  *  spin and CANNOT be hit by the real layout. If it is ever hit the repair is
  *  aborted (fail-closed) rather than reporting a partial repair as complete. */

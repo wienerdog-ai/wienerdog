@@ -40,12 +40,27 @@ or re-injecting the secret while you clean up.
      `state/digest.md` yourself first; `sync` recreates it.
    - **Also check `state/quarantine/`.** This is where Wienerdog set aside a
      dream note it wouldn't commit because it looked like it contained a
-     secret (see T4, gate ii) — the digest shows a banner while this folder
-     is non-empty. Open each file: if it's a **true positive** (it really does
-     hold the secret), delete it once you've finished rotating in step 2 — it
-     holds the raw bytes, not a redacted copy. If it's a **false positive**
-     (the scanner was wrong), you can copy its content back into the vault by
-     hand; the banner clears once the folder is empty.
+     secret (see T4, gate ii) — the digest shows a banner while a withheld
+     note is in there. Open each file in it: if it's a **true positive** (it
+     really does hold the secret), delete it once you've finished rotating in
+     step 2 — it holds the raw bytes, not a redacted copy. If it's a **false
+     positive** (the scanner was wrong), you can copy its content back into the
+     vault by hand; the banner clears once no withheld notes are left.
+   - **And check `state/quarantine/redacted/`.** Sometimes Wienerdog *does*
+     commit the note, with the suspicious lines replaced by
+     `[REDACTED:high-entropy]`. This folder holds the original, one file per
+     note the scan rewrote, named `<date>-<note name>`. If the scan was wrong,
+     copy the text back into the note by hand. If it was right, delete the file
+     once you've rotated the credential in step 2 — it holds the raw bytes.
+     **There is no banner for this one:** it is announced in that night's dream
+     report (`reports/dreams/<date>.md`, under "Redacted in place (secret
+     scan)"), so that is where to look. The folder keeps roughly the 50 most
+     recent copies and then deletes the oldest, so review a redaction within
+     about two months rather than leaving it indefinitely — right after a run
+     that rewrote a great many notes it can briefly hold more, because a run
+     never deletes its own copies. And `wienerdog uninstall` removes this
+     folder along with everything else Wienerdog keeps, so copy out anything
+     you want to keep before you uninstall.
 
 4. **Clean the git history.** The vault is a local git repository (`git log` in
    your vault folder), and a committed secret lives in its history, not just
@@ -77,7 +92,9 @@ or re-injecting the secret while you clean up.
      (or pick them again from the routine menu, `/wienerdog-routines`).
    - Run `wienerdog doctor` to confirm nothing is flagged (it checks, among
      other things, that no Wienerdog file is readable by other users).
-   - Confirm `state/quarantine/` is empty — while anything is in it, the
-     digest keeps showing a "held for review" notice.
+   - Confirm `state/quarantine/` holds no withheld notes — the `redacted/`
+     folder inside it is a different thing, covered in step 3, and it does not
+     keep the notice showing. While a withheld note is there, the digest keeps
+     showing a "held for review" notice.
    - Open the digest and confirm it's clean, and confirm the *new*, rotated
      credential works where you use it.
