@@ -259,6 +259,14 @@ comparison must be written carefully rather than by analogy to the argv block:
    unquoted values** (`"Minute" => 30`). The parser reads the `descriptor` block
    under the trigger whose `stream` is `com.apple.launchd.calendarinterval`.
 
+4. **Five of the seven canonical env pairs render with EMPTY values.** In the
+   block above, `NODE_PATH`, `ANTHROPIC_API_KEY`, `CLAUDE_CONFIG_DIR`,
+   `NODE_OPTIONS` and `CODEX_HOME` all appear with nothing after the arrow — they
+   are `scheduledEnvPairs`' ambient-scrub bindings, and the empty string is their
+   *intended* value. A parser treating a valueless line as absent would drop five
+   of seven bindings, and containment would then pass for a record carrying **no
+   scrub at all** — certifying the removal of the control it was reading.
+
 ### 8. The notice the user sees (`schedule.js:583-585`)
 
 **Byte-exact**, including the trailing period:
@@ -312,8 +320,9 @@ one new Proposed ADR, one test file extended. **M** — one session.
 | Action | Path | Notes |
 |--------|------|-------|
 | create | docs/adr/0037-verified-registration-postcondition.md | The rule + the ADR-0018 decision-2 amendment. **Proposed, unsigned.** Written already by the architect, together with its `docs/adr/README.md` index row; the implementer edits neither. **0036 is deliberately skipped** — reserved by the in-flight ADR amending ADR-0031. |
+| modify | docs/adr/README.md | **D0b** — the ADR index row for 0037. Written already by the architect alongside the ADR; the implementer does not touch it. Listed because it **is** in this branch's diff, and a Deliverables table that omits a changed file is exactly the boundary-gate failure this row fixes. |
 | modify | src/scheduler/generators.js | **D0** — add **four** names to `module.exports`, and add **two** new pure parsers (`launchdLoadedCalendar`, `launchdLoadedEnv` — D1b). Existing names exported unchanged:: `launchdLoadedArgs` (`:679-689`, used internally at `:787`) and `jobLaunchArgs` (`:208`, used internally at `:355`); the two new parsers are exported with them. Structural, not an API promise — the WP-114 precedent for `repairCatchup`. Audited, not assumed (see "Export audit" in Implementation notes): `catchupLaunchArgs` (`:1030`) and `loadedEntryTargets` (`:1007`) are **already** exported and need no change. |
-| modify | src/cli/schedule.js | **D1-D4**: `darwinLoadedMatches` + `ensureDarwinEntryRegistered` (new, non-exported); the darwin per-job arm (`:429-431`, Table A row 1); `ensureCatchup` (`:314-317`, row 2); the linux arm (`:456-466`, row 3). Nothing else — no probe, no heal, no notice string, no Windows path, and **`darwinReplaceEntry` itself is not edited** (it stays the heal path's primitive). |
+| modify | src/cli/schedule.js | **D1-D4**: `darwinLoadedVerdict` + `ensureDarwinEntryRegistered` (new, non-exported); the darwin per-job arm (`:429-431`, Table A row 1); `ensureCatchup` (`:314-317`, row 2); the linux arm (`:456-466`, row 3). Nothing else — no probe, no heal, no notice string, no Windows path, and **`darwinReplaceEntry` itself is not edited** (it stays the heal path's primitive). |
 | modify | tests/unit/scheduler-schedule.test.js | **T1, T2, T2b, T3-T7** (Test index) plus the **four** existing assertions enumerated in AC6 — no others. |
 
 Not deliverables, deliberately: `src/scheduler/status.js`,
@@ -328,21 +337,28 @@ from a new file — never edit it),
 
 ```js
 /**
- * Does a LOADED launchd record match what we would register right now? Pure
+ * What does the LOADED launchd record say, relative to what we would register
+ * right now? Returns a TRI-STATE verdict, never a boolean. Pure
  * string work over `launchctl print` stdout — no spawn, no fs, never throws.
  * Compares EVERY canonical field that can vary between two renders, not just
  * the argv (Table A2): the complete ProgramArguments element by element, the
  * StartCalendarInterval Hour/Minute, and the EnvironmentVariables bindings by
  * CONTAINMENT (launchd injects keys of its own — Current state §7b fact 1).
- * If ANY of the three blocks fails to parse, or any compared value differs,
- * returns FALSE: an unparseable readback is not evidence, and a partial match
- * is not a match.
+ * The verdict vocabulary is **adopted verbatim from `loadedEntryTargets`**
+ * (`generators.js:784`) — `'match' | 'mismatch' | 'indeterminate'` — so the two
+ * readback consumers speak one language rather than two.
+ *   'match'         — every block parsed AND every compared value equal.
+ *   'mismatch'      — every block parsed AND some compared value differs.
+ *                     THIS IS THE ONLY VERDICT THAT MAY AUTHORIZE A TEARDOWN.
+ *   'indeterminate' — any block failed to parse. The ABSENCE of evidence, not
+ *                     evidence of divergence: it permits the non-destructive
+ *                     bootstrap attempt and NOTHING further.
  * @param {string} stdout  `launchctl print` output (untrusted display text)
- * @param {{argv:string[], hour:number, minute:number, env:Array<[string,string]>}} expect
+ * @param {{argv:string[], hour:number|null, minute:number, env:Array<[string,string]>}} expect
  *   the canonical values just rendered
- * @returns {boolean}
+ * @returns {'match'|'mismatch'|'indeterminate'}
  */
-function darwinLoadedMatches(stdout, expect)
+function darwinLoadedVerdict(stdout, expect)
 
 /**
  * Register one launchd entry, reporting success only from evidence about what
@@ -351,7 +367,7 @@ function darwinLoadedMatches(stdout, expect)
  * and whether a teardown is justified.
  * @param {(argv:string[])=>{status:number,stdout?:string}} loader
  * @param {number} uid @param {string} label @param {string} plistPath
- * @param {{changed:boolean, expect:{argv:string[],hour:number,minute:number,env:Array<[string,string]>}, priorBytes:Buffer|null, onBeforeTeardown:()=>void}} o
+ * @param {{changed:boolean, expect:{argv:string[],hour:number|null,minute:number,env:Array<[string,string]>}, priorBytes:Buffer|null, onBeforeTeardown:()=>void}} o
  * @returns {boolean} true only when launchd verifiably holds this entry
  */
 function ensureDarwinEntryRegistered(loader, uid, label, plistPath, o)
@@ -362,14 +378,19 @@ function ensureDarwinEntryRegistered(loader, uid, label, plistPath, o)
 ```js
   const printed = loader(['launchctl', 'print', `gui/${uid}/${label}`]);
   const isLoaded = !!printed && printed.status === 0;
+  //     `verdict` is TRI-STATE: 'absent' | 'indeterminate' | 'mismatch' | 'match'.
+  const verdict = isLoaded ? darwinLoadedVerdict(printed.stdout || '', o.expect) : 'absent';
   // (a) THE LIVE MATCH WINS — regardless of o.changed. The readback is the
   //     evidence; `changed` is a statement about a FILE and must not force the
   //     teardown of a record that already is what we would register.
-  if (isLoaded && darwinLoadedMatches(printed.stdout || '', o.expect)) return true;
+  if (verdict === 'match') return true;
   // (b) non-destructive attempt first (ADR-0018 ordering, preserved)
   if (loader(['launchctl', 'bootstrap', `gui/${uid}`, plistPath]).status === 0) return true;
-  // (c) TEARDOWN ONLY WITH INDEPENDENT EVIDENCE THE LABEL IS LOADED
-  if (!isLoaded) return false;
+  // (c) TEARDOWN ONLY ON A POSITIVELY ESTABLISHED MISMATCH. 'absent' means
+  //     nothing to tear down; 'indeterminate' is the ABSENCE of evidence, not
+  //     evidence of divergence — destroying a record we could not read would be
+  //     the exact opposite of this WP's rule.
+  if (verdict !== 'mismatch') return false;
   o.onBeforeTeardown();                       // ADR-0018 marker (advisory — see below)
   loader(['launchctl', 'bootout', `gui/${uid}/${label}`]);
   if (loader(['launchctl', 'bootstrap', `gui/${uid}`, plistPath]).status === 0) return true;
@@ -442,10 +463,24 @@ divergent") is a claim about the **readback**, while the gate consulted the
 complete live match. Such a healthy record went on to bootstrap-fail → `bootout` →
 replace, and a transient replacement failure then destroyed a working schedule.
 
-| Condition | Decision |
+`verdict` is `'absent'` when `print` exits non-zero, otherwise the tri-state
+`darwinLoadedVerdict` result.
+
+| `verdict` | Decision |
 |---|---|
-| `print` exits 0 **and** every Table A2 field matches | **skip the OS call — regardless of `changed`** |
-| anything else | attempt (step b), then teardown only under step (c)'s evidence |
+| `'match'` | **skip the OS call — regardless of `changed`** |
+| `'mismatch'` | attempt (step b); on failure, teardown + replace + rollback (steps c-d) |
+| `'indeterminate'` | attempt (step b) only; on failure report `loaded:false` with **NO teardown** |
+| `'absent'` | attempt (step b) only; on failure report `loaded:false` — there is nothing to tear down |
+
+**Only `'mismatch'` authorizes destruction, and that is the fix for the round-6
+contradiction.** The round-6 bound claimed "anything reaching a teardown is already
+divergent", but the code reached teardown whenever the comparison was not a match —
+and a **degraded, truncated or format-skewed** `print` is exactly that: the
+**absence of evidence**, not evidence of divergence. Destroying a record we could
+not read is the precise opposite of this WP's rule. `'indeterminate'` therefore
+buys the non-destructive bootstrap attempt and nothing more, and the bound is now
+literally true: teardown requires a **positively established** mismatch.
 
 **What bookkeeping is still allowed on the skip path, exactly.** `ensureEntry` has
 already run before the helper is called, so its two **non-OS-mutating** side
@@ -491,10 +526,11 @@ parser mismatches, which means attempt.
 One behavior per row; **Trigger** names the guarantee destroyed, **Patch** is the
 edit. No ordinals. Assert the pattern selected exactly one named subtest.
 
-The darwin rows were **re-derived as one unit** — four times: after the full-argv
+The darwin rows were **re-derived as one unit** — five times: after the full-argv
 comparison landed, after the owner-directed rollback amendment, after Table A2
-widened the comparison to the calendar and env blocks, and again after Table A1
-made the live match win over `changed`. Not
+widened the comparison to the calendar and env blocks, after Table A1 made the
+live match win over `changed`, and again after the verdict became tri-state and
+only a positively established `'mismatch'` could authorize a teardown. Not
 adjusted row by row. The skip gate is three independent conditions, each with its
 own row so no mutation removes two at once; step (d)'s four properties each have
 their own row; and each row names the fixture that provably executes the mutated
@@ -505,7 +541,7 @@ branch (the recurring failure mode in this chain — see the gate-3 row).
 | darwin register cannot replace a loaded record | drop the teardown branch from `ensureDarwinEntryRegistered` | T1 |
 | darwin tears down without evidence the label is loaded | change the teardown guard to `if (false) return false;` — always tear down after a failed bootstrap | T2 |
 | the pre-destructive marker stops preceding the teardown | move `onBeforeTeardown()` below the `bootout` | **T1** — it is the only fixture that reaches a teardown |
-| darwin skips regardless of what is loaded (gate 1: `isLoaded`) | change the skip clause to `if (darwinLoadedMatches(…)) return true;` — drop the `isLoaded` conjunct | T3 case (iv) |
+| darwin skips regardless of what is loaded (gate 1) | compute `verdict` without the `isLoaded` guard, so an absent label is parsed as text and can reach `'match'` | T3 case (iv) |
 | darwin skips regardless of the record's content (gate 2: the comparison) | change the skip clause to `if (isLoaded) return true;` — drop the comparison | T3 cases (ii), (iii), (v) |
 | **the live match stops winning over `changed`** (Table A1) | re-add the `!o.changed` conjunct to the skip clause | **T1** — its loaded record matches canonical while `changed` is true, so the mutated gate forces it to a teardown |
 | a healthy record is torn down over file-side bookkeeping | make the skip path also call `onBeforeTeardown()` or any `launchctl` verb | T1 (asserts exactly one call, the `print`) |
@@ -517,13 +553,15 @@ branch (the recurring failure mode in this chain — see the gate-3 row).
 | rollback reports the failed replacement as success | make step (d) `return true` after a successful restore-bootstrap | T2b |
 | the prior bytes are captured after the overwrite | move the `priorBytes` read below `ensureEntry` | T2b (the restored bytes become the new plist, so the prior argv is never re-bootstrapped) |
 | `add()` reports success for an unloaded unchanged entry | restore the `changed &&` conjunct at `schedule.js:882` | T7 |
-| darwin compares only the head of the argv — the round-2 defect | make `darwinLoadedMatches` compare only `argv[0]` and `argv[1]` | **T3 case (v)** — the stale-tail fixture |
+| **`'indeterminate'` authorizes a teardown** — the CX-1 defect | change the teardown guard to `if (verdict === 'absent') return false;`, i.e. let an unreadable record through | **T3 case (xiv)** — print exits 0 with unparseable stdout ⇒ a `bootout` appears |
+| the verdict collapses back to a boolean | make `darwinLoadedVerdict` return `'mismatch'` for any non-match, folding `'indeterminate'` into it | T3 case (xiv) |
+| darwin compares only the head of the argv — the round-2 defect | make `darwinLoadedVerdict` compare only `argv[0]` and `argv[1]` | **T3 case (v)** — the stale-tail fixture |
 | darwin compares the argv only — the round-4 defect (CX-1) | drop the calendar and env comparisons, keeping the argv | **T3 case (vii)** — the stale-`Hour` fixture |
 | the calendar gate is dropped alone | drop only the `launchdLoadedCalendar` comparison | T3 case (vii) |
 | the env gate is dropped alone | drop only the env containment comparison | T3 case (viii) |
 | env comparison becomes set-equality instead of containment | require the loaded env to have exactly the canonical key set | **T3 case (ix)** — it would reject a healthy record over launchd's injected keys |
 | the env block is anchored by suffix instead of exact line | find the block with `line.endsWith('environment = {')` | T3 case (viii) — it binds to `inherited environment` and the canonical pairs are absent |
-| darwin trusts an unparseable readback | make `darwinLoadedMatches` return `true` when `launchdLoadedArgs` returns `null` | T3 case (iii) |
+| darwin trusts an unparseable readback | make `darwinLoadedVerdict` return `'match'` when `launchdLoadedArgs` returns `null` | T3 case (iii) |
 | darwin accepts a length-mismatched argv | drop the length check, comparing only the elements `expect.argv` indexes | T3 case (vi) |
 | darwin catch-up keeps the bare bootstrap | revert `ensureCatchup` to the `loader([… 'bootstrap' …])` call | T4 |
 | a degraded linux reload is reported as success | revert to `loaded = enableOk` | T5 |
@@ -599,11 +637,18 @@ returning a fail-safe empty/null on anything they cannot parse. Neither performs
 filesystem access, a spawn or a `require`, and neither throws — the same contract
 `launchdLoadedArgs` already carries.
 
-- `launchdLoadedCalendar(stdout)` → `{hour:number, minute:number}|null`. Find the
+- `launchdLoadedCalendar(stdout)` → `{hour:number|null, minute:number}|null`, where
+  the **outer** `null` means "malformed, or `Minute` missing" and `hour: null` means
+  "the `Hour` key was validly **absent**" (the catch-up shape). The two nulls are
+  different and must never be collapsed. Find the
   `event triggers` entry whose `stream` is `com.apple.launchd.calendarinterval`,
   read its nested `descriptor = {` block, and parse the **quoted-key, unquoted-value**
   `"Hour" => 3` / `"Minute" => 30` lines (Current state §7b fact 3). A missing
-  block, a missing key, or a non-numeric value ⇒ `null`.
+  block, a missing `Minute`, or a non-numeric value ⇒ outer `null`. A missing
+  `Hour` key ⇒ `hour: null` — not an error, it is the catch-up shape.
+  The comparison then uses **strict equality** on `hour`, so `null` matches only
+  `null`: an absent expectation **refuses** a present `"Hour"`, and a present
+  expectation refuses an absent one.
 - `launchdLoadedEnv(stdout)` → `Map<string,string>|null`. Find the block whose
   **trimmed line is exactly** `environment = {` — never a suffix match, because
   `inherited environment = {` and `default environment = {` precede it (§7b fact 2)
@@ -611,12 +656,12 @@ filesystem access, a spawn or a `require`, and neither throws — the same contr
   valid pair whose value is the empty string** — never a skipped line (§7b fact 4).
   Unparseable ⇒ `null`.
 
-`darwinLoadedMatches` then applies Table A2: argv equality, calendar equality, and
+`darwinLoadedVerdict` then applies Table A2: argv equality, calendar equality, and
 env **containment** (§7b fact 1). Any `null` ⇒ false ⇒ attempt.
 
 ### D1 — the two new helpers in `src/cli/schedule.js`
 
-Both non-exported, defined near `darwinReplaceEntry`. `darwinLoadedMatches` calls
+Both non-exported, defined near `darwinReplaceEntry`. `darwinLoadedVerdict` calls
 `gen.launchdLoadedArgs(stdout)` (exported by D0) and returns true only when the
 result is non-null, has the same length as `expect.argv`, and is equal
 element-by-element — **and then applies the calendar and env comparisons of
@@ -727,7 +772,8 @@ The same call, with the label `'ai.wienerdog.catchup'` (already in scope as
 ```js
 expect: {
   argv: [node, ...gen.catchupLaunchArgs({ launcher, expectDigest, jobDigests })],
-  hour: 0, minute: 0,     // catchupPlist renders StartCalendarInterval Minute 0 only
+  hour: null, minute: 0,  // catchupPlist renders Minute 0 and NO Hour key
+                          // (generators.js:410-416) — null REFUSES a present Hour
   env: gen.scheduledEnvPairs(paths.home, paths.core),
 }
 ```
@@ -904,7 +950,7 @@ nothing in this branch should be read as owner approval of it.
 - [ ] `launchctl print` stdout is **untrusted display text** and is handled the way
       `defaultProbe` step 8 handles it: string comparison only, through the
       existing `loadedEntryTargets`. No value parsed out of it reaches a `spawn`, a
-      `path.join`, a `require`, an `fs` call, or a write. `darwinLoadedMatches`
+      `path.join`, a `require`, an `fs` call, or a write. `darwinLoadedVerdict`
       performs no filesystem access and never throws.
 - [ ] The comparison is **allowlist-shaped**: it returns true only when the parsed
       argv is non-null, the same length as `expect.argv`, and equal element for
@@ -989,6 +1035,9 @@ mock `process.platform` — and no test may touch a real OS scheduler
       **bound**, not a recovery: it is the case where rollback provably cannot
       restore the destroyed record;
       (g) the restore's `bootstrap` itself fails ⇒ still `loaded: false`, no throw.
+      **Every fixture in this set pins `verdict === 'mismatch'`** — that is now the
+      only verdict that reaches a teardown at all (Table A1), so a rollback fixture
+      whose readback is unparseable would be testing an unreachable path.
       Fixtures (e), (f) and (g) are the executable form of the two bounded windows
       in Implementation notes property 5.
       A round-3 draft asserted only loudness here, because it accepted the
@@ -1032,7 +1081,13 @@ mock `process.platform` — and no test may touch a real OS scheduler
       (xiii) **the empty-value fixture (C2)** — a loaded record whose env carries
       `WIENERDOG_HOME` and `HOME` but **omits the five ambient-scrub keys** ⇒
       **attempted**. A parser that skipped valueless lines would have skipped here,
-      granting a verified skip to a record with no scrub at all.
+      granting a verified skip to a record with no scrub at all;
+      (xiv) **the indeterminate fixture (CX-1)** — `print` exits **0** (a record IS
+      loaded) but its stdout is degraded/truncated so a block fails to parse, and
+      `changed` is true so the bootstrap is attempted and fails. Assert the verdict
+      is `'indeterminate'`, the result is `loaded: false`, and **no `bootout`
+      appears anywhere in the call list**. Parse degradation must never destroy a
+      possibly-healthy record.
       **Call-count scoping (do not over-claim):** case (i) asserts zero *mutating*
       calls and exactly one `print` **from the per-job helper**. It is **not** one
       `print` per `registerPlatform` call — `registerPlatformEntries` registers the
@@ -1178,9 +1233,11 @@ grep -n "loadedEntryTargets" src/cli/schedule.js \
 # baseline and the FAIL branch is reachable only by regression.
 
 # V7 — the boundary gate and the pipeline.
+# Feed boundary-check the REAL diff, never a hand-maintained list. A list typed
+# into a verification command drifts from the branch and hides exactly the file
+# the gate exists to catch (that is how docs/adr/README.md went unlisted).
 node scripts/boundary-check.js docs/specs/WP-scheduler-register-replaces-loaded-record.md \
-  docs/adr/0037-verified-registration-postcondition.md src/cli/schedule.js \
-  tests/unit/scheduler-schedule.test.js
+  $(git diff --name-only origin/main...HEAD)
 npm run lint
 npm test
 ```
