@@ -395,7 +395,8 @@ from a new file — never edit it),
  *                     evidence of divergence: it permits the non-destructive
  *                     bootstrap attempt and NOTHING further.
  * @param {string} stdout  `launchctl print` output (untrusted display text)
- * @param {{argv:string[], hour:number|null, minute:number, env:Array<[string,string]>}} expect
+ * @param {{argv:string[], hour:number|null, minute:number, env:Array<[string,string]>,
+ *          path:string, stdoutPath:string, stderrPath:string, spawnType:string}} expect
  *   the canonical values just rendered
  * @returns {'match'|'mismatch'|'indeterminate'}
  */
@@ -408,7 +409,9 @@ function darwinLoadedVerdict(stdout, expect)
  * and whether a teardown is justified.
  * @param {(argv:string[])=>{status:number,stdout?:string}} loader
  * @param {number} uid @param {string} label @param {string} plistPath
- * @param {{changed:boolean, expect:{argv:string[],hour:number|null,minute:number,env:Array<[string,string]>}, priorBytes:Buffer|null, onBeforeTeardown:()=>void}} o
+ * @param {{changed:boolean, expect:{argv:string[],hour:number|null,minute:number,env:Array<[string,string]>,
+ *          path:string,stdoutPath:string,stderrPath:string,spawnType:string},
+ *          priorBytes:Buffer|null, onBeforeTeardown:()=>void}} o
  * @returns {boolean} true only when launchd verifiably holds this entry
  */
 function ensureDarwinEntryRegistered(loader, uid, label, plistPath, o)
@@ -604,7 +607,7 @@ canonical, because every plist Wienerdog has ever written carried the same one.
 | Canonical field | Compared? | How / why |
 |---|---|---|
 | `ProgramArguments` | **yes** | full array equality (`launchdLoadedArgs`) |
-| `event triggers` — **exactly one** calendarinterval trigger | **yes** | `launchdLoadedCalendar` must **count** the triggers whose `stream` is `com.apple.launchd.calendarinterval` and return the outer `null` unless the count is **exactly 1**. A round-9 draft said "the trigger whose stream is …", selecting *a* trigger without requiring uniqueness — so a record carrying a **second** firing trigger (an extra schedule added by hand) matched on the first and was granted a skip while firing at times we never registered. Zero ⇒ unparseable; two or more ⇒ unparseable; both ⇒ attempt |
+| `event triggers` — **exactly one trigger TOTAL, and it is the canonical calendar one** | **yes** | `launchdLoadedCalendar` counts **every** entry in the `event triggers` block, not only those whose `stream` is `com.apple.launchd.calendarinterval`, and returns the outer `null` unless the total is **exactly 1** *and* that one trigger's `stream` is the calendarinterval stream. **Stream-filtered counting is not enough (CX11-2):** a record with our canonical calendar trigger **plus** a foreign-stream trigger still counts 1 under a filtered count and would be granted a skip while firing on a condition we never registered. Justified **loaded-side**, per §7c: the executed dump's `event triggers` block contains **exactly one** entry for our label — launchd injects **nothing** into it (its own `event channels`, `resource coalition` and `jetsam coalition` are *separate top-level blocks*, not trigger entries), so "exactly one total" is what a healthy record actually looks like rather than what our renderer intends. A round-9 draft said "the trigger whose stream is …", selecting *a* trigger without requiring uniqueness — so a record carrying a **second** firing trigger (an extra schedule added by hand) matched on the first and was granted a skip while firing at times we never registered. Zero ⇒ unparseable; two or more ⇒ unparseable; both ⇒ attempt |
 | `StartCalendarInterval` Minute | **yes** | from the `descriptor` block of the trigger whose `stream` is `com.apple.launchd.calendarinterval` (`launchdLoadedCalendar`) |
 | `StartCalendarInterval` Hour — **OPTIONAL by entry kind** | **yes**, as `hour: number\|null` | The per-job plist renders `Hour`; **`catchupPlist` renders `Minute` only, with no `Hour` key** (`generators.js:410-416`, and the live record shows `"Minute" => 0` alone). So `hour: null` means "the `Hour` key must be **ABSENT**" — it **matches** an absent key and **REFUSES** a present one. `null` is **not** a wildcard: `Hour 0` + `Minute 0` is *daily at midnight*, `Minute 0` alone is *hourly at :00* — two different schedules, and a present `"Hour" => 0` on a catch-up record must fail the match |
 | `EnvironmentVariables` (the 7 `scheduledEnvPairs`) | **yes, by CONTAINMENT, with the EMPTY STRING as a real value** | every canonical pair must be present with its value; launchd-injected keys (`OSLogRateLimit`, `XPC_SERVICE_NAME` — §7b) are ignored. Set-equality would never match. **Five of the seven canonical pairs are the ambient-scrub bindings and render as a `KEY =>` line with nothing after the arrow** (§7b fact 4) — a parser that skipped valueless lines would drop `NODE_OPTIONS`, `NODE_PATH`, `CLAUDE_CONFIG_DIR`, `CODEX_HOME` and `ANTHROPIC_API_KEY`, and would then grant a skip to a record **missing the entire scrub**. such a line parses to `[KEY, '']` and `''` is compared as a value |
@@ -615,7 +618,6 @@ canonical, because every plist Wienerdog has ever written carried the same one.
 | `Label` | not compared | it is the *lookup key* — the record was fetched by it |
 | `RunAtLoad` (catch-up only) | **NOT compared — darwin's honesty-clause residual** | It appears in **no field** of the executed record, and the catch-up label is not loaded on the authoring host, so what `print` shows for it could not be executed (§7c). Specifying a guessed parse shape is forbidden by this spec's own no-unexecutable-parsers rule — the same rule that denied Linux a skip and Windows a trigger readback. **Bounded exposure:** a catch-up record with `RunAtLoad` removed passes every compared field and is granted a verified skip, so catch-up would silently stop running at login while still firing hourly. Routed as **`WP-launchd-runatload-readback`**, and carried into ADR-0037's ratification surface so the owner signs it. |
 | ~~`ProcessType`~~ (now compared as `spawn type`), `RunAtLoad` | see above | the round-9 renderer-side rationale is superseded for every field `print` exposes (`Background`; `true` on catch-up) — cannot vary between two canonical renders. **The "constant" claim is executed, not asserted:** `git log -S "ProcessType" -- src/scheduler/generators.js` and the same for `RunAtLoad` each return exactly one commit, `ae7720e` (WP-013, where the renderers were introduced) — neither literal has changed since, so no plist Wienerdog has ever written carries a different value |
-| `StandardOutPath` / `StandardErrorPath` | not compared | derived from `<core>/logs/<name>`; a moved core changes the launcher and descriptor paths, which **are** in the argv, so divergence is caught transitively |
 
 **The adversarial boundary is unchanged, and this round does not reopen it.** What
 Table A2 now covers is the **accidental / manual** class — a field edited by hand,
@@ -634,8 +636,10 @@ parser mismatches, which means attempt.
 One behavior per row; **Trigger** names the guarantee destroyed, **Patch** is the
 edit. No ordinals. Assert the pattern selected exactly one named subtest.
 
-The darwin rows were **re-derived as one unit** — six times (the sixth after
-Table A2 was re-decided from the loaded side rather than the renderer side): after the full-argv
+The darwin rows were **re-derived as one unit** — seven times (the sixth after
+Table A2 was re-decided from the loaded side rather than the renderer side; the
+seventh after its new fields were propagated into the exact-contract layer and
+trigger counting was widened to the whole block): after the full-argv
 comparison landed, after the owner-directed rollback amendment, after Table A2
 widened the comparison to the calendar and env blocks, after Table A1 made the
 live match win over `changed`, and again after the verdict became tri-state and
@@ -676,6 +680,8 @@ branch (the recurring failure mode in this chain — see the gate-3 row).
 | the log-path gates are dropped | drop the `stdout path`/`stderr path` comparisons | T3 case (xvii) |
 | the `spawn type` gate is dropped, or compares the numeric code | drop it, or compare `(5)` instead of the word `background` | T3 case (xviii) |
 | **trigger uniqueness is not required** — the CX10-1 extra-trigger defect | select the first calendarinterval trigger instead of requiring exactly one | **T3 case (xix)** — a record with a second calendarinterval trigger must NOT skip |
+| **uniqueness counts only calendarinterval triggers** — the CX11-2 foreign-stream defect | revert to a stream-filtered count (`triggers.filter(t => t.stream === CAL).length === 1`) instead of counting the whole block | **T3 case (xx)** — one canonical calendar trigger PLUS a foreign-stream trigger must NOT skip |
+| a new field is missing and is treated as a mismatch | make an absent `path`/`program`/log-path/`spawn type` line yield `'mismatch'` instead of `'indeterminate'` | **T3 case (xxi)** — an absent line must not authorize a teardown |
 | the calendar gate is dropped alone | drop only the `launchdLoadedCalendar` comparison | T3 case (vii) |
 | the env gate is dropped alone | drop only the env containment comparison | T3 case (viii) |
 | env comparison becomes set-equality instead of containment | require the loaded env to have exactly the canonical key set | **T3 case (ix)** — it would reject a healthy record over launchd's injected keys |
@@ -789,9 +795,19 @@ result exactly as Table A1 requires:
 
 | Observation | Verdict |
 |---|---|
-| **any** parser returns its unparseable value (`launchdLoadedArgs` → `null`; `launchdLoadedCalendar` → outer `null`; `launchdLoadedEnv` → `null`) | **`'indeterminate'`** — the absence of evidence. Attempt the non-destructive bootstrap; **never** a teardown |
-| all three parsed, but the argv differs in length or in any element, or the calendar differs, or a canonical env pair is missing/differs | **`'mismatch'`** — the ONLY verdict that may authorize a teardown |
-| all three parsed and every compared value equal (Table A2) | **`'match'`** — skip |
+| **any** source returns its unparseable value — `launchdLoadedArgs` → `null`; `launchdLoadedCalendar` → outer `null`; `launchdLoadedEnv` → `null`; **or any of the four single-line fields is absent from the record** | **`'indeterminate'`** — the absence of evidence. Attempt the non-destructive bootstrap; **never** a teardown |
+| everything parsed, but any Table A2 value differs — argv length or element, calendar, a canonical env pair, `path`, `program`, either log path, or `spawn type` | **`'mismatch'`** — the ONLY verdict that may authorize a teardown |
+| everything parsed and every Table A2 value equal | **`'match'`** — skip |
+
+**The four fields added in round 11 need no new parser family.** `path`, `program`,
+`stdout path` and `stderr path` are each a single top-level `key = value` line in
+the record (§7c), so one small reader — trim the line, split on the first ` = ` —
+serves all four; `spawn type` uses the same reader and then compares only the
+**first word** of its value (`background`, from `background (5)`), because the
+numeric code is undocumented. **A field the reader cannot find is `'indeterminate'`,
+never `'mismatch'`**: an absent line is a readback we could not complete, and the
+round-9 rule that the absence of evidence must not authorize destruction applies to
+these fields exactly as it does to the three block parsers.
 
 Both fail-safe directions follow from that table and neither is a boolean: an
 unreadable record is never skipped **and** never destroyed.
@@ -871,6 +887,10 @@ scope and whose ADR-0018 reasoning still applies unchanged there.
         argv: [node, ...gen.jobLaunchArgs({ launcher: b.launcher, name: o.name, descriptor: b.descriptor, expectDigest: b.expectDigest })],
         hour: o.hour, minute: o.minute,
         env: gen.scheduledEnvPairs(paths.home, paths.core),   // already exported (:1035)
+        path: plistPath,                                      // in scope; the file we just wrote
+        stdoutPath: path.join(logDir, 'launchd.out.log'),     // logDir is in scope
+        stderrPath: path.join(logDir, 'launchd.err.log'),
+        spawnType: 'background',                              // ProcessType literal
       },
       onBeforeTeardown: () => require('../scheduler/status').refreshSchedulerStatus(paths),
     });
@@ -902,6 +922,10 @@ expect: {
   hour: null, minute: 0,  // catchupPlist renders Minute 0 and NO Hour key
                           // (generators.js:410-416) — null REFUSES a present Hour
   env: gen.scheduledEnvPairs(paths.home, paths.core),
+  path: plistPath,
+  stdoutPath: path.join(logDir, 'launchd.out.log'),   // logDir = <core>/logs/catchup
+  stderrPath: path.join(logDir, 'launchd.err.log'),
+  spawnType: 'background',
 }
 ```
 
@@ -1348,6 +1372,13 @@ mock `process.platform` — and no test may touch a real OS scheduler
       calendarinterval trigger ⇒ **attempted, not skipped**. Each of (xv)-(xix) is
       a **drift-only** test: every other compared field matches, so it fails for
       exactly the field named;
+      (xx) **the foreign-stream fixture (CX11-2)** — the record carries our one
+      canonical calendarinterval trigger **plus** a second trigger on a different
+      stream ⇒ **attempted, not skipped**. A stream-filtered count sees 1 and would
+      skip while the record fires on a condition we never registered;
+      (xxi) any one of `path`/`program`/`stdout path`/`stderr path`/`spawn type` is
+      **absent** from the record ⇒ verdict `'indeterminate'` ⇒ attempted, and
+      **no `bootout`** — an unreadable field is not a divergent one;
       (xiv) **the indeterminate fixture (CX-1)** — `print` exits **0** (a record IS
       loaded) but its stdout is degraded/truncated so a block fails to parse, and
       `changed` is true so the bootstrap is attempted and fails. Assert the verdict
@@ -1432,7 +1463,7 @@ mock `process.platform` — and no test may touch a real OS scheduler
 |----|------|----------------|
 | T1 | tests/unit/scheduler-schedule.test.js | darwin replace ordering + `loaded` (AC1) |
 | T2 | tests/unit/scheduler-schedule.test.js | teardown guard — no `bootout` when nothing is loaded; marker ordering and non-firing (AC2, AC8) |
-| T3 | tests/unit/scheduler-schedule.test.js | the verified skip, **six** cases incl. the stale-tail and length-mismatch fixtures and the crash-recovery case (iv); marker non-firing (AC3, AC8) |
+| T3 | tests/unit/scheduler-schedule.test.js | the verified skip, **cases (i)-(xxi)** — the stale-tail, length-mismatch and crash-recovery fixtures; the catch-up `hour:null` shape and its present-`Hour` refusal; the empty-env fixture; the indeterminate fixture; the five round-11 drift-only fixtures (`path`, `program`, log paths, `spawn type`); the extra-trigger and foreign-stream trigger fixtures; and the absent-field ⇒ `'indeterminate'` fixture. Marker non-firing (AC3, AC8) |
 | T2b | tests/unit/scheduler-schedule.test.js | the rollback set — restore file + re-bootstrap prior argv + `loaded:false` + notice + the `priorBytes === null` bound (AC2) |
 | T2c | tests/unit/scheduler-schedule.test.js | the `plutil` preflight — rejects (no `bootout`, absolute argv) and passes (AC2 h, j) |
 | T2d | tests/unit/scheduler-schedule.test.js | `existsSync(PLUTIL)` false ⇒ no `plutil` argv issued, register proceeds (AC2 i) |
