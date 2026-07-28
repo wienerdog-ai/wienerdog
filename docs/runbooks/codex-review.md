@@ -51,22 +51,35 @@ auditable instead is the **dispatch message**: it names each claim re-run and th
 result, so a reader can tell a gate that ran from a gate that was skipped. That
 is the whole record — no new file, no tooling, no schedule.
 
-**Which claims, and how the orchestrator knows the set is complete.** The set is
-every claim **the spec states as fact about files it does not own** and that has a
-runnable form: line-number citations, `grep` sentinels, digests over files outside
-the spec's Deliverables table, "today's behaviour" descriptions, and
-permitted-removal bounds. **`## Current state` is where most of them live, but the
-boundary is the claim's kind, not the heading** — a spec may carry copied,
-un-re-measured facts under any heading, and those are in scope too. Worked
-instance: `WP-secret-fence-ep2-redact-arm` puts rows **D1/D2** under
-`## Derived measurements — copied, not re-measured`, which is precisely the
-digests-over-files-the-WP-does-not-own category above; a check bounded to the
-`## Current state` heading would have walked past them. The spec is the inventory —
-it is required to inline everything the implementer needs (ADR-0005) — so a claim
-of this kind that appears nowhere enumerable is a spec bug and is reported as one
-rather than silently re-verified. **If a spec's claims of this kind cannot be
-enumerated from it, the spec is not dispatchable and goes back to wd-architect** —
-the same routing as a stale claim, for the same reason.
+**Which claims. The boundary is RUNNABILITY — not file ownership, and not a
+heading.** Re-run **every executable claim the spec makes about the tree the
+implementer will find**: line-number citations, `grep` sentinels, digests, quoted
+code shapes, "today's behaviour" descriptions, and permitted-removal bounds. If it
+has a runnable form, it is in scope. If it has none, it was never an executable
+claim and this gate does not cover it.
+
+**Two boundaries this rule previously drew and both were wrong.** *Not the
+heading:* a spec may carry copied, un-re-measured facts anywhere —
+`WP-secret-fence-ep2-redact-arm` puts rows **D1/D2** under
+`## Derived measurements — copied, not re-measured`, and a check bounded to
+`## Current state` walks straight past them. *Not file ownership:* a `Ready` spec
+routinely snapshots exact code from files **inside its own Deliverables** —
+`WP-147` quotes `shared.js` / `manifest.js` code shapes it will then edit, `WP-151`
+the same — and those drift in exactly the `Ready`→dispatch window this gate exists
+for. A spec's own future edits do not protect its record of what that file says
+*today*. **Owning the file makes a stale snapshot worse, not exempt**, because the
+implementer will edit from it.
+
+Keep the owned/external distinction only where it aids reporting — it is useful to
+say which stale claims the implementer could have fixed and which route back — but
+it decides nothing about what gets re-run.
+
+The spec is the inventory: it is required to inline everything the implementer
+needs (ADR-0005), so an executable claim that appears nowhere enumerable is a spec
+bug and is reported as one rather than silently re-verified. **If a spec's
+executable claims cannot be enumerated from it, the spec is not dispatchable and
+goes back to wd-architect** — the same routing as a stale claim, for the same
+reason.
 
 **Why it exists.** A spec's Current-state section is verified once, at design
 time. Every dependency that merges between then and dispatch can falsify it,
