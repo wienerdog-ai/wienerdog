@@ -144,6 +144,17 @@ instead of a blocked session.
   (PR diffs) — never by the orchestrator inline, and never by Codex itself.
 - A finding the owner rejects is recorded in the spec/PR as an accepted
   residual with a one-line reason.
+- **Keep the PR body small enough for CI to read it.** `.github/workflows/ci.yml`
+  passes `github.event.pull_request.body` to `bash` as an environment variable in
+  the `pr-title` and `boundary` jobs, so a body that grows past the runner's
+  argument limit fails both with
+  `An error occurred trying to start process '/usr/bin/bash' … Argument list too long`
+  — a red X that says nothing about the diff. Measured on PR #124: **~144 KB was
+  over the line; ~30 KB is comfortably under it.** A long review loop should put
+  each round's dispositions in a **PR comment** (comments are never passed to a
+  job) and keep the body to the template plus the current round. **And note where
+  the durable record belongs**: not the PR at all, but the spec, ADR or runbook the
+  round changed, where the next reader can re-run it.
 - **Prove a new gate in BOTH directions.** Red-before-work shows a check is not
   vacuous; it does **not** show the check is not *over-strict*, because a check
   that rejects the correct answer is also red before the work and looks identical
