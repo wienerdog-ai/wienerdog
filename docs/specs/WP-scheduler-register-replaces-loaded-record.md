@@ -388,8 +388,12 @@ from a new file — never edit it),
  * (`generators.js:784`) — `'match' | 'mismatch' | 'indeterminate'` — so the two
  * readback consumers speak one language rather than two.
  *   'match'         — every block parsed AND every compared value equal.
- *   'mismatch'      — every block parsed AND some compared value differs.
- *                     THIS IS THE ONLY VERDICT THAT MAY AUTHORIZE A TEARDOWN.
+ *   'mismatch-fatal'  — everything parsed AND a FATAL-tier field differs
+ *                     (Table A2b). THE ONLY VERDICT THAT MAY AUTHORIZE A TEARDOWN.
+ *   'mismatch-benign' — everything parsed, every FATAL field equal, and only a
+ *                     BENIGN-tier field differs. No skip AND no teardown: the
+ *                     loaded record is still doing its authorized job, so
+ *                     destroying it could leave no working schedule at all.
  *   'indeterminate' — any block failed to parse. The ABSENCE of evidence, not
  *                     evidence of divergence: it permits the non-destructive
  *                     bootstrap attempt and NOTHING further.
@@ -450,7 +454,7 @@ function ensureDarwinEntryRegistered(loader, uid, label, plistPath, o)
   //     nothing to tear down; 'indeterminate' is the ABSENCE of evidence, not
   //     evidence of divergence — destroying a record we could not read would be
   //     the exact opposite of this WP's rule.
-  if (verdict !== 'mismatch') return false;
+  if (verdict !== 'mismatch-fatal') return false;   // benign / indeterminate / absent
   o.onBeforeTeardown();                       // ADR-0018 marker (advisory — see below)
   loader(['launchctl', 'bootout', `gui/${uid}/${label}`]);
   if (loader(['launchctl', 'bootstrap', `gui/${uid}`, plistPath]).status === 0) return verifyLoaded();
@@ -566,12 +570,19 @@ replace, and a transient replacement failure then destroyed a working schedule.
 | `verdict` | Decision |
 |---|---|
 | `'match'` | **skip the OS call — regardless of `changed`** |
-| `'mismatch'` | attempt (step b); on failure, teardown + replace + rollback (steps c-d) |
+| `'mismatch-fatal'` | attempt (step b); on failure, teardown + replace + rollback (steps c-d) |
+| `'mismatch-benign'` | attempt (step b) only; on failure report `loaded:false` with **NO teardown** — the record still performs its authorized job (Table A2b) |
 | `'indeterminate'` | attempt (step b) only; on failure report `loaded:false` with **NO teardown** |
 | `'absent'` | attempt (step b) only; on failure report `loaded:false` — there is nothing to tear down |
 
-**Only `'mismatch'` authorizes destruction, and that is the fix for the round-6
-contradiction.** The round-6 bound claimed "anything reaching a teardown is already
+**Only `'mismatch-fatal'` authorizes destruction — and that is what keeps the
+round-8 bound TRUE AS DERIVED after round 11's widening (Table A2b).** The bound is
+"every record reaching a teardown is already failing"; once the comparison covered
+fields on which a loaded job still works, plain `'mismatch'` stopped implying
+"failing", and the bound became an assertion rather than a derivation. Tiering
+restores the derivation instead of restating the claim.
+
+**`'indeterminate'` also never authorizes destruction, which was the round-6 fix.** The round-6 bound claimed "anything reaching a teardown is already
 divergent", but the code reached teardown whenever the comparison was not a match —
 and a **degraded, truncated or format-skewed** `print` is exactly that: the
 **absence of evidence**, not evidence of divergence. Destroying a record we could
@@ -618,6 +629,49 @@ canonical, because every plist Wienerdog has ever written carried the same one.
 | `RunAtLoad` (catch-up only) | **NOT compared — darwin's honesty-clause residual** | It appears in **no field** of the executed record, and the catch-up label is not loaded on the authoring host, so what `print` shows for it could not be executed (§7c). Specifying a guessed parse shape is forbidden by this spec's own no-unexecutable-parsers rule — the same rule that denied Linux a skip and Windows a trigger readback. **Bounded exposure:** a catch-up record with `RunAtLoad` removed passes every compared field and is granted a verified skip, so catch-up would silently stop running at login while still firing hourly. Routed as **`WP-launchd-runatload-readback`**, and carried into ADR-0037's ratification surface so the owner signs it. |
 | ~~`ProcessType`~~ (now compared as `spawn type`), `RunAtLoad` | see above | the round-9 renderer-side rationale is superseded for every field `print` exposes (`Background`; `true` on catch-up) — cannot vary between two canonical renders. **The "constant" claim is executed, not asserted:** `git log -S "ProcessType" -- src/scheduler/generators.js` and the same for `RunAtLoad` each return exactly one commit, `ae7720e` (WP-013, where the renderers were introduced) — neither literal has changed since, so no plist Wienerdog has ever written carries a different value |
 
+### Table A2b — FATALITY TIER per field (canonical; CX13-1)
+
+Round 11 widened the comparison and **broke the round-8 bound's derivation**.
+Pre-widening every mismatch meant argv/calendar divergence — a record already
+failing or misfiring — so "anything reaching a teardown is already failing" was
+true and the teardown lost nothing. After round 11, a mismatch can mean a field on
+which the loaded job **still performs its authorized work**, and tearing that down
+can leave the machine with **no** functioning schedule. Divergence ≠ failure.
+
+Each field is tiered by exactly one question, decided **loaded-side**: *does this
+field's divergence prevent the loaded record from performing its authorized job
+NOW?*
+
+| Field | Tier | Reasoning (loaded-side) |
+|---|---|---|
+| `arguments` (full argv) | **FATAL** | a stale `--expect-digest` makes the launcher refuse **every** fire; a wrong descriptor path or job name is the same class. The record is already dead |
+| `program` | **FATAL** | a different interpreter in the execution position is the `WP-scheduler-node-path-durability` hazard — the fire dies before any of our code runs |
+| calendar `Hour`/`Minute` | **FATAL** | the job does not run when it was authorized to run |
+| trigger count / stream | **FATAL** | the record fires on a condition we never registered |
+| `environment` bindings | **FATAL** | `WIENERDOG_HOME` selects the core the launcher verifies against, and the scrub (`NODE_OPTIONS`, `NODE_PATH`, the credential roots) is a security control — a job running without it is not doing its authorized work |
+| `stdout path` / `stderr path` | **BENIGN** | the job runs and does its work; it writes its logs somewhere else |
+| `spawn type` | **BENIGN** | a record not marked `background` still executes. It may miss the throttling posture ADR-0028 expects, which is a real but non-preventing defect — **recorded as the second-closest call in this table** |
+| `path` (the plist launchd loaded from) | **BENIGN — and this is the closest call, so it is argued rather than asserted** | The record is functional **now**: it is running our argv, our calendar and our env. What it will not do is **track future syncs** — we write `plistPath`, launchd loaded elsewhere, so later updates never reach it. That is a *latent* fatality, not a present one, and the tiering question is deliberately about **now**, because the cost of getting it wrong is destroying a working schedule. Benign handling is also the right handling here: no skip (so it is never certified), a non-destructive attempt, and a notice — the divergence stays visible without a teardown |
+
+**Decision, and the bound restored:**
+
+- **any FATAL mismatch ⇒ the replace path.** The teardown is authorized, and the
+  round-8 bound is true again *as derived*: only records that are already failing
+  reach a destructive step.
+- **BENIGN-only mismatch ⇒ no skip AND no teardown.** The non-destructive
+  `bootstrap` is attempted (it fails while the label is loaded), the register
+  reports `loaded: false`, and §8's notice fires.
+
+**Convergence for benign-only drift, stated honestly: it does not self-heal.**
+The attempt cannot replace a loaded label without a teardown, and a teardown is
+exactly what this tier withholds. So the entry keeps working, keeps logging to the
+old path, and keeps producing the notice on every register until a human acts. The
+existing notice text already says *"schedule file written but the OS scheduler did
+not accept it — run 'wienerdog doctor'"*, which is true here and is the right
+instruction; it does not distinguish benign drift from a hard failure, and that
+refinement is routed as **`WP-scheduler-benign-drift-heal`** rather than smuggled
+into a string this WP is not allowed to change.
+
 **The adversarial boundary is unchanged, and this round does not reopen it.** What
 Table A2 now covers is the **accidental / manual** class — a field edited by hand,
 a partially written record, an extra trigger. A *foreign writer who can forge a
@@ -635,7 +689,10 @@ parser mismatches, which means attempt.
 One behavior per row; **Trigger** names the guarantee destroyed, **Patch** is the
 edit. No ordinals. Assert the pattern selected exactly one named subtest.
 
-The darwin rows were **re-derived as one unit** — seven times (the sixth after
+The darwin rows were **re-derived as one unit** — eight times. The eighth is
+**semantic, not propagation**: Table A2b tiered the compared fields by fatality, so
+the verdict gained a fourth value and the teardown authorization narrowed from
+"mismatch" to "fatal mismatch". (The sixth after
 Table A2 was re-decided from the loaded side rather than the renderer side; the
 seventh after its new fields were propagated into the exact-contract layer and
 trigger counting was widened to the whole block): after the full-argv
@@ -670,6 +727,8 @@ branch (the recurring failure mode in this chain — see the gate-3 row).
 | a known-bad replacement still gets a teardown | delete the `plutil -lint` preflight (c0) | **T2c** — `existsSync` true + lint non-zero + loaded record ⇒ a `bootout` appears |
 | the preflight is gated on the loader's result instead of existence | replace the `fs.existsSync(PLUTIL)` guard with a result-shape test (`if (lint && typeof lint.status === 'number')`) | **T2d** — with `existsSync` stubbed false and the loader still answering `{status:1}` (the shape `schedulerSpawn` produces for ENOENT), the register must still proceed; the mutated form refuses forever |
 | the linter is resolved off PATH | change `PLUTIL` to the bare name `'plutil'` | **T2c** — the argv assertion pins the absolute `/usr/bin/plutil` |
+| **the fatality tiers are collapsed** — the CX13-1 defect | make `darwinLoadedVerdict` return `'mismatch-fatal'` for any difference, dropping the Table A2b tiering | **T3 case (xxii)** — benign-only drift plus a failed replacement bootstrap must leave the existing record LOADED; the collapsed form boots it out |
+| a FATAL field is tiered benign | move `environment` (or the calendar) to the BENIGN tier | T3 case (xxii)'s sibling — a stale-env record must still reach the replace path |
 | **`'indeterminate'` authorizes a teardown** — the CX-1 defect | change the teardown guard to `if (verdict === 'absent') return false;`, i.e. let an unreadable record through | **T3 case (xiv)** — print exits 0 with unparseable stdout ⇒ a `bootout` appears |
 | the verdict collapses back to a boolean | make `darwinLoadedVerdict` return `'mismatch'` for any non-match, folding `'indeterminate'` into it | T3 case (xiv) |
 | darwin compares only the head of the argv — the round-2 defect | make `darwinLoadedVerdict` compare only `argv[0]` and `argv[1]` | **T3 case (v)** — the stale-tail fixture |
@@ -701,26 +760,27 @@ rounds 2-3, where an unregistered Deliverables cell shipped a wrong test set):
 
 - [ ] **(+r3/r5)** Deliverables cell for `src/scheduler/generators.js` — D0 exports **four** names (`launchdLoadedArgs`, `jobLaunchArgs`, and the two new parsers `launchdLoadedCalendar`/`launchdLoadedEnv`) and adds the two parser bodies (D1b). Mirrors **Table A2**.
 - [ ] Deliverables cell for `src/cli/schedule.js` (the four D-sites — Table A rows 1-3)
-- [ ] Deliverables cell for `tests/unit/scheduler-schedule.test.js` (T1-T6 + AC6's four assertions)
+- [ ] Deliverables cell for `tests/unit/scheduler-schedule.test.js` (T1, T2, T2b, T2c, T2d, T2e, T3, T4, T5, T6, T7 + AC6's four assertions)
 - [ ] Deliverables cell for `docs/adr/0037-…` (the rule — Table A's spine)
 - [ ] "Exact contracts" — both JSDoc blocks and the `ensureDarwinEntryRegistered` body
 - [ ] Current state §2 (rows 1-2), §3 (the teardown guard), §4 (row 3), §6 (row 4), §7 (the readback machinery + the measured exit codes), §9 (why not a cache)
 - [ ] **(+r4)** Implementation notes → D5 (`add()`'s guard) and AC11 — the CLI-surface mirror of ADR-0037's postcondition
 - [ ] **(+r4)** ADR-0037's Consequences — the rollback consequence and the withdrawn crash-marker promise both mirror this spec's rollback section
-- [ ] Implementation notes → Export audit, D0-D5, and **"Rollback — OWNER-DIRECTED"** (its four contract properties + the crash-window table)
+- [ ] Implementation notes → Export audit, D0, D0b, D1, D1b, D2, D3, D4, D5, and **"Rollback — OWNER-DIRECTED"** (its four contract properties + the crash-window table)
 - [ ] Acceptance criteria AC1-AC5 (rows 1-3), AC2's rollback set, AC6 (the four changed assertions), AC7 (row 4 preservation), AC8 (the marker), AC11 (D5)
 - [ ] Verification commands V2-V6
 - [ ] Table B rows, each naming its Table A / A2 row
 - [ ] **(+r5)** Current state §7b (the executed readback evidence behind Table A2 — four facts) and Table A2 itself
 - [ ] **(+r6)** **Table A1** (the skip decision tree and the allowed bookkeeping) — mirrored by the contract body's step (a), D1b, AC1's Table A1 fixture, AC5's recount, and the Table B live-match rows
-- [ ] Test index rows T1, T2, T2b, T3-T7
+- [ ] Test index rows T1, T2, T2b, T2c, T2d, T2e, T3, T4, T5, T6, T7
 - [ ] The banner's cross-spec mapping table — **both** macOS sites map to that spec's Table C row 5
 - [ ] Definition of done items 5 (that spec's 0a) and 6 (the ADR signature gate)
 
 **Coherence layers this spec is checked across** (each pass runs all of them;
 the layer that first caught a defect is named): canonical↔canonical (round 8),
 notes↔canonical (round 9), contract-body↔canonical, security-checklist↔canonical,
-AC↔Test-index (round 10), and — added in round 13 — **boundary↔ACs**: every `Dn`
+AC↔Test-index (round 10), **range-abbreviation (round 14 — carries its own grep,
+below)**, and — added in round 13 — **boundary↔ACs**: every `Dn`
 and `Tn` an acceptance criterion references must appear in **exactly one**
 Deliverables cell, and no file may appear in both the Deliverables table and the
 not-deliverables list. That layer exists because the permission boundary is what an
@@ -729,6 +789,24 @@ it. Round 13's run found three defects: the `schedule.js` cell stopped at D4 whi
 AC11 requires D5; the test cell's `T3-T7` range silently excluded T2c/T2d/T2e; and
 `src/scheduler/generators.js` was listed as **both** a deliverable and a
 not-deliverable.
+
+**The range-abbreviation check, with its grep.** Round 13 enumerated the two
+Deliverables cells and wrote the lesson — and left the *same* abbreviation standing
+at four other sites, including the checklist line that is the **registered mirror**
+of the cell it had just fixed, and a line twelve lines above where the checklist
+narrates the lesson. That is the lesson applied to the site that revealed it rather
+than to every site of its kind. So the check now carries its own command, run on
+every pass:
+
+```bash
+grep -nE "T[0-9][a-z]?-T[0-9]|D[0-9][a-z]?-D[0-9]" docs/specs/WP-scheduler-register-replaces-loaded-record.md
+```
+
+**Expected output: only narration** — lines that *quote* a deleted abbreviation to
+explain why it was deleted. Any hit that is a live reference to a set is a defect:
+these id sets grow by insertion (T2b/T2c/T2d/T2e were inserted *before* T3, and
+D0b/D1b are lettered members inside a `D0-D5` span), so a range silently excludes
+new members the moment one is added. Enumerate; never abbreviate.
 
 Out of this spec, not deliverables:
 
@@ -992,7 +1070,7 @@ obligation 1 does not reach it, and moving it would be unrequested scope.
 The `changed &&` conjunct makes the **user-facing entry point** report success for
 an unchanged entry whose forced registration failed — it prints *"already
 scheduled … unchanged"* over a `loaded: false`. That is ADR-0037's central
-postcondition violated at the one surface a human reads directly, and after D2-D4
+postcondition violated at the one surface a human reads directly, and after D2, D3 and D4
 it is reachable on both fixed legs (darwin: an unchanged entry whose readback
 mismatches, then fails to register; linux: an unchanged entry whose hoisted
 `daemon-reload` is degraded).
@@ -1401,6 +1479,14 @@ mock `process.platform` — and no test may touch a real OS scheduler
       (xxi) any one of `path`/`program`/`stdout path`/`stderr path`/`spawn type` is
       **absent** from the record ⇒ verdict `'indeterminate'` ⇒ attempted, and
       **no `bootout`** — an unreadable field is not a divergent one;
+      (xxii) **the benign-drift fixture (CX13-1)** — every FATAL field matches and
+      only a BENIGN one differs (the loaded record's `stdout path` is the old one),
+      `changed` is true, and the `bootstrap` fails because the label is loaded.
+      Assert: verdict `'mismatch-benign'`, **no `bootout` anywhere in the call
+      list**, the pre-existing record therefore still loaded, `loaded: false`, and
+      §8's notice. Run the sibling too — the same shape with a **FATAL** field
+      differing (a stale env binding) ⇒ verdict `'mismatch-fatal'` and the replace
+      path IS taken — so the pair pins the tier boundary from both sides;
       (xiv) **the indeterminate fixture (CX-1)** — `print` exits **0** (a record IS
       loaded) but its stdout is degraded/truncated so a block fails to parse, and
       `changed` is true so the bootstrap is attempted and fails. Assert the verdict
@@ -1525,7 +1611,8 @@ grep -c "stays gated only on" tests/unit/scheduler-schedule.test.js
 # on main: 2 (the two linux `loaded === true` assertions). REQUIRED after: 0.
 #
 # Then paste the FULL diff of the file and confirm BY READING that it touches
-# only AC6's four enumerated sites plus the new T1-T6 blocks. There is no grep
+# only AC6's four enumerated sites plus the new T1/T2/T2b/T2c/T2d/T2e/T3/T4/T5/
+# T6/T7 blocks. There is no grep
 # that proves "nothing else moved" in a JS file — this repo has no parser. The
 # enumeration in AC6 is the contract; the full diff is the evidence.
 git diff origin/main...HEAD -- tests/unit/scheduler-schedule.test.js

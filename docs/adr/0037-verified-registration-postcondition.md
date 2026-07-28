@@ -129,11 +129,16 @@ routed separately.
   which is what an earlier failed register leaves behind; **and** (ii) the freshly
   rendered plist **C** passes a `plutil -lint` preflight yet still fails to
   bootstrap (permissions, or launchd state). Then the teardown — authorized, since
-  A was a positively established mismatch — destroys **A**, and the rollback
+  A was a positively established **FATAL** mismatch (it differs in the argument
+  vector, the program, the calendar, the trigger set or the environment bindings —
+  a record already failing to do its authorized job; one diverging only in a benign
+  field such as its log paths, spawn type or source file is never torn down at all)
+  — destroys **A**, and the rollback
   restores **B**, which may itself be unbootstrappable. **A is lost.** The outcome
   is loud (`loaded:false` plus the user-facing notice on every subsequent
-  register), it is bounded to already-divergent records by obligation 3's
-  comparison, and the `plutil -lint` preflight removes the malformed-replacement
+  register), it is bounded to records that were **already failing** — not merely
+  already different, which is a strictly narrower set than an earlier draft of this
+  Consequence described — and the `plutil -lint` preflight removes the malformed-replacement
   cause, which is the likeliest one. It is **not** eliminated. Ratifying this ADR
   approves that specific window, not a vague residual.
 - **The rollback is bounded, not total, and the bound comes from obligation 3.**
