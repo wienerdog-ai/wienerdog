@@ -197,12 +197,43 @@ removed because it is UNSATISFIABLE.**
   of `<stateDir>/quarantine/redacted/`. This is the three-method ordered-event-log
   technique **FI-15** already runs in this file; nothing new is needed. Then assert:
 
-  - the log holds **exactly one** prune-read event (cardinality), and
-  - its index is **greater than** the index of the `numstat` event naming the
-    trailing path (ordering), and
-  - as a precondition rather than an assumption, that the trailing path's event is
-    the **last** per-path event in the log — so a fixture whose paths came out in an
-    unexpected order fails loudly instead of proving nothing.
+  - **(a1) cardinality** — the log holds **exactly one** prune-read event;
+  - **(a2) ordering, anchored on the trailing path's LAST git event** — the prune
+    read's index is **greater than** the index of the trailing path's
+    `git diff --cached -U0 -- <rel>`, **not its `numstat`**. *Read from source
+    (`src/core/dream/validate.js`): for a path with added lines and no finding the
+    iteration runs `numstat` → `-U0` → `scanAndRedact` → `continue`, so `numstat`
+    marks the **start** of the last iteration and `-U0` is its last GIT event. An
+    ordering anchored on `numstat` is satisfied by a prune that runs late **inside**
+    that same iteration, which is not "after the loop" at all;*
+  - **(a3) the trailing path's `-U0` is the last per-path git event in the log** —
+    asserted as a **precondition**, so a fixture whose paths emerged in an
+    unexpected order fails loudly instead of proving nothing. *Stated as "last
+    **git** event" deliberately: `scanAndRedact` does follow `-U0` inside the
+    iteration and is invisible to the spawn log, which is exactly why (a) is
+    necessary and NOT sufficient — see (b).*
+
+  **(b) THE SUFFICIENCY HALF — the structural, source-level assertion.** The seam
+  cannot distinguish "after the loop" from "late inside the final iteration",
+  because after the trailing path's `-U0` there is no further git event to order
+  against. So the test **also** asserts the call-site structure that step **0c**
+  already checks at dispatch: the guarded call
+  `if (secretRedactions > 0) pruneRedactedOriginals(stateDir, redactedCreated);`
+  **immediately follows** its `Retention, once per run` comment, and
+  `pruneRedactedOriginals(stateDir, redactedCreated)` occurs **exactly once** in
+  `validate.js`. Assert it inside the test (read the file, apply the same two
+  checks) — a precondition that only runs at dispatch does not protect the test
+  from a later refactor.
+
+  **Which half catches which mutation family — record this, because the two are not
+  interchangeable:**
+
+  | mutation family | caught by |
+  |---|---|
+  | prune fires **early** — in the loop, or guarded to the first redaction (**AC-3b**) | **(a2)** — the prune read precedes the trailing path's `-U0` |
+  | prune fires **more than once** — per call, unguarded | **(a1)** — cardinality |
+  | prune fires **once, late inside the FINAL iteration** — after the trailing `-U0` | **(b) ONLY.** (a) is blind to it by construction: there is no later git event to be after |
+  | the call is **duplicated**, one post-loop and one in-loop | **(a1)** and **(b)**'s occurs-exactly-once |
 
 **The removed option, and why removing it is the point.** Until 2026-07-28 this
 spec also offered a *consequential* strategy — "a fixture seeded to the cap where a
@@ -257,6 +288,14 @@ the assertion and the counts, not a verdict.*
 - [ ] **AC-2** The new test **passes** against unmodified `src/`.
 - [ ] **AC-3** The new test **fails** under the N2-only mutation stated in "Exact
       contracts", applied and reverted by hand, with the output pasted into the PR.
+- [ ] **AC-3c** The new test **fails** under the **late-in-final-iteration**
+      mutation: one call, fired once, placed inside the loop **after** the
+      trailing path's `-U0` diff (e.g. guarded to run on the last changed path).
+      **The seam cannot see this one** — cardinality is 1 and the prune still
+      follows every git event the log contains — so it must be caught by the
+      structural assertion **(b)**. *This criterion is what makes (b) load-bearing
+      rather than belt-and-braces; without it the sufficiency half is untested and
+      the test proves only what the seam can see.*
 - [ ] **AC-3b** The new test **fails** under the **timing-only** mutation that
       preserves cardinality: move the single call inside the loop and guard it to
       fire on the **first** completed redaction only (e.g. `if (secretRedactions === 1)`),
@@ -281,7 +320,11 @@ the assertion and the counts, not a verdict.*
       `NOTHING — AND THAT IS THE POINT` disposition are absent). **Both directions are proven, not one**: the step is run on the untouched tree
       (expect red — non-vacuity) **and** on hand-constructed expected post-work
       rows that include a history-recounting sentence (expect green — not
-      over-strict). *Red-before-work and rejects-the-right-answer look identical
+      over-strict) **and that V-30 itself accepts** (step 5g splices them into a
+      copy of the ep2 spec and runs the gate over it). *That last part is what
+      stops AC-6 and V-30 drifting apart: an earlier draft's fixture carried the
+      counts but no literal `RED`, so it satisfied AC-6 and would have failed the
+      mandatory gate two steps later.* *Red-before-work and rejects-the-right-answer look identical
       from one side, which is how an earlier draft of this step shipped a
       bare-word ban that rejected the very sentence this criterion recommends.*
       **Prose that recounts the history stays legal** — a row saying "this recorded an undetected
@@ -398,7 +441,33 @@ git diff --quiet -- "$V" && git diff --cached --quiet -- "$V" || {
   echo "         'git checkout --', which would destroy them. Commit or stash first."
   exit 1; }
 BEFORE=$(git hash-object "$V")
+OUT=$(mktemp -t n2probe)          # unique per run; never a shared /tmp path
 
+#     TRAPS FIRST — INSTALLED BEFORE THE FIRST WRITE, CLEARED ONLY AFTER THE
+#     BLOB-VERIFIED RESTORE. This is not tidiness. **This checkout IS production
+#     for the machine that runs it**: the deploy symlink resolves into this tree,
+#     so a mutation stranded in `validate.js` by a Ctrl-C between the write and the
+#     restore is a LIVE INCIDENT — the next scheduled dream would prune with the
+#     wrong timing against the user's real vault. An untrapped probe turns one
+#     interrupted keystroke into that.
+#     (A disposable `git worktree` would dissolve the src/-safety question
+#     entirely and is the cleaner shape where it can be run; it is not used here
+#     because this spec's author could not EXECUTE that variant in their
+#     environment, and an unexecuted probe is exactly what this batch keeps
+#     rejecting. The trap form below was run in all four cases — see the PR.)
+restore() {
+  git checkout -- "$V" 2>/dev/null || true
+  rm -f "$OUT"
+}
+trap 'restore; echo "PROBE INTERRUPTED — src/ restored by trap"; exit 130' INT TERM
+trap 'restore' EXIT
+
+#     `set +e` MUST COVER THE MUTATION HEREDOC TOO, not just the test run. Under
+#     the block's `set -euo pipefail` a python that exits 1 kills the script BEFORE
+#     `probe_applied=$?`, so the anchor-miss diagnosis below would be unreachable
+#     dead text — the exact must_not class the parent spec's gate-polarity preamble
+#     names. The earlier draft wrapped the neighbouring command and not this one.
+set +e
 python3 - "$V" <<'MUT'
 import sys
 p = sys.argv[1]
@@ -413,8 +482,7 @@ open(p, 'w', encoding='utf-8').write(s)
 MUT
 probe_applied=$?
 
-set +e
-node tests/run.js --test-name-pattern "EP2 retention" "$T" >/tmp/n2-probe.out 2>&1
+node tests/run.js --test-name-pattern "EP2 retention" "$T" >"$OUT" 2>&1
 probe_exit=$?
 set -e
 
@@ -431,7 +499,7 @@ test "$probe_applied" = "0" || {
 test "$probe_exit" = "0" || {
   echo "BLOCKED: the N2-only mutation REDDENED something. This spec's central"
   echo "         Current-state claim ('N2 has no detector') is no longer true:"
-  sed -n '1,40p' /tmp/n2-probe.out
+  sed -n '1,40p' "$OUT"
   echo "         Somebody has given N2 a detector. STOP AND REPORT — this WP is"
   echo "         either already done or has changed shape."; exit 1; }
 echo "ok: the isolated N2 mutation still reddens nothing — the gap is real and open"
@@ -532,16 +600,41 @@ echo "ok: mutation row no longer states the gap"
 mkdir -p /tmp/second-direction
 #     Write the two rows you INTEND to ship — including a sentence that recounts
 #     the history, which is the case an over-strict check would reject:
+#     BOTH ROWS MUST CARRY A LITERAL `RED`. V-30's `executed` limb requires a
+#     POSITIVE failure count AND a named reddened target; a fixture with counts but
+#     no `RED` passes step 5 and then fails step 6, which is the contradiction the
+#     round-13 review found in an earlier draft of this spec.
 cat > /tmp/second-direction/census-row.txt <<'ROW'
-| **M-48** | **executed** | Closed by the new test. Recorded an undetected gap until this WP landed. <TITLE> ⇒ <COUNTS> |
+| **M-48** | **executed** | Closed by the new test. `<TITLE>` goes **RED** under the isolated N2-only mutation, `<COUNTS>`. This row recorded an undetected gap until this WP landed |
 ROW
 cat > /tmp/second-direction/mutation-row.txt <<'ROW'
-| **M-48** | prune per call instead of per run | <TITLE> ⇒ <COUNTS>. This row recorded an undetected gap until this WP closed it |
+| **M-48** | **prune per call instead of per run** — the call moved into the B4 loop, accumulated set unchanged. Violates **Table N row N2** and nothing else | **`<TITLE>`**, which goes **RED** under it — `<COUNTS>`. *This row recorded an executed no-detector gap until this WP closed it* |
 ROW
 #     Substitute your real TITLE/COUNTS into both, then re-run 5c/5d/5e against
 #     these two files instead of the extracted ones. EXPECT: every assertion ok.
-#     If any fails, the STEP is wrong and not your work — fix the step and say so
-#     in the PR under "Decisions made".
+
+# 5g. AND RUN V-30 AGAINST THE SAME FIXTURE — this is what keeps step 5 and step 6
+#     from ever diverging again. Build a whole copy of the ep2 spec with your two
+#     intended rows spliced in, and run its V-30 block against that copy. The GATE
+#     validates the fixture, so "my rows satisfy AC-6" and "my rows satisfy V-30"
+#     stop being two independent claims.
+python3 - <<'SPLICE'
+import re
+SRC = 'docs/specs/done/WP-secret-fence-ep2-redact-arm.md'
+cen = open('/tmp/second-direction/census-row.txt', encoding='utf-8').read().strip()
+mut = open('/tmp/second-direction/mutation-row.txt', encoding='utf-8').read().strip()
+s = open(SRC, encoding='utf-8').read().split('\n')
+top = next(i for i, l in enumerate(s) if l.startswith('### AC-15 coverage census'))
+idx = [i for i in range(top, len(s)) if re.match(r'^\| \*\*M-48\*\* \|', s[i])]
+assert len(idx) == 2, idx
+s[idx[0]] = cen      # the census row comes first in the file
+s[idx[1]] = mut
+open('/tmp/second-direction/postwork.md', 'w', encoding='utf-8').write('\n'.join(s))
+SPLICE
+#     …then extract the V-30 block from the ep2 spec exactly as step 6 does and run
+#     it against /tmp/second-direction/postwork.md. EXPECT exit 0.
+#     If any of 5c–5g fails, the STEP or the FIXTURE is wrong and not your work —
+#     fix it and say so in the PR under "Decisions made".
 
 # 6. The Done spec's own gates must stay green — you are editing inside them.
 #    Extract and run V-30 and V-31 from that spec's Verification steps, and
