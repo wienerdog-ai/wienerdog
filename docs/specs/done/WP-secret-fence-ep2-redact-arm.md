@@ -2203,9 +2203,20 @@ Seven consequences of this table that are easy to get wrong:
    N2 was kept rather than the claim.**
 
    **Tested rather than argued: AC-14's THIRD case** — the 51+ boundary from
-   both an empty and a full directory — is what holds N5 and N6. The second
-   case holds N3/N4 against tied and skewed `mtime`s. *Round 3 corrected this
-   pointer: it named the second case for a precedence the third one tests.*
+   both an empty and a full directory — is what holds N5 and N6. **The SECOND
+   case holds N3** (the exclusion) and **the FIRST case holds N4** (the
+   `(mtimeMs, name)` ordering), each against tied and skewed `mtime`s.
+   *Round 3 corrected this pointer once: it named the second case for a
+   precedence the third one tests. Round 6 of the post-Done errata corrected it
+   again, and by measurement — this sentence said "the second case holds N3/N4",
+   which the M-23 / M-23b split falsifies: **M-23b's isolated run reddens case 1
+   only and leaves case 2 green**, so case 2 is insensitive to the ordering half
+   and cannot hold N4. Both runs are recorded in those two rows and in the AC-15
+   coverage census.* **This sentence is a registered mirror of BOTH rows** —
+   M-23 for N3 and M-23b for N4 — and it is registered as both because round 5's
+   sweep checked it against M-48 and N2, found it correct there, and cleared it
+   while the adjacent N4 clause had just gone stale. Checking a multi-row mirror
+   for one of its rows is how the other clause slips.
 
 ### Table T — canonical: how every Table R row is produced and observed
 
@@ -2218,6 +2229,156 @@ under "Exact contracts", the `src/core/dream/validate.js` and
 `tests/unit/dream-validate.test.js` Deliverables rows, acceptance criteria
 **AC-9** and **AC-24**, and mutation rows **M-17**/**M-21**/**M-27**. There is no
 separate "how to produce it" list any more — this table replaced it.
+
+**POST-DONE ERRATA — 2026-07-28 (three rows corrected; no contract changed).**
+*Deliberately not a heading: V-30 keys every table's schema on the nearest
+preceding heading, so a `####` here would re-key Table T's own table and fail the
+step. Stated as prose for that reason, and the reason is written down because the
+next editor will reach for a heading too.*
+
+**This spec is `Done` and merged. Three of its rows said something that is not
+true, and this block records the corrections in place rather than leaving the
+rows wrong in `done/`, which is the project's true changelog.** The corrections
+were earned by the implementation round of PR #122, which reported all three
+under *Discovered issues* and *Decisions made* and worked around them rather
+than editing this file.
+
+**Nothing about the shipped behaviour changes, and that was checked rather than
+assumed.** PR #122's substitutions were verified faithful — FI-19's is strictly
+stronger than what the row asked for — so `src/` and
+`tests/unit/dream-validate.test.js` are correct as merged. What was wrong is
+what these three rows *say*, and only that is edited:
+
+- **FI-10** said: a `mechanism` cell naming a patch and **no fall-through
+  trigger**. What is true: the patch alone leaves the arm completing at **R8**,
+  so the cell FI-10 exists to produce is never entered and the row passes
+  **vacuously** — a green test that never enters the branch it asserts about
+  looks exactly like a green test that did. The trigger is FI-7's
+  `spawnPinnedSync` wrapper, and it is now a named field of the cell.
+- **FI-19** said: round 8's let-through list, *"letting K1, K2 and K3's read
+  through"*, with a counter argument built on four target reads. What is true:
+  on FI-19's own mandated trigger (an **R7**) the arm returns before **K2** ever
+  runs, so the sequence is **K1, K3, K4** and any ordinal counter is wrong for
+  it. The read is now identified **structurally**.
+- **M-23** said: one mutation row stating **two** independent mutations. What is
+  true: either half alone satisfies the row, so a single run cannot show that
+  both clauses are held. Split into **M-23** and **M-23b**, one mutation each —
+  which is what PR #122 ran.
+
+**A rule that would generalize all three is PROPOSED in `docs/adr/0036-mechanism-cell-schema-for-contract-tables.md`,
+whose Table A is its canonical statement.** In one line: a `mechanism` cell names
+a **trigger** and a **patch** as separate fields, identifies **every** seam it
+names structurally, and a mutation row states one mutation. **That is a summary,
+not the rule** — each clause has an exemption and each exemption has a
+measurement, and all six live in Table A. Read them there; nothing in this spec
+restates them, deliberately, because a mirror that reproduces a clause is a
+mirror that can drift from it — including by being **stricter** than its
+canonical, which is drift in the direction that reads like rigour.
+
+**ADR-0036 is PROPOSED, unsigned, and NOT IN FORCE, and this block does not make
+it so.** Nothing in this spec is governed by it. The three corrections below
+stand on **PR #122's own measurements** and on the two mutation runs recorded in
+the M-23 / M-23b cells, not on ADR-0036. If the owner signs it, Table A becomes
+the rule and this paragraph is a registered mirror of it — a change to a Table A
+row changes this paragraph, the Checklist bullet below, and FI-19's row, in one
+pass.
+
+**Mirrors touched in this same pass, per ADR-0031's update-all-mirrors
+obligation** — the `mechanism` and `why nothing cheaper reaches it` cells of
+**FI-10** and **FI-19**; the mutation table's **M-23** row plus the new **M-23b**
+row, and **M-48**'s cell, audited in the same pass and kept as one row with its
+coupling stated; and **V-30**'s dated-backlog list and its comment, which is the
+surface that registers a newly defined id. No acceptance criterion, no
+verification command, no Deliverables cell and no Table R / Table K / Table N row
+states any of the three facts, so none of those moved — checked by reading them,
+not by assuming.
+
+**Round 6 registered one more surface and it is a TABLE, not a sentence: the
+*AC-15 coverage census*.** It is dispositioned as corpus/measurement **data** in
+verification step **V-30**'s schema list, which means what the Checklist registers
+is the table itself rather than its rows — the same disposition "Table Q
+membership" carries, and it is why this bullet names the census by its exact
+heading. The census is the canonical source for every mutation row's evidence
+limb; **AC-15** is now its pointer and states no disposition of its own, and
+**M-48**'s cell and the **Table R consequence 7** sentence are the two row-level
+surfaces that must move with it. *That is an extraction, not a rewording, and the
+reason is written into the census itself: AC-15's wording was the blocking finding
+in two consecutive rounds, which is the circuit-breaker condition.*
+
+**Round 5 registered two more mirrors, and they are the ones round 4 missed:
+acceptance criteria AC-14 and AC-15.** Both restated M-48's coverage — AC-14's
+third case asserted *"a per-call prune fails this case"*, AC-15 asserted that
+every mutation row reddens a named test — and both were falsified by the same
+executed run that rewrote M-48. **This is the one-surface-updated-mirrors-stale
+pattern one layer up**, and it is the third instance in this document's history:
+AC-14's own provenance note records round 4 of the *original* gate appending a
+correction as commentary rather than editing the assertion, *"so it stood for a
+further round"*. Both criteria are now edited rather than annotated, and the
+routed slug **`WP-ep2-retention-prune-timing-test`** is registered on **five**
+surfaces, and the count is the registration rather than a decoration: **(1)**
+M-48's cell in the Mutation checks table; **(2)** the **AC-15 coverage census**
+row for M-48, which carries the `gap` limb; **(3)** **AC-14**'s third case, where
+the routed WP is named as the owner of N2's missing detector; **(4)** the PR body's
+discovered issue; and **(5)** the spec itself, `docs/specs/WP-ep2-retention-prune-timing-test.md`,
+authored in the same pass so the slug names a real `Draft` WP rather than a
+string. *Round 5 wrote "three surfaces" and had it on four — AC-14 was omitted —
+and round 6 added the fifth by authoring the spec. A registration sentence that
+states a count is checkable, which is the only reason to state one; it has now
+been wrong once and is written as an enumeration.*
+**The sweep that found them was mechanical and its whole result is recorded**, so
+the next reader can re-run it — **scoped to this file, which is the scope the claim
+is about**:
+
+```sh
+grep -n "per-call\|at least one named test" docs/specs/done/WP-secret-fence-ep2-redact-arm.md
+```
+
+*Round 6 corrected this command: round 5 recorded it unscoped over `docs/`, where it
+returns roughly fifteen hits in unrelated senses — `per-call defaultYes` in WP-060,
+`per-call-site` in the scheduler specs — so the command as written did not reproduce
+the conclusion it was offered as evidence for. The conclusion was right; the
+command was not re-runnable — which is the difference between an artifact and a
+verdict, a distinction this document reached on its own evidence and which row
+**A1** of the PROPOSED, NOT-IN-FORCE ADR-0036 also states.* Besides the corrections themselves it
+returns **three** further sites, and **one of the three needed the edit** — *round 5
+wrote "exactly two … neither needed an edit", and round 7 found the third and
+corrected it. The command was right; the triage of its output was not, which is a
+different failure from round 5's unscoped command and worth distinguishing: a sweep
+can be re-runnable and still be read wrong.* The three, with what each is:
+
+- **the Security checklist's retention-prune bullet** — **this is the one that needed
+  the edit.** It said the narrowed per-call form *"is exactly what mutation M-48
+  mutates TO"*, which the split falsified. Re-keyed in round 7; see that bullet.
+
+And two that did not — Table B row **B10**, whose *"reading it into this chain
+is a per-call prune, i.e. exactly what mutation M-48 does"* states **N2**'s contract
+correctly and cites M-48 more accurately after the split than before it, and Table R
+**consequence 7**, which names the per-call prune only as the design a falsified
+arithmetic claim once argued for. Both are registered as M-48 mirrors by this
+sentence, checked, and left byte-unchanged.
+
+**What the M-23 / M-23b split cost to settle, recorded because it is the one
+claim here that needed a run rather than a reading.** Round 1 of this errata
+inferred the assignment from PR #122's two terse sweep labels and said so; round
+2's review accepted the disclosure but Codex then found the **M-23b** mapping
+itself wrong. Both halves were therefore executed against the shipped retention
+suite — each in isolation, `src/` restored and the tree verified clean after each
+— and the two halves reach **different** AC-14 cases: the exclusion half reddens
+case 2, the ordering half reddens case 1. The cells carry the runs. **The general
+lesson is A3's measurement leg in ADR-0036: a row claiming its half is separately
+detectable owes the run that shows it.**
+
+**The one figure that moves.** V-30 counted **203** ids on the merged file;
+M-23b makes it **204**. That count is printed by the step, never pinned as a
+literal, so nothing is repinned here.
+
+**The one thing this block deliberately does NOT do:** it does not renumber, it
+does not touch the `## Provenance` section (V-20's digest), the
+`## The threat model` section (V-18's), the `## The shared check contracts`
+section (V-33's), or either `OWNER-SIGNED` line (V-11's). Verified by locating
+each digested range before editing: Table T lives inside `## Contract reference`
+and the mutation table inside `## Acceptance criteria`, and neither range is
+digested by any step.
 
 **The one fact everything below follows from.** `src/core/dream/validate.js`
 binds its collaborators two different ways, and the mechanism you need depends
@@ -2284,7 +2445,7 @@ entirely on which:
 | FI-7b | **R7b** | patch `fs.renameSync` on the shared `node:fs` object: throw `EIO` for any source path containing `.wienerdog-scrub.`, delegate otherwise | helper and gate | the stage must be allowed to **succeed** and only the rename to fail, which no permission or argument fault produces — the temp and the target share a directory, so any mode that blocks the rename also blocked the temp's creation (that is FI-5a, row R5). This is the row that proves the index reached the sanitized state before the working tree did, i.e. invariant **I2** in its failure form |
 | FI-8 | **R9** | the same `spawnPinnedSync` wrapper, failing `['-C', vaultDir, 'checkout', 'HEAD', '--', rel]` on a **tracked** file after an R7 | gate | as FI-7 |
 | FI-9 | **R9** | the same wrapper, failing `['-C', vaultDir, 'add', '-A', '--', rel]` (row B3a) on an **untracked** file after an R7 | gate | as FI-7 |
-| FI-10 | the **`redacted/` copy is kept** cell of Table R consequence 2's second condition | patch `fs.writeFileSync` on the shared `node:fs` object: throw `EACCES` for any path under `<stateDir>/quarantine/` that is **not** under `<stateDir>/quarantine/redacted/`; delegate otherwise. The redact preserve writes its temp inside `redacted/` and succeeds; B3's own preserve writes its temp directly in `quarantine/` and fails | gate | path-matched rather than call-counted, so it is deterministic regardless of how many writes either preserve makes. A `chmodSync` on `quarantine/` cannot do it: `redacted/` already exists by then, and FI-1's executed result above is that the write into it still succeeds |
+| FI-10 | the **`redacted/` copy is kept** cell of Table R consequence 2's second condition | **A TRIGGER AND A PATCH, stated as two fields — the errata pass of 2026-07-28 added the first, which this row shipped without.** **(1) THE TRIGGER — FI-7's `spawnPinnedSync` wrapper**, failing the single `['-C', vaultDir, 'update-index', '--add', '--cacheinfo', …]` invocation. That is **row R7 → B5a → B3**, and it is the fall-through this row needs because **it leaves the target byte-unchanged** — the rename never runs — so the copy is still of the bytes on disk, B3b does not fire, and the withhold proceeds into the keep-combination this row is about. FI-16's fall-through would not do: it rewrites the target at K2, which takes the arm to **R0b** and out of this row entirely. **(2) THE PATCH** — patch `fs.writeFileSync` on the shared `node:fs` object: throw `EACCES` for any path under `<stateDir>/quarantine/` that is **not** under `<stateDir>/quarantine/redacted/`; delegate otherwise. The redact preserve writes its temp inside `redacted/` and succeeds; B3's own preserve writes its temp directly in `quarantine/` and fails | gate | **THE PATCH ALONE REACHES NOTHING, AND THIS ROW SHIPPED THAT WAY** *(post-Done errata 2026-07-28, from PR #122's Decision 1 and Discovered issue 1)*. With no trigger the redact preserve writes inside `redacted/` and the scrub's temp is in the vault, so the patch touches neither, the arm completes at **R8**, B3 never runs, and the cell this row exists to produce is never entered — the row passes **vacuously**, and vacuously is the failure mode that looks green. It is round 6's FI-19 defect on a second row, which is why the general rule is now PROPOSED outside this spec, in **ADR-0036** (unsigned, not in force): a `mechanism` cell carries its **trigger** as a field distinct from its **patch**. Its Table A is canonical for that clause and for the exemption that goes with it; this cell states neither. Beyond the trigger: the patch is path-matched rather than call-counted, so it is deterministic regardless of how many writes either preserve makes. A `chmodSync` on `quarantine/` cannot do it: `redacted/` already exists by then, and FI-1's executed result above is that the write into it still succeeds |
 | FI-11 | the **`redacted/` copy is kept** cell of Table R consequence 2's **byte-identity** condition | **one stateful `fs.readFileSync` patch on the shared `node:fs` object, counting only calls whose path resolves to `<vault>/<rel>` and counting them from the preamble's arming read**: delegate on **K1**, throw `EACCES` on **K2**, and on **K3** return a **different** buffer (the fixture's bytes plus one appended line). K2's exception column takes the run to **R2**; K3 is B3's own `quarantinePreserve(…, 'withheld')`, which therefore writes different bytes than the `redacted/` copy holds. **The relative count is load-bearing here in a way it is not even in FI-2**: under an absolute counter on a B11 fixture the different bytes land on the *scrub* instead of on B3's preserve, the two copies then agree, the guard is never exercised, and **M-31 survives green** — the mutation this row exists to kill. Assert: **both** copies exist after the run, their contents differ, and the report line for that path carries Q8's suffix naming the `redacted/` one | gate | **one seam, one patch, deterministic** — it reuses FI-2's counter rather than adding a second mechanism, and it needs no concurrent process. It is a faithful simulation of the fault: production compares the two *copies*, and the copies are exactly what the two patched reads produced, so perturbing read 3 is indistinguishable from an editor replacing the note between reads 1 and 3. **Nothing cheaper reaches it**: really racing an editor against the gate is non-deterministic, and no argument, mode or path fault makes two reads of one unchanging file return different bytes |
 | BU | the **`byte-unchanged`** cell of R2–R7b — **R7c is deliberately NOT in this range**, and round 5 checked rather than assumed it: `BU` reads the target before the call and asserts equality after, but R7c's whole condition is that the target CHANGED during the call, so the assertion cannot hold. R7c's postcondition is FI-16's (the rename was never reached), not BU's | read the target's bytes before the call, call `scrubAddedLines` directly, assert `false` **and** byte equality immediately after it returns. For **R7** and **R7b** the direct call is made with FI-7's / FI-7b's seam installed around it — those are the only two rows whose fault is not a plain argument or filesystem condition | **helper only** | **unassertable at gate level, by construction** — see Table R consequence 1: by the time the gate returns, B3 has restored a tracked file to `HEAD` or removed an untracked one, so the file cannot equal its pre-scrub content and a gate-level test claiming otherwise asserts something impossible |
 | I1 | invariant **I1** (**AC-24**) | patch `fs.appendFileSync` on the shared `node:fs` object to snapshot `execFileSync('git', ['-C', vaultDir, 'diff', '--cached'])` on its **first** call and then delegate. Assert on the snapshot: it contains no raw fixture bytes, and on the R8 case it matches the working tree for that path. **The test must drive `validateAndCommit` directly**, not a CLI entry point: `fs.appendFileSync` is not private to this module and a wider driver would let some other caller's append take the snapshot | gate | `fs.appendFileSync` is Step 4's first write *inside this function*, so under a direct driver its first call **is** "before any report operation". Asserting after the run instead would measure Step 5's re-stage and prove nothing about the window |
@@ -2296,7 +2457,7 @@ entirely on which:
 | **FI-16** | **R7c** — the target changes between the capture and the comparison | **Patch `fs.readFileSync` on the shared `node:fs` object, counting calls whose path resolves to `<vault>/<rel>` from the preamble's arming read.** Delegate on call 1 (the capture). On call **2** — the rule-2 comparison — **first write different bytes over the target on disk** (the fixture's content plus one appended line), **then delegate the read**, so the comparison genuinely reads the modified file. The captured buffer and the comparison read now differ, so the arm must return `false` **without renaming**. Separately patch `fs.renameSync` to **record and delegate**. **Assert:** the recorded rename was **never invoked with a `.wienerdog-scrub.` source**; `S` returned `false`; the working-tree file holds the **modified** bytes; the run took **B5a → B3**; and consequence 2's keep-combination fired — **both** copies exist, their contents differ, and the report line carries Q8's suffix | helper **and** gate | **ROUND 2 ALSO REPLACED THIS ROW, and the old form was self-contradictory.** It patched `fs.renameSync` to write different bytes over the target *inside the patched rename* and then asserted **the rename was never invoked** — but the patch only executes when rename IS invoked, so the assertion could never hold, and the modification landed **after** the comparison had already completed and passed, where no comparison could prevent it. **The fix is to move the modification to strictly BEFORE the comparison read**, which is the only point at which rule 2 can act on it. <br>**It is the mirror of FI-11 on the success path, and neither covers the other.** FI-11 perturbs B3's preserve read on a row that was already failing; FI-16 perturbs the target on the row that was about to **succeed**, which is the only path where the gate would otherwise write over the user's save. **The helper level is not optional**: R7c's `false` return and its no-rename postcondition are `BU`-class cells, unassertable once B3 has run |
 | **FI-17** | **R0b** — the cross-product, TRACKED target | Combine the two axes that FI-10 and FI-16 each cover singly. **(1)** patch `fs.readFileSync` so that on **K2** it first writes different bytes over the target and then delegates — the FI-16 mechanism, which takes the arm to **R7c**; **(2)** patch `fs.writeFileSync` to throw `EACCES` for any path under `<stateDir>/quarantine/` that is **not** under `redacted/` — the FI-10 mechanism, which fails B3's own preserve. The redact preserve still succeeds, so `redacted/` holds the **pre-save** bytes while the target holds the **post-save** ones. **Assert:** the gate **threw**; the tracked file is **byte-identical to the post-save bytes** — *not* restored to `HEAD`; `git diff --cached` still shows the uncleared entry; `fs.appendFileSync` was never called; **both** the `redacted/` copy and the on-disk file survive and **differ from each other**; **and the `WienerdogError` carries all four of Table Q row Q18's fields at their R0b-MISMATCH values** — the vault-relative path; **B3's** preserve named as the one that failed and the redact preserve **not** so named; the identity check recorded as **performed and mismatched**; and the surviving `redacted/` basename. *Round 8 added the first three: round 7 asserted the basename alone, which an error message reading `preserve failed <basename>` satisfies* | gate | **this is the destructive cell neither existing injection occupies**, and stating why is the point: **FI-10** is preserve-failure with **no** concurrent change (so the copy *is* of the bytes K3 saw and the revert proceeds, subject to residual 11), **FI-16** is concurrent change with a **successful** second preserve (so a copy of the current bytes gets written). Only the product leaves a copy that is *not* of the bytes on disk while the code path that would delete them runs. **A test that varies one axis passes against the losing implementation** |
 | **FI-18** | **R0b** — the cross-product, UNTRACKED target | the same two patches, on an **untracked** target. **Assert the same things, including all four of Q18's fields at their R0b-MISMATCH values, with the first two sharpened:** the file is **still on disk** (`fs.rmSync` never ran) and holds the post-save bytes | gate | **the untracked arm is the one that loses data irreversibly and it must be tested separately**, exactly as FI-12/13/14 are: a tracked file discarded by `git checkout HEAD --` loses only this run's modifications, while an untracked file removed by `fs.rmSync` is **gone**. Round 1 made that argument for R0 and round 5 makes it again for R0b, because the two rows share the abort and not the way in |
-| **FI-19** | **R0b** via K4's THROW, tracked and untracked | **Three patches, and the fall-through trigger is the part round 6 got wrong.** **(1) THE TRIGGER — FI-7's `spawnPinnedSync` wrapper**, failing the single `['-C', vaultDir, 'update-index', '--add', '--cacheinfo', …]` invocation. That is **row R7 → B5a → B3**, and it is the cleanest fall-through available here because **it leaves the target byte-unchanged** — the rename never runs — which is what keeps this row's own "byte-identical to what was on disk before the arm" assertion true. **(2)** patch `fs.writeFileSync` to throw `EACCES` for any path under `<stateDir>/quarantine/` that is **not** under `redacted/` — FI-10's mechanism, so **K3's preserve returns `null`** (its read succeeds; its *write* is what fails). **(3)** patch `fs.readFileSync` to throw `EACCES` on **K4** — the identity read that follows a `null` from K3 — while letting **K1, K2 and K3's read** through. *(Round 8 corrected this let-through list, which named K1 and K2 only. **K3 reads the target too** — it is B3's own `quarantinePreserve`, whose read must SUCCEED here so that its WRITE is what fails, which is patch (2)'s whole point. A counter that lets two reads through and throws on the third lands the `EACCES` on K3, so the preserve fails at the read, `K4` never runs, and the row's own outcome is unreachable — the same off-by-one class as round 6's unproducible trigger.)* **Assert, on both arms:** the gate **threw**; **no `git checkout` and no `fs.rmSync` ran** against the target; the index entry was **not** cleared; the file is byte-identical to what was on disk before the arm; **and the `WienerdogError` carries all four of Table Q row Q18's fields at their R0b-READ-ERROR values** — the vault-relative path; **B3's** preserve named as the one that failed; the identity check recorded as **attempted and NOT POSSIBLE**, which must be a **different** recorded value from FI-17/FI-18's *performed and mismatched* (a single wording covering both is exactly what **M-55** mutates to); and the surviving `redacted/` basename. *(Assert the absence of the destructive calls directly — the same `spawnPinnedSync` wrapper records invocations, plus a recording `fs.rmSync` — not merely the end state, because on a tracked file the end states of "checkout ran" and "checkout did not run" coincide when the working tree already matched `HEAD`.)* | gate | **ROUND 6 SHIPPED THIS ROW UNPRODUCIBLE, and the reason is worth keeping.** It reached the branch "with FI-17's second patch" alone — but that patch fails writes under `quarantine/` **outside** `redacted/`, and **K1's preserve writes its temp INSIDE `redacted/`** while **the scrub's temp is in the vault**. Neither is touched, so the arm completes at **R8** and K3/K4 never execute: the row asserted an outcome its own mechanism could not reach, and **M-50 had nothing to redden**. A fall-through trigger is therefore mandatory, and it must be one that **does not touch the target** — FI-16's does (it rewrites the file at K2), which would falsify the byte-identity assertion; FI-7's does not |
+| **FI-19** | **R0b** via K4's THROW, tracked and untracked | **Three patches, and the fall-through trigger is the part round 6 got wrong.** **(1) THE TRIGGER — FI-7's `spawnPinnedSync` wrapper**, failing the single `['-C', vaultDir, 'update-index', '--add', '--cacheinfo', …]` invocation. That is **row R7 → B5a → B3**, and it is the cleanest fall-through available here because **it leaves the target byte-unchanged** — the rename never runs — which is what keeps this row's own "byte-identical to what was on disk before the arm" assertion true. **(2)** patch `fs.writeFileSync` to throw `EACCES` for any path under `<stateDir>/quarantine/` that is **not** under `redacted/` — FI-10's mechanism, so **K3's preserve returns `null`** (its read succeeds; its *write* is what fails). **(3)** patch `fs.readFileSync` to throw `EACCES` on **K4** — the identity read that follows a `null` from K3 — and **identify K4 STRUCTURALLY, never by an ordinal**: throw on the **first** target Buffer read that happens **after the withheld preserve's write has failed**, which is K4 by construction on both arms. K3's own read must still succeed, so that its WRITE is what fails — that is patch (2)'s whole point — and the structural form gives that for free, because the flag it keys on is set by the failing write. *(Post-Done errata 2026-07-28, from PR #122's Decision 2 and Discovered issue 2. Round 8 wrote this let-through list as "K1, K2 and K3's read", and that list is arithmetically wrong for this row's OWN trigger: patch (1) is an **R7**, and on an R7 the arm returns before the pre-rename comparison ever runs, so **K2 does not execute**. The real sequence on this path is **K1, K3, K4** — three target reads, not four — so a patch that lets three through leaves nothing for the throw to land on and the row's outcome is unreachable again. Round 8's own worked counter-argument inherits the same error: against the true sequence, "lets two reads through and throws on the third" lands on **K4**, which is exactly what this row wants, not on K3. **The repair is not a corrected count.** Any ordinal is a claim about which reads run, and this row has now been wrong about that twice; the structural anchor above is immune to the count and to any future reordering, and it is strictly stronger than what round 8 asked for — it cannot fire before the withheld write has failed, whatever the sequence. Round 6's version of this row named no fall-through trigger at all, and FI-10 shipped with the same omission: one defect family, and **ADR-0036** — PROPOSED, unsigned, not in force — is where the general rule is now written, in its canonical Table A. **That rule does not forbid counted seams**: it forbids an ordinal where a structural anchor was available, which is this row's case exactly, and it permits a count armed at a named canonical row, which is what FI-2 and FI-11 use.)* **Assert, on both arms:** the gate **threw**; **no `git checkout` and no `fs.rmSync` ran** against the target; the index entry was **not** cleared; the file is byte-identical to what was on disk before the arm; **and the `WienerdogError` carries all four of Table Q row Q18's fields at their R0b-READ-ERROR values** — the vault-relative path; **B3's** preserve named as the one that failed; the identity check recorded as **attempted and NOT POSSIBLE**, which must be a **different** recorded value from FI-17/FI-18's *performed and mismatched* (a single wording covering both is exactly what **M-55** mutates to); and the surviving `redacted/` basename. *(Assert the absence of the destructive calls directly — the same `spawnPinnedSync` wrapper records invocations, plus a recording `fs.rmSync` — not merely the end state, because on a tracked file the end states of "checkout ran" and "checkout did not run" coincide when the working tree already matched `HEAD`.)* | gate | **ROUND 6 SHIPPED THIS ROW UNPRODUCIBLE, and the reason is worth keeping.** It reached the branch "with FI-17's second patch" alone — but that patch fails writes under `quarantine/` **outside** `redacted/`, and **K1's preserve writes its temp INSIDE `redacted/`** while **the scrub's temp is in the vault**. Neither is touched, so the arm completes at **R8** and K3/K4 never execute: the row asserted an outcome its own mechanism could not reach, and **M-50 had nothing to redden**. A fall-through trigger is therefore mandatory, and it must be one that **does not touch the target** — FI-16's does (it rewrites the file at K2), which would falsify the byte-identity assertion; FI-7's does not |
 | **RP-1** | **residual 11** — the pre-revert race, tracked and untracked | **A RESIDUAL-PINNING ROW, not a fault the design prevents**, and labelled so nobody reads it as a passing safety property. Patch the `spawnPinnedSync` wrapper (tracked) or `fs.rmSync` (untracked) to **write different bytes over the target immediately before delegating** — i.e. simulate a save landing *after* K3/K4 and *before* the destruction. **Assert the currently-specified outcome: the save is destroyed**, no durable artifact holds it, and — the part that matters — **no artifact claims otherwise**: the report line, the reason string and the banner all describe the *pre-save* copy, which is the only thing that was ever preserved. | gate | **it makes the residual visible and makes any future closure break loudly.** Residual 11 is an inherited race this WP does not own; a test that pins it is how the follow-on `WP-ep2-atomic-withhold-handoff` will know it changed something. **If this row ever starts failing, the race was closed — update residual 11 and this row together; do not "fix" the assertion.** |
 | — | **R8** | no injection: an ordinary `redact`-severity fixture | gate | — |
 
@@ -2904,6 +3065,49 @@ above; the rule applies identically to rows B4, B5, B10, B6, B7 and B13.
       **arming rule in this table's preamble**. A precondition can be forgotten
       by the next test author and fails *vacuously* when it is; a seam property
       cannot be violated by a fixture at all.
+      **The 2026-07-28 post-Done errata registers one NEW mirror: the errata
+      block in Table T's preamble**, which restates what FI-10, FI-19 and M-23
+      were wrong about. It defers to the three rows and decides nothing.
+      **Registered 2026-07-28, round 6 — the *AC-15 coverage census*.** That
+      table is canonical for every mutation row's evidence limb; **AC-15** is its
+      pointer and decides nothing; **M-48**'s cell and **Table R consequence 7**'s
+      pointer sentence are the row-level surfaces that move with it. It is
+      dispositioned corpus/measurement **data** in **V-30**, so what this bullet
+      registers is the table, named here by its exact heading — *AC-15 coverage
+      census* — and not its rows. **Since round 9 that schema entry also declares a
+      1:1 PAIRING with the Mutation checks table**, which V-30 derives and enforces
+      in both directions on every run, so the census can no longer go short or long
+      without the step going red. *It exists because AC-15's wording was the
+      blocking finding in two consecutive rounds: the third repair is an
+      extraction, per the circuit-breaker in `docs/runbooks/codex-review.md`.*
+      **A generalizing rule is PROPOSED in `docs/adr/0036-mechanism-cell-schema-for-contract-tables.md`
+      and its Table A is canonical for it.** Summary only, and deliberately only a
+      summary: a `mechanism` cell names a **trigger** and a **patch** as separate
+      fields, identifies **every** seam it names structurally, and a mutation row
+      states one mutation. **Each of those three clauses has an exemption and each
+      exemption has a measurement — read all six in Table A, which is the one
+      place they are decided.** This bullet does not restate them. **ADR-0036 is
+      unsigned and NOT IN FORCE**, so this registers it as a proposal, never as an
+      obligation; the three corrections stand on PR #122's measurements and on the
+      two mutation runs recorded in the M-23 / M-23b cells.
+      **What each instance was, which is this spec's own history and not the ADR's:**
+      FI-10 shipped with no trigger and passed vacuously — **round 5's extension,
+      third instance**. FI-19 shipped an ordinal read count in its **patch**,
+      wrong for its own trigger — **a different axis from round 7's extension**,
+      which kept the ordinal and made it *relative* to an arming read. FI-19's
+      repair reaches for a structural anchor instead, and **that is the right
+      repair for FI-19 specifically because one existed**; it is *not* a rule that
+      counted seams are wrong. **A counted seam armed at a named canonical row —
+      which is what round 7's arming rule produced, and what FI-2 and FI-11 use —
+      stays correct here — that is this spec's own conclusion, reached from the arming
+      rule its own round 7 established and from FI-2's and FI-11's executed
+      behaviour, and it does not depend on any ADR. *It would also conform to row
+      **A2** of the PROPOSED ADR-0036, which is NOT IN FORCE and is named here as
+      agreement, never as the reason.*** Nothing
+      in this bullet deprecates it. M-23 stated two mutations in one row, so
+      neither clause was held. Three instances in one table is a pattern and not
+      three slips, which is why the rule was proposed outside this spec rather
+      than written into this bullet as local practice.
 - [ ] **Table P** mirrors: the Current-state paragraph describing the detector
       after leg 1; the Deliverables prohibition on `src/core/secret-scan.js`;
       "Why this leg cannot go first"; acceptance criterion AC-21; verification
@@ -3460,9 +3664,20 @@ restating a measurement it cannot reproduce.
       only entries matching `^[0-9]{4}-[0-9]{2}-[0-9]{2}-`, only regular files,
       and **never any copy this run created** — every fact here is **Table N**'s
       (N2 the trigger, N3 the exclusion set, N4 the ordering, N5 the
-      precedence), and this bullet restates no number. *The per-call form it
-      carried until round 2 — "never the copy the current B4 just created" — is
-      exactly what mutation **M-48** mutates TO.*
+      precedence), and this bullet restates no number. *Until round 2 this bullet
+      carried a narrowed per-call form — "never the copy the current B4 just
+      created" — which **Table N row N3** replaced with the run-scoped set.
+      **Re-keyed 2026-07-28, round 7 of the post-Done errata**, because the
+      sentence that stood here said that form "is exactly what mutation **M-48**
+      mutates TO", and after M-48 was split that is false: post-split M-48 moves
+      the prune's CALL SITE and passes the accumulated set **unchanged**, so it
+      mutates no exclusion at all. **The pre-round-2 design was two changes —
+      per-call AND narrowed — and only the per-call half now has a row.** The
+      narrowed half is stated by no mutation row: **M-23** removes the exclusion
+      entirely rather than narrowing it, and whether a narrowed exclusion is
+      separately detectable is **not measured and not claimed here**. Recorded as
+      an observation, not routed. This bullet is a registered **M-48** mirror —
+      see that row's mirror enumeration.*
 - [ ] **The fall-through's deletion of the `redacted/` copy is the second and last
       delete path this WP adds, and it is narrower than the prune.** It is
       `fs.rmSync` on exactly `path.join(stateDir, 'quarantine', 'redacted', basename)`,
@@ -4006,13 +4221,60 @@ here.
       prune back — impossible under N2 — and round 4 appended the correction as
       commentary instead of editing the assertion, so it stood for a further
       round. The assertion above is now the criterion. See the N2/N6 decision
-      under Table N.* **A per-call prune
-      fails this case and a per-run prune passes it** — which is the whole reason
-      the case exists, because the previous design's defence was an arithmetic
-      claim (Table R consequence 7) that was false by three orders of magnitude
-      and that no test could have caught.
-- [ ] **AC-15** Every mutation in the Mutation checks table makes at least one
-      named test fail.
+      under Table N.* **WHAT THIS CASE DOES AND DOES NOT DETECT — corrected 2026-07-28
+      by the post-Done errata, round 5, and corrected by MEASUREMENT rather than
+      by argument.** Until then this criterion asserted *"A per-call prune fails
+      this case and a per-run prune passes it."* **That is false, and the run
+      that disproves it is recorded in mutation row M-48**: the isolated N2-only
+      mutation — move the `pruneRedactedOriginals` call into the B4 loop while
+      passing the accumulated `redactedCreated` set unchanged — leaves **all
+      five** retention cases green, the whole `dream-validate` file green
+      (`tests 136, pass 136, fail 0`) and the **entire suite** green
+      (`tests 1807, pass 1802, fail 0`). **What this case really pins** is the
+      cap, the **N5** precedence and the **N6** overshoot lifetime, and — through
+      the other two retention cases — the `(mtimeMs, name)` ordering (**N4**, by
+      M-23b's run) and the created-copy exclusion (**N3**, by M-23's run). **What
+      nothing pins is the prune's TIMING, Table N row N2**: **as of 2026-07-28 it
+      was undetected by any test in this repository** — the run that establishes
+      that is recorded in M-48 and dated — **and it is closed by
+      `WP-ep2-retention-prune-timing-test` when that WP lands.** *Written in the
+      dated-past deliberately, round 8: a present-tense "is undetected" becomes
+      false the moment the routed WP merges, which would oblige that WP to edit
+      this criterion and every other statement of the same fact. Dated, the
+      sentence stays true forever and the routed WP's Deliverables can stay at two
+      files.* The fix is routed to
+      **`WP-ep2-retention-prune-timing-test`** — a real `Draft` spec at
+      `docs/specs/WP-ep2-retention-prune-timing-test.md`, authored in the same
+      errata pass so this criterion names an owned WP rather than a string — which
+      owns `tests/`. This errata
+      pass does not, so it records the gap rather than closing it. *The case still
+      earns its keep: the previous design's defence of the retention story was an
+      arithmetic claim (Table R consequence 7) false by three orders of magnitude,
+      and this case is what replaced argument with a fixture — for the cap and the
+      precedence, which it does hold.* **Provenance, and it is the same failure
+      twice:** the paragraph above records round 4 of the original gate appending a
+      correction *"as commentary instead of editing the assertion, so it stood for
+      a further round"*; round 4 of THIS errata corrected M-48's cell and left this
+      assertion standing, which is that shape a third time, one layer up. Both are
+      why the correction here **replaces** the sentence instead of following it.
+- [ ] **AC-15** **Every mutation row in the Mutation checks table has a row in the
+      *AC-15 coverage census*, and that table decides its evidence limb.** This
+      criterion states no per-row disposition and no blanket claim; the census
+      does, one row per mutation row, and its coverage is derived by comparing the
+      two id sets rather than asserted. *Reworded 2026-07-28 by the post-Done
+      errata. It read "Every mutation in the Mutation checks table makes at least
+      one named test fail" until round 5 — false for the rewritten **M-48** —
+      and then, until round 6, a two-limb sentence whose normative clause demanded
+      a recorded run while its own gloss only parsed if the first limb had none,
+      and whose "every other row" was false under the reading its capitals forced.
+      **Two consecutive rounds landed on this criterion's WORDING**, which is the
+      circuit-breaker condition in `docs/runbooks/codex-review.md`, so the third
+      repair is an EXTRACTION and not a third rewording: the dispositions moved to
+      a table where every row is visible and the coverage claim is true by
+      construction. The asymmetry the two-limb sentence tried to carry in prose —
+      inherited-and-swept versus executed-here versus an executed gap — is now the
+      census's `limb` column, which is where a distinction that keeps being
+      misread belongs.*
 - [ ] **AC-16** `npm test` and `npm run lint` pass; running the dream twice over
       an unchanged corpus produces zero changes on the second run.
 - [ ] **AC-19** `docs/runbooks/secret-incident.md` carries all three Table Q
@@ -4115,6 +4377,137 @@ here.
       orderings have converged on the same state, which is exactly why round 4's
       AC-24 could not see a write-then-stage implementation. One case is enough
       (an ordinary **R8**), and it is the case **M-30** must break.
+
+### AC-15 coverage census — canonical: the evidence limb of every mutation row
+
+**This table is the single place AC-15's per-row disposition is decided, and it
+exists because AC-15's WORDING was the blocking finding in two consecutive review
+rounds.** Round 5 reworded it; round 6 found the rewording internally inconsistent.
+That is the two-consecutive-rounds condition stated in
+`docs/runbooks/codex-review.md`, so the repair is an **extraction** rather than a
+third rewording. AC-15 is now a pointer; the dispositions live here, one row per
+mutation row, so *"every other row"* is true **by construction** instead of by
+assertion.
+
+**Coverage is ENFORCED, and enforced at check time.** This table declares a **1:1
+pairing** with the Mutation checks table in **V-30**'s schema list, and that step
+derives both first-cell id sets on every run and **fails on any asymmetric difference
+in either direction** — a mutation row with no census row, or a census row with no
+mutation row. The count is printed, not pinned: today it reads *"1 declaring a 1:1
+pairing, each checked in BOTH directions at 37 rows"*.
+
+*Round 9 replaced what stood here, and the replacement is the point. Round 6 wrote
+"Coverage is derived, not claimed. This table holds 37 rows and the Mutation checks
+table holds 37 rows; the two id sets were compared with `comm` on 2026-07-28 and are
+identical." **Every word of that was true and none of it was enforced.** It is a
+remembered invariant: the `comm` run happened once, on a date, and nothing re-ran it,
+so a row added or deleted afterwards drifted green while AC-15 claimed exact coverage.
+A one-directional test would not have been enough either — it passes on a strict
+superset or a strict subset depending which way it is written — so the check compares
+both differences and names which side each stray id is on.*
+
+**Proven red in both directions, executed 2026-07-28** (probe copies of this file; the
+real file was not modified): removing the census row for **M-24b** ⇒ *"in the PAIRED
+table only: M-24b"*, exit 1. Adding a census row for a fabricated **M-99** ⇒ *"in the
+DATA table only: M-99"*, exit 1. Duplicating a census row ⇒ *"DUPLICATED in the DATA
+table: M-24b×2"*, exit 1. Control on the unmodified file ⇒ exit 0.
+
+**AND THE SEMANTIC PROBES, recorded HERE rather than only in the pull request, which
+is the point of writing them down at all.** The pairing checks *identity*; these check
+*meaning*, and a probe that lives only in a PR body is a probe the next editor cannot
+re-run. All executed 2026-07-28 on probe copies, all exit 1, control exit 0:
+
+- **invalid limb** — rewrite M-48's limb to `nonsense`. The vocabulary is closed; a
+  limb nobody defined is a row nobody can act on.
+- **dropped column** — delete a row's evidence cell. A row short of a column silently
+  drops the field the next check reads.
+- **gap → executed** — relabel M-48, evidence untouched. **This is the attack the rule
+  exists for**: an *uncovered* mutation recorded as covered, and its routed WP
+  suppressed. Caught on the positive-failure-count requirement, because `fail 0` is
+  not a mutation that reddened anything.
+- **gap → swept** — relabel M-48. A swept row may carry no local counts, and M-48's
+  `fail 0` is one.
+- **executed → gap**, and **executed → swept** — relabel M-23. A gap needs a
+  zero-failure run and a routed WP; a swept row may carry no counts at all.
+- **swept → executed**, and **swept → gap** — relabel M-7. An inherited verdict has
+  neither a positive failure count nor a zero-failure run.
+- **executed evidence gutted** — keep the limb, remove the counts and the reddened
+  target. A limb without its evidence is the coverage claim this census exists to stop.
+- **executed keeps a target but loses its counts** — keep `RED`, drop `fail N`. Naming
+  a target is not the same as showing it went red.
+
+*Deliberately a list and not a table: V-30 keys a table's schema on the nearest
+preceding heading, so a second table under this one would need its own schema entry
+and its own Checklist registration — machinery for a narrative record. The step caught
+the first draft of this block, which is the gate working.*
+
+**Thirteen probes, all red; the unmodified file green.** The six mislabel directions are
+enumerated deliberately: with three limbs there are exactly six ways to wear another
+limb's evidence, and the predicates are only *mutually exclusive* if all six fail. **A gate
+proven red in one direction only is half-proven**, and the second direction here is
+not the same second direction a step's non-vacuity proof needs — that one asks whether
+the check accepts the correct answer; this one asks whether it catches drift on the
+side you were not thinking about.
+
+**The three limbs — and the asymmetry between them is the point, so it is a column
+and not prose.**
+
+- **`swept`** — the row's injection was applied and its named check run in **PR
+  #122's** mutation sweep, which recorded `RED (ok)`. **The run lives in that PR
+  body, not in the cell**, and this errata did not re-execute it. It is an
+  inherited verdict, not a measurement this document performed. **34 rows.**
+- **`executed`** — this errata applied the row's mutation **in isolation** and the
+  row's own cell carries the command and the pass/fail counts. **2 rows.**
+- **`gap`** — the mutation was executed and **reddens nothing**; the cell records
+  the run demonstrating the absence and names the WP routed to close it. **1 row.**
+  This limb cannot be taken by assertion: it costs a run and a named owner, which
+  is strictly more than a claim of coverage costs. That is why it is not a loophole.
+
+| # | limb | evidence |
+|---|------|----------|
+| M-7 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
+| M-8 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
+| M-9 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
+| M-10 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
+| M-11 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
+| M-12 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
+| M-16 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
+| M-17 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
+| M-18 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
+| M-19 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
+| M-20 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
+| M-21 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
+| M-22 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
+| **M-23** | **executed** | **RED:** `a run NEVER evicts its own copies, even when they are the oldest by both keys` — `pass 2, fail 3` — *narration follows the verdict and never substitutes for it:* re-executed by this errata, 2026-07-28, in ISOLATION; drop `&& !created.has(e.name)`, keep the `(mtimeMs, name)` sort; cases 3 and 4 also went red, case 1 stayed green. Also `RED (ok)` in PR #122's sweep, but there as the pre-split conjoined row |
+| **M-23b** | **executed** | **RED:** `the prune evicts by (mtimeMs, name), not by filename alone` — `pass 4, fail 1` — *narration follows the verdict:* re-executed by this errata, 2026-07-28, in ISOLATION; drop the `mtimeMs` term, keep the exclusion; that case only. Round 5 corrected this row's mapping from case 2 to case 1 on the strength of that run |
+| M-24 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
+| M-24b | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
+| M-25 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
+| M-26 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
+| M-27 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
+| M-28 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
+| M-29 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
+| M-30 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
+| M-31 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
+| M-32 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
+| M-33 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
+| M-51 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
+| M-53 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
+| M-56 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
+| M-54 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
+| M-55 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
+| M-50 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
+| M-49 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
+| M-45 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
+| M-46 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
+| M-47 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
+| **M-48** | **gap** | **EXECUTED 2026-07-28, AND REDDENED NOTHING AT THAT DATE.** *Stated in the dated past, round 8, so this row stays true after `WP-ep2-retention-prune-timing-test` lands and changes the answer; that WP moves this row's LIMB and adds its test, and needs to edit nothing else.* The isolated N2-only mutation — move the prune call into the B4 loop, pass the accumulated set unchanged — leaves all five retention cases green, `dream-validate` 136/136, and the **whole suite** at `tests 1807, pass 1802, fail 0`. **PR #122 recorded `M-48 RED (ok)` and that is not a contradiction: #122 ran the CONJOINED row, whose other half violates N3, and N3 has a detector.** The redness came from the half that was covered — which is this census's whole argument. Routed to **`WP-ep2-retention-prune-timing-test`** |
+
+**What this census does NOT claim.** It does not claim the 34 `swept` rows would
+still redden today: `main` has moved since 2026-07-27 and this errata re-ran none of
+them. It claims exactly what it says — each was applied and recorded red at that
+commit. Re-establishing them is a sweep, not a reading, and no surface in this
+document says otherwise.
 
 ### Mutation checks (run these; a green suite against unmodified `src/` is not evidence)
 
@@ -4289,7 +4682,8 @@ against; and as of round 8 the **dated** form is not used either, because round
 | M-20 | drop B10's index-first stage entirely and let Step 5's `git add -A` do the staging | AC-24 (**I1**, the **R8** case: with nothing staged before Step 4, the index snapshot taken at the first `fs.appendFileSync` still holds this run's raw added bytes) **and** AC-9 (Table R row **R7** becomes unproducible — there are no staging calls left to fail — so its test has no subject). **Not the R7 fall-through cases**: those clear the index through B3's `git checkout HEAD --` or B3a's `git add -A -- rel`, which run regardless of whether B10 staged anything, and an earlier revision of this cell named them wrongly |
 | M-21 | replace the temp+rename in `scrubAddedLines` with a single `fs.writeFileSync` onto the target | AC-9 (Table R row **R5**, injection FI-5b) |
 | M-22 | move `reverted.push(…)` back into the shared path so a completed B4 enters it | AC-8 / AC-10 (Table B row **B9a** — the report section and `res.reverted.length`) |
-| M-23 | prune by filename sort instead of `(mtimeMs, name)`, and stop excluding the just-created copy | AC-14 |
+| M-23 | **stop excluding the just-created copy** from the prune's candidate set (**Table N row N3**); leave the `(mtimeMs, name)` ordering alone | **AC-14's SECOND case** — *"a run NEVER evicts its own copies, even when they are the oldest by both keys"* — which is what holds **N3**. *Post-Done errata 2026-07-28: until then this row stated TWO independent mutations in one cell — the ordering and the exclusion — and either half alone satisfied it, so no single run could show that both clauses are held. **THE SPLIT AND THIS MAPPING ARE MEASURED, NOT INFERRED (re-run 2026-07-28, after a round-2 review found this cell claiming as recorded what was then a reading of PR #122's two terse sweep labels).** The isolated mutation — drop `&& !created.has(e.name)` from the candidate filter, leave the sort untouched — was applied to `src/core/dream/validate.js` and the retention suite run: **AC-14 case 1 stays GREEN, case 2 goes RED** (with cases 3 and 4 also red), `pass 2, fail 3`. `src/` was restored and the tree verified clean. The complementary run is in **M-23b**'s cell; the two are disjoint, which is what makes them two mutations rather than one* |
+| **M-23b** | **order the prune's candidates by filename** instead of by `(mtimeMs, name)` (**Table N row N4**); leave the just-created-copy exclusion alone | **AC-14's FIRST case** — *"the prune evicts by (mtimeMs, name), not by filename alone"* — which is what holds **N4**, because it is the only case asserting **which old files were removed** (`gone === seeded.slice(-11)`; its own comment reads *"A filename sort would have deleted the first eleven"*). *Added by the 2026-07-28 errata as the second half of the old M-23. **MEASURED, and the measurement corrected this cell**: it first mapped to AC-14's second case, which a round-2 review found insensitive to this mutation — with the created-copy exclusion left intact a filename sort still keeps the run's own copies, so case 2 asserts nothing this half can break. Executed: the isolated sort mutation (drop the `mtimeMs` term, keep the exclusion) applied to `src/core/dream/validate.js` reddens **case 1 only**, `pass 4, fail 1`, every other retention case green. `src/` restored, tree verified clean.* Registered on V-30's dated backlog in the same pass, with the other retention-family mutation ids |
 | M-24 | require `,b` in the hunk-header pattern (`/^@@ -(\d+),(\d+) \+…/`) so `@@ -2 +2 @@` never matches | AC-8 (the **single-line replacement** fixture) |
 | M-24b | treat a hunk header with no `,d` as contributing zero added lines | AC-8 (the **single-line insertion** fixture) |
 | M-25 | change B3's reason string (drop `; not committed`) | AC-7 (the withhold path's byte-identical reason strings) |
@@ -4311,7 +4705,7 @@ against; and as of round 8 the **dated** form is not used either, because round
 | **M-45** | **delete row B3b** — let B3 revert or remove the file after its own preserve failed, exactly as it did before round 1 of the design gate | AC-9 (Table R row **R0**, injections **FI-12/13/14**, and specifically their **untracked** arms: with B3b gone the note is `fs.rmSync`ed while neither `redacted/` nor `quarantine/` holds a copy, so the assertion that the file is still on disk fails). **This mutation IS the shipped behaviour of every revision before this one**, which is why it is in the table: the loss path was the default, not a slip |
 | **M-46** | **restore the second content read** — have `scrubAddedLines` call `fs.readFileSync` on the target for its scrub input instead of using the `captured` buffer | **AC-9 via FI-15, RE-KEYED IN ROUND 2 to the read COUNT rather than to a perturbation.** FI-15's harness records every read of the target and asserts there are **exactly two** (the capture and the rule-2 comparison); a module that re-reads for content makes a **third** and fails that assertion. It also fails FI-15's fourth assertion, that the scrubbed target equals the per-line scrub of the captured bytes. **The previous keying was to an impossible injection** — FI-15 used to poison every post-capture read, which a conforming implementation must observe at the comparison, so the row it named could never be reached and this mutation had nothing that could redden. **No structural check can substitute** — a grep for the read count is satisfied by any other spelling |
 | **M-47** | **drop the pre-rename compare** — rename the temp over the target without re-reading and comparing against `captured` | **AC-9 (Table R row R7c, injection FI-16), RE-KEYED IN ROUND 2 to a modification made BEFORE the comparison read.** FI-16 now writes different bytes over the target immediately before delegating the comparison read, so a conforming arm detects the change and never renames; with the compare dropped, the recorded `fs.renameSync` **IS** invoked, the user's mid-run save is overwritten by the gate's rewrite, and the only copy of that save is destroyed while `redacted/` holds the pre-save bytes. **Asserted as *rename was called*, which is the observation that distinguishes the two designs.** The previous keying was self-contradictory: FI-16 modified the target *inside* the patched rename — after the comparison had already passed — and then asserted the rename was never invoked, which the patch's own execution disproves |
-| **M-48** | **prune per call instead of per run**, excluding only the current B4's basename — i.e. violate **Table N** rows **N2** and **N3** | AC-14, the full-directory multi-redaction case with tied and skewed `mtime`s: a copy this run created is evicted before the run ends and the report line names a file that no longer exists. **The previous design's defence against this was an arithmetic claim ("decades of runs below the cap") that Table N's extraction record shows was false by three orders of magnitude — so nothing but this mutation stands between the two designs** |
+| **M-48** | **prune per call instead of per run** — move the `pruneRedactedOriginals` call from its post-loop site into the B4 loop, **passing the accumulated `redactedCreated` set unchanged**. Violates **Table N row N2** (the trigger: once per run) and **nothing else** | **NOTHING — AND THAT IS THE POINT OF THIS ROW AS IT NOW STANDS.** *Rewritten 2026-07-28 by the post-Done errata, round 4, after Codex falsified two prior readings of it.* **What was claimed:** rounds 2 and 3 of this errata kept this row whole and argued it was **indivisible** — that N3's candidate set is *defined* as "every basename **this run** created", so per-call scoping collapses N3 as a consequence and no edit violates N2 alone. **That argument reads Table N's definition and never reads the code.** The implementation separates the two facts: the prune's **timing** is one call site (`src/core/dream/validate.js`, the post-loop `if (secretRedactions > 0) pruneRedactedOriginals(stateDir, redactedCreated);` under the comment *"Retention, once per run"*), while the **exclusion** is the run-scoped `redactedCreated` set, built inside the loop and merely *passed in*. Moving the call and retaining the set violates N2 and preserves N3 — so the row was divisible all along, and **the split is required by the executed run recorded below** — two halves, separately revertible, reaching different acceptance-criterion cases, which is a conclusion of this document's own measurements and of nothing else. *It would also conform to row **A3** of the PROPOSED ADR-0036, which is NOT IN FORCE; the ADR is cited here because it is where the general form of this reasoning is written down, never as the authority that compelled the split.* **Executed, 2026-07-28, and this is the finding:** that isolated N2-only mutation was applied and the suite run. All five AC-14 retention cases stayed **green**; the whole `dream-validate` file stayed green (`tests 136, pass 136, fail 0`); **the entire suite stayed green — `tests 1807, pass 1802, fail 0`.** `src/` restored, tree verified clean. **So N2 had NO detector as of 2026-07-28** — dated, not present-tense, so the sentence survives the routed WP landing. This row names a real mutation that nothing catches, which is worse than a row that names two mutations: it is a mutation row that cannot go red. It is recorded here as an **undetected-today gap**, not as a passing check, and it is **routed to `WP-ep2-retention-prune-timing-test`** — the slug registered for this gap, used here, in **AC-15**'s second limb and in the PR body, one name across all three — a WP that owns `tests/`. This errata pass does not, and inventing a test from a docs branch is exactly the boundary violation the Deliverables table exists to stop. **The two AC surfaces that mirror this row were corrected in the SAME pass (round 5), and they were missed in round 4**: AC-14's third case asserted that a per-call prune fails it, and AC-15 asserted that every mutation row reddens a named test. Both were falsified by the run above. That is the one-surface-updated-mirrors-stale pattern at the acceptance-criterion layer, and AC-14's own provenance note records the identical shape from round 4 of the original gate. **N3 is unaffected and still covered**: `M-23` holds it, by its own recorded run (AC-14 case 2 red). **REGISTERED MIRRORS OF THIS ROW — the enumeration, added 2026-07-28 in round 7 and added because counted prose failed three errata rounds running.** **Three rounds missed FOUR surfaces between them**, and each miss was hidden by a sentence that stated a COUNT instead of a LIST. Named by the round whose FIX missed them, which is the attribution that makes the pattern legible: **round 4** — the pass that split this row — missed **two**, **AC-14** and **AC-15**; **round 5** missed **Table R consequence 7**; **round 6** missed the **Security checklist**'s prune bullet. *Corrected 2026-07-28 in round 8: this sentence said "rounds 5, 6 and 7 each missed exactly one", which was wrong in both halves — the round attribution was shifted by one (round 4's own commit title reads "the two M-48 mirrors round 4 missed"), and "exactly one" is falsified by its own next clause, which names two. A provenance note that miscounts the misses is the same defect it is describing.* The repair is the one this document has now built twice — for the AC-15 coverage census and for ADR-0036's mirror list — so it is applied a third time here. **The six surfaces that state something about this row and move with it:** **(1)** **AC-14**'s third case, which states what N2's absence means and names the routed WP; **(2)** this row's line in the **AC-15 coverage census**, which carries its `gap` limb and the run; **(3)** **Table B row B10**, which states N2's contract and names this row as its mutation; **(4)** **Table R consequence 7**, which names the per-call prune as the design a falsified arithmetic claim once argued for; **(5)** the **Security checklist**'s retention-prune bullet, re-keyed in round 7; and **(6)** row **A3** of the PROPOSED **ADR-0036**, a cross-document mirror that cites this row as its worked example and that this row cites back — the citation is bidirectional on purpose, so neither can move alone. **The meta-rule, identical to the one ADR-0036's list carries:** any sentence anywhere that calls a surface a mirror of this row moves in the same pass as this enumeration, because a sentence of exactly that kind is what falsified the count three times. A count is checkable only if it is written beside the list it counts. *Table A row A3 of the PROPOSED ADR-0036 is where the general rule is written; this cell is its worked instance and cites it as a proposal, not as authority* |
 
 M-16 and M-17 cover the transitions Table B had no row for until B5a; M-20 … M-24
 cover the four defects round 3 found in this same contract family, which is why
@@ -5858,6 +6252,14 @@ const SCHEMA = new Map([
 ["### Table K — canonical: every read of the target inside the redact arm || | # | which read | encoding | position in the arm | what anchors it | if it THROWS | if its bytes DIFFER from `captured` |", ["ids", /^K[0-9]+$/]],
 ["### Table R — canonical: the redact arm's outcome matrix || | # | outcome | `P` | `S` | working-tree file **at the instant `S` returned** | `redacted/` copy when the row finishes | index **when the row finishes** | next row | `secretRedactions` | `secretReverts` | in `reverted[]` | fault injection |", ["ids", /^R[0-9]+[a-z]?$/]],
 ["### Table T — canonical: how every Table R row is produced and observed || | id | produces | mechanism — the exact seam | asserted at | why nothing cheaper reaches it |", ["ids", /^(FI-[0-9]+[a-z]?|RP-[0-9]+|BU|I[0-9]+|—)$/]],
+// A DATA table may declare a 1:1 PAIRING with an ids table: ["data", <registration
+// name>, <schema key of the paired table>]. When it does, this step DERIVES both
+// first-cell sets at check time and fails on any asymmetric difference, in either
+// direction. Added 2026-07-28, round 9: the census carried its coverage claim as a
+// DATED comm run and a static "37", which is a remembered invariant, not a checked
+// one — a mutation row added without a census row, or a census row deleted, drifted
+// green while AC-15 claimed exact coverage.
+["### AC-15 coverage census — canonical: the evidence limb of every mutation row || | # | limb | evidence |", ["data", "AC-15 coverage census", "### Mutation checks (run these; a green suite against unmodified `src/` is not evidence) || | # | One-line mutation to `src/` | Must fail |"]],
 ["### Mirrored Surface Checklist || | hit | surface | disposition |", ["data", "census"]],
 ["### Owner signature form — canonical || | # | Fact | Value |", ["ids", /^S[0-9]+$/]],
 ["### Table H — canonical: what a DEFINITION is, and what a REGISTRATION is || | # | fact | pattern | why it is here |", ["ids", /^H[0-9]+$/]],
@@ -5884,6 +6286,12 @@ const SCHEMA = new Map([
 //     the success row has no seam. It is a real row of a canonical table, so
 //     the schema pattern must admit it rather than silently skip it; it names
 //     no id, so there is nothing to register.
+//   M-23b  backlogged 2026-07-28, POST-DONE ERRATA. It is the second half of the
+//     old M-23, which stated two independent mutations in one row; the split is
+//     disclosed in the Table T errata block. It inherits M-23's disposition
+//     exactly — same retention family, same acceptance criterion, same reason
+//     for being unregistered — so it goes on the backlog beside it rather than
+//     into the Checklist, which would claim a mirror set neither half has.
 const BACKLOG = new Set(`
 P1 P2 P3 P4 P6
 B1 B2 B8 B9
@@ -5893,7 +6301,7 @@ K1 K3
 R3 R5 R7b R8 R9
 FI-3 FI-5a FI-5b FI-7b FI-8 FI-9 FI-10 FI-12 FI-13 FI-14
 S1 S2 S3 S4 S5 S6 S7
-M-8 M-9 M-11 M-23 M-24 M-24b M-25
+M-8 M-9 M-11 M-23 M-23b M-24 M-24b M-25
 AC-8 AC-15 AC-16
 V-1 V-10 V-25
 —
@@ -5954,6 +6362,111 @@ const resRe = new RegExp(P_RES);
 
 const seen = new Set();
 let dataTables = 0;
+// key -> Map of that table's first-cell values to their OCCURRENCE COUNT, collected
+// for BOTH dispositions so a declared pairing can be compared after the walk. The ids
+// branch already DEFINES its cells; this records WHICH TABLE defined them, which
+// `defs` alone does not carry.
+//   COUNTS, NOT MEMBERSHIP, and round 10 is why: a Set makes a DUPLICATED row
+//   invisible — duplicate a census row and both sides still hold the same id, so the
+//   step reported 1:1 over a 2:1 census. The ids branch has `define()`'s
+//   duplicate guard (Table H row H5); a DATA table has no such guard, which is
+//   exactly the side that needed one.
+// ─── PER-ROW SEMANTICS FOR NAMED DATA TABLES. Round 11: the pairing validated ids
+//     and multiplicity but NOT MEANING — the reviewer replaced M-48's limb with
+//     "nonsense" and this step stayed green, because a first cell is all the pairing
+//     ever looked at.
+//     CHOICE RECORDED: a NAMED BRANCH keyed by registration name, not a generalization
+//     of the pairing mechanism. Generalizing would mean inventing a mini-schema
+//     language (column counts, per-cell enums, conditional cell requirements) to serve
+//     ONE table, which is the over-fitting the pairing form was written to avoid. A
+//     named rule says what it is; a second data table needing semantics adds a second
+//     entry, and only then is a general form worth designing.
+const DATA_ROW_RULES = new Map([
+  ["AC-15 coverage census", {
+    cols: 3,
+    // cell 2 is the LIMB. Exactly this vocabulary, nothing else.
+    limb: ["swept", "executed", "gap"],
+    // cell 3 is the EVIDENCE, and what it must carry depends on the limb it claims.
+    //   MUTUALLY EXCLUSIVE, and round 12 is why. The first form required only that
+    //   an `executed` row carry "pass N, fail N" — which `fail 0` satisfies. So
+    //   relabelling the M-48 gap row to `executed`, keeping its REDDENED-NOTHING
+    //   evidence untouched, passed: an UNCOVERED mutation recorded as covered, and
+    //   its routed WP silently suppressed. Each limb now states what it must have
+    //   AND what it must not, so no row can wear another limb's evidence:
+    //     swept    inherited verdict, NO local counts at all
+    //     executed a POSITIVE failure count and a named reddened target
+    //     gap      a ZERO failure count, NO positive one, and a routed WP slug
+    //   Verified before shipping: every one of the 37 rows satisfies its own limb
+    //   and FAILS the other two, so the three predicates partition the table.
+    evidence: {
+      swept: [
+        [[/#122/, "must name the PR whose sweep recorded it"],
+         // AND THE INHERITED VERDICT MUST BE THE SUCCESSFUL ONE, in the exact form
+         // #122 recorded. Round 14: the rule required the reference and forbade a
+         // local count, but never asked what the inherited verdict SAID — so
+         // flipping a row's `RED (ok)` to `GREEN (missed)` left this step green
+         // while it claimed to have validated the row's meaning. A row that
+         // inherits a FAILURE is not a covered row.
+         [/RED \(ok\)/, "must carry the inherited verdict in #122's recorded form, `RED (ok)` — a swept row asserts the mutation WAS caught"]],
+        [[/fail \d/, "must NOT carry a local pass/fail count — a swept row's verdict is inherited, not measured here"],
+         // Scoped to the VERDICT FORM, not to the word: `executed` and `gap` rows
+         // legitimately say "case 1 green" when reporting which cases held, and a
+         // blanket ban on the word would reject honest per-case reporting. This
+         // matches a verdict token followed by its parenthetical, which is the
+         // shape #122's sweep uses and the shape the attack forged.
+         [/\b(?:GREEN|MISSED|UNCAUGHT|SURVIVED)\s*\(|\((?:missed|uncaught|survived|green)\)/i,
+          "must NOT record a contradictory verdict — a swept row whose inherited result was anything but caught is an uncovered mutation wearing a covered row's limb"]],
+      ],
+      // ── EXECUTED IS NO LONGER A PHRASE MATCH. Rounds 16 and 17 each patched a
+      //    phrase list and each was defeated the next round — "stayed GREEN", then
+      //    "passed unchanged" — which is this document's own two-consecutive-rounds
+      //    breaker condition. So the predicate went STRUCTURAL in round 18: the
+      //    evidence must open with a canonical verdict clause, and the target named
+      //    in it is COMPARED, as a string, against the PAIRED MUTATION ROW. The two
+      //    rows are already joined by id, so the comparison is one lookup.
+      //      **RED:** `<target>` — `<counts>`   then narration, which decides nothing
+      //    An attacker can no longer name someone else's target: a target that does
+      //    not occur verbatim in the paired row fails, whatever the prose says.
+      //    THE HONEST BOUNDARY: narration after the clause is not parsed, so a row
+      //    could still contradict itself in prose. What changed is that the VERDICT
+      //    POSITION is authoritative and derivable — the phrase lists below are kept
+      //    only as narration hygiene, and they decide nothing.
+      executed: [
+        [[/fail [1-9][0-9]*/, "must carry a POSITIVE failure count — `fail 0` is not a mutation that reddened anything"],
+         [/^\s*\*\*RED:\*\*\s+`[^`]+`\s+—\s+`[^`]+`/, "must OPEN with the canonical verdict clause **RED:** `<target>` — `<counts>`; a verdict stated only in prose is not derivable"]],
+        // ── THE PHRASE LISTS ARE RETIRED, round 18, and their retirement is the
+        //    point rather than an omission. Round 14 banned non-detection phrases;
+        //    round 17 added "stayed green"; round 18's attack was "passed
+        //    unchanged". Each list was defeated by the next synonym, which is a
+        //    losing game against free text — and worse, the round-17 ban FIRED ON
+        //    HONEST NARRATION the moment these cells were rewritten to report
+        //    which sibling cases stayed green, i.e. it had become a false-positive
+        //    generator as well as a bypassable one.
+        //    The verdict is now carried by the canonical clause and checked by the
+        //    cross-row target comparison; narration is free to describe the run in
+        //    whatever words are true, INCLUDING "case 1 stayed green".
+        [],
+      ],
+      gap: [
+        [[/fail 0\b/, "must carry the zero-failure run that demonstrates the absence"],
+         [/WP-[a-z0-9]+(-[a-z0-9]+)*/, "must name the WP routed to close it"]],
+        [[/fail [1-9][0-9]*/, "must NOT carry a positive failure count — something went red, so this is not a gap"]],
+      ],
+    },
+  }],
+]);
+const rowIds = new Map();
+const rowLines = new Map();   // key -> Map(id -> 1-based line), for cross-row comparison
+const collect = (key, cell, ln) => {
+  if (!rowIds.has(key)) rowIds.set(key, new Map());
+  const m = rowIds.get(key);
+  m.set(cell, (m.get(cell) || 0) + 1);
+  if (ln !== undefined) {
+    if (!rowLines.has(key)) rowLines.set(key, new Map());
+    if (!rowLines.get(key).has(cell)) rowLines.get(key).set(cell, ln);
+  }
+};
+const firstCell = (line) => (line.split("|")[1] || "").trim().replace(/^\*\*|\*\*$/g, "").trim();
 let head = "(none)";
 for (let i = 0; i < lines.length; i++) {
   if (/^#{2,6} /.test(lines[i])) head = flat(lines[i]);
@@ -5965,9 +6478,29 @@ for (let i = 0; i < lines.length; i++) {
     if (s[0] === "data") {
       dataTables += 1;
       if (!registered(s[1])) fail("the table at line " + (i + 1) + " is dispositioned as corpus/measurement DATA, so what the Checklist registers is the TABLE — but " + JSON.stringify(s[1]) + " is named nowhere in the Checklist region under H6's boundary form. Register it there, or reclassify the table. (An UNBOUNDED substring test would pass here on any longer name that contains this one: that was round 8's defect.)");
+      const rule = DATA_ROW_RULES.get(s[1]);
+      for (let j = i + 2; j < lines.length && /^\|/.test(lines[j]); j++) {
+        collect(key, firstCell(lines[j]), j + 1);
+        if (!rule) continue;
+        const cells = lines[j].split("|").slice(1, -1);
+        const norm = (c) => (c || "").trim().replace(/^\*\*|\*\*$/g, "").trim();
+        const where = JSON.stringify(s[1]) + " row " + JSON.stringify(norm(cells[0])) + " (line " + (j + 1) + ")";
+        if (cells.length !== rule.cols) fail(where + " has " + cells.length + " cells, want " + rule.cols + ". A row short of a column silently drops the field the next check reads.");
+        const limb = norm(cells[1]);
+        if (!rule.limb.includes(limb)) fail(where + " has limb " + JSON.stringify(limb) + ", which is not one of: " + rule.limb.join(" | ") + ". The vocabulary is closed — a limb nobody defined is a row nobody can act on.");
+        const ev = cells[2] || "";
+        const [must, mustNot] = rule.evidence[limb];
+        for (const [pat, why] of must) {
+          if (!pat.test(ev)) fail(where + " claims limb " + JSON.stringify(limb) + " but its evidence cell does not satisfy " + pat + " — it " + why + ". A limb without its evidence is the coverage claim this census exists to stop.");
+        }
+        for (const [pat, why] of mustNot) {
+          if (pat.test(ev)) fail(where + " claims limb " + JSON.stringify(limb) + " but its evidence cell matches " + pat + ", which that limb forbids — it " + why + ". The limbs are MUTUALLY EXCLUSIVE: a row wearing another limb's evidence is a mislabel, and a mislabel is how an uncovered mutation gets recorded as covered.");
+        }
+      }
     } else {
       for (let j = i + 2; j < lines.length && /^\|/.test(lines[j]); j++) {
-        const cell = (lines[j].split("|")[1] || "").trim().replace(/^\*\*|\*\*$/g, "").trim();
+        const cell = firstCell(lines[j]);
+        collect(key, cell, j + 1);
         if (!s[1].test(cell)) fail("row " + (j + 1) + " has first cell " + JSON.stringify(cell) + ", which its table pattern " + s[1] + " does not match. A mis-shaped id is invisible to registration (Table H row H1).");
         define(cell, j + 1, "contract-table id");
       }
@@ -5984,6 +6517,89 @@ for (let i = 0; i < lines.length; i++) {
   }
 }
 for (const k of SCHEMA.keys()) if (!seen.has(k)) fail("the schema names a table this document no longer contains:\n           " + k + "\n           Remove it — a stale schema entry silently widens the carve-out.");
+
+// ─── DECLARED 1:1 PAIRINGS, DERIVED AT CHECK TIME. Both directions, because a
+//     one-directional test passes on a census that is a strict superset AND on one
+//     that is a strict subset, depending which way you write it.
+let pairings = 0;
+for (const [k, s] of SCHEMA) {
+  if (s[0] !== "data" || !s[2]) continue;
+  pairings += 1;
+  if (!SCHEMA.has(s[2])) fail("data table " + JSON.stringify(s[1]) + " declares a pairing with a schema key that does not exist:\n           " + s[2]);
+  const a = rowIds.get(k) || new Map();
+  const b = rowIds.get(s[2]) || new Map();
+  if (a.size === 0 || b.size === 0) fail("the pairing for " + JSON.stringify(s[1]) + " extracted an EMPTY side (" + a.size + " vs " + b.size + "). A pairing over an empty set is trivially satisfiable. Do not weaken it; report it.");
+  // MULTIPLICITY, not membership: a row present twice on one side and once on the
+  // other is a real asymmetry and is reported as one.
+  const dupA = [...a].filter(([, n]) => n > 1).map(([x, n]) => x + "×" + n);
+  const dupB = [...b].filter(([, n]) => n > 1).map(([x, n]) => x + "×" + n);
+  // ── ROUND 18: the EXECUTED target must occur verbatim in its PAIRED row. This
+  //    is the comparison the phrase lists could never be: two strings, from the two
+  //    rows the pairing already joins.
+  const norm = (t) => t.replace(/\s+/g, " ").trim();
+  for (const [id, ln] of (rowLines.get(k) || new Map())) {
+    const ev = (lines[ln - 1].split("|").slice(1, -1)[2] || "");
+    const limb = (lines[ln - 1].split("|").slice(1, -1)[1] || "").replace(/[*\s]/g, "");
+    if (limb !== "executed") continue;
+    // Parse the WHOLE clause — target AND counts — so the positive-failure
+    // requirement is satisfied by the clause itself and not by any digits that
+    // happen to appear later in the narration.
+    const m = /^\s*\*\*RED:\*\*\s+`([^`]+)`\s+—\s+`([^`]+)`/.exec(ev);
+    if (!m) fail("census row " + JSON.stringify(id) + " (line " + ln + ") claims limb \"executed\" but its evidence does not open with the canonical verdict clause **RED:** `<target>` — `<counts>`.");
+    const target = norm(m[1]);
+    const counts = m[2];
+    if (!/fail [1-9][0-9]*/.test(counts))
+      fail("census row " + JSON.stringify(id) + " (line " + ln + ") has counts " + JSON.stringify(counts) + " in its verdict clause with no POSITIVE failure count. Digits elsewhere in the narration do not count — the clause is the verdict.");
+    // ROUND 19: the id form is rejected outright. Every mutation row contains its
+    // own id, so `**RED:** \`M-23\`` satisfied a whole-row comparison while naming
+    // no test at all — and `M-23` is even a substring of `M-23b`. An id is not a
+    // target.
+    if (/^M-[0-9]+[a-z]?$/.test(target))
+      fail("census row " + JSON.stringify(id) + " (line " + ln + ") names " + JSON.stringify(target) + " as its target, which is a MUTATION ID, not a test. Every mutation row contains its own id, so this would compare a row against itself. Name the test or acceptance-criterion case the mutation reddens.");
+    if (target.length < 12)
+      fail("census row " + JSON.stringify(id) + " (line " + ln + ") names a target of " + target.length + " characters. A target that short cannot identify a test; it is a token that happens to occur in the partner row.");
+    const partnerLn = (rowLines.get(s[2]) || new Map()).get(id);
+    if (!partnerLn) fail("census row " + JSON.stringify(id) + " has no paired mutation row to compare its target against.");
+    // Compare against the partner's MUST-FAIL CELL ONLY — the column that names
+    // what the mutation is supposed to redden. The id lives in cell 1 and the
+    // mutation description in cell 2; neither is a statement about the target.
+    const partnerCells = lines[partnerLn - 1].split("|").slice(1, -1);
+    const mustFail = norm(partnerCells[2] || "");
+    if (!mustFail) fail("the paired mutation row for " + JSON.stringify(id) + " (line " + partnerLn + ") has no Must-fail cell to compare against.");
+    // ROUND 20, TERMINAL FORM: EXACT MEMBERSHIP against the Must-fail cell's
+    // TITLE SPANS, not a substring of the cell. A substring test accepted any
+    // ≥12-character run of incidental prose — "the only case asserting" passed.
+    //
+    // WHICH DELIMITER, MEASURED RATHER THAN ASSUMED: the round-20 finding proposed
+    // parsing BACKTICKED spans. Measured on the live rows, backticks in these
+    // cells carry CODE — `mtimeMs`, `src/core/dream/validate.js`,
+    // `&& !created.has(e.name)` — while the test titles are ITALIC-QUOTED,
+    // *"a run NEVER evicts its own copies…"*. Parsing backticks would have
+    // extracted code fragments and failed every real row. Titles are parsed from
+    // the italic-quoted spans, which is where they actually live.
+    const titleSpans = [...(partnerCells[2] || "").matchAll(/\*"([^"]+)"\*/g)].map((x) => norm(x[1]));
+    if (titleSpans.length === 0)
+      fail("the paired mutation row for " + JSON.stringify(id) + " (line " + partnerLn + ") names no test in its Must-fail cell. A row whose census entry claims an executed verdict must say, in that cell, WHICH test the mutation reddens — as an italic-quoted title.");
+    if (!titleSpans.includes(target))
+      fail("census row " + JSON.stringify(id) + " (line " + ln + ") names the target " + JSON.stringify(target.slice(0, 60)) + ", which is not one of the tests its paired mutation row names (line " + partnerLn + "): " + JSON.stringify(titleSpans.map((t) => t.slice(0, 40))) + ". EXACT membership is required — a substring of the cell's prose is not a test name.");
+  }
+
+  const onlyA = [...a.keys()].filter((x) => !b.has(x));
+  const onlyB = [...b.keys()].filter((x) => !a.has(x));
+  const mism = [...a].filter(([x, n]) => b.has(x) && b.get(x) !== n).map(([x, n]) => x + " (" + n + " vs " + b.get(x) + ")");
+  if (onlyA.length || onlyB.length || dupA.length || dupB.length || mism.length) {
+    console.error("FAIL V-30: " + JSON.stringify(s[1]) + " is not 1:1 with the table it is paired to.");
+    if (onlyA.length) console.error("           in the DATA table only: " + onlyA.join(" "));
+    if (onlyB.length) console.error("           in the PAIRED table only: " + onlyB.join(" "));
+    if (dupA.length) console.error("           DUPLICATED in the DATA table: " + dupA.join(" "));
+    if (dupB.length) console.error("           DUPLICATED in the PAIRED table: " + dupB.join(" "));
+    if (mism.length) console.error("           differing multiplicity: " + mism.join(" "));
+    console.error("           " + JSON.stringify(s[1]) + " claims exact coverage; add or remove the");
+    console.error("           matching row in the same commit. This is DERIVED here, not");
+    console.error("           remembered from a dated run.");
+    process.exit(1);
+  }
+}
 
 const missing = [];
 for (const [id, d] of defs) {
@@ -6009,7 +6625,7 @@ if (missing.length) {
 // H9: print what was checked, INCLUDING what was not. The backlog holds ids
 // that are genuinely unregistered mirrors; calling them nothing would make this
 // pasted artifact less honest than the source it came from.
-console.log("V-30 ok: " + defs.size + " ids defined across " + seen.size + " schema-dispositioned tables (" + dataTables + " corpus/measurement, registered by table) plus the acceptance-criterion, verification-step and accepted-residual families; "
+console.log("V-30 ok: " + defs.size + " ids defined across " + seen.size + " schema-dispositioned tables (" + dataTables + " corpus/measurement, registered by table; " + pairings + " declaring a 1:1 pairing, each checked in BOTH directions at " + (rowIds.get("### AC-15 coverage census — canonical: the evidence limb of every mutation row || | # | limb | evidence |") || new Map()).size + " distinct ids, rows semantically validated where a rule is registered) plus the acceptance-criterion, verification-step and accepted-residual families; "
   + (defs.size - BACKLOG.size) + " registered in the Checklist under H6's boundary form; "
   + BACKLOG.size + " on the dated backlog and therefore NOT registered; 0 outside both.");
 REGEOF
