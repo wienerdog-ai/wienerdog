@@ -96,7 +96,10 @@ decision: the OS loads whatever is on disk when it is asked, so a concurrent wri
 can invalidate any readback taken moments earlier. No lock is introduced here —
 the repository's only lock serializes dream runs, not registrations — and
 obligation 3's "verify, don't assume" already requires the cheapest available
-mitigation, a re-read after the mutating call. Cross-process serialization is
+mitigation, a re-read after the mutating call — **checked, not assumed: that
+obligation makes no distinction between a first registration and a replacement, so
+it already binds every successful mutating call, and no new obligation was added
+for the post-bootstrap verify.** Cross-process serialization is
 routed separately.
 
 ## Consequences

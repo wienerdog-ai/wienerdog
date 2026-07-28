@@ -387,8 +387,17 @@ function ensureDarwinEntryRegistered(loader, uid, label, plistPath, o)
   //     evidence; `changed` is a statement about a FILE and must not force the
   //     teardown of a record that already is what we would register.
   if (verdict === 'match') return true;
+  // POST-BOOTSTRAP VERIFY — applied after EVERY successful bootstrap, not only
+  // the post-teardown one. launchd loads whatever is on disk at that moment, not
+  // the bytes we rendered/linted, so a bootstrap exit 0 is NOT evidence about
+  // what got loaded. DETECTION only, never a repair (see "The file race").
+  const verifyLoaded = () => {
+    const after = loader(['launchctl', 'print', `gui/${uid}/${label}`]);
+    return !!after && after.status === 0
+      && darwinLoadedVerdict(after.stdout || '', o.expect) === 'match';
+  };
   // (b) non-destructive attempt first (ADR-0018 ordering, preserved)
-  if (loader(['launchctl', 'bootstrap', `gui/${uid}`, plistPath]).status === 0) return true;
+  if (loader(['launchctl', 'bootstrap', `gui/${uid}`, plistPath]).status === 0) return verifyLoaded();
   // (c0) PREFLIGHT — never destroy a loaded record for a known-bad replacement.
   //      Gated on EXISTENCE, not on the loader's result shape: schedulerSpawn
   //      normalizes a spawn error (incl. ENOENT) to {status:1} and discards the
@@ -404,14 +413,7 @@ function ensureDarwinEntryRegistered(loader, uid, label, plistPath, o)
   if (verdict !== 'mismatch') return false;
   o.onBeforeTeardown();                       // ADR-0018 marker (advisory — see below)
   loader(['launchctl', 'bootout', `gui/${uid}/${label}`]);
-  if (loader(['launchctl', 'bootstrap', `gui/${uid}`, plistPath]).status === 0) {
-    // (c1) POST-BOOTSTRAP VERIFY — launchd loaded whatever was on disk at that
-    //      moment, not the bytes we linted. One read-only re-read; DETECTION
-    //      only, never a repair (see "The file race").
-    const after = loader(['launchctl', 'print', `gui/${uid}/${label}`]);
-    return !!after && after.status === 0
-      && darwinLoadedVerdict(after.stdout || '', o.expect) === 'match';
-  }
+  if (loader(['launchctl', 'bootstrap', `gui/${uid}`, plistPath]).status === 0) return verifyLoaded();
   // (d) ROLLBACK — the replacement is unbootstrappable; restore the prior
   //     registration so no destruction window ships. Never returns true.
   if (o.priorBytes !== null) {
@@ -608,6 +610,8 @@ branch (the recurring failure mode in this chain — see the gate-3 row).
 | rollback reports the failed replacement as success | make step (d) `return true` after a successful restore-bootstrap | T2b |
 | the prior bytes are captured after the overwrite | move the `priorBytes` read below `ensureEntry` | T2b (the restored bytes become the new plist, so the prior argv is never re-bootstrapped) |
 | `add()` reports success for an unloaded unchanged entry | restore the `changed &&` conjunct at `schedule.js:882` | T7 |
+| the initial-bootstrap path skips the post-verify — the CX9-1 defect | change the step (b) success branch to `return true;` instead of `return verifyLoaded();` | **T2e** (AC2 case k) — the absent-label register reports success for foreign bytes |
+| the verify accepts a non-match | make `verifyLoaded` return `true` for any verdict, or for a non-zero `print` | T2e |
 | a known-bad replacement still gets a teardown | delete the `plutil -lint` preflight (c0) | **T2c** — `existsSync` true + lint non-zero + loaded record ⇒ a `bootout` appears |
 | the preflight is gated on the loader's result instead of existence | replace the `fs.existsSync(PLUTIL)` guard with a result-shape test (`if (lint && typeof lint.status === 'number')`) | **T2d** — with `existsSync` stubbed false and the loader still answering `{status:1}` (the shape `schedulerSpawn` produces for ENOENT), the register must still proceed; the mutated form refuses forever |
 | the linter is resolved off PATH | change `PLUTIL` to the bare name `'plutil'` | **T2c** — the argv assertion pins the absolute `/usr/bin/plutil` |
@@ -1066,11 +1070,20 @@ existing lock belongs to a different lifecycle, is exactly the kind of speculati
 machinery CLAUDE.md forbids. Routed as **`WP-scheduler-register-serialization`**,
 which is also where the rollback-overwrite half belongs.
 
-**What IS added, because it is cheap: a post-bootstrap verify.** After the final
-`bootstrap` returns 0, issue **one** read-only `print` and re-run
+**What IS added, because it is cheap: a post-bootstrap verify — after EVERY
+successful bootstrap.** Issue **one** read-only `print` and re-run
 `darwinLoadedVerdict` against the same `expect`. Only `'match'` returns `true`;
-anything else returns `false` (with §8's notice). Cost: one read-only call on the
-replace path.
+anything else returns `false` (with §8's notice).
+
+**Both bootstrap sites, not just the post-teardown one.** A round-9 draft verified
+only the replacement bootstrap and let the **initial** (absent-label) bootstrap
+return `true` bare. That is the *same* race on the branch where nothing was loaded
+— the file can change between render/lint and bootstrap, launchd loads the foreign
+bytes, and we report them as canonical — and it contradicted both ADR-0037's
+re-read-after-the-mutating-call obligation and this section's own claim to close
+the report-wrong-registration race. The verify is therefore a single closure
+(`verifyLoaded`) applied at both sites, so the two paths cannot drift apart again.
+Cost: one read-only call per **successful** register, on either path.
 
 **State its failure mode honestly — it is a DETECTION, not a repair.** If the
 bootstrap succeeded but the verify does not match, the record **is** loaded, with
@@ -1146,10 +1159,15 @@ mock `process.platform` — and no test may touch a real OS scheduler
 (`WIENERDOG_TEST_NO_REAL_SCHEDULER` stays armed).
 
 - [ ] **AC1 (Table A row 1 — replace, AND the marker ordering).** darwin,
-      `changed` true, loader: `print` exits 0, first `bootstrap` non-zero, rest 0.
-      Calls in order: `print` → `bootstrap` → `bootout` → `bootstrap`; result
-      `loaded: true`. **`print`'s stdout MUST be pinned to a record that does NOT
-      match canonical** (an OLD argv), so the replace path is genuinely reached.
+      `changed` true, loader: the FIRST `print` exits 0, first `bootstrap`
+      non-zero, rest 0, and the **trailing** `print` returns a record matching
+      `expect`. Calls in order: `print` → `bootstrap` → `bootout` → `bootstrap` →
+      **`print`** — the post-bootstrap verify, which is new in round 10, so every
+      **successful** register now costs one extra read-only call on either path.
+      Result `loaded: true`. **The FIRST `print`'s stdout MUST be pinned to a
+      record that does NOT match canonical** (an OLD argv), so the replace path is
+      genuinely reached, while the trailing one MUST match or the register would
+      correctly report failure.
       **T1 additionally carries the Table A1 fixture, which flips a round-5
       assertion:** the same register with `changed = true` but a `print` stdout
       matching canonical **completely** (argv + calendar + env) must now
@@ -1208,7 +1226,16 @@ mock `process.platform` — and no test may touch a real OS scheduler
       indistinguishable from a lint rejection, and modelling it that way is what
       made a round-8 draft's fail-open unreachable;
       (j) **the preflight passes (T2c)** — `existsSync` true, `{status: 0}` ⇒ the
-      replace path proceeds exactly as AC1.
+      replace path proceeds exactly as AC1;
+      (k) **the absent-label verify (T2e, CX9-1)** — `print` exits **non-zero**
+      (nothing loaded), the initial `bootstrap` **succeeds**, and the trailing
+      `print` returns a record that does **not** match `expect` (foreign bytes, or
+      an unparseable readback) ⇒ **`loaded: false`** with §8's notice and **no
+      `bootout`**. This is the branch a round-9 draft returned `true` from without
+      any readback at all. Run it twice, once with a mismatching record and once
+      with an unparseable one, since both must fail closed;
+      (l) the same shape but the trailing `print` **matches** ⇒ `loaded: true`,
+      call order `print` → `bootstrap` → `print`.
       **Every fixture in this set pins `verdict === 'mismatch'`** — that is now the
       only verdict that reaches a teardown at all (Table A1), so a rollback fixture
       whose readback is unparseable would be testing an unreachable path.
@@ -1269,7 +1296,12 @@ mock `process.platform` — and no test may touch a real OS scheduler
       performs its **own** readback under D3. A full darwin `registerPlatform` on
       an unchanged healthy install therefore issues **two** read-only `print`s and
       zero mutating calls. Assert per helper, or assert two through the full path —
-      never "exactly one" through the full path. (T3)
+      never "exactly one" through the full path.
+      **These two counts are NOT affected by round 10's post-bootstrap verify**, and
+      the reason is worth stating rather than leaving to inference: the verify fires
+      only after a **successful bootstrap**, and the verified-skip path never
+      reaches a bootstrap at all. Counts that move are the *register* paths (AC1,
+      AC2 case l), each of which gains one trailing `print`. (T3)
 - [ ] **AC4 (Table A row 2).** The catch-up entry goes through the same helper:
       AC1's replace ordering and AC2's teardown guard both hold for
       `ai.wienerdog.catchup`. (T4)
@@ -1337,6 +1369,9 @@ mock `process.platform` — and no test may touch a real OS scheduler
 | T2 | tests/unit/scheduler-schedule.test.js | teardown guard — no `bootout` when nothing is loaded; marker ordering and non-firing (AC2, AC8) |
 | T3 | tests/unit/scheduler-schedule.test.js | the verified skip, **six** cases incl. the stale-tail and length-mismatch fixtures and the crash-recovery case (iv); marker non-firing (AC3, AC8) |
 | T2b | tests/unit/scheduler-schedule.test.js | the rollback set — restore file + re-bootstrap prior argv + `loaded:false` + notice + the `priorBytes === null` bound (AC2) |
+| T2c | tests/unit/scheduler-schedule.test.js | the `plutil` preflight — rejects (no `bootout`, absolute argv) and passes (AC2 h, j) |
+| T2d | tests/unit/scheduler-schedule.test.js | `existsSync(PLUTIL)` false ⇒ no `plutil` argv issued, register proceeds (AC2 i) |
+| T2e | tests/unit/scheduler-schedule.test.js | **the post-bootstrap verify on the ABSENT-label path (CX9-1)** — bootstrap succeeds, trailing `print` mismatched or unparseable ⇒ `loaded:false`, no `bootout`; and the matching case ⇒ `loaded:true` (AC2 k, l) |
 | T4 | tests/unit/scheduler-schedule.test.js | catch-up through the same helper (AC4) |
 | T5 | tests/unit/scheduler-schedule.test.js | linux degraded reload ⇒ `loaded:false` + notice; null/missing results (AC5 i) |
 | T6 | tests/unit/scheduler-schedule.test.js | linux unchanged bytes still reload + enable, exactly two calls (AC5 ii) |
@@ -1415,6 +1450,19 @@ node scripts/boundary-check.js docs/specs/WP-scheduler-register-replaces-loaded-
 npm run lint
 npm test
 ```
+
+## Discovered issues (reported, not fixed)
+
+- **`state/locks` is named but ownerless.** `src/scheduler/launcher.js:533` re-asserts
+  the bound home so nothing can "relocate its state/locks/logs", yet **nothing in
+  `src/` reads or writes a `state/locks` path** — grepped in round 9: the only lock
+  in the tree is `src/core/dream/lock.js` (`state/dream.lock`), which serializes
+  dream runs under ADR-0012 and is a different lifecycle. So the launcher defends a
+  directory no component owns. This is recorded **as its own entry**, independent of
+  `WP-scheduler-register-serialization`: if that WP is never written, or is written
+  without touching `state/locks`, this fact must still survive. It is either a
+  vestigial reference to be removed or an unimplemented concept to be built, and
+  deciding which is out of scope here.
 
 ## Out of scope (do NOT do these)
 
