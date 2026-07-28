@@ -4920,17 +4920,162 @@ rm -f "$PERM13"
 #      step going red is the SUCCESS case of that mechanism: it is what caught
 #      the D-table being stale hours after it was written. Repair by re-deriving
 #      this spec's D rows FROM the ADR — never by editing the ADR to match.
-#      ANCHORED AT LINE START, which is what keeps the first two literals honest
-#      now that ADR-0034's 2026-07-28 errata block QUOTES the superseded block
-#      verbatim: that quotation is indented two spaces as its own stated quoting
-#      device, so `^notes scanned` cannot reach it. An unanchored form would
-#      match the historical record and pass on a document that had never been
-#      corrected at all.
-must grep -qE '^notes scanned +189$' "$ADR"
-must grep -qE '^notes with ANY finding \(EP2 reverts today\) +109 +\(57\.7%\)$' "$ADR"
-must grep -qF 'notes withheld **109 → 1**' "$ADR"
-must grep -qF 'notes scrubbed in place **0 → 9**' "$ADR"
-must grep -qF 'notes untouched **80 → 179**' "$ADR"
+#      THE ADR SIDE WAS EXISTENCE-ONLY UNTIL ROUND 4, AND EXISTENCE IS NOT
+#      AGREEMENT. Five `grep -q` calls asserted that the expected lines are
+#      PRESENT. They said nothing about a SECOND, CONTRADICTORY claim sitting
+#      beside them: keep `notes scanned 189` and add `notes scanned 190`, or keep
+#      `notes untouched **80 → 179**` and add a different end state to the same
+#      paragraph, and all five stayed green while the ADR asserted two
+#      incompatible figures and D1/D2 silently agreed with only one of them.
+#      V-34 cannot see it either — its two digests deliberately exclude the
+#      measured evidence, which errata legitimately move. Found by the design
+#      gate in round 4, after F7 of the archived leg's frozen-surfaces table had
+#      already named V-17 as the live carrier of this guarantee.
+#      THE REPAIR HAS THREE PARTS, and each closes a different half of it.
+#      (a) EXTRACT THE AUTHORITATIVE REGION FIRST, content-addressed, the way the
+#          retired V-15 did — E1 by its own first and last lines, E3 by its
+#          paragraph markers. This is not tidiness: ADR-0034's 2026-07-28 errata
+#          block quotes the SUPERSEDED figures verbatim (indented two spaces, its
+#          own stated quoting device) and its ER rows quote them again, so
+#          measured on the current file the `notes untouched` claim pattern occurs
+#          FOUR times document-wide, `notes withheld` three and `notes scrubbed`
+#          twice. A document-wide "exactly once" rule would be red on a correct
+#          ADR. Inside the extracted regions each occurs exactly once.
+#      (b) ASSERT EACH REGION IS UNIQUE before extracting it, so the block cannot
+#          simply be duplicated whole further down the file.
+#      (c) COUNT THE CLAIM PATTERN, NOT THE EXPECTED LITERAL. Each check below
+#          matches the claim's SHAPE with its value left open, requires exactly
+#          one occurrence in the region, and only then compares that occurrence
+#          against the canonical text. Counting the expected literal instead is
+#          what let a contradictory sibling through: the right line was still
+#          there, so the count was still one.
+#      WHAT THIS STEP DOES AND DOES NOT CARRY, because F7 of the archived leg
+#      names it and that sentence has to be true rather than reassuring: it
+#      carries the D1/D2 agreement guarantee — the two E1 claims and the three E3
+#      claims that D1 and D2 are derived from, each unique and each correct. It
+#      does NOT carry the retired V-15's whole-block byte digest over E1's other
+#      five lines. Nothing does. That is stated in F7 as a gap rather than
+#      rounded up, and the reason it is not closed here is that leg 2 mirrors no
+#      part of those five lines — pinning bytes this WP has no stake in would
+#      redden for reasons that cannot affect it.
+#      WRITTEN AS ONE FUNCTION OVER A FILE ARGUMENT, called once for real and
+#      once per probe. The probes therefore exercise THE SAME CODE PATH rather
+#      than a second copy of the assertions — a probe suite that re-implements
+#      what it is probing tests itself.
+v17_region() {   # <adr-file> <label> <first-line-pattern> <last-line-pattern>
+  local n
+  n="$(grep -cE "$3" "$1")"
+  if [ "$n" != "1" ]; then
+    echo "FAIL V-17: ADR-0034's $2 region starts $n times, not once."
+    echo "           A duplicated evidence block means the ADR states the same"
+    echo "           measured fact twice and the D-table agrees with whichever"
+    echo "           copy it was derived from. STOP AND REPORT; do not delete a"
+    echo "           copy to make this pass — an errata amendment decides which"
+    echo "           figure is live."
+    exit 1
+  fi
+  n="$(grep -cE "$4" "$1")"
+  if [ "$n" != "1" ]; then
+    echo "FAIL V-17: ADR-0034's $2 region ends $n times, not once. Same reading"
+    echo "           as above. STOP AND REPORT."
+    exit 1
+  fi
+}
+v17_claim() {   # <label> <region-file> <claim-pattern-ERE> <canonical, single-spaced>
+  local n hit
+  n="$(grep -oE "$3" "$2" | wc -l | tr -d ' ')"
+  if [ "$n" != "1" ]; then
+    echo "FAIL V-17: the claim '$1' occurs $n times inside ADR-0034's own"
+    echo "           evidence region, not once."
+    echo "           MORE THAN ONE means the ADR makes the same measured claim"
+    echo "           twice — and if the two disagree, D1/D2 are derived from one"
+    echo "           of them and silently contradict the other. This is the check"
+    echo "           the round-3 existence-only form did not have."
+    echo "           ZERO means the claim's shape is gone entirely."
+    echo "           Either way: STOP AND REPORT. A measured figure is repaired"
+    echo "           by a dated errata amendment inside ADR-0034, by the"
+    echo "           architect, never here and never by an implementer."
+    exit 1
+  fi
+  hit="$(grep -oE "$3" "$2" | tr -s ' ')"
+  if [ "$hit" != "$4" ]; then
+    echo "FAIL V-17: ADR-0034's '$1' claim and this spec's D-table disagree."
+    echo "           ADR-0034 says : $hit"
+    echo "           D1/D2 derive  : $4"
+    echo "           Re-derive the D rows FROM the ADR. Never edit the ADR to"
+    echo "           match the D-table — that is the mirror-promotion failure"
+    echo "           ADR-0031 exists to prevent."
+    exit 1
+  fi
+}
+v17_adr_side() {   # <adr-file> — every ADR-side assertion, over ONE file.
+  local e1 e3
+  #    E1 — the evidence block D1 is derived from.
+  v17_region "$1" "E1 evidence-block" '^notes scanned ' '^distinct high-entropy runs '
+  e1="$(mktemp)"
+  sed -n '/^notes scanned /,/^distinct high-entropy runs /p' "$1" >"$e1"
+  if [ ! -s "$e1" ]; then
+    echo "FAIL V-17: the E1 extraction is EMPTY. An empty region satisfies no"
+    echo "           claim check by construction. STOP AND REPORT."
+    rm -f "$e1"; exit 1
+  fi
+  v17_claim "notes scanned" "$e1" \
+    '^notes scanned +[0-9]+$' 'notes scanned 189'
+  v17_claim "notes with ANY finding" "$e1" \
+    '^notes with ANY finding \(EP2 reverts today\) +[0-9]+ +\([0-9.]+%\)$' \
+    'notes with ANY finding (EP2 reverts today) 109 (57.7%)'
+  rm -f "$e1"
+  #    E3 — the end-state paragraph D2 is derived from. A PARAGRAPH, so the
+  #    claims are inline rather than whole lines; counting the claim's SHAPE is
+  #    what makes "exactly once" meaningful in running prose.
+  v17_region "$1" "E3 end-state" '^\*\*E3 — ' '^\*\*E4 — '
+  e3="$(mktemp)"
+  awk '/^\*\*E3 — /{f=1} /^\*\*E4 — /{f=0} f' "$1" >"$e3"
+  if [ ! -s "$e3" ]; then
+    echo "FAIL V-17: the E3 extraction is EMPTY. STOP AND REPORT."
+    rm -f "$e3"; exit 1
+  fi
+  v17_claim "notes withheld" "$e3" \
+    'notes withheld \*\*[0-9]+ → [0-9]+\*\*' 'notes withheld **109 → 1**'
+  v17_claim "notes scrubbed in place" "$e3" \
+    'notes scrubbed in place \*\*[0-9]+ → [0-9]+\*\*' 'notes scrubbed in place **0 → 9**'
+  v17_claim "notes untouched" "$e3" \
+    'notes untouched \*\*[0-9]+ → [0-9]+\*\*' 'notes untouched **80 → 179**'
+  rm -f "$e3"
+}
+#      THE REAL ASSERTION. Runs at top level, so a failure exits the suite with
+#      the diagnostics above.
+v17_adr_side "$ADR"
+echo "V-17 ok: ADR-0034's E1 and E3 each state their claims exactly once, and"
+echo "         D1/D2 are derived from those values"
+#      NEGATIVE PROBES, run against COPIES and pasted with the rest. Each is one
+#      of the two attacks the round-3 existence-only form was blind to, and each
+#      must make `v17_adr_side` fail. **The probe calls the same function**, in a
+#      SUBSHELL so its `exit 1` ends the probe rather than the suite — a probe
+#      suite that re-implements what it probes is testing itself.
+v17_probe() {   # <what-it-simulates> <sed-program>
+  local t
+  t="$(mktemp)"
+  sed "$2" "$ADR" >"$t"
+  if ( v17_adr_side "$t" ) >/dev/null 2>&1; then
+    rm -f "$t"
+    echo "FAIL V-17: the claim checks are BLIND to $1."
+    echo "           The round-4 repair does not hold and this step is decoration."
+    exit 1
+  fi
+  rm -f "$t"
+  echo "V-17 probe ok: rejected — $1"
+}
+v17_probe "a duplicated 'notes scanned' line carrying a different figure" \
+  '/^notes scanned /a\
+notes scanned                                     190
+'
+v17_probe "a contradictory end state beside the canonical one" \
+  's/notes untouched \*\*80 → 179\*\*\./notes untouched **80 → 179**, or on a second reading notes untouched **80 → 171**./'
+#      THE POSITIVE CONTROL is the top-level call above: it ran against the real
+#      ADR and printed. A probe pair that rejects every input, a correct document
+#      included, proves nothing, and this step would have exited before reaching
+#      the probes if that were the case.
 #      The spec side. EXTRACTED FIRST: greping the whole file for these literals
 #      would be satisfied by the three lines above, which live in this same file.
 #      The awk range covers only "## Derived measurements" … "## Deliverables".

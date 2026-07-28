@@ -1023,11 +1023,18 @@ recomputes is how a stale pin survives:
   retired with the spec.** Leg 1 merged at `72f3e46`, is `status: Done` at
   `docs/specs/done/WP-secret-fence-two-tier-detector.md`, and its M-blocks are
   the dated evidence the shipped work was accepted against. **The authority for
-  retiring these five is that leg 2's V-17 holds the same guarantee and pins its
-  own literals for it** — it greps this file's E1/E3 figures and that leg's
-  D1/D2 rows, on both sides, and it runs. That spec's frozen-surfaces table
-  (row **F7**) is a reader's map of the arrangement and decides nothing; the
-  rule the arrangement follows is stated at leg 2's **V-34**.
+  retiring these five is that leg 2's V-17 holds the part anything still depends
+  on and pins its own literals for it** — it requires this file's E1 and E3 to
+  state the five claims D1/D2 are derived from **exactly once each, inside
+  extracted regions**, on both sides, and it runs. **It does not carry all of
+  what V-15 held, and the remainder is held by nobody**: E1's other five lines,
+  E3's prose outside its three claims, the errata rows' byte-pin and the
+  prose-residue sweep. *That gap is recorded at rows **F7a/F7b** of that spec's
+  frozen-surfaces table rather than rounded up — this bullet said "the same
+  guarantee" until round 4 and that was not true.* What remains digested is the
+  **ratified** content, by leg 2's **V-34**; what is unheld is measured-evidence
+  bytes outside those five claims. That table is a reader's map and decides
+  nothing; the rule the arrangement follows is stated at leg 2's **V-34**.
   `ER_EXPECT` would have moved on the three rows above alone: the V-15 note
   anticipating "adding ER-7 changes this digest" is that anticipation arriving.
 - **V-21's two digests** (this file's `## Decision` … `## The measured evidence`
