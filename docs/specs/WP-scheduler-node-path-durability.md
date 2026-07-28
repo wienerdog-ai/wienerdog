@@ -416,15 +416,25 @@ and Linux has a degraded branch that does not. Do not re-fuse them.
 **Row 6 has NO Linux analogue, and that is why row 4 is the worse of the two
 failures.** `deriveIdentityArgv` returns `{kind:'systemd', argv:null}` for a
 `.timer` basename — the identity query is *declared unimplemented*
-(`generators.js:178-181`) — so `defaultProbe` step 6 returns `'unknown'`, which is
+(`generators.js:178-180`) — so `defaultProbe` step 6 returns `'unknown'`, which is
 **not** in `HEAL_SET` (`status.js:80`). The shipped test
 `entry-identity: a systemd entry yields unknown, not a health claim`
 (`tests/unit/scheduler-entry-identity.test.js:423-430`) pins exactly that. A Linux
 entry therefore never enters the heal set, never reaches step 8b's
 execution-position existence check, and never self-repairs the way row 6 does. The
 second best-effort `daemon-reload` at `schedule.js:777` sits inside `reloadJob`'s
-linux arm, which is reached **only** from `reloadMissing`'s heal — so on Linux it
-is effectively unreachable and does not rescue row 4.
+linux arm, which is reached only from `reloadMissing`'s heal.
+
+**Be precise about that last point — `schedule.js:777` IS reachable on Linux, just
+never for row 4.** A timer that is absent or inactive makes the step-3 probe
+(`systemctl --user is-active …`) exit non-zero, so `defaultProbe` step 4 returns
+`'missing'`, which **is** in `HEAL_SET`, and `reloadJob` runs. What row 4 describes
+is an **active** timer running from stale units: `is-active` exits 0, so step 4
+does not apply, and the entry short-circuits at step 6 to `'unknown'` before any
+identity or execution-position check. So Linux has a heal path for *absent*
+timers and **no** heal path for *stale-but-running* ones — which is exactly the
+row 4 case, and is a sharper statement than "Linux never heals". The sibling WP's
+author must not conclude that Linux has no heal path at all.
 
 Row 4 was found by the round-2 Codex leg. It is **not** a reason to redesign this
 WP; it is a second member of the same family as row 5, and it is handled the same
@@ -506,7 +516,8 @@ In this spec:
 - [ ] Security checklist bullets 1 and 2 (rows 3, 4 and 5 — which of them is the security boundary)
 - [ ] Acceptance criteria AC1 (rows 5–6), AC2 (rows 1–4 via Table F), AC3 (Table B row 1), AC4 (Table B row 2 **and**, as the spec's only seam-free assertion of them, Table A rows 5-6), AC5 (Table A row 6), AC6 (idempotence, and its explicit non-claim about Tables C/D), AC9 (Tables C and D reproduced in the PR)
 - [ ] Verification commands V3 (Table B row 1 count), V4 (Table B row 2 preservation), V5 + V5b (Table A row 6 preservation and AC5's zero-coupling argument)
-- [ ] **(+r2)** Verification command V2 (its `>= 4` threshold mirrors the Test index row count)
+- [ ] **(+r2)** Verification command V2 (its `>= 4` threshold mirrors the Test index row count — note T5 is **skipped** on win32, so a win32 run legitimately reports one fewer)
+- [ ] **(+r4)** T5's POSIX-only platform gate — stated in **AC4**, the **Test index** T5 cell, and **Table E row 7**'s scope column; all three must move together
 - [ ] Table E mutation rows 1–8; the Table F fixture references belong to **rows 4-6 only** (rows 1, 2, 3, 7 and 8 are driven by T1/T5/V3 and cite no Table F fixture)
 - [ ] **(+r2)** Test index — T1's and T2's cells are the only place Table F rows 13–15 (the alias positives) and rows 1–12 (the negatives) carry a *requirement* rather than an arithmetic fact
 - [ ] **(+r2)** The whole **Out of scope** section — every bullet applies Table A row 6 (descriptor), row 2 (nvm et al.) or row 1 (Windows), and the first bullet applies Tables C/D
@@ -822,10 +833,25 @@ fixture without adding its row there.
       output is the inverse (6 and 0).
 - [ ] **AC4 (Table B row 2 — the runtime role is untouched — AND the spec's only
       seam-free assertion of Table A rows 5-6), asserted against a fabricated
-      Homebrew layout so it is host-independent.** T5 is the one place the alias
-      derivation is exercised through the **real** `fs.realpathSync` against a
-      **real** symlink rather than an injected seam, so it cross-checks AC1's
-      seam-driven positives; if the two ever disagree, the seam is lying. In a temp dir
+      Homebrew layout so it is host-independent **across POSIX hosts**.** T5 is
+      the one place the alias derivation is exercised through the **real**
+      `fs.realpathSync` against a **real** symlink rather than an injected seam,
+      so it cross-checks AC1's seam-driven positives; if the two ever disagree,
+      the seam is lying.
+      **T5 is POSIX-only and MUST carry an explicit platform gate** —
+      `const posixOnly = { skip: process.platform === 'win32' };` passed as the
+      test's options argument, the idiom already used at
+      `tests/unit/exec-identity.test.js:26`. On win32 the fabricated `TMP`
+      realpaths to a drive-letter path (`C:\Users\…`), which Table A **row 1**
+      returns unchanged — so the alias assertion would fail against a
+      **correct** implementation. That is a defect in the test, not in the code,
+      and the gate is the fix. Windows' row-1 no-op is already covered by AC2
+      (Table F row 4), so gating T5 loses no coverage.
+      **CI note (executed):** `.github/workflows/ci.yml:32-34` runs the unit
+      matrix on `[ubuntu-latest, macos-latest]` only — there is no
+      `windows-latest` leg — so an ungated T5 would not break CI today. The gate
+      is required anyway: it protects a Windows developer running `npm test`
+      locally, and it keeps the test honest the day a Windows leg is added. In a temp dir
       `TMP` (**`fs.realpathSync`'d first** — on macOS `/tmp` is a symlink to
       `/private/tmp`), create the real files `TMP/Cellar/node/9.9.9/bin/node` and
       the symlink `TMP/opt/node -> ../Cellar/node/9.9.9`. Then, inside a
@@ -921,7 +947,7 @@ dogfooding lesson).
 | 4 | the `Cellar` shape test is loosened to a first-match/substring derivation | replace `parts[i] !== 'Cellar'` with `!execPath.includes('/Cellar/')` **and** derive `i` as `parts.indexOf('Cellar')` | T2 (Table F row 8) | with `i = 3`, formula `node` and version `25.9.0_2` both pass, so the fixture reaches row 5 and trips `assert.fail()` |
 | 5 | the **formula** gate is dropped — the one segment that enters `ALIAS` | delete the `formula` regex test | T2 (Table F rows 9 **and** 10) | both fixtures have a passing `version`, so both reach row 5 and trip `assert.fail()` |
 | 6 | the **version** gate is dropped — keg-shape narrowing lost | delete the `version` regex test | T2 (Table F rows 11 **and** 12) | both have formula `node`, so both reach row 5 and trip `assert.fail()` |
-| 7 | the role split collapses — `nodePath()` is dragged to the entry value | change `nodePath()`'s body to `return entryNodePath();` | **T5** (AC4) | under the fabricated layout `process.execPath` is a Cellar path whose alias exists, so `gen.nodePath()` returns the alias and the `=== process.execPath` assertion fails — on **every** host |
+| 7 | the role split collapses — `nodePath()` is dragged to the entry value | change `nodePath()`'s body to `return entryNodePath();` | **T5** (AC4) — **on any POSIX host; T5 is skipped on win32, so this row cannot be demonstrated there** | under the fabricated layout `process.execPath` is a Cellar path whose alias exists, so `gen.nodePath()` returns the alias and the `=== process.execPath` assertion fails. The redness claim is **POSIX-scoped, not universal** — an earlier draft said "on every host", which was false for win32, where T5's fabricated path is a drive-letter path that Table A row 1 returns unchanged. Demonstrate this row on macOS or Linux and say which. |
 | 8 | one entry site is left on the pinned path | revert `schedule.js:417` to `const node = gen.nodePath();` | V3 (counts become 5 / 1) | judged by reading the printed counts, not by exit status |
 
 **Row 7 is the row round 1 got wrong, and the correction is the point.** Round 1
@@ -948,7 +974,7 @@ inventing a contrived row for a preservation criterion.
 | T1 | tests/unit/scheduler-generators.test.js | Table A rows 5–6 with an injected `realpath` — three positives (Table F rows 13–15, incl. the `node@22` and linuxbrew prefix derivations), the different-inode negative, the throwing negative (AC1) |
 | T2 | tests/unit/scheduler-generators.test.js | Table A rows 1–4, table-driven over Table F rows 1–12, with an `assert.fail()` realpath (AC2) |
 | T4 | tests/unit/scheduler-generators.test.js | double-render byte-identity and repeat-call stability (AC6) |
-| T5 | tests/unit/scheduler-generators.test.js | the fabricated-Homebrew-layout role-split detector: `nodePath()` vs `entryNodePath()` under a controlled `process.execPath`, real `fs.realpathSync`, no seam (AC4, Table E row 7) |
+| T5 | tests/unit/scheduler-generators.test.js | the fabricated-Homebrew-layout role-split detector: `nodePath()` vs `entryNodePath()` under a controlled `process.execPath`, real `fs.realpathSync`, no seam (AC4, Table E row 7). **POSIX-only — must be declared with `{ skip: process.platform === 'win32' }`** (the `posixOnly` idiom at `tests/unit/exec-identity.test.js:26`); see AC4 for why an ungated T5 fails against a correct implementation on win32 |
 
 There is no T3. Round 1's T3 (descriptor-digest invariance) was vacuous by
 construction and its criterion (AC5) is now static — see AC5.
