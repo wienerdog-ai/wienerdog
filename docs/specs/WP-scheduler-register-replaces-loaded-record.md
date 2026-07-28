@@ -363,11 +363,10 @@ one new Proposed ADR, one test file extended. **M** — one session.
 | create | docs/adr/0037-verified-registration-postcondition.md | The rule + the ADR-0018 decision-2 amendment. **Proposed, unsigned.** Written already by the architect, together with its `docs/adr/README.md` index row; the implementer edits neither. **0036 is deliberately skipped** — reserved by the in-flight ADR amending ADR-0031. |
 | modify | docs/adr/README.md | **D0b** — the ADR index row for 0037. Written already by the architect alongside the ADR; the implementer does not touch it. Listed because it **is** in this branch's diff, and a Deliverables table that omits a changed file is exactly the boundary-gate failure this row fixes. |
 | modify | src/scheduler/generators.js | **D0** — add **four** names to `module.exports`, and add **two** new pure parsers (`launchdLoadedCalendar`, `launchdLoadedEnv` — D1b). Existing names exported unchanged:: `launchdLoadedArgs` (`:679-689`, used internally at `:787`) and `jobLaunchArgs` (`:208`, used internally at `:355`); the two new parsers are exported with them. Structural, not an API promise — the WP-114 precedent for `repairCatchup`. Audited, not assumed (see "Export audit" in Implementation notes): `catchupLaunchArgs` (`:1030`) and `loadedEntryTargets` (`:1007`) are **already** exported and need no change. |
-| modify | src/cli/schedule.js | **D1-D4**: `darwinLoadedVerdict` + `ensureDarwinEntryRegistered` (new, non-exported); the darwin per-job arm (`:429-431`, Table A row 1); `ensureCatchup` (`:314-317`, row 2); the linux arm (`:456-466`, row 3). Nothing else — no probe, no heal, no notice string, no Windows path, and **`darwinReplaceEntry` itself is not edited** (it stays the heal path's primitive). |
-| modify | tests/unit/scheduler-schedule.test.js | **T1, T2, T2b, T3-T7** (Test index) plus the **four** existing assertions enumerated in AC6 — no others. |
+| modify | src/cli/schedule.js | **D1, D2, D3, D4 and D5** — the complete set, reconciled against the Implementation notes and the ACs: **D1** `darwinLoadedVerdict` + `ensureDarwinEntryRegistered` (new, non-exported, incl. the `plutil` preflight, the tri-state verdict, `verifyLoaded` and the rollback); **D2** the darwin per-job arm (`:429-431`, Table A row 1); **D3** `ensureCatchup` (`:314-317`, row 2); **D4** the linux arm (`:456-466`, row 3); **D5** `add()`'s guard at `:882` — drop the `changed &&` conjunct so it throws on ANY unloaded outcome (**required by AC11**; a cell that stopped at D4 would leave the user-facing false-success shipped). Nothing beyond those five — no probe, no heal, no notice string, no Windows path, and **`darwinReplaceEntry` itself is not edited** (it stays the heal path's primitive). |
+| modify | tests/unit/scheduler-schedule.test.js | **T1, T2, T2b, T2c, T2d, T2e, T3, T4, T5, T6, T7** — the complete Test index, enumerated rather than range-abbreviated because `T3-T7` silently excluded T2c/T2d/T2e (the `plutil` preflight, its existence gate, and the post-bootstrap verify). Plus the **four** existing assertions enumerated in AC6 — no others. |
 
 Not deliverables, deliberately: `src/scheduler/status.js`,
-`src/scheduler/generators.js` (`loadedEntryTargets` is consumed, not changed),
 `src/scheduler/launcher.js`, `src/cli/sync.js` (§10), `src/cli/doctor.js`,
 `docs/adr/0018-windows-scheduled-dreaming.md` (owner-signed; ADR-0037 amends it
 from a new file — never edit it),
@@ -718,6 +717,19 @@ rounds 2-3, where an unregistered Deliverables cell shipped a wrong test set):
 - [ ] The banner's cross-spec mapping table — **both** macOS sites map to that spec's Table C row 5
 - [ ] Definition of done items 5 (that spec's 0a) and 6 (the ADR signature gate)
 
+**Coherence layers this spec is checked across** (each pass runs all of them;
+the layer that first caught a defect is named): canonical↔canonical (round 8),
+notes↔canonical (round 9), contract-body↔canonical, security-checklist↔canonical,
+AC↔Test-index (round 10), and — added in round 13 — **boundary↔ACs**: every `Dn`
+and `Tn` an acceptance criterion references must appear in **exactly one**
+Deliverables cell, and no file may appear in both the Deliverables table and the
+not-deliverables list. That layer exists because the permission boundary is what an
+implementer reads **first**, so a stale cell outranks every correct table beneath
+it. Round 13's run found three defects: the `schedule.js` cell stopped at D4 while
+AC11 requires D5; the test cell's `T3-T7` range silently excluded T2c/T2d/T2e; and
+`src/scheduler/generators.js` was listed as **both** a deliverable and a
+not-deliverable.
+
 Out of this spec, not deliverables:
 
 - [ ] `docs/adr/0018-…` decision 2 — amended by ADR-0037 from a new file, never edited. Owner-signed.
@@ -763,9 +775,19 @@ filesystem access, a spawn or a `require`, and neither throws — the same contr
 `launchdLoadedArgs` already carries.
 
 - `launchdLoadedCalendar(stdout)` → `{hour:number|null, minute:number}|null`, where
-  the **outer** `null` means "malformed, or `Minute` missing" and `hour: null` means
-  "the `Hour` key was validly **absent**" (the catch-up shape). The two nulls are
-  different and must never be collapsed. Find the
+  the **outer** `null` means "malformed, `Minute` missing, **or the trigger block
+  did not hold exactly one entry**" and `hour: null` means "the `Hour` key was
+  validly **absent**" (the catch-up shape). The two nulls are different and must
+  never be collapsed.
+
+  **Parse the COMPLETE `event triggers` block and count ALL of its immediate
+  entries — do not search for a calendarinterval entry (Table A2, CX11-2).** Return
+  the outer `null` unless the total is **exactly 1** *and* that sole entry's
+  `stream` is `com.apple.launchd.calendarinterval`. A find-the-calendarinterval
+  instruction, implemented literally, ships the defect round 12 closed: our
+  canonical calendar trigger **plus** a foreign-stream trigger passes a search and
+  fails a count. The executed dump (§7c) shows launchd injects nothing into that
+  block, so "exactly one" is what a healthy record looks like. Then read the
   `event triggers` entry whose `stream` is `com.apple.launchd.calendarinterval`,
   read its nested `descriptor = {` block, and parse the **quoted-key, unquoted-value**
   `"Hour" => 3` / `"Minute" => 30` lines (Current state §7b fact 3). A missing
