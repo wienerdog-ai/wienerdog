@@ -390,6 +390,27 @@ the assertion and the counts, not a verdict.*
 #    ANY FAILURE HERE BLOCKS DISPATCH. Do not start, do not work around it,
 #    report it and stop.
 #
+#    ── THE ERREXIT REGIME, DECLARED ONCE AND TRUE ─────────────────────────────
+#    This whole block runs under `set -euo pipefail`, declared on the next line.
+#    *Audited round 17 and it was not true before: no regime was declared anywhere
+#    in this block, `set +e` at the mutation probe switched OFF something that had
+#    never been on, and a `set -e` further down turned it on for the first time
+#    MID-SCRIPT. Comments referred to "this block's set -euo pipefail" that did not
+#    exist. The consequence was a fail-open gate — a checker could print BLOCKED,
+#    exit non-zero, and the script would carry on and print later `ok:` lines. That
+#    is the round-12 finding's mirror: there `set -e` made a diagnosis unreachable,
+#    here its ABSENCE made one non-binding.*
+#
+#    TWO CONVENTIONS FOLLOW, AND EVERY COMMAND IN THIS STEP OBEYS THEM:
+#      (i) A command whose FAILURE IS THE ANSWER runs inside a deliberate
+#          `set +e` island, and the island's exit status is read on the very next
+#          line. Islands are marked `# ── set +e ISLAND` and closed by `set -e`.
+#     (ii) A capture whose command signals "not found" by exit status — `grep -c`
+#          returning 1 on zero matches is the one that bites — is written
+#          `x=$(… || true)`, because the CHECK is the `test` on the next line, not
+#          grep's status. Without it errexit aborts before the message prints.
+set -euo pipefail
+#
 #    EVERY CHECK BELOW READS AUTHORITATIVE MAIN, NEVER YOUR CHECKOUT. That is the
 #    whole shape of this step and it is not a detail: a dispatcher standing on a
 #    stale or topic branch would otherwise get a green record describing a tree the
@@ -421,13 +442,20 @@ echo "dispatch SHA (origin/main): $MAIN"
 #     question. (`git merge-base --is-ancestor` remains a fine extra check on a repo
 #     that never squashes; this one merges with merge commits today, so both would
 #     pass — content is chosen because it stays true if that ever changes.)
-git show "$MAIN:$SPEC" | grep -q '^### AC-15 coverage census' || {
+#     PIPEFAIL-SAFE BY CONSTRUCTION, and this was found by RUNNING the step after
+#     declaring the regime, not by reading it: `git show … | grep -q` exits grep
+#     early on a match, `git show` then takes SIGPIPE, and under `pipefail` the
+#     whole pipeline reports failure ON SUCCESS. Every pipeline in this step ends
+#     in a consumer that reads its input to the end (`grep -c`, `awk`), never in an
+#     early-exit one (`grep -q`, `grep -m1`, `head`).
+have=$(git show "$MAIN:$SPEC" | grep -c '^### AC-15 coverage census' || true)
+test "${have:-0}" -ge 1 || {
   echo "BLOCKED: the AC-15 coverage census is NOT on origin/main ($MAIN)."
   echo "         PR #124 has not merged. Do not start this WP."; exit 1; }
 
 # 0c. The census must still carry M-48 on the 'gap' limb ON MAIN — i.e. nobody has
 #     done this work already. Cell equality, not a substring.
-limb=$(git show "$MAIN:$SPEC" | grep -m1 '^| \*\*M-48\*\* |' | awk -F'|' '{gsub(/[* ]/,"",$3); print $3}')
+limb=$(git show "$MAIN:$SPEC" | awk -F'|' '/^\| \*\*M-48\*\* \|/ && !seen++ {gsub(/[* ]/,"",$3); print $3}' || true)
 test "$limb" = "gap" || {
   echo "BLOCKED: on main the census limb for M-48 is '$limb', expected 'gap'."
   echo "         Either this work is already done or the census moved."; exit 1; }
@@ -435,8 +463,9 @@ echo "ok: PR #124 is on main and the gap is still open"
 
 #     Materialize main's copies of the two files every later check reads.
 MV=$(mktemp -t validate); MT=$(mktemp -t dvtest)
-git show "$MAIN:$V" > "$MV"
-git show "$MAIN:$T" > "$MT"
+git show "$MAIN:$V" > "$MV" || { echo "BLOCKED: cannot read $V from main."; exit 1; }
+git show "$MAIN:$T" > "$MT" || { echo "BLOCKED: cannot read $T from main."; exit 1; }
+test -s "$MV" && test -s "$MT" || { echo "BLOCKED: main's copy of $V or $T came out EMPTY."; exit 1; }
 
 # 0d. THE CALL-SITE STRUCTURE, all three assertions, run against MAIN's copy.
 #     These are the canonical post-loop call-site checks defined once under
@@ -445,7 +474,11 @@ git show "$MAIN:$T" > "$MT"
 #     is not redundant**: adjacency and occurs-once are both satisfied by moving
 #     the comment and the call TOGETHER into a guard inside the loop, which is
 #     exactly the regression this WP targets.
-node - "$MV" <<'LOOPCHK'
+#     THE EXPLICIT FAILURE BRANCH IS THE FIX FOR THIS STEP'S FAIL-OPEN. Under the
+#     declared regime `set -e` would already terminate here; the branch is written
+#     anyway so the step is correct even if someone lifts it out of the fence, and
+#     so the reason is visible at the call site rather than inferred from a header.
+node - "$MV" <<'LOOPCHK' || { echo "BLOCKED: the call-site structure check failed (above). Do not start this WP."; exit 1; }
 const fs = require('fs');
 const lines = fs.readFileSync(process.argv[2], 'utf8').split('\n');
 const CALL = 'if (secretRedactions > 0) pruneRedactedOriginals(stateDir, redactedCreated);';
@@ -489,7 +522,7 @@ grep -q 'every basename this run wrote into' "$MV" || {
 #     satisfied by five DIFFERENT tests — including an N2 test somebody already
 #     added under another name, which would dispatch you to redo existing work.
 while IFS= read -r want; do
-  n=$(grep -c -F "$want" "$MT")
+  n=$(grep -c -F "$want" "$MT" || true)   # convention (ii): the test below is the check
   test "$n" = "1" || {
     echo "BLOCKED: on main, expected exactly 1 test titled:"; echo "           $want"
     echo "         found $n. The baseline this spec was written against has moved."
@@ -501,7 +534,7 @@ EP2 retention: above the cap, the cap YIELDS; a zero-redaction run leaves the ov
 EP2 retention: above the cap from a FULL directory, the run keeps exactly its own copies
 EP2 retention: a B5/B5a fall-through never prunes, and the prune stays inside redacted/
 TITLES
-t=$(grep -c 'EP2 retention:' "$MT")
+t=$(grep -c 'EP2 retention:' "$MT" || true)
 test "$t" = "5" || {
   echo "BLOCKED: on main, found $t 'EP2 retention:' tests, want exactly 5 — a SIXTH exists."
   echo "         Somebody may already have written this WP's test. STOP AND REPORT."; exit 1; }
@@ -523,15 +556,25 @@ echo "ok: call site, exclusion set, the 5 exact titles and the 6 helpers — all
 #     If it has stopped being true, somebody has already given N2 a detector and
 #     this WP is either done or has changed shape.
 #
-#     WHY A dispatch STEP MAY WRITE TO src/ AT ALL, stated rather than assumed:
-#     it writes only under `git` supervision, it refuses to run unless the file is
-#     already clean, it restores with `git checkout --`, and it verifies the
-#     restore by BLOB HASH before continuing. Nothing is left behind and nothing
-#     uncommitted can be destroyed. A probe that cannot meet those four conditions
-#     does not belong in a dispatch step; this one does.
+#     WHY THIS STEP IS SAFE, and it is NOT the four-condition argument this comment
+#     used to carry. *That argument described the round-13 design — "it writes only
+#     under git supervision … it restores with `git checkout --`" — and round 14
+#     replaced that design with worktree isolation. The rationale survived the
+#     design it justified by four rounds, telling a reader the probe writes here
+#     when it does not, and there is no `git checkout --` anywhere in this step.*
+#     The true argument is the one written fifteen lines below and it is stronger:
+#     THE PROBE NEVER WRITES TO THIS TREE AT ALL. Nothing is restored because
+#     nothing is touched.
+#
+#     The dirty-tree check below STAYS — a dirty deployed tree is worth blocking on
+#     — but its REASON is re-keyed to something true: the step asserts the deployed
+#     `validate.js` is byte-identical before and after, and that attestation is
+#     meaningless if the file was already dirty and moving for other reasons.
 git diff --quiet -- "$V" && git diff --cached --quiet -- "$V" || {
-  echo "BLOCKED: $V has uncommitted changes. This probe restores with"
-  echo "         'git checkout --', which would destroy them. Commit or stash first."
+  echo "BLOCKED: $V has uncommitted changes. This step attests that the deployed"
+  echo "         file is byte-identical before and after the probe; that attestation"
+  echo "         is ambiguous on an already-dirty tree. Commit or stash first."
+  echo "         (Your changes are NOT at risk — the probe never writes here.)"
   exit 1; }
 DEPLOYED_BEFORE=$(git hash-object "$V")
 #     The worktree is cut from `$MAIN` (resolved in step 0a), NOT from HEAD. Cutting
@@ -583,6 +626,8 @@ git worktree add --detach "$WT" "$MAIN" >/dev/null    # MAIN, never HEAD
 #     this block's `set -euo pipefail` a python exiting 1 would kill the script
 #     BEFORE `probe_applied=$?`, making the anchor-miss diagnosis below unreachable
 #     dead text — a `must_not` the parent spec's gate-polarity preamble names.
+# ── set +e ISLAND (convention i): both commands below signal their ANSWER by
+#    exit status, and each status is read on the very next line.
 set +e
 python3 - "$WT/$V" <<'MUT'
 import sys

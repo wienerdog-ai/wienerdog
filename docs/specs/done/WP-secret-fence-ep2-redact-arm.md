@@ -6419,7 +6419,13 @@ const DATA_ROW_RULES = new Map([
       ],
       executed: [
         [[/fail [1-9][0-9]*/, "must carry a POSITIVE failure count — `fail 0` is not a mutation that reddened anything"],
-         [/\bRED\b/, "must name the target it reddened"]],
+         // TARGET-LINKED, round 17. Requiring `RED` anywhere in the cell let a row
+         // claim a verdict about something OTHER than its own target: "the new
+         // test stayed GREEN; an unrelated old test went RED, pass 5, fail 1"
+         // satisfied every earlier rule. The verdict must be BOUND to a named
+         // target — one emphasis span carrying both, which is the form both real
+         // rows already use ("**AC-14 case 2 RED**").
+         [/\*\*[^*]*\bRED\b[^*]*\*\*/, "must bind the RED verdict to a NAMED target in one span, not mention RED loose in the cell"]],
         // THE SYMMETRIC HOLE, found by PROBING rather than by reading (round 14):
         // an executed row could carry `RED`, a positive failure count AND a claim
         // that the run passed — self-contradictory, and green. Non-detection is
@@ -6429,7 +6435,14 @@ const DATA_ROW_RULES = new Map([
         // `gap` is deliberately exempt — it is the one limb whose whole content IS
         // a non-detection claim.
         [[/\b(?:survived|uncaught|not caught|nothing failed|everything passed|all (?:tests )?passed|all green|\(missed\))\b/i,
-          "must NOT claim the run was not caught — an executed row asserts a mutation REDDENED something, and a row asserting both is a mislabel a reader cannot resolve"]],
+          "must NOT claim the run was not caught — an executed row asserts a mutation REDDENED something, and a row asserting both is a mislabel a reader cannot resolve"],
+         // AND MUST NOT CLAIM ITS TARGET STAYED GREEN. Measured: the binding
+         // predicate above is NECESSARY but NOT SUFFICIENT — an attacker can bold
+         // an unrelated RED and satisfy it, which was verified rather than assumed.
+         // This is the clause that actually catches the round-17 attack; zero hits
+         // across all 37 rows before enforcing.
+         [/\bstayed\s+green\b|\bremained\s+green\b|\bstill\s+green\b|\bstays\s+green\b|\bdid not (?:go )?red\b/i,
+          "must NOT record its own target as staying green — that is a row whose mutation was NOT caught, wearing the limb of one that was"]],
       ],
       gap: [
         [[/fail 0\b/, "must carry the zero-failure run that demonstrates the absence"],
