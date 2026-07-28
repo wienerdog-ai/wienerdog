@@ -157,20 +157,52 @@ by hand to verify red, then revert:
 mutation. If your test also fails when only N3 is broken, it is not isolating N2 and
 the existing N3 test already covers that.
 
-**The shape of a fixture that discriminates.** Under per-call pruning, the prune
-runs while `redactedCreated` holds only the copies made *so far*. The exclusion
-therefore still protects them, so a fixture must make the prune **observably fire
-more than once**. Two shapes work and either is acceptable; pick one and say which
-in the PR:
+**What the fixture must make observable.** Under per-call pruning, the prune runs
+while `redactedCreated` holds only the copies made *so far*. The exclusion therefore
+still protects them, so a fixture cannot show the difference in what the directory
+ends up holding — it must make the prune **observably fire more than once**. That is
+a statement about a seam, not about a final state, and the sweep recorded below is
+why the distinction is load-bearing rather than stylistic.
 
 **There is exactly ONE strategy, and the second one this spec used to offer was
 removed because it is UNSATISFIABLE.**
 
-- **Observational — the only form** — a counting seam on `pruneRedactedOriginals`'s
-  directory read (`fs.readdirSync` on `<stateDir>/quarantine/redacted/`), asserting
-  it is entered **exactly once** across a run that completes **three** redactions.
-  It is a direct assertion of N2, it does not depend on cap arithmetic, and it
-  cannot be satisfied by accident.
+- **Observational — the only form** — a seam on `pruneRedactedOriginals`'s directory
+  read (`fs.readdirSync` on `<stateDir>/quarantine/redacted/`), asserting **two**
+  things across a run that completes **three** redactions.
+
+  **(1) CARDINALITY — the read happens exactly once.** Direct, independent of cap
+  arithmetic, and not satisfiable by accident.
+
+  **(2) ORDERING — the read happens AFTER the whole loop, and it is WITNESSED, not
+  inferred from the count.** N2 says *once* **and** *after the loop over changed
+  paths*; cardinality alone proves only the first half. **A call guarded to fire on
+  the first redaction satisfies `count === 1` while running far too early** — before
+  the later redactions have even created their copies — so the row would pass while
+  the timing half is violated. That mutation is real enough to be an acceptance
+  criterion of its own (**AC-3b**).
+
+  **The witness, concretely, because "add an ordering assertion" is not
+  implementable as advice.** The fixture carries a **trailing changed path that
+  produces no redaction** — an ordinary note with added lines and no finding, named
+  so it sorts **last** among the changed paths (e.g. `04-Atomic/zzz-trailing.md`;
+  git emits `--name-status` in path order). The loop reaches that path and calls
+  `git diff --cached --numstat -z -- <rel>` on it — **unconditionally, before any
+  finding logic**, which is what makes it a reliable "the loop got here" event.
+
+  **Both events are visible through seams this test file already uses.** Install ONE
+  ordered event log written by two recorders — the `spawnPinnedSync` wrapper
+  (`stubSpawn`, which the R7/R9/FI-19 cases already use) appending every git
+  invocation with its args, and an `fs.readdirSync` patch appending the prune's read
+  of `<stateDir>/quarantine/redacted/`. This is the three-method ordered-event-log
+  technique **FI-15** already runs in this file; nothing new is needed. Then assert:
+
+  - the log holds **exactly one** prune-read event (cardinality), and
+  - its index is **greater than** the index of the `numstat` event naming the
+    trailing path (ordering), and
+  - as a precondition rather than an assumption, that the trailing path's event is
+    the **last** per-path event in the log — so a fixture whose paths came out in an
+    unexpected order fails loudly instead of proving nothing.
 
 **The removed option, and why removing it is the point.** Until 2026-07-28 this
 spec also offered a *consequential* strategy — "a fixture seeded to the cap where a
@@ -225,6 +257,14 @@ the assertion and the counts, not a verdict.*
 - [ ] **AC-2** The new test **passes** against unmodified `src/`.
 - [ ] **AC-3** The new test **fails** under the N2-only mutation stated in "Exact
       contracts", applied and reverted by hand, with the output pasted into the PR.
+- [ ] **AC-3b** The new test **fails** under the **timing-only** mutation that
+      preserves cardinality: move the single call inside the loop and guard it to
+      fire on the **first** completed redaction only (e.g. `if (secretRedactions === 1)`),
+      so `fs.readdirSync` is still entered exactly once. **This is the mutation
+      cardinality cannot see** — the count assertion stays green and the ordering
+      assertion must go red. Paste both runs. *Without this criterion the
+      observational seam proves only half of N2, which states once **and** after the
+      loop.*
 - [ ] **AC-4** The new test still **passes** under the N3-only mutation (drop
       `&& !created.has(e.name)`), demonstrating it isolates N2 rather than
       re-testing the exclusion the second existing test already holds.
@@ -316,6 +356,13 @@ node tests/run.js --test-name-pattern "EP2 retention" tests/unit/dream-validate.
 node tests/run.js --test-name-pattern "EP2 retention" tests/unit/dream-validate.test.js
 #    Expect: the new test FAILS and the other five still pass. Revert src/ and
 #    confirm `git status --short` shows no source file.
+
+# 3b. AC-3b — the TIMING-ONLY mutation: move the call inside the loop AND guard it
+#     to fire once (`if (secretRedactions === 1)`), so cardinality is preserved.
+#     Expect: the cardinality assertion still passes, the ORDERING assertion FAILS.
+#     If your test stays green here, it is asserting a count and calling it timing.
+#     Revert src/ and confirm `git status --short` shows no source file.
+node tests/run.js --test-name-pattern "EP2 retention" tests/unit/dream-validate.test.js
 
 # 3. AC-4 — apply the N3-only mutation by hand, then the same command.
 #    Expect: the SECOND existing test fails and YOUR test still passes.

@@ -6337,6 +6337,29 @@ let dataTables = 0;
 //   step reported 1:1 over a 2:1 census. The ids branch has `define()`'s
 //   duplicate guard (Table H row H5); a DATA table has no such guard, which is
 //   exactly the side that needed one.
+// ─── PER-ROW SEMANTICS FOR NAMED DATA TABLES. Round 11: the pairing validated ids
+//     and multiplicity but NOT MEANING — the reviewer replaced M-48's limb with
+//     "nonsense" and this step stayed green, because a first cell is all the pairing
+//     ever looked at.
+//     CHOICE RECORDED: a NAMED BRANCH keyed by registration name, not a generalization
+//     of the pairing mechanism. Generalizing would mean inventing a mini-schema
+//     language (column counts, per-cell enums, conditional cell requirements) to serve
+//     ONE table, which is the over-fitting the pairing form was written to avoid. A
+//     named rule says what it is; a second data table needing semantics adds a second
+//     entry, and only then is a general form worth designing.
+const DATA_ROW_RULES = new Map([
+  ["AC-15 coverage census", {
+    cols: 3,
+    // cell 2 is the LIMB. Exactly this vocabulary, nothing else.
+    limb: ["swept", "executed", "gap"],
+    // cell 3 is the EVIDENCE, and what it must carry depends on the limb it claims.
+    evidence: {
+      swept: [/#122/, "an inherited verdict must name the PR whose sweep recorded it"],
+      executed: [/pass \d+, fail \d+/, "an executed row must carry its pass/fail counts"],
+      gap: [/WP-[a-z0-9]+(-[a-z0-9]+)*/, "a gap row must name the WP routed to close it"],
+    },
+  }],
+]);
 const rowIds = new Map();
 const collect = (key, cell) => {
   if (!rowIds.has(key)) rowIds.set(key, new Map());
@@ -6355,7 +6378,19 @@ for (let i = 0; i < lines.length; i++) {
     if (s[0] === "data") {
       dataTables += 1;
       if (!registered(s[1])) fail("the table at line " + (i + 1) + " is dispositioned as corpus/measurement DATA, so what the Checklist registers is the TABLE — but " + JSON.stringify(s[1]) + " is named nowhere in the Checklist region under H6's boundary form. Register it there, or reclassify the table. (An UNBOUNDED substring test would pass here on any longer name that contains this one: that was round 8's defect.)");
-      for (let j = i + 2; j < lines.length && /^\|/.test(lines[j]); j++) collect(key, firstCell(lines[j]));
+      const rule = DATA_ROW_RULES.get(s[1]);
+      for (let j = i + 2; j < lines.length && /^\|/.test(lines[j]); j++) {
+        collect(key, firstCell(lines[j]));
+        if (!rule) continue;
+        const cells = lines[j].split("|").slice(1, -1);
+        const norm = (c) => (c || "").trim().replace(/^\*\*|\*\*$/g, "").trim();
+        const where = JSON.stringify(s[1]) + " row " + JSON.stringify(norm(cells[0])) + " (line " + (j + 1) + ")";
+        if (cells.length !== rule.cols) fail(where + " has " + cells.length + " cells, want " + rule.cols + ". A row short of a column silently drops the field the next check reads.");
+        const limb = norm(cells[1]);
+        if (!rule.limb.includes(limb)) fail(where + " has limb " + JSON.stringify(limb) + ", which is not one of: " + rule.limb.join(" | ") + ". The vocabulary is closed — a limb nobody defined is a row nobody can act on.");
+        const [pat, why] = rule.evidence[limb];
+        if (!pat.test(cells[2] || "")) fail(where + " claims limb " + JSON.stringify(limb) + " but its evidence cell does not satisfy " + pat + " — " + why + ". A limb without its evidence is the coverage claim this census exists to stop.");
+      }
     } else {
       for (let j = i + 2; j < lines.length && /^\|/.test(lines[j]); j++) {
         const cell = firstCell(lines[j]);
@@ -6433,7 +6468,7 @@ if (missing.length) {
 // H9: print what was checked, INCLUDING what was not. The backlog holds ids
 // that are genuinely unregistered mirrors; calling them nothing would make this
 // pasted artifact less honest than the source it came from.
-console.log("V-30 ok: " + defs.size + " ids defined across " + seen.size + " schema-dispositioned tables (" + dataTables + " corpus/measurement, registered by table; " + pairings + " declaring a 1:1 pairing, each checked in BOTH directions at " + (rowIds.get("### AC-15 coverage census — canonical: the evidence limb of every mutation row || | # | limb | evidence |") || new Map()).size + " distinct ids) plus the acceptance-criterion, verification-step and accepted-residual families; "
+console.log("V-30 ok: " + defs.size + " ids defined across " + seen.size + " schema-dispositioned tables (" + dataTables + " corpus/measurement, registered by table; " + pairings + " declaring a 1:1 pairing, each checked in BOTH directions at " + (rowIds.get("### AC-15 coverage census — canonical: the evidence limb of every mutation row || | # | limb | evidence |") || new Map()).size + " distinct ids, rows semantically validated where a rule is registered) plus the acceptance-criterion, verification-step and accepted-residual families; "
   + (defs.size - BACKLOG.size) + " registered in the Checklist under H6's boundary form; "
   + BACKLOG.size + " on the dated backlog and therefore NOT registered; 0 outside both.");
 REGEOF
