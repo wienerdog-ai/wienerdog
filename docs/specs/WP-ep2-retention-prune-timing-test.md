@@ -9,6 +9,17 @@ adrs: [ADR-0004, ADR-0005]
 epic: secret-lifecycle
 ---
 
+> **`depends_on: []` is correct and is NOT the whole story — read this before
+> dispatching.** This WP's real precondition has no WP id to list: the two cells it
+> edits (**M-48**'s mutation row and its row in the **AC-15 coverage census**) exist
+> only after **PR #124** — the post-Done errata pass on
+> `docs/specs/done/WP-secret-fence-ep2-redact-arm.md` — has merged. `depends_on`
+> takes work-package ids and that pass is a spec-less architect PR, so there is
+> nothing well-formed to put in the list; leaving it empty is honest and stating the
+> precondition here is the repair. **Do not dispatch this WP until PR #124 is on
+> `main`.** Verification step 0 below checks it by running rather than by trusting:
+> if the census heading or the M-48 gap disposition is not there, stop and report it.
+
 # WP-ep2-retention-prune-timing-test: give N2 (prune once per run) its missing test
 
 ## Context (read this, nothing else)
@@ -125,6 +136,7 @@ helpers you will reuse — `redactFixture()`, `seedNotes()`, `seedRedacted()`,
 | Action | Path | Notes |
 |--------|------|-------|
 | modify | tests/unit/dream-validate.test.js | **Add exactly one test**, in the EP2 retention block beside the five above. It must go red under the N2-only mutation and green on unmodified `src/`. Change no existing test |
+| modify | docs/specs/WP-ep2-retention-prune-timing-test.md | **This spec file — the `status:` transition ONLY** (`Draft` → `In-Review`, per Definition of done item 4). No other line of this file may change. *Listed explicitly rather than relied on as a convention: `docs/specs/_TEMPLATE.md` carries a self-file exception in a comment above its Deliverables table and this spec did not copy it, so a conforming implementer had a Definition-of-done item its permission boundary forbade. Making the row explicit is the smaller fix and it survives a reader who never opens the template* |
 | modify | docs/specs/done/WP-secret-fence-ep2-redact-arm.md | **Two cells only.** **M-48**'s row: replace the `NOTHING — …` / `undetected-today gap` disposition with the name of the new test and the recorded run that reddens it. The **AC-15 coverage census** row for **M-48**: move its limb from `gap` to `executed` and record the same run. **Touch nothing else in that file** — it is `Done`, and its V-11/V-18/V-20/V-33 digests pin regions you must not enter |
 
 **`src/` is NOT in this table.** If you find yourself editing `validate.js` to make
@@ -199,8 +211,21 @@ the assertion and the counts, not a verdict.*
       `&& !created.has(e.name)`), demonstrating it isolates N2 rather than
       re-testing the exclusion the second existing test already holds.
 - [ ] **AC-5** `npm test` and `npm run lint` pass.
-- [ ] **AC-6** M-48's cell and the AC-15 census row both name the new test and carry
-      the AC-3 run; neither still says the gap is open.
+- [ ] **AC-6** **M-48's mutation row and its AC-15 census row are extracted
+      SEPARATELY, and each is asserted on its own.** In each extracted row: the new
+      test's title occurs **exactly once**; the AC-3 pass/fail counts are present; the
+      census row's **limb CELL equals `executed`**; and the mutation row no longer
+      **states** the gap (the exact phrases `undetected-today gap` and its
+      `NOTHING — AND THAT IS THE POINT` disposition are absent). **Prose that
+      recounts the history stays legal** — a row saying "this recorded an undetected
+      gap until this WP closed it" is what *should* be written, and a check that
+      forbade the word would be stricter than the contract it guards. *A whole-file grep cannot do this
+      job and the earlier draft of this criterion tried: the routed slug already
+      occurs in both cells, so counting it proves nothing; a bare count with no
+      expected value passes on any number; and a negative grep for
+      `undetected-today gap` over the file would clear a census row whose limb was
+      never moved off `gap`, because that phrase lives in the mutation cell and the
+      limb lives in the census. **Extract each row, assert each row.***
 
 ## Verification steps (run these; paste output in the PR)
 
@@ -227,9 +252,35 @@ node tests/run.js --test-name-pattern "EP2 retention" tests/unit/dream-validate.
 npm test
 npm run lint
 
-# 5. AC-6 — the two documentation cells
-grep -c 'WP-ep2-retention-prune-timing-test' docs/specs/done/WP-secret-fence-ep2-redact-arm.md
-grep -n 'undetected-today gap' docs/specs/done/WP-secret-fence-ep2-redact-arm.md   # expect no hit after your edit
+# 5. AC-6 — the two documentation cells, EXTRACTED SEPARATELY and asserted
+#    separately. Set TITLE to the exact title of the test you added.
+SPEC=docs/specs/done/WP-secret-fence-ep2-redact-arm.md
+TITLE='<the exact title of your new test>'
+
+# 5a. the MUTATION row: the one line beginning with the M-48 cell in the
+#     "Mutation checks" table (the LAST of the two M-48 lines in the file).
+grep -n '^| \*\*M-48\*\* |' "$SPEC" | tail -1 | cut -d: -f1 \
+  | xargs -I{} sed -n '{}p' "$SPEC" > /tmp/m48-mutation-row.txt
+# 5b. the CENSUS row: the FIRST of the two, inside the AC-15 coverage census.
+grep -n '^| \*\*M-48\*\* |' "$SPEC" | head -1 | cut -d: -f1 \
+  | xargs -I{} sed -n '{}p' "$SPEC" > /tmp/m48-census-row.txt
+
+for f in /tmp/m48-mutation-row.txt /tmp/m48-census-row.txt; do
+  echo "--- $f"
+  test -s "$f"                            || { echo "FAIL: row extracted EMPTY"; exit 1; }
+  n=$(grep -c -F "$TITLE" "$f" || true)
+  test "$n" = "1"                         || { echo "FAIL: new test title occurs $n times, want 1"; exit 1; }
+  grep -qF 'executed' "$f"                || { echo "FAIL: limb/word 'executed' absent"; exit 1; }
+  grep -qF 'fail 1' "$f"                  || { echo "FAIL: the AC-3 counts are absent"; exit 1; }
+  grep -qF 'undetected-today gap' "$f"    && { echo "FAIL: still says undetected-today gap"; exit 1; }
+  grep -qF 'NOTHING' "$f"                 && { echo "FAIL: still says NOTHING"; exit 1; }
+  grep -qwF 'gap' "$f"                    && { echo "FAIL: still carries the gap limb"; exit 1; }
+  echo "ok"
+done
+#    NOTE the polarity: the three `grep -q … && { … exit 1; }` lines fail on
+#    PRESENCE. Under `set -e` a bare failing grep would abort the loop, which is
+#    why each is written as a printing branch. Adjust 'fail 1' to whatever your
+#    AC-3 run actually printed — do not paste a count you did not observe.
 
 # 6. The Done spec's own gates must stay green — you are editing inside them.
 #    Extract and run V-30 and V-31 from that spec's Verification steps, and
