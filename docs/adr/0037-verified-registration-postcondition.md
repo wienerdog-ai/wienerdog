@@ -27,7 +27,8 @@ previous registration. Because the entry argv carries `--expect-digest`, a
 launcher then refuses at fire time, while `doctor` reports the entry `loaded`.
 
 On **Linux**, `systemctl --user daemon-reload` is explicitly best-effort and
-**not gated** — only `enable --now` sets `loaded` (`schedule.js:457-465`). A
+**not gated** — only `enable --now` (`schedule.js:466`) sets `loaded`; the block
+is `schedule.js:457-466`. A
 degraded reload followed by a successful `enable --now` starts the timer from the
 units systemd already had, so the stale unit keeps running while `sync` reports
 success. One stderr warning is emitted at that sync and nothing thereafter,
@@ -60,10 +61,16 @@ Concretely, three obligations, applied on every platform:
    (`darwinReplaceEntry`), under the same non-destructive-first discipline —
    attempt `bootstrap`, and tear down only after launchd has proven the bootstrap
    blocked. Bootout-first remains rejected, for ADR-0018's original reason.
-3. **An unverified entry is retried, not skipped.** Byte-identical files permit
-   skipping the OS call only when the last durable status for that entry is
-   `loaded`. Absent, unreadable, or any other status ⇒ attempt the registration
-   again. The fail-safe direction is redundant work, never silence.
+3. **An unverified entry is retried, not skipped, and the evidence is a LIVE
+   READBACK.** Byte-identical files permit skipping the OS call only when a
+   read performed *at that moment* shows the OS holding what we would register —
+   the check Windows already makes. A durable cache is explicitly **not**
+   acceptable evidence: it is not written by every registration entry point, it
+   cannot represent every platform's state, and it can record `loaded` for an
+   entry the OS no longer holds (a crash between a teardown and its replacement
+   leaves exactly that). Where no such readback exists for a platform, that
+   platform does not skip. The fail-safe direction is redundant work, never
+   silence.
 
 ## Consequences
 
@@ -74,9 +81,18 @@ Concretely, three obligations, applied on every platform:
   pre-destructive durable-marker rule extends to it: refresh the status cache from
   the live probe before the first teardown, so a process killed mid-replacement
   leaves a pessimistic record rather than a stale `loaded` one.
-- Linux pays one extra `daemon-reload` per registration even when nothing changed.
-  It is idempotent and cheap, and it is what removes the permanent silence after a
-  degraded reload.
+- Linux pays a `daemon-reload` and an `enable --now` on **every** registration,
+  including one whose files did not change. Both are idempotent no-ops against an
+  already-correct unit, and running them unconditionally is what removes the
+  permanent silence after a degraded reload. Linux therefore has **no** verified
+  skip: there is no readback of a loaded unit's *content* that could be specified
+  and executed when this was written, and obligation 3 forbids skipping without
+  evidence. A later WP may add one.
+- "Idempotent" keeps its CLAUDE.md meaning — running twice changes nothing. What
+  changes is the **call count** of a re-register: a verified skip costs one
+  read-only readback (which is what Windows has always cost), and Linux costs two
+  idempotent calls. Any test asserting *zero* calls on a re-register is asserting
+  the old contract.
 - A persistently broken scheduler now produces work and a notice on every `sync`
   rather than one warning and then quiet. That is the intended trade: the failure
   is loud and attended instead of silent and unattended.
@@ -90,13 +106,17 @@ Concretely, three obligations, applied on every platform:
 ## Owner signature
 
 This ADR is **Proposed** and carries **no owner signature**. It amends an
-owner-signed decision (ADR-0018 is marked `Accepted. OWNER-SIGNED 2026-07-26.`),
+owner-signed decision — ADR-0018's status line records an owner sign-off dated
+2026-07-26, and that line is **described here rather than reproduced**, so a future
+signature sweep cannot match a ratification token inside an explicitly unsigned
+ADR —
 so it requires an explicit owner ratification before the work package that depends
 on it may merge.
 
 The signature slot is the `Status:` line at the top of this file. Ratification
 replaces `Proposed` with the accepted form plus the owner's dated sign-off, in the
-same shape ADR-0018 line 204 uses. **No ratification token is present in this file
+same shape ADR-0018's status line uses (again: described, not quoted). **No
+ratification token is present in this file
 and none may be added by an implementer, an agent, or a reviewer** — only the
 owner may write it, and only in an explicit ratification pass.
 
