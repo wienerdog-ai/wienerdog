@@ -823,9 +823,13 @@ again before that. Each time the architect filed a dated errata amendment inside
 ADR-0034 and these rows were re-derived **from** it: **ER-4/ER-5** on 2026-07-26
 (the vault grew by one note overnight), and **ER-7/ER-8/ER-9** on 2026-07-28
 (leg 1 merged as `72f3e46`, the vault had grown by seven more notes, and every
-E-block figure moved while no structural fact and no conclusion did). **V-17 went
-red both times and that is how both were found** — the first time the D-table was
-stale against its own deciding surface within hours of being written. **The
+E-block figure moved while no structural fact and no conclusion did). **The two
+re-derivations were found differently, and the difference is worth keeping
+straight.** The 2026-07-26 one was found BY V-17 going red — the D-table was
+stale against its own deciding surface within hours of being written, which is
+the mechanism catching a drift nobody had noticed. The 2026-07-28 one was not:
+the architect re-measured deliberately after leg 1 merged, and these rows were
+re-derived in the same pass, so V-17 was never observed red for it. **The
 corrected figures are deliberately not restated in this paragraph**, because V-17
 pins only the D1 and D2 rows and a number carried here would be an unpinned
 mirror of ADR-0034. Read them in ER-7 and ER-9. No argument in this spec moves
