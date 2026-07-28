@@ -1,7 +1,6 @@
 # ADR-0037: A register that cannot verify what the OS now holds must not report success
 
-Status: Proposed
-
+Status: Accepted. OWNER-SIGNED 2026-07-28.
 Date: 2026-07-28
 
 Amends ADR-0018 decision 2 (2026-07-25 amendment), which granted the
@@ -185,13 +184,13 @@ routed separately.
 
 ## Owner signature
 
-This ADR is **Proposed** and carries **no owner signature**. It amends an
-owner-signed decision — ADR-0018's status line records an owner sign-off dated
-2026-07-26, and that line is **described here rather than reproduced**, so a future
-signature sweep cannot match a ratification token inside an explicitly unsigned
-ADR —
-so it requires an explicit owner ratification before the work package that depends
-on it may merge.
+**RATIFIED 2026-07-28 — the owner's dated sign-off is in the `Status:` line at
+the top of this file**, hand-typed by the owner in an explicit ratification pass.
+The paragraphs below are the pre-ratification record, kept as provenance: this
+ADR was written Proposed and unsigned, amends an owner-signed decision —
+ADR-0018's status line records an owner sign-off dated 2026-07-26, described
+here rather than reproduced — and required this explicit owner ratification
+before the work package that depends on it could merge.
 
 The signature slot is the `Status:` line at the top of this file. Ratification
 replaces `Proposed` with the accepted form plus the owner's dated sign-off, in the

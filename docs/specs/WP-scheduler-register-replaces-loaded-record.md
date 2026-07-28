@@ -47,7 +47,7 @@ times.
 
 **The rule this WP implements:** *a register that cannot verify what the OS now
 holds must not report success — and must not skip the OS call without evidence.*
-That is ADR-0037 (Proposed, unsigned — see "ADR-0037 is not signed"), which amends
+That is ADR-0037 (Accepted, OWNER-SIGNED 2026-07-28), which amends
 ADR-0018 decision 2.
 
 **The evidence must be a LIVE READBACK, not a durable cache.** A round-1 draft of
@@ -360,7 +360,7 @@ one new Proposed ADR, one test file extended. **M** — one session.
 
 | Action | Path | Notes |
 |--------|------|-------|
-| create | docs/adr/0037-verified-registration-postcondition.md | The rule + the ADR-0018 decision-2 amendment. **Proposed, unsigned.** Written already by the architect, together with its `docs/adr/README.md` index row; the implementer edits neither. **0036 is deliberately skipped** — reserved by the in-flight ADR amending ADR-0031. |
+| create | docs/adr/0037-verified-registration-postcondition.md | The rule + the ADR-0018 decision-2 amendment. **Accepted, OWNER-SIGNED 2026-07-28.** Written by the architect, together with its `docs/adr/README.md` index row; the implementer edits neither. **0036 is deliberately skipped** — reserved by the in-flight ADR amending ADR-0031. |
 | modify | docs/adr/README.md | **D0b** — the ADR index row for 0037. Written already by the architect alongside the ADR; the implementer does not touch it. Listed because it **is** in this branch's diff, and a Deliverables table that omits a changed file is exactly the boundary-gate failure this row fixes. |
 | modify | src/scheduler/generators.js | **D0** — add **four** names to `module.exports`, and add **two** new pure parsers (`launchdLoadedCalendar`, `launchdLoadedEnv` — D1b). Existing names exported unchanged:: `launchdLoadedArgs` (`:679-689`, used internally at `:787`) and `jobLaunchArgs` (`:208`, used internally at `:355`); the two new parsers are exported with them. Structural, not an API promise — the WP-114 precedent for `repairCatchup`. Audited, not assumed (see "Export audit" in Implementation notes): `catchupLaunchArgs` (`:1030`) and `loadedEntryTargets` (`:1007`) are **already** exported and need no change. |
 | modify | src/cli/schedule.js | **D1, D2, D3, D4 and D5** — the complete set, reconciled against the Implementation notes and the ACs: **D1** `darwinLoadedVerdict` + `ensureDarwinEntryRegistered` (new, non-exported, incl. the `plutil` preflight, the tri-state verdict, `verifyLoaded` and the rollback); **D2** the darwin per-job arm (`:429-431`, Table A row 1); **D3** `ensureCatchup` (`:314-317`, row 2); **D4** the linux arm (`:456-466`, row 3); **D5** `add()`'s guard at `:882` — drop the `changed &&` conjunct so it throws on ANY unloaded outcome (**required by AC11**; a cell that stopped at D4 would leave the user-facing false-success shipped). Nothing beyond those five — no probe, no heal, no notice string, no Windows path, and **`darwinReplaceEntry` itself is not edited** (it stays the heal path's primitive). |
@@ -490,7 +490,7 @@ skipped; (v) the task crosses an authority boundary — the register emits a suc
 verdict whose subject is state the OS owns; (vii) the same rule is mirrored across
 three platform legs, the Deliverables cells, the acceptance criteria and the ADR.
 
-Per the A1 rule set — cited as **proposed, not in force** — each table row is one
+Per the A1 rule set (ADR-0036, **Accepted, OWNER-SIGNED 2026-07-28**) — each table row is one
 gate with one fixture and one mutation, and Table B keeps trigger separate from
 patch with no ordinals.
 
@@ -1370,9 +1370,10 @@ success for bytes we never verified"*, and strictly weaker than a repair.
 It closes the **report-wrong-registration** half of the race. The
 **rollback-overwrite** half is covered by the precondition and the route above.
 
-### ADR-0037 is not signed, and this WP cannot merge before it is
+### ADR-0037 ratification gate — SATISFIED 2026-07-28 (kept as the pre-merge record)
 
-`docs/adr/0037-verified-registration-postcondition.md` is **Proposed**. It amends
+`docs/adr/0037-verified-registration-postcondition.md` is **Accepted — OWNER-SIGNED
+2026-07-28** (the gate below was satisfied by that signature). It amends
 ADR-0018 decision 2, which is owner-signed. Per `docs/adr/README.md`, accepted ADRs
 are superseded by a new ADR rather than edited — the form used here, deliberately,
 and **not** an in-file appendix to 0018.
@@ -1380,8 +1381,9 @@ and **not** an in-file appendix to 0018.
 The signature slot is ADR-0037's `Status:` line. **No ratification token is in
 that file and none may be added by the implementer, by any agent, or by a
 reviewer.** Definition of done item 6 gates merge on the owner's ratification.
-Stated as a negative: this ADR has **not** been signed, it is **not** accepted, and
-nothing in this branch should be read as owner approval of it.
+Pre-ratification, this section stated the negative — not signed, not accepted,
+nothing in the branch readable as approval. The owner's ratification pass on
+2026-07-28 is what changed it, and only that.
 
 ### General
 
