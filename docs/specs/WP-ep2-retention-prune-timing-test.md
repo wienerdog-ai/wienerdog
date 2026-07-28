@@ -279,6 +279,17 @@ npm run lint
 #    separately. Set TITLE to the exact title of the test you added.
 SPEC=docs/specs/done/WP-secret-fence-ep2-redact-arm.md
 TITLE='<the exact title of your new test>'
+COUNTS='<the exact pass/fail counts your AC-3 run printed, e.g. "pass 5, fail 1">'
+# GUARD BOTH, AND GUARD THEM LOUDLY. `COUNTS` was referenced by 5c and never
+# assigned at all until round 9 — and an unset or empty COUNTS turns
+# `grep -qF "$COUNTS"` into an EMPTY-PATTERN match, which matches every line, so
+# the assertion passes on any tree in silence. That is a worse polarity than a
+# false red: this repo's logbook records an unbound `$ADR` producing five false
+# REDs, which at least announced itself. A silent green does not.
+: "${TITLE:?set TITLE to the exact title of the test you added}"
+: "${COUNTS:?set COUNTS to the exact pass/fail counts your AC-3 run printed}"
+case "$TITLE"  in *'<the exact'*) echo "FAIL: TITLE is still the placeholder";  exit 1;; esac
+case "$COUNTS" in *'<the exact'*) echo "FAIL: COUNTS is still the placeholder"; exit 1;; esac
 
 # 5a. the MUTATION row: the one line beginning with the M-48 cell in the
 #     "Mutation checks" table (the LAST of the two M-48 lines in the file).
@@ -324,7 +335,10 @@ echo "ok: mutation row no longer states the gap"
 #        census carries a limb. `tolower` because neighbouring cells are mixed
 #        case, and cell EQUALITY — not a substring search — is the assertion.
 #    (iv) COUNTS. Set COUNTS to what your AC-3 run actually printed. Do not paste
-#        a figure you did not observe.
+#        a figure you did not observe — and note the guard at the top of this step
+#        exists because an UNSET COUNTS makes `grep -qF "$COUNTS"` an empty-pattern
+#        match that matches everything. The failure mode of a forgotten variable
+#        here is a SILENT GREEN, not a red, so it is guarded rather than trusted.
 
 # 5f. THE SECOND-DIRECTION PROOF — run this BEFORE you edit the real spec.
 #     Red-before-work proves a gate is not vacuous. It does NOT prove the gate is

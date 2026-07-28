@@ -110,9 +110,18 @@ instead of a blocked session.
   spec's Deliverables table is a permission boundary, so the file that would fix
   a rotted citation is usually outside the implementer's reach — which is what
   made the case above a deadlock rather than an inconvenience.
-- **The dispatch message records the run.** Which claims were re-run, and their
-  results. A dispatch that does not say is a dispatch where this gate did not
-  run, and it is the orchestrator's to redo.
+- **The dispatch message records the run, AND THE REVISION IT RAN AGAINST.** Which
+  claims were re-run, their results, and **the commit SHA the claims were re-run
+  against**. A dispatch that does not say is a dispatch where this gate did not run,
+  and it is the orchestrator's to redo.
+- **The implementer's worktree starts from that SHA** — or, equivalently and often
+  simpler, the verification runs *against the already-created worktree* and the
+  record carries that worktree's `HEAD`. Either order is fine; what is not fine is a
+  green record with no revision attached, because a merge landing between the
+  verification and the worktree creation recreates the exact stale-spec condition
+  this gate exists for, and leaves a record saying everything passed. **This is what
+  the record must CONTAIN — no tooling, no hook, one more line in a message that is
+  already being written.**
 
 ## How to run it
 

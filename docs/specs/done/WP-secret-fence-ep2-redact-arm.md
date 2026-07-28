@@ -3074,7 +3074,10 @@ above; the rule applies identically to rows B4, B5, B10, B6, B7 and B13.
       pointer sentence are the row-level surfaces that move with it. It is
       dispositioned corpus/measurement **data** in **V-30**, so what this bullet
       registers is the table, named here by its exact heading — *AC-15 coverage
-      census* — and not its rows. *It exists because AC-15's wording was the
+      census* — and not its rows. **Since round 9 that schema entry also declares a
+      1:1 PAIRING with the Mutation checks table**, which V-30 derives and enforces
+      in both directions on every run, so the census can no longer go short or long
+      without the step going red. *It exists because AC-15's wording was the
       blocking finding in two consecutive rounds: the third repair is an
       extraction, per the circuit-breaker in `docs/runbooks/codex-review.md`.*
       **A generalizing rule is PROPOSED in `docs/adr/0036-mechanism-cell-schema-for-contract-tables.md`
@@ -4386,11 +4389,31 @@ third rewording. AC-15 is now a pointer; the dispositions live here, one row per
 mutation row, so *"every other row"* is true **by construction** instead of by
 assertion.
 
-**Coverage is derived, not claimed.** This table holds **37** rows and the Mutation
-checks table below holds **37** rows; the two id sets were compared with `comm` on
-2026-07-28 and are **identical — nothing in either that is not in the other**. A row
-added to the mutation table without a row here shows up as a count mismatch, which
-is exactly the property the old blanket wording lacked.
+**Coverage is ENFORCED, and enforced at check time.** This table declares a **1:1
+pairing** with the Mutation checks table in **V-30**'s schema list, and that step
+derives both first-cell id sets on every run and **fails on any asymmetric difference
+in either direction** — a mutation row with no census row, or a census row with no
+mutation row. The count is printed, not pinned: today it reads *"1 declaring a 1:1
+pairing, each checked in BOTH directions at 37 rows"*.
+
+*Round 9 replaced what stood here, and the replacement is the point. Round 6 wrote
+"Coverage is derived, not claimed. This table holds 37 rows and the Mutation checks
+table holds 37 rows; the two id sets were compared with `comm` on 2026-07-28 and are
+identical." **Every word of that was true and none of it was enforced.** It is a
+remembered invariant: the `comm` run happened once, on a date, and nothing re-ran it,
+so a row added or deleted afterwards drifted green while AC-15 claimed exact coverage.
+A one-directional test would not have been enough either — it passes on a strict
+superset or a strict subset depending which way it is written — so the check compares
+both differences and names which side each stray id is on.*
+
+**Proven red in both directions, executed 2026-07-28** (probe copies of this file; the
+real file was not modified): removing the census row for **M-24b** ⇒ *"in the PAIRED
+table only: M-24b"*, exit 1. Adding a census row for a fabricated **M-99** ⇒ *"in the
+DATA table only: M-99"*, exit 1. Control on the unmodified file ⇒ exit 0. **A gate
+proven red in one direction only is half-proven**, and the second direction here is
+not the same second direction a step's non-vacuity proof needs — that one asks whether
+the check accepts the correct answer; this one asks whether it catches drift on the
+side you were not thinking about.
 
 **The three limbs — and the asymmetry between them is the point, so it is a column
 and not prose.**
@@ -6195,7 +6218,14 @@ const SCHEMA = new Map([
 ["### Table K — canonical: every read of the target inside the redact arm || | # | which read | encoding | position in the arm | what anchors it | if it THROWS | if its bytes DIFFER from `captured` |", ["ids", /^K[0-9]+$/]],
 ["### Table R — canonical: the redact arm's outcome matrix || | # | outcome | `P` | `S` | working-tree file **at the instant `S` returned** | `redacted/` copy when the row finishes | index **when the row finishes** | next row | `secretRedactions` | `secretReverts` | in `reverted[]` | fault injection |", ["ids", /^R[0-9]+[a-z]?$/]],
 ["### Table T — canonical: how every Table R row is produced and observed || | id | produces | mechanism — the exact seam | asserted at | why nothing cheaper reaches it |", ["ids", /^(FI-[0-9]+[a-z]?|RP-[0-9]+|BU|I[0-9]+|—)$/]],
-["### AC-15 coverage census — canonical: the evidence limb of every mutation row || | # | limb | evidence |", ["data", "AC-15 coverage census"]],
+// A DATA table may declare a 1:1 PAIRING with an ids table: ["data", <registration
+// name>, <schema key of the paired table>]. When it does, this step DERIVES both
+// first-cell sets at check time and fails on any asymmetric difference, in either
+// direction. Added 2026-07-28, round 9: the census carried its coverage claim as a
+// DATED comm run and a static "37", which is a remembered invariant, not a checked
+// one — a mutation row added without a census row, or a census row deleted, drifted
+// green while AC-15 claimed exact coverage.
+["### AC-15 coverage census — canonical: the evidence limb of every mutation row || | # | limb | evidence |", ["data", "AC-15 coverage census", "### Mutation checks (run these; a green suite against unmodified `src/` is not evidence) || | # | One-line mutation to `src/` | Must fail |"]],
 ["### Mirrored Surface Checklist || | hit | surface | disposition |", ["data", "census"]],
 ["### Owner signature form — canonical || | # | Fact | Value |", ["ids", /^S[0-9]+$/]],
 ["### Table H — canonical: what a DEFINITION is, and what a REGISTRATION is || | # | fact | pattern | why it is here |", ["ids", /^H[0-9]+$/]],
@@ -6298,6 +6328,15 @@ const resRe = new RegExp(P_RES);
 
 const seen = new Set();
 let dataTables = 0;
+// key -> Set of that table's first-cell values, collected for BOTH dispositions so a
+// declared pairing can be compared after the walk. The ids branch already DEFINES its
+// cells; this records WHICH TABLE defined them, which `defs` alone does not carry.
+const rowIds = new Map();
+const collect = (key, cell) => {
+  if (!rowIds.has(key)) rowIds.set(key, new Set());
+  rowIds.get(key).add(cell);
+};
+const firstCell = (line) => (line.split("|")[1] || "").trim().replace(/^\*\*|\*\*$/g, "").trim();
 let head = "(none)";
 for (let i = 0; i < lines.length; i++) {
   if (/^#{2,6} /.test(lines[i])) head = flat(lines[i]);
@@ -6309,9 +6348,11 @@ for (let i = 0; i < lines.length; i++) {
     if (s[0] === "data") {
       dataTables += 1;
       if (!registered(s[1])) fail("the table at line " + (i + 1) + " is dispositioned as corpus/measurement DATA, so what the Checklist registers is the TABLE — but " + JSON.stringify(s[1]) + " is named nowhere in the Checklist region under H6's boundary form. Register it there, or reclassify the table. (An UNBOUNDED substring test would pass here on any longer name that contains this one: that was round 8's defect.)");
+      for (let j = i + 2; j < lines.length && /^\|/.test(lines[j]); j++) collect(key, firstCell(lines[j]));
     } else {
       for (let j = i + 2; j < lines.length && /^\|/.test(lines[j]); j++) {
-        const cell = (lines[j].split("|")[1] || "").trim().replace(/^\*\*|\*\*$/g, "").trim();
+        const cell = firstCell(lines[j]);
+        collect(key, cell);
         if (!s[1].test(cell)) fail("row " + (j + 1) + " has first cell " + JSON.stringify(cell) + ", which its table pattern " + s[1] + " does not match. A mis-shaped id is invisible to registration (Table H row H1).");
         define(cell, j + 1, "contract-table id");
       }
@@ -6328,6 +6369,29 @@ for (let i = 0; i < lines.length; i++) {
   }
 }
 for (const k of SCHEMA.keys()) if (!seen.has(k)) fail("the schema names a table this document no longer contains:\n           " + k + "\n           Remove it — a stale schema entry silently widens the carve-out.");
+
+// ─── DECLARED 1:1 PAIRINGS, DERIVED AT CHECK TIME. Both directions, because a
+//     one-directional test passes on a census that is a strict superset AND on one
+//     that is a strict subset, depending which way you write it.
+let pairings = 0;
+for (const [k, s] of SCHEMA) {
+  if (s[0] !== "data" || !s[2]) continue;
+  pairings += 1;
+  if (!SCHEMA.has(s[2])) fail("data table " + JSON.stringify(s[1]) + " declares a pairing with a schema key that does not exist:\n           " + s[2]);
+  const a = rowIds.get(k) || new Set();
+  const b = rowIds.get(s[2]) || new Set();
+  if (a.size === 0 || b.size === 0) fail("the pairing for " + JSON.stringify(s[1]) + " extracted an EMPTY side (" + a.size + " vs " + b.size + "). A pairing over an empty set is trivially satisfiable. Do not weaken it; report it.");
+  const onlyA = [...a].filter((x) => !b.has(x));
+  const onlyB = [...b].filter((x) => !a.has(x));
+  if (onlyA.length || onlyB.length) {
+    console.error("FAIL V-30: " + JSON.stringify(s[1]) + " is not 1:1 with the table it is paired to.");
+    if (onlyA.length) console.error("           in the DATA table only: " + onlyA.join(" "));
+    if (onlyB.length) console.error("           in the PAIRED table only: " + onlyB.join(" "));
+    console.error("           AC-15 claims exact coverage; add or remove the matching row in the");
+    console.error("           same commit. This is DERIVED here, not remembered from a dated run.");
+    process.exit(1);
+  }
+}
 
 const missing = [];
 for (const [id, d] of defs) {
@@ -6353,7 +6417,7 @@ if (missing.length) {
 // H9: print what was checked, INCLUDING what was not. The backlog holds ids
 // that are genuinely unregistered mirrors; calling them nothing would make this
 // pasted artifact less honest than the source it came from.
-console.log("V-30 ok: " + defs.size + " ids defined across " + seen.size + " schema-dispositioned tables (" + dataTables + " corpus/measurement, registered by table) plus the acceptance-criterion, verification-step and accepted-residual families; "
+console.log("V-30 ok: " + defs.size + " ids defined across " + seen.size + " schema-dispositioned tables (" + dataTables + " corpus/measurement, registered by table; " + pairings + " declaring a 1:1 pairing, each checked in BOTH directions at " + (rowIds.get("### AC-15 coverage census — canonical: the evidence limb of every mutation row || | # | limb | evidence |") || new Set()).size + " rows) plus the acceptance-criterion, verification-step and accepted-residual families; "
   + (defs.size - BACKLOG.size) + " registered in the Checklist under H6's boundary form; "
   + BACKLOG.size + " on the dated backlog and therefore NOT registered; 0 outside both.");
 REGEOF
