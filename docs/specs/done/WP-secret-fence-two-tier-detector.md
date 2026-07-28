@@ -427,8 +427,11 @@ Deliverables table.
 
 > **SUPERSEDED AS LIVE FIGURES ON 2026-07-28, AND FROZEN HERE DELIBERATELY.**
 > This WP merged as `72f3e46` and is `status: Done`. Re-measured on 2026-07-28
-> against the same vault, now 189 notes rather than 182, **every figure in M1, M2
-> and M5 moved and no structural fact and no conclusion did**. Those corrections
+> against the same vault, now 189 notes rather than 182, **every figure M1, M2
+> and M5 share with ADR-0034 moved, and no structural fact and no conclusion
+> did.** M2's frequency list was not re-measured and is not claimed either way —
+> re-deriving it would mean re-publishing vault-derived path fragments, and it is
+> the one part of these measurements ADR-0034 never mirrored. Those corrections
 > were filed where the durable record is: **ADR-0034 errata ER-7, ER-8 and
 > ER-9**, which correct evidence blocks E1, E2 and E3 in place and quote the
 > pre-edit bytes verbatim. Read the live figures there.
