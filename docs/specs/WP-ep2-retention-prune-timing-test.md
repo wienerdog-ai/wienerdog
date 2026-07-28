@@ -153,6 +153,37 @@ by hand to verify red, then revert:
 2. Insert `pruneRedactedOriginals(stateDir, redactedCreated);` immediately after the
    `secretRedactions += 1;` line inside the B4 arm.
 
+### The post-loop call-site checks — canonical, stated once
+
+**Three assertions over `src/core/dream/validate.js`. Both the dispatch gate
+(step 0d) and the new test's structural half run THESE; neither restates the
+algorithm, because two hand-copied versions of one check are two checks that can
+disagree.**
+
+1. **Adjacency** — the guarded call `if (secretRedactions > 0) pruneRedactedOriginals(stateDir, redactedCreated);`
+   immediately follows its `Retention, once per run` comment; exactly one such
+   adjacent pair.
+2. **Uniqueness** — `pruneRedactedOriginals(stateDir, redactedCreated)` appears
+   exactly once in the file.
+3. **Scope** — the call's line is **after** the `scanTokens` loop's matching
+   closing brace. Find the loop header, scan forward keeping a brace balance, take
+   the first line where it returns to zero. **Derive that close TWICE — character
+   balance, and line shape (only a trailing `{` opens, only a line-leading `}`
+   closes) — and REFUSE if they disagree.**
+
+**Why 3 exists, proven rather than argued.** Assertions 1 and 2 are both satisfied
+by relocating the **comment and the call together** into a guard inside the loop
+(`if (i >= scanTokens.length - 2) { … }`) — executed, and both returned 1 on a file
+with N2 violated. The seam ordering holds there too. Only assertion 3 catches it.
+
+**The honest limit of 3, stated and then checked.** Character brace-balance is
+wrong in general for JS. Measured in this region today the only brace-bearing
+literals are template interpolations — `` `HEAD:${rel}` `` and the
+`${REDACTED_SUBDIR}` reason string — and `${…}` is self-balancing, so both
+derivations agree (loop `1200..1331`, call `1333`). The cross-check is what turns
+that from an assumption into something that will announce itself: add a bare `'{'`
+literal and the methods diverge and the check blocks.
+
 **`redactedCreated` is passed unchanged** — that is what makes this an N2-only
 mutation. If your test also fails when only N3 is broken, it is not isolating N2 and
 the existing N3 test already covers that.
@@ -231,24 +262,11 @@ removed because it is UNSATISFIABLE.**
   checks returned 1, i.e. PASS, on a file with N2 violated.** Only assertion 3
   catches it.*
 
-  **How to compute assertion 3, concretely — no parser needed.** Find the loop
-  header line (`for (let i = 0; i < scanTokens.length; i++) {`), then scan forward
-  keeping a brace balance, and take the first line where the balance returns to
-  zero as the loop's close. **Derive it TWICE by independent methods and require
-  them to agree**, refusing rather than guessing if they do not:
-
-  - **character balance** — every `{` and `}` in the text;
-  - **line shape** — only a trailing `{` opens, only a line-leading `}` closes.
-
-  **The honest limit, stated rather than hidden.** Character balance is wrong in
-  general for JS: a brace inside a string literal or a comment can be unbalanced.
-  Measured in this region today, the only brace-bearing literals are template
-  interpolations — `` `HEAD:${rel}` `` and the `${REDACTED_SUBDIR}` reason string —
-  and `${…}` is **self-balancing**, so both methods agree (loop `1200..1331`, call
-  at `1333`). The two-method cross-check is what converts that from a standing
-  assumption into a checked one: if someone later adds `'{'` as a literal, the
-  methods diverge and the check **blocks and says so** instead of silently
-  computing the wrong boundary.
+  **The three assertions are the canonical post-loop call-site checks defined
+  under "Exact contracts" — run them, do not restate them.** The dispatch gate
+  (step 0d) runs the same three against main's copy; a check written out twice is
+  two checks that can drift, which is the defect this whole work package's parent
+  spec keeps recording.
 
   Assert all three inside the test — a precondition that only runs at dispatch does
   not protect the test from a later refactor.
@@ -370,62 +388,110 @@ the assertion and the counts, not a verdict.*
 ```bash
 # 0. THE DISPATCH BLOCKER, AND IT MUST BE RUN FIRST.
 #    ANY FAILURE HERE BLOCKS DISPATCH. Do not start, do not work around it,
-#    report it and stop — the two cells this WP edits do not exist yet.
+#    report it and stop.
+#
+#    EVERY CHECK BELOW READS AUTHORITATIVE MAIN, NEVER YOUR CHECKOUT. That is the
+#    whole shape of this step and it is not a detail: a dispatcher standing on a
+#    stale or topic branch would otherwise get a green record describing a tree the
+#    implementer will never see — the revision-skew failure the dispatch rule in
+#    `docs/runbooks/codex-review.md` exists to prevent, reproduced inside the gate
+#    that cites it. *Demonstrated on the authoring checkout: HEAD `8868b80`,
+#    `origin/main` `5f0ffc0`, and the census grep printed "on main" while main did
+#    not contain it.*
 SPEC=docs/specs/done/WP-secret-fence-ep2-redact-arm.md
+V=src/core/dream/validate.js
+T=tests/unit/dream-validate.test.js
 
-# 0a. The AC-15 coverage census must exist. It arrived in PR #124; before that
-#     merge this grep finds nothing and this step is RED, which is the point.
-grep -q '^### AC-15 coverage census' "$SPEC" || {
-  echo "BLOCKED: the AC-15 coverage census is not in $SPEC."
+# 0a. RESOLVE AUTHORITATIVE MAIN. `origin/main` is the authority, not a local
+#     `main` branch, because a local `main` can lag with no signal and it is
+#     `origin/main` that CI merges into.
+git fetch --quiet origin main || {
+  echo "BLOCKED: cannot reach origin. This gate cannot be satisfied offline —"
+  echo "         every claim below is about main, not about your checkout."; exit 1; }
+MAIN=$(git rev-parse origin/main)
+echo "dispatch SHA (origin/main): $MAIN"
+#     RECORD THAT SHA IN THE DISPATCH MESSAGE, and start the implementer worktree
+#     from it — both are required by the dispatch rule in the codex-review runbook.
+
+# 0b. IS PR #124 ACTUALLY ON MAIN? Asked of main's content, not of your files.
+#     CONTENT is the authority here rather than commit ancestry: a squash-merge
+#     would break `merge-base --is-ancestor <branch sha> origin/main` while the
+#     content this WP depends on is present and correct. Ancestry answers "was that
+#     commit merged"; content answers "is the thing I need there", which is the
+#     question. (`git merge-base --is-ancestor` remains a fine extra check on a repo
+#     that never squashes; this one merges with merge commits today, so both would
+#     pass — content is chosen because it stays true if that ever changes.)
+git show "$MAIN:$SPEC" | grep -q '^### AC-15 coverage census' || {
+  echo "BLOCKED: the AC-15 coverage census is NOT on origin/main ($MAIN)."
   echo "         PR #124 has not merged. Do not start this WP."; exit 1; }
 
-# 0b. The census must still carry M-48 on the 'gap' limb — i.e. nobody has done
-#     this work already. Cell equality, not a substring.
-limb=$(grep -m1 '^| \*\*M-48\*\* |' "$SPEC" | awk -F'|' '{gsub(/[* ]/,"",$3); print $3}')
+# 0c. The census must still carry M-48 on the 'gap' limb ON MAIN — i.e. nobody has
+#     done this work already. Cell equality, not a substring.
+limb=$(git show "$MAIN:$SPEC" | grep -m1 '^| \*\*M-48\*\* |' | awk -F'|' '{gsub(/[* ]/,"",$3); print $3}')
 test "$limb" = "gap" || {
-  echo "BLOCKED: the census limb for M-48 is '$limb', expected 'gap'."
+  echo "BLOCKED: on main the census limb for M-48 is '$limb', expected 'gap'."
   echo "         Either this work is already done or the census moved."; exit 1; }
 echo "ok: PR #124 is on main and the gap is still open"
 
-# 0c. The CODE claims — and these ASSERT rather than print, because the exact
-#     regression this WP exists to catch (the prune call moved into the B4 loop)
-#     leaves BOTH comments intact and is proven to leave all five existing
-#     retention tests green. Grepping for the comments alone would dispatch this
-#     WP against already-broken production code, and the baseline in step 1 would
-#     then fail with src/ outside your permission boundary.
-V=src/core/dream/validate.js
+#     Materialize main's copies of the two files every later check reads.
+MV=$(mktemp -t validate); MT=$(mktemp -t dvtest)
+git show "$MAIN:$V" > "$MV"
+git show "$MAIN:$T" > "$MT"
 
-#     The comment and the guarded call must be ADJACENT — one two-line pattern, so
-#     a call that moved away from its comment is caught even though both strings
-#     still exist somewhere in the file.
-n=$(awk '/Retention, once per run/ { c = NR }
-         c && NR == c + 1 && /if \(secretRedactions > 0\) pruneRedactedOriginals\(stateDir, redactedCreated\);/ { n++ }
-         END { print n + 0 }' "$V")
-test "$n" = "1" || {
-  echo "BLOCKED: the guarded post-loop prune call does not immediately follow its"
-  echo "         'Retention, once per run' comment ($n adjacent occurrence(s), want 1)."
-  echo "         Either the call moved — which is the N2 regression itself — or the"
-  echo "         code was refactored. STOP AND REPORT; do not start."; exit 1; }
+# 0d. THE CALL-SITE STRUCTURE, all three assertions, run against MAIN's copy.
+#     These are the canonical post-loop call-site checks defined once under
+#     "Exact contracts" — this step and the new test's structural half BOTH run
+#     them, and neither restates the algorithm. **Assertion 3 is not optional and
+#     is not redundant**: adjacency and occurs-once are both satisfied by moving
+#     the comment and the call TOGETHER into a guard inside the loop, which is
+#     exactly the regression this WP targets.
+node - "$MV" <<'LOOPCHK'
+const fs = require('fs');
+const lines = fs.readFileSync(process.argv[2], 'utf8').split('\n');
+const CALL = 'if (secretRedactions > 0) pruneRedactedOriginals(stateDir, redactedCreated);';
+const fail = (m) => { console.error('BLOCKED: ' + m); process.exit(1); };
 
-#     …and it must occur EXACTLY ONCE in the whole file, so a per-call copy added
-#     alongside the post-loop one is caught too.
-c=$(grep -c 'pruneRedactedOriginals(stateDir, redactedCreated)' "$V")
-test "$c" = "1" || {
-  echo "BLOCKED: pruneRedactedOriginals is called $c times, want exactly 1."
-  echo "         A second call site is the per-call form. STOP AND REPORT."; exit 1; }
+// (1) adjacency: the guarded call immediately follows its comment.
+let adj = 0;
+for (let i = 1; i < lines.length; i++) {
+  if (/Retention, once per run/.test(lines[i - 1]) && lines[i].includes(CALL)) adj++;
+}
+if (adj !== 1) fail(`the guarded call does not immediately follow its "Retention, once per run" comment (${adj} adjacent occurrences, want 1).`);
 
-grep -q 'every basename this run wrote into' "$V" || {
-  echo "BLOCKED: the run-scoped exclusion set's declaration is gone."; exit 1; }
+// (2) exactly one call site in the whole file.
+const n = lines.filter((l) => l.includes('pruneRedactedOriginals(stateDir, redactedCreated)')).length;
+if (n !== 1) fail(`pruneRedactedOriginals is called ${n} times, want exactly 1. A second call site is the per-call form.`);
 
-#     The TEST baseline is ASSERTED BY EXACT TITLE, not by a prefix count. A count
-#     of five is also satisfied by five DIFFERENT tests — including an N2 test
-#     somebody already added under another name, which would dispatch you to do
-#     work that exists.
-T=tests/unit/dream-validate.test.js
+// (3) the call is AFTER the scanTokens loop's matching closing brace.
+const hdr = lines.findIndex((l) => /for \(let i = 0; i < scanTokens\.length; i\+\+\) \{/.test(l));
+if (hdr < 0) fail('the scanTokens loop header is not where this spec says it is.');
+const callIdx = lines.findIndex((l) => l.includes(CALL));
+let d = 0, closeA = -1;
+for (let i = hdr; i < lines.length; i++) {
+  for (const ch of lines[i]) { if (ch === '{') d++; else if (ch === '}') d--; }
+  if (d === 0) { closeA = i; break; }
+}
+let e = 0, closeB = -1;
+for (let i = hdr; i < lines.length; i++) {
+  if (/\{\s*$/.test(lines[i])) e++;
+  if (/^\s*\}/.test(lines[i])) { e--; if (e === 0) { closeB = i; break; } }
+}
+if (closeA < 0 || closeB < 0) fail("could not find the loop's closing brace.");
+if (closeA !== closeB) fail(`the two brace derivations disagree (char=${closeA + 1}, line-shape=${closeB + 1}). An unbalanced brace inside a string literal or comment is the usual cause. This check REFUSES rather than guessing — report it.`);
+if (callIdx <= closeA) fail(`the prune call is at line ${callIdx + 1}, INSIDE the scanTokens loop (header ${hdr + 1}, closes ${closeA + 1}). N2 requires it after the loop. Adjacency and once-file-wide are both satisfiable from inside the loop — this is the check that is not.`);
+console.log(`ok: loop ${hdr + 1}..${closeA + 1}, prune call at ${callIdx + 1} — after the loop, both derivations agree`);
+LOOPCHK
+
+grep -q 'every basename this run wrote into' "$MV" || {
+  echo "BLOCKED: the run-scoped exclusion set's declaration is gone from main."; exit 1; }
+
+# 0e. THE TEST BASELINE, BY EXACT TITLE, on main's copy. A count of five is also
+#     satisfied by five DIFFERENT tests — including an N2 test somebody already
+#     added under another name, which would dispatch you to redo existing work.
 while IFS= read -r want; do
-  n=$(grep -c -F "$want" "$T")
+  n=$(grep -c -F "$want" "$MT")
   test "$n" = "1" || {
-    echo "BLOCKED: expected exactly 1 test titled:"; echo "           $want"
+    echo "BLOCKED: on main, expected exactly 1 test titled:"; echo "           $want"
     echo "         found $n. The baseline this spec was written against has moved."
     echo "         STOP AND REPORT."; exit 1; }
 done <<'TITLES'
@@ -435,22 +501,21 @@ EP2 retention: above the cap, the cap YIELDS; a zero-redaction run leaves the ov
 EP2 retention: above the cap from a FULL directory, the run keeps exactly its own copies
 EP2 retention: a B5/B5a fall-through never prunes, and the prune stays inside redacted/
 TITLES
-t=$(grep -c 'EP2 retention:' "$T")
+t=$(grep -c 'EP2 retention:' "$MT")
 test "$t" = "5" || {
-  echo "BLOCKED: found $t 'EP2 retention:' tests, want exactly 5 — a SIXTH exists."
+  echo "BLOCKED: on main, found $t 'EP2 retention:' tests, want exactly 5 — a SIXTH exists."
   echo "         Somebody may already have written this WP's test. STOP AND REPORT."; exit 1; }
 
-#     The HELPERS step 1 and your new test depend on. A refactor that renames these
-#     leaves every grep above green and blocks you after you have started.
 for h in 'function redactFixture(' 'const RUN =' 'const lsRedacted =' \
          'const CAP = 50;' 'function seedRedacted(' 'function seedNotes('; do
-  grep -qF "$h" "$T" || {
-    echo "BLOCKED: the helper '$h' this spec builds on is gone from $T."
+  grep -qF "$h" "$MT" || {
+    echo "BLOCKED: the helper '$h' this spec builds on is gone from main's $T."
     echo "         STOP AND REPORT — do not re-create it."; exit 1; }
 done
-echo "ok: call site, exclusion set, the 5 exact titles and the 6 helpers all as stated"
+rm -f "$MV" "$MT"
+echo "ok: call site, exclusion set, the 5 exact titles and the 6 helpers — all as stated, ON MAIN"
 
-# 0d. THE CENTRAL CURRENT-STATE CLAIM, EXECUTED — not read, not trusted.
+# 0f. THE CENTRAL CURRENT-STATE CLAIM, EXECUTED — not read, not trusted.
 #     This spec's whole reason to exist is "the isolated N2 mutation reddens
 #     nothing". That claim was executed on 2026-07-28 and it is executable by
 #     construction, so the dispatch rule this repo adopted (re-run every EXECUTABLE
@@ -469,6 +534,10 @@ git diff --quiet -- "$V" && git diff --cached --quiet -- "$V" || {
   echo "         'git checkout --', which would destroy them. Commit or stash first."
   exit 1; }
 DEPLOYED_BEFORE=$(git hash-object "$V")
+#     The worktree is cut from `$MAIN` (resolved in step 0a), NOT from HEAD. Cutting
+#     from HEAD probes whatever branch the dispatcher happens to stand on, which is
+#     the same skew step 0 exists to close — and it would report a green central
+#     claim about a tree the implementer will never see.
 
 #     ISOLATION: THE PROBE NEVER WRITES TO THIS TREE. It runs in a disposable
 #     `git worktree`, and that is a safety requirement rather than a preference.
@@ -508,7 +577,7 @@ cleanup() {
 trap 'cleanup; echo "PROBE INTERRUPTED — nothing in the deployed tree was ever written"; exit 130' INT TERM
 trap cleanup EXIT
 
-git worktree add --detach "$WT" HEAD >/dev/null
+git worktree add --detach "$WT" "$MAIN" >/dev/null    # MAIN, never HEAD
 
 #     `set +e` MUST COVER THE MUTATION HEREDOC TOO, not just the test run. Under
 #     this block's `set -euo pipefail` a python exiting 1 would kill the script
