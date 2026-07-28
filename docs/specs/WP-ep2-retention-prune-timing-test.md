@@ -213,17 +213,45 @@ removed because it is UNSATISFIABLE.**
     iteration and is invisible to the spawn log, which is exactly why (a) is
     necessary and NOT sufficient — see (b).*
 
-  **(b) THE SUFFICIENCY HALF — the structural, source-level assertion.** The seam
-  cannot distinguish "after the loop" from "late inside the final iteration",
-  because after the trailing path's `-U0` there is no further git event to order
-  against. So the test **also** asserts the call-site structure that step **0c**
-  already checks at dispatch: the guarded call
-  `if (secretRedactions > 0) pruneRedactedOriginals(stateDir, redactedCreated);`
-  **immediately follows** its `Retention, once per run` comment, and
-  `pruneRedactedOriginals(stateDir, redactedCreated)` occurs **exactly once** in
-  `validate.js`. Assert it inside the test (read the file, apply the same two
-  checks) — a precondition that only runs at dispatch does not protect the test
-  from a later refactor.
+  **(b) THE SUFFICIENCY HALF — the structural, source-level assertion, and it must
+  be BRACE-AWARE.** The seam cannot distinguish "after the loop" from "late inside
+  the final iteration", because after the trailing path's `-U0` there is no further
+  git event to order against. So the test **also** reads `validate.js` and asserts
+  its structure. **Three assertions, and the third is the one that matters:**
+
+  1. the guarded call **immediately follows** its `Retention, once per run` comment;
+  2. `pruneRedactedOriginals(stateDir, redactedCreated)` occurs **exactly once**;
+  3. **the call's line is AFTER the `scanTokens` loop's matching closing brace.**
+
+  *Assertions 1 and 2 are not sufficient and this was proven, not argued. Relocate
+  the COMMENT AND THE CALL TOGETHER into a last-path guard inside the loop —
+  `if (i >= scanTokens.length - 2) { <comment> <call> }` — and adjacency still reads
+  1, the file-wide count still reads 1, and the seam ordering still holds because
+  the prune fires after the trailing path's last git event. **Executed: both old
+  checks returned 1, i.e. PASS, on a file with N2 violated.** Only assertion 3
+  catches it.*
+
+  **How to compute assertion 3, concretely — no parser needed.** Find the loop
+  header line (`for (let i = 0; i < scanTokens.length; i++) {`), then scan forward
+  keeping a brace balance, and take the first line where the balance returns to
+  zero as the loop's close. **Derive it TWICE by independent methods and require
+  them to agree**, refusing rather than guessing if they do not:
+
+  - **character balance** — every `{` and `}` in the text;
+  - **line shape** — only a trailing `{` opens, only a line-leading `}` closes.
+
+  **The honest limit, stated rather than hidden.** Character balance is wrong in
+  general for JS: a brace inside a string literal or a comment can be unbalanced.
+  Measured in this region today, the only brace-bearing literals are template
+  interpolations — `` `HEAD:${rel}` `` and the `${REDACTED_SUBDIR}` reason string —
+  and `${…}` is **self-balancing**, so both methods agree (loop `1200..1331`, call
+  at `1333`). The two-method cross-check is what converts that from a standing
+  assumption into a checked one: if someone later adds `'{'` as a literal, the
+  methods diverge and the check **blocks and says so** instead of silently
+  computing the wrong boundary.
+
+  Assert all three inside the test — a precondition that only runs at dispatch does
+  not protect the test from a later refactor.
 
   **Which half catches which mutation family — record this, because the two are not
   interchangeable:**
@@ -501,7 +529,14 @@ open(p, 'w', encoding='utf-8').write(s)
 MUT
 probe_applied=$?
 
-( cd "$WT" && node tests/run.js --test-name-pattern "EP2 retention" "$T" ) >"$OUT" 2>&1
+#     THE COMPLETE SUITE, not one file. This spec's Current-state claim is
+#     repository-wide — "the isolated N2 mutation reddens NOTHING" — and a run
+#     scoped to one file's `EP2 retention` prefix cannot support it. **Decided by
+#     measurement, round 15: the full 1807-test suite runs in a BARE worktree in
+#     46 seconds** (`node tests/run.js`, no `node_modules`, no install). That is
+#     affordable for a dispatch step, so the honest form is the one that ships and
+#     the claim needs no narrowing.
+( cd "$WT" && node tests/run.js ) >"$OUT" 2>&1
 probe_exit=$?
 set -e
 
@@ -514,7 +549,7 @@ test "$probe_exit" = "0" || {
   sed -n '1,40p' "$OUT"
   echo "         Somebody has given N2 a detector. STOP AND REPORT — this WP is"
   echo "         either already done or has changed shape."; exit 1; }
-echo "ok: the isolated N2 mutation still reddens nothing — the gap is real and open"
+echo "ok: the isolated N2 mutation still reddens nothing, ACROSS THE WHOLE SUITE"
 
 #     And the deployed tree is asserted untouched. It should be impossible for it
 #     to have changed; assert it anyway, because "impossible by construction" is
@@ -539,6 +574,21 @@ node tests/run.js --test-name-pattern "EP2 retention" tests/unit/dream-validate.
 #     If your test stays green here, it is asserting a count and calling it timing.
 #     Revert src/ and confirm `git status --short` shows no source file.
 node tests/run.js --test-name-pattern "EP2 retention" tests/unit/dream-validate.test.js
+
+# 3c. AC-3c — the LATE-IN-FINAL-ITERATION mutation. One call, fired once, moved
+#     inside the loop AFTER the trailing path's -U0 — e.g. relocate the comment and
+#     the call together into a last-path guard:
+#         if (i >= scanTokens.length - 2) {
+#           // Retention, once per run and only after a completed redaction.
+#           if (secretRedactions > 0) pruneRedactedOriginals(stateDir, redactedCreated);
+#         }
+#     Expect: the CARDINALITY assertion passes (still one prune read), the SEAM
+#     ORDERING assertion passes (the prune still follows the trailing path's last
+#     git event), and the STRUCTURAL assertion (b3) FAILS — "the prune call is at
+#     line N, INSIDE the scanTokens loop". If your test goes green here, its
+#     structural half is not brace-aware and (b) is decorative.
+node tests/run.js --test-name-pattern "EP2 retention" tests/unit/dream-validate.test.js
+#     Revert src/ and confirm `git status --short` shows no source file.
 
 # 3. AC-4 — apply the N3-only mutation by hand, then the same command.
 #    Expect: the SECOND existing test fails and YOUR test still passes.
@@ -678,7 +728,13 @@ SPLICE
 ## Definition of done
 
 1. All verification steps pass locally; output pasted into the PR body, including
-   both mutation runs and the clean `git status` after each.
+   **all THREE mutation runs** — **AC-3** (the N2-only mutation), **AC-3b** (the
+   timing-only mutation that preserves cardinality) and **AC-3c** (the
+   late-in-final-iteration mutation) — plus **AC-4**'s N3-only control run, and the
+   clean `git status` after each. *Round 15 corrected this item, which said "both
+   mutation runs" while the criteria required three: a count in prose drifted the
+   moment a third criterion was added, which is the same defect class as the
+   registration sentences that stated a number instead of a list.*
 2. Conventional commits; PR titled `test(dream): … (WP-ep2-retention-prune-timing-test)`.
 3. PR template filled, including "Decisions made" (or "none") and `Generated-by:`.
 4. This spec's `status:` flipped to `In-Review` in the same PR.
