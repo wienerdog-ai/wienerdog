@@ -1,9 +1,13 @@
 # ADR-0036: A contract table's `mechanism` cell states its trigger separately from its patch, identifies every seam structurally, and states one mutation per row
 
-Status: Proposed (amends ADR-0031)
+Status: Accepted (amends ADR-0031)
 Date: 2026-07-28
+OWNER-SIGNED 2026-07-28
 
-> **PROPOSED. WRITTEN BY THE ARCHITECT. NOT SIGNED BY THE OWNER. NOT IN FORCE.**
+> **RATIFIED — OWNER-SIGNED 2026-07-28, the line above.** Written by the
+> architect and proposed unsigned earlier the same day; the paragraph below is
+> the pre-ratification record of where the signature was to go, kept as
+> provenance rather than deleted.
 >
 > **Where the owner's signature goes, stated exactly.** On its own line
 > immediately below the `Date:` line above, in the plain form the other ratified
