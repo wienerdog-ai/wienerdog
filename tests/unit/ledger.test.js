@@ -426,7 +426,8 @@ test('ledger: quarantineBannerLine renders the exhausted sentence, names no comm
     line,
     '> [!warning] Wienerdog: 2 session transcript(s) are no longer being dreamed over — the notes made ' +
       'from them were withheld by the secret check too many times in a row: sess-a.jsonl, sess-b.jsonl. ' +
-      'The withheld copies are in state/quarantine/: restore what you meant to keep and delete the rest. ' +
+      'The withheld copies are in state/quarantine/: restore what you meant to keep and delete the rest ' +
+      'of the files there (not the redacted/ folder inside it). ' +
       'The session files themselves are untouched.'
   );
   assert.ok(!line.includes('could not be read'), 'the intake sentence is not emitted for this reason');

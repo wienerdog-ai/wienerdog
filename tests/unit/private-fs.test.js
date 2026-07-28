@@ -106,6 +106,40 @@ test('private-fs: repairPrivateModes fixes a legacy 0755/0644 install and is ide
   });
 });
 
+test('private-fs: a loosened state/quarantine/redacted/ and a file inside it are seen and repaired', { skip: !POSIX }, () => {
+  // The EP2 gate creates this directory 0700 and its files 0600, so the DEFAULT
+  // is right. This module exists for the case the default does not cover —
+  // drift: a permissive umask, a restore from a backup that flattened modes, a
+  // manual chmod -R. Without the A5 entry a world-readable pre-scrub copy of a
+  // credential is invisible to `wienerdog doctor`, to the insecure-modes digest
+  // banner, and to `wienerdog sync`'s repair.
+  withUmask(0o022, () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-privfs-'));
+    const paths = pathsFor(root);
+    const redacted = path.join(paths.state, 'quarantine', 'redacted');
+    fs.mkdirSync(redacted, { recursive: true, mode: 0o700 });
+    for (const d of [paths.core, paths.state, path.join(paths.state, 'quarantine')]) {
+      fs.chmodSync(d, 0o700);
+    }
+    const copy = path.join(redacted, '2026-07-26-note.md');
+    fs.writeFileSync(copy, 'raw\n');
+    fs.chmodSync(redacted, 0o755);
+    fs.chmodSync(copy, 0o644);
+
+    // The exact reproduction that returned [] before this WP.
+    const insecure = insecureEntries(paths);
+    assert.ok(insecure.includes(redacted), `the loosened dir is enumerated: ${insecure.join(', ')}`);
+    assert.ok(insecure.includes(copy), `the loosened file inside it is enumerated: ${insecure.join(', ')}`);
+    assert.ok(scanPrivateModes(paths).insecure >= 2);
+
+    repairPrivateModes(paths);
+    assert.equal(modeOf(redacted), 0o700);
+    assert.equal(modeOf(copy), 0o600);
+    assert.deepEqual(insecureEntries(paths), []);
+    assert.deepEqual(repairPrivateModes(paths), { changed: 0 }, 'idempotent');
+  });
+});
+
 test('private-fs: repairPrivateModes fixes a legacy A9 install — secrets/, tokens, grants/pins, metadata, log dirs (WP-a9)', { skip: !POSIX }, () => {
   withUmask(0o022, () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-privfs-'));
@@ -594,6 +628,11 @@ test('private-fs: the A5-scoped set matches the OWNER-APPROVED membership', () =
     paths.logs,
     path.join(paths.state, 'dream-scratch'),
     path.join(paths.state, 'quarantine'),
+    // The EP2 gate's pre-scrub originals. The A5 membership is "the private
+    // tree, including everywhere the gate can write raw secret bytes", and this
+    // subdirectory is exactly that — so it must not be able to grow without
+    // someone noticing, which is what this assertion is for.
+    path.join(paths.state, 'quarantine', 'redacted'),
   ]);
   assert.ok(!dirs.includes(paths.secrets), 'secrets is A9, not in the A5 constant');
   assert.deepEqual(A5_PRIVATE_FILE_BASENAMES, [

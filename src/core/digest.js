@@ -564,16 +564,19 @@ function renderDigest(vaultDir, layout = defaultLayout(), opts = {}) {
   // output is unchanged (golden-frozen).
   // Staged-output quarantine pending-review banner (EP4 companion, WP-125
   // contract 5, OWNER-APPROVED in the WP-124 walkthrough): STATE-DRIVEN — it
-  // renders while state/quarantine/ is non-empty and clears itself once the
-  // owner empties the directory. Sanitized basenames only (the caller applies
-  // displayName; re-whitelisted here as defense in depth) — the quarantined
-  // files hold raw secrets and their CONTENT is never read or rendered.
+  // renders while a withheld note is listed here and clears itself once none
+  // are left. The `redacted/` subdirectory holds pre-scrub originals of notes
+  // that WERE committed; listSecretQuarantine keeps it out of this list, so the
+  // banner keeps describing withheld notes only. Sanitized basenames only (the
+  // caller applies displayName; re-whitelisted here as defense in depth) —
+  // the quarantined files hold raw secrets and their CONTENT is never read or rendered.
   const quarantined = (Array.isArray(opts.secretQuarantine) ? opts.secretQuarantine : [])
     .map((n) => String(n).replace(/[^A-Za-z0-9._-]/g, '_'));
   const secretQuarantineWarn = quarantined.length > 0
     ? `> [!warning] Wienerdog: ${quarantined.length} dream note(s) were withheld from your vault because they ` +
       `appear to contain a secret — ${quarantined.join(', ')}. Review the copies in state/quarantine/: restore ` +
-      'what you meant to keep, delete the rest; this notice clears when the folder is empty.'
+      'what you meant to keep, delete the rest of the files there (not the redacted/ folder inside it); ' +
+      'this notice clears when no withheld copies are left.'
     : '';
   // Insecure-modes awareness banner (WP-126, OWNER-APPROVED 2026-07-17):
   // state-driven like the quarantine banner above — renders while the
@@ -599,15 +602,18 @@ function renderDigest(vaultDir, layout = defaultLayout(), opts = {}) {
  * DIRECTORY LISTING only — never file contents (they hold raw secrets).
  * Dot-prefixed entries (atomic-write temp files) are excluded. Missing or
  * unreadable dir → []. Sorted for a deterministic banner.
+ * FILES ONLY: the `redacted/` subdirectory holds pre-scrub originals of notes
+ * the gate rewrote and committed, which this withhold banner deliberately does
+ * not announce (they are announced in the dream report instead).
  * @param {string} stateDir
  * @returns {string[]}
  */
 function listSecretQuarantine(stateDir) {
   try {
     return fs
-      .readdirSync(path.join(stateDir, 'quarantine'))
-      .filter((n) => !n.startsWith('.'))
-      .map((n) => n.replace(/[^A-Za-z0-9._-]/g, '_'))
+      .readdirSync(path.join(stateDir, 'quarantine'), { withFileTypes: true })
+      .filter((e) => e.isFile() && !e.name.startsWith('.'))
+      .map((e) => e.name.replace(/[^A-Za-z0-9._-]/g, '_'))
       .sort();
   } catch {
     return [];

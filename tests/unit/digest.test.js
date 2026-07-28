@@ -674,6 +674,44 @@ test('listSecretQuarantine: lists sanitized basenames; missing dir → []', () =
   assert.deepEqual(listSecretQuarantine(stateDir), ['2026-07-17-leak.md'], 'dotfiles/tmp excluded, content never read');
 });
 
+test('listSecretQuarantine: the redacted/ SUBDIRECTORY never enters the withhold banner', () => {
+  const { listSecretQuarantine } = require('../../src/core/digest');
+  const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-digest-state-'));
+  const qdir = path.join(stateDir, 'quarantine');
+  const redacted = path.join(qdir, 'redacted');
+  fs.mkdirSync(redacted, { recursive: true });
+  fs.writeFileSync(path.join(redacted, '2026-07-26-tooling.md'), 'the pre-scrub original');
+  // A directory in state/quarantine/ is not a withheld note: the note it belongs
+  // to WAS committed (scrubbed), and the banner describes withheld notes only.
+  assert.deepEqual(listSecretQuarantine(stateDir), []);
+  fs.writeFileSync(path.join(qdir, '2026-07-26-leak.md'), 'raw secret bytes');
+  assert.deepEqual(listSecretQuarantine(stateDir), ['2026-07-26-leak.md'], 'files only, never the subdirectory');
+});
+
+test('secretQuarantine: the banner sentence no longer tells the user to delete the redacted/ folder', () => {
+  const digest = renderDigest(FIXTURE, undefined, {
+    identityApprovals: approvals(FIXTURE),
+    secretQuarantine: ['2026-07-17-leak.md'],
+    profile: BLOCKED,
+  });
+  const banner = digest.split('\n\n').find((s) => s.includes('were withheld from your vault'));
+  // Pinned as a full-string equality — nothing in the suite asserted this
+  // sentence text before, and both halves of its old closing sentence became
+  // false the moment the redact arm started writing into that folder: "delete
+  // the rest" would destroy the pre-scrub originals, and "empty" is a state the
+  // user can no longer reach.
+  assert.equal(
+    banner,
+    '> [!warning] Wienerdog: 1 dream note(s) were withheld from your vault because they appear to '
+      + 'contain a secret — 2026-07-17-leak.md. Review the copies in state/quarantine/: restore what '
+      + 'you meant to keep, delete the rest of the files there (not the redacted/ folder inside it); '
+      + 'this notice clears when no withheld copies are left.'
+  );
+  // Byte-identical to the exhausted-transcript banner's parenthetical: two
+  // banners about the same folder must not warn about it two different ways.
+  assert.ok(banner.includes('(not the redacted/ folder inside it)'));
+});
+
 // ── A3 hash-gate TOCTOU + accurate banner reason (WP-identity-digest-hashgate-toctou) ──
 
 test('TOCTOU closed: each identity file is read exactly once per render (hash+parse share one read)', () => {
