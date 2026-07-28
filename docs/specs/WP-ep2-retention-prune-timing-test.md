@@ -714,8 +714,32 @@ assert_run() {
   rc=$?
   set -e
 
+  # DIRECTIVES ARE EXCLUDED ON BOTH SIDES. A `# SKIP` or `# TODO` line is not a
+  # pass and it is not a failure either — it is a test that did not report. The
+  # inbox lesson from #115 round 4 states the pair: EXCLUDE DIRECTIVES **and**
+  # ENFORCE THE RUNNER'S EXIT STATUS. This assertor applied the first to `ok_line`
+  # only, and never applied the second at all — the repo's own flagship lesson,
+  # half-applied, in the gate written to embody it.
+  # *Measured before changing it: the `$` anchor ALREADY excludes a directive'd
+  # line from `bad_line`, because `not ok 2 - T # TODO` does not match
+  # `^not ok [0-9]+ - T$`. So the added exclusion is defence in depth against a
+  # future edit that loosens the anchor, NOT the closing of a live hole. Recorded
+  # that way rather than claimed as a fix — over-claiming a hazard is not the safe
+  # kind of error either.*
   ok_line()  { grep -E "^ok [0-9]+ - $1\$" "$TAPOUT" | grep -vE '# (SKIP|TODO)' | head -1; }
-  bad_line() { grep -E "^not ok [0-9]+ - $1\$" "$TAPOUT" | head -1; }
+  bad_line() { grep -E "^not ok [0-9]+ - $1\$" "$TAPOUT" | grep -vE '# (SKIP|TODO)' | head -1; }
+
+  # (a0) THE RUNNER'S EXIT STATUS, enforced — the half of #115's lesson that was
+  #      missing here. A per-test line is not enough on its own: a reporter that
+  #      dies mid-stream, or a harness that never reached the suite, can leave a
+  #      plausible-looking TAP file behind.
+  if [ "$want" = "red" ] && [ "$rc" = "0" ]; then
+    echo "FAIL $label: the runner exited 0. Whatever the TAP file says, the suite"
+    echo "     did not fail — never certify an expected-red gate on parsed text"
+    echo "     when the process disagrees."; exit 1; fi
+  if [ "$want" = "green" ] && [ "$rc" != "0" ]; then
+    echo "FAIL $label: the runner exited $rc on a run this control expects to be"
+    echo "     GREEN. Something failed even if your test did not."; exit 1; fi
 
   # (a) the NEW test is in the run at all, and has the disposition we expect.
   if [ -z "$(ok_line "$(esc "$NEWTEST")")$(bad_line "$(esc "$NEWTEST")")" ]; then
@@ -745,6 +769,7 @@ TITLES
 }
 esc() { printf '%s' "$1" | sed 's/[.[\*^$()+?{|]/\\&/g'; }
 TAPOUT=$(mktemp -t taprun)
+TAP_AC3=$(mktemp -t tapac3)   # AC-3's artifact, preserved before TAPOUT is reused
 NEWTEST='<the exact title of the test you added>'
 : "${NEWTEST:?set NEWTEST to your new test's exact title}"
 case "$NEWTEST" in *'<the exact'*) echo "FAIL: NEWTEST is still the placeholder"; exit 1;; esac
@@ -759,6 +784,23 @@ node tests/run.js --test-name-pattern "EP2 retention" tests/unit/dream-validate.
 
 # 2. AC-3 — apply the N2-only mutation by hand, then:
 assert_run red "AC-3"   # asserts WHICH test failed, not merely that one did
+#     PRESERVE THIS RUN'S TAP ARTIFACT AND DERIVE THE COUNTS FROM IT. `$TAPOUT`
+#     is overwritten by AC-3b, AC-3c and AC-4, so the artifact the documentation
+#     rows must quote has to be copied out HERE, at the only moment it exists —
+#     and the counts are then DERIVED from it rather than transcribed. Same
+#     derive-don't-transcribe move this batch made for the census coverage claim,
+#     applied to the one figure a human was still typing by hand.
+cp "$TAPOUT" "$TAP_AC3"
+ac3_pass=$(awk '/^# pass /{print $3}' "$TAP_AC3" | head -1)
+ac3_fail=$(awk '/^# fail /{print $3}' "$TAP_AC3" | head -1)
+test -n "$ac3_pass" && test -n "$ac3_fail" || {
+  echo "FAIL AC-3: could not read the pass/fail summary from the preserved TAP"
+  echo "     artifact. Do not hand-enter the counts — fix the capture."; exit 1; }
+test "$ac3_fail" -ge 1 || {
+  echo "FAIL AC-3: the preserved artifact reports fail $ac3_fail. An executed row"
+  echo "     needs a POSITIVE failure count; V-30 rejects anything else."; exit 1; }
+COUNTS="pass $ac3_pass, fail $ac3_fail"
+echo "ok AC-3: counts DERIVED from the preserved artifact — $COUNTS"
 #    Expect: the new test FAILS and the other five still pass. Revert src/ and
 #    confirm `git status --short` shows no source file.
 
@@ -809,17 +851,24 @@ npm run lint
 #    separately. Set TITLE to the exact title of the test you added.
 SPEC=docs/specs/done/WP-secret-fence-ep2-redact-arm.md
 TITLE='<the exact title of your new test>'
-COUNTS='<the exact pass/fail counts your AC-3 run printed, e.g. "pass 5, fail 1">'
-# GUARD BOTH, AND GUARD THEM LOUDLY. `COUNTS` was referenced by 5c and never
+#     COUNTS IS NOT SET HERE ANY MORE. It is DERIVED in step 2 from AC-3's
+#     preserved TAP artifact, so the figure the documentation rows carry is the
+#     one the run actually produced. Assert the derivation happened rather than
+#     re-typing it: a hand-entered count was the last transcription left in this
+#     spec, and round 21 removed it.
+: "${COUNTS:?COUNTS was not derived — run step 2 (AC-3) first; never hand-enter it}"
+echo "$COUNTS" | grep -qE '^pass [0-9]+, fail [1-9][0-9]*$' || {
+  echo "FAIL: COUNTS is '$COUNTS', not the derived 'pass N, fail M' form."; exit 1; }
+test -s "$TAP_AC3" || { echo "FAIL: AC-3's preserved TAP artifact is missing."; exit 1; }
+echo "ok 5: COUNTS = $COUNTS, derived from AC-3's preserved artifact"
+# GUARD TITLE LOUDLY. `COUNTS` was referenced by 5c and never
 # assigned at all until round 9 — and an unset or empty COUNTS turns
 # `grep -qF "$COUNTS"` into an EMPTY-PATTERN match, which matches every line, so
 # the assertion passes on any tree in silence. That is a worse polarity than a
 # false red: this repo's logbook records an unbound `$ADR` producing five false
 # REDs, which at least announced itself. A silent green does not.
 : "${TITLE:?set TITLE to the exact title of the test you added}"
-: "${COUNTS:?set COUNTS to the exact pass/fail counts your AC-3 run printed}"
-case "$TITLE"  in *'<the exact'*) echo "FAIL: TITLE is still the placeholder";  exit 1;; esac
-case "$COUNTS" in *'<the exact'*) echo "FAIL: COUNTS is still the placeholder"; exit 1;; esac
+case "$TITLE" in *'<the exact'*) echo "FAIL: TITLE is still the placeholder"; exit 1;; esac
 
 # 5a. the MUTATION row: the one line beginning with the M-48 cell in the
 #     "Mutation checks" table (the LAST of the two M-48 lines in the file).
