@@ -364,7 +364,7 @@ one new Proposed ADR, one test file extended. **M** — one session.
 | modify | docs/adr/README.md | **D0b** — the ADR index row for 0037. Written already by the architect alongside the ADR; the implementer does not touch it. Listed because it **is** in this branch's diff, and a Deliverables table that omits a changed file is exactly the boundary-gate failure this row fixes. |
 | modify | src/scheduler/generators.js | **D0** — add **four** names to `module.exports`, and add **two** new pure parsers (`launchdLoadedCalendar`, `launchdLoadedEnv` — D1b). Existing names exported unchanged:: `launchdLoadedArgs` (`:679-689`, used internally at `:787`) and `jobLaunchArgs` (`:208`, used internally at `:355`); the two new parsers are exported with them. Structural, not an API promise — the WP-114 precedent for `repairCatchup`. Audited, not assumed (see "Export audit" in Implementation notes): `catchupLaunchArgs` (`:1030`) and `loadedEntryTargets` (`:1007`) are **already** exported and need no change. |
 | modify | src/cli/schedule.js | **D1, D2, D3, D4 and D5** — the complete set, reconciled against the Implementation notes and the ACs: **D1** `darwinLoadedVerdict` + `ensureDarwinEntryRegistered` (new, non-exported, incl. the `plutil` preflight, the tri-state verdict, `verifyLoaded` and the rollback); **D2** the darwin per-job arm (`:429-431`, Table A row 1); **D3** `ensureCatchup` (`:314-317`, row 2); **D4** the linux arm (`:456-466`, row 3); **D5** `add()`'s guard at `:882` — drop the `changed &&` conjunct so it throws on ANY unloaded outcome (**required by AC11**; a cell that stopped at D4 would leave the user-facing false-success shipped). Nothing beyond those five — no probe, no heal, no notice string, no Windows path, and **`darwinReplaceEntry` itself is not edited** (it stays the heal path's primitive). |
-| modify | tests/unit/scheduler-schedule.test.js | **T1, T2, T2b, T2c, T2d, T2e, T2f, T3, T4, T5, T6, T7** — the complete Test index, enumerated rather than range-abbreviated because `T3-T7` silently excluded T2c/T2d/T2e (the `plutil` preflight, its existence gate, and the post-bootstrap verify). Plus the **four** existing assertions enumerated in AC6 — no others. |
+| modify | tests/unit/scheduler-schedule.test.js | **T1, T2, T2b, T2c, T2d, T2e, T2f, T2g, T3, T4, T5, T6, T7** — the complete Test index, enumerated rather than range-abbreviated because `T3-T7` silently excluded T2c/T2d/T2e (the `plutil` preflight, its existence gate, and the post-bootstrap verify). Plus the **four** existing assertions enumerated in AC6 — no others. |
 
 Not deliverables, deliberately: `src/scheduler/status.js`,
 `src/scheduler/launcher.js`, `src/cli/sync.js` (§10), `src/cli/doctor.js`,
@@ -416,7 +416,11 @@ function darwinLoadedVerdict(stdout, expect)
  * @param {number} uid @param {string} label @param {string} plistPath
  * @param {{changed:boolean, expect:{argv:string[],hour:number|null,minute:number,env:Array<[string,string]>,
  *          path:string,stdoutPath:string,stderrPath:string,spawnType:string},
- *          priorBytes:Buffer|null, onBeforeTeardown:()=>void}} o
+ *          priorBytes:Buffer|null, canonicalBytes:Buffer, onBeforeTeardown:()=>void}} o
+ *   `canonicalBytes` is the rendered plist this invocation wrote — the SAME value
+ *   handed to `ensureEntry`. It is REQUIRED: the staleness guard reads it, and a
+ *   missing binding is a ReferenceError on the post-teardown failure path, i.e. a
+ *   crash with the schedule already removed.
  * @returns {boolean} true only when launchd verifiably holds this entry
  */
 function ensureDarwinEntryRegistered(loader, uid, label, plistPath, o)
@@ -463,14 +467,14 @@ function ensureDarwinEntryRegistered(loader, uid, label, plistPath, o)
   if (loader(['launchctl', 'bootstrap', `gui/${uid}`, plistPath]).status === 0) return verifyLoaded();
   // (d) ROLLBACK — the replacement is unbootstrappable; restore the prior
   //     registration so no destruction window ships. Never returns true.
-  //     COMPARE-AND-SWAP: restore ONLY if the file still holds the bytes THIS
-  //     invocation wrote. If another invocation has written since, its bytes are
-  //     newer than ours and overwriting them would destroy a registration we
-  //     never inspected.
+  //     BEST-EFFORT STALENESS CHECK (not atomic — see the residual): restore ONLY
+  //     if the file still holds the bytes THIS invocation wrote. If another
+  //     invocation has written since, its bytes are newer than ours and
+  //     overwriting them would destroy a registration we never inspected.
   if (o.priorBytes !== null) {
     let current = null;
     try { current = fs.readFileSync(plistPath); } catch { current = null; }
-    if (current !== null && current.equals(canonicalBytes)) {
+    if (current !== null && current.equals(o.canonicalBytes)) {
       try { fs.writeFileSync(plistPath, o.priorBytes); } catch { return false; }
       loader(['launchctl', 'bootstrap', `gui/${uid}`, plistPath]);
     }
@@ -728,7 +732,8 @@ branch (the recurring failure mode in this chain — see the gate-3 row).
 | the catch-up `Hour` expectation becomes a wildcard | treat `expect.hour === null` as matching any loaded `Hour` | **T3 case (xii)** — a catch-up record carrying `"Hour" => 0` must REFUSE |
 | the catch-up shape loses its skip | expect `hour: 0` for catch-up instead of `hour: null` | **T3 case (xi)** — the healthy catch-up record would be attempted, not skipped |
 | the env parser drops valueless lines | skip `KEY =>` lines with nothing after the arrow | **T3 case (xiii)** — a record missing the whole ambient scrub would be skipped |
-| **the rollback restore is unconditional** — the CX14-2 race defect | delete the compare-and-swap guard, restoring `priorBytes` without re-reading the file | **T2f** — write A, a concurrent write of B, then a teardown: the rollback must NOT restore A over B |
+| **`canonicalBytes` is unbound** — the CX15-1 crash | remove `canonicalBytes` from the options passed at either call site | **T2f/T2g** — the rollback path throws `ReferenceError` **after** the `bootout`, i.e. the CLI dies with the schedule already removed. Any rollback fixture reaching the guard must assert the call **does not throw** |
+| **the rollback restore is unconditional** — the CX14-2 race defect | delete the staleness guard, restoring `priorBytes` without re-reading the file | **T2f** — write A, a concurrent write of B, then a teardown: the rollback must NOT restore A over B |
 | rollback does not restore the prior plist | delete the `fs.writeFileSync(plistPath, o.priorBytes)` line from step (d) | T2b |
 | rollback restores the file but not the record | delete the trailing `bootstrap` from step (d) | T2b |
 | rollback reports the failed replacement as success | make step (d) `return true` after a successful restore-bootstrap | T2b |
@@ -1000,6 +1005,7 @@ scope and whose ADR-0018 reasoning still applies unchanged there.
     const loaded = ensureDarwinEntryRegistered(loader, uid, label, plistPath, {
       changed,
       priorBytes,
+      canonicalBytes: Buffer.from(content),   // the same bytes handed to ensureEntry
       expect: {
         argv: [node, ...gen.jobLaunchArgs({ launcher: b.launcher, name: o.name, descriptor: b.descriptor, expectDigest: b.expectDigest })],
         hour: o.hour, minute: o.minute,
@@ -1044,6 +1050,13 @@ expect: {
   stderrPath: path.join(logDir, 'launchd.err.log'),
   spawnType: 'background',
 }
+```
+
+and, alongside `priorBytes`, **`canonicalBytes: Buffer.from(content)`** — the same
+`content` handed to `ensureEntry` a few lines above. Both call sites must pass it;
+it is not optional (see the JSDoc).
+
+```js
 ```
 
 Return `{ loaded: … }` as today.
@@ -1160,7 +1173,10 @@ Four contract properties, all binding:
    no artifact of that record exists on disk — this spec's own
    "disk is not evidence" premise, applied to its own rollback.
 
-   **The restore is a COMPARE-AND-SWAP, not an unconditional write (CX14-2).**
+   **The restore is guarded by a BEST-EFFORT STALENESS CHECK, not an unconditional
+   write (CX14-2) — and deliberately not called a compare-and-swap (CX15-2).**
+   "Compare-and-swap" names an *atomic* primitive; this is a plain read followed by
+   a write, and calling it CAS would overclaim exactly the property it lacks.
    Declaring registration single-invocation does not *enforce* it, and two attended
    CLIs can overlap. Before restoring, re-read `plistPath` and restore **only if it
    still equals the canonical bytes this invocation wrote**. If they differ, another
@@ -1169,7 +1185,44 @@ Four contract properties, all binding:
    `loaded: false`, and fire §8's notice. No lock is introduced; serialization
    stays routed as `WP-scheduler-register-serialization`.
 
-   **What the CAS does NOT close, traced rather than glossed.** It removes the
+   **The guard's own residual, stated exactly — it is not atomic and cannot be
+   made so here.** Two windows survive, both bounded by the single-invocation
+   precondition:
+   1. **Read-then-write.** A concurrent write landing *between* the guard's read
+      and our restore write is still overwritten. Cost: that invocation's file is
+      replaced by `priorBytes`; its own post-bootstrap verify then fails, it
+      reports `loaded:false` with the notice, and the next attended register
+      converges it. Loud, never silent.
+   2. **Identical bytes.** A concurrent writer producing bytes *equal* to our
+      canonical is undetectable by a byte comparison — but it is also, by
+      definition, writing the same registration we would, so overwriting it with
+      `priorBytes` costs only the same loud non-convergence as case 1, never a
+      different registration.
+
+   **There is no lock-free fixed point for this**, and chasing one would be
+   inventing the serialization that is already declared out of scope. Closure path:
+   the **single-invocation precondition** plus **`WP-scheduler-register-serialization`**,
+   which owns atomicity. The guard's value proposition is unchanged and modest: at
+   four lines it removes the *likely* destructive interleaving; the remainder is
+   named, bounded, preconditioned and routed.
+
+   **ADR-0037 needs no new text for this — checked, not assumed.** Its precondition
+   already reads: *"Two concurrent registrations racing the same scheduler entry are
+   outside this decision: the OS loads whatever is on disk when it is asked, so a
+   concurrent writer can invalidate any readback taken moments earlier."* Both
+   windows above are instances of exactly that sentence, so the ADR is not grown.
+
+   **Fixtures for the two windows: NOT written here, and recorded as the routed
+   WP's acceptance criteria instead.** Both require observing a write that lands
+   inside a specific instruction interval of another process; a unit test can only
+   fake that with scaffolding that proves the scaffolding, not the code. Writing
+   them would violate this spec's own no-unexecutable-evidence rule — the same rule
+   that denied Linux a verified skip and Windows a trigger readback. They belong to
+   `WP-scheduler-register-serialization`, whose mechanism can actually make them
+   deterministic. T2f (the *observable* interleaving — a concurrent write already
+   present when the guard reads) stays here, because it is honestly executable.
+
+   **What the guard does NOT close beyond its own windows, traced rather than glossed.** It removes the
    destructive half of the race — we can no longer overwrite a newer file. It does
    **not** undo the `bootout`: the losing invocation may already have removed the
    loaded entry, so the winner's newly written plist can be left on disk with no
@@ -1439,9 +1492,14 @@ mock `process.platform` — and no test may touch a real OS scheduler
       **bound**, not a recovery: it is the case where rollback provably cannot
       restore the destroyed record;
       (g) the restore's `bootstrap` itself fails ⇒ still `loaded: false`, no throw;
+      (g1) **the binding fixture (T2g, CX15-1)** — any fixture that reaches the
+      staleness guard must assert the helper call **does not throw**. The guard
+      reads `o.canonicalBytes`, and an unbound reference raises `ReferenceError`
+      **after** the `bootout` has already removed the schedule — the worst possible
+      moment. Assert a normal `loaded: false` return, not an exception;
       (g2) **the interleaved fixture (T2f, CX14-2)** — this invocation writes its
       canonical bytes, a concurrent invocation then writes different bytes to the
-      same path, and the teardown proceeds. Assert the compare-and-swap **declines**
+      same path, and the teardown proceeds. Assert the staleness guard **declines**
       to restore (the file still holds the concurrent bytes, byte for byte), no
       restoring `bootstrap` is issued, the result is `loaded: false`, and §8's
       notice fires;
@@ -1624,7 +1682,8 @@ mock `process.platform` — and no test may touch a real OS scheduler
 | T2b | tests/unit/scheduler-schedule.test.js | the rollback set — restore file + re-bootstrap prior argv + `loaded:false` + notice + the `priorBytes === null` bound (AC2) |
 | T2c | tests/unit/scheduler-schedule.test.js | the `plutil` preflight — rejects (no `bootout`, absolute argv) and passes (AC2 h, j) |
 | T2d | tests/unit/scheduler-schedule.test.js | `existsSync(PLUTIL)` false ⇒ no `plutil` argv issued, register proceeds (AC2 i) |
-| T2f | tests/unit/scheduler-schedule.test.js | the interleaved-write fixture — the rollback's compare-and-swap declines to overwrite a concurrent invocation's newer bytes (AC2 g2) |
+| T2f | tests/unit/scheduler-schedule.test.js | the interleaved-write fixture — the rollback's staleness guard declines to overwrite a concurrent invocation's newer bytes (AC2 g2) |
+| T2g | tests/unit/scheduler-schedule.test.js | the binding fixture — a rollback reaching the staleness guard must NOT throw (`o.canonicalBytes` is bound at both call sites); asserts a normal `loaded:false` (AC2 g1) |
 | T2e | tests/unit/scheduler-schedule.test.js | **the post-bootstrap verify on the ABSENT-label path (CX9-1)** — bootstrap succeeds, trailing `print` mismatched or unparseable ⇒ `loaded:false`, no `bootout`; and the matching case ⇒ `loaded:true` (AC2 k, l) |
 | T4 | tests/unit/scheduler-schedule.test.js | catch-up through the same helper (AC4) |
 | T5 | tests/unit/scheduler-schedule.test.js | linux degraded reload ⇒ `loaded:false` + notice; null/missing results (AC5 i) |
