@@ -6566,8 +6566,22 @@ for (const [k, s] of SCHEMA) {
     const partnerCells = lines[partnerLn - 1].split("|").slice(1, -1);
     const mustFail = norm(partnerCells[2] || "");
     if (!mustFail) fail("the paired mutation row for " + JSON.stringify(id) + " (line " + partnerLn + ") has no Must-fail cell to compare against.");
-    if (!mustFail.includes(target))
-      fail("census row " + JSON.stringify(id) + " (line " + ln + ") names the target " + JSON.stringify(target.slice(0, 60)) + ", which does NOT occur in its paired mutation row's MUST-FAIL cell (line " + partnerLn + "). An executed row must state the verdict for the target its own row says the mutation reddens — naming anything else is how an uncaught mutation gets recorded as caught.");
+    // ROUND 20, TERMINAL FORM: EXACT MEMBERSHIP against the Must-fail cell's
+    // TITLE SPANS, not a substring of the cell. A substring test accepted any
+    // ≥12-character run of incidental prose — "the only case asserting" passed.
+    //
+    // WHICH DELIMITER, MEASURED RATHER THAN ASSUMED: the round-20 finding proposed
+    // parsing BACKTICKED spans. Measured on the live rows, backticks in these
+    // cells carry CODE — `mtimeMs`, `src/core/dream/validate.js`,
+    // `&& !created.has(e.name)` — while the test titles are ITALIC-QUOTED,
+    // *"a run NEVER evicts its own copies…"*. Parsing backticks would have
+    // extracted code fragments and failed every real row. Titles are parsed from
+    // the italic-quoted spans, which is where they actually live.
+    const titleSpans = [...(partnerCells[2] || "").matchAll(/\*"([^"]+)"\*/g)].map((x) => norm(x[1]));
+    if (titleSpans.length === 0)
+      fail("the paired mutation row for " + JSON.stringify(id) + " (line " + partnerLn + ") names no test in its Must-fail cell. A row whose census entry claims an executed verdict must say, in that cell, WHICH test the mutation reddens — as an italic-quoted title.");
+    if (!titleSpans.includes(target))
+      fail("census row " + JSON.stringify(id) + " (line " + ln + ") names the target " + JSON.stringify(target.slice(0, 60)) + ", which is not one of the tests its paired mutation row names (line " + partnerLn + "): " + JSON.stringify(titleSpans.map((t) => t.slice(0, 40))) + ". EXACT membership is required — a substring of the cell's prose is not a test name.");
   }
 
   const onlyA = [...a.keys()].filter((x) => !b.has(x));

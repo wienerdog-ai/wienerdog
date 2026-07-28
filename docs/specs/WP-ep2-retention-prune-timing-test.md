@@ -903,11 +903,20 @@ mkdir -p /tmp/second-direction
 #     POSITIVE failure count AND a named reddened target; a fixture with counts but
 #     no `RED` passes step 5 and then fails step 6, which is the contradiction the
 #     round-13 review found in an earlier draft of this spec.
+#     BOTH ROWS ARE IN THE FORM V-30 REQUIRES, AND THAT COUPLING IS THE POINT:
+#     the census row must OPEN with the canonical verdict clause
+#     `**RED:** \`<target>\` — \`<counts>\``, and the mutation row's MUST-FAIL cell
+#     must name that same target as an ITALIC-QUOTED title, because V-30 compares
+#     the two by exact membership. *Round 20 rewrote both: the round-13 fixture
+#     opened "Closed by the new test…", which round 18's predicate rejects — so an
+#     implementer following AC-6 and this fixture exactly could not complete the
+#     WP. That is cross-FILE lag: the predicate moved in the ep2 spec and the
+#     fixture that must satisfy it lives here.*
 cat > /tmp/second-direction/census-row.txt <<'ROW'
-| **M-48** | **executed** | Closed by the new test. `<TITLE>` goes **RED** under the isolated N2-only mutation, `<COUNTS>`. This row recorded an undetected gap until this WP landed |
+| **M-48** | **executed** | **RED:** `<TITLE>` — `<COUNTS>` — *narration follows the verdict:* closed by the new test; this row recorded an executed no-detector gap until this WP landed |
 ROW
 cat > /tmp/second-direction/mutation-row.txt <<'ROW'
-| **M-48** | **prune per call instead of per run** — the call moved into the B4 loop, accumulated set unchanged. Violates **Table N row N2** and nothing else | **`<TITLE>`**, which goes **RED** under it — `<COUNTS>`. *This row recorded an executed no-detector gap until this WP closed it* |
+| **M-48** | **prune per call instead of per run** — the call moved into the B4 loop, accumulated set unchanged. Violates **Table N row N2** and nothing else | *"<TITLE>"* — which goes **RED** under it, `<COUNTS>`, executed at implementation time. *This row recorded an executed no-detector gap until this WP closed it* |
 ROW
 #     Substitute your real TITLE/COUNTS into both, then re-run 5c/5d/5e against
 #     these two files instead of the extracted ones. EXPECT: every assertion ok.
@@ -930,8 +939,21 @@ s[idx[0]] = cen      # the census row comes first in the file
 s[idx[1]] = mut
 open('/tmp/second-direction/postwork.md', 'w', encoding='utf-8').write('\n'.join(s))
 SPLICE
-#     …then extract the V-30 block from the ep2 spec exactly as step 6 does and run
-#     it against /tmp/second-direction/postwork.md. EXPECT exit 0.
+#     …then extract the V-30 block and run it against the spliced copy. THE
+#     COMMAND IS PINNED HERE rather than described, because "extract it the way
+#     step 6 does" is the kind of instruction that drifts:
+v30_lo=$(grep -n 'V30_JS="\$(mktemp)"' "$SPEC" | cut -d: -f1)
+v30_hi=$(grep -n '^REGEOF$' "$SPEC" | head -1 | cut -d: -f1)
+test -n "$v30_lo" && test -n "$v30_hi" || {
+  echo "FAIL: could not locate the V-30 block in $SPEC"; exit 1; }
+sed -n "$((v30_lo + 2)),$((v30_hi - 1))p" "$SPEC" > /tmp/second-direction/v30.js
+node /tmp/second-direction/v30.js /tmp/second-direction/postwork.md || {
+  echo "FAIL: V-30 rejects the post-work fixture. Your two rows do not satisfy the"
+  echo "      gate that step 6 will run against the real file — fix the ROWS, and"
+  echo "      if the gate itself is wrong say so in the PR under Decisions made."
+  exit 1; }
+echo "ok 5g: V-30 accepts the constructed post-work rows"
+#     EXPECT exit 0.
 #     If any of 5c–5g fails, the STEP or the FIXTURE is wrong and not your work —
 #     fix it and say so in the PR under "Decisions made".
 
