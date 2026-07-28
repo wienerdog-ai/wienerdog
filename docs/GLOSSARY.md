@@ -74,7 +74,13 @@ Canonical names. Use these exact terms in code, docs, specs, and prompts — nev
   persistence points in the dream lifecycle: transcript input, the brain's
   staged output, the durable log/alert/email path, and each digest section
   (ADR-0024). Returns sanitized text plus metadata-only findings (`{label,
-  severity, count}`) — a finding never stores the matched secret bytes. Two
+  severity, count}`) — a finding never stores the matched secret bytes. The
+  labelled format rules all emit `quarantine` severity. Behind them sits a
+  two-tier entropy pass: a long enough run drawn from the narrow alphabet, at
+  or above the entropy floor, is `redact` and needs no context at all; the same
+  run widened to include `/` is `quarantine` only when a sensitive keyword
+  binds to it through a separator on the same line. Both tiers write the same
+  `[REDACTED:high-entropy]` token. Two
   severities, `redact` and `quarantine`, but the *persistence* gates (staged
   output, digest section) withhold on **any** finding of either severity; the
   input and log/alert paths use `redactOnly` (inline redaction of every

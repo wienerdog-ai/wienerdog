@@ -22,6 +22,7 @@ const ScanLimits = {
   SCAN_MAX_BYTES: 256 * 1024, // a text longer than this is NOT regex-scanned
   ENTROPY_MIN_LEN: 24, // a contextual high-entropy candidate must be at least this long
   ENTROPY_MIN_BITS_PER_CHAR: 3.5, // Shannon bits/char over the candidate to count as high-entropy
+  ENTROPY_CTX_FILLER_MAX: 20, // chars a sensitive keyword may sit before the separator it binds through
 };
 
 /** @typedef {'redact'|'quarantine'} Severity
@@ -52,19 +53,10 @@ const SPECIFIC_KEY_LABELS = new Set([
   'access_token',
 ]);
 
-// AWS *secret* material has no safe partial redaction context → hard finding.
-const QUARANTINE_KEYS = new Set(['aws_secret_access_key', 'aws_session_token']);
-
 /** @param {string} key matched sensitive key @returns {string} finding label */
 function labelForKey(key) {
   const normalized = key.toLowerCase().replace(/-/g, '_');
   return SPECIFIC_KEY_LABELS.has(normalized) ? normalized : 'generic-secret';
-}
-
-/** @param {string} key matched sensitive key @returns {Severity} */
-function severityForKey(key) {
-  const normalized = key.toLowerCase().replace(/-/g, '_');
-  return QUARANTINE_KEYS.has(normalized) ? SEVERITY.QUARANTINE : SEVERITY.REDACT;
 }
 
 /**
@@ -93,22 +85,22 @@ const RULES = [
   ),
   // No leading \b anywhere below: a token glued to a preceding word character
   // must still match (the audit's explicit bypass case).
-  simpleRule(/sk-ant-[A-Za-z0-9\-_]{20,}/g, 'anthropic-key', SEVERITY.REDACT),
-  simpleRule(/sk-proj-[A-Za-z0-9_]{16,}/g, 'openai-key', SEVERITY.REDACT),
-  simpleRule(/sk-[A-Za-z0-9_]{20,}/g, 'openai-key', SEVERITY.REDACT),
-  simpleRule(/AKIA[0-9A-Z]{12,}/g, 'aws-key', SEVERITY.REDACT),
-  simpleRule(/gh[pousr]_[A-Za-z0-9]{36,}/g, 'github-token', SEVERITY.REDACT),
-  simpleRule(/xox[baprs]-[A-Za-z0-9-]{10,}/g, 'slack-token', SEVERITY.REDACT),
-  simpleRule(/ya29\.[A-Za-z0-9\-_]+/g, 'google-oauth', SEVERITY.REDACT),
+  simpleRule(/sk-ant-[A-Za-z0-9\-_]{20,}/g, 'anthropic-key', SEVERITY.QUARANTINE),
+  simpleRule(/sk-proj-[A-Za-z0-9_]{16,}/g, 'openai-key', SEVERITY.QUARANTINE),
+  simpleRule(/sk-[A-Za-z0-9_]{20,}/g, 'openai-key', SEVERITY.QUARANTINE),
+  simpleRule(/AKIA[0-9A-Z]{12,}/g, 'aws-key', SEVERITY.QUARANTINE),
+  simpleRule(/gh[pousr]_[A-Za-z0-9]{36,}/g, 'github-token', SEVERITY.QUARANTINE),
+  simpleRule(/xox[baprs]-[A-Za-z0-9-]{10,}/g, 'slack-token', SEVERITY.QUARANTINE),
+  simpleRule(/ya29\.[A-Za-z0-9\-_]+/g, 'google-oauth', SEVERITY.QUARANTINE),
   simpleRule(
     /eyJ[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}/g,
     'jwt',
-    SEVERITY.REDACT,
+    SEVERITY.QUARANTINE,
   ),
   // HTTP auth headers: "Authorization: Bearer <token>" (space-separated form)
   (text, add) =>
     text.replace(/\b(bearer)\s+[A-Za-z0-9_\-.~+/]{12,}=*/gi, (_m, kw) => {
-      add('bearer-token', SEVERITY.REDACT);
+      add('bearer-token', SEVERITY.QUARANTINE);
       return `${kw} [REDACTED:bearer-token]`;
     }),
   // Legacy sensitive key=value / key: value assignments (keeps key, redacts value)
@@ -116,11 +108,22 @@ const RULES = [
     text.replace(
       /\b(api[_-]?key|secret|token|password|passwd|bearer)(["']?\s*[:=]\s*["']?)[A-Za-z0-9_\-]{12,}/gi,
       (_m, key, sep) => {
-        add('generic-secret', SEVERITY.REDACT);
+        add('generic-secret', SEVERITY.QUARANTINE);
         return `${key}${sep}[REDACTED:generic-secret]`;
       },
     ),
   // --- A5 additive coverage (runs only on what the legacy pass left) ---
+  // Table A row A16: "Authorization: Basic <base64>" — the one published
+  // credential class the two-tier entropy pass would otherwise stop catching at
+  // all (the word `Basic` sits between the separator and the candidate, so no
+  // context binds, and a standard-base64 body fragments on its slashes). FIRST
+  // rule of the A5 additive block, so the legacy pipeline above stays
+  // byte-compatible for every input it already covered.
+  (text, add) =>
+    text.replace(/\b(authorization:[ \t]*basic)[ \t]+[A-Za-z0-9+/]{8,}={0,2}/gi, (_m, kw) => {
+      add('basic-auth', SEVERITY.QUARANTINE);
+      return `${kw} [REDACTED:basic-auth]`;
+    }),
   // Structured JSON string values under a sensitive key: "client_secret":"…"
   (text, add) =>
     text.replace(
@@ -128,7 +131,7 @@ const RULES = [
       (match, key, sep, value) => {
         if (value.includes('[REDACTED:')) return match; // already handled upstream
         const label = labelForKey(key);
-        add(label, severityForKey(key));
+        add(label, SEVERITY.QUARANTINE);
         return `"${key}"${sep}"[REDACTED:${label}]"`;
       },
     ),
@@ -139,20 +142,70 @@ const RULES = [
       new RegExp(`(${SENSITIVE_KEYS})(["']?\\s*[:=]\\s*["']?)[A-Za-z0-9_\\-./+=~]{12,}`, 'gi'),
       (_m, key, sep) => {
         const label = labelForKey(key);
-        add(label, severityForKey(key));
+        add(label, SEVERITY.QUARANTINE);
         return `${key}${sep}[REDACTED:${label}]`;
       },
     ),
   // New provider prefixes (after the key-context rules so a key-labelled
   // finding wins when both would match).
-  simpleRule(/GOCSPX-[A-Za-z0-9\-_]{16,}/g, 'google-client-secret', SEVERITY.REDACT),
-  simpleRule(/1\/\/0[A-Za-z0-9\-_=]{8,}/g, 'google-refresh-token', SEVERITY.REDACT),
-  simpleRule(/AIza[A-Za-z0-9\-_]{30,}/g, 'google-api-key', SEVERITY.REDACT),
+  simpleRule(/GOCSPX-[A-Za-z0-9\-_]{16,}/g, 'google-client-secret', SEVERITY.QUARANTINE),
+  simpleRule(/1\/\/0[A-Za-z0-9\-_=]{8,}/g, 'google-refresh-token', SEVERITY.QUARANTINE),
+  simpleRule(/AIza[A-Za-z0-9\-_]{30,}/g, 'google-api-key', SEVERITY.QUARANTINE),
   simpleRule(/(?:sk|rk)_live_[A-Za-z0-9]{10,}/g, 'stripe-secret-key', SEVERITY.QUARANTINE),
-  simpleRule(/pk_live_[A-Za-z0-9]{10,}/g, 'stripe-key', SEVERITY.REDACT),
+  simpleRule(/pk_live_[A-Za-z0-9]{10,}/g, 'stripe-key', SEVERITY.QUARANTINE),
 ];
 
-const ENTROPY_CANDIDATE = new RegExp(`[A-Za-z0-9+/=]{${ScanLimits.ENTROPY_MIN_LEN},}`, 'g');
+/** The ONE declaration of the entropy candidate alphabet. Tier 2 is Tier 1 plus
+ *  `/`; both regexes are DERIVED from these two constants and are never written
+ *  out by hand. `-` and `_` are absent from both, deliberately and as today. */
+const ENTROPY_CORE_CLASS = 'A-Za-z0-9+=';
+const ENTROPY_WIDE_EXTRA = '/';
+
+// Tier 1 (A2): a delimiter-free run. Tier 2 (A3): the same run allowed to span
+// `/`, i.e. exactly today's candidate. Both built from the two constants above.
+const TIER1_CANDIDATE = new RegExp(
+  `[${ENTROPY_CORE_CLASS}]{${ScanLimits.ENTROPY_MIN_LEN},}`,
+  'g',
+);
+const TIER2_CANDIDATE = new RegExp(
+  `[${ENTROPY_CORE_CLASS}${ENTROPY_WIDE_EXTRA}]{${ScanLimits.ENTROPY_MIN_LEN},}`,
+  'g',
+);
+
+/** The ONE declaration of the separator TOKEN set — Table A row A8a decides its
+ *  members; this line only spells them. Ordered LONGEST-FIRST as a DEFENSIVE
+ *  convention, not because the current predicate needs it: `hasBoundContext`'s
+ *  regex is END-ANCHORED, so when the one-character alternative matches the
+ *  first character of a two-character token the trailing `$` fails and the
+ *  engine backtracks into the longer form. The order becomes load-bearing the
+ *  moment the alternation is used anywhere the anchor does not force that
+ *  backtrack — a forward scan, a `g`/`y` match, or a `SEP` reused outside this
+ *  one predicate — so keep it. Do NOT reorder, and do NOT claim in review that
+ *  reordering is a fail-open bug; it is not. The vertical bar is deliberately
+ *  absent, and so are gitleaks' comma and logical-or members.
+ *  Written as a regex literal + `.source` rather than a quoted string so the
+ *  parser checks it and so it carries ONE backslash, not two.
+ *  Interpolated into `hasBoundContext`'s regex inside `(?: … )`, exactly once. */
+const SEP = /:{1,3}=|=>|\?=|[:=>]/.source;
+
+// A8: how far back the binder may look — the longest keyword (21 characters,
+// `aws_secret_access_key`), the filler bound, and 12 characters of slack for the
+// separator token, the two optional quote/backtick slots and the optional
+// whitespace on each side. DERIVED from ScanLimits and never a literal.
+const CTX_LOOKBACK_MAX = 21 + ScanLimits.ENTROPY_CTX_FILLER_MAX + 12;
+
+// A7/A8/A8a, spelled once: a sensitive keyword (the shipped SENSITIVE_KEYS
+// constant plus `authorization`, matched case-insensitively), then bounded
+// filler from gitleaks' own class, then at most one quote or backtick, optional
+// whitespace, exactly one separator token, optional whitespace, at most one
+// quote or backtick — and then the candidate, which the `$` anchor forces to
+// follow directly.
+const CTX_BINDER = new RegExp(
+  `(?:${SENSITIVE_KEYS}|authorization)` +
+    `[ \\t\\w.-]{0,${ScanLimits.ENTROPY_CTX_FILLER_MAX}}` +
+    `["'\`]?\\s*(?:${SEP})\\s*["'\`]?$`,
+  'i',
+);
 
 /** Shannon entropy in bits per character over the run. @param {string} run */
 function bitsPerChar(run) {
@@ -169,19 +222,46 @@ function bitsPerChar(run) {
   return bits;
 }
 
+/** True iff a sensitive keyword BINDS to the candidate starting at `idx`.
+ *  Implements Table A rows A7, A8 and A8a EXACTLY — that table decides the
+ *  keyword list, the filler bound and the separator set; this function does not
+ *  get to differ from it. Same line only: the search never crosses a `\n`.
+ *  @param {string} text @param {number} idx @returns {boolean} */
+function hasBoundContext(text, idx) {
+  const back = text.slice(Math.max(0, idx - CTX_LOOKBACK_MAX), idx);
+  const line = back.slice(back.lastIndexOf('\n') + 1);
+  return CTX_BINDER.test(line);
+}
+
 /**
- * Contextual high-entropy pass: a base64/hex run of >= ENTROPY_MIN_LEN chars
- * with >= ENTROPY_MIN_BITS_PER_CHAR that no labelled rule already replaced is
- * an unstructured secret candidate — no safe partial redaction, so QUARANTINE.
+ * Two-tier high-entropy pass (Table A rows A5, A6, A9).
+ *  - Tier 2 — a run over the wide alphabet, at or above the entropy floor, with
+ *    a sensitive keyword bound to it through a separator on the same line: no
+ *    safe partial redaction, so QUARANTINE, whole candidate replaced.
+ *  - Tier 1 — any sub-run of a non-quarantined tier-2 candidate that is long
+ *    enough and at or above the floor, over the NARROW alphabet: a bare pasted
+ *    key with no keyword near it, so the accidental case, replaced at REDACT.
+ * The tier-1 scan runs unconditionally on every non-quarantined candidate and
+ * is never gated on the tier-2 bits check: entropy is not monotone, so a
+ * low-entropy wide run can contain a high-entropy narrow sub-run.
  * @param {string} text
  * @param {(label:string, severity:Severity)=>void} add
  * @returns {string}
  */
 function entropyPass(text, add) {
-  return text.replace(ENTROPY_CANDIDATE, (run) => {
-    if (bitsPerChar(run) < ScanLimits.ENTROPY_MIN_BITS_PER_CHAR) return run;
-    add('high-entropy', SEVERITY.QUARANTINE);
-    return '[REDACTED:high-entropy]';
+  return text.replace(TIER2_CANDIDATE, (cand, offset) => {
+    if (
+      bitsPerChar(cand) >= ScanLimits.ENTROPY_MIN_BITS_PER_CHAR &&
+      hasBoundContext(text, offset)
+    ) {
+      add('high-entropy', SEVERITY.QUARANTINE);
+      return '[REDACTED:high-entropy]';
+    }
+    return cand.replace(TIER1_CANDIDATE, (sub) => {
+      if (bitsPerChar(sub) < ScanLimits.ENTROPY_MIN_BITS_PER_CHAR) return sub;
+      add('high-entropy', SEVERITY.REDACT);
+      return '[REDACTED:high-entropy]';
+    });
   });
 }
 
@@ -210,8 +290,11 @@ function scanAndRedact(text) {
     const findings = new Map();
     const add = (label, severity) => {
       const existing = findings.get(label);
-      if (existing) existing.count += 1;
-      else findings.set(label, { label, severity, count: 1 });
+      if (existing) {
+        existing.count += 1;
+        // A15: severity is the MAXIMUM over a label's occurrences, never the first.
+        if (severity === SEVERITY.QUARANTINE) existing.severity = SEVERITY.QUARANTINE;
+      } else findings.set(label, { label, severity, count: 1 });
     };
     let out = text;
     for (const rule of RULES) out = rule(out, add);
