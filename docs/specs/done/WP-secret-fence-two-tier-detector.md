@@ -484,19 +484,28 @@ Deliverables table.
 > | **F5** | **M5** | the design's measured end state | ADR-0034 **E3** / **ER-9** |
 > | **F6** | the **A15 escalation** paragraph, "9 of the maintainer's 182 vault notes" | how common the mixed-severity carrier is | none — illustrative, never mirrored, never asserted |
 > | **F7** | **V-15's five literals** — `M1_EXPECT`, `M5_EXPECT`, `E3_EXPECT`, `ER_EXPECT`, `SWEEP_EXPECT` | that this spec and ADR-0034 agree, **and that ADR-0034's evidence bytes do not move except by disclosed errata** | **PARTLY CARRIED, AND THE REST IS CARRIED BY NOBODY.** See the two rows below — this cell used to say "leg 2's V-17 carries the same guarantee", which was rounded up twice over and is corrected here in round 4. |
-> | **F7a** | the part **leg 2's V-17 does carry** | that ADR-0034's E1 and E3 state the five claims **D1 and D2 are derived from** — `notes scanned`, `notes with ANY finding`, `notes withheld`, `notes scrubbed in place`, `notes untouched` — each **exactly once inside its own extracted region**, each equal to the value D1/D2 carry, on both the ADR side and this-spec side | **leg 2's V-17**, and it runs. *Round 4 is what made this true: until then V-17's ADR side was five existence greps, which a second contradictory claim beside the right one passed. It now extracts the authoritative E1/E3 regions, counts each claim's SHAPE rather than its expected text, and carries two negative probes proving it rejects exactly that attack.* |
+> | **F7a** | the part **leg 2's V-17 does carry** | that ADR-0034's E1 and E3 state the five claims **D1 and D2 are derived from** — `notes scanned`, `notes with ANY finding`, `notes withheld`, `notes scrubbed in place`, `notes untouched` — each **exactly once inside its own extracted region**, each equal to the value D1/D2 carry, on both the ADR side and this-spec side | **leg 2's V-17**, and it runs. *Round 4 is what made this true: until then V-17's ADR side was five existence greps, which a second contradictory claim beside the right one passed. It now extracts the authoritative E1/E3 regions, asserts their markers are in order and the extraction is exactly as long as those markers imply, counts each claim's stable LABEL as well as its SHAPE, and carries **four** negative probes — a duplicated line, a contradictory restatement, a second figure in a non-canonical spelling, and a boundary edit that made the extraction 817 lines instead of 7. **Its scope is declared beside the step**: it catches accidental disagreement, not a deliberately evasive edit to the ADR, and the structural defences for that class are V-34, V-11 and diff review.* |
 > | **F7b** | the part **nobody carries** | **byte-immutability of everything else V-15's digests covered**: E1's other five lines (`high-entropy ONLY`, `a labelled rule ONLY`, `both`, `findings by rule`, `distinct high-entropy runs`), E3's prose outside its three claims, **`ER_EXPECT`'s pin on the errata rows**, and **`SWEEP_EXPECT`'s pin on the whole remaining prose of both documents**. An edit to any of those is caught by nothing. | **none.** *Stated as a gap rather than rounded up. Two of V-15's guarantees are MOOT rather than lost — `M1_EXPECT`'s spec↔ADR byte equality and `M5_EXPECT` both had this frozen file as one operand, and a superseded copy has nothing to stay equal to. The four above are genuinely unheld. Not closed in round 4 because leg 2 mirrors no part of them: pinning bytes that WP has no stake in would redden it for changes that cannot affect it. **What IS still held is the ratified content** — leg 2's V-34 digests Decisions 1–7 and the amendment licence, and V-11 the owner's signature. What is unheld is measured-evidence bytes outside D1/D2's five claims. Closing it would mean a live document taking a whole-block digest over ADR-0034's evidence, which is a decision for whoever next needs that guarantee.* |
 > | **F8** | **V-21's two ADR digests** — `494aa6ae…` (Decisions 1–7) and `57f298f2…` (the amendment licence) | that the owner-ratified content and the architect-only licence are unedited | **CARRIED, not retired.** Both literals run unchanged in leg 2's **V-34**. *Where the guarantee actually lives: V-34's own two literals — this row is a pointer to them and holds nothing. Changing this cell to say "retired" would make this table wrong and would not stop V-34 running.* |
 >
 > **The rule this arrangement follows is NOT stated here.** It lives in leg 2's
 > verification step **V-34**, in the comment above the two literals it governs,
-> and it reads: *a check retires only when a live check carries its guarantee, and
-> the carrying check names what it carries.* It is one sentence, it is the only
-> load-bearing thing the old F8 said, and it belongs beside the check that
-> performs the carry rather than in a table describing that the carry happened.
-> **F7 and F8 above are that rule's two outcomes, recorded, not decided:** F7
-> retired because leg 2's V-17 carries the same guarantee, F8 did not because
-> nothing else in the repository carried it until V-34 did.
+> and it belongs beside the check that performs a carry rather than in a table
+> describing that a carry happened. **The rows above are that rule's outcomes,
+> recorded, not decided** — and they are recorded per GUARANTEE, not per check,
+> because V-15 held several and they did not all end the same way: F7a **carried**
+> (by repaired V-17), F7b **dropped and named**, F8 **carried** (by V-34), and
+> `M1_EXPECT`'s cross-copy equality and `M5_EXPECT` **moot**, their other operand
+> being this frozen file.
+>
+> *Round 5 removed the sentence that used to sit here — "F7 retired because leg 2's
+> V-17 carries the same guarantee". It contradicted F7b two lines above it and it
+> contradicted the rule itself, which at the time had no clause admitting a
+> dropped guarantee. **The rule was the thing that was wrong**, not the practice:
+> retiring V-15 was correct, and the rule as first written could not describe why.
+> It now has three dispositions and requires the drop to be named. This is the
+> seventh instance in this PR of a claim written stronger than what was true, and
+> like the other six it is recorded where it was made.*
 >
 > **Consequence for V-15, stated here and echoed at the step so nobody meets it
 > cold.** F7's five literals are **retired with this spec and deliberately NOT
@@ -4135,19 +4144,26 @@ must_not 'validate.js now references hasHardFinding — that is leg 2' \
 #      what the banner says would now be the forbidden repair. The banner is left
 #      byte-unchanged because it is part of the frozen record — see below.
 #      THE AUTHORITY FOR RETIRING THESE FIVE LITERALS is not this comment and is
-#      not any table. It is that **leg 2's V-17 holds the part of the guarantee
-#      that anything still depends on, and pins its own literals for it** — it
-#      requires ADR-0034's E1 and E3 to state the five claims D1/D2 derive from
-#      exactly once each, inside extracted regions, on both sides, and it RUNS.
-#      Go and read V-17 if you want to know it is real; it carries two negative
-#      probes that prove it rejects a contradictory second claim.
-#      **IT DOES NOT CARRY ALL OF WHAT V-15 HELD, AND THE REST IS HELD BY
-#      NOBODY** — E1's other five lines, E3's prose outside its three claims,
-#      ER_EXPECT's pin on the errata rows and SWEEP_EXPECT's pin on both
-#      documents' prose. That gap is written down at **Table F rows F7a and F7b**
-#      rather than glossed. It is a real loss, it is smaller than it looks
-#      (the RATIFIED content is still digested, by leg 2's V-34), and it is not
-#      closed here because leg 2 mirrors none of those bytes.
+#      not any table. This step held SEVERAL guarantees and they did not all end
+#      the same way; leg 2's V-34 states the rule, which is per guarantee and has
+#      three dispositions. Applied here:
+#        CARRIED   the D1/D2 agreement guarantee, by leg 2's V-17 — it requires
+#                  ADR-0034's E1 and E3 to state the five claims D1/D2 derive
+#                  from exactly once each, inside extracted regions, on both
+#                  sides, and it RUNS. Go and read it; it carries four negative
+#                  probes proving it rejects a contradictory second claim, a
+#                  novel spelling and a bad boundary edit.
+#        MOOT      M1_EXPECT's spec-to-ADR byte equality, and M5_EXPECT. Both had
+#                  THIS file as one operand; a superseded copy has nothing left
+#                  to stay equal to.
+#        DROPPED   byte-immutability of ADR-0034's other evidence lines, E3's
+#                  prose outside its three claims, ER_EXPECT's pin on the errata
+#                  rows and SWEEP_EXPECT's pin on both documents' prose. Nothing
+#                  holds these. Recorded at **Table F row F7b**, which names each
+#                  one — a drop is only permitted when it is named.
+#      It is a real loss and it is smaller than it looks: the RATIFIED content is
+#      still digested by leg 2's V-34, and the owner's signature by V-11. It is
+#      not closed here because leg 2 mirrors none of those bytes.
 #      The frozen-surfaces table (Table F) under "## The measurements this design
 #      rests on" is a READER'S MAP of this arrangement — row F7 for these five
 #      literals, row F8 for the two that were carried rather than retired. It

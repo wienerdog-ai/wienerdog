@@ -4647,17 +4647,43 @@ console.log("V-16 P6 ok: Authorization: Basic is quarantine and its body is full
 #      not own.
 #
 #      THE RETIREMENT INVARIANT, stated here because this is the check that
-#      performs a carry and this is where anyone about to undo one is reading:
+#      performs a carry and this is where anyone about to undo one is reading.
+#      IT IS PER GUARANTEE, NOT PER CHECK — one check can hold several, and they
+#      need not end the same way:
 #
-#        A CHECK RETIRES ONLY WHEN A LIVE CHECK CARRIES ITS GUARANTEE, AND THE
-#        CARRYING CHECK NAMES WHAT IT CARRIES.
+#        A CHECK MAY RETIRE ONLY WHEN EVERY GUARANTEE IT HELD HAS ONE OF THESE
+#        THREE DISPOSITIONS, WRITTEN DOWN:
+#          (i)   CARRIED — a live check holds it, AND THAT CHECK NAMES WHAT IT
+#                CARRIES, so the claim can be checked rather than believed;
+#          (ii)  MOOT — one of the guarantee's operands no longer exists, so
+#                there is nothing left for it to be about;
+#          (iii) DROPPED — nothing holds it, and the drop is RECORDED, naming
+#                exactly what is no longer held.
+#        (iii) IS A DECISION, NEVER A DEFAULT. Dropping without naming is the
+#        failure this rule exists to prevent, and it is the only one of the three
+#        that can happen by inattention.
 #
-#      That is the whole rule. "Its spec reached `Done`" is not a reason, and an
-#      archived file is not a place a guarantee can live. This step is the second
-#      half of the rule discharged for ADR-0034's two digests: it names what it
-#      carries in the paragraph below. **Deleting this step retires nothing —
-#      it drops the guarantee**, because after the detector leg was archived
-#      there is no other holder.
+#      "Its spec reached `Done`" is a reason for none of them, and an archived
+#      file is not a place a guarantee can live.
+#      WORKED, for the retirement this epic actually performed — the detector
+#      leg's V-15 held five literals covering several distinct guarantees:
+#        CARRIED   its D1/D2 agreement guarantee, by V-17 in this same block,
+#                  which names it in its own step comment.
+#        MOOT      M1_EXPECT's spec-to-ADR byte equality, and M5_EXPECT: both
+#                  had the now-frozen detector spec as one operand.
+#        DROPPED   byte-immutability of ADR-0034's other evidence lines, its
+#                  errata rows and both documents' prose residue. Recorded at
+#                  Table F row F7b of the archived leg, which names each one.
+#      *The rule carried only clause (i) until round 5 of the gate. That version
+#      could not describe what had actually been done — some of V-15's guarantees
+#      were dropped on purpose — so the archived leg's own table and this rule
+#      contradicted each other for two rounds. The practice was right and the
+#      rule was short; the clause was added rather than the practice bent.*
+#      THIS STEP is clause (i) discharged for ADR-0034's two digests: it names
+#      what it carries in the paragraph below. **Deleting this step retires
+#      nothing — it drops the guarantee**, because after the detector leg was
+#      archived there is no other holder, and an unrecorded drop is exactly what
+#      (iii) forbids.
 #      Round 3 of the gate moved this sentence here from a table in the archived
 #      leg that described the arrangement. The reasoning is recorded there and is
 #      worth one line: a narrative table naming itself the authority over
@@ -4981,8 +5007,64 @@ v17_region() {   # <adr-file> <label> <first-line-pattern> <last-line-pattern>
     exit 1
   fi
 }
+#      ORDER AND WIDTH OF THE EXTRACTION, added in round 5 because a BAD EDIT —
+#      not an evasion — defeats a range check that only counts its markers.
+#      Measured 2026-07-28 on this ADR: move E1's end marker above its start and
+#      `sed -n '/s/,/e/p'` finds no end after the start, runs to end of file, and
+#      extracts **817** lines instead of 7. (The design gate reported 822 against
+#      a slightly earlier revision of the ADR; the figure here is the one
+#      reproduced at the head that ships, and the point is the same.)
+#      Both markers still occur exactly once, so the uniqueness
+#      check above is silent, and every claim below is still satisfied by the
+#      real block sitting inside the over-wide region. This asserts the two
+#      structural facts that make the extraction mean what it says: the markers
+#      are IN ORDER, and the region is EXACTLY as long as the marker line numbers
+#      imply. No bound is hard-coded — the expected length is computed from the
+#      markers themselves, so it cannot go stale.
+v17_bounds() {   # <adr-file> <label> <start-pat> <end-pat> <region-file> <inclusive 0|1>
+  local s e want got
+  s="$(grep -nE "$3" "$1" | head -1 | cut -d: -f1)"
+  e="$(grep -nE "$4" "$1" | head -1 | cut -d: -f1)"
+  if [ "$s" -ge "$e" ]; then
+    echo "FAIL V-17: ADR-0034's $2 markers are OUT OF ORDER — the region starts"
+    echo "           at line $s and ends at line $e."
+    echo "           An extraction whose end precedes its start silently runs to"
+    echo "           end of file and swallows the rest of the document; every"
+    echo "           claim check then passes on a region that means nothing."
+    echo "           This is an ordinary bad edit, not an attack. STOP AND REPORT."
+    exit 1
+  fi
+  want=$(( e - s + $6 ))
+  got="$(wc -l <"$5" | tr -d ' ')"
+  if [ "$got" != "$want" ]; then
+    echo "FAIL V-17: ADR-0034's $2 extraction is $got lines; its markers sit at"
+    echo "           lines $s and $e, which imply $want."
+    echo "           The region is over-wide or short, so the claim checks below"
+    echo "           are not reading the block they name. STOP AND REPORT."
+    exit 1
+  fi
+}
 v17_claim() {   # <label> <region-file> <claim-pattern-ERE> <canonical, single-spaced>
   local n hit
+  #    THE LABEL COUNT, added in round 5. It is INDEPENDENT OF PUNCTUATION AND
+  #    FORMATTING: `$1` is the claim's stable prose label, and it must occur
+  #    exactly once in the region whatever follows it. The shape count below
+  #    cannot see `notes scanned: 190` written beside the canonical
+  #    `notes scanned  189` — that is not the canonical spelling, so it does not
+  #    match the shape, so the count stays 1 and the value still compares equal.
+  #    Counting the LABEL catches it: two mentions of the same measured quantity
+  #    in one authoritative region is a contradiction however it is spelled.
+  n="$(grep -oF "$1" "$2" | wc -l | tr -d ' ')"
+  if [ "$n" != "1" ]; then
+    echo "FAIL V-17: the LABEL '$1' occurs $n times inside ADR-0034's own"
+    echo "           evidence region, not once."
+    echo "           The region names one measured quantity once. A second"
+    echo "           mention — in ANY spelling, canonical or not — means the ADR"
+    echo "           states that quantity twice, and D1/D2 agree with only one."
+    echo "           This is the check that sees a restatement the canonical"
+    echo "           pattern below cannot match. STOP AND REPORT."
+    exit 1
+  fi
   n="$(grep -oE "$3" "$2" | wc -l | tr -d ' ')"
   if [ "$n" != "1" ]; then
     echo "FAIL V-17: the claim '$1' occurs $n times inside ADR-0034's own"
@@ -5019,6 +5101,7 @@ v17_adr_side() {   # <adr-file> — every ADR-side assertion, over ONE file.
     echo "           claim check by construction. STOP AND REPORT."
     rm -f "$e1"; exit 1
   fi
+  v17_bounds "$1" "E1 evidence-block" '^notes scanned ' '^distinct high-entropy runs ' "$e1" 1
   v17_claim "notes scanned" "$e1" \
     '^notes scanned +[0-9]+$' 'notes scanned 189'
   v17_claim "notes with ANY finding" "$e1" \
@@ -5035,6 +5118,7 @@ v17_adr_side() {   # <adr-file> — every ADR-side assertion, over ONE file.
     echo "FAIL V-17: the E3 extraction is EMPTY. STOP AND REPORT."
     rm -f "$e3"; exit 1
   fi
+  v17_bounds "$1" "E3 end-state" '^\*\*E3 — ' '^\*\*E4 — ' "$e3" 0
   v17_claim "notes withheld" "$e3" \
     'notes withheld \*\*[0-9]+ → [0-9]+\*\*' 'notes withheld **109 → 1**'
   v17_claim "notes scrubbed in place" "$e3" \
@@ -5053,29 +5137,80 @@ echo "         D1/D2 are derived from those values"
 #      must make `v17_adr_side` fail. **The probe calls the same function**, in a
 #      SUBSHELL so its `exit 1` ends the probe rather than the suite — a probe
 #      suite that re-implements what it probes is testing itself.
-v17_probe() {   # <what-it-simulates> <sed-program>
+#      EACH MUTATION IS A NAMED FUNCTION rather than a sed string: two of the
+#      four need more than one editing command, and a `sed` script carrying an
+#      embedded newline inside a spec's fenced block is a transcription hazard
+#      this document has already paid for once (the SEP backslash, Table A).
+v17_mut_duplicate_line() { sed '/^notes scanned /a\
+notes scanned                                     190
+' "$1" >"$2"; }
+v17_mut_contradictory_end() {
+  sed 's/notes untouched \*\*80 → 179\*\*\./notes untouched **80 → 179**, or on a second reading notes untouched **80 → 171**./' "$1" >"$2"
+}
+#      NOVEL SPELLING: not the canonical form, so the SHAPE pattern cannot match
+#      it and the value comparison never sees it. Only the label count fires.
+v17_mut_novel_spelling() { sed '/^notes scanned /a\
+notes scanned: 190
+' "$1" >"$2"; }
+#      BAD BOUNDARY EDIT: move E1's end marker above its start. Both markers
+#      still occur exactly once; the extraction runs to end of file.
+v17_mut_swap_boundaries() {
+  awk '{L[NR]=$0}
+       /^notes scanned /{if(!s)s=NR}
+       /^distinct high-entropy runs /{if(!e)e=NR}
+       END{for(i=1;i<=NR;i++){if(i==s)print L[e];else if(i==e)print L[s];else print L[i]}}' \
+    "$1" >"$2"
+}
+v17_probe() {   # <what-it-simulates> <mutator-fn>
   local t
   t="$(mktemp)"
-  sed "$2" "$ADR" >"$t"
+  "$2" "$ADR" "$t"
   if ( v17_adr_side "$t" ) >/dev/null 2>&1; then
     rm -f "$t"
     echo "FAIL V-17: the claim checks are BLIND to $1."
-    echo "           The round-4 repair does not hold and this step is decoration."
+    echo "           The repair does not hold and this step is decoration."
     exit 1
   fi
   rm -f "$t"
   echo "V-17 probe ok: rejected — $1"
 }
-v17_probe "a duplicated 'notes scanned' line carrying a different figure" \
-  '/^notes scanned /a\
-notes scanned                                     190
-'
-v17_probe "a contradictory end state beside the canonical one" \
-  's/notes untouched \*\*80 → 179\*\*\./notes untouched **80 → 179**, or on a second reading notes untouched **80 → 171**./'
+v17_probe "a duplicated 'notes scanned' line carrying a different figure" v17_mut_duplicate_line
+v17_probe "a contradictory end state beside the canonical one" v17_mut_contradictory_end
+v17_probe "a second figure in a NON-canonical spelling ('notes scanned: 190')" v17_mut_novel_spelling
+v17_probe "E1's end marker moved above its start (over-wide extraction)" v17_mut_swap_boundaries
 #      THE POSITIVE CONTROL is the top-level call above: it ran against the real
-#      ADR and printed. A probe pair that rejects every input, a correct document
+#      ADR and printed. A probe set that rejects every input, a correct document
 #      included, proves nothing, and this step would have exited before reaching
 #      the probes if that were the case.
+#
+#      WHAT V-17 DEFENDS AGAINST, DECLARED — the same shape this document's own
+#      Table P and the fence's threat model use, and for the same reason: an
+#      undeclared scope invites an unbounded search for one more counterexample.
+#      IN SCOPE — ACCIDENTAL DISAGREEMENT between ADR-0034's measured evidence
+#      and this spec's D-table. A stale figure left behind by a re-measurement; a
+#      half-applied errata that corrected E1 and forgot E3; a duplicated evidence
+#      block; a restatement of a quantity in different words; a boundary edit
+#      that makes an extraction mean something other than it says. All five are
+#      things an architect or a reviewer does by inattention, all five are
+#      probed above, and all five now fail loudly.
+#      OUT OF SCOPE — A DELIBERATELY EVASIVE EDIT TO THE ADR, and this step
+#      cannot defend against it. Anything still passing after the four probes
+#      requires someone with commit access to a ratified, owner-signed ADR to
+#      craft a claim that is contradictory in substance, novel in spelling AND
+#      shaped to miss a label count. That is not drift; it is an insider editing
+#      the authority his own work rests on.
+#      THE STRUCTURAL DEFENCES FOR THAT CLASS ARE ELSEWHERE AND ARE NAMED:
+#      **V-34**'s two digests over the ratified Decisions 1-7 and the amendment
+#      licence; **V-11** over the owner's signature lines; and review of the
+#      diff, which is the only one of the three that reads meaning.
+#      **FURTHER FINDINGS OF THE FORM "here is another spelling that slips
+#      through" ARE OUT OF SCOPE FOR V-17 BY DECLARATION.** That class has no
+#      fixed point, and this epic has already paid for chasing one twice — the
+#      secret fence's own review criterion (ADR-0034 Decision 4, which exists
+#      because five consecutive fail-open criticals were constructed evasions)
+#      and the #117 verification loop. A reviewer who constructs one is producing
+#      an observation, not a blocker; the answer is a diff review, not a sixth
+#      pattern here.
 #      The spec side. EXTRACTED FIRST: greping the whole file for these literals
 #      would be satisfied by the three lines above, which live in this same file.
 #      The awk range covers only "## Derived measurements" … "## Deliverables".
