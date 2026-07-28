@@ -1,37 +1,45 @@
 ---
 id: WP-scheduler-node-path-durability
 title: Register scheduler entries against an upgrade-durable node path, not a version-pinned Cellar path
-status: Draft
+status: Ready
 model: sonnet
 size: M
-depends_on: []
+depends_on: [WP-scheduler-register-replaces-loaded-record]
 adrs: [ADR-0004, ADR-0027, ADR-0028, ADR-0031]
 epic: audit-a7
 ---
 
 # WP-scheduler-node-path-durability: the entry's execution position survives `brew upgrade node`
 
-> **DISPATCH BLOCKER — read before doing anything with this spec.**
-> This WP must **not** be implemented or merged before
+> **DISPATCH BLOCKER — LIFTED 2026-07-28. History retained; do not delete.**
+>
+> **What the blocker said:** this WP must not be implemented or merged before
 > `WP-scheduler-register-replaces-loaded-record` (the sibling that lets the macOS
-> registration path replace an already-loaded launchd record). The reason is
+> registration path replace an already-loaded launchd record). The reason was
 > **Table D**: on an existing macOS install this WP changes the rendered bytes of
 > every entry, the first `sync` is refused by launchd, and **every later `sync`
 > then reports success while launchd still holds the pinned path** — turning a
 > loud failure into a silent one for exactly the population this WP is meant to
-> protect. `depends_on` is empty only because the frontmatter schema requires
-> every `depends_on` id to resolve to an existing spec and that sibling is not
-> yet written; the ordering is **not** optional. The architect must not flip
-> `status:` to `Ready` until the sibling exists and is sequenced first
-> (Definition of done item 0).
+> protect.
 >
-> **Be clear about what enforces this: nothing mechanical does, yet.** This banner
-> is prose, `status: Draft` is a convention, and `scripts/check-frontmatter.js`
-> only rejects a `depends_on` id that fails to resolve — it never objects to an
-> empty one. The single point where a tooling gate becomes reachable is Definition
-> of done item **0b**: adding the sibling's id to `depends_on` at the moment the
-> blocker lifts. Until someone does that, this blocker is architect discipline and
-> should be read as such.
+> **What lifted it (2026-07-28):**
+> - **0a** — the sibling **merged to `main` in PR #125 (`fbc9d80`)**, and its scope
+>   covers **both** of this spec's Table C rows. Verified against `main`'s copy of
+>   that spec, not branch history: its banner maps *"row 5 (macOS) — **both**
+>   bare-`bootstrap` sites"* to its Table A rows 1 **and** 2, and *"row 4 (linux,
+>   degraded reload)"* to its Table A row 3.
+> - **0b** — its id is now in this spec's `depends_on`, so the dependency is
+>   **mechanically enforced** from here on: `scripts/check-frontmatter.js` rejects
+>   an id that fails to resolve, and this one resolves against the merged spec.
+>   That was the single point at which a tooling gate became reachable, and it is
+>   taken.
+> - **0c** — with 0a and 0b satisfied, `status:` moves `Draft` → `Ready`.
+>
+> **The enforcement caveat is now historical, and its resolution is the point.**
+> While the blocker stood, nothing mechanical held it: the banner was prose and
+> `status: Draft` a convention, because `check-frontmatter.js` never objects to an
+> **empty** `depends_on`. That gap closed the moment 0b was taken — which is why
+> 0b was specified as the lift's required step rather than a courtesy.
 
 ## Context (read this, nothing else)
 
@@ -408,8 +416,8 @@ and Linux has a degraded branch that does not. Do not re-fuse them.
 |---|---------------------------|------------------------|---------------------------------------|-----------|
 | 1 | any platform, job registered for the first time after this ships | durable path | durable path | **yes** |
 | 2 | **windows (schtasks)**, existing job, first `sync` | durable path | durable path — `ensureWindowsTaskRegistered` (`schedule.js:240-245`) forces `schtasks /create /f` whenever `o.changed`, and even when unchanged it re-reads the LOADED task and force-creates on any mismatch | **yes** (the strongest leg) |
-| 3 | **linux (systemd)**, existing job, first `sync`, `daemon-reload` **succeeds** | durable path | durable path — systemd re-reads the unit files, then `systemctl --user enable --now` (`schedule.js:465`) starts the reloaded timer | **yes** |
-| 4 | **linux (systemd)**, existing job, first `sync`, `daemon-reload` **degraded** | durable path | **still the pinned Cellar path** — `daemon-reload` is explicitly best-effort and **not gated**; only `enable --now` counts (`schedule.js:457-465`). A successful `enable --now` against not-yet-reloaded units leaves systemd on the stale unit, whose `ExecStart` is the pinned path, while `loaded` is reported `true` | **NO** |
+| 3 | **linux (systemd)**, existing job, first `sync`, `daemon-reload` **succeeds** | durable path | durable path — systemd re-reads the unit files, then `systemctl --user enable --now` (`schedule.js:466`) starts the reloaded timer | **yes** |
+| 4 | **linux (systemd)**, existing job, first `sync`, `daemon-reload` **degraded** | durable path | **still the pinned Cellar path** — `daemon-reload` is explicitly best-effort and **not gated**; only `enable --now` counts (`schedule.js:466`; the block is `:457-466`). A successful `enable --now` against not-yet-reloaded units leaves systemd on the stale unit, whose `ExecStart` is the pinned path, while `loaded` is reported `true` | **NO** |
 | 5 | **macOS, existing job whose loaded record is healthy** | durable path | **still the pinned Cellar path** — `ensureEntry` reports `changed`, the bare `launchctl bootstrap` is refused because the label is already loaded (Current state §8) | **NO** |
 | 6 | macOS, existing job, after the Cellar path is deleted | durable path | durable path — step 8b grades the entry `mismatched`, it enters the heal set, `reloadJob` → `darwinReplaceEntry` boots out and re-bootstraps | **yes**, one upgrade late |
 
@@ -600,13 +608,13 @@ in prose about `appTreeDigest` consumers (`:302`) — and neither is a Deliverab
 entry, so the conclusion stands. (Round 1 said "only under its not-deliverables
 list", which missed `:302`; the conclusion was right, the survey was not.)
 
-**`depends_on: []` is nonetheless NOT a statement that this WP is dispatchable.**
-It is empty for a mechanical reason — `scripts/check-frontmatter.js` rejects a
-`depends_on` id that does not resolve to an existing spec, and
-`WP-scheduler-register-replaces-loaded-record` is not written yet. The real
-ordering constraint lives in the DISPATCH BLOCKER banner and Definition of done
-item 0, and it is binding. When that sibling spec exists, its id **must** be added
-here.
+**`depends_on` — history, and its current state (2026-07-28).** It was empty for a
+mechanical reason: `scripts/check-frontmatter.js` rejects an id that does not
+resolve to an existing spec, and `WP-scheduler-register-replaces-loaded-record` was
+not yet written, so the real ordering constraint lived only in the DISPATCH BLOCKER
+banner and Definition of done item 0. **That sibling merged to `main` in PR #125
+(`fbc9d80`), and its id is now recorded in this spec's `depends_on`** — so the
+ordering that was prose is now mechanically enforced by the frontmatter resolver.
 
 ## Implementation notes & constraints
 
@@ -709,8 +717,11 @@ the implementer and the PR author must both honor:
    loaded record) do **not** converge, and Table D's last row in each sub-table
    reports that non-convergence
    as success. Do not write "closes the class" anywhere.
-2. Because of Table D, this WP is **blocked** behind
-   `WP-scheduler-register-replaces-loaded-record` (Definition of done item 0).
+2. Because of Table D, this WP **was blocked** behind
+   `WP-scheduler-register-replaces-loaded-record` — **lifted 2026-07-28** when that
+   sibling merged to `main` (PR #125, `fbc9d80`) and its id entered this spec's
+   `depends_on` (Definition of done item 0). Table D itself is unchanged and still
+   governs what this WP may claim.
 
 ### Windows — scoped OUT, with the reason recorded
 
@@ -1108,7 +1119,7 @@ npm test
   loaded state — on BOTH platforms.** Two members of one family:
   (i) macOS, the bare `launchctl bootstrap` (`schedule.js:315`, `:431`), which
   launchd refuses on an already-loaded label (Table C row 5); and
-  (ii) **Linux, the ungated best-effort `daemon-reload`** (`schedule.js:457-465`),
+  (ii) **Linux, the ungated best-effort `daemon-reload`** (`schedule.js:457-466`),
   where only `enable --now` gates `loaded`, so a degraded reload plus a successful
   enable leaves systemd on the stale unit while `sync` reports success (Table C
   row 4). Both are routed to the single prerequisite
@@ -1144,23 +1155,29 @@ npm test
 ## Definition of done
 
 0. **BLOCKER — checked by the architect before dispatch, not by the implementer.**
-   All three sub-items, in order:
-   - **(0a)** `WP-scheduler-register-replaces-loaded-record` exists as a spec,
-     **its scope covers Table C row 4 (linux, degraded `daemon-reload`) as well as
-     row 5 (macOS)**, and it is sequenced to merge **before** this WP.
-   - **(0b)** **Its id is added to this spec's `depends_on`** in the same pass that
-     lifts the blocker. This is the one step that converts the blocker from prose
-     into a machine check: `scripts/check-frontmatter.js` rejects a `depends_on`
-     id that does not resolve, but it **never** complains about a *missing* one —
-     so an empty `depends_on` is invisible to tooling, and only adding the id makes
-     the dependency mechanically enforced from then on. Do not lift 0a without 0b.
-   - **(0c)** Until 0a and 0b are both done, this spec must not leave `Draft`, must
-     not be handed to an implementer, and must not merge.
+   **SATISFIED 2026-07-28 — all three sub-items. Retained as the record of what
+   was required and what discharged it.**
+   - **(0a) DONE.** `WP-scheduler-register-replaces-loaded-record` **merged to
+     `main` in PR #125 (`fbc9d80`)**, and its scope covers Table C row 4 (linux,
+     degraded `daemon-reload`) **as well as** row 5 (macOS). Verified against
+     `main`'s copy of that spec rather than branch history: its banner maps *"row 5
+     (macOS) — **both** bare-`bootstrap` sites"* to its Table A rows 1 and 2, and
+     *"row 4 (linux, degraded reload)"* to its Table A row 3. Both of this spec's
+     non-converging rows therefore have an owner, and it has shipped.
+   - **(0b) DONE.** Its id is recorded in this spec's `depends_on`. This was the one
+     step that converts the blocker from prose into a machine check:
+     `scripts/check-frontmatter.js` rejects a `depends_on` id that does not
+     resolve, but **never** complains about a *missing* one — so an empty
+     `depends_on` was invisible to tooling. It is no longer empty, and the resolver
+     now enforces the ordering.
+   - **(0c) DISCHARGED.** With 0a and 0b satisfied, `status:` moves `Draft` →
+     `Ready` and the spec may be dispatched.
 
-   The reason is **Table D**: without that sibling, this WP converts a loud failure
-   into a silent one on every already-installed macOS machine (D-a) and on every
-   Linux machine with a degraded `daemon-reload` (D-b). If a future architect wants
-   to lift this blocker, the thing to change is Table D — not this item.
+   The reason the blocker existed was **Table D**: without that sibling, this WP
+   converts a loud failure into a silent one on every already-installed macOS
+   machine (D-a) and on every Linux machine with a degraded `daemon-reload` (D-b).
+   Those tables are unchanged and still govern; what changed is that the sibling
+   that fixes both now exists on `main`.
 1. All verification steps pass locally; output pasted into the PR body, with V2's
    pass count strictly above 79, V2's subtest count `>= 4`, and V3's two counts
    flipped to 0 / 6.
