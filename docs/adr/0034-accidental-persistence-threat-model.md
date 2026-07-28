@@ -891,7 +891,7 @@ requires: a dated block that states what moved, quotes the pre-edit bytes
 verbatim, and names the digests it obliges the architect to recompute.
 
 **What happened.** `WP-secret-fence-two-tier-detector` — leg 1 of the fence —
-merged on 2026-07-26 as `72f3e46`. The evidence in this document was last
+merged on 2026-07-28 as `72f3e46`. The evidence in this document was last
 re-measured on 2026-07-26 against a **182**-note vault. Re-run on 2026-07-28
 against the same vault, now **189** notes, every figure in E1, E2 and E3 moved
 and **no structural fact and no conclusion did**. That is precisely the
