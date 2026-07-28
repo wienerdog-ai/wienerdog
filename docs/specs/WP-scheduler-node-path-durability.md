@@ -24,6 +24,14 @@ epic: audit-a7
 > yet written; the ordering is **not** optional. The architect must not flip
 > `status:` to `Ready` until the sibling exists and is sequenced first
 > (Definition of done item 0).
+>
+> **Be clear about what enforces this: nothing mechanical does, yet.** This banner
+> is prose, `status: Draft` is a convention, and `scripts/check-frontmatter.js`
+> only rejects a `depends_on` id that fails to resolve — it never objects to an
+> empty one. The single point where a tooling gate becomes reachable is Definition
+> of done item **0b**: adding the sibling's id to `depends_on` at the moment the
+> blocker lifts. Until someone does that, this blocker is architect discipline and
+> should be read as such.
 
 ## Context (read this, nothing else)
 
@@ -235,7 +243,7 @@ calls.
 |--------|------|-------|
 | modify | src/scheduler/generators.js | **D1** — add `entryNodePath(execPath?, opts?)` per Table A and export it. `nodePath()` keeps its body **byte-for-byte** (Table A row 6, Table B row 2). No renderer, no other function. |
 | modify | src/cli/schedule.js | **D2** — replace `gen.nodePath()` with `gen.entryNodePath()` at exactly the six ENTRY sites (`:303`, `:342`, `:417`, `:638`, `:667`, `:752` — Current state §2). Nothing else in this file changes: no bootstrap/bootout change, no probe change, no notice change. |
-| modify | tests/unit/scheduler-generators.test.js | **T1–T4** (Test index). The existing test at `:421` (`nodePath/wienerdogBin are absolute`) must pass **unmodified**. |
+| modify | tests/unit/scheduler-generators.test.js | **T1, T2, T4 and T5** — the exact set in the Test index. **There is no T3** (round 1's descriptor-digest test was vacuous and is deleted — see AC5), and **T5 is not optional**: it is the ONLY detector for Table E row 7, the role split. Building T1/T2/T4 without T5 reproduces the round-1 test set that shipped an undetectable mutation. The existing test at `:421` (`nodePath/wienerdogBin are absolute`) must pass **unmodified** — and note it does **not** protect the role split, which is exactly why T5 exists. |
 
 Not deliverables, deliberately: `src/scheduler/descriptor.js`,
 `src/scheduler/status.js`, `src/scheduler/launcher.js`, `src/cli/run-job.js`,
@@ -390,36 +398,88 @@ registered has to be re-minted for this WP.
 
 This table was prose in round 1. It is now a canonical contract table, because the
 round-1 acceptance criteria asserted file idempotence and let a reader infer
-scheduler-state convergence from it — which row 3 shows is false.
+scheduler-state convergence from it — which rows 4 and 5 show is false.
 
-| # | Platform + starting state | Plist/unit/XML on disk | What the OS actually holds afterwards | Converged? |
+**Rows 2 and 3 were one fused "linux / windows" row until round 3.** They are
+split because the two platforms behave *differently*: Windows genuinely converges
+and Linux has a degraded branch that does not. Do not re-fuse them.
+
+| # | Platform + starting state | Unit/plist/XML on disk | What the OS actually holds afterwards | Converged? |
 |---|---------------------------|------------------------|---------------------------------------|-----------|
 | 1 | any platform, job registered for the first time after this ships | durable path | durable path | **yes** |
-| 2 | linux (systemd) / windows (schtasks), existing job, first `sync` | durable path | durable path — both re-register unconditionally on a content change (`systemctl --user enable --now`, `schtasks /create /f`) | **yes** |
-| 3 | **macOS, existing job whose loaded record is healthy** | durable path | **still the pinned Cellar path** — `ensureEntry` reports `changed`, the bare `launchctl bootstrap` is refused because the label is already loaded (Current state §8) | **NO** |
-| 4 | macOS, existing job, after the Cellar path is deleted | durable path | durable path — step 8b grades the entry `mismatched`, it enters the heal set, `reloadJob` → `darwinReplaceEntry` boots out and re-bootstraps | **yes**, one upgrade late |
+| 2 | **windows (schtasks)**, existing job, first `sync` | durable path | durable path — `ensureWindowsTaskRegistered` (`schedule.js:240-245`) forces `schtasks /create /f` whenever `o.changed`, and even when unchanged it re-reads the LOADED task and force-creates on any mismatch | **yes** (the strongest leg) |
+| 3 | **linux (systemd)**, existing job, first `sync`, `daemon-reload` **succeeds** | durable path | durable path — systemd re-reads the unit files, then `systemctl --user enable --now` (`schedule.js:465`) starts the reloaded timer | **yes** |
+| 4 | **linux (systemd)**, existing job, first `sync`, `daemon-reload` **degraded** | durable path | **still the pinned Cellar path** — `daemon-reload` is explicitly best-effort and **not gated**; only `enable --now` counts (`schedule.js:457-465`). A successful `enable --now` against not-yet-reloaded units leaves systemd on the stale unit, whose `ExecStart` is the pinned path, while `loaded` is reported `true` | **NO** |
+| 5 | **macOS, existing job whose loaded record is healthy** | durable path | **still the pinned Cellar path** — `ensureEntry` reports `changed`, the bare `launchctl bootstrap` is refused because the label is already loaded (Current state §8) | **NO** |
+| 6 | macOS, existing job, after the Cellar path is deleted | durable path | durable path — step 8b grades the entry `mismatched`, it enters the heal set, `reloadJob` → `darwinReplaceEntry` boots out and re-bootstraps | **yes**, one upgrade late |
 
-### Table D — what `wienerdog sync` REPORTS in Table C row 3 (canonical)
+**Row 6 has NO Linux analogue, and that is why row 4 is the worse of the two
+failures.** `deriveIdentityArgv` returns `{kind:'systemd', argv:null}` for a
+`.timer` basename — the identity query is *declared unimplemented*
+(`generators.js:178-181`) — so `defaultProbe` step 6 returns `'unknown'`, which is
+**not** in `HEAL_SET` (`status.js:80`). The shipped test
+`entry-identity: a systemd entry yields unknown, not a health claim`
+(`tests/unit/scheduler-entry-identity.test.js:423-430`) pins exactly that. A Linux
+entry therefore never enters the heal set, never reaches step 8b's
+execution-position existence check, and never self-repairs the way row 6 does. The
+second best-effort `daemon-reload` at `schedule.js:777` sits inside `reloadJob`'s
+linux arm, which is reached **only** from `reloadMissing`'s heal — so on Linux it
+is effectively unreachable and does not rescue row 4.
 
-Row 3 is not merely "not converged"; it is **not converged and, on the second
-run, silently reported as fine**. That is the substance of the round-1 review's
-blocking finding, and it belongs in the contract, not in prose.
+Row 4 was found by the round-2 Codex leg. It is **not** a reason to redesign this
+WP; it is a second member of the same family as row 5, and it is handled the same
+way — see the note under Table D.
 
-| Run | `ensureEntry` | OS calls | `repointSchedules` notice | What the user is told | Reality |
-|-----|---------------|----------|---------------------------|-----------------------|---------|
-| first `sync` after this ships | `changed = true` (bytes differ) | one refused `launchctl bootstrap` | `"<job>" schedule file written but the OS scheduler did not accept it — run 'wienerdog doctor'` | something went wrong | launchd holds the pinned path |
-| `doctor`, immediately after | — | read-only probe | `[ok] scheduled job '<job>' is loaded` | it is fine | launchd holds the pinned path; step 8b only checks that the exec position **exists**, and it still does |
-| **every later `sync`** | `changed = false` (bytes now identical) | **zero** | **none** | **it is fine** | **launchd still holds the pinned path** |
+### Table D — what `wienerdog sync` REPORTS in Table C rows 4 and 5 (canonical)
 
-The third row is the false success. A later `brew upgrade node` then reproduces
-the original silent `ENOENT` — the exact failure this WP exists to prevent —
-after a `sync` that reported nothing wrong.
+Neither row is merely "not converged"; each is **not converged and, on every later
+run, silently reported as fine**. That is the substance of the round-1 and round-2
+blocking findings, and it belongs in the contract, not in prose.
 
-**This is why this WP carries a hard dispatch blocker** (see the banner at the
-top of this spec and Definition of done item 0). The defect is pre-existing on
-`main`, but **this WP is what triggers it on every already-installed macOS
-machine**, because it changes the rendered bytes of every existing entry. It must
-not ship first.
+Every literal below is quoted **byte-exact from source** (round 2 shipped two that
+were not, and AC9 copies this table into the merge artifact).
+
+**D-a — macOS (Table C row 5).**
+
+| Run | `ensureEntry` | OS calls | What the user is told | Reality |
+|-----|---------------|----------|-----------------------|---------|
+| first `sync` after this ships | `changed = true` (bytes differ) | one refused `launchctl bootstrap` | `"<job>" schedule file written but the OS scheduler did not accept it — run 'wienerdog doctor'.` (`schedule.js:584`, **including the trailing period**) | launchd holds the pinned path |
+| `doctor`, immediately after | — | read-only probe | `[ok] scheduled job 'dream' is loaded (launchd)` (`status.js:283` message + `doctor.js:317` `[${status}] ${msg}` wrapper — **including the `(launchd)` suffix**) | launchd holds the pinned path; step 8b only checks that the exec position **exists**, and it still does |
+| **every later `sync`** | `changed = false` (bytes now identical) | **zero** | **nothing** | **launchd still holds the pinned path** |
+
+**D-b — Linux, degraded `daemon-reload` (Table C row 4).**
+
+| Run | `ensureEntry` | OS calls | What the user is told | Reality |
+|-----|---------------|----------|-----------------------|---------|
+| first `sync` after this ships | `changed = true` (bytes differ) | `daemon-reload` (degraded, **ungated**) then a **successful** `enable --now` | one-time stderr line: `wienerdog: warning — 'systemctl --user daemon-reload' returned <status>; the timer may load from stale units. Run 'wienerdog doctor'.` (`schedule.js:464`) — and **no** `repointSchedules` notice, because `loaded` is `true` | systemd holds the pinned path |
+| `doctor`, immediately after | — | read-only probe | **nothing about this entry** — a systemd entry probes `unknown`, which `doctorSchedulerChecks` does not report as a health claim | systemd holds the pinned path |
+| **every later `sync`** | `changed = false` (bytes now identical) | **zero** | **nothing** | **systemd still holds the pinned path, and no heal path exists** |
+
+**The last row of each sub-table is the false success.** A later `brew upgrade
+node` then reproduces the original silent `ENOENT` — the exact failure this WP
+exists to prevent — after a `sync` that reported nothing wrong. Do not describe
+D-b as fully silent: it **warns once**, at the degraded `sync`, and is silent and
+falsely-converged from then on.
+
+**This is why this WP carries a hard dispatch blocker** (see the banner at the top
+of this spec and Definition of done item 0). Both defects are pre-existing on
+`main`, but **this WP is what triggers them**, on every already-installed macOS
+machine and on every Linux machine with a degraded `daemon-reload`, because it
+changes the rendered bytes of every existing entry. It must not ship first.
+
+**Scope decision for row 4 (recorded, per the round-2 instruction to pick one).**
+The Linux degraded-reload case is folded into the **existing prerequisite**,
+`WP-scheduler-register-replaces-loaded-record`, rather than fixed inside this WP.
+Three reasons, and the first is decisive: it is the *same* defect family — the
+registration path reports success from a call that did not replace the loaded
+state — so one WP that fixes "register must verify what the OS now holds" closes
+macOS and Linux together, while a Linux-only patch here would leave the family
+half-closed and would drag `schedule.js`'s systemd arm into a WP whose Deliverables
+cell says "six one-token substitutions, nothing else". Second, a Linux fix needs a
+gating decision on `daemon-reload` that belongs with the ADR-0018 amendment the
+sibling already carries. Third, it keeps this WP S/M-sized and its blocker
+structure unchanged. The sibling's scope therefore covers **both** Table C row 4
+and row 5; Out of scope says so, and Definition of done item 0 gates on it.
 
 ### Mirrored Surface Checklist
 
@@ -434,6 +494,7 @@ In this spec:
 
 - [ ] Deliverables cell for `src/scheduler/generators.js` (D1 — "per Table A", `nodePath()` byte-for-byte)
 - [ ] Deliverables cell for `src/cli/schedule.js` (D2 — the six site list, Table B row 1)
+- [ ] **(+r3)** Deliverables cell for `tests/unit/scheduler-generators.test.js` — it mirrors the **Test index** row set (T1/T2/T4/T5) and the "no T3" fact. **This is the mirror whose absence caused a round-2 defect**: the T3→T5 renumbering updated five registered surfaces and missed this unregistered one, leaving the permission-boundary table telling the implementer to build the round-1-failing test set. Registered so the Test index and this cell can never diverge again.
 - [ ] **(+r2)** Deliverables → the **Sizing** paragraph (it restates Table B row 1's "six call sites" count)
 - [ ] "Exact contracts" JSDoc block, its default-parameter note (Table A row 1) and its input → output pairs (Table F)
 - [ ] "Exact contracts" literal `.plist` fragment (the `--expect-digest`-unchanged claim, Table A row 6)
@@ -443,13 +504,13 @@ In this spec:
 - [ ] Implementation notes §D1 (the derivation, the `parts.length < 6` spelling of row 2, the anti-`indexOf` rule from Table E row 4), §"Why the descriptor field stays" (row 6), §"Windows" (row 1), §"Convergence — governed by Table C" (which now cites C and D instead of restating them)
 - [ ] Design space → option (a) (the alias mechanism is rows 5–6)
 - [ ] Security checklist bullets 1 and 2 (rows 3, 4 and 5 — which of them is the security boundary)
-- [ ] Acceptance criteria AC1 (rows 5–6), AC2 (rows 1–4 via Table F), AC3 (Table B row 1), AC4 (Table B row 2), AC5 (Table A row 6), AC6 (idempotence, and its explicit non-claim about Tables C/D), AC9 (Tables C and D reproduced in the PR)
+- [ ] Acceptance criteria AC1 (rows 5–6), AC2 (rows 1–4 via Table F), AC3 (Table B row 1), AC4 (Table B row 2 **and**, as the spec's only seam-free assertion of them, Table A rows 5-6), AC5 (Table A row 6), AC6 (idempotence, and its explicit non-claim about Tables C/D), AC9 (Tables C and D reproduced in the PR)
 - [ ] Verification commands V3 (Table B row 1 count), V4 (Table B row 2 preservation), V5 + V5b (Table A row 6 preservation and AC5's zero-coupling argument)
 - [ ] **(+r2)** Verification command V2 (its `>= 4` threshold mirrors the Test index row count)
-- [ ] Table E mutation rows 1–8, and each row's Table F fixture reference
+- [ ] Table E mutation rows 1–8; the Table F fixture references belong to **rows 4-6 only** (rows 1, 2, 3, 7 and 8 are driven by T1/T5/V3 and cite no Table F fixture)
 - [ ] **(+r2)** Test index — T1's and T2's cells are the only place Table F rows 13–15 (the alias positives) and rows 1–12 (the negatives) carry a *requirement* rather than an arithmetic fact
 - [ ] **(+r2)** The whole **Out of scope** section — every bullet applies Table A row 6 (descriptor), row 2 (nvm et al.) or row 1 (Windows), and the first bullet applies Tables C/D
-- [ ] **(+r2)** Definition of done items 0 (the Tables C/D blocker), 1 (V2/V3 thresholds), 6 (the Windows owner check, Table A row 1) and 7 (AC9's no-overclaim rule)
+- [ ] **(+r2)** Definition of done items 0 (the Tables C/D blocker **and** the `depends_on` obligation), 1 (V2/V3 thresholds), 6 (the Windows owner check, Table A row 1), 7 (AC9's no-overclaim rule) and 8 (the ADR-0028 sequencing gate)
 - [ ] The DISPATCH BLOCKER banner at the top of this spec (Tables C and D)
 
 Out of this spec, registered so a later Table A change updates them too — **none
@@ -630,11 +691,14 @@ The convergence facts live in **Table C**; what `sync` tells the user about them
 lives in **Table D**. Neither is restated here. Two things follow from them that
 the implementer and the PR author must both honor:
 
-1. On macOS this WP is fully preventive for **new** registrations (Table C row 1)
-   and self-healing one upgrade late for existing ones (Table C row 4) — but Table
-   C row 3 does **not** converge, and Table D row 3 reports that non-convergence
+1. This WP is fully preventive for **new** registrations on every platform (Table
+   C row 1), fully converged on Windows (row 2) and on Linux with a healthy
+   `daemon-reload` (row 3), and self-healing one upgrade late on macOS (row 6) —
+   but Table C rows **4** (linux, degraded reload) and **5** (macOS, healthy
+   loaded record) do **not** converge, and Table D's last row in each sub-table
+   reports that non-convergence
    as success. Do not write "closes the class" anywhere.
-2. Because of Table D row 3, this WP is **blocked** behind
+2. Because of Table D, this WP is **blocked** behind
    `WP-scheduler-register-replaces-loaded-record` (Definition of done item 0).
 
 ### Windows — scoped OUT, with the reason recorded
@@ -756,8 +820,12 @@ fixture without adding its row there.
       `src/cli/schedule.js` contains **zero** occurrences of `gen.nodePath()` and
       exactly **six** of `gen.entryNodePath()`. Asserted by V3, whose `main`
       output is the inverse (6 and 0).
-- [ ] **AC4 (Table B row 2 — the runtime role is untouched), asserted against a
-      fabricated Homebrew layout so it is host-independent.** In a temp dir
+- [ ] **AC4 (Table B row 2 — the runtime role is untouched — AND the spec's only
+      seam-free assertion of Table A rows 5-6), asserted against a fabricated
+      Homebrew layout so it is host-independent.** T5 is the one place the alias
+      derivation is exercised through the **real** `fs.realpathSync` against a
+      **real** symlink rather than an injected seam, so it cross-checks AC1's
+      seam-driven positives; if the two ever disagree, the seam is lying. In a temp dir
       `TMP` (**`fs.realpathSync`'d first** — on macOS `/tmp` is a symlink to
       `/private/tmp`), create the real files `TMP/Cellar/node/9.9.9/bin/node` and
       the symlink `TMP/opt/node -> ../Cellar/node/9.9.9`. Then, inside a
@@ -786,17 +854,19 @@ fixture without adding its row there.
       byte-identical strings, and `gen.entryNodePath()` called twice in one process
       returns the same value. **AC6 asserts idempotence at the rendered-bytes level
       ONLY. It does NOT assert that the OS scheduler state converged** — Table C
-      row 3 records that on macOS it does not, and Table D row 3 records that
-      `sync` nonetheless reports success. Do not read AC6 as convergence. (T4)
+      rows 4 and 5 record that on linux-degraded and macOS it does not, and Table
+      D records that `sync` nonetheless reports success. Do not read AC6 as
+      convergence. (T4)
 - [ ] **AC7 (mutation matrix).** Every row of Table E was demonstrated red; output
       pasted in the PR.
 - [ ] **AC8 (no daemon, no new dependency).** The diff introduces no `spawn`, no
       `setInterval`, no `setTimeout`, no new `require`, and no `package.json`
       change. Asserted by reading the diff and by V6.
 - [ ] **AC9 (the PR does not overclaim).** The PR body reproduces **Table C and
-      Table D verbatim**, states that Table C row 3 does not converge and Table D
-      row 3 reports it as success, and does **not** contain the phrase "closes the
-      class" or any equivalent. This is an acceptance criterion, not etiquette:
+      Table D (both sub-tables) verbatim**, states that Table C rows 4 and 5 do not
+      converge and that Table D's final row in each sub-table reports that as
+      success, and does **not** contain the phrase "closes the class" or any
+      equivalent. This is an acceptance criterion, not etiquette:
       round 1's disclosure lived only in prose and the review found it invisible at
       the contract layer.
 
@@ -900,7 +970,10 @@ different strings. (ii) Restore `process.execPath` in a `finally`; leaking a fak
 (iii) The fabricated `Cellar/.../bin/node` must be a **real regular file** (any
 content — it is never executed, only `realpath`'d), and `TMP/opt/node` must be a
 **directory** symlink to `../Cellar/node/9.9.9`, mirroring the live layout measured
-in Current state §4. (iv) Clean the temp dir in the same `finally`.
+in Current state §4 — which means `TMP/opt` must be **created as a directory
+first**: `fs.symlinkSync` does not create missing parents, so building the link
+before `mkdir -p TMP/opt` fails with `ENOENT` and the test dies before it asserts
+anything. (iv) Clean the temp dir in the same `finally`.
 
 ## Verification steps (run these; paste output in the PR)
 
@@ -1005,16 +1078,26 @@ npm test
   notes, "Why the descriptor field stays". Routed as
   `WP-descriptor-node-field-stability`, which must land **after** the registration
   fix below.
-- **The registration path's bare `launchctl bootstrap`** (`schedule.js:315`,
-  `:431`). Making `sync` able to replace an already-loaded record is a real,
-  separate defect with its own blast radius and an ADR-0018 amendment attached
-  (that ADR's decision 2 grants the replace capability to the *heal* path only).
-  Routed as `WP-scheduler-register-replaces-loaded-record`. Do not touch
-  `darwinReplaceEntry` or either bootstrap call in this WP. **It is out of this
-  WP's scope but it is NOT out of its way:** Tables C row 3 and D row 3 show this
-  WP is unsafe to merge ahead of it, which is what Definition of done item 0
-  enforces. "Out of scope" here means "not implemented here", never "not our
-  problem".
+- **The registration path reporting success from a call that did not replace the
+  loaded state — on BOTH platforms.** Two members of one family:
+  (i) macOS, the bare `launchctl bootstrap` (`schedule.js:315`, `:431`), which
+  launchd refuses on an already-loaded label (Table C row 5); and
+  (ii) **Linux, the ungated best-effort `daemon-reload`** (`schedule.js:457-465`),
+  where only `enable --now` gates `loaded`, so a degraded reload plus a successful
+  enable leaves systemd on the stale unit while `sync` reports success (Table C
+  row 4). Both are routed to the single prerequisite
+  `WP-scheduler-register-replaces-loaded-record`, whose scope **must cover both**
+  (Definition of done item 0a) — the fix is one rule, "a register that cannot
+  verify what the OS now holds must not report success", and splitting it by
+  platform would close half a family. It carries an ADR-0018 amendment (that ADR's
+  decision 2 grants the replace capability to the *heal* path only) and, for the
+  Linux leg, a gating decision on `daemon-reload`.
+  In **this** WP: do not touch `darwinReplaceEntry`, either bootstrap call, the
+  `daemon-reload` calls at `:458` or `:777`, or the `enable --now` gate.
+  **It is out of this WP's scope but it is NOT out of its way:** Table C rows 4-5
+  and Table D show this WP is unsafe to merge ahead of it, which is what Definition
+  of done item 0 enforces. "Out of scope" here means "not implemented here", never
+  "not our problem".
 - **`docs/adr/0028-…:83`** ("`node` is `process.execPath` … and is not pinned").
   This WP makes that sentence false for the registered entry. An ADR is never
   edited from a WP (WP-114 Decision 5). Owner action; proposed slug
@@ -1035,12 +1118,23 @@ npm test
 ## Definition of done
 
 0. **BLOCKER — checked by the architect before dispatch, not by the implementer.**
-   `WP-scheduler-register-replaces-loaded-record` exists as a spec and is
-   sequenced to merge **before** this WP. Until then this spec must not leave
-   `Draft`, must not be handed to an implementer, and must not merge. The reason
-   is Table D row 3: without that sibling, this WP converts a loud failure into a
-   silent one on every already-installed macOS machine. If a future architect
-   wants to lift this blocker, the thing to change is Table D — not this item.
+   All three sub-items, in order:
+   - **(0a)** `WP-scheduler-register-replaces-loaded-record` exists as a spec,
+     **its scope covers Table C row 4 (linux, degraded `daemon-reload`) as well as
+     row 5 (macOS)**, and it is sequenced to merge **before** this WP.
+   - **(0b)** **Its id is added to this spec's `depends_on`** in the same pass that
+     lifts the blocker. This is the one step that converts the blocker from prose
+     into a machine check: `scripts/check-frontmatter.js` rejects a `depends_on`
+     id that does not resolve, but it **never** complains about a *missing* one —
+     so an empty `depends_on` is invisible to tooling, and only adding the id makes
+     the dependency mechanically enforced from then on. Do not lift 0a without 0b.
+   - **(0c)** Until 0a and 0b are both done, this spec must not leave `Draft`, must
+     not be handed to an implementer, and must not merge.
+
+   The reason is **Table D**: without that sibling, this WP converts a loud failure
+   into a silent one on every already-installed macOS machine (D-a) and on every
+   Linux machine with a degraded `daemon-reload` (D-b). If a future architect wants
+   to lift this blocker, the thing to change is Table D — not this item.
 1. All verification steps pass locally; output pasted into the PR body, with V2's
    pass count strictly above 79, V2's subtest count `>= 4`, and V3's two counts
    flipped to 0 / 6.
@@ -1056,9 +1150,10 @@ npm test
    Windows argline byte-identical. No Windows host was available while this spec
    was written; the Windows layout claim in Implementation notes is specified, not
    observed.
-7. **AC9.** The PR body reproduces **Tables C and D verbatim**, states that Table C
-   row 3 does not converge and that Table D row 3 reports that non-convergence as
-   success, and does **not** claim the incident class is closed.
+7. **AC9.** The PR body reproduces **Table C and both halves of Table D verbatim**,
+   states that Table C rows 4 and 5 do not converge and that Table D's final row in
+   each sub-table reports that non-convergence as success, and does **not** claim
+   the incident class is closed.
 8. **ADR-0028 sequencing (OWNER).** The `WP-adr-0028-entry-node-path-amendment`
    change to `docs/adr/0028-…:83` has landed, or that line carries an owner-written
    annotation naming this WP, **at or before** this WP's merge. This WP does not
