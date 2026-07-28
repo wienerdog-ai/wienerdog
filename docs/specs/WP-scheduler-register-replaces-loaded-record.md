@@ -390,9 +390,13 @@ function ensureDarwinEntryRegistered(loader, uid, label, plistPath, o)
   // (b) non-destructive attempt first (ADR-0018 ordering, preserved)
   if (loader(['launchctl', 'bootstrap', `gui/${uid}`, plistPath]).status === 0) return true;
   // (c0) PREFLIGHT — never destroy a loaded record for a known-bad replacement.
-  //      Non-zero lint ⇒ stop here. Absent/erroring plutil ⇒ treat as pass.
-  const lint = loader(['plutil', '-lint', plistPath]);
-  if (lint && typeof lint.status === 'number' && lint.status !== 0) return false;
+  //      Gated on EXISTENCE, not on the loader's result shape: schedulerSpawn
+  //      normalizes a spawn error (incl. ENOENT) to {status:1} and discards the
+  //      error, so "absent plutil" and "lint rejected the file" are the SAME
+  //      value to a caller. Existence is what distinguishes them.
+  if (fs.existsSync(PLUTIL)) {
+    if (loader([PLUTIL, '-lint', plistPath]).status !== 0) return false;
+  }
   // (c) TEARDOWN ONLY ON A POSITIVELY ESTABLISHED MISMATCH. 'absent' means
   //     nothing to tear down; 'indeterminate' is the ABSENCE of evidence, not
   //     evidence of divergence — destroying a record we could not read would be
@@ -400,7 +404,14 @@ function ensureDarwinEntryRegistered(loader, uid, label, plistPath, o)
   if (verdict !== 'mismatch') return false;
   o.onBeforeTeardown();                       // ADR-0018 marker (advisory — see below)
   loader(['launchctl', 'bootout', `gui/${uid}/${label}`]);
-  if (loader(['launchctl', 'bootstrap', `gui/${uid}`, plistPath]).status === 0) return true;
+  if (loader(['launchctl', 'bootstrap', `gui/${uid}`, plistPath]).status === 0) {
+    // (c1) POST-BOOTSTRAP VERIFY — launchd loaded whatever was on disk at that
+    //      moment, not the bytes we linted. One read-only re-read; DETECTION
+    //      only, never a repair (see "The file race").
+    const after = loader(['launchctl', 'print', `gui/${uid}/${label}`]);
+    return !!after && after.status === 0
+      && darwinLoadedVerdict(after.stdout || '', o.expect) === 'match';
+  }
   // (d) ROLLBACK — the replacement is unbootstrappable; restore the prior
   //     registration so no destruction window ships. Never returns true.
   if (o.priorBytes !== null) {
@@ -597,8 +608,9 @@ branch (the recurring failure mode in this chain — see the gate-3 row).
 | rollback reports the failed replacement as success | make step (d) `return true` after a successful restore-bootstrap | T2b |
 | the prior bytes are captured after the overwrite | move the `priorBytes` read below `ensureEntry` | T2b (the restored bytes become the new plist, so the prior argv is never re-bootstrapped) |
 | `add()` reports success for an unloaded unchanged entry | restore the `changed &&` conjunct at `schedule.js:882` | T7 |
-| a known-bad replacement still gets a teardown | delete the `plutil -lint` preflight (c0) | **T2c** — lint non-zero + loaded record ⇒ a `bootout` appears |
-| a missing linter disables registration | treat an absent/erroring `plutil` result as a lint failure | **T2d** — `loader` returns `undefined` for `plutil` ⇒ the register must still proceed |
+| a known-bad replacement still gets a teardown | delete the `plutil -lint` preflight (c0) | **T2c** — `existsSync` true + lint non-zero + loaded record ⇒ a `bootout` appears |
+| the preflight is gated on the loader's result instead of existence | replace the `fs.existsSync(PLUTIL)` guard with a result-shape test (`if (lint && typeof lint.status === 'number')`) | **T2d** — with `existsSync` stubbed false and the loader still answering `{status:1}` (the shape `schedulerSpawn` produces for ENOENT), the register must still proceed; the mutated form refuses forever |
+| the linter is resolved off PATH | change `PLUTIL` to the bare name `'plutil'` | **T2c** — the argv assertion pins the absolute `/usr/bin/plutil` |
 | **`'indeterminate'` authorizes a teardown** — the CX-1 defect | change the teardown guard to `if (verdict === 'absent') return false;`, i.e. let an unreadable record through | **T3 case (xiv)** — print exits 0 with unparseable stdout ⇒ a `bootout` appears |
 | the verdict collapses back to a boolean | make `darwinLoadedVerdict` return `'mismatch'` for any non-match, folding `'indeterminate'` into it | T3 case (xiv) |
 | darwin compares only the head of the argv — the round-2 defect | make `darwinLoadedVerdict` compare only `argv[0]` and `argv[1]` | **T3 case (v)** — the stale-tail fixture |
@@ -707,13 +719,21 @@ env **containment** (§7b fact 1). Any `null` ⇒ false ⇒ attempt.
 
 ### D1 — the two new helpers in `src/cli/schedule.js`
 
-Both non-exported, defined near `darwinReplaceEntry`. `darwinLoadedVerdict` calls
-`gen.launchdLoadedArgs(stdout)` (exported by D0) and returns true only when the
-result is non-null, has the same length as `expect.argv`, and is equal
-element-by-element — **and then applies the calendar and env comparisons of
-Table A2 (D1b); all three must pass.** `null` (an unparseable `arguments = { … }` block), a length
-difference, or any mismatched element returns **false** — the fail-safe direction
-is to attempt, never to skip.
+Both non-exported, defined near `darwinReplaceEntry`. **`darwinLoadedVerdict`
+returns one of three strings and NEVER a boolean** — a round-7 rename made the
+function tri-state but left this paragraph describing true/false, which read
+literally would either disable every teardown or reintroduce destroy-on-unreadable.
+It calls `gen.launchdLoadedArgs(stdout)` plus the two D1b parsers and maps the
+result exactly as Table A1 requires:
+
+| Observation | Verdict |
+|---|---|
+| **any** parser returns its unparseable value (`launchdLoadedArgs` → `null`; `launchdLoadedCalendar` → outer `null`; `launchdLoadedEnv` → `null`) | **`'indeterminate'`** — the absence of evidence. Attempt the non-destructive bootstrap; **never** a teardown |
+| all three parsed, but the argv differs in length or in any element, or the calendar differs, or a canonical env pair is missing/differs | **`'mismatch'`** — the ONLY verdict that may authorize a teardown |
+| all three parsed and every compared value equal (Table A2) | **`'match'`** — skip |
+
+Both fail-safe directions follow from that table and neither is a boolean: an
+unreadable record is never skipped **and** never destroyed.
 
 **"Element by element" is not byte-fidelity, and that is safe here.**
 `launchdLoadedArgs` **normalizes**: it trims each line (`generators.js:685`) and
@@ -958,13 +978,32 @@ Four contract properties, all binding:
    0
    ```
 
-   **Contract:** after `ensureEntry` writes and **before** step (c)'s teardown, run
-   `plutil -lint <plistPath>` through the `loader` seam. **Non-zero ⇒ return
-   `loaded:false` immediately, with NO teardown** — the replacement is known-bad, so
-   destroying a loaded record for it is indefensible. Exit 0 does not promise the
-   bootstrap will succeed (permissions, launchd state), so it narrows the window
-   rather than closing it. `plutil` absent or erroring ⇒ treat as **pass** and
-   proceed: a missing linter must not disable registration.
+   **Contract, and the reason it is gated on `fs.existsSync` rather than on the
+   loader's result.** `schedulerSpawn` (`src/scheduler/spawn.js:33-35`) returns
+   `{status: r.status == null ? 1 : r.status}` and **discards `r.error`**. A spawn
+   failure — including `ENOENT` for a missing binary — therefore arrives as
+   `{status: 1}`, **byte-identical to "the linter rejected this file"**. A
+   fail-open written as "absent or erroring ⇒ pass" is consequently
+   **unreachable** with the production loader, and its real effect would be the
+   opposite of the intent: a machine without `plutil` would read every preflight as
+   a lint failure and **permanently refuse to replace any mismatched record**.
+   So the branch is decided by **existence**, which the loader cannot flatten:
+
+   - `PLUTIL = '/usr/bin/plutil'` — an absolute path, never a PATH lookup
+     (WP-154's exec-identity rule).
+   - `fs.existsSync(PLUTIL)` **false** ⇒ **skip the preflight entirely** and
+     proceed. This is the true fail-open, and it is now reachable and
+     distinguishable from a lint rejection.
+   - exists **and** `status !== 0` ⇒ return `loaded:false`, **no teardown**. The
+     replacement is known-bad; destroying a loaded record for it is indefensible.
+     Conservative and loud.
+   - exists **and** `status === 0` ⇒ proceed. Exit 0 does not promise the bootstrap
+     will succeed (permissions, launchd state), so this narrows the window rather
+     than closing it.
+
+   `plutil` is a **macOS system binary present by default** (`/usr/bin/plutil`,
+   verified on the authoring host), so the skip branch is near-unreachable in
+   practice — it exists to make the failure mode safe, not because it is expected.
 
    **The bound is what makes the remainder acceptable, and it depends on Table A2.** Once
    the skip compares every varying field, **any** record that reaches a teardown is
@@ -1005,6 +1044,45 @@ Four contract properties, all binding:
 That routed follow-up slug is **retired** — absorbed here — and must not be routed
 from this spec again.
 
+### The file race, the precondition, and the post-bootstrap verify (CX8-1)
+
+launchd loads whatever is on disk **at bootstrap time**, not the bytes we linted or
+computed `expect` from. A concurrent writer between those points makes the helper
+report success for bytes it never verified; and a concurrent rollback can overwrite
+another invocation's canonical file with stale `priorBytes`.
+
+**What serialization this repo actually has — grepped, not assumed.** The only lock
+is `src/core/dream/lock.js` (`state/dream.lock`, `acquireLock`/`lockPath`), which
+serializes **dream runs** under ADR-0012. There is **no** per-label, per-entry or
+registration-wide lock: `wienerdog sync` and `wienerdog schedule add` do not
+serialize with each other or with themselves. `state/locks` (which the launcher's
+env re-assert mentions) has no owner in `src/` — nothing reads or writes it.
+
+**Precondition, stated rather than invented around.** *Registration is an attended,
+single-invocation operation. Two concurrent `sync`/`add` processes racing the same
+label are **out of scope** for this WP.* This spec does **not** introduce a lock —
+inventing cross-process serialization from a docs WP, in a subsystem whose only
+existing lock belongs to a different lifecycle, is exactly the kind of speculative
+machinery CLAUDE.md forbids. Routed as **`WP-scheduler-register-serialization`**,
+which is also where the rollback-overwrite half belongs.
+
+**What IS added, because it is cheap: a post-bootstrap verify.** After the final
+`bootstrap` returns 0, issue **one** read-only `print` and re-run
+`darwinLoadedVerdict` against the same `expect`. Only `'match'` returns `true`;
+anything else returns `false` (with §8's notice). Cost: one read-only call on the
+replace path.
+
+**State its failure mode honestly — it is a DETECTION, not a repair.** If the
+bootstrap succeeded but the verify does not match, the record **is** loaded, with
+bytes we did not authorize, and we report `loaded: false`. We do not tear it down:
+that would be destroying a record on a verdict we have just shown can be produced
+by a racing writer rather than by divergence. So the outcome is *"something else
+won the race; a human is told"* — which is strictly better than *"we reported
+success for bytes we never verified"*, and strictly weaker than a repair.
+
+It closes the **report-wrong-registration** half of the race. The
+**rollback-overwrite** half is covered by the precondition and the route above.
+
 ### ADR-0037 is not signed, and this WP cannot merge before it is
 
 `docs/adr/0037-verified-registration-postcondition.md` is **Proposed**. It amends
@@ -1034,14 +1112,16 @@ nothing in this branch should be read as owner approval of it.
       existing `loadedEntryTargets`. No value parsed out of it reaches a `spawn`, a
       `path.join`, a `require`, an `fs` call, or a write. `darwinLoadedVerdict`
       performs no filesystem access and never throws.
-- [ ] The comparison is **allowlist-shaped**: it returns true only when the parsed
-      argv is non-null, the same length as `expect.argv`, and equal element for
-      element, **and** the calendar and env comparisons of Table A2 also pass. `null`, a length difference and any mismatched element all return
-      false, so an attacker who can make the readback unparseable — or who can
-      alter any single argument of the loaded record — causes an extra
-      registration, never a skip. Comparing the **complete** argv (rather than the
-      node and launcher positions) is what makes altering the
-      `--descriptor`/`--expect-digest` tail insufficient to buy a skip.
+- [ ] The comparison is **allowlist-shaped and TRI-STATE**: `'match'` only when
+      every parser succeeded **and** every Table A2 value is equal. An attacker who
+      can alter any single argument, calendar field or canonical env pair gets
+      `'mismatch'` — an extra registration, never a skip. An attacker who can make
+      the readback **unparseable** gets `'indeterminate'`, which buys **neither** a
+      skip **nor** a teardown: degrading the readback can therefore neither
+      certify a hostile record nor weaponize this code into destroying a healthy
+      one. Comparing the **complete** argv (rather than the node and launcher
+      positions) is what makes altering the `--descriptor`/`--expect-digest` tail
+      insufficient to buy a skip.
 - [ ] D0 exports an existing **pure** string function. It performs no filesystem
       access, no spawn and no `require`, it never throws, and exporting it widens
       no capability — `package.json` declares `bin` only (no `main`, no `exports`),
@@ -1117,11 +1197,18 @@ mock `process.platform` — and no test may touch a real OS scheduler
       **bound**, not a recovery: it is the case where rollback provably cannot
       restore the destroyed record;
       (g) the restore's `bootstrap` itself fails ⇒ still `loaded: false`, no throw;
-      (h) **the preflight (T2c)** — `plutil -lint` returns non-zero with a loaded
-      record present ⇒ `loaded: false` and **no `bootout` anywhere**;
-      (i) **the linter is absent (T2d)** — the `loader` returns `undefined` for the
-      `plutil` argv ⇒ treated as a pass, the register proceeds normally. A missing
-      linter must never disable registration.
+      (h) **the preflight rejects (T2c)** — `existsSync(PLUTIL)` true and the
+      loader answers `{status: 1}` for `[PLUTIL,'-lint',plistPath]`, with a loaded
+      mismatched record present ⇒ `loaded: false` and **no `bootout` anywhere**.
+      Assert the argv carries the **absolute** `/usr/bin/plutil`;
+      (i) **the linter is absent (T2d)** — `existsSync(PLUTIL)` stubbed **false**
+      ⇒ **no `plutil` argv is issued at all** and the register proceeds to the
+      normal replace path. Note the fixture must NOT model absence as a loader
+      result: `schedulerSpawn` renders ENOENT as `{status:1}`, which is
+      indistinguishable from a lint rejection, and modelling it that way is what
+      made a round-8 draft's fail-open unreachable;
+      (j) **the preflight passes (T2c)** — `existsSync` true, `{status: 0}` ⇒ the
+      replace path proceeds exactly as AC1.
       **Every fixture in this set pins `verdict === 'mismatch'`** — that is now the
       only verdict that reaches a teardown at all (Table A1), so a rollback fixture
       whose readback is unparseable would be testing an unreachable path.

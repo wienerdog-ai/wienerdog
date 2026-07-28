@@ -90,6 +90,15 @@ Concretely, three obligations, applied on every platform:
    platform does not skip. The fail-safe direction is redundant work, never
    silence.
 
+**Precondition.** Registration is an **attended, single-invocation** operation.
+Two concurrent registrations racing the same scheduler entry are outside this
+decision: the OS loads whatever is on disk when it is asked, so a concurrent writer
+can invalidate any readback taken moments earlier. No lock is introduced here —
+the repository's only lock serializes dream runs, not registrations — and
+obligation 3's "verify, don't assume" already requires the cheapest available
+mitigation, a re-read after the mutating call. Cross-process serialization is
+routed separately.
+
 ## Consequences
 
 - A `sync` that cannot establish what the OS holds now says so, every time,
