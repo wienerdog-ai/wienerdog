@@ -69,10 +69,16 @@ Concretely, three obligations, applied on every platform:
    **A platform's verified skip covers exactly the fields its readback can
    compare, and those fields are enumerated per platform with the remainder named
    as a residual.** No platform may claim the general form of this obligation on
-   the strength of a partial readback: macOS compares argv, calendar and
-   environment; Windows compares the executed command and argument line **only**,
-   leaving triggers and settings unread; Linux can compare nothing and therefore
-   never skips. Where a readback cannot reach a behaviour-bearing field, the honest
+   the strength of a partial readback: macOS compares the loaded plist path, the
+   program, the full argument vector, the log paths, the spawn type, the
+   environment bindings and a **unique** calendar trigger — but **not**
+   `RunAtLoad`, whose readback shape could not be established on any executed
+   record, so a catch-up registration with `RunAtLoad` removed by hand would pass
+   every compared field, be granted a verified skip, and silently stop running at
+   login while continuing to fire hourly (bounded to a manually edited record —
+   our renderer cannot produce it — and routed); Windows compares the executed
+   command and argument line **only**, leaving triggers and settings unread; Linux
+   can compare nothing and therefore never skips. Where a readback cannot reach a behaviour-bearing field, the honest
    options are to not skip, or to skip and record the exposure — never to describe
    the platform as fully conforming.
    **The readback is the whole of the evidence: file state is neither sufficient
