@@ -158,6 +158,8 @@ before you touch anything near it.
      including this one, including "to carry it across a rename", including "to
      make the two legs look symmetrical". -->
 
+OWNER-REAFFIRMED 2026-07-27 
+
 > **OWNER-ANSWERED — 2026-07-26. The signature stands; this question is closed.**
 > The signature below was given on 2026-07-25 against a document then named
 > `WP-secret-fence-two-tier-entropy`. This file is that document, renamed and
