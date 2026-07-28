@@ -15,6 +15,12 @@ findings across two rounds on the ADR-0020 / WP-080…083 spec chain.
    the merge gate (spec-fidelity review); Codex is an independent second
    opinion on the same diff. Both run; Gyula merges only when both are clean
    or every finding is dispositioned.
+3. **Dispatch-time re-verification (mandatory): every WP, at the moment it is
+   handed to an implementer.** The **orchestrator session** re-runs the spec's
+   executable Current-state claims against current `main` before it writes the
+   dispatch message. See "Dispatch-time re-verification" below. Listed here
+   because this is the section a dispatcher reads, and the gate is worthless if
+   it is only findable next to the design-review loop that precedes it.
 
 ## The loop (design review)
 
@@ -28,17 +34,33 @@ mechanisms) → repeat until clean → owner sign-off → specs move to Ready.
 
 ## Dispatch-time re-verification (the last gate before an implementer starts)
 
-**`Ready` is not the same as "still true". Before a WP is handed to an
-implementer, re-run its executable Current-state claims. A stale one blocks
-dispatch and routes the spec back to wd-architect — it is never something the
-implementer works around.**
+**`Ready` is not the same as "still true".** **The orchestrator session runs
+this**, in the same session that writes the dispatch message and immediately
+before it — the same actor that runs the design-review loop above, at the next
+step of the same pipeline. **Before it hands a WP to an implementer it re-runs
+that spec's executable Current-state claims against current `main`. A stale
+claim blocks the dispatch and routes the spec back to wd-architect** — the
+orchestrator does not repair it, and the implementer is never dispatched to work
+around it.
 
-The claims this covers are the ones the spec states as fact about the tree the
-implementer will find: line-number citations, `grep` sentinels, digests over
-files the WP does not own, "today's behaviour" descriptions, and permitted-removal
-bounds. The check is exactly the spec's own commands, run on current `main`. No
-new mechanism, no tooling, no schedule — this is one step in the dispatch
-conversation, stated once, here.
+**Dispatch here is a conversation, not a command**, which is exactly why the rule
+has to name its actor and its artifact rather than a hook: there is no dispatch
+binary to wire this into, and adding one would be a mechanism this repo does not
+want (ADR-0004). What makes it auditable instead is the **dispatch message**: it
+names each claim re-run and the result, so a reader can tell a gate that ran from
+a gate that was skipped. That is the whole record — no new file, no tooling, no
+schedule.
+
+**Which claims, and how the orchestrator knows the set is complete.** The set is
+every claim in the spec's `## Current state` section that has a runnable form:
+line-number citations, `grep` sentinels, digests over files the WP does not own,
+"today's behaviour" descriptions, and permitted-removal bounds. The spec is the
+inventory — it is required to inline everything the implementer needs (ADR-0005),
+so a Current-state fact that appears nowhere in that section is a spec bug and is
+reported as one rather than silently re-verified. **If a spec's Current-state
+claims cannot be enumerated from that section, the spec is not dispatchable and
+goes back to wd-architect** — the same routing as a stale claim, for the same
+reason.
 
 **Why it exists.** A spec's Current-state section is verified once, at design
 time. Every dependency that merges between then and dispatch can falsify it,
@@ -60,15 +82,18 @@ deadlock, dispatched (`docs/specs/done/WP-secret-fence-ep2-redact-arm.md:629`).
 Re-running the claims at dispatch turns that into a five-minute architect edit
 instead of a blocked session.
 
-**Two rules follow.**
+**Three rules follow.**
 
 - **Re-run, do not re-read.** A claim is stale or it is not; reading the spec
   again cannot tell you which. If a claim has no runnable form, it was not an
   executable Current-state claim and this gate does not cover it.
-- **A stale claim goes back to the architect, never to the implementer.** The
+- **A stale claim goes back to wd-architect, never to the implementer.** The
   spec's Deliverables table is a permission boundary, so the file that would fix
   a rotted citation is usually outside the implementer's reach — which is what
   made the case above a deadlock rather than an inconvenience.
+- **The dispatch message records the run.** Which claims were re-run, and their
+  results. A dispatch that does not say is a dispatch where this gate did not
+  run, and it is the orchestrator's to redo.
 
 ## How to run it
 

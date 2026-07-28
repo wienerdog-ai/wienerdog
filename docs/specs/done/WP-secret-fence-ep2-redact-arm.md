@@ -2254,11 +2254,19 @@ what these three rows *say*, and only that is edited:
   both clauses are held. Split into **M-23** and **M-23b**, one mutation each —
   which is what PR #122 ran.
 
-**The rule that generalizes all three is now in ADR-0031** as a dated,
-architect-authored, **not-yet-owner-signed** amendment: a contract table's
-`mechanism` column carries a schema in which the **trigger** is a field distinct
-from the **patch**, and a mutation row states **exactly one** mutation. Read that
-amendment as the rule; this block is the instance it was written from.
+**A rule that would generalize all three is PROPOSED in ADR-0031** — amendment
+A1, dated 2026-07-28, written by the architect and **not signed by the owner**.
+Its three clauses: a contract table's `mechanism` column carries a schema in
+which the **trigger** is a field distinct from the **patch**, and a `TRIGGER:
+none` claim is measured rather than asserted; **every seam the cell names —
+trigger or patch — is identified structurally, never by an ordinal**; and a
+mutation row states **exactly one** mutation. **A1 is not in force and this block
+does not make it so.** Until the owner signs it, nothing in this spec is governed
+by it: the three corrections below stand on their own evidence, which is what
+PR #122 measured, and A1 is the proposal that block was written from rather
+than the authority for it. **If and when A1 is signed, it becomes the rule and this
+paragraph is its mirror** — and the middle clause is the one FI-19's correction
+rests on, so a change to it changes FI-19's row in the same pass.
 
 **Mirrors touched in this same pass, per ADR-0031's update-all-mirrors
 obligation** — the `mechanism` and `why nothing cheaper reaches it` cells of
@@ -2965,18 +2973,28 @@ above; the rule applies identically to rows B4, B5, B10, B6, B7 and B13.
       **arming rule in this table's preamble**. A precondition can be forgotten
       by the next test author and fails *vacuously* when it is; a seam property
       cannot be violated by a fixture at all.
-      **The 2026-07-28 post-Done errata registers one NEW mirror and states the
-      rule the round-5 and round-7 extensions above kept re-deriving.** The new
-      mirror is the **errata block in Table T's preamble**, which restates what
-      FI-10, FI-19 and M-23 were wrong about; it defers to the three rows and
-      decides nothing. The rule: **a `mechanism` cell states its TRIGGER as a
-      field distinct from its PATCH, and a mutation row states exactly one
-      mutation.** FI-10 shipped with no trigger and passed vacuously — round 5's
-      extension, third instance. FI-19 shipped with an ordinal read count wrong
-      for its own trigger — round 7's extension, second instance. M-23 stated two
-      mutations in one row, so neither clause was held. **ADR-0031**'s dated
-      2026-07-28 amendment carries the rule out of this spec, because three
-      instances in one table is a pattern and not three slips.
+      **The 2026-07-28 post-Done errata registers one NEW mirror: the errata
+      block in Table T's preamble**, which restates what FI-10, FI-19 and M-23
+      were wrong about. It defers to the three rows and decides nothing.
+      **The three clauses of ADR-0031's PROPOSED amendment A1, stated in full
+      because a mirror that carries two of three is the drift this Checklist
+      exists to stop:** (i) a `mechanism` cell states its **TRIGGER** as a field
+      distinct from its **PATCH**, and a `TRIGGER: none` claim is measured rather
+      than asserted; (ii) **every seam the cell names — trigger or patch — is
+      identified structurally, never by an ordinal**; (iii) a mutation row states
+      exactly one mutation. **A1 is not signed and not in force**, so this bullet
+      registers it as a proposal, not as an obligation; the three corrections
+      stand on PR #122's measurements. What each instance was: FI-10 shipped with
+      no trigger and passed vacuously — clause (i), and **round 5's extension,
+      third instance**. FI-19 shipped an ordinal read count in its **patch** that
+      was wrong for its own trigger — clause (ii), and **a new axis rather than a
+      recurrence of round 7's extension**: round 7 kept the ordinal and made it
+      *relative* to an arming read, while FI-19's repair **abandons ordinals
+      altogether** for a structural anchor, which is the stronger move and the
+      reason clause (ii) reaches patches. M-23 stated two mutations in one row, so
+      neither clause was held — clause (iii). Three instances in one table is a
+      pattern and not three slips, which is why the rule was proposed outside this
+      spec rather than written into this bullet as local practice.
 - [ ] **Table P** mirrors: the Current-state paragraph describing the detector
       after leg 1; the Deliverables prohibition on `src/core/secret-scan.js`;
       "Why this leg cannot go first"; acceptance criterion AC-21; verification
@@ -4362,8 +4380,8 @@ against; and as of round 8 the **dated** form is not used either, because round
 | M-20 | drop B10's index-first stage entirely and let Step 5's `git add -A` do the staging | AC-24 (**I1**, the **R8** case: with nothing staged before Step 4, the index snapshot taken at the first `fs.appendFileSync` still holds this run's raw added bytes) **and** AC-9 (Table R row **R7** becomes unproducible — there are no staging calls left to fail — so its test has no subject). **Not the R7 fall-through cases**: those clear the index through B3's `git checkout HEAD --` or B3a's `git add -A -- rel`, which run regardless of whether B10 staged anything, and an earlier revision of this cell named them wrongly |
 | M-21 | replace the temp+rename in `scrubAddedLines` with a single `fs.writeFileSync` onto the target | AC-9 (Table R row **R5**, injection FI-5b) |
 | M-22 | move `reverted.push(…)` back into the shared path so a completed B4 enters it | AC-8 / AC-10 (Table B row **B9a** — the report section and `res.reverted.length`) |
-| M-23 | **stop excluding the just-created copy** from the prune's candidate set (**Table N row N3**); leave the `(mtimeMs, name)` ordering alone | AC-14, the second case (tied and skewed `mtime`s), which is what holds **N3**. *Post-Done errata 2026-07-28: until then this row stated TWO independent mutations in one cell — the ordering and the exclusion — and either half alone satisfied it, so no single run could show that both clauses are held. PR #122's Decision 3 split it and ran both; the split is recorded here. **M-23b** is the other half* |
-| **M-23b** | **order the prune's candidates by filename** instead of by `(mtimeMs, name)` (**Table N row N4**); leave the just-created-copy exclusion alone | AC-14, the second case, which is what holds **N4**. *Added by the 2026-07-28 errata as the second half of the old M-23. Registered on V-30's dated backlog in the same pass, with the other retention-family mutation ids* |
+| M-23 | **stop excluding the just-created copy** from the prune's candidate set (**Table N row N3**); leave the `(mtimeMs, name)` ordering alone | AC-14, the second case (tied and skewed `mtime`s), which is what holds **N3**. *Post-Done errata 2026-07-28: until then this row stated TWO independent mutations in one cell — the ordering and the exclusion — and either half alone satisfied it, so no single run could show that both clauses are held. **PR #122's Decision 3 records that it split the row and ran both halves separately, and that both went red against different tests. WHICH HALF TOOK WHICH ID IS CHOSEN HERE, NOT MEASURED** — that PR's sweep labels the two runs `prune by filename, no exclusion` and `prune by filename sort`, the first of which names both clauses, so the labels do not resolve the assignment; no id appears in `src/`, `tests/` or `scripts/` (grepped 2026-07-28, zero hits), so nothing in the tree resolves it either. The assignment below is the reading that matches those two labels most directly, and it is stated as a choice so no later reader takes it for a measurement. Re-running the two halves would settle it and is not done here.* **M-23b** is the other half |
+| **M-23b** | **order the prune's candidates by filename** instead of by `(mtimeMs, name)` (**Table N row N4**); leave the just-created-copy exclusion alone | AC-14, the second case, which is what holds **N4**. *Added by the 2026-07-28 errata as the second half of the old M-23; the same chosen-not-measured disclosure in M-23's cell governs this row's half of the split. Registered on V-30's dated backlog in the same pass, with the other retention-family mutation ids* |
 | M-24 | require `,b` in the hunk-header pattern (`/^@@ -(\d+),(\d+) \+…/`) so `@@ -2 +2 @@` never matches | AC-8 (the **single-line replacement** fixture) |
 | M-24b | treat a hunk header with no `,d` as contributing zero added lines | AC-8 (the **single-line insertion** fixture) |
 | M-25 | change B3's reason string (drop `; not committed`) | AC-7 (the withhold path's byte-identical reason strings) |
@@ -4385,7 +4403,7 @@ against; and as of round 8 the **dated** form is not used either, because round
 | **M-45** | **delete row B3b** — let B3 revert or remove the file after its own preserve failed, exactly as it did before round 1 of the design gate | AC-9 (Table R row **R0**, injections **FI-12/13/14**, and specifically their **untracked** arms: with B3b gone the note is `fs.rmSync`ed while neither `redacted/` nor `quarantine/` holds a copy, so the assertion that the file is still on disk fails). **This mutation IS the shipped behaviour of every revision before this one**, which is why it is in the table: the loss path was the default, not a slip |
 | **M-46** | **restore the second content read** — have `scrubAddedLines` call `fs.readFileSync` on the target for its scrub input instead of using the `captured` buffer | **AC-9 via FI-15, RE-KEYED IN ROUND 2 to the read COUNT rather than to a perturbation.** FI-15's harness records every read of the target and asserts there are **exactly two** (the capture and the rule-2 comparison); a module that re-reads for content makes a **third** and fails that assertion. It also fails FI-15's fourth assertion, that the scrubbed target equals the per-line scrub of the captured bytes. **The previous keying was to an impossible injection** — FI-15 used to poison every post-capture read, which a conforming implementation must observe at the comparison, so the row it named could never be reached and this mutation had nothing that could redden. **No structural check can substitute** — a grep for the read count is satisfied by any other spelling |
 | **M-47** | **drop the pre-rename compare** — rename the temp over the target without re-reading and comparing against `captured` | **AC-9 (Table R row R7c, injection FI-16), RE-KEYED IN ROUND 2 to a modification made BEFORE the comparison read.** FI-16 now writes different bytes over the target immediately before delegating the comparison read, so a conforming arm detects the change and never renames; with the compare dropped, the recorded `fs.renameSync` **IS** invoked, the user's mid-run save is overwritten by the gate's rewrite, and the only copy of that save is destroyed while `redacted/` holds the pre-save bytes. **Asserted as *rename was called*, which is the observation that distinguishes the two designs.** The previous keying was self-contradictory: FI-16 modified the target *inside* the patched rename — after the comparison had already passed — and then asserted the rename was never invoked, which the patch's own execution disproves |
-| **M-48** | **prune per call instead of per run**, excluding only the current B4's basename — i.e. violate **Table N** rows **N2** and **N3** | AC-14, the full-directory multi-redaction case with tied and skewed `mtime`s: a copy this run created is evicted before the run ends and the report line names a file that no longer exists. **The previous design's defence against this was an arithmetic claim ("decades of runs below the cap") that Table N's extraction record shows was false by three orders of magnitude — so nothing but this mutation stands between the two designs** |
+| **M-48** | **prune per call instead of per run**, excluding only the current B4's basename — i.e. violate **Table N** rows **N2** and **N3** | AC-14, the full-directory multi-redaction case with tied and skewed `mtime`s: a copy this run created is evicted before the run ends and the report line names a file that no longer exists. **The previous design's defence against this was an arithmetic claim ("decades of runs below the cap") that Table N's extraction record shows was false by three orders of magnitude — so nothing but this mutation stands between the two designs**. *Audited 2026-07-28 as part of the M-23 errata and KEPT AS ONE ROW: it names two Table N rows but it is **one independently-revertible change** — moving the prune from per-run to per-call. N3's exclusion set is defined as "every basename **this run** created", so per-call scoping collapses it to the current call as a consequence; there is no edit that violates N2 here without violating N3, and no half to run separately. That is the distinction the one-mutation rule turns on — one revertible change, not one sentence — and it is why this row is not the M-23 defect. **The audit was the whole table, not this row**: all **37** mutation rows the table now holds were read in that pass (counted, not recalled), M-48 is the only one naming two contract-table rows, and the six others carrying an "and" (**M-16**, **M-20**, **M-33**, **M-53**, **M-56**, **M-50**) each state one revertible edit plus its consequence or its retained scope, not a second mutation. M-23 was the only genuine conjunction and it is now split* |
 
 M-16 and M-17 cover the transitions Table B had no row for until B5a; M-20 … M-24
 cover the four defects round 3 found in this same contract family, which is why

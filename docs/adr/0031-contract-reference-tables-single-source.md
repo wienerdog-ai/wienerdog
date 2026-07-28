@@ -308,18 +308,40 @@ tables that tell an implementer how to *produce* a state rather than what must b
 
 1. **A `mechanism` cell carries at least two named fields: a TRIGGER and a PATCH.** The
    **patch** is the fault itself — the stub, the stateful wrapper, the permission change. The
-   **trigger** is what puts the system on the code path where that patch is reached. Either
-   field may be *"none — the patch is reached on the ordinary path"*, and writing that
-   explicitly is the point: it is a claim the author has to make and a reviewer can falsify.
-   What is forbidden is a cell that names only patches and leaves reachability implied.
-2. **A trigger is identified structurally, never by an ordinal**, whenever both forms are
-   available. *"the first read after X failed"* survives a reordering; *"the third read"* is a
-   standing claim about which calls run, and it is falsified by any short-circuit on the very
-   path the row mandates.
+   **trigger** is what puts the system on the code path where that patch is reached. What is
+   forbidden is a cell that names only patches and leaves reachability implied.
+   **`TRIGGER: none` is a permitted value and it is a measured one.** A cell may say *"none —
+   the patch is reached on the ordinary path"* only when the row also records the observation
+   that shows it: the injection run, and the row's own cell observed as **entered** — the
+   assertion about the failure path evaluated, not merely a green test. An unverified
+   *"none"* is the FI-10 defect written down rather than removed, because a row whose patch is
+   never reached is green either way and the claim is exactly what nobody checked. **This is
+   the clause that gives the rule its parity with the `kind` column below**, which is
+   admissible only with the untouched-tree run behind it; without this clause A1 would be
+   strictly weaker than the precedent it cites.
+2. **Every seam a `mechanism` cell names — trigger or patch — is identified structurally,
+   never by an ordinal, whenever both forms are available.** *"the first read after X failed"*
+   survives a reordering; *"the third read"* is a standing claim about which calls run, and it
+   is falsified by any short-circuit on the very path the row mandates. **The scope is "every
+   seam" and not "the trigger", and that is the whole point of the clause**: FI-19's ordinal
+   was never in its trigger — the trigger was a structural `spawnPinnedSync` wrapper — it was
+   in the **patch**, a read counter that throws on the *n*-th call. A rule reaching only
+   triggers leaves the actual defect legal, and both of this clause's worked examples above
+   are patches. Neither field is exempt.
+   **The boundary, stated so the clause does not over-reach.** *"Whenever both forms are
+   available"* is load-bearing: some seams genuinely have no structural anchor, and for those
+   a **counted** seam is admissible provided the count is **relative to a named arming
+   event** rather than absolute over the run, and the row says what arms it. That is a
+   weaker guarantee and the row carries the reason it settled for it. What this clause
+   forbids is an ordinal chosen when a structural anchor was there to be used — which is
+   FI-19's case exactly: the structural anchor (the first target read after the withheld
+   preserve's write failed) existed the whole time and is what the implementation shipped.
 3. **A mutation row states exactly one mutation.** A row conjoining two independent changes
    cannot demonstrate that both are held: applied together, either half alone reddens the
    named check, so a green sweep is compatible with one clause being unenforced. Two changes
-   are two rows and two ids.
+   are two rows and two ids. **"One mutation" means one independently-revertible change, not
+   one sentence** — a single coherent design revert that necessarily moves two rows of the
+   same contract together is one mutation, and a row relying on that reading says so.
 
 **Why a schema rather than more care.** A mechanism cell with no trigger fails *green*. The
 injected fault is never reached, the arm completes on its success path, and the assertion
