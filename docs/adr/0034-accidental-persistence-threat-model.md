@@ -32,9 +32,10 @@ run of 24+ characters from `[A-Za-z0-9+/=]` at ≥ 3.5 bits/char is
 finding at the EP2 staged-output gate withholds and reverts the whole note.
 
 **That rule is destroying the product, and the measurement is not marginal.**
-Scanned on 2026-07-26 with the shipped detector at commit `efd1489` against the
-maintainer's real vault (182 markdown notes): **102 notes (56.0%) contain at
-least one finding and would be reverted by EP2.** On 2026-07-24 the live dream
+Scanned on 2026-07-28 against the maintainer's real vault (189 markdown notes),
+with the detector as it stood *before* this fence's first leg: **109 notes
+(57.7%) contain at least one finding and would be reverted by EP2.** On
+2026-07-24 the live dream
 reverted three legitimate notes — including the daily rollup — and, because the
 transcript ledger had already marked those sessions processed, that content was
 lost permanently. (The ledger half was fixed separately by
@@ -214,23 +215,33 @@ the candidate's contents.
 
 ## The measured evidence
 
-E1–E3 were re-measured on **2026-07-26** against the shipped detector at commit
-`efd1489` and the maintainer's real vault (**182** markdown notes under
-`~/Obsidian/gyula`, excluding `.git`/`.obsidian`/`.trash`); the vault is private
-and is not checked in. E4 was produced on 2026-07-25 against the same commit.
-The vault is a live corpus — see errata ER-4 for what that means for a later
-reproduction.
+E1–E3 were re-measured on **2026-07-28** against the maintainer's real vault
+(**189** markdown notes under `~/Obsidian/gyula`, excluding
+`.git`/`.obsidian`/`.trash`); the vault is private and is not checked in. E4 was
+produced on 2026-07-25 against commit `efd1489`. The vault is a live corpus — see
+errata ER-4 and ER-7 for what that means for a later reproduction.
+
+**What each figure is measured against, stated because leg 1 has now merged and
+the two halves no longer come from one detector.** E1 and E2 describe the
+detector as it stood *before* `WP-secret-fence-two-tier-detector`, reproduced by
+`scripts/measure-secret-fp.js` at `72f3e46`: that script runs the module's
+labelled stage with its entropy stage suppressed, then applies a hand-written
+copy of the pre-leg-1 context-free pass to what survives, and it refuses to print
+any figure at all on a corpus where a rule leg 1 *added* has matched. E3 describes
+this design's end state and is now measured against the **shipped, merged
+detector** rather than against the from-spec prototype it rested on when it was
+first written — a strengthening of E3's evidence, not a change to what it claims.
 
 **E1 — the destructive false positives come from exactly one rule.**
 
 ```text
-notes scanned                                    182
-notes with ANY finding (EP2 reverts today)       102   (56.0%)
-    high-entropy ONLY                            101
-    a labelled rule ONLY                           0
-    both                                           1   (a documented AKIA placeholder)
-findings by rule:  high-entropy 299 occurrences  |  aws-key 1
-distinct high-entropy runs                       106
+notes scanned                                     189
+notes with ANY finding (EP2 reverts today)        109   (57.7%)
+    high-entropy ONLY                             108
+    a labelled rule ONLY                            0
+    both                                            1   (a documented AKIA placeholder)
+findings by rule:  high-entropy 315 occurrences  |  aws-key 1
+distinct high-entropy runs                        110
 ```
 
 **100% of the destructive false positives come from the single context-free
@@ -240,20 +251,20 @@ produced a finding in the entire corpus, and that finding is a documented
 seventeen produced none.** (Corrected 2026-07-26, errata ER-6: the original
 sentence put the count on the wrong side.)
 
-**E2 — the 7-character structural void.** Of the 106 distinct high-entropy
-runs, **102 contain a `/`**, and every one of those is a file path or a
+**E2 — the 7-character structural void.** Of the 110 distinct high-entropy
+runs, **106 contain a `/`**, and every one of those is a file path or a
 slash-joined prose list. The discriminating fact: **the longest slash-free
 segment in any of them is 17 characters, against a 24-character floor — a
 7-character structural void.** A credential is high-entropy *within* one
 delimiter-free segment; a path is high-entropy only *across* its segments.
 That gap is structural, not a tuned threshold: it exists because path segments
-are words. (Distribution of the longest segment per run: 7→3, 8→8, 9→23,
-10→27, 11→3, 12→29, 13→4, 14→4, 17→1.)
+are words. (Distribution of the longest segment per run: 7→3, 8→9, 9→25,
+10→28, 11→3, 12→29, 13→4, 14→4, 17→1.)
 
 **E3 — the design's measured end state.** Labelled rules at `quarantine` plus a
-context-bound tier and a context-free tier: notes withheld **102 → 1** (the
+context-bound tier and a context-free tier: notes withheld **109 → 1** (the
 pre-existing `AKIA` placeholder, a labelled-rule hit unaffected by any of
-this), notes scrubbed in place **0 → 9**, notes untouched **80 → 172**.
+this), notes scrubbed in place **0 → 9**, notes untouched **80 → 179**.
 
 **E4 — the false-negative cost, measured rather than argued.** *(Corrected
 2026-07-26, errata ER-1 and ER-2. The original text stated a cell count that its
@@ -334,7 +345,7 @@ the `0600` artifacts regardless (`docs/THREAT-MODEL.md` T0 / ACTION-LIST A12).
 - **The severity taxonomy acquires meaning at EP2.** `redact` gains exactly one
   producer and a gate that acts on it; before this ADR, `redact` and
   `quarantine` were indistinguishable at that gate.
-- **A false positive stops costing the user a note.** Measured: 102 withheld
+- **A false positive stops costing the user a note.** Measured: 109 withheld
   notes become 1 withheld and 9 scrubbed-with-a-preserved-original.
 - **The fence is now allowed to be wrong in one direction on purpose.** That is
   the point of writing the threat model down: the residual in E4 and the
@@ -349,7 +360,7 @@ the `0600` artifacts regardless (`docs/THREAT-MODEL.md` T0 / ACTION-LIST A12).
 ## Alternatives considered
 
 - **Keep today's behaviour (withhold on any finding).** Rejected on
-  measurement: 56.0% of a real vault reverted, permanent content loss already
+  measurement: 57.7% of a real vault reverted, permanent content loss already
   incurred, and the destructive share attributable to one rule is 100%. A
   security control the user must route around is not a security control.
 - **A human-ratified exact-value allowlist** (sha256 digests of approved whole
@@ -872,3 +883,178 @@ bytes, verbatim:
 The replacement says "eleven words", scopes the no-rewording claim to everything
 outside the parenthesis, and scopes the no-movement claim to edit (1) — because
 edit (1) of this block did move those blocks bodily and says so.
+
+## Errata — 2026-07-28 (vault re-measurement after leg 1 merged; no Decision changes)
+
+Applied by **the architect**, in the form this appendix's opening paragraph
+requires: a dated block that states what moved, quotes the pre-edit bytes
+verbatim, and names the digests it obliges the architect to recompute.
+
+**What happened.** `WP-secret-fence-two-tier-detector` — leg 1 of the fence —
+merged on 2026-07-28 as `72f3e46`. The evidence in this document was last
+re-measured on 2026-07-26 against a **182**-note vault. Re-run on 2026-07-28
+against the same vault, now **189** notes, every figure in E1, E2 and E3 moved
+and **no structural fact and no conclusion did**. That is precisely the
+"re-measurement event" ER-4 said this mechanism would handle, arriving for the
+second time.
+
+**Why an errata amendment and not a new ADR, checked against this document's own
+licence rather than assumed.** The errata mechanism defined above covers
+**measured evidence only**; the five-condition precedent's closing paragraph says
+so in as many words — *"the errata mechanism above covers measured evidence only,
+and the Decisions are outside it"*. Every edit in this block is a measured figure
+in E1, E2, E3, a sentence that quotes one, **or the evidence-provenance paragraph
+ER-7(a) names** — the ten lines added to the evidence header recording which
+detector each block is measured against. *That paragraph is new prose rather than
+a corrected figure, so an unqualified "every edit is a measured figure" did not
+cover it; the paragraph was disclosed at ER-7(a) from the start, so this is a
+scoping defect in this sentence and not an undisclosed edit. Corrected 2026-07-28
+in the fix round.* **Decisions 1–7 are untouched,
+byte for byte, and so is the owner-signature line on line 6** — no agent may ever
+amend either, and this block does not invoke the dangling-cross-reference
+exception, which is not needed here because nothing inside a Decision is edited
+at all. Decision 3's parenthetical cites Evidence E1 by name and carries no
+figure, which is why a re-measurement leaves it alone. The decisions re-derive
+identically from the corrected figures: a vault that reverts 57.7% instead of
+56.0% is the same problem slightly larger, and nothing in this ADR turns on the
+third significant figure.
+
+> **OWNER-RULED IN SESSION — 2026-07-28 (TRANSCRIBED BY THE ARCHITECT, NOT
+> OWNER-TYPED).** The owner was asked whether this errata block needs his
+> signature and answered that it does not need one and that he passes on signing
+> it. This paragraph records that the question was put and answered. **It is not
+> a signature, it is not an approval line, and no gate may ever key on it** — the
+> merge gate keys on an owner-written signature line, which no agent ever writes
+> (row S5 of `WP-secret-fence-ep2-redact-arm`'s owner-signature-form table). The
+> architect verified the ruling against the licence text before relying on it,
+> and the reading above is that verification: an errata block needs no signature
+> because it corrects measured evidence and touches no Decision and no signature
+> line. Had a Decision genuinely moved, this would have been a new-ADR event and
+> the ruling would not have reached it.
+
+**Pre-edit bytes, verbatim. The two-space indent is this block's quoting device
+and is not part of the text** — the same device the round-5 structural correction
+above uses, and here it is load-bearing rather than tidy: `WP-secret-fence-two-tier-detector`'s
+V-15 digests the E1 block by a content-addressed `sed` range running from
+`^notes scanned` to `^distinct high-entropy runs` (each pattern ends in a space,
+which is not shown here), so an unindented verbatim quotation of that block
+elsewhere in this file would extend the range over everything in between. A
+quotation must not change what a checker reads.
+
+```text
+  E1–E3 were re-measured on **2026-07-26** against the shipped detector at commit
+  `efd1489` and the maintainer's real vault (**182** markdown notes under
+  `~/Obsidian/gyula`, excluding `.git`/`.obsidian`/`.trash`); the vault is private
+  and is not checked in. E4 was produced on 2026-07-25 against the same commit.
+  The vault is a live corpus — see errata ER-4 for what that means for a later
+  reproduction.
+
+  notes scanned                                    182
+  notes with ANY finding (EP2 reverts today)       102   (56.0%)
+      high-entropy ONLY                            101
+      a labelled rule ONLY                           0
+      both                                           1   (a documented AKIA placeholder)
+  findings by rule:  high-entropy 299 occurrences  |  aws-key 1
+  distinct high-entropy runs                       106
+
+  **E2 — the 7-character structural void.** Of the 106 distinct high-entropy
+  runs, **102 contain a `/`**, and every one of those is a file path or a
+  slash-joined prose list. … (Distribution of the longest segment per run: 7→3, 8→8, 9→23,
+  10→27, 11→3, 12→29, 13→4, 14→4, 17→1.)
+
+  **E3 — the design's measured end state.** Labelled rules at `quarantine` plus a
+  context-bound tier and a context-free tier: notes withheld **102 → 1** (the
+  pre-existing `AKIA` placeholder, a labelled-rule hit unaffected by any of
+  this), notes scrubbed in place **0 → 9**, notes untouched **80 → 172**.
+
+  Scanned on 2026-07-26 with the shipped detector at commit `efd1489` against the
+  maintainer's real vault (182 markdown notes): **102 notes (56.0%) contain at
+  least one finding and would be reverted by EP2.**
+
+  - **A false positive stops costing the user a note.** Measured: 102 withheld
+    notes become 1 withheld and 9 scrubbed-with-a-preserved-original.
+
+  - **Keep today's behaviour (withhold on any finding).** Rejected on
+    measurement: 56.0% of a real vault reverted, permanent content loss already
+    incurred, and the destructive share attributable to one rule is 100%.
+```
+
+`…` marks elided body that this edit did not touch: E2's middle sentences and the
+tails of the two bullets are byte-unchanged and are not requoted.
+
+| # | What was wrong | Where | Correction |
+|---|----------------|-------|------------|
+| ER-7 | E1's figures were a 2026-07-26 snapshot of a corpus that has grown again: **182** notes, **102** with any finding, **56.0%**, a **101 / 0 / 1** source split, **299** `high-entropy` occurrences and **106** distinct runs | E1, the Context paragraph, the evidence header, the third "Consequences" bullet and the first "Alternatives considered" bullet | Re-measured 2026-07-28 over **189** notes: **109** with any finding, **57.7%**, split **108 / 0 / 1**, **315** `high-entropy` occurrences, **110** distinct runs. **Every structural fact is unchanged** — one labelled-rule finding in the whole corpus, still `aws-key`, still the documented `AKIA…` placeholder, so E1's headline claim re-derives identically and **its commentary paragraph is byte-unchanged**, ER-6's correction included. Two things about the block itself are new and are stated rather than left to be noticed. (a) **The evidence header now records which detector each block is measured against**, which the 2026-07-26 text did not have to: leg 1 has merged, so E1 and E2 are the *pre-leg-1* pass reproduced by `scripts/measure-secret-fp.js`, while E3 is the shipped module. (b) **The block's value column is one character wider.** It is that script's current output verbatim **apart from the pre-existing parenthetical on the `both` row, `(a documented AKIA placeholder)`, which is editorial, predates this pass and is re-attached with the same three-space gap it always had** — the script prints counts only and has never printed it; the script is a leg-1 deliverable that did not exist when the 2026-07-26 copy was hand-assembled, and it pads the value field to five columns where the hand-built copy padded to four. No digit moved because of the padding |
+| ER-8 | E2's counts were the same snapshot — "Of the **106** distinct high-entropy runs, **102 contain a `/`**", with the longest-segment distribution `7→3, 8→8, 9→23, 10→27, 11→3, 12→29, 13→4, 14→4, 17→1` | E2 | Re-measured 2026-07-28 over the same corpus by the same construction: **110** distinct runs, **106** containing a `/`, distribution `7→3, 8→9, 9→25, 10→28, 11→3, 12→29, 13→4, 14→4, 17→1` (which sums to 106, as the pre-edit one summed to 102). **The 7-character structural void — the only thing E2 argues from — is unchanged**: the longest slash-free segment in any of those runs is still **17** characters against a 24-character floor. **E2's qualitative claim, that every slashed run is a file path or a slash-joined prose list, was re-checked over the new set rather than inherited**, and structurally rather than by publishing any of them: all 106 have every slash-free segment ≤ 17 characters, all 106 have every segment word- or identifier-shaped (`[A-Za-z0-9._-]` only), 105 of 106 have a vowel in every segment longer than three characters, and **none of the 106 contains a `+` or an `=`** — no run in the set carries a base64 marker. ER-4 recorded E2 as reproducing byte-identically; that is no longer true of its counts and is still true of its conclusion, and the two claims are deliberately not conflated |
+| ER-9 | "notes withheld **102 → 1** … notes untouched **80 → 172**" | E3 | **109 → 1** and **80 → 179**. Scrubbed in place **0 → 9** is unchanged, and so is the parenthetical naming the one survivor. The *before* column of the untouched row is **80 in both measurements**, which is arithmetic and not luck: 182 − 102 = 189 − 109 = 80. **E3 is now measured against the shipped, merged detector** rather than against the from-spec prototype it rested on when it was written, leg 1 having landed at `72f3e46` — the evidence got stronger while the figures moved |
+
+Nothing else in this ADR is amended by this block.
+
+**One dangling path, dispositioned here rather than repaired in place.** The
+2026-07-26 cross-reference-update block above points Table A and Tables C / C1 /
+C3 at `docs/specs/WP-secret-fence-two-tier-detector.md`. **That path stopped
+resolving on 2026-07-28**: the detector leg merged as `72f3e46`, is
+`status: Done`, and is **filed at
+`docs/specs/done/WP-secret-fence-two-tier-detector.md`**. It is this ADR's only
+remaining path citation to that leg — every other reference uses the document
+name, which does not rot — and it now sits under no live digest, since the
+detector leg's restatement sweep was retired with its spec.
+
+**The 2026-07-26 row is left byte-as-written, deliberately.** It is a dated
+record of where a file was *created*, and an errata row's own rule in this
+appendix is that a dated record does not change after it is written. Editing it
+would make the 2026-07-26 block assert a fact that was not true on 2026-07-26.
+The forward pointer is this paragraph instead. **The five-condition precedent
+does not gate either choice**: that block sits in this appendix and not inside a
+Decision, so it is bookkeeping, and conditions 1–2 — which govern edits to a
+Decision's own prose — do not reach it.
+
+**The digests this obliges the architect to recompute, named exhaustively and
+each with its disposition**, because a re-measurement that names only the ones it
+recomputes is how a stale pin survives:
+
+- **`WP-secret-fence-ep2-redact-arm` V-17** — five `grep` literals over this file
+  (`notes scanned`, `notes with ANY finding`, and the three E3 fragments) and the
+  two whole-line canonical rows **D1** and **D2**. **Recomputed in this pass**,
+  by re-deriving that spec's D-table from this file, which is the only legal
+  direction; that leg is `Ready` and its suite still runs.
+- **`WP-secret-fence-two-tier-detector` V-15** — `M1_EXPECT`, `M5_EXPECT`,
+  `E3_EXPECT`, `ER_EXPECT` and `SWEEP_EXPECT`. **Deliberately NOT recomputed;
+  retired with the spec.** Leg 1 merged at `72f3e46`, is `status: Done` at
+  `docs/specs/done/WP-secret-fence-two-tier-detector.md`, and its M-blocks are
+  the dated evidence the shipped work was accepted against. **The authority for
+  retiring these five is that leg 2's V-17 holds the part anything still depends
+  on and pins its own literals for it** — it requires this file's E1 and E3 to
+  state the five claims D1/D2 are derived from **exactly once each, inside
+  extracted regions**, on both sides, and it runs. **It does not carry all of
+  what V-15 held, and the remainder is held by nobody**: E1's other five lines,
+  E3's prose outside its three claims, the errata rows' byte-pin and the
+  prose-residue sweep. *That gap is recorded at rows **F7a/F7b** of that spec's
+  frozen-surfaces table rather than rounded up — this bullet said "the same
+  guarantee" until round 4 and that was not true.* What remains digested is the
+  **ratified** content, by leg 2's **V-34**; what is unheld is measured-evidence
+  bytes outside those five claims. That table is a reader's map and decides
+  nothing; the rule the arrangement follows is stated at leg 2's **V-34**.
+  `ER_EXPECT` would have moved on the three rows above alone: the V-15 note
+  anticipating "adding ER-7 changes this digest" is that anticipation arriving.
+- **V-21's two digests** (this file's `## Decision` … `## The measured evidence`
+  range, and the five-condition precedent range) — **untouched and verified
+  byte-identical after this block**, which is the check that no Decision and no
+  licence moved. **And CARRIED, not retired** *(added in the 2026-07-28 fix
+  round, on a HIGH finding)*. They lived only in leg 1's verification block, and
+  they are the only two digests in the repository over the owner-ratified
+  Decisions and over the architect-only amendment licence — archiving that spec
+  would have left an unauthorized edit to either passing the whole active suite.
+  **Both literals move unchanged into leg 2 as verification step V-34**;
+  neither was recomputed. **The guarantee now lives in V-34's two literals and
+  nowhere else** — not in this bullet, and not in the frozen-surfaces table row
+  **F8** that also records the carry, which is a reader's map. The rule V-34
+  discharges is stated in V-34's own comment: *a check retires only when a live
+  check carries its guarantee, and the carrying check names what it carries.*
+- **V-18**, the ratified threat-model section mirrored in both legs, and
+  **V-11**, over the owner's two signature lines — **untouched and verified**.
+  Neither may ever be recomputed by anyone.
+- **`WP-secret-fence-ep2-redact-arm` V-20**, over that spec's Provenance section
+  — moved in this pass, but **not by this block**: the owner typed a reaffirmation
+  line into that section on 2026-07-27. It is disclosed there, at the step that
+  sanctions it.

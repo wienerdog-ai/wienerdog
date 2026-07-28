@@ -16,9 +16,15 @@ epic: secret-lifecycle
 **This file was previously `docs/specs/WP-secret-fence-two-tier-entropy.md`.**
 The owner authorised splitting that spec on 2026-07-26 along the Table A / Table
 B line it had already drawn. Its detector half became
-`docs/specs/WP-secret-fence-two-tier-detector.md` (a new file). **Its Table B
-half — this document — stayed in place and was renamed**, so that the owner's
-signature block at the end of this file never travelled between documents.
+`WP-secret-fence-two-tier-detector` (a new file) — created at
+`docs/specs/WP-secret-fence-two-tier-detector.md` and, since it merged as
+`72f3e46` and completed, filed at
+`docs/specs/done/WP-secret-fence-two-tier-detector.md`. *The path is stated by
+content rather than by its 2026-07-26 location, because a location citation into
+another spec rots every time a spec completes; this one did, on 2026-07-28.*
+**Its Table B half — this document — stayed in place and was renamed**, so that
+the owner's signature block at the end of this file never travelled between
+documents.
 **"Renamed" here describes what the ARCHITECT did on disk, before either file was
 tracked. It is not a claim git can confirm — point 5 below states exactly what
 git does and does not show, and it is less than an earlier revision implied.**
@@ -114,7 +120,24 @@ before you touch anything near it.
    tidier**, and nobody "repairs" this by rewriting history.
 
 <!-- OWNER REAFFIRMATION SLOT — leg 2.
-     Prepared, deliberately EMPTY, and never filled by an agent.
+     Prepared empty, and never filled by an agent.
+
+     FILLED BY THE OWNER ON 2026-07-27, in his own words and shorter than the
+     template below invited — which is his call and not a defect. The line
+     immediately after this comment is his; it is byte-frozen from the moment he
+     typed it, and S5 below governs it exactly as it governs a signature. **No
+     agent edits, rewords, re-indents, re-dates, reflows or "completes" it, for
+     any reason, including to make it match the template.** It carries a trailing
+     space, which is his text and stays: MD009 is off in this repository's
+     markdownlint configuration, verified 2026-07-28, so nothing lints it away.
+
+     The V-20 CONSEQUENCE PREDICTED BELOW ARRIVED. That line sits inside the
+     region V-20 checksums, so V-20 went red on 2026-07-27; the architect
+     recomputed and disclosed it on 2026-07-28 in the V-20 step's own comment,
+     which is the disclosure this paragraph points at. V-11 and V-18 were
+     verified untouched in the same pass — V-11 still counts exactly one
+     signature line in this file, and the `OWNER-REAFFIRMED` form scores 0
+     against its pattern, as measured below.
 
      Point 5 above is honest that the split has no git record. The strongest
      confirmation available that these two documents are the ones the owner
@@ -157,6 +180,8 @@ before you touch anything near it.
      S5 IS UNCHANGED AND ABSOLUTE: no agent writes an owner line of any kind,
      including this one, including "to carry it across a rename", including "to
      make the two legs look symmetrical". -->
+
+OWNER-REAFFIRMED 2026-07-27 
 
 > **OWNER-ANSWERED — 2026-07-26. The signature stands; this question is closed.**
 > The signature below was given on 2026-07-25 against a document then named
@@ -784,30 +809,39 @@ corpus are load-bearing for decisions below, and they are **derived copies**.
 ADR-0034 is the hub both legs pin to, so neither leg has to read the other's spec
 to stay correct (the One-Document Rule, ADR-0005). **Verification step V-17 greps
 ADR-0034 for these exact figures**, so if a future errata amendment moves one, this
-WP's verification goes red rather than this table quietly going stale. Leg 1's own
-V-15 greps the same lines, which is what forces the two legs to agree.
+WP's verification goes red rather than this table quietly going stale.
+*Until 2026-07-28 this paragraph added that leg 1's own V-15 greps the same lines
+"which is what forces the two legs to agree". That is no longer true and the
+sentence is deleted rather than softened: leg 1 is `status: Done`, filed under
+`docs/specs/done/`, and its V-15 is retired — it does not run and its literals
+were deliberately not recomputed when ER-7/ER-8/ER-9 moved the figures.* **V-17
+is now the ONLY live check over D1/D2, and it asserts both sides — the ADR's and
+this table's — which is why it is sufficient on its own.**
 
 | id | figure | decided in | why this WP needs it |
 |----|--------|-----------|----------------------|
-| D1 | 182 notes scanned; **102** of them (56.0%) contain at least one finding and are reverted by EP2 today | ADR-0034 **E1**, as amended by errata **ER-4** | the size of the problem this gate closes; quoted in the Context of both legs |
-| D2 | end state after **both** legs: **1** note withheld, **9** scrubbed in place, **172** untouched — per full-vault pass | ADR-0034 **E3**, as amended by errata **ER-5** | the rate that sets the retention cap (Table B rows B12/B13) and the reason a redaction gets no digest banner |
+| D1 | 189 notes scanned; **109** of them (57.7%) contain at least one finding and are reverted by EP2 today | ADR-0034 **E1**, as amended by errata **ER-4** and **ER-7** | the size of the problem this gate closes; quoted in the Context of both legs |
+| D2 | end state after **both** legs: **1** note withheld, **9** scrubbed in place, **179** untouched — per full-vault pass | ADR-0034 **E3**, as amended by errata **ER-5** and **ER-9** | the rate that sets the retention cap (Table B rows B12/B13) and the reason a redaction gets no digest banner |
 
-**Re-derived 2026-07-26 — and this is the mechanism working, not a defect.** Both
-rows carried slightly different figures until this revision. While it was being
-written the architect filed a dated errata amendment inside ADR-0034 (**ER-4**
-and **ER-5**):
-the vault is live, it grew by one note between 2026-07-25 and 2026-07-26, and the
-figures were re-measured against the shipped detector at `efd1489`. **V-17 went
-red and that is how this was found** — the D-table was stale against its own
-deciding surface within hours of being written. Every structural fact ER-4 lists
-is unchanged — the finding count, the disposition split, the `high-entropy`
-occurrence count, the single `aws-key` hit, E2 reproducing byte-identically —
-**and those figures are deliberately not restated here**, because V-17 pins only
-the D1 and D2 rows and a number this paragraph carried would be an unpinned
-mirror of ADR-0034. Read them in ER-4. So no argument in this spec moves: the withheld and scrubbed rows of D2 are untouched
-and only the untouched-notes total shifts by one. Nothing here was re-measured by
-this spec; it was re-derived from the amended ADR, which is the only legal
-direction.
+**Re-derived twice now, and both times this is the mechanism working rather than a
+defect.** The rows carried different figures on 2026-07-26 and different ones
+again before that. Each time the architect filed a dated errata amendment inside
+ADR-0034 and these rows were re-derived **from** it: **ER-4/ER-5** on 2026-07-26
+(the vault grew by one note overnight), and **ER-7/ER-8/ER-9** on 2026-07-28
+(leg 1 merged as `72f3e46`, the vault had grown by seven more notes, and every
+E-block figure moved while no structural fact and no conclusion did). **The two
+re-derivations were found differently, and the difference is worth keeping
+straight.** The 2026-07-26 one was found BY V-17 going red — the D-table was
+stale against its own deciding surface within hours of being written, which is
+the mechanism catching a drift nobody had noticed. The 2026-07-28 one was not:
+the architect re-measured deliberately after leg 1 merged, and these rows were
+re-derived in the same pass, so V-17 was never observed red for it. **The
+corrected figures are deliberately not restated in this paragraph**, because V-17
+pins only the D1 and D2 rows and a number carried here would be an unpinned
+mirror of ADR-0034. Read them in ER-7 and ER-9. No argument in this spec moves
+under either re-derivation: D2's withheld and scrubbed rows are untouched in both,
+and only the untouched-notes total shifts. **Nothing here was re-measured by this
+spec**; it was re-derived from the amended ADR, which is the only legal direction.
 
 **Do not re-measure these and do not restate them anywhere else in this
 document.** Every other surface here cites `D1` or `D2`. If you believe one is
@@ -2882,13 +2916,29 @@ above; the rule applies identically to rows B4, B5, B10, B6, B7 and B13.
       are the `scrubAddedLines` JSDoc's "SANITIZATION UNIT: one line at a time"
       paragraph and Table R row **R6**, which is the row a broken P5 would make
       universal.
+- [ ] **V-34** mirrors *(registered 2026-07-28, when the step was created)*: the
+      verification-id paragraph above the block, which records that V-34 is a
+      **carry** of the detector leg's two ADR digests rather than a new check and
+      why an id change was required; **ADR-0034's own digest-disposition list in
+      its 2026-07-28 errata block**, which names the same carry from the ADR
+      side; and **row F8 of the detector leg's frozen-surfaces table**, which
+      records the same carry as a reader's map and decides nothing. **This step's
+      own two literals are the guarantee** — no table, comment or bullet holds
+      any part of it, which is why editing any of those three mirrors weakens
+      nothing. **Both literals are carried unchanged from the detector leg and
+      this document recomputes neither**; a mirror that re-derived them would be
+      asserting the ADR against itself. The digests themselves are decided by
+      ADR-0034's bytes and by nothing in this file. The retirement invariant in
+      V-34's comment is an instruction to whoever edits the step, not a control,
+      and it is deliberately not mirrored anywhere.
 - [ ] **D1/D2** mirrors: the Context section's second and third paragraphs (which
       describe the problem's size in words, deliberately without digits); the
       B12/B13 growth-story paragraph after Table B, which cites D2 rather than
       restating it. **ADR-0034's E1 and E3 are the deciding surface**, and V-17 is
-      what forces this document to agree with them. Leg 1's V-15 greps the same
-      lines, which is what forces the two legs to agree without either reading
-      the other.
+      what forces this document to agree with them — **on both sides, the ADR's
+      and this table's, which is why it needs no counterpart.** *The claim that
+      leg 1's V-15 greps the same lines "which is what forces the two legs to
+      agree" was deleted 2026-07-28: leg 1 is Done and its V-15 is retired.*
 - [ ] **ADR-0034** (`docs/adr/0034-accidental-persistence-threat-model.md`) is a
       mirror of this spec in both directions. Its mirrors here: the "The threat
       model" section and the review-criterion block (ADR-0034 Decisions 1–5); the
@@ -4117,8 +4167,21 @@ own answer.
 #      header in the detector was deduplicated away and the step stayed green.
 #      Occurrences are now preserved until the per-leg duplicate check has run,
 #      and deduplicated only for the cross-leg comparison.
-DET=docs/specs/WP-secret-fence-two-tier-detector.md
+# LEG 1 COMPLETED AND MOVED on 2026-07-28: it merged as 72f3e46 and its spec is
+# now `status: Done` under docs/specs/done/. The path is updated rather than the
+# check dropped — the id space is still shared, and a `mdefs`/`vdefs` run against
+# a missing file returns EMPTY, which would report a clean cross-leg allocation
+# on no evidence at all. The guard below is what makes that failure loud.
+DET=docs/specs/done/WP-secret-fence-two-tier-detector.md
 GATE=docs/specs/WP-secret-fence-ep2-redact-arm.md
+for f in "$DET" "$GATE"; do
+  if [ ! -f "$f" ]; then
+    echo "FAIL allocation: $f does not exist, so its id definitions read as EMPTY"
+    echo "                 and every check below would pass vacuously. A leg that"
+    echo "                 completed moves to docs/specs/done/; repoint this path."
+    exit 1
+  fi
+done
 
 # A MUTATION is defined by a row of that leg's Mutation-checks table — the table
 # only, not any table-shaped line in the document.
@@ -4373,6 +4436,18 @@ this leg's to account for. **V-24 and V-25 are new ids** created in round 4, and
 parent's range rather than reusing a detector-leg gap, so a cross-leg reader
 never finds two different checks under one id.
 
+**V-34 is a new id created 2026-07-28, and it is a CARRY rather than a new
+check.** The detector leg completed and was archived, which would have retired
+the only two digests in this repository over ADR-0034's owner-ratified Decisions
+1–7 and its architect-only amendment licence. Those two checks now run here, as
+**V-34**, with **both literals carried unchanged and neither recomputed**. The
+paragraph above still stands as written — V-21 remains unused in this leg and
+this document still makes no claim about the sibling's use of it — because
+**V-34 is a different id doing the same job, which is what the id convention
+requires**: an id means one check, so a check that changes owner changes id
+rather than travelling under the previous owner's number. The V-16 preflight and
+V-34 are the two steps that gate on something outside this WP's control.
+
 **V-16 runs first and is a stop, not a report.**
 
 ```bash
@@ -4567,6 +4642,148 @@ if(!text.includes("Authorization: Basic")){
 console.log("V-16 P6 ok: Authorization: Basic is quarantine and its body is fully redacted");
 '
 
+# V-34 THE OWNER-RATIFIED ADR IS UNEDITED. A PREFLIGHT STOP, like V-16, and for
+#      the same kind of reason: it checks something this WP depends on and does
+#      not own.
+#
+#      THE RETIREMENT INVARIANT, stated here because this is the check that
+#      performs a carry and this is where anyone about to undo one is reading.
+#      IT IS PER GUARANTEE, NOT PER CHECK — one check can hold several, and they
+#      need not end the same way:
+#
+#        A CHECK MAY RETIRE ONLY WHEN EVERY GUARANTEE IT HELD HAS ONE OF THESE
+#        THREE DISPOSITIONS, WRITTEN DOWN:
+#          (i)   CARRIED — a live check holds it, AND THAT CHECK NAMES WHAT IT
+#                CARRIES, so the claim can be checked rather than believed;
+#          (ii)  MOOT — one of the guarantee's operands no longer exists, so
+#                there is nothing left for it to be about;
+#          (iii) DROPPED — nothing holds it, and the drop is RECORDED, naming
+#                exactly what is no longer held.
+#        (iii) IS A DECISION, NEVER A DEFAULT. Dropping without naming is the
+#        failure this rule exists to prevent, and it is the only one of the three
+#        that can happen by inattention.
+#
+#      "Its spec reached `Done`" is a reason for none of them, and an archived
+#      file is not a place a guarantee can live.
+#      WORKED, for the retirement this epic actually performed — the detector
+#      leg's V-15 held five literals covering several distinct guarantees:
+#        CARRIED   its D1/D2 agreement guarantee, by V-17 in this same block,
+#                  which names it in its own step comment.
+#        MOOT      M1_EXPECT's spec-to-ADR byte equality, and M5_EXPECT: both
+#                  had the now-frozen detector spec as one operand.
+#        DROPPED   byte-immutability of ADR-0034's other evidence lines, its
+#                  errata rows and both documents' prose residue. Recorded at
+#                  Table F row F7b of the archived leg, which names each one.
+#      *The rule carried only clause (i) until round 5 of the gate. That version
+#      could not describe what had actually been done — some of V-15's guarantees
+#      were dropped on purpose — so the archived leg's own table and this rule
+#      contradicted each other for two rounds. The practice was right and the
+#      rule was short; the clause was added rather than the practice bent.*
+#      THIS STEP is clause (i) discharged for ADR-0034's two digests: it names
+#      what it carries in the paragraph below. **Deleting this step retires
+#      nothing — it drops the guarantee**, because after the detector leg was
+#      archived there is no other holder, and an unrecorded drop is exactly what
+#      (iii) forbids.
+#      Round 3 of the gate moved this sentence here from a table in the archived
+#      leg that described the arrangement. The reasoning is recorded there and is
+#      worth one line: a narrative table naming itself the authority over
+#      retirement is an unguarded control, and the repair offered was a live check
+#      pinning the table. We removed the authority instead — the guarantees live
+#      in the checks that carry them and are pinned by their own literals, so the
+#      table went back to being a reader's map and the one load-bearing sentence
+#      came here. A gate over the table that describes gates is a map of a map.
+#      NOTE WHAT THIS COMMENT IS AND IS NOT: it is an instruction to whoever
+#      edits this step, not a control, and it is not itself under any digest —
+#      this leg's verification block is digested by nothing. That is deliberate
+#      and consistent with the paragraph above. The controls in this step are the
+#      two literals below.
+#      WHY THIS STEP EXISTS AT ALL, and it is not a new idea — it is a CARRY.
+#      These two digests were verification step V-21 of the detector leg. That
+#      leg is `status: Done` and filed under docs/specs/done/, and its
+#      verification block is retired with it. **These two checks are the only
+#      thing in this repository that hashes ADR-0034's Decisions 1-7 or its
+#      architect-only amendment licence.** Archiving the detector leg without
+#      moving them would have left an unauthorized edit to the owner's ratified
+#      Decisions — or to the five conditions that say only the architect may
+#      touch a Decision's prose, and only to repair a dangling cross-reference —
+#      passing every check in the active suite. Found in the 2026-07-28 fix
+#      round; the detector leg's frozen-surfaces table records the same carry at
+#      its row F8, as a reader's map — that row holds nothing and this step needs
+#      nothing from it.
+#      **BOTH LITERALS ARE CARRIED UNCHANGED AND WERE NOT RECOMPUTED.** They are
+#      byte-identical to the values the detector leg carried; the 2026-07-28
+#      errata pass verified both were unmoved by it, which is what made the carry
+#      a copy rather than a re-pin. If either goes red, that is the check working:
+#      **STOP AND REPORT. Do not recompute either literal, and do not edit the
+#      ADR** — `docs/adr/*` is outside this WP's Deliverables table, and no agent
+#      amends a Decision or the owner's signature line under any circumstances.
+#      DIGEST 1 — Decisions 1-7. The range is `## Decision` to the line before
+#      `## The measured evidence`, so it covers exactly the ratified decisions
+#      and stops before the evidence, which errata legitimately move.
+V34_DEC="$(awk '/^## Decision$/{f=1} /^## The measured evidence$/{f=0} f' "$ADR" \
+  | shasum -a 256 | cut -d' ' -f1)"
+if [ -z "$V34_DEC" ]; then
+  echo "FAIL V-34: the Decision range extracted EMPTY — a heading moved or was"
+  echo "           renamed. An empty range digests the empty string and would pin"
+  echo "           it happily. Do not repin. STOP AND REPORT."
+  exit 1
+fi
+if [ "$V34_DEC" != "494aa6aed5203f84d0144c9ef166afb01f30c0e8be22f8f2bca495d5963c7870" ]; then
+  echo "FAIL V-34: ADR-0034's Decisions 1-7 have been edited."
+  echo "           got  $V34_DEC"
+  echo "           want 494aa6aed5203f84d0144c9ef166afb01f30c0e8be22f8f2bca495d5963c7870"
+  echo "           This is the owner-ratified content of the authority this WP"
+  echo "           implements. STOP AND REPORT. Do not recompute this digest and"
+  echo "           do not edit the ADR."
+  exit 1
+fi
+#      DIGEST 2 — the amendment licence. Terminated by THE NEXT `## ` HEADING,
+#      whatever it is, because a named terminator can be deleted and the range
+#      then swallows the rest of the document; the ADR's round-5 structural
+#      correction records that measurement. The heading COUNT below is what
+#      catches a range that has swollen past its own section — a swollen range
+#      reddens too, but repinning it would silently convert a LICENCE digest into
+#      a whole-appendix one that then goes red on every unrelated dated block.
+#      WHAT THE HEADING COUNT DOES AND DOES NOT CATCH, measured 2026-07-28 on
+#      five mutations of a COPY of the ADR rather than asserted. It catches a
+#      range that has absorbed ANOTHER SECTION'S `## ` heading. It does NOT catch
+#      a range that swelled because the very next heading was DEMOTED out of `## `
+#      form: the count stays 1 while the range grew 105 -> 131 lines. That case is
+#      caught by the DIGEST (84c55805… against the pinned 57f298f2…), which is why
+#      the count is the secondary guard and the digest is the gate. Also measured
+#      as discriminating: rewording a Decision heading (digest 1 moves), deleting
+#      `and by nobody else` from licence condition 5 (digest 2 moves), renaming
+#      the licence heading (range extracts EMPTY and the guard above fires), and
+#      renaming the Decision terminator (digest 1 moves). No mutation of the five
+#      left both digests green.
+v34_prec() {
+  awk '/^## The five-condition precedent /{f=1; print; next} f && /^## /{f=0} f' "$ADR"
+}
+if [ -z "$(v34_prec)" ]; then
+  echo "FAIL V-34: the amendment-licence range is empty — its heading moved or was"
+  echo "           renamed. Do not repin an empty range. STOP AND REPORT."
+  exit 1
+fi
+if [ "$(v34_prec | grep -c '^## ')" != "1" ]; then
+  echo "FAIL V-34: the licence range contains $(v34_prec | grep -c '^## ') '## ' headings, not 1."
+  echo "           It has run past its own section and is digesting others."
+  echo "           DO NOT recompute: repinning here converts a LICENCE digest into"
+  echo "           a whole-appendix one. STOP AND REPORT."
+  exit 1
+fi
+V34_PREC="$(v34_prec | shasum -a 256 | cut -d' ' -f1)"
+if [ "$V34_PREC" != "57f298f2b9015d16680a3c0d8dd1943164c9019d43449ad9918569c201da81e8" ]; then
+  echo "FAIL V-34: ADR-0034's five-condition amendment precedent has been edited."
+  echo "           got  $V34_PREC"
+  echo "           want 57f298f2b9015d16680a3c0d8dd1943164c9019d43449ad9918569c201da81e8"
+  echo "           That block is the ONE licence to edit inside a Decision, and its"
+  echo "           condition 5 restricts it to the architect. Deleting the words"
+  echo "           'and by nobody else' would widen it to every agent, which is"
+  echo "           exactly what this digest exists to catch. STOP AND REPORT."
+  exit 1
+fi
+echo "V-34 ok: ADR-0034's Decisions and its amendment licence are unedited"
+
 # V-1  full suite, through the ONE wrapper that sets the scheduler guard
 node tests/run.js
 
@@ -4723,15 +4940,277 @@ rm -f "$PERM13"
 #      a measured figure is repaired by a dated errata amendment inside ADR-0034,
 #      by the architect, never by an implementer.
 #      The literals below track ADR-0034's evidence AS AMENDED by its errata
-#      ER-4/ER-5 of 2026-07-26 (the corpus is live and grew by one note). This
+#      ER-4/ER-5 of 2026-07-26 (the corpus is live and grew by one note) and then
+#      by ER-7/ER-8/ER-9 of 2026-07-28 (leg 1 merged, the vault had grown to 189
+#      notes, and every E-block figure moved while no structural fact did). This
 #      step going red is the SUCCESS case of that mechanism: it is what caught
 #      the D-table being stale hours after it was written. Repair by re-deriving
 #      this spec's D rows FROM the ADR — never by editing the ADR to match.
-must grep -qE '^notes scanned +182$' "$ADR"
-must grep -qE '^notes with ANY finding \(EP2 reverts today\) +102 +\(56\.0%\)$' "$ADR"
-must grep -qF 'notes withheld **102 → 1**' "$ADR"
-must grep -qF 'notes scrubbed in place **0 → 9**' "$ADR"
-must grep -qF 'notes untouched **80 → 172**' "$ADR"
+#      THE ADR SIDE WAS EXISTENCE-ONLY UNTIL ROUND 4, AND EXISTENCE IS NOT
+#      AGREEMENT. Five `grep -q` calls asserted that the expected lines are
+#      PRESENT. They said nothing about a SECOND, CONTRADICTORY claim sitting
+#      beside them: keep `notes scanned 189` and add `notes scanned 190`, or keep
+#      `notes untouched **80 → 179**` and add a different end state to the same
+#      paragraph, and all five stayed green while the ADR asserted two
+#      incompatible figures and D1/D2 silently agreed with only one of them.
+#      V-34 cannot see it either — its two digests deliberately exclude the
+#      measured evidence, which errata legitimately move. Found by the design
+#      gate in round 4, after F7 of the archived leg's frozen-surfaces table had
+#      already named V-17 as the live carrier of this guarantee.
+#      THE REPAIR HAS THREE PARTS, and each closes a different half of it.
+#      (a) EXTRACT THE AUTHORITATIVE REGION FIRST, content-addressed, the way the
+#          retired V-15 did — E1 by its own first and last lines, E3 by its
+#          paragraph markers. This is not tidiness: ADR-0034's 2026-07-28 errata
+#          block quotes the SUPERSEDED figures verbatim (indented two spaces, its
+#          own stated quoting device) and its ER rows quote them again, so
+#          measured on the current file the `notes untouched` claim pattern occurs
+#          FOUR times document-wide, `notes withheld` three and `notes scrubbed`
+#          twice. A document-wide "exactly once" rule would be red on a correct
+#          ADR. Inside the extracted regions each occurs exactly once.
+#      (b) ASSERT EACH REGION IS UNIQUE before extracting it, so the block cannot
+#          simply be duplicated whole further down the file.
+#      (c) COUNT THE CLAIM PATTERN, NOT THE EXPECTED LITERAL. Each check below
+#          matches the claim's SHAPE with its value left open, requires exactly
+#          one occurrence in the region, and only then compares that occurrence
+#          against the canonical text. Counting the expected literal instead is
+#          what let a contradictory sibling through: the right line was still
+#          there, so the count was still one.
+#      WHAT THIS STEP DOES AND DOES NOT CARRY, because F7 of the archived leg
+#      names it and that sentence has to be true rather than reassuring: it
+#      carries the D1/D2 agreement guarantee — the two E1 claims and the three E3
+#      claims that D1 and D2 are derived from, each unique and each correct. It
+#      does NOT carry the retired V-15's whole-block byte digest over E1's other
+#      five lines. Nothing does. That is stated in F7 as a gap rather than
+#      rounded up, and the reason it is not closed here is that leg 2 mirrors no
+#      part of those five lines — pinning bytes this WP has no stake in would
+#      redden for reasons that cannot affect it.
+#      WRITTEN AS ONE FUNCTION OVER A FILE ARGUMENT, called once for real and
+#      once per probe. The probes therefore exercise THE SAME CODE PATH rather
+#      than a second copy of the assertions — a probe suite that re-implements
+#      what it is probing tests itself.
+v17_region() {   # <adr-file> <label> <first-line-pattern> <last-line-pattern>
+  local n
+  n="$(grep -cE "$3" "$1")"
+  if [ "$n" != "1" ]; then
+    echo "FAIL V-17: ADR-0034's $2 region starts $n times, not once."
+    echo "           A duplicated evidence block means the ADR states the same"
+    echo "           measured fact twice and the D-table agrees with whichever"
+    echo "           copy it was derived from. STOP AND REPORT; do not delete a"
+    echo "           copy to make this pass — an errata amendment decides which"
+    echo "           figure is live."
+    exit 1
+  fi
+  n="$(grep -cE "$4" "$1")"
+  if [ "$n" != "1" ]; then
+    echo "FAIL V-17: ADR-0034's $2 region ends $n times, not once. Same reading"
+    echo "           as above. STOP AND REPORT."
+    exit 1
+  fi
+}
+#      ORDER AND WIDTH OF THE EXTRACTION, added in round 5 because a BAD EDIT —
+#      not an evasion — defeats a range check that only counts its markers.
+#      Measured 2026-07-28 on this ADR: move E1's end marker above its start and
+#      `sed -n '/s/,/e/p'` finds no end after the start, runs to end of file, and
+#      extracts **817** lines instead of 7. (The design gate reported 822 against
+#      a slightly earlier revision of the ADR; the figure here is the one
+#      reproduced at the head that ships, and the point is the same.)
+#      Both markers still occur exactly once, so the uniqueness
+#      check above is silent, and every claim below is still satisfied by the
+#      real block sitting inside the over-wide region. This asserts the two
+#      structural facts that make the extraction mean what it says: the markers
+#      are IN ORDER, and the region is EXACTLY as long as the marker line numbers
+#      imply. No bound is hard-coded — the expected length is computed from the
+#      markers themselves, so it cannot go stale.
+v17_bounds() {   # <adr-file> <label> <start-pat> <end-pat> <region-file> <inclusive 0|1>
+  local s e want got
+  s="$(grep -nE "$3" "$1" | head -1 | cut -d: -f1)"
+  e="$(grep -nE "$4" "$1" | head -1 | cut -d: -f1)"
+  if [ "$s" -ge "$e" ]; then
+    echo "FAIL V-17: ADR-0034's $2 markers are OUT OF ORDER — the region starts"
+    echo "           at line $s and ends at line $e."
+    echo "           An extraction whose end precedes its start silently runs to"
+    echo "           end of file and swallows the rest of the document; every"
+    echo "           claim check then passes on a region that means nothing."
+    echo "           This is an ordinary bad edit, not an attack. STOP AND REPORT."
+    exit 1
+  fi
+  want=$(( e - s + $6 ))
+  got="$(wc -l <"$5" | tr -d ' ')"
+  if [ "$got" != "$want" ]; then
+    echo "FAIL V-17: ADR-0034's $2 extraction is $got lines; its markers sit at"
+    echo "           lines $s and $e, which imply $want."
+    echo "           The region is over-wide or short, so the claim checks below"
+    echo "           are not reading the block they name. STOP AND REPORT."
+    exit 1
+  fi
+}
+v17_claim() {   # <label> <region-file> <claim-pattern-ERE> <canonical, single-spaced>
+  local n hit
+  #    THE LABEL COUNT, added in round 5. It is INDEPENDENT OF PUNCTUATION AND
+  #    FORMATTING: `$1` is the claim's stable prose label, and it must occur
+  #    exactly once in the region whatever follows it. The shape count below
+  #    cannot see `notes scanned: 190` written beside the canonical
+  #    `notes scanned  189` — that is not the canonical spelling, so it does not
+  #    match the shape, so the count stays 1 and the value still compares equal.
+  #    Counting the LABEL catches it: two mentions of the same measured quantity
+  #    in one authoritative region is a contradiction however it is spelled.
+  n="$(grep -oF "$1" "$2" | wc -l | tr -d ' ')"
+  if [ "$n" != "1" ]; then
+    echo "FAIL V-17: the LABEL '$1' occurs $n times inside ADR-0034's own"
+    echo "           evidence region, not once."
+    echo "           The region names one measured quantity once. A second"
+    echo "           mention — in ANY spelling, canonical or not — means the ADR"
+    echo "           states that quantity twice, and D1/D2 agree with only one."
+    echo "           This is the check that sees a restatement the canonical"
+    echo "           pattern below cannot match. STOP AND REPORT."
+    exit 1
+  fi
+  n="$(grep -oE "$3" "$2" | wc -l | tr -d ' ')"
+  if [ "$n" != "1" ]; then
+    echo "FAIL V-17: the claim '$1' occurs $n times inside ADR-0034's own"
+    echo "           evidence region, not once."
+    echo "           MORE THAN ONE means the ADR makes the same measured claim"
+    echo "           twice — and if the two disagree, D1/D2 are derived from one"
+    echo "           of them and silently contradict the other. This is the check"
+    echo "           the round-3 existence-only form did not have."
+    echo "           ZERO means the claim's shape is gone entirely."
+    echo "           Either way: STOP AND REPORT. A measured figure is repaired"
+    echo "           by a dated errata amendment inside ADR-0034, by the"
+    echo "           architect, never here and never by an implementer."
+    exit 1
+  fi
+  hit="$(grep -oE "$3" "$2" | tr -s ' ')"
+  if [ "$hit" != "$4" ]; then
+    echo "FAIL V-17: ADR-0034's '$1' claim and this spec's D-table disagree."
+    echo "           ADR-0034 says : $hit"
+    echo "           D1/D2 derive  : $4"
+    echo "           Re-derive the D rows FROM the ADR. Never edit the ADR to"
+    echo "           match the D-table — that is the mirror-promotion failure"
+    echo "           ADR-0031 exists to prevent."
+    exit 1
+  fi
+}
+v17_adr_side() {   # <adr-file> — every ADR-side assertion, over ONE file.
+  local e1 e3
+  #    E1 — the evidence block D1 is derived from.
+  v17_region "$1" "E1 evidence-block" '^notes scanned ' '^distinct high-entropy runs '
+  e1="$(mktemp)"
+  sed -n '/^notes scanned /,/^distinct high-entropy runs /p' "$1" >"$e1"
+  if [ ! -s "$e1" ]; then
+    echo "FAIL V-17: the E1 extraction is EMPTY. An empty region satisfies no"
+    echo "           claim check by construction. STOP AND REPORT."
+    rm -f "$e1"; exit 1
+  fi
+  v17_bounds "$1" "E1 evidence-block" '^notes scanned ' '^distinct high-entropy runs ' "$e1" 1
+  v17_claim "notes scanned" "$e1" \
+    '^notes scanned +[0-9]+$' 'notes scanned 189'
+  v17_claim "notes with ANY finding" "$e1" \
+    '^notes with ANY finding \(EP2 reverts today\) +[0-9]+ +\([0-9.]+%\)$' \
+    'notes with ANY finding (EP2 reverts today) 109 (57.7%)'
+  rm -f "$e1"
+  #    E3 — the end-state paragraph D2 is derived from. A PARAGRAPH, so the
+  #    claims are inline rather than whole lines; counting the claim's SHAPE is
+  #    what makes "exactly once" meaningful in running prose.
+  v17_region "$1" "E3 end-state" '^\*\*E3 — ' '^\*\*E4 — '
+  e3="$(mktemp)"
+  awk '/^\*\*E3 — /{f=1} /^\*\*E4 — /{f=0} f' "$1" >"$e3"
+  if [ ! -s "$e3" ]; then
+    echo "FAIL V-17: the E3 extraction is EMPTY. STOP AND REPORT."
+    rm -f "$e3"; exit 1
+  fi
+  v17_bounds "$1" "E3 end-state" '^\*\*E3 — ' '^\*\*E4 — ' "$e3" 0
+  v17_claim "notes withheld" "$e3" \
+    'notes withheld \*\*[0-9]+ → [0-9]+\*\*' 'notes withheld **109 → 1**'
+  v17_claim "notes scrubbed in place" "$e3" \
+    'notes scrubbed in place \*\*[0-9]+ → [0-9]+\*\*' 'notes scrubbed in place **0 → 9**'
+  v17_claim "notes untouched" "$e3" \
+    'notes untouched \*\*[0-9]+ → [0-9]+\*\*' 'notes untouched **80 → 179**'
+  rm -f "$e3"
+}
+#      THE REAL ASSERTION. Runs at top level, so a failure exits the suite with
+#      the diagnostics above.
+v17_adr_side "$ADR"
+echo "V-17 ok: ADR-0034's E1 and E3 each state their claims exactly once, and"
+echo "         D1/D2 are derived from those values"
+#      NEGATIVE PROBES, run against COPIES and pasted with the rest. Each is one
+#      of the two attacks the round-3 existence-only form was blind to, and each
+#      must make `v17_adr_side` fail. **The probe calls the same function**, in a
+#      SUBSHELL so its `exit 1` ends the probe rather than the suite — a probe
+#      suite that re-implements what it probes is testing itself.
+#      EACH MUTATION IS A NAMED FUNCTION rather than a sed string: two of the
+#      four need more than one editing command, and a `sed` script carrying an
+#      embedded newline inside a spec's fenced block is a transcription hazard
+#      this document has already paid for once (the SEP backslash, Table A).
+v17_mut_duplicate_line() { sed '/^notes scanned /a\
+notes scanned                                     190
+' "$1" >"$2"; }
+v17_mut_contradictory_end() {
+  sed 's/notes untouched \*\*80 → 179\*\*\./notes untouched **80 → 179**, or on a second reading notes untouched **80 → 171**./' "$1" >"$2"
+}
+#      NOVEL SPELLING: not the canonical form, so the SHAPE pattern cannot match
+#      it and the value comparison never sees it. Only the label count fires.
+v17_mut_novel_spelling() { sed '/^notes scanned /a\
+notes scanned: 190
+' "$1" >"$2"; }
+#      BAD BOUNDARY EDIT: move E1's end marker above its start. Both markers
+#      still occur exactly once; the extraction runs to end of file.
+v17_mut_swap_boundaries() {
+  awk '{L[NR]=$0}
+       /^notes scanned /{if(!s)s=NR}
+       /^distinct high-entropy runs /{if(!e)e=NR}
+       END{for(i=1;i<=NR;i++){if(i==s)print L[e];else if(i==e)print L[s];else print L[i]}}' \
+    "$1" >"$2"
+}
+v17_probe() {   # <what-it-simulates> <mutator-fn>
+  local t
+  t="$(mktemp)"
+  "$2" "$ADR" "$t"
+  if ( v17_adr_side "$t" ) >/dev/null 2>&1; then
+    rm -f "$t"
+    echo "FAIL V-17: the claim checks are BLIND to $1."
+    echo "           The repair does not hold and this step is decoration."
+    exit 1
+  fi
+  rm -f "$t"
+  echo "V-17 probe ok: rejected — $1"
+}
+v17_probe "a duplicated 'notes scanned' line carrying a different figure" v17_mut_duplicate_line
+v17_probe "a contradictory end state beside the canonical one" v17_mut_contradictory_end
+v17_probe "a second figure in a NON-canonical spelling ('notes scanned: 190')" v17_mut_novel_spelling
+v17_probe "E1's end marker moved above its start (over-wide extraction)" v17_mut_swap_boundaries
+#      THE POSITIVE CONTROL is the top-level call above: it ran against the real
+#      ADR and printed. A probe set that rejects every input, a correct document
+#      included, proves nothing, and this step would have exited before reaching
+#      the probes if that were the case.
+#
+#      WHAT V-17 DEFENDS AGAINST, DECLARED — the same shape this document's own
+#      Table P and the fence's threat model use, and for the same reason: an
+#      undeclared scope invites an unbounded search for one more counterexample.
+#      IN SCOPE — ACCIDENTAL DISAGREEMENT between ADR-0034's measured evidence
+#      and this spec's D-table. A stale figure left behind by a re-measurement; a
+#      half-applied errata that corrected E1 and forgot E3; a duplicated evidence
+#      block; a restatement of a quantity in different words; a boundary edit
+#      that makes an extraction mean something other than it says. All five are
+#      things an architect or a reviewer does by inattention, all five are
+#      probed above, and all five now fail loudly.
+#      OUT OF SCOPE — A DELIBERATELY EVASIVE EDIT TO THE ADR, and this step
+#      cannot defend against it. Anything still passing after the four probes
+#      requires someone with commit access to a ratified, owner-signed ADR to
+#      craft a claim that is contradictory in substance, novel in spelling AND
+#      shaped to miss a label count. That is not drift; it is an insider editing
+#      the authority his own work rests on.
+#      THE STRUCTURAL DEFENCES FOR THAT CLASS ARE ELSEWHERE AND ARE NAMED:
+#      **V-34**'s two digests over the ratified Decisions 1-7 and the amendment
+#      licence; **V-11** over the owner's signature lines; and review of the
+#      diff, which is the only one of the three that reads meaning.
+#      **FURTHER FINDINGS OF THE FORM "here is another spelling that slips
+#      through" ARE OUT OF SCOPE FOR V-17 BY DECLARATION.** That class has no
+#      fixed point, and this epic has already paid for chasing one twice — the
+#      secret fence's own review criterion (ADR-0034 Decision 4, which exists
+#      because five consecutive fail-open criticals were constructed evasions)
+#      and the #117 verification loop. A reviewer who constructs one is producing
+#      an observation, not a blocker; the answer is a diff review, not a sixth
+#      pattern here.
 #      The spec side. EXTRACTED FIRST: greping the whole file for these literals
 #      would be satisfied by the three lines above, which live in this same file.
 #      The awk range covers only "## Derived measurements" … "## Deliverables".
@@ -4758,9 +5237,9 @@ must_eq "V-17 no second D1 claim anywhere on any line" 1 \
 must_eq "V-17 no second D2 claim anywhere on any line" 1 \
   "$(grep -o '| D2 |' "$DT" | wc -l | tr -d ' ')"
 must_eq "V-17 D1 canonical row, WHOLE LINE" 1 "$(grep -cxF \
-  '| D1 | 182 notes scanned; **102** of them (56.0%) contain at least one finding and are reverted by EP2 today | ADR-0034 **E1**, as amended by errata **ER-4** | the size of the problem this gate closes; quoted in the Context of both legs |' "$DT")"
+  '| D1 | 189 notes scanned; **109** of them (57.7%) contain at least one finding and are reverted by EP2 today | ADR-0034 **E1**, as amended by errata **ER-4** and **ER-7** | the size of the problem this gate closes; quoted in the Context of both legs |' "$DT")"
 must_eq "V-17 D2 canonical row, WHOLE LINE" 1 "$(grep -cxF \
-  '| D2 | end state after **both** legs: **1** note withheld, **9** scrubbed in place, **172** untouched — per full-vault pass | ADR-0034 **E3**, as amended by errata **ER-5** | the rate that sets the retention cap (Table B rows B12/B13) and the reason a redaction gets no digest banner |' "$DT")"
+  '| D2 | end state after **both** legs: **1** note withheld, **9** scrubbed in place, **179** untouched — per full-vault pass | ADR-0034 **E3**, as amended by errata **ER-5** and **ER-9** | the rate that sets the retention cap (Table B rows B12/B13) and the reason a redaction gets no digest banner |' "$DT")"
 rm -f "$DT"
 
 # V-18 the ratified threat model is byte-identical to the detector leg's copy.
@@ -4867,22 +5346,57 @@ if ! grep -qF 'OWNER-ANSWERED' "$PROV"; then
   echo "           rename and must not be deleted as a tidy-up."
   rm -f "$PROV"; exit 1
 fi
-#      RECOMPUTED IN ROUND 1 OF THE DESIGN GATE, and the recomputation is
-#      legitimate where V-11's and V-18's would not be. This digest is
-#      AGENT-COMPUTED over prose the architect owns; V-11's is over the OWNER's
-#      own two signature lines and V-18's is over a RATIFIED review criterion.
-#      Recomputing either of those two is forbidden in every circumstance — a red
-#      line there means the owner's text or ADR-0034's was edited, and the repair
-#      is `git checkout`, never a new literal. This one moved because the section
-#      it covers was corrected: point 5 said "both leg files are still untracked"
-#      (false since 7ef4c51), and the section now states what git does and does
-#      not attest about the split, plus the empty owner-reaffirmation slot.
+#      RECOMPUTED TWICE, and both recomputations are legitimate where V-11's and
+#      V-18's would not be. This digest is AGENT-COMPUTED over prose the
+#      architect owns; V-11's is over the OWNER's own two signature lines and
+#      V-18's is over a RATIFIED review criterion. Recomputing either of those
+#      two is forbidden in every circumstance — a red line there means the
+#      owner's text or ADR-0034's was edited, and the repair is `git checkout`,
+#      never a new literal.
+#      FIRST RECOMPUTATION, round 1 of the design gate: the section it covers was
+#      corrected. Point 5 said "both leg files are still untracked" (false since
+#      7ef4c51), and the section was rewritten to state what git does and does
+#      not attest about the split, plus the then-empty owner-reaffirmation slot.
+#      SECOND RECOMPUTATION, 2026-07-28 — AND IT IS AN OWNER ACTION THAT MOVED
+#      IT, which is the case this step's failure text sanctions by name.
+#      WHAT MOVED, exactly, and in this order:
+#        (1) THE OWNER TYPED A LINE. On 2026-07-27 he filled the reaffirmation
+#            slot with `OWNER-REAFFIRMED 2026-07-27` (plus one trailing space,
+#            which is his text). The slot is inside this extraction, so this
+#            digest went red the instant he saved. **That is the mechanism
+#            working.** No agent wrote, edited, reworded, re-indented, re-dated
+#            or reflowed that line, and none ever may (row S5). It is not a
+#            second signature: it carries the `OWNER-REAFFIRMED` token, which
+#            scores 0 against V-11's `OWNER-SIGNED` pattern — measured again in
+#            this pass, with V-11 green at exactly one signature line per file
+#            and its pinned digest unmoved.
+#        (2) The slot comment stopped calling itself empty, because it no longer
+#            is, and now records that the owner filled it and where the
+#            disclosure lives.
+#        (3) One dangling path repair in the same section: leg 1's spec merged as
+#            72f3e46 and moved to docs/specs/done/, so the sentence naming its
+#            location names both the created and the filed path.
+#      WHAT DID NOT MOVE, verified rather than assumed in the same pass: **V-11**
+#      (one signature in each file, one in `## OWNER-APPROVED`, one in the ADR's
+#      header region, pinned digest byte-identical) and **V-18** (the ratified
+#      threat-model section, byte-identical in this leg and in the sibling).
+#      Neither was touched and neither may ever be recomputed.
+#      BEFORE -> AFTER, stated because a recomputation nobody can diff is a
+#      recomputation nobody can audit:
+#        was ec53884c8fc5be494718b6ad7ae2b8439e10b2e00a2e2afd262d6d36933197cd
+#        now e3fe067fe102ba200ff729751d36f620e67e4614ee5e3dd37b22951326728b10
+#      The intermediate value with the owner's line present and nothing else
+#      changed was a6add80ae5be6291e5408fe77d2a519c29f5d72e04b2853a74737afd6683c711
+#      — recorded so that his edit alone is separable from the architect's.
+#      THE OWNER'S LINE IS NOW UNDER THIS DIGEST. A future red V-20 traceable to
+#      it means his bytes changed — the repair is `git checkout` of his text and
+#      a report, never a retype and never a new literal, exactly as for V-11.
 PROV_DIGEST="$(shasum -a 256 <"$PROV" | cut -d' ' -f1)"
 rm -f "$PROV"
-if [ "$PROV_DIGEST" != "ec53884c8fc5be494718b6ad7ae2b8439e10b2e00a2e2afd262d6d36933197cd" ]; then
+if [ "$PROV_DIGEST" != "e3fe067fe102ba200ff729751d36f620e67e4614ee5e3dd37b22951326728b10" ]; then
   echo "FAIL V-20: the split-provenance section has been edited."
   echo "           got  $PROV_DIGEST"
-  echo "           want ec53884c8fc5be494718b6ad7ae2b8439e10b2e00a2e2afd262d6d36933197cd"
+  echo "           want e3fe067fe102ba200ff729751d36f620e67e4614ee5e3dd37b22951326728b10"
   echo "           AS THE IMPLEMENTER: revert your edit. This section is not in"
   echo "           your Deliverables and nothing in this WP requires touching it."
   echo "           AS THE ARCHITECT: this one digest MAY be recomputed, unlike"
