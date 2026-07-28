@@ -15,6 +15,12 @@ findings across two rounds on the ADR-0020 / WP-080…083 spec chain.
    the merge gate (spec-fidelity review); Codex is an independent second
    opinion on the same diff. Both run; Gyula merges only when both are clean
    or every finding is dispositioned.
+3. **Dispatch-time re-verification (mandatory): every WP, at the moment it is
+   handed to an implementer.** The **orchestrator session** re-runs the spec's
+   executable Current-state claims against current `main` before it writes the
+   dispatch message. See "Dispatch-time re-verification" below. Listed here
+   because this is the section a dispatcher reads, and the gate is worthless if
+   it is only findable next to the design-review loop that precedes it.
 
 ## The loop (design review)
 
@@ -25,6 +31,97 @@ accepts/rejects findings → wd-architect revision pass → /codex:adversarial-r
 round 2 (ask it to verify its own prior findings are fixed AND attack the new
 mechanisms) → repeat until clean → owner sign-off → specs move to Ready.
 ```
+
+## Dispatch-time re-verification (the last gate before an implementer starts)
+
+**`Ready` is not the same as "still true".** **The orchestrator session runs
+this**, in the same session that writes the dispatch message and immediately
+before it — the same actor that runs the design-review loop above, at the next
+step of the same pipeline. **Before it hands a WP to an implementer it re-runs
+that spec's executable Current-state claims against current `main`. A stale
+claim blocks the dispatch and routes the spec back to wd-architect** — the
+orchestrator does not repair it, and the implementer is never dispatched to work
+around it.
+
+**Dispatch here is a conversation, not a command**, which is exactly why the rule
+has to name its actor and its artifact rather than a hook: there is no dispatch
+command, agent invocation or workflow to wire this into, and inventing an entry
+point to hold the gate would be more machinery than the gate. What makes it
+auditable instead is the **dispatch message**: it names each claim re-run and the
+result, so a reader can tell a gate that ran from a gate that was skipped. That
+is the whole record — no new file, no tooling, no schedule.
+
+**Which claims. The boundary is RUNNABILITY — not file ownership, and not a
+heading.** Re-run **every executable claim the spec makes about the tree the
+implementer will find**: line-number citations, `grep` sentinels, digests, quoted
+code shapes, "today's behaviour" descriptions, and permitted-removal bounds. If it
+has a runnable form, it is in scope. If it has none, it was never an executable
+claim and this gate does not cover it.
+
+**Two boundaries this rule previously drew and both were wrong.** *Not the
+heading:* a spec may carry copied, un-re-measured facts anywhere —
+`WP-secret-fence-ep2-redact-arm` puts rows **D1/D2** under
+`## Derived measurements — copied, not re-measured`, and a check bounded to
+`## Current state` walks straight past them. *Not file ownership:* a `Ready` spec
+routinely snapshots exact code from files **inside its own Deliverables** —
+`WP-147` quotes `shared.js` / `manifest.js` code shapes it will then edit, `WP-151`
+the same — and those drift in exactly the `Ready`→dispatch window this gate exists
+for. A spec's own future edits do not protect its record of what that file says
+*today*. **Owning the file makes a stale snapshot worse, not exempt**, because the
+implementer will edit from it.
+
+Keep the owned/external distinction only where it aids reporting — it is useful to
+say which stale claims the implementer could have fixed and which route back — but
+it decides nothing about what gets re-run.
+
+The spec is the inventory: it is required to inline everything the implementer
+needs (ADR-0005), so an executable claim that appears nowhere enumerable is a spec
+bug and is reported as one rather than silently re-verified. **If a spec's
+executable claims cannot be enumerated from it, the spec is not dispatchable and
+goes back to wd-architect** — the same routing as a stale claim, for the same
+reason.
+
+**Why it exists.** A spec's Current-state section is verified once, at design
+time. Every dependency that merges between then and dispatch can falsify it,
+silently, without anyone editing the spec. Measured on the `secret-fence` epic:
+the specs count **seven** capture-drift instances in the epic
+(`docs/specs/done/WP-secret-fence-two-tier-detector.md:320`,
+`docs/specs/done/WP-secret-fence-ep2-redact-arm.md:618`), and the `0.11.0` batch
+merging on 2026-07-26–27 moved `main` underneath **both** legs at once — round 1
+of the design gate then found **seven stale citations across the two legs**, all
+from that single event and none of them a design error
+(`docs/specs/done/WP-secret-fence-two-tier-detector.md:326`).
+
+**And one of them was not cosmetic.** `WP-stance-authority-containment` rewrote
+`docs/THREAT-MODEL.md`'s stance clause, so the ep2 spec's V-27 sentinel grepped
+for a sentence that no longer existed. V-27 exited 1 **before an implementer
+could write a line**, while that spec's own Deliverables row and V-27's own
+failure text both forbade touching the region that would fix it — a hard
+deadlock, dispatched (`docs/specs/done/WP-secret-fence-ep2-redact-arm.md:629`).
+Re-running the claims at dispatch turns that into a five-minute architect edit
+instead of a blocked session.
+
+**Three rules follow.**
+
+- **Re-run, do not re-read.** A claim is stale or it is not; reading the spec
+  again cannot tell you which. If a claim has no runnable form, it was not an
+  executable Current-state claim and this gate does not cover it.
+- **A stale claim goes back to wd-architect, never to the implementer.** The
+  spec's Deliverables table is a permission boundary, so the file that would fix
+  a rotted citation is usually outside the implementer's reach — which is what
+  made the case above a deadlock rather than an inconvenience.
+- **The dispatch message records the run, AND THE REVISION IT RAN AGAINST.** Which
+  claims were re-run, their results, and **the commit SHA the claims were re-run
+  against**. A dispatch that does not say is a dispatch where this gate did not run,
+  and it is the orchestrator's to redo.
+- **The implementer's worktree starts from that SHA** — or, equivalently and often
+  simpler, the verification runs *against the already-created worktree* and the
+  record carries that worktree's `HEAD`. Either order is fine; what is not fine is a
+  green record with no revision attached, because a merge landing between the
+  verification and the worktree creation recreates the exact stale-spec condition
+  this gate exists for, and leaves a record saying everything passed. **This is what
+  the record must CONTAIN — no tooling, no hook, one more line in a message that is
+  already being written.**
 
 ## How to run it
 
@@ -47,6 +144,43 @@ mechanisms) → repeat until clean → owner sign-off → specs move to Ready.
   (PR diffs) — never by the orchestrator inline, and never by Codex itself.
 - A finding the owner rejects is recorded in the spec/PR as an accepted
   residual with a one-line reason.
+- **Keep the PR body small enough for CI to read it.** `.github/workflows/ci.yml`
+  passes `github.event.pull_request.body` to `bash` as an environment variable in
+  the `pr-title` and `boundary` jobs, so a body that grows past the runner's
+  argument limit fails both with
+  `An error occurred trying to start process '/usr/bin/bash' … Argument list too long`
+  — a red X that says nothing about the diff. Measured on PR #124: **~144 KB was
+  over the line; ~30 KB is comfortably under it.** A long review loop should put
+  each round's dispositions in a **PR comment** (comments are never passed to a
+  job) and keep the body to the template plus the current round. **And note where
+  the durable record belongs**: not the PR at all, but the spec, ADR or runbook the
+  round changed, where the next reader can re-run it.
+- **Run a gate from a script, not from an inline shell one-liner.** A pattern
+  passed through nested quotes — `echo "… $(grep -E "$PAT" … ) …"` — silently
+  changes what the gate matched, and the result looks like the gate moved.
+  Measured on PR #124 round 14: that shape reported the pinned owner-signature
+  digest as MOVED when it was byte-identical, and that digest is one nobody may
+  ever recompute. **A false red on a never-recompute pin is one keystroke from
+  destroying it.** Put the gate in a file, quote once, and compare against the
+  literal there.
+- **A claim about how a tool behaves is a claim to be RUN, not read.** Four
+  instances on PR #124 alone: a spec citing a shell fence's options that the fence
+  did not declare; a review harness whose prepended setup changed what it measured;
+  "the worktree variant could not be executed here" when what had failed was one
+  command's *shape*; and an audit asserting that `grep … && { … }` aborts under
+  `set -e` — it does not, because the left operand of `&&` is errexit-exempt
+  (measured, bash 3.2.57). Three of the four *over*-claimed a hazard and one
+  under-claimed a capability, so the bias is not in one direction: the defect is
+  the missing run. **Paste the reproduction or do not state the behaviour** — and
+  when someone else's claim cannot be reproduced, the burden is on the run.
+- **Prove a new gate in BOTH directions.** Red-before-work shows a check is not
+  vacuous; it does **not** show the check is not *over-strict*, because a check
+  that rejects the correct answer is also red before the work and looks identical
+  from that side. So run a new verification step twice: on the untouched tree
+  (expect red) **and** on a hand-constructed version of the expected finished
+  state, including the awkward-but-legal cases (expect green). Cheap — the second
+  run is a heredoc — and it is the only thing that catches a gate which will
+  punish the implementer for doing the work correctly.
 - **Loop circuit-breaker (ADR-0031).** If two consecutive review rounds land a
   finding on the *same* contract family, stop fixing finding-by-finding and do a
   contract-**extraction** pass instead: pull that contract into one canonical
