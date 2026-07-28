@@ -45,22 +45,28 @@ around it.
 
 **Dispatch here is a conversation, not a command**, which is exactly why the rule
 has to name its actor and its artifact rather than a hook: there is no dispatch
-binary to wire this into, and adding one would be a mechanism this repo does not
-want (ADR-0004). What makes it auditable instead is the **dispatch message**: it
-names each claim re-run and the result, so a reader can tell a gate that ran from
-a gate that was skipped. That is the whole record — no new file, no tooling, no
-schedule.
+command, agent invocation or workflow to wire this into, and inventing an entry
+point to hold the gate would be more machinery than the gate. What makes it
+auditable instead is the **dispatch message**: it names each claim re-run and the
+result, so a reader can tell a gate that ran from a gate that was skipped. That
+is the whole record — no new file, no tooling, no schedule.
 
 **Which claims, and how the orchestrator knows the set is complete.** The set is
-every claim in the spec's `## Current state` section that has a runnable form:
-line-number citations, `grep` sentinels, digests over files the WP does not own,
-"today's behaviour" descriptions, and permitted-removal bounds. The spec is the
-inventory — it is required to inline everything the implementer needs (ADR-0005),
-so a Current-state fact that appears nowhere in that section is a spec bug and is
-reported as one rather than silently re-verified. **If a spec's Current-state
-claims cannot be enumerated from that section, the spec is not dispatchable and
-goes back to wd-architect** — the same routing as a stale claim, for the same
-reason.
+every claim **the spec states as fact about files it does not own** and that has a
+runnable form: line-number citations, `grep` sentinels, digests over files outside
+the spec's Deliverables table, "today's behaviour" descriptions, and
+permitted-removal bounds. **`## Current state` is where most of them live, but the
+boundary is the claim's kind, not the heading** — a spec may carry copied,
+un-re-measured facts under any heading, and those are in scope too. Worked
+instance: `WP-secret-fence-ep2-redact-arm` puts rows **D1/D2** under
+`## Derived measurements — copied, not re-measured`, which is precisely the
+digests-over-files-the-WP-does-not-own category above; a check bounded to the
+`## Current state` heading would have walked past them. The spec is the inventory —
+it is required to inline everything the implementer needs (ADR-0005) — so a claim
+of this kind that appears nowhere enumerable is a spec bug and is reported as one
+rather than silently re-verified. **If a spec's claims of this kind cannot be
+enumerated from it, the spec is not dispatchable and goes back to wd-architect** —
+the same routing as a stale claim, for the same reason.
 
 **Why it exists.** A spec's Current-state section is verified once, at design
 time. Every dependency that merges between then and dispatch can falsify it,

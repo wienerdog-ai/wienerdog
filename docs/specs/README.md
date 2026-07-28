@@ -4,7 +4,7 @@ A **work package (WP)** is one self-contained implementation spec: one implement
 
 ## Lifecycle
 
-`Draft → Ready → In-Progress → In-Review → Done` (frontmatter `status:`). Only the architect agent or the owner moves a spec to `Ready`. An implementer may only pick up a `Ready` spec whose `depends_on` are all `Done`. On merge, the spec's file moves to `done/` — kept forever; `done/` is the project's true changelog. A spec whose design is abandoned rather than shipped takes the terminal status `Superseded` and also moves to `done/`, carrying a header that names its replacement and the logbook entry explaining why — the evidence stays findable, and the specs root keeps holding only real pending work.
+`Draft → Ready → In-Progress → In-Review → Done` (frontmatter `status:`). Only the architect agent or the owner moves a spec to `Ready`. An implementer may only pick up a `Ready` spec whose `depends_on` are all `Done` — **and `Ready` is not the same as "still true": before dispatching, the orchestrator re-runs the spec's executable claims about files it does not own, because a dependency merging in between can falsify them silently. A stale claim blocks the dispatch and goes back to the architect. See [Dispatch-time re-verification](../runbooks/codex-review.md#dispatch-time-re-verification-the-last-gate-before-an-implementer-starts).** On merge, the spec's file moves to `done/` — kept forever; `done/` is the project's true changelog. A spec whose design is abandoned rather than shipped takes the terminal status `Superseded` and also moves to `done/`, carrying a header that names its replacement and the logbook entry explaining why — the evidence stays findable, and the specs root keeps holding only real pending work.
 
 ## Sizing
 
