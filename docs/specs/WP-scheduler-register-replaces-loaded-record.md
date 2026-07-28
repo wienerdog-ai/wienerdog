@@ -208,6 +208,57 @@ verified skip is allowed, and whether a teardown is justified. Only `=== 0` is
 treated as loaded — `113` and every other non-zero value mean "not loaded", and
 the code must not special-case 113.
 
+### 7b. What ELSE `launchctl print` exposes — executed, and it decides CX-1
+
+The round-4 comparison covered the argv only. A loaded record differing solely in
+**firing time** passed it, so a stale schedule persisted — reachable by the same
+pre-WP transition family as the stale digest. The question is whether `print`
+exposes the other behavior-bearing fields. **It does.** Executed on the authoring
+host against `gui/501/ai.wienerdog.dream`:
+
+```
+        environment = {
+                OSLogRateLimit => 64
+                WIENERDOG_HOME => /Users/gyulafeher/.wienerdog
+                NODE_PATH =>
+                ANTHROPIC_API_KEY =>
+                CLAUDE_CONFIG_DIR =>
+                NODE_OPTIONS =>
+                HOME => /Users/gyulafeher
+                CODEX_HOME =>
+                XPC_SERVICE_NAME => ai.wienerdog.dream
+        }
+
+        event triggers = {
+                ai.wienerdog.dream.268435561 => {
+                        …
+                        stream = com.apple.launchd.calendarinterval
+                        descriptor = {
+                                "Minute" => 30
+                                "Hour" => 3
+                        }
+                }
+        }
+```
+
+Three parse facts, each executed, each load-bearing — and each a reason the
+comparison must be written carefully rather than by analogy to the argv block:
+
+1. **The env block is NOT a mirror of our `EnvironmentVariables`.** launchd injects
+   keys we never set — `OSLogRateLimit` and `XPC_SERVICE_NAME` are both present
+   above. A set-equality comparison would therefore **always** fail and no skip
+   would ever be granted. The comparison must be **containment**: every canonical
+   pair must appear with its expected value; unrecognized extra keys are ignored.
+2. **`environment = {` is not uniquely anchored by a suffix match.** The output
+   contains `inherited environment = {` and `default environment = {` **before**
+   it, and both end with the same characters. The block must be found by a
+   **trimmed exact-line equality** on `environment = {`, exactly the way
+   `launchdLoadedArgs` anchors on `arguments = {`.
+3. **The calendar fields are nested two levels deep** — `event triggers` → a
+   generated `<label>.<id>` key → `descriptor = {` — with **quoted keys and
+   unquoted values** (`"Minute" => 30`). The parser reads the `descriptor` block
+   under the trigger whose `stream` is `com.apple.launchd.calendarinterval`.
+
 ### 8. The notice the user sees (`schedule.js:583-585`)
 
 **Byte-exact**, including the trailing period:
@@ -261,7 +312,7 @@ one new Proposed ADR, one test file extended. **M** — one session.
 | Action | Path | Notes |
 |--------|------|-------|
 | create | docs/adr/0037-verified-registration-postcondition.md | The rule + the ADR-0018 decision-2 amendment. **Proposed, unsigned.** Written already by the architect, together with its `docs/adr/README.md` index row; the implementer edits neither. **0036 is deliberately skipped** — reserved by the in-flight ADR amending ADR-0031. |
-| modify | src/scheduler/generators.js | **D0** — add **two** names to `module.exports`: `launchdLoadedArgs` (`:679-689`, used internally at `:787`) **and** `jobLaunchArgs` (`:208`, used internally at `:355`). **Those two lines are the entire change**; neither function body is touched. Structural, not an API promise — the WP-114 precedent for `repairCatchup`. Audited, not assumed (see "Export audit" in Implementation notes): `catchupLaunchArgs` (`:1030`) and `loadedEntryTargets` (`:1007`) are **already** exported and need no change. |
+| modify | src/scheduler/generators.js | **D0** — add **four** names to `module.exports`, and add **two** new pure parsers (`launchdLoadedCalendar`, `launchdLoadedEnv` — D1b). Existing names exported unchanged:: `launchdLoadedArgs` (`:679-689`, used internally at `:787`) and `jobLaunchArgs` (`:208`, used internally at `:355`); the two new parsers are exported with them. Structural, not an API promise — the WP-114 precedent for `repairCatchup`. Audited, not assumed (see "Export audit" in Implementation notes): `catchupLaunchArgs` (`:1030`) and `loadedEntryTargets` (`:1007`) are **already** exported and need no change. |
 | modify | src/cli/schedule.js | **D1-D4**: `darwinLoadedMatches` + `ensureDarwinEntryRegistered` (new, non-exported); the darwin per-job arm (`:429-431`, Table A row 1); `ensureCatchup` (`:314-317`, row 2); the linux arm (`:456-466`, row 3). Nothing else — no probe, no heal, no notice string, no Windows path, and **`darwinReplaceEntry` itself is not edited** (it stays the heal path's primitive). |
 | modify | tests/unit/scheduler-schedule.test.js | **T1, T2, T2b, T3-T7** (Test index) plus the **four** existing assertions enumerated in AC6 — no others. |
 
@@ -279,16 +330,19 @@ from a new file — never edit it),
 /**
  * Does a LOADED launchd record match what we would register right now? Pure
  * string work over `launchctl print` stdout — no spawn, no fs, never throws.
- * Compares the COMPLETE argv, element by element, against the canonical
- * ProgramArguments we just rendered — not merely the node and launcher
- * positions. A null (unparseable) block, a length difference, or any element
- * mismatch returns FALSE: an unparseable readback is not evidence, and a
- * partial match is not a match.
+ * Compares EVERY canonical field that can vary between two renders, not just
+ * the argv (Table A2): the complete ProgramArguments element by element, the
+ * StartCalendarInterval Hour/Minute, and the EnvironmentVariables bindings by
+ * CONTAINMENT (launchd injects keys of its own — Current state §7b fact 1).
+ * If ANY of the three blocks fails to parse, or any compared value differs,
+ * returns FALSE: an unparseable readback is not evidence, and a partial match
+ * is not a match.
  * @param {string} stdout  `launchctl print` output (untrusted display text)
- * @param {string[]} expectArgv  the canonical ProgramArguments just rendered
+ * @param {{argv:string[], hour:number, minute:number, env:Array<[string,string]>}} expect
+ *   the canonical values just rendered
  * @returns {boolean}
  */
-function darwinLoadedMatches(stdout, expectArgv)
+function darwinLoadedMatches(stdout, expect)
 
 /**
  * Register one launchd entry, reporting success only from evidence about what
@@ -297,7 +351,7 @@ function darwinLoadedMatches(stdout, expectArgv)
  * and whether a teardown is justified.
  * @param {(argv:string[])=>{status:number,stdout?:string}} loader
  * @param {number} uid @param {string} label @param {string} plistPath
- * @param {{changed:boolean, expectArgv:string[], priorBytes:Buffer|null, onBeforeTeardown:()=>void}} o
+ * @param {{changed:boolean, expect:{argv:string[],hour:number,minute:number,env:Array<[string,string]>}, priorBytes:Buffer|null, onBeforeTeardown:()=>void}} o
  * @returns {boolean} true only when launchd verifiably holds this entry
  */
 function ensureDarwinEntryRegistered(loader, uid, label, plistPath, o)
@@ -309,7 +363,7 @@ function ensureDarwinEntryRegistered(loader, uid, label, plistPath, o)
   const printed = loader(['launchctl', 'print', `gui/${uid}/${label}`]);
   const isLoaded = !!printed && printed.status === 0;
   // (a) verified skip — unchanged bytes AND the live record matches canonical
-  if (!o.changed && isLoaded && darwinLoadedMatches(printed.stdout || '', o.expectArgv)) return true;
+  if (!o.changed && isLoaded && darwinLoadedMatches(printed.stdout || '', o.expect)) return true;
   // (b) non-destructive attempt first (ADR-0018 ordering, preserved)
   if (loader(['launchctl', 'bootstrap', `gui/${uid}`, plistPath]).status === 0) return true;
   // (c) TEARDOWN ONLY WITH INDEPENDENT EVIDENCE THE LABEL IS LOADED
@@ -376,13 +430,39 @@ register changes no file and leaves the OS in the same state. What changes is th
 *call count* of a re-register. Table A's third column is the honest statement of
 that, and AC5 pins it per platform.
 
+### Table A2 — what the verified skip compares (canonical)
+
+The round-4 contract compared the argv alone; CX-1 showed that proves **argv
+identity, not registration identity**. ADR-0037's obligation is that the OS holds
+what we *would register* — the whole record's semantics.
+
+**The comparison covers every canonical field that can VARY between two renders.**
+Renderer **constants** are excluded by argument, not by omission: a value the
+renderer always emits identically cannot differ between the loaded record and
+canonical, because every plist Wienerdog has ever written carried the same one.
+
+| Canonical field | Compared? | How / why |
+|---|---|---|
+| `ProgramArguments` | **yes** | full array equality (`launchdLoadedArgs`) |
+| `StartCalendarInterval` Hour/Minute | **yes** | from the `descriptor` block of the trigger whose `stream` is `com.apple.launchd.calendarinterval` (`launchdLoadedCalendar`). **This is the CX-1 fix** — a record differing only in firing time previously passed |
+| `EnvironmentVariables` (the 7 `scheduledEnvPairs`) | **yes, by CONTAINMENT** | every canonical pair must be present with its value; launchd-injected keys (`OSLogRateLimit`, `XPC_SERVICE_NAME` — §7b) are ignored. Set-equality would never match |
+| `Label` | not compared | it is the *lookup key* — the record was fetched by it |
+| `ProcessType`, `RunAtLoad` | not compared | renderer **constants** (`Background`; `true` on catch-up) — cannot vary between two canonical renders |
+| `StandardOutPath` / `StandardErrorPath` | not compared | derived from `<core>/logs/<name>`; a moved core changes the launcher and descriptor paths, which **are** in the argv, so divergence is caught transitively |
+
+**Any block that fails to parse ⇒ no skip.** Same fail-safe direction as the argv:
+attempt, never skip. And per RC2, all three comparisons are over **normalized**
+readback text, not byte-fidelity — a value that cannot round-trip through the
+parser mismatches, which means attempt.
+
 ### Table B — Mutation checks
 
 One behavior per row; **Trigger** names the guarantee destroyed, **Patch** is the
 edit. No ordinals. Assert the pattern selected exactly one named subtest.
 
-The darwin rows were **re-derived as one unit** — twice: after the full-argv
-comparison landed, and again after the owner-directed rollback amendment. Not
+The darwin rows were **re-derived as one unit** — three times: after the full-argv
+comparison landed, after the owner-directed rollback amendment, and again after
+Table A2 widened the comparison to the calendar and env blocks. Not
 adjusted row by row. The skip gate is three independent conditions, each with its
 own row so no mutation removes two at once; step (d)'s four properties each have
 their own row; and each row names the fixture that provably executes the mutated
@@ -402,8 +482,13 @@ branch (the recurring failure mode in this chain — see the gate-3 row).
 | the prior bytes are captured after the overwrite | move the `priorBytes` read below `ensureEntry` | T2b (the restored bytes become the new plist, so the prior argv is never re-bootstrapped) |
 | `add()` reports success for an unloaded unchanged entry | restore the `changed &&` conjunct at `schedule.js:882` | T7 |
 | darwin compares only the head of the argv — the round-2 defect | make `darwinLoadedMatches` compare only `argv[0]` and `argv[1]` | **T3 case (v)** — the stale-tail fixture |
+| darwin compares the argv only — the round-4 defect (CX-1) | drop the calendar and env comparisons, keeping the argv | **T3 case (vii)** — the stale-`Hour` fixture |
+| the calendar gate is dropped alone | drop only the `launchdLoadedCalendar` comparison | T3 case (vii) |
+| the env gate is dropped alone | drop only the env containment comparison | T3 case (viii) |
+| env comparison becomes set-equality instead of containment | require the loaded env to have exactly the canonical key set | **T3 case (ix)** — it would reject a healthy record over launchd's injected keys |
+| the env block is anchored by suffix instead of exact line | find the block with `line.endsWith('environment = {')` | T3 case (viii) — it binds to `inherited environment` and the canonical pairs are absent |
 | darwin trusts an unparseable readback | make `darwinLoadedMatches` return `true` when `launchdLoadedArgs` returns `null` | T3 case (iii) |
-| darwin accepts a length-mismatched argv | drop the length check, comparing only the elements `expectArgv` indexes | T3 case (vi) |
+| darwin accepts a length-mismatched argv | drop the length check, comparing only the elements `expect.argv` indexes | T3 case (vi) |
 | darwin catch-up keeps the bare bootstrap | revert `ensureCatchup` to the `loader([… 'bootstrap' …])` call | T4 |
 | a degraded linux reload is reported as success | revert to `loaded = enableOk` | T5 |
 | a degraded linux reload is never retried | move the reload block back inside `if (changed)` | T6 |
@@ -416,7 +501,7 @@ Tables A and B are the single place these facts are decided. Registered mirrors 
 implementer reads first (the lesson from `WP-scheduler-node-path-durability`
 rounds 2-3, where an unregistered Deliverables cell shipped a wrong test set):
 
-- [ ] **(+r3)** Deliverables cell for `src/scheduler/generators.js` (D0 — the `launchdLoadedArgs` export the full-argv comparison rests on)
+- [ ] **(+r3/r5)** Deliverables cell for `src/scheduler/generators.js` — D0 exports **four** names (`launchdLoadedArgs`, `jobLaunchArgs`, and the two new parsers `launchdLoadedCalendar`/`launchdLoadedEnv`) and adds the two parser bodies (D1b). Mirrors **Table A2**.
 - [ ] Deliverables cell for `src/cli/schedule.js` (the four D-sites — Table A rows 1-3)
 - [ ] Deliverables cell for `tests/unit/scheduler-schedule.test.js` (T1-T6 + AC6's four assertions)
 - [ ] Deliverables cell for `docs/adr/0037-…` (the rule — Table A's spine)
@@ -427,7 +512,8 @@ rounds 2-3, where an unregistered Deliverables cell shipped a wrong test set):
 - [ ] Implementation notes → Export audit, D0-D5, and **"Rollback — OWNER-DIRECTED"** (its four contract properties + the crash-window table)
 - [ ] Acceptance criteria AC1-AC5 (rows 1-3), AC2's rollback set, AC6 (the four changed assertions), AC7 (row 4 preservation), AC8 (the marker), AC11 (D5)
 - [ ] Verification commands V2-V6
-- [ ] Table B rows, each naming its Table A row
+- [ ] Table B rows, each naming its Table A / A2 row
+- [ ] **(+r5)** Current state §7b (the executed readback evidence behind Table A2) and Table A2 itself
 - [ ] Test index rows T1, T2, T2b, T3-T7
 - [ ] The banner's cross-spec mapping table — **both** macOS sites map to that spec's Table C row 5
 - [ ] Definition of done items 5 (that spec's 0a) and 6 (the ADR signature gate)
@@ -452,17 +538,51 @@ $ grep -nE "^  (launchdLoadedArgs|jobLaunchArgs|catchupLaunchArgs|loadedEntryTar
 1030:  catchupLaunchArgs,
 ```
 
+Re-run in round 5 for the symbols Table A2 added:
+
+```
+$ grep -nE "^  (scheduledEnvPairs|launchdLoadedCalendar|launchdLoadedEnv),$" \
+    src/scheduler/generators.js
+1035:  scheduledEnvPairs,
+```
+
+`scheduledEnvPairs` is already exported and needs no D0 entry.
+`launchdLoadedCalendar` and `launchdLoadedEnv` do not exist yet — D1b creates and
+exports them.
+
 `launchdLoadedArgs` and `jobLaunchArgs` are **absent** — both are defined and used
 internally but never exported, so both would be `undefined` at the call site D2
 specifies. That is what D0 fixes, and why D0 exports **two** names rather than one.
 "The function exists" is not "the function is reachable".
 
+### D1b — the two new readback parsers in `src/scheduler/generators.js`
+
+Both **pure**, both alongside `launchdLoadedArgs`, both exported by D0, both
+returning a fail-safe empty/null on anything they cannot parse. Neither performs
+filesystem access, a spawn or a `require`, and neither throws — the same contract
+`launchdLoadedArgs` already carries.
+
+- `launchdLoadedCalendar(stdout)` → `{hour:number, minute:number}|null`. Find the
+  `event triggers` entry whose `stream` is `com.apple.launchd.calendarinterval`,
+  read its nested `descriptor = {` block, and parse the **quoted-key, unquoted-value**
+  `"Hour" => 3` / `"Minute" => 30` lines (Current state §7b fact 3). A missing
+  block, a missing key, or a non-numeric value ⇒ `null`.
+- `launchdLoadedEnv(stdout)` → `Map<string,string>|null`. Find the block whose
+  **trimmed line is exactly** `environment = {` — never a suffix match, because
+  `inherited environment = {` and `default environment = {` precede it (§7b fact 2)
+  — and parse its `KEY => value` lines, where an empty value is the empty string.
+  Unparseable ⇒ `null`.
+
+`darwinLoadedMatches` then applies Table A2: argv equality, calendar equality, and
+env **containment** (§7b fact 1). Any `null` ⇒ false ⇒ attempt.
+
 ### D1 — the two new helpers in `src/cli/schedule.js`
 
 Both non-exported, defined near `darwinReplaceEntry`. `darwinLoadedMatches` calls
 `gen.launchdLoadedArgs(stdout)` (exported by D0) and returns true only when the
-result is non-null, has the same length as `expectArgv`, and is equal
-element-by-element. `null` (an unparseable `arguments = { … }` block), a length
+result is non-null, has the same length as `expect.argv`, and is equal
+element-by-element — **and then applies the calendar and env comparisons of
+Table A2 (D1b); all three must pass.** `null` (an unparseable `arguments = { … }` block), a length
 difference, or any mismatched element returns **false** — the fail-safe direction
 is to attempt, never to skip.
 
@@ -498,7 +618,7 @@ guarantee has render sites, cited the way §7 cites the parser:** `launchdPlist`
 emits `o.node` first (`generators.js:364`) and then `jobLaunchArgs(o)` in order
 (`:355` + the `args.map` immediately after it); `catchupPlist` does the same with
 `catchupLaunchArgs` (`:398`, `:407-408`). If either renderer's argument order ever
-changes, `expectArgv` must change with it — they are one contract. Build `expectArgv`
+changes, `expect.argv` must change with it — they are one contract. Build `expect.argv`
 from those same values; never re-read it from the rendered plist string.
 
 **Why the COMPLETE argv, and not just node + launcher.** A round-2 draft compared
@@ -537,7 +657,11 @@ scope and whose ADR-0018 reasoning still applies unchanged there.
     const loaded = ensureDarwinEntryRegistered(loader, uid, label, plistPath, {
       changed,
       priorBytes,
-      expectArgv: [node, ...gen.jobLaunchArgs({ launcher: b.launcher, name: o.name, descriptor: b.descriptor, expectDigest: b.expectDigest })],
+      expect: {
+        argv: [node, ...gen.jobLaunchArgs({ launcher: b.launcher, name: o.name, descriptor: b.descriptor, expectDigest: b.expectDigest })],
+        hour: o.hour, minute: o.minute,
+        env: gen.scheduledEnvPairs(paths.home, paths.core),   // already exported (:1035)
+      },
       onBeforeTeardown: () => require('../scheduler/status').refreshSchedulerStatus(paths),
     });
 ```
@@ -563,7 +687,11 @@ The same call, with the label `'ai.wienerdog.catchup'` (already in scope as
 `label`) and
 
 ```js
-expectArgv: [node, ...gen.catchupLaunchArgs({ launcher, expectDigest, jobDigests })]
+expect: {
+  argv: [node, ...gen.catchupLaunchArgs({ launcher, expectDigest, jobDigests })],
+  hour: 0, minute: 0,     // catchupPlist renders StartCalendarInterval Minute 0 only
+  env: gen.scheduledEnvPairs(paths.home, paths.core),
+}
 ```
 
 Return `{ loaded: … }` as today.
@@ -571,7 +699,7 @@ Return `{ loaded: … }` as today.
 **Reuse the values already computed for `gen.catchupPlist(…)` a few lines above —
 do not re-call `gen.nodePath()` or `launcherPathFor(paths)`.** D2 already does this
 correctly with its local `node`. Hoist the catch-up node/launcher/digest values
-into `const`s and pass the same ones to both the renderer and `expectArgv`, so the
+into `const`s and pass the same ones to both the renderer and `expect`, so the
 registered plist and the expectation are provably the same values. This matters
 concretely once `WP-scheduler-node-path-durability` lands and `:303` becomes
 `gen.entryNodePath()`: two independent calls could otherwise diverge, and the skip
@@ -651,38 +779,65 @@ required there.
 Four contract properties, all binding:
 
 1. **Rollback restores BOTH the file and the loaded record** — write `priorBytes`
-   back to `plistPath`, then `bootstrap` that restored file. Restoring only the
-   file would leave the label absent; restoring only the record is impossible.
-2. **The register still reports `loaded: false` and fires §8's notice.** Rollback
-   restores *scheduling*; it does not make the new registration a success. Step (d)
-   can never `return true` — that is the point of its placement after the final
-   `bootstrap` check, and Table B has a mutation row for it.
+   back to `plistPath`, then `bootstrap` that restored file.
+2. **The register still reports `loaded: false` and fires §8's notice.** Step (d)
+   can never `return true`. And it **restores the PRIOR state, healthy or not** —
+   in D1's transition case the prior record is exactly the stale registration being
+   replaced, which refuses every fire. Do not say rollback "restores scheduling":
+   it restores *what was there*, and property 3 is what carries the user forward.
 3. **Convergence.** After a rollback the disk holds the **prior** plist, so the
-   next register renders canonical bytes that differ from it, `ensureEntry` returns
-   `changed = true`, no verified skip is possible, and the replacement is retried.
-   The loop terminates when either the replacement becomes bootstrappable or the
-   user acts on the notice. It does not spin silently: the notice fires on every
-   attempt.
-4. **Crash windows under the NEW protocol, enumerated — every one recovers via the
-   readback, none via the marker.** Each was traced against the measured exit codes
-   (§7: `0` loaded, `113` absent):
+   next register renders differing bytes, `changed = true`, no skip is possible,
+   and the replacement is retried — with §8's notice on every attempt, so it never
+   spins silently.
 
-   | Crash point | Disk holds | Label | Next register sees | Outcome |
+4. **What rollback protects, and its bound — stated honestly (CX-2).**
+   `priorBytes` is the bytes on disk when the register began. That is the
+   previously-**registered** plist **only in the `changed = true` case**, where the
+   disk represents a known prior registration. In the divergence case
+   (`changed = false`, disk already canonical, loaded record older) `priorBytes`
+   **equals canonical**, so a rollback would re-write and re-bootstrap the very
+   plist that just failed. It cannot restore what the `bootout` destroyed, because
+   no artifact of that record exists on disk — this spec's own
+   "disk is not evidence" premise, applied to its own rollback.
+
+   **The bound is what makes that acceptable, and it depends on Table A2.** Once
+   the skip compares every varying field, **any** record that reaches a teardown is
+   already divergent from canonical: a stale argv (refusing every fire on the
+   `--expect-digest` mismatch), a stale firing time, or a stale env binding. So the
+   residual destruction window contains **only already-divergent registrations** —
+   never a healthy one — it is loud (`loaded:false` + §8's notice), and property 3
+   converges. It is bounded, not absent, and it is not called a residual-that-was-
+   argued-away: it is the honest remainder of a contract the owner required.
+
+   Codex's stricter form — never `bootout` without an artifact proven to represent
+   the loaded record — is **rejected** on the ground that it would forbid teardown
+   in exactly the transition case this WP exists to fix, leaving the stale record
+   permanently loaded. The owner has been notified of this refinement.
+
+5. **Crash and failure windows — every one converges to a loud, bounded state.**
+   Traced against the measured exit codes (§7: `0` loaded, `113` absent):
+
+   | Point | Disk | Label | Next register | Outcome |
    |---|---|---|---|---|
-   | after `bootout`, before the final `bootstrap` | NEW plist | absent | `changed=false`; `print` → 113 ⇒ `isLoaded` false ⇒ **no skip** (gate 1) ⇒ `bootstrap` | recovered |
-   | **after restore-file, before re-`bootstrap`** | PRIOR plist | absent | canonical ≠ prior ⇒ `changed=true` ⇒ no skip ⇒ `print` → 113 ⇒ `bootstrap` of the freshly written canonical | recovered |
-   | after `ensureEntry`'s write, before `print` | NEW plist | OLD record | `changed=false`; `print` → 0 but the loaded argv is the OLD one ⇒ comparison fails ⇒ attempt | recovered |
+   | after `bootout`, before the final `bootstrap` | NEW | absent | `changed=false`; `print`→113 ⇒ no skip ⇒ `bootstrap` | **recovered** |
+   | after `ensureEntry`'s write, before `print` | NEW | OLD record | `changed=false`; `print`→0, compared fields differ ⇒ attempt | **recovered** |
+   | after restore-file, before re-`bootstrap` | PRIOR | absent | `changed=true`; `print`→113 ⇒ `bootstrap` of canonical — **which is unbootstrappable, since that is how this state was reached** ⇒ fails ⇒ step (d) unreachable | **converges to loud failure; the prior registration is lost** |
 
-   **The one irreducible window**, stated rather than hidden: if `priorBytes` is
-   `null` — the plist did not exist when the register began — there is nothing to
-   restore, so a teardown followed by a failed bootstrap leaves the job
-   unscheduled. Reaching it requires the plist to have been deleted out from under
-   a *loaded* label by something other than Wienerdog. This WP never creates that
-   state, and the following register recovers it (`changed=true`, `print` → 113,
-   `bootstrap`).
+   **The third row is not "recovered", and a round-4 draft said it was.** Reaching
+   restore-file requires the replacement to be unbootstrappable, so the next
+   register hits the same failure and never returns to step (d). Final state: disk
+   holds the unbootstrappable canonical plist, label absent, notice on every sync.
+   That is the same converges-to-loud-failure semantics property 3 already states —
+   the table simply disagreed with the prose above it.
 
-The slug `WP-scheduler-register-rollback` is **retired** — absorbed here. It must
-not appear in this spec or be routed from it.
+   **Two bounded windows of the same kind, therefore, not one.** (i) that row, and
+   (ii) `priorBytes === null` — the plist did not exist when the register began, so
+   there is nothing to restore; reaching it needs the plist deleted out from under
+   a *loaded* label by something other than Wienerdog. Both end loudly, both are
+   covered by property 3's retry loop, and both are asserted (AC2 fixtures e, f).
+
+That routed follow-up slug is **retired** — absorbed here — and must not be routed
+from this spec again.
 
 ### ADR-0037 is not signed, and this WP cannot merge before it is
 
@@ -714,8 +869,8 @@ nothing in this branch should be read as owner approval of it.
       `path.join`, a `require`, an `fs` call, or a write. `darwinLoadedMatches`
       performs no filesystem access and never throws.
 - [ ] The comparison is **allowlist-shaped**: it returns true only when the parsed
-      argv is non-null, the same length as `expectArgv`, and equal element for
-      element. `null`, a length difference and any mismatched element all return
+      argv is non-null, the same length as `expect.argv`, and equal element for
+      element, **and** the calendar and env comparisons of Table A2 also pass. `null`, a length difference and any mismatched element all return
       false, so an attacker who can make the readback unparseable — or who can
       alter any single argument of the loaded record — causes an extra
       registration, never a skip. Comparing the **complete** argv (rather than the
@@ -782,8 +937,17 @@ mock `process.platform` — and no test may touch a real OS scheduler
       byte-exact notice — rollback restores scheduling, it does **not** make the
       replacement a success;
       (e) with `priorBytes === null` (no plist existed) there is no restore attempt
-      and the result is still `loaded: false` — the irreducible window, asserted so
-      it stays bounded.
+      and the result is still `loaded: false`;
+      (f) **the divergence case (CX-2)** — `changed === false` with the disk already
+      canonical and the loaded record older: assert that the teardown still happens
+      (the record is divergent and must be replaced), that the restore re-writes
+      canonical (because `priorBytes === canonical` here), that the result is
+      `loaded: false`, and that §8's notice fires. This fixture exists to pin the
+      **bound**, not a recovery: it is the case where rollback provably cannot
+      restore the destroyed record;
+      (g) the restore's `bootstrap` itself fails ⇒ still `loaded: false`, no throw.
+      Fixtures (e), (f) and (g) are the executable form of the two bounded windows
+      in Implementation notes property 5.
       A round-3 draft asserted only loudness here, because it accepted the
       destruction. The owner ruled otherwise; this fixture set is that ruling made
       executable. (T2, T2b)
@@ -803,7 +967,18 @@ mock `process.platform` — and no test may touch a real OS scheduler
       `--expect-digest` (the transition-era state D1 describes) ⇒ **attempted, not
       skipped**. This is the case a head-only comparison would skip forever;
       (vi) the loaded argv is a strict prefix of canonical (fewer elements) ⇒
-      attempted.
+      attempted;
+      (vii) **the CX-1 regression fixture** — the argv matches **exactly** but the
+      loaded `descriptor` block carries a different `Hour`/`Minute` ⇒ **attempted,
+      not skipped**. This is the case a round-4 argv-only comparison skipped
+      forever;
+      (viii) the argv and calendar match but a canonical env pair is missing or
+      differs ⇒ attempted;
+      (ix) the argv and calendar match and every canonical env pair is present
+      **alongside launchd's injected `OSLogRateLimit`/`XPC_SERVICE_NAME`** ⇒
+      **skipped** — the containment semantics of Table A2, which set-equality
+      would have broken;
+      (x) any one of the three blocks is unparseable ⇒ attempted.
       **Call-count scoping (do not over-claim):** case (i) asserts zero *mutating*
       calls and exactly one `print` **from the per-job helper**. It is **not** one
       `print` per `registerPlatform` call — `registerPlatformEntries` registers the

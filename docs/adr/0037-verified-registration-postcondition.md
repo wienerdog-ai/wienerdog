@@ -62,9 +62,11 @@ Concretely, three obligations, applied on every platform:
    attempt `bootstrap`, and tear down only after launchd has proven the bootstrap
    blocked. Bootout-first remains rejected, for ADR-0018's original reason.
 3. **An unverified entry is retried, not skipped, and the evidence is a LIVE
-   READBACK.** Byte-identical files permit skipping the OS call only when a
-   read performed *at that moment* shows the OS holding what we would register —
-   the check Windows already makes. A durable cache is explicitly **not**
+   READBACK, and it must cover the whole REGISTRATION, not one field of it.**
+   Byte-identical files permit skipping the OS call only when a read performed *at
+   that moment* shows the OS holding what we would register — every field of it
+   that can vary between two renders, not merely the command line. The check
+   Windows already makes. A durable cache is explicitly **not**
    acceptable evidence: it is not written by every registration entry point, it
    cannot represent every platform's state, and it can record `loaded` for an
    entry the OS no longer holds (a crash between a teardown and its replacement
@@ -77,13 +79,23 @@ Concretely, three obligations, applied on every platform:
 - A `sync` that cannot establish what the OS holds now says so, every time,
   instead of once. The user-facing notice already exists
   (`schedule.js:583-585`); this decision makes it fire when it should.
-- macOS registration may replace a loaded record, so it **must not leave a
-  destruction window**: the prior schedule file's bytes are captured before they
-  are overwritten, and if the replacement cannot be bootstrapped after a teardown,
-  the prior file is restored and re-bootstrapped. The register still reports
-  failure — a rollback restores scheduling, it does not make the replacement a
-  success. (Owner ruling, 2026-07-28. An earlier draft of this ADR treated the
-  destruction window as an accepted residual; that is superseded.)
+- macOS registration may replace a loaded record, so it **must not leave an
+  unbounded destruction window**: the prior schedule file's bytes are captured
+  before they are overwritten, and if the replacement cannot be bootstrapped after
+  a teardown, the prior file is restored and re-bootstrapped. The register still
+  reports failure — a rollback restores the **prior state, healthy or not**; it
+  does not make the replacement a success, and the retry loop is what carries the
+  user forward. (Owner ruling, 2026-07-28. An earlier draft treated the destruction
+  window as an accepted residual; that is superseded.)
+- **The rollback is bounded, not total, and the bound comes from obligation 3.**
+  Where the disk is already canonical and only the loaded record is stale, the
+  captured bytes *are* canonical, so nothing can restore the record a teardown
+  destroys. That is tolerable only because a verified skip compares every canonical
+  field that can vary — so any record reaching a teardown is **already divergent**
+  and already failing, never a healthy one. The remainder is loud and converges. A
+  stricter rule (never tear down without an artifact proven to represent the loaded
+  record) is rejected: it would forbid replacement in exactly the stale-record case
+  this decision exists to fix.
 - **Crash safety comes from the readback, not from the marker — say so plainly.**
   ADR-0018 decision 2's pre-destructive status refresh is retained as an
   **advisory** signal for `doctor`, and this ADR makes no promise about its
