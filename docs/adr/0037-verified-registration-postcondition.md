@@ -65,7 +65,16 @@ Concretely, three obligations, applied on every platform:
    READBACK, and it must cover the whole REGISTRATION, not one field of it.**
    The OS call may be skipped **only** when a read performed *at that moment* shows
    the OS holding what we would register — every field of it that can vary between
-   two renders, not merely the command line. The check Windows already makes.
+   two renders, not merely the command line.
+   **A platform's verified skip covers exactly the fields its readback can
+   compare, and those fields are enumerated per platform with the remainder named
+   as a residual.** No platform may claim the general form of this obligation on
+   the strength of a partial readback: macOS compares argv, calendar and
+   environment; Windows compares the executed command and argument line **only**,
+   leaving triggers and settings unread; Linux can compare nothing and therefore
+   never skips. Where a readback cannot reach a behaviour-bearing field, the honest
+   options are to not skip, or to skip and record the exposure — never to describe
+   the platform as fully conforming.
    **The readback is the whole of the evidence: file state is neither sufficient
    NOR necessary.** Not sufficient, because byte-identical files say nothing about
    what the OS loaded. Not necessary either — an earlier draft of this obligation
@@ -94,6 +103,21 @@ Concretely, three obligations, applied on every platform:
   does not make the replacement a success, and the retry loop is what carries the
   user forward. (Owner ruling, 2026-07-28. An earlier draft treated the destruction
   window as an accepted residual; that is superseded.)
+- **The remaining data-loss window, stated exactly — this is what the owner's
+  signature approves.** A rollback restores *the disk state that preceded the
+  register*, which is the previous **registration** only when the previous register
+  succeeded. The compound case that survives is: (i) a pre-existing divergent
+  history — the OS holds record **A** while the disk holds a different plist **B**,
+  which is what an earlier failed register leaves behind; **and** (ii) the freshly
+  rendered plist **C** passes a `plutil -lint` preflight yet still fails to
+  bootstrap (permissions, or launchd state). Then the teardown — authorized, since
+  A was a positively established mismatch — destroys **A**, and the rollback
+  restores **B**, which may itself be unbootstrappable. **A is lost.** The outcome
+  is loud (`loaded:false` plus the user-facing notice on every subsequent
+  register), it is bounded to already-divergent records by obligation 3's
+  comparison, and the `plutil -lint` preflight removes the malformed-replacement
+  cause, which is the likeliest one. It is **not** eliminated. Ratifying this ADR
+  approves that specific window, not a vague residual.
 - **The rollback is bounded, not total, and the bound comes from obligation 3.**
   Where the disk is already canonical and only the loaded record is stale, the
   captured bytes *are* canonical, so nothing can restore the record a teardown

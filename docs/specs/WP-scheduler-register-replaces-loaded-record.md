@@ -181,8 +181,11 @@ function ensureWindowsTaskRegistered(loader, taskName, xmlPath, o) {
 
 It skips the OS call **only** after re-reading the LOADED task and verifying it
 equals canonical; every other state — including unreadable and unverifiable —
-force-registers. **This is the reference implementation both other legs are now
-shaped to.** Note what its verified skip costs: one read-only `schtasks /query`.
+force-registers **on the two fields it reads**. Both other legs are shaped to that
+*pattern* — skip only on a live readback — but Windows is **not** the reference
+implementation of the rule, because its readback covers only `<Command>` and
+`<Arguments>`: see Table A row 4's residual. A round-2 draft called it "the
+reference leg"; that overstated what it verifies. Note what its verified skip costs: one read-only `schtasks /query`.
 It is not a zero-call path, and it never was.
 
 ### 7. The readback machinery already exists for launchd
@@ -386,6 +389,10 @@ function ensureDarwinEntryRegistered(loader, uid, label, plistPath, o)
   if (verdict === 'match') return true;
   // (b) non-destructive attempt first (ADR-0018 ordering, preserved)
   if (loader(['launchctl', 'bootstrap', `gui/${uid}`, plistPath]).status === 0) return true;
+  // (c0) PREFLIGHT — never destroy a loaded record for a known-bad replacement.
+  //      Non-zero lint ⇒ stop here. Absent/erroring plutil ⇒ treat as pass.
+  const lint = loader(['plutil', '-lint', plistPath]);
+  if (lint && typeof lint.status === 'number' && lint.status !== 0) return false;
   // (c) TEARDOWN ONLY ON A POSITIVELY ESTABLISHED MISMATCH. 'absent' means
   //     nothing to tear down; 'indeterminate' is the ABSENCE of evidence, not
   //     evidence of divergence — destroying a record we could not read would be
@@ -421,12 +428,49 @@ patch with no ordinals.
 reaching `repointSchedules` (`schedule.js:583`). **"Verified skip" means zero
 MUTATING calls and one read-only readback** — the cost Windows has always paid.
 
-| # | Platform / site | Verified skip allowed when | Mutating call gated on | Teardown allowed when |
-|---|-----------------|----------------------------|------------------------|-----------------------|
-| 1 | darwin per-job (`:429-431`) | `!changed` **and** `print` exits 0 **and** the loaded record's **COMPLETE argv** equals the canonical `ProgramArguments` (element-by-element) | `ensureDarwinEntryRegistered` — the final `bootstrap` | **only** when that same `print` exited 0 — independent evidence the label is loaded |
-| 2 | darwin catch-up (`:314-317`) | same, label `ai.wienerdog.catchup`, canonical argv from `catchupLaunchArgs` | same | same |
-| 3 | linux (`:456-466`) | **never** — see below | `reloadOk && enableOk`, reload hoisted OUT of `if (changed)` | n/a — no teardown on this leg |
-| 4 | win32 (`:240-245`) | unchanged — `windowsLoadedTaskMatches` | unchanged | n/a |
+**Table A is an INDEX, not a second decision authority.** It says which platform
+is governed by what; it deliberately carries **no** skip/teardown rule text of its
+own. A round-5 draft did restate those rules here, and they then survived
+un-updated through three rounds of amendments while Table A1 and Table A2 moved —
+two canonical tables silently disagreeing. **A canonical that restates another
+canonical is how that happens.** If you find yourself wanting to spell a rule out
+in this table, put it in A1 or A2 and point at it.
+
+| # | Platform / site | Decision authority | Comparison authority |
+|---|-----------------|--------------------|----------------------|
+| 1 | darwin per-job (`:429-431`) | **Table A1** | **Table A2** |
+| 2 | darwin catch-up (`:314-317`) | **Table A1** (label `ai.wienerdog.catchup`; canonical argv from `catchupLaunchArgs`, `hour: null`) | **Table A2** |
+| 3 | linux (`:456-466`) | **no verified skip ever** — always attempt; `loaded` gated on `reloadOk && enableOk`, reload hoisted OUT of `if (changed)`; no teardown on this leg | n/a — nothing is compared |
+| 4 | win32 (`:240-245`) | unchanged code — `ensureWindowsTaskRegistered` | **partial: `<Command>`/`<Arguments>` only** — see row 4's residual below |
+
+**Row 4 — Windows is an argv-conforming leg, NOT the reference leg (CX-2).**
+`windowsLoadedTaskMatches` reads a loaded task's `<Command>` and `<Arguments>` and
+nothing else. So a loaded task whose **trigger or settings** were altered — a
+changed firing time, a disabled task — while its command and argline stay canonical
+**passes** its verified skip. That is file-bytes-as-evidence for every field the
+readback never reads: precisely the invariant ADR-0037 states, violated on the leg
+this spec had been calling exemplary.
+
+- **What its readback covers:** the executed command and the full argument line.
+- **What it does not:** triggers (`<CalendarTrigger>`/`<TimeTrigger>`), settings,
+  enabled state — the Windows analogue of the `StartCalendarInterval` and
+  `EnvironmentVariables` fields Table A2 added on darwin.
+- **Why it is not fixed here:** extending the parser would mean specifying XML
+  readback shapes for `schtasks /query /xml` output that **cannot be executed on
+  the authoring host** (macOS). That is this spec's own no-unexecutable-parsers
+  rule — the same rule that denied Linux a verified skip — and it binds here too.
+- **Bounded exposure:** a Windows entry whose trigger drifted without its argline
+  drifting keeps firing on the old schedule (or not at all) until something forces
+  a re-register. It is not silent at fire time the way the macOS stale-digest case
+  was — the launcher still runs and still verifies the descriptor — but the
+  *schedule* is stale and `sync` reports success.
+- **Routed:** **`WP-windows-task-trigger-readback`** (new slug). Checked against the
+  existing candidate `WP-windows-task-exec-pairing`
+  (`WP-scheduler-entry-identity.md:1993`) and kept **separate**: that one is about
+  `parseWindowsTaskExec` mis-pairing `<Command>` with another `<Exec>`'s
+  `<Arguments>` — a defect in reading the fields it *already* reads. This one is
+  about reading fields it never reads at all. Adjacent, not the same; folding them
+  would hide one behind the other.
 
 **Row 3 permits no verified skip, and that is a deliberate, recorded choice.**
 There is no readback of a loaded systemd unit that this spec can specify *and
@@ -553,6 +597,8 @@ branch (the recurring failure mode in this chain — see the gate-3 row).
 | rollback reports the failed replacement as success | make step (d) `return true` after a successful restore-bootstrap | T2b |
 | the prior bytes are captured after the overwrite | move the `priorBytes` read below `ensureEntry` | T2b (the restored bytes become the new plist, so the prior argv is never re-bootstrapped) |
 | `add()` reports success for an unloaded unchanged entry | restore the `changed &&` conjunct at `schedule.js:882` | T7 |
+| a known-bad replacement still gets a teardown | delete the `plutil -lint` preflight (c0) | **T2c** — lint non-zero + loaded record ⇒ a `bootout` appears |
+| a missing linter disables registration | treat an absent/erroring `plutil` result as a lint failure | **T2d** — `loader` returns `undefined` for `plutil` ⇒ the register must still proceed |
 | **`'indeterminate'` authorizes a teardown** — the CX-1 defect | change the teardown guard to `if (verdict === 'absent') return false;`, i.e. let an unreadable record through | **T3 case (xiv)** — print exits 0 with unparseable stdout ⇒ a `bootout` appears |
 | the verdict collapses back to a boolean | make `darwinLoadedVerdict` return `'mismatch'` for any non-match, folding `'indeterminate'` into it | T3 case (xiv) |
 | darwin compares only the head of the argv — the round-2 defect | make `darwinLoadedVerdict` compare only `argv[0]` and `argv[1]` | **T3 case (v)** — the stale-tail fixture |
@@ -875,16 +921,52 @@ Four contract properties, all binding:
    spins silently.
 
 4. **What rollback protects, and its bound — stated honestly (CX-2).**
-   `priorBytes` is the bytes on disk when the register began. That is the
-   previously-**registered** plist **only in the `changed = true` case**, where the
-   disk represents a known prior registration. In the divergence case
+   `priorBytes` is **the previous DISK state, and nothing more**. A round-4 draft
+   claimed it is "the previously-registered plist when `changed = true`; that is
+   **false**, and the counterexample is reachable through pre-WP history: OS holds
+   record **A**, disk holds plist **B**, we render **C**. That state is exactly what
+   an earlier failed register leaves behind (`ensureEntry` writes B, the OS call
+   fails, A stays loaded). Then `changed = true`, `priorBytes = B`, the verdict on
+   A is `mismatch`, C fails to bootstrap, and the rollback restores **B — never
+   A**. A is gone, and B may itself be unbootstrappable.
+   **The disk coincides with the previous registration only when the last register
+   SUCCEEDED**, which is precisely the assumption this WP exists because we cannot
+   make. In the divergence case
    (`changed = false`, disk already canonical, loaded record older) `priorBytes`
    **equals canonical**, so a rollback would re-write and re-bootstrap the very
    plist that just failed. It cannot restore what the `bootout` destroyed, because
    no artifact of that record exists on disk — this spec's own
    "disk is not evidence" premise, applied to its own rollback.
 
-   **The bound is what makes that acceptable, and it depends on Table A2.** Once
+   **What rollback therefore guarantees, stated honestly:** it restores *the disk
+   state that preceded this register*, and re-bootstraps it. When the last register
+   succeeded (the common case) that **is** the prior registration and the guarantee
+   is complete. When it did not, rollback returns the machine to the same
+   already-broken state it was in before this attempt — it never makes things
+   worse, and it never claims to have restored a working schedule.
+
+   **Narrowing the window cheaply — a `plutil -lint` preflight before ANY
+   teardown.** The most likely reason a self-authored replacement fails to
+   bootstrap is that it is malformed, and that is detectable **before** anything is
+   destroyed, at zero risk. Verified present and working on the authoring host:
+
+   ```
+   $ which plutil
+   /usr/bin/plutil
+   $ plutil -lint ~/Library/LaunchAgents/ai.wienerdog.dream.plist ; echo $?
+   /Users/gyulafeher/Library/LaunchAgents/ai.wienerdog.dream.plist: OK
+   0
+   ```
+
+   **Contract:** after `ensureEntry` writes and **before** step (c)'s teardown, run
+   `plutil -lint <plistPath>` through the `loader` seam. **Non-zero ⇒ return
+   `loaded:false` immediately, with NO teardown** — the replacement is known-bad, so
+   destroying a loaded record for it is indefensible. Exit 0 does not promise the
+   bootstrap will succeed (permissions, launchd state), so it narrows the window
+   rather than closing it. `plutil` absent or erroring ⇒ treat as **pass** and
+   proceed: a missing linter must not disable registration.
+
+   **The bound is what makes the remainder acceptable, and it depends on Table A2.** Once
    the skip compares every varying field, **any** record that reaches a teardown is
    already divergent from canonical: a stale argv (refusing every fire on the
    `--expect-digest` mismatch), a stale firing time, or a stale env binding. So the
@@ -1034,7 +1116,12 @@ mock `process.platform` — and no test may touch a real OS scheduler
       `loaded: false`, and that §8's notice fires. This fixture exists to pin the
       **bound**, not a recovery: it is the case where rollback provably cannot
       restore the destroyed record;
-      (g) the restore's `bootstrap` itself fails ⇒ still `loaded: false`, no throw.
+      (g) the restore's `bootstrap` itself fails ⇒ still `loaded: false`, no throw;
+      (h) **the preflight (T2c)** — `plutil -lint` returns non-zero with a loaded
+      record present ⇒ `loaded: false` and **no `bootout` anywhere**;
+      (i) **the linter is absent (T2d)** — the `loader` returns `undefined` for the
+      `plutil` argv ⇒ treated as a pass, the register proceeds normally. A missing
+      linter must never disable registration.
       **Every fixture in this set pins `verdict === 'mismatch'`** — that is now the
       only verdict that reaches a teardown at all (Table A1), so a rollback fixture
       whose readback is unparseable would be testing an unreachable path.
@@ -1248,7 +1335,11 @@ npm test
   specified here. Routed as **`WP-systemd-loaded-unit-readback`**; it would also
   close `WP-scheduler-entry-identity`'s Residual 1 and would let row 3 gain a skip
   clause.
-- **Comparing the launcher argument tail** (`--descriptor`, `--expect-digest`) —
+- **Substitution-resistance of the executed BINARY** — a record whose argv is
+  byte-equal to canonical but whose node/launcher *file* was replaced. The argv
+  tail (`--descriptor`, `--expect-digest`) **is** compared and has been since
+  round 3, so the round-2 phrasing of this entry was stale; what remains for that
+  sibling is binary identity, not argv identity —
   `WP-scheduler-argument-tail-identity`.
 - **Making the execution position *comparable*** against substitution —
   `WP-scheduler-stable-exec-position`.
