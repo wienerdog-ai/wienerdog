@@ -2203,9 +2203,20 @@ Seven consequences of this table that are easy to get wrong:
    N2 was kept rather than the claim.**
 
    **Tested rather than argued: AC-14's THIRD case** — the 51+ boundary from
-   both an empty and a full directory — is what holds N5 and N6. The second
-   case holds N3/N4 against tied and skewed `mtime`s. *Round 3 corrected this
-   pointer: it named the second case for a precedence the third one tests.*
+   both an empty and a full directory — is what holds N5 and N6. **The SECOND
+   case holds N3** (the exclusion) and **the FIRST case holds N4** (the
+   `(mtimeMs, name)` ordering), each against tied and skewed `mtime`s.
+   *Round 3 corrected this pointer once: it named the second case for a
+   precedence the third one tests. Round 6 of the post-Done errata corrected it
+   again, and by measurement — this sentence said "the second case holds N3/N4",
+   which the M-23 / M-23b split falsifies: **M-23b's isolated run reddens case 1
+   only and leaves case 2 green**, so case 2 is insensitive to the ordering half
+   and cannot hold N4. Both runs are recorded in those two rows and in the AC-15
+   coverage census.* **This sentence is a registered mirror of BOTH rows** —
+   M-23 for N3 and M-23b for N4 — and it is registered as both because round 5's
+   sweep checked it against M-48 and N2, found it correct there, and cleared it
+   while the adjacent N4 clause had just gone stale. Checking a multi-row mirror
+   for one of its rows is how the other clause slips.
 
 ### Table T — canonical: how every Table R row is produced and observed
 
@@ -2282,6 +2293,18 @@ verification command, no Deliverables cell and no Table R / Table K / Table N ro
 states any of the three facts, so none of those moved — checked by reading them,
 not by assuming.
 
+**Round 6 registered one more surface and it is a TABLE, not a sentence: the
+*AC-15 coverage census*.** It is dispositioned as corpus/measurement **data** in
+verification step **V-30**'s schema list, which means what the Checklist registers
+is the table itself rather than its rows — the same disposition "Table Q
+membership" carries, and it is why this bullet names the census by its exact
+heading. The census is the canonical source for every mutation row's evidence
+limb; **AC-15** is now its pointer and states no disposition of its own, and
+**M-48**'s cell and the **Table R consequence 7** sentence are the two row-level
+surfaces that must move with it. *That is an extraction, not a rewording, and the
+reason is written into the census itself: AC-15's wording was the blocking finding
+in two consecutive rounds, which is the circuit-breaker condition.*
+
 **Round 5 registered two more mirrors, and they are the ones round 4 missed:
 acceptance criteria AC-14 and AC-15.** Both restated M-48's coverage — AC-14's
 third case asserted *"a per-call prune fails this case"*, AC-15 asserted that
@@ -2291,12 +2314,32 @@ pattern one layer up**, and it is the third instance in this document's history:
 AC-14's own provenance note records round 4 of the *original* gate appending a
 correction as commentary rather than editing the assertion, *"so it stood for a
 further round"*. Both criteria are now edited rather than annotated, and the
-routed slug **`WP-ep2-retention-prune-timing-test`** appears in M-48's cell,
-AC-15's second limb and the PR body — one name, three surfaces, registered here.
+routed slug **`WP-ep2-retention-prune-timing-test`** is registered on **five**
+surfaces, and the count is the registration rather than a decoration: **(1)**
+M-48's cell in the Mutation checks table; **(2)** the **AC-15 coverage census**
+row for M-48, which carries the `gap` limb; **(3)** **AC-14**'s third case, where
+the routed WP is named as the owner of N2's missing detector; **(4)** the PR body's
+discovered issue; and **(5)** the spec itself, `docs/specs/WP-ep2-retention-prune-timing-test.md`,
+authored in the same pass so the slug names a real `Draft` WP rather than a
+string. *Round 5 wrote "three surfaces" and had it on four — AC-14 was omitted —
+and round 6 added the fifth by authoring the spec. A registration sentence that
+states a count is checkable, which is the only reason to state one; it has now
+been wrong once and is written as an enumeration.*
 **The sweep that found them was mechanical and its whole result is recorded**, so
-the next reader can re-run it: `grep -rn "per-call\|at least one named test"` over
-`docs/` returns, besides the corrections themselves, exactly two further sites and
-**neither needed an edit** — Table B row **B10**, whose *"reading it into this chain
+the next reader can re-run it — **scoped to this file, which is the scope the claim
+is about**:
+
+```sh
+grep -n "per-call\|at least one named test" docs/specs/done/WP-secret-fence-ep2-redact-arm.md
+```
+
+*Round 6 corrected this command: round 5 recorded it unscoped over `docs/`, where it
+returns roughly fifteen hits in unrelated senses — `per-call defaultYes` in WP-060,
+`per-call-site` in the scheduler specs — so the command as written did not reproduce
+the conclusion it was offered as evidence for. The conclusion was right; the
+command was not re-runnable, which by row **A1** of the PROPOSED ADR-0036 is the
+difference between an artifact and a verdict.* Besides the corrections themselves it
+returns exactly two further sites, and **neither needed an edit** — Table B row **B10**, whose *"reading it into this chain
 is a per-call prune, i.e. exactly what mutation M-48 does"* states **N2**'s contract
 correctly and cites M-48 more accurately after the split than before it, and Table R
 **consequence 7**, which names the per-call prune only as the design a falsified
@@ -3014,6 +3057,15 @@ above; the rule applies identically to rows B4, B5, B10, B6, B7 and B13.
       **The 2026-07-28 post-Done errata registers one NEW mirror: the errata
       block in Table T's preamble**, which restates what FI-10, FI-19 and M-23
       were wrong about. It defers to the three rows and decides nothing.
+      **Registered 2026-07-28, round 6 — the *AC-15 coverage census*.** That
+      table is canonical for every mutation row's evidence limb; **AC-15** is its
+      pointer and decides nothing; **M-48**'s cell and **Table R consequence 7**'s
+      pointer sentence are the row-level surfaces that move with it. It is
+      dispositioned corpus/measurement **data** in **V-30**, so what this bullet
+      registers is the table, named here by its exact heading — *AC-15 coverage
+      census* — and not its rows. *It exists because AC-15's wording was the
+      blocking finding in two consecutive rounds: the third repair is an
+      extraction, per the circuit-breaker in `docs/runbooks/codex-review.md`.*
       **A generalizing rule is PROPOSED in `docs/adr/0036-mechanism-cell-schema-for-contract-tables.md`
       and its Table A is canonical for it.** Summary only, and deliberately only a
       summary: a `mechanism` cell names a **trigger** and a **patch** as separate
@@ -4155,7 +4207,10 @@ here.
       M-23b's run) and the created-copy exclusion (**N3**, by M-23's run). **What
       nothing pins is the prune's TIMING, Table N row N2**: it is **undetected by
       any test in this repository today**, and the fix is routed to
-      **`WP-ep2-retention-prune-timing-test`**, which owns `tests/`. This errata
+      **`WP-ep2-retention-prune-timing-test`** — a real `Draft` spec at
+      `docs/specs/WP-ep2-retention-prune-timing-test.md`, authored in the same
+      errata pass so this criterion names an owned WP rather than a string — which
+      owns `tests/`. This errata
       pass does not, so it records the gap rather than closing it. *The case still
       earns its keep: the previous design's defence of the retention story was an
       arithmetic claim (Table R consequence 7) false by three orders of magnitude,
@@ -4166,22 +4221,24 @@ here.
       a further round"*; round 4 of THIS errata corrected M-48's cell and left this
       assertion standing, which is that shape a third time, one layer up. Both are
       why the correction here **replaces** the sentence instead of following it.
-- [ ] **AC-15** **Every mutation row in the Mutation checks table either names a
-      test its RECORDED RUN reddens, or records an EXECUTED no-detector gap
-      naming the WP routed to close it.** *Reworded 2026-07-28 by the post-Done
-      errata, round 5. It previously read "Every mutation in the Mutation checks
-      table makes at least one named test fail", which the rewritten **M-48** row
-      falsifies: its isolated N2-only mutation was executed and survives the whole
-      suite, so no named test fails and the old criterion was simply untrue of the
-      table it describes.* **The second limb is not a loophole — it is strictly
-      harder to satisfy than a claim of coverage**, because it requires the run
-      that demonstrates the absence and a named owner for the fix; a row may not
-      take it by assertion. **M-48 is the only row on the second limb today**, and
-      its routed WP is **`WP-ep2-retention-prune-timing-test`**. Every other row
-      is on the first limb. *This formulation is deliberately the general one
-      rather than a per-row exception, and it is consistent with row **A3** of the
-      PROPOSED ADR-0036, which likewise asks a mutation row for an artifact rather
-      than for a verdict.*
+- [ ] **AC-15** **Every mutation row in the Mutation checks table has a row in the
+      *AC-15 coverage census*, and that table decides its evidence limb.** This
+      criterion states no per-row disposition and no blanket claim; the census
+      does, one row per mutation row, and its coverage is derived by comparing the
+      two id sets rather than asserted. *Reworded 2026-07-28 by the post-Done
+      errata. It read "Every mutation in the Mutation checks table makes at least
+      one named test fail" until round 5 — false for the rewritten **M-48** —
+      and then, until round 6, a two-limb sentence whose normative clause demanded
+      a recorded run while its own gloss only parsed if the first limb had none,
+      and whose "every other row" was false under the reading its capitals forced.
+      **Two consecutive rounds landed on this criterion's WORDING**, which is the
+      circuit-breaker condition in `docs/runbooks/codex-review.md`, so the third
+      repair is an EXTRACTION and not a third rewording: the dispositions moved to
+      a table where every row is visible and the coverage claim is true by
+      construction. The asymmetry the two-limb sentence tried to carry in prose —
+      inherited-and-swept versus executed-here versus an executed gap — is now the
+      census's `limb` column, which is where a distinction that keeps being
+      misread belongs.*
 - [ ] **AC-16** `npm test` and `npm run lint` pass; running the dream twice over
       an unchanged corpus produces zero changes on the second run.
 - [ ] **AC-19** `docs/runbooks/secret-incident.md` carries all three Table Q
@@ -4284,6 +4341,83 @@ here.
       orderings have converged on the same state, which is exactly why round 4's
       AC-24 could not see a write-then-stage implementation. One case is enough
       (an ordinary **R8**), and it is the case **M-30** must break.
+
+### AC-15 coverage census — canonical: the evidence limb of every mutation row
+
+**This table is the single place AC-15's per-row disposition is decided, and it
+exists because AC-15's WORDING was the blocking finding in two consecutive review
+rounds.** Round 5 reworded it; round 6 found the rewording internally inconsistent.
+That is the two-consecutive-rounds condition stated in
+`docs/runbooks/codex-review.md`, so the repair is an **extraction** rather than a
+third rewording. AC-15 is now a pointer; the dispositions live here, one row per
+mutation row, so *"every other row"* is true **by construction** instead of by
+assertion.
+
+**Coverage is derived, not claimed.** This table holds **37** rows and the Mutation
+checks table below holds **37** rows; the two id sets were compared with `comm` on
+2026-07-28 and are **identical — nothing in either that is not in the other**. A row
+added to the mutation table without a row here shows up as a count mismatch, which
+is exactly the property the old blanket wording lacked.
+
+**The three limbs — and the asymmetry between them is the point, so it is a column
+and not prose.**
+
+- **`swept`** — the row's injection was applied and its named check run in **PR
+  #122's** mutation sweep, which recorded `RED (ok)`. **The run lives in that PR
+  body, not in the cell**, and this errata did not re-execute it. It is an
+  inherited verdict, not a measurement this document performed. **34 rows.**
+- **`executed`** — this errata applied the row's mutation **in isolation** and the
+  row's own cell carries the command and the pass/fail counts. **2 rows.**
+- **`gap`** — the mutation was executed and **reddens nothing**; the cell records
+  the run demonstrating the absence and names the WP routed to close it. **1 row.**
+  This limb cannot be taken by assertion: it costs a run and a named owner, which
+  is strictly more than a claim of coverage costs. That is why it is not a loophole.
+
+| # | limb | evidence |
+|---|------|----------|
+| M-7 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
+| M-8 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
+| M-9 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
+| M-10 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
+| M-11 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
+| M-12 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
+| M-16 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
+| M-17 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
+| M-18 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
+| M-19 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
+| M-20 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
+| M-21 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
+| M-22 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
+| **M-23** | **executed** | **Re-executed by this errata, 2026-07-28, in ISOLATION.** Drop `&& !created.has(e.name)`, keep the `(mtimeMs, name)` sort ⇒ **AC-14 case 2 RED** (cases 3 and 4 also red, case 1 green), `pass 2, fail 3`. The command and counts are in this row's own cell. Also `RED (ok)` in PR #122's sweep, but there as the pre-split conjoined row |
+| **M-23b** | **executed** | **Re-executed by this errata, 2026-07-28, in ISOLATION.** Drop the `mtimeMs` term, keep the exclusion ⇒ **AC-14 case 1 RED** only, `pass 4, fail 1`. Counts in this row's own cell. Round 5 corrected this row's mapping from case 2 to case 1 on the strength of that run |
+| M-24 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
+| M-24b | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
+| M-25 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
+| M-26 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
+| M-27 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
+| M-28 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
+| M-29 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
+| M-30 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
+| M-31 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
+| M-32 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
+| M-33 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
+| M-51 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
+| M-53 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
+| M-56 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
+| M-54 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
+| M-55 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
+| M-50 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
+| M-49 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
+| M-45 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
+| M-46 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
+| M-47 | swept | **`RED (ok)`** — PR #122's mutation sweep, 2026-07-27, which applied every row's injection, ran its named check and restored the file (*"ALL MUTATIONS CAUGHT"*). The check it reddens is the one this row's own `Must fail` cell names. **Inherited verdict, not re-executed by this errata** |
+| **M-48** | **gap** | **EXECUTED, AND REDDENS NOTHING.** The isolated N2-only mutation — move the prune call into the B4 loop, pass the accumulated set unchanged — leaves all five retention cases green, `dream-validate` 136/136, and the **whole suite** at `tests 1807, pass 1802, fail 0`. **PR #122 recorded `M-48 RED (ok)` and that is not a contradiction: #122 ran the CONJOINED row, whose other half violates N3, and N3 has a detector.** The redness came from the half that was covered — which is this census's whole argument. Routed to **`WP-ep2-retention-prune-timing-test`** |
+
+**What this census does NOT claim.** It does not claim the 34 `swept` rows would
+still redden today: `main` has moved since 2026-07-27 and this errata re-ran none of
+them. It claims exactly what it says — each was applied and recorded red at that
+commit. Re-establishing them is a sweep, not a reading, and no surface in this
+document says otherwise.
 
 ### Mutation checks (run these; a green suite against unmodified `src/` is not evidence)
 
@@ -6028,6 +6162,7 @@ const SCHEMA = new Map([
 ["### Table K — canonical: every read of the target inside the redact arm || | # | which read | encoding | position in the arm | what anchors it | if it THROWS | if its bytes DIFFER from `captured` |", ["ids", /^K[0-9]+$/]],
 ["### Table R — canonical: the redact arm's outcome matrix || | # | outcome | `P` | `S` | working-tree file **at the instant `S` returned** | `redacted/` copy when the row finishes | index **when the row finishes** | next row | `secretRedactions` | `secretReverts` | in `reverted[]` | fault injection |", ["ids", /^R[0-9]+[a-z]?$/]],
 ["### Table T — canonical: how every Table R row is produced and observed || | id | produces | mechanism — the exact seam | asserted at | why nothing cheaper reaches it |", ["ids", /^(FI-[0-9]+[a-z]?|RP-[0-9]+|BU|I[0-9]+|—)$/]],
+["### AC-15 coverage census — canonical: the evidence limb of every mutation row || | # | limb | evidence |", ["data", "AC-15 coverage census"]],
 ["### Mirrored Surface Checklist || | hit | surface | disposition |", ["data", "census"]],
 ["### Owner signature form — canonical || | # | Fact | Value |", ["ids", /^S[0-9]+$/]],
 ["### Table H — canonical: what a DEFINITION is, and what a REGISTRATION is || | # | fact | pattern | why it is here |", ["ids", /^H[0-9]+$/]],
