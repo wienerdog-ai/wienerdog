@@ -2367,6 +2367,89 @@ test('EP2 RP-1: the same race on an UNTRACKED note, where the loss is irreversib
   assert.ok(!copy.includes('a microsecond too late'), 'no durable artifact holds the save');
 });
 
+// ── A note that is not lossless UTF-8 is WITHHELD, never rewritten ──────────
+// The per-line scrub has to decode the whole note, and `toString('utf8')` never
+// fails — it substitutes U+FFFD for every invalid byte, and the re-encode then
+// writes different bytes back for lines this run never added. Git classifies
+// such a file as TEXT whenever it holds no NUL, so the binary fail-closed
+// branch does not catch it. The arm declines and the note is withheld, which is
+// the behaviour this gate had before the redact arm existed.
+
+/** A Latin-1 note: 0xE9 is `é` in Latin-1 and is invalid standalone UTF-8. */
+const LATIN1_HEAD = Buffer.concat([
+  Buffer.from('caf'), Buffer.from([0xE9]), Buffer.from(' au lait notes\nsecond line\n'),
+]);
+const FFFD = Buffer.from([0xEF, 0xBF, 0xBD]);
+
+test('EP2 redact arm: a NOT-lossless-UTF-8 note is withheld, and not one byte of it is rewritten', () => {
+  const rel = '04-Atomic/l1.md';
+  const { root, vault, scratch } = tempVault();
+  const stateDir = path.join(root, 'state');
+  fs.mkdirSync(path.join(vault, '04-Atomic'), { recursive: true });
+  fs.writeFileSync(path.join(vault, rel), LATIN1_HEAD);
+  git(vault, ['add', '-A']);
+  git(vault, ['commit', '-q', '-m', 'the note as the user has it']);
+  const withAdded = Buffer.concat([LATIN1_HEAD, Buffer.from(REDACT_NOTE)]);
+  fs.writeFileSync(path.join(vault, rel), withAdded);
+  // Precondition: git calls this TEXT, so the binary branch is not what catches it.
+  assert.ok(
+    !/^-\t-\t/.test(git(vault, ['diff', '--cached', '--numstat', '-z', '--', rel])),
+    'git classifies the fixture as text — the binary fail-closed branch is not in play'
+  );
+
+  const res = validateAndCommit({ vaultDir: vault, scratchDir: scratch, date: '2026-07-02', expectedScratch: [], stateDir });
+
+  // WITHHELD, not scrubbed.
+  assert.equal(res.secretRedactions, 0);
+  assert.equal(res.secretReverts, 1);
+  assert.ok(!res.committed.includes(rel));
+  // The working tree is byte-identical to the committed original — nothing was
+  // rewritten, and in particular no U+FFFD was substituted anywhere.
+  assert.deepEqual(fs.readFileSync(path.join(vault, rel)), LATIN1_HEAD);
+  assert.ok(!fs.readFileSync(path.join(vault, rel)).includes(FFFD), 'no replacement characters');
+  // The withheld copy holds the exact pre-revert bytes, invalid byte intact.
+  const copy = fs.readFileSync(path.join(stateDir, 'quarantine', '2026-07-02-l1.md'));
+  assert.deepEqual(copy, withAdded);
+  assert.ok(!copy.includes(FFFD));
+  assert.ok(copy.includes(Buffer.from([0xE9])), 'the Latin-1 byte survived untouched');
+  // Nothing is left in redacted/: the fall-through deleted its copy.
+  assert.deepEqual(lsRedacted({ stateDir }), []);
+  // The reason names the note and says why it was not rewritten.
+  const entry = res.reverted.find((r) => r.path === rel);
+  assert.ok(entry, JSON.stringify(res.reverted));
+  assert.ok(
+    entry.reason.includes(
+      '(not rewritten: this note is not valid UTF-8 text, so the secret could not be '
+        + 'replaced without changing the rest of it)'
+    ),
+    entry.reason
+  );
+  const report = fs.readFileSync(path.join(vault, 'reports/dreams/2026-07-02.md'), 'utf8');
+  assert.ok(report.includes('`04-Atomic/l1.md` — reverted:'));
+  assert.ok(!report.includes('## Redacted in place'), 'no redaction was announced');
+});
+
+test('EP2 redact arm: scrubAddedLines itself refuses a not-lossless buffer (helper)', () => {
+  // Held in the helper too, so the exported function is safe for every caller,
+  // not only for the gate that checks before calling it.
+  const rel = '04-Atomic/l1.md';
+  const { root, vault } = tempVault();
+  void root;
+  fs.mkdirSync(path.join(vault, '04-Atomic'), { recursive: true });
+  const withAdded = Buffer.concat([LATIN1_HEAD, Buffer.from(REDACT_NOTE)]);
+  fs.writeFileSync(path.join(vault, rel), withAdded);
+  git(vault, ['add', '-A']);
+  const { scrubAddedLines } = require('../../src/core/dream/validate');
+  assert.equal(scrubAddedLines(vault, rel, [3], withAdded), false);
+  assert.deepEqual(fs.readFileSync(path.join(vault, rel)), withAdded, 'byte-unchanged');
+  // …and a valid-UTF-8 control on the same fixture shape still scrubs, so the
+  // guard is not simply refusing everything.
+  const ok = Buffer.from(`plain notes\nsecond line\n${REDACT_NOTE}`);
+  fs.writeFileSync(path.join(vault, rel), ok);
+  git(vault, ['add', '-A']);
+  assert.equal(scrubAddedLines(vault, rel, [3], ok), true);
+});
+
 // ── AC-14 — the retention contract for state/quarantine/redacted/ ───────────
 // The prune is a DELETE PATH over the only pre-scrub copies of the user's own
 // text, so it runs once per run, only after a completed redaction, only inside

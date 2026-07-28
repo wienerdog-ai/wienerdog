@@ -731,6 +731,27 @@ function addedLineNumbersFromDiff(diff) {
 }
 
 /**
+ * Can these bytes be decoded as UTF-8 and re-encoded to exactly themselves?
+ *
+ * THE PER-LINE SCRUB HAS TO DECODE THE WHOLE NOTE, AND A DECODE IS ONLY SAFE IF
+ * IT ROUND-TRIPS. `Buffer.toString('utf8')` never fails: it replaces every
+ * invalid byte with U+FFFD. Re-encoding that string then writes three different
+ * bytes back — so on a Latin-1 (or otherwise not-quite-UTF-8) note the gate
+ * would rewrite lines it never touched, all over the file, while reporting that
+ * it replaced only the added ones. Git classifies such a file as TEXT whenever
+ * it holds no NUL byte, so the binary fail-closed branch does not catch it.
+ *
+ * A note that fails this check is withheld instead of scrubbed — the behaviour
+ * this gate had before the redact arm existed, which is the right default for a
+ * file that cannot be processed without risking its bytes.
+ * @param {Buffer} buf
+ * @returns {boolean}
+ */
+function isLosslessUtf8(buf) {
+  return Buffer.compare(Buffer.from(buf.toString('utf8'), 'utf8'), buf) === 0;
+}
+
+/**
  * Rewrite exactly the lines THIS run added, replacing each with its sanitized
  * form. Never touches a line the run did not add — a secret already committed
  * in HEAD is not rewritten (ADR-0024's "the gate scans the added bytes").
@@ -768,6 +789,12 @@ function scrubAddedLines(vaultDir, rel, addedLineNumbers, captured) {
   const target = path.join(vaultDir, rel);
   let tmp = null;
   try {
+    // Fail closed on a note whose bytes are not losslessly representable as
+    // UTF-8: decoding it would substitute U+FFFD for every invalid byte and the
+    // re-encode would then corrupt lines this run never added. The caller
+    // withholds instead. Held here rather than only at the call site so the
+    // exported helper is safe for every caller.
+    if (!isLosslessUtf8(captured)) return false;
     const raw = captured.toString('utf8');
     const trailingNewline = raw.endsWith('\n');
     const lines = (trailingNewline ? raw.slice(0, -1) : raw).split('\n');
@@ -1189,6 +1216,8 @@ function validateAndCommit(o) {
     let redactCopy = null;
     /** true once the redact arm was entered and did not complete */
     let redactFellThrough = false;
+    /** true when the arm declined because the note is not lossless UTF-8 */
+    let notLosslessUtf8 = false;
     if (isBinary) {
       reason = 'reverted: staged content is binary and cannot be secret-scanned; not committed';
     } else {
@@ -1214,7 +1243,11 @@ function validateAndCommit(o) {
         redactCopy = quarantinePreserve(stateDir, vaultDir, rel, date, 'redacted');
         if (redactCopy) redactedCreated.add(redactCopy.name);
         const addedLineNumbers = addedLineNumbersFromDiff(diff);
-        if (redactCopy && scrubAddedLines(vaultDir, rel, addedLineNumbers, redactCopy.bytes)) {
+        // A note whose bytes do not survive a UTF-8 round trip cannot be
+        // rewritten per line without changing bytes the run never added, so the
+        // arm declines it outright and the withhold below runs instead.
+        if (redactCopy && !isLosslessUtf8(redactCopy.bytes)) notLosslessUtf8 = true;
+        else if (redactCopy && scrubAddedLines(vaultDir, rel, addedLineNumbers, redactCopy.bytes)) {
           secretRedacted.push({
             path: rel,
             lines: addedLineNumbers.length,
@@ -1265,6 +1298,10 @@ function validateAndCommit(o) {
       git(vaultDir, ['add', '-A', '--', rel]);
     }
     if (!preserved) reason += ' (quarantine copy failed)';
+    if (notLosslessUtf8) {
+      reason += ' (not rewritten: this note is not valid UTF-8 text, so the secret could not be '
+        + 'replaced without changing the rest of it)';
+    }
     if (redactCopy) {
       // Dispose of the redact arm's copy, LAST, after the revert succeeded.
       // Delete it only when a byte-identical withheld copy demonstrably exists;
