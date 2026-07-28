@@ -2282,6 +2282,27 @@ verification command, no Deliverables cell and no Table R / Table K / Table N ro
 states any of the three facts, so none of those moved — checked by reading them,
 not by assuming.
 
+**Round 5 registered two more mirrors, and they are the ones round 4 missed:
+acceptance criteria AC-14 and AC-15.** Both restated M-48's coverage — AC-14's
+third case asserted *"a per-call prune fails this case"*, AC-15 asserted that
+every mutation row reddens a named test — and both were falsified by the same
+executed run that rewrote M-48. **This is the one-surface-updated-mirrors-stale
+pattern one layer up**, and it is the third instance in this document's history:
+AC-14's own provenance note records round 4 of the *original* gate appending a
+correction as commentary rather than editing the assertion, *"so it stood for a
+further round"*. Both criteria are now edited rather than annotated, and the
+routed slug **`WP-ep2-retention-prune-timing-test`** appears in M-48's cell,
+AC-15's second limb and the PR body — one name, three surfaces, registered here.
+**The sweep that found them was mechanical and its whole result is recorded**, so
+the next reader can re-run it: `grep -rn "per-call\|at least one named test"` over
+`docs/` returns, besides the corrections themselves, exactly two further sites and
+**neither needed an edit** — Table B row **B10**, whose *"reading it into this chain
+is a per-call prune, i.e. exactly what mutation M-48 does"* states **N2**'s contract
+correctly and cites M-48 more accurately after the split than before it, and Table R
+**consequence 7**, which names the per-call prune only as the design a falsified
+arithmetic claim once argued for. Both are registered as M-48 mirrors by this
+sentence, checked, and left byte-unchanged.
+
 **What the M-23 / M-23b split cost to settle, recorded because it is the one
 claim here that needed a run rather than a reading.** Round 1 of this errata
 inferred the assignment from PR #122's two terse sweep labels and said so; round
@@ -4119,13 +4140,48 @@ here.
       prune back — impossible under N2 — and round 4 appended the correction as
       commentary instead of editing the assertion, so it stood for a further
       round. The assertion above is now the criterion. See the N2/N6 decision
-      under Table N.* **A per-call prune
-      fails this case and a per-run prune passes it** — which is the whole reason
-      the case exists, because the previous design's defence was an arithmetic
-      claim (Table R consequence 7) that was false by three orders of magnitude
-      and that no test could have caught.
-- [ ] **AC-15** Every mutation in the Mutation checks table makes at least one
-      named test fail.
+      under Table N.* **WHAT THIS CASE DOES AND DOES NOT DETECT — corrected 2026-07-28
+      by the post-Done errata, round 5, and corrected by MEASUREMENT rather than
+      by argument.** Until then this criterion asserted *"A per-call prune fails
+      this case and a per-run prune passes it."* **That is false, and the run
+      that disproves it is recorded in mutation row M-48**: the isolated N2-only
+      mutation — move the `pruneRedactedOriginals` call into the B4 loop while
+      passing the accumulated `redactedCreated` set unchanged — leaves **all
+      five** retention cases green, the whole `dream-validate` file green
+      (`tests 136, pass 136, fail 0`) and the **entire suite** green
+      (`tests 1807, pass 1802, fail 0`). **What this case really pins** is the
+      cap, the **N5** precedence and the **N6** overshoot lifetime, and — through
+      the other two retention cases — the `(mtimeMs, name)` ordering (**N4**, by
+      M-23b's run) and the created-copy exclusion (**N3**, by M-23's run). **What
+      nothing pins is the prune's TIMING, Table N row N2**: it is **undetected by
+      any test in this repository today**, and the fix is routed to
+      **`WP-ep2-retention-prune-timing-test`**, which owns `tests/`. This errata
+      pass does not, so it records the gap rather than closing it. *The case still
+      earns its keep: the previous design's defence of the retention story was an
+      arithmetic claim (Table R consequence 7) false by three orders of magnitude,
+      and this case is what replaced argument with a fixture — for the cap and the
+      precedence, which it does hold.* **Provenance, and it is the same failure
+      twice:** the paragraph above records round 4 of the original gate appending a
+      correction *"as commentary instead of editing the assertion, so it stood for
+      a further round"*; round 4 of THIS errata corrected M-48's cell and left this
+      assertion standing, which is that shape a third time, one layer up. Both are
+      why the correction here **replaces** the sentence instead of following it.
+- [ ] **AC-15** **Every mutation row in the Mutation checks table either names a
+      test its RECORDED RUN reddens, or records an EXECUTED no-detector gap
+      naming the WP routed to close it.** *Reworded 2026-07-28 by the post-Done
+      errata, round 5. It previously read "Every mutation in the Mutation checks
+      table makes at least one named test fail", which the rewritten **M-48** row
+      falsifies: its isolated N2-only mutation was executed and survives the whole
+      suite, so no named test fails and the old criterion was simply untrue of the
+      table it describes.* **The second limb is not a loophole — it is strictly
+      harder to satisfy than a claim of coverage**, because it requires the run
+      that demonstrates the absence and a named owner for the fix; a row may not
+      take it by assertion. **M-48 is the only row on the second limb today**, and
+      its routed WP is **`WP-ep2-retention-prune-timing-test`**. Every other row
+      is on the first limb. *This formulation is deliberately the general one
+      rather than a per-row exception, and it is consistent with row **A3** of the
+      PROPOSED ADR-0036, which likewise asks a mutation row for an artifact rather
+      than for a verdict.*
 - [ ] **AC-16** `npm test` and `npm run lint` pass; running the dream twice over
       an unchanged corpus produces zero changes on the second run.
 - [ ] **AC-19** `docs/runbooks/secret-incident.md` carries all three Table Q
@@ -4425,7 +4481,7 @@ against; and as of round 8 the **dated** form is not used either, because round
 | **M-45** | **delete row B3b** — let B3 revert or remove the file after its own preserve failed, exactly as it did before round 1 of the design gate | AC-9 (Table R row **R0**, injections **FI-12/13/14**, and specifically their **untracked** arms: with B3b gone the note is `fs.rmSync`ed while neither `redacted/` nor `quarantine/` holds a copy, so the assertion that the file is still on disk fails). **This mutation IS the shipped behaviour of every revision before this one**, which is why it is in the table: the loss path was the default, not a slip |
 | **M-46** | **restore the second content read** — have `scrubAddedLines` call `fs.readFileSync` on the target for its scrub input instead of using the `captured` buffer | **AC-9 via FI-15, RE-KEYED IN ROUND 2 to the read COUNT rather than to a perturbation.** FI-15's harness records every read of the target and asserts there are **exactly two** (the capture and the rule-2 comparison); a module that re-reads for content makes a **third** and fails that assertion. It also fails FI-15's fourth assertion, that the scrubbed target equals the per-line scrub of the captured bytes. **The previous keying was to an impossible injection** — FI-15 used to poison every post-capture read, which a conforming implementation must observe at the comparison, so the row it named could never be reached and this mutation had nothing that could redden. **No structural check can substitute** — a grep for the read count is satisfied by any other spelling |
 | **M-47** | **drop the pre-rename compare** — rename the temp over the target without re-reading and comparing against `captured` | **AC-9 (Table R row R7c, injection FI-16), RE-KEYED IN ROUND 2 to a modification made BEFORE the comparison read.** FI-16 now writes different bytes over the target immediately before delegating the comparison read, so a conforming arm detects the change and never renames; with the compare dropped, the recorded `fs.renameSync` **IS** invoked, the user's mid-run save is overwritten by the gate's rewrite, and the only copy of that save is destroyed while `redacted/` holds the pre-save bytes. **Asserted as *rename was called*, which is the observation that distinguishes the two designs.** The previous keying was self-contradictory: FI-16 modified the target *inside* the patched rename — after the comparison had already passed — and then asserted the rename was never invoked, which the patch's own execution disproves |
-| **M-48** | **prune per call instead of per run** — move the `pruneRedactedOriginals` call from its post-loop site into the B4 loop, **passing the accumulated `redactedCreated` set unchanged**. Violates **Table N row N2** (the trigger: once per run) and **nothing else** | **NOTHING — AND THAT IS THE POINT OF THIS ROW AS IT NOW STANDS.** *Rewritten 2026-07-28 by the post-Done errata, round 4, after Codex falsified two prior readings of it.* **What was claimed:** rounds 2 and 3 of this errata kept this row whole and argued it was **indivisible** — that N3's candidate set is *defined* as "every basename **this run** created", so per-call scoping collapses N3 as a consequence and no edit violates N2 alone. **That argument reads Table N's definition and never reads the code.** The implementation separates the two facts: the prune's **timing** is one call site (`src/core/dream/validate.js`, the post-loop `if (secretRedactions > 0) pruneRedactedOriginals(stateDir, redactedCreated);` under the comment *"Retention, once per run"*), while the **exclusion** is the run-scoped `redactedCreated` set, built inside the loop and merely *passed in*. Moving the call and retaining the set violates N2 and preserves N3 — so the row was divisible all along, and **A3 required the split**. **Executed, 2026-07-28, and this is the finding:** that isolated N2-only mutation was applied and the suite run. All five AC-14 retention cases stayed **green**; the whole `dream-validate` file stayed green (`tests 136, pass 136, fail 0`); **the entire suite stayed green — `tests 1807, pass 1802, fail 0`.** `src/` restored, tree verified clean. **So N2 has NO detector today.** This row names a real mutation that nothing catches, which is worse than a row that names two mutations: it is a mutation row that cannot go red. It is recorded here as an **undetected-today gap**, not as a passing check, and it is routed as a discovered issue for a test-side fix in a WP that owns `tests/` — this errata pass does not, and inventing a test from a docs branch is exactly the boundary violation the Deliverables table exists to stop. **N3 is unaffected and still covered**: `M-23` holds it, by its own recorded run (AC-14 case 2 red). *Table A row A3 of the PROPOSED ADR-0036 is where the general rule is written; this cell is its worked instance and cites it as a proposal, not as authority* |
+| **M-48** | **prune per call instead of per run** — move the `pruneRedactedOriginals` call from its post-loop site into the B4 loop, **passing the accumulated `redactedCreated` set unchanged**. Violates **Table N row N2** (the trigger: once per run) and **nothing else** | **NOTHING — AND THAT IS THE POINT OF THIS ROW AS IT NOW STANDS.** *Rewritten 2026-07-28 by the post-Done errata, round 4, after Codex falsified two prior readings of it.* **What was claimed:** rounds 2 and 3 of this errata kept this row whole and argued it was **indivisible** — that N3's candidate set is *defined* as "every basename **this run** created", so per-call scoping collapses N3 as a consequence and no edit violates N2 alone. **That argument reads Table N's definition and never reads the code.** The implementation separates the two facts: the prune's **timing** is one call site (`src/core/dream/validate.js`, the post-loop `if (secretRedactions > 0) pruneRedactedOriginals(stateDir, redactedCreated);` under the comment *"Retention, once per run"*), while the **exclusion** is the run-scoped `redactedCreated` set, built inside the loop and merely *passed in*. Moving the call and retaining the set violates N2 and preserves N3 — so the row was divisible all along, and **A3 required the split**. **Executed, 2026-07-28, and this is the finding:** that isolated N2-only mutation was applied and the suite run. All five AC-14 retention cases stayed **green**; the whole `dream-validate` file stayed green (`tests 136, pass 136, fail 0`); **the entire suite stayed green — `tests 1807, pass 1802, fail 0`.** `src/` restored, tree verified clean. **So N2 has NO detector today.** This row names a real mutation that nothing catches, which is worse than a row that names two mutations: it is a mutation row that cannot go red. It is recorded here as an **undetected-today gap**, not as a passing check, and it is **routed to `WP-ep2-retention-prune-timing-test`** — the slug registered for this gap, used here, in **AC-15**'s second limb and in the PR body, one name across all three — a WP that owns `tests/`. This errata pass does not, and inventing a test from a docs branch is exactly the boundary violation the Deliverables table exists to stop. **The two AC surfaces that mirror this row were corrected in the SAME pass (round 5), and they were missed in round 4**: AC-14's third case asserted that a per-call prune fails it, and AC-15 asserted that every mutation row reddens a named test. Both were falsified by the run above. That is the one-surface-updated-mirrors-stale pattern at the acceptance-criterion layer, and AC-14's own provenance note records the identical shape from round 4 of the original gate. **N3 is unaffected and still covered**: `M-23` holds it, by its own recorded run (AC-14 case 2 red). *Table A row A3 of the PROPOSED ADR-0036 is where the general rule is written; this cell is its worked instance and cites it as a proposal, not as authority* |
 
 M-16 and M-17 cover the transitions Table B had no row for until B5a; M-20 … M-24
 cover the four defects round 3 found in this same contract family, which is why
