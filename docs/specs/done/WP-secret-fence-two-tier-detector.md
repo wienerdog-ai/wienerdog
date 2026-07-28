@@ -150,7 +150,11 @@ context-free entropy pass**: any run of 24+ characters drawn from
 `[A-Za-z0-9+/=]` whose Shannon entropy is ≥ 3.5 bits/char is labelled
 `high-entropy` at `quarantine` severity.
 
-**That entropy pass is destroying the product.** Measured on the maintainer's
+**That entropy pass is destroying the product.** *(Figures superseded 2026-07-28
+— this paragraph is **row F2** of the frozen-surfaces table under "The
+measurements this design rests on"; the live values are ADR-0034 **E1** as
+amended by errata **ER-7**. Left as written: it is the text the reviewers read.)*
+Measured on the maintainer's
 real vault on 2026-07-26 (182 notes, shipped detector at commit `efd1489`):
 **102 of 182 notes (56.0%) contain at least one finding and would be reverted by
 EP2.** 101 of those fire on `high-entropy` alone; across all eighteen labelled
@@ -427,37 +431,67 @@ Deliverables table.
 
 > **SUPERSEDED AS LIVE FIGURES ON 2026-07-28, AND FROZEN HERE DELIBERATELY.**
 > This WP merged as `72f3e46` and is `status: Done`. Re-measured on 2026-07-28
-> against the same vault, now 189 notes rather than 182, **every figure M1, M2
-> and M5 share with ADR-0034 moved, and no structural fact and no conclusion
-> did.** M2's frequency list was not re-measured and is not claimed either way —
-> re-deriving it would mean re-publishing vault-derived path fragments, and it is
-> the one part of these measurements ADR-0034 never mirrored. Those corrections
-> were filed where the durable record is: **ADR-0034 errata ER-7, ER-8 and
-> ER-9**, which correct evidence blocks E1, E2 and E3 in place and quote the
-> pre-edit bytes verbatim. Read the live figures there.
+> against the same vault, now 189 notes rather than 182, **every figure this
+> document shares with ADR-0034 moved, and no structural fact and no conclusion
+> did.** Those corrections were filed where the durable record is: **ADR-0034
+> errata ER-7, ER-8 and ER-9**, which correct evidence blocks E1, E2 and E3 in
+> place and quote the pre-edit bytes verbatim. Read the live figures there.
 >
-> **M1, M2 and M5 below are NOT updated to match, and that is a decision rather
+> **Nothing in this document is updated to match, and that is a decision rather
 > than an oversight.** A completed work package is a dated record of what was
 > built and of the evidence it was accepted against; retro-fitting a corpus
 > measured two days after it merged would make this document describe evidence
-> that did not exist when the work was reviewed. The live mirror obligation moves
-> with the epic: it is now carried by **Table D rows D1/D2 of
-> `WP-secret-fence-ep2-redact-arm`**, which are *derived* rows citing ADR-0034
-> and are re-derived from it in the same pass, and by that leg's verification
-> step **V-17**, which greps this ADR on both sides. So exactly one live mirror
-> exists and it agrees with the canonical surface — which is the whole of what
-> ADR-0031 asks for.
+> that did not exist when the work was reviewed. **Every number in this file,
+> wherever it appears — the H1 title and frontmatter `title` included — is a
+> 2026-07-26 measurement and is read as one.**
 >
-> **Consequence for this document's own verification block, stated so nobody
-> "repairs" it.** V-15's four literals — `M1_EXPECT`, `M5_EXPECT`, `E3_EXPECT`
-> and `ER_EXPECT` — and its `SWEEP_EXPECT` are **retired with this spec and are
-> deliberately NOT recomputed.** `M1_EXPECT` holds the spec and ADR copies to
-> each other and the ADR copy has moved; `ER_EXPECT` moved the moment ER-7 was
-> written, exactly as its own note predicted. A red V-15 here is now a *statement
-> of that history*, not a defect to clear: **do not recompute those literals, do
-> not edit M1/M2/M5 to make them pass, and do not re-open this WP.** The ADR-0034
-> errata block dated 2026-07-28 names all five and records the same disposition.
-> Everything a live check still needs is in leg 2, whose suite runs.
+> **What is frozen is DECIDED IN TABLE F BELOW AND NOWHERE ELSE.** *Table F was
+> extracted in the 2026-07-28 fix round. Two review findings landed in one
+> family — the surfaces that ANNOUNCE the freeze had fallen out of agreement with
+> the surfaces that are frozen, once at this banner and once at V-15 — and the
+> repair for that family is a declared table with mirrors that defer, not the
+> same prose written out in three places (ADR-0031). The banner, V-15's retirement
+> header and ADR-0034's digest-disposition list now all cite Table F rather than
+> re-enumerate it.*
+>
+> *Table F sits inside this blockquote, so **V-32's registration schema does not
+> enumerate it** — that step finds tables by an unquoted heading plus header row.
+> Stated rather than left to be discovered: it is not a hole today, because F1–F8
+> are not ids of any family V-32 tracks and Table F declares no acceptance
+> criterion, verification step, mutation or residual. **It would become one the
+> moment somebody put a tracked id in it**, and the repair then is to lift the
+> table out of the blockquote and give it a schema row, not to widen the schema
+> to read inside quotes.*
+>
+> | # | frozen surface | what it states | live successor |
+> |---|----------------|----------------|----------------|
+> | **F1** | the **H1 title** and the frontmatter `title` | "56% of the vault" | ADR-0034 **E1** as amended by **ER-7** (57.7%). Not edited: a Done WP's title is how it is cited in the logbook, in ADR-0033 and in four superseded specs |
+> | **F2** | the **Context** paragraph, "102 of 182 notes (56.0%)" and the 101/eighteen-rules sentence after it | the size of the problem, in the words the reviewers read | ADR-0034 **E1** / **ER-7** |
+> | **F3** | **M1**, the evidence block | the source breakdown, occurrence totals and distinct-run count | ADR-0034 **E1** / **ER-7** — byte-identical mirror until this pass |
+> | **F4** | **M2**, the structural-void paragraph and its frequency list | 106 runs / 102 slashed, and the top of the FP frequency list | the counts: ADR-0034 **E2** / **ER-8**. **The frequency list has no successor and was NOT re-measured** — it is the one part of these measurements ADR-0034 never mirrored, and re-deriving it would mean re-publishing vault-derived path fragments. Not claimed either way |
+> | **F5** | **M5** | the design's measured end state | ADR-0034 **E3** / **ER-9** |
+> | **F6** | the **A15 escalation** paragraph, "9 of the maintainer's 182 vault notes" | how common the mixed-severity carrier is | none — illustrative, never mirrored, never asserted |
+> | **F7** | **V-15's five literals** — `M1_EXPECT`, `M5_EXPECT`, `E3_EXPECT`, `ER_EXPECT`, `SWEEP_EXPECT` | that this spec and ADR-0034 agree | **leg 2's Table D rows D1/D2 and its verification step V-17**, which greps ADR-0034 on both sides and runs |
+> | **F8** | **V-21's two ADR digests** — `494aa6ae…` (Decisions 1–7) and `57f298f2…` (the amendment licence) | that the owner-ratified content and the architect-only licence are unedited | **NOT frozen and NOT retired — CARRIED.** Both literals move unchanged into leg 2's **V-34**, because they are the only live gate over the owner's ratified ADR and archiving this spec would have retired them. See F8's note in leg 2 |
+>
+> **The rule Table F encodes**, so a future Done transition does not re-derive it:
+> a surface is frozen when it states a measurement, and a *check* is retired only
+> when what it protects has a live successor or does not need one. **F7 retires
+> because leg 2 carries the same guarantee; F8 does not, because nothing else in
+> the repository carries it.** "The spec is Done" is not on its own a reason to
+> drop a gate.
+>
+> **Consequence for V-15, stated here and echoed at the step so nobody meets it
+> cold.** F7's five literals are **retired with this spec and deliberately NOT
+> recomputed.** `M1_EXPECT` holds the spec and ADR copies to each other and the
+> ADR copy has moved; `ER_EXPECT` moved the moment ER-7 was written, exactly as
+> its own note predicted. **A red V-15 here is a statement of that history, not a
+> defect to clear**: do not recompute those literals, do not edit M1/M2/M5 to make
+> them pass, and do not re-open this WP. V-15's own failure text still says "the
+> repair is a dated errata amendment in which the architect recomputes these
+> digests" — that instruction was written for a `Ready` spec and **is superseded
+> by this row for a `Done` one**; the step now carries a `RETIRED` header saying
+> so.
 >
 > **V-18 (the ratified threat-model section, byte-identical in both legs) and
 > V-11 (the owner's signature lines) are untouched by any of this and were
@@ -1649,7 +1683,7 @@ this is a contract, not a style preference (ADR-0031).
 | C3-4 | labelled-rule coverage | exactly the **14** C1 fixtures marked **labelled? = yes**: `anthropic-api-key`, `openai-legacy`, `github-pat`, `github-oauth`, `slack-bot-token`, `aws-access-key-id`, `google-api-key`, `google-oauth-ya29`, `google-client-secret`, `google-refresh-token`, `stripe-secret`, `jwt`, `private-key-block`, `authorization-basic`. Each is caught **100%** at **`quarantine`** severity in all four contexts. Asserted as an **equality on the id set** — a 15th fixture becoming labelled-covered must be a deliberate table edit. (`authorization-basic` is on this list *because of* A16; delete that rule and this row fails, which is mutation M-35) |
 | C3-5 | C2 corpus, `quarantine` severity | **exactly the id set {29, 30, 31, 32, 42, 43}** — an **equality**, not a ceiling, for the same reason C3-6 is one. Rows 29–31 are the separator positive controls and *must* withhold; row 32 is the accepted alphabet-prose residual; **rows 42 and 43 are the accepted metadata-suffix binder residuals added in round 1 of the design gate** (residual 6), and they are in this set because they really do quarantine and the corpus must say so rather than omit the class. **This equality is what holds TWO of A8's clauses in the main suite, needing no 35–44 negative control for either.** (a) **Case-insensitivity**: measured 2026-07-26, a case-sensitive binder drops rows 29, 31 and 32 to `redact` — their keywords are the `Key` of `apiKey` and the `TOKEN` of `API_TOKEN` and `TOKEN_CHARS` — while row 30's already-lower-case `secret` and rows 42/43's already-lower-case keywords stay put, so the set shrinks to `{30, 42, 43}` and this row fails (mutation **M-42**). (b) **The optional whitespace on each side of the separator**: measured 2026-07-27, removing both allowances drops **all six** members out of `quarantine` and the set becomes empty. **No row in 1–28 may withhold an artifact** — that is the destructive-outcome promise, it is unchanged, and rows 42/43 sit deliberately outside that range so that adding a measured residual can never be mistaken for relaxing it |
 | C3-6 | C2 corpus, `redact` severity | **exactly the id set {14, 15, 20, 24, 25, 27, 33, 34, 35, 37, 39, 40, 41, 44}** — an **equality**, not an upper bound. Row **44** joined it in round 1 of the design gate; it is the pre-separator quote control and becomes `quarantine` under M-44 and under M-39. A detector that fires on nothing satisfies "at most N" and must fail here. Rows 33 and 34 are the negative separator controls: they are `redact`, and they become `quarantine` under M-41 / M-43. Rows 35 and 37 are the filler-**bound** controls and become `quarantine` under M-5. Row 39 is the **adjacency** control and becomes `quarantine` under M-37; row 40 is the separator-**cardinality** control and becomes `quarantine` under M-38; row 41 is the quote-**cardinality** control and becomes `quarantine` under M-39. Rows 36 and 38 are the filler-**class** and **same-line** controls: both are `clean`, so both are in neither this set nor C3-5 — row 36 enters C3-5 under M-13 and row 38 under M-36, which is what breaks that equality in each case. **This row is the only place the set is written**; every other surface, this table's own commentary included, cites `C3-6` |
-| C3-7 | today's baseline column | **Two sources, and the split between them is the substance of this row.** (a) **The 18 cells C3-3 names** — its six fixtures × `bare`/`prose`/`table` — take `today` from the six numbers written **in C3-3 itself**: constants transcribed from this table into the test file, never regenerated, so a wrong "before" is a visible diff against a document on `main`. See "Why no dependency on the oracle WP". (b) **The other 138 of C3-0's 156 cells have no transcribed constant and never had one** — C3-2 needs a `today` for every cell and this table states six — so they are computed per cell by **`caughtByShippedDetector` in `tests/fixtures/secret-corpus.js`**, a re-implementation of the **pre-WP detector**: the module's own labelled findings *less* `high-entropy` and *less* the `basic-auth` rule that **A16** adds, OR a hand-written copy of the shipped context-free pass (`[A-Za-z0-9+/=]{24,}` at ≥ 3.5 bits/char, both literals written out in the fixture module and never read from `src/`). **What pins it, and how far.** The six transcribed constants are asserted against that function's own output to within 0.1 point across all 18 of C3-3's cells; three of them are fractional (38.1, 91.3, 96.5) and reproduce only if the emulator's alphabet, its 24-character length floor and its 3.5-bit floor are exactly the pre-WP ones, so a drifted entropy half cannot satisfy C3-3. For the remaining 138, **C3-2's set equality pins the emulator in one direction only**: an emulator that OVER-reports `today` on any of them makes that cell regress, the regressing set stops equalling C3-3's, and C3-2 fails; an emulator that UNDER-reports leaves `proposed ≥ today` true and is not caught. That asymmetry is stated rather than glossed — it is the honest bound, and it is fail-*safe* in the direction that matters, since a real regression can only be hidden by over-reporting the baseline. *Amended 2026-07-28. Round 1 of leg 1's merge review raised the gap between this row and C3-2 as advisory: C3-2 requires a per-cell `today` for all 156 cells, this row said only "transcribed constants", and the transcribed constants are six. The implementer supplied the rest through the reference above and disclosed it; the reviewer verified it exactly faithful to the real pre-WP detector across all 156 cells and all 44 C2 rows. **No code changed and none was asked for** — the amendment names the second source and states what bounds it* |
+| C3-7 | today's baseline column | **Two sources, and the split between them is the substance of this row.** (a) **The 18 cells C3-3 names** — its six fixtures × `bare`/`prose`/`table` — take `today` from the six numbers written **in C3-3 itself**: constants transcribed from this table into the test file, never regenerated, so a wrong "before" is a visible diff against a document on `main`. See "Why no dependency on the oracle WP". (b) **The other 138 of C3-0's 156 cells have no transcribed constant and never had one** — C3-2 needs a `today` for every cell and this table states six — so they are computed per cell by **`caughtByShippedDetector` in `tests/fixtures/secret-corpus.js`**, a re-implementation of the **pre-WP detector**: the module's own labelled findings *less* `high-entropy` and *less* the `basic-auth` rule that **A16** adds, OR a hand-written copy of the shipped context-free pass (`[A-Za-z0-9+/=]{24,}` at ≥ 3.5 bits/char, both literals written out in the fixture module and never read from `src/`). **What pins it, and how far.** The six transcribed constants are asserted against that function's own output to within 0.1 point across all 18 of C3-3's cells; three of them are fractional (38.1, 91.3, 96.5) and reproduce only if the emulator's alphabet, its 24-character length floor and its 3.5-bit floor are exactly the pre-WP ones, so a drifted entropy half cannot satisfy C3-3. For the remaining 138, **C3-2's set equality pins the emulator in one direction only, and that direction is the WRONG one.** The test declares a cell regressing when `proposed < today`. So: an emulator that **OVER**-reports `today` turns a fine cell into a regressing one, the regressing set stops equalling C3-3's, and C3-2 **fails loudly — fail-closed**. An emulator that **UNDER**-reports `today` leaves `proposed ≥ today` true, the cell is never flagged, and **a real regression is concealed — fail-open.** Worked: if the pre-WP detector really caught a shape 100% and the new one catches it 90%, that is a regression; an emulated baseline of 80% reports `90 ≥ 80` and the suite stays green. **The uncaught direction is the dangerous one**, and this row says so rather than the reverse. **The gap is dispositioned as residual 9**, which states why it is narrow today and what would actually close it. *Amended 2026-07-28. Round 1 of leg 1's merge review raised the gap between this row and C3-2 as advisory: C3-2 requires a per-cell `today` for all 156 cells, this row said only "transcribed constants", and the transcribed constants are six. The implementer supplied the rest through the reference above and disclosed it; the reviewer verified it exactly faithful to the real pre-WP detector across all 156 cells and all 44 C2 rows. **No code changed and none was asked for** — the amendment names the second source and states what bounds it* |
 | C3-8 | `SEVERITY.REDACT` producers in `src/core/secret-scan.js` | exactly **one** `add(…)` call site (A13), counted as **occurrences**, not lines |
 | C3-9 | severity escalation on a mixed note (A15) | a two-line input containing one bound tier-2 candidate and one bare tier-1 candidate yields **one** `high-entropy` finding at **`quarantine`** with `count` 2, **in both line orders**, and `hasHardFinding` is `true` for both. Asserted for both orders explicitly — a single-order test passes against the unescalated code |
 | C3-10 | C2 rows 26, 27, 28 under a `SEP` containing the vertical bar | rows **26 and 27** reach `quarantine`; row **28 stays clean**, because its longest tier-2 run (`src/core/secret`) is 15 characters and no `SEP` can lift it over the 24 floor. Asserted as that exact three-way outcome, not as "at least one of them fires" — the weaker form is satisfied by a mutation that reddens only row 26. Held by mutation row M-14, not by the main suite; it is what makes the A8a bar decision testable rather than documentary |
@@ -1967,6 +2001,24 @@ decides what the mechanism actually guarantees.
       rows ARE C3-5's id set, so a row joining or leaving that set re-measures
       this table in the same pass, which is the coupling round 2 discovered
       by paying for it and round 3 found again in the repair.
+- [ ] **residual 8** mirrors *(registered 2026-07-28, in the post-merge pass that
+      created it)*: **Table A row A6**, which is the deciding surface — A6 decides
+      that tier 1 tests the **maximal** narrow sub-run and residual 8 is the
+      consequence of that word, cited by A6 and restated by neither; **acceptance
+      criterion AC-4**, whose wide/narrow distinction is what keeps the residual
+      from reading as a failure of the criterion; and the `entropyPass`
+      Exact-contracts block, which is the normative form the word "maximal" was
+      tightened to match. No figure of residual 8's is stated anywhere else: the
+      2.674 and 4.585 bits/char measurements live in the residual only.
+- [ ] **residual 9** mirrors *(registered 2026-07-28, same pass)*: **Table C3 row
+      C3-7**, the deciding surface — C3-7 decides the emulator's construction and
+      its one-directional bound, and residual 9 dispositions the fail-open gap
+      that bound leaves; **"Why no dependency on `WP-secret-scan-baseline-oracle`"**,
+      whose argument residual 9 partially retracts and which is the surface a
+      reader arrives from; and the `tests/fixtures/secret-corpus.js` Deliverables
+      row, which names `caughtByShippedDetector` and defers its bounds to C3-7.
+      **Neither residual restates C3-7's mechanism and C3-7 states neither
+      residual's disposition** — that split is the point of registering them.
 - [ ] **Table C** mirrors, **all of them by row id, none of them by number**:
       the "Measurements" M6 paragraph; the Deliverables rows for
       `tests/fixtures/secret-corpus.js` and `tests/unit/secret-fence.test.js`;
@@ -3085,6 +3137,50 @@ requires is in Table C.
    *Raised as advisory by round 1 of leg 1's merge review, against A6's wording
    rather than against the code; A6's wording was tightened to the maximal run in
    the same pass and the code was not touched.*
+9. **The FN matrix's `today` baseline is self-measured, and it is fail-OPEN for
+   the 138 cells C3-3 does not transcribe.** **Table C3 row C3-7** decides the
+   construction and the bound; this bullet dispositions the gap it names and
+   restates no mechanism.
+
+   The shape, in one line: an emulated baseline that is too LOW hides a real
+   regression and nothing goes red. There is no independent oracle — the
+   "before" column is produced by the same test run that produces the "after".
+
+   **Why it is narrow today, measured rather than argued.** The emulator has two
+   halves and they fail differently. (a) **The labelled half cannot under-report
+   at all**, by construction: it reads the LIVE module's own findings and
+   subtracts `high-entropy` and the one rule this WP adds, so every labelled rule
+   the pre-WP detector had is still the module's own rule, matching identically —
+   A10 changed those rules' *severity*, never their patterns. Its rot direction
+   is the safe one: a FUTURE WP that adds a labelled rule without extending that
+   exclusion makes the emulator over-report, which fails closed. (b) **The
+   entropy half is a hand-written copy** — `[A-Za-z0-9+/=]{24,}` at ≥ 3.5
+   bits/char, both literals in the fixture module — and it is the half that can
+   under-report if it drifts stricter. It is pinned by C3-3's six transcribed
+   constants across 18 cells, three of them fractional, **but only to the extent
+   those six fixtures exercise it**: a drift that changes nothing for those six
+   shapes while lowering `today` for one of the other 33 fixtures is invisible.
+   That residue is the whole of the exposure, and it is not zero.
+
+   *Accepted for this WP.* The cost of the gap is a *false negative in the
+   measurement*, not in the detector: it could let a regression ship unnoticed,
+   which is real, but the regressions this WP actually makes are enumerated,
+   floored and equality-asserted in C3-3, and the 18 cells that carry the most
+   regression risk are exactly the ones with a transcribed baseline.
+
+   *Closed by:* an **independent pre-WP oracle** — a checked-in immutable
+   baseline of the `today` column, produced once against the real pre-WP detector
+   and diffed rather than recomputed. **That is precisely what
+   `WP-secret-scan-baseline-oracle` was for**, and "Why no dependency on the
+   oracle WP" rejected it on the argument that six transcribed constants solve
+   the same problem more cheaply. **That argument was right about the 18 cells
+   C3-3 names and wrong about the other 138**, which is the honest form of the
+   trade and is recorded here rather than left implied. The oracle spec is
+   superseded at `docs/specs/done/WP-secret-scan-baseline-oracle.md`; a successor
+   would be cheap and purely additive. *Raised by round 1 of leg 1's merge review
+   as a directional error in C3-7's own text — the row asserted the safe
+   direction was the uncaught one. Corrected 2026-07-28, and the gap it was
+   hiding dispositioned here.*
 
 ## Acceptance criteria
 
@@ -3959,6 +4055,37 @@ grep -qF 'if (findings.length === 0) continue;' src/core/dream/validate.js
 must_not 'validate.js now references hasHardFinding — that is leg 2' \
   grep -q 'hasHardFinding' src/core/dream/validate.js
 
+# RETIRED 2026-07-28 — THE STEP BELOW. READ THIS BEFORE ANYTHING ELSE IN IT.
+#      DELIBERATELY NOT WRITTEN AS `# V-15 …`. Table H row H3 defines a
+#      verification by its `# V-<n> ` step header, and the id-allocation
+#      procedure counts those headers as DEFINITIONS — a second one under the
+#      same id is a same-leg collision, which is what it reported when this
+#      header was first written that way. A retirement notice is an annotation on
+#      a step, not a second step.
+#      This spec is `status: Done` and merged as 72f3e46. ADR-0034's evidence was
+#      re-measured on 2026-07-28 (errata ER-7/ER-8/ER-9) and this document's
+#      copies were deliberately NOT updated, so THIS STEP IS EXPECTED TO BE RED.
+#      A red V-15 here is a statement of that history, not a defect to clear.
+#      **THE BANNER BELOW IS SUPERSEDED FOR A `Done` SPEC.** It says the repair
+#      is "a dated errata amendment inside ADR-0034 by the ARCHITECT, who
+#      recomputes these digests in the same pass". That was written while this
+#      spec was live; the errata amendment HAS been filed, and the accompanying
+#      decision was to retire these literals rather than recompute them. Doing
+#      what the banner says would now be the forbidden repair. The banner is left
+#      byte-unchanged because it is part of the frozen record — see below.
+#      WHAT IS FROZEN AND WHAT SUCCEEDS IT IS DECIDED IN ONE PLACE: the
+#      frozen-surfaces table (Table F) under "## The measurements this design
+#      rests on". These five literals are its row **F7**; the live successor is
+#      leg 2's Table D rows D1/D2 and its verification step **V-17**, which greps
+#      ADR-0034 on both sides and RUNS. Do not re-enumerate that table here.
+#      NOT RETIRED, and the distinction is row **F8**: V-21's two ADR digests
+#      were CARRIED into leg 2 as V-34 rather than archived with this file,
+#      because they are the only live gate over the owner's ratified Decisions
+#      and the architect-only amendment licence. "The spec is Done" retires a
+#      check only when something else carries the guarantee.
+#      DO NOT: recompute M1_EXPECT, M5_EXPECT, E3_EXPECT, ER_EXPECT or
+#      SWEEP_EXPECT; edit M1/M2/M5 to make them pass; or re-open this WP.
+#
 # V-15 M1 and M5 still agree with ADR-0034's evidence E1 and E3. ADR-0034 is the
 #      hub: the EP2-gate leg pins the same figures to the same lines, so this is
 #      what keeps the two legs in agreement without either reading the other.
@@ -4010,6 +4137,9 @@ if [ "$(m1_digest "$SPEC")" != "$M1_EXPECT" ] || [ "$(m1_digest "$ADR")" != "$M1
   echo "           ADR : $(m1_digest "$ADR")"
   echo "           want: $M1_EXPECT"
   echo "           Do NOT recompute this to make it pass. See the note above."
+  echo "           RETIRED 2026-07-28 (Table F row F7): this spec is Done and"
+  echo "           this literal is EXPECTED red. Live successor: leg 2's D1/D2"
+  echo "           and V-17. Ignore the 'recompute in the same pass' banner."
   exit 1
 fi
 
@@ -4023,10 +4153,14 @@ M5_EXPECT=bc9704893fc2a181f844c95097f15931e5c7a46c5734fd93544583b4ad1fb021
 E3_EXPECT=bf0aeb7292c2d37b8d8c51809f1a71f175e857013097bad99ff93227e551a182
 if [ "$(m5_digest "$SPEC")" != "$M5_EXPECT" ]; then
   echo "FAIL V-15: the spec's M5 block moved. got $(m5_digest "$SPEC"), want $M5_EXPECT"
+  echo "           RETIRED 2026-07-28 (Table F row F7): expected red on a Done"
+  echo "           spec. Live successor: leg 2's D1/D2 and V-17. Do not repin."
   exit 1
 fi
 if [ "$(e3_digest "$ADR")" != "$E3_EXPECT" ]; then
   echo "FAIL V-15: the ADR's E3 paragraph moved. got $(e3_digest "$ADR"), want $E3_EXPECT"
+  echo "           RETIRED 2026-07-28 (Table F row F7): ER-9 moved E3 on purpose."
+  echo "           Live successor: leg 2's D1/D2 and V-17. Do not repin."
   exit 1
 fi
 
@@ -4048,6 +4182,9 @@ if [ "$(er_digest "$ADR")" != "$ER_EXPECT" ]; then
   echo "FAIL V-15: an ADR-0034 errata row moved. got $(er_digest "$ADR"), want $ER_EXPECT"
   echo "           An errata row is a dated historical record. If you added one,"
   echo "           the architect recomputes this literal in the same pass."
+  echo "           RETIRED 2026-07-28 (Table F row F7): ER-7/ER-8/ER-9 were added"
+  echo "           and this literal was retired rather than recomputed, which is"
+  echo "           the one case the sentence above does NOT cover. Do not repin."
   exit 1
 fi
 
@@ -4182,6 +4319,17 @@ spec_prose()   { awk '/^```bash$/{f=1} !f{print} f&&/^```$/{f=0}' "$1"; }
 #      never was — a dangling cross-reference to a probe that does not exist.)
 #      The repair is NOT "tell the implementer to skip V-15": a gate with a
 #      documented exemption is a gate nobody runs.
+#      SCOPED 2026-07-28, because that sentence and this step's RETIRED header
+#      contradict each other if both are read unscoped. **The rule is about a
+#      LIVE spec**, which is what this document was when the rule was written: a
+#      gate an implementer is told to skip while the work is still being done is
+#      decoration, and that is still true. **Retirement is a different act and is
+#      not an exemption.** It happens once, at the Done transition, by the
+#      architect, and only when the guarantee has a live successor or needs none
+#      — which is what Table F rows F7 and F8 decide, one each way. Nobody is
+#      being told to skip a check on work in progress; a completed record is
+#      being marked as no longer being the thing that is checked. Leaving both
+#      sentences unreconciled inside one step was the defect, not either of them.
 spec_residue() {
   spec_prose "$1" \
     | sed '/^status: /d' \
@@ -4313,6 +4461,9 @@ if [ "$SWEEP_BASE" != "$SWEEP_EXPECT" ]; then
   echo "           ERRATA AMENDMENT inside ADR-0034, by the ARCHITECT, who"
   echo "           recomputes this literal in the same pass — never here, never"
   echo "           on the spec side alone, never by an implementer."
+  echo "           RETIRED 2026-07-28 (Table F row F7): that amendment HAS been"
+  echo "           filed (ER-7/ER-8/ER-9) and this literal was retired rather"
+  echo "           than recomputed. Expected red on a Done spec. Do not repin."
   exit 1
 fi
 

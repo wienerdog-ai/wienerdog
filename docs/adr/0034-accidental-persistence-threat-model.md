@@ -903,7 +903,13 @@ licence rather than assumed.** The errata mechanism defined above covers
 **measured evidence only**; the five-condition precedent's closing paragraph says
 so in as many words — *"the errata mechanism above covers measured evidence only,
 and the Decisions are outside it"*. Every edit in this block is a measured figure
-in E1, E2, E3 or in a sentence that quotes one. **Decisions 1–7 are untouched,
+in E1, E2, E3, a sentence that quotes one, **or the evidence-provenance paragraph
+ER-7(a) names** — the ten lines added to the evidence header recording which
+detector each block is measured against. *That paragraph is new prose rather than
+a corrected figure, so an unqualified "every edit is a measured figure" did not
+cover it; the paragraph was disclosed at ER-7(a) from the start, so this is a
+scoping defect in this sentence and not an undisclosed edit. Corrected 2026-07-28
+in the fix round.* **Decisions 1–7 are untouched,
 byte for byte, and so is the owner-signature line on line 6** — no agent may ever
 amend either, and this block does not invoke the dangling-cross-reference
 exception, which is not needed here because nothing inside a Decision is edited
@@ -978,11 +984,30 @@ tails of the two bullets are byte-unchanged and are not requoted.
 
 | # | What was wrong | Where | Correction |
 |---|----------------|-------|------------|
-| ER-7 | E1's figures were a 2026-07-26 snapshot of a corpus that has grown again: **182** notes, **102** with any finding, **56.0%**, a **101 / 0 / 1** source split, **299** `high-entropy` occurrences and **106** distinct runs | E1, the Context paragraph, the evidence header, the third "Consequences" bullet and the first "Alternatives considered" bullet | Re-measured 2026-07-28 over **189** notes: **109** with any finding, **57.7%**, split **108 / 0 / 1**, **315** `high-entropy` occurrences, **110** distinct runs. **Every structural fact is unchanged** — one labelled-rule finding in the whole corpus, still `aws-key`, still the documented `AKIA…` placeholder, so E1's headline claim re-derives identically and **its commentary paragraph is byte-unchanged**, ER-6's correction included. Two things about the block itself are new and are stated rather than left to be noticed. (a) **The evidence header now records which detector each block is measured against**, which the 2026-07-26 text did not have to: leg 1 has merged, so E1 and E2 are the *pre-leg-1* pass reproduced by `scripts/measure-secret-fp.js`, while E3 is the shipped module. (b) **The block's value column is one character wider.** It is that script's current output verbatim; the script is a leg-1 deliverable that did not exist when the 2026-07-26 copy was hand-assembled, and it pads the value field to five columns where the hand-built copy padded to four. No digit moved because of the padding |
+| ER-7 | E1's figures were a 2026-07-26 snapshot of a corpus that has grown again: **182** notes, **102** with any finding, **56.0%**, a **101 / 0 / 1** source split, **299** `high-entropy` occurrences and **106** distinct runs | E1, the Context paragraph, the evidence header, the third "Consequences" bullet and the first "Alternatives considered" bullet | Re-measured 2026-07-28 over **189** notes: **109** with any finding, **57.7%**, split **108 / 0 / 1**, **315** `high-entropy` occurrences, **110** distinct runs. **Every structural fact is unchanged** — one labelled-rule finding in the whole corpus, still `aws-key`, still the documented `AKIA…` placeholder, so E1's headline claim re-derives identically and **its commentary paragraph is byte-unchanged**, ER-6's correction included. Two things about the block itself are new and are stated rather than left to be noticed. (a) **The evidence header now records which detector each block is measured against**, which the 2026-07-26 text did not have to: leg 1 has merged, so E1 and E2 are the *pre-leg-1* pass reproduced by `scripts/measure-secret-fp.js`, while E3 is the shipped module. (b) **The block's value column is one character wider.** It is that script's current output verbatim **apart from the pre-existing parenthetical on the `both` row, `(a documented AKIA placeholder)`, which is editorial, predates this pass and is re-attached with the same three-space gap it always had** — the script prints counts only and has never printed it; the script is a leg-1 deliverable that did not exist when the 2026-07-26 copy was hand-assembled, and it pads the value field to five columns where the hand-built copy padded to four. No digit moved because of the padding |
 | ER-8 | E2's counts were the same snapshot — "Of the **106** distinct high-entropy runs, **102 contain a `/`**", with the longest-segment distribution `7→3, 8→8, 9→23, 10→27, 11→3, 12→29, 13→4, 14→4, 17→1` | E2 | Re-measured 2026-07-28 over the same corpus by the same construction: **110** distinct runs, **106** containing a `/`, distribution `7→3, 8→9, 9→25, 10→28, 11→3, 12→29, 13→4, 14→4, 17→1` (which sums to 106, as the pre-edit one summed to 102). **The 7-character structural void — the only thing E2 argues from — is unchanged**: the longest slash-free segment in any of those runs is still **17** characters against a 24-character floor. **E2's qualitative claim, that every slashed run is a file path or a slash-joined prose list, was re-checked over the new set rather than inherited**, and structurally rather than by publishing any of them: all 106 have every slash-free segment ≤ 17 characters, all 106 have every segment word- or identifier-shaped (`[A-Za-z0-9._-]` only), 105 of 106 have a vowel in every segment longer than three characters, and **none of the 106 contains a `+` or an `=`** — no run in the set carries a base64 marker. ER-4 recorded E2 as reproducing byte-identically; that is no longer true of its counts and is still true of its conclusion, and the two claims are deliberately not conflated |
 | ER-9 | "notes withheld **102 → 1** … notes untouched **80 → 172**" | E3 | **109 → 1** and **80 → 179**. Scrubbed in place **0 → 9** is unchanged, and so is the parenthetical naming the one survivor. The *before* column of the untouched row is **80 in both measurements**, which is arithmetic and not luck: 182 − 102 = 189 − 109 = 80. **E3 is now measured against the shipped, merged detector** rather than against the from-spec prototype it rested on when it was written, leg 1 having landed at `72f3e46` — the evidence got stronger while the figures moved |
 
 Nothing else in this ADR is amended by this block.
+
+**One dangling path, dispositioned here rather than repaired in place.** The
+2026-07-26 cross-reference-update block above points Table A and Tables C / C1 /
+C3 at `docs/specs/WP-secret-fence-two-tier-detector.md`. **That path stopped
+resolving on 2026-07-28**: the detector leg merged as `72f3e46`, is
+`status: Done`, and is **filed at
+`docs/specs/done/WP-secret-fence-two-tier-detector.md`**. It is this ADR's only
+remaining path citation to that leg — every other reference uses the document
+name, which does not rot — and it now sits under no live digest, since the
+detector leg's restatement sweep was retired with its spec.
+
+**The 2026-07-26 row is left byte-as-written, deliberately.** It is a dated
+record of where a file was *created*, and an errata row's own rule in this
+appendix is that a dated record does not change after it is written. Editing it
+would make the 2026-07-26 block assert a fact that was not true on 2026-07-26.
+The forward pointer is this paragraph instead. **The five-condition precedent
+does not gate either choice**: that block sits in this appendix and not inside a
+Decision, so it is bookkeeping, and conditions 1–2 — which govern edits to a
+Decision's own prose — do not reach it.
 
 **The digests this obliges the architect to recompute, named exhaustively and
 each with its disposition**, because a re-measurement that names only the ones it
@@ -994,19 +1019,28 @@ recomputes is how a stale pin survives:
   by re-deriving that spec's D-table from this file, which is the only legal
   direction; that leg is `Ready` and its suite still runs.
 - **`WP-secret-fence-two-tier-detector` V-15** — `M1_EXPECT`, `M5_EXPECT`,
-  `E3_EXPECT`, `ER_EXPECT` and `SWEEP_EXPECT`. **Deliberately NOT recomputed.**
-  Leg 1 merged at `72f3e46` and its spec is `status: Done` at
-  `docs/specs/done/WP-secret-fence-two-tier-detector.md`; its M-blocks are the
-  dated evidence the shipped work was accepted against and are frozen as a
-  record, and its verification block is retired with it. The reasoning, and the
-  instruction not to "repair" those literals, is written into that spec in the
-  same pass. `ER_EXPECT` would have moved on the three rows above alone — the
-  V-15 note that anticipates "adding ER-7 changes this digest" is that
-  anticipation arriving.
+  `E3_EXPECT`, `ER_EXPECT` and `SWEEP_EXPECT`. **Deliberately NOT recomputed;
+  retired with the spec.** Leg 1 merged at `72f3e46`, is `status: Done` at
+  `docs/specs/done/WP-secret-fence-two-tier-detector.md`, and its M-blocks are
+  the dated evidence the shipped work was accepted against. **What is frozen
+  there, and what succeeds each frozen surface, is decided in that spec's
+  frozen-surfaces table (Table F) and is not re-enumerated here** — these five
+  literals are its row **F7**, whose live successor is leg 2's D1/D2 and V-17.
+  `ER_EXPECT` would have moved on the three rows above alone: the V-15 note
+  anticipating "adding ER-7 changes this digest" is that anticipation arriving.
 - **V-21's two digests** (this file's `## Decision` … `## The measured evidence`
   range, and the five-condition precedent range) — **untouched and verified
   byte-identical after this block**, which is the check that no Decision and no
-  licence moved.
+  licence moved. **And CARRIED, not retired** *(added in the 2026-07-28 fix
+  round, on a HIGH finding)*. They lived only in leg 1's verification block, and
+  they are the only two digests in the repository over the owner-ratified
+  Decisions and over the architect-only amendment licence — archiving that spec
+  would have left an unauthorized edit to either passing the whole active suite.
+  **Both literals move unchanged into leg 2 as verification step V-34**;
+  neither was recomputed. Table F row **F8** records the same carry, and it is
+  the one row of that table that does not retire — the rule being that a check
+  retires only when something else carries its guarantee, never merely because
+  its spec reached `Done`.
 - **V-18**, the ratified threat-model section mirrored in both legs, and
   **V-11**, over the owner's two signature lines — **untouched and verified**.
   Neither may ever be recomputed by anyone.

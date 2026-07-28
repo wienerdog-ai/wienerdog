@@ -809,8 +809,14 @@ corpus are load-bearing for decisions below, and they are **derived copies**.
 ADR-0034 is the hub both legs pin to, so neither leg has to read the other's spec
 to stay correct (the One-Document Rule, ADR-0005). **Verification step V-17 greps
 ADR-0034 for these exact figures**, so if a future errata amendment moves one, this
-WP's verification goes red rather than this table quietly going stale. Leg 1's own
-V-15 greps the same lines, which is what forces the two legs to agree.
+WP's verification goes red rather than this table quietly going stale.
+*Until 2026-07-28 this paragraph added that leg 1's own V-15 greps the same lines
+"which is what forces the two legs to agree". That is no longer true and the
+sentence is deleted rather than softened: leg 1 is `status: Done`, filed under
+`docs/specs/done/`, and its V-15 is retired — it does not run and its literals
+were deliberately not recomputed when ER-7/ER-8/ER-9 moved the figures.* **V-17
+is now the ONLY live check over D1/D2, and it asserts both sides — the ADR's and
+this table's — which is why it is sufficient on its own.**
 
 | id | figure | decided in | why this WP needs it |
 |----|--------|-----------|----------------------|
@@ -2910,13 +2916,25 @@ above; the rule applies identically to rows B4, B5, B10, B6, B7 and B13.
       are the `scrubAddedLines` JSDoc's "SANITIZATION UNIT: one line at a time"
       paragraph and Table R row **R6**, which is the row a broken P5 would make
       universal.
+- [ ] **V-34** mirrors *(registered 2026-07-28, when the step was created)*: the
+      verification-id paragraph above the block, which records that V-34 is a
+      **carry** of the detector leg's two ADR digests rather than a new check and
+      why an id change was required; **ADR-0034's own digest-disposition list in
+      its 2026-07-28 errata block**, which names the same carry from the ADR
+      side; and **row F8 of the detector leg's frozen-surfaces table**, which is
+      the deciding surface for what that spec's archival retired and what it did
+      not. **Both literals are carried unchanged from the detector leg and this
+      document recomputes neither** — a mirror that re-derived them would be
+      asserting the ADR against itself. The two digests themselves are decided by
+      ADR-0034's bytes and by nothing in this file.
 - [ ] **D1/D2** mirrors: the Context section's second and third paragraphs (which
       describe the problem's size in words, deliberately without digits); the
       B12/B13 growth-story paragraph after Table B, which cites D2 rather than
       restating it. **ADR-0034's E1 and E3 are the deciding surface**, and V-17 is
-      what forces this document to agree with them. Leg 1's V-15 greps the same
-      lines, which is what forces the two legs to agree without either reading
-      the other.
+      what forces this document to agree with them — **on both sides, the ADR's
+      and this table's, which is why it needs no counterpart.** *The claim that
+      leg 1's V-15 greps the same lines "which is what forces the two legs to
+      agree" was deleted 2026-07-28: leg 1 is Done and its V-15 is retired.*
 - [ ] **ADR-0034** (`docs/adr/0034-accidental-persistence-threat-model.md`) is a
       mirror of this spec in both directions. Its mirrors here: the "The threat
       model" section and the review-criterion block (ADR-0034 Decisions 1–5); the
@@ -4414,6 +4432,18 @@ this leg's to account for. **V-24 and V-25 are new ids** created in round 4, and
 parent's range rather than reusing a detector-leg gap, so a cross-leg reader
 never finds two different checks under one id.
 
+**V-34 is a new id created 2026-07-28, and it is a CARRY rather than a new
+check.** The detector leg completed and was archived, which would have retired
+the only two digests in this repository over ADR-0034's owner-ratified Decisions
+1–7 and its architect-only amendment licence. Those two checks now run here, as
+**V-34**, with **both literals carried unchanged and neither recomputed**. The
+paragraph above still stands as written — V-21 remains unused in this leg and
+this document still makes no claim about the sibling's use of it — because
+**V-34 is a different id doing the same job, which is what the id convention
+requires**: an id means one check, so a check that changes owner changes id
+rather than travelling under the previous owner's number. The V-16 preflight and
+V-34 are the two steps that gate on something outside this WP's control.
+
 **V-16 runs first and is a stop, not a report.**
 
 ```bash
@@ -4607,6 +4637,95 @@ if(!text.includes("Authorization: Basic")){
 }
 console.log("V-16 P6 ok: Authorization: Basic is quarantine and its body is fully redacted");
 '
+
+# V-34 THE OWNER-RATIFIED ADR IS UNEDITED. A PREFLIGHT STOP, like V-16, and for
+#      the same kind of reason: it checks something this WP depends on and does
+#      not own.
+#      WHY THIS STEP EXISTS AT ALL, and it is not a new idea — it is a CARRY.
+#      These two digests were verification step V-21 of the detector leg. That
+#      leg is `status: Done` and filed under docs/specs/done/, and its
+#      verification block is retired with it. **These two checks are the only
+#      thing in this repository that hashes ADR-0034's Decisions 1-7 or its
+#      architect-only amendment licence.** Archiving the detector leg without
+#      moving them would have left an unauthorized edit to the owner's ratified
+#      Decisions — or to the five conditions that say only the architect may
+#      touch a Decision's prose, and only to repair a dangling cross-reference —
+#      passing every check in the active suite. Found in the 2026-07-28 fix
+#      round; the detector leg's frozen-surfaces table records the same carry as
+#      its row F8, which is the one row of that table that does NOT retire.
+#      **BOTH LITERALS ARE CARRIED UNCHANGED AND WERE NOT RECOMPUTED.** They are
+#      byte-identical to the values the detector leg carried; the 2026-07-28
+#      errata pass verified both were unmoved by it, which is what made the carry
+#      a copy rather than a re-pin. If either goes red, that is the check working:
+#      **STOP AND REPORT. Do not recompute either literal, and do not edit the
+#      ADR** — `docs/adr/*` is outside this WP's Deliverables table, and no agent
+#      amends a Decision or the owner's signature line under any circumstances.
+#      DIGEST 1 — Decisions 1-7. The range is `## Decision` to the line before
+#      `## The measured evidence`, so it covers exactly the ratified decisions
+#      and stops before the evidence, which errata legitimately move.
+V34_DEC="$(awk '/^## Decision$/{f=1} /^## The measured evidence$/{f=0} f' "$ADR" \
+  | shasum -a 256 | cut -d' ' -f1)"
+if [ -z "$V34_DEC" ]; then
+  echo "FAIL V-34: the Decision range extracted EMPTY — a heading moved or was"
+  echo "           renamed. An empty range digests the empty string and would pin"
+  echo "           it happily. Do not repin. STOP AND REPORT."
+  exit 1
+fi
+if [ "$V34_DEC" != "494aa6aed5203f84d0144c9ef166afb01f30c0e8be22f8f2bca495d5963c7870" ]; then
+  echo "FAIL V-34: ADR-0034's Decisions 1-7 have been edited."
+  echo "           got  $V34_DEC"
+  echo "           want 494aa6aed5203f84d0144c9ef166afb01f30c0e8be22f8f2bca495d5963c7870"
+  echo "           This is the owner-ratified content of the authority this WP"
+  echo "           implements. STOP AND REPORT. Do not recompute this digest and"
+  echo "           do not edit the ADR."
+  exit 1
+fi
+#      DIGEST 2 — the amendment licence. Terminated by THE NEXT `## ` HEADING,
+#      whatever it is, because a named terminator can be deleted and the range
+#      then swallows the rest of the document; the ADR's round-5 structural
+#      correction records that measurement. The heading COUNT below is what
+#      catches a range that has swollen past its own section — a swollen range
+#      reddens too, but repinning it would silently convert a LICENCE digest into
+#      a whole-appendix one that then goes red on every unrelated dated block.
+#      WHAT THE HEADING COUNT DOES AND DOES NOT CATCH, measured 2026-07-28 on
+#      five mutations of a COPY of the ADR rather than asserted. It catches a
+#      range that has absorbed ANOTHER SECTION'S `## ` heading. It does NOT catch
+#      a range that swelled because the very next heading was DEMOTED out of `## `
+#      form: the count stays 1 while the range grew 105 -> 131 lines. That case is
+#      caught by the DIGEST (84c55805… against the pinned 57f298f2…), which is why
+#      the count is the secondary guard and the digest is the gate. Also measured
+#      as discriminating: rewording a Decision heading (digest 1 moves), deleting
+#      `and by nobody else` from licence condition 5 (digest 2 moves), renaming
+#      the licence heading (range extracts EMPTY and the guard above fires), and
+#      renaming the Decision terminator (digest 1 moves). No mutation of the five
+#      left both digests green.
+v34_prec() {
+  awk '/^## The five-condition precedent /{f=1; print; next} f && /^## /{f=0} f' "$ADR"
+}
+if [ -z "$(v34_prec)" ]; then
+  echo "FAIL V-34: the amendment-licence range is empty — its heading moved or was"
+  echo "           renamed. Do not repin an empty range. STOP AND REPORT."
+  exit 1
+fi
+if [ "$(v34_prec | grep -c '^## ')" != "1" ]; then
+  echo "FAIL V-34: the licence range contains $(v34_prec | grep -c '^## ') '## ' headings, not 1."
+  echo "           It has run past its own section and is digesting others."
+  echo "           DO NOT recompute: repinning here converts a LICENCE digest into"
+  echo "           a whole-appendix one. STOP AND REPORT."
+  exit 1
+fi
+V34_PREC="$(v34_prec | shasum -a 256 | cut -d' ' -f1)"
+if [ "$V34_PREC" != "57f298f2b9015d16680a3c0d8dd1943164c9019d43449ad9918569c201da81e8" ]; then
+  echo "FAIL V-34: ADR-0034's five-condition amendment precedent has been edited."
+  echo "           got  $V34_PREC"
+  echo "           want 57f298f2b9015d16680a3c0d8dd1943164c9019d43449ad9918569c201da81e8"
+  echo "           That block is the ONE licence to edit inside a Decision, and its"
+  echo "           condition 5 restricts it to the architect. Deleting the words"
+  echo "           'and by nobody else' would widen it to every agent, which is"
+  echo "           exactly what this digest exists to catch. STOP AND REPORT."
+  exit 1
+fi
+echo "V-34 ok: ADR-0034's Decisions and its amendment licence are unedited"
 
 # V-1  full suite, through the ONE wrapper that sets the scheduler guard
 node tests/run.js
