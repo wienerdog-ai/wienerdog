@@ -77,10 +77,24 @@ Concretely, three obligations, applied on every platform:
 - A `sync` that cannot establish what the OS holds now says so, every time,
   instead of once. The user-facing notice already exists
   (`schedule.js:583-585`); this decision makes it fire when it should.
-- macOS registration becomes potentially destructive, so ADR-0018 decision 2's
-  pre-destructive durable-marker rule extends to it: refresh the status cache from
-  the live probe before the first teardown, so a process killed mid-replacement
-  leaves a pessimistic record rather than a stale `loaded` one.
+- macOS registration may replace a loaded record, so it **must not leave a
+  destruction window**: the prior schedule file's bytes are captured before they
+  are overwritten, and if the replacement cannot be bootstrapped after a teardown,
+  the prior file is restored and re-bootstrapped. The register still reports
+  failure — a rollback restores scheduling, it does not make the replacement a
+  success. (Owner ruling, 2026-07-28. An earlier draft of this ADR treated the
+  destruction window as an accepted residual; that is superseded.)
+- **Crash safety comes from the readback, not from the marker — say so plainly.**
+  ADR-0018 decision 2's pre-destructive status refresh is retained as an
+  **advisory** signal for `doctor`, and this ADR makes no promise about its
+  contents. It cannot: the refresh reads the live probe *before* the teardown, so
+  it can legitimately record `loaded`, and `refreshSchedulerStatus` swallows every
+  write error and returns `void`, so no caller can know it landed
+  (`WP-scheduler-status-write-observable` owns that gap). What actually recovers a
+  process killed mid-replacement is obligation 3: the next registration re-reads
+  the live state, finds it not matching, and re-registers. An earlier draft of this
+  ADR promised a "pessimistic status record"; the mechanism never delivered it, and
+  the promise is withdrawn rather than restated.
 - Linux pays a `daemon-reload` and an `enable --now` on **every** registration,
   including one whose files did not change. Both are idempotent no-ops against an
   already-correct unit, and running them unconditionally is what removes the

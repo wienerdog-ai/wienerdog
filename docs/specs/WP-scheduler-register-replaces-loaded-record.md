@@ -261,9 +261,9 @@ one new Proposed ADR, one test file extended. **M** — one session.
 | Action | Path | Notes |
 |--------|------|-------|
 | create | docs/adr/0037-verified-registration-postcondition.md | The rule + the ADR-0018 decision-2 amendment. **Proposed, unsigned.** Written already by the architect, together with its `docs/adr/README.md` index row; the implementer edits neither. **0036 is deliberately skipped** — reserved by the in-flight ADR amending ADR-0031. |
-| modify | src/scheduler/generators.js | **D0** — add `launchdLoadedArgs` to `module.exports`. **That one line is the entire change**: the function already exists (`:679-689`), is already used internally by `loadedEntryTargets` (`:787`), and is not otherwise touched. Structural, not an API promise — the WP-114 precedent for `repairCatchup`. |
+| modify | src/scheduler/generators.js | **D0** — add **two** names to `module.exports`: `launchdLoadedArgs` (`:679-689`, used internally at `:787`) **and** `jobLaunchArgs` (`:208`, used internally at `:355`). **Those two lines are the entire change**; neither function body is touched. Structural, not an API promise — the WP-114 precedent for `repairCatchup`. Audited, not assumed (see "Export audit" in Implementation notes): `catchupLaunchArgs` (`:1030`) and `loadedEntryTargets` (`:1007`) are **already** exported and need no change. |
 | modify | src/cli/schedule.js | **D1-D4**: `darwinLoadedMatches` + `ensureDarwinEntryRegistered` (new, non-exported); the darwin per-job arm (`:429-431`, Table A row 1); `ensureCatchup` (`:314-317`, row 2); the linux arm (`:456-466`, row 3). Nothing else — no probe, no heal, no notice string, no Windows path, and **`darwinReplaceEntry` itself is not edited** (it stays the heal path's primitive). |
-| modify | tests/unit/scheduler-schedule.test.js | **T1-T6** (Test index) plus the **four** existing assertions enumerated in AC6 — no others. |
+| modify | tests/unit/scheduler-schedule.test.js | **T1, T2, T2b, T3-T7** (Test index) plus the **four** existing assertions enumerated in AC6 — no others. |
 
 Not deliverables, deliberately: `src/scheduler/status.js`,
 `src/scheduler/generators.js` (`loadedEntryTargets` is consumed, not changed),
@@ -297,7 +297,7 @@ function darwinLoadedMatches(stdout, expectArgv)
  * and whether a teardown is justified.
  * @param {(argv:string[])=>{status:number,stdout?:string}} loader
  * @param {number} uid @param {string} label @param {string} plistPath
- * @param {{changed:boolean, expectArgv:string[], onBeforeTeardown:()=>void}} o
+ * @param {{changed:boolean, expectArgv:string[], priorBytes:Buffer|null, onBeforeTeardown:()=>void}} o
  * @returns {boolean} true only when launchd verifiably holds this entry
  */
 function ensureDarwinEntryRegistered(loader, uid, label, plistPath, o)
@@ -314,9 +314,16 @@ function ensureDarwinEntryRegistered(loader, uid, label, plistPath, o)
   if (loader(['launchctl', 'bootstrap', `gui/${uid}`, plistPath]).status === 0) return true;
   // (c) TEARDOWN ONLY WITH INDEPENDENT EVIDENCE THE LABEL IS LOADED
   if (!isLoaded) return false;
-  o.onBeforeTeardown();                       // ADR-0018 pre-destructive marker
+  o.onBeforeTeardown();                       // ADR-0018 marker (advisory — see below)
   loader(['launchctl', 'bootout', `gui/${uid}/${label}`]);
-  return loader(['launchctl', 'bootstrap', `gui/${uid}`, plistPath]).status === 0;
+  if (loader(['launchctl', 'bootstrap', `gui/${uid}`, plistPath]).status === 0) return true;
+  // (d) ROLLBACK — the replacement is unbootstrappable; restore the prior
+  //     registration so no destruction window ships. Never returns true.
+  if (o.priorBytes !== null) {
+    try { fs.writeFileSync(plistPath, o.priorBytes); } catch { return false; }
+    loader(['launchctl', 'bootstrap', `gui/${uid}`, plistPath]);
+  }
+  return false;
 ```
 
 ## Contract reference
@@ -374,9 +381,12 @@ that, and AC5 pins it per platform.
 One behavior per row; **Trigger** names the guarantee destroyed, **Patch** is the
 edit. No ordinals. Assert the pattern selected exactly one named subtest.
 
-The darwin rows were **re-derived as one unit** after the full-argv comparison
-landed, not adjusted row by row — the skip gate is now three independent
-conditions, and each gets its own row so no mutation removes two at once.
+The darwin rows were **re-derived as one unit** — twice: after the full-argv
+comparison landed, and again after the owner-directed rollback amendment. Not
+adjusted row by row. The skip gate is three independent conditions, each with its
+own row so no mutation removes two at once; step (d)'s four properties each have
+their own row; and each row names the fixture that provably executes the mutated
+branch (the recurring failure mode in this chain — see the gate-3 row).
 
 | Trigger (guarantee destroyed) | Patch | Test that must go RED |
 |-------------------------------|-------|-----------------------|
@@ -385,7 +395,12 @@ conditions, and each gets its own row so no mutation removes two at once.
 | the pre-destructive marker stops preceding the teardown | move `onBeforeTeardown()` below the `bootout` | **T1** — it is the only fixture that reaches a teardown |
 | darwin skips regardless of what is loaded (gate 1: `isLoaded`) | change the skip clause to `if (!o.changed && darwinLoadedMatches(…)) return true;` — drop the `isLoaded` conjunct | T3 case (iv) |
 | darwin skips regardless of the record's content (gate 2: the comparison) | change the skip clause to `if (!o.changed && isLoaded) return true;` — drop the comparison | T3 cases (ii), (iii), (v) |
-| darwin skips a changed file (gate 3: `!o.changed`) | drop the `!o.changed` conjunct | T1 (a changed entry would be skipped instead of replaced) |
+| darwin skips a changed file (gate 3: `!o.changed`) | drop the `!o.changed` conjunct | **T1** — **only because AC1 pins T1's `print` stdout to a record whose argv equals the NEW canonical** (see AC1). With an unpinned or stale stdout the comparison fails anyway and the mutated clause is false regardless, so the row would be vacuous — the RB1 finding |
+| rollback does not restore the prior plist | delete the `fs.writeFileSync(plistPath, o.priorBytes)` line from step (d) | T2b |
+| rollback restores the file but not the record | delete the trailing `bootstrap` from step (d) | T2b |
+| rollback reports the failed replacement as success | make step (d) `return true` after a successful restore-bootstrap | T2b |
+| the prior bytes are captured after the overwrite | move the `priorBytes` read below `ensureEntry` | T2b (the restored bytes become the new plist, so the prior argv is never re-bootstrapped) |
+| `add()` reports success for an unloaded unchanged entry | restore the `changed &&` conjunct at `schedule.js:882` | T7 |
 | darwin compares only the head of the argv — the round-2 defect | make `darwinLoadedMatches` compare only `argv[0]` and `argv[1]` | **T3 case (v)** — the stale-tail fixture |
 | darwin trusts an unparseable readback | make `darwinLoadedMatches` return `true` when `launchdLoadedArgs` returns `null` | T3 case (iii) |
 | darwin accepts a length-mismatched argv | drop the length check, comparing only the elements `expectArgv` indexes | T3 case (vi) |
@@ -407,12 +422,13 @@ rounds 2-3, where an unregistered Deliverables cell shipped a wrong test set):
 - [ ] Deliverables cell for `docs/adr/0037-…` (the rule — Table A's spine)
 - [ ] "Exact contracts" — both JSDoc blocks and the `ensureDarwinEntryRegistered` body
 - [ ] Current state §2 (rows 1-2), §3 (the teardown guard), §4 (row 3), §6 (row 4), §7 (the readback machinery + the measured exit codes), §9 (why not a cache)
-- [ ] **(+r3)** Implementation notes → "Accepted residual" (the CX-2 exposure; AC2's second fixture is its detector)
-- [ ] Implementation notes D1-D4
-- [ ] Acceptance criteria AC1-AC5 (rows 1-3), AC6 (the four changed assertions), AC7 (row 4 preservation), AC8 (the marker)
+- [ ] **(+r4)** Implementation notes → D5 (`add()`'s guard) and AC11 — the CLI-surface mirror of ADR-0037's postcondition
+- [ ] **(+r4)** ADR-0037's Consequences — the rollback consequence and the withdrawn crash-marker promise both mirror this spec's rollback section
+- [ ] Implementation notes → Export audit, D0-D5, and **"Rollback — OWNER-DIRECTED"** (its four contract properties + the crash-window table)
+- [ ] Acceptance criteria AC1-AC5 (rows 1-3), AC2's rollback set, AC6 (the four changed assertions), AC7 (row 4 preservation), AC8 (the marker), AC11 (D5)
 - [ ] Verification commands V2-V6
 - [ ] Table B rows, each naming its Table A row
-- [ ] Test index rows T1-T6
+- [ ] Test index rows T1, T2, T2b, T3-T7
 - [ ] The banner's cross-spec mapping table — **both** macOS sites map to that spec's Table C row 5
 - [ ] Definition of done items 5 (that spec's 0a) and 6 (the ADR signature gate)
 
@@ -423,6 +439,24 @@ Out of this spec, not deliverables:
 
 ## Implementation notes & constraints
 
+### Export audit — run this before naming any `gen.*` symbol
+
+**Standing authoring step, adopted after this chain produced three
+named-but-unreachable-symbol blockers.** For every `gen.*` symbol a spec names,
+record a grep over `module.exports`, not over the file. Executed for this spec:
+
+```
+$ grep -nE "^  (launchdLoadedArgs|jobLaunchArgs|catchupLaunchArgs|loadedEntryTargets),$" \
+    src/scheduler/generators.js
+1007:  loadedEntryTargets,
+1030:  catchupLaunchArgs,
+```
+
+`launchdLoadedArgs` and `jobLaunchArgs` are **absent** — both are defined and used
+internally but never exported, so both would be `undefined` at the call site D2
+specifies. That is what D0 fixes, and why D0 exports **two** names rather than one.
+"The function exists" is not "the function is reachable".
+
 ### D1 — the two new helpers in `src/cli/schedule.js`
 
 Both non-exported, defined near `darwinReplaceEntry`. `darwinLoadedMatches` calls
@@ -431,6 +465,16 @@ result is non-null, has the same length as `expectArgv`, and is equal
 element-by-element. `null` (an unparseable `arguments = { … }` block), a length
 difference, or any mismatched element returns **false** — the fail-safe direction
 is to attempt, never to skip.
+
+**"Element by element" is not byte-fidelity, and that is safe here.**
+`launchdLoadedArgs` **normalizes**: it trims each line (`generators.js:685`) and
+terminates on a trimmed `}` (`:686`). So an argument carrying leading/trailing
+whitespace, an embedded newline, or a lone `}` line cannot round-trip through the
+readback. Every such case yields a **mismatch**, which means **attempt** — the
+fail-safe direction — and none is reachable from a code-owned argv anyway: the
+elements are an absolute node path, an absolute launcher path, a
+`/^[a-z0-9][a-z0-9-]*$/` job name, the literal flags, an absolute descriptor path,
+and a `sha256:`+hex digest. Do not "fix" this by reaching for the raw stdout.
 
 **Compare against the UNESCAPED canonical argv, not the plist's XML.** The plist
 renders each argument through `xmlEscape`, but `launchctl print` reports the
@@ -449,7 +493,12 @@ actual argument values. Executed against the live record on the authoring host:
 ```
 
 That is exactly `[node, ...gen.jobLaunchArgs({launcher, name, descriptor,
-expectDigest})]` — the array the register site already holds. Build `expectArgv`
+expectDigest})]` — the array the register site already holds. **The order
+guarantee has render sites, cited the way §7 cites the parser:** `launchdPlist`
+emits `o.node` first (`generators.js:364`) and then `jobLaunchArgs(o)` in order
+(`:355` + the `args.map` immediately after it); `catchupPlist` does the same with
+`catchupLaunchArgs` (`:398`, `:407-408`). If either renderer's argument order ever
+changes, `expectArgv` must change with it — they are one contract. Build `expectArgv`
 from those same values; never re-read it from the rendered plist string.
 
 **Why the COMPLETE argv, and not just node + launcher.** A round-2 draft compared
@@ -480,9 +529,14 @@ scope and whose ADR-0018 reasoning still applies unchanged there.
 ### D2 — darwin per-job arm (`schedule.js:429-431`)
 
 ```js
+    // Captured BEFORE ensureEntry overwrites — the narrowest possible capture
+    // point, and the reason ensureEntry's contract does not change.
+    let priorBytes = null;
+    try { priorBytes = fs.readFileSync(plistPath); } catch { priorBytes = null; }
     const changed = ensureEntry(manifest, plistPath, content, unload);
     const loaded = ensureDarwinEntryRegistered(loader, uid, label, plistPath, {
       changed,
+      priorBytes,
       expectArgv: [node, ...gen.jobLaunchArgs({ launcher: b.launcher, name: o.name, descriptor: b.descriptor, expectDigest: b.expectDigest })],
       onBeforeTeardown: () => require('../scheduler/status').refreshSchedulerStatus(paths),
     });
@@ -543,39 +597,92 @@ Do not change the warning string (byte-exact in §4). Leave the second
 user is logged out — it is not evidence about what systemd holds, so ADR-0037's
 obligation 1 does not reach it, and moving it would be unrequested scope.
 
-### Accepted residual — a bad REPLACEMENT can still cost a healthy job
+### D5 — `add()` must fail on ANY unloaded outcome (`schedule.js:882`)
 
-`launchctl print` exiting 0 proves the label is loaded. It does **not** prove that
-the `bootstrap` failed *because* of that. So one interleaving remains destructive:
-a healthy record is loaded **and** the replacement plist is itself unbootstrappable
-(invalid content, or a permission rejection on the LaunchAgents path). The guard
-passes on evidence (i), the `bootout` succeeds, the final `bootstrap` fails, and
-the job is left **unscheduled** — `loaded: false`, so §8's notice fires and
-`doctor` is directed at it.
+```js
+  if (changed && !loaded) { throw new WienerdogError(…); }
+  if (!changed) { process.stdout.write(`wienerdog: "${name}" already scheduled at ${flags.at} — unchanged.\n`); return; }
+```
 
-**This is a NEW exposure.** Today the register path never tears anything down; this
-WP gives it that power in exchange for closing the stale-record defect. The trade
-is recorded, not hidden.
+The `changed &&` conjunct makes the **user-facing entry point** report success for
+an unchanged entry whose forced registration failed — it prints *"already
+scheduled … unchanged"* over a `loaded: false`. That is ADR-0037's central
+postcondition violated at the one surface a human reads directly, and after D2-D4
+it is reachable on both fixed legs (darwin: an unchanged entry whose readback
+mismatches, then fails to register; linux: an unchanged entry whose hoisted
+`daemon-reload` is degraded).
 
-**Decision: accept it, do not build rollback.** The alternative — snapshot the
-prior bytes before `ensureEntry` writes, and on final-bootstrap failure restore the
-file and re-bootstrap the prior registration — is heavier than the class it
-defends: `ensureEntry`'s write path is shared by **every** platform and entry kind,
-so a rollback contract there is blast radius far beyond this WP, to protect against
-a plist **we authored ourselves** from a code-owned renderer. An invalid plist is a
-renderer bug caught by tests, not a runtime condition to recover from. And the
-failure is **loud**: a notice, a false `loaded`, and a `doctor` pointer — materially
-better than the silent stale record it replaces. Simplicity over speculative
-recovery is the repo's stated bias.
+**Fix: drop the conjunct — throw whenever `loaded` is false, regardless of
+`changed`.** Keep the message text; only its guard changes.
 
-**Exposure, stated precisely so it can be re-judged later:** on darwin, when a
-healthy entry is loaded and the freshly rendered plist cannot be bootstrapped for
-any reason other than the label already being loaded, the previously working
-registration is destroyed and not restored; the file on disk holds the new
-(unbootstrappable) content; recovery is the next successful `wienerdog sync` or
-`wienerdog doctor`-directed repair. Routed as **`WP-scheduler-register-rollback`**
-if the class is ever observed in the field. AC2's second fixture pins the loud
-behavior so the residual cannot silently become a silent one.
+**This is not a new rule, it is the rule the other two callers already follow** —
+which is also the evidence that `add()` is the outlier:
+
+- `ensureDreamSchedule` (`schedule.js:823`) already does
+  `if (!res.loaded) return { scheduled: false, reason: 'load-failed', at };`
+  unconditionally, and its comment states the principle in the repo's own words:
+  *"Any load failure (incl. a forced re-registration with unchanged source XML)
+  must fail loud — the loaded task is the trust anchor, not the source bytes."*
+- `repointSchedules` (`schedule.js:583`) already pushes §8's notice on
+  `!res.loaded`, unconditionally.
+- `add()` (`schedule.js:882`) is the **only** `registerPlatform` caller gated on
+  `changed`. Audited: those are all four call sites (`:380` definition, `:575`,
+  `:813`, `:879`).
+
+### Rollback — OWNER-DIRECTED, and it is the contract, not a residual
+
+**This section supersedes a round-3 draft that declared the destruction window an
+accepted residual. The owner ruled on 2026-07-28: rollback is required, no
+destruction window ships.** Codex's position prevails; the "self-authored plist,
+loud failure, rollback complexity not paid" argument is **withdrawn**, not
+weakened, and must not be re-proposed from this spec's history.
+
+`launchctl print` exiting 0 proves the label is loaded; it does **not** prove the
+`bootstrap` failed *because* of that. So a healthy record plus an unbootstrappable
+replacement (invalid content, or a permission rejection on the LaunchAgents path)
+reaches the teardown. Step (d) of the contract restores the prior registration.
+
+**Blast radius stayed narrow, as directed.** `priorBytes` is read in the darwin
+arm **immediately before** `ensureEntry` overwrites (D2), so `ensureEntry`'s
+contract, return value and every other platform are untouched, and the whole
+rollback lives in `src/cli/schedule.js` — already a deliverable. `fs` is already
+required there.
+
+Four contract properties, all binding:
+
+1. **Rollback restores BOTH the file and the loaded record** — write `priorBytes`
+   back to `plistPath`, then `bootstrap` that restored file. Restoring only the
+   file would leave the label absent; restoring only the record is impossible.
+2. **The register still reports `loaded: false` and fires §8's notice.** Rollback
+   restores *scheduling*; it does not make the new registration a success. Step (d)
+   can never `return true` — that is the point of its placement after the final
+   `bootstrap` check, and Table B has a mutation row for it.
+3. **Convergence.** After a rollback the disk holds the **prior** plist, so the
+   next register renders canonical bytes that differ from it, `ensureEntry` returns
+   `changed = true`, no verified skip is possible, and the replacement is retried.
+   The loop terminates when either the replacement becomes bootstrappable or the
+   user acts on the notice. It does not spin silently: the notice fires on every
+   attempt.
+4. **Crash windows under the NEW protocol, enumerated — every one recovers via the
+   readback, none via the marker.** Each was traced against the measured exit codes
+   (§7: `0` loaded, `113` absent):
+
+   | Crash point | Disk holds | Label | Next register sees | Outcome |
+   |---|---|---|---|---|
+   | after `bootout`, before the final `bootstrap` | NEW plist | absent | `changed=false`; `print` → 113 ⇒ `isLoaded` false ⇒ **no skip** (gate 1) ⇒ `bootstrap` | recovered |
+   | **after restore-file, before re-`bootstrap`** | PRIOR plist | absent | canonical ≠ prior ⇒ `changed=true` ⇒ no skip ⇒ `print` → 113 ⇒ `bootstrap` of the freshly written canonical | recovered |
+   | after `ensureEntry`'s write, before `print` | NEW plist | OLD record | `changed=false`; `print` → 0 but the loaded argv is the OLD one ⇒ comparison fails ⇒ attempt | recovered |
+
+   **The one irreducible window**, stated rather than hidden: if `priorBytes` is
+   `null` — the plist did not exist when the register began — there is nothing to
+   restore, so a teardown followed by a failed bootstrap leaves the job
+   unscheduled. Reaching it requires the plist to have been deleted out from under
+   a *loaded* label by something other than Wienerdog. This WP never creates that
+   state, and the following register recovers it (`changed=true`, `print` → 113,
+   `bootstrap`).
+
+The slug `WP-scheduler-register-rollback` is **retired** — absorbed here. It must
+not appear in this spec or be routed from it.
 
 ### ADR-0037 is not signed, and this WP cannot merge before it is
 
@@ -640,7 +747,14 @@ mock `process.platform` — and no test may touch a real OS scheduler
 - [ ] **AC1 (Table A row 1 — replace, AND the marker ordering).** darwin,
       `changed` true, loader: `print` exits 0, first `bootstrap` non-zero, rest 0.
       Calls in order: `print` → `bootstrap` → `bootout` → `bootstrap`; result
-      `loaded: true`. **Additionally assert that `state/scheduler-status.json`
+      `loaded: true`. **`print`'s stdout MUST be pinned to a record whose
+      `arguments` block equals the NEW canonical argv** — the real state it models
+      is a plist deleted or corrupted on disk and rewritten while launchd still
+      held the correct record. Without that pin the gate-3 mutation row (drop
+      `!o.changed`) is vacuous: with `changed` true the loaded record would hold
+      the OLD argv, `darwinLoadedMatches` would be false, and the mutated clause
+      would be false anyway, so T1 would stay green (RB1).
+      **Additionally assert that `state/scheduler-status.json`
       already existed at the moment of the `bootout` call** (a loader that stats
       the file at every call and records the observation), which is ADR-0018
       decision 2's pre-destructive marker rule. **This assertion lives here and
@@ -654,13 +768,25 @@ mock `process.platform` — and no test may touch a real OS scheduler
       the assertion that separates "already loaded" from "failed for another
       reason", and it is the one a register-path teardown was previously unable to
       make.
-      **Second fixture — the accepted residual, pinned so it stays loud:** `print`
-      exits **0** (a healthy record IS loaded) and **both** `bootstrap` calls fail
-      (an unbootstrappable replacement). Assert the call order
-      `print` → `bootstrap` → `bootout` → `bootstrap`, `loaded: false`, and that
-      `repointSchedules` pushes §8's byte-exact notice. This is the destructive
-      interleaving Implementation notes accept without rollback; the test exists so
-      the residual cannot silently become a *silent* residual. (T2)
+      **Second fixture — the ROLLBACK set (T2b), owner-directed.** `print` exits
+      **0** (a healthy record IS loaded), `changed` is true, and **both** the first
+      and the replacement `bootstrap` fail — an unbootstrappable replacement.
+      Assert **all five** properties, not merely the loudness:
+      (a) call order `print` → `bootstrap` → `bootout` → `bootstrap` →
+      **`bootstrap` again** (the restore);
+      (b) the file at `plistPath` holds the **prior** bytes after the call, byte
+      for byte;
+      (c) the restoring `bootstrap` targets that restored file, so the **prior**
+      argv is what launchd is asked to load again;
+      (d) the result is **`loaded: false`** and `repointSchedules` pushes §8's
+      byte-exact notice — rollback restores scheduling, it does **not** make the
+      replacement a success;
+      (e) with `priorBytes === null` (no plist existed) there is no restore attempt
+      and the result is still `loaded: false` — the irreducible window, asserted so
+      it stays bounded.
+      A round-3 draft asserted only loudness here, because it accepted the
+      destruction. The owner ruled otherwise; this fixture set is that ruling made
+      executable. (T2, T2b)
 - [ ] **AC3 (Table A row 1 — the verified skip).** darwin, `changed` false, six
       cases, each asserted on the recorded call list:
       (i) `print` exits 0 and the loaded argv equals canonical **element for
@@ -729,6 +855,17 @@ mock `process.platform` — and no test may touch a real OS scheduler
 - [ ] **AC9 (no daemon, no new dependency).** The diff introduces no
       `setInterval`, no `setTimeout`, no new top-level `require`, and no
       `package.json` change (V4).
+- [ ] **AC11 (D5 — the CLI entry point obeys the postcondition).** `add()` throws
+      whenever `loaded` is false, **regardless of `changed`**, and must never print
+      `"<name>" already scheduled at <at> — unchanged.` over an unloaded outcome.
+      Two CLI-path fixtures, one per fixed leg, both with `changed === false`:
+      (i) darwin — the readback mismatches, the register is attempted and fails;
+      (ii) linux — the hoisted `daemon-reload` is degraded so `loaded` is false.
+      Assert the throw in both, and assert the "already scheduled" string is
+      **absent** from stdout. (T7)
+      The other two `registerPlatform` callers are already conforming and must stay
+      unmodified: `ensureDreamSchedule` (`:823`) and `repointSchedules` (`:583`)
+      both branch on `!res.loaded` unconditionally.
 - [ ] **AC10 (mutation matrix).** Every Table B row demonstrated red; output pasted.
 
 ### Test index
@@ -738,9 +875,11 @@ mock `process.platform` — and no test may touch a real OS scheduler
 | T1 | tests/unit/scheduler-schedule.test.js | darwin replace ordering + `loaded` (AC1) |
 | T2 | tests/unit/scheduler-schedule.test.js | teardown guard — no `bootout` when nothing is loaded; marker ordering and non-firing (AC2, AC8) |
 | T3 | tests/unit/scheduler-schedule.test.js | the verified skip, **six** cases incl. the stale-tail and length-mismatch fixtures and the crash-recovery case (iv); marker non-firing (AC3, AC8) |
+| T2b | tests/unit/scheduler-schedule.test.js | the rollback set — restore file + re-bootstrap prior argv + `loaded:false` + notice + the `priorBytes === null` bound (AC2) |
 | T4 | tests/unit/scheduler-schedule.test.js | catch-up through the same helper (AC4) |
 | T5 | tests/unit/scheduler-schedule.test.js | linux degraded reload ⇒ `loaded:false` + notice; null/missing results (AC5 i) |
 | T6 | tests/unit/scheduler-schedule.test.js | linux unchanged bytes still reload + enable, exactly two calls (AC5 ii) |
+| T7 | tests/unit/scheduler-schedule.test.js | **CLI path** — `add()` throws on an unloaded outcome for an UNCHANGED entry, on both legs: unchanged-darwin readback-mismatch-then-failure, and unchanged-linux degraded reload (AC11) |
 
 Name every subtest with the prefix `verified-register:` followed by one space.
 
@@ -799,7 +938,12 @@ grep -n "launchdLoadedArgs" src/scheduler/generators.js src/cli/schedule.js
 grep -n "loadedEntryTargets" src/cli/schedule.js \
   && echo "FAIL: the register path is comparing positions, not the full argv" \
   || echo "OK: the register path does not use the two-position comparison"
-# on main: no output from either (neither symbol appears in schedule.js).
+# on main, executed: command 1 prints TWO lines from generators.js —
+#   679:function launchdLoadedArgs(stdout) {
+#   787:      const args = launchdLoadedArgs(stdout);
+# and NOTHING from schedule.js (the symbol is absent there, and unexported).
+# Command 2 prints nothing and takes the `||` branch, so the OK line is the
+# baseline and the FAIL branch is reachable only by regression.
 
 # V7 — the boundary gate and the pipeline.
 node scripts/boundary-check.js docs/specs/WP-scheduler-register-replaces-loaded-record.md \
