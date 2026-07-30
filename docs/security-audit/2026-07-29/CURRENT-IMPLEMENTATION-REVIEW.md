@@ -13,8 +13,25 @@ dream-authored Tier-1/2 state into the injected session digest.
 
 **Addendum (2026-07-30):** a follow-up pass added **2 further Major and 2 Minor
 findings** and identified the single root cause the whole group shares. See
-"Addendum — follow-up pass (2026-07-30)" at the end of this document. The
-totals above describe the 2026-07-29 pass only.
+"Addendum — follow-up pass (2026-07-30)" at the end of this document.
+
+**Second addendum (2026-07-30, adversarial cross-review):** an adversarial pass
+over the remediation plan surfaced **2 further Major findings** (M7, M8) that
+neither earlier pass reached.
+
+**Third addendum (2026-07-30, second adversarial cross-review):** a second such
+pass surfaced **2 further Major findings** (M9, M10), both about parts of the
+dream's write surface the validator cannot see at all.
+
+**Fourth addendum (2026-07-30, harness verification):** the tests those addenda
+called for were run. **M7 and M10 are now reproduced**, not inferred: a live
+dream-profile run wrote `AGENTS.md`, `CLAUDE.md` and a nested
+`01-Projects/customer/AGENTS.md` into the vault. **M9 drops to Minor** — both
+harnesses refuse writes under `.git`, though every step after that refusal is
+confirmed to work.
+
+The totals above describe the 2026-07-29 pass only. The running total across all
+five passes is **0 Critical, 7 Major, 3 Minor**.
 
 ## Executive assessment
 
@@ -641,3 +658,439 @@ and re-freezing the daily gate does not stop `weekly-review` from reading the sa
 daily notes raw. Full containment while the fixes are designed also requires
 narrowing the `daily-digest` and `weekly-review` snapshot plans, since those are
 the two sessions that combine untrusted vault bytes with an outbound mail tool.
+
+## Second addendum — adversarial cross-review (2026-07-30)
+
+**Origin:** the remediation plan derived from this report
+(`ACTION-LIST.md`, actions B0–B6) was submitted to an adversarial review by a
+different model family, with the instruction to attack the plan rather than the
+code. Two of its findings were not defects in the plan but gaps in **this
+report**: a delivery path no finding covers, and an interpolation site the M4
+enumeration missed. Both were then verified by reading the live code at the same
+target commit.
+
+**Result:** **2 further Major (M7, M8).** M8 is the same defect class as M4 and
+extends its affected-code list; M7 is a new class — persistence rather than
+per-run injection.
+
+### M7 — The dream can write the harness instruction file into the vault, giving it persistence across runs
+
+**Severity:** Major / High
+
+**Confidence:** **Reproduced** (2026-07-30 harness verification, see the fourth
+addendum). A live Claude dream-profile run wrote `<vault>/AGENTS.md`,
+`<vault>/CLAUDE.md` and `<vault>/01-Projects/customer/AGENTS.md` successfully.
+The write step is no longer an inference.
+
+**Impact:** A steered dream can commit `<vault>/AGENTS.md` (or
+`<vault>/CLAUDE.md`). On the Codex brain path the vault **is** the run's working
+directory, so that file is loaded as project instructions by the *next* dream
+run, before the code-owned prompt. Every finding above describes content that
+must be re-delivered on each run; this one persists in the vault and re-steers
+future runs by itself, including runs whose transcripts contain nothing hostile.
+
+#### Affected code
+
+- `src/core/dream/validate.js:1111-1176` classifies every changed vault path.
+  There is no allowlist of writable locations. A path is checked for containment
+  (`:1114-1120`), for being the learnings ledger (`:1121`), and for being Tier 3
+  (`:1137`); `isTier3` at `:1056-1057` matches **only** the identity-dir and
+  skills-dir prefixes. Everything else falls through to case (c) at `:1175`:
+  "Tier-1/2 note, daily log, or report → keep". A vault-root `AGENTS.md` or
+  `CLAUDE.md` is none of the special cases, so it is kept and committed.
+- `src/core/dream/brain.js:186-199` chooses the run's `cwd`. The Codex branch
+  sets `cwd = vaultDir` (`:189`); only the Claude branch gets the neutral staging
+  directory (`:198`).
+- `src/core/dream/brain.js:133-139` — the JSDoc of `ensureBrainStaging` names
+  this exact attack: "no `.claude`, no CLAUDE.md, no git — a neutral cwd Claude
+  Code can never mistake for a project ... **a hijacked dream could otherwise
+  plant `<vault>/CLAUDE.md` for a later run**." The mitigation described there is
+  real, but it protects the *staging directory*. It does not stop the file from
+  being written into the vault, and it does not apply to the Codex path at all.
+- Grep for `CLAUDE.md` / `AGENTS.md` across `src/core/dream/`,
+  `src/core/vault-snapshot.js` and `src/core/routine-runtime.js` returns only
+  those two comment lines. No code anywhere rejects, quarantines, or flags such a
+  file.
+
+#### Exploit chain
+
+1. Attacker-controlled transcript or `tool_result` content steers a dream run.
+2. The dream writes `<vault>/AGENTS.md` containing instruction-shaped text. It is
+   not Tier 3, not the ledger, and inside the vault, so `validate.js:1175` keeps
+   it. The EP2 secret scan does not reject instruction text.
+3. The next Codex dream run starts with `cwd = vaultDir` (`brain.js:189`) and
+   loads that file as project instructions, ahead of the code-owned prompt.
+4. The steering now survives without any further attacker input. The dream can
+   also refresh the file on each run, so removing the original hostile transcript
+   does not end the loop.
+
+A second, lower-privilege sink: the vault is an Obsidian vault the user works in
+directly. Any Claude Code or Codex session the *user* starts there picks up the
+same file.
+
+#### Why the current tests miss it
+
+The suite asserts what the validator reverts. Nothing asserts what it must
+refuse to *keep* at a path the layout does not name, because the classification
+has no such concept — the vault is writable by default and Tier 3 is the only
+carve-out.
+
+#### Required remediation direction
+
+- Make the dream's writable surface an allowlist derived from the layout, not a
+  deny-list of two special cases. Any committed path outside it is reverted and
+  recorded, which closes this whole class rather than the two known filenames.
+- If an allowlist is judged too large a change, the minimum is an explicit
+  reject-and-quarantine rule for harness-control files at any depth of the vault
+  (`CLAUDE.md`, `AGENTS.md`, `.claude/`, `.codex/`, `.mcp.json`) — but state in
+  the spec that this is a named-file deny-list and will not cover the next
+  harness convention.
+- Independently: the Codex brain path should get the same neutral-cwd treatment
+  as the Claude path, or the reason it cannot must be recorded. `brain.js:189`
+  currently justifies `cwd = vaultDir` by the write fence, which is a different
+  concern from instruction discovery.
+
+### M8 — M4's enumeration is incomplete: a fifth unneutralized site, in the same function
+
+**Severity:** Major / High (identical class and channel to M4)
+
+**Confidence:** High — read in the live code.
+
+**Impact:** The remediation for M4 names four unneutralized sites. A fifth exists
+in the same file, fourteen lines below the one M4 cites, in the dream report's
+redaction section. A fix that patches only the enumerated sites leaves this one
+open, and the site-enumeration test proposed for it would pass.
+
+#### Affected code
+
+- `src/core/dream/validate.js:1251-1255` pushes the redaction record with the
+  vault-relative path unmodified: `secretRedacted.push({ path: rel, ... })`.
+- `src/core/dream/validate.js:1366-1375` renders it into the committed report:
+  `` `- \`${r.path}\` — ${r.lines} line(s) scrubbed (${r.labels}); ...` ``. The
+  path, the label list and the quarantine basename are all interpolated raw.
+- `src/core/dream/validate.js:1359-1364` — the comment immediately above claims
+  the section is "Metadata only: the vault-relative path, a line count, the
+  labels and the sanitized destination basename — never the matched bytes and
+  never the scrubbed line's text." That is true about *secrecy* and irrelevant to
+  *structure*: a vault-relative path is attacker-influenceable, so metadata-only
+  is not the same as code-owned.
+
+#### Exploit chain
+
+1. The steered dream creates a note whose **path** carries the payload — the same
+   newline-plus-heading shape as M4's — and whose added lines contain
+   secret-shaped bytes of a severity that is *scrubbed in place* rather than
+   quarantined (`validate.js:1250-1257`).
+2. The content is redacted, the note survives, and the raw path is written into
+   the report's "Redacted in place (secret scan)" section.
+3. Per M3, that report reaches the `daily-digest` and `weekly-review` models.
+
+This is the same second-order property M4 records, one layer further in: the
+record of a *successful* secret redaction publishes the hostile name.
+
+#### Why this matters for the remediation
+
+M4's affected-code list and the root-cause table below both stop at five sites.
+Any spec that enumerates sites from this report would have shipped with this one
+unfixed. The lesson is the one M4 already states — a per-site decision is not a
+rule — and it reproduced inside the very pass that named it.
+
+### Updated root-cause table
+
+Supersedes the table in the first addendum. Six sites, five of them unsafe:
+
+| Site | Value interpolated | Neutralized? |
+| --- | --- | --- |
+| `digest.js:517` — `## Active projects` | filesystem directory name | no (M1) |
+| `digest.js:541-546` — daily fence | note `## Summary` body | no (M2) |
+| `digest.js:304` — alert callout | free-form failure reason | no (m5) |
+| `validate.js:1352-1353` — dream report, enforcement section | reverted vault path | no (M4) |
+| `validate.js:1366-1375` — dream report, redaction section | redacted vault path, labels, basename | no (M8) |
+| `digest.js:573-574` — quarantine banner | quarantined basename | **yes** |
+| `digest.js:556-557` — identity banner | fixed filenames only | n/a (no untrusted bytes) |
+
+The conclusion drawn there is unchanged and strengthened: the fix is one shared
+helper plus an enumeration test, not a per-site patch set. M7 is outside this
+table — it is not an interpolation defect and the helper does not touch it.
+
+### Verification performed for this addendum
+
+- Read in the live worktree at the same target commit:
+  `src/core/dream/validate.js` (classification loop, `isTier3`, the redaction
+  push and the report append), `src/core/dream/brain.js` (`cwd` selection and
+  `ensureBrainStaging`), `src/core/routine-runtime.js`.
+- Confirmed live, not assumed: `isTier3` matches only the identity and skills
+  prefixes; the Codex brain path runs with `cwd = vaultDir`; no source file under
+  `src/core/dream/` handles `CLAUDE.md` or `AGENTS.md` outside two comments.
+- **No new reproduction was executed.** M7 and M8 are verified by code
+  inspection. M1 and M2 remain the only reproduced findings in this document.
+- No product, test, or fixture file was changed by this pass.
+
+## Third addendum — second adversarial cross-review (2026-07-30)
+
+**Origin:** the plan revised to absorb M7 and M8 was submitted to a second
+adversarial pass, told explicitly not to re-report the first pass's findings. Of
+its eight findings, six were defects in the plan and are recorded there. Two
+were, again, gaps in this report: both are ways the dream's write surface
+extends past what the validator can see or classify.
+
+**Result:** **2 further Major (M9, M10).** Both concern the same blind spot M7
+named — the vault is writable by default — but neither is closed by an allowlist
+over the classification loop, because neither reaches that loop.
+
+### M9 — Git control state is inside the dream's write fence, and the validator then runs `git add` and `git commit` in that repository
+
+**Severity:** **Minor** — downgraded 2026-07-30 after the harness verification
+below. It was recorded as "Major, Critical if the write is confirmed"; the write
+is now confirmed **blocked** by both harnesses, so the chain does not currently
+execute. It stays in the report as a defence-in-depth gap because every step
+*after* the blocked one is reproduced, and the block belongs to third-party
+software this project does not own or test.
+
+**Confidence:** **Reproduced, in both directions.** The hook and filter
+execution, and the effectiveness of the proposed mitigation, were each run
+directly. The first step is reproduced as a refusal.
+
+**Impact:** `.git/hooks/`, `.git/config` and `.git/info/attributes` are
+repository-local execution surfaces. The validator invokes `git add` and
+`git commit` in the vault repository with the Wienerdog process's own
+privileges — which include network access and the whole filesystem, none of
+which the dream itself has.
+
+#### Affected code
+
+- `src/core/dream/brain.js:90-104`: the Claude path passes
+  `addDirs: [vaultDir, scratchDir]`, described as "the ONLY tool roots: the
+  writable vault". `.git` is inside `vaultDir` and is not excluded anywhere.
+- `src/core/dream/brain.js:110-131`: the Codex path passes `--sandbox
+  workspace-write --cd vaultDir`, with the comment naming `--cd` as "THE write
+  fence". Same containing directory, same absence of a `.git` carve-out.
+- `src/core/dream/validate.js:1190`, `:1298` and `:1379` run `git add`, and
+  `:1400-1407` runs `git commit`. Neither passes `--no-verify`, and nothing sets
+  `core.hooksPath` to a neutral value. The only `-c` overrides are `user.name`
+  and `user.email`.
+- `src/core/dream/validate.js:67-73`: `git()` spawns with `env: process.env` —
+  the parent environment, unfiltered.
+- Grep for `.git/` across `validate.js` and `brain.js` returns nothing: no code
+  reads, guards, snapshots or restores the repository's control state.
+
+#### Exploit chain
+
+1. The steered dream writes `<vault>/.git/hooks/pre-commit` (or a `clean` filter
+   in `.git/config` activated from `.git/info/attributes`).
+2. Nothing in the classification loop sees it: `changedPaths()`
+   (`validate.js:987-1000`) reads `git status`, which never reports paths inside
+   the git directory.
+3. The validator reaches step 5 and runs `git add -A` and then `git commit`. The
+   hook or filter executes — in the Wienerdog process's context, not the
+   brain's.
+
+Note that the validator's *own enforcement machinery* is the trigger. The more
+the run is reverted, the more certainly the commit still happens.
+
+#### What the harness verification established
+
+Step 1 is refused by both brain paths, on the versions tested (see the fourth
+addendum for method and exact versions):
+
+- Claude Code refuses `<vault>/.git/hooks/pre-commit` and
+  `<vault>/.git/info/attributes` with "which is a sensitive file", under the
+  dream profile's own `acceptEdits` permission mode.
+- Codex's `workspace-write` sandbox refuses both with `operation not permitted`.
+
+Everything after step 1 is reproduced and works:
+
+- A planted `pre-commit` hook **executes** on the validator's exact commit shape
+  (`git -c user.name=wienerdog -c user.email=wienerdog@localhost commit`).
+- A `clean` filter defined in `.git/config` and activated from
+  `.git/info/attributes` **executes** on `git add -A`.
+
+#### Why this stays in the report
+
+The block is Anthropic's and OpenAI's, not Wienerdog's. Claude Code's refusal in
+particular is a **permission-layer** decision against a maintained list of
+sensitive paths — not an OS sandbox — so it is a product behaviour that can
+change between versions, and no test in this repository asserts it. A control
+the project neither implements nor tests is a dependency, not a defence.
+
+#### Required remediation direction
+
+- Neutralize the execution surfaces at the call site anyway: `-c
+  core.hooksPath=/dev/null` on every validator `git` invocation and
+  `--no-verify` on commit. **Verified to work** — with those two flags the
+  planted hook does not run. It is a two-line change that removes the dependency
+  on somebody else's sensitive-path list.
+- **Filters are not covered by that mitigation — this was tested, and the filter
+  still executed with both flags set.** They need their own answer: either the
+  repository's control state is captured and compared across the run, or the
+  validator's git invocations run against a configuration the vault repository
+  cannot influence.
+- Add a test asserting the harness refusal itself, so a future harness version
+  that relaxes it fails this repository's suite rather than shipping silently.
+
+### M10 — Gitignored paths never reach the classification loop, and the dream can write the ignore file
+
+**Severity:** Major / High
+
+**Confidence:** **Reproduced** — the full two-run chain was executed against a
+real git repository, and the harness verification confirms the dream can write
+`<vault>/.gitignore`.
+
+**Impact:** Every validator gate — Tier 3, the ledger check, the secret scan,
+the containment check — operates on the output of `git status`. A path the
+repository ignores is invisible to all of them, stays on disk, and is preserved
+by the crash-recovery path. The dream can create that condition itself.
+
+#### Affected code
+
+- `src/core/dream/validate.js:988` runs `git status --porcelain -z -uall`.
+  `-uall` expands untracked *directories*; it does not add ignored paths, which
+  need `--ignored`. So an ignored file produces no entry, and the loop at
+  `:1111-1176` never classifies it.
+- `src/core/dream/validate.js:139-149`: `restoreVaultToHead` uses `git clean
+  -fd` and its comment states the intent explicitly — "NOT -x — so .gitignore'd
+  files ... are preserved". The safety net that exists for every other
+  unvalidated brain write deliberately skips these.
+- `<vault>/.gitignore` is not layout-mapped, not the ledger and not Tier 3, so a
+  dream write to it lands on case (c) at `:1175` and is kept and committed.
+- `src/core/adopt-git.js:14-21` shows the project already ships vault ignore
+  patterns, so a non-empty `.gitignore` is the normal state, not an edge case.
+
+#### Exploit chain
+
+1. Run one: the steered dream appends `.claude/` to `<vault>/.gitignore`. This
+   write *is* visible, and under every current rule it is kept.
+2. Run two: the dream writes `<vault>/01-Projects/customer/.claude/settings.json`.
+   It is ignored, so `changedPaths()` returns nothing for it, no gate runs, no
+   enforcement line is written, and `git clean -fd` leaves it in place.
+3. Any session the user starts in that project directory loads it.
+
+A user who has independently added `.claude/` or `.codex/` to their vault ignore
+file — a common habit — collapses this to a single run.
+
+#### Why this matters beyond M7
+
+M7's remediation is an allowlist over the classification loop. This finding is
+about paths that never enter the loop, so **the allowlist does not close it**.
+The two must be fixed together or the fix will read as complete while the
+easier of the two paths stays open.
+
+#### Required remediation direction
+
+- The validator's view of what the run changed must not be the repository's view
+  of what is interesting. Either add `--ignored` to the status call and classify
+  those paths too, or take an independent pre/post filesystem inventory of the
+  vault.
+- Whichever is chosen, `<vault>/.gitignore` itself becomes security-relevant and
+  belongs on the list of paths the dream may not write.
+- `git clean -fd` needs revisiting in the same change. Its current behaviour is
+  deliberate and correct for Obsidian plugin binaries; it is wrong for a path
+  the dream created this run. Those two cases have to be told apart rather than
+  traded off.
+
+### Verification performed for this addendum
+
+- Read in the live worktree at the same target commit:
+  `src/core/dream/brain.js:85-131` (both argv builders),
+  `src/core/dream/validate.js:60-80` (`git()`), `:126-140` and `:1400-1407` (the
+  commit calls), `:139-149` (`restoreVaultToHead`), `:985-1002`
+  (`changedPaths`), `src/core/adopt-git.js:14-21`, `src/core/layout.js:1-40`,
+  `src/core/digest.js:466-512`, `skills/wienerdog-dream/SKILL.md:105-140`.
+- Confirmed live, not assumed: no `--no-verify` and no `core.hooksPath` override
+  on any validator git call; `env: process.env` unfiltered; `git status` without
+  `--ignored`; `git clean` without `-x`; no `.git/` handling anywhere in
+  `validate.js` or `brain.js`.
+- The findings above were verified by code inspection. They were **subsequently
+  reproduced** — see the fourth addendum, which supersedes the confidence and
+  severity lines this section originally carried.
+- No product, test, or fixture file was changed by this pass.
+
+## Fourth addendum — harness verification (2026-07-30)
+
+**Origin:** the third addendum recorded M9 with its first step untested, and
+named that test as the highest-priority next action because it decided between
+Major and Critical. It was run. Running it also answered the equivalent question
+for M7 and M10, which had been verified by inspection only.
+
+**Method.** Every test below ran in a throwaway `mktemp -d` repository. No real
+vault, no real `~/.wienerdog`, no product file touched. The brain arguments were
+composed through the project's own code — `getProfile('dream')` and
+`composeClaudeArgs()` from `src/core/runtime-profile.js`, plus the real
+`ensureSettingsProfile()` — so the tools, `--disallowedTools`,
+`--permission-mode acceptEdits`, `--add-dir`, `--setting-sources ''` and
+`--settings` flags are byte-faithful to a production dream run. Only the prompt
+differed. The Codex side replicated `buildCodexArgs`'s flags directly. Every
+result was confirmed against the filesystem, not only against the model's own
+report.
+
+**Versions tested:** Codex CLI 0.146.0 (`gpt-5.6-sol`), Claude Code as installed
+on 2026-07-30, git 2.50.1 (Apple Git-155), macOS.
+
+### Result 1 — `.git` writes are refused by both harnesses (M9 → Minor)
+
+| Path | Claude (dream profile) | Codex (`workspace-write --cd vault`) |
+| --- | --- | --- |
+| `.git/hooks/pre-commit` | REFUSED — "which is a sensitive file" | REFUSED — `operation not permitted` |
+| `.git/info/attributes` | REFUSED — same | REFUSED — same |
+
+Filesystem confirmed both absent. Note the difference in kind: Codex's is an OS
+sandbox denial, Claude Code's is a **permission-layer** decision against a
+maintained sensitive-path list. The latter is a product behaviour, not a
+boundary this project owns.
+
+### Result 2 — everything downstream of the blocked write works (M9)
+
+- A planted `.git/hooks/pre-commit` **executed** on the validator's exact commit
+  shape, writing its marker file.
+- A `clean` filter defined in `.git/config` and activated from
+  `.git/info/attributes` **executed** on `git add -A`.
+- With `-c core.hooksPath=/dev/null` and `--no-verify`, the hook **did not run**
+  — the proposed mitigation works.
+- With the same two flags, the filter **still ran**. `core.hooksPath` does not
+  cover filters. The third addendum asserted this; it is now measured.
+
+### Result 3 — harness-control files ARE writable (M7, M10 → reproduced)
+
+A single Claude dream-profile run, one prompt, six targets:
+
+| Path | Result |
+| --- | --- |
+| `<vault>/AGENTS.md` | **WRITTEN** |
+| `<vault>/CLAUDE.md` | **WRITTEN** |
+| `<vault>/.gitignore` | **WRITTEN** |
+| `<vault>/01-Projects/customer/AGENTS.md` | **WRITTEN** (parent dirs created silently) |
+| `<vault>/.claude/settings.json` | refused — permission not granted |
+| `<vault>/.mcp.json` | refused — "which is a sensitive file" |
+
+The asymmetry is the finding: **the harness protects configuration surfaces and
+leaves instruction surfaces open.** `.mcp.json` and `.claude/settings.json` are
+guarded; `CLAUDE.md` and `AGENTS.md` — which are auto-loaded as instructions by
+the very same product — are not. Nothing about that is a defect in the harness;
+it is exactly why M7 needs a fix in Wienerdog rather than a note that the
+sandbox probably handles it. The nested write confirms the M7/B7 point that a
+prefix allowlist over permitted roots is not sufficient.
+
+### Result 4 — the gitignore blind spot, end to end (M10)
+
+Two runs against a real repository:
+
+1. `.gitignore` containing `.claude/` — written by the dream, visible to
+   `git status` as `?? .gitignore`, kept under every current rule.
+2. `01-Projects/customer/.claude/settings.local.json` — written next.
+   `git status --porcelain -z -uall` reports **only** `?? .gitignore`. The
+   second file produces no entry at all, so no gate in the classification loop
+   sees it.
+3. After `git reset --hard HEAD` and `git clean -fd` — the validator's exact
+   `restoreVaultToHead` shape — the ignored file **survived**.
+
+### What this changes
+
+- **M7 and M10 move from verified-by-inspection to reproduced.** Both remain
+  Major.
+- **M9 drops to Minor.** Its chain is blocked at step 1 today. It stays on the
+  record because the block is external, untested by this repository, and every
+  later step is confirmed — and because two lines of code remove the dependency.
+- **The running total becomes 0 Critical, 7 Major, 3 Minor.**
+- One item of the remediation plan is now measured rather than argued: the
+  hook mitigation works and the filter mitigation does not, so those are two
+  changes and not one.
