@@ -21,7 +21,7 @@ Commands:
   gws         Read Gmail/Calendar/Drive and draft mail (Google Workspace)
   grant       Authorize a routine to send email (typed confirmation required)
   memory      Approve identity-note changes so they inject into your session (typed confirmation)
-  safety      Show the pre-use security gates (all disabled until reviewed)
+  safety      Show which sensitive actions Wienerdog allows or blocks
 
 Global options:
   --dry-run   Show what would happen; make no changes
