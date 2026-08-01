@@ -1,8 +1,20 @@
 # Wienerdog 🌭🐕
 
+[![npm version](https://img.shields.io/npm/v/wienerdog)](https://www.npmjs.com/package/wienerdog) [![CI](https://github.com/wienerdog-ai/wienerdog/actions/workflows/ci.yml/badge.svg)](https://github.com/wienerdog-ai/wienerdog/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 **Give your AI a memory, habits, and a daily routine — with nothing but files.**
 
+**Just files, by design: no daemon, no server, no telemetry. Nothing listens, nothing phones home — and `wienerdog uninstall` removes every file it wrote.**
+
 You already pay for a great AI model. Wienerdog makes it *feel* dramatically smarter — not by changing the model, but by installing the right files around it: a real profile of you, a persistent markdown memory, skills for your recurring tasks, and a nightly "dreaming" process that learns from your conversations. If you use both **Claude Code and Codex CLI**, they share this: one memory vault, read and written by whichever one you're in, so switching tools doesn't mean starting over with an AI that knows nothing about you.
+
+```
+npx wienerdog@latest init
+```
+
+> Want to review the plan before anything is written? Run `npx wienerdog@latest init --dry-run` first — it prints exactly what would be created and touches nothing.
+
+**No Node installed yet?** Use the bootstrap script instead — on macOS/Linux:
 
 ```
 curl -fsSL https://raw.githubusercontent.com/wienerdog-ai/wienerdog/main/install.sh | bash
@@ -14,7 +26,7 @@ curl -fsSL https://raw.githubusercontent.com/wienerdog-ai/wienerdog/main/install
 irm https://raw.githubusercontent.com/wienerdog-ai/wienerdog/main/install.ps1 | iex
 ```
 
-Prefer npm? `npx wienerdog@latest init` does the same thing on any OS. Either script checks for Node (and git); if either is missing it offers to install it for you — always asking first and showing the exact command it will run, and simply printing that command for you to run yourself if you decline or aren't in an interactive terminal. On Windows, installing Node this way may pop up a one-time admin (UAC) prompt — that's Windows asking permission, not Wienerdog; decline it and you get the same command to run yourself instead. The window stays open and tells you when it's done. [Read install.sh](install.sh) or [install.ps1](install.ps1) first if you like; once Node is ready either one hands over to the versioned npm package. That handoff doesn't pause for another confirmation — it prints its plan as it installs, and running the one-liner is your go-ahead. Want to review the plan before anything is written? Run `npx wienerdog@latest init --dry-run` first, or use the AI-assisted install below.
+Either script checks for Node (and git); if either is missing it offers to install it for you — always asking first and showing the exact command it will run, and simply printing that command for you to run yourself if you decline or aren't in an interactive terminal. On Windows, installing Node this way may pop up a one-time admin (UAC) prompt — that's Windows asking permission, not Wienerdog; decline it and you get the same command to run yourself instead. The window stays open and tells you when it's done. [Read install.sh](install.sh) or [install.ps1](install.ps1) first if you like; once Node is ready either one hands over to the same versioned npm package. That handoff doesn't pause for another confirmation — it prints its plan as it installs, and running the one-liner is your go-ahead. Prefer a guided path? Use the AI-assisted install below.
 
 > **Windows has full parity:** vault, skills, and scheduled nightly dreaming all work — the nightly dream registers in Task Scheduler for your own user (no admin rights), and if the machine was off or asleep at dream time it catches up after you're back.
 
