@@ -170,7 +170,7 @@ whole no-log design rested on it. Corrected here from the source at `e7c845e`:
 `chmodIfNeeded` (`:156-165`) swallows its own errors and is not a source.
 
 **This is what Table R rows 2–3 exist for**, and the owner ruled on it — see
-[No-log failure path](#no-log-failure-path--owner-ruled-2026-08-01).
+[No-log failure path](#no-log-failure-path--owner-ruled-transcribed-2026-08-01).
 
 ### 5. `failure` and where it comes from
 
@@ -215,7 +215,7 @@ the boolean return noted in §1, and `depends_on: []` is still correct.
 
 | Action | Path | Notes |
 |--------|------|-------|
-| modify | src/cli/run-job.js | **D1** — replace the free-form branch at `:1004` with `noLogReason(...)` per **Table R**, plus the module-private `noLogReason` helper and its `TOKEN_OK` pattern; change **no other branch** of the three-branch `reason` and **not** the `reason +=` mutation. **D2** — write the raw (redacted) cause into the per-run log **through the still-open `logStream`**, inside the existing `finally` at `:923-926`, before `endStream`. **D3** — make `endStream` (`:514-516`) error-absorbing so an async stream `'error'` cannot escape the `finally` and skip `failLoud` (Codex [high]). |
+| modify | src/cli/run-job.js | **D1** — replace the free-form branch at `:1004` with `noLogReason(...)` per **Table R**, plus the module-private `noLogReason` helper and its `TOKEN_OK` pattern; change **no other branch** of the three-branch `reason` and **not** the `reason +=` mutation. **D2** — write the raw (redacted) cause into the per-run log **through the still-open `logStream`**, inside the existing `finally` at `:923-926`, before `endStream`. **D3** — make `endStream` (`:514-516`) error-absorbing so an async stream `'error'` cannot escape the `finally` and skip `failLoud`. **D4** — two test seams in the house WP-155 idiom, so T7 and T8 are implementable at all. **D5** — attach a no-throw `'error'` listener to `logStream` at creation, covering the tee window as well as finalization. |
 | modify | tests/unit/scheduler-runjob.test.js | **T1, T2, T5's suffix half, T7 and T8** (Test index below). **T3 and T4 are already covered and are NOT new work** — do not add tests for them. This is the real path — verified at `e7c845e`; **no file matches `tests/unit/run-job*`**, and the Deliverables table is the CI-enforced boundary. |
 
 ### Exact contracts
@@ -246,17 +246,39 @@ Current state §2 and §4; read the file itself with
 `noLogReason` is a **module-private pure helper** (add it near `runStamp`, no
 export) implementing **Table R** below. It is a named function rather than an
 inline ternary because it carries the errno-token validation, which must be
-readable and testable on its own.
+readable on its own.
+
+**It stays unexported deliberately, and that is why D4 exists.** Its behaviour is
+reached in tests *through `runJob`*, by driving the seams — never by importing
+it. An earlier revision specified both "module-private, no export" **and** tests
+that could only have been written by calling it directly or by stubbing helpers
+with no seam; that combination was unimplementable, which is what D4 fixes.
 
 ### Table R — the non-WienerdogError reason (canonical)
 
 Conditions in order; the first that holds decides. `S` is `logStream` at the
 moment the reason is built (`null` iff the private log open failed — Current
-state §4). `C` is `failure.code`.
+state §4).
+
+**`C` is bound EXACTLY ONCE, before any test, and nothing re-reads
+`failure.code` afterwards:**
+
+```js
+const C = failure && failure.code;   // ONE read. Never `failure.code` again.
+```
+
+**This single-read rule is a security requirement, not a style preference.**
+`failure` is an arbitrary object the failing code threw; `code` may be a
+**getter**. A validate-then-interpolate implementation that reads the property
+twice is defeated by a getter whose first read returns `'EACCES'` (passing
+`TOKEN_OK`) and whose second returns arbitrary prose — which then lands verbatim
+in the durable alert and the outbound email, i.e. exactly the free-form hole this
+WP exists to close, reopened by the fix. Bind once, validate the binding,
+interpolate the binding.
 
 | # | Condition | Reason rendered | Why |
 |---|-----------|-----------------|-----|
-| 1 | `S !== null` (a log exists) | `` `job "${name}" failed to run — see the log for details` `` | The raw cause is in the log (D2). The alert needs no detail, so it carries none. |
+| 1 | `S !== null` (a log **stream** exists) | `` `job "${name}" failed to run — see the log for details` `` | The raw cause is in the log (D2). The alert needs no detail, so it carries none. |
 | 2 | `S === null` **and** `C` passes `TOKEN_OK` | `` `job "${name}" failed to run (${C}) — no log could be written` `` | **There is no log to point at**, so the alert must carry enough to act on. One validated errno token is the whole of that detail. |
 | 3 | `S === null` **and** `C` fails `TOKEN_OK` (absent, non-string, or wrong shape) | `` `job "${name}" failed to run (UNKNOWN) — no log could be written` `` | Fixed literal. Never fall back to `failure.message`, never omit the parenthetical (a caller must not have to distinguish "no token" from "no row 2"). |
 
@@ -267,10 +289,16 @@ literal, not described:
 const TOKEN_OK = /^[A-Z][A-Z0-9]{1,15}$/;   // fully anchored, no `m` flag
 ```
 
-- **Fully anchored, and `String.prototype.match` semantics.** In JS, `^`/`$`
-  without the `m` flag cannot match at an interior newline, so a multi-line value
-  is rejected outright. Do **not** add `m`. Do **not** use `.test()` on a
-  `RegExp` carrying `g` (lastIndex state); this pattern has no flags.
+- **Fully anchored.** In JS, `^`/`$` without the `m` flag cannot match at an
+  interior newline, so a multi-line value is rejected outright. Do **not** add
+  `m`.
+- **`TOKEN_OK.test(C)` is the correct call and is safe here.** The caution about
+  `.test()` is specifically about a `RegExp` carrying the **`g`** (or `y`) flag,
+  which advances `lastIndex` between calls and makes alternate invocations return
+  `false` on identical input. **This pattern has no flags**, so `.test()` is
+  stateless and may be used directly. Do not add `g`; do not "work around" a
+  statefulness problem this pattern does not have by re-creating the regex per
+  call or by switching to `.match()`.
 - **Bounded to 16 characters** — every real POSIX/libuv errno is far shorter
   (`EACCES`, `ENOSPC`, `EROFS`, `ENAMETOOLONG` is 12).
 - **Uppercase alphanumeric only**, first character a letter. No `_`, no `-`, no
@@ -351,8 +379,39 @@ function endStream(stream) {
 }
 ```
 
-Three properties the implementer must preserve, each of which a plausible
-simplification breaks:
+**D5 — the SAME defect covers a much longer window, and it is fixed at the
+source.** D3 guards finalization. But the tee handlers at `:867` and `:872` write
+to `logStream` for the **child's entire life** on a stream that likewise has no
+`'error'` listener, so a disk filling *while the job runs* raises an unhandled
+`'error'` and takes the process down before the settle path is even reached. The
+finalization window is milliseconds; the tee window is the whole job. Fixing the
+short half and documenting the long half would be the wrong shape.
+
+**One listener, attached at creation, covers both windows.** Immediately after
+`logStream` is assigned (D4's `openLogFn` call at `:846`):
+
+```js
+    // D5 (WP-151): the tee handlers below write for the child's whole life, and
+    // finalization writes again. A stream with NO 'error' listener turns an
+    // EIO/ENOSPC into an unhandled 'error' that takes the process down before
+    // the fail-loud path runs. Absorb it: the log is best-effort, the refusal is
+    // not. Recording the flag keeps the failure visible without throwing.
+    logStream.on('error', () => { logStreamFailed = true; });
+```
+
+with `let logStreamFailed = false;` declared beside `let logStream = null;`
+(`:838`). **`logStreamFailed` is never read by the reason logic** — Table R keys
+on `logStream === null`, not on this flag, so D5 changes no rendering. It exists
+so the condition is observable to T8 and to any future WP that wants to report it.
+
+**D3 and D5 compose; neither replaces the other.** D5 stops the unhandled-error
+crash for the stream's whole lifetime. D3 additionally guarantees that
+*finalization resolves* — because `stream.end(cb)` on an already-errored stream
+may never invoke `cb`, and an `await` on a promise that never settles hangs the
+job just as effectively as a throw. Implement both.
+
+Three properties the implementer must preserve in `endStream`, each of which a
+plausible simplification breaks:
 
 - **The `error` listener is attached BEFORE `end()`**, because `end()` can emit
   synchronously.
@@ -364,6 +423,41 @@ simplification breaks:
 
 `endStream` has exactly one other caller shape to consider: it is called only at
 `:925`. Making it error-absorbing therefore changes no other path.
+
+**D4 — two test seams, in the house WP-155 idiom, because without them T7 and T8
+cannot be written at all.** `mkdirPrivate` and `createLogStreamPrivate` are
+called directly at `:845`/`:846`; `runJob`'s `opts` carries no seam for either,
+and the test file has no stubbing idiom for module imports. So the only two ways
+to reach Table R rows 2–3 or a stream `'error'` were to export `noLogReason` (the
+contract forbids it) or to touch files outside the Deliverables table (the
+boundary forbids that). **Neither escape hatch is taken; the seam is added
+instead.**
+
+Add beside the existing reap seams, mirroring them exactly — the comment included,
+because the *"production never sets them"* claim is what makes a seam acceptable
+under WP-155 (`run-job.js:880-883` is the pattern):
+
+```js
+    // Log seams (test-only, WP-155 idiom): production never sets them, so the
+    // scheduled path always uses the real private-fs helpers.
+    const mkdirFn = opts.mkdirPrivate || mkdirPrivate;
+    const openLogFn = opts.createLogStream || createLogStreamPrivate;
+```
+
+and call them at `:845`/`:846` in place of the direct calls. **Declare them
+before the `try` that contains those lines**, so they are in scope where they are
+used.
+
+Three constraints on D4, each of which the WP-155 rationale depends on:
+
+- **They are `opts`-only — never env, never argv.** An environment-readable seam
+  is precisely what ADR-0028 Decision 2 deleted from this codebase; re-adding one
+  here would be the same defect with a new name.
+- **No default other than the real helper.** `opts.mkdirPrivate || mkdirPrivate`,
+  not a truthiness-tolerant or `'in opts'` form. Production passes no `opts` for
+  these, so the real helper is always what runs.
+- **They are not exported and not documented as an API.** They exist for
+  `tests/unit/scheduler-runjob.test.js` and nothing else.
 
 **Why through the stream and not `fs.appendFileSync`** (recorded so it is not
 re-litigated — the previous revision of this contract specified an append to a
@@ -420,8 +514,10 @@ passing**, listed so the implementer does not rewrite what already covers them.
 | T3 | existing | A timeout still surfaces `job "<name>" timed out after <n> min`. **Already covered** — `/timed out/` at `:844` and `:930`. Do not add a test; keep these green and unmodified. | D1, unchanged arm |
 | T4 | existing | A non-zero exit still surfaces `job "<name>" exited <code>`. **Already covered** — `/exited 3/` at `:762`, `:785`, and `:789` which asserts the **email body** specifically. Do not add a test; keep these green and unmodified. | D1, unchanged arm |
 | T5 | **half NEW** | **R8-1 is not clobbered** (POSIX only). Its **clean-exit half is already covered**: `:993-1021` (`R9-1/R8-1 — a clean close whose group-A reap stays { reaped: false } … FAILS LOUD`) rejects on `/live process group\|could not be reaped/` at `:1011` and asserts `assert.match(durable[0].reason, /could not be reaped to quiescence/)` at `:1019` — a two-branch rewrite fails it. **Add only the suffix half**: a *failed* run with an un-reapable group still gets the `— and it left a live process group behind: …` suffix, which has **zero** existing coverage. | D1, R8-1 arms |
-| T7 | **NEW** | **Table R rows 2–3, the no-log path.** Drive `mkdirPrivate` to raise a raw `Error` with `code: 'EACCES'` (a read-only or non-writable `paths.logs`, or the injected-seam equivalent) so `logStream === null`. Assert the alert `reason` is **exactly** `job "<name>" failed to run (EACCES) — no log could be written`. Then repeat with a hostile `.code`: a value failing `TOKEN_OK` (e.g. `'not an errno: ' + secret`, a number, `undefined`) must render **exactly** `job "<name>" failed to run (UNKNOWN) — no log could be written`, with the hostile value appearing nowhere in the alert record or the email body. | Table R rows 2, 3 |
-| T8 | **NEW** | **Codex [high]: a stream error must not mask the failure.** Inject a `logStream` whose `write()` succeeds but which emits an asynchronous `'error'` (e.g. `EIO`) before/while `end()` runs. Assert the run still reaches its normal failure outcome: `last_status: 'error'` watermark written, **one** durable `alerts.jsonl` record, the `sendAlert` stub called, and `runJob` rejecting with the code-owned `reason` — **not** with the stream's error. **Red-before-work is mandatory here**: against `e7c845e`'s `endStream` this test must fail, because the unhandled `'error'` escapes the `finally` before `failLoud` runs. | D3 |
+| T7a | **NEW** | **Table R row 2, via the D4 seam — portable, no platform guard.** Pass `opts.mkdirPrivate` = a function that throws a raw `Error` with `code: 'EACCES'` (a plain `Error`, **not** a `WienerdogError`, so it takes D1's non-Wienerdog arm) → `logStream === null`. Assert the alert `reason` is **exactly** `job "<name>" failed to run (EACCES) — no log could be written`. | Table R row 2, D4 |
+| T7b | **NEW** | **Table R row 3, the hostile `.code`.** Same seam, three throwables: `.code` a long prose string containing a marker (fails `TOKEN_OK`), `.code` a **number**, and `.code` absent. All three must render **exactly** `job "<name>" failed to run (UNKNOWN) — no log could be written`, and the marker must appear **nowhere** in the alert record or the `sendAlert` body. **Plus the getter case (N2):** an object whose `code` is a **getter returning `'EACCES'` on first read and prose on every later read** must still render the `EACCES` form with no prose anywhere — this is the only test that can catch a validate-then-re-read implementation. | Table R row 3, single-read rule |
+| T7c | **NEW, platform-guarded** | **The same path through a REAL errno**, so the seam is not the only evidence: `chmod 0500` the `paths.logs` parent so the real `mkdirPrivate` raises a genuine `EACCES`, and assert the row-2 rendering. Guard it `{ skip: SKIP_NO_EACCES }` where `SKIP_NO_EACCES` follows the file's existing constant idiom (`REAP_SKIP_WIN32` at `:891` — a `platform === 'win32' && '<reason>'` expression used as `{ skip: … }` at `:915`, `:941`, `:968`, `:995`). **It must skip on win32** (POSIX mode bits do not deny the owner there) **and when running as root** (`process.getuid && process.getuid() === 0` — root bypasses the mode bits, so the test would silently pass for the wrong reason). | Table R row 2, non-vacuity |
+| T8 | **NEW** | **Codex [high]: a stream error must not mask the failure — BOTH windows.** Pass `opts.createLogStream` = a factory returning a stream stub that records writes and can emit `'error'` on demand. **(a) finalization window:** emit `'error'` (`EIO`) as `end()` runs. **(b) tee window (D5):** emit `'error'` *while the child is still running*, after a tee write. In **both** cases assert the run still reaches its normal failure outcome — `last_status: 'error'` watermark, **one** durable `alerts.jsonl` record, the `sendAlert` stub called, and `runJob` rejecting with the code-owned `reason`, **not** with the stream's error. **Red-before-work is mandatory for both halves**: against `e7c845e` (a) escapes the `finally` before `failLoud`, and (b) takes the process down mid-run. | D3, D5, D4 |
 
 **Prove T1 in both directions** (`docs/runbooks/codex-review.md`): run it against
 the untouched `:1004` (expect **red** — the raw message reaches the alert) and
@@ -429,14 +525,30 @@ against the finished one (expect **green**). **T8 must be proved the same way**,
 and it is the one that matters most: a T8 that is green against the untouched
 `endStream` is not testing what it claims.
 
-**Owner walkthrough (2026-07-18): Ready.** No open fork. Owner ratified reducing a
-non-WienerdogError failure to the fixed code-owned sentence in the durable
-alert/email and writing the raw (redacted) cause to the local per-run log only —
-so the machine-leaving email carries no free-form/attacker-influenced text while
-the user can still debug from the log. WienerdogError reasons stay as-is (already
-code-owned).
+**Owner assent: see [Owner assent](#owner-assent--the-two-records-and-which-is-primary)**
+— both the 2026-07-18 walkthrough and the 2026-08-01 ruling live there, and this
+spec states their substance in exactly that one place.
 
-### No-log failure path — owner-ruled (2026-08-01)
+### Owner assent — the two records, and which is primary
+
+**This subsection is the PRIMARY home for both owner records in this spec.**
+Everywhere else that mentions them — Deliverables notes, Table R's rationale, the
+provenance block — **references this section and does not restate the substance**.
+An earlier revision carried the 2026-07-18 walkthrough in two places and the
+2026-08-01 ruling in two more, which is four homes for two facts and exactly the
+shape that drifts.
+
+**Record 1 — the original design, owner walkthrough 2026-07-18.** No open fork.
+The owner ratified reducing a non-`WienerdogError` failure to a fixed code-owned
+sentence in the durable alert/email, and writing the raw (redacted) cause to the
+local per-run log only — so the machine-leaving email carries no
+free-form/attacker-influenced text while the user can still debug from the log.
+`WienerdogError` reasons stay as-is (already code-owned). **Unchanged by
+everything below.**
+
+**Record 2 — the no-log path, owner-ruled 2026-08-01.** Below.
+
+#### No-log failure path — owner-ruled (transcribed, 2026-08-01)
 
 > **OWNER-DECIDED IN SESSION — 2026-08-01 (TRANSCRIBED, NOT OWNER-TYPED).**
 > Gyula Fehér answered in conversation; this record was written by the
@@ -526,10 +638,14 @@ its PR.
       (Table R).
 - [ ] **`TOKEN_OK` is fully anchored with no `m` flag**, so a multi-line
       `failure.code` cannot match on one interior line. It is applied **only**
-      after `typeof failure.code === 'string'` — the value is never coerced with
+      after `typeof C === 'string'` — the value is never coerced with
       `String(...)` first, because coercion is exactly how a crafted `.code` with
       a hostile `toString` would smuggle prose in. A rejected value collapses to
       the literal `UNKNOWN`, never to a truncation of itself.
+- [ ] **`failure.code` is read EXACTLY ONCE** into `const C`, and the validated
+      binding — never a second property read — is what row 2 interpolates. A
+      getter that returns `'EACCES'` on its first read and prose on its second
+      must not be able to place that prose in the alert or the email (T7b).
 - [ ] The raw failure detail is preserved for the user only in the LOCAL private
       per-run log, redacted via `redactOnly`, never emailed.
 - [ ] `alerts.sanitizeAlert`'s cap + scrub is unchanged (belt-and-suspenders).
@@ -537,10 +653,16 @@ its PR.
       re-opening a pathname — so no code path can create a log file outside
       `createLogStreamPrivate`'s `O_NOFOLLOW` + `0600` guarantee, and no new
       symlink-swap window is opened (Exact contracts D2).
-- [ ] **A logging failure never masks the original failure**, synchronously **or
-      asynchronously**: the diagnostic `write()` is inside a `try`, and
-      `endStream` absorbs an `'error'` event and resolves (D3). The watermark,
-      the durable alert, the email and the `throw` all still happen.
+- [ ] **A logging failure never masks the original failure — synchronously or
+      asynchronously, and for the WHOLE life of the stream, not just its close.**
+      The diagnostic `write()` is inside a `try` (D2); `logStream` carries a
+      no-throw `'error'` listener from the moment it is created, so the tee writes
+      at `:867`/`:872` cannot raise an unhandled `'error'` during the run (D5);
+      and `endStream` absorbs an `'error'` and still resolves, so finalization can
+      neither throw nor hang (D3). In every one of those cases the watermark, the
+      durable alert, the email and the code-owned `throw` all still happen.
+      **This claim is now true rather than narrowed** — see the round-2
+      disposition in the provenance.
 
 ## Acceptance criteria
 
@@ -560,17 +682,25 @@ its PR.
 - [ ] **AC5** — `failLoud` still returns its boolean and its body still ends in
       `.trim()`; `alertPersisted` and the G2 pidfile release still work
       (V3 below).
-- [ ] **AC6** — T7: with `logStream === null` and `failure.code === 'EACCES'`,
-      the reason is exactly
+- [ ] **AC6** — T7a/T7b/T7c: with `logStream === null` and a valid token the
+      reason is exactly
       `job "<name>" failed to run (EACCES) — no log could be written`; with a
-      `.code` failing `TOKEN_OK`, it is exactly
-      `job "<name>" failed to run (UNKNOWN) — no log could be written` and the
-      hostile value appears nowhere in the alert or the email.
-- [ ] **AC7** — T8: an asynchronous stream `'error'` during finalization does
-      **not** prevent the watermark, the durable alert, the email or the
-      code-owned `throw`. **Red against `e7c845e`'s `endStream`, green after;
-      both runs pasted.**
-- [ ] **AC8** — `npm test` and `npm run lint` are green.
+      `.code` failing `TOKEN_OK` — including a **number**, an **absent** value and
+      a **getter that returns a valid token on its first read and prose
+      afterwards** — it is exactly
+      `job "<name>" failed to run (UNKNOWN) — no log could be written` (or, for
+      the getter, the `EACCES` form), and no hostile value appears anywhere in the
+      alert or the email. T7c reaches the same rendering through a **real**
+      `EACCES`, skipped on win32 and as root.
+- [ ] **AC7** — T8: an asynchronous stream `'error'` does **not** prevent the
+      watermark, the durable alert, the email or the code-owned `throw`, in
+      **both** the finalization window (D3) and the **tee window** (D5).
+      **Red against `e7c845e`, green after; all four runs pasted.**
+- [ ] **AC8** — **D4's seams are `opts`-only and default to the real helpers.**
+      `grep -n "opts.mkdirPrivate\|opts.createLogStream" src/cli/run-job.js`
+      shows exactly two lines, both of the form `opts.X || realHelper`, and
+      neither reads `process.env` (V7).
+- [ ] **AC9** — `npm test` and `npm run lint` are green.
 
 ## Verification steps (run these; paste output in the PR)
 
@@ -598,7 +728,19 @@ sed -n "/^function endStream/,/^}/p" src/cli/run-job.js
 # Expect exactly one line, matching the literal in Exact contracts.
 grep -n "\^\[A-Z\]\[A-Z0-9\]{1,15}\\\$/" src/cli/run-job.js
 
-# V7 — full gates.
+# V7 (D4, AC8) — the seams are opts-only and default to the real helpers.
+# Expect exactly two lines, each `opts.X || <realHelper>`.
+grep -n "opts.mkdirPrivate\|opts.createLogStream" src/cli/run-job.js
+# ...and NO env-readable seam was introduced alongside them. Expect no output,
+# exit 1. (ADR-0028 Decision 2 deleted env-chosen behaviour from this file; a
+# seam that reads process.env would re-add it under a new name.)
+grep -n "process.env.WIENERDOG_.*LOG\|env\.WIENERDOG_.*MKDIR" src/cli/run-job.js
+
+# V8 (D5) — the tee window is covered: an 'error' listener is attached at
+# creation, not only inside endStream. Expect one line near the log open.
+grep -n "logStream.on('error'" src/cli/run-job.js
+
+# V9 — full gates.
 npm test
 npm run lint
 ```
@@ -608,7 +750,11 @@ regression from a pre-existing state: V2 prints the hole at `:1004` (exit 0);
 V3 prints its five lines (`574`, `583`, `1007`, `1009`, `1015`); V4's first grep
 prints `:867` and `:872` and its second prints nothing (exit 1); **V5 prints the
 three-line `new Promise((resolve) => stream.end(resolve));` body with no `error`
-listener** (that absence is the D3 defect); **V6 prints nothing, exit 1**.
+listener** (that absence is the D3 defect); **V6 prints nothing, exit 1**;
+**V7's first grep prints nothing, exit 1** (the seams do not exist yet) and its
+second also prints nothing, exit 1 (and must *stay* that way — it is an absence
+check, not a progress gate); **V8 prints nothing, exit 1** (that absence is the
+D5 defect, and it is the whole tee window).
 
 ## Out of scope (do NOT do these)
 
@@ -632,6 +778,13 @@ listener** (that absence is the D3 defect); **V6 prints nothing, exit 1**.
 - **Widening the errno token.** No allowlist of known errnos, no mapping table,
   no human-readable expansion (`EACCES` must not become "permission denied"), no
   second token. Table R's three rows are the whole vocabulary.
+- **Widening D4's seams.** Exactly two, both `opts`-only, both defaulting to the
+  real helper. Do not add a third, do not make either readable from the
+  environment, and do not export `noLogReason` "so it can be unit-tested" — its
+  behaviour is reached through `runJob` via the seams.
+- **Reporting `logStreamFailed` anywhere.** D5 records it so the condition is
+  observable to T8; wiring it into the reason, the alert or the digest is a
+  different decision with its own review.
 - The win32 settle path — `WP-a10-windows-reap` (`Draft`).
 - The **P12–P15 secret-sink probes** in the same test file — those are
   `WP-secret-sink-wiring-probes` (`Draft`). Additive and disjoint; see "Ordering".
@@ -647,8 +800,10 @@ listener** (that absence is the D3 defect); **V6 prints nothing, exit 1**.
 5. The PR body's "Discovered issues" names `WP-mkdir-private-errno-wrap` (the
    bare `fs.mkdirSync` at `private-fs.js:250`) — reported, not fixed.
 
-> **Provenance.** Audit A13 (self-alert content). Owner walkthrough 2026-07-18
-> ratified the design; spec reached `Ready` then.
+> **Provenance.** Audit A13 (self-alert content). Both owner records — the
+> 2026-07-18 walkthrough and the 2026-08-01 ruling — are stated once, in
+> [Owner assent](#owner-assent--the-two-records-and-which-is-primary); this block
+> references them and does not restate their substance.
 >
 > **2026-08-01 — architect re-verification pass, tested SHA `e7c845e`.** Every
 > executable Current-state claim was re-run first-hand. Result: **three stale
@@ -665,9 +820,9 @@ listener** (that absence is the D3 defect); **V6 prints nothing, exit 1**.
 > `tests/unit/scheduler-runjob.test.js`, which matters because the Deliverables
 > table is the CI-enforced boundary. Also recorded, though the spec did not
 > contradict them: `failLoud` now returns a boolean (`persisted`, G2) and its body
-> template ends in `.trim()`. **Status stays `Ready`**: the design decision the
-> owner ratified is unchanged; only the code snapshot it lands on had drifted, and
-> the one design consequence (D2's mechanism) is recorded above with its reason.
+> template ends in `.trim()`. **Status stays `Ready`**: owner record 1 is
+> unchanged; only the code snapshot it lands on had drifted, and the one design
+> consequence (D2's mechanism) is recorded above with its reason.
 >
 > **2026-08-01 — gate round 1 corrections (verdict: REQUEST CHANGES).**
 >
@@ -684,7 +839,7 @@ listener** (that absence is the D3 defect); **V6 prints nothing, exit 1**.
 >   **bare** `fs.mkdirSync` (`private-fs.js:250`). Causal analysis corrected in
 >   Current state §4a; the disposition went to Gyula and he ruled for the bounded
 >   errno-token discriminator — see
->   [No-log failure path](#no-log-failure-path--owner-ruled-2026-08-01) and
+>   [No-log failure path](#no-log-failure-path--owner-ruled-transcribed-2026-08-01) and
 >   **Table R**. The source-level fix is routed as `WP-mkdir-private-errno-wrap`
 >   and deliberately not taken here.
 > - **(a) T5's "only detector" claim was false.**
@@ -707,3 +862,57 @@ listener** (that absence is the D3 defect); **V6 prints nothing, exit 1**.
 >   `:565-570` — it is the source of a do-not-change pin, so it is labelled.
 >   D2 keeps the `failure && failure.message` null-guard. New verification steps
 >   V5 and V6 make D3 and `TOKEN_OK` executable, both red-verified at `e7c845e`.
+>
+> **2026-08-01 — gate round 2 corrections (verdict: REQUEST CHANGES, one
+> blocking).**
+>
+> - **(a) N1 — T7's hostile-`.code` half and T8 were UNIMPLEMENTABLE.**
+>   `mkdirPrivate` (`:845`) and `createLogStreamPrivate` (`:846`) are called
+>   directly, `runJob`'s `opts` carries no seam for either, and the test file has
+>   no module-stubbing idiom — while this spec simultaneously forbade both escape
+>   hatches (`noLogReason` module-private with no export; Deliverables authorising
+>   only D1/D2/D3). Closed by **D4**: two seams in the house WP-155 idiom
+>   (`opts.mkdirPrivate || mkdirPrivate`, `opts.createLogStream ||
+>   createLogStreamPrivate`), mirroring `opts.reapTree || killProcessTree` at
+>   `:882-883` **including its "production never sets them" comment**, which is
+>   what makes a seam acceptable under WP-155. Three constraints fenced:
+>   `opts`-only (never env — ADR-0028 Decision 2 deleted env-chosen behaviour from
+>   this file), no truthiness-tolerant default, not exported. T7 is now T7a (seam,
+>   portable), T7b (hostile `.code`, incl. the getter), and T7c (a **real**
+>   `EACCES` via `chmod 0500`, `{ skip: … }`-guarded on win32 **and as root**,
+>   following the `REAP_SKIP_WIN32` constant idiom at `:891`) so the seam is not
+>   the only evidence. New AC8 and V7 pin the seam shape.
+> - **(b) N2 — Table R now pins a SINGLE READ of `failure.code`.** The reviewer
+>   demonstrated a live getter exploit: read 1 returns `'EACCES'` and passes
+>   `TOKEN_OK`, read 2 returns hostile prose into the template — reopening the
+>   exact free-form hole this WP closes, inside the fix for it. Contract:
+>   `const C = failure && failure.code;` bound once, validated once, and **that
+>   binding** interpolated. Added to Table R, the security checklist, and T7b as
+>   the only test that can catch a validate-then-re-read implementation.
+> - **(a) N3 + Codex round-2 [high] — RECONCILED BY ADOPTING THE FIX (D5), not by
+>   narrowing the claim.** Both findings target the same window: the tee writes at
+>   `:867`/`:872` run for the child's **whole life** on a `logStream` with no
+>   `'error'` listener, and D3 only covered finalization. The reviewer proposed
+>   narrowing the security-checklist claim and routing the tee window to
+>   Discovered issues; Codex proposed fixing it. **Adopted Codex's**, for three
+>   reasons: the tee window is *longer* than the finalization window, so
+>   documenting it while fixing the short half is the wrong shape; an unhandled
+>   `'error'` there kills the process with **no watermark, no alert and no email**,
+>   which is precisely the failure class this WP exists to prevent, so it is
+>   in-purpose rather than scope creep; and **one listener attached at creation
+>   covers both windows**, so the fix is ~3 lines in a file already delivered and
+>   makes the checklist claim **true instead of narrowed**. D3 is still required
+>   alongside it — `stream.end(cb)` on an already-errored stream may never call
+>   back, and an `await` that never settles hangs the job as effectively as a
+>   throw. T8 gains a second half for the tee window; V8 pins the listener.
+> - **(adv, taken) N4** — Table R row 1 now says "a log **stream** exists", since
+>   `S !== null` proves the stream was opened, not that any bytes survive.
+>   **N5** — the `.test()` caution is corrected: it applies to a `RegExp` carrying
+>   `g`/`y` (lastIndex state); `TOKEN_OK` has **no flags**, so `.test()` is
+>   stateless and correct here, and the spec says so rather than leaving an
+>   implementer to work around a problem that does not exist. **N6** — the four
+>   owner-assent restatements collapse to one primary section
+>   ([Owner assent](#owner-assent--the-two-records-and-which-is-primary)); every
+>   other mention references it.
+> - **(nit, taken)** The ruling heading now reads
+>   *"owner-ruled (transcribed, 2026-08-01)"*; anchors updated.
