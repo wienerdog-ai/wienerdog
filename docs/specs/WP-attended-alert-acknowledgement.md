@@ -296,7 +296,7 @@ not exist and no code references it.
 <!-- Always allowed without listing: this spec file itself (the status flip)
      and package-lock.json. Everything else must be listed. -->
 
-Nine files. New non-test source is ≈ 200 lines across two new modules plus four
+Ten files. New non-test source is ≈ 200 lines across two new modules plus four
 small edits (two one-line call-site changes, one array entry, one dispatch entry
 plus one usage line, one two-line hook in `clearAlerts`, and one appended
 glossary bullet).
@@ -312,6 +312,7 @@ glossary bullet).
 | modify | src/core/private-fs.js | **D7** — add the single string `'alerts-ack.json',` to `A5_PRIVATE_FILE_BASENAMES` (`:116-121`), after `'alerts.jsonl',`. No other line in this file. |
 | modify | docs/GLOSSARY.md | **D8** — insert the **acknowledged alert** bullet (verbatim block **G1** under Exact contracts) as a new line immediately after the existing `- **fail-loud** …` bullet and immediately before the existing `- **catch-up** …` bullet. Change no existing bullet. |
 | create | tests/unit/alert-ack.test.js | **D9** — tests **A1–A13** (Test index). New file; copy the `setup()` helper from `tests/unit/alerts.test.js:20-26`. |
+| modify | tests/unit/private-fs.test.js | **D10** — update the hard-coded expected basename list to include 'alerts-ack.json' (spec-bug amendment, added in-PR: this file mirrors the D7 array and was omitted from the original table) |
 
 Not Deliverables, deliberately — see "Out of scope" for the reason on each:
 `src/scheduler/launcher.js`, `src/core/digest.js`, `src/cli/run-job.js`,
