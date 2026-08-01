@@ -139,7 +139,7 @@ is never retro-edited. It is not a deliverable and must not be touched.
 
 | Action | Path | Notes |
 |--------|------|-------|
-| modify | bin/wienerdog.js | Replace **line 24 only** with the exact replacement text below. Change nothing else in the file — not another description, not the padding of any other line, not `USAGE`'s surrounding text, not the dispatch table. |
+| modify | bin/wienerdog.js | Replace **the single `safety` line inside `USAGE`** — currently line 24, and matched byte-exact by the removal block below; locate it by that text, not by the number. Change nothing else in the file — not another description, not the padding of any other line, not `USAGE`'s surrounding text, not the dispatch table (`:65` also mentions `safety` and is **not** this line). |
 
 No test file is listed, deliberately: none asserts this text (Current state §4).
 
@@ -161,6 +161,10 @@ The two leading spaces and the six spaces after `safety` are unchanged, so the
 description still starts at column 15 and the block stays aligned (Current state
 §1). Nothing else on the line, and no other line, changes.
 
+**This block is canonical.** The replacement line appears in exactly three places
+in this spec: here, in **AC2**, and in **V3**'s grep pattern. This block decides;
+those two are mirrors and must be updated with it in the same pass.
+
 **Why this wording** (recorded so it is not re-litigated): it says what the
 command shows — a per-gate verdict that can come back either way — without
 asserting *which* verdict, so it cannot go stale again if a future reviewed
@@ -168,6 +172,17 @@ release blocks a gate. It uses no jargon: not "capability gate", not "safety
 profile", not "code-owned", not "pre-use". "Sensitive actions" is the
 plain-language stand-in for the five gated capabilities, and "allows or blocks"
 mirrors the `[allowed]` / `[blocked]` token the command actually prints.
+
+**"Sensitive", not "powerful" — a considered choice, recorded so it is not
+re-proposed.** Gate round 1 offered `Show which powerful actions Wienerdog allows
+or blocks`, borrowing `docs/GLOSSARY.md:43`'s own adjective, and explicitly did
+not require it. **Declined.** The GLOSSARY says "powerful" while defining the
+*mechanism's scope* for a developer reading a glossary; this line is read by a
+knowledge worker scanning `wienerdog help`, where "powerful" reads as a boast
+about capability and "sensitive" reads as the caution it actually is. The five
+gated things — reading your mail, sending as you, editing your identity notes —
+are sensitive first and powerful second. Consistency with the GLOSSARY is not
+lost: neither text asserts a verdict, which is the property that matters.
 
 ## Contract reference
 
@@ -198,8 +213,11 @@ ADR-0031's seven activation triggers fire.
 - [ ] **AC3** — the help block stays aligned: in
       `node bin/wienerdog.js help`, the `safety` description starts at the same
       column as every other command's description.
-- [ ] **AC4** — `git diff --stat` shows exactly one file changed and
-      **1 insertion, 1 deletion** (plus this spec's `status:` flip).
+- [ ] **AC4** — `git diff --stat -- bin/wienerdog.js` shows **one** file,
+      **1 insertion, 1 deletion**; the only other changed file in the PR is this
+      spec's `status:` flip. (Stated with the pathspec because an unscoped
+      `--stat` necessarily shows two files, which contradicted the earlier
+      "exactly one file changed" wording. V5 already scopes correctly.)
 - [ ] **AC5** — `npm test` and `npm run lint` are green, with
       `tests/unit/broker-server.test.js` and `tests/unit/safety-cli.test.js`
       passing **unmodified**.
