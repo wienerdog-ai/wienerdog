@@ -62,9 +62,11 @@ epic: audit-a7
 > this precondition are independent gates, and neither discharges the other.
 >
 > **On `status: Ready` (flagged for the owner, not decided here).** The `Draft` →
-> `Ready` flip was made in an owner-directed session, partly on 0a's now-corrected
-> sub-item, so it is **not silently reverted**. The question — *keep `Ready` with
-> this explicit precondition, or return to `Draft` until the sibling ships?* — is
+> `Ready` flip was made in an owner-directed session, partly on 0a's
+> **now-corrected sub-item — corrected in BOTH of its copies**, this banner and
+> Definition of done item 0a, which no longer claim the sibling "has shipped" —
+> so the flip is **not silently reverted**. The question — *keep `Ready` with this
+> explicit precondition, or return to `Draft` until the sibling ships?* — is
 > **Gyula's**. Until he answers, the precondition above governs and no dispatch
 > may proceed on the strength of `status: Ready` alone.
 
@@ -1188,21 +1190,41 @@ npm test
 0. **BLOCKER — checked by the architect before dispatch, not by the implementer.**
    **SATISFIED 2026-07-28 — all three sub-items. Retained as the record of what
    was required and what discharged it.**
-   - **(0a) DONE.** `WP-scheduler-register-replaces-loaded-record` **merged to
-     `main` in PR #125 (`fbc9d80`)**, and its scope covers Table C row 4 (linux,
-     degraded `daemon-reload`) **as well as** row 5 (macOS). Verified against
-     `main`'s copy of that spec rather than branch history: its banner maps *"row 5
-     (macOS) — **both** bare-`bootstrap` sites"* to its Table A rows 1 and 2, and
-     *"row 4 (linux, degraded reload)"* to its Table A row 3. Both of this spec's
-     non-converging rows therefore have an owner, and it has shipped.
+   - **(0a) DONE — as a SCOPE claim only.** The
+     `WP-scheduler-register-replaces-loaded-record` **spec** exists, and its scope
+     covers Table C row 4 (linux, degraded `daemon-reload`) **as well as** row 5
+     (macOS). Verified against `main`'s copy of that spec rather than branch
+     history: its banner maps *"row 5 (macOS) — **both** bare-`bootstrap` sites"*
+     to its Table A rows 1 and 2, and *"row 4 (linux, degraded reload)"* to its
+     Table A row 3. Both of this spec's non-converging rows therefore have an
+     **owner**.
+     **CORRECTED 2026-08-02 — this sub-item used to end "and it has shipped".**
+     It had not, and that clause is deleted. `git show --stat fbc9d80`: PR #125
+     merged **three docs files** — `docs/adr/0037-…md`, `docs/adr/README.md` and
+     that **spec document** — with **zero `src/` and zero `tests/`**. What merged
+     was the *design*; the registration-replacement **implementation has not
+     shipped**, and as of 2026-08-02 that spec is `status: Draft`, absent from
+     `docs/specs/done/`. **Having an owner is not the same as being fixed** — the
+     silent-nonconvergence hazard is live in production. This is the same
+     correction already applied to the DISPATCH BLOCKER banner at the head of this
+     spec; the two copies now agree.
    - **(0b) DONE.** Its id is recorded in this spec's `depends_on`. This was the one
      step that converts the blocker from prose into a machine check:
      `scripts/check-frontmatter.js` rejects a `depends_on` id that does not
      resolve, but **never** complains about a *missing* one — so an empty
      `depends_on` was invisible to tooling. It is no longer empty, and the resolver
      now enforces the ordering.
-   - **(0c) DISCHARGED.** With 0a and 0b satisfied, `status:` moves `Draft` →
-     `Ready` and the spec may be dispatched.
+   - **(0c) DISCHARGED — for the BLOCKER only.** With 0a and 0b satisfied,
+     `status:` moves `Draft` → `Ready`.
+     **`Ready` is NOT clearance to dispatch.** See the **DISPATCH PRECONDITION**
+     in the banner at the head of this spec: dispatch additionally requires
+     `WP-scheduler-register-replaces-loaded-record` to be **`Done`** — merged
+     **and** verified — which as of **2026-08-02 it is not** (`Draft`, absent from
+     `docs/specs/done/`; 0a above). `scripts/check-frontmatter.js` resolves a
+     `depends_on` id to an existing spec **file** and never reads its `status`, so
+     **nothing mechanical enforces this** and 0b's machine check does not cover
+     it. The blocker and the precondition are independent gates; discharging one
+     discharges nothing about the other.
 
    The reason the blocker existed was **Table D**: without that sibling, this WP
    converts a loud failure into a silent one on every already-installed macOS

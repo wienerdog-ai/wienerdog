@@ -110,7 +110,7 @@ on **2026-08-01**.
 | Action | Path | Notes |
 |--------|------|-------|
 | modify | docs/adr/0028-scheduler-app-executable-integrity.md | **ALREADY WRITTEN by the architect in this spec's commit — do not author it, do not revise it.** One appended amendment section, headed *"Amendment (2026-08-01) — the scheduler ENTRY's node path is an upgrade-durable alias; process.execPath stays the runtime and the authorization value"*, carrying `Status: PROPOSED — awaiting owner signature.` Listed so the boundary check permits its presence in this branch's diff, and so the Deliverables record is exhaustive. **The one remaining edit — replacing that status line with a hand-typed `OWNER-SIGNED <date>` — is the OWNER's, and no agent may make it.** |
-| modify | docs/specs/WP-scheduler-node-path-durability.md | **D2 — four places, all already edited by the architect.** (a) Definition of done item 8 and (b) the matching Mirrored Surface Checklist entry each offered a second way to satisfy this gate — *"or that line carries an owner-written annotation"* on `docs/adr/0028-…:83` — which **conflicts with this spec's append-only rule** and with ADR-0028's convention; withdrawn in both. (c) **DISPATCH BLOCKER sub-item 0a's claim that the sibling "merged to `main` in PR #125"** is corrected: `git show --stat fbc9d80` merged **three docs files, zero `src/`, zero `tests/`** — the spec, not the implementation — and the banner gains an explicit **DISPATCH PRECONDITION** mirroring B6. (d) the `depends_on` history paragraph, same correction. **Still unchanged:** every table, every acceptance criterion, and `status:` (see Decisions). |
+| modify | docs/specs/WP-scheduler-node-path-durability.md | **D2 — FIVE places, all already edited by the architect.** (a) Definition of done item 8 and (b) the matching Mirrored Surface Checklist entry each offered a second way to satisfy this gate — *"or that line carries an owner-written annotation"* on `docs/adr/0028-…:83` — which **conflicts with this spec's append-only rule** and with ADR-0028's convention; withdrawn in both. (c) **DISPATCH BLOCKER sub-item 0a's claim that the sibling "merged to `main` in PR #125"** is corrected: `git show --stat fbc9d80` merged **three docs files, zero `src/`, zero `tests/`** — the spec, not the implementation — and the banner gains an explicit **DISPATCH PRECONDITION** mirroring B6. (d) the `depends_on` history paragraph, same correction. **(e) Definition of done items 0a and 0c** — 0a carried a *second copy* of the "and it has shipped" claim, contradicting (c) in the same file; 0c's *"and the spec may be dispatched"* now points at the precondition. **Still unchanged:** every table, every acceptance criterion, and `status:` (see Decisions). |
 
 Not a deliverable, deliberately: `docs/adr/README.md`. See Implementation notes.
 
@@ -225,9 +225,11 @@ Never evaluate a State A criterion against a State B tree, or vice versa.
       owner-written-annotation branch **withdrawn**; **VA5's two absence greps
       both return `0`** (they return `1` on `main`, so the gate is not vacuous).
       Its DISPATCH BLOCKER banner carries the corrected 0a and the DISPATCH
-      PRECONDITION. Nothing else in that file changed
+      PRECONDITION, **and so does Definition of done item 0a — both copies of that
+      claim, not one** (VA5b). Item 0c points at the precondition rather than
+      saying the spec "may be dispatched". Nothing else in that file changed
       (`git diff -- docs/specs/WP-scheduler-node-path-durability.md` touches only
-      those regions — paste it).
+      D2's five regions — paste it).
 
 ### State B — SIGNED-FINAL (owner-satisfiable ONLY; red today, by design)
 
@@ -361,6 +363,13 @@ grep -n "carries the owner's hand-typed signature" docs/specs/WP-scheduler-node-
 grep -c "has landed, or that line carries" docs/specs/WP-scheduler-node-path-durability.md
 grep -c "merge, or ADR-0028:83 must carry" docs/specs/WP-scheduler-node-path-durability.md
 
+# VA5b (A6, D2e) — NO LIVE "has shipped" claim survives in either copy. Expect
+# 0: the only two hits are the corrections themselves, which QUOTE the deleted
+# clause, so the grep excludes quoted forms.
+grep -c 'rows therefore have an owner, and it has shipped' docs/specs/WP-scheduler-node-path-durability.md
+# ...and 0c no longer ends with the unqualified dispatch clearance. Expect 0.
+grep -c "may be dispatched" docs/specs/WP-scheduler-node-path-durability.md
+
 # VA6 (A5)
 npm run lint
 ```
@@ -374,6 +383,8 @@ so every VA5 gate is proved red-before-green rather than asserted:
 | `grep -n "carries the owner's hand-typed signature"` | no output | one line |
 | `grep -c "has landed, or that line carries"` | **`1`** | **`0`** |
 | `grep -c "merge, or ADR-0028:83 must carry"` | **`1`** | **`0`** |
+| VA5b — `grep -c 'rows therefore have an owner, and it has shipped'` | **`1`** | **`0`** |
+| VA5b — `grep -c "may be dispatched"` | **`1`** | **`0`** |
 
 The last two rows run **1 → 0**, which is the direction that proves the offer was
 really removed and not merely reworded around: each pattern spans the *operative*
@@ -432,11 +443,15 @@ this branch: VB4 prints `VB4 ok — pure append preserved through the signature`
 
 - Implementing `entryNodePath` or touching any file under `src/` — that is
   `WP-scheduler-node-path-durability`'s entire Deliverables table.
-- Editing `docs/specs/WP-scheduler-node-path-durability.md` **beyond D2's
-  two-place reword** — not its DISPATCH BLOCKER banner, not Tables A–F, not its
-  acceptance criteria, not its status. (This exclusion was total until gate
-  round 1; D2 carves out the minimum needed to remove a self-contradicting gate
-  branch.)
+- Editing `docs/specs/WP-scheduler-node-path-durability.md` **beyond D2's five
+  places (see the Deliverables cell)** — not Tables A–F, not its acceptance
+  criteria, not its `status:`. (This exclusion was total until gate round 1, then
+  two places, then four; D2 now carves out exactly the set needed to remove a
+  self-contradicting gate branch and a shipped-claim that was false in **two**
+  copies. **The DISPATCH BLOCKER banner and Definition of done items 0a/0c are
+  now INSIDE D2, not excluded** — an earlier revision of this bullet still named
+  the banner as off-limits while D2 authorized editing it, which is the
+  contradiction this reword closes.)
 - Editing `docs/adr/README.md` (see Implementation notes).
 - Moving the descriptor's `node` field off `process.execPath` — a separate
   change that must land after ADR-0037's verified-registration postcondition is
@@ -612,3 +627,30 @@ the completion. Read the two criteria sets before checking anything off.
 > **Naming note for readers of the older provenance blocks above:** what those
 > entries call `AC5b` is now **B6**, and `AC2`'s worked example is now
 > **A2's**. The renaming is this round's; the content is unchanged.
+>
+> **2026-08-02 — ADR nod (APPROVE-CONFIRMED on the two-state design; signature
+> simulation verified end-to-end). Two (b) mirror-drift fold-ins. Both closed.**
+>
+> - **(b) The "has shipped" claim survived in a SECOND copy.** Round 5 corrected
+>   `WP-scheduler-node-path-durability`'s DISPATCH BLOCKER banner but not its
+>   **Definition of done item 0a**, which still read *"merged to `main` in PR #125
+>   … and it has shipped"* — contradicting the corrected banner and the DISPATCH
+>   PRECONDITION **in the same file**. 0a is now a **scope claim only** (the spec
+>   exists and covers Table C rows 4 and 5), with the shipped clause deleted and
+>   the `git show --stat fbc9d80` evidence inline; and **0c** no longer ends *"and
+>   the spec may be dispatched"* — it points at the precondition and states that
+>   0b's machine check does not cover completion. **D2 widens from four places to
+>   five**, and the banner's *"0a's now-corrected sub-item"* now says
+>   **corrected in BOTH copies**, which it finally is. New **VA5b**, verified
+>   **1 → 0** on both patterns.
+> - **(b) This spec's own Out-of-scope bullet contradicted D2.** It still read
+>   *"beyond D2's two-place reword — not its DISPATCH BLOCKER banner"* while D2
+>   authorized editing exactly that banner. Reworded to *"beyond D2's five places
+>   (see the Deliverables cell)"*, with the banner and DoD 0a/0c named as
+>   **inside** D2 rather than excluded.
+>
+> **Both are the same defect shape this branch has now hit five times: a fact
+> corrected in one place and left standing in its mirror.** The difference here is
+> that both mirrors lived in files already inside a Deliverables table, so the fix
+> was a reword rather than a boundary expansion — and **VA5b now makes the
+> corrected state executable** instead of leaving it to the next reader's eye.
