@@ -189,25 +189,33 @@ landed without opening the ADR.
 - [ ] **AC1** — `docs/adr/0028-scheduler-app-executable-integrity.md` contains
       exactly one occurrence of `PROPOSED — awaiting owner signature`, inside the
       2026-08-01 entry-node-path amendment.
-- [ ] **AC2** — The file gains **no new dated owner marker**. Exactly four dated
-      owner markers exist, all pre-existing and all untouched:
-      `OWNER-SIGNED 2026-07-25` (`:6`), `OWNER-APPROVED (2026-07-19)` (`:8`),
-      `OWNER-SIGNED 2026-07-26` (`:752`), `OWNER-SIGNED 2026-08-01` (`:978`).
-      **V2's output contains other dated lines and that is expected** — `:760`
-      and `:1225` are prose *back-references* naming the 2026-07-25 marker, and
-      `:1224`/`:1331` carry the literal placeholder `OWNER-SIGNED <date>`. The
-      criterion is "no new **marker**", not "no other line carrying a date".
-      **A placeholder is not a signature; an agent may never replace `<date>`
-      with a real date.**
+- [ ] **AC2** — The file gains **no new dated owner marker**. Read V2's output
+      against this roster; **the roster is the criterion**, and every hit must
+      fall into exactly one of its three classes:
+      1. **Four dated markers, all pre-existing, all untouched, all cited by line
+         because the change is a pure append and therefore cannot move them:**
+         `OWNER-SIGNED 2026-07-25` (`:6`), `OWNER-APPROVED (2026-07-19)` (`:8`),
+         `OWNER-SIGNED 2026-07-26` (`:752`), `OWNER-SIGNED 2026-08-01` (`:978`).
+      2. **Prose back-references** that name one of those four. Dated, and
+         expected.
+      3. **Unfilled placeholders — every remaining hit must literally contain
+         `OWNER-SIGNED <date>`**, angle brackets and all.
+      **Class 3 is identified by its `<date>` content, NOT by a line number.**
+      Line numbers inside the amendment body are structurally unstable: this
+      spec's own §5 insertion shifted §6 within a single commit, which is what
+      made the earlier `:1224/:1331` citation stale on arrival. **A placeholder is
+      not a signature; an agent may never replace `<date>` with a real date.**
 - [ ] **AC3** — Decision 1's sentence at `:83` is byte-identical to its
       pre-amendment text.
 - [ ] **AC4** — `npm run lint` is green.
 - [ ] **AC4b (D2)** — `docs/specs/WP-scheduler-node-path-durability.md`'s
       Definition of done item 8 and its Mirrored Surface Checklist entry both
       require the **owner-signed dated amendment** and both mark the
-      owner-written-annotation branch **withdrawn**. Nothing else in that file
-      changed (`git diff -- docs/specs/WP-scheduler-node-path-durability.md`
-      touches only those two regions — paste it).
+      owner-written-annotation branch **withdrawn**; **V4b's two absence greps
+      both return `0`** (they return `1` on `main`, so the gate is not vacuous).
+      Nothing else in that file changed
+      (`git diff -- docs/specs/WP-scheduler-node-path-durability.md` touches only
+      those two regions — paste it).
 - [ ] **AC5 (OWNER, blocking)** — the amendment's `Status:` line carries a
       hand-typed `OWNER-SIGNED <date>`. **Until AC5 is met,
       `WP-scheduler-node-path-durability` must not merge.** This is the only
@@ -219,10 +227,10 @@ landed without opening the ADR.
 # V1 (AC1) — exactly one PROPOSED marker, in the new amendment.
 grep -n "PROPOSED — awaiting owner signature" docs/adr/0028-scheduler-app-executable-integrity.md
 
-# V2 (AC2) — no NEW dated owner marker. Read the output against AC2's list:
-# four dated markers at :6, :8, :752, :978; EVERY other hit is either a
-# back-reference to one of those four (:760, :1225 — both dated, both referring
-# to the 2026-07-25 marker) or the unfilled `<date>` placeholder (:1224, :1331).
+# V2 (AC2) — no NEW dated owner marker. Classify every hit against AC2's
+# three-class roster. Deliberately NO line numbers restated here: only the four
+# base-region markers have stable lines (the change is a pure append); anything
+# inside the amendment body moves whenever the body is edited.
 grep -n "OWNER-SIGNED\|OWNER-APPROVED" docs/adr/0028-scheduler-app-executable-integrity.md
 
 # V3 (AC3) — Decision 1's sentence is unchanged.
@@ -236,13 +244,35 @@ sed -n '83p' docs/adr/0028-scheduler-app-executable-integrity.md
 grep -c "withdrawn" docs/specs/WP-scheduler-node-path-durability.md
 grep -n "carries the owner's hand-typed signature" docs/specs/WP-scheduler-node-path-durability.md
 
+# V4b (D2) — the withdrawn branch is not OFFERED anywhere. These two greps match
+# the OPERATIVE wording of each old branch, which survives nowhere: the quoted,
+# marked-withdrawn copies deliberately reproduce only a FRAGMENT of each.
+# Expect 0 and 0.
+#
+# THESE ARE ABSENCE CHECKS. A later editor must not "fix" a 0 by re-adding the
+# text — 0 is the passing result, and a 1 means the annotation branch is being
+# offered again.
+grep -c "has landed, or that line carries" docs/specs/WP-scheduler-node-path-durability.md
+grep -c "merge, or ADR-0028:83 must carry" docs/specs/WP-scheduler-node-path-durability.md
+
 # V5 (AC4)
 npm run lint
 ```
 
-**Untouched-`main` baseline for V4** (`git show e7c845e:docs/specs/WP-scheduler-node-path-durability.md`):
-the first command prints **`0`** and the second prints nothing — so V4 is
-genuinely red before this WP's D2 edit.
+**Untouched-`main` baselines** (`git show e7c845e:docs/specs/WP-scheduler-node-path-durability.md`),
+so every one of these four gates is proved red-before-green rather than asserted:
+
+| Gate | on `e7c845e` | after D2 |
+|------|--------------|----------|
+| V4 — `grep -c "withdrawn"` | `0` | `2` |
+| V4 — `grep -n "carries the owner's hand-typed signature"` | no output | one line |
+| V4b — `grep -c "has landed, or that line carries"` | **`1`** | **`0`** |
+| V4b — `grep -c "merge, or ADR-0028:83 must carry"` | **`1`** | **`0`** |
+
+The two V4b rows run **1 → 0**, which is the direction that proves the offer was
+really removed and not merely reworded around: each pattern spans the *operative*
+wording of one old branch, and the quoted marked-withdrawn copies reproduce only
+a fragment of each, deliberately.
 
 Expected V3 output, byte-exact:
 
@@ -278,3 +308,30 @@ Expected V3 output, byte-exact:
 5. This spec's `status:` moves to `Done` and the file moves to `docs/specs/done/`
    in the owner's signature pass — not before, because until then the gate this
    spec exists to hold is still open.
+
+> **Provenance.** Drafted 2026-08-01 by `wd-architect` to unblock
+> `WP-scheduler-node-path-durability`'s Definition of done item 8. Gate round 1:
+> **APPROVE** with fold-ins (pure-append proven by `cmp`; owner-marker sweep
+> clean). Gate round 2: **APPROVE-CONFIRMED** with two fold-ins, both applied
+> here:
+>
+> - **(b) AC2 and V2's comment cited placeholder line numbers that were stale on
+>   arrival.** They named `:1224/:1331`, but this spec's own §5 insertion into the
+>   amendment moved §6 to `:1342` **within the same commit**. The reviewer's root
+>   cause is the right one and is fixed structurally rather than by re-numbering:
+>   **line numbers inside the amendment body are unstable by construction**, so
+>   AC2 now identifies placeholders by their unfilled `<date>` **content** — which
+>   is the actual criterion — and V2's comment points at AC2's roster instead of
+>   restating it. **The four base-region markers keep their line numbers**,
+>   because the change is a pure append and an append cannot move them.
+> - **(b) V4 gained two absence greps**, each verified **1 → 0** against
+>   `main`'s copy: `"has landed, or that line carries"` and
+>   `"merge, or ADR-0028:83 must carry"`. They match the *operative* wording of
+>   each withdrawn branch, which the quoted marked-withdrawn copies deliberately
+>   reproduce only in fragment — so unlike a grep for
+>   `"owner-written annotation"` they can distinguish *removed* from *still
+>   offered*. Both are labelled **absence checks** in the spec so a later editor
+>   does not "fix" a `0` by re-adding the text.
+>
+> No owner marker has been written at any point. The amendment still carries
+> `Status: PROPOSED — awaiting owner signature.`
