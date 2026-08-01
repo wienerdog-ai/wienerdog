@@ -1322,6 +1322,17 @@ Two residuals are recorded rather than claimed closed:
   stable. That layout claim is **specified, not observed** — no Windows host was
   available.
 
+**One other unsigned amendment to this ADR is pending, and it is unrelated to
+this one.** `docs/adr/0035-attended-execution-is-the-app-tree-trust-boundary.md`
+carries, under *"Proposed amendment to ADR-0028 (for the owner's separate
+signature)"*, a narrowing of this ADR's **"Honest boundary"** section — the app
+tree leaves the protected class. `docs/adr/README.md`'s 0035 row records the same
+pending state. The two amendments touch **different sections** (that one the
+Honest boundary; this one Decision 1's node sentence), rest on **different
+arguments**, and are **independent in both directions**. Cross-referenced here in
+one line for a single reason: **signing one must not be read as settling the
+other.** Each needs its own dated owner marker.
+
 ### 6. Sequencing, and what remains for the owner
 
 This amendment must be **signed at or before** the merge of

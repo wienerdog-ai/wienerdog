@@ -110,11 +110,20 @@ on **2026-08-01**.
 | Action | Path | Notes |
 |--------|------|-------|
 | modify | docs/adr/0028-scheduler-app-executable-integrity.md | **ALREADY WRITTEN by the architect in this spec's commit — do not author it, do not revise it.** One appended amendment section, headed *"Amendment (2026-08-01) — the scheduler ENTRY's node path is an upgrade-durable alias; process.execPath stays the runtime and the authorization value"*, carrying `Status: PROPOSED — awaiting owner signature.` Listed so the boundary check permits its presence in this branch's diff, and so the Deliverables record is exhaustive. **The one remaining edit — replacing that status line with a hand-typed `OWNER-SIGNED <date>` — is the OWNER's, and no agent may make it.** |
+| modify | docs/specs/WP-scheduler-node-path-durability.md | **D2 — a two-place reword, already made by the architect.** Its Definition of done item 8 (`:1200-1203`) and the matching Mirrored Surface Checklist entry (`:538`) each offered a second way to satisfy this gate: *"or that line carries an owner-written annotation"* on `docs/adr/0028-…:83`. That branch **conflicts with this spec's own append-only rule** and with ADR-0028's stated convention, so it is withdrawn in both places. **Nothing else in that spec changes** — no table, no acceptance criterion, no status. |
 
 Not a deliverable, deliberately: `docs/adr/README.md`. See Implementation notes.
 
 Not deliverables under any reading: every file under `src/`, `bin/`, `tests/`,
-`skills/`, `templates/`, and `docs/specs/WP-scheduler-node-path-durability.md`.
+`skills/`, `templates/`.
+
+**On D2's boundary expansion.** `docs/specs/WP-scheduler-node-path-durability.md`
+was **not** on this branch before gate round 1; adding it widens the branch's
+file set, which is exactly the kind of thing a Deliverables table exists to make
+visible rather than silent. It is added because the finding cannot be fixed
+anywhere else: the conflicting text lives in that spec, and leaving it would mean
+shipping a gate whose two branches contradict each other. The edit is confined to
+the two places named in the cell.
 
 ### What the amendment says (summary — the ADR is authoritative)
 
@@ -152,6 +161,21 @@ landed without opening the ADR.
   a pending-amendment annotation would have to be removed again on signature,
   churning a file for a state that is already visible at the only place it
   matters. Recorded here so the omission reads as a decision, not a miss.
+
+  **There IS a live counterexample in that same file, and it does not overturn
+  this.** `docs/adr/README.md:43` — the **0035** row — already carries exactly
+  such an annotation, and about ADR-0028 at that:
+  *"Accepted (does **not** amend 0028 — its "Honest boundary" narrowing awaits a
+  separate owner-signed amendment)"*. Three differences make it a different case.
+  **(1) It annotates a different ADR's row.** It tells a reader of **0035** that
+  0035 does not do something they might assume it does; it is a fact about 0035's
+  own scope, not a status marker for 0028. **(2) 0028's own row is unannotated**,
+  and has stayed so across five amendments including two that were unsigned when
+  written. **(3) The 0035 note is load-bearing against a misreading** — 0035 is
+  *about* the A7 boundary, so "amends 0028" is the natural wrong inference — while
+  a note on 0028's row would only restate what the file itself says on the line
+  below its own heading. If the owner prefers the annotation anyway, it is one
+  row and a two-word removal at signature time; it is left out, not overlooked.
 - **The amendment records a decision ahead of its implementation, on purpose.**
   ADR-0028:83 is still true at `e7c845e` (Current state §3). The gate's wording
   is "at or before", and "before" is the safe order: signing first means the code
@@ -169,13 +193,21 @@ landed without opening the ADR.
       owner markers exist, all pre-existing and all untouched:
       `OWNER-SIGNED 2026-07-25` (`:6`), `OWNER-APPROVED (2026-07-19)` (`:8`),
       `OWNER-SIGNED 2026-07-26` (`:752`), `OWNER-SIGNED 2026-08-01` (`:978`).
-      Every other `OWNER-SIGNED` hit in V2's output is prose — either a reference
-      to one of those four, or the literal placeholder `OWNER-SIGNED <date>`
-      inside the new amendment. **A placeholder is not a signature; an agent may
-      never replace `<date>` with a real date.**
+      **V2's output contains other dated lines and that is expected** — `:760`
+      and `:1225` are prose *back-references* naming the 2026-07-25 marker, and
+      `:1224`/`:1331` carry the literal placeholder `OWNER-SIGNED <date>`. The
+      criterion is "no new **marker**", not "no other line carrying a date".
+      **A placeholder is not a signature; an agent may never replace `<date>`
+      with a real date.**
 - [ ] **AC3** — Decision 1's sentence at `:83` is byte-identical to its
       pre-amendment text.
 - [ ] **AC4** — `npm run lint` is green.
+- [ ] **AC4b (D2)** — `docs/specs/WP-scheduler-node-path-durability.md`'s
+      Definition of done item 8 and its Mirrored Surface Checklist entry both
+      require the **owner-signed dated amendment** and both mark the
+      owner-written-annotation branch **withdrawn**. Nothing else in that file
+      changed (`git diff -- docs/specs/WP-scheduler-node-path-durability.md`
+      touches only those two regions — paste it).
 - [ ] **AC5 (OWNER, blocking)** — the amendment's `Status:` line carries a
       hand-typed `OWNER-SIGNED <date>`. **Until AC5 is met,
       `WP-scheduler-node-path-durability` must not merge.** This is the only
@@ -188,15 +220,29 @@ landed without opening the ADR.
 grep -n "PROPOSED — awaiting owner signature" docs/adr/0028-scheduler-app-executable-integrity.md
 
 # V2 (AC2) — no NEW dated owner marker. Read the output against AC2's list:
-# four dated markers (:6, :8, :752, :978) and nothing else that carries a date.
+# four dated markers at :6, :8, :752, :978; EVERY other hit is either a
+# back-reference to one of those four (:760, :1225 — both dated, both referring
+# to the 2026-07-25 marker) or the unfilled `<date>` placeholder (:1224, :1331).
 grep -n "OWNER-SIGNED\|OWNER-APPROVED" docs/adr/0028-scheduler-app-executable-integrity.md
 
 # V3 (AC3) — Decision 1's sentence is unchanged.
 sed -n '83p' docs/adr/0028-scheduler-app-executable-integrity.md
 
-# V4 (AC4)
+# V4 (D2) — the annotation branch is withdrawn in BOTH places, and DoD item 8
+# now requires the signature. Do NOT grep for "owner-written annotation": that
+# phrase legitimately survives INSIDE the quoted, marked-withdrawn text in both
+# places, so it cannot distinguish "removed" from "still offered".
+# Expect: 2, then one matching line.
+grep -c "withdrawn" docs/specs/WP-scheduler-node-path-durability.md
+grep -n "carries the owner's hand-typed signature" docs/specs/WP-scheduler-node-path-durability.md
+
+# V5 (AC4)
 npm run lint
 ```
+
+**Untouched-`main` baseline for V4** (`git show e7c845e:docs/specs/WP-scheduler-node-path-durability.md`):
+the first command prints **`0`** and the second prints nothing — so V4 is
+genuinely red before this WP's D2 edit.
 
 Expected V3 output, byte-exact:
 
@@ -208,8 +254,11 @@ Expected V3 output, byte-exact:
 
 - Implementing `entryNodePath` or touching any file under `src/` — that is
   `WP-scheduler-node-path-durability`'s entire Deliverables table.
-- Editing `docs/specs/WP-scheduler-node-path-durability.md`, including its
-  Definition of done item 8 or its DISPATCH BLOCKER banner.
+- Editing `docs/specs/WP-scheduler-node-path-durability.md` **beyond D2's
+  two-place reword** — not its DISPATCH BLOCKER banner, not Tables A–F, not its
+  acceptance criteria, not its status. (This exclusion was total until gate
+  round 1; D2 carves out the minimum needed to remove a self-contradicting gate
+  branch.)
 - Editing `docs/adr/README.md` (see Implementation notes).
 - Moving the descriptor's `node` field off `process.execPath` — a separate
   change that must land after ADR-0037's verified-registration postcondition is
