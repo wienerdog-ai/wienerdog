@@ -1,7 +1,7 @@
 ---
 id: WP-attended-alert-acknowledgement
 title: Let the user silence an already-seen alert in the session digest, at a real terminal, without changing what any job verifies
-status: Ready
+status: In-Review
 model: sonnet
 size: M
 depends_on: []
@@ -296,7 +296,7 @@ not exist and no code references it.
 <!-- Always allowed without listing: this spec file itself (the status flip)
      and package-lock.json. Everything else must be listed. -->
 
-Nine files. New non-test source is ≈ 200 lines across two new modules plus four
+Ten files. New non-test source is ≈ 200 lines across two new modules plus four
 small edits (two one-line call-site changes, one array entry, one dispatch entry
 plus one usage line, one two-line hook in `clearAlerts`, and one appended
 glossary bullet).
@@ -312,6 +312,7 @@ glossary bullet).
 | modify | src/core/private-fs.js | **D7** — add the single string `'alerts-ack.json',` to `A5_PRIVATE_FILE_BASENAMES` (`:116-121`), after `'alerts.jsonl',`. No other line in this file. |
 | modify | docs/GLOSSARY.md | **D8** — insert the **acknowledged alert** bullet (verbatim block **G1** under Exact contracts) as a new line immediately after the existing `- **fail-loud** …` bullet and immediately before the existing `- **catch-up** …` bullet. Change no existing bullet. |
 | create | tests/unit/alert-ack.test.js | **D9** — tests **A1–A13** (Test index). New file; copy the `setup()` helper from `tests/unit/alerts.test.js:20-26`. |
+| modify | tests/unit/private-fs.test.js | **D10** — update the hard-coded expected basename list to include 'alerts-ack.json' (spec-bug amendment, added in-PR: this file mirrors the D7 array and was omitted from the original table) |
 
 Not Deliverables, deliberately — see "Out of scope" for the reason on each:
 `src/scheduler/launcher.js`, `src/core/digest.js`, `src/cli/run-job.js`,
@@ -367,9 +368,15 @@ function addAcks(paths, alerts)
  *  @param {import('./paths').WienerdogPaths} paths @param {string} job */
 function pruneAcksForJob(paths, job)
 
-/** `alerts` minus every entry whose (job, reason) is acknowledged. Pure: reads
- *  the store, allocates a new array, mutates nothing. A non-array `alerts`
- *  returns []. This is the ONLY suppression point (Table B).
+/** `alerts` minus every entry acknowledged by a record that AGREES WITH THE
+ *  ALERT'S JOB: a record suppresses `a` only when `record.job === a.job` AND
+ *  `record.key === ackKey(a.job, a.reason)` (Table B, Match predicate). The key
+ *  already binds the job; comparing the stored field too means an inconsistent
+ *  record — job "A" carrying B's key — suppresses nothing and stays prunable by
+ *  A's success. Pure: reads the store, allocates a new array, mutates nothing.
+ *  A non-array `alerts` returns [] — an upstream PROGRAMMING-ERROR guard, not a
+ *  suppression path (both callers pass readAlerts, which always returns an
+ *  array). This is the ONLY suppression point (Table B).
  *  @param {import('./paths').WienerdogPaths} paths
  *  @param {Array<{job:string, at:string, reason:string, log_hint:string}>} alerts
  *  @returns {Array<{job:string, at:string, reason:string, log_hint:string}>} */
@@ -377,6 +384,15 @@ function unacknowledgedAlerts(paths, alerts)
 
 module.exports = { ACK_FILE, MAX_ACKS, ackPath, ackKey, readAcks, addAcks, pruneAcksForJob, unacknowledgedAlerts };
 ```
+
+**Read the two "never outlives" comments as normal-path statements, not as
+guarantees.** The `pruneAcksForJob` JSDoc above and the inline comment on the
+`clearAlerts` hook below both say an acknowledgement never outlives its alert.
+That is the rule the hook implements and the wording stays as written — but it
+is bounded in exactly two ways (log compaction can orphan an acknowledgement;
+`MAX_ACKS` eviction can resurface an acknowledged alert), and **Table A's
+Lifecycle row is where those bounds are decided**. Do not restate the absolute
+form of the claim in any new prose, comment, commit message, or PR text.
 
 The on-disk file, in full, after acknowledging the two pairs that exist on the
 maintainer's install (line-wrapped here for readability; write it with
@@ -509,13 +525,16 @@ wienerdog: the jobs keep refusing and the records stay on file — run `wienerdo
 wienerdog: run `wienerdog sync` to re-render your session digest now.
 ```
 
-The count in the first line is the number of groups that were just acknowledged
-(`addAcks(...).added`).
+The count in the first line is the number of groups that were **actually stored**
+(`addAcks(...).added`), which is the printed pairs still present at write time —
+not the number printed above the prompt. See Table C's "What may be
+acknowledged" row: the two differ whenever a job succeeds while the prompt is
+pending.
 
 G1 — the glossary bullet (D8), verbatim; it is one source line:
 
 ```text
-- **acknowledged alert** — a durable alert (one record in `~/.wienerdog/state/alerts.jsonl`) that the user has silenced **in the session digest only**, by running `wienerdog alerts ack` at a real terminal with a typed confirmation. It is keyed on the exact `(job, reason)` pair, so a single byte of change in the failure wording surfaces it again. It changes nothing else: the job still refuses, still exits non-zero, still spawns nothing, and still writes its record; `wienerdog alerts` always lists acknowledged alerts. Acknowledgements for a job are dropped when that job next succeeds. (Not: "dismissed", "muted", "snoozed" — say acknowledged alert.)
+- **acknowledged alert** — a durable alert (one record in `~/.wienerdog/state/alerts.jsonl`) that the user has silenced **in the session digest only**, by running `wienerdog alerts ack` at a real terminal with a typed confirmation. It is keyed on the exact `(job, reason)` pair, so a change in the failure wording surfaces it again (the wording it compares is the one Wienerdog stored — already shortened to 2,000 characters, with secret-looking text blanked out — so two failures that differ only past that length, or only in the blanked-out parts, count as the same wording). It changes nothing else: the job still refuses, still exits non-zero, still spawns nothing, and still writes its record; `wienerdog alerts` always lists acknowledged alerts. Acknowledgements for a job are dropped when that job next succeeds. (Not: "dismissed", "muted", "snoozed" — say acknowledged alert.)
 ```
 
 The `USAGE` line (D3), verbatim; it is one source line inside the template
@@ -559,9 +578,9 @@ bug in the PR body rather than following the mirror.
 | **Cap** | `MAX_ACKS = 100`. On write, keep the **newest** 100 (`slice(-MAX_ACKS)`) |
 | **Duplicate key** | a `key` already on file is **not** re-added and its existing `at` is **not** rewritten. `addAcks` counts it as not-added |
 | **Whole-file parse failure** — missing, unreadable, invalid JSON, not an object, `schema !== 1`, or `acked` not an array | `readAcks` returns `[]` ⇒ **nothing is suppressed**. This is the FAIL-OPEN direction and it is the required one: a corrupt store must never hide a warning |
-| **Per-record validation** | a record counts only when `typeof job === 'string'` **and** `/^[0-9a-f]{64}$/.test(key)` **and** `typeof at === 'string'`. Any other record is ignored on read, is not repaired, and is not written back |
-| **Lifecycle** | `clearAlerts(paths, job)` calls `pruneAcksForJob(paths, job)` **first**, so an acknowledgement never outlives the alert it silenced. When no records remain the file is removed (`fs.rmSync(file, {force:true})`) |
-| **Robustness** | `readAcks` and `pruneAcksForJob` never throw. `addAcks` may throw only what `writeFilePrivate` throws (a symlinked or unwritable destination) — that surfaces at an attended terminal, which is the right place for it |
+| **Per-record validation** | a record counts only when `typeof job === 'string'` **and** `/^[0-9a-f]{64}$/.test(key)` **and** `typeof at === 'string'`. Any other record is ignored on read, is not repaired, and is not written back. **The `key` regex is load-bearing beyond validation:** Table B's Match predicate encodes the lookup as `job + "\n" + key`, which is injective only while `key` is fixed-length and newline-free. **Do not relax this pattern without re-deciding that encoding first** |
+| **Lifecycle** | `clearAlerts(paths, job)` calls `pruneAcksForJob(paths, job)` **first**, so on the normal path an acknowledgement does not outlive the alert it silenced. When no records remain the file is removed (`fs.rmSync(file, {force:true})`). **The pairing is bounded, not absolute — two cases break it and neither is repaired here.** (1) **Orphaned acknowledgement:** `appendAlert`'s compaction drops the oldest records once `MAX_ALERTS`/`MAX_FILE_BYTES` is exceeded, with no job having succeeded, so an acknowledgement can survive the record it silenced. Its residual effect is narrow — it pre-suppresses only an **exact** recurrence of wording the user has already read and acknowledged, and any other wording renders. (2) **Evicted acknowledgement:** `MAX_ACKS` eviction can drop an acknowledgement while its alert is still on file, so a silenced alert **resurfaces** in the digest. (3) **Failed prune:** `pruneAcksForJob` is **best-effort and swallows its write failures** (Robustness row), so a prune that fails leaves an acknowledgement alive past the success that should have removed it. Two bounds make that acceptable and both must be stated together: `clearAlerts` re-runs the prune on **every subsequent success of that job**, so a *transient* failure self-heals at the next success with no user action; and a *persistent* write failure to `state/` — a symlinked, unwritable or hostile store — is the **already-accepted A7/A12 boundary**, the same surface on which an adversary could forge the store outright, so it grants nothing new. All three fail in the safe direction — (2) loudly — and coupling the two stores to close them would buy less than it costs. Do **not** write "never outlives" as an unqualified claim anywhere |
+| **Robustness** | `readAcks` and `pruneAcksForJob` never throw. `pruneAcksForJob` achieves that by **swallowing** its write failures, which is the right trade — it runs on the success path of an unrelated job and must never turn that job's success into a failure — but it means a prune can silently not happen; the Lifecycle row's case (3) records what bounds that. `addAcks` may throw only what `writeFilePrivate` throws (a symlinked or unwritable destination) — that surfaces at an attended terminal, which is the right place for it |
 | **Mode coverage** | `'alerts-ack.json'` is a member of `A5_PRIVATE_FILE_BASENAMES`, so `wienerdog doctor` / `sync` report and repair a loosened mode on it exactly as they do for `alerts.jsonl` |
 | **Uninstall** | no manifest entry — like `alerts.jsonl`, it is runtime state created under `state/` and removed with the core. Do not add a manifest entry |
 
@@ -571,24 +590,24 @@ bug in the PR body rather than following the mirror.
 |----------|--------|
 | **What is suppressed** | ONE thing: the presence of a matching alert in the array handed to `renderDigest`'s `alerts` option, i.e. whether it becomes a `> [!warning]` line in `state/digest.md` |
 | **What is NEVER suppressed** | the launcher's verification; its refusal; its zero spawn; its non-zero exit; its stderr line; the record it appends to `alerts.jsonl`; `wienerdog alerts` output; anything `wienerdog doctor` reports |
-| **Match predicate** | alert `a` is suppressed **iff** `ackKey(a.job, a.reason)` equals the `key` of a **valid** record on file |
-| **Reason sensitivity** | the reason string is inside the hash, so one changed byte ⇒ a different key ⇒ the alert renders. There is no prefix match, no substring match, no normalization, no trimming, and no regex |
-| **Job sensitivity** | the job name is inside the hash, so an acknowledgement for job A never suppresses job B — including when the two share a reason string |
+| **Match predicate** | alert `a` is suppressed **iff** some **valid** record on file satisfies **BOTH** `record.job === a.job` **AND** `record.key === ackKey(a.job, a.reason)`. The key already binds the job, so for a **semantically consistent** record the extra field comparison is redundant — it is decisive only for an **inconsistent** one. A record pairing job `"A"` with job B's key therefore suppresses **nothing**, and stays prunable by `clearAlerts(paths, 'A')`; without the field comparison it would suppress **B**'s alert while only **A**'s success could ever remove it. **Encoding dependency — read this before touching Table A.** The predicate is implemented as membership of `job + "\n" + key` in a `Set`, and that composite is **injective only because `key` has already been validated against `/^[0-9a-f]{64}$/`** (Table A, Per-record validation): a fixed-length, newline-free `key` means the final 65 characters are always exactly `"\n" + key`, so the split point is unambiguous. **Relax that regex — allow a variable length, or a newline — and the encoding becomes ambiguous**, letting a crafted `(job, key)` pair collide with a different one (`job = "a\nb"`, `key = "c"` vs `job = "a"`, `key = "b\nc"`) and suppress an alert it was never acknowledged for. The `Set` is also what makes an attacker-influenceable job name safe in the composite (Security checklist bullet 2) — that is a **separate** guarantee from this one and neither substitutes for the other |
+| **Reason sensitivity** | the reason string is inside the hash, so one changed byte ⇒ a different key ⇒ the alert renders. There is no prefix match, no substring match, no normalization, no trimming, and no regex. **The hashed string is the STORED reason, not the raw one**: `sanitizeAlert` (`src/core/alerts.js:45-49`) caps every field at `MAX_FIELD_CHARS = 2000` and runs `redactOnly` over it *before* the record reaches disk, so two raw messages that differ **only past the cap**, or **only in bytes that redaction replaced**, produce the identical stored reason and therefore the identical key. That is a pre-existing property of the alert log, not of this mechanism, and this WP neither widens nor narrows it |
+| **Job sensitivity** | the job name is inside the hash **and** is compared as a stored field (Match predicate), so an acknowledgement for job A never suppresses job B — including when the two share a reason string, and including a hand-edited record that pairs A's `job` with B's `key` |
 | **Where applied** | exactly two call sites: `src/cli/sync.js` and `src/cli/dream.js`. `formatAlerts` itself is never changed and never learns about acknowledgements |
-| **Failure direction** | any doubt renders the alert. A corrupt store, an unreadable store, a malformed record, or a non-array `alerts` input all end with the alert visible (or nothing at all), never with a hidden warning |
+| **Failure direction** | **Doubt about the STORE always renders the alert.** A corrupt store, an unreadable store, a malformed record, or a record whose `job` disagrees with its `key` all leave the alert visible, never hidden — that is the whole of the fail-open principle and it has no exception. The one case that returns nothing is **not** a suppression path and must not be read as one: a **non-array** `alerts` argument returns `[]`, which is a guard against an upstream **programming error**, not against a bad store. Both production callers pass `readAlerts(paths)`, which always returns an array (missing/unreadable file → `[]`), so the guard is unreachable in production; when it does fire there is no alert being hidden, because there was no alert array to render in the first place |
 | **Effect when the store is absent** | byte-identical digest output to today. This is why no golden fixture moves |
 
 ### Table C — the attended act (canonical)
 
 | Fact | Value |
 |------|-------|
-| **Command** | `wienerdog alerts ack`. There is no other way to create an acknowledgement |
+| **Command** | `wienerdog alerts ack`. **"No other way" is scoped exactly as Security checklist bullet 4 is, and must never be written unqualified.** Within Wienerdog's own contained runtimes — the dream, catalog routines, hooks and skills, none of which can execute arbitrary Node — there is genuinely no other way. The documented code-level seams are the exception and they are only reachable by an actor that can already run arbitrary code as the user: `opts.promptFn` (Test seams row) substitutes the confirmation, and the exported `addAcks` writes the store with no prompt at all. That actor is the **A12** adversary (arbitrary same-user native code), out of scope here, and this is the **identical, already-accepted** boundary of `wienerdog grant` (ADR-0007) and `wienerdog memory approve` (ADR-0021) — a code-level seam is not a privilege escalation when the caller already has code execution |
 | **Terminal requirement** | the confirmation is read by `defaultPrompt` imported from `src/cli/grant.js`: `process.stdin` when it is a TTY, otherwise the controlling terminal `/dev/tty`; on an unreachable terminal it prints a refusal and resolves to `''` |
 | **Environment override** | none. Do not add one, in any form |
 | **Typed word** | the exact string `ack` after `String(answer).trim()`. Any other answer (including `y`, `yes`, `ACK`, `''`) cancels and writes nothing |
 | **`--yes`** | ignored — it must never bypass the prompt, exactly as in `wienerdog grant` and `wienerdog memory approve` |
-| **What may be acknowledged** | only `(job, reason)` pairs present in `alerts.jsonl` at the moment the command runs, and only after they have been printed in full on stdout. There is no way to acknowledge a pair that has not been shown |
-| **Test seams** | `run(argv, opts)` with `opts.promptFn` and `opts.paths` — code-level only, never read from the environment (the `src/cli/memory.js:63` model) |
+| **What may be acknowledged** | the printed pairs **still present at write time** — i.e. a pair must have been printed in full on stdout *and* still be in `alerts.jsonl` when the confirmation resolves. There is no way to acknowledge a pair that has not been shown, and none to acknowledge one that stopped being live while the prompt was pending. The ack path therefore **re-reads `readAlerts(paths)` after the typed confirmation** and stores only the intersection with the printed unacknowledged groups; an empty intersection takes the `nothing new to acknowledge` path and writes nothing. This closes the ack-vs-success race: a job that succeeds — and so prunes its own acknowledgements — while the user is still typing must not have its stale pre-prompt pair stored anyway (test A16) |
+| **Test seams** | `run(argv, opts)` with `opts.promptFn` and `opts.paths` — code-level only, never read from the environment (the `src/cli/memory.js:63` model). These are the seams the **Command** row's A12 scoping refers to; that row is where their boundary is decided, and this row does not restate it |
 | **Cancel path** | prints `wienerdog: nothing was acknowledged.` and exits 0. No file is created |
 
 ### Mirrored Surface Checklist
@@ -599,16 +618,21 @@ found in review is added to this list in the same pass.
 
 Table A (store) mirrors:
 - [ ] Deliverables rows D1, D4, D7 (the export list, the `clearAlerts` hook, the private-mode entry)
+- [ ] Deliverables row D10 / `tests/unit/private-fs.test.js` (deepEquals Table A's Mode-coverage membership)
 - [ ] the `src/core/alert-ack.js` JSDoc block under Exact contracts
 - [ ] the literal `alerts-ack.json` example under Exact contracts
 - [ ] acceptance criteria AC2, AC3, AC4, AC8, AC9
 - [ ] verification commands V4, V6, V7
 - [ ] Current state §5 (the `A5_PRIVATE_FILE_BASENAMES` excerpt)
+- [ ] **Lifecycle row only** — the `pruneAcksForJob` JSDoc, the inline comment on the `clearAlerts` hook, and the "Read the two 'never outlives' comments" note that qualifies both. The two comments state the **normal-path** rule; the two bounds (orphan by log compaction, resurface by `MAX_ACKS` eviction) live in the table and nowhere else
 
 Table B (suppression) mirrors:
 - [ ] Deliverables rows D5, D6
 - [ ] the `unacknowledgedAlerts` JSDoc and the two call-site diffs under Exact contracts
+- [ ] **Security checklist bullet 2** — mirrors the Match predicate row: it is the only surface that states *how* the predicate is implemented (a `Set` over `job + "\n" + key`) and therefore the only place the `Set`-membership invariant and the job-name-in-the-composite fact are recorded. A change to the Match predicate's encoding invalidates it
+- [ ] **Table A's Per-record validation row** — carries the back-pointer for the `key` regex the composite's injectivity depends on. A relaxation there breaks the Match predicate, so the two rows move together
 - [ ] the glossary bullet **G1** (restates Table B's meaning in user-facing words)
+- [ ] **`docs/GLOSSARY.md`'s shipped bullet (D8)** — a BYTE-IDENTICAL twin of G1, not a paraphrase. Any edit to G1 must be applied to both in the same commit, and `diff` them before you finish
 - [ ] acceptance criteria AC1, AC5, AC6, AC7, AC10
 - [ ] verification commands V3, V5
 - [ ] Current state §2 and §3 (what `formatAlerts` does and who feeds it)
@@ -620,6 +644,7 @@ Table C (attended act) mirrors:
 - [ ] the glossary bullet **G1** (the phrase "at a real terminal with a typed confirmation")
 - [ ] acceptance criteria AC11, AC12
 - [ ] verification command V8
+- [ ] **Security checklist bullet 4** — mirrors the **Command** row's exclusivity claim, which is where that claim and its A12 scoping are now decided. Both surfaces must always carry the scoping; an unqualified "no headless job can mint one" or "there is no other way" is a defect in either one
 - [ ] Current state §4 (the `defaultPrompt` description)
 
 ## Implementation notes & constraints
@@ -677,17 +702,36 @@ Table C (attended act) mirrors:
       constructs is `path.join(paths.state, 'alerts-ack.json')` from a **constant**
       basename — the job name and the reason string never touch a path, a shell,
       or a filename. Do not introduce a per-job acknowledgement file.
-- [ ] The job name and reason string are used only as **hash input** and as
-      already-sanitized text on stdout. They are never used as an object key, a
-      regex, or a lookup index — `readAcks` builds its lookup from the stored
-      64-hex `key`, which is pattern-validated before use, so no
-      `__proto__`/`constructor`-shaped value can reach a property access.
+- [ ] **The job name DOES enter the lookup, and what keeps that safe is the data
+      structure, not a pattern.** The reason string is only ever hash input and
+      already-sanitized text on stdout. The **job name is half of the lookup
+      composite** — `job + "\n" + key`, per Table B's Match predicate — and job
+      names come from `config.yaml`, which is precisely the A7-scoped write
+      surface, so an attacker can influence their **wording**, including to
+      `__proto__`, `constructor` or `toString`. That is harmless for exactly one
+      reason: **membership is tested against a `Set`**, which compares values and
+      never performs a property access. **The lookup must stay a `Set` (or a
+      `Map`) — never a plain object, never `key in obj`, never `obj[key]`.**
+      Substituting a plain object would turn an attacker-influenceable job name
+      into a live prototype-chain surface, and the `/^[0-9a-f]{64}$/` validation
+      on `key` would **not** prevent it: that validation buys injectivity (Table
+      B's Match predicate), not prototype safety. Do not conflate the two.
 - [ ] The store fails **open** on every malformed input (Table A) — a suppression
       path that fails closed would hide security warnings, which is the wrong
       direction for this file.
 - [ ] The acknowledgement is created **only** through the terminal-only typed
-      confirmation of Table C. No environment variable, no flag, and no
-      `--yes` may reach it, so no skill, hook, dream, or headless job can mint one.
+      confirmation of Table C. No environment variable, no flag, and no `--yes`
+      may reach it. **Scope that claim honestly, and do not write it unqualified
+      anywhere.** Within Wienerdog's own contained runtimes — the dream, catalog
+      routines, hooks and skills, none of which can execute arbitrary Node — no
+      actor can mint an acknowledgement. An actor that *can* execute arbitrary
+      code under the user's account defeats it trivially, by driving
+      `defaultPrompt` through a pseudoterminal or by simply importing `addAcks`
+      and calling it. That actor is the **A12** adversary (arbitrary same-user
+      native code), which is out of scope here, and this is the **identical,
+      already-accepted** boundary of `wienerdog grant` (ADR-0007) and
+      `wienerdog memory approve` (ADR-0021) — this WP neither strengthens nor
+      weakens it.
 - [ ] The store is written 0600 through `writeFilePrivate`, which refuses a
       pre-existing symlink at the destination, and is registered in
       `A5_PRIVATE_FILE_BASENAMES` so a loosened mode is reported and repaired.
@@ -749,6 +793,11 @@ Table C (attended act) mirrors:
 | A11 | `alerts cli: only the typed word ack acknowledges` | AC11 |
 | A12 | `alerts cli: --yes does not bypass the prompt` | AC12 |
 | A13 | `alerts cli: list and unknown subcommand` | AC13 |
+| A14 | `alerts cli: grouped range is earliest-to-latest even when written newest-first` | the grouping contract under Exact contracts — a group's printed range is earliest `at` to latest `at` regardless of the order the records were written in |
+| A15 | `alert-ack: a mismatched job field suppresses nothing` | Table B's Match predicate — a record pairing job "A" with job B's key suppresses neither A's nor B's alert, and stays prunable by `clearAlerts(paths, 'A')` |
+| A16 | `alerts cli: a job succeeding during the prompt is not acknowledged` | the ack-vs-success race: a job that succeeds (and prunes its own acknowledgement) while the typed confirmation is pending must not have its stale pre-prompt pair stored anyway |
+| A17 | `alert-ack: addAcks reports and stores no more than MAX_ACKS` | `addAcks`'s returned `added` count is the honest STORED count, never more than `MAX_ACKS`, even when handed more distinct pairs than the cap in one call |
+| A18 | `alert-ack: pruneAcksForJob re-caps an over-cap store` | `pruneAcksForJob`'s rewrite re-applies the `MAX_ACKS` cap, so a hand-grown over-cap store shrinks to contract on its next write (Table A: the cap is enforced "on write") |
 
 ## Verification steps (run these; paste output in the PR)
 
@@ -759,10 +808,10 @@ npm test
 # V2 — lint (markdownlint + shellcheck + shfmt + frontmatter schema)
 npm run lint
 
-# V3 — this WP's tests alone (all 13 must appear and pass)
+# V3 — this WP's tests alone (all 18 must appear and pass)
 npm test -- tests/unit/alert-ack.test.js
 
-# V4 — the store is written from exactly one module (expect: only src/core/alert-ack.js)
+# V4 — the store is WRITTEN from exactly one module: src/core/alert-ack.js. Expect three matches: the writer, the D7 constant in private-fs.js, and its D10 test mirror — no other writer.
 grep -rn "alerts-ack" src bin tests
 
 # V5 — both digest feeders filter, and neither still passes the raw array

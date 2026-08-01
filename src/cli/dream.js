@@ -20,6 +20,7 @@ const { runContainmentProbe } = require('../core/dream/containment-probe');
 const identityApprovals = require('../core/identity-approvals');
 const { renderUpdateLine } = require('../core/update-check');
 const { readAlerts } = require('../core/alerts');
+const { unacknowledgedAlerts } = require('../core/alert-ack');
 const {
   validateAndCommit,
   assertGitRepo,
@@ -375,7 +376,7 @@ async function run(argv, opts = {}) {
       const idReg = identityApprovals.readRegistry(paths.state);
       const quarantineLine = ledgerLib.quarantineBannerLine(ledger);
       const digest = renderDigest(vaultDir, layout, {
-        alerts: readAlerts(paths),
+        alerts: unacknowledgedAlerts(paths, readAlerts(paths)),
         updateLine: renderUpdateLine(paths),
         identityApprovals: identityApprovals.approvalsMap(idReg),
         quarantineLine,

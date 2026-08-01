@@ -638,6 +638,7 @@ test('private-fs: the A5-scoped set matches the OWNER-APPROVED membership', () =
   assert.deepEqual(A5_PRIVATE_FILE_BASENAMES, [
     'digest.md',
     'alerts.jsonl',
+    'alerts-ack.json',
     'transcript-ledger.json',
     'identity-approvals.json',
   ]);

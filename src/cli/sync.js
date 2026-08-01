@@ -9,6 +9,7 @@ const { writeFilePrivate, repairPrivateModes, scanPrivateModes } = require('../c
 const identityApprovals = require('../core/identity-approvals');
 const { renderUpdateLine } = require('../core/update-check');
 const { readAlerts } = require('../core/alerts');
+const { unacknowledgedAlerts } = require('../core/alert-ack');
 const ledgerLib = require('../core/dream/ledger');
 const { readVaultLayout } = require('../core/layout');
 const { detectHarnesses } = require('../core/detect');
@@ -274,7 +275,7 @@ async function run(argv, opts = {}) {
     if (!dryRun) identityApprovals.seedApprovals(paths.state, vaultPath, layout);
     const idReg = identityApprovals.readRegistry(paths.state);
     const digest = renderDigest(vaultPath, layout, {
-      alerts: readAlerts(paths),
+      alerts: unacknowledgedAlerts(paths, readAlerts(paths)),
       schedulerLine: require('../scheduler/status').renderSchedulerStatusLine(paths),
       updateLine: renderUpdateLine(paths),
       identityApprovals: identityApprovals.approvalsMap(idReg),
