@@ -509,7 +509,7 @@ speaks to that, and row 4 makes legacy entries no more deletable than before.
 |-------|------|-----------|-------|---------|
 | `kind` | `'symlink'` | `shared.js:399`, `:450`, `:456` | literal | `reverse()` dispatch (`manifest.js:718`) |
 | `path` | `string` (required) | same three sites | `linkPath` = `path.join(targetSkillsDir, name)` (`shared.js:382`) | `validateEntry`, `withinAllowedRoot`, Table A |
-| `target` | `string` (**optional** — absent on legacy entries) | same three sites | `target` = `path.join(skillsDir, name)` (`shared.js:381`) — the core skill source the link points at | Table A rows 2–4 only |
+| `target` | `string` (**optional** — absent on legacy entries) | same three sites | `target` = `path.join(skillsDir, name)` (`shared.js:381`) — the core skill source the link points at | Table A rows 2–5 only |
 
 Mirrors of this table, stated so they cannot drift:
 
@@ -585,7 +585,7 @@ In this spec:
 - [ ] Current state §6 (the legacy-preserve resemblance — Table A row 2)
 - [ ] Current state §7 (`sameResolvedDir`'s fail-closed direction — Table A row 3)
 - [ ] The **Test index** (every row names the Table A row, Table B field or Table T row it drives)
-- [ ] Security checklist bullets 1–3 (Table A rows 2, 3 and 4)
+- [ ] Security checklist bullets 1–3 (Table A rows 2, 3 and 5)
 - [ ] Acceptance criteria AC1–AC6
 - [ ] Verification commands V1–V5
 - [ ] Implementation notes §"Legacy entries — what to build" and §"Do not touch the sync side"
@@ -674,7 +674,7 @@ realpath-equals a harness skills root; `readlink(L)` resolves into the app's own
 skills source. This is the shape `reverseCopiedSkill` arm 1 already ships
 (`manifest.js:406-412`), and `skillsRoots` is already computed and passed into
 the reverse loop. It would have made legacy installs uninstall cleanly. It is a
-**weaker** proof than rows 3–4's exact-target equality — it authorises deleting
+**weaker** proof than rows 3 + 5's exact-target equality — it authorises deleting
 any `wienerdog-*` link in a harness skills root that points into our skills
 source, so a user who deliberately re-pointed one of our links at a *different
 one of our own skills* would lose it — and it needs the skills-source directory
@@ -715,7 +715,7 @@ and each is a way the implementer could accidentally exceed the ruling:
    [Legacy-entry policy](#legacy-entry-policy--owner-ruled-transcribed-2026-08-01).
 2. **Do not infer ownership from where the link points** (e.g. "it resolves
    inside the core, so it is ours"). That is the structural arm the owner
-   declined, and it is also the ancestor-scoped test Table A rows 3–4 forbid.
+   declined, and it is also the ancestor-scoped target test Table A rows 3 and 5 forbid.
 3. **Do not soften the notice.** Row 2's `keeping …` line is what makes the
    left-behind links visible to a user reading uninstall's output; it is the only
    signal they get.
@@ -734,7 +734,7 @@ WP only adds `target` to the three `recordOnce` calls in that same file.
 - Guard the lexical fallback: `fs.readlinkSync` throws on a dangling-parent or
   permission error, so it must sit inside a `try`/`catch` whose `catch` yields
   "no match" (→ Table A row 3 → preserve).
-- `dryRun` changes **only** whether `fs.unlinkSync` runs (Table A row 4). The
+- `dryRun` changes **only** whether `fs.unlinkSync` runs (Table A row 5). The
   bucket assignment is identical in both modes, exactly as today.
 - No daemon, no watcher, no telemetry, no background process (ADR-0004).
 - When uncertain: choose the simpler option and record it in the PR under
@@ -742,14 +742,32 @@ WP only adds `target` to the three `recordOnce` calls in that same file.
 
 ### Test index
 
-| # | File | What it asserts | Drives |
-|---|------|-----------------|--------|
-| T1 | `tests/unit/manifest.test.js` | **The regression, red-first.** Manifest holds `{kind:'symlink', path: L, target: T}`; the user has replaced `L` with a symlink to their own directory. `reverse()` leaves `L` on disk, its readlink unchanged, and reports it in `skipped`, not `removed`. | Table A row 3 |
-| T2 | `tests/unit/manifest.test.js` | **No regression.** `L` is still our own unmodified link to `T`. `reverse()` unlinks it and reports it in `removed`. Repeat with `dryRun: true`: `L` still exists, and it is still reported in `removed`. | Table A row 4 |
-| T3 | `tests/unit/manifest.test.js` | **Legacy.** The entry has no `target` at all. `reverse()` leaves `L` on disk and reports it in `skipped`, whatever `L` currently points at (assert both: pointing at `T`, and pointing elsewhere). | Table A row 2 |
-| T4 | `tests/unit/manifest.test.js` | **Dangling core.** The entry carries `target: T`, `L` is still our link with `readlink(L) === T`, but `T` has been removed from disk. `reverse()` still unlinks `L` (the lexical fallback), and reports it in `removed`. | Table A row 3, lexical fallback |
-| T5 | `tests/unit/shared-skill-links.test.js` | **An EDIT to three shipped assertions, not a new test.** All three facts — which test, which producer branch, which expected object, and what the source path is called *in that test's scope* — are in **Table T**. Do not derive any of them from prose. | Table B, Table T |
-| T6 | `tests/unit/manifest.test.js` | **Vacuity repair, required.** `:297-312` (`global guard (iii): a {kind:symlink} whose path resolves to a deferred member is never unlinked`) records `{kind:'symlink', path: link}` with **no** `target`, where `link` points at `paths.manifest`. After this WP that is also a Table A row-2 legacy entry, so it would be preserved **for the wrong reason** and the deferred-member guard it exists to prove would stop being exercised — a regressed guard would stay green. Give the recorded entry `target: paths.manifest`, which makes `sameResolvedDir(L, T)` true → Table A row 4 → only the deferred-member guard stands between the entry and `fs.unlinkSync`. Assert the same outcomes as today (`:308-311`). | vacuity of the shipped guard |
+**`Preconditions on L`** is a column because Table A row 4 made the link's own
+*location* load-bearing: a fixture that is **not-OWNED** never reaches the delete
+row, so a test written without checking it asserts the wrong thing — or, worse,
+passes for the wrong reason. `OWNED` means **`wienerdog-<name>` directly under a
+harness skills root** (`<claudeDir>/skills` or `<codexDir>/skills`); see
+"Why row 4 exists".
+
+| # | File | Preconditions on `L` | What it asserts | Drives |
+|---|------|----------------------|-----------------|--------|
+| T1 | `tests/unit/manifest.test.js` | **OWNED** | **The regression, red-first.** Manifest holds `{kind:'symlink', path: L, target: T}`; the user has replaced `L` with a symlink to their own directory. `reverse()` leaves `L` on disk, its readlink unchanged, and reports it in `skipped`, not `removed`. | Table A row 3 |
+| T2 | `tests/unit/manifest.test.js` | **OWNED — required** | **No regression.** `L` is still our own unmodified link to `T`. `reverse()` unlinks it and reports it in `removed`. Repeat with `dryRun: true`: `L` still exists, and it is still reported in `removed`. **`L` must be `wienerdog-<name>` directly under a harness skills root**, or row 4 preempts row 5 and the delete assertions fail. | Table A row 5 |
+| T3 | `tests/unit/manifest.test.js` | n/a — row 2 precedes row 4 | **Legacy.** The entry has no `target` at all. `reverse()` leaves `L` on disk and reports it in `skipped`, whatever `L` currently points at (assert both: pointing at `T`, and pointing elsewhere). | Table A row 2 |
+| T4 | `tests/unit/manifest.test.js` | **OWNED — required** | **Dangling core.** The entry carries `target: T`, `L` is still our link with `readlink(L) === T`, but `T` has been removed from disk. `reverse()` still unlinks `L` (the lexical fallback), and reports it in `removed`. **Same location precondition as T2** — an unOWNED fixture is preserved by row 4 and the test asserts nothing about the fallback. | Table A row 3 (lexical fallback) → row 5 |
+| T5 | `tests/unit/shared-skill-links.test.js` | n/a — sync side | **An EDIT to three shipped assertions, not a new test.** All three facts — which test, which producer branch, which expected object, and what the source path is called *in that test's scope* — are in **Table T**. Do not derive any of them from prose. | Table B, Table T |
+| T6 | `tests/unit/manifest.test.js` | **OWNED — the fixture path CHANGES** | **Vacuity repair, required.** `:297-312` (`global guard (iii): a {kind:symlink} whose path resolves to a deferred member is never unlinked`) records a target-less symlink at `<core>/ledger-link` → `paths.manifest`. After this WP that fixture is **doubly vacuous**: row 2 preserves it as legacy, **and** row 4 preserves it because `<core>/ledger-link` is not OWNED — so the guard-removed red run cannot be produced at all. **Move the link to `<claudeDir>/skills/wienerdog-ledger` → `paths.manifest` and give the entry `target: paths.manifest`.** It is then OWNED and target-matched, reaches **row 5**, and the deferred-member guard is once again the only thing between it and `fs.unlinkSync`. Assert the same outcomes as today (`:308-311`). | vacuity of the shipped guard |
+| T7 | `tests/unit/manifest.test.js` | **NOT-OWNED — that is the point** | **Forged `(path, target)` pair — the adversarial row.** Create a symlink the *user* owns, named **without** the `wienerdog-` prefix (e.g. `my-notes`), directly under a harness skills root. Hand-write `{kind:'symlink', path: <that link>, target: <its actual destination, read off the link>}` — a forgery in which rows 1–3 all pass. `reverse()` must **preserve** it: the link still exists, its readlink is unchanged, and it is reported in `skipped`. **Second case:** a `wienerdog-`-prefixed link **one directory deeper** than a skills root — also preserved. **Red-first**: against a row-4-less reverser both are unlinked. **See the destination precondition below — it is not optional.** | Table A row 4 |
+
+**T7's forged link must POINT somewhere inside an allowed root**, e.g. make
+`my-notes` resolve into `~/.claude/my-skills/` rather than `/tmp`. `reverse()`
+applies `withinAllowedRoot` at `:722` **before** `reverseSymlink` is ever called,
+and `contains()` realpaths — which **follows the link** — so a forged entry
+pointing outside every Wienerdog-owned root is preserved at `:726` with the
+`outside every Wienerdog-owned root` notice. The test would then pass **for the
+wrong reason**, and its red baseline would be unobtainable: a row-4-less reverser
+would preserve it too. This is the single most likely way to write T7 so that it
+proves nothing.
 
 **Prove T1 in both directions** (`docs/runbooks/codex-review.md`): run it against
 the untouched `reverseSymlink` (expect **red** — the user's link is unlinked) and
@@ -757,12 +775,12 @@ against the finished one (expect **green**). A test that is only ever green afte
 the change does not show the defect was real.
 
 **Prove T6 the same way**, and it is the more important of the two: with T6's
-`target` in place, temporarily remove the deferred-member guard
-(`manifest.js:578-586`'s `resolvesTo(entry.path, paths.manifest)` arm) and
-confirm T6 goes **red**. Without that run, T6 is a test that cannot tell you
-whether the guard exists.
-
-| T7 | `tests/unit/manifest.test.js` | **Forged `(path, target)` pair — the adversarial row.** Create a symlink the *user* owns, named **without** the `wienerdog-` prefix (e.g. `my-notes` → some real directory), directly under a harness skills root. Hand-write a manifest entry `{kind:'symlink', path: <that link>, target: <its actual destination, read off the link>}` — a forgery in which rows 1–3 all pass. `reverse()` must **preserve** it: the link still exists, its readlink is unchanged, and it is reported in `skipped`. **Second case:** a `wienerdog-`-prefixed link **not** directly under a skills root (one directory deeper) — also preserved. **Red-first**: against a row-4-less reverser both are unlinked. | Table A row 4 |
+relocated, OWNED, target-carrying fixture in place, temporarily remove the
+deferred-member guard (`manifest.js:578-586`'s
+`resolvesTo(entry.path, paths.manifest)` arm) and confirm T6 goes **red**.
+Without that run, T6 is a test that cannot tell you whether the guard exists —
+which is exactly the state the original `<core>/ledger-link` fixture would have
+left it in after row 4 landed.
 
 **T3 is final** (the owner ruling settled its shape on 2026-08-01). It asserts
 preservation in **both** legacy sub-cases — `L` pointing at `T`, and `L` pointing
@@ -776,7 +794,7 @@ does, by design (Current state §3).
       (no intervening sync) and a re-sync-that-failed-before-save — Table A row 3,
       pinned by T1.
 - [ ] Our own unmodified link is still removed on uninstall, in both real and
-      dry-run mode — Table A row 4, pinned by T2. No regression.
+      dry-run mode — Table A row 5, pinned by T2. No regression.
 - [ ] A legacy target-less symlink entry is preserved, not deleted — Table A
       row 2, pinned by T3. No uninstall breakage for installs created before
       this WP.
@@ -816,11 +834,15 @@ does, by design (Current state §3).
       passes with its assertions unchanged. The **only** permitted edits to
       shipped tests are the four named in the Test index: the three
       whole-object `deepEqual` expectations **listed in Table T** (T5 — they
-      compare the entry object, so the new key breaks them), and the recorded
-      entry in `manifest.test.js:297-312` (T6). **The four WP-146 sync-side
-      tests at `shared-skill-links.test.js:345`, `:371`, `:387` and `:405` must
-      pass BYTE-UNMODIFIED** — they are the fence, and any diff touching them is
-      a scope violation.
+      compare the entry object, so the new key breaks them), and
+      `manifest.test.js:297-312` (T6). **T6's edit is wider than a single
+      assertion**: the fixture's **link path moves** from `<core>/ledger-link` to
+      `<claudeDir>/skills/wienerdog-ledger`, and the recorded entry gains
+      `target: paths.manifest` — both are required, because row 4 otherwise
+      preserves the old fixture and the guard-removed red run cannot be produced.
+      **The four WP-146 sync-side tests at `shared-skill-links.test.js:345`,
+      `:371`, `:387` and `:405` must pass BYTE-UNMODIFIED** — they are the fence,
+      and any diff touching them is a scope violation.
 - [ ] **AC4** — `grep -c "kind: 'symlink', path: linkPath, target" src/adapters/shared.js`
       is `3`, and `grep -c "kind: 'symlink', path: linkPath }" src/adapters/shared.js`
       is `0` (no producer site left target-less). The call is still
@@ -830,7 +852,9 @@ does, by design (Current state §3).
       **only** lines inside the three **Table T** assertion ranges (`:52-55`,
       `:191-194`, `:337-340`). In particular `:181` is **not** touched — the
       dry-run test's destructuring stays as it is, and its `target` is built
-      inline per Table T row 2. Paste the diff.
+      inline per Table T row 2. Paste the diff. **This fence covers
+      `shared-skill-links.test.js` only**; `manifest.test.js:297-312` is edited
+      more broadly by T6 (see AC3).
 
 ## Verification steps (run these; paste output in the PR)
 
@@ -1039,3 +1063,46 @@ of scope is that the owner declined one, not that `sync` already does it.
 > unconditionally. Row 4 governs **recorded** entries, where the question is not
 > *"may we delete what we cannot prove is ours"* but *"is a forged proof still a
 > proof"*. Legacy entries are no more deletable after this change than before.
+>
+> **2026-08-02 — gate round 5 (verdict: REQUEST CHANGES; the security fix was
+> proven correct, five mechanical collateral findings). All closed.**
+>
+> Row 4's insertion was right but it moved the ground under five other things —
+> the classic collateral shape, and worth naming: **a new row in a canonical
+> table invalidates every fixture whose reachability depended on the old row
+> set.**
+>
+> - **(1) T6's vacuity repair was itself UNDONE by row 4.** The fixture link
+>   `<core>/ledger-link` is **not OWNED**, so row 4 now preserves it — and the
+>   mandated guard-removed red run became impossible to produce (the reviewer
+>   executed both directions). The fixture was **doubly vacuous**: row 2 for being
+>   legacy, row 4 for its location. Fixed as the reviewer verified: the link moves
+>   to **`<claudeDir>/skills/wienerdog-ledger` → `paths.manifest`** and keeps
+>   `target: paths.manifest`, so it is OWNED **and** target-matched, reaches
+>   **row 5**, and the deferred-member guard is once again the only thing standing
+>   between it and `fs.unlinkSync`. AC3 is widened to say T6's edit changes the
+>   **fixture path**, not just an assertion.
+> - **(2) T2 and T4 gained an explicit location precondition** — `L` must be
+>   `wienerdog-<name>` directly under a harness skills root, or row 4 preempts
+>   row 5 and their delete assertions fail.
+> - **(3) T7 gained the non-obvious destination precondition.** The forged link
+>   must **point** inside an allowed root (e.g. `~/.claude/my-skills/`), because
+>   `withinAllowedRoot` runs at `:722` **before** `reverseSymlink` and `contains()`
+>   realpaths — **following the link** — so a forgery pointing at `/tmp` is
+>   preserved at `:726` and the test passes **for the wrong reason** with no
+>   obtainable red baseline. This was the likeliest way to write T7 so it proved
+>   nothing.
+> - **(4) Seven stale row-number mirrors** from the insertion, all corrected:
+>   T2 → row 5; T6 → row 5; the Mirrored Surface Checklist's security-bullet entry
+>   → rows 2, 3, 5; the declined-option-(ii) comparison → rows 3 + 5; the
+>   ancestor-scoped prohibition → rows 3 + 5; the `dryRun` note → row 5; the
+>   security-checklist no-regression bullet → row 5; and Table B's `target`
+>   consumer range → rows 2–5.
+> - **(5) T7 was orphaned outside the Test index table** — it sat after two prose
+>   paragraphs, so it rendered as literal pipes **and** fell outside the registered
+>   "Test index" mirror. Moved directly under T6; prose now follows the table.
+> - **(6, structural — taken)** The Test index gains a **`Preconditions on L`**
+>   column (`OWNED` / `NOT-OWNED` / `n/a`). Findings 1–3 were all the same defect
+>   — a fixture whose reachability nobody had written down — so the column makes
+>   the next Table A change surface its test impact mechanically instead of by
+>   review.
