@@ -1209,3 +1209,125 @@ rather than smoothed over; the cost was that findings 4 and 5 landed as amendmen
 to a spec an implementer was already working from. Verdict: **REQUEST CHANGES**.
 All five findings were dispositioned by the owner on 2026-08-01; **none was
 rejected**.
+
+## Amendment (2026-08-01) — the scheduler ENTRY's node path is an upgrade-durable alias; `process.execPath` stays the runtime and the authorization value
+
+Status: **PROPOSED — awaiting owner signature.**
+
+**Architect note (2026-08-01, architect-authored — this is NOT an owner
+signature, confers no approval, and no gate may key on it).** This amendment was
+drafted by `wd-architect` because a `Ready` work package
+(`WP-scheduler-node-path-durability`) makes one sentence of Decision 1 false, and
+that spec's own Definition of done item 8 forbids merging the code while an
+owner-signed ADR line is left silently false. The status line above is the
+**only** ratification marker for this amendment; it stays `PROPOSED` until Gyula
+Fehér types an `OWNER-SIGNED <date>` line into it by hand. Nothing above this
+heading — not the `OWNER-SIGNED 2026-07-25` line at the head of the file, not
+Decision 1's text, not any earlier amendment — is edited by this note or by the
+sections below. Until signature, **Decision 1 stands exactly as written and this
+amendment is a proposal, not the record**.
+
+### 1. The sentence this amends, and why it needs amending
+
+Decision 1 ("Structural executable pin") ends with:
+
+> `node` is `process.execPath` (already absolute) and is not pinned.
+
+That sentence was written when `process.execPath` was the value used in **every**
+node-path role A7 touches, so one clause covered all of them. It has since become
+ambiguous rather than wrong, and `WP-scheduler-node-path-durability` makes one
+reading of it false. That WP registers the OS scheduler entry against an
+upgrade-durable Homebrew alias (`<prefix>/opt/<formula>/bin/node`) instead of the
+version-pinned Cellar path `process.execPath` returns, because an ordinary
+`brew upgrade node` deletes the Cellar directory and every scheduled fire then
+dies in `posix_spawn` with `ENOENT` **before a line of Wienerdog code runs** — a
+failure outside the product's own observability, which is the exact class A7
+exists to move inside it.
+
+### 2. The three roles the sentence conflates (canonical)
+
+| Role | Where the value lands | Value after this amendment | Why |
+|------|----------------------|----------------------------|-----|
+| **Entry** — the program the OS starts | `ProgramArguments[0]` (launchd), the `ExecStart` head (systemd), the node token in the Windows `<Arguments>` | an upgrade-durable absolute alias **when, and only when, it provably resolves to the running interpreter**; otherwise `process.execPath` unchanged | a string the OS keeps and re-reads days later. A path that dies between writes is fatal here. |
+| **Runtime** — spawning a child of the process that is already running | `run-job.js`, `routine-runtime.js` | `process.execPath`, **unchanged** | must be the exact running interpreter. The path cannot go stale between the read and the spawn, and the exec-identity discipline requires it (never a PATH lookup, never an interpreter chosen by a symlink). |
+| **Authorization record** — the digest-covered descriptor field | `descriptor.js`'s `node` field (Decision 3's schema, `"node": "/…/bin/node"`) | `process.execPath`, **unchanged** | see §4. |
+
+### 3. Corrected contract
+
+Decision 1's closing sentence is replaced, in effect, by:
+
+> `node` is **not pinned** in the WP-154 sense — there is no command-path +
+> install-dir pin store entry for it, and no structural verification of it. The
+> node path Wienerdog *writes* depends on the role: the **runtime** and
+> **authorization-record** roles are `process.execPath` verbatim; the **OS entry**
+> role is the most upgrade-durable absolute path that **provably resolves, via
+> `realpath`, to the very interpreter that is running at registration time**,
+> falling back to `process.execPath` in every other case and on every error.
+
+The realpath identity check is the whole of the security argument, and it is
+stated here rather than left in the spec: a candidate alias is never written
+anywhere until `realpath(alias) === realpath(process.execPath)` has proven it
+names the **same inode** as the running interpreter. Any alias that survives that
+check names the correct binary by construction, whatever its lexical shape; any
+alias that does not is discarded and the pinned path is used. The derivation is
+therefore fail-safe in one direction only — toward `process.execPath`.
+
+### 4. Why the descriptor's `node` field does **not** move
+
+Decision 3's rule — *"everything that shapes the 03:30 spawn argv is
+digest-covered, no exceptions"* — is untouched, and the field stays
+`process.execPath` for two reasons that are consequences of decisions already in
+this ADR, not new policy:
+
+1. The field is digest-covered, so changing its value changes every existing
+   job's **descriptor digest**, and therefore the `--expect-digest` token bound
+   into every registered entry's argv.
+2. The macOS registration path cannot replace an already-loaded launchd record
+   with a bare `launchctl bootstrap`. The rewritten plist would sit on disk
+   carrying the new digest while launchd kept serving the old record carrying the
+   old one; at the next fire the launcher would re-derive the new digest, compare
+   it against the stale entry-bound old one, and **refuse** — breaking the nightly
+   job on every already-installed macOS machine.
+
+**The honest consequence, stated rather than smoothed over.** After a
+`brew upgrade node`, an entry registered against the durable alias *fires*, the
+launcher *runs*, re-derives `node: process.execPath` as the new Cellar path,
+finds it differs from the descriptor on disk, and **refuses loudly** — durable
+`alerts.jsonl` record, digest callout, remedy `run 'wienerdog sync'`. That is the
+point: the failure moves from **outside** the product's observability to
+**inside** it. Making a node upgrade cost nothing at all requires the descriptor
+field to move too, which is a separate change that must land after the
+verified-registration postcondition (ADR-0037) is in force everywhere.
+
+### 5. Honest boundary — this adds no substitution resistance
+
+The alias is a **third-party path Wienerdog does not own**. A same-user actor who
+can repoint `<prefix>/opt/node` is the same actor who can replace the Cellar
+binary it points at, and both are the arbitrary-same-user-native-code class this
+ADR's "Honest boundary" already hands to A12. This amendment therefore closes the
+**accidental** half of the dead-execution-position problem (a binary that ceases
+to exist because the user upgraded a package) and closes **none** of the
+**substituted** half (a real-but-hostile binary in the execution position, which
+still grades `loaded` today). No sentence anywhere may read this amendment as
+strengthening the executable trust anchor; it strengthens *availability* of a
+correct entry, nothing else.
+
+Two residuals are recorded rather than claimed closed:
+
+- **nvm / fnm / volta / nodenv layouts** maintain no stable alias, so they keep
+  the version-pinned path, where `defaultProbe`'s attended
+  execution-position-exists check remains the only safety net.
+- **Windows** is a no-op by construction (a Windows `process.execPath` has no
+  POSIX-absolute shape), on the basis that the known Windows layouts are already
+  stable. That layout claim is **specified, not observed** — no Windows host was
+  available.
+
+### 6. Sequencing, and what remains for the owner
+
+This amendment must be **signed at or before** the merge of
+`WP-scheduler-node-path-durability`; that spec's Definition of done item 8 is the
+gate, and it is deliberately an owner action because an ADR is never edited from
+a work package. Until the status line above carries a hand-typed
+`OWNER-SIGNED <date>`, the gate is **not** satisfied and the code must not merge.
+The only remaining step is the signature — the amendment text is written and
+needs no further architect pass.
