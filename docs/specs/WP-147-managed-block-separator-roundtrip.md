@@ -175,7 +175,7 @@ the current template.
 |--------|------|-------|
 | modify | src/adapters/shared.js | `applyManagedBlock`: replace the lossy append with a non-lossy insert that records the exact inserted separator bytes (`sepBefore`, `sepAfter`) on the manifest entry. `createdFile` and `replace` branches keep behavior; record `sepAfter:'\n'` on the createdFile branch. |
 | modify | src/core/manifest.js | `reverseManagedBlock`: strip only the recorded (or legacy-default) separators, and only when the strip preserves a line boundary — never fuse user lines, **and never consume a newline the user supplied** (the `weSuppliedTerminator` gate on the at-EOF disjunct — Table N). |
-| modify | tests/unit/claude-adapter.test.js | Round-trip cases incl. the relocated-block-between-single-newline-lines case (**Table N row 4**), plus **T8**: create (absent file) → **sync again at least twice** → uninstall, asserting the file is **REMOVED**, not truncated to empty. That is the sticky-`createdFile` guard, and it is red against a plain-overwrite upsert. |
+| modify | tests/unit/claude-adapter.test.js | Round-trip cases incl. the relocated-block-between-single-newline-lines case (**Table N row 4**), plus **T8**: create (absent file) → **sync again at least twice** → uninstall, asserting the file is **REMOVED**, not truncated to empty (the sticky-`createdFile` guard, red against a plain-overwrite upsert), plus **T10**: the two **delete-and-reinsert** round trips from the per-field/per-branch matrix — both directions, red against first-insertion-wins. |
 | modify | tests/unit/manifest.test.js | Direct `reverseManagedBlock` cases for recorded + legacy (no sep metadata) entries — **all of Table N** — plus **T6**, the discrimination pair (**rows 3 and 2**, which differ only in `sepBefore`; both are required, see Table N's T6 note), **T7**, the out-of-vocabulary forged-metadata rows from **Table M**, and **T9**, the *in-vocabulary* at-EOF forgery that makes Table M's declared bound executable. |
 
 ### Exact contracts
@@ -190,25 +190,29 @@ const sepBefore = `${pad}\n`;                          // '\n' (already newline-
 const sepAfter = '\n';                                 // the block's own line terminator
 const next = `${current}${sepBefore}${block}${sepAfter}`;
 if (!dryRun) fs.writeFileSync(mdPath, next);
-recordManagedBlock(manifest, mdPath, false, sepBefore, sepAfter);
+recordManagedBlock(manifest, mdPath, false, sepBefore, sepAfter, true);  // inserted → UPDATE
 out.changed.push(mdPath);                              // ← UNCHANGED, and easy to drop
 ```
-- createdFile branch: record `recordManagedBlock(manifest, mdPath, true, '', '\n')`
-  (file is exactly `block + '\n'`; no leading separator).
+- createdFile branch: `recordManagedBlock(manifest, mdPath, true, '', '\n', true)`
+  (file is exactly `block + '\n'`; no leading separator). **`inserted = true`** —
+  this branch really does write separators.
 - replace branch (sentinels already present): unchanged splice; call
-  `recordManagedBlock(manifest, mdPath, false, sepBefore, sepAfter)` with the
-  separators it would have used. **The helper's own rules protect both fields** —
-  `createdFile` is sticky-true so this branch's `false` cannot clobber a real
-  create, and the separators are first-insertion-wins so this branch's values are
-  ignored when an entry already exists. See the helper contract below.
+  `recordManagedBlock(manifest, mdPath, false, null, null, false)`.
+  **`inserted = false`** — the splice writes **no** separators, so this branch
+  must not touch the recorded ones. `createdFile` is sticky-true, so its `false`
+  cannot clobber a real create either.
 
-Add `recordManagedBlock(manifest, path, createdFile, sepBefore, sepAfter)` in
-`shared.js`. **Mirror `recordSettingsEntry` (`shared.js:90-98`), not
-`recordCopiedSkill`** — it is the in-tree helper that already solves this exact
-problem, sticky field included:
+Add `recordManagedBlock(manifest, path, createdFile, sepBefore, sepAfter, inserted)`
+in `shared.js`. **Mirror `recordSettingsEntry` (`shared.js:90-98`), not
+`recordCopiedSkill`** — it is the in-tree helper that already solves the sticky
+half of this:
 
 ```js
-function recordManagedBlock(manifest, mdPath, createdFile, sepBefore, sepAfter) {
+/** @param {boolean} inserted TRUE only on the two branches that actually WRITE
+ *  separators (createdFile, append). The replace branch splices between existing
+ *  sentinels and writes none, so it passes false and the recorded separators
+ *  are left exactly as they are. */
+function recordManagedBlock(manifest, mdPath, createdFile, sepBefore, sepAfter, inserted) {
   if (!manifest) return;
   if (!Array.isArray(manifest.entries)) manifest.entries = [];
   const existing = manifest.entries.find((e) => e.kind === 'managed-block' && e.path === mdPath);
@@ -216,27 +220,71 @@ function recordManagedBlock(manifest, mdPath, createdFile, sepBefore, sepAfter) 
   // STICKY-TRUE (shared.js:95's rule): once we created the file, a later re-sync
   // that finds it present must NOT flip that truth back to false.
   entry.createdFile = existing ? (existing.createdFile === true ? true : createdFile) : createdFile;
-  // FIRST-INSERTION-WINS: the separators we actually inserted, never overwritten.
-  if (typeof entry.sepBefore !== 'string') entry.sepBefore = sepBefore;
-  if (typeof entry.sepAfter !== 'string') entry.sepAfter = sepAfter;
+  // UPDATE-ON-INSERT: record the separators THIS insertion wrote, replacing any
+  // earlier ones — a delete-and-reinsert cycle can legitimately change them.
+  if (inserted) {
+    entry.sepBefore = sepBefore;
+    entry.sepAfter = sepAfter;
+  }
   if (!existing) manifest.entries.push(entry);
 }
 ```
 
-**The two fields follow DIFFERENT rules, and conflating them is the bug gate
-round 4 found.** An earlier revision of this cell said both *"set `createdFile`"*
-and *"always keeps `createdFile`"* — contradictory, and a straightforward upsert
-resolves the contradiction the wrong way:
+### The per-field, per-branch matrix (canonical)
 
-| Field | Rule | Why |
-|-------|------|-----|
-| `createdFile` | **sticky-true** — `existing.createdFile === true \|\| createdFile` | The **replace** branch calls with `false` on every re-sync. A plain overwrite flips `true → false` on the first re-sync after a create, and uninstall then **truncates the file instead of deleting it** — leaving an empty `CLAUDE.md` we created. Exactly the defect `shared.js:83-87` documents for `settings-entry`. |
-| `sepBefore` / `sepAfter` | **first-insertion-wins** — set only when absent | They describe the bytes inserted **at first insertion**; a re-sync's splice inserts no separators, so overwriting them would record separators that were never written. |
+**The two fields follow THREE distinct rules between them**, and every round that
+touched this helper got caught by conflating two of them. The matrix is the
+contract; do not derive it from prose.
+
+| Branch | writes separators? | `createdFile` | `sepBefore` / `sepAfter` |
+|--------|--------------------|---------------|--------------------------|
+| **createdFile** (file absent) | **yes** — `''` + block + `'\n'` | set `true` (sticky-true keeps it true forever) | **UPDATE** to `''` / `'\n'` |
+| **append** (file present, no sentinels) | **yes** — `sepBefore` + block + `'\n'` | pass `false`; **sticky-true preserves an earlier `true`** | **UPDATE** to what was just inserted |
+| **replace** (sentinels present) | **no** — splice only | pass `false`; **sticky-true preserves an earlier `true`** | **PRESERVE** — pass `inserted = false` |
+
+- **`createdFile` → sticky-true, in all three branches.** The replace branch calls
+  with `false` on every re-sync; a plain overwrite flips `true → false` on the
+  first re-sync after a create, and uninstall then **truncates the file instead of
+  deleting it**, leaving an empty `CLAUDE.md` we made. Exactly the defect
+  `shared.js:83-87` documents for `settings-entry`. (Found gate round 4.)
+- **Separators → update-on-insert / preserve-on-replace.** They must describe the
+  bytes of the **most recent actual insertion**. Preserving them on replace is
+  required (that branch inserts nothing); **updating them on insert is equally
+  required** — see the delete-and-reinsert defect below. (Found gate round 6.)
 
 **Sticky-true is safe here for the same reason it is safe there:** the reverser
 deletes the file only when it is **also** empty after the strip
 (`remaining.trim() === ''`, `manifest.js:215`), so a stale `createdFile: true`
 can never delete a file that still holds user text.
+
+#### Why first-insertion-wins was wrong — the delete-and-reinsert cycle
+
+An earlier revision made the separators **first-insertion-wins** (set only when
+absent). That is correct for the replace branch and **wrong for the append
+branch**, because a user can delete the managed block by hand and leave the file
+in a *different* termination state than it had at first insertion — after which
+the next `sync` genuinely inserts **different separator bytes** while the manifest
+keeps the stale ones. **Both directions measured at `e7c845e`:**
+
+```text
+rule = first-wins
+  (a) "foo" -> delete, left "foo\n"   recorded sepBefore="\n\n" -> uninstall "foo"    want "foo\n"   *** WRONG ***
+  (b) "foo\n" -> delete, left "foo"   recorded sepBefore="\n"   -> uninstall "foo\n"  want "foo"     *** WRONG ***
+
+rule = per-branch
+  (a) "foo" -> delete, left "foo\n"   recorded sepBefore="\n"   -> uninstall "foo\n"  want "foo\n"   ok
+  (b) "foo\n" -> delete, left "foo"   recorded sepBefore="\n\n" -> uninstall "foo"    want "foo"     ok
+```
+
+Direction (a) **eats the user's newline**; direction (b) **leaves an extra one**.
+The existing tests never caught it because they exercise only the
+**sentinel-replacement** re-sync, where nothing is inserted and first-wins and
+per-branch agree.
+
+**Declared residual — unchanged by this fix.** The in-vocabulary forgery bound in
+**Table M** is unaffected: this changes *which* in-vocabulary value gets recorded
+by an honest sync, not the set of accepted values, and a stale-vs-fresh separator
+is the same one-whitespace-byte envelope. Nothing else in the threat model moves.
 
 **Forward-side "unchanged" regions — the same standard as the reverse side.**
 Only the three lines `const base = …` / `const next = …` / `recordOnce(…)`
@@ -246,8 +294,8 @@ Only the three lines `const base = …` / `const next = …` / `recordOnce(…)`
 | Region | `e7c845e` anchor | Must stay |
 |--------|------------------|-----------|
 | `buildBlock` call and the read | `shared.js:134-140` | unchanged. |
-| The absent-file branch | `shared.js:142-152` | unchanged **except** its `recordOnce` becomes `recordManagedBlock(manifest, mdPath, true, '', '\n')`. The written bytes stay `` `${block}\n` `` — the digest golden depends on it. |
-| The `locateManagedBlock` call + splice-replace branch | `shared.js:154-169` | unchanged **except** its `recordOnce` becomes the upsert. The `next === current` → `out.unchanged.push` arm is untouched. |
+| The absent-file branch | `shared.js:142-152` | unchanged **except** its `recordOnce` becomes `recordManagedBlock(manifest, mdPath, true, '', '\n', true)` — `inserted = true`. The written bytes stay `` `${block}\n` `` — the digest golden depends on it. |
+| The `locateManagedBlock` call + splice-replace branch | `shared.js:154-169` | unchanged **except** its `recordOnce` becomes `recordManagedBlock(manifest, mdPath, false, null, null, false)` — **`inserted = false`**, because this branch writes no separators. The `next === current` → `out.unchanged.push` arm is untouched. |
 | **`out.changed.push(mdPath);`** | `shared.js:176` | **unchanged — and this is the one an implementer drops**, because the round-1 draft of the append-branch snippet above omitted it. `sync` reports the file as changed via this line; without it the file is silently rewritten and reported as untouched. |
 | The function close | `shared.js:177` | unchanged. |
 
@@ -464,6 +512,25 @@ row 3 alone is satisfied by deleting the disjunct, row 2 alone by leaving it
 ungated. This is what "proves the gate discriminates rather than disabling the
 disjunct" means, stated as the two-sided measurement rather than as a claim.
 
+#### T10 — delete-and-reinsert, both directions (the per-branch rule)
+
+Each case is one full lifecycle: **sync → hand-delete the block → sync →
+uninstall**. The hand-delete step writes the file directly; it must **not** go
+through `applyManagedBlock`.
+
+| # | Original | File after the hand-delete | Recorded `sepBefore` after the 2nd sync | Uninstall must yield |
+|---|----------|----------------------------|------------------------------------------|----------------------|
+| (a) | `"foo"` | `"foo\n"` | **`'\n'`** (updated) | **`"foo\n"`** |
+| (b) | `"foo\n"` | `"foo"` | **`'\n\n'`** (updated) | **`"foo"`** |
+
+**Assert the recorded `sepBefore` as well as the final bytes.** The end-state
+assertion alone tells you *that* something is wrong; the manifest assertion tells
+you *which* rule fired, and it is the one that fails loudly the moment someone
+reinstates first-insertion-wins.
+
+**Red-first:** under first-insertion-wins (a) yields `"foo"` and (b) yields
+`"foo\n"` — measured.
+
 #### T9 — the in-vocabulary at-EOF forgery (makes Table M's bound executable)
 
 Same file, same install, **two entries**, one assertion each:
@@ -624,7 +691,18 @@ listed under "Out of scope".
       **deleted** by uninstall after **two or more** intervening `sync` runs, not
       truncated to empty. **Red-first** against a plain-overwrite upsert, where the
       replace branch's `createdFile: false` wins on the first re-sync.
-- [ ] **AC10 (new — the declared bound is EXECUTABLE, T9).** On an honest install
+- [ ] **AC11 (new — delete-and-reinsert, T10, BOTH directions).** A user who
+      deletes the managed block by hand and leaves the file in a *different*
+      termination state still round-trips byte-perfectly through the next
+      sync → uninstall:
+      **(a)** sync `"foo"` → hand-delete the block leaving `"foo\n"` → sync →
+      uninstall → **`"foo\n"`** (the user's newline survives);
+      **(b)** sync `"foo\n"` → hand-delete leaving `"foo"` → sync → uninstall →
+      **`"foo"`** (no extra newline appears).
+      **Red-first against first-insertion-wins**, where (a) yields `"foo"` and
+      (b) yields `"foo\n"`. The shipped tests do **not** cover this — they
+      exercise only the sentinel-replacement re-sync, where the two rules agree.
+- [ ] **AC10 (the declared bound is EXECUTABLE, T9).** On an honest install
       of original `"foo\n"`, a manifest hand-edited to the **in-vocabulary**
       `sepBefore: '\n\n'` uninstalls to **exactly `"foo"`** — i.e. the loss is
       **one newline and nothing else**: no user text is removed, and the honest
@@ -690,7 +768,16 @@ grep -q "typeof entry.sep" src/core/manifest.js && {
   echo "REGRESSED: separator metadata still accepted on a bare typeof check"; exit 1; }
 echo "V4 ok — separator vocabulary is bounded"
 
-# V5 — full gates.
+# V5 (per-branch separator rule) — the helper takes the `inserted` flag and the
+# replace branch passes false. FAILS LOUDLY if the first-insertion-wins shape
+# (`typeof entry.sepBefore !== 'string'`) was reinstated.
+grep -q "inserted" src/adapters/shared.js || {
+  echo "REGRESSED: recordManagedBlock lost its `inserted` per-branch flag"; exit 1; }
+grep -q "typeof entry.sepBefore !== 'string'" src/adapters/shared.js && {
+  echo "REGRESSED: first-insertion-wins reinstated — delete-and-reinsert will corrupt"; exit 1; }
+echo "V5 ok — separator update rule is per-branch"
+
+# V6 — full gates.
 npm test
 npm run lint
 ```
@@ -715,6 +802,12 @@ genuine progress gate (must print after the work) while its second is an
 implementer writing the vulnerable
 `typeof entry.sepBefore === 'string' ? … : '\n'` shape, which was this spec's own
 contract until gate round 3.
+
+**V5's baseline at `e7c845e`:** both greps also miss (exit 1) — `shared.js` has
+no `recordManagedBlock` yet. Its **first** grep is a progress gate (the
+`inserted` flag must exist after the work); its **second** is an **absence
+check** that must keep missing, guarding against an implementer reinstating the
+first-insertion-wins shape this spec itself specified until gate round 6.
 
 **Both were proved in BOTH directions** (`docs/runbooks/codex-review.md`) on the
 untouched tree at `e7c845e`:
@@ -973,3 +1066,48 @@ abort the script — it simply skips the block. Measured, not assumed.
 > so an attacker who can rewrite `sepBefore` can equally rewrite a recorded hash.
 > Hardening one field while the file is otherwise unprotected buys nothing. A
 > separate design, with its own review.
+>
+> **2026-08-02 — gate round 6, Codex [metadata lifecycle]: CLOSED.**
+>
+> **The separator rule was wrong across a delete-and-reinsert cycle.** Round 4
+> made `sepBefore`/`sepAfter` **first-insertion-wins**, which is right for the
+> replace branch and **wrong for the append branch**: a user can delete the
+> managed block by hand and leave the file in a *different* termination state, so
+> the next `sync` genuinely inserts **different separator bytes** while the
+> manifest keeps the stale ones. **Both directions measured at `e7c845e`:**
+>
+> ```text
+> rule = first-wins
+>   (a) "foo" -> delete, left "foo\n"   recorded "\n\n" -> uninstall "foo"    want "foo\n"  WRONG
+>   (b) "foo\n" -> delete, left "foo"   recorded "\n"   -> uninstall "foo\n"  want "foo"    WRONG
+> rule = per-branch
+>   (a) ... recorded "\n"   -> "foo\n"  ok
+>   (b) ... recorded "\n\n" -> "foo"    ok
+> ```
+>
+> Direction (a) **eats the user's newline**; (b) **leaves an extra one**. The
+> shipped tests never caught it because they exercise only the
+> **sentinel-replacement** re-sync, where nothing is inserted and the two rules
+> agree — which is exactly why the new rows are lifecycle round trips rather than
+> unit assertions on the helper.
+>
+> **Fix (Codex's recommendation, adopted):** the separator update rule is
+> **per-branch**. `recordManagedBlock` takes an explicit `inserted` flag;
+> the **createdFile** and **append** branches pass `true` and **UPDATE** the
+> recorded separators to what they just wrote, the **replace** branch passes
+> `false` and **PRESERVES** them. `createdFile` stays **sticky-true in all three**,
+> unchanged from round 4.
+>
+> **Made structural so this shape cannot recur:** the two fields now carry
+> **three distinct rules between them** (sticky-true, update-on-insert,
+> preserve-on-replace), so the contract is a **per-field, per-branch matrix**
+> rather than prose. Every round that touched this helper was caught by conflating
+> two of the three; a matrix makes the omission visible instead of arguable.
+> New **T10** (both directions, asserting the **recorded `sepBefore`** as well as
+> the final bytes, so a failure says *which* rule fired), new **AC11**, new **V5**
+> — whose absence-check half fails loudly if first-insertion-wins is reinstated.
+>
+> **Declared residual — unchanged.** Table M's in-vocabulary forgery bound does
+> not move: this changes *which* in-vocabulary value an honest sync records, not
+> the accepted set, and a stale-vs-fresh separator sits inside the same
+> one-whitespace-byte envelope. No other part of the threat model shifts.
