@@ -133,6 +133,17 @@ validateEntry({kind:'managed-block', path:'…', createdFile:false,
 Optionally list them as known-optional keys in `ENTRY_FIELD_TYPES`
 (`manifest.js:806-817`) — additive only, no rejection.
 
+**"No rejection" means: do NOT give them a `'string'` type.** `validateEntry`
+enforces a listed field's type whenever the value is **not `undefined`**, so
+`sepBefore: 'string'` makes `reverse()` **skip the whole entry** for a `null`,
+number, boolean or array — leaving the managed block **installed**, which is the
+disposition Table M explicitly **rejected**. The type rule also buys nothing: the
+allowlist is **total over every JS value** (`SEP_BEFORE_OK.has(null)` is `false`,
+as it is for `42`, `true`, `[]`, `{}` — measured), so every non-member already
+degrades to the legacy strip. **Keep the cell `'managed-block': { createdFile:
+'boolean' }`.** Adding the shape to the module doc-comment header is fine and
+encouraged; adding it to the *type table* is not.
+
 ### What re-verification found stale
 
 **One item, and it was a security hazard.** This spec reached `Ready` at
@@ -176,7 +187,7 @@ the current template.
 | modify | src/adapters/shared.js | `applyManagedBlock`: replace the lossy append with a non-lossy insert that records the exact inserted separator bytes (`sepBefore`, `sepAfter`) on the manifest entry. `createdFile` and `replace` branches keep behavior; record `sepAfter:'\n'` on the createdFile branch. |
 | modify | src/core/manifest.js | `reverseManagedBlock`: strip only the recorded (or legacy-default) separators, and only when the strip preserves a line boundary — never fuse user lines, **and never consume a newline the user supplied** (the `weSuppliedTerminator` gate on the at-EOF disjunct — Table N). |
 | modify | tests/unit/claude-adapter.test.js | Round-trip cases incl. the relocated-block-between-single-newline-lines case (**Table N row 4**), plus **T8**: create (absent file) → **sync again at least twice** → uninstall, asserting the file is **REMOVED**, not truncated to empty (the sticky-`createdFile` guard, red against a plain-overwrite upsert), plus **T10**: the two **delete-and-reinsert** round trips from the per-field/per-branch matrix — both directions, red against first-insertion-wins. **AND one MANDATORY update to a shipped assertion at `:342-361` — see "The one shipped assertion this WP flips".** |
-| modify | tests/unit/manifest.test.js | Direct `reverseManagedBlock` cases for recorded + legacy (no sep metadata) entries — **all of Table N** — plus **T6**, the discrimination pair (**rows 3 and 2**, which differ only in `sepBefore`; both are required, see Table N's T6 note), **T7**, the out-of-vocabulary forged-metadata rows from **Table M**, and **T9**, the *in-vocabulary* at-EOF forgery that makes Table M's declared bound executable. |
+| modify | tests/unit/manifest.test.js | Direct `reverseManagedBlock` cases for recorded + legacy (no sep metadata) entries — **all seven rows of Table N** — plus **T6**, the discrimination pair (**rows 3 and 2**, which differ only in `sepBefore`; both are required, see Table N's T6 note), **T7**, the out-of-vocabulary forged-metadata rows from **Table M**, **T9**, the *in-vocabulary* at-EOF forgery that makes Table M's declared bound executable, **T11**, the honest-relocation pair (**Table N rows 6–7**, the ownership re-check), and **T12**, the **non-string** metadata rows (`null` / number / boolean / array `sepBefore` and `sepAfter`) asserting the block is still conservatively stripped and the entry is **not** rejected upstream (AC14). |
 
 ### Exact contracts
 
@@ -332,15 +343,33 @@ if (sepBefore.length > 0 && before.endsWith(sepBefore)) {
   // the file was already newline-terminated by the USER, so that newline is
   // theirs and survives even with nothing after the block.
   const weSuppliedTerminator = sepBefore === '\n\n';
-  const safe =
+
+  // (1) OWNERSHIP RE-CHECK. We wrote '\n\n' ONLY because the content did not end
+  //     with a newline. If `candidate` ends with one now, the block is NOT at its
+  //     recorded append position — the user moved it — and that newline is theirs.
+  const ownershipOk = !weSuppliedTerminator || !candidate.endsWith('\n');
+
+  // (2) ANTI-FUSION. Unchanged: never remove a newline that is the boundary
+  //     between two user lines.
+  const noFusion =
     candidate === '' ||
     candidate.endsWith('\n') ||
     (weSuppliedTerminator && after === '') ||
     after.startsWith('\n');
-  if (safe) before = candidate; // else: leave the user's newline intact (no fusion)
+
+  // BOTH are required. They are independent: (1) alone fuses (Table N row 7),
+  // (2) alone eats a user blank line on relocation (row 6).
+  if (ownershipOk && noFusion) before = candidate;
 }
 const remaining = before + after;
 ```
+
+**`ownershipOk` and `noFusion` are a CONJUNCTION, and neither is redundant.**
+Measured across the full case set: dropping (1) scores 6/7 (row 6 fails —
+a user blank line is collapsed); replacing (2) with (1) also scores 6/7 (row 7
+fails — **two user lines fuse**, the exact A13 defect this WP exists to close).
+Only the conjunction is 7/7. A draft of this fix used (1) *instead of* (2) and
+reintroduced fusion; the probe below is what caught it.
 
 **The `weSuppliedTerminator` gate is load-bearing — do not simplify it back to a
 bare `after === ''`.** That ungated form is what an earlier revision of this spec
@@ -445,6 +474,29 @@ rewrite `sepBefore` can equally rewrite a recorded `hash`. Adding integrity to o
 field while the file is otherwise unprotected buys nothing. That is a separate
 design with its own review, not a fold-in here.
 
+**Scope boundary — what this residual does NOT cover, stated because gate round 9
+tested exactly there.** Table M and the T9 bound govern **forged metadata**: a
+manifest edited to a value the forward step did not write. **Honest-use
+corruption is a different question and is NOT residual — it is a defect.**
+Table N row 6 is honest use — nothing is forged, the recorded `'\n\n'` is exactly
+what an unterminated append wrote — and the r4 contract still consumed a
+user-authored blank line. Three reasons it fails the T9 bound rather than fitting
+inside it:
+
+1. **The bound is scoped to forgery.** T9 measures what a *hand-edited manifest*
+   can cost. Row 6 needs no edit at all.
+2. **It exceeds "two whitespace bytes, cannot cross a line boundary".** Deleting
+   `\n\n` where the user authored a blank line **merges two Markdown blocks** —
+   two paragraphs become one. That is a structural change to their document, not
+   whitespace trimming, so the "cannot cross a line boundary" half of the bound is
+   simply false here.
+3. **It is a regression against shipped code**, which strips one newline
+   unconditionally. A residual may be a cost the design accepts; it may not be
+   *worse than what it replaces*.
+
+Fixed by the ownership re-check in Exact contracts, pinned by **Table N rows 6–7**
+and **T11**.
+
 ### Table N — the `safe` predicate, every REACHABLE case (canonical)
 
 **Reachability first, because it bounds the table.** `locateManagedBlock`
@@ -473,13 +525,28 @@ contract above.
 | 3 | **relocated to EOF, original `foo\n`** | `'\n'` | `"foo\n"` | `"foo"` **XX** | `"foo"` **XX** | `"foo\n"` **ok** |
 | 4 | relocated between two user lines | `'\n'` | `"lineA\nlineB\n"` | `"lineAlineB\n"` **XX fusion** | ok | **ok** |
 | 5 | empty original | `'\n\n'` | `""` | `"\n"` **XX** | ok | **ok** |
+| **6** | **relocated between lines, `sepBefore='\n\n'`** — user file `lineA\n\n\n<BLOCK>\nlineB\n` | `'\n\n'` | `"lineA\n\n\nlineB\n"` | `"lineA\n\nlineB\n"` **XX** | `"lineA\nlineB\n"` **XX** | **ok** |
+| **7** | **fusion probe, `sepBefore='\n\n'`** — user file `lineA\n\n<BLOCK>\nlineB\n` | `'\n\n'` | `"lineA\n\nlineB\n"` | — | ok | **ok** |
 
 ```text
-SCORE  today 1/5   ungated 4/5   gated 5/5
+SCORE  today 1/7   ungated 5/7   gated (with the ownership re-check) 7/7
 ```
 
-Rows 2, 4 and 5 are the bugs this WP exists to fix; **row 3 is the one the gate
-adds**.
+Rows 2, 4 and 5 are the bugs this WP exists to fix; **row 3 is the one the
+`weSuppliedTerminator` gate adds**; **rows 6 and 7 are the pair the ownership
+re-check adds** (gate round 9).
+
+**Row 6 is a REGRESSION the r4 contract would have shipped, not a residual.**
+With `sepBefore='\n\n'` recorded from an honest unterminated append, a user who
+later relocates the block after a blank line gets `candidate = "lineA\n"`, whose
+`endsWith('\n')` satisfied the old predicate — so **both** preceding newlines were
+deleted. Today's shipped code strips **one**; the r4 contract strips **two**. A WP
+whose thesis is *never delete a byte we cannot prove is ours* must not delete more
+than the code it replaces.
+
+**Row 7 is why the fix is a conjunction.** Same `sepBefore='\n\n'`, but
+`candidate = "lineA"` — no trailing newline, so the ownership re-check passes.
+Only `noFusion` stops the strip, and without it two user lines **fuse**.
 
 **Row 5 of the round-3 table was UNSATISFIABLE and has been removed.** It
 described *"relocated to EOF, original `foo`"* — a file shaped
@@ -554,6 +621,29 @@ remove**.
 
 **This is spec text only** — `tests/unit/claude-adapter.test.js` is already in the
 Deliverables table.
+
+#### T11 — honest relocation with `sepBefore='\n\n'` (the ownership re-check)
+
+**Two rows, and both are required** — they differ only in whether `candidate`
+ends with a newline, which is precisely the signal the re-check reads.
+
+| # | Recorded | User file at uninstall | Uninstall must yield | What it pins |
+|---|----------|------------------------|----------------------|--------------|
+| a | `sepBefore='\n\n'` | `lineA\n\n\n<BLOCK>\nlineB\n` | **`"lineA\n\n\nlineB\n"`** | the ownership re-check: `candidate="lineA\n"` → not at the recorded position → strip nothing on the leading side |
+| b | `sepBefore='\n\n'` | `lineA\n\n<BLOCK>\nlineB\n` | **`"lineA\n\nlineB\n"`** | `noFusion` still governs: `candidate="lineA"` passes the re-check, and only the anti-fusion guard prevents `lineAlineB\n` |
+
+Set both up **honestly** — sync an unterminated original so the forward step
+records `'\n\n'` by itself, then move the block by writing the file directly. **Do
+not hand-edit the manifest**; that would make this a forgery test, which is T9's
+job, and would not exercise the honest path this row exists for.
+
+**Red-first, and in two different directions:**
+
+- **(a)** against the round-4 predicate yields `"lineA\nlineB\n"` — a user blank
+  line collapsed.
+- **(b)** against an ownership-re-check-*instead-of*-`noFusion` implementation
+  yields `"lineAlineB\n"` — **fusion**. Run this one; a fix for (a) that drops
+  `noFusion` passes (a) and silently reintroduces A13.
 
 #### T10 — delete-and-reinsert, both directions (the per-branch rule)
 
@@ -734,7 +824,21 @@ listed under "Out of scope".
       **deleted** by uninstall after **two or more** intervening `sync` runs, not
       truncated to empty. **Red-first** against a plain-overwrite upsert, where the
       replace branch's `createdFile: false` wins on the first re-sync.
-- [ ] **AC11 (new — delete-and-reinsert, T10, BOTH directions).** A user who
+- [ ] **AC13 (new — honest relocation, T11, BOTH rows).** With `sepBefore='\n\n'`
+      recorded by an honest unterminated append: **(a)** a block relocated after a
+      blank line (`lineA\n\n\n<BLOCK>\nlineB\n`) uninstalls to
+      **`"lineA\n\n\nlineB\n"`** — the user's blank line survives; **(b)** a block
+      relocated with no blank line (`lineA\n\n<BLOCK>\nlineB\n`) uninstalls to
+      **`"lineA\n\nlineB\n"`** — **no fusion**. Both red-first, in the two
+      different directions named under T11. **(b) is not optional**: it is the only
+      thing that catches a fix for (a) that drops the anti-fusion guard.
+- [ ] **AC14 (new — non-string separator metadata still strips).** `reverse()` on
+      a `managed-block` entry whose `sepBefore` or `sepAfter` is **`null`, a
+      number, a boolean, or an array** still removes the block, degrading to the
+      legacy conservative strip per **Table M**. **The entry must NOT be rejected
+      before `reverseManagedBlock` runs** — `ENTRY_FIELD_TYPES` must not type-gate
+      these fields (see Implementation notes: *additive only, no rejection*).
+- [ ] **AC11 (delete-and-reinsert, T10, BOTH directions).** A user who
       deletes the managed block by hand and leaves the file in a *different*
       termination state still round-trips byte-perfectly through the next
       sync → uninstall:
@@ -845,6 +949,30 @@ grep -qF "recordManagedBlock(manifest, mdPath, false, null, null, false)" src/ad
 printf '%s\n' "$RBODY" | grep -q "typeof entry.sepBefore !== 'string'" && {
   echo 'REGRESSED: first-insertion-wins reinstated — delete-and-reinsert will corrupt'; exit 1; }
 echo "V5 ok — separator update rule is per-branch"
+
+# V5b (AC14) — ENTRY_FIELD_TYPES must NOT type-gate the separator fields. A
+# 'string' rule there rejects a non-string BEFORE the allowlist can degrade,
+# leaving the block installed — the disposition Table M rejected.
+# Expect no output, exit 1. ABSENCE CHECK: 0 hits is the passing result.
+grep -n "'managed-block': {.*sep" src/core/manifest.js
+
+# V5c (Table N rows 6-7) — the ownership re-check is present AND the anti-fusion
+# guard was not replaced by it. Assert literals UNIQUE to the new predicate:
+# `after.startsWith('\n')` alone is useless here — it already exists at :212 as
+# the sepAfter legacy fallback, so it is green on the untouched tree.
+RBODY2=$(sed -n '/^function reverseManagedBlock/,/^}/p' src/core/manifest.js)
+for L in "!weSuppliedTerminator || !candidate.endsWith('\\n')" \
+         "weSuppliedTerminator && after === ''" \
+         "ownershipOk && noFusion"; do
+  printf '%s\n' "$RBODY2" | grep -qF "$L" || {
+    echo "REGRESSED: safe-predicate conjunct missing: $L"; exit 1; }
+done
+echo "V5c ok — ownership re-check AND anti-fusion guard both present"
+#
+# NOTE, and it is the reason T11 exists: every `grep -qF` gate in this spec is
+# COMMENT-EVADABLE (gate round 9's reviewer gutted the V4 allowlist leaving only
+# comments and V4 stayed green). These greps are cheap tripwires; **T11 and T7 are
+# the load-bearing checks**. Routed for a canonical fix: `WP-grep-gate-helper`.
 
 # V6 — full gates.
 npm test
@@ -1226,3 +1354,59 @@ abort the script — it simply skips the block. Measured, not assumed.
 > separate gates reported green. **V1b is that step.** The generalisation: a
 > verification plan that never assembles the whole change has not verified the
 > change, however many of its parts it checked.
+>
+> **2026-08-02 — PR #134 implementation double gate. One spec decision, one
+> implementer violation, three routed.**
+>
+> - **Codex [medium] / SPEC DECISION — honest relocation consumed TWO user
+>   newlines.** With `sepBefore='\n\n'` recorded by an **honest** unterminated
+>   append, a user who later relocates the block after a blank line
+>   (`lineA\n\n\n<BLOCK>\nlineB\n`) got `candidate = "lineA\n"`, whose
+>   `endsWith('\n')` satisfied the r4 predicate — so **both** preceding newlines
+>   were deleted, **collapsing a user-authored blank line** and merging two
+>   Markdown blocks. **Judged a DEFECT, not a residual**, for three reasons stated
+>   in Table M's new scope-boundary paragraph: Table M/T9 are scoped to **forgery**
+>   and this needs no forged byte; it **exceeds** the pinned *"two whitespace
+>   bytes, cannot cross a line boundary"* bound, because collapsing a blank line
+>   **is** a structural boundary change; and it is a **regression against shipped
+>   code**, which strips one newline, not two. A residual may be a cost the design
+>   accepts — it may not be worse than the code it replaces.
+>   **Fix: an ownership re-check, conjoined with the existing anti-fusion guard.**
+>   We wrote `'\n\n'` *only* because the content did not end with a newline, so if
+>   `candidate` ends with one now the block is not at its recorded position and
+>   that newline is the user's. **Both conjuncts are load-bearing, and a draft that
+>   used the re-check INSTEAD of `noFusion` reintroduced FUSION** — the exact A13
+>   defect this WP exists to close. Measured across the full set: r4 **6/7**
+>   (row 6 fails), re-check-only **6/7** (row 7 fuses), **conjunction 7/7**.
+>   Table N gains canonical **rows 6 and 7**; new **T11** (both rows, red-first in
+>   two different directions), **AC13**, **V5c**.
+> - **wd-reviewer [medium] / IMPLEMENTER VIOLATION, no spec change — CONCURRED.**
+>   PR #134 shipped
+>   `'managed-block': { createdFile: 'boolean', sepBefore: 'string', sepAfter: 'string' }`.
+>   The spec forbids this in **three** places — `:133-134` and `:693-696`
+>   (*"additive only, no rejection"*) and **Table M's canonical disposition**,
+>   which **explicitly rejected** skipping the entry because it leaves the block
+>   installed. A `'string'` rule makes `validateEntry` reject a **non-string**
+>   `sepBefore`/`sepAfter` *before* the allowlist can degrade it. **The spec is
+>   correct as written and is not amended**; the one-line revert is the
+>   implementer's. Two clarifications added so it cannot recur: an explicit
+>   *"no rejection means do NOT give them a `'string'` type"* note with the
+>   measured fact that **the allowlist is total over every JS value**
+>   (`SEP_BEFORE_OK.has(null)` is `false`, as for `42`/`true`/`[]`/`{}`), so the
+>   type rule buys **nothing** and costs the fallback; plus **AC14**, **T12** and
+>   **V5b** to pin it. Round 4's note *"`ENTRY_FIELD_TYPES` cannot close this — a
+>   forged value IS a string"* considered only string forgery; the non-string case
+>   is where it actively subtracts.
+>
+> **Routed, NOT held against PR #134:**
+>
+> - **`WP-grep-gate-helper`** — the reviewer gutted V4's allowlist leaving every
+>   literal in comments and V4 stayed green: `grep -qF` is a substring match over
+>   source *including comments*. **Fourth instance** of this shape (rounds 2, 4, 7,
+>   8). The fix is a canonical gate helper that strips comments before matching
+>   (or an AST predicate), owned in one place — same treatment as
+>   `WP-f30-io-contract-extraction`. Until it lands, the greps are tripwires and
+>   **T7/T11 are the load-bearing checks**; V5c says so inline.
+> - **`shared.js:196`'s stale comment** (*"do not re-record"* above what is now an
+>   upserting call) is pinned byte-for-byte by the forward unchanged-regions
+>   table. Widen the pin or fix the comment in a follow-up.
