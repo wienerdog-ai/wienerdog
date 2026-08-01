@@ -175,7 +175,7 @@ the current template.
 |--------|------|-------|
 | modify | src/adapters/shared.js | `applyManagedBlock`: replace the lossy append with a non-lossy insert that records the exact inserted separator bytes (`sepBefore`, `sepAfter`) on the manifest entry. `createdFile` and `replace` branches keep behavior; record `sepAfter:'\n'` on the createdFile branch. |
 | modify | src/core/manifest.js | `reverseManagedBlock`: strip only the recorded (or legacy-default) separators, and only when the strip preserves a line boundary — never fuse user lines, **and never consume a newline the user supplied** (the `weSuppliedTerminator` gate on the at-EOF disjunct — Table N). |
-| modify | tests/unit/claude-adapter.test.js | Round-trip cases incl. the relocated-block-between-single-newline-lines case (**Table N row 4**), plus **T8**: create (absent file) → **sync again at least twice** → uninstall, asserting the file is **REMOVED**, not truncated to empty (the sticky-`createdFile` guard, red against a plain-overwrite upsert), plus **T10**: the two **delete-and-reinsert** round trips from the per-field/per-branch matrix — both directions, red against first-insertion-wins. |
+| modify | tests/unit/claude-adapter.test.js | Round-trip cases incl. the relocated-block-between-single-newline-lines case (**Table N row 4**), plus **T8**: create (absent file) → **sync again at least twice** → uninstall, asserting the file is **REMOVED**, not truncated to empty (the sticky-`createdFile` guard, red against a plain-overwrite upsert), plus **T10**: the two **delete-and-reinsert** round trips from the per-field/per-branch matrix — both directions, red against first-insertion-wins. **AND one MANDATORY update to a shipped assertion at `:342-361` — see "The one shipped assertion this WP flips".** |
 | modify | tests/unit/manifest.test.js | Direct `reverseManagedBlock` cases for recorded + legacy (no sep metadata) entries — **all of Table N** — plus **T6**, the discrimination pair (**rows 3 and 2**, which differ only in `sepBefore`; both are required, see Table N's T6 note), **T7**, the out-of-vocabulary forged-metadata rows from **Table M**, and **T9**, the *in-vocabulary* at-EOF forgery that makes Table M's declared bound executable. |
 
 ### Exact contracts
@@ -512,6 +512,49 @@ row 3 alone is satisfied by deleting the disjunct, row 2 alone by leaving it
 ungated. This is what "proves the gate discriminates rather than disabling the
 disjunct" means, stated as the two-sided measurement rather than as a claim.
 
+#### The one shipped assertion this WP FLIPS — `claude-adapter.test.js:342-361`
+
+**Implementing the forward and reverse contracts TOGETHER flips exactly one
+shipped test, and you must update it.** It is
+`a user-relocated mid-file block uninstalls to exactly one blank line`
+(`tests/unit/claude-adapter.test.js:342`).
+
+| Implementation | Result of that test |
+|----------------|---------------------|
+| reverse side only | **24/24** — passes |
+| **full forward + reverse pair (what this WP ships)** | **23/24** — this one fails |
+
+**Measured**, with the adapter's `createdFile` branch recording `sepBefore: ''`
+per this WP's forward contract:
+
+```text
+shipped expectation   = "# Above\n\n# Below\ntail\n"
+reverse-only          = "# Above\n\n# Below\ntail\n"    PASSES
+FULL forward+reverse  = "# Above\n\n\n# Below\ntail\n"  *** FLIPS ***
+```
+
+**Change the expected literal to `'# Above\n\n\n# Below\ntail\n'`** and update the
+assertion message. **The new behaviour is correct by this WP's own thesis:** the
+adapter created the file, so the forward step recorded **`sepBefore: ''`** — *we
+added nothing on the leading side* — so the leading strip must not run, and
+**both of the user's blank lines survive**. The shipped expectation encodes the
+old fixed-one-newline heuristic, which is **the A13 defect this WP exists to
+remove**.
+
+**Three readings are available when you hit this red test, and two are wrong:**
+
+1. ~~Collapse the blank lines in the reverser~~ — **re-introduces user-byte
+   consumption**, i.e. re-creates A13. CLAUDE.md's *"choose the simpler option"*
+   tiebreak points here, which is exactly why this section exists.
+2. ~~Record `sepBefore: '\n'` on the createdFile branch~~ — **false**: that branch
+   writes `block + '\n'` and inserts **no** leading separator. Recording one would
+   claim we wrote bytes we did not.
+3. **Update the assertion.** The behaviour changed on purpose; the test encodes
+   the pre-fix heuristic.
+
+**This is spec text only** — `tests/unit/claude-adapter.test.js` is already in the
+Deliverables table.
+
 #### T10 — delete-and-reinsert, both directions (the per-branch rule)
 
 Each case is one full lifecycle: **sync → hand-delete the block → sync →
@@ -724,6 +767,12 @@ listed under "Out of scope".
       still removed. Assert the stderr notice fires. **Prove it red-first**
       against the unbounded contract, where the same three entries yield
       `"lineA\n"`, `"lineB\n"` and `""`.
+- [ ] **AC12 (new — the BOTH-SIDES run).** With the **forward and reverse
+      contracts both implemented**, `tests/unit/claude-adapter.test.js` is
+      **24/24** — after updating the one assertion at `:342-361` named above.
+      **Red baseline: 23/24** with that assertion left as shipped. Paste both
+      runs. **This is the only configuration that exercises what this WP actually
+      ships**, and no verification pass before gate round 8 ran it.
 - [ ] `npm test` and `npm run lint` are green (digest golden unchanged).
 
 ## Verification steps (run these; paste output in the PR)
@@ -732,6 +781,16 @@ listed under "Out of scope".
 # V1 — the two suites this WP touches. Never a bare `node --test`; tests/run.js
 # sets the scheduler guard the whole suite depends on.
 node tests/run.js tests/unit/claude-adapter.test.js tests/unit/manifest.test.js
+
+# V1b (AC12) — THE BOTH-SIDES RUN. Run the SHIPPED adapter suite with the FORWARD
+# AND REVERSE contracts BOTH implemented. This is the only configuration that
+# exercises what this WP ships, and it is the step seven rounds of review did not
+# take: every earlier pass verified one side at a time, which is why the flipped
+# assertion at :342 stayed latent from round 1.
+#   BEFORE updating the :342 assertion -> 23/24 (that one test red)
+#   AFTER  updating it                 -> 24/24
+# Paste BOTH runs; a single 24/24 does not show you found the flip.
+node tests/run.js tests/unit/claude-adapter.test.js
 
 # V2 — the F30 tail was NOT regressed (Exact contracts table). This gate FAILS
 # LOUDLY: `grep -q` on the pre-F30 shape exits the script non-zero. Note NO `-n`
@@ -760,21 +819,31 @@ grep -q "^function reverseManagedBlock(entry, dryRun, removed, skipped, removedS
 echo "V3 ok — signature intact"
 
 # V4 (Table M) — the separator vocabulary is an ALLOWLIST, not a typeof check.
-# BOTH halves fail loudly: the allowlist must be PRESENT, and the vulnerable
-# `typeof entry.sepBefore === 'string'` shape must be ABSENT.
-grep -q "SEP_BEFORE_OK" src/core/manifest.js || {
-  echo "REGRESSED: separator vocabulary allowlist (SEP_BEFORE_OK) missing"; exit 1; }
-grep -q "typeof entry.sep" src/core/manifest.js && {
-  echo "REGRESSED: separator metadata still accepted on a bare typeof check"; exit 1; }
+# Presence is asserted on DISTINCTIVE LITERALS with grep -qF, the V2 idiom: a
+# bare `grep -q "SEP_BEFORE_OK"` is satisfiable by a COMMENT mentioning the name,
+# which is the soft-guard shape gate rounds 2, 4 and 7 each found once.
+MBODY=$(sed -n '/^function reverseManagedBlock/,/^}/p' src/core/manifest.js)
+for L in "SEP_BEFORE_OK.has(sepBefore)" "sepAfter !== '\\n'"; do
+  printf '%s\n' "$MBODY" | grep -qF "$L" || {
+    echo "REGRESSED: Table M vocabulary check missing from reverseManagedBlock: $L"; exit 1; }
+done
+grep -qF "const SEP_BEFORE_OK = new Set(['', '\\n', '\\n\\n']);" src/core/manifest.js || {
+  echo 'REGRESSED: SEP_BEFORE_OK allowlist literal missing or widened'; exit 1; }
+printf '%s\n' "$MBODY" | grep -q "typeof entry.sep" && {
+  echo 'REGRESSED: separator metadata still accepted on a bare typeof check'; exit 1; }
 echo "V4 ok — separator vocabulary is bounded"
 
-# V5 (per-branch separator rule) — the helper takes the `inserted` flag and the
-# replace branch passes false. FAILS LOUDLY if the first-insertion-wins shape
-# (`typeof entry.sepBefore !== 'string'`) was reinstated.
-grep -q "inserted" src/adapters/shared.js || {
-  echo "REGRESSED: recordManagedBlock lost its `inserted` per-branch flag"; exit 1; }
-grep -q "typeof entry.sepBefore !== 'string'" src/adapters/shared.js && {
-  echo "REGRESSED: first-insertion-wins reinstated — delete-and-reinsert will corrupt"; exit 1; }
+# V5 (per-branch separator rule) — same idiom. Assert the OPERATIVE lines of the
+# helper, not the word `inserted`, which a comment satisfies.
+RBODY=$(sed -n '/^function recordManagedBlock/,/^}/p' src/adapters/shared.js)
+for L in "if (inserted) {" "entry.sepBefore = sepBefore;" "entry.sepAfter = sepAfter;"; do
+  printf '%s\n' "$RBODY" | grep -qF "$L" || {
+    echo "REGRESSED: recordManagedBlock lost its per-branch update: $L"; exit 1; }
+done
+grep -qF "recordManagedBlock(manifest, mdPath, false, null, null, false)" src/adapters/shared.js || {
+  echo 'REGRESSED: the replace branch no longer passes inserted=false'; exit 1; }
+printf '%s\n' "$RBODY" | grep -q "typeof entry.sepBefore !== 'string'" && {
+  echo 'REGRESSED: first-insertion-wins reinstated — delete-and-reinsert will corrupt'; exit 1; }
 echo "V5 ok — separator update rule is per-branch"
 
 # V6 — full gates.
@@ -1111,3 +1180,49 @@ abort the script — it simply skips the block. Measured, not assumed.
 > not move: this changes *which* in-vocabulary value an honest sync records, not
 > the accepted set, and a stale-vs-fresh separator sits inside the same
 > one-whitespace-byte envelope. No other part of the threat model shifts.
+>
+> **2026-08-02 — gate round 8 (round-7 micro-delta APPROVED the lifecycle work;
+> one blocking omission + two carries). All closed.**
+>
+> - **(a) BLOCKING — implementing BOTH sides flips a shipped test, and no round
+>   had ever run that configuration.** With the forward *and* reverse contracts
+>   implemented, `tests/unit/claude-adapter.test.js:342`
+>   (*"a user-relocated mid-file block uninstalls to exactly one blank line"*)
+>   goes **23/24**; with the reverse side alone it is **24/24**. Reproduced here:
+>   shipped expectation `"# Above\n\n# Below\ntail\n"`, actual under the full pair
+>   `"# Above\n\n\n# Below\ntail\n"`. **The new behaviour is correct by this WP's
+>   thesis** — the adapter *created* the file, so the forward step records
+>   `sepBefore: ''` (*we added nothing on the leading side*), the leading strip
+>   never runs, and both of the user's blank lines survive; the shipped assertion
+>   encodes the **fixed-one-newline heuristic that IS the A13 defect**. The spec
+>   now names the test, its new expected literal, the one-sentence reason, and —
+>   critically — **the two wrong readings an implementer would otherwise pick**,
+>   because CLAUDE.md's *"choose the simpler option"* tiebreak points straight at
+>   "collapse the blank lines", which re-introduces user-byte consumption. New
+>   **AC12** and **V1b**, the both-sides run, with 23/24 stated as the red baseline
+>   and both runs required in the PR.
+> - **(b) V5 had a shell bug** — backticks inside a double-quoted `echo` triggered
+>   command substitution (`bash: inserted: command not found`, and the word
+>   vanished from the message). Exit status was still right, but V-step output gets
+>   pasted into PR bodies. All runnable `echo`s are now single-quoted or
+>   backtick-free; verified by running them.
+> - **(b) THIRD instance of the soft-guard shape — canonical pass done.** V5's
+>   presence check was a bare `grep -q "inserted"`, satisfiable by a **comment**
+>   (the reviewer built a reverted implementation that kept the word in a comment
+>   and V5 passed). This is V2 (round 2) / V4 (round 4) / V5 (round 7) with the
+>   identical defect, while the fix idiom — **per-line `grep -qF` on distinctive
+>   operative literals, scoped to the function body** — already existed at V2. **V4
+>   and V5 are both converted now** rather than leaving a fourth instance for the
+>   next reviewer: they assert the actual expressions
+>   (`SEP_BEFORE_OK.has(sepBefore)`, `if (inserted) {`,
+>   `recordManagedBlock(…, null, null, false)`) inside the extracted function
+>   bodies. Verified shell-clean and correctly red on the untouched tree.
+>
+> **Structural lesson, recorded because it cost seven rounds:** *a spec whose
+> deliverables span **two sides of one contract** needs at least one V-step that
+> implements **both sides** and runs the **shipped** suite.* Every pass here
+> verified one side at a time — forward or reverse, never the pair — so a flipped
+> shipped assertion stayed latent from round 1 through round 7 while eight
+> separate gates reported green. **V1b is that step.** The generalisation: a
+> verification plan that never assembles the whole change has not verified the
+> change, however many of its parts it checked.
