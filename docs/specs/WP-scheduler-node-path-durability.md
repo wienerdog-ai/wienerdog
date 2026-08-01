@@ -23,11 +23,18 @@ epic: audit-a7
 > protect.
 >
 > **What lifted it (2026-07-28):**
-> - **0a** — the sibling **merged to `main` in PR #125 (`fbc9d80`)**, and its scope
->   covers **both** of this spec's Table C rows. Verified against `main`'s copy of
->   that spec, not branch history: its banner maps *"row 5 (macOS) — **both**
->   bare-`bootstrap` sites"* to its Table A rows 1 **and** 2, and *"row 4 (linux,
->   degraded reload)"* to its Table A row 3.
+> - **0a** — the sibling **spec exists** and its scope covers **both** of this
+>   spec's Table C rows. Verified against `main`'s copy of that spec, not branch
+>   history: its banner maps *"row 5 (macOS) — **both** bare-`bootstrap` sites"* to
+>   its Table A rows 1 **and** 2, and *"row 4 (linux, degraded reload)"* to its
+>   Table A row 3.
+>   **CORRECTED 2026-08-02:** this sub-item previously read *"the sibling **merged
+>   to `main` in PR #125 (`fbc9d80`)**"*, which invited — and received — the
+>   reading that the fix had shipped. **It had not.** `git show --stat fbc9d80`:
+>   that PR merged exactly **three files** — `docs/adr/0037-…md`,
+>   `docs/adr/README.md`, and the sibling **spec document** — with **zero `src/`
+>   and zero `tests/`**. What merged was the *design*, not the implementation. The
+>   scope claim above is true and stands; the shipped claim is deleted.
 > - **0b** — its id is now in this spec's `depends_on`, so the dependency is
 >   **mechanically enforced** from here on: `scripts/check-frontmatter.js` rejects
 >   an id that fails to resolve, and this one resolves against the merged spec.
@@ -40,6 +47,28 @@ epic: audit-a7
 > `status: Draft` a convention, because `check-frontmatter.js` never objects to an
 > **empty** `depends_on`. That gap closed the moment 0b was taken — which is why
 > 0b was specified as the lift's required step rather than a courtesy.
+>
+> **DISPATCH PRECONDITION — separate from the blocker above, and NOT discharged by
+> it (added 2026-08-02).** `depends_on` resolving is **not** the dependency being
+> done: `scripts/check-frontmatter.js` resolves an id to an existing spec **file**
+> and never reads that spec's `status`. **Dispatch of this WP additionally requires
+> `WP-scheduler-register-replaces-loaded-record` to be `Done` — merged and
+> verified.** As of **2026-08-02 it is `Draft`** and absent from
+> `docs/specs/done/`, i.e. **specced but unimplemented**, so the
+> silent-nonconvergence hazard Tables C/D describe (a `sync` reporting success
+> while launchd or systemd still holds the pinned path) is **live in production**
+> and this WP is **not dispatchable today**. This mirrors the completion-aware
+> clause in `WP-adr-0028-entry-node-path-amendment` (AC5b): the ADR signature and
+> this precondition are independent gates, and neither discharges the other.
+>
+> **On `status: Ready` (flagged for the owner, not decided here).** The `Draft` →
+> `Ready` flip was made in an owner-directed session, partly on 0a's
+> **now-corrected sub-item — corrected in BOTH of its copies**, this banner and
+> Definition of done item 0a, which no longer claim the sibling "has shipped" —
+> so the flip is **not silently reverted**. The question — *keep `Ready` with this
+> explicit precondition, or return to `Draft` until the sibling ships?* — is
+> **Gyula's**. Until he answers, the precondition above governs and no dispatch
+> may proceed on the strength of `status: Ready` alone.
 
 ## Context (read this, nothing else)
 
@@ -535,7 +564,7 @@ In this spec:
 Out of this spec, registered so a later Table A change updates them too — **none
 of these is a deliverable**, and none may be edited by the implementer:
 
-- [ ] `docs/adr/0028-scheduler-app-executable-integrity.md:83` — "`node` is `process.execPath` (already absolute) and is not pinned." After this WP that sentence is true of the descriptor field and of runtime spawns, and **false of the registered entry**. An ADR amendment is an OWNER action (WP-114's Decision 5 precedent: an ADR gloss is never edited from a WP). Proposed slug: `WP-adr-0028-entry-node-path-amendment`. **Sequencing is not optional and is not left to a routed slug:** the amendment must land **with or before** this WP's merge, or ADR-0028:83 must carry an owner-written annotation naming this WP, in the same owner pass. Definition of done item 8 is the gate. Knowingly merging code that falsifies an owner-signed ADR line, with no ordering requirement attached, is what round 1 did and it is not acceptable.
+- [ ] `docs/adr/0028-scheduler-app-executable-integrity.md:83` — "`node` is `process.execPath` (already absolute) and is not pinned." After this WP that sentence is true of the descriptor field and of runtime spawns, and **false of the registered entry**. An ADR amendment is an OWNER action (WP-114's Decision 5 precedent: an ADR gloss is never edited from a WP). The routed slug `WP-adr-0028-entry-node-path-amendment` **now exists as a spec, and its amendment text is already appended to ADR-0028 carrying `Status: PROPOSED — awaiting owner signature`**. **Sequencing is not optional:** that amendment must land **with or before** this WP's merge, **owner-signed**. Definition of done item 8 is the gate. **Corrected 2026-08-01 (gate round 1):** this cell previously offered an alternative — *"or ADR-0028:83 must carry an owner-written annotation naming this WP"* — which is **withdrawn**, because ADR-0028's own preamble (`:18-20`) rules that a later decision lands as a dated amendment and never as an edit to the text it refines; none of its five prior amendments annotated superseded text. Knowingly merging code that falsifies an owner-signed ADR line, with no ordering requirement attached, is what round 1 did and it is not acceptable.
 - [ ] `docs/GLOSSARY.md:25` — "the running `node` path" in the **job descriptor** field list. Unchanged by this WP *because* Table A row 6 leaves `descriptor.js:215` alone; registered because a later WP that moves the descriptor field must edit it.
 
 Not registered, and why: `src/scheduler/status.js` step 8b **reads** an execution
@@ -612,9 +641,13 @@ list", which missed `:302`; the conclusion was right, the survey was not.)
 mechanical reason: `scripts/check-frontmatter.js` rejects an id that does not
 resolve to an existing spec, and `WP-scheduler-register-replaces-loaded-record` was
 not yet written, so the real ordering constraint lived only in the DISPATCH BLOCKER
-banner and Definition of done item 0. **That sibling merged to `main` in PR #125
-(`fbc9d80`), and its id is now recorded in this spec's `depends_on`** — so the
-ordering that was prose is now mechanically enforced by the frontmatter resolver.
+banner and Definition of done item 0. **That sibling's SPEC merged to `main` in
+PR #125 (`fbc9d80`) — the document, not the implementation (see 0a's 2026-08-02
+correction) — and its id is now recorded in this spec's `depends_on`**, so the
+*ordering* that was prose is now mechanically enforced by the frontmatter
+resolver. **What the resolver does NOT enforce is completion**: it checks that
+the id names a spec file, never that the spec is `Done`. See the DISPATCH
+PRECONDITION in the banner.
 
 ## Implementation notes & constraints
 
@@ -1157,21 +1190,41 @@ npm test
 0. **BLOCKER — checked by the architect before dispatch, not by the implementer.**
    **SATISFIED 2026-07-28 — all three sub-items. Retained as the record of what
    was required and what discharged it.**
-   - **(0a) DONE.** `WP-scheduler-register-replaces-loaded-record` **merged to
-     `main` in PR #125 (`fbc9d80`)**, and its scope covers Table C row 4 (linux,
-     degraded `daemon-reload`) **as well as** row 5 (macOS). Verified against
-     `main`'s copy of that spec rather than branch history: its banner maps *"row 5
-     (macOS) — **both** bare-`bootstrap` sites"* to its Table A rows 1 and 2, and
-     *"row 4 (linux, degraded reload)"* to its Table A row 3. Both of this spec's
-     non-converging rows therefore have an owner, and it has shipped.
+   - **(0a) DONE — as a SCOPE claim only.** The
+     `WP-scheduler-register-replaces-loaded-record` **spec** exists, and its scope
+     covers Table C row 4 (linux, degraded `daemon-reload`) **as well as** row 5
+     (macOS). Verified against `main`'s copy of that spec rather than branch
+     history: its banner maps *"row 5 (macOS) — **both** bare-`bootstrap` sites"*
+     to its Table A rows 1 and 2, and *"row 4 (linux, degraded reload)"* to its
+     Table A row 3. Both of this spec's non-converging rows therefore have an
+     **owner**.
+     **CORRECTED 2026-08-02 — this sub-item used to end "and it has shipped".**
+     It had not, and that clause is deleted. `git show --stat fbc9d80`: PR #125
+     merged **three docs files** — `docs/adr/0037-…md`, `docs/adr/README.md` and
+     that **spec document** — with **zero `src/` and zero `tests/`**. What merged
+     was the *design*; the registration-replacement **implementation has not
+     shipped**, and as of 2026-08-02 that spec is `status: Draft`, absent from
+     `docs/specs/done/`. **Having an owner is not the same as being fixed** — the
+     silent-nonconvergence hazard is live in production. This is the same
+     correction already applied to the DISPATCH BLOCKER banner at the head of this
+     spec; the two copies now agree.
    - **(0b) DONE.** Its id is recorded in this spec's `depends_on`. This was the one
      step that converts the blocker from prose into a machine check:
      `scripts/check-frontmatter.js` rejects a `depends_on` id that does not
      resolve, but **never** complains about a *missing* one — so an empty
      `depends_on` was invisible to tooling. It is no longer empty, and the resolver
      now enforces the ordering.
-   - **(0c) DISCHARGED.** With 0a and 0b satisfied, `status:` moves `Draft` →
-     `Ready` and the spec may be dispatched.
+   - **(0c) DISCHARGED — for the BLOCKER only.** With 0a and 0b satisfied,
+     `status:` moves `Draft` → `Ready`.
+     **`Ready` is NOT clearance to dispatch.** See the **DISPATCH PRECONDITION**
+     in the banner at the head of this spec: dispatch additionally requires
+     `WP-scheduler-register-replaces-loaded-record` to be **`Done`** — merged
+     **and** verified — which as of **2026-08-02 it is not** (`Draft`, absent from
+     `docs/specs/done/`; 0a above). `scripts/check-frontmatter.js` resolves a
+     `depends_on` id to an existing spec **file** and never reads its `status`, so
+     **nothing mechanical enforces this** and 0b's machine check does not cover
+     it. The blocker and the precondition are independent gates; discharging one
+     discharges nothing about the other.
 
    The reason the blocker existed was **Table D**: without that sibling, this WP
    converts a loud failure into a silent one on every already-installed macOS
@@ -1197,7 +1250,16 @@ npm test
    states that Table C rows 4 and 5 do not converge and that Table D's final row in
    each sub-table reports that non-convergence as success, and does **not** claim
    the incident class is closed.
-8. **ADR-0028 sequencing (OWNER).** The `WP-adr-0028-entry-node-path-amendment`
-   change to `docs/adr/0028-…:83` has landed, or that line carries an owner-written
-   annotation naming this WP, **at or before** this WP's merge. This WP does not
-   merge leaving an owner-signed ADR line silently false.
+8. **ADR-0028 sequencing (OWNER).** `WP-adr-0028-entry-node-path-amendment`'s
+   dated amendment has landed in `docs/adr/0028-scheduler-app-executable-integrity.md`
+   **and carries the owner's hand-typed signature**, at or before this WP's
+   merge. This WP does not merge leaving an owner-signed ADR line silently false.
+
+   **Corrected 2026-08-01 (gate round 1).** This item previously offered a second
+   branch — *"or that line carries an owner-written annotation"* on
+   `docs/adr/0028-…:83` itself. That branch is **withdrawn**: it contradicts
+   ADR-0028's own convention, stated in its preamble (`:18-20`), that a later
+   ruling *"lands as a dated amendment to this ADR"* — never as an edit to the
+   superseded text. None of that ADR's five prior amendments annotated the text
+   it refined, and the amendment spec forbids it explicitly. The dated amendment
+   plus its owner signature is the **only** way this item is satisfied.
