@@ -1335,6 +1335,9 @@ test('WP-147 Table N: the safe predicate over every reachable case (recorded met
     ['row 3: relocated to EOF, original "foo\\n"', `foo\n${WP147_BLOCK}\n`, '\n', 'foo\n'],
     ['row 4: relocated between two user lines — no fusion', `lineA\n${WP147_BLOCK}\nlineB\n`, '\n', 'lineA\nlineB\n'],
     ['row 5: empty original', `\n\n${WP147_BLOCK}\n`, '\n\n', ''],
+    // Rows 6-7: sepBefore='\n\n' relocated (the ownership re-check + anti-fusion pair).
+    ['row 6: relocated between lines, sepBefore=\\n\\n — user blank line survives', `lineA\n\n\n${WP147_BLOCK}\nlineB\n`, '\n\n', 'lineA\n\n\nlineB\n'],
+    ['row 7: fusion probe, sepBefore=\\n\\n — no fusion', `lineA\n\n${WP147_BLOCK}\nlineB\n`, '\n\n', 'lineA\n\nlineB\n'],
   ];
   for (const [label, content, sepBefore, want] of rows) {
     const { final } = reverseBlockCase(content, { sepBefore, sepAfter: '\n' });
@@ -1405,4 +1408,54 @@ test('WP-147 T9 (Table M bound): an in-vocabulary at-EOF forgery loses exactly o
     forged.replace(/\n/g, ''),
     'the text is byte-identical with newlines removed — the loss never widens past whitespace'
   );
+});
+
+test('WP-147 T11 (AC13): honest relocation with sepBefore=\'\\n\\n\' — ownership re-check AND anti-fusion, both rows', () => {
+  const { applyManagedBlock } = require('../../src/adapters/shared');
+  // Honest setup: sync an UNTERMINATED original so the forward step records
+  // sepBefore='\n\n' by itself, then move the block by writing the file directly.
+  // NO manifest hand-editing — that would be a forgery test (T9's job).
+  const run = (template) => {
+    const paths = tempPaths();
+    const manifest = makeInstall(paths);
+    fs.mkdirSync(paths.claudeDir, { recursive: true });
+    const md = path.join(paths.claudeDir, 'CLAUDE.md');
+    fs.writeFileSync(md, 'orig'); // unterminated → append records sepBefore '\n\n'
+    applyManagedBlock(md, 'body', false, manifest, { changed: [], unchanged: [], notices: [] });
+    const entry = manifest.entries.find((e) => e.kind === 'managed-block' && e.path === md);
+    assert.equal(entry.sepBefore, '\n\n', 'honest unterminated append records sepBefore \\n\\n');
+    const written = fs.readFileSync(md, 'utf8');
+    const block = written.slice(written.indexOf(MB_BEGIN), written.indexOf(MB_END) + MB_END.length);
+    fs.writeFileSync(md, template.split('<BLOCK>').join(block));
+    manifestLib.reverse(paths, manifest, {});
+    return fs.readFileSync(md, 'utf8');
+  };
+  // (a) ownership re-check: candidate="lineA\n" ends in a newline → block is NOT
+  // at its recorded append position → strip nothing on the leading side.
+  assert.equal(run('lineA\n\n\n<BLOCK>\nlineB\n'), 'lineA\n\n\nlineB\n', '(a) the user blank line survives — no paragraph merge');
+  // (b) anti-fusion still governs: candidate="lineA" passes the re-check, only
+  // noFusion prevents lineAlineB\n.
+  assert.equal(run('lineA\n\n<BLOCK>\nlineB\n'), 'lineA\n\nlineB\n', '(b) no fusion');
+});
+
+test('WP-147 T12 (AC14): non-string separator metadata still strips the block, not rejected upstream', () => {
+  // A non-string sepBefore/sepAfter must NOT be type-gated by ENTRY_FIELD_TYPES —
+  // it has to reach reverseManagedBlock so the SEP_BEFORE_OK allowlist degrades to
+  // the legacy conservative strip and still removes the block (Table M).
+  const content = `lineA\n${WP147_BLOCK}\nlineB\n`;
+  const cases = [
+    { label: 'null sepBefore', extra: { sepBefore: null, sepAfter: '\n' } },
+    { label: 'number sepBefore', extra: { sepBefore: 5, sepAfter: '\n' } },
+    { label: 'boolean sepBefore', extra: { sepBefore: true, sepAfter: '\n' } },
+    { label: 'array sepBefore', extra: { sepBefore: ['\n'], sepAfter: '\n' } },
+    { label: 'null sepAfter', extra: { sepBefore: '\n', sepAfter: null } },
+    { label: 'number sepAfter', extra: { sepBefore: '\n', sepAfter: 3 } },
+    { label: 'array both', extra: { sepBefore: [], sepAfter: [] } },
+  ];
+  for (const { label, extra } of cases) {
+    const { final, res, err, md } = reverseBlockCase(content, extra);
+    assert.equal(final, 'lineA\nlineB\n', `${label}: legacy conservative strip, no user text touched`);
+    assert.ok(res.removed.includes(md), `${label}: block still removed (entry NOT rejected upstream)`);
+    assert.match(err, /ignoring out-of-vocabulary separator metadata/, `${label}: the stderr notice fires`);
+  }
 });
