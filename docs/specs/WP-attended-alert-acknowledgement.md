@@ -575,7 +575,7 @@ bug in the PR body rather than following the mirror.
 | **Cap** | `MAX_ACKS = 100`. On write, keep the **newest** 100 (`slice(-MAX_ACKS)`) |
 | **Duplicate key** | a `key` already on file is **not** re-added and its existing `at` is **not** rewritten. `addAcks` counts it as not-added |
 | **Whole-file parse failure** — missing, unreadable, invalid JSON, not an object, `schema !== 1`, or `acked` not an array | `readAcks` returns `[]` ⇒ **nothing is suppressed**. This is the FAIL-OPEN direction and it is the required one: a corrupt store must never hide a warning |
-| **Per-record validation** | a record counts only when `typeof job === 'string'` **and** `/^[0-9a-f]{64}$/.test(key)` **and** `typeof at === 'string'`. Any other record is ignored on read, is not repaired, and is not written back |
+| **Per-record validation** | a record counts only when `typeof job === 'string'` **and** `/^[0-9a-f]{64}$/.test(key)` **and** `typeof at === 'string'`. Any other record is ignored on read, is not repaired, and is not written back. **The `key` regex is load-bearing beyond validation:** Table B's Match predicate encodes the lookup as `job + "\n" + key`, which is injective only while `key` is fixed-length and newline-free. **Do not relax this pattern without re-deciding that encoding first** |
 | **Lifecycle** | `clearAlerts(paths, job)` calls `pruneAcksForJob(paths, job)` **first**, so on the normal path an acknowledgement does not outlive the alert it silenced. When no records remain the file is removed (`fs.rmSync(file, {force:true})`). **The pairing is bounded, not absolute — two cases break it and neither is repaired here.** (1) **Orphaned acknowledgement:** `appendAlert`'s compaction drops the oldest records once `MAX_ALERTS`/`MAX_FILE_BYTES` is exceeded, with no job having succeeded, so an acknowledgement can survive the record it silenced. Its residual effect is narrow — it pre-suppresses only an **exact** recurrence of wording the user has already read and acknowledged, and any other wording renders. (2) **Evicted acknowledgement:** `MAX_ACKS` eviction can drop an acknowledgement while its alert is still on file, so a silenced alert **resurfaces** in the digest. Both fail in the safe direction — (2) loudly — and coupling the two stores to close them would buy less than it costs. Do **not** write "never outlives" as an unqualified claim anywhere |
 | **Robustness** | `readAcks` and `pruneAcksForJob` never throw. `addAcks` may throw only what `writeFilePrivate` throws (a symlinked or unwritable destination) — that surfaces at an attended terminal, which is the right place for it |
 | **Mode coverage** | `'alerts-ack.json'` is a member of `A5_PRIVATE_FILE_BASENAMES`, so `wienerdog doctor` / `sync` report and repair a loosened mode on it exactly as they do for `alerts.jsonl` |
@@ -587,7 +587,7 @@ bug in the PR body rather than following the mirror.
 |----------|--------|
 | **What is suppressed** | ONE thing: the presence of a matching alert in the array handed to `renderDigest`'s `alerts` option, i.e. whether it becomes a `> [!warning]` line in `state/digest.md` |
 | **What is NEVER suppressed** | the launcher's verification; its refusal; its zero spawn; its non-zero exit; its stderr line; the record it appends to `alerts.jsonl`; `wienerdog alerts` output; anything `wienerdog doctor` reports |
-| **Match predicate** | alert `a` is suppressed **iff** some **valid** record on file satisfies **BOTH** `record.job === a.job` **AND** `record.key === ackKey(a.job, a.reason)`. The key already binds the job, so for a **semantically consistent** record the extra field comparison is redundant — it is decisive only for an **inconsistent** one. A record pairing job `"A"` with job B's key therefore suppresses **nothing**, and stays prunable by `clearAlerts(paths, 'A')`; without the field comparison it would suppress **B**'s alert while only **A**'s success could ever remove it |
+| **Match predicate** | alert `a` is suppressed **iff** some **valid** record on file satisfies **BOTH** `record.job === a.job` **AND** `record.key === ackKey(a.job, a.reason)`. The key already binds the job, so for a **semantically consistent** record the extra field comparison is redundant — it is decisive only for an **inconsistent** one. A record pairing job `"A"` with job B's key therefore suppresses **nothing**, and stays prunable by `clearAlerts(paths, 'A')`; without the field comparison it would suppress **B**'s alert while only **A**'s success could ever remove it. **Encoding dependency — read this before touching Table A.** The predicate is implemented as membership of `job + "\n" + key` in a `Set`, and that composite is **injective only because `key` has already been validated against `/^[0-9a-f]{64}$/`** (Table A, Per-record validation): a fixed-length, newline-free `key` means the final 65 characters are always exactly `"\n" + key`, so the split point is unambiguous. **Relax that regex — allow a variable length, or a newline — and the encoding becomes ambiguous**, letting a crafted `(job, key)` pair collide with a different one (`job = "a\nb"`, `key = "c"` vs `job = "a"`, `key = "b\nc"`) and suppress an alert it was never acknowledged for. The `Set` is also what makes an attacker-influenceable job name safe in the composite (Security checklist bullet 2) — that is a **separate** guarantee from this one and neither substitutes for the other |
 | **Reason sensitivity** | the reason string is inside the hash, so one changed byte ⇒ a different key ⇒ the alert renders. There is no prefix match, no substring match, no normalization, no trimming, and no regex. **The hashed string is the STORED reason, not the raw one**: `sanitizeAlert` (`src/core/alerts.js:45-49`) caps every field at `MAX_FIELD_CHARS = 2000` and runs `redactOnly` over it *before* the record reaches disk, so two raw messages that differ **only past the cap**, or **only in bytes that redaction replaced**, produce the identical stored reason and therefore the identical key. That is a pre-existing property of the alert log, not of this mechanism, and this WP neither widens nor narrows it |
 | **Job sensitivity** | the job name is inside the hash **and** is compared as a stored field (Match predicate), so an acknowledgement for job A never suppresses job B — including when the two share a reason string, and including a hand-edited record that pairs A's `job` with B's `key` |
 | **Where applied** | exactly two call sites: `src/cli/sync.js` and `src/cli/dream.js`. `formatAlerts` itself is never changed and never learns about acknowledgements |
@@ -626,6 +626,8 @@ Table A (store) mirrors:
 Table B (suppression) mirrors:
 - [ ] Deliverables rows D5, D6
 - [ ] the `unacknowledgedAlerts` JSDoc and the two call-site diffs under Exact contracts
+- [ ] **Security checklist bullet 2** — mirrors the Match predicate row: it is the only surface that states *how* the predicate is implemented (a `Set` over `job + "\n" + key`) and therefore the only place the `Set`-membership invariant and the job-name-in-the-composite fact are recorded. A change to the Match predicate's encoding invalidates it
+- [ ] **Table A's Per-record validation row** — carries the back-pointer for the `key` regex the composite's injectivity depends on. A relaxation there breaks the Match predicate, so the two rows move together
 - [ ] the glossary bullet **G1** (restates Table B's meaning in user-facing words)
 - [ ] **`docs/GLOSSARY.md`'s shipped bullet (D8)** — a BYTE-IDENTICAL twin of G1, not a paraphrase. Any edit to G1 must be applied to both in the same commit, and `diff` them before you finish
 - [ ] acceptance criteria AC1, AC5, AC6, AC7, AC10
@@ -697,11 +699,20 @@ Table C (attended act) mirrors:
       constructs is `path.join(paths.state, 'alerts-ack.json')` from a **constant**
       basename — the job name and the reason string never touch a path, a shell,
       or a filename. Do not introduce a per-job acknowledgement file.
-- [ ] The job name and reason string are used only as **hash input** and as
-      already-sanitized text on stdout. They are never used as an object key, a
-      regex, or a lookup index — `readAcks` builds its lookup from the stored
-      64-hex `key`, which is pattern-validated before use, so no
-      `__proto__`/`constructor`-shaped value can reach a property access.
+- [ ] **The job name DOES enter the lookup, and what keeps that safe is the data
+      structure, not a pattern.** The reason string is only ever hash input and
+      already-sanitized text on stdout. The **job name is half of the lookup
+      composite** — `job + "\n" + key`, per Table B's Match predicate — and job
+      names come from `config.yaml`, which is precisely the A7-scoped write
+      surface, so an attacker can influence their **wording**, including to
+      `__proto__`, `constructor` or `toString`. That is harmless for exactly one
+      reason: **membership is tested against a `Set`**, which compares values and
+      never performs a property access. **The lookup must stay a `Set` (or a
+      `Map`) — never a plain object, never `key in obj`, never `obj[key]`.**
+      Substituting a plain object would turn an attacker-influenceable job name
+      into a live prototype-chain surface, and the `/^[0-9a-f]{64}$/` validation
+      on `key` would **not** prevent it: that validation buys injectivity (Table
+      B's Match predicate), not prototype safety. Do not conflate the two.
 - [ ] The store fails **open** on every malformed input (Table A) — a suppression
       path that fails closed would hide security warnings, which is the wrong
       direction for this file.
