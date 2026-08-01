@@ -309,3 +309,25 @@ test('alerts cli: grouped range is earliest-to-latest even when written newest-f
   );
   assert.ok(!outList.includes('2026-08-01T00:00:00.000Z to 2026-07-01T00:00:00.000Z'));
 });
+
+// -------------------------------------------------------------------------
+// A15 — Table B, Match predicate: a record whose job disagrees with its key
+// suppresses nothing, and stays prunable by the job it actually names.
+// -------------------------------------------------------------------------
+
+test('alert-ack: a mismatched job field suppresses nothing', () => {
+  const { paths } = setup();
+  fs.mkdirSync(paths.state, { recursive: true });
+  // Hand-written record: job "A" paired with job B's key (Table B's example).
+  const mismatched = { job: 'A', key: ackKey('B', 'reason'), at: '2026-01-01T00:00:00.000Z' };
+  fs.writeFileSync(ackPath(paths), JSON.stringify({ schema: 1, acked: [mismatched] }, null, 2));
+
+  const alertA = rec('A', '2026-07-04T01:00:00.000Z', 'reason');
+  const alertB = rec('B', '2026-07-04T02:00:00.000Z', 'reason');
+  const remaining = unacknowledgedAlerts(paths, [alertA, alertB]);
+  assert.deepEqual(remaining, [alertA, alertB], 'the inconsistent record suppresses neither job');
+
+  assert.equal(readAcks(paths).length, 1, 'the mismatched record is still on file before pruning');
+  clearAlerts(paths, 'A');
+  assert.deepEqual(readAcks(paths), [], "clearAlerts(paths, 'A') still prunes it — Table B's stated asymmetry");
+});

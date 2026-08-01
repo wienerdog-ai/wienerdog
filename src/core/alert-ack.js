@@ -111,16 +111,22 @@ function pruneAcksForJob(paths, job) {
   }
 }
 
-/** `alerts` minus every entry whose (job, reason) is acknowledged. Pure: reads
- *  the store, allocates a new array, mutates nothing. A non-array `alerts`
- *  returns []. This is the ONLY suppression point (Table B).
+/** `alerts` minus every entry acknowledged by a record that AGREES WITH THE
+ *  ALERT'S JOB: a record suppresses `a` only when `record.job === a.job` AND
+ *  `record.key === ackKey(a.job, a.reason)` (Table B, Match predicate). The key
+ *  already binds the job; comparing the stored field too means an inconsistent
+ *  record — job "A" carrying B's key — suppresses nothing and stays prunable by
+ *  A's success. Pure: reads the store, allocates a new array, mutates nothing.
+ *  A non-array `alerts` returns [] — an upstream PROGRAMMING-ERROR guard, not a
+ *  suppression path (both callers pass readAlerts, which always returns an
+ *  array). This is the ONLY suppression point (Table B).
  *  @param {import('./paths').WienerdogPaths} paths
  *  @param {Array<{job:string, at:string, reason:string, log_hint:string}>} alerts
  *  @returns {Array<{job:string, at:string, reason:string, log_hint:string}>} */
 function unacknowledgedAlerts(paths, alerts) {
   if (!Array.isArray(alerts)) return [];
-  const acked = new Set(readAcks(paths).map((r) => r.key));
-  return alerts.filter((a) => !acked.has(ackKey(a.job, a.reason)));
+  const acked = new Set(readAcks(paths).map((r) => `${r.job}\n${r.key}`));
+  return alerts.filter((a) => !acked.has(`${a.job}\n${ackKey(a.job, a.reason)}`));
 }
 
 module.exports = {

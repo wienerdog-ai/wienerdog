@@ -780,6 +780,7 @@ Table C (attended act) mirrors:
 | A12 | `alerts cli: --yes does not bypass the prompt` | AC12 |
 | A13 | `alerts cli: list and unknown subcommand` | AC13 |
 | A14 | `alerts cli: grouped range is earliest-to-latest even when written newest-first` | the grouping contract under Exact contracts — a group's printed range is earliest `at` to latest `at` regardless of the order the records were written in |
+| A15 | `alert-ack: a mismatched job field suppresses nothing` | Table B's Match predicate — a record pairing job "A" with job B's key suppresses neither A's nor B's alert, and stays prunable by `clearAlerts(paths, 'A')` |
 
 ## Verification steps (run these; paste output in the PR)
 
@@ -790,7 +791,7 @@ npm test
 # V2 — lint (markdownlint + shellcheck + shfmt + frontmatter schema)
 npm run lint
 
-# V3 — this WP's tests alone (all 14 must appear and pass)
+# V3 — this WP's tests alone (all 15 must appear and pass)
 npm test -- tests/unit/alert-ack.test.js
 
 # V4 — the store is WRITTEN from exactly one module: src/core/alert-ack.js. Expect three matches: the writer, the D7 constant in private-fs.js, and its D10 test mirror — no other writer.
