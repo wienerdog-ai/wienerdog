@@ -215,7 +215,7 @@ the boolean return noted in §1, and `depends_on: []` is still correct.
 
 | Action | Path | Notes |
 |--------|------|-------|
-| modify | src/cli/run-job.js | **D1** — replace the free-form branch at `:1004` with `noLogReason(...)` per **Table R**, plus the module-private `noLogReason` helper and its `TOKEN_OK` pattern; change **no other branch** of the three-branch `reason` and **not** the `reason +=` mutation. **D2** — write the raw (redacted) cause into the per-run log **through the still-open `logStream`**, inside the existing `finally` at `:923-926`, before `endStream`. **D3** — rewrite `endStream` (`:514-516`) to settle in every **Table S** state: synchronous already-settled check first, then `error` **and** `close` listeners, then `end(cb)`. **D4** — two test seams in the house WP-155 idiom, so T7–T10 are implementable at all. **D5** — attach a no-throw `'error'` listener to `logStream` at creation recording `logStreamFailed` + `logStreamErrCode`, covering the tee window as well as finalization. **D6** — add `&& !logStreamFailed` to the success condition at `:979` so a job whose log failed is not certified clean (**Table R row 4**). |
+| modify | src/cli/run-job.js | **D1** — **two lines in the `reason` construction**: replace the free-form branch at `:1004` with `noLogReason(...)` per **Table R** rows 1–3, **and** wrap the clean-exit arm at `:1007` in a `reapFailure ?` guard whose else-arm is `logFailedReason(...)` (**Table R row 4**) — without that guard D6's new path hits `reapFailure.reason` on `null` and **throws**. Add both module-private helpers and the shared `TOKEN_OK` pattern. The `reason +=` mutation and the R8-1 *text* are untouched. **D2** — write the raw (redacted) cause into the per-run log **through the still-open `logStream`**, inside the existing `finally` at `:923-926`, before `endStream`. **D3** — rewrite `endStream` (`:514-516`) to settle in every **Table S** state: synchronous already-settled check first, then `error` **and** `close` listeners, then `end(cb)`. **D4** — two test seams in the house WP-155 idiom, so T7–T10 are implementable at all. **D5** — attach a no-throw `'error'` listener to `logStream` at creation recording `logStreamFailed` + `logStreamErrCode`, covering the tee window as well as finalization. **D6** — add `&& !logStreamFailed` to the success condition at `:979` so a job whose log failed is not certified clean (**Table R row 4**). |
 | modify | tests/unit/scheduler-runjob.test.js | **T1, T2, T5's suffix half, T7, T8, T9 and T10** (Test index below). **T3 and T4 are already covered and are NOT new work** — do not add tests for them. This is the real path — verified at `e7c845e`; **no file matches `tests/unit/run-job*`**, and the Deliverables table is the CI-enforced boundary. |
 
 ### Exact contracts
@@ -226,22 +226,54 @@ the boolean return noted in §1, and `depends_on: []` is still correct.
 Current state §2 and §4; read the file itself with
 `sed -n '1001,1010p' src/cli/run-job.js` and `sed -n '923,926p' src/cli/run-job.js`.
 
-**D1 — the reason branch (`src/cli/run-job.js:1001-1010`).** Change **only** the
-`:1004` arm. The surrounding structure, including the R8-1 clean-exit arm and the
-`reason +=` mutation, stays byte-for-byte:
+**D1 — the reason branch (`src/cli/run-job.js:1001-1010`).** **TWO lines change**
+— `:1004`, and the clean-exit arm at `:1007`. The `reason +=` mutation stays
+byte-for-byte:
 
 ```js
   let reason = failure
     ? failure instanceof WienerdogError
       ? failure.message                                 // UNCHANGED — Wienerdog-authored
-      : noLogReason(name, failure, logStream)           // ← THE ONLY CHANGED LINE (Table R)
+      : noLogReason(name, failure, logStream)           // CHANGED (Table R rows 1-3)
     : code !== 0
       ? `job "${name}" exited ${code}`                  // UNCHANGED
-      : `job "${name}" ${reapFailure.reason}`;          // UNCHANGED — R8-1
+      : reapFailure                                     // CHANGED — null guard, see below
+        ? `job "${name}" ${reapFailure.reason}`         // R8-1, unchanged text
+        : logFailedReason(name, logStreamErrCode);      // NEW — Table R row 4
   if (reapFailure && (failure || code !== 0)) {
     reason += ` — and it ${reapFailure.reason}`;        // UNCHANGED — R8-1
   }
 ```
+
+**Why `:1007` MUST change, and what happens if it does not.** At `e7c845e` the
+clean-exit arm is an unguarded `` `job "${name}" ${reapFailure.reason}` ``. That
+is safe **today only because of an invariant D6 breaks**: pre-D6, a clean exit
+(`!failure && code === 0`) reached `:1001` **only** when `reapFailure` was set —
+`:979` returned in every other case. D6 adds a second way in
+(`logStreamFailed`), and that path arrives with `failure = null`, `code = 0`,
+**`reapFailure = null`** → `reapFailure.reason` throws a **`TypeError`**, before
+`writeScheduleState`, before `failLoud`, before the `throw`. **A `TypeError` in
+place of the fail-loud path is strictly worse than the silent `ok` D6 was written
+to fix.** Found by the Codex leg of gate round 5 and adjudicated against the code.
+
+`logFailedReason(name, code)` is a second module-private helper beside
+`noLogReason`, applying **the same `TOKEN_OK` validation to the same
+single-read token**:
+
+```js
+/** Table R row 4. `code` is the ALREADY-CAPTURED logStreamErrCode — never re-read
+ *  from an error object here. */
+function logFailedReason(name, code) {
+  const t = typeof code === 'string' && TOKEN_OK.test(code) ? code : 'UNKNOWN';
+  return `job "${name}" ran but its log could not be written (${t})`;
+}
+```
+
+**The two halves of D6 must be tested TOGETHER.** The `:979` gate and this
+fall-through are separate edits, and a truth table that verifies only the gate
+(*"does the run stop reporting `ok`?"*) passes while the fall-through throws. T10
+asserts the **rendered reason plus the watermark, the durable alert, the email
+and the final rejection**, which is what catches it.
 
 `noLogReason` is a **module-private pure helper** (add it near `runStamp`, no
 export) implementing **Table R** below. It is a named function rather than an
@@ -281,7 +313,15 @@ interpolate the binding.
 | 1 | `S` is truthy (a log **stream** was opened) | `` `job "${name}" failed to run — see the log for details` `` | The raw cause is in the log (D2) **when the stream is healthy**. If D5 absorbed an `'error'`, or D2's `write` threw, the log may be truncated — see "Known residual" below. |
 | 2 | `S` is falsy **and** `C` passes `TOKEN_OK` | `` `job "${name}" failed to run (${C}) — no log could be written` `` | **There is no log to point at**, so the alert must carry enough to act on. One validated errno token is the whole of that detail. |
 | 3 | `S` is falsy **and** `C` fails `TOKEN_OK` (absent, non-string, or wrong shape) | `` `job "${name}" failed to run (UNKNOWN) — no log could be written` `` | Fixed literal. Never fall back to `failure.message`, never omit the parenthetical (a caller must not have to distinguish "no token" from "no row 2"). |
-| **4** | **SUCCESS path (D6):** `!failure && code === 0 && !reapFailure` **and** `logStreamFailed` | `` `job "${name}" ran but its log could not be written (${T}) ` `` where `T` is `logStreamErrCode` under `TOKEN_OK`, else `UNKNOWN` | The job itself succeeded — say so — but its log did not, so it is **not certified clean** (R8-1 ethos). Same vocabulary, same validator, same single-read rule as rows 2–3. |
+| **4** | **SUCCESS path (D6):** `!failure && code === 0 && !reapFailure` **and** `logStreamFailed` | `` `job "${name}" ran but its log could not be written (${T})` `` where `T` is `logStreamErrCode` under `TOKEN_OK`, else `UNKNOWN` | The job itself succeeded — say so — but its log did not, so it is **not certified clean** (R8-1 ethos). Same vocabulary, same validator, same single-read rule as rows 2–3. |
+
+**No trailing space before the closing backtick.** `failLoud`'s body template is
+`` `${reason}\n\nDetails: ${logHint}`.trim() `` (`:574`), and `.trim()` only
+strips the **ends** of the whole body — a space at the end of `reason` lands
+*interior* to it and survives. An earlier revision of this cell carried one, so
+an implementer copying it byte-for-byte would have failed T10's *"exactly"*
+assertion. The three mirrors (T10, AC7c, the provenance) were already correct;
+this canonical cell is the one that was wrong.
 
 **Row 4 is the SUCCESS path and is scoped separately from rows 1–3.** Gyula's
 2026-08-01 ruling governs the **failure** path — what a failing job's alert says
@@ -420,7 +460,8 @@ function endStream(stream) {
     const finish = () => { if (!done) { done = true; resolve(); } };
     // 1. ALREADY-SETTLED CHECK, FIRST. A stream destroyed on an earlier tick has
     //    already emitted 'close', so a listener attached now never fires.
-    if (stream.destroyed || stream.closed || stream.writableEnded) return finish();
+    //    NOT `writableEnded` — see below.
+    if (stream.destroyed || stream.closed) return finish();
     // 2. BOTH terminal events, attached before end() (end() can emit synchronously).
     stream.on('error', finish);
     stream.on('close', finish);
@@ -453,9 +494,17 @@ is ever reached — which is D5's whole point):
 **Row B is the one that decides the contract.** Adding `on('close', …)` fixes
 row A but **not** row B — by then `'close'` has already fired, so the listener is
 attached to an event that will never come again. Only the **synchronous
-already-settled check** catches it, and it must run **first**. `stream.destroyed`
-alone covers A–D; `closed` and `writableEnded` are kept as cheap belt-and-braces
-against stream types that set them differently.
+already-settled check** catches it, and it must run **first**.
+
+**The check is `destroyed || closed` — `writableEnded` is deliberately NOT in
+it.** `writableEnded` goes `true` the moment `end()` is *called*, **before the
+flush completes**, so including it makes `endStream` return early on a healthy
+stream with data still buffered — the reviewer measured **0 of 4 MB flushed**.
+That would truncate exactly the log this WP exists to preserve, and it would do
+so on the *common* path rather than an exotic one. `destroyed || closed` alone
+reproduces all six Table S rows identically (measured), so the column is dropped
+rather than paired with `writableFinished`: two flags that cover every measured
+row beat three where one is actively harmful.
 
 **Measurement note, recorded because two rounds disagreed.** Gate round 3
 reported that only a no-arg `destroy()` hung; gate round 4 (Codex) said D3 still
@@ -518,7 +567,19 @@ success path, below.
 
 **Add `&& !logStreamFailed` to that condition.** A clean exit whose log write
 failed then falls through to the fail-loud path at `:1001` and renders **Table R
-row 4**. Nothing else in the success block changes.
+row 4**. Nothing else in the success block changes — but **`:1007` does**, and
+D6 is not implementable without it: see D1's null guard. **The gate and the
+fall-through are one change in two places.**
+
+**Declared limitation of the observation window.** `logStreamFailed` is read at
+`:979`, which runs **after** the `finally` at `:923-926` has awaited `endStream`.
+An `'error'` emitted *after* `endStream` resolves is therefore **not observed**,
+and such a run is still reported `ok`. This is theoretical rather than reachable
+in practice: it needs the stream to resolve finalization and *then* error, which
+on a real `fs.WriteStream` means the already-settled early-return rows of
+**Table S** (A/B) — where the stream is destroyed and emits nothing further.
+Declared and accepted; closing it would mean re-checking the flag after every
+later await, for a window nothing real occupies.
 
 **Why this belongs in THIS WP rather than being routed.** D5 absorbs a stream
 `'error'` that previously crashed the process. Absorbing it without D6 would
@@ -558,8 +619,9 @@ await).
 Four properties the implementer must preserve in `endStream`, each of which a
 plausible simplification breaks — the first two are Table S rows B and A:
 
-- **The already-settled check runs FIRST and is synchronous.** Table S row B
-  hangs without it, *even with* the `close` listener.
+- **The already-settled check runs FIRST, is synchronous, and is
+  `destroyed || closed` only.** Table S row B hangs without it, *even with* the
+  `close` listener — and adding `writableEnded` to it truncates a healthy flush.
 - **Both `error` and `close` are attached BEFORE `end()`**, because `end()` can
   emit synchronously (Table S row A).
 - **`finish` is idempotent** (`done`), because `error`, `close` and the `end`
@@ -678,8 +740,8 @@ passing**, listed so the implementer does not rewrite what already covers them.
 | T7b | **NEW** | **Table R row 3, the hostile `.code`.** Same seam, three throwables: `.code` a long prose string containing a marker (fails `TOKEN_OK`), `.code` a **number**, and `.code` absent. All three must render **exactly** `job "<name>" failed to run (UNKNOWN) — no log could be written`, and the marker must appear **nowhere** in the alert record or the `sendAlert` body. **Plus the getter case (N2):** an object whose `code` is a **getter returning `'EACCES'` on first read and prose on every later read** must still render the `EACCES` form with no prose anywhere — this is the only test that can catch a validate-then-re-read implementation. | Table R row 3, single-read rule |
 | T7c | **NEW, platform-guarded** | **The same path through a REAL errno**, so the seam is not the only evidence: `chmod 0500` the `paths.logs` parent so the real `mkdirPrivate` raises a genuine `EACCES`, and assert the row-2 rendering. Guard it `{ skip: SKIP_NO_EACCES }` where `SKIP_NO_EACCES` follows the file's existing constant idiom (`REAP_SKIP_WIN32` at `:891` — a `platform === 'win32' && '<reason>'` expression used as `{ skip: … }` at `:915`, `:941`, `:968`, `:995`). **It must skip on win32** (POSIX mode bits do not deny the owner there) **and when running as root** (`process.getuid && process.getuid() === 0` — root bypasses the mode bits, so the test would silently pass for the wrong reason). | Table R row 2, non-vacuity |
 | T8 | **NEW** | **Codex [high]: a stream error must not mask the failure — BOTH windows.** Pass `opts.createLogStream` = a **family-1** stub (error-then-callback). **(a) finalization window:** emit `'error'` (`EIO`) as `end()` runs. **(b) tee window (D5):** emit `'error'` *while the child is still running*, after a tee write. In **both** cases assert the run still reaches its normal failure outcome — `last_status: 'error'` watermark, **one** durable `alerts.jsonl` record, the `sendAlert` stub called, and `runJob` rejecting with the code-owned `reason`, **not** with the stream's error. **Red-before-work is mandatory for both halves**: against `e7c845e` (a) escapes the `finally` before `failLoud`, and (b) takes the process down mid-run. | D3, D5, D4 |
-| T9 | **NEW** | **Table S rows A and B — `endStream` must not HANG.** Pass a **family-2** stub (destroyed-no-callback): row A sets `destroyed = true` only; row B sets `destroyed = true` **and** `closed = true` and emits nothing further. `runJob` must still complete its failure path. **Row B is the discriminating one**: it hangs against a round-3 `endStream` **and** against an `endStream` that only adds a `close` listener, so it is the only test that forces the synchronous already-settled check. Give the test a bounded timeout so a regression **fails** rather than wedging the suite. | D3 (Table S) |
-| T10 | **NEW** | **D6 / Table R row 4 — the success path is not certified clean.** Child exits `0`, no `failure`, no `reapFailure`, and a family-1 stub emits `'error'` with `code: 'EIO'` during a tee write. Assert: `last_status` is **`error`, not `ok`**; `clearAlerts` did **not** run; one durable alert whose `reason` is exactly `job "<name>" ran but its log could not be written (EIO)`; and `runJob` rejects. Repeat with `code: 'ENOSPC'`. Repeat with a `.code` failing `TOKEN_OK` → `(UNKNOWN)`. **Red-before-work**: without D6 the run reports `ok`. | D6, Table R row 4 |
+| T9 | **NEW** | **Table S rows A and B — `endStream` must not HANG.** Pass a **family-2** stub (destroyed-no-callback): row A sets `destroyed = true` only; row B sets `destroyed = true` **and** `closed = true` and emits nothing further. `runJob` must still complete its failure path. **Row B is the discriminating one**: it hangs against a round-3 `endStream` **and** against an `endStream` that only adds a `close` listener, so it is the only test that forces the synchronous already-settled check. **Bound it with `node:test`'s own option — `test('…', { timeout: 5000 }, async () => …)` — in the same options object the file already uses for `skip` (`:995`).** Do **not** hand-roll a `Promise.race`: there is no timeout precedent in this file or in `tests/run.js`, and a hand-rolled race leaves the real promise pending. | D3 (Table S) |
+| T10 | **NEW** | **D6 / Table R row 4 — the success path is not certified clean, and does not THROW getting there.** Child exits `0`, no `failure`, **`reapFailure === null`**, and a family-1 stub emits `'error'` with `code: 'EIO'` during a tee write. Assert: `last_status` is **`error`, not `ok`**; `clearAlerts` did **not** run; one durable alert whose `reason` is exactly `job "<name>" ran but its log could not be written (EIO)`; the `sendAlert` stub was called; and `runJob` rejects **with that reason, not with a `TypeError`**. Repeat with `code: 'ENOSPC'`, and with a `.code` failing `TOKEN_OK` → `(UNKNOWN)`. **Two red directions, both required**: without D6's `:979` gate the run reports `ok`; with the gate but **without D1's `:1007` null guard** it throws `TypeError` before the watermark. **`reapFailure === null` is the whole point of the fixture** — it is the state that pre-D6 could never reach `:1001`. | D6, D1 null guard, Table R row 4 |
 
 **Prove T1 in both directions** (`docs/runbooks/codex-review.md`): run it against
 the untouched `:1004` (expect **red** — the raw message reaches the alert) and
@@ -885,13 +947,19 @@ its PR.
       required and is the discriminating case: it hangs both against `e7c845e`
       and against an `endStream` that merely adds a `close` listener, so only the
       synchronous already-settled check passes it. The test carries a bounded
-      timeout so a regression fails rather than wedging the suite.
-- [ ] **AC7c** — T10 (**D6**): a child exiting `0` whose log stream errored is
-      recorded `last_status: 'error'`, **not** `ok`; `clearAlerts` does not run;
-      the durable reason is exactly
+      timeout so a regression fails rather than wedging the suite — via
+      `{ timeout: 5000 }` on the test's own options object, not a hand-rolled
+      `Promise.race`.
+- [ ] **AC7c** — T10 (**D6, BOTH halves**): a child exiting `0` whose log stream
+      errored is recorded `last_status: 'error'`, **not** `ok`; `clearAlerts`
+      does not run; the durable reason is exactly
       `job "<name>" ran but its log could not be written (EIO)` (and `(ENOSPC)`,
-      and `(UNKNOWN)` for a token failing `TOKEN_OK`). **Red before the work**:
-      the same run reports `ok`.
+      and `(UNKNOWN)` for a token failing `TOKEN_OK`); the `sendAlert` stub is
+      called; and `runJob` **rejects with that reason — not with a `TypeError`**.
+      The `reapFailure === null` case is the one that throws without D1's null
+      guard, so it must be asserted explicitly. **Red before the work**: the same
+      run reports `ok`; **red with the `:979` gate but WITHOUT the `:1007`
+      guard**: the run throws `TypeError: Cannot read properties of null`.
 - [ ] **AC8** — **D4's seams are `opts`-only and default to the real helpers.**
       `grep -n "opts.mkdirPrivate\|opts.createLogStream" src/cli/run-job.js`
       shows exactly two lines, both of the form `opts.X || realHelper`, and
@@ -942,14 +1010,20 @@ grep -n "logStream.on('error'" src/cli/run-job.js
 
 # V9 (D3, Table S) — endStream settles in every state. Expect the synchronous
 # already-settled check AND a 'close' listener inside the body; a `close`
-# listener WITHOUT the state check still hangs Table S row B.
-sed -n "/^function endStream/,/^}/p" src/cli/run-job.js | grep -E "destroyed|closed|writableEnded|'close'"
+# listener WITHOUT the state check still hangs Table S row B. `writableEnded`
+# must NOT appear — it goes true at the end() call, before the flush.
+sed -n "/^function endStream/,/^}/p" src/cli/run-job.js | grep -E "destroyed|closed|'close'"
+sed -n "/^function endStream/,/^}/p" src/cli/run-job.js | grep -q "writableEnded" && {
+  echo "REGRESSED: writableEnded in the settled-check truncates a healthy flush"; exit 1; }
 
-# V10 (D6) — the success path is gated on the log having been written.
-# Expect one line: the :979 condition carrying `&& !logStreamFailed`.
+# V10 (D6, both halves) — the success path is gated AND the clean-exit arm is
+# null-guarded. Expect TWO lines: the :979 condition carrying
+# `&& !logStreamFailed`, and a `reapFailure ?` guard before `reapFailure.reason`.
 grep -n "code === 0 && !reapFailure" src/cli/run-job.js
+grep -q "logFailedReason" src/cli/run-job.js || {
+  echo "REGRESSED: D6 fall-through missing — reapFailure.reason will throw"; exit 1; }
 
-# V9 — full gates.
+# V11 — full gates.
 npm test
 npm run lint
 ```
@@ -965,8 +1039,11 @@ second also prints nothing, exit 1 (and must *stay* that way — it is an absenc
 check, not a progress gate); **V8 prints nothing, exit 1** (that absence is the
 D5 defect, and it is the whole tee window); **V9 prints nothing, exit 1** (the
 `endStream` body has no state check and no `close` listener — Table S rows A/B);
-**V10 prints `979:  if (!failure && code === 0 && !reapFailure) {`** — the
-ungated success condition, which after D6 must carry `&& !logStreamFailed`.
+**V10's first grep prints `979:  if (!failure && code === 0 && !reapFailure) {`**
+— the ungated success condition, which after D6 must carry
+`&& !logStreamFailed` — and **its second exits 1** (`logFailedReason` does not
+exist yet, which is the D1 null-guard defect). **V9's `writableEnded` half exits
+1 and must STAY that way**: it is an absence check, not a progress gate.
 
 ## Out of scope (do NOT do these)
 
@@ -994,6 +1071,11 @@ ungated success condition, which after D6 must carry `&& !logStreamFailed`.
   real helper. Do not add a third, do not make either readable from the
   environment, and do not export `noLogReason` "so it can be unit-tested" — its
   behaviour is reached through `runJob` via the seams.
+- **Changing the R8-1 text at `:1007`.** D1 wraps that arm in a `reapFailure ?`
+  guard; the *string* it renders stays byte-identical, and the `reason +=` suffix
+  is untouched.
+- **Re-checking `logStreamFailed` after later awaits.** Its observation window
+  ends at `:979` — see D6's declared limitation. Widening it is not in scope.
 - **Rewording Table R rows 1–3 for a degraded log.** Row 1 still says "see the
   log for details" even when the log is truncated — that is the routed half of
   the Known residual (`WP-log-degraded-discriminator`), and it sits inside the
@@ -1226,3 +1308,48 @@ ungated success condition, which after D6 must carry `&& !logStreamFailed`.
 >   (rows A/B). A stub that only models the first silently misses the hang, and one
 >   that only sets `destroyed` while still emitting a late `'close'` tests row A
 >   and misses row B.
+>
+> **2026-08-02 — gate round 5 (verdict: APPROVE, three must-fixes + two
+> advisories, plus one adjudicated Codex [high]). All closed.**
+>
+> - **Codex [high], adjudicated against the code — D6 as specced THREW instead of
+>   rendering row 4.** The reason ternary's clean-exit fallback at `:1007` is an
+>   unguarded `` `job "${name}" ${reapFailure.reason}` ``. That was safe **only
+>   because of an invariant D6 breaks**: pre-D6 a clean exit reached `:1001`
+>   solely when `reapFailure` was set (R8-1). D6's new path arrives with
+>   `failure = null`, `code = 0`, `reapFailure = null` → **`TypeError` before the
+>   watermark, the alert and the email** — strictly worse than the silent `ok` D6
+>   exists to fix. **D1 now changes TWO lines**, `:1004` and `:1007`, the latter
+>   gaining a `reapFailure ?` guard whose else-arm is a new module-private
+>   `logFailedReason(name, logStreamErrCode)` applying the **same `TOKEN_OK`
+>   validation to the same single-read token**. The "only `:1004` changes"
+>   constraint is corrected wherever it appeared. T10's fixture now pins
+>   `reapFailure === null` explicitly and asserts **two red directions** (no gate
+>   → `ok`; gate without guard → `TypeError`), and a caution is recorded that the
+>   round-5 delta truth table verified only the `:979` gate, **not** this
+>   fall-through — the two halves are one change in two places and must be tested
+>   jointly. New V10 second grep.
+> - **(M1) The canonical Table R row 4 cell carried a stray trailing space**
+>   before its closing backtick. `failLoud`'s `.trim()` strips only the ends of
+>   the **whole** body, so a space at the end of `reason` survives *interior* to
+>   it and fails T10's "exactly". Canonical cell fixed; the three mirrors were
+>   already right, and the spec now says why the trap exists.
+> - **(M2) `writableEnded` dropped from D3's already-settled check.** It goes
+>   `true` at the `end()` **call**, before the flush — the reviewer measured a
+>   **0-of-4 MB-flushed early return**, i.e. it would truncate the very log this
+>   WP preserves, on the *common* path. `destroyed || closed` reproduces all six
+>   Table S rows identically, so the column is dropped rather than paired with
+>   `writableFinished`. V9 now also asserts its **absence**.
+> - **(M3) Duplicate `V9` label** — the full-gates step is renumbered **V11**
+>   (V10 is the `:979` check).
+> - **(A1) T9's "bounded timeout" now names the mechanism**: `{ timeout: 5000 }`
+>   in the same options object the file already uses for `skip` (`:995`). There is
+>   no timeout precedent in this file or `tests/run.js`, so an implementer would
+>   otherwise hand-roll a `Promise.race` — which leaves the real promise pending.
+> - **(A2) Declared limitation added to D6**: `logStreamFailed` is read at `:979`,
+>   **after** the `finally` awaits `endStream`, so an `'error'` emitted *after*
+>   `endStream` resolves is unobserved and such a run still reports `ok`.
+>   Theoretical — it requires the Table S early-return rows, where the stream is
+>   destroyed and emits nothing further. Declared and accepted; closing it would
+>   mean re-checking the flag after every later await for a window nothing real
+>   occupies.
