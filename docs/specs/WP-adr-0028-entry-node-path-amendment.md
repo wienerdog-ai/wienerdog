@@ -110,7 +110,7 @@ on **2026-08-01**.
 | Action | Path | Notes |
 |--------|------|-------|
 | modify | docs/adr/0028-scheduler-app-executable-integrity.md | **ALREADY WRITTEN by the architect in this spec's commit — do not author it, do not revise it.** One appended amendment section, headed *"Amendment (2026-08-01) — the scheduler ENTRY's node path is an upgrade-durable alias; process.execPath stays the runtime and the authorization value"*, carrying `Status: PROPOSED — awaiting owner signature.` Listed so the boundary check permits its presence in this branch's diff, and so the Deliverables record is exhaustive. **The one remaining edit — replacing that status line with a hand-typed `OWNER-SIGNED <date>` — is the OWNER's, and no agent may make it.** |
-| modify | docs/specs/WP-scheduler-node-path-durability.md | **D2 — four places, all already edited by the architect.** (a) Definition of done item 8 and (b) the matching Mirrored Surface Checklist entry each offered a second way to satisfy this gate — *"or that line carries an owner-written annotation"* on `docs/adr/0028-…:83` — which **conflicts with this spec's append-only rule** and with ADR-0028's convention; withdrawn in both. (c) **DISPATCH BLOCKER sub-item 0a's claim that the sibling "merged to `main` in PR #125"** is corrected: `git show --stat fbc9d80` merged **three docs files, zero `src/`, zero `tests/`** — the spec, not the implementation — and the banner gains an explicit **DISPATCH PRECONDITION** mirroring AC5b. (d) the `depends_on` history paragraph, same correction. **Still unchanged:** every table, every acceptance criterion, and `status:` (see Decisions). |
+| modify | docs/specs/WP-scheduler-node-path-durability.md | **D2 — four places, all already edited by the architect.** (a) Definition of done item 8 and (b) the matching Mirrored Surface Checklist entry each offered a second way to satisfy this gate — *"or that line carries an owner-written annotation"* on `docs/adr/0028-…:83` — which **conflicts with this spec's append-only rule** and with ADR-0028's convention; withdrawn in both. (c) **DISPATCH BLOCKER sub-item 0a's claim that the sibling "merged to `main` in PR #125"** is corrected: `git show --stat fbc9d80` merged **three docs files, zero `src/`, zero `tests/`** — the spec, not the implementation — and the banner gains an explicit **DISPATCH PRECONDITION** mirroring B6. (d) the `depends_on` history paragraph, same correction. **Still unchanged:** every table, every acceptance criterion, and `status:` (see Decisions). |
 
 Not a deliverable, deliberately: `docs/adr/README.md`. See Implementation notes.
 
@@ -184,47 +184,102 @@ landed without opening the ADR.
   sentence itself. This ADR's convention (stated in its own preamble) is that a
   later ruling "lands as a dated amendment to this ADR", never as an edit.
 
-## Acceptance criteria
+## Acceptance criteria — TWO NAMED STATES
 
-- [ ] **AC1** — `docs/adr/0028-scheduler-app-executable-integrity.md` contains
+**This WP passes through two different correct states, and a single criteria set
+cannot describe both.** An earlier revision tried: it required the amendment to
+read `PROPOSED — awaiting owner signature` (AC1) and the file to gain **no** new
+dated owner marker (AC2), while *also* requiring Gyula's dated `OWNER-SIGNED`
+marker before the WP could close (AC5). **After the very signature this WP exists
+to obtain, AC1 and AC2 necessarily FAIL** — so the gate could never close
+honestly, and the only way through was a manual waive. Found by the final Codex
+pass; the fix is to name the states.
+
+- **State A — PRE-SIGNATURE.** What the architect delivers and what every gate
+  round has been checking. The amendment is written, appended, disclaimed, and
+  **unsigned**.
+- **State B — SIGNED-FINAL.** What closes this WP. The owner has typed the
+  marker; the `PROPOSED — awaiting owner signature` line is discharged.
+
+**Both states are correct in their turn. A criterion belongs to exactly one.**
+Never evaluate a State A criterion against a State B tree, or vice versa.
+
+### State A — PRE-SIGNATURE (agent-satisfiable; true today)
+
+- [ ] **A1** — `docs/adr/0028-scheduler-app-executable-integrity.md` contains
       exactly one occurrence of `PROPOSED — awaiting owner signature`, inside the
       2026-08-01 entry-node-path amendment.
-- [ ] **AC2** — The file gains **no new dated owner marker**. The criterion is
-      the section **"AC2's worked example"** below — V2's actual nine-line output
-      with every line classified into one of four classes. It **is** the
-      criterion, not an illustration of one.
-- [ ] **AC3** — Decision 1's sentence at `:83` is byte-identical to its
+- [ ] **A2** — The file gains **no new dated owner marker**. The criterion is the
+      section **"A2's worked example"** below — VA2's actual nine-line output with
+      every line classified into one of four classes. It **is** the criterion, not
+      an illustration of one.
+- [ ] **A3** — Decision 1's sentence at `:83` is byte-identical to its
       pre-amendment text.
-- [ ] **AC4** — `npm run lint` is green.
-- [ ] **AC4b (D2)** — `docs/specs/WP-scheduler-node-path-durability.md`'s
+- [ ] **A4** — The architect-authored disclaimer is present in the amendment
+      (*"this is NOT an owner signature, confers no approval, and no gate may key
+      on it"*).
+- [ ] **A5** — `npm run lint` is green.
+- [ ] **A6 (D2)** — `docs/specs/WP-scheduler-node-path-durability.md`'s
       Definition of done item 8 and its Mirrored Surface Checklist entry both
       require the **owner-signed dated amendment** and both mark the
-      owner-written-annotation branch **withdrawn**; **V4b's two absence greps
+      owner-written-annotation branch **withdrawn**; **VA5's two absence greps
       both return `0`** (they return `1` on `main`, so the gate is not vacuous).
-      Nothing else in that file changed
+      Its DISPATCH BLOCKER banner carries the corrected 0a and the DISPATCH
+      PRECONDITION. Nothing else in that file changed
       (`git diff -- docs/specs/WP-scheduler-node-path-durability.md` touches only
-      those two regions — paste it).
-- [ ] **AC5 (OWNER, blocking)** — the amendment's `Status:` line carries a
-      hand-typed `OWNER-SIGNED <date>`. **Until AC5 is met,
-      `WP-scheduler-node-path-durability` must not merge.** This is the only
-      criterion an agent cannot satisfy, and it is the whole point of this WP.
-- [ ] **AC5b (completion-aware — NOT discharged by AC5)** — the signature
-      satisfies the **ADR gate only**. Dispatching
-      `WP-scheduler-node-path-durability` additionally requires its
-      `depends_on` spec, `WP-scheduler-register-replaces-loaded-record`, to be
-      **`Done`** (merged **and** verified), per the standing dispatch discipline
-      in `docs/specs/README.md`. **Nothing mechanical enforces this:**
+      those regions — paste it).
+
+### State B — SIGNED-FINAL (owner-satisfiable ONLY; red today, by design)
+
+**Every B criterion is red right now, and that is the correct reading of this
+tree — not a defect.** They go green on exactly one event: **Gyula typing the
+marker.** This is the one gate in this repo that **no agent, and no amount of
+work, can turn green** — which is the honest statement of what this WP is.
+
+- [ ] **B1 (OWNER, blocking)** — the amendment's `Status:` line carries a
+      **hand-typed** `OWNER-SIGNED <date>`, and the
+      `PROPOSED — awaiting owner signature` text is **discharged** (replaced by
+      that marker). **A1 is expected to fail in State B; that is the transition,
+      not a regression.**
+- [ ] **B2** — **Exactly ONE new dated owner marker exists**, and it is the one at
+      the entry-node-path amendment. The A2 worked example is updated in the same
+      owner pass to carry it as a **fifth [1] MARKER** row.
+- [ ] **B3** — **All four pre-existing dated markers are byte-unchanged**:
+      `OWNER-SIGNED 2026-07-25` (`:6`), `OWNER-APPROVED (2026-07-19)` (`:8`),
+      `OWNER-SIGNED 2026-07-26` (`:752`), `OWNER-SIGNED 2026-08-01` (`:978`).
+      Signing this amendment ratifies **this amendment**, nothing else.
+- [ ] **B4** — **The pure-append property still holds against the signed tree**:
+      every byte of `docs/adr/0028-…md` **above the 2026-08-01 entry-node-path
+      amendment heading** is byte-identical to `e7c845e`. The signature edits one
+      status line **inside** the appended section and nothing above it —
+      including Decision 1's `:83`, which A3 pinned and B4 re-pins.
+- [ ] **B5** — `npm run lint` is green.
+- [ ] **B6 (NOT discharged by B1)** — the signature satisfies the **ADR gate
+      only**. Dispatching `WP-scheduler-node-path-durability` additionally
+      requires its `depends_on` spec,
+      `WP-scheduler-register-replaces-loaded-record`, to be **`Done`** (merged
+      **and** verified), per the standing dispatch discipline in
+      `docs/specs/README.md`. **Nothing mechanical enforces this:**
       `scripts/check-frontmatter.js` resolves a `depends_on` id to an existing
       spec **file** and never reads that spec's `status`. Verified at `e7c845e`:
       that dependency is `status: Draft` and is **not** in `docs/specs/done/` —
       PR #125 (`fbc9d80`) merged its **spec document**, not its implementation —
-      so the hazard it closes is still live. Do not read a signed amendment as
-      clearance to dispatch.
+      so the hazard it closes is still live. **Do not read a signed amendment as
+      clearance to dispatch.**
 
-### AC2's worked example — V2's actual output, every line classified
+**B6 is the only criterion that survives into State B unchanged from A**, because
+it is not about the signature at all. Everything else in State B either replaces
+an A criterion (B1 ↔ A1, B2 ↔ A2) or re-pins one against the new tree (B3/B4 ↔
+A2/A3).
 
-Nine lines, four classes. **This block is the criterion**; compare V2's output
+### A2's worked example — VA2's actual output, every line classified
+
+Nine lines, four classes. **This block is the criterion**; compare VA2's output
 against it line for line.
+
+**This is the STATE A roster.** In State B it gains **one** row — the owner's new
+marker at the entry-node-path amendment, classified **[1] MARKER** — and nothing
+else changes. Updating it is part of the owner's signature pass (B2).
 
 ```text
 6:OWNER-SIGNED 2026-07-25                                        [1] MARKER
@@ -262,63 +317,116 @@ line numbers. **A placeholder is not a signature; an agent may never replace
 
 ## Verification steps
 
+**Run the set that matches the state you are in.** The `VA*` commands verify
+State A and pass today. The `VB*` commands verify State B and **fail today by
+design** — they are the owner's, and nothing an agent does turns them green.
+
+### State A — PRE-SIGNATURE
+
 ```bash
-# V1 (AC1) — exactly one PROPOSED marker, in the new amendment.
+# VA1 (A1) — exactly one PROPOSED marker, in the new amendment.
 grep -n "PROPOSED — awaiting owner signature" docs/adr/0028-scheduler-app-executable-integrity.md
 
-# V2 (AC2) — no NEW dated owner marker. Compare the output line-for-line against
-# AC2's WORKED EXAMPLE, which is the actual nine-line output with every line
-# classified. Deliberately NO line numbers restated here: only the four
-# base-region markers have stable lines (the change is a pure append); anything
-# inside the amendment body moves whenever the body is edited.
+# VA2 (A2) — no NEW dated owner marker. Compare the output line-for-line against
+# "A2's worked example", the actual nine-line output with every line classified.
+# Deliberately NO line numbers restated here: only the four base-region markers
+# have stable lines (the change is a pure append); anything inside the amendment
+# body moves whenever the body is edited.
 grep -n "OWNER-SIGNED\|OWNER-APPROVED" docs/adr/0028-scheduler-app-executable-integrity.md
 
-# V3 (AC3) — Decision 1's sentence is unchanged.
+# VA3 (A3) — Decision 1's sentence is unchanged.
 sed -n '83p' docs/adr/0028-scheduler-app-executable-integrity.md
 
-# V4 (D2) — the annotation branch is withdrawn in BOTH places, and DoD item 8
-# now requires the signature. Do NOT grep for "owner-written annotation": that
-# phrase legitimately survives INSIDE the quoted, marked-withdrawn text in both
-# places, so it cannot distinguish "removed" from "still offered".
-# Expect: 2, then one matching line.
+# VA4 (A4) — the architect disclaimer is present. Expect ONE matching line.
+# TWO traps in this one grep, both hit while writing it:
+#  (a) the disclaimer WRAPS ("…this is NOT an owner / signature, confers no
+#      approval…"), so a grep for the full phrase matches NOTHING — grep is
+#      line-oriented, so pick a fragment that lives on one line;
+#  (b) "confers no approval" ALSO appears in the 2026-07-25 amendment's own
+#      architect note (`:755`), so it returns two lines and cannot tell you
+#      whether THIS amendment carries one. "no gate may key on it" is unique.
+grep -n "no gate may key on it" docs/adr/0028-scheduler-app-executable-integrity.md
+
+# VA5 (A6, D2) — the annotation branch is withdrawn in BOTH places, and DoD
+# item 8 now requires the signature. Do NOT grep for "owner-written annotation":
+# that phrase legitimately survives INSIDE the quoted, marked-withdrawn text in
+# both places, so it cannot distinguish "removed" from "still offered".
+# Expect: 2, then one matching line, then 0 and 0.
 grep -c "withdrawn" docs/specs/WP-scheduler-node-path-durability.md
 grep -n "carries the owner's hand-typed signature" docs/specs/WP-scheduler-node-path-durability.md
-
-# V4b (D2) — the withdrawn branch is not OFFERED anywhere. These two greps match
-# the OPERATIVE wording of each old branch, which survives nowhere: the quoted,
-# marked-withdrawn copies deliberately reproduce only a FRAGMENT of each.
-# Expect 0 and 0.
 #
-# THESE ARE ABSENCE CHECKS. A later editor must not "fix" a 0 by re-adding the
-# text — 0 is the passing result, and a 1 means the annotation branch is being
-# offered again.
+# THE NEXT TWO ARE ABSENCE CHECKS. A later editor must not "fix" a 0 by
+# re-adding the text — 0 is the passing result, and a 1 means the annotation
+# branch is being offered again.
 grep -c "has landed, or that line carries" docs/specs/WP-scheduler-node-path-durability.md
 grep -c "merge, or ADR-0028:83 must carry" docs/specs/WP-scheduler-node-path-durability.md
 
-# V5 (AC4)
+# VA6 (A5)
 npm run lint
 ```
 
 **Untouched-`main` baselines** (`git show e7c845e:docs/specs/WP-scheduler-node-path-durability.md`),
-so every one of these four gates is proved red-before-green rather than asserted:
+so every VA5 gate is proved red-before-green rather than asserted:
 
 | Gate | on `e7c845e` | after D2 |
 |------|--------------|----------|
-| V4 — `grep -c "withdrawn"` | `0` | `2` |
-| V4 — `grep -n "carries the owner's hand-typed signature"` | no output | one line |
-| V4b — `grep -c "has landed, or that line carries"` | **`1`** | **`0`** |
-| V4b — `grep -c "merge, or ADR-0028:83 must carry"` | **`1`** | **`0`** |
+| `grep -c "withdrawn"` | `0` | `2` |
+| `grep -n "carries the owner's hand-typed signature"` | no output | one line |
+| `grep -c "has landed, or that line carries"` | **`1`** | **`0`** |
+| `grep -c "merge, or ADR-0028:83 must carry"` | **`1`** | **`0`** |
 
-The two V4b rows run **1 → 0**, which is the direction that proves the offer was
+The last two rows run **1 → 0**, which is the direction that proves the offer was
 really removed and not merely reworded around: each pattern spans the *operative*
 wording of one old branch, and the quoted marked-withdrawn copies reproduce only
 a fragment of each, deliberately.
 
-Expected V3 output, byte-exact:
+Expected VA3 output, byte-exact:
 
 ```text
 `node` is `process.execPath` (already absolute) and is not pinned.
 ```
+
+### State B — SIGNED-FINAL (red today; only Gyula's signature turns these green)
+
+```bash
+# VB1 (B1) — the PROPOSED line is DISCHARGED. Expect NO output, exit 1.
+# This is the exact inverse of VA1: A1 requires the line, B1 requires its absence.
+grep -n "PROPOSED — awaiting owner signature" docs/adr/0028-scheduler-app-executable-integrity.md
+
+# VB2 (B1, B2) — exactly FIVE dated markers now, the new one at the amendment.
+# Compare against the worked example UPDATED in the signature pass.
+grep -n "OWNER-SIGNED\|OWNER-APPROVED" docs/adr/0028-scheduler-app-executable-integrity.md
+
+# VB3 (B3) — the four pre-existing markers are byte-unchanged.
+sed -n '6p;8p;752p;978p' docs/adr/0028-scheduler-app-executable-integrity.md
+
+# VB4 (B4) — PURE-APPEND still holds against the SIGNED tree. Compare the WHOLE
+# base file against the HEAD of the current one; the base's own line count is the
+# boundary. Expect no diff output and exit 0.
+#
+# Do NOT derive the boundary from the amendment heading's line number minus one:
+# the append introduced a blank separator line ABOVE the heading, so that form
+# reports a spurious one-line delta (measured — it did, on the first draft).
+BASE=docs/adr/0028-scheduler-app-executable-integrity.md
+BASE_LINES=$(git show "e7c845e:$BASE" | wc -l | tr -d ' ')
+diff <(git show "e7c845e:$BASE") <(head -n "$BASE_LINES" "$BASE") \
+  && echo "VB4 ok — pure append preserved through the signature"
+
+# VB5 (B5)
+npm run lint
+```
+
+**VB1 and VB2 are red on this branch and must stay red until the owner signs.** A
+green VB1 today would mean an agent removed the `PROPOSED` line; a green VB2
+today would mean an agent wrote a dated owner marker. **Either is a violation, not
+progress** — see "no agent writes an owner signature" in Implementation notes.
+
+**VB3 and VB4 already pass today, and that is correct** — they assert *invariants*
+the signature must not break (the four pre-existing markers, and the pure-append
+property), not the signature itself. They are in State B because they must be
+**re-run after** the signature, where they are the only thing standing between a
+one-line status edit and an accidental rewrite of the base region. Verified on
+this branch: VB4 prints `VB4 ok — pure append preserved through the signature`.
 
 ## Out of scope (do NOT do these)
 
@@ -339,18 +447,30 @@ Expected V3 output, byte-exact:
 
 ## Definition of done
 
-1. The amendment section exists in ADR-0028 with `Status: **PROPOSED — awaiting
-   owner signature.**` (done in this spec's commit).
-2. V1–V4 pass; output pasted into the PR body.
-3. **The owner types the `OWNER-SIGNED <date>` line.** Not an agent. Ever.
-4. Only after 3: `WP-scheduler-node-path-durability`'s Definition of done item 8
+**The WP closes in STATE B, not State A.** State A is the deliverable; State B is
+the completion. Read the two criteria sets before checking anything off.
+
+1. **State A reached** — the amendment section exists in ADR-0028 with
+   `Status: **PROPOSED — awaiting owner signature.**` (done in this spec's
+   commit), and **A1–A6 all pass**.
+2. **VA1–VA6 pass**; output pasted into the PR body. **VB1/VB2 are expected RED
+   at this point** — paste them too, and say so, because a State-B gate that is
+   green before the signature is a violation, not progress.
+3. **The owner types the `OWNER-SIGNED <date>` line.** Not an agent. Ever. This
+   is the only step that moves the WP from State A to State B, and **no amount of
+   agent work substitutes for it**.
+4. **State B verified** — after step 3, **B1–B5 all pass** and **VB1–VB5 are
+   re-run**, including VB3/VB4, which are what catch a signature pass that
+   accidentally touched the base region. The A2 worked example is updated in the
+   same pass to carry the new marker as a fifth `[1] MARKER` row (B2).
+5. Only after 4: `WP-scheduler-node-path-durability`'s Definition of done item 8
    is satisfied and its implementation PR may merge. **That is the ADR gate
    alone.** Dispatching that WP *also* requires
    `WP-scheduler-register-replaces-loaded-record` to be `Done` — merged and
    verified — which at `e7c845e` it is **not** (`status: Draft`, absent from
-   `docs/specs/done/`). See AC5b; the two gates are independent and neither
+   `docs/specs/done/`). See **B6**; the two gates are independent and neither
    discharges the other.
-5. This spec's `status:` moves to `Done` and the file moves to `docs/specs/done/`
+6. This spec's `status:` moves to `Done` and the file moves to `docs/specs/done/`
    in the owner's signature pass — not before, because until then the gate this
    spec exists to hold is still open.
 
@@ -443,3 +563,52 @@ Expected V3 output, byte-exact:
 > no dispatch may proceed on the strength of `status: Ready` alone. **Gyula
 > decides: keep `Ready` with the precondition, or return the spec to `Draft` until
 > the sibling ships.**
+>
+> **2026-08-02 — final Codex pass, [medium]: the gates contradicted the WP's own
+> terminal state. CLOSED by splitting the criteria into two named states.**
+>
+> **The defect.** AC1 required the amendment to read
+> `PROPOSED — awaiting owner signature` and AC2 required **no** new dated owner
+> marker — while AC5/DoD required Gyula's dated `OWNER-SIGNED` marker before the
+> WP could close. **After the very signature this WP exists to obtain, AC1 and AC2
+> necessarily FAIL.** The gate could never close honestly; the only way through
+> was a manual waive, which is precisely the outcome a gate is supposed to prevent.
+>
+> **The fix.** Two named states, each with its own criteria and its own V-set:
+> **State A — PRE-SIGNATURE** (A1–A6 / VA1–VA6: the amendment written, appended,
+> disclaimed, unsigned — what every gate round has been checking, and what passes
+> today) and **State B — SIGNED-FINAL** (B1–B6 / VB1–VB5: the `PROPOSED` line
+> discharged, **exactly one** new dated marker at the amendment, the four
+> pre-existing markers byte-unchanged, the **pure-append property re-proved
+> against the signed tree**, and the worked-example roster updated to carry the
+> new marker as a fifth `[1] MARKER` row). A1's failure in State B is now
+> **the transition, stated as such**, not a regression.
+>
+> **`VB1` and `VB2` are the one gate in this repo that no agent can turn green** —
+> a green VB1 today would mean an agent deleted the `PROPOSED` line; a green VB2
+> would mean an agent wrote a dated owner marker. Both are violations, not
+> progress, and the spec says so where the commands live. **VB3/VB4 pass today by
+> design**: they assert invariants the signature must not break, and their job is
+> to be **re-run after** it. DoD now walks A → signature → B explicitly, and
+> requires the red VB1/VB2 output to be pasted at step 2 so the pre-signature
+> state is on the record.
+>
+> **Two defects in my own new gates, found by running them rather than reading
+> them:**
+>
+> - **VA4 matched nothing.** The disclaimer wraps across a line break
+>   (*"…this is NOT an owner / signature, confers no approval…"*) and `grep` is
+>   line-oriented. The first repair then matched **two** lines, because
+>   *"confers no approval"* also appears in the 2026-07-25 amendment's own
+>   architect note (`:755`). Settled on `no gate may key on it`, which is unique —
+>   both traps are recorded inline so the next editor does not re-introduce either.
+> - **VB4 reported a spurious one-line delta.** Deriving the boundary from the
+>   amendment heading's line number minus one excludes the blank separator the
+>   append itself introduced. Rewritten to compare the **whole base file** against
+>   the **head of the current one**, with the base's own line count as the
+>   boundary — which is the actual definition of "pure append". Verified:
+>   `VB4 ok — pure append preserved through the signature`.
+>
+> **Naming note for readers of the older provenance blocks above:** what those
+> entries call `AC5b` is now **B6**, and `AC2`'s worked example is now
+> **A2's**. The renaming is this round's; the content is unchanged.
