@@ -5,7 +5,7 @@ status: Ready
 model: sonnet
 size: S
 depends_on: []
-adrs: [ADR-0004]
+adrs: [ADR-0004, ADR-0026]
 ---
 
 # WP-vision-gate-status-destale: three sentences that still say the product is switched off
@@ -80,11 +80,15 @@ False. It also mis-points the reader: T0 now says the opposite.
 
 ### 4. `docs/GLOSSARY.md:43-47` — stale claim #3
 
+The complete five-line bullet, byte-exact at `e7c845e`
+(`sed -n '43,47p' docs/GLOSSARY.md`):
+
 ```text
 - **safety profile** — the code-owned, fail-closed record of which powerful
   capabilities are cleared for use (`src/core/safety-profile.js`). Every
   capability is BLOCKED until its security gate is opened by a reviewed release;
-  there is no runtime/env/flag override. Inspect it with `wienerdog safety`.
+  there is no runtime/env/flag override. Inspect it with `wienerdog safety`. (Not
+  a "sandbox" — that word means the unrelated `WIENERDOG_HOME` redirect guard.)
 ```
 
 The sentence states a *rule* and 0.10.0 was that reviewed release, so it is
@@ -99,9 +103,12 @@ current-state claim, in the file `CLAUDE.md` names as canonical. See Decisions.
   **0.10.0** all five were opened after that hardening cleared review — each
   capability is now **allowed** …"*. This is the **canonical source** for the
   facts this WP restates. Do not edit it; defer to it.
-- **`README.md:69`, `:70`, `:73`** already say *"run `wienerdog safety` to see
-  the status of every gated capability"*, with no claim about which status. Match
-  that register.
+- **`README.md:69`, `:70`, `:73`** already point at the command with no claim
+  about which status. **The three are NOT byte-identical** — only `:70` reads
+  *"run `wienerdog safety` to see the status of every gated capability"*; `:69`
+  and `:73` insert "any time" (`:69` also capitalises: *"Run `wienerdog safety`
+  any time to see the status of every gated capability."*). Match the
+  **register**, not any one string.
 - `grep -n -i "disabled\|blocked\|frozen\|off pending\|gated\|gate" docs/VISION.md`
   at `e7c845e` returns lines 22, 28, 49, 51 only. **Lines 28 and 49 are about
   daemons/servers, not capability gates** — they are unrelated and out of scope.
@@ -123,18 +130,32 @@ Not deliverables under any reading: `docs/THREAT-MODEL.md`, `README.md`,
 
 ### Exact contract
 
-**Edit 1 — `docs/VISION.md:22`.** Remove, byte-exact:
+**The rule both edits follow, and it is not optional.** A dated *historical* fact
+cannot go stale (0.10.0 shipped; `package.json` is already `0.12.0`). A *live
+per-gate verdict* in prose goes stale the moment a reviewed release blocks a
+gate — which is precisely how the two sentences being removed here came to be
+wrong. **So: exactly one live-state assertion exists in the repo, in
+`docs/THREAT-MODEL.md` T0. Every other surface points at `wienerdog safety` and
+asserts nothing.** VISION carries no verdict at all; the GLOSSARY carries one
+dated historical fact and no verdict.
+
+**Edit 1 — `docs/VISION.md:22`.** Remove, byte-exact (note the leading space; the
+sentence's final `.` sits *outside* the closing bracket and **stays exactly where
+it is**):
 
 ```text
  (in this build, Google senses and the routine catalog are off pending the pre-use security review — see "What we will not do")
 ```
 
-Insert in its place, byte-exact (note the leading space and that the sentence's
-final `.` moves after the closing bracket):
+Insert in its place, byte-exact:
 
 ```text
- (both are gated capabilities — run `wienerdog safety` to see what is allowed on your machine)
+ (Google senses and routines are both gated capabilities — run `wienerdog safety` to see what is allowed on your machine)
 ```
+
+The subject is named explicitly rather than left as "both", because the sentence
+contains an em-dash aside (*"— designed to deliver a spectacular first win within
+a day —"*) whose noun is the nearer antecedent.
 
 **Edit 2 — `docs/VISION.md:51`.** Remove, byte-exact:
 
@@ -145,8 +166,21 @@ In the current security-hardened build the Google Workspace layer is disabled en
 Insert in its place, byte-exact:
 
 ```text
-The Google Workspace layer is one of Wienerdog's gated capabilities: it was switched off until the pre-use security review finished, and it is on now — see the threat model's T0, and run `wienerdog safety` to see the status on your machine.
+The Google Workspace layer is one of Wienerdog's gated capabilities — see the threat model's T0, and run `wienerdog safety` to see its status on your machine.
 ```
+
+**Two things this replacement deliberately does NOT do**, both of which an
+earlier draft of this spec got wrong and gate round 1 caught:
+
+1. **It asserts no verdict.** A draft said *"…it was switched off until the
+   pre-use security review finished, and it is on now"*. That re-arms the exact
+   trap this WP exists to disarm: the next reviewed release that blocks
+   `gws-use` makes VISION wrong again, in the same file, for the same reason.
+2. **It contains no occurrence of the phrase `pre-use security review`.** That
+   same draft did — which made **AC1 unsatisfiable by construction**, since AC1
+   requires that phrase to be absent from `docs/VISION.md` after the edit
+   (verified on scratch copies: the post-edit grep matched `:51` and exited 0).
+   Fixing (1) fixes (2); if you reword this text, keep both properties.
 
 **Edit 3 — `docs/GLOSSARY.md:43-47`.** This is a **whole-bullet replacement** —
 replace all five lines at once, so there is no question about where the reflow
@@ -205,6 +239,16 @@ ADR-0031's seven activation triggers fire.
   it; VISION points there.
 - Do not "improve" adjacent VISION or GLOSSARY prose while you are in the files.
   Every changed line must trace to this spec.
+- **On the frontmatter `adrs:` list.** Gate round 1 suggested naming "the
+  safety-profile / capability-gate ADR"; **there is no such ADR** — the safety
+  profile shipped in `WP-109-safety-profile-and-preflight` without one
+  (`grep -rl "safety profile\|FROZEN_PROFILE\|capability gate" docs/adr/` returns
+  only 0021, 0025, 0026 and 0032, all of which *consume* a gate rather than
+  define the mechanism). `ADR-0026` is added because it owns the `gws-use` gate's
+  substance — the broker both VISION `:51` sentences describe. `ADR-0004` stays
+  because this WP asserts it adds no process. **Do not invent a
+  safety-profile ADR to satisfy this bullet**; if one is ever wanted, it is its
+  own work.
 - Do not renumber, reorder or reflow the GLOSSARY bullet list.
 - When uncertain: choose the simpler option and record it in the PR under
   "Decisions made".
@@ -218,10 +262,11 @@ ADR-0031's seven activation triggers fire.
 - [ ] **AC2** — `grep -n "BLOCKED" docs/GLOSSARY.md` matches nothing after the
       change.
 - [ ] **AC3** — the three replacement strings are present byte-exact.
-- [ ] **AC4** — `git diff --stat` shows exactly **three** files changed:
-      `docs/VISION.md`, `docs/GLOSSARY.md`, and this spec (its `status:` flip —
-      this spec also lives under `docs/`, so it appears in a `docs/`-scoped
-      diff). **`docs/THREAT-MODEL.md` and `README.md` are not among them.**
+- [ ] **AC4** — an **unscoped** `git diff --stat` shows exactly **three** files
+      changed: `docs/VISION.md`, `docs/GLOSSARY.md`, and this spec (its `status:`
+      flip). **`docs/THREAT-MODEL.md` and `README.md` are not among them** — and
+      the diff must be unscoped, because a `-- docs/` pathspec cannot show
+      `README.md` at all and would make this criterion vacuous.
 - [ ] **AC5** — `npm run lint` is green (markdownlint over `docs/**/*.md`).
 - [ ] **AC6** — `npm test` is green. Nothing should depend on this prose; if a
       golden fixture does, that is a discovered issue for the PR body, not a
@@ -246,11 +291,13 @@ grep -n "BLOCKED" docs/GLOSSARY.md
 
 # V4 (AC3) — the replacements are present. Expect one line each.
 grep -n "run \`wienerdog safety\` to see what is allowed on your machine" docs/VISION.md
-grep -n "it was switched off until the pre-use security review finished, and it is on now" docs/VISION.md
+grep -n "one of Wienerdog's gated capabilities — see the threat model" docs/VISION.md
 grep -n "All five gates were opened in 0.10.0" docs/GLOSSARY.md
 
-# V5 (AC4) — exactly three files: VISION, GLOSSARY, and this spec. Nothing else.
-git diff --stat -- docs/
+# V5 (AC4) — NO pathspec. AC4 asserts README.md and THREAT-MODEL.md are
+# unchanged, and a `-- docs/` pathspec would hide README.md (and bin/, src/)
+# from the output entirely, making the assertion unfalsifiable.
+git diff --stat
 
 # V6 (AC5, AC6)
 npm run lint
@@ -260,6 +307,37 @@ npm test
 **Baseline on the untouched tree at `e7c845e`**, so a red V1/V2 is recognisable
 as "the work is not done" rather than "the command is wrong": V1 prints
 `22:` and `51:`; V2 prints `45:`.
+
+**All three edits were simulated on scratch copies at `e7c845e`, and this spec's
+own criteria were run against the result.** The simulation asserts each removal
+block matches **byte-exact** before replacing it (it throws otherwise), so this
+also proves the three "Remove, byte-exact" blocks above are correct:
+
+```text
+--- AC1 / V3 (must be ABSENT from VISION) ---
+PASS  pre-use security review (found=false, want=false)
+PASS  disabled entirely behind a pre-use safety gate (found=false, want=false)
+--- AC2 / V3 (must be ABSENT from GLOSSARY) ---
+PASS  BLOCKED (found=false, want=false)
+--- AC3 / V4 (must be PRESENT) ---
+PASS  V4a (found=true, want=true)
+PASS  V4b (found=true, want=true)
+PASS  V4c (found=true, want=true)
+
+resulting VISION:22 = "…he stack (Google senses and routines are both gated
+  capabilities — run `wienerdog safety` to see what is allowed on your machine)."
+resulting VISION:51 = "…T4a). The Google Workspace layer is one of Wienerdog's
+  gated capabilities — see the threat model's T0, and run `wienerdog safety` to
+  see its status on your machine."
+```
+
+The `VISION:22` line also confirms the point Edit 1 makes: the sentence's final
+`.` is **outside** the closing bracket before and after, and does not move.
+
+**Note on `docs/VISION.md:51`'s apostrophe.** The removal block uses a **straight
+apostrophe** in `model's` (`0x27`, verified with `od -c`), not a typographic
+`’`. Copy it from this spec or from the file; retyping it in an editor with smart
+quotes enabled will silently break the byte-exact match.
 
 ## Out of scope (do NOT do these)
 
@@ -314,3 +392,44 @@ as "the work is not done" rather than "the command is wrong": V1 prints
 > wrong. **(3)** The edit is one sentence in one bullet; the WP stays **S**.
 > If the owner disagrees, dropping it is a two-line edit: remove the
 > `docs/GLOSSARY.md` row and Edit 3, and delete AC2 and its greps.
+>
+> **Gate round 1 UPHELD that decision on the merits**, and sharpened the reason
+> into a rule this spec now states in Exact contracts: *a dated historical fact
+> ("opened in 0.10.0") cannot re-stale — `package.json` is already `0.12.0` — but
+> a live per-gate verdict can.* The GLOSSARY row stays because it carries the
+> first kind and none of the second.
+>
+> **2026-08-01 — gate round 1 corrections (verdict: REQUEST CHANGES).**
+>
+> - **(a) AC1 could never go green.** Edit 2's own replacement text contained the
+>   phrase `pre-use security review`, which AC1/V3 require **absent** from
+>   `docs/VISION.md` after the edit (verified on scratch copies: the post-edit
+>   grep matched `:51` and exited 0).
+> - **(a) Edit 2 violated this spec's own invariant.** It asserted a live verdict
+>   (*"and it is on now"*) about `gws-use` — re-arming exactly the trap this WP
+>   disarms, in the same file, for the same reason. Both findings are closed by
+>   one rewrite: Edit 2 now asserts **no** verdict and points at
+>   `wienerdog safety`, which also removes the offending phrase. The
+>   dated-fact-yes / live-verdict-no rule is stated explicitly so a future
+>   reword cannot re-break it.
+> - **(a) V5's `-- docs/` pathspec blinded AC4.** AC4 asserts `README.md` and
+>   `docs/THREAT-MODEL.md` are unchanged, but the pathspec excluded `README.md`
+>   (and `bin/`, `src/`) from the output entirely, so the criterion could not
+>   fail. Pathspec dropped.
+> - **(b) Current state §4's evidence block was a four-line abridgment** labelled
+>   `:43-47` — it truncated `:46` after *"wienerdog safety."* and omitted `:47`.
+>   Replaced with the full five-line bullet and a `sed` command to re-derive it.
+> - **(b) Edit 1's parenthetical was factually wrong** — it said the sentence's
+>   final `.` "moves after the closing bracket"; the period is already outside the
+>   paren at `:22` and stays put (simulated). Corrected.
+> - **(b) §5 presented a paraphrase as a quote** — only `README.md:70` is
+>   byte-exact; `:69` and `:73` insert "any time", and `:69` capitalises "Run".
+>   Now marked as a register to match, not a string to copy.
+> - **(adv, taken)** Edit 1 names its subject (*"Google senses and routines"*)
+>   rather than saying "both", because the sentence's em-dash aside supplies a
+>   competing nearest antecedent.
+> - **(adv, taken with a correction)** The suggestion to cite "the
+>   safety-profile / capability-gate ADR" rests on a false premise — **no such
+>   ADR exists**. `ADR-0026` (the GWS capability broker) is added instead, since
+>   it owns the substance of the `gws-use` gate that VISION `:51` describes; the
+>   reasoning is recorded in Implementation notes so it is not re-proposed.
