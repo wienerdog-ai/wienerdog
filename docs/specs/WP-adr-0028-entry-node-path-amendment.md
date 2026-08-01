@@ -189,22 +189,10 @@ landed without opening the ADR.
 - [ ] **AC1** — `docs/adr/0028-scheduler-app-executable-integrity.md` contains
       exactly one occurrence of `PROPOSED — awaiting owner signature`, inside the
       2026-08-01 entry-node-path amendment.
-- [ ] **AC2** — The file gains **no new dated owner marker**. Read V2's output
-      against this roster; **the roster is the criterion**, and every hit must
-      fall into exactly one of its three classes:
-      1. **Four dated markers, all pre-existing, all untouched, all cited by line
-         because the change is a pure append and therefore cannot move them:**
-         `OWNER-SIGNED 2026-07-25` (`:6`), `OWNER-APPROVED (2026-07-19)` (`:8`),
-         `OWNER-SIGNED 2026-07-26` (`:752`), `OWNER-SIGNED 2026-08-01` (`:978`).
-      2. **Prose back-references** that name one of those four. Dated, and
-         expected.
-      3. **Unfilled placeholders — every remaining hit must literally contain
-         `OWNER-SIGNED <date>`**, angle brackets and all.
-      **Class 3 is identified by its `<date>` content, NOT by a line number.**
-      Line numbers inside the amendment body are structurally unstable: this
-      spec's own §5 insertion shifted §6 within a single commit, which is what
-      made the earlier `:1224/:1331` citation stale on arrival. **A placeholder is
-      not a signature; an agent may never replace `<date>` with a real date.**
+- [ ] **AC2** — The file gains **no new dated owner marker**. The criterion is
+      the section **"AC2's worked example"** below — V2's actual nine-line output
+      with every line classified into one of four classes. It **is** the
+      criterion, not an illustration of one.
 - [ ] **AC3** — Decision 1's sentence at `:83` is byte-identical to its
       pre-amendment text.
 - [ ] **AC4** — `npm run lint` is green.
@@ -220,6 +208,51 @@ landed without opening the ADR.
       hand-typed `OWNER-SIGNED <date>`. **Until AC5 is met,
       `WP-scheduler-node-path-durability` must not merge.** This is the only
       criterion an agent cannot satisfy, and it is the whole point of this WP.
+- [ ] **AC5b (completion-aware — NOT discharged by AC5)** — the signature
+      satisfies the **ADR gate only**. Dispatching
+      `WP-scheduler-node-path-durability` additionally requires its
+      `depends_on` spec, `WP-scheduler-register-replaces-loaded-record`, to be
+      **`Done`** (merged **and** verified), per the standing dispatch discipline
+      in `docs/specs/README.md`. **Nothing mechanical enforces this:**
+      `scripts/check-frontmatter.js` resolves a `depends_on` id to an existing
+      spec **file** and never reads that spec's `status`. Verified at `e7c845e`:
+      that dependency is `status: Draft` and is **not** in `docs/specs/done/` —
+      PR #125 (`fbc9d80`) merged its **spec document**, not its implementation —
+      so the hazard it closes is still live. Do not read a signed amendment as
+      clearance to dispatch.
+
+### AC2's worked example — V2's actual output, every line classified
+
+Nine lines, four classes. **This block is the criterion**; compare V2's output
+against it line for line.
+
+```text
+6:OWNER-SIGNED 2026-07-25                                        [1] MARKER
+8:> **OWNER-APPROVED (2026-07-19).** The owner ratified …         [1] MARKER
+14:> resolved as dated `OWNER-APPROVED` markers across the …      [2] CONVENTION
+752:Status: **Accepted. OWNER-SIGNED 2026-07-26.**                [1] MARKER
+760:`OWNER-SIGNED 2026-07-25` line at the head of the file, and … [3] BACK-REF
+978:Status: **ACCEPTED — OWNER-SIGNED 2026-08-01**                [1] MARKER
+1224:Fehér types an `OWNER-SIGNED <date>` line into it by hand …  [4] PLACEHOLDER
+1225:heading — not the `OWNER-SIGNED 2026-07-25` line at the …    [3] BACK-REF
+1342:`OWNER-SIGNED <date>`, the gate is **not** satisfied …       [4] PLACEHOLDER
+```
+
+- **[1] Marker** — the four dated ratifications. **Cited by line, and only these
+  are**, because the ADR change is a pure append and an append cannot move them.
+- **[2] Convention** — a generic mention of the marker *convention* that names
+  none of the four. `:14` is one. **An earlier three-class roster had no home for
+  it, so a strict verifier would have failed a correct file** — that omission is
+  the finding this section closes.
+- **[3] Back-reference** — prose naming one of the four markers.
+- **[4] Placeholder** — **identified by containing the literal
+  `OWNER-SIGNED <date>`**, angle brackets and all, never by line number.
+
+**Line numbers inside the amendment BODY are structurally unstable** — this
+spec's own §5 insertion moved §6 from `:1331` to `:1342` within a single commit,
+which is exactly why classes 2–4 are content-identified and only class 1 carries
+line numbers. **A placeholder is not a signature; an agent may never replace
+`<date>` with a real date.**
 
 ## Verification steps
 
@@ -227,8 +260,9 @@ landed without opening the ADR.
 # V1 (AC1) — exactly one PROPOSED marker, in the new amendment.
 grep -n "PROPOSED — awaiting owner signature" docs/adr/0028-scheduler-app-executable-integrity.md
 
-# V2 (AC2) — no NEW dated owner marker. Classify every hit against AC2's
-# three-class roster. Deliberately NO line numbers restated here: only the four
+# V2 (AC2) — no NEW dated owner marker. Compare the output line-for-line against
+# AC2's WORKED EXAMPLE, which is the actual nine-line output with every line
+# classified. Deliberately NO line numbers restated here: only the four
 # base-region markers have stable lines (the change is a pure append); anything
 # inside the amendment body moves whenever the body is edited.
 grep -n "OWNER-SIGNED\|OWNER-APPROVED" docs/adr/0028-scheduler-app-executable-integrity.md
@@ -304,7 +338,12 @@ Expected V3 output, byte-exact:
 2. V1–V4 pass; output pasted into the PR body.
 3. **The owner types the `OWNER-SIGNED <date>` line.** Not an agent. Ever.
 4. Only after 3: `WP-scheduler-node-path-durability`'s Definition of done item 8
-   is satisfied and its implementation PR may merge.
+   is satisfied and its implementation PR may merge. **That is the ADR gate
+   alone.** Dispatching that WP *also* requires
+   `WP-scheduler-register-replaces-loaded-record` to be `Done` — merged and
+   verified — which at `e7c845e` it is **not** (`status: Draft`, absent from
+   `docs/specs/done/`). See AC5b; the two gates are independent and neither
+   discharges the other.
 5. This spec's `status:` moves to `Done` and the file moves to `docs/specs/done/`
    in the owner's signature pass — not before, because until then the gate this
    spec exists to hold is still open.
@@ -335,3 +374,37 @@ Expected V3 output, byte-exact:
 >
 > No owner marker has been written at any point. The amendment still carries
 > `Status: PROPOSED — awaiting owner signature.`
+>
+> **2026-08-01 — gate round 3 (verdict: APPROVE-CONFIRMED, one residual + one
+> Codex finding). Both closed.**
+>
+> - **(b) AC2's roster claimed a total partition it did not achieve.**
+>   `docs/adr/0028-…:14` — a generic prose mention of the `OWNER-APPROVED` marker
+>   *convention*, undated in the marker sense and naming none of the four — fit no
+>   class, so a strict verifier would have **failed a correct file**. This family
+>   was on its third round, so the fix is structural rather than another patch:
+>   class 2 is broadened to **"a generic reference to the marker convention
+>   itself"**, and **V2's actual nine-line output is now pasted into AC2 with every
+>   line classified inline**. The worked example *is* the roster. That ends the
+>   assert-exhaustiveness-but-never-check-it pattern that produced all three
+>   rounds of this finding.
+> - **(a) Codex round 3 [high] — a signature would make the WP look
+>   dispatchable while its dependency is unmerged.**
+>   `WP-scheduler-node-path-durability` carries
+>   `depends_on: [WP-scheduler-register-replaces-loaded-record]`, and
+>   `scripts/check-frontmatter.js` **only resolves the id to an existing spec
+>   file — it never reads that spec's `status`**. Verified at `e7c845e`: the
+>   dependency is `status: Draft` and absent from `docs/specs/done/`; PR #125
+>   (`fbc9d80`) merged its **spec document**, not its implementation. So the
+>   silent-nonconvergence hazard it closes (a `sync` reporting success while
+>   launchd/systemd still holds the pinned path) is **live in production**, and an
+>   owner signing this amendment could reasonably read it as clearance to dispatch.
+>   Closed with a completion-aware clause in three places — the amendment's §6
+>   Sequencing, this spec's **AC5b**, and Definition of done item 4 — each stating
+>   that the signature discharges the **ADR gate only**. No new mechanism, per the
+>   brief.
+>
+> **Discovered issue, reported not fixed:** that WP's DISPATCH BLOCKER banner says
+> the sibling *"merged to `main` in PR #125 (`fbc9d80`)"*. True of the spec
+> document and its lift argument 0a (which was about scope coverage), but easy to
+> misread as "the fix shipped". Re-wording it is outside this WP's Deliverables.

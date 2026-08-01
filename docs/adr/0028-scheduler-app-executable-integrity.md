@@ -1342,3 +1342,15 @@ a work package. Until the status line above carries a hand-typed
 `OWNER-SIGNED <date>`, the gate is **not** satisfied and the code must not merge.
 The only remaining step is the signature — the amendment text is written and
 needs no further architect pass.
+
+**The signature discharges THIS gate only, and not the WP's dispatchability.**
+`WP-scheduler-node-path-durability` also carries
+`depends_on: [WP-scheduler-register-replaces-loaded-record]`, and that dependency
+must be **`Done` — merged and verified — before the WP is dispatched**, per the
+standing dispatch discipline in `docs/specs/README.md`. This is stated because
+the two gates are easy to conflate and nothing mechanical separates them:
+`scripts/check-frontmatter.js` only resolves a `depends_on` id to an existing
+spec file; it never checks that spec's `status`. A signed amendment therefore
+makes the WP *look* ready while the silent-nonconvergence hazard its dependency
+closes (Tables C/D in that spec: a `sync` that reports success while launchd or
+systemd still holds the pinned path) is still live in production.
