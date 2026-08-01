@@ -278,9 +278,17 @@ interpolate the binding.
 
 | # | Condition | Reason rendered | Why |
 |---|-----------|-----------------|-----|
-| 1 | `S !== null` (a log **stream** exists) | `` `job "${name}" failed to run — see the log for details` `` | The raw cause is in the log (D2). The alert needs no detail, so it carries none. |
-| 2 | `S === null` **and** `C` passes `TOKEN_OK` | `` `job "${name}" failed to run (${C}) — no log could be written` `` | **There is no log to point at**, so the alert must carry enough to act on. One validated errno token is the whole of that detail. |
-| 3 | `S === null` **and** `C` fails `TOKEN_OK` (absent, non-string, or wrong shape) | `` `job "${name}" failed to run (UNKNOWN) — no log could be written` `` | Fixed literal. Never fall back to `failure.message`, never omit the parenthetical (a caller must not have to distinguish "no token" from "no row 2"). |
+| 1 | `S` is truthy (a log **stream** was opened) | `` `job "${name}" failed to run — see the log for details` `` | The raw cause is in the log (D2) **when the stream is healthy**. If D5 absorbed an `'error'`, or D2's `write` threw, the log may be truncated — see "Known residual" below. |
+| 2 | `S` is falsy **and** `C` passes `TOKEN_OK` | `` `job "${name}" failed to run (${C}) — no log could be written` `` | **There is no log to point at**, so the alert must carry enough to act on. One validated errno token is the whole of that detail. |
+| 3 | `S` is falsy **and** `C` fails `TOKEN_OK` (absent, non-string, or wrong shape) | `` `job "${name}" failed to run (UNKNOWN) — no log could be written` `` | Fixed literal. Never fall back to `failure.message`, never omit the parenthetical (a caller must not have to distinguish "no token" from "no row 2"). |
+
+**The condition is TRUTHINESS, not `!== null`.** `logStream` is initialised to
+`null` (`:838`) and the production path only ever assigns a stream or leaves it
+`null` — but D2's guard at `:923-926` and the rotate guard at `:937` are both
+written `if (logStream)`, and **D4's seam makes `undefined` newly reachable** (a
+test factory that returns nothing). Table R keying on `!== null` while every other
+site keys on truthiness would send `undefined` down row 1, pointing the user at a
+log that was never opened. Use `if (S)` / `if (!S)` throughout, matching the file.
 
 **`TOKEN_OK` is the whole security surface of this WP** and is stated as a
 literal, not described:
@@ -309,6 +317,37 @@ const TOKEN_OK = /^[A-Z][A-Z0-9]{1,15}$/;   // fully anchored, no `m` flag
   prose in.
 - **Rejection is silent and total** — row 3's fixed literal, never a truncation
   of the offending value, never a "code: <n>" rendering.
+
+### Known residual — a degraded log is not distinguished from a healthy one
+
+**Row 1 says "see the log for details" whenever a stream was opened, and nothing
+downgrades that when the log turns out to be incomplete.** Two consequences,
+both named rather than left implicit:
+
+1. **Failure path.** D5 absorbs a stream `'error'` and D2's diagnostic `write` is
+   wrapped in `try`. Either can silence a real write failure, so the alert can
+   point at a **truncated** log — the user follows the pointer and the cause is
+   not there.
+2. **Success path, and this one is a genuine trade.** If the child exits `0`
+   after an absorbed stream error, the job is recorded `last_status: 'ok'` with a
+   silently truncated log. **Before D5 that event crashed loudly.** D5 trades a
+   loud crash for a silent success, which is the opposite direction from R8-1's
+   ethos (*never certify a job clean when something is known to be wrong*), and it
+   is stated here because it is the price of not killing the run.
+
+`logStreamFailed` (D5) already records the condition — it is deliberately not
+read by Table R. **Routed as `WP-log-degraded-discriminator`**, which owns both
+consequences together: a fourth Table R row for the failure path, and a
+watermark/notice decision for the success path.
+
+**Disposition of Codex round 3 [medium] — "treat `logStreamFailed` as an
+unavailable log in Table R": DECLINED AND ROUTED, not dismissed.** A fourth row
+is new design surface immediately adjacent to the owner ruling's scope, and that
+ruling covered `logStream === null` only — the "no log was opened" case, not "a
+log was opened and then degraded". Deciding what a degraded log should say, and
+whether a clean exit after one may still be `ok`, is a fresh product judgement
+rather than a fold-in. The reviewer's four-reason defence of this boundary is in
+its round-3 report; it is cited rather than re-derived here.
 
 **Why a token at all, when D1's whole point is a code-owned body.** Because a
 token from a fixed, machine-generated vocabulary that has been validated against
@@ -406,9 +445,27 @@ so the condition is observable to T8 and to any future WP that wants to report i
 
 **D3 and D5 compose; neither replaces the other.** D5 stops the unhandled-error
 crash for the stream's whole lifetime. D3 additionally guarantees that
-*finalization resolves* — because `stream.end(cb)` on an already-errored stream
-may never invoke `cb`, and an `await` on a promise that never settles hangs the
-job just as effectively as a throw. Implement both.
+*finalization resolves*, as **defence in depth against a non-settling `end()`**.
+
+**Stated as measured, not as observed behaviour** — an earlier revision claimed
+*"`stream.end(cb)` on an already-errored stream may never invoke `cb`"*, and gate
+round 3 refuted it by driving a real `fs.WriteStream` through five states:
+**both errored states DID call back**; only `destroy()` with no error argument
+hung. So the precise justification is:
+
+- On the shapes measured, `end(cb)` calls back even after an `'error'`, so D3 is
+  **not** load-bearing for those.
+- **A non-settling state demonstrably exists** (the no-arg `destroy()` row), and
+  which states settle is a function of the Node version and the concrete stream
+  type — neither of which this contract pins, and D4's seam deliberately lets a
+  **stub** stand in for the real stream.
+- An `await` on a promise that never settles hangs the job as effectively as a
+  throw, and this code runs on the failure path where hanging is the worst
+  outcome. The idempotent `finish` costs three lines.
+
+Implement both. **Do not delete D3 on the grounds that D5 makes it unnecessary**
+— they close different failure modes (unhandled-error crash vs. never-settling
+await).
 
 Three properties the implementer must preserve in `endStream`, each of which a
 plausible simplification breaks:
@@ -433,9 +490,12 @@ contract forbids it) or to touch files outside the Deliverables table (the
 boundary forbids that). **Neither escape hatch is taken; the seam is added
 instead.**
 
-Add beside the existing reap seams, mirroring them exactly — the comment included,
+Add them **in the same form as** the existing reap seams — the comment included,
 because the *"production never sets them"* claim is what makes a seam acceptable
-under WP-155 (`run-job.js:880-883` is the pattern):
+under WP-155 (`run-job.js:880-883` is the pattern). **Not in the same place:**
+the reap seams sit *inside* the `try` at `:839`, **after** the `:845`/`:846` call
+sites these seams must serve, so putting these there would leave them undeclared
+where they are used. See the placement rule below.
 
 ```js
     // Log seams (test-only, WP-155 idiom): production never sets them, so the
@@ -445,8 +505,8 @@ under WP-155 (`run-job.js:880-883` is the pattern):
 ```
 
 and call them at `:845`/`:846` in place of the direct calls. **Declare them
-before the `try` that contains those lines**, so they are in scope where they are
-used.
+BEFORE the `try` that contains those lines** — beside `const logDir` at `:829`
+is the natural spot — so they are in scope where they are used.
 
 Three constraints on D4, each of which the WP-155 rationale depends on:
 
@@ -517,13 +577,28 @@ passing**, listed so the implementer does not rewrite what already covers them.
 | T7a | **NEW** | **Table R row 2, via the D4 seam — portable, no platform guard.** Pass `opts.mkdirPrivate` = a function that throws a raw `Error` with `code: 'EACCES'` (a plain `Error`, **not** a `WienerdogError`, so it takes D1's non-Wienerdog arm) → `logStream === null`. Assert the alert `reason` is **exactly** `job "<name>" failed to run (EACCES) — no log could be written`. | Table R row 2, D4 |
 | T7b | **NEW** | **Table R row 3, the hostile `.code`.** Same seam, three throwables: `.code` a long prose string containing a marker (fails `TOKEN_OK`), `.code` a **number**, and `.code` absent. All three must render **exactly** `job "<name>" failed to run (UNKNOWN) — no log could be written`, and the marker must appear **nowhere** in the alert record or the `sendAlert` body. **Plus the getter case (N2):** an object whose `code` is a **getter returning `'EACCES'` on first read and prose on every later read** must still render the `EACCES` form with no prose anywhere — this is the only test that can catch a validate-then-re-read implementation. | Table R row 3, single-read rule |
 | T7c | **NEW, platform-guarded** | **The same path through a REAL errno**, so the seam is not the only evidence: `chmod 0500` the `paths.logs` parent so the real `mkdirPrivate` raises a genuine `EACCES`, and assert the row-2 rendering. Guard it `{ skip: SKIP_NO_EACCES }` where `SKIP_NO_EACCES` follows the file's existing constant idiom (`REAP_SKIP_WIN32` at `:891` — a `platform === 'win32' && '<reason>'` expression used as `{ skip: … }` at `:915`, `:941`, `:968`, `:995`). **It must skip on win32** (POSIX mode bits do not deny the owner there) **and when running as root** (`process.getuid && process.getuid() === 0` — root bypasses the mode bits, so the test would silently pass for the wrong reason). | Table R row 2, non-vacuity |
-| T8 | **NEW** | **Codex [high]: a stream error must not mask the failure — BOTH windows.** Pass `opts.createLogStream` = a factory returning a stream stub that records writes and can emit `'error'` on demand. **(a) finalization window:** emit `'error'` (`EIO`) as `end()` runs. **(b) tee window (D5):** emit `'error'` *while the child is still running*, after a tee write. In **both** cases assert the run still reaches its normal failure outcome — `last_status: 'error'` watermark, **one** durable `alerts.jsonl` record, the `sendAlert` stub called, and `runJob` rejecting with the code-owned `reason`, **not** with the stream's error. **Red-before-work is mandatory for both halves**: against `e7c845e` (a) escapes the `finally` before `failLoud`, and (b) takes the process down mid-run. | D3, D5, D4 |
+| T8 | **NEW** | **Codex [high]: a stream error must not mask the failure — BOTH windows.** Pass `opts.createLogStream` = a factory returning a stream stub that records writes and can emit `'error'` on demand. **(a) finalization window:** emit `'error'` (`EIO`) as `end()` runs. **(b) tee window (D5):** emit `'error'` *while the child is still running*, after a tee write. In **both** cases assert the run still reaches its normal failure outcome — `last_status: 'error'` watermark, **one** durable `alerts.jsonl` record, the `sendAlert` stub called, and `runJob` rejecting with the code-owned `reason`, **not** with the stream's error. **Red-before-work is mandatory for both halves**: against `e7c845e` (a) escapes the `finally` before `failLoud`, and (b) takes the process down mid-run. **Model the real stream in the stub — see below.** | D3, D5, D4 |
 
 **Prove T1 in both directions** (`docs/runbooks/codex-review.md`): run it against
 the untouched `:1004` (expect **red** — the raw message reaches the alert) and
 against the finished one (expect **green**). **T8 must be proved the same way**,
 and it is the one that matters most: a T8 that is green against the untouched
 `endStream` is not testing what it claims.
+
+**T8's stub must model the real stream, or it proves nothing.** Gate round 3
+drove a real `fs.WriteStream` through five states and measured the behaviour the
+stub has to reproduce:
+
+- **It emits `'error'` AND still calls `end(cb)` afterwards.** That is what a real
+  errored `fs.WriteStream` does. A **lenient** stub that never emits, or that
+  swallows the error and resolves regardless, passes against the untouched
+  `endStream` too — so it cannot show D3/D5 did anything.
+- **Do not build the stub on a no-argument `destroy()`.** That is the one measured
+  state that never settles, so a stub shaped that way **hangs the test suite**
+  rather than failing it, on both the before and after trees.
+- The stub therefore needs: a `write()` that records, an `on('error', …)`
+  registry, a way for the test to fire `'error'` at a chosen moment, and an
+  `end(cb)` that invokes `cb` **even after** an error has been emitted.
 
 **Owner assent: see [Owner assent](#owner-assent--the-two-records-and-which-is-primary)**
 — both the 2026-07-18 walkthrough and the 2026-08-01 ruling live there, and this
@@ -734,7 +809,11 @@ grep -n "opts.mkdirPrivate\|opts.createLogStream" src/cli/run-job.js
 # ...and NO env-readable seam was introduced alongside them. Expect no output,
 # exit 1. (ADR-0028 Decision 2 deleted env-chosen behaviour from this file; a
 # seam that reads process.env would re-add it under a new name.)
-grep -n "process.env.WIENERDOG_.*LOG\|env\.WIENERDOG_.*MKDIR" src/cli/run-job.js
+#
+# Widened per gate round 3: match ANY `process.env` within 3 lines of a seam
+# declaration, rather than two guessed variable names. This is an ABSENCE check
+# — 0 hits is the passing result, and it is not a progress gate.
+grep -n -A 3 "opts.mkdirPrivate\|opts.createLogStream" src/cli/run-job.js | grep "process\.env"
 
 # V8 (D5) — the tee window is covered: an 'error' listener is attached at
 # creation, not only inside endStream. Expect one line near the log open.
@@ -916,3 +995,47 @@ D5 defect, and it is the whole tee window).
 >   other mention references it.
 > - **(nit, taken)** The ruling heading now reads
 >   *"owner-ruled (transcribed, 2026-08-01)"*; anchors updated.
+>
+> **2026-08-01 — gate round 3 (verdict: APPROVE, fold-ins only). All applied.**
+>
+> - **(M1) + Codex round 3 [medium] — Table R row 1's "Why" was false in two
+>   states.** It read *"The raw cause is in the log (D2)"*, which does not hold
+>   once D5 has absorbed a stream `'error'` or D2's `write` threw. Amended to
+>   *"…when the stream is healthy"*, plus a **Known residual** section naming both
+>   consequences: (i) the failure path can point at a **truncated** log, and (ii)
+>   on the success path a child exiting `0` after an absorbed stream error is
+>   recorded `last_status: 'ok'` with a silently truncated log — **pre-D5 that
+>   event crashed loudly**, so D5 trades a loud crash for a silent success, which
+>   runs against R8-1's ethos and is stated rather than buried. Both routed to
+>   **`WP-log-degraded-discriminator`**.
+>   **Disposition of the Codex finding ("treat `logStreamFailed` as an unavailable
+>   log in Table R"): DECLINED AND ROUTED.** A fourth Table R row is new design
+>   surface adjacent to the owner ruling's scope — that ruling covered
+>   `logStream === null` only, not "opened then degraded" — so what a degraded log
+>   should say, and whether a clean exit after one may still be `ok`, is a fresh
+>   product judgement, not a fold-in. The reviewer's four-reason defence of the
+>   boundary is in its round-3 report and is cited rather than re-derived.
+> - **(M2) Table R keyed on `S !== null` while the file keys on truthiness.**
+>   `if (logStream)` at `:923-926` and `:937` — and **D4's seam makes `undefined`
+>   newly reachable** (a stub factory returning nothing), which would have taken
+>   row 1 and pointed the user at a log that was never opened. Table R now keys on
+>   truthiness throughout.
+> - **(A1) "add beside the existing reap seams" was physically impossible.** Those
+>   live *inside* the `try` at `:839`, i.e. **after** the `:845`/`:846` call sites
+>   the new seams must serve. Reworded to "in the same **form** as", with the
+>   placement rule (declare before the `try`, beside `const logDir` at `:829`)
+>   stated positively instead of contradicted two paragraphs later.
+> - **(A2) D3's retention rationale was contradicted by measurement.** The claim
+>   *"`stream.end(cb)` on an already-errored stream may never invoke `cb`"* is
+>   false on the shapes tested — the reviewer drove a real `fs.WriteStream` through
+>   five states and **both errored states called back**; only a no-argument
+>   `destroy()` hung. D3 is restated as **defence in depth against a
+>   version/stream-type-dependent non-settling state** — the no-arg `destroy()` row
+>   proves such states exist, and D4's seam deliberately lets a stub stand in for
+>   the real stream — rather than as observed behaviour.
+> - **(A3, taken) V7b widened** from two guessed variable names to *any*
+>   `process.env` within three lines of a seam declaration, keeping its honest
+>   "absence check, not a progress gate" label. **T8's stub guidance added**: the
+>   stub must emit `'error'` **and still call `end(cb)` afterwards**, because a
+>   lenient stub passes against the untouched `endStream` and proves nothing, and a
+>   stub built on no-arg `destroy()` **hangs** the suite instead of failing it.
