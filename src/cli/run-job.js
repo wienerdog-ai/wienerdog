@@ -87,6 +87,37 @@ function runStamp(d = new Date()) {
   return d.toISOString().replace(/[:.]/g, '-');
 }
 
+/** Errno-token gate (WP-151, Table R): the ONLY non-template bytes that may reach
+ *  the durable alert `reason` or the self-email body — at most 16 uppercase
+ *  alphanumeric chars, first char a letter. Fully anchored, NO flags (`^`/`$`
+ *  without `m` cannot match at an interior newline, and a flagless RegExp makes
+ *  `.test()` stateless). */
+const TOKEN_OK = /^[A-Z][A-Z0-9]{1,15}$/;
+
+/** Table R rows 1-3 (WP-151, audit A13): the code-owned reason for a
+ *  non-WienerdogError failure. The raw `failure.message` NEVER reaches the
+ *  durable alert or the self-email: row 1 points at the per-run log (the
+ *  finally wrote the redacted detail there while the stream was open); rows
+ *  2-3 carry at most ONE validated errno token when no log could be written.
+ *  `failure.code` is read exactly once — a getter must not get a second read
+ *  after validation (that re-read is how prose would smuggle back in).
+ *  @param {string} name @param {any} failure @param {any} logStream
+ *  @returns {string} */
+function noLogReason(name, failure, logStream) {
+  if (logStream) return `job "${name}" failed to run — see the log for details`;
+  const C = failure && failure.code; // ONE read. Never `failure.code` again.
+  const t = typeof C === 'string' && TOKEN_OK.test(C) ? C : 'UNKNOWN';
+  return `job "${name}" failed to run (${t}) — no log could be written`;
+}
+
+/** Table R row 4 (WP-151, D6). `code` is the ALREADY-CAPTURED logStreamErrCode —
+ *  never re-read from an error object here.
+ *  @param {string} name @param {any} code @returns {string} */
+function logFailedReason(name, code) {
+  const t = typeof code === 'string' && TOKEN_OK.test(code) ? code : 'UNKNOWN';
+  return `job "${name}" ran but its log could not be written (${t})`;
+}
+
 /** Display an absolute path under home as ~/... .
  *  @param {string} home @param {string} p @returns {string} */
 function tilde(home, p) {
@@ -509,10 +540,29 @@ function rotateLogs(dir) {
   }
 }
 
-/** Close a write stream and wait for its flush.
+/** Close a write stream and wait for its flush. Resolves in EVERY state — this
+ *  runs on the failure path, where a hang is as bad as a throw and a logging
+ *  failure must never mask the original failure (WP-151). Never rejects, never
+ *  throws, never awaits an event that has already fired.
  *  @param {NodeJS.WritableStream} stream @returns {Promise<void>} */
 function endStream(stream) {
-  return new Promise((resolve) => stream.end(resolve));
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = () => { if (!done) { done = true; resolve(); } };
+    // 1. ALREADY-SETTLED CHECK, FIRST. A stream destroyed on an earlier tick has
+    //    already emitted 'close', so a listener attached now never fires. The
+    //    check is destroyed/closed ONLY — the ended flag goes true at the end()
+    //    CALL, before the flush, so keying on it would truncate a healthy buffer.
+    if (stream.destroyed || stream.closed) return finish();
+    // 2. BOTH terminal events, attached before end() (end() can emit synchronously).
+    stream.on('error', finish);
+    stream.on('close', finish);
+    try {
+      stream.end(finish);
+    } catch {
+      finish();
+    }
+  });
 }
 
 /**
@@ -677,6 +727,8 @@ function safeResolvePath(input, guard, hopCap = 40) {
  *          timeoutMs?: number,
  *          reapTree?: typeof killProcessTree,
  *          reapGroup?: typeof reap.reapGroup,
+ *          mkdirPrivate?: typeof mkdirPrivate,
+ *          createLogStream?: typeof createLogStreamPrivate,
  *          probeCmd?: string,
  *          skipContainmentProbe?: boolean,
  *          profile?: Record<string,string>}} [opts] `opts.profile` is the
@@ -827,6 +879,10 @@ async function runJob(paths, job, opts = {}) {
   //    (R4-A, WP-a9): a private-open failure must reach the step-7
   //    error-watermark + failLoud branch, not escape uncaught.
   const logDir = path.join(paths.logs, name);
+  // Log seams (test-only, WP-155 idiom): production never sets them, so the
+  // scheduled path always uses the real private-fs helpers.
+  const mkdirFn = opts.mkdirPrivate || mkdirPrivate;
+  const openLogFn = opts.createLogStream || createLogStreamPrivate;
 
   // 4. Watchdog: detached child (own process group), race exit vs timeout, kill
   //    the whole tree on timeout, always clear the timer (reuse dream.js's shape).
@@ -836,14 +892,25 @@ async function runJob(paths, job, opts = {}) {
   let failure = null;
   let reapFailure = null;
   let logStream = null;
+  let logStreamFailed = false;
+  let logStreamErrCode = null;
   try {
     // Per-run log dir (0700) + stream (0600) — umask-independent and
     // fail-closed (WP-a9): mkdirPrivate defeats a permissive umask on the dir,
     // createLogStreamPrivate secures the fd to 0600 or throws (it never writes
     // into a file it could not secure). A throw here lands in the catch below
     // and takes the existing fail-loud branch.
-    mkdirPrivate(logDir, { core: paths.core });
-    logStream = createLogStreamPrivate(path.join(logDir, `${runStamp()}.log`), { core: paths.core });
+    mkdirFn(logDir, { core: paths.core });
+    logStream = openLogFn(path.join(logDir, `${runStamp()}.log`), { core: paths.core });
+    // D5 (WP-151): the tee handlers below write for the child's whole life, and
+    // finalization writes again. A stream with NO 'error' listener turns an
+    // EIO/ENOSPC into an unhandled 'error' that takes the process down before
+    // the fail-loud path runs. Absorb it: the log is best-effort, the refusal is
+    // not. Recording the flag keeps the failure visible without throwing.
+    logStream.on('error', (err) => {
+      logStreamFailed = true;
+      logStreamErrCode = err && err.code; // ONE read — Table R's single-read rule
+    });
 
     const child = spawn(command, args, {
       cwd: spawnCwd,
@@ -922,7 +989,20 @@ async function runJob(paths, job, opts = {}) {
     failure = err;
   } finally {
     // The open may have thrown before logStream was assigned (R4-A).
-    if (logStream) await endStream(logStream);
+    if (logStream) {
+      // A13/WP-151: a non-Wienerdog error's raw message never reaches the durable
+      // alert or the self-email. Preserve it for the user HERE — redacted, through
+      // the SAME already-private fd, before it closes. Best-effort: a logging
+      // failure must never mask the original failure.
+      if (failure && !(failure instanceof WienerdogError)) {
+        try {
+          logStream.write(redactOnly(`\nwienerdog: job failed to run: ${failure && failure.message}\n`));
+        } catch {
+          /* best-effort */
+        }
+      }
+      await endStream(logStream); // error-absorbing, settles in every state (D3)
+    }
   }
 
   // 5. Rotate logs after the run — ONLY if we privately opened the log dir/file
@@ -976,7 +1056,7 @@ async function runJob(paths, job, opts = {}) {
   //    capability ever exercised. The catch-up map is minted ONLY by attended,
   //    user-invoked registration (sync/schedule add/init/adopt). Here we do at most
   //    a READ-ONLY "catch-up entry missing" notice — never write, never load.
-  if (!failure && code === 0 && !reapFailure) {
+  if (!failure && code === 0 && !reapFailure && !logStreamFailed) {
     jobsLib.writeScheduleState(paths, name, { last_success: nowIso(), last_status: 'ok' });
     clearAlerts(paths, name);
     if (platform === 'darwin' || platform === 'win32') {
@@ -1001,10 +1081,12 @@ async function runJob(paths, job, opts = {}) {
   let reason = failure
     ? failure instanceof WienerdogError
       ? failure.message
-      : `job "${name}" failed: ${failure.message}`
+      : noLogReason(name, failure, logStream)
     : code !== 0
       ? `job "${name}" exited ${code}`
-      : `job "${name}" ${reapFailure.reason}`;
+      : reapFailure
+        ? `job "${name}" ${reapFailure.reason}`
+        : logFailedReason(name, logStreamErrCode);
   if (reapFailure && (failure || code !== 0)) {
     reason += ` — and it ${reapFailure.reason}`;
   }
