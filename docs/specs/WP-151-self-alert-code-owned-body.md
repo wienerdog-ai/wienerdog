@@ -308,6 +308,34 @@ in the durable alert and the outbound email, i.e. exactly the free-form hole thi
 WP exists to close, reopened by the fix. Bind once, validate the binding,
 interpolate the binding.
 
+**Declared residual — a THROWING `.code` getter (out of scope, stated for the
+record).** The single read closes the *value*-substitution getter; it does not
+close a getter that **throws**. A `failure` whose `.code` throws when read makes
+`const C = failure && failure.code` throw out of `reason` construction, skipping
+the watermark, the alert, the email and the `throw` — the same failure shape D3
+closes for the stream side. It is declared out of scope, exactly as `endStream`'s
+threat model declares its signal-less-stub residual, on three grounds:
+
+1. **Not a regression.** The identical residual pre-exists at base `b3a53bc`: the
+   old `` `job "${name}" failed: ${failure.message}` `` reads `failure.message`,
+   and a throwing `.message` getter throws at the same point. Measured both ways:
+   **0 alerts** written, on the base and on this WP.
+2. **Unreachable in production.** Every `failure` source is a Node-authored
+   `Error` (spawn `'error'`, watchdog) or a Wienerdog `WienerdogError` (Current
+   state §5) — none of which defines a throwing `code`/`message` accessor. Only a
+   hand-constructed object reaches it, and nothing in the failure path constructs
+   one.
+3. **The shipped line is Table R's byte-literal contract**, so it was correctly
+   **not** patched in the PR #135 implementation — wrapping the read in a
+   `try/catch` would diverge from the ratified contract for an unreachable case.
+
+If it is ever worth closing, fold it into the already-routed
+`WP-mkdir-private-errno-wrap` (both are "a failure-path read of an
+attacker-shaped field can throw past fail-loud"); it is **not** a fold-in here.
+Same lesson as every declared residual on this branch: *the declaration is what
+stops the loop re-finding it* — a throwing getter has to be named, or gate round
+N+1 re-raises it as new.
+
 | # | Condition | Reason rendered | Why |
 |---|-----------|-----------------|-----|
 | 1 | `S` is truthy (a log **stream** was opened) | `` `job "${name}" failed to run — see the log for details` `` | The raw cause is in the log (D2) **when the stream is healthy**. If D5 absorbed an `'error'`, or D2's `write` threw, the log may be truncated — see "Known residual" below. |
@@ -397,6 +425,18 @@ question Gyula's 2026-08-01 ruling covered, and changing what a failing job's
 alert says about its log is his call rather than a fold-in. The reviewer's
 four-reason defence of that boundary is in its round-3 report and is cited rather
 than re-derived.
+
+**DISPOSITIONED-STANDS through the implementation gate (Codex re-raise #4, in
+PR #135).** The same failure-path point was raised a fourth time against the built
+code and again dispositioned as above — success half closed in-WP (D6 / row 4),
+failure-path wording owner-scoped-out and routed to
+`WP-log-degraded-discriminator`. **The shipped implementation (PR #135)
+faithfully matches this split**: `noLogReason` renders row 1 unchanged on the
+failure path and consults `logStreamFailed` only on the success path (D6), which
+is exactly the ratified contract. Recorded here so a fifth reader does not
+re-litigate a decision that has now held across design rounds 5, 6 and final
+**and** the implementation gate — the disposition is settled, not merely
+un-actioned.
 
 **Why a token at all, when D1's whole point is a code-owned body.** Because a
 token from a fixed, machine-generated vocabulary that has been validated against
@@ -495,6 +535,25 @@ is ever reached — which is D5's whole point):
 row A but **not** row B — by then `'close'` has already fired, so the listener is
 attached to an event that will never come again. Only the **synchronous
 already-settled check** catches it, and it must run **first**.
+
+**Accuracy footnote — row A's two INTERMEDIATE columns are version-sensitive; the
+load-bearing cells are not.** The wd-reviewer re-measured on Node **v25.9.0** and
+found row A's `error`+`end(cb)`-only and `+close`-listener cells **settle**, where
+this table (measured during the design rounds) records the `error`+`end(cb)` cell
+as **HANGS**. This changes **nothing** in the contract:
+
+- The **`full D3` column is correct in all six rows** under both measurements —
+  it is the only column the shipped code implements, and it settles everywhere.
+- **Row B reproduces exactly, flags included**, under both measurements — and
+  Row B is the row that decides the contract (its `+close`-only cell **HANGS**,
+  which is what forces the synchronous already-settled check).
+
+So the only load-bearing claims are **the `full D3` column and row B**; row A's
+two intermediate columns are diagnostic scaffolding that shows *why* each half of
+the fix exists, and their exact HANGS/settled value drifts with the Node
+build's destroy/close-ordering. Do not treat a mismatch in row A's intermediate
+cells across Node versions as a regression — re-confirm `full D3` and row B
+instead.
 
 **The check is `destroyed || closed` — `writableEnded` is deliberately NOT in
 it.** `writableEnded` goes `true` the moment `end()` is *called*, **before the
