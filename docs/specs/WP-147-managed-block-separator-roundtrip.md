@@ -176,7 +176,7 @@ the current template.
 | modify | src/adapters/shared.js | `applyManagedBlock`: replace the lossy append with a non-lossy insert that records the exact inserted separator bytes (`sepBefore`, `sepAfter`) on the manifest entry. `createdFile` and `replace` branches keep behavior; record `sepAfter:'\n'` on the createdFile branch. |
 | modify | src/core/manifest.js | `reverseManagedBlock`: strip only the recorded (or legacy-default) separators, and only when the strip preserves a line boundary — never fuse user lines, **and never consume a newline the user supplied** (the `weSuppliedTerminator` gate on the at-EOF disjunct — Table N). |
 | modify | tests/unit/claude-adapter.test.js | Round-trip cases incl. the relocated-block-between-single-newline-lines case (**Table N row 4**), plus **T8**: create (absent file) → **sync again at least twice** → uninstall, asserting the file is **REMOVED**, not truncated to empty. That is the sticky-`createdFile` guard, and it is red against a plain-overwrite upsert. |
-| modify | tests/unit/manifest.test.js | Direct `reverseManagedBlock` cases for recorded + legacy (no sep metadata) entries — **all of Table N** — plus **T6**, the discrimination pair (**rows 3 and 2**, which differ only in `sepBefore`; both are required, see Table N's T6 note), and **T7**, the forged-metadata rows from **Table M**. |
+| modify | tests/unit/manifest.test.js | Direct `reverseManagedBlock` cases for recorded + legacy (no sep metadata) entries — **all of Table N** — plus **T6**, the discrimination pair (**rows 3 and 2**, which differ only in `sepBefore`; both are required, see Table N's T6 note), **T7**, the out-of-vocabulary forged-metadata rows from **Table M**, and **T9**, the *in-vocabulary* at-EOF forgery that makes Table M's declared bound executable. |
 
 ### Exact contracts
 
@@ -366,6 +366,37 @@ entries against `"lineA\n<BLOCK>\nlineB\n"` return `"lineA\nlineB\n"` — byte-i
 to the honest result. **Not closed, deliberately:** the manifest has no integrity
 protection, which is a separate design.
 
+#### Disposition — Codex round 4 [high], the in-vocabulary at-EOF case
+
+Codex raised a **concrete instance** of exactly the residual above: on an honest
+install whose recorded `sepBefore` is `'\n'`, editing the manifest to the
+**in-vocabulary** `'\n\n'` makes the at-EOF disjunct fire (Table N's gate keys on
+that value) and consumes the user's trailing newline. **Measured at `e7c845e`:**
+
+```text
+original user file   "foo\n"
+after sync           "foo\n\n<BLOCK>\n"
+honest  sepBefore="\n"    -> "foo\n"
+FORGED  sepBefore="\n\n"  -> "foo"
+delta = 1 byte | all whitespace? true | text preserved? true
+```
+
+**Disposition: NOT A REDESIGN — it lands inside the declared bound, and the bound
+is now executable.** One newline. No text. No line boundary crossed. That is the
+residual Table M already declares, and the point of declaring a bound is that
+instances of it are dispositioned against the bound rather than re-opening the
+design each time one is demonstrated. **T9 makes the bound testable** (see the
+Test index), which is what turns a declared residual into a checked one.
+
+**Explicitly declined: integrity-protecting the metadata.** Signing or HMAC-ing
+manifest fields would close in-vocabulary forgery, and it is **out of scope by
+declaration** — the manifest carries no integrity protection at all, and
+`reverseCopiedSkill` lives with the *same* residual for the *same* reason: its
+`hash` field is likewise read from the untrusted manifest, so an attacker who can
+rewrite `sepBefore` can equally rewrite a recorded `hash`. Adding integrity to one
+field while the file is otherwise unprotected buys nothing. That is a separate
+design with its own review, not a fold-in here.
+
 ### Table N — the `safe` predicate, every REACHABLE case (canonical)
 
 **Reachability first, because it bounds the table.** `locateManagedBlock`
@@ -432,6 +463,23 @@ row 2  sepBefore="\n\n"   "foo"      "foo"      "foo"      "foo\n\n"
 row 3 alone is satisfied by deleting the disjunct, row 2 alone by leaving it
 ungated. This is what "proves the gate discriminates rather than disabling the
 disjunct" means, stated as the two-sided measurement rather than as a claim.
+
+#### T9 — the in-vocabulary at-EOF forgery (makes Table M's bound executable)
+
+Same file, same install, **two entries**, one assertion each:
+
+| Case | Manifest entry | Expected result |
+|------|----------------|-----------------|
+| control (honest) | `sepBefore: '\n'`, `sepAfter: '\n'` | `"foo\n"` |
+| **forged, in-vocabulary** | `sepBefore: '\n\n'`, `sepAfter: '\n'` | **`"foo"`** |
+
+Set up by syncing an original `"foo\n"` (the forward step records `'\n'`), then
+hand-editing the manifest entry to `'\n\n'` — **no on-disk content changes**. The
+forged row must lose **exactly the trailing newline and nothing else**; assert the
+*text* is byte-identical to the control with newlines removed, so the test fails
+if the loss ever widens beyond whitespace. **This is not a red-first test** — it
+pins a *declared residual* at its declared size, which is the only way a bound
+stops being a claim.
 
 **Legacy entries are unaffected in the direction that matters.** A pre-WP entry
 has no `sepBefore`, so the default `'\n'` applies and `weSuppliedTerminator` is
@@ -572,10 +620,16 @@ listed under "Out of scope".
 - [ ] A block manually relocated to sit between two single-newline user lines
       uninstalls to `lineA\nlineB\n` (no fusion), NOT `lineAlineB\n`.
 - [ ] A createdFile managed block uninstalls by deleting the file.
-- [ ] **AC9 (new — sticky `createdFile`, T8).** A file Wienerdog created is still
+- [ ] **AC9 (sticky `createdFile`, T8).** A file Wienerdog created is still
       **deleted** by uninstall after **two or more** intervening `sync` runs, not
       truncated to empty. **Red-first** against a plain-overwrite upsert, where the
       replace branch's `createdFile: false` wins on the first re-sync.
+- [ ] **AC10 (new — the declared bound is EXECUTABLE, T9).** On an honest install
+      of original `"foo\n"`, a manifest hand-edited to the **in-vocabulary**
+      `sepBefore: '\n\n'` uninstalls to **exactly `"foo"`** — i.e. the loss is
+      **one newline and nothing else**: no user text is removed, and the honest
+      control (`sepBefore: '\n'`) still yields `"foo\n"`. This asserts Table M's
+      residual **is** the bound, rather than leaving it a claim.
 - [ ] A legacy `managed-block` entry (no `sepBefore`/`sepAfter`) still restores a
       genuine append and no longer fuses a relocated block.
 - [ ] **AC7 (Table N, the discrimination pair).** **Row 3** — a block relocated
@@ -894,3 +948,28 @@ abort the script — it simply skips the block. Measured, not assumed.
 >   it cannot delete user *text* or cross a line boundary, and stays inside the
 >   one-newline-per-side envelope the `safe` predicate already governs. Measured:
 >   all three forged entries return the honest result byte-identically.
+>
+> **2026-08-02 — gate round 5, Codex [high]: DISPOSITIONED, not redesigned.**
+>
+> Codex raised the **in-vocabulary at-EOF** case: on an honest install whose
+> recorded `sepBefore` is `'\n'`, hand-editing the manifest to the
+> **in-vocabulary** `'\n\n'` fires Table N's at-EOF disjunct and eats the user's
+> trailing newline. **Measured at `e7c845e`:** honest → `"foo\n"`, forged →
+> `"foo"`; **delta one byte, all whitespace, text preserved**.
+>
+> **That is Table M's declared residual, exactly at its declared size**, so it is
+> dispositioned against the bound rather than re-opening the design — which is the
+> entire purpose of declaring a bound. **What changed is that the bound is now
+> EXECUTABLE:** new **T9** pins both the forged result (`"foo"`) and the honest
+> control (`"foo\n"`), and asserts the *text* is byte-identical with newlines
+> removed, so the test fails the moment the loss widens past whitespace. New
+> **AC10**. A declared residual that nothing checks is a claim; one with a test is
+> a bound, and that is what terminates this loop.
+>
+> **Explicitly declined: integrity-protecting the metadata.** It would close
+> in-vocabulary forgery, and it is **out of scope by declaration** — the manifest
+> has no integrity protection at all, and **`reverseCopiedSkill` carries the same
+> residual for the same reason**: its `hash` is read from the same untrusted file,
+> so an attacker who can rewrite `sepBefore` can equally rewrite a recorded hash.
+> Hardening one field while the file is otherwise unprotected buys nothing. A
+> separate design, with its own review.
