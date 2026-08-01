@@ -176,7 +176,7 @@ the current template.
 | modify | src/adapters/shared.js | `applyManagedBlock`: replace the lossy append with a non-lossy insert that records the exact inserted separator bytes (`sepBefore`, `sepAfter`) on the manifest entry. `createdFile` and `replace` branches keep behavior; record `sepAfter:'\n'` on the createdFile branch. |
 | modify | src/core/manifest.js | `reverseManagedBlock`: strip only the recorded (or legacy-default) separators, and only when the strip preserves a line boundary — never fuse user lines, **and never consume a newline the user supplied** (the `weSuppliedTerminator` gate on the at-EOF disjunct — Table N). |
 | modify | tests/unit/claude-adapter.test.js | Round-trip cases incl. the relocated-block-between-single-newline-lines case (**Table N row 4**). |
-| modify | tests/unit/manifest.test.js | Direct `reverseManagedBlock` cases for recorded + legacy (no sep metadata) entries — **Table N rows 1, 2, 4, 6** — plus **T6**: rows **3 and 5** as a matched pair (relocated-to-EOF with `sepBefore='\n'` keeps the trailing newline; with `sepBefore='\n\n'` it does not), which is the only thing that proves the gate discriminates rather than just disabling the disjunct. |
+| modify | tests/unit/manifest.test.js | Direct `reverseManagedBlock` cases for recorded + legacy (no sep metadata) entries — **all of Table N** — plus **T6**, the discrimination pair (**rows 3 and 2**, which differ only in `sepBefore`; both are required, see Table N's T6 note), and **T7**, the forged-metadata rows from **Table M**. |
 
 ### Exact contracts
 
@@ -225,14 +225,27 @@ Only the three lines `const base = …` / `const next = …` / `recordOnce(…)`
 let before = content.slice(0, span.begin);
 let after = content.slice(span.end);
 
+// The manifest is UNTRUSTED (WP-144). Accept ONLY values the forward step can
+// actually emit; anything else is treated exactly as a legacy entry. Table M.
+let sepBefore = entry.sepBefore;
+let sepAfter = entry.sepAfter;
+if (!SEP_BEFORE_OK.has(sepBefore) || sepAfter !== '\n') {
+  if (sepBefore !== undefined || sepAfter !== undefined) {
+    process.stderr.write(
+      `wienerdog: ignoring out-of-vocabulary separator metadata on ${entry.path} — ` +
+      'stripping conservatively\n'
+    );
+  }
+  sepBefore = '\n';
+  sepAfter = '\n';
+}
+
 // Trailing terminator: the block's own line end is always Wienerdog's — remove it.
-const sepAfter = typeof entry.sepAfter === 'string' ? entry.sepAfter : '\n';
 if (after.startsWith(sepAfter)) after = after.slice(sepAfter.length);
 else if (after.startsWith('\n')) after = after.slice(1); // legacy fallback
 
 // Leading separator: remove ONLY the exact bytes we added, and ONLY when doing so
 // preserves a line boundary — otherwise we would fuse two user lines (the A13 bug).
-const sepBefore = typeof entry.sepBefore === 'string' ? entry.sepBefore : '\n';
 if (sepBefore.length > 0 && before.endsWith(sepBefore)) {
   const candidate = before.slice(0, before.length - sepBefore.length);
   // The at-EOF disjunct is GATED on sepBefore === '\n\n' — i.e. on the forward
@@ -256,22 +269,125 @@ specified, and it consumes the user's own trailing newline when the block has
 been relocated to end-of-file. Table N below is the canonical case set; the gate
 is the only difference between its two right-hand columns.
 
-### Table N — the `safe` predicate, every case (canonical)
+### Table M — the accepted separator vocabulary (canonical)
 
-Executed at `e7c845e`, all six cases, three implementations side by side.
-"round-1" is the ungated `after === ''`; "gated" is the contract above.
+**`entry.sepBefore` and `entry.sepAfter` are read from
+`~/.wienerdog/install-manifest.json`, which WP-144 established is UNTRUSTED
+input** — a plaintext, user-editable, attacker-writable file. A `typeof … ===
+'string'` check is **not** a validation: the values are then byte-matched against
+the user's own file and the match is *deleted*. So the accepted set is an
+allowlist of exactly what `applyManagedBlock` can emit, and nothing else.
 
-| # | Case | `sepBefore` | Want | today (shipped) | round-1 | **gated** |
-|---|------|-------------|------|-----------------|---------|-----------|
-| 1 | genuine append onto `foo\n` | `'\n'` | `"foo\n"` | `"foo\n"` | `"foo\n"` ok | `"foo\n"` **ok** |
-| 2 | genuine append onto `foo` | `'\n\n'` | `"foo"` | `"foo\n"` **lossy** | `"foo"` ok | `"foo"` **ok** |
-| 3 | **relocated to EOF, original `foo\n`** | `'\n'` | `"foo\n"` | `"foo"` | `"foo"` **XX** | `"foo\n"` **ok** |
-| 4 | relocated between two lines | `'\n'` | `"lineA\nlineB\n"` | `"lineAlineB\n"` **fusion** | ok | **ok** |
-| 5 | relocated to EOF, original `foo` | `'\n\n'` | `"foo"` | `"foo"` | ok | **ok** |
-| 6 | empty original | `'\n\n'` | `""` | `"\n"` | ok | **ok** |
+| Field | Accepted values | Emitted by | Anything else |
+|-------|-----------------|------------|---------------|
+| `sepAfter` | **`'\n'`** and nothing else | every forward branch — the block's own line terminator is always one newline | treated as legacy |
+| `sepBefore` | **`''`**, **`'\n'`**, **`'\n\n'`** | `''` createdFile branch; `'\n'` append onto newline-terminated content; `'\n\n'` append onto unterminated content | treated as legacy |
 
-**Round-1 scored 5/6; the gated predicate scores 6/6.** Rows 2, 4 and 6 are the
-bugs this WP exists to fix; row 3 is the one the gate adds.
+```js
+const SEP_BEFORE_OK = new Set(['', '\n', '\n\n']);   // module-level, beside the sentinels
+```
+
+**Cross-field rule: the pair is validated together and rejected together.** If
+either field is out of vocabulary, **both** are discarded and the entry is
+reversed exactly as a legacy (absent-metadata) entry — `sepBefore = '\n'`,
+`sepAfter = '\n'`, under the same `safe` guard — with one stderr notice.
+
+**Disposition, recorded because it was a real choice:** the alternative was to
+*skip* the entry with a notice. **Rejected.** Skipping leaves Wienerdog's own
+managed block sitting in the user's `CLAUDE.md` forever with no path to removal,
+and it hands an attacker a trivial way to make uninstall incomplete. The legacy
+fallback is **provably bounded** — it can strip at most one newline on each side,
+both already protected by the `safe` predicate — so it removes our block without
+ever reaching user text. Invalid metadata is therefore treated as *absent*, which
+also keeps the reverser at two modes rather than three.
+
+**Executed at `e7c845e` — the two data-loss primitives, and the fix.** User file
+`"lineA\n<BLOCK>\nlineB\n"`, want `"lineA\nlineB\n"`:
+
+```text
+                    UNBOUNDED (round-3 contract)    BOUNDED (this contract)
+honest metadata     "lineA\nlineB\n"                "lineA\nlineB\n"
+forged sepAfter     "lineA\n"           ← lineB     "lineA\nlineB\n"
+forged sepBefore    "lineB\n"           ← lineA     "lineA\nlineB\n"
+forged both         ""                  ← ALL       "lineA\nlineB\n"
+```
+
+`sepAfter: "\nlineB\n"` eats the trailing user line; `sepBefore: "lineA\n"` eats
+the leading one — and note the `safe` predicate's `candidate === ''` disjunct
+*assists* that second one, which is why bounding the input is the fix rather than
+tightening the guard. Together they empty the file.
+
+**This is not covered by `ENTRY_FIELD_TYPES`.** Adding `sepBefore`/`sepAfter`
+there as `'string'` is harmless and still optional, but a forged value **is** a
+string and passes. The allowlist above is the only thing that closes this, and it
+lives in `reverseManagedBlock`.
+
+### Table N — the `safe` predicate, every REACHABLE case (canonical)
+
+**Reachability first, because it bounds the table.** `locateManagedBlock`
+(`manifest.js:57-76`) matches a line whose **`.trim()`** equals the sentinel and
+sets `span.begin` to the **start of that line**. Therefore `before` is always
+either `''` or newline-terminated — no other shape exists. Executed at `e7c845e`:
+
+```text
+content "foo<BLOCK>\n"    -> locateManagedBlock THROWS "ambiguous" (the begin
+                             sentinel is not alone on its line) => reverseManagedBlock
+                             SKIPS this file entirely
+content "foo\n<BLOCK>\n"  -> before = "foo\n"   (reachable)
+content "<BLOCK>\n"       -> before = ""        (reachable)
+```
+
+Every row below is a state the forward step can actually produce, with
+`sepBefore` **derived from the forward contract** rather than asserted. All four
+implementations run side by side: `today` is the shipped strip; `ungated` is
+round-1's `after === ''`; `no-disjunct` removes it entirely; **`gated`** is the
+contract above.
+
+| # | Case | `sepBefore` | Want | today | ungated | **gated** |
+|---|------|-------------|------|-------|---------|-----------|
+| 1 | genuine append onto `foo\n` | `'\n'` | `"foo\n"` | `"foo\n"` ok | `"foo\n"` ok | `"foo\n"` **ok** |
+| 2 | genuine append onto `foo` — block ends at EOF, **we** supplied the terminator | `'\n\n'` | `"foo"` | `"foo\n"` **XX lossy** | `"foo"` ok | `"foo"` **ok** |
+| 3 | **relocated to EOF, original `foo\n`** | `'\n'` | `"foo\n"` | `"foo"` **XX** | `"foo"` **XX** | `"foo\n"` **ok** |
+| 4 | relocated between two user lines | `'\n'` | `"lineA\nlineB\n"` | `"lineAlineB\n"` **XX fusion** | ok | **ok** |
+| 5 | empty original | `'\n\n'` | `""` | `"\n"` **XX** | ok | **ok** |
+
+```text
+SCORE  today 1/5   ungated 4/5   gated 5/5
+```
+
+Rows 2, 4 and 5 are the bugs this WP exists to fix; **row 3 is the one the gate
+adds**.
+
+**Row 5 of the round-3 table was UNSATISFIABLE and has been removed.** It
+described *"relocated to EOF, original `foo`"* — a file shaped
+`foo<BLOCK>\n`, with the sentinel glued to the end of the user's unterminated
+text. No such state is reachable: `locateManagedBlock` requires the sentinel to
+be alone on its line, so that content **throws `ambiguous` and the file is
+skipped entirely**, and its published cells silently blended two different
+constructions. Gate round 3 found it by implementing every predicate variant and
+brute-forcing the `(before, after)` space. **The gate itself was verified
+correct; this was an evidence-table defect.** The construction it was reaching
+for is row 2, so the two are merged.
+
+#### T6 — the discrimination pair is row 3 vs row 2
+
+Both rows reach `after === ''`. They differ **only** in `sepBefore`, which is
+exactly the bit the gate consults, so together they pin the gate from both sides:
+
+```text
+                          want       gated      ungated    no-disjunct
+row 3  sepBefore="\n"     "foo\n"    "foo\n"    "foo"      "foo\n"
+row 2  sepBefore="\n\n"   "foo"      "foo"      "foo"      "foo\n\n"
+
+=> ungated (disjunct always ON)   fails row 3
+   no-disjunct (disjunct removed) fails row 2
+   only the GATED form satisfies both
+```
+
+**T6 must assert both rows.** Either alone is passed by a wrong implementation:
+row 3 alone is satisfied by deleting the disjunct, row 2 alone by leaving it
+ungated. This is what "proves the gate discriminates rather than disabling the
+disjunct" means, stated as the two-sided measurement rather than as a claim.
 
 **Legacy entries are unaffected in the direction that matters.** A pre-WP entry
 has no `sepBefore`, so the default `'\n'` applies and `weSuppliedTerminator` is
@@ -391,7 +507,17 @@ listed under "Out of scope".
       under the same guard) are removed; nothing before them is touched.
 - [ ] **Uninstall never consumes a newline the USER supplied.** The at-EOF
       disjunct fires only when `sepBefore === '\n\n'`, i.e. only when the forward
-      step supplied the file's terminator itself (Table N row 3 vs row 5).
+      step supplied the file's terminator itself (Table N, rows 3 vs 2).
+- [ ] **The separator metadata is treated as UNTRUSTED INPUT, not as a string.**
+      `sepAfter` is accepted only as `'\n'` and `sepBefore` only from
+      `{'', '\n', '\n\n'}` (Table M); the pair is validated together and
+      discarded together. **A `typeof … === 'string'` check is not sufficient** —
+      the value is byte-matched against the user's own file and the match is
+      deleted, so an unbounded string is a direct data-deletion primitive
+      (measured: a forged pair empties the file).
+- [ ] **Invalid metadata degrades to the legacy conservative strip, never to a
+      wider one**, so the worst case is one newline on each side under the same
+      `safe` guard — bounded by construction, and it still removes our block.
 - [ ] A re-sync does not overwrite the sep metadata captured at first insertion.
 
 ## Acceptance criteria
@@ -404,12 +530,20 @@ listed under "Out of scope".
 - [ ] A createdFile managed block uninstalls by deleting the file.
 - [ ] A legacy `managed-block` entry (no `sepBefore`/`sepAfter`) still restores a
       genuine append and no longer fuses a relocated block.
-- [ ] **AC7 (new — Table N row 3).** A block relocated to **end of file** on an
-      originally newline-terminated file (`sepBefore === '\n'`) uninstalls to
-      `"foo\n"`, **not** `"foo"` — the user's own trailing newline survives. Its
-      companion, Table N row 5 (`sepBefore === '\n\n'`, original `foo`), still
-      restores `"foo"`, so the gate is proved to discriminate rather than to
-      simply disable the disjunct. **Both are T6.**
+- [ ] **AC7 (Table N, the discrimination pair).** **Row 3** — a block relocated
+      to end of file on an originally newline-terminated install
+      (`sepBefore === '\n'`) uninstalls to `"foo\n"`, **not** `"foo"`. **Row 2** —
+      a genuine append onto an unterminated file (`sepBefore === '\n\n'`, block
+      also at EOF) still uninstalls to `"foo"`. **Both are required and both are
+      T6**: row 3 alone is satisfied by deleting the disjunct, row 2 alone by
+      leaving it ungated.
+- [ ] **AC8 (new — Table M, forged metadata).** With the user file
+      `"lineA\n<BLOCK>\nlineB\n"`, a manifest entry carrying
+      `sepAfter: "\nlineB\n"`, or `sepBefore: "lineA\n"`, or both, uninstalls to
+      `"lineA\nlineB\n"` — **every byte of user text survives** — and the block is
+      still removed. Assert the stderr notice fires. **Prove it red-first**
+      against the unbounded contract, where the same three entries yield
+      `"lineA\n"`, `"lineB\n"` and `""`.
 - [ ] `npm test` and `npm run lint` are green (digest golden unchanged).
 
 ## Verification steps (run these; paste output in the PR)
@@ -445,7 +579,15 @@ grep -q "^function reverseManagedBlock(entry, dryRun, removed, skipped, removedS
   echo "REGRESSED: reverseManagedBlock signature changed (fd/target dropped)"; exit 1; }
 echo "V3 ok — signature intact"
 
-# V4 — full gates.
+# V4 (Table M) — the separator vocabulary is an ALLOWLIST, not a typeof check.
+# Expect the Set literal, and NO surviving `typeof entry.sepBefore === 'string'`
+# / `typeof entry.sepAfter === 'string'` form (that shape is the vulnerability).
+grep -n "SEP_BEFORE_OK" src/core/manifest.js
+grep -q "typeof entry.sep" src/core/manifest.js && {
+  echo "REGRESSED: separator metadata still accepted on a bare typeof check"; exit 1; }
+echo "V4 ok — separator vocabulary is bounded"
+
+# V5 — full gates.
 npm test
 npm run lint
 ```
@@ -462,6 +604,14 @@ V2 ok — fd-bound write intact, no writeFileSync in the body
 ```
 
 **Expected V3 output:** `V3 ok — signature intact`.
+
+**V4's baseline at `e7c845e`:** both greps miss (`SEP_BEFORE_OK` exit 1,
+`typeof entry.sep` exit 1) — neither field exists yet, so V4's *first* grep is a
+genuine progress gate (must print after the work) while its second is an
+**absence check** that must keep missing. The failure mode it guards is an
+implementer writing the vulnerable
+`typeof entry.sepBefore === 'string' ? … : '\n'` shape, which was this spec's own
+contract until gate round 3.
 
 **Both were proved in BOTH directions** (`docs/runbooks/codex-review.md`) on the
 untouched tree at `e7c845e`:
@@ -628,3 +778,40 @@ abort the script — it simply skips the block. Measured, not assumed.
 > this spec and any sibling reference it by name — the ADR-0031 circuit-breaker
 > the watch item above anticipates. Candidate slug `WP-f30-io-contract-extraction`.
 > It is a cross-spec refactor and does not belong in a round-3 fix pass.
+>
+> **2026-08-01 — gate round 3 (verdict: REQUEST CHANGES, one blocking + one
+> Codex finding). Both closed.**
+>
+> - **(a) Table N row 5 was UNSATISFIABLE.** The reviewer implemented every
+>   predicate variant and brute-forced the `(before, after)` space: the published
+>   row blended two constructions and **no reachable state satisfied all three of
+>   its cells**. The root cause is a reachability fact the table never stated —
+>   `locateManagedBlock` is **line-anchored** (it matches a line whose `.trim()`
+>   is the sentinel and sets `span.begin` to that line's start), so `before` is
+>   always `''` or newline-terminated. Re-derived first-hand, the old row 5's
+>   content (`foo<BLOCK>\n`) is worse than unreachable: it makes
+>   `locateManagedBlock` **throw `ambiguous`**, so `reverseManagedBlock` skips the
+>   file entirely. **The gate itself was verified correct — this was an
+>   evidence-table defect.** Fixed as the reviewer proposed: the construction row 5
+>   was reaching for *is* row 2, so they are merged; the table is rebuilt from
+>   reachable states only with `sepBefore` **derived from the forward contract**;
+>   the reachability rule is now stated above it; and the score line is re-run and
+>   re-pasted — **today 1/5, ungated 4/5, gated 5/5**. T6's discrimination pair
+>   becomes **row 3 vs row 2**, with a measured four-column table showing that
+>   *ungated* fails row 3 and *no-disjunct* fails row 2, so both rows are required.
+> - **(a) Codex round 3 [high] — forged separator metadata is a data-deletion
+>   primitive.** `sepBefore`/`sepAfter` are read from the **untrusted** install
+>   manifest (WP-144's premise) behind only a `typeof === 'string'` check, then
+>   byte-matched against the user's own file and the match **deleted**. Measured:
+>   `sepAfter: "\nlineB\n"` eats the trailing user line, `sepBefore: "lineA\n"`
+>   eats the leading one — assisted by the `safe` predicate's own
+>   `candidate === ''` disjunct — and both together **empty the file**. Closed by
+>   **Table M**: an allowlist of exactly the producer-emittable values
+>   (`sepAfter === '\n'`; `sepBefore ∈ {'', '\n', '\n\n'}`), validated as a **pair**
+>   and discarded as a pair. **Design call recorded:** invalid metadata degrades to
+>   the *legacy conservative strip*, not to a skip — skipping would strand our own
+>   managed block in the user's file forever and hand an attacker a one-line way to
+>   make uninstall incomplete, while the legacy path is provably bounded to one
+>   newline per side under the `safe` guard. New AC8, new T7 rows, new V4;
+>   noted explicitly that `ENTRY_FIELD_TYPES` cannot close this, because a forged
+>   value *is* a string.
