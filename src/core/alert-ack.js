@@ -91,12 +91,15 @@ function addAcks(paths, alerts) {
 
 /** Drop every acknowledgement whose `job` equals `job`; delete the file when
  *  none remain. Called by clearAlerts when that job next succeeds, so an
- *  acknowledgement never outlives the alert it silenced (Table A).
- *  Best-effort: never throws out of this function.
+ *  acknowledgement never outlives the alert it silenced (Table A). A no-op
+ *  when nothing is pruned (no matching `job`), so an unrelated job's success
+ *  never rewrites the store. Best-effort: never throws out of this function.
  *  @param {import('./paths').WienerdogPaths} paths @param {string} job */
 function pruneAcksForJob(paths, job) {
   try {
-    const remaining = readAcks(paths).filter((r) => r.job !== job);
+    const existing = readAcks(paths);
+    const remaining = existing.filter((r) => r.job !== job);
+    if (remaining.length === existing.length) return;
     const file = ackPath(paths);
     if (remaining.length === 0) {
       fs.rmSync(file, { force: true });

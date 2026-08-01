@@ -23,7 +23,8 @@ function groupAlerts(alerts) {
     const cur = map.get(key);
     if (cur) {
       cur.count += 1;
-      cur.last = a.at;
+      if (a.at < cur.first) cur.first = a.at;
+      if (a.at > cur.last) cur.last = a.at;
     } else {
       map.set(key, { job: a.job, reason: a.reason, key, count: 1, first: a.at, last: a.at });
     }

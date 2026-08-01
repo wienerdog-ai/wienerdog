@@ -600,6 +600,7 @@ found in review is added to this list in the same pass.
 
 Table A (store) mirrors:
 - [ ] Deliverables rows D1, D4, D7 (the export list, the `clearAlerts` hook, the private-mode entry)
+- [ ] Deliverables row D10 / `tests/unit/private-fs.test.js` (deepEquals Table A's Mode-coverage membership)
 - [ ] the `src/core/alert-ack.js` JSDoc block under Exact contracts
 - [ ] the literal `alerts-ack.json` example under Exact contracts
 - [ ] acceptance criteria AC2, AC3, AC4, AC8, AC9
@@ -763,7 +764,7 @@ npm run lint
 # V3 — this WP's tests alone (all 13 must appear and pass)
 npm test -- tests/unit/alert-ack.test.js
 
-# V4 — the store is written from exactly one module (expect: only src/core/alert-ack.js)
+# V4 — the store is WRITTEN from exactly one module: src/core/alert-ack.js. Expect three matches: the writer, the D7 constant in private-fs.js, and its D10 test mirror — no other writer.
 grep -rn "alerts-ack" src bin tests
 
 # V5 — both digest feeders filter, and neither still passes the raw array

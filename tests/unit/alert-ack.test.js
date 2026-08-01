@@ -293,3 +293,19 @@ test('alerts cli: list and unknown subcommand', async () => {
   assert.ok(outList.includes('job "dream"'));
   assert.ok(!fs.existsSync(ackPath(paths)), 'list never writes the ack store');
 });
+
+// A13 (extension) — grouping must not assume alerts.jsonl is sorted by `at`;
+// it is file-write order. A newest-first write for one (job, reason) must
+// still render the group's range earliest-to-latest, never reversed.
+test('alerts cli: grouped range is earliest-to-latest even when written newest-first', async () => {
+  const { paths } = setup();
+  appendAlert(paths, rec('dream', '2026-08-01T00:00:00.000Z', 'exited 1'));
+  appendAlert(paths, rec('dream', '2026-07-01T00:00:00.000Z', 'exited 1'));
+
+  const outList = await withStdout(() => alertsCli.run(['list'], { paths }));
+  assert.ok(
+    outList.includes('2 times, 2026-07-01T00:00:00.000Z to 2026-08-01T00:00:00.000Z'),
+    'range is earliest to latest, not reversed'
+  );
+  assert.ok(!outList.includes('2026-08-01T00:00:00.000Z to 2026-07-01T00:00:00.000Z'));
+});
