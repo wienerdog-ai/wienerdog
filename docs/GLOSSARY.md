@@ -41,10 +41,11 @@ Canonical names. Use these exact terms in code, docs, specs, and prompts — nev
 - **identity trust registry** — the code-owned, 0600 record (`~/.wienerdog/state/identity-approvals.json`) of the exact-byte `sha256` a human ratified for each injected identity file. The digest injects an identity file only when its current bytes match its record; a mismatch fails closed (ADR-0021). Path identity is case-folded; content identity is byte-exact.
 - **memory approve** — the interactive, terminal-only command (`wienerdog memory approve <file>`) that ratifies the current exact bytes of an injected identity note into the identity trust registry. The only way to change an approved identity note; no model-driven or headless process can run it (ADR-0021).
 - **safety profile** — the code-owned, fail-closed record of which powerful
-  capabilities are cleared for use (`src/core/safety-profile.js`). Every
-  capability is BLOCKED until its security gate is opened by a reviewed release;
-  there is no runtime/env/flag override. Inspect it with `wienerdog safety`. (Not
-  a "sandbox" — that word means the unrelated `WIENERDOG_HOME` redirect guard.)
+  capabilities are cleared for use (`src/core/safety-profile.js`). A capability
+  stays blocked until a reviewed release opens its gate; there is no
+  runtime/env/flag override. All five gates were opened in 0.10.0. Inspect it
+  with `wienerdog safety`. (Not a "sandbox" — that word means the unrelated
+  `WIENERDOG_HOME` redirect guard.)
 - **capability gate** — one named on/off switch in the safety profile
   (e.g. `gws-use`, `external-content-routine`). A blocked gate makes its feature
   fail closed before any side effect (no model spawn, no credential load).
