@@ -4,12 +4,33 @@ title: Make the manifest symlink reverser target-aware so uninstall never delete
 status: Ready
 model: opus
 size: S
-depends_on: [WP-144]
+depends_on: [WP-144, WP-147]
 adrs: [ADR-0004, ADR-0019, ADR-0031]
 branch: wp/153-target-aware-symlink-reverser
 ---
 
 # WP-153: Target-aware symlink reverser (audit A13 follow-up — Codex-found)
+
+> **OWNER-DECIDED IN SESSION — 2026-08-01 (TRANSCRIBED, NOT OWNER-TYPED).**
+> Gyula Fehér answered in conversation; this record was written by the
+> orchestrator, not by him. It records that the decision was taken — it is
+> **not** his signature and must never be treated as one, and **no gate keys on
+> it**. Verbatim: *"fine to have installs predating the WP have uninstall leave
+> all skill symlinks behind."*
+>
+> This closes the last open question in this spec — the disposition of **legacy
+> (target-less) manifest entries**. The full framing, the two rejected
+> alternatives and the accepted cost are recorded under
+> **[Legacy-entry policy — owner-ruled](#legacy-entry-policy--owner-ruled-2026-08-01)**.
+> **Table A row 2 is settled by it**; every other row and section was already
+> independent of it.
+>
+> **Process note, kept rather than smoothed over.** A revision of this spec
+> earlier on 2026-08-01 moved itself to `Ready` by closing this question with an
+> argument, and gate round 1 was right to reject that: the argument reached the
+> same answer, but an architect reaching an owner's answer is not the owner
+> answering. The status is `Ready` now because Gyula ruled, not because the
+> argument improved.
 
 ## Context (read this, nothing else)
 
@@ -90,7 +111,10 @@ a `try`, returning `false` on any throw.
 ### 2. The single call site — `src/core/manifest.js:718-729`
 
 `reverse()` dispatches by kind. The symlink arm validates the canonical PARENT
-is in-bounds and then delegates:
+is in-bounds and then delegates. **The excerpt below is dedented for readability
+and its final `}` is synthetic** — at `e7c845e` line 730 is the next
+`} else if (…)`, not a close. Read the file for the exact bytes:
+`sed -n '718,729p' src/core/manifest.js`.
 
 ```js
       } else if (entry.kind === 'symlink') {
@@ -148,6 +172,35 @@ own comment names this WP's defect in so many words: *"reverseSymlink (which
 unlinks any symlink at a recorded path, without a target check) would delete the
 user's replacement on uninstall."*
 
+**`recordOnce` NO-OPS on an existing entry — so adding `target` at these three
+sites does NOT migrate an existing install** (`shared.js:47-52`, verified at
+`e7c845e`):
+
+```js
+function recordOnce(manifest, entry) {
+  if (!manifest) return;
+  if (!Array.isArray(manifest.entries)) manifest.entries = [];
+  const exists = manifest.entries.some((e) => e.kind === entry.kind && e.path === entry.path);
+  if (!exists) manifest.entries.push(entry);   // ← an EXISTING entry is left exactly as it was
+}
+```
+
+An upgraded install already has `{kind:'symlink', path}` in its manifest, so
+every later `sync` hits `exists === true` and the entry **stays target-less
+permanently — through one sync, and through a hundred**. This was found by the
+Codex adversarial leg of gate round 1 and it **falsifies an earlier revision of
+this spec**, which claimed under "Out of scope" that *"the next `wienerdog sync`
+re-records the entries through the three producer sites, which is the whole
+migration"*.
+
+**There is no migration, and by owner ruling (2026-08-01) none will be built.**
+Backfilling would need an **upsert** — the shape `recordCopiedSkill`
+(`shared.js:54-71`) and `recordSettingsEntry` (`shared.js:90`) already use — and
+that was put to the owner and declined. **`recordOnce` therefore stays exactly as
+it is at all three sites**, and "legacy" is a permanent state for any install
+that predates this WP. See
+[Legacy-entry policy](#legacy-entry-policy--owner-ruled-2026-08-01).
+
 ### 4. The manifest entry schema — `src/core/manifest.js:806-817` (shipped by WP-144, Done)
 
 ```js
@@ -186,21 +239,35 @@ Surface Checklist so it cannot be missed.
 
 ### 6. The ownership-proof precedent this WP copies — `reverseCopiedSkill` (`manifest.js:404-437`)
 
-The directory analogue already refuses on an unprovable entry. Its sequence is:
-`isDir` → `wienerdog-` basename + parent-realpath-is-a-harness-skills-root →
-`fs.lstatSync(...).isDirectory()` (a symlink at the path is *not* our directory)
-→ `typeof entry.hash !== 'string' || hashDir(entry.path) !== entry.hash`. Both
-failure arms write
-`wienerdog: keeping <path> — not the Wienerdog skill we recorded (modified, replaced, or unverifiable)`
-to stderr and `skipped.push`.
+The directory analogue already refuses on an unprovable entry. It has **three**
+refuse arms, and they do not all say the same thing:
 
-**Its hash-less (legacy) branch is the settled house policy this WP inherits**,
-and it is already pinned by a shipped test in
-`tests/unit/shared-skill-links.test.js`, green at `e7c845e`:
+| Arm | Anchor | Test | stderr |
+|-----|--------|------|--------|
+| 1 | `manifest.js:408-412` | basename is not `wienerdog-*`, **or** the parent does not realpath-equal a harness skills root | `wienerdog: refusing to remove <path> — not a Wienerdog skill directly under a harness skills dir` |
+| 2 | `manifest.js:424-428` | `fs.lstatSync(entry.path).isDirectory()` is false — a symlink at the path is *not* our directory | `wienerdog: keeping <path> — not the Wienerdog skill we recorded (modified, replaced, or unverifiable)` |
+| 3 | `manifest.js:429-433` | `typeof entry.hash !== 'string' \|\| hashDir(entry.path) !== entry.hash` | same string as arm 2 |
+
+**The last two arms** share the `keeping …` string; arm 1 has its own. (An
+earlier revision of this spec said "both failure arms", which undercounted.)
+
+**Arm 1 is the structural-ownership shape** that was put to the owner as the
+declined alternative (ii). **Arm 3's hash-less half is the
+preserve-on-unverifiable behaviour** Table A row 2 now matches; it is pinned by a
+shipped test in `tests/unit/shared-skill-links.test.js:298`, green at `e7c845e`:
 
 ```text
 ✔ legacy hash-less copied-skill entry → PRESERVED, notice, never rmSync (unverifiable)
 ```
+
+**That similarity is not the reason Table A row 2 exists** — it is a resemblance,
+and gate round 1 was right that it does not settle anything on its own: for a
+`copied-skill`, a hash-less entry is a **fallback-only edge** (the normal
+`applySkillLinks` path symlinks; copying happens only on `EPERM`/`EACCES`,
+`shared.js:457-460`), whereas for a **symlink** the legacy entry is the
+**mainline** shape on every install created before this WP. Same mechanism, very
+different cost. The cost is what the owner ruled on — see
+[Legacy-entry policy](#legacy-entry-policy--owner-ruled-2026-08-01).
 
 ### 7. The realpath-equality helper — `src/core/manifest.js:353-359`
 
@@ -253,13 +320,45 @@ ships a branch no install reaches.
 
 | Action | Path | Notes |
 |--------|------|-------|
-| modify | src/adapters/shared.js | **D1** — add `target` to the entry object at all three `recordOnce(manifest, { kind: 'symlink', … })` sites (`:399`, `:450`, `:456` — Current state §3), per **Table B**. Nothing else in this file changes: the WP-146 preserve arm, `dropOwnedEntry`, the `readlinkSync` comparison and every notice string stay byte-identical. |
-| modify | src/core/manifest.js | **D2** — `reverseSymlink` implements **Table A**; **D3** — `ENTRY_FIELD_TYPES.symlink` becomes `{ target: 'string' }` (`:809`); **D4** — the entry-shape doc comment at `:17` gains the optional field per **Table B**. No other function, no other kind, no change to `reverse()`'s symlink arm at `:718-729`. |
-| modify | tests/unit/manifest.test.js | **T1–T4** — the exact set in the Test index below. |
-| modify | tests/unit/shared-skill-links.test.js | **T5** — assert the recorded symlink entry now carries the expected `target` at all three producer branches (Table B). Every existing test in this file must pass **unmodified**. |
+| modify | src/adapters/shared.js | **D1** — add `target` to the entry object at all three `recordOnce(manifest, { kind: 'symlink', … })` sites (`:399`, `:450`, `:456` — Current state §3), per **Table B**. Nothing else in this file changes: the WP-146 preserve arm, `dropOwnedEntry`, the `readlinkSync` comparison and every notice string stay byte-identical. **`recordOnce` itself is NOT modified and is NOT replaced by an upsert** — the owner declined a backfill (2026-08-01). |
+| modify | src/core/manifest.js | **D2** — `reverseSymlink` implements **Table A**; **D3** — `ENTRY_FIELD_TYPES.symlink` becomes `{ target: 'string' }` (`:809`); **D4** — the entry-shape doc comment at `:17` gains the optional field per **Table B**. No other function, no other kind, and **no change to `reverse()`'s symlink arm at `:718-729`** — `reverseSymlink` keeps its five-parameter signature. **D3 is THIS WP's edit, not WP-147's** — see "Sequencing" below. |
+| modify | tests/unit/manifest.test.js | **T1–T4 and T6** — the exact set in the Test index below. **T6 is a required repair, not a new feature**: `manifest.test.js:297-312`'s deferred-member guard becomes vacuous under this WP unless its entry gains a `target`. |
+| modify | tests/unit/shared-skill-links.test.js | **T5** — this is **an edit to three shipped assertions**, not a new test. `:52-55`, `:191-194` and `:337-340` each `assert.deepEqual(..., [{ kind: 'symlink', path: linkPath }])`; `deepEqual` **fails on the extra `target` key** (executed at `e7c845e`: `ERR_ASSERTION`). Extend each expected object with its branch-appropriate `target`. **The four WP-146 sync-side tests at `:345`, `:371`, `:387` and `:405` are fenced — they must pass byte-unmodified.** |
 
 Not deliverables, deliberately: `src/cli/uninstall.js`, every other reverser,
 `docs/GLOSSARY.md`, `docs/adr/**`, `tests/golden/**`.
+
+### Sequencing with WP-147 — why `depends_on: [WP-144, WP-147]`
+
+`WP-147-managed-block-separator-roundtrip` (`Ready`) also edits
+`src/core/manifest.js`, and the two overlap in two places:
+
+1. **`ENTRY_FIELD_TYPES` (`:806-817`).** WP-147 lists adding `sepBefore`/`sepAfter`
+   to the `managed-block` cell as an *optional, additive* nicety; **this WP
+   REQUIRES** the `symlink` cell change (D3). Both edit the same object literal.
+2. **Adjacency.** This WP's Current state §2 anchors `:718-729`, immediately above
+   the caller block WP-147 pins as `:730-770` (its `openSync` at `:746`, its call
+   at `:764`, its close at `:769`). Whichever lands first shifts the other's
+   anchors.
+
+**Decision: WP-147 lands first; WP-153 depends on it.** WP-147 is the older,
+larger and more delicate of the two (it edits the F30 fd-bound IO region), and
+its anchors are the ones that would be most expensive to re-derive; putting it
+first means only this spec's anchors need re-checking, not both. Two consequences
+the implementer must honour:
+
+- **The `symlink` schema cell is WP-153's edit alone.** WP-147's Deliverables
+  offer its `managed-block` addition as optional; nothing in WP-147 may touch the
+  `symlink` cell.
+- **Every `src/core/manifest.js` line anchor in this spec is stated against
+  `e7c845e`, i.e. BEFORE WP-147 lands.** WP-147 grows `reverseManagedBlock`'s
+  strip region by ~8 lines, so anchors at or after `:205` shift downward. The
+  implementer must re-locate `ENTRY_FIELD_TYPES`, `validateEntry` and the symlink
+  arm **by content, not by line number**, and the architect re-anchors this spec
+  at the dispatch-time re-verification that follows WP-147's merge
+  (`docs/runbooks/codex-review.md`, "Dispatch-time re-verification"). Anchors
+  **before** `:205` (`reverseSymlink` `:144-159`, `isSymlink` `:136-142`, the doc
+  comment `:17`) are unaffected.
 
 ### Exact contracts
 
@@ -307,7 +406,7 @@ Conditions are evaluated **in order**; the first that holds decides. `L` is
 | # | Condition | Filesystem action | Bucket | stderr | Why this is the fail-safe answer |
 |---|-----------|-------------------|--------|--------|----------------------------------|
 | 1 | `!isSymlink(L)` | none | `skipped` | none | Unchanged shipped behavior. A real file/dir at `L`, or nothing at all, is definitionally not the link we made. |
-| 2 | `typeof T !== 'string' \|\| T === ''` — a **LEGACY** entry | none | `skipped` | `wienerdog: keeping <L> — not the Wienerdog skill link we recorded (replaced, or unverifiable)` | Recorded before this WP, so ownership is **unprovable**. Preserve. This is the same disposition `reverseCopiedSkill` already ships for a hash-less entry (Current state §6), not a new policy. |
+| 2 | `typeof T !== 'string' \|\| T === ''` — a **LEGACY** entry | none | `skipped` | `wienerdog: keeping <L> — not the Wienerdog skill link we recorded (replaced, or unverifiable)` | Ownership is **unprovable** — the entry was recorded before this WP and, per the owner ruling, nothing will ever backfill it. Preserve. **This row and its accepted cost are owner-ruled (2026-08-01), not argued from precedent** — see [Legacy-entry policy](#legacy-entry-policy--owner-ruled-2026-08-01). |
 | 3 | `sameResolvedDir(L, T) === false` **and** `readlinkSync(L) !== T` | none | `skipped` | same line as row 2 | The link at `L` points somewhere else — a user's replacement, or a stale link from another install root. Both sub-tests are fail-closed (`sameResolvedDir` catches and returns `false`; the lexical test runs inside a `try` whose `catch` yields no match), so **every** error path lands in this row, i.e. in *preserve*. |
 | 4 | otherwise | `if (!dryRun) fs.unlinkSync(L)` | `removed` **and** `removedSet.add(L)` | none | The link provably resolves to the source we recorded. This is the only row that deletes. |
 
@@ -327,7 +426,9 @@ lexical second.**
 - Both are **string/inode equality only**. Do **not** add a prefix, `startsWith`,
   `path.relative`, or "is under the core" test — an ancestor-scoped test would
   authorize deleting any link pointing anywhere inside the core, which is a
-  larger permission than "the link we recorded".
+  larger permission than "the link we recorded". (**This prohibition scopes rows
+  3–4 only** — but with the owner declining the structural legacy arm, it is now
+  effectively total: no row of Table A uses an ancestor-scoped test.)
 
 ### Table B — the `{kind:'symlink'}` entry shape (canonical)
 
@@ -391,24 +492,113 @@ Out of this spec, registered so a later Table A/B change updates them too —
 - [ ] `docs/specs/done/WP-146-settings-upsert-and-foreign-symlink-preserve.md` —
       the shipped record of the sync-side half. Never edited.
 
+## Legacy-entry policy — owner-ruled (2026-08-01)
+
+> **OWNER-DECIDED IN SESSION — 2026-08-01 (TRANSCRIBED, NOT OWNER-TYPED).**
+> Gyula Fehér answered in conversation; this record was written by the
+> orchestrator, not by him. It records that the decision was taken — it is
+> **not** his signature and must never be treated as one, and **no gate keys on
+> it**. Verbatim: *"fine to have installs predating the WP have uninstall leave
+> all skill symlinks behind."*
+
+### The question that was put
+
+Every install created **before** this WP has manifest entries shaped
+`{kind:'symlink', path}` with no `target`. `reverseSymlink` therefore cannot
+prove those links are ours. What should `wienerdog uninstall` do with them?
+
+### The ruling
+
+**Preserve them. Table A row 2 as written: skip, notice, never unlink.** No
+structural ownership arm, and no backfill migration. The two alternatives below
+were put alongside it and are **declined**; they are kept so the choice stays
+legible and so a future WP does not re-propose them as if new.
+
+### The accepted cost, stated plainly
+
+This is the part the owner accepted, so it is stated at full strength rather
+than softened:
+
+- On **every install created before this WP**, `wienerdog uninstall` leaves
+  **all** `wienerdog-*` skill symlinks behind in the harness skills directory
+  (`~/.claude/skills/`, `~/.codex/skills/`) and reports each as skipped.
+- Because the core is disposed in the same run, those links are left **dangling**.
+- **Nothing ever heals them.** A later `wienerdog sync` does not — see "Why there
+  is no migration" below. The user removes them by hand.
+- This is a real, bounded departure from CLAUDE.md's *"reversible —
+  `wienerdog uninstall` fully undoes it via the install manifest"*, and it is
+  accepted deliberately in exchange for the guarantee that uninstall can never
+  delete a file it cannot prove it created (ADR-0004, ADR-0019).
+
+### Why there is no migration, and why the spec used to claim there was
+
+`recordOnce` **no-ops when a same-kind+path entry already exists**
+(`shared.js:47-52`, quoted in Current state §3). An upgraded install already has
+`{kind:'symlink', path}` in its manifest, so adding `target` at the three
+producer sites changes nothing for it: `exists === true`, the push is skipped,
+and the entry **stays target-less permanently — through one sync, and through a
+hundred**.
+
+An earlier revision of this spec asserted the opposite under "Out of scope"
+(*"the next `wienerdog sync` re-records the entries … which is the whole
+migration"*). **That was false**, and it was found by the Codex leg of gate
+round 1. With the owner declining a backfill, the fix is to state the true
+behaviour rather than to build the migration: **legacy is permanent**. Every
+surface in this spec that implied otherwise has been corrected.
+
+### The two declined alternatives, recorded so they are not re-proposed as new
+
+**(ii) Structural ownership proof for legacy entries — DECLINED.** Row 2 would
+have unlinked when all three held: `wienerdog-` basename; `path.dirname(L)`
+realpath-equals a harness skills root; `readlink(L)` resolves into the app's own
+skills source. This is the shape `reverseCopiedSkill` arm 1 already ships
+(`manifest.js:406-412`), and `skillsRoots` is already computed and passed into
+the reverse loop. It would have made legacy installs uninstall cleanly. It is a
+**weaker** proof than rows 3–4's exact-target equality — it authorises deleting
+any `wienerdog-*` link in a harness skills root that points into our skills
+source, so a user who deliberately re-pointed one of our links at a *different
+one of our own skills* would lose it — and it needs the skills-source directory
+plumbed into `reverseSymlink`.
+
+**(iii) Upsert-backfill so "legacy" drains over time — DECLINED.** Replace
+`recordOnce` at the three producer sites with an upsert that sets `target` on an
+existing entry after verifying the current link, mirroring `recordCopiedSkill`
+(`shared.js:54-71`) and `recordSettingsEntry` (`shared.js:90`). It would have
+shrunk the blast radius to "installs that uninstall without ever syncing again".
+It does not help an install that upgrades and immediately uninstalls, so it was a
+mitigation rather than an answer.
+
+**The precedent argument that preceded the ruling, and its correction.** An
+earlier revision closed this question by citing `reverseCopiedSkill`'s hash-less
+arm as settled house policy. Gate round 1 rejected that reasoning and was right
+to: for `copied-skill` a hash-less entry is a **fallback-only edge** (copying
+happens only on `EPERM`/`EACCES`, `shared.js:457-460`), while for `symlink` a
+target-less entry is the **mainline shape on every pre-WP-153 install**. Same
+mechanism, very different cost — which is exactly why it was an owner call. The
+owner reached the same answer; the argument did not become sufficient
+retroactively.
+
 ## Implementation notes & constraints
 
-### Legacy entries — the policy, and why it is not a judgment call
+### Legacy entries — what to build
 
-A target-less entry is **preserved, never deleted** (Table A row 2). This is not
-a new decision: `reverseCopiedSkill` has shipped exactly this disposition for a
-hash-less `copied-skill` entry since WP-146, and it is pinned by a green test
-(Current state §6). The cost is stated rather than hidden: **on an install
-created before this WP, `wienerdog uninstall` will leave the `wienerdog-*` skill
-symlinks in place** and report them as skipped, until one `wienerdog sync`
-re-records them with a `target`. That is the same bounded cost already accepted
-for legacy copied-skill directories, and it is the correct direction: leaving a
-file behind is recoverable, deleting a user's file is not.
+A target-less entry is **preserved, never deleted** (Table A row 2), by owner
+ruling of 2026-08-01. Build exactly that and nothing more. Three things follow,
+and each is a way the implementer could accidentally exceed the ruling:
 
-Do **not** try to recover the legacy case by inferring ownership from the link's
-current target (e.g. "it points inside the core, so it is ours"). That is the
-ancestor-scoped test Table A row 3 forbids, and it re-opens the deletion
-permission this WP exists to close.
+1. **Legacy is permanent — do not "helpfully" fix it.** `recordOnce` stays as it
+   is; do not turn it into an upsert, do not add a one-off backfill, do not write
+   a migration step into `sync`. An install that predates this WP keeps
+   target-less symlink entries forever, its `uninstall` leaves **all** its
+   `wienerdog-*` skill links behind (dangling, once the core is disposed), and
+   nothing heals that. The owner accepted this cost explicitly; see
+   [Legacy-entry policy](#legacy-entry-policy--owner-ruled-2026-08-01).
+2. **Do not infer ownership from where the link points** (e.g. "it resolves
+   inside the core, so it is ours"). That is the structural arm the owner
+   declined, and it is also the ancestor-scoped test Table A rows 3–4 forbid.
+3. **Do not soften the notice.** Row 2's `keeping …` line is what makes the
+   left-behind links visible to a user reading uninstall's output; it is the only
+   signal they get.
 
 ### Do not touch the sync side
 
@@ -438,12 +628,25 @@ WP only adds `target` to the three `recordOnce` calls in that same file.
 | T2 | `tests/unit/manifest.test.js` | **No regression.** `L` is still our own unmodified link to `T`. `reverse()` unlinks it and reports it in `removed`. Repeat with `dryRun: true`: `L` still exists, and it is still reported in `removed`. | Table A row 4 |
 | T3 | `tests/unit/manifest.test.js` | **Legacy.** The entry has no `target` at all. `reverse()` leaves `L` on disk and reports it in `skipped`, whatever `L` currently points at (assert both: pointing at `T`, and pointing elsewhere). | Table A row 2 |
 | T4 | `tests/unit/manifest.test.js` | **Dangling core.** The entry carries `target: T`, `L` is still our link with `readlink(L) === T`, but `T` has been removed from disk. `reverse()` still unlinks `L` (the lexical fallback), and reports it in `removed`. | Table A row 3, lexical fallback |
-| T5 | `tests/unit/shared-skill-links.test.js` | The recorded entry carries `target === path.join(skillsDir, name)` at **all three** producer branches: the adopt-existing-link branch, the `dryRun` branch, and the create branch. | Table B |
+| T5 | `tests/unit/shared-skill-links.test.js` | **An EDIT to three shipped assertions, not a new test.** `:52-55`, `:191-194`, `:337-340` each assert `deepEqual(manifest.entries.filter(…), [{ kind: 'symlink', path: linkPath }])`. `deepEqual` compares whole objects, so the added `target` key makes all three fail (executed at `e7c845e`: `ERR_ASSERTION`). Extend each expected object to `[{ kind: 'symlink', path: linkPath, target: coreSkill }]` (each test already has the source path in scope — `:50` reads it as `coreSkill`), so each branch asserts its own recorded `target`: `:52-55` the adopt-existing-link branch, `:191-194` the `dryRun` branch, `:337-340` the pre-existing-correct-symlink branch. | Table B |
+| T6 | `tests/unit/manifest.test.js` | **Vacuity repair, required.** `:297-312` (`global guard (iii): a {kind:symlink} whose path resolves to a deferred member is never unlinked`) records `{kind:'symlink', path: link}` with **no** `target`, where `link` points at `paths.manifest`. After this WP that is also a Table A row-2 legacy entry, so it would be preserved **for the wrong reason** and the deferred-member guard it exists to prove would stop being exercised — a regressed guard would stay green. Give the recorded entry `target: paths.manifest`, which makes `sameResolvedDir(L, T)` true → Table A row 4 → only the deferred-member guard stands between the entry and `fs.unlinkSync`. Assert the same outcomes as today (`:308-311`). | vacuity of the shipped guard |
 
 **Prove T1 in both directions** (`docs/runbooks/codex-review.md`): run it against
 the untouched `reverseSymlink` (expect **red** — the user's link is unlinked) and
 against the finished one (expect **green**). A test that is only ever green after
 the change does not show the defect was real.
+
+**Prove T6 the same way**, and it is the more important of the two: with T6's
+`target` in place, temporarily remove the deferred-member guard
+(`manifest.js:578-586`'s `resolvesTo(entry.path, paths.manifest)` arm) and
+confirm T6 goes **red**. Without that run, T6 is a test that cannot tell you
+whether the guard exists.
+
+**T3 is final** (the owner ruling settled its shape on 2026-08-01). It asserts
+preservation in **both** legacy sub-cases — `L` pointing at `T`, and `L` pointing
+elsewhere — because under the ruling those are treated identically. **Do not add
+a test asserting that a legacy entry acquires `target` after a sync**: it never
+does, by design (Current state §3).
 
 ## Security checklist
 
@@ -468,14 +671,27 @@ the change does not show the defect was real.
 
 - [ ] **AC1** — T1 is red against the untouched `reverseSymlink` and green after
       (Table A row 3). Both runs pasted into the PR.
-- [ ] **AC2** — T2, T3, T4 and T5 all pass (Table A rows 2 and 4; Table B).
-- [ ] **AC3** — Every pre-existing test in `tests/unit/manifest.test.js` and
-      `tests/unit/shared-skill-links.test.js` passes **unmodified**; in
-      particular the WP-146 sync-side tests are untouched.
+- [ ] **AC2** — T2, T3, T4, T5 and T6 all pass (Table A rows 2 and 4; Table B;
+      the vacuity repair).
+- [ ] **AC3** — **Narrowed, because D1 makes three shipped assertions fail by
+      construction.** Every **behavioural** test in
+      `tests/unit/manifest.test.js` and `tests/unit/shared-skill-links.test.js`
+      passes with its assertions unchanged. The **only** permitted edits to
+      shipped tests are the four named in the Test index: the three
+      whole-object `deepEqual` expectations at
+      `shared-skill-links.test.js:52-55`, `:191-194`, `:337-340` (T5 — they
+      compare the entry object, so the new key breaks them), and the recorded
+      entry in `manifest.test.js:297-312` (T6). **The four WP-146 sync-side
+      tests at `shared-skill-links.test.js:345`, `:371`, `:387` and `:405` must
+      pass BYTE-UNMODIFIED** — they are the fence, and any diff touching them is
+      a scope violation.
 - [ ] **AC4** — `grep -c "kind: 'symlink', path: linkPath, target" src/adapters/shared.js`
       is `3`, and `grep -c "kind: 'symlink', path: linkPath }" src/adapters/shared.js`
-      is `0` (no producer site left target-less).
+      is `0` (no producer site left target-less). The call is still
+      `recordOnce` — the owner declined the upsert.
 - [ ] **AC5** — `npm test` and `npm run lint` are green.
+- [ ] **AC6** — `git diff -- tests/unit/shared-skill-links.test.js` touches
+      **only** lines in the three T5 ranges. Paste the diff.
 
 ## Verification steps (run these; paste output in the PR)
 
@@ -492,9 +708,10 @@ node tests/run.js tests/unit/manifest.test.js tests/unit/shared-skill-links.test
 grep -c "kind: 'symlink', path: linkPath, target" src/adapters/shared.js
 grep -c "kind: 'symlink', path: linkPath }" src/adapters/shared.js
 
-# V3 — the schema cell is listed (Table B). Expect exactly one line:
-#   symlink: { target: 'string' },
-grep -n "symlink: {" src/core/manifest.js
+# V3 — the schema cell carries the Table B literal. Match the LITERAL, not the
+# key: `grep -n "symlink: {"` already returns one line on the untouched tree
+# (`809:  symlink: {},`), so it can never fail and proves nothing.
+grep -n "symlink: { target: 'string' }," src/core/manifest.js
 
 # V4 — the reverser consults the recorded target (Table A rows 3-4). Expect a
 # `sameResolvedDir` and a `readlinkSync` inside the reverseSymlink body.
@@ -504,6 +721,12 @@ sed -n '/^function reverseSymlink/,/^}/p' src/core/manifest.js
 npm test
 npm run lint
 ```
+
+**Untouched-tree baselines at `e7c845e`, so a red gate is legible.** V2 prints
+`0` then `3` (inverted from the finished state). **V3 prints nothing and exits
+1** — verified; the loose `grep -n "symlink: {"` form it replaced printed
+`809:  symlink: {},` and was therefore green before any work. V4 prints the
+nine-line pre-change body with no `sameResolvedDir` and no `readlinkSync`.
 
 ## Out of scope (do NOT do these)
 
@@ -516,10 +739,23 @@ npm run lint
 - Any other reverser. `reverseCopiedSkill` already has its ownership proof;
   `reverseVendoredTree`, `reverseManagedBlock` and `reverseSettingsEntry` are
   untouched.
-- A migration that back-fills `target` onto existing manifests. The next
-  `wienerdog sync` re-records the entries through the three producer sites,
-  which is the whole migration.
 - Any change to `docs/GLOSSARY.md` or any ADR.
+- **`src/core/manifest.js`'s `managed-block` schema cell and `reverseManagedBlock`**
+  — those are `WP-147`'s, which lands first (see "Sequencing with WP-147").
+
+- **Any backfill of `target` onto existing manifest entries** — no upsert, no
+  migration step in `sync`, no one-off repair command. **Owner-declined
+  2026-08-01.** Legacy entries stay target-less permanently.
+
+**One bullet was REWORDED on 2026-08-01, because it stated a falsehood.** It
+read: *"A migration that back-fills `target` onto existing manifests. The next
+`wienerdog sync` re-records the entries through the three producer sites, which
+is the whole migration."* The first sentence was right (a migration is out of
+scope); **the second was false** — `recordOnce` no-ops on an existing entry
+(`shared.js:47-52`; Current state §3), so no number of syncs ever backfills
+anything. Found by the Codex leg of gate round 1. The bullet above keeps the
+scope exclusion and drops the false justification: the reason a migration is out
+of scope is that the owner declined one, not that `sync` already does it.
 
 ## Definition of done
 
@@ -541,12 +777,35 @@ npm run lint
 > WP-144" is replaced by the exact one-line change at `manifest.js:809`).
 >
 > **The 2026-07-18 draft's "needs an owner walkthrough before Ready" note is
-> resolved and removed**, on this evidence and by the architect, not the owner:
-> its two named agenda items were (a) *schema coordination with WP-144* — now
-> moot, WP-144 shipped and the cell is `ENTRY_FIELD_TYPES.symlink` at
-> `manifest.js:809`; and (b) *legacy-entry policy* — settled by shipped,
-> tested precedent rather than by a new decision (`reverseCopiedSkill`'s
-> hash-less arm and its green test, Current state §6), with the bounded cost
-> written down in Implementation notes §"Legacy entries". Status moved
-> `Draft` → `Ready` in the same pass. **If the owner disagrees with either
-> resolution, reverting is one line: set `status: Draft`.**
+> now legitimately discharged**, one item per authority:
+>
+> - **(a) schema coordination with WP-144 — closed on evidence, by the
+>   architect.** WP-144 is `Done`; the cell is `ENTRY_FIELD_TYPES.symlink` at
+>   `manifest.js:809` and the change is one line. Nothing here needed a decision.
+> - **(b) legacy-entry policy — closed by the OWNER, 2026-08-01.** See the
+>   transcribed ruling at the head of this spec and
+>   [Legacy-entry policy](#legacy-entry-policy--owner-ruled-2026-08-01).
+>
+> **How this went wrong first, recorded so the pattern is visible.** An earlier
+> revision on 2026-08-01 closed **(b)** by argument — citing
+> `reverseCopiedSkill`'s hash-less arm as settled house policy — and moved itself
+> to `Ready`. Gate round 1 rejected it on two grounds, both correct: the
+> precedent covers a *fallback-only edge* while this is the *mainline* path, so
+> it escalated an accepted cost rather than inheriting one; and the offered
+> reassurance *"reverting is one line"* inverted an owner **opt-in** into an
+> owner **opt-out**, which is the wrong default for a question about deleting
+> user files. The spec went back to `Draft`, the question went to Gyula, and he
+> ruled. **The answer happened to match the argument; that is not what makes it
+> valid.**
+>
+> **2026-08-01 — gate round 1 corrections also folded in.** Codex [medium]: the
+> claimed sync-heals-legacy migration does not exist (`recordOnce` no-ops) — with
+> a backfill declined, the spec now states the true permanent-legacy behaviour
+> instead. Reviewer: AC3 was unsatisfiable (three shipped `deepEqual` assertions
+> break on the new key — T5 now owns that edit, with the four WP-146 sync-side
+> tests fenced); V3 could not fail (now greps the Table B literal, red-verified
+> on the untouched tree); `manifest.test.js:297-312`'s deferred-member guard
+> would have gone vacuous (T6 repairs it); `depends_on` gains `WP-147` for the
+> `manifest.js` collision; and three presentation defects were fixed (the
+> three-arm count in Current state §6, the synthetic brace in §2, the
+> `shared.js:457-460` anchor).
