@@ -82,9 +82,18 @@ async function run(argv, opts = {}) {
       out.write('wienerdog: nothing was acknowledged.\n');
       return;
     }
+    // Re-read after the prompt: a job may have succeeded (and pruned its own
+    // acknowledgements) while the user was answering, so only ack pairs that
+    // are still present — never the stale pre-prompt snapshot.
+    const freshKeys = new Set(groupAlerts(readAlerts(paths)).map((g) => g.key));
+    const stillPresent = unacked.filter((g) => freshKeys.has(g.key));
+    if (stillPresent.length === 0) {
+      out.write('wienerdog: nothing new to acknowledge.\n');
+      return;
+    }
     const { added } = addAcks(
       paths,
-      unacked.map((g) => ({ job: g.job, reason: g.reason }))
+      stillPresent.map((g) => ({ job: g.job, reason: g.reason }))
     );
     out.write(
       `wienerdog: acknowledged ${added} alert(s). They will not appear in your session digest again unless the wording of the failure changes.\n`

@@ -792,6 +792,9 @@ Table C (attended act) mirrors:
 | A13 | `alerts cli: list and unknown subcommand` | AC13 |
 | A14 | `alerts cli: grouped range is earliest-to-latest even when written newest-first` | the grouping contract under Exact contracts — a group's printed range is earliest `at` to latest `at` regardless of the order the records were written in |
 | A15 | `alert-ack: a mismatched job field suppresses nothing` | Table B's Match predicate — a record pairing job "A" with job B's key suppresses neither A's nor B's alert, and stays prunable by `clearAlerts(paths, 'A')` |
+| A16 | `alerts cli: a job succeeding during the prompt is not acknowledged` | the ack-vs-success race: a job that succeeds (and prunes its own acknowledgement) while the typed confirmation is pending must not have its stale pre-prompt pair stored anyway |
+| A17 | `alert-ack: addAcks reports and stores no more than MAX_ACKS` | `addAcks`'s returned `added` count is the honest STORED count, never more than `MAX_ACKS`, even when handed more distinct pairs than the cap in one call |
+| A18 | `alert-ack: pruneAcksForJob re-caps an over-cap store` | `pruneAcksForJob`'s rewrite re-applies the `MAX_ACKS` cap, so a hand-grown over-cap store shrinks to contract on its next write (Table A: the cap is enforced "on write") |
 
 ## Verification steps (run these; paste output in the PR)
 
@@ -802,7 +805,7 @@ npm test
 # V2 — lint (markdownlint + shellcheck + shfmt + frontmatter schema)
 npm run lint
 
-# V3 — this WP's tests alone (all 15 must appear and pass)
+# V3 — this WP's tests alone (all 18 must appear and pass)
 npm test -- tests/unit/alert-ack.test.js
 
 # V4 — the store is WRITTEN from exactly one module: src/core/alert-ack.js. Expect three matches: the writer, the D7 constant in private-fs.js, and its D10 test mirror — no other writer.

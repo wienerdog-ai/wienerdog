@@ -86,7 +86,11 @@ function addAcks(paths, alerts) {
   const combined = existing.concat(additions).slice(-MAX_ACKS);
   const obj = { schema: 1, acked: combined };
   writeFilePrivate(ackPath(paths), `${JSON.stringify(obj, null, 2)}\n`);
-  return { added: additions.length };
+  // additions sit at the tail of `combined` (appended after existing), so the
+  // trailing slice(-MAX_ACKS) always keeps them in full unless there are more
+  // additions than MAX_ACKS itself — the honest stored count is therefore
+  // never more than MAX_ACKS.
+  return { added: Math.min(additions.length, MAX_ACKS) };
 }
 
 /** Drop every acknowledgement whose `job` equals `job`; delete the file when
@@ -105,7 +109,8 @@ function pruneAcksForJob(paths, job) {
       fs.rmSync(file, { force: true });
       return;
     }
-    writeFilePrivate(file, `${JSON.stringify({ schema: 1, acked: remaining }, null, 2)}\n`);
+    const capped = remaining.slice(-MAX_ACKS); // re-apply the cap on every write (Table A: cap is "on write")
+    writeFilePrivate(file, `${JSON.stringify({ schema: 1, acked: capped }, null, 2)}\n`);
   } catch {
     /* best-effort — never throw out of clearAlerts' lifecycle hook */
   }

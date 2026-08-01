@@ -9,6 +9,7 @@ const path = require('node:path');
 const { getPaths } = require('../../src/core/paths');
 const {
   ACK_FILE,
+  MAX_ACKS,
   ackPath,
   ackKey,
   readAcks,
@@ -330,4 +331,70 @@ test('alert-ack: a mismatched job field suppresses nothing', () => {
   assert.equal(readAcks(paths).length, 1, 'the mismatched record is still on file before pruning');
   clearAlerts(paths, 'A');
   assert.deepEqual(readAcks(paths), [], "clearAlerts(paths, 'A') still prunes it — Table B's stated asymmetry");
+});
+
+// -------------------------------------------------------------------------
+// A16 — a job succeeding during the prompt must not have its (now-stale)
+// acknowledgement outlive the alert it would have silenced.
+// -------------------------------------------------------------------------
+
+test('alerts cli: a job succeeding during the prompt is not acknowledged', async () => {
+  const { paths } = setup();
+  appendAlert(paths, rec('dream', '2026-07-04T01:00:00.000Z', 'exited 1'));
+  appendAlert(paths, rec('digest', '2026-07-04T02:00:00.000Z', 'exited 2'));
+
+  const promptFn = async () => {
+    // Simulate "dream" succeeding while the user is still answering the prompt.
+    clearAlerts(paths, 'dream');
+    return 'ack';
+  };
+  const out = await withStdout(() => alertsCli.run(['ack'], { paths, promptFn }));
+  assert.ok(out.includes('acknowledged 1 alert(s)'), 'only the surviving job is counted');
+
+  const acked = readAcks(paths);
+  assert.deepEqual(acked.map((r) => r.job), ['digest'], "only digest's pair was stored");
+  assert.ok(
+    !acked.some((r) => r.key === ackKey('dream', 'exited 1')),
+    "dream's pair was NOT stored even though it was printed before the prompt"
+  );
+});
+
+// -------------------------------------------------------------------------
+// A17 — addAcks must report and store no more than MAX_ACKS, even when
+// handed more distinct pairs than the cap in one call.
+// -------------------------------------------------------------------------
+
+test('alert-ack: addAcks reports and stores no more than MAX_ACKS', () => {
+  const { paths } = setup();
+  const alerts = [];
+  for (let i = 0; i < MAX_ACKS + 5; i += 1) {
+    alerts.push({ job: `job${i}`, reason: 'exited 1' });
+  }
+  const { added } = addAcks(paths, alerts);
+  assert.equal(added, MAX_ACKS, 'the honest stored count, not the requested count');
+  assert.equal(readAcks(paths).length, MAX_ACKS, 'exactly MAX_ACKS records on file');
+});
+
+// -------------------------------------------------------------------------
+// A18 — pruneAcksForJob must re-apply the MAX_ACKS cap on its rewrite, so a
+// hand-grown over-cap store shrinks to contract on its next write (Table A).
+// -------------------------------------------------------------------------
+
+test('alert-ack: pruneAcksForJob re-caps an over-cap store', () => {
+  const { paths } = setup();
+  fs.mkdirSync(paths.state, { recursive: true });
+  const overCap = [];
+  // One record for job "prune-me" (to be dropped), then MAX_ACKS + 4 records
+  // for other jobs — hand-written directly, bypassing addAcks's own cap.
+  overCap.push({ job: 'prune-me', key: ackKey('prune-me', 'r'), at: '2026-01-01T00:00:00.000Z' });
+  for (let i = 0; i < MAX_ACKS + 4; i += 1) {
+    overCap.push({ job: `job${i}`, key: ackKey(`job${i}`, 'r'), at: '2026-01-01T00:00:00.000Z' });
+  }
+  fs.writeFileSync(ackPath(paths), JSON.stringify({ schema: 1, acked: overCap }, null, 2));
+  assert.equal(readAcks(paths).length, MAX_ACKS + 5, 'store starts over cap (hand-written, bypassing addAcks)');
+
+  pruneAcksForJob(paths, 'prune-me');
+  const after = readAcks(paths);
+  assert.equal(after.length, MAX_ACKS, 'rewrite re-applies the cap, not just the job filter');
+  assert.ok(!after.some((r) => r.job === 'prune-me'), "the pruned job's record is gone");
 });
