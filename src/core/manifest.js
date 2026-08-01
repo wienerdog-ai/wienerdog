@@ -245,12 +245,23 @@ function reverseManagedBlock(entry, dryRun, removed, skipped, removedSet, fd, ta
     // the file was already newline-terminated by the USER, so that newline is
     // theirs and survives even with nothing after the block.
     const weSuppliedTerminator = sepBefore === '\n\n';
-    const safe =
+
+    // (1) OWNERSHIP RE-CHECK. We wrote '\n\n' ONLY because the content did not end
+    //     with a newline. If `candidate` ends with one now, the block is NOT at its
+    //     recorded append position — the user moved it — and that newline is theirs.
+    const ownershipOk = !weSuppliedTerminator || !candidate.endsWith('\n');
+
+    // (2) ANTI-FUSION. Never remove a newline that is the boundary between two user
+    //     lines.
+    const noFusion =
       candidate === '' ||
       candidate.endsWith('\n') ||
       (weSuppliedTerminator && after === '') ||
       after.startsWith('\n');
-    if (safe) before = candidate; // else: leave the user's newline intact (no fusion)
+
+    // BOTH are required. They are independent: (1) alone fuses (Table N row 7),
+    // (2) alone eats a user blank line on relocation (row 6).
+    if (ownershipOk && noFusion) before = candidate;
   }
   const remaining = before + after;
 
@@ -849,7 +860,12 @@ const ENTRY_FIELD_TYPES = {
   file: { hash: 'string' },
   dir: {},
   symlink: {},
-  'managed-block': { createdFile: 'boolean', sepBefore: 'string', sepAfter: 'string' },
+  // sepBefore/sepAfter (WP-147) are deliberately NOT type-gated here: a non-string
+  // forgery must reach reverseManagedBlock so its SEP_BEFORE_OK allowlist degrades
+  // to the legacy conservative strip and still removes the block (Table M:
+  // "additive only, no rejection"). Type-gating would reject the entry upstream,
+  // leaving the managed block installed — the disposition Table M explicitly rejects.
+  'managed-block': { createdFile: 'boolean' },
   'settings-entry': { createdFile: 'boolean', commands: 'string[]' },
   'vendored-tree': {},
   'copied-skill': { hash: 'string' },
