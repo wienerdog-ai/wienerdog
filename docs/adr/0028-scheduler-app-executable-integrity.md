@@ -1126,3 +1126,86 @@ this changes neither direction of that.
   same bound the app-side writer has, or extends the record schema with a count;
   either needs its own work package and its own review, and neither is a launch-day
   change.
+
+### 6. Codex design-review dispositions (2026-08-01, owner-accepted)
+
+This amendment and `WP-attended-alert-acknowledgement` were put through the
+adversarial design-review loop. Five findings came back; the owner accepted every
+disposition below on 2026-08-01 and **rejected none**. Sections 1–5 above are
+owner-signed and are not rewritten by this subsection — finding 1 is recorded here
+as a **correction of emphasis** to §4, and §6.1 is the authoritative reading of
+§4's capability claim wherever the two are read together.
+
+#### 6.1 Finding 1 — "adds no capability" is too categorical (ACCEPTED, corrects the emphasis of §4)
+
+**What the review found.** §4 argues that a forged acknowledgement record grants
+the `<core>/state`-writing adversary nothing, because that adversary "can already
+truncate or delete `alerts.jsonl` outright". The two are not equivalent, and the
+difference runs in the attacker's favour. A forged acknowledgement is
+**persistent** — it survives every subsequent append and lasts until the job
+succeeds, which for a pseudo-job like `--catch-up` is never; it is **selective** —
+it silences one chosen `(job, reason)` key and leaves every other alert rendering
+normally, so the channel keeps looking healthy; and it is **unauthenticated** —
+the record carries no proof that a human at a terminal produced it, while
+`alerts.jsonl` itself remains intact and unsuspicious. One-time truncation gives
+an attacker none of those three: it destroys history once, leaves a visible gap,
+and suppresses nothing that is appended afterwards. Writing that the store "adds
+no capability" therefore overstates the case as a flat claim.
+
+**The disposition, and the counter-argument that bounds it.** The finding is
+accepted as stated. What it does **not** establish is a new *reachable outcome*,
+and that is the sharper argument, which stands: the same adversary — anything able
+to write under `<core>/state` — can rewrite **`state/digest.md` itself**, the very
+artifact the alert banner is rendered into, and can do so persistently and
+selectively too. The digest notification channel was therefore **never**
+integrity-protected against this adversary, before or after this amendment. What
+the acknowledgement store changes is the **shape** of the tampering available —
+from "destroy or rewrite the rendered output" to "suppress one key at the source"
+— not the set of outcomes the adversary can reach. §4's honest-boundary framing
+stands with that qualification, and its closing sentence (*"What this amendment
+does not claim: that the notification channel is tamper-resistant against a writer
+who reaches `<core>/state`"*) was already the correct statement; §4's bullet
+overstated it in the attacker's disfavour and should be read through this
+paragraph. **The security guarantee is untouched in every reading: zero spawn,
+non-zero exit, and no weakening of any verification.**
+
+#### 6.2 Findings 2–5 — the four spec-side dispositions
+
+- **Finding 2 — the anti-minting claim was unqualified.** The spec asserted that
+  "no skill, hook, dream, or headless job can mint one"; an actor able to execute
+  arbitrary code under the user's account defeats it by driving `defaultPrompt`
+  through a pseudoterminal or by importing `addAcks` directly. **Accepted as an
+  A12-precedent residual** — identical to the already-accepted boundary of
+  `wienerdog grant` (ADR-0007) and `wienerdog memory approve` (ADR-0021), neither
+  strengthened nor weakened here. **Landed:** the WP's Security checklist bullet 4,
+  scoped to Wienerdog's contained runtimes with the A12 hand-off stated.
+- **Finding 3 — "a single byte of change" overstated the key's precision.** The
+  key is computed over the **stored** reason, which `sanitizeAlert` has already
+  capped at 2,000 characters and secret-redacted, so two raw messages differing
+  only past the cap, or only in redacted bytes, share a key. **Accepted.**
+  **Landed:** Table B's Reason sensitivity row, and the user-facing G1 bullet
+  mirrored byte-identically into `docs/GLOSSARY.md`.
+- **Finding 4 — two defects in the match contract.** (a) A record whose stored
+  `job` disagreed with its `key` suppressed another job's alert while only the
+  stored job's success could ever prune it; (b) the fail-open prose contradicted
+  the `[]` returned for a non-array input. **Accepted.** **Landed:** the match
+  predicate strengthened to require **both** `record.job === alert.job` and
+  `record.key === ackKey(job, reason)` in the WP (PR #127), with the non-array
+  return ruled an upstream programming-error guard rather than a suppression path
+  in Table B; the code follows the tables.
+- **Finding 5 — the lifecycle pairing is bounded, not absolute.** Alert-log
+  compaction can **orphan** an acknowledgement (which then pre-suppresses only an
+  exact recurrence of already-acknowledged wording), and `MAX_ACKS` eviction can
+  **resurface** an acknowledged alert. **Accepted as fail-safe residuals.**
+  **Landed:** Table A's Lifecycle row, which now carries both bounds and forbids
+  the unqualified "never outlives" phrasing.
+
+#### 6.3 Process note
+
+The review was run per `docs/runbooks/codex-review.md`. **The design-review leg
+ran late** — after the spec had reached `Ready` and been dispatched, rather than
+before, which is a deviation from the runbook's ordering and is recorded here
+rather than smoothed over; the cost was that findings 4 and 5 landed as amendments
+to a spec an implementer was already working from. Verdict: **REQUEST CHANGES**.
+All five findings were dispositioned by the owner on 2026-08-01; **none was
+rejected**.
