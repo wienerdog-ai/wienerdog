@@ -174,9 +174,9 @@ the current template.
 | Action | Path | Notes |
 |--------|------|-------|
 | modify | src/adapters/shared.js | `applyManagedBlock`: replace the lossy append with a non-lossy insert that records the exact inserted separator bytes (`sepBefore`, `sepAfter`) on the manifest entry. `createdFile` and `replace` branches keep behavior; record `sepAfter:'\n'` on the createdFile branch. |
-| modify | src/core/manifest.js | `reverseManagedBlock`: strip only the recorded (or legacy-default) separators, and only when the strip preserves a line boundary — never fuse user lines. |
-| modify | tests/unit/claude-adapter.test.js | Round-trip cases incl. the relocated-block-between-single-newline-lines case. |
-| modify | tests/unit/manifest.test.js | Direct `reverseManagedBlock` cases for recorded + legacy (no sep metadata) entries. |
+| modify | src/core/manifest.js | `reverseManagedBlock`: strip only the recorded (or legacy-default) separators, and only when the strip preserves a line boundary — never fuse user lines, **and never consume a newline the user supplied** (the `weSuppliedTerminator` gate on the at-EOF disjunct — Table N). |
+| modify | tests/unit/claude-adapter.test.js | Round-trip cases incl. the relocated-block-between-single-newline-lines case (**Table N row 4**). |
+| modify | tests/unit/manifest.test.js | Direct `reverseManagedBlock` cases for recorded + legacy (no sep metadata) entries — **Table N rows 1, 2, 4, 6** — plus **T6**: rows **3 and 5** as a matched pair (relocated-to-EOF with `sepBefore='\n'` keeps the trailing newline; with `sepBefore='\n\n'` it does not), which is the only thing that proves the gate discriminates rather than just disabling the disjunct. |
 
 ### Exact contracts
 
@@ -235,11 +235,51 @@ else if (after.startsWith('\n')) after = after.slice(1); // legacy fallback
 const sepBefore = typeof entry.sepBefore === 'string' ? entry.sepBefore : '\n';
 if (sepBefore.length > 0 && before.endsWith(sepBefore)) {
   const candidate = before.slice(0, before.length - sepBefore.length);
-  const safe = candidate === '' || candidate.endsWith('\n') || after === '' || after.startsWith('\n');
+  // The at-EOF disjunct is GATED on sepBefore === '\n\n' — i.e. on the forward
+  // step having supplied the file's terminator itself. When sepBefore is '\n'
+  // the file was already newline-terminated by the USER, so that newline is
+  // theirs and survives even with nothing after the block.
+  const weSuppliedTerminator = sepBefore === '\n\n';
+  const safe =
+    candidate === '' ||
+    candidate.endsWith('\n') ||
+    (weSuppliedTerminator && after === '') ||
+    after.startsWith('\n');
   if (safe) before = candidate; // else: leave the user's newline intact (no fusion)
 }
 const remaining = before + after;
 ```
+
+**The `weSuppliedTerminator` gate is load-bearing — do not simplify it back to a
+bare `after === ''`.** That ungated form is what an earlier revision of this spec
+specified, and it consumes the user's own trailing newline when the block has
+been relocated to end-of-file. Table N below is the canonical case set; the gate
+is the only difference between its two right-hand columns.
+
+### Table N — the `safe` predicate, every case (canonical)
+
+Executed at `e7c845e`, all six cases, three implementations side by side.
+"round-1" is the ungated `after === ''`; "gated" is the contract above.
+
+| # | Case | `sepBefore` | Want | today (shipped) | round-1 | **gated** |
+|---|------|-------------|------|-----------------|---------|-----------|
+| 1 | genuine append onto `foo\n` | `'\n'` | `"foo\n"` | `"foo\n"` | `"foo\n"` ok | `"foo\n"` **ok** |
+| 2 | genuine append onto `foo` | `'\n\n'` | `"foo"` | `"foo\n"` **lossy** | `"foo"` ok | `"foo"` **ok** |
+| 3 | **relocated to EOF, original `foo\n`** | `'\n'` | `"foo\n"` | `"foo"` | `"foo"` **XX** | `"foo\n"` **ok** |
+| 4 | relocated between two lines | `'\n'` | `"lineA\nlineB\n"` | `"lineAlineB\n"` **fusion** | ok | **ok** |
+| 5 | relocated to EOF, original `foo` | `'\n\n'` | `"foo"` | `"foo"` | ok | **ok** |
+| 6 | empty original | `'\n\n'` | `""` | `"\n"` | ok | **ok** |
+
+**Round-1 scored 5/6; the gated predicate scores 6/6.** Rows 2, 4 and 6 are the
+bugs this WP exists to fix; row 3 is the one the gate adds.
+
+**Legacy entries are unaffected in the direction that matters.** A pre-WP entry
+has no `sepBefore`, so the default `'\n'` applies and `weSuppliedTerminator` is
+`false` — the tighter branch. For a legacy genuine append the file is
+`foo\n\n<BLOCK>\n` whichever way the original ended (the old forward code
+`replace(/\n+$/, '')`-ed the tail), so `candidate` is `foo\n`, disjunct 2 fires,
+and the strip happens exactly as before. The gate can only ever *withhold* a
+strip, never authorise a new one, so it cannot introduce fusion or deletion.
 
 **Everything else in `reverseManagedBlock` is unchanged, and "unchanged" here
 means BYTE-FOR-BYTE AGAINST THE FILE — `sed -n '182,224p' src/core/manifest.js`
@@ -290,40 +330,40 @@ precision. Depends on WP-145 (manifest.js) and WP-146 (shared.js).
 - createdFile: `block\n` → both strips empty the file → `remaining.trim()===''` →
   file deleted.
 
-**Accepted known behaviour — the block at EOF with no preceding blank line.**
-When the user has relocated the block to the very end of the file with a single
-newline before it (`"foo\n" + BLOCK + "\n"`), the `safe` predicate's
-`after === ''` disjunct fires and the leading newline **is** consumed, so the
-file restores to `"foo"` rather than `"foo\n"`. **Executed at `e7c845e`, both
-predicates side by side, so the "not a regression" claim is measured rather than
-argued:**
+- **Block relocated to EOF**, original `foo\n`, `sepBefore='\n'`: `after` is `''`
+  but `weSuppliedTerminator` is `false`, so the at-EOF disjunct does **not** fire;
+  candidate `foo` fails the other three → **NOT safe → keep** `foo\n`. Result
+  `foo\n`. **Byte-perfect** (Table N row 3).
 
-```text
-EOF, one newline before   | today = "foo"          | proposed = "foo"
-genuine append (foo\n)    | today = "foo\n"        | proposed = "foo\n"
-genuine append (foo)      | today = "foo\n"        | proposed = "foo"
-relocated between lines   | today = "lineAlineB\n" | proposed = "lineA\nlineB\n"
-```
+### The EOF edge — Codex round 2 found it, and the finding is ADOPTED
 
-(Row 3 is the lossy-append fix and row 4 is the fusion fix — both are this WP's
-point. Row 1 is this edge: **identical under both**.) Three things about it, all
-deliberate:
+An earlier revision of this spec documented the at-EOF case as **accepted known
+behaviour**: with the ungated `after === ''` disjunct, a block relocated to
+end-of-file consumed the user's trailing newline (`"foo\n"` → `"foo"`). The
+argument was that today's shipped code does the same, so it is not a regression,
+and that the disjunct is load-bearing for the no-trailing-newline case. A
+wd-reviewer measured that table and approved the acceptance.
 
-1. **It is not a regression.** Today's shipped code does exactly the same — it
-   strips one leading newline unconditionally. This WP does not make it worse.
-2. **It is not fusion.** Nothing is joined; the file simply loses its trailing
-   newline, and no user line boundary is destroyed. Fusion — the defect this WP
-   exists to close — needs a user line on *both* sides.
-3. **The disjunct cannot be dropped.** `after === ''` is exactly what makes the
-   genuine-append-with-no-trailing-newline case restore byte-perfectly
-   (`current='foo'` → `sepBefore='\n\n'` → candidate `foo`, `after===''` → safe →
-   `foo`). Removing it to fix the EOF case would break a case the acceptance
-   criteria require.
+**Codex's round-2 finding rejected the acceptance, and it is right.** Its
+argument is specific and this spec had no answer to it: **this WP is the very
+change that ships `sepBefore`**, and `sepBefore` is exactly the bit that
+distinguishes *"the file was already newline-terminated by the user"* (`'\n'`)
+from *"we supplied the terminator ourselves"* (`'\n\n'`). Shipping the metadata
+that resolves the ambiguity and then declining to consult it is not an accepted
+cost; it is an unfinished fix. The old third justification —
+*"the disjunct cannot be dropped"* — was answering the wrong question: nobody
+needed it dropped, only **gated**.
 
-**So: do NOT write a test asserting `"foo\n" + BLOCK` restores to `"foo\n"`, and
-do NOT widen the predicate to make it so.** Both are out of scope. It is recorded
-here so an implementer meeting it in a round-trip test knows it is expected
-rather than a bug they introduced.
+**What changed:** the at-EOF disjunct is now `weSuppliedTerminator && after === ''`
+(Exact contracts). **Measured effect: round-1 scored 5/6 on Table N, the gated
+predicate scores 6/6**, and the case it adds is precisely the one the acceptance
+was documenting. The gate can only withhold a strip, never authorise one, so it
+introduces no fusion and no deletion risk (Table N's note).
+
+**Consequences elsewhere in this spec**, all applied: Table N is new and
+canonical; the "Why this is correct" list gains the relocated-to-EOF row; **T6**
+is a new test row; **AC7** is a new acceptance criterion; and this is no longer
+listed under "Out of scope".
 
 ## Implementation notes & constraints
 
@@ -349,6 +389,9 @@ rather than a bug they introduced.
       (the `safe` predicate), so a relocated block can never fuse user content.
 - [ ] Only the exact recorded separator bytes (or the legacy `'\n'` default,
       under the same guard) are removed; nothing before them is touched.
+- [ ] **Uninstall never consumes a newline the USER supplied.** The at-EOF
+      disjunct fires only when `sepBefore === '\n\n'`, i.e. only when the forward
+      step supplied the file's terminator itself (Table N row 3 vs row 5).
 - [ ] A re-sync does not overwrite the sep metadata captured at first insertion.
 
 ## Acceptance criteria
@@ -361,6 +404,12 @@ rather than a bug they introduced.
 - [ ] A createdFile managed block uninstalls by deleting the file.
 - [ ] A legacy `managed-block` entry (no `sepBefore`/`sepAfter`) still restores a
       genuine append and no longer fuses a relocated block.
+- [ ] **AC7 (new — Table N row 3).** A block relocated to **end of file** on an
+      originally newline-terminated file (`sepBefore === '\n'`) uninstalls to
+      `"foo\n"`, **not** `"foo"` — the user's own trailing newline survives. Its
+      companion, Table N row 5 (`sepBefore === '\n\n'`, original `foo`), still
+      restores `"foo"`, so the gate is proved to discriminate rather than to
+      simply disable the disjunct. **Both are T6.**
 - [ ] `npm test` and `npm run lint` are green (digest golden unchanged).
 
 ## Verification steps (run these; paste output in the PR)
@@ -376,6 +425,16 @@ node tests/run.js tests/unit/claude-adapter.test.js tests/unit/manifest.test.js
 # so a numbered expected-output paste would be stale by construction.
 BODY=$(sed -n '/^function reverseManagedBlock/,/^}/p' src/core/manifest.js)
 printf '%s\n' "$BODY" | grep -E "ftruncateSync|fs\.writeSync|rmSync"
+# Assert each fd-bound line is PRESENT (-F: fixed string, no regex surprises).
+# Asserting presence — not merely the absence of one bad spelling — is what
+# closes the hole a reviewer found in the earlier form: a path-based re-open
+# spelled `fs.openSync(entry.path,'w')` + `fs.writevSync(...)` contains no
+# `writeFileSync` and would have passed green.
+for L in "fs.ftruncateSync(fd, 0);" "fs.writeSync(fd, buf, 0, buf.length, 0);" \
+         "fs.rmSync(target, { force: true });"; do
+  printf '%s\n' "$BODY" | grep -qF "$L" || {
+    echo "REGRESSED: missing fd-bound line: $L"; exit 1; }
+done
 printf '%s\n' "$BODY" | grep -q "fs\.writeFileSync" && {
   echo "REGRESSED: pre-F30 path-based write restored in reverseManagedBlock"; exit 1; }
 echo "V2 ok — fd-bound write intact, no writeFileSync in the body"
@@ -431,6 +490,23 @@ untouched tree at `e7c845e`:
   that alternative is anchored on the `fs.` prefix and the offending call is
   `fs.writeFileSync`.
 
+- **Red against an evasion that carries no `writeFileSync` at all** — the round-2
+  advisory. A path-based re-open spelled `fs.openSync(entry.path, 'w')` +
+  `fs.writevSync(...)` regresses the delete-time binding just as thoroughly while
+  containing none of the strings the absence check looks for. Measured on a
+  scratch copy carrying exactly that body:
+
+  ```text
+  # round-2 V2 (absence check only)
+  V2 ok — fd-bound write intact, no writeFileSync in the body      exit=0   ← THE HOLE
+
+  # round-3 V2 (per-line `grep -qF` presence assertions)
+  REGRESSED: missing fd-bound line: fs.ftruncateSync(fd, 0);       exit=1   ← closed
+  ```
+
+  and still `exit=0` on the clean tree. **Asserting presence, not just the
+  absence of one known-bad spelling, is what makes this gate general.**
+
 **Why `grep -q … && { …; exit 1; }` is safe under `set -e`**: the left operand of
 `&&` is errexit-exempt, so a *non*-matching `grep -q` (the good case) does not
 abort the script — it simply skips the block. Measured, not assumed.
@@ -445,9 +521,10 @@ abort the script — it simply skips the block. Measured, not assumed.
   WP-144 F30's, they shipped, and V2/V3 are the guards.
 - `reverseSettingsEntry`, which took the same `(…, fd, target)` signature change
   in the same F30 pass. Untouched here.
-- **The block-at-EOF trailing-newline edge** — see the "Accepted known behaviour"
-  note under "Why this is correct". Do not add a test for it and do not widen the
-  `safe` predicate to change it.
+- ~~The block-at-EOF trailing-newline edge~~ — **no longer out of scope.** It was
+  listed here as accepted known behaviour until gate round 2; Codex's finding was
+  adopted and it is now **fixed** by the `weSuppliedTerminator` gate (Table N
+  row 3, AC7, T6). Struck rather than deleted so the reversal is visible.
 - **`ENTRY_FIELD_TYPES.symlink`** (`manifest.js:809`). This WP's own
   `managed-block` addition to that object is *optional*; the `symlink` cell
   belongs to **WP-153**, which `depends_on` this WP and lands after it. Do not
@@ -521,3 +598,33 @@ abort the script — it simply skips the block. Measured, not assumed.
 > repeats on that family, apply ADR-0031's loop circuit-breaker — extract the F30
 > fd-bound-IO contract to its canonical owner (WP-144 / ADR-0028) and reference it
 > by name from here instead of restating it.
+>
+> **2026-08-01 — gate round 2 (verdict: APPROVE, one advisory + one Codex
+> finding). Both taken.**
+>
+> - **Codex round 2 [medium] — the EOF acceptance is ADOPTED as a fix, not
+>   dispositioned.** Its argument was one this spec had no answer to: **this WP
+>   ships the `sepBefore` metadata that distinguishes the two cases**, so
+>   declining to consult it was an unfinished fix rather than an accepted cost.
+>   The round-1 justification *"the disjunct cannot be dropped"* answered the
+>   wrong question — nobody needed it dropped, only **gated**. The at-EOF disjunct
+>   is now `weSuppliedTerminator && after === ''`. **Measured: 5/6 → 6/6 on the
+>   new canonical Table N**, with the added row being exactly the one the
+>   acceptance documented. New AC7, new T6 (rows 3 **and** 5 as a matched pair, so
+>   the gate is proved to discriminate rather than to disable), and the item is
+>   struck from Out of scope. The wd-reviewer had approved the documented
+>   acceptance; approving a documented cost is not the same as preferring it to a
+>   fix that removes the cost.
+> - **(adv, taken) V2 was one-literal-wide.** It only asserted the *absence* of
+>   `fs.writeFileSync`, so a path-based re-open spelled
+>   `fs.openSync(entry.path,'w')` + `fs.writevSync(...)` regressed the delete-time
+>   binding and passed **green** — measured. V2 now also asserts the **presence**
+>   of the three fd-bound lines via per-line `grep -qF`, verified red on that
+>   evasion copy and green on the clean tree. The reviewer did not block on this;
+>   it is taken because the hole is the same class the gate exists to close.
+>
+> **Routed, NOT done on this branch:** extract the F30 fd-bound-IO contract to its
+> canonical owner (WP-144 / ADR-0028) with a **single canonical guard**, and have
+> this spec and any sibling reference it by name — the ADR-0031 circuit-breaker
+> the watch item above anticipates. Candidate slug `WP-f30-io-contract-extraction`.
+> It is a cross-spec refactor and does not belong in a round-3 fix pass.
