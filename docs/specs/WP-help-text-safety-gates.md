@@ -1,7 +1,7 @@
 ---
 id: WP-help-text-safety-gates
 title: Fix the stale `safety` line in `wienerdog help` — the gates are no longer all disabled
-status: Ready
+status: In-Review
 model: sonnet
 size: S
 depends_on: []
