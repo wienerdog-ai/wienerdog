@@ -21,7 +21,7 @@ branch: wp/153-target-aware-symlink-reverser
 > This closes the last open question in this spec — the disposition of **legacy
 > (target-less) manifest entries**. The full framing, the two rejected
 > alternatives and the accepted cost are recorded under
-> **[Legacy-entry policy — owner-ruled](#legacy-entry-policy--owner-ruled-2026-08-01)**.
+> **[Legacy-entry policy — owner-ruled](#legacy-entry-policy--owner-ruled-transcribed-2026-08-01)**.
 > **Table A row 2 is settled by it**; every other row and section was already
 > independent of it.
 >
@@ -199,7 +199,7 @@ Backfilling would need an **upsert** — the shape `recordCopiedSkill`
 that was put to the owner and declined. **`recordOnce` therefore stays exactly as
 it is at all three sites**, and "legacy" is a permanent state for any install
 that predates this WP. See
-[Legacy-entry policy](#legacy-entry-policy--owner-ruled-2026-08-01).
+[Legacy-entry policy](#legacy-entry-policy--owner-ruled-transcribed-2026-08-01).
 
 ### 4. The manifest entry schema — `src/core/manifest.js:806-817` (shipped by WP-144, Done)
 
@@ -213,7 +213,7 @@ const ENTRY_FIELD_TYPES = {
 };
 ```
 
-`validateEntry` (`manifest.js:828-849`) rejects an unknown `kind` and a
+`validateEntry` (`manifest.js:828-849` — **settled by bytes**, see below) rejects an unknown `kind` and a
 missing/empty/non-string `path`; for every **listed** field it enforces the type
 **only when the field is present** (`if (value === undefined) continue;`), and
 its doc comment states *"extra keys are ignored (forward-compat)"*. Two
@@ -224,6 +224,21 @@ consequences the implementer must not re-derive:
 - An entry carrying a non-string `target` is rejected fail-safe by `reverse()`
   **before** `reverseSymlink` runs, once the field is listed — so the reverser
   never has to defend against a non-string `target`.
+
+**`validateEntry`'s range is `:828-849`, settled with the actual bytes.** Gate
+round 1 advised `:828-849` was wrong and the closing brace was at `:850`; round 2
+repeated it. It is not. `sed -n '848,851p' src/core/manifest.js | od -c` at
+`e7c845e`:
+
+```text
+0000000       r  e  t  u  r  n     {     o  k  :     t
+0000020    r  u  e     }  ;  \n  }  \n  \n  /  *  *  \n
+```
+
+Read positionally: `:848` is the `return { ok: true };` line, **`:849` is the
+closing `}`**, `:850` is empty, `:851` opens the next JSDoc block. The range stands at
+`:828-849`. Recorded with the bytes rather than re-declined a third time, so the
+next reviewer can settle it in one command instead of re-raising it.
 
 ### 5. The entry-shape doc comment — `src/core/manifest.js:17`
 
@@ -267,7 +282,7 @@ and gate round 1 was right that it does not settle anything on its own: for a
 `shared.js:457-460`), whereas for a **symlink** the legacy entry is the
 **mainline** shape on every install created before this WP. Same mechanism, very
 different cost. The cost is what the owner ruled on — see
-[Legacy-entry policy](#legacy-entry-policy--owner-ruled-2026-08-01).
+[Legacy-entry policy](#legacy-entry-policy--owner-ruled-transcribed-2026-08-01).
 
 ### 7. The realpath-equality helper — `src/core/manifest.js:353-359`
 
@@ -323,7 +338,7 @@ ships a branch no install reaches.
 | modify | src/adapters/shared.js | **D1** — add `target` to the entry object at all three `recordOnce(manifest, { kind: 'symlink', … })` sites (`:399`, `:450`, `:456` — Current state §3), per **Table B**. Nothing else in this file changes: the WP-146 preserve arm, `dropOwnedEntry`, the `readlinkSync` comparison and every notice string stay byte-identical. **`recordOnce` itself is NOT modified and is NOT replaced by an upsert** — the owner declined a backfill (2026-08-01). |
 | modify | src/core/manifest.js | **D2** — `reverseSymlink` implements **Table A**; **D3** — `ENTRY_FIELD_TYPES.symlink` becomes `{ target: 'string' }` (`:809`); **D4** — the entry-shape doc comment at `:17` gains the optional field per **Table B**. No other function, no other kind, and **no change to `reverse()`'s symlink arm at `:718-729`** — `reverseSymlink` keeps its five-parameter signature. **D3 is THIS WP's edit, not WP-147's** — see "Sequencing" below. |
 | modify | tests/unit/manifest.test.js | **T1–T4 and T6** — the exact set in the Test index below. **T6 is a required repair, not a new feature**: `manifest.test.js:297-312`'s deferred-member guard becomes vacuous under this WP unless its entry gains a `target`. |
-| modify | tests/unit/shared-skill-links.test.js | **T5** — this is **an edit to three shipped assertions**, not a new test. `:52-55`, `:191-194` and `:337-340` each `assert.deepEqual(..., [{ kind: 'symlink', path: linkPath }])`; `deepEqual` **fails on the extra `target` key** (executed at `e7c845e`: `ERR_ASSERTION`). Extend each expected object with its branch-appropriate `target`. **The four WP-146 sync-side tests at `:345`, `:371`, `:387` and `:405` are fenced — they must pass byte-unmodified.** |
+| modify | tests/unit/shared-skill-links.test.js | **T5** — this is **an edit to three shipped assertions**, not a new test. `:52-55`, `:191-194` and `:337-340` each `assert.deepEqual(..., [{ kind: 'symlink', path: linkPath }])`; `deepEqual` **fails on the extra `target` key** (executed at `e7c845e`: `ERR_ASSERTION`). **Take the expected object for each from Table T** — including the dry-run row, whose test has no `coreSkill` in scope. **The four WP-146 sync-side tests at `:345`, `:371`, `:387` and `:405` are fenced — they must pass byte-unmodified.** |
 
 Not deliverables, deliberately: `src/cli/uninstall.js`, every other reverser,
 `docs/GLOSSARY.md`, `docs/adr/**`, `tests/golden/**`.
@@ -406,7 +421,7 @@ Conditions are evaluated **in order**; the first that holds decides. `L` is
 | # | Condition | Filesystem action | Bucket | stderr | Why this is the fail-safe answer |
 |---|-----------|-------------------|--------|--------|----------------------------------|
 | 1 | `!isSymlink(L)` | none | `skipped` | none | Unchanged shipped behavior. A real file/dir at `L`, or nothing at all, is definitionally not the link we made. |
-| 2 | `typeof T !== 'string' \|\| T === ''` — a **LEGACY** entry | none | `skipped` | `wienerdog: keeping <L> — not the Wienerdog skill link we recorded (replaced, or unverifiable)` | Ownership is **unprovable** — the entry was recorded before this WP and, per the owner ruling, nothing will ever backfill it. Preserve. **This row and its accepted cost are owner-ruled (2026-08-01), not argued from precedent** — see [Legacy-entry policy](#legacy-entry-policy--owner-ruled-2026-08-01). |
+| 2 | `typeof T !== 'string' \|\| T === ''` — a **LEGACY** entry | none | `skipped` | `wienerdog: keeping <L> — not the Wienerdog skill link we recorded (replaced, or unverifiable)` | Ownership is **unprovable** — the entry was recorded before this WP and, per the owner ruling, nothing will ever backfill it. Preserve. **This row and its accepted cost are owner-ruled (2026-08-01), not argued from precedent** — see [Legacy-entry policy](#legacy-entry-policy--owner-ruled-transcribed-2026-08-01). |
 | 3 | `sameResolvedDir(L, T) === false` **and** `readlinkSync(L) !== T` | none | `skipped` | same line as row 2 | The link at `L` points somewhere else — a user's replacement, or a stale link from another install root. Both sub-tests are fail-closed (`sameResolvedDir` catches and returns `false`; the lexical test runs inside a `try` whose `catch` yields no match), so **every** error path lands in this row, i.e. in *preserve*. |
 | 4 | otherwise | `if (!dryRun) fs.unlinkSync(L)` | `removed` **and** `removedSet.add(L)` | none | The link provably resolves to the source we recorded. This is the only row that deletes. |
 
@@ -455,9 +470,45 @@ Mirrors of this table, stated so they cannot drift:
 **`target` is never used as a path to write, delete, open, or spawn.** It is
 compared and nothing else. There is no untrusted-identifier flow to anchor.
 
+### Table T — the three shipped `deepEqual` assertions T5 must edit (canonical)
+
+**Extracted under ADR-0031's loop circuit-breaker.** Gate rounds 1 and 2 both
+landed findings on this same contract family — round 1 that AC3 was unsatisfiable
+because these assertions break, round 2 that the branch labels were wrong and one
+test lacks the variable the prose told it to use. Two rounds, one family, so the
+facts are pulled into one table instead of being patched in prose a third time.
+
+| Assertion | Owning test (`shared-skill-links.test.js`) | Producer site it exercises | Expected object after this WP | Source path, **as named in that test's scope** |
+|-----------|--------------------------------------------|----------------------------|-------------------------------|-----------------------------------------------|
+| `:52-55` | `:40` *skill symlinked into the target dir with the default seam (POSIX)* | `shared.js:456` — **create** | `[{ kind: 'symlink', path: linkPath, target: coreSkill }]` | `coreSkill` (destructured at `:42`) |
+| `:191-194` | `:180` *dry-run records a symlink entry and reports the change without writing* | `shared.js:450` — **dryRun** | `[{ kind: 'symlink', path: linkPath, target: path.join(skillsDir, 'wienerdog-setup') }]` | **none** — `:181` destructures only `{ skillsDir, targetSkillsDir }`. Build it inline from `skillsDir`, which **is** in scope. |
+| `:337-340` | `:324` *a pre-existing correct symlink is adopted into the manifest (recorded, reported unchanged)* | `shared.js:399` — **adopt** | `[{ kind: 'symlink', path: linkPath, target: coreSkill }]` | `coreSkill` (destructured at `:326`) |
+
+**Row 2 is the one that bites.** An earlier revision of this spec prescribed
+`target: coreSkill` for all three; that variable does not exist in the dry-run
+test, and **AC6's line fence forbids editing `:181` to add it**. The inline
+`path.join(skillsDir, 'wienerdog-setup')` keeps the whole edit inside `:191-194`
+and leaves AC6 intact. (`path` and `skillsDir` are both already in scope; the
+literal `'wienerdog-setup'` is the same one `:188` already uses to build
+`linkPath`.)
+
+**Branch labels were wrong in the earlier revision** — it named the adopt branch
+twice and the create branch never. The mapping above is the corrected one, read
+off the tests at `e7c845e`.
+
+#### Mirrored surfaces of Table T
+
+Every surface in this spec that restates any Table T fact, registered so a
+future correction updates the table **and** all of them in one pass:
+
+- [ ] Deliverables cell for `tests/unit/shared-skill-links.test.js`
+- [ ] The **Test index** row **T5**
+- [ ] **AC3** (which assertions may be edited)
+- [ ] **AC6** (the line fence over the same ranges)
+
 ### Mirrored Surface Checklist
 
-Tables A and B are the single place these facts are decided. Every surface in
+Tables A, B and T are the single place these facts are decided. Every surface in
 this spec that restates them is registered here, so one review finding updates
 the table **and** all its mirrors in one pass, and any new mirror found in review
 is added here on the spot.
@@ -466,20 +517,31 @@ In this spec:
 
 - [ ] Deliverables cell for `src/adapters/shared.js` (D1 — the three sites, Table B row `target`)
 - [ ] Deliverables cell for `src/core/manifest.js` (D2/D3/D4 — Table A, the schema cell, the doc comment)
-- [ ] Deliverables cell for `tests/unit/manifest.test.js` (it mirrors the **Test index** rows T1–T4)
-- [ ] Deliverables cell for `tests/unit/shared-skill-links.test.js` (T5 — Table B)
+- [ ] Deliverables cell for `tests/unit/manifest.test.js` (it mirrors the **Test index** rows T1–T4 and T6)
+- [ ] Deliverables cell for `tests/unit/shared-skill-links.test.js` (T5 — Table B **and Table T**)
 - [ ] The **Sizing** paragraph (it restates the three-site count)
 - [ ] "Exact contracts" — the JSDoc block, the `recordOnce` line, the schema cell
 - [ ] Current state §3 (the three producer sites and their branches — Table B)
 - [ ] Current state §4 (the schema's optional-field semantics — Table B)
 - [ ] Current state §5 (the doc-comment mirror — Table B)
-- [ ] Current state §6 (the legacy-preserve precedent — Table A row 2)
+- [ ] Current state §6 (the legacy-preserve resemblance — Table A row 2)
 - [ ] Current state §7 (`sameResolvedDir`'s fail-closed direction — Table A row 3)
-- [ ] The **Test index** (every row names the Table A row or Table B field it drives)
+- [ ] The **Test index** (every row names the Table A row, Table B field or Table T row it drives)
 - [ ] Security checklist bullets 1–3 (Table A rows 2, 3 and 4)
-- [ ] Acceptance criteria AC1–AC5
+- [ ] Acceptance criteria AC1–AC6
 - [ ] Verification commands V1–V5
-- [ ] Implementation notes §"Legacy entries" and §"Do not touch the sync side"
+- [ ] Implementation notes §"Legacy entries — what to build" and §"Do not touch the sync side"
+- [ ] **(+r2) BOTH copies of the owner-ruling block — the banner under the H1 and
+      the `## Legacy-entry policy — owner-ruled (transcribed, 2026-08-01)`
+      section.** They quote the same verbatim ruling and both restate **Table A
+      row 2**. **This is the exact drift shape this checklist exists to catch**:
+      two verbatim copies of an owner's words, unregistered, in a document whose
+      other mirrors are all registered. If the ruling is ever restated, corrected
+      or re-transcribed, **both** move together or neither does — and a
+      transcription that drifts from the owner's actual words is worse than a
+      stale line number.
+- [ ] **(+r2) Table T's own four mirrors** — registered under Table T itself, in
+      §"Mirrored surfaces of Table T", rather than duplicated here.
 
 Out of this spec, registered so a later Table A/B change updates them too —
 **none is a deliverable**, and none may be edited by the implementer:
@@ -492,7 +554,7 @@ Out of this spec, registered so a later Table A/B change updates them too —
 - [ ] `docs/specs/done/WP-146-settings-upsert-and-foreign-symlink-preserve.md` —
       the shipped record of the sync-side half. Never edited.
 
-## Legacy-entry policy — owner-ruled (2026-08-01)
+## Legacy-entry policy — owner-ruled (transcribed, 2026-08-01)
 
 > **OWNER-DECIDED IN SESSION — 2026-08-01 (TRANSCRIBED, NOT OWNER-TYPED).**
 > Gyula Fehér answered in conversation; this record was written by the
@@ -592,7 +654,7 @@ and each is a way the implementer could accidentally exceed the ruling:
    target-less symlink entries forever, its `uninstall` leaves **all** its
    `wienerdog-*` skill links behind (dangling, once the core is disposed), and
    nothing heals that. The owner accepted this cost explicitly; see
-   [Legacy-entry policy](#legacy-entry-policy--owner-ruled-2026-08-01).
+   [Legacy-entry policy](#legacy-entry-policy--owner-ruled-transcribed-2026-08-01).
 2. **Do not infer ownership from where the link points** (e.g. "it resolves
    inside the core, so it is ours"). That is the structural arm the owner
    declined, and it is also the ancestor-scoped test Table A rows 3–4 forbid.
@@ -628,7 +690,7 @@ WP only adds `target` to the three `recordOnce` calls in that same file.
 | T2 | `tests/unit/manifest.test.js` | **No regression.** `L` is still our own unmodified link to `T`. `reverse()` unlinks it and reports it in `removed`. Repeat with `dryRun: true`: `L` still exists, and it is still reported in `removed`. | Table A row 4 |
 | T3 | `tests/unit/manifest.test.js` | **Legacy.** The entry has no `target` at all. `reverse()` leaves `L` on disk and reports it in `skipped`, whatever `L` currently points at (assert both: pointing at `T`, and pointing elsewhere). | Table A row 2 |
 | T4 | `tests/unit/manifest.test.js` | **Dangling core.** The entry carries `target: T`, `L` is still our link with `readlink(L) === T`, but `T` has been removed from disk. `reverse()` still unlinks `L` (the lexical fallback), and reports it in `removed`. | Table A row 3, lexical fallback |
-| T5 | `tests/unit/shared-skill-links.test.js` | **An EDIT to three shipped assertions, not a new test.** `:52-55`, `:191-194`, `:337-340` each assert `deepEqual(manifest.entries.filter(…), [{ kind: 'symlink', path: linkPath }])`. `deepEqual` compares whole objects, so the added `target` key makes all three fail (executed at `e7c845e`: `ERR_ASSERTION`). Extend each expected object to `[{ kind: 'symlink', path: linkPath, target: coreSkill }]` (each test already has the source path in scope — `:50` reads it as `coreSkill`), so each branch asserts its own recorded `target`: `:52-55` the adopt-existing-link branch, `:191-194` the `dryRun` branch, `:337-340` the pre-existing-correct-symlink branch. | Table B |
+| T5 | `tests/unit/shared-skill-links.test.js` | **An EDIT to three shipped assertions, not a new test.** All three facts — which test, which producer branch, which expected object, and what the source path is called *in that test's scope* — are in **Table T**. Do not derive any of them from prose. | Table B, Table T |
 | T6 | `tests/unit/manifest.test.js` | **Vacuity repair, required.** `:297-312` (`global guard (iii): a {kind:symlink} whose path resolves to a deferred member is never unlinked`) records `{kind:'symlink', path: link}` with **no** `target`, where `link` points at `paths.manifest`. After this WP that is also a Table A row-2 legacy entry, so it would be preserved **for the wrong reason** and the deferred-member guard it exists to prove would stop being exercised — a regressed guard would stay green. Give the recorded entry `target: paths.manifest`, which makes `sameResolvedDir(L, T)` true → Table A row 4 → only the deferred-member guard stands between the entry and `fs.unlinkSync`. Assert the same outcomes as today (`:308-311`). | vacuity of the shipped guard |
 
 **Prove T1 in both directions** (`docs/runbooks/codex-review.md`): run it against
@@ -678,8 +740,7 @@ does, by design (Current state §3).
       `tests/unit/manifest.test.js` and `tests/unit/shared-skill-links.test.js`
       passes with its assertions unchanged. The **only** permitted edits to
       shipped tests are the four named in the Test index: the three
-      whole-object `deepEqual` expectations at
-      `shared-skill-links.test.js:52-55`, `:191-194`, `:337-340` (T5 — they
+      whole-object `deepEqual` expectations **listed in Table T** (T5 — they
       compare the entry object, so the new key breaks them), and the recorded
       entry in `manifest.test.js:297-312` (T6). **The four WP-146 sync-side
       tests at `shared-skill-links.test.js:345`, `:371`, `:387` and `:405` must
@@ -691,7 +752,10 @@ does, by design (Current state §3).
       `recordOnce` — the owner declined the upsert.
 - [ ] **AC5** — `npm test` and `npm run lint` are green.
 - [ ] **AC6** — `git diff -- tests/unit/shared-skill-links.test.js` touches
-      **only** lines in the three T5 ranges. Paste the diff.
+      **only** lines inside the three **Table T** assertion ranges (`:52-55`,
+      `:191-194`, `:337-340`). In particular `:181` is **not** touched — the
+      dry-run test's destructuring stays as it is, and its `target` is built
+      inline per Table T row 2. Paste the diff.
 
 ## Verification steps (run these; paste output in the PR)
 
@@ -784,7 +848,7 @@ of scope is that the owner declined one, not that `sync` already does it.
 >   `manifest.js:809` and the change is one line. Nothing here needed a decision.
 > - **(b) legacy-entry policy — closed by the OWNER, 2026-08-01.** See the
 >   transcribed ruling at the head of this spec and
->   [Legacy-entry policy](#legacy-entry-policy--owner-ruled-2026-08-01).
+>   [Legacy-entry policy](#legacy-entry-policy--owner-ruled-transcribed-2026-08-01).
 >
 > **How this went wrong first, recorded so the pattern is visible.** An earlier
 > revision on 2026-08-01 closed **(b)** by argument — citing
@@ -809,3 +873,37 @@ of scope is that the owner declined one, not that `sync` already does it.
 > `manifest.js` collision; and three presentation defects were fixed (the
 > three-arm count in Current state §6, the synthetic brace in §2, the
 > `shared.js:457-460` anchor).
+>
+> **2026-08-01 — gate round 2 corrections (verdict: REQUEST CHANGES, narrow).**
+>
+> - **(b) T5 was unimplementable as written.** It prescribed `target: coreSkill`
+>   for all three assertions, but the dry-run test destructures only
+>   `{ skillsDir, targetSkillsDir }` at `:181` — there is no `coreSkill` — and
+>   **AC6's line fence forbids editing `:181` to add one**. Fixed by building that
+>   row's target inline from `skillsDir`, which is in scope, keeping the whole
+>   edit inside `:191-194` and AC6 intact.
+> - **(b) T5's branch labels were wrong** — it named the *adopt* branch twice and
+>   the *create* branch never. Corrected mapping, read off the tests: `:52-55` ↔
+>   `shared.js:456` (create), `:191-194` ↔ `:450` (dryRun), `:337-340` ↔ `:399`
+>   (adopt).
+> - **ADR-0031 extraction, not a third prose patch.** Rounds 1 and 2 both landed
+>   findings on this same family (round 1: AC3 unsatisfiable because these
+>   assertions break; round 2: wrong labels plus a missing variable), which is the
+>   two-rounds-same-family trigger. The facts are now in **Table T** — one row per
+>   assertion carrying its owning test, producer site, expected object **and the
+>   source path's name in that test's scope** — with its four mirrors (Deliverables
+>   cell, T5 row, AC3, AC6) registered under it.
+> - **BOTH copies of the owner-ruling block are now registered** in the Mirrored
+>   Surface Checklist under Table A row 2. They were duplicated verbatim and
+>   unregistered — the exact drift shape the checklist exists to prevent, and
+>   worse than a stale line number, because what would drift is a transcription of
+>   the owner's own words.
+> - **(adv, DECLINED a second time — now settled with bytes.)** `validateEntry`'s
+>   range is `:828-849`, not `:828-850`. `sed -n '848,851p' src/core/manifest.js | od -c`
+>   at `e7c845e` shows the closing `}` on `:849` and an empty `:850`; the byte dump
+>   is pasted in Current state §4 so the point cannot be re-raised without
+>   re-running one command. Round 1 raised it, round 2 repeated it; this is the
+>   evidence that ends it.
+> - **(nit, taken)** The ruling section heading now reads
+>   *"owner-ruled (transcribed, 2026-08-01)"*, so the heading carries the
+>   qualification its first line makes. Six in-document anchors updated with it.
