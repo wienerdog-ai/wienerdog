@@ -972,3 +972,157 @@ Consequences, stated plainly:
   `git`, which it cannot do without loading pin code from the very tree it is
   verifying. The instability that scoping was meant to cure exists only on dev,
   and §1 removes it by dev not content-addressing its tree at all.
+
+## Amendment (2026-08-01) — a correct, permanent refusal may be acknowledged by the user; it may never be softened by the install
+
+Status: **ACCEPTED — OWNER-SIGNED 2026-08-01**
+
+This amendment resolves the disposition the 2026-07-25 amendment left standing as
+an accepted cost — *"catch-up remains structurally unavailable on a dev install,
+with a durable alert naming `wienerdog sync` that will not make it available"* —
+now that the cost has been observed in practice. It **reverses nothing**. §2's
+rejection of a dev catch-up branch and §3's durable rule are reaffirmed verbatim
+and are the grounds on which two candidate repairs are rejected below.
+
+### 1. What was observed
+
+On the maintainer's dev-stance install (`<core>/app/current` → the live checkout),
+the hourly catch-up entry fires, `verifyContainment` refuses because `app/current`
+legitimately resolves outside `<core>/app`, and `appendRefuseAlert` appends one
+record per hour. Measured 2026-08-01: **119** records in
+`<core>/state/alerts.jsonl`, all for the pseudo-job `--catch-up`, collapsing to
+exactly **two** distinct `(job, reason)` pairs — one legacy record from
+2026-07-25T19:12:34.322Z and **118** identical records from
+2026-07-27T13:53:42.303Z to 2026-08-01T10:00:05.159Z.
+
+The refusal is correct and is the disposition this ADR ratified. Three
+consequences of it were not anticipated:
+
+1. Nothing ever clears the record. `clearAlerts(paths, job)` runs when a job
+   **succeeds**; `--catch-up` is a pseudo-job that never reports success, so its
+   alerts are durable **forever** by construction.
+2. `formatAlerts` re-renders the newest reason into **every** session digest, so a
+   single permanent, already-understood condition presents as a fresh incident on
+   every session start.
+3. The rendered advice is the `reinstall` class from
+   `WP-refusal-remedy-discriminator` — *"Do not run `wienerdog sync` … Reinstall
+   Wienerdog from a trusted source, then investigate."* That class assignment is
+   **correct** under that WP's rule R-P (containment failed, so nothing was
+   confirmed) and must not be changed; but on this machine the condition is a
+   legitimate, owner-chosen dev link, so the correct-in-general advice is wrong in
+   this instance and is repeated indefinitely.
+
+### 2. Two candidate repairs, both rejected under §3
+
+**(a) A dev-aware refusal alert.** Rejected. On the catch-up path the live "this
+is a dev install" observation **is** the containment failure — there is no other
+signal available to that code. `<core>/app/current` is a symlink, and repointing
+one symlink is an **A7-scoped write**: on a *production* install an attacker who
+repoints it produces exactly that observation, and the banner would then tell the
+user *"this is just a dev install, nothing to see"* at the precise moment a
+repoint attack is in progress. That is the advice-downgrade shape §3 forbids,
+applied one level up from verification to the notification the user acts on.
+Binding a stance token into the catch-up registration does not help: §3's
+mint-time half already rules that binding the decision into a registration *"only
+moves the attack one attended `sync` earlier"*. `WP-refusal-remedy-discriminator`
+independently forbids the same move in its own words (*"do **not** add an
+`isDev(target)` test to `verifyCatchup` to pick a gentler tail … it would carve
+the first real exception into R-P"*). Rejected.
+
+**(b) Stop registering `ai.wienerdog.catchup` on a dev-stance install.** Rejected,
+though not on §3 grounds alone. It is *narrowly* rule-compatible: it selects
+between an **enforced** catch-up and **no** catch-up, never between enforced and
+**reduced** verification, so no execution path with weaker checking is created.
+It is rejected on three other grounds:
+
+1. **It does not solve the observed problem.** The 119 records are already
+   durable and nothing clears them (§1.1), so the digest banner would persist
+   unchanged after the registration disappeared.
+2. **It puts an availability guarantee behind a forgeable oracle.** The mint-time
+   decision reads containment at attended `sync`; a pre-`sync` repoint on a
+   production install would silently leave catch-up unregistered — the missed-job
+   safety net disabled with **no refusal ever firing**, i.e. an availability loss
+   that produces no signal at all. A refusal that fires and is loud is strictly
+   preferable to a capability that quietly never exists.
+3. **It edits the wrong contract at the wrong time.** The four-caller
+   mint/teardown ownership invariant of Amendment #6 (R6/R7/R9 —
+   `sync`/`repointSchedules`, `schedule add`, `init`, `adopt` mint;
+   `repointSchedules` alone repairs and tears down) is the most delicate
+   contract in this ADR, and this would add a conditional to it.
+
+**Catch-up therefore stays registered and stays refusing on a dev install.**
+Nothing in §2 or §4 of the 2026-07-25 amendment moves.
+
+### 3. The ratified door: an attended acknowledgement of the *rendering*
+
+The user may silence a **specific, already-seen** alert **in the session digest
+only**, by an owner-attended act. The act is a typed confirmation read from a real
+controlling terminal — the boundary `wienerdog grant` (ADR-0007) and
+`wienerdog memory approve` (ADR-0021) already use. **A typed terminal
+confirmation is not a file write, so it is not something the A7 adversary can
+perform**, which is why this door is open where (a) and (b) are shut.
+
+The scope limits are the decision, and they are exhaustive:
+
+- It changes **rendering only**. Verification, the refusal, the zero spawn, the
+  non-zero exit, the stderr line, and the durable record in `alerts.jsonl` are all
+  untouched. No verification is weakened, skipped, or made conditional.
+- It is keyed on the **exact `(job, reason)` pair**, hashed together. One changed
+  byte in the reason, or the same reason under a different job, is a different key
+  and renders normally. There is no prefix, substring, pattern or class match.
+- Only a pair **present in `alerts.jsonl` at the moment of the command**, and only
+  after it has been printed in full to the user, may be acknowledged.
+- The acknowledgement is **dropped when that job next succeeds** (`clearAlerts`
+  prunes it), so it can never outlive the alert it silenced and silently
+  pre-suppress a later, different failure that happens to reuse the wording.
+- Acknowledged alerts remain listed by `wienerdog alerts`. Nothing becomes
+  invisible; it becomes un-repeated.
+- The mechanism reads **nothing** about the install — not the stance, not
+  containment, not `.git`, not `WIENERDOG_DEV`, not the job name. §3's rule is not
+  engaged, because no path selection of any kind occurs.
+
+Delivered by **`WP-attended-alert-acknowledgement`**.
+
+### 4. Honest boundary of the acknowledgement store
+
+The store is `<core>/state/alerts-ack.json`, at the **same** A7-scoped write
+surface as `<core>/state/alerts.jsonl` itself. Stated plainly, and not claimed
+away:
+
+- An attacker who can forge an acknowledgement record can already **truncate or
+  delete `alerts.jsonl` outright**, which suppresses the same banner without
+  needing to predict a reason string. The store therefore adds **no capability**
+  to the in-scope adversary.
+- The launcher's `appendRefuseAlert` already documents itself as best-effort —
+  *"the alert is best-effort — the refusal (non-zero exit, zero spawn) stands
+  regardless"*. The **security** guarantee of a refusal has never been the alert;
+  it is the zero spawn and the non-zero exit, and both are untouched.
+- The store fails **open** on every malformed input: a missing, unreadable,
+  non-JSON, wrong-schema or wrong-shaped record suppresses nothing. A suppression
+  mechanism that failed closed would hide warnings, which is the wrong direction
+  for this file.
+
+What this amendment does **not** claim: that the notification channel is
+tamper-resistant against a writer who reaches `<core>/state`. It never was, and
+this changes neither direction of that.
+
+### 5. Consequences
+
+- **Catch-up remains structurally unavailable on a dev install**, exactly as the
+  2026-07-25 amendment ratified. What changes is only that its correct, permanent
+  refusal stops presenting as an unread incident in every session once the owner
+  has read it and said so at a terminal.
+- **No new stance-dependent code exists anywhere**, and the two candidate designs
+  that would have introduced some are recorded as rejected above rather than left
+  as open ideas to be re-proposed.
+- **A discovered, unfixed defect is recorded, not repaired here:** the launcher's
+  `appendRefuseAlert` is the only writer of `alerts.jsonl` that applies no record
+  or byte bound, so the file grows without limit on the launcher path, and the
+  app-side newest-200 compaction lets a repeating refusal crowd older alerts for
+  other jobs out of the history. The obvious repair — collapsing consecutive
+  identical records — is **rejected**, because it would make the digest report
+  *"has failed"* for a job that genuinely failed 118 consecutive times,
+  understating a real recurring failure. A correct repair gives the launcher the
+  same bound the app-side writer has, or extends the record schema with a count;
+  either needs its own work package and its own review, and neither is a launch-day
+  change.
