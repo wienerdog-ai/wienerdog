@@ -525,8 +525,11 @@ wienerdog: the jobs keep refusing and the records stay on file — run `wienerdo
 wienerdog: run `wienerdog sync` to re-render your session digest now.
 ```
 
-The count in the first line is the number of groups that were just acknowledged
-(`addAcks(...).added`).
+The count in the first line is the number of groups that were **actually stored**
+(`addAcks(...).added`), which is the printed pairs still present at write time —
+not the number printed above the prompt. See Table C's "What may be
+acknowledged" row: the two differ whenever a job succeeds while the prompt is
+pending.
 
 G1 — the glossary bullet (D8), verbatim; it is one source line:
 
@@ -576,8 +579,8 @@ bug in the PR body rather than following the mirror.
 | **Duplicate key** | a `key` already on file is **not** re-added and its existing `at` is **not** rewritten. `addAcks` counts it as not-added |
 | **Whole-file parse failure** — missing, unreadable, invalid JSON, not an object, `schema !== 1`, or `acked` not an array | `readAcks` returns `[]` ⇒ **nothing is suppressed**. This is the FAIL-OPEN direction and it is the required one: a corrupt store must never hide a warning |
 | **Per-record validation** | a record counts only when `typeof job === 'string'` **and** `/^[0-9a-f]{64}$/.test(key)` **and** `typeof at === 'string'`. Any other record is ignored on read, is not repaired, and is not written back. **The `key` regex is load-bearing beyond validation:** Table B's Match predicate encodes the lookup as `job + "\n" + key`, which is injective only while `key` is fixed-length and newline-free. **Do not relax this pattern without re-deciding that encoding first** |
-| **Lifecycle** | `clearAlerts(paths, job)` calls `pruneAcksForJob(paths, job)` **first**, so on the normal path an acknowledgement does not outlive the alert it silenced. When no records remain the file is removed (`fs.rmSync(file, {force:true})`). **The pairing is bounded, not absolute — two cases break it and neither is repaired here.** (1) **Orphaned acknowledgement:** `appendAlert`'s compaction drops the oldest records once `MAX_ALERTS`/`MAX_FILE_BYTES` is exceeded, with no job having succeeded, so an acknowledgement can survive the record it silenced. Its residual effect is narrow — it pre-suppresses only an **exact** recurrence of wording the user has already read and acknowledged, and any other wording renders. (2) **Evicted acknowledgement:** `MAX_ACKS` eviction can drop an acknowledgement while its alert is still on file, so a silenced alert **resurfaces** in the digest. Both fail in the safe direction — (2) loudly — and coupling the two stores to close them would buy less than it costs. Do **not** write "never outlives" as an unqualified claim anywhere |
-| **Robustness** | `readAcks` and `pruneAcksForJob` never throw. `addAcks` may throw only what `writeFilePrivate` throws (a symlinked or unwritable destination) — that surfaces at an attended terminal, which is the right place for it |
+| **Lifecycle** | `clearAlerts(paths, job)` calls `pruneAcksForJob(paths, job)` **first**, so on the normal path an acknowledgement does not outlive the alert it silenced. When no records remain the file is removed (`fs.rmSync(file, {force:true})`). **The pairing is bounded, not absolute — two cases break it and neither is repaired here.** (1) **Orphaned acknowledgement:** `appendAlert`'s compaction drops the oldest records once `MAX_ALERTS`/`MAX_FILE_BYTES` is exceeded, with no job having succeeded, so an acknowledgement can survive the record it silenced. Its residual effect is narrow — it pre-suppresses only an **exact** recurrence of wording the user has already read and acknowledged, and any other wording renders. (2) **Evicted acknowledgement:** `MAX_ACKS` eviction can drop an acknowledgement while its alert is still on file, so a silenced alert **resurfaces** in the digest. (3) **Failed prune:** `pruneAcksForJob` is **best-effort and swallows its write failures** (Robustness row), so a prune that fails leaves an acknowledgement alive past the success that should have removed it. Two bounds make that acceptable and both must be stated together: `clearAlerts` re-runs the prune on **every subsequent success of that job**, so a *transient* failure self-heals at the next success with no user action; and a *persistent* write failure to `state/` — a symlinked, unwritable or hostile store — is the **already-accepted A7/A12 boundary**, the same surface on which an adversary could forge the store outright, so it grants nothing new. All three fail in the safe direction — (2) loudly — and coupling the two stores to close them would buy less than it costs. Do **not** write "never outlives" as an unqualified claim anywhere |
+| **Robustness** | `readAcks` and `pruneAcksForJob` never throw. `pruneAcksForJob` achieves that by **swallowing** its write failures, which is the right trade — it runs on the success path of an unrelated job and must never turn that job's success into a failure — but it means a prune can silently not happen; the Lifecycle row's case (3) records what bounds that. `addAcks` may throw only what `writeFilePrivate` throws (a symlinked or unwritable destination) — that surfaces at an attended terminal, which is the right place for it |
 | **Mode coverage** | `'alerts-ack.json'` is a member of `A5_PRIVATE_FILE_BASENAMES`, so `wienerdog doctor` / `sync` report and repair a loosened mode on it exactly as they do for `alerts.jsonl` |
 | **Uninstall** | no manifest entry — like `alerts.jsonl`, it is runtime state created under `state/` and removed with the core. Do not add a manifest entry |
 
@@ -598,13 +601,13 @@ bug in the PR body rather than following the mirror.
 
 | Fact | Value |
 |------|-------|
-| **Command** | `wienerdog alerts ack`. There is no other way to create an acknowledgement |
+| **Command** | `wienerdog alerts ack`. **"No other way" is scoped exactly as Security checklist bullet 4 is, and must never be written unqualified.** Within Wienerdog's own contained runtimes — the dream, catalog routines, hooks and skills, none of which can execute arbitrary Node — there is genuinely no other way. The documented code-level seams are the exception and they are only reachable by an actor that can already run arbitrary code as the user: `opts.promptFn` (Test seams row) substitutes the confirmation, and the exported `addAcks` writes the store with no prompt at all. That actor is the **A12** adversary (arbitrary same-user native code), out of scope here, and this is the **identical, already-accepted** boundary of `wienerdog grant` (ADR-0007) and `wienerdog memory approve` (ADR-0021) — a code-level seam is not a privilege escalation when the caller already has code execution |
 | **Terminal requirement** | the confirmation is read by `defaultPrompt` imported from `src/cli/grant.js`: `process.stdin` when it is a TTY, otherwise the controlling terminal `/dev/tty`; on an unreachable terminal it prints a refusal and resolves to `''` |
 | **Environment override** | none. Do not add one, in any form |
 | **Typed word** | the exact string `ack` after `String(answer).trim()`. Any other answer (including `y`, `yes`, `ACK`, `''`) cancels and writes nothing |
 | **`--yes`** | ignored — it must never bypass the prompt, exactly as in `wienerdog grant` and `wienerdog memory approve` |
-| **What may be acknowledged** | only `(job, reason)` pairs present in `alerts.jsonl` at the moment the command runs, and only after they have been printed in full on stdout. There is no way to acknowledge a pair that has not been shown |
-| **Test seams** | `run(argv, opts)` with `opts.promptFn` and `opts.paths` — code-level only, never read from the environment (the `src/cli/memory.js:63` model) |
+| **What may be acknowledged** | the printed pairs **still present at write time** — i.e. a pair must have been printed in full on stdout *and* still be in `alerts.jsonl` when the confirmation resolves. There is no way to acknowledge a pair that has not been shown, and none to acknowledge one that stopped being live while the prompt was pending. The ack path therefore **re-reads `readAlerts(paths)` after the typed confirmation** and stores only the intersection with the printed unacknowledged groups; an empty intersection takes the `nothing new to acknowledge` path and writes nothing. This closes the ack-vs-success race: a job that succeeds — and so prunes its own acknowledgements — while the user is still typing must not have its stale pre-prompt pair stored anyway (test A16) |
+| **Test seams** | `run(argv, opts)` with `opts.promptFn` and `opts.paths` — code-level only, never read from the environment (the `src/cli/memory.js:63` model). These are the seams the **Command** row's A12 scoping refers to; that row is where their boundary is decided, and this row does not restate it |
 | **Cancel path** | prints `wienerdog: nothing was acknowledged.` and exits 0. No file is created |
 
 ### Mirrored Surface Checklist
@@ -641,7 +644,7 @@ Table C (attended act) mirrors:
 - [ ] the glossary bullet **G1** (the phrase "at a real terminal with a typed confirmation")
 - [ ] acceptance criteria AC11, AC12
 - [ ] verification command V8
-- [ ] **Security checklist bullet 4** — the only surface that states who *cannot* mint an acknowledgement. It must always carry the A12 scoping; an unqualified "no headless job can mint one" is a defect
+- [ ] **Security checklist bullet 4** — mirrors the **Command** row's exclusivity claim, which is where that claim and its A12 scoping are now decided. Both surfaces must always carry the scoping; an unqualified "no headless job can mint one" or "there is no other way" is a defect in either one
 - [ ] Current state §4 (the `defaultPrompt` description)
 
 ## Implementation notes & constraints
