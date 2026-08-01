@@ -191,6 +191,7 @@ const sepAfter = '\n';                                 // the block's own line t
 const next = `${current}${sepBefore}${block}${sepAfter}`;
 if (!dryRun) fs.writeFileSync(mdPath, next);
 recordManagedBlock(manifest, mdPath, false, sepBefore, sepAfter);
+out.changed.push(mdPath);                              // ← UNCHANGED, and easy to drop
 ```
 - createdFile branch: record `recordManagedBlock(manifest, mdPath, true, '', '\n')`
   (file is exactly `block + '\n'`; no leading separator).
@@ -205,6 +206,19 @@ Add `recordManagedBlock(manifest, path, createdFile, sepBefore, sepAfter)` in
 `managed-block` entry for `path`; create if absent; set `createdFile`; set
 `sepBefore`/`sepAfter` ONLY if the existing entry has none (or on create). Never
 duplicate the entry.
+
+**Forward-side "unchanged" regions — the same standard as the reverse side.**
+Only the three lines `const base = …` / `const next = …` / `recordOnce(…)`
+(`shared.js:172-175`) are replaced. Byte-for-byte **against the file**
+(`sed -n '133,177p' src/adapters/shared.js` at `e7c845e`):
+
+| Region | `e7c845e` anchor | Must stay |
+|--------|------------------|-----------|
+| `buildBlock` call and the read | `shared.js:134-140` | unchanged. |
+| The absent-file branch | `shared.js:142-152` | unchanged **except** its `recordOnce` becomes `recordManagedBlock(manifest, mdPath, true, '', '\n')`. The written bytes stay `` `${block}\n` `` — the digest golden depends on it. |
+| The `locateManagedBlock` call + splice-replace branch | `shared.js:154-169` | unchanged **except** its `recordOnce` becomes the upsert. The `next === current` → `out.unchanged.push` arm is untouched. |
+| **`out.changed.push(mdPath);`** | `shared.js:176` | **unchanged — and this is the one an implementer drops**, because the round-1 draft of the append-branch snippet above omitted it. `sync` reports the file as changed via this line; without it the file is silently rewritten and reported as untouched. |
+| The function close | `shared.js:177` | unchanged. |
 
 **Reverse (`reverseManagedBlock` in manifest.js):**
 ```js
@@ -228,10 +242,12 @@ const remaining = before + after;
 ```
 
 **Everything else in `reverseManagedBlock` is unchanged, and "unchanged" here
-means BYTE-FOR-BYTE against the `e7c845e` text quoted in Current state — not
-"reconstruct something equivalent".** Named explicitly, because a stale quote in
-an earlier revision of this spec would have led an implementer to rewrite one of
-them incorrectly:
+means BYTE-FOR-BYTE AGAINST THE FILE — `sed -n '182,224p' src/core/manifest.js`
+at `e7c845e` — not against this spec's excerpts, and not "reconstruct something
+equivalent".** The excerpts in Current state are dedented and carry `// ← …`
+annotations that are **not** in the file; they show shape, the file is the
+authority. Named explicitly, because a stale quote in an earlier revision of this
+spec would have led an implementer to rewrite one of these regions incorrectly:
 
 | Region | `e7c845e` anchor | Must stay |
 |--------|------------------|-----------|
@@ -273,6 +289,41 @@ precision. Depends on WP-145 (manifest.js) and WP-146 (shared.js).
   relocated block no longer fuses.
 - createdFile: `block\n` → both strips empty the file → `remaining.trim()===''` →
   file deleted.
+
+**Accepted known behaviour — the block at EOF with no preceding blank line.**
+When the user has relocated the block to the very end of the file with a single
+newline before it (`"foo\n" + BLOCK + "\n"`), the `safe` predicate's
+`after === ''` disjunct fires and the leading newline **is** consumed, so the
+file restores to `"foo"` rather than `"foo\n"`. **Executed at `e7c845e`, both
+predicates side by side, so the "not a regression" claim is measured rather than
+argued:**
+
+```text
+EOF, one newline before   | today = "foo"          | proposed = "foo"
+genuine append (foo\n)    | today = "foo\n"        | proposed = "foo\n"
+genuine append (foo)      | today = "foo\n"        | proposed = "foo"
+relocated between lines   | today = "lineAlineB\n" | proposed = "lineA\nlineB\n"
+```
+
+(Row 3 is the lossy-append fix and row 4 is the fusion fix — both are this WP's
+point. Row 1 is this edge: **identical under both**.) Three things about it, all
+deliberate:
+
+1. **It is not a regression.** Today's shipped code does exactly the same — it
+   strips one leading newline unconditionally. This WP does not make it worse.
+2. **It is not fusion.** Nothing is joined; the file simply loses its trailing
+   newline, and no user line boundary is destroyed. Fusion — the defect this WP
+   exists to close — needs a user line on *both* sides.
+3. **The disjunct cannot be dropped.** `after === ''` is exactly what makes the
+   genuine-append-with-no-trailing-newline case restore byte-perfectly
+   (`current='foo'` → `sepBefore='\n\n'` → candidate `foo`, `after===''` → safe →
+   `foo`). Removing it to fix the EOF case would break a case the acceptance
+   criteria require.
+
+**So: do NOT write a test asserting `"foo\n" + BLOCK` restores to `"foo\n"`, and
+do NOT widen the predicate to make it so.** Both are out of scope. It is recorded
+here so an implementer meeting it in a round-trip test knows it is expected
+rather than a bug they introduced.
 
 ## Implementation notes & constraints
 
@@ -319,38 +370,70 @@ precision. Depends on WP-145 (manifest.js) and WP-146 (shared.js).
 # sets the scheduler guard the whole suite depends on.
 node tests/run.js tests/unit/claude-adapter.test.js tests/unit/manifest.test.js
 
-# V2 — the F30 tail was NOT regressed (Exact contracts table). Expect the
-# fd-bound write and the `target` delete, and ZERO writeFileSync in the body.
-sed -n '/^function reverseManagedBlock/,/^}/p' src/core/manifest.js \
-  | grep -nE "ftruncateSync|writeSync|rmSync|writeFileSync"
+# V2 — the F30 tail was NOT regressed (Exact contracts table). This gate FAILS
+# LOUDLY: `grep -q` on the pre-F30 shape exits the script non-zero. Note NO `-n`
+# — the extracted body's line numbers SHIFT when this WP grows the strip region,
+# so a numbered expected-output paste would be stale by construction.
+BODY=$(sed -n '/^function reverseManagedBlock/,/^}/p' src/core/manifest.js)
+printf '%s\n' "$BODY" | grep -E "ftruncateSync|fs\.writeSync|rmSync"
+printf '%s\n' "$BODY" | grep -q "fs\.writeFileSync" && {
+  echo "REGRESSED: pre-F30 path-based write restored in reverseManagedBlock"; exit 1; }
+echo "V2 ok — fd-bound write intact, no writeFileSync in the body"
 
-# V3 — the signature still carries fd + target. Expect exactly one line.
-grep -n "^function reverseManagedBlock" src/core/manifest.js
+# V3 — the signature still carries fd + target. Also FAILS LOUDLY.
+grep -q "^function reverseManagedBlock(entry, dryRun, removed, skipped, removedSet, fd, target) {" \
+  src/core/manifest.js || {
+  echo "REGRESSED: reverseManagedBlock signature changed (fd/target dropped)"; exit 1; }
+echo "V3 ok — signature intact"
 
 # V4 — full gates.
 npm test
 npm run lint
 ```
 
-**Expected V2 output** (line numbers are relative to the extracted body; the
-absence of `writeFileSync` is the assertion):
+**Expected V2 output — content only, no line numbers**, because the strip region
+this WP rewrites grows from 9 to ~17 lines and every number in an extracted body
+shifts with it:
 
 ```text
-35:    if (!dryRun) fs.rmSync(target, { force: true });
-39:    fs.ftruncateSync(fd, 0);
-40:    fs.writeSync(fd, buf, 0, buf.length, 0);
+    if (!dryRun) fs.rmSync(target, { force: true });
+    fs.ftruncateSync(fd, 0);
+    fs.writeSync(fd, buf, 0, buf.length, 0);
+V2 ok — fd-bound write intact, no writeFileSync in the body
 ```
 
-**Expected V3 output:**
+**Expected V3 output:** `V3 ok — signature intact`.
 
-```text
-182:function reverseManagedBlock(entry, dryRun, removed, skipped, removedSet, fd, target) {
-```
+**Both were proved in BOTH directions** (`docs/runbooks/codex-review.md`) on the
+untouched tree at `e7c845e`:
 
-(V2 and V3 were run on the untouched tree at `e7c845e` and produced exactly the
-above — so they are *green before* the work. That is deliberate: they are
-**regression guards**, not progress gates. The progress gates are V1's new
-round-trip cases and the acceptance criteria.)
+- **Green as-is** — they are *regression guards*, not progress gates, so passing
+  before the work is correct. The progress gates are V1's new round-trip cases.
+- **Red when regressed** — gate round 1's reviewer injected the exact pre-F30
+  body (`else if (!dryRun) fs.writeFileSync(entry.path, remaining);`) and the
+  earlier form of V2 **still exited 0**, because it only *printed* matches and
+  never tested for the bad one. The `grep -q … && { …; exit 1; }` shape above is
+  the fix, and it was re-proved on a scratch copy of `manifest.js` carrying that
+  same injection **plus** the signature reverted to five parameters:
+
+  ```text
+  --- V2 ---
+      if (!dryRun) fs.rmSync(entry.path, { force: true });
+  REGRESSED: pre-F30 path-based write restored in reverseManagedBlock
+  exit=1
+
+  --- V3 (run standalone against the same copy) ---
+  REGRESSED: reverseManagedBlock signature changed (fd/target dropped)
+  exit=1
+  ```
+
+  `writeFileSync` does not collide with the `fs\.writeSync` alternation, because
+  that alternative is anchored on the `fs.` prefix and the offending call is
+  `fs.writeFileSync`.
+
+**Why `grep -q … && { …; exit 1; }` is safe under `set -e`**: the left operand of
+`&&` is errexit-exempt, so a *non*-matching `grep -q` (the good case) does not
+abort the script — it simply skips the block. Measured, not assumed.
 
 ## Out of scope (do NOT do these)
 
@@ -362,6 +445,13 @@ round-trip cases and the acceptance criteria.)
   WP-144 F30's, they shipped, and V2/V3 are the guards.
 - `reverseSettingsEntry`, which took the same `(…, fd, target)` signature change
   in the same F30 pass. Untouched here.
+- **The block-at-EOF trailing-newline edge** — see the "Accepted known behaviour"
+  note under "Why this is correct". Do not add a test for it and do not widen the
+  `safe` predicate to change it.
+- **`ENTRY_FIELD_TYPES.symlink`** (`manifest.js:809`). This WP's own
+  `managed-block` addition to that object is *optional*; the `symlink` cell
+  belongs to **WP-153**, which `depends_on` this WP and lands after it. Do not
+  touch it.
 
 ## Definition of done
 
@@ -388,3 +478,46 @@ round-trip cases and the acceptance criteria.)
 > and V3. One non-code correction: the Deliverables comment listed the retired
 > `docs/specs/ROADMAP.md`. **Status stays `Ready`** — the design is unaffected;
 > only the snapshot of the code it lands on had drifted.
+>
+> **2026-08-01 — gate round 1 corrections (verdict: REQUEST CHANGES).** The
+> reviewer implemented this spec's Exact contracts verbatim and reports all five
+> acceptance criteria and the whole security checklist pass, including the
+> relocated-block no-fusion case. Five defects were found in the *spec*, not the
+> design:
+>
+> - **(a) WP-147 × WP-153 collision, no dependency edge.** Both were `Ready` on
+>   this branch and both edit `src/core/manifest.js` — this WP's optional
+>   `ENTRY_FIELD_TYPES` addition against WP-153's required `symlink` cell, and
+>   WP-153's `:718-729` anchors sit directly above the `:730-770` caller block
+>   this spec pins. Resolved by **`WP-153 depends_on WP-147`**: this WP lands
+>   first (it is the more delicate F30 region and its anchors are the costlier
+>   ones to re-derive), the `symlink` cell is WP-153's edit alone, and WP-153
+>   carries the note that its `manifest.js` anchors are stated pre-WP-147.
+> - **(b) V2's pasted expected output was stale by construction.** It used
+>   `grep -n` over an *extracted* function body, and this WP grows the strip
+>   region 9 → ~17 lines, shifting those numbers. `-n` dropped; the paste is
+>   content-only.
+> - **(b) V2 could not fail.** The reviewer injected the exact pre-F30
+>   regression and V2 still exited 0 — it printed matches without testing for the
+>   bad one. Both V2 and V3 now carry `grep -q … && { …; exit 1; }` failure
+>   modes, **re-proved in both directions** on a scratch copy carrying the
+>   injection (output pasted under Verification steps).
+> - **(b) The "BYTE-FOR-BYTE" standard pointed at this spec's own quotes**, which
+>   are dedented and annotated. Retargeted at the file
+>   (`sed -n '182,224p' src/core/manifest.js`), with the excerpts labelled.
+> - **(b) One unspecified edge**: a block relocated to EOF loses the file's
+>   trailing newline (`"foo\n"` → `"foo"`). Now recorded as accepted known
+>   behaviour — **identical under today's code and the proposed predicate**
+>   (executed, four cases side by side), not fusion, and the `after === ''`
+>   disjunct that causes it is load-bearing for the no-trailing-newline case, so
+>   it cannot be dropped. Fenced in Out of scope so nobody writes a failing test
+>   for it.
+> - **(adv, taken)** The forward-side contract had no "unchanged" table and its
+>   snippet silently dropped `out.changed.push(mdPath);` (`shared.js:176`). Both
+>   fixed.
+>
+> **Watch item carried forward** (reviewer's note): three of the five findings
+> land on the **F30 IO contract family** in a single round. If gate round 2
+> repeats on that family, apply ADR-0031's loop circuit-breaker — extract the F30
+> fd-bound-IO contract to its canonical owner (WP-144 / ADR-0028) and reference it
+> by name from here instead of restating it.
