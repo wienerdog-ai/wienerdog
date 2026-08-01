@@ -5,6 +5,7 @@ const path = require('node:path');
 
 const { redactOnly } = require('./secret-scan');
 const { mkdirPrivate } = require('./private-fs');
+const { pruneAcksForJob } = require('./alert-ack');
 
 /** Best-effort 0600 on the alerts file (audit A5, WP-126): a first append
  *  otherwise inherits umask; win32/vanished-file is a silent no-op.
@@ -195,6 +196,7 @@ function readAlerts(paths) {
  *  temp+rename. Removes the file when no alerts remain.
  *  @param {import('./paths').WienerdogPaths} paths @param {string} job */
 function clearAlerts(paths, job) {
+  pruneAcksForJob(paths, job); // an acknowledgement never outlives the alert it silenced (Table A)
   const remaining = readAlerts(paths).filter((a) => a.job !== job);
   const file = alertsPath(paths);
   if (remaining.length === 0) {

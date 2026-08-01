@@ -1,7 +1,7 @@
 ---
 id: WP-attended-alert-acknowledgement
 title: Let the user silence an already-seen alert in the session digest, at a real terminal, without changing what any job verifies
-status: Ready
+status: In-Review
 model: sonnet
 size: M
 depends_on: []
