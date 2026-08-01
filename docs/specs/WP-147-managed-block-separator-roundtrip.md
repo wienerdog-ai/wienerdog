@@ -175,7 +175,7 @@ the current template.
 |--------|------|-------|
 | modify | src/adapters/shared.js | `applyManagedBlock`: replace the lossy append with a non-lossy insert that records the exact inserted separator bytes (`sepBefore`, `sepAfter`) on the manifest entry. `createdFile` and `replace` branches keep behavior; record `sepAfter:'\n'` on the createdFile branch. |
 | modify | src/core/manifest.js | `reverseManagedBlock`: strip only the recorded (or legacy-default) separators, and only when the strip preserves a line boundary — never fuse user lines, **and never consume a newline the user supplied** (the `weSuppliedTerminator` gate on the at-EOF disjunct — Table N). |
-| modify | tests/unit/claude-adapter.test.js | Round-trip cases incl. the relocated-block-between-single-newline-lines case (**Table N row 4**). |
+| modify | tests/unit/claude-adapter.test.js | Round-trip cases incl. the relocated-block-between-single-newline-lines case (**Table N row 4**), plus **T8**: create (absent file) → **sync again at least twice** → uninstall, asserting the file is **REMOVED**, not truncated to empty. That is the sticky-`createdFile` guard, and it is red against a plain-overwrite upsert. |
 | modify | tests/unit/manifest.test.js | Direct `reverseManagedBlock` cases for recorded + legacy (no sep metadata) entries — **all of Table N** — plus **T6**, the discrimination pair (**rows 3 and 2**, which differ only in `sepBefore`; both are required, see Table N's T6 note), and **T7**, the forged-metadata rows from **Table M**. |
 
 ### Exact contracts
@@ -195,17 +195,48 @@ out.changed.push(mdPath);                              // ← UNCHANGED, and eas
 ```
 - createdFile branch: record `recordManagedBlock(manifest, mdPath, true, '', '\n')`
   (file is exactly `block + '\n'`; no leading separator).
-- replace branch (sentinels already present): unchanged splice; keep calling
-  `recordOnce`/upsert so it does NOT overwrite the sep metadata recorded at first
-  insertion (a re-sync must not clobber the original separators). Simplest:
-  `recordManagedBlock` UPSERTS but only sets `sepBefore`/`sepAfter` when absent
-  (first insertion wins); it always keeps `createdFile`.
+- replace branch (sentinels already present): unchanged splice; call
+  `recordManagedBlock(manifest, mdPath, false, sepBefore, sepAfter)` with the
+  separators it would have used. **The helper's own rules protect both fields** —
+  `createdFile` is sticky-true so this branch's `false` cannot clobber a real
+  create, and the separators are first-insertion-wins so this branch's values are
+  ignored when an entry already exists. See the helper contract below.
 
 Add `recordManagedBlock(manifest, path, createdFile, sepBefore, sepAfter)` in
-`shared.js` (mirror `recordCopiedSkill`'s upsert style): find existing
-`managed-block` entry for `path`; create if absent; set `createdFile`; set
-`sepBefore`/`sepAfter` ONLY if the existing entry has none (or on create). Never
-duplicate the entry.
+`shared.js`. **Mirror `recordSettingsEntry` (`shared.js:90-98`), not
+`recordCopiedSkill`** — it is the in-tree helper that already solves this exact
+problem, sticky field included:
+
+```js
+function recordManagedBlock(manifest, mdPath, createdFile, sepBefore, sepAfter) {
+  if (!manifest) return;
+  if (!Array.isArray(manifest.entries)) manifest.entries = [];
+  const existing = manifest.entries.find((e) => e.kind === 'managed-block' && e.path === mdPath);
+  const entry = existing || { kind: 'managed-block', path: mdPath };
+  // STICKY-TRUE (shared.js:95's rule): once we created the file, a later re-sync
+  // that finds it present must NOT flip that truth back to false.
+  entry.createdFile = existing ? (existing.createdFile === true ? true : createdFile) : createdFile;
+  // FIRST-INSERTION-WINS: the separators we actually inserted, never overwritten.
+  if (typeof entry.sepBefore !== 'string') entry.sepBefore = sepBefore;
+  if (typeof entry.sepAfter !== 'string') entry.sepAfter = sepAfter;
+  if (!existing) manifest.entries.push(entry);
+}
+```
+
+**The two fields follow DIFFERENT rules, and conflating them is the bug gate
+round 4 found.** An earlier revision of this cell said both *"set `createdFile`"*
+and *"always keeps `createdFile`"* — contradictory, and a straightforward upsert
+resolves the contradiction the wrong way:
+
+| Field | Rule | Why |
+|-------|------|-----|
+| `createdFile` | **sticky-true** — `existing.createdFile === true \|\| createdFile` | The **replace** branch calls with `false` on every re-sync. A plain overwrite flips `true → false` on the first re-sync after a create, and uninstall then **truncates the file instead of deleting it** — leaving an empty `CLAUDE.md` we created. Exactly the defect `shared.js:83-87` documents for `settings-entry`. |
+| `sepBefore` / `sepAfter` | **first-insertion-wins** — set only when absent | They describe the bytes inserted **at first insertion**; a re-sync's splice inserts no separators, so overwriting them would record separators that were never written. |
+
+**Sticky-true is safe here for the same reason it is safe there:** the reverser
+deletes the file only when it is **also** empty after the strip
+(`remaining.trim() === ''`, `manifest.js:215`), so a stale `createdFile: true`
+can never delete a file that still holds user text.
 
 **Forward-side "unchanged" regions — the same standard as the reverse side.**
 Only the three lines `const base = …` / `const next = …` / `recordOnce(…)`
@@ -321,6 +352,19 @@ tightening the guard. Together they empty the file.
 there as `'string'` is harmless and still optional, but a forged value **is** a
 string and passes. The allowlist above is the only thing that closes this, and it
 lives in `reverseManagedBlock`.
+
+**Declared threat model, and the residual after bounding.** In scope and closed:
+any out-of-vocabulary value, which is every string that can reach past a newline.
+**The residual is an *in-vocabulary* forgery** — swapping `sepBefore` between
+`''`, `'\n'` and `'\n\n'`, or claiming `sepAfter: '\n'` when we wrote none. Its
+worst case is bounded by **the vocabulary's longest value: two bytes, both
+newlines**. It therefore cannot delete a character of user *text*, cannot cross a
+line boundary into a user line, and cannot reach further than the strip the
+legacy path already performs — the same one-newline-per-side envelope the `safe`
+predicate governs. Measured: with the allowlist in place, all three forged
+entries against `"lineA\n<BLOCK>\nlineB\n"` return `"lineA\nlineB\n"` — byte-identical
+to the honest result. **Not closed, deliberately:** the manifest has no integrity
+protection, which is a separate design.
 
 ### Table N — the `safe` predicate, every REACHABLE case (canonical)
 
@@ -528,6 +572,10 @@ listed under "Out of scope".
 - [ ] A block manually relocated to sit between two single-newline user lines
       uninstalls to `lineA\nlineB\n` (no fusion), NOT `lineAlineB\n`.
 - [ ] A createdFile managed block uninstalls by deleting the file.
+- [ ] **AC9 (new — sticky `createdFile`, T8).** A file Wienerdog created is still
+      **deleted** by uninstall after **two or more** intervening `sync` runs, not
+      truncated to empty. **Red-first** against a plain-overwrite upsert, where the
+      replace branch's `createdFile: false` wins on the first re-sync.
 - [ ] A legacy `managed-block` entry (no `sepBefore`/`sepAfter`) still restores a
       genuine append and no longer fuses a relocated block.
 - [ ] **AC7 (Table N, the discrimination pair).** **Row 3** — a block relocated
@@ -580,9 +628,10 @@ grep -q "^function reverseManagedBlock(entry, dryRun, removed, skipped, removedS
 echo "V3 ok — signature intact"
 
 # V4 (Table M) — the separator vocabulary is an ALLOWLIST, not a typeof check.
-# Expect the Set literal, and NO surviving `typeof entry.sepBefore === 'string'`
-# / `typeof entry.sepAfter === 'string'` form (that shape is the vulnerability).
-grep -n "SEP_BEFORE_OK" src/core/manifest.js
+# BOTH halves fail loudly: the allowlist must be PRESENT, and the vulnerable
+# `typeof entry.sepBefore === 'string'` shape must be ABSENT.
+grep -q "SEP_BEFORE_OK" src/core/manifest.js || {
+  echo "REGRESSED: separator vocabulary allowlist (SEP_BEFORE_OK) missing"; exit 1; }
 grep -q "typeof entry.sep" src/core/manifest.js && {
   echo "REGRESSED: separator metadata still accepted on a bare typeof check"; exit 1; }
 echo "V4 ok — separator vocabulary is bounded"
@@ -815,3 +864,33 @@ abort the script — it simply skips the block. Measured, not assumed.
 >   newline per side under the `safe` guard. New AC8, new T7 rows, new V4;
 >   noted explicitly that `ENTRY_FIELD_TYPES` cannot close this, because a forged
 >   value *is* a string.
+>
+> **2026-08-02 — gate round 4 (verdict: APPROVE, dispatch-ready; two reviewer
+> carries + one Codex finding). All three closed.**
+>
+> - **Codex [medium] — `createdFile` stickiness was self-contradictory.** The
+>   helper cell said both *"set `createdFile`"* and *"always keeps
+>   `createdFile`"*. A straightforward upsert resolves that the wrong way: the
+>   **replace** branch passes `false` on every re-sync, so the first re-sync after
+>   a create flips `true → false`, and uninstall then **truncates the file instead
+>   of deleting it** — leaving behind an empty `CLAUDE.md` we created. Fixed by
+>   specifying the helper against **`recordSettingsEntry` (`shared.js:90-98`)**
+>   rather than `recordCopiedSkill`: it is the in-tree helper that already solves
+>   exactly this, and `shared.js:95`'s
+>   `existing.createdFile === true ? true : createdFile` is copied verbatim, with
+>   `shared.js:83-87`'s own safety argument (sticky-true is safe because the
+>   reverser still requires `remaining.trim() === ''`). A table now states the
+>   **two fields follow different rules** — `createdFile` sticky-true,
+>   `sepBefore`/`sepAfter` first-insertion-wins — since conflating them was the
+>   defect. New **T8** (create → ≥2 syncs → uninstall asserts the file is
+>   **removed**) and **AC9**, red against a plain-overwrite upsert.
+> - **(b) V4's first grep was an unenforced progress gate** — it printed a match
+>   but never failed without one, so a missing allowlist would have passed green.
+>   Now `grep -q … || { echo "REGRESSED: …"; exit 1; }`, matching V2's standard;
+>   both halves of V4 now fail loudly.
+> - **(adv) Table M gains the in-vocabulary forgery bound.** The residual after
+>   the allowlist is swapping among `''`/`'\n'`/`'\n\n'`, whose worst case is
+>   bounded by **the vocabulary's longest value — two bytes, both newlines** — so
+>   it cannot delete user *text* or cross a line boundary, and stays inside the
+>   one-newline-per-side envelope the `safe` predicate already governs. Measured:
+>   all three forged entries return the honest result byte-identically.
