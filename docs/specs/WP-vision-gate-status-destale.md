@@ -1,7 +1,7 @@
 ---
 id: WP-vision-gate-status-destale
 title: De-stale the pre-use-security-review claims in VISION and GLOSSARY — the capability gates were opened in 0.10.0
-status: Ready
+status: In-Review
 model: sonnet
 size: S
 depends_on: []
