@@ -1,7 +1,7 @@
 ---
 id: WP-147
 title: Managed-block uninstall must remove only Wienerdog-added separators, never fuse a user's surrounding lines
-status: Ready
+status: In-Review
 model: opus
 size: M
 depends_on: [WP-145, WP-146]
