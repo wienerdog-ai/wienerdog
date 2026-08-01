@@ -110,7 +110,7 @@ on **2026-08-01**.
 | Action | Path | Notes |
 |--------|------|-------|
 | modify | docs/adr/0028-scheduler-app-executable-integrity.md | **ALREADY WRITTEN by the architect in this spec's commit — do not author it, do not revise it.** One appended amendment section, headed *"Amendment (2026-08-01) — the scheduler ENTRY's node path is an upgrade-durable alias; process.execPath stays the runtime and the authorization value"*, carrying `Status: PROPOSED — awaiting owner signature.` Listed so the boundary check permits its presence in this branch's diff, and so the Deliverables record is exhaustive. **The one remaining edit — replacing that status line with a hand-typed `OWNER-SIGNED <date>` — is the OWNER's, and no agent may make it.** |
-| modify | docs/specs/WP-scheduler-node-path-durability.md | **D2 — a two-place reword, already made by the architect.** Its Definition of done item 8 (`:1200-1203`) and the matching Mirrored Surface Checklist entry (`:538`) each offered a second way to satisfy this gate: *"or that line carries an owner-written annotation"* on `docs/adr/0028-…:83`. That branch **conflicts with this spec's own append-only rule** and with ADR-0028's stated convention, so it is withdrawn in both places. **Nothing else in that spec changes** — no table, no acceptance criterion, no status. |
+| modify | docs/specs/WP-scheduler-node-path-durability.md | **D2 — four places, all already edited by the architect.** (a) Definition of done item 8 and (b) the matching Mirrored Surface Checklist entry each offered a second way to satisfy this gate — *"or that line carries an owner-written annotation"* on `docs/adr/0028-…:83` — which **conflicts with this spec's append-only rule** and with ADR-0028's convention; withdrawn in both. (c) **DISPATCH BLOCKER sub-item 0a's claim that the sibling "merged to `main` in PR #125"** is corrected: `git show --stat fbc9d80` merged **three docs files, zero `src/`, zero `tests/`** — the spec, not the implementation — and the banner gains an explicit **DISPATCH PRECONDITION** mirroring AC5b. (d) the `depends_on` history paragraph, same correction. **Still unchanged:** every table, every acceptance criterion, and `status:` (see Decisions). |
 
 Not a deliverable, deliberately: `docs/adr/README.md`. See Implementation notes.
 
@@ -247,6 +247,12 @@ against it line for line.
 - **[3] Back-reference** — prose naming one of the four markers.
 - **[4] Placeholder** — **identified by containing the literal
   `OWNER-SIGNED <date>`**, angle brackets and all, never by line number.
+
+**The numbers on the [2] / [3] / [4] rows are a snapshot of one run — match those
+rows by CLASS AND CONTENT, not by number.** They sit inside the amendment body
+and shift on any future edit above them. Only the **[1] MARKER** rows have pinned
+numbers, because the ADR change is a pure append and an append cannot move the
+base region.
 
 **Line numbers inside the amendment BODY are structurally unstable** — this
 spec's own §5 insertion moved §6 from `:1331` to `:1342` within a single commit,
@@ -408,3 +414,32 @@ Expected V3 output, byte-exact:
 > the sibling *"merged to `main` in PR #125 (`fbc9d80`)"*. True of the spec
 > document and its lift argument 0a (which was about scope coverage), but easy to
 > misread as "the fix shipped". Re-wording it is outside this WP's Deliverables.
+>
+> **2026-08-02 — gate round 4 (verdict: APPROVE-CONFIRMED; one advisory, plus a
+> serious discovered issue the reviewer escalated). Both closed.**
+>
+> - **(adv, taken)** The worked example now says in so many words that **the
+>   numbers on the [2]/[3]/[4] rows are a snapshot of one run — match those rows by
+>   class and content, not by number.** Only the [1] MARKER rows carry pinned
+>   numbers, because a pure append cannot move the base region.
+> - **(escalated, and it was right) DoD item 0a's "and it has shipped" was
+>   FALSE.** `git show --stat fbc9d80` shows PR #125 merged exactly **three files**
+>   — `docs/adr/0037-…md`, `docs/adr/README.md`, and the sibling **spec
+>   document** — with **zero `src/` and zero `tests/`**. The
+>   registration-replacement implementation never shipped, yet the DISPATCH
+>   BLOCKER was lifted (spec → `Ready`, 2026-07-28) partly on that sub-item, while
+>   the silent-nonconvergence hazard it closes is **live in production**. D2's
+>   carve-out into `WP-scheduler-node-path-durability.md` is widened to fix it:
+>   0a keeps its **true** half (the sibling spec exists and its scope covers Table
+>   C rows 4 and 5) and loses the shipped claim; the banner names what actually
+>   merged; the `depends_on` history paragraph gets the same correction; and an
+>   explicit **DISPATCH PRECONDITION** is added, mirroring AC5b — dispatch requires
+>   the sibling to be `Done`, which as of 2026-08-02 it is not.
+>
+> **Decision recorded: `status: Ready` is NOT reverted, and the question is
+> flagged for the owner.** That flip was made in an owner-directed session, so
+> reverting it silently would be the same overstep this branch already corrected
+> once on WP-153. Instead the banner carries the precondition explicitly and says
+> no dispatch may proceed on the strength of `status: Ready` alone. **Gyula
+> decides: keep `Ready` with the precondition, or return the spec to `Draft` until
+> the sibling ships.**

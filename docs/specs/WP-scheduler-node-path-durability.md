@@ -23,11 +23,18 @@ epic: audit-a7
 > protect.
 >
 > **What lifted it (2026-07-28):**
-> - **0a** — the sibling **merged to `main` in PR #125 (`fbc9d80`)**, and its scope
->   covers **both** of this spec's Table C rows. Verified against `main`'s copy of
->   that spec, not branch history: its banner maps *"row 5 (macOS) — **both**
->   bare-`bootstrap` sites"* to its Table A rows 1 **and** 2, and *"row 4 (linux,
->   degraded reload)"* to its Table A row 3.
+> - **0a** — the sibling **spec exists** and its scope covers **both** of this
+>   spec's Table C rows. Verified against `main`'s copy of that spec, not branch
+>   history: its banner maps *"row 5 (macOS) — **both** bare-`bootstrap` sites"* to
+>   its Table A rows 1 **and** 2, and *"row 4 (linux, degraded reload)"* to its
+>   Table A row 3.
+>   **CORRECTED 2026-08-02:** this sub-item previously read *"the sibling **merged
+>   to `main` in PR #125 (`fbc9d80`)**"*, which invited — and received — the
+>   reading that the fix had shipped. **It had not.** `git show --stat fbc9d80`:
+>   that PR merged exactly **three files** — `docs/adr/0037-…md`,
+>   `docs/adr/README.md`, and the sibling **spec document** — with **zero `src/`
+>   and zero `tests/`**. What merged was the *design*, not the implementation. The
+>   scope claim above is true and stands; the shipped claim is deleted.
 > - **0b** — its id is now in this spec's `depends_on`, so the dependency is
 >   **mechanically enforced** from here on: `scripts/check-frontmatter.js` rejects
 >   an id that fails to resolve, and this one resolves against the merged spec.
@@ -40,6 +47,26 @@ epic: audit-a7
 > `status: Draft` a convention, because `check-frontmatter.js` never objects to an
 > **empty** `depends_on`. That gap closed the moment 0b was taken — which is why
 > 0b was specified as the lift's required step rather than a courtesy.
+>
+> **DISPATCH PRECONDITION — separate from the blocker above, and NOT discharged by
+> it (added 2026-08-02).** `depends_on` resolving is **not** the dependency being
+> done: `scripts/check-frontmatter.js` resolves an id to an existing spec **file**
+> and never reads that spec's `status`. **Dispatch of this WP additionally requires
+> `WP-scheduler-register-replaces-loaded-record` to be `Done` — merged and
+> verified.** As of **2026-08-02 it is `Draft`** and absent from
+> `docs/specs/done/`, i.e. **specced but unimplemented**, so the
+> silent-nonconvergence hazard Tables C/D describe (a `sync` reporting success
+> while launchd or systemd still holds the pinned path) is **live in production**
+> and this WP is **not dispatchable today**. This mirrors the completion-aware
+> clause in `WP-adr-0028-entry-node-path-amendment` (AC5b): the ADR signature and
+> this precondition are independent gates, and neither discharges the other.
+>
+> **On `status: Ready` (flagged for the owner, not decided here).** The `Draft` →
+> `Ready` flip was made in an owner-directed session, partly on 0a's now-corrected
+> sub-item, so it is **not silently reverted**. The question — *keep `Ready` with
+> this explicit precondition, or return to `Draft` until the sibling ships?* — is
+> **Gyula's**. Until he answers, the precondition above governs and no dispatch
+> may proceed on the strength of `status: Ready` alone.
 
 ## Context (read this, nothing else)
 
@@ -612,9 +639,13 @@ list", which missed `:302`; the conclusion was right, the survey was not.)
 mechanical reason: `scripts/check-frontmatter.js` rejects an id that does not
 resolve to an existing spec, and `WP-scheduler-register-replaces-loaded-record` was
 not yet written, so the real ordering constraint lived only in the DISPATCH BLOCKER
-banner and Definition of done item 0. **That sibling merged to `main` in PR #125
-(`fbc9d80`), and its id is now recorded in this spec's `depends_on`** — so the
-ordering that was prose is now mechanically enforced by the frontmatter resolver.
+banner and Definition of done item 0. **That sibling's SPEC merged to `main` in
+PR #125 (`fbc9d80`) — the document, not the implementation (see 0a's 2026-08-02
+correction) — and its id is now recorded in this spec's `depends_on`**, so the
+*ordering* that was prose is now mechanically enforced by the frontmatter
+resolver. **What the resolver does NOT enforce is completion**: it checks that
+the id names a spec file, never that the spec is `Done`. See the DISPATCH
+PRECONDITION in the banner.
 
 ## Implementation notes & constraints
 
