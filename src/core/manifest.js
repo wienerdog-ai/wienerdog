@@ -14,7 +14,10 @@ const { WienerdogError } = require('./errors');
  * user modifications on uninstall.
  *
  * Adapters add three more kinds (WP-006), each with precise reverse semantics:
- *   {kind:'symlink', path}                          — a symlink we created
+ *   {kind:'symlink', path, target?}                 — a symlink we created;
+ *                                                     `target` is the source it
+ *                                                     must still resolve to
+ *                                                     (absent on legacy entries)
  *   {kind:'managed-block', path, createdFile:bool,
  *    sepBefore?:string, sepAfter?:string}           — a sentinel block we wrote
  *                                                     into a (maybe user-owned) file;
@@ -154,20 +157,63 @@ function isSymlink(p) {
 }
 
 /**
- * Reverse a 'symlink' entry: unlink only if it is still a symlink we created.
- * @param {ManifestEntry} entry
+ * Reverse a 'symlink' entry: unlink ONLY when the link still resolves to the
+ * source we recorded. A legacy (target-less) entry and a target mismatch are
+ * both PRESERVED and reported as skipped — never unlinked.
+ * @param {ManifestEntry} entry  {kind:'symlink', path, target?}
  * @param {boolean} dryRun
  * @param {string[]} removed @param {string[]} skipped @param {Set<string>} removedSet
+ * @param {string[]} skillsRoots the harness skills roots (row 4 OWNED gate)
  */
-function reverseSymlink(entry, dryRun, removed, skipped, removedSet) {
-  if (!isSymlink(entry.path)) {
-    // User replaced it with a real file/dir, or it is already gone.
-    skipped.push(entry.path);
+function reverseSymlink(entry, dryRun, removed, skipped, removedSet, skillsRoots) {
+  const L = entry.path;
+  const T = entry.target;
+  // Row 1: not a symlink (real file/dir, or already gone) — never ours to delete.
+  if (!isSymlink(L)) {
+    skipped.push(L);
     return;
   }
-  if (!dryRun) fs.unlinkSync(entry.path);
-  removedSet.add(entry.path);
-  removed.push(entry.path);
+  // Row 2: LEGACY (target-less) entry — ownership is unprovable, preserve
+  // unconditionally (owner ruling 2026-08-01). No backfill exists or ever will.
+  if (typeof T !== 'string' || T === '') {
+    process.stderr.write(
+      `wienerdog: keeping ${L} — not the Wienerdog skill link we recorded (replaced, or unverifiable)\n`
+    );
+    skipped.push(L);
+    return;
+  }
+  // Row 3: the link no longer resolves to the source we recorded. Realpath first
+  // (semantic, follows the link); lexical fallback for the one reachable case
+  // where the core was deleted by hand so realpath(T) throws. Both fail-closed.
+  let lexicalMatch = false;
+  try {
+    lexicalMatch = fs.readlinkSync(L) === T;
+  } catch {
+    lexicalMatch = false;
+  }
+  if (!sameResolvedDir(L, T) && !lexicalMatch) {
+    process.stderr.write(
+      `wienerdog: keeping ${L} — not the Wienerdog skill link we recorded (replaced, or unverifiable)\n`
+    );
+    skipped.push(L);
+    return;
+  }
+  // Row 4: a target match is NOT delete authority — the manifest is untrusted, so
+  // an attacker can forge a (path, target) pair. Require the STRUCTURAL ownership
+  // proof reverseCopiedSkill uses: wienerdog-* basename AND parent realpath-equal
+  // to a harness skills root.
+  const parentIsRoot = skillsRoots.some((root) => sameResolvedDir(path.dirname(L), root));
+  if (!path.basename(L).startsWith('wienerdog-') || !parentIsRoot) {
+    process.stderr.write(
+      `wienerdog: keeping ${L} — not the Wienerdog skill link we recorded (replaced, or unverifiable)\n`
+    );
+    skipped.push(L);
+    return;
+  }
+  // Row 5: OWNED, in-namespace, and provably resolves to our recorded source.
+  if (!dryRun) fs.unlinkSync(L);
+  removedSet.add(L);
+  removed.push(L);
 }
 
 /**
@@ -779,7 +825,7 @@ function reverse(paths, manifest, { dryRun = false } = {}) {
           skipped.push(entry.path);
           continue;
         }
-        reverseSymlink(entry, dryRun, removed, skipped, removedSet);
+        reverseSymlink(entry, dryRun, removed, skipped, removedSet, skillsRoots);
       } else if (entry.kind === 'managed-block' || entry.kind === 'settings-entry') {
         // F30: canonicalize the PARENT, then open the final component with
         // O_NOFOLLOW so a symlink at the recorded path (a swap-to-symlink)
@@ -859,7 +905,7 @@ function reverse(paths, manifest, { dryRun = false } = {}) {
 const ENTRY_FIELD_TYPES = {
   file: { hash: 'string' },
   dir: {},
-  symlink: {},
+  symlink: { target: 'string' },
   // sepBefore/sepAfter (WP-147) are deliberately NOT type-gated here: a non-string
   // forgery must reach reverseManagedBlock so its SEP_BEFORE_OK allowlist degrades
   // to the legacy conservative strip and still removes the block (Table M:
@@ -1013,4 +1059,4 @@ function disposeCoreMechanics(paths, { dryRun = false, vaultPath = null } = {}) 
   return { removed, skippedForVault };
 }
 
-module.exports = { load, record, save, reverse, disposeCoreMechanics, reverseSchedulerEntry, reverseVendoredTree, reverseCopiedSkill, hashDir, sha256File, validateEntry, withinAllowedRoot, withinSchedulerRoot };
+module.exports = { load, record, save, reverse, disposeCoreMechanics, reverseSchedulerEntry, reverseVendoredTree, reverseCopiedSkill, reverseSymlink, hashDir, sha256File, validateEntry, withinAllowedRoot, withinSchedulerRoot };
