@@ -53,11 +53,31 @@ The rule below is **not** a universal statement about every key in the manifest.
 An earlier draft quantified over "every manifest field" and was falsified in
 review by `target`; the scope is therefore stated first and precisely.
 
-**The governed unit is an evidence-field GROUP, not a single key.** Fields that
-are written and read together — `{sepBefore, sepAfter}`, `{origin, dev, ino}` —
-are introduced by one change and decided by one predicate, so quantifying over
-them one at a time is meaningless. The group is governed as a unit and the rule
-quantifies over its **complete joint value space**.
+**The governed unit is an evidence-field GROUP, and group membership is
+OBJECTIVE, not the author's to choose.** Keys belong to one group only when all
+three hold:
+
+1. **introduced by one change** — the same WP/commit adds them;
+2. **written by one producer decision** — every site that writes one writes them
+   all, under one rule;
+3. **read by one predicate** — one arm of the reverser decides on them jointly.
+
+**Why the boundary cannot be loose.** R bites only when *every* key in a group is
+absent. Bundling keys that are written or evaluated independently therefore
+*weakens* R — a wide group makes R apply in fewer states, and legacy artifacts
+can be stranded without anyone naming the cost. **Bundling is a way to evade R,
+so the test is mechanical.**
+
+**Applied, this splits a group an earlier draft got wrong.** `{origin, dev, ino}`
+fails tests 2 and 3: `origin` is written at **all three** producer sites and read
+by **row 4a**; `dev`/`ino` are written **only at the create site** and read by
+**row 4b**. They are **two groups**: `{origin}` and `{dev, ino}`. Conversely
+`{sepBefore, sepAfter}` passes all three — one `if (inserted)` block, one
+vocabulary predicate that validates and rejects them jointly — and
+`{anchorBefore}` is a singleton separated from them by test 1 (WP-147 introduced
+the separators; this WP introduces the anchor).
+
+The rule quantifies over each group's **complete joint value space**.
 
 **Governed: an evidence-field group added to a PRE-EXISTING entry kind.** Two
 conditions, both required: the keys must carry *evidence* (their job is to let
@@ -71,7 +91,26 @@ commit that introduced it:
 | `{target}` | `symlink` | WP-153, merged `78506dc` (PR #137) | `reverseSymlink` unlinked **any** symlink at a recorded path, with no ownership test |
 | `{sepBefore, sepAfter}` | `managed-block` | WP-147, `ddd457f` (PR #134) | `reverseManagedBlock` stripped a fixed one newline on each side |
 | `{anchorBefore}` *(proposed)* | `managed-block` | `WP-managed-block-insertion-anchor` | the reverser at `9188a1c` |
-| `{origin, dev, ino}` *(proposed)* | `symlink` | `WP-symlink-authorship-identity` | the reverser at `9188a1c` |
+| `{origin}` *(proposed)* | `symlink` | `WP-symlink-authorship-identity` | the reverser at `9188a1c` |
+| `{dev, ino}` *(proposed)* | `symlink` | `WP-symlink-authorship-identity` | the reverser at `9188a1c` |
+
+**Splitting a group EXPOSES R departures a wide group hides, and that is the
+point.** With `{origin, dev, ino}` as one unit, R applied only when all three
+were absent — the legacy shape, where the reverser does reproduce the baseline —
+so R held trivially and said nothing. Split, R bites in two more places, and
+`WP-symlink-authorship-identity`'s Table S already measures every one:
+
+| Group | R applies when | Departures (preserved where the baseline removes) | Already-ruled ledger row |
+|---|---|---|---|
+| `{origin}` | `origin` absent | `both-wrong` | *a schema-valid wrong identity pair* |
+| `{origin}` | `origin` absent | `dev-only`, `ino-only` | *the partial-pair leftover* |
+| `{dev, ino}` | both absent | `origin: 'adopted'` | *4a, the adopt-leftover* |
+
+**All four departures map onto cost-ledger rows the owner ruled on (2026-08-02,
+disposition (i)). The split reclassifies measured cells; it introduces no cost
+and needs no new ruling.** Stated explicitly because the reverse — a silent
+reclassification that *did* move a cost — is exactly what the objective grouping
+test exists to prevent.
 
 **The baseline is never "the entry does not exist".** It is the reverser's
 behavior for that kind with the group absent but the entry present. A no-entry
@@ -121,8 +160,10 @@ the BASELINE be the reverser's behavior for `K` at the commit immediately before
   must be a **SUBSET of the mutations the baseline performs** on the same
   on-disk state. A group may make uninstall delete **less**. It may never make it
   delete **more**, or delete something the baseline would not have. *(Joint, not
-  per-key: `WP-symlink-authorship-identity`'s Table S is the worked form —
-  twenty cells covering `{origin, dev, ino}` exhaustively.)*
+  per-key. `WP-symlink-authorship-identity`'s Table S is the worked form: twenty
+  cells covering `{origin}` × `{dev, ino}` exhaustively — and because every cell
+  is `removed` at the baseline, **N holds for both groups over the whole
+  matrix**, which the split does not disturb.)*
 - **R — the reversibility floor.** When **every key in `G`** is **absent**, the reverser must
   reproduce the baseline **exactly**, not merely a subset of it. Absence is the
   permanent shape of every install written before `F` existed — nothing

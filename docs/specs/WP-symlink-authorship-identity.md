@@ -675,13 +675,22 @@ files. **Seven canonical tables** below — P, S, A2, B, N, F and U.
   entries **permanently** — through one sync and through a hundred. That is the
   owner-ruled position for `target` (2026-08-01) and it is inherited unchanged.
   "Legacy" is a permanent state.
-- **S-4. "Absent" is not one condition, and the accepted shape space is bigger
+- **S-4. The fields are TWO governed groups, and "absent" is not one condition, and the accepted shape space is bigger
   than the producer's output.** All three fields are optional and only
   type-gated, so `validateEntry` admits **twenty** distinct
   `{origin, dev, ino}` shapes while the forward step writes only **four**.
   **Table S enumerates all twenty, measured.**
 
 ### Table S — every schema-accepted `{origin, dev, ino}` shape (canonical)
+
+**The twenty cells cover TWO governed groups, not one** (ADR-0038's grouping
+test, applied 2026-08-03): `{origin}` is written at all three producer sites
+and read by row 4a; `{dev, ino}` are written only at the create site and read
+by row 4b. Splitting them makes ADR-0038's **R** bite in four places this
+table already measures — `origin` absent with `both-wrong`/`dev-only`/`ino-only`,
+and `origin: 'adopted'` with no identity. **All four are already priced in the
+owner ledger** (the wrong-pair row, the partial-pair row, and 4a), so the split
+reclassifies measured cells and moves no cost.
 
 **This table exists because a six-row summary was not the shape space.** Codex
 round 3 finding 2: all three fields are optional, `origin` is type- but not
@@ -1096,14 +1105,18 @@ const s = fs.readFileSync(file, 'utf8');
 const defs = [...s.matchAll(new RegExp(`\\nfunction ${fn}\\(`, 'g'))];
 if (defs.length === 0) { console.error(`no top-level ${fn} in ${file}`); process.exit(1); }
 if (defs.length > 1) { console.error(`${defs.length} definitions of ${fn} — refusing`); process.exit(1); }
-const rebind = new RegExp(`(^|[^.\\w])${fn}\\s*=[^=]`, 'm');
-const body = s.slice(defs[0].index);
-if (rebind.test(s.replace(body.slice(0, body.indexOf('\n}\n') + 3), ''))) {
-  console.error(`${fn} is rebound outside its definition — refusing`); process.exit(1);
-}
 const i = defs[0].index;
 const j = s.indexOf('\n}\n', i);
 if (j < 0) { console.error(`unterminated ${fn}`); process.exit(1); }
+const rest = s.replace(s.slice(i, j + 3), '');
+for (const [re, what] of [
+  [new RegExp(`(^|[^.\\w])${fn}\\s*=[^=>]`, 'm'), 'assignment'],
+  [new RegExp(`\\{[^{}]*\\b${fn}\\b[^{}]*\\}\\s*=`, 'm'), 'object destructuring'],
+  [new RegExp(`\\[[^\\[\\]]*\\b${fn}\\b[^\\[\\]]*\\]\\s*=`, 'm'), 'array destructuring'],
+  [new RegExp(`\\b(var|let|const|function|class)\\s+${fn}\\b`, 'm'), 're-declaration'],
+]) {
+  if (re.test(rest)) { console.error(`${fn} is rebound outside its definition (${what}) — refusing`); process.exit(1); }
+}
 process.stdout.write(s.slice(i + 1, j + 3));
 EX
 
@@ -1129,18 +1142,46 @@ node /tmp/wd-fnextract.js src/core/manifest.js reverseSymlink > /tmp/wd-actual-s
 #   4a/4b do not exist yet). It goes green the moment the mandated edits land.
 diff -u /tmp/wd-expected-symlink.js /tmp/wd-actual-symlink.js && echo "V4 ok (byte-identical to the spec's expected function)"
 
-# V4 SELF-CHECK — the expected function must differ from the base function by
-#   EXACTLY the three mandated edits, so the fence cannot silently absorb a
-#   fourth change. Asserts the diff touches only those regions.
+# V4 SELF-CHECK — INVERSE TRANSFORM. Undo the three mandated edits on the spec's
+#   expected function; the result must be byte-identical to the base function.
+#   This admits NO classification: an earlier revision inspected only ADDED lines
+#   and exempted any line containing an allowed substring, and a fourth line
+#   `if (entry.origin === "created" && entry.dev === "0") { fs.unlinkSync(...); return; }`
+#   was exempted by `entry.dev` and passed (measured). Deletion-only edits were
+#   invisible to it, and tampering with the mandated text itself was exempted by
+#   its own vocabulary. Inversion catches all three.
+cat > /tmp/wd-invert.js <<'INV'
+const fs = require('node:fs');
+let f = fs.readFileSync(process.argv[2], 'utf8');
+const SIG_NEW = 'function reverseSymlink(entry, dryRun, removed, skipped, removedSet, skillsRoots, opts = {}) {\n'
+  + '  const identityOf = opts.identity || linkIdentity;   // test seam only\n';
+const SIG_OLD = 'function reverseSymlink(entry, dryRun, removed, skipped, removedSet, skillsRoots) {\n';
+const ROW5 = '  // Row 5: OWNED, in-namespace, and provably resolves to our recorded source.\n';
+const ROWS = fs.readFileSync(process.argv[3], 'utf8');
+for (const [name, present, replaced] of [['signature', SIG_NEW, SIG_OLD], ['rows 4a/4b', ROWS + ROW5, ROW5]]) {
+  if (!f.includes(present)) {
+    console.error(`INVERSION: the mandated ${name} edit is not present verbatim in the fence`);
+    process.exit(1);
+  }
+  f = f.replace(present, replaced, 1);
+}
+process.stdout.write(f);
+INV
+#   The rows-4a/4b text is taken FROM THE FENCE ITSELF — sliced between its two
+#   anchors — so the inverter carries no second transcription either.
+node -e '
+const fs=require("node:fs");
+const s=fs.readFileSync("/tmp/wd-expected-symlink.js","utf8");
+const a=s.indexOf("  // Row 4a:");
+const b=s.indexOf("  // Row 5: OWNED");
+if(a<0||b<0||a>b){console.error("fence anchors missing");process.exit(1);}
+fs.writeFileSync("/tmp/wd-rows.js", s.slice(a,b));
+'
 git show 9188a1c:src/core/manifest.js > /tmp/wd-base-manifest.js
 node /tmp/wd-fnextract.js /tmp/wd-base-manifest.js reverseSymlink > /tmp/wd-base-symlink.js
-diff /tmp/wd-base-symlink.js /tmp/wd-expected-symlink.js | grep '^>' | grep -qv \
-  -e 'opts = {}' -e 'identityOf' -e 'Row 4a' -e 'Row 4b' -e 'adopted' -e 'hasDev' -e 'hasIno' \
-  -e 'skipped.push(L)' -e 'return;' -e '^> *}' -e '^> *);' -e 'process.stderr.write' \
-  -e 'wienerdog: keeping' -e 'entry.dev' -e 'entry.ino' -e 'id === null' -e 'const id =' \
-  -e '^> *// ' \
-  && { echo "V4 SELF-CHECK: the expected function carries an unmandated change"; exit 1; } \
-  || echo "V4 self-check ok (expected = base + the three mandated edits)"
+node /tmp/wd-invert.js /tmp/wd-expected-symlink.js /tmp/wd-rows.js > /tmp/wd-inverted.js
+diff -u /tmp/wd-base-symlink.js /tmp/wd-inverted.js \
+  && echo "V4 self-check ok (fence inverts EXACTLY to the base function)"
 
 # V4 RED — MUST fail against the evasion that defeated the previous token guard: a
 #   provenance-conditioned link-text delete inserted before row 3, under no

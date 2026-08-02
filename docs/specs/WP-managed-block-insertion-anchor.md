@@ -1020,9 +1020,14 @@ if (defs.length > 1) { console.error(`${defs.length} definitions of ${fn} — re
 const i = defs[0].index;
 const j = s.indexOf('\n}\n', i);
 if (j < 0) { console.error(`unterminated ${fn}`); process.exit(1); }
-const rebind = new RegExp(`(^|[^.\\w])${fn}\\s*=[^=]`, 'm');
-if (rebind.test(s.replace(s.slice(i, j + 3), ''))) {
-  console.error(`${fn} is rebound outside its definition — refusing`); process.exit(1);
+const rest = s.replace(s.slice(i, j + 3), '');
+for (const [re, what] of [
+  [new RegExp(`(^|[^.\w])${fn}\s*=[^=>]`, 'm'), 'assignment'],
+  [new RegExp(`\{[^{}]*\b${fn}\b[^{}]*\}\s*=`, 'm'), 'object destructuring'],
+  [new RegExp(`\[[^\[\]]*\b${fn}\b[^\[\]]*\]\s*=`, 'm'), 'array destructuring'],
+  [new RegExp(`\b(var|let|const|function|class)\s+${fn}\b`, 'm'), 're-declaration'],
+]) {
+  if (re.test(rest)) { console.error(`${fn} is rebound outside its definition (${what}) — refusing`); process.exit(1); }
 }
 process.stdout.write(s.slice(i + 1, j + 3));
 EX
