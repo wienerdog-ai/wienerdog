@@ -416,17 +416,59 @@ register — and `loaded` is gated on **both**:
 At `5f0ffc0` `loaded` was `enableOk` alone and the reload was best-effort and
 ungated, which is exactly what made old Table C row 4 silent. **That is fixed.**
 
-### 9. **NEW (2026-08-02) — the one thing §8's convergence rests on that is NOT executed**
+### 9. **NEW (2026-08-02) — the premise §8's convergence rests on, and the experiment that SETTLED it**
 
 §8's convergence argument assumes launchd's `launchctl print` **echoes
 `ProgramArguments[0]` verbatim** into both the `arguments` block and the `program`
 line — i.e. that it does **not** realpath-resolve the program path at load. This
 WP registers a **symlinked** node path for the first time, so it is the first
 change that can tell the difference, and the assumption was never load-bearing
-before it.
+before it. **Table G is canonical; this section records what was run.**
 
-**What IS executed.** The sibling captured a real `launchctl print` dump on this
-same host (`docs/specs/done/WP-scheduler-register-replaces-loaded-record.md:280-293`):
+> **SETTLED 2026-08-02 — P is TRUE, by direct experiment.** Executed at the
+> **orchestrator** layer on the owner's machine (macOS 26, launchd, uid 501), not
+> by the spec-authoring pass — see "what could not be run here" below for why the
+> split matters.
+>
+> **Method.** A throwaway plist with `Label ai.wienerdog.premise-check` and
+> `ProgramArguments = ["/opt/homebrew/opt/node/bin/node", "-e", "process.exit(0)"]`.
+> **The discriminating feature is the program path**: `/opt/homebrew/opt/node` is a
+> **symlinked directory** (→ `../Cellar/node/25.9.0_2`), so the literal path
+> `/opt/homebrew/opt/node/bin/node` and its realpath
+> `/opt/homebrew/Cellar/node/25.9.0_2/bin/node` **differ**. A verbatim echo and a
+> resolving echo predict different strings; the live `dream` record could not
+> distinguish them because its `ProgramArguments[0]` is already its own realpath.
+> `plutil -lint` OK; `launchctl bootstrap gui/501 <plist>` exit 0.
+>
+> **Readback** — `launchctl print gui/501/ai.wienerdog.premise-check`:
+>
+> ```
+> path = <the scratch plist path>
+> program = /opt/homebrew/opt/node/bin/node
+> arguments = { /opt/homebrew/opt/node/bin/node, -e, process.exit(0) }
+> ```
+>
+> **Result: BOTH `program` and the `arguments` block echo the alias VERBATIM.**
+> launchd does **not** realpath-resolve the program path at load. **P is TRUE**,
+> and Table C row 5 / Table D-a hold exactly as written.
+>
+> **Teardown — zero residue.** `launchctl bootout` exit 0; post-`bootout`
+> `launchctl print` exit **113** (absent); the scratch plist deleted. **The real
+> `ai.wienerdog.dream` label was untouched throughout** — the experiment used its
+> own label and never went near it.
+
+**What could NOT be run here, and why that is still the right boundary.** A
+spec-authoring pass may read the machine but not mutate it: bootstrapping even a
+throwaway label changes the user's launchd state, and an architect does not do that
+unilaterally. That constraint is unchanged and is why this section originally
+recorded an *unverified premise* instead of guessing. It was lifted by escalating
+the experiment to the layer that could authorize it, with a scratch label and full
+teardown — **not** by relaxing the rule.
+
+**The corroborating evidence that was already executed**, and which the experiment
+promoted from suggestive to confirmed. The sibling captured a real `launchctl print`
+dump on this same host
+(`docs/specs/done/WP-scheduler-register-replaces-loaded-record.md:280-293`):
 
 ```
 gui/501/ai.wienerdog.dream = {
@@ -444,18 +486,20 @@ the loaded record *"stays correct"* and `launchctl print` *"still exits 0"*, whi
 the fire dies in `posix_spawn` — the evidence points strongly at **store-verbatim,
 resolve-at-spawn**.
 
-**What is NOT executed, and why it could not be here.** The live entry's
+**Why this dump alone was not enough** *(the reasoning that motivated the
+experiment, retained)*. The live entry's
 `ProgramArguments[0]` is already the realpath, so this dump cannot distinguish
 "echoed verbatim" from "resolved, and the two happen to be equal". Settling it
-requires either a loaded job whose program path is a symlink, or bootstrapping a
-throwaway label — a **mutation of the user's launchd state**, which is out of
-bounds for a spec-authoring pass and is not something an architect may do
-unilaterally. It is therefore recorded as an **unverified premise**, in the same
-form and for the same reason as this spec's Windows layout claim (Implementation
-notes §"Windows", WP-114 Residual 2 precedent): **specified, not observed**.
+required either a loaded job whose program path is a symlink, or bootstrapping a
+throwaway label. **The scratch-label experiment above supplied exactly that missing
+discrimination**, which is why the premise moved from *specified, not observed* to
+**observed and true** rather than staying a residual like the Windows layout claim
+(Implementation notes §"Windows", WP-114 Residual 2 precedent — **that one is still
+unverified; only this premise was settled**).
 
-**Table G is the canonical statement of the premise, its consequence if false, and
-the one command that settles it.** Definition of done item 9 is the gate.
+**Table G is canonical** for the premise, its executed result, and the retained
+history of the branch that did not occur. Definition of done item 9 is now a
+**live smoke test**, not a premise gate.
 
 ## Deliverables (permission boundary — touch ONLY these)
 
@@ -657,6 +701,13 @@ split because the two platforms behave *differently*. Do not re-fuse them.
 > verbatim in the row's own cell. Nothing about `entryNodePath` or the six swaps
 > changed; only what the OS does with the bytes afterwards.
 >
+> **Row 5 rests on Table G, and Table G is SETTLED.** Row 5's convergence requires
+> launchd to echo the symlinked `ProgramArguments[0]` verbatim into `program`
+> rather than realpath-resolving it. That premise was **executed and confirmed
+> TRUE on 2026-08-02** (Current state §9 — scratch label with a discriminating
+> literal ≠ realpath path; full teardown). **Row 5 is therefore an observed
+> outcome, not a conditional one.**
+>
 > **Row 7 is NEW.** It is the residual that survives the sibling's landing.
 
 | # | Platform + starting state | Unit/plist/XML on disk | What the OS actually holds afterwards | Converged? |
@@ -761,32 +812,37 @@ worked**: PR #140 shipped the Linux leg (`loaded = reloadOk && enableOk`, reload
 hoisted) alongside the macOS one, closing the family in one WP exactly as
 predicted. No part of it returns to this WP's scope.
 
-### Table G — the macOS readback-echo premise (canonical; **UNVERIFIED — added 2026-08-02**)
+### Table G — the macOS readback-echo premise (canonical; **EXECUTED — P is TRUE, 2026-08-02**)
 
 Table C row 5's convergence and Table D-a's whole sub-table rest on one premise
 about launchd that this WP is the **first** change able to falsify, because it is
-the first to register a **symlinked** program path. It is stated here as a
-canonical, explicitly-unverified premise rather than assumed inside prose.
-Current state §9 records the evidence for and against it.
+the first to register a **symlinked** program path. It was added on 2026-08-02 as
+an explicitly-unverified premise and **settled by direct experiment the same day**.
+Current state §9 records the run.
 
 | | |
 |---|---|
 | **Premise (P)** | `launchctl print gui/<uid>/<label>` echoes the plist's `ProgramArguments[0]` **verbatim** into both the `arguments` block and the `program` line — it does **not** realpath-resolve the program path at load. |
-| **Status** | **NOT EXECUTED.** Specified, not observed — the same standing as this spec's Windows layout claim (WP-114 Residual 2 precedent). Settling it needs a loaded job whose program path is a symlink; the authoring host has none, and bootstrapping a throwaway label is a mutation of the user's launchd state that a spec-authoring pass may not make. |
-| **Evidence FOR** | `properties = inferred program` in the executed dump (Current state §9) — launchd derived `program` from `ProgramArguments[0]`. Plus the incident signature this WP exists to fix: after the Cellar directory is deleted the record still prints clean and `launchctl print` exits 0, i.e. launchd is not re-resolving the path. |
-| **Evidence AGAINST** | none found. But the executed dump cannot *distinguish* "echoed verbatim" from "resolved, and equal by coincidence", because the live entry's `ProgramArguments[0]` is already its own realpath. |
-| **If P is TRUE** (expected) | Tables C row 5 and D-a hold exactly as written. Steady state after one `sync`: verdict `'match'`, one read-only `print`, zero mutations, forever. |
-| **If P is FALSE** | `program` reads back as the resolved Cellar path while `expect.argv[0]` is the alias ⇒ **permanent `'mismatch-fatal'`**. Every `sync` would then `bootout` + `bootstrap` (a real teardown-and-replace of a working schedule) and `verifyLoaded()` would still fail ⇒ **`loaded:false` and the notice on every run, forever**. The schedule keeps working (the re-bootstrap succeeds) and the failure is **loud, never silent** — but permanent churn plus a permanent false failure report is **not shippable**. |
-| **Consequence if P is false** | This WP is **not** obsoleted and `entryNodePath` is **not** wrong — the durable path is still the right thing to register. What would need doing is a follow-up on the **comparison** side (compare `program` after realpath, or drop `program` as redundant with `arguments[0]`), which is `darwinLoadedVerdict` — **the sibling's code, out of this WP's Deliverables**. Route it as a new WP; do **not** patch `schedule.js` beyond the six swaps. |
-| **How to settle it (one command, macOS + Homebrew, after D1/D2 are implemented)** | `wienerdog sync` then:<br>`launchctl print gui/$(id -u)/ai.wienerdog.dream \| grep -E '^[[:space:]]+program ='`<br>**P is TRUE iff** the printed path is `/opt/homebrew/opt/node/bin/node` (the alias). **P is FALSE if** it is `/opt/homebrew/Cellar/node/<version>/bin/node`. Cross-check with `wienerdog sync` a second time: under P, the second run must make **no** `launchctl` mutation and report nothing. |
+| **Status** | **EXECUTED 2026-08-02 — P is TRUE.** Observed directly on the owner's machine (macOS 26, launchd, uid 501) via an orchestrator-run scratch-label experiment; method and readback in Current state §9. *(Superseded status, retained: "**NOT EXECUTED.** Specified, not observed — the same standing as this spec's Windows layout claim … bootstrapping a throwaway label is a mutation of the user's launchd state that a spec-authoring pass may not make." That constraint was real and is why the architect did not run it; it was lifted by running the experiment at the orchestrator layer, with full teardown.)* |
+| **What makes the evidence CONCLUSIVE** | The scratch job's `ProgramArguments[0]` was `/opt/homebrew/opt/node/bin/node` — a path **through a symlinked directory** (`/opt/homebrew/opt/node` → `../Cellar/node/25.9.0_2`) whose realpath is `/opt/homebrew/Cellar/node/25.9.0_2/bin/node`. **The literal and the resolved path therefore DIFFER**, which is precisely the discriminating case the live `dream` record could not supply. A verbatim echo and a resolving echo predict *different* strings here, and only one was observed. |
+| **Result** | Both `program = /opt/homebrew/opt/node/bin/node` **and** the `arguments` block's first element echoed the **alias, verbatim**. No realpath resolution at load. |
+| **Evidence FOR (corroborating, now secondary)** | `properties = inferred program` in the live dump — launchd derived `program` from `ProgramArguments[0]`. Plus the incident signature this WP exists to fix: after the Cellar directory is deleted the record still prints clean and `launchctl print` exits 0. |
+| **Evidence AGAINST** | **None — and the gap that previously blocked a verdict is closed.** *(Retained: "the executed dump cannot distinguish 'echoed verbatim' from 'resolved, and equal by coincidence', because the live entry's `ProgramArguments[0]` is already its own realpath." The scratch-label experiment removed exactly that coincidence.)* |
+| **If P is TRUE** — **CONFIRMED** | Tables C row 5 and D-a hold **exactly as written**. Steady state after one `sync`: verdict `'match'`, one read-only `print`, zero mutations, forever. |
+| **If P is FALSE** — **DID NOT OCCUR; retained as history** | `program` would read back as the resolved Cellar path while `expect.argv[0]` is the alias ⇒ **permanent `'mismatch-fatal'`**: `bootout` + `bootstrap` on every `sync`, `verifyLoaded()` failing every time ⇒ `loaded:false` and the notice forever. Loud, never silent, schedule still working — but permanent churn plus a permanent false failure report would **not** have been shippable. |
+| **Consequence if P is false** — **MOOT; retained as history** | This WP would **not** have been obsoleted and `entryNodePath` would **not** have been wrong. The follow-up would have been on the **comparison** side (realpath `program` before comparing, or drop it as redundant with `arguments[0]`) — `darwinLoadedVerdict`, **the sibling's code, out of this WP's Deliverables** — routed as a new WP, never a widened diff here. **No such WP is needed.** |
+| **How it was settled** | Not by the originally-specified post-implementation command, which needed D1/D2 in place. A **scratch label** carrying the discriminating path settled it **before** implementation — see Current state §9. The post-`sync` command survives as a **live smoke test**, not a premise gate: Definition of done item 9. |
 
-**Definition of done item 9 is the gate.** This premise must be settled — on a real
-Homebrew macOS host, with the command above — **before this WP merges**. It is the
-one claim in this spec that a green `npm test` cannot reach: `tests/run.js` sets
-`WIENERDOG_TEST_NO_REAL_SCHEDULER=1`, and the sibling's `fakeLaunchd` loader is a
-**stateful fake that echoes back what it was handed** — so it models P as true by
-construction and can never falsify it. A fake cannot test an assumption about the
-real system it stands in for; say so in the PR rather than citing a green suite.
+**The premise gate is discharged pre-implementation.** What remains in Definition
+of done item 9 is a smoke test, not a gate on an open question.
+
+**This is still a claim a green `npm test` cannot reach, and that has not changed.**
+`tests/run.js` sets `WIENERDOG_TEST_NO_REAL_SCHEDULER=1`, and the sibling's
+`fakeLaunchd` double renders `program: argv[0] || ''` from the plist it stored at
+`bootstrap` — so it models P as true **by construction** and could never have
+falsified it. A fake cannot test an assumption about the real system it stands in
+for. **P is now known true from the real system, not from the fake** — cite
+Current state §9 in the PR, never the suite.
 
 ### Mirrored Surface Checklist
 
@@ -815,19 +871,20 @@ In this spec:
 - [ ] Current state §2 (the ENTRY/RUNTIME site classification — Table B) — **(+r5)** and its NEW hoisted-`const node` sub-table, which is the mirror of Implementation notes §D2's dual-consumer rule
 - [ ] Current state §7 (the descriptor field — Table A row 6)
 - [ ] **(+r5)** Current state §8 — **REWRITTEN against `ensureDarwinEntryRegistered`**; it is the mechanism behind Tables C and D and must be re-read whenever either moves. Its `5f0ffc0` text is retained in a quote block, not deleted
-- [ ] **(+r5)** Current state §9 (the executed evidence for and against Table G's premise) — Table G decides; §9 only records what was and was not run
+- [ ] **(+r5)** Current state §9 — **the executed record of the scratch-label experiment that settled Table G's premise (P is TRUE, 2026-08-02)**. Table G decides; §9 records what was run, by whom, and the teardown. **Registered because Table G's Status row and §9 must move together**: if the premise is ever re-opened (a launchd behavior change), both flip, plus every mirror below
+- [ ] **(+r5, updated 2026-08-02)** **AC6**'s non-claim bullet — it cited Table G's premise as unverified and now must not; and the **Convergence** section heading paragraph, which states the premise's settled status
 - [ ] **(+r5)** Table C's reconciliation preamble (the row-4 / row-5 verdict-change table) and Table D's reconciliation preamble — these are the dated records of the two settled rows that changed outcome; neither may be silently folded into the tables they precede
 - [ ] Implementation notes §D1 (the derivation, the `parts.length < 6` spelling of row 2, the anti-`indexOf` rule from Table E row 4), §"Why the descriptor field stays" (row 6), §"Windows" (row 1), §"Convergence — governed by Table C" (which now cites C and D instead of restating them)
 - [ ] Design space → option (a) (the alias mechanism is rows 5–6)
 - [ ] Security checklist bullets 1 and 2 (rows 3, 4 and 5 — which of them is the security boundary)
-- [ ] Acceptance criteria AC1 (rows 5–6), AC2 (rows 1–4 via Table F), AC3 (Table B row 1), AC4 (Table B row 2 **and**, as the spec's only seam-free assertion of them, Table A rows 5-6), AC5 (Table A row 6), AC6 (idempotence, and its explicit non-claim about Tables C/D), AC9 (Tables C and D reproduced in the PR) — **(+r5)** AC9 now also mirrors Table C row 5's flipped verdict, Table D's discharged false-success finding and **Table G**'s premise
+- [ ] Acceptance criteria AC1 (rows 5–6), AC2 (rows 1–4 via Table F), AC3 (Table B row 1), AC4 (Table B row 2 **and**, as the spec's only seam-free assertion of them, Table A rows 5-6), AC5 (Table A row 6), AC6 (idempotence, and its explicit non-claim about Tables C/D), AC9 (Tables C and D reproduced in the PR) — **(+r5)** AC9 now also mirrors Table C row 5's flipped verdict, Table D's discharged false-success finding and **Table G**'s premise — **which is SETTLED TRUE as of 2026-08-02, so AC9 sub-item (iv) reports it as executed, never as unverified**
 - [ ] Verification commands V3 (Table B row 1 count), V4 (Table B row 2 preservation), V5 + V5b (Table A row 6 preservation and AC5's zero-coupling argument)
 - [ ] **(+r2)** Verification command V2 (its `>= 4` threshold mirrors the Test index row count — note T5 is **skipped** on win32, so a win32 run legitimately reports one fewer)
 - [ ] **(+r4)** T5's POSIX-only platform gate — stated in **AC4**, the **Test index** T5 cell, and **Table E row 7**'s scope column; all three must move together
 - [ ] Table E mutation rows 1–8; the Table F fixture references belong to **rows 4-6 only** (rows 1, 2, 3, 7 and 8 are driven by T1/T5/V3 and cite no Table F fixture)
 - [ ] **(+r2)** Test index — T1's and T2's cells are the only place Table F rows 13–15 (the alias positives) and rows 1–12 (the negatives) carry a *requirement* rather than an arithmetic fact
 - [ ] **(+r2)** The whole **Out of scope** section — every bullet applies Table A row 6 (descriptor), row 2 (nvm et al.) or row 1 (Windows), and the first bullet applies Tables C/D
-- [ ] **(+r2)** Definition of done items 0 (the Tables C/D blocker **and** the `depends_on` obligation), 1 (V2/V3 thresholds), 6 (the Windows owner check, Table A row 1), 7 (AC9's no-overclaim rule) and 8 (the ADR-0028 sequencing gate) — **(+r5)** and item **9** (Table G's premise gate)
+- [ ] **(+r2)** Definition of done items 0 (the Tables C/D blocker **and** the `depends_on` obligation), 1 (V2/V3 thresholds), 6 (the Windows owner check, Table A row 1), 7 (AC9's no-overclaim rule) and 8 (the ADR-0028 sequencing gate) — **(+r5)** and item **9**, which mirrors Table G's Status row: it began as a **premise gate** and is now a **live smoke test**, the premise having been discharged pre-implementation on 2026-08-02. **Item 9 and Table G's Status row may never disagree about whether the premise is open**
 - [ ] **(+r5)** Definition of done item 1's **V2 pass-count threshold**, which mirrors the V1 baseline measured at a specific SHA. It was `79` at `5f0ffc0` and is **`120` at `1093e51`**; it moves whenever the suite grows, so it is registered rather than left as a literal in two places
 - [ ] **(+r5)** Implementation notes §D2's "do not touch" list — it names the register machinery by function, and PR #140 replaced those functions
 - [ ] **(+r5)** Out of scope, the registration-path bullet — it described the defect as *routed and unfixed*; it now records it as *fixed by PR #140*
@@ -1079,8 +1136,9 @@ not this WP.**
 ### Convergence — governed by Table C, reported by Table D, premised on Table G
 
 The convergence facts live in **Table C**; what `sync` tells the user about them
-lives in **Table D**; the one unverified premise both rest on lives in **Table G**.
-None is restated here. Three things follow that the implementer and the PR author
+lives in **Table D**; the launchd premise both rest on lives in **Table G**, and it
+is **settled TRUE** as of 2026-08-02 (executed — Current state §9). None is
+restated here. Three things follow that the implementer and the PR author
 must both honor — **all three were re-derived on 2026-08-02 against `1093e51`**:
 
 1. This WP is fully preventive for **new** registrations on every platform (Table
@@ -1272,8 +1330,11 @@ fixture without adding its row there.
       returns the same value. **AC6 asserts idempotence at the rendered-bytes level
       ONLY. It does NOT assert that the OS scheduler state converged** — Table C
       rows **4** (linux, degraded reload) and **7** (macOS, `'indeterminate'`
-      readback) record that it does not, and Table G records that even row 5's
-      convergence rests on an unverified premise. Do not read AC6 as convergence.
+      readback) record that it does not. *(Updated again 2026-08-02: this bullet
+      also said "and Table G records that even row 5's convergence rests on an
+      unverified premise" — Table G's premise is now **settled TRUE**, so row 5's
+      convergence is no longer conditional. AC6 asserts nothing about convergence
+      either way; that is the point of the bullet.)* Do not read AC6 as convergence.
       *(Updated 2026-08-02: this bullet used to name "rows 4 and 5 … on
       linux-degraded and macOS" and to add "and Table D records that `sync`
       nonetheless reports success". Row 5 converges as of PR #140, and Table D no
@@ -1295,8 +1356,13 @@ fixture without adding its row there.
       (iii) Table D's false-success rows are **gone on both platforms**, so no
       `sync` reports a silent success — while rows 4 and 7 remain non-convergent,
       merely loud; and
-      (iv) **Table G's premise is unverified**, with Definition of done item 9's
-      observed branch reported.
+      (iv) **Table G's premise is SETTLED — P is TRUE**, executed 2026-08-02
+      pre-implementation (Current state §9), so row 5's convergence rests on an
+      observed fact rather than an assumption; and Definition of done item 9's
+      **smoke-test** result is reported, or its absence stated.
+      *(Superseded sub-item, retained: "(iv) **Table G's premise is unverified**,
+      with Definition of done item 9's observed branch reported." Reporting it as
+      unverified would now be inaccurate.)*
       The PR must **not** contain the phrase "closes the class" or any equivalent.
       This is an acceptance criterion, not etiquette: round 1's disclosure lived
       only in prose and the review found it invisible at the contract layer.
@@ -1654,8 +1720,11 @@ npm test
    body reproduces **Table C and all three sub-tables of Table D verbatim**, states
    that Table C rows **4 and 7** do not converge, that row **5 now does** (PR #140,
    the sibling's fix and not this WP's), that Table D's false-success rows are
-   **gone**, and that **Table G's premise is unverified** with item 9's observed
-   branch reported — and does **not** claim the incident class is closed.
+   **gone**, and that **Table G's premise is settled TRUE** (executed 2026-08-02,
+   Current state §9) with item 9's **smoke-test** result reported — and does
+   **not** claim the incident class is closed.
+   *(Superseded: "that **Table G's premise is unverified** with item 9's observed
+   branch reported".)*
    *(Superseded: "states that Table C rows 4 and 5 do not converge and that Table
    D's final row in each sub-table reports that non-convergence as success.")*
 8. **ADR-0028 sequencing (OWNER). — SATISFIED 2026-08-02.**
@@ -1683,35 +1752,53 @@ npm test
    may.** An `OWNER-SIGNED` line is typed by Gyula Fehér by hand; this item is
    discharged by pointing at his, not by producing one. The implementer touches
    **no** file under `docs/adr/` — it is not in the Deliverables table.
-9. **Table G's premise — SETTLE BEFORE MERGE (owner or implementer, macOS +
-   Homebrew host required). NEW 2026-08-02.** Table C row 5's convergence and all
-   of Table D-a rest on the **unverified** premise that `launchctl print` echoes
-   `ProgramArguments[0]` verbatim into the `program` line rather than
-   realpath-resolving it. **`npm test` cannot reach this** — `tests/run.js` sets
-   `WIENERDOG_TEST_NO_REAL_SCHEDULER=1`, and the sibling's `fakeLaunchd` double
-   renders `program: argv[0] || ''` from the plist it stored at `bootstrap`, so it
-   models the premise as true **by construction** and can never falsify it. Do not
-   cite a green suite as evidence here.
+9. **Table G — live smoke test on macOS + Homebrew. NEW 2026-08-02; the PREMISE
+   GATE it started as is DISCHARGED.**
 
-   After D1/D2 are implemented, on a real Homebrew macOS install, run
-   `wienerdog sync` and then:
+   > **The gate is closed and did not need the implementer.** Table G's premise —
+   > that `launchctl print` echoes `ProgramArguments[0]` verbatim into `program`
+   > rather than realpath-resolving it — was **settled by experiment on
+   > 2026-08-02, pre-implementation: P is TRUE** (Current state §9; scratch label
+   > `ai.wienerdog.premise-check` carrying a symlinked program path, so literal ≠
+   > realpath; both `program` and `arguments` echoed the alias verbatim; full
+   > teardown, zero residue).
+   >
+   > *(Superseded framing, retained: this item read "**SETTLE BEFORE MERGE** …
+   > **Cellar path printed** ⇒ premise **FALSE**. **Do not merge.**" That
+   > do-not-merge branch **did not occur**. It stays on the record because the
+   > routed follow-up it names — realpath `program` before comparing, or drop it
+   > as redundant with `arguments[0]`, inside `darwinLoadedVerdict`, **the
+   > sibling's code and out of this WP's Deliverables** — remains the correct
+   > response if the behavior ever changes. **No such WP is needed today.**)*
+
+   **What remains is a smoke test, and it is still worth running.** It confirms the
+   *whole path* end to end — that `entryNodePath` actually produced the alias, that
+   the renderer wrote it, that `expect.argv[0]` matched it, and that the second
+   register is a verified skip. After D1/D2 are implemented, on a real Homebrew
+   macOS install, run `wienerdog sync` and then:
 
    ```bash
    launchctl print gui/$(id -u)/ai.wienerdog.dream | grep -E '^[[:space:]]+program ='
    ```
 
-   - **Alias printed** (`/opt/homebrew/opt/node/bin/node`) ⇒ premise TRUE, Tables
-     C row 5 and D-a hold. Additionally run `wienerdog sync` a **second** time and
-     confirm it makes no `launchctl` mutation and reports nothing.
-   - **Cellar path printed** ⇒ premise **FALSE**. **Do not merge.** Report it: the
-     fix is on the comparison side (`darwinLoadedVerdict`), which is the landed
-     sibling's code and **out of this WP's Deliverables** — it needs a new WP, not
-     a widened diff here. `entryNodePath` and the six swaps stay as specified
-     either way.
+   - **Expected** (`/opt/homebrew/opt/node/bin/node`, the alias) ⇒ consistent with
+     the settled premise and with Tables C row 5 / D-a. Then run `wienerdog sync` a
+     **second** time and confirm it makes **no** `launchctl` mutation and reports
+     nothing — the `'match'` verdict path.
+   - **Unexpected** (a `/opt/homebrew/Cellar/node/<version>/bin/node`, or a second
+     `sync` that mutates) ⇒ **stop and report; do not merge.** This would
+     contradict an executed result, so treat it as new evidence about launchd
+     rather than a defect in `entryNodePath`, and route it to the
+     `darwinLoadedVerdict` follow-up named above.
 
-   Paste the command's output into the PR body and state which branch was
-   observed. If no Homebrew macOS host is available, say so explicitly rather than
-   marking this item done — an unrunnable check is an open risk, not a pass.
+   Paste the command's output into the PR body and state which branch was observed.
+   **`npm test` still cannot substitute for this** — `tests/run.js` sets
+   `WIENERDOG_TEST_NO_REAL_SCHEDULER=1`, and `fakeLaunchd` renders
+   `program: argv[0] || ''` from the plist it stored, so it models P true by
+   construction. If no Homebrew macOS host is available, say so explicitly rather
+   than marking this item done. **Note the difference from the old framing: an
+   unrunnable smoke test is no longer an open risk about the premise** — that is
+   settled — **only unconfirmed end-to-end wiring.**
 
    **Corrected 2026-08-01 (gate round 1).** This item previously offered a second
    branch — *"or that line carries an owner-written annotation"* on
