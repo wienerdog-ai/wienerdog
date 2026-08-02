@@ -19,11 +19,14 @@ const { WienerdogError } = require('./errors');
  *                                                     must still resolve to
  *                                                     (absent on legacy entries)
  *   {kind:'managed-block', path, createdFile:bool,
- *    sepBefore?:string, sepAfter?:string}           — a sentinel block we wrote
+ *    sepBefore?:string, sepAfter?:string,
+ *    anchorBefore?:string}                          — a sentinel block we wrote
  *                                                     into a (maybe user-owned) file;
  *                                                     sepBefore/sepAfter (WP-147) are
  *                                                     the exact separator bytes the
- *                                                     last insertion added
+ *                                                     last insertion added; anchorBefore
+ *                                                     is the insertionAnchor() of the
+ *                                                     content that preceded them
  *   {kind:'settings-entry', path, createdFile:bool, commands:string[]}
  *                                                   — hook commands we merged into
  *                                                     a JSON settings file
@@ -44,7 +47,7 @@ const { WienerdogError } = require('./errors');
  *
  * @typedef {{kind: string, path: string, hash?: string, createdFile?: boolean,
  *            commands?: string[], unload?: string[], sepBefore?: string,
- *            sepAfter?: string}} ManifestEntry
+ *            sepAfter?: string, anchorBefore?: string}} ManifestEntry
  * @typedef {{version: number, createdAt: string, entries: ManifestEntry[]}} Manifest
  */
 
@@ -57,6 +60,51 @@ const END_SENTINEL = '<!-- wienerdog:end -->';
  *  reverseManagedBlock accepts sepBefore only from this allowlist (and sepAfter
  *  only as '\n'); anything else degrades to the legacy conservative strip. */
 const SEP_BEFORE_OK = new Set(['', '\n', '\n\n']);
+
+/** The bounded context window an insertion anchor covers, in JS string units
+ *  (UTF-16 code units — both sides slice JS strings read with 'utf8'). Bounded
+ *  ON PURPOSE: an unbounded/full-prefix anchor breaks on any edit anywhere above
+ *  the block, which is the COMMON case; 256 is roughly three to four lines of
+ *  markdown, enough to identify the block's neighbourhood and short enough that a
+ *  distant edit does not disturb it. */
+const ANCHOR_WINDOW = 256;
+/** An anchor is a sha256 hex digest and nothing else. Read from the UNTRUSTED
+ *  manifest, so the shape is checked before it is compared (Table N). */
+const ANCHOR_HEX = /^[0-9a-f]{64}$/;
+
+/** Hash of the last ANCHOR_WINDOW characters of the content that immediately
+ *  preceded an inserted separator. HASHED, not stored raw: the manifest is a
+ *  plaintext file and must never carry a copy of the user's document text.
+ *  @param {string} prefix @returns {string} 64-char lowercase hex */
+function insertionAnchor(prefix) {
+  return crypto.createHash('sha256').update(String(prefix).slice(-ANCHOR_WINDOW), 'utf8').digest('hex');
+}
+
+/** Does the recorded anchor prove the block is still at its RECORDED POSITION?
+ *  A hash match alone does NOT: it proves only that `candidate` ends with the
+ *  same window we recorded, and a window that occurs twice in the user's own
+ *  document has two positions that satisfy it (Table Q row Q10 — measured, no
+ *  forgery and no hash collision needed). So the match is paired with a
+ *  UNIQUENESS test. Both together are the position proof; either alone is not.
+ *  @param {ManifestEntry} entry
+ *  @param {string} candidate  the content that would remain in front of the block
+ *  @param {string} userText   the RECONSTRUCTED user document: `candidate + after`,
+ *    i.e. what uninstall is about to leave on disk. It must NOT be the whole
+ *    `content`, nor `content` with only the block excised — both still hold
+ *    Wienerdog's own separator bytes, which manufacture false ambiguity on
+ *    newline-only content (Table Q row Q13, measured).
+ *  @returns {boolean} */
+function anchorProvesPosition(entry, candidate, userText) {
+  const rec = entry.anchorBefore;
+  // LEGACY (absent or not a sha256 hex digest) → shipped 0.12.0 behaviour.
+  if (typeof rec !== 'string' || !ANCHOR_HEX.test(rec)) return true;
+  if (insertionAnchor(candidate) !== rec) return false;
+  const win = candidate.slice(-ANCHOR_WINDOW);
+  // The empty prefix exists at exactly one offset (0), so it is self-locating.
+  if (win === '') return true;
+  const first = userText.indexOf(win);
+  return first !== -1 && userText.indexOf(win, first + 1) === -1;
+}
 
 /** Locate the SINGLE managed block by FULL-LINE sentinel match (a line whose
  *  trimmed content equals the sentinel). Returns {begin, end} character offsets
@@ -305,9 +353,21 @@ function reverseManagedBlock(entry, dryRun, removed, skipped, removedSet, fd, ta
       (weSuppliedTerminator && after === '') ||
       after.startsWith('\n');
 
-    // BOTH are required. They are independent: (1) alone fuses (Table N row 7),
-    // (2) alone eats a user blank line on relocation (row 6).
-    if (ownershipOk && noFusion) before = candidate;
+    // (3) INSERTION ANCHOR + UNIQUENESS. `candidate` is the content that would
+    //     remain in front of the block. It must hash to the anchor we recorded
+    //     when we wrote sepBefore, AND that window must occur exactly once in the
+    //     user's document — otherwise a block moved to a second occurrence of the
+    //     same window passes the hash at the wrong position. An ABSENT or
+    //     malformed anchor is a LEGACY entry: shipped behaviour, never stricter.
+    //     The corpus is `candidate + after` — the document uninstall is about to
+    //     leave — NOT `content`, which still holds our own separator and makes
+    //     newline-only files look ambiguous (Table Q row Q13).
+    const anchorOk = anchorProvesPosition(entry, candidate, candidate + after);
+
+    // ALL THREE are required, and the anchor is a CONJUNCT — never a disjunct.
+    // It may only ever withhold a strip the other two would have allowed
+    // (Table N); it may never authorise one they refused.
+    if (anchorOk && ownershipOk && noFusion) before = candidate;
   }
   const remaining = before + after;
 
@@ -1059,4 +1119,4 @@ function disposeCoreMechanics(paths, { dryRun = false, vaultPath = null } = {}) 
   return { removed, skippedForVault };
 }
 
-module.exports = { load, record, save, reverse, disposeCoreMechanics, reverseSchedulerEntry, reverseVendoredTree, reverseCopiedSkill, reverseSymlink, hashDir, sha256File, validateEntry, withinAllowedRoot, withinSchedulerRoot };
+module.exports = { load, record, save, reverse, disposeCoreMechanics, reverseSchedulerEntry, reverseVendoredTree, reverseCopiedSkill, reverseSymlink, hashDir, insertionAnchor, sha256File, validateEntry, withinAllowedRoot, withinSchedulerRoot };
