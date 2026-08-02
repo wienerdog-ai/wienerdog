@@ -443,24 +443,16 @@ to what is there now. Only the comment header and the condition change, and the
 `lexicalMatch` `let`/`try`/`catch` disappear. No new `require`, no new variable,
 no reordering of rows.
 
-**Two constraints the V4 gate (R8) puts on this block, both load-bearing.**
+**The V4 gate (R8) makes this text load-bearing to the byte — including the
+comment.** V4 diffs the **entire** `reverseSymlink` function against an expected
+copy embedded in the gate, so anything you change here — reflowing the notice,
+rewording a comment line, altering whitespace, renaming `L` — turns V4 red. Copy
+the block above exactly, comment and all.
 
-1. **The seven executable lines are byte-exact.** V4 extracts the range from
-   the guard line `if (!sameResolvedDir(L, T)) {` down to its closing brace, and
-   `diff`s that range against
-   exactly the text above. Reflowing the notice, renaming `L`, or changing the
-   brace style breaks the gate.
-2. **Use `//` comments in `reverseSymlink`, never `/* … */`.** V4 rejects any
-   block comment in this function. That is not fussiness: V4's third check strips
-   *line* comments before looking for `readlinkSync`, and a block comment defeats
-   that strip **in both directions**. Both were measured against the exact
-   pipeline — `/* if (!sameResolvedDir(L, T)) { */` above an `if (false) {` guard
-   **passed** a `//`-only-stripped presence grep, and
-   `/* … fs.readlinkSync(L) === T … */` above correct code **failed** its absence
-   grep. Banning block comments here is the precondition that makes check (iii)
-   sound; check (ii) catches the first evasion independently.
-
-Comment *wording* is otherwise free — the gate no longer depends on it.
+That coupling is deliberate and it is the point of the round-3 extraction pass
+(see the note under R8): three successive grep-shaped gates were each beaten by a
+lexical trick, so the gate stopped reasoning about tokens and started comparing
+the artifact. The cost is that comment wording is no longer free. Pay it.
 
 **R2 — the test edit.** Replace `tests/unit/manifest.test.js:1564-1595` (the whole
 T4 `test(...)` call, quoted byte-exact in Current state §6) with exactly these
@@ -748,23 +740,35 @@ Remove `:936-946` (from `# V4 — the reverser consults the recorded target (Tab
 through `echo "V4 ok — both row 3 sub-tests present"`). Insert in its place:
 
 ```bash
-# V4 — row 3 is the semantic test and ONLY the semantic test. THREE checks, in
-# order. A grep over the function's raw text is evadable by comments in BOTH
-# directions, and both were measured: a block comment carrying the guard text
-# satisfied a presence grep while the real guard was `if (false)`, and a block
-# comment merely MENTIONING the dropped call tripped an absence grep on correct
-# code. Hence (i) and (ii).
-BODY=$(sed -n '/^function reverseSymlink/,/^}/p' src/core/manifest.js)
-# (i) No block comment in this function. A `/* … */` is what defeats (iii)'s
-#     line-based strip, so it is banned here, and that ban is the precondition
-#     that makes (iii) sound. Use `//` comments in reverseSymlink.
-if printf '%s\n' "$BODY" | grep -qF '/*'; then
-  echo "REGRESSED: block comment inside reverseSymlink — V4's comment strip is line-based"; exit 1
-fi
-# (ii) Row 3's executable block, BYTE-EXACT. Sound on its own, without (i): the
-#      sed range only opens on the real guard line, so a commented-out copy of
-#      that line yields an empty extraction and the diff fails.
-if ! diff <(printf '%s\n' "$BODY" | sed -n '/^  if (!sameResolvedDir(L, T)) {$/,/^  }$/p') - <<'ROW3'
+# V4 — reverseSymlink is byte-identical to the expected post-change function.
+# ONE diff, no greps. Read the note below before "simplifying" this back.
+if ! diff <(sed -n '/^function reverseSymlink/,/^}/p' src/core/manifest.js) - <<'FN'
+function reverseSymlink(entry, dryRun, removed, skipped, removedSet, skillsRoots) {
+  const L = entry.path;
+  const T = entry.target;
+  // Row 1: not a symlink (real file/dir, or already gone) — never ours to delete.
+  if (!isSymlink(L)) {
+    skipped.push(L);
+    return;
+  }
+  // Row 2: LEGACY (target-less) entry — ownership is unprovable, preserve
+  // unconditionally (owner ruling 2026-08-01). No backfill exists or ever will.
+  if (typeof T !== 'string' || T === '') {
+    process.stderr.write(
+      `wienerdog: keeping ${L} — not the Wienerdog skill link we recorded (replaced, or unverifiable)\n`
+    );
+    skipped.push(L);
+    return;
+  }
+  // Row 3: the link must PROVE it still resolves to the source we recorded.
+  // sameResolvedDir is realpath-based (semantic, follows the link) and is itself
+  // fail-closed — an unresolvable side returns false, which lands HERE, in preserve.
+  // There is deliberately NO second, link-text comparison: WP-153 shipped one, and
+  // WP-symlink-lexical-fallback-removal dropped it because raw-text equality is the
+  // weaker proof and the manifest is UNTRUSTED — a recorded target may narrow this
+  // delete, never authorize one the semantic proof refuses (e.g. a relative recorded
+  // target, which Wienerdog never writes, matched the link text while realpath did
+  // not). Strictly narrowing: every input this now preserves was previously deleted.
   if (!sameResolvedDir(L, T)) {
     process.stderr.write(
       `wienerdog: keeping ${L} — not the Wienerdog skill link we recorded (replaced, or unverifiable)\n`
@@ -772,30 +776,61 @@ if ! diff <(printf '%s\n' "$BODY" | sed -n '/^  if (!sameResolvedDir(L, T)) {$/,
     skipped.push(L);
     return;
   }
-ROW3
+  // Row 4: a target match is NOT delete authority — the manifest is untrusted, so
+  // an attacker can forge a (path, target) pair. Require the STRUCTURAL ownership
+  // proof reverseCopiedSkill uses: wienerdog-* basename AND parent realpath-equal
+  // to a harness skills root.
+  const parentIsRoot = skillsRoots.some((root) => sameResolvedDir(path.dirname(L), root));
+  if (!path.basename(L).startsWith('wienerdog-') || !parentIsRoot) {
+    process.stderr.write(
+      `wienerdog: keeping ${L} — not the Wienerdog skill link we recorded (replaced, or unverifiable)\n`
+    );
+    skipped.push(L);
+    return;
+  }
+  // Row 5: OWNED, in-namespace, and provably resolves to our recorded source.
+  if (!dryRun) fs.unlinkSync(L);
+  removedSet.add(L);
+  removed.push(L);
+}
+FN
 then
-  echo "REGRESSED: row 3's executable block is not byte-exact"; exit 1
+  echo "REGRESSED: reverseSymlink is not byte-identical to the expected function"; exit 1
 fi
-# (iii) The dropped link-text sub-test is absent from EXECUTABLE code anywhere in
-#       the function, not only in row 3.
-CODE=$(printf '%s\n' "$BODY" | sed 's://.*::')
-if printf '%s\n' "$CODE" | grep -qF 'readlinkSync'; then
-  echo "REGRESSED: the dropped link-text sub-test is back in reverseSymlink"; exit 1
-fi
-echo "V4 ok — row 3's executable block is sameResolvedDir alone"
+echo "V4 ok — reverseSymlink is byte-identical to the expected function"
 ```
 
-**Why three checks and not one grep, recorded so a later reviewer does not
-"simplify" it back.** Every weaker form was measured against real fixtures:
+**Why one whole-function diff and not greps — do NOT "simplify" this back.** This
+gate drew a review finding in **three consecutive rounds**, each time because a
+*lexical* check was asked to prove a *semantic* property. The history, all
+reproduced against the exact pipeline of the round in question:
 
-| Gate shape | `if (false)` + block comment carrying the guard text | correct code + block comment mentioning the dropped call | `if (false)` + line comment naming `sameResolvedDir` | fallback restored |
-|---|---|---|---|---|
-| raw grep over the body | **passes (evaded)** | fails (false trip) | **passes (evaded)** | fails |
-| `//`-strip + token grep | **passes (evaded)** | **fails (false trip)** | fails | fails |
-| **(i)+(ii)+(iii) above** | fails | fails, and says why | fails | fails |
+| Round | Gate shape | The evasion that beat it |
+|---|---|---|
+| 1 | grep the raw function body | a comment naming `sameResolvedDir` satisfied the presence check while the real guard was deleted |
+| 2 | strip `//` comments, then grep | `/* if (!sameResolvedDir(L, T)) { */` above `if (false) {` passed; and a block comment merely *mentioning* the dropped call falsely failed correct code |
+| 3 | ban `/*`, byte-exact **row-3 block**, strip-and-grep | `if ('//' && fs.readlinkSync(L) === T) { … }` — a `//` inside a **string literal** made `sed` strip the rest of the line, hiding the reintroduced call; and the mandated block nested under `if (false) { … }` still matched the range diff |
 
-Column 2 is a false trip that (i) converts into a true, correctly-explained
-failure: block comments are simply not allowed in this function.
+Three rounds is the ADR-0031 loop circuit-breaker. The fix is not a fourth grep,
+it is **extraction**: the expected post-change function is fully determined (the
+base function minus one deletion), so the gate compares the whole function
+byte-for-byte and the entire lexical class dies at once — comment evasion, string
+literals, control-flow nesting, duplicate-function shadowing (a second
+`function reverseSymlink` later in the file lands inside the `sed` range and
+changes the diff), whitespace, everything. The mutation matrix collapses to a
+single rule: **any byte differs → red.**
+
+**Consequences you must accept, not work around:**
+
+- **The comment text inside `reverseSymlink` is now part of the contract.** It is
+  in the heredoc, so rewording it fails V4. That is the price of a sound gate;
+  reword it only in a WP that updates the heredoc in the same commit.
+- **This subsumes the old V4b** (row 4's ownership grep, WP-153 `:948-956`). V4b
+  is left in place — it is not in this WP's anchor set — but it can no longer
+  fail while V4 passes.
+- **A legitimate future edit to this function fails V4 until the heredoc moves
+  with it.** That is the intended coupling, and it is what "Table A decides row 3"
+  has meant since WP-153.
 
 #### R9 — the Mirrored Surface Checklist entry, byte-exact replacement
 
@@ -929,11 +964,11 @@ Registered **outside** this spec so a later change knows this table is its sourc
 - **Do not grep for the word "lexical"** to find your edit sites — it also hits
   `src/adapters/shared.js`, `docs/adr/0028-*`, three other done specs and the
   security-audit archive, none of which are yours. Use the R-anchors in Table R.
-- **Keep the whole row-3 executable block byte-exact**, and **use `//` comments
-  only inside `reverseSymlink` — no `/* … */`.** V4 checks both: it rejects any
-  block comment in this function (that is what makes its line-based comment strip
-  sound), and it diffs the row-3 block against the seven mandated lines. Comment
-  *wording* is free; comment *syntax* is not.
+- **Reproduce the `reverseSymlink` function exactly as R1 gives it — every byte,
+  comments included.** V4 diffs the whole function against an embedded expected
+  copy. There is no longer any part of this function you may reword "harmlessly":
+  if V4 is red, either your code differs from R1 or you changed R1 without
+  changing V4's heredoc, and both are failures.
 - **T4b must be green against the untouched tree** (AC4, run B1). If it is red
   before R1, your fixture is wrong, not the code — most likely the link is not
   directly under `<claudeDir>/skills`, or its destination is outside
@@ -982,12 +1017,9 @@ Registered **outside** this spec so a later change knows this table is its sourc
 
 ## Acceptance criteria
 
-- [ ] **AC1 (R1)** — all three V3b checks pass: (i) `reverseSymlink` contains no
-      block comment; (ii) its row-3 executable block is **byte-identical** to the
-      seven lines in "Exact contracts" — guard, notice, `skipped.push(L)`,
-      `return`, close — which also makes the notice string byte-identical to
-      `0f9ee08`; (iii) `readlinkSync` appears nowhere in the function's executable
-      code. (V3b.)
+- [ ] **AC1 (R1)** — V3b passes: the whole `reverseSymlink` function, comments
+      included, is **byte-identical** to the expected post-change function embedded
+      in that gate. One diff, no greps — see the note under R8 for why. (V3b.)
 - [ ] **AC2 (R2, red → green — the behavior change)** — **T4a** and **T4c** both
       fail against the untouched `src/core/manifest.js` and both pass after R1.
       Both runs pasted into the PR. Expected counts on
@@ -1005,25 +1037,26 @@ Registered **outside** this spec so a later change knows this table is its sourc
 - [ ] **AC4 (the scoped unreachability fact)** — **T4b** passes against the
       untouched tree as well as after R1, and asserts the
       `outside every Wienerdog-owned root` notice. Both runs pasted into the PR.
-- [ ] **AC5 (mutation checks — FOUR, all required)** — each is applied to
-      `src/core/manifest.js`, run, then reverted with
-      `git checkout -- src/core/manifest.js`. Paste every output.
-      **(a) Fallback restored** — paste the exact `lexicalMatch` block from
-      Current state §1 back: **T4a and T4c go red**, T4b stays green, and V3b
-      prints `REGRESSED: the dropped link-text sub-test is back in reverseSymlink`.
-      **(b) Guard deleted, line comment intact** — change only the guard line to
-      `if (false) {`: V3b prints
-      `REGRESSED: row 3's executable block is not byte-exact`.
-      **(c) Guard deleted, BLOCK comment carries the guard text** — replace the
-      row-3 block with `/* if (!sameResolvedDir(L, T)) { */` followed by
-      `if (false) {`: V3b prints the **block-comment** rejection. This is the
-      evasion Codex round 2 found against the previous `//`-only strip, which
-      passed it; both directions were re-measured on the current gate.
-      **(d) Block comment merely MENTIONING the dropped call** — add
-      `/* historical: we used to try fs.readlinkSync(L) === T here */` above a
-      correct row 3: V3b prints the **block-comment** rejection. This one is not a
-      code defect — it is the gate telling you that block comments are not allowed
-      in this function, which is what keeps check (iii) sound. Use `//`.
+- [ ] **AC5 (mutation checks — FIVE, all required)** — V4's rule is now *any byte
+      differs → red*, so the matrix is a list of things that must all be caught,
+      not a list of grep shapes. Apply each to `src/core/manifest.js`, run V3b,
+      then `git checkout -- src/core/manifest.js`. Paste every output; each must
+      print `REGRESSED: reverseSymlink is not byte-identical to the expected
+      function` **and** a legible `diff` hunk.
+      **(a) Fallback restored** — paste the Current-state §1 block back. Also run
+      the tests: **T4a and T4c go red**, T4b stays green.
+      **(b) String-literal evasion** — insert
+      `if ('//' && fs.readlinkSync(L) === T) { fs.unlinkSync(L); return; }` above
+      row 3. *This beat the round-2 gate* (the `//` inside the string made `sed`
+      strip the rest of the line, hiding the call from the token grep).
+      **(c) Control-flow nesting** — wrap the unmodified row-3 block in
+      `if (false) { … }`. *This also beat the round-2 gate*: the block was still
+      byte-exact, it just never ran.
+      **(d) Block comment** — add `/* anything */` inside the function.
+      **(e) Arbitrary byte flip** — change one `skipped.push(L)` to
+      `skipped.push(l)`.
+      All five were measured red, and the unmutated function measured green,
+      while this spec was drafted.
 - [ ] **AC6 (mirrors moved, R3–R14)** — the twelve WP-153 anchors carry their
       replacement text byte-exactly (V3c: the full diff is pasted and compared
       hunk-by-hunk against the R-blocks), the post-merge-note **heading line is
@@ -1080,7 +1113,7 @@ grep -cF 'T2, T3, T4, T5, T6 and T7 all pass' "$SPEC"       # was 1, expect 0 (R
 grep -cF 'lets T1/T2/T4/T7 unit-test the' "$SPEC"           # was 1, expect 0 (R14)
 grep -cF '**Row 3 has exactly one test' "$SPEC"             # expect 1 (R4)
 grep -cF 'SUPERSEDED by `WP-symlink-lexical-fallback-removal`' "$SPEC"  # expect 1 (R10)
-grep -cF 'V4 ok — row 3' "$SPEC"                            # expect 1 (R8)
+grep -cF 'V4 ok — reverseSymlink is byte-identical' "$SPEC" # expect 1 (R8)
 grep -cF '`WP-symlink-lexical-fallback-removal` satisfied it' "$SPEC" # expect 1 (R9)
 grep -cF '| T4b |' "$SPEC"                                  # expect 1 (R7)
 grep -cF '| T4c |' "$SPEC"                                  # expect 1 (R7)
@@ -1093,17 +1126,40 @@ grep -cF '## Post-merge note — 2026-08-02: the lexical fallback is dead throug
 # "is this line a dated record".
 grep -n '\bT4\b' "$SPEC"
 
-# V3b — R1's executable block (AC1). This is R8's V4 verbatim; run it here too so
-# the code gate and the gate the spec installs are proven identical. THREE checks:
-# (i) no block comment in the function — a `/* … */` defeats (iii)'s line-based
-# strip in both directions (measured); (ii) row 3's executable block byte-exact,
-# which alone catches a commented-out guard; (iii) the dropped call absent from
-# executable code anywhere in the function.
-BODY=$(sed -n '/^function reverseSymlink/,/^}/p' src/core/manifest.js)
-if printf '%s\n' "$BODY" | grep -qF '/*'; then
-  echo "REGRESSED: block comment inside reverseSymlink — V4's comment strip is line-based"; exit 1
-fi
-if ! diff <(printf '%s\n' "$BODY" | sed -n '/^  if (!sameResolvedDir(L, T)) {$/,/^  }$/p') - <<'ROW3'
+# V3b — R1 (AC1). This is R8's V4 verbatim; run it here too, so the gate this WP
+# installs and the gate this WP is judged by are provably the same text. ONE diff:
+# reverseSymlink must be byte-identical to the expected post-change function.
+# Greps were tried in three review rounds and beaten three times — see the note
+# under R8 before changing this.
+# V4 — reverseSymlink is byte-identical to the expected post-change function.
+# ONE diff, no greps. Read the note below before "simplifying" this back.
+if ! diff <(sed -n '/^function reverseSymlink/,/^}/p' src/core/manifest.js) - <<'FN'
+function reverseSymlink(entry, dryRun, removed, skipped, removedSet, skillsRoots) {
+  const L = entry.path;
+  const T = entry.target;
+  // Row 1: not a symlink (real file/dir, or already gone) — never ours to delete.
+  if (!isSymlink(L)) {
+    skipped.push(L);
+    return;
+  }
+  // Row 2: LEGACY (target-less) entry — ownership is unprovable, preserve
+  // unconditionally (owner ruling 2026-08-01). No backfill exists or ever will.
+  if (typeof T !== 'string' || T === '') {
+    process.stderr.write(
+      `wienerdog: keeping ${L} — not the Wienerdog skill link we recorded (replaced, or unverifiable)\n`
+    );
+    skipped.push(L);
+    return;
+  }
+  // Row 3: the link must PROVE it still resolves to the source we recorded.
+  // sameResolvedDir is realpath-based (semantic, follows the link) and is itself
+  // fail-closed — an unresolvable side returns false, which lands HERE, in preserve.
+  // There is deliberately NO second, link-text comparison: WP-153 shipped one, and
+  // WP-symlink-lexical-fallback-removal dropped it because raw-text equality is the
+  // weaker proof and the manifest is UNTRUSTED — a recorded target may narrow this
+  // delete, never authorize one the semantic proof refuses (e.g. a relative recorded
+  // target, which Wienerdog never writes, matched the link text while realpath did
+  // not). Strictly narrowing: every input this now preserves was previously deleted.
   if (!sameResolvedDir(L, T)) {
     process.stderr.write(
       `wienerdog: keeping ${L} — not the Wienerdog skill link we recorded (replaced, or unverifiable)\n`
@@ -1111,15 +1167,28 @@ if ! diff <(printf '%s\n' "$BODY" | sed -n '/^  if (!sameResolvedDir(L, T)) {$/,
     skipped.push(L);
     return;
   }
-ROW3
+  // Row 4: a target match is NOT delete authority — the manifest is untrusted, so
+  // an attacker can forge a (path, target) pair. Require the STRUCTURAL ownership
+  // proof reverseCopiedSkill uses: wienerdog-* basename AND parent realpath-equal
+  // to a harness skills root.
+  const parentIsRoot = skillsRoots.some((root) => sameResolvedDir(path.dirname(L), root));
+  if (!path.basename(L).startsWith('wienerdog-') || !parentIsRoot) {
+    process.stderr.write(
+      `wienerdog: keeping ${L} — not the Wienerdog skill link we recorded (replaced, or unverifiable)\n`
+    );
+    skipped.push(L);
+    return;
+  }
+  // Row 5: OWNED, in-namespace, and provably resolves to our recorded source.
+  if (!dryRun) fs.unlinkSync(L);
+  removedSet.add(L);
+  removed.push(L);
+}
+FN
 then
-  echo "REGRESSED: row 3's executable block is not byte-exact"; exit 1
+  echo "REGRESSED: reverseSymlink is not byte-identical to the expected function"; exit 1
 fi
-CODE=$(printf '%s\n' "$BODY" | sed 's://.*::')
-if printf '%s\n' "$CODE" | grep -qF 'readlinkSync'; then
-  echo "REGRESSED: the dropped link-text sub-test is back in reverseSymlink"; exit 1
-fi
-echo "V4 ok — row 3's executable block is sameResolvedDir alone"
+echo "V4 ok — reverseSymlink is byte-identical to the expected function"
 
 # V3c (AC6, byte-exactness) — bound the WP-153 diff, then paste it IN FULL and
 # compare each hunk against the R3-R14 blocks in this spec. The comparison is the
@@ -1166,17 +1235,19 @@ for L in "startsWith('wienerdog-')" "skillsRoots"; do
 done
 echo "V4b ok — structural ownership gate present"
 
-# V5 — mutation check (a) (AC5). Paste the Current-state §1 block back into
-# src/core/manifest.js, run both commands, then `git checkout --
-# src/core/manifest.js` to revert. Expect: T4a and T4c FAIL, T4b still passes,
-# and V3b prints `REGRESSED: the dropped link-text sub-test is back …`.
-node tests/run.js tests/unit/manifest.test.js
-# …then re-run the V3b block above.
-
-# V6 — mutation check (b) (AC5, the comment-evasion case). Change ONLY the guard
-# line to `if (false) {`, leaving the comment above it intact, then re-run the
-# V3b block: it must print `REGRESSED: row 3's executable guard is not …`.
-# Revert with `git checkout -- src/core/manifest.js`.
+# V5 — the five AC5 mutations. For each: edit src/core/manifest.js, re-run the
+# V3b block above, then `git checkout -- src/core/manifest.js`. Every one must
+# print `REGRESSED: reverseSymlink is not byte-identical to the expected function`
+# plus a legible diff hunk. Mutation (a) additionally changes test outcomes, so
+# run the suite for that one too.
+#   (a) restore the Current-state §1 `lexicalMatch` block   → also: T4a, T4c red
+#   (b) insert  if ('//' && fs.readlinkSync(L) === T) { fs.unlinkSync(L); return; }
+#   (c) wrap the unmodified row-3 block in  if (false) { … }
+#   (d) add  /* anything */  inside the function
+#   (e) change one  skipped.push(L)  to  skipped.push(l)
+# (b) and (c) are the two that beat the round-2 gate; they are in this list so a
+# future editor cannot re-weaken V4 without noticing.
+node tests/run.js tests/unit/manifest.test.js   # for mutation (a) only
 
 # V7 — lint.
 npm run lint

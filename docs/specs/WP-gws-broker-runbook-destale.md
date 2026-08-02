@@ -46,10 +46,16 @@ poisoned-email test harness — a claim about the harness's **current execution
 status**, which a `Ready` WP (`WP-broker-e2e-terminal-auth`) and the harness's own
 `AUTH-BLOCKED` short-circuit contradict today (Current state §3). Both defects are
 the same failure mode — **prose asserting a status a later change can falsify** —
-so both are fixed here, in the one file, by the same rule.
+so both are fixed here, by the same rule.
 
-This WP changes prose in one file. It adds no behavior, no file, no flag and no
-process (**IRON RULE, ADR-0004: Wienerdog is just files** — nothing here starts
+**And the same defect turned out to be in the document the runbook defers to.**
+Round 2 of the design gate found `docs/THREAT-MODEL.md:146` asserting that the
+harness "is being re-fitted" and naming a WP that is already `Done`. That clause
+is **E3**. The scope is therefore **three regions across two files** — resolve it
+from **Table S**, never from prose.
+
+This WP changes prose only. It adds no behavior, no file, no flag and no process
+(**IRON RULE, ADR-0004: Wienerdog is just files** — nothing here starts
 anything). It is user-facing text for knowledge workers, not developers: plain
 language, no jargon without explanation.
 
@@ -270,9 +276,15 @@ Verified at `0f9ee08`:
 - `grep -rn "proven end-to-end" tests/ src/ docs/` returns **only**
   `docs/runbooks/gws-broker.md:121` — the E2 sentence itself. Nothing quotes it.
 - Neither edit touches a heading, so no in-repo anchor can break.
-- **`docs/THREAT-MODEL.md:146` is the canonical source for E2's substance** and is
-  already correct (Current state §3). Like the banner deferring to T0, E2 defers
-  to `:146`; do not edit it.
+- **`docs/THREAT-MODEL.md:146` is NOT a source to defer to — it is E3** (Table S),
+  because it carries the same defect (Current state §3). Only its **second half**
+  — *"the containment itself is enforced by the argv + broker design,
+  unit-verified and design-reviewed"* — is sound, and E2 mirrors that half. **An
+  earlier revision of this bullet said `:146` was "already correct … do not edit
+  it", which directly contradicted E3 and would have let an implementer skip it;
+  Codex round 3 caught it.** That is why the scope now lives in one table.
+- **Every OTHER line of `docs/THREAT-MODEL.md` is still defer-only**, T0 at
+  `:32-35` above all.
 
 ## Deliverables (permission boundary — touch ONLY these)
 
@@ -281,9 +293,9 @@ Verified at `0f9ee08`:
 
 | Action | Path | Notes |
 |--------|------|-------|
-| modify | docs/runbooks/gws-broker.md | **Two regions, both specified byte-exactly below.** **E1** — replace the three-line blockquote at `:7-9` (the gate-status banner). **E2** — replace the four-line paragraph at `:121-124` (the live-proof assertion about the poisoned-email harness) with the five-line text below. Change nothing else in the file — not `:108`, not `:70`/`:72`/`:76`, not any heading, not the table at `:114-119`, not the intro at `:3-5`. |
+| modify | docs/runbooks/gws-broker.md | **E1 and E2** — two of the three regions in **Table S**, which is canonical; the byte-exact text for each is under "Exact contract". Change nothing else in the file — not `:108`, not `:70`/`:72`/`:76`, not any heading, not the table at `:114-119`, not the intro at `:3-5`. |
 
-| modify | docs/THREAT-MODEL.md | **E3 — ONE CLAUSE at `:146` and nothing else in the file.** The parenthetical beginning `(The live end-to-end poisoned-email harness` and ending `unit-verified and design-reviewed.)` — the same live-status defect as E2 (Current state §3). **The content is the boundary, not the line number.** Every other sentence of `:146`, and every other line of the file — T0 (`:32-35`), the gates (`:130`, `:132`, `:134`), the stance clause (`:277-279`), the residuals (`:427`, `:429`, `:431`) — stays byte-identical. Several of those are clause-scoped deliverables of OTHER specs; touching them is a permission-boundary violation, not a favour. |
+| modify | docs/THREAT-MODEL.md | **E3** — the third region in **Table S**. **ONE CLAUSE at `:146` and nothing else in the file.** The parenthetical beginning `(The live end-to-end poisoned-email harness` and ending `unit-verified and design-reviewed.)` — the same live-status defect as E2 (Current state §3). **The content is the boundary, not the line number.** Every other sentence of `:146`, and every other line of the file — T0 (`:32-35`), the gates (`:130`, `:132`, `:134`), the stance clause (`:277-279`), the residuals (`:427`, `:429`, `:431`) — stays byte-identical. Several of those are clause-scoped deliverables of OTHER specs; touching them is a permission-boundary violation, not a favour. |
 
 Not deliverables under any reading: `docs/VISION.md`, `docs/GLOSSARY.md`,
 `README.md`, `docs/adr/`, any other file in `docs/runbooks/`,
@@ -292,9 +304,8 @@ every file under `src/`, `bin/`, `tests/`, `skills/` and `templates/`.
 
 ### Exact contract
 
-Two edits, both in `docs/runbooks/gws-broker.md`. **E1** is the gate-status
-banner; **E2** is the live-proof assertion. Both follow the same rule: name the
-thing, point at where the live answer lives, assert no current status.
+The three regions of **Table S**, in order. All three follow the same rule: name
+the thing, point at where the live answer lives, assert no current status.
 
 #### E1 — the banner, `:7-9`
 
@@ -390,7 +401,7 @@ each side of the parenthetical, unchanged):
 **Insert in its place**, byte-exact:
 
 ```text
-(The live end-to-end poisoned-email harness that exercises this is `tests/scenarios/broker-e2e/`; the containment itself is enforced by the argv + broker design, unit-verified and design-reviewed.)
+(The end-to-end poisoned-email harness written to exercise this is `tests/scenarios/broker-e2e/`; the containment itself is enforced by the argv + broker design, unit-verified and design-reviewed.)
 ```
 
 `:146` is one very long line; the surrounding sentences on it do not change.
@@ -405,8 +416,13 @@ each side of the parenthetical, unchanged):
   and *"— WP-scenario-harness-auth-repair"* (a WP that is `Done`, so naming it as
   the ongoing repair is simply wrong today).
 - **It names the harness by path**, which is stable, instead of by the state it is
-  in, which is not. Same move as E2, and now the two documents say the same thing
-  in the same voice.
+  in, which is not.
+- **It drops the word "live" and the present-tense "that exercises this".** Both
+  assert a current execution capability — the identical defect one notch quieter,
+  and Codex round 3 caught the first revision of E3 keeping them. The replacement
+  uses E2's neutral construction, *"written to exercise this"*, so the two
+  documents now say the same thing in the same voice and neither claims the
+  harness runs today.
 - **It does not name `WP-broker-e2e-terminal-auth` either.** Pointing at the
   *next* repair WP is the identical failure mode with a later expiry date — that
   WP will also be `Done` one day. Spec ids belong in specs, not in the threat
@@ -414,12 +430,58 @@ each side of the parenthetical, unchanged):
 
 ## Contract reference
 
-N/A — three prose clauses across two documents, each a self-contained
-replacement. No interface, taxonomy, parser, error path, authority boundary or
-downstream consumer changes; fewer than two of ADR-0031's seven activation
-triggers fire. **E3's mirror question was checked explicitly** (Current state §3):
-`:146` is registered as no other spec's mirrored surface, and the sentence has no
-copies elsewhere in the repo.
+The ADR-0031 activation trigger fires on **two** of the seven: (vi) a successor
+spec inherits the contract — this is the third WP applying the sibling
+"one-live-state-assertion" rule, and it **generalizes** that rule from gate
+verdicts to any externally-decided status (see Context); and (vii) the same
+contract must appear in multiple mirrored surfaces. Trigger (vii) is not
+theoretical here: **the scope statement drifted in exactly that way.** Round 2
+added E3 while six prose restatements still said "one file", one of which
+positively instructed the implementer *not* to edit E3's target. Codex round 3
+called it, correctly, a mirrored-surface failure.
+
+So the scope is now a table, and prose defers to it.
+
+### Table S — the edit regions (canonical)
+
+Every statement of *what this WP changes* resolves here. Prose that restates a
+row is a mirror and is listed in the checklist below.
+
+| # | File | Region | Anchor (content is the boundary) | Defect | Byte-exact text |
+|---|------|--------|----------------------------------|--------|-----------------|
+| **E1** | `docs/runbooks/gws-broker.md` | the 3-line blockquote at `:7-9` | opens `> Google Workspace access is **off**` | gate-status verdict, false since 0.10.0 | "Exact contract" → E1 |
+| **E2** | `docs/runbooks/gws-broker.md` | the 4-line paragraph at `:121-124` | opens `The broker's containment of a hijacked AI is proven end-to-end` | live-proof assertion | "Exact contract" → E2 |
+| **E3** | `docs/THREAT-MODEL.md` | ONE clause inside `:146` | the parenthetical from `(The live end-to-end poisoned-email harness` to `unit-verified and design-reviewed.)` | live-proof assertion + names a `Done` WP as the ongoing repair | "Exact contract" → E3 |
+
+**Three regions, two files. Nothing else in either file moves.** In particular
+`docs/THREAT-MODEL.md` T0 (`:32-35`) and the clause-scoped regions owned by other
+specs (`:130`, `:132`, `:134`, `:277-279`, `:427`) are defer-only.
+
+### Mirrored Surface Checklist
+
+Every surface that restates Table S, registered so a scope change moves them
+together or not at all. **The first two are the ones that drifted in round 2 and
+were caught in round 3** — they are listed first deliberately:
+
+- [ ] **Context** (`"three regions across two files"`) — restates the row count
+      and the two-file fact.
+- [ ] **Current state §6's `docs/THREAT-MODEL.md:146` bullet** — must say `:146`
+      is **E3**, never "already correct" or "do not edit it". This bullet is the
+      one that actively contradicted Table S.
+- [ ] **Deliverables table** — one row per file, each pointing at Table S rather
+      than re-listing the regions.
+- [ ] **"Exact contract" preamble and its `#### E1 / #### E2 / #### E3`
+      subsections** — one subsection per Table S row, same ids, same order.
+- [ ] **Current state §3's "Consequence" paragraph** — states the region and file
+      count.
+- [ ] **Acceptance criteria AC1–AC8** — each names the E-id it gates.
+- [ ] **Verification commands V1–V8** — including **V8's `boundary-check`
+      invocation, which must list every file in Table S**; a missing path there
+      makes CI reject the very edit this spec mandates.
+- [ ] **Out of scope** — its "every OTHER line of `docs/THREAT-MODEL.md`" bullet
+      is the negative image of Table S row E3.
+- [ ] **Definition of done** — the PR-title prefix depends on how many files
+      Table S spans (`docs:` while it spans more than `docs/runbooks/`).
 
 ## Implementation notes & constraints
 
@@ -546,7 +608,8 @@ grep -c "tests/scenarios/broker-e2e/" docs/runbooks/gws-broker.md  # expect 1
 # so this greps the replacement clause rather than diffing a line range.
 grep -c "being re-fitted" docs/THREAT-MODEL.md                     # before 1, after 0
 grep -c "WP-scenario-harness-auth-repair" docs/THREAT-MODEL.md     # before 1, after 0
-grep -cF 'harness that exercises this is `tests/scenarios/broker-e2e/`; the containment itself is enforced by the argv + broker design, unit-verified and design-reviewed.)' docs/THREAT-MODEL.md   # expect 1
+grep -cF 'harness written to exercise this is `tests/scenarios/broker-e2e/`; the containment itself is enforced by the argv + broker design, unit-verified and design-reviewed.)' docs/THREAT-MODEL.md   # expect 1
+grep -c 'The live end-to-end' docs/THREAT-MODEL.md                  # before 1, after 0
 
 # V6 (AC6, AC7, AC8) — the blast radius, both files.
 git diff --stat
@@ -561,9 +624,10 @@ git diff -U0 -- docs/THREAT-MODEL.md | grep -cE "^[+-][^+-]"   # expect 2 (one -
 # V7 — lint (markdownlint runs over docs/**/*.md).
 npm run lint
 
-# V8 — the permission boundary (CI runs this too).
+# V8 — the permission boundary (CI runs this too). EVERY file in Table S must be
+# listed here; a missing path makes CI reject the very edit this spec mandates.
 node scripts/boundary-check.js docs/specs/WP-gws-broker-runbook-destale.md \
-  docs/runbooks/gws-broker.md
+  docs/runbooks/gws-broker.md docs/THREAT-MODEL.md
 ```
 
 ## Out of scope (do NOT do these)
