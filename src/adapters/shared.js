@@ -2,7 +2,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const { hashDir } = require('../core/manifest');
+const { hashDir, insertionAnchor } = require('../core/manifest');
 const { WienerdogError } = require('../core/errors');
 
 const BEGIN = '<!-- wienerdog:begin -->';
@@ -109,8 +109,12 @@ function recordSettingsEntry(manifest, settingsPath, createdFile, commands) {
  *  @param {boolean} inserted TRUE only on the two branches that actually WRITE
  *  separators (createdFile, append). The replace branch splices between existing
  *  sentinels and writes none, so it passes false and the recorded separators
- *  are left exactly as they are. */
-function recordManagedBlock(manifest, mdPath, createdFile, sepBefore, sepAfter, inserted) {
+ *  are left exactly as they are.
+ *  @param {string|null} anchorBefore the insertionAnchor() of the content that
+ *  immediately preceded sepBefore. Moves with sepBefore/sepAfter under the SAME
+ *  update-on-insert rule — the three fields are one fact and must never be
+ *  written apart (Table P rule P-1). */
+function recordManagedBlock(manifest, mdPath, createdFile, sepBefore, sepAfter, inserted, anchorBefore) {
   if (!manifest) return;
   if (!Array.isArray(manifest.entries)) manifest.entries = [];
   const existing = manifest.entries.find((e) => e.kind === 'managed-block' && e.path === mdPath);
@@ -123,6 +127,7 @@ function recordManagedBlock(manifest, mdPath, createdFile, sepBefore, sepAfter, 
   if (inserted) {
     entry.sepBefore = sepBefore;
     entry.sepAfter = sepAfter;
+    entry.anchorBefore = anchorBefore;
   }
   if (!existing) manifest.entries.push(entry);
 }
@@ -176,7 +181,7 @@ function applyManagedBlock(mdPath, digest, dryRun, manifest, out) {
       fs.mkdirSync(path.dirname(mdPath), { recursive: true });
       fs.writeFileSync(mdPath, next);
     }
-    recordManagedBlock(manifest, mdPath, true, '', '\n', true);
+    recordManagedBlock(manifest, mdPath, true, '', '\n', true, insertionAnchor(''));
     out.changed.push(mdPath);
     return;
   }
@@ -194,7 +199,7 @@ function applyManagedBlock(mdPath, digest, dryRun, manifest, out) {
       out.changed.push(mdPath);
     }
     // Manifest entry (if any) already exists from a prior run; do not re-record.
-    recordManagedBlock(manifest, mdPath, false, null, null, false);
+    recordManagedBlock(manifest, mdPath, false, null, null, false, null);
     return;
   }
 
@@ -207,7 +212,7 @@ function applyManagedBlock(mdPath, digest, dryRun, manifest, out) {
   const sepAfter = '\n'; // the block's own line terminator
   const next = `${current}${sepBefore}${block}${sepAfter}`;
   if (!dryRun) fs.writeFileSync(mdPath, next);
-  recordManagedBlock(manifest, mdPath, false, sepBefore, sepAfter, true); // inserted → UPDATE
+  recordManagedBlock(manifest, mdPath, false, sepBefore, sepAfter, true, insertionAnchor(current)); // inserted → UPDATE
   out.changed.push(mdPath);
 }
 

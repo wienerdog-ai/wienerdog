@@ -1393,6 +1393,11 @@ test('WP-147 T7 (Table M): forged out-of-vocabulary separator metadata cannot de
   }
 });
 
+// WP-managed-block-insertion-anchor (Table F): the bound TIGHTENED. The forged
+// '\n\n' makes `candidate` = 'foo', which no longer hashes to the recorded
+// anchor of 'foo\n' — the strip is withheld, so the forgery now loses ZERO user
+// bytes (it used to lose exactly the trailing newline; our blank line is left
+// behind instead).
 test('WP-147 T9 (Table M bound): an in-vocabulary at-EOF forgery loses exactly one newline, never text', () => {
   const { applyManagedBlock } = require('../../src/adapters/shared');
   /** Honest install of "foo\n"; optionally hand-edit the manifest entry to the
@@ -1414,7 +1419,7 @@ test('WP-147 T9 (Table M bound): an in-vocabulary at-EOF forgery loses exactly o
   const control = run(false);
   const forged = run(true);
   assert.equal(control, 'foo\n', 'honest control restores byte-perfectly');
-  assert.equal(forged, 'foo', 'forged entry loses exactly the trailing newline');
+  assert.equal(forged, 'foo\n\n', 'forged entry now loses NOTHING — the anchor refuses the forged separator claim and our blank line is left instead');
   assert.equal(
     control.replace(/\n/g, ''),
     forged.replace(/\n/g, ''),
@@ -1478,6 +1483,211 @@ test('WP-147 T12 (AC14): non-string separator metadata still strips the block, n
     assert.ok(res.removed.includes(md), `${label}: block still removed (entry NOT rejected upstream)`);
     assert.match(err, /ignoring out-of-vocabulary separator metadata/, `${label}: the stderr notice fires`);
   }
+});
+
+// ── WP-managed-block-insertion-anchor: forward-time position evidence ─────────
+// A-T1 … A-T11 (A-T5 is the edit to WP-147 T9 above, per Table F). Every fixture
+// is set up HONESTLY through applyManagedBlock (WP-147 T11's harness shape) so
+// the recorded separator + anchor are whatever the forward step actually wrote;
+// manifest hand-editing appears only in the forgery rows (A-T4).
+
+const { applyManagedBlock: anchorApplyMB } = require('../../src/adapters/shared');
+const { insertionAnchor } = manifestLib;
+
+/** Honest-setup harness (WP-147 T11's `run` shape): sync `original` through
+ *  applyManagedBlock, assert the recorded sepBefore, then rewrite the file from
+ *  `template` with <BLOCK> substituted (`null` = leave the honest write as is),
+ *  optionally mutate the manifest entry (forgery rows only), and uninstall.
+ *  @param {string} original @param {string} expectedSep
+ *  @param {string|null} template @param {(e: object) => void} [mutate]
+ *  @returns {{final: string|null, pre: string, block: string, entry: object,
+ *             res: object, err: string, md: string}} */
+function anchorRun(original, expectedSep, template, mutate) {
+  const paths = tempPaths();
+  const manifest = makeInstall(paths);
+  fs.mkdirSync(paths.claudeDir, { recursive: true });
+  const md = path.join(paths.claudeDir, 'CLAUDE.md');
+  fs.writeFileSync(md, original);
+  anchorApplyMB(md, 'body', false, manifest, { changed: [], unchanged: [], notices: [] });
+  const entry = manifest.entries.find((e) => e.kind === 'managed-block' && e.path === md);
+  assert.equal(entry.sepBefore, expectedSep, `honest sync records sepBefore ${JSON.stringify(expectedSep)}`);
+  const written = fs.readFileSync(md, 'utf8');
+  const block = written.slice(written.indexOf(MB_BEGIN), written.indexOf(MB_END) + MB_END.length);
+  const pre = template === null ? written : template.split('<BLOCK>').join(block);
+  if (template !== null) fs.writeFileSync(md, pre);
+  if (mutate) mutate(entry);
+  const origWrite = process.stderr.write.bind(process.stderr);
+  let err = '';
+  process.stderr.write = (chunk) => { err += chunk; return true; };
+  let res;
+  try {
+    res = manifestLib.reverse(paths, manifest, {});
+  } finally {
+    process.stderr.write = origWrite;
+  }
+  return { final: fs.existsSync(md) ? fs.readFileSync(md, 'utf8') : null, pre, block, entry, res, err, md };
+}
+
+test('WP-managed-block-insertion-anchor A-T1 (Q1): the routed residual is closed — a moved block restores the user blank line byte-perfectly', () => {
+  const { final, entry } = anchorRun('paraA\n\nparaB\n', '\n', 'paraA\n\n<BLOCK>\nparaB\n');
+  assert.equal(typeof entry.anchorBefore, 'string', 'the honest sync recorded an anchor — this row must not pass by the legacy arm');
+  assert.equal(final, 'paraA\n\nparaB\n', 'byte-perfect: the user blank line survives the relocation (base eats it)');
+});
+
+test('WP-managed-block-insertion-anchor A-T2 (Q3+Q4): the ordinary path and a distant edit restore byte-perfectly; the forward step is idempotent (AC11)', () => {
+  // (a) ordinary in-place uninstall, with the AC11 idempotency check: sync TWICE.
+  const paths = tempPaths();
+  const manifest = makeInstall(paths);
+  fs.mkdirSync(paths.claudeDir, { recursive: true });
+  const md = path.join(paths.claudeDir, 'CLAUDE.md');
+  fs.writeFileSync(md, 'foo\n');
+  anchorApplyMB(md, 'body', false, manifest, { changed: [], unchanged: [], notices: [] });
+  const find = () => manifest.entries.find((e) => e.kind === 'managed-block' && e.path === md);
+  const snapshot = JSON.parse(JSON.stringify(find()));
+  const bytes = fs.readFileSync(md, 'utf8');
+  const out2 = { changed: [], unchanged: [], notices: [] };
+  anchorApplyMB(md, 'body', false, manifest, out2);
+  assert.deepEqual(find(), snapshot, 'second sync leaves the manifest entry deep-equal (AC11)');
+  assert.equal(fs.readFileSync(md, 'utf8'), bytes, 'second sync leaves the file bytes unchanged (AC11)');
+  assert.deepEqual(out2.unchanged, [md], 'second sync reports the file unchanged');
+  manifestLib.reverse(paths, manifest, {});
+  assert.equal(fs.readFileSync(md, 'utf8'), 'foo\n', '(a) in-place uninstall restores byte-perfectly');
+  // (b) a distant edit — first line changed, 400 filler chars between it and the
+  // block. Red against a full-prefix or prefix-length anchor: this is the row
+  // that justifies ANCHOR_WINDOW being bounded.
+  const filler = 'f'.repeat(400);
+  const edited = `HEAD-EDITED\n${filler}\ntail-para\n`;
+  const { final } = anchorRun(`head\n${filler}\ntail-para\n`, '\n', `${edited}\n<BLOCK>\n`);
+  assert.equal(final, edited, '(b) an edit far above the block does not withhold the strip');
+});
+
+test('WP-managed-block-insertion-anchor A-T3 (Q5, R2): an in-window edit withholds the strip — the declared cost, BOTH producer-valid separators', () => {
+  // (a) newline-terminated original ⇒ sepBefore '\n' ⇒ one-character surplus.
+  const a = anchorRun('paraA\n', '\n', 'paraA-EDITED\n\n<BLOCK>\n');
+  const aBase = 'paraA-EDITED\n'; // what shipped base produces on this fixture
+  assert.equal(a.final, 'paraA-EDITED\n\n', '(a) our separator is left — the strip is withheld');
+  assert.equal(a.final.length - aBase.length, a.entry.sepBefore.length, '(a) the surplus against base equals sepBefore.length');
+  assert.equal(a.final.replace(/\n/g, ''), aBase.replace(/\n/g, ''), '(a) no user byte is lost');
+  // (b) unterminated original ⇒ sepBefore '\n\n' ⇒ TWO-character surplus.
+  const b = anchorRun('paraA', '\n\n', 'paraA-EDITED\n\n<BLOCK>\n');
+  const bBase = 'paraA-EDITED';
+  assert.equal(b.final, 'paraA-EDITED\n\n', '(b) our two-byte separator is left — the strip is withheld');
+  assert.equal(b.final.length - bBase.length, b.entry.sepBefore.length, '(b) the surplus against base equals sepBefore.length (2)');
+  assert.equal(b.final.replace(/\n/g, ''), bBase.replace(/\n/g, ''), '(b) no user byte is lost');
+});
+
+test('WP-managed-block-insertion-anchor A-T4 (Q7/Q8): a deleted or non-string anchor degrades to EXACTLY base behaviour — narrowing only', () => {
+  const cases = [
+    ['deleted anchor', (e) => { delete e.anchorBefore; }],
+    ['non-string anchor', (e) => { e.anchorBefore = 42; }],
+  ];
+  for (const [label, mutate] of cases) {
+    const { final, res, err, md } = anchorRun('paraA\n\nparaB\n', '\n', 'paraA\n\n<BLOCK>\nparaB\n', mutate);
+    assert.equal(final, 'paraA\nparaB\n', `${label}: exactly shipped 0.12.0 behaviour, no more and no less`);
+    assert.ok(res.removed.includes(md), `${label}: the block is still removed — uninstall is not made incomplete`);
+    assert.doesNotMatch(err, /ignoring out-of-vocabulary separator metadata/, `${label}: the separator notice belongs to sepBefore/sepAfter, not the anchor`);
+  }
+});
+
+test('WP-managed-block-insertion-anchor A-T6 (Q10): the duplicate-window move — uniqueness, not the hash alone, proves position', () => {
+  const W = 'w'.repeat(251) + '\nEND\n';
+  assert.equal(W.length, 256, 'the fixture sits exactly on the window boundary');
+  const original = `${W}\nTAIL\n${W}`;
+  const { final } = anchorRun(original, '\n', `${W}\n<BLOCK>\nTAIL\n${W}`);
+  assert.equal(final, original, 'byte-perfect: the ambiguous window withholds the strip at the wrong position');
+  const count = (s) => s.split(W).length - 1;
+  assert.ok(count(final) >= count(original), 'no W occurrence was consumed — the withhold never became a strip');
+});
+
+test('WP-managed-block-insertion-anchor A-T7 (Q12): boundary sweep at candidate.length 255/256/257 — nothing special happens at the window edge', () => {
+  for (const len of [255, 256, 257]) {
+    const P = 'x'.repeat(len - 1) + '\n';
+    assert.equal(P.length, len);
+    // ordinary in-place uninstall
+    const inPlace = anchorRun(P, '\n', null);
+    assert.equal(inPlace.final, P, `in-place restores byte-perfectly at candidate.length ${len}`);
+    // honest relocation (Q1 shape scaled to the boundary)
+    const original = `${P}\nparaB\n`;
+    const moved = anchorRun(original, '\n', `${P}\n<BLOCK>\nparaB\n`);
+    assert.equal(moved.final, original, `relocation preserves byte-perfectly at candidate.length ${len}`);
+  }
+});
+
+test('WP-managed-block-insertion-anchor A-T8 (Table B :179/:197): the createdFile branch anchors the empty prefix; replace preserves; uninstall deletes', () => {
+  const paths = tempPaths();
+  const manifest = makeInstall(paths);
+  const md = path.join(paths.claudeDir, 'CLAUDE.md'); // ABSENT — the createdFile branch
+  anchorApplyMB(md, 'body', false, manifest, { changed: [], unchanged: [], notices: [] });
+  const find = () => manifest.entries.find((e) => e.kind === 'managed-block' && e.path === md);
+  const entry = find();
+  assert.equal(entry.createdFile, true);
+  assert.equal(entry.sepBefore, '');
+  assert.equal(entry.sepAfter, '\n');
+  assert.equal(entry.anchorBefore, insertionAnchor(''), 'the empty prefix is anchored via insertionAnchor(\'\'), not null');
+  const snapshot = JSON.parse(JSON.stringify(entry));
+  const bytes = fs.readFileSync(md, 'utf8');
+  // Second sync runs the REPLACE branch (:197): inserted=false must preserve all
+  // three recorded fields (rule P-3) and change nothing on disk (AC11).
+  anchorApplyMB(md, 'body', false, manifest, { changed: [], unchanged: [], notices: [] });
+  assert.deepEqual(find(), snapshot, 'the replace branch preserves the whole entry — sepBefore/sepAfter/anchorBefore untouched');
+  assert.equal(fs.readFileSync(md, 'utf8'), bytes, 'second sync leaves the file bytes unchanged (AC11)');
+  manifestLib.reverse(paths, manifest, {});
+  assert.equal(fs.existsSync(md), false, 'uninstall deletes the file we created');
+});
+
+test('WP-managed-block-insertion-anchor A-T9 (Q14/Q15, R2c): a reproduced window strips exactly sepBefore — EQUAL to base, both arms', () => {
+  // (a) 256-char newline-terminated window ⇒ sepBefore '\n' ⇒ one character.
+  const Wa = 'w'.repeat(251) + '\nEND\n';
+  assert.equal(Wa.length, 256);
+  const a = anchorRun(`PPPP\n${Wa}`, '\n', `QQ\n${Wa}\n<BLOCK>\n`);
+  assert.equal(a.final, `QQ\n${Wa}`, '(a) the strip proceeds at the reproduced, unique window');
+  const aNoBlock = a.pre.replace(a.block + '\n', ''); // block + sepAfter excised, leading separator RETAINED
+  assert.equal(aNoBlock.length - a.final.length, a.entry.sepBefore.length, '(a) exactly sepBefore.length characters removed');
+  assert.equal(aNoBlock.replace(/\s/g, ''), a.final.replace(/\s/g, ''), '(a) the removed characters are whitespace');
+  // (b) 256-char UNTERMINATED window ⇒ sepBefore '\n\n' ⇒ two characters, block at EOF.
+  const Wb = 'w'.repeat(253) + 'END';
+  assert.equal(Wb.length, 256);
+  const b = anchorRun(`PPPP\n${Wb}`, '\n\n', `QQ\n${Wb}\n\n<BLOCK>\n`);
+  assert.equal(b.final, `QQ\n${Wb}`, '(b) both separator bytes stripped — equal to base, the two-character arm');
+  const bNoBlock = b.pre.replace(b.block + '\n', '');
+  assert.equal(bNoBlock.length - b.final.length, b.entry.sepBefore.length, '(b) exactly sepBefore.length (2) characters removed');
+  assert.equal(bNoBlock.replace(/\s/g, ''), b.final.replace(/\s/g, ''), '(b) the removed characters are whitespace');
+});
+
+test('WP-managed-block-insertion-anchor A-T10 (Q13): the ordinary-path corpus sweep — newline-only, repeated-line, CRLF and empty content all round-trip', () => {
+  for (const original of ['\n', '\n\n\n', 'a\na\na\n', 'x\r\ny\r\n', 'foo\n', '']) {
+    const expectedSep = original.endsWith('\n') ? '\n' : '\n\n';
+    const { final } = anchorRun(original, expectedSep, null);
+    assert.equal(final, original, `${JSON.stringify(original)} restores byte-perfectly`);
+  }
+  // Ambiguous sentinels: the entry is skipped with the shipped notice and the file
+  // is untouched — the anchor never runs on a file locateManagedBlock refuses.
+  const amb = anchorRun('foo\n', '\n', 'foo\n\n<BLOCK>\n<BLOCK>\n');
+  assert.match(amb.err, /ambiguous wienerdog managed-block markers/, 'the shipped ambiguity notice fires');
+  assert.ok(amb.res.skipped.includes(amb.md), 'the ambiguous entry is skipped');
+  assert.equal(amb.final, amb.pre, 'the ambiguous file is left byte-untouched');
+});
+
+test('WP-managed-block-insertion-anchor A-T11 (Q16, R2b): a repeated short window after the block withholds — the cost, pinned with controls', () => {
+  // [original, appended-after-block, expectedSep, base result]
+  const costing = [
+    ['A\n', 'A\n', '\n', 'A\nA\n'],
+    ['hi\n', 'hi\n', '\n', 'hi\nhi\n'],
+    ['# Notes\n', '# Notes\n', '\n', '# Notes\n# Notes\n'],
+    ['A', '\nA', '\n\n', 'A\nA'], // the unterminated, two-byte arm
+  ];
+  for (const [original, appended, expectedSep, base] of costing) {
+    const { final, entry } = anchorRun(original, expectedSep, `${original}${expectedSep}<BLOCK>\n${appended}`);
+    assert.equal(final, `${original}${expectedSep}${appended}`, `${JSON.stringify(original)}+${JSON.stringify(appended)}: the surplus is the recorded separator`);
+    assert.equal(final.length - base.length, entry.sepBefore.length, `${JSON.stringify(original)}: the surplus equals sepBefore.length`);
+    assert.equal(final.replace(/\n/g, ''), base.replace(/\n/g, ''), `${JSON.stringify(original)}: no user byte moves`);
+  }
+  // Controls: a NON-repeating append costs nothing — the withhold is caused by
+  // the repetition, not by the append.
+  const c1 = anchorRun('A\n', '\n', 'A\n\n<BLOCK>\nB\n');
+  assert.equal(c1.final, 'A\nB\n', 'control (\\n arm): base exactly — zero cost');
+  const c2 = anchorRun('A', '\n\n', 'A\n\n<BLOCK>\n\nB');
+  assert.equal(c2.final, 'A\nB', 'control (\\n\\n arm): base exactly — zero cost');
 });
 
 // ── WP-153: target-aware symlink reverser (audit A13 follow-up) ───────────────
