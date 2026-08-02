@@ -54,6 +54,178 @@ function darwinReplaceEntry(loader, uid, label, plistPath) {
   return loader(['launchctl', 'bootstrap', `gui/${uid}`, plistPath]).status === 0;
 }
 
+/** Absolute path to `plutil`, the macOS plist linter used as a preflight before
+ *  ANY teardown in `ensureDarwinEntryRegistered` (WP-scheduler-register-replaces-
+ *  loaded-record). Never a PATH lookup (WP-154's exec-identity rule) — gating on
+ *  `fs.existsSync(PLUTIL)` rather than the loader's result shape is what keeps
+ *  "absent plutil" distinguishable from "lint rejected the file" (see the
+ *  preflight's own comment below). */
+const PLUTIL = '/usr/bin/plutil';
+
+/** Read ONE top-level `key = value` line out of a `launchctl print` record — the
+ *  same parse shape `launchdLoadedArgs` uses for the `arguments` block, applied to
+ *  a single scalar line (Current state §7c, Implementation notes D1). Trim each
+ *  line, split on the FIRST ` = `; the key must match exactly. PURE: string work
+ *  only, never throws. @param {string} stdout @param {string} key
+ *  @returns {string|null} null when the key's line is absent (an incomplete
+ *    readback — never treated as a value to compare). */
+function readTopLevelField(stdout, key) {
+  const lines = String(stdout).split('\n');
+  for (const line of lines) {
+    const t = line.trim();
+    const idx = t.indexOf(' = ');
+    if (idx === -1) continue;
+    if (t.slice(0, idx) === key) return t.slice(idx + 3);
+  }
+  return null;
+}
+
+/**
+ * What does the LOADED launchd record say, relative to what we would register
+ * right now? Returns a TRI-STATE verdict, never a boolean. Pure
+ * string work over `launchctl print` stdout — no spawn, no fs, never throws.
+ * Compares EVERY canonical field that can vary between two renders, not just
+ * the argv (Table A2): the complete ProgramArguments element by element, the
+ * StartCalendarInterval Hour/Minute, and the EnvironmentVariables bindings by
+ * CONTAINMENT (launchd injects keys of its own — Current state §7b fact 1).
+ * The verdict vocabulary is **adopted verbatim from `loadedEntryTargets`**
+ * (`generators.js:784`) and **extended by one member** for Table A2b's fatality
+ * tiering — `'match' | 'mismatch-fatal' | 'mismatch-benign' | 'indeterminate'`.
+ * The bare `'mismatch'` is NOT a value this function can return; it survives in
+ * this spec only as narration of the pre-tiering contract.
+ *   'match'         — every block parsed AND every compared value equal.
+ *   'mismatch-fatal'  — everything parsed AND a FATAL-tier field differs
+ *                     (Table A2b). THE ONLY VERDICT THAT MAY AUTHORIZE A TEARDOWN.
+ *   'mismatch-benign' — everything parsed, every FATAL field equal, and only a
+ *                     BENIGN-tier field differs. No skip AND no teardown: the
+ *                     loaded record is still doing its authorized job, so
+ *                     destroying it could leave no working schedule at all.
+ *   'indeterminate' — any block failed to parse. The ABSENCE of evidence, not
+ *                     evidence of divergence: it permits the non-destructive
+ *                     bootstrap attempt and NOTHING further.
+ * @param {string} stdout  `launchctl print` output (untrusted display text)
+ * @param {{argv:string[], hour:number|null, minute:number, env:Array<[string,string]>,
+ *          path:string, stdoutPath:string, stderrPath:string, spawnType:string}} expect
+ *   the canonical values just rendered
+ * @returns {'match'|'mismatch-fatal'|'mismatch-benign'|'indeterminate'}
+ */
+function darwinLoadedVerdict(stdout, expect) {
+  const argv = gen.launchdLoadedArgs(stdout);
+  const cal = gen.launchdLoadedCalendar(stdout);
+  const env = gen.launchdLoadedEnv(stdout);
+  const p = readTopLevelField(stdout, 'path');
+  const program = readTopLevelField(stdout, 'program');
+  const stdoutPath = readTopLevelField(stdout, 'stdout path');
+  const stderrPath = readTopLevelField(stdout, 'stderr path');
+  const spawnTypeRaw = readTopLevelField(stdout, 'spawn type');
+
+  // Any source unparseable, or any single-line field absent ⇒ the ABSENCE of
+  // evidence — never a mismatch of either tier (Implementation notes D1).
+  if (
+    argv === null || cal === null || env === null ||
+    p === null || program === null || stdoutPath === null ||
+    stderrPath === null || spawnTypeRaw === null
+  ) {
+    return 'indeterminate';
+  }
+  const spawnType = spawnTypeRaw.split(' ')[0]; // 'background (5)' → 'background'
+
+  // FATAL tier (Table A2b): argv, program, calendar, env.
+  let fatal =
+    argv.length !== expect.argv.length ||
+    !argv.every((a, i) => a === expect.argv[i]) ||
+    program !== expect.argv[0] ||
+    cal.hour !== expect.hour ||
+    cal.minute !== expect.minute;
+  if (!fatal) {
+    for (const [k, v] of expect.env) {
+      if (!env.has(k) || env.get(k) !== v) {
+        fatal = true;
+        break;
+      }
+    }
+  }
+  if (fatal) return 'mismatch-fatal';
+
+  // BENIGN tier (Table A2b): log paths, spawn type, the loaded-from path.
+  const benign =
+    p !== expect.path ||
+    stdoutPath !== expect.stdoutPath ||
+    stderrPath !== expect.stderrPath ||
+    spawnType !== expect.spawnType;
+  return benign ? 'mismatch-benign' : 'match';
+}
+
+/**
+ * Register one launchd entry, reporting success only from evidence about what
+ * launchd now holds (ADR-0037). Mirrors ensureWindowsTaskRegistered. ONE
+ * `launchctl print` serves both decisions: whether a verified skip is allowed,
+ * and whether a teardown is justified.
+ * @param {(argv:string[])=>{status:number,stdout?:string}} loader
+ * @param {number} uid @param {string} label @param {string} plistPath
+ * @param {{changed:boolean, expect:{argv:string[],hour:number|null,minute:number,env:Array<[string,string]>,
+ *          path:string,stdoutPath:string,stderrPath:string,spawnType:string},
+ *          priorBytes:Buffer|null, canonicalBytes:Buffer, onBeforeTeardown:()=>void}} o
+ *   `canonicalBytes` is the rendered plist this invocation wrote — the SAME value
+ *   handed to `ensureEntry`. It is REQUIRED: the staleness guard reads it, and a
+ *   missing binding is a ReferenceError on the post-teardown failure path, i.e. a
+ *   crash with the schedule already removed.
+ * @returns {boolean} true only when launchd verifiably holds this entry
+ */
+function ensureDarwinEntryRegistered(loader, uid, label, plistPath, o) {
+  const printed = loader(['launchctl', 'print', `gui/${uid}/${label}`]);
+  const isLoaded = !!printed && printed.status === 0;
+  //     `verdict` is FOUR-STATE plus the caller's 'absent': 'absent' |
+  //     'indeterminate' | 'mismatch-benign' | 'mismatch-fatal' | 'match'.
+  const verdict = isLoaded ? darwinLoadedVerdict(printed.stdout || '', o.expect) : 'absent';
+  // (a) THE LIVE MATCH WINS — regardless of o.changed. The readback is the
+  //     evidence; `changed` is a statement about a FILE and must not force the
+  //     teardown of a record that already is what we would register.
+  if (verdict === 'match') return true;
+  // POST-BOOTSTRAP VERIFY — applied after EVERY successful bootstrap, not only
+  // the post-teardown one. launchd loads whatever is on disk at that moment, not
+  // the bytes we rendered/linted, so a bootstrap exit 0 is NOT evidence about
+  // what got loaded. DETECTION only, never a repair (see "The file race").
+  const verifyLoaded = () => {
+    const after = loader(['launchctl', 'print', `gui/${uid}/${label}`]);
+    return !!after && after.status === 0
+      && darwinLoadedVerdict(after.stdout || '', o.expect) === 'match';
+  };
+  // (b) non-destructive attempt first (ADR-0018 ordering, preserved)
+  if (loader(['launchctl', 'bootstrap', `gui/${uid}`, plistPath]).status === 0) return verifyLoaded();
+  // (c0) PREFLIGHT — never destroy a loaded record for a known-bad replacement.
+  //      Gated on EXISTENCE, not on the loader's result shape: schedulerSpawn
+  //      normalizes a spawn error (incl. ENOENT) to {status:1} and discards the
+  //      error, so "absent plutil" and "lint rejected the file" are the SAME
+  //      value to a caller. Existence is what distinguishes them.
+  if (fs.existsSync(PLUTIL)) {
+    if (loader([PLUTIL, '-lint', plistPath]).status !== 0) return false;
+  }
+  // (c) TEARDOWN ONLY ON A POSITIVELY ESTABLISHED MISMATCH. 'absent' means
+  //     nothing to tear down; 'indeterminate' is the ABSENCE of evidence, not
+  //     evidence of divergence — destroying a record we could not read would be
+  //     the exact opposite of this WP's rule.
+  if (verdict !== 'mismatch-fatal') return false;   // benign / indeterminate / absent
+  o.onBeforeTeardown();                       // ADR-0018 marker (advisory — see below)
+  loader(['launchctl', 'bootout', `gui/${uid}/${label}`]);
+  if (loader(['launchctl', 'bootstrap', `gui/${uid}`, plistPath]).status === 0) return verifyLoaded();
+  // (d) ROLLBACK — the replacement is unbootstrappable; restore the prior
+  //     registration so no destruction window ships. Never returns true.
+  //     BEST-EFFORT STALENESS CHECK (not atomic — see the residual): restore ONLY
+  //     if the file still holds the bytes THIS invocation wrote. If another
+  //     invocation has written since, its bytes are newer than ours and
+  //     overwriting them would destroy a registration we never inspected.
+  if (o.priorBytes !== null) {
+    let current = null;
+    try { current = fs.readFileSync(plistPath); } catch { current = null; }
+    if (current !== null && current.equals(o.canonicalBytes)) {
+      try { fs.writeFileSync(plistPath, o.priorBytes); } catch { return false; }
+      loader(['launchctl', 'bootstrap', `gui/${uid}`, plistPath]);
+    }
+  }
+  return false;
+}
+
 /**
  * Compute the per-job launcher binding for the OS entry (WP-157): the launcher
  * path, the descriptor path, and the entry-bound expect-digest (the re-derived
@@ -299,10 +471,16 @@ function sweepLegacyWindowsWrappers(paths, manifest) {
  */
 function ensureCatchup(paths, manifest, loader, uid, jobDigests) {
   const logDir = path.join(paths.logs, 'catchup');
+  // Hoisted so the renderer and `expect` are provably built from the SAME
+  // values — two independent calls could otherwise diverge (D3 implementation
+  // note), and the skip would then compare against something we never wrote.
+  const node = gen.nodePath();
+  const launcher = launcherPathFor(paths);
+  const expectDigest = catchupExpectDigest(paths);
   const content = gen.catchupPlist({
-    node: gen.nodePath(),
-    launcher: launcherPathFor(paths),
-    expectDigest: catchupExpectDigest(paths),
+    node,
+    launcher,
+    expectDigest,
     jobDigests,
     home: paths.home,
     core: paths.core,
@@ -311,10 +489,26 @@ function ensureCatchup(paths, manifest, loader, uid, jobDigests) {
   const label = 'ai.wienerdog.catchup';
   const plistPath = path.join(gen.launchAgentsDir(paths.home), `${label}.plist`);
   const unload = ['launchctl', 'bootout', `gui/${uid}/${label}`];
-  if (ensureEntry(manifest, plistPath, content, unload)) {
-    return { loaded: loader(['launchctl', 'bootstrap', `gui/${uid}`, plistPath]).status === 0 };
-  }
-  return { loaded: true };
+  let priorBytes = null;
+  try { priorBytes = fs.readFileSync(plistPath); } catch { priorBytes = null; }
+  const changed = ensureEntry(manifest, plistPath, content, unload);
+  const loaded = ensureDarwinEntryRegistered(loader, uid, label, plistPath, {
+    changed,
+    priorBytes,
+    canonicalBytes: Buffer.from(content),
+    expect: {
+      argv: [node, ...gen.catchupLaunchArgs({ launcher, expectDigest, jobDigests })],
+      hour: null, minute: 0,  // catchupPlist renders Minute 0 and NO Hour key
+                              // (generators.js:410-416) — null REFUSES a present Hour
+      env: gen.scheduledEnvPairs(paths.home, paths.core),
+      path: plistPath,
+      stdoutPath: path.join(logDir, 'launchd.out.log'),   // logDir = <core>/logs/catchup
+      stderrPath: path.join(logDir, 'launchd.err.log'),
+      spawnType: 'background',
+    },
+    onBeforeTeardown: () => require('../scheduler/status').refreshSchedulerStatus(paths),
+  });
+  return { loaded };
 }
 
 /**
@@ -426,9 +620,26 @@ function registerPlatformEntries(paths, manifest, o, loader, platform = process.
     const plistPath = path.join(gen.launchAgentsDir(paths.home), `${label}.plist`);
     const content = gen.launchdPlist({ ...o, node, launcher: b.launcher, descriptor: b.descriptor, expectDigest: b.expectDigest, home: paths.home, core: paths.core, logDir });
     const unload = ['launchctl', 'bootout', `gui/${uid}/${label}`];
-    let loaded = true;
-    let changed = ensureEntry(manifest, plistPath, content, unload);
-    if (changed) loaded = loader(['launchctl', 'bootstrap', `gui/${uid}`, plistPath]).status === 0;
+    // Captured BEFORE ensureEntry overwrites — the narrowest possible capture
+    // point, and the reason ensureEntry's contract does not change.
+    let priorBytes = null;
+    try { priorBytes = fs.readFileSync(plistPath); } catch { priorBytes = null; }
+    const changed = ensureEntry(manifest, plistPath, content, unload);
+    const loaded = ensureDarwinEntryRegistered(loader, uid, label, plistPath, {
+      changed,
+      priorBytes,
+      canonicalBytes: Buffer.from(content),   // the same bytes handed to ensureEntry
+      expect: {
+        argv: [node, ...gen.jobLaunchArgs({ launcher: b.launcher, name: o.name, descriptor: b.descriptor, expectDigest: b.expectDigest })],
+        hour: o.hour, minute: o.minute,
+        env: gen.scheduledEnvPairs(paths.home, paths.core),   // already exported (:1035)
+        path: plistPath,                                      // in scope; the file we just wrote
+        stdoutPath: path.join(logDir, 'launchd.out.log'),     // logDir is in scope
+        stderrPath: path.join(logDir, 'launchd.err.log'),
+        spawnType: 'background',                              // ProcessType literal
+      },
+      onBeforeTeardown: () => require('../scheduler/status').refreshSchedulerStatus(paths),
+    });
     // Catch-up entry: login + hourly (macOS StartCalendarInterval misses power-off).
     // MINT the per-job digest map from freshly-derived descriptors (WP-catchup-per-job-authorization) —
     // this attended register path is one of the four authorized mint callers.
@@ -452,19 +663,26 @@ function registerPlatformEntries(paths, manifest, o, loader, platform = process.
     const timerChanged = ensureEntry(manifest, timerPath, timerText, timerUnload);
     const serviceChanged = ensureEntry(manifest, servicePath, serviceText, null);
     const changed = timerChanged || serviceChanged;
-    let loaded = true;
+    // Table A row 3 (ADR-0037): no verified skip on linux — reload + its warning
+    // + `enable --now` run on EVERY register, hoisted OUT of `if (changed)`, so a
+    // degraded reload is retried (and warned about) on every sync until it
+    // succeeds — never silently once. Both are idempotent no-ops against an
+    // already-correct unit, so this is cheap.
+    const reload = loader(['systemctl', '--user', 'daemon-reload']);
+    // Treat a MISSING result (undefined result OR a nullish status) as a failure too —
+    // absence of a result is not success. `!= null` catches both undefined and null, so
+    // a `{status:null}` result warns and prints 'no result', never 'null'.
+    const reloadOk = !!reload && reload.status != null && reload.status === 0;
+    if (!reloadOk) {
+      const s = reload && reload.status != null ? reload.status : 'no result';
+      process.stderr.write(`wienerdog: warning — 'systemctl --user daemon-reload' returned ${s}; the timer may load from stale units. Run 'wienerdog doctor'.\n`);
+    }
+    const enableOk = loader(['systemctl', '--user', 'enable', '--now', `${unitBase}.timer`]).status === 0;
+    const loaded = reloadOk && enableOk;
     if (changed) {
-      // Best-effort daemon-reload/linger are not gated; only `enable --now` counts.
-      const reload = loader(['systemctl', '--user', 'daemon-reload']);
-      // Treat a MISSING result (undefined result OR a nullish status) as a failure too —
-      // absence of a result is not success. `!= null` catches both undefined and null, so
-      // a `{status:null}` result warns and prints 'no result', never 'null'.
-      if (!reload || reload.status == null || reload.status !== 0) {
-        const s = reload && reload.status != null ? reload.status : 'no result';
-        process.stderr.write(`wienerdog: warning — 'systemctl --user daemon-reload' returned ${s}; the timer may load from stale units. Run 'wienerdog doctor'.\n`);
-      }
-      loaded = loader(['systemctl', '--user', 'enable', '--now', `${unitBase}.timer`]).status === 0;
-      // Best-effort: let timers fire when the user is logged out.
+      // Best-effort: let timers fire when the user is logged out. NOT evidence
+      // about what systemd holds, so it stays gated on `changed` and never gates
+      // `loaded` (D4 implementation note).
       const user = process.env.USER || process.env.LOGNAME || '';
       if (user) {
         const linger = loader(['loginctl', 'enable-linger', user]);
@@ -879,7 +1097,9 @@ function add(argv, loader, profile) {
   const { platform, changed, loaded } = registerPlatform(paths, manifest, { name, hour, minute }, loader);
   manifestLib.save(paths, manifest);
 
-  if (changed && !loaded) {
+  // ADR-0037: fail loud on ANY unloaded outcome, regardless of `changed` — a
+  // forced re-registration of unchanged source bytes can still fail (D5).
+  if (!loaded) {
     throw new WienerdogError(
       `wienerdog: registered "${name}"'s schedule file but the OS scheduler (${platform}) rejected it — ` +
       `it is NOT active. Run 'wienerdog doctor' for details.`
