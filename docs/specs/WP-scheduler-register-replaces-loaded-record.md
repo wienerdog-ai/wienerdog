@@ -840,12 +840,29 @@ rows 1, 4 and 5 stays byte-identical. Exhaustive site list, main line numbers:
 | `:1228` | `repointSchedules refreshes the descriptor … (WP-156)` (`:1224`) |
 
 **Every other `{ status: 0 }` loader in the file stays unchanged, and that is the
-boundary** — main `:106`, `:302`, `:321`, `:461`, `:495`, `:519`, `:643`, `:665`,
-`:752`, `:792`, `:840`, `:899`, `:1050`, `:1066`, `:1106`, `:1139`. A swap at any
-site not in the table above is out of boundary. Note in particular `:461`
-(`remove nope` — no register runs) and `:1139` (`list --json`'s own invocation):
-adjacent to swapped sites in the same tests, and deliberately left alone, because
-the swap is owed only where a register actually executes.
+boundary.** The list below is **complete, and its completeness is arithmetic
+rather than assertion** (corrected 2026-08-02, round-2 review note 1 — an earlier
+form said "every other" over a 16-entry list that was actually partial, which is
+the prose form of the range-abbreviation failure this table warns about):
+
+```bash
+git show origin/main:tests/unit/scheduler-schedule.test.js | grep -c "{ status: 0 }"
+```
+
+**49** on `main`. **14** of them are the swapped sites in the table above
+(`:338`; `:392`, `:395`; `:401`; `:420`; `:1021`, `:1025`; `:1035`; `:1084`;
+`:1131`, `:1132`; `:1185`, `:1199`; `:1228`). The remaining **35 stay unchanged**,
+and here they all are — `:106`, `:302`, `:321`, `:443`, `:461`, `:493`, `:495`,
+`:517`, `:519`, `:540`, `:579`, `:620`, `:643`, `:665`, `:729`, `:752`, `:773`,
+`:792`, `:827`, `:840`, `:855`, `:888`, `:899`, `:935`, `:953`, `:980`, `:993`,
+`:1050`, `:1066`, `:1104`, `:1106`, `:1118`, `:1139`, `:1216`, `:1238`.
+14 + 35 = 49, so the two lists together account for every site and neither can
+quietly lose a member.
+
+A swap at any site not in the table above is out of boundary. Note in particular
+`:461` (`remove nope` — no register runs) and `:1139` (`list --json`'s own
+invocation): adjacent to swapped sites in the same tests, and deliberately left
+alone, because the swap is owed only where a register actually executes.
 
 ### Table N — where §8's notice is asserted, and where it is inherited (canonical; +2026-08-02)
 
@@ -859,8 +876,10 @@ exactly the contract-density shape ADR-0031 names. This table is now that owner.
 (main; `:802` on the branch), inside an unconditional `if (!res.loaded)` — no
 platform branch, no second emitter of that string. Audited: the other two
 `did not accept it` strings in `schedule.js` (`:870`, `:895` on the branch) are
-`ensureCatchup`'s **different** catch-up sentences, not §8's. This WP does not
-change any of the three. **Consequence, and the reason this table exists:** a
+**different** catch-up sentences, not §8's, and both sit inside **`repairCatchup`**
+(branch `:832`) — the heal-gated primitive, not `ensureCatchup` (attribution
+corrected 2026-08-02, round-2 review note 2; the substantive claim is unchanged).
+This WP does not change any of the three. **Consequence, and the reason this table exists:** a
 fixture proves the notice **only if it drives `repointSchedules`**. A fixture that
 calls `registerPlatform` directly can prove `loaded === false` and nothing more —
 which is what all five clauses were resting on.
