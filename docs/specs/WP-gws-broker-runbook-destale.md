@@ -146,16 +146,23 @@ returns **exactly one line: `:9`** — part of the banner above. And:
 grep -niE "frozen|disabled|off in this|hardened|safety gate|gate is|not (yet )?enabled|pre-use|opened" docs/runbooks/gws-broker.md
 ```
 
-returns **`:7`, `:8`, `:9` and `:108`**. So `:7-9` is the complete gate-status
-scope.
+returns **`:7`, `:8` and `:9` — nothing else**. So `:7-9` is the complete
+gate-status scope. (An earlier revision of this spec said the scan also returned
+`:108` and then spent a paragraph defending that hit. It does not: re-run at
+`0f9ee08` returns three lines. wd-reviewer caught it. The paragraph below is
+kept, reframed as what it always actually was — a *scope* note, not a scan
+result.)
 
-**`:108` is NOT in that class and must not be touched.** It reads: *"(Per-group
-revocation would require setting up separate Google apps, which v1 does not do.)"*
-That is a product-scope statement about how many OAuth clients v1 uses, not a
-capability-gate status, and it is still true —
-`docs/THREAT-MODEL.md:431` states the same thing: *"Revocation is
-**all-or-nothing per OAuth client** (v1 uses one client with per-capability
-tokens…)"*.
+**Scope note, unprompted by any scan: leave the `v1 does not do` parenthetical
+alone.** It spans `:107-108` (it opens mid-line on `:107` with `(Per-group`, and
+`grep -n "which v1 does not do"` lands on `:108`, the line carrying that phrase)
+and reads *"(Per-group revocation would require setting up separate Google apps,
+which v1 does not do.)"* It is a product-scope statement about how many OAuth
+clients v1 uses, not a capability-gate status, and it is still true —
+`docs/THREAT-MODEL.md:431` says the same: *"Revocation is **all-or-nothing per
+OAuth client** (v1 uses one client with per-capability tokens…)"*. It is called
+out because it is the sentence most likely to look editable to someone reading
+this runbook for stale claims.
 
 **A SECOND stale class the gate-status scan does not catch: a live-proof
 assertion.** Found by the Codex design gate (round 1, 2026-08-02) and confirmed
@@ -224,7 +231,12 @@ only; exact wording in Implementation notes."* E3 follows that shape exactly.
 registered mirrored surface of any other spec. The clause-scoped
 `docs/THREAT-MODEL.md` rows that exist elsewhere name `:130`, `:132`, `:134`,
 `:277-279` and `:427` (`WP-secret-fence-ep2-redact-arm`'s Table Q rows Q10–Q13
-and `WP-stance-authority-containment`'s D7) — **none is `:146`**. And
+and `WP-stance-authority-containment`'s D7), plus
+`WP-refusal-remedy-discriminator`'s **M3** (`:292`), whose two anchored spans are
+the `wienerdog sync` remedy sentence and the last sentence of the "Where a
+refusal surfaces" bullet at `:354-361` — **none is `:146`**. (The M3 row was
+missing from an earlier revision's enumeration; wd-reviewer caught it. Adding it
+does not change the conclusion.) And
 `grep -rln "being re-fitted\|re-fitted to the current" docs/` returns only
 `docs/THREAT-MODEL.md` and this spec, so the sentence has no copies to keep in
 lockstep. `WP-143-a2-broker-docs` (Done) is the WP that originally wrote the T4a
@@ -266,11 +278,17 @@ operator's guide, not a definitions file, so it follows the VISION/README patter
 Verified at `0f9ee08`:
 
 - `grep -rn "gws-broker" docs/ README.md tests/ src/ bin/` (excluding
-  `docs/specs/done/`) returns four matches: `docs/THREAT-MODEL.md:429` and
+  `docs/specs/`) returns **five** matches: `docs/THREAT-MODEL.md:429` and
   `docs/adr/0026-gws-capability-broker.md:305`, which link to the **file**, not to
-  any heading inside it; `tests/unit/gws-broker.test.js:12` and
-  `bin/wienerdog.js:46`, which are about `src/cli/gws-broker.js`, an unrelated
-  **code** module that happens to share the name.
+  any heading inside it; `docs/security-audit/2026-07-15/WORKING-NOTES.md:47`, a
+  dated audit note that names the runbook in a list of documents, also not a
+  heading link; and `tests/unit/gws-broker.test.js:12` and `bin/wienerdog.js:46`,
+  which are about `src/cli/gws-broker.js`, an unrelated **code** module that
+  happens to share the name. (An earlier revision said "four" and stated the
+  exclusion as `docs/specs/done/`, which does not exclude the security-audit
+  tree; wd-reviewer caught the miscount. **The conclusion is unchanged** — the
+  fifth match is a file-level mention, so no in-repo anchor depends on this
+  runbook's headings.)
 - No test asserts any string from this runbook. **No test file is a deliverable**,
   and adding one is out of scope.
 - `grep -rn "proven end-to-end" tests/ src/ docs/` returns **only**
@@ -294,7 +312,6 @@ Verified at `0f9ee08`:
 | Action | Path | Notes |
 |--------|------|-------|
 | modify | docs/runbooks/gws-broker.md | **E1 and E2** — two of the three regions in **Table S**, which is canonical; the byte-exact text for each is under "Exact contract". Change nothing else in the file — not `:108`, not `:70`/`:72`/`:76`, not any heading, not the table at `:114-119`, not the intro at `:3-5`. |
-
 | modify | docs/THREAT-MODEL.md | **E3** — the third region in **Table S**. **ONE CLAUSE at `:146` and nothing else in the file.** The parenthetical beginning `(The live end-to-end poisoned-email harness` and ending `unit-verified and design-reviewed.)` — the same live-status defect as E2 (Current state §3). **The content is the boundary, not the line number.** Every other sentence of `:146`, and every other line of the file — T0 (`:32-35`), the gates (`:130`, `:132`, `:134`), the stance clause (`:277-279`), the residuals (`:427`, `:429`, `:431`) — stays byte-identical. Several of those are clause-scoped deliverables of OTHER specs; touching them is a permission-boundary violation, not a favour. |
 
 Not deliverables under any reading: `docs/VISION.md`, `docs/GLOSSARY.md`,
@@ -717,15 +734,20 @@ console.error("REGRESSED: files differ only in trailing content");
 process.exit(1);
 ' "$BASE"
 
-# V6 (AC6, AC7, AC8) — the blast radius, both files.
-git diff --stat
-git diff -- docs/runbooks/gws-broker.md
-git diff -- docs/THREAT-MODEL.md            # expect ONE changed line, at :146
+# V6 (AC6, AC7, AC8) — the blast radius, all three files. Diff against the BRANCH
+# BASE, not the working tree: the DoD requires these edits to be committed, and a
+# bare `git diff` is empty once they are. (V0 and V5b already use merge-base;
+# this block used the working-tree form until wd-reviewer caught the mismatch.)
+BASE=$(git merge-base main HEAD)
+git diff --stat "$BASE"
+git diff "$BASE" -- docs/runbooks/gws-broker.md
+git diff "$BASE" -- docs/THREAT-MODEL.md    # expect ONE changed line, at :146
+git diff "$BASE" -- docs/specs/WP-gws-broker-runbook-destale.md  # expect ONLY the status line
 wc -l docs/runbooks/gws-broker.md                           # expect 125
 wc -l docs/THREAT-MODEL.md                                  # expect 431
 grep -n "which v1 does not do" docs/runbooks/gws-broker.md  # expect line 108
 # AC8 — the clauses that belong to OTHER specs must not appear in the diff at all.
-git diff -U0 -- docs/THREAT-MODEL.md | grep -cE "^[+-][^+-]"   # expect 2 (one - and one +)
+git diff -U0 "$BASE" -- docs/THREAT-MODEL.md | grep -cE "^[+-][^+-]"   # expect 2 (one - and one +)
 
 # V7 — lint (markdownlint runs over docs/**/*.md).
 npm run lint

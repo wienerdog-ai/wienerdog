@@ -3,7 +3,7 @@ id: WP-symlink-lexical-fallback-removal
 title: Narrow the symlink reverser's row 3 to the semantic proof — drop the link-text fallback
 status: Ready
 model: sonnet
-size: S
+size: M
 depends_on: [WP-153]
 adrs: [ADR-0004, ADR-0019, ADR-0031]
 ---
@@ -22,7 +22,7 @@ adrs: [ADR-0004, ADR-0019, ADR-0031]
 ## Context (read this, nothing else)
 
 Wienerdog installs files. When it installs, it appends every artifact it creates
-to an **install manifest** (`<core>/manifest.json`) — one entry per artifact,
+to an **install manifest** (`<core>/install-manifest.json`) — one entry per artifact,
 each with a `kind` (`file`, `dir`, `symlink`, `managed-block`, `settings-entry`,
 `vendored-tree`, `copied-skill`, `scheduler-entry`, …). `wienerdog uninstall`
 replays that ledger backwards through `reverse()` in `src/core/manifest.js`,
@@ -150,13 +150,14 @@ row 3, i.e. in *preserve*. Removing the fallback therefore removes no error
 handling — it removes a **second** attempt at a proof whose failure is already
 safe.
 
-### 3. The one call path, and where the DANGLING case dies — `src/core/manifest.js:818-828`
+### 3. The one call path, and where the DANGLING case dies — `src/core/manifest.js:817-828`
 
 `reverseSymlink` has exactly **one** production caller: `reverse()`'s symlink arm.
 Verified: `grep -rn "reverseSymlink" src/ bin/` returns `manifest.js:168` (the
 definition), `:818` (a comment), `:828` (the call), `:1062` (the `module.exports`
 line), and `src/adapters/shared.js:441` — which is a **comment mentioning the
-name**, not a call. Byte-exact at `:818-828`:
+name**, not a call. Byte-exact at `:817-828` (the arm's own lines; the closing
+brace belongs to `:829`'s `} else if` and is not quoted):
 
 ```js
       } else if (entry.kind === 'symlink') {
@@ -171,11 +172,11 @@ name**, not a call. Byte-exact at `:818-828`:
           continue;
         }
         reverseSymlink(entry, dryRun, removed, skipped, removedSet, skillsRoots);
-      }
 ```
 
 `withinAllowedRoot` (`:969`) filters `allowedRoots` through `contains(root,
-targetPath)` (`:987`), and `contains` calls `fs.realpathSync(inner)` on its inner
+targetPath)` (`:970`; `contains` itself is defined at `:985`), and `contains`
+calls `fs.realpathSync(inner)` (`:990`) on its inner
 argument — **which is the link path itself, so it follows the link**. On a
 **dangling** link that throws `ENOENT`, the `catch` returns `false`, no root
 matches, and the entry is preserved at `:822-827` **before** `reverseSymlink`
@@ -403,7 +404,7 @@ and 975, which are likewise **not** the surfaces this WP amends. Grep by
 |--------|------|-------|
 | modify | src/core/manifest.js | **R1** only — the row-3 block at `:185-200` (Current state §1). No other function, no other row, no other kind, no change to `module.exports`. |
 | modify | tests/unit/manifest.test.js | **R2** only — replace T4 (`:1564-1595`) with the three preserve tests T4a, T4b and T4c. T1, T2, T3, T7 and every other test in the file stay byte-identical. |
-| modify | docs/specs/done/WP-153-target-aware-symlink-reverser.md | **R3–R14** — the twelve registered mirrors of the row-3 contract, per Table R. WP-153's own Mirrored Surface Checklist (`:637-643`) requires they move in the **same commit** as R1. Do not touch anything in that file outside the twelve anchors named in Table R. |
+| modify | docs/specs/done/WP-153-target-aware-symlink-reverser.md | **R3–R14** — the twelve registered mirrors of the row-3 contract, per Table R; **Table W** is the census of what is where in that file. WP-153's own Mirrored Surface Checklist (`:637-643`) requires they move in the **same commit** as R1. Do not touch anything in that file outside the twelve anchors named in Table R. |
 
 Not deliverables under any reading: `src/adapters/shared.js`, any other file under
 `src/`, `bin/`, `tests/` (including any scenario harness), `docs/adr/`,
@@ -631,15 +632,63 @@ their opening words, so a shifted line number is recoverable.
 | R11 | WP-153 Deliverables cell for `tests/unit/manifest.test.js` | `:340`, the only line containing `**T1–T4 and T6**` | `T1–T4` becomes `T1–T3, T4a–T4c` (T6 unchanged). A live cell naming a test id that no longer exists. | V3a |
 | R12 | WP-153 Mirrored Surface Checklist — test-deliverable entry | `:612`, the only line containing `it mirrors the **Test index** rows T1–T4 and T6` | Same rename. | V3a |
 | R13 | WP-153 **AC2** | `:881`, the only line containing `- [ ] **AC2** — T2, T3, T4, T5, T6 and T7 all pass` | `T4` becomes `T4a, T4b, T4c`. A live acceptance criterion naming a test id that no longer exists. | V3a |
-| R14 | WP-153 Implementation-notes export bullet | `:775-778`, the only block containing `lets T1/T2/T4/T7 unit-test the` | `T1/T2/T4/T7` becomes `T1/T2/T4a/T7` — T4a is the direct unit call; T4b and T4c go through `reverse()`. | V3a |
+| R14 | WP-153 Implementation-notes export bullet | `:775-778`, the only block containing `lets T1/T2/T4/T7 unit-test the` | **Whole-bullet replacement** (text below), not a substring swap: the sentence's list is wrong in the shipped spec, not merely stale. | V3a |
+
+### Table W — the WP-153 mirror census (canonical)
+
+**Every statement in this spec about *what is in WP-153* resolves here**: the
+anchor-link warning, the "which `T4`s are out of scope" list, and AC6 all cite
+this table instead of re-deriving the census. Line numbers are WP-153 at
+`0f9ee08`. Rows are ordered by line.
+
+This table exists because the census — not the amendment set — has now drawn
+findings in three separate reviews (Codex rounds 1 and 4, wd-reviewer round 1),
+each time because the same facts were restated in prose in three places and one
+copy drifted. ADR-0031: one table, and the prose cites it.
+
+| # | Line(s) | Opening words | Live or dated | Post-merge anchor link? | R-item |
+|---|---------|---------------|---------------|-------------------------|--------|
+| W1 | `:340` | `\| modify \| tests/unit/manifest.test.js \| **T1–T4 and T6**` | live | no | **R11** |
+| W2 | `:429` | Table A row 3, `\| 3 \| sameResolvedDir(L, T) === false` | live | no | **R3** |
+| W3 | `:433-457` | `**Row 3 has two sub-tests on purpose,` | live | **yes — `:445`** | **R4** |
+| W4 | `:612` | `- [ ] Deliverables cell for tests/unit/manifest.test.js` | live | no | **R12** |
+| W5 | `:637-643` | `- [ ] **(+post-merge) §"Post-merge note — 2026-08-02"**` | live | no | **R9** |
+| W6 | `:775-778` | `- **reverseSymlink** is **module.exports**-ed` | live | no | **R14** |
+| W7 | `:779-785` | `- **Guard the lexical fallback**` | live | **yes — `:785`** | **R5** |
+| W8 | `:806` | Test index `\| T4 \| … **DIRECT unit test of reverseSymlink**` | live | **yes — `:806`** | **R7** |
+| W9 | `:869-875` | `- [ ] Every error path in Table A lands in *preserve*` | live | **yes — `:875`** | **R6** |
+| W10 | `:881` | `- [ ] **AC2** — T2, T3, T4, T5, T6 and T7 all pass` | live | no | **R13** |
+| W11 | `:936-946` | `# V4 — the reverser consults the recorded target` | live | no | **R8** |
+| W12 | `:1001` | `## Post-merge note — 2026-08-02:` — the heading | dated | it **is** the anchor target | **R10** inserts after it |
+| W13 | `:1005`, `:1034`, `:1044`, `:1056`, `:1059` | `T4` mentions inside the post-merge note | dated | no | none — R10's superseding blockquote governs them; not separately edited |
+| W14 | `:1259` | `> [2026-08-02 post-merge note](…)` in the review-gate log | dated | **yes — `:1259`** | none — left as recorded |
+| W15 | `:1220`, `:1250`, `:1253`, `:1262` | `T4` mentions in the dated review-gate log | dated | no | none — left as recorded |
+
+**Anchor-link count, before and after — this is the arithmetic AC6 asserts.**
+Five links exist today: **W3 (`:445`), W7 (`:785`), W8 (`:806`), W9 (`:875`),
+W14 (`:1259`)**. R4, R5, R6 re-emit theirs; **R7 re-emits its own on the new T4a
+row** (see R7 — that re-emission is why the count stays five and is not
+optional); W14 is untouched. **Five before, five after.**
+
+**Live `T4` references — the complete set is W1, W5, W6, W8, W9, W10** (`:340`,
+`:643`, `:777`, `:806`, `:873`, `:881`), every one covered by an R-item. Dated
+`T4` references, out of scope, are W13 and W15 only. Two corrections this table
+exists to lock down: **`:643` is LIVE**, not dated — it is the last line of the
+entry R9 replaces — and **`:873` is LIVE** and sits inside R6's anchor block;
+an earlier revision of this spec called `:643` out-of-scope and omitted `:873`
+altogether.
 
 **Anchor warning for R10, and it is not optional.** The post-merge note's heading
-is linked from **five** places inside WP-153 (`:445`, `:641`, `:785`, `:875`,
-`:1259`) by the GitHub-generated anchor
+is the target of **five** in-document links — **Table W rows W3, W7, W8, W9 and
+W14** — through the GitHub-generated anchor
 `#post-merge-note--2026-08-02-the-lexical-fallback-is-dead-through-production-removal-routed`.
-Changing one character of that heading breaks all five links. **Leave line 1001
-byte-identical.** R4, R5, R6 and R9 all re-emit that same link — copy it from the
-text below, do not retype it.
+Changing one character of that heading breaks all five. **Leave line 1001
+byte-identical.** The R-items that re-emit that link are **R4, R5, R6 and R7**
+(**not** R9, whose replacement carries no link) — copy it from the text below,
+do not retype it. **R7's re-emission is load-bearing:** its anchor line `:806`
+carries one of the five, and R7 replaces that line with three rows, so without
+deliberately putting the link back on the T4a row the count would fall to four
+and AC6 would be unsatisfiable.
 
 #### R3 — Table A row 3, byte-exact replacement
 
@@ -689,7 +738,7 @@ ends `where it points, and it only ever *narrows* row 5.)`). Insert in its place
 
 #### R5 — the Implementation-notes bullet, byte-exact replacement
 
-Remove `:779-785` (begins `- **Guard the lexical fallback**: \`fs.readlinkSync\``).
+Remove `:779-785` — the bullet beginning `- **Guard the lexical fallback**`.
 Insert in its place:
 
 ```text
@@ -729,7 +778,7 @@ file containing the string `DIRECT unit test of`. Insert in its place **three**
 lines:
 
 ```text
-| T4a | `tests/unit/manifest.test.js` — **DIRECT unit call of `reverseSymlink`** | **OWNED — required; `T` deleted, so `L` dangles** | **Dangling core → PRESERVE.** The entry carries `target: T` and `L` is still our link, but `T` has been removed from disk, so `sameResolvedDir` cannot succeed. Called **directly**, `reverseSymlink` preserves `L`: still a symlink on disk, reported in `skipped`, row-2 notice printed. **Assert with `lstat`, never `existsSync`** — `existsSync` follows the link and returns `false` for a live dangling link, so an `existsSync` assertion is vacuous here. **Why direct:** the dangling case cannot reach `reverseSymlink` through `reverse()` (T4b), so the exported-helper boundary is the only place this row is observable for it. **Same location precondition as T2** — an unOWNED fixture is preserved by row 4 and proves nothing about row 3. **Red before `WP-symlink-lexical-fallback-removal`, green after.** | Table A row 3 |
+| T4a | `tests/unit/manifest.test.js` — **DIRECT unit call of `reverseSymlink`** | **OWNED — required; `T` deleted, so `L` dangles** | **Dangling core → PRESERVE.** The entry carries `target: T` and `L` is still our link, but `T` has been removed from disk, so `sameResolvedDir` cannot succeed. Called **directly**, `reverseSymlink` preserves `L`: still a symlink on disk, reported in `skipped`, row-2 notice printed. **Assert with `lstat`, never `existsSync`** — `existsSync` follows the link and returns `false` for a live dangling link, so an `existsSync` assertion is vacuous here. **Why direct:** the dangling case cannot reach `reverseSymlink` through `reverse()` (T4b), so the exported-helper boundary is the only place this row is observable for it. **Same location precondition as T2** — an unOWNED fixture is preserved by row 4 and proves nothing about row 3. **Red before `WP-symlink-lexical-fallback-removal`, green after.** See the [2026-08-02 post-merge note](#post-merge-note--2026-08-02-the-lexical-fallback-is-dead-through-production-removal-routed). | Table A row 3 |
 | T4b | `tests/unit/manifest.test.js` — through `reverse()` | **OWNED; `T` deleted, so `L` dangles** | **A scoped unreachability fact: the DANGLING case only.** The same fixture, recorded in the manifest and driven through `reverse()`, is preserved — and the notice is `outside every Wienerdog-owned root`, the UPSTREAM `withinAllowedRoot` gate's, not row 3's. That notice is the proof `reverseSymlink` was never entered: `contains()` realpaths the link, which follows it and throws on a dangling one. **CHARACTERIZATION test — green both before and after `WP-symlink-lexical-fallback-removal`.** It does **not** claim the dropped sub-test was unreachable in general; T4c is a reachable case that did change. | upstream `withinAllowedRoot` gate — row 3 never reached |
 | T4c | `tests/unit/manifest.test.js` — through `reverse()` | **OWNED; `L` RESOLVES (not dangling); link text and recorded `target` are the same RELATIVE string** | **The behavior change, red-first, on a reachable production path.** `L` resolves, so the upstream gate passes and `reverseSymlink` does run. `realpath()` resolves a relative `T` against `process.cwd()`, not the link's directory, so `sameResolvedDir` returns `false` while raw-text equality would have matched — before `WP-symlink-lexical-fallback-removal`, `reverse()` **unlinked** this entry; after it, row 3 **preserves** it with the row-2 notice. **Preserving is intended:** Wienerdog never records a relative target (`shared.js` joins an absolute core path), so such an entry is hand-edited or forged, and an untrusted recorded field may narrow a delete, never authorize one the semantic proof refuses. Assert the fixture preconditions (link text is relative; the link resolves; the relative target does **not** resolve from the test cwd) so the test cannot go vacuous. | Table A row 3 |
 ```
@@ -856,6 +905,12 @@ Insert the following as a new paragraph **immediately after** the heading line a
 `> **This section is a RECORD, not a contract change.**` blockquote. Delete
 nothing; reword nothing; leave the heading byte-identical.
 
+**Separate the two blockquotes with exactly one blank line.** Markdown merges
+adjacent `>` blocks that are not separated, so without it the new paragraph and
+the original record render as a single quote and the "everything below is the
+original record" framing is lost. Final shape: heading, blank, NEW blockquote,
+**blank**, original `> **This section is a RECORD…**` blockquote.
+
 ```text
 > **SUPERSEDED by `WP-symlink-lexical-fallback-removal`, whose implementation
 > commit this paragraph is part of. That WP also CORRECTED this note's central
@@ -890,20 +945,49 @@ nothing; reword nothing; leave the heading byte-identical.
 R2 renames one test into three, so every **live** place in WP-153 that names `T4`
 as an existing test becomes wrong. These four are surgical: change **only** the
 quoted substring on the named line, leave the rest of the line byte-identical.
-(Every other `T4` in that file — `:643`, `:1005`, `:1034`, `:1044`, `:1056`,
-`:1059`, `:1220`, `:1250`, `:1253`, `:1262` — is inside the post-merge note or a
-dated review-gate record and is **out of scope**; see Out of scope.)
+The complete live/dated split is **Table W**, not this paragraph. Live `T4`
+references are W1, W5, W6, W8, W9 and W10 — all six covered by an R-item. Out of
+scope are the dated ones only: **W13** (`:1005`, `:1034`, `:1044`, `:1056`,
+`:1059`, inside the post-merge note) and **W15** (`:1220`, `:1250`, `:1253`,
+`:1262`, the review-gate log). **Note two that are LIVE and easy to misfile:**
+`:643` is the last line of the entry **R9** replaces, and `:873` sits inside
+**R6**'s anchor block — an earlier revision of this spec listed `:643` as
+out-of-scope and omitted `:873`, which is why the census is now a table.
 
 | # | Line | Replace this substring | With this |
 |---|------|------------------------|-----------|
 | R11 | `:340` (Deliverables cell) | `**T1–T4 and T6**` | `**T1–T3, T4a–T4c and T6**` |
 | R12 | `:612` (Mirrored Surface Checklist) | `rows T1–T4 and T6` | `rows T1–T3, T4a–T4c and T6` |
 | R13 | `:881` (AC2) | `T2, T3, T4, T5, T6 and T7 all pass` | `T2, T3, T4a, T4b, T4c, T5, T6 and T7 all pass` |
-| R14 | `:777` (Implementation-notes export bullet) | `lets T1/T2/T4/T7 unit-test the` | `lets T1/T2/T4a/T7 unit-test the` |
+| R14 | `:775-778` (Implementation-notes export bullet) | — | **whole-bullet replacement, text below** |
 
 Each substring was confirmed to appear **exactly once** in the file at `0f9ee08`
-(`grep -cF` → `1` for all four). R14 names only `T4a` because T4b and T4c drive
-`reverse()` and do not depend on the export; T4a is the direct unit call.
+(`grep -cF` → `1` for R11, R12 and R13; R14's anchor phrase likewise).
+
+**R14 — whole-bullet replacement.** Remove `:775-778` — the four-line bullet
+that is the only block in the file containing `lets T1/T2/T4/T7 unit-test the`.
+Insert:
+
+```text
+- **`reverseSymlink` is `module.exports`-ed** (blessed deviation, gate round 11):
+  it mirrors the already-exported sibling reversers (`reverseCopiedSkill`,
+  `reverseVendoredTree`), and the export is what lets **T4a** call the reverser
+  directly for the one case `reverse()` cannot deliver to it — a dangling link,
+  which the upstream containment gate preserves first. T1, T2, T3, T4b, T4c and
+  T7 all drive `reverse()` and do not depend on the export.
+```
+
+**Why a block replacement and not the one-token swap this row used to specify.**
+The shipped sentence claims the export "lets T1/T2/T4/T7 unit-test the rows
+directly rather than plumbing every case through `reverse()`". That is false in
+the shipped spec and would stay false after a `T4`→`T4a` rename: **only T4/T4a
+calls `reverseSymlink` directly** (`manifest.test.js:1584`); T1, T2, T3 and T7
+all go through `reverse()`. wd-reviewer flagged it as an advisory and suggested
+recording a deliberate leave-as-is. Deliberately going further: this WP exists
+to stop shipping claims that are not true, and R14 already edits this exact
+bullet, so leaving a known-false sentence inside its own anchor would be the
+defect this spec's sibling is about. The correction is confined to R14's
+existing anchor and adds no new one.
 
 ### Mirrored Surface Checklist
 
@@ -925,6 +1009,12 @@ review finding updates the table and all its mirrors in one pass:
       executable-guard constraint V4 imposes on R1.
 - [ ] The R3–R14 sub-sections under Table R — the full replacement text for the
       WP-153 mirrors.
+- [ ] **Table W's three mirrors** (registered in wd-reviewer round 1, which is
+      when the census drifted for the third time): the **anchor warning** under
+      Table W, the **live/dated `T4` paragraph** under R11–R14, and **AC6**. All
+      three now cite Table W rather than re-deriving it. A change to WP-153's
+      line numbers, to which R-item owns an anchor, or to the anchor-link count
+      moves **Table W first**, and those three follow in the same pass.
 - [ ] **R10's §2 is a mirror of R8** (registered in round 4): it summarises what
       V4 becomes, so a change to R8's gate design must move R10's sentence in the
       same pass. It said "three-check gate" for one round after R8 became a single
@@ -1090,11 +1180,16 @@ Registered **outside** this spec so a later change knows this table is its sourc
       implementation commit). Paste V0's output.
 - [ ] **AC6 (mirrors moved, R3–R14)** — the twelve WP-153 anchors carry their
       replacement text byte-exactly (V3c: the full diff is pasted and compared
-      hunk-by-hunk against the R-blocks), the post-merge-note **heading line is
-      unchanged**, all five in-document links to that anchor still resolve, and
-      **no live `T4` reference remains** in that file outside the post-merge note
-      and the dated review-gate log. R1, R2 and R3–R14 are in **one** commit
-      (V3d).
+      hunk-by-hunk against the R-blocks); the post-merge-note **heading line is
+      unchanged**; and **all five** in-document links to that anchor still
+      resolve — the same five **Table W** counts (W3, W7, W8, W9, W14), which
+      holds only because **R7 re-emits the link on its new T4a row**. Every
+      **live** `T4` reference in Table W (W1, W5, W6, W8, W9, W10) has been
+      updated by its R-item, and **no surviving `T4` names a test that does not
+      exist** — R9's replacement legitimately reads "T4 (now T4a/T4b/T4c)", which
+      names the rename rather than an existing test and is correct as written.
+      The dated references (W13, W15) are unchanged by design. R1, R2 and R3–R14
+      are in **one** commit (V3d).
 - [ ] **AC7 (the characterization is stated, not implied)** — the PR body says in
       its own words that this is a **narrowing behavior change**, names the
       relative-target case as the reachable input that changes, and states that
@@ -1223,8 +1318,9 @@ grep -n '\bT4\b' "$SPEC"
 # shipping a permanently wrong V4 into a Done spec.)
 #
 # The `$` anchors below are load-bearing: this block's own prose contains the
-# literal <<'FN' mid-line, and an unanchored count returns 3 instead of 1
-# (measured). Only a real heredoc opener ENDS with it.
+# literal <<'FN' mid-line, and an unanchored count returns 4 instead of 1
+# (measured at the current text; it rises as this block is discussed). Only a
+# real heredoc opener ENDS with it.
 SPEC153=docs/specs/done/WP-153-target-aware-symlink-reverser.md
 SPECWP=docs/specs/WP-symlink-lexical-fallback-removal.md
 fnblock() { awk '/<<\047FN\047$/{f=1;next} f && $0=="FN"{f=0;next} f' "$1"; }
@@ -1291,7 +1387,7 @@ for L in "startsWith('wienerdog-')" "skillsRoots"; do
 done
 echo "V4b ok — structural ownership gate present"
 
-# V5 — the five AC5 mutations. For each: edit src/core/manifest.js, re-run the
+# V5 — the SIX AC5 mutations. For each: edit src/core/manifest.js, re-run the
 # V3b block above, then `git checkout -- src/core/manifest.js`. Every one must
 # print `REGRESSED: reverseSymlink is not byte-identical to the expected function`
 # plus a legible diff hunk. Mutation (a) additionally changes test outcomes, so
