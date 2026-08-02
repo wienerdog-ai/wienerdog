@@ -4,9 +4,9 @@ This is the operator's guide to how Wienerdog reaches Google — Gmail, Calendar
 and Drive — and what to do when it needs attention. It is written for you, the
 person who owns the machine, not for a developer.
 
-> Google Workspace access is **off** in this security-hardened build, behind a
-> pre-use safety gate. Run `wienerdog safety` to see what is enabled. This
-> runbook describes how the broker behaves once that gate is opened.
+> Google Workspace access is one of Wienerdog's gated capabilities. Run
+> `wienerdog safety` to see its status on your machine. Everything below
+> describes how the broker behaves when that capability is available to you.
 
 ## What the broker is
 
@@ -118,7 +118,8 @@ the keyboard.
 | A routine trying to delete/modify calendar events | A compromised operating system |
 | A routine trying to read your stored sign-in | — |
 
-The broker's containment of a hijacked AI is proven end-to-end by the
-poisoned-email test harness (`tests/scenarios/broker-e2e/`). The protection of
-the underlying files is your OS account and disk encryption, exactly as it is
-for every other app you run.
+The broker's containment of a hijacked AI comes from its fixed menu of actions
+and from the restricted environment the routine runs in; the poisoned-email test
+harness (`tests/scenarios/broker-e2e/`) is the end-to-end check written to
+exercise it. The protection of the underlying files is your OS account and disk
+encryption, exactly as it is for every other app you run.
