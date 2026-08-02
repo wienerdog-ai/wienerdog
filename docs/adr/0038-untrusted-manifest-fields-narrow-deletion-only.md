@@ -1,4 +1,4 @@
-# ADR-0038: An untrusted manifest field may only narrow a deletion, never widen one
+# ADR-0038: A new manifest evidence field may only narrow a deletion, never widen one
 
 Status: Proposed — awaiting owner signature
 Date: 2026-08-02
@@ -16,7 +16,8 @@ Date: 2026-08-02
 >
 > **Until that line exists, this ADR binds nobody.** No spec, agent definition,
 > template or runbook is governed by it today, and no document may cite it as
-> authority. Documents that cite it now cite it as a *proposal*.
+> authority. Documents that cite it now cite it as a *proposal* — and no spec
+> lists it in `adrs:` frontmatter, because that list means "law".
 >
 > **Authorized for drafting by the owner in session on 2026-08-02** — verbatim,
 > as the third of three answers: *"1) ship as specified 2) ship 4a+4b 3) draft
@@ -30,8 +31,7 @@ remove exactly what the installer created. That file is **plaintext, user-
 editable and attacker-writable**, and its contents are the *only* thing standing
 between the reverser and a `fs.unlinkSync` / `fs.rmSync` / file rewrite. WP-144
 established the premise; three separate gate rounds since have found the same
-class of defect underneath it, each time in a field that had been added for a
-good reason:
+class of defect underneath it, each time in a field added for a good reason:
 
 - **A forged separator was a file-emptying primitive.** WP-147 measured it: with
   unbounded `sepBefore`/`sepAfter`, a hand-edited manifest turned an uninstall of
@@ -44,161 +44,214 @@ good reason:
   `WP-symlink-lexical-fallback-removal` (PR #151) removed row 3's raw link-text
   comparison for exactly this reason.
 
-Each was fixed locally and each fix was rediscovered independently. The rule
-underneath them has never been written down, so every new field re-derives it —
-and the two specs this ADR is drafted alongside reached **opposite** validation
-decisions from it, which is precisely the point at which an unwritten rule starts
-looking like an inconsistency instead of a principle.
+Each was fixed locally and each was rediscovered independently. The rule
+underneath them has never been written down, so every new field re-derives it.
+
+## Scope — what this ADR governs, and what it does not
+
+The rule below is **not** a universal statement about every key in the manifest.
+An earlier draft quantified over "every manifest field" and was falsified in
+review by `target`; the scope is therefore stated first and precisely.
+
+**Governed: a newly introduced OPTIONAL EVIDENCE field.** A key added to an
+existing entry kind, absent from entries written by earlier versions, whose only
+job is to let the reverser decide whether an artifact is provably Wienerdog's.
+`sepBefore`, `sepAfter`, `hash`, `target`, `createdFile`, and the two fields
+proposed by the specs below are all of this shape.
+
+**Not governed — dispatch and locator keys: `kind` and `path`.** They do not
+*evidence* anything; they are what makes an entry an entry. There is no "absent"
+case to compare against — `validateEntry` rejects an entry lacking either — and
+therefore no baseline in which the entry exists without them. A rule phrased as
+"absent versus present" is not meaningful for a key whose absence deletes the
+entry.
+
+**Not governed prospectively — fields already shipped.** They are cited below as
+**instances**, evidence that the rule describes real practice. They are not
+re-opened by this ADR, and a signature does not license revisiting them.
 
 ## Decision
 
-**A field read from the install manifest may only ever NARROW what uninstall
-deletes. It may never widen it. For every possible value of every manifest
-field — absent, well-formed, malformed, or forged — the set of filesystem
-mutations the reverser performs must be a SUBSET of the set it would perform if
-that field were absent.**
+**For a newly introduced optional evidence field `F` on entry kind `K`, let the
+BASELINE be the reverser's behavior for `K` immediately before `F` was
+introduced. Then:**
 
-Three corollaries, each of which is the operative form in a different situation:
+- **N — the narrowing rule.** For **every** value of `F` — absent, well-formed,
+  malformed, or forged — the set of filesystem mutations the reverser performs
+  must be a **SUBSET of the mutations the baseline performs** on the same
+  on-disk state. A field may make uninstall delete **less**. It may never make it
+  delete **more**, or delete something the baseline would not have.
+- **R — the reversibility floor.** When `F` is **absent**, the reverser must
+  reproduce the baseline **exactly**, not merely a subset of it. Absence is the
+  permanent shape of every install written before `F` existed — nothing
+  backfills — so a narrower-than-baseline absent case strands those installs'
+  artifacts forever.
+- **D — the disposal floor.** N alone does not pick a behavior: refusing an
+  entry outright performs **zero** mutations and is trivially a subset, so it
+  satisfies N for *any* field. Among the behaviors N permits, choose one that
+  **never leaves a Wienerdog-created artifact that no future uninstall can
+  remove**. Where refusing would strand such an artifact, malformed input must
+  degrade toward the baseline instead of refusing.
 
-1. **Absence is the baseline, and the baseline is the previously shipped
-   behavior.** A missing field must reproduce what the code did before the field
-   existed. This is what keeps `uninstall` reversible across an upgrade: entries
-   written by older versions lack the new field permanently (there is no
-   backfill), and if absence made deletion *stricter*, every pre-existing install
-   would stop removing its own artifacts.
-2. **A field may serve as a proof obligation, never as a proof.** Evidence in the
-   manifest can make the reverser refuse a deletion it would otherwise perform.
-   It can never be the thing that authorizes one. Where a field is compared
-   against the live filesystem, the *filesystem* is the authority and the field
-   is the claim.
-3. **Malformed input degrades toward preservation, and the degradation target is
-   chosen per kind by asking which direction is safe for that artifact** — see
-   "Two validation postures" below. It is never chosen by asking which is
-   tidier.
+**The reference point is the BASELINE, not the absent case.** That distinction is
+the whole content of the correction below, and getting it backwards makes the
+rule appear to forbid its own best instance.
 
-## The two validation postures, and why both obey this rule
+### Why `target` looked like a counterexample and is not
 
-The rule fixes the *direction* of failure, not the *mechanism*. The two specs
-drafted with it take opposite mechanical decisions on the same schema table, and
-both are correct:
+Review raised `target` against an earlier draft that measured subsets against
+*"the same field absent"*: a target-**less** symlink entry is always preserved,
+while a target-**bearing** one can reach row 5 and unlink. Against that wrong
+reference point, adding `target` widens.
+
+Against the **baseline** — `reverseSymlink` as it stood before WP-153, which
+unlinked **any** symlink at a recorded path with no ownership test at all — every
+case is a subset:
+
+| `target` | outcome | vs baseline |
+|---|---|---|
+| absent | preserve | strict subset |
+| present, `sameResolvedDir` false | preserve | strict subset |
+| present, resolves, `OWNED(L)` false | preserve | strict subset |
+| present, resolves, `OWNED(L)` true | unlink | equal |
+
+`target` satisfies **N**. It does **not** satisfy **R** — absent preserves where
+the baseline deleted — and that departure is exactly the cost WP-153 put to the
+owner and the owner ratified on 2026-08-01 (*"fine to have installs predating
+the WP have uninstall leave all skill symlinks behind"*). **R is a default an
+owner may buy out of with a ruling; N is not.**
+
+### D in practice — the two opposite validation postures
+
+D is what selects between behaviors N permits, and it produces **opposite**
+type-gating decisions in the two specs drafted alongside this ADR:
 
 | | `{kind:'managed-block'}` `anchorBefore` | `{kind:'symlink'}` `origin`/`dev`/`ino` |
 |---|---|---|
 | Listed in `ENTRY_FIELD_TYPES`? | **No** | **Yes** |
-| A non-string value therefore… | reaches the reverser and degrades to the legacy strip | is rejected by `validateEntry`, and `reverse()` skips the entry |
-| …which means the artifact is | **still removed** (the block comes out) | **preserved** (the link stays) |
-| Why that is the narrowing direction | a rejected `managed-block` entry leaves Wienerdog's block **installed in the user's `CLAUDE.md` forever, with no path to removal** — that is not preservation, it is an unremovable leftover, and an attacker could induce it at will | a rejected `symlink` entry leaves a symlink in place. Preserving a link is exactly the safe failure |
+| A non-string value therefore… | reaches the reverser and degrades to the legacy strip | is rejected by `validateEntry`; `reverse()` skips the entry |
+| …so the artifact is | **still removed** | **preserved** |
+| Both satisfy **N**? | yes | yes |
+| **D** selects it because… | refusing would leave Wienerdog's block **spliced inside a file the user keeps, with no path to removal by any later uninstall** — an attacker could induce that permanently by corrupting one byte | refusing leaves a symlink Wienerdog created in a directory it created. That is a leftover, not defacement, and it is the same failure mode the owner already ratified for legacy entries |
 
-**The same rule produces opposite type-gating decisions because the artifacts
-differ in what "failing safe" means.** For a block spliced into a file the user
-owns, safety is *getting our bytes out*; for a link, safety is *not deleting*.
-Anyone applying this ADR to a new field must answer that question first, and the
-answer is a property of the artifact, not of the field.
+**The question D asks is a property of the artifact, not of the field:** *does
+failing to act strand something inside what the user keeps?* Anyone applying this
+ADR to a new field must answer that before choosing a posture.
 
-## The shipped instances this ADR codifies
+## Instances
 
-This is **codification of behavior already in `main`**, not a new constraint:
+**Six shipped, in `main` today:**
 
 | Instance | Where | The narrowing |
 |---|---|---|
 | Schema validation | `validateEntry` + `reverse()`'s pre-dispatch skip | a malformed entry never reaches a reverser |
 | Containment | `withinAllowedRoot` (WP-144) | an entry naming a path outside every Wienerdog-owned root is preserved |
-| Separator vocabulary | WP-147's `SEP_BEFORE_OK` allowlist | anything outside `''`/`'\n'`/`'\n\n'` degrades to the legacy one-newline strip; the file-emptying primitive is gone |
-| Legacy symlink entries | WP-153 Table A **row 2** | a target-less entry is preserved unconditionally (owner-ruled 2026-08-01) |
+| Separator vocabulary | WP-147's `SEP_BEFORE_OK` allowlist | anything outside `''`/`'\n'`/`'\n\n'` degrades to the legacy one-newline strip; the file-emptying primitive is gone. **A D instance**: it degrades rather than refuses, so the block still comes out |
+| Legacy symlink entries | WP-153 Table A **row 2** | a target-less entry is preserved unconditionally. **The one owner-ratified departure from R** |
 | Structural ownership | WP-153 Table A **row 4** | a forged `(path, target)` pair still has to name a `wienerdog-*` link directly under a harness skills root |
-| Semantic-proof-only row 3 | PR #151 (`91b12e2`) | the recorded target can no longer authorize a delete `realpath` refuses. Its own commit message states the rule: *"a recorded target may narrow this delete, never authorize one the semantic proof refuses"*, and *"strictly narrowing: every input this now preserves was previously deleted"* |
-| Insertion anchor | `WP-managed-block-insertion-anchor`, Table N | absent or non-hex ⇒ shipped behavior; any other value withholds a strip. Measured over its whole value space |
-| Link identity | `WP-symlink-authorship-identity`, **Table S** | **all twenty** schema-accepted `{origin, dev, ino}` shapes measured end-to-end: every one is `removed` at base, so **every preserved cell is a narrowing and no cell is a widening** |
+| Semantic-proof-only row 3 | PR #151 (`91b12e2`) | the recorded target can no longer authorize a delete `realpath` refuses. **The shipped code comment states the rule almost verbatim** (`src/core/manifest.js:186-193`): *"a recorded target may narrow this delete, never authorize one the semantic proof refuses"*, and *"Strictly narrowing: every input this now preserves was previously deleted"*. Its **commit message** carries the shorter form, quoted here exactly: *"Strictly narrowing: every input now preserved was previously deleted."* |
 
-Table S is the strongest existing evidence for this ADR: it is an exhaustive,
-measured demonstration of the rule over one field group's entire accepted input
-space, rather than an argument that the rule holds.
+**Two PROPOSED designs, measured against this rule but NOT yet implemented.**
+Their specs are `Ready`; **no `anchorBefore`, `insertionAnchor` or `linkIdentity`
+exists in `src/` or `tests/` at this tip** — verified, not assumed:
+
+| Design | Where | The narrowing, as measured in the spec |
+|---|---|---|
+| Insertion anchor | `WP-managed-block-insertion-anchor`, Table N | absent or non-hex ⇒ baseline; any other value withholds a strip. Measured over its whole value space against a prototype |
+| Link identity | `WP-symlink-authorship-identity`, **Table S** | all twenty schema-accepted `{origin, dev, ino}` shapes measured end-to-end against a prototype: every one is `removed` at baseline, so **every preserved cell is a narrowing and no cell is a widening** |
+
+Table S is the most complete evidence available for this rule — an exhaustive
+measurement over one field group's entire accepted input space rather than an
+argument — but it is evidence from a **prototype**, and this ADR says so.
 
 ## The non-provenance, recorded because it was wrong for months
 
-**This rule is NOT in ADR-0019 and never was.** Four specs in this repository
-have attributed the sentence *"anything it cannot prove it created is
-preserved"* to ADR-0019. Measured on 2026-08-02: the word *"prove"* appears
-**zero** times in `docs/adr/0019-uninstall-disposes-core-mechanics.md`, and no
-ADR in `docs/adr/` contains the phrase *"cannot prove"*. ADR-0019 is a
-**completeness-mandating** ADR — it requires uninstall to remove the core's
-machine-generated mechanics, and its **sole documented exception** is a
-user-modified `config.yaml`.
+**This rule is NOT in ADR-0019 and never was.** The sentence *"anything it
+cannot prove it created is preserved"* was attributed to ADR-0019 across four
+specs — **two `Done` specs at this tip (`WP-153`, `WP-147`'s family), plus
+earlier revisions of the two drafted alongside this ADR, which now carry the
+correction instead**. Counting it at the tip alone understates it; counting it
+without that qualifier is unverifiable. Measured on 2026-08-02: the word *"prove"* appears **zero** times in
+`docs/adr/0019-uninstall-disposes-core-mechanics.md`, and no ADR in `docs/adr/`
+contains the phrase *"cannot prove"*. ADR-0019 is a **completeness-mandating**
+ADR — it requires uninstall to remove the core's machine-generated mechanics, and
+its **sole documented exception** is a user-modified `config.yaml`.
 
-Two things follow, and both matter more than the correction itself:
+Two things follow, and both matter more than the correction:
 
 - The rule was **load-bearing across four specs while existing nowhere**, which
   is the strongest available argument for writing it down.
 - A misattributed citation is worse than a missing one, because it terminates
-  inquiry. Anyone who checked the citation would have found nothing; anyone who
-  did not check inherited a false certainty. **The `Done` specs carrying it are
-  not edited** — they describe what they shipped — so this ADR is the correction's
-  home.
+  inquiry. Anyone who checked would have found nothing; anyone who did not
+  inherited a false certainty. **The `Done` specs carrying it are not edited** —
+  they describe what they shipped — so this ADR is the correction's home.
 
 ## What this rule does NOT cover
 
-Stated so the boundary is not re-derived, and so nobody claims more from a
-signature than it gives:
-
-- **It is not manifest integrity.** An attacker who can rewrite the manifest can
-  always *delete* a field and get the pre-field behavior. This rule bounds the
-  damage of forged content; it does not authenticate the file. Signing/HMAC is a
-  separate design, deliberately not built: the file carries no integrity
-  protection at all, and protecting one field while the rest is unprotected buys
-  nothing.
-- **It does not make uninstall complete.** Narrowing costs completeness by
-  construction — that is the trade, and it is why both 2026-08-02 rulings were
-  owner decisions rather than architect ones. This ADR does not pre-authorize
-  future completeness costs; each still needs its own ledger and its own ruling.
-- **It does not govern indirect effects.** A field consumed as *executable* input
-  rather than as delete evidence is out of scope; ADR-0027 already forbids the
-  one live instance (never execute manifest-stored argv).
-- **It does not cover TOCTOU.** A field verified before a syscall can be
-  invalidated between the check and the call. That is a separate residual, and it
-  is declared where it occurs, following ADR-0028's *"not claimed as
-  TOCTOU-free"* precedent.
-- **It does not apply to non-manifest inputs.** The vault, transcripts and email
-  are governed by ADR-0023, ADR-0032 and the secret-lifecycle ADRs.
+- **Not manifest integrity.** An attacker who can rewrite the manifest can always
+  *delete* a field and get the baseline. This rule bounds forged content; it does
+  not authenticate the file. Signing/HMAC is a separate design, deliberately not
+  built: the file has no integrity protection at all, and protecting one field
+  while the rest is unprotected buys nothing.
+- **Not completeness.** Narrowing costs completeness by construction — that is
+  the trade, and it is why both 2026-08-02 rulings were owner decisions. This ADR
+  does not pre-authorize future completeness costs; each needs its own ledger and
+  its own ruling. **R** is the floor that keeps the cost from silently reaching
+  pre-existing installs.
+- **Not indirect effects.** A field consumed as *executable* input rather than as
+  delete evidence is out of scope; ADR-0027 already forbids the live instance
+  (never execute manifest-stored argv).
+- **Not TOCTOU.** A field verified before a syscall can be invalidated between
+  the check and the call — a separate residual, declared where it occurs,
+  following ADR-0028's *"not claimed as TOCTOU-free"* precedent.
+- **Not non-manifest inputs.** The vault, transcripts and email are governed by
+  ADR-0023, ADR-0032 and the secret-lifecycle ADRs.
 
 ## Relationship to the two specs drafted alongside it
 
 **This ADR's signature does NOT gate `WP-managed-block-insertion-anchor` or
-`WP-symlink-authorship-identity` — not their dispatch, not their
-implementation, not their merge.**
+`WP-symlink-authorship-identity` — not their dispatch, implementation or merge.**
 
-The reasoning, recorded so nobody derives a phantom blocker from an unsigned
-ADR sitting next to two `Ready` specs:
+The reasoning, restated after review removed an earlier circular version of it
+(that draft argued the specs need no gate because the ADR describes behavior
+`main` already ships — which is false for precisely those two, since their
+implementations do not exist yet):
 
-- Those specs were gated on **owner rulings over their cost ledgers**, and both
-  rulings were given on 2026-08-02 (*"1) ship as specified 2) ship 4a+4b"*).
-  Those rulings are transcribed in the specs and are what moved them to `Ready`.
-- This ADR **codifies behavior those specs already measured and that `main`
-  already ships**. It adds no requirement either spec does not already satisfy,
-  and neither cites it as law — Part B's Implementation notes reference it as
-  context for a decision made independently.
-- Gating shipped, owner-ruled work on the signature of a document that describes
-  it would invert the order: the practice is the evidence for the ADR, not the
-  other way round.
+- **What actually gated them has been satisfied.** Both were gated on **owner
+  rulings over their cost ledgers**, and both rulings were given on 2026-08-02
+  (*"1) ship as specified 2) ship 4a+4b"*). Those rulings are transcribed in the
+  specs and are what moved them to `Ready`. Nothing else was ever their gate.
+- **Neither spec depends on this ADR to be correct.** Each derives its narrowing
+  property independently and *measures* it — Part B exhaustively, over twenty
+  cells. Remove this ADR and neither spec loses a claim; the ADR's value is that
+  the **next** field does not have to re-derive it.
+- **Neither cites it as law.** Both reference it in prose as context, and
+  **neither lists it in `adrs:` frontmatter** — that list means "implementers
+  treat this as law", which an unsigned Proposed ADR is not.
+- **Gating them would invent a blocker the owner did not create.** He ruled the
+  work in and authorized the ADR as a third, separate item. Reading his
+  authorization to draft as a precondition on the work he just approved inverts
+  his instruction.
 
-What the signature *does* change: after it, this rule becomes citable as law for
-**future** fields, and a new manifest field that widens deletion becomes a spec
-defect rather than a judgement call.
+What the signature *does* change: this rule becomes citable as law for **future**
+fields, the two designs above graduate from "measured against a proposal" to
+"instances of a ratified rule" when they ship, and a new manifest field that
+widens deletion becomes a spec defect rather than a judgement call.
 
 ## Consequences
 
-- **Easier:** a new manifest field has one question to answer — *"what does this
-  do when absent, malformed, and forged?"* — with a required answer for the last
-  two. Reviewers get a single sentence to test against instead of re-deriving the
-  posture per field.
+- **Easier:** a new evidence field has one question to answer — *"what does this
+  do when absent, malformed, and forged, measured against the pre-field
+  baseline?"* — with a required answer for all three.
 - **Easier:** the two opposite type-gating decisions stop looking like an
-  inconsistency and become a worked example, with the artifact-safety question
+  inconsistency and become a worked example of **D**, with the artifact question
   that produces them stated once.
 - **Harder:** every new field costs an exhaustive value-space check. Table S's
   twenty measured cells are the standard this sets, and that is more work than a
   type annotation.
-- **Given up:** uninstall completeness, at the margin, permanently and by design.
-  Each instance is a cost that must be measured and — where it is worse than the
-  code it replaces — ruled on by the owner.
-- **Not given up:** the reversibility contract. Corollary 1 is what keeps
-  absence-of-field equal to previously-shipped behavior, so upgrades do not
-  strand artifacts on installs that predate a field.
+- **Given up:** uninstall completeness, at the margin, by design. Each instance
+  is a cost that must be measured and — where it is worse than the code it
+  replaces — ruled on by the owner.
+- **Not given up:** the reversibility contract, which is **R**'s whole job.
+  Departures from R exist (WP-153 row 2) but are owner-ratified, one at a time,
+  never assumed.

@@ -5,7 +5,7 @@ status: Ready
 model: opus
 size: M
 depends_on: [WP-147]
-adrs: [ADR-0004, ADR-0019, ADR-0031, ADR-0036, ADR-0038]
+adrs: [ADR-0004, ADR-0019, ADR-0031, ADR-0036]
 epic: audit-a13
 ---
 
@@ -175,10 +175,13 @@ The operative term here is **insertion anchor**, and it is not a glossary term.
 ## Current state
 
 **Re-verification record.** Every executable claim in this section was run
-first-hand against the working tree at commit **`18bc909`** (`git rev-parse HEAD`
-→ `18bc90931835d7e928ba897c794de217c6993777`) on **2026-08-02**. `src/` is
-byte-identical to `0f9ee08` at that commit — the three commits on this branch
-touch `docs/specs/` only — so every line number below is equally `0f9ee08`'s.
+first-hand against the working tree at commit **`9188a1c`** on **2026-08-02**,
+and **re-verified there again on 2026-08-03** after `WP-symlink-lexical-fallback-removal`
+(PR #151) landed. The claims were first measured at `18bc909`, where `src/` was
+byte-identical to `0f9ee08`; PR #151's change was **line-count-neutral**
+(`src/core/manifest.js` is 1062 lines at both SHAs), so **no line number in this
+spec shifted**. This WP touches no region PR #151 changed — only its V4 guard
+references `reverseSymlink`, and that guard moved with it.
 **Nothing was found stale.** The whole design was additionally **implemented as a
 throwaway prototype and measured**; every "measured" figure in this spec is that
 prototype's output, not reasoning. The prototype was discarded.
@@ -1001,20 +1004,36 @@ printf '\nfunction reverseManagedBlock(entry, dryRun, removed, skipped, removedS
 node /tmp/wd-fnguard.js /tmp/wd-ev2.js reverseManagedBlock "+fs.ftruncateSync(fd, 0)" \
   && { echo "EVASION 2 (later duplicate) NOT DETECTED"; exit 1; } || echo "evasion 2 (later duplicate definition) detected"
 
-# V4 — reverseSymlink is UNTOUCHED by this WP (it is Part B's). Row 3 is the
-#      SINGLE semantic proof as `WP-symlink-lexical-fallback-removal` (PR #151)
-#      left it, and row 4's OWNED gate is WP-153's.
-node /tmp/wd-fnguard.js src/core/manifest.js reverseSymlink \
-  "+if (!sameResolvedDir(L, T)) {" \
-  "-lexicalMatch" \
-  "+skillsRoots.some((root) => sameResolvedDir(path.dirname(L), root))" \
-  "-entry.origin" "-entry.dev" && echo "V4 ok"
+# V4x — the function extractor both V4 arms use. Prints one top-level function
+#   verbatim, so the check is a BYTE DIFF and not a token search. A token guard
+#   was proven evadable: a branch calling `fs.readlinkSync(L) === T` under a
+#   different identifier, inserted before row 4, kept every asserted token and
+#   passed clean (measured, both review legs).
+cat > /tmp/wd-fnextract.js <<'EX'
+const fs = require('node:fs');
+const [file, fn] = process.argv.slice(2);
+const s = fs.readFileSync(file, 'utf8');
+const i = s.indexOf(`\nfunction ${fn}(`);
+if (i < 0) { console.error(`no top-level ${fn} in ${file}`); process.exit(1); }
+const j = s.indexOf('\n}\n', i);
+if (j < 0) { console.error(`unterminated ${fn}`); process.exit(1); }
+process.stdout.write(s.slice(i + 1, j + 3));
+EX
+git show 9188a1c:src/core/manifest.js > /tmp/wd-base-manifest.js
 
-# V4 RED — the same check against a copy with the fallback deleted. MUST fail.
+# V4 — `reverseSymlink` is UNTOUCHED by this WP (it is Part B's). Assert it by
+#   RECONSTRUCTION: the implemented function must be byte-identical to the one at
+#   `9188a1c`, i.e. as `WP-symlink-lexical-fallback-removal` (PR #151) left it.
+node /tmp/wd-fnextract.js /tmp/wd-base-manifest.js reverseSymlink > /tmp/wd-expected-symlink.js
+node /tmp/wd-fnextract.js src/core/manifest.js      reverseSymlink > /tmp/wd-actual-symlink.js
+diff -u /tmp/wd-expected-symlink.js /tmp/wd-actual-symlink.js && echo "V4 ok (byte-identical)"
+
+# V4 RED — MUST fail against a copy that reintroduces a link-text comparison
+#   under a DIFFERENT identifier, which is exactly what defeated the old token guard.
 cp src/core/manifest.js /tmp/wd-v4-red.js
-node -e 'const fs=require("node:fs"),p=process.argv[1];fs.writeFileSync(p,fs.readFileSync(p,"utf8").replace("  if (!sameResolvedDir(L, T)) {","  if (!sameResolvedDir(L, T) || fs.readlinkSync(L) === T) {"))' /tmp/wd-v4-red.js
-node /tmp/wd-fnguard.js /tmp/wd-v4-red.js reverseSymlink \
-  "+if (!sameResolvedDir(L, T)) {" "-lexicalMatch" \
+node -e 'const fs=require("node:fs"),p=process.argv[1];fs.writeFileSync(p,fs.readFileSync(p,"utf8").replace("  // Row 3: the link must PROVE it still resolves to the source we recorded.","  if (fs.readlinkSync(L) === T) { if (!dryRun) fs.unlinkSync(L); removedSet.add(L); removed.push(L); return; }\n  // Row 3: the link must PROVE it still resolves to the source we recorded."))' /tmp/wd-v4-red.js
+node /tmp/wd-fnextract.js /tmp/wd-v4-red.js reverseSymlink > /tmp/wd-actual-red.js
+diff -q /tmp/wd-expected-symlink.js /tmp/wd-actual-red.js >/dev/null \
   && { echo "V4 BROKEN: the guard cannot fail"; exit 1; } || echo "V4 ok (red, as required)"
 
 # V5 — ANCHOR_WINDOW is DEFINED exactly once, in core, and shared.js neither
