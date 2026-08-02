@@ -593,6 +593,90 @@ function reverseSymlink(entry, dryRun, removed, skipped, removedSet, skillsRoots
 }
 ```
 
+> **Design decision, 2026-08-03 — why V4 verifies the mandated region itself
+> rather than delegating it to B-T4.** Three resolutions were on the table for
+> the candidate-derived-span defect, and this spec takes the second:
+>
+> 1. **Codex** — validate the rows against an independently trusted exact
+>    transformation. Correct in principle; it needs a trusted copy, which is what
+>    (2) supplies.
+> 2. **Two canonical copies in mechanical lockstep (TAKEN).** The fence and the
+>    snippets both live in this spec, serve different readers, and each pins the
+>    other: `base + snippets` must construct the fence byte for byte. Neither is
+>    derived from the artifact under test.
+> 3. **wd-reviewer** — accept content-tampering inside the mandated region as a
+>    structural limit, scope V4's comment, and lean on **B-T4** to redden it.
+>
+> **The deciding question was whether B-T4 runs on every path that trusts V4.
+> It does not.** V4 is meaningful — and runnable — at **spec-review time, on a
+> tree where no implementation and no B-T4 exist yet**; that is precisely when a
+> reviewer validates the contract structurally. A gate whose guarantee is
+> conditional on a downstream artifact that may not exist is a gate that reports
+> more confidence than it has, and this V-step has now failed review three times
+> for exactly that shape of reason (classification, allow-lists, candidate-derived
+> spans). Removing the last conditional is the consistent move.
+>
+> **The reviewer's adjudication was correct about the design it examined and does
+> not carry to this one.** It measured `a493f2b`'s *candidate-derived inverter*,
+> where tampering inside the rows text genuinely was invisible. Under the two-copy
+> construction those same two cases are **caught** — measured: `hasDev || hasIno`
+> → `&&` FAILS, and a delete-authorizing branch inside the rows block FAILS. The
+> "structural limit" was a limit of the derived span, not of single-sourcing.
+>
+> **Its B-T4 mapping is kept anyway, because it is the honest backstop for the one
+> residual this design does have:** an edit applied *consistently to both copies*
+> is authoring, not evasion — visible as a two-place spec diff — and it is what
+> B-T4 reddens. Cost accepted: the rows text appears twice. That is duplication
+> with a registered, executable lockstep, which is ADR-0031's own prescription for
+> duplication that has to exist, not a violation of it.
+
+**The mandated edits also live here, each on its own, as the SECOND canonical
+copy.** The fence above is what V4 compares the *implementation* against; the two
+snippets below are what the *implementer reads* — and V4's self-check requires
+that building `base + these snippets` reproduces the fence **byte for byte**.
+Two copies, each pinning the other, **neither derived from the artifact under
+test**. An earlier revision sliced the mandated rows out of the candidate fence
+itself, which meant a branch smuggled *inside* that slice was removed as if it
+were mandated and the gate stayed green (measured).
+
+<!-- MANDATED-SIGNATURE: reverseSymlink -->
+
+```js
+function reverseSymlink(entry, dryRun, removed, skipped, removedSet, skillsRoots, opts = {}) {
+  const identityOf = opts.identity || linkIdentity;   // test seam only
+```
+
+<!-- MANDATED-ROWS: reverseSymlink -->
+
+```js
+  // Row 4a: ADOPTED — the link was already on disk when we first recorded it, so
+  // it is the USER's, not ours, however exactly it matches. Preserve.
+  if (entry.origin === 'adopted') {
+    process.stderr.write(
+      `wienerdog: keeping ${L} — not the Wienerdog skill link we recorded (replaced, or unverifiable)\n`
+    );
+    skipped.push(L);
+    return;
+  }
+  // Row 4b: IDENTITY — when we recorded a (dev, ino) pair, the link on disk must
+  // still BE that file object. A delete-and-recreate gets a new inode, so a user's
+  // same-source replacement no longer passes for ours. Fail closed on any doubt.
+  // A PARTIAL pair (one of the two) is a shape the forward step never writes, so
+  // it is unverifiable, not absent — preserve (Table P rule S-4, Table S).
+  const hasDev = typeof entry.dev === 'string';
+  const hasIno = typeof entry.ino === 'string';
+  if (hasDev || hasIno) {
+    const id = hasDev && hasIno ? identityOf(L) : null;
+    if (id === null || id.dev !== entry.dev || id.ino !== entry.ino) {
+      process.stderr.write(
+        `wienerdog: keeping ${L} — not the Wienerdog skill link we recorded (replaced, or unverifiable)\n`
+      );
+      skipped.push(L);
+      return;
+    }
+  }
+```
+
 **Why the seam exists.** `(dev, ino)` is a *filesystem* property, so the four
 behaviors row 4b depends on — changed device, changed inode, reused identity,
 unavailable identity — cannot be produced deterministically on a real
@@ -1142,46 +1226,44 @@ node /tmp/wd-fnextract.js src/core/manifest.js reverseSymlink > /tmp/wd-actual-s
 #   4a/4b do not exist yet). It goes green the moment the mandated edits land.
 diff -u /tmp/wd-expected-symlink.js /tmp/wd-actual-symlink.js && echo "V4 ok (byte-identical to the spec's expected function)"
 
-# V4 SELF-CHECK — INVERSE TRANSFORM. Undo the three mandated edits on the spec's
-#   expected function; the result must be byte-identical to the base function.
-#   This admits NO classification: an earlier revision inspected only ADDED lines
-#   and exempted any line containing an allowed substring, and a fourth line
-#   `if (entry.origin === "created" && entry.dev === "0") { fs.unlinkSync(...); return; }`
-#   was exempted by `entry.dev` and passed (measured). Deletion-only edits were
-#   invisible to it, and tampering with the mandated text itself was exempted by
-#   its own vocabulary. Inversion catches all three.
-cat > /tmp/wd-invert.js <<'INV'
-const fs = require('node:fs');
-let f = fs.readFileSync(process.argv[2], 'utf8');
-const SIG_NEW = 'function reverseSymlink(entry, dryRun, removed, skipped, removedSet, skillsRoots, opts = {}) {\n'
-  + '  const identityOf = opts.identity || linkIdentity;   // test seam only\n';
-const SIG_OLD = 'function reverseSymlink(entry, dryRun, removed, skipped, removedSet, skillsRoots) {\n';
-const ROW5 = '  // Row 5: OWNED, in-namespace, and provably resolves to our recorded source.\n';
-const ROWS = fs.readFileSync(process.argv[3], 'utf8');
-for (const [name, present, replaced] of [['signature', SIG_NEW, SIG_OLD], ['rows 4a/4b', ROWS + ROW5, ROW5]]) {
-  if (!f.includes(present)) {
-    console.error(`INVERSION: the mandated ${name} edit is not present verbatim in the fence`);
-    process.exit(1);
-  }
-  f = f.replace(present, replaced, 1);
-}
-process.stdout.write(f);
-INV
-#   The rows-4a/4b text is taken FROM THE FENCE ITSELF — sliced between its two
-#   anchors — so the inverter carries no second transcription either.
-node -e '
-const fs=require("node:fs");
-const s=fs.readFileSync("/tmp/wd-expected-symlink.js","utf8");
-const a=s.indexOf("  // Row 4a:");
-const b=s.indexOf("  // Row 5: OWNED");
-if(a<0||b<0||a>b){console.error("fence anchors missing");process.exit(1);}
-fs.writeFileSync("/tmp/wd-rows.js", s.slice(a,b));
-'
+# V4 SELF-CHECK — CONSTRUCTION FROM INDEPENDENT SOURCES. Build the expected
+#   function from the BASE plus the two mandated snippets, and require it to
+#   byte-equal the fence. Nothing here is derived from the artifact under test:
+#   the base comes from git, the two edits come from their own marked fences, and
+#   the two anchors they replace are located IN THE BASE rather than transcribed.
+#   An earlier revision instead sliced the rows out of the candidate fence and
+#   removed that span — so a deleting branch smuggled inside the span was treated
+#   as mandated and the check stayed green (measured, Codex delta 3).
+#
+#   SCOPE, stated exactly: this catches any SINGLE-COPY divergence — an addition,
+#   a deletion, or a tampering inside the mandated region, in EITHER the fence or
+#   the snippets, because the two must construct to each other byte for byte. What
+#   it does NOT catch is the same edit applied CONSISTENTLY to both canonical
+#   copies; that is an authoring change, visible as a two-place edit in the spec
+#   diff, and it is pinned behaviourally downstream by B-T4 (a weakened
+#   partial-pair arm reddens B-T4's dev-only/ino-only rows; a delete-authorizing
+#   branch reddens its three both-wrong rows).
+node /tmp/wd-specfence.js docs/specs/WP-symlink-authorship-identity.md \
+  'MANDATED-SIGNATURE: reverseSymlink' > /tmp/wd-mand-sig.js
+node /tmp/wd-specfence.js docs/specs/WP-symlink-authorship-identity.md \
+  'MANDATED-ROWS: reverseSymlink' > /tmp/wd-mand-rows.js
 git show 9188a1c:src/core/manifest.js > /tmp/wd-base-manifest.js
 node /tmp/wd-fnextract.js /tmp/wd-base-manifest.js reverseSymlink > /tmp/wd-base-symlink.js
-node /tmp/wd-invert.js /tmp/wd-expected-symlink.js /tmp/wd-rows.js > /tmp/wd-inverted.js
-diff -u /tmp/wd-base-symlink.js /tmp/wd-inverted.js \
-  && echo "V4 self-check ok (fence inverts EXACTLY to the base function)"
+node -e '
+const fs = require("node:fs");
+const base = fs.readFileSync("/tmp/wd-base-symlink.js", "utf8");
+const sig  = fs.readFileSync("/tmp/wd-mand-sig.js", "utf8");
+const rows = fs.readFileSync("/tmp/wd-mand-rows.js", "utf8");
+// Both anchors are located IN THE BASE, never transcribed here.
+const sigOld = base.slice(0, base.indexOf("\n") + 1);
+const r5 = base.indexOf("  // Row 5: OWNED");
+if (r5 < 0) { console.error("base anchor missing"); process.exit(1); }
+const row5 = base.slice(r5, base.indexOf("\n", r5) + 1);
+fs.writeFileSync("/tmp/wd-constructed.js",
+  base.replace(sigOld, sig).replace(row5, rows + row5));
+'
+diff -u /tmp/wd-constructed.js /tmp/wd-expected-symlink.js \
+  && echo "V4 self-check ok (base + mandated snippets == the fence, byte for byte)"
 
 # V4 RED — MUST fail against the evasion that defeated the previous token guard: a
 #   provenance-conditioned link-text delete inserted before row 3, under no
@@ -1191,6 +1273,59 @@ node -e 'const fs=require("node:fs"),p=process.argv[1];fs.writeFileSync(p,fs.rea
 node /tmp/wd-fnextract.js /tmp/wd-v4-red.js reverseSymlink > /tmp/wd-actual-red.js
 diff -q /tmp/wd-expected-symlink.js /tmp/wd-actual-red.js >/dev/null \
   && { echo "V4 BROKEN: the guard cannot fail"; exit 1; } || echo "V4 ok (red, as required)"
+
+# V4 RED 2 — the SELF-CHECK's own red case, required. Smuggle a deleting branch
+#   INSIDE the Row 4a..Row 5 span of a copy of the fence. The previous
+#   candidate-derived inverter sliced that span out of the fence itself, so the
+#   smuggled branch was removed as if mandated and the check stayed GREEN
+#   (measured). Construction from the independent snippets catches it, because the
+#   constructed function simply does not contain it.
+node /tmp/wd-specfence.js docs/specs/WP-symlink-authorship-identity.md \
+  'EXPECTED-FUNCTION: reverseSymlink' > /tmp/wd-fence-span.js
+node -e '
+const fs = require("node:fs");
+const p = "/tmp/wd-fence-span.js";
+const s = fs.readFileSync(p, "utf8");
+const at = s.indexOf("  // Row 4b: IDENTITY");
+if (at < 0) { console.error("row 4b anchor missing"); process.exit(1); }
+const inj = "  if (entry.origin === \x27created\x27) {\n    if (!dryRun) fs.unlinkSync(L);\n    removedSet.add(L); removed.push(L); return;\n  }\n";
+fs.writeFileSync(p, s.slice(0, at) + inj + s.slice(at));
+'
+diff -q /tmp/wd-constructed.js /tmp/wd-fence-span.js >/dev/null \
+  && { echo "V4 SELF-CHECK BROKEN: a branch inside the mandated span passed"; exit 1; } \
+  || echo "V4 self-check ok (red: an inside-span branch is caught)"
+
+# V4z — THE HELPER'S OWN RED MATRIX. The extractor above is embedded in TWO
+#   specs; a copy that silently loses its regex escapes still *looks* right and
+#   refuses nothing. Part A's copy did exactly that — single backslashes inside a
+#   JS template literal, so `\s*` became `s*` and `\b` became a backspace, and it
+#   accepted every reassignment form while appearing to check them (measured).
+#   So the matrix runs against the helper AS EXTRACTED FROM THIS SPEC, every time,
+#   and a claim measured against any other copy does not count.
+cat > /tmp/wd-rebind-matrix.sh <<'MX'
+set -u
+tmp=$(mktemp -d); ok=1
+node /tmp/wd-fnextract.js src/core/manifest.js reverseSymlink > "$tmp/fn.js" 2>/dev/null \
+  || { echo "matrix: cannot extract the clean function"; exit 1; }
+cp src/core/manifest.js "$tmp/clean.js"
+printf '\n({ reverseSymlink } = { reverseSymlink: unsafe });\n' > "$tmp/a"; cat "$tmp/clean.js" "$tmp/a" > "$tmp/destruct.js"
+printf '\n[reverseSymlink] = [unsafe];\n'                        > "$tmp/b"; cat "$tmp/clean.js" "$tmp/b" > "$tmp/arr.js"
+printf '\nreverseSymlink = unsafe;\n'                            > "$tmp/c"; cat "$tmp/clean.js" "$tmp/c" > "$tmp/plain.js"
+printf '\nconst reverseSymlink = unsafe;\n'                      > "$tmp/d"; cat "$tmp/clean.js" "$tmp/d" > "$tmp/redecl.js"
+printf '\nfunction reverseSymlink() {}\n'                        > "$tmp/e"; cat "$tmp/clean.js" "$tmp/e" > "$tmp/dup.js"
+for f in destruct arr plain redecl dup; do
+  if node /tmp/wd-fnextract.js "$tmp/$f.js" reverseSymlink >/dev/null 2>&1; then
+    echo "  MATRIX FAIL: $f was ACCEPTED"; ok=0
+  else
+    echo "  matrix ok: $f refused"
+  fi
+done
+node /tmp/wd-fnextract.js "$tmp/clean.js" reverseSymlink >/dev/null 2>&1 \
+  && echo "  matrix ok: clean tree accepted" || { echo "  MATRIX FAIL: clean tree refused"; ok=0; }
+rm -rf "$tmp"
+[ "$ok" = 1 ] && echo "V4z ok (5 refused, 1 accepted)" || { echo "V4z BROKEN"; exit 1; }
+MX
+bash /tmp/wd-rebind-matrix.sh
 
 # V5 — reverse() must NOT pass the test seam; the production call stays 6-arg.
 grep -q "reverseSymlink(entry, dryRun, removed, skipped, removedSet, skillsRoots);" src/core/manifest.js || {

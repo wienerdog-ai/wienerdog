@@ -1022,10 +1022,10 @@ const j = s.indexOf('\n}\n', i);
 if (j < 0) { console.error(`unterminated ${fn}`); process.exit(1); }
 const rest = s.replace(s.slice(i, j + 3), '');
 for (const [re, what] of [
-  [new RegExp(`(^|[^.\w])${fn}\s*=[^=>]`, 'm'), 'assignment'],
-  [new RegExp(`\{[^{}]*\b${fn}\b[^{}]*\}\s*=`, 'm'), 'object destructuring'],
-  [new RegExp(`\[[^\[\]]*\b${fn}\b[^\[\]]*\]\s*=`, 'm'), 'array destructuring'],
-  [new RegExp(`\b(var|let|const|function|class)\s+${fn}\b`, 'm'), 're-declaration'],
+  [new RegExp(`(^|[^.\\w])${fn}\\s*=[^=>]`, 'm'), 'assignment'],
+  [new RegExp(`\\{[^{}]*\\b${fn}\\b[^{}]*\\}\\s*=`, 'm'), 'object destructuring'],
+  [new RegExp(`\\[[^\\[\\]]*\\b${fn}\\b[^\\[\\]]*\\]\\s*=`, 'm'), 'array destructuring'],
+  [new RegExp(`\\b(var|let|const|function|class)\\s+${fn}\\b`, 'm'), 're-declaration'],
 ]) {
   if (re.test(rest)) { console.error(`${fn} is rebound outside its definition (${what}) — refusing`); process.exit(1); }
 }
@@ -1047,6 +1047,38 @@ node -e 'const fs=require("node:fs"),p=process.argv[1];fs.writeFileSync(p,fs.rea
 node /tmp/wd-fnextract.js /tmp/wd-v4-red.js reverseSymlink > /tmp/wd-actual-red.js
 diff -q /tmp/wd-expected-symlink.js /tmp/wd-actual-red.js >/dev/null \
   && { echo "V4 BROKEN: the guard cannot fail"; exit 1; } || echo "V4 ok (red, as required)"
+
+# V4z — THE HELPER'S OWN RED MATRIX. The extractor above is embedded in TWO
+#   specs; a copy that silently loses its regex escapes still *looks* right and
+#   refuses nothing. Part A's copy did exactly that — single backslashes inside a
+#   JS template literal, so `\s*` became `s*` and `\b` became a backspace, and it
+#   accepted every reassignment form while appearing to check them (measured).
+#   So the matrix runs against the helper AS EXTRACTED FROM THIS SPEC, every time,
+#   and a claim measured against any other copy does not count.
+cat > /tmp/wd-rebind-matrix.sh <<'MX'
+set -u
+tmp=$(mktemp -d); ok=1
+node /tmp/wd-fnextract.js src/core/manifest.js reverseSymlink > "$tmp/fn.js" 2>/dev/null \
+  || { echo "matrix: cannot extract the clean function"; exit 1; }
+cp src/core/manifest.js "$tmp/clean.js"
+printf '\n({ reverseSymlink } = { reverseSymlink: unsafe });\n' > "$tmp/a"; cat "$tmp/clean.js" "$tmp/a" > "$tmp/destruct.js"
+printf '\n[reverseSymlink] = [unsafe];\n'                        > "$tmp/b"; cat "$tmp/clean.js" "$tmp/b" > "$tmp/arr.js"
+printf '\nreverseSymlink = unsafe;\n'                            > "$tmp/c"; cat "$tmp/clean.js" "$tmp/c" > "$tmp/plain.js"
+printf '\nconst reverseSymlink = unsafe;\n'                      > "$tmp/d"; cat "$tmp/clean.js" "$tmp/d" > "$tmp/redecl.js"
+printf '\nfunction reverseSymlink() {}\n'                        > "$tmp/e"; cat "$tmp/clean.js" "$tmp/e" > "$tmp/dup.js"
+for f in destruct arr plain redecl dup; do
+  if node /tmp/wd-fnextract.js "$tmp/$f.js" reverseSymlink >/dev/null 2>&1; then
+    echo "  MATRIX FAIL: $f was ACCEPTED"; ok=0
+  else
+    echo "  matrix ok: $f refused"
+  fi
+done
+node /tmp/wd-fnextract.js "$tmp/clean.js" reverseSymlink >/dev/null 2>&1 \
+  && echo "  matrix ok: clean tree accepted" || { echo "  MATRIX FAIL: clean tree refused"; ok=0; }
+rm -rf "$tmp"
+[ "$ok" = 1 ] && echo "V4z ok (5 refused, 1 accepted)" || { echo "V4z BROKEN"; exit 1; }
+MX
+bash /tmp/wd-rebind-matrix.sh
 
 # V5 — ANCHOR_WINDOW is DEFINED exactly once, in core, and shared.js neither
 #      redefines it nor re-implements the digest. Counts DEFINITIONS, not mentions,
