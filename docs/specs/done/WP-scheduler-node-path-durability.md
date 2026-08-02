@@ -1,7 +1,7 @@
 ---
 id: WP-scheduler-node-path-durability
 title: Register scheduler entries against an upgrade-durable node path, not a version-pinned Cellar path
-status: In-Review
+status: Done
 model: sonnet
 size: M
 depends_on: [WP-scheduler-register-replaces-loaded-record]
