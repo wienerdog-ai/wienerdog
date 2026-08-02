@@ -1338,6 +1338,12 @@ test('WP-147 Table N: the safe predicate over every reachable case (recorded met
     // Rows 6-7: sepBefore='\n\n' relocated (the ownership re-check + anti-fusion pair).
     ['row 6: relocated between lines, sepBefore=\\n\\n — user blank line survives', `lineA\n\n\n${WP147_BLOCK}\nlineB\n`, '\n\n', 'lineA\n\n\nlineB\n'],
     ['row 7: fusion probe, sepBefore=\\n\\n — no fusion', `lineA\n\n${WP147_BLOCK}\nlineB\n`, '\n\n', 'lineA\n\nlineB\n'],
+    // Row 8: the DECLARED RESIDUAL (gate round 10). A sepBefore='\n' cross-paragraph
+    // relocation collapses one blank line — this is EQUAL TO shipped base b3a53bc
+    // (base strips one newline unconditionally too), not fusion, and out of this
+    // WP's remit. Pinned so the permutation resolves against a committed assertion;
+    // full closure is routed to WP-managed-block-insertion-anchor.
+    ['row 8: cross-paragraph relocation, sepBefore=\\n — =base residual', `paraA\n\n${WP147_BLOCK}\nparaB\n`, '\n', 'paraA\nparaB\n'],
   ];
   for (const [label, content, sepBefore, want] of rows) {
     const { final } = reverseBlockCase(content, { sepBefore, sepAfter: '\n' });
@@ -1410,20 +1416,21 @@ test('WP-147 T9 (Table M bound): an in-vocabulary at-EOF forgery loses exactly o
   );
 });
 
-test('WP-147 T11 (AC13): honest relocation with sepBefore=\'\\n\\n\' — ownership re-check AND anti-fusion, both rows', () => {
+test('WP-147 T11 (AC13): honest relocation — ownership re-check, anti-fusion, and the declared \'\\n\' residual, three rows', () => {
   const { applyManagedBlock } = require('../../src/adapters/shared');
-  // Honest setup: sync an UNTERMINATED original so the forward step records
-  // sepBefore='\n\n' by itself, then move the block by writing the file directly.
-  // NO manifest hand-editing — that would be a forgery test (T9's job).
-  const run = (template) => {
+  // Honest setup: sync an original so the forward step records the separator by
+  // itself (unterminated → '\n\n'; newline-terminated → '\n'), then move the block
+  // by writing the file directly. NO manifest hand-editing — that would be a
+  // forgery test (T9's job) and would not exercise the honest path these rows need.
+  const run = (original, expectedSep, template) => {
     const paths = tempPaths();
     const manifest = makeInstall(paths);
     fs.mkdirSync(paths.claudeDir, { recursive: true });
     const md = path.join(paths.claudeDir, 'CLAUDE.md');
-    fs.writeFileSync(md, 'orig'); // unterminated → append records sepBefore '\n\n'
+    fs.writeFileSync(md, original);
     applyManagedBlock(md, 'body', false, manifest, { changed: [], unchanged: [], notices: [] });
     const entry = manifest.entries.find((e) => e.kind === 'managed-block' && e.path === md);
-    assert.equal(entry.sepBefore, '\n\n', 'honest unterminated append records sepBefore \\n\\n');
+    assert.equal(entry.sepBefore, expectedSep, `honest append records sepBefore ${JSON.stringify(expectedSep)}`);
     const written = fs.readFileSync(md, 'utf8');
     const block = written.slice(written.indexOf(MB_BEGIN), written.indexOf(MB_END) + MB_END.length);
     fs.writeFileSync(md, template.split('<BLOCK>').join(block));
@@ -1431,11 +1438,18 @@ test('WP-147 T11 (AC13): honest relocation with sepBefore=\'\\n\\n\' — ownersh
     return fs.readFileSync(md, 'utf8');
   };
   // (a) ownership re-check: candidate="lineA\n" ends in a newline → block is NOT
-  // at its recorded append position → strip nothing on the leading side.
-  assert.equal(run('lineA\n\n\n<BLOCK>\nlineB\n'), 'lineA\n\n\nlineB\n', '(a) the user blank line survives — no paragraph merge');
+  // at its recorded append position → strip nothing on the leading side (row 6).
+  assert.equal(run('orig', '\n\n', 'lineA\n\n\n<BLOCK>\nlineB\n'), 'lineA\n\n\nlineB\n', '(a) the user blank line survives — no paragraph merge');
   // (b) anti-fusion still governs: candidate="lineA" passes the re-check, only
-  // noFusion prevents lineAlineB\n.
-  assert.equal(run('lineA\n\n<BLOCK>\nlineB\n'), 'lineA\n\nlineB\n', '(b) no fusion');
+  // noFusion prevents lineAlineB\n (row 7).
+  assert.equal(run('orig', '\n\n', 'lineA\n\n<BLOCK>\nlineB\n'), 'lineA\n\nlineB\n', '(b) no fusion');
+  // (c) the DECLARED RESIDUAL (Table N row 8), NOT red-first: a sepBefore='\n'
+  // cross-paragraph relocation collapses one blank line — EQUAL to shipped base
+  // b3a53bc, out of this WP's remit. This pins CURRENT behaviour, not a fix; a
+  // '\n' relocation cannot establish ownership without the insertion anchor
+  // (routed to WP-managed-block-insertion-anchor). If it ever goes red, either
+  // the code regressed below base or that anchor WP landed — both worth a failure.
+  assert.equal(run('paraA\n', '\n', 'paraA\n\n<BLOCK>\nparaB\n'), 'paraA\nparaB\n', '(c) =base residual: one blank line collapses (not fusion, not a regression)');
 });
 
 test('WP-147 T12 (AC14): non-string separator metadata still strips the block, not rejected upstream', () => {
