@@ -152,26 +152,41 @@ function buildPrintStdout(o) {
   if (!omit.has('program')) lines.push(`\tprogram = ${o.program != null ? o.program : o.argv[0]}`);
   lines.push('\targuments = {');
   if (o.malformedArgs) {
-    lines.push(`\t\t${o.argv[0] || ''}`); // deliberately never closed
-  } else {
-    for (const a of o.argv) lines.push(`\t\t${a}`);
-    lines.push('\t}');
+    // Deliberately never closed, AND nothing follows — launchdLoadedArgs scans
+    // for the NEXT trimmed '}' with no depth-tracking, so a later block's own
+    // closing brace would otherwise be picked up as if it closed this one,
+    // producing a garbled non-null array rather than a genuine parse failure.
+    lines.push(`\t\t${o.argv[0] || ''}`);
+    return `${lines.join('\n')}\n`;
   }
+  for (const a of o.argv) lines.push(`\t\t${a}`);
+  lines.push('\t}');
   if (!omit.has('stdoutPath')) lines.push(`\tstdout path = ${o.stdoutPath}`);
   if (!omit.has('stderrPath')) lines.push(`\tstderr path = ${o.stderrPath}`);
+  // Real `launchctl print` output precedes the real `environment = {` block
+  // with `inherited environment = {` and `default environment = {` (§7b fact
+  // 2) — both empty here, and both end with the same characters as the real
+  // anchor, which is exactly what pins that the anchor must be a TRIMMED
+  // EXACT-LINE match, never a suffix match.
+  lines.push('\tinherited environment = {');
+  lines.push('\t}');
+  lines.push('\tdefault environment = {');
+  lines.push('\t}');
   lines.push('\tenvironment = {');
   if (o.malformedEnv) {
-    // deliberately never closed
-  } else {
-    for (const [k, v] of o.env) lines.push(`\t\t${k} => ${v}`);
-    lines.push('\t\tOSLogRateLimit => 64');
-    lines.push('\t\tXPC_SERVICE_NAME => some.label');
-    lines.push('\t}');
+    // Never closed, and truncated here for the same reason as malformedArgs.
+    return `${lines.join('\n')}\n`;
   }
+  for (const [k, v] of o.env) lines.push(`\t\t${k} => ${v}`);
+  lines.push('\t\tOSLogRateLimit => 64');
+  lines.push('\t\tXPC_SERVICE_NAME => some.label');
+  lines.push('\t}');
   lines.push('\tevent triggers = {');
   if (o.malformedCalendar) {
-    // deliberately never closed
-  } else {
+    // Never closed, and truncated here for the same reason as malformedArgs.
+    return `${lines.join('\n')}\n`;
+  }
+  {
     const count = o.triggerCount != null ? o.triggerCount : 1;
     for (let i = 0; i < count; i += 1) {
       const isCalendar = !o.foreignStreamTrigger || i === 0;
@@ -1694,6 +1709,7 @@ test('verified-register: T1 — Table A1: a live match SKIPS even when changed=t
   const jobCalls = calls.filter((a) => labelForArgv(a) === expect.label);
   assert.equal(jobCalls.length, 1, 'zero mutating calls — the live match wins over `changed`');
   assert.equal(res.loaded, true);
+  assert.equal(fs.existsSync(statusMarkerPath(paths)), false, 'the skip path calls no launchctl verb of any kind and no onBeforeTeardown — nothing but the one print');
 });
 
 test("verified-register: T1 — Codex fixture: changed=true only because the manifest entry is missing (AC1)", async () => {
@@ -2005,7 +2021,10 @@ test('verified-register: T3 case (iii) — the arguments block is unparseable �
 });
 
 test('verified-register: T3 case (iv) — print exits non-zero (nothing loaded) ⇒ attempted (crash-recovery criterion)', async () => {
-  await runT3Case({ status: 113 }, 'attempt');
+  // The stdout carries a fully MATCHING record (gate 1's own regression bait —
+  // pins the `isLoaded` guard, not just the empty-stdout case): a non-zero exit
+  // must be decisive on its own, never overridden by parseable-looking text.
+  await runT3Case((expect) => ({ status: 113, stdout: matchingStdout(expect) }), 'attempt');
 });
 
 test('verified-register: T3 case (v) — the stale-tail fixture: same node+launcher, different --expect-digest ⇒ attempted, not skipped', async () => {
@@ -2089,6 +2108,16 @@ test('verified-register: T3 case (xiii) — the empty-value fixture: the record 
     const env = expect.env.filter(([k]) => k === 'HOME' || k === 'WIENERDOG_HOME'); // drop the 5 scrub pairs
     return { status: 0, stdout: buildPrintStdout({ ...expect, env, program: expect.argv[0] }) };
   }, 'attempt');
+});
+
+test("verified-register: T3 case (xiii)'s pair — a HEALTHY record's five valueless `KEY =>` lines ARE the scrub, and must be parsed as present ⇒ skipped", async () => {
+  // §7b fact 4: five of the seven canonical pairs render as `KEY =>` with
+  // NOTHING after the arrow — that IS their intended (empty-string) value on a
+  // genuinely healthy record. A parser that skips a valueless line instead of
+  // recording `['KEY','']` would drop these five keys from the parsed map and
+  // wrongly force an attempt on a record that is doing exactly its authorized
+  // job — the C2 defect named in AC3 case (xiii).
+  await runT3Case((expect) => ({ status: 0, stdout: matchingStdout(expect) }), 'skip');
 });
 
 test('verified-register: T3 case (xiv) — the indeterminate fixture (CX-1): print exits 0 but degraded, changed=true, bootstrap fails ⇒ no bootout anywhere', async () => {
