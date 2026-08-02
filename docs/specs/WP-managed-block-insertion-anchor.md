@@ -30,13 +30,26 @@ epic: audit-a13
 >   edited** (the ROADMAP-retirement precedent), so the logbook entry is the
 >   bridge from that name to these two.
 >
-> **Owner status: no ruling is required for Part A.** The residual this spec
-> closes was owner-approved as an FYI flag on 2026-08-02, *not* an owner decision,
-> because it is equal-or-stronger than shipped 0.12.0 and therefore carries no new
-> cost to ratify: *"WP-147 leaves a pre-existing cross-paragraph-relocation
-> blank-line-collapse unchanged from 0.12.0; full fix routed to
-> `WP-managed-block-insertion-anchor`."* **Part B does carry an owner ruling; this
-> spec does not, and must not wait on one.**
+> **Owner status: A RULING IS REQUIRED before this spec moves to `Ready`** — see
+> the **Owner ruling** section. Rounds 1–3 of this spec asserted the opposite,
+> and **that assertion was wrong**. It leaned on the 2026-08-02 FYI flag
+> (*"WP-147 leaves a pre-existing cross-paragraph-relocation blank-line-collapse
+> unchanged from 0.12.0; full fix routed to `WP-managed-block-insertion-anchor`"*),
+> but that flag was FYI **because the behaviour it described was unchanged from
+> shipped**. This WP's withhold cases (**R2**, **R2b**) are *not* unchanged: they
+> leave a Wienerdog-authored separator that shipped code removes. By the repo's
+> own discriminator — *"a residual may be a cost the design accepts; it may not be
+> worse than the code it replaces"* (`done/WP-147-…:1461-1462`) — that is a **new
+> cost**, and a new cost is the gated register.
+>
+> **A search for an existing delegation was run and found none.** ADR-0019,
+> ADR-0004, MILESTONES M7, THREAT-MODEL, ARCHITECTURE, every `OWNER-*` marker in
+> `docs/`, and the WP-144/WP-147/WP-153 owner walkthroughs were checked. Every
+> owner marker in the repo ratifies **a named design**, not a class of tradeoff;
+> none contains transferable language. The closest near-miss — WP-153's
+> 2026-08-01 ruling — is scoped by its own spec to *"legacy (target-less) entries
+> — Table A **row 2**"*, and WP-153 explicitly says *"Nothing in the ruling speaks
+> to that"* about adjacent questions. **Do not cite a delegation; there is none.**
 >
 > **What this spec claims, stated exactly — it is NOT an unqualified "full
 > close".** Codex round 3 finding 1 was right that the consolidated draft's
@@ -51,8 +64,11 @@ epic: audit-a13
 >   **our own** bytes, never a user byte (**R2**, **R2b**).
 > - **Retained, bounded, pinned:** one case where the anchor establishes position
 >   *wrongly* — a user who deletes the original neighbourhood and reproduces the
->   same 256 characters elsewhere. Cost: **one newline, never text, never a
->   fusion** (**R2c**, pinned by A-T9).
+>   same 256 characters elsewhere. Cost: **at most the recorded `sepBefore` — two
+>   whitespace characters — never text, never a fusion**, and **equal to base in
+>   both arms** (**R2c**, pinned by A-T9's two cases). Rounds 1–3 stated this
+>   bound as *"one newline"*, which is true only for the `'\n'` arm; Codex round 4
+>   finding 1 found the `'\n\n'` arm and it is measured below.
 >
 > So: *this WP closes the relocation residual for every case the anchor can
 > decide, subject to R2, R2b and R2c.* Nothing in this document may say "full
@@ -66,10 +82,22 @@ machine and records every artifact it creates in an **install manifest**
 manifest in reverse to remove exactly what was created and nothing else.
 
 **IRON RULE (ADR-0004): Wienerdog is just files.** No daemons, no servers, no
-telemetry. **ADR-0019** states the reverse-side half: uninstall disposes the
-core's machine-generated mechanics, and *anything it cannot prove it created is
-preserved* — an unmodified install must leave **only the vault** behind, and it
-must never delete a byte the user authored.
+telemetry. **ADR-0019** states the reverse-side half: uninstall recursively
+removes the core's machine-generated-mechanics subdirectories and then the core
+dir itself, so that *"an unmodified install thus leaves **only the vault**"* — its
+**sole documented exception** is a user-modified `config.yaml`.
+
+> **A misattribution corrected here, because it has propagated.** Four specs in
+> this repo — including earlier revisions of this one — attribute the sentence
+> *"anything it cannot prove it created is preserved"* to ADR-0019. **It is not in
+> ADR-0019.** Measured: the word *"prove"* appears **zero** times in
+> `docs/adr/0019-uninstall-disposes-core-mechanics.md`, and no ADR in `docs/adr/`
+> contains the phrase *"cannot prove"*. It is an architect gloss. The principle is
+> real and this spec relies on it, but it is a **design convention argued from
+> WP-144/WP-146/WP-147/WP-153's shipped reversers**, not ratified ADR text — which
+> is precisely why the Owner ruling below cannot be argued away by citing it. The
+> `Done` specs carrying the misattribution are **not edited** (they describe what
+> they shipped); this correction lives here.
 
 The artifact this WP is about is the **managed block** — the sentinel-delimited
 region (`<!-- wienerdog:begin -->` … `<!-- wienerdog:end -->`) Wienerdog splices
@@ -555,7 +583,31 @@ was executed end-to-end through `applyManagedBlock` → `reverse()`; the recorde
 | **Q11** | Same shape, but the duplicated context is **shorter than the window** (15 chars, twice) | `'\n'` | one newline eaten | **byte-perfect** | already correct under the hash-only draft — a short `candidate` is a *whole-prefix* mismatch. The boundary's other side. |
 | **Q12** | Boundary sweep at `candidate.length` = **255 / 256 / 257**, each under an ordinary in-place uninstall **and** an honest relocation — six runs | `'\n'` | — | **byte-perfect in all six** | pins that nothing special happens at the window edge now the `<=WINDOW` shortcut is gone. Pinned by **A-T7**. |
 | **Q13** | **The ordinary-path corpus sweep.** Six whole-file contents, each synced and immediately uninstalled with **no relocation and no user edit**: `"\n"`, `"\n\n\n"`, `"a\na\na\n"`, CRLF `"x\r\ny\r\n"`, `"foo\n"`, and `""` (present but empty) | `'\n'` / `'\n\n'` | byte-perfect in all six | **byte-perfect in all six** | the block-excised corpus regressed two of these (`"\n"` → `"\n\n"`, `"\n\n\n"` → `"\n\n\n\n"`). Fixed by `candidate + after`. Pinned by **A-T10**. |
-| **Q14** | **R2c made executable.** Original `` `PPPP\n${W}` ``; honest sync; the user then **replaces the prefix** with `` `QQ\n${W}` `` — the same window at a new, unique position — and relocates the block there | `'\n'` | one newline stripped | **one newline stripped — the DECLARED residual, unchanged** | measured **red** against a full-prefix anchor and against an always-withhold anchor, so it discriminates. Pinned by **A-T9**. |
+| **Q14** | **R2c, arm 1 — the `'\n'` separator.** `W` is 256 chars **ending in a newline**, so an honest append onto `` `PPPP\n${W}` `` records `sepBefore: '\n'`. The user then **replaces the prefix** with `` `QQ\n${W}` `` — the same window at a new, unique position — and relocates the block there | `'\n'` | **one** char stripped | **one char stripped — the DECLARED residual, EQUAL to base** | measured **red** against a full-prefix anchor and against an always-withhold anchor, so it discriminates. Pinned by **A-T9(a)**. |
+| **Q15** | **R2c, arm 2 — the `'\n\n'` separator** (Codex round 4, finding 1). `W` is 256 chars **NOT** newline-terminated, so an honest append onto `` `PPPP\n${W}` `` records `sepBefore: '\n\n'`. Same reproduction, and the block sits **at EOF** | `'\n\n'` | **two** chars stripped | **two chars stripped — EQUAL to base** | **This is the arm rounds 1–3 missed.** With `sepBefore='\n\n'`, `candidate` has no trailing newline so `ownershipOk` passes, and `after === ''` at EOF so `noFusion`'s at-EOF disjunct passes — the strip removes **both** newlines. Pinned by **A-T9(b)**. |
+
+**The R2c bound corrected, and why it is still a residual rather than a defect.**
+Measured, both arms, base = WP-147 shipped:
+
+```text
+arm        recorded sepBefore   base strips   this WP strips   delta
+'\n'       "\n"                 1 char        1 char           EQUAL
+'\n\n'     "\n\n"               2 chars       2 chars          EQUAL
+```
+
+The correct bound is **"at most the recorded `sepBefore`"**, whose vocabulary
+WP-147's Table M fixes at `''` / `'\n'` / `'\n\n'` — so **at most two whitespace
+characters, never text, never a fusion**. Rounds 1–3 wrote *"at most one
+newline"*, which is the `'\n'` arm only.
+
+**It stays a residual and not a defect because it is EQUAL to base in both arms**
+— the repo's own rule is *"a residual may be a cost the design accepts; it may not
+be worse than the code it replaces"* (`done/WP-147-…:1461-1462`), and neither arm
+is worse. **The mechanism cannot be changed to make the one-newline bound true**:
+the `'\n\n'` at-EOF strip is exactly what an *honest* append onto unterminated
+content requires (Table Q's genuine-append row), and the anchor matched, so
+nothing distinguishes the honest case from this one. Narrowing it would break the
+honest case; that is why the bound moves and the mechanism does not.
 
 **Rows Q3, Q4, Q6, Q11 and Q13 are baseline rows** (ADR-0036 A1 exemption (ii),
 `PATCH: none — ordinary path`): each records the run and names the assertion that
@@ -668,9 +720,12 @@ at `18bc909` — **not** against this spec's excerpts, which are dedented and ca
 
 **Table R (residuals)** — mirrors:
 
-- [ ] Table Q rows **Q5**, **Q10**, **Q14**; Table N
-- [ ] Test index **A-T3**, **A-T6**, **A-T9**
+- [ ] Table Q rows **Q5**, **Q10**, **Q14**, **Q15**; Table N
+- [ ] Test index **A-T3**, **A-T6**, **A-T9** (both arms)
 - [ ] The security checklist's position-proof bullet
+- [ ] **The Owner ruling section** — its cost ledger repeats R2/R2b's bounds and
+      its disposition table repeats Q1/Q10's outcomes
+- [ ] The header blockquote's scope statement (the R2c bound and the owner status)
 
 ## Test index
 
@@ -696,7 +751,7 @@ hand-write manifest entries except where the row's job is forgery.
 | **A-T6** | Table Q row **Q10**, the duplicate-window move. Build `W = 'w'.repeat(251) + '\nEND\n'` (**exactly 256 characters, newline-terminated — assert `W.length === 256` in the test** so the fixture cannot silently drift off the boundary); original document `` `${W}\nTAIL\n${W}` ``; honest sync; rewrite the file to `` `${W}\n<BLOCK>\nTAIL\n${W}` `` | the final content is **exactly** the original document — **and** additionally assert the result contains no fewer `W` occurrences than the original, so the row fails loudly if the withhold ever becomes a strip | base, the hash-only anchor, **and** an anchor whose uniqueness test is gated on `candidate.length <= ANCHOR_WINDOW` — **all three measured red**. This is the only test that separates the three anchor designs. |
 | **A-T7** | Table Q row **Q12**, the boundary sweep. Six runs: `candidate.length` ∈ {255, 256, 257} × {ordinary in-place uninstall, honest relocation} | in-place restores byte-perfectly at all three lengths; the relocation preserves byte-perfectly at all three | `PATCH: none — boundary pin.` Not red-first against the shipped design; it exists so the removal of the `<=ANCHOR_WINDOW` shortcut stays removed. Red against any re-introduction of a length-conditional branch. |
 | **A-T8** | **The createdFile producer site** (`shared.js:179`). Fixture: the markdown file is **absent**; `applyManagedBlock` creates it | assert the whole entry: `createdFile === true`, `sepBefore === ''`, `sepAfter === '\n'`, **and `anchorBefore === insertionAnchor('')`** (import it; do not hardcode the digest). Then sync a **second** time and assert the entry and the file bytes are unchanged, and finally that uninstall **deletes** the file | red against any implementation that records `null`, omits the anchor, or records a non-empty `sepBefore` on this branch. **Measured**: the entry is `{createdFile:true, sepBefore:'', sepAfter:'\n', anchorBefore:'e3b0c442…b855'}` and uninstall deletes the file. |
-| **A-T9** | Table Q row **Q14** — **R2c, executable**. Original `` `PPPP\n${W}` ``, honest sync; then rewrite the file so the prefix is `` `QQ\n${W}` `` — the same 256-char window at a new, **unique** position — with the block relocated after it | assert the exact resulting bytes, and additionally assert the delta against the pre-uninstall content is **exactly one newline** and is whitespace-only — the R2c safety bound made executable | red against a full-prefix anchor **and** against an always-withhold anchor — **both measured** |
+| **A-T9** | Table Q rows **Q14** and **Q15** — **R2c, executable, BOTH producer-valid separators. Two cases, and both are required.** (a) `W = 'w'.repeat(251) + '\nEND\n'` — 256 chars, newline-terminated, so the honest append records `sepBefore: '\n'`; original `` `PPPP\n${W}` ``; rewrite the prefix to `` `QQ\n${W}` `` with the block after it. (b) `W = 'w'.repeat(253) + 'END'` — 256 chars, **not** newline-terminated, so the honest append records `sepBefore: '\n\n'`; same reproduction, block **at EOF**. **Assert the recorded `sepBefore` in each case** so a fixture that drifts onto the other arm fails loudly | each asserts the exact resulting bytes, **and** that the delta against the pre-uninstall content is **exactly `sepBefore.length` characters** and whitespace-only — (a) one, (b) **two**. That is the R2c bound made executable across its whole vocabulary | (a) red against a full-prefix anchor **and** an always-withhold anchor — both measured. (b) is `PATCH: none — the second arm of the same residual`, pinning the two-character bound; it is red only if the bound ever widens past `sepBefore`, or if a future change makes the arms diverge from base. **Rounds 1–3 had only (a), and the stated bound was wrong as a result** (Codex round 4, finding 1). |
 | **A-T10** | Table Q row **Q13**, the ordinary-path corpus sweep. Six whole-file contents — `"\n"`, `"\n\n\n"`, `"a\na\na\n"`, CRLF `"x\r\ny\r\n"`, `"foo\n"`, `""` — each synced and immediately uninstalled with **no relocation and no edit** | every one restores **byte-perfectly**. Add one further assertion in the same test: a file with **ambiguous** sentinels is skipped with the shipped notice and left untouched, proving the anchor never runs on a file `locateManagedBlock` refuses | red against the block-excised corpus, which yields `"\n\n"` and `"\n\n\n\n"` on the first two rows — **measured**. This is the ordinary-path regression detector. |
 
 **Idempotency (AC11) is asserted inside A-T2(a) and A-T8**: run the forward step
@@ -987,6 +1042,66 @@ prove behaviour.
   pointers already resolve to this file.
 - **`docs/GLOSSARY.md`.**
 
+## Owner ruling — REQUIRED before this spec moves to `Ready`
+
+**Rounds 1–3 of this spec claimed no ruling was needed. That was wrong** (Codex
+round 4, finding 2), and the correction is recorded here rather than quietly
+applied, because the wrong claim was argued rather than measured.
+
+**The discriminator is the repo's own, stated twice in `Done` specs.**
+`done/WP-147-…:1461-1462`: *"A residual may be a cost the design accepts — **it
+may not be worse than the code it replaces**."* `done/WP-153-…:1286-1288`: an
+FYI flag rather than a ruling is correct *"because it is equal-or-stronger than
+base, so there is no new cost to ratify (contrast WP-153's legacy ruling, which
+**accepted a new cost**)."* A new cost is the gated register.
+
+**Measured against that bar, this WP has two rows on each side:**
+
+| | vs shipped base | Register |
+|---|---|---|
+| The relocation fix (Q1, Q10) | **stronger** — user bytes that base deletes are preserved | FYI, already flagged 2026-08-02 |
+| R2c (Q14, Q15) | **equal** in both arms — base strips the same 1 and 2 characters | FYI |
+| **R2** (in-window edit) | **weaker on completeness** — our separator is left where base removes it | **GATED** |
+| **R2b** (duplicated window) | **weaker on completeness** — same | **GATED** |
+
+**No existing delegation covers this, and one was genuinely looked for.** ADR-0019
+mandates completeness and its **sole documented exception** is a user-modified
+`config.yaml`; it contains no tolerance clause and, measured, does not contain the
+word *"prove"* at all. MILESTONES M7 (*"uninstall leaves only the vault"*) is
+**silent** here rather than permissive — the managed block lives inside the user's
+own `CLAUDE.md`, which uninstall never deletes — and silence is not delegation.
+THREAT-MODEL and ARCHITECTURE state the completeness promise without a tolerance
+clause. Every `OWNER-*` marker in `docs/` ratifies a **named design**, not a class
+of tradeoff. **Do not construct a delegation citation.**
+
+### The cost ledger (canonical for the ruling)
+
+| Row | What it buys | What it costs | How narrow | Pinned by |
+|-----|--------------|---------------|------------|-----------|
+| **R2** — in-window edit ⇒ withhold | the anchor stays *bounded*, so an edit far above the block does **not** cost a leftover (Q4). This row is the price of that bound | when the user edits inside the last 256 characters immediately above the block, uninstall leaves **our** separator: at most two whitespace characters, **zero user bytes** | needs an edit in the 256-character window directly above the block, between the last `sync` and the uninstall | **A-T3**, which asserts the exact bytes and that no user byte is lost |
+| **R2b** — duplicated window ⇒ withhold | the position proof is sound; without it the duplicate-window move (Q10) silently eats a user blank line | when the recorded window occurs more than once in the reconstructed document, uninstall leaves **our** separator: same bound, **zero user bytes** | needs a 256-character run repeated in the user's own `CLAUDE.md` | **A-T6**, which asserts the preserve **and** that no user byte is lost |
+
+**Both costs are whitespace Wienerdog wrote, inside a file uninstall does not
+delete, and neither can ever reach a user byte** — that is the argument *for*
+accepting them, and it is the architect's argument, not a ruling.
+
+### The three dispositions
+
+| | Disposition | Q1/Q10 relocation fix | Cost |
+|---|---|---|---|
+| (i) | **Ship as specified** (this spec's shape) | **closed** | R2 + R2b: a bounded whitespace leftover in the two withhold cases |
+| (ii) | **Ship the anchor without the uniqueness conjunct** | Q1 closed, **Q10 stays open** (a duplicate-window move still eats a user blank line) | R2 only |
+| (iii) | **Do not ship**; leave WP-147's residual open | stays open | none |
+
+**Architect's recommendation: (i).** The costs are whitespace we authored; the
+thing bought is user-authored bytes that shipped code destroys. But (ii) and (iii)
+are coherent, and **the choice is the owner's**. **Do not implement any arm until
+the ruling is recorded here.**
+
+**Whichever is chosen, the same surfaces move in one pass** — this spec's header
+blockquote, Table Q, Table R rows R2/R2b/R2c, AC3/AC4/AC5, A-T3/A-T6, and this
+section. They are registered in the Mirrored Surface Checklist.
+
 ## Declared residuals after this WP (Table R — canonical)
 
 Each row names its pinning test. A residual with no test is a claim.
@@ -996,7 +1111,7 @@ Each row names its pinning test. A residual with no test is a claim.
 | **R1** | **Manifest forgery.** An attacker who can rewrite `install-manifest.json` deletes the field and gets base behaviour | WP-147's Table M envelope: at most one newline per side, cannot cross a line boundary into user text. **The anchor makes it strictly tighter** — Q9 shows the in-vocabulary forgery now loses **zero** user bytes rather than one newline | A-T4, and the shipped WP-147 T7/T9/T12 suites | manifest integrity — **declined by declaration**, not routed |
 | **R2** | **In-window edit above the block.** A user edit inside the last 256 characters before the block leaves our blank line behind on uninstall | one separator, ≤ 2 whitespace bytes, **all of them ours**. Never a user byte | **A-T3** | not routed — the design's chosen trade (Implementation notes) |
 | **R2b** | **Duplicated window ⇒ withheld strip.** When the recorded window occurs more than once in the reconstructed user document, `anchorProvesPosition` cannot tell the positions apart and **preserves**, leaving our blank line | same bound as R2 — one separator, all of it ours, never a user byte. This is the *fail-closed* half of the uniqueness conjunct and its price | **A-T6** asserts the preserve; its companion assertion is that **no user byte is lost**, which is what distinguishes this from a defect | not routed — preserve-on-ambiguity is the chosen answer |
-| **R2c** | **Window reproduced elsewhere.** A user who deletes the block's original neighbourhood **and** reproduces the same 256 characters at another position gets a strip at the new site: the anchor matches and the window is unique | the strip is still bounded by `ownershipOk` and `noFusion` — **at most one newline, never a fusion, never text** — i.e. the WP-147 envelope | **A-T9**, which asserts the exact bytes **and** that the delta is one whitespace character. It discriminates: measured **red** against a full-prefix anchor and against an always-withhold anchor | not routed. This is the honest edge of what a bounded window can prove, declared rather than papered over |
+| **R2c** | **Window reproduced elsewhere.** A user who deletes the block's original neighbourhood **and** reproduces the same 256 characters at another position gets a strip at the new site: the anchor matches and the window is unique | **at most the recorded `sepBefore`** — WP-147's Table M fixes that vocabulary at `''`/`'\n'`/`'\n\n'`, so **at most two whitespace characters, never a fusion, never text**. **EQUAL to base in both arms** (measured: base strips 1 and 2 respectively), which is why it is a residual and not a defect | **A-T9**, both arms, each asserting the delta is exactly `sepBefore.length` whitespace characters. Arm (a) discriminates: measured **red** against a full-prefix anchor and against an always-withhold anchor | not routed. This is the honest edge of what a bounded window can prove. **The bound was stated as "one newline" through round 3 and corrected in round 4** — the mechanism cannot be narrowed without breaking the honest unterminated-append case |
 | **R8** | **The V3–V6 source guards are not AST-aware.** They strip comments and reject duplicate definitions, but cannot tell reachable code from code after a `return` | the guards are **tripwires**; V1/V2 — the test suite — are the load-bearing checks. This is WP-147's own stated disposition for the same class | the evasions listed in Verification steps each have an executed red mutation; the uncovered one is unreachable code | **`WP-grep-gate-helper`** — already routed by WP-147 as the canonical comment-stripping/AST gate helper, *"fourth instance of this shape"*. This spec does not re-route it |
 
 ## Definition of done
@@ -1007,8 +1122,9 @@ Each row names its pinning test. A residual with no test is a claim.
    `fix(uninstall): prove a managed-block separator's position before stripping it (WP-managed-block-insertion-anchor)`.
 3. PR template filled, including "Decisions made" (or "none") and `Generated-by:`.
 4. This spec's `status:` flipped to `In-Review` in the same PR.
-5. **No owner ruling is required for this spec** — the residual it closes was an
-   FYI flag, not an owner decision. Do not wait on Part B's ledger.
+5. **The Owner ruling above is recorded here.** This spec does not move to
+   `Ready` without it, and no implementer starts without `Ready`. Its ledger is
+   **independent of Part B's** — two specs, two ledgers, one decision list.
 
 > **Provenance.** Part A of the split of the consolidated
 > `WP-forward-time-ownership-provenance`, which was drafted 2026-08-02, taken

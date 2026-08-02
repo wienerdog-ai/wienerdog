@@ -38,7 +38,7 @@ got when it split (`6ca7d2f`): file deleted, rationale in the logbook.
 | mechanism | a bounded context hash of the bytes preceding the inserted separator, plus a uniqueness test | `lstat` device/inode recorded at creation, plus an explicit `origin` (created vs adopted) bit |
 | `depends_on` | `[WP-147]` | `[WP-153, WP-managed-block-insertion-anchor]` |
 | size | M | S |
-| owner ruling | **none required** | **required before `Ready`** |
+| owner ruling | **required before `Ready`** | **required before `Ready`** |
 
 **Part B depends on Part A for merge-ordering, not for design.** The two
 mechanisms are independent. What couples them is three **shared, additive** hunks
@@ -77,9 +77,15 @@ but its *contract surface*, and the two halves shared almost none of theirs:
   upstream would leave the managed block installed forever. A malformed
   `dev`/`ino` **must** be type-gated — rejecting the entry preserves the link,
   which is the safe direction. The same schema table, opposite decisions.
-- **Only one half carries an owner ruling.** Part B's mechanism trades uninstall
-  completeness for safety, which WP-153 established is the gated register. Part A
-  trades nothing. Keeping them together held a no-ruling WP hostage to a ruling.
+- **Each half carries its own owner ruling, over different costs.** Part B trades
+  uninstall completeness for safety on *files*; Part A does the same on *bounded
+  whitespace it authored itself*. WP-153 established that direction is the gated
+  register. **This bullet originally read "only one half carries a ruling — Part A
+  trades nothing", and that was wrong**: Codex round 4 finding 2 showed Part A's
+  withhold cases leave separators shipped code removes, which is a new cost by the
+  repo's own *"may not be worse than the code it replaces"* rule. Splitting still
+  helped — the two ledgers are over different artifacts and decide independently —
+  but the reason is separability, not that one half was free.
 
 **The measurable tell was test-row growth under review.** Eleven rows at draft,
 fourteen after round 1, eighteen after round 2 — none removed, because every

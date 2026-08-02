@@ -64,9 +64,22 @@ machine and records every artifact it creates in an **install manifest**
 manifest in reverse to remove exactly what was created and nothing else.
 
 **IRON RULE (ADR-0004): Wienerdog is just files.** **ADR-0019** states the
-reverse-side half: uninstall disposes the core's machine-generated mechanics, and
-*anything it cannot prove it created is preserved* — an unmodified install must
-leave **only the vault** behind, and it must never delete a user's file.
+reverse-side half: uninstall recursively removes the core's
+machine-generated-mechanics subdirectories and then the core dir itself, so that
+*"an unmodified install thus leaves **only the vault**"* — its **sole documented
+exception** is a user-modified `config.yaml`.
+
+> **A misattribution corrected here, because it has propagated.** Four specs in
+> this repo — including earlier revisions of this one — attribute the sentence
+> *"anything it cannot prove it created is preserved"* to ADR-0019. **It is not in
+> ADR-0019.** Measured: the word *"prove"* appears **zero** times in
+> `docs/adr/0019-uninstall-disposes-core-mechanics.md`, and no ADR in `docs/adr/`
+> contains the phrase *"cannot prove"*. It is an architect gloss. The principle is
+> real and this spec relies on it — it is the shape of every shipped reverser from
+> WP-144 through WP-153 — but it is a **design convention**, not ratified ADR
+> text. That matters here specifically: the owner ledger below **cannot be argued
+> away by citing it as policy**. The `Done` specs carrying the misattribution are
+> **not edited**; this correction lives here.
 
 The artifact this WP is about is the **skill symlink**: for each core skill named
 `wienerdog-*`, `applySkillLinks` (`src/adapters/shared.js`) creates
@@ -870,12 +883,57 @@ a sequence, and names the implementation it reddens (ADR-0036 A1/A2).
 
 ## Verification steps (run these; paste output in the PR)
 
-Uses the same scoped guard helper Part A introduced. **Write `/tmp/wd-fnguard.js`
-exactly as Part A's V0 does** — it is reproduced there in full; this spec does not
-duplicate it, because after Part A lands the file is one `cat` away and
-duplicating a 30-line helper in two specs is the drift ADR-0031 exists to prevent.
-**If you are implementing this WP standalone, copy V0 verbatim from
-`docs/specs/WP-managed-block-insertion-anchor.md`.**
+**Every command below runs from this spec alone.** An earlier revision told the
+implementer to copy the guard helper out of Part A's spec, which broke the
+One-Document Rule this spec's own Context heading asserts (Codex round 4, finding
+3). The helper is inlined here in full. It is **byte-identical to Part A's V0** —
+one helper, written twice on purpose, because a *verification command an
+implementer cannot execute* is a worse failure than a duplicated 30-line script.
+
+```bash
+# V0 — the scoped guard helper (used by V3 and V4). Strips comments, refuses when
+#      the function has more than one top-level definition, then matches inside
+#      that function's body only.
+cat > /tmp/wd-fnguard.js <<'GUARD'
+const fs = require('node:fs');
+const [file, fn, ...rules] = process.argv.slice(2);
+const raw = fs.readFileSync(file, 'utf8');
+function stripComments(s) {
+  let out = ''; let i = 0; let mode = null;
+  while (i < s.length) {
+    const c = s[i]; const n = s[i + 1];
+    if (mode === null) {
+      if (c === '/' && n === '/') { mode = '//'; out += '  '; i += 2; continue; }
+      if (c === '/' && n === '*') { mode = '/*'; out += '  '; i += 2; continue; }
+      if (c === "'" || c === '"' || c === '`') { mode = c; out += c; i++; continue; }
+      out += c; i++; continue;
+    }
+    if (mode === '//') { if (c === '\n') { mode = null; out += c; } else out += ' '; i++; continue; }
+    if (mode === '/*') { if (c === '*' && n === '/') { mode = null; out += '  '; i += 2; } else { out += c === '\n' ? '\n' : ' '; i++; } continue; }
+    if (c === '\\') { out += c + (n === undefined ? '' : n); i += 2; continue; }
+    if (c === mode) mode = null;
+    out += c; i++;
+  }
+  return out;
+}
+const s = stripComments(raw);
+const decl = `\nfunction ${fn}(`;
+const hits = [];
+for (let k = s.indexOf(decl); k !== -1; k = s.indexOf(decl, k + 1)) hits.push(k);
+if (hits.length === 0) { console.error(`GUARD: no top-level definition of ${fn} in ${file}`); process.exit(1); }
+if (hits.length > 1) { console.error(`GUARD: ${hits.length} top-level definitions of ${fn} — the LAST one binds; refusing to guess`); process.exit(1); }
+const i = hits[0];
+const j = s.indexOf('\nfunction ', i + 1);
+const body = j === -1 ? s.slice(i) : s.slice(i, j);
+let bad = 0;
+for (const r of rules) {
+  const want = r[0] === '+'; const pat = r.slice(1); const has = body.includes(pat);
+  if (want && !has) { console.error(`MISSING inside ${fn}: ${pat}`); bad = 1; }
+  if (!want && has) { console.error(`FORBIDDEN inside ${fn}: ${pat}`); bad = 1; }
+}
+process.exit(bad);
+GUARD
+```
 
 ```bash
 # V1 — the whole suite. Expect zero failures.
@@ -963,8 +1021,12 @@ npm run lint
 **Measured at `18bc909` while writing this spec** (i.e. **before** either part
 landed, so the "must be present" checks for new code are post-implementation by
 construction): V3's and V4's **red** runs both exit 1, and V4's green run passes
-against WP-153's shipped rows. V5's `reverseSymlink(` count is 3 today and must
-stay 3. **The guards are tripwires; V1 and V2 are the load-bearing checks** —
+against WP-153's shipped rows. **V5's `grep -c 'reverseSymlink(' src/core/manifest.js`
+is `2` today and must stay `2`** — the definition and the one production call.
+Do not confuse that with the **five** *unparenthesized* textual occurrences of
+`reverseSymlink` across `src/` (Current state §2), which include the comment above
+the call, the `module.exports` line and a prose mention in `shared.js:441`.
+**The guards are tripwires; V1 and V2 are the load-bearing checks** —
 they are not AST-aware and cannot tell reachable code from code after a `return`
 (**R8**, routed to `WP-grep-gate-helper`).
 
@@ -994,8 +1056,10 @@ they are not AST-aware and cannot tell reachable code from code after a `return`
 
 ## Owner ruling — ONE decision over the WHOLE symlink-identity mechanism
 
-**This spec does not move to `Ready` without a recorded owner ruling.** Part A
-does not need one and must not wait on this.
+**This spec does not move to `Ready` without a recorded owner ruling.** **Part A
+carries its own, independent ledger** — Codex round 4 finding 2 overturned that
+spec's no-ruling claim. Two specs, two ledgers, **one decision list**; neither
+waits on the other's ruling.
 
 **Why an owner and not the architect.** WP-153's legacy ruling (*"fine to have
 installs predating the WP have uninstall leave all skill symlinks behind"*) is the
@@ -1032,9 +1096,9 @@ equal-or-stronger than shipped.
 | (iii) | **Ship 4a only**; record `dev`/`ino` but leave them unread | stays open | **narrowed** | the adopt-leftover only |
 | (iv) | Ship neither; record all three fields, read none | stays open | stays open | none — but then this WP closes nothing and should not ship |
 
-**Architect's recommendation: (i)**, on the ground that ADR-0019 states the
-priority explicitly — *anything uninstall cannot prove it created is preserved* —
-and a leftover symlink in the user's own skills directory is a smaller harm than
+**Architect's recommendation: (i)**, on the ground that every shipped reverser
+from WP-144 through WP-153 preserves what it cannot prove it created — a design
+convention, **not** ADR-0019 text (see the Context correction) — and a leftover symlink in the user's own skills directory is a smaller harm than
 deleting a file the user made. **(ii) and (iii) are both legitimate** and either
 would let this WP ship against a narrower claim; **(iv) is only coherent if this
 WP is dropped**, since recording fields nothing reads is dead data by CLAUDE.md's
