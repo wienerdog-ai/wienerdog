@@ -526,7 +526,7 @@ adds the D2 consistency rule rather than a new deliverable.
 | modify | src/scheduler/generators.js | **D1** — add `entryNodePath(execPath?, opts?)` per Table A and export it. `nodePath()` keeps its body **byte-for-byte** (Table A row 6, Table B row 2). No renderer, no other function. |
 | modify | src/cli/schedule.js | **D2** — replace `gen.nodePath()` with `gen.entryNodePath()` at exactly the six ENTRY sites, **re-anchored to `1093e51`: `:477`, `:536`, `:611`, `:856`, `:885`, `:970`** (Current state §2; `5f0ffc0`'s `:303 :342 :417 :638 :667 :752` are dead line numbers — do not use them). Nothing else in this file changes: **no change to `ensureDarwinEntryRegistered`, `darwinLoadedVerdict`, `darwinReplaceEntry`, the `plutil` preflight, the linux `reloadOk`/`enableOk` gate**, no probe change, no notice change. |
 | modify | tests/unit/scheduler-generators.test.js | **T1, T2, T4 and T5** — the exact set in the Test index. **There is no T3** (round 1's descriptor-digest test was vacuous and is deleted — see AC5), and **T5 is not optional**: it is the ONLY detector for Table E row 7, the role split. Building T1/T2/T4 without T5 reproduces the round-1 test set that shipped an undetectable mutation. The existing test at `:421` (`nodePath/wienerdogBin are absolute`) must pass **unmodified** — and note it does **not** protect the role split, which is exactly why T5 exists. |
-| modify | tests/unit/scheduler-schedule.test.js | **D3 / T6 — architect boundary amendment, 2026-08-02.** Exactly the **six** oracle sites **Table H** rows 1-6 enumerate, and nothing else: `gen.nodePath()` → `gen.entryNodePath()` at each, plus the one added `//` comment line per site. **Table H is the authority — this cell carries no site list of its own.** No new test, no deleted test, no renamed subtest, no helper signature change, no `fakeLaunchd`/`buildPrintStdout`/`printStdoutFromPlistXml` change, and **no change to any of the seven `process.execPath` occurrences** (RUNTIME role — Table B row 2). The collision was discovered at `npm test` time on the authoring host, not at spec time; the full record, the decision and the rejected alternatives are in Implementation notes → **D3/D4**. |
+| modify | tests/unit/scheduler-schedule.test.js | **D3 / T6 — architect boundary amendment, 2026-08-02.** Exactly the **six** oracle sites **Table H** rows 1-6 enumerate, and nothing else: `gen.nodePath()` → `gen.entryNodePath()` at each, plus the added `//` comment line(s) **Table H**'s comment-budget rule authorizes (at most one per site, two at row 2 — amended 2026-08-02, round-2 finding 12; this cell previously said "the one added comment line per site" and was one of the mirrors the amendment corrected). **Table H is the authority — this cell carries neither a site list nor a comment budget of its own.** No new test, no deleted test, no renamed subtest, no helper signature change, no `fakeLaunchd`/`buildPrintStdout`/`printStdoutFromPlistXml` change, and **no change to any of the seven `process.execPath` occurrences** (RUNTIME role — Table B row 2). The collision was discovered at `npm test` time on the authoring host, not at spec time; the full record, the decision and the rejected alternatives are in Implementation notes → **D3/D4**. |
 | modify | tests/unit/sync-repoint.test.js | **D4 / T7 — architect boundary amendment, 2026-08-02.** Exactly the **one** oracle site **Table H** row 7 enumerates, plus its added `//` comment line. Nothing else in this file: no other test, no `primaryEntry`/`runSync` helper change, no fixture change, no `oldNode` change. Same record as D3. |
 
 Not deliverables, deliberately: `src/scheduler/descriptor.js`,
@@ -697,11 +697,23 @@ registered has to be re-minted for this WP.
 
 ### Table B — role split (canonical)
 
+> **RE-ANCHORED 2026-08-02 to `1093e51` (round-2 finding 13).** Rows 1 and 2 still
+> carried `5f0ffc0`'s line numbers after PR #140 moved every one of them. Current
+> state §2 and Deliverables **D2** had already been re-anchored — this table, the
+> one the Mirrored Surface Checklist points those mirrors *at*, was the surface
+> left behind, which inverted the direction the checklist exists to enforce. The
+> numbers below are re-executed from `grep -rn "gen\.nodePath()" src/` at
+> `1093e51` (the listing is reproduced in Current state §2), not carried forward.
+> **The counts did not change — six ENTRY, three RUNTIME — and neither did the
+> enclosing function of any site; only the line numbers moved.** `5f0ffc0`'s
+> numbers are retained in the cells for provenance and are **dead — never
+> navigate by them**.
+
 | Role | Function | Call sites | Value | Rule |
 |------|----------|-----------|-------|------|
-| Entry (written into a file the OS keeps) | `entryNodePath()` | `schedule.js` `:303 :342 :417 :638 :667 :752` | Table A | must survive a package upgrade |
-| Runtime (spawn a child of this process) | `nodePath()` | `run-job.js:408`, `run-job.js:529`, `routine-runtime.js:92` | `process.execPath` | must be the exact running interpreter (WP-154) |
-| Authorization record (digest-covered) | *(inline)* `process.execPath` | `descriptor.js:215` | `process.execPath` | **unchanged** — see Table A row 6 |
+| Entry (written into a file the OS keeps) | `entryNodePath()` | `schedule.js` `:477 :536 :611 :856 :885 :970` *(at `1093e51`; `5f0ffc0`'s dead `:303 :342 :417 :638 :667 :752`, retained for provenance)* | Table A | must survive a package upgrade |
+| Runtime (spawn a child of this process) | `nodePath()` | `run-job.js:439`, `run-job.js:579`, `routine-runtime.js:92` *(at `1093e51`; `run-job.js`'s dead `:408` / `:529`, retained for provenance — `routine-runtime.js:92` never moved)* | `process.execPath` | must be the exact running interpreter (WP-154) |
+| Authorization record (digest-covered) | *(inline)* `process.execPath` | `descriptor.js:215` *(re-confirmed at `1093e51` — unmoved)* | `process.execPath` | **unchanged** — see Table A row 6 |
 
 ### Table C — post-`sync` convergence, by platform and starting state (canonical)
 
@@ -916,8 +928,9 @@ recorded in Implementation notes → **D3/D4**. This table is the **bounded
 enumeration** that replaces the withdrawn blanket claim.
 
 **How to read it.** Every authorized site is a row. **Every row is one expression
-swap — `gen.nodePath()` → `gen.entryNodePath()` — plus at most one added `//`
-comment line above it.** Nothing else in either file changes: no assertion text, no
+swap — `gen.nodePath()` → `gen.entryNodePath()` — plus, above it, at most one
+added `//` comment line, or a two-line `//` comment where the citation does not
+fit on one line.** Nothing else in either file changes: no assertion text, no
 expected value, no test name, no helper signature, no fixture, no
 `fakeLaunchd` / `buildPrintStdout` / `printStdoutFromPlistXml` change, and none of
 the **seven `process.execPath` occurrences** in `scheduler-schedule.test.js`
@@ -926,9 +939,25 @@ spawned test child, Table B row 2). **A site not in this table is out of the
 permission boundary**, exactly as with Table E. V8 and V8b make both halves
 mechanical.
 
+> **AMENDED 2026-08-02 (round-2 finding 12) — the comment budget is "at most one,
+> or two where the citation needs it", and the amendment moved the PROSE, not the
+> code.** The rule above read *"at most one added `//` comment line"* while
+> **row 2** carries **two** — its citation names both Table B row 1 and this
+> table, and does not fit on one line. The `branch` column below **already
+> encoded the two-line shape**: the **+3** cumulative shift at row 2 and the
+> **+4 / +5** shifts at rows 3-6 are arithmetically consistent *only* with two
+> comment lines at row 2. So the prose was the stale mirror and the numbers were
+> right; the prose is what moved. Trimming the test comment instead would have
+> invalidated four downstream `branch` line numbers to save one line of comment.
+> **Row 2 is the only two-line site**: rows 1, 3, 4 and 7 carry exactly one line
+> each, rows 5 and 6 carry none. **V8b is indifferent either way** — it filters
+> `^\+[[:space:]]*//` per line, so it accepts any number of added comment lines
+> and its verdict does not change under this amendment.
+
 `main` line numbers are `origin/main` @ `179173b`; `branch` line numbers are this
-branch after the swap (they shift by the added comment lines, and are given so a
-reader can find the site — they are not the contract; the expression and its role
+branch after the swap (they shift by the added comment lines — see the amendment
+note above for the per-row budget those shifts encode — and are given so a
+reader can find the site; they are not the contract, the expression and its role
 are).
 
 | # | File | `main` | branch | The expression | Its role — what the test uses it for | Class | Red on the authoring host? |
@@ -1018,24 +1047,37 @@ applied, not skipped:** the contract that had leaked into the not-deliverables
 prose is now decided in exactly one place (Table H), and every mirror below defers
 to it.
 
+**(+r8, 2026-08-02) — round-2 findings 12 and 13, and the one lesson they share.**
+Both were **canonical tables outvoted by their own mirrors**. Finding 12: Table H's
+comment-budget prose said "at most one" while Table H's own `branch` column
+encoded two at row 2 — a table disagreeing with itself. Finding 13: Table B row 1
+and row 2 still carried `5f0ffc0`'s line numbers *after* two registered mirrors of
+Table B — Current state §2 and Deliverables **D2** — had been re-anchored to
+`1093e51`. **A re-anchoring pass that updates the mirrors and not the table it
+mirrors is the checklist run backwards**, and it is the failure this block exists
+to make un-repeatable: **when a `(+r5)`-class line-number entry moves, Table B
+moves first and the mirrors follow it.** Table B is now marked with its own dated
+re-anchoring preamble so a future reader can tell at a glance which commit its
+numbers belong to.
+
 In this spec:
 
 - [ ] Deliverables cell for `src/scheduler/generators.js` (D1 — "per Table A", `nodePath()` byte-for-byte)
 - [ ] Deliverables cell for `src/cli/schedule.js` (D2 — the six site list, Table B row 1)
 - [ ] **(+r3)** Deliverables cell for `tests/unit/scheduler-generators.test.js` — it mirrors the **Test index** row set (T1/T2/T4/T5) and the "no T3" fact. **This is the mirror whose absence caused a round-2 defect**: the T3→T5 renumbering updated five registered surfaces and missed this unregistered one, leaving the permission-boundary table telling the implementer to build the round-1-failing test set. Registered so the Test index and this cell can never diverge again.
-- [ ] **(+r7)** Deliverables cells for `tests/unit/scheduler-schedule.test.js` (**D3 / T6**) and `tests/unit/sync-repoint.test.js` (**D4 / T7**) — both mirror **Table H**'s row set and its "one expression swap plus at most one comment line" rule. **Neither cell carries a site list of its own**, deliberately: the sibling's D6 amendment showed that a Deliverables cell restating an enumeration is exactly the mirror that goes stale (`done/WP-scheduler-register-replaces-loaded-record.md:368` says the same of its Table E). Table H is the authority
+- [ ] **(+r7)** Deliverables cells for `tests/unit/scheduler-schedule.test.js` (**D3 / T6**) and `tests/unit/sync-repoint.test.js` (**D4 / T7**) — both mirror **Table H**'s row set and its comment-budget rule — **(+r8)** now *"one expression swap plus at most one added `//` comment line, or two where the citation needs it (row 2 only)"*, amended 2026-08-02 for round-2 finding 12, which found the D3 cell restating the superseded one-line budget. **Neither cell carries a site list or a comment budget of its own**, deliberately: the sibling's D6 amendment showed that a Deliverables cell restating an enumeration is exactly the mirror that goes stale (`done/WP-scheduler-register-replaces-loaded-record.md:368` says the same of its Table E). Table H is the authority
 - [ ] **(+r7)** Deliverables → the **not-deliverables paragraph's proof-role statement**. This is the mirror the amendment **falsified**: it claimed the two files' unmodified assertions were *"this WP's proof that nothing else moved"*, which stopped being true the moment D1/D2 landed on a Homebrew host. The withdrawn sentence is quoted in place and replaced by the narrowed claim — *no assertion changes beyond the enumerated oracle swaps* — which **AC10** asserts and **V8/V8b** make mechanical. **The three must never disagree about the scope of the claim**
 - [ ] **(+r2, +r7)** Deliverables → the **Sizing** paragraph (it restates Table B row 1's "six call sites" count, **and now Table H's seven-site count**)
 - [ ] "Exact contracts" JSDoc block, its default-parameter note (Table A row 1) and its input → output pairs (Table F)
 - [ ] "Exact contracts" literal `.plist` fragment (the `--expect-digest`-unchanged claim, Table A row 6)
-- [ ] Current state §2 (the ENTRY/RUNTIME site classification — Table B) — **(+r5)** and its NEW hoisted-`const node` sub-table, which is the mirror of Implementation notes §D2's dual-consumer rule
+- [ ] Current state §2 (the ENTRY/RUNTIME site classification — Table B) — **(+r5)** and its NEW hoisted-`const node` sub-table, which is the mirror of Implementation notes §D2's dual-consumer rule. **(+r8)** §2's nine line numbers and **Deliverables D2**'s six are mirrors of **Table B rows 1-2**, which is where they are decided; round-2 finding 13 found both mirrors re-anchored to `1093e51` while Table B itself was not. Re-anchor Table B first, then these
 - [ ] Current state §7 (the descriptor field — Table A row 6)
 - [ ] **(+r5)** Current state §8 — **REWRITTEN against `ensureDarwinEntryRegistered`**; it is the mechanism behind Tables C and D and must be re-read whenever either moves. Its `5f0ffc0` text is retained in a quote block, not deleted
 - [ ] **(+r5)** Current state §9 — **the executed record of the scratch-label experiment that settled Table G's premise (P is TRUE, 2026-08-02)**. Table G decides; §9 records what was run, by whom, and the teardown. **Registered because Table G's Status row and §9 must move together**: if the premise is ever re-opened (a launchd behavior change), both flip, plus every mirror below
 - [ ] **(+r5, updated 2026-08-02)** **AC6**'s non-claim bullet — it cited Table G's premise as unverified and now must not; and the **Convergence** section heading paragraph, which states the premise's settled status
 - [ ] **(+r6, 2026-08-02, from the light gate)** **Table D's OS-call lists** — D-a's call-count scoping paragraph, D-a's steady-state cell, D-c's `plutil` cell, Table D's RECONCILED preamble bullet ("a later `sync` makes two read-only `print`s"), **Table G's "If P is TRUE" row**, and **AC9's reproduction requirement**. All six state the same two facts — *the `plutil` preflight (`:201-203`) runs before the teardown guard (`:208`)*, and *a full darwin `sync` issues **two** read-only `print`s, one per helper*. Registered because the gate found **two** of them wrong while the others were right: a call list is a contract here, since AC9 makes the implementer copy it into the merge artifact verbatim. The full-path count is the **landed sibling's** canonical property (`done/WP-scheduler-register-replaces-loaded-record.md:1880-1883`) — derive from it, never restate it independently
 - [ ] **(+r5)** Table C's reconciliation preamble (the row-4 / row-5 verdict-change table) and Table D's reconciliation preamble — these are the dated records of the two settled rows that changed outcome; neither may be silently folded into the tables they precede
-- [ ] Implementation notes §D1 (the derivation, the `parts.length < 6` spelling of row 2, the anti-`indexOf` rule from Table E row 4), §"Why the descriptor field stays" (row 6), §"Windows" (row 1), §"Convergence — governed by Table C" (which now cites C and D instead of restating them)
+- [ ] Implementation notes §D1 (the derivation, the `parts.length < 6` spelling of row 2, the anti-`indexOf` rule from Table E row 4), §"Why the descriptor field stays" (row 6), §"Windows" (row 1 — **(+r8)** and, newly registered, **Table B row 1**: §"Windows" names the Windows-reachable call sites, so it moves with every re-anchoring. Round-2 finding 13's sweep found it still on `5f0ffc0`'s `:342`/`:667`, and found it naming **two** sites where Current state §2's sub-table has **three** — `:611`'s hoisted `const node` also feeds the win32 `argline` at `:716`. Both corrected in the finding-13 pass), §"Convergence — governed by Table C" (which now cites C and D instead of restating them)
 - [ ] Design space → option (a) (the alias mechanism is rows 5–6)
 - [ ] Security checklist bullets 1 and 2 (rows 3, 4 and 5 — which of them is the security boundary)
 - [ ] Acceptance criteria AC1 (rows 5–6), AC2 (rows 1–4 via Table F), AC3 (Table B row 1), AC4 (Table B row 2 **and**, as the spec's only seam-free assertion of them, Table A rows 5-6), AC5 (Table A row 6), AC6 (idempotence, and its explicit non-claim about Tables C/D), AC9 (Tables C and D reproduced in the PR) — **(+r5)** AC9 now also mirrors Table C row 5's flipped verdict, Table D's discharged false-success finding and **Table G**'s premise — **which is SETTLED TRUE as of 2026-08-02, so AC9 sub-item (iv) reports it as executed, never as unverified**
@@ -1311,8 +1353,9 @@ precedent this section follows.
 
 **THE DECISION.** Promote both files into the Deliverables table (**D3** and
 **D4**), authorize **exactly** the seven oracle expressions **Table H** enumerates
-— `gen.nodePath()` → `gen.entryNodePath()`, plus at most one added `//` comment
-line per site — and **narrow the not-deliverables paragraph's proof claim** from
+— `gen.nodePath()` → `gen.entryNodePath()`, plus the added `//` comment line(s)
+**Table H**'s comment-budget rule authorizes (at most one per site, two at row 2)
+— and **narrow the not-deliverables paragraph's proof claim** from
 *"nothing else moved"* to *"no assertion changes beyond the enumerated oracle
 swaps"*, which **AC10** asserts and **V8/V8b** check mechanically. **Not one
 assertion, expected value, test name, helper signature, fixture, loader or stdout
@@ -1440,9 +1483,12 @@ must both honor — **all three were re-derived on 2026-08-02 against `1093e51`*
 
 ### Windows — scoped OUT, with the reason recorded
 
-The same `nodePath()` value flows into `windowsCmdArguments` (Current state §2,
-sites `:342` and `:667`), so the Windows generator **does** carry the identical
-pin, and `entryNodePath` is wired into both Windows sites — but Table A row 1
+The same `nodePath()` value flows into `windowsCmdArguments` from **Table B row 1**
+sites **`:536`** (`ensureWindowsCatchup`) and **`:885`** (`repairCatchup`'s win32
+leg), and — via the hoisted `const node` — from **`:611`** (`registerPlatformEntries`,
+whose win32 `argline` is at `:716`; Current state §2's sub-table). So the Windows
+generator **does** carry the identical pin, and `entryNodePath` is wired into every
+Windows-reachable site by D2's six-site swap — but Table A row 1
 makes it a **no-op** there, because a Windows `process.execPath` never starts with
 `/`. That is deliberate, and the exclusion rests on the Windows node layouts
 being stable already: the official MSI and Chocolatey install to
@@ -1887,10 +1933,29 @@ grep -nE "generators|nodePath|entryNodePath" src/scheduler/descriptor.js \
 # REQUIRED after: IDENTICAL.
 
 # V6 (CHANGE — AC8; judged by reading). The new function must add no process,
-#     no timer and no require.
+#     no timer and no require. COMMENT-TOLERANT and CALL-ANCHORED, and both are
+#     required, not conveniences (amended 2026-08-02, round-2 finding 11 — the
+#     same caused-by-conformance class as the sibling's V5/V6b, fixed at 56ee4d0):
+#     the JSDoc this spec MANDATES for `entryNodePath` contains the literal
+#     "NOT for spawning a child of the current process" (see "Exact contracts"),
+#     the bare `spawn` alternative matched that one prose line, and the OK branch
+#     therefore could NEVER print on a branch that followed the spec exactly. Two
+#     narrowings, both applied: drop comment-leading ADDED lines, and anchor the
+#     process alternatives on a CALL (`spawn(`, `spawnSync(`, `exec(`, `execFile(`)
+#     rather than on the bare word. The contract JSDoc must NOT be reworded to
+#     dodge a grep.
 git diff origin/main...HEAD -- src/scheduler/generators.js src/cli/schedule.js \
-  | grep -E "^\+" | grep -nE "require\(|spawn|setInterval|setTimeout|exec\(" || \
-  echo "OK: no new require/spawn/timer in the production diff"
+  | grep -E "^\+" \
+  | grep -vE "^\+[[:space:]]*(\*|//|/\*)" \
+  | grep -nE "require\(|spawn(Sync)?\(|exec(Sync|File|FileSync)?\(|setInterval|setTimeout" \
+  || echo "OK: no new require/spawn/timer in the production diff"
+# The middle filter drops added lines whose first non-blank character starts a
+# comment (` * `, `//`, `/*`) — i.e. prose, the mandated JSDoc included. It does
+# NOT weaken the gate: every real violation is a code line, and
+# `require('child_process')`, `spawn(`, `spawnSync(`, `exec(`, `execFile(`,
+# `setInterval` and `setTimeout` all still trip it. Executed on this branch as a
+# two-sided check — green on the real diff, and matching (no OK line) on a
+# synthetic diff carrying those five code lines.
 # on main: n/a (empty diff). REQUIRED after: the OK line, with no matches above it.
 
 # V8 (CHANGE + PRESERVATION — Table H / AC10 (i) and (ii); judged by reading the
