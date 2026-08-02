@@ -183,17 +183,46 @@ invocation. Two sources, both checked at `0f9ee08`:
 - **`docs/specs/WP-broker-e2e-terminal-auth.md`** (status: **Ready**, i.e. not yet
   done) exists precisely to fix this: *"LP2's positive read-path is currently
   unprovable from a normal `npm run scenarios:broker-e2e` invocation."*
-- **`docs/THREAT-MODEL.md:146`** already carries the honest wording: *"(The live
-  end-to-end poisoned-email harness that exercises this is being re-fitted to the
-  current Claude runtime — WP-scenario-harness-auth-repair; the containment itself
-  is enforced by the argv + broker design, unit-verified and design-reviewed.)"*
+- **`docs/THREAT-MODEL.md:146` — which round 1 of this spec wrongly blessed as
+  "already correct". It is not.** Its parenthetical reads: *"(The live end-to-end
+  poisoned-email harness that exercises this is being re-fitted to the current
+  Claude runtime — WP-scenario-harness-auth-repair; the containment itself is
+  enforced by the argv + broker design, unit-verified and design-reviewed.)"*
+  **That is the same defect class, one document further in**, and it is stale
+  twice over: *"is being re-fitted"* is a live-status assertion, and the WP it
+  names as the ongoing repair —
+  `docs/specs/done/WP-scenario-harness-auth-repair.md` — has `status: Done`,
+  while the repair that actually remains is the still-`Ready`
+  `WP-broker-e2e-terminal-auth`. Found by the Codex design gate (round 2). It is
+  therefore **E3 of this WP**, not a source to defer to; only its second half (the
+  design-enforcement clause) is sound, and that half survives byte-identically.
 
 **This is the same failure mode as the banner**, one class up: prose asserting a
 status that a later change can falsify. The fix is the same rule — name the
 mechanism and the harness, assert no current execution status.
 
-**Consequence: this WP has TWO edit regions in the one file** — `:7-9` and
-`:121-124`. Everything else is out of scope.
+**Consequence: this WP has THREE edit regions across TWO files** — the runbook's
+`:7-9` (**E1**) and `:121-124` (**E2**), and one clause of
+`docs/THREAT-MODEL.md:146` (**E3**). Everything else in both files is out of
+scope.
+
+**On adding a second file to a docs-only WP.** The alternative was a companion WP
+for one sentence, which is process overhead for a one-clause fix of the *same*
+defect class found in the *same* review. The repo has direct precedent for a
+**clause-scoped** `docs/THREAT-MODEL.md` Deliverables row:
+`docs/specs/done/WP-stance-authority-containment.md:585` reads
+*"\| modify \| docs/THREAT-MODEL.md \| **D7** — the stance clause at `:277-279`
+only; exact wording in Implementation notes."* E3 follows that shape exactly.
+
+**Mirror check, done before widening scope (ADR-0031).** `:146` is **not** a
+registered mirrored surface of any other spec. The clause-scoped
+`docs/THREAT-MODEL.md` rows that exist elsewhere name `:130`, `:132`, `:134`,
+`:277-279` and `:427` (`WP-secret-fence-ep2-redact-arm`'s Table Q rows Q10–Q13
+and `WP-stance-authority-containment`'s D7) — **none is `:146`**. And
+`grep -rln "being re-fitted\|re-fitted to the current" docs/` returns only
+`docs/THREAT-MODEL.md` and this spec, so the sentence has no copies to keep in
+lockstep. `WP-143-a2-broker-docs` (Done) is the WP that originally wrote the T4a
+residual; it registers no live mirror obligation.
 
 ### 4. The canonical source this banner must defer to — `docs/THREAT-MODEL.md:32-35`
 
@@ -254,10 +283,12 @@ Verified at `0f9ee08`:
 |--------|------|-------|
 | modify | docs/runbooks/gws-broker.md | **Two regions, both specified byte-exactly below.** **E1** — replace the three-line blockquote at `:7-9` (the gate-status banner). **E2** — replace the four-line paragraph at `:121-124` (the live-proof assertion about the poisoned-email harness) with the five-line text below. Change nothing else in the file — not `:108`, not `:70`/`:72`/`:76`, not any heading, not the table at `:114-119`, not the intro at `:3-5`. |
 
-Not deliverables under any reading: `docs/THREAT-MODEL.md`, `docs/VISION.md`,
-`docs/GLOSSARY.md`, `README.md`, `docs/adr/`, any other file in `docs/runbooks/`,
-`tests/scenarios/broker-e2e/`, and every file under `src/`, `bin/`, `tests/`,
-`skills/` and `templates/`.
+| modify | docs/THREAT-MODEL.md | **E3 — ONE CLAUSE at `:146` and nothing else in the file.** The parenthetical beginning `(The live end-to-end poisoned-email harness` and ending `unit-verified and design-reviewed.)` — the same live-status defect as E2 (Current state §3). **The content is the boundary, not the line number.** Every other sentence of `:146`, and every other line of the file — T0 (`:32-35`), the gates (`:130`, `:132`, `:134`), the stance clause (`:277-279`), the residuals (`:427`, `:429`, `:431`) — stays byte-identical. Several of those are clause-scoped deliverables of OTHER specs; touching them is a permission-boundary violation, not a favour. |
+
+Not deliverables under any reading: `docs/VISION.md`, `docs/GLOSSARY.md`,
+`README.md`, `docs/adr/`, any other file in `docs/runbooks/`,
+`tests/scenarios/broker-e2e/`, every OTHER line of `docs/THREAT-MODEL.md`, and
+every file under `src/`, `bin/`, `tests/`, `skills/` and `templates/`.
 
 ### Exact contract
 
@@ -344,11 +375,51 @@ encryption, exactly as it is for every other app you run.
 - **Plain language.** "comes from" rather than "is enforced by"; no "LP2", no
   "argv", no "hermetic runtime profile".
 
+#### E3 — the same defect in the threat model, `docs/THREAT-MODEL.md:146`
+
+**Remove**, byte-exact — the parenthetical **only**, mid-paragraph. Inside that
+one long line it sits between the sentence ending
+`…and A2’s fixed broker verbs.` and the sentence starting
+`This is the same single-user-machine file-permission boundary…` (one space on
+each side of the parenthetical, unchanged):
+
+```text
+(The live end-to-end poisoned-email harness that exercises this is being re-fitted to the current Claude runtime — WP-scenario-harness-auth-repair; the containment itself is enforced by the argv + broker design, unit-verified and design-reviewed.)
+```
+
+**Insert in its place**, byte-exact:
+
+```text
+(The live end-to-end poisoned-email harness that exercises this is `tests/scenarios/broker-e2e/`; the containment itself is enforced by the argv + broker design, unit-verified and design-reviewed.)
+```
+
+`:146` is one very long line; the surrounding sentences on it do not change.
+
+**Why this wording:**
+
+- **The second half survives byte-identically** — *"the containment itself is
+  enforced by the argv + broker design, unit-verified and design-reviewed"* is the
+  sound half, and it is the sentence E2 was written to mirror. Only the stale
+  first half moves.
+- **It drops two stale claims at once**: *"is being re-fitted"* (a live status)
+  and *"— WP-scenario-harness-auth-repair"* (a WP that is `Done`, so naming it as
+  the ongoing repair is simply wrong today).
+- **It names the harness by path**, which is stable, instead of by the state it is
+  in, which is not. Same move as E2, and now the two documents say the same thing
+  in the same voice.
+- **It does not name `WP-broker-e2e-terminal-auth` either.** Pointing at the
+  *next* repair WP is the identical failure mode with a later expiry date — that
+  WP will also be `Done` one day. Spec ids belong in specs, not in the threat
+  model's prose.
+
 ## Contract reference
 
-N/A — two prose paragraphs in one document. No interface, taxonomy, parser, error
-path, authority boundary or downstream consumer changes; fewer than two of
-ADR-0031's seven activation triggers fire.
+N/A — three prose clauses across two documents, each a self-contained
+replacement. No interface, taxonomy, parser, error path, authority boundary or
+downstream consumer changes; fewer than two of ADR-0031's seven activation
+triggers fire. **E3's mirror question was checked explicitly** (Current state §3):
+`:146` is registered as no other spec's mirrored surface, and the sentence has no
+copies elsewhere in the repo.
 
 ## Implementation notes & constraints
 
@@ -398,11 +469,25 @@ command, and no code. It changes eight lines of documentation prose.
 - [ ] **AC4 (E2, red → green)** — `grep -n "is proven end-to-end by" docs/runbooks/gws-broker.md`
       matches **before** the change and matches **nothing after**, and the file
       still names `tests/scenarios/broker-e2e/` exactly once.
-- [ ] **AC5 (nothing else moved)** — `git diff --stat` shows exactly one file
-      changed, `8 insertions(+), 7 deletions(-)`, and `git diff` shows the change
-      confined to lines 7-9 and 121-124.
-- [ ] **AC6** — line `:108` (*"which v1 does not do"*) is unchanged, and the file
-      is 125 lines after the edit (124 + E2's one added line).
+- [ ] **AC5 (E3, red → green)** —
+      `grep -c "being re-fitted" docs/THREAT-MODEL.md` returns 1 **before** and 0
+      **after**, and `grep -c "WP-scenario-harness-auth-repair" docs/THREAT-MODEL.md`
+      likewise 1 → 0. The replacement clause is present byte-exactly (V5b).
+- [ ] **AC6 (nothing else moved)** — `git diff --stat` shows exactly **two** files
+      changed: `docs/runbooks/gws-broker.md` with
+      `8 insertions(+), 7 deletions(-)`, and `docs/THREAT-MODEL.md` with
+      `1 insertion(+), 1 deletion(-)` — E3 edits one clause inside one long line,
+      so it is a one-line diff. `git diff` shows the runbook change confined to
+      lines 7-9 and 121-124, and the threat-model change confined to `:146`.
+      (Measured while drafting.)
+- [ ] **AC7** — runbook line `:108` (*"which v1 does not do"*) is unchanged, the
+      runbook is 125 lines after the edit (124 + E2's one added line), and
+      `docs/THREAT-MODEL.md` is still **431** lines.
+- [ ] **AC8 (E3 stayed in its lane)** — no other clause of
+      `docs/THREAT-MODEL.md` moved. Specifically `:32-35` (T0), `:130`, `:132`,
+      `:134`, `:277-279` and `:427` are byte-identical — several are
+      clause-scoped deliverables of **other** specs (Current state §3), so a
+      "helpful" consistency edit there is a permission-boundary violation.
 - [ ] `npm run lint` is green.
 
 ## Verification steps (run these; paste output in the PR)
@@ -457,11 +542,21 @@ echo "AC3 ok — no unconditional gate verdict in the blockquote"
 grep -c "wienerdog safety" docs/runbooks/gws-broker.md          # expect 1
 grep -c "tests/scenarios/broker-e2e/" docs/runbooks/gws-broker.md  # expect 1
 
-# V6 (AC5, AC6) — the blast radius.
-git diff --stat -- docs/runbooks/gws-broker.md
+# V5b (AC5) — E3, byte-exact, in docs/THREAT-MODEL.md. `:146` is one long line,
+# so this greps the replacement clause rather than diffing a line range.
+grep -c "being re-fitted" docs/THREAT-MODEL.md                     # before 1, after 0
+grep -c "WP-scenario-harness-auth-repair" docs/THREAT-MODEL.md     # before 1, after 0
+grep -cF 'harness that exercises this is `tests/scenarios/broker-e2e/`; the containment itself is enforced by the argv + broker design, unit-verified and design-reviewed.)' docs/THREAT-MODEL.md   # expect 1
+
+# V6 (AC6, AC7, AC8) — the blast radius, both files.
+git diff --stat
 git diff -- docs/runbooks/gws-broker.md
+git diff -- docs/THREAT-MODEL.md            # expect ONE changed line, at :146
 wc -l docs/runbooks/gws-broker.md                           # expect 125
+wc -l docs/THREAT-MODEL.md                                  # expect 431
 grep -n "which v1 does not do" docs/runbooks/gws-broker.md  # expect line 108
+# AC8 — the clauses that belong to OTHER specs must not appear in the diff at all.
+git diff -U0 -- docs/THREAT-MODEL.md | grep -cE "^[+-][^+-]"   # expect 2 (one - and one +)
 
 # V7 — lint (markdownlint runs over docs/**/*.md).
 npm run lint
@@ -473,9 +568,14 @@ node scripts/boundary-check.js docs/specs/WP-gws-broker-runbook-destale.md \
 
 ## Out of scope (do NOT do these)
 
-- **`docs/THREAT-MODEL.md`** — it holds the one permitted live-state assertion
-  (Current state §4) and the honest harness wording E2 mirrors (`:146`). Already
-  correct. Do not edit it; defer to it.
+- **Every line of `docs/THREAT-MODEL.md` except the `:146` parenthetical (E3).**
+  T0 at `:32-35` still holds the one permitted live-state gate assertion
+  (Current state §4) and must not move. `:130`, `:132`, `:134`, `:277-279` and
+  `:427` are clause-scoped deliverables of other specs. E3 is a one-clause edit;
+  keep it that way.
+- **Naming `WP-broker-e2e-terminal-auth` in either document.** It is the WP that
+  still owes the repair, and pointing prose at it is the same expiring-status
+  mistake one WP later. Spec ids stay in specs.
 - **`docs/VISION.md`, `docs/GLOSSARY.md`, `README.md`, `bin/wienerdog.js`** —
   already de-staled by `WP-vision-gate-status-destale` and
   `WP-help-text-safety-gates`.
@@ -499,6 +599,8 @@ node scripts/boundary-check.js docs/specs/WP-gws-broker-runbook-destale.md \
 1. All verification steps pass locally; output pasted into the PR body, including
    **both** directions of AC1 and AC4 and both byte-exact diffs from V3.
 2. Branch `wp/gws-broker-runbook-destale`; conventional commits; PR titled
-   `docs(runbooks): de-stale the Google access banner and the harness claim (WP-gws-broker-runbook-destale)`.
+   `docs: de-stale the Google access banner and the harness-proof claims (WP-gws-broker-runbook-destale)`.
+   **`docs:`, not `docs(runbooks):`** — E3 lands in `docs/THREAT-MODEL.md`, which
+   is not a runbook.
 3. PR template filled, including "Decisions made" (or "none") and `Generated-by:`.
 4. This spec's `status:` flipped to `In-Review` in the same PR.

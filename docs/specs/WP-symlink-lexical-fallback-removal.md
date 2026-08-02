@@ -443,17 +443,24 @@ to what is there now. Only the comment header and the condition change, and the
 `lexicalMatch` `let`/`try`/`catch` disappear. No new `require`, no new variable,
 no reordering of rows.
 
-**Note on the comment and the V4 gate.** The amended V4 (R8) **strips comment
-lines before grepping**, so it tests executable code and nothing else: a comment
-can neither satisfy the `sameResolvedDir` presence check nor trip the
-`readlinkSync` absence check. That shape is deliberate — an earlier draft of this
-spec grepped the raw body, which meant (a) the prescribed comment's own mention of
-`readlinkSync` turned the gate red on correct code, and (b) deleting the real
-guard while leaving a comment that says `sameResolvedDir` would have kept it
-green. Both were measured; the stripped form was measured red on the
-guard-deleted mutation and green on the correct code. You may therefore word the
-comment freely — but keep the executable guard exactly
-`if (!sameResolvedDir(L, T)) {`, because V4 matches that line literally.
+**Two constraints the V4 gate (R8) puts on this block, both load-bearing.**
+
+1. **The seven executable lines are byte-exact.** V4 extracts the range from
+   the guard line `if (!sameResolvedDir(L, T)) {` down to its closing brace, and
+   `diff`s that range against
+   exactly the text above. Reflowing the notice, renaming `L`, or changing the
+   brace style breaks the gate.
+2. **Use `//` comments in `reverseSymlink`, never `/* … */`.** V4 rejects any
+   block comment in this function. That is not fussiness: V4's third check strips
+   *line* comments before looking for `readlinkSync`, and a block comment defeats
+   that strip **in both directions**. Both were measured against the exact
+   pipeline — `/* if (!sameResolvedDir(L, T)) { */` above an `if (false) {` guard
+   **passed** a `//`-only-stripped presence grep, and
+   `/* … fs.readlinkSync(L) === T … */` above correct code **failed** its absence
+   grep. Banning block comments here is the precondition that makes check (iii)
+   sound; check (ii) catches the first evasion independently.
+
+Comment *wording* is otherwise free — the gate no longer depends on it.
 
 **R2 — the test edit.** Replace `tests/unit/manifest.test.js:1564-1595` (the whole
 T4 `test(...)` call, quoted byte-exact in Current state §6) with exactly these
@@ -628,7 +635,7 @@ their opening words, so a shifted line number is recoverable.
 | R7 | WP-153 Test-index row T4 | `:806`, the only line in the file containing `DIRECT unit test of` | Replaced by **three** rows, T4a, T4b and T4c, below. The index is one row per `test()` call and R2 produces three. | V3a |
 | R8 | WP-153 verification command **V4** | `:936-946`, `# V4 — the reverser consults the recorded target…` through `echo "V4 ok — both row 3 sub-tests present"` | Replaced by the inverted V4 below: `sameResolvedDir` **present**, `readlinkSync` **absent**. | V3b |
 | R9 | WP-153 Mirrored Surface Checklist entry | `:637-643`, `- [ ] **(+post-merge) §"Post-merge note — 2026-08-02"**` | Reworded from pending to landed. Exact text below. | V3a |
-| R10 | WP-153 post-merge note | insertion **immediately after** the heading line `:1001` | One new blockquote paragraph marking the note resolved. **Nothing in the note is deleted or reworded, and the heading line is not touched** — see the anchor warning below. | V3a |
+| R10 | WP-153 post-merge note | insertion **immediately after** the heading line `:1001` | One new blockquote paragraph superseding the note, written **commit-relative and undated** — it may not name a date or claim the change is on `main`, because it is authored inside the pre-merge commit (Codex round 2). **Nothing in the note is deleted or reworded, and the heading line is not touched** — see the anchor warning below. | V3a |
 | R11 | WP-153 Deliverables cell for `tests/unit/manifest.test.js` | `:340`, the only line containing `**T1–T4 and T6**` | `T1–T4` becomes `T1–T3, T4a–T4c` (T6 unchanged). A live cell naming a test id that no longer exists. | V3a |
 | R12 | WP-153 Mirrored Surface Checklist — test-deliverable entry | `:612`, the only line containing `it mirrors the **Test index** rows T1–T4 and T6` | Same rename. | V3a |
 | R13 | WP-153 **AC2** | `:881`, the only line containing `- [ ] **AC2** — T2, T3, T4, T5, T6 and T7 all pass` | `T4` becomes `T4a, T4b, T4c`. A live acceptance criterion naming a test id that no longer exists. | V3a |
@@ -741,26 +748,54 @@ Remove `:936-946` (from `# V4 — the reverser consults the recorded target (Tab
 through `echo "V4 ok — both row 3 sub-tests present"`). Insert in its place:
 
 ```bash
-# V4 — row 3 is the semantic test and ONLY the semantic test. COMMENT LINES ARE
-# STRIPPED FIRST, so this gates executable code: a comment can neither satisfy the
-# presence check nor trip the absence check. Expect the literal guard PRESENT and
-# `readlinkSync` ABSENT. The link-text sub-test was dropped by
-# WP-symlink-lexical-fallback-removal (2026-08-02 post-merge note) because it was
-# the weaker, forgeable proof — from that WP onward its PRESENCE is the regression.
-CODE=$(sed -n '/^function reverseSymlink/,/^}/p' src/core/manifest.js | sed 's://.*::')
-if ! printf '%s\n' "$CODE" | grep -qF 'if (!sameResolvedDir(L, T)) {'; then
-  echo "REGRESSED: row 3's executable guard is not 'if (!sameResolvedDir(L, T)) {'"; exit 1
+# V4 — row 3 is the semantic test and ONLY the semantic test. THREE checks, in
+# order. A grep over the function's raw text is evadable by comments in BOTH
+# directions, and both were measured: a block comment carrying the guard text
+# satisfied a presence grep while the real guard was `if (false)`, and a block
+# comment merely MENTIONING the dropped call tripped an absence grep on correct
+# code. Hence (i) and (ii).
+BODY=$(sed -n '/^function reverseSymlink/,/^}/p' src/core/manifest.js)
+# (i) No block comment in this function. A `/* … */` is what defeats (iii)'s
+#     line-based strip, so it is banned here, and that ban is the precondition
+#     that makes (iii) sound. Use `//` comments in reverseSymlink.
+if printf '%s\n' "$BODY" | grep -qF '/*'; then
+  echo "REGRESSED: block comment inside reverseSymlink — V4's comment strip is line-based"; exit 1
 fi
+# (ii) Row 3's executable block, BYTE-EXACT. Sound on its own, without (i): the
+#      sed range only opens on the real guard line, so a commented-out copy of
+#      that line yields an empty extraction and the diff fails.
+if ! diff <(printf '%s\n' "$BODY" | sed -n '/^  if (!sameResolvedDir(L, T)) {$/,/^  }$/p') - <<'ROW3'
+  if (!sameResolvedDir(L, T)) {
+    process.stderr.write(
+      `wienerdog: keeping ${L} — not the Wienerdog skill link we recorded (replaced, or unverifiable)\n`
+    );
+    skipped.push(L);
+    return;
+  }
+ROW3
+then
+  echo "REGRESSED: row 3's executable block is not byte-exact"; exit 1
+fi
+# (iii) The dropped link-text sub-test is absent from EXECUTABLE code anywhere in
+#       the function, not only in row 3.
+CODE=$(printf '%s\n' "$BODY" | sed 's://.*::')
 if printf '%s\n' "$CODE" | grep -qF 'readlinkSync'; then
   echo "REGRESSED: the dropped link-text sub-test is back in reverseSymlink"; exit 1
 fi
-echo "V4 ok — row 3's executable guard is sameResolvedDir alone"
+echo "V4 ok — row 3's executable block is sameResolvedDir alone"
 ```
 
-**Why the strip, recorded so a later reviewer does not "simplify" it back.** The
-un-stripped form this replaces was evadable in both directions, both measured:
-a comment mentioning `readlinkSync` turned it red on correct code, and deleting
-the guard while leaving a comment that says `sameResolvedDir` left it green.
+**Why three checks and not one grep, recorded so a later reviewer does not
+"simplify" it back.** Every weaker form was measured against real fixtures:
+
+| Gate shape | `if (false)` + block comment carrying the guard text | correct code + block comment mentioning the dropped call | `if (false)` + line comment naming `sameResolvedDir` | fallback restored |
+|---|---|---|---|---|
+| raw grep over the body | **passes (evaded)** | fails (false trip) | **passes (evaded)** | fails |
+| `//`-strip + token grep | **passes (evaded)** | **fails (false trip)** | fails | fails |
+| **(i)+(ii)+(iii) above** | fails | fails, and says why | fails | fails |
+
+Column 2 is a false trip that (i) converts into a true, correctly-explained
+failure: block comments are simply not allowed in this function.
 
 #### R9 — the Mirrored Surface Checklist entry, byte-exact replacement
 
@@ -772,10 +807,11 @@ Insert in its place:
       sub-test that **used to** live in **Table A row 3** and names the WP that
       removed it. It is a **record of a divergence that has since been closed**,
       not a second source of truth: Table A still decides row 3.
-      `WP-symlink-lexical-fallback-removal` landed on 2026-08-02 and moved this
-      note, Table A row 3, the Implementation-notes guard bullet, the
-      security-checklist error-path bullet, T4 and V4 in **one** commit together
-      with the code — which is exactly what this entry required.
+      `WP-symlink-lexical-fallback-removal` satisfied it: that WP's single
+      implementation commit moved this note, Table A row 3, the
+      Implementation-notes guard bullet, the security-checklist error-path bullet,
+      T4 (now T4a/T4b/T4c) and V4 together with the code, which is exactly what
+      this entry required.
 ```
 
 #### R10 — the post-merge note resolution, insertion only
@@ -786,15 +822,15 @@ Insert the following as a new paragraph **immediately after** the heading line a
 nothing; reword nothing; leave the heading byte-identical.
 
 ```text
-> **RESOLVED 2026-08-02 — the removal landed
-> (`WP-symlink-lexical-fallback-removal`), and this note's central claim was
-> CORRECTED on the way.** Everything below this paragraph is the dated record as
-> written, kept verbatim. Two things you must carry forward instead of it:
+> **SUPERSEDED by `WP-symlink-lexical-fallback-removal`, whose implementation
+> commit this paragraph is part of. That WP also CORRECTED this note's central
+> claim.** Everything below is the original record, kept verbatim. Two things
+> carry forward instead of it:
 >
 > 1. **The unreachability proof below is SOUND BUT TOO NARROW.** It proves the
 >    DANGLING case cannot reach `reverseSymlink` through `reverse()`, and that is
 >    true. It does **not** prove the branch as a whole was dead. The Codex design
->    gate (2026-08-02, round 1) found a reachable counterexample: an `OWNED`,
+>    gate on that WP found a reachable counterexample: an `OWNED`,
 >    **non-dangling** link whose text is relative, with `target` set to that same
 >    text. `realpath()` resolves a relative `T` against the process cwd, so
 >    `sameResolvedDir` fails while the raw-text test matched — and `reverse()`
@@ -802,15 +838,16 @@ nothing; reword nothing; leave the heading byte-identical.
 >    behavior change, in the **preserve** direction (an untrusted recorded target
 >    may narrow a delete, never authorize one the semantic proof refuses), pinned
 >    by the new **T4c**.
-> 2. **What is on `main` now:** the link-text sub-test is gone from
->    `src/core/manifest.js`; Table A row 3 is `sameResolvedDir(L, T) === false`
->    alone; the Implementation-notes bullet and the security-checklist bullet were
->    rewritten; T4 became **T4a/T4b/T4c**, all asserting *preserve*; and V4 now
->    strips comments and fails on the sub-test's **presence**. The sentences below
->    reading *"it is nonetheless what ships"*, *"the fallback is dead through
->    production"* and the standing instruction's *"the fallback stays in the code
->    and in the contract"* are historical. That instruction was satisfied, not
->    broken — its condition ("until that WP lands") was met.
+> 2. **What that commit changes, alongside this paragraph:** the link-text
+>    sub-test leaves `src/core/manifest.js`; Table A row 3 becomes
+>    `sameResolvedDir(L, T) === false` alone; the Implementation-notes bullet and
+>    the security-checklist bullet are rewritten; T4 becomes **T4a/T4b/T4c**, all
+>    asserting *preserve*; and V4 becomes a three-check gate that fails on the
+>    sub-test's **presence**. The sentences below reading *"it is nonetheless what
+>    ships"*, *"the fallback is dead through production"* and the standing
+>    instruction's *"the fallback stays in the code and in the contract"* describe
+>    the state before that commit. The standing instruction was satisfied, not
+>    broken — its condition ("until that WP lands") is met by this very commit.
 ```
 
 #### R11–R14 — the four live `T4` references, surgical substring replacements
@@ -892,8 +929,11 @@ Registered **outside** this spec so a later change knows this table is its sourc
 - **Do not grep for the word "lexical"** to find your edit sites — it also hits
   `src/adapters/shared.js`, `docs/adr/0028-*`, three other done specs and the
   security-audit archive, none of which are yours. Use the R-anchors in Table R.
-- **Keep the executable guard exactly `if (!sameResolvedDir(L, T)) {`.** V4
-  matches that line literally after stripping comments. Comment text is free.
+- **Keep the whole row-3 executable block byte-exact**, and **use `//` comments
+  only inside `reverseSymlink` — no `/* … */`.** V4 checks both: it rejects any
+  block comment in this function (that is what makes its line-based comment strip
+  sound), and it diffs the row-3 block against the seven mandated lines. Comment
+  *wording* is free; comment *syntax* is not.
 - **T4b must be green against the untouched tree** (AC4, run B1). If it is red
   before R1, your fixture is wrong, not the code — most likely the link is not
   directly under `<claudeDir>/skills`, or its destination is outside
@@ -942,10 +982,12 @@ Registered **outside** this spec so a later change knows this table is its sourc
 
 ## Acceptance criteria
 
-- [ ] **AC1 (R1)** — after stripping comment lines, `reverseSymlink`'s body
-      contains the literal guard `if (!sameResolvedDir(L, T)) {` and does **not**
-      contain `readlinkSync`. Row 3's notice string, `skipped.push(L)` and
-      `return` are byte-identical to `0f9ee08`. (V3b.)
+- [ ] **AC1 (R1)** — all three V3b checks pass: (i) `reverseSymlink` contains no
+      block comment; (ii) its row-3 executable block is **byte-identical** to the
+      seven lines in "Exact contracts" — guard, notice, `skipped.push(L)`,
+      `return`, close — which also makes the notice string byte-identical to
+      `0f9ee08`; (iii) `readlinkSync` appears nowhere in the function's executable
+      code. (V3b.)
 - [ ] **AC2 (R2, red → green — the behavior change)** — **T4a** and **T4c** both
       fail against the untouched `src/core/manifest.js` and both pass after R1.
       Both runs pasted into the PR. Expected counts on
@@ -963,14 +1005,25 @@ Registered **outside** this spec so a later change knows this table is its sourc
 - [ ] **AC4 (the scoped unreachability fact)** — **T4b** passes against the
       untouched tree as well as after R1, and asserts the
       `outside every Wienerdog-owned root` notice. Both runs pasted into the PR.
-- [ ] **AC5 (mutation checks — two, both required)** — (a) restore the exact
-      `lexicalMatch` block from Current state §1: **T4a and T4c go red**, T4b stays
-      green, and V3b prints
-      `REGRESSED: the dropped link-text sub-test is back in reverseSymlink`.
-      (b) Replace the guard with `if (false) {` while leaving the comment intact:
-      V3b prints `REGRESSED: row 3's executable guard is not …` — this is the
-      comment-evasion case, and it is the reason V3b strips comments. Revert both;
-      paste all four outputs.
+- [ ] **AC5 (mutation checks — FOUR, all required)** — each is applied to
+      `src/core/manifest.js`, run, then reverted with
+      `git checkout -- src/core/manifest.js`. Paste every output.
+      **(a) Fallback restored** — paste the exact `lexicalMatch` block from
+      Current state §1 back: **T4a and T4c go red**, T4b stays green, and V3b
+      prints `REGRESSED: the dropped link-text sub-test is back in reverseSymlink`.
+      **(b) Guard deleted, line comment intact** — change only the guard line to
+      `if (false) {`: V3b prints
+      `REGRESSED: row 3's executable block is not byte-exact`.
+      **(c) Guard deleted, BLOCK comment carries the guard text** — replace the
+      row-3 block with `/* if (!sameResolvedDir(L, T)) { */` followed by
+      `if (false) {`: V3b prints the **block-comment** rejection. This is the
+      evasion Codex round 2 found against the previous `//`-only strip, which
+      passed it; both directions were re-measured on the current gate.
+      **(d) Block comment merely MENTIONING the dropped call** — add
+      `/* historical: we used to try fs.readlinkSync(L) === T here */` above a
+      correct row 3: V3b prints the **block-comment** rejection. This one is not a
+      code defect — it is the gate telling you that block comments are not allowed
+      in this function, which is what keeps check (iii) sound. Use `//`.
 - [ ] **AC6 (mirrors moved, R3–R14)** — the twelve WP-153 anchors carry their
       replacement text byte-exactly (V3c: the full diff is pasted and compared
       hunk-by-hunk against the R-blocks), the post-merge-note **heading line is
@@ -1026,9 +1079,9 @@ grep -cF 'rows T1–T4 and T6' "$SPEC"                        # was 1, expect 0 
 grep -cF 'T2, T3, T4, T5, T6 and T7 all pass' "$SPEC"       # was 1, expect 0 (R13)
 grep -cF 'lets T1/T2/T4/T7 unit-test the' "$SPEC"           # was 1, expect 0 (R14)
 grep -cF '**Row 3 has exactly one test' "$SPEC"             # expect 1 (R4)
-grep -cF 'RESOLVED 2026-08-02 — the removal landed' "$SPEC"  # expect 1 (R10)
+grep -cF 'SUPERSEDED by `WP-symlink-lexical-fallback-removal`' "$SPEC"  # expect 1 (R10)
 grep -cF 'V4 ok — row 3' "$SPEC"                            # expect 1 (R8)
-grep -cF '`WP-symlink-lexical-fallback-removal` landed on 2026-08-02' "$SPEC" # expect 1 (R9)
+grep -cF '`WP-symlink-lexical-fallback-removal` satisfied it' "$SPEC" # expect 1 (R9)
 grep -cF '| T4b |' "$SPEC"                                  # expect 1 (R7)
 grep -cF '| T4c |' "$SPEC"                                  # expect 1 (R7)
 grep -cF 'No row deletes on an error' "$SPEC"               # expect 1 (R6)
@@ -1040,18 +1093,33 @@ grep -cF '## Post-merge note — 2026-08-02: the lexical fallback is dead throug
 # "is this line a dated record".
 grep -n '\bT4\b' "$SPEC"
 
-# V3b — R1's executable guard (AC1). COMMENTS ARE STRIPPED FIRST, so a comment
-# can neither satisfy the presence check nor trip the absence check. Both
-# directions were measured while drafting: green on the prescribed code, red on
-# the `if (false) {`-with-comment-intact mutation.
-CODE=$(sed -n '/^function reverseSymlink/,/^}/p' src/core/manifest.js | sed 's://.*::')
-if ! printf '%s\n' "$CODE" | grep -qF 'if (!sameResolvedDir(L, T)) {'; then
-  echo "REGRESSED: row 3's executable guard is not 'if (!sameResolvedDir(L, T)) {'"; exit 1
+# V3b — R1's executable block (AC1). This is R8's V4 verbatim; run it here too so
+# the code gate and the gate the spec installs are proven identical. THREE checks:
+# (i) no block comment in the function — a `/* … */` defeats (iii)'s line-based
+# strip in both directions (measured); (ii) row 3's executable block byte-exact,
+# which alone catches a commented-out guard; (iii) the dropped call absent from
+# executable code anywhere in the function.
+BODY=$(sed -n '/^function reverseSymlink/,/^}/p' src/core/manifest.js)
+if printf '%s\n' "$BODY" | grep -qF '/*'; then
+  echo "REGRESSED: block comment inside reverseSymlink — V4's comment strip is line-based"; exit 1
 fi
+if ! diff <(printf '%s\n' "$BODY" | sed -n '/^  if (!sameResolvedDir(L, T)) {$/,/^  }$/p') - <<'ROW3'
+  if (!sameResolvedDir(L, T)) {
+    process.stderr.write(
+      `wienerdog: keeping ${L} — not the Wienerdog skill link we recorded (replaced, or unverifiable)\n`
+    );
+    skipped.push(L);
+    return;
+  }
+ROW3
+then
+  echo "REGRESSED: row 3's executable block is not byte-exact"; exit 1
+fi
+CODE=$(printf '%s\n' "$BODY" | sed 's://.*::')
 if printf '%s\n' "$CODE" | grep -qF 'readlinkSync'; then
   echo "REGRESSED: the dropped link-text sub-test is back in reverseSymlink"; exit 1
 fi
-echo "V4 ok — row 3's executable guard is sameResolvedDir alone"
+echo "V4 ok — row 3's executable block is sameResolvedDir alone"
 
 # V3c (AC6, byte-exactness) — bound the WP-153 diff, then paste it IN FULL and
 # compare each hunk against the R3-R14 blocks in this spec. The comparison is the
@@ -1059,13 +1127,36 @@ echo "V4 ok — row 3's executable guard is sameResolvedDir alone"
 git diff --numstat main -- "$SPEC"
 git diff main -- "$SPEC"
 
-# V3d (AC6, one-commit lockstep) — R1, R2 and R3-R14 in ONE commit.
-git show --name-only --format= HEAD
-# Expect exactly these four paths and no others:
-#   docs/specs/WP-symlink-lexical-fallback-removal.md
-#   docs/specs/done/WP-153-target-aware-symlink-reverser.md
-#   src/core/manifest.js
-#   tests/unit/manifest.test.js
+# V3d (AC6, one-commit lockstep) — R1, R2 and R3-R14 in ONE commit. Note what this
+# must prove: NOT "HEAD touches four paths" (a trivial HEAD touching all four would
+# satisfy that while R1 landed in an earlier commit), but "exactly one commit on
+# this branch touches any of them". Measured: the weaker form passes on a branch
+# whose deliverables are split; this form reports the split and names both commits.
+BASE=$(git merge-base main HEAD)
+COMMITS=$(git log --format=%H "$BASE"..HEAD -- \
+  src/core/manifest.js tests/unit/manifest.test.js \
+  docs/specs/done/WP-153-target-aware-symlink-reverser.md \
+  docs/specs/WP-symlink-lexical-fallback-removal.md | sort -u)
+N=$(printf '%s\n' "$COMMITS" | grep -c .)
+if [ "$N" -ne 1 ]; then
+  echo "FAIL (AC6): the deliverables are split across $N commits (must be 1):"
+  printf '%s\n' "$COMMITS"; exit 1
+fi
+echo "lockstep ok — single commit $(git rev-parse --short "$COMMITS")"
+
+# …and that commit's path set is EXACTLY the four (LC_ALL=C sort order). Must
+# print nothing and exit 0.
+diff <(git show --name-only --format= "$COMMITS" | sed '/^$/d' | LC_ALL=C sort -u) - <<'EOF'
+docs/specs/WP-symlink-lexical-fallback-removal.md
+docs/specs/done/WP-153-target-aware-symlink-reverser.md
+src/core/manifest.js
+tests/unit/manifest.test.js
+EOF
+echo "path set ok"
+
+# …and its full patch must actually contain R1, R2 and R3-R14. Paste it and say
+# so explicitly in the PR; there is no automatic test for "this hunk is R11".
+git show "$COMMITS"
 
 # V4b (WP-153's, unchanged) — row 4's structural ownership gate survived.
 BODY=$(sed -n '/^function reverseSymlink/,/^}/p' src/core/manifest.js)
