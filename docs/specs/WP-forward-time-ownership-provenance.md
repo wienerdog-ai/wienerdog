@@ -433,20 +433,28 @@ Three primitives (~32 lines, up from two/~18 — `anchorProvesPosition` is new)
 plus one conjunct in one predicate, one default parameter and two rows in one
 reverser (~24 lines) in `manifest.js`; one parameter and four call sites in
 `shared.js`; two schema/doc cells; two test files extended, of which four shipped
-assertions are edited, across **fourteen** test rows (up from eleven).
+assertions are edited, across **eighteen** test rows (eleven at round 1, fourteen at round 2).
 
-**This is now at the very top of M and the architect's recommendation has
-hardened from "splitting is defensible" to "split it".** Round 1 added three test
-rows and a fourth primitive without removing anything; a round 3 that adds more
-should not be absorbed here. **Do not add anything to this table without
-executing the Split plan** — which is pre-cut, per-part, and now additive on
-every shared hunk, so the cut costs one pass.
+**Sizing pressure is now the dominant fact about this WP, and it is recorded
+rather than resolved.** Round 1 added three test rows and a fourth primitive;
+round 2 added four more test rows, a per-shape reverse arm and a hardened guard.
+Eleven → fourteen → eighteen test rows, none removed. **The document is over the
+top of M on volume and is held at `M` only because every added row is a table
+row or a test, not new mechanism** — the two mechanisms are exactly what they
+were at round 1.
+
+**The architect's recommendation is now unambiguously: SPLIT.** It is not
+executed here because the coordinator has asked for the consolidated document to
+be kept for now; this paragraph is the standing note that the pressure is real
+and compounding, and the **Split plan** is pre-cut, per-part and additive on
+every shared hunk, so the cut costs one pass whenever it is called. **A round 4
+that adds further rows should split first and revise second.**
 
 | Action | Path | Notes |
 |--------|------|-------|
 | modify | src/core/manifest.js | **D1 (Part A)** — add `ANCHOR_WINDOW`, `ANCHOR_HEX`, `insertionAnchor()` and `anchorProvesPosition()` beside `SEP_BEFORE_OK` (`:54-59`), and export `insertionAnchor`. **D2 (Part A)** — `reverseManagedBlock`'s leading-strip region (`:285-311`) gains the `userText` slice and the `anchorOk` conjunct per **Table Q**; **nothing else in that function changes** (Table U). **D3 (Part B)** — add `linkIdentity()` beside the other primitives and export it. **D4 (Part B)** — `reverseSymlink` gains a 7th parameter `opts = {}` (the identity seam — Exact contracts) and rows **4a** and **4b** per **Table A2**, between the existing rows 4 and 5; rows 1–5 are otherwise byte-identical, and `reverse()`'s call site is **not** changed. **D5 (Part B)** — `ENTRY_FIELD_TYPES.symlink` becomes `{ target: 'string', origin: 'string', dev: 'string', ino: 'string' }` (`:908`); the `managed-block` cell and its comment are **unchanged** (Table P's validation column says why). **D6 (both)** — the module doc comment (`:17-26`) and the `@typedef ManifestEntry` (`:45-47`) gain the new optional fields per **Table P**. |
 | modify | src/adapters/shared.js | **D7 (both)** — import the two primitives on `:5`. **D8 (Part A)** — `recordManagedBlock` (`:113`) takes a seventh parameter `anchorBefore` and assigns it inside the existing `if (inserted)` block, per **Table P**; the sticky-true `createdFile` line is **unchanged**. **D9 (Part A)** — `applyManagedBlock`'s three `recordManagedBlock` calls (`:179`, `:197`, `:210`) pass the anchor per **Table B**; **no other byte of that function changes** (Table U). **D10 (Part B)** — the three `recordOnce(manifest, { kind: 'symlink', … })` sites (`:434`, `:485`, `:491`) record `origin` (and, at `:491` only, `dev`/`ino`) per **Table B**. `recordOnce` itself is **NOT modified and NOT replaced by an upsert** — the owner declined a backfill (2026-08-01). The WP-146 preserve arm, `dropOwnedEntry`, the `readlinkSync` comparison, the `EPERM` copy fallback and every notice string stay byte-identical. |
-| modify | tests/unit/manifest.test.js | **A-T1 … A-T7** and **B-T1 … B-T5, B-T7** — the exact set in the Test index. **A-T5 is a required edit to a shipped assertion**, not a new test (**Table F** row 1): `manifest.test.js:1417`'s `assert.equal(forged, 'foo', …)` becomes `'foo\n\n'`. The WP-147 Table N suite (`:1336-1358`), T6, T7, T11 and T12 must pass **byte-unmodified** — they craft entries with no anchor, so they exercise the legacy arm and are the regression fence for it. |
+| modify | tests/unit/manifest.test.js | **A-T1 … A-T10** and **B-T1 … B-T5, B-T7, B-T8** — the exact set in the Test index. **A-T5 is a required edit to a shipped assertion**, not a new test (**Table F** row 1): `manifest.test.js:1417`'s `assert.equal(forged, 'foo', …)` becomes `'foo\n\n'`. The WP-147 Table N suite (`:1336-1358`), T6, T7, T11 and T12 must pass **byte-unmodified** — they craft entries with no anchor, so they exercise the legacy arm and are the regression fence for it. |
 | modify | tests/unit/shared-skill-links.test.js | **B-T6** — this is **an edit to three shipped `deepEqual` assertions** plus one new forward-side assertion. `:52-55`, `:191-194` and `:337-340` are **Table F** rows 2–4; take the expected object for each from that table. The four WP-146 sync-side tests at `:345`, `:371`, `:387` and `:405` are **fenced — they must pass byte-unmodified**. |
 
 Not deliverables, deliberately: `src/cli/uninstall.js`, `src/cli/sync.js`, every
@@ -484,11 +492,15 @@ function insertionAnchor(prefix) {
  *  same window we recorded, and a window that occurs twice in the user's own
  *  document has two positions that satisfy it (Table Q row Q10 — measured, no
  *  forgery and no hash collision needed). So the match is paired with a
- *  UNIQUENESS test over `userText`, the document with the managed block excised.
+ *  UNIQUENESS test over `userText`, the RECONSTRUCTED user document.
  *  Both together are the position proof; either alone is not.
  *  @param {ManifestEntry} entry
  *  @param {string} candidate  the content that would remain in front of the block
- *  @param {string} userText   content.slice(0, span.begin) + content.slice(span.end)
+ *  @param {string} userText   the RECONSTRUCTED user document: `candidate + after`,
+ *    i.e. what uninstall is about to leave on disk. It must NOT be
+ *    `content.slice(0, span.begin) + content.slice(span.end)` — that still holds
+ *    Wienerdog's own separator bytes, which manufacture false ambiguity on
+ *    newline-only content (Table Q row Q13, measured; Codex round 2 finding 2).
  *  @returns {boolean} */
 function anchorProvesPosition(entry, candidate, userText) {
   const rec = entry.anchorBefore;
@@ -554,8 +566,10 @@ function recordManagedBlock(manifest, mdPath, createdFile, sepBefore, sepAfter, 
     //     user's document — otherwise a block moved to a second occurrence of the
     //     same window passes the hash at the wrong position. An ABSENT or
     //     malformed anchor is a LEGACY entry: shipped behaviour, never stricter.
-    const userText = content.slice(0, span.begin) + content.slice(span.end);
-    const anchorOk = anchorProvesPosition(entry, candidate, userText);
+    //     The corpus is `candidate + after` — the document uninstall is about to
+    //     leave — NOT the block-excised `content`, which still holds our own
+    //     separator and makes newline-only files look ambiguous (Q13).
+    const anchorOk = anchorProvesPosition(entry, candidate, candidate + after);
 
     // ALL THREE are required, and the anchor is a CONJUNCT — never a disjunct.
     // It may only ever withhold a strip the other two would have allowed
@@ -599,8 +613,12 @@ block and the `// Row 5:` comment (`manifest.js:213`), nothing else touched:
   // Row 4b: IDENTITY — when we recorded a (dev, ino) pair, the link on disk must
   // still BE that file object. A delete-and-recreate gets a new inode, so a user's
   // same-source replacement no longer passes for ours. Fail closed on any doubt.
-  if (typeof entry.dev === 'string' && typeof entry.ino === 'string') {
-    const id = identityOf(L);
+  // A PARTIAL pair (one of the two) is a shape the forward step never writes, so
+  // it is unverifiable, not absent — preserve (Table P rule P-6).
+  const hasDev = typeof entry.dev === 'string';
+  const hasIno = typeof entry.ino === 'string';
+  if (hasDev || hasIno) {
+    const id = hasDev && hasIno ? identityOf(L) : null;
     if (id === null || id.dev !== entry.dev || id.ino !== entry.ino) {
       process.stderr.write(
         `wienerdog: keeping ${L} — not the Wienerdog skill link we recorded (replaced, or unverifiable)\n`
@@ -690,6 +708,21 @@ this spec is a mirror.
   against ADR-0019 for every user on that platform. **The fail-closed direction
   applies on the REVERSE side only** (Table A2 row 4b): identity that was
   recorded and no longer matches preserves.
+- **P-6. Every accepted symlink entry SHAPE is enumerated here, because "absent"
+  is not one condition.** Round 2's AC8a said *"any new field absent ⇒ base
+  behaviour"*, which is false for an honest adopted entry — it deliberately has
+  `origin: 'adopted'` and **no** `dev`/`ino`, and must be preserved (Codex round 2,
+  finding 4). The complete table, **all six rows measured**:
+
+  | `origin` | `dev`/`ino` | Written by | Reverse outcome | Why |
+  |----------|-------------|-----------|-----------------|-----|
+  | absent | absent | an install predating this WP | **base behaviour — removed** | the legacy arm; AC8a |
+  | `'created'` | both present | `shared.js:491` when `linkIdentity` succeeded | row 4b decides | the mainline |
+  | `'created'` | absent | `shared.js:485` (dry run), or `:491` when `linkIdentity` returned `null` (P-4) | **base behaviour — removed** | identity was never establishable; never make an existing platform's uninstall incomplete |
+  | `'adopted'` | absent | `shared.js:434` | **preserved** (row 4a) | the link is the user's |
+  | `'adopted'` | both present | **never written by any branch** | preserved (row 4a fires first) | a forgery; only narrows |
+  | absent | **exactly one** of the two | **never written by any branch** | **preserved** (row 4b's partial arm) | a partial pair is unverifiable, not absent. Treating it as absent would be a *wider* deletion than treating it as unverifiable, and fail-closed is the house rule |
+
 - **P-5. Nothing backfills.** `recordOnce` no-ops on an existing entry
   (`shared.js:50-51`), so an install that predates this WP keeps its target-only
   symlink entries and its anchor-less managed-block entry **permanently**, through
@@ -706,7 +739,7 @@ are WP-147's, unchanged, and are restated here only so the predicate has one hom
 |---|----------|------------|----------|-----------------------------------|
 | 1 | `ownershipOk` | `!weSuppliedTerminator \|\| !candidate.endsWith('\n')`, where `weSuppliedTerminator` is `sepBefore === '\n\n'` | WP-147 | withhold only |
 | 2 | `noFusion` | `candidate === '' \|\| candidate.endsWith('\n') \|\| (weSuppliedTerminator && after === '') \|\| after.startsWith('\n')` | WP-147 | withhold only |
-| 3 | **`anchorOk`** | `anchorProvesPosition(entry, candidate, userText)` — `true` when `entry.anchorBefore` is not a sha256 hex string (legacy); otherwise **both** `insertionAnchor(candidate) === entry.anchorBefore` **and** the window `candidate.slice(-ANCHOR_WINDOW)` occurs **exactly once** in `userText` (the document with the block excised). `win === ''` short-circuits to `true` — offset 0 is the only empty prefix | **this WP** | **withhold only** |
+| 3 | **`anchorOk`** | `anchorProvesPosition(entry, candidate, userText)` — `true` when `entry.anchorBefore` is not a sha256 hex string (legacy); otherwise **both** `insertionAnchor(candidate) === entry.anchorBefore` **and** the window `candidate.slice(-ANCHOR_WINDOW)` occurs **exactly once** in `userText` = `candidate + after`, the document uninstall is about to leave. `win === ''` short-circuits to `true` — offset 0 is the only empty prefix | **this WP** | **withhold only** |
 
 **The hash match ALONE is not a position proof, and this was a real defect in
 this spec's round-1 draft.** Codex design-gate round 1 finding 1 raised it, it
@@ -733,13 +766,38 @@ document proves nothing about position. Recorded because the reasoning is
 seductive and a later round would otherwise re-propose it. Only the third form
 ships; it is what `anchorProvesPosition` implements.
 
-**Why `userText` (the block excised) and not `content`.** The alternative
-positions the block could have occupied are positions in the **user's** document.
-Searching `content` would also count occurrences inside Wienerdog's own digest
-body, which are not candidate positions, and would withhold the strip whenever the
-digest happened to contain the window — a false ambiguity that grows as the
-window shrinks. Excising the block removes that class entirely and removes no real
-alternative position: `userText` still spans both sides of where the block sits.
+**The corpus is `candidate + after`, and getting this wrong is an ordinary-path
+regression.** Three corpora were measured; only the third is correct.
+
+| corpus | what is still in it | verdict |
+|--------|---------------------|---------|
+| `content` (the whole file) | the block body **and** our separators | wrong — the digest body can contain the window, withholding the strip for a reason that has nothing to do with the user |
+| `content.slice(0, span.begin) + content.slice(span.end)` — **round 2's shipped form** | our `sepBefore` and `sepAfter` | **wrong, and measured red on the ORDINARY path** (Q13) |
+| **`candidate + after`** — the document uninstall is about to leave | nothing of ours | **correct** |
+
+**Codex round 2 finding 2, reproduced.** For a file whose entire content is
+`"\n"`, an honest sync writes `"\n" + "\n" + BLOCK + "\n"`. Round 2's corpus was
+`"\n\n\n"`, the window is `"\n"`, `indexOf` finds it three times, ambiguity is
+declared, and uninstall leaves `"\n\n"` where base restores `"\n"`. **No
+relocation, no user edit, no forgery — the ambiguity was manufactured entirely by
+Wienerdog's own bytes**, which contradicts both the ordinary-path guarantee (AC4)
+and R2b's premise that ambiguity is a property of the *user's* document.
+Measured, all four rows:
+
+```text
+content     base 0f9ee08   round-2 corpus   candidate+after
+"\n"        "\n"           "\n\n"    XX     "\n"        ok
+"\n\n\n"    "\n\n\n"       "\n\n\n\n" XX    "\n\n\n"    ok
+"a\na\na\n" "a\na\na\n"    "a\na\na\n" ok   "a\na\na\n" ok
+"x\r\ny\r\n" (CRLF)        "x\r\ny\r\n" ok  "x\r\ny\r\n" ok
+```
+
+`candidate + after` fixes both failures and changes none of the rows the
+uniqueness conjunct was added for — Q10, Q1, Q3 and Q4 are byte-identical under
+both corpora (measured). It is also the *semantically* right corpus: the question
+"could this window match somewhere else in the user's document?" is a question
+about the document that will exist after uninstall, which is exactly
+`candidate + after`.
 
 **Measured behaviour, prototype vs base `0f9ee08`, on the cases that matter.**
 Every row was executed end-to-end through `applyManagedBlock` → `reverse()`; the
@@ -759,6 +817,8 @@ recorded `sepBefore` is whatever the honest forward step wrote, never hand-set.
 | **Q10** | **The duplicate-window move** (Codex round 1, finding 1). Document `W + "\nTAIL\n" + W` with `W` exactly 256 chars ending in `\n`; honest sync; user moves the block to the **first** occurrence | `'\n'` | the user's blank line is eaten | **byte-perfect** | **FIXED by the uniqueness conjunct.** Red against base, against the round-1 hash-only draft, **and** against the `<=WINDOW` shortcut — all three measured above. Pinned by **A-T6**. |
 | **Q11** | Same shape, but the duplicated context is **shorter than the window** (15 chars, twice) | `'\n'` | one newline eaten | **byte-perfect** | already correct under the hash-only draft — a short `candidate` is a *whole-prefix* mismatch. Kept as the boundary's other side. |
 | **Q12** | Boundary sweep at `candidate.length` = **255 / 256 / 257**, each under an ordinary in-place uninstall **and** an honest relocation — six runs | `'\n'` | — | **byte-perfect in all six** | pins that nothing special happens at the window edge now the `<=WINDOW` shortcut is gone. Pinned by **A-T7**. |
+| **Q13** | **The ordinary-path corpus sweep** (Codex round 2, finding 2). Six whole-file contents, each synced and immediately uninstalled with **no relocation and no user edit**: `"\n"`, `"\n\n\n"`, `"a\na\na\n"`, CRLF `"x\r\ny\r\n"`, `"foo\n"`, and `""` (present but empty) | `'\n'` / `'\n\n'` | byte-perfect in all six | **byte-perfect in all six** | **Round 2's corpus regressed two of these** (`"\n"` → `"\n\n"`, `"\n\n\n"` → `"\n\n\n\n"`). Fixed by the `candidate + after` corpus. Pinned by **A-T10**. |
+| **Q14** | **R2c made executable** (Codex round 2, finding 6). Original `` `PPPP\n${W}` ``; honest sync; the user then **replaces the prefix** with `` `QQ\n${W}` `` — the same window at a new, unique position — and relocates the block there | `'\n'` | one newline stripped | **one newline stripped — the DECLARED residual, unchanged** | **R2c is pinnable after all** — round 2 claimed it was not. Measured: it is **red** against a full-prefix anchor and against an always-withhold anchor, so it discriminates. Pinned by **A-T9**. |
 
 **Rows Q3, Q4 and Q6 are baseline rows** (ADR-0036 A1 exemption (ii),
 `PATCH: none — ordinary path`): each records the run and names the assertion that
@@ -780,8 +840,44 @@ restated here in full so this spec is self-contained; **rows 4a and 4b are new.*
 | 3 | `sameResolvedDir(L, T) === false` **and** `fs.readlinkSync(L) !== T` | none | `skipped` | same line | The link points somewhere else. Both sub-tests are fail-closed. **The lexical sub-test is dead through production and stays anyway** — see Implementation notes. |
 | 4 | **`OWNED(L)` is false** — basename not `wienerdog-*`, **or** `path.dirname(L)` does not realpath-equal a harness skills root | none | `skipped` | same line | A forged `(path, target)` pair is not delete authority (WP-153 gate round 4). |
 | **4a** | **`entry.origin === 'adopted'`** | none | `skipped` | same line | **NEW.** The link was already on disk when we first recorded it — `applySkillLinks`' adopt branch (`shared.js:434`) sees a `wienerdog-*` link already pointing at our source and records it. It is the user's. Closes residual B case 2. |
-| **4b** | **`typeof entry.dev === 'string' && typeof entry.ino === 'string'`** **and** `identityOf(L)` is `null` **or** does not equal `(entry.dev, entry.ino)` | none | `skipped` | same line | **NEW.** We recorded which file object we created; this is not it. A delete-and-recreate gets a new inode (measured, Current state §9), so a user's same-source replacement no longer passes for ours. Closes residual B case 1. A `null` identity is fail-closed by construction. **`(dev, ino)` is durable but not permanent, and recyclable — both directions are costed in the Owner-ruling table and pinned by B-T7.** |
-| 5 | otherwise | `if (!dryRun) fs.unlinkSync(L)` | `removed` **and** `removedSet.add(L)` | none | In-namespace, under a harness skills root, resolves to the recorded source, **not adopted**, and **still the file object we created**. The only row that deletes. |
+| **4b** | **`entry.dev` or `entry.ino` is a string** — and either the pair is **partial** (only one of the two), or `identityOf(L)` is `null`, or it does not equal `(entry.dev, entry.ino)` | none | `skipped` | same line | **NEW.** We recorded which file object we created; this is not it. A delete-and-recreate gets a new inode (measured, Current state §9), so a user's same-source replacement no longer passes for ours. Closes residual B case 1. A `null` identity is fail-closed by construction. **`(dev, ino)` is durable but not permanent, and recyclable — both directions are costed in the Owner-ruling table and pinned by B-T7.** |
+| 5 | otherwise | `if (!dryRun) fs.unlinkSync(L)` | `removed` **and** `removedSet.add(L)` | none | In-namespace, under a harness skills root, resolves to the recorded source, **not adopted**, and **still the file object we created**. The only row that deletes. **Row 4b's check and this unlink are two syscalls, not one — see the TOCTOU note below. This design is NOT claimed to be TOCTOU-free.** |
+
+**Row 4b verifies identity; row 5 unlinks by pathname. Those are separate
+syscalls, and nothing binds them.** Codex round 2 finding 1 is correct and is
+**declared, bounded and pinned — not claimed closed.**
+
+- **The window.** Between `identityOf(L)` returning and `fs.unlinkSync(L)`
+  executing, another process can replace `L`. Uninstall then removes the
+  replacement even though the identity it verified belonged to the previous
+  object. **Measured** with an identity seam that replaces the link and *then*
+  returns the recorded pair: the replacement is deleted (**B-T8**).
+- **Why it is not closed in-process.** Node exposes no atomic
+  compare-and-unlink for a symlink: there is no `unlinkat` with an identity
+  predicate, and `lstat` + `unlink` cannot be fused from JS. Closing it needs an
+  OS primitive Node does not surface.
+- **Who can exploit it, and why that is outside the threat model.** The attacker
+  must already be able to create and delete files at the recorded path inside the
+  user's own harness skills directory — i.e. **arbitrary code running as the same
+  OS user**. `docs/THREAT-MODEL.md` places that squarely outside the boundary and
+  says so repeatedly: it is *"arbitrary same-user native code (A12)"*, on the
+  *"trusted-computing-base residual"* shelf, and the file states plainly that the
+  0600 file-permission boundary *"is not an OS boundary"* and that a same-user
+  native actor *"can read the same 0600 tokens and rewrite the same 0600 grant
+  store"*. An attacker who can win this race can delete the link directly and
+  does not need `uninstall` as a confused deputy.
+- **The precedent for this disposition is the sibling's, not an invention here.**
+  ADR-0028 carries the same shape for the scheduler's executable-integrity check:
+  *"reopen-based; a TOCTOU-free design requires the deferred '2b' in-memory
+  bootstrap … plainly in docs; not claimed as TOCTOU-free."* This spec takes the
+  identical line — state it, bound it, pin it, do not claim what it cannot
+  demonstrate.
+- **It only ever narrows against base.** At `0f9ee08` `reverseSymlink` unlinks any
+  recorded-path symlink with no identity check at all, so every outcome reachable
+  through this race is also reachable at base, with no race required. Row 4b is
+  strictly stronger even with the window open.
+- **Recorded as residual R7, pinned by B-T8, and costed in the Owner-ruling
+  ledger** so the ruling covers it alongside 4a and 4b.
 
 **Measured behaviour, prototype vs base `0f9ee08`.** Each row was run end-to-end
 through `applySkillLinks` → `reverse()`.
@@ -919,7 +1015,7 @@ mirror found in review is added here on the spot.
 - [ ] Current state §3 (the shipped predicate)
 - [ ] Table U's `ownershipOk`/`noFusion` row
 - [ ] Acceptance criteria **AC3**, **AC4**, **AC5**
-- [ ] Test index **A-T1 … A-T7**; Table F row 1; Table R rows **R1**, **R2**,
+- [ ] Test index **A-T1 … A-T10**; Table F row 1; Table R rows **R1**, **R2**,
       **R2b**, **R2c**
 - [ ] Verification **V2**
 - [ ] The falsification record under Table Q (the three rejected anchor designs)
@@ -931,8 +1027,8 @@ mirror found in review is added here on the spot.
 - [ ] Exact contracts: the rows 4a/4b snippet and the one-stderr-string decision
 - [ ] Current state §4 (the shipped five rows)
 - [ ] Table U's `reverseSymlink` row
-- [ ] Acceptance criteria **AC6**, **AC7**, **AC8a**, **AC8b**
-- [ ] Test index **B-T1 … B-T7**; Table R rows **R3**, **R4**, **R5**
+- [ ] Acceptance criteria **AC6**, **AC7**, **AC8a**, **AC8a′**, **AC8b**
+- [ ] Test index **B-T1 … B-T8**; Table R rows **R3**, **R4**, **R5**
 - [ ] Verification **V4**
 - [ ] **The Owner-ruling cost ledger** (rows 4a and 4b) and its four dispositions
 - [ ] Exact contracts: the `opts = {}` identity-seam signature and Table U's
@@ -960,7 +1056,7 @@ mirror found in review is added here on the spot.
 - [ ] Table P's type-gating column
 - [ ] Table Q rows **Q7**, **Q8**; Table A2's measured rows **S4**–**S7**
 - [ ] Security checklist
-- [ ] Acceptance criteria **AC8a**, **AC8b**; Test index **A-T4**, **B-T5**, **B-T7**
+- [ ] Acceptance criteria **AC8a**, **AC8a′**, **AC8b**; Test index **A-T4**, **B-T4**, **B-T5**, **B-T7**
 
 ## Test index
 
@@ -985,6 +1081,9 @@ hand-write manifest entries except where the row's job is forgery.
 | **A-T4** | Table Q rows **Q7** and **Q8**: A-T1's fixture, then the manifest entry is mutated — (a) `delete entry.anchorBefore`, (b) `entry.anchorBefore = 42` | both yield **exactly** base behaviour `paraA\nparaB\n`, **and** the block is in `res.removed` (uninstall is not made incomplete), **and** no `ignoring out-of-vocabulary separator metadata` notice fires (that notice belongs to `sepBefore`/`sepAfter`, not the anchor) | any implementation that type-gates `anchorBefore` in `ENTRY_FIELD_TYPES` (the entry would be rejected upstream and the block left installed), and any that treats a malformed anchor as a mismatch |
 | **A-T5** | **EDIT to the shipped test at `:1396-1423`** — Table F row 1. Fixture unchanged | `assert.equal(forged, 'foo\n\n', …)`; the control and the newline-stripped-equality assertions stay byte-unmodified | `PATCH: none — a shipped assertion whose expected value moved.` Its red-ness is Table F's measurement: it fails at `0f9ee08` + this design with `'foo\n\n' !== 'foo'`, which is exactly why it must be edited rather than left. |
 | **A-T6** | Table Q row **Q10**, the duplicate-window move. Build `W = 'w'.repeat(251) + '\nEND\n'` (**exactly 256 characters, newline-terminated — assert `W.length === 256` in the test** so the fixture cannot silently drift off the boundary); original document `` `${W}\nTAIL\n${W}` ``; honest sync (records `sepBefore: '\n'`); rewrite the file to `` `${W}\n<BLOCK>\nTAIL\n${W}` `` | the final content is **exactly** the original document — **and** additionally assert the result contains no fewer `W` occurrences than the original, so the row fails loudly if the withhold ever becomes a strip | base `0f9ee08`, the hash-only anchor, **and** an anchor whose uniqueness test is gated on `candidate.length <= ANCHOR_WINDOW` — **all three measured red**. This row is the finding-1 detector and the only test that separates the three anchor designs. |
+| **A-T8** | **The createdFile producer site** (`shared.js:179`) — the one site nothing exercised (Codex round 2, finding 5). Fixture: the markdown file is **absent**; `applyManagedBlock` creates it | assert the whole entry: `createdFile === true`, `sepBefore === ''`, `sepAfter === '\n'`, **and `anchorBefore === insertionAnchor('')`** (import it; do not hardcode the digest). Then sync a **second** time and assert the entry and the file bytes are unchanged, and finally that uninstall **deletes** the file | red against any implementation that records `null`, omits the anchor, or records a non-empty `sepBefore` on this branch. **Measured**: the entry is `{createdFile:true, sepBefore:'', sepAfter:'\n', anchorBefore:'e3b0c442…b855'}` and uninstall deletes the file. Closes AC9's third managed-block site. |
+| **A-T9** | Table Q row **Q14** — **R2c, executable** (Codex round 2, finding 6). Original `` `PPPP\n${W}` ``, honest sync; then rewrite the file so the prefix is `` `QQ\n${W}` `` — the same 256-char window at a new, **unique** position — with the block relocated after it | assert the exact resulting bytes, and additionally assert the delta against the pre-uninstall content is **exactly one newline** and is whitespace-only — the R2c safety bound made executable | red against a full-prefix anchor **and** against an always-withhold anchor — **both measured**. Round 2 claimed this residual could not be pinned "because a test would pass on every implementation"; **that claim was wrong and is retracted**. |
+| **A-T10** | Table Q row **Q13**, the ordinary-path corpus sweep. Six whole-file contents — `"\n"`, `"\n\n\n"`, `"a\na\na\n"`, CRLF `"x\r\ny\r\n"`, `"foo\n"`, `""` — each synced and immediately uninstalled with **no relocation and no edit** | every one restores **byte-perfectly**. Add one further assertion in the same test: a file with **ambiguous** sentinels is skipped with the shipped notice and left untouched, proving the anchor never runs on a file `locateManagedBlock` refuses | red against round 2's block-excised corpus, which yields `"\n\n"` and `"\n\n\n\n"` on the first two rows — **measured**. This is the ordinary-path regression detector. |
 | **A-T7** | Table Q row **Q12**, the boundary sweep. Six runs: `candidate.length` ∈ {255, 256, 257} × {ordinary in-place uninstall, honest relocation} | in-place restores byte-perfectly at all three lengths; the relocation preserves byte-perfectly at all three | `PATCH: none — boundary pin.` Not red-first against the shipped design; it exists so the removal of the `<=ANCHOR_WINDOW` shortcut stays removed. Red against any re-introduction of a length-conditional branch. |
 
 ### Part B — `tests/unit/manifest.test.js` and `tests/unit/shared-skill-links.test.js`
@@ -994,10 +1093,12 @@ hand-write manifest entries except where the row's job is forgery.
 | **B-T1** | Table A2 row **S2**: honest `applySkillLinks` create, then `fs.unlinkSync(link)` followed by `fs.symlinkSync(coreSkill, link)` — a new file object at the same path with the same target. **Assert the precondition explicitly**: `linkIdentity(link)` must now differ from the recorded `(dev, ino)`, so a filesystem that recycled the inode fails the *precondition* loudly instead of silently turning this into a vacuous pass | the link **still exists** after `reverse()`, is in `skipped`, and the stderr `keeping …` line fired | base `0f9ee08` (**measured**: the link is deleted). **This is the end-to-end row and it is filesystem-dependent by nature** — the deterministic proof of the same rule is **B-T7(b)**, which is why both exist (Codex round 1, finding 2). |
 | **B-T2** | Table A2 row **S3**: the link is created **before** `applySkillLinks` runs, so the adopt branch records it | the link **still exists** after `reverse()`, is in `skipped`; **and** the recorded entry has `origin: 'adopted'` and **no** `dev`/`ino` | base `0f9ee08` (**measured**: the link is deleted). Assert the entry shape too — the end state alone tells you something is wrong; the entry tells you which rule fired. |
 | **B-T3** | Table A2 row **S1**: honest create, nothing touched, uninstall | the link is **removed** and is in `removed` | `TRIGGER: none — the ordinary path.` Baseline row; red against making identity *required*, and against any row 4a/4b that fires on our own untouched link. |
-| **B-T4** | Table A2 row **S4**: honest create, then `delete entry.origin; delete entry.dev; delete entry.ino` — the shape an install written before this WP has | the link is **removed** | any implementation where absent identity means preserve. **This is the backward-compatibility fence** and the ADR-0019 reversibility contract's detector. |
+| **B-T4** | Table A2 row **S4** and **Table P rule P-6** — **six rows, one per accepted shape**, not one combined deletion: all-absent; created+identity; created+no-identity; adopted+no-identity; adopted+identity; **exactly one of `dev`/`ino`** | each behaves as P-6 tabulates — removed, row-4b, removed, preserved, preserved, preserved | the all-absent row is the **backward-compatibility fence** (red against "absent identity ⇒ preserve", which would strand every pre-existing install). The **partial** row is red against treating a half pair as absent. **All six measured.** Round 2 deleted all three fields in one case and called that coverage (Codex round 2, finding 4). |
 | **B-T5** | Table A2 rows **S5**, **S6**, **S7**: three mutations of an honest entry, one per case — `origin = 'adopted'`; `ino = 12345` (non-string); `ino = '999999999'` (wrong value) | all three **preserve** the link | any implementation where a forged provenance field widens deletion. Three separate rows, three separate mutations (ADR-0036 A3) — they are independently revertible and each reddens a different arm (row 4a; `validateEntry`; row 4b). |
 | **B-T6** | `shared-skill-links.test.js` — the three **Table F** rows 2–4 plus their forward-side identity assertion | exactly the expectations in Table F | `PATCH: none — shipped assertions whose expected values moved.` Their red-ness is Table F's measurement (three `ERR_ASSERTION` failures at `0f9ee08` + this design). |
 | **B-T7** | **The identity seam, four deterministic arms.** Honest `applySkillLinks` create, then call `reverseSymlink` **directly** (WP-153 already blessed the direct unit call) passing `{ identity: … }` as the 7th argument. Four separate rows, four separate seams: **(a) changed device** → `{dev: recorded.dev+1, ino: recorded.ino}`; **(b) changed inode** → `{dev: recorded.dev, ino: recorded.ino+1}`; **(c) unavailable** → `null`; **(d) reused** → the recorded pair verbatim | (a), (b), (c) → the link **survives**, is in `skipped`, `removed` is empty. (d) → the link is **removed** — this arm pins Table R row **R4**'s recycling residual at its declared size, and its comment must say it pins current behaviour, not a fix | (a)(b)(c) are red against any implementation that ignores a recorded identity or treats a `null` identity as a match. (d) is `PATCH: none — residual pin`, red only if recycling ever stops deleting, which would mean the mechanism changed. **This row replaces round 1's plan of relying on `unlink`+`symlink` allocating a fresh inode**, which is a filesystem-dependent assumption, not a contract (Codex round 1, finding 2). |
+
+| **B-T8** | **The verify→unlink race** (Codex round 2, finding 1), deterministic. Honest `applySkillLinks` create, then call `reverseSymlink` directly with an identity seam that **replaces the link on disk** (`unlinkSync` + `symlinkSync`) and *then* returns the **recorded** pair — simulating a replacement landing between the check and the unlink | the replacement **is deleted** and the link is in `removed` | `PATCH: none — residual pin.` Not red-first: it pins **R7** at its declared size, which is the only way "we do not claim TOCTOU-freedom" stops being a sentence. Comment it as pinning current behaviour, not a fix. If it ever goes red, either an atomic primitive was adopted or the mechanism changed — both worth a failure. **Measured.** |
 
 **Idempotency (AC11) is asserted inside B-T3 and A-T2(a)** rather than as its own
 row: run the forward step **twice** before uninstalling and assert the manifest
@@ -1154,10 +1255,20 @@ identical, one `unchanged`.
 - [ ] **AC7.** Table A2 rows **S1** and **S4** still remove the link — our own
       untouched link, and a legacy target-only entry. Uninstall stays complete for
       every install written before this WP.
-- [ ] **AC8a — legacy degradation.** With **any new field absent**, both reversers
-      reproduce **base `0f9ee08` behaviour byte for byte**: the managed block is
-      still stripped with the shipped predicate (A-T4(a)) and the symlink is still
-      removed (B-T4). This is the upgrade-safety criterion.
+- [ ] **AC8a — legacy degradation.** With **ALL** provenance fields absent — the
+      exact shape an install predating this WP has — both reversers reproduce
+      **base `0f9ee08` behaviour byte for byte**: the managed block is still
+      stripped with the shipped predicate (A-T4(a)) and the symlink is still
+      removed (B-T4). This is the upgrade-safety criterion. **It is scoped to the
+      all-absent shape on purpose**: round 2 said *"any field absent"*, which
+      contradicted row 4a, since an honest adopted entry has `origin: 'adopted'`
+      and no identity and must be **preserved** (Codex round 2, finding 4).
+- [ ] **AC8a′ — every accepted partial shape.** All six rows of **Table P rule
+      P-6** behave as tabulated, each asserted separately: all-absent → removed;
+      created+identity → row 4b; created+no-identity → removed; adopted+no-identity
+      → preserved; adopted+identity → preserved; **exactly one of `dev`/`ino`** →
+      preserved. **B-T4 must not delete all three fields in one case and call that
+      coverage** — that was round 2's gap.
 - [ ] **AC8b — narrowing only.** For **every** non-absent value of every new
       field, the action taken is a **subset** of base's: never a wider deletion.
       Per Table N, the outcomes differ by field and both shapes must hold —
@@ -1168,10 +1279,12 @@ identical, one `unchanged`.
       contradicted Table N's own preserve rows** (Codex round 1, finding 5).
 - [ ] **AC9.** Each of the **six** producer sites in Table B — `shared.js:179`,
       `:197`, `:210`, `:434`, `:485`, `:491` — records exactly what that table
-      says, no more and no less: B-T6 covers the three symlink sites; the three
-      managed-block sites are covered by A-T1's `anchorBefore` assertion, A-T6's
-      honest-sync setup, and the preserve-on-replace assertion in AC11's
-      second-run check.
+      says, no more and no less. **Every site has a named test**: `:434`/`:485`/
+      `:491` → B-T6; `:210` (append) → A-T1's `anchorBefore` assertion; `:179`
+      (createdFile) → **A-T8**, which asserts the full entry including
+      `anchorBefore === insertionAnchor('')`; `:197` (replace) → the
+      preserve-on-replace assertion in AC11's second-run check. **Round 2 left
+      `:179` with no test at all** (Codex round 2, finding 5).
 - [ ] **AC10.** The four Table F assertions are updated to their new expectations
       and pass; **every other test in the repository passes byte-unmodified**,
       including WP-147's Table N suite, T6, T7, T11, T12 and WP-153's T1–T4, T6
@@ -1193,21 +1306,55 @@ Write the guard helper first — it isolates a named top-level function's source
 and asserts `+must-contain` / `-must-not-contain` patterns **inside that function
 only**:
 
+**Round 2's guard was still evadable three ways and Codex round 2 finding 3 named
+them: a block-commented call satisfied a `+` rule, `indexOf` picked the FIRST
+definition when a later duplicate is the effective binding, and V5's `^const`
+missed an indented shadow.** All three are fixed below and **each has an executed
+red mutation**. The fourth — telling reachable code from code after a `return` —
+needs an AST and is **not** attempted: **residual R8**, routed to the already-open
+`WP-grep-gate-helper` (WP-147 opened it as *"the fourth instance of this shape"*;
+this is the fifth). **The guards are tripwires; V1/V2 are the load-bearing
+checks** — WP-147's own words for the same class, and the reason this spec's
+behavioural claims all rest on tests, not greps.
+
 ```bash
-# V0 — the scoped guard helper (used by V3 and V4).
+# V0 — the scoped guard helper (used by V3 and V4). Strips comments, refuses when
+#      the function has more than one top-level definition, then matches inside
+#      that function's body only.
 cat > /tmp/wd-fnguard.js <<'GUARD'
 const fs = require('node:fs');
 const [file, fn, ...rules] = process.argv.slice(2);
-const s = fs.readFileSync(file, 'utf8');
-const i = s.indexOf(`\nfunction ${fn}(`);
+const raw = fs.readFileSync(file, 'utf8');
+function stripComments(s) {
+  let out = ''; let i = 0; let mode = null;
+  while (i < s.length) {
+    const c = s[i]; const n = s[i + 1];
+    if (mode === null) {
+      if (c === '/' && n === '/') { mode = '//'; out += '  '; i += 2; continue; }
+      if (c === '/' && n === '*') { mode = '/*'; out += '  '; i += 2; continue; }
+      if (c === "'" || c === '"' || c === '`') { mode = c; out += c; i++; continue; }
+      out += c; i++; continue;
+    }
+    if (mode === '//') { if (c === '\n') { mode = null; out += c; } else out += ' '; i++; continue; }
+    if (mode === '/*') { if (c === '*' && n === '/') { mode = null; out += '  '; i += 2; } else { out += c === '\n' ? '\n' : ' '; i++; } continue; }
+    if (c === '\\') { out += c + (n === undefined ? '' : n); i += 2; continue; }
+    if (c === mode) mode = null;
+    out += c; i++;
+  }
+  return out;
+}
+const s = stripComments(raw);
+const decl = `\nfunction ${fn}(`;
+const hits = [];
+for (let k = s.indexOf(decl); k !== -1; k = s.indexOf(decl, k + 1)) hits.push(k);
+if (hits.length === 0) { console.error(`GUARD: no top-level definition of ${fn} in ${file}`); process.exit(1); }
+if (hits.length > 1) { console.error(`GUARD: ${hits.length} top-level definitions of ${fn} — the LAST one binds; refusing to guess`); process.exit(1); }
+const i = hits[0];
 const j = s.indexOf('\nfunction ', i + 1);
-if (i < 0 || j < 0) { console.error(`could not isolate ${fn} in ${file}`); process.exit(1); }
-const body = s.slice(i, j);
+const body = j === -1 ? s.slice(i) : s.slice(i, j);
 let bad = 0;
 for (const r of rules) {
-  const want = r[0] === '+';
-  const pat = r.slice(1);
-  const has = body.includes(pat);
+  const want = r[0] === '+'; const pat = r.slice(1); const has = body.includes(pat);
   if (want && !has) { console.error(`MISSING inside ${fn}: ${pat}`); bad = 1; }
   if (!want && has) { console.error(`FORBIDDEN inside ${fn}: ${pat}`); bad = 1; }
 }
@@ -1249,9 +1396,27 @@ node /tmp/wd-fnguard.js src/core/manifest.js reverseSymlink \
   "+!sameResolvedDir(L, T) && !lexicalMatch" \
   "+skillsRoots.some((root) => sameResolvedDir(path.dirname(L), root))" && echo "V4 ok"
 
+# V4 RED — the same check against a copy with the row-3 fallback deleted. MUST fail.
+cp src/core/manifest.js /tmp/wd-v4-red.js
+node -e 'const fs=require("node:fs"),p=process.argv[1];fs.writeFileSync(p,fs.readFileSync(p,"utf8").replace("  if (!sameResolvedDir(L, T) && !lexicalMatch) {","  if (!sameResolvedDir(L, T)) {"))' /tmp/wd-v4-red.js
+node /tmp/wd-fnguard.js /tmp/wd-v4-red.js reverseSymlink \
+  "+!sameResolvedDir(L, T) && !lexicalMatch" && { echo "V4 BROKEN: the guard cannot fail"; exit 1; } || echo "V4 ok (red, as required)"
+
+# V3/V4 RED — the two EVASIONS Codex round 2 named. Both must fail.
+cp src/core/manifest.js /tmp/wd-ev1.js
+node -e 'const fs=require("node:fs"),p=process.argv[1];fs.writeFileSync(p,fs.readFileSync(p,"utf8").replace("    fs.ftruncateSync(fd, 0);","    /* fs.ftruncateSync(fd, 0); */"))' /tmp/wd-ev1.js
+node /tmp/wd-fnguard.js /tmp/wd-ev1.js reverseManagedBlock "+fs.ftruncateSync(fd, 0)" \
+  && { echo "EVASION 1 (block comment) NOT DETECTED"; exit 1; } || echo "evasion 1 (block-commented call) detected"
+cp src/core/manifest.js /tmp/wd-ev2.js
+printf '\nfunction reverseManagedBlock(entry, dryRun, removed, skipped, removedSet, fd, target) {\n  fs.writeFileSync(entry.path, "");\n}\n' >> /tmp/wd-ev2.js
+node /tmp/wd-fnguard.js /tmp/wd-ev2.js reverseManagedBlock "+fs.ftruncateSync(fd, 0)" \
+  && { echo "EVASION 2 (later duplicate) NOT DETECTED"; exit 1; } || echo "evasion 2 (later duplicate definition) detected"
+
 # V5 — ANCHOR_WINDOW is DEFINED exactly once, in core, and shared.js neither
-#      redefines it nor re-implements the digest. Counts definitions, not mentions.
-test "$(grep -c '^const ANCHOR_WINDOW = ' src/core/manifest.js)" -eq 1 || {
+#      redefines it nor re-implements the digest. Counts DEFINITIONS, not mentions,
+#      and the pattern allows leading whitespace so an INDENTED shadow is counted
+#      (round 2's ^const missed it — Codex round 2, finding 3).
+test "$(grep -cE '^[[:space:]]*const ANCHOR_WINDOW[[:space:]]*=' src/core/manifest.js)" -eq 1 || {
   echo "FAIL: ANCHOR_WINDOW is not defined exactly once in manifest.js"; exit 1; }
 test "$(grep -c 'ANCHOR_WINDOW' src/adapters/shared.js)" -eq 0 || {
   echo "FAIL: ANCHOR_WINDOW leaked into shared.js"; exit 1; }
@@ -1282,15 +1447,24 @@ process.exit(bad);
 npm run lint
 ```
 
-**Every structural check has a demonstrated failure mode.** V3's is executed in
-both directions by the block itself — **paste both outputs**. V4, V5 and V6 all
-exit non-zero on their negation; V5 and V6 additionally assert *counts* and
-*scoped* contents rather than mere presence, which is what round 1 got wrong.
-**Measured at `0f9ee08` while writing this spec:** V3 green passes and V3 red
-prints `MISSING inside reverseManagedBlock: fs.ftruncateSync(fd, 0)` +
-`FORBIDDEN inside reverseManagedBlock: fs.writeFileSync(` and exits 1; V4 passes.
-V5 and V6 fail at `0f9ee08` by construction — they check post-implementation
-state.
+**Every structural check has a demonstrated failure mode, and the block executes
+its own red runs — paste all of them.** Measured at `0f9ee08` while writing this
+spec:
+
+```text
+V3 green (unmodified tree)                                        exit 0
+V3 red   (ftruncateSync -> writeFileSync(entry.path, remaining))  exit 1
+V4 green (unmodified tree)                                        exit 0
+V4 red   (row-3 lexical fallback conjunct deleted)                exit 1
+evasion 1: the guarded call wrapped in /* … */                    exit 1  (comment-stripping)
+evasion 2: a LATER duplicate reverseManagedBlock appended         exit 1  ("2 top-level definitions … refusing to guess")
+evasion 3: an INDENTED `  const ANCHOR_WINDOW = 8;`               counted 1 by the new V5 pattern, 0 by round 2's
+```
+
+The one evasion **not** covered is unreachable code — a guarded call sitting
+after a `return`. That needs an AST, it is **residual R8**, and it is routed to
+`WP-grep-gate-helper`. **V1 and V2 are the load-bearing checks**; these guards
+exist to catch an implementer who edits the wrong region, not to prove behaviour.
 
 ## Out of scope (do NOT do these)
 
@@ -1332,11 +1506,11 @@ labelled `(Part A)`, `(Part B)` or `(both)` so the cut is mechanical:
 
 | | Part A — `WP-managed-block-insertion-anchor` | Part B — `WP-symlink-authorship-identity` |
 |---|---|---|
-| Deliverables — **exclusive** | **D1, D2** (manifest.js), **D8, D9** (shared.js), A-T1…A-T7 | **D3, D4, D5** (manifest.js), **D10** (shared.js), B-T1…B-T7 |
+| Deliverables — **exclusive** | **D1, D2** (manifest.js), **D8, D9** (shared.js), A-T1…A-T10 | **D3, D4, D5** (manifest.js), **D10** (shared.js), B-T1…B-T8 |
 | Deliverables — **shared hunks, split ADDITIVELY** | **D6a** — the doc comment + `@typedef` gain `anchorBefore?` **only**. **D7a** — `shared.js:5` becomes `const { hashDir, insertionAnchor } = …`. **AC1a** — `insertionAnchor` exported and imported. **AC2a** — `anchorBefore?` documented | **D6b** — the *same* two hunks gain `origin?`, `dev?`, `ino?`, **extending** what Part A wrote. **D7b** — the *same* import line gains `linkIdentity`. **AC1b** — `linkIdentity` exported and imported. **AC2b** — the three symlink fields documented |
 | Canonical tables | **Table Q**, Table P's `anchorBefore` row, Table B's three managed-block rows, Table F row 1, Table N's four anchor rows | **Table A2**, Table P's `origin`/`dev`/`ino` rows, Table B's three symlink rows, Table F rows 2–4, Table N's five symlink rows, **the Owner-ruling cost ledger** |
 | Acceptance | AC3, AC4, AC5, AC1a, AC2a | AC6, AC7, AC1b, AC2b |
-| Acceptance asserted by **both**, each against its own surfaces | AC8a, AC8b, AC9, AC10, AC11, AC12 | AC8a, AC8b, AC9, AC10, AC11, AC12 |
+| Acceptance asserted by **both**, each against its own surfaces | AC8a, AC8a′, AC8b, AC9, AC10, AC11, AC12 | AC8a, AC8a′, AC8b, AC9, AC10, AC11, AC12 |
 | Shared, unsplit | Table U's `manifest.js` rows for the region it edits; the security checklist's anchor bullets | Table U's `reverseSymlink` and `reverse()`-arm rows; the security checklist's identity bullets |
 | Sizing if split | **M** | **S** |
 | Owner ruling required? | **no** | **yes** — the cost ledger is entirely Part B's |
@@ -1387,6 +1561,7 @@ the whole mechanism, rather than twice over halves of it.**
 |-----|--------------|---------------|------------------------|-----------|
 | **4a** (adopted ⇒ preserve) | closes residual B **case 2**: a link the user created before we synced is no longer deleted | a link **we** created is left behind when its manifest entry was lost and a later `sync` re-adopted it | `recordOnce` no-ops when an entry exists (`shared.js:50-51`), so an ordinary re-sync never re-records; and `uninstall` refuses outright without a manifest (`src/cli/uninstall.js:43-46`). It needs: manifest deleted or reset → reinstall → sync → uninstall | B-T2 |
 | **4b** (identity must match) | closes residual B **case 1**: a user's same-source replacement is no longer deleted | **(a) durability** — a backup/restore, volume remount, home-directory migration, container rebuild or network filesystem can change `dev` and/or `ino` for a link nobody touched, which is then **left behind**; **(b) recycling** — an inode handed back to a user's replacement link at the same path with the same target passes 4b and is **deleted**, re-opening case 1 in that narrow subset | (a) is the fail-closed direction and never loses data; (b) requires the FS to reallocate the exact recorded inode at the exact path **and** the user to have re-pointed it at our source | B-T7 rows *changed-device*, *changed-inode*, *unavailable*, *reused* — all four deterministic through the identity seam |
+| **4b's verify→unlink race** (not a separate row to ship; a property of 4b) | nothing — it is 4b's cost, not its benefit | the identity check and the unlink are two syscalls; a replacement landing between them is deleted despite the verified identity belonging to the previous object | requires **arbitrary same-user native code**, which `docs/THREAT-MODEL.md` places outside the boundary (A12), and which can delete the link directly without the race. Node exposes no atomic compare-and-unlink, so this cannot be closed in-process | **B-T8**, deterministic through the identity seam. **Residual R7; not claimed closed** (same disposition ADR-0028 takes for the scheduler's reopen-based check) |
 
 **Neither row is ever worse than shipped `0f9ee08` on SAFETY** — base
 `reverseSymlink` unlinks any recorded-path symlink with no ownership test at all,
@@ -1465,6 +1640,8 @@ Each row names its pinning test. A residual with no test is a claim.
 | **R3** | **No stable `(dev, ino)` on some platform.** Where `linkIdentity` returns `null` at creation time, no identity is recorded and WP-153's residual persists on that platform | the WP-153 residual, unchanged: the `wienerdog-` namespace under a harness skills root | B-T4 covers the *reverse* arm (absent identity ⇒ shipped behaviour). **The forward arm has no test** — it needs a platform that reports a zero `dev`/`ino`, which this repo's CI does not have | a Windows-runner probe, if one is ever wanted; not routed today |
 | **R4** | **Identity drift and identity recycling.** `(dev, ino)` is durable but not permanent: a restore, remount, home migration, container rebuild or network filesystem can change it for a link nobody touched (→ **preserved**, a leftover); and a recycled inode handed to a user's replacement at the same path with the same target passes row 4b (→ **deleted**, case 1 re-opens in that subset) | drift is the fail-closed direction and never loses data; recycling needs the exact inode at the exact path **plus** the user re-pointing it at our source, and is still equal-or-stronger than base, which deletes unconditionally | **B-T7** — all four arms (*changed-device*, *changed-inode*, *unavailable*, *reused*) are deterministic through the identity seam. Round 1 recorded this as *"stated, not pinned; a test would have to fake `lstat`"*; the seam is that fake, so it is pinned now | **costed in the Owner-ruling ledger, row 4b.** A birth-time/generation field was considered and rejected there |
 | **R5** | **Adopted-link leftover** — row 4a's half of the ledger | one symlink per core skill, in the harness skills dir, only after a manifest-loss reinstall | B-T2 pins the *behaviour*; the *cost* is what the owner rules on | **blocked on the owner ruling** |
+| **R7** | **The verify→unlink race in `reverseSymlink`.** Row 4b's `identityOf(L)` and row 5's `fs.unlinkSync(L)` are separate syscalls; a replacement landing in the window is deleted | requires **arbitrary same-user native code** — outside the threat model per `docs/THREAT-MODEL.md`'s A12 / *"not an OS boundary"* posture — and such an actor can delete the link directly. **Only ever narrows against base**, which unlinks with no identity check at all | **B-T8** (identity seam replaces the link, then returns the recorded pair) | **not routed and not claimed closed.** Node exposes no atomic compare-and-unlink for a symlink; the same disposition ADR-0028 takes for the scheduler's reopen-based integrity check (*"not claimed as TOCTOU-free"*). Costed in the Owner-ruling ledger |
+| **R8** | **The V3–V6 source guards are not AST-aware.** They strip comments and reject duplicate definitions, but cannot tell reachable code from code after a `return` | the guards are **tripwires**; V1/V2 — the test suite — are the load-bearing checks. This is WP-147's own stated disposition for the same class | the four evasions Codex named are each covered by an executed red mutation (see Verification steps); the uncovered one is unreachable-code | **`WP-grep-gate-helper`** — already routed by WP-147 as the canonical comment-stripping/AST gate helper, *"fourth instance of this shape"*. This spec is the fifth and does not re-route it |
 | **R6** | **`reverseCopiedSkill` has the same authorship gap** — its `hash` is read from the same untrusted file and proves content, not authorship | out of scope here; a `copied-skill` is the `EPERM`/`EACCES` fallback shape, not the mainline | none | a future WP, not drafted |
 
 ## Definition of done
@@ -1535,6 +1712,55 @@ Each row names its pinning test. A residual with no test is a claim.
 >   outcomes named); **AC9** said four producer sites where Table B enumerates
 >   **six** — corrected, along with the same "four" in the ADR-0031 activation
 >   paragraph, which was an unregistered mirror and is now registered.
+>
+> **2026-08-02 — Codex design-gate round 2 (`ae6f35d`): needs-attention, 1 high +
+> 5 mediums. All six citations spot-checked against the file first; all six
+> accurate; none refuted; all six ADOPTED.**
+>
+> - **(1, high) Verify→unlink is not atomic.** Correct, and reproduced with an
+>   identity seam that replaces the link before returning the recorded pair.
+>   **Declared, bounded and pinned rather than claimed closed** — Node exposes no
+>   atomic compare-and-unlink for a symlink, the attacker needs arbitrary
+>   same-user native code (`docs/THREAT-MODEL.md`'s A12 / *"not an OS boundary"*
+>   posture, verified first-hand), and the outcome is reachable at base without
+>   any race. Same disposition ADR-0028 takes for the scheduler's reopen-based
+>   check (*"not claimed as TOCTOU-free"*). Residual **R7**, test **B-T8**, and a
+>   row in the Owner-ruling ledger.
+> - **(2, medium) Wienerdog's own separators manufactured ambiguity — and this
+>   was an ORDINARY-PATH regression, the most serious item of the round.**
+>   Reproduced exactly as reported: content `"\n"` restored as `"\n\n"`, content
+>   `"\n\n\n"` as `"\n\n\n\n"`. The corpus is now `candidate + after` — the
+>   document uninstall is about to leave — instead of the block-excised `content`.
+>   Three corpora measured side by side; the fix changes none of Q1/Q3/Q4/Q10.
+>   New row **Q13** and test **A-T10**, which also covers CRLF and
+>   ambiguous-marker preservation.
+> - **(3, medium) The guard still accepted comments and the wrong duplicate.**
+>   Correct on all four sub-points. V0 now strips comments and refuses when a
+>   function has more than one top-level definition; V5 counts definitions with a
+>   whitespace-tolerant pattern. **Three evasions plus V4's red are executed in
+>   the verification block.** The remaining one — unreachable code — needs an AST,
+>   is residual **R8**, and is routed to the already-open `WP-grep-gate-helper`
+>   (WP-147 opened it as the fourth instance; this is the fifth).
+> - **(4, medium) AC8a contradicted row 4a.** Correct: an honest adopted entry has
+>   `origin: 'adopted'` and no identity and must be preserved. AC8a is now scoped
+>   to the **all-absent** shape, **AC8a′** enumerates all six accepted shapes, and
+>   Table P gains rule **P-6** with every shape measured. **Row 4b additionally
+>   changed**: a *partial* `dev`/`ino` pair is now unverifiable ⇒ preserve, rather
+>   than being treated as absent ⇒ delete. B-T4 becomes six rows.
+> - **(5, medium) The createdFile producer site had no test.** Correct — nothing
+>   exercised `shared.js:179`. New test **A-T8** asserts the whole entry including
+>   `anchorBefore === insertionAnchor('')`, plus second-run idempotency and the
+>   file delete.
+> - **(6, medium) R2c was pinnable and the round-2 claim was false.** Correct, and
+>   **the claim is retracted in the spec text**. Codex's construction discriminates:
+>   measured red against a full-prefix anchor and against an always-withhold
+>   anchor. New row **Q14** and test **A-T9**, which also asserts the one-newline
+>   whitespace-only safety bound.
+>
+> **Re-measured after the round-2 revisions:** `npm test` still `1901 / 1888 / 4`
+> with the same four flips and the same values; all round-1 and round-2 rows
+> unchanged; the six ordinary-path contents byte-perfect; all six provenance
+> shapes as tabulated; all five identity-seam arms plus the race arm as declared.
 >
 > **One deferred nit checked and found already closed.** PR #144's gate deferred a
 > citation fix in `docs/specs/done/WP-scheduler-node-path-durability.md` — the
