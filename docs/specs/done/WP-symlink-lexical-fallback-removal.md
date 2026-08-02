@@ -1,7 +1,7 @@
 ---
 id: WP-symlink-lexical-fallback-removal
 title: Narrow the symlink reverser's row 3 to the semantic proof — drop the link-text fallback
-status: In-Review
+status: Done
 model: sonnet
 size: M
 depends_on: [WP-153]
@@ -646,6 +646,13 @@ findings in three separate reviews (Codex rounds 1 and 4, wd-reviewer round 1),
 each time because the same facts were restated in prose in three places and one
 copy drifted. ADR-0031: one table, and the prose cites it.
 
+**W12a is registered here rather than only inside R10** because Table W is the
+canonical answer to "what is at this location in WP-153, and which R-item owns
+it". The two MD028 comments are WP-153 bytes that R10 owns; a future byte
+comparison of that file walks this table, so a byte with no row would read as
+unpredicted. R10 carries their exact text and position; this row carries the
+ownership fact.
+
 | # | Line(s) | Opening words | Live or dated | Post-merge anchor link? | R-item |
 |---|---------|---------------|---------------|-------------------------|--------|
 | W1 | `:340` | `\| modify \| tests/unit/manifest.test.js \| **T1–T4 and T6**` | live | no | **R11** |
@@ -660,6 +667,7 @@ copy drifted. ADR-0031: one table, and the prose cites it.
 | W10 | `:881` | `- [ ] **AC2** — T2, T3, T4, T5, T6 and T7 all pass` | live | no | **R13** |
 | W11 | `:936-946` | `# V4 — the reverser consults the recorded target` | live | no | **R8** |
 | W12 | `:1001` | `## Post-merge note — 2026-08-02:` — the heading | dated | it **is** the anchor target | **R10** inserts after it |
+| W12a | the two `markdownlint-disable`/`-enable MD028` comment lines bracketing the post-merge note's two blockquotes | `<!-- markdownlint-disable MD028 --` and `<!-- markdownlint-enable MD028 -->` | dated | no | **R10** — mandated bytes, see R10's slot table |
 | W13 | `:1005`, `:1034`, `:1044`, `:1056`, `:1059` | `T4` mentions inside the post-merge note | dated | no | none — R10's superseding blockquote governs them; not separately edited |
 | W14 | `:1259` | `> [2026-08-02 post-merge note](…)` in the review-gate log | dated | **yes — `:1259`** | none — left as recorded |
 | W15 | `:1220`, `:1250`, `:1253`, `:1262` | `T4` mentions in the dated review-gate log | dated | no | none — left as recorded |
@@ -906,16 +914,53 @@ Insert in its place:
 
 #### R10 — the post-merge note resolution, insertion only
 
-Insert the following as a new paragraph **immediately after** the heading line at
-`:1001` and the blank line that follows it, i.e. **above** the existing
-`> **This section is a RECORD, not a contract change.**` blockquote. Delete
+**R10 inserts FOUR things, not one:** a scoped `markdownlint-disable` comment, the
+new blockquote, the blank line that separates it from the original record, and a
+matching `markdownlint-enable` comment. All four are mandated bytes. Delete
 nothing; reword nothing; leave the heading byte-identical.
 
-**Separate the two blockquotes with exactly one blank line.** Markdown merges
-adjacent `>` blocks that are not separated, so without it the new paragraph and
-the original record render as a single quote and the "everything below is the
-original record" framing is lost. Final shape: heading, blank, NEW blockquote,
-**blank**, original `> **This section is a RECORD…**` blockquote.
+**Why the two comments are part of the contract.** The blank line between the two
+blockquotes is required — markdown merges adjacent `>` blocks, and without it the
+superseding paragraph and the original record render as a single quote, losing
+the "everything below is the original record" framing. But that same blank line
+is exactly what **MD028 (no-blanks-blockquote)** forbids, so `npm run lint` fails
+without a scoped suppression. The suppression is therefore not an implementation
+detail the implementer chose; it is the only way to satisfy both this WP and the
+lint gate, and it is specified here so R10's canonical text and WP-153's shipped
+bytes agree exactly. **Scoped, never file-wide:** the `enable` comment restores
+MD028 immediately after the original record's last line, so the rest of WP-153 is
+still linted.
+
+**The slot immediately after the heading belongs to the `disable` comment**, not
+to the blockquote — an earlier revision of this paragraph said the blockquote went
+there, which is off by one line against what shipped.
+
+**Final shape, in order** (`H` = the heading line at `:1001`):
+
+| Slot | Content |
+|------|---------|
+| `H` | `## Post-merge note — 2026-08-02: …` — byte-identical, never touched |
+| `H+1` | blank (already present) |
+| `H+2` | the `markdownlint-disable MD028` comment, byte-exact below |
+| `H+3` … | the NEW blockquote, byte-exact below |
+| next | **one blank line** — the whole reason for the suppression |
+| next … | the original `> **This section is a RECORD…**` blockquote, untouched |
+| next | the `markdownlint-enable MD028` comment, byte-exact below, **immediately after that blockquote's last line, with no blank between them** |
+| next | blank, then the note's existing `**The finding.**` paragraph |
+
+**Insert at `H+2`**, byte-exact (one line, no wrapping):
+
+```text
+<!-- markdownlint-disable MD028 -- the blank line between the two blockquotes below is deliberate: the superseding paragraph and the original record must render as SEPARATE quotes -->
+```
+
+**Insert after the original record's closing line**, byte-exact:
+
+```text
+<!-- markdownlint-enable MD028 -->
+```
+
+**And the blockquote itself**, byte-exact, at `H+3`:
 
 ```text
 > **SUPERSEDED by `WP-symlink-lexical-fallback-removal`, whose implementation
