@@ -426,30 +426,47 @@ Conditions are evaluated **in order**; the first that holds decides. `L` is
 |---|-----------|-------------------|--------|--------|----------------------------------|
 | 1 | `!isSymlink(L)` | none | `skipped` | none | Unchanged shipped behavior. A real file/dir at `L`, or nothing at all, is definitionally not the link we made. |
 | 2 | `typeof T !== 'string' \|\| T === ''` — a **LEGACY** entry | none | `skipped` | `wienerdog: keeping <L> — not the Wienerdog skill link we recorded (replaced, or unverifiable)` | Ownership is **unprovable** — the entry was recorded before this WP and, per the owner ruling, nothing will ever backfill it. Preserve. **This row and its accepted cost are owner-ruled (2026-08-01), not argued from precedent** — see [Legacy-entry policy](#legacy-entry-policy--owner-ruled-transcribed-2026-08-01). |
-| 3 | `sameResolvedDir(L, T) === false` **and** `readlinkSync(L) !== T` | none | `skipped` | same line as row 2 | The link at `L` points somewhere else — a user's replacement, or a stale link from another install root. Both sub-tests are fail-closed (`sameResolvedDir` catches and returns `false`; the lexical test runs inside a `try` whose `catch` yields no match), so **every** error path lands in this row, i.e. in *preserve*. |
+| 3 | `sameResolvedDir(L, T) === false` | none | `skipped` | same line as row 2 | The link at `L` does not resolve to the source we recorded — a user's replacement, a stale link from another install root, **or a dangling link** (`sameResolvedDir` catches and returns `false`). Every such case, including every error path, lands here, i.e. in *preserve*. |
 | 4 | **`OWNED(L)` is false** — `path.basename(L)` does not start with `wienerdog-`, **or** `path.dirname(L)` does not realpath-equal a harness skills root | none | `skipped` | same line as row 2 | **Structural ownership gate.** The manifest is untrusted, so a target match alone is not delete authority — see "Why row 4 exists" below. |
 | 5 | otherwise | `if (!dryRun) fs.unlinkSync(L)` | `removed` **and** `removedSet.add(L)` | none | The link is in the `wienerdog-` namespace, directly under a harness skills root, **and** provably resolves to the source we recorded. This is the only row that deletes. |
 
-**Row 3 has two sub-tests on purpose, and the order is fixed: realpath first,
-lexical second.**
+**Row 3 is a SINGLE test — `sameResolvedDir` — and the lexical
+`readlinkSync(L) === T` fallback was REMOVED (gate round 11).** An earlier
+revision made row 3 `sameResolvedDir(L, T) === false && readlinkSync(L) !== T`,
+justified as *"for our own link on a hand-deleted core, `realpath(T)` throws so
+the realpath test cannot succeed — without the fallback uninstall would leave its
+own dangling links behind."* **Both halves of that justification are false, and
+the implementer and wd-reviewer confirmed it independently on PR #137:**
 
-- `sameResolvedDir(L, T)` is `realpath(L) === realpath(T)` (Current state §7).
-  On a symlink, `realpath` follows the link — so this is the *semantic* proof and
-  it matches what every other reverser in this file uses.
-- The lexical fallback `fs.readlinkSync(L) === T` exists for **one** reachable
-  case: the user deleted the core by hand and then ran `uninstall`, so
-  `realpath(T)` throws and the realpath test cannot succeed for *our own* link.
-  Without the fallback, `wienerdog uninstall` would leave its own dangling links
-  behind on that path. **The fallback does not widen the delete authority**,
-  because row 4's `OWNED(L)` gate is evaluated regardless of which sub-test
-  matched. (An earlier revision justified this with *"`T` is a value only
-  Wienerdog ever wrote"* — **false**, and corrected under "Why row 4 exists".)
-- Both are **string/inode equality only**. Do **not** add a prefix, `startsWith`,
-  `path.relative`, or "is under the core" test **on the TARGET side** — an
-  ancestor-scoped target test would authorize deleting any link pointing anywhere
-  inside the core, which is a larger permission than "the link we recorded".
-  (Row 4's `OWNED(L)` gate is a constraint on the **link's own location**, not on
-  where it points, and it only ever *narrows* row 5.)
+- `reverseSymlink` is reached in production **only** through `reverse()`'s symlink
+  arm (`manifest.js:718-729`), which **first** calls
+  `withinAllowedRoot(target, …)` at `:722`. That resolves through
+  `contains()` → `fs.realpathSync(inner)` (`:886`), which **follows the link** and
+  **throws `ENOENT` on a dangling link**; the `catch` at `:887-888` returns
+  `false`, and the entry is preserved at `:726` — **before `reverseSymlink` ever
+  runs**. So the "hand-deleted core" case never reaches the fallback.
+- Therefore uninstall leaves its own dangling links behind **regardless** of the
+  fallback — at the upstream gate. The fallback changed **no production
+  behavior**; it was handling a scenario impossible through the only production
+  path, which **CLAUDE.md forbids** (*"No error handling for impossible
+  scenarios"*).
+
+Dropping it makes `reverseSymlink`'s dangling-link behavior (**preserve**, via
+row 3) *consistent* with the upstream reality, and it removes V4's now-misleading
+`readlinkSync` grep mandate (a grep for a branch production cannot reach). **This
+is not a behavior change** — dangling OWNED links are preserved with or without
+the fallback, equal to base `b3a53bc` (which also leaves them, for the same
+reason). See the gate-round-11 provenance entry.
+
+- `sameResolvedDir(L, T)` is `realpath(L) === realpath(T)` (Current state §7): on
+  a symlink `realpath` follows the link, so this is the *semantic* proof, and it
+  matches every other reverser in this file.
+- Do **not** re-add the lexical fallback, and do **not** add a prefix,
+  `startsWith`, `path.relative`, or "is under the core" test **on the TARGET
+  side** — an ancestor-scoped target test would authorize deleting any link
+  pointing anywhere inside the core, a larger permission than "the link we
+  recorded". (Row 4's `OWNED(L)` gate constrains the **link's own location**, not
+  where it points, and only ever *narrows* row 5.)
 
 ### Why row 4 exists — a target match is not delete authority
 
@@ -481,20 +498,49 @@ created. Found by the Codex leg of gate round 4.
 - **In scope, and now closed:** a manifest forgery that names a symlink **outside
   the `wienerdog-` namespace**, or one **not directly under a harness skills
   root**. Those land in row 4 and are preserved.
-- **Residual, accepted and bounded:** an attacker who can write the manifest
-  **and** create (or already has) a symlink named `wienerdog-*` **directly under
-  a harness skills root** can still cause that one link to be removed. The blast
-  radius is exactly the `wienerdog-` namespace in two directories the user gave
-  us — it cannot reach `~/.ssh`, a dotfile, or any link the user did not name
-  after us.
-- **This is strictly stronger than what ships today.** At `e7c845e`
-  `reverseSymlink` unlinks **any** symlink at a recorded path with no basename
-  test, no parent test and no target test (Current state §1). Row 4 is a
-  narrowing, never a widening, so no forgery that fails today succeeds after this
-  WP.
-- **Not closed, and deliberately:** the manifest has no integrity protection at
-  all. Signing or HMAC-ing it is a different design with its own review —
-  `reverseCopiedSkill` lives with the same residual for the same reason.
+- **Residual, accepted and bounded — `OWNED` + target-match is not proof of
+  authorship.** Row 4 requires the link to be `wienerdog-*`-named, directly under
+  a harness skills root, **and** to resolve to the recorded source. A link that
+  meets all three can still be **the user's**, and it is removed. Codex (gate
+  round 11) named the two concrete honest-use cases, and they are recorded here so
+  no later round re-raises them as new:
+  1. **Same-source replacement.** The user deletes our `wienerdog-foo` link and
+     re-creates their own `wienerdog-foo` pointing at the **same** core source.
+     It resolves to `T`, so row 5 removes it — even though the *current* bytes are
+     the user's link, not ours.
+  2. **Pre-existing exact-target adoption.** The user already had a
+     `wienerdog-foo` link at the harness path pointing at our source *before* we
+     synced; `applySkillLinks`' adopt-existing branch (`shared.js:397-399`)
+     recorded it as ours. Uninstall removes a link the user created.
+  In both, target-equality is standing in for authorship, and it cannot
+  distinguish "our link" from "a user link that happens to resolve to the same
+  place". The blast radius is exactly the `wienerdog-` namespace in the two
+  directories the user gave us — it cannot reach `~/.ssh`, a dotfile, or any link
+  the user did not name after us.
+- **Equal-or-stronger than shipped base.** At `e7c845e` `reverseSymlink` unlinks
+  **any** symlink at a recorded path with **no** basename, parent or target test
+  (Current state §1) — so base removes both Codex cases too, *and* every other
+  recorded-path link. Row 4 only ever **narrows**; no link preserved by base
+  becomes deletable, and many that base deletes are now preserved. This residual
+  is therefore never a regression.
+- **Full close routed to `WP-forward-time-ownership-provenance`.** Closing it
+  needs **authorship** evidence that target-equality cannot supply: record the
+  link's `lstat` **device + inode** at forward creation time, and require
+  *identity AND target* to match before unlink, failing closed where stable
+  identity cannot be established (a re-created link gets a new inode; an adopted
+  pre-existing link never had ours recorded). That is a **forward-time** change —
+  the same shape as `WP-managed-block-insertion-anchor` (record more identity when
+  we write, so ownership survives later user edits). **Architect's routing call:
+  one WP covers both** — symlink inode-identity and managed-block insertion-anchor
+  are the same mechanism (forward-time ownership provenance) applied to two
+  reversers — with a note that it may split in review if the two diverge. It is
+  **not** a fold-in to WP-153: it changes the forward path (`applySkillLinks`) and
+  the manifest schema, well outside this WP's Deliverables.
+- **Not closed by manifest integrity, and deliberately.** Signing/HMAC-ing the
+  manifest is a different design with its own review; `reverseCopiedSkill` lives
+  with the same residual for the same reason (its `hash` is read from the same
+  untrusted file). Inode-identity closes *authorship* even on a fully forgeable
+  manifest, which integrity alone does not.
 
 **This does NOT re-litigate the owner ruling.** Gyula declined the structural arm
 for **legacy (target-less)** entries — Table A **row 2**, which is untouched and
@@ -731,9 +777,13 @@ WP only adds `target` to the three `recordOnce` calls in that same file.
 
 - No new npm dependency and no new `require` in either source file. `manifest.js`
   already requires `node:fs` and `node:path`.
-- Guard the lexical fallback: `fs.readlinkSync` throws on a dangling-parent or
-  permission error, so it must sit inside a `try`/`catch` whose `catch` yields
-  "no match" (→ Table A row 3 → preserve).
+- **`reverseSymlink` is `module.exports`-ed** (blessed deviation, gate round 11):
+  it mirrors the already-exported sibling reversers (`reverseCopiedSkill`,
+  `reverseVendoredTree`), and the export is what lets T1/T2/T4/T7 unit-test the
+  rows directly rather than plumbing every case through `reverse()`.
+- **No lexical `readlinkSync` fallback** (gate round 11) — row 3 is
+  `sameResolvedDir` alone. A dangling link is preserved, which matches what
+  `reverse()` already does upstream. Do not re-introduce it (Table A row 3).
 - `dryRun` changes **only** whether `fs.unlinkSync` runs (Table A row 5). The
   bucket assignment is identical in both modes, exactly as today.
 - No daemon, no watcher, no telemetry, no background process (ADR-0004).
@@ -754,7 +804,7 @@ harness skills root** (`<claudeDir>/skills` or `<codexDir>/skills`); see
 | T1 | `tests/unit/manifest.test.js` | **OWNED** | **The regression, red-first.** Manifest holds `{kind:'symlink', path: L, target: T}`; the user has replaced `L` with a symlink to their own directory. `reverse()` leaves `L` on disk, its readlink unchanged, and reports it in `skipped`, not `removed`. | Table A row 3 |
 | T2 | `tests/unit/manifest.test.js` | **OWNED — required** | **No regression.** `L` is still our own unmodified link to `T`. `reverse()` unlinks it and reports it in `removed`. Repeat with `dryRun: true`: `L` still exists, and it is still reported in `removed`. **`L` must be `wienerdog-<name>` directly under a harness skills root**, or row 4 preempts row 5 and the delete assertions fail. | Table A row 5 |
 | T3 | `tests/unit/manifest.test.js` | n/a — row 2 precedes row 4 | **Legacy.** The entry has no `target` at all. `reverse()` leaves `L` on disk and reports it in `skipped`, whatever `L` currently points at (assert both: pointing at `T`, and pointing elsewhere). | Table A row 2 |
-| T4 | `tests/unit/manifest.test.js` | **OWNED — required** | **Dangling core.** The entry carries `target: T`, `L` is still our link with `readlink(L) === T`, but `T` has been removed from disk. `reverse()` still unlinks `L` (the lexical fallback), and reports it in `removed`. **Same location precondition as T2** — an unOWNED fixture is preserved by row 4 and the test asserts nothing about the fallback. | Table A row 3 (lexical fallback) → row 5 |
+| T4 | `tests/unit/manifest.test.js` — **DIRECT unit test of `reverseSymlink`** (blessed deviation, gate round 11) | **OWNED, dangling** | **Dangling core, PRESERVED.** The entry carries `target: T`, `L` is still our link with `readlink(L) === T`, but `T` has been removed from disk so `L` dangles. Assert `reverseSymlink` (called directly) leaves `L` on disk and reports it in `skipped`. **This is the reality, and it matches `reverse()`:** a dangling link never reaches `reverseSymlink` through `reverse()` — `withinAllowedRoot`'s `realpathSync` throws `ENOENT` and the entry is preserved at the upstream gate (`manifest.js:722-726`). Asserted at the `reverseSymlink` level because that reality cannot be reached through `reverse()` at all. **An earlier revision had T4 assert `reverse()` unlinks `L` via a lexical fallback — unsatisfiable and now removed** (see Table A row 3). | Table A row 3 → preserve |
 | T5 | `tests/unit/shared-skill-links.test.js` | n/a — sync side | **An EDIT to three shipped assertions, not a new test.** All three facts — which test, which producer branch, which expected object, and what the source path is called *in that test's scope* — are in **Table T**. Do not derive any of them from prose. | Table B, Table T |
 | T6 | `tests/unit/manifest.test.js` | **OWNED — the fixture path CHANGES** | **Vacuity repair, required.** `:297-312` (`global guard (iii): a {kind:symlink} whose path resolves to a deferred member is never unlinked`) records a target-less symlink at `<core>/ledger-link` → `paths.manifest`. After this WP that fixture is **doubly vacuous**: row 2 preserves it as legacy, **and** row 4 preserves it because `<core>/ledger-link` is not OWNED — so the guard-removed red run cannot be produced at all. **Move the link to `<claudeDir>/skills/wienerdog-ledger` → `paths.manifest` and give the entry `target: paths.manifest`.** It is then OWNED and target-matched, reaches **row 5**, and the deferred-member guard is once again the only thing between it and `fs.unlinkSync`. Assert the same outcomes as today (`:308-311`). | vacuity of the shipped guard |
 | T7 | `tests/unit/manifest.test.js` | **NOT-OWNED — that is the point** | **Forged `(path, target)` pair — the adversarial row.** Create a symlink the *user* owns, named **without** the `wienerdog-` prefix (e.g. `my-notes`), directly under a harness skills root. Hand-write `{kind:'symlink', path: <that link>, target: <its actual destination, read off the link>}` — a forgery in which rows 1–3 all pass. `reverse()` must **preserve** it: the link still exists, its readlink is unchanged, and it is reported in `skipped`. **Second case:** a `wienerdog-`-prefixed link **one directory deeper** than a skills root — also preserved. **Red-first**: against a row-4-less reverser both are unlinked. **See the destination precondition below — it is not optional.** | Table A row 4 |
@@ -808,14 +858,18 @@ does, by design (Current state §3).
       harness skills root — because the manifest is untrusted and an attacker can
       forge a `(path, target)` pair that satisfies rows 1–3 for **any** user
       symlink (they read `target` off the link). Pinned by **T7**.
-- [ ] **The declared residual is stated, not implied**: a forgery naming a
-      `wienerdog-*` link **directly under a harness skills root** can still remove
-      that one link. Bounded to the `wienerdog-` namespace in the two directories
-      the user gave us, and **strictly narrower than the shipped behaviour**,
-      which unlinks any symlink at a recorded path with no test at all.
+- [ ] **The declared residual is stated, not implied**: a `wienerdog-*`-named
+      link **directly under a harness skills root that resolves to the recorded
+      source** can be removed even when the user made it — whether a
+      **same-source replacement** of our link or a **pre-existing exact-target
+      adoption** (Codex, gate round 11; see the tightened residual under "Why
+      row 4 exists"). Bounded to the `wienerdog-` namespace in the two
+      directories the user gave us, and **equal-or-stronger than shipped base**,
+      which unlinks any symlink at a recorded path with no test at all. Full close
+      routed to `WP-forward-time-ownership-provenance`.
 - [ ] Every error path in Table A lands in *preserve*, never in *delete*:
-      `sameResolvedDir` catches and returns `false`, and the lexical fallback's
-      `catch` yields no match.
+      `sameResolvedDir` catches and returns `false` (row 3), so a dangling or
+      unresolvable link is preserved.
 
 ## Acceptance criteria
 
@@ -877,8 +931,15 @@ grep -c "kind: 'symlink', path: linkPath }" src/adapters/shared.js
 grep -n "symlink: { target: 'string' }," src/core/manifest.js
 
 # V4 — the reverser consults the recorded target (Table A rows 3+5). Expect a
-# `sameResolvedDir` and a `readlinkSync` inside the reverseSymlink body.
-sed -n '/^function reverseSymlink/,/^}/p' src/core/manifest.js
+# `sameResolvedDir` inside the reverseSymlink body. There is NO `readlinkSync`
+# fallback — it was removed as unreachable-through-production (gate round 11), so
+# do NOT grep for one; its presence would mean the dead branch was re-added.
+BODY0=$(sed -n '/^function reverseSymlink/,/^}/p' src/core/manifest.js)
+printf '%s\n' "$BODY0" | grep -qF "sameResolvedDir" || {
+  echo "REGRESSED: reverseSymlink no longer consults sameResolvedDir"; exit 1; }
+printf '%s\n' "$BODY0" | grep -q "readlinkSync" && {
+  echo "REGRESSED: lexical readlinkSync fallback re-added (dead through production)"; exit 1; }
+echo "V4 ok — sameResolvedDir present, no dead lexical fallback"
 
 # V4b (Table A row 4) — a target match alone is NOT delete authority. Expect the
 # structural gate inside the reverseSymlink body: the wienerdog- basename test
@@ -899,8 +960,9 @@ npm run lint
 `0` then `3` (inverted from the finished state). **V3 prints nothing and exits
 1** — verified; the loose `grep -n "symlink: {"` form it replaced printed
 `809:  symlink: {},` and was therefore green before any work. V4 prints the
-nine-line pre-change body with no `sameResolvedDir` and no `readlinkSync`.
-**V4b exits 1 with**
+nine-line pre-change body with no `sameResolvedDir` (so V4's first grep is
+red-before-work), and it contains no `readlinkSync` (so V4's absence check is
+green on base and must stay green). **V4b exits 1 with**
 `REGRESSED: row 4 ownership gate missing: startsWith('wienerdog-')` — verified.
 
 ## Out of scope (do NOT do these)
@@ -1106,3 +1168,55 @@ of scope is that the owner declined one, not that `sync` already does it.
 >   — a fixture whose reachability nobody had written down — so the column makes
 >   the next Table A change surface its test impact mechanically instead of by
 >   review.
+>
+> **2026-08-02 — PR #137 implementation double gate; two spec-hygiene follow-ups.
+> NOT blocking (both legs cleared — wd-reviewer APPROVE with an adversarial
+> harness proving the `OWNED` gate preserves non-`wienerdog` links and only
+> narrows base; Codex needs-attention is the declared residual). Batched.**
+>
+> - **T4 / row-3-fallback spec defect — CONFIRMED by implementer and wd-reviewer
+>   independently. Decision: (a), drop the fallback.** `reverse()`'s symlink arm
+>   computes `target` from `realpathSync(dirname) + basename` and passes it to
+>   `withinAllowedRoot` → `contains()` → `realpathSync`, which **follows the link
+>   and throws `ENOENT` on a dangling link**; the entry is preserved at the
+>   upstream gate (`:722-726`) **before `reverseSymlink` runs**. Consequences, all
+>   corrected: (a) T4's *"reverse() still unlinks L"* was **unsatisfiable** at the
+>   `reverse()` level — the implementer correctly made it a **direct** unit test of
+>   the now-exported `reverseSymlink`, and its assertion is flipped to
+>   **PRESERVED** (matching the upstream reality); (b) Table A row 3's justification
+>   *"without the fallback uninstall would leave its own dangling links behind"*
+>   was **false** — uninstall leaves them regardless, at the gate — and is removed;
+>   (c) the `readlinkSync` lexical fallback and V4's `readlinkSync` grep mandated a
+>   branch **unreachable through the only production path**, which CLAUDE.md forbids
+>   (*"no error handling for impossible scenarios"*), so both are dropped. Row 3 is
+>   now `sameResolvedDir` alone; V4 asserts `sameResolvedDir` present **and**
+>   `readlinkSync` absent. **Zero production-behavior change** — dangling OWNED
+>   links are preserved with or without the fallback, equal to base `b3a53bc`.
+>   **Two implementer deviations formally blessed:** `reverseSymlink` added to
+>   `module.exports` (mirrors the already-exported sibling reversers; forced by the
+>   unreachable-through-`reverse()` case) and **T4-as-direct-unit-test**.
+> - **Codex inode-identity finding — residual TIGHTENED, full-close ROUTED.**
+>   Codex argued target-equality is not authorship: a `wienerdog-*`-named link
+>   under a skills root resolving to the recorded source passes row 4 and is
+>   deleted **even when the user made it** — the two honest-use cases
+>   (same-source replacement; pre-existing exact-target adoption via
+>   `shared.js:397-399`) are now named in the residual. wd-reviewer confirmed both
+>   are **within the already-declared residual** and that WP-153 only **narrows**
+>   base (base deletes any recorded-path symlink with zero ownership check). The
+>   residual statement now spells out the two cases and the **equal-or-stronger
+>   than base** fact. **Full close routed to `WP-forward-time-ownership-provenance`**
+>   — record `lstat` device/inode at forward creation, require identity AND target
+>   before unlink, fail closed where stable identity can't be established. **Routing
+>   call: ONE WP** covers both this and `WP-managed-block-insertion-anchor` — they
+>   are the same shape (record more identity at forward time so ownership survives
+>   later user edits) — with a note it may split in review if the two mechanisms
+>   diverge.
+>
+> **Owner-FYI (flagged, NOT gated; same register as the WP-147 residual flag):**
+> *WP-153 leaves a namespace-bounded symlink-ownership residual — a
+> `wienerdog-*`-named link under a skills root resolving to our source can be
+> removed even if the user made it — strictly stronger than shipped 0.12.0; full
+> close routed to `WP-forward-time-ownership-provenance`.* Not an owner decision:
+> it is equal-or-stronger than base, so there is no new cost to ratify (contrast
+> WP-153's legacy ruling, which accepted a new cost); flagged only because
+> reversibility is IRON-RULE-adjacent.
