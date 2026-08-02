@@ -508,10 +508,11 @@ history of the branch that did not occur. Definition of done item 9 is now a
 
 **Sizing (recorded, not left implicit).** One new pure function plus its export in
 `generators.js`; six one-token call-site swaps in `schedule.js`; one test file
-extended. No renderer, no descriptor, no ADR, no glossary, no runbook. **M** — one
-session. It is not split further: the function and its six call sites are
-meaningless apart, and splitting them would ship an exported function nothing
-calls.
+extended; **plus seven one-token oracle swaps across two further test files
+(D3/D4, the 2026-08-02 boundary amendment below)**. No renderer, no descriptor, no
+ADR, no glossary, no runbook. **M** — one session. It is not split further: the
+function and its six call sites are meaningless apart, and splitting them would
+ship an exported function nothing calls.
 
 **Re-confirmed 2026-08-02 against `1093e51` (PR #140).** The sizing is
 **unchanged**: still six sites, still one-token swaps, still no new file. PR #140
@@ -525,6 +526,8 @@ adds the D2 consistency rule rather than a new deliverable.
 | modify | src/scheduler/generators.js | **D1** — add `entryNodePath(execPath?, opts?)` per Table A and export it. `nodePath()` keeps its body **byte-for-byte** (Table A row 6, Table B row 2). No renderer, no other function. |
 | modify | src/cli/schedule.js | **D2** — replace `gen.nodePath()` with `gen.entryNodePath()` at exactly the six ENTRY sites, **re-anchored to `1093e51`: `:477`, `:536`, `:611`, `:856`, `:885`, `:970`** (Current state §2; `5f0ffc0`'s `:303 :342 :417 :638 :667 :752` are dead line numbers — do not use them). Nothing else in this file changes: **no change to `ensureDarwinEntryRegistered`, `darwinLoadedVerdict`, `darwinReplaceEntry`, the `plutil` preflight, the linux `reloadOk`/`enableOk` gate**, no probe change, no notice change. |
 | modify | tests/unit/scheduler-generators.test.js | **T1, T2, T4 and T5** — the exact set in the Test index. **There is no T3** (round 1's descriptor-digest test was vacuous and is deleted — see AC5), and **T5 is not optional**: it is the ONLY detector for Table E row 7, the role split. Building T1/T2/T4 without T5 reproduces the round-1 test set that shipped an undetectable mutation. The existing test at `:421` (`nodePath/wienerdogBin are absolute`) must pass **unmodified** — and note it does **not** protect the role split, which is exactly why T5 exists. |
+| modify | tests/unit/scheduler-schedule.test.js | **D3 / T6 — architect boundary amendment, 2026-08-02.** Exactly the **six** oracle sites **Table H** rows 1-6 enumerate, and nothing else: `gen.nodePath()` → `gen.entryNodePath()` at each, plus the one added `//` comment line per site. **Table H is the authority — this cell carries no site list of its own.** No new test, no deleted test, no renamed subtest, no helper signature change, no `fakeLaunchd`/`buildPrintStdout`/`printStdoutFromPlistXml` change, and **no change to any of the seven `process.execPath` occurrences** (RUNTIME role — Table B row 2). The collision was discovered at `npm test` time on the authoring host, not at spec time; the full record, the decision and the rejected alternatives are in Implementation notes → **D3/D4**. |
+| modify | tests/unit/sync-repoint.test.js | **D4 / T7 — architect boundary amendment, 2026-08-02.** Exactly the **one** oracle site **Table H** row 7 enumerates, plus its added `//` comment line. Nothing else in this file: no other test, no `primaryEntry`/`runSync` helper change, no fixture change, no `oldNode` change. Same record as D3. |
 
 Not deliverables, deliberately: `src/scheduler/descriptor.js`,
 `src/scheduler/status.js`, `src/scheduler/launcher.js`, `src/cli/run-job.js`,
@@ -532,10 +535,33 @@ Not deliverables, deliberately: `src/scheduler/descriptor.js`,
 `docs/adr/0028-scheduler-app-executable-integrity.md`,
 `docs/adr/0018-windows-scheduled-dreaming.md`,
 `docs/runbooks/scheduler-and-executable-integrity.md`,
-`tests/unit/scheduler-schedule.test.js`, `tests/unit/sync-repoint.test.js`,
-`tests/unit/descriptor.test.js`. Several of those contain assertions that must
-pass **unmodified** — that is this WP's proof that nothing else moved. See "Out of
-scope" for why each is untouched.
+`tests/unit/descriptor.test.js`, and — **added 2026-08-02 with the D3/D4
+amendment, because promoting two scheduler test files must not read as promoting
+all of them** — `tests/unit/scheduler-entry-identity.test.js`, whose shipped test
+`entry-identity: a systemd entry yields unknown, not a health claim` (`:423-430`)
+Table C's row-6 note relies on being unchanged.
+*(Removed from this list on the same date, into the Deliverables table above:
+`tests/unit/scheduler-schedule.test.js` and `tests/unit/sync-repoint.test.js` —
+Table H, Implementation notes → D3/D4.)*
+
+**What the untouched-assertions proof now claims — RESTATED 2026-08-02, and
+NARROWED.** This paragraph used to end: *"Several of those contain assertions that
+must pass **unmodified** — that is this WP's proof that nothing else moved",* with
+`tests/unit/scheduler-schedule.test.js` and `tests/unit/sync-repoint.test.js` named
+in the list above it. **That claim was host-shape-dependent and is withdrawn**
+(Implementation notes → D3/D4). The honest replacement, which is what AC10 and
+V8/V8b assert:
+
+> Every file still listed above contains assertions that must pass
+> **unmodified** — and in the two files promoted to Deliverables, **no assertion
+> changes at all: the only edits are the seven oracle-expression swaps Table H
+> enumerates.** The proof narrows from *"nothing else moved"* to
+> **"nothing moved beyond the enumerated oracle swaps"**, and that narrower claim
+> is now **mechanically checkable** (V8b: every `+`/`-` line in those two files
+> either contains a `nodePath` token or is an added comment) rather than resting
+> on the files' absence from this table.
+
+See "Out of scope" for why each remaining file is untouched.
 
 ### Exact contracts
 
@@ -614,10 +640,11 @@ surface and one of two now-distinct node-path roles is re-pointed at it;
 decide whether the alias or `execPath` wins, and the fail-safe direction must be
 identical in all **five** failure conditions; (vii) the same rule is restated
 across Deliverables cells, acceptance criteria, verification greps, Current-state
-and the operative prose. **Six canonical tables** below (A: the return rule; B:
+and the operative prose. **Seven canonical tables** below (A: the return rule; B:
 the role split; C: post-`sync` convergence; D: what `sync` reports; F: the fixture
-arithmetic; **G (added 2026-08-02): the macOS readback-echo premise**); every
-mirror is registered under them.
+arithmetic; **G (added 2026-08-02): the macOS readback-echo premise**; **H (added
+2026-08-02): the authorized test-oracle sites**); every mirror is registered under
+them.
 
 Round 1 shipped only A and B, and the review found the consequences in exactly the
 places the missing tables would have covered: the convergence limitation lived in
@@ -773,7 +800,7 @@ shipped two that were not, and AC9 copies this table into the merge artifact).
 The **OS calls** column below is scoped to the **per-job helper**
 (`ensureDarwinEntryRegistered`, one invocation), **not** to a whole `sync` run.
 That is deliberate, and it follows the landed sibling's own canonical rule
-(`docs/specs/done/WP-scheduler-register-replaces-loaded-record.md:1881-1883`),
+(`docs/specs/done/WP-scheduler-register-replaces-loaded-record.md:1880-1883`),
 quoted verbatim:
 
 > *"A full darwin `registerPlatform` on an unchanged healthy install therefore
@@ -876,9 +903,96 @@ falsified it. A fake cannot test an assumption about the real system it stands i
 for. **P is now known true from the real system, not from the fake** — cite
 Current state §9 in the PR, never the suite.
 
+### Table H — the authorized test-oracle sites (canonical; NEW 2026-08-02)
+
+**Why this table exists.** `tests/unit/scheduler-schedule.test.js` and
+`tests/unit/sync-repoint.test.js` were on this spec's **not-deliverables** list,
+whose stated role was *"assertions that must pass unmodified — the proof nothing
+else moved"*. With D1/D2 implemented, **15 of their tests fail on a Homebrew macOS
+host and pass on a CI runner**, because seven expressions in them use
+`gen.nodePath()` as the oracle for *what a freshly-written entry embeds* — and that
+is now `gen.entryNodePath()`. The boundary did not anticipate it; the amendment is
+recorded in Implementation notes → **D3/D4**. This table is the **bounded
+enumeration** that replaces the withdrawn blanket claim.
+
+**How to read it.** Every authorized site is a row. **Every row is one expression
+swap — `gen.nodePath()` → `gen.entryNodePath()` — plus at most one added `//`
+comment line above it.** Nothing else in either file changes: no assertion text, no
+expected value, no test name, no helper signature, no fixture, no
+`fakeLaunchd` / `buildPrintStdout` / `printStdoutFromPlistXml` change, and none of
+the **seven `process.execPath` occurrences** in `scheduler-schedule.test.js`
+(`:398`, `:422`, `:460`, `:633`, `:769`, `:808`, `:1148` — RUNTIME-role argv for a
+spawned test child, Table B row 2). **A site not in this table is out of the
+permission boundary**, exactly as with Table E. V8 and V8b make both halves
+mechanical.
+
+`main` line numbers are `origin/main` @ `179173b`; `branch` line numbers are this
+branch after the swap (they shift by the added comment lines, and are given so a
+reader can find the site — they are not the contract; the expression and its role
+are).
+
+| # | File | `main` | branch | The expression | Its role — what the test uses it for | Class | Red on the authoring host? |
+|---|------|--------|--------|----------------|--------------------------------------|-------|----------------------------|
+| 1 | `tests/unit/scheduler-schedule.test.js` | `:1254` | `:1255` | `const stableNode = gen.nodePath();` | In `scheduler-schedule: repointSchedules rewrites a stale embedded node path (changed:1)` — the string **split out of the freshly-registered plist** to seed a stale entry, then asserted back in after repoint (`entry now targets the current node`) | **(a)** | **YES** — 1 test |
+| 2 | `tests/unit/scheduler-schedule.test.js` | `:1547` | `:1550` | `darwinJobExpect`'s `const node = gen.nodePath();` | Builds `expect.argv[0]` for the per-job darwin readback. Its JSDoc contract is *"Compute the SAME `expect`-shape values `registerPlatformEntries`'s darwin arm derives"* — and that arm now derives the durable alias | **(a)** | **YES** — feeds all 45 `verified-register:` tests |
+| 3 | `tests/unit/scheduler-schedule.test.js` | `:1569` | `:1573` | `darwinCatchupExpect`'s `const node = gen.nodePath();` | The catch-up analogue of row 2 (`ensureCatchup`'s `expect.argv[0]`) | **(a)** | **YES** |
+| 4 | `tests/unit/scheduler-schedule.test.js` | `:1592` | `:1597` | `canonicalJobPlistContent`'s `const node = gen.nodePath();` | Renders *"the exact plist bytes `registerPlatformEntries`'s darwin arm renders"*, so a test can pre-plant a `changed:false` fixture. On the pinned path those bytes are no longer canonical, `ensureEntry` reports `changed:true`, and the fixture stops being the thing under test | **(a)** | **YES** |
+| 5 | `tests/unit/scheduler-schedule.test.js` | `:2070` | `:2075` | T3 case (xi)'s inline `node: gen.nodePath(),` inside `gen.catchupPlist({…})` | Row 4's job for the catch-up entry, written inline rather than through the helper | **(a)** | **YES** |
+| 6 | `tests/unit/scheduler-schedule.test.js` | `:2090` | `:2095` | T3 case (xii)'s inline `node: gen.nodePath(),` inside `gen.catchupPlist({…})` | Same as row 5, for the `Hour => 0` sibling case | **(a)** | **NO — green, and repaired anyway.** Its expectation is `attempt`, so a stale node merely supplies a *second* reason to attempt: the test stays green **for the wrong reason** and no longer isolates the `Hour`-key rule its name claims to pin. A silently-weakened test is the same defect class as a red one, and leaving row 6 out would make the "every `gen.nodePath()` in these two files" boundary a rule with one unexplained exception |
+| 7 | `tests/unit/sync-repoint.test.js` | `:150` | `:151` | `const stableNode = gen.nodePath();` | In `sync-repoint: rewrites a stale scheduler entry to the vendored bin, then is idempotent` — asserted **present** in the post-`sync` entry (`entry now targets the current node`) after a REAL `sync.run` | **(a)** | **YES** — 1 test |
+
+**Rows 1-6 account for 14 of the failures, row 7 for the 15th.** Rows 2-4 are the
+multiplier: 13 of the 45 `verified-register:` tests are the ones where the node
+divergence flips a verdict (`'match'` → `'mismatch-fatal'`, or `changed:false` →
+`changed:true`). The other 32 already asserted an `attempt`/mismatch outcome that
+the extra divergence does not change — which is why the collision presents as 13
+reds rather than 45.
+
+**Oracle classes considered, and why every site is (a).**
+
+| Class | What it would mean | Verdict |
+|-------|--------------------|---------|
+| **(a) `gen.entryNodePath()`** — the value the renderer now embeds | The oracle names the **contract** (Table B row 1: the ENTRY role's value) rather than reading the implementation's output | **CHOSEN for all seven.** It sits at exactly the same distance from the assertion that `gen.nodePath()` sat at **before** this WP: a pure generator function, called by the test, compared against what `schedule.js` and the register machinery produced. No detection power is lost |
+| **(b)** a value **derived from the rendered output itself** — parse the plist the test just wrote and take `ProgramArguments[0]` | The oracle is read out of the artifact under test | **REJECTED — it destroys the assertion.** For rows 2-4 the entire point of `expect` is to be computed **independently** of the bytes `registerPlatform` writes; deriving it from those bytes makes the FATAL-tier argv comparison self-satisfying and silently deletes T3's whole mismatch matrix. For rows 1 and 7 the assertion *is* "the file now contains the right node path", so an oracle read from that same file is vacuously true |
+| **(c)** something else — a literal, a host probe, a platform branch | e.g. hardcode `/opt/homebrew/opt/node/bin/node`, or branch on `fs.existsSync('/opt/homebrew')` | **REJECTED.** A literal is wrong on every non-Homebrew host and on any other `brew` prefix; a host probe re-introduces precisely the host-shape dependence this amendment exists to remove, and would itself need tests |
+
+**Why (a) is not tautological — stated precisely, because it is the obvious
+objection.** The code under test at these seven sites is `src/cli/schedule.js`'s
+**call site** plus the register machinery around it — **not** `entryNodePath`
+itself, which has its own seam-free detector (T5, Table E row 7) and its own
+twelve-fixture negative sweep (T2). After the swap these tests still go red if
+`schedule.js` stops calling `entryNodePath` at an entry site, if a renderer stops
+interpolating `o.node`, if `expect` and the renderer are built from **different**
+values (Implementation notes §D2's "do not helpfully split them"), or if
+`darwinLoadedVerdict` mis-tiers `program` / `argv[0]`. **Detection power strictly
+increases:** on a Homebrew host, Table E row 8's mutation (revert
+`schedule.js:611` to `gen.nodePath()`) now turns rows 2-4's dependents red **as
+well as** flipping V3's counts, where before the amendment it was judged by reading
+V3's counts alone.
+
+**Consistency with the sibling's `fakeLaunchd` readback — checked, not assumed.**
+`fakeLaunchd` stores the plist bytes at `bootstrap` and answers `print` through
+`printStdoutFromPlistXml`, which renders `program: argv[0] || ''` from those very
+bytes (`tests/unit/scheduler-schedule.test.js:241` — unchanged by this amendment).
+It therefore echoes **whatever the renderer wrote**, so every `fakeLaunchd`-driven
+test is host-shape-independent by construction and needs no site here. The tests
+that needed one are exactly those using `scriptedDarwinLoader` with an `expect`
+built by rows 2-4, where `matchingStdout(expect)` sets
+`program: expect.argv[0]` — so the readback follows row 2/3's value automatically
+and stays consistent with the chosen oracle. **No loader, no double and no stdout
+builder is edited.**
+
+**On a host where `entryNodePath() === nodePath()` the swap is a literal no-op.**
+That is the property that makes it correct rather than merely convenient: on the CI
+runners (`setup-node`; no Homebrew alias resolving to `execPath`) these seven
+expressions evaluate to the same string before and after, so this amendment cannot
+change CI's verdict in either direction. What it removes is the **asymmetry** — a
+proof mechanism that was green on the runners and red on the exact machine class
+this WP was written to protect.
+
 ### Mirrored Surface Checklist
 
-Tables A, B, C, D, F **and G** are the single place these facts are decided. Every
+Tables A, B, C, D, F, G **and H** are the single place these facts are decided. Every
 surface in this spec that restates them is registered below, so one review finding
 updates the table **and** all its mirrors in one pass, and any new mirror found in
 review is added here on the spot. **The five entries marked (+r2) were
@@ -892,12 +1006,26 @@ sibling's landing cannot leave a stale mirror behind. **`(+r5)` entries carrying
 line number are mirrors of Current state's re-anchoring, not of a rule** — they
 move whenever `schedule.js` moves, which is why they are registered.
 
+**(+r7, 2026-08-02) — the mirrors the D3/D4 boundary amendment created or
+invalidated.** Promoting `tests/unit/scheduler-schedule.test.js` and
+`tests/unit/sync-repoint.test.js` from not-deliverables to Deliverables added
+**Table H** and **falsified one existing mirror outright** — the not-deliverables
+paragraph's *"proof nothing else moved"* role. Every surface that restates the
+seven-site enumeration, the two new Deliverables cells, or the narrowed proof
+statement is registered below with a `(+r7)` marker, in the same pass, so the
+amendment cannot leave a stale mirror behind. **The remedial-extraction rule was
+applied, not skipped:** the contract that had leaked into the not-deliverables
+prose is now decided in exactly one place (Table H), and every mirror below defers
+to it.
+
 In this spec:
 
 - [ ] Deliverables cell for `src/scheduler/generators.js` (D1 — "per Table A", `nodePath()` byte-for-byte)
 - [ ] Deliverables cell for `src/cli/schedule.js` (D2 — the six site list, Table B row 1)
 - [ ] **(+r3)** Deliverables cell for `tests/unit/scheduler-generators.test.js` — it mirrors the **Test index** row set (T1/T2/T4/T5) and the "no T3" fact. **This is the mirror whose absence caused a round-2 defect**: the T3→T5 renumbering updated five registered surfaces and missed this unregistered one, leaving the permission-boundary table telling the implementer to build the round-1-failing test set. Registered so the Test index and this cell can never diverge again.
-- [ ] **(+r2)** Deliverables → the **Sizing** paragraph (it restates Table B row 1's "six call sites" count)
+- [ ] **(+r7)** Deliverables cells for `tests/unit/scheduler-schedule.test.js` (**D3 / T6**) and `tests/unit/sync-repoint.test.js` (**D4 / T7**) — both mirror **Table H**'s row set and its "one expression swap plus at most one comment line" rule. **Neither cell carries a site list of its own**, deliberately: the sibling's D6 amendment showed that a Deliverables cell restating an enumeration is exactly the mirror that goes stale (`done/WP-scheduler-register-replaces-loaded-record.md:368` says the same of its Table E). Table H is the authority
+- [ ] **(+r7)** Deliverables → the **not-deliverables paragraph's proof-role statement**. This is the mirror the amendment **falsified**: it claimed the two files' unmodified assertions were *"this WP's proof that nothing else moved"*, which stopped being true the moment D1/D2 landed on a Homebrew host. The withdrawn sentence is quoted in place and replaced by the narrowed claim — *no assertion changes beyond the enumerated oracle swaps* — which **AC10** asserts and **V8/V8b** make mechanical. **The three must never disagree about the scope of the claim**
+- [ ] **(+r2, +r7)** Deliverables → the **Sizing** paragraph (it restates Table B row 1's "six call sites" count, **and now Table H's seven-site count**)
 - [ ] "Exact contracts" JSDoc block, its default-parameter note (Table A row 1) and its input → output pairs (Table F)
 - [ ] "Exact contracts" literal `.plist` fragment (the `--expect-digest`-unchanged claim, Table A row 6)
 - [ ] Current state §2 (the ENTRY/RUNTIME site classification — Table B) — **(+r5)** and its NEW hoisted-`const node` sub-table, which is the mirror of Implementation notes §D2's dual-consumer rule
@@ -905,19 +1033,25 @@ In this spec:
 - [ ] **(+r5)** Current state §8 — **REWRITTEN against `ensureDarwinEntryRegistered`**; it is the mechanism behind Tables C and D and must be re-read whenever either moves. Its `5f0ffc0` text is retained in a quote block, not deleted
 - [ ] **(+r5)** Current state §9 — **the executed record of the scratch-label experiment that settled Table G's premise (P is TRUE, 2026-08-02)**. Table G decides; §9 records what was run, by whom, and the teardown. **Registered because Table G's Status row and §9 must move together**: if the premise is ever re-opened (a launchd behavior change), both flip, plus every mirror below
 - [ ] **(+r5, updated 2026-08-02)** **AC6**'s non-claim bullet — it cited Table G's premise as unverified and now must not; and the **Convergence** section heading paragraph, which states the premise's settled status
-- [ ] **(+r6, 2026-08-02, from the light gate)** **Table D's OS-call lists** — D-a's call-count scoping paragraph, D-a's steady-state cell, D-c's `plutil` cell, Table D's RECONCILED preamble bullet ("a later `sync` makes two read-only `print`s"), **Table G's "If P is TRUE" row**, and **AC9's reproduction requirement**. All six state the same two facts — *the `plutil` preflight (`:201-203`) runs before the teardown guard (`:208`)*, and *a full darwin `sync` issues **two** read-only `print`s, one per helper*. Registered because the gate found **two** of them wrong while the others were right: a call list is a contract here, since AC9 makes the implementer copy it into the merge artifact verbatim. The full-path count is the **landed sibling's** canonical property (`done/WP-scheduler-register-replaces-loaded-record.md:1881-1883`) — derive from it, never restate it independently
+- [ ] **(+r6, 2026-08-02, from the light gate)** **Table D's OS-call lists** — D-a's call-count scoping paragraph, D-a's steady-state cell, D-c's `plutil` cell, Table D's RECONCILED preamble bullet ("a later `sync` makes two read-only `print`s"), **Table G's "If P is TRUE" row**, and **AC9's reproduction requirement**. All six state the same two facts — *the `plutil` preflight (`:201-203`) runs before the teardown guard (`:208`)*, and *a full darwin `sync` issues **two** read-only `print`s, one per helper*. Registered because the gate found **two** of them wrong while the others were right: a call list is a contract here, since AC9 makes the implementer copy it into the merge artifact verbatim. The full-path count is the **landed sibling's** canonical property (`done/WP-scheduler-register-replaces-loaded-record.md:1880-1883`) — derive from it, never restate it independently
 - [ ] **(+r5)** Table C's reconciliation preamble (the row-4 / row-5 verdict-change table) and Table D's reconciliation preamble — these are the dated records of the two settled rows that changed outcome; neither may be silently folded into the tables they precede
 - [ ] Implementation notes §D1 (the derivation, the `parts.length < 6` spelling of row 2, the anti-`indexOf` rule from Table E row 4), §"Why the descriptor field stays" (row 6), §"Windows" (row 1), §"Convergence — governed by Table C" (which now cites C and D instead of restating them)
 - [ ] Design space → option (a) (the alias mechanism is rows 5–6)
 - [ ] Security checklist bullets 1 and 2 (rows 3, 4 and 5 — which of them is the security boundary)
 - [ ] Acceptance criteria AC1 (rows 5–6), AC2 (rows 1–4 via Table F), AC3 (Table B row 1), AC4 (Table B row 2 **and**, as the spec's only seam-free assertion of them, Table A rows 5-6), AC5 (Table A row 6), AC6 (idempotence, and its explicit non-claim about Tables C/D), AC9 (Tables C and D reproduced in the PR) — **(+r5)** AC9 now also mirrors Table C row 5's flipped verdict, Table D's discharged false-success finding and **Table G**'s premise — **which is SETTLED TRUE as of 2026-08-02, so AC9 sub-item (iv) reports it as executed, never as unverified**
-- [ ] Verification commands V3 (Table B row 1 count), V4 (Table B row 2 preservation), V5 + V5b (Table A row 6 preservation and AC5's zero-coupling argument)
+- [ ] **(+r7)** **AC10** (Table H's seven sites, the narrowed proof statement) and **Table H itself** — AC10 is the criterion, Table H the enumeration. AC10 states no site list; it points at the table
+- [ ] Verification commands V3 (Table B row 1 count), V4 (Table B row 2 preservation), V5 + V5b (Table A row 6 preservation and AC5's zero-coupling argument) — **(+r7)** and **V5's expected file list**, which is a mirror of the Deliverables row count and moved from **three files** to **five** when D3/D4 landed
+- [ ] **(+r7)** Verification commands **V8** (Table H's four `main`-vs-branch counts, plus the `process.execPath` preservation pair) and **V8b** (the "everything else stays unchanged" half). Together they are the mechanical form of Table H, and of the narrowed proof statement in the not-deliverables paragraph. **V7's `boundary-check.js` argument list is also a mirror** — it must name all five Deliverables files, or the gate silently checks a subset
+- [ ] **(+r7)** Test index rows **T6** and **T7**, and the naming-rule exemption immediately under the table: T6/T7 add no `node-path-durability:`-prefixed subtest, so **V2's `>= 4` threshold is unaffected by them** and must not be raised on their account
 - [ ] **(+r2)** Verification command V2 (its `>= 4` threshold mirrors the Test index row count — note T5 is **skipped** on win32, so a win32 run legitimately reports one fewer)
 - [ ] **(+r4)** T5's POSIX-only platform gate — stated in **AC4**, the **Test index** T5 cell, and **Table E row 7**'s scope column; all three must move together
-- [ ] Table E mutation rows 1–8; the Table F fixture references belong to **rows 4-6 only** (rows 1, 2, 3, 7 and 8 are driven by T1/T5/V3 and cite no Table F fixture)
+- [ ] Table E mutation rows 1–8; the Table F fixture references belong to **rows 4-6 only** (rows 1, 2, 3, 7 and 8 are driven by T1/T5/V3 and cite no Table F fixture) — **(+r7)** and row **8**'s redness claim, which Table H's "detection power strictly increases" paragraph extends: on a Homebrew host that mutation now also reddens Table H rows 2-4's dependents. **Table E row 8 stays judged by reading V3's counts**; the extra redness is a bonus, never a substitute, and the two statements must move together
+- [ ] **(+r7)** Implementation notes **§D3/D4** — the dated amendment record (the collision, the decision, the two rejected alternatives, the escalation rule). It is the narrative behind **Table H**; Table H decides, §D3/D4 records what happened and why. Neither may be folded into the other, and a change to Table H's row set requires a dated note here
+- [ ] **(+r7)** Implementation notes §D2's dual-consumer rule — Table H rows 2-4 are its **test-side** mirror: `darwinJobExpect` and `canonicalJobPlistContent` reproduce, on the test side, the same "renderer and `expect` are built from the SAME value" invariant the hoisted `const node` gives on the production side. If §D2's rule ever changes, these three helpers change with it
 - [ ] **(+r2)** Test index — T1's and T2's cells are the only place Table F rows 13–15 (the alias positives) and rows 1–12 (the negatives) carry a *requirement* rather than an arithmetic fact
 - [ ] **(+r2)** The whole **Out of scope** section — every bullet applies Table A row 6 (descriptor), row 2 (nvm et al.) or row 1 (Windows), and the first bullet applies Tables C/D
-- [ ] **(+r2)** Definition of done items 0 (the Tables C/D blocker **and** the `depends_on` obligation), 1 (V2/V3 thresholds), 6 (the Windows owner check, Table A row 1), 7 (AC9's no-overclaim rule) and 8 (the ADR-0028 sequencing gate) — **(+r5)** and item **9**, which mirrors Table G's Status row: it began as a **premise gate** and is now a **live smoke test**, the premise having been discharged pre-implementation on 2026-08-02. **Item 9 and Table G's Status row may never disagree about whether the premise is open**
+- [ ] **(+r2)** Definition of done items 0 (the Tables C/D blocker **and** the `depends_on` obligation), 1 (V2/V3 thresholds), 6 (the Windows owner check, Table A row 1), 7 (AC9's no-overclaim rule) and 8 (the ADR-0028 sequencing gate) — **(+r5)** and item **9**, which mirrors Table G's Status row: it began as a **premise gate** and is now a **live smoke test**, the premise having been discharged pre-implementation on 2026-08-02. **Item 9 and Table G's Status row may never disagree about whether the premise is open**; **(+r7)** and item **10**, which mirrors **Table H** and the narrowed proof statement
+- [ ] **(+r7)** Out of scope → the new **"the two amended test files"** bullet, which records what stays out of bounds *inside* two files that are now Deliverables. It mirrors Table H's "a site not in this table is out of the permission boundary" rule from the opposite direction and must move with it
 - [ ] **(+r5)** Definition of done item 1's **V2 pass-count threshold**, which mirrors the V1 baseline measured at a specific SHA. It was `79` at `5f0ffc0` and is **`120` at `1093e51`**; it moves whenever the suite grows, so it is registered rather than left as a literal in two places
 - [ ] **(+r5)** Implementation notes §D2's "do not touch" list — it names the register machinery by function, and PR #140 replaced those functions
 - [ ] **(+r5)** Out of scope, the registration-path bullet — it described the defect as *routed and unfixed*; it now records it as *fixed by PR #140*
@@ -1118,6 +1252,116 @@ or any probe, notice or heal. *(At `5f0ffc0` this paragraph said "do not touch t
 bare `launchctl bootstrap` calls at `:315` and `:431`". **Those calls no longer
 exist** — PR #140 deleted them. The instruction is unchanged in spirit: the
 register machinery is not this WP's to edit.)*
+
+### D3/D4 — the host-shape oracle collision (architect boundary amendment, 2026-08-02)
+
+**This section was added after the implementer finished D1/D2.** It is a spec bug
+being paid for, not a scope change the implementer chose. The collision was
+invisible at spec time and surfaced only at `npm test` time, in two files this
+spec's Deliverables table did not list — and it surfaced **only on the authoring
+host**. Recorded here in full so the next reader does not have to reconstruct it
+from a PR body. **Table H is canonical for the sites; this section is canonical
+for the decision.**
+
+**The collision, verified firsthand.** With D1 and D2 implemented and nothing else
+touched, `npm test` on the **authoring host** — a real Homebrew macOS install
+(macOS 26, Apple Silicon, prefix `/opt/homebrew`, `process.execPath` =
+`/opt/homebrew/Cellar/node/25.9.0_2/bin/node`, alias
+`/opt/homebrew/opt/node -> ../Cellar/node/25.9.0_2`) — reports **15 failures**:
+
+```
+ℹ tests 93 / ℹ pass 71 / ℹ fail 15 / ℹ skipped 7
+  14 in tests/unit/scheduler-schedule.test.js
+   1 in tests/unit/sync-repoint.test.js
+```
+
+Both files were on the **not-deliverables** list. The implementer touched neither
+and reported it rather than adapting a test outside their boundary, which is the
+correct move and is why this amendment exists instead of a silent widening.
+
+**Root cause — the WP working exactly as designed.** Seven expressions in those two
+files call `gen.nodePath()` as their **oracle for what a freshly-written entry
+embeds**. On this host `entryNodePath()` now legitimately returns
+`/opt/homebrew/opt/node/bin/node` (Table A row 6; Table G's premise P is TRUE), so
+the oracle and the rendered bytes diverge by exactly one string. Everything
+downstream follows mechanically: `expect.argv[0]` stops matching the readback, so
+the FATAL-tier comparison at `schedule.js:134-139` grades `'mismatch-fatal'` where
+the test expects `'match'`; and `canonicalJobPlistContent`'s bytes stop being
+canonical, so `ensureEntry` reports `changed:true` where the fixture needs
+`changed:false`. **No production behavior is wrong. Fifteen oracles are stale.**
+
+**The finding this makes unavoidable, and it is about the spec, not the code.**
+This spec's own proof mechanism was **host-shape-dependent**. The not-deliverables
+paragraph rested on those two files' assertions passing unmodified, and that
+property held on the CI runners (`setup-node`; no Homebrew alias resolving to
+`execPath`, so `entryNodePath() === nodePath()` and the swap is a no-op) while
+failing on the **exact machine class this WP was written to protect**. A boundary
+whose proof is green precisely where the change is inert, and red precisely where
+the change does something, is not a proof. That asymmetry is the defect; the
+15 reds are its symptom.
+
+**Same defect class as the sibling's D6, and the same remedy.**
+`WP-scheduler-register-replaces-loaded-record` hit an identical shape — an
+unavoidable consequence in a non-deliverable file the boundary did not anticipate
+(`docs/specs/done/WP-scheduler-register-replaces-loaded-record.md:1289-1382`, §D6,
+the `WIENERDOG_LOADER_NOOP` collision) — and answered it with a dated amendment
+that promoted the file into Deliverables under a bounded enumeration rather than
+either widening the boundary implicitly or bending the production code. That is the
+precedent this section follows.
+
+**THE DECISION.** Promote both files into the Deliverables table (**D3** and
+**D4**), authorize **exactly** the seven oracle expressions **Table H** enumerates
+— `gen.nodePath()` → `gen.entryNodePath()`, plus at most one added `//` comment
+line per site — and **narrow the not-deliverables paragraph's proof claim** from
+*"nothing else moved"* to *"no assertion changes beyond the enumerated oracle
+swaps"*, which **AC10** asserts and **V8/V8b** check mechanically. **Not one
+assertion, expected value, test name, helper signature, fixture, loader or stdout
+builder changes.** Table H's rejected-oracle table records why class (a) was chosen
+over deriving the oracle from the rendered output (b) or from the host (c), and why
+(a) is not tautological.
+
+**REJECTED ALTERNATIVE 1 — leave the two files out of Deliverables and let the
+15 stay red, on the ground that CI is green.** Rejected, and rejected in this WP's
+own terms.
+
+1. **It ships a WP whose own suite fails on the owner's production machine.**
+   Definition of done item 1 requires the verification steps to pass *locally*, and
+   V1's `ℹ fail 0` is an explicit **preservation** result. "Green on the runner"
+   was never the contract.
+2. **It institutionalises the asymmetry.** The next change to the entry node path
+   would meet the same 15 reds with no record of why, and the obvious local repair
+   — teaching a test to branch on the host — would bake the dependence in.
+3. **It is the failing-outside-our-own-observability signature one layer up.** This
+   spec's Context names that signature as the thing the WP exists to kill. A proof
+   mechanism that only reports where the change is inert has the same shape.
+
+**REJECTED ALTERNATIVE 2 — make `entryNodePath()` return `execPath` under a test
+env var (`WIENERDOG_TEST_NO_DURABLE_NODE=1`, or keyed off
+`WIENERDOG_TEST_NO_REAL_SCHEDULER`), so the two files need no edit at all.**
+Rejected, hard, and for the same reason the sibling rejected teaching
+`WIENERDOG_LOADER_NOOP` to fabricate a readback (§D6, rejected alternative).
+
+1. **It disables the feature in the only suite that could detect it.** Every test
+   would then exercise the pinned path, so no test could ever again observe the
+   durable path being chosen — including T5, whose entire job is the role split.
+   The WP would ship with its central behavior untested by construction.
+2. **It puts a test seam in the production return value**, on the registration
+   path, contradicting the "Exact contracts" JSDoc (`opts.realpath` is the **only**
+   seam) and the Security checklist's statement that the only filesystem touch is
+   two `realpath` calls.
+3. **It is a wider diff than the honest one.** Seven expression swaps in test files
+   versus a new env-var branch in `generators.js` plus its own tests plus a
+   documented seam. The cheaper change is also the correct one here, which is not
+   always true and is worth recording when it is.
+
+**The escalation rule this amendment follows, stated so it is reusable.** When an
+implementer reports a failure in a **non-deliverable** file: first ask whether it
+is a **behavioral regression** or a **stale oracle**. A regression stops the WP —
+that is the boundary doing its job. A stale oracle is a spec bug, and the spec
+owner pays for it with a **dated amendment plus a bounded enumeration**, never with
+a verbal go-ahead and never by the implementer editing outside their table. Each of
+the 15 failures here was read individually and classified before a single character
+of test source changed; all fifteen were stale oracles, none was a regression.
 
 ### Why the descriptor field stays `process.execPath` — the decisive reason
 
@@ -1386,7 +1630,7 @@ fixture without adding its row there.
       of those tables, not commentary on them. Reproducing the call lists **without**
       the scoping paragraph restates the *"'exactly one' through the full path"*
       claim the landed sibling explicitly forbids
-      (`docs/specs/done/WP-scheduler-register-replaces-loaded-record.md:1881-1883`),
+      (`docs/specs/done/WP-scheduler-register-replaces-loaded-record.md:1880-1883`),
       so dropping it turns a correct table into an incorrect one. The PR states
       **all four** of:
       (i) Table C rows **4** (linux, degraded reload) and **7** (macOS,
@@ -1410,6 +1654,27 @@ fixture without adding its row there.
       converge and that Table D's final row in each sub-table reports that as
       success". Row 5 converges as of PR #140; repeating the old sentence would now
       be an UNDERclaim, and an inaccurate one.)*
+
+- [ ] **AC10 (Table H — the oracle swap is bounded, and the narrowed proof holds).
+      NEW 2026-08-02, with the D3/D4 boundary amendment.** Four things, all
+      mechanical:
+      (i) `tests/unit/scheduler-schedule.test.js` and
+      `tests/unit/sync-repoint.test.js` contain **zero** occurrences of
+      `gen.nodePath()` and exactly **six** and **one** of `gen.entryNodePath()`
+      respectively — V8, whose `origin/main` output is the inverse (6/0 and 1/0);
+      (ii) their `process.execPath` counts are **unchanged** at **7** and **0** —
+      the RUNTIME role did not move inside a file that is now a Deliverable
+      (V8, second half);
+      (iii) **every** `+`/`-` line in those two files' diff against `origin/main`
+      either contains a `nodePath` token or is an added `//` comment line — V8b,
+      **exit status is the verdict**. This is the executable form of the narrowed
+      proof statement: *no assertion changes beyond the enumerated oracle swaps*;
+      (iv) all 15 previously-failing tests are green **on a Homebrew macOS host**,
+      and V1 still reports `ℹ fail 0`.
+      **AC10 states no site list of its own — Table H is the enumeration.** A swap
+      at a site Table H does not list fails the boundary gate (V7) in spirit even
+      when `boundary-check.js` passes it, because `boundary-check.js` checks files
+      and Table H checks sites; V8b is what closes that gap.
 
 ### Table F — fixture arithmetic (canonical; every AC2/Table E fixture)
 
@@ -1491,13 +1756,18 @@ inventing a contrived row for a preservation criterion.
 | T4 | tests/unit/scheduler-generators.test.js | double-render byte-identity and repeat-call stability (AC6) |
 | T5 | tests/unit/scheduler-generators.test.js | the fabricated-Homebrew-layout role-split detector: `nodePath()` vs `entryNodePath()` under a controlled `process.execPath`, real `fs.realpathSync`, no seam (AC4, Table E row 7). **POSIX-only — must be declared with `{ skip: process.platform === 'win32' }`** (the `posixOnly` idiom at `tests/unit/exec-identity.test.js:26`); see AC4 for why an ungated T5 fails against a correct implementation on win32 |
 
+| T6 | tests/unit/scheduler-schedule.test.js | **(+2026-08-02, D3)** the six oracle sites of **Table H** rows 1-6 (AC10). **Not new tests and not `node-path-durability:` subtests** — six existing expressions in existing tests, so the naming rule below does not apply to them and V2's `>= 4` threshold is unaffected |
+| T7 | tests/unit/sync-repoint.test.js | **(+2026-08-02, D4)** the one oracle site of **Table H** row 7 (AC10). Same exemption as T6 |
+
 There is no T3. Round 1's T3 (descriptor-digest invariance) was vacuous by
 construction and its criterion (AC5) is now static — see AC5.
 
 Name every subtest with the prefix `node-path-durability:` **followed by one
 space** so the verification commands can count them with one anchored grep,
 exactly as `tests/unit/scheduler-entry-identity.test.js` does with its
-`entry-identity:` prefix.
+`entry-identity:` prefix. **T6 and T7 are exempt — see their rows.** They add no
+subtest at all, so they neither satisfy nor inflate V2's `>= 4` count; V2 remains a
+statement about T1/T2/T4/T5 only.
 
 T1 and T2 must be **table-driven** over arrays of `[input, expected, why]` — the
 arrays are the executable form of Table F, and adding a fixture is then one line
@@ -1536,17 +1806,21 @@ they moved.
 **Three rules, and they are not the same rule.**
 
 1. **Change checks** must print something different after the fix than on `main`.
-   **V2, V3 and V6 are change checks.** V2's `main` count of **`ℹ pass 120`** is a
-   **FAILURE** after implementation — T1, T2, T4 and T5 add tests, so a run still
-   reporting 120 means no new direct evidence was written.
+   **V2, V3, V6 and V8's first four counts are change checks.** V2's `main` count
+   of **`ℹ pass 120`** is a **FAILURE** after implementation — T1, T2, T4 and T5
+   add tests, so a run still reporting 120 means no new direct evidence was
+   written. (T6/T7 add **no** subtests, so they neither raise nor excuse this
+   threshold — Test index.)
 2. **Preservation checks** assert something did *not* move and are supposed to
-   print the same thing before and after. The carve-out covers **exactly four
-   results: V1's `ℹ fail 0` line, V4, V5 and V5b** — nothing else. V1's `ℹ pass`
-   count is emphatically not covered; it is V2's input.
-3. **Exit status is the verdict for V1 and V5b only** (V5b is a negative grep, so
-   its exit status *is* its answer). V3, V4, V5 and V6 are judged by **reading the
-   printed output** — `grep` exits 0 whether it prints six lines or one. Never
-   report an exit 0 from those as a pass.
+   print the same thing before and after. The carve-out covers **exactly six
+   results: V1's `ℹ fail 0` line, V4, V5, V5b, V8's two `execPath` counts, and
+   V8b** — nothing else (**UPDATED 2026-08-02**: it was four before V8/V8b joined
+   with the D3/D4 boundary amendment). V1's `ℹ pass` count is emphatically not
+   covered; it is V2's input.
+3. **Exit status is the verdict for V1, V5b and V8b only** (V5b and V8b are
+   negative greps, so their exit status *is* their answer). V3, V4, V5, V6 and V8
+   are judged by **reading the printed output** — `grep` exits 0 whether it prints
+   six lines or one. Never report an exit 0 from those as a pass.
 
 Two commands need a `main` ref that exists in the implementer's worktree. Fetch it
 once up front rather than assuming a local branch: `git fetch origin main --quiet`,
@@ -1597,8 +1871,10 @@ grep -n "node: process.execPath" src/scheduler/descriptor.js
 git diff --name-only origin/main...HEAD
 # on main (RE-EXECUTED at 1093e51): src/scheduler/descriptor.js:215:    node: process.execPath,
 # REQUIRED after: the same single line, AND descriptor.js absent from the
-# name-only diff, which must list exactly the three Deliverables files plus this
-# spec.
+# name-only diff, which must list exactly the FIVE Deliverables files plus this
+# spec (UPDATED 2026-08-02: it was three before the D3/D4 boundary amendment
+# added tests/unit/scheduler-schedule.test.js and tests/unit/sync-repoint.test.js
+# — see Table H).
 
 # V5b (PRESERVATION — AC5's zero-coupling argument, made executable. This is the
 #      command that replaces round 1's vacuous descriptor-digest test: it shows
@@ -1617,10 +1893,45 @@ git diff origin/main...HEAD -- src/scheduler/generators.js src/cli/schedule.js \
   echo "OK: no new require/spawn/timer in the production diff"
 # on main: n/a (empty diff). REQUIRED after: the OK line, with no matches above it.
 
-# V7 — the boundary gate and the lint pipeline.
+# V8 (CHANGE + PRESERVATION — Table H / AC10 (i) and (ii); judged by reading the
+#     counts). The oracle swap is BOUNDED: in the two amended test files every
+#     `gen.nodePath()` becomes `gen.entryNodePath()`, and the RUNTIME-role
+#     `process.execPath` occurrences (Table B row 2) do not move.
+#     ADDED 2026-08-02 with the D3/D4 boundary amendment.
+for f in tests/unit/scheduler-schedule.test.js tests/unit/sync-repoint.test.js; do
+  echo "$f  main: nodePath=$(git show origin/main:$f | grep -c 'gen\.nodePath()') \
+entryNodePath=$(git show origin/main:$f | grep -c 'gen\.entryNodePath()') \
+execPath=$(git show origin/main:$f | grep -c 'process\.execPath')"
+  echo "$f  HEAD: nodePath=$(grep -c 'gen\.nodePath()' "$f") \
+entryNodePath=$(grep -c 'gen\.entryNodePath()' "$f") \
+execPath=$(grep -c 'process\.execPath' "$f")"
+done
+# on main:  scheduler-schedule  nodePath=6  entryNodePath=0  execPath=7
+#           sync-repoint        nodePath=1  entryNodePath=0  execPath=0
+# REQUIRED after: scheduler-schedule  nodePath=0  entryNodePath=6  execPath=7
+#                 sync-repoint        nodePath=0  entryNodePath=1  execPath=0
+# The two execPath counts are the PRESERVATION half and must be IDENTICAL.
+
+# V8b (PRESERVATION — Table H / AC10 (iii): the "everything else stays unchanged"
+#      half, and the executable form of the NARROWED proof statement in the
+#      not-deliverables paragraph. EXIT STATUS IS THE VERDICT — the inner grep
+#      must find nothing, so the OK branch must be the one that prints.
+git diff origin/main...HEAD -- tests/unit/scheduler-schedule.test.js \
+                               tests/unit/sync-repoint.test.js \
+  | grep -E '^[+-]' | grep -vE '^(\+\+\+|---)' \
+  | grep -vE 'gen\.(entry)?[Nn]odePath\(\)' | grep -vE '^\+[[:space:]]*//' \
+  && echo "FAIL: a line outside Table H's enumeration moved in the amended test files" \
+  || echo "OK: every changed line is an enumerated oracle swap or its added comment"
+# on main: n/a (empty diff). REQUIRED after: the OK line, with nothing above it.
+
+# V7 — the boundary gate and the lint pipeline. The argument list must name ALL
+#      FIVE Deliverables files (UPDATED 2026-08-02: the last two were added by the
+#      D3/D4 boundary amendment; a V7 that still lists three checks a subset and
+#      passes vacuously).
 node scripts/boundary-check.js docs/specs/WP-scheduler-node-path-durability.md \
   src/scheduler/generators.js src/cli/schedule.js \
-  tests/unit/scheduler-generators.test.js
+  tests/unit/scheduler-generators.test.js \
+  tests/unit/scheduler-schedule.test.js tests/unit/sync-repoint.test.js
 npm run lint
 npm test
 ```
@@ -1679,6 +1990,21 @@ npm test
 - **Any change to `status.js`, `launcher.js`, `run-job.js` or the renderers.**
 - **Windows-specific handling.** Table A row 1 makes the change a no-op there by
   construction; that is the whole Windows story for this WP.
+- **Everything in the two amended test files that Table H does not list.** NEW
+  2026-08-02 with the D3/D4 boundary amendment. `tests/unit/scheduler-schedule.test.js`
+  and `tests/unit/sync-repoint.test.js` are now Deliverables, and that is **not** a
+  licence to touch them generally. Out of bounds inside them: every assertion text
+  and expected value, every test name, `fakeLaunchd`, `printStdoutFromPlistXml`,
+  `buildPrintStdout`, `matchingStdout`, `scriptedDarwinLoader`,
+  `unchangedJobFixture`'s structure, `primaryEntry`/`runSync`, every fixture, and
+  **all seven `process.execPath` occurrences** (RUNTIME role — Table B row 2).
+  **A site not in Table H is out of the permission boundary**, and V8b is the check
+  that says so mechanically rather than on trust.
+- **Teaching `entryNodePath` a test-only escape hatch** (an env var that makes it
+  return `execPath` under the suite) so the two files would have needed no edit.
+  Rejected in Implementation notes → **D3/D4, rejected alternative 2**: it would
+  disable the WP's central behavior in the only suite that could detect it, and put
+  a second seam in a production return value. Do not reopen it.
 
 ## Definition of done
 
@@ -1742,8 +2068,13 @@ npm test
    C, D and G, not a memory of their pre-#140 shape.
 1. All verification steps pass locally; output pasted into the PR body, with V2's
    pass count **strictly above 120** (RE-BASELINED 2026-08-02 at `1093e51`; it was
-   79 at `5f0ffc0` — do **not** use the old number), V2's subtest count `>= 4`, and
-   V3's two counts flipped to 0 / 6.
+   79 at `5f0ffc0` — do **not** use the old number), V2's subtest count `>= 4`,
+   V3's two counts flipped to 0 / 6, and **V8's four counts flipped to 0/6 and 0/1
+   with both `execPath` counts unmoved** (added 2026-08-02 with D3/D4).
+   **"Locally" means a real Homebrew macOS host wherever one is available** — that
+   is where this WP's change is not inert, and it is the host on which the D3/D4
+   collision was found. A green run on a CI runner alone does not discharge this
+   item; say which host class was used.
 2. Every Table E row (1–8) demonstrated red (with the "selected exactly one named
    subtest" assertion) and the file restored byte-for-byte afterwards.
 3. Conventional commits; PR titled
@@ -1848,3 +2179,18 @@ npm test
    superseded text. None of that ADR's five prior amendments annotated the text
    it refined, and the amendment spec forbids it explicitly. The dated amendment
    plus its owner signature is the **only** way this item is satisfied.
+10. **D3/D4 — the boundary amendment is discharged, and its proof is the narrowed
+    one. NEW 2026-08-02.**
+    - **AC10** passes in all four parts: V8's counts flipped (0/6 and 0/1) with
+      both `process.execPath` counts unmoved (7 and 0); **V8b prints the OK line
+      with nothing above it**; and the 15 previously-failing tests are green on a
+      Homebrew macOS host with V1 still reporting `ℹ fail 0`.
+    - **V7's `boundary-check.js` invocation names all FIVE Deliverables files** and
+      exits 0. A V7 still listing three files is a vacuous pass, not a pass.
+    - The PR body states, in one sentence, that this WP's proof of non-interference
+      is the **narrowed** one — *no assertion changes beyond the enumerated oracle
+      swaps* — and **not** the withdrawn *"nothing else moved"*. Overstating it
+      would re-assert exactly the claim the amendment retired.
+    - **No owner marker is written for this item.** It is discharged by the
+      architect's dated amendment plus the mechanical checks above; there is no
+      signature to produce and none may be invented.
