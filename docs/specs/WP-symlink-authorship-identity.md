@@ -1194,10 +1194,16 @@ const j = s.indexOf('\n}\n', i);
 if (j < 0) { console.error(`unterminated ${fn}`); process.exit(1); }
 const rest = s.replace(s.slice(i, j + 3), '');
 for (const [re, what] of [
-  [new RegExp(`(^|[^.\\w])${fn}\\s*=[^=>]`, 'm'), 'assignment'],
+  // The WHOLE assignment-operator family, not bare `=`: =, +=, -=, *=, /=, %=,
+  // **=, <<=, >>=, >>>=, &=, ^=, |=, &&=, ||=, ??=. The lookahead keeps ==, ===
+  // and => out. `reverseSymlink &&= unsafe` bypassed the bare-`=` form while the
+  // extractor still emitted the original bytes (measured).
+  [new RegExp(`(^|[^.\\w])${fn}\\s*(?:>>>|\\*\\*|<<|>>|&&|\\|\\||\\?\\?|[+\\-*/%&|^])?=(?![=>])`, 'm'), 'assignment'],
+  [new RegExp(`for\\s*\\(\\s*(?:(?:var|let|const)\\s+)?${fn}\\s+(?:in|of)\\b`, 'm'), 'loop assignment'],
   [new RegExp(`\\{[^{}]*\\b${fn}\\b[^{}]*\\}\\s*=`, 'm'), 'object destructuring'],
   [new RegExp(`\\[[^\\[\\]]*\\b${fn}\\b[^\\[\\]]*\\]\\s*=`, 'm'), 'array destructuring'],
   [new RegExp(`\\b(var|let|const|function|class)\\s+${fn}\\b`, 'm'), 're-declaration'],
+  [new RegExp(`\\bexports\\.${fn}\\s*=`, 'm'), 'export rebinding'],
 ]) {
   if (re.test(rest)) { console.error(`${fn} is rebound outside its definition (${what}) — refusing`); process.exit(1); }
 }
@@ -1313,7 +1319,14 @@ printf '\n[reverseSymlink] = [unsafe];\n'                        > "$tmp/b"; cat
 printf '\nreverseSymlink = unsafe;\n'                            > "$tmp/c"; cat "$tmp/clean.js" "$tmp/c" > "$tmp/plain.js"
 printf '\nconst reverseSymlink = unsafe;\n'                      > "$tmp/d"; cat "$tmp/clean.js" "$tmp/d" > "$tmp/redecl.js"
 printf '\nfunction reverseSymlink() {}\n'                        > "$tmp/e"; cat "$tmp/clean.js" "$tmp/e" > "$tmp/dup.js"
-for f in destruct arr plain redecl dup; do
+printf '\nreverseSymlink &&= unsafe;\n'                          > "$tmp/f"; cat "$tmp/clean.js" "$tmp/f" > "$tmp/logand.js"
+printf '\nreverseSymlink ||= unsafe;\n'                          > "$tmp/g"; cat "$tmp/clean.js" "$tmp/g" > "$tmp/logor.js"
+printf '\nreverseSymlink ??= unsafe;\n'                          > "$tmp/h"; cat "$tmp/clean.js" "$tmp/h" > "$tmp/nullish.js"
+printf '\nreverseSymlink += unsafe;\n'                           > "$tmp/i"; cat "$tmp/clean.js" "$tmp/i" > "$tmp/compound.js"
+printf '\nfor (reverseSymlink of [unsafe]) {}\n'                 > "$tmp/j"; cat "$tmp/clean.js" "$tmp/j" > "$tmp/forof.js"
+printf '\nfor (reverseSymlink in {a:1}) {}\n'                    > "$tmp/k"; cat "$tmp/clean.js" "$tmp/k" > "$tmp/forin.js"
+printf '\nmodule.exports.reverseSymlink = unsafe;\n'             > "$tmp/l"; cat "$tmp/clean.js" "$tmp/l" > "$tmp/exportw.js"
+for f in destruct arr plain redecl dup logand logor nullish compound forof forin exportw; do
   if node /tmp/wd-fnextract.js "$tmp/$f.js" reverseSymlink >/dev/null 2>&1; then
     echo "  MATRIX FAIL: $f was ACCEPTED"; ok=0
   else
@@ -1323,7 +1336,7 @@ done
 node /tmp/wd-fnextract.js "$tmp/clean.js" reverseSymlink >/dev/null 2>&1 \
   && echo "  matrix ok: clean tree accepted" || { echo "  MATRIX FAIL: clean tree refused"; ok=0; }
 rm -rf "$tmp"
-[ "$ok" = 1 ] && echo "V4z ok (5 refused, 1 accepted)" || { echo "V4z BROKEN"; exit 1; }
+[ "$ok" = 1 ] && echo "V4z ok (12 refused, 1 accepted)" || { echo "V4z BROKEN"; exit 1; }
 MX
 bash /tmp/wd-rebind-matrix.sh
 
@@ -1564,6 +1577,18 @@ They are registered in the Mirrored Surface Checklist for exactly this reason.
 | **R8** | **The source guards are not AST-aware.** They strip comments and reject duplicate definitions, but cannot tell reachable code from code after a `return` | the guards are **tripwires**; V1/V2 are the load-bearing checks | the red mutations in Verification steps | **`WP-grep-gate-helper`** — already routed by WP-147; this spec does not re-route it |
 | **R9** | **The partial-pair leftover** — see the ledger row of the same name | not reachable from any producer site | B-T4's two partial rows | a ledger cost |
 | **R10** | **A schema-valid wrong identity pair.** An entry whose `dev`/`ino` are both strings but do not match the live link — including one-of-two wrong — **preserves** a link base removes | corruption- or forgery-only; an honest pair that *becomes* wrong is 4b's durability row instead. Measured: base removes all three variants, this WP preserves all three | B-T4's three both-wrong rows, which assert the base contrast | a ledger cost |
+
+**R8 — the source guards are regex, not AST — updated 2026-08-03.** The rebinding
+guard now covers the full assignment-operator family, both loop-target forms,
+both destructuring forms, re-declaration and `exports.` writes, each with a
+permanent V4z fixture. **The residual is novel syntax outside the fixture set**:
+regexes enumerate forms, an AST enumerates the language. This is the **sixth**
+instance of the same class in this repo, and every one has been closed by adding
+another pattern after a reviewer found the gap — which is the argument, not an
+anecdote. Routed to **`WP-grep-gate-helper`** (already open, opened by WP-147 as
+its fourth instance). A devDependency-free verification script cannot parse JS
+itself, so regex-with-exhaustive-fixtures is the available path until that helper
+lands; V1/V2 remain the load-bearing behavioural checks.
 
 ## Definition of done
 

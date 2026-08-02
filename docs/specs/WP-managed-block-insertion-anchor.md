@@ -1022,10 +1022,16 @@ const j = s.indexOf('\n}\n', i);
 if (j < 0) { console.error(`unterminated ${fn}`); process.exit(1); }
 const rest = s.replace(s.slice(i, j + 3), '');
 for (const [re, what] of [
-  [new RegExp(`(^|[^.\\w])${fn}\\s*=[^=>]`, 'm'), 'assignment'],
+  // The WHOLE assignment-operator family, not bare `=`: =, +=, -=, *=, /=, %=,
+  // **=, <<=, >>=, >>>=, &=, ^=, |=, &&=, ||=, ??=. The lookahead keeps ==, ===
+  // and => out. `reverseSymlink &&= unsafe` bypassed the bare-`=` form while the
+  // extractor still emitted the original bytes (measured).
+  [new RegExp(`(^|[^.\\w])${fn}\\s*(?:>>>|\\*\\*|<<|>>|&&|\\|\\||\\?\\?|[+\\-*/%&|^])?=(?![=>])`, 'm'), 'assignment'],
+  [new RegExp(`for\\s*\\(\\s*(?:(?:var|let|const)\\s+)?${fn}\\s+(?:in|of)\\b`, 'm'), 'loop assignment'],
   [new RegExp(`\\{[^{}]*\\b${fn}\\b[^{}]*\\}\\s*=`, 'm'), 'object destructuring'],
   [new RegExp(`\\[[^\\[\\]]*\\b${fn}\\b[^\\[\\]]*\\]\\s*=`, 'm'), 'array destructuring'],
   [new RegExp(`\\b(var|let|const|function|class)\\s+${fn}\\b`, 'm'), 're-declaration'],
+  [new RegExp(`\\bexports\\.${fn}\\s*=`, 'm'), 'export rebinding'],
 ]) {
   if (re.test(rest)) { console.error(`${fn} is rebound outside its definition (${what}) — refusing`); process.exit(1); }
 }
@@ -1066,7 +1072,14 @@ printf '\n[reverseSymlink] = [unsafe];\n'                        > "$tmp/b"; cat
 printf '\nreverseSymlink = unsafe;\n'                            > "$tmp/c"; cat "$tmp/clean.js" "$tmp/c" > "$tmp/plain.js"
 printf '\nconst reverseSymlink = unsafe;\n'                      > "$tmp/d"; cat "$tmp/clean.js" "$tmp/d" > "$tmp/redecl.js"
 printf '\nfunction reverseSymlink() {}\n'                        > "$tmp/e"; cat "$tmp/clean.js" "$tmp/e" > "$tmp/dup.js"
-for f in destruct arr plain redecl dup; do
+printf '\nreverseSymlink &&= unsafe;\n'                          > "$tmp/f"; cat "$tmp/clean.js" "$tmp/f" > "$tmp/logand.js"
+printf '\nreverseSymlink ||= unsafe;\n'                          > "$tmp/g"; cat "$tmp/clean.js" "$tmp/g" > "$tmp/logor.js"
+printf '\nreverseSymlink ??= unsafe;\n'                          > "$tmp/h"; cat "$tmp/clean.js" "$tmp/h" > "$tmp/nullish.js"
+printf '\nreverseSymlink += unsafe;\n'                           > "$tmp/i"; cat "$tmp/clean.js" "$tmp/i" > "$tmp/compound.js"
+printf '\nfor (reverseSymlink of [unsafe]) {}\n'                 > "$tmp/j"; cat "$tmp/clean.js" "$tmp/j" > "$tmp/forof.js"
+printf '\nfor (reverseSymlink in {a:1}) {}\n'                    > "$tmp/k"; cat "$tmp/clean.js" "$tmp/k" > "$tmp/forin.js"
+printf '\nmodule.exports.reverseSymlink = unsafe;\n'             > "$tmp/l"; cat "$tmp/clean.js" "$tmp/l" > "$tmp/exportw.js"
+for f in destruct arr plain redecl dup logand logor nullish compound forof forin exportw; do
   if node /tmp/wd-fnextract.js "$tmp/$f.js" reverseSymlink >/dev/null 2>&1; then
     echo "  MATRIX FAIL: $f was ACCEPTED"; ok=0
   else
@@ -1076,7 +1089,7 @@ done
 node /tmp/wd-fnextract.js "$tmp/clean.js" reverseSymlink >/dev/null 2>&1 \
   && echo "  matrix ok: clean tree accepted" || { echo "  MATRIX FAIL: clean tree refused"; ok=0; }
 rm -rf "$tmp"
-[ "$ok" = 1 ] && echo "V4z ok (5 refused, 1 accepted)" || { echo "V4z BROKEN"; exit 1; }
+[ "$ok" = 1 ] && echo "V4z ok (12 refused, 1 accepted)" || { echo "V4z BROKEN"; exit 1; }
 MX
 bash /tmp/wd-rebind-matrix.sh
 
@@ -1298,6 +1311,18 @@ Each row names its pinning test. A residual with no test is a claim.
 | **R2b** | **Repeated window ⇒ withheld strip.** When the window occurs more than once in the reconstructed user document, `anchorProvesPosition` cannot tell the positions apart and **preserves**, leaving our separator. **The window is `candidate.slice(-ANCHOR_WINDOW)`, so on a prefix shorter than 256 characters it is the WHOLE prefix** — a single repeated short line is enough, with no relocation and no edit above the block | at most two whitespace characters, all of them ours, **never a user byte** — measured, the user text is byte-identical to base in every costing fixture. This is the *fail-closed* half of the uniqueness conjunct and its price | **A-T11** pins the COST (three repeating fixtures + a non-repeating control). **A-T6 pins the BENEFIT** (Q10) and does not pin this row — the two were conflated through round 4 (Codex round 5, finding 1) | not routed — preserve-on-ambiguity is the chosen answer. A frequency-reducing refinement is routed to `WP-anchor-whole-prefix-flag` and deliberately not folded in |
 | **R2c** | **Window reproduced elsewhere.** A user who deletes the block's original neighbourhood **and** reproduces the same 256 characters at another position gets a strip at the new site: the anchor matches and the window is unique | **at most the recorded `sepBefore`** — WP-147's Table M fixes that vocabulary at `''`/`'\n'`/`'\n\n'`, so **at most two whitespace characters, never a fusion, never text**. **EQUAL to base in both arms** (measured: base strips 1 and 2 respectively), which is why it is a residual and not a defect | **A-T9**, both arms, each asserting the delta is exactly `sepBefore.length` whitespace characters. Arm (a) discriminates: measured **red** against a full-prefix anchor and against an always-withhold anchor | not routed. This is the honest edge of what a bounded window can prove. **The bound was stated as "one newline" through round 3 and corrected in round 4** — the mechanism cannot be narrowed without breaking the honest unterminated-append case |
 | **R8** | **The V3–V6 source guards are not AST-aware.** They strip comments and reject duplicate definitions, but cannot tell reachable code from code after a `return` | the guards are **tripwires**; V1/V2 — the test suite — are the load-bearing checks. This is WP-147's own stated disposition for the same class | the evasions listed in Verification steps each have an executed red mutation; the uncovered one is unreachable code | **`WP-grep-gate-helper`** — already routed by WP-147 as the canonical comment-stripping/AST gate helper, *"fourth instance of this shape"*. This spec does not re-route it |
+
+**R8 — the source guards are regex, not AST — updated 2026-08-03.** The rebinding
+guard now covers the full assignment-operator family, both loop-target forms,
+both destructuring forms, re-declaration and `exports.` writes, each with a
+permanent V4z fixture. **The residual is novel syntax outside the fixture set**:
+regexes enumerate forms, an AST enumerates the language. This is the **sixth**
+instance of the same class in this repo, and every one has been closed by adding
+another pattern after a reviewer found the gap — which is the argument, not an
+anecdote. Routed to **`WP-grep-gate-helper`** (already open, opened by WP-147 as
+its fourth instance). A devDependency-free verification script cannot parse JS
+itself, so regex-with-exhaustive-fixtures is the available path until that helper
+lands; V1/V2 remain the load-bearing behavioural checks.
 
 ## Definition of done
 
