@@ -1307,31 +1307,50 @@ grep -cF '| T4c |' "$SPEC"                                  # expect 1 (R7)
 grep -cF 'No row deletes on an error' "$SPEC"               # expect 1 (R6)
 grep -cF '## Post-merge note — 2026-08-02: the lexical fallback is dead through production, removal routed' "$SPEC"  # expect 1 — the heading is UNCHANGED (R10 anchor warning)
 
-# V3a2 (AC6) — no surviving `T4` names a CURRENT test. This is now executable and
-# it AGREES WITH AC6. Two transition phrases are permitted, because each names the
+# V3a2 (AC6) — no `T4` reference names a CURRENT test. Executable, and it AGREES
+# WITH AC6. Exactly TWO transition phrases are legitimate, because each names the
 # rename rather than a test:
 #   • R9's, in the LIVE Mirrored Surface Checklist:  T4 (now T4a/T4b/T4c)
 #   • R10's, inside the post-merge note:             T4 becomes **T4a/T4b/T4c**
-# Everything else must sit AT OR AFTER the post-merge-note heading — the dated
-# record, and the dated review-gate log below it. R10's insertion lands after that
-# heading, so the line rule covers it without a second exception.
+# R10's lands after the post-merge-note heading, so the position rule covers it.
+# R9's is the only one before the heading, so it is allowed BY OCCURRENCE.
+#
+# OCCURRENCE-LEVEL, NOT LINE-LEVEL — this is the whole point of the shape below.
+# A `grep -vF` on the phrase discards the entire LINE, so a line carrying BOTH the
+# R9 phrase AND a bare T4 naming a current test passed. Reproduced green on
+# "AC2 still names current T4; R9 says T4 (now T4a/T4b/T4c)". The gate now
+# (1) asserts exactly ONE R9 phrase before the heading, (2) removes just that one
+# occurrence from the text stream, (3) fails on any bare T4 that remains.
+#
 # \bT4\b does not match T4a/T4b/T4c (the trailing letter is a word character), so
-# the renamed tests never trip this.
-# (An earlier revision forbade EVERY live T4 outright, which contradicted AC6 —
-# R9's phrase is live by design — and no correct implementation could satisfy
-# both. Codex delta pass caught it.)
+# the renamed tests never trip this. The single-occurrence removal is done in awk,
+# not `sed '0,/re/'` — that address form is GNU-only and this must run on macOS too.
 H=$(grep -n '^## Post-merge note — 2026-08-02' "$SPEC" | cut -d: -f1)
 [ -n "$H" ] || { echo "FAIL: post-merge-note heading not found"; exit 1; }
-BAD=$(grep -n '\bT4\b' "$SPEC" | awk -F: -v h="$H" '($1+0) < (h+0)' | grep -vF 'T4 (now T4a/T4b/T4c)')
-if [ -n "$BAD" ]; then
-  echo "REGRESSED: live T4 reference(s) naming a current test:"; printf '%s\n' "$BAD"; exit 1
+PRE=$(grep -n '' "$SPEC" | awk -F: -v h="$H" '($1+0) < (h+0)')
+N=$(printf '%s\n' "$PRE" | grep -oF 'T4 (now T4a/T4b/T4c)' | grep -c .)
+if [ "$N" -ne 1 ]; then
+  echo "REGRESSED: expected exactly 1 R9 transition phrase before the heading, found $N"; exit 1
 fi
-echo "V3a2 ok — the only live T4 is R9's rename phrase (heading at :$H)"
-# Measured three ways while drafting: green on the correct post-edit state; red,
-# naming the line, when AC2 (W10) is left un-updated; and red against the
-# UNAMENDED WP-153, where it lists every line Table W marks live. That last run
-# is also the check to use if you ever doubt the column: the gate derives the set,
-# so no prose has to.
+BAD=$(printf '%s\n' "$PRE" \
+  | awk -v ph='T4 (now T4a/T4b/T4c)' 'BEGIN{d=0}{if(!d){i=index($0,ph);if(i>0){$0=substr($0,1,i-1) "<R9-ALLOWED>" substr($0,i+length(ph));d=1}}print}' \
+  | grep -E '\bT4\b')
+if [ -n "$BAD" ]; then
+  echo "REGRESSED: T4 reference(s) naming a current test:"; printf '%s\n' "$BAD"; exit 1
+fi
+echo "V3a2 ok — exactly one R9 rename phrase, no other live T4 (heading at :$H)"
+# Measured FIVE ways while drafting, with this text run verbatim:
+#   A correct post-edit state ............................. green
+#   B AC2 left un-updated on its own line ................. red, naming the line
+#   C bare T4 and the R9 phrase on the SAME line .......... red  <- the hole this
+#     ("AC2 still names current T4; R9 says T4 (now …)")          shape exists for;
+#                                                                 line-level was green
+#   D the R9 phrase deleted entirely ...................... red, on the count
+#   E the UNAMENDED WP-153 ................................ red, on the count
+# Note on E: before the amendments R9's phrase does not exist yet, so the count
+# check fires first and you get "found 0" rather than a list of live T4s. That is
+# still a correct red. To SEE the live set on an unamended file, read Table W's
+# `Live or dated` column — which is the canonical source anyway.
 
 # V3b — R1 (AC1), judged against THE SHIPPING GATE. This WP contains exactly ONE
 # expected copy of the function: the heredoc R8 installs into WP-153. This block
