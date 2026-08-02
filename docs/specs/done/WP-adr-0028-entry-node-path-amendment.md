@@ -1,7 +1,7 @@
 ---
 id: WP-adr-0028-entry-node-path-amendment
 title: Amend ADR-0028 Decision 1 so the scheduler entry's node path may be an upgrade-durable alias while process.execPath stays the runtime and authorization value
-status: Draft
+status: Done
 model: opus
 size: S
 depends_on: []
@@ -290,6 +290,7 @@ else changes. Updating it is part of the owner's signature pass (B2).
 752:Status: **Accepted. OWNER-SIGNED 2026-07-26.**                [1] MARKER
 760:`OWNER-SIGNED 2026-07-25` line at the head of the file, and … [3] BACK-REF
 978:Status: **ACCEPTED — OWNER-SIGNED 2026-08-01**                [1] MARKER
+1215:Status: **ACCEPTED - OWNER-SIGNED 2026-08-02**               [1] MARKER
 1224:Fehér types an `OWNER-SIGNED <date>` line into it by hand …  [4] PLACEHOLDER
 1225:heading — not the `OWNER-SIGNED 2026-07-25` line at the …    [3] BACK-REF
 1342:`OWNER-SIGNED <date>`, the gate is **not** satisfied …       [4] PLACEHOLDER
