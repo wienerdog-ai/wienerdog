@@ -930,7 +930,13 @@ review finding updates the table and all its mirrors in one pass:
       same pass. It said "three-check gate" for one round after R8 became a single
       whole-function diff.
 - [ ] **The Definition of done's AC5 count** — it names how many mutation outputs
-      the PR must carry, and AC5 has changed count twice (two → four → five).
+      the PR must carry, and AC5 has changed count three times (two → four → five
+      → six).
+- [ ] **V0's licensed substitution and the Definition of done's status-flip
+      item** (registered in round 5) — both encode the SAME repo convention, that
+      an implementation commit moves this spec `Ready` → `In-Review` and changes
+      nothing else. If the project ever changes that lifecycle, V0's substitution
+      and the DoD item move together, or V0 fails every implementation.
 - [ ] The **Context** section's "Why this is a behavior change" subsection and the
       **top-of-file blockquote** — both restate Table R's R1 characterization
       (narrowing, not dead-code removal). **Registered by Codex round 1**: if the
@@ -970,6 +976,11 @@ Registered **outside** this spec so a later change knows this table is its sourc
 - **Do not grep for the word "lexical"** to find your edit sites — it also hits
   `src/adapters/shared.js`, `docs/adr/0028-*`, three other done specs and the
   security-audit archive, none of which are yours. Use the R-anchors in Table R.
+- **Do not edit this spec, at all, except the `status:` line.** V0 enforces it
+  byte-for-byte. This is not bureaucracy: R8's heredoc in this file is what V3b
+  and V3e judge the code against, so an implementer who "fixes" it can make a
+  weakened implementation pass every other gate. If this spec is wrong, the PR
+  says so under "Discovered issues" and the fix is a separate architect pass.
 - **Reproduce the `reverseSymlink` function exactly as R1 gives it — every byte,
   comments included.** V4 diffs the whole function against an embedded expected
   copy. There is no longer any part of this function you may reword "harmlessly":
@@ -1023,6 +1034,13 @@ Registered **outside** this spec so a later change knows this table is its sourc
 
 ## Acceptance criteria
 
+- [ ] **AC0 (trust root — check this first)** — **V0** passes: this spec is
+      byte-identical to its branch-base copy apart from the single frontmatter
+      `status: Ready` → `status: In-Review` flip. Every other gate reads its
+      expectations out of this file, so if V0 is red nothing below it means
+      anything. **The implementation commit may not change one other byte of this
+      spec** — not the R8 heredoc, not a heading, not a typo you spotted. Found
+      something wrong here? Say so under "Discovered issues"; do not fix it.
 - [ ] **AC1 (R1)** — V3b passes: the whole `reverseSymlink` function, comments
       included, is **byte-identical** to the expected post-change function embedded
       in that gate. One diff, no greps — see the note under R8 for why. (V3b.)
@@ -1063,6 +1081,13 @@ Registered **outside** this spec so a later change knows this table is its sourc
       `skipped.push(l)`.
       All five were measured red, and the unmutated function measured green,
       while this spec was drafted.
+      **(f) THE TRUST-ROOT MUTATION, and it is V0's not V3b's.** Change one byte
+      inside R8's heredoc **in this spec**, apply the identical change to WP-153's
+      heredoc **and** to `reverseSymlink`. **V3b and V3e both stay GREEN** — they
+      are consistent with each other and with the code, just consistently wrong.
+      **V0 goes red** and names the line and column. Measured end-to-end in a
+      throwaway repo reproducing the real lifecycle (main at `Ready`, one
+      implementation commit). Paste V0's output.
 - [ ] **AC6 (mirrors moved, R3–R14)** — the twelve WP-153 anchors carry their
       replacement text byte-exactly (V3c: the full diff is pasted and compared
       hunk-by-hunk against the R-blocks), the post-merge-note **heading line is
@@ -1092,6 +1117,62 @@ node tests/run.js tests/unit/manifest.test.js
 # unlinks that entry. All three counts were measured at 0f9ee08 while drafting.
 
 # ── AFTER R1 + R2 + R3-R14 ────────────────────────────────────────────────────
+# ── V0 — THE TRUST ROOT. Run this FIRST, before anything below. ───────────────
+# Every other gate in this section compares an artifact against text that lives in
+# THIS spec: V3b/V3e resolve the expected function from R8's heredoc, V3a/V3c
+# compare WP-153 against the R-blocks. So this spec is the root of trust, and the
+# implementation commit is REQUIRED to touch it (the status flip). Round 5 found
+# the consequence: a commit could edit R8's heredoc here, apply the same edit to
+# WP-153 and to manifest.js, weaken the delivered tests, and leave V3b, V3e, V3d,
+# the path-set check and the suite all green. MEASURED in a throwaway repo — the
+# one-byte variant of exactly that attack keeps V3b and V3e green.
+#
+# So: reconstruct this spec from the branch base and license EXACTLY ONE change —
+# the frontmatter status flip. Anything else here is red.
+#
+# The licensed substitution is `status: Ready` -> `status: In-Review`, NOT
+# `Draft` -> `In-Review`. Verified against a real merged implementation commit:
+# `8ecf7f0` (WP-scheduler-node-path-durability) changed exactly one line of its
+# spec, `-status: Ready` / `+status: In-Review`, numstat `1 1`. The Draft->Ready
+# move is the architect's or owner's, in its own earlier commit on main — so if
+# this gate reports that the base spec is not `Ready`, the lifecycle was skipped.
+BASE=$(git merge-base main HEAD)
+node -e '
+const fs = require("node:fs");
+const { execSync } = require("node:child_process");
+const SPEC = "docs/specs/WP-symlink-lexical-fallback-removal.md";
+const base = execSync(`git show ${process.argv[1]}:${SPEC}`, { maxBuffer: 1e8 }).toString();
+const lines = base.split("\n");
+const fmEnd = lines.indexOf("---", 1);
+if (fmEnd === -1) { console.error("FAIL: no frontmatter terminator in the base spec"); process.exit(1); }
+const hits = [];
+for (let i = 0; i < fmEnd; i++) if (lines[i] === "status: Ready") hits.push(i);
+if (hits.length !== 1) {
+  console.error(`FAIL: the base spec frontmatter has ${hits.length} \`status: Ready\` lines, expected exactly 1.`);
+  console.error("  This spec must be at `status: Ready` on the branch base before implementation starts.");
+  process.exit(1);
+}
+lines[hits[0]] = "status: In-Review";
+const expected = lines.join("\n");
+const actual = fs.readFileSync(SPEC, "utf8");
+if (actual === expected) { console.log("V0 ok — this spec is the base spec with ONLY the Ready->In-Review flip"); process.exit(0); }
+const a = actual.split("\n"), b = expected.split("\n");
+for (let i = 0; i < Math.max(a.length, b.length); i++) {
+  if (a[i] === b[i]) continue;
+  const x = a[i] ?? "<missing line>", y = b[i] ?? "<missing line>";
+  let c = 0; while (c < x.length && c < y.length && x[c] === y[c]) c++;
+  const from = Math.max(0, c - 60), to = c + 60;
+  console.error(`REGRESSED: this spec diverges from base+status-flip at line ${i + 1}, column ${c + 1}`);
+  console.error("  actual  : …" + x.slice(from, to) + "…");
+  console.error("  expected: …" + y.slice(from, to) + "…");
+  console.error("  The implementation commit may change ONE line of this spec: the status flip.");
+  console.error("  Everything else here — R8s heredoc above all — is the trust root the other gates rest on.");
+  process.exit(1);
+}
+console.error("REGRESSED: this spec differs from base+status-flip in trailing content");
+process.exit(1);
+' "$BASE"
+
 # V1 — the manifest suite. shared-skill-links is included because it shares the
 # scheduler guard the suite depends on (WP-153's V1, unchanged).
 # Expect `pass 80 / fail 0 / skipped 1` on manifest.test.js.
@@ -1274,7 +1355,8 @@ node scripts/boundary-check.js docs/specs/WP-symlink-lexical-fallback-removal.md
 ## Definition of done
 
 1. All verification steps pass locally; output pasted into the PR body, including
-   **both** directions of AC2 and AC4, and all five AC5 mutation outputs.
+   **both** directions of AC2 and AC4, and all six AC5 mutation outputs.
+   **V0's output goes first** — it is what makes the rest meaningful.
 2. Branch `wp/symlink-lexical-fallback-removal`; conventional commits; PR titled
    `fix(manifest): narrow reverseSymlink row 3 to the semantic proof (WP-symlink-lexical-fallback-removal)`.
    **`fix`, not `chore`** — this changes reachable behavior (AC7).
