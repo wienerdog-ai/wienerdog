@@ -1,16 +1,36 @@
 ---
 id: WP-managed-block-insertion-anchor
 title: Record a managed-block insertion anchor at forward time so uninstall strips only separators it can prove are ours
-status: Draft
+status: Ready
 model: opus
 size: M
 depends_on: [WP-147]
-adrs: [ADR-0004, ADR-0019, ADR-0031, ADR-0036]
+adrs: [ADR-0004, ADR-0019, ADR-0031, ADR-0036, ADR-0038]
 epic: audit-a13
 ---
 
 # WP-managed-block-insertion-anchor: forward-time position evidence for the managed-block reverser
 
+> **OWNER-DECIDED IN SESSION — 2026-08-02 (TRANSCRIBED, NOT OWNER-TYPED).**
+> Gyula Fehér answered in conversation; this record was written by the
+> orchestrator, not by him. It records that the decision was taken — it is
+> **not** his signature and must never be treated as one, and **no gate keys on
+> it**. Verbatim, all three of his answers as given:
+> *"1) ship as specified 2) ship 4a+4b 3) draft the ADR"*.
+>
+> **Answer 1 — "ship as specified" — is this spec's ruling: disposition (i).**
+> Ship the anchor with the uniqueness conjunct. The owner accepts **R2** and
+> **R2b**, the two bounded whitespace-leftover costs, at the sizes and
+> frequencies the ledger measures. Dispositions (ii) and (iii) are **declined**.
+> (Answer 2 rules on `WP-symlink-authorship-identity`; answer 3 authorizes
+> **ADR-0038**, which codifies the narrowing rule and does **not** gate this
+> spec — see that ADR's "Relationship to the two specs".)
+>
+> **This ruling was the only thing gating this spec**, so its status moves
+> `Draft` → `Ready` in the same commit. The non-selected dispositions are kept
+> below as dated records, not deleted — the ledger is the evidence the ruling was
+> made against, and a future reader must be able to see what was declined.
+>
 > **This is Part A of a two-part chain.** It was drafted as one half of a
 > consolidated WP that the 2026-08-02 wave routed under two names; the
 > consolidated document was split at its own pre-cut line after Codex design-gate
@@ -357,7 +377,7 @@ sits comfortably inside M now that the symlink mechanism is gone.
 
 | Action | Path | Notes |
 |--------|------|-------|
-| modify | src/core/manifest.js | **D1** — add `ANCHOR_WINDOW`, `ANCHOR_HEX`, `insertionAnchor()` and `anchorProvesPosition()` beside `SEP_BEFORE_OK` (`:54-59`), and export `insertionAnchor`. **D2** — `reverseManagedBlock`'s leading-strip region (`:285-311`) gains the `anchorOk` conjunct per **Table Q**; **nothing else in that function changes** (Table U). **D6a** — the module doc comment (`:21-26`) and `@typedef ManifestEntry` (`:45-47`) gain **`anchorBefore?: string` only**; do **not** add Part B's symlink fields. **`ENTRY_FIELD_TYPES` is NOT edited by this WP** — Table P says why, and V6 enforces it. |
+| modify | src/core/manifest.js | **D1** — add `ANCHOR_WINDOW`, `ANCHOR_HEX`, `insertionAnchor()` and `anchorProvesPosition()` beside `SEP_BEFORE_OK` (`:54-59`), and export `insertionAnchor`. **D2** — `reverseManagedBlock`'s leading-strip region (`:285-312`) gains the `anchorOk` conjunct per **Table Q**; **nothing else in that function changes** (Table U). **D6a** — the module doc comment (`:21-26`) and `@typedef ManifestEntry` (`:45-47`) gain **`anchorBefore?: string` only**; do **not** add Part B's symlink fields. **`ENTRY_FIELD_TYPES` is NOT edited by this WP** — Table P says why, and V6 enforces it. |
 | modify | src/adapters/shared.js | **D7a** — `:5` becomes `const { hashDir, insertionAnchor } = require('../core/manifest');`. Do **not** import `linkIdentity`; it does not exist until Part B. **D8** — `recordManagedBlock` (`:113`) takes a seventh parameter `anchorBefore` and assigns it inside the existing `if (inserted)` block, per **Table P**; the sticky-true `createdFile` line is **unchanged**. **D9** — `applyManagedBlock`'s three `recordManagedBlock` calls (`:179`, `:197`, `:210`) pass the anchor per **Table B**; **no other byte of that function changes** (Table U). |
 | modify | tests/unit/manifest.test.js | **A-T1 … A-T11** — the exact set in the Test index. **A-T5 is a required edit to a shipped assertion**, not a new test (**Table F**): `:1417`'s `assert.equal(forged, 'foo', …)` becomes `'foo\n\n'`. The WP-147 Table N suite (`:1336-1358`), T6, T7, T11 and T12 must pass **byte-unmodified** — they craft entries with no anchor, so they exercise the legacy arm and are the regression fence for it. |
 
@@ -631,7 +651,9 @@ evidence, not an author's claim.
 
 **The theorem this WP must satisfy:** for every possible manifest, the set of
 filesystem mutations performed after this WP is a **subset** of base's. New
-evidence may only withhold a strip.
+evidence may only withhold a strip. **This is the rule `ADR-0038` codifies**
+(Proposed, unsigned — cited as context, not as law; it gates nothing here, and
+this WP measured the property independently).
 
 | Forgery | What an attacker gains | Measured | Row |
 |---------|------------------------|----------|-----|
@@ -681,7 +703,7 @@ at `18bc909` — **not** against this spec's excerpts, which are dedented and ca
 | `ownershipOk` and `noFusion` | `manifest.js:287-306` | unchanged — the anchor is a **third** conjunct, not a replacement for either |
 | The `createdFile` delete | `manifest.js:314-316` | `fs.rmSync(target, { force: true })` — the pathname delete using `target`, **not** `entry.path` |
 | The fd-bound write | `manifest.js:317-321` | `Buffer.from(remaining)` + `fs.ftruncateSync(fd, 0)` + `fs.writeSync(fd, buf, 0, buf.length, 0)`. **Never `fs.writeFileSync(entry.path, remaining)`** — that is the pre-F30 shape and restoring it silently regresses WP-144's delete-time binding. **V3 is the guard.** |
-| `reverseSymlink`, in full | `manifest.js:159-217` | **untouched by this WP** — it is Part B's |
+| `reverseSymlink`, in full | `manifest.js:168-217` (JSDoc `:159-167`) | **untouched by this WP** — it is Part B's, and PR #151 already narrowed its row 3 |
 | `ENTRY_FIELD_TYPES` | `manifest.js:902-921` | **untouched by this WP** (Table P; V6 enforces it) |
 | The `reverse()` managed-block arm | `manifest.js:829-869` | unchanged — the `O_NOFOLLOW` open, the `ELOOP`/`ENOENT` arms, the `finally` close |
 | `applyManagedBlock`'s branch bodies | `shared.js:164-211` | unchanged except the three `recordManagedBlock` argument lists. **`out.changed.push(mdPath);` at `:180` and `:211` must survive** — a predecessor spec's snippet dropped it and `sync` silently stopped reporting the file as changed. |
@@ -979,19 +1001,20 @@ printf '\nfunction reverseManagedBlock(entry, dryRun, removed, skipped, removedS
 node /tmp/wd-fnguard.js /tmp/wd-ev2.js reverseManagedBlock "+fs.ftruncateSync(fd, 0)" \
   && { echo "EVASION 2 (later duplicate) NOT DETECTED"; exit 1; } || echo "evasion 2 (later duplicate definition) detected"
 
-# V4 — reverseSymlink is UNTOUCHED by this WP (it is Part B's). WP-153's row-3
-#      lexical fallback and row-4 OWNED gate must still be exactly as shipped.
+# V4 — reverseSymlink is UNTOUCHED by this WP (it is Part B's). Row 3 is the
+#      SINGLE semantic proof as `WP-symlink-lexical-fallback-removal` (PR #151)
+#      left it, and row 4's OWNED gate is WP-153's.
 node /tmp/wd-fnguard.js src/core/manifest.js reverseSymlink \
-  "+lexicalMatch = fs.readlinkSync(L) === T;" \
-  "+!sameResolvedDir(L, T) && !lexicalMatch" \
+  "+if (!sameResolvedDir(L, T)) {" \
+  "-lexicalMatch" \
   "+skillsRoots.some((root) => sameResolvedDir(path.dirname(L), root))" \
   "-entry.origin" "-entry.dev" && echo "V4 ok"
 
 # V4 RED — the same check against a copy with the fallback deleted. MUST fail.
 cp src/core/manifest.js /tmp/wd-v4-red.js
-node -e 'const fs=require("node:fs"),p=process.argv[1];fs.writeFileSync(p,fs.readFileSync(p,"utf8").replace("  if (!sameResolvedDir(L, T) && !lexicalMatch) {","  if (!sameResolvedDir(L, T)) {"))' /tmp/wd-v4-red.js
+node -e 'const fs=require("node:fs"),p=process.argv[1];fs.writeFileSync(p,fs.readFileSync(p,"utf8").replace("  if (!sameResolvedDir(L, T)) {","  if (!sameResolvedDir(L, T) || fs.readlinkSync(L) === T) {"))' /tmp/wd-v4-red.js
 node /tmp/wd-fnguard.js /tmp/wd-v4-red.js reverseSymlink \
-  "+!sameResolvedDir(L, T) && !lexicalMatch" \
+  "+if (!sameResolvedDir(L, T)) {" "-lexicalMatch" \
   && { echo "V4 BROKEN: the guard cannot fail"; exit 1; } || echo "V4 ok (red, as required)"
 
 # V5 — ANCHOR_WINDOW is DEFINED exactly once, in core, and shared.js neither
@@ -1187,14 +1210,14 @@ accepting them, and it is the architect's argument, not a ruling.
 
 | | Disposition | Q1/Q10 relocation fix | Cost |
 |---|---|---|---|
-| (i) | **Ship as specified** (this spec's shape) | **closed** | R2 + R2b: a bounded whitespace leftover in the two withhold cases |
-| (ii) | **Ship the anchor without the uniqueness conjunct** | Q1 closed, **Q10 stays open** (a duplicate-window move still eats a user blank line) | R2 only |
-| (iii) | **Do not ship**; leave WP-147's residual open | stays open | none |
+| **(i) ✅ SELECTED** | **Ship as specified** (this spec's shape) — **owner-ruled 2026-08-02** | **closed** | R2 + R2b: a bounded whitespace leftover in the two withhold cases |
+| (ii) *declined* | **Ship the anchor without the uniqueness conjunct** | Q1 closed, **Q10 stays open** (a duplicate-window move still eats a user blank line) | R2 only |
+| (iii) *declined* | **Do not ship**; leave WP-147's residual open | stays open | none |
 
-**Architect's recommendation: (i).** The costs are whitespace we authored; the
-thing bought is user-authored bytes that shipped code destroys. But (ii) and (iii)
-are coherent, and **the choice is the owner's**. **Do not implement any arm until
-the ruling is recorded here.**
+**Architect's recommendation was (i), and the owner ruled (i)** on 2026-08-02. The costs are whitespace we authored; the
+thing bought is user-authored bytes that shipped code destroys. (ii) and (iii)
+remain recorded above as declined alternatives. **The ruling is recorded in this
+spec's header blockquote; implement arm (i).**
 
 **Whichever is chosen, the same surfaces move in one pass** — this spec's header
 blockquote, Table Q (rows Q5/Q10/Q14/Q15/Q16), Table R rows R2/R2b/R2c,
