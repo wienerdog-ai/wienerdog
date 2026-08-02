@@ -1251,7 +1251,8 @@ test('scheduler-schedule: repointSchedules rewrites a stale embedded node path (
   // stable out-of-tree launcher (<core>/launcher/launch.js) rather than a
   // version-scoped bin, so the node path is the absolute value repoint migrates.
   const file = primaryEntryFile(paths, 'dream');
-  const stableNode = gen.nodePath();
+  // ENTRY-role value — the node path the renderer embeds (Table H site 1).
+  const stableNode = gen.entryNodePath();
   const oldNode = '/old/versions/node/v1.0.0/bin/node';
   const stale = fs.readFileSync(file, 'utf8').split(stableNode).join(oldNode);
   assert.ok(stale.includes(oldNode) && !stale.includes(stableNode), 'seeded a stale entry');
@@ -1544,7 +1545,9 @@ function scriptedDarwinLoader(paths, scriptedLabel, responses) {
  *  @param {import('../../src/core/paths').WienerdogPaths} paths
  *  @param {string} name @param {number} hour @param {number} minute */
 function darwinJobExpect(paths, name, hour, minute) {
-  const node = gen.nodePath();
+  // ENTRY-role value: mirrors the value the register site now hoists
+  // (WP-scheduler-node-path-durability, Table B row 1 / Table H site 2).
+  const node = gen.entryNodePath();
   const launcher = gen.launcherPath(paths);
   const descriptorPath = require('../../src/scheduler/descriptor').descriptorPath(paths, name);
   const label = gen.launchdLabel(name);
@@ -1566,7 +1569,8 @@ function darwinJobExpect(paths, name, hour, minute) {
 
 /** The catch-up analogue of `darwinJobExpect`. */
 function darwinCatchupExpect(paths) {
-  const node = gen.nodePath();
+  // ENTRY-role value — see darwinJobExpect (Table H site 3).
+  const node = gen.entryNodePath();
   const launcher = gen.launcherPath(paths);
   const label = 'ai.wienerdog.catchup';
   const plistPath = path.join(paths.home, 'Library', 'LaunchAgents', `${label}.plist`);
@@ -1589,7 +1593,8 @@ function darwinCatchupExpect(paths) {
  *  unfindable job `name` (expectDigest ''), so a test can pre-plant an
  *  UNCHANGED (`changed:false`) fixture. */
 function canonicalJobPlistContent(paths, name, hour, minute) {
-  const node = gen.nodePath();
+  // ENTRY-role value — see darwinJobExpect (Table H site 4).
+  const node = gen.entryNodePath();
   const launcher = gen.launcherPath(paths);
   const descriptorPath = require('../../src/scheduler/descriptor').descriptorPath(paths, name);
   const logDir = path.join(paths.logs, name);
@@ -2067,7 +2072,7 @@ test('verified-register: T3 case (xi) — the catch-up shape: Minute-only, NO Ho
   const manifest = manifestLib.load(paths);
   const expect = darwinCatchupExpect(paths);
   const content = gen.catchupPlist({
-    node: gen.nodePath(), launcher: gen.launcherPath(paths), expectDigest: '', jobDigests: gen.encodeJobDigests({}),
+    node: gen.entryNodePath(), launcher: gen.launcherPath(paths), expectDigest: '', jobDigests: gen.encodeJobDigests({}),
     home: paths.home, core: paths.core, logDir: path.join(paths.logs, 'catchup'),
   });
   fs.mkdirSync(path.dirname(expect.plistPath), { recursive: true });
@@ -2087,7 +2092,7 @@ test('verified-register: T3 case (xii) — the same catch-up record but carrying
   const manifest = manifestLib.load(paths);
   const expect = darwinCatchupExpect(paths);
   const content = gen.catchupPlist({
-    node: gen.nodePath(), launcher: gen.launcherPath(paths), expectDigest: '', jobDigests: gen.encodeJobDigests({}),
+    node: gen.entryNodePath(), launcher: gen.launcherPath(paths), expectDigest: '', jobDigests: gen.encodeJobDigests({}),
     home: paths.home, core: paths.core, logDir: path.join(paths.logs, 'catchup'),
   });
   fs.mkdirSync(path.dirname(expect.plistPath), { recursive: true });

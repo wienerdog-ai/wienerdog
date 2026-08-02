@@ -631,3 +631,196 @@ test('scheduler-generators: windowsCmdArguments clears NODE_OPTIONS/NODE_PATH + 
   // cmd.exe /c wrapper with AutoRun disabled and delayed expansion off.
   assert.match(argline, /^\/d \/s \/v:off \/c "/);
 });
+
+// WP-scheduler-node-path-durability: `entryNodePath` (Table A) is the ENTRY-only
+// role — the durable Homebrew alias, taken ONLY when proven to be the same
+// interpreter that is running. `nodePath()` stays the RUNTIME role (Table B)
+// and is untouched (T4 covers its own preservation implicitly via T5's split).
+
+// T1 — Table A rows 5-6, injected realpath: the three alias positives (Table F
+// rows 13-15), the different-inode negative, and the throwing negative (AC1).
+const T1_POSITIVES = [
+  [
+    '/opt/homebrew/Cellar/node/25.9.0_2/bin/node',
+    '/opt/homebrew/opt/node/bin/node',
+    'Table F row 13 — plain homebrew formula',
+  ],
+  [
+    '/usr/local/Cellar/node@22/22.14.0/bin/node',
+    '/usr/local/opt/node@22/bin/node',
+    'Table F row 14 — versioned formula (node@22)',
+  ],
+  [
+    '/home/linuxbrew/.linuxbrew/Cellar/node/24.0.1/bin/node',
+    '/home/linuxbrew/.linuxbrew/opt/node/bin/node',
+    'Table F row 15 — linuxbrew prefix derivation',
+  ],
+];
+
+test('node-path-durability: entryNodePath takes the alias only when realpath proves it is the same binary (AC1)', () => {
+  const sameRealpath = () => 'SAME-INODE';
+  for (const [input, expected, why] of T1_POSITIVES) {
+    assert.equal(gen.entryNodePath(input, { realpath: sameRealpath }), expected, why);
+  }
+
+  // Different-inode negative: ALIAS and exec resolve to DIFFERENT strings —
+  // the alias currently names a different binary — fail-safe direction wins.
+  const CELLAR = '/opt/homebrew/Cellar/node/25.9.0_2/bin/node';
+  const identityRealpath = (p) => p;
+  assert.equal(
+    gen.entryNodePath(CELLAR, { realpath: identityRealpath }),
+    CELLAR,
+    'different-inode negative must return execPath verbatim'
+  );
+
+  // Throwing negative: realpath throws (ENOENT-shaped) — fail-safe direction wins.
+  const throwingRealpath = () => {
+    throw new Error('ENOENT: no such file or directory');
+  };
+  assert.equal(
+    gen.entryNodePath(CELLAR, { realpath: throwingRealpath }),
+    CELLAR,
+    'a throwing realpath must return execPath verbatim, never throw'
+  );
+});
+
+// T2 — Table A rows 1-4, table-driven over Table F rows 1-12: every fixture
+// returns its input verbatim, and — via the `reached` flag, checked AFTER the
+// call so a swallowed exception cannot mask it — realpath is never invoked
+// (AC2; this is what makes Table E rows 4-6 red).
+const T2_FIXTURES = [
+  [null, null, 'Table F row 1 — not a string (null)'],
+  [42, 42, 'Table F row 2 — not a string (number)'],
+  ['', '', 'Table F row 3 — empty string, no leading /'],
+  [
+    'C:\\Program Files\\nodejs\\node.exe',
+    'C:\\Program Files\\nodejs\\node.exe',
+    'Table F row 4 — Windows path, no leading /',
+  ],
+  ['/usr/bin/node', '/usr/bin/node', 'Table F row 5 — len < 6'],
+  [
+    '/opt/homebrew/Cellar/node/bin/node',
+    '/opt/homebrew/Cellar/node/bin/node',
+    'Table F row 6 — len < 6',
+  ],
+  [
+    '/home/u/.nvm/versions/node/v22.1.0/bin/node',
+    '/home/u/.nvm/versions/node/v22.1.0/bin/node',
+    "Table F row 7 — parts[i] === 'versions', not Cellar",
+  ],
+  [
+    '/opt/homebrew/Cellar/node/25.9.0_2/bin/x/node',
+    '/opt/homebrew/Cellar/node/25.9.0_2/bin/x/node',
+    'Table F row 8 — Cellar at the wrong depth',
+  ],
+  [
+    '/opt/homebrew/Cellar/pnpm/9.0.0/bin/node',
+    '/opt/homebrew/Cellar/pnpm/9.0.0/bin/node',
+    "Table F row 9 — formula 'pnpm' is not a node keg",
+  ],
+  [
+    '/opt/homebrew/Cellar/../1.0.0/bin/node',
+    '/opt/homebrew/Cellar/../1.0.0/bin/node',
+    'Table F row 10 — traversal in the formula position',
+  ],
+  [
+    '/opt/homebrew/Cellar/node/../bin/node',
+    '/opt/homebrew/Cellar/node/../bin/node',
+    'Table F row 11 — traversal in the version position',
+  ],
+  [
+    '/opt/homebrew/Cellar/node/beta/bin/node',
+    '/opt/homebrew/Cellar/node/beta/bin/node',
+    "Table F row 12 — version 'beta' does not start with a digit",
+  ],
+];
+
+test('node-path-durability: entryNodePath returns every non-alias input verbatim, WITHOUT touching the filesystem (AC2)', () => {
+  for (const [input, expected, why] of T2_FIXTURES) {
+    const reached = { realpath: false };
+    const realpath = () => {
+      reached.realpath = true;
+      assert.fail(`AC2: realpath must not be called — ${why}`);
+    };
+    const got = gen.entryNodePath(input, { realpath });
+    assert.equal(got, expected, why);
+    assert.equal(reached.realpath, false, `realpath was reached for: ${why}`);
+  }
+});
+
+// T4 — idempotence (AC6): entryNodePath is deterministic for a fixed
+// filesystem, and rendering the same job twice through a real renderer with
+// entryNodePath's result produces byte-identical strings. AC6 asserts
+// rendered-bytes idempotence ONLY — it says nothing about OS convergence
+// (Table C rows 4 and 7 are the residual on that front, not this test's job).
+test('node-path-durability: entryNodePath is deterministic, and double-rendering a plist with it is byte-identical (AC6)', () => {
+  const opts = { realpath: () => 'SAME-INODE' };
+  const exec = '/opt/homebrew/Cellar/node/25.9.0_2/bin/node';
+
+  const first = gen.entryNodePath(exec, opts);
+  const second = gen.entryNodePath(exec, opts);
+  assert.equal(first, second);
+  assert.equal(first, '/opt/homebrew/opt/node/bin/node');
+
+  const render = () =>
+    gen.launchdPlist({
+      name: 'daily-digest',
+      hour: 7,
+      minute: 0,
+      node: gen.entryNodePath(exec, opts),
+      launcher: LAUNCHER,
+      descriptor: DESC,
+      expectDigest: DIGEST,
+      home: HOME,
+      core: CORE,
+      logDir: '/Users/ada/.wienerdog/logs/daily-digest',
+    });
+  assert.equal(render(), render());
+});
+
+// T5 — the role-split detector (AC4, Table E row 7): a fabricated Homebrew
+// layout, exercised through the REAL fs.realpathSync against a REAL symlink,
+// with NO seam at all. `nodePath()` must still return process.execPath
+// unchanged; `entryNodePath()` must return the durable alias; and the two
+// must differ. POSIX-only — a Windows execPath is a drive-letter path, which
+// Table A row 1 correctly returns unchanged (already covered by AC2/Table F
+// row 4), so gating this test loses no coverage (see AC4).
+const posixOnly = { skip: process.platform === 'win32' };
+
+test('node-path-durability: nodePath() vs entryNodePath() under a fabricated Homebrew layout — the role split, no seam (AC4, Table E row 7)', posixOnly, () => {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+
+  // (i) realpath the temp root FIRST — on macOS /tmp is a symlink to
+  // /private/tmp, and building paths off the unresolved root would compare
+  // two different strings later.
+  const TMP = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'wd-nodepath-')));
+  const originalExecPath = process.execPath;
+
+  try {
+    // (iii) the fabricated Cellar binary must be a REAL regular file (never
+    // executed, only realpath'd); TMP/opt must exist as a directory BEFORE
+    // the symlink is created, since fs.symlinkSync does not create parents.
+    const cellarDir = path.join(TMP, 'Cellar', 'node', '9.9.9', 'bin');
+    fs.mkdirSync(cellarDir, { recursive: true });
+    const cellarNode = path.join(cellarDir, 'node');
+    fs.writeFileSync(cellarNode, '');
+
+    fs.mkdirSync(path.join(TMP, 'opt'), { recursive: true });
+    fs.symlinkSync(path.join('..', 'Cellar', 'node', '9.9.9'), path.join(TMP, 'opt', 'node'));
+
+    // (ii) restored in the `finally` below — never leak a fake execPath into
+    // the rest of the suite.
+    Object.defineProperty(process, 'execPath', { value: cellarNode, configurable: true, writable: true });
+
+    assert.equal(gen.nodePath(), process.execPath);
+    const alias = path.join(TMP, 'opt', 'node', 'bin', 'node');
+    assert.equal(gen.entryNodePath(), alias);
+    assert.notEqual(gen.nodePath(), gen.entryNodePath());
+  } finally {
+    Object.defineProperty(process, 'execPath', { value: originalExecPath, configurable: true, writable: true });
+    // (iv) clean the temp dir in the same finally.
+    fs.rmSync(TMP, { recursive: true, force: true });
+  }
+});
