@@ -1250,8 +1250,10 @@ divergence is recorded without the contract drifting from the code.
 > - **T4 / row-3-fallback — the fallback is DEAD THROUGH PRODUCTION; the spec
 >   RECORDS that, it does not enact it.** The unreachability was confirmed by the
 >   implementer and wd-reviewer independently on PR #137 and re-confirmed by Codex
->   on the spec-hygiene review. It does **not** change Table A row 3, T4 or V4: the
->   fallback is in the shipped code, so the settled contract keeps describing it,
+>   on the spec-hygiene review. It does **not** change Table A row 3 or T4, and V4
+>   keeps its ratified expectation — **both** sub-tests — in a strengthened
+>   assertive form (see the post-merge note): the fallback is in the shipped code,
+>   so the settled contract keeps describing it,
 >   and its deletion is routed to `WP-symlink-lexical-fallback-removal`. The full
 >   analysis, the anchors and the standing instruction are in the
 >   [2026-08-02 post-merge note](#post-merge-note--2026-08-02-the-lexical-fallback-is-dead-through-production-removal-routed).
