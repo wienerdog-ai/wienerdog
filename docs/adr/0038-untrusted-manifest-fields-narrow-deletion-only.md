@@ -53,45 +53,88 @@ The rule below is **not** a universal statement about every key in the manifest.
 An earlier draft quantified over "every manifest field" and was falsified in
 review by `target`; the scope is therefore stated first and precisely.
 
-**Governed: a newly introduced OPTIONAL EVIDENCE field.** A key added to an
-existing entry kind, absent from entries written by earlier versions, whose only
-job is to let the reverser decide whether an artifact is provably Wienerdog's.
-`sepBefore`, `sepAfter`, `hash`, `target`, `createdFile`, and the two fields
-proposed by the specs below are all of this shape.
+**The governed unit is an evidence-field GROUP, not a single key.** Fields that
+are written and read together — `{sepBefore, sepAfter}`, `{origin, dev, ino}` —
+are introduced by one change and decided by one predicate, so quantifying over
+them one at a time is meaningless. The group is governed as a unit and the rule
+quantifies over its **complete joint value space**.
+
+**Governed: an evidence-field group added to a PRE-EXISTING entry kind.** Two
+conditions, both required: the keys must carry *evidence* (their job is to let
+the reverser decide whether an artifact is provably Wienerdog's), and the kind
+must have existed, with a reverser, **before** the group was added — otherwise
+there is no baseline to compare against. Each governed group is pinned to the
+commit that introduced it:
+
+| Group | Kind | Introduced by | Baseline = the reverser immediately before |
+|---|---|---|---|
+| `{target}` | `symlink` | WP-153, merged `78506dc` (PR #137) | `reverseSymlink` unlinked **any** symlink at a recorded path, with no ownership test |
+| `{sepBefore, sepAfter}` | `managed-block` | WP-147, `ddd457f` (PR #134) | `reverseManagedBlock` stripped a fixed one newline on each side |
+| `{anchorBefore}` *(proposed)* | `managed-block` | `WP-managed-block-insertion-anchor` | the reverser at `9188a1c` |
+| `{origin, dev, ino}` *(proposed)* | `symlink` | `WP-symlink-authorship-identity` | the reverser at `9188a1c` |
+
+**The baseline is never "the entry does not exist".** It is the reverser's
+behavior for that kind with the group absent but the entry present. A no-entry
+baseline would make every legitimate removal a widening and the rule vacuous.
 
 **Not governed — dispatch and locator keys: `kind` and `path`.** They do not
-*evidence* anything; they are what makes an entry an entry. There is no "absent"
-case to compare against — `validateEntry` rejects an entry lacking either — and
-therefore no baseline in which the entry exists without them. A rule phrased as
-"absent versus present" is not meaningful for a key whose absence deletes the
-entry.
+*evidence* anything; they are what makes an entry an entry. `validateEntry`
+rejects an entry lacking either, so there is no "absent" case and no baseline in
+which the entry exists without them.
 
-**Not governed prospectively — fields already shipped.** They are cited below as
+**Not governed — keys born WITH their entry kind.** They have no pre-field
+reverser, so N and R are not evaluable for them at all. Verified with
+`git log -S`, per kind, because "hash" is not one field:
+
+| Key | Kind | Arrived | Evidence |
+|---|---|---|---|
+| `createdFile` | `managed-block` | with the kind | `87047a8` (WP-006, the Claude adapter) |
+| `hash` | `file` | with the kind | `5cbcc9e` (WP-003, the installer core) |
+| `hash` | `copied-skill` | with the kind | `980279e` (WP-050) |
+
+*(`6bc8802`/WP-144 is where `hash:` enters `ENTRY_FIELD_TYPES` — that is the
+type **gate**, not the field, and it does not make the field governed.)*
+
+**`createdFile` is the sharpest reason the baseline must be the pre-field
+reverser and not the absent case.** Read with the absent case as a proxy
+baseline, **N is outright falsified** on it: absent ⇒ `ftruncateSync` +
+`writeSync`, and the file survives (`manifest.js:317-321`); a forged
+`createdFile: true` on an entry whose `remaining.trim() === ''` ⇒
+`fs.rmSync(target)` (`:314-316`), and the file is gone. **An unlink is not a
+subset of a truncate.** That is the same falsification `target` produced, on the
+neighbouring key — which is why the reference point is stated three times in this
+ADR and why `createdFile` is listed here rather than as an instance.
+
+**Not governed prospectively — groups already shipped.** They are cited below as
 **instances**, evidence that the rule describes real practice. They are not
 re-opened by this ADR, and a signature does not license revisiting them.
 
 ## Decision
 
-**For a newly introduced optional evidence field `F` on entry kind `K`, let the
-BASELINE be the reverser's behavior for `K` immediately before `F` was
-introduced. Then:**
+**For a governed evidence-field group `G` on a pre-existing entry kind `K`, let
+the BASELINE be the reverser's behavior for `K` at the commit immediately before
+`G` was introduced — the commit named in the scope table above. Then:**
 
-- **N — the narrowing rule.** For **every** value of `F` — absent, well-formed,
-  malformed, or forged — the set of filesystem mutations the reverser performs
+- **N — the narrowing rule.** For **every point in the group's joint value
+  space** — every combination of absent, well-formed, malformed and forged
+  across all its keys — the set of filesystem mutations the reverser performs
   must be a **SUBSET of the mutations the baseline performs** on the same
-  on-disk state. A field may make uninstall delete **less**. It may never make it
-  delete **more**, or delete something the baseline would not have.
-- **R — the reversibility floor.** When `F` is **absent**, the reverser must
+  on-disk state. A group may make uninstall delete **less**. It may never make it
+  delete **more**, or delete something the baseline would not have. *(Joint, not
+  per-key: `WP-symlink-authorship-identity`'s Table S is the worked form —
+  twenty cells covering `{origin, dev, ino}` exhaustively.)*
+- **R — the reversibility floor.** When **every key in `G`** is **absent**, the reverser must
   reproduce the baseline **exactly**, not merely a subset of it. Absence is the
   permanent shape of every install written before `F` existed — nothing
   backfills — so a narrower-than-baseline absent case strands those installs'
   artifacts forever.
 - **D — the disposal floor.** N alone does not pick a behavior: refusing an
   entry outright performs **zero** mutations and is trivially a subset, so it
-  satisfies N for *any* field. Among the behaviors N permits, choose one that
-  **never leaves a Wienerdog-created artifact that no future uninstall can
-  remove**. Where refusing would strand such an artifact, malformed input must
-  degrade toward the baseline instead of refusing.
+  satisfies N for *any* group. Among the behaviors N permits, **never choose one
+  that can leave an EMBEDDED artifact behind** (defined below). Where refusing
+  would strand an embedded artifact, malformed input must degrade toward the
+  baseline instead of refusing. **D is owner-buyable, on the same terms as R** —
+  see "D's buy-out" below; it is never satisfied by silence.
 
 **The reference point is the BASELINE, not the absent case.** That distinction is
 the whole content of the correction below, and getting it backwards makes the
@@ -121,6 +164,45 @@ owner and the owner ratified on 2026-08-01 (*"fine to have installs predating
 the WP have uninstall leave all skill symlinks behind"*). **R is a default an
 owner may buy out of with a ruling; N is not.**
 
+### What D protects, defined — because "unremovable" is not the criterion
+
+An earlier draft said D forbids leaving *"a Wienerdog-created artifact that no
+future uninstall can remove"*. **That wording forbids D's own worked example**,
+and review falsified it correctly: `uninstall` deletes the manifest as its last
+step (`src/cli/uninstall.js`), so after a run **no** leftover is removable by a
+future uninstall — a preserved symlink included. Worse, a later `sync` would see
+that surviving link, classify it `origin: 'adopted'`, and row 4a would preserve
+it again, permanently. Under the absolute wording, the symlink posture violates
+D. The criterion has to be something else, and it is:
+
+- **EMBEDDED artifact** — bytes Wienerdog wrote **inside a file the user owns and
+  keeps editing**: the managed block in `CLAUDE.md` / `AGENTS.md`. Recovering
+  from a leftover means the *user* opening their own document and working out
+  which bytes were ours. The file is not ours to delete, and the boundary between
+  our bytes and theirs is exactly the thing the sentinels exist to mark.
+- **STANDALONE artifact** — a whole file, directory or link Wienerdog created:
+  the skill symlinks, the core directory. Recovering from a leftover is one `rm`
+  on a `wienerdog-*`-named path the user can see.
+
+**D forbids leaving an embedded artifact. It permits leaving a standalone one.**
+Both are equally unreachable by a future uninstall; they differ in what recovery
+costs the user, and that is the whole content of the distinction.
+
+**Stated plainly, because it is the honest half:** a standalone leftover really
+is permanent as far as Wienerdog is concerned. That is not a gap this ADR papers
+over — it is the failure mode WP-153's legacy arm already ships and the owner
+already ratified on 2026-08-01.
+
+#### D's buy-out
+
+**R is owner-buyable and D is too, but only explicitly.** Buying out of D means
+accepting that Wienerdog's bytes may remain **permanently inside a file the user
+keeps**, with no path to removal except the user editing it by hand. That is an
+owner-level cost in the same register as R's, and it must be **named in a cost
+ledger and ruled on**, never inferred from a spec's silence. **No shipped or
+proposed design invokes it**, and a design that needs to would be a spec defect
+until the ruling exists.
+
 ### D in practice — the two opposite validation postures
 
 D is what selects between behaviors N permits, and it produces **opposite**
@@ -132,11 +214,13 @@ type-gating decisions in the two specs drafted alongside this ADR:
 | A non-string value therefore… | reaches the reverser and degrades to the legacy strip | is rejected by `validateEntry`; `reverse()` skips the entry |
 | …so the artifact is | **still removed** | **preserved** |
 | Both satisfy **N**? | yes | yes |
-| **D** selects it because… | refusing would leave Wienerdog's block **spliced inside a file the user keeps, with no path to removal by any later uninstall** — an attacker could induce that permanently by corrupting one byte | refusing leaves a symlink Wienerdog created in a directory it created. That is a leftover, not defacement, and it is the same failure mode the owner already ratified for legacy entries |
+| Artifact class | **EMBEDDED** | **STANDALONE** |
+| **D** selects it because… | D **forbids** leaving an embedded artifact. Refusing would leave Wienerdog's block spliced inside a file the user keeps, recoverable only by the user hand-editing their own document — and an attacker could induce that permanently by corrupting one byte | D **permits** leaving a standalone artifact. Refusing leaves a `wienerdog-*` link the user can `rm`, which is the same failure mode the owner already ratified for legacy entries. **After the manifest is deleted it is permanent** — stated, not hidden |
 
-**The question D asks is a property of the artifact, not of the field:** *does
-failing to act strand something inside what the user keeps?* Anyone applying this
-ADR to a new field must answer that before choosing a posture.
+**The question D asks is a property of the artifact, not of the group:** *is this
+artifact EMBEDDED or STANDALONE?* Anyone applying this ADR to a new group must
+classify the artifact before choosing a posture — and if the answer is
+"embedded", refusing is not available without an owner ruling.
 
 ## Instances
 

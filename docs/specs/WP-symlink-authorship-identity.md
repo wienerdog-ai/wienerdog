@@ -499,29 +499,67 @@ function linkIdentity(linkPath) {
 
 Added to `module.exports` and to the `shared.js:5` destructure.
 
-**`reverseSymlink` gains an injectable identity seam:**
+**`reverseSymlink` is specified as a COMPLETE EXPECTED FUNCTION, not as prose
+plus fragments.** The fence below is the **single source**: it is what the
+implementer writes, and **V4 extracts these exact bytes out of this file** and
+byte-diffs them against the implementation. There is no second copy to drift
+against — an earlier revision kept the contract and the gate as separate
+transcriptions and they had already diverged by one trailing comment, which made
+a literal implementation of the contract fail the gate.
+
+Three edits distinguish it from the function at `9188a1c`, and nothing else
+changes: the `opts = {}` parameter, the `identityOf` binding, and rows **4a**
+and **4b** inserted immediately before the `// Row 5:` comment.
+
+<!-- EXPECTED-FUNCTION: reverseSymlink -->
 
 ```js
 function reverseSymlink(entry, dryRun, removed, skipped, removedSet, skillsRoots, opts = {}) {
   const identityOf = opts.identity || linkIdentity;   // test seam only
-```
-
-`(dev, ino)` is a *filesystem* property, so the four behaviours row 4b depends on
-— changed device, changed inode, reused identity, unavailable identity — cannot
-be produced deterministically on a real filesystem, and a test that relies on
-`unlink` + `symlink` happening to allocate a fresh inode is a platform-dependent
-assumption pretending to be a contract. The seam makes all four deterministic
-(**B-T7**, measured). `reverse()`'s call site passes **nothing** — the default
-parameter keeps production behaviour byte-identical, exactly as
-`reverseSchedulerEntry` (Current state §7) already does with its own `opts = {}`.
-`reverseSymlink` is already exported and already unit-tested directly (WP-153's
-T4). **`opts` comes from the call site and never from a manifest entry**, so it
-is not an untrusted-input surface.
-
-**The two new rows** — inserted **between** the existing row-4 block and the
-`// Row 5:` comment, nothing else touched:
-
-```js
+  const L = entry.path;
+  const T = entry.target;
+  // Row 1: not a symlink (real file/dir, or already gone) — never ours to delete.
+  if (!isSymlink(L)) {
+    skipped.push(L);
+    return;
+  }
+  // Row 2: LEGACY (target-less) entry — ownership is unprovable, preserve
+  // unconditionally (owner ruling 2026-08-01). No backfill exists or ever will.
+  if (typeof T !== 'string' || T === '') {
+    process.stderr.write(
+      `wienerdog: keeping ${L} — not the Wienerdog skill link we recorded (replaced, or unverifiable)\n`
+    );
+    skipped.push(L);
+    return;
+  }
+  // Row 3: the link must PROVE it still resolves to the source we recorded.
+  // sameResolvedDir is realpath-based (semantic, follows the link) and is itself
+  // fail-closed — an unresolvable side returns false, which lands HERE, in preserve.
+  // There is deliberately NO second, link-text comparison: WP-153 shipped one, and
+  // WP-symlink-lexical-fallback-removal dropped it because raw-text equality is the
+  // weaker proof and the manifest is UNTRUSTED — a recorded target may narrow this
+  // delete, never authorize one the semantic proof refuses (e.g. a relative recorded
+  // target, which Wienerdog never writes, matched the link text while realpath did
+  // not). Strictly narrowing: every input this now preserves was previously deleted.
+  if (!sameResolvedDir(L, T)) {
+    process.stderr.write(
+      `wienerdog: keeping ${L} — not the Wienerdog skill link we recorded (replaced, or unverifiable)\n`
+    );
+    skipped.push(L);
+    return;
+  }
+  // Row 4: a target match is NOT delete authority — the manifest is untrusted, so
+  // an attacker can forge a (path, target) pair. Require the STRUCTURAL ownership
+  // proof reverseCopiedSkill uses: wienerdog-* basename AND parent realpath-equal
+  // to a harness skills root.
+  const parentIsRoot = skillsRoots.some((root) => sameResolvedDir(path.dirname(L), root));
+  if (!path.basename(L).startsWith('wienerdog-') || !parentIsRoot) {
+    process.stderr.write(
+      `wienerdog: keeping ${L} — not the Wienerdog skill link we recorded (replaced, or unverifiable)\n`
+    );
+    skipped.push(L);
+    return;
+  }
   // Row 4a: ADOPTED — the link was already on disk when we first recorded it, so
   // it is the USER's, not ours, however exactly it matches. Preserve.
   if (entry.origin === 'adopted') {
@@ -548,7 +586,24 @@ is not an untrusted-input surface.
       return;
     }
   }
+  // Row 5: OWNED, in-namespace, and provably resolves to our recorded source.
+  if (!dryRun) fs.unlinkSync(L);
+  removedSet.add(L);
+  removed.push(L);
+}
 ```
+
+**Why the seam exists.** `(dev, ino)` is a *filesystem* property, so the four
+behaviors row 4b depends on — changed device, changed inode, reused identity,
+unavailable identity — cannot be produced deterministically on a real
+filesystem, and a test that relies on `unlink` + `symlink` happening to allocate
+a fresh inode is a platform-dependent assumption pretending to be a contract.
+The seam makes all four deterministic (**B-T7**, measured). `reverse()`'s call
+site passes **nothing** — the default parameter keeps production behavior
+byte-identical, exactly as `reverseSchedulerEntry` (Current state §7) already
+does with its own `opts = {}`. `reverseSymlink` is already exported and already
+unit-tested directly (WP-153's T4a). **`opts` comes from the call site and never
+from a manifest entry**, so it is not an untrusted-input surface.
 
 **One stderr string for rows 2, 3, 4, 4a and 4b, deliberately.** WP-153 already
 shares it across rows 2–4; adding two more distinct strings would add two more
@@ -1031,77 +1086,63 @@ node /tmp/wd-fnguard.js /tmp/wd-v3-red.js reverseManagedBlock \
   "+fs.ftruncateSync(fd, 0)" "-fs.writeFileSync(" \
   && { echo "V3 BROKEN: the guard cannot fail"; exit 1; } || echo "V3 ok (red, as required)"
 
-# V4x — the function extractor both V4 arms use. Prints one top-level function
-#   verbatim, so the check is a BYTE DIFF and not a token search. A token guard
-#   was proven evadable: a branch calling `fs.readlinkSync(L) === T` under a
-#   different identifier, inserted before row 4, kept every asserted token and
-#   passed clean (measured, both review legs).
+# V4x — the extractor. Prints ONE top-level function verbatim, and REFUSES when
+#   the name is defined more than once or is rebound (`reverseSymlink = ...`),
+#   so a later shadowing definition cannot slip past a first-match search.
 cat > /tmp/wd-fnextract.js <<'EX'
 const fs = require('node:fs');
 const [file, fn] = process.argv.slice(2);
 const s = fs.readFileSync(file, 'utf8');
-const i = s.indexOf(`\nfunction ${fn}(`);
-if (i < 0) { console.error(`no top-level ${fn} in ${file}`); process.exit(1); }
+const defs = [...s.matchAll(new RegExp(`\\nfunction ${fn}\\(`, 'g'))];
+if (defs.length === 0) { console.error(`no top-level ${fn} in ${file}`); process.exit(1); }
+if (defs.length > 1) { console.error(`${defs.length} definitions of ${fn} — refusing`); process.exit(1); }
+const rebind = new RegExp(`(^|[^.\\w])${fn}\\s*=[^=]`, 'm');
+const body = s.slice(defs[0].index);
+if (rebind.test(s.replace(body.slice(0, body.indexOf('\n}\n') + 3), ''))) {
+  console.error(`${fn} is rebound outside its definition — refusing`); process.exit(1);
+}
+const i = defs[0].index;
 const j = s.indexOf('\n}\n', i);
 if (j < 0) { console.error(`unterminated ${fn}`); process.exit(1); }
 process.stdout.write(s.slice(i + 1, j + 3));
 EX
-git show 9188a1c:src/core/manifest.js > /tmp/wd-base-manifest.js
 
-# V4 — `reverseSymlink` must be EXACTLY the base function PLUS this WP's three
-#   mandated edits, byte for byte. Reconstruction, not token matching: the
-#   expected function is BUILT here from the base and the Exact-contracts text,
-#   so any extra branch, alias or reordering fails the diff whatever it is named.
-cat > /tmp/wd-expect-symlink.js <<'EXP'
+# V4y — pull the EXPECTED function out of THIS SPEC. The Exact-contracts fence is
+#   the single source; nothing is transcribed twice.
+cat > /tmp/wd-specfence.js <<'SF'
 const fs = require('node:fs');
-let f = fs.readFileSync(process.argv[2], 'utf8');
-const SIG_OLD = 'function reverseSymlink(entry, dryRun, removed, skipped, removedSet, skillsRoots) {\n';
-const SIG_NEW = 'function reverseSymlink(entry, dryRun, removed, skipped, removedSet, skillsRoots, opts = {}) {\n'
-  + '  const identityOf = opts.identity || linkIdentity;\n';
-const ROW5 = '  // Row 5: OWNED, in-namespace, and provably resolves to our recorded source.\n';
-const ROWS = `  // Row 4a: ADOPTED — the link was already on disk when we first recorded it, so
-  // it is the USER's, not ours, however exactly it matches. Preserve.
-  if (entry.origin === 'adopted') {
-    process.stderr.write(
-      \`wienerdog: keeping \${L} — not the Wienerdog skill link we recorded (replaced, or unverifiable)\\n\`
-    );
-    skipped.push(L);
-    return;
-  }
-  // Row 4b: IDENTITY — when we recorded a (dev, ino) pair, the link on disk must
-  // still BE that file object. A delete-and-recreate gets a new inode, so a user's
-  // same-source replacement no longer passes for ours. Fail closed on any doubt.
-  // A PARTIAL pair (one of the two) is a shape the forward step never writes, so
-  // it is unverifiable, not absent — preserve (Table P rule S-4, Table S).
-  const hasDev = typeof entry.dev === 'string';
-  const hasIno = typeof entry.ino === 'string';
-  if (hasDev || hasIno) {
-    const id = hasDev && hasIno ? identityOf(L) : null;
-    if (id === null || id.dev !== entry.dev || id.ino !== entry.ino) {
-      process.stderr.write(
-        \`wienerdog: keeping \${L} — not the Wienerdog skill link we recorded (replaced, or unverifiable)\\n\`
-      );
-      skipped.push(L);
-      return;
-    }
-  }
-`;
-for (const [name, old, neu] of [['signature', SIG_OLD, SIG_NEW], ['rows 4a/4b', ROW5, ROWS + ROW5]]) {
-  if (!f.includes(old)) { console.error(`expected-function build: anchor missing for ${name}`); process.exit(1); }
-  f = f.replace(old, neu);
-}
-process.stdout.write(f);
-EXP
-node /tmp/wd-fnextract.js /tmp/wd-base-manifest.js reverseSymlink > /tmp/wd-base-symlink.js
-node /tmp/wd-expect-symlink.js /tmp/wd-base-symlink.js               > /tmp/wd-expected-symlink.js
-node /tmp/wd-fnextract.js src/core/manifest.js reverseSymlink        > /tmp/wd-actual-symlink.js
-#   POST-IMPLEMENTATION: at base this diff is non-empty by construction (rows
-#   4a/4b do not exist yet). It goes green the moment the mandated edits land —
-#   confirmed by building a scratch implementation from the reconstruction and
-#   re-running this arm against it.
-diff -u /tmp/wd-expected-symlink.js /tmp/wd-actual-symlink.js && echo "V4 ok (byte-identical to the reconstruction)"
+const [spec, marker] = process.argv.slice(2);
+const s = fs.readFileSync(spec, 'utf8');
+const m = s.indexOf(`<!-- ${marker} -->`);
+if (m < 0) { console.error(`marker not found: ${marker}`); process.exit(1); }
+const open = s.indexOf('```js', m);
+const close = s.indexOf('```', open + 5);
+if (open < 0 || close < 0) { console.error('no fenced block after the marker'); process.exit(1); }
+process.stdout.write(s.slice(open + 6, close));
+SF
 
-# V4 RED — MUST fail against the evasion that defeated the old token guard: a
+# V4 — the implementation must be byte-identical to the spec's expected function.
+node /tmp/wd-specfence.js docs/specs/WP-symlink-authorship-identity.md \
+  'EXPECTED-FUNCTION: reverseSymlink' > /tmp/wd-expected-symlink.js
+node /tmp/wd-fnextract.js src/core/manifest.js reverseSymlink > /tmp/wd-actual-symlink.js
+#   POST-IMPLEMENTATION: at base this diff is non-empty by construction (rows
+#   4a/4b do not exist yet). It goes green the moment the mandated edits land.
+diff -u /tmp/wd-expected-symlink.js /tmp/wd-actual-symlink.js && echo "V4 ok (byte-identical to the spec's expected function)"
+
+# V4 SELF-CHECK — the expected function must differ from the base function by
+#   EXACTLY the three mandated edits, so the fence cannot silently absorb a
+#   fourth change. Asserts the diff touches only those regions.
+git show 9188a1c:src/core/manifest.js > /tmp/wd-base-manifest.js
+node /tmp/wd-fnextract.js /tmp/wd-base-manifest.js reverseSymlink > /tmp/wd-base-symlink.js
+diff /tmp/wd-base-symlink.js /tmp/wd-expected-symlink.js | grep '^>' | grep -qv \
+  -e 'opts = {}' -e 'identityOf' -e 'Row 4a' -e 'Row 4b' -e 'adopted' -e 'hasDev' -e 'hasIno' \
+  -e 'skipped.push(L)' -e 'return;' -e '^> *}' -e '^> *);' -e 'process.stderr.write' \
+  -e 'wienerdog: keeping' -e 'entry.dev' -e 'entry.ino' -e 'id === null' -e 'const id =' \
+  -e '^> *// ' \
+  && { echo "V4 SELF-CHECK: the expected function carries an unmandated change"; exit 1; } \
+  || echo "V4 self-check ok (expected = base + the three mandated edits)"
+
+# V4 RED — MUST fail against the evasion that defeated the previous token guard: a
 #   provenance-conditioned link-text delete inserted before row 3, under no
 #   `lexicalMatch` identifier, leaving every previously-asserted token intact.
 cp src/core/manifest.js /tmp/wd-v4-red.js
