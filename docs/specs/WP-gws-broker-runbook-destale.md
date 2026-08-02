@@ -531,10 +531,12 @@ command, and no code. It changes eight lines of documentation prose.
 - [ ] **AC4 (E2, red → green)** — `grep -n "is proven end-to-end by" docs/runbooks/gws-broker.md`
       matches **before** the change and matches **nothing after**, and the file
       still names `tests/scenarios/broker-e2e/` exactly once.
-- [ ] **AC5 (E3, red → green)** —
-      `grep -c "being re-fitted" docs/THREAT-MODEL.md` returns 1 **before** and 0
-      **after**, and `grep -c "WP-scenario-harness-auth-repair" docs/THREAT-MODEL.md`
-      likewise 1 → 0. The replacement clause is present byte-exactly (V5b).
+- [ ] **AC5 (E3, byte-enforced)** — V5b passes: `docs/THREAT-MODEL.md` is
+      **byte-identical** to the branch-base file with **only** the E3 clause
+      substituted. This is one check, not a set of greps, and it subsumes the old
+      before/after sentinels: if the stale clause were still there, or the
+      replacement differed by a word, or anything else in the file moved, the
+      reconstruction diff fails and names the line and column.
 - [ ] **AC6 (nothing else moved)** — `git diff --stat` shows exactly **two** files
       changed: `docs/runbooks/gws-broker.md` with
       `8 insertions(+), 7 deletions(-)`, and `docs/THREAT-MODEL.md` with
@@ -545,11 +547,14 @@ command, and no code. It changes eight lines of documentation prose.
 - [ ] **AC7** — runbook line `:108` (*"which v1 does not do"*) is unchanged, the
       runbook is 125 lines after the edit (124 + E2's one added line), and
       `docs/THREAT-MODEL.md` is still **431** lines.
-- [ ] **AC8 (E3 stayed in its lane)** — no other clause of
-      `docs/THREAT-MODEL.md` moved. Specifically `:32-35` (T0), `:130`, `:132`,
-      `:134`, `:277-279` and `:427` are byte-identical — several are
-      clause-scoped deliverables of **other** specs (Current state §3), so a
-      "helpful" consistency edit there is a permission-boundary violation.
+- [ ] **AC8 (E3 stayed in its lane) — proven by V5b, not asserted.** No other
+      byte of `docs/THREAT-MODEL.md` moved, including the rest of `:146` itself.
+      T0 (`:32-35`) and the clause-scoped regions owned by other specs (`:130`,
+      `:132`, `:134`, `:277-279`, `:427`) are byte-identical by construction. A
+      "helpful" consistency edit anywhere in this file is a permission-boundary
+      violation and V5b will fail on it. **Round-4 note:** the previous checks
+      could not see this — `:146` is one line carrying several security claims,
+      and negating a neighbouring one passed every single check.
 - [ ] `npm run lint` is green.
 
 ## Verification steps (run these; paste output in the PR)
@@ -604,12 +609,43 @@ echo "AC3 ok — no unconditional gate verdict in the blockquote"
 grep -c "wienerdog safety" docs/runbooks/gws-broker.md          # expect 1
 grep -c "tests/scenarios/broker-e2e/" docs/runbooks/gws-broker.md  # expect 1
 
-# V5b (AC5) — E3, byte-exact, in docs/THREAT-MODEL.md. `:146` is one long line,
-# so this greps the replacement clause rather than diffing a line range.
-grep -c "being re-fitted" docs/THREAT-MODEL.md                     # before 1, after 0
-grep -c "WP-scenario-harness-auth-repair" docs/THREAT-MODEL.md     # before 1, after 0
-grep -cF 'harness written to exercise this is `tests/scenarios/broker-e2e/`; the containment itself is enforced by the argv + broker design, unit-verified and design-reviewed.)' docs/THREAT-MODEL.md   # expect 1
-grep -c 'The live end-to-end' docs/THREAT-MODEL.md                  # before 1, after 0
+# V5b (AC5 + AC8) — E3 byte-enforced, and the clause-only permission boundary
+# with it. Greps cannot do this job: `:146` is ONE long line holding several
+# security claims, so a check that only looks for the replacement clause passes
+# while the rest of the line is rewritten. Measured — with E3 applied correctly
+# and the neighbouring keyed-MAC claim silently negated (its `**not**` deleted),
+# every round-3 check still passed: stale phrase 0, replacement 1, changed lines
+# 2, line count 431. The gate below caught it at line 146, column 1238.
+#
+# So: reconstruct the ENTIRE expected file from the branch base by applying ONLY
+# the mandated substitution, and diff. Any other byte anywhere in the file is red.
+BASE=$(git merge-base main HEAD)
+node -e '
+const fs = require("node:fs");
+const { execSync } = require("node:child_process");
+const base = execSync(`git show ${process.argv[1]}:docs/THREAT-MODEL.md`, { maxBuffer: 1e8 }).toString();
+const OLD = "(The live end-to-end poisoned-email harness that exercises this is being re-fitted to the current Claude runtime — WP-scenario-harness-auth-repair; the containment itself is enforced by the argv + broker design, unit-verified and design-reviewed.)";
+const NEW = "(The end-to-end poisoned-email harness written to exercise this is `tests/scenarios/broker-e2e/`; the containment itself is enforced by the argv + broker design, unit-verified and design-reviewed.)";
+const n = base.split(OLD).length - 1;
+if (n !== 1) { console.error(`FAIL: the BASE file contains the E3 clause ${n} times, expected exactly 1`); process.exit(1); }
+const expected = base.replace(OLD, NEW);
+const actual = fs.readFileSync("docs/THREAT-MODEL.md", "utf8");
+if (actual === expected) { console.log("V5b ok — THREAT-MODEL is the base file with ONLY the E3 clause replaced"); process.exit(0); }
+const a = actual.split("\n"), b = expected.split("\n");
+for (let i = 0; i < Math.max(a.length, b.length); i++) {
+  if (a[i] === b[i]) continue;
+  const x = a[i] ?? "<missing line>", y = b[i] ?? "<missing line>";
+  let c = 0; while (c < x.length && c < y.length && x[c] === y[c]) c++;
+  const from = Math.max(0, c - 60), to = c + 60;
+  console.error(`REGRESSED: docs/THREAT-MODEL.md diverges from base+E3 at line ${i + 1}, column ${c + 1}`);
+  console.error("  actual  : …" + x.slice(from, to) + "…");
+  console.error("  expected: …" + y.slice(from, to) + "…");
+  console.error("  Only the E3 clause may change. Nothing else in this file is yours.");
+  process.exit(1);
+}
+console.error("REGRESSED: files differ only in trailing content");
+process.exit(1);
+' "$BASE"
 
 # V6 (AC6, AC7, AC8) — the blast radius, both files.
 git diff --stat

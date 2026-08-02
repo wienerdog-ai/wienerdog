@@ -877,8 +877,8 @@ nothing; reword nothing; leave the heading byte-identical.
 >    sub-test leaves `src/core/manifest.js`; Table A row 3 becomes
 >    `sameResolvedDir(L, T) === false` alone; the Implementation-notes bullet and
 >    the security-checklist bullet are rewritten; T4 becomes **T4a/T4b/T4c**, all
->    asserting *preserve*; and V4 becomes a three-check gate that fails on the
->    sub-test's **presence**. The sentences below reading *"it is nonetheless what
+>    asserting *preserve*; and V4 becomes a single byte-for-byte diff of the whole
+>    `reverseSymlink` function against an expected copy embedded in the gate. The sentences below reading *"it is nonetheless what
 >    ships"*, *"the fallback is dead through production"* and the standing
 >    instruction's *"the fallback stays in the code and in the contract"* describe
 >    the state before that commit. The standing instruction was satisfied, not
@@ -925,6 +925,12 @@ review finding updates the table and all its mirrors in one pass:
       executable-guard constraint V4 imposes on R1.
 - [ ] The R3–R14 sub-sections under Table R — the full replacement text for the
       WP-153 mirrors.
+- [ ] **R10's §2 is a mirror of R8** (registered in round 4): it summarises what
+      V4 becomes, so a change to R8's gate design must move R10's sentence in the
+      same pass. It said "three-check gate" for one round after R8 became a single
+      whole-function diff.
+- [ ] **The Definition of done's AC5 count** — it names how many mutation outputs
+      the PR must carry, and AC5 has changed count twice (two → four → five).
 - [ ] The **Context** section's "Why this is a behavior change" subsection and the
       **top-of-file blockquote** — both restate Table R's R1 characterization
       (narrowing, not dead-code removal). **Registered by Codex round 1**: if the
@@ -1126,69 +1132,38 @@ grep -cF '## Post-merge note — 2026-08-02: the lexical fallback is dead throug
 # "is this line a dated record".
 grep -n '\bT4\b' "$SPEC"
 
-# V3b — R1 (AC1). This is R8's V4 verbatim; run it here too, so the gate this WP
-# installs and the gate this WP is judged by are provably the same text. ONE diff:
-# reverseSymlink must be byte-identical to the expected post-change function.
-# Greps were tried in three review rounds and beaten three times — see the note
-# under R8 before changing this.
-# V4 — reverseSymlink is byte-identical to the expected post-change function.
-# ONE diff, no greps. Read the note below before "simplifying" this back.
-if ! diff <(sed -n '/^function reverseSymlink/,/^}/p' src/core/manifest.js) - <<'FN'
-function reverseSymlink(entry, dryRun, removed, skipped, removedSet, skillsRoots) {
-  const L = entry.path;
-  const T = entry.target;
-  // Row 1: not a symlink (real file/dir, or already gone) — never ours to delete.
-  if (!isSymlink(L)) {
-    skipped.push(L);
-    return;
-  }
-  // Row 2: LEGACY (target-less) entry — ownership is unprovable, preserve
-  // unconditionally (owner ruling 2026-08-01). No backfill exists or ever will.
-  if (typeof T !== 'string' || T === '') {
-    process.stderr.write(
-      `wienerdog: keeping ${L} — not the Wienerdog skill link we recorded (replaced, or unverifiable)\n`
-    );
-    skipped.push(L);
-    return;
-  }
-  // Row 3: the link must PROVE it still resolves to the source we recorded.
-  // sameResolvedDir is realpath-based (semantic, follows the link) and is itself
-  // fail-closed — an unresolvable side returns false, which lands HERE, in preserve.
-  // There is deliberately NO second, link-text comparison: WP-153 shipped one, and
-  // WP-symlink-lexical-fallback-removal dropped it because raw-text equality is the
-  // weaker proof and the manifest is UNTRUSTED — a recorded target may narrow this
-  // delete, never authorize one the semantic proof refuses (e.g. a relative recorded
-  // target, which Wienerdog never writes, matched the link text while realpath did
-  // not). Strictly narrowing: every input this now preserves was previously deleted.
-  if (!sameResolvedDir(L, T)) {
-    process.stderr.write(
-      `wienerdog: keeping ${L} — not the Wienerdog skill link we recorded (replaced, or unverifiable)\n`
-    );
-    skipped.push(L);
-    return;
-  }
-  // Row 4: a target match is NOT delete authority — the manifest is untrusted, so
-  // an attacker can forge a (path, target) pair. Require the STRUCTURAL ownership
-  // proof reverseCopiedSkill uses: wienerdog-* basename AND parent realpath-equal
-  // to a harness skills root.
-  const parentIsRoot = skillsRoots.some((root) => sameResolvedDir(path.dirname(L), root));
-  if (!path.basename(L).startsWith('wienerdog-') || !parentIsRoot) {
-    process.stderr.write(
-      `wienerdog: keeping ${L} — not the Wienerdog skill link we recorded (replaced, or unverifiable)\n`
-    );
-    skipped.push(L);
-    return;
-  }
-  // Row 5: OWNED, in-namespace, and provably resolves to our recorded source.
-  if (!dryRun) fs.unlinkSync(L);
-  removedSet.add(L);
-  removed.push(L);
-}
-FN
-then
-  echo "REGRESSED: reverseSymlink is not byte-identical to the expected function"; exit 1
+# V3b — R1 (AC1), judged against THE SHIPPING GATE. This WP contains exactly ONE
+# expected copy of the function: the heredoc R8 installs into WP-153. This block
+# EXTRACTS that copy from the amended WP-153 and diffs manifest.js against it, so
+# the gate that ships and the gate that judges R1 are the same bytes by
+# construction rather than by a reviewer noticing.
+# (Round 4 found the earlier shape: a SECOND copy was embedded here, so a one-byte
+# transcription error while applying R8 would have left every check green while
+# shipping a permanently wrong V4 into a Done spec.)
+#
+# The `$` anchors below are load-bearing: this block's own prose contains the
+# literal <<'FN' mid-line, and an unanchored count returns 3 instead of 1
+# (measured). Only a real heredoc opener ENDS with it.
+SPEC153=docs/specs/done/WP-153-target-aware-symlink-reverser.md
+SPECWP=docs/specs/WP-symlink-lexical-fallback-removal.md
+fnblock() { awk '/<<\047FN\047$/{f=1;next} f && $0=="FN"{f=0;next} f' "$1"; }
+[ "$(grep -cE "<<'FN'$" "$SPEC153")" -eq 1 ] || {
+  echo "FAIL: expected exactly ONE FN heredoc in $SPEC153"; exit 1; }
+if ! diff <(sed -n '/^function reverseSymlink/,/^}/p' src/core/manifest.js) <(fnblock "$SPEC153"); then
+  echo "REGRESSED: reverseSymlink is not byte-identical to the function WP-153's V4 expects"; exit 1
 fi
-echo "V4 ok — reverseSymlink is byte-identical to the expected function"
+echo "V3b ok — reverseSymlink matches the gate WP-153 ships"
+
+# V3e (AC6 lockstep) — the copy R8 installed into WP-153 is byte-identical to the
+# copy this spec authored. This is the one failure V3b cannot see on its own: a
+# faithfully-applied-but-wrong heredoc would simply judge R1 against the wrong
+# expectation, consistently and silently.
+[ "$(grep -cE "<<'FN'$" "$SPECWP")" -eq 1 ] || {
+  echo "FAIL: this spec must contain exactly ONE FN heredoc (R8's)"; exit 1; }
+if ! diff <(fnblock "$SPECWP") <(fnblock "$SPEC153"); then
+  echo "REGRESSED: WP-153's V4 heredoc differs from the R8 text this spec mandates"; exit 1
+fi
+echo "V3e ok — the shipped gate and the authored gate are the same bytes"
 
 # V3c (AC6, byte-exactness) — bound the WP-153 diff, then paste it IN FULL and
 # compare each hunk against the R3-R14 blocks in this spec. The comparison is the
@@ -1299,7 +1274,7 @@ node scripts/boundary-check.js docs/specs/WP-symlink-lexical-fallback-removal.md
 ## Definition of done
 
 1. All verification steps pass locally; output pasted into the PR body, including
-   **both** directions of AC2 and AC4, and all four AC5 mutation outputs.
+   **both** directions of AC2 and AC4, and all five AC5 mutation outputs.
 2. Branch `wp/symlink-lexical-fallback-removal`; conventional commits; PR titled
    `fix(manifest): narrow reverseSymlink row 3 to the semantic proof (WP-symlink-lexical-fallback-removal)`.
    **`fix`, not `chore`** — this changes reachable behavior (AC7).
