@@ -2195,14 +2195,24 @@ test('verified-register: T3 case (xxi) — an absent path/program/log-path/spawn
 
 test('verified-register: T3 case (xxii) — benign-only drift (stale stdout path): no bootout, existing record stays loaded, loaded:false + notice', async () => {
   const { paths } = setup();
+  // Table N row 2: the notice's ONLY push site is inside `repointSchedules`, and
+  // `repointSchedules` iterates CONFIGURED jobs (`jobsLib.listJobs`), not the
+  // manifest — so the job must be saved for the repoint leg to reach it at all.
+  jobsLib.saveJob(paths, { name: 'dream', at: '03:30', run: 'builtin:dream', timeoutMinutes: 20 });
   const manifest = manifestLib.load(paths);
   const expect = darwinJobExpect(paths, 'dream', 3, 30);
   fs.mkdirSync(path.dirname(expect.plistPath), { recursive: true });
   fs.writeFileSync(expect.plistPath, 'not yet canonical'); // forces changed:true
   const benignStdout = buildPrintStdout({ ...expect, stdoutPath: '/old/logs/launchd.out.log', program: expect.argv[0] });
+  // Four scripted responses: the direct `registerPlatform` leg below consumes
+  // the first pair; `repointSchedules`'s OWN internal `registerPlatform` call
+  // (driven through the SAME loader) consumes the second pair, reproducing the
+  // identical benign-drift mismatch so it reaches the same `loaded:false`.
   const { loader, calls } = scriptedDarwinLoader(paths, expect.label, [
     { status: 0, stdout: benignStdout },
     { status: 1 }, // the non-destructive bootstrap fails (the label is loaded)
+    { status: 0, stdout: benignStdout },
+    { status: 1 },
   ]);
   const res = await withPlutilExists(false, () =>
     schedule.registerPlatform(paths, manifest, { name: 'dream', hour: 3, minute: 30 }, loader, 'darwin')
@@ -2211,6 +2221,15 @@ test('verified-register: T3 case (xxii) — benign-only drift (stale stdout path
   assert.ok(!jobCalls.some((a) => a[1] === 'bootout'), 'BENIGN-only mismatch ⇒ no skip AND no teardown — the record is still doing its authorized job');
   assert.equal(jobCalls.length, 2, 'print + the single failed non-destructive attempt, nothing more');
   assert.equal(res.loaded, false);
+
+  // Table N row 2 — the darwin leg's ONLY notice proof: a `registerPlatform`-
+  // only fixture proves `loaded:false` and nothing about §8's notice, because
+  // the notice's single push site is inside `repointSchedules` (schedule.js:583).
+  const r = await withPlutilExists(false, () => schedule.repointSchedules(paths, manifest, { loader, platform: 'darwin' }));
+  assert.ok(
+    r.notices.some((n) => /"dream".*did not accept it/.test(n)),
+    'repointSchedules pushes §8\'s notice for the still-benign-drifted, still-unloaded entry'
+  );
 });
 
 test("verified-register: T3 case (xxii)'s sibling — a FATAL field (stale env) still reaches the replace path", async () => {
@@ -2282,6 +2301,10 @@ test('verified-register: T4 — catch-up goes through ensureDarwinEntryRegistere
 
 test('verified-register: T5 — linux degraded reload ⇒ loaded:false + notice, even though enable --now succeeds', { skip: !LINUX_SYSTEMD }, () => {
   const { paths } = setup();
+  // Table N row 3: the notice's ONLY push site is inside `repointSchedules`,
+  // which iterates CONFIGURED jobs — the job must be saved for the repoint leg
+  // to reach it.
+  jobsLib.saveJob(paths, { name: 'dream', at: '03:30', run: 'builtin:dream', timeoutMinutes: 20 });
   const manifest = manifestLib.load(paths);
   const loader = (argv) => {
     if (argv[0] === 'systemctl' && argv.includes('daemon-reload')) return { status: 1 };
@@ -2289,6 +2312,15 @@ test('verified-register: T5 — linux degraded reload ⇒ loaded:false + notice,
   };
   const res = schedule.registerPlatform(paths, manifest, { name: 'dream', hour: 3, minute: 30 }, loader, 'linux');
   assert.equal(res.loaded, false, 'reloadOk && enableOk — a degraded reload fails the register even though enable --now succeeded');
+
+  // Table N row 3 — the linux leg's ONLY notice proof: a `registerPlatform`-only
+  // fixture proves `loaded:false` and nothing about §8's notice, since the
+  // notice's single push site is inside `repointSchedules` (schedule.js:583).
+  const r = schedule.repointSchedules(paths, manifest, { loader, platform: 'linux' });
+  assert.ok(
+    r.notices.some((n) => /"dream".*did not accept it/.test(n)),
+    'repointSchedules pushes §8\'s notice for the still-degraded-reload, still-unloaded entry'
+  );
 });
 
 test('verified-register: T5 — linux daemon-reload {status:null} / missing result also counts as failure', { skip: !LINUX_SYSTEMD }, () => {
@@ -2326,8 +2358,9 @@ test('verified-register: T7 — darwin: add() throws when an unchanged entry\'s 
   const fake = fakeLaunchd(paths);
   await runSchedule(env, ['add', 'dream', '--at', '03:30', '--job', 'dream'], fake);
 
-  // Corrupt the loaded record's env so a re-add's readback mismatches, and make
-  // every bootstrap fail so the register cannot heal itself.
+  // Drift the loaded record's spawn type (a BENIGN-tier field, Table A2b) so a
+  // re-add's readback mismatches without authorizing a teardown, and make every
+  // bootstrap fail so the register cannot heal itself.
   const label = 'ai.wienerdog.dream';
   const expect = darwinJobExpect(paths, 'dream', 3, 30);
   const badStdout = buildPrintStdout({ ...expect, spawnType: 'foreground', program: expect.argv[0] });
