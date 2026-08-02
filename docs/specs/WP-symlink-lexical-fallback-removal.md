@@ -653,7 +653,7 @@ copy drifted. ADR-0031: one table, and the prose cites it.
 | W3 | `:433-457` | `**Row 3 has two sub-tests on purpose,` | live | **yes — `:445`** | **R4** |
 | W4 | `:612` | `- [ ] Deliverables cell for tests/unit/manifest.test.js` | live | no | **R12** |
 | W5 | `:637-643` | `- [ ] **(+post-merge) §"Post-merge note — 2026-08-02"**` | live | no | **R9** |
-| W6 | `:775-778` | `- **reverseSymlink** is **module.exports**-ed` | live | no | **R14** |
+| W6 | `:775-778` | ``- **`reverseSymlink` is `module.exports`-ed**`` | live | no | **R14** |
 | W7 | `:779-785` | `- **Guard the lexical fallback**` | live | **yes — `:785`** | **R5** |
 | W8 | `:806` | Test index `\| T4 \| … **DIRECT unit test of reverseSymlink**` | live | **yes — `:806`** | **R7** |
 | W9 | `:869-875` | `- [ ] Every error path in Table A lands in *preserve*` | live | **yes — `:875`** | **R6** |
@@ -670,13 +670,19 @@ W14 (`:1259`)**. R4, R5, R6 re-emit theirs; **R7 re-emits its own on the new T4a
 row** (see R7 — that re-emission is why the count stays five and is not
 optional); W14 is untouched. **Five before, five after.**
 
-**Live `T4` references — the complete set is W1, W5, W6, W8, W9, W10** (`:340`,
-`:643`, `:777`, `:806`, `:873`, `:881`), every one covered by an R-item. Dated
-`T4` references, out of scope, are W13 and W15 only. Two corrections this table
-exists to lock down: **`:643` is LIVE**, not dated — it is the last line of the
-entry R9 replaces — and **`:873` is LIVE** and sits inside R6's anchor block;
-an earlier revision of this spec called `:643` out-of-scope and omitted `:873`
-altogether.
+**`T4` references: read the `Live or dated` column. Every row marked *live* is
+covered by its R-item; every row marked *dated* is out of scope.** That sentence
+is the whole rule, and it is deliberately not accompanied by a list.
+
+**Why there is no list here.** A derived enumeration of the live rows stood in
+this spot, and in two other places citing it, for four consecutive review rounds
+— and drifted in every one of them while the table itself stayed correct
+(`:643` first misfiled as dated, `:873` omitted, then `:612` omitted). The
+fourth reviewer's recommendation was deletion rather than another correction,
+because a restatement of a table is a mirror that no gate can check and every
+edit can break. Two rows worth noticing while reading the column, since both look
+dated and are not: **`:643`** is the last line of the entry **R9** replaces, and
+**`:873`** sits inside **R6**'s anchor block.
 
 **Anchor warning for R10, and it is not optional.** The post-merge note's heading
 is the target of **five** in-document links — **Table W rows W3, W7, W8, W9 and
@@ -945,14 +951,9 @@ original record" framing is lost. Final shape: heading, blank, NEW blockquote,
 R2 renames one test into three, so every **live** place in WP-153 that names `T4`
 as an existing test becomes wrong. These four are surgical: change **only** the
 quoted substring on the named line, leave the rest of the line byte-identical.
-The complete live/dated split is **Table W**, not this paragraph. Live `T4`
-references are W1, W5, W6, W8, W9 and W10 — all six covered by an R-item. Out of
-scope are the dated ones only: **W13** (`:1005`, `:1034`, `:1044`, `:1056`,
-`:1059`, inside the post-merge note) and **W15** (`:1220`, `:1250`, `:1253`,
-`:1262`, the review-gate log). **Note two that are LIVE and easy to misfile:**
-`:643` is the last line of the entry **R9** replaces, and `:873` sits inside
-**R6**'s anchor block — an earlier revision of this spec listed `:643` as
-out-of-scope and omitted `:873`, which is why the census is now a table.
+The live/dated split is **Table W**'s `Live or dated` column, not this
+paragraph, and this paragraph deliberately does not restate it: every row marked
+*live* is covered by its R-item, every row marked *dated* is out of scope.
 
 | # | Line | Replace this substring | With this |
 |---|------|------------------------|-----------|
@@ -1183,11 +1184,15 @@ Registered **outside** this spec so a later change knows this table is its sourc
       hunk-by-hunk against the R-blocks); the post-merge-note **heading line is
       unchanged**; and **all five** in-document links to that anchor still
       resolve — the same five **Table W** counts (W3, W7, W8, W9, W14), which
-      holds only because **R7 re-emits the link on its new T4a row**. Every
-      **live** `T4` reference in Table W (W1, W5, W6, W8, W9, W10) has been
-      updated by its R-item, and **no surviving `T4` names a test that does not
-      exist** — R9's replacement legitimately reads "T4 (now T4a/T4b/T4c)", which
-      names the rename rather than an existing test and is correct as written.
+      holds only because **R7 re-emits the link on its new T4a row**. **Every Table W
+      row marked *live* has been updated by its R-item; rows marked *dated* are
+      unchanged by design.** And **no surviving `T4` names an existing test** —
+      R9's replacement legitimately reads "T4 (now T4a/T4b/T4c)", which names the
+      rename, not a test. **V3a2 enforces exactly that rule** and is executable:
+      it permits R9's phrase and requires every other `T4` to sit at or after the
+      post-merge-note heading. Neither this criterion nor V3a2 restates Table W's
+      live rows — that enumeration drifted in four consecutive rounds and was
+      deleted rather than corrected.
       The dated references (W13, W15) are unchanged by design. R1, R2 and R3–R14
       are in **one** commit (V3d).
 - [ ] **AC7 (the characterization is stated, not implied)** — the PR body says in
@@ -1302,11 +1307,31 @@ grep -cF '| T4c |' "$SPEC"                                  # expect 1 (R7)
 grep -cF 'No row deletes on an error' "$SPEC"               # expect 1 (R6)
 grep -cF '## Post-merge note — 2026-08-02: the lexical fallback is dead through production, removal routed' "$SPEC"  # expect 1 — the heading is UNCHANGED (R10 anchor warning)
 
-# V3a2 (AC6) — no LIVE `T4` reference survives. Every remaining hit must be in
-# the post-merge note (>= line 1001 pre-edit) or the dated review-gate log.
-# Inspect each hit by eye and say so in the PR; there is no automatic test for
-# "is this line a dated record".
-grep -n '\bT4\b' "$SPEC"
+# V3a2 (AC6) — no surviving `T4` names a CURRENT test. This is now executable and
+# it AGREES WITH AC6. Two transition phrases are permitted, because each names the
+# rename rather than a test:
+#   • R9's, in the LIVE Mirrored Surface Checklist:  T4 (now T4a/T4b/T4c)
+#   • R10's, inside the post-merge note:             T4 becomes **T4a/T4b/T4c**
+# Everything else must sit AT OR AFTER the post-merge-note heading — the dated
+# record, and the dated review-gate log below it. R10's insertion lands after that
+# heading, so the line rule covers it without a second exception.
+# \bT4\b does not match T4a/T4b/T4c (the trailing letter is a word character), so
+# the renamed tests never trip this.
+# (An earlier revision forbade EVERY live T4 outright, which contradicted AC6 —
+# R9's phrase is live by design — and no correct implementation could satisfy
+# both. Codex delta pass caught it.)
+H=$(grep -n '^## Post-merge note — 2026-08-02' "$SPEC" | cut -d: -f1)
+[ -n "$H" ] || { echo "FAIL: post-merge-note heading not found"; exit 1; }
+BAD=$(grep -n '\bT4\b' "$SPEC" | awk -F: -v h="$H" '($1+0) < (h+0)' | grep -vF 'T4 (now T4a/T4b/T4c)')
+if [ -n "$BAD" ]; then
+  echo "REGRESSED: live T4 reference(s) naming a current test:"; printf '%s\n' "$BAD"; exit 1
+fi
+echo "V3a2 ok — the only live T4 is R9's rename phrase (heading at :$H)"
+# Measured three ways while drafting: green on the correct post-edit state; red,
+# naming the line, when AC2 (W10) is left un-updated; and red against the
+# UNAMENDED WP-153, where it lists every line Table W marks live. That last run
+# is also the check to use if you ever doubt the column: the gate derives the set,
+# so no prose has to.
 
 # V3b — R1 (AC1), judged against THE SHIPPING GATE. This WP contains exactly ONE
 # expected copy of the function: the heredoc R8 installs into WP-153. This block
@@ -1387,11 +1412,12 @@ for L in "startsWith('wienerdog-')" "skillsRoots"; do
 done
 echo "V4b ok — structural ownership gate present"
 
-# V5 — the SIX AC5 mutations. For each: edit src/core/manifest.js, re-run the
-# V3b block above, then `git checkout -- src/core/manifest.js`. Every one must
-# print `REGRESSED: reverseSymlink is not byte-identical to the expected function`
-# plus a legible diff hunk. Mutation (a) additionally changes test outcomes, so
-# run the suite for that one too.
+# V5 — AC5 mutations (a)-(e), the FIVE source-only ones. For each: edit
+# src/core/manifest.js, re-run the V3b block above, then
+# `git checkout -- src/core/manifest.js`. Every one must print
+# `REGRESSED: reverseSymlink is not byte-identical to the expected function` plus
+# a legible diff hunk. Mutation (a) additionally changes test outcomes, so run the
+# suite for that one too.
 #   (a) restore the Current-state §1 `lexicalMatch` block   → also: T4a, T4c red
 #   (b) insert  if ('//' && fs.readlinkSync(L) === T) { fs.unlinkSync(L); return; }
 #   (c) wrap the unmodified row-3 block in  if (false) { … }
@@ -1399,7 +1425,23 @@ echo "V4b ok — structural ownership gate present"
 #   (e) change one  skipped.push(L)  to  skipped.push(l)
 # (b) and (c) are the two that beat the round-2 gate; they are in this list so a
 # future editor cannot re-weaken V4 without noticing.
+# AC5's SIXTH mutation is NOT here — it is a different shape and a different gate.
+# See V5f.
 node tests/run.js tests/unit/manifest.test.js   # for mutation (a) only
+
+# V5f — AC5 mutation (f), THE TRUST-ROOT MUTATION. Not a source-only edit and NOT
+# V3b's to catch: it changes the expected function consistently in all three
+# places, so V3b and V3e agree with the code and stay GREEN. V0 is the gate.
+#   1. change one byte inside R8's heredoc IN THIS SPEC
+#      (e.g.  const T = entry.target;  ->  const T = entry.targetX;)
+#   2. make the identical change in WP-153's V4 heredoc
+#   3. make the identical change in reverseSymlink in src/core/manifest.js
+#   4. run V3b and V3e  -> BOTH ok. That is the point of this mutation.
+#   5. run V0           -> REGRESSED, naming the line and column in this spec
+#   6. revert all three: git checkout -- docs/specs/WP-symlink-lexical-fallback-removal.md \
+#        docs/specs/done/WP-153-target-aware-symlink-reverser.md src/core/manifest.js
+# Measured end-to-end in a throwaway repo reproducing the real lifecycle (main at
+# `status: Ready`, one implementation commit): V3b ok, V3e ok, V0 red.
 
 # V7 — lint.
 npm run lint
