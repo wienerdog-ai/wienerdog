@@ -51,7 +51,7 @@ test('skill symlinked into the target dir with the default seam (POSIX)', () => 
   assert.ok(out.changed.includes(linkPath));
   assert.deepEqual(
     manifest.entries.filter((e) => e.path === linkPath),
-    [{ kind: 'symlink', path: linkPath }]
+    [{ kind: 'symlink', path: linkPath, target: coreSkill }]
   );
 });
 
@@ -190,7 +190,7 @@ test('dry-run records a symlink entry and reports the change without writing', (
   assert.ok(out.changed.includes(linkPath));
   assert.deepEqual(
     manifest.entries.filter((e) => e.path === linkPath),
-    [{ kind: 'symlink', path: linkPath }]
+    [{ kind: 'symlink', path: linkPath, target: path.join(skillsDir, 'wienerdog-setup') }]
   );
 });
 
@@ -336,7 +336,7 @@ test('a pre-existing correct symlink is adopted into the manifest (recorded, rep
   assert.ok(!out.changed.includes(linkPath));
   assert.deepEqual(
     manifest.entries.filter((e) => e.path === linkPath),
-    [{ kind: 'symlink', path: linkPath }]
+    [{ kind: 'symlink', path: linkPath, target: coreSkill }]
   );
 });
 

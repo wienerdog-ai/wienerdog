@@ -431,7 +431,7 @@ function applySkillLinks(skillsDir, targetSkillsDir, dryRun, manifest, out, opts
       }
       if (currentTarget === target) {
         out.unchanged.push(linkPath);
-        recordOnce(manifest, { kind: 'symlink', path: linkPath });
+        recordOnce(manifest, { kind: 'symlink', path: linkPath, target });
       } else {
         // A wienerdog-* symlink whose target is NOT our core skill source — a user's
         // own link, or a stale one from another install root. Never silently clobber
@@ -482,13 +482,13 @@ function applySkillLinks(skillsDir, targetSkillsDir, dryRun, manifest, out, opts
       out.notices.push(`left user file untouched: ${linkPath}`);
     } else if (dryRun) {
       // A dry run does not probe symlink permission; report the common case.
-      recordOnce(manifest, { kind: 'symlink', path: linkPath });
+      recordOnce(manifest, { kind: 'symlink', path: linkPath, target });
       out.changed.push(linkPath);
     } else {
       // Absent: prefer a symlink; copy where symlink creation is unpermitted.
       try {
         symlink(target, linkPath);
-        recordOnce(manifest, { kind: 'symlink', path: linkPath });
+        recordOnce(manifest, { kind: 'symlink', path: linkPath, target });
       } catch (err) {
         if (err && (err.code === 'EPERM' || err.code === 'EACCES')) {
           fs.cpSync(target, linkPath, { recursive: true });

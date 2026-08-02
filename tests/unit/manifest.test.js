@@ -297,11 +297,17 @@ test('global guard (ii): a {kind:scheduler-entry, path: manifest} entry never rm
 test('global guard (iii): a {kind:symlink} whose path resolves to a deferred member is never unlinked', () => {
   const paths = tempPaths();
   const manifest = makeInstall(paths);
-  // A symlink (inside the core) pointing at the manifest ledger. Without the
-  // realpath-aware guard, reverseSymlink would unlink it.
-  const link = path.join(paths.core, 'ledger-link');
+  // An OWNED, target-matched skill link (wienerdog-* directly under a harness
+  // skills root) pointing at the manifest ledger. It reaches Table A row 5 —
+  // OWNED (row 4) and readlink === target (row 3) — so the deferred-member guard
+  // is the ONLY thing between it and fs.unlinkSync. (A <core>/ledger-link fixture
+  // would be doubly vacuous under WP-153: preserved by row 2 as legacy AND by
+  // row 4 for not being OWNED, so the guard could never be shown to matter.)
+  const skillsRoot = path.join(paths.claudeDir, 'skills');
+  fs.mkdirSync(skillsRoot, { recursive: true });
+  const link = path.join(skillsRoot, 'wienerdog-ledger');
   fs.symlinkSync(paths.manifest, link);
-  manifestLib.record(manifest, { kind: 'symlink', path: link });
+  manifestLib.record(manifest, { kind: 'symlink', path: link, target: paths.manifest });
   manifestLib.save(paths, manifest);
   const reloaded = manifestLib.load(paths);
   const { removed, skipped } = manifestLib.reverse(paths, reloaded, {});
@@ -1471,5 +1477,150 @@ test('WP-147 T12 (AC14): non-string separator metadata still strips the block, n
     assert.equal(final, 'lineA\nlineB\n', `${label}: legacy conservative strip, no user text touched`);
     assert.ok(res.removed.includes(md), `${label}: block still removed (entry NOT rejected upstream)`);
     assert.match(err, /ignoring out-of-vocabulary separator metadata/, `${label}: the stderr notice fires`);
+  }
+});
+
+// ── WP-153: target-aware symlink reverser (audit A13 follow-up) ───────────────
+// reverseSymlink now unlinks ONLY a link it can prove Wienerdog owns (Table A):
+// row 2 legacy (target-less) → preserve; row 3 target mismatch → preserve;
+// row 4 not-OWNED (wienerdog-* directly under a harness skills root) → preserve;
+// row 5 OWNED + resolves to the recorded source → unlink. OWNED fixtures live at
+// `<claudeDir>/skills/wienerdog-<name>` (a harness skills root); their symlink
+// destinations sit inside `claudeDir` so reverse()'s withinAllowedRoot gate
+// (which realpaths — i.e. follows — the link) passes and the red baseline is
+// obtainable.
+
+test('reverseSymlink: a user replacement link (target mismatch) survives uninstall — Table A row 3 (T1)', (t) => {
+  if (!isPosix) return t.skip('symlink creation may be unavailable');
+  const paths = tempPaths();
+  const manifest = makeInstall(paths);
+  const skillsRoot = path.join(paths.claudeDir, 'skills');
+  fs.mkdirSync(skillsRoot, { recursive: true });
+  const recordedSource = path.join(paths.claudeDir, 'core-skills', 'wienerdog-foo');
+  fs.mkdirSync(recordedSource, { recursive: true });
+  // The user replaced our link with their own wienerdog-foo symlink to their dir.
+  const userDir = path.join(paths.claudeDir, 'my-notes');
+  fs.mkdirSync(userDir, { recursive: true });
+  const link = path.join(skillsRoot, 'wienerdog-foo');
+  fs.symlinkSync(userDir, link);
+  manifestLib.record(manifest, { kind: 'symlink', path: link, target: recordedSource });
+  manifestLib.save(paths, manifest);
+  const { removed, skipped } = manifestLib.reverse(paths, manifestLib.load(paths), {});
+  assert.equal(fs.lstatSync(link).isSymbolicLink(), true, "the user's replacement link is not unlinked");
+  assert.equal(fs.readlinkSync(link), userDir, "the user's link target is unchanged");
+  assert.ok(!removed.includes(link));
+  assert.ok(skipped.includes(link));
+});
+
+test('reverseSymlink: our own unmodified link is removed, in real and dry-run mode — Table A row 5 (T2)', (t) => {
+  if (!isPosix) return t.skip('symlink creation may be unavailable');
+  const paths = tempPaths();
+  const manifest = makeInstall(paths);
+  const skillsRoot = path.join(paths.claudeDir, 'skills'); // OWNED location — required
+  fs.mkdirSync(skillsRoot, { recursive: true });
+  const source = path.join(paths.claudeDir, 'core-skills', 'wienerdog-foo');
+  fs.mkdirSync(source, { recursive: true });
+  const link = path.join(skillsRoot, 'wienerdog-foo');
+  fs.symlinkSync(source, link);
+  manifestLib.record(manifest, { kind: 'symlink', path: link, target: source });
+  manifestLib.save(paths, manifest);
+  // dry-run first: reports it as removed but leaves it on disk.
+  const dry = manifestLib.reverse(paths, manifestLib.load(paths), { dryRun: true });
+  assert.equal(fs.lstatSync(link).isSymbolicLink(), true, 'dry-run does not unlink');
+  assert.ok(dry.removed.includes(link), 'dry-run still reports it in removed');
+  // real: unlinks it.
+  const real = manifestLib.reverse(paths, manifestLib.load(paths), {});
+  assert.equal(fs.existsSync(link), false, 'our own link is removed');
+  assert.ok(real.removed.includes(link));
+});
+
+test('reverseSymlink: a legacy (target-less) entry is preserved whatever it points at — Table A row 2 (T3)', (t) => {
+  if (!isPosix) return t.skip('symlink creation may be unavailable');
+  const paths = tempPaths();
+  const manifest = makeInstall(paths);
+  const skillsRoot = path.join(paths.claudeDir, 'skills');
+  fs.mkdirSync(skillsRoot, { recursive: true });
+  const source = path.join(paths.claudeDir, 'core-skills', 'wienerdog-a');
+  const other = path.join(paths.claudeDir, 'elsewhere');
+  fs.mkdirSync(source, { recursive: true });
+  fs.mkdirSync(other, { recursive: true });
+  // Sub-case A: legacy entry, link points at what would be its source.
+  const linkA = path.join(skillsRoot, 'wienerdog-a');
+  fs.symlinkSync(source, linkA);
+  manifestLib.record(manifest, { kind: 'symlink', path: linkA }); // NO target — legacy
+  // Sub-case B: legacy entry, link points elsewhere.
+  const linkB = path.join(skillsRoot, 'wienerdog-b');
+  fs.symlinkSync(other, linkB);
+  manifestLib.record(manifest, { kind: 'symlink', path: linkB }); // NO target — legacy
+  manifestLib.save(paths, manifest);
+  const { removed, skipped } = manifestLib.reverse(paths, manifestLib.load(paths), {});
+  for (const link of [linkA, linkB]) {
+    assert.equal(fs.lstatSync(link).isSymbolicLink(), true, 'a legacy link is never unlinked');
+    assert.ok(!removed.includes(link));
+    assert.ok(skipped.includes(link));
+  }
+});
+
+test('reverseSymlink: a dangling own link is still removed via the lexical fallback — Table A row 3→5 (T4)', (t) => {
+  if (!isPosix) return t.skip('symlink creation may be unavailable');
+  // T4 exercises reverseSymlink DIRECTLY, not via reverse(). The lexical fallback
+  // (readlinkSync(L) === T) only ever fires when T is unresolvable — i.e. the core
+  // was deleted by hand so the link dangles. But reverse()'s withinAllowedRoot gate
+  // realpaths the link (following it), which THROWS on a dangling link and preserves
+  // the entry BEFORE reverseSymlink runs. That gate is pre-existing (WP-144/F30) and
+  // out of scope here, so the fallback contract (Table A row 3 → row 5) is proven at
+  // the unit boundary. See the PR "Discovered issues" note.
+  const paths = tempPaths();
+  const skillsRoot = path.join(paths.claudeDir, 'skills'); // OWNED location — required
+  fs.mkdirSync(skillsRoot, { recursive: true });
+  const source = path.join(paths.claudeDir, 'core-skills', 'wienerdog-foo');
+  fs.mkdirSync(source, { recursive: true });
+  const link = path.join(skillsRoot, 'wienerdog-foo');
+  fs.symlinkSync(source, link);
+  fs.rmSync(source, { recursive: true, force: true }); // core deleted by hand → link dangles
+  const removed = [];
+  const skipped = [];
+  const removedSet = new Set();
+  manifestLib.reverseSymlink(
+    { kind: 'symlink', path: link, target: source },
+    false,
+    removed,
+    skipped,
+    removedSet,
+    [skillsRoot]
+  );
+  assert.equal(fs.existsSync(link), false, 'the dangling own link is unlinked via the lexical fallback');
+  assert.ok(removed.includes(link));
+  assert.ok(!skipped.includes(link));
+});
+
+test('reverseSymlink: a forged (path,target) pair for a non-OWNED link is preserved — Table A row 4 (T7)', (t) => {
+  if (!isPosix) return t.skip('symlink creation may be unavailable');
+  const paths = tempPaths();
+  const manifest = makeInstall(paths);
+  const skillsRoot = path.join(paths.claudeDir, 'skills');
+  fs.mkdirSync(skillsRoot, { recursive: true });
+  // Destination inside an allowed root, so withinAllowedRoot passes and the red
+  // baseline is obtainable (a /tmp destination would be preserved at :775 for the
+  // WRONG reason — no red baseline).
+  const userDest = path.join(paths.claudeDir, 'my-skills');
+  fs.mkdirSync(userDest, { recursive: true });
+  // Case 1: a user link WITHOUT the wienerdog- prefix, directly under the skills root.
+  const notes = path.join(skillsRoot, 'my-notes');
+  fs.symlinkSync(userDest, notes);
+  // Forgery: target read straight off the link, so rows 1-3 all pass.
+  manifestLib.record(manifest, { kind: 'symlink', path: notes, target: fs.readlinkSync(notes) });
+  // Case 2: a wienerdog-* link ONE DIRECTORY DEEPER than the skills root.
+  const nested = path.join(skillsRoot, 'nested');
+  fs.mkdirSync(nested, { recursive: true });
+  const deep = path.join(nested, 'wienerdog-deep');
+  fs.symlinkSync(userDest, deep);
+  manifestLib.record(manifest, { kind: 'symlink', path: deep, target: fs.readlinkSync(deep) });
+  manifestLib.save(paths, manifest);
+  const { removed, skipped } = manifestLib.reverse(paths, manifestLib.load(paths), {});
+  for (const link of [notes, deep]) {
+    assert.equal(fs.lstatSync(link).isSymbolicLink(), true, 'a non-OWNED forged link is preserved');
+    assert.ok(!removed.includes(link));
+    assert.ok(skipped.includes(link));
   }
 });
