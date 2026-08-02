@@ -1,7 +1,7 @@
 ---
 id: WP-managed-block-insertion-anchor
 title: Record a managed-block insertion anchor at forward time so uninstall strips only separators it can prove are ours
-status: Draft
+status: Ready
 model: opus
 size: M
 depends_on: [WP-147]
@@ -11,6 +11,26 @@ epic: audit-a13
 
 # WP-managed-block-insertion-anchor: forward-time position evidence for the managed-block reverser
 
+> **OWNER-DECIDED IN SESSION — 2026-08-02 (TRANSCRIBED, NOT OWNER-TYPED).**
+> Gyula Fehér answered in conversation; this record was written by the
+> orchestrator, not by him. It records that the decision was taken — it is
+> **not** his signature and must never be treated as one, and **no gate keys on
+> it**. Verbatim, all three of his answers as given:
+> *"1) ship as specified 2) ship 4a+4b 3) draft the ADR"*.
+>
+> **Answer 1 — "ship as specified" — is this spec's ruling: disposition (i).**
+> Ship the anchor with the uniqueness conjunct. The owner accepts **R2** and
+> **R2b**, the two bounded whitespace-leftover costs, at the sizes and
+> frequencies the ledger measures. Dispositions (ii) and (iii) are **declined**.
+> (Answer 2 rules on `WP-symlink-authorship-identity`; answer 3 authorizes
+> **ADR-0038**, which codifies the narrowing rule and does **not** gate this
+> spec — see that ADR's "Relationship to the two specs".)
+>
+> **This ruling was the only thing gating this spec**, so its status moves
+> `Draft` → `Ready` in the same commit. The non-selected dispositions are kept
+> below as dated records, not deleted — the ledger is the evidence the ruling was
+> made against, and a future reader must be able to see what was declined.
+>
 > **This is Part A of a two-part chain.** It was drafted as one half of a
 > consolidated WP that the 2026-08-02 wave routed under two names; the
 > consolidated document was split at its own pre-cut line after Codex design-gate
@@ -155,10 +175,13 @@ The operative term here is **insertion anchor**, and it is not a glossary term.
 ## Current state
 
 **Re-verification record.** Every executable claim in this section was run
-first-hand against the working tree at commit **`18bc909`** (`git rev-parse HEAD`
-→ `18bc90931835d7e928ba897c794de217c6993777`) on **2026-08-02**. `src/` is
-byte-identical to `0f9ee08` at that commit — the three commits on this branch
-touch `docs/specs/` only — so every line number below is equally `0f9ee08`'s.
+first-hand against the working tree at commit **`9188a1c`** on **2026-08-02**,
+and **re-verified there again on 2026-08-03** after `WP-symlink-lexical-fallback-removal`
+(PR #151) landed. The claims were first measured at `18bc909`, where `src/` was
+byte-identical to `0f9ee08`; PR #151's change was **line-count-neutral**
+(`src/core/manifest.js` is 1062 lines at both SHAs), so **no line number in this
+spec shifted**. This WP touches no region PR #151 changed — only its V4 guard
+references `reverseSymlink`, and that guard moved with it.
 **Nothing was found stale.** The whole design was additionally **implemented as a
 throwaway prototype and measured**; every "measured" figure in this spec is that
 prototype's output, not reasoning. The prototype was discarded.
@@ -357,7 +380,7 @@ sits comfortably inside M now that the symlink mechanism is gone.
 
 | Action | Path | Notes |
 |--------|------|-------|
-| modify | src/core/manifest.js | **D1** — add `ANCHOR_WINDOW`, `ANCHOR_HEX`, `insertionAnchor()` and `anchorProvesPosition()` beside `SEP_BEFORE_OK` (`:54-59`), and export `insertionAnchor`. **D2** — `reverseManagedBlock`'s leading-strip region (`:285-311`) gains the `anchorOk` conjunct per **Table Q**; **nothing else in that function changes** (Table U). **D6a** — the module doc comment (`:21-26`) and `@typedef ManifestEntry` (`:45-47`) gain **`anchorBefore?: string` only**; do **not** add Part B's symlink fields. **`ENTRY_FIELD_TYPES` is NOT edited by this WP** — Table P says why, and V6 enforces it. |
+| modify | src/core/manifest.js | **D1** — add `ANCHOR_WINDOW`, `ANCHOR_HEX`, `insertionAnchor()` and `anchorProvesPosition()` beside `SEP_BEFORE_OK` (`:54-59`), and export `insertionAnchor`. **D2** — `reverseManagedBlock`'s leading-strip region (`:285-312`) gains the `anchorOk` conjunct per **Table Q**; **nothing else in that function changes** (Table U). **D6a** — the module doc comment (`:21-26`) and `@typedef ManifestEntry` (`:45-47`) gain **`anchorBefore?: string` only**; do **not** add Part B's symlink fields. **`ENTRY_FIELD_TYPES` is NOT edited by this WP** — Table P says why, and V6 enforces it. |
 | modify | src/adapters/shared.js | **D7a** — `:5` becomes `const { hashDir, insertionAnchor } = require('../core/manifest');`. Do **not** import `linkIdentity`; it does not exist until Part B. **D8** — `recordManagedBlock` (`:113`) takes a seventh parameter `anchorBefore` and assigns it inside the existing `if (inserted)` block, per **Table P**; the sticky-true `createdFile` line is **unchanged**. **D9** — `applyManagedBlock`'s three `recordManagedBlock` calls (`:179`, `:197`, `:210`) pass the anchor per **Table B**; **no other byte of that function changes** (Table U). |
 | modify | tests/unit/manifest.test.js | **A-T1 … A-T11** — the exact set in the Test index. **A-T5 is a required edit to a shipped assertion**, not a new test (**Table F**): `:1417`'s `assert.equal(forged, 'foo', …)` becomes `'foo\n\n'`. The WP-147 Table N suite (`:1336-1358`), T6, T7, T11 and T12 must pass **byte-unmodified** — they craft entries with no anchor, so they exercise the legacy arm and are the regression fence for it. |
 
@@ -631,7 +654,9 @@ evidence, not an author's claim.
 
 **The theorem this WP must satisfy:** for every possible manifest, the set of
 filesystem mutations performed after this WP is a **subset** of base's. New
-evidence may only withhold a strip.
+evidence may only withhold a strip. **This is the rule `ADR-0038` codifies**
+(Proposed, unsigned — cited as context, not as law; it gates nothing here, and
+this WP measured the property independently).
 
 | Forgery | What an attacker gains | Measured | Row |
 |---------|------------------------|----------|-----|
@@ -681,7 +706,7 @@ at `18bc909` — **not** against this spec's excerpts, which are dedented and ca
 | `ownershipOk` and `noFusion` | `manifest.js:287-306` | unchanged — the anchor is a **third** conjunct, not a replacement for either |
 | The `createdFile` delete | `manifest.js:314-316` | `fs.rmSync(target, { force: true })` — the pathname delete using `target`, **not** `entry.path` |
 | The fd-bound write | `manifest.js:317-321` | `Buffer.from(remaining)` + `fs.ftruncateSync(fd, 0)` + `fs.writeSync(fd, buf, 0, buf.length, 0)`. **Never `fs.writeFileSync(entry.path, remaining)`** — that is the pre-F30 shape and restoring it silently regresses WP-144's delete-time binding. **V3 is the guard.** |
-| `reverseSymlink`, in full | `manifest.js:159-217` | **untouched by this WP** — it is Part B's |
+| `reverseSymlink`, in full | `manifest.js:168-217` (JSDoc `:159-167`) | **untouched by this WP** — it is Part B's, and PR #151 already narrowed its row 3 |
 | `ENTRY_FIELD_TYPES` | `manifest.js:902-921` | **untouched by this WP** (Table P; V6 enforces it) |
 | The `reverse()` managed-block arm | `manifest.js:829-869` | unchanged — the `O_NOFOLLOW` open, the `ELOOP`/`ENOENT` arms, the `finally` close |
 | `applyManagedBlock`'s branch bodies | `shared.js:164-211` | unchanged except the three `recordManagedBlock` argument lists. **`out.changed.push(mdPath);` at `:180` and `:211` must survive** — a predecessor spec's snippet dropped it and `sync` silently stopped reporting the file as changed. |
@@ -979,20 +1004,135 @@ printf '\nfunction reverseManagedBlock(entry, dryRun, removed, skipped, removedS
 node /tmp/wd-fnguard.js /tmp/wd-ev2.js reverseManagedBlock "+fs.ftruncateSync(fd, 0)" \
   && { echo "EVASION 2 (later duplicate) NOT DETECTED"; exit 1; } || echo "evasion 2 (later duplicate definition) detected"
 
-# V4 — reverseSymlink is UNTOUCHED by this WP (it is Part B's). WP-153's row-3
-#      lexical fallback and row-4 OWNED gate must still be exactly as shipped.
-node /tmp/wd-fnguard.js src/core/manifest.js reverseSymlink \
-  "+lexicalMatch = fs.readlinkSync(L) === T;" \
-  "+!sameResolvedDir(L, T) && !lexicalMatch" \
-  "+skillsRoots.some((root) => sameResolvedDir(path.dirname(L), root))" \
-  "-entry.origin" "-entry.dev" && echo "V4 ok"
+# V4x — the extractor. Prints ONE top-level function verbatim, and REFUSES when
+#   the name is defined more than once or is rebound (`reverseSymlink = ...`), so
+#   a later shadowing definition cannot slip past a first-match search. A token
+#   guard was proven evadable here: a branch calling `fs.readlinkSync(L) === T`
+#   under a different identifier, inserted before row 4, kept every asserted
+#   token and passed clean (measured, both review legs).
+cat > /tmp/wd-fnextract.js <<'EX'
+const fs = require('node:fs');
+const [file, fn] = process.argv.slice(2);
+const s = fs.readFileSync(file, 'utf8');
+const defs = [...s.matchAll(new RegExp(`\\nfunction ${fn}\\(`, 'g'))];
+if (defs.length === 0) { console.error(`no top-level ${fn} in ${file}`); process.exit(1); }
+if (defs.length > 1) { console.error(`${defs.length} definitions of ${fn} — refusing`); process.exit(1); }
+const i = defs[0].index;
+const j = s.indexOf('\n}\n', i);
+if (j < 0) { console.error(`unterminated ${fn}`); process.exit(1); }
+const rest = s.replace(s.slice(i, j + 3), '');
+for (const [re, what] of [
+  // The WHOLE assignment-operator family, not bare `=`: =, +=, -=, *=, /=, %=,
+  // **=, <<=, >>=, >>>=, &=, ^=, |=, &&=, ||=, ??=. The lookahead keeps ==, ===
+  // and => out. `reverseSymlink &&= unsafe` bypassed the bare-`=` form while the
+  // extractor still emitted the original bytes (measured).
+  [new RegExp(`(^|[^.\\w])${fn}\\s*(?:>>>|\\*\\*|<<|>>|&&|\\|\\||\\?\\?|[+\\-*/%&|^])?=(?![=>])`, 'm'), 'assignment'],
+  [new RegExp(`for\\s*\\(\\s*(?:(?:var|let|const)\\s+)?${fn}\\s+(?:in|of)\\b`, 'm'), 'loop assignment'],
+  // Update expressions rebind too: `reverseSymlink++` turns the binding into a
+  // number while the exported property keeps the function, so a direct-import
+  // test and production resolve DIFFERENT things. Horizontal whitespace only, so
+  // an unrelated `count--` on the line above cannot false-positive.
+  [new RegExp(`(^|[^.\\w])${fn}[ \\t]*(?:\\+\\+|--)`, 'm'), 'postfix update'],
+  [new RegExp(`(?:\\+\\+|--)[ \\t]*${fn}\\b`, 'm'), 'prefix update'],
+  [new RegExp(`\\{[^{}]*\\b${fn}\\b[^{}]*\\}\\s*=`, 'm'), 'object destructuring'],
+  [new RegExp(`\\[[^\\[\\]]*\\b${fn}\\b[^\\[\\]]*\\]\\s*=`, 'm'), 'array destructuring'],
+  [new RegExp(`\\b(var|let|const|function|class)\\s+${fn}\\b`, 'm'), 're-declaration'],
+  [new RegExp(`\\bexports\\.${fn}\\s*=`, 'm'), 'export rebinding'],
+]) {
+  if (re.test(rest)) { console.error(`${fn} is rebound outside its definition (${what}) — refusing`); process.exit(1); }
+}
+process.stdout.write(s.slice(i + 1, j + 3));
+EX
+git show 9188a1c:src/core/manifest.js > /tmp/wd-base-manifest.js
 
-# V4 RED — the same check against a copy with the fallback deleted. MUST fail.
+# V4 — `reverseSymlink` is UNTOUCHED by this WP (it is Part B's). Assert it by
+#   RECONSTRUCTION: the implemented function must be byte-identical to the one at
+#   `9188a1c`, i.e. as `WP-symlink-lexical-fallback-removal` (PR #151) left it.
+node /tmp/wd-fnextract.js /tmp/wd-base-manifest.js reverseSymlink > /tmp/wd-expected-symlink.js
+node /tmp/wd-fnextract.js src/core/manifest.js      reverseSymlink > /tmp/wd-actual-symlink.js
+diff -u /tmp/wd-expected-symlink.js /tmp/wd-actual-symlink.js && echo "V4 ok (byte-identical)"
+
+# V4 RED — MUST fail against a copy that reintroduces a link-text comparison
+#   under a DIFFERENT identifier, which is exactly what defeated the old token guard.
 cp src/core/manifest.js /tmp/wd-v4-red.js
-node -e 'const fs=require("node:fs"),p=process.argv[1];fs.writeFileSync(p,fs.readFileSync(p,"utf8").replace("  if (!sameResolvedDir(L, T) && !lexicalMatch) {","  if (!sameResolvedDir(L, T)) {"))' /tmp/wd-v4-red.js
-node /tmp/wd-fnguard.js /tmp/wd-v4-red.js reverseSymlink \
-  "+!sameResolvedDir(L, T) && !lexicalMatch" \
+node -e 'const fs=require("node:fs"),p=process.argv[1];fs.writeFileSync(p,fs.readFileSync(p,"utf8").replace("  // Row 3: the link must PROVE it still resolves to the source we recorded.","  if (fs.readlinkSync(L) === T) { if (!dryRun) fs.unlinkSync(L); removedSet.add(L); removed.push(L); return; }\n  // Row 3: the link must PROVE it still resolves to the source we recorded."))' /tmp/wd-v4-red.js
+node /tmp/wd-fnextract.js /tmp/wd-v4-red.js reverseSymlink > /tmp/wd-actual-red.js
+diff -q /tmp/wd-expected-symlink.js /tmp/wd-actual-red.js >/dev/null \
   && { echo "V4 BROKEN: the guard cannot fail"; exit 1; } || echo "V4 ok (red, as required)"
+
+# V4z — THE HELPER'S OWN RED/GREEN MATRIX, SHIPPED IN FULL. The extractor above
+#   is embedded in TWO specs; a copy that silently loses its regex escapes still
+#   *looks* right and refuses nothing. Part A's copy did exactly that — single
+#   backslashes inside a JS template literal, so `\s*` became `s*` and `\b` became
+#   a backspace, and it accepted every reassignment form while appearing to check
+#   them (measured). So the matrix runs against the helper AS EXTRACTED FROM THIS
+#   SPEC, every time, and a claim measured against any other copy does not count.
+#
+#   THE WHOLE MATRIX IS HERE, not described elsewhere. An earlier revision shipped
+#   twelve fixtures while its report cited a twenty-seven-form measurement run in
+#   a scratch harness — which is the exact gap this step exists to close, one level
+#   up. 31 forms must be REFUSED, 13 benign forms and the clean tree must be
+#   ACCEPTED.
+cat > /tmp/wd-rebind-matrix.js <<'MX'
+const fs = require('node:fs'), os = require('node:os'), path = require('node:path');
+const { execFileSync } = require('node:child_process');
+const FN = 'reverseSymlink';
+const clean = fs.readFileSync('src/core/manifest.js', 'utf8');
+const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-mx-'));
+
+// Every form that REBINDS the local binding the production call site resolves.
+const REJECT = [
+  // the assignment-operator family, one fixture per operator
+  'reverseSymlink = unsafe;', 'reverseSymlink += unsafe;', 'reverseSymlink -= unsafe;',
+  'reverseSymlink *= unsafe;', 'reverseSymlink /= unsafe;', 'reverseSymlink %= unsafe;',
+  'reverseSymlink **= unsafe;', 'reverseSymlink <<= unsafe;', 'reverseSymlink >>= unsafe;',
+  'reverseSymlink >>>= unsafe;', 'reverseSymlink &= unsafe;', 'reverseSymlink ^= unsafe;',
+  'reverseSymlink |= unsafe;', 'reverseSymlink &&= unsafe;', 'reverseSymlink ||= unsafe;',
+  'reverseSymlink ??= unsafe;', 'reverseSymlink=unsafe;',
+  // update expressions — these convert the binding to a number while the exported
+  // property keeps the original function, so direct-import tests and production
+  // resolve DIFFERENT things
+  'reverseSymlink++;', '++reverseSymlink;', 'reverseSymlink--;', '--reverseSymlink;',
+  // loop assignment targets
+  'for (reverseSymlink of [unsafe]) {}', 'for (reverseSymlink in {a:1}) {}',
+  'for (const reverseSymlink of [unsafe]) {}',
+  // destructuring
+  '({ reverseSymlink } = { reverseSymlink: unsafe });', '[reverseSymlink] = [unsafe];',
+  // re-declaration
+  'const reverseSymlink = unsafe;', 'let reverseSymlink;', 'function reverseSymlink() {}',
+  // export rebinding — swaps what the tests import while production keeps the
+  // lexical binding, so B-T7/B-T8 would exercise a different function
+  'module.exports.reverseSymlink = unsafe;', 'exports.reverseSymlink = unsafe;',
+];
+
+// Benign forms that must NOT be flagged — the false-positive suite.
+const ACCEPT = [
+  'reverseSymlink(entry, dryRun, removed, skipped, removedSet, skillsRoots);',
+  'if (reverseSymlink === unsafe) {}', 'if (reverseSymlink !== unsafe) {}',
+  'if (reverseSymlink == unsafe) {}', 'if (reverseSymlink != unsafe) {}',
+  'if (x <= reverseSymlink) {}', 'if (x >= reverseSymlink) {}',
+  'const f = () => reverseSymlink;',
+  'module.exports = { load, reverseSymlink, hashDir };',
+  'obj.reverseSymlink = unsafe;', 'obj.reverseSymlink++;',
+  'thing.exportsXreverseSymlink = unsafe;',
+  ' * reverseSymlink lstat+unlinks the LINK ITSELF',
+];
+
+let bad = 0, n = 0;
+const accepts = (snippet) => {
+  const f = path.join(dir, `f${n++}.js`);
+  fs.writeFileSync(f, snippet === null ? clean : clean + '\n' + snippet + '\n');
+  try { execFileSync('node', ['/tmp/wd-fnextract.js', f, FN], { stdio: 'ignore' }); return true; }
+  catch { return false; }
+};
+for (const s of REJECT) if (accepts(s)) { console.log(`  MATRIX FAIL (accepted): ${s}`); bad++; }
+for (const s of ACCEPT) if (!accepts(s)) { console.log(`  MATRIX FAIL (refused):  ${s}`); bad++; }
+if (!accepts(null)) { console.log('  MATRIX FAIL: clean tree refused'); bad++; }
+fs.rmSync(dir, { recursive: true, force: true });
+if (bad) { console.log(`V4z BROKEN (${bad} problem(s))`); process.exit(1); }
+console.log(`V4z ok (${REJECT.length} refused, ${ACCEPT.length + 1} accepted)`);
+MX
+node /tmp/wd-rebind-matrix.js
 
 # V5 — ANCHOR_WINDOW is DEFINED exactly once, in core, and shared.js neither
 #      redefines it nor re-implements the digest. Counts DEFINITIONS, not mentions,
@@ -1187,14 +1327,14 @@ accepting them, and it is the architect's argument, not a ruling.
 
 | | Disposition | Q1/Q10 relocation fix | Cost |
 |---|---|---|---|
-| (i) | **Ship as specified** (this spec's shape) | **closed** | R2 + R2b: a bounded whitespace leftover in the two withhold cases |
-| (ii) | **Ship the anchor without the uniqueness conjunct** | Q1 closed, **Q10 stays open** (a duplicate-window move still eats a user blank line) | R2 only |
-| (iii) | **Do not ship**; leave WP-147's residual open | stays open | none |
+| **(i) ✅ SELECTED** | **Ship as specified** (this spec's shape) — **owner-ruled 2026-08-02** | **closed** | R2 + R2b: a bounded whitespace leftover in the two withhold cases |
+| (ii) *declined* | **Ship the anchor without the uniqueness conjunct** | Q1 closed, **Q10 stays open** (a duplicate-window move still eats a user blank line) | R2 only |
+| (iii) *declined* | **Do not ship**; leave WP-147's residual open | stays open | none |
 
-**Architect's recommendation: (i).** The costs are whitespace we authored; the
-thing bought is user-authored bytes that shipped code destroys. But (ii) and (iii)
-are coherent, and **the choice is the owner's**. **Do not implement any arm until
-the ruling is recorded here.**
+**Architect's recommendation was (i), and the owner ruled (i)** on 2026-08-02. The costs are whitespace we authored; the
+thing bought is user-authored bytes that shipped code destroys. (ii) and (iii)
+remain recorded above as declined alternatives. **The ruling is recorded in this
+spec's header blockquote; implement arm (i).**
 
 **Whichever is chosen, the same surfaces move in one pass** — this spec's header
 blockquote, Table Q (rows Q5/Q10/Q14/Q15/Q16), Table R rows R2/R2b/R2c,
@@ -1212,6 +1352,20 @@ Each row names its pinning test. A residual with no test is a claim.
 | **R2b** | **Repeated window ⇒ withheld strip.** When the window occurs more than once in the reconstructed user document, `anchorProvesPosition` cannot tell the positions apart and **preserves**, leaving our separator. **The window is `candidate.slice(-ANCHOR_WINDOW)`, so on a prefix shorter than 256 characters it is the WHOLE prefix** — a single repeated short line is enough, with no relocation and no edit above the block | at most two whitespace characters, all of them ours, **never a user byte** — measured, the user text is byte-identical to base in every costing fixture. This is the *fail-closed* half of the uniqueness conjunct and its price | **A-T11** pins the COST (three repeating fixtures + a non-repeating control). **A-T6 pins the BENEFIT** (Q10) and does not pin this row — the two were conflated through round 4 (Codex round 5, finding 1) | not routed — preserve-on-ambiguity is the chosen answer. A frequency-reducing refinement is routed to `WP-anchor-whole-prefix-flag` and deliberately not folded in |
 | **R2c** | **Window reproduced elsewhere.** A user who deletes the block's original neighbourhood **and** reproduces the same 256 characters at another position gets a strip at the new site: the anchor matches and the window is unique | **at most the recorded `sepBefore`** — WP-147's Table M fixes that vocabulary at `''`/`'\n'`/`'\n\n'`, so **at most two whitespace characters, never a fusion, never text**. **EQUAL to base in both arms** (measured: base strips 1 and 2 respectively), which is why it is a residual and not a defect | **A-T9**, both arms, each asserting the delta is exactly `sepBefore.length` whitespace characters. Arm (a) discriminates: measured **red** against a full-prefix anchor and against an always-withhold anchor | not routed. This is the honest edge of what a bounded window can prove. **The bound was stated as "one newline" through round 3 and corrected in round 4** — the mechanism cannot be narrowed without breaking the honest unterminated-append case |
 | **R8** | **The V3–V6 source guards are not AST-aware.** They strip comments and reject duplicate definitions, but cannot tell reachable code from code after a `return` | the guards are **tripwires**; V1/V2 — the test suite — are the load-bearing checks. This is WP-147's own stated disposition for the same class | the evasions listed in Verification steps each have an executed red mutation; the uncovered one is unreachable code | **`WP-grep-gate-helper`** — already routed by WP-147 as the canonical comment-stripping/AST gate helper, *"fourth instance of this shape"*. This spec does not re-route it |
+
+**R8 — the source guards are regex, not AST — updated 2026-08-03.** The rebinding
+guard now covers the full assignment-operator family, **prefix and postfix update
+expressions**, both loop-target forms, both destructuring forms, re-declaration
+and `exports.` writes — **31 forms, each with a permanent V4z fixture, plus a
+13-form false-positive suite**, all shipped in the step itself rather than
+described in a report. **The residual is novel syntax outside the fixture set**:
+regexes enumerate forms, an AST enumerates the language. This is the **sixth**
+instance of the same class in this repo, and every one has been closed by adding
+another pattern after a reviewer found the gap — which is the argument, not an
+anecdote. Routed to **`WP-grep-gate-helper`** (already open, opened by WP-147 as
+its fourth instance). A devDependency-free verification script cannot parse JS
+itself, so regex-with-exhaustive-fixtures is the available path until that helper
+lands; V1/V2 remain the load-bearing behavioural checks.
 
 ## Definition of done
 

@@ -1,7 +1,7 @@
 ---
 id: WP-symlink-authorship-identity
 title: Record symlink authorship and lstat identity at forward time so uninstall unlinks only links it can prove it created
-status: Draft
+status: Ready
 model: opus
 size: S
 depends_on: [WP-153, WP-managed-block-insertion-anchor]
@@ -11,6 +11,28 @@ epic: audit-a13
 
 # WP-symlink-authorship-identity: forward-time authorship evidence for the symlink reverser
 
+> **OWNER-DECIDED IN SESSION — 2026-08-02 (TRANSCRIBED, NOT OWNER-TYPED).**
+> Gyula Fehér answered in conversation; this record was written by the
+> orchestrator, not by him. It records that the decision was taken — it is
+> **not** his signature and must never be treated as one, and **no gate keys on
+> it**. Verbatim, all three of his answers as given:
+> *"1) ship as specified 2) ship 4a+4b 3) draft the ADR"*.
+>
+> **Answer 2 — "ship 4a+4b" — is this spec's ruling: disposition (i).**
+> Ship both reverser rows. The owner accepts all five priced completeness
+> costs — 4a's adopt-leftover, 4b's durability drift, the schema-valid
+> wrong-pair row, the partial-pair leftover and D5's schema rejection — at the
+> sizes the ledger measures. Dispositions (ii), (iii), (iv) and (v) are
+> **declined**. (Answer 1 rules on `WP-managed-block-insertion-anchor`;
+> answer 3 authorizes **ADR-0038**, which codifies the narrowing rule this
+> spec's Table N states and does **not** gate this spec — see that ADR's
+> "Relationship to the two specs".)
+>
+> **This ruling was the only thing gating this spec**, so its status moves
+> `Draft` → `Ready` in the same commit. The non-selected dispositions are kept
+> below as dated records, not deleted — the ledger is the evidence the ruling was
+> made against, and a future reader must be able to see what was declined.
+>
 > **This is Part B of a two-part chain.** It was drafted as one half of a
 > consolidated WP that the 2026-08-02 wave routed under the slug
 > **`WP-forward-time-ownership-provenance`**; that document was split at its own
@@ -142,10 +164,19 @@ The operative term here is **link identity**, and it is not a glossary term.
 ## Current state
 
 **Re-verification record.** Every executable claim in this section was run
-first-hand against the working tree at commit **`18bc909`** (`git rev-parse HEAD`
-→ `18bc90931835d7e928ba897c794de217c6993777`) on **2026-08-02**. `src/` is
-byte-identical to `0f9ee08` at that commit — the commits on this branch touch
-`docs/specs/` only. **Nothing was found stale.** The whole design was
+first-hand against the working tree at commit **`9188a1c`** on **2026-08-02**,
+and **re-verified there again on 2026-08-03** after `WP-symlink-lexical-fallback-removal`
+(PR #151) landed.
+
+> **Carry-forward note on line numbers.** The claims were first measured at
+> `18bc909`, where `src/` was byte-identical to `0f9ee08`. PR #151 then rewrote
+> `reverseSymlink`'s row 3 **line-count-neutrally** — `src/core/manifest.js` is
+> 1062 lines at both SHAs — so **no line number in this spec shifted**. Every
+> anchor below is stated against `9188a1c` and holds at `18bc909` too; what
+> changed is the row-3 *content*, and every surface carrying it moved with it
+> (see §1).
+
+**Nothing was found stale.** The whole design was
 additionally **implemented as a throwaway prototype and measured**, including an
 exhaustive twenty-cell sweep of every schema-accepted entry shape (Table S).
 The prototype was discarded.
@@ -162,7 +193,7 @@ The prototype was discarded.
 
 ### 1. `reverseSymlink` — `src/core/manifest.js:168-217` (JSDoc at `:159-167`)
 
-Byte-identical at `18bc909`, WP-153's five rows:
+Byte-identical at `9188a1c`, the five rows as they stand **after `WP-symlink-lexical-fallback-removal` (PR #151, `91b12e2`)**:
 
 ```js
 function reverseSymlink(entry, dryRun, removed, skipped, removedSet, skillsRoots) {
@@ -182,16 +213,16 @@ function reverseSymlink(entry, dryRun, removed, skipped, removedSet, skillsRoots
     skipped.push(L);
     return;
   }
-  // Row 3: the link no longer resolves to the source we recorded. Realpath first
-  // (semantic, follows the link); lexical fallback for the one reachable case
-  // where the core was deleted by hand so realpath(T) throws. Both fail-closed.
-  let lexicalMatch = false;
-  try {
-    lexicalMatch = fs.readlinkSync(L) === T;
-  } catch {
-    lexicalMatch = false;
-  }
-  if (!sameResolvedDir(L, T) && !lexicalMatch) {
+  // Row 3: the link must PROVE it still resolves to the source we recorded.
+  // sameResolvedDir is realpath-based (semantic, follows the link) and is itself
+  // fail-closed — an unresolvable side returns false, which lands HERE, in preserve.
+  // There is deliberately NO second, link-text comparison: WP-153 shipped one, and
+  // WP-symlink-lexical-fallback-removal dropped it because raw-text equality is the
+  // weaker proof and the manifest is UNTRUSTED — a recorded target may narrow this
+  // delete, never authorize one the semantic proof refuses (e.g. a relative recorded
+  // target, which Wienerdog never writes, matched the link text while realpath did
+  // not). Strictly narrowing: every input this now preserves was previously deleted.
+  if (!sameResolvedDir(L, T)) {
     process.stderr.write(
       `wienerdog: keeping ${L} — not the Wienerdog skill link we recorded (replaced, or unverifiable)\n`
     );
@@ -220,6 +251,19 @@ function reverseSymlink(entry, dryRun, removed, skipped, removedSet, skillsRoots
 Rows 2, 3 and 4 share one stderr string. Row 5 is the only row that deletes, and
 it deletes on *target equality*, which a user's own link can satisfy — **the
 residual this WP narrows**.
+
+> **Row 3 changed under this spec on 2026-08-02 and the change is folded in
+> here.** `WP-symlink-lexical-fallback-removal` (PR #151, `91b12e2`) dropped the
+> `fs.readlinkSync(L) === T` lexical fallback, leaving `sameResolvedDir` as the
+> sole proof. Every reference in this spec has been re-verified against `9188a1c`
+> and moved with it: this quote, Table A2 row 3, Table U, the Implementation-notes
+> bullet, V4 and Out of scope. **The change was strictly narrowing** — its own
+> **shipped code comment** (`src/core/manifest.js:186-193`) says *"Strictly
+> narrowing: every input this now preserves was previously deleted"* — its commit
+> message carries the shorter *"every input now preserved was previously
+> deleted"* —
+> so it touches nothing this WP measures, and the suite it left behind is
+> `1903 / 1894 / 0`.
 
 `isSymlink` (`manifest.js:151-157`) is `fs.lstatSync(p).isSymbolicLink()` inside
 a `try`, returning `false` on any throw. `sameResolvedDir`
@@ -423,7 +467,7 @@ nothing records ships a branch no install reaches.
 |--------|------|-------|
 | modify | src/core/manifest.js | **D3** — add `linkIdentity()` beside Part A's primitives and export it. **D4** — `reverseSymlink` gains a 7th parameter `opts = {}` (the identity seam — Exact contracts) and rows **4a** and **4b** per **Table A2**, between the existing rows 4 and 5; rows 1–5 are otherwise byte-identical and `reverse()`'s call site is **not** changed. **D5** — `ENTRY_FIELD_TYPES.symlink` becomes `{ target: 'string', origin: 'string', dev: 'string', ino: 'string' }`; **no other cell changes**, and in particular `managed-block` must not gain `anchorBefore` (Part A's Table P forbids it). **D6b** — the module doc comment and `@typedef ManifestEntry` gain `origin?`, `dev?`, `ino?` per **Table P**, **extending** Part A's `anchorBefore?` rather than replacing it. |
 | modify | src/adapters/shared.js | **D7b** — extend `:5` to `const { hashDir, insertionAnchor, linkIdentity } = require('../core/manifest');`. **Do not drop `insertionAnchor`** — Part A put it there. **D10** — the three `recordOnce(manifest, { kind: 'symlink', … })` sites (`:434`, `:485`, `:491`) record `origin` (and, at `:491` only, `dev`/`ino`) per **Table B**. `recordOnce` itself is **NOT modified and NOT replaced by an upsert** — the owner declined a backfill (2026-08-01). The WP-146 preserve arm, `dropOwnedEntry`, the `readlinkSync` comparison, the `EPERM` copy fallback and every notice string stay byte-identical, as does everything Part A touched in `applyManagedBlock`. |
-| modify | tests/unit/manifest.test.js | **B-T1 … B-T5, B-T7, B-T8** — the exact set in the Test index. WP-153's shipped T1–T4 and T6 must pass **byte-unmodified**; they craft entries with no `origin`/`dev`/`ino`, so they exercise the legacy arm and are its regression fence. Part A's A-T1…A-T11 must also pass byte-unmodified. |
+| modify | tests/unit/manifest.test.js | **B-T1 … B-T5, B-T7, B-T8** — the exact set in the Test index. WP-153's shipped **T1–T3, T4a–T4c and T6** must pass **byte-unmodified** — that is WP-153's own canonical roster after `WP-symlink-lexical-fallback-removal` split T4 into T4a/T4b/T4c. They craft entries with no `origin`/`dev`/`ino`, so they exercise the legacy arm and are its regression fence. Part A's A-T1…A-T11 must also pass byte-unmodified. |
 | modify | tests/unit/shared-skill-links.test.js | **B-T6** — this is **an edit to three shipped `deepEqual` assertions** plus one new forward-side assertion. `:52-55`, `:191-194` and `:337-340` are the **Table F** rows; take the expected object for each from that table. The four WP-146 sync-side tests at `:345`, `:371`, `:387` and `:405` are **fenced — they must pass byte-unmodified**. |
 
 Not deliverables, deliberately: `reverseManagedBlock` and everything Part A
@@ -455,27 +499,154 @@ function linkIdentity(linkPath) {
 
 Added to `module.exports` and to the `shared.js:5` destructure.
 
-**`reverseSymlink` gains an injectable identity seam:**
+**`reverseSymlink` is specified as a COMPLETE EXPECTED FUNCTION, not as prose
+plus fragments.** The fence below is the **single source**: it is what the
+implementer writes, and **V4 extracts these exact bytes out of this file** and
+byte-diffs them against the implementation. There is no second copy to drift
+against — an earlier revision kept the contract and the gate as separate
+transcriptions and they had already diverged by one trailing comment, which made
+a literal implementation of the contract fail the gate.
+
+Three edits distinguish it from the function at `9188a1c`, and nothing else
+changes: the `opts = {}` parameter, the `identityOf` binding, and rows **4a**
+and **4b** inserted immediately before the `// Row 5:` comment.
+
+<!-- EXPECTED-FUNCTION: reverseSymlink -->
+
+```js
+function reverseSymlink(entry, dryRun, removed, skipped, removedSet, skillsRoots, opts = {}) {
+  const identityOf = opts.identity || linkIdentity;   // test seam only
+  const L = entry.path;
+  const T = entry.target;
+  // Row 1: not a symlink (real file/dir, or already gone) — never ours to delete.
+  if (!isSymlink(L)) {
+    skipped.push(L);
+    return;
+  }
+  // Row 2: LEGACY (target-less) entry — ownership is unprovable, preserve
+  // unconditionally (owner ruling 2026-08-01). No backfill exists or ever will.
+  if (typeof T !== 'string' || T === '') {
+    process.stderr.write(
+      `wienerdog: keeping ${L} — not the Wienerdog skill link we recorded (replaced, or unverifiable)\n`
+    );
+    skipped.push(L);
+    return;
+  }
+  // Row 3: the link must PROVE it still resolves to the source we recorded.
+  // sameResolvedDir is realpath-based (semantic, follows the link) and is itself
+  // fail-closed — an unresolvable side returns false, which lands HERE, in preserve.
+  // There is deliberately NO second, link-text comparison: WP-153 shipped one, and
+  // WP-symlink-lexical-fallback-removal dropped it because raw-text equality is the
+  // weaker proof and the manifest is UNTRUSTED — a recorded target may narrow this
+  // delete, never authorize one the semantic proof refuses (e.g. a relative recorded
+  // target, which Wienerdog never writes, matched the link text while realpath did
+  // not). Strictly narrowing: every input this now preserves was previously deleted.
+  if (!sameResolvedDir(L, T)) {
+    process.stderr.write(
+      `wienerdog: keeping ${L} — not the Wienerdog skill link we recorded (replaced, or unverifiable)\n`
+    );
+    skipped.push(L);
+    return;
+  }
+  // Row 4: a target match is NOT delete authority — the manifest is untrusted, so
+  // an attacker can forge a (path, target) pair. Require the STRUCTURAL ownership
+  // proof reverseCopiedSkill uses: wienerdog-* basename AND parent realpath-equal
+  // to a harness skills root.
+  const parentIsRoot = skillsRoots.some((root) => sameResolvedDir(path.dirname(L), root));
+  if (!path.basename(L).startsWith('wienerdog-') || !parentIsRoot) {
+    process.stderr.write(
+      `wienerdog: keeping ${L} — not the Wienerdog skill link we recorded (replaced, or unverifiable)\n`
+    );
+    skipped.push(L);
+    return;
+  }
+  // Row 4a: ADOPTED — the link was already on disk when we first recorded it, so
+  // it is the USER's, not ours, however exactly it matches. Preserve.
+  if (entry.origin === 'adopted') {
+    process.stderr.write(
+      `wienerdog: keeping ${L} — not the Wienerdog skill link we recorded (replaced, or unverifiable)\n`
+    );
+    skipped.push(L);
+    return;
+  }
+  // Row 4b: IDENTITY — when we recorded a (dev, ino) pair, the link on disk must
+  // still BE that file object. A delete-and-recreate gets a new inode, so a user's
+  // same-source replacement no longer passes for ours. Fail closed on any doubt.
+  // A PARTIAL pair (one of the two) is a shape the forward step never writes, so
+  // it is unverifiable, not absent — preserve (Table P rule S-4, Table S).
+  const hasDev = typeof entry.dev === 'string';
+  const hasIno = typeof entry.ino === 'string';
+  if (hasDev || hasIno) {
+    const id = hasDev && hasIno ? identityOf(L) : null;
+    if (id === null || id.dev !== entry.dev || id.ino !== entry.ino) {
+      process.stderr.write(
+        `wienerdog: keeping ${L} — not the Wienerdog skill link we recorded (replaced, or unverifiable)\n`
+      );
+      skipped.push(L);
+      return;
+    }
+  }
+  // Row 5: OWNED, in-namespace, and provably resolves to our recorded source.
+  if (!dryRun) fs.unlinkSync(L);
+  removedSet.add(L);
+  removed.push(L);
+}
+```
+
+> **Design decision, 2026-08-03 — why V4 verifies the mandated region itself
+> rather than delegating it to B-T4.** Three resolutions were on the table for
+> the candidate-derived-span defect, and this spec takes the second:
+>
+> 1. **Codex** — validate the rows against an independently trusted exact
+>    transformation. Correct in principle; it needs a trusted copy, which is what
+>    (2) supplies.
+> 2. **Two canonical copies in mechanical lockstep (TAKEN).** The fence and the
+>    snippets both live in this spec, serve different readers, and each pins the
+>    other: `base + snippets` must construct the fence byte for byte. Neither is
+>    derived from the artifact under test.
+> 3. **wd-reviewer** — accept content-tampering inside the mandated region as a
+>    structural limit, scope V4's comment, and lean on **B-T4** to redden it.
+>
+> **The deciding question was whether B-T4 runs on every path that trusts V4.
+> It does not.** V4 is meaningful — and runnable — at **spec-review time, on a
+> tree where no implementation and no B-T4 exist yet**; that is precisely when a
+> reviewer validates the contract structurally. A gate whose guarantee is
+> conditional on a downstream artifact that may not exist is a gate that reports
+> more confidence than it has, and this V-step has now failed review three times
+> for exactly that shape of reason (classification, allow-lists, candidate-derived
+> spans). Removing the last conditional is the consistent move.
+>
+> **The reviewer's adjudication was correct about the design it examined and does
+> not carry to this one.** It measured `a493f2b`'s *candidate-derived inverter*,
+> where tampering inside the rows text genuinely was invisible. Under the two-copy
+> construction those same two cases are **caught** — measured: `hasDev || hasIno`
+> → `&&` FAILS, and a delete-authorizing branch inside the rows block FAILS. The
+> "structural limit" was a limit of the derived span, not of single-sourcing.
+>
+> **Its B-T4 mapping is kept anyway, because it is the honest backstop for the one
+> residual this design does have:** an edit applied *consistently to both copies*
+> is authoring, not evasion — visible as a two-place spec diff — and it is what
+> B-T4 reddens. Cost accepted: the rows text appears twice. That is duplication
+> with a registered, executable lockstep, which is ADR-0031's own prescription for
+> duplication that has to exist, not a violation of it.
+
+**The mandated edits also live here, each on its own, as the SECOND canonical
+copy.** The fence above is what V4 compares the *implementation* against; the two
+snippets below are what the *implementer reads* — and V4's self-check requires
+that building `base + these snippets` reproduces the fence **byte for byte**.
+Two copies, each pinning the other, **neither derived from the artifact under
+test**. An earlier revision sliced the mandated rows out of the candidate fence
+itself, which meant a branch smuggled *inside* that slice was removed as if it
+were mandated and the gate stayed green (measured).
+
+<!-- MANDATED-SIGNATURE: reverseSymlink -->
 
 ```js
 function reverseSymlink(entry, dryRun, removed, skipped, removedSet, skillsRoots, opts = {}) {
   const identityOf = opts.identity || linkIdentity;   // test seam only
 ```
 
-`(dev, ino)` is a *filesystem* property, so the four behaviours row 4b depends on
-— changed device, changed inode, reused identity, unavailable identity — cannot
-be produced deterministically on a real filesystem, and a test that relies on
-`unlink` + `symlink` happening to allocate a fresh inode is a platform-dependent
-assumption pretending to be a contract. The seam makes all four deterministic
-(**B-T7**, measured). `reverse()`'s call site passes **nothing** — the default
-parameter keeps production behaviour byte-identical, exactly as
-`reverseSchedulerEntry` (Current state §7) already does with its own `opts = {}`.
-`reverseSymlink` is already exported and already unit-tested directly (WP-153's
-T4). **`opts` comes from the call site and never from a manifest entry**, so it
-is not an untrusted-input surface.
-
-**The two new rows** — inserted **between** the existing row-4 block and the
-`// Row 5:` comment, nothing else touched:
+<!-- MANDATED-ROWS: reverseSymlink -->
 
 ```js
   // Row 4a: ADOPTED — the link was already on disk when we first recorded it, so
@@ -505,6 +676,18 @@ is not an untrusted-input surface.
     }
   }
 ```
+
+**Why the seam exists.** `(dev, ino)` is a *filesystem* property, so the four
+behaviors row 4b depends on — changed device, changed inode, reused identity,
+unavailable identity — cannot be produced deterministically on a real
+filesystem, and a test that relies on `unlink` + `symlink` happening to allocate
+a fresh inode is a platform-dependent assumption pretending to be a contract.
+The seam makes all four deterministic (**B-T7**, measured). `reverse()`'s call
+site passes **nothing** — the default parameter keeps production behavior
+byte-identical, exactly as `reverseSchedulerEntry` (Current state §7) already
+does with its own `opts = {}`. `reverseSymlink` is already exported and already
+unit-tested directly (WP-153's T4a). **`opts` comes from the call site and never
+from a manifest entry**, so it is not an untrusted-input surface.
 
 **One stderr string for rows 2, 3, 4, 4a and 4b, deliberately.** WP-153 already
 shares it across rows 2–4; adding two more distinct strings would add two more
@@ -576,13 +759,22 @@ files. **Seven canonical tables** below — P, S, A2, B, N, F and U.
   entries **permanently** — through one sync and through a hundred. That is the
   owner-ruled position for `target` (2026-08-01) and it is inherited unchanged.
   "Legacy" is a permanent state.
-- **S-4. "Absent" is not one condition, and the accepted shape space is bigger
+- **S-4. The fields are TWO governed groups, and "absent" is not one condition, and the accepted shape space is bigger
   than the producer's output.** All three fields are optional and only
   type-gated, so `validateEntry` admits **twenty** distinct
   `{origin, dev, ino}` shapes while the forward step writes only **four**.
   **Table S enumerates all twenty, measured.**
 
 ### Table S — every schema-accepted `{origin, dev, ino}` shape (canonical)
+
+**The twenty cells cover TWO governed groups, not one** (ADR-0038's grouping
+test, applied 2026-08-03): `{origin}` is written at all three producer sites
+and read by row 4a; `{dev, ino}` are written only at the create site and read
+by row 4b. Splitting them makes ADR-0038's **R** bite in four places this
+table already measures — `origin` absent with `both-wrong`/`dev-only`/`ino-only`,
+and `origin: 'adopted'` with no identity. **All four are already priced in the
+owner ledger** (the wrong-pair row, the partial-pair row, and 4a), so the split
+reclassifies measured cells and moves no cost.
 
 **This table exists because a six-row summary was not the shape space.** Codex
 round 3 finding 2: all three fields are optional, `origin` is type- but not
@@ -599,7 +791,11 @@ not match the live link; `dev-only` / `ino-only` = a partial pair.
 | **`'adopted'`** | **PRESERVED** | **PRESERVED** | **PRESERVED** | **PRESERVED** | **PRESERVED** |
 | **`'bogus'`** (unknown string) | removed | removed | **PRESERVED** | **PRESERVED** | **PRESERVED** |
 
-**At base `0f9ee08` every one of these twenty cells is `removed`** —
+**At base every one of these twenty cells is `removed`** — measured at
+`0f9ee08`, and **unchanged by PR #151**: every Table S fixture uses a link whose
+target still resolves, so row 3 passes in all twenty and the removal of its
+link-text fallback cannot move a single cell. (The fallback only ever mattered
+when `realpath` failed, which no fixture here induces.) —
 `reverseSymlink` unlinks any recorded-path symlink with no identity check at all.
 **So every `PRESERVED` cell is a NARROWING and no cell is a widening.** That is
 Table N's theorem, proved exhaustively rather than by argument.
@@ -642,7 +838,7 @@ this spec is self-contained; **rows 4a and 4b are new.**
 |---|-----------|-------------------|--------|--------|--------------------------------|
 | 1 | `!isSymlink(L)` | none | `skipped` | none | A real file/dir at `L`, or nothing at all, is definitionally not the link we made. |
 | 2 | `typeof T !== 'string' \|\| T === ''` — **LEGACY** | none | `skipped` | `wienerdog: keeping <L> — not the Wienerdog skill link we recorded (replaced, or unverifiable)` | Ownership unprovable; owner-ruled 2026-08-01. |
-| 3 | `sameResolvedDir(L, T) === false` **and** `fs.readlinkSync(L) !== T` | none | `skipped` | same line | The link points somewhere else. Both sub-tests are fail-closed. **The lexical sub-test is dead through production and stays anyway** — see Implementation notes. |
+| 3 | `sameResolvedDir(L, T) === false` | none | `skipped` | same line | The link does not **prove** it resolves to the recorded source. `sameResolvedDir` is realpath-based and fail-closed by construction — an unresolvable side returns `false`, which lands here, in preserve. **There is deliberately no second, link-text comparison**: WP-153 shipped one and `WP-symlink-lexical-fallback-removal` dropped it, because raw-text equality is the weaker proof and the manifest is untrusted. |
 | 4 | **`OWNED(L)` is false** — basename not `wienerdog-*`, **or** `path.dirname(L)` does not realpath-equal a harness skills root | none | `skipped` | same line | A forged `(path, target)` pair is not delete authority (WP-153 gate round 4). |
 | **4a** | **`entry.origin === 'adopted'`** | none | `skipped` | same line | **NEW.** The link was already on disk when we first recorded it — the adopt branch (`shared.js:434`) sees a `wienerdog-*` link already pointing at our source and records it. It is the user's. Narrows honest-use case 2. |
 | **4b** | **`entry.dev` or `entry.ino` is a string** — and either the pair is **partial**, or `identityOf(L)` is `null`, or it does not equal `(entry.dev, entry.ino)` | none | `skipped` | same line | **NEW.** We recorded which file object we created; this is not it. A delete-and-recreate gets a new inode (measured, Current state §8), so a user's same-source replacement no longer passes for ours. Narrows honest-use case 1. A `null` identity is fail-closed by construction. **`(dev, ino)` is durable but not permanent, and recyclable.** The two directions are split across the two ledger sections: the *drift* half is a completeness cost, the *recycling* half is **equal to base** and is deliberately NOT priced (Codex round 7). Both pinned by B-T7. |
@@ -731,7 +927,7 @@ excerpts, which are dedented and annotated.
 
 | Region | Must stay |
 |--------|-----------|
-| `reverseSymlink` rows 1–5 | unchanged except the two new blocks inserted **before** the `// Row 5:` comment, the `opts = {}` parameter, and the `identityOf` binding. In particular the row-3 `lexicalMatch` `try`/`catch` stays. |
+| `reverseSymlink` rows 1–5 | unchanged except the two new blocks inserted **before** the `// Row 5:` comment, the `opts = {}` parameter, and the `identityOf` binding. In particular row 3 stays the **single** `if (!sameResolvedDir(L, T))` test — do **not** reintroduce a link-text comparison anywhere in this function, under any identifier; `WP-symlink-lexical-fallback-removal` removed it deliberately. **V4 enforces this by reconstructing the whole expected function and byte-diffing it**, so an added branch fails whatever it is named. |
 | The `reverse()` symlink arm | unchanged — **including the argument list**. `reverseSymlink` gains a 7th parameter `opts = {}`, and `reverse()` must **not** pass it: the default is production behaviour. A diff that adds an argument there is out of scope. |
 | `reverseManagedBlock`, in full | **untouched by this WP** — Part A's. Its fd-bound read, WP-147's Table M vocabulary block, the `anchorOk` conjunct Part A added, the `createdFile` `fs.rmSync(target, …)` delete and the fd-bound `ftruncateSync`+`writeSync` all stay exactly as Part A left them. **V3 is the guard.** |
 | `ENTRY_FIELD_TYPES`' other cells | unchanged — only the `symlink` cell moves. `managed-block` must **not** gain `anchorBefore` (Part A's Table P forbids it; V6 enforces it). |
@@ -810,18 +1006,15 @@ a sequence, and names the implementation it reddens (ADR-0036 A1/A2).
   so a swapped file or directory at the recorded path can never produce an
   identity match. Every throw degrades to `null`, which row 4b treats as
   **preserve**.
-- **The row-3 lexical fallback stays.** WP-153's 2026-08-02 post-merge note
-  established that `fs.readlinkSync(L) === T` is **dead through production** —
-  `reverse()`'s symlink arm calls `withinAllowedRoot`, whose `realpathSync`
-  throws `ENOENT` on a dangling link and preserves the entry before
-  `reverseSymlink` runs — and issued a **standing instruction**: the fallback
-  stays in the code and in the contract until `WP-symlink-lexical-fallback-removal`
-  lands. **Do not remove it here**, and do not "tidy" it while adding rows 4a/4b.
-  The shipped test that reaches it (`reverseSymlink: a dangling own link is still
-  removed via the lexical fallback — Table A row 3→5 (T4)`) calls `reverseSymlink`
-  **directly**; its entry is `{ kind: 'symlink', path: link, target: source }`
-  with no `origin`/`dev`/`ino`, so rows 4a and 4b do not fire and it stays green
-  byte-unmodified. Measured.
+- **Row 3 is now a single semantic proof — do not add a second one.**
+  WP-153 shipped `sameResolvedDir(L, T) === false && fs.readlinkSync(L) !== T`;
+  `WP-symlink-lexical-fallback-removal` (PR #151) dropped the lexical half
+  because raw link-text equality is the weaker proof and the manifest is
+  untrusted — a recorded target may **narrow** a delete, never authorize one
+  the semantic proof refuses. That is the same rule this WP's own fields obey
+  (Table N), and it is the rule **ADR-0038** codifies. Row 3 is not this WP's
+  to change: V4 asserts the single test is present **and** that `lexicalMatch`
+  is absent.
 - **A birth-time / generation field was considered and REJECTED.** It would
   narrow only the recycling half of R4, leaves the drift half untouched, and
   `birthtimeMs` is not dependably a creation time across the filesystems
@@ -898,8 +1091,10 @@ a sequence, and names the implementation it reddens (ADR-0036 A1/A2).
       `:485`, `:491` — records exactly what that table says, no more and no less
       — B-T6, plus B-T2's `origin: 'adopted'` / no-identity assertion.
 - [ ] **AC10.** Table F's three assertions are updated and pass; **every other
-      test in the repository passes byte-unmodified**, including WP-153's T1–T4
-      and T6, the four fenced WP-146 sync-side tests, and the whole of Part A's
+      test in the repository passes byte-unmodified**, including WP-153's **T1–T3,
+      T4a–T4c and T6** (its canonical roster after
+      `WP-symlink-lexical-fallback-removal` split T4), the four fenced WP-146
+      sync-side tests, and the whole of Part A's
       A-T1…A-T11 and `tests/unit/manifest.test.js`'s WP-147 suites.
 - [ ] **AC11.** Running `applySkillLinks` twice is idempotent: deep-equal manifest
       entries and zero `changed` on the second run — B-T3.
@@ -984,33 +1179,207 @@ node /tmp/wd-fnguard.js /tmp/wd-v3-red.js reverseManagedBlock \
   "+fs.ftruncateSync(fd, 0)" "-fs.writeFileSync(" \
   && { echo "V3 BROKEN: the guard cannot fail"; exit 1; } || echo "V3 ok (red, as required)"
 
-# V4-shipped — WP-153's rows are INTACT. This arm passes at base AND after this
-#   WP; run it both before and after your change and paste both.
-node /tmp/wd-fnguard.js src/core/manifest.js reverseSymlink \
-  "+lexicalMatch = fs.readlinkSync(L) === T;" \
-  "+!sameResolvedDir(L, T) && !lexicalMatch" \
-  "+skillsRoots.some((root) => sameResolvedDir(path.dirname(L), root))" && echo "V4-shipped ok"
+# V4x — the extractor. Prints ONE top-level function verbatim, and REFUSES when
+#   the name is defined more than once or is rebound (`reverseSymlink = ...`),
+#   so a later shadowing definition cannot slip past a first-match search.
+cat > /tmp/wd-fnextract.js <<'EX'
+const fs = require('node:fs');
+const [file, fn] = process.argv.slice(2);
+const s = fs.readFileSync(file, 'utf8');
+const defs = [...s.matchAll(new RegExp(`\\nfunction ${fn}\\(`, 'g'))];
+if (defs.length === 0) { console.error(`no top-level ${fn} in ${file}`); process.exit(1); }
+if (defs.length > 1) { console.error(`${defs.length} definitions of ${fn} — refusing`); process.exit(1); }
+const i = defs[0].index;
+const j = s.indexOf('\n}\n', i);
+if (j < 0) { console.error(`unterminated ${fn}`); process.exit(1); }
+const rest = s.replace(s.slice(i, j + 3), '');
+for (const [re, what] of [
+  // The WHOLE assignment-operator family, not bare `=`: =, +=, -=, *=, /=, %=,
+  // **=, <<=, >>=, >>>=, &=, ^=, |=, &&=, ||=, ??=. The lookahead keeps ==, ===
+  // and => out. `reverseSymlink &&= unsafe` bypassed the bare-`=` form while the
+  // extractor still emitted the original bytes (measured).
+  [new RegExp(`(^|[^.\\w])${fn}\\s*(?:>>>|\\*\\*|<<|>>|&&|\\|\\||\\?\\?|[+\\-*/%&|^])?=(?![=>])`, 'm'), 'assignment'],
+  [new RegExp(`for\\s*\\(\\s*(?:(?:var|let|const)\\s+)?${fn}\\s+(?:in|of)\\b`, 'm'), 'loop assignment'],
+  // Update expressions rebind too: `reverseSymlink++` turns the binding into a
+  // number while the exported property keeps the function, so a direct-import
+  // test and production resolve DIFFERENT things. Horizontal whitespace only, so
+  // an unrelated `count--` on the line above cannot false-positive.
+  [new RegExp(`(^|[^.\\w])${fn}[ \\t]*(?:\\+\\+|--)`, 'm'), 'postfix update'],
+  [new RegExp(`(?:\\+\\+|--)[ \\t]*${fn}\\b`, 'm'), 'prefix update'],
+  [new RegExp(`\\{[^{}]*\\b${fn}\\b[^{}]*\\}\\s*=`, 'm'), 'object destructuring'],
+  [new RegExp(`\\[[^\\[\\]]*\\b${fn}\\b[^\\[\\]]*\\]\\s*=`, 'm'), 'array destructuring'],
+  [new RegExp(`\\b(var|let|const|function|class)\\s+${fn}\\b`, 'm'), 're-declaration'],
+  [new RegExp(`\\bexports\\.${fn}\\s*=`, 'm'), 'export rebinding'],
+]) {
+  if (re.test(rest)) { console.error(`${fn} is rebound outside its definition (${what}) — refusing`); process.exit(1); }
+}
+process.stdout.write(s.slice(i + 1, j + 3));
+EX
 
-# V4-new — this WP's own rows are present. POST-IMPLEMENTATION ONLY: it exits 1 at
-#   base with three MISSING lines, which is correct and expected.
-node /tmp/wd-fnguard.js src/core/manifest.js reverseSymlink \
-  "+entry.origin === 'adopted'" \
-  "+const identityOf = opts.identity || linkIdentity;" \
-  "+hasDev || hasIno" && echo "V4-new ok"
+# V4y — pull the EXPECTED function out of THIS SPEC. The Exact-contracts fence is
+#   the single source; nothing is transcribed twice.
+cat > /tmp/wd-specfence.js <<'SF'
+const fs = require('node:fs');
+const [spec, marker] = process.argv.slice(2);
+const s = fs.readFileSync(spec, 'utf8');
+const m = s.indexOf(`<!-- ${marker} -->`);
+if (m < 0) { console.error(`marker not found: ${marker}`); process.exit(1); }
+const open = s.indexOf('```js', m);
+const close = s.indexOf('```', open + 5);
+if (open < 0 || close < 0) { console.error('no fenced block after the marker'); process.exit(1); }
+process.stdout.write(s.slice(open + 6, close));
+SF
 
-# V4 RED — MUST fail against a copy with WP-153's row-3 fallback deleted.
+# V4 — the implementation must be byte-identical to the spec's expected function.
+node /tmp/wd-specfence.js docs/specs/WP-symlink-authorship-identity.md \
+  'EXPECTED-FUNCTION: reverseSymlink' > /tmp/wd-expected-symlink.js
+node /tmp/wd-fnextract.js src/core/manifest.js reverseSymlink > /tmp/wd-actual-symlink.js
+#   POST-IMPLEMENTATION: at base this diff is non-empty by construction (rows
+#   4a/4b do not exist yet). It goes green the moment the mandated edits land.
+diff -u /tmp/wd-expected-symlink.js /tmp/wd-actual-symlink.js && echo "V4 ok (byte-identical to the spec's expected function)"
+
+# V4 SELF-CHECK — CONSTRUCTION FROM INDEPENDENT SOURCES. Build the expected
+#   function from the BASE plus the two mandated snippets, and require it to
+#   byte-equal the fence. Nothing here is derived from the artifact under test:
+#   the base comes from git, the two edits come from their own marked fences, and
+#   the two anchors they replace are located IN THE BASE rather than transcribed.
+#   An earlier revision instead sliced the rows out of the candidate fence and
+#   removed that span — so a deleting branch smuggled inside the span was treated
+#   as mandated and the check stayed green (measured, Codex delta 3).
+#
+#   SCOPE, stated exactly: this catches any SINGLE-COPY divergence — an addition,
+#   a deletion, or a tampering inside the mandated region, in EITHER the fence or
+#   the snippets, because the two must construct to each other byte for byte. What
+#   it does NOT catch is the same edit applied CONSISTENTLY to both canonical
+#   copies; that is an authoring change, visible as a two-place edit in the spec
+#   diff, and it is pinned behaviourally downstream by B-T4 (a weakened
+#   partial-pair arm reddens B-T4's dev-only/ino-only rows; a delete-authorizing
+#   branch reddens its three both-wrong rows).
+node /tmp/wd-specfence.js docs/specs/WP-symlink-authorship-identity.md \
+  'MANDATED-SIGNATURE: reverseSymlink' > /tmp/wd-mand-sig.js
+node /tmp/wd-specfence.js docs/specs/WP-symlink-authorship-identity.md \
+  'MANDATED-ROWS: reverseSymlink' > /tmp/wd-mand-rows.js
+git show 9188a1c:src/core/manifest.js > /tmp/wd-base-manifest.js
+node /tmp/wd-fnextract.js /tmp/wd-base-manifest.js reverseSymlink > /tmp/wd-base-symlink.js
+node -e '
+const fs = require("node:fs");
+const base = fs.readFileSync("/tmp/wd-base-symlink.js", "utf8");
+const sig  = fs.readFileSync("/tmp/wd-mand-sig.js", "utf8");
+const rows = fs.readFileSync("/tmp/wd-mand-rows.js", "utf8");
+// Both anchors are located IN THE BASE, never transcribed here.
+const sigOld = base.slice(0, base.indexOf("\n") + 1);
+const r5 = base.indexOf("  // Row 5: OWNED");
+if (r5 < 0) { console.error("base anchor missing"); process.exit(1); }
+const row5 = base.slice(r5, base.indexOf("\n", r5) + 1);
+fs.writeFileSync("/tmp/wd-constructed.js",
+  base.replace(sigOld, sig).replace(row5, rows + row5));
+'
+diff -u /tmp/wd-constructed.js /tmp/wd-expected-symlink.js \
+  && echo "V4 self-check ok (base + mandated snippets == the fence, byte for byte)"
+
+# V4 RED — MUST fail against the evasion that defeated the previous token guard: a
+#   provenance-conditioned link-text delete inserted before row 3, under no
+#   `lexicalMatch` identifier, leaving every previously-asserted token intact.
 cp src/core/manifest.js /tmp/wd-v4-red.js
-node -e 'const fs=require("node:fs"),p=process.argv[1];fs.writeFileSync(p,fs.readFileSync(p,"utf8").replace("  if (!sameResolvedDir(L, T) && !lexicalMatch) {","  if (!sameResolvedDir(L, T)) {"))' /tmp/wd-v4-red.js
-node /tmp/wd-fnguard.js /tmp/wd-v4-red.js reverseSymlink \
-  "+!sameResolvedDir(L, T) && !lexicalMatch" \
-  && { echo "V4 BROKEN: the guard cannot fail"; exit 1; } || echo "V4-shipped ok (red, as required)"
+node -e 'const fs=require("node:fs"),p=process.argv[1];fs.writeFileSync(p,fs.readFileSync(p,"utf8").replace("  // Row 3: the link must PROVE it still resolves to the source we recorded.","  if (entry.origin === \x27created\x27 && fs.readlinkSync(L) === T) { if (!dryRun) fs.unlinkSync(L); removedSet.add(L); removed.push(L); return; }\n  // Row 3: the link must PROVE it still resolves to the source we recorded."))' /tmp/wd-v4-red.js
+node /tmp/wd-fnextract.js /tmp/wd-v4-red.js reverseSymlink > /tmp/wd-actual-red.js
+diff -q /tmp/wd-expected-symlink.js /tmp/wd-actual-red.js >/dev/null \
+  && { echo "V4 BROKEN: the guard cannot fail"; exit 1; } || echo "V4 ok (red, as required)"
 
-# V4 RED 2 — MUST fail against a copy with THIS WP's partial-pair arm weakened to
-#            the round-2 form (which treated a half pair as absent and deleted).
-cp src/core/manifest.js /tmp/wd-v4-red2.js
-node -e 'const fs=require("node:fs"),p=process.argv[1];fs.writeFileSync(p,fs.readFileSync(p,"utf8").replace("  if (hasDev || hasIno) {","  if (hasDev && hasIno) {"))' /tmp/wd-v4-red2.js
-node /tmp/wd-fnguard.js /tmp/wd-v4-red2.js reverseSymlink "+hasDev || hasIno" \
-  && { echo "V4 BROKEN: the partial-pair arm is not guarded"; exit 1; } || echo "V4 ok (red 2, as required)"
+# V4 RED 2 — the SELF-CHECK's own red case, required. Smuggle a deleting branch
+#   INSIDE the Row 4a..Row 5 span of a copy of the fence. The previous
+#   candidate-derived inverter sliced that span out of the fence itself, so the
+#   smuggled branch was removed as if mandated and the check stayed GREEN
+#   (measured). Construction from the independent snippets catches it, because the
+#   constructed function simply does not contain it.
+node /tmp/wd-specfence.js docs/specs/WP-symlink-authorship-identity.md \
+  'EXPECTED-FUNCTION: reverseSymlink' > /tmp/wd-fence-span.js
+node -e '
+const fs = require("node:fs");
+const p = "/tmp/wd-fence-span.js";
+const s = fs.readFileSync(p, "utf8");
+const at = s.indexOf("  // Row 4b: IDENTITY");
+if (at < 0) { console.error("row 4b anchor missing"); process.exit(1); }
+const inj = "  if (entry.origin === \x27created\x27) {\n    if (!dryRun) fs.unlinkSync(L);\n    removedSet.add(L); removed.push(L); return;\n  }\n";
+fs.writeFileSync(p, s.slice(0, at) + inj + s.slice(at));
+'
+diff -q /tmp/wd-constructed.js /tmp/wd-fence-span.js >/dev/null \
+  && { echo "V4 SELF-CHECK BROKEN: a branch inside the mandated span passed"; exit 1; } \
+  || echo "V4 self-check ok (red: an inside-span branch is caught)"
+
+# V4z — THE HELPER'S OWN RED/GREEN MATRIX, SHIPPED IN FULL. The extractor above
+#   is embedded in TWO specs; a copy that silently loses its regex escapes still
+#   *looks* right and refuses nothing. Part A's copy did exactly that — single
+#   backslashes inside a JS template literal, so `\s*` became `s*` and `\b` became
+#   a backspace, and it accepted every reassignment form while appearing to check
+#   them (measured). So the matrix runs against the helper AS EXTRACTED FROM THIS
+#   SPEC, every time, and a claim measured against any other copy does not count.
+#
+#   THE WHOLE MATRIX IS HERE, not described elsewhere. An earlier revision shipped
+#   twelve fixtures while its report cited a twenty-seven-form measurement run in
+#   a scratch harness — which is the exact gap this step exists to close, one level
+#   up. 31 forms must be REFUSED, 13 benign forms and the clean tree must be
+#   ACCEPTED.
+cat > /tmp/wd-rebind-matrix.js <<'MX'
+const fs = require('node:fs'), os = require('node:os'), path = require('node:path');
+const { execFileSync } = require('node:child_process');
+const FN = 'reverseSymlink';
+const clean = fs.readFileSync('src/core/manifest.js', 'utf8');
+const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-mx-'));
+
+// Every form that REBINDS the local binding the production call site resolves.
+const REJECT = [
+  // the assignment-operator family, one fixture per operator
+  'reverseSymlink = unsafe;', 'reverseSymlink += unsafe;', 'reverseSymlink -= unsafe;',
+  'reverseSymlink *= unsafe;', 'reverseSymlink /= unsafe;', 'reverseSymlink %= unsafe;',
+  'reverseSymlink **= unsafe;', 'reverseSymlink <<= unsafe;', 'reverseSymlink >>= unsafe;',
+  'reverseSymlink >>>= unsafe;', 'reverseSymlink &= unsafe;', 'reverseSymlink ^= unsafe;',
+  'reverseSymlink |= unsafe;', 'reverseSymlink &&= unsafe;', 'reverseSymlink ||= unsafe;',
+  'reverseSymlink ??= unsafe;', 'reverseSymlink=unsafe;',
+  // update expressions — these convert the binding to a number while the exported
+  // property keeps the original function, so direct-import tests and production
+  // resolve DIFFERENT things
+  'reverseSymlink++;', '++reverseSymlink;', 'reverseSymlink--;', '--reverseSymlink;',
+  // loop assignment targets
+  'for (reverseSymlink of [unsafe]) {}', 'for (reverseSymlink in {a:1}) {}',
+  'for (const reverseSymlink of [unsafe]) {}',
+  // destructuring
+  '({ reverseSymlink } = { reverseSymlink: unsafe });', '[reverseSymlink] = [unsafe];',
+  // re-declaration
+  'const reverseSymlink = unsafe;', 'let reverseSymlink;', 'function reverseSymlink() {}',
+  // export rebinding — swaps what the tests import while production keeps the
+  // lexical binding, so B-T7/B-T8 would exercise a different function
+  'module.exports.reverseSymlink = unsafe;', 'exports.reverseSymlink = unsafe;',
+];
+
+// Benign forms that must NOT be flagged — the false-positive suite.
+const ACCEPT = [
+  'reverseSymlink(entry, dryRun, removed, skipped, removedSet, skillsRoots);',
+  'if (reverseSymlink === unsafe) {}', 'if (reverseSymlink !== unsafe) {}',
+  'if (reverseSymlink == unsafe) {}', 'if (reverseSymlink != unsafe) {}',
+  'if (x <= reverseSymlink) {}', 'if (x >= reverseSymlink) {}',
+  'const f = () => reverseSymlink;',
+  'module.exports = { load, reverseSymlink, hashDir };',
+  'obj.reverseSymlink = unsafe;', 'obj.reverseSymlink++;',
+  'thing.exportsXreverseSymlink = unsafe;',
+  ' * reverseSymlink lstat+unlinks the LINK ITSELF',
+];
+
+let bad = 0, n = 0;
+const accepts = (snippet) => {
+  const f = path.join(dir, `f${n++}.js`);
+  fs.writeFileSync(f, snippet === null ? clean : clean + '\n' + snippet + '\n');
+  try { execFileSync('node', ['/tmp/wd-fnextract.js', f, FN], { stdio: 'ignore' }); return true; }
+  catch { return false; }
+};
+for (const s of REJECT) if (accepts(s)) { console.log(`  MATRIX FAIL (accepted): ${s}`); bad++; }
+for (const s of ACCEPT) if (!accepts(s)) { console.log(`  MATRIX FAIL (refused):  ${s}`); bad++; }
+if (!accepts(null)) { console.log('  MATRIX FAIL: clean tree refused'); bad++; }
+fs.rmSync(dir, { recursive: true, force: true });
+if (bad) { console.log(`V4z BROKEN (${bad} problem(s))`); process.exit(1); }
+console.log(`V4z ok (${REJECT.length} refused, ${ACCEPT.length + 1} accepted)`);
+MX
+node /tmp/wd-rebind-matrix.js
 
 # V5 — reverse() must NOT pass the test seam; the production call stays 6-arg.
 grep -q "reverseSymlink(entry, dryRun, removed, skipped, removedSet, skillsRoots);" src/core/manifest.js || {
@@ -1044,7 +1413,7 @@ grep -q "const { hashDir, insertionAnchor, linkIdentity } = require('../core/man
 echo "V7 ok"
 
 # V8 — AC2: the two in-code doc mirrors carry ALL THREE new fields AND still carry
-#      Part A's `anchorBefore`. Uses the same helper Part A's V8 writes; it is
+#      Part A's `anchorBefore`. Uses the same helper Part A's V7 writes; it is
 #      reproduced here so this spec runs standalone.
 cat > /tmp/wd-docfields.js <<'DOCS'
 const fs = require('node:fs');
@@ -1067,14 +1436,14 @@ node /tmp/wd-docfields.js src/core/manifest.js origin dev ino anchorBefore && ec
 npm run lint
 ```
 
-**Measured at `18bc909` while writing this spec** (i.e. **before** either part
+**Measured at `9188a1c`** (i.e. **before** either part
 landed, so the "must be present" checks for new code are post-implementation by
-construction): V3's and V4's **red** runs both exit 1. **V4's GREEN run is
-post-implementation and does NOT pass at base** — three of its `+` rules name code
-this WP adds (`entry.origin === 'adopted'`, the `identityOf` binding, the
-`hasDev || hasIno` arm), so at `18bc909` it exits 1 with three `MISSING` lines.
-That is expected. **V4-shipped** below is the arm that passes at base and must keep
-passing after this WP. **V5's `grep -c 'reverseSymlink(' src/core/manifest.js`
+construction): V3's and V4's **red** runs both exit 1, and **V4's red arm catches
+the evasion that defeated the previous token guard** — a provenance-conditioned
+link-text delete under no `lexicalMatch` identifier. **V4's GREEN arm is
+post-implementation** and shows a diff at base, because rows 4a/4b do not exist
+yet; it was proved green against a scratch implementation built from the same
+reconstruction. **V5's `grep -c 'reverseSymlink(' src/core/manifest.js`
 is `2` today and must stay `2`** — the definition and the one production call.
 Do not confuse that with the **five** *unparenthesized* textual occurrences of
 `reverseSymlink` across `src/` (Current state §2), which include the comment above
@@ -1090,8 +1459,9 @@ they are not AST-aware and cannot tell reachable code from code after a `return`
   `anchorBefore` on the doc comment and typedef. Part A lands first; do not
   re-edit its hunks except to **extend** the three shared ones.
 - **Manifest integrity (signing/HMAC).** Declared out of scope by Table N.
-- **Removing the row-3 lexical fallback** — routed to
-  `WP-symlink-lexical-fallback-removal`, under WP-153's standing instruction.
+- **Touching row 3 at all.** `WP-symlink-lexical-fallback-removal` (PR #151)
+  settled it on 2026-08-02: one semantic proof, no link-text comparison. V4
+  asserts both halves of that.
 - **Backfilling `origin`/`dev`/`ino` onto existing entries**, or replacing
   `recordOnce` with an upsert. Owner-declined 2026-08-01; S-3 inherits it.
 - **A birth-time / generation field.** Rejected with reasons (Implementation
@@ -1177,14 +1547,15 @@ the `Case 1` column's qualifier instead.
 
 | | Disposition | Keeps `D5`? | Case 1 | Case 2 | Completeness cost (preservation regressions only) |
 |---|---|---|---|---|---|
-| (i) | **Ship rows 4a AND 4b** (this spec's shape) | yes | **narrowed** — bounded by recycling (R4) and the race (R7), both equal-to-base | **narrowed** | 4a's adopt-leftover, **4b's durability drift**, the **schema-valid wrong-pair** row, the partial-pair row, D5's schema rejection |
-| (ii) | **Ship 4b only**; record `origin` but leave it unread | yes | **narrowed** — same two bounds | stays open | **4b's durability drift**, the **schema-valid wrong-pair** row, the partial-pair row, D5's schema rejection |
-| (iii) | **Ship 4a only**; record `dev`/`ino` but leave them unread | yes | stays open | **narrowed** | the adopt-leftover **and D5's schema rejection** |
-| (iv) | Ship neither; record all three fields, read none | yes | stays open | stays open | **D5's schema rejection** — *not* "none". And the WP then closes nothing, so it should not ship |
-| (v) | Ship neither **and drop the type gates** — `symlink: { target: 'string' }` stays as WP-153 shipped it; the producer fields are still **recorded** (D10) but nothing reads or validates them | **no** | stays open | stays open | **none — uninstall behaves byte-for-byte as base.** The *manifest* still differs from base, because D10 keeps writing `origin`/`dev`/`ino`; they are inert, ignored by `validateEntry` as unknown keys, and reversible only by dropping D10 as well |
+| **(i) ✅ SELECTED** | **Ship rows 4a AND 4b** (this spec's shape) — **owner-ruled 2026-08-02** | yes | **narrowed** — bounded by recycling (R4) and the race (R7), both equal-to-base | **narrowed** | 4a's adopt-leftover, **4b's durability drift**, the **schema-valid wrong-pair** row, the partial-pair row, D5's schema rejection |
+| (ii) *declined* | **Ship 4b only**; record `origin` but leave it unread | yes | **narrowed** — same two bounds | stays open | **4b's durability drift**, the **schema-valid wrong-pair** row, the partial-pair row, D5's schema rejection |
+| (iii) *declined* | **Ship 4a only**; record `dev`/`ino` but leave them unread | yes | stays open | **narrowed** | the adopt-leftover **and D5's schema rejection** |
+| (iv) *declined* | Ship neither; record all three fields, read none | yes | stays open | stays open | **D5's schema rejection** — *not* "none". And the WP then closes nothing, so it should not ship |
+| (v) *declined* | Ship neither **and drop the type gates** — `symlink: { target: 'string' }` stays as WP-153 shipped it; the producer fields are still **recorded** (D10) but nothing reads or validates them | **no** | stays open | stays open | **none — uninstall behaves byte-for-byte as base.** The *manifest* still differs from base, because D10 keeps writing `origin`/`dev`/`ino`; they are inert, ignored by `validateEntry` as unknown keys, and reversible only by dropping D10 as well |
 
-**Architect's recommendation: (i)** — and the ground is a *preference this WP is
-proposing*, not an established rule. Stated precisely, because round 4 replaced a
+**Architect's recommendation was (i), and the owner ruled (i)** on 2026-08-02.
+The ground below was offered as a *preference this WP proposes*, not an
+established rule — it is kept because the ruling was made against it. Stated precisely, because round 4 replaced a
 misattributed ADR quote with an equally unsupported universal claim (Codex round
 5, finding 4):
 
@@ -1232,7 +1603,7 @@ preserved back to removed. Table S moves only if rows 4a/4b are also dropped,
 which is what (v) does *in addition*.
 
 They are registered in the Mirrored Surface Checklist for exactly this reason.
-**Do not implement any arm until the ruling is recorded here.**
+**The ruling is recorded in this spec's header blockquote; implement arm (i).**
 
 ## Declared residuals after this WP (Table R — canonical)
 
@@ -1247,6 +1618,20 @@ They are registered in the Mirrored Surface Checklist for exactly this reason.
 | **R8** | **The source guards are not AST-aware.** They strip comments and reject duplicate definitions, but cannot tell reachable code from code after a `return` | the guards are **tripwires**; V1/V2 are the load-bearing checks | the red mutations in Verification steps | **`WP-grep-gate-helper`** — already routed by WP-147; this spec does not re-route it |
 | **R9** | **The partial-pair leftover** — see the ledger row of the same name | not reachable from any producer site | B-T4's two partial rows | a ledger cost |
 | **R10** | **A schema-valid wrong identity pair.** An entry whose `dev`/`ino` are both strings but do not match the live link — including one-of-two wrong — **preserves** a link base removes | corruption- or forgery-only; an honest pair that *becomes* wrong is 4b's durability row instead. Measured: base removes all three variants, this WP preserves all three | B-T4's three both-wrong rows, which assert the base contrast | a ledger cost |
+
+**R8 — the source guards are regex, not AST — updated 2026-08-03.** The rebinding
+guard now covers the full assignment-operator family, **prefix and postfix update
+expressions**, both loop-target forms, both destructuring forms, re-declaration
+and `exports.` writes — **31 forms, each with a permanent V4z fixture, plus a
+13-form false-positive suite**, all shipped in the step itself rather than
+described in a report. **The residual is novel syntax outside the fixture set**:
+regexes enumerate forms, an AST enumerates the language. This is the **sixth**
+instance of the same class in this repo, and every one has been closed by adding
+another pattern after a reviewer found the gap — which is the argument, not an
+anecdote. Routed to **`WP-grep-gate-helper`** (already open, opened by WP-147 as
+its fourth instance). A devDependency-free verification script cannot parse JS
+itself, so regex-with-exhaustive-fixtures is the available path until that helper
+lands; V1/V2 remain the load-bearing behavioural checks.
 
 ## Definition of done
 
