@@ -1200,6 +1200,12 @@ for (const [re, what] of [
   // extractor still emitted the original bytes (measured).
   [new RegExp(`(^|[^.\\w])${fn}\\s*(?:>>>|\\*\\*|<<|>>|&&|\\|\\||\\?\\?|[+\\-*/%&|^])?=(?![=>])`, 'm'), 'assignment'],
   [new RegExp(`for\\s*\\(\\s*(?:(?:var|let|const)\\s+)?${fn}\\s+(?:in|of)\\b`, 'm'), 'loop assignment'],
+  // Update expressions rebind too: `reverseSymlink++` turns the binding into a
+  // number while the exported property keeps the function, so a direct-import
+  // test and production resolve DIFFERENT things. Horizontal whitespace only, so
+  // an unrelated `count--` on the line above cannot false-positive.
+  [new RegExp(`(^|[^.\\w])${fn}[ \\t]*(?:\\+\\+|--)`, 'm'), 'postfix update'],
+  [new RegExp(`(?:\\+\\+|--)[ \\t]*${fn}\\b`, 'm'), 'prefix update'],
   [new RegExp(`\\{[^{}]*\\b${fn}\\b[^{}]*\\}\\s*=`, 'm'), 'object destructuring'],
   [new RegExp(`\\[[^\\[\\]]*\\b${fn}\\b[^\\[\\]]*\\]\\s*=`, 'm'), 'array destructuring'],
   [new RegExp(`\\b(var|let|const|function|class)\\s+${fn}\\b`, 'm'), 're-declaration'],
@@ -1301,44 +1307,79 @@ diff -q /tmp/wd-constructed.js /tmp/wd-fence-span.js >/dev/null \
   && { echo "V4 SELF-CHECK BROKEN: a branch inside the mandated span passed"; exit 1; } \
   || echo "V4 self-check ok (red: an inside-span branch is caught)"
 
-# V4z — THE HELPER'S OWN RED MATRIX. The extractor above is embedded in TWO
-#   specs; a copy that silently loses its regex escapes still *looks* right and
-#   refuses nothing. Part A's copy did exactly that — single backslashes inside a
-#   JS template literal, so `\s*` became `s*` and `\b` became a backspace, and it
-#   accepted every reassignment form while appearing to check them (measured).
-#   So the matrix runs against the helper AS EXTRACTED FROM THIS SPEC, every time,
-#   and a claim measured against any other copy does not count.
-cat > /tmp/wd-rebind-matrix.sh <<'MX'
-set -u
-tmp=$(mktemp -d); ok=1
-node /tmp/wd-fnextract.js src/core/manifest.js reverseSymlink > "$tmp/fn.js" 2>/dev/null \
-  || { echo "matrix: cannot extract the clean function"; exit 1; }
-cp src/core/manifest.js "$tmp/clean.js"
-printf '\n({ reverseSymlink } = { reverseSymlink: unsafe });\n' > "$tmp/a"; cat "$tmp/clean.js" "$tmp/a" > "$tmp/destruct.js"
-printf '\n[reverseSymlink] = [unsafe];\n'                        > "$tmp/b"; cat "$tmp/clean.js" "$tmp/b" > "$tmp/arr.js"
-printf '\nreverseSymlink = unsafe;\n'                            > "$tmp/c"; cat "$tmp/clean.js" "$tmp/c" > "$tmp/plain.js"
-printf '\nconst reverseSymlink = unsafe;\n'                      > "$tmp/d"; cat "$tmp/clean.js" "$tmp/d" > "$tmp/redecl.js"
-printf '\nfunction reverseSymlink() {}\n'                        > "$tmp/e"; cat "$tmp/clean.js" "$tmp/e" > "$tmp/dup.js"
-printf '\nreverseSymlink &&= unsafe;\n'                          > "$tmp/f"; cat "$tmp/clean.js" "$tmp/f" > "$tmp/logand.js"
-printf '\nreverseSymlink ||= unsafe;\n'                          > "$tmp/g"; cat "$tmp/clean.js" "$tmp/g" > "$tmp/logor.js"
-printf '\nreverseSymlink ??= unsafe;\n'                          > "$tmp/h"; cat "$tmp/clean.js" "$tmp/h" > "$tmp/nullish.js"
-printf '\nreverseSymlink += unsafe;\n'                           > "$tmp/i"; cat "$tmp/clean.js" "$tmp/i" > "$tmp/compound.js"
-printf '\nfor (reverseSymlink of [unsafe]) {}\n'                 > "$tmp/j"; cat "$tmp/clean.js" "$tmp/j" > "$tmp/forof.js"
-printf '\nfor (reverseSymlink in {a:1}) {}\n'                    > "$tmp/k"; cat "$tmp/clean.js" "$tmp/k" > "$tmp/forin.js"
-printf '\nmodule.exports.reverseSymlink = unsafe;\n'             > "$tmp/l"; cat "$tmp/clean.js" "$tmp/l" > "$tmp/exportw.js"
-for f in destruct arr plain redecl dup logand logor nullish compound forof forin exportw; do
-  if node /tmp/wd-fnextract.js "$tmp/$f.js" reverseSymlink >/dev/null 2>&1; then
-    echo "  MATRIX FAIL: $f was ACCEPTED"; ok=0
-  else
-    echo "  matrix ok: $f refused"
-  fi
-done
-node /tmp/wd-fnextract.js "$tmp/clean.js" reverseSymlink >/dev/null 2>&1 \
-  && echo "  matrix ok: clean tree accepted" || { echo "  MATRIX FAIL: clean tree refused"; ok=0; }
-rm -rf "$tmp"
-[ "$ok" = 1 ] && echo "V4z ok (12 refused, 1 accepted)" || { echo "V4z BROKEN"; exit 1; }
+# V4z — THE HELPER'S OWN RED/GREEN MATRIX, SHIPPED IN FULL. The extractor above
+#   is embedded in TWO specs; a copy that silently loses its regex escapes still
+#   *looks* right and refuses nothing. Part A's copy did exactly that — single
+#   backslashes inside a JS template literal, so `\s*` became `s*` and `\b` became
+#   a backspace, and it accepted every reassignment form while appearing to check
+#   them (measured). So the matrix runs against the helper AS EXTRACTED FROM THIS
+#   SPEC, every time, and a claim measured against any other copy does not count.
+#
+#   THE WHOLE MATRIX IS HERE, not described elsewhere. An earlier revision shipped
+#   twelve fixtures while its report cited a twenty-seven-form measurement run in
+#   a scratch harness — which is the exact gap this step exists to close, one level
+#   up. 31 forms must be REFUSED, 13 benign forms and the clean tree must be
+#   ACCEPTED.
+cat > /tmp/wd-rebind-matrix.js <<'MX'
+const fs = require('node:fs'), os = require('node:os'), path = require('node:path');
+const { execFileSync } = require('node:child_process');
+const FN = 'reverseSymlink';
+const clean = fs.readFileSync('src/core/manifest.js', 'utf8');
+const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-mx-'));
+
+// Every form that REBINDS the local binding the production call site resolves.
+const REJECT = [
+  // the assignment-operator family, one fixture per operator
+  'reverseSymlink = unsafe;', 'reverseSymlink += unsafe;', 'reverseSymlink -= unsafe;',
+  'reverseSymlink *= unsafe;', 'reverseSymlink /= unsafe;', 'reverseSymlink %= unsafe;',
+  'reverseSymlink **= unsafe;', 'reverseSymlink <<= unsafe;', 'reverseSymlink >>= unsafe;',
+  'reverseSymlink >>>= unsafe;', 'reverseSymlink &= unsafe;', 'reverseSymlink ^= unsafe;',
+  'reverseSymlink |= unsafe;', 'reverseSymlink &&= unsafe;', 'reverseSymlink ||= unsafe;',
+  'reverseSymlink ??= unsafe;', 'reverseSymlink=unsafe;',
+  // update expressions — these convert the binding to a number while the exported
+  // property keeps the original function, so direct-import tests and production
+  // resolve DIFFERENT things
+  'reverseSymlink++;', '++reverseSymlink;', 'reverseSymlink--;', '--reverseSymlink;',
+  // loop assignment targets
+  'for (reverseSymlink of [unsafe]) {}', 'for (reverseSymlink in {a:1}) {}',
+  'for (const reverseSymlink of [unsafe]) {}',
+  // destructuring
+  '({ reverseSymlink } = { reverseSymlink: unsafe });', '[reverseSymlink] = [unsafe];',
+  // re-declaration
+  'const reverseSymlink = unsafe;', 'let reverseSymlink;', 'function reverseSymlink() {}',
+  // export rebinding — swaps what the tests import while production keeps the
+  // lexical binding, so B-T7/B-T8 would exercise a different function
+  'module.exports.reverseSymlink = unsafe;', 'exports.reverseSymlink = unsafe;',
+];
+
+// Benign forms that must NOT be flagged — the false-positive suite.
+const ACCEPT = [
+  'reverseSymlink(entry, dryRun, removed, skipped, removedSet, skillsRoots);',
+  'if (reverseSymlink === unsafe) {}', 'if (reverseSymlink !== unsafe) {}',
+  'if (reverseSymlink == unsafe) {}', 'if (reverseSymlink != unsafe) {}',
+  'if (x <= reverseSymlink) {}', 'if (x >= reverseSymlink) {}',
+  'const f = () => reverseSymlink;',
+  'module.exports = { load, reverseSymlink, hashDir };',
+  'obj.reverseSymlink = unsafe;', 'obj.reverseSymlink++;',
+  'thing.exportsXreverseSymlink = unsafe;',
+  ' * reverseSymlink lstat+unlinks the LINK ITSELF',
+];
+
+let bad = 0, n = 0;
+const accepts = (snippet) => {
+  const f = path.join(dir, `f${n++}.js`);
+  fs.writeFileSync(f, snippet === null ? clean : clean + '\n' + snippet + '\n');
+  try { execFileSync('node', ['/tmp/wd-fnextract.js', f, FN], { stdio: 'ignore' }); return true; }
+  catch { return false; }
+};
+for (const s of REJECT) if (accepts(s)) { console.log(`  MATRIX FAIL (accepted): ${s}`); bad++; }
+for (const s of ACCEPT) if (!accepts(s)) { console.log(`  MATRIX FAIL (refused):  ${s}`); bad++; }
+if (!accepts(null)) { console.log('  MATRIX FAIL: clean tree refused'); bad++; }
+fs.rmSync(dir, { recursive: true, force: true });
+if (bad) { console.log(`V4z BROKEN (${bad} problem(s))`); process.exit(1); }
+console.log(`V4z ok (${REJECT.length} refused, ${ACCEPT.length + 1} accepted)`);
 MX
-bash /tmp/wd-rebind-matrix.sh
+node /tmp/wd-rebind-matrix.js
 
 # V5 — reverse() must NOT pass the test seam; the production call stays 6-arg.
 grep -q "reverseSymlink(entry, dryRun, removed, skipped, removedSet, skillsRoots);" src/core/manifest.js || {
@@ -1579,9 +1620,11 @@ They are registered in the Mirrored Surface Checklist for exactly this reason.
 | **R10** | **A schema-valid wrong identity pair.** An entry whose `dev`/`ino` are both strings but do not match the live link — including one-of-two wrong — **preserves** a link base removes | corruption- or forgery-only; an honest pair that *becomes* wrong is 4b's durability row instead. Measured: base removes all three variants, this WP preserves all three | B-T4's three both-wrong rows, which assert the base contrast | a ledger cost |
 
 **R8 — the source guards are regex, not AST — updated 2026-08-03.** The rebinding
-guard now covers the full assignment-operator family, both loop-target forms,
-both destructuring forms, re-declaration and `exports.` writes, each with a
-permanent V4z fixture. **The residual is novel syntax outside the fixture set**:
+guard now covers the full assignment-operator family, **prefix and postfix update
+expressions**, both loop-target forms, both destructuring forms, re-declaration
+and `exports.` writes — **31 forms, each with a permanent V4z fixture, plus a
+13-form false-positive suite**, all shipped in the step itself rather than
+described in a report. **The residual is novel syntax outside the fixture set**:
 regexes enumerate forms, an AST enumerates the language. This is the **sixth**
 instance of the same class in this repo, and every one has been closed by adding
 another pattern after a reviewer found the gap — which is the argument, not an
