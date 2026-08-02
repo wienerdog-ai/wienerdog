@@ -677,7 +677,10 @@ syscalls, and nothing binds them.**
 - **It only ever narrows against base**, which unlinks with no identity check at
   all, so every outcome reachable through this race is reachable at base with no
   race required.
-- **Residual R7, pinned by B-T8, costed in the owner ledger.**
+- **Residual R7, pinned by B-T8.** It is **not** a cost in the owner ledger:
+  base removes the same replacement with no race required, so this is a limit on
+  how much of honest-use case 1 closes, not a regression to ratify (Codex round 6,
+  finding 2). The ledger lists it under *reclassified — equal to base*.
 
 ### Table B — what each producer site records (canonical)
 
@@ -751,7 +754,10 @@ excerpts, which are dedented and annotated.
 - [ ] Verification **V5**, **V6**
 - [ ] **The owner cost ledger's fourth row** (the partial-pair leftover) **and its
       fifth** (D5's schema rejection), plus the ledger's `Keeps D5?` column and
-      disposition **(v)** — the only arm with genuinely zero completeness cost
+      disposition **(v)** — the only arm with zero completeness cost
+- [ ] **The ledger's *reclassified — equal to base* table** (4b's recycling arm and
+      the verify→unlink race) and the `Completeness cost` column's restriction to
+      preservation regressions — R4's and R7's Table R rows mirror it
 - [ ] Deliverable **D5** and Table N's non-string row — both move if the ruling
       is (v)
 
@@ -1076,11 +1082,31 @@ and **weaker on completeness**, which is the gated register.
 
 ### The complete cost ledger (canonical for the ruling)
 
+**Two kinds of thing were conflated through round 5, and separating them lowers
+4b's stated price** (Codex round 6, finding 2). A **completeness cost** is a case
+where this WP **preserves a link base would have removed** — a genuine regression
+against shipped behaviour, and the only thing the owner is being asked to accept.
+A **residual limit on the benefit** is a case where this WP **removes a link base
+also removes** — no regression at all, just a bound on how much safety the
+mechanism buys. Only the first kind belongs in a cost table.
+
+**Reclassified out of the cost ledger — equal to base, therefore NOT costs:**
+
+| Item | What happens | vs base | Where it lives now |
+|------|--------------|---------|--------------------|
+| **4b's recycling arm** | an inode reallocated to a user's replacement at the same path with the same target passes 4b, and the link is removed | base removes it too, unconditionally and without any check | **R4**'s recycling half — a limit on how much of honest-use case 1 closes, pinned by **B-T7(d)** |
+| **the verify→unlink race** | a replacement landing between the identity check and the unlink is removed | base removes it too, with no race required | **R7** — pinned by **B-T8**, and it is why case 1 is described as *narrowed*, not closed |
+
+Neither can make an install worse off than shipped, so **neither is something to
+ratify**. They remain fully declared and pinned in Table R; they are simply not
+prices.
+
+**The actual completeness costs — every row here preserves a link base removes:**
+
 | Row | What it buys | What it costs | How narrow the cost is | Pinned by |
 |-----|--------------|---------------|------------------------|-----------|
 | **4a** (adopted ⇒ preserve) | narrows honest-use **case 2**: a link the user created before we synced is no longer deleted | a link **we** created is left behind when its manifest entry was lost and a later `sync` re-adopted it | `recordOnce` no-ops when an entry exists (`shared.js:50-51`), so an ordinary re-sync never re-records; and `uninstall` refuses outright without a manifest (`src/cli/uninstall.js:43-46`). It needs: manifest deleted or reset → reinstall → sync → uninstall | B-T2 |
-| **4b** (identity must match) | narrows honest-use **case 1**: a user's same-source replacement is no longer deleted | **(a) durability** — a backup/restore, volume remount, home migration, container rebuild or network filesystem can change `dev` and/or `ino` for a link nobody touched, which is then **left behind**; **(b) recycling** — an inode handed back to a user's replacement at the same path with the same target passes 4b and is **deleted** | (a) is the fail-closed direction and never loses data; (b) needs the FS to reallocate the exact inode at the exact path **and** the user to have re-pointed it at our source | B-T7 (a)–(d) |
-| **4b's verify→unlink race** | nothing — it is 4b's cost, not its benefit | a replacement landing between the identity check and the unlink is deleted despite the verified identity belonging to the previous object | needs **arbitrary same-user native code**, which `docs/THREAT-MODEL.md` places outside the boundary (A12) and which can delete the link directly. Node exposes no atomic compare-and-unlink | **B-T8**. Residual **R7**; not claimed closed (ADR-0028's disposition for the scheduler's reopen-based check) |
+| **4b** (identity must match) | narrows honest-use **case 1**: a user's same-source replacement is no longer deleted | **durability only** — a backup/restore, volume remount, home migration, container rebuild or network filesystem can change `dev`/`ino` for a link nobody touched, which is then **left behind** where base removed it | the fail-closed direction; never loses data | B-T7 (a)–(c) |
 | **the partial-pair leftover** (new in round 3) | nothing — it is the fail-closed reading of a shape no branch writes | an entry carrying **exactly one** of `dev`/`ino` **preserves** a link base would delete | **not reachable from any producer site** (Table S) — it needs a hand-edited or corrupted manifest. It is a cost the ledger owes the owner because the ledger claims to be complete, not because a user will hit it | B-T4's two partial rows |
 | **D5's schema rejection** (new in round 5) | a non-string forgery is stopped **upstream** of the reverser, so the reverser never has to defend against one | a **non-string** `origin`, `dev` or `ino` makes `validateEntry` reject the whole entry, so `reverse()` skips it and the link is **preserved** — where base **removed** it, because base's `symlink: {}` cell type-gated none of these keys | **only reachable from a hand-edited or corrupted manifest** — no producer site writes a non-string. But it is a **direct consequence of D5**, so it is present in **every disposition that keeps the schema cell**, including ones that read none of the fields | **B-T5** |
 
@@ -1100,13 +1126,18 @@ Rounds 3–4 wrote (iii) as *"the adopt-leftover only"* and (iv) as *"none"*, an
 `Keeps D5?` column is now explicit, and a disposition that genuinely wants zero
 completeness cost must **also drop the type gates** — which is disposition (v).
 
-| | Disposition | Keeps `D5`? | Case 1 | Case 2 | Completeness cost |
+**The `Completeness cost` column lists ONLY preservation regressions** — cases
+where uninstall leaves a link base removes. Equal-to-base deletions (recycling,
+the race) are **not** listed there; they are limits on the benefit and appear in
+the `Case 1` column's qualifier instead.
+
+| | Disposition | Keeps `D5`? | Case 1 | Case 2 | Completeness cost (preservation regressions only) |
 |---|---|---|---|---|---|
-| (i) | **Ship rows 4a AND 4b** (this spec's shape) | yes | **narrowed**, except recycling and the race | **narrowed** | all five ledger rows |
-| (ii) | **Ship 4b only**; record `origin` but leave it unread | yes | **narrowed**, except recycling and the race | stays open | 4b's two directions, the race, the partial-pair row, **and D5's schema rejection** |
-| (iii) | **Ship 4a only**; record `dev`/`ino` but leave them unread | yes | stays open | **narrowed** | the adopt-leftover **and D5's schema rejection** — *not* "the adopt-leftover only" |
+| (i) | **Ship rows 4a AND 4b** (this spec's shape) | yes | **narrowed** — bounded by recycling (R4) and the race (R7), both equal-to-base | **narrowed** | 4a's adopt-leftover, **4b's durability drift**, the partial-pair row, D5's schema rejection |
+| (ii) | **Ship 4b only**; record `origin` but leave it unread | yes | **narrowed** — same two bounds | stays open | **4b's durability drift**, the partial-pair row, D5's schema rejection |
+| (iii) | **Ship 4a only**; record `dev`/`ino` but leave them unread | yes | stays open | **narrowed** | the adopt-leftover **and D5's schema rejection** |
 | (iv) | Ship neither; record all three fields, read none | yes | stays open | stays open | **D5's schema rejection** — *not* "none". And the WP then closes nothing, so it should not ship |
-| (v) | Ship neither **and drop the type gates** (`symlink: { target: 'string' }` unchanged) | **no** | stays open | stays open | **genuinely none** — byte-for-byte base behaviour |
+| (v) | Ship neither **and drop the type gates** — `symlink: { target: 'string' }` stays as WP-153 shipped it; the producer fields are still **recorded** (D10) but nothing reads or validates them | **no** | stays open | stays open | **none — uninstall behaves byte-for-byte as base.** The *manifest* still differs from base, because D10 keeps writing `origin`/`dev`/`ino`; they are inert, ignored by `validateEntry` as unknown keys, and reversible only by dropping D10 as well |
 
 **Architect's recommendation: (i)** — and the ground is a *preference this WP is
 proposing*, not an established rule. Stated precisely, because round 4 replaced a
@@ -1164,10 +1195,10 @@ They are registered in the Mirrored Surface Checklist for exactly this reason.
 |---|----------|-------|-----------|--------|
 | **R1** | **Manifest forgery.** An attacker who can rewrite the manifest deletes the fields and gets base behaviour | WP-153's row-4 `OWNED(L)` gate: the `wienerdog-` namespace in the two directories the user gave us | Table S's `absent`/`none` column; B-T5 | manifest integrity — **declined by declaration**, not routed |
 | **R3** | **No stable `(dev, ino)` on some platform.** Where `linkIdentity` returns `null` at creation time, no identity is recorded and WP-153's residual persists on that platform | the WP-153 residual, unchanged | B-T4's `'created'`+no-identity row covers the *reverse* arm. **The forward arm has no test** — it needs a platform reporting a zero `dev`/`ino`, which this repo's CI does not have | a Windows-runner probe, if one is ever wanted; not routed today |
-| **R4** | **Identity drift and recycling.** `(dev, ino)` is durable but not permanent | drift is fail-closed and never loses data; recycling needs the exact inode at the exact path **plus** the user re-pointing it at our source, and is still equal-or-stronger than base | **B-T7**, all four arms deterministic through the identity seam | costed in the ledger, row 4b. A birth-time field was considered and rejected |
+| **R4** | **Identity drift and recycling.** `(dev, ino)` is durable but not permanent | drift is fail-closed and never loses data; recycling needs the exact inode at the exact path **plus** the user re-pointing it at our source, and is still equal-or-stronger than base | **B-T7**, all four arms deterministic through the identity seam | **split across the two ledger sections**: the *drift* half is a real completeness cost (ledger row 4b); the *recycling* half is equal to base and is listed under *reclassified — equal to base*, not as a price. A birth-time field was considered and rejected |
 | **R5** | **Adopted-link leftover** — row 4a's half of the ledger | one symlink per core skill, in the harness skills dir, only after a manifest-loss reinstall | B-T2 pins the *behaviour*; the *cost* is what the owner rules on | **blocked on the owner ruling** |
 | **R6** | **`reverseCopiedSkill` has the same authorship gap** — its `hash` is read from the same untrusted file and proves content, not authorship | out of scope here; a `copied-skill` is the `EPERM`/`EACCES` fallback shape, not the mainline | none | a future WP, not drafted |
-| **R7** | **The verify→unlink race.** Row 4b's `identityOf(L)` and row 5's `fs.unlinkSync(L)` are separate syscalls | needs **arbitrary same-user native code** — outside the threat model per `docs/THREAT-MODEL.md`'s A12 posture — and such an actor can delete the link directly. **Only ever narrows against base** | **B-T8** | **not routed and not claimed closed.** Node exposes no atomic compare-and-unlink; ADR-0028's disposition for the scheduler's reopen-based check. Costed in the ledger |
+| **R7** | **The verify→unlink race.** Row 4b's `identityOf(L)` and row 5's `fs.unlinkSync(L)` are separate syscalls | needs **arbitrary same-user native code** — outside the threat model per `docs/THREAT-MODEL.md`'s A12 posture — and such an actor can delete the link directly. **Only ever narrows against base** | **B-T8** | **not routed and not claimed closed.** Node exposes no atomic compare-and-unlink; ADR-0028's disposition for the scheduler's reopen-based check. **Listed in the ledger under *reclassified — equal to base*, deliberately NOT as a cost** — base removes the same replacement with no race required |
 | **R8** | **The source guards are not AST-aware.** They strip comments and reject duplicate definitions, but cannot tell reachable code from code after a `return` | the guards are **tripwires**; V1/V2 are the load-bearing checks | the red mutations in Verification steps | **`WP-grep-gate-helper`** — already routed by WP-147; this spec does not re-route it |
 | **the partial-pair leftover** | see the ledger's fourth row | not reachable from any producer site | B-T4's two partial rows | costed in the ledger |
 
