@@ -474,7 +474,7 @@ function ensureCatchup(paths, manifest, loader, uid, jobDigests) {
   // Hoisted so the renderer and `expect` are provably built from the SAME
   // values — two independent calls could otherwise diverge (D3 implementation
   // note), and the skip would then compare against something we never wrote.
-  const node = gen.nodePath();
+  const node = gen.entryNodePath();
   const launcher = launcherPathFor(paths);
   const expectDigest = catchupExpectDigest(paths);
   const content = gen.catchupPlist({
@@ -533,7 +533,7 @@ function ensureWindowsCatchup(paths, manifest, loader, jobDigests) {
   const launchArgs = ['--catch-up', '--expect-digest', catchupExpectDigest(paths)];
   if (typeof jobDigests === 'string' && jobDigests !== '') launchArgs.push('--job-digests', jobDigests);
   const argline = gen.windowsCmdArguments({
-    node: gen.nodePath(),
+    node: gen.entryNodePath(),
     launcher: launcherPathFor(paths),
     home: paths.home,
     core: paths.core,
@@ -608,7 +608,7 @@ function registerPlatform(paths, manifest, o, loader, platform = process.platfor
  *  (same params/returns) — split out so the descriptor capture wraps every
  *  platform branch uniformly (WP-156). */
 function registerPlatformEntries(paths, manifest, o, loader, platform = process.platform) {
-  const node = gen.nodePath();
+  const node = gen.entryNodePath();
   // WP-157: the OS entry invokes the out-of-tree launcher with the descriptor
   // path + expect-digest, not the app bin directly.
   const b = jobLaunchBinding(paths, o.name, platform);
@@ -853,7 +853,7 @@ function repairCatchup(paths, manifest, opts = {}) {
     const observed = probeArgv ? probe(probeArgv, expect, { run: opts.run }) : null;
     if (!probeArgv || !HEAL_SET.has(observed)) return {};
     const content = gen.catchupPlist({
-      node: gen.nodePath(),
+      node: gen.entryNodePath(),
       launcher: launcherPathFor(paths),
       expectDigest: catchupExpectDigest(paths),
       jobDigests,
@@ -882,7 +882,7 @@ function repairCatchup(paths, manifest, opts = {}) {
   const launchArgs = ['--catch-up', '--expect-digest', catchupExpectDigest(paths)];
   if (jobDigests) launchArgs.push('--job-digests', jobDigests);
   const argline = gen.windowsCmdArguments({
-    node: gen.nodePath(),
+    node: gen.entryNodePath(),
     launcher: launcherPathFor(paths),
     home: paths.home,
     core: paths.core,
@@ -967,7 +967,7 @@ function writeCanonicalSchedule(filePath, content) {
 function reloadJob(paths, job, loader, platform) {
   if (!/^[a-z0-9][a-z0-9-]*$/.test(job.name)) return false;
   const { hour, minute } = gen.parseAt(job.at); // throws on a bad time → caller treats as failed
-  const node = gen.nodePath();
+  const node = gen.entryNodePath();
   const b = jobLaunchBinding(paths, job.name, platform);
   const roots = schedulerRootsFor(paths);
 

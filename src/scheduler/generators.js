@@ -22,6 +22,45 @@ function nodePath() {
 }
 
 /**
+ * The absolute node path written into an OS scheduler ENTRY (plist / systemd
+ * unit / Task Scheduler XML) — a string the OS keeps and re-reads days later.
+ * Prefers an upgrade-DURABLE alias over the version-pinned `process.execPath`,
+ * but ONLY when that alias provably resolves to the very interpreter that is
+ * running right now. Every other input, and every failure, returns `execPath`
+ * unchanged (Table A). PURE apart from one `realpath` stat; NEVER throws.
+ *
+ * NOT for spawning a child of the current process — use `nodePath()` there.
+ *
+ * @param {string} [execPath=process.execPath]  absolute path of the running node
+ * @param {{realpath?: (p:string) => string}} [opts]  test seam; default fs.realpathSync
+ * @returns {*} the durable alias (always a string), OR `execPath` returned
+ *   **verbatim** — including when `execPath` is not a string at all, which is a
+ *   caller bug this function passes through rather than masks (Table A row 1).
+ *   The type is deliberately `*` and not `string`: an earlier draft wrote
+ *   `{string}`, which contradicted row 1.
+ */
+function entryNodePath(execPath = process.execPath, opts = {}) {
+  try {
+    if (typeof execPath !== 'string' || execPath[0] !== '/') return execPath;
+    const parts = execPath.split('/');
+    if (parts.length < 6) return execPath;
+    const i = parts.length - 5;
+    if (parts[i] !== 'Cellar') return execPath;
+    const formula = parts[i + 1];
+    if (!/^node(@[0-9]+(\.[0-9]+)*)?$/.test(formula)) return execPath;
+    const version = parts[i + 2];
+    if (!/^[0-9][0-9A-Za-z._+-]*$/.test(version)) return execPath;
+    const prefix = parts.slice(0, i).join('/');
+    const ALIAS = prefix + '/opt/' + formula + '/bin/node';
+    const realpath = typeof opts.realpath === 'function' ? opts.realpath : fs.realpathSync;
+    if (realpath(ALIAS) !== realpath(execPath)) return execPath;
+    return ALIAS;
+  } catch {
+    return execPath;
+  }
+}
+
+/**
  * Absolute path to the STABLE vendored bin (ADR-0013). Survives version bumps:
  * only the `current` symlink's target changes, so scheduler entries are
  * version-independent. @param {import('../core/paths').WienerdogPaths} paths
@@ -1123,6 +1162,7 @@ function teardownCatchup(paths, manifest, opts = {}) {
 
 module.exports = {
   nodePath,
+  entryNodePath,
   wienerdogBin,
   launcherPath,
   launchAgentsDir,
