@@ -187,7 +187,7 @@ the current template.
 | modify | src/adapters/shared.js | `applyManagedBlock`: replace the lossy append with a non-lossy insert that records the exact inserted separator bytes (`sepBefore`, `sepAfter`) on the manifest entry. `createdFile` and `replace` branches keep behavior; record `sepAfter:'\n'` on the createdFile branch. |
 | modify | src/core/manifest.js | `reverseManagedBlock`: strip only the recorded (or legacy-default) separators, and only when the strip preserves a line boundary — never fuse user lines, **and never consume a newline the user supplied** (the `weSuppliedTerminator` gate on the at-EOF disjunct — Table N). |
 | modify | tests/unit/claude-adapter.test.js | Round-trip cases incl. the relocated-block-between-single-newline-lines case (**Table N row 4**), plus **T8**: create (absent file) → **sync again at least twice** → uninstall, asserting the file is **REMOVED**, not truncated to empty (the sticky-`createdFile` guard, red against a plain-overwrite upsert), plus **T10**: the two **delete-and-reinsert** round trips from the per-field/per-branch matrix — both directions, red against first-insertion-wins. **AND one MANDATORY update to a shipped assertion at `:342-361` — see "The one shipped assertion this WP flips".** |
-| modify | tests/unit/manifest.test.js | Direct `reverseManagedBlock` cases for recorded + legacy (no sep metadata) entries — **all seven rows of Table N** — plus **T6**, the discrimination pair (**rows 3 and 2**, which differ only in `sepBefore`; both are required, see Table N's T6 note), **T7**, the out-of-vocabulary forged-metadata rows from **Table M**, **T9**, the *in-vocabulary* at-EOF forgery that makes Table M's declared bound executable, **T11**, the honest-relocation pair (**Table N rows 6–7**, the ownership re-check), and **T12**, the **non-string** metadata rows (`null` / number / boolean / array `sepBefore` and `sepAfter`) asserting the block is still conservatively stripped and the entry is **not** rejected upstream (AC14). |
+| modify | tests/unit/manifest.test.js | Direct `reverseManagedBlock` cases for recorded + legacy (no sep metadata) entries — **all eight rows of Table N** — plus **T6**, the discrimination pair (**rows 3 and 2**, which differ only in `sepBefore`; both are required, see Table N's T6 note), **T7**, the out-of-vocabulary forged-metadata rows from **Table M**, **T9**, the *in-vocabulary* at-EOF forgery that makes Table M's declared bound executable, **T11**, the honest-relocation set (**Table N rows 6, 7 and 8**: the ownership re-check *and* the declared `'\n'` cross-paragraph residual), and **T12**, the **non-string** metadata rows (`null` / number / boolean / array `sepBefore` and `sepAfter`) asserting the block is still conservatively stripped and the entry is **not** rejected upstream (AC14). |
 
 ### Exact contracts
 
@@ -494,7 +494,7 @@ inside it:
    unconditionally. A residual may be a cost the design accepts; it may not be
    *worse than what it replaces*.
 
-Fixed by the ownership re-check in Exact contracts, pinned by **Table N rows 6–7**
+Fixed by the ownership re-check in Exact contracts, pinned by **Table N rows 6–8**
 and **T11**.
 
 ### Table N — the `safe` predicate, every REACHABLE case (canonical)
@@ -527,14 +527,21 @@ contract above.
 | 5 | empty original | `'\n\n'` | `""` | `"\n"` **XX** | ok | **ok** |
 | **6** | **relocated between lines, `sepBefore='\n\n'`** — user file `lineA\n\n\n<BLOCK>\nlineB\n` | `'\n\n'` | `"lineA\n\n\nlineB\n"` | `"lineA\n\nlineB\n"` **XX** | `"lineA\nlineB\n"` **XX** | **ok** |
 | **7** | **fusion probe, `sepBefore='\n\n'`** — user file `lineA\n\n<BLOCK>\nlineB\n` | `'\n\n'` | `"lineA\n\nlineB\n"` | — | ok | **ok** |
+| **8** | **cross-paragraph relocation, `sepBefore='\n'`** — user file `paraA\n\n<BLOCK>\nparaB\n` | `'\n'` | `"paraA\nparaB\n"` **(= base; declared residual)** | `"paraA\nparaB\n"` **=base** | `"paraA\nparaB\n"` **=base** | `"paraA\nparaB\n"` **=base ok** |
 
 ```text
-SCORE  today 1/7   ungated 5/7   gated (with the ownership re-check) 7/7
+SCORE  today 2/8   ungated 6/8   gated (with the ownership re-check) 8/8
 ```
 
 Rows 2, 4 and 5 are the bugs this WP exists to fix; **row 3 is the one the
 `weSuppliedTerminator` gate adds**; **rows 6 and 7 are the pair the ownership
-re-check adds** (gate round 9).
+re-check adds** (gate round 9). **Row 8 is the declared residual** (gate round 10):
+its "want" **is** the base-`b3a53bc` output, not a byte-perfect restore — the
+`'\n'` cross-paragraph collapse is unchanged from shipped and out of this WP's
+remit. It is in the table so the boundary is executable, marked `=base` to make
+clear it pins **current behaviour, not a fix** (see "Relocation and separator
+ownership"). All three predicates agree on row 8 precisely because none of them
+can establish ownership of a relocated `'\n'` — that needs the insertion anchor.
 
 **Row 6 is a REGRESSION the r4 contract would have shipped, not a residual.**
 With `sepBefore='\n\n'` recorded from an honest unterminated append, a user who
@@ -547,6 +554,64 @@ than the code it replaces.
 **Row 7 is why the fix is a conjunction.** Same `sepBefore='\n\n'`, but
 `candidate = "lineA"` — no trailing newline, so the ownership re-check passes.
 Only `noFusion` stops the strip, and without it two user lines **fuse**.
+
+### Relocation and separator ownership — the GENERAL residual (canonical)
+
+**This section exists to give the "construct a relocation that consumes a user
+newline" question a fixed point.** Each gate round found one more permutation
+(EOF single-newline, the `'\n\n'` relocation, now the `'\n'` cross-paragraph
+relocation), and patching them one at a time never terminates. The boundary is
+declared here **once**, generally, so no further permutation re-opens the WP.
+
+**The root fact.** Once the user has **moved the block away from its recorded
+append position**, the reverser has no way to prove which surrounding bytes were
+Wienerdog's separators and which are the user's, because **the manifest records
+the separator's *shape* (`sepBefore`/`sepAfter`) but not its *position***. Full
+ownership closure would need an install-time **insertion anchor** — the prefix
+length at insertion, or a hash of the surrounding context — which this WP does not
+add. Absent that anchor, the reverser removes **at most the `noFusion`-bounded
+separator** and never more. Consequences, by recorded `sepBefore`, are exhaustive:
+
+| recorded `sepBefore` | on a relocation, the reverser removes | vs shipped base `b3a53bc` | worst case |
+|----------------------|----------------------------------------|---------------------------|------------|
+| `''` (createdFile) | **nothing** on the leading side | at least as safe | no leading effect |
+| `'\n'` | **at most one** leading newline, and only when `noFusion` allows | **EQUAL** — base strips one newline unconditionally too | one blank line collapses on a *cross-paragraph* relocation (paragraph merge); **never fusion** |
+| `'\n\n'` | **nothing**, when `candidate` ends in `\n` (`ownershipOk` fails) | **BETTER** — base would strip and collapse a blank line | preserved (Table N row 6, the finding-2 fix) |
+
+**The `'\n'` row is a legitimate residual, not a defect, by this WP's own round-10
+rule.** Measured against both trees on `paraA\n\n<BLOCK>\nparaB\n` with
+`sepBefore='\n'`:
+
+```text
+base b3a53bc  ->  "paraA\nparaB\n"   (unconditional single-newline strip)
+this WP       ->  "paraA\nparaB\n"   (noFusion permits; ownershipOk does not bite for '\n')
+EQUAL
+```
+
+It is **equal to shipped**, so it clears the bar *"a residual may not be worse
+than the code it replaces"* — which is exactly why last round's `'\n\n'` case was
+a **defect** (two newlines, *worse* than base) while this one is **residual**
+(one newline, *equal* to base). **WP-147's remit is fusion** — the A13 target,
+`lineA\n<BLOCK>\nlineB\n` → `lineA\nlineB\n` not `lineAlineB\n` — plus not
+*regressing* the blank-line behaviour; it does **not** also fix the pre-existing
+cross-paragraph blank-line collapse, which is **unchanged from 0.12.0**.
+
+**Why `ownershipOk` is gated on `weSuppliedTerminator` and not extended to
+`'\n'`.** Extending the ownership re-check to the `'\n'` case (refuse to strip a
+recorded `'\n'` when `candidate` ends in a newline) would *improve* on base for
+cross-paragraph relocation — but it would also **leave Wienerdog's own separator
+behind on the ordinary in-place uninstall**, because that is the common case where
+`candidate` legitimately ends in a newline and the strip is correct. Without a
+position anchor the reverser cannot tell the two apart, so closing the residual
+here would trade a rare cosmetic collapse for a common leftover-blank-line. That
+trade needs the anchor, which is out of scope.
+
+**Routed: `WP-managed-block-insertion-anchor`** — record the insertion position
+(prefix length or a context hash) at forward time so the reverser can prove
+ownership on a relocated block and close this residual for **every** `sepBefore`
+value at once. It is the single mechanism that terminates the permutation search
+properly; until it lands, the table above is the declared boundary and **Table N
+rows 6–8 pin it executably** (row 8 added below).
 
 **Row 5 of the round-3 table was UNSATISFIABLE and has been removed.** It
 described *"relocated to EOF, original `foo`"* — a file shaped
@@ -622,28 +687,39 @@ remove**.
 **This is spec text only** — `tests/unit/claude-adapter.test.js` is already in the
 Deliverables table.
 
-#### T11 — honest relocation with `sepBefore='\n\n'` (the ownership re-check)
+#### T11 — honest relocation, three rows (the ownership re-check AND its declared boundary)
 
-**Two rows, and both are required** — they differ only in whether `candidate`
-ends with a newline, which is precisely the signal the re-check reads.
+**Three rows. (a) and (b) differ only in whether `candidate` ends with a
+newline — the signal the re-check reads; (c) is the declared `'\n'` residual and
+is a DIFFERENT kind of assertion.**
 
 | # | Recorded | User file at uninstall | Uninstall must yield | What it pins |
 |---|----------|------------------------|----------------------|--------------|
-| a | `sepBefore='\n\n'` | `lineA\n\n\n<BLOCK>\nlineB\n` | **`"lineA\n\n\nlineB\n"`** | the ownership re-check: `candidate="lineA\n"` → not at the recorded position → strip nothing on the leading side |
-| b | `sepBefore='\n\n'` | `lineA\n\n<BLOCK>\nlineB\n` | **`"lineA\n\nlineB\n"`** | `noFusion` still governs: `candidate="lineA"` passes the re-check, and only the anti-fusion guard prevents `lineAlineB\n` |
+| a | `sepBefore='\n\n'` | `lineA\n\n\n<BLOCK>\nlineB\n` | **`"lineA\n\n\nlineB\n"`** | the ownership re-check: `candidate="lineA\n"` → not at the recorded position → strip nothing on the leading side (Table N row 6) |
+| b | `sepBefore='\n\n'` | `lineA\n\n<BLOCK>\nlineB\n` | **`"lineA\n\nlineB\n"`** | `noFusion` still governs: `candidate="lineA"` passes the re-check, and only the anti-fusion guard prevents `lineAlineB\n` (Table N row 7) |
+| c | `sepBefore='\n'` | `paraA\n\n<BLOCK>\nparaB\n` | **`"paraA\nparaB\n"`** | the **declared residual** (Table N row 8): one blank line collapses, **equal to base `b3a53bc`**. Comment it as *pinning CURRENT behaviour, not a fix* — a `sepBefore='\n'` relocation cannot establish ownership without the insertion anchor. |
 
-Set both up **honestly** — sync an unterminated original so the forward step
-records `'\n\n'` by itself, then move the block by writing the file directly. **Do
-not hand-edit the manifest**; that would make this a forgery test, which is T9's
-job, and would not exercise the honest path this row exists for.
+Set all three up **honestly** — sync an original so the forward step records the
+separator by itself (unterminated → `'\n\n'` for (a)/(b); newline-terminated →
+`'\n'` for (c)), then move the block by writing the file directly. **Do not
+hand-edit the manifest**; that would make it a forgery test (T9's job) and would
+not exercise the honest path these rows exist for.
 
-**Red-first, and in two different directions:**
+**Red-first, and in different directions:**
 
 - **(a)** against the round-4 predicate yields `"lineA\nlineB\n"` — a user blank
   line collapsed.
 - **(b)** against an ownership-re-check-*instead-of*-`noFusion` implementation
   yields `"lineAlineB\n"` — **fusion**. Run this one; a fix for (a) that drops
   `noFusion` passes (a) and silently reintroduces A13.
+- **(c) is NOT red-first** — it is a boundary pin. Its expected value **is** the
+  base-`b3a53bc` output, so it passes on base, on r4, and on the shipped fix
+  alike. That is the point: it documents that this permutation is *out of remit*
+  and equal to shipped, so a future "I found a relocation that eats a newline"
+  report resolves against a committed test instead of re-opening the WP. If it
+  ever goes red, either the code regressed **below** base or
+  `WP-managed-block-insertion-anchor` landed and closed the residual — both are
+  events worth a failing test.
 
 #### T10 — delete-and-reinsert, both directions (the per-branch rule)
 
@@ -824,7 +900,7 @@ listed under "Out of scope".
       **deleted** by uninstall after **two or more** intervening `sync` runs, not
       truncated to empty. **Red-first** against a plain-overwrite upsert, where the
       replace branch's `createdFile: false` wins on the first re-sync.
-- [ ] **AC13 (new — honest relocation, T11, BOTH rows).** With `sepBefore='\n\n'`
+- [ ] **AC13 (new — honest relocation, T11, THREE rows).** With `sepBefore='\n\n'`
       recorded by an honest unterminated append: **(a)** a block relocated after a
       blank line (`lineA\n\n\n<BLOCK>\nlineB\n`) uninstalls to
       **`"lineA\n\n\nlineB\n"`** — the user's blank line survives; **(b)** a block
@@ -832,6 +908,11 @@ listed under "Out of scope".
       **`"lineA\n\nlineB\n"`** — **no fusion**. Both red-first, in the two
       different directions named under T11. **(b) is not optional**: it is the only
       thing that catches a fix for (a) that drops the anti-fusion guard.
+      **(c) the declared `'\n'` residual (Table N row 8):** with `sepBefore='\n'`,
+      `paraA\n\n<BLOCK>\nparaB\n` uninstalls to **`"paraA\nparaB\n"`** — **equal to
+      base `b3a53bc`**, one blank line collapsed, documented as pinned current
+      behaviour, **not** red-first. It exists so the cross-paragraph permutation
+      resolves against a committed test rather than re-opening the WP.
 - [ ] **AC14 (new — non-string separator metadata still strips).** `reverse()` on
       a `managed-block` entry whose `sepBefore` or `sepAfter` is **`null`, a
       number, a boolean, or an array** still removes the block, degrading to the
@@ -1072,6 +1153,14 @@ abort the script — it simply skips the block. Measured, not assumed.
   `managed-block` addition to that object is *optional*; the `symlink` cell
   belongs to **WP-153**, which `depends_on` this WP and lands after it. Do not
   touch it.
+- **Closing the relocation residual for `sepBefore='\n'`** (the cross-paragraph
+  blank-line collapse, Table N row 8). It is **equal to shipped base** and out of
+  this WP's fusion remit — see "Relocation and separator ownership". Full closure
+  needs an install-time insertion anchor and is routed to
+  **`WP-managed-block-insertion-anchor`**. Do **not** attempt it here by extending
+  `ownershipOk` to the `'\n'` case: without the anchor that trades a rare cosmetic
+  collapse for a **common** leftover blank line on ordinary in-place uninstall
+  (the reasoning is in the same section). T11 case (c) pins the current behaviour.
 
 ## Definition of done
 
@@ -1410,3 +1499,46 @@ abort the script — it simply skips the block. Measured, not assumed.
 > - **`shared.js:196`'s stale comment** (*"do not re-record"* above what is now an
 >   upserting call) is pinned byte-for-byte by the forward unchanged-regions
 >   table. Widen the pin or fix the comment in a follow-up.
+>
+> **2026-08-02 — PR #134 re-gate (tip 4425122), Codex finding #3: a THIRD
+> relocation permutation. DECLARED, not patched — this is the loop-termination
+> move.**
+>
+> The finding: honest `sepBefore='\n'` (not `'\n\n'`), user relocates the block to
+> `paraA\n\n<BLOCK>\nparaB\n`. The round-9 `ownershipOk` conjunct only bites when
+> `weSuppliedTerminator` (the `'\n\n'` case), so for `'\n'` the guard reduces to
+> `noFusion` alone; `candidate="paraA\n"` ends in a newline, so one newline is
+> removed and the user's blank line collapses (paragraph merge).
+>
+> **Verified against BOTH trees — EQUAL to base, not a regression.** On
+> `paraA\n\n<BLOCK>\nparaB\n` with `sepBefore='\n'`: base `b3a53bc` yields
+> `"paraA\nparaB\n"` (its unconditional single-newline strip), and this WP yields
+> the **same**. By round 10's own rule — *a residual may not be worse than the
+> code it replaces* — this is a **legitimate residual** (equal to shipped),
+> whereas round 9's `'\n\n'` case was **worse** than shipped (two newlines) and
+> was correctly a defect. WP-147's remit is **fusion** (`lineA\n<BLOCK>\nlineB\n`
+> → `lineA\nlineB\n`, not `lineAlineB\n` — measured: base fuses, this WP does not);
+> it does not also fix the pre-existing cross-paragraph blank-line collapse, which
+> is **unchanged from 0.12.0**.
+>
+> **Instead of patching a fourth permutation, the boundary is now declared
+> generally** in the new *"Relocation and separator ownership"* section: once the
+> block is moved off its recorded append position, ownership of the surrounding
+> bytes cannot be established, because the manifest records the separator's
+> **shape but not its position**. The reverser removes at most the
+> `noFusion`-bounded separator; consequences are tabulated by recorded `sepBefore`
+> (`''` → nothing; `'\n'` → one newline, **= base**, can collapse a blank line,
+> never fusion; `'\n\n'` → preserved, the round-9 fix). **Full closure needs an
+> install-time insertion anchor**, routed to **`WP-managed-block-insertion-anchor`**
+> — the single mechanism that terminates the permutation search for *every*
+> `sepBefore` value at once. **Table N gains row 8** and **T11 gains case (c)**,
+> both marked `=base` and *pinning current behaviour, not a fix*, so the next
+> "I found a relocation that eats a newline" report resolves against a committed
+> test rather than re-opening the WP. AC13 extended to three rows.
+>
+> **Not an owner decision — flagged as an FYI only.** Unlike WP-153's legacy
+> ruling (which accepted a *new* cost), this residual is **equal to shipped**, so
+> there is no new cost to ratify. Reversibility is IRON-RULE-adjacent, so it is
+> **flagged for Gyula, not gated**: *WP-147 leaves a pre-existing
+> cross-paragraph-relocation blank-line-collapse unchanged from 0.12.0; full fix
+> routed to `WP-managed-block-insertion-anchor`.*
