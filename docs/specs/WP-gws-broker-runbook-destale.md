@@ -1,7 +1,7 @@
 ---
 id: WP-gws-broker-runbook-destale
 title: De-stale the "Google Workspace access is off" banner in the capability-broker runbook
-status: Draft
+status: Ready
 model: sonnet
 size: S
 depends_on: []
