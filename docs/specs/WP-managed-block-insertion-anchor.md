@@ -1,7 +1,7 @@
 ---
 id: WP-managed-block-insertion-anchor
 title: Record a managed-block insertion anchor at forward time so uninstall strips only separators it can prove are ours
-status: Ready
+status: In-Review
 model: opus
 size: M
 depends_on: [WP-147]
