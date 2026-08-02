@@ -1,7 +1,7 @@
 ---
 id: WP-151
 title: Build the fail-loud alert and self-email body from code-owned status fields, never a free-form failure string
-status: In-Review
+status: Done
 model: sonnet
 size: S
 depends_on: []

@@ -1,7 +1,7 @@
 ---
 id: WP-153
 title: Make the manifest symlink reverser target-aware so uninstall never deletes a user's replacement link
-status: In-Review
+status: Done
 model: opus
 size: S
 depends_on: [WP-144, WP-147]
