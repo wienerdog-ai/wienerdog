@@ -678,7 +678,7 @@ function registerPlatformEntries(paths, manifest, o, loader, platform = process.
       process.stderr.write(`wienerdog: warning — 'systemctl --user daemon-reload' returned ${s}; the timer may load from stale units. Run 'wienerdog doctor'.\n`);
     }
     const enableOk = loader(['systemctl', '--user', 'enable', '--now', `${unitBase}.timer`]).status === 0;
-    const loaded = reloadOk && enableOk;
+    const loaded = enableOk; // MUTATION A (Table B): degraded reload reported as success
     if (changed) {
       // Best-effort: let timers fire when the user is logged out. NOT evidence
       // about what systemd holds, so it stays gated on `changed` and never gates
