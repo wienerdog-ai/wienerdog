@@ -1,7 +1,7 @@
 ---
 id: WP-scheduler-register-replaces-loaded-record
 title: A register that cannot verify what the OS now holds must not report success
-status: Draft
+status: In-Review
 model: sonnet
 size: M
 depends_on: []
