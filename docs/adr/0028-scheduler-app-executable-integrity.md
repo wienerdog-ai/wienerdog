@@ -1212,7 +1212,7 @@ rejected**.
 
 ## Amendment (2026-08-01) — the scheduler ENTRY's node path is an upgrade-durable alias; `process.execPath` stays the runtime and the authorization value
 
-Status: **PROPOSED — awaiting owner signature.**
+Status: **ACCEPTED - OWNER-SIGNED 2026-08-02**
 
 **Architect note (2026-08-01, architect-authored — this is NOT an owner
 signature, confers no approval, and no gate may key on it).** This amendment was
