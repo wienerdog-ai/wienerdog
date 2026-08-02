@@ -630,7 +630,7 @@ each is a distinct decision, not an accident:
    shape no branch writes, so it is *unverifiable*, not *absent*; treating it as
    absent would be a **wider** deletion than treating it as unverifiable, and
    fail-closed is the house rule. **This is a real completeness cost and it is in
-   the owner ledger** — see the ledger's fourth row.
+   the owner ledger** — see the ledger's **partial-pair leftover** row.
 
 ### Table A2 — what `reverseSymlink(entry)` does after this WP (canonical)
 
@@ -774,7 +774,8 @@ excerpts, which are dedented and annotated.
 - [ ] Acceptance criteria **AC6**, **AC7**
 - [ ] Test index **B-T1 … B-T8**; Table R rows **R3**, **R4**, **R5**, **R7**
 - [ ] Verification **V4**
-- [ ] **The owner cost ledger**, all four rows
+- [ ] **The owner cost ledger**, all five priced rows, **and** its
+      *reclassified — equal to base* table
 
 **Table F (flipped assertions)** — mirrors:
 
@@ -1120,7 +1121,7 @@ recorded-path symlink with no ownership test at all, so every row here only ever
 preserves more (Table S, exhaustively). **The cost is completeness only**, which
 is precisely the axis WP-153's ruling spoke to.
 
-### The four dispositions, so the ruling is a choice and not an essay
+### The five dispositions, so the ruling is a choice and not an essay
 
 Ordered by how much of the residual narrows; all are safety-wise
 equal-or-stronger than shipped.
