@@ -236,7 +236,7 @@ function recordManagedBlock(manifest, mdPath, createdFile, sepBefore, sepAfter, 
 `createdFile` is **sticky-true**; the separators are **update-on-insert /
 preserve-on-replace**. Both rules are WP-147's and neither changes here.
 
-### 3. `reverseManagedBlock`'s leading-strip region — `src/core/manifest.js:285-311`
+### 3. `reverseManagedBlock`'s leading-strip region — `src/core/manifest.js:285-312`
 
 Byte-identical:
 
@@ -245,6 +245,10 @@ Byte-identical:
   // preserves a line boundary — otherwise we would fuse two user lines (the A13 bug).
   if (sepBefore.length > 0 && before.endsWith(sepBefore)) {
     const candidate = before.slice(0, before.length - sepBefore.length);
+    // The at-EOF disjunct is GATED on sepBefore === '\n\n' — i.e. on the forward
+    // step having supplied the file's terminator itself. When sepBefore is '\n'
+    // the file was already newline-terminated by the USER, so that newline is
+    // theirs and survives even with nothing after the block.
     const weSuppliedTerminator = sepBefore === '\n\n';
 
     // (1) OWNERSHIP RE-CHECK. We wrote '\n\n' ONLY because the content did not end
@@ -585,7 +589,6 @@ was executed end-to-end through `applyManagedBlock` → `reverse()`; the recorde
 | **Q13** | **The ordinary-path corpus sweep.** Six whole-file contents, each synced and immediately uninstalled with **no relocation and no user edit**: `"\n"`, `"\n\n\n"`, `"a\na\na\n"`, CRLF `"x\r\ny\r\n"`, `"foo\n"`, and `""` (present but empty) | `'\n'` / `'\n\n'` | byte-perfect in all six | **byte-perfect in all six** | the block-excised corpus regressed two of these (`"\n"` → `"\n\n"`, `"\n\n\n"` → `"\n\n\n\n"`). Fixed by `candidate + after`. Pinned by **A-T10**. |
 | **Q14** | **R2c, arm 1 — the `'\n'` separator.** `W` is 256 chars **ending in a newline**, so an honest append onto `` `PPPP\n${W}` `` records `sepBefore: '\n'`. The user then **replaces the prefix** with `` `QQ\n${W}` `` — the same window at a new, unique position — and relocates the block there | `'\n'` | **one** char stripped | **one char stripped — the DECLARED residual, EQUAL to base** | measured **red** against a full-prefix anchor and against an always-withhold anchor, so it discriminates. Pinned by **A-T9(a)**. |
 | **Q15** | **R2c, arm 2 — the `'\n\n'` separator** (Codex round 4, finding 1). `W` is 256 chars **NOT** newline-terminated, so an honest append onto `` `PPPP\n${W}` `` records `sepBefore: '\n\n'`. Same reproduction, and the block sits **at EOF** | `'\n\n'` | **two** chars stripped | **two chars stripped — EQUAL to base** | **This is the arm rounds 1–3 missed.** With `sepBefore='\n\n'`, `candidate` has no trailing newline so `ownershipOk` passes, and `after === ''` at EOF so `noFusion`'s at-EOF disjunct passes — the strip removes **both** newlines. Pinned by **A-T9(b)**. |
-
 | **Q16** | **R2b's cost, measured** (Codex round 5, finding 1). Content `"A\n"`; honest sync; the user **appends `"A\n"` after the block** — no relocation, no edit above it. The window is `candidate.slice(-256)` = `"A\n"`, **2 characters, not 256**, and it now occurs twice in the reconstructed document | `'\n'` | `"A\nA\n"` — the separator is removed | `"A\n\nA\n"` — **our separator is left**, one surplus character | **This is R2b, and it is far more ordinary than rounds 1–4 described.** Not a defect — zero user bytes move — but a **frequency correction to the ledger**. Pinned by **A-T11**, with a control (`"A\n"` + `"B\n"`) that costs nothing. |
 
 **The R2c bound corrected, and why it is still a residual rather than a defect.**
@@ -612,7 +615,7 @@ nothing distinguishes the honest case from this one. Narrowing it would break th
 honest case; that is why the bound moves and the mechanism does not.
 
 **Rows Q3, Q4, Q6, Q11 and Q13 are baseline rows** (ADR-0036 A1 exemption (ii),
-`PATCH: none — ordinary path`): each records the run and names the assertion that
+`PATCH: none — baseline / ordinary path`): each records the run and names the assertion that
 fires only on it. Their measured base-vs-prototype equality is the exemption's
 evidence, not an author's claim.
 
@@ -722,8 +725,9 @@ at `18bc909` — **not** against this spec's excerpts, which are dedented and ca
 
 **Table R (residuals)** — mirrors:
 
-- [ ] Table Q rows **Q5**, **Q10**, **Q14**, **Q15**; Table N
-- [ ] Test index **A-T3**, **A-T6**, **A-T9** (both arms)
+- [ ] Table Q rows **Q5**, **Q10**, **Q14**, **Q15**, **Q16**; Table N
+- [ ] Test index **A-T3**, **A-T6**, **A-T9** (both arms), **A-T11** — the ONLY
+      pinning test the ledger and Table R name for **R2b**
 - [ ] The security checklist's position-proof bullet
 - [ ] **The Owner ruling section** — its cost ledger repeats R2/R2b's bounds and
       its disposition table repeats Q1/Q10's outcomes
@@ -754,8 +758,8 @@ hand-write manifest entries except where the row's job is forgery.
 | **A-T7** | Table Q row **Q12**, the boundary sweep. Six runs: `candidate.length` ∈ {255, 256, 257} × {ordinary in-place uninstall, honest relocation} | in-place restores byte-perfectly at all three lengths; the relocation preserves byte-perfectly at all three | `PATCH: none — boundary pin.` Not red-first against the shipped design; it exists so the removal of the `<=ANCHOR_WINDOW` shortcut stays removed. Red against any re-introduction of a length-conditional branch. |
 | **A-T8** | **The createdFile producer site** (`shared.js:179`). Fixture: the markdown file is **absent**; `applyManagedBlock` creates it | assert the whole entry: `createdFile === true`, `sepBefore === ''`, `sepAfter === '\n'`, **and `anchorBefore === insertionAnchor('')`** (import it; do not hardcode the digest). Then sync a **second** time and assert the entry and the file bytes are unchanged, and finally that uninstall **deletes** the file | red against any implementation that records `null`, omits the anchor, or records a non-empty `sepBefore` on this branch. **Measured**: the entry is `{createdFile:true, sepBefore:'', sepAfter:'\n', anchorBefore:'e3b0c442…b855'}` and uninstall deletes the file. |
 | **A-T9** | Table Q rows **Q14** and **Q15** — **R2c, executable, BOTH producer-valid separators. Two cases, and both are required.** (a) `W = 'w'.repeat(251) + '\nEND\n'` — 256 chars, newline-terminated, so the honest append records `sepBefore: '\n'`; original `` `PPPP\n${W}` ``; rewrite the prefix to `` `QQ\n${W}` `` with the block after it. (b) `W = 'w'.repeat(253) + 'END'` — 256 chars, **not** newline-terminated, so the honest append records `sepBefore: '\n\n'`; same reproduction, block **at EOF**. **Assert the recorded `sepBefore` in each case** so a fixture that drifts onto the other arm fails loudly | each asserts the exact resulting bytes. **The bound assertion needs an explicitly defined baseline, because the pre-uninstall file still contains the block and `sepAfter`** and a raw delta against it can never be one or two characters (Codex round 5, finding 3). Define `noBlock` = the pre-uninstall content with **the block and its trailing `sepAfter` excised but the leading separator RETAINED**; then assert `noBlock.length - final.length === sepBefore.length`, that the removed characters are whitespace, and that `final` equals what **base** produces on the same fixture — (a) one character, (b) **two** | (a) red against a full-prefix anchor **and** an always-withhold anchor — both measured. (b) is `PATCH: none — the second arm of the same residual`, pinning the two-character bound; it is red only if the bound ever widens past `sepBefore`, or if a future change makes the arms diverge from base. **Rounds 1–3 had only (a), and the stated bound was wrong as a result** (Codex round 4, finding 1). |
-| **A-T11** | Table Q row **Q16** — **R2b's COST**, which A-T6 does not pin. Six rows, honest sync then a **pure append after the block**, no relocation and no edit above it. **`sepBefore='\n'` arms:** `"A\n"` + `"A\n"`; `"hi\n"` + `"hi\n"`; `"# Notes\n"` + `"# Notes\n"`; control `"A\n"` + `"B\n"`. **`sepBefore='\n\n'` arms** (unterminated original — the two-byte case): `"A"` + `"\nA"`; control `"A"` + `"\nB"`. **Assert the recorded `sepBefore` per arm** | every repeating row yields a surplus versus base equal to **`sepBefore.length`** — one for the `'\n'` arms, **two** for the `'\n\n'` arm — the surplus is the recorded separator, and `final.replace(/\n/g, '')` is **byte-identical to base**, so no user byte moves. **Both controls yield base exactly**, proving the withhold is caused by the repetition and not by the append | `PATCH: none — the declared cost, pinned at its measured size and frequency.` Not red-first. It goes red if the cost ever widens past whitespace, or if the control starts costing too — either would mean the uniqueness test fires more broadly than declared. **This row exists because rounds 1–4 stated R2b's cost with the wrong fixture class** (Codex round 5, finding 1). |
 | **A-T10** | Table Q row **Q13**, the ordinary-path corpus sweep. Six whole-file contents — `"\n"`, `"\n\n\n"`, `"a\na\na\n"`, CRLF `"x\r\ny\r\n"`, `"foo\n"`, `""` — each synced and immediately uninstalled with **no relocation and no edit** | every one restores **byte-perfectly**. Add one further assertion in the same test: a file with **ambiguous** sentinels is skipped with the shipped notice and left untouched, proving the anchor never runs on a file `locateManagedBlock` refuses | red against the block-excised corpus, which yields `"\n\n"` and `"\n\n\n\n"` on the first two rows — **measured**. This is the ordinary-path regression detector. |
+| **A-T11** | Table Q row **Q16** — **R2b's COST**, which A-T6 does not pin. Six rows, honest sync then a **pure append after the block**, no relocation and no edit above it. **`sepBefore='\n'` arms:** `"A\n"` + `"A\n"`; `"hi\n"` + `"hi\n"`; `"# Notes\n"` + `"# Notes\n"`; control `"A\n"` + `"B\n"`. **`sepBefore='\n\n'` arms** (unterminated original — the two-byte case): `"A"` + `"\nA"`; control `"A"` + `"\nB"`. **Assert the recorded `sepBefore` per arm** | every repeating row yields a surplus versus base equal to **`sepBefore.length`** — one for the `'\n'` arms, **two** for the `'\n\n'` arm — the surplus is the recorded separator, and `final.replace(/\n/g, '')` is **byte-identical to base**, so no user byte moves. **Both controls yield base exactly**, proving the withhold is caused by the repetition and not by the append | `PATCH: none — the declared cost, pinned at its measured size and frequency.` Not red-first. It goes red if the cost ever widens past whitespace, or if the control starts costing too — either would mean the uniqueness test fires more broadly than declared. **This row exists because rounds 1–4 stated R2b's cost with the wrong fixture class** (Codex round 5, finding 1). |
 
 **Idempotency (AC11) is asserted inside A-T2(a) and A-T8**: run the forward step
 **twice** before uninstalling and assert the manifest entry is deep-equal to the
@@ -843,6 +847,14 @@ first run's and the file bytes are unchanged. Measured: second
       guard and it is proved red as well as green.**
 
 ## Acceptance criteria
+
+> **Numbering note (One-Document Rule).** This spec's **AC** series skips 6 and
+> 7: those ids belong to `WP-symlink-authorship-identity`, the sibling that
+> `depends_on` this spec. The gap is deliberate — renumbering would break every
+> cross-reference the two specs, the logbook and PR #149 already carry.
+> **Nothing is missing here.** Note also that this spec's `Table P` rules
+> **P-1…P-4** are its own; the sibling's equivalent rules are numbered
+> **S-1…S-4** precisely so no id means two different things across the pair.
 
 - [ ] **AC1.** `src/core/manifest.js` exports `insertionAnchor`;
       `src/adapters/shared.js:5` imports it from `../core/manifest`.
@@ -1009,7 +1021,28 @@ if(!o.includes("'"'"'managed-block'"'"': { createdFile: '"'"'boolean'"'"' }")){c
 process.exit(bad);
 ' && echo "V6 ok"
 
-# V7 — lint.
+# V7 — AC2: the two in-code doc mirrors carry the new field. SCOPED to the module
+#      header (everything above `const BEGIN_SENTINEL`), so a mention anywhere
+#      else in the file cannot satisfy it. AC2 had no executable check before
+#      round 8's review.
+cat > /tmp/wd-docfields.js <<'DOCS'
+const fs = require('node:fs');
+const [file, ...fields] = process.argv.slice(2);
+const s = fs.readFileSync(file, 'utf8');
+const head = s.slice(0, s.indexOf('const BEGIN_SENTINEL'));
+if (!head || head.length === s.length) { console.error('could not isolate the module header'); process.exit(1); }
+const shapes = head.slice(0, head.indexOf('@typedef'));
+const typedef = head.slice(head.indexOf('@typedef'));
+let bad = 0;
+for (const f of fields) {
+  if (!shapes.includes(f)) { console.error(`AC2: entry-shape doc comment does not mention ${f}`); bad = 1; }
+  if (!typedef.includes(f)) { console.error(`AC2: @typedef ManifestEntry does not mention ${f}`); bad = 1; }
+}
+process.exit(bad);
+DOCS
+node /tmp/wd-docfields.js src/core/manifest.js anchorBefore && echo "V7 ok"
+
+# V8 — lint.
 npm run lint
 ```
 
@@ -1202,7 +1235,7 @@ Each row names its pinning test. A residual with no test is a claim.
 >
 > **Design evidence carried forward, all measured at `0f9ee08`/`18bc909`
 > (`src/` is identical at both):** the full suite baseline
-> (`1901 / 1892 / 0`), the single flipped assertion, the fourteen Table Q rows,
+> (`1901 / 1892 / 0`), the single flipped assertion, the sixteen Table Q rows,
 > the three-design falsification of the anchor (hash-only and the `<=WINDOW`
 > shortcut both red), the three-corpus comparison, and both idempotency runs.
 > **Round-1 finding:** a hash match alone is not a position proof — the

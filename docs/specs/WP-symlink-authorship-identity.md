@@ -160,7 +160,7 @@ The prototype was discarded.
 > re-verification"). This is the same arrangement WP-153 carried against WP-147
 > and for the same reason.
 
-### 1. `reverseSymlink` — `src/core/manifest.js:159-217`
+### 1. `reverseSymlink` — `src/core/manifest.js:168-217` (JSDoc at `:159-167`)
 
 Byte-identical at `18bc909`, WP-153's five rows:
 
@@ -439,7 +439,7 @@ owns; `src/cli/**`; every other reverser; `recordOnce`; `recordCopiedSkill`;
 /** lstat identity of a SYMLINK, as decimal strings (bigint: a 64-bit inode
  *  exceeds Number.MAX_SAFE_INTEGER, and BigInt is not JSON-serializable).
  *  Returns null when the path is not a symlink, is unreadable, or the platform
- *  cannot supply a non-zero (dev, ino) pair — see Table P rule P-4.
+ *  cannot supply a non-zero (dev, ino) pair — see Table P rule S-2.
  *  @param {string} linkPath @returns {{dev: string, ino: string}|null} */
 function linkIdentity(linkPath) {
   try {
@@ -491,7 +491,7 @@ is not an untrusted-input surface.
   // still BE that file object. A delete-and-recreate gets a new inode, so a user's
   // same-source replacement no longer passes for ours. Fail closed on any doubt.
   // A PARTIAL pair (one of the two) is a shape the forward step never writes, so
-  // it is unverifiable, not absent — preserve (Table P rule P-6, Table S).
+  // it is unverifiable, not absent — preserve (Table P rule S-4, Table S).
   const hasDev = typeof entry.dev === 'string';
   const hasIno = typeof entry.ino === 'string';
   if (hasDev || hasIno) {
@@ -547,7 +547,7 @@ values; (iii) **schema acceptance** changes — `ENTRY_FIELD_TYPES.symlink` gain
 three fields; (iv) **fallback/precedence** behaviour changes — two new rows and a
 new legacy arm; (vii) the same contract appears in **multiple mirrored surfaces**
 — three producer sites, one schema cell, two doc comments, one reverser, two test
-files. **Six canonical tables** below.
+files. **Seven canonical tables** below — P, S, A2, B, N, F and U.
 
 ### Table P — the provenance fields (canonical)
 
@@ -559,11 +559,11 @@ files. **Six canonical tables** below.
 
 **Rules that govern the fields as a set, decided here:**
 
-- **P-3. `dev`/`ino` are recorded ONLY where we created the link** (`:491`). Not
+- **S-1. `dev`/`ino` are recorded ONLY where we created the link** (`:491`). Not
   at `:434` — we did not create it, and that is exactly what `origin: 'adopted'`
   says — and not at `:485`, where nothing exists to `lstat` and the entry is
   never saved.
-- **P-4. When `linkIdentity()` returns `null`, record NO identity fields** —
+- **S-2. When `linkIdentity()` returns `null`, record NO identity fields** —
   `origin: 'created'` alone. This is the **forward**-side "cannot establish
   identity" answer and it deliberately keeps shipped behaviour, because the
   alternative — treating unavailable identity as a reason to preserve — would
@@ -571,12 +571,12 @@ files. **Six canonical tables** below.
   stable `(dev, ino)` pair, a regression against ADR-0019 for every user on that
   platform. **The fail-closed direction applies on the REVERSE side only**
   (row 4b): identity that *was* recorded and no longer matches preserves.
-- **P-5. Nothing backfills.** `recordOnce` no-ops on an existing entry
+- **S-3. Nothing backfills.** `recordOnce` no-ops on an existing entry
   (`shared.js:50-51`), so an install that predates this WP keeps its target-only
   entries **permanently** — through one sync and through a hundred. That is the
   owner-ruled position for `target` (2026-08-01) and it is inherited unchanged.
   "Legacy" is a permanent state.
-- **P-6. "Absent" is not one condition, and the accepted shape space is bigger
+- **S-4. "Absent" is not one condition, and the accepted shape space is bigger
   than the producer's output.** All three fields are optional and only
   type-gated, so `validateEntry` admits **twenty** distinct
   `{origin, dev, ino}` shapes while the forward step writes only **four**.
@@ -611,7 +611,7 @@ forgery or corruption only:
 |-------|-----------|---------|-----|
 | absent / `none` | an install predating this WP | **removed** — base behaviour | the legacy arm; the upgrade-safety criterion (AC8a) |
 | `'created'` / `both` | `shared.js:491` when `linkIdentity` succeeded | row 4b decides | the mainline |
-| `'created'` / `none` | `shared.js:485` (dry run), or `:491` when `linkIdentity` returned `null` (P-4) | **removed** — base behaviour | identity was never establishable; never make an existing platform's uninstall incomplete |
+| `'created'` / `none` | `shared.js:485` (dry run), or `:491` when `linkIdentity` returned `null` (S-2) | **removed** — base behaviour | identity was never establishable; never make an existing platform's uninstall incomplete |
 | `'adopted'` / `none` | `shared.js:434` | **preserved** (row 4a) | the link is the user's |
 
 **The three semantic classes among the remaining sixteen**, each stated because
@@ -645,7 +645,7 @@ this spec is self-contained; **rows 4a and 4b are new.**
 | 3 | `sameResolvedDir(L, T) === false` **and** `fs.readlinkSync(L) !== T` | none | `skipped` | same line | The link points somewhere else. Both sub-tests are fail-closed. **The lexical sub-test is dead through production and stays anyway** — see Implementation notes. |
 | 4 | **`OWNED(L)` is false** — basename not `wienerdog-*`, **or** `path.dirname(L)` does not realpath-equal a harness skills root | none | `skipped` | same line | A forged `(path, target)` pair is not delete authority (WP-153 gate round 4). |
 | **4a** | **`entry.origin === 'adopted'`** | none | `skipped` | same line | **NEW.** The link was already on disk when we first recorded it — the adopt branch (`shared.js:434`) sees a `wienerdog-*` link already pointing at our source and records it. It is the user's. Narrows honest-use case 2. |
-| **4b** | **`entry.dev` or `entry.ino` is a string** — and either the pair is **partial**, or `identityOf(L)` is `null`, or it does not equal `(entry.dev, entry.ino)` | none | `skipped` | same line | **NEW.** We recorded which file object we created; this is not it. A delete-and-recreate gets a new inode (measured, Current state §8), so a user's same-source replacement no longer passes for ours. Narrows honest-use case 1. A `null` identity is fail-closed by construction. **`(dev, ino)` is durable but not permanent, and recyclable — both directions are split across the two ledger sections — the **drift** half is a completeness cost, the **recycling** half is *equal to base* and is deliberately NOT priced (Codex round 7). Both pinned by B-T7.** |
+| **4b** | **`entry.dev` or `entry.ino` is a string** — and either the pair is **partial**, or `identityOf(L)` is `null`, or it does not equal `(entry.dev, entry.ino)` | none | `skipped` | same line | **NEW.** We recorded which file object we created; this is not it. A delete-and-recreate gets a new inode (measured, Current state §8), so a user's same-source replacement no longer passes for ours. Narrows honest-use case 1. A `null` identity is fail-closed by construction. **`(dev, ino)` is durable but not permanent, and recyclable.** The two directions are split across the two ledger sections: the *drift* half is a completeness cost, the *recycling* half is **equal to base** and is deliberately NOT priced (Codex round 7). Both pinned by B-T7. |
 | 5 | otherwise | `if (!dryRun) fs.unlinkSync(L)` | `removed` **and** `removedSet.add(L)` | none | In-namespace, under a harness skills root, resolves to the recorded source, **not adopted**, and **still the file object we created**. The only row that deletes. **Row 4b's check and this unlink are two syscalls, not one — see the TOCTOU note. This design is NOT claimed to be TOCTOU-free.** |
 
 **Row 4b verifies identity; row 5 unlinks by pathname. Those are separate
@@ -688,7 +688,7 @@ syscalls, and nothing binds them.**
 |------|--------|------------------------|----------|-------------|
 | `shared.js:434` | **adopt** | unchanged | **`'adopted'`** | **none** (we did not create it) |
 | `shared.js:485` | **dryRun** | unchanged | **`'created'`** | **none** (nothing exists to `lstat`; never saved — `sync.js:340`) |
-| `shared.js:491` | **create** | unchanged | **`'created'`** | **`linkIdentity(linkPath)`**, or **none** when it returns `null` (P-4) |
+| `shared.js:491` | **create** | unchanged | **`'created'`** | **`linkIdentity(linkPath)`**, or **none** when it returns `null` (S-2) |
 
 ### Table N — the strictly-negative posture (canonical)
 
@@ -722,7 +722,7 @@ state, all in `tests/unit/shared-skill-links.test.js`.
 |---|-----------|------|---------------------|---------------------|-----|
 | 1 | `:52-55` | `skill symlinked into the target dir with the default seam (POSIX)` | `assert.deepEqual(…, [{ kind: 'symlink', path: linkPath, target: coreSkill }])` | **Cannot stay a literal** — the entry now carries machine-specific `dev`/`ino`. Replace with: assert `kind`/`path`/`target`/`origin` equal `'symlink'`/`linkPath`/`coreSkill`/`'created'`, **and** assert `{ dev: entry.dev, ino: entry.ino }` deep-equals `linkIdentity(linkPath)`, **and** that it is non-null on POSIX. Get `linkIdentity` by extending the **existing** destructure at `:10` (`const { hashDir } = require('../../src/core/manifest');`); do not add a second `require` | This is the create branch (`:491`) and the **only** site that records identity. Asserting against the live `linkIdentity` rather than a hardcoded number is what makes the row portable; asserting non-null is what makes it non-vacuous. |
 | 2 | `:191-194` | `dry-run records a symlink entry and reports the change without writing` | `[{ kind: 'symlink', path: linkPath, target: path.join(skillsDir, 'wienerdog-setup') }]` | `[{ kind: 'symlink', path: linkPath, target: path.join(skillsDir, 'wienerdog-setup'), origin: 'created' }]` | Dry run writes nothing, so there is no link to `lstat` and no identity to record (Table B). The literal stays a literal. **`coreSkill` is NOT in scope** — `:181` destructures only `{ skillsDir, targetSkillsDir }`; build the target inline from `skillsDir`, as the shipped assertion already does. |
-| 3 | `:337-340` | `a pre-existing correct symlink is adopted into the manifest (recorded, reported unchanged)` | `[{ kind: 'symlink', path: linkPath, target: coreSkill }]` | `[{ kind: 'symlink', path: linkPath, target: coreSkill, origin: 'adopted' }]` | This is the adopt branch (`:434`). No identity is recorded (P-3) and `origin` is `'adopted'` — the two facts that make row 4a fire on uninstall. |
+| 3 | `:337-340` | `a pre-existing correct symlink is adopted into the manifest (recorded, reported unchanged)` | `[{ kind: 'symlink', path: linkPath, target: coreSkill }]` | `[{ kind: 'symlink', path: linkPath, target: coreSkill, origin: 'adopted' }]` | This is the adopt branch (`:434`). No identity is recorded (S-1) and `origin` is `'adopted'` — the two facts that make row 4a fire on uninstall. |
 
 ### Table U — the regions that must stay BYTE-IDENTICAL
 
@@ -737,7 +737,7 @@ excerpts, which are dedented and annotated.
 | `ENTRY_FIELD_TYPES`' other cells | unchanged — only the `symlink` cell moves. `managed-block` must **not** gain `anchorBefore` (Part A's Table P forbids it; V6 enforces it). |
 | `applySkillLinks`' preserve arm, directory arm and EPERM fallback | unchanged |
 | `applyManagedBlock`, in full | **untouched by this WP** — Part A's, including its three `recordManagedBlock` argument lists |
-| `recordOnce` | unchanged — **not** replaced by an upsert (P-5) |
+| `recordOnce` | unchanged — **not** replaced by an upsert (S-3) |
 | `shared.js:5` | **extended, not rewritten** — `insertionAnchor` must survive |
 
 ### Mirrored Surface Checklist
@@ -791,7 +791,7 @@ a sequence, and names the implementation it reddens (ADR-0036 A1/A2).
 |---|----------------------|-----------|-------------|
 | **B-T1** | Honest `applySkillLinks` create, then `fs.unlinkSync(link)` followed by `fs.symlinkSync(coreSkill, link)` — a new file object at the same path with the same target. **Assert the precondition explicitly**: `linkIdentity(link)` must now differ from the recorded pair, so a filesystem that recycled the inode fails the *precondition* loudly instead of silently turning this into a vacuous pass | the link **still exists** after `reverse()`, is in `skipped`, and the stderr `keeping …` line fired | base (**measured**: the link is deleted). **This is the end-to-end row and it is filesystem-dependent by nature** — the deterministic proof of the same rule is **B-T7(b)**, which is why both exist. |
 | **B-T2** | The link is created **before** `applySkillLinks` runs, so the adopt branch records it | the link **still exists** after `reverse()`, is in `skipped`; **and** the recorded entry has `origin: 'adopted'` and **no** `dev`/`ino` | base (**measured**: the link is deleted). Assert the entry shape too — the end state alone tells you something is wrong; the entry tells you which rule fired. |
-| **B-T3** | Honest create, nothing touched, uninstall | the link is **removed** and is in `removed` | `TRIGGER: none — the ordinary path.` Baseline row; red against making identity *required*, and against any row 4a/4b that fires on our own untouched link. **Run the forward step twice before uninstalling** and assert the entry is deep-equal to the first run's — that is AC11. |
+| **B-T3** | Honest create, nothing touched, uninstall | the link is **removed** and is in `removed` | `PATCH: none — baseline / ordinary path.` Baseline row (ADR-0036 A1 exemption **(ii)**, not (i): there is no fault to inject here, so the missing field is the PATCH); red against making identity *required*, and against any row 4a/4b that fires on our own untouched link. **Run the forward step twice before uninstalling** and assert the entry is deep-equal to the first run's — that is AC11. |
 | **B-T4** | **Table S, one case per row of the producer-valid table plus every semantic class — TWELVE rows, not one combined deletion**: all-absent; `'created'`+matching identity; `'created'`+no identity; `'adopted'`+no identity; `'adopted'`+identity; unknown `origin`+no identity; unknown `origin`+matching identity; **`dev`-only**; **`ino`-only**; and the **both-wrong** family added in round 7 — **both fields wrong**, **`ino` wrong only**, **`dev` wrong only**. **The three both-wrong rows must also assert the BASE contrast** (base removes all three; measured), because they are what pins the corruption-only ledger row | each behaves exactly as Table S tabulates — in particular all three both-wrong rows **preserve**, where base removes | the all-absent row is the **backward-compatibility fence** (red against "absent identity ⇒ preserve", which would strand every pre-existing install). The **two partial rows are required in both directions** — one alone is passed by an implementation that checks only the field it happens to test. **All measured.** |
 | **B-T5** | Non-string forgeries, one per field: `origin = 1`, `dev = 1`, `ino = 12345`. **This row pins the owner ledger's schema-rejection cost**, so it must also assert the base contrast: at base the same entries **validated and the link was removed**, because `symlink: {}` gated none of these keys. Prove it in-test with `validateEntry({…, zzz: 12345})` — an ungated key — returning `{ok:true}`, which is what base did for `ino` | all three **preserve** the link, and the entry is rejected upstream by `validateEntry` with its notice and a `why` naming the field | any implementation where a non-string field reaches the reverser or widens deletion. Three separate rows, three separate mutations (ADR-0036 A3) — independently revertible, each reddening a different field of the schema cell. |
 | **B-T6** | `shared-skill-links.test.js` — the three **Table F** rows plus the forward-side identity assertion | exactly the expectations in Table F | `PATCH: none — shipped assertions whose expected values moved.` Their red-ness is Table F's measurement (three `ERR_ASSERTION` failures). |
@@ -860,6 +860,15 @@ a sequence, and names the implementation it reddens (ADR-0036 A1/A2).
       closed.
 
 ## Acceptance criteria
+
+> **Numbering note (One-Document Rule).** This spec's **AC** series skips 3, 4
+> and 5, and its **Table R** skips R2/R2b/R2c: those ids belong to
+> `WP-managed-block-insertion-anchor`, the sibling this WP `depends_on`. The
+> gaps are deliberate — renumbering would break every cross-reference the two
+> specs, the logbook and PR #149 already carry. **Nothing is missing here.**
+> The `Table P` rules were originally numbered `P-3`…`P-6` for the same
+> reason, but `P-3` collided with a **different** rule of the same id in the
+> sibling, so they are renumbered **S-1**…**S-4** (S for symlink).
 
 - [ ] **AC1.** `src/core/manifest.js` exports `linkIdentity`;
       `src/adapters/shared.js:5` imports it **alongside Part A's
@@ -975,21 +984,26 @@ node /tmp/wd-fnguard.js /tmp/wd-v3-red.js reverseManagedBlock \
   "+fs.ftruncateSync(fd, 0)" "-fs.writeFileSync(" \
   && { echo "V3 BROKEN: the guard cannot fail"; exit 1; } || echo "V3 ok (red, as required)"
 
-# V4 GREEN — this WP's own rows are present AND WP-153's are intact.
+# V4-shipped — WP-153's rows are INTACT. This arm passes at base AND after this
+#   WP; run it both before and after your change and paste both.
 node /tmp/wd-fnguard.js src/core/manifest.js reverseSymlink \
   "+lexicalMatch = fs.readlinkSync(L) === T;" \
   "+!sameResolvedDir(L, T) && !lexicalMatch" \
-  "+skillsRoots.some((root) => sameResolvedDir(path.dirname(L), root))" \
+  "+skillsRoots.some((root) => sameResolvedDir(path.dirname(L), root))" && echo "V4-shipped ok"
+
+# V4-new — this WP's own rows are present. POST-IMPLEMENTATION ONLY: it exits 1 at
+#   base with three MISSING lines, which is correct and expected.
+node /tmp/wd-fnguard.js src/core/manifest.js reverseSymlink \
   "+entry.origin === 'adopted'" \
   "+const identityOf = opts.identity || linkIdentity;" \
-  "+hasDev || hasIno" && echo "V4 ok"
+  "+hasDev || hasIno" && echo "V4-new ok"
 
 # V4 RED — MUST fail against a copy with WP-153's row-3 fallback deleted.
 cp src/core/manifest.js /tmp/wd-v4-red.js
 node -e 'const fs=require("node:fs"),p=process.argv[1];fs.writeFileSync(p,fs.readFileSync(p,"utf8").replace("  if (!sameResolvedDir(L, T) && !lexicalMatch) {","  if (!sameResolvedDir(L, T)) {"))' /tmp/wd-v4-red.js
 node /tmp/wd-fnguard.js /tmp/wd-v4-red.js reverseSymlink \
   "+!sameResolvedDir(L, T) && !lexicalMatch" \
-  && { echo "V4 BROKEN: the guard cannot fail"; exit 1; } || echo "V4 ok (red, as required)"
+  && { echo "V4 BROKEN: the guard cannot fail"; exit 1; } || echo "V4-shipped ok (red, as required)"
 
 # V4 RED 2 — MUST fail against a copy with THIS WP's partial-pair arm weakened to
 #            the round-2 form (which treated a half pair as absent and deleted).
@@ -1029,14 +1043,38 @@ grep -q "const { hashDir, insertionAnchor, linkIdentity } = require('../core/man
   echo "FAIL: shared.js:5 does not carry all three imports"; exit 1; }
 echo "V7 ok"
 
-# V8 — lint.
+# V8 — AC2: the two in-code doc mirrors carry ALL THREE new fields AND still carry
+#      Part A's `anchorBefore`. Uses the same helper Part A's V8 writes; it is
+#      reproduced here so this spec runs standalone.
+cat > /tmp/wd-docfields.js <<'DOCS'
+const fs = require('node:fs');
+const [file, ...fields] = process.argv.slice(2);
+const s = fs.readFileSync(file, 'utf8');
+const head = s.slice(0, s.indexOf('const BEGIN_SENTINEL'));
+if (!head || head.length === s.length) { console.error('could not isolate the module header'); process.exit(1); }
+const shapes = head.slice(0, head.indexOf('@typedef'));
+const typedef = head.slice(head.indexOf('@typedef'));
+let bad = 0;
+for (const f of fields) {
+  if (!shapes.includes(f)) { console.error(`AC2: entry-shape doc comment does not mention ${f}`); bad = 1; }
+  if (!typedef.includes(f)) { console.error(`AC2: @typedef ManifestEntry does not mention ${f}`); bad = 1; }
+}
+process.exit(bad);
+DOCS
+node /tmp/wd-docfields.js src/core/manifest.js origin dev ino anchorBefore && echo "V8 ok"
+
+# V9 — lint.
 npm run lint
 ```
 
 **Measured at `18bc909` while writing this spec** (i.e. **before** either part
 landed, so the "must be present" checks for new code are post-implementation by
-construction): V3's and V4's **red** runs both exit 1, and V4's green run passes
-against WP-153's shipped rows. **V5's `grep -c 'reverseSymlink(' src/core/manifest.js`
+construction): V3's and V4's **red** runs both exit 1. **V4's GREEN run is
+post-implementation and does NOT pass at base** — three of its `+` rules name code
+this WP adds (`entry.origin === 'adopted'`, the `identityOf` binding, the
+`hasDev || hasIno` arm), so at `18bc909` it exits 1 with three `MISSING` lines.
+That is expected. **V4-shipped** below is the arm that passes at base and must keep
+passing after this WP. **V5's `grep -c 'reverseSymlink(' src/core/manifest.js`
 is `2` today and must stay `2`** — the definition and the one production call.
 Do not confuse that with the **five** *unparenthesized* textual occurrences of
 `reverseSymlink` across `src/` (Current state §2), which include the comment above
@@ -1055,7 +1093,7 @@ they are not AST-aware and cannot tell reachable code from code after a `return`
 - **Removing the row-3 lexical fallback** — routed to
   `WP-symlink-lexical-fallback-removal`, under WP-153's standing instruction.
 - **Backfilling `origin`/`dev`/`ino` onto existing entries**, or replacing
-  `recordOnce` with an upsert. Owner-declined 2026-08-01; P-5 inherits it.
+  `recordOnce` with an upsert. Owner-declined 2026-08-01; S-3 inherits it.
 - **A birth-time / generation field.** Rejected with reasons (Implementation
   notes); if wanted, it is its own WP with a platform survey.
 - **Passing the identity seam from `reverse()`.** It is for tests only.
@@ -1152,8 +1190,9 @@ misattributed ADR quote with an equally unsupported universal claim (Codex round
 
 - **What is true.** Several shipped reverser arms **do** fail closed on an
   unprovable ownership proof, and they are the arms this WP extends:
-  `reverseCopiedSkill`'s hash arms (`manifest.js:424-433` — a non-string or
-  mismatching `hash` preserves), WP-153's Table A **row 2** (a target-less entry
+  `reverseCopiedSkill`'s hash arm (`manifest.js:528-531` —
+  `if (typeof entry.hash !== 'string' || hashDir(entry.path) !== entry.hash)`, so a
+  non-string **or** mismatching `hash` preserves), WP-153's Table A **row 2** (a target-less entry
   preserves) and **row 4** (`OWNED(L)` false preserves), WP-144's
   `withinAllowedRoot` arm (out-of-bounds preserves), and WP-147's `noFusion`
   (a strip that would fuse user lines is withheld).
@@ -1206,8 +1245,8 @@ They are registered in the Mirrored Surface Checklist for exactly this reason.
 | **R6** | **`reverseCopiedSkill` has the same authorship gap** — its `hash` is read from the same untrusted file and proves content, not authorship | out of scope here; a `copied-skill` is the `EPERM`/`EACCES` fallback shape, not the mainline | none | a future WP, not drafted |
 | **R7** | **The verify→unlink race.** Row 4b's `identityOf(L)` and row 5's `fs.unlinkSync(L)` are separate syscalls | needs **arbitrary same-user native code** — outside the threat model per `docs/THREAT-MODEL.md`'s A12 posture — and such an actor can delete the link directly. **Only ever narrows against base** | **B-T8** | **not routed and not claimed closed.** Node exposes no atomic compare-and-unlink; ADR-0028's disposition for the scheduler's reopen-based check. **Listed in the ledger under *reclassified — equal to base*, deliberately NOT as a cost** — base removes the same replacement with no race required |
 | **R8** | **The source guards are not AST-aware.** They strip comments and reject duplicate definitions, but cannot tell reachable code from code after a `return` | the guards are **tripwires**; V1/V2 are the load-bearing checks | the red mutations in Verification steps | **`WP-grep-gate-helper`** — already routed by WP-147; this spec does not re-route it |
-| **the partial-pair leftover** | see the ledger row of the same name | not reachable from any producer site | B-T4's two partial rows | a ledger cost |
-| **a schema-valid wrong identity pair** | an entry whose `dev`/`ino` are both strings but do not match the live link — including one-of-two wrong — **preserves** a link base removes | corruption- or forgery-only; an honest pair that *becomes* wrong is 4b's durability row instead. Measured: base removes all three variants, this WP preserves all three | B-T4's three both-wrong rows, which assert the base contrast | a ledger cost |
+| **R9** | **The partial-pair leftover** — see the ledger row of the same name | not reachable from any producer site | B-T4's two partial rows | a ledger cost |
+| **R10** | **A schema-valid wrong identity pair.** An entry whose `dev`/`ino` are both strings but do not match the live link — including one-of-two wrong — **preserves** a link base removes | corruption- or forgery-only; an honest pair that *becomes* wrong is 4b's durability row instead. Measured: base removes all three variants, this WP preserves all three | B-T4's three both-wrong rows, which assert the base contrast | a ledger cost |
 
 ## Definition of done
 

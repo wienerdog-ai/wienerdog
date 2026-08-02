@@ -18,7 +18,7 @@ manifest records what an artifact **looks like** but not enough to prove
 - **WP-153** (skill symlink): the manifest records the link's target, and target
   equality is not authorship, so a user's same-named link resolving to our source
   is deleted. Routed to **`WP-forward-time-ownership-provenance`**, with WP-153's
-  architect adding the routing call *"ONE WP covers both — they are the same
+  architect adding the routing call *"ONE WP covers both […] — they are the same
   shape (record more identity at forward time so ownership survives later user
   edits) — with a note it may split in review if the two mechanisms diverge."*
 
