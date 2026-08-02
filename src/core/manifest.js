@@ -182,16 +182,16 @@ function reverseSymlink(entry, dryRun, removed, skipped, removedSet, skillsRoots
     skipped.push(L);
     return;
   }
-  // Row 3: the link no longer resolves to the source we recorded. Realpath first
-  // (semantic, follows the link); lexical fallback for the one reachable case
-  // where the core was deleted by hand so realpath(T) throws. Both fail-closed.
-  let lexicalMatch = false;
-  try {
-    lexicalMatch = fs.readlinkSync(L) === T;
-  } catch {
-    lexicalMatch = false;
-  }
-  if (!sameResolvedDir(L, T) && !lexicalMatch) {
+  // Row 3: the link must PROVE it still resolves to the source we recorded.
+  // sameResolvedDir is realpath-based (semantic, follows the link) and is itself
+  // fail-closed — an unresolvable side returns false, which lands HERE, in preserve.
+  // There is deliberately NO second, link-text comparison: WP-153 shipped one, and
+  // WP-symlink-lexical-fallback-removal dropped it because raw-text equality is the
+  // weaker proof and the manifest is UNTRUSTED — a recorded target may narrow this
+  // delete, never authorize one the semantic proof refuses (e.g. a relative recorded
+  // target, which Wienerdog never writes, matched the link text while realpath did
+  // not). Strictly narrowing: every input this now preserves was previously deleted.
+  if (!sameResolvedDir(L, T)) {
     process.stderr.write(
       `wienerdog: keeping ${L} — not the Wienerdog skill link we recorded (replaced, or unverifiable)\n`
     );
