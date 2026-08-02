@@ -668,14 +668,15 @@ function registerPlatformEntries(paths, manifest, o, loader, platform = process.
     // degraded reload is retried (and warned about) on every sync until it
     // succeeds — never silently once. Both are idempotent no-ops against an
     // already-correct unit, so this is cheap.
-    const reload = loader(['systemctl', '--user', 'daemon-reload']);
-    // Treat a MISSING result (undefined result OR a nullish status) as a failure too —
-    // absence of a result is not success. `!= null` catches both undefined and null, so
-    // a `{status:null}` result warns and prints 'no result', never 'null'.
-    const reloadOk = !!reload && reload.status != null && reload.status === 0;
-    if (!reloadOk) {
-      const s = reload && reload.status != null ? reload.status : 'no result';
-      process.stderr.write(`wienerdog: warning — 'systemctl --user daemon-reload' returned ${s}; the timer may load from stale units. Run 'wienerdog doctor'.\n`);
+    // MUTATION B (Table B): reload re-gated on `changed` — never retried
+    let reloadOk = true;
+    if (changed) {
+      const reload = loader(['systemctl', '--user', 'daemon-reload']);
+      reloadOk = !!reload && reload.status != null && reload.status === 0;
+      if (!reloadOk) {
+        const s = reload && reload.status != null ? reload.status : 'no result';
+        process.stderr.write(`wienerdog: warning — 'systemctl --user daemon-reload' returned ${s}; the timer may load from stale units. Run 'wienerdog doctor'.\n`);
+      }
     }
     const enableOk = loader(['systemctl', '--user', 'enable', '--now', `${unitBase}.timer`]).status === 0;
     const loaded = reloadOk && enableOk;
