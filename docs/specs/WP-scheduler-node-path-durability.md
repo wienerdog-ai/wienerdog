@@ -755,7 +755,8 @@ which is why row 4 is no longer the silent failure it was.
 > mechanisms, neither of which is in this WP's Deliverables:
 > - **macOS:** the readback runs on **every** register, ungated by `changed`, so
 >   there is no "bytes now identical ⇒ zero OS calls" path any more. A later `sync`
->   makes one read-only `print`, grades it `'match'`, and is correct to be silent.
+>   makes **two** read-only `print`s (per-job + catch-up — see D-a's call-count
+>   scoping), grades both `'match'`, and is correct to be silent.
 > - **linux:** `daemon-reload` + `enable --now` are **hoisted out of
 >   `if (changed)`**, so a degraded reload re-warns and re-reports **on every
 >   `sync`**, never once.
@@ -768,11 +769,34 @@ shipped two that were not, and AC9 copies this table into the merge artifact).
 
 **D-a — macOS (Table C row 5), at `1093e51`.**
 
-| Run | Readback verdict | OS calls | What the user is told | Reality |
-|-----|------------------|----------|-----------------------|---------|
+**Call-count scoping — read before reproducing this table (CORRECTED 2026-08-02).**
+The **OS calls** column below is scoped to the **per-job helper**
+(`ensureDarwinEntryRegistered`, one invocation), **not** to a whole `sync` run.
+That is deliberate, and it follows the landed sibling's own canonical rule
+(`docs/specs/done/WP-scheduler-register-replaces-loaded-record.md:1881-1883`),
+quoted verbatim:
+
+> *"A full darwin `registerPlatform` on an unchanged healthy install therefore
+> issues **two** read-only `print`s and zero mutating calls. Assert per helper, or
+> assert two through the full path — never 'exactly one' through the full path."*
+
+The multiplier is `registerPlatformEntries`, which registers the per-job entry and
+then calls `ensureCatchup` (**`schedule.js:646`**; `loaded: loaded && cu.loaded` at
+`:647`), and `ensureCatchup` performs its **own** readback via its own
+`ensureDarwinEntryRegistered` call (`:495`). **So multiply every row's call list by
+the two darwin entries — per-job and catch-up — to get the full-`sync` figure.**
+For the steady state that is **two read-only `print`s and zero mutating calls**.
+
+| Run | Readback verdict | OS calls (**per-job helper only** — see scoping above) | What the user is told | Reality |
+|-----|------------------|--------------------------------------------------------|-----------------------|---------|
 | first `sync` after this ships | `'mismatch-fatal'` (`program` **and** `arguments[0]` both differ) | `print`; `bootstrap` (refused); `/usr/bin/plutil -lint` (passes); `bootout`; `bootstrap` (exit 0); `print` again to verify | **nothing** — `loaded` is `true`, so no notice fires | **launchd holds the DURABLE path** |
 | `doctor`, immediately after | — | read-only probe | `[ok] scheduled job 'dream' is loaded (launchd)` (`status.js:283` message + `doctor.js:317` `[${status}] ${msg}` wrapper — **including the `(launchd)` suffix**; both lines unchanged at `1093e51`) | true, and now for the right reason |
-| **every later `sync`** | `'match'` | **one read-only `print`, zero mutations** (`:184`) | **nothing** | **launchd holds the durable path** |
+| **every later `sync`** | `'match'` | **one read-only `print`, zero mutations** (`:184`) — **two `print`s through the full `sync` path** (per-job + catch-up), still zero mutations | **nothing** | **launchd holds the durable path** |
+
+*(Corrected 2026-08-02: the "every later `sync`" cell previously read "**one
+read-only `print`, zero mutations**" with no scoping note, which under-counts a
+`sync` run and is exactly the "'exactly one' through the full path" claim the
+sibling forbids. The zero-mutations half was and is correct.)*
 
 *Superseded `5f0ffc0` row, retained:* ~~"every later `sync`: `changed = false`,
 **zero** OS calls, **nothing** told, **launchd still holds the pinned path**."~~
@@ -790,10 +814,18 @@ shipped two that were not, and AC9 copies this table into the merge artifact).
 `loaded` is `true`."~~
 
 **D-c — macOS, `'indeterminate'` readback (Table C row 7), at `1093e51`. NEW.**
+Same per-job-helper call-count scoping as D-a.
 
-| Run | Readback verdict | OS calls | What the user is told | Reality |
-|-----|------------------|----------|-----------------------|---------|
-| **every `sync`**, first and later alike | `'indeterminate'` | `print`; `bootstrap` (refused). **No `plutil`, no `bootout`** — `:208` returns before them | the `repointSchedules` notice, byte-exact as quoted in D-b, **on every run** | launchd holds the pinned path |
+| Run | Readback verdict | OS calls (**per-job helper only**) | What the user is told | Reality |
+|-----|------------------|-------------------------------------|-----------------------|---------|
+| **every `sync`**, first and later alike | `'indeterminate'` | `print`; `bootstrap` (refused); `/usr/bin/plutil -lint` (**runs** — the preflight at `:201-203` precedes the teardown guard; skipped only when `/usr/bin/plutil` is absent, since it is gated on `fs.existsSync(PLUTIL)`). **No `bootout`** — `:208` returns before it | the `repointSchedules` notice, byte-exact as quoted in D-b, **on every run** | launchd holds the pinned path |
+
+*(Corrected 2026-08-02: this cell previously read "**No `plutil`, no `bootout`** —
+`:208` returns before them". **The `plutil` half was false.** The preflight is at
+`:201-203` and the teardown guard at `:208`, so on a real macOS host the lint
+**does** run on the `'indeterminate'` path — only the `bootout` half was right.
+This also reconciles D-c with D-a's own first-`sync` row, which sequences the lint
+correctly.)*
 
 **What this WP may now claim, and what it still may not.** It **may** say the
 macOS non-convergence of Table C row 5 is closed, and that no `sync` reports a
@@ -828,7 +860,7 @@ Current state §9 records the run.
 | **Result** | Both `program = /opt/homebrew/opt/node/bin/node` **and** the `arguments` block's first element echoed the **alias, verbatim**. No realpath resolution at load. |
 | **Evidence FOR (corroborating, now secondary)** | `properties = inferred program` in the live dump — launchd derived `program` from `ProgramArguments[0]`. Plus the incident signature this WP exists to fix: after the Cellar directory is deleted the record still prints clean and `launchctl print` exits 0. |
 | **Evidence AGAINST** | **None — and the gap that previously blocked a verdict is closed.** *(Retained: "the executed dump cannot distinguish 'echoed verbatim' from 'resolved, and equal by coincidence', because the live entry's `ProgramArguments[0]` is already its own realpath." The scratch-label experiment removed exactly that coincidence.)* |
-| **If P is TRUE** — **CONFIRMED** | Tables C row 5 and D-a hold **exactly as written**. Steady state after one `sync`: verdict `'match'`, one read-only `print`, zero mutations, forever. |
+| **If P is TRUE** — **CONFIRMED** | Tables C row 5 and D-a hold **exactly as written**. Steady state after one `sync`: verdict `'match'`, **two** read-only `print`s through the full `sync` path (per-job + catch-up; **one** per helper invocation — D-a's call-count scoping), zero mutations, forever. |
 | **If P is FALSE** — **DID NOT OCCUR; retained as history** | `program` would read back as the resolved Cellar path while `expect.argv[0]` is the alias ⇒ **permanent `'mismatch-fatal'`**: `bootout` + `bootstrap` on every `sync`, `verifyLoaded()` failing every time ⇒ `loaded:false` and the notice forever. Loud, never silent, schedule still working — but permanent churn plus a permanent false failure report would **not** have been shippable. |
 | **Consequence if P is false** — **MOOT; retained as history** | This WP would **not** have been obsoleted and `entryNodePath` would **not** have been wrong. The follow-up would have been on the **comparison** side (realpath `program` before comparing, or drop it as redundant with `arguments[0]`) — `darwinLoadedVerdict`, **the sibling's code, out of this WP's Deliverables** — routed as a new WP, never a widened diff here. **No such WP is needed.** |
 | **How it was settled** | Not by the originally-specified post-implementation command, which needed D1/D2 in place. A **scratch label** carrying the discriminating path settled it **before** implementation — see Current state §9. The post-`sync` command survives as a **live smoke test**, not a premise gate: Definition of done item 9. |
@@ -873,6 +905,7 @@ In this spec:
 - [ ] **(+r5)** Current state §8 — **REWRITTEN against `ensureDarwinEntryRegistered`**; it is the mechanism behind Tables C and D and must be re-read whenever either moves. Its `5f0ffc0` text is retained in a quote block, not deleted
 - [ ] **(+r5)** Current state §9 — **the executed record of the scratch-label experiment that settled Table G's premise (P is TRUE, 2026-08-02)**. Table G decides; §9 records what was run, by whom, and the teardown. **Registered because Table G's Status row and §9 must move together**: if the premise is ever re-opened (a launchd behavior change), both flip, plus every mirror below
 - [ ] **(+r5, updated 2026-08-02)** **AC6**'s non-claim bullet — it cited Table G's premise as unverified and now must not; and the **Convergence** section heading paragraph, which states the premise's settled status
+- [ ] **(+r6, 2026-08-02, from the light gate)** **Table D's OS-call lists** — D-a's call-count scoping paragraph, D-a's steady-state cell, D-c's `plutil` cell, Table D's RECONCILED preamble bullet ("a later `sync` makes two read-only `print`s"), **Table G's "If P is TRUE" row**, and **AC9's reproduction requirement**. All six state the same two facts — *the `plutil` preflight (`:201-203`) runs before the teardown guard (`:208`)*, and *a full darwin `sync` issues **two** read-only `print`s, one per helper*. Registered because the gate found **two** of them wrong while the others were right: a call list is a contract here, since AC9 makes the implementer copy it into the merge artifact verbatim. The full-path count is the **landed sibling's** canonical property (`done/WP-scheduler-register-replaces-loaded-record.md:1881-1883`) — derive from it, never restate it independently
 - [ ] **(+r5)** Table C's reconciliation preamble (the row-4 / row-5 verdict-change table) and Table D's reconciliation preamble — these are the dated records of the two settled rows that changed outcome; neither may be silently folded into the tables they precede
 - [ ] Implementation notes §D1 (the derivation, the `parts.length < 6` spelling of row 2, the anti-`indexOf` rule from Table E row 4), §"Why the descriptor field stays" (row 6), §"Windows" (row 1), §"Convergence — governed by Table C" (which now cites C and D instead of restating them)
 - [ ] Design space → option (a) (the alias mechanism is rows 5–6)
@@ -1348,7 +1381,14 @@ fixture without adding its row there.
       change. Asserted by reading the diff and by V6.
 - [ ] **AC9 (the PR does not overclaim) — RESTATED 2026-08-02 against the
       reconciled tables.** The PR body reproduces **Table C and Table D (all three
-      sub-tables, D-a/D-b/D-c) verbatim**, and states **all four** of:
+      sub-tables, D-a/D-b/D-c) verbatim** — **including D-a's call-count scoping
+      paragraph and the dated correction notes under D-a and D-c**, which are part
+      of those tables, not commentary on them. Reproducing the call lists **without**
+      the scoping paragraph restates the *"'exactly one' through the full path"*
+      claim the landed sibling explicitly forbids
+      (`docs/specs/done/WP-scheduler-register-replaces-loaded-record.md:1881-1883`),
+      so dropping it turns a correct table into an incorrect one. The PR states
+      **all four** of:
       (i) Table C rows **4** (linux, degraded reload) and **7** (macOS,
       `'indeterminate'` readback) do **not** converge;
       (ii) Table C row **5 now DOES converge**, on the first `sync`, because of
