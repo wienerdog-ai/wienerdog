@@ -423,7 +423,7 @@ nothing records ships a branch no install reaches.
 |--------|------|-------|
 | modify | src/core/manifest.js | **D3** — add `linkIdentity()` beside Part A's primitives and export it. **D4** — `reverseSymlink` gains a 7th parameter `opts = {}` (the identity seam — Exact contracts) and rows **4a** and **4b** per **Table A2**, between the existing rows 4 and 5; rows 1–5 are otherwise byte-identical and `reverse()`'s call site is **not** changed. **D5** — `ENTRY_FIELD_TYPES.symlink` becomes `{ target: 'string', origin: 'string', dev: 'string', ino: 'string' }`; **no other cell changes**, and in particular `managed-block` must not gain `anchorBefore` (Part A's Table P forbids it). **D6b** — the module doc comment and `@typedef ManifestEntry` gain `origin?`, `dev?`, `ino?` per **Table P**, **extending** Part A's `anchorBefore?` rather than replacing it. |
 | modify | src/adapters/shared.js | **D7b** — extend `:5` to `const { hashDir, insertionAnchor, linkIdentity } = require('../core/manifest');`. **Do not drop `insertionAnchor`** — Part A put it there. **D10** — the three `recordOnce(manifest, { kind: 'symlink', … })` sites (`:434`, `:485`, `:491`) record `origin` (and, at `:491` only, `dev`/`ino`) per **Table B**. `recordOnce` itself is **NOT modified and NOT replaced by an upsert** — the owner declined a backfill (2026-08-01). The WP-146 preserve arm, `dropOwnedEntry`, the `readlinkSync` comparison, the `EPERM` copy fallback and every notice string stay byte-identical, as does everything Part A touched in `applyManagedBlock`. |
-| modify | tests/unit/manifest.test.js | **B-T1 … B-T5, B-T7, B-T8** — the exact set in the Test index. WP-153's shipped T1–T4 and T6 must pass **byte-unmodified**; they craft entries with no `origin`/`dev`/`ino`, so they exercise the legacy arm and are its regression fence. Part A's A-T1…A-T10 must also pass byte-unmodified. |
+| modify | tests/unit/manifest.test.js | **B-T1 … B-T5, B-T7, B-T8** — the exact set in the Test index. WP-153's shipped T1–T4 and T6 must pass **byte-unmodified**; they craft entries with no `origin`/`dev`/`ino`, so they exercise the legacy arm and are its regression fence. Part A's A-T1…A-T11 must also pass byte-unmodified. |
 | modify | tests/unit/shared-skill-links.test.js | **B-T6** — this is **an edit to three shipped `deepEqual` assertions** plus one new forward-side assertion. `:52-55`, `:191-194` and `:337-340` are the **Table F** rows; take the expected object for each from that table. The four WP-146 sync-side tests at `:345`, `:371`, `:387` and `:405` are **fenced — they must pass byte-unmodified**. |
 
 Not deliverables, deliberately: `reverseManagedBlock` and everything Part A
@@ -749,7 +749,11 @@ excerpts, which are dedented and annotated.
 - [ ] Table B, Table N
 - [ ] Acceptance criteria **AC1**, **AC2**, **AC8a**, **AC8a′**, **AC8b**, **AC9**
 - [ ] Verification **V5**, **V6**
-- [ ] **The owner cost ledger's fourth row** (the partial-pair leftover)
+- [ ] **The owner cost ledger's fourth row** (the partial-pair leftover) **and its
+      fifth** (D5's schema rejection), plus the ledger's `Keeps D5?` column and
+      disposition **(v)** — the only arm with genuinely zero completeness cost
+- [ ] Deliverable **D5** and Table N's non-string row — both move if the ruling
+      is (v)
 
 **Table A2 (reverser rows)** — mirrors:
 
@@ -779,7 +783,7 @@ a sequence, and names the implementation it reddens (ADR-0036 A1/A2).
 | **B-T2** | The link is created **before** `applySkillLinks` runs, so the adopt branch records it | the link **still exists** after `reverse()`, is in `skipped`; **and** the recorded entry has `origin: 'adopted'` and **no** `dev`/`ino` | base (**measured**: the link is deleted). Assert the entry shape too — the end state alone tells you something is wrong; the entry tells you which rule fired. |
 | **B-T3** | Honest create, nothing touched, uninstall | the link is **removed** and is in `removed` | `TRIGGER: none — the ordinary path.` Baseline row; red against making identity *required*, and against any row 4a/4b that fires on our own untouched link. **Run the forward step twice before uninstalling** and assert the entry is deep-equal to the first run's — that is AC11. |
 | **B-T4** | **Table S, one case per row of the producer-valid table plus the three semantic classes — nine rows, not one combined deletion**: all-absent; `'created'`+matching identity; `'created'`+no identity; `'adopted'`+no identity; `'adopted'`+identity; unknown `origin`+no identity; unknown `origin`+matching identity; **`dev`-only**; **`ino`-only** | each behaves exactly as Table S tabulates | the all-absent row is the **backward-compatibility fence** (red against "absent identity ⇒ preserve", which would strand every pre-existing install). The **two partial rows are required in both directions** — one alone is passed by an implementation that checks only the field it happens to test. **All measured.** |
-| **B-T5** | Non-string forgeries, one per field: `origin = 1`, `dev = 1`, `ino = 12345` | all three **preserve** the link, and the entry is rejected upstream by `validateEntry` with its notice | any implementation where a non-string field reaches the reverser or widens deletion. Three separate rows, three separate mutations (ADR-0036 A3) — independently revertible, each reddening a different field of the schema cell. |
+| **B-T5** | Non-string forgeries, one per field: `origin = 1`, `dev = 1`, `ino = 12345`. **This row pins the owner ledger's schema-rejection cost**, so it must also assert the base contrast: at base the same entries **validated and the link was removed**, because `symlink: {}` gated none of these keys. Prove it in-test with `validateEntry({…, zzz: 12345})` — an ungated key — returning `{ok:true}`, which is what base did for `ino` | all three **preserve** the link, and the entry is rejected upstream by `validateEntry` with its notice and a `why` naming the field | any implementation where a non-string field reaches the reverser or widens deletion. Three separate rows, three separate mutations (ADR-0036 A3) — independently revertible, each reddening a different field of the schema cell. |
 | **B-T6** | `shared-skill-links.test.js` — the three **Table F** rows plus the forward-side identity assertion | exactly the expectations in Table F | `PATCH: none — shipped assertions whose expected values moved.` Their red-ness is Table F's measurement (three `ERR_ASSERTION` failures). |
 | **B-T7** | **The identity seam, four deterministic arms.** Honest create, then call `reverseSymlink` **directly** (WP-153 blessed the direct unit call) passing `{ identity: … }` as the 7th argument. Four separate rows: **(a) changed device** → `{dev: recorded.dev+1, ino: recorded.ino}`; **(b) changed inode** → `{dev: recorded.dev, ino: recorded.ino+1}`; **(c) unavailable** → `null`; **(d) reused** → the recorded pair verbatim | (a),(b),(c) → the link **survives**, is in `skipped`, `removed` empty. (d) → the link is **removed** — this arm pins **R4**'s recycling residual at its declared size; comment it as pinning current behaviour, not a fix | (a)(b)(c) red against any implementation that ignores a recorded identity or treats `null` as a match. (d) is `PATCH: none — residual pin`. **All four measured.** |
 | **B-T8** | **The verify→unlink race**, deterministic. Honest create, then call `reverseSymlink` directly with an identity seam that **replaces the link on disk** (`unlinkSync` + `symlinkSync`) and *then* returns the **recorded** pair — simulating a replacement landing between the check and the unlink | the replacement **is deleted** and the link is in `removed` | `PATCH: none — residual pin.` Not red-first: it pins **R7** at its declared size, which is the only way "we do not claim TOCTOU-freedom" stops being a sentence. If it ever goes red, either an atomic primitive was adopted or the mechanism changed. **Measured.** |
@@ -876,7 +880,7 @@ a sequence, and names the implementation it reddens (ADR-0036 A1/A2).
 - [ ] **AC10.** Table F's three assertions are updated and pass; **every other
       test in the repository passes byte-unmodified**, including WP-153's T1–T4
       and T6, the four fenced WP-146 sync-side tests, and the whole of Part A's
-      A-T1…A-T10 and `tests/unit/manifest.test.js`'s WP-147 suites.
+      A-T1…A-T11 and `tests/unit/manifest.test.js`'s WP-147 suites.
 - [ ] **AC11.** Running `applySkillLinks` twice is idempotent: deep-equal manifest
       entries and zero `changed` on the second run — B-T3.
 - [ ] **AC12.** `npm run lint` passes.
@@ -1078,6 +1082,7 @@ and **weaker on completeness**, which is the gated register.
 | **4b** (identity must match) | narrows honest-use **case 1**: a user's same-source replacement is no longer deleted | **(a) durability** — a backup/restore, volume remount, home migration, container rebuild or network filesystem can change `dev` and/or `ino` for a link nobody touched, which is then **left behind**; **(b) recycling** — an inode handed back to a user's replacement at the same path with the same target passes 4b and is **deleted** | (a) is the fail-closed direction and never loses data; (b) needs the FS to reallocate the exact inode at the exact path **and** the user to have re-pointed it at our source | B-T7 (a)–(d) |
 | **4b's verify→unlink race** | nothing — it is 4b's cost, not its benefit | a replacement landing between the identity check and the unlink is deleted despite the verified identity belonging to the previous object | needs **arbitrary same-user native code**, which `docs/THREAT-MODEL.md` places outside the boundary (A12) and which can delete the link directly. Node exposes no atomic compare-and-unlink | **B-T8**. Residual **R7**; not claimed closed (ADR-0028's disposition for the scheduler's reopen-based check) |
 | **the partial-pair leftover** (new in round 3) | nothing — it is the fail-closed reading of a shape no branch writes | an entry carrying **exactly one** of `dev`/`ino` **preserves** a link base would delete | **not reachable from any producer site** (Table S) — it needs a hand-edited or corrupted manifest. It is a cost the ledger owes the owner because the ledger claims to be complete, not because a user will hit it | B-T4's two partial rows |
+| **D5's schema rejection** (new in round 5) | a non-string forgery is stopped **upstream** of the reverser, so the reverser never has to defend against one | a **non-string** `origin`, `dev` or `ino` makes `validateEntry` reject the whole entry, so `reverse()` skips it and the link is **preserved** — where base **removed** it, because base's `symlink: {}` cell type-gated none of these keys | **only reachable from a hand-edited or corrupted manifest** — no producer site writes a non-string. But it is a **direct consequence of D5**, so it is present in **every disposition that keeps the schema cell**, including ones that read none of the fields | **B-T5** |
 
 **No row is ever worse than shipped `0f9ee08` on SAFETY** — base unlinks any
 recorded-path symlink with no ownership test at all, so every row here only ever
@@ -1089,24 +1094,67 @@ is precisely the axis WP-153's ruling spoke to.
 Ordered by how much of the residual narrows; all are safety-wise
 equal-or-stronger than shipped.
 
-| | Disposition | Honest-use case 1 | Honest-use case 2 | Completeness cost |
-|---|---|---|---|---|
-| (i) | **Ship rows 4a AND 4b** (this spec's shape) | **narrowed**, except recycling and the race | **narrowed** | all four ledger rows |
-| (ii) | **Ship 4b only**; record `origin` but leave it unread | **narrowed**, except recycling and the race | stays open | 4b's two directions, the race, the partial-pair row |
-| (iii) | **Ship 4a only**; record `dev`/`ino` but leave them unread | stays open | **narrowed** | the adopt-leftover only |
-| (iv) | Ship neither; record all three fields, read none | stays open | stays open | none — but then this WP closes nothing and should not ship |
+**Every disposition below that keeps `D5` also keeps the schema-rejection cost.**
+Rounds 3–4 wrote (iii) as *"the adopt-leftover only"* and (iv) as *"none"*, and
+**both were false** for exactly that reason (Codex round 5, finding 2). The
+`Keeps D5?` column is now explicit, and a disposition that genuinely wants zero
+completeness cost must **also drop the type gates** — which is disposition (v).
 
-**Architect's recommendation: (i)**, on the ground that every shipped reverser
-from WP-144 through WP-153 preserves what it cannot prove it created — a design
-convention, **not** ADR-0019 text (see the Context correction) — and a leftover symlink in the user's own skills directory is a smaller harm than
-deleting a file the user made. **(ii) and (iii) are both legitimate** and either
-would let this WP ship against a narrower claim; **(iv) is only coherent if this
-WP is dropped**, since recording fields nothing reads is dead data by CLAUDE.md's
-own rule.
+| | Disposition | Keeps `D5`? | Case 1 | Case 2 | Completeness cost |
+|---|---|---|---|---|---|
+| (i) | **Ship rows 4a AND 4b** (this spec's shape) | yes | **narrowed**, except recycling and the race | **narrowed** | all five ledger rows |
+| (ii) | **Ship 4b only**; record `origin` but leave it unread | yes | **narrowed**, except recycling and the race | stays open | 4b's two directions, the race, the partial-pair row, **and D5's schema rejection** |
+| (iii) | **Ship 4a only**; record `dev`/`ino` but leave them unread | yes | stays open | **narrowed** | the adopt-leftover **and D5's schema rejection** — *not* "the adopt-leftover only" |
+| (iv) | Ship neither; record all three fields, read none | yes | stays open | stays open | **D5's schema rejection** — *not* "none". And the WP then closes nothing, so it should not ship |
+| (v) | Ship neither **and drop the type gates** (`symlink: { target: 'string' }` unchanged) | **no** | stays open | stays open | **genuinely none** — byte-for-byte base behaviour |
+
+**Architect's recommendation: (i)** — and the ground is a *preference this WP is
+proposing*, not an established rule. Stated precisely, because round 4 replaced a
+misattributed ADR quote with an equally unsupported universal claim (Codex round
+5, finding 4):
+
+- **What is true.** Several shipped reverser arms **do** fail closed on an
+  unprovable ownership proof, and they are the arms this WP extends:
+  `reverseCopiedSkill`'s hash arms (`manifest.js:424-433` — a non-string or
+  mismatching `hash` preserves), WP-153's Table A **row 2** (a target-less entry
+  preserves) and **row 4** (`OWNED(L)` false preserves), WP-144's
+  `withinAllowedRoot` arm (out-of-bounds preserves), and WP-147's `noFusion`
+  (a strip that would fuse user lines is withheld).
+- **What is NOT true, and round 4's wording implied it.** *"Every shipped
+  reverser preserves what it cannot prove it created"* is false, and this spec's
+  own premises are the counterexamples: **shipped WP-153 deletes a user's
+  same-source replacement** on target equality alone — that is honest-use case 1,
+  the thing this WP exists to narrow — and **shipped WP-147 strips separators
+  without any position proof**, which is what Part A exists to fix. A rule with
+  two counterexamples inside the very specs citing it is not a convention; it is
+  the direction of travel.
+- **So the recommendation rests on a judgement, offered as one:** a leftover
+  symlink in the user's own skills directory is a smaller harm than deleting a
+  file the user made, and the costs above are bounded and mostly
+  forgery-reachable only. **That is the architect's preference. It is not
+  precedent, and it does not settle the ruling.**
+
+**(ii) and (iii) are both legitimate** and either would let this WP ship against a
+narrower claim; **(iv) is only coherent if this WP is dropped**, since recording
+fields nothing reads is dead data by CLAUDE.md's own rule; **(v) is the only
+disposition with genuinely zero completeness cost**, and it is the honest floor
+if the owner wants base behaviour preserved exactly.
 
 **Whichever is chosen, the same surfaces move in the same pass** — this spec's
 title and scope blockquote, Table A2, Table S, the Table B rows for any site that
-stops recording, AC6, AC7, AC8a′, B-T2/B-T4/B-T7/B-T8, and Table R rows R4/R5/R7.
+stops recording, AC6, AC7, AC8a′, AC8b, B-T2/B-T4/B-T5/B-T7/B-T8, and Table R rows
+R4/R5/R7. **And if the ruling is (v), these move too**: deliverable **D5**, the
+type-gating column of **Table P**, **Table N**'s non-string row, the
+schema-rejection ledger row above, and **B-T5**, whose whole subject is the gates.
+
+**Table S does NOT move when only the gates are dropped, and the reason is worth
+stating so nobody re-derives it wrongly** (I did, in the first draft of this
+paragraph): **all twenty of its cells are string-valued or absent**, so the type
+gates never fire on any of them — Table S is governed entirely by rows 4a/4b.
+Dropping the gates changes exactly the **three non-string shapes in B-T5**, from
+preserved back to removed. Table S moves only if rows 4a/4b are also dropped,
+which is what (v) does *in addition*.
+
 They are registered in the Mirrored Surface Checklist for exactly this reason.
 **Do not implement any arm until the ruling is recorded here.**
 

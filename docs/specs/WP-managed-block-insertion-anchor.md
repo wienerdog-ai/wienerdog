@@ -348,14 +348,14 @@ after Part A knows they must **not** move.)
 **Sizing.** Three primitives (~32 lines) plus one conjunct in one predicate
 (~6 lines) in `manifest.js`; one parameter and three call sites in `shared.js`;
 two doc-comment cells; one test file extended, of which one shipped assertion is
-edited, across ten test rows. **M.** This is the larger half of the split and it
+edited, across eleven test rows. **M.** This is the larger half of the split and it
 sits comfortably inside M now that the symlink mechanism is gone.
 
 | Action | Path | Notes |
 |--------|------|-------|
 | modify | src/core/manifest.js | **D1** — add `ANCHOR_WINDOW`, `ANCHOR_HEX`, `insertionAnchor()` and `anchorProvesPosition()` beside `SEP_BEFORE_OK` (`:54-59`), and export `insertionAnchor`. **D2** — `reverseManagedBlock`'s leading-strip region (`:285-311`) gains the `anchorOk` conjunct per **Table Q**; **nothing else in that function changes** (Table U). **D6a** — the module doc comment (`:21-26`) and `@typedef ManifestEntry` (`:45-47`) gain **`anchorBefore?: string` only**; do **not** add Part B's symlink fields. **`ENTRY_FIELD_TYPES` is NOT edited by this WP** — Table P says why, and V6 enforces it. |
 | modify | src/adapters/shared.js | **D7a** — `:5` becomes `const { hashDir, insertionAnchor } = require('../core/manifest');`. Do **not** import `linkIdentity`; it does not exist until Part B. **D8** — `recordManagedBlock` (`:113`) takes a seventh parameter `anchorBefore` and assigns it inside the existing `if (inserted)` block, per **Table P**; the sticky-true `createdFile` line is **unchanged**. **D9** — `applyManagedBlock`'s three `recordManagedBlock` calls (`:179`, `:197`, `:210`) pass the anchor per **Table B**; **no other byte of that function changes** (Table U). |
-| modify | tests/unit/manifest.test.js | **A-T1 … A-T10** — the exact set in the Test index. **A-T5 is a required edit to a shipped assertion**, not a new test (**Table F**): `:1417`'s `assert.equal(forged, 'foo', …)` becomes `'foo\n\n'`. The WP-147 Table N suite (`:1336-1358`), T6, T7, T11 and T12 must pass **byte-unmodified** — they craft entries with no anchor, so they exercise the legacy arm and are the regression fence for it. |
+| modify | tests/unit/manifest.test.js | **A-T1 … A-T11** — the exact set in the Test index. **A-T5 is a required edit to a shipped assertion**, not a new test (**Table F**): `:1417`'s `assert.equal(forged, 'foo', …)` becomes `'foo\n\n'`. The WP-147 Table N suite (`:1336-1358`), T6, T7, T11 and T12 must pass **byte-unmodified** — they craft entries with no anchor, so they exercise the legacy arm and are the regression fence for it. |
 
 Not deliverables, deliberately: `src/core/manifest.js`'s `reverseSymlink`,
 `ENTRY_FIELD_TYPES`, and every other reverser; `applySkillLinks`; `recordOnce`;
@@ -586,6 +586,8 @@ was executed end-to-end through `applyManagedBlock` → `reverse()`; the recorde
 | **Q14** | **R2c, arm 1 — the `'\n'` separator.** `W` is 256 chars **ending in a newline**, so an honest append onto `` `PPPP\n${W}` `` records `sepBefore: '\n'`. The user then **replaces the prefix** with `` `QQ\n${W}` `` — the same window at a new, unique position — and relocates the block there | `'\n'` | **one** char stripped | **one char stripped — the DECLARED residual, EQUAL to base** | measured **red** against a full-prefix anchor and against an always-withhold anchor, so it discriminates. Pinned by **A-T9(a)**. |
 | **Q15** | **R2c, arm 2 — the `'\n\n'` separator** (Codex round 4, finding 1). `W` is 256 chars **NOT** newline-terminated, so an honest append onto `` `PPPP\n${W}` `` records `sepBefore: '\n\n'`. Same reproduction, and the block sits **at EOF** | `'\n\n'` | **two** chars stripped | **two chars stripped — EQUAL to base** | **This is the arm rounds 1–3 missed.** With `sepBefore='\n\n'`, `candidate` has no trailing newline so `ownershipOk` passes, and `after === ''` at EOF so `noFusion`'s at-EOF disjunct passes — the strip removes **both** newlines. Pinned by **A-T9(b)**. |
 
+| **Q16** | **R2b's cost, measured** (Codex round 5, finding 1). Content `"A\n"`; honest sync; the user **appends `"A\n"` after the block** — no relocation, no edit above it. The window is `candidate.slice(-256)` = `"A\n"`, **2 characters, not 256**, and it now occurs twice in the reconstructed document | `'\n'` | `"A\nA\n"` — the separator is removed | `"A\n\nA\n"` — **our separator is left**, one surplus character | **This is R2b, and it is far more ordinary than rounds 1–4 described.** Not a defect — zero user bytes move — but a **frequency correction to the ledger**. Pinned by **A-T11**, with a control (`"A\n"` + `"B\n"`) that costs nothing. |
+
 **The R2c bound corrected, and why it is still a residual rather than a defect.**
 Measured, both arms, base = WP-147 shipped:
 
@@ -701,7 +703,7 @@ at `18bc909` — **not** against this spec's excerpts, which are dedented and ca
 - [ ] Current state §3 (the shipped predicate)
 - [ ] Table U's `ownershipOk`/`noFusion` row
 - [ ] Acceptance criteria **AC3**, **AC4**, **AC5**
-- [ ] Test index **A-T1 … A-T10**; Table F; Table R rows **R1**, **R2**, **R2b**, **R2c**
+- [ ] Test index **A-T1 … A-T11**; Table F; Table R rows **R1**, **R2**, **R2b**, **R2c**
 - [ ] Verification **V2**
 - [ ] The falsification record (the three rejected anchor designs) and the
       three-corpus table
@@ -751,7 +753,8 @@ hand-write manifest entries except where the row's job is forgery.
 | **A-T6** | Table Q row **Q10**, the duplicate-window move. Build `W = 'w'.repeat(251) + '\nEND\n'` (**exactly 256 characters, newline-terminated — assert `W.length === 256` in the test** so the fixture cannot silently drift off the boundary); original document `` `${W}\nTAIL\n${W}` ``; honest sync; rewrite the file to `` `${W}\n<BLOCK>\nTAIL\n${W}` `` | the final content is **exactly** the original document — **and** additionally assert the result contains no fewer `W` occurrences than the original, so the row fails loudly if the withhold ever becomes a strip | base, the hash-only anchor, **and** an anchor whose uniqueness test is gated on `candidate.length <= ANCHOR_WINDOW` — **all three measured red**. This is the only test that separates the three anchor designs. |
 | **A-T7** | Table Q row **Q12**, the boundary sweep. Six runs: `candidate.length` ∈ {255, 256, 257} × {ordinary in-place uninstall, honest relocation} | in-place restores byte-perfectly at all three lengths; the relocation preserves byte-perfectly at all three | `PATCH: none — boundary pin.` Not red-first against the shipped design; it exists so the removal of the `<=ANCHOR_WINDOW` shortcut stays removed. Red against any re-introduction of a length-conditional branch. |
 | **A-T8** | **The createdFile producer site** (`shared.js:179`). Fixture: the markdown file is **absent**; `applyManagedBlock` creates it | assert the whole entry: `createdFile === true`, `sepBefore === ''`, `sepAfter === '\n'`, **and `anchorBefore === insertionAnchor('')`** (import it; do not hardcode the digest). Then sync a **second** time and assert the entry and the file bytes are unchanged, and finally that uninstall **deletes** the file | red against any implementation that records `null`, omits the anchor, or records a non-empty `sepBefore` on this branch. **Measured**: the entry is `{createdFile:true, sepBefore:'', sepAfter:'\n', anchorBefore:'e3b0c442…b855'}` and uninstall deletes the file. |
-| **A-T9** | Table Q rows **Q14** and **Q15** — **R2c, executable, BOTH producer-valid separators. Two cases, and both are required.** (a) `W = 'w'.repeat(251) + '\nEND\n'` — 256 chars, newline-terminated, so the honest append records `sepBefore: '\n'`; original `` `PPPP\n${W}` ``; rewrite the prefix to `` `QQ\n${W}` `` with the block after it. (b) `W = 'w'.repeat(253) + 'END'` — 256 chars, **not** newline-terminated, so the honest append records `sepBefore: '\n\n'`; same reproduction, block **at EOF**. **Assert the recorded `sepBefore` in each case** so a fixture that drifts onto the other arm fails loudly | each asserts the exact resulting bytes, **and** that the delta against the pre-uninstall content is **exactly `sepBefore.length` characters** and whitespace-only — (a) one, (b) **two**. That is the R2c bound made executable across its whole vocabulary | (a) red against a full-prefix anchor **and** an always-withhold anchor — both measured. (b) is `PATCH: none — the second arm of the same residual`, pinning the two-character bound; it is red only if the bound ever widens past `sepBefore`, or if a future change makes the arms diverge from base. **Rounds 1–3 had only (a), and the stated bound was wrong as a result** (Codex round 4, finding 1). |
+| **A-T9** | Table Q rows **Q14** and **Q15** — **R2c, executable, BOTH producer-valid separators. Two cases, and both are required.** (a) `W = 'w'.repeat(251) + '\nEND\n'` — 256 chars, newline-terminated, so the honest append records `sepBefore: '\n'`; original `` `PPPP\n${W}` ``; rewrite the prefix to `` `QQ\n${W}` `` with the block after it. (b) `W = 'w'.repeat(253) + 'END'` — 256 chars, **not** newline-terminated, so the honest append records `sepBefore: '\n\n'`; same reproduction, block **at EOF**. **Assert the recorded `sepBefore` in each case** so a fixture that drifts onto the other arm fails loudly | each asserts the exact resulting bytes. **The bound assertion needs an explicitly defined baseline, because the pre-uninstall file still contains the block and `sepAfter`** and a raw delta against it can never be one or two characters (Codex round 5, finding 3). Define `noBlock` = the pre-uninstall content with **the block and its trailing `sepAfter` excised but the leading separator RETAINED**; then assert `noBlock.length - final.length === sepBefore.length`, that the removed characters are whitespace, and that `final` equals what **base** produces on the same fixture — (a) one character, (b) **two** | (a) red against a full-prefix anchor **and** an always-withhold anchor — both measured. (b) is `PATCH: none — the second arm of the same residual`, pinning the two-character bound; it is red only if the bound ever widens past `sepBefore`, or if a future change makes the arms diverge from base. **Rounds 1–3 had only (a), and the stated bound was wrong as a result** (Codex round 4, finding 1). |
+| **A-T11** | Table Q row **Q16** — **R2b's COST**, which A-T6 does not pin. Four rows, honest sync then a **pure append after the block**, no relocation and no edit above it: content `"A\n"` + append `"A\n"`; `"hi\n"` + `"hi\n"`; `"# Notes\n"` + `"# Notes\n"`; and the **control** `"A\n"` + `"B\n"` | the three repeating rows each yield **exactly one surplus `\n`** versus the base result, the surplus is the recorded `sepBefore`, and `final.replace(/\n/g, '')` is **byte-identical to base** — no user byte moves. The control yields **base exactly**, proving the withhold is caused by the repetition and not by the append | `PATCH: none — the declared cost, pinned at its measured size and frequency.` Not red-first. It goes red if the cost ever widens past whitespace, or if the control starts costing too — either would mean the uniqueness test fires more broadly than declared. **This row exists because rounds 1–4 stated R2b's cost with the wrong fixture class** (Codex round 5, finding 1). |
 | **A-T10** | Table Q row **Q13**, the ordinary-path corpus sweep. Six whole-file contents — `"\n"`, `"\n\n\n"`, `"a\na\na\n"`, CRLF `"x\r\ny\r\n"`, `"foo\n"`, `""` — each synced and immediately uninstalled with **no relocation and no edit** | every one restores **byte-perfectly**. Add one further assertion in the same test: a file with **ambiguous** sentinels is skipped with the shipped notice and left untouched, proving the anchor never runs on a file `locateManagedBlock` refuses | red against the block-excised corpus, which yields `"\n\n"` and `"\n\n\n\n"` on the first two rows — **measured**. This is the ordinary-path regression detector. |
 
 **Idempotency (AC11) is asserted inside A-T2(a) and A-T8**: run the forward step
@@ -854,9 +857,12 @@ first run's and the file bytes are unchanged. Measured: second
       byte-perfectly — the anchor does not withhold on the ordinary path, on a
       distant edit, at any window-boundary length, or on newline-only and CRLF
       content — A-T2, A-T7, A-T10.
-- [ ] **AC5.** Table Q row **Q5** yields `paraA-EDITED\n\n`: our separator is left,
-      **no user byte is lost** — A-T3. And row **Q14** yields the declared
-      one-newline strip, whitespace-only — A-T9.
+- [ ] **AC5.** The three declared costs each land at their declared size, with
+      **zero user bytes moved** in all of them: row **Q5** yields
+      `paraA-EDITED\n\n` (A-T3); rows **Q14** and **Q15** — **both arms** — strip
+      exactly `sepBefore.length` whitespace characters against the defined
+      no-block baseline and match base (A-T9); and row **Q16** leaves exactly one
+      surplus separator with a control that costs nothing (A-T11).
 - [ ] **AC8a — legacy degradation.** With `anchorBefore` **absent**, the reverser
       reproduces base behaviour byte for byte and the block is still removed —
       A-T4(a). This is the upgrade-safety criterion.
@@ -1079,7 +1085,45 @@ of tradeoff. **Do not construct a delegation citation.**
 | Row | What it buys | What it costs | How narrow | Pinned by |
 |-----|--------------|---------------|------------|-----------|
 | **R2** — in-window edit ⇒ withhold | the anchor stays *bounded*, so an edit far above the block does **not** cost a leftover (Q4). This row is the price of that bound | when the user edits inside the last 256 characters immediately above the block, uninstall leaves **our** separator: at most two whitespace characters, **zero user bytes** | needs an edit in the 256-character window directly above the block, between the last `sync` and the uninstall | **A-T3**, which asserts the exact bytes and that no user byte is lost |
-| **R2b** — duplicated window ⇒ withhold | the position proof is sound; without it the duplicate-window move (Q10) silently eats a user blank line | when the recorded window occurs more than once in the reconstructed document, uninstall leaves **our** separator: same bound, **zero user bytes** | needs a 256-character run repeated in the user's own `CLAUDE.md` | **A-T6**, which asserts the preserve **and** that no user byte is lost |
+| **R2b** — repeated window ⇒ withhold | the position proof is sound; without it the duplicate-window move (Q10) silently eats a user blank line | when the window occurs more than once in the reconstructed document, uninstall leaves **our** separator: at most two whitespace characters, **zero user bytes** | **NOT "a 256-character run"** — the window is `candidate.slice(-ANCHOR_WINDOW)`, so for any prefix shorter than 256 characters it is **the whole prefix**, and repetition becomes easy. **Measured**: a `CLAUDE.md` whose content is `"A\n"`, with the user simply **appending `"A\n"` after the block** — no relocation, no edit above the block — already trips it. See the cost table below | **A-T11** (the cost). **A-T6 pins the benefit, not this cost** — Codex round 5 finding 1 |
+
+**R2b's frequency, measured, because the ruling turns on it.** Rounds 1–4
+described R2b as needing *"a 256-character run repeated in the user's own
+`CLAUDE.md`"*, which made it sound vanishingly rare. **That was wrong**: the
+window is `candidate.slice(-ANCHOR_WINDOW)`, so when the content before the block
+is shorter than 256 characters the window is **the entire prefix**, and a single
+repeated short line is enough. Measured end-to-end, base vs this WP, with **no
+relocation and no edit above the block** — the user only appends a line *after*
+the block:
+
+```text
+CLAUDE.md content   user then appends   base        this WP        surplus
+"A\n"               "A\n"               "A\nA\n"    "A\n\nA\n"     1 char (ours)
+"hi\n"              "hi\n"              "hi\nhi\n"  "hi\n\nhi\n"   1 char (ours)
+"# Notes\n"         "# Notes\n"         "…\n…\n"    "…\n\n…\n"     1 char (ours)
+"A\n"               "B\n"  (control)    "A\nB\n"    "A\nB\n"       0 — no cost
+```
+
+In every costing row the **user text is byte-identical** to base
+(`final.replace(/\n/g,'')` equal) and the surplus is the single `\n` **we** wrote.
+
+**How to read this for the ruling.** R2b is *frequent-ish on small files and rare
+on large ones*: a real `CLAUDE.md` with more than 256 characters above the block
+needs a genuine 256-character repetition, which is unlikely; a short or nearly
+empty one needs only a duplicated line. The cost never changes shape — it is
+always ≤ 2 whitespace characters Wienerdog authored, in a file uninstall does not
+delete — but its **frequency** is higher than rounds 1–4 implied, and that is the
+correction the ledger owes.
+
+**A refinement was considered and NOT taken.** Recording, at forward time,
+whether the anchor covered the *whole* prefix (`current.length <= ANCHOR_WINDOW`)
+would let the reverser skip the uniqueness test in exactly the short-file case,
+because a whole-prefix match *is* a position proof. It needs a second field and a
+fourth rule in Table P, and it arrived at round 5 of a spec already over its
+sizing budget. **Routed, not folded in: `WP-anchor-whole-prefix-flag`** (not
+drafted). If the owner finds R2b's frequency unacceptable, that is the mechanism
+that reduces it — and disposition (ii) below is the alternative that removes the
+cost entirely at the price of Q10.
 
 **Both costs are whitespace Wienerdog wrote, inside a file uninstall does not
 delete, and neither can ever reach a user byte** — that is the argument *for*
@@ -1099,7 +1143,8 @@ are coherent, and **the choice is the owner's**. **Do not implement any arm unti
 the ruling is recorded here.**
 
 **Whichever is chosen, the same surfaces move in one pass** — this spec's header
-blockquote, Table Q, Table R rows R2/R2b/R2c, AC3/AC4/AC5, A-T3/A-T6, and this
+blockquote, Table Q (rows Q5/Q10/Q14/Q15/Q16), Table R rows R2/R2b/R2c,
+AC3/AC4/AC5, A-T3/A-T6/A-T9/A-T11, and this
 section. They are registered in the Mirrored Surface Checklist.
 
 ## Declared residuals after this WP (Table R — canonical)
@@ -1110,7 +1155,7 @@ Each row names its pinning test. A residual with no test is a claim.
 |---|----------|-------|-----------|--------|
 | **R1** | **Manifest forgery.** An attacker who can rewrite `install-manifest.json` deletes the field and gets base behaviour | WP-147's Table M envelope: at most one newline per side, cannot cross a line boundary into user text. **The anchor makes it strictly tighter** — Q9 shows the in-vocabulary forgery now loses **zero** user bytes rather than one newline | A-T4, and the shipped WP-147 T7/T9/T12 suites | manifest integrity — **declined by declaration**, not routed |
 | **R2** | **In-window edit above the block.** A user edit inside the last 256 characters before the block leaves our blank line behind on uninstall | one separator, ≤ 2 whitespace bytes, **all of them ours**. Never a user byte | **A-T3** | not routed — the design's chosen trade (Implementation notes) |
-| **R2b** | **Duplicated window ⇒ withheld strip.** When the recorded window occurs more than once in the reconstructed user document, `anchorProvesPosition` cannot tell the positions apart and **preserves**, leaving our blank line | same bound as R2 — one separator, all of it ours, never a user byte. This is the *fail-closed* half of the uniqueness conjunct and its price | **A-T6** asserts the preserve; its companion assertion is that **no user byte is lost**, which is what distinguishes this from a defect | not routed — preserve-on-ambiguity is the chosen answer |
+| **R2b** | **Repeated window ⇒ withheld strip.** When the window occurs more than once in the reconstructed user document, `anchorProvesPosition` cannot tell the positions apart and **preserves**, leaving our separator. **The window is `candidate.slice(-ANCHOR_WINDOW)`, so on a prefix shorter than 256 characters it is the WHOLE prefix** — a single repeated short line is enough, with no relocation and no edit above the block | at most two whitespace characters, all of them ours, **never a user byte** — measured, the user text is byte-identical to base in every costing fixture. This is the *fail-closed* half of the uniqueness conjunct and its price | **A-T11** pins the COST (three repeating fixtures + a non-repeating control). **A-T6 pins the BENEFIT** (Q10) and does not pin this row — the two were conflated through round 4 (Codex round 5, finding 1) | not routed — preserve-on-ambiguity is the chosen answer. A frequency-reducing refinement is routed to `WP-anchor-whole-prefix-flag` and deliberately not folded in |
 | **R2c** | **Window reproduced elsewhere.** A user who deletes the block's original neighbourhood **and** reproduces the same 256 characters at another position gets a strip at the new site: the anchor matches and the window is unique | **at most the recorded `sepBefore`** — WP-147's Table M fixes that vocabulary at `''`/`'\n'`/`'\n\n'`, so **at most two whitespace characters, never a fusion, never text**. **EQUAL to base in both arms** (measured: base strips 1 and 2 respectively), which is why it is a residual and not a defect | **A-T9**, both arms, each asserting the delta is exactly `sepBefore.length` whitespace characters. Arm (a) discriminates: measured **red** against a full-prefix anchor and against an always-withhold anchor | not routed. This is the honest edge of what a bounded window can prove. **The bound was stated as "one newline" through round 3 and corrected in round 4** — the mechanism cannot be narrowed without breaking the honest unterminated-append case |
 | **R8** | **The V3–V6 source guards are not AST-aware.** They strip comments and reject duplicate definitions, but cannot tell reachable code from code after a `return` | the guards are **tripwires**; V1/V2 — the test suite — are the load-bearing checks. This is WP-147's own stated disposition for the same class | the evasions listed in Verification steps each have an executed red mutation; the uncovered one is unreachable code | **`WP-grep-gate-helper`** — already routed by WP-147 as the canonical comment-stripping/AST gate helper, *"fourth instance of this shape"*. This spec does not re-route it |
 
