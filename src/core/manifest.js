@@ -15,8 +15,12 @@ const { WienerdogError } = require('./errors');
  *
  * Adapters add three more kinds (WP-006), each with precise reverse semantics:
  *   {kind:'symlink', path}                          — a symlink we created
- *   {kind:'managed-block', path, createdFile:bool}  — a sentinel block we wrote
- *                                                     into a (maybe user-owned) file
+ *   {kind:'managed-block', path, createdFile:bool,
+ *    sepBefore?:string, sepAfter?:string}           — a sentinel block we wrote
+ *                                                     into a (maybe user-owned) file;
+ *                                                     sepBefore/sepAfter (WP-147) are
+ *                                                     the exact separator bytes the
+ *                                                     last insertion added
  *   {kind:'settings-entry', path, createdFile:bool, commands:string[]}
  *                                                   — hook commands we merged into
  *                                                     a JSON settings file
@@ -36,12 +40,20 @@ const { WienerdogError } = require('./errors');
  *                                                     recursively on uninstall.
  *
  * @typedef {{kind: string, path: string, hash?: string, createdFile?: boolean,
- *            commands?: string[], unload?: string[]}} ManifestEntry
+ *            commands?: string[], unload?: string[], sepBefore?: string,
+ *            sepAfter?: string}} ManifestEntry
  * @typedef {{version: number, createdAt: string, entries: ManifestEntry[]}} Manifest
  */
 
 const BEGIN_SENTINEL = '<!-- wienerdog:begin -->';
 const END_SENTINEL = '<!-- wienerdog:end -->';
+
+/** Table M (WP-147): the ONLY leading-separator values the forward step can
+ *  emit ('' createdFile; '\n' append onto newline-terminated content; '\n\n'
+ *  append onto unterminated content). The manifest is UNTRUSTED input, so
+ *  reverseManagedBlock accepts sepBefore only from this allowlist (and sepAfter
+ *  only as '\n'); anything else degrades to the legacy conservative strip. */
+const SEP_BEFORE_OK = new Set(['', '\n', '\n\n']);
 
 /** Locate the SINGLE managed block by FULL-LINE sentinel match (a line whose
  *  trimmed content equals the sentinel). Returns {begin, end} character offsets
@@ -159,13 +171,13 @@ function reverseSymlink(entry, dryRun, removed, skipped, removedSet) {
 }
 
 /**
- * Reverse a 'managed-block' entry: strip the exact span the forward step
- * introduced — the block plus one leading newline (the blank-line separator)
- * and the one trailing newline after the end sentinel — so a pre-existing
- * file round-trips byte-identically through sync → uninstall. A block the
- * user relocated mid-file uninstalls to exactly one blank line between the
- * surrounding regions. Delete the file only if we created it and nothing
- * else remains.
+ * Reverse a 'managed-block' entry: strip the block plus ONLY the separator
+ * bytes the forward step recorded on the entry (`sepBefore`/`sepAfter`;
+ * legacy default one newline each side), and only when the strip preserves
+ * a user line boundary — never fuse the user's surrounding lines (audit
+ * A13, WP-147). The metadata is UNTRUSTED (Table M): values outside the
+ * emittable vocabulary degrade to the same legacy conservative strip.
+ * Delete the file only if we created it and nothing else remains.
  *
  * F30 (delete-time binding): the caller opens the O_NOFOLLOW-verified regular
  * file once and passes the fd + its canonical path `target`; read+modify+write
@@ -204,12 +216,53 @@ function reverseManagedBlock(entry, dryRun, removed, skipped, removedSet, fd, ta
   }
   let before = content.slice(0, span.begin);
   let after = content.slice(span.end);
-  // The forward step wrote '\n' + block + '\n' after the prior content's own
-  // trailing newline: one newline forming the blank-line separator, one
-  // terminating the end sentinel. Remove exactly those two characters along
-  // with the block itself.
-  if (before.endsWith('\n')) before = before.slice(0, -1);
-  if (after.startsWith('\n')) after = after.slice(1);
+
+  // The manifest is UNTRUSTED (WP-144). Accept ONLY values the forward step can
+  // actually emit; anything else is treated exactly as a legacy entry. Table M.
+  let sepBefore = entry.sepBefore;
+  let sepAfter = entry.sepAfter;
+  if (!SEP_BEFORE_OK.has(sepBefore) || sepAfter !== '\n') {
+    if (sepBefore !== undefined || sepAfter !== undefined) {
+      process.stderr.write(
+        `wienerdog: ignoring out-of-vocabulary separator metadata on ${entry.path} — ` +
+        'stripping conservatively\n'
+      );
+    }
+    sepBefore = '\n';
+    sepAfter = '\n';
+  }
+
+  // Trailing terminator: the block's own line end is always Wienerdog's — remove it.
+  if (after.startsWith(sepAfter)) after = after.slice(sepAfter.length);
+  else if (after.startsWith('\n')) after = after.slice(1); // legacy fallback
+
+  // Leading separator: remove ONLY the exact bytes we added, and ONLY when doing so
+  // preserves a line boundary — otherwise we would fuse two user lines (the A13 bug).
+  if (sepBefore.length > 0 && before.endsWith(sepBefore)) {
+    const candidate = before.slice(0, before.length - sepBefore.length);
+    // The at-EOF disjunct is GATED on sepBefore === '\n\n' — i.e. on the forward
+    // step having supplied the file's terminator itself. When sepBefore is '\n'
+    // the file was already newline-terminated by the USER, so that newline is
+    // theirs and survives even with nothing after the block.
+    const weSuppliedTerminator = sepBefore === '\n\n';
+
+    // (1) OWNERSHIP RE-CHECK. We wrote '\n\n' ONLY because the content did not end
+    //     with a newline. If `candidate` ends with one now, the block is NOT at its
+    //     recorded append position — the user moved it — and that newline is theirs.
+    const ownershipOk = !weSuppliedTerminator || !candidate.endsWith('\n');
+
+    // (2) ANTI-FUSION. Never remove a newline that is the boundary between two user
+    //     lines.
+    const noFusion =
+      candidate === '' ||
+      candidate.endsWith('\n') ||
+      (weSuppliedTerminator && after === '') ||
+      after.startsWith('\n');
+
+    // BOTH are required. They are independent: (1) alone fuses (Table N row 7),
+    // (2) alone eats a user blank line on relocation (row 6).
+    if (ownershipOk && noFusion) before = candidate;
+  }
   const remaining = before + after;
 
   if (entry.createdFile === true && remaining.trim() === '') {
@@ -807,6 +860,11 @@ const ENTRY_FIELD_TYPES = {
   file: { hash: 'string' },
   dir: {},
   symlink: {},
+  // sepBefore/sepAfter (WP-147) are deliberately NOT type-gated here: a non-string
+  // forgery must reach reverseManagedBlock so its SEP_BEFORE_OK allowlist degrades
+  // to the legacy conservative strip and still removes the block (Table M:
+  // "additive only, no rejection"). Type-gating would reject the entry upstream,
+  // leaving the managed block installed — the disposition Table M explicitly rejects.
   'managed-block': { createdFile: 'boolean' },
   'settings-entry': { createdFile: 'boolean', commands: 'string[]' },
   'vendored-tree': {},

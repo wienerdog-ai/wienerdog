@@ -97,6 +97,36 @@ function recordSettingsEntry(manifest, settingsPath, createdFile, commands) {
   if (!existing) manifest.entries.push(entry);
 }
 
+/** Upsert the managed-block manifest record (WP-147). The two fields follow
+ *  different rules: `createdFile` is STICKY-TRUE (shared.js:95's rule — once we
+ *  created the file, a later re-sync that finds it present must not flip that
+ *  truth back), while `sepBefore`/`sepAfter` are UPDATE-ON-INSERT: they must
+ *  describe the bytes of the most recent actual insertion, because a
+ *  delete-and-reinsert cycle can legitimately change them.
+ *  @param {object} [manifest] @param {string} mdPath
+ *  @param {boolean} createdFile @param {string|null} sepBefore
+ *  @param {string|null} sepAfter
+ *  @param {boolean} inserted TRUE only on the two branches that actually WRITE
+ *  separators (createdFile, append). The replace branch splices between existing
+ *  sentinels and writes none, so it passes false and the recorded separators
+ *  are left exactly as they are. */
+function recordManagedBlock(manifest, mdPath, createdFile, sepBefore, sepAfter, inserted) {
+  if (!manifest) return;
+  if (!Array.isArray(manifest.entries)) manifest.entries = [];
+  const existing = manifest.entries.find((e) => e.kind === 'managed-block' && e.path === mdPath);
+  const entry = existing || { kind: 'managed-block', path: mdPath };
+  // STICKY-TRUE (shared.js:95's rule): once we created the file, a later re-sync
+  // that finds it present must NOT flip that truth back to false.
+  entry.createdFile = existing ? (existing.createdFile === true ? true : createdFile) : createdFile;
+  // UPDATE-ON-INSERT: record the separators THIS insertion wrote, replacing any
+  // earlier ones — a delete-and-reinsert cycle can legitimately change them.
+  if (inserted) {
+    entry.sepBefore = sepBefore;
+    entry.sepAfter = sepAfter;
+  }
+  if (!existing) manifest.entries.push(entry);
+}
+
 /**
  * Build the sentinel-delimited managed block from a digest string. Neutralize any
  * digest LINE that trims exactly to a sentinel so the emitted block always has
@@ -146,7 +176,7 @@ function applyManagedBlock(mdPath, digest, dryRun, manifest, out) {
       fs.mkdirSync(path.dirname(mdPath), { recursive: true });
       fs.writeFileSync(mdPath, next);
     }
-    recordOnce(manifest, { kind: 'managed-block', path: mdPath, createdFile: true });
+    recordManagedBlock(manifest, mdPath, true, '', '\n', true);
     out.changed.push(mdPath);
     return;
   }
@@ -164,15 +194,20 @@ function applyManagedBlock(mdPath, digest, dryRun, manifest, out) {
       out.changed.push(mdPath);
     }
     // Manifest entry (if any) already exists from a prior run; do not re-record.
-    recordOnce(manifest, { kind: 'managed-block', path: mdPath, createdFile: false });
+    recordManagedBlock(manifest, mdPath, false, null, null, false);
     return;
   }
 
   // File present without sentinels → append with exactly one blank-line separator.
-  const base = current.replace(/\n+$/, '');
-  const next = `${base}\n\n${block}\n`;
+  // Non-lossy: keep the file's own trailing newline(s); insert exactly one blank
+  // line before the block and record the exact bytes we add, so uninstall can
+  // remove only OUR separators (audit A13).
+  const pad = current.endsWith('\n') ? '' : '\n'; // ensure content ends with a newline first
+  const sepBefore = `${pad}\n`; // '\n' (already newline-terminated) or '\n\n'
+  const sepAfter = '\n'; // the block's own line terminator
+  const next = `${current}${sepBefore}${block}${sepAfter}`;
   if (!dryRun) fs.writeFileSync(mdPath, next);
-  recordOnce(manifest, { kind: 'managed-block', path: mdPath, createdFile: false });
+  recordManagedBlock(manifest, mdPath, false, sepBefore, sepAfter, true); // inserted → UPDATE
   out.changed.push(mdPath);
 }
 
