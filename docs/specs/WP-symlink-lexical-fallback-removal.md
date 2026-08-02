@@ -1061,7 +1061,7 @@ Registered **outside** this spec so a later change knows this table is its sourc
 - [ ] **AC4 (the scoped unreachability fact)** — **T4b** passes against the
       untouched tree as well as after R1, and asserts the
       `outside every Wienerdog-owned root` notice. Both runs pasted into the PR.
-- [ ] **AC5 (mutation checks — FIVE, all required)** — V4's rule is now *any byte
+- [ ] **AC5 (mutation checks — SIX, all required)** — V4's rule is now *any byte
       differs → red*, so the matrix is a list of things that must all be caught,
       not a list of grep shapes. Apply each to `src/core/manifest.js`, run V3b,
       then `git checkout -- src/core/manifest.js`. Paste every output; each must

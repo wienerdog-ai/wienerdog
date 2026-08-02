@@ -474,7 +474,10 @@ were caught in round 3** — they are listed first deliberately:
       subsections** — one subsection per Table S row, same ids, same order.
 - [ ] **Current state §3's "Consequence" paragraph** — states the region and file
       count.
-- [ ] **Acceptance criteria AC1–AC8** — each names the E-id it gates.
+- [ ] **Acceptance criteria AC0–AC8** — each names the E-id it gates. **AC6
+      counts the changed files, so it moves whenever Table S gains or loses a
+      file** — and it must also count this spec itself, whose status flip every
+      implementation commit carries (round 6).
 - [ ] **Verification commands V1–V8** — including **V8's `boundary-check`
       invocation, which must list every file in Table S**; a missing path there
       makes CI reject the very edit this spec mandates.
@@ -508,6 +511,13 @@ command, and no code. It changes eight lines of documentation prose.
 
 ## Acceptance criteria
 
+- [ ] **AC0 (trust root — check this first)** — **V0** passes: this spec is
+      byte-identical to its branch-base copy apart from the single frontmatter
+      `status: Ready` → `status: In-Review` flip. V5b reconstructs
+      `docs/THREAT-MODEL.md` using clause strings that live in **this** file, so if
+      V0 is red nothing below it means anything. **The implementation commit may
+      not change one other byte of this spec.** Found something wrong here? Say so
+      under "Discovered issues"; do not fix it.
 - [ ] **AC1 (E1, red → green)** — `grep -n "pre-use safety gate" docs/runbooks/gws-broker.md`
       and `grep -n "security-hardened build" docs/runbooks/gws-broker.md` each
       match **before** the change and match **nothing after**. All four runs
@@ -537,13 +547,18 @@ command, and no code. It changes eight lines of documentation prose.
       before/after sentinels: if the stale clause were still there, or the
       replacement differed by a word, or anything else in the file moved, the
       reconstruction diff fails and names the line and column.
-- [ ] **AC6 (nothing else moved)** — `git diff --stat` shows exactly **two** files
-      changed: `docs/runbooks/gws-broker.md` with
-      `8 insertions(+), 7 deletions(-)`, and `docs/THREAT-MODEL.md` with
-      `1 insertion(+), 1 deletion(-)` — E3 edits one clause inside one long line,
-      so it is a one-line diff. `git diff` shows the runbook change confined to
-      lines 7-9 and 121-124, and the threat-model change confined to `:146`.
-      (Measured while drafting.)
+- [ ] **AC6 (nothing else moved)** — `git diff --stat` shows exactly **three**
+      files changed, and the third is the mandatory status flip:
+      `docs/runbooks/gws-broker.md` with `8 insertions(+), 7 deletions(-)`;
+      `docs/THREAT-MODEL.md` with `1 insertion(+), 1 deletion(-)` (E3 edits one
+      clause inside one long line, so it is a one-line diff); and
+      `docs/specs/WP-gws-broker-runbook-destale.md` with
+      `1 insertion(+), 1 deletion(-)` — the `status:` line and nothing else,
+      byte-proven by **V0**. `git diff` shows the runbook change confined to lines
+      7-9 and 121-124, and the threat-model change confined to `:146`. (The two
+      product-document counts were measured while drafting; the third is the
+      repo's standard implementation-commit spec flip — see
+      `8ecf7f0`, numstat `1 1`.)
 - [ ] **AC7** — runbook line `:108` (*"which v1 does not do"*) is unchanged, the
       runbook is 125 lines after the edit (124 + E2's one added line), and
       `docs/THREAT-MODEL.md` is still **431** lines.
@@ -560,6 +575,61 @@ command, and no code. It changes eight lines of documentation prose.
 ## Verification steps (run these; paste output in the PR)
 
 ```bash
+# ── V0 — THE TRUST ROOT. Run this FIRST, before anything below. ───────────────
+# V5b reconstructs docs/THREAT-MODEL.md using the OLD and NEW clause strings that
+# live in THIS spec, and V3 diffs the runbook against text that lives here too. So
+# this spec is the root of trust — and the implementation commit is REQUIRED to
+# touch it (the status flip, DoD item 4). Without this gate a commit could edit
+# the NEW string here and write that same text into THREAT-MODEL, and V5b would
+# pass: consistent with itself, and wrong.
+#
+# This is the same gate WP-symlink-lexical-fallback-removal carries, deliberately
+# identical so the two specs' conventions match. Reconstruct this spec from the
+# branch base and license EXACTLY ONE change — the frontmatter status flip.
+#
+# The licensed substitution is `status: Ready` -> `status: In-Review`. Verified
+# against a real merged implementation commit: `8ecf7f0` changed exactly one line
+# of its spec, `-status: Ready` / `+status: In-Review`, numstat `1 1`. The
+# Draft->Ready move is the architect's or owner's, in its own earlier commit on
+# main — so if this gate reports the base spec is not `Ready`, the lifecycle was
+# skipped.
+BASE=$(git merge-base main HEAD)
+node -e '
+const fs = require("node:fs");
+const { execSync } = require("node:child_process");
+const SPEC = "docs/specs/WP-gws-broker-runbook-destale.md";
+const base = execSync(`git show ${process.argv[1]}:${SPEC}`, { maxBuffer: 1e8 }).toString();
+const lines = base.split("\n");
+const fmEnd = lines.indexOf("---", 1);
+if (fmEnd === -1) { console.error("FAIL: no frontmatter terminator in the base spec"); process.exit(1); }
+const hits = [];
+for (let i = 0; i < fmEnd; i++) if (lines[i] === "status: Ready") hits.push(i);
+if (hits.length !== 1) {
+  console.error(`FAIL: the base spec frontmatter has ${hits.length} \`status: Ready\` lines, expected exactly 1.`);
+  console.error("  This spec must be at `status: Ready` on the branch base before implementation starts.");
+  process.exit(1);
+}
+lines[hits[0]] = "status: In-Review";
+const expected = lines.join("\n");
+const actual = fs.readFileSync(SPEC, "utf8");
+if (actual === expected) { console.log("V0 ok — this spec is the base spec with ONLY the Ready->In-Review flip"); process.exit(0); }
+const a = actual.split("\n"), b = expected.split("\n");
+for (let i = 0; i < Math.max(a.length, b.length); i++) {
+  if (a[i] === b[i]) continue;
+  const x = a[i] ?? "<missing line>", y = b[i] ?? "<missing line>";
+  let c = 0; while (c < x.length && c < y.length && x[c] === y[c]) c++;
+  const from = Math.max(0, c - 60), to = c + 60;
+  console.error(`REGRESSED: this spec diverges from base+status-flip at line ${i + 1}, column ${c + 1}`);
+  console.error("  actual  : …" + x.slice(from, to) + "…");
+  console.error("  expected: …" + y.slice(from, to) + "…");
+  console.error("  The implementation commit may change ONE line of this spec: the status flip.");
+  console.error("  Everything else here — V5bs clause strings above all — is the trust root.");
+  process.exit(1);
+}
+console.error("REGRESSED: this spec differs from base+status-flip in trailing content");
+process.exit(1);
+' "$BASE"
+
 # V1 (AC1/AC4, BEFORE) — the three stale phrases are present. Run before editing.
 grep -n "pre-use safety gate" docs/runbooks/gws-broker.md
 grep -n "security-hardened build" docs/runbooks/gws-broker.md
@@ -703,4 +773,6 @@ node scripts/boundary-check.js docs/specs/WP-gws-broker-runbook-destale.md \
    **`docs:`, not `docs(runbooks):`** — E3 lands in `docs/THREAT-MODEL.md`, which
    is not a runbook.
 3. PR template filled, including "Decisions made" (or "none") and `Generated-by:`.
-4. This spec's `status:` flipped to `In-Review` in the same PR.
+4. This spec's `status:` flipped to `In-Review` in the same PR — **that flip is
+   the only change this PR may make to this file**, and V0 proves it. It is the
+   third file in AC6's `git diff --stat`.
