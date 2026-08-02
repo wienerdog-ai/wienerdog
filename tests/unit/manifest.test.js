@@ -1561,15 +1561,14 @@ test('reverseSymlink: a legacy (target-less) entry is preserved whatever it poin
   }
 });
 
-test('reverseSymlink: a dangling own link is still removed via the lexical fallback — Table A row 3→5 (T4)', (t) => {
+test('reverseSymlink: a dangling own link is PRESERVED — direct call (T4a)', (t) => {
   if (!isPosix) return t.skip('symlink creation may be unavailable');
-  // T4 exercises reverseSymlink DIRECTLY, not via reverse(). The lexical fallback
-  // (readlinkSync(L) === T) only ever fires when T is unresolvable — i.e. the core
-  // was deleted by hand so the link dangles. But reverse()'s withinAllowedRoot gate
-  // realpaths the link (following it), which THROWS on a dangling link and preserves
-  // the entry BEFORE reverseSymlink runs. That gate is pre-existing (WP-144/F30) and
-  // out of scope here, so the fallback contract (Table A row 3 → row 5) is proven at
-  // the unit boundary. See the PR "Discovered issues" note.
+  // Row 3 is one test, sameResolvedDir, and it is fail-closed: a dangling link cannot
+  // prove it resolves to the recorded source, so it is preserved. WP-153 shipped a
+  // second, link-text sub-test that unlinked exactly this case;
+  // WP-symlink-lexical-fallback-removal dropped it, narrowing delete authority.
+  // This case is UNREACHABLE through reverse() (see T4b), so the narrowing is only
+  // observable here, at the exported-helper boundary.
   const paths = tempPaths();
   const skillsRoot = path.join(paths.claudeDir, 'skills'); // OWNED location — required
   fs.mkdirSync(skillsRoot, { recursive: true });
@@ -1581,17 +1580,111 @@ test('reverseSymlink: a dangling own link is still removed via the lexical fallb
   const removed = [];
   const skipped = [];
   const removedSet = new Set();
-  manifestLib.reverseSymlink(
-    { kind: 'symlink', path: link, target: source },
-    false,
-    removed,
-    skipped,
-    removedSet,
-    [skillsRoot]
+  const origWrite = process.stderr.write.bind(process.stderr);
+  let err = '';
+  process.stderr.write = (chunk) => { err += chunk; return true; };
+  try {
+    manifestLib.reverseSymlink(
+      { kind: 'symlink', path: link, target: source },
+      false,
+      removed,
+      skipped,
+      removedSet,
+      [skillsRoot]
+    );
+  } finally {
+    process.stderr.write = origWrite;
+  }
+  // lstat, NOT existsSync: existsSync FOLLOWS the link and is false for a link that
+  // is still on disk but dangling, so an existsSync assertion here is vacuous.
+  assert.equal(fs.lstatSync(link).isSymbolicLink(), true, 'the dangling own link is preserved');
+  assert.ok(!removed.includes(link));
+  assert.ok(skipped.includes(link));
+  assert.match(err, /not the Wienerdog skill link we recorded/);
+});
+
+test('reverseSymlink: a DANGLING own link never reaches the reverser through reverse() (T4b)', (t) => {
+  if (!isPosix) return t.skip('symlink creation may be unavailable');
+  // Scoped claim: the DANGLING case, and only that case, is unreachable through
+  // reverse(). Its symlink arm passes the link path to withinAllowedRoot, whose
+  // contains() realpaths it — which FOLLOWS the link and throws on a dangling one —
+  // so the entry is preserved at that upstream gate and reverseSymlink never runs.
+  // CHARACTERIZATION test: green both before and after
+  // WP-symlink-lexical-fallback-removal. The asserted notice is the upstream gate's,
+  // not row 3's, which is what proves reverseSymlink was never entered.
+  // This does NOT say the dropped sub-test was unreachable in general — T4c is a
+  // reachable case that DID change behavior.
+  const paths = tempPaths();
+  const manifest = makeInstall(paths);
+  const skillsRoot = path.join(paths.claudeDir, 'skills');
+  fs.mkdirSync(skillsRoot, { recursive: true });
+  const source = path.join(paths.claudeDir, 'core-skills', 'wienerdog-bar');
+  fs.mkdirSync(source, { recursive: true });
+  const link = path.join(skillsRoot, 'wienerdog-bar');
+  fs.symlinkSync(source, link);
+  fs.rmSync(source, { recursive: true, force: true });
+  manifestLib.record(manifest, { kind: 'symlink', path: link, target: source });
+  manifestLib.save(paths, manifest);
+  const origWrite = process.stderr.write.bind(process.stderr);
+  let err = '';
+  process.stderr.write = (chunk) => { err += chunk; return true; };
+  let res;
+  try {
+    res = manifestLib.reverse(paths, manifestLib.load(paths), {});
+  } finally {
+    process.stderr.write = origWrite;
+  }
+  assert.equal(fs.lstatSync(link).isSymbolicLink(), true, 'reverse() preserves the dangling own link');
+  assert.ok(!res.removed.includes(link));
+  assert.ok(res.skipped.includes(link));
+  assert.match(
+    err,
+    /outside every Wienerdog-owned root/,
+    'preserved by the upstream withinAllowedRoot gate — reverseSymlink never ran'
   );
-  assert.equal(fs.existsSync(link), false, 'the dangling own link is unlinked via the lexical fallback');
-  assert.ok(removed.includes(link));
-  assert.ok(!skipped.includes(link));
+});
+
+test('reverseSymlink: a relative-target entry is PRESERVED through reverse(), not unlinked (T4c)', (t) => {
+  if (!isPosix) return t.skip('symlink creation may be unavailable');
+  // THE BEHAVIOR CHANGE, red-first, through reverse(). `L` is OWNED and NOT dangling:
+  // its link text is RELATIVE and resolves fine, and the entry's `target` is that same
+  // relative text. withinAllowedRoot follows L to an in-bounds destination and passes,
+  // so reverseSymlink DOES run. Before WP-symlink-lexical-fallback-removal the
+  // link-text sub-test matched the raw string and row 5 UNLINKED it. sameResolvedDir
+  // alone refuses, because realpath() resolves a relative T against process.cwd(),
+  // not against the link's directory.
+  // Preserving it is INTENDED: Wienerdog never records a relative target (shared.js
+  // joins an absolute core path), so such an entry is hand-edited or forged input,
+  // and the manifest is untrusted — a recorded field may narrow deletion, never
+  // authorize one the semantic proof refuses.
+  const paths = tempPaths();
+  const manifest = makeInstall(paths);
+  const skillsRoot = path.join(paths.claudeDir, 'skills'); // OWNED location — required
+  fs.mkdirSync(skillsRoot, { recursive: true });
+  const dest = path.join(paths.claudeDir, 'core-skills', 'wienerdog-rel');
+  fs.mkdirSync(dest, { recursive: true });
+  const link = path.join(skillsRoot, 'wienerdog-rel');
+  const relText = path.join('..', 'core-skills', 'wienerdog-rel');
+  fs.symlinkSync(relText, link); // RELATIVE link text that resolves — not the dangling case
+  // Fixture preconditions, asserted so a later edit cannot make this test vacuous.
+  assert.equal(fs.readlinkSync(link), relText, 'the link text is the relative form');
+  assert.equal(fs.existsSync(link), true, 'the link RESOLVES — this is not the dangling case');
+  assert.equal(fs.existsSync(relText), false, 'the relative target must not resolve from the test cwd');
+  manifestLib.record(manifest, { kind: 'symlink', path: link, target: relText });
+  manifestLib.save(paths, manifest);
+  const origWrite = process.stderr.write.bind(process.stderr);
+  let err = '';
+  process.stderr.write = (chunk) => { err += chunk; return true; };
+  let res;
+  try {
+    res = manifestLib.reverse(paths, manifestLib.load(paths), {});
+  } finally {
+    process.stderr.write = origWrite;
+  }
+  assert.equal(fs.lstatSync(link).isSymbolicLink(), true, 'the relative-target link is preserved');
+  assert.ok(!res.removed.includes(link));
+  assert.ok(res.skipped.includes(link));
+  assert.match(err, /not the Wienerdog skill link we recorded/);
 });
 
 test('reverseSymlink: a forged (path,target) pair for a non-OWNED link is preserved — Table A row 4 (T7)', (t) => {

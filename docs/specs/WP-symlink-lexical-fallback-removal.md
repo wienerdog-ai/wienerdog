@@ -1,7 +1,7 @@
 ---
 id: WP-symlink-lexical-fallback-removal
 title: Narrow the symlink reverser's row 3 to the semantic proof — drop the link-text fallback
-status: Ready
+status: In-Review
 model: sonnet
 size: M
 depends_on: [WP-153]
