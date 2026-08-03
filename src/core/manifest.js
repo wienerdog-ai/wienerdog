@@ -17,7 +17,14 @@ const { WienerdogError } = require('./errors');
  *   {kind:'symlink', path, target?}                 — a symlink we created;
  *                                                     `target` is the source it
  *                                                     must still resolve to
- *                                                     (absent on legacy entries)
+ *                                                     (absent on legacy entries);
+ *                                                     origin? is 'created' or
+ *                                                     'adopted' — whether we made
+ *                                                     the link or found it on
+ *                                                     disk; dev?/ino? are the
+ *                                                     link's lstat identity at
+ *                                                     creation time, as decimal
+ *                                                     strings (create site only)
  *   {kind:'managed-block', path, createdFile:bool,
  *    sepBefore?:string, sepAfter?:string,
  *    anchorBefore?:string}                          — a sentinel block we wrote
@@ -47,6 +54,7 @@ const { WienerdogError } = require('./errors');
  *
  * @typedef {{kind: string, path: string, hash?: string, createdFile?: boolean,
  *            commands?: string[], unload?: string[], sepBefore?: string,
+ *            origin?: string, dev?: string, ino?: string,
  *            sepAfter?: string, anchorBefore?: string}} ManifestEntry
  * @typedef {{version: number, createdAt: string, entries: ManifestEntry[]}} Manifest
  */
@@ -104,6 +112,22 @@ function anchorProvesPosition(entry, candidate, userText) {
   if (win === '') return true;
   const first = userText.indexOf(win);
   return first !== -1 && userText.indexOf(win, first + 1) === -1;
+}
+
+/** lstat identity of a SYMLINK, as decimal strings (bigint: a 64-bit inode
+ *  exceeds Number.MAX_SAFE_INTEGER, and BigInt is not JSON-serializable).
+ *  Returns null when the path is not a symlink, is unreadable, or the platform
+ *  cannot supply a non-zero (dev, ino) pair — see Table P rule S-2.
+ *  @param {string} linkPath @returns {{dev: string, ino: string}|null} */
+function linkIdentity(linkPath) {
+  try {
+    const st = fs.lstatSync(linkPath, { bigint: true });
+    if (!st.isSymbolicLink()) return null;
+    if (st.dev === 0n || st.ino === 0n) return null;
+    return { dev: String(st.dev), ino: String(st.ino) };
+  } catch {
+    return null;
+  }
 }
 
 /** Locate the SINGLE managed block by FULL-LINE sentinel match (a line whose
@@ -212,8 +236,10 @@ function isSymlink(p) {
  * @param {boolean} dryRun
  * @param {string[]} removed @param {string[]} skipped @param {Set<string>} removedSet
  * @param {string[]} skillsRoots the harness skills roots (row 4 OWNED gate)
+ * @param {{identity?: function}} [opts]  test seam only — see D4
  */
-function reverseSymlink(entry, dryRun, removed, skipped, removedSet, skillsRoots) {
+function reverseSymlink(entry, dryRun, removed, skipped, removedSet, skillsRoots, opts = {}) {
+  const identityOf = opts.identity || linkIdentity;   // test seam only
   const L = entry.path;
   const T = entry.target;
   // Row 1: not a symlink (real file/dir, or already gone) — never ours to delete.
@@ -257,6 +283,32 @@ function reverseSymlink(entry, dryRun, removed, skipped, removedSet, skillsRoots
     );
     skipped.push(L);
     return;
+  }
+  // Row 4a: ADOPTED — the link was already on disk when we first recorded it, so
+  // it is the USER's, not ours, however exactly it matches. Preserve.
+  if (entry.origin === 'adopted') {
+    process.stderr.write(
+      `wienerdog: keeping ${L} — not the Wienerdog skill link we recorded (replaced, or unverifiable)\n`
+    );
+    skipped.push(L);
+    return;
+  }
+  // Row 4b: IDENTITY — when we recorded a (dev, ino) pair, the link on disk must
+  // still BE that file object. A delete-and-recreate gets a new inode, so a user's
+  // same-source replacement no longer passes for ours. Fail closed on any doubt.
+  // A PARTIAL pair (one of the two) is a shape the forward step never writes, so
+  // it is unverifiable, not absent — preserve (Table P rule S-4, Table S).
+  const hasDev = typeof entry.dev === 'string';
+  const hasIno = typeof entry.ino === 'string';
+  if (hasDev || hasIno) {
+    const id = hasDev && hasIno ? identityOf(L) : null;
+    if (id === null || id.dev !== entry.dev || id.ino !== entry.ino) {
+      process.stderr.write(
+        `wienerdog: keeping ${L} — not the Wienerdog skill link we recorded (replaced, or unverifiable)\n`
+      );
+      skipped.push(L);
+      return;
+    }
   }
   // Row 5: OWNED, in-namespace, and provably resolves to our recorded source.
   if (!dryRun) fs.unlinkSync(L);
@@ -965,7 +1017,7 @@ function reverse(paths, manifest, { dryRun = false } = {}) {
 const ENTRY_FIELD_TYPES = {
   file: { hash: 'string' },
   dir: {},
-  symlink: { target: 'string' },
+  symlink: { target: 'string', origin: 'string', dev: 'string', ino: 'string' },
   // sepBefore/sepAfter (WP-147) are deliberately NOT type-gated here: a non-string
   // forgery must reach reverseManagedBlock so its SEP_BEFORE_OK allowlist degrades
   // to the legacy conservative strip and still removes the block (Table M:
@@ -1119,4 +1171,4 @@ function disposeCoreMechanics(paths, { dryRun = false, vaultPath = null } = {}) 
   return { removed, skippedForVault };
 }
 
-module.exports = { load, record, save, reverse, disposeCoreMechanics, reverseSchedulerEntry, reverseVendoredTree, reverseCopiedSkill, reverseSymlink, hashDir, insertionAnchor, sha256File, validateEntry, withinAllowedRoot, withinSchedulerRoot };
+module.exports = { load, record, save, reverse, disposeCoreMechanics, reverseSchedulerEntry, reverseVendoredTree, reverseCopiedSkill, reverseSymlink, hashDir, insertionAnchor, linkIdentity, sha256File, validateEntry, withinAllowedRoot, withinSchedulerRoot };
