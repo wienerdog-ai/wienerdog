@@ -164,36 +164,40 @@ The operative term here is **link identity**, and it is not a glossary term.
 ## Current state
 
 **Re-verification record.** Every executable claim in this section was run
-first-hand against the working tree at commit **`9188a1c`** on **2026-08-02**,
-and **re-verified there again on 2026-08-03** after `WP-symlink-lexical-fallback-removal`
-(PR #151) landed.
+first-hand against the working tree at commit **`8515eb1`** on **2026-08-03**,
+in a **dispatch-time reconciliation pass** run after this spec's sibling merged.
 
-> **Carry-forward note on line numbers.** The claims were first measured at
-> `18bc909`, where `src/` was byte-identical to `0f9ee08`. PR #151 then rewrote
-> `reverseSymlink`'s row 3 **line-count-neutrally** — `src/core/manifest.js` is
-> 1062 lines at both SHAs — so **no line number in this spec shifted**. Every
-> anchor below is stated against `9188a1c` and holds at `18bc909` too; what
-> changed is the row-3 *content*, and every surface carrying it moved with it
-> (see §1).
+> **Anchor history, and why the numbers below are the third set.** The claims
+> were first measured at `18bc909` (`src/` byte-identical to `0f9ee08`). PR #151
+> then rewrote `reverseSymlink`'s row 3 **line-count-neutrally**, so no anchor
+> moved and only the row-3 *content* changed. **`WP-managed-block-insertion-anchor`
+> then merged (PR #154, `336e67b`) and moved everything**:
+> `src/core/manifest.js` went **1062 → 1122 lines**, `reverseSymlink`'s definition
+> moved `:168 → :216`, and the symlink producer sites moved
+> `:434/:485/:491 → :439/:490/:496`.
+>
+> **The dispatch gate caught this, which is what it is for.** Every anchor below
+> was re-derived by locating its region **by content** at `8515eb1` — not by
+> arithmetic on the old numbers — and the reconciliation record is in this
+> spec's provenance block.
+>
+> **Nothing this spec designs was disturbed.** `reverseSymlink`'s function body is
+> **byte-identical** at `9188a1c`, `17a2bc5` and `8515eb1` (verified by extracting
+> and `cmp`-ing the function at all three), so Part A moved this spec's subject
+> without touching it. What Part A *did* change is the three **shared hunks**,
+> which are now half-shipped — see §5 and §6.
 
 **Nothing was found stale.** The whole design was
 additionally **implemented as a throwaway prototype and measured**, including an
 exhaustive twenty-cell sweep of every schema-accepted entry shape (Table S).
 The prototype was discarded.
 
-> **ANCHOR WARNING — every `src/core/manifest.js` and `src/adapters/shared.js`
-> line number below is stated PRE-PART-A.** `WP-managed-block-insertion-anchor`
-> lands first and inserts roughly thirty lines near `manifest.js:59` and edits
-> `shared.js:5`, so **anchors at or after `:59` in `manifest.js` shift downward**.
-> The implementer must re-locate every region **by content, not by line number**,
-> and the architect re-anchors this spec at the dispatch-time re-verification
-> that follows Part A's merge (`docs/runbooks/codex-review.md`, "Dispatch-time
-> re-verification"). This is the same arrangement WP-153 carried against WP-147
-> and for the same reason.
+### 1. `reverseSymlink` — `src/core/manifest.js:216-265` (JSDoc at `:207-215`)
 
-### 1. `reverseSymlink` — `src/core/manifest.js:168-217` (JSDoc at `:159-167`)
-
-Byte-identical at `9188a1c`, the five rows as they stand **after `WP-symlink-lexical-fallback-removal` (PR #151, `91b12e2`)**:
+Byte-identical at `8515eb1`, the five rows as they stand **after
+`WP-symlink-lexical-fallback-removal` (PR #151, `91b12e2`)** — and **unchanged by
+`WP-managed-block-insertion-anchor` (PR #154), which moved this function without
+editing a byte of it**:
 
 ```js
 function reverseSymlink(entry, dryRun, removed, skipped, removedSet, skillsRoots) {
@@ -255,22 +259,23 @@ residual this WP narrows**.
 > **Row 3 changed under this spec on 2026-08-02 and the change is folded in
 > here.** `WP-symlink-lexical-fallback-removal` (PR #151, `91b12e2`) dropped the
 > `fs.readlinkSync(L) === T` lexical fallback, leaving `sameResolvedDir` as the
-> sole proof. Every reference in this spec has been re-verified against `9188a1c`
+> sole proof. Every reference in this spec has been re-verified against `8515eb1`
 > and moved with it: this quote, Table A2 row 3, Table U, the Implementation-notes
 > bullet, V4 and Out of scope. **The change was strictly narrowing** — its own
-> **shipped code comment** (`src/core/manifest.js:186-193`) says *"Strictly
+> **shipped code comment** (`src/core/manifest.js:234-241`) says *"Strictly
 > narrowing: every input this now preserves was previously deleted"* — its commit
 > message carries the shorter *"every input now preserved was previously
 > deleted"* —
-> so it touches nothing this WP measures, and the suite it left behind is
-> `1903 / 1894 / 0`.
+> so it touches nothing this WP measures. **Suite at `8515eb1`:
+> `1913 / 1904 / 0`** — it was `1903 / 1894 / 0` before
+> `WP-managed-block-insertion-anchor` added its eleven test rows.
 
-`isSymlink` (`manifest.js:151-157`) is `fs.lstatSync(p).isSymbolicLink()` inside
+`isSymlink` (`manifest.js:199-205`) is `fs.lstatSync(p).isSymbolicLink()` inside
 a `try`, returning `false` on any throw. `sameResolvedDir`
-(`manifest.js:452-458`) is `realpathSync(a) === realpathSync(b)` inside a `try`,
+(`manifest.js:512-518`) is `realpathSync(a) === realpathSync(b)` inside a `try`,
 returning `false` on any throw — fail-closed by construction.
 
-### 2. The single call site — `src/core/manifest.js:817-828`
+### 2. The single call site — `src/core/manifest.js:877-888`
 
 ```js
       } else if (entry.kind === 'symlink') {
@@ -288,18 +293,18 @@ returning `false` on any throw — fail-closed by construction.
       }
 ```
 
-`skillsRoots` is built once at `manifest.js:620` as
+`skillsRoots` is built once at `manifest.js:680` as
 `[<claudeDir>/skills, <codexDir>/skills]`.
 
-**`grep -rn "reverseSymlink" src/` at `18bc909` returns exactly FIVE lines**,
+**`grep -rn "reverseSymlink" src/` at `8515eb1` returns exactly FIVE lines**,
 measured:
 
 ```text
-src/core/manifest.js:168   the definition
-src/core/manifest.js:818   the comment above the call
-src/core/manifest.js:828   the ONE production call
-src/core/manifest.js:1062  module.exports  ← WP-153's blessed implementer deviation
-src/adapters/shared.js:441 one prose mention in a comment
+src/core/manifest.js:216   the definition
+src/core/manifest.js:878   the comment above the call
+src/core/manifest.js:888   the ONE production call
+src/core/manifest.js:1122  module.exports  ← WP-153's blessed implementer deviation
+src/adapters/shared.js:446 one prose mention in a comment
 ```
 
 **There is no second reverser and no second production call site.**
@@ -311,7 +316,8 @@ src/adapters/shared.js:441 one prose mention in a comment
 > double-gate note formally blessed — *"`reverseSymlink` added to
 > `module.exports` … forced by the unreachable-through-`reverse()` case"*), which
 > is the fifth line; and the `shared.js` prose mention has moved from `:406` to
-> `:441`. `docs/specs/done/WP-153-…` is **not edited** — a `Done` spec describes
+> `:446` (it was `:441` until PR #154 moved it). `docs/specs/done/WP-153-…` is
+> **not edited** — a `Done` spec describes
 > the code it shipped at the moment it was written — but this spec must not
 > inherit its arithmetic, because **V5 asserts a count**. The export is what
 > makes B-T7 and B-T8's direct unit calls possible.
@@ -321,28 +327,28 @@ is **2** — the definition and the one call. V5 asserts that number.
 
 ### 3. The three producer sites — `src/adapters/shared.js`
 
-`grep -n "kind: 'symlink'" src/adapters/shared.js` at `18bc909` returns exactly
+`grep -n "kind: 'symlink'" src/adapters/shared.js` at `8515eb1` returns exactly
 three lines, all inside `applySkillLinks`'s `for (const name of names)` loop
-whose first two lines (`:416-417`) are
+whose first two lines (`:421-422`) are
 `const target = path.join(skillsDir, name);` /
 `const linkPath = path.join(targetSkillsDir, name);`:
 
 ```text
-434:        recordOnce(manifest, { kind: 'symlink', path: linkPath, target });
-485:      recordOnce(manifest, { kind: 'symlink', path: linkPath, target });
-491:        recordOnce(manifest, { kind: 'symlink', path: linkPath, target });
+439:        recordOnce(manifest, { kind: 'symlink', path: linkPath, target });
+490:      recordOnce(manifest, { kind: 'symlink', path: linkPath, target });
+496:        recordOnce(manifest, { kind: 'symlink', path: linkPath, target });
 ```
 
 | site | branch | reached when |
 |------|--------|--------------|
-| `:434` | **adopt** | a symlink already sits at `linkPath` and `fs.readlinkSync(linkPath) === target`; reported `unchanged` |
-| `:485` | **dryRun** | nothing at `linkPath` and `dryRun` is true; nothing is written |
-| `:491` | **create** | nothing at `linkPath`; `symlink(target, linkPath)` at `:490` has just succeeded |
+| `:439` | **adopt** | a symlink already sits at `linkPath` and `fs.readlinkSync(linkPath) === target`; reported `unchanged` |
+| `:490` | **dryRun** | nothing at `linkPath` and `dryRun` is true; nothing is written |
+| `:496` | **create** | nothing at `linkPath`; `symlink(target, linkPath)` at `:495` has just succeeded |
 
-The `else` of `:434` is WP-146's preserve arm (`:435-447`): a `wienerdog-*`
+The `else` of `:439` is WP-146's preserve arm (`:440-452`): a `wienerdog-*`
 symlink whose `readlinkSync` is **not** `target` is left untouched, records no
 entry, and calls `dropOwnedEntry(manifest, 'symlink', linkPath)`. **Not changed
-by this WP.** The `EPERM`/`EACCES` fallback below `:491` copies the directory and
+by this WP.** The `EPERM`/`EACCES` fallback below `:496` copies the directory and
 records a `copied-skill` entry — **also not changed.**
 
 **`recordOnce` NO-OPS on an existing entry** (`shared.js:47-52`):
@@ -362,10 +368,10 @@ ordinary re-sync of our own link never re-records it — the entry keeps the
 for the owner ledger's row 4a.
 
 **A dry-run manifest is never persisted** — `src/cli/sync.js:340` is
-`if (!dryRun) manifestMod.save(paths, manifest);` (verified at `18bc909`). The
-`:485` entry is a report, and `uninstall` never sees it.
+`if (!dryRun) manifestMod.save(paths, manifest);` (verified at `8515eb1`, unmoved). The
+`:490` entry is a report, and `uninstall` never sees it.
 
-### 4. The entry schema — `src/core/manifest.js:902-953`
+### 4. The entry schema — `src/core/manifest.js:965-1013`
 
 ```js
 const ENTRY_FIELD_TYPES = {
@@ -378,18 +384,21 @@ const ENTRY_FIELD_TYPES = {
 };
 ```
 
-`validateEntry` (`:932-953`) rejects an unknown `kind` and a missing/empty/
+`validateEntry` (`:992-1013`) rejects an unknown `kind` and a missing/empty/
 non-string `path`; for every **listed** field it enforces the type **only when
 the value is not `undefined`**, and extra keys are ignored (forward-compat).
-`reverse()` runs it **first**, before kind dispatch (`:658-665`), and a rejected
+`reverse()` runs it **first**, before kind dispatch (`:718-724`), and a rejected
 entry is `skipped` with a notice — which, **for a symlink, means the link is
 preserved**. That is the safe direction, and it is why this WP type-gates its
 three fields while Part A deliberately does not type-gate `anchorBefore` (for a
 managed block a rejected entry leaves the block installed).
 
-### 5. The module doc comment — `src/core/manifest.js:16-29` and `:45-48`
+### 5. The module doc comment — `src/core/manifest.js:17-29` and `:48-50`
 
-Two in-code mirrors of the entry shape:
+Two in-code mirrors of the entry shape. **Both are now HALF-SHIPPED**: Part A's
+`D6a` landed with PR #154, so `anchorBefore?` is already there and this WP
+**extends** the hunks rather than writing them fresh. The shipped bytes at
+`8515eb1`:
 
 ```text
  *   {kind:'symlink', path, target?}                 — a symlink we created;
@@ -401,22 +410,29 @@ Two in-code mirrors of the entry shape:
 ```text
  * @typedef {{kind: string, path: string, hash?: string, createdFile?: boolean,
  *            commands?: string[], unload?: string[], sepBefore?: string,
- *            sepAfter?: string}} ManifestEntry
+ *            sepAfter?: string, anchorBefore?: string}} ManifestEntry
 ```
 
-**Part A adds `anchorBefore?` to both before this WP lands.** This spec
-**extends** the same two hunks with `origin?`, `dev?` and `ino?`; it does not
-rewrite them and must not drop Part A's field.
+**`anchorBefore?` is SHIPPED — Part A's `D6a` landed in PR #154**, and the
+`managed-block` shape in the same comment block (`:21-29`) now documents it too.
+This spec **extends** these two hunks with `origin?`, `dev?` and `ino?` on the
+**`symlink`** shape; it does not rewrite them, and **`D6b` must not drop
+`anchorBefore`** — V8 asserts all four fields together for exactly that reason.
 
 ### 6. The adapters→core import direction, and what Part A leaves
 
-`src/adapters/shared.js:5` is `const { hashDir } = require('../core/manifest');`
-at `18bc909`; **after Part A it reads
-`const { hashDir, insertionAnchor } = require('../core/manifest');`**. This spec
-extends that same line with `linkIdentity`. Adapters may import from core; core
+`src/adapters/shared.js:5` reads, **as shipped at `8515eb1`**:
+
+```js
+const { hashDir, insertionAnchor } = require('../core/manifest');
+```
+
+Part A's `D7a` has landed. This spec's **`D7b` extends that same line** with
+`linkIdentity` — it does not rewrite it, and dropping `insertionAnchor` would
+break the merged Part A. V7 asserts all three names together. Adapters may import from core; core
 may never import from adapters.
 
-### 7. `reverseSchedulerEntry`'s options-seam precedent — `src/core/manifest.js:387-389`
+### 7. `reverseSchedulerEntry`'s options-seam precedent — `src/core/manifest.js:447-449`
 
 ```text
  *   once in reverse(); defaults keep the exported function directly callable.
@@ -427,7 +443,7 @@ function reverseSchedulerEntry(entry, dryRun, removed, skipped, removedSet, opts
 This is the in-tree precedent this WP copies for its identity seam: a trailing
 `opts = {}` whose default preserves production behaviour exactly.
 
-### 8. `fs.lstatSync(link, { bigint: true })` — measured at `18bc909`
+### 8. `fs.lstatSync(link, { bigint: true })` — measured at `18bc909`, re-run at `8515eb1`
 
 ```text
 identity of a fresh symlink:        {"dev":"16777231","ino":"273462079"}
@@ -444,11 +460,17 @@ is not JSON-serializable, so the manifest stores **decimal strings**.
 
 ### 9. The three shipped assertions this WP flips — measured, not predicted
 
-`npm test` at `18bc909` unmodified: **`tests 1901 / pass 1892 / fail 0`**. With
-this WP's design alone applied, **exactly three** assertions flip, all three
-`deepEqual`s in `tests/unit/shared-skill-links.test.js`, all three in Table F.
-(WP-147's T9 in `tests/unit/manifest.test.js` also flips under the *consolidated*
-design — that flip belongs entirely to **Part A** and will already have landed.)
+`npm test` at **`8515eb1`** unmodified: **`tests 1913 / pass 1904 / fail 0`**.
+(It was `1901 / 1892 / 0` when this section was first written at `18bc909`, and
+`1903 / 1894 / 0` at `17a2bc5`; Part A's eleven test rows account for the last
+step. **1913 / 1904 / 0 is this WP's baseline.**) With this WP's design alone
+applied, **exactly three** assertions flip, all three `deepEqual`s in
+`tests/unit/shared-skill-links.test.js`, all three in Table F.
+
+**Part A's flip has already landed and must not be re-counted**: WP-147's T9 in
+`tests/unit/manifest.test.js` now reads `assert.equal(forged, 'foo\n\n', …)` in
+`main`. It is **not** one of this WP's three; an implementer who sees it already
+flipped is seeing Part A's shipped work.
 
 ## Deliverables (permission boundary — touch ONLY these)
 
@@ -466,7 +488,7 @@ nothing records ships a branch no install reaches.
 | Action | Path | Notes |
 |--------|------|-------|
 | modify | src/core/manifest.js | **D3** — add `linkIdentity()` beside Part A's primitives and export it. **D4** — `reverseSymlink` gains a 7th parameter `opts = {}` (the identity seam — Exact contracts) and rows **4a** and **4b** per **Table A2**, between the existing rows 4 and 5; rows 1–5 are otherwise byte-identical and `reverse()`'s call site is **not** changed. **D5** — `ENTRY_FIELD_TYPES.symlink` becomes `{ target: 'string', origin: 'string', dev: 'string', ino: 'string' }`; **no other cell changes**, and in particular `managed-block` must not gain `anchorBefore` (Part A's Table P forbids it). **D6b** — the module doc comment and `@typedef ManifestEntry` gain `origin?`, `dev?`, `ino?` per **Table P**, **extending** Part A's `anchorBefore?` rather than replacing it. |
-| modify | src/adapters/shared.js | **D7b** — extend `:5` to `const { hashDir, insertionAnchor, linkIdentity } = require('../core/manifest');`. **Do not drop `insertionAnchor`** — Part A put it there. **D10** — the three `recordOnce(manifest, { kind: 'symlink', … })` sites (`:434`, `:485`, `:491`) record `origin` (and, at `:491` only, `dev`/`ino`) per **Table B**. `recordOnce` itself is **NOT modified and NOT replaced by an upsert** — the owner declined a backfill (2026-08-01). The WP-146 preserve arm, `dropOwnedEntry`, the `readlinkSync` comparison, the `EPERM` copy fallback and every notice string stay byte-identical, as does everything Part A touched in `applyManagedBlock`. |
+| modify | src/adapters/shared.js | **D7b** — extend `:5` to `const { hashDir, insertionAnchor, linkIdentity } = require('../core/manifest');`. **Do not drop `insertionAnchor`** — Part A put it there. **D10** — the three `recordOnce(manifest, { kind: 'symlink', … })` sites (`:439`, `:490`, `:496`) record `origin` (and, at `:496` only, `dev`/`ino`) per **Table B**. `recordOnce` itself is **NOT modified and NOT replaced by an upsert** — the owner declined a backfill (2026-08-01). The WP-146 preserve arm, `dropOwnedEntry`, the `readlinkSync` comparison, the `EPERM` copy fallback and every notice string stay byte-identical, as does everything Part A touched in `applyManagedBlock`. |
 | modify | tests/unit/manifest.test.js | **B-T1 … B-T5, B-T7, B-T8** — the exact set in the Test index. WP-153's shipped **T1–T3, T4a–T4c and T6** must pass **byte-unmodified** — that is WP-153's own canonical roster after `WP-symlink-lexical-fallback-removal` split T4 into T4a/T4b/T4c. They craft entries with no `origin`/`dev`/`ino`, so they exercise the legacy arm and are its regression fence. Part A's A-T1…A-T11 must also pass byte-unmodified. |
 | modify | tests/unit/shared-skill-links.test.js | **B-T6** — this is **an edit to three shipped `deepEqual` assertions** plus one new forward-side assertion. `:52-55`, `:191-194` and `:337-340` are the **Table F** rows; take the expected object for each from that table. The four WP-146 sync-side tests at `:345`, `:371`, `:387` and `:405` are **fenced — they must pass byte-unmodified**. |
 
@@ -507,8 +529,10 @@ against — an earlier revision kept the contract and the gate as separate
 transcriptions and they had already diverged by one trailing comment, which made
 a literal implementation of the contract fail the gate.
 
-Three edits distinguish it from the function at `9188a1c`, and nothing else
-changes: the `opts = {}` parameter, the `identityOf` binding, and rows **4a**
+Three edits distinguish it from the function at **`8515eb1`**, and nothing else
+changes. **The pin moved from `9188a1c` and the bytes did not**: the function is
+byte-identical at `9188a1c`, `17a2bc5` and `8515eb1` (extracted and `cmp`-ed at
+all three), so re-pinning is an anchor change, not a contract change: the `opts = {}` parameter, the `identityOf` binding, and rows **4a**
 and **4b** inserted immediately before the `// Row 5:` comment.
 
 <!-- EXPECTED-FUNCTION: reverseSymlink -->
@@ -705,13 +729,13 @@ an oversight.
 **Producer sites, per Table B:**
 
 ```js
-// :434  adopt — the link was already there.
+// :439  adopt — the link was already there.
 recordOnce(manifest, { kind: 'symlink', path: linkPath, target, origin: 'adopted' });
 
-// :485  dryRun — a report only; nothing is written and sync.js:340 never saves it.
+// :490  dryRun — a report only; nothing is written and sync.js:340 never saves it.
 recordOnce(manifest, { kind: 'symlink', path: linkPath, target, origin: 'created' });
 
-// :491  create — symlink(target, linkPath) has just succeeded. Write it out
+// :496  create — symlink(target, linkPath) has just succeeded. Write it out
 //       explicitly; do NOT spread a possibly-null identity into the literal.
 const id = linkIdentity(linkPath);
 const symlinkEntry = { kind: 'symlink', path: linkPath, target, origin: 'created' };
@@ -736,15 +760,15 @@ files. **Seven canonical tables** below — P, S, A2, B, N, F and U.
 
 | Field | Type on disk | Written by | Exact value | Read by | Absent ⇒ | Type-gated? |
 |-------|--------------|-----------|-------------|---------|----------|-------------|
-| `origin` | `string` — `'created'` or `'adopted'` | the three `recordOnce` sites | `'adopted'` at `:434`; `'created'` at `:485` and `:491` | row 4a | see **Table S** — it depends on the other fields | **YES** (`origin: 'string'`). A rejected entry means the **link is preserved**, the safe direction — the exact opposite of Part A's managed-block case. |
-| `dev` | `string` — decimal | `recordOnce` at `:491` **only** | `String(fs.lstatSync(link, {bigint:true}).dev)` | row 4b | see **Table S** | **YES** |
-| `ino` | `string` — decimal | `recordOnce` at `:491` **only** | `String(fs.lstatSync(link, {bigint:true}).ino)` | row 4b | see **Table S** | **YES** |
+| `origin` | `string` — `'created'` or `'adopted'` | the three `recordOnce` sites | `'adopted'` at `:439`; `'created'` at `:490` and `:496` | row 4a | see **Table S** — it depends on the other fields | **YES** (`origin: 'string'`). A rejected entry means the **link is preserved**, the safe direction — the exact opposite of Part A's managed-block case. |
+| `dev` | `string` — decimal | `recordOnce` at `:496` **only** | `String(fs.lstatSync(link, {bigint:true}).dev)` | row 4b | see **Table S** | **YES** |
+| `ino` | `string` — decimal | `recordOnce` at `:496` **only** | `String(fs.lstatSync(link, {bigint:true}).ino)` | row 4b | see **Table S** | **YES** |
 
 **Rules that govern the fields as a set, decided here:**
 
-- **S-1. `dev`/`ino` are recorded ONLY where we created the link** (`:491`). Not
-  at `:434` — we did not create it, and that is exactly what `origin: 'adopted'`
-  says — and not at `:485`, where nothing exists to `lstat` and the entry is
+- **S-1. `dev`/`ino` are recorded ONLY where we created the link** (`:496`). Not
+  at `:439` — we did not create it, and that is exactly what `origin: 'adopted'`
+  says — and not at `:490`, where nothing exists to `lstat` and the entry is
   never saved.
 - **S-2. When `linkIdentity()` returns `null`, record NO identity fields** —
   `origin: 'created'` alone. This is the **forward**-side "cannot establish
@@ -806,9 +830,9 @@ forgery or corruption only:
 | Shape | Written by | Outcome | Why |
 |-------|-----------|---------|-----|
 | absent / `none` | an install predating this WP | **removed** — base behaviour | the legacy arm; the upgrade-safety criterion (AC8a) |
-| `'created'` / `both` | `shared.js:491` when `linkIdentity` succeeded | row 4b decides | the mainline |
-| `'created'` / `none` | `shared.js:485` (dry run), or `:491` when `linkIdentity` returned `null` (S-2) | **removed** — base behaviour | identity was never establishable; never make an existing platform's uninstall incomplete |
-| `'adopted'` / `none` | `shared.js:434` | **preserved** (row 4a) | the link is the user's |
+| `'created'` / `both` | `shared.js:496` when `linkIdentity` succeeded | row 4b decides | the mainline |
+| `'created'` / `none` | `shared.js:490` (dry run), or `:496` when `linkIdentity` returned `null` (S-2) | **removed** — base behaviour | identity was never establishable; never make an existing platform's uninstall incomplete |
+| `'adopted'` / `none` | `shared.js:439` | **preserved** (row 4a) | the link is the user's |
 
 **The three semantic classes among the remaining sixteen**, each stated because
 each is a distinct decision, not an accident:
@@ -840,7 +864,7 @@ this spec is self-contained; **rows 4a and 4b are new.**
 | 2 | `typeof T !== 'string' \|\| T === ''` — **LEGACY** | none | `skipped` | `wienerdog: keeping <L> — not the Wienerdog skill link we recorded (replaced, or unverifiable)` | Ownership unprovable; owner-ruled 2026-08-01. |
 | 3 | `sameResolvedDir(L, T) === false` | none | `skipped` | same line | The link does not **prove** it resolves to the recorded source. `sameResolvedDir` is realpath-based and fail-closed by construction — an unresolvable side returns `false`, which lands here, in preserve. **There is deliberately no second, link-text comparison**: WP-153 shipped one and `WP-symlink-lexical-fallback-removal` dropped it, because raw-text equality is the weaker proof and the manifest is untrusted. |
 | 4 | **`OWNED(L)` is false** — basename not `wienerdog-*`, **or** `path.dirname(L)` does not realpath-equal a harness skills root | none | `skipped` | same line | A forged `(path, target)` pair is not delete authority (WP-153 gate round 4). |
-| **4a** | **`entry.origin === 'adopted'`** | none | `skipped` | same line | **NEW.** The link was already on disk when we first recorded it — the adopt branch (`shared.js:434`) sees a `wienerdog-*` link already pointing at our source and records it. It is the user's. Narrows honest-use case 2. |
+| **4a** | **`entry.origin === 'adopted'`** | none | `skipped` | same line | **NEW.** The link was already on disk when we first recorded it — the adopt branch (`shared.js:439`) sees a `wienerdog-*` link already pointing at our source and records it. It is the user's. Narrows honest-use case 2. |
 | **4b** | **`entry.dev` or `entry.ino` is a string** — and either the pair is **partial**, or `identityOf(L)` is `null`, or it does not equal `(entry.dev, entry.ino)` | none | `skipped` | same line | **NEW.** We recorded which file object we created; this is not it. A delete-and-recreate gets a new inode (measured, Current state §8), so a user's same-source replacement no longer passes for ours. Narrows honest-use case 1. A `null` identity is fail-closed by construction. **`(dev, ino)` is durable but not permanent, and recyclable.** The two directions are split across the two ledger sections: the *drift* half is a completeness cost, the *recycling* half is **equal to base** and is deliberately NOT priced (Codex round 7). Both pinned by B-T7. |
 | 5 | otherwise | `if (!dryRun) fs.unlinkSync(L)` | `removed` **and** `removedSet.add(L)` | none | In-namespace, under a harness skills root, resolves to the recorded source, **not adopted**, and **still the file object we created**. The only row that deletes. **Row 4b's check and this unlink are two syscalls, not one — see the TOCTOU note. This design is NOT claimed to be TOCTOU-free.** |
 
@@ -882,9 +906,9 @@ syscalls, and nothing binds them.**
 
 | Site | Branch | `kind`/`path`/`target` | `origin` | `dev`/`ino` |
 |------|--------|------------------------|----------|-------------|
-| `shared.js:434` | **adopt** | unchanged | **`'adopted'`** | **none** (we did not create it) |
-| `shared.js:485` | **dryRun** | unchanged | **`'created'`** | **none** (nothing exists to `lstat`; never saved — `sync.js:340`) |
-| `shared.js:491` | **create** | unchanged | **`'created'`** | **`linkIdentity(linkPath)`**, or **none** when it returns `null` (S-2) |
+| `shared.js:439` | **adopt** | unchanged | **`'adopted'`** | **none** (we did not create it) |
+| `shared.js:490` | **dryRun** | unchanged | **`'created'`** | **none** (nothing exists to `lstat`; never saved — `sync.js:340`) |
+| `shared.js:496` | **create** | unchanged | **`'created'`** | **`linkIdentity(linkPath)`**, or **none** when it returns `null` (S-2) |
 
 ### Table N — the strictly-negative posture (canonical)
 
@@ -916,9 +940,9 @@ state, all in `tests/unit/shared-skill-links.test.js`.
 
 | # | File:line | Test | Current expectation | **New expectation** | Why |
 |---|-----------|------|---------------------|---------------------|-----|
-| 1 | `:52-55` | `skill symlinked into the target dir with the default seam (POSIX)` | `assert.deepEqual(…, [{ kind: 'symlink', path: linkPath, target: coreSkill }])` | **Cannot stay a literal** — the entry now carries machine-specific `dev`/`ino`. Replace with: assert `kind`/`path`/`target`/`origin` equal `'symlink'`/`linkPath`/`coreSkill`/`'created'`, **and** assert `{ dev: entry.dev, ino: entry.ino }` deep-equals `linkIdentity(linkPath)`, **and** that it is non-null on POSIX. Get `linkIdentity` by extending the **existing** destructure at `:10` (`const { hashDir } = require('../../src/core/manifest');`); do not add a second `require` | This is the create branch (`:491`) and the **only** site that records identity. Asserting against the live `linkIdentity` rather than a hardcoded number is what makes the row portable; asserting non-null is what makes it non-vacuous. |
+| 1 | `:52-55` | `skill symlinked into the target dir with the default seam (POSIX)` | `assert.deepEqual(…, [{ kind: 'symlink', path: linkPath, target: coreSkill }])` | **Cannot stay a literal** — the entry now carries machine-specific `dev`/`ino`. Replace with: assert `kind`/`path`/`target`/`origin` equal `'symlink'`/`linkPath`/`coreSkill`/`'created'`, **and** assert `{ dev: entry.dev, ino: entry.ino }` deep-equals `linkIdentity(linkPath)`, **and** that it is non-null on POSIX. Get `linkIdentity` by extending the **existing** destructure at `:10` (`const { hashDir } = require('../../src/core/manifest');`); do not add a second `require` | This is the create branch (`:496`) and the **only** site that records identity. Asserting against the live `linkIdentity` rather than a hardcoded number is what makes the row portable; asserting non-null is what makes it non-vacuous. |
 | 2 | `:191-194` | `dry-run records a symlink entry and reports the change without writing` | `[{ kind: 'symlink', path: linkPath, target: path.join(skillsDir, 'wienerdog-setup') }]` | `[{ kind: 'symlink', path: linkPath, target: path.join(skillsDir, 'wienerdog-setup'), origin: 'created' }]` | Dry run writes nothing, so there is no link to `lstat` and no identity to record (Table B). The literal stays a literal. **`coreSkill` is NOT in scope** — `:181` destructures only `{ skillsDir, targetSkillsDir }`; build the target inline from `skillsDir`, as the shipped assertion already does. |
-| 3 | `:337-340` | `a pre-existing correct symlink is adopted into the manifest (recorded, reported unchanged)` | `[{ kind: 'symlink', path: linkPath, target: coreSkill }]` | `[{ kind: 'symlink', path: linkPath, target: coreSkill, origin: 'adopted' }]` | This is the adopt branch (`:434`). No identity is recorded (S-1) and `origin` is `'adopted'` — the two facts that make row 4a fire on uninstall. |
+| 3 | `:337-340` | `a pre-existing correct symlink is adopted into the manifest (recorded, reported unchanged)` | `[{ kind: 'symlink', path: linkPath, target: coreSkill }]` | `[{ kind: 'symlink', path: linkPath, target: coreSkill, origin: 'adopted' }]` | This is the adopt branch (`:439`). No identity is recorded (S-1) and `origin` is `'adopted'` — the two facts that make row 4a fire on uninstall. |
 
 ### Table U — the regions that must stay BYTE-IDENTICAL
 
@@ -972,6 +996,31 @@ excerpts, which are dedented and annotated.
 - [ ] Verification **V4**
 - [ ] **The owner cost ledger**, all five priced rows, **and** its
       *reclassified — equal to base* table
+
+**Table B (the three producer sites) — mirrors. REGISTERED IN FULL after a census
+found ELEVEN stale coordinates across them** (wd-reviewer, PR #156). The three
+sites are a contract with roughly ten mirrors, and three successive hand sweeps
+each updated only the subset they happened to grep — the reviewer's diagnosis is
+the lesson: *"both were visited and both were updated only as far as the first
+number on the line — the sweep was line-scoped, which is arithmetic-shaped, not
+content-shaped."* Every surface carrying a producer coordinate is named here so
+the next `src/` move relocates them mechanically:
+
+- [ ] Deliverables cell **D10** — carries all three coordinates
+- [ ] Exact contracts: the three `// :NNN` **code comments** inside the
+      producer-site fence. They sit in a fence, so they have no backticks — the
+      form every backtick-scoped sweep missed
+- [ ] **Table B** itself — the canonical row per site
+- [ ] **Table P**'s "Written by" column, one coordinate per field row, and
+      **rule S-1**, which names all three
+- [ ] **Table F** rows 1 and 3 — the create and the adopt site
+- [ ] **Table S**'s producer-valid shape table
+- [ ] **AC9** — all three, and they **wrap across two lines**, which is how two of
+      them survived a line-scoped pass
+- [ ] Current state §3 — the grep block and the per-site table
+- [ ] The EPERM-fallback prose and the dry-run report prose
+- [ ] **V11 resolves every one of them by content.** It is the only surface here
+      that cannot go stale silently — **re-run it instead of sweeping**
 
 **Table F (flipped assertions)** — mirrors:
 
@@ -1087,8 +1136,8 @@ a sequence, and names the implementation it reddens (ADR-0036 A1/A2).
 - [ ] **AC8b — narrowing only.** Every cell of Table S is `removed` at base;
       every cell that is `PRESERVED` after this WP is therefore a narrowing, and
       **no cell is a widening**.
-- [ ] **AC9.** Each of the **three** producer sites in Table B — `shared.js:434`,
-      `:485`, `:491` — records exactly what that table says, no more and no less
+- [ ] **AC9.** Each of the **three** producer sites in Table B — `shared.js:439`,
+      `:490`, `:496` — records exactly what that table says, no more and no less
       — B-T6, plus B-T2's `origin: 'adopted'` / no-identity assertion.
 - [ ] **AC10.** Table F's three assertions are updated and pass; **every other
       test in the repository passes byte-unmodified**, including WP-153's **T1–T3,
@@ -1259,7 +1308,7 @@ node /tmp/wd-specfence.js docs/specs/WP-symlink-authorship-identity.md \
   'MANDATED-SIGNATURE: reverseSymlink' > /tmp/wd-mand-sig.js
 node /tmp/wd-specfence.js docs/specs/WP-symlink-authorship-identity.md \
   'MANDATED-ROWS: reverseSymlink' > /tmp/wd-mand-rows.js
-git show 9188a1c:src/core/manifest.js > /tmp/wd-base-manifest.js
+git show 8515eb1:src/core/manifest.js > /tmp/wd-base-manifest.js
 node /tmp/wd-fnextract.js /tmp/wd-base-manifest.js reverseSymlink > /tmp/wd-base-symlink.js
 node -e '
 const fs = require("node:fs");
@@ -1415,6 +1464,12 @@ echo "V7 ok"
 # V8 — AC2: the two in-code doc mirrors carry ALL THREE new fields AND still carry
 #      Part A's `anchorBefore`. Uses the same helper Part A's V7 writes; it is
 #      reproduced here so this spec runs standalone.
+#      BASE DIRECTION, restated after PR #154: `anchorBefore` now PASSES at base
+#      because Part A shipped it, so the red signal comes from `origin`/`dev`/`ino`
+#      alone. Measured at 8515eb1: asserting `anchorBefore` on its own exits 0;
+#      asserting `origin dev ino anchorBefore` exits 1 with six MISSING lines, two
+#      per absent field. Keep all four names in the assertion — dropping
+#      `anchorBefore` would stop guarding Part A's shipped hunk.
 cat > /tmp/wd-docfields.js <<'DOCS'
 const fs = require('node:fs');
 const [file, ...fields] = process.argv.slice(2);
@@ -1432,6 +1487,215 @@ process.exit(bad);
 DOCS
 node /tmp/wd-docfields.js src/core/manifest.js origin dev ino anchorBefore && echo "V8 ok"
 
+# V11 — CITATION SCAN. Resolves every `src/` line number this spec is allowed to
+#   cite BY CONTENT, then flags any citation that resolves to nothing. It exists
+#   because a HAND sweep has now missed mirrors three times: each pass grepped the
+#   vocabulary it remembered (`shared.js:NNN`) and missed the form the spec
+#   actually uses most (a bare `` `:NNN` ``). After PR #154 that left `:491`
+#   pointing at `out.changed.push(linkPath)` while creation had moved to `:496`.
+#   **Re-run this instead of sweeping.** When it fails, fix the citation — or, if
+#   the code genuinely moved, fix the anchor and let it re-resolve.
+cat > /tmp/wd-citescan.js <<'CS'
+// V11 — CITATION SCAN. Resolves every src/ line number this spec may cite BY
+// CONTENT, per file, and fails on any citation that does not resolve against the
+// file it is attributed to.
+//
+// THREE DESIGN ROUNDS, each closing a demonstrated false negative:
+//   r1  exempted historical numbers GLOBALLY, so re-introducing a stale citation
+//       anywhere still passed. Exemptions became context-scoped.
+//   r2  scanned `:N` and file.js:N but not `// :N` — the fenced-comment form that
+//       had survived three hand sweeps. All forms are scanned now.
+//   r3  flattened every file's anchors into ONE set, so a citation qualified with
+//       the WRONG file passed (manifest.js:216-265 rewritten to
+//       shared.js:216-265 exited 0), and a non-source exempt integer could be
+//       reused as a src citation (shared.js:5 -> shared.js:10 exited 0). Grouped
+//       coordinates (:434/:485/:491) were not parsed at all.
+// Validation is now PER FILE, exemptions are per CONTEXT, and an anchor that does
+// not resolve exactly once fails the scan rather than silently widening it.
+const fs = require('node:fs');
+const spec = process.argv[2];
+const text = fs.readFileSync(spec, 'utf8');
+const LINES = text.split('\n');
+const FILES = {
+  'manifest.js': 'src/core/manifest.js',
+  'shared.js': 'src/adapters/shared.js',
+  'uninstall.js': 'src/cli/uninstall.js',
+  'sync.js': 'src/cli/sync.js',
+};
+const SRC = Object.fromEntries(Object.entries(FILES).map(([k, v]) => [k, fs.readFileSync(v, 'utf8').split('\n')]));
+
+let anchorFail = 0;
+// Resolve `needle` in `file`. `of` is how many times it is EXPECTED to occur; a
+// mismatch is ambiguity and fails the scan.
+const A = (file, needle, { nth = 1, of = 1 } = {}) => {
+  const hits = [];
+  SRC[file].forEach((l, i) => { if (l.includes(needle)) hits.push(i + 1); });
+  if (hits.length !== of) {
+    console.log(`  ANCHOR AMBIGUOUS: ${file} "${needle.slice(0, 46)}" found ${hits.length}x, expected ${of}`);
+    anchorFail++;
+    return -1;
+  }
+  return hits[nth - 1];
+};
+const closeOf = (file, start) => { for (let i = start; i < SRC[file].length; i++) if (SRC[file][i] === '}') return i + 1; return -1; };
+
+const rsDef = A('manifest.js', 'function reverseSymlink(');
+const roDef = A('shared.js', 'function recordOnce(');
+const P = (nth) => A('shared.js', "kind: 'symlink', path: linkPath, target", { nth, of: 3 });
+
+const ANCHORS = [
+  ['manifest.js', 'reverseSymlink definition', rsDef],
+  ['manifest.js', 'reverseSymlink close', closeOf('manifest.js', rsDef)],
+  ['manifest.js', 'reverseSymlink JSDoc open', A('manifest.js', "* Reverse a 'symlink' entry") - 1],
+  ['manifest.js', 'reverseSymlink JSDoc close', rsDef - 1],
+  ['manifest.js', 'row-3 comment head', A('manifest.js', '// Row 3: the link must PROVE')],
+  ['manifest.js', 'row-3 comment block start', A('manifest.js', '// sameResolvedDir is realpath-based')],
+  ['manifest.js', 'row-3 comment tail', A('manifest.js', 'Strictly narrowing: every input this now preserves')],
+  ['manifest.js', 'isSymlink open', A('manifest.js', 'function isSymlink(')],
+  ['manifest.js', 'isSymlink close', closeOf('manifest.js', A('manifest.js', 'function isSymlink('))],
+  ['manifest.js', 'sameResolvedDir open', A('manifest.js', 'function sameResolvedDir(')],
+  ['manifest.js', 'sameResolvedDir close', closeOf('manifest.js', A('manifest.js', 'function sameResolvedDir('))],
+  ['manifest.js', 'reverseCopiedSkill hash arm', A('manifest.js', "typeof entry.hash !== 'string' || hashDir(")],
+  ['manifest.js', 'reverseCopiedSkill hash arm end', A('manifest.js', "typeof entry.hash !== 'string' || hashDir(") + 3],
+  ['manifest.js', 'skillsRoots', A('manifest.js', 'const skillsRoots = [')],
+  ['manifest.js', 'reverse() symlink arm', A('manifest.js', "} else if (entry.kind === 'symlink') {")],
+  ['manifest.js', 'F30 comment in that arm', A('manifest.js', '// F30: validate the canonical PARENT')],
+  ['manifest.js', 'reverseSymlink call site', A('manifest.js', 'reverseSymlink(entry, dryRun, removed, skipped, removedSet, skillsRoots);')],
+  ['manifest.js', 'module doc: symlink shape', A('manifest.js', "{kind:'symlink', path, target?}", { nth: 1, of: 2 })],
+  ['manifest.js', 'module doc: managed-block shape', A('manifest.js', "{kind:'managed-block', path, createdFile:bool,")],
+  ['manifest.js', 'module doc: managed-block shape end', A('manifest.js', 'content that preceded them')],
+  ['manifest.js', '@typedef open', A('manifest.js', '@typedef {{kind: string')],
+  ['manifest.js', '@typedef close', A('manifest.js', 'sepAfter?: string, anchorBefore?: string}} ManifestEntry')],
+  ['manifest.js', 'ENTRY_FIELD_TYPES', A('manifest.js', 'const ENTRY_FIELD_TYPES = {')],
+  ['manifest.js', 'validateEntry open', A('manifest.js', 'function validateEntry(')],
+  ['manifest.js', 'validateEntry close', closeOf('manifest.js', A('manifest.js', 'function validateEntry('))],
+  ['manifest.js', 'pre-dispatch validate skip', A('manifest.js', 'const shape = validateEntry(entry);')],
+  ['manifest.js', 'pre-dispatch skip end', A('manifest.js', 'const shape = validateEntry(entry);') + 6],
+  ['manifest.js', 'reverseSchedulerEntry', A('manifest.js', 'function reverseSchedulerEntry(')],
+  ['manifest.js', 'reverseSchedulerEntry JSDoc tail', A('manifest.js', 'function reverseSchedulerEntry(') - 2],
+  ['manifest.js', 'module.exports', A('manifest.js', 'module.exports = {')],
+  ['shared.js', 'core import', A('shared.js', "require('../core/manifest')")],
+  ['shared.js', 'recordOnce open', roDef],
+  ['shared.js', 'recordOnce close', closeOf('shared.js', roDef)],
+  ['shared.js', 'recordOnce exists-check', A('shared.js', 'const exists = manifest.entries.some(')],
+  ['shared.js', 'recordOnce push line', A('shared.js', 'if (!exists) manifest.entries.push(entry);')],
+  ['shared.js', 'loop head: target', A('shared.js', 'const target = path.join(skillsDir, name);')],
+  ['shared.js', 'loop head: linkPath', A('shared.js', 'const linkPath = path.join(targetSkillsDir, name);')],
+  ['shared.js', 'producer: adopt', P(1)],
+  ['shared.js', 'producer: dryRun', P(2)],
+  ['shared.js', 'producer: create', P(3)],
+  ['shared.js', 'symlink() call', A('shared.js', 'symlink(target, linkPath);')],
+  ['shared.js', 'WP-146 preserve arm open', A('shared.js', '// A wienerdog-* symlink whose target is NOT our core skill source') - 1],
+  ['shared.js', 'WP-146 preserve arm close', A('shared.js', 'left foreign symlink untouched') + 2],
+  ['shared.js', 'prose mention of reverseSymlink', A('shared.js', 'reverseSymlink (which unlinks any symlink')],
+  ['uninstall.js', 'manifest refusal', A('uninstall.js', 'if (!fileExists(paths.manifest)) {')],
+  ['uninstall.js', 'manifest refusal close', A('uninstall.js', 'if (!fileExists(paths.manifest)) {') + 4],
+  ['sync.js', 'save gated on !dryRun', A('sync.js', 'if (!dryRun) manifestMod.save(paths, manifest)')],
+];
+
+// PER-FILE valid sets. A citation qualified with a file is checked ONLY here.
+const valid = {};
+for (const [f, , ln] of ANCHORS) (valid[f] ||= new Set()).add(ln);
+const anyValid = new Set(Object.values(valid).flatMap((s) => [...s]));
+
+// Context, not integers. A citation is exempt only when its own neighbourhood
+// says what it is: a record that a number MOVED, or a pointer into a test file
+// or another spec.
+const HISTORICAL = /→|->|went stale|moved from|until PR|After PR|it was `|rewritten to|false negative|re-parsed|re-opened/;
+// The scan's OWN scaffolding quotes stale coordinates on purpose — the four red
+// controls are built from them. Exempt the scaffolding, or the gate fails on the
+// fixtures that prove it works.
+const SCAFFOLD = /wd-c\.md|wd-citescan|V11 CONTROL/;
+// This scan is EMBEDDED IN THE SPEC IT SCANS. Its own source quotes stale
+// coordinates on purpose (the falsification record, the red-control fixtures), so
+// the heredoc that carries it is skipped wholesale. Regex-matching its comment
+// lines one by one was tried and is whack-a-mole.
+const SELF = (() => {
+  const a = LINES.findIndex((l) => l.includes("cat > /tmp/wd-citescan.js <<'CS'"));
+  if (a < 0) return () => false;
+  const b = LINES.findIndex((l, i) => i > a && l === 'CS');
+  return (i) => i > a && i < b;
+})();
+const NON_SOURCE = /\.test\.js|tests\/unit|docs\/specs|WP-153|WP-147|shared-skill-links|manifest\.test/;
+// 8 lines back: a table's preamble names its file that far above its rows
+// (Table F does, at 4). Wider than the citation's own line, tight enough that
+// naming a file still means the neighbourhood is about that file.
+const ctx = (i) => LINES.slice(Math.max(0, i - 8), i + 1).join('\n');
+
+let bad = 0, checked = 0, unbound = 0, grouped = 0;
+const fails = [];
+// FOUR forms. The grouped one is last and consumes the whole run.
+// FIVE forms. The QUALIFIED SLASH-GROUP must come first and consume the whole
+// run: matching `shared.js:439` first left `:216/:496` behind as an UNQUALIFIED
+// group, which was union-checked — so `shared.js:439/:216/:496` passed because
+// 216 is a manifest.js anchor. That recreated the cross-file false negative for
+// grouped syntax (measured). A filename qualifies EVERY coordinate in its run.
+const RE = new RegExp([
+  String.raw`(?<qgfile>manifest|shared|uninstall|sync)\.js:(?<qgroup>\d+(?:\/:\d+)+)`,
+  String.raw`(?<qfile>manifest|shared|uninstall|sync)\.js:(?<qa>\d+)(?:-(?<qb>\d+))?`,
+  String.raw`\`:(?<ba>\d+)(?:-(?<bb>\d+))?\``,
+  String.raw`\/\/\s*:(?<cc>\d+)`,
+  String.raw`(?<ugroup>:\d+(?:\/:\d+)+)`,
+].join('|'), 'g');
+for (const m of text.matchAll(RE)) {
+  const idx = text.slice(0, m.index).split('\n').length - 1;
+  const c = ctx(idx);
+  const g = m.groups;
+  let file = null, nums;
+  if (g.qgfile) { file = g.qgfile + '.js'; nums = g.qgroup.match(/\d+/g).map(Number); grouped++; }
+  else if (g.qfile) { file = g.qfile + '.js'; nums = [g.qa, g.qb].filter(Boolean).map(Number); }
+  else if (g.ugroup) { nums = g.ugroup.match(/\d+/g).map(Number); grouped++; }
+  else nums = [g.ba, g.bb, g.cc].filter(Boolean).map(Number);
+  // Unqualified citations are NOT bound by proximity. Guessing the file from the
+  // neighbourhood was tried and mis-binds: the dry-run producer comment mentions
+  // sync.js:340 on its own line, so `// :490` bound to sync.js and failed
+  // spuriously. They are checked against the union instead, and the count is
+  // reported so the residual is visible rather than implied.
+  for (const n of nums) {
+    checked++;
+    if (SELF(idx)) continue;
+    if (HISTORICAL.test(LINES[idx]) || SCAFFOLD.test(LINES[idx])) continue;
+    // A citation QUALIFIED with a src filename is a src citation by
+    // construction — the non-source exemption must not reach it.
+    if (!file && NON_SOURCE.test(c)) continue;
+    if (file && valid[file]) { if (valid[file].has(n)) continue; }
+    else { unbound++; if (anyValid.has(n)) continue; }
+    bad++;
+    fails.push(`  UNRESOLVED ${file || '(unqualified)'}:${n}  at spec line ${idx + 1}`);
+  }
+}
+console.log(`  anchors resolved: ${ANCHORS.length}   citations checked: ${checked}   grouped runs: ${grouped}   unbound: ${unbound}`);
+for (const f of fails) console.log(f);
+if (anchorFail) console.log(`  ${anchorFail} anchor(s) failed to resolve unambiguously`);
+if (bad || anchorFail) { console.log(`V11 BROKEN — ${bad} citation(s) + ${anchorFail} anchor(s)`); process.exit(1); }
+console.log('V11 ok (every src/ citation resolves, per file, to a content-anchored line)');
+CS
+node /tmp/wd-citescan.js docs/specs/WP-symlink-authorship-identity.md
+
+# V11 RED CONTROLS — four, permanent. Each is a false negative a previous version
+#   of this scan demonstrably had. A gate that has been redesigned three times
+#   ships its falsification record as executable fixtures, not as prose.
+for c in cross-file exempt-reuse grouped qualified-group fenced-comment; do
+  cp docs/specs/WP-symlink-authorship-identity.md /tmp/wd-c.md
+  case $c in
+    cross-file)      # a citation qualified with the WRONG file
+      node -e 'const f=require("node:fs"),p="/tmp/wd-c.md";f.writeFileSync(p,f.readFileSync(p,"utf8").replace("src/core/manifest.js:216-265","src/adapters/shared.js:216-265"))' ;;
+    exempt-reuse)    # a src citation reusing a number that is exempt elsewhere
+      node -e 'const f=require("node:fs"),p="/tmp/wd-c.md";f.writeFileSync(p,f.readFileSync(p,"utf8").replace("shared.js:5","shared.js:10"))' ;;
+    grouped)         # a stale coordinate inside a slash-grouped run, operative context
+      node -e 'const f=require("node:fs"),p="/tmp/wd-c.md";f.writeFileSync(p,f.readFileSync(p,"utf8").replace("`shared.js:439`,\n      `:490`, `:496`","`:439/:490/:491`"))' ;;
+    qualified-group) # a FILENAME-qualified slash run whose TAIL names another
+                     # file's anchor — the tails used to be parsed as a separate
+                     # unqualified group and union-checked
+      node -e 'const f=require("node:fs"),p="/tmp/wd-c.md";f.writeFileSync(p,f.readFileSync(p,"utf8").replace("`shared.js:439`","`shared.js:439/:216/:496`"))' ;;
+    fenced-comment)  # a stale `// :NNN` inside a code fence
+      node -e 'const f=require("node:fs"),p="/tmp/wd-c.md";f.writeFileSync(p,f.readFileSync(p,"utf8").replace("// :490  dryRun","// :485  dryRun"))' ;;
+  esac
+  node /tmp/wd-citescan.js /tmp/wd-c.md >/dev/null 2>&1 \
+    && { echo "V11 CONTROL BROKEN: $c was not caught"; exit 1; } || echo "  control ok: $c caught"
+done
+echo "V11 controls ok (5 false negatives all reproduce as failures)"
+
 # V9 — lint.
 npm run lint
 ```
@@ -1447,7 +1711,7 @@ reconstruction. **V5's `grep -c 'reverseSymlink(' src/core/manifest.js`
 is `2` today and must stay `2`** — the definition and the one production call.
 Do not confuse that with the **five** *unparenthesized* textual occurrences of
 `reverseSymlink` across `src/` (Current state §2), which include the comment above
-the call, the `module.exports` line and a prose mention in `shared.js:441`.
+the call, the `module.exports` line and a prose mention in `shared.js:446`.
 **The guards are tripwires; V1 and V2 are the load-bearing checks** —
 they are not AST-aware and cannot tell reachable code from code after a `return`
 (**R8**, routed to `WP-grep-gate-helper`).
@@ -1518,7 +1782,7 @@ prices.
 
 | Row | What it buys | What it costs | How narrow the cost is | Pinned by |
 |-----|--------------|---------------|------------------------|-----------|
-| **4a** (adopted ⇒ preserve) | narrows honest-use **case 2**: a link the user created before we synced is no longer deleted | a link **we** created is left behind when its manifest entry was lost and a later `sync` re-adopted it | `recordOnce` no-ops when an entry exists (`shared.js:50-51`), so an ordinary re-sync never re-records; and `uninstall` refuses outright without a manifest (`src/cli/uninstall.js:43-46`). It needs: manifest deleted or reset → reinstall → sync → uninstall | B-T2 |
+| **4a** (adopted ⇒ preserve) | narrows honest-use **case 2**: a link the user created before we synced is no longer deleted | a link **we** created is left behind when its manifest entry was lost and a later `sync` re-adopted it | `recordOnce` no-ops when an entry exists (`shared.js:50-51`), so an ordinary re-sync never re-records; and `uninstall` refuses outright without a manifest (`src/cli/uninstall.js:43-47`). It needs: manifest deleted or reset → reinstall → sync → uninstall | B-T2 |
 | **4b** (identity must match) | narrows honest-use **case 1**: a user's same-source replacement is no longer deleted | **durability drift** — a backup/restore, volume remount, home migration, container rebuild or network filesystem changes `dev`/`ino` for a link nobody touched, which is then **left behind** where base removed it. **This row prices the HONEST-reachable half only**; a pair that was never correct is the corruption-only row below (Codex round 7) | the fail-closed direction; never loses data | B-T7 (a)–(c) |
 | **the partial-pair leftover** (new in round 3) | nothing — it is the fail-closed reading of a shape no branch writes | an entry carrying **exactly one** of `dev`/`ino` **preserves** a link base would delete | **not reachable from any producer site** (Table S) — it needs a hand-edited or corrupted manifest. It is a cost the ledger owes the owner because the ledger claims to be complete, not because a user will hit it | B-T4's two partial rows |
 | **a schema-valid WRONG identity pair** (new in round 7) | nothing — it is the same fail-closed arm as 4b, reached by a manifest that was never correct rather than by the world changing | an entry whose `dev`/`ino` are both strings but **do not match the live link** — including the case where only one of the two is wrong — **preserves** a link base removes | **corruption- or forgery-only**: no producer site can emit a wrong pair, and an honest pair that *becomes* wrong is 4b's durability row instead. Measured, base vs this WP, on three variants (both wrong; `ino` wrong only; `dev` wrong only): base **removes** all three, this WP **preserves** all three; both controls (honest pair, no fields at all) are **removed** by both | **B-T4**'s both-wrong case, which asserts the base contrast |
@@ -1561,7 +1825,7 @@ misattributed ADR quote with an equally unsupported universal claim (Codex round
 
 - **What is true.** Several shipped reverser arms **do** fail closed on an
   unprovable ownership proof, and they are the arms this WP extends:
-  `reverseCopiedSkill`'s hash arm (`manifest.js:528-531` —
+  `reverseCopiedSkill`'s hash arm (`manifest.js:588-591` —
   `if (typeof entry.hash !== 'string' || hashDir(entry.path) !== entry.hash)`, so a
   non-string **or** mismatching `hash` preserves), WP-153's Table A **row 2** (a target-less entry
   preserves) and **row 4** (`OWNED(L)` false preserves), WP-144's
@@ -1615,6 +1879,36 @@ They are registered in the Mirrored Surface Checklist for exactly this reason.
 | **R5** | **Adopted-link leftover** — row 4a's half of the ledger | one symlink per core skill, in the harness skills dir, only after a manifest-loss reinstall | B-T2 pins the *behaviour*; the *cost* is what the owner rules on | **blocked on the owner ruling** |
 | **R6** | **`reverseCopiedSkill` has the same authorship gap** — its `hash` is read from the same untrusted file and proves content, not authorship | out of scope here; a `copied-skill` is the `EPERM`/`EACCES` fallback shape, not the mainline | none | a future WP, not drafted |
 | **R7** | **The verify→unlink race.** Row 4b's `identityOf(L)` and row 5's `fs.unlinkSync(L)` are separate syscalls | needs **arbitrary same-user native code** — outside the threat model per `docs/THREAT-MODEL.md`'s A12 posture — and such an actor can delete the link directly. **Only ever narrows against base** | **B-T8** | **not routed and not claimed closed.** Node exposes no atomic compare-and-unlink; ADR-0028's disposition for the scheduler's reopen-based check. **Listed in the ledger under *reclassified — equal to base*, deliberately NOT as a cost** — base removes the same replacement with no race required |
+
+**R11 — V11's own falsification record, kept because it took three rounds.** The
+citation scan closed a class the hand sweeps could not, and it was wrong three
+times first; each version was defeated by a *measured* case, not an argued one:
+
+| round | the false negative | closed by |
+|---|---|---|
+| 1 | historical numbers exempted **by integer**, so re-introducing a stale citation anywhere passed | exemption became **context**-scoped |
+| 2 | `` `:N` `` and `file.js:N` scanned, `// :N` inside a fence not — the one form that had survived three hand sweeps | all forms scanned |
+| 3 | every file's anchors flattened into **one** set, so `manifest.js:216-265` rewritten to `shared.js:216-265` passed, and an exempt test-file integer could be reused as a src citation | **per-file** validation; qualified citations never take the non-source exemption |
+| 4 | a filename-qualified slash run had its **tail** re-parsed as a separate unqualified group, so `shared.js:439/:216/:496` passed — 216 is a `manifest.js` anchor. The same cross-file hole, re-opened by grouped syntax | the qualified slash-run is matched **first** and consumes the whole run; the filename qualifies **every** coordinate in it |
+
+Two further defects surfaced while fixing round 3, both invisible to inspection
+and caught only by running the controls: the per-file map was keyed `'shared.js'`
+while the parser produced `'shared'`, so **per-file validation silently fell back
+to the global set and was never active**; and binding an unqualified citation to
+the nearest filename in its neighbourhood mis-bound `// :490` to `sync.js`,
+because that comment names `sync.js:340` on its own line.
+
+**All six slash-groups in this spec today are UNQUALIFIED** (they sit in drift
+records and in the scan's own scaffolding), so round 4's hole was latent rather
+than live — the control makes it stay closed if a qualified group is ever written.
+
+**Residual, declared:** an **unqualified** citation (`` `:N` ``, `// :N`, or an
+unqualified slash run) is
+checked against the union of all anchors, so one whose number collides with a
+different file's anchor is not caught. Qualified citations are exact. The scan
+reports its unqualified count every run so the exposure is visible rather than
+implied.
+
 | **R8** | **The source guards are not AST-aware.** They strip comments and reject duplicate definitions, but cannot tell reachable code from code after a `return` | the guards are **tripwires**; V1/V2 are the load-bearing checks | the red mutations in Verification steps | **`WP-grep-gate-helper`** — already routed by WP-147; this spec does not re-route it |
 | **R9** | **The partial-pair leftover** — see the ledger row of the same name | not reachable from any producer site | B-T4's two partial rows | a ledger cost |
 | **R10** | **A schema-valid wrong identity pair.** An entry whose `dev`/`ino` are both strings but do not match the live link — including one-of-two wrong — **preserves** a link base removes | corruption- or forgery-only; an honest pair that *becomes* wrong is 4b's durability row instead. Measured: base removes all three variants, this WP preserves all three | B-T4's three both-wrong rows, which assert the base contrast | a ledger cost |
@@ -1641,8 +1935,11 @@ lands; V1/V2 remain the load-bearing behavioural checks.
    `fix(uninstall): prove a skill symlink's authorship before unlinking it (WP-symlink-authorship-identity)`.
 3. PR template filled, including "Decisions made" (or "none") and `Generated-by:`.
 4. This spec's `status:` flipped to `In-Review` in the same PR.
-5. **`WP-managed-block-insertion-anchor` is merged**, and this spec's
-   `src/` anchors have been re-verified against the post-Part-A tree.
+5. **`WP-managed-block-insertion-anchor` is `Done`** — merged as PR #154
+   (`336e67b`) and filed in `docs/specs/done/` by PR #155 (`8515eb1`). **This
+   precondition is SATISFIED**, and the post-Part-A anchor re-verification it
+   required was carried out in the dispatch-time reconciliation pass recorded in
+   this spec's provenance block. Nothing here waits on Part A any longer.
 6. **The owner ruling above is recorded here.** This spec does not move to
    `Ready` without it, and no implementer starts without `Ready`.
 
@@ -1654,6 +1951,27 @@ lands; V1/V2 remain the load-bearing behavioural checks.
 > `docs/specs/logbook/2026-08-02-forward-time-ownership-provenance-split.md`.
 > WP-153's four routing mentions of the retired slug are left unedited as inert
 > `Done`-spec records.
+>
+> **2026-08-03 — DISPATCH-TIME RECONCILIATION against `8515eb1`, run because the
+> gate blocked dispatch.** `WP-managed-block-insertion-anchor` merged (PR #154,
+> `336e67b`) and moved `src/` under this spec: `manifest.js` 1062 → 1122 lines,
+> `reverseSymlink` `:168` → `:216`, the symlink producer sites
+> `:434/:485/:491` → `:439/:490/:496`. **Every anchor in this spec was re-derived
+> by content at `8515eb1`**, never by arithmetic. Also re-stated: the suite
+> baseline (`1913 / 1904 / 0`), the three **shared hunks** — which are now
+> half-shipped, so `D6b`/`D7b` extend Part A's landed text rather than writing it
+> — V4's base pin (`9188a1c` → `8515eb1`), V8's base direction (`anchorBefore`
+> now passes at base; the red signal is `origin`/`dev`/`ino`), and the
+> Definition-of-done precondition (Part A is `Done`; it is satisfied).
+>
+> **No design, ledger row or ruled disposition was touched.** The reconciliation
+> is anchors and current-state only. The load-bearing check that permits that
+> claim: **`reverseSymlink`'s function body is byte-identical at `9188a1c`,
+> `17a2bc5` and `8515eb1`** — extracted and `cmp`-ed at all three — so Part A
+> moved this spec's subject without editing it. Re-run from this spec after
+> reconciliation: V4 self-check green, V4 red, inside-span red, V4z 31/14;
+> V5's `reverseSymlink(` count still 2; V6's two schema cells still pre-Part-B
+> (and Part A correctly did **not** type-gate `anchorBefore`).
 >
 > **Design evidence carried forward, all measured at `18bc909` (`src/` identical
 > to `0f9ee08`):** the full suite baseline (`1901 / 1892 / 0`), the three flipped
