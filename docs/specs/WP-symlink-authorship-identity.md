@@ -1496,120 +1496,188 @@ node /tmp/wd-docfields.js src/core/manifest.js origin dev ino anchorBefore && ec
 #   **Re-run this instead of sweeping.** When it fails, fix the citation — or, if
 #   the code genuinely moved, fix the anchor and let it re-resolve.
 cat > /tmp/wd-citescan.js <<'CS'
-// V11 — CITATION SCAN. Resolves every src/ line number this spec is allowed to
-// cite BY CONTENT against the tree, then flags any src/ citation in the spec that
-// is not on that list. Ships in the spec so the next reconciliation re-runs it
-// instead of sweeping by hand.
+// V11 — CITATION SCAN. Resolves every src/ line number this spec may cite BY
+// CONTENT, per file, and fails on any citation that does not resolve against the
+// file it is attributed to.
+//
+// THREE DESIGN ROUNDS, each closing a demonstrated false negative:
+//   r1  exempted historical numbers GLOBALLY, so re-introducing a stale citation
+//       anywhere still passed. Exemptions became context-scoped.
+//   r2  scanned `:N` and file.js:N but not `// :N` — the fenced-comment form that
+//       had survived three hand sweeps. All forms are scanned now.
+//   r3  flattened every file's anchors into ONE set, so a citation qualified with
+//       the WRONG file passed (manifest.js:216-265 rewritten to
+//       shared.js:216-265 exited 0), and a non-source exempt integer could be
+//       reused as a src citation (shared.js:5 -> shared.js:10 exited 0). Grouped
+//       coordinates (:434/:485/:491) were not parsed at all.
+// Validation is now PER FILE, exemptions are per CONTEXT, and an anchor that does
+// not resolve exactly once fails the scan rather than silently widening it.
 const fs = require('node:fs');
 const spec = process.argv[2];
 const text = fs.readFileSync(spec, 'utf8');
-const F = {
-  'manifest.js': fs.readFileSync('src/core/manifest.js', 'utf8').split('\n'),
-  'shared.js': fs.readFileSync('src/adapters/shared.js', 'utf8').split('\n'),
-  'uninstall.js': fs.readFileSync('src/cli/uninstall.js', 'utf8').split('\n'),
-  'sync.js': fs.readFileSync('src/cli/sync.js', 'utf8').split('\n'),
+const LINES = text.split('\n');
+const FILES = {
+  'manifest.js': 'src/core/manifest.js',
+  'shared.js': 'src/adapters/shared.js',
+  'uninstall.js': 'src/cli/uninstall.js',
+  'sync.js': 'src/cli/sync.js',
 };
-const at = (f, needle, nth = 1) => {
-  let seen = 0;
-  for (let i = 0; i < F[f].length; i++) {
-    if (F[f][i].includes(needle)) { seen++; if (seen === nth) return i + 1; }
-  }
-  return -1;
-};
-const closeOf = (f, start) => { for (let i = start; i < F[f].length; i++) if (F[f][i] === '}') return i + 1; return -1; };
+const SRC = Object.fromEntries(Object.entries(FILES).map(([k, v]) => [k, fs.readFileSync(v, 'utf8').split('\n')]));
 
-// The anchor table: every src/ location this spec may cite, resolved by CONTENT.
-const rsDef = at('manifest.js', 'function reverseSymlink(');
+let anchorFail = 0;
+// Resolve `needle` in `file`. `of` is how many times it is EXPECTED to occur; a
+// mismatch is ambiguity and fails the scan.
+const A = (file, needle, { nth = 1, of = 1 } = {}) => {
+  const hits = [];
+  SRC[file].forEach((l, i) => { if (l.includes(needle)) hits.push(i + 1); });
+  if (hits.length !== of) {
+    console.log(`  ANCHOR AMBIGUOUS: ${file} "${needle.slice(0, 46)}" found ${hits.length}x, expected ${of}`);
+    anchorFail++;
+    return -1;
+  }
+  return hits[nth - 1];
+};
+const closeOf = (file, start) => { for (let i = start; i < SRC[file].length; i++) if (SRC[file][i] === '}') return i + 1; return -1; };
+
+const rsDef = A('manifest.js', 'function reverseSymlink(');
+const roDef = A('shared.js', 'function recordOnce(');
+const P = (nth) => A('shared.js', "kind: 'symlink', path: linkPath, target", { nth, of: 3 });
+
 const ANCHORS = [
   ['manifest.js', 'reverseSymlink definition', rsDef],
   ['manifest.js', 'reverseSymlink close', closeOf('manifest.js', rsDef)],
-  ['manifest.js', 'reverseSymlink JSDoc open', at('manifest.js', '* Reverse a \'symlink\' entry') - 1],
-  ['manifest.js', 'row-3 comment head', at('manifest.js', '// Row 3: the link must PROVE')],
-  ['manifest.js', 'row-3 comment tail', at('manifest.js', 'Strictly narrowing: every input this now preserves')],
-  ['manifest.js', 'isSymlink open', at('manifest.js', 'function isSymlink(')],
-  ['manifest.js', 'isSymlink close', closeOf('manifest.js', at('manifest.js', 'function isSymlink('))],
-  ['manifest.js', 'sameResolvedDir open', at('manifest.js', 'function sameResolvedDir(')],
-  ['manifest.js', 'sameResolvedDir close', closeOf('manifest.js', at('manifest.js', 'function sameResolvedDir('))],
-  ['manifest.js', 'reverseCopiedSkill hash arm', at('manifest.js', "typeof entry.hash !== 'string' || hashDir(")],
-  ['manifest.js', 'skillsRoots', at('manifest.js', 'const skillsRoots = [')],
-  ['manifest.js', 'reverse() symlink arm', at('manifest.js', "} else if (entry.kind === 'symlink') {")],
-  ['manifest.js', 'F30 comment in that arm', at('manifest.js', '// F30: validate the canonical PARENT')],
-  ['manifest.js', 'reverseSymlink call site', at('manifest.js', 'reverseSymlink(entry, dryRun, removed, skipped, removedSet, skillsRoots);')],
-  ['manifest.js', 'module doc: symlink shape', at('manifest.js', "{kind:'symlink', path, target?}")],
-  ['manifest.js', 'module doc: managed-block shape', at('manifest.js', "{kind:'managed-block', path, createdFile:bool,")],
-  ['manifest.js', '@typedef open', at('manifest.js', '@typedef {{kind: string')],
-  ['manifest.js', 'ENTRY_FIELD_TYPES', at('manifest.js', 'const ENTRY_FIELD_TYPES = {')],
-  ['manifest.js', 'validateEntry open', at('manifest.js', 'function validateEntry(')],
-  ['manifest.js', 'validateEntry close', closeOf('manifest.js', at('manifest.js', 'function validateEntry('))],
-  ['manifest.js', 'pre-dispatch validate skip', at('manifest.js', 'const shape = validateEntry(entry);')],
-  ['manifest.js', 'reverseSchedulerEntry', at('manifest.js', 'function reverseSchedulerEntry(')],
-  ['manifest.js', 'module.exports', at('manifest.js', 'module.exports = {')],
-  ['shared.js', 'core import', at('shared.js', "require('../core/manifest')")],
-  ['shared.js', 'recordOnce open', at('shared.js', 'function recordOnce(')],
-  ['shared.js', 'recordOnce close', closeOf('shared.js', at('shared.js', 'function recordOnce('))],
-  ['shared.js', 'recordOnce exists-check', at('shared.js', 'const exists = manifest.entries.some(')],
-  ['shared.js', 'loop head: target', at('shared.js', 'const target = path.join(skillsDir, name);')],
-  ['shared.js', 'loop head: linkPath', at('shared.js', 'const linkPath = path.join(targetSkillsDir, name);')],
-  ['shared.js', 'producer: adopt', at('shared.js', "kind: 'symlink', path: linkPath, target", 1)],
-  ['shared.js', 'producer: dryRun', at('shared.js', "kind: 'symlink', path: linkPath, target", 2)],
-  ['shared.js', 'producer: create', at('shared.js', "kind: 'symlink', path: linkPath, target", 3)],
-  ['shared.js', 'symlink() call', at('shared.js', 'symlink(target, linkPath);')],
-  ['shared.js', 'WP-146 preserve arm open', at('shared.js', '// A wienerdog-* symlink whose target is NOT our core skill source') - 1],
-  ['shared.js', 'prose mention of reverseSymlink', at('shared.js', 'reverseSymlink (which unlinks any symlink')],
+  ['manifest.js', 'reverseSymlink JSDoc open', A('manifest.js', "* Reverse a 'symlink' entry") - 1],
   ['manifest.js', 'reverseSymlink JSDoc close', rsDef - 1],
-  ['manifest.js', 'row-3 comment block start', at('manifest.js', '// sameResolvedDir is realpath-based')],
-  ['manifest.js', 'module doc: managed-block shape end', at('manifest.js', 'content that preceded them')],
-  ['manifest.js', '@typedef close', at('manifest.js', "sepAfter?: string, anchorBefore?: string}} ManifestEntry")],
-  ['manifest.js', 'pre-dispatch skip end', at('manifest.js', 'const shape = validateEntry(entry);') + 6],
-  ['manifest.js', 'reverseCopiedSkill hash arm end', at('manifest.js', "typeof entry.hash !== 'string' || hashDir(") + 3],
-  ['manifest.js', 'reverseSchedulerEntry JSDoc tail', at('manifest.js', 'function reverseSchedulerEntry(') - 2],
-  ['shared.js', 'recordOnce push line', at('shared.js', 'if (!exists) manifest.entries.push(entry);')],
-  ['shared.js', 'WP-146 preserve arm close', at('shared.js', 'left foreign symlink untouched') + 2],
-  ['uninstall.js', 'manifest refusal', at('uninstall.js', 'if (!fileExists(paths.manifest)) {')],
-  ['sync.js', 'save gated on !dryRun', at('sync.js', 'if (!dryRun) manifestMod.save(paths, manifest)')],
+  ['manifest.js', 'row-3 comment head', A('manifest.js', '// Row 3: the link must PROVE')],
+  ['manifest.js', 'row-3 comment block start', A('manifest.js', '// sameResolvedDir is realpath-based')],
+  ['manifest.js', 'row-3 comment tail', A('manifest.js', 'Strictly narrowing: every input this now preserves')],
+  ['manifest.js', 'isSymlink open', A('manifest.js', 'function isSymlink(')],
+  ['manifest.js', 'isSymlink close', closeOf('manifest.js', A('manifest.js', 'function isSymlink('))],
+  ['manifest.js', 'sameResolvedDir open', A('manifest.js', 'function sameResolvedDir(')],
+  ['manifest.js', 'sameResolvedDir close', closeOf('manifest.js', A('manifest.js', 'function sameResolvedDir('))],
+  ['manifest.js', 'reverseCopiedSkill hash arm', A('manifest.js', "typeof entry.hash !== 'string' || hashDir(")],
+  ['manifest.js', 'reverseCopiedSkill hash arm end', A('manifest.js', "typeof entry.hash !== 'string' || hashDir(") + 3],
+  ['manifest.js', 'skillsRoots', A('manifest.js', 'const skillsRoots = [')],
+  ['manifest.js', 'reverse() symlink arm', A('manifest.js', "} else if (entry.kind === 'symlink') {")],
+  ['manifest.js', 'F30 comment in that arm', A('manifest.js', '// F30: validate the canonical PARENT')],
+  ['manifest.js', 'reverseSymlink call site', A('manifest.js', 'reverseSymlink(entry, dryRun, removed, skipped, removedSet, skillsRoots);')],
+  ['manifest.js', 'module doc: symlink shape', A('manifest.js', "{kind:'symlink', path, target?}", { nth: 1, of: 2 })],
+  ['manifest.js', 'module doc: managed-block shape', A('manifest.js', "{kind:'managed-block', path, createdFile:bool,")],
+  ['manifest.js', 'module doc: managed-block shape end', A('manifest.js', 'content that preceded them')],
+  ['manifest.js', '@typedef open', A('manifest.js', '@typedef {{kind: string')],
+  ['manifest.js', '@typedef close', A('manifest.js', 'sepAfter?: string, anchorBefore?: string}} ManifestEntry')],
+  ['manifest.js', 'ENTRY_FIELD_TYPES', A('manifest.js', 'const ENTRY_FIELD_TYPES = {')],
+  ['manifest.js', 'validateEntry open', A('manifest.js', 'function validateEntry(')],
+  ['manifest.js', 'validateEntry close', closeOf('manifest.js', A('manifest.js', 'function validateEntry('))],
+  ['manifest.js', 'pre-dispatch validate skip', A('manifest.js', 'const shape = validateEntry(entry);')],
+  ['manifest.js', 'pre-dispatch skip end', A('manifest.js', 'const shape = validateEntry(entry);') + 6],
+  ['manifest.js', 'reverseSchedulerEntry', A('manifest.js', 'function reverseSchedulerEntry(')],
+  ['manifest.js', 'reverseSchedulerEntry JSDoc tail', A('manifest.js', 'function reverseSchedulerEntry(') - 2],
+  ['manifest.js', 'module.exports', A('manifest.js', 'module.exports = {')],
+  ['shared.js', 'core import', A('shared.js', "require('../core/manifest')")],
+  ['shared.js', 'recordOnce open', roDef],
+  ['shared.js', 'recordOnce close', closeOf('shared.js', roDef)],
+  ['shared.js', 'recordOnce exists-check', A('shared.js', 'const exists = manifest.entries.some(')],
+  ['shared.js', 'recordOnce push line', A('shared.js', 'if (!exists) manifest.entries.push(entry);')],
+  ['shared.js', 'loop head: target', A('shared.js', 'const target = path.join(skillsDir, name);')],
+  ['shared.js', 'loop head: linkPath', A('shared.js', 'const linkPath = path.join(targetSkillsDir, name);')],
+  ['shared.js', 'producer: adopt', P(1)],
+  ['shared.js', 'producer: dryRun', P(2)],
+  ['shared.js', 'producer: create', P(3)],
+  ['shared.js', 'symlink() call', A('shared.js', 'symlink(target, linkPath);')],
+  ['shared.js', 'WP-146 preserve arm open', A('shared.js', '// A wienerdog-* symlink whose target is NOT our core skill source') - 1],
+  ['shared.js', 'WP-146 preserve arm close', A('shared.js', 'left foreign symlink untouched') + 2],
+  ['shared.js', 'prose mention of reverseSymlink', A('shared.js', 'reverseSymlink (which unlinks any symlink')],
+  ['uninstall.js', 'manifest refusal', A('uninstall.js', 'if (!fileExists(paths.manifest)) {')],
+  ['uninstall.js', 'manifest refusal close', A('uninstall.js', 'if (!fileExists(paths.manifest)) {') + 4],
+  ['sync.js', 'save gated on !dryRun', A('sync.js', 'if (!dryRun) manifestMod.save(paths, manifest)')],
 ];
 
+// PER-FILE valid sets. A citation qualified with a file is checked ONLY here.
 const valid = {};
-for (const [f, , ln] of ANCHORS) { (valid[f] ||= new Set()).add(ln); }
-// spans: a cited range A-B is valid when both ends are anchors, or B closes A's region
-const allValid = new Set();
-for (const f of Object.keys(valid)) for (const n of valid[f]) allValid.add(n);
-// numbers that are NOT src/ citations and are legitimately cited
-const EXEMPT = new Set([
-  10, 40, 52, 55, 180, 181, 191, 194, 324, 337, 340, 345, 371, 387, 405, 1417, // test-file lines
-  514, 868, 1274, 1286,                                                        // WP-153 spec lines
-]);
-// A citation may also be HISTORICAL — a number quoted to record that it moved.
-// Exempting those by NUMBER would exempt them everywhere and defeat the scan
-// (measured: it did). They are exempted only on a line that says so.
-const HISTORICAL = /→|->|went stale|moved from|until PR|After PR|it was `/;
+for (const [f, , ln] of ANCHORS) (valid[f] ||= new Set()).add(ln);
+const anyValid = new Set(Object.values(valid).flatMap((s) => [...s]));
 
-let bad = 0, checked = 0;
-const seen = new Map();
-// THREE citation forms exist in this spec and all three must be scanned:
-//   `:NNN`            backticked prose
-//   file.js:NNN       qualified
-//   // :NNN           a code comment INSIDE a fence — no backticks, and the
-//                     form that survived three hand sweeps. Omitting it here
-//                     was measured to let a stale comment pass.
-for (const m of text.matchAll(/`:(\d+)(?:-(\d+))?`|\b(?:manifest|shared|uninstall|sync)\.js:(\d+)(?:-(\d+))?|\/\/\s*:(\d+)/g)) {
-  const nums = [m[1], m[2], m[3], m[4], m[5]].filter(Boolean).map(Number);
-  const line = text.slice(0, m.index).split('\n').length;
+// Context, not integers. A citation is exempt only when its own neighbourhood
+// says what it is: a record that a number MOVED, or a pointer into a test file
+// or another spec.
+const HISTORICAL = /→|->|went stale|moved from|until PR|After PR|it was `|rewritten to|false negative/;
+// The scan's OWN scaffolding quotes stale coordinates on purpose — the four red
+// controls are built from them. Exempt the scaffolding, or the gate fails on the
+// fixtures that prove it works.
+const SCAFFOLD = /wd-c\.md|wd-citescan|V11 CONTROL/;
+// This scan is EMBEDDED IN THE SPEC IT SCANS. Its own source quotes stale
+// coordinates on purpose (the falsification record, the red-control fixtures), so
+// the heredoc that carries it is skipped wholesale. Regex-matching its comment
+// lines one by one was tried and is whack-a-mole.
+const SELF = (() => {
+  const a = LINES.findIndex((l) => l.includes("cat > /tmp/wd-citescan.js <<'CS'"));
+  if (a < 0) return () => false;
+  const b = LINES.findIndex((l, i) => i > a && l === 'CS');
+  return (i) => i > a && i < b;
+})();
+const NON_SOURCE = /\.test\.js|tests\/unit|docs\/specs|WP-153|WP-147|shared-skill-links|manifest\.test/;
+// 8 lines back: a table's preamble names its file that far above its rows
+// (Table F does, at 4). Wider than the citation's own line, tight enough that
+// naming a file still means the neighbourhood is about that file.
+const ctx = (i) => LINES.slice(Math.max(0, i - 8), i + 1).join('\n');
+
+let bad = 0, checked = 0, unbound = 0, grouped = 0;
+const fails = [];
+// FOUR forms. The grouped one is last and consumes the whole run.
+const RE = /(?:(manifest|shared|uninstall|sync)\.js:(\d+)(?:-(\d+))?)|`:(\d+)(?:-(\d+))?`|\/\/\s*:(\d+)|(:\d+(?:\/:\d+)+)/g;
+for (const m of text.matchAll(RE)) {
+  const idx = text.slice(0, m.index).split('\n').length - 1;
+  const c = ctx(idx);
+  let file = m[1] ? m[1] + '.js' : null;   // keys are 'shared.js', not 'shared'
+  let nums;
+  if (m[7]) { nums = m[7].match(/\d+/g).map(Number); grouped++; }
+  else nums = [m[2], m[3], m[4], m[5], m[6]].filter(Boolean).map(Number);
+  // Unqualified citations are NOT bound by proximity. Guessing the file from the
+  // neighbourhood was tried and mis-binds: the dry-run producer comment mentions
+  // sync.js:340 on its own line, so `// :490` bound to sync.js and failed
+  // spuriously. They are checked against the union instead, and the count is
+  // reported so the residual is visible rather than implied.
   for (const n of nums) {
     checked++;
-    const specLine = text.split('\n')[line - 1] || '';
-    if (allValid.has(n) || EXEMPT.has(n) || HISTORICAL.test(specLine)) continue;
+    if (SELF(idx)) continue;
+    if (HISTORICAL.test(LINES[idx]) || SCAFFOLD.test(LINES[idx])) continue;
+    // A citation QUALIFIED with a src filename is a src citation by
+    // construction — the non-source exemption must not reach it.
+    if (!m[1] && NON_SOURCE.test(c)) continue;
+    if (file && valid[file]) { if (valid[file].has(n)) continue; }
+    else { unbound++; if (anyValid.has(n)) continue; }
     bad++;
-    seen.set(`${n}`, (seen.get(`${n}`) || []).concat(line));
+    fails.push(`  UNRESOLVED ${file || '(unqualified)'}:${n}  at spec line ${idx + 1}`);
   }
 }
-console.log(`  anchors resolved: ${ANCHORS.length}   citations checked: ${checked}`);
-for (const [n, lines] of seen) console.log(`  UNRESOLVED :${n}  cited at spec line(s) ${lines.join(', ')}`);
-if (process.env.SHOW_ANCHORS) for (const [f, what, ln] of ANCHORS) console.log(`    ${String(ln).padStart(5)}  ${f.padEnd(13)} ${what}`);
-if (bad) { console.log(`V11 BROKEN — ${bad} citation(s) resolve to nothing`); process.exit(1); }
-console.log('V11 ok (every src/ citation resolves to a content-anchored line)');
+console.log(`  anchors resolved: ${ANCHORS.length}   citations checked: ${checked}   grouped runs: ${grouped}   unbound: ${unbound}`);
+for (const f of fails) console.log(f);
+if (anchorFail) console.log(`  ${anchorFail} anchor(s) failed to resolve unambiguously`);
+if (bad || anchorFail) { console.log(`V11 BROKEN — ${bad} citation(s) + ${anchorFail} anchor(s)`); process.exit(1); }
+console.log('V11 ok (every src/ citation resolves, per file, to a content-anchored line)');
 CS
 node /tmp/wd-citescan.js docs/specs/WP-symlink-authorship-identity.md
+
+# V11 RED CONTROLS — four, permanent. Each is a false negative a previous version
+#   of this scan demonstrably had. A gate that has been redesigned three times
+#   ships its falsification record as executable fixtures, not as prose.
+for c in cross-file exempt-reuse grouped fenced-comment; do
+  cp docs/specs/WP-symlink-authorship-identity.md /tmp/wd-c.md
+  case $c in
+    cross-file)      # a citation qualified with the WRONG file
+      node -e 'const f=require("node:fs"),p="/tmp/wd-c.md";f.writeFileSync(p,f.readFileSync(p,"utf8").replace("src/core/manifest.js:216-265","src/adapters/shared.js:216-265"))' ;;
+    exempt-reuse)    # a src citation reusing a number that is exempt elsewhere
+      node -e 'const f=require("node:fs"),p="/tmp/wd-c.md";f.writeFileSync(p,f.readFileSync(p,"utf8").replace("shared.js:5","shared.js:10"))' ;;
+    grouped)         # a stale coordinate inside a slash-grouped run, operative context
+      node -e 'const f=require("node:fs"),p="/tmp/wd-c.md";f.writeFileSync(p,f.readFileSync(p,"utf8").replace("`shared.js:439`,\n      `:490`, `:496`","`:439/:490/:491`"))' ;;
+    fenced-comment)  # a stale `// :NNN` inside a code fence
+      node -e 'const f=require("node:fs"),p="/tmp/wd-c.md";f.writeFileSync(p,f.readFileSync(p,"utf8").replace("// :490  dryRun","// :485  dryRun"))' ;;
+  esac
+  node /tmp/wd-citescan.js /tmp/wd-c.md >/dev/null 2>&1 \
+    && { echo "V11 CONTROL BROKEN: $c was not caught"; exit 1; } || echo "  control ok: $c caught"
+done
+echo "V11 controls ok (4 false negatives all reproduce as failures)"
 
 # V9 — lint.
 npm run lint
@@ -1794,6 +1862,30 @@ They are registered in the Mirrored Surface Checklist for exactly this reason.
 | **R5** | **Adopted-link leftover** — row 4a's half of the ledger | one symlink per core skill, in the harness skills dir, only after a manifest-loss reinstall | B-T2 pins the *behaviour*; the *cost* is what the owner rules on | **blocked on the owner ruling** |
 | **R6** | **`reverseCopiedSkill` has the same authorship gap** — its `hash` is read from the same untrusted file and proves content, not authorship | out of scope here; a `copied-skill` is the `EPERM`/`EACCES` fallback shape, not the mainline | none | a future WP, not drafted |
 | **R7** | **The verify→unlink race.** Row 4b's `identityOf(L)` and row 5's `fs.unlinkSync(L)` are separate syscalls | needs **arbitrary same-user native code** — outside the threat model per `docs/THREAT-MODEL.md`'s A12 posture — and such an actor can delete the link directly. **Only ever narrows against base** | **B-T8** | **not routed and not claimed closed.** Node exposes no atomic compare-and-unlink; ADR-0028's disposition for the scheduler's reopen-based check. **Listed in the ledger under *reclassified — equal to base*, deliberately NOT as a cost** — base removes the same replacement with no race required |
+
+**R11 — V11's own falsification record, kept because it took three rounds.** The
+citation scan closed a class the hand sweeps could not, and it was wrong three
+times first; each version was defeated by a *measured* case, not an argued one:
+
+| round | the false negative | closed by |
+|---|---|---|
+| 1 | historical numbers exempted **by integer**, so re-introducing a stale citation anywhere passed | exemption became **context**-scoped |
+| 2 | `` `:N` `` and `file.js:N` scanned, `// :N` inside a fence not — the one form that had survived three hand sweeps | all forms scanned |
+| 3 | every file's anchors flattened into **one** set, so `manifest.js:216-265` rewritten to `shared.js:216-265` passed, and an exempt test-file integer could be reused as a src citation | **per-file** validation; qualified citations never take the non-source exemption |
+
+Two further defects surfaced while fixing round 3, both invisible to inspection
+and caught only by running the controls: the per-file map was keyed `'shared.js'`
+while the parser produced `'shared'`, so **per-file validation silently fell back
+to the global set and was never active**; and binding an unqualified citation to
+the nearest filename in its neighbourhood mis-bound `// :490` to `sync.js`,
+because that comment names `sync.js:340` on its own line.
+
+**Residual, declared:** an **unqualified** citation (`` `:N` ``, `// :N`) is
+checked against the union of all anchors, so one whose number collides with a
+different file's anchor is not caught. Qualified citations are exact. The scan
+reports its unqualified count every run so the exposure is visible rather than
+implied.
+
 | **R8** | **The source guards are not AST-aware.** They strip comments and reject duplicate definitions, but cannot tell reachable code from code after a `return` | the guards are **tripwires**; V1/V2 are the load-bearing checks | the red mutations in Verification steps | **`WP-grep-gate-helper`** — already routed by WP-147; this spec does not re-route it |
 | **R9** | **The partial-pair leftover** — see the ledger row of the same name | not reachable from any producer site | B-T4's two partial rows | a ledger cost |
 | **R10** | **A schema-valid wrong identity pair.** An entry whose `dev`/`ino` are both strings but do not match the live link — including one-of-two wrong — **preserves** a link base removes | corruption- or forgery-only; an honest pair that *becomes* wrong is 4b's durability row instead. Measured: base removes all three variants, this WP preserves all three | B-T4's three both-wrong rows, which assert the base contrast | a ledger cost |
