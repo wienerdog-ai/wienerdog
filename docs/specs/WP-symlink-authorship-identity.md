@@ -1601,7 +1601,7 @@ const anyValid = new Set(Object.values(valid).flatMap((s) => [...s]));
 // Context, not integers. A citation is exempt only when its own neighbourhood
 // says what it is: a record that a number MOVED, or a pointer into a test file
 // or another spec.
-const HISTORICAL = /→|->|went stale|moved from|until PR|After PR|it was `|rewritten to|false negative/;
+const HISTORICAL = /→|->|went stale|moved from|until PR|After PR|it was `|rewritten to|false negative|re-parsed|re-opened/;
 // The scan's OWN scaffolding quotes stale coordinates on purpose — the four red
 // controls are built from them. Exempt the scaffolding, or the gate fails on the
 // fixtures that prove it works.
@@ -1625,14 +1625,27 @@ const ctx = (i) => LINES.slice(Math.max(0, i - 8), i + 1).join('\n');
 let bad = 0, checked = 0, unbound = 0, grouped = 0;
 const fails = [];
 // FOUR forms. The grouped one is last and consumes the whole run.
-const RE = /(?:(manifest|shared|uninstall|sync)\.js:(\d+)(?:-(\d+))?)|`:(\d+)(?:-(\d+))?`|\/\/\s*:(\d+)|(:\d+(?:\/:\d+)+)/g;
+// FIVE forms. The QUALIFIED SLASH-GROUP must come first and consume the whole
+// run: matching `shared.js:439` first left `:216/:496` behind as an UNQUALIFIED
+// group, which was union-checked — so `shared.js:439/:216/:496` passed because
+// 216 is a manifest.js anchor. That recreated the cross-file false negative for
+// grouped syntax (measured). A filename qualifies EVERY coordinate in its run.
+const RE = new RegExp([
+  String.raw`(?<qgfile>manifest|shared|uninstall|sync)\.js:(?<qgroup>\d+(?:\/:\d+)+)`,
+  String.raw`(?<qfile>manifest|shared|uninstall|sync)\.js:(?<qa>\d+)(?:-(?<qb>\d+))?`,
+  String.raw`\`:(?<ba>\d+)(?:-(?<bb>\d+))?\``,
+  String.raw`\/\/\s*:(?<cc>\d+)`,
+  String.raw`(?<ugroup>:\d+(?:\/:\d+)+)`,
+].join('|'), 'g');
 for (const m of text.matchAll(RE)) {
   const idx = text.slice(0, m.index).split('\n').length - 1;
   const c = ctx(idx);
-  let file = m[1] ? m[1] + '.js' : null;   // keys are 'shared.js', not 'shared'
-  let nums;
-  if (m[7]) { nums = m[7].match(/\d+/g).map(Number); grouped++; }
-  else nums = [m[2], m[3], m[4], m[5], m[6]].filter(Boolean).map(Number);
+  const g = m.groups;
+  let file = null, nums;
+  if (g.qgfile) { file = g.qgfile + '.js'; nums = g.qgroup.match(/\d+/g).map(Number); grouped++; }
+  else if (g.qfile) { file = g.qfile + '.js'; nums = [g.qa, g.qb].filter(Boolean).map(Number); }
+  else if (g.ugroup) { nums = g.ugroup.match(/\d+/g).map(Number); grouped++; }
+  else nums = [g.ba, g.bb, g.cc].filter(Boolean).map(Number);
   // Unqualified citations are NOT bound by proximity. Guessing the file from the
   // neighbourhood was tried and mis-binds: the dry-run producer comment mentions
   // sync.js:340 on its own line, so `// :490` bound to sync.js and failed
@@ -1644,7 +1657,7 @@ for (const m of text.matchAll(RE)) {
     if (HISTORICAL.test(LINES[idx]) || SCAFFOLD.test(LINES[idx])) continue;
     // A citation QUALIFIED with a src filename is a src citation by
     // construction — the non-source exemption must not reach it.
-    if (!m[1] && NON_SOURCE.test(c)) continue;
+    if (!file && NON_SOURCE.test(c)) continue;
     if (file && valid[file]) { if (valid[file].has(n)) continue; }
     else { unbound++; if (anyValid.has(n)) continue; }
     bad++;
@@ -1662,7 +1675,7 @@ node /tmp/wd-citescan.js docs/specs/WP-symlink-authorship-identity.md
 # V11 RED CONTROLS — four, permanent. Each is a false negative a previous version
 #   of this scan demonstrably had. A gate that has been redesigned three times
 #   ships its falsification record as executable fixtures, not as prose.
-for c in cross-file exempt-reuse grouped fenced-comment; do
+for c in cross-file exempt-reuse grouped qualified-group fenced-comment; do
   cp docs/specs/WP-symlink-authorship-identity.md /tmp/wd-c.md
   case $c in
     cross-file)      # a citation qualified with the WRONG file
@@ -1671,13 +1684,17 @@ for c in cross-file exempt-reuse grouped fenced-comment; do
       node -e 'const f=require("node:fs"),p="/tmp/wd-c.md";f.writeFileSync(p,f.readFileSync(p,"utf8").replace("shared.js:5","shared.js:10"))' ;;
     grouped)         # a stale coordinate inside a slash-grouped run, operative context
       node -e 'const f=require("node:fs"),p="/tmp/wd-c.md";f.writeFileSync(p,f.readFileSync(p,"utf8").replace("`shared.js:439`,\n      `:490`, `:496`","`:439/:490/:491`"))' ;;
+    qualified-group) # a FILENAME-qualified slash run whose TAIL names another
+                     # file's anchor — the tails used to be parsed as a separate
+                     # unqualified group and union-checked
+      node -e 'const f=require("node:fs"),p="/tmp/wd-c.md";f.writeFileSync(p,f.readFileSync(p,"utf8").replace("`shared.js:439`","`shared.js:439/:216/:496`"))' ;;
     fenced-comment)  # a stale `// :NNN` inside a code fence
       node -e 'const f=require("node:fs"),p="/tmp/wd-c.md";f.writeFileSync(p,f.readFileSync(p,"utf8").replace("// :490  dryRun","// :485  dryRun"))' ;;
   esac
   node /tmp/wd-citescan.js /tmp/wd-c.md >/dev/null 2>&1 \
     && { echo "V11 CONTROL BROKEN: $c was not caught"; exit 1; } || echo "  control ok: $c caught"
 done
-echo "V11 controls ok (4 false negatives all reproduce as failures)"
+echo "V11 controls ok (5 false negatives all reproduce as failures)"
 
 # V9 — lint.
 npm run lint
@@ -1872,6 +1889,7 @@ times first; each version was defeated by a *measured* case, not an argued one:
 | 1 | historical numbers exempted **by integer**, so re-introducing a stale citation anywhere passed | exemption became **context**-scoped |
 | 2 | `` `:N` `` and `file.js:N` scanned, `// :N` inside a fence not — the one form that had survived three hand sweeps | all forms scanned |
 | 3 | every file's anchors flattened into **one** set, so `manifest.js:216-265` rewritten to `shared.js:216-265` passed, and an exempt test-file integer could be reused as a src citation | **per-file** validation; qualified citations never take the non-source exemption |
+| 4 | a filename-qualified slash run had its **tail** re-parsed as a separate unqualified group, so `shared.js:439/:216/:496` passed — 216 is a `manifest.js` anchor. The same cross-file hole, re-opened by grouped syntax | the qualified slash-run is matched **first** and consumes the whole run; the filename qualifies **every** coordinate in it |
 
 Two further defects surfaced while fixing round 3, both invisible to inspection
 and caught only by running the controls: the per-file map was keyed `'shared.js'`
@@ -1880,7 +1898,12 @@ to the global set and was never active**; and binding an unqualified citation to
 the nearest filename in its neighbourhood mis-bound `// :490` to `sync.js`,
 because that comment names `sync.js:340` on its own line.
 
-**Residual, declared:** an **unqualified** citation (`` `:N` ``, `// :N`) is
+**All six slash-groups in this spec today are UNQUALIFIED** (they sit in drift
+records and in the scan's own scaffolding), so round 4's hole was latent rather
+than live — the control makes it stay closed if a qualified group is ever written.
+
+**Residual, declared:** an **unqualified** citation (`` `:N` ``, `// :N`, or an
+unqualified slash run) is
 checked against the union of all anchors, so one whose number collides with a
 different file's anchor is not caught. Qualified citations are exact. The scan
 reports its unqualified count every run so the exposure is visible rather than
