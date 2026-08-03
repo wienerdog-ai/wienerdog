@@ -236,6 +236,7 @@ function isSymlink(p) {
  * @param {boolean} dryRun
  * @param {string[]} removed @param {string[]} skipped @param {Set<string>} removedSet
  * @param {string[]} skillsRoots the harness skills roots (row 4 OWNED gate)
+ * @param {{identity?: function}} [opts]  test seam only — see D4
  */
 function reverseSymlink(entry, dryRun, removed, skipped, removedSet, skillsRoots, opts = {}) {
   const identityOf = opts.identity || linkIdentity;   // test seam only

@@ -1974,19 +1974,27 @@ test('WP-symlink-authorship-identity B-T1: a user same-source replacement (new f
   assert.equal(entry.origin, 'created');
   assert.equal(typeof entry.dev, 'string');
   assert.equal(typeof entry.ino, 'string');
-  // The user deletes our link and re-makes it — same path, same target, but a
-  // NEW file object (honest-use case 1).
-  fs.unlinkSync(link);
-  fs.symlinkSync(coreSkill, link);
-  // Precondition, asserted explicitly (Test index B-T1): the recreated link's
-  // identity must differ from the recorded pair, so a filesystem that recycled
-  // the inode fails HERE, loudly, instead of making the row a vacuous pass.
+  // The user replaces our link — same path, same target, but a NEW file object
+  // (honest-use case 1). Built by RENAME, not delete+recreate ("B-T1's
+  // construction", amended 2026-08-03): the naive form asserted an allocator
+  // coin flip and ext4 falsifies it by reusing a freed inode immediately.
+  // Here the replacement's inode is allocated WHILE the original still holds
+  // its own — two live files on one device cannot share an inode number — and
+  // renameSync then swaps the dirent, which POSIX defines as a directory-entry
+  // operation that preserves the inode.
+  const tmp = `${link}.tmp`;
+  fs.symlinkSync(coreSkill, tmp); // 1. new inode, allocated while `link` is still live
+  const tmpId = manifestLib.linkIdentity(tmp);
+  assert.notEqual(tmpId, null);
+  // Derivation check (i) — a POSIX guarantee, not a coin flip: the temp link's
+  // inode differs from the still-live original's.
+  assert.notEqual(tmpId.ino, entry.ino, 'construction: the temp inode must differ from the recorded one');
+  fs.unlinkSync(link); // 2. free the original
+  fs.renameSync(tmp, link); // 3. move the DIRENT; the inode is preserved
+  // Derivation check (ii): rename moved the name, not the inode.
   const now = manifestLib.linkIdentity(link);
   assert.notEqual(now, null);
-  assert.ok(
-    now.dev !== entry.dev || now.ino !== entry.ino,
-    'precondition: delete+recreate must change the (dev, ino) pair'
-  );
+  assert.equal(now.ino, tmpId.ino, 'construction: rename must preserve the temp inode');
   manifestLib.save(paths, manifest);
   const { result: res, err } = captureStderr(() => manifestLib.reverse(paths, manifestLib.load(paths), {}));
   // At base this link was DELETED (measured): target equality alone authorized
