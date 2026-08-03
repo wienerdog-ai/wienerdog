@@ -2,7 +2,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const { hashDir, insertionAnchor } = require('../core/manifest');
+const { hashDir, insertionAnchor, linkIdentity } = require('../core/manifest');
 const { WienerdogError } = require('../core/errors');
 
 const BEGIN = '<!-- wienerdog:begin -->';
@@ -436,7 +436,10 @@ function applySkillLinks(skillsDir, targetSkillsDir, dryRun, manifest, out, opts
       }
       if (currentTarget === target) {
         out.unchanged.push(linkPath);
-        recordOnce(manifest, { kind: 'symlink', path: linkPath, target });
+        // The link was ALREADY on disk — we did not create it, so no lstat
+        // identity is recorded (Table B / rule S-1) and `origin: 'adopted'`
+        // makes uninstall preserve it (row 4a): it is the user's.
+        recordOnce(manifest, { kind: 'symlink', path: linkPath, target, origin: 'adopted' });
       } else {
         // A wienerdog-* symlink whose target is NOT our core skill source — a user's
         // own link, or a stale one from another install root. Never silently clobber
@@ -487,13 +490,26 @@ function applySkillLinks(skillsDir, targetSkillsDir, dryRun, manifest, out, opts
       out.notices.push(`left user file untouched: ${linkPath}`);
     } else if (dryRun) {
       // A dry run does not probe symlink permission; report the common case.
-      recordOnce(manifest, { kind: 'symlink', path: linkPath, target });
+      // Nothing exists to lstat, so no identity (Table B); this manifest is a
+      // report only — sync.js gates save() on !dryRun, so it is never persisted.
+      recordOnce(manifest, { kind: 'symlink', path: linkPath, target, origin: 'created' });
       out.changed.push(linkPath);
     } else {
       // Absent: prefer a symlink; copy where symlink creation is unpermitted.
       try {
         symlink(target, linkPath);
-        recordOnce(manifest, { kind: 'symlink', path: linkPath, target });
+        // symlink() has just succeeded: record the link's lstat identity so
+        // uninstall can prove this exact file object is the one we created
+        // (row 4b). Written out explicitly — never spread a possibly-null
+        // identity into the literal; when linkIdentity() cannot establish one,
+        // record `origin: 'created'` alone and keep base behaviour (rule S-2).
+        const id = linkIdentity(linkPath);
+        const symlinkEntry = { kind: 'symlink', path: linkPath, target, origin: 'created' };
+        if (id) {
+          symlinkEntry.dev = id.dev;
+          symlinkEntry.ino = id.ino;
+        }
+        recordOnce(manifest, symlinkEntry);
       } catch (err) {
         if (err && (err.code === 'EPERM' || err.code === 'EACCES')) {
           fs.cpSync(target, linkPath, { recursive: true });

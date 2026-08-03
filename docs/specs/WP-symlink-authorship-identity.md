@@ -1,7 +1,7 @@
 ---
 id: WP-symlink-authorship-identity
 title: Record symlink authorship and lstat identity at forward time so uninstall unlinks only links it can prove it created
-status: Ready
+status: In-Review
 model: opus
 size: S
 depends_on: [WP-153, WP-managed-block-insertion-anchor]

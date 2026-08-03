@@ -1927,3 +1927,349 @@ test('reverseSymlink: a forged (path,target) pair for a non-OWNED link is preser
     assert.ok(skipped.includes(link));
   }
 });
+
+// ── WP-symlink-authorship-identity: forward-time authorship evidence ──────────
+// Rows 4a/4b of reverseSymlink (Table A2): `origin: 'adopted'` preserves — the
+// link was already on disk when we first recorded it, so it is the user's — and
+// a recorded (dev, ino) pair must still BE the live link's lstat identity before
+// row 5 may unlink. Fail closed on any doubt; ALL provenance fields absent keeps
+// shipped 0.12.0 behaviour byte-for-byte (AC8a). Fixtures mirror WP-153's:
+// OWNED links live at <claudeDir>/skills/wienerdog-* and their destinations sit
+// inside claudeDir so reverse()'s withinAllowedRoot gate passes.
+
+const { applySkillLinks } = require('../../src/adapters/shared');
+
+/** Run fn with stderr captured; returns { result, err }. */
+function captureStderr(fn) {
+  const origWrite = process.stderr.write.bind(process.stderr);
+  let err = '';
+  process.stderr.write = (chunk) => { err += chunk; return true; };
+  try {
+    const result = fn();
+    return { result, err };
+  } finally {
+    process.stderr.write = origWrite;
+  }
+}
+
+/** Honest forward step: a claudeDir-contained core skill source, linked into the
+ *  harness skills dir by the REAL applySkillLinks (the create branch). */
+function honestSkillLink(paths, manifest) {
+  const skillsDir = path.join(paths.claudeDir, 'core-skills');
+  const targetSkillsDir = path.join(paths.claudeDir, 'skills');
+  const coreSkill = path.join(skillsDir, 'wienerdog-foo');
+  fs.mkdirSync(coreSkill, { recursive: true });
+  fs.writeFileSync(path.join(coreSkill, 'SKILL.md'), '# skill\n');
+  const out = { changed: [], unchanged: [], notices: [] };
+  applySkillLinks(skillsDir, targetSkillsDir, false, manifest, out);
+  return { skillsDir, targetSkillsDir, coreSkill, link: path.join(targetSkillsDir, 'wienerdog-foo'), out };
+}
+
+test('WP-symlink-authorship-identity B-T1: a user same-source replacement (new file object) survives uninstall — row 4b', (t) => {
+  if (!isPosix) return t.skip('symlink creation may be unavailable');
+  const paths = tempPaths();
+  const manifest = makeInstall(paths);
+  const { coreSkill, link } = honestSkillLink(paths, manifest);
+  const entry = manifest.entries.find((e) => e.kind === 'symlink' && e.path === link);
+  assert.equal(entry.origin, 'created');
+  assert.equal(typeof entry.dev, 'string');
+  assert.equal(typeof entry.ino, 'string');
+  // The user deletes our link and re-makes it — same path, same target, but a
+  // NEW file object (honest-use case 1).
+  fs.unlinkSync(link);
+  fs.symlinkSync(coreSkill, link);
+  // Precondition, asserted explicitly (Test index B-T1): the recreated link's
+  // identity must differ from the recorded pair, so a filesystem that recycled
+  // the inode fails HERE, loudly, instead of making the row a vacuous pass.
+  const now = manifestLib.linkIdentity(link);
+  assert.notEqual(now, null);
+  assert.ok(
+    now.dev !== entry.dev || now.ino !== entry.ino,
+    'precondition: delete+recreate must change the (dev, ino) pair'
+  );
+  manifestLib.save(paths, manifest);
+  const { result: res, err } = captureStderr(() => manifestLib.reverse(paths, manifestLib.load(paths), {}));
+  // At base this link was DELETED (measured): target equality alone authorized
+  // the unlink. Row 4b now refuses — the file object is not the one we made.
+  assert.equal(fs.lstatSync(link).isSymbolicLink(), true, "the user's same-source replacement is preserved");
+  assert.ok(!res.removed.includes(link));
+  assert.ok(res.skipped.includes(link));
+  assert.match(err, /wienerdog: keeping .* — not the Wienerdog skill link we recorded/);
+});
+
+test('WP-symlink-authorship-identity B-T2: a pre-existing exact-target link is adopted and survives uninstall — row 4a', (t) => {
+  if (!isPosix) return t.skip('symlink creation may be unavailable');
+  const paths = tempPaths();
+  const manifest = makeInstall(paths);
+  const skillsDir = path.join(paths.claudeDir, 'core-skills');
+  const targetSkillsDir = path.join(paths.claudeDir, 'skills');
+  const coreSkill = path.join(skillsDir, 'wienerdog-foo');
+  fs.mkdirSync(coreSkill, { recursive: true });
+  fs.writeFileSync(path.join(coreSkill, 'SKILL.md'), '# skill\n');
+  // The USER made this link before we ever synced (honest-use case 2).
+  fs.mkdirSync(targetSkillsDir, { recursive: true });
+  const link = path.join(targetSkillsDir, 'wienerdog-foo');
+  fs.symlinkSync(coreSkill, link);
+  const out = { changed: [], unchanged: [], notices: [] };
+  applySkillLinks(skillsDir, targetSkillsDir, false, manifest, out);
+  assert.ok(out.unchanged.includes(link), 'the adopt branch reports unchanged');
+  // Assert the entry shape too (Test index B-T2): the end state alone says
+  // something preserved the link; `origin: 'adopted'` with NO identity says
+  // WHICH rule fired — row 4a, off the adopt branch's recording (rule S-1).
+  const entry = manifest.entries.find((e) => e.kind === 'symlink' && e.path === link);
+  assert.ok(entry, 'the adopt branch records an entry');
+  assert.equal(entry.origin, 'adopted');
+  assert.equal(entry.dev, undefined);
+  assert.equal(entry.ino, undefined);
+  manifestLib.save(paths, manifest);
+  const { result: res, err } = captureStderr(() => manifestLib.reverse(paths, manifestLib.load(paths), {}));
+  // At base this link was DELETED (measured). Row 4a now preserves it.
+  assert.equal(fs.lstatSync(link).isSymbolicLink(), true, "the user's pre-existing link is preserved");
+  assert.ok(!res.removed.includes(link));
+  assert.ok(res.skipped.includes(link));
+  assert.match(err, /wienerdog: keeping .* — not the Wienerdog skill link we recorded/);
+});
+
+test('WP-symlink-authorship-identity B-T3: our own untouched link is still removed; the forward step is idempotent (AC11)', (t) => {
+  // PATCH: none — baseline / ordinary path (ADR-0036 A1 exemption (ii)). Red
+  // against making identity REQUIRED, and against any row 4a/4b that fires on
+  // our own untouched link.
+  if (!isPosix) return t.skip('symlink creation may be unavailable');
+  const paths = tempPaths();
+  const manifest = makeInstall(paths);
+  const { skillsDir, targetSkillsDir, link } = honestSkillLink(paths, manifest);
+  // AC11: run the forward step a SECOND time before uninstalling — deep-equal
+  // manifest entries (recordOnce no-ops; the entry keeps its first-run identity)
+  // and zero `changed`.
+  const snapshot = JSON.parse(JSON.stringify(manifest.entries));
+  const out2 = { changed: [], unchanged: [], notices: [] };
+  applySkillLinks(skillsDir, targetSkillsDir, false, manifest, out2);
+  assert.deepEqual(manifest.entries, snapshot, 'second run leaves every entry exactly as recorded');
+  assert.deepEqual(out2.changed, [], 'second run reports zero changed');
+  assert.ok(out2.unchanged.includes(link));
+  manifestLib.save(paths, manifest);
+  const { result: res } = captureStderr(() => manifestLib.reverse(paths, manifestLib.load(paths), {}));
+  assert.equal(fs.existsSync(link), false, 'our own untouched link is removed — uninstall stays complete');
+  assert.ok(res.removed.includes(link));
+});
+
+/** Table S harness (B-T4): an OWNED, resolving wienerdog-* link plus a crafted
+ *  entry whose {origin, dev, ino} shape comes from `shape(id)`. When
+ *  `opts.baseControl`, a second link with an ALL-ABSENT entry rides along and
+ *  must be removed in the same run — the all-absent shape reproduces base
+ *  behaviour byte-for-byte (AC8a), which is how the base contrast the ledger's
+ *  wrong-pair row demands is asserted in-tree. */
+function tableSRow(t, shape, expect, opts = {}) {
+  if (!isPosix) return t.skip('symlink creation may be unavailable');
+  const paths = tempPaths();
+  const manifest = makeInstall(paths);
+  const skillsRoot = path.join(paths.claudeDir, 'skills');
+  fs.mkdirSync(skillsRoot, { recursive: true });
+  const source = path.join(paths.claudeDir, 'core-skills', 'wienerdog-foo');
+  fs.mkdirSync(source, { recursive: true });
+  const link = path.join(skillsRoot, 'wienerdog-foo');
+  fs.symlinkSync(source, link);
+  const id = manifestLib.linkIdentity(link);
+  assert.notEqual(id, null, 'precondition: the live link has an establishable identity');
+  manifestLib.record(manifest, { kind: 'symlink', path: link, target: source, ...shape(id) });
+  let control = null;
+  if (opts.baseControl) {
+    control = path.join(skillsRoot, 'wienerdog-ctl');
+    fs.symlinkSync(source, control);
+    manifestLib.record(manifest, { kind: 'symlink', path: control, target: source });
+  }
+  manifestLib.save(paths, manifest);
+  const { result: res } = captureStderr(() => manifestLib.reverse(paths, manifestLib.load(paths), {}));
+  if (expect === 'removed') {
+    assert.equal(fs.existsSync(link), false, 'Table S says removed');
+    assert.ok(res.removed.includes(link));
+  } else {
+    assert.equal(fs.lstatSync(link).isSymbolicLink(), true, 'Table S says PRESERVED');
+    assert.ok(!res.removed.includes(link));
+    assert.ok(res.skipped.includes(link));
+  }
+  if (control) {
+    assert.equal(fs.existsSync(control), false, 'base contrast: the no-provenance control is removed');
+    assert.ok(res.removed.includes(control));
+  }
+}
+
+test('WP-symlink-authorship-identity B-T4: all provenance absent (pre-WP install) — removed, the backward-compatibility fence (AC8a)', (t) => {
+  // Red against "absent identity ⇒ preserve", which would strand every install
+  // written before this WP with permanent leftovers.
+  tableSRow(t, () => ({}), 'removed');
+});
+
+test("WP-symlink-authorship-identity B-T4: 'created' + matching identity — removed (the mainline)", (t) => {
+  tableSRow(t, (id) => ({ origin: 'created', dev: id.dev, ino: id.ino }), 'removed');
+});
+
+test("WP-symlink-authorship-identity B-T4: 'created' + no identity (S-2: identity never establishable) — removed, base behaviour", (t) => {
+  tableSRow(t, () => ({ origin: 'created' }), 'removed');
+});
+
+test("WP-symlink-authorship-identity B-T4: 'adopted' + no identity — PRESERVED (row 4a, the adopt shape)", (t) => {
+  tableSRow(t, () => ({ origin: 'adopted' }), 'preserved');
+});
+
+test("WP-symlink-authorship-identity B-T4: 'adopted' + matching identity — PRESERVED (row 4a fires first; identity never consulted)", (t) => {
+  tableSRow(t, (id) => ({ origin: 'adopted', dev: id.dev, ino: id.ino }), 'preserved');
+});
+
+test('WP-symlink-authorship-identity B-T4: unknown origin string + no identity — removed (never more permissive than created)', (t) => {
+  tableSRow(t, () => ({ origin: 'bogus' }), 'removed');
+});
+
+test('WP-symlink-authorship-identity B-T4: unknown origin string + matching identity — removed (behaves exactly as created)', (t) => {
+  tableSRow(t, (id) => ({ origin: 'bogus', dev: id.dev, ino: id.ino }), 'removed');
+});
+
+test('WP-symlink-authorship-identity B-T4: dev-only partial pair — PRESERVED (unverifiable, not absent)', (t) => {
+  // One of the two partial directions; its sibling below is required too — one
+  // alone is passed by an implementation that checks only the field it tests.
+  tableSRow(t, (id) => ({ origin: 'created', dev: id.dev }), 'preserved');
+});
+
+test('WP-symlink-authorship-identity B-T4: ino-only partial pair — PRESERVED (unverifiable, not absent)', (t) => {
+  tableSRow(t, (id) => ({ origin: 'created', ino: id.ino }), 'preserved');
+});
+
+test('WP-symlink-authorship-identity B-T4: both identity fields wrong — PRESERVED where base removed (the corruption-only ledger row)', (t) => {
+  tableSRow(t, (id) => ({ origin: 'created', dev: `${id.dev}0`, ino: `${id.ino}0` }), 'preserved', { baseControl: true });
+});
+
+test('WP-symlink-authorship-identity B-T4: ino wrong only — PRESERVED where base removed', (t) => {
+  tableSRow(t, (id) => ({ origin: 'created', dev: id.dev, ino: `${id.ino}0` }), 'preserved', { baseControl: true });
+});
+
+test('WP-symlink-authorship-identity B-T4: dev wrong only — PRESERVED where base removed', (t) => {
+  tableSRow(t, (id) => ({ origin: 'created', dev: `${id.dev}0`, ino: id.ino }), 'preserved', { baseControl: true });
+});
+
+/** B-T5 harness: an honest-shaped entry with ONE field forged to a non-string.
+ *  validateEntry must reject it upstream (D5's type gates) and the link must be
+ *  preserved — where base VALIDATED the same entry and removed the link,
+ *  because its `symlink: {}` cell gated none of these keys. */
+function nonStringRow(t, field, value) {
+  if (!isPosix) return t.skip('symlink creation may be unavailable');
+  const paths = tempPaths();
+  const manifest = makeInstall(paths);
+  const skillsRoot = path.join(paths.claudeDir, 'skills');
+  fs.mkdirSync(skillsRoot, { recursive: true });
+  const source = path.join(paths.claudeDir, 'core-skills', 'wienerdog-foo');
+  fs.mkdirSync(source, { recursive: true });
+  const link = path.join(skillsRoot, 'wienerdog-foo');
+  fs.symlinkSync(source, link);
+  const id = manifestLib.linkIdentity(link);
+  assert.notEqual(id, null);
+  const entry = { kind: 'symlink', path: link, target: source, origin: 'created', dev: id.dev, ino: id.ino };
+  entry[field] = value;
+  // The rejection is validateEntry's, with a `why` naming the forged field.
+  const shape = manifestLib.validateEntry(entry);
+  assert.equal(shape.ok, false);
+  assert.match(shape.why, new RegExp(`${field} must be a string`));
+  // Base contrast (the ledger's schema-rejection cost): base's `symlink: {}`
+  // cell gated NONE of these keys, so the same entry validated and the link was
+  // removed. Proved in-test with an ungated key, which still validates today.
+  assert.equal(manifestLib.validateEntry({ kind: 'symlink', path: link, target: source, zzz: 12345 }).ok, true);
+  manifestLib.record(manifest, entry);
+  manifestLib.save(paths, manifest);
+  const { result: res, err } = captureStderr(() => manifestLib.reverse(paths, manifestLib.load(paths), {}));
+  assert.equal(fs.lstatSync(link).isSymbolicLink(), true, 'the link is preserved — the safe direction for a symlink');
+  assert.ok(!res.removed.includes(link));
+  assert.ok(res.skipped.includes(link));
+  assert.match(err, /wienerdog: skipping manifest entry with invalid symlink shape/);
+}
+
+test('WP-symlink-authorship-identity B-T5: non-string origin is rejected upstream and the link preserved', (t) => {
+  nonStringRow(t, 'origin', 1);
+});
+
+test('WP-symlink-authorship-identity B-T5: non-string dev is rejected upstream and the link preserved', (t) => {
+  nonStringRow(t, 'dev', 1);
+});
+
+test('WP-symlink-authorship-identity B-T5: non-string ino is rejected upstream and the link preserved', (t) => {
+  nonStringRow(t, 'ino', 12345);
+});
+
+/** B-T7 harness: honest OWNED link with its real recorded identity, then a
+ *  DIRECT reverseSymlink call (WP-153 blessed the direct unit call) with the
+ *  identity SEAM as the 7th argument, making the filesystem-dependent row-4b
+ *  behaviours deterministic. Returns everything the arms assert on. */
+function seamArm(makeIdentity) {
+  const paths = tempPaths();
+  const skillsRoot = path.join(paths.claudeDir, 'skills');
+  fs.mkdirSync(skillsRoot, { recursive: true });
+  const source = path.join(paths.claudeDir, 'core-skills', 'wienerdog-foo');
+  fs.mkdirSync(source, { recursive: true });
+  const link = path.join(skillsRoot, 'wienerdog-foo');
+  fs.symlinkSync(source, link);
+  const recorded = manifestLib.linkIdentity(link);
+  assert.notEqual(recorded, null);
+  const entry = { kind: 'symlink', path: link, target: source, origin: 'created', dev: recorded.dev, ino: recorded.ino };
+  const removed = [];
+  const skipped = [];
+  const removedSet = new Set();
+  const { err } = captureStderr(() =>
+    manifestLib.reverseSymlink(entry, false, removed, skipped, removedSet, [skillsRoot], {
+      identity: makeIdentity(recorded, link, source),
+    })
+  );
+  return { link, removed, skipped, err };
+}
+
+test('WP-symlink-authorship-identity B-T7(a): a changed device preserves — the seam, deterministic', (t) => {
+  if (!isPosix) return t.skip('symlink creation may be unavailable');
+  const { link, removed, skipped, err } = seamArm((recorded) => () => ({ dev: recorded.dev + 1, ino: recorded.ino }));
+  assert.equal(fs.lstatSync(link).isSymbolicLink(), true, 'the link survives');
+  assert.ok(skipped.includes(link));
+  assert.deepEqual(removed, []);
+  assert.match(err, /wienerdog: keeping .* — not the Wienerdog skill link we recorded/);
+});
+
+test('WP-symlink-authorship-identity B-T7(b): a changed inode preserves — the deterministic proof behind B-T1', (t) => {
+  if (!isPosix) return t.skip('symlink creation may be unavailable');
+  const { link, removed, skipped, err } = seamArm((recorded) => () => ({ dev: recorded.dev, ino: recorded.ino + 1 }));
+  assert.equal(fs.lstatSync(link).isSymbolicLink(), true, 'the link survives');
+  assert.ok(skipped.includes(link));
+  assert.deepEqual(removed, []);
+  assert.match(err, /wienerdog: keeping .* — not the Wienerdog skill link we recorded/);
+});
+
+test('WP-symlink-authorship-identity B-T7(c): an unavailable identity (null) preserves — never treated as a match', (t) => {
+  if (!isPosix) return t.skip('symlink creation may be unavailable');
+  const { link, removed, skipped, err } = seamArm(() => () => null);
+  assert.equal(fs.lstatSync(link).isSymbolicLink(), true, 'the link survives');
+  assert.ok(skipped.includes(link));
+  assert.deepEqual(removed, []);
+  assert.match(err, /wienerdog: keeping .* — not the Wienerdog skill link we recorded/);
+});
+
+test('WP-symlink-authorship-identity B-T7(d): a reused (recycled) identity is removed — R4 residual pin', (t) => {
+  // PATCH: none — residual pin. This arm pins CURRENT behaviour at its declared
+  // size, not a fix: an inode the filesystem recycled back to the same pair
+  // passes row 4b, exactly as Table A2 declares (equal to base, which removes
+  // the same link with no check at all).
+  if (!isPosix) return t.skip('symlink creation may be unavailable');
+  const { link, removed } = seamArm((recorded) => () => ({ dev: recorded.dev, ino: recorded.ino }));
+  assert.equal(fs.existsSync(link), false, 'the link is removed');
+  assert.ok(removed.includes(link));
+});
+
+test('WP-symlink-authorship-identity B-T8: a replacement landing between the identity check and the unlink is deleted — R7 residual pin', (t) => {
+  // PATCH: none — residual pin. Row 4b's check and row 5's unlink are two
+  // syscalls with nothing binding them (the verify→unlink race). This pins R7
+  // at its declared size: if it ever goes red, either an atomic
+  // compare-and-unlink primitive was adopted or the mechanism changed.
+  if (!isPosix) return t.skip('symlink creation may be unavailable');
+  const { link, removed } = seamArm((recorded, linkPath, source) => () => {
+    // The seam replaces the link on disk and THEN reports the recorded pair —
+    // simulating a same-user process winning the race after the check ran.
+    fs.unlinkSync(linkPath);
+    fs.symlinkSync(source, linkPath);
+    return { dev: recorded.dev, ino: recorded.ino };
+  });
+  assert.equal(fs.existsSync(link), false, 'the replacement is deleted');
+  assert.ok(removed.includes(link));
+});
