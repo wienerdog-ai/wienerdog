@@ -1,6 +1,6 @@
 # ADR-0038: A new manifest evidence field may only narrow a deletion, never widen one
 
-Status: Proposed — awaiting owner signature
+Status: Accepted — OWNER-SIGNED 2026-08-03
 Date: 2026-08-02
 
 > **WHERE THE SIGNATURE GOES, STATED EXACTLY.** On its own line immediately below

@@ -5,7 +5,7 @@ status: Done
 model: opus
 size: S
 depends_on: [WP-153, WP-managed-block-insertion-anchor]
-adrs: [ADR-0004, ADR-0019, ADR-0031, ADR-0036]
+adrs: [ADR-0004, ADR-0019, ADR-0031, ADR-0036, ADR-0038]
 epic: audit-a13
 ---
 
