@@ -478,8 +478,8 @@ flipped is seeing Part A's shipped work.
      and package-lock.json. Everything else must be listed. -->
 
 **Sizing.** One primitive (~12 lines), one default parameter and two rows in one
-reverser (~20 lines), one schema cell, two doc-comment extensions in
-`manifest.js`; one import extension and three call sites in `shared.js`; two test
+reverser (~20 lines), one schema cell, three doc-comment extensions in
+`manifest.js` (module doc, `@typedef`, and `reverseSymlink`'s own JSDoc); one import extension and three call sites in `shared.js`; two test
 files extended, of which three shipped assertions are edited, across eight test
 rows. **S** — and it is the smaller half of the split. It is not split further:
 recording the fields without consuming them ships dead data, and consuming fields
@@ -487,9 +487,9 @@ nothing records ships a branch no install reaches.
 
 | Action | Path | Notes |
 |--------|------|-------|
-| modify | src/core/manifest.js | **D3** — add `linkIdentity()` beside Part A's primitives and export it. **D4** — `reverseSymlink` gains a 7th parameter `opts = {}` (the identity seam — Exact contracts) and rows **4a** and **4b** per **Table A2**, between the existing rows 4 and 5; rows 1–5 are otherwise byte-identical and `reverse()`'s call site is **not** changed. **D5** — `ENTRY_FIELD_TYPES.symlink` becomes `{ target: 'string', origin: 'string', dev: 'string', ino: 'string' }`; **no other cell changes**, and in particular `managed-block` must not gain `anchorBefore` (Part A's Table P forbids it). **D6b** — the module doc comment and `@typedef ManifestEntry` gain `origin?`, `dev?`, `ino?` per **Table P**, **extending** Part A's `anchorBefore?` rather than replacing it. |
+| modify | src/core/manifest.js | **D3** — add `linkIdentity()` beside Part A's primitives and export it. **D4** — `reverseSymlink` gains a 7th parameter `opts = {}` (the identity seam — Exact contracts) and rows **4a** and **4b** per **Table A2**, between the existing rows 4 and 5; rows 1–5 are otherwise byte-identical and `reverse()`'s call site is **not** changed. **D5** — `ENTRY_FIELD_TYPES.symlink` becomes `{ target: 'string', origin: 'string', dev: 'string', ino: 'string' }`; **no other cell changes**, and in particular `managed-block` must not gain `anchorBefore` (Part A's Table P forbids it). **D6b** — the module doc comment and `@typedef ManifestEntry` gain `origin?`, `dev?`, `ino?` per **Table P**, **extending** Part A's `anchorBefore?` rather than replacing it. **D6c** — `reverseSymlink`'s **own** JSDoc (currently `:207-215`, immediately above the mandated fence and **outside** it) gains exactly one line, `` * @param {{identity?: function}} [opts]  test seam only — see D4 ``, placed after the existing `skillsRoots` `@param`. See "D6c — why `opts` gets a JSDoc line" for the decision. |
 | modify | src/adapters/shared.js | **D7b** — extend `:5` to `const { hashDir, insertionAnchor, linkIdentity } = require('../core/manifest');`. **Do not drop `insertionAnchor`** — Part A put it there. **D10** — the three `recordOnce(manifest, { kind: 'symlink', … })` sites (`:439`, `:490`, `:496`) record `origin` (and, at `:496` only, `dev`/`ino`) per **Table B**. `recordOnce` itself is **NOT modified and NOT replaced by an upsert** — the owner declined a backfill (2026-08-01). The WP-146 preserve arm, `dropOwnedEntry`, the `readlinkSync` comparison, the `EPERM` copy fallback and every notice string stay byte-identical, as does everything Part A touched in `applyManagedBlock`. |
-| modify | tests/unit/manifest.test.js | **B-T1 … B-T5, B-T7, B-T8** — the exact set in the Test index. WP-153's shipped **T1–T3, T4a–T4c and T6** must pass **byte-unmodified** — that is WP-153's own canonical roster after `WP-symlink-lexical-fallback-removal` split T4 into T4a/T4b/T4c. They craft entries with no `origin`/`dev`/`ino`, so they exercise the legacy arm and are its regression fence. Part A's A-T1…A-T11 must also pass byte-unmodified. |
+| modify | tests/unit/manifest.test.js | **B-T1 … B-T5, B-T7, B-T8** — the exact set in the Test index. WP-153's shipped **T1–T3, T4a–T4c, T6 and T7** must pass **byte-unmodified**. WP-153's own roster line reads *"T1–T3, T4a–T4c and T6"*, but its Table also defines **T7** — the forged-`(path, target)` adversarial row — as a shipped `manifest.test.js` test, and `(T7)` is present in the file while T6 was a *repair to an existing test* rather than a new labelled one. **Both are pinned here**; naming only T6 left the one labelled row unfenced. They craft entries with no `origin`/`dev`/`ino`, so they exercise the legacy arm and are its regression fence. Part A's A-T1…A-T11 must also pass byte-unmodified. |
 | modify | tests/unit/shared-skill-links.test.js | **B-T6** — this is **an edit to three shipped `deepEqual` assertions** plus one new forward-side assertion. `:52-55`, `:191-194` and `:337-340` are the **Table F** rows; take the expected object for each from that table. The four WP-146 sync-side tests at `:345`, `:371`, `:387` and `:405` are **fenced — they must pass byte-unmodified**. |
 
 Not deliverables, deliberately: `reverseManagedBlock` and everything Part A
@@ -967,6 +967,7 @@ excerpts, which are dedented and annotated.
 - [ ] Deliverables cells **D5**, **D6b**, **D10**
 - [ ] Exact contracts: the producer-site block and the rows-4a/4b snippet
 - [ ] `src/core/manifest.js` module doc comment and `@typedef` (in-code — D6b)
+- [ ] `reverseSymlink`'s own JSDoc — the `opts` `@param` (in-code — D6c)
 - [ ] `src/core/manifest.js` `ENTRY_FIELD_TYPES.symlink` (in-code — D5)
 - [ ] Current state §3 (producer sites), §4 (schema), §5 (doc comment)
 - [ ] Table B, Table N
@@ -1020,7 +1021,9 @@ the next `src/` move relocates them mechanically:
 - [ ] Current state §3 — the grep block and the per-site table
 - [ ] The EPERM-fallback prose and the dry-run report prose
 - [ ] **V11 resolves every one of them by content.** It is the only surface here
-      that cannot go stale silently — **re-run it instead of sweeping**
+      that cannot go stale silently — **re-run it instead of sweeping**, *at base*
+      (V11's header comment is the one place its directionality is decided; it is
+      green at base and red after the work lands, by design)
 
 **Table F (flipped assertions)** — mirrors:
 
@@ -1034,7 +1037,7 @@ a sequence, and names the implementation it reddens (ADR-0036 A1/A2).
 
 | # | Fixture (structural) | Assertion | Red against |
 |---|----------------------|-----------|-------------|
-| **B-T1** | Honest `applySkillLinks` create, then `fs.unlinkSync(link)` followed by `fs.symlinkSync(coreSkill, link)` — a new file object at the same path with the same target. **Assert the precondition explicitly**: `linkIdentity(link)` must now differ from the recorded pair, so a filesystem that recycled the inode fails the *precondition* loudly instead of silently turning this into a vacuous pass | the link **still exists** after `reverse()`, is in `skipped`, and the stderr `keeping …` line fired | base (**measured**: the link is deleted). **This is the end-to-end row and it is filesystem-dependent by nature** — the deterministic proof of the same rule is **B-T7(b)**, which is why both exist. |
+| **B-T1** | Honest `applySkillLinks` create, then a **replacement built so its inode CANNOT equal the recorded one** — see "B-T1's construction" below. Guard the row with the file's existing `isPosix` convention (`manifest.test.js:55`): `if (!isPosix) return t.skip('symlink creation may be unavailable');` | the link **still exists** after `reverse()`, is in `skipped`, and the stderr `keeping …` line fired. **Two assertions on the construction, both POSIX guarantees, not coin flips**: (i) immediately after the temp link is created and *before* the original is unlinked, its inode differs from the original's; (ii) after the rename, the link's inode equals the temp's. Do **NOT** assert "the recreated pair differs from the recorded pair" as a precondition — that is the defect this amendment removes | base (**measured**: the link is deleted). This is the end-to-end row; **B-T7(b)** proves the same rule deterministically through the seam, and remains the coverage that does not depend on filesystem behaviour at all. |
 | **B-T2** | The link is created **before** `applySkillLinks` runs, so the adopt branch records it | the link **still exists** after `reverse()`, is in `skipped`; **and** the recorded entry has `origin: 'adopted'` and **no** `dev`/`ino` | base (**measured**: the link is deleted). Assert the entry shape too — the end state alone tells you something is wrong; the entry tells you which rule fired. |
 | **B-T3** | Honest create, nothing touched, uninstall | the link is **removed** and is in `removed` | `PATCH: none — baseline / ordinary path.` Baseline row (ADR-0036 A1 exemption **(ii)**, not (i): there is no fault to inject here, so the missing field is the PATCH); red against making identity *required*, and against any row 4a/4b that fires on our own untouched link. **Run the forward step twice before uninstalling** and assert the entry is deep-equal to the first run's — that is AC11. |
 | **B-T4** | **Table S, one case per row of the producer-valid table plus every semantic class — TWELVE rows, not one combined deletion**: all-absent; `'created'`+matching identity; `'created'`+no identity; `'adopted'`+no identity; `'adopted'`+identity; unknown `origin`+no identity; unknown `origin`+matching identity; **`dev`-only**; **`ino`-only**; and the **both-wrong** family added in round 7 — **both fields wrong**, **`ino` wrong only**, **`dev` wrong only**. **The three both-wrong rows must also assert the BASE contrast** (base removes all three; measured), because they are what pins the corruption-only ledger row | each behaves exactly as Table S tabulates — in particular all three both-wrong rows **preserve**, where base removes | the all-absent row is the **backward-compatibility fence** (red against "absent identity ⇒ preserve", which would strand every pre-existing install). The **two partial rows are required in both directions** — one alone is passed by an implementation that checks only the field it happens to test. **All measured.** |
@@ -1042,6 +1045,114 @@ a sequence, and names the implementation it reddens (ADR-0036 A1/A2).
 | **B-T6** | `shared-skill-links.test.js` — the three **Table F** rows plus the forward-side identity assertion | exactly the expectations in Table F | `PATCH: none — shipped assertions whose expected values moved.` Their red-ness is Table F's measurement (three `ERR_ASSERTION` failures). |
 | **B-T7** | **The identity seam, four deterministic arms.** Honest create, then call `reverseSymlink` **directly** (WP-153 blessed the direct unit call) passing `{ identity: … }` as the 7th argument. Four separate rows: **(a) changed device** → `{dev: recorded.dev+1, ino: recorded.ino}`; **(b) changed inode** → `{dev: recorded.dev, ino: recorded.ino+1}`; **(c) unavailable** → `null`; **(d) reused** → the recorded pair verbatim | (a),(b),(c) → the link **survives**, is in `skipped`, `removed` empty. (d) → the link is **removed** — this arm pins **R4**'s recycling residual at its declared size; comment it as pinning current behaviour, not a fix | (a)(b)(c) red against any implementation that ignores a recorded identity or treats `null` as a match. (d) is `PATCH: none — residual pin`. **All four measured.** |
 | **B-T8** | **The verify→unlink race**, deterministic. Honest create, then call `reverseSymlink` directly with an identity seam that **replaces the link on disk** (`unlinkSync` + `symlinkSync`) and *then* returns the **recorded** pair — simulating a replacement landing between the check and the unlink | the replacement **is deleted** and the link is in `removed` | `PATCH: none — residual pin.` Not red-first: it pins **R7** at its declared size, which is the only way "we do not claim TOCTOU-freedom" stops being a sentence. If it ever goes red, either an atomic primitive was adopted or the mechanism changed. **Measured.** |
+
+### D6c — why `opts` gets a JSDoc line, and why it is not in the fence
+
+**The gap.** `reverseSymlink`'s mandated signature adds a 7th parameter,
+`opts = {}` (the identity seam). Its JSDoc lives at `manifest.js:207-215`, which
+is **above** the `MANDATED-SIGNATURE` fence — the fence begins at the `function`
+line. So the byte-lockstep gate that pins the signature does **not** see the
+JSDoc, and without an explicit deliverable the parameter would ship undocumented,
+against this repo's stated convention (CLAUDE.md: *"No TypeScript in `src/` —
+JSDoc type annotations only"*). Every other parameter of this function has an
+`@param`; `opts` would have been the only one without.
+
+**Decision: document it, outside the fence, pinned by a grep — not by moving the
+fence.** Three options were weighed:
+
+| | Option | Verdict |
+|---|---|---|
+| 1 | **Leave it undocumented** — treat `opts` as an internal seam | **rejected.** It is a real parameter in a real signature; "internal" is not a property the reader can see, and the convention has no seam exemption |
+| 2 | **Extend the `MANDATED-SIGNATURE` fence upward** to cover the JSDoc | **rejected.** The fence is byte-locked against a second copy and its extraction spans are content-anchored on `function reverseSymlink(`. Widening it means re-deriving the extractor, the construction self-check and the 31/13 V4z matrix — a large, measured surface disturbed for one comment line. Cost is wildly out of proportion to the gap |
+| 3 | **One mandated JSDoc line above the fence, checked by grep (V8b)** | **TAKEN.** Zero disturbance to V4: the fence still starts at the `function` line and stays byte-identical. `@param` text is not behaviour, so a byte-lock buys nothing a presence check does not |
+
+**Blast radius, checked rather than assumed.** Adding a line at `:215`
+shifts `rsDef` and everything below it in `manifest.js` by one.
+
+- **V4** is unaffected — its spans are content-anchored at `function
+  reverseSymlink(` and the matching close brace, both of which move together.
+- **V8/AC2** is unaffected — `wd-docfields.js` isolates the module header by
+  slicing at `const BEGIN_SENTINEL` (`manifest.js:54`), far above this JSDoc.
+- **V11** is affected, and that is already accounted for: it is a **base-only**
+  gate (see its header comment), and the implementation shifts these coordinates
+  by far more than one line regardless. The deferred post-merge citation
+  re-derivation absorbs it.
+
+**Exact text, so there is no judgment left.** One line, after the existing
+`skillsRoots` `@param`:
+
+```js
+ * @param {{identity?: function}} [opts]  test seam only — see D4
+```
+
+### B-T1's construction — and why the naive one was a spec defect
+
+**What failed.** The mandated text was *"`fs.unlinkSync(link)` followed by
+`fs.symlinkSync(coreSkill, link)`"* plus an assertion that the new pair differs
+from the recorded one. On APFS — every local run and CI's macOS runner — the
+recreate gets a fresh inode and the assertion holds. **On ext4 the freed inode is
+reused immediately**, the new link gets the *same* inode, and the assertion fails:
+CI (ubuntu-latest) reported *"precondition: delete+recreate must change the
+(dev, ino) pair — expected true, actual false"*.
+
+**This was a spec defect, not an implementation one.** Codex's design-round-2
+finding warned the row was filesystem-dependent; the answer written into the spec
+— *"B-T1 asserts its filesystem precondition instead of assuming it"* — converted
+a silent vacuous pass into a **hard failure on a conforming platform**. Asserting
+a coin flip does not remove the dependency, it just makes the coin visible.
+
+**The construction that removes the dependency.** Allocate the replacement's
+inode **while the original still holds its own**, then swap the name:
+
+```js
+const tmp = `${link}.tmp`;
+fs.symlinkSync(coreSkill, tmp);        // 1. new inode, allocated while `link` is still live
+//    ASSERT (i): linkIdentity(tmp).ino !== recorded.ino
+fs.unlinkSync(link);                   // 2. free the original
+fs.renameSync(tmp, link);              // 3. move the DIRENT; the inode is preserved
+//    ASSERT (ii): linkIdentity(link).ino === the inode observed at step 1
+```
+
+**Why this is guaranteed, and on what.** It rests on two POSIX properties, not on
+any allocator policy:
+
+1. **Two live files on one device cannot share an inode number.** At step 1 the
+   original is still linked, so its inode is allocated; `symlink()` creates a new
+   inode and therefore a different number. (`symlink()` never hardlinks.)
+2. **`rename()` does not allocate an inode.** POSIX defines it as a
+   directory-entry operation — *"the rename() function shall change the name of a
+   file"* — and it does not follow symlinks: *"if the old argument points to a
+   pathname of a symbolic link, the symbolic link shall be renamed."* So step 3
+   moves the name and keeps the inode from step 1. Nothing between steps 2 and 3
+   allocates anything, so the freed original inode cannot be handed back.
+
+`tmp` is a sibling in the same directory, so the device is identical and `EXDEV`
+is impossible. **Measured on APFS**: step 1 yields distinct inodes, step 3
+preserves the temp's inode, the final pair differs from the recorded one, and the
+link is still a symlink resolving to the core source. The ext4 behaviour that
+broke the naive form — immediate reuse of a *freed* inode — cannot apply, because
+under this construction the original's inode is never freed before the
+replacement's is allocated.
+
+**Design decision, recorded.** Two candidates were considered:
+
+| | Design | Verdict |
+|---|---|---|
+| (a) | **skip-guard** — `t.skip(…)` when the recreated pair happens to equal the recorded one, leaning on **B-T7(b)** for the mismatch path | **not taken.** Correct and platform-independent, but it makes the row's end-to-end value a coin flip: on ext4 it would *always* skip, so the only platform CI actually gates on would lose the coverage entirely |
+| (b) | **construct** — the rename swap above | **TAKEN.** It keeps the row-4b end-to-end proof live on **every** POSIX filesystem, including CI's own |
+
+**(a) remains the documented fallback.** If a platform is ever found where either
+POSIX property above does not hold, the row cannot be made deterministic there and
+(a) is the correct amendment — with the same pointer: **B-T7(b) proves row 4b's
+mismatch path through the identity seam, deterministically and without touching a
+filesystem**, which is exactly why both rows exist. That division is unchanged by
+this amendment: B-T1 is the end-to-end row, B-T7 is the deterministic one.
+
+**The two assertions are derivation checks, not preconditions.** Each restates a
+POSIX guarantee, so a failure means either the construction was built wrong (fail
+loudly — correct) or the platform violates POSIX rename semantics (in which case
+R3/R4's assumptions need revisiting, and that is also worth failing on). Neither
+is the allocator coin flip the old row depended on.
 
 ## Implementation notes & constraints
 
@@ -1115,6 +1226,10 @@ a sequence, and names the implementation it reddens (ADR-0036 A1/A2).
 - [ ] **AC1.** `src/core/manifest.js` exports `linkIdentity`;
       `src/adapters/shared.js:5` imports it **alongside Part A's
       `insertionAnchor`**, which must survive the edit.
+- [ ] **AC2b.** `reverseSymlink`'s own JSDoc documents `[opts]` with the exact
+      `@param` line D6c mandates. It sits **above** the byte-locked fence, so V4
+      cannot see it and **V8b** is what checks it (D6c records why the fence was
+      not widened to cover it).
 - [ ] **AC2.** The module doc comment and `@typedef ManifestEntry` list `origin?`,
       `dev?` and `ino?` **in addition to** Part A's `anchorBefore?`.
 - [ ] **AC6.** Table A2 rows **4a** and **4b** preserve the link in the two
@@ -1141,8 +1256,9 @@ a sequence, and names the implementation it reddens (ADR-0036 A1/A2).
       — B-T6, plus B-T2's `origin: 'adopted'` / no-identity assertion.
 - [ ] **AC10.** Table F's three assertions are updated and pass; **every other
       test in the repository passes byte-unmodified**, including WP-153's **T1–T3,
-      T4a–T4c and T6** (its canonical roster after
-      `WP-symlink-lexical-fallback-removal` split T4), the four fenced WP-146
+      T4a–T4c, T6 and T7** (T4 was split by
+      `WP-symlink-lexical-fallback-removal`; T7 is the labelled forged-pair row
+      that an earlier revision of this list omitted), the four fenced WP-146
       sync-side tests, and the whole of Part A's
       A-T1…A-T11 and `tests/unit/manifest.test.js`'s WP-147 suites.
 - [ ] **AC11.** Running `applySkillLinks` twice is idempotent: deep-equal manifest
@@ -1487,6 +1603,20 @@ process.exit(bad);
 DOCS
 node /tmp/wd-docfields.js src/core/manifest.js origin dev ino anchorBefore && echo "V8 ok"
 
+# V8b — D6c: `opts` must be documented in reverseSymlink's OWN JSDoc, which sits
+#       ABOVE the mandated fence and so is invisible to V4. Scope the check to the
+#       comment block immediately preceding the definition, so an `@param opts`
+#       written anywhere else in the file does not satisfy it.
+#       POST-IMPLEMENTATION (red at base — `opts` does not exist yet).
+node -e '
+const fs=require("node:fs"), L=fs.readFileSync("src/core/manifest.js","utf8").split("\n");
+const d=L.findIndex(l=>l.startsWith("function reverseSymlink("));
+let a=d-1; while(a>0 && !L[a].includes("/**")) a--;
+const doc=L.slice(a,d).join("\n");
+if(!/@param\s+\{\{identity\?: *function\}\} \[opts\]/.test(doc)){
+  console.error("V8b: reverseSymlink JSDoc does not document [opts]"); process.exit(1);}
+console.log("V8b ok");'
+
 # V11 — CITATION SCAN. Resolves every `src/` line number this spec is allowed to
 #   cite BY CONTENT, then flags any citation that resolves to nothing. It exists
 #   because a HAND sweep has now missed mirrors three times: each pass grepped the
@@ -1495,6 +1625,23 @@ node /tmp/wd-docfields.js src/core/manifest.js origin dev ino anchorBefore && ec
 #   pointing at `out.changed.push(linkPath)` while creation had moved to `:496`.
 #   **Re-run this instead of sweeping.** When it fails, fix the citation — or, if
 #   the code genuinely moved, fix the anchor and let it re-resolve.
+#
+#   DIRECTIONALITY — RUN THIS AT BASE, BEFORE YOU WRITE ANY CODE, AND ONLY THERE.
+#   V11 runs BACKWARDS from every other gate here. V4's green arm, V7 and V8 are
+#   red at base and go green when the work lands. V11 is GREEN AT BASE AND GOES
+#   RED WHEN THE WORK LANDS — because it validates this spec's citations against
+#   the code, and this spec's Current-state deliberately cites the BASE tree.
+#   Growing `reverseSymlink` shifts every coordinate below it in manifest.js.
+#   MEASURED, not argued: inserting 40 filler lines into the function body — a
+#   conservative stand-in for rows 4a/4b plus the identity helper — turns V11 from
+#   `ok` into `V11 BROKEN — 21 citation(s)`, starting with `manifest.js:265` (the
+#   function's close, cited at spec line 195). That red is CORRECT and EXPECTED.
+#   IMPLEMENTER: run V11 once, at base, paste the green output, and do NOT re-run
+#   it after implementing and do NOT "fix" the citations. Re-deriving this spec's
+#   src coordinates against the merged tree is the ARCHITECT's post-merge
+#   task, deliberately deferred so it happens once against final line numbers
+#   instead of N times against a moving branch. (Scale, as the scan reports it
+#   today: 48 anchors, 187 citation occurrences.)
 cat > /tmp/wd-citescan.js <<'CS'
 // V11 — CITATION SCAN. Resolves every src/ line number this spec may cite BY
 // CONTENT, per file, and fails on any citation that does not resolve against the
@@ -1566,6 +1713,7 @@ const ANCHORS = [
   ['manifest.js', 'module doc: managed-block shape end', A('manifest.js', 'content that preceded them')],
   ['manifest.js', '@typedef open', A('manifest.js', '@typedef {{kind: string')],
   ['manifest.js', '@typedef close', A('manifest.js', 'sepAfter?: string, anchorBefore?: string}} ManifestEntry')],
+  ['manifest.js', 'BEGIN_SENTINEL (V8/AC2 header slice point)', A('manifest.js', 'const BEGIN_SENTINEL = ')],
   ['manifest.js', 'ENTRY_FIELD_TYPES', A('manifest.js', 'const ENTRY_FIELD_TYPES = {')],
   ['manifest.js', 'validateEntry open', A('manifest.js', 'function validateEntry(')],
   ['manifest.js', 'validateEntry close', closeOf('manifest.js', A('manifest.js', 'function validateEntry('))],
@@ -1712,6 +1860,10 @@ is `2` today and must stay `2`** — the definition and the one production call.
 Do not confuse that with the **five** *unparenthesized* textual occurrences of
 `reverseSymlink` across `src/` (Current state §2), which include the comment above
 the call, the `module.exports` line and a prose mention in `shared.js:446`.
+**V11 is the one gate that runs backwards** — green at base, red once the
+function grows (measured: 21 unresolved citations against a 40-line growth
+simulation). Run it at base only; its header comment is the canonical statement
+of that and of why the citation re-derivation is deferred to post-merge.
 **The guards are tripwires; V1 and V2 are the load-bearing checks** —
 they are not AST-aware and cannot tell reachable code from code after a `return`
 (**R8**, routed to `WP-grep-gate-helper`).
@@ -1943,6 +2095,20 @@ lands; V1/V2 remain the load-bearing behavioural checks.
 6. **The owner ruling above is recorded here.** This spec does not move to
    `Ready` without it, and no implementer starts without `Ready`.
 
+> **Commit shape — this spec imposes NO commit-count rule, checked rather than
+> assumed.** The one-commit lockstep gate is **V3d of
+> `WP-symlink-lexical-fallback-removal`**, which counts commits touching *that*
+> WP's four-path set (`src/core/manifest.js`, `tests/unit/manifest.test.js`, and
+> its two spec files) on *that* branch. It is not part of this spec and does not
+> govern this WP's PR: `grep -niE "one commit|single commit|lockstep|V3d"` over
+> this file returns only the two **fence/snippet byte-lockstep** mentions, which
+> are about Table B's two canonical copies, not about git. **So the amended B-T1
+> may land as a second commit on the open PR** — no rebuild, no force-push, no
+> licence needed. Stated here because the question was asked once and should not
+> need re-deriving.
+
+---
+
 > **Provenance.** Part B of the split of the consolidated
 > `WP-forward-time-ownership-provenance`, which was drafted 2026-08-02, taken
 > through **three Codex design-gate rounds** (11 findings, 3 high), and split at
@@ -1973,7 +2139,24 @@ lands; V1/V2 remain the load-bearing behavioural checks.
 > V5's `reverseSymlink(` count still 2; V6's two schema cells still pre-Part-B
 > (and Part A correctly did **not** type-gate `anchorBefore`).
 >
-> **Design evidence carried forward, all measured at `18bc909` (`src/` identical
+> **2026-08-03 — B-T1 AMENDMENT, made against `81f43b7` while PR #157 is open and
+> unmerged.** CI (ubuntu-latest) failed on B-T1: the mandated fixture asserted
+> that a delete-and-recreate changes the `(dev, ino)` pair, which **ext4 falsifies
+> by reusing the freed inode immediately**. That was a **spec** defect — the row
+> mandated a filesystem coin flip and then asserted the coin. B-T1's mandate is
+> replaced with a rename-based construction that cannot produce a colliding inode
+> on any POSIX filesystem; the reasoning, the measurement, the rejected
+> alternative and the retained fallback are in *"B-T1's construction"*. **No
+> design, ledger row, contract table or ruled disposition changed** — only the
+> fixture that proves row 4b end to end, and it still proves the same assertion.
+> Folded in the same touch: the **V11 directionality** statement (measured, and
+> the opposite of what was first written — see its header), the roster fix
+> **T6 → T6 and T7**, and the **D6c** `opts` JSDoc decision with its **V8b** gate
+> (measured red at base, green against the mandated line). **Commit shape:** this
+> spec carries no commit-count rule (see the Definition-of-done note), so the
+> implementer applies this as a **second commit** on the open PR.
+>
+> > **Design evidence carried forward, all measured at `18bc909` (`src/` identical
 > to `0f9ee08`):** the full suite baseline (`1901 / 1892 / 0`), the three flipped
 > assertions, the `lstat`-identity primitive including the inode change on
 > delete-and-recreate, the **twenty-cell Table S sweep**, all four identity-seam
