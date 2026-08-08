@@ -1,0 +1,38 @@
+[codex] Starting Codex task thread.
+[codex] Thread ready (019fe1ba-9c26-7e30-88ac-61a36cc11bc5).
+[codex] Turn started (019fe1ba-9d2a-74b2-9a81-ee390cb2baf0).
+[codex] Running command: /bin/zsh -lc "nl -ba docs/specs/WP-sanitize-project-display-names.md | sed -n '360,655p'; nl ...
+[codex] Command completed: /bin/zsh -lc "nl -ba docs/specs/WP-sanitize-project-display-names.md | sed -n '360,655p'; nl ... (exit 0)
+[codex] Running command: /bin/zsh -lc "node --test <(printf '%s\\n' \"'use strict'; require('node:test')('x',()=>{});\")"
+[codex] Command failed: /bin/zsh -lc "node --test <(printf '%s\\n' \"'use strict'; require('node:test')('x',()=>{});\")" (exit 1)
+[codex] Running command: /bin/zsh -lc "nl -ba docs/specs/WP-sanitize-project-display-names.md | sed -n '509,655p'; nl ...
+[codex] Command completed: /bin/zsh -lc "nl -ba docs/specs/WP-sanitize-project-display-names.md | sed -n '509,655p'; nl ... (exit 0)
+[codex] Running command: /bin/zsh -lc "printf '%s\\n' \"'use strict'; const t=require('node:test'); t('ok',()=>{}); t(...
+[codex] Running command: /bin/zsh -lc "node -e \"const t=require('node:test');t('ok',()=>{});t('todo-fail',{todo:true}...
+[codex] Command completed: /bin/zsh -lc "node -e \"const t=require('node:test');t('ok',()=>{});t('todo-fail',{todo:true}... (exit 0)
+[codex] Running command: /bin/zsh -lc "node -e \"const t=require('node:test');for(let i=1;i<=16;i++)t('p'+i,()=>{});t(...
+[codex] Command completed: /bin/zsh -lc "node -e \"const t=require('node:test');for(let i=1;i<=16;i++)t('p'+i,()=>{});t(... (exit 0)
+[codex] Assistant message captured: {"verdict":"needs-attention","summary":"Nem szállítható: a G1 kapuja egyszerre ad hamis piros...
+[codex] Turn completed.
+# Codex Adversarial Review
+
+Target: branch diff against main
+Verdict: needs-attention
+
+Nem szállítható: a G1 kapuja egyszerre ad hamis pirosat és hamis zöldet, a G2 előírt negatív futása pedig a megadott korlátok között nem állítható elő.
+
+Findings:
+- [high] A G1 envelope nem felel meg a parancs kimenetének, és TODO teszttel kijátszható (docs/specs/WP-sanitize-project-display-names.md:563-565)
+  A támadott rész: „the summary reports `# fail 0` … and `# pass` exactly `16`”. A dokumentált, reporter nélküli `node --test` parancs támogatott Node-verzión terminálban `ℹ fail`, `ℹ pass` stb. számlálókat ír, ezért a szó szerint értelmezett envelope egy helyes implementációt elutasít. Ezzel párhuzamosan nem követeli meg sem a teljes tesztszám 16-os értékét, sem a `todo 0` számlálót. Mérhetően 16 sikeres teszt és egy hibázó, TODO-ként jelölt tizenhetedik teszt exit 0-val, `pass 16`, `fail 0`, `skipped 0`, `cancelled 0`, `todo 1` eredményt ad; ez átmegy a felsorolt feltételeken, miközben közvetlenül cáfolja a „more means a case beyond T1–T16 was added” állítást.
+  Recommendation: Rögzítsen explicit reportert a parancsban, és az envelope ellenőrizze a reporter tényleges számlálóit, köztük a teljes tesztszám pontosan 16 és a TODO pontosan 0 értéket is.
+- [high] A G2 kötelező negatív futása ellentmond a tiltott módosításnak (docs/specs/WP-sanitize-project-display-names.md:575-584)
+  A támadott részek: „`G2` … produces and pastes [a red observation]” és „No such run may write `tests/golden/digest-default.md`”. A G2 pontos parancsa kizárólag ennek az egy fájlnak a bájtjait hash-eli. A helyes hash jelenleg megegyezik a rögzített értékkel, ezért a tartalomellenőrzés értelmes piros oldalát csak a célfájl bájtjainak ideiglenes megváltoztatásával lehet előállítani, amit a spec kifejezetten megtilt. PATH-, jogosultság- vagy eszközhiba csak a `shasum` meghibásodását bizonyítaná, nem azt, hogy a gate eltérő bájtokat visszautasít. Emiatt egy helyes implementáció sem tudja teljesíteni a Definition of done feltételeit a megadott szabályok szerint.
+  Recommendation: Vagy engedélyezze a golden ideiglenes, kötelezően visszaállított negatív mutációját, vagy definiáljon olyan külön negatív ellenőrzést egy másolaton/paraméterezett bemeneten, amely ténylegesen eltérő bájtokat hash-el anélkül, hogy a deliverable-határt megsértené.
+- [medium] A biztonsági checklist teljes strukturális hamisítás-zárást állít, miközben egy szerkezet szándékosan nyitva marad (docs/specs/WP-sanitize-project-display-names.md:525-534)
+  A támadott rész: „The surface this WP does close is structural forgery”. Table A és RES-2 ezzel szemben kifejezetten rögzíti, hogy a `1. do x` név `- 1. do x` alakban beágyazott rendezett listát, vagyis Markdown-struktúrát hoz létre. A9 csak az egy sorban maradást és az allowlist-formát méri; nem dönti el az összes strukturális konstrukció kizárását. A checklist így többet állít a mért biztonsági tulajdonságnál, ami későbbi threat-model vagy audit során hamis lezárási feltételezéshez vezethet.
+  Recommendation: A biztonsági állítást korlátozza az A9 által ténylegesen eldöntött sor- és szekcióhamisításra, vagy bővítse a szerződést és a teszteket úgy, hogy a RES-2-ben elfogadott Markdown-struktúrát is kizárják.
+
+Next steps:
+- Javítsák a G1 reporterét és teljes számláló-envelope-ját.
+- Oldják fel a G2 negatív futása és a golden módosítási tilalma közti ellentmondást.
+- Igazítsák a security checklist állítását az A9 és RES-2 tényleges határához.
