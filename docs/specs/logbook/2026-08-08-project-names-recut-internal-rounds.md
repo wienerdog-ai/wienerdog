@@ -435,3 +435,51 @@ One deviation noticed while doing this and not corrected retroactively: the
 commits on this branch carry a `Generated-by:` trailer, while `main` and upstream
 both use `Co-Authored-By:`. The `main` commit uses the upstream form; the branch
 history was left alone rather than rewritten.
+
+## Sixth closing round — three findings, all in this session's own prose
+
+Seventh clean run of the companion runtime. The round confirmed T17's two vaults
+observe both sub-cases, confirmed the M1/M2/M7/M10 partition, and confirmed the
+test count consistent at seventeen. Every one of the three findings was in text
+written during this run of fixes, not in the spec's original content.
+
+- **F-1 (medium) — the managed-block baseline was inaccurate.** Current state
+  claimed `buildBlock` "neutralizes only lines exactly equal to its own BEGIN/END
+  sentinel". The code compares `line.trim()` against the sentinel, so a padded
+  sentinel is neutralized too. Inherited wording, but touched this session when
+  the `trimEnd` clause went in, without checking the sentence around it. Fixed to
+  say what the code does, plus the fact that settles it for this surface: A1
+  excludes `<`, `>` and `!`, so a sanitized project name cannot spell a sentinel.
+- **F-2 (medium) — the sub-case boundary was drawn on the wrong side.** A9 said
+  "a name ending in spaces sanitizes unchanged". Measured counterexamples: `'   '`
+  and `'---   '` both end in spaces and both sanitize to the **empty** string,
+  because A3 deletes the whole leading run. They are case (b), not (a), so the
+  two sub-cases overlapped and (a) was false for real inputs. The boundary now
+  sits on the sanitized **output**: (a) is non-empty and ends in U+0020, (b) is
+  empty.
+- **F-3 (low) — four mirrors carried a weaker wording than A9.** A9 said "every
+  trailing whitespace character"; the Security checklist, the Not-relaxed line,
+  Coverage and Out of scope all said "space". Same contract, two forces, in
+  registered mirrors.
+
+### The structural answer, applied a second time
+
+F-3 was the third appearance of one family: a canonical row changes and its prose
+mirrors drift. Ruled: apply the A12 pattern to A9 rather than align the wording a
+third time.
+
+A9 now owns the mechanism outright and states it once — `trimEnd` strips every
+trailing whitespace character, and on this surface only U+0020 is reachable
+because A1 admits no other whitespace, mapping tab, U+00A0 and U+3000 alike to
+`_`. Every prose surface was reduced to a bare citation carrying no mechanism at
+all: "row A9's recorded final-position divergence". Text with no content in it
+cannot go stale, which is the whole point.
+
+Measured after the change: the mechanism is named in exactly two places in the
+file — row A9, and T17 itself, which has to be concrete because it is the gate.
+Current state, the SHAPE-PB comment, the Security checklist, the Not-relaxed
+line, Coverage and Out of scope now all point rather than describe.
+
+Two canonical owners now hold the two contracts that drew the most review
+traffic: **A12** for the golden fixture, **A9** for the persisted-surface
+divergence.
