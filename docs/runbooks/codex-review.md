@@ -50,6 +50,18 @@ mechanisms) → repeat until clean → owner sign-off → specs move to Ready.
 - When two consecutive rounds land findings of the same kind, the next
   step is a design question, never another textual patch.
 
+### Template conformance (round zero, before any review)
+
+- Before the first adversarial round, the relay diffs the spec against
+  `docs/specs/_TEMPLATE.md`'s section list and reports it in the round
+  header: every template section is either present or explicitly marked
+  `N/A — <one-line reason>`. A silently absent section blocks the round.
+- The check runs in a clean context: an executor that took no part in
+  drafting, relaying or reviewing this spec, given exactly two inputs —
+  the spec and the template. A context that helped produce the artifact
+  reads what it meant, not what is written. No external reviewer is used
+  either — this is a conformance read, not a design critique.
+
 ## Dispatch-time re-verification (the last gate before an implementer starts)
 
 **`Ready` is not the same as "still true".** **The orchestrator session runs
