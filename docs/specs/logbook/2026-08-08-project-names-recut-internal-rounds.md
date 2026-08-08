@@ -540,3 +540,58 @@ are not merely red-capable: the correct implementation is idempotent over the
 full sweep with all four inputs (zero violations), and M8 stays green under the
 trailing input across `cp 0..0x2fff` — the run input remains the only thing that
 catches it, which is what its cell claims.
+
+## Eighth closing round — the fixes are now generating the findings
+
+Ninth clean run. A9's reachability condition, M11's red set and the 17/12/4
+counts were confirmed. Three findings, two of them direct consequences of the
+previous round's own fix.
+
+- **F-1 (medium) — the T17 table row was left behind by its own test body.** The
+  body had been renamed to "and only there" and grown a third vault; the row
+  still said the old name and "two vaults". Two contradictory surfaces in one
+  section. Fixed: the row now carries the body's literal name, all three vaults
+  and the control's expectation.
+- **F-2 (medium) — a justification this session wrote became false in the same
+  commit that wrote it.** T7's cell claimed that without the trailing input
+  "nothing in this file constrains the end of the string", citing M11. But the
+  T17 control added in that same commit catches M11 too. Measured: the broad tail
+  trim reddens both T7 and T17's control; a **narrower** variant that removes only
+  a trailing `.`, `_` or `-` and never a space is green on all three of T17's
+  vaults and on every other test, and is caught by the trailing input alone. The
+  justification now cites that variant, and M11's cell states what its own red set
+  already showed — two independent assertions catch it.
+- **F-3 (medium) — exact mapping was ungated on mixed runs.** T7's four inputs
+  each vary a single `ch` or its double, so no per-code-point sweep can see a
+  pair like `_-`. Measured: appending `` .replace(/_-/g, '_') `` was green on
+  **every one of T1–T17** while turning `a` + newline + `-b` into `a_b` where A2
+  requires `a_-b`. Fixed: T10 gains the `HOSTILE_A` exact-mapping pair — the test
+  count does not move — and **M12** is added with its measured red set, `{T10}`.
+
+### Q15 applied as practice, and what it caught
+
+The owner recorded Q15 as a candidate: after adding a gate, re-measure every
+MEASURED claim the new gate could invalidate, in the same commit. Applied here
+before writing anything, it caught a row the round had not mentioned — **M8**.
+Its cell claimed "T7's run input is the only assertion that fires"; with
+`HOSTILE_A` in T10 that is no longer true, because HOSTILE_A carries a run of
+excluded characters that M8 collapses. M8's measured red set is now T7 and T10,
+and its cell records that the T10 side was measured when the pair was added.
+
+That is one round's worth of findings avoided by a discipline that cost one
+measurement pass.
+
+### A modelling error caught before it reached the artifact
+
+While re-measuring, the first pass modelled M1 as an identity function and
+concluded that T10 reddens under it. That is wrong: M1 patches the **splice
+site**, explicitly leaving `sanitizeProjectName` defined, so every pure-function
+test — T5, T6, T7, T8, T10 — is untouched by it. M1's cells were correct as they
+stood and were not changed. Recorded because the failure mode is worth naming:
+modelling a mutation by its effect rather than by its stated patch produces
+confident, wrong red sets.
+
+All thirteen rows were then read end to end as reddens/stays-green pairs. Only
+M8 needed changing, and one cell of it — M8's stays-green list had been written
+with T17 in it, against the stated convention that the cells carry T1–T16 and the
+note carries T17. Corrected to T1–T6, T8, T9, T11–T16.
