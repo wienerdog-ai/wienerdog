@@ -595,3 +595,54 @@ All thirteen rows were then read end to end as reddens/stays-green pairs. Only
 M8 needed changing, and one cell of it — M8's stays-green list had been written
 with T17 in it, against the stated convention that the cells carry T1–T16 and the
 note carries T17. Corrected to T1–T6, T8, T9, T11–T16.
+
+## Ninth closing round — one finding, and the third structural owner
+
+Tenth clean run, and the first round of this series to return a single finding.
+Part A confirmed every count and all thirteen mutation partitions against the
+tree.
+
+**The finding:** `HOSTILE_C`'s mandated exact mapping was asserted nowhere.
+Measured — a post-process collapsing a space followed by an underscore turns
+`log__ _end of daily log_` into `log___end of daily log_` and passes T7's four
+inputs, T10's ten pairs and all thirteen mutation rows.
+
+### Why the fix was not "add HOSTILE_C"
+
+Round eight found `HOSTILE_A` missing from T10's hand-listed subset. Round nine
+found `HOSTILE_C`. `HOSTILE_B` was missing too and would have been round ten.
+That is the pattern the repo's own P1 lesson names: when a review keeps finding
+one more entry missing from an enumeration, the enumeration's granularity is the
+defect, not its contents.
+
+Owner ruling: **T10 quantifies over the worked input→output table** — every row,
+not a named subset — with a closed two-row exception list, both still gated. The
+`Olvasnivalók` row's expectation is prose ("the input, byte-identical") and T6
+gates it in NFC and NFD; the leading-spaces row's input is described rather than
+written and is built from escapes. Measured before landing: the implementation
+this spec mandates reproduces all seventeen literal rows.
+
+That is the third structural owner in this run. **A12** owns the golden fixture,
+**A9** owns the persisted-surface divergence, and the worked table now owns the
+exact-mapping obligation. All three replaced an enumeration that reviews kept
+finding one more member of.
+
+### Q15's second application
+
+Announced before the change and measured, not inferred: a table-wide T10 moves
+exactly one mutation row. **M11** reddens T10 once the table is in scope, because
+`HOSTILE_B` ends in `.` and `HOSTILE_C` ends in `_` and a tail trim removes both;
+its measured set moves from `{T7, T17}` to `{T7, T10, T17}`, and its cell records
+that the T10 entry arrived with the scope change. M2, M7 and M8 already carried
+T10 and do not move; M9 stays green; M1, M3, M4, M5, M6a, M6b and M10 patch the
+splice site or the EP4 decision and leave the pure function alone.
+
+### M12 became a family row rather than spawning M13
+
+The new mutant, which merges a space into the underscore that follows it, is a second member of the mixed-adjacency family M12
+already represents, so M12 names the family and both measured members instead. A
+row per discovered patch would rebuild, one level up, exactly the enumeration T10
+had just replaced with a quantifier.
+
+All thirteen rows were read end to end afterwards as reddens/stays-green pairs;
+the partition is consistent and no other cell moved.
