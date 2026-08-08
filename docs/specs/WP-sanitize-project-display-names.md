@@ -522,16 +522,20 @@ This WP handles untrusted input, so this section is written rather than deleted.
       splice site, not about the tree:** RES-1 says plainly that splice-site
       completeness is not gated, and this item claims nothing wider than the site
       row A5 names.
-- [ ] **The surface this WP does close is structural forgery inside a text
-      artifact a model reads as authority.** Creating a directory needs no
-      approval, and the digest's strongest control — identity notes injected only
-      when their bytes hash-match a recorded human approval
-      (`src/core/digest.js:471`, ADR-0021) — does not cover a folder name. What
-      it forges persists into the managed block on disk. Row A9 is the gated
-      claim, and it is a closed-form property over emitted output rather than a
-      list of dangerous shapes: the project block holds exactly `min(K, 50)`
-      lines, plus one overflow line when `K > 50`, and every line matches the
-      allowlist form.
+- [ ] **The surface this WP closes is line and section forging inside a text
+      artifact a model reads as authority — not every markdown construct.**
+      Creating a directory needs no approval, and the digest's strongest control
+      — identity notes injected only when their bytes hash-match a recorded human
+      approval (`src/core/digest.js:471`, ADR-0021) — does not cover a folder
+      name. What it forges persists into the managed block on disk. Row A9 is the
+      gated claim, and it is a closed-form property over emitted output rather
+      than a list of dangerous shapes: the project block holds exactly
+      `min(K, 50)` lines, plus one overflow line when `K > 50`, and every line
+      matches the allowlist form. **The residual is named, not implied:** RES-2
+      keeps one construct alive inside the bullet — a name beginning with digits
+      followed by `.` and a space renders as a nested ordered-list item, as
+      `- 1. do x` does — so this item asserts no general structure-freedom, only
+      that a name cannot leave its own list item or create a heading.
 - [ ] **The secret-scan layer is not weakened in either direction (ADR-0024).**
       Row A7 keeps today's scan input byte-identical as one leg, so the existing
       omission decision cannot regress, and adds a second leg over the bytes that
@@ -562,7 +566,7 @@ A step's verdict is its envelope below, never the impression its output leaves.
 
 | step | command | still passes | already fails |
 |------|---------|--------------|---------------|
-| G1 | `node --test tests/unit/digest-project-name-sanitize.test.js` | exit `0`, and the summary reports `# fail 0`, `# skipped 0`, `# cancelled 0` and `# pass` exactly `16` | any `# fail` > 0; any `# skipped` > 0 or `# cancelled` > 0 (a case that did not run is not a case that passed); `# pass` other than `16` — **both directions are red**: fewer means not all of T1–T16 ran and the file is incomplete, more means a case beyond T1–T16 was added, which the Deliverables table forbids ("exactly the sixteen tests … Add nothing else"). Measured on this tree: `node --test` over a single file reports one `pass` per top-level `test()` and adds no entry for the file itself. The command has no pipe, so its exit status is the runner's own. |
+| G1 | `node --test tests/unit/digest-project-name-sanitize.test.js` | exit `0`, and the summary reports `tests 16`, `pass 16`, `fail 0`, `skipped 0`, `cancelled 0`, `todo 0` | any of the six counters differing from the value above. **The envelope is the numbers, never the prefix** — the runner marks the summary lines `ℹ` under its default reporter and `#` under TAP (measured on this tree: `ℹ pass 16`), so a gate that pinned the prefix would red a correct run. `tests` is pinned as well as `pass`, and `todo` is pinned to `0`, because they are what close the over-count side: measured, sixteen passing cases plus a **failing** seventeenth marked `{todo: true}` reports `tests 17, pass 16, fail 0, skipped 0, cancelled 0, todo 1` and exits `0` — a case beyond T1–T16, which the Deliverables table forbids ("exactly the sixteen tests … Add nothing else"), smuggled past every other counter. Fewer than `16` means not all of T1–T16 ran and the file is incomplete. Also measured: `node --test` over a single file reports one `pass` per top-level `test()` and adds no entry for the file itself. The command has no pipe, so its exit status is the runner's own. |
 | G2 | `shasum -a 256 tests/golden/digest-default.md` | the printed digest is exactly `68ab999675bb66f806ad785aa4de008c90e74ed822afc4af366c2c030715a8a2` | any other digest — including one produced only by a line-ending or trailing-whitespace difference, because the baseline is a hash of bytes. **Baseline declared:** the recorded digest is the file's content, not a git comparison; a staged or committed change cannot pass it the way `git diff --exit-code` would. **Windows is not a supported author for this gate:** a `core.autocrlf=true` checkout rewrites these bytes to CRLF and fails it; set `core.autocrlf=false`. CI runs `ubuntu-latest` and `macos-latest` only. On a machine without `shasum`, `sha256sum tests/golden/digest-default.md` prints the same digest. |
 | G3 | `npm test && npm run lint` | both exit `0` | either exits non-zero |
 
@@ -647,8 +651,11 @@ partially addressed here.
    M7, M8, M9, M10) applied, run and reverted; all output pasted into the PR body.
    **`G2` and `G3` additionally need a red run each**, per the two-sided rule under
    Verification steps — `G1`'s red side comes from the mutation rows, theirs does
-   not exist yet and the implementer produces it. No such run may write
-   `tests/golden/digest-default.md`.
+   not exist yet and the implementer produces it. No such run may leave
+   `tests/golden/digest-default.md` in a modified state — a temporary
+   tip-observe-restore is permitted, an unrestored edit is a boundary violation.
+   How the red side is produced is the implementer's call; this spec does not
+   prescribe a method.
 2. Conventional commits; PR titled
    `fix(digest): sanitize vault-derived project display names (WP-sanitize-project-display-names)`.
 3. PR template filled, including "Decisions made" (or "none") and `Generated-by:`.
