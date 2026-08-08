@@ -5,7 +5,7 @@ status: Draft
 model: sonnet
 size: S
 depends_on: []
-adrs: [ADR-0004, ADR-0024]
+adrs: [ADR-0004, ADR-0024, ADR-0031, ADR-0036]
 epic: audit-2026-07-29
 ---
 
@@ -122,7 +122,7 @@ the golden, so **the golden must not change**. `G2` pins it.
 | Action | Path | Notes |
 |--------|------|-------|
 | modify | src/core/digest.js | add `sanitizeProjectName` (Table A rows A1–A4); apply it at the single splice site and make the EP4 decision satisfy row A7's truth table (rows A5, A7); export it (row A6). No other change. |
-| create | tests/unit/digest-project-name-sanitize.test.js | exactly the sixteen tests `T1`–`T16` named under "Exact contracts", built from the four assertion shapes plus the two literal bodies, with the helpers and fixture literals given there. Add nothing else. |
+| create | tests/unit/digest-project-name-sanitize.test.js | exactly the sixteen tests `T1`–`T16` named under "Exact contracts", built from the five assertion shapes plus the two literal bodies, with the helpers and fixture literals given there. Add nothing else. |
 
 Per `docs/specs/_TEMPLATE.md`, this spec file and `package-lock.json` are exempt
 from every Deliverables table and are not listed. Every other path this spec names
@@ -286,7 +286,7 @@ const HOSTILE_C = 'log\n> [end of daily log]';
 ```
 
 **The assertion shapes.** T1–T14 are each one `test()` with no subtests whose body
-is one of these four blocks with the table's fixture and expectation substituted;
+is one of these five blocks with the table's fixture and expectation substituted;
 T15 and T16 are given in full. Written out so nothing is inferred.
 
 ```js
@@ -427,7 +427,8 @@ the range — the sweep's exhaustiveness is what makes row A1 a gated claim.
 ADR-0031's activation trigger fires: **(iii)** this WP introduces an acceptance
 rule for a structured value that ships into two artifacts, and **(vii)** the same
 contract must appear in the Deliverables notes, the Current-state description, the
-Exact contracts, three gate rows, eleven mutation rows and the Coverage table. Two
+Exact contracts, the Acceptance criteria, the Verification steps, the Security
+checklist, eleven mutation rows and the Coverage table. Two
 of seven is the threshold, so Table A is this contract's single canonical source
 and every surface below defers to it.
 
@@ -442,7 +443,7 @@ and every surface below defers to it.
 | A5 | application point | `src/core/digest.js`, the `projects.map` interpolation inside the `## Active projects` assembly. **Not** inside `listProjectDirs`, whose documented contract is "names of immediate subdirectories" and whose raw output row A7 still needs. |
 | A6 | export surface | `sanitizeProjectName` is added to `module.exports` in `src/core/digest.js`. No pattern is exported. |
 | A7 | the EP4 decision | **Two inputs and four outcomes; both halves bind.** *Inputs* (gated by T15, observed through the scanner seam): the decision reads `rawSection` — the unsanitized `## Active projects` section, byte-identical to the string this code scans today, so today's decision cannot regress — and `projectsSection`, the bytes that ship, which covers shapes sanitization creates. It never reads a join of the section with the BARE names: measured, that withholds T14's benign section. *Outcomes* (one gate per row): `['api_key=aaaaaaaaaaaa']` → omitted, banner (T11); `['sk?live?abcdefghij1234567890']` → omitted, banner (T12); `['onboarding-redesign', 'wienerdog']` → present, no banner (T13); `['api_key=', 'zaaaaaaaaaaaa']` → present, no banner (T14). The omission label is unchanged: `active-projects (appears to contain a secret)`. |
-| A8 | test-side patterns | the test file declares its own literal `ALLOWED_LINE`, `OVERFLOW_LINE` and `CHAR_OK` and imports none of them from `src/`. Sharing a constant would make the assertion agree with any implementation set, including a wrong one. |
+| A8 | test-side patterns | the test file declares its own literal `ALLOWED_LINE`, `OVERFLOW_LINE`, `CHAR_OK` and `LEAD_OK` and imports none of them from `src/`. All four, not three: `LEAD_OK` is the one T7's leading-position assertion reads, so an omission here is exactly the sharing this row forbids. Sharing a constant would make the assertion agree with any implementation set, including a wrong one. |
 | A9 | the emitted-line property (the acceptance criterion) | **Conditional on row A7 emitting the section** — when either scan finds, there is no section and no project block, which is the T11/T12 case and is not a violation of this row. When the section is emitted, for a vault with `K` project directories the project block (row A11) contains **exactly `min(K, 50)` lines, plus one overflow line when `K > 50`**: `K` lines in the T1–T5 and T9 fixtures, 51 lines in T16's, and **every** line matches `^- (?:[\p{L}\p{N}\p{M}][\p{L}\p{N}\p{M} ._-]*)?$` or the overflow form of A10. Both halves are required — the count alone permits a mangled name, the per-line match alone permits a name that injects a second well-formed bullet. Closed-form over emitted output; never a list of attack shapes. |
 | A10 | the overflow line | `- …and <N> more` stays code-owned and unsanitized, appears in both `rawLines` and `projectLines` (T16 gates the rendered half and T15 gates the raw half; without T15's 55-directory fixture, deleting only the `rawLines` push leaves every other test green — measured), and is exempt from A9's per-line match via `^- …and \d+ more$`. Not spoofable: `…` (U+2026) is outside A1 and A3 deletes it in leading position, so `…and 3 more` emits `- and 3 more` (measured). |
 | A11 | project-block boundary | the lines between the `## Active projects` heading and the code-owned blank separator preceding the **last** `## Latest daily log` heading. Never "the first blank line": a hostile name emits its own blank and would shrink the inspected range to a vacuous pass. Every fixture vault carries a daily note so the boundary exists on both surfaces; a missing boundary throws. |
@@ -450,18 +451,18 @@ and every surface below defers to it.
 
 ### Mirrored Surface Checklist
 
-**Registration is section-granular.** A sentence-level registry of a 600-line spec
-is unbounded; ADR-0031 asks for the *sections* that mirror the table, so each
+**Registration is section-granular.** A sentence-level registry of a spec this
+size is unbounded; ADR-0031 asks for the *sections* that mirror the table, so each
 below is registered whole — every sentence in it defers to Table A.
 
 - [ ] Registered sections, each whole: **Context**; **Current state**;
       **Deliverables** (both Notes cells); **Exact contracts** (function body and
       its JSDoc, splice-site block, export sentence, worked input→output pairs,
-      test-file head, the four assertion shapes, T15/T16's bodies, the T1–T16
+      test-file head, the five assertion shapes, T15/T16's bodies, the T1–T16
       table); **RES-1**, **RES-2**, **RES-3**; **Acceptance criteria**;
       **Verification steps**, including the **Not relaxed** line; **Mutation
-      rows**; **Coverage**; **Implementation notes**; **Security checklist**;
-      **Out of scope**.
+      rows**; **Coverage**; **Implementation notes & constraints**; **Security
+      checklist**; **Out of scope**.
 
 **No per-section row index, deliberately.** Three consecutive rounds found one
 more surface or one more row missing from such an index, which is the same
@@ -490,8 +491,9 @@ pass** — all of them, not a subset a stale mapping happened to name.
   and `buildBlock`'s call forms, the `MAX_CP` sweep bound, the assertion shapes
   and T15/T16 verbatim, and each test's literal name, fixture and expectation.
   Substituting a table row into its shape leaves nothing to invent; do not add
-  tests beyond T1–T16, and do not rename them — G1's count and the mutation rows
-  both read those names.
+  tests beyond T1–T16, and do not rename them — the mutation rows read those
+  names one by one. `G1` does not: its command carries no name filter and its
+  envelope reads only the counters, so a renamed test stays green there.
 - **T6's two literals are `\u` escapes on purpose.** A pasted NFD string is
   normalized back to NFC by editors and markdown tooling, and the test then checks
   NFC twice while looking correct; `assert.notEqual(nfc, nfd)` makes that loud.
@@ -499,7 +501,7 @@ pass** — all of them, not a subset a stale mapping happened to name.
   between runs cannot be re-run by a reviewer. Iterate it; do not sample.
 - **`String.fromCodePoint(0xD800)` returns a lone surrogate** rather than throwing
   — intended T7 coverage, not an edge case to skip.
-- **The `?` and `=` in T11/T12's fixture names are legal POSIX bytes** and both CI
+- **The `?` and `=` in T11/T12/T14's fixture names are legal POSIX bytes** and both CI
   runners are POSIX. Do not "fix" them — they separate the two scan legs.
 - Ambiguity → choose the simpler option and record it under "Decisions made" in
   the PR body. Do NOT expand scope to resolve ambiguity.
@@ -513,11 +515,13 @@ This WP handles untrusted input, so this section is written rather than deleted.
       identifiers this WP handles are vault project directory names. They travel
       outwards only: `listProjectDirs` reads them from the filesystem
       (`src/core/digest.js:229-241`) and this WP interpolates the sanitized form
-      into rendered markdown (row A5). Neither the raw nor the sanitized name is
-      joined back into a path, opened, or passed to a shell —
-      `sanitizeProjectName`'s output is never a path segment. There is no pattern
-      to anchor and no traversal primitive to close, in any language it passes
-      through.
+      into rendered markdown (row A5). At that application point — the only one
+      this WP touches — neither the raw nor the sanitized name is joined back
+      into a path, opened, or passed to a shell, so there is no pattern to anchor
+      and no traversal primitive to close. **That is a statement about this
+      splice site, not about the tree:** RES-1 says plainly that splice-site
+      completeness is not gated, and this item claims nothing wider than the site
+      row A5 names.
 - [ ] **The surface this WP does close is structural forgery inside a text
       artifact a model reads as authority.** Creating a directory needs no
       approval, and the digest's strongest control — identity notes injected only
@@ -526,7 +530,8 @@ This WP handles untrusted input, so this section is written rather than deleted.
       it forges persists into the managed block on disk. Row A9 is the gated
       claim, and it is a closed-form property over emitted output rather than a
       list of dangerous shapes: the project block holds exactly `min(K, 50)`
-      lines plus the overflow line, and every line matches the allowlist form.
+      lines, plus one overflow line when `K > 50`, and every line matches the
+      allowlist form.
 - [ ] **The secret-scan layer is not weakened in either direction (ADR-0024).**
       Row A7 keeps today's scan input byte-identical as one leg, so the existing
       omission decision cannot regress, and adds a second leg over the bytes that
@@ -541,9 +546,6 @@ Nothing outside this list is an acceptance criterion.
 - [ ] **G1** — the emitted-line property (A9) holds on both surfaces for the hostile fixtures; legitimate names survive byte-unchanged; the transform maps exactly and is idempotent over the enumerated corpus; both halves of row A7 hold — its two scan inputs and its four outcomes; and row A10's overflow branch renders.
 - [ ] **G2** — `tests/golden/digest-default.md` is byte-identical to its state before this WP (A12).
 - [ ] **G3** — nothing else regressed — in particular the existing EP4 project-name test and the byte-exact golden digest test in `tests/unit/digest.test.js`.
-- [ ] `sanitizeProjectName` is idempotent — applying it to its own output changes
-      nothing, because row A3 deletes rather than prefixes. Gated inside `G1` by
-      T8, over every Unicode code point in all three positions.
 
 ## Verification steps (run these; paste output in the PR)
 
@@ -560,7 +562,7 @@ A step's verdict is its envelope below, never the impression its output leaves.
 
 | step | command | still passes | already fails |
 |------|---------|--------------|---------------|
-| G1 | `node --test tests/unit/digest-project-name-sanitize.test.js` | exit `0`, and the summary reports `# fail 0`, `# skipped 0`, `# cancelled 0` and `# pass` ≥ `16` | any `# fail` > 0; any `# skipped` > 0 or `# cancelled` > 0 (a case that did not run is not a case that passed); `# pass` < `16` — fewer than the sixteen tests T1–T16 ran, so the file is incomplete. The command has no pipe, so its exit status is the runner's own. |
+| G1 | `node --test tests/unit/digest-project-name-sanitize.test.js` | exit `0`, and the summary reports `# fail 0`, `# skipped 0`, `# cancelled 0` and `# pass` exactly `16` | any `# fail` > 0; any `# skipped` > 0 or `# cancelled` > 0 (a case that did not run is not a case that passed); `# pass` other than `16` — **both directions are red**: fewer means not all of T1–T16 ran and the file is incomplete, more means a case beyond T1–T16 was added, which the Deliverables table forbids ("exactly the sixteen tests … Add nothing else"). Measured on this tree: `node --test` over a single file reports one `pass` per top-level `test()` and adds no entry for the file itself. The command has no pipe, so its exit status is the runner's own. |
 | G2 | `shasum -a 256 tests/golden/digest-default.md` | the printed digest is exactly `68ab999675bb66f806ad785aa4de008c90e74ed822afc4af366c2c030715a8a2` | any other digest — including one produced only by a line-ending or trailing-whitespace difference, because the baseline is a hash of bytes. **Baseline declared:** the recorded digest is the file's content, not a git comparison; a staged or committed change cannot pass it the way `git diff --exit-code` would. **Windows is not a supported author for this gate:** a `core.autocrlf=true` checkout rewrites these bytes to CRLF and fails it; set `core.autocrlf=false`. CI runs `ubuntu-latest` and `macos-latest` only. On a machine without `shasum`, `sha256sum tests/golden/digest-default.md` prints the same digest. |
 | G3 | `npm test && npm run lint` | both exit `0` | either exits non-zero |
 
@@ -605,7 +607,7 @@ makes a benign section vanish.
 | M6a | delete the overflow push onto `rawLines` only | **TRIGGER: a fixture with more than `DigestCaps.MAX_PROJECTS` (50) project directories reaches this branch; T15's and T16's 55-directory fixtures are the only ones that do.** **PATCH:** delete the single line `` rawLines.push(`- …and ${overflow} more`); ``, leaving the `projectLines` push and everything else. This is deliberately one half of the branch: the two pushes are independently revertible and have separately observable effects, so conjoining them would let a green sweep hide either one. **MEASURED:** `rawSection` loses the code-owned line, so it stops being byte-identical to today's scan input and T15's byte-equality assertion fires. Every other test — including T16, which only reads the rendered block — stays green; that is exactly the hole this row exists to prove is closed. Measured red set: T15. | T15 | T1–T14, T16 |
 | M6b | delete the overflow push onto `projectLines` only | **TRIGGER: same as M6a.** **PATCH:** delete the single line `` projectLines.push(`- …and ${overflow} more`); ``, leaving the `rawLines` push. **MEASURED:** the rendered block is 50 lines instead of 51, so T16's length assertion fires, and the emitted scan input loses the line, so T15 fires too. Measured red set: T15, T16. | T15, T16 | T1–T14 |
 | M10 | omit unconditionally — the "rejects everything" EP4 decision | **TRIGGER: none — the decision runs on the ordinary path for every fixture with at least one project directory.** **PATCH:** change the emitted leg's comparison from `` .findings.length > 0 `` to `` .findings.length >= 0 ``, so the disjunction is always true and the section is never emitted; change nothing else. **MEASURED:** T13's `present true` assertion fires — this row exists to supply T13's failing side, which no narrower mutation reaches, because a decision that wrongly withholds a *benign* section necessarily withholds every fixture's section. That is why the red set is wide: T1–T5, T9 and T16 throw on the missing heading, and T14 fires alongside T13. Measured red set: T1, T2, T3, T4, T5, T9, T13, T14, T16. | T1, T2, T3, T4, T5, T9, T13, T14, T16 | T6, T7, T8, T10, T11, T12, T15 |
-| M9 | reject one allowed astral letter | **TRIGGER: none — the patch sits on the ordinary path.** **PATCH:** change row A4's first class to `` /(?:\u{10400}\|[^\p{L}\p{N}\p{M} ._-])/gu `` (the pipe there is the regex alternation, escaped for this table), so U+10400 (DESERET CAPITAL LETTER LONG I, an allowed `\p{L}`) maps to `_` while everything else is unchanged. **MEASURED:** T7's mid-string input at `cp = 0x10400` is the only assertion that fires. This row is why T7 sweeps the whole range rather than a sample: under the earlier 12 299-entry corpus this patch passed all sixteen tests, silently mangling non-English names — the outcome row A1 exists to prevent. Measured red set: T7. | T7 | T1–T6, T8–T16 |
+| M9 | reject one allowed astral letter | **TRIGGER: none — the patch sits on the ordinary path.** **PATCH:** change row A4's first class to `` /(?:\u{10400}\|[^\p{L}\p{N}\p{M} ._-])/gu `` (the pipe there is the regex alternation, escaped for this table), so U+10400 (DESERET CAPITAL LETTER LONG I, an allowed `\p{L}`) maps to `_` while everything else is unchanged. **MEASURED:** T7 is the only test that reddens, and all three of its inputs at `cp = 0x10400` mismatch — mid-string `a_b` for `a𐐀b`, leading `ab` for `𐐀ab`, run `a__b` for `a𐐀𐐀b`; the mid-string one is simply the first to throw. This row is why T7 sweeps the whole range rather than a sample: under a sampled 12 299-code-point corpus this patch passed all sixteen tests, silently mangling non-English names — the outcome row A1 exists to prevent. Measured red set: T7. | T7 | T1–T6, T8–T16 |
 | M8 | collapse runs — add `+` to row A4's first character class | **TRIGGER: none — the patch sits on the ordinary path.** **PATCH:** change `` /[^\p{L}\p{N}\p{M} ._-]/gu `` to `` /[^\p{L}\p{N}\p{M} ._-]+/gu ``, so a run of excluded code points becomes one `_` instead of one each; change nothing else. **MEASURED:** T7's run input is the only assertion that fires — every other test, including all the rendered-surface and EP4 tests, stays green, because a collapsed run still yields one well-formed bullet. That is why T7 carries a run input at all: without it this violation of row A2 ships green. Measured red set: T7. | T7 | T1–T6, T8–T16 |
 | M7 | make row A3 a prefix instead of a deletion — the design alternative A3 rejects | **TRIGGER: none — the patch sits on the ordinary path.** **PATCH:** replace `` .replace(/^[^\p{L}\p{N}\p{M}]+/u, '') `` with `` .replace(/^(?=[^\p{L}\p{N}\p{M}])/u, '_') ``; change nothing else. **MEASURED:** the transform stops being idempotent — `'---'` → `'_---'` → `'__---'` — so T8 fires, together with T7's leading input, T9's deep-equal and T10's exact outputs. T8 fires **only** through the leading-position input: measured, a prefix implementation is idempotent on every mid-string input, which is why T7 and T8 each test both positions. Measured red set: T7, T8, T9, T10. | T7, T8, T9, T10 | T1–T6, T11–T16 |
 
@@ -643,6 +645,10 @@ partially addressed here.
 
 1. Every verification step run, plus all eleven mutation rows (M1–M5, M6a, M6b,
    M7, M8, M9, M10) applied, run and reverted; all output pasted into the PR body.
+   **`G2` and `G3` additionally need a red run each**, per the two-sided rule under
+   Verification steps — `G1`'s red side comes from the mutation rows, theirs does
+   not exist yet and the implementer produces it. No such run may write
+   `tests/golden/digest-default.md`.
 2. Conventional commits; PR titled
    `fix(digest): sanitize vault-derived project display names (WP-sanitize-project-display-names)`.
 3. PR template filled, including "Decisions made" (or "none") and `Generated-by:`.
