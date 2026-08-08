@@ -83,3 +83,46 @@ external loop looks at rather than about this spec. The owner has queued the
 proposal — make the internal coherence pass standing, at the same level as round
 zero — as **Q13: candidate, not yet a rule.** The framing package's re-cut supplies
 the second measurement; a measured recurrence is what would raise it to a rule.
+
+## External confirming round — findings and dispositions
+
+Run with the plugin's own companion runtime, invoked programmatically as a plain
+command: `codex-companion.mjs adversarial-review --wait --cwd <worktree>
+--base main <focus>`. Not the human-only slash command, not the raw engine. The
+call succeeded on its first attempt; nothing in the mechanics needed working
+around. Raw stdout is preserved verbatim beside this file, committed before any
+finding was adjudicated.
+
+Verdict: needs-attention, three findings, all ruled **fix**. Every one of the
+three was re-measured locally before disposition, not taken on the reviewer's
+word.
+
+- **R1 (high) — `G1`'s envelope was false-red and false-green at once.** False
+  red: it named the counters with a `#` prefix, while the documented command
+  prints `ℹ` under the default reporter, so a correct run failed the literal
+  envelope. False green, and this one was new: sixteen passing cases plus a
+  **failing** seventeenth marked `{todo: true}` reports `tests 17, pass 16,
+  fail 0, skipped 0, cancelled 0, todo 1` and exits `0` — measured — which
+  satisfied every condition the envelope listed while refuting the sentence
+  beside it. Ruled: the prefix leaves the envelope (the numbers are the
+  envelope, never the notation), and `tests` and `todo` join `pass` as pinned
+  counters. That closes the over-count side from both directions.
+- **R2 (high) — the `G2` red-run obligation contradicted its own constraint.**
+  `G2` hashes one file at a fixed path and the current bytes already equal the
+  pin, so a red side requires different bytes — while the Definition of done, as
+  written in the previous commit, forbade any run that *writes* that path. Ruled
+  option (i): the constraint narrows to "may not leave the tracked file in a
+  modified state", which permits a temporary tip-observe-restore. The method
+  stays the implementer's, so the spec still grows no methodology, and Q11's
+  two-sided observation survives intact.
+- **R3 (medium) — the Security checklist claimed more than row A9 decides.** It
+  said the WP closes "structural forgery"; A9 decides line and section forging
+  only, and RES-2 deliberately keeps one construct alive inside the bullet.
+  Ruled: the claim narrows to what A9 gates, with the RES-2 residual named
+  rather than implied.
+
+Two of the three were defects the re-cut itself introduced, and the third — the
+counter prefix — was the one flagged in this record and deliberately routed to
+the external round instead of being folded in silently. The round found nothing
+new in the content that had passed the old tip's eleven rounds; the nine
+pre-existing defects had already been taken by the internal coherence pass.
