@@ -362,3 +362,509 @@ One bullet per lesson, prefixed with WP id (or M0 for foundation work). The drea
 - WP-scheduler-loaded-record-tripwire / WP-scheduler-entry-identity (spec gate loop, PR #115): a strict extractor makes non-conforming input invisible, and invisible is worse than missed because the check then reports success. Prefer a permissive matcher feeding a strict comparison, widen at every position the format permits (GFM: compact `|G6|` cells AND 0-3 leading spaces), and pair every widen with a case that must stay outside it or the new bound is unproven.
 - WP-scheduler-loaded-record-tripwire / WP-scheduler-entry-identity (spec gate loop, PR #115): an adversarial review criterion of the form "construct input that slips through" has no fixed point; it terminates only when the check declares its threat model (accidental format-conforming drift by trusted editors) and names the structural remedy for the rest (review). Declared honestly, the next Codex finding was in-scope and real, not exotic.
 - WP-scheduler-loaded-record-tripwire / WP-scheduler-entry-identity (spec gate loop, PR #115): "keep these two copies identical" is not a contract until something asserts it — three careful rounds still forked four of seven canonical rows because each round only checked the row it touched. If a spec claims a cross-file invariant, ship the check that fails on it, and make a missing anchor fail loudly (two empty extractions diff clean).
+- **WP-secret-fence (round 1):** a positive grep sentinel can be *unsatisfiable*,
+  not merely stale — verify a replacement by running it, and remember `grep -F`
+  matches within one line while prose wraps.
+- **WP-secret-fence (round 1):** `^[> *]*` prefix classes contain a **space**, so
+  an indented line whose first token is the marker matches. Quoting a gate's own
+  marker in documentation can trip the gate.
+- **WP-secret-fence (round 1):** BSD awk (macOS) silently matches nothing for
+  GNU's `\<`/`\>` word anchors — an extraction range built on them produces an
+  *empty* permitted-removals list, and `grep -vFf` against an empty file removes
+  nothing, inverting a bound into a vacuous pass.
+- **WP-secret-fence (round 1):** a digest gate that sweeps its own document's
+  frontmatter will redden on the lifecycle transitions that document mandates.
+- **WP-secret-fence (round 1):** when a repair is available, measure it before
+  declining it — the metadata-suffix narrowing looked right and was leaky, and
+  only building it showed that.
+
+- **WP-secret-fence (round 3):** a fault injection for a guard must perturb the
+  system on the side the guard can act on — one round-1 injection put the
+  perturbation where the guard *must* catch it (so it demanded an outcome the
+  correct design forbids) and one where it *cannot* (so the injection disproved
+  its own assertion).
+- **WP-secret-fence (round 3):** a probe built with `sed 's/^status: Draft$/…/'`
+  goes vacuous the moment the status is no longer Draft — normalize with
+  `s/^status: .*/…/` so the substitution is a real rewrite from any state.
+- **WP-secret-fence (round 3):** apply a reviewer's *resolution* by running it,
+  not by trusting the line it names — two of round 2's stated resolutions were
+  insufficient or pointed at the wrong line, and only execution showed it.
+- **WP-secret-fence (round 3):** two invariants stated side by side can be
+  jointly unsatisfiable at a boundary neither mentions; state a precedence, and
+  test the boundary rather than the typical case.
+- **WP-secret-fence (round 3):** when a canonical table's row type changes,
+  update the whole column in one pass — updating the two rows the change was
+  noticed on and leaving seven is how a "single place every value is decided"
+  stops being one.
+
+- **WP-secret-fence (round 4):** when a repair restates the very figure the same
+  commit forbids restating, the family's *bounds* are the defect — extract the
+  arithmetic into one table whose rows are the deciding surface, and let every
+  other site cite it.
+- **WP-secret-fence (round 4):** a read's **failure outcome** belongs to the
+  read's contract, not to the row it lands in; stating it per-row is how two
+  rows came to claim one input with opposite artifact outcomes.
+- **WP-secret-fence (round 4):** two invariants can be individually correct and
+  jointly unsatisfiable at a trigger condition neither mentions — write the
+  trigger and the lifetime into the same table and the contradiction is
+  unmissable.
+- **WP-secret-fence (round 4):** prefer keeping a safety property and correcting
+  the claim over relaxing the property to make a sentence true.
+- **WP-secret-fence (round 4):** verify a scripted multi-line replacement by
+  diffing the document's heading list before and after — a range that
+  over-matches deletes silently and lint will not notice.
+
+- **WP-secret-fence (round 5):** "does a durable copy exist" and "is the file I
+  am about to destroy recoverable" are different questions, and a guard that
+  asks the first while acting on the second loses data whenever a third party
+  changes the file.
+- **WP-secret-fence (round 5):** when two injections each vary one axis of a
+  two-axis failure, the destructive cell is the *product* and neither test
+  reaches it — check the cross-product explicitly.
+- **WP-secret-fence (round 5):** re-keying colliding ids means renaming the
+  *table* too when the table letter is the row prefix; otherwise "Table D row
+  D2" and "derived row D2" stay ambiguous.
+- **WP-secret-fence (round 5):** appending a correction as commentary leaves the
+  false assertion standing — edit the assertion.
+- **WP-secret-fence (round 5):** a census that quotes the digits it catalogues
+  matches itself; write the dispositions without the figures or it never
+  converges.
+- **WP-secret-fence (round 5):** a claimed walk is worth nothing without its
+  executed output — run the grep, paste the hits, disposition each one.
+
+- **WP-secret-fence (round 6):** a check cannot authorize a *later* destructive
+  operation on a file another process can write — the only sound fix is to take
+  the file (`rename(2)`) rather than inspect it and trust the inspection.
+- **WP-secret-fence (round 6):** before treating a race as this WP's, check
+  whether shipped `main` already has it — an inherited race is a residual and a
+  named follow-on, not a blocker, and the distinction changes who decides.
+- **WP-secret-fence (round 6):** never run a completeness sweep over a *filtered*
+  view of the document — rounds 4 and 5 swept the residue view, which is blind to
+  bash fences, which is exactly where the stale mirror lived.
+- **WP-secret-fence (round 6):** if a document excludes a region from its own
+  enforcement, no registered mirror may live there; move the prose out rather
+  than widening the sweep.
+- **WP-secret-fence (round 6):** when a fault injection perturbs at one point,
+  check which *branch* it lands in — FI-17/18 perturbed at K2 and so only ever
+  exercised the mismatch branch, leaving the throw branch untested and
+  exploitable.
+
+- **WP-secret-fence (round 7):** when the same registration defect survives four
+  rounds of hand-walks, the walk is the bug — derive the membership from the
+  document and let the step's output be the walk.
+- **WP-secret-fence (round 7):** a fail-closed registry needs its exclusion list
+  described honestly as a backlog, and needs to fail on *stale* exclusions too,
+  or the carve-out widens silently.
+- **WP-secret-fence (round 7):** three id collisions were three numbers written
+  down — replace the figure with the command that derives it.
+- **WP-secret-fence (round 7):** check that a fault injection's trigger actually
+  reaches the branch it targets; FI-19's patches never caused a fall-through, so
+  the row and its mutation were both decoration.
+- **WP-secret-fence (round 7):** a terminology gate built on negation words fails
+  on multi-line prose and matches its own failure message — use a prose view
+  minus a registered list, the shape the document already had.
+
+- **WP-secret-fence (round 7.5):** when a decision is answered, sweep for *every*
+  surface that framed it as open — an earlier decision in the same document had
+  carried "OWNER DECISION REQUIRED" for four rounds after it was answered, and
+  only an executed sweep found it.
+
+- **WP-secret-fence (round 8):** a claimed fix is not a fix. Two consecutive
+  rounds recorded repairs the tree never received; both were caught in seconds by
+  hashing the disputed cell at each commit (`git show <rev>:<file> | grep '^| …'`).
+  Verify by extraction and hash, never by reading the round's own note.
+- **WP-secret-fence (round 8):** a mechanized check needs an adversarial run
+  against its OWN published bypass before it ships. Three of this round's
+  mechanisms passed their bypass after the obvious repair — V-31 still missed the
+  wrap attack because the subject word was `destructive` and the stem was
+  `destro`, and only running the attack revealed it.
+- **WP-secret-fence (round 8):** a digest literal quoted in prose that the same
+  digest sweeps has no fixed point. Keep the value inside the excluded region and
+  say in prose that you did.
+- **WP-secret-fence (round 8):** "registered" and "named" are different claims. A
+  registration checker that greps for a mention proves nothing is *unnamed*; say
+  so in the register's own row rather than letting the count read as coverage.
+- **WP-secret-fence (round 8):** an enumerator regex is a schema assumption. One
+  pattern over every table silently excluded three whole id families here; derive
+  the schema per table and fail on a table the schema does not name.
+
+- **WP-secret-fence (round 9):** when the same *family* produces the blocking
+  finding five rounds running, stop improving the check and extract its contract.
+  The test of a real extraction is that the checker holds no second copy of what
+  it enforces — if it still carries the pattern, it will still drift.
+- **WP-secret-fence (round 9):** a word-boundary is not a boundary. `\b` matches
+  `C3` inside `C3-19`; an id boundary needs `(?<![A-Za-z0-9])X(?![A-Za-z0-9-])`,
+  and an unbounded substring test is a false-positive machine — closing round 8's
+  false negative left its mirror image wide open.
+- **WP-secret-fence (round 9):** an enumerator must see the document as an
+  implementer leaves it, not as the author wrote it. Ticking the checkboxes on an
+  acceptance-criteria list is normal use, and it made all fifteen criteria vanish.
+- **WP-secret-fence (round 9):** widening a check's view is not free. Including
+  the fenced blocks was mandatory and correct, and it immediately produced five
+  false positives because a fence has no blank lines — bound the window, or the
+  check gets bypassed by hand instead of by regex.
+- **WP-secret-fence (round 9):** verify the *harness* before believing the
+  removal test. The first dead-entry run reported all 22 entries dead, because it
+  deleted the entry from the swept copy while the step still read its allowlist
+  from the pristine spec.
+
+- **WP-secret-fence (final):** a decided sentence is not a contract until
+  something fails without it. Round 9 wrote the escaped path into Q18 and the
+  words `escap`/`hostile`/`ANSI` occurred on exactly one line of the document —
+  the cell that decided it. Every field a canonical row decides needs an
+  assertion and a mutation, or it ships as prose.
+- **WP-secret-fence (final):** "escape it" is not implementable. Naming the
+  algorithm (`JSON.stringify`) and asserting the *complete* rendering plus a
+  collision pair is what separates a security control from a sanitizer that
+  quietly makes two different paths look the same.
+- **WP-secret-fence (final):** a cell that restates a canonical row's fields
+  drifts in the same commit that changes them — B3b did, in the very round it was
+  registered as that row's mirror. Cite; do not restate.
+- **WP-secret-fence (final):** a mandate that offers two designs must not sit
+  beside a test only one of them can pass; write both branches or make one
+  mandatory.
+- **WP-secret-fence (final):** when a gate is stopped by decision rather than by
+  exhaustion, write down what is known to bypass the machinery, with the executed
+  attack. The next reader then inherits evidence instead of an illusion of
+  completeness.
+
+- WP-secret-fence-two-tier-detector: `\s*` versus `[ \t]*` inside the
+  context binder is not cosmetic — it decides whether mutation M-36 (deleting
+  the same-line trim) is observable at all. With `[ \t]*` the binder cannot
+  cross the newline on its own, M-36 becomes a silent no-op on C2 row 38, and
+  AC-15 is violated by an implementation that looks *more* careful. The
+  conservative-looking choice was the wrong one.
+- WP-secret-fence-two-tier-detector: the spec's PRNG, seed and per-cell
+  "one fresh RNG" rule are enough to reproduce a 156-cell measurement *exactly*
+  — the labelled set, the regressing set and all six `today` constants landed
+  on the first run. Pinning the generator rather than checking in sample tokens
+  is what made that possible, and it is worth the extra fixture code.
+- WP-secret-fence-two-tier-detector: `String.raw` and single-quoted JS
+  literals are the only sane way to script mutations against a file full of
+  template literals and regex sources. Two attempts at `sed`/`perl` one-liners
+  produced silently non-applying mutations, which read as "the row stayed
+  green" — i.e. as a spec bug. The runner now hashes the file before and after
+  and reports "MUTATION DID NOT APPLY" separately from "GREEN".
+- WP-secret-fence-two-tier-detector: measuring the C2 disposition *delta* per
+  mutation, rather than only the exit status, is what turns C3-10 … C3-19 from
+  prose into evidence. Several rows (M-5, M-39, M-44, M-42, M-52+M-5) are
+  specified as exact multi-row outcomes where a weaker "some row moved" reading
+  passes against a wrong implementation.
+- WP-secret-fence-two-tier-detector: V-7 is the only step that reads a live
+  corpus, so it is the only one that can go "red" for a reason that is not a
+  defect. Reporting the drift explicitly (182 → 188 notes) beside the parts that
+  *did* reproduce (M5's 1/9 split, the interim 10) is cheaper than either
+  silently absorbing it or treating it as a blocker.
+- WP-secret-fence-two-tier-detector: a measurement script whose output is
+  designed to be pasted publicly must not echo an argument that is a private
+  absolute path. The documented invocation writes `~/Obsidian/<name>`, which
+  *reads* as anonymised — but the shell expands it before the script ever sees
+  it, so `console.log(vaultPath)` published the developer's username and the
+  vault's location into a public PR body. The intent lived in the docs and the
+  leak lived in the code. Print a fixed placeholder; never the argument.
+- WP-secret-fence-two-tier-detector: when a script *reproduces* a pipeline, the
+  stage ORDER is part of what is being reproduced. Scanning the raw note with a
+  context-free entropy pass looks equivalent to scanning it after the labelled
+  rules and is not: a labelled credential gets counted twice and lands in the
+  wrong bucket of the source breakdown. It went unnoticed because this corpus
+  has exactly one labelled finding and it does not overlap an entropy run —
+  i.e. the corpus could not discriminate the bug, which is the same failure
+  mode the spec's own M4e register keeps recording about single-corpus
+  evidence.
+- WP-secret-fence-two-tier-detector: when a script emulates a PREVIOUS version
+  of a pipeline, every rule the current version adds is a source of error, and a
+  warning is not a substitute for refusing to report. The first fix printed the
+  full M1 table with a caveat line underneath; the caveat would have been
+  dropped the moment anyone pasted the numbers, because **a number that is
+  printed will be quoted**. Emitting nothing is the only version of "this is not
+  reproducible" that survives a copy-paste.
+- WP-secret-fence-two-tier-detector: a guard that refuses to report should be
+  gated on the condition that actually invalidates the report, not on the
+  trigger that usually accompanies it. This one keys on "a rule this WP adds
+  fired" when what invalidates the baseline is narrower — "a rule this WP adds
+  consumed a body the shipped pass would have reported". Over-refusal is the
+  safe failure and it is still a false alarm, and false alarms are what train
+  people to bypass guards.
+
+- **WP-secret-fence-ep2-redact-arm:** A fault injection that names a *mechanism*
+  but not a *trigger* is unproducible in exactly the way the spec's own round-6
+  finding describes — and it fails silently green, because the arm completes
+  successfully and the assertion about the failure path is simply never reached.
+  Before writing an injection, trace which rows its patches actually touch; two of
+  this spec's rows (FI-10, FI-19) needed a trigger their cells did not name.
+- **WP-secret-fence-ep2-redact-arm:** Read-counting seams must be anchored to a
+  *structural* event, not to an ordinal. FI-19's "throw on the Nth read" broke
+  because its own mandated trigger short-circuits before one of the reads it was
+  counting. Anchoring on "the first read after this other thing failed" is immune
+  to that, and to any future reordering.
+- **WP-secret-fence-ep2-redact-arm:** A permitted-removals heredoc bounds *removed*
+  lines, so rewrapping a JSDoc block near an edit fails the bound even when the
+  edit itself is in scope. V-5 caught a rewrap of `listSecretQuarantine`'s doc
+  comment that was pure tidying; the fix was to leave the original lines byte-exact
+  and *append* the new sentence. The same trap bites single-line grep sentinels:
+  my first `digest.js` comment rewrap split `CONTENT is never read or rendered`
+  across two lines and V-5's positive `grep -qF` went red.
+- **WP-secret-fence-ep2-redact-arm:** Mutation rows stating two independent changes
+  in one cell cannot demonstrate that both clauses are held. Split them and run
+  each; the spec's M-23 is the worked instance.
+- **WP-secret-fence-ep2-redact-arm:** A mutation driver that edits `src/` in place
+  makes the working tree lie for the duration. Commit first, and do not read source
+  files while it runs — I briefly read a mutated `validate.js` and had to re-check
+  it against the commit.
+- **WP-secret-fence-ep2-redact-arm:** The retention fixtures are the slow ones (a
+  51-note run is ~4s of git spawns and there are four such cases), which makes the
+  full mutation sweep a ~25-minute job. Worth budgeting for, and worth *not*
+  shortening the fixtures: the 51-note boundary is the only place the cap-yields
+  precedence is observable at all.
+
+- WP-scheduler-node-path-durability: `process.execPath` **realpath-resolves on
+  POSIX** — launching node through `/opt/homebrew/opt/node/bin/node` still reports
+  the Cellar path. Any design that assumes "register the alias, then compare
+  `process.execPath` to it at fire time" is wrong from the start. Verify this with
+  a one-line `node -p` before writing the comparison, not after.
+- WP-scheduler-node-path-durability: a scheduler fix that changes a
+  **digest-covered** field is not the same size as one that does not. Tracing
+  `descriptor.node` → descriptor digest → the entry's `--expect-digest` → the
+  launcher's fire-time re-derivation is what turned an apparently-obvious
+  two-line fix into an explicit out-of-scope decision with a routed successor.
+  Trace the digest closure of any field before adding it to a Deliverables table.
+- WP-scheduler-node-path-durability: `grep -rn` for a helper is not enough — you
+  must classify each call site by **lifetime**. `gen.nodePath()`'s nine callers
+  split cleanly into six that write a string the OS keeps for days and three that
+  spawn a child in the next millisecond, and only the first group has the hazard.
+  A blanket change to the shared helper would have been fewer edits and the wrong
+  fix.
+- WP-scheduler-node-path-durability: design option "(b) detect it at fire time" is
+  a reflex that dies on one question — *does any of our code run in that failure?*
+  When the missing thing is the interpreter itself, the answer is no, and every
+  variant of (b) either needs a daemon (ADR-0004) or reduces to the attended
+  detection already shipped. Ask that question before enumerating alerts.
+- WP-scheduler-node-path-durability: markdownlint's MD038 rejects a code span with
+  a trailing space, so a spec cannot write a test-name prefix as `` `foo: ` `` to
+  show the space is significant. Say "followed by one space" in prose instead.
+
+- WP-scheduler-node-path-durability: a mutation table is only evidence if every
+  fixture's arithmetic was **executed**. Four of round 1's fixtures exited at an
+  earlier gate than the row they were filed under, so three mutation rows could
+  never go red. The fix that generalizes is Table F — write the split/index/segment
+  values into the spec as a table, produced by running the split, so a fixture and
+  the gate it claims to test cannot drift apart.
+- WP-scheduler-node-path-durability: when a fix's evidence is "stub the export and
+  observe", check first whether the target even *imports* the module. `descriptor.js`
+  has zero coupling to `generators.js`, so the test could never fail — and reassigning
+  an exported property does not rebind a lexical call inside the module either. Both
+  traps have the same tell: no `require` edge between the two files.
+- WP-scheduler-node-path-durability: `process.execPath` is a writable, configurable
+  property. That turns a whole class of "this assertion is only meaningful on my
+  machine" tests into host-independent ones — fabricate the layout on disk, point
+  `process.execPath` at it, restore in a `finally`. Check `Object.getOwnPropertyDescriptor`
+  before assuming a `process` field is read-only.
+- WP-scheduler-node-path-durability: fusing two validation gates into one contract
+  row costs you both detectors. One gate per row, one fixture per row, one mutation
+  per row — the moment two conditions share a row, no mutation can isolate either.
+- WP-scheduler-node-path-durability: a limitation disclosed in prose while the
+  acceptance criteria assert the cheerful half is not disclosed. AC6 asserted file
+  idempotence, which a reader converts into "converged"; the honest fix was to make
+  the non-convergence a canonical table, cite it from AC6's own text, and require the
+  PR to reproduce it.
+- WP-scheduler-node-path-durability: "the regex is the security gate" deserves the
+  same skepticism as any other inherited claim — trace which validated segment
+  actually reaches the constructed value. Here `version` never entered the path at
+  all, and the real boundary was the realpath identity check two rows later.
+
+- WP-scheduler-node-path-durability: a contract row covering two platforms is a
+  latent defect even when it is currently true of both. Fusing linux and windows
+  into one Table C row meant the first counter-example to the linux half would have
+  dragged the (stronger) windows claim down with it. Split rows by the thing that
+  can diverge, not by what reads compactly today.
+- WP-scheduler-node-path-durability: "best-effort" in a comment is a load-bearing
+  contract term — go read what gates the success value. Here `daemon-reload` was
+  best-effort and ungated while only `enable --now` set `loaded`, which is exactly
+  how a degraded reload becomes a reported success. Grep for what assigns the
+  variable the caller reports, not for what the function calls.
+- WP-scheduler-node-path-durability: before claiming a self-heal path exists on a
+  platform, check that the platform's probe can produce a status *in the heal set*.
+  systemd's identity query is declared unimplemented, so it always probes
+  `unknown`, which is not healed — the macOS "it repairs itself one upgrade late"
+  story has no Linux counterpart at all, and assuming symmetry would have
+  understated the risk.
+- WP-scheduler-node-path-durability: the Deliverables table is the permission
+  boundary an implementer reads *first*, so it must be registered as a mirror of
+  every table it restates. Round 2 renumbered T3→T5 and updated five registered
+  surfaces; the one unregistered surface was the Deliverables cell, and it was the
+  one that would have shipped the wrong test set. Register the permission boundary
+  itself, not only the prose that explains it.
+- WP-scheduler-node-path-durability: when a spec requires a literal to be copied
+  into a merge artifact, verify it by string containment against the source file
+  rather than by reading — two of round 2's literals differed from the code by a
+  trailing period and a `(launchd)` suffix, both invisible on a careful read.
+- WP-scheduler-node-path-durability: if a blocker is enforced only by prose, say so
+  in the blocker. Naming the single step that makes it mechanically checkable
+  (`depends_on` gains the id) is more useful than restating the prohibition, and it
+  puts the fix at the exact moment the blocker lifts.
+
+- WP-scheduler-node-path-durability: a test that fabricates a filesystem layout
+  inherits that platform's path grammar. Realpathing a temp dir yields
+  `/private/tmp/...` on macOS and `C:\Users\...` on win32, and a POSIX-shaped
+  contract returns the latter unchanged — so the fixture stops testing what it
+  claims and fails against correct code. Gate layout-fabricating tests to the
+  platform whose grammar the contract is written in.
+- WP-scheduler-node-path-durability: check the CI matrix before calling something
+  a CI breaker, and fix it anyway. The finding was latent rather than live here —
+  reporting that accurately costs nothing and keeps the severity signal
+  trustworthy, while the fix still lands at full strength.
+- WP-scheduler-node-path-durability: "effectively unreachable" is the kind of
+  shortcut that misleads the next author. The precise version — reachable via one
+  status, unreachable for this specific scenario because an earlier step
+  short-circuits — was both more accurate and a stronger argument. When narrowing
+  a claim makes it stronger, the claim was wrong.
+
+- **P0-docs-pass:** A fault-injection row that names a *mechanism* but no *trigger* fails
+  **green**. The patch is never reached, the arm completes on its success path, and the assertion
+  about the failure path is never evaluated — so the row, the test and the mutation sweep are all
+  green while nothing is proved. Absence, not error, which is why a column schema catches it and
+  re-reading does not.
+- **P0-docs-pass:** An ordinal in a seam ("throw on the Nth read") is a standing claim about
+  which calls run, and it is falsified by any short-circuit on the very path the row mandates.
+  Anchor on a structural event — *"the first read after X failed"* — which survives reordering and
+  is strictly stronger.
+- **P0-docs-pass:** Editing a `Done` spec means editing inside other people's gates. Locate every
+  digested range **before** the first edit (`awk` the extraction ranges out of the verification
+  block and hash them), then re-run the id/vocabulary sweeps after. Two of my three drafting
+  choices in this pass — a markdown table, and a `####` heading — would have failed V-30, and
+  running it is what told me, not reading it.
+- **P0-docs-pass:** Writing `NOT <ratification-token>` to mark something unsigned re-creates
+  exactly the false positive the repo already recorded: a bare grep for the token now matches the
+  paragraph that says the token is absent. Spell the negative in words.
+- **P0-docs-pass:** When a task hands you a figure ("three rounds running", "five instances in one
+  day"), grep for it before writing it into an ADR. Two of this pass's three cited tallies did not
+  reproduce as stated, and one of the corrections — that the rounds were *non*-consecutive — turned
+  out to be the strongest argument in the amendment, because it explains why the existing
+  circuit-breaker never fired.
+
+- **P0-docs-pass:** A lesson can be cited, believed, and still only half-applied — I quoted #115's
+  TAP rule while implementing one of its two clauses. **When a lesson has two parts, check both
+  parts against the code, not against your memory of having applied it.**
+- **P0-docs-pass:** Parsed output and process exit are two witnesses and they can disagree.
+  Trusting the parse alone means a dead reporter reads as a clean run. **Assert both, and say which
+  one you believe when they conflict.**
+- **P0-docs-pass:** The last hand-typed figure in a document is the one most likely to drift,
+  because everything around it has already been mechanised and nobody re-reads it. Deriving
+  `COUNTS` cost four lines and removed the final transcription this spec contained.
+- **P0-docs-pass:** Reporting a change accurately sometimes means saying "this was already safe."
+  I could have banked the directive exclusion as a fix; measuring first showed the anchor already
+  carried it. **The record is worth more than the credit.**
+
+- WP-attended-alert-acknowledgement: when a Deliverables table adds a new basename to a shared constant like `A5_PRIVATE_FILE_BASENAMES`, check for existing tests that assert that constant's *exact* membership (`deepEqual`) rather than just "is a member of" — those are the ones a correct, spec-compliant change will break, and if the spec doesn't list them as Deliverables, the implementer is stuck reporting a spec bug instead of fixing forward.
+- WP-attended-alert-acknowledgement: this WP's local dev machine already had the exact real-world scenario the spec's Context section describes (120 live `--catch-up` alert records, 2 distinct reasons) — running `node bin/wienerdog.js alerts` (V11) against the real `~/.wienerdog` core was a genuinely useful extra confidence check beyond the isolated unit tests, worth doing whenever a WP's Context section cites the maintainer's own install as a concrete example.
+- WP-attended-alert-acknowledgement: the spec's Exact-contracts block gives a fully worked literal example for `wienerdog alerts` (list) but only prose ("prints the unacknowledged groups in the format above") for `wienerdog alerts ack`'s pre-prompt listing — worth a literal block in a future spec revision so implementers don't have to infer whether the list command's header/footer lines carry over.
+- WP-attended-alert-acknowledgement: grouping/aggregation code over an append-only log should never assume the log's on-disk order equals sort order by timestamp — file-write order and `at`-sort order coincide in the common case and silently diverge the moment any record arrives out of order (clock skew, backfill, concurrent writers). Any min/max tracked while folding such a log needs an explicit comparison (`if (a.at < cur.first) …`), not an assignment on every iteration; a working test suite built entirely from monotonically-increasing fixtures won't catch this, so it's worth a deliberately out-of-order fixture whenever a spec introduces a new fold over `alerts.jsonl`-shaped data.
+
+- WP-147: a Ready spec's snapshot of code it owns is the highest-risk staleness — "the rest is unchanged" plus a rotted quote is an instruction to regress a security fix; replace the phrase with a byte-for-byte region table.
+- WP-147: "untrusted input" plus `typeof x === 'string'` is not validation when the value is byte-matched and the match deleted — bound the vocabulary to what the producer can emit, and validate multi-field metadata as a pair.
+- WP-147: a "first write wins" rule assumes the artifact is only created once; any hand-editable artifact has a delete-and-recreate lifecycle, and that is where such rules break. When two fields in one helper need different update rules, a per-field/per-branch matrix makes a missing cell visible instead of arguable.
+- WP-147: an absence-only gate is one spelling wide — assert presence of the operative literals too, and prove the gate against a different evasion than the one you first imagined.
+- WP-147: a spec whose deliverables span two sides of one contract needs at least one V-step that implements both sides and runs the shipped suite — seven rounds of one-side-at-a-time verification left a flipped shipped assertion latent while eight gates reported green.
+- WP-147: an evidence table needs its reachability stated, not just its cells filled — a row blended two constructions for three rounds because nothing said what shapes the input could take; derive fixture inputs from the contract instead of asserting them.
+- WP-151: an executable claim can be uncompilable rather than merely outdated (`logFile` never existed); grep the identifiers a contract names before trusting it.
+- WP-151: reading an attacker-controlled property twice is a vulnerability even when the first read is validated — bind once, validate once, interpolate the binding.
+- WP-151: when a change adds a new way into an existing code path, verify the path it lands in, not only the gate that opens it — a truth table over one half is how a TypeError shipped past two reviewers.
+- WP-151: when a fix introduces a regression (loud crash → silent success), the fix's own WP owes the repair; routing it ships a knowing regression.
+- WP-151: a state flag named for intent (`writableEnded`) may fire at the call, not the completion — measure before using one as a settled-check; and a probe that settles is not evidence until it uses the production ordering.
+- WP-153: an architect reaching an owner's answer is not the owner answering; "reverting is one line" quietly inverts an opt-in into an opt-out.
+- WP-153: "X is a value only we ever wrote" is never true of anything read from an untrusted file — the sentence itself is the tell.
+- WP-153: inserting a row into a canonical table is never a local edit — every fixture, mirror, and precondition keyed to the old row set needs re-derivation; a Preconditions column converts invisible reachability dependencies into declared ones.
+- WP-153: when a spec claims a migration, execute the helper that would perform it — `recordOnce`'s no-op falsified a sentence that read plausibly for two weeks.
+- WP-adr-0028: a gate set that describes only one of a WP's correct states cannot close honestly — when a WP has a terminal state its own criteria contradict, name the states rather than waiving a criterion.
+- WP-adr-0028: line numbers inside an appendable region are structurally unstable (they drifted within a single commit); identify content-anchored criteria by content, and let a classified worked example BE the roster instead of asserting exhaustiveness that was never checked against real output.
+- WP-adr-0028: "X has an owner" and "X is fixed" are different claims — conflating them is how a live production hazard got recorded as discharged; a correction is not done until you grep for its claim, not its location.
+- Process: a declared threat model is what terminates an adversarial review loop — but a declared residual only stops re-raises once it has a test that pins its size.
+- Process: dispatch-time re-verification caught both Ready specs stale before any implementer saw them (one would have regressed a security fix); the rule earned its keep on its second outing.
+- Process: verifier findings are a starting point, not a boundary — three consecutive rounds, the architect or a reviewer found one more instance the reporter missed by re-running everything themselves.
+
+- WP-help-text-safety-gates: locating the target line by byte-exact text rather than line number paid off trivially here, but the spec's explicit warning about the second `safety` mention (dispatch table at :65) is the kind of disambiguation that prevents a wrong one-line edit.
+- WP-help-text-safety-gates: the V4 alignment probe (awk RLENGTH over the Commands block) is a cheap, reusable idiom for guarding fixed-column help text without a golden file.
+
+- WP-vision-gate-status-destale: spec-provided byte-exact removal/insertion blocks plus a pre-verified V1/V2 baseline (22/51/45) made the de-stale mechanical — the baseline matching on first run confirmed the tree state before any edit.
+- WP-vision-gate-status-destale: the "no live per-gate verdicts anywhere except THREAT-MODEL T0; everything else points at `wienerdog safety`" rule is a good staleness firewall for any future prose that mentions gate status.
+
+- WP-147: type-gating an untrusted, self-healing field is a foot-gun — `validateEntry`'s reject-on-bad-type runs *before* the reverser's degrade-to-legacy path, so a `'string'` rule turned "malformed metadata → conservative strip" into "malformed metadata → block left installed". The allowlist inside the reverser is the real guard; the schema must stay permissive so the entry reaches it.
+- WP-147: an honest-use regression can masquerade as an in-scope "residual" — Table N row 6 (relocated block, recorded `sepBefore='\n\n'`) collapsed a user blank line with no forgery at all, and was worse than the shipped code it replaced. A declared bound only covers the threat it is scoped to (forgery); honest-path corruption is a defect, not a residual.
+- WP-147: a two-conjunct safety predicate needs a red-first test in **both** directions — dropping conjunct 1 fails one row, replacing conjunct 2 with conjunct 1 fails a *different* row; a single red test would have let either wrong simplification through.
+- WP-147: the worktree sandbox refuses compound bash (command substitution + loops) inline; write the spec's V-gates verbatim into a script file and run `bash script.sh`.
+- WP-147: patching relocation permutations one at a time never terminates (three gate rounds, three permutations). The durable move is to declare the boundary *once, generally* — separate "worse than base = defect, fix it" from "equal to base = residual, pin it" — and pin the residual with a NOT-red-first `=base` test so the next report resolves against a committed assertion instead of re-opening the WP.
+- WP-147: the sandbox also refuses `git commit -m` with a multi-line body containing `\n` literals; commit with `git commit -F <file>` from the scratchpad.
+
+- WP-151: `node:test`'s `{ timeout }` marks a hung test **cancelled**, not
+  failed — `fail 0, cancelled 2` is what a red hang looks like; grep for
+  cancelled too when hunting red evidence.
+- WP-151: an absence-check verification (V9's `writableEnded` grep) can be
+  tripped by your own explanatory comment — word comments so the forbidden
+  token stays greppably absent.
+- WP-151: a child's spawn-ENOENT message is Node-authored; to plant a marker
+  in a non-Wienerdog failure without adding a spawn seam, put the marker in
+  the nonexistent command path itself.
+
+- WP-153: Dispatch-time re-verification paid off — WP-147 shifted every `manifest.js`
+  anchor after ~:205 by ~53 lines; implementing by CONTENT (not the spec's stale
+  numbers) was essential. All code shapes still matched, so the design held.
+- WP-153: A gate at the enclosing loop can silently shadow a branch a spec assumes
+  is reachable. `reverse()`'s `withinAllowedRoot` follows the link via realpath, so
+  a dangling-link fixture is preserved before the reverser runs — the spec's T4
+  "reverse() unlinks" claim was untestable as written. Verify reachability
+  empirically before writing a fixture, not just the branch logic.
+- WP-153: The Deliverables table said the arm's "only change" is the extra
+  `skillsRoots` arg, but honestly testing the lexical fallback required one more
+  in-file change (exporting `reverseSymlink`). When a required test can only be
+  written against a non-exported internal, the export is part of the deliverable —
+  flag it rather than skip the test.
+
+- WP-scheduler-register-replaces-loaded-record: `WIENERDOG_LOADER_NOOP` (used
+  by ~15 test files across the suite to neutralize the real OS scheduler for
+  subprocess-driven CLI tests) is fundamentally incompatible with any
+  ADR-0037-style live-readback postcondition — it answers every spawn with a
+  blind `{status:0}`, never a matching `stdout`. Any future WP touching
+  register-path verification should budget for this collision up front rather
+  than discovering it at `npm test` time.
+- WP-scheduler-register-replaces-loaded-record: when a spec's own worked test
+  fixtures use a "malformed" flag to simulate an unclosed block (e.g. `arguments
+  = {` never closed), a parser without depth-tracking will happily swallow a
+  LATER block's closing brace as if it were the missing one — a synthetic
+  fixture must TRUNCATE the stdout entirely at the malformed point, not just
+  leave the block open while continuing to emit more text after it.
+- WP-scheduler-register-replaces-loaded-record: AC6's "exactly four existing
+  assertions change" underclaimed by one — `repointSchedules after add is a
+  no-op`'s own `calls.length` assertion is a second, structurally identical
+  casualty of the same Table A behavior change (a verified skip now costs a
+  readback even when unchanged) that AC5(iii) already documents for the
+  `:389-397` sibling test. Worth a spec pass to enumerate it explicitly next
+  time this chain gets revised.
+- WP-scheduler-register-replaces-loaded-record: a scripted mutation-testing
+  harness (apply one exact-text patch, run the named test via
+  `--test-name-pattern`, assert red, `git checkout --` to revert) made
+  demonstrating ~40 Table B rows tractable in one session, and caught three
+  real fixture bugs of my own that a purely manual "looks right" read would
+  have missed — recommend this pattern for future WPs with large mutation
+  matrices.
+
+- WP-scheduler-node-path-durability: `entryNodePath`'s never-throw contract
+  (whole body in one `try {...} catch { return execPath; }`) means an
+  injected `realpath` that calls `assert.fail()` when reached has its
+  exception silently swallowed — the return value doesn't change, so a
+  naive "assert equal to the unchanged fixture" test cannot detect the
+  mutation. Detecting "was the filesystem seam reached at all" requires an
+  out-of-band flag set as a side effect before the throw, checked after the
+  call returns, not the throw itself.
+- WP-scheduler-node-path-durability: a spec measured and tested against a
+  real Homebrew macOS dev machine can bake host-specific assumptions into
+  sibling test files that then become "must pass unmodified" NOT-deliverable
+  constraints — assumptions that this exact kind of change (an ENTRY path
+  now correctly differing from `process.execPath` on that same host shape)
+  legitimately breaks. Worth a spec-authoring note next time: state whether
+  a NOT-deliverable file's assertions were actually re-run post-implementation
+  on the measured host, or only checked against unmodified `main`.
+- WP-scheduler-node-path-durability: `git diff origin/main...HEAD` is empty
+  until something is actually committed to the branch — V5/V6's diff-based
+  commands need to run AFTER the commit, not against a dirty worktree, or
+  they silently report "no changes" instead of the real diff.
+

@@ -14,9 +14,26 @@ const { WienerdogError } = require('./errors');
  * user modifications on uninstall.
  *
  * Adapters add three more kinds (WP-006), each with precise reverse semantics:
- *   {kind:'symlink', path}                          — a symlink we created
- *   {kind:'managed-block', path, createdFile:bool}  — a sentinel block we wrote
- *                                                     into a (maybe user-owned) file
+ *   {kind:'symlink', path, target?}                 — a symlink we created;
+ *                                                     `target` is the source it
+ *                                                     must still resolve to
+ *                                                     (absent on legacy entries);
+ *                                                     origin? is 'created' or
+ *                                                     'adopted' — whether we made
+ *                                                     the link or found it on
+ *                                                     disk; dev?/ino? are the
+ *                                                     link's lstat identity at
+ *                                                     creation time, as decimal
+ *                                                     strings (create site only)
+ *   {kind:'managed-block', path, createdFile:bool,
+ *    sepBefore?:string, sepAfter?:string,
+ *    anchorBefore?:string}                          — a sentinel block we wrote
+ *                                                     into a (maybe user-owned) file;
+ *                                                     sepBefore/sepAfter (WP-147) are
+ *                                                     the exact separator bytes the
+ *                                                     last insertion added; anchorBefore
+ *                                                     is the insertionAnchor() of the
+ *                                                     content that preceded them
  *   {kind:'settings-entry', path, createdFile:bool, commands:string[]}
  *                                                   — hook commands we merged into
  *                                                     a JSON settings file
@@ -36,12 +53,82 @@ const { WienerdogError } = require('./errors');
  *                                                     recursively on uninstall.
  *
  * @typedef {{kind: string, path: string, hash?: string, createdFile?: boolean,
- *            commands?: string[], unload?: string[]}} ManifestEntry
+ *            commands?: string[], unload?: string[], sepBefore?: string,
+ *            origin?: string, dev?: string, ino?: string,
+ *            sepAfter?: string, anchorBefore?: string}} ManifestEntry
  * @typedef {{version: number, createdAt: string, entries: ManifestEntry[]}} Manifest
  */
 
 const BEGIN_SENTINEL = '<!-- wienerdog:begin -->';
 const END_SENTINEL = '<!-- wienerdog:end -->';
+
+/** Table M (WP-147): the ONLY leading-separator values the forward step can
+ *  emit ('' createdFile; '\n' append onto newline-terminated content; '\n\n'
+ *  append onto unterminated content). The manifest is UNTRUSTED input, so
+ *  reverseManagedBlock accepts sepBefore only from this allowlist (and sepAfter
+ *  only as '\n'); anything else degrades to the legacy conservative strip. */
+const SEP_BEFORE_OK = new Set(['', '\n', '\n\n']);
+
+/** The bounded context window an insertion anchor covers, in JS string units
+ *  (UTF-16 code units — both sides slice JS strings read with 'utf8'). Bounded
+ *  ON PURPOSE: an unbounded/full-prefix anchor breaks on any edit anywhere above
+ *  the block, which is the COMMON case; 256 is roughly three to four lines of
+ *  markdown, enough to identify the block's neighbourhood and short enough that a
+ *  distant edit does not disturb it. */
+const ANCHOR_WINDOW = 256;
+/** An anchor is a sha256 hex digest and nothing else. Read from the UNTRUSTED
+ *  manifest, so the shape is checked before it is compared (Table N). */
+const ANCHOR_HEX = /^[0-9a-f]{64}$/;
+
+/** Hash of the last ANCHOR_WINDOW characters of the content that immediately
+ *  preceded an inserted separator. HASHED, not stored raw: the manifest is a
+ *  plaintext file and must never carry a copy of the user's document text.
+ *  @param {string} prefix @returns {string} 64-char lowercase hex */
+function insertionAnchor(prefix) {
+  return crypto.createHash('sha256').update(String(prefix).slice(-ANCHOR_WINDOW), 'utf8').digest('hex');
+}
+
+/** Does the recorded anchor prove the block is still at its RECORDED POSITION?
+ *  A hash match alone does NOT: it proves only that `candidate` ends with the
+ *  same window we recorded, and a window that occurs twice in the user's own
+ *  document has two positions that satisfy it (Table Q row Q10 — measured, no
+ *  forgery and no hash collision needed). So the match is paired with a
+ *  UNIQUENESS test. Both together are the position proof; either alone is not.
+ *  @param {ManifestEntry} entry
+ *  @param {string} candidate  the content that would remain in front of the block
+ *  @param {string} userText   the RECONSTRUCTED user document: `candidate + after`,
+ *    i.e. what uninstall is about to leave on disk. It must NOT be the whole
+ *    `content`, nor `content` with only the block excised — both still hold
+ *    Wienerdog's own separator bytes, which manufacture false ambiguity on
+ *    newline-only content (Table Q row Q13, measured).
+ *  @returns {boolean} */
+function anchorProvesPosition(entry, candidate, userText) {
+  const rec = entry.anchorBefore;
+  // LEGACY (absent or not a sha256 hex digest) → shipped 0.12.0 behaviour.
+  if (typeof rec !== 'string' || !ANCHOR_HEX.test(rec)) return true;
+  if (insertionAnchor(candidate) !== rec) return false;
+  const win = candidate.slice(-ANCHOR_WINDOW);
+  // The empty prefix exists at exactly one offset (0), so it is self-locating.
+  if (win === '') return true;
+  const first = userText.indexOf(win);
+  return first !== -1 && userText.indexOf(win, first + 1) === -1;
+}
+
+/** lstat identity of a SYMLINK, as decimal strings (bigint: a 64-bit inode
+ *  exceeds Number.MAX_SAFE_INTEGER, and BigInt is not JSON-serializable).
+ *  Returns null when the path is not a symlink, is unreadable, or the platform
+ *  cannot supply a non-zero (dev, ino) pair — see Table P rule S-2.
+ *  @param {string} linkPath @returns {{dev: string, ino: string}|null} */
+function linkIdentity(linkPath) {
+  try {
+    const st = fs.lstatSync(linkPath, { bigint: true });
+    if (!st.isSymbolicLink()) return null;
+    if (st.dev === 0n || st.ino === 0n) return null;
+    return { dev: String(st.dev), ino: String(st.ino) };
+  } catch {
+    return null;
+  }
+}
 
 /** Locate the SINGLE managed block by FULL-LINE sentinel match (a line whose
  *  trimmed content equals the sentinel). Returns {begin, end} character offsets
@@ -142,30 +229,101 @@ function isSymlink(p) {
 }
 
 /**
- * Reverse a 'symlink' entry: unlink only if it is still a symlink we created.
- * @param {ManifestEntry} entry
+ * Reverse a 'symlink' entry: unlink ONLY when the link still resolves to the
+ * source we recorded. A legacy (target-less) entry and a target mismatch are
+ * both PRESERVED and reported as skipped — never unlinked.
+ * @param {ManifestEntry} entry  {kind:'symlink', path, target?}
  * @param {boolean} dryRun
  * @param {string[]} removed @param {string[]} skipped @param {Set<string>} removedSet
+ * @param {string[]} skillsRoots the harness skills roots (row 4 OWNED gate)
+ * @param {{identity?: function}} [opts]  test seam only — see D4
  */
-function reverseSymlink(entry, dryRun, removed, skipped, removedSet) {
-  if (!isSymlink(entry.path)) {
-    // User replaced it with a real file/dir, or it is already gone.
-    skipped.push(entry.path);
+function reverseSymlink(entry, dryRun, removed, skipped, removedSet, skillsRoots, opts = {}) {
+  const identityOf = opts.identity || linkIdentity;   // test seam only
+  const L = entry.path;
+  const T = entry.target;
+  // Row 1: not a symlink (real file/dir, or already gone) — never ours to delete.
+  if (!isSymlink(L)) {
+    skipped.push(L);
     return;
   }
-  if (!dryRun) fs.unlinkSync(entry.path);
-  removedSet.add(entry.path);
-  removed.push(entry.path);
+  // Row 2: LEGACY (target-less) entry — ownership is unprovable, preserve
+  // unconditionally (owner ruling 2026-08-01). No backfill exists or ever will.
+  if (typeof T !== 'string' || T === '') {
+    process.stderr.write(
+      `wienerdog: keeping ${L} — not the Wienerdog skill link we recorded (replaced, or unverifiable)\n`
+    );
+    skipped.push(L);
+    return;
+  }
+  // Row 3: the link must PROVE it still resolves to the source we recorded.
+  // sameResolvedDir is realpath-based (semantic, follows the link) and is itself
+  // fail-closed — an unresolvable side returns false, which lands HERE, in preserve.
+  // There is deliberately NO second, link-text comparison: WP-153 shipped one, and
+  // WP-symlink-lexical-fallback-removal dropped it because raw-text equality is the
+  // weaker proof and the manifest is UNTRUSTED — a recorded target may narrow this
+  // delete, never authorize one the semantic proof refuses (e.g. a relative recorded
+  // target, which Wienerdog never writes, matched the link text while realpath did
+  // not). Strictly narrowing: every input this now preserves was previously deleted.
+  if (!sameResolvedDir(L, T)) {
+    process.stderr.write(
+      `wienerdog: keeping ${L} — not the Wienerdog skill link we recorded (replaced, or unverifiable)\n`
+    );
+    skipped.push(L);
+    return;
+  }
+  // Row 4: a target match is NOT delete authority — the manifest is untrusted, so
+  // an attacker can forge a (path, target) pair. Require the STRUCTURAL ownership
+  // proof reverseCopiedSkill uses: wienerdog-* basename AND parent realpath-equal
+  // to a harness skills root.
+  const parentIsRoot = skillsRoots.some((root) => sameResolvedDir(path.dirname(L), root));
+  if (!path.basename(L).startsWith('wienerdog-') || !parentIsRoot) {
+    process.stderr.write(
+      `wienerdog: keeping ${L} — not the Wienerdog skill link we recorded (replaced, or unverifiable)\n`
+    );
+    skipped.push(L);
+    return;
+  }
+  // Row 4a: ADOPTED — the link was already on disk when we first recorded it, so
+  // it is the USER's, not ours, however exactly it matches. Preserve.
+  if (entry.origin === 'adopted') {
+    process.stderr.write(
+      `wienerdog: keeping ${L} — not the Wienerdog skill link we recorded (replaced, or unverifiable)\n`
+    );
+    skipped.push(L);
+    return;
+  }
+  // Row 4b: IDENTITY — when we recorded a (dev, ino) pair, the link on disk must
+  // still BE that file object. A delete-and-recreate gets a new inode, so a user's
+  // same-source replacement no longer passes for ours. Fail closed on any doubt.
+  // A PARTIAL pair (one of the two) is a shape the forward step never writes, so
+  // it is unverifiable, not absent — preserve (Table P rule S-4, Table S).
+  const hasDev = typeof entry.dev === 'string';
+  const hasIno = typeof entry.ino === 'string';
+  if (hasDev || hasIno) {
+    const id = hasDev && hasIno ? identityOf(L) : null;
+    if (id === null || id.dev !== entry.dev || id.ino !== entry.ino) {
+      process.stderr.write(
+        `wienerdog: keeping ${L} — not the Wienerdog skill link we recorded (replaced, or unverifiable)\n`
+      );
+      skipped.push(L);
+      return;
+    }
+  }
+  // Row 5: OWNED, in-namespace, and provably resolves to our recorded source.
+  if (!dryRun) fs.unlinkSync(L);
+  removedSet.add(L);
+  removed.push(L);
 }
 
 /**
- * Reverse a 'managed-block' entry: strip the exact span the forward step
- * introduced — the block plus one leading newline (the blank-line separator)
- * and the one trailing newline after the end sentinel — so a pre-existing
- * file round-trips byte-identically through sync → uninstall. A block the
- * user relocated mid-file uninstalls to exactly one blank line between the
- * surrounding regions. Delete the file only if we created it and nothing
- * else remains.
+ * Reverse a 'managed-block' entry: strip the block plus ONLY the separator
+ * bytes the forward step recorded on the entry (`sepBefore`/`sepAfter`;
+ * legacy default one newline each side), and only when the strip preserves
+ * a user line boundary — never fuse the user's surrounding lines (audit
+ * A13, WP-147). The metadata is UNTRUSTED (Table M): values outside the
+ * emittable vocabulary degrade to the same legacy conservative strip.
+ * Delete the file only if we created it and nothing else remains.
  *
  * F30 (delete-time binding): the caller opens the O_NOFOLLOW-verified regular
  * file once and passes the fd + its canonical path `target`; read+modify+write
@@ -204,12 +362,65 @@ function reverseManagedBlock(entry, dryRun, removed, skipped, removedSet, fd, ta
   }
   let before = content.slice(0, span.begin);
   let after = content.slice(span.end);
-  // The forward step wrote '\n' + block + '\n' after the prior content's own
-  // trailing newline: one newline forming the blank-line separator, one
-  // terminating the end sentinel. Remove exactly those two characters along
-  // with the block itself.
-  if (before.endsWith('\n')) before = before.slice(0, -1);
-  if (after.startsWith('\n')) after = after.slice(1);
+
+  // The manifest is UNTRUSTED (WP-144). Accept ONLY values the forward step can
+  // actually emit; anything else is treated exactly as a legacy entry. Table M.
+  let sepBefore = entry.sepBefore;
+  let sepAfter = entry.sepAfter;
+  if (!SEP_BEFORE_OK.has(sepBefore) || sepAfter !== '\n') {
+    if (sepBefore !== undefined || sepAfter !== undefined) {
+      process.stderr.write(
+        `wienerdog: ignoring out-of-vocabulary separator metadata on ${entry.path} — ` +
+        'stripping conservatively\n'
+      );
+    }
+    sepBefore = '\n';
+    sepAfter = '\n';
+  }
+
+  // Trailing terminator: the block's own line end is always Wienerdog's — remove it.
+  if (after.startsWith(sepAfter)) after = after.slice(sepAfter.length);
+  else if (after.startsWith('\n')) after = after.slice(1); // legacy fallback
+
+  // Leading separator: remove ONLY the exact bytes we added, and ONLY when doing so
+  // preserves a line boundary — otherwise we would fuse two user lines (the A13 bug).
+  if (sepBefore.length > 0 && before.endsWith(sepBefore)) {
+    const candidate = before.slice(0, before.length - sepBefore.length);
+    // The at-EOF disjunct is GATED on sepBefore === '\n\n' — i.e. on the forward
+    // step having supplied the file's terminator itself. When sepBefore is '\n'
+    // the file was already newline-terminated by the USER, so that newline is
+    // theirs and survives even with nothing after the block.
+    const weSuppliedTerminator = sepBefore === '\n\n';
+
+    // (1) OWNERSHIP RE-CHECK. We wrote '\n\n' ONLY because the content did not end
+    //     with a newline. If `candidate` ends with one now, the block is NOT at its
+    //     recorded append position — the user moved it — and that newline is theirs.
+    const ownershipOk = !weSuppliedTerminator || !candidate.endsWith('\n');
+
+    // (2) ANTI-FUSION. Never remove a newline that is the boundary between two user
+    //     lines.
+    const noFusion =
+      candidate === '' ||
+      candidate.endsWith('\n') ||
+      (weSuppliedTerminator && after === '') ||
+      after.startsWith('\n');
+
+    // (3) INSERTION ANCHOR + UNIQUENESS. `candidate` is the content that would
+    //     remain in front of the block. It must hash to the anchor we recorded
+    //     when we wrote sepBefore, AND that window must occur exactly once in the
+    //     user's document — otherwise a block moved to a second occurrence of the
+    //     same window passes the hash at the wrong position. An ABSENT or
+    //     malformed anchor is a LEGACY entry: shipped behaviour, never stricter.
+    //     The corpus is `candidate + after` — the document uninstall is about to
+    //     leave — NOT `content`, which still holds our own separator and makes
+    //     newline-only files look ambiguous (Table Q row Q13).
+    const anchorOk = anchorProvesPosition(entry, candidate, candidate + after);
+
+    // ALL THREE are required, and the anchor is a CONJUNCT — never a disjunct.
+    // It may only ever withhold a strip the other two would have allowed
+    // (Table N); it may never authorise one they refused.
+    if (anchorOk && ownershipOk && noFusion) before = candidate;
+  }
   const remaining = before + after;
 
   if (entry.createdFile === true && remaining.trim() === '') {
@@ -726,7 +937,7 @@ function reverse(paths, manifest, { dryRun = false } = {}) {
           skipped.push(entry.path);
           continue;
         }
-        reverseSymlink(entry, dryRun, removed, skipped, removedSet);
+        reverseSymlink(entry, dryRun, removed, skipped, removedSet, skillsRoots);
       } else if (entry.kind === 'managed-block' || entry.kind === 'settings-entry') {
         // F30: canonicalize the PARENT, then open the final component with
         // O_NOFOLLOW so a symlink at the recorded path (a swap-to-symlink)
@@ -806,7 +1017,12 @@ function reverse(paths, manifest, { dryRun = false } = {}) {
 const ENTRY_FIELD_TYPES = {
   file: { hash: 'string' },
   dir: {},
-  symlink: {},
+  symlink: { target: 'string', origin: 'string', dev: 'string', ino: 'string' },
+  // sepBefore/sepAfter (WP-147) are deliberately NOT type-gated here: a non-string
+  // forgery must reach reverseManagedBlock so its SEP_BEFORE_OK allowlist degrades
+  // to the legacy conservative strip and still removes the block (Table M:
+  // "additive only, no rejection"). Type-gating would reject the entry upstream,
+  // leaving the managed block installed — the disposition Table M explicitly rejects.
   'managed-block': { createdFile: 'boolean' },
   'settings-entry': { createdFile: 'boolean', commands: 'string[]' },
   'vendored-tree': {},
@@ -955,4 +1171,4 @@ function disposeCoreMechanics(paths, { dryRun = false, vaultPath = null } = {}) 
   return { removed, skippedForVault };
 }
 
-module.exports = { load, record, save, reverse, disposeCoreMechanics, reverseSchedulerEntry, reverseVendoredTree, reverseCopiedSkill, hashDir, sha256File, validateEntry, withinAllowedRoot, withinSchedulerRoot };
+module.exports = { load, record, save, reverse, disposeCoreMechanics, reverseSchedulerEntry, reverseVendoredTree, reverseCopiedSkill, reverseSymlink, hashDir, insertionAnchor, linkIdentity, sha256File, validateEntry, withinAllowedRoot, withinSchedulerRoot };

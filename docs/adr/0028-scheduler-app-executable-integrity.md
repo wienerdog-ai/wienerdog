@@ -972,3 +972,385 @@ Consequences, stated plainly:
   `git`, which it cannot do without loading pin code from the very tree it is
   verifying. The instability that scoping was meant to cure exists only on dev,
   and §1 removes it by dev not content-addressing its tree at all.
+
+## Amendment (2026-08-01) — a correct, permanent refusal may be acknowledged by the user; it may never be softened by the install
+
+Status: **ACCEPTED — OWNER-SIGNED 2026-08-01**
+
+This amendment resolves the disposition the 2026-07-25 amendment left standing as
+an accepted cost — *"catch-up remains structurally unavailable on a dev install,
+with a durable alert naming `wienerdog sync` that will not make it available"* —
+now that the cost has been observed in practice. It **reverses nothing**. §2's
+rejection of a dev catch-up branch and §3's durable rule are reaffirmed verbatim
+and are the grounds on which two candidate repairs are rejected below.
+
+### 1. What was observed
+
+On the maintainer's dev-stance install (`<core>/app/current` → the live checkout),
+the hourly catch-up entry fires, `verifyContainment` refuses because `app/current`
+legitimately resolves outside `<core>/app`, and `appendRefuseAlert` appends one
+record per hour. Measured 2026-08-01: **119** records in
+`<core>/state/alerts.jsonl`, all for the pseudo-job `--catch-up`, collapsing to
+exactly **two** distinct `(job, reason)` pairs — one legacy record from
+2026-07-25T19:12:34.322Z and **118** identical records from
+2026-07-27T13:53:42.303Z to 2026-08-01T10:00:05.159Z.
+
+The refusal is correct and is the disposition this ADR ratified. Three
+consequences of it were not anticipated:
+
+1. Nothing ever clears the record. `clearAlerts(paths, job)` runs when a job
+   **succeeds**; `--catch-up` is a pseudo-job that never reports success, so its
+   alerts are durable **forever** by construction.
+2. `formatAlerts` re-renders the newest reason into **every** session digest, so a
+   single permanent, already-understood condition presents as a fresh incident on
+   every session start.
+3. The rendered advice is the `reinstall` class from
+   `WP-refusal-remedy-discriminator` — *"Do not run `wienerdog sync` … Reinstall
+   Wienerdog from a trusted source, then investigate."* That class assignment is
+   **correct** under that WP's rule R-P (containment failed, so nothing was
+   confirmed) and must not be changed; but on this machine the condition is a
+   legitimate, owner-chosen dev link, so the correct-in-general advice is wrong in
+   this instance and is repeated indefinitely.
+
+### 2. Two candidate repairs, both rejected under §3
+
+**(a) A dev-aware refusal alert.** Rejected. On the catch-up path the live "this
+is a dev install" observation **is** the containment failure — there is no other
+signal available to that code. `<core>/app/current` is a symlink, and repointing
+one symlink is an **A7-scoped write**: on a *production* install an attacker who
+repoints it produces exactly that observation, and the banner would then tell the
+user *"this is just a dev install, nothing to see"* at the precise moment a
+repoint attack is in progress. That is the advice-downgrade shape §3 forbids,
+applied one level up from verification to the notification the user acts on.
+Binding a stance token into the catch-up registration does not help: §3's
+mint-time half already rules that binding the decision into a registration *"only
+moves the attack one attended `sync` earlier"*. `WP-refusal-remedy-discriminator`
+independently forbids the same move in its own words (*"do **not** add an
+`isDev(target)` test to `verifyCatchup` to pick a gentler tail … it would carve
+the first real exception into R-P"*). Rejected.
+
+**(b) Stop registering `ai.wienerdog.catchup` on a dev-stance install.** Rejected,
+though not on §3 grounds alone. It is *narrowly* rule-compatible: it selects
+between an **enforced** catch-up and **no** catch-up, never between enforced and
+**reduced** verification, so no execution path with weaker checking is created.
+It is rejected on three other grounds:
+
+1. **It does not solve the observed problem.** The 119 records are already
+   durable and nothing clears them (§1.1), so the digest banner would persist
+   unchanged after the registration disappeared.
+2. **It puts an availability guarantee behind a forgeable oracle.** The mint-time
+   decision reads containment at attended `sync`; a pre-`sync` repoint on a
+   production install would silently leave catch-up unregistered — the missed-job
+   safety net disabled with **no refusal ever firing**, i.e. an availability loss
+   that produces no signal at all. A refusal that fires and is loud is strictly
+   preferable to a capability that quietly never exists.
+3. **It edits the wrong contract at the wrong time.** The four-caller
+   mint/teardown ownership invariant of Amendment #6 (R6/R7/R9 —
+   `sync`/`repointSchedules`, `schedule add`, `init`, `adopt` mint;
+   `repointSchedules` alone repairs and tears down) is the most delicate
+   contract in this ADR, and this would add a conditional to it.
+
+**Catch-up therefore stays registered and stays refusing on a dev install.**
+Nothing in §2 or §4 of the 2026-07-25 amendment moves.
+
+### 3. The ratified door: an attended acknowledgement of the *rendering*
+
+The user may silence a **specific, already-seen** alert **in the session digest
+only**, by an owner-attended act. The act is a typed confirmation read from a real
+controlling terminal — the boundary `wienerdog grant` (ADR-0007) and
+`wienerdog memory approve` (ADR-0021) already use. **A typed terminal
+confirmation is not a file write, so it is not something the A7 adversary can
+perform**, which is why this door is open where (a) and (b) are shut.
+
+The scope limits are the decision, and they are exhaustive:
+
+- It changes **rendering only**. Verification, the refusal, the zero spawn, the
+  non-zero exit, the stderr line, and the durable record in `alerts.jsonl` are all
+  untouched. No verification is weakened, skipped, or made conditional.
+- It is keyed on the **exact `(job, reason)` pair**, hashed together. One changed
+  byte in the reason, or the same reason under a different job, is a different key
+  and renders normally. There is no prefix, substring, pattern or class match.
+- Only a pair **present in `alerts.jsonl` at the moment of the command**, and only
+  after it has been printed in full to the user, may be acknowledged.
+- The acknowledgement is **dropped when that job next succeeds** (`clearAlerts`
+  prunes it), so it can never outlive the alert it silenced and silently
+  pre-suppress a later, different failure that happens to reuse the wording.
+- Acknowledged alerts remain listed by `wienerdog alerts`. Nothing becomes
+  invisible; it becomes un-repeated.
+- The mechanism reads **nothing** about the install — not the stance, not
+  containment, not `.git`, not `WIENERDOG_DEV`, not the job name. §3's rule is not
+  engaged, because no path selection of any kind occurs.
+
+Delivered by **`WP-attended-alert-acknowledgement`**.
+
+### 4. Honest boundary of the acknowledgement store
+
+The store is `<core>/state/alerts-ack.json`, at the **same** A7-scoped write
+surface as `<core>/state/alerts.jsonl` itself. Stated plainly, and not claimed
+away:
+
+- An attacker who can forge an acknowledgement record can already **truncate or
+  delete `alerts.jsonl` outright**, which suppresses the same banner without
+  needing to predict a reason string. The store therefore adds **no capability**
+  to the in-scope adversary.
+- The launcher's `appendRefuseAlert` already documents itself as best-effort —
+  *"the alert is best-effort — the refusal (non-zero exit, zero spawn) stands
+  regardless"*. The **security** guarantee of a refusal has never been the alert;
+  it is the zero spawn and the non-zero exit, and both are untouched.
+- The store fails **open** on every malformed input: a missing, unreadable,
+  non-JSON, wrong-schema or wrong-shaped record suppresses nothing. A suppression
+  mechanism that failed closed would hide warnings, which is the wrong direction
+  for this file.
+
+What this amendment does **not** claim: that the notification channel is
+tamper-resistant against a writer who reaches `<core>/state`. It never was, and
+this changes neither direction of that.
+
+### 5. Consequences
+
+- **Catch-up remains structurally unavailable on a dev install**, exactly as the
+  2026-07-25 amendment ratified. What changes is only that its correct, permanent
+  refusal stops presenting as an unread incident in every session once the owner
+  has read it and said so at a terminal.
+- **No new stance-dependent code exists anywhere**, and the two candidate designs
+  that would have introduced some are recorded as rejected above rather than left
+  as open ideas to be re-proposed.
+- **A discovered, unfixed defect is recorded, not repaired here:** the launcher's
+  `appendRefuseAlert` is the only writer of `alerts.jsonl` that applies no record
+  or byte bound, so the file grows without limit on the launcher path, and the
+  app-side newest-200 compaction lets a repeating refusal crowd older alerts for
+  other jobs out of the history. The obvious repair — collapsing consecutive
+  identical records — is **rejected**, because it would make the digest report
+  *"has failed"* for a job that genuinely failed 118 consecutive times,
+  understating a real recurring failure. A correct repair gives the launcher the
+  same bound the app-side writer has, or extends the record schema with a count;
+  either needs its own work package and its own review, and neither is a launch-day
+  change.
+
+### 6. Codex design-review dispositions (2026-08-01, owner-accepted)
+
+This amendment and `WP-attended-alert-acknowledgement` were put through the
+adversarial design-review loop. Five findings came back; the owner accepted every
+disposition below on 2026-08-01 and **rejected none**. Sections 1–5 above are
+owner-signed and are not rewritten by this subsection — finding 1 is recorded here
+as a **correction of emphasis** to §4, and §6.1 is the authoritative reading of
+§4's capability claim wherever the two are read together.
+
+#### 6.1 Finding 1 — "adds no capability" is too categorical (ACCEPTED, corrects the emphasis of §4)
+
+**What the review found.** §4 argues that a forged acknowledgement record grants
+the `<core>/state`-writing adversary nothing, because that adversary "can already
+truncate or delete `alerts.jsonl` outright". The two are not equivalent, and the
+difference runs in the attacker's favour. A forged acknowledgement is
+**persistent** — it survives every subsequent append and lasts until the job
+succeeds, which for a pseudo-job like `--catch-up` is never; it is **selective** —
+it silences one chosen `(job, reason)` key and leaves every other alert rendering
+normally, so the channel keeps looking healthy; and it is **unauthenticated** —
+the record carries no proof that a human at a terminal produced it, while
+`alerts.jsonl` itself remains intact and unsuspicious. One-time truncation gives
+an attacker none of those three: it destroys history once, leaves a visible gap,
+and suppresses nothing that is appended afterwards. Writing that the store "adds
+no capability" therefore overstates the case as a flat claim.
+
+**The disposition, and the counter-argument that bounds it.** The finding is
+accepted as stated. What it does **not** establish is a new *reachable outcome*,
+and that is the sharper argument, which stands: the same adversary — anything able
+to write under `<core>/state` — can rewrite **`state/digest.md` itself**, the very
+artifact the alert banner is rendered into, and can do so persistently and
+selectively too. The digest notification channel was therefore **never**
+integrity-protected against this adversary, before or after this amendment. What
+the acknowledgement store changes is the **shape** of the tampering available —
+from "destroy or rewrite the rendered output" to "suppress one key at the source"
+— not the set of outcomes the adversary can reach. §4's honest-boundary framing
+stands with that qualification, and its closing sentence (*"What this amendment
+does not claim: that the notification channel is tamper-resistant against a writer
+who reaches `<core>/state`"*) was already the correct statement; §4's bullet
+overstated it in the attacker's disfavour and should be read through this
+paragraph. **The security guarantee is untouched in every reading: zero spawn,
+non-zero exit, and no weakening of any verification.**
+
+#### 6.2 Findings 2–5 — the four spec-side dispositions
+
+- **Finding 2 — the anti-minting claim was unqualified.** The spec asserted that
+  "no skill, hook, dream, or headless job can mint one"; an actor able to execute
+  arbitrary code under the user's account defeats it by driving `defaultPrompt`
+  through a pseudoterminal or by importing `addAcks` directly. **Accepted as an
+  A12-precedent residual** — identical to the already-accepted boundary of
+  `wienerdog grant` (ADR-0007) and `wienerdog memory approve` (ADR-0021), neither
+  strengthened nor weakened here. **Landed:** the WP's Security checklist bullet 4,
+  scoped to Wienerdog's contained runtimes with the A12 hand-off stated.
+- **Finding 3 — "a single byte of change" overstated the key's precision.** The
+  key is computed over the **stored** reason, which `sanitizeAlert` has already
+  capped at 2,000 characters and secret-redacted, so two raw messages differing
+  only past the cap, or only in redacted bytes, share a key. **Accepted.**
+  **Landed:** Table B's Reason sensitivity row, and the user-facing G1 bullet
+  mirrored byte-identically into `docs/GLOSSARY.md`.
+- **Finding 4 — two defects in the match contract.** (a) A record whose stored
+  `job` disagreed with its `key` suppressed another job's alert while only the
+  stored job's success could ever prune it; (b) the fail-open prose contradicted
+  the `[]` returned for a non-array input. **Accepted.** **Landed:** the match
+  predicate strengthened to require **both** `record.job === alert.job` and
+  `record.key === ackKey(job, reason)` in the WP (PR #127), with the non-array
+  return ruled an upstream programming-error guard rather than a suppression path
+  in Table B; the code follows the tables.
+- **Finding 5 — the lifecycle pairing is bounded, not absolute.** Alert-log
+  compaction can **orphan** an acknowledgement (which then pre-suppresses only an
+  exact recurrence of already-acknowledged wording), and `MAX_ACKS` eviction can
+  **resurface** an acknowledged alert. **Accepted as fail-safe residuals.**
+  **Landed:** Table A's Lifecycle row, which now carries both bounds and forbids
+  the unqualified "never outlives" phrasing.
+
+#### 6.3 Process note
+
+The review was run per `docs/runbooks/codex-review.md`. **The design-review leg
+ran late** — after the spec had reached `Ready` and been dispatched, rather than
+before, which is a deviation from the runbook's ordering and is recorded here
+rather than smoothed over; the cost was that findings 4 and 5 landed as amendments
+to a spec an implementer was already working from. Verdict: **REQUEST CHANGES**.
+All five findings were dispositioned by the owner on 2026-08-01; **none was
+rejected**.
+
+## Amendment (2026-08-01) — the scheduler ENTRY's node path is an upgrade-durable alias; `process.execPath` stays the runtime and the authorization value
+
+Status: **ACCEPTED - OWNER-SIGNED 2026-08-02**
+
+**Architect note (2026-08-01, architect-authored — this is NOT an owner
+signature, confers no approval, and no gate may key on it).** This amendment was
+drafted by `wd-architect` because a `Ready` work package
+(`WP-scheduler-node-path-durability`) makes one sentence of Decision 1 false, and
+that spec's own Definition of done item 8 forbids merging the code while an
+owner-signed ADR line is left silently false. The status line above is the
+**only** ratification marker for this amendment; it stays `PROPOSED` until Gyula
+Fehér types an `OWNER-SIGNED <date>` line into it by hand. Nothing above this
+heading — not the `OWNER-SIGNED 2026-07-25` line at the head of the file, not
+Decision 1's text, not any earlier amendment — is edited by this note or by the
+sections below. Until signature, **Decision 1 stands exactly as written and this
+amendment is a proposal, not the record**.
+
+### 1. The sentence this amends, and why it needs amending
+
+Decision 1 ("Structural executable pin") ends with:
+
+> `node` is `process.execPath` (already absolute) and is not pinned.
+
+That sentence was written when `process.execPath` was the value used in **every**
+node-path role A7 touches, so one clause covered all of them. It has since become
+ambiguous rather than wrong, and `WP-scheduler-node-path-durability` makes one
+reading of it false. That WP registers the OS scheduler entry against an
+upgrade-durable Homebrew alias (`<prefix>/opt/<formula>/bin/node`) instead of the
+version-pinned Cellar path `process.execPath` returns, because an ordinary
+`brew upgrade node` deletes the Cellar directory and every scheduled fire then
+dies in `posix_spawn` with `ENOENT` **before a line of Wienerdog code runs** — a
+failure outside the product's own observability, which is the exact class A7
+exists to move inside it.
+
+### 2. The three roles the sentence conflates (canonical)
+
+| Role | Where the value lands | Value after this amendment | Why |
+|------|----------------------|----------------------------|-----|
+| **Entry** — the program the OS starts | `ProgramArguments[0]` (launchd), the `ExecStart` head (systemd), the node token in the Windows `<Arguments>` | an upgrade-durable absolute alias **when, and only when, it provably resolves to the running interpreter**; otherwise `process.execPath` unchanged | a string the OS keeps and re-reads days later. A path that dies between writes is fatal here. |
+| **Runtime** — spawning a child of the process that is already running | `run-job.js`, `routine-runtime.js` | `process.execPath`, **unchanged** | must be the exact running interpreter. The path cannot go stale between the read and the spawn, and the exec-identity discipline requires it (never a PATH lookup, never an interpreter chosen by a symlink). |
+| **Authorization record** — the digest-covered descriptor field | `descriptor.js`'s `node` field (Decision 3's schema, `"node": "/…/bin/node"`) | `process.execPath`, **unchanged** | see §4. |
+
+### 3. Corrected contract
+
+Decision 1's closing sentence is replaced, in effect, by:
+
+> `node` is **not pinned** in the WP-154 sense — there is no command-path +
+> install-dir pin store entry for it, and no structural verification of it. The
+> node path Wienerdog *writes* depends on the role: the **runtime** and
+> **authorization-record** roles are `process.execPath` verbatim; the **OS entry**
+> role is the most upgrade-durable absolute path that **provably resolves, via
+> `realpath`, to the very interpreter that is running at registration time**,
+> falling back to `process.execPath` in every other case and on every error.
+
+The realpath identity check is the whole of the security argument, and it is
+stated here rather than left in the spec: a candidate alias is never written
+anywhere until `realpath(alias) === realpath(process.execPath)` has proven it
+names the **same inode** as the running interpreter. Any alias that survives that
+check names the correct binary by construction, whatever its lexical shape; any
+alias that does not is discarded and the pinned path is used. The derivation is
+therefore fail-safe in one direction only — toward `process.execPath`.
+
+### 4. Why the descriptor's `node` field does **not** move
+
+Decision 3's rule — *"everything that shapes the 03:30 spawn argv is
+digest-covered, no exceptions"* — is untouched, and the field stays
+`process.execPath` for two reasons that are consequences of decisions already in
+this ADR, not new policy:
+
+1. The field is digest-covered, so changing its value changes every existing
+   job's **descriptor digest**, and therefore the `--expect-digest` token bound
+   into every registered entry's argv.
+2. The macOS registration path cannot replace an already-loaded launchd record
+   with a bare `launchctl bootstrap`. The rewritten plist would sit on disk
+   carrying the new digest while launchd kept serving the old record carrying the
+   old one; at the next fire the launcher would re-derive the new digest, compare
+   it against the stale entry-bound old one, and **refuse** — breaking the nightly
+   job on every already-installed macOS machine.
+
+**The honest consequence, stated rather than smoothed over.** After a
+`brew upgrade node`, an entry registered against the durable alias *fires*, the
+launcher *runs*, re-derives `node: process.execPath` as the new Cellar path,
+finds it differs from the descriptor on disk, and **refuses loudly** — durable
+`alerts.jsonl` record, digest callout, remedy `run 'wienerdog sync'`. That is the
+point: the failure moves from **outside** the product's observability to
+**inside** it. Making a node upgrade cost nothing at all requires the descriptor
+field to move too, which is a separate change that must land after the
+verified-registration postcondition (ADR-0037) is in force everywhere.
+
+### 5. Honest boundary — this adds no substitution resistance
+
+The alias is a **third-party path Wienerdog does not own**. A same-user actor who
+can repoint `<prefix>/opt/node` is the same actor who can replace the Cellar
+binary it points at, and both are the arbitrary-same-user-native-code class this
+ADR's "Honest boundary" already hands to A12. This amendment therefore closes the
+**accidental** half of the dead-execution-position problem (a binary that ceases
+to exist because the user upgraded a package) and closes **none** of the
+**substituted** half (a real-but-hostile binary in the execution position, which
+still grades `loaded` today). No sentence anywhere may read this amendment as
+strengthening the executable trust anchor; it strengthens *availability* of a
+correct entry, nothing else.
+
+Two residuals are recorded rather than claimed closed:
+
+- **nvm / fnm / volta / nodenv layouts** maintain no stable alias, so they keep
+  the version-pinned path, where `defaultProbe`'s attended
+  execution-position-exists check remains the only safety net.
+- **Windows** is a no-op by construction (a Windows `process.execPath` has no
+  POSIX-absolute shape), on the basis that the known Windows layouts are already
+  stable. That layout claim is **specified, not observed** — no Windows host was
+  available.
+
+**One other unsigned amendment to this ADR is pending, and it is unrelated to
+this one.** `docs/adr/0035-attended-execution-is-the-app-tree-trust-boundary.md`
+carries, under *"Proposed amendment to ADR-0028 (for the owner's separate
+signature)"*, a narrowing of this ADR's **"Honest boundary"** section — the app
+tree leaves the protected class. `docs/adr/README.md`'s 0035 row records the same
+pending state. The two amendments touch **different sections** (that one the
+Honest boundary; this one Decision 1's node sentence), rest on **different
+arguments**, and are **independent in both directions**. Cross-referenced here in
+one line for a single reason: **signing one must not be read as settling the
+other.** Each needs its own dated owner marker.
+
+### 6. Sequencing, and what remains for the owner
+
+This amendment must be **signed at or before** the merge of
+`WP-scheduler-node-path-durability`; that spec's Definition of done item 8 is the
+gate, and it is deliberately an owner action because an ADR is never edited from
+a work package. Until the status line above carries a hand-typed
+`OWNER-SIGNED <date>`, the gate is **not** satisfied and the code must not merge.
+The only remaining step is the signature — the amendment text is written and
+needs no further architect pass.
+
+**The signature discharges THIS gate only, and not the WP's dispatchability.**
+`WP-scheduler-node-path-durability` also carries
+`depends_on: [WP-scheduler-register-replaces-loaded-record]`, and that dependency
+must be **`Done` — merged and verified — before the WP is dispatched**, per the
+standing dispatch discipline in `docs/specs/README.md`. This is stated because
+the two gates are easy to conflate and nothing mechanical separates them:
+`scripts/check-frontmatter.js` only resolves a `depends_on` id to an existing
+spec file; it never checks that spec's `status`. A signed amendment therefore
+makes the WP *look* ready while the silent-nonconvergence hazard its dependency
+closes (Tables C/D in that spec: a `sync` that reports success while launchd or
+systemd still holds the pinned path) is still live in production.

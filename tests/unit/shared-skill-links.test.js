@@ -7,7 +7,7 @@ const os = require('node:os');
 const path = require('node:path');
 
 const shared = require('../../src/adapters/shared');
-const { hashDir } = require('../../src/core/manifest');
+const { hashDir, linkIdentity } = require('../../src/core/manifest');
 
 /** Fresh temp core skills dir (with one wienerdog-* skill) + empty target dir. */
 function setup() {
@@ -49,10 +49,20 @@ test('skill symlinked into the target dir with the default seam (POSIX)', () => 
   assert.ok(fs.lstatSync(linkPath).isSymbolicLink(), 'a symlink is created');
   assert.equal(fs.readlinkSync(linkPath), coreSkill);
   assert.ok(out.changed.includes(linkPath));
-  assert.deepEqual(
-    manifest.entries.filter((e) => e.path === linkPath),
-    [{ kind: 'symlink', path: linkPath }]
-  );
+  // The create-branch entry carries machine-specific dev/ino, so it cannot be a
+  // literal (Table F row 1). Field-by-field, with the identity asserted against
+  // the LIVE linkIdentity() so the row is portable — and non-null on POSIX so
+  // the identity assertion cannot pass vacuously.
+  const entries = manifest.entries.filter((e) => e.path === linkPath);
+  assert.equal(entries.length, 1);
+  const entry = entries[0];
+  assert.equal(entry.kind, 'symlink');
+  assert.equal(entry.path, linkPath);
+  assert.equal(entry.target, coreSkill);
+  assert.equal(entry.origin, 'created');
+  const id = linkIdentity(linkPath);
+  assert.notEqual(id, null, 'linkIdentity must establish an identity on POSIX');
+  assert.deepEqual({ dev: entry.dev, ino: entry.ino }, id, 'the recorded pair is the live link identity');
 });
 
 test('EPERM on symlink falls back to copying the folder + records copied-skill', () => {
@@ -190,7 +200,7 @@ test('dry-run records a symlink entry and reports the change without writing', (
   assert.ok(out.changed.includes(linkPath));
   assert.deepEqual(
     manifest.entries.filter((e) => e.path === linkPath),
-    [{ kind: 'symlink', path: linkPath }]
+    [{ kind: 'symlink', path: linkPath, target: path.join(skillsDir, 'wienerdog-setup'), origin: 'created' }]
   );
 });
 
@@ -336,7 +346,7 @@ test('a pre-existing correct symlink is adopted into the manifest (recorded, rep
   assert.ok(!out.changed.includes(linkPath));
   assert.deepEqual(
     manifest.entries.filter((e) => e.path === linkPath),
-    [{ kind: 'symlink', path: linkPath }]
+    [{ kind: 'symlink', path: linkPath, target: coreSkill, origin: 'adopted' }]
   );
 });
 

@@ -6,6 +6,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const { EventEmitter } = require('node:events');
 
 const { getPaths } = require('../../src/core/paths');
 const manifestLib = require('../../src/core/manifest');
@@ -1959,4 +1960,410 @@ test('scheduler-runjob: the CATCH-UP path (catchUp → runJob) is gated by the p
   const state = jobsLib.readScheduleState(paths);
   assert.equal(state.digest.last_status, 'error', 'catch-up routed through the same probe gate and halted');
   assert.ok(!fs.existsSync(marker), 'the routine brain never spawned under catch-up');
+});
+
+// -------------------------------------------------------------------------
+// WP-151 (audit A13): the fail-loud alert/email body is built from code-owned
+// status fields — a non-Wienerdog error's raw message never leaves the machine.
+// Table R rows 1-4, the D2 log write, D3/D5 stream-error absorption, D6 gate.
+// -------------------------------------------------------------------------
+
+/** T7c skip guard (REAP_SKIP_WIN32 idiom): POSIX mode bits cannot deny the
+ *  owner on win32, and root bypasses them — either way the real-EACCES probe
+ *  would silently pass for the wrong reason. */
+const SKIP_NO_EACCES =
+  (process.platform === 'win32' && 'POSIX mode bits cannot deny the owner on win32') ||
+  (typeof process.getuid === 'function' && process.getuid() === 0 && 'root bypasses POSIX mode bits');
+
+/** WP-151 stub, family 1 (Table S rows C/F — error-then-callback): emits
+ *  'error' at the armed moment, and end(cb) STILL invokes cb afterwards, like a
+ *  real errored fs.WriteStream; destroyed/closed stay false. A lenient stub
+ *  that never emits passes against the untouched endStream too and proves
+ *  nothing — the red direction depends on the emit.
+ *  @param {{errorOnWrite?: Error|null, errorOnEnd?: Error|null}} [arm] */
+function errorThenCallbackStub({ errorOnWrite = null, errorOnEnd = null } = {}) {
+  const s = new EventEmitter();
+  /** @type {string[]} */ s.written = [];
+  s.destroyed = false;
+  s.closed = false;
+  s.writableEnded = false;
+  s.errored = false;
+  s.write = (chunk) => {
+    s.written.push(String(chunk));
+    if (errorOnWrite && !s.errored) {
+      s.errored = true;
+      s.emit('error', errorOnWrite);
+    }
+    return true;
+  };
+  s.end = (cb) => {
+    s.writableEnded = true;
+    if (errorOnEnd && !s.errored) {
+      s.errored = true;
+      s.emit('error', errorOnEnd);
+    }
+    if (cb) process.nextTick(cb);
+  };
+  return s;
+}
+
+/** WP-151 stub, family 2 (Table S rows A/B — destroyed-no-callback): reports
+ *  destroyed (row B: destroyed AND closed), NEVER invokes the end callback and
+ *  NEVER emits again. Against a listener-only endStream this HANGS; only the
+ *  synchronous already-settled check passes row B.
+ *  @param {{closed?: boolean}} [state] */
+function destroyedNoCallbackStub({ closed = false } = {}) {
+  const s = new EventEmitter();
+  /** @type {string[]} */ s.written = [];
+  s.destroyed = true;
+  s.closed = closed;
+  s.writableEnded = false;
+  s.write = (chunk) => (s.written.push(String(chunk)), true);
+  s.end = () => {
+    /* never calls back, never emits (Table S rows A/B) */
+  };
+  return s;
+}
+
+/** The T1/T2 fixture: a spawn of the nonexistent literal path `weird ENOENT /x`
+ *  makes the child emit a raw Node error (`spawn weird ENOENT /x ENOENT`) — a
+ *  non-WienerdogError whose message carries the marker. */
+const RAW_MARKER = 'weird ENOENT /x';
+const ROW1_REASON = 'job "dream" failed to run — see the log for details';
+
+test('scheduler-runjob: WP-151 T1 — a non-Wienerdog failure renders the code-owned row-1 reason; the raw message reaches NEITHER the durable alert NOR the email', async () => {
+  const { env, paths } = setup();
+  jobsLib.saveJob(paths, { name: 'dream', at: '03:30', run: 'builtin:dream', timeoutMinutes: 20 });
+  /** @type {string[]} */ const bodies = [];
+  const sendAlert = (_p, _n, _subject, body) => (bodies.push(body), { status: 0 });
+
+  await assert.rejects(
+    withRun(env, {}, ['dream'], {
+      resolveCommand: () => ({ command: RAW_MARKER, args: [], shell: false }),
+      sendAlert,
+      loader: noopLoader,
+    }),
+    (e) => e.message === ROW1_REASON || assert.fail(`rejected with "${e.message}" instead of the code-owned reason`)
+  );
+
+  assert.equal(jobsLib.readScheduleState(paths).dream.last_status, 'error');
+  const durable = readAlerts(paths);
+  assert.equal(durable.length, 1, 'one durable alert record');
+  assert.equal(durable[0].reason, ROW1_REASON, 'alert reason is exactly the row-1 template');
+  assert.ok(!JSON.stringify(durable[0]).includes(RAW_MARKER), 'raw message appears NOWHERE in the alert record');
+  assert.equal(bodies.length, 1, 'fail-loud email attempted');
+  assert.ok(!bodies[0].includes(RAW_MARKER), 'raw message appears NOWHERE in the email body');
+  assert.match(bodies[0], /failed to run — see the log for details/, 'email carries the code-owned reason');
+});
+
+test('scheduler-runjob: WP-151 T2 — the same run preserves the redacted raw cause in the per-run log', async () => {
+  const { env, paths } = setup();
+  jobsLib.saveJob(paths, { name: 'dream', at: '03:30', run: 'builtin:dream', timeoutMinutes: 20 });
+
+  await assert.rejects(
+    withRun(env, {}, ['dream'], {
+      resolveCommand: () => ({ command: RAW_MARKER, args: [], shell: false }),
+      sendAlert: () => ({ status: 0 }),
+      loader: noopLoader,
+    }),
+    (e) => e.message === ROW1_REASON
+  );
+
+  const logDir = path.join(paths.logs, 'dream');
+  const logs = fs.readdirSync(logDir).filter((f) => f.endsWith('.log'));
+  assert.equal(logs.length, 1, 'one per-run log file');
+  const log = fs.readFileSync(path.join(logDir, logs[0]), 'utf8');
+  assert.match(log, /wienerdog: job failed to run: /, 'the D2 diagnostic line is present');
+  assert.ok(log.includes(RAW_MARKER), 'the raw cause IS preserved locally, in the log');
+});
+
+test(
+  'scheduler-runjob: WP-151 T5 — a FAILED run with an un-reapable group keeps the R8-1 "— and it …" suffix',
+  { skip: REAP_SKIP_WIN32 },
+  async () => {
+    const { root, env, paths } = setup();
+    jobsLib.saveJob(paths, { name: 'dream', at: '03:30', run: 'builtin:dream', timeoutMinutes: 20 });
+    const fake = writeScript(root, 'fail.sh', ['#!/bin/sh', 'exit 3']);
+    // { reaped: false } across the bounded final escalation → reapFailure set.
+    const seams = reapSeams([{ reaped: false }, { reaped: false }]);
+    await assert.rejects(
+      withRun(env, {}, ['dream'], {
+        resolveCommand: fakeResolve(fake),
+        sendAlert: () => ({ status: 0 }),
+        loader: noopLoader,
+        reapTree: seams.reapTree,
+        reapGroup: seams.reapGroup,
+      }),
+      /exited 3 — and it left a live process group behind/
+    );
+    const durable = readAlerts(paths);
+    assert.equal(durable.length, 1);
+    assert.match(
+      durable[0].reason,
+      /^job "dream" exited 3 — and it left a live process group behind: /,
+      'the code-owned exit reason keeps the R8-1 suffix'
+    );
+    assert.match(durable[0].reason, /could not be reaped to quiescence/);
+  }
+);
+
+test('scheduler-runjob: WP-151 T7a — no log could be written: a seam-thrown raw EACCES renders the row-2 errno-token reason', async () => {
+  const { root, env, paths } = setup();
+  jobsLib.saveJob(paths, { name: 'dream', at: '03:30', run: 'builtin:dream', timeoutMinutes: 20 });
+  const fake = writeScript(root, 'ok.sh', ['#!/bin/sh', 'exit 0']);
+  /** @type {string[]} */ const bodies = [];
+  // A plain Error (NOT a WienerdogError) with a real errno token — the
+  // mkdirPrivate bare-mkdirSync shape (private-fs.js:250).
+  const boom = Object.assign(new Error('mkdir denied: /private/leaky path'), { code: 'EACCES' });
+  const expected = 'job "dream" failed to run (EACCES) — no log could be written';
+
+  await assert.rejects(
+    withRun(env, {}, ['dream'], {
+      resolveCommand: fakeResolve(fake),
+      mkdirPrivate: () => {
+        throw boom;
+      },
+      sendAlert: (_p, _n, _subject, body) => (bodies.push(body), { status: 0 }),
+      loader: noopLoader,
+    }),
+    (e) => e.message === expected || assert.fail(`rejected with "${e.message}"`)
+  );
+
+  assert.equal(jobsLib.readScheduleState(paths).dream.last_status, 'error');
+  const durable = readAlerts(paths);
+  assert.equal(durable.length, 1);
+  assert.equal(durable[0].reason, expected, 'alert reason is exactly the row-2 template with the validated token');
+  assert.ok(!JSON.stringify(durable[0]).includes('mkdir denied'), 'raw message not in the alert record');
+  assert.ok(!bodies[0].includes('mkdir denied'), 'raw message not in the email body');
+  assert.ok(!fs.existsSync(path.join(paths.logs, 'dream')), 'no log dir was created — "no log could be written" is true');
+});
+
+test('scheduler-runjob: WP-151 T7b — a hostile .code collapses to UNKNOWN, and a getter .code is read EXACTLY once', async () => {
+  const MARKER = 'HOSTILE-PROSE-MARKER-9000';
+  const UNKNOWN = 'job "dream" failed to run (UNKNOWN) — no log could be written';
+  /** Drive one run with mkdirPrivate throwing `err`; return {rejection, durable, bodies}. */
+  async function drive(err) {
+    const { root, env, paths } = setup();
+    jobsLib.saveJob(paths, { name: 'dream', at: '03:30', run: 'builtin:dream', timeoutMinutes: 20 });
+    const fake = writeScript(root, 'ok.sh', ['#!/bin/sh', 'exit 0']);
+    /** @type {string[]} */ const bodies = [];
+    /** @type {Error|undefined} */ let rejection;
+    await assert.rejects(
+      withRun(env, {}, ['dream'], {
+        resolveCommand: fakeResolve(fake),
+        mkdirPrivate: () => {
+          throw err;
+        },
+        sendAlert: (_p, _n, _subject, body) => (bodies.push(body), { status: 0 }),
+        loader: noopLoader,
+      }),
+      (e) => ((rejection = e), true)
+    );
+    return { rejection, durable: readAlerts(paths), bodies };
+  }
+
+  // Three TOKEN_OK-failing shapes: prose string, number, absent.
+  const throwables = [
+    Object.assign(new Error(`boom ${MARKER}`), { code: `long prose ${MARKER} that fails TOKEN_OK` }),
+    Object.assign(new Error(`boom ${MARKER}`), { code: 13 }),
+    new Error(`boom ${MARKER}`),
+  ];
+  for (const err of throwables) {
+    const { rejection, durable, bodies } = await drive(err);
+    assert.equal(rejection && rejection.message, UNKNOWN, 'rejects with the fixed UNKNOWN literal');
+    assert.equal(durable.length, 1);
+    assert.equal(durable[0].reason, UNKNOWN, 'alert reason is exactly the UNKNOWN literal');
+    assert.ok(!JSON.stringify(durable[0]).includes(MARKER), 'hostile value appears NOWHERE in the alert record');
+    assert.ok(!bodies[0].includes(MARKER), 'hostile value appears NOWHERE in the email body');
+  }
+
+  // N2 — the getter exploit: first read returns a valid token, every later read
+  // returns prose. Only a single-read implementation renders the EACCES form
+  // with no prose anywhere; validate-then-re-read leaks the marker.
+  let reads = 0;
+  const getterErr = new Error(`boom ${MARKER}`);
+  Object.defineProperty(getterErr, 'code', {
+    get() {
+      reads += 1;
+      return reads === 1 ? 'EACCES' : `EVIL ${MARKER}`;
+    },
+  });
+  const { rejection, durable, bodies } = await drive(getterErr);
+  assert.equal(
+    rejection && rejection.message,
+    'job "dream" failed to run (EACCES) — no log could be written',
+    'the FIRST (validated) read is what renders'
+  );
+  assert.equal(durable[0].reason, 'job "dream" failed to run (EACCES) — no log could be written');
+  assert.ok(!JSON.stringify(durable[0]).includes(MARKER), 'the getter never got a second read into the alert');
+  assert.ok(!bodies[0].includes(MARKER), 'the getter never got a second read into the email');
+});
+
+test(
+  'scheduler-runjob: WP-151 T7c — a REAL EACCES (chmod 0500 logs parent) renders the same row-2 reason — the seam is not the only evidence',
+  { skip: SKIP_NO_EACCES },
+  async () => {
+    const { root, env, paths } = setup();
+    jobsLib.saveJob(paths, { name: 'dream', at: '03:30', run: 'builtin:dream', timeoutMinutes: 20 });
+    const fake = writeScript(root, 'ok.sh', ['#!/bin/sh', 'exit 0']);
+    const expected = 'job "dream" failed to run (EACCES) — no log could be written';
+    fs.chmodSync(paths.logs, 0o500); // read+exec only → the REAL mkdirPrivate raises a genuine EACCES
+    try {
+      await assert.rejects(
+        withRun(env, {}, ['dream'], {
+          resolveCommand: fakeResolve(fake),
+          sendAlert: () => ({ status: 0 }),
+          loader: noopLoader,
+        }),
+        (e) => e.message === expected || assert.fail(`rejected with "${e.message}"`)
+      );
+      const durable = readAlerts(paths);
+      assert.equal(durable.length, 1);
+      assert.equal(durable[0].reason, expected, 'a genuine errno takes the identical row-2 rendering');
+    } finally {
+      fs.chmodSync(paths.logs, 0o700);
+    }
+  }
+);
+
+test('scheduler-runjob: WP-151 T8a — a stream error during FINALIZATION does not mask the failure (watermark + alert + email + code-owned throw)', async () => {
+  const { root, env, paths } = setup();
+  jobsLib.saveJob(paths, { name: 'dream', at: '03:30', run: 'builtin:dream', timeoutMinutes: 20 });
+  const fake = writeScript(root, 'fail.sh', ['#!/bin/sh', 'exit 3']);
+  const stub = errorThenCallbackStub({ errorOnEnd: Object.assign(new Error('I/O error on close'), { code: 'EIO' }) });
+  /** @type {string[]} */ const alerts = [];
+
+  await assert.rejects(
+    withRun(env, {}, ['dream'], {
+      resolveCommand: fakeResolve(fake),
+      createLogStream: () => stub,
+      sendAlert: (_p, _n, subject) => (alerts.push(subject), { status: 0 }),
+      loader: noopLoader,
+    }),
+    (e) => e.message === 'job "dream" exited 3' || assert.fail(`rejected with "${e.message}" — the stream error masked the failure`)
+  );
+
+  assert.ok(stub.errored, 'the stub really emitted its error (a lenient stub proves nothing)');
+  assert.equal(jobsLib.readScheduleState(paths).dream.last_status, 'error', 'error watermark still written');
+  const durable = readAlerts(paths);
+  assert.equal(durable.length, 1, 'one durable alerts.jsonl record');
+  assert.equal(durable[0].reason, 'job "dream" exited 3');
+  assert.deepEqual(alerts, ['job dream failed'], 'the fail-loud email still fired');
+});
+
+test('scheduler-runjob: WP-151 T8b — a stream error during the TEE (child still running, D5) does not take the process down or mask the failure', async () => {
+  const { root, env, paths } = setup();
+  jobsLib.saveJob(paths, { name: 'dream', at: '03:30', run: 'builtin:dream', timeoutMinutes: 20 });
+  const fake = writeScript(root, 'chatty-fail.sh', ['#!/bin/sh', 'echo mid-run output', 'exit 3']);
+  const stub = errorThenCallbackStub({ errorOnWrite: Object.assign(new Error('no space left on device'), { code: 'ENOSPC' }) });
+  /** @type {string[]} */ const alerts = [];
+
+  await assert.rejects(
+    withRun(env, {}, ['dream'], {
+      resolveCommand: fakeResolve(fake),
+      createLogStream: () => stub,
+      sendAlert: (_p, _n, subject) => (alerts.push(subject), { status: 0 }),
+      loader: noopLoader,
+    }),
+    (e) => e.message === 'job "dream" exited 3' || assert.fail(`rejected with "${e.message}" — the tee-window error masked the failure`)
+  );
+
+  assert.ok(stub.errored, 'the tee write really triggered the stream error');
+  assert.equal(jobsLib.readScheduleState(paths).dream.last_status, 'error', 'error watermark still written');
+  const durable = readAlerts(paths);
+  assert.equal(durable.length, 1, 'one durable alerts.jsonl record');
+  assert.equal(durable[0].reason, 'job "dream" exited 3', 'the failure-path reason is unchanged by the log degradation (Table R rows 1-3 key on the stream, not the flag)');
+  assert.deepEqual(alerts, ['job dream failed'], 'the fail-loud email still fired');
+});
+
+test(
+  'scheduler-runjob: WP-151 T9 row A — endStream settles on a destroyed stream (destroyed only, no callback, no events)',
+  { timeout: 5000 },
+  async () => {
+    const { root, env, paths } = setup();
+    jobsLib.saveJob(paths, { name: 'dream', at: '03:30', run: 'builtin:dream', timeoutMinutes: 20 });
+    const fake = writeScript(root, 'fail.sh', ['#!/bin/sh', 'exit 3']);
+    const stub = destroyedNoCallbackStub({ closed: false }); // Table S row A
+
+    await assert.rejects(
+      withRun(env, {}, ['dream'], {
+        resolveCommand: fakeResolve(fake),
+        createLogStream: () => stub,
+        sendAlert: () => ({ status: 0 }),
+        loader: noopLoader,
+      }),
+      (e) => e.message === 'job "dream" exited 3'
+    );
+    assert.equal(jobsLib.readScheduleState(paths).dream.last_status, 'error', 'the failure path completed — no hang');
+  }
+);
+
+test(
+  'scheduler-runjob: WP-151 T9 row B — endStream settles on destroyed AND closed (the state ONLY the synchronous already-settled check catches)',
+  { timeout: 5000 },
+  async () => {
+    // Row B is the discriminating case: 'close' has already fired before
+    // endStream attaches listeners, so a listener-only endStream hangs here.
+    const { root, env, paths } = setup();
+    jobsLib.saveJob(paths, { name: 'dream', at: '03:30', run: 'builtin:dream', timeoutMinutes: 20 });
+    const fake = writeScript(root, 'fail.sh', ['#!/bin/sh', 'exit 3']);
+    const stub = destroyedNoCallbackStub({ closed: true }); // Table S row B
+
+    await assert.rejects(
+      withRun(env, {}, ['dream'], {
+        resolveCommand: fakeResolve(fake),
+        createLogStream: () => stub,
+        sendAlert: () => ({ status: 0 }),
+        loader: noopLoader,
+      }),
+      (e) => e.message === 'job "dream" exited 3'
+    );
+    assert.equal(jobsLib.readScheduleState(paths).dream.last_status, 'error', 'the failure path completed — no hang');
+  }
+);
+
+test('scheduler-runjob: WP-151 T10 — a clean exit whose log stream errored is NOT certified clean (Table R row 4), and does not THROW getting there', async () => {
+  /** Drive one clean-exit run whose stub stream errors on the first tee write.
+   *  reapFailure === null is the whole point of the fixture: pre-D6 this state
+   *  could never reach the fail-loud reason, so without D1's :1007 null guard it
+   *  throws TypeError instead of rendering row 4. */
+  async function drive(codeVal) {
+    const { root, env, paths } = setup();
+    jobsLib.saveJob(paths, { name: 'dream', at: '03:30', run: 'builtin:dream', timeoutMinutes: 20 });
+    const fake = writeScript(root, 'chatty-ok.sh', ['#!/bin/sh', 'echo mid-run output', 'exit 0']);
+    const err = new Error('tee write failed mid-run');
+    if (codeVal !== undefined) err.code = codeVal;
+    const stub = errorThenCallbackStub({ errorOnWrite: err });
+    const seams = reapSeams(); // every reap { reaped: true } → reapFailure === null
+    /** @type {string[]} */ const bodies = [];
+    /** @type {Error|undefined} */ let rejection;
+    await assert.rejects(
+      withRun(env, {}, ['dream'], {
+        resolveCommand: fakeResolve(fake),
+        createLogStream: () => stub,
+        reapTree: seams.reapTree,
+        reapGroup: seams.reapGroup,
+        sendAlert: (_p, _n, _subject, body) => (bodies.push(body), { status: 0 }),
+        loader: noopLoader,
+      }),
+      (e) => ((rejection = e), true),
+      'the run must reject — a silent ok is the D6 red direction'
+    );
+    assert.ok(stub.errored, 'the tee write really triggered the stream error');
+    return { paths, rejection, durable: readAlerts(paths), bodies };
+  }
+
+  for (const [codeVal, token] of [['EIO', 'EIO'], ['ENOSPC', 'ENOSPC'], ['not an errno!!', 'UNKNOWN'], [undefined, 'UNKNOWN']]) {
+    const { paths, rejection, durable, bodies } = await drive(codeVal);
+    const expected = `job "dream" ran but its log could not be written (${token})`;
+    assert.ok(!(rejection instanceof TypeError), `no TypeError — got "${rejection}"`);
+    assert.equal(rejection && rejection.message, expected, 'rejects with the row-4 reason, not a TypeError');
+    const state = jobsLib.readScheduleState(paths).dream;
+    assert.equal(state.last_status, 'error', 'last_status is error, NOT ok');
+    assert.ok(!state.last_success, 'the success block (last_success + clearAlerts) did not run');
+    assert.equal(durable.length, 1, 'one durable alert — clearAlerts did not run');
+    assert.equal(durable[0].reason, expected, 'durable reason is exactly the row-4 template');
+    assert.equal(bodies.length, 1, 'the sendAlert stub was called');
+    assert.match(bodies[0], /ran but its log could not be written/, 'email carries the row-4 reason');
+  }
 });

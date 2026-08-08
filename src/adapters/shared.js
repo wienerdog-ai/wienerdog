@@ -2,7 +2,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const { hashDir } = require('../core/manifest');
+const { hashDir, insertionAnchor, linkIdentity } = require('../core/manifest');
 const { WienerdogError } = require('../core/errors');
 
 const BEGIN = '<!-- wienerdog:begin -->';
@@ -97,6 +97,41 @@ function recordSettingsEntry(manifest, settingsPath, createdFile, commands) {
   if (!existing) manifest.entries.push(entry);
 }
 
+/** Upsert the managed-block manifest record (WP-147). The two fields follow
+ *  different rules: `createdFile` is STICKY-TRUE (shared.js:95's rule — once we
+ *  created the file, a later re-sync that finds it present must not flip that
+ *  truth back), while `sepBefore`/`sepAfter` are UPDATE-ON-INSERT: they must
+ *  describe the bytes of the most recent actual insertion, because a
+ *  delete-and-reinsert cycle can legitimately change them.
+ *  @param {object} [manifest] @param {string} mdPath
+ *  @param {boolean} createdFile @param {string|null} sepBefore
+ *  @param {string|null} sepAfter
+ *  @param {boolean} inserted TRUE only on the two branches that actually WRITE
+ *  separators (createdFile, append). The replace branch splices between existing
+ *  sentinels and writes none, so it passes false and the recorded separators
+ *  are left exactly as they are.
+ *  @param {string|null} anchorBefore the insertionAnchor() of the content that
+ *  immediately preceded sepBefore. Moves with sepBefore/sepAfter under the SAME
+ *  update-on-insert rule — the three fields are one fact and must never be
+ *  written apart (Table P rule P-1). */
+function recordManagedBlock(manifest, mdPath, createdFile, sepBefore, sepAfter, inserted, anchorBefore) {
+  if (!manifest) return;
+  if (!Array.isArray(manifest.entries)) manifest.entries = [];
+  const existing = manifest.entries.find((e) => e.kind === 'managed-block' && e.path === mdPath);
+  const entry = existing || { kind: 'managed-block', path: mdPath };
+  // STICKY-TRUE (shared.js:95's rule): once we created the file, a later re-sync
+  // that finds it present must NOT flip that truth back to false.
+  entry.createdFile = existing ? (existing.createdFile === true ? true : createdFile) : createdFile;
+  // UPDATE-ON-INSERT: record the separators THIS insertion wrote, replacing any
+  // earlier ones — a delete-and-reinsert cycle can legitimately change them.
+  if (inserted) {
+    entry.sepBefore = sepBefore;
+    entry.sepAfter = sepAfter;
+    entry.anchorBefore = anchorBefore;
+  }
+  if (!existing) manifest.entries.push(entry);
+}
+
 /**
  * Build the sentinel-delimited managed block from a digest string. Neutralize any
  * digest LINE that trims exactly to a sentinel so the emitted block always has
@@ -146,7 +181,7 @@ function applyManagedBlock(mdPath, digest, dryRun, manifest, out) {
       fs.mkdirSync(path.dirname(mdPath), { recursive: true });
       fs.writeFileSync(mdPath, next);
     }
-    recordOnce(manifest, { kind: 'managed-block', path: mdPath, createdFile: true });
+    recordManagedBlock(manifest, mdPath, true, '', '\n', true, insertionAnchor(''));
     out.changed.push(mdPath);
     return;
   }
@@ -164,15 +199,20 @@ function applyManagedBlock(mdPath, digest, dryRun, manifest, out) {
       out.changed.push(mdPath);
     }
     // Manifest entry (if any) already exists from a prior run; do not re-record.
-    recordOnce(manifest, { kind: 'managed-block', path: mdPath, createdFile: false });
+    recordManagedBlock(manifest, mdPath, false, null, null, false, null);
     return;
   }
 
   // File present without sentinels → append with exactly one blank-line separator.
-  const base = current.replace(/\n+$/, '');
-  const next = `${base}\n\n${block}\n`;
+  // Non-lossy: keep the file's own trailing newline(s); insert exactly one blank
+  // line before the block and record the exact bytes we add, so uninstall can
+  // remove only OUR separators (audit A13).
+  const pad = current.endsWith('\n') ? '' : '\n'; // ensure content ends with a newline first
+  const sepBefore = `${pad}\n`; // '\n' (already newline-terminated) or '\n\n'
+  const sepAfter = '\n'; // the block's own line terminator
+  const next = `${current}${sepBefore}${block}${sepAfter}`;
   if (!dryRun) fs.writeFileSync(mdPath, next);
-  recordOnce(manifest, { kind: 'managed-block', path: mdPath, createdFile: false });
+  recordManagedBlock(manifest, mdPath, false, sepBefore, sepAfter, true, insertionAnchor(current)); // inserted → UPDATE
   out.changed.push(mdPath);
 }
 
@@ -396,7 +436,10 @@ function applySkillLinks(skillsDir, targetSkillsDir, dryRun, manifest, out, opts
       }
       if (currentTarget === target) {
         out.unchanged.push(linkPath);
-        recordOnce(manifest, { kind: 'symlink', path: linkPath });
+        // The link was ALREADY on disk — we did not create it, so no lstat
+        // identity is recorded (Table B / rule S-1) and `origin: 'adopted'`
+        // makes uninstall preserve it (row 4a): it is the user's.
+        recordOnce(manifest, { kind: 'symlink', path: linkPath, target, origin: 'adopted' });
       } else {
         // A wienerdog-* symlink whose target is NOT our core skill source — a user's
         // own link, or a stale one from another install root. Never silently clobber
@@ -447,13 +490,26 @@ function applySkillLinks(skillsDir, targetSkillsDir, dryRun, manifest, out, opts
       out.notices.push(`left user file untouched: ${linkPath}`);
     } else if (dryRun) {
       // A dry run does not probe symlink permission; report the common case.
-      recordOnce(manifest, { kind: 'symlink', path: linkPath });
+      // Nothing exists to lstat, so no identity (Table B); this manifest is a
+      // report only — sync.js gates save() on !dryRun, so it is never persisted.
+      recordOnce(manifest, { kind: 'symlink', path: linkPath, target, origin: 'created' });
       out.changed.push(linkPath);
     } else {
       // Absent: prefer a symlink; copy where symlink creation is unpermitted.
       try {
         symlink(target, linkPath);
-        recordOnce(manifest, { kind: 'symlink', path: linkPath });
+        // symlink() has just succeeded: record the link's lstat identity so
+        // uninstall can prove this exact file object is the one we created
+        // (row 4b). Written out explicitly — never spread a possibly-null
+        // identity into the literal; when linkIdentity() cannot establish one,
+        // record `origin: 'created'` alone and keep base behaviour (rule S-2).
+        const id = linkIdentity(linkPath);
+        const symlinkEntry = { kind: 'symlink', path: linkPath, target, origin: 'created' };
+        if (id) {
+          symlinkEntry.dev = id.dev;
+          symlinkEntry.ino = id.ino;
+        }
+        recordOnce(manifest, symlinkEntry);
       } catch (err) {
         if (err && (err.code === 'EPERM' || err.code === 'EACCES')) {
           fs.cpSync(target, linkPath, { recursive: true });

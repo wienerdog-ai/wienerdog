@@ -16,11 +16,12 @@ Commands:
   schedule    Add, remove, or list scheduled jobs (dream, routines)
   run-job     Run a scheduled job now (used by the OS scheduler)
   doctor      Check an existing install for problems
+  alerts      List job alerts and silence ones you have already seen (typed confirmation)
   uninstall   Remove everything Wienerdog created (reverses the install)
   gws         Read Gmail/Calendar/Drive and draft mail (Google Workspace)
   grant       Authorize a routine to send email (typed confirmation required)
   memory      Approve identity-note changes so they inject into your session (typed confirmation)
-  safety      Show the pre-use security gates (all disabled until reviewed)
+  safety      Show which sensitive actions Wienerdog allows or blocks
 
 Global options:
   --dry-run   Show what would happen; make no changes
@@ -48,6 +49,7 @@ async function main() {
 
   /** @type {Record<string, () => {run: (argv: string[]) => Promise<void>}>} */
   const commands = {
+    alerts: () => require('../src/cli/alerts'),
     init: () => require('../src/cli/init'),
     adopt: () => require('../src/cli/adopt'),
     sync: () => require('../src/cli/sync'),

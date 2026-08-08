@@ -113,6 +113,187 @@ async function withSpawnSpy(fn) {
   }
 }
 
+// -------------------------------------------------------------------------
+// WP-scheduler-register-replaces-loaded-record: synthetic `launchctl print`
+// stdout + a stateful fake launchd, shared by the new verified-register tests
+// AND by every pre-existing darwin-path test whose loader was a blind
+// `() => ({status:0})` — ADR-0037 now requires a LIVE readback before any
+// register can report success, so a mock that never answers `print` truthfully
+// can no longer be treated as "loaded" (see the WP's PR body, Decisions made).
+// -------------------------------------------------------------------------
+
+/** Reverse `xmlEscape` (generators.js) — `&` LAST so an already-decoded
+ *  `<`/`>` is not re-processed. @param {string} s @returns {string} */
+function xmlUnescapeSimple(s) {
+  return String(s).replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+}
+
+/**
+ * Build synthetic `launchctl print` stdout matching the shape
+ * darwinLoadedVerdict / launchdLoadedCalendar / launchdLoadedEnv / the
+ * top-level single-line reader parse (Current state §7b/§7c). Every field is
+ * directly overridable so tests can construct deliberately-stale/foreign/
+ * malformed records; `omit` drops a named single-line field entirely
+ * (simulating an incomplete readback), and the `malformed*`/`triggerCount`/
+ * `foreignStreamTrigger` knobs construct the parser-edge fixtures.
+ * @param {{argv:string[], program?:string, env:Array<[string,string]>,
+ *   hour:number|null, minute:number, path:string, stdoutPath:string,
+ *   stderrPath:string, spawnType:string, omit?:string[],
+ *   triggerCount?:number, foreignStreamTrigger?:boolean,
+ *   malformedArgs?:boolean, malformedEnv?:boolean, malformedCalendar?:boolean,
+ *   noHourEvenIfExpected?:boolean}} o
+ * @returns {string}
+ */
+function buildPrintStdout(o) {
+  const omit = new Set(o.omit || []);
+  const lines = ['gui/501/some.label = {'];
+  if (!omit.has('path')) lines.push(`\tpath = ${o.path}`);
+  lines.push('\ttype = LaunchAgent');
+  if (!omit.has('program')) lines.push(`\tprogram = ${o.program != null ? o.program : o.argv[0]}`);
+  lines.push('\targuments = {');
+  if (o.malformedArgs) {
+    // Deliberately never closed, AND nothing follows — launchdLoadedArgs scans
+    // for the NEXT trimmed '}' with no depth-tracking, so a later block's own
+    // closing brace would otherwise be picked up as if it closed this one,
+    // producing a garbled non-null array rather than a genuine parse failure.
+    lines.push(`\t\t${o.argv[0] || ''}`);
+    return `${lines.join('\n')}\n`;
+  }
+  for (const a of o.argv) lines.push(`\t\t${a}`);
+  lines.push('\t}');
+  if (!omit.has('stdoutPath')) lines.push(`\tstdout path = ${o.stdoutPath}`);
+  if (!omit.has('stderrPath')) lines.push(`\tstderr path = ${o.stderrPath}`);
+  // Real `launchctl print` output precedes the real `environment = {` block
+  // with `inherited environment = {` and `default environment = {` (§7b fact
+  // 2) — both empty here, and both end with the same characters as the real
+  // anchor, which is exactly what pins that the anchor must be a TRIMMED
+  // EXACT-LINE match, never a suffix match.
+  lines.push('\tinherited environment = {');
+  lines.push('\t}');
+  lines.push('\tdefault environment = {');
+  lines.push('\t}');
+  lines.push('\tenvironment = {');
+  if (o.malformedEnv) {
+    // Never closed, and truncated here for the same reason as malformedArgs.
+    return `${lines.join('\n')}\n`;
+  }
+  for (const [k, v] of o.env) lines.push(`\t\t${k} => ${v}`);
+  lines.push('\t\tOSLogRateLimit => 64');
+  lines.push('\t\tXPC_SERVICE_NAME => some.label');
+  lines.push('\t}');
+  lines.push('\tevent triggers = {');
+  if (o.malformedCalendar) {
+    // Never closed, and truncated here for the same reason as malformedArgs.
+    return `${lines.join('\n')}\n`;
+  }
+  {
+    const count = o.triggerCount != null ? o.triggerCount : 1;
+    for (let i = 0; i < count; i += 1) {
+      const isCalendar = !o.foreignStreamTrigger || i === 0;
+      lines.push(`\t\tsome.label.${i} => {`);
+      lines.push(`\t\t\tstream = ${isCalendar ? 'com.apple.launchd.calendarinterval' : 'com.apple.notifyd.matching'}`);
+      if (isCalendar) {
+        lines.push('\t\t\tdescriptor = {');
+        if (o.hour !== null && !o.noHourEvenIfExpected) lines.push(`\t\t\t\t"Hour" => ${o.hour}`);
+        lines.push(`\t\t\t\t"Minute" => ${o.minute}`);
+        lines.push('\t\t\t}');
+      }
+      lines.push('\t\t}');
+    }
+    lines.push('\t}');
+  }
+  if (!omit.has('spawnType')) lines.push(`\tspawn type = ${o.spawnType} (5)`);
+  lines.push('\tproperties = inferred program');
+  lines.push('}');
+  return `${lines.join('\n')}\n`;
+}
+
+/**
+ * Parse OUR OWN rendered plist XML (launchdPlist/catchupPlist) back into
+ * `buildPrintStdout`'s input shape, so a test can simulate "launchd loaded
+ * exactly the bytes on disk" without hand-writing a fixture. @param {string} xml
+ * @param {string} plistPath @returns {string} */
+function printStdoutFromPlistXml(xml, plistPath) {
+  const argsM = xml.match(/<key>ProgramArguments<\/key>\s*<array>([\s\S]*?)<\/array>/);
+  const argv = argsM
+    ? Array.from(argsM[1].matchAll(/<string>([\s\S]*?)<\/string>/g)).map((m) => xmlUnescapeSimple(m[1]))
+    : [];
+  const envM = xml.match(/<key>EnvironmentVariables<\/key>\s*<dict>([\s\S]*?)<\/dict>/);
+  const env = [];
+  if (envM) {
+    const re = /<key>([^<]*)<\/key>\s*<string>([\s\S]*?)<\/string>/g;
+    let m;
+    while ((m = re.exec(envM[1]))) env.push([xmlUnescapeSimple(m[1]), xmlUnescapeSimple(m[2])]);
+  }
+  const calM = xml.match(/<key>StartCalendarInterval<\/key>\s*<dict>([\s\S]*?)<\/dict>/);
+  let hour = null;
+  let minute = 0;
+  if (calM) {
+    const hm = calM[1].match(/<key>Hour<\/key>\s*<integer>(-?\d+)<\/integer>/);
+    const mm = calM[1].match(/<key>Minute<\/key>\s*<integer>(-?\d+)<\/integer>/);
+    if (hm) hour = Number(hm[1]);
+    if (mm) minute = Number(mm[1]);
+  }
+  const outM = xml.match(/<key>StandardOutPath<\/key>\s*<string>([\s\S]*?)<\/string>/);
+  const errM = xml.match(/<key>StandardErrorPath<\/key>\s*<string>([\s\S]*?)<\/string>/);
+  return buildPrintStdout({
+    argv,
+    program: argv[0] || '',
+    env,
+    hour,
+    minute,
+    path: plistPath,
+    stdoutPath: outM ? xmlUnescapeSimple(outM[1]) : '',
+    stderrPath: errM ? xmlUnescapeSimple(errM[1]) : '',
+    spawnType: 'background',
+  });
+}
+
+/**
+ * A minimal STATEFUL fake launchd for tests that do not exercise this WP's
+ * readback mechanics directly — every pre-existing darwin-path test whose
+ * purpose is "does add()/repointSchedules() succeed", not "what does the
+ * verified-registration postcondition do". Tracks which labels are "loaded"
+ * and the exact plist bytes each was loaded with: `print` reports absent
+ * (status 113, mirroring the measured exit code — Current state §7) for a
+ * label never bootstrapped, or a synthetic stdout built from the bytes at its
+ * last successful `bootstrap`; `bootstrap` "loads" the label from whatever is
+ * CURRENTLY on disk at the given plist path and succeeds; `bootout` unloads
+ * it. Every non-`launchctl` call (systemctl/schtasks/plutil) succeeds, so this
+ * is also a safe drop-in on a systemd Linux host. @param {import('../../src/core/paths').WienerdogPaths} paths
+ * @returns {(argv:string[])=>{status:number, stdout?:string}} */
+function fakeLaunchd(paths) {
+  /** @type {Map<string,string>} */ const loaded = new Map(); // label -> plist XML at load time
+  const labelOf = (gui) => (/^gui\/\d+\/(.+)$/.exec(gui || '') || [])[1] || null;
+  const plistPathFor = (label) => path.join(paths.home, 'Library', 'LaunchAgents', `${label}.plist`);
+  return (argv) => {
+    if (argv[0] !== 'launchctl') return { status: 0 };
+    if (argv[1] === 'print') {
+      const label = labelOf(argv[2]);
+      if (!label || !loaded.has(label)) return { status: 113 };
+      return { status: 0, stdout: printStdoutFromPlistXml(loaded.get(label), plistPathFor(label)) };
+    }
+    if (argv[1] === 'bootstrap') {
+      let xml;
+      try {
+        xml = fs.readFileSync(argv[3], 'utf8');
+      } catch {
+        return { status: 1 };
+      }
+      const labelM = xml.match(/<key>Label<\/key>\s*<string>([^<]*)<\/string>/);
+      if (!labelM) return { status: 1 };
+      loaded.set(labelM[1], xml);
+      return { status: 0 };
+    }
+    if (argv[1] === 'bootout') {
+      const label = labelOf(argv[2]);
+      if (label) loaded.delete(label);
+      return { status: 0 };
+    }
+    return { status: 0 };
+  };
+}
+
 // Whether `schedule add` can register on this host (skip integration otherwise).
 const SCHED_SUPPORTED =
   process.platform === 'darwin' ||
@@ -333,9 +514,10 @@ test('scheduler-schedule: add --skill is refused under a blocked profile — no 
 test('scheduler-schedule: add registers the platform entry, records manifest, saves the job', { skip: !SCHED_SUPPORTED }, async () => {
   const { env, paths } = setup();
   /** @type {string[][]} */ const calls = [];
+  const fake = fakeLaunchd(paths);
   const loader = (argv) => {
     calls.push(argv);
-    return { status: 0 };
+    return fake(argv);
   };
 
   await runSchedule(env, ['add', 'daily-digest', '--at', '07:00', '--skill', 'wienerdog-daily-digest'], loader, allowAll());
@@ -362,7 +544,10 @@ test('scheduler-schedule: add registers the platform entry, records manifest, sa
     const jobEntry = schedEntries.find((e) => e.path === plistPath);
     assert.ok(jobEntry, 'per-job plist entry recorded');
     assert.deepEqual(jobEntry.unload, ['launchctl', 'bootout', `gui/${uid}/${label}`]);
-    assert.deepEqual(calls[0], ['launchctl', 'bootstrap', `gui/${uid}`, plistPath]);
+    // ADR-0037: the readback now precedes the register — calls[0] is the
+    // `print` (nothing loaded yet), and the bootstrap moves to calls[1].
+    assert.deepEqual(calls[0], ['launchctl', 'print', `gui/${uid}/${label}`]);
+    assert.deepEqual(calls[1], ['launchctl', 'bootstrap', `gui/${uid}`, plistPath]);
     // Catch-up plist ensured once.
     const catchPath = path.join(paths.home, 'Library', 'LaunchAgents', 'ai.wienerdog.catchup.plist');
     assert.ok(schedEntries.some((e) => e.path === catchPath), 'catch-up entry recorded');
@@ -386,19 +571,30 @@ test('scheduler-schedule: add registers the platform entry, records manifest, sa
   }
 });
 
-test('scheduler-schedule: a second identical add is idempotent (no OS call)', { skip: !SCHED_SUPPORTED }, async () => {
-  const { env } = setup();
+// ADR-0037 (AC6 item 4): a register that cannot verify what the OS now holds
+// must not skip the OS call without evidence — so an unchanged re-add is no
+// longer a ZERO-call no-op. It costs exactly its per-platform verified-skip
+// readback (Table A's third column, AC5(iii)): darwin ⇒ one read-only `print`
+// per site (job + catch-up); linux ⇒ the idempotent `daemon-reload` +
+// `enable --now`. Neither ever MUTATES.
+test('scheduler-schedule: a second identical add is idempotent (no MUTATING OS call)', { skip: !SCHED_SUPPORTED }, async () => {
+  const { env, paths } = setup();
+  const fake = fakeLaunchd(paths);
   const calls1 = [];
-  await runSchedule(env, ['add', 'dream', '--at', '03:30', '--job', 'dream'], (a) => (calls1.push(a), { status: 0 }));
+  await runSchedule(env, ['add', 'dream', '--at', '03:30', '--job', 'dream'], (a) => (calls1.push(a), fake(a)));
   assert.ok(calls1.length >= 1);
   const calls2 = [];
-  await runSchedule(env, ['add', 'dream', '--at', '03:30', '--job', 'dream'], (a) => (calls2.push(a), { status: 0 }));
-  assert.equal(calls2.length, 0, 'no loader calls on an unchanged re-add');
+  await runSchedule(env, ['add', 'dream', '--at', '03:30', '--job', 'dream'], (a) => (calls2.push(a), fake(a)));
+  assert.equal(calls2.length, 2, 'the unchanged re-add costs exactly its per-platform verified-skip check, no more');
+  assert.ok(
+    calls2.every((a) => (a[0] === 'launchctl' ? a[1] === 'print' : a[0] === 'systemctl')),
+    'no MUTATING OS call (no bootstrap/bootout, no schtasks /create) on an unchanged re-add'
+  );
 });
 
 test('scheduler-schedule: add then manifest.reverse DEFERS config.yaml (hash re-synced, not mistaken for a user edit) (WP-088)', { skip: !SCHED_SUPPORTED }, async () => {
   const { env, paths } = setup();
-  await runSchedule(env, ['add', 'dream', '--at', '03:30', '--job', 'dream'], () => ({ status: 0 }));
+  await runSchedule(env, ['add', 'dream', '--at', '03:30', '--job', 'dream'], fakeLaunchd(paths));
   assert.ok(fs.existsSync(paths.config));
   // WP-088: config.yaml is a deferred-deletion-set member — reverse() NO LONGER
   // deletes it. A re-synced (unmodified) hash means it is recognized as our own
@@ -417,7 +613,7 @@ test('scheduler-schedule: add then manifest.reverse DEFERS config.yaml (hash re-
 
 test('scheduler-schedule: remove runs the unload, deletes files, drops entries and the job', { skip: !SCHED_SUPPORTED }, async () => {
   const { env, paths, root } = setup();
-  await runSchedule(env, ['add', 'dream', '--at', '03:30', '--job', 'dream'], () => ({ status: 0 }));
+  await runSchedule(env, ['add', 'dream', '--at', '03:30', '--job', 'dream'], fakeLaunchd(paths));
 
   // WP-145: poison the stored unloads with marker commands to prove they are
   // IGNORED; the remove flow derives the real unregister argv instead (the spy
@@ -497,7 +693,9 @@ test('scheduler-schedule: registerPlatform warns on a NONZERO daemon-reload and 
     const { result: res, stderr } = captureStderr(() =>
       schedule.registerPlatform(paths, manifest, { name: 'dream', hour: 3, minute: 30 }, loader, 'linux')
     );
-    assert.equal(res.loaded, true, '`loaded` stays gated only on `enable --now`, which returned status 0');
+    // ADR-0037: `loaded` is now `reloadOk && enableOk` — a degraded reload
+    // fails the register even though `enable --now` itself succeeded.
+    assert.equal(res.loaded, false, '`loaded` is `reloadOk && enableOk`; a degraded daemon-reload fails it');
     assert.match(stderr, /'systemctl --user daemon-reload' returned 1/, 'nonzero daemon-reload warns with its status');
     assert.match(stderr, /'loginctl enable-linger ada' returned no result/, 'a MISSING (undefined) result warns as "no result", not silence');
   } finally {
@@ -521,7 +719,9 @@ test('scheduler-schedule: registerPlatform warns on a MISSING ({status:null}) da
     const { result: res, stderr } = captureStderr(() =>
       schedule.registerPlatform(paths, manifest, { name: 'dream', hour: 3, minute: 30 }, loader, 'linux')
     );
-    assert.equal(res.loaded, true, '`loaded` stays gated only on `enable --now`, which returned status 0');
+    // ADR-0037: `loaded` is now `reloadOk && enableOk` — a MISSING (null
+    // status) reload also fails the register.
+    assert.equal(res.loaded, false, '`loaded` is `reloadOk && enableOk`; a missing daemon-reload result fails it');
     assert.match(stderr, /'systemctl --user daemon-reload' returned no result/, 'a {status:null} result warns as "no result", not success');
     assert.match(stderr, /'loginctl enable-linger ada' returned 2/, 'nonzero enable-linger warns with its status');
   } finally {
@@ -1016,30 +1216,43 @@ function primaryEntryFile(paths, name) {
   return path.join(gen.systemdUserDir(paths.home, process.env), `${gen.systemdUnitBase(name)}.service`);
 }
 
-test('scheduler-schedule: repointSchedules after add is a no-op (changed:0, no OS call)', { skip: !SCHED_SUPPORTED }, async () => {
+// ADR-0037: an unchanged repoint is no longer a ZERO-call no-op — it still
+// costs its per-platform verified-skip readback (Table A's third column,
+// AC5(iii)): darwin ⇒ two read-only `print`s (job + catch-up); linux ⇒ the
+// idempotent `daemon-reload` + `enable --now`. `fake` is reused across the
+// setup `add()` and the repoint under test so the live record it registered
+// is what the repoint's readback re-reads (a fresh mock would see nothing
+// loaded and force a spurious re-bootstrap).
+test('scheduler-schedule: repointSchedules after add is a no-op (changed:0, no MUTATING OS call)', { skip: !SCHED_SUPPORTED }, async () => {
   const { env, paths } = setup();
-  await runSchedule(env, ['add', 'dream', '--at', '03:30', '--job', 'dream'], () => ({ status: 0 }));
+  const fake = fakeLaunchd(paths);
+  await runSchedule(env, ['add', 'dream', '--at', '03:30', '--job', 'dream'], fake);
 
   const calls = [];
   const manifest = manifestLib.load(paths);
-  const res = schedule.repointSchedules(paths, manifest, { loader: (a) => (calls.push(a), { status: 0 }) });
+  const res = schedule.repointSchedules(paths, manifest, { loader: (a) => (calls.push(a), fake(a)) });
 
   assert.equal(res.repointed, 1, 'the one defined job was re-registered');
   assert.equal(res.changed, 0, 'content already targets the stable bin — nothing rewritten');
   assert.deepEqual(res.notices, []);
-  assert.equal(calls.length, 0, 'no OS reload on an unchanged repoint');
+  assert.equal(calls.length, 2, 'the verified-skip readback still runs (Table A) even when nothing changed');
+  assert.ok(
+    calls.every((a) => (a[0] === 'launchctl' ? a[1] === 'print' : a[0] === 'systemctl')),
+    'no MUTATING OS call on an unchanged repoint'
+  );
 });
 
 test('scheduler-schedule: repointSchedules rewrites a stale embedded node path (changed:1)', { skip: !SCHED_SUPPORTED }, async () => {
   const { env, paths } = setup();
-  await runSchedule(env, ['add', 'dream', '--at', '03:30', '--job', 'dream'], () => ({ status: 0 }));
+  await runSchedule(env, ['add', 'dream', '--at', '03:30', '--job', 'dream'], fakeLaunchd(paths));
 
   // Simulate an older version's entry: hand-edit the embedded node (the entry's
   // <Command>/first arg) to a stale path. WP-157: the entry now invokes the
   // stable out-of-tree launcher (<core>/launcher/launch.js) rather than a
   // version-scoped bin, so the node path is the absolute value repoint migrates.
   const file = primaryEntryFile(paths, 'dream');
-  const stableNode = gen.nodePath();
+  // ENTRY-role value — the node path the renderer embeds (Table H site 1).
+  const stableNode = gen.entryNodePath();
   const oldNode = '/old/versions/node/v1.0.0/bin/node';
   const stale = fs.readFileSync(file, 'utf8').split(stableNode).join(oldNode);
   assert.ok(stale.includes(oldNode) && !stale.includes(stableNode), 'seeded a stale entry');
@@ -1081,7 +1294,8 @@ test('scheduler-schedule: repointSchedules degrades on an unsupported platform (
 test('scheduler-schedule: ensureDreamSchedule schedules dream once at 03:30', { skip: !SCHED_SUPPORTED }, () => {
   const { paths } = setup();
   /** @type {string[][]} */ const calls = [];
-  const res = schedule.ensureDreamSchedule(paths, { loader: (a) => (calls.push(a), { status: 0 }) });
+  const fake = fakeLaunchd(paths);
+  const res = schedule.ensureDreamSchedule(paths, { loader: (a) => (calls.push(a), fake(a)) });
 
   assert.deepEqual(res, { scheduled: true, at: '03:30' });
   // Job persisted with builtin:dream + 20-minute timeout.
@@ -1128,8 +1342,9 @@ test('scheduler-schedule: ensureDreamSchedule degrades on an unsupported platfor
 
 test('scheduler-schedule: list --json reports jobs with watermarks', { skip: !SCHED_SUPPORTED }, async () => {
   const { env, paths } = setup();
-  await runSchedule(env, ['add', 'dream', '--at', '03:30', '--job', 'dream'], () => ({ status: 0 }));
-  await runSchedule(env, ['add', 'daily-digest', '--at', '07:00', '--skill', 'wienerdog-daily-digest'], () => ({ status: 0 }), allowAll());
+  const fake = fakeLaunchd(paths);
+  await runSchedule(env, ['add', 'dream', '--at', '03:30', '--job', 'dream'], fake);
+  await runSchedule(env, ['add', 'daily-digest', '--at', '07:00', '--skill', 'wienerdog-daily-digest'], fake, allowAll());
   jobsLib.writeScheduleState(paths, 'dream', { last_success: '2026-07-03T03:30:12.000Z', last_status: 'ok' });
 
   let out = '';
@@ -1182,7 +1397,8 @@ test('scheduler-schedule: add writes a 0600 job descriptor, records it once, and
   const { env, paths } = setup();
   plantAppTree(paths);
   plantPins(paths);
-  await runSchedule(env, ['add', 'dream', '--at', '03:30', '--job', 'dream'], () => ({ status: 0 }));
+  const fake = fakeLaunchd(paths);
+  await runSchedule(env, ['add', 'dream', '--at', '03:30', '--job', 'dream'], fake);
 
   const descPath = path.join(paths.state, 'descriptors', 'dream.json');
   assert.ok(fs.existsSync(descPath), 'descriptor written during add');
@@ -1196,7 +1412,7 @@ test('scheduler-schedule: add writes a 0600 job descriptor, records it once, and
   assert.equal(entries.length, 1, 'exactly one manifest file entry for the descriptor');
 
   // Second add: byte-identical descriptor, still exactly one manifest entry.
-  await runSchedule(env, ['add', 'dream', '--at', '03:30', '--job', 'dream'], () => ({ status: 0 }));
+  await runSchedule(env, ['add', 'dream', '--at', '03:30', '--job', 'dream'], fake);
   assert.ok(fs.readFileSync(descPath).equals(bytes), 'unchanged inputs ⇒ byte-identical descriptor');
   const entries2 = manifestLib.load(paths).entries.filter((e) => e.kind === 'file' && e.path === descPath);
   assert.equal(entries2.length, 1, 'no duplicate manifest entry on re-add');
@@ -1225,7 +1441,7 @@ test('scheduler-schedule: repointSchedules refreshes the descriptor; a legit uni
   const { env, paths } = setup();
   plantAppTree(paths);
   plantPins(paths);
-  await runSchedule(env, ['add', 'dream', '--at', '03:30', '--job', 'dream'], () => ({ status: 0 }));
+  await runSchedule(env, ['add', 'dream', '--at', '03:30', '--job', 'dream'], fakeLaunchd(paths));
   const descPath = path.join(paths.state, 'descriptors', 'dream.json');
   fs.rmSync(descPath); // simulate a lost descriptor — sync's repoint restores it
 
@@ -1248,3 +1464,945 @@ test('scheduler-schedule: repointSchedules refreshes the descriptor; a legit uni
   assert.ok(result.removed.includes(descPath), 'the descriptor file entry reverses');
   assert.equal(fs.existsSync(descPath), false);
 });
+
+// =========================================================================
+// WP-scheduler-register-replaces-loaded-record: verified registration
+// (ADR-0037). darwinLoadedVerdict + ensureDarwinEntryRegistered are
+// non-exported by design (D1) — every test below drives them THROUGH
+// `schedule.registerPlatform` (darwin/linux, platform injected) or through the
+// CLI `add()` path (T7), never by importing them directly.
+// =========================================================================
+
+const PLUTIL_PATH = '/usr/bin/plutil';
+
+/** Identify which launchd LABEL an argv targets, for `scriptedDarwinLoader`.
+ *  @param {string[]} argv @returns {string|null} */
+function labelForArgv(argv) {
+  if (argv[0] === 'launchctl' && (argv[1] === 'print' || argv[1] === 'bootout')) {
+    return (/^gui\/\d+\/(.+)$/.exec(argv[2] || '') || [])[1] || null;
+  }
+  if (argv[0] === 'launchctl' && argv[1] === 'bootstrap') {
+    const m = /([^/]+)\.plist$/.exec(argv[3] || '');
+    return m ? m[1] : null;
+  }
+  if (argv[0] === PLUTIL_PATH && argv[1] === '-lint') {
+    const m = /([^/]+)\.plist$/.exec(argv[2] || '');
+    return m ? m[1] : null;
+  }
+  return null;
+}
+
+/** Stub `fs.existsSync` for exactly `/usr/bin/plutil` during `fn`, delegating
+ *  every other path to the real implementation — makes the `plutil` preflight
+ *  deterministic regardless of whether THIS test host has it. Only T2c/T2d
+ *  exercise the preflight itself; every other fixture stubs it `false` (skip)
+ *  so it never adds an unscripted call to an otherwise-pinned sequence.
+ *  @template T @param {boolean} exists @param {() => (T|Promise<T>)} fn
+ *  @returns {Promise<T>} */
+async function withPlutilExists(exists, fn) {
+  const orig = fs.existsSync;
+  fs.existsSync = (p) => (p === PLUTIL_PATH ? exists : orig(p));
+  try {
+    return await fn();
+  } finally {
+    fs.existsSync = orig;
+  }
+}
+
+/**
+ * A darwin loader for THIS WP's own tests: calls targeting `scriptedLabel`
+ * return the SCRIPTED `responses` in order (one per call OBSERVED for that
+ * label; an entry may be a function `(argv)=>response` for a fixture that
+ * needs a side effect, e.g. simulating a concurrent write). Every other call
+ * (typically the catch-up site's OWN registration, running alongside the
+ * per-job one under test) falls through to a shared `fakeLaunchd`
+ * passthrough, so it succeeds harmlessly and never interferes with the
+ * assertions under test.
+ * @param {import('../../src/core/paths').WienerdogPaths} paths
+ * @param {string} scriptedLabel
+ * @param {Array<{status:number,stdout?:string}|((argv:string[])=>{status:number,stdout?:string})>} responses
+ * @returns {{loader:(argv:string[])=>{status:number,stdout?:string}, calls:string[][]}}
+ */
+function scriptedDarwinLoader(paths, scriptedLabel, responses) {
+  const fallback = fakeLaunchd(paths);
+  /** @type {string[][]} */ const calls = [];
+  let i = 0;
+  const loader = (argv) => {
+    calls.push(argv);
+    if (labelForArgv(argv) === scriptedLabel && i < responses.length) {
+      const r = responses[i];
+      i += 1;
+      return typeof r === 'function' ? r(argv) : r;
+    }
+    return fallback(argv);
+  };
+  return { loader, calls };
+}
+
+/** Compute the SAME `expect`-shape values `registerPlatformEntries`'s darwin
+ *  arm derives for job `name` (no job saved ⇒ expectDigest degrades to '',
+ *  matching what the register site itself computes for an unfindable job).
+ *  @param {import('../../src/core/paths').WienerdogPaths} paths
+ *  @param {string} name @param {number} hour @param {number} minute */
+function darwinJobExpect(paths, name, hour, minute) {
+  // ENTRY-role value: mirrors the value the register site now hoists
+  // (WP-scheduler-node-path-durability, Table B row 1 / Table H site 2).
+  const node = gen.entryNodePath();
+  const launcher = gen.launcherPath(paths);
+  const descriptorPath = require('../../src/scheduler/descriptor').descriptorPath(paths, name);
+  const label = gen.launchdLabel(name);
+  const plistPath = path.join(paths.home, 'Library', 'LaunchAgents', `${label}.plist`);
+  const logDir = path.join(paths.logs, name);
+  return {
+    label,
+    plistPath,
+    argv: [node, ...gen.jobLaunchArgs({ launcher, name, descriptor: descriptorPath, expectDigest: '' })],
+    hour,
+    minute,
+    env: gen.scheduledEnvPairs(paths.home, paths.core),
+    path: plistPath,
+    stdoutPath: path.join(logDir, 'launchd.out.log'),
+    stderrPath: path.join(logDir, 'launchd.err.log'),
+    spawnType: 'background',
+  };
+}
+
+/** The catch-up analogue of `darwinJobExpect`. */
+function darwinCatchupExpect(paths) {
+  // ENTRY-role value — see darwinJobExpect (Table H site 3).
+  const node = gen.entryNodePath();
+  const launcher = gen.launcherPath(paths);
+  const label = 'ai.wienerdog.catchup';
+  const plistPath = path.join(paths.home, 'Library', 'LaunchAgents', `${label}.plist`);
+  const logDir = path.join(paths.logs, 'catchup');
+  return {
+    label,
+    plistPath,
+    argv: [node, ...gen.catchupLaunchArgs({ launcher, expectDigest: '', jobDigests: gen.encodeJobDigests({}) })],
+    hour: null,
+    minute: 0,
+    env: gen.scheduledEnvPairs(paths.home, paths.core),
+    path: plistPath,
+    stdoutPath: path.join(logDir, 'launchd.out.log'),
+    stderrPath: path.join(logDir, 'launchd.err.log'),
+    spawnType: 'background',
+  };
+}
+
+/** The exact plist bytes `registerPlatformEntries`'s darwin arm renders for an
+ *  unfindable job `name` (expectDigest ''), so a test can pre-plant an
+ *  UNCHANGED (`changed:false`) fixture. */
+function canonicalJobPlistContent(paths, name, hour, minute) {
+  // ENTRY-role value — see darwinJobExpect (Table H site 4).
+  const node = gen.entryNodePath();
+  const launcher = gen.launcherPath(paths);
+  const descriptorPath = require('../../src/scheduler/descriptor').descriptorPath(paths, name);
+  const logDir = path.join(paths.logs, name);
+  return gen.launchdPlist({
+    name, hour, minute, node, launcher, descriptor: descriptorPath, expectDigest: '',
+    home: paths.home, core: paths.core, logDir,
+  });
+}
+
+/** A `launchctl print` stdout that matches `expect` exactly (Table A2). */
+function matchingStdout(expect) {
+  return buildPrintStdout({ ...expect, program: expect.argv[0] });
+}
+
+/** Pre-plant an UNCHANGED per-job entry: canonical bytes already on disk plus
+ *  a matching manifest entry, so `ensureEntry` returns `changed:false` and the
+ *  ONLY thing under test is the verified-skip/attempt decision (T3). */
+function unchangedJobFixture(name, hour, minute) {
+  const { paths } = setup();
+  const manifest = manifestLib.load(paths);
+  const expect = darwinJobExpect(paths, name, hour, minute);
+  const content = canonicalJobPlistContent(paths, name, hour, minute);
+  fs.mkdirSync(path.dirname(expect.plistPath), { recursive: true });
+  fs.writeFileSync(expect.plistPath, content);
+  manifestLib.record(manifest, { kind: 'scheduler-entry', path: expect.plistPath });
+  return { paths, manifest, expect };
+}
+
+/** Path to the pre-destructive marker file `onBeforeTeardown` writes
+ *  (`refreshSchedulerStatus`'s target — `status.js`'s STATUS_FILE). */
+function statusMarkerPath(paths) {
+  return path.join(paths.state, 'scheduler-status.json');
+}
+
+/**
+ * Run ONE T3 verified-skip/attempt case: an unchanged 'dream' entry, a SINGLE
+ * scripted `print` response, and an assertion on whether the register skips
+ * (exactly one read-only `print`, `loaded:true`) or attempts (a `bootstrap`
+ * follows). `buildResponse` is either a fixed `{status,stdout?}` or a function
+ * `(expect) => {status,stdout?}` — the function form is what lets a case build
+ * its stdout from the SAME `expect` (paths, argv, env, …) the fixture under
+ * test actually uses, rather than from a throwaway fixture whose paths would
+ * never match (a real bug an earlier draft of this file had).
+ * @param {{status:number,stdout?:string}|((expect:object)=>{status:number,stdout?:string})} buildResponse
+ * @param {'skip'|'attempt'} expectation
+ */
+async function runT3Case(buildResponse, expectation) {
+  const { paths, manifest, expect } = unchangedJobFixture('dream', 3, 30);
+  const printResponse = typeof buildResponse === 'function' ? buildResponse(expect) : buildResponse;
+  const { loader, calls } = scriptedDarwinLoader(paths, expect.label, [printResponse]);
+  const res = await withPlutilExists(false, () =>
+    schedule.registerPlatform(paths, manifest, { name: 'dream', hour: 3, minute: 30 }, loader, 'darwin')
+  );
+  const jobCalls = calls.filter((a) => labelForArgv(a) === expect.label);
+  if (expectation === 'skip') {
+    assert.equal(jobCalls.length, 1, 'a verified skip costs exactly one read-only print, nothing more');
+    assert.deepEqual(jobCalls[0], ['launchctl', 'print', `gui/${process.getuid()}/${expect.label}`]);
+    assert.equal(res.loaded, true);
+  } else {
+    assert.ok(jobCalls.length >= 2, 'a non-matching/unreadable record must be ATTEMPTED, never skipped');
+    assert.equal(jobCalls[1][1], 'bootstrap', 'the non-destructive bootstrap attempt runs');
+  }
+  return { paths, manifest, expect, calls, jobCalls, res };
+}
+
+// -------------------------------------------------------------------------
+// T1 — darwin replace ordering + `loaded` (AC1)
+// -------------------------------------------------------------------------
+
+test('verified-register: T1 — darwin replace: print → bootstrap → bootout → bootstrap → print, marker precedes bootout (AC1)', async () => {
+  const { paths } = setup();
+  const manifest = manifestLib.load(paths);
+  const expect = darwinJobExpect(paths, 'dream', 3, 30);
+  const staleStdout = buildPrintStdout({ ...expect, argv: [...expect.argv.slice(0, -1), 'sha256:' + '0'.repeat(64)], program: expect.argv[0] });
+  let statusExistedAtBootout = null;
+  const { loader, calls } = scriptedDarwinLoader(paths, expect.label, [
+    { status: 0, stdout: staleStdout }, // (1) print — a STALE record IS loaded
+    { status: 1 }, // (2) bootstrap — the non-destructive attempt fails (already loaded)
+    (argv) => { // (3) bootout — the marker must already exist by now (AC8 ordering)
+      statusExistedAtBootout = fs.existsSync(statusMarkerPath(paths));
+      return { status: 0 };
+    },
+    { status: 0 }, // (4) bootstrap — the replacement succeeds
+    { status: 0, stdout: matchingStdout(expect) }, // (5) print — post-bootstrap verify: matches
+  ]);
+  const res = await withPlutilExists(false, () =>
+    schedule.registerPlatform(paths, manifest, { name: 'dream', hour: 3, minute: 30 }, loader, 'darwin')
+  );
+  const jobCalls = calls.filter((a) => labelForArgv(a) === expect.label);
+  const uid = process.getuid();
+  assert.deepEqual(jobCalls, [
+    ['launchctl', 'print', `gui/${uid}/${expect.label}`],
+    ['launchctl', 'bootstrap', `gui/${uid}`, expect.plistPath],
+    ['launchctl', 'bootout', `gui/${uid}/${expect.label}`],
+    ['launchctl', 'bootstrap', `gui/${uid}`, expect.plistPath],
+    ['launchctl', 'print', `gui/${uid}/${expect.label}`],
+  ]);
+  assert.equal(res.loaded, true, 'the replacement verified-loaded');
+  assert.equal(statusExistedAtBootout, true, "ADR-0018 decision 2's pre-destructive marker precedes the bootout");
+});
+
+test('verified-register: T1 — Table A1: a live match SKIPS even when changed=true (AC1)', async () => {
+  const { paths } = setup();
+  const manifest = manifestLib.load(paths);
+  const expect = darwinJobExpect(paths, 'dream', 3, 30);
+  // `changed:true` is forced by pre-planting DIFFERENT on-disk bytes, so
+  // ensureEntry rewrites the file — but the LOADED record already matches
+  // the NEW canonical values, so the live match must still win.
+  fs.mkdirSync(path.dirname(expect.plistPath), { recursive: true });
+  fs.writeFileSync(expect.plistPath, 'not yet canonical');
+  const { loader, calls } = scriptedDarwinLoader(paths, expect.label, [
+    { status: 0, stdout: matchingStdout(expect) },
+  ]);
+  const res = await withPlutilExists(false, () =>
+    schedule.registerPlatform(paths, manifest, { name: 'dream', hour: 3, minute: 30 }, loader, 'darwin')
+  );
+  const jobCalls = calls.filter((a) => labelForArgv(a) === expect.label);
+  assert.equal(jobCalls.length, 1, 'zero mutating calls — the live match wins over `changed`');
+  assert.equal(res.loaded, true);
+  assert.equal(fs.existsSync(statusMarkerPath(paths)), false, 'the skip path calls no launchctl verb of any kind and no onBeforeTeardown — nothing but the one print');
+});
+
+test("verified-register: T1 — Codex fixture: changed=true only because the manifest entry is missing (AC1)", async () => {
+  const { paths } = setup();
+  const manifest = manifestLib.load(paths); // no scheduler-entry recorded yet
+  const expect = darwinJobExpect(paths, 'dream', 3, 30);
+  const content = canonicalJobPlistContent(paths, 'dream', 3, 30);
+  fs.mkdirSync(path.dirname(expect.plistPath), { recursive: true });
+  fs.writeFileSync(expect.plistPath, content); // disk already canonical
+  const { loader, calls } = scriptedDarwinLoader(paths, expect.label, [
+    { status: 0, stdout: matchingStdout(expect) },
+  ]);
+  const res = await withPlutilExists(false, () =>
+    schedule.registerPlatform(paths, manifest, { name: 'dream', hour: 3, minute: 30 }, loader, 'darwin')
+  );
+  const jobCalls = calls.filter((a) => labelForArgv(a) === expect.label);
+  // `changed` is true (the manifest entry was missing), but the live record
+  // already matches canonical — Table A1's live match wins regardless, costing
+  // exactly its one read-only readback and ZERO mutating calls.
+  assert.deepEqual(jobCalls, [['launchctl', 'print', `gui/${process.getuid()}/${expect.label}`]]);
+  assert.equal(res.loaded, true);
+  const entry = manifest.entries.find((e) => e.kind === 'scheduler-entry' && e.path === expect.plistPath);
+  assert.ok(entry, 'the manifest entry is still recorded (ensureEntry\'s own bookkeeping runs regardless)');
+});
+
+// -------------------------------------------------------------------------
+// T2 — teardown guard: no bootout when nothing is loaded; marker non-firing (AC2, AC8)
+// -------------------------------------------------------------------------
+
+test('verified-register: T2 — nothing loaded + bootstrap failure ⇒ no bootout anywhere, loaded:false, no marker (AC2, AC8)', async () => {
+  const { paths } = setup();
+  const manifest = manifestLib.load(paths);
+  const expect = darwinJobExpect(paths, 'dream', 3, 30);
+  const { loader, calls } = scriptedDarwinLoader(paths, expect.label, [
+    { status: 113 }, // (1) print — nothing loaded
+    { status: 1 },   // (2) bootstrap — a transient/permissions/invalid-plist failure
+  ]);
+  const res = await withPlutilExists(false, () =>
+    schedule.registerPlatform(paths, manifest, { name: 'dream', hour: 3, minute: 30 }, loader, 'darwin')
+  );
+  const jobCalls = calls.filter((a) => labelForArgv(a) === expect.label);
+  assert.ok(!jobCalls.some((a) => a[1] === 'bootout'), 'no bootout in the call list at all');
+  assert.equal(res.loaded, false);
+  assert.equal(fs.existsSync(statusMarkerPath(paths)), false, 'the pre-destructive marker never fires without a teardown');
+});
+
+// -------------------------------------------------------------------------
+// T2b — the rollback set (AC2)
+// -------------------------------------------------------------------------
+
+test('verified-register: T2b — rollback restores the prior plist + re-bootstraps it, reports loaded:false (AC2 a-d,g)', async () => {
+  const { paths } = setup();
+  const manifest = manifestLib.load(paths);
+  const expect = darwinJobExpect(paths, 'dream', 3, 30);
+  const priorBytes = Buffer.from('PRIOR-PLIST-BYTES-MARKER');
+  fs.mkdirSync(path.dirname(expect.plistPath), { recursive: true });
+  fs.writeFileSync(expect.plistPath, priorBytes);
+  const staleStdout = buildPrintStdout({ ...expect, argv: [...expect.argv.slice(0, -1), 'sha256:' + '1'.repeat(64)], program: expect.argv[0] });
+  const { loader, calls } = scriptedDarwinLoader(paths, expect.label, [
+    { status: 0, stdout: staleStdout }, // (1) print — a healthy but stale record IS loaded
+    { status: 1 }, // (2) bootstrap — fails (already loaded)
+    { status: 0 }, // (3) bootout
+    { status: 1 }, // (4) bootstrap — the REPLACEMENT also fails (unbootstrappable)
+    { status: 1 }, // (5) bootstrap — the RESTORE; its result is never checked
+  ]);
+  const res = await withPlutilExists(false, () =>
+    schedule.registerPlatform(paths, manifest, { name: 'dream', hour: 3, minute: 30 }, loader, 'darwin')
+  );
+  const jobCalls = calls.filter((a) => labelForArgv(a) === expect.label);
+  const uid = process.getuid();
+  assert.deepEqual(jobCalls.map((a) => a.slice(0, 2)), [
+    ['launchctl', 'print'],
+    ['launchctl', 'bootstrap'],
+    ['launchctl', 'bootout'],
+    ['launchctl', 'bootstrap'],
+    ['launchctl', 'bootstrap'],
+  ], '(a) call order: print → bootstrap → bootout → bootstrap → bootstrap again (the restore)');
+  assert.deepEqual(jobCalls[4], ['launchctl', 'bootstrap', `gui/${uid}`, expect.plistPath], '(c) the restoring bootstrap targets the restored file');
+  assert.ok(fs.readFileSync(expect.plistPath).equals(priorBytes), '(b) the file holds the PRIOR bytes, byte for byte');
+  assert.equal(res.loaded, false, '(d)/(g) rollback never reports success, even when its own restore-bootstrap fails');
+});
+
+test('verified-register: T2b — priorBytes===null (no plist existed) ⇒ no restore attempt, still loaded:false (AC2 e)', async () => {
+  const { paths } = setup();
+  const manifest = manifestLib.load(paths);
+  const expect = darwinJobExpect(paths, 'dream', 3, 30); // nothing pre-planted on disk
+  const staleStdout = buildPrintStdout({ ...expect, argv: [...expect.argv.slice(0, -1), 'sha256:' + '2'.repeat(64)], program: expect.argv[0] });
+  const { loader, calls } = scriptedDarwinLoader(paths, expect.label, [
+    { status: 0, stdout: staleStdout },
+    { status: 1 },
+    { status: 0 },
+    { status: 1 },
+  ]);
+  const res = await withPlutilExists(false, () =>
+    schedule.registerPlatform(paths, manifest, { name: 'dream', hour: 3, minute: 30 }, loader, 'darwin')
+  );
+  const jobCalls = calls.filter((a) => labelForArgv(a) === expect.label);
+  assert.equal(jobCalls.length, 4, 'no restoring bootstrap — priorBytes was null, nothing to restore');
+  assert.equal(res.loaded, false);
+});
+
+test('verified-register: T2b — the divergence case (CX-2): changed=false, disk canonical, loaded record older (AC2 f)', async () => {
+  const { paths, manifest, expect } = unchangedJobFixture('dream', 3, 30); // changed:false; priorBytes === canonical
+  const staleStdout = buildPrintStdout({ ...expect, argv: [...expect.argv.slice(0, -1), 'sha256:' + '3'.repeat(64)], program: expect.argv[0] });
+  const canonicalBytes = fs.readFileSync(expect.plistPath);
+  const { loader, calls } = scriptedDarwinLoader(paths, expect.label, [
+    { status: 0, stdout: staleStdout },
+    { status: 1 },
+    { status: 0 },
+    { status: 1 },
+    { status: 0 },
+  ]);
+  const res = await withPlutilExists(false, () =>
+    schedule.registerPlatform(paths, manifest, { name: 'dream', hour: 3, minute: 30 }, loader, 'darwin')
+  );
+  const jobCalls = calls.filter((a) => labelForArgv(a) === expect.label);
+  assert.ok(jobCalls.some((a) => a[1] === 'bootout'), 'the divergent record IS torn down — it is already stale');
+  assert.ok(fs.readFileSync(expect.plistPath).equals(canonicalBytes), 'the restore re-writes canonical — priorBytes WAS canonical here (the bound this fixture pins)');
+  assert.equal(res.loaded, false, 'rollback cannot restore the destroyed record — it never claims success');
+});
+
+// T2f — the interleaved-write fixture (CX14-2): a concurrent write lands
+// between this invocation's canonical write and the rollback's staleness
+// read; the guard must DECLINE to restore over it.
+test('verified-register: T2f — rollback staleness guard declines to overwrite a concurrent write (AC2 g2)', async () => {
+  const { paths } = setup();
+  const manifest = manifestLib.load(paths);
+  const expect = darwinJobExpect(paths, 'dream', 3, 30);
+  const priorBytes = Buffer.from('PRIOR-BYTES');
+  const concurrentBytes = Buffer.from('CONCURRENT-WRITER-BYTES');
+  fs.mkdirSync(path.dirname(expect.plistPath), { recursive: true });
+  fs.writeFileSync(expect.plistPath, priorBytes);
+  const staleStdout = buildPrintStdout({ ...expect, argv: [...expect.argv.slice(0, -1), 'sha256:' + '4'.repeat(64)], program: expect.argv[0] });
+  const { loader, calls } = scriptedDarwinLoader(paths, expect.label, [
+    { status: 0, stdout: staleStdout },
+    { status: 1 },
+    { status: 0 },
+    (argv) => { // the REPLACEMENT bootstrap: a concurrent invocation writes here first
+      fs.writeFileSync(expect.plistPath, concurrentBytes);
+      return { status: 1 };
+    },
+  ]);
+  const res = await withPlutilExists(false, () =>
+    schedule.registerPlatform(paths, manifest, { name: 'dream', hour: 3, minute: 30 }, loader, 'darwin')
+  );
+  const jobCalls = calls.filter((a) => labelForArgv(a) === expect.label);
+  assert.equal(jobCalls.length, 4, 'the guard declines — no restoring bootstrap is issued');
+  assert.ok(fs.readFileSync(expect.plistPath).equals(concurrentBytes), 'the concurrent bytes are left in place, byte for byte');
+  assert.equal(res.loaded, false);
+});
+
+// T2g — the binding fixture (CX15-1): canonicalBytes is bound at both call
+// sites, so a rollback reaching the staleness guard must not throw.
+test('verified-register: T2g — a rollback reaching the staleness guard does not throw (AC2 g1)', async () => {
+  const { paths } = setup();
+  const manifest = manifestLib.load(paths);
+  const expect = darwinJobExpect(paths, 'dream', 3, 30);
+  fs.mkdirSync(path.dirname(expect.plistPath), { recursive: true });
+  fs.writeFileSync(expect.plistPath, Buffer.from('PRIOR'));
+  const staleStdout = buildPrintStdout({ ...expect, argv: [...expect.argv.slice(0, -1), 'sha256:' + '5'.repeat(64)], program: expect.argv[0] });
+  const { loader } = scriptedDarwinLoader(paths, expect.label, [
+    { status: 0, stdout: staleStdout },
+    { status: 1 },
+    { status: 0 },
+    { status: 1 },
+    { status: 0 },
+  ]);
+  await assert.doesNotReject(
+    withPlutilExists(false, () =>
+      schedule.registerPlatform(paths, manifest, { name: 'dream', hour: 3, minute: 30 }, loader, 'darwin')
+    )
+  );
+});
+
+// -------------------------------------------------------------------------
+// T2c / T2d — the `plutil` preflight (AC2 h,i,j)
+// -------------------------------------------------------------------------
+
+test('verified-register: T2c — the preflight rejects: no bootout anywhere, absolute /usr/bin/plutil argv (AC2 h)', async () => {
+  const { paths } = setup();
+  const manifest = manifestLib.load(paths);
+  const expect = darwinJobExpect(paths, 'dream', 3, 30);
+  const staleStdout = buildPrintStdout({ ...expect, argv: [...expect.argv.slice(0, -1), 'sha256:' + '6'.repeat(64)], program: expect.argv[0] });
+  const { loader, calls } = scriptedDarwinLoader(paths, expect.label, [
+    { status: 0, stdout: staleStdout },
+    { status: 1 },
+  ]);
+  const res = await withPlutilExists(true, () => {
+    const wrapped = (argv) => (argv[0] === PLUTIL_PATH ? { status: 1 } : loader(argv));
+    return schedule.registerPlatform(paths, manifest, { name: 'dream', hour: 3, minute: 30 }, wrapped, 'darwin');
+  });
+  const jobCalls = calls.filter((a) => labelForArgv(a) === expect.label);
+  assert.ok(!jobCalls.some((a) => a[1] === 'bootout'), 'no bootout — the replacement is KNOWN-bad, never destroy for it');
+  assert.equal(res.loaded, false);
+});
+
+test('verified-register: T2c — the preflight passes: the replace path proceeds exactly as AC1 (AC2 j)', async () => {
+  const { paths } = setup();
+  const manifest = manifestLib.load(paths);
+  const expect = darwinJobExpect(paths, 'dream', 3, 30);
+  const staleStdout = buildPrintStdout({ ...expect, argv: [...expect.argv.slice(0, -1), 'sha256:' + '7'.repeat(64)], program: expect.argv[0] });
+  const { loader, calls } = scriptedDarwinLoader(paths, expect.label, [
+    { status: 0, stdout: staleStdout },
+    { status: 1 },
+    { status: 0 }, // bootout
+    { status: 0 }, // replacement bootstrap succeeds
+    { status: 0, stdout: matchingStdout(expect) }, // verify
+  ]);
+  const res = await withPlutilExists(true, () => {
+    const wrapped = (argv) => (argv[0] === PLUTIL_PATH ? { status: 0 } : loader(argv));
+    return schedule.registerPlatform(paths, manifest, { name: 'dream', hour: 3, minute: 30 }, wrapped, 'darwin');
+  });
+  assert.equal(res.loaded, true);
+  const jobCalls = calls.filter((a) => labelForArgv(a) === expect.label);
+  assert.ok(jobCalls.some((a) => a[1] === 'bootout'), 'a passed preflight still allows the teardown');
+});
+
+test('verified-register: T2d — existsSync(PLUTIL) false ⇒ no plutil argv is issued at all, register proceeds (AC2 i)', async () => {
+  const { paths } = setup();
+  const manifest = manifestLib.load(paths);
+  const expect = darwinJobExpect(paths, 'dream', 3, 30);
+  const staleStdout = buildPrintStdout({ ...expect, argv: [...expect.argv.slice(0, -1), 'sha256:' + '8'.repeat(64)], program: expect.argv[0] });
+  const { loader, calls } = scriptedDarwinLoader(paths, expect.label, [
+    { status: 0, stdout: staleStdout },
+    { status: 1 },
+    { status: 0 },
+    { status: 0 },
+    { status: 0, stdout: matchingStdout(expect) },
+  ]);
+  const res = await withPlutilExists(false, () =>
+    schedule.registerPlatform(paths, manifest, { name: 'dream', hour: 3, minute: 30 }, loader, 'darwin')
+  );
+  assert.ok(!calls.some((a) => a[0] === PLUTIL_PATH), 'existence false ⇒ the preflight never even calls the loader');
+  assert.equal(res.loaded, true, 'the register proceeds normally — absence of the linter is the true fail-open');
+});
+
+// -------------------------------------------------------------------------
+// T2e — the post-bootstrap verify on the ABSENT-label path (AC2 k,l; CX9-1)
+// -------------------------------------------------------------------------
+
+test('verified-register: T2e — absent label, bootstrap succeeds, trailing print mismatches ⇒ loaded:false, no bootout (AC2 k)', async () => {
+  const { paths } = setup();
+  const manifest = manifestLib.load(paths);
+  const expect = darwinJobExpect(paths, 'dream', 3, 30);
+  const foreignStdout = buildPrintStdout({ ...expect, argv: ['/foreign/node', ...expect.argv.slice(1)], program: '/foreign/node' });
+  const { loader, calls } = scriptedDarwinLoader(paths, expect.label, [
+    { status: 113 }, // print — nothing loaded
+    { status: 0 },   // bootstrap succeeds
+    { status: 0, stdout: foreignStdout }, // trailing print — FOREIGN bytes, not ours
+  ]);
+  const res = await withPlutilExists(false, () =>
+    schedule.registerPlatform(paths, manifest, { name: 'dream', hour: 3, minute: 30 }, loader, 'darwin')
+  );
+  const jobCalls = calls.filter((a) => labelForArgv(a) === expect.label);
+  assert.equal(res.loaded, false, 'a bootstrap exit 0 is NOT evidence of what got loaded');
+  assert.ok(!jobCalls.some((a) => a[1] === 'bootout'), 'no bootout — nothing was loaded to tear down');
+  assert.deepEqual(jobCalls.map((a) => a[1]), ['print', 'bootstrap', 'print']);
+});
+
+test('verified-register: T2e — absent label, bootstrap succeeds, trailing print UNPARSEABLE ⇒ loaded:false (AC2 k)', async () => {
+  const { paths } = setup();
+  const manifest = manifestLib.load(paths);
+  const expect = darwinJobExpect(paths, 'dream', 3, 30);
+  const { loader } = scriptedDarwinLoader(paths, expect.label, [
+    { status: 113 },
+    { status: 0 },
+    { status: 0, stdout: 'not a launchctl print record at all' },
+  ]);
+  const res = await withPlutilExists(false, () =>
+    schedule.registerPlatform(paths, manifest, { name: 'dream', hour: 3, minute: 30 }, loader, 'darwin')
+  );
+  assert.equal(res.loaded, false);
+});
+
+test('verified-register: T2e — absent label, bootstrap succeeds, trailing print MATCHES ⇒ loaded:true (AC2 l)', async () => {
+  const { paths } = setup();
+  const manifest = manifestLib.load(paths);
+  const expect = darwinJobExpect(paths, 'dream', 3, 30);
+  const { loader, calls } = scriptedDarwinLoader(paths, expect.label, [
+    { status: 113 },
+    { status: 0 },
+    { status: 0, stdout: matchingStdout(expect) },
+  ]);
+  const res = await withPlutilExists(false, () =>
+    schedule.registerPlatform(paths, manifest, { name: 'dream', hour: 3, minute: 30 }, loader, 'darwin')
+  );
+  const jobCalls = calls.filter((a) => labelForArgv(a) === expect.label);
+  assert.equal(res.loaded, true);
+  assert.deepEqual(jobCalls.map((a) => a[1]), ['print', 'bootstrap', 'print']);
+});
+
+// -------------------------------------------------------------------------
+// T3 — the verified skip, cases (i)-(xxii) (AC3, AC8)
+// -------------------------------------------------------------------------
+
+test('verified-register: T3 case (i) — argv matches element for element ⇒ zero mutating calls, loaded:true', async () => {
+  await runT3Case((expect) => ({ status: 0, stdout: matchingStdout(expect) }), 'skip');
+});
+
+test('verified-register: T3 case (ii) — the record names a foreign launcher ⇒ attempted', async () => {
+  await runT3Case((expect) => ({
+    status: 0,
+    stdout: buildPrintStdout({ ...expect, argv: [expect.argv[0], '/foreign/launcher.js', ...expect.argv.slice(2)], program: expect.argv[0] }),
+  }), 'attempt');
+});
+
+test('verified-register: T3 case (iii) — the arguments block is unparseable ⇒ attempted', async () => {
+  await runT3Case((expect) => ({ status: 0, stdout: buildPrintStdout({ ...expect, malformedArgs: true }) }), 'attempt');
+});
+
+test('verified-register: T3 case (iv) — print exits non-zero (nothing loaded) ⇒ attempted (crash-recovery criterion)', async () => {
+  // The stdout carries a fully MATCHING record (gate 1's own regression bait —
+  // pins the `isLoaded` guard, not just the empty-stdout case): a non-zero exit
+  // must be decisive on its own, never overridden by parseable-looking text.
+  await runT3Case((expect) => ({ status: 113, stdout: matchingStdout(expect) }), 'attempt');
+});
+
+test('verified-register: T3 case (v) — the stale-tail fixture: same node+launcher, different --expect-digest ⇒ attempted, not skipped', async () => {
+  await runT3Case((expect) => ({
+    status: 0,
+    stdout: buildPrintStdout({ ...expect, argv: [...expect.argv.slice(0, -1), 'sha256:' + '9'.repeat(64)], program: expect.argv[0] }),
+  }), 'attempt');
+});
+
+test('verified-register: T3 case (vi) — the loaded argv is a strict prefix of canonical ⇒ attempted', async () => {
+  await runT3Case((expect) => ({
+    status: 0,
+    stdout: buildPrintStdout({ ...expect, argv: expect.argv.slice(0, -1), program: expect.argv[0] }),
+  }), 'attempt');
+});
+
+test('verified-register: T3 case (vii) — the CX-1 regression fixture: argv matches, calendar Hour/Minute differs ⇒ attempted', async () => {
+  await runT3Case((expect) => ({ status: 0, stdout: buildPrintStdout({ ...expect, minute: 45, program: expect.argv[0] }) }), 'attempt');
+});
+
+test('verified-register: T3 case (viii) — argv+calendar match but a canonical env pair differs ⇒ attempted', async () => {
+  await runT3Case((expect) => {
+    const env = expect.env.map(([k, v]) => (k === 'WIENERDOG_HOME' ? [k, '/some/other/core'] : [k, v]));
+    return { status: 0, stdout: buildPrintStdout({ ...expect, env, program: expect.argv[0] }) };
+  }, 'attempt');
+});
+
+test('verified-register: T3 case (ix) — every canonical env pair present alongside launchd-injected keys ⇒ skipped (containment)', async () => {
+  // buildPrintStdout always adds OSLogRateLimit/XPC_SERVICE_NAME on top of `env`
+  // — this case pins that containment (not set-equality) is what is checked.
+  await runT3Case((expect) => ({ status: 0, stdout: buildPrintStdout({ ...expect, program: expect.argv[0] }) }), 'skip');
+});
+
+test('verified-register: T3 case (x) — the environment block is unparseable ⇒ attempted', async () => {
+  await runT3Case((expect) => ({ status: 0, stdout: buildPrintStdout({ ...expect, malformedEnv: true }) }), 'attempt');
+});
+
+test('verified-register: T3 case (xi) — the catch-up shape: Minute-only, NO Hour key, matched against hour:null ⇒ skipped', async () => {
+  const { paths } = setup();
+  const manifest = manifestLib.load(paths);
+  const expect = darwinCatchupExpect(paths);
+  const content = gen.catchupPlist({
+    node: gen.entryNodePath(), launcher: gen.launcherPath(paths), expectDigest: '', jobDigests: gen.encodeJobDigests({}),
+    home: paths.home, core: paths.core, logDir: path.join(paths.logs, 'catchup'),
+  });
+  fs.mkdirSync(path.dirname(expect.plistPath), { recursive: true });
+  fs.writeFileSync(expect.plistPath, content);
+  manifestLib.record(manifest, { kind: 'scheduler-entry', path: expect.plistPath });
+  const { loader, calls } = scriptedDarwinLoader(paths, expect.label, [{ status: 0, stdout: matchingStdout(expect) }]);
+  const res = await withPlutilExists(false, () =>
+    schedule.registerPlatform(paths, manifest, { name: 'dream', hour: 3, minute: 30 }, loader, 'darwin')
+  );
+  const cuCalls = calls.filter((a) => labelForArgv(a) === expect.label);
+  assert.equal(cuCalls.length, 1, 'the catch-up entry gets its own verified skip: one print, zero mutating calls');
+  assert.equal(res.loaded, true);
+});
+
+test('verified-register: T3 case (xii) — the same catch-up record but carrying "Hour" => 0 ⇒ attempted', async () => {
+  const { paths } = setup();
+  const manifest = manifestLib.load(paths);
+  const expect = darwinCatchupExpect(paths);
+  const content = gen.catchupPlist({
+    node: gen.entryNodePath(), launcher: gen.launcherPath(paths), expectDigest: '', jobDigests: gen.encodeJobDigests({}),
+    home: paths.home, core: paths.core, logDir: path.join(paths.logs, 'catchup'),
+  });
+  fs.mkdirSync(path.dirname(expect.plistPath), { recursive: true });
+  fs.writeFileSync(expect.plistPath, content);
+  manifestLib.record(manifest, { kind: 'scheduler-entry', path: expect.plistPath });
+  const stdout = buildPrintStdout({ ...expect, hour: 0, program: expect.argv[0] });
+  const { loader, calls } = scriptedDarwinLoader(paths, expect.label, [{ status: 0, stdout }]);
+  const res = await withPlutilExists(false, () =>
+    schedule.registerPlatform(paths, manifest, { name: 'dream', hour: 3, minute: 30 }, loader, 'darwin')
+  );
+  const cuCalls = calls.filter((a) => labelForArgv(a) === expect.label);
+  assert.ok(cuCalls.length >= 2 && cuCalls[1][1] === 'bootstrap', 'hour:null REFUSES a present Hour key — Hour 0 + Minute 0 is a different schedule than Minute 0 alone');
+  void res;
+});
+
+test('verified-register: T3 case (xiii) — the empty-value fixture: the record omits the whole ambient scrub ⇒ attempted', async () => {
+  await runT3Case((expect) => {
+    const env = expect.env.filter(([k]) => k === 'HOME' || k === 'WIENERDOG_HOME'); // drop the 5 scrub pairs
+    return { status: 0, stdout: buildPrintStdout({ ...expect, env, program: expect.argv[0] }) };
+  }, 'attempt');
+});
+
+test("verified-register: T3 case (xiii)'s pair — a HEALTHY record's five valueless `KEY =>` lines ARE the scrub, and must be parsed as present ⇒ skipped", async () => {
+  // §7b fact 4: five of the seven canonical pairs render as `KEY =>` with
+  // NOTHING after the arrow — that IS their intended (empty-string) value on a
+  // genuinely healthy record. A parser that skips a valueless line instead of
+  // recording `['KEY','']` would drop these five keys from the parsed map and
+  // wrongly force an attempt on a record that is doing exactly its authorized
+  // job — the C2 defect named in AC3 case (xiii).
+  await runT3Case((expect) => ({ status: 0, stdout: matchingStdout(expect) }), 'skip');
+});
+
+test('verified-register: T3 case (xiv) — the indeterminate fixture (CX-1): print exits 0 but degraded, changed=true, bootstrap fails ⇒ no bootout anywhere', async () => {
+  const { paths } = setup();
+  const manifest = manifestLib.load(paths);
+  const expect = darwinJobExpect(paths, 'dream', 3, 30);
+  const { loader, calls } = scriptedDarwinLoader(paths, expect.label, [
+    { status: 0, stdout: 'degraded / truncated output, no arguments block at all' },
+    { status: 1 },
+  ]);
+  const res = await withPlutilExists(false, () =>
+    schedule.registerPlatform(paths, manifest, { name: 'dream', hour: 3, minute: 30 }, loader, 'darwin')
+  );
+  const jobCalls = calls.filter((a) => labelForArgv(a) === expect.label);
+  assert.equal(jobCalls.length, 2, 'stops after the failed bootstrap — indeterminate authorizes no further step');
+  assert.ok(!jobCalls.some((a) => a[1] === 'bootout'), 'parse degradation must never destroy a possibly-healthy record');
+  assert.equal(res.loaded, false);
+});
+
+test('verified-register: T3 case (xv) — path drift: the loaded record was read from a different plist file ⇒ attempted', async () => {
+  await runT3Case((expect) => ({
+    status: 0,
+    stdout: buildPrintStdout({ ...expect, path: '/some/other/ai.wienerdog.dream.plist', program: expect.argv[0] }),
+  }), 'attempt');
+});
+
+test('verified-register: T3 case (xvi) — program drift ⇒ attempted', async () => {
+  await runT3Case((expect) => ({ status: 0, stdout: buildPrintStdout({ ...expect, program: '/some/other/node' }) }), 'attempt');
+});
+
+test('verified-register: T3 case (xvii) — a log path drifts ⇒ attempted', async () => {
+  await runT3Case((expect) => ({
+    status: 0,
+    stdout: buildPrintStdout({ ...expect, stdoutPath: '/some/other/launchd.out.log', program: expect.argv[0] }),
+  }), 'attempt');
+});
+
+test('verified-register: T3 case (xviii) — spawn type is not background ⇒ attempted', async () => {
+  await runT3Case((expect) => ({
+    status: 0,
+    stdout: buildPrintStdout({ ...expect, spawnType: 'foreground', program: expect.argv[0] }),
+  }), 'attempt');
+});
+
+test('verified-register: T3 case (xix) — the extra-trigger fixture (CX10-1): a SECOND calendarinterval trigger ⇒ attempted, not skipped', async () => {
+  await runT3Case((expect) => ({
+    status: 0,
+    stdout: buildPrintStdout({ ...expect, triggerCount: 2, program: expect.argv[0] }),
+  }), 'attempt');
+});
+
+test('verified-register: T3 case (xx) — the foreign-stream fixture (CX11-2): our calendar trigger PLUS a foreign-stream one ⇒ attempted, not skipped', async () => {
+  await runT3Case((expect) => ({
+    status: 0,
+    stdout: buildPrintStdout({ ...expect, triggerCount: 2, foreignStreamTrigger: true, program: expect.argv[0] }),
+  }), 'attempt');
+});
+
+test('verified-register: T3 case (xxi) — an absent path/program/log-path/spawn-type line ⇒ indeterminate, attempted, no bootout', async () => {
+  const { paths } = setup();
+  const manifest = manifestLib.load(paths);
+  const expect = darwinJobExpect(paths, 'dream', 3, 30);
+  const stdout = buildPrintStdout({ ...expect, program: expect.argv[0], omit: ['program'] });
+  const { loader, calls } = scriptedDarwinLoader(paths, expect.label, [
+    { status: 0, stdout },
+    { status: 1 },
+  ]);
+  const res = await withPlutilExists(false, () =>
+    schedule.registerPlatform(paths, manifest, { name: 'dream', hour: 3, minute: 30 }, loader, 'darwin')
+  );
+  const jobCalls = calls.filter((a) => labelForArgv(a) === expect.label);
+  assert.ok(!jobCalls.some((a) => a[1] === 'bootout'), 'an absent line is a readback we could not complete — never a divergence');
+  assert.equal(res.loaded, false);
+});
+
+test('verified-register: T3 case (xxii) — benign-only drift (stale stdout path): no bootout, existing record stays loaded, loaded:false + notice', async () => {
+  const { paths } = setup();
+  // Table N row 2: the notice's ONLY push site is inside `repointSchedules`, and
+  // `repointSchedules` iterates CONFIGURED jobs (`jobsLib.listJobs`), not the
+  // manifest — so the job must be saved for the repoint leg to reach it at all.
+  jobsLib.saveJob(paths, { name: 'dream', at: '03:30', run: 'builtin:dream', timeoutMinutes: 20 });
+  const manifest = manifestLib.load(paths);
+  const expect = darwinJobExpect(paths, 'dream', 3, 30);
+  fs.mkdirSync(path.dirname(expect.plistPath), { recursive: true });
+  fs.writeFileSync(expect.plistPath, 'not yet canonical'); // forces changed:true
+  const benignStdout = buildPrintStdout({ ...expect, stdoutPath: '/old/logs/launchd.out.log', program: expect.argv[0] });
+  // Four scripted responses: the direct `registerPlatform` leg below consumes
+  // the first pair; `repointSchedules`'s OWN internal `registerPlatform` call
+  // (driven through the SAME loader) consumes the second pair, reproducing the
+  // identical benign-drift mismatch so it reaches the same `loaded:false`.
+  const { loader, calls } = scriptedDarwinLoader(paths, expect.label, [
+    { status: 0, stdout: benignStdout },
+    { status: 1 }, // the non-destructive bootstrap fails (the label is loaded)
+    { status: 0, stdout: benignStdout },
+    { status: 1 },
+  ]);
+  const res = await withPlutilExists(false, () =>
+    schedule.registerPlatform(paths, manifest, { name: 'dream', hour: 3, minute: 30 }, loader, 'darwin')
+  );
+  const jobCalls = calls.filter((a) => labelForArgv(a) === expect.label);
+  assert.ok(!jobCalls.some((a) => a[1] === 'bootout'), 'BENIGN-only mismatch ⇒ no skip AND no teardown — the record is still doing its authorized job');
+  assert.equal(jobCalls.length, 2, 'print + the single failed non-destructive attempt, nothing more');
+  assert.equal(res.loaded, false);
+
+  // Table N row 2 — the darwin leg's ONLY notice proof: a `registerPlatform`-
+  // only fixture proves `loaded:false` and nothing about §8's notice, because
+  // the notice's single push site is inside `repointSchedules` (schedule.js:583).
+  const r = await withPlutilExists(false, () => schedule.repointSchedules(paths, manifest, { loader, platform: 'darwin' }));
+  assert.ok(
+    r.notices.some((n) => /"dream".*did not accept it/.test(n)),
+    'repointSchedules pushes §8\'s notice for the still-benign-drifted, still-unloaded entry'
+  );
+});
+
+test("verified-register: T3 case (xxii)'s sibling — a FATAL field (stale env) still reaches the replace path", async () => {
+  const { paths } = setup();
+  const manifest = manifestLib.load(paths);
+  const expect = darwinJobExpect(paths, 'dream', 3, 30);
+  fs.mkdirSync(path.dirname(expect.plistPath), { recursive: true });
+  fs.writeFileSync(expect.plistPath, 'not yet canonical');
+  const env = expect.env.map(([k, v]) => (k === 'WIENERDOG_HOME' ? [k, '/stale/core'] : [k, v]));
+  const fatalStdout = buildPrintStdout({ ...expect, env, program: expect.argv[0] });
+  const { loader, calls } = scriptedDarwinLoader(paths, expect.label, [
+    { status: 0, stdout: fatalStdout },
+    { status: 1 }, // non-destructive attempt fails
+    { status: 0 }, // bootout
+    { status: 0 }, // replacement bootstrap succeeds
+    { status: 0, stdout: matchingStdout(expect) }, // verify
+  ]);
+  const res = await withPlutilExists(false, () =>
+    schedule.registerPlatform(paths, manifest, { name: 'dream', hour: 3, minute: 30 }, loader, 'darwin')
+  );
+  const jobCalls = calls.filter((a) => labelForArgv(a) === expect.label);
+  assert.ok(jobCalls.some((a) => a[1] === 'bootout'), 'a FATAL env mismatch DOES reach the replace path');
+  assert.equal(res.loaded, true);
+});
+
+// -------------------------------------------------------------------------
+// T4 — catch-up entry through the same helper (AC4)
+// -------------------------------------------------------------------------
+
+test('verified-register: T4 — catch-up goes through ensureDarwinEntryRegistered: AC1 ordering + AC2 teardown guard both hold', async () => {
+  const { paths } = setup();
+  const manifest = manifestLib.load(paths);
+  const expect = darwinCatchupExpect(paths);
+  const staleStdout = buildPrintStdout({ ...expect, argv: [...expect.argv.slice(0, -1), 'sha256:' + 'a'.repeat(64)], program: expect.argv[0] });
+  const { loader, calls } = scriptedDarwinLoader(paths, expect.label, [
+    { status: 0, stdout: staleStdout },
+    { status: 1 },
+    { status: 0 },
+    { status: 0 },
+    { status: 0, stdout: matchingStdout(expect) },
+  ]);
+  const res = await withPlutilExists(false, () =>
+    schedule.registerPlatform(paths, manifest, { name: 'dream', hour: 3, minute: 30 }, loader, 'darwin')
+  );
+  const cuCalls = calls.filter((a) => labelForArgv(a) === expect.label);
+  assert.deepEqual(cuCalls.map((a) => a[1]), ['print', 'bootstrap', 'bootout', 'bootstrap', 'print']);
+  assert.equal(res.loaded, true);
+
+  // The teardown guard also holds for catch-up: nothing loaded + a failed
+  // bootstrap must never reach a bootout.
+  const { paths: paths2 } = setup();
+  const manifest2 = manifestLib.load(paths2);
+  const expect2 = darwinCatchupExpect(paths2);
+  const { loader: loader2, calls: calls2 } = scriptedDarwinLoader(paths2, expect2.label, [
+    { status: 113 },
+    { status: 1 },
+  ]);
+  const res2 = await withPlutilExists(false, () =>
+    schedule.registerPlatform(paths2, manifest2, { name: 'dream', hour: 3, minute: 30 }, loader2, 'darwin')
+  );
+  const cuCalls2 = calls2.filter((a) => labelForArgv(a) === expect2.label);
+  assert.ok(!cuCalls2.some((a) => a[1] === 'bootout'));
+  assert.equal(res2.loaded, false);
+});
+
+// -------------------------------------------------------------------------
+// T5 / T6 — linux (AC5)
+// -------------------------------------------------------------------------
+
+test('verified-register: T5 — linux degraded reload ⇒ loaded:false + notice, even though enable --now succeeds', { skip: !LINUX_SYSTEMD }, () => {
+  const { paths } = setup();
+  // Table N row 3: the notice's ONLY push site is inside `repointSchedules`,
+  // which iterates CONFIGURED jobs — the job must be saved for the repoint leg
+  // to reach it.
+  jobsLib.saveJob(paths, { name: 'dream', at: '03:30', run: 'builtin:dream', timeoutMinutes: 20 });
+  const manifest = manifestLib.load(paths);
+  const loader = (argv) => {
+    if (argv[0] === 'systemctl' && argv.includes('daemon-reload')) return { status: 1 };
+    return { status: 0 };
+  };
+  const res = schedule.registerPlatform(paths, manifest, { name: 'dream', hour: 3, minute: 30 }, loader, 'linux');
+  assert.equal(res.loaded, false, 'reloadOk && enableOk — a degraded reload fails the register even though enable --now succeeded');
+
+  // Table N row 3 — the linux leg's ONLY notice proof: a `registerPlatform`-only
+  // fixture proves `loaded:false` and nothing about §8's notice, since the
+  // notice's single push site is inside `repointSchedules` (schedule.js:583).
+  const r = schedule.repointSchedules(paths, manifest, { loader, platform: 'linux' });
+  assert.ok(
+    r.notices.some((n) => /"dream".*did not accept it/.test(n)),
+    'repointSchedules pushes §8\'s notice for the still-degraded-reload, still-unloaded entry'
+  );
+});
+
+test('verified-register: T5 — linux daemon-reload {status:null} / missing result also counts as failure', { skip: !LINUX_SYSTEMD }, () => {
+  const { paths } = setup();
+  const manifest = manifestLib.load(paths);
+  const loader = (argv) => {
+    if (argv[0] === 'systemctl' && argv.includes('daemon-reload')) return { status: null };
+    return { status: 0 };
+  };
+  const res = schedule.registerPlatform(paths, manifest, { name: 'dream', hour: 3, minute: 30 }, loader, 'linux');
+  assert.equal(res.loaded, false);
+});
+
+test('verified-register: T6 — linux unchanged bytes still reload + enable, exactly two calls', { skip: !LINUX_SYSTEMD }, () => {
+  const { paths } = setup();
+  const manifest = manifestLib.load(paths);
+  const calls1 = [];
+  schedule.registerPlatform(paths, manifest, { name: 'dream', hour: 3, minute: 30 }, (a) => (calls1.push(a), { status: 0 }), 'linux');
+  const calls2 = [];
+  const res = schedule.registerPlatform(paths, manifest, { name: 'dream', hour: 3, minute: 30 }, (a) => (calls2.push(a), { status: 0 }), 'linux');
+  assert.equal(res.changed, false, 'the second register sees identical bytes');
+  assert.deepEqual(calls2, [
+    ['systemctl', '--user', 'daemon-reload'],
+    ['systemctl', '--user', 'enable', '--now', 'wienerdog-dream.timer'],
+  ], 'exactly reload + enable — no verified skip exists on this leg (Table A row 3)');
+});
+
+// -------------------------------------------------------------------------
+// T7 — the CLI path: add() throws on an unloaded outcome for an UNCHANGED
+// entry, on both fixed legs (AC11, D5)
+// -------------------------------------------------------------------------
+
+test('verified-register: T7 — darwin: add() throws when an unchanged entry\'s readback mismatches then fails to register', { skip: process.platform !== 'darwin' }, async () => {
+  const { env, paths } = setup();
+  const fake = fakeLaunchd(paths);
+  await runSchedule(env, ['add', 'dream', '--at', '03:30', '--job', 'dream'], fake);
+
+  // Drift the loaded record's spawn type (a BENIGN-tier field, Table A2b) so a
+  // re-add's readback mismatches without authorizing a teardown, and make every
+  // bootstrap fail so the register cannot heal itself.
+  const label = 'ai.wienerdog.dream';
+  const expect = darwinJobExpect(paths, 'dream', 3, 30);
+  const badStdout = buildPrintStdout({ ...expect, spawnType: 'foreground', program: expect.argv[0] });
+  let out = '';
+  const orig = process.stdout.write.bind(process.stdout);
+  process.stdout.write = (s) => ((out += s), true);
+  try {
+    await assert.rejects(
+      runSchedule(env, ['add', 'dream', '--at', '03:30', '--job', 'dream'], (argv) => {
+        if (labelForArgv(argv) === label && argv[1] === 'print') return { status: 0, stdout: badStdout };
+        if (labelForArgv(argv) === label && argv[1] === 'bootstrap') return { status: 1 };
+        return fake(argv);
+      }),
+      WienerdogError
+    );
+  } finally {
+    process.stdout.write = orig;
+  }
+  assert.ok(!/already scheduled/.test(out), 'the "already scheduled … unchanged" string must never print over an unloaded outcome');
+});
+
+test('verified-register: T7 — linux: add() throws when an unchanged entry\'s hoisted daemon-reload is degraded', { skip: !LINUX_SYSTEMD }, async () => {
+  const { env } = setup();
+  await runSchedule(env, ['add', 'dream', '--at', '03:30', '--job', 'dream'], () => ({ status: 0 }));
+  let out = '';
+  const orig = process.stdout.write.bind(process.stdout);
+  process.stdout.write = (s) => ((out += s), true);
+  try {
+    await assert.rejects(
+      runSchedule(env, ['add', 'dream', '--at', '03:30', '--job', 'dream'], (argv) =>
+        argv[0] === 'systemctl' && argv.includes('daemon-reload') ? { status: 1 } : { status: 0 }
+      ),
+      WienerdogError
+    );
+  } finally {
+    process.stdout.write = orig;
+  }
+  assert.ok(!/already scheduled/.test(out), 'the "already scheduled … unchanged" string must never print over an unloaded outcome');
+});
+

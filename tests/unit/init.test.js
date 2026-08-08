@@ -120,9 +120,25 @@ test('init --fresh-vault schedules the nightly dream and surfaces it (ADR-0014)'
   // platform; either way the user is told.
   assert.match(r.stdout, /dreaming/i);
   // The catch-up reassurance is surfaced alongside the schedule (WP-066): users
-  // must never think they have to leave the machine on overnight. Both CI OSes
-  // (macOS, ubuntu) support scheduling, so d.scheduled is true and this prints.
-  assert.match(r.stdout, /catches up automatically/i);
+  // must never think they have to leave the machine on overnight. What the
+  // summary may CLAIM now depends on whether the register could verify the
+  // registration (ADR-0037), and this test runs a real subprocess under
+  // WIENERDOG_LOADER_NOOP=1 — a seam that answers every scheduler spawn with a
+  // blind {status:0} and no stdout.
+  //   darwin: the register reads the entry back with `launchctl print`; a blind
+  //     {status:0} carries no record, so nothing is verified and the summary must
+  //     NOT promise catch-up. The degraded notice IS the postcondition working.
+  //   linux/win32: no readback runs on this path, so the seam still yields
+  //     d.scheduled === true and the reassurance prints, as before.
+  // The darwin negative assertion is deliberate: it is the tripwire against ever
+  // teaching the NOOP seam to fabricate a matching readback, which would forge
+  // exactly the evidence ADR-0037 exists to require.
+  if (process.platform === 'darwin') {
+    assert.match(r.stdout, /did not accept it yet/i);
+    assert.doesNotMatch(r.stdout, /catches up automatically/i);
+  } else {
+    assert.match(r.stdout, /catches up automatically/i);
+  }
   // The dream job definition landed in config regardless of platform support:
   // ensureDreamSchedule persists the job before registering the OS entry.
   const cfg = fs.readFileSync(path.join(core, 'config.yaml'), 'utf8');

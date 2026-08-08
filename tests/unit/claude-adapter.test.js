@@ -355,8 +355,8 @@ test('a user-relocated mid-file block uninstalls to exactly one blank line', () 
 
   assert.equal(
     fs.readFileSync(claudeMd, 'utf8'),
-    '# Above\n\n# Below\ntail\n',
-    'exactly one blank line between the surrounding regions'
+    '# Above\n\n\n# Below\ntail\n',
+    'the adapter CREATED this file, so sepBefore is \'\' — we added nothing on the leading side, the leading strip must not run, and BOTH of the user\'s blank lines survive (WP-147; the old one-blank-line expectation encoded the A13 fixed-newline heuristic)'
   );
 });
 
@@ -570,4 +570,94 @@ test('re-apply with an unchanged hook set leaves the settings-entry byte-identic
   shared.applySettings(settingsPath, [['SessionStart', A]], false, manifest, out2);
   assert.equal(JSON.stringify(manifest.entries), snap, 'manifest entry byte-identical on re-sync');
   assert.ok(out2.unchanged.includes(settingsPath));
+});
+
+// ── WP-147: managed-block separator round-trip fidelity (audit A13) ──────────
+
+test('WP-147: sync then uninstall round-trips a CLAUDE.md with NO trailing newline byte-identically', () => {
+  const paths = setup();
+  const claudeMd = path.join(paths.claudeDir, 'CLAUDE.md');
+  const original = '# My notes\n\ntext'; // deliberately unterminated
+  fs.writeFileSync(claudeMd, original);
+
+  const manifest = freshManifest();
+  applyClaudeAdapter(paths, { manifest });
+  const entry = manifest.entries.find((e) => e.kind === 'managed-block' && e.path === claudeMd);
+  assert.equal(entry.sepBefore, '\n\n', "append onto unterminated content records sepBefore '\\n\\n'");
+  fs.mkdirSync(paths.core, { recursive: true });
+
+  manifestLib.reverse(paths, manifest, { dryRun: false });
+
+  assert.equal(fs.readFileSync(claudeMd, 'utf8'), original, 'byte-identical — no trailing newline appears');
+});
+
+test('WP-147: a block relocated between two single-newline user lines uninstalls without fusing them (Table N row 4)', () => {
+  const paths = setup();
+  const claudeMd = path.join(paths.claudeDir, 'CLAUDE.md');
+  fs.writeFileSync(claudeMd, 'lineA\nlineB\n');
+  const manifest = freshManifest();
+  applyClaudeAdapter(paths, { manifest });
+
+  // Simulate the user cutting the block and pasting it between their two lines.
+  const written = fs.readFileSync(claudeMd, 'utf8');
+  const begin = written.indexOf('<!-- wienerdog:begin -->');
+  const end = written.indexOf('<!-- wienerdog:end -->') + '<!-- wienerdog:end -->'.length;
+  const block = written.slice(begin, end);
+  fs.writeFileSync(claudeMd, `lineA\n${block}\nlineB\n`);
+  fs.mkdirSync(paths.core, { recursive: true });
+
+  manifestLib.reverse(paths, manifest, { dryRun: false });
+
+  assert.equal(fs.readFileSync(claudeMd, 'utf8'), 'lineA\nlineB\n', 'no fusion: the user line boundary survives');
+});
+
+test('WP-147 T8: a Wienerdog-created CLAUDE.md is still DELETED after two re-syncs (sticky createdFile)', () => {
+  const paths = setup();
+  const claudeMd = path.join(paths.claudeDir, 'CLAUDE.md');
+  const manifest = freshManifest();
+
+  applyClaudeAdapter(paths, { manifest }); // create (file absent)
+  applyClaudeAdapter(paths, { manifest }); // re-sync 1 — replace branch passes createdFile:false
+  applyClaudeAdapter(paths, { manifest }); // re-sync 2
+
+  const entry = manifest.entries.find((e) => e.kind === 'managed-block' && e.path === claudeMd);
+  assert.equal(entry.createdFile, true, 'createdFile stays sticky-true across re-syncs');
+  fs.mkdirSync(paths.core, { recursive: true });
+
+  manifestLib.reverse(paths, manifest, { dryRun: false });
+
+  assert.equal(fs.existsSync(claudeMd), false, 'the file we created is REMOVED, not truncated to empty');
+});
+
+test('WP-147 T10: delete-and-reinsert updates the recorded separators — both directions', () => {
+  // (a) sync "foo" → hand-delete the block leaving "foo\n" → sync → uninstall.
+  {
+    const paths = setup();
+    const md = path.join(paths.claudeDir, 'CLAUDE.md');
+    fs.writeFileSync(md, 'foo');
+    const manifest = freshManifest();
+    applyClaudeAdapter(paths, { manifest }); // append: records sepBefore '\n\n'
+    fs.writeFileSync(md, 'foo\n'); // hand-delete the block (NOT via applyManagedBlock)
+    applyClaudeAdapter(paths, { manifest }); // re-insert: must UPDATE the recorded bytes
+    const entry = manifest.entries.find((e) => e.kind === 'managed-block' && e.path === md);
+    assert.equal(entry.sepBefore, '\n', "(a) recorded sepBefore updated to '\\n' by the re-insertion");
+    fs.mkdirSync(paths.core, { recursive: true });
+    manifestLib.reverse(paths, manifest, { dryRun: false });
+    assert.equal(fs.readFileSync(md, 'utf8'), 'foo\n', "(a) the user's newline survives");
+  }
+  // (b) sync "foo\n" → hand-delete the block leaving "foo" → sync → uninstall.
+  {
+    const paths = setup();
+    const md = path.join(paths.claudeDir, 'CLAUDE.md');
+    fs.writeFileSync(md, 'foo\n');
+    const manifest = freshManifest();
+    applyClaudeAdapter(paths, { manifest }); // append: records sepBefore '\n'
+    fs.writeFileSync(md, 'foo'); // hand-delete, leaving the file unterminated
+    applyClaudeAdapter(paths, { manifest }); // re-insert: must UPDATE the recorded bytes
+    const entry = manifest.entries.find((e) => e.kind === 'managed-block' && e.path === md);
+    assert.equal(entry.sepBefore, '\n\n', "(b) recorded sepBefore updated to '\\n\\n' by the re-insertion");
+    fs.mkdirSync(paths.core, { recursive: true });
+    manifestLib.reverse(paths, manifest, { dryRun: false });
+    assert.equal(fs.readFileSync(md, 'utf8'), 'foo', '(b) no extra newline appears');
+  }
 });

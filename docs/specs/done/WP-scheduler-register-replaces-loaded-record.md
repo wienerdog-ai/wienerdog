@@ -1,7 +1,7 @@
 ---
 id: WP-scheduler-register-replaces-loaded-record
 title: A register that cannot verify what the OS now holds must not report success
-status: Draft
+status: Done
 model: sonnet
 size: M
 depends_on: []
@@ -356,7 +356,8 @@ not change the chain.
      and package-lock.json. Everything else must be listed. -->
 
 **Sizing.** Two new non-exported helpers plus four edited call sites in one file,
-one new Proposed ADR, one test file extended. **M** — one session.
+one new Proposed ADR, one test file extended, plus **one existing assertion in a
+second test file** (D6, the 2026-08-02 boundary amendment below). **M** — one session.
 
 | Action | Path | Notes |
 |--------|------|-------|
@@ -364,9 +365,12 @@ one new Proposed ADR, one test file extended. **M** — one session.
 | modify | docs/adr/README.md | **D0b** — the ADR index row for 0037. Written already by the architect alongside the ADR; the implementer does not touch it. Listed because it **is** in this branch's diff, and a Deliverables table that omits a changed file is exactly the boundary-gate failure this row fixes. |
 | modify | src/scheduler/generators.js | **D0** — add **four** names to `module.exports`, and add **two** new pure parsers (`launchdLoadedCalendar`, `launchdLoadedEnv` — D1b). Existing names exported unchanged:: `launchdLoadedArgs` (`:679-689`, used internally at `:787`) and `jobLaunchArgs` (`:208`, used internally at `:355`); the two new parsers are exported with them. Structural, not an API promise — the WP-114 precedent for `repairCatchup`. Audited, not assumed (see "Export audit" in Implementation notes): `catchupLaunchArgs` (`:1030`) and `loadedEntryTargets` (`:1007`) are **already** exported and need no change. |
 | modify | src/cli/schedule.js | **D1, D2, D3, D4 and D5** — the complete set, reconciled against the Implementation notes and the ACs: **D1** `darwinLoadedVerdict` + `ensureDarwinEntryRegistered` (new, non-exported, incl. the `plutil` preflight, the tri-state verdict, `verifyLoaded` and the rollback); **D2** the darwin per-job arm (`:429-431`, Table A row 1); **D3** `ensureCatchup` (`:314-317`, row 2); **D4** the linux arm (`:456-466`, row 3); **D5** `add()`'s guard at `:882` — drop the `changed &&` conjunct so it throws on ANY unloaded outcome (**required by AC11**; a cell that stopped at D4 would leave the user-facing false-success shipped). Nothing beyond those five — no probe, no heal, no notice string, no Windows path, and **`darwinReplaceEntry` itself is not edited** (it stays the heal path's primitive). |
-| modify | tests/unit/scheduler-schedule.test.js | **T1, T2, T2b, T2c, T2d, T2e, T2f, T2g, T3, T4, T5, T6, T7** — the complete Test index, enumerated rather than range-abbreviated because `T3-T7` silently excluded T2c/T2d/T2e (the `plutil` preflight, its existence gate, and the post-bootstrap verify). Plus the **four** existing assertions enumerated in AC6 — no others. |
+| modify | tests/unit/scheduler-schedule.test.js | **T1, T2, T2b, T2c, T2d, T2e, T2f, T2g, T3, T4, T5, T6, T7** — the complete Test index, enumerated rather than range-abbreviated because `T3-T7` silently excluded T2c/T2d/T2e (the `plutil` preflight, its existence gate, and the post-bootstrap verify). Plus, **and only**, what **Table E** enumerates (amended 2026-08-02, round-1 finding 3): its **five** existing-assertion rows and its authorized setup-only `fakeLaunchd` loader swap at the ten sites it lists. The new `fakeLaunchd` helper itself is part of the T-test scaffolding. **Table E is the authority — this cell deliberately carries no site list of its own**, because the earlier "four existing assertions" wording here was one of the mirrors that stayed stale while the branch carried five. T3 case (xxii) and T5 additionally carry **Table N**'s two notice assertions. |
+| modify | tests/unit/init.test.js | **D6 / T8 — architect boundary amendment, 2026-08-02.** ONE existing assertion in the single test `init --fresh-vault schedules the nightly dream and surfaces it (ADR-0014)`: its `/catches up automatically/i` match becomes platform-aware, because under `WIENERDOG_LOADER_NOOP=1` the darwin leg now correctly reports `loaded: false`. Added post-hoc — the collision was discovered at `npm test` time, not at spec time; the full record, the decision and the rejected alternative are in Implementation notes → **D6**. Nothing else in this file: no other test, no helper, no `tempEnv`/`run` change. |
 
 Not deliverables, deliberately: `src/scheduler/status.js`,
+`src/scheduler/spawn.js` (**D6's rejected alternative** — the NOOP seam is never
+taught to fabricate a readback; see Implementation notes → D6),
 `src/scheduler/launcher.js`, `src/cli/sync.js` (§10), `src/cli/doctor.js`,
 `docs/adr/0018-windows-scheduled-dreaming.md` (owner-signed; ADR-0037 amends it
 from a new file — never edit it),
@@ -768,28 +772,169 @@ branch (the recurring failure mode in this chain — see the gate-3 row).
 | a degraded linux reload is never retried | move the reload block back inside `if (changed)` | T6 |
 | windows stops verifying before skipping | delete the `windowsLoadedTaskMatches` call | AC7's preservation assertion |
 
+### Table E — the existing-assertion change set in `tests/unit/scheduler-schedule.test.js` (canonical; +2026-08-02)
+
+**This table is the single place the existing-test blast radius is decided.** AC6,
+V3 and the `tests/unit/scheduler-schedule.test.js` Deliverables cell all defer to
+it; none of them restates a site. It was extracted here on 2026-08-02 because the
+same reconciliation D6 got for `tests/unit/init.test.js` was owed to this file:
+the round-1 review found a **fifth** forced assertion change and a ten-site
+setup-loader swap that AC6's "exactly FOUR" contradicted. Verified against the
+branch diff (`git diff origin/main...HEAD -- tests/unit/scheduler-schedule.test.js`),
+not against the enumeration it replaces.
+
+Line numbers are **`origin/main`'s** — the pre-change file, the anchor AC6 has
+always used — with the branch line second for navigation. Each changed assertion
+is **renamed** to state the new contract and cites ADR-0037 in a comment.
+
+| # | main | branch | Existing test (main line of its `test(` line) | What changes |
+|---|---|---|---|---|
+| 1 | `:365` | `:547-550` | `add registers the platform entry, records manifest, saves the job` (`:333`) | `assert.deepEqual(calls[0], ['launchctl','bootstrap',…])` — the readback now precedes it, so `calls[0]` is the `print` and a second assertion pins the `bootstrap` at `calls[1]`. **This one changes because of the readback design; an earlier draft of this spec asserted it would not.** |
+| 2 | `:500` | `:696` | `registerPlatform warns on a NONZERO daemon-reload …` (`:474`) | the `assert.equal(res.loaded, true, …)` whose message says the verdict "stays gated only on `enable --now`" ⇒ **`false`**, message rewritten to `reloadOk && enableOk` |
+| 3 | `:524` | `:722` | `registerPlatform warns on a MISSING ({status:null}) daemon-reload …` (`:504`) | the same assertion in the sibling test ⇒ **`false`** |
+| 4 | `:389-397` | `:580-593` | `a second identical add is idempotent (no OS call)` (`:389`) | **renamed** to `(no MUTATING OS call)`; `assert.equal(calls2.length, 0, …)` ⇒ `2`; **one new** assertion that every recorded call is non-mutating. Rewritten per AC5(iii) |
+| 5 | `:1019-1030` | `:1226-1243` | `repointSchedules after add is a no-op (changed:0, no OS call)` (`:1019`) | **(+2026-08-02)** **renamed** to `(changed:0, no MUTATING OS call)`; `assert.equal(calls.length, 0, 'no OS reload on an unchanged repoint')` ⇒ `2`; **one new** non-mutating assertion |
+
+**Row 5 is not a discovery, it is the consequence AC5(iii) already stated, at the
+site AC6 forgot.** `repointSchedules` is the **second** unchanged-register surface
+in this file — structurally identical to row 4's `add()` surface, reached by the
+same Table A third-column recount (darwin ⇒ two read-only `print`s, zero mutating
+calls). A verified skip costs one readback per site *wherever* it is driven from,
+so any assertion pinning "zero OS calls on an unchanged register" had to move.
+Row 4 and row 5 are one class with two members; enumerating one and not the other
+is exactly the range-abbreviation failure this spec greps for, in prose form.
+
+**`:982` (the heal path) is NOT in this table and must not be touched.** No
+existing assertion outside Table E's five rows may be edited.
+
+#### Table E authorization — the setup-only `fakeLaunchd` loader swap (+2026-08-02)
+
+`fakeLaunchd(paths)` is a **new helper this WP adds** (branch `:265`): a stateful
+launchd double that remembers what a `bootstrap` loaded and answers a later
+`print` from it, returning `{status:113}` for an absent label. Ten pre-existing
+tests have their **setup** loader swapped from the blind `() => ({ status: 0 })`
+to it.
+
+**The swap is FORCED, not stylistic, and it is the same NOOP-collision class as
+D6 — one file over.** A blind `{status:0}` carries no `stdout`, so
+`darwinLoadedVerdict` returns `'indeterminate'`, `ensureDarwinEntryRegistered`
+returns `false`, and after D5 `add()` **throws during the test's own setup** —
+the test dies before it reaches the subject it was written to check. These tests
+are not about registration; they are about manifests, descriptors, `remove`, and
+`list --json`, and they need a loader that is merely *honest* rather than blind.
+
+**It changes NO assertion.** Every assertion in these ten tests other than Table E
+rows 1, 4 and 5 stays byte-identical. Exhaustive site list, main line numbers:
+
+| main line(s) | Enclosing test (main line of its `test(` line) |
+|---|---|
+| `:338` | `add registers the platform entry, records manifest, saves the job` (`:333`) — also Table E row 1 |
+| `:392`, `:395` | `a second identical add is idempotent` (`:389`) — also Table E row 4 |
+| `:401` | `add then manifest.reverse DEFERS config.yaml … (WP-088)` (`:399`) |
+| `:420` | `remove runs the unload, deletes files, drops entries and the job` (`:418`) |
+| `:1021`, `:1025` | `repointSchedules after add is a no-op` (`:1019`) — also Table E row 5 |
+| `:1035` | `repointSchedules rewrites a stale embedded node path (changed:1)` (`:1033`) |
+| `:1084` | `ensureDreamSchedule schedules dream once at 03:30` (`:1081`) |
+| `:1131`, `:1132` | `list --json reports jobs with watermarks` (`:1129`) |
+| `:1185`, `:1199` | `add writes a 0600 job descriptor … (WP-156)` (`:1181`) |
+| `:1228` | `repointSchedules refreshes the descriptor … (WP-156)` (`:1224`) |
+
+**Every other `{ status: 0 }` loader in the file stays unchanged, and that is the
+boundary.** The list below is **complete, and its completeness is arithmetic
+rather than assertion** (corrected 2026-08-02, round-2 review note 1 — an earlier
+form said "every other" over a 16-entry list that was actually partial, which is
+the prose form of the range-abbreviation failure this table warns about):
+
+```bash
+git show origin/main:tests/unit/scheduler-schedule.test.js | grep -c "{ status: 0 }"
+```
+
+**49** on `main`. **14** of them are the swapped sites in the table above
+(`:338`; `:392`, `:395`; `:401`; `:420`; `:1021`, `:1025`; `:1035`; `:1084`;
+`:1131`, `:1132`; `:1185`, `:1199`; `:1228`). The remaining **35 stay unchanged**,
+and here they all are — `:106`, `:302`, `:321`, `:443`, `:461`, `:493`, `:495`,
+`:517`, `:519`, `:540`, `:579`, `:620`, `:643`, `:665`, `:729`, `:752`, `:773`,
+`:792`, `:827`, `:840`, `:855`, `:888`, `:899`, `:935`, `:953`, `:980`, `:993`,
+`:1050`, `:1066`, `:1104`, `:1106`, `:1118`, `:1139`, `:1216`, `:1238`.
+14 + 35 = 49, so the two lists together account for every site and neither can
+quietly lose a member.
+
+A swap at any site not in the table above is out of boundary. Note in particular
+`:461` (`remove nope` — no register runs) and `:1139` (`list --json`'s own
+invocation): adjacent to swapped sites in the same tests, and deliberately left
+alone, because the swap is owed only where a register actually executes.
+
+### Table N — where §8's notice is asserted, and where it is inherited (canonical; +2026-08-02)
+
+**Extracted on 2026-08-02 under the round-1 review's finding 1.** Five acceptance
+criteria said a fixture "pushes §8's byte-exact notice" and no new test asserted
+it; two new test titles claimed it while asserting `res.loaded === false` only.
+The obligation was scattered across five AC clauses with no canonical owner —
+exactly the contract-density shape ADR-0031 names. This table is now that owner.
+
+**§8's notice has exactly ONE push site.** `repointSchedules`, `schedule.js:583`
+(main; `:802` on the branch), inside an unconditional `if (!res.loaded)` — no
+platform branch, no second emitter of that string. Audited: the other two
+`did not accept it` strings in `schedule.js` (`:870`, `:895` on the branch) are
+**different** catch-up sentences, not §8's, and both sit inside **`repairCatchup`**
+(branch `:832`) — the heal-gated primitive, not `ensureCatchup` (attribution
+corrected 2026-08-02, round-2 review note 2; the substantive claim is unchanged).
+This WP does not change any of the three. **Consequence, and the reason this table exists:** a
+fixture proves the notice **only if it drives `repointSchedules`**. A fixture that
+calls `registerPlatform` directly can prove `loaded === false` and nothing more —
+which is what all five clauses were resting on.
+
+| # | Leg | Fixture | Notice obligation |
+|---|---|---|---|
+| 1 | win32 | `tests/unit/scheduler-schedule.test.js:1112` — **pre-existing, unchanged by this WP** | **ASSERTED.** `r.notices.some((n) => /"dream".*did not accept it/.test(n))`, driven through `schedule.repointSchedules(…, { platform: 'win32' })`. It is the shape rows 2 and 3 copy |
+| 2 | darwin | **T3 case (xxii)** — benign-only drift (AC3 case (xxii)) | **MUST ASSERT.** After its `registerPlatform` leg, drive `schedule.repointSchedules` over the same `paths`/`manifest`/loader and assert row 1's regex. This is the **only** proof that the darwin leg's `loaded:false` reaches a human |
+| 3 | linux | **T5** — degraded reload (AC5 (i)) | **MUST ASSERT.** Same shape, `platform: 'linux'`, the degraded-reload loader |
+| 4 | darwin | **T2b** (AC2 d), **T2f** (AC2 g2), **T2e** (AC2 k) | **INHERITED — assert `res.loaded === false` only, and add NO notice assertion.** The notice follows from row 2 plus the single unconditional push site: these fixtures reach it through the *same* `!res.loaded` gate row 2 exercises, so re-driving a repoint in each would re-test one line of `schedule.js` three more times while tripling three already-intricate rollback fixtures |
+
+**RULING (2026-08-02, architect) — the five AC clauses are KEPT, not struck.**
+§8's notice **is** the user-facing half of ADR-0037's postcondition: "must not
+report success" is only observable because something is said out loud. Striking
+the clauses would leave this WP shipping a changed `loaded` return value whose
+only asserted user-visible consequence sits on **win32 — the one leg this WP does
+not touch** — which is the failing-outside-our-own-observability signature named
+in Context, reproduced inside the fix for it. The remedy is therefore the
+reviewer's preferred one, bounded by rows 2 and 3: **two** new notice assertions,
+one per fixed leg, driving `repointSchedules` and mirroring `:1112`. The
+remaining three clauses keep their notice text as a stated consequence and are
+discharged by row 4's inheritance argument — recorded here so it is an argued
+disposition, not a silent gap.
+
+**Test titles must match what they assert.** T3 case (xxii)'s and T5's titles
+already say "+ notice"; rows 2 and 3 are what make those titles true. Do **not**
+resolve this by editing the titles.
+
 ### Mirrored Surface Checklist
 
-Tables A and B are the single place these facts are decided. Registered mirrors —
+Tables A and B — and, since 2026-08-02, **Table E** (the existing-assertion change
+set) and **Table N** (where §8's notice is asserted) — are the single place these
+facts are decided. Registered mirrors —
 **including all three Deliverables cells**, which are the permission boundary the
 implementer reads first (the lesson from `WP-scheduler-node-path-durability`
 rounds 2-3, where an unregistered Deliverables cell shipped a wrong test set):
 
 - [ ] **(+r3/r5)** Deliverables cell for `src/scheduler/generators.js` — D0 exports **four** names (`launchdLoadedArgs`, `jobLaunchArgs`, and the two new parsers `launchdLoadedCalendar`/`launchdLoadedEnv`) and adds the two parser bodies (D1b). Mirrors **Table A2**.
 - [ ] Deliverables cell for `src/cli/schedule.js` (the four D-sites — Table A rows 1-3)
-- [ ] Deliverables cell for `tests/unit/scheduler-schedule.test.js` (T1, T2, T2b, T2c, T2d, T2e, T3, T4, T5, T6, T7 + AC6's four assertions)
+- [ ] Deliverables cell for `tests/unit/scheduler-schedule.test.js` (T1, T2, T2b, T2c, T2d, T2e, T3, T4, T5, T6, T7 + whatever **Table E** enumerates — the cell carries no site list of its own)
+- [ ] **(+2026-08-02)** **Table E** — the existing-assertion change set (five rows) and its authorized setup-only `fakeLaunchd` swap. Its registered mirrors are **AC6**, **AC5(iii)**, **V3**'s read-and-confirm instruction, and the `tests/unit/scheduler-schedule.test.js` Deliverables cell. Each of those defers to the table and restates no site
+- [ ] **(+2026-08-02)** **Table N** — where §8's notice is asserted (rows 2-3) and where it is inherited (row 4). Its registered mirrors are **AC2(d)**, **AC2(g2)**, **AC2(k)**, **AC3 case (xxii)**, **AC5(i)**, Test index rows **T3** and **T5**, the `tests/unit/scheduler-schedule.test.js` Deliverables cell, and **V9**
+- [ ] **(+2026-08-02)** Deliverables cell for `tests/unit/init.test.js` (D6 / T8 — the one platform-aware assertion). Mirrors **Table A** rows 1 and 3: darwin verifies and so can report `loaded:false` under a blind seam, linux does not verify and so still reports `loaded:true`. Its other registered mirrors are Implementation notes → **D6**, **AC12**, Test index **T8**, and **V8**.
 - [ ] Deliverables cell for `docs/adr/0037-…` (the rule — Table A's spine)
 - [ ] "Exact contracts" — both JSDoc blocks and the `ensureDarwinEntryRegistered` body
 - [ ] Current state §2 (rows 1-2), §3 (the teardown guard), §4 (row 3), §6 (row 4), §7 (the readback machinery + the measured exit codes), §9 (why not a cache)
 - [ ] **(+r4)** Implementation notes → D5 (`add()`'s guard) and AC11 — the CLI-surface mirror of ADR-0037's postcondition
 - [ ] **(+r4)** ADR-0037's Consequences — the rollback consequence and the withdrawn crash-marker promise both mirror this spec's rollback section
 - [ ] Implementation notes → Export audit, D0, D0b, D1, D1b, D2, D3, D4, D5, and **"Rollback — OWNER-DIRECTED"** (its four contract properties + the crash-window table)
-- [ ] Acceptance criteria AC1, AC2 (incl. its rollback set), AC3, AC4, AC5 (rows 1-3), AC6 (the four changed assertions), AC7 (row 4 preservation), AC8 (the marker), AC9, AC10, AC11 (D5)
-- [ ] Verification commands V2-V6
+- [ ] Acceptance criteria AC1, AC2 (incl. its rollback set), AC3, AC4, AC5 (rows 1-3), AC6 (**defers to Table E**), AC7 (row 4 preservation), AC8 (the marker), AC9, AC10, AC11 (D5)
+- [ ] Verification commands V2, V3, V4, V5, V6, V6b, V9 (enumerated, not range-abbreviated — the same insertion growth that produced V6b and V9)
 - [ ] Table B rows, each naming its Table A / A2 row
 - [ ] **(+r5)** Current state §7b (the executed readback evidence behind Table A2 — four facts) and Table A2 itself
 - [ ] **(+r6)** **Table A1** (the skip decision tree and the allowed bookkeeping) — mirrored by the contract body's step (a), D1b, AC1's Table A1 fixture, AC5's recount, and the Table B live-match rows
-- [ ] Test index rows T1, T2, T2b, T2c, T2d, T2e, T3, T4, T5, T6, T7
+- [ ] Test index rows T1, T2, T2b, T2c, T2d, T2e, **T2f**, **T2g**, T3, T4, T5, T6, T7, **T8** (**+2026-08-02** — T2f/T2g/T8 were absent from this line while the Deliverables cell listed all three: the same enumeration drift, in the mirror registry itself)
 - [ ] The banner's cross-spec mapping table — **both** macOS sites map to that spec's Table C row 5
 - [ ] Definition of done items 5 (that spec's 0a) and 6 (the ADR signature gate)
 
@@ -806,6 +951,25 @@ it. Round 13's run found three defects: the `schedule.js` cell stopped at D4 whi
 AC11 requires D5; the test cell's `T3-T7` range silently excluded T2c/T2d/T2e; and
 `src/scheduler/generators.js` was listed as **both** a deliverable and a
 not-deliverable.
+
+**Added 2026-08-02 after the round-1 review — the two layers a pre-implementation
+pass structurally cannot run, and which therefore run on every post-implementation
+revision instead:**
+
+- **diff↔enumeration.** Every counted claim about existing code ("exactly FOUR
+  existing assertions change") is re-derived from
+  `git diff origin/main...HEAD -- <file>` and never from the previous draft.
+  Finding 3 was a count written before the code existed and never re-derived; the
+  branch carried five assertion sites and a ten-site setup-loader swap. Counts
+  about a tree you have not diffed are estimates wearing a contract's clothes.
+  **Table E** is where this layer's output now lives.
+- **verification↔contract.** Every grep in "Verification steps" is executed
+  against a tree that satisfies the spec's *other* mandates — in particular the
+  JSDoc in "Exact contracts". Finding 2 was two greps that a spec-conforming
+  branch fails **because** it conformed: the mandated JSDoc names
+  `ensureWindowsTaskRegistered` and `loadedEntryTargets`, and the greps matched
+  prose. A verification command that a correct implementation fails is worse than
+  no command, because it teaches the implementer to reword the contract.
 
 **The range-abbreviation check, with its grep.** Round 13 enumerated the two
 Deliverables cells and wrote the lesson — and left the *same* abbreviation standing
@@ -1121,6 +1285,101 @@ which is also the evidence that `add()` is the outlier:
 - `add()` (`schedule.js:882`) is the **only** `registerPlatform` caller gated on
   `changed`. Audited: those are all four call sites (`:380` definition, `:575`,
   `:813`, `:879`).
+
+### D6 — the `WIENERDOG_LOADER_NOOP` collision (architect boundary amendment, 2026-08-02)
+
+**This section was added after the implementer finished.** It is a spec bug being
+paid for, not a scope change the implementer chose: the collision below was
+invisible at spec time and surfaced only at full-`npm test` time, in a file this
+table did not list. Recorded here in full so the next reader does not have to
+reconstruct it from a PR body.
+
+**The collision, verified firsthand.** `tests/unit/init.test.js:115` runs a REAL
+subprocess of `bin/wienerdog.js init --fresh-vault --yes` with
+`WIENERDOG_LOADER_NOOP=1`. That seam (`src/scheduler/spawn.js:25`) answers EVERY
+scheduler spawn with a blind `{status:0}` and **no `stdout`**:
+
+```js
+  if (process.env.WIENERDOG_LOADER_NOOP) return { status: 0 };
+```
+
+Under Table A row 1 the darwin per-job register now reads the entry back with
+`launchctl print` and requires a `'match'` verdict. A `{status:0}` with no
+`stdout` parses to `'indeterminate'` — never `'match'` — so
+`ensureDarwinEntryRegistered` returns `false`, `ensureDreamSchedule` returns
+`{scheduled:false, reason:'load-failed'}` (`schedule.js:823`), and `init`'s
+summary takes the `load-failed` branch (`src/cli/init.js:199`) instead of the
+`scheduled` branch (`:192-195`). The test's `/catches up automatically/i`
+assertion is in that `scheduled` branch. Executed on this branch, the ONLY
+delta in `init --fresh-vault`'s entire stdout against `origin/main` is that
+three-line success block collapsing to the one-line degraded notice — nothing
+else in the run moved.
+
+**This is the postcondition working exactly as designed.** Nothing was verified,
+so nothing may claim success. The notice the user now sees under a blind seam is
+the correct output, and the WP-066 catch-up reassurance would be a false promise
+there: `init` cannot promise launchd will catch up on an entry it has no
+evidence launchd holds. Read the other way round, the pre-amendment assertion was
+never testing real scheduling — it was resting on the seam's blindness being
+indistinguishable from success, which is precisely the
+failing-outside-our-own-observability signature named in Context.
+
+**The fix is PLATFORM-AWARE, and that is not incidental.** Only the legs that
+verify can report `loaded:false` under a blind seam:
+
+| leg | under `WIENERDOG_LOADER_NOOP=1` | why | `init` summary |
+|---|---|---|---|
+| darwin (Table A rows 1-2) | `loaded:false` | the readback runs and yields `'indeterminate'` | the `load-failed` notice |
+| linux (Table A row 3) | `loaded:true` | Table A row 3 specifies **no** readback — `reloadOk && enableOk` are both `{status:0}` | the `scheduled` block |
+| win32 (Table A row 4) | `loaded:true` on a fresh install | `changed` is true, so `ensureWindowsTaskRegistered` skips its readback and returns from `/create` | the `scheduled` block |
+
+CI runs `ubuntu-latest` **and** `macos-latest` (`.github/workflows/ci.yml:33`), so
+a single unconditional assertion cannot be correct on both. The assertion branches
+on `process.platform === 'darwin'`.
+
+**The darwin leg asserts the NEGATIVE too** (`doesNotMatch(/catches up
+automatically/i)`) deliberately: that turns this test into a tripwire against the
+rejected alternative below. If anyone later teaches the seam to fabricate a
+matching readback, this assertion goes red and forces the conversation.
+
+**REJECTED ALTERNATIVE — extending `WIENERDOG_LOADER_NOOP` in
+`src/scheduler/spawn.js` so a NOOP `launchctl print` returns canonical-matching
+stdout.** Rejected, and rejected in this WP's own terms:
+
+1. **It fabricates the exact evidence the postcondition exists to require.**
+   ADR-0037's rule is *a register that cannot verify what the OS now holds must
+   not report success*. A seam that manufactures a `'match'` readback makes the
+   register report success from evidence it invented about an OS call that never
+   happened. That is the anti-pattern this WP kills, reintroduced one layer down
+   and harder to see, because it would then be baked into the chokepoint rather
+   than into any one call site.
+2. **It would make the postcondition untestable-by-construction on every NOOP
+   path.** All ~15 NOOP-using test files would permanently observe "verified",
+   so no subprocess-driven test could ever again detect a genuine regression in
+   the readback. One honest assertion change is strictly cheaper than blinding
+   the whole seam.
+3. **It contradicts the seam's documented contract and an existing in-tree
+   precedent.** `spawn.js`'s own JSDoc calls NOOP "the existing neutralizer; a
+   test that has deliberately opted out of real scheduling" — a *neutralizer*,
+   not a simulator. And `tests/unit/scheduler-entry-identity.test.js:396-407`
+   already pins the read side of exactly this question: under
+   `WIENERDOG_LOADER_NOOP=1` it asserts `defaultProbe(…) === 'unknown'`. NOOP
+   already means *you learn nothing*. Option (b) would put the two read paths in
+   direct contradiction.
+4. **It is not small.** To fabricate a matching `launchctl print`, the seam would
+   have to know the label→plist mapping, the live config and the rendered
+   canonical bytes — i.e. reimplement the generator inside the ONE scheduler
+   chokepoint that ADR-0028 hardened, in service of one assertion.
+
+**Blast radius, confirmed by grep, not by assumption.** The ~15 other
+NOOP-using files were checked for register-success assertions
+(`catches up automatically|is scheduled for|did not accept|loaded: *true|\.loaded`).
+Two files hit and neither is affected: `tests/integration/adopt-e2e.test.js:422`
+is a comment, and `tests/unit/scheduler-entry-identity.test.js`'s hits are
+unit-level `loadedEntryTargets` calls over explicit stdout fixtures (no seam
+involved) plus one assertion on a *failure* notice (`:815`). `init.test.js` is
+the only file whose meaning depends on the seam implying success — which is why
+it is the only one in this table.
 
 ### Rollback — OWNER-DIRECTED, and it is the contract, not a residual
 
@@ -1483,7 +1742,9 @@ mock `process.platform` — and no test may touch a real OS scheduler
       argv is what launchd is asked to load again;
       (d) the result is **`loaded: false`** and `repointSchedules` pushes §8's
       byte-exact notice — rollback restores scheduling, it does **not** make the
-      replacement a success;
+      replacement a success. **Table N row 4 — INHERITED (+2026-08-02): assert
+      `loaded: false` only and add NO notice assertion to this fixture;** the
+      notice is proved once per leg, at Table N rows 2 and 3;
       (e) with `priorBytes === null` (no plist existed) there is no restore attempt
       and the result is still `loaded: false`;
       (f) **the divergence case (CX-2)** — `changed === false` with the disk already
@@ -1504,7 +1765,8 @@ mock `process.platform` — and no test may touch a real OS scheduler
       same path, and the teardown proceeds. Assert the staleness guard **declines**
       to restore (the file still holds the concurrent bytes, byte for byte), no
       restoring `bootstrap` is issued, the result is `loaded: false`, and §8's
-      notice fires;
+      notice fires (**Table N row 4 — INHERITED (+2026-08-02)**: assert
+      `loaded: false` only; add NO notice assertion to this fixture);
       (h) **the preflight rejects (T2c)** — `existsSync(PLUTIL)` true and the
       loader answers `{status: 1}` for `[PLUTIL,'-lint',plistPath]`, with a loaded
       mismatched record present ⇒ `loaded: false` and **no `bootout` anywhere**.
@@ -1523,7 +1785,9 @@ mock `process.platform` — and no test may touch a real OS scheduler
       an unparseable readback) ⇒ **`loaded: false`** with §8's notice and **no
       `bootout`**. This is the branch a round-9 draft returned `true` from without
       any readback at all. Run it twice, once with a mismatching record and once
-      with an unparseable one, since both must fail closed;
+      with an unparseable one, since both must fail closed. **Table N row 4 —
+      INHERITED (+2026-08-02): assert `loaded: false` only; add NO notice
+      assertion to this fixture;**
       (l) the same shape but the trailing `print` **matches** ⇒ `loaded: true`,
       call order `print` → `bootstrap` → `print`.
       **Every fixture in this set pins `verdict === 'mismatch-fatal'`** — that is now the
@@ -1593,7 +1857,14 @@ mock `process.platform` — and no test may touch a real OS scheduler
       `changed` is true, and the `bootstrap` fails because the label is loaded.
       Assert: verdict `'mismatch-benign'`, **no `bootout` anywhere in the call
       list**, the pre-existing record therefore still loaded, `loaded: false`, and
-      §8's notice. Run the sibling too — the same shape with a **FATAL** field
+      §8's notice. **Table N row 2 — MUST ASSERT (+2026-08-02): this is the
+      darwin leg's ONLY notice proof.** After the `registerPlatform` leg, drive
+      `schedule.repointSchedules` over the same `paths`/`manifest`/loader and
+      assert `r.notices.some((n) => /"dream".*did not accept it/.test(n))`,
+      mirroring the pre-existing win32 fixture at `:1112`. A `registerPlatform`-
+      only fixture proves `loaded: false` and nothing about the notice, because
+      the notice's single push site is inside `repointSchedules` (Table N).
+      Run the sibling too — the same shape with a **FATAL** field
       differing (a stale env binding) ⇒ verdict `'mismatch-fatal'` and the replace
       path IS taken — so the pair pins the tier boundary from both sides;
       (xiv) **the indeterminate fixture (CX-1)** — `print` exits **0** (a record IS
@@ -1622,31 +1893,45 @@ mock `process.platform` — and no test may touch a real OS scheduler
       (i) linux, degraded reload (`{status:1}`) with a successful `enable --now` ⇒
       `loaded: false` (on `main`: `true`), and `repointSchedules` pushes §8's
       byte-exact notice; `{status:null}` and a missing result also count as
-      failure. (T5)
+      failure. **Table N row 3 — MUST ASSERT (+2026-08-02): T5 must DRIVE
+      `schedule.repointSchedules(…, { platform: 'linux' })` with the degraded-
+      reload loader and assert the notice regex**, mirroring the pre-existing
+      win32 fixture at `:1112`. This is the linux leg's only notice proof; the
+      `registerPlatform`-only form asserts `loaded: false` and nothing more. (T5)
       (ii) linux, `changed` false ⇒ the reload **and** `enable --now` still run —
       exactly those two `systemctl` calls and no others. (T6)
-      (iii) the shipped invariant test at `:389-397` stays green under its
-      rewritten contract (AC6 item 4), and is the per-platform statement of Table
+      (iii) the shipped invariant tests at `:389-397` **and `:1019-1030`** stay
+      green under their rewritten contracts (**Table E rows 4 and 5** — the second
+      of those was added 2026-08-02; `repointSchedules` is the second unchanged-
+      register surface and the recount below applies to it identically), and are
+      the per-platform statement of Table
       A's third column, **recounted from the Table A1 decision tree**: darwin ⇒
       **two** read-only `print`s (per-job + catch-up, per AC3's call-count scoping)
       and **zero** mutating calls — and this now holds whether `changed` is false
       **or** true, since the live match wins either way, which is the property
       Codex's missing-manifest-entry fixture pins; linux ⇒ exactly
       `daemon-reload` + `enable --now`, both idempotent.
-- [ ] **AC6 (exactly FOUR existing assertions change, each enumerated).** No other
-      existing assertion in `tests/unit/scheduler-schedule.test.js` may be edited.
-      Each changed one is **renamed** to state the new contract and cites ADR-0037
-      in a comment:
-      1. `:365` — `assert.deepEqual(calls[0], ['launchctl','bootstrap',…])`. The
-         readback now precedes it, so `calls[0]` is the `print` and the `bootstrap`
-         moves to `calls[1]`. **This one changes because of the readback design; an
-         earlier draft of this spec asserted it would not.**
-      2. `:500` — the `assert.equal(res.loaded, true, …)` whose message says the
-         verdict stays gated only on `enable --now` ⇒ must become `false`.
-      3. `:524` — the same assertion in the sibling `{status:null}` test ⇒ `false`.
-      4. `:389-397` — "a second identical add is idempotent (no OS call)" ⇒
-         rewritten per AC5(iii) and **renamed** to say "no MUTATING OS call".
-      `:982` (the heal path) is **not** in this set and must not be touched.
+- [ ] **AC6 (the existing-assertion change set — FIVE sites, plus one authorized
+      setup-only swap; amended 2026-08-02). Canonical: Table E.** Every changed
+      site and every authorized setup-loader swap in
+      `tests/unit/scheduler-schedule.test.js` is enumerated in **Table E** and in
+      no other place; this criterion does not restate them, because a restated
+      canonical is how the earlier "exactly FOUR" survived un-updated while the
+      branch carried five. Assert against Table E:
+      1. **exactly the five rows of Table E** change an assertion — no existing
+         assertion outside them may be edited, and `:982` (the heal path) is not
+         among them;
+      2. **exactly the sites listed in Table E's authorization block** have their
+         setup loader swapped from `() => ({ status: 0 })` to `fakeLaunchd(paths)`,
+         and **no assertion changes at any of them** beyond Table E rows 1, 4 and 5;
+      3. every other `{ status: 0 }` loader named in that block's
+         stays-unchanged list is untouched.
+      **The round-1 review's finding 3 is what this criterion now records:** the
+      fifth site (Table E row 5, the `repointSchedules` no-op) and the ten-site
+      swap were **forced** — the swap is a setup-time collision of the same class
+      as D6, and row 5 is the direct consequence AC5(iii) already documented at
+      the second unchanged-register surface. They were reported honestly by the
+      implementer; the spec, not the implementation, was wrong.
 - [ ] **AC7 (Table A row 4 — Windows preservation).** `ensureWindowsTaskRegistered`
       and `windowsLoadedTaskMatches` are unchanged and absent from the diff (V5);
       the existing Windows registration assertions pass unmodified.
@@ -1673,6 +1958,16 @@ mock `process.platform` — and no test may touch a real OS scheduler
       unmodified: `ensureDreamSchedule` (`:823`) and `repointSchedules` (`:583`)
       both branch on `!res.loaded` unconditionally.
 - [ ] **AC10 (mutation matrix).** Every Table B row demonstrated red; output pasted.
+- [ ] **AC12 (D6 — the NOOP boundary collision, added 2026-08-02).** In
+      `tests/unit/init.test.js`, the single test
+      `init --fresh-vault schedules the nightly dream and surfaces it (ADR-0014)`
+      branches on `process.platform === 'darwin'`: darwin asserts the
+      `load-failed` notice is present **and** that `/catches up automatically/i`
+      is **absent**; every other platform asserts the reassurance as before. The
+      unconditional `/dreaming/i` and the three config assertions are unchanged,
+      and no other test in the file is touched. `src/scheduler/spawn.js` is
+      **not** in the diff — the seam is never taught to fabricate a readback
+      (D6's rejected alternative). Full `npm test` is green (V8).
 
 ### Test index
 
@@ -1680,7 +1975,7 @@ mock `process.platform` — and no test may touch a real OS scheduler
 |----|------|----------------|
 | T1 | tests/unit/scheduler-schedule.test.js | darwin replace ordering + `loaded` (AC1) |
 | T2 | tests/unit/scheduler-schedule.test.js | teardown guard — no `bootout` when nothing is loaded; marker ordering and non-firing (AC2, AC8) |
-| T3 | tests/unit/scheduler-schedule.test.js | the verified skip, **cases (i)-(xxi)** — the stale-tail, length-mismatch and crash-recovery fixtures; the catch-up `hour:null` shape and its present-`Hour` refusal; the empty-env fixture; the indeterminate fixture; the five round-11 drift-only fixtures (`path`, `program`, log paths, `spawn type`); the extra-trigger and foreign-stream trigger fixtures; and the absent-field ⇒ `'indeterminate'` fixture. Marker non-firing (AC3, AC8) |
+| T3 | tests/unit/scheduler-schedule.test.js | the verified skip, **cases (i)-(xxi)** — the stale-tail, length-mismatch and crash-recovery fixtures; the catch-up `hour:null` shape and its present-`Hour` refusal; the empty-env fixture; the indeterminate fixture; the five round-11 drift-only fixtures (`path`, `program`, log paths, `spawn type`); the extra-trigger and foreign-stream trigger fixtures; and the absent-field ⇒ `'indeterminate'` fixture. Marker non-firing (AC3, AC8). **Case (xxii) additionally carries Table N row 2 — the darwin leg's §8-notice assertion, driven through `repointSchedules` (+2026-08-02)** |
 | T2b | tests/unit/scheduler-schedule.test.js | the rollback set — restore file + re-bootstrap prior argv + `loaded:false` + notice + the `priorBytes === null` bound (AC2) |
 | T2c | tests/unit/scheduler-schedule.test.js | the `plutil` preflight — rejects (no `bootout`, absolute argv) and passes (AC2 h, j) |
 | T2d | tests/unit/scheduler-schedule.test.js | `existsSync(PLUTIL)` false ⇒ no `plutil` argv issued, register proceeds (AC2 i) |
@@ -1688,14 +1983,18 @@ mock `process.platform` — and no test may touch a real OS scheduler
 | T2g | tests/unit/scheduler-schedule.test.js | the binding fixture — a rollback reaching the staleness guard must NOT throw (`o.canonicalBytes` is bound at both call sites); asserts a normal `loaded:false` (AC2 g1) |
 | T2e | tests/unit/scheduler-schedule.test.js | **the post-bootstrap verify on the ABSENT-label path (CX9-1)** — bootstrap succeeds, trailing `print` mismatched or unparseable ⇒ `loaded:false`, no `bootout`; and the matching case ⇒ `loaded:true` (AC2 k, l) |
 | T4 | tests/unit/scheduler-schedule.test.js | catch-up through the same helper (AC4) |
-| T5 | tests/unit/scheduler-schedule.test.js | linux degraded reload ⇒ `loaded:false` + notice; null/missing results (AC5 i) |
+| T5 | tests/unit/scheduler-schedule.test.js | linux degraded reload ⇒ `loaded:false` + notice; null/missing results (AC5 i). **The "+ notice" half is Table N row 3 and must be DRIVEN through `repointSchedules`, not inferred from `registerPlatform` (+2026-08-02)** |
 | T6 | tests/unit/scheduler-schedule.test.js | linux unchanged bytes still reload + enable, exactly two calls (AC5 ii) |
 | T7 | tests/unit/scheduler-schedule.test.js | **CLI path** — `add()` throws on an unloaded outcome for an UNCHANGED entry, on both legs: unchanged-darwin readback-mismatch-then-failure, and unchanged-linux degraded reload (AC11) |
+| T8 | tests/unit/init.test.js | **(+2026-08-02)** the D6 boundary collision — a REAL `init --fresh-vault` subprocess under `WIENERDOG_LOADER_NOOP=1` must not claim catch-up on the darwin leg, where nothing was verified (AC12). **Not a new test and not a `verified-register:` subtest** — one existing assertion in an existing test, so the naming rule below does not apply to it. |
 
 Name every subtest with the prefix `verified-register:` followed by one space.
+(T8 is exempt — see its row.)
 
-**Every T-test drives `registerPlatform` / `ensureCatchup` behaviorally with an
-injected loader.** The two new helpers are non-exported and must **not** be
+**Every T-test in `tests/unit/scheduler-schedule.test.js` drives `registerPlatform`
+/ `ensureCatchup` behaviorally with an
+injected loader** (T8 is in a different file and drives a real subprocess — see its
+row). The two new helpers are non-exported and must **not** be
 exported to make them testable — that would widen the module surface to serve a
 test. Each assertion reads the recorded loader call list, which is the artifact
 that says what the OS was actually asked to do.
@@ -1715,17 +2014,27 @@ npm test --silent -- --test-reporter=tap tests/unit/scheduler-schedule.test.js \
   | grep -cE "^ok [0-9]+ - verified-register: "
 # on main: 0.
 
-# V3 (AC6 — MECHANICAL, because it greps the assertion BODY. A count of changed
-#     `test(` declaration lines cannot see an edited body under an unchanged
-#     name, which is why that form was dropped.)
+# V3 (AC6 / Table E — MECHANICAL, because it greps the assertion BODY. A count of
+#     changed `test(` declaration lines cannot see an edited body under an
+#     unchanged name, which is why that form was dropped.)
 grep -c "stays gated only on" tests/unit/scheduler-schedule.test.js
-# on main: 2 (the two linux `loaded === true` assertions). REQUIRED after: 0.
+# on main: 2 (the two linux `loaded === true` assertions, Table E rows 2 and 3).
+# REQUIRED after: 0.
+#
+# Table E rows 4 and 5 are the two renames; both must have landed:
+grep -c "no MUTATING OS call" tests/unit/scheduler-schedule.test.js
+# on main: 0. REQUIRED after: >= 4 — each of the two renamed test titles plus
+# each row's new non-mutating assertion message.
 #
 # Then paste the FULL diff of the file and confirm BY READING that it touches
-# only AC6's four enumerated sites plus the new T1/T2/T2b/T2c/T2d/T2e/T3/T4/T5/
-# T6/T7 blocks. There is no grep
-# that proves "nothing else moved" in a JS file — this repo has no parser. The
-# enumeration in AC6 is the contract; the full diff is the evidence.
+# only (a) **Table E's five assertion rows**, (b) **Table E's authorized
+# setup-only `fakeLaunchd` swap at exactly the sites its authorization block
+# lists** — with no assertion changed at any of them beyond rows 1, 4 and 5 —
+# and (c) the new T1/T2/T2b/T2c/T2d/T2e/T2f/T2g/T3/T4/T5/T6/T7 blocks and the
+# helpers they add. There is no grep that proves "nothing else moved" in a JS
+# file — this repo has no parser. **Table E is the contract**; the full diff is
+# the evidence. (Amended 2026-08-02: this instruction previously said "AC6's
+# four enumerated sites", which the branch contradicted at five.)
 git diff origin/main...HEAD -- tests/unit/scheduler-schedule.test.js
 
 # V4 (AC9 — no daemon, no new top-level require; judged by reading).
@@ -1733,10 +2042,21 @@ git diff origin/main...HEAD -- src/cli/schedule.js | grep -E "^\+" \
   | grep -nE "setInterval|setTimeout|^\+const .* = require\(" \
   || echo "OK: no timer and no new top-level require"
 
-# V5 (AC7 — Windows leg untouched; judged by reading).
+# V5 (AC7 — Windows leg untouched; judged by reading). COMMENT-TOLERANT, and
+#     that is required, not a convenience (amended 2026-08-02, round-1 finding 2):
+#     the JSDoc this spec MANDATES for `ensureDarwinEntryRegistered` contains the
+#     literal "Mirrors ensureWindowsTaskRegistered" (see "Exact contracts"), so
+#     the bare form failed on a branch that followed the spec exactly. The fix is
+#     to narrow the grep to FUNCTIONAL references; the contract JSDoc must NOT be
+#     reworded to dodge a grep.
 git diff origin/main...HEAD -- src/cli/schedule.js \
+  | grep -E "^[-+]" \
+  | grep -vE "^[-+][[:space:]]*(\*|//|/\*)" \
   | grep -nE "ensureWindowsTaskRegistered|windowsLoadedTaskMatches" \
-  || echo "OK: the Windows registration path is not in the diff"
+  || echo "OK: no functional reference to the Windows registration path is in the diff"
+# The middle filter drops added/removed lines whose first non-blank character
+# starts a comment (` * `, `//`, `/*`) — i.e. prose. A real edit to the Windows
+# leg is a code line and still fails the check.
 
 # V6 (Current state §9 — the register must not read the durable status cache).
 git diff origin/main...HEAD -- src/cli/schedule.js | grep -nE "^\+.*readSchedulerStatus" \
@@ -1745,17 +2065,60 @@ git diff origin/main...HEAD -- src/cli/schedule.js | grep -nE "^\+.*readSchedule
 # V6b (CX-1 — the verified skip must compare the COMPLETE argv, not the head).
 grep -n "launchdLoadedArgs" src/scheduler/generators.js src/cli/schedule.js
 # REQUIRED after: the definition + its internal use + the new module.exports line
-# in generators.js, AND at least one use in schedule.js. If schedule.js instead
-# references `loadedEntryTargets`, the head-only comparison was reintroduced:
-grep -n "loadedEntryTargets" src/cli/schedule.js \
+# in generators.js, AND at least one FUNCTIONAL use (`gen.launchdLoadedArgs(`) in
+# schedule.js. If schedule.js instead CALLS `loadedEntryTargets`, the head-only
+# comparison was reintroduced. COMMENT-TOLERANT, and required to be (amended
+# 2026-08-02, round-1 finding 2): this spec's own mandated JSDoc for
+# `darwinLoadedVerdict` says the verdict vocabulary is "adopted verbatim from
+# `loadedEntryTargets`" (see "Exact contracts"), so the bare form drove the FAIL
+# branch on a branch that followed the spec exactly. Narrow the grep; do NOT
+# reword the contract JSDoc to dodge it.
+grep -nE "loadedEntryTargets" src/cli/schedule.js \
+  | grep -vE "^[0-9]+:[[:space:]]*(\*|//|/\*)" \
   && echo "FAIL: the register path is comparing positions, not the full argv" \
   || echo "OK: the register path does not use the two-position comparison"
+# The filter drops lines whose first non-blank character starts a comment. Any
+# real reference — `gen.loadedEntryTargets(…)`, or a destructuring import — is a
+# code line and still trips the FAIL branch. `schedule.js` reaches generators
+# only through `const gen = require('../scheduler/generators')` (`:11`), so a
+# functional use cannot be written without a code line naming the symbol.
 # on main, executed: command 1 prints TWO lines from generators.js —
 #   679:function launchdLoadedArgs(stdout) {
 #   787:      const args = launchdLoadedArgs(stdout);
 # and NOTHING from schedule.js (the symbol is absent there, and unexported).
 # Command 2 prints nothing and takes the `||` branch, so the OK line is the
 # baseline and the FAIL branch is reachable only by regression.
+
+# V8 (AC12 / D6 — the NOOP boundary collision, added 2026-08-02).
+node tests/run.js tests/unit/init.test.js
+# REQUIRED: `ℹ fail 0`. On this branch BEFORE the D6 fix: fail 1, at
+# tests/unit/init.test.js:125 — /catches up automatically/i did not match.
+#
+# The seam is never taught to fabricate a readback — spawn.js must stay out of
+# the diff (D6's rejected alternative):
+git diff --name-only origin/main...HEAD | grep -x "src/scheduler/spawn.js" \
+  && echo "FAIL: the NOOP seam was edited — see Implementation notes D6" \
+  || echo "OK: src/scheduler/spawn.js is not in the diff"
+#
+# The assertion is platform-aware, and the darwin leg asserts the NEGATIVE (the
+# tripwire against option (b)). Both must be present:
+grep -n "did not accept it yet" tests/unit/init.test.js
+grep -n "doesNotMatch(r.stdout, /catches up automatically/i)" tests/unit/init.test.js
+# REQUIRED: one hit each, both inside the `process.platform === 'darwin'` branch
+# of `init --fresh-vault schedules the nightly dream and surfaces it (ADR-0014)`.
+# on main: 0 hits each.
+
+# V9 (Table N rows 2-3 — §8's notice is asserted on BOTH fixed legs; the
+#     round-1 finding-1 ruling, added 2026-08-02).
+grep -n "did not accept it" tests/unit/scheduler-schedule.test.js
+# on main, executed: exactly ONE hit — `:1112`, the pre-existing win32 fixture
+# (Table N row 1), which is the only leg this WP does not change.
+# REQUIRED after: exactly THREE hits — row 1, plus one inside T3 case (xxii)
+# (darwin) and one inside T5 (linux). Then confirm BY READING that each of the
+# two new hits sits in a block that calls `schedule.repointSchedules(`: §8's
+# notice has exactly one push site (`schedule.js:583`), inside repointSchedules,
+# so a `registerPlatform`-only fixture cannot reach it and a notice assertion
+# placed anywhere else is testing a string it never produced.
 
 # V7 — the boundary gate and the pipeline.
 # Feed boundary-check the REAL diff, never a hand-maintained list. A list typed

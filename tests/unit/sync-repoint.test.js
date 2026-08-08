@@ -147,7 +147,8 @@ test('sync-repoint: rewrites a stale scheduler entry to the vendored bin, then i
 
   await runSync(env);
 
-  const stableNode = gen.nodePath();
+  // ENTRY-role value — the node path the renderer embeds (Table H site 7).
+  const stableNode = gen.entryNodePath();
   const launcher = path.join(paths.core, 'launcher', 'launch.js');
   const after = fs.readFileSync(entry.file, 'utf8');
   assert.ok(after.includes(stableNode), 'entry now targets the current node');

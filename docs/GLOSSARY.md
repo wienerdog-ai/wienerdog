@@ -21,6 +21,7 @@ Canonical names. Use these exact terms in code, docs, specs, and prompts — nev
 - **run-job** — the short-lived job wrapper: clean env, TCC-guard, watchdog, logs, fail-loud, catch-up.
 - **TCC-guard** — refusal to run unattended jobs that reference macOS TCC-protected paths (Desktop/Documents/Downloads/iCloud).
 - **fail-loud** — no silent failures: alert email (`gws _alert`) or a banner line in the digest.
+- **acknowledged alert** — a durable alert (one record in `~/.wienerdog/state/alerts.jsonl`) that the user has silenced **in the session digest only**, by running `wienerdog alerts ack` at a real terminal with a typed confirmation. It is keyed on the exact `(job, reason)` pair, so a change in the failure wording surfaces it again (the wording it compares is the one Wienerdog stored — already shortened to 2,000 characters, with secret-looking text blanked out — so two failures that differ only past that length, or only in the blanked-out parts, count as the same wording). It changes nothing else: the job still refuses, still exits non-zero, still spawns nothing, and still writes its record; `wienerdog alerts` always lists acknowledged alerts. Acknowledgements for a job are dropped when that job next succeeds. (Not: "dismissed", "muted", "snoozed" — say acknowledged alert.)
 - **catch-up** — running jobs missed while the machine was off (login-triggered check on macOS; native on systemd/Task Scheduler).
 - **job descriptor** — the code-owned, deterministic record of exactly what a scheduled job is authorized to run. Digest-covered field set (the authoritative WP-156 schema): `run` action, capability profile (`profileId`), prompt/skill content hash (`promptHash`), configured `model`, the inner dream/lock timeout (`timeoutMs`), the outer run-job watchdog timeout (`outerTimeoutMs`), the corpus size cap (`maxInputBytes`), the effective vault layout (`vaultLayout`), the vault root (`vaultRoot`), the bound authorized home directory (`home`), the job's `schedule` (`at` + `timezone`), the running `node` path, the executable identities (`exec`: claude + git required, codex optional — the executable pins), and the app release digest (`appRelease`: `version`, `treeDigest`, `stance`). Written at schedule/sync and re-derivable from live inputs to detect drift (A7, WP-156). **Dev reduction:** on a **dev**-stance install the digest reduces `appRelease` to `{stance, root}` — excluding only `treeDigest` and `version` (a tracked-source edit is expected there) — every other field, including `schedule`/`home`/`node`, is still digest-covered, so a `config.yaml`, schedule, or home edit still drifts and refuses on a dev machine too. (Not: "job spec", "job config".)
 - **descriptor digest** — the `sha256` of the canonicalized job descriptor, bound into the OS scheduler entry as the independent anchor a scoped `config.yaml`/app rewrite cannot change; the launcher re-derives it at fire time and refuses on any mismatch (A7, WP-156/157).
@@ -40,10 +41,11 @@ Canonical names. Use these exact terms in code, docs, specs, and prompts — nev
 - **identity trust registry** — the code-owned, 0600 record (`~/.wienerdog/state/identity-approvals.json`) of the exact-byte `sha256` a human ratified for each injected identity file. The digest injects an identity file only when its current bytes match its record; a mismatch fails closed (ADR-0021). Path identity is case-folded; content identity is byte-exact.
 - **memory approve** — the interactive, terminal-only command (`wienerdog memory approve <file>`) that ratifies the current exact bytes of an injected identity note into the identity trust registry. The only way to change an approved identity note; no model-driven or headless process can run it (ADR-0021).
 - **safety profile** — the code-owned, fail-closed record of which powerful
-  capabilities are cleared for use (`src/core/safety-profile.js`). Every
-  capability is BLOCKED until its security gate is opened by a reviewed release;
-  there is no runtime/env/flag override. Inspect it with `wienerdog safety`. (Not
-  a "sandbox" — that word means the unrelated `WIENERDOG_HOME` redirect guard.)
+  capabilities are cleared for use (`src/core/safety-profile.js`). A capability
+  stays blocked until a reviewed release opens its gate; there is no
+  runtime/env/flag override. All five gates were opened in 0.10.0. Inspect it
+  with `wienerdog safety`. (Not a "sandbox" — that word means the unrelated
+  `WIENERDOG_HOME` redirect guard.)
 - **capability gate** — one named on/off switch in the safety profile
   (e.g. `gws-use`, `external-content-routine`). A blocked gate makes its feature
   fail closed before any side effect (no model spawn, no credential load).

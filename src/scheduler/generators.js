@@ -22,6 +22,45 @@ function nodePath() {
 }
 
 /**
+ * The absolute node path written into an OS scheduler ENTRY (plist / systemd
+ * unit / Task Scheduler XML) — a string the OS keeps and re-reads days later.
+ * Prefers an upgrade-DURABLE alias over the version-pinned `process.execPath`,
+ * but ONLY when that alias provably resolves to the very interpreter that is
+ * running right now. Every other input, and every failure, returns `execPath`
+ * unchanged (Table A). PURE apart from one `realpath` stat; NEVER throws.
+ *
+ * NOT for spawning a child of the current process — use `nodePath()` there.
+ *
+ * @param {string} [execPath=process.execPath]  absolute path of the running node
+ * @param {{realpath?: (p:string) => string}} [opts]  test seam; default fs.realpathSync
+ * @returns {*} the durable alias (always a string), OR `execPath` returned
+ *   **verbatim** — including when `execPath` is not a string at all, which is a
+ *   caller bug this function passes through rather than masks (Table A row 1).
+ *   The type is deliberately `*` and not `string`: an earlier draft wrote
+ *   `{string}`, which contradicted row 1.
+ */
+function entryNodePath(execPath = process.execPath, opts = {}) {
+  try {
+    if (typeof execPath !== 'string' || execPath[0] !== '/') return execPath;
+    const parts = execPath.split('/');
+    if (parts.length < 6) return execPath;
+    const i = parts.length - 5;
+    if (parts[i] !== 'Cellar') return execPath;
+    const formula = parts[i + 1];
+    if (!/^node(@[0-9]+(\.[0-9]+)*)?$/.test(formula)) return execPath;
+    const version = parts[i + 2];
+    if (!/^[0-9][0-9A-Za-z._+-]*$/.test(version)) return execPath;
+    const prefix = parts.slice(0, i).join('/');
+    const ALIAS = prefix + '/opt/' + formula + '/bin/node';
+    const realpath = typeof opts.realpath === 'function' ? opts.realpath : fs.realpathSync;
+    if (realpath(ALIAS) !== realpath(execPath)) return execPath;
+    return ALIAS;
+  } catch {
+    return execPath;
+  }
+}
+
+/**
  * Absolute path to the STABLE vendored bin (ADR-0013). Survives version bumps:
  * only the `current` symlink's target changes, so scheduler entries are
  * version-independent. @param {import('../core/paths').WienerdogPaths} paths
@@ -689,6 +728,134 @@ function launchdLoadedArgs(stdout) {
   return null; // no closing brace → the block did not parse
 }
 
+/** The `event triggers = { … }` block of a `launchctl print` record — the
+ *  StartCalendarInterval readback (WP-scheduler-register-replaces-loaded-record,
+ *  Current state §7b/§7c, Table A2, CX10-1/CX11-2). PURE: string work only, never
+ *  throws. Returns the OUTER `null` when the block never opened/closed, when it
+ *  does not hold EXACTLY ONE immediate entry, when that one entry's `stream` is
+ *  not `com.apple.launchd.calendarinterval`, when its `descriptor = {` block is
+ *  missing/unclosed, when `Minute` is absent, or when `Hour`/`Minute` is present
+ *  but non-numeric — the outer null means "malformed, Minute missing, or the
+ *  trigger block did not hold exactly one entry" (never collapsed with the INNER
+ *  `hour: null`, which means "the `Hour` key was validly ABSENT" — the catch-up
+ *  shape). Counts the COMPLETE block, not a stream-filtered search (CX11-2): our
+ *  canonical trigger plus a foreign-stream trigger must fail the count, not match
+ *  on the first.
+ *  @param {string} stdout
+ *  @returns {{hour:number|null, minute:number}|null} */
+function launchdLoadedCalendar(stdout) {
+  const lines = String(stdout).split('\n');
+  const openIdx = lines.findIndex((l) => l.trim() === 'event triggers = {');
+  if (openIdx === -1) return null;
+  // Pass 1 — walk the block's DIRECT children only (depth 0 relative to the
+  // block body), so a nested `descriptor = {` inside an entry is never counted
+  // as a second top-level trigger.
+  const entries = [];
+  let depth = 0;
+  let closeIdx = -1;
+  for (let i = openIdx + 1; i < lines.length; i += 1) {
+    const t = lines[i].trim();
+    if (t === '}') {
+      if (depth === 0) {
+        closeIdx = i;
+        break;
+      }
+      depth -= 1;
+      if (depth === 0) entries[entries.length - 1].end = i;
+      continue;
+    }
+    if (/\{\s*$/.test(t)) {
+      if (depth === 0) entries.push({ start: i, end: -1 });
+      depth += 1;
+      continue;
+    }
+  }
+  if (closeIdx === -1) return null; // the block never closed
+  if (entries.length !== 1) return null; // zero or 2+ direct entries ⇒ unparseable
+  const entry = entries[0];
+  if (entry.end === -1) return null; // the sole entry never closed
+  // Pass 2 — within that one entry, find its (depth-0) `stream = …` line and its
+  // nested `descriptor = {` block.
+  let entryDepth = 0;
+  let stream = null;
+  let descStart = -1;
+  let descEnd = -1;
+  for (let i = entry.start + 1; i < entry.end; i += 1) {
+    const t = lines[i].trim();
+    if (t === '}') {
+      entryDepth -= 1;
+      if (entryDepth === 0 && descStart !== -1 && descEnd === -1) descEnd = i;
+      continue;
+    }
+    if (/\{\s*$/.test(t)) {
+      if (entryDepth === 0 && t === 'descriptor = {') descStart = i;
+      entryDepth += 1;
+      continue;
+    }
+    if (entryDepth === 0) {
+      const sm = t.match(/^stream\s*=\s*(.+)$/);
+      if (sm) stream = sm[1].trim();
+    }
+  }
+  if (stream !== 'com.apple.launchd.calendarinterval') return null;
+  if (descStart === -1 || descEnd === -1) return null; // no descriptor block
+  // Pass 3 — the descriptor's quoted-key, unquoted-value lines.
+  let hourRaw = null;
+  let hourPresent = false;
+  let minuteRaw = null;
+  let minutePresent = false;
+  for (let i = descStart + 1; i < descEnd; i += 1) {
+    const t = lines[i].trim();
+    const hm = t.match(/^"Hour"\s*=>\s*(.+)$/);
+    if (hm) {
+      hourRaw = hm[1].trim();
+      hourPresent = true;
+      continue;
+    }
+    const mm = t.match(/^"Minute"\s*=>\s*(.+)$/);
+    if (mm) {
+      minuteRaw = mm[1].trim();
+      minutePresent = true;
+    }
+  }
+  if (!minutePresent) return null; // Minute missing ⇒ outer null
+  const minute = Number(minuteRaw);
+  if (!Number.isFinite(minute)) return null; // non-numeric Minute ⇒ outer null
+  let hour = null; // absent Hour key ⇒ the catch-up shape, NOT an error
+  if (hourPresent) {
+    hour = Number(hourRaw);
+    if (!Number.isFinite(hour)) return null; // non-numeric Hour ⇒ outer null
+  }
+  return { hour, minute };
+}
+
+/** The `environment = { … }` block of a `launchctl print` record — the
+ *  EnvironmentVariables readback (Current state §7b facts 1/2/4). PURE: string
+ *  work only, never throws. Anchored by a TRIMMED EXACT-LINE match on
+ *  `environment = {`, never a suffix match — `inherited environment = {` and
+ *  `default environment = {` precede it in the real output and both end with the
+ *  same characters. A `KEY =>` line with nothing after the arrow is a VALID pair
+ *  whose value is the empty string, never a skipped line — five of the seven
+ *  canonical `scheduledEnvPairs` bindings render exactly that way.
+ *  @param {string} stdout
+ *  @returns {Map<string,string>|null} null when the block never opened/closed */
+function launchdLoadedEnv(stdout) {
+  const lines = String(stdout).split('\n');
+  const openIdx = lines.findIndex((l) => l.trim() === 'environment = {');
+  if (openIdx === -1) return null;
+  const map = new Map();
+  for (let i = openIdx + 1; i < lines.length; i += 1) {
+    const t = lines[i].trim();
+    if (t === '}') return map;
+    const idx = t.indexOf('=>');
+    if (idx === -1) continue;
+    const key = t.slice(0, idx).trim();
+    const value = t.slice(idx + 2).trim();
+    map.set(key, value);
+  }
+  return null; // no closing brace → the block did not parse
+}
+
 /** Table B1 consumer 1 — split a cmd.exe inner command chain at each ` & ` that
  *  lies OUTSIDE a double-quoted region (the only delimiter windowsCmdArguments
  *  emits). An ODD total `"` count is unparseable → null (fail closed). A ` & `
@@ -995,6 +1162,7 @@ function teardownCatchup(paths, manifest, opts = {}) {
 
 module.exports = {
   nodePath,
+  entryNodePath,
   wienerdogBin,
   launcherPath,
   launchAgentsDir,
@@ -1035,4 +1203,8 @@ module.exports = {
   scheduledEnvPairs,
   teardownCatchup,
   defaultCatchupLoader,
+  jobLaunchArgs,
+  launchdLoadedArgs,
+  launchdLoadedCalendar,
+  launchdLoadedEnv,
 };
