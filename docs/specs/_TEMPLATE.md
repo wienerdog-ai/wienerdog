@@ -11,6 +11,10 @@ adrs: []                 # e.g. [ADR-0004] — decisions this WP must respect
 
 # WP-<slug>: <title>
 
+- A template section is never deleted silently: where a conditional
+  section legitimately does not apply, one line stays in its place —
+  `N/A — <one-line reason>` — so absence is always visible and checkable.
+
 ## Context (read this, nothing else)
 
 2–4 paragraphs. What this component is, why it exists, how it fits the system.
