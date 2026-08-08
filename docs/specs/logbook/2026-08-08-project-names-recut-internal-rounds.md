@@ -291,3 +291,78 @@ recorded in the spec beside the table — including the measurement that
 M5's forbidden join, which is what keeps the three EP4 rows green for it. Adding
 a seventeenth entry to every cell was declined for the same reason this spec
 already dropped its per-section row index: the bookkeeping is the defect.
+
+## Fourth closing round — and the mirror walk that should have run earlier
+
+Fifth clean run of the companion runtime. The round confirmed T17 — its
+behaviour against the tree, its observability, and its measured mutation
+partition — and confirmed the A12/G2 correction. Four findings, all measured
+locally before disposition.
+
+Three of the four have one root cause, and it is not subtle: **row A9 was changed
+and T17 was added without executing this spec's own update-all-mirrors
+obligation.** The Mirrored Surface Checklist exists to make exactly that walk
+mandatory, and it was skipped. The lesson recorded, owner-accepted: *a change to
+a Table A row is not finished until the walk has run.*
+
+- **F-2 (medium) — 16 and 17 stated in the same file.** Two MEASURED claims still
+  carried the old denominator: T7's cell ("adding `+` … passes all sixteen
+  tests") and M9's ("passed all sixteen tests"). Re-measured: T17 is green under
+  both M8 and M9, so both statements are true of seventeen today. Fixed, and the
+  mutation table's framing now states the division of labour outright — the cells
+  carry T1–T16, the note below carries T17, and every one of T1–T17 has an
+  observed red side across the two.
+- **F-3 (medium) — row A11 excluded T17's own fixture.** A11 asserted "Every
+  fixture vault carries a daily note"; T17's deliberately does not, which is the
+  whole mechanism. Fixed: A11 scopes to fixtures that use `projectBlock` and
+  names T17's exception.
+- **F-4 (medium) — registered mirrors still promised the old persisted
+  guarantee.** Ruled fix **with the full walk**, not with the three sites the
+  round happened to see.
+- **F-1 (medium) — the branch diff fails the spec's own boundary check.**
+  Measured: `scripts/boundary-check.js` over this branch's file list exits **1**,
+  naming the five round-log files, none of which is in the Deliverables table. In
+  practice it does not fire — the CI step skips when the PR body carries no
+  `Spec:` line, and a spec-authoring PR carries none. Owner ruling: **no change
+  now; Q9 is armed with a deadline.** The round logs' canonical home, or their
+  relationship to the boundary gate, is decided before the first `Spec:`-carrying
+  PR, deliberately and preferably in an upstream-compatible form. The exit-1
+  measurement is recorded in the plan.
+
+### The walk itself, section by section
+
+Every section the Mirrored Surface Checklist registers, walked against A9's
+changed row. Recorded so the next walk can be checked rather than trusted.
+
+**Affected, and now updated (seven):**
+
+- **Current state** — "passes every other line through unchanged" was incomplete;
+  it now names the `trimEnd` exception.
+- **Exact contracts, the `vault()` helper comment** — it explained why every
+  fixture carries a daily note; it now names T17 as the test that deliberately
+  uses neither the helper nor that vault.
+- **Exact contracts, the `SHAPE-PB` comment** — it claimed "the same property on
+  the persisted managed block" without qualification; it now scopes to a project
+  block that is not the digest's last part and points at T17 for the rest.
+- **Acceptance criteria, `G1`** — "holds on both surfaces" now distinguishes the
+  rendered digest from the persisted copy and names the final-position divergence.
+- **Verification steps, the Not-relaxed line** — it could be read as forbidding
+  the very line T17 requires; it now says explicitly what it does not forbid.
+- **Coverage** — "the same bytes as persisted on disk" now carries the exception.
+- **Out of scope** — a new item forbids closing the divergence by touching
+  `src/adapters/shared.js`, which is not in the Deliverables table.
+
+**Examined and genuinely unaffected (five):**
+
+- **Context** — states that the digest is persisted and that a folder name's
+  forgery persists with it. No claim about byte-identity or line form.
+- **Deliverables** — the two Notes cells and the paragraph below the table speak
+  about paths and about the test file's contents, not about the persisted form.
+- **RES-1, RES-2, RES-3** — splice-site completeness, the surviving ordered-list
+  marker, and shape-not-meaning. None asserts anything about persistence. A
+  fourth residual for the divergence was considered and not written: a residual
+  is for what is *not* gated, and this one is gated by T17.
+- **Mutation rows** — already carried the divergence, in M1's and M7's reasons
+  inside the T17 note.
+- **Implementation notes & constraints** — its only "persisted" sentence is the
+  ADR-0004 statement about not persisting beyond bytes already written.
