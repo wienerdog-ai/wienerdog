@@ -230,3 +230,64 @@ here rather than rewritten:
 
 A post-edit re-sweep with the same keywords confirms exactly one line in the file
 still states the rule: A12 itself.
+
+## Third closing round — three findings, one of them new territory
+
+Fourth clean run of the companion runtime. Verdict: needs-attention, three
+findings, all re-measured locally before disposition. The round-count series
+went 17 → 3 → 2 → 1 → 3; the owner accepted the reading that this is not a
+regression in the old content but a widening of the surface being examined —
+one finding is territory neither the eleven earlier rounds nor the four here
+had reached.
+
+- **F-A (high) — the persisted managed block's last line violates row A9.**
+  Measured chain: a directory named `~~~` sorts after `wienerdog` and empties
+  under A2+A3, so it renders as a bare bullet; `buildBlock` ends in
+  `safeDigest.trimEnd()`, so when the project section is the digest's LAST part
+  — reachable whenever no daily note exists — that bullet persists as a lone
+  `-`, which does not match A9's form. T4 cannot see it: the `vault()` helper
+  writes a daily note unconditionally, precisely so the project block is never
+  final. Ruled: the contract states the truth rather than the code being
+  changed, since `src/adapters/shared.js` is outside the Deliverables table.
+  A9 now records the divergence, and **T17** pins it.
+- **F-B (high) — the A12 ownership leaked through a general clause.** The sweep
+  that moved the golden rule into A12 found every *mention* of the file but not
+  a rule that covers it without naming it: "Every other path this spec names is
+  one the implementer reads, never writes" still forbade what A12 permits.
+  Ruled fix: that clause carries an explicit A12 exception, and the Out-of-scope
+  item's title defers too. **The lesson worth keeping: a keyword sweep finds
+  mentions, not coverage.** A general sentence that never names the subject
+  passes every sweep.
+- **F-C (high) — `G2` claimed more than a content hash decides.** "a staged or
+  committed change cannot pass it" is false: `shasum` reads the working tree, so
+  a divergence staged while the working copy is restored passes. Ruled fix
+  without widening the gate: the claim narrows to the working-tree bytes at run
+  time, and names the real enforcer of the final state — `scripts/boundary-check.js`
+  fails the PR on any changed file outside the Deliverables table — together
+  with its one documented hole, the step being skipped when the PR body carries
+  no `Spec:` line.
+
+Two findings the round raised and the owner dropped, recorded here rather than in
+the spec: the `G2` acceptance criterion and the **Not relaxed** line were flagged
+as restating the golden rule. Neither is a permission rule — the first is a
+statement about the required final state, which is exactly what A12 says, and the
+second states what the envelope refuses to widen to.
+
+### The count change T17 forced, and why it is in the same commit
+
+A seventeenth test moves every statement of the test count, and the owner made
+that a same-commit requirement rather than a follow-up: a split would have
+guaranteed that the next round fired on the inconsistency. Updated together with
+T17: the Deliverables Notes cell, the "seventeen tests" heading, the T-table, the
+`G1` envelope (`tests` and `pass` from 16 to 17), the `G1` command comment, the
+Mirrored Surface Checklist, the implementation-notes "do not add tests beyond"
+line, and the Verification-steps observed-red sentence.
+
+**T17's mutation partition was measured, not inferred, and is stated once rather
+than added to twenty-two cells.** Measured against T17's fixture: it reddens
+under M1, M7 and M10, and stays green under the other eight. The reasons are
+recorded in the spec beside the table — including the measurement that
+`scanAndRedact` returns zero findings on T17's raw form, its emitted form, and
+M5's forbidden join, which is what keeps the three EP4 rows green for it. Adding
+a seventeenth entry to every cell was declined for the same reason this spec
+already dropped its per-section row index: the bookkeeping is the defect.
