@@ -366,3 +366,72 @@ changed row. Recorded so the next walk can be checked rather than trusted.
   inside the T17 note.
 - **Implementation notes & constraints** — its only "persisted" sentence is the
   ADR-0004 statement about not persisting beyond bytes already written.
+
+## Fifth closing round — two findings, and Q9 decided
+
+Sixth clean run of the companion runtime. The round confirmed the test count
+consistent at seventeen and A11/T17 in agreement.
+
+- **F-2 (medium) — the divergence is wider than it was written.** A9 described
+  only the empty-name case; `trimEnd` removes **every** trailing whitespace
+  character from the last line, and A1 admits U+0020 anywhere in a name. Two
+  sub-cases, both measured: a name ending in spaces keeps A9's line form and
+  loses only bytes; an empty-sanitizing name loses the bullet space and leaves
+  the form. Ruled fix: the contract states the wider truth, the seven mirror
+  sections take it via a second walk, and **T17 builds two vaults in one test**
+  so both sub-cases are gated without moving the test count.
+
+  A note worth keeping: the wider T17 is a strictly better test. Re-measured, it
+  now reddens under **M2** as well — a total-rejecting sanitizer empties the
+  trailing-space name too, so the last line becomes `-` where `- z` is required.
+  With only the empty-name vault, M2 was green. The partition is now M1, M2, M7,
+  M10 red and seven green.
+
+  Two mistakes were made writing it and are recorded because both are the kind
+  this spec has been bitten by before. First, the assertion messages were written
+  with English possessives inside single-quoted JS literals, which breaks the
+  literal — the same seam that the old spec recorded for shell payloads. Second,
+  the fixture literal was meant to use escape sequences precisely so that no
+  formatter can silently trim invisible trailing spaces, but the escapes did not
+  survive the editing channel: measured, the line came out with real spaces and
+  zero escape sequences. It was rewritten by building the backslash from its
+  character code, and verified by **evaluating** the literal — length 4 — rather
+  than by looking at it, since the display collapses the escapes either way.
+
+- **F-1 (high) — the branch could not pass its own boundary check.** Recurring,
+  and this time it was blocking: the review targets the `main...HEAD` diff, which
+  structurally contains the round logs, so the ruled closure criterion of zero
+  findings was unreachable regardless of the spec's quality.
+
+### Q9 decided: the boundary check learns about process records
+
+Owner ruling: `scripts/boundary-check.js` gains a narrow exception for
+`docs/specs/logbook/**`. A logbook entry records how a decision or a review round
+went; it is never an implementation surface, so no spec should ever list one as a
+deliverable. This is the first code change on `main` since the reset, taken as a
+separate deliberate commit (`6ae7a0c`) with an upstream-compatible message.
+
+**Q11 two-sided observation, as required, on the real invocation:**
+
+- **Red first**, before the change: the new allow-case failed against the
+  unchanged script, exit 1 naming the logbook path.
+- **Green after**: the file list `scripts/lint.js` plus a logbook record exits
+  **0**.
+- **Red after**: the same list plus `src/core/digest.js` exits **1**, printing
+  only `src/core/digest.js` — which shows the exception is narrow rather than a
+  blanket pass.
+- Unit level: `tests/unit/boundary-check.test.js` runs 9/9, including a new guard
+  that `docs/specs/logbookish.md` stays rejected, so the trailing slash is pinned
+  and `docs/specs/` at large — the ADR-0029 ROADMAP case — is untouched.
+- Full suite on `main`: tests 1938, pass 1929, fail 0, cancelled 0, skipped 9,
+  todo 0. Lint green (394 files, 0 errors); shellcheck and PSScriptAnalyzer were
+  skipped locally for want of the binaries and run in CI.
+
+`main` was then merged into this branch and the check re-run over the branch's
+own file list: **exit 0**. The obstacle is gone as a fact, not as an exemption —
+the closure criterion was never relaxed.
+
+One deviation noticed while doing this and not corrected retroactively: the
+commits on this branch carry a `Generated-by:` trailer, while `main` and upstream
+both use `Co-Authored-By:`. The `main` commit uses the upstream form; the branch
+history was left alone rather than rewritten.
