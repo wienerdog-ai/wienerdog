@@ -181,3 +181,52 @@ re-cut is the next measurement point — the collected-layers form becomes manda
 This spec closes under the current all-or-nothing criterion: a fresh round with
 zero findings. After it closes, the owner decides on a weighted closure rule for
 the following specs, on the evidence of the full round-count series.
+
+## Second closing round — one finding, and the structural answer to it
+
+The round confirmed A9/A10's `capDigest` scoping as consistent and found no other
+surface repeating the unconditional form, so that family is closed. It raised one
+finding: a **third** statement of the golden constraint, in the Deliverables
+paragraph. Two consecutive rounds had now landed the same kind — a rule living in
+several places where each fix reaches one of them — so the breaker applied and the
+answer was structural rather than a third patch.
+
+**Owner ruling:** row **A12** becomes the single owner of the golden's status,
+stating the invariance *and* the one bounded exception (a temporary tip is
+permitted provided it is restored immediately; anything surviving into the final
+worktree, commit or diff is a boundary violation). Every other surface cites A12
+and none restates the rule. The Mirrored Surface Checklist additionally registers
+the paragraph below the Deliverables table, which it had never covered — that
+omission is why the rule could drift there unnoticed.
+
+### The sweep, and why a longer list would not have been enough
+
+The owner's instruction was explicit: sweep the whole file, do not work from the
+previous list. That mattered. The list of five sites compiled from the round's
+finding was itself incomplete — it missed the statement in **Current state**
+("so the golden must not change"), which the advisor caught independently. A
+keyword sweep over `golden`, `digest-default`, `byte-identical` and the pinned
+sha found seventeen mentions in total.
+
+Five of them stated the rule and are now A12 citations: Current state, the
+Deliverables paragraph, the Verification-steps red-run bullet, the Out-of-scope
+"Updating any golden fixture" item, and Definition of done item 1.
+
+The remaining mentions do something other than state the rule, and are recorded
+here rather than rewritten:
+
+- **The `G2` command and its envelope** name the path and carry the pinned sha
+  literally. A gate has to be checkable without following a cross-reference, so
+  the literal stays. It is a *registered* mirror — the checklist covers
+  Verification steps whole — so a change to A12 re-walks it by obligation.
+- **The Not-relaxed line** ("one byte of difference in …") states what the
+  envelope refuses to widen to, not what the implementer may do to the file.
+- **Current state's remaining sentences** record which golden contains the
+  section, how that was verified, and the byte-identical measurement. Evidence,
+  not rule.
+- **The `G3` criterion** names a different test inside `tests/unit/digest.test.js`.
+- **Out of scope's "Changing the emitted line format"** notes that a backtick
+  wrapper would change the golden. A consequence, not a permission.
+
+A post-edit re-sweep with the same keywords confirms exactly one line in the file
+still states the rule: A12 itself.
