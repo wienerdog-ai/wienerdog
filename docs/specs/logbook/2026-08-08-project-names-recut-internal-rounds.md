@@ -483,3 +483,60 @@ line, Coverage and Out of scope now all point rather than describe.
 Two canonical owners now hold the two contracts that drew the most review
 traffic: **A12** for the golden fixture, **A9** for the persisted-surface
 divergence.
+
+## Seventh closing round — a false green in the original content
+
+Eighth clean run of the companion runtime. Three findings, and unlike the two
+rounds before it, the serious one was not in this session's prose.
+
+- **F-1 (high) — nothing in the file constrained the end of a sanitized name.**
+  The spec gates leading position with care (row A3, T7's leading input, mutation
+  M7) and never gates trailing position: T7's three inputs all ended in `b` or
+  `ab`. Measured consequence — an implementation that mirrors A3 at the tail
+  passes **every one of the seventeen tests**: T5's legitimate names, T7's whole
+  sweep, T8's idempotence, T10's worked pairs and both of T17's vaults. What it
+  does in the field: `report.` becomes `report`, `my_note_` becomes `my_note`,
+  `a-b-` becomes `a-b`, `z` plus three spaces becomes `z`. That is the outcome
+  row A1 exists to prevent, shipping green.
+
+  Ruled fix: T7 gains a fourth, trailing-position input, and **M11** is added as
+  the mutation that supplies its observed red side — measured, the trailing
+  assertion fails at `cp = 0`. The test count stays seventeen; the mutation count
+  moves to twelve.
+
+- **F-2 (medium) — A9's reachability condition was too broad.** It said the
+  divergence bites "whenever the project section is the digest's last part".
+  Measured: `trimEnd` touches only the string's end, so `'a\nb   \nc'` comes back
+  unchanged, and past `MAX_PROJECTS` the code-owned overflow line is last and no
+  project line is final. The condition now names all three requirements, and
+  **T17 gained a third, control vault** — the same trailing-space name followed
+  by another project — so the condition is gated rather than merely stated.
+
+- **F-3 (low) — one surviving sixteen-test reference.** M9's cell carried
+  "sixteen when that was measured" as a historical qualifier. Removed; the
+  sentence lives count-free.
+
+### The walk after the mutation table changed
+
+The mutation table moving from eleven rows to twelve triggered the
+update-all-mirrors walk again. It found three surfaces beyond the four count
+statements, none of which the round had named:
+
+- **T8's cell** described the sweep as "all three inputs" — T7 now has four, and
+  T8 reuses T7's corpus. Corrected, with the reason the trailing input is
+  included there even though it adds no failing side of its own: one corpus for
+  both tests beats two that have to be kept in step.
+- **M9's cell** enumerated T7's mismatching inputs at `cp = 0x10400` as three.
+  Re-measured: all four mismatch, the trailing one giving `ab_` where `ab𐐀` is
+  required.
+- **M7's cell** said T7 and T8 "each test both positions". With trailing added
+  there are three positions plus the run shape; reworded to sweep every position.
+- **M11's own cell** was then caught carrying exactly the historical count
+  qualifier F-3 had just ruled out, and was reworded count-free for consistency
+  with that ruling rather than left as a special case.
+
+Two green-side checks were run before landing any of it, so the new assertions
+are not merely red-capable: the correct implementation is idempotent over the
+full sweep with all four inputs (zero violations), and M8 stays green under the
+trailing input across `cp 0..0x2fff` — the run input remains the only thing that
+catches it, which is what its cell claims.
