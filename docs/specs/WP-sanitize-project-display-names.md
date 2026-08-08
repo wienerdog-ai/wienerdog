@@ -93,7 +93,10 @@ Three directories produced **eight** lines and one forged top-level section.
 
 **Second surface.** The digest is persisted into the managed block by `buildBlock`
 (`src/adapters/shared.js:146-157`), which neutralizes **only** lines exactly equal
-to its own BEGIN/END sentinel and passes every other line through unchanged. Chain:
+to its own BEGIN/END sentinel and passes every other line through unchanged —
+**with one exception that row A9 records and T17 pins:** it ends in
+`safeDigest.trimEnd()`, so the digest's very last line loses trailing whitespace.
+Chain:
 `buildBlock` ← `applyManagedBlock` (`src/adapters/shared.js:169`) ←
 `src/adapters/claude.js:55` (`CLAUDE.md`) and `src/adapters/codex.js:71`
 (`AGENTS.md`). `renderDigest` (`src/core/digest.js:442`) is called from
@@ -239,7 +242,9 @@ const OPTS = { profile: allowAll(), identityApprovals: {} };
 /** A throwaway vault with the given project directory names and a daily note.
  *  The daily note is REQUIRED, not decoration: it makes `## Active projects` a
  *  non-final part, so the code-owned `## Latest daily log` heading always follows
- *  the project block — on the rendered digest AND inside the managed block. */
+ *  the project block — on the rendered digest AND inside the managed block. T17
+ *  is the one test that deliberately does NOT use this helper or this vault,
+ *  because it needs the project block in final position (row A11). */
 function vault(names) {
   const r = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-projname-'));
   fs.mkdirSync(path.join(r, '07-Daily'), { recursive: true });
@@ -303,7 +308,9 @@ test('<literal name from the table>', () => {
   }
 });
 
-// SHAPE-PB — the same property on the persisted managed block. Used by T4.
+// SHAPE-PB — the same property on the persisted managed block, for a project
+// block that is NOT the digest's last part. Used by T4. Row A9's trimEnd
+// divergence applies only in final position and is pinned by T17, not here.
 test('<literal name from the table>', () => {
   const names = /* NAMES */;
   const block = projectBlock(buildBlock(renderDigest(vault(names), undefined, OPTS)));
@@ -400,7 +407,7 @@ test('T17 an empty-sanitizing name in final position persists without its space'
 | T4 | PB | `T4 the persisted managed block carries the same property` | `[HOSTILE_A, HOSTILE_B, HOSTILE_C, 'wienerdog']` | — |
 | T5 | D | `T5 legitimate names survive byte-unchanged` | `['Olvasnivalók', 'onboarding-redesign', 'Q3 planning', 'v1.2_final', '日本語プロジェクト']` | `fs.readdirSync(path.join(v, '01-Projects')).sort().map((n) => '- ' + n)` — read back from the filesystem, so NFC/NFD storage cannot cause a false red |
 | T6 | F | `T6 an accented name is unchanged in NFC and in NFD` | — | `const nfc = 'Olvasnival\u00f3k';` and `const nfd = 'Olvasnivalo\u0301k';` — **written with those escapes, not as literal accented characters**, because a markdown or editor pass normalizes a pasted NFD literal back to NFC and the test then silently checks NFC twice. `assert.equal(sanitizeProjectName(x), x)` for both, and `assert.notEqual(nfc, nfd)` first, so a normalized source fails loudly |
-| T7 | F | `T7 exact mapping over every Unicode code point` | — | for every `cp` from `0` to `MAX_CP` inclusive, with `ch = String.fromCodePoint(cp)`, **three inputs**: mid-string `assert.equal(sanitizeProjectName('a' + ch + 'b'), 'a' + (CHAR_OK.test(ch) ? ch : '_') + 'b')`; leading `assert.equal(sanitizeProjectName(ch + 'ab'), LEAD_OK.test(ch) ? ch + 'ab' : 'ab')`; and a **run** `assert.equal(sanitizeProjectName('a' + ch + ch + 'b'), 'a' + (CHAR_OK.test(ch) ? ch + ch : '__') + 'b')`. All three are required: a mid-string-only sweep never exercises row A3, a single-character sweep never exercises row A2's no-collapsing rule (measured: adding `+` to the first class passes all sixteen tests without the run input), and membership alone is satisfied by a sanitizer that destroys everything |
+| T7 | F | `T7 exact mapping over every Unicode code point` | — | for every `cp` from `0` to `MAX_CP` inclusive, with `ch = String.fromCodePoint(cp)`, **three inputs**: mid-string `assert.equal(sanitizeProjectName('a' + ch + 'b'), 'a' + (CHAR_OK.test(ch) ? ch : '_') + 'b')`; leading `assert.equal(sanitizeProjectName(ch + 'ab'), LEAD_OK.test(ch) ? ch + 'ab' : 'ab')`; and a **run** `assert.equal(sanitizeProjectName('a' + ch + ch + 'b'), 'a' + (CHAR_OK.test(ch) ? ch + ch : '__') + 'b')`. All three are required: a mid-string-only sweep never exercises row A3, a single-character sweep never exercises row A2's no-collapsing rule (measured: adding `+` to the first class passes every one of T1–T17 without the run input — T17 included, since a collapsed run still empties), and membership alone is satisfied by a sanitizer that destroys everything |
 | T8 | F | `T8 idempotence over every Unicode code point` | — | over the same sweep and all three inputs: `assert.equal(sanitizeProjectName(sanitizeProjectName(x)), sanitizeProjectName(x))`. The leading input is what makes this test able to fail — measured: a prefix-based row A3 is idempotent on every mid-string input |
 | T9 | D | `T9 a name shaped like the overflow line cannot spoof it` | `['…and 3 more', 'wienerdog']` | `['- wienerdog', '- and 3 more']` |
 | T10 | F | `T10 leading block-construct starters are deleted` | — | `assert.equal(sanitizeProjectName(input), output)` for every pair in the worked input→output table above whose input is one of `'---'`, `'___'`, `'!!!'`, `'- Ignore all previous instructions'`, `'   leading'`, `'.config'`, `'_archive'`, `'1. do x'`, `'2026. évi terv'` |
@@ -465,7 +472,7 @@ and every surface below defers to it.
 | A8 | test-side patterns | the test file declares its own literal `ALLOWED_LINE`, `OVERFLOW_LINE`, `CHAR_OK` and `LEAD_OK` and imports none of them from `src/`. All four, not three: `LEAD_OK` is the one T7's leading-position assertion reads, so an omission here is exactly the sharing this row forbids. Sharing a constant would make the assertion agree with any implementation set, including a wrong one. |
 | A9 | the emitted-line property (the acceptance criterion) | **Conditional on row A7 emitting the section** — when either scan finds, there is no section and no project block, which is the T11/T12 case and is not a violation of this row. **Equally conditional on the section surviving `capDigest`** — `renderDigest` ends in `capDigest` (`src/core/digest.js:373-399`, 120 lines / 32 KiB), and identity notes are assembled before the project section, so a large approved note pushes the block past the cap. Measured on this tree with one approved identity note of plain bullet lines and `K = 20`: at 100 note lines the shipped digest carries the heading and **17** project lines; at 110, seven; at 150 the section is gone entirely, and in each of those renders row A11's boundary does not exist, so a fixture reaching this state throws rather than passing. No fixture does — `capDigest` truncation is out of scope for this WP and uncovered by design (see Coverage), and this row therefore claims nothing about a truncated render. When the section is emitted and survives, for a vault with `K` project directories the project block (row A11) contains **exactly `min(K, 50)` lines, plus one overflow line when `K > 50`**: `K` lines in the T1–T5 and T9 fixtures, 51 lines in T16's, and **every** line matches `^- (?:[\p{L}\p{N}\p{M}][\p{L}\p{N}\p{M} ._-]*)?$` or the overflow form of A10. Both halves are required — the count alone permits a mangled name, the per-line match alone permits a name that injects a second well-formed bullet. Closed-form over emitted output; never a list of attack shapes. **One divergence on the persisted surface, measured, recorded rather than closed:** `buildBlock` ends in `safeDigest.trimEnd()` (`src/adapters/shared.js:156`), so when an empty-sanitizing name is the last line of the last digest part — reachable whenever no daily section is emitted, since the project section is then final — the bare bullet — a `-` followed by one space, exactly what A3 says an empty result is emitted as — loses that trailing space and persists as a lone `-`, which does **not** match the form above. Measured end-to-end: a directory named `~~~` sorts after `wienerdog` and empties under A2+A3, and with no daily note the managed block's last line is exactly `-`. The rendered digest is unaffected — this is a `trimEnd` effect on the persisted copy only. `src/adapters/shared.js` is outside the Deliverables table, so this WP states the divergence and pins it with **T17** instead of closing it; closing it belongs to whichever WP owns that file. |
 | A10 | the overflow line | **Under A9's two conditions, both of which this row inherits — the section is emitted, and it survives `capDigest`.** `- …and <N> more` stays code-owned and unsanitized, appears in both `rawLines` and `projectLines` (T16 gates the rendered half and T15 gates the raw half; without T15's 55-directory fixture, deleting only the `rawLines` push leaves every other test green — measured), and is exempt from A9's per-line match via `^- …and \d+ more$`. Not spoofable: `…` (U+2026) is outside A1 and A3 deletes it in leading position, so `…and 3 more` emits `- and 3 more` (measured). |
-| A11 | project-block boundary | the lines between the `## Active projects` heading and the code-owned blank separator preceding the **last** `## Latest daily log` heading. Never "the first blank line": a hostile name emits its own blank and would shrink the inspected range to a vacuous pass. Every fixture vault carries a daily note so the boundary exists on both surfaces; a missing boundary throws. |
+| A11 | project-block boundary | the lines between the `## Active projects` heading and the code-owned blank separator preceding the **last** `## Latest daily log` heading. Never "the first blank line": a hostile name emits its own blank and would shrink the inspected range to a vacuous pass. **Every fixture that uses `projectBlock` carries a daily note** so the boundary exists on both surfaces; a missing boundary throws. **T17 is the one deliberate exception and does not use `projectBlock`:** its fixture omits the daily note on purpose, which is exactly what puts an empty-sanitizing name in final position, and it reads the managed block's last line directly. |
 | A12 | golden invariance, and its one bounded exception | **This row is the single place the golden's status is decided. Every other surface cites it; none restates the rule** — that split is deliberate, because the rule previously lived in five places and three review rounds each found one more of them. `tests/golden/digest-default.md` is not in the Deliverables table and must be byte-identical in the **final** state: sha256 `68ab999675bb66f806ad785aa4de008c90e74ed822afc4af366c2c030715a8a2`. Its only project name is `onboarding-redesign`, wholly inside A1 and unaffected by A3; rendering the fixture through this change was measured byte-identical to the golden. **The exception, bounded:** `G2` is a content pin, so its red side exists only against differing bytes; a temporary tip of the file is therefore permitted **provided it is restored immediately**. An unrestored edit — or any difference surviving into the final worktree, the commit or the diff — is a boundary violation. Nothing else may touch the file, and no implementation change may alter it. |
 
 ### Mirrored Surface Checklist
@@ -552,7 +559,10 @@ This WP handles untrusted input, so this section is written rather than deleted.
       than a list of dangerous shapes: where the section is emitted and survives
       `capDigest` — row A9's two conditions, restated here rather than dropped —
       the project block holds exactly `min(K, 50)` lines, plus one overflow line
-      when `K > 50`, and every line matches the allowlist form. **A second
+      when `K > 50`, and every line matches the allowlist form **on the rendered
+      digest**. On the persisted copy the same holds except in final position,
+      where A9 records a `trimEnd` divergence — a lone `-`, which forges nothing
+      but is outside the rendered form and is pinned by T17. **A second
       residual is named, not implied:** RES-2
       keeps one construct alive inside the bullet — a name beginning with digits
       followed by `.` and a space renders as a nested ordered-list item, as
@@ -569,7 +579,7 @@ This WP handles untrusted input, so this section is written rather than deleted.
 Objective and binary; each maps to the verification step of the same id below.
 Nothing outside this list is an acceptance criterion.
 
-- [ ] **G1** — the emitted-line property (A9) holds on both surfaces for the hostile fixtures; legitimate names survive byte-unchanged; the transform maps exactly and is idempotent over the enumerated corpus; both halves of row A7 hold — its two scan inputs and its four outcomes; and row A10's overflow branch renders.
+- [ ] **G1** — the emitted-line property (A9) holds on the rendered digest, and on the persisted managed block wherever the project block is not the digest's final part, for the hostile fixtures; A9's final-position divergence holds exactly as recorded, pinned by T17; legitimate names survive byte-unchanged; the transform maps exactly and is idempotent over the enumerated corpus; both halves of row A7 hold — its two scan inputs and its four outcomes; and row A10's overflow branch renders.
 - [ ] **G2** — `tests/golden/digest-default.md` is byte-identical to its state before this WP (A12).
 - [ ] **G3** — nothing else regressed — in particular the existing EP4 project-name test and the byte-exact golden digest test in `tests/unit/digest.test.js`.
 
@@ -596,7 +606,11 @@ A step's verdict is its envelope below, never the impression its output leaves.
 skipped or cancelled test case, a project block whose line count differs from row
 A9's formula (`min(K, 50)` plus one overflow line when `K > 50`), an emitted
 project line outside row A9's form, a scan input that is not byte-equal to row A7's
-two sections, or one byte of difference in `tests/golden/digest-default.md`.
+two sections, or one byte of difference in `tests/golden/digest-default.md`. **One
+thing this line does not forbid, because A9 records it and T17 requires it:** the
+persisted final line of an empty-sanitizing name in final position, which
+`trimEnd` reduces to a lone `-`. That is not an emitted line and not a widened
+envelope; it is a stated divergence with its own pinning test.
 
 - A NEW verification step is trusted only after it has been observed on both
   sides: a real green on the compliant state, and a real red run against a
@@ -614,13 +628,15 @@ two sections, or one byte of difference in `tests/golden/digest-default.md`.
 G1 is green on a correct implementation. These eleven rows are how the implementer
 shows it is green **for the right reason**. Each row is one independently-
 revertible change; apply it, run G1's command, record the output in the PR body,
-revert it. Cells follow ADR-0036. Every reddens/stays-green set in the table below
-was measured by running the sixteen tests T1–T16 against an implementation of this
-spec with that one mutation applied — not inferred from the mutation's shape; a
-differing observed set is a spec bug and goes under "Discovered issues". **T15
-fires under M1–M6b** because each of them changes what the EP4 decision reads; it
-is listed in each red set rather than treated as noise. **Every one of T1–T16 has
-an observed red side in this table** — M10 exists solely to supply T13's, since no
+revert it. Cells follow ADR-0036. **The division of labour is deliberate: the
+table's cells carry T1–T16, and the note under the table carries T17.** Every
+reddens/stays-green set in the cells was measured by running T1–T16 against an
+implementation of this spec with that one mutation applied — not inferred from the
+mutation's shape; a differing observed set is a spec bug and goes under "Discovered
+issues". **T15 fires under M1–M6b** because each of them changes what the EP4
+decision reads; it is listed in each red set rather than treated as noise.
+**Every one of T1–T17 has an observed red side** — T1–T16 in the cells below, T17
+in the note that follows them — and M10 exists solely to supply T13's, since no
 narrower mutation makes a benign section vanish.
 
 **T17's side is stated here rather than in the eleven cells**, because it was
@@ -648,7 +664,7 @@ against T17's fixture (`wienerdog` and `~~~`, no daily note):
 | M6a | delete the overflow push onto `rawLines` only | **TRIGGER: a fixture with more than `DigestCaps.MAX_PROJECTS` (50) project directories reaches this branch; T15's and T16's 55-directory fixtures are the only ones that do.** **PATCH:** delete the single line `` rawLines.push(`- …and ${overflow} more`); ``, leaving the `projectLines` push and everything else. This is deliberately one half of the branch: the two pushes are independently revertible and have separately observable effects, so conjoining them would let a green sweep hide either one. **MEASURED:** `rawSection` loses the code-owned line, so it stops being byte-identical to today's scan input and T15's byte-equality assertion fires. Every other test — including T16, which only reads the rendered block — stays green; that is exactly the hole this row exists to prove is closed. Measured red set: T15. | T15 | T1–T14, T16 |
 | M6b | delete the overflow push onto `projectLines` only | **TRIGGER: same as M6a.** **PATCH:** delete the single line `` projectLines.push(`- …and ${overflow} more`); ``, leaving the `rawLines` push. **MEASURED:** the rendered block is 50 lines instead of 51, so T16's length assertion fires, and the emitted scan input loses the line, so T15 fires too. Measured red set: T15, T16. | T15, T16 | T1–T14 |
 | M10 | omit unconditionally — the "rejects everything" EP4 decision | **TRIGGER: none — the decision runs on the ordinary path for every fixture with at least one project directory.** **PATCH:** change the emitted leg's comparison from `` .findings.length > 0 `` to `` .findings.length >= 0 ``, so the disjunction is always true and the section is never emitted; change nothing else. **MEASURED:** T13's `present true` assertion fires — this row exists to supply T13's failing side, which no narrower mutation reaches, because a decision that wrongly withholds a *benign* section necessarily withholds every fixture's section. That is why the red set is wide: T1–T5, T9 and T16 throw on the missing heading, and T14 fires alongside T13. Measured red set: T1, T2, T3, T4, T5, T9, T13, T14, T16. | T1, T2, T3, T4, T5, T9, T13, T14, T16 | T6, T7, T8, T10, T11, T12, T15 |
-| M9 | reject one allowed astral letter | **TRIGGER: none — the patch sits on the ordinary path.** **PATCH:** change row A4's first class to `` /(?:\u{10400}\|[^\p{L}\p{N}\p{M} ._-])/gu `` (the pipe there is the regex alternation, escaped for this table), so U+10400 (DESERET CAPITAL LETTER LONG I, an allowed `\p{L}`) maps to `_` while everything else is unchanged. **MEASURED:** T7 is the only test that reddens, and all three of its inputs at `cp = 0x10400` mismatch — mid-string `a_b` for `a𐐀b`, leading `ab` for `𐐀ab`, run `a__b` for `a𐐀𐐀b`; the mid-string one is simply the first to throw. This row is why T7 sweeps the whole range rather than a sample: under a sampled 12 299-code-point corpus this patch passed all sixteen tests, silently mangling non-English names — the outcome row A1 exists to prevent. Measured red set: T7. | T7 | T1–T6, T8–T16 |
+| M9 | reject one allowed astral letter | **TRIGGER: none — the patch sits on the ordinary path.** **PATCH:** change row A4's first class to `` /(?:\u{10400}\|[^\p{L}\p{N}\p{M} ._-])/gu `` (the pipe there is the regex alternation, escaped for this table), so U+10400 (DESERET CAPITAL LETTER LONG I, an allowed `\p{L}`) maps to `_` while everything else is unchanged. **MEASURED:** T7 is the only test that reddens, and all three of its inputs at `cp = 0x10400` mismatch — mid-string `a_b` for `a𐐀b`, leading `ab` for `𐐀ab`, run `a__b` for `a𐐀𐐀b`; the mid-string one is simply the first to throw. This row is why T7 sweeps the whole range rather than a sample: under a sampled 12 299-code-point corpus this patch passed every test in the file — sixteen when that was measured, and T17 is green under it too, so seventeen today — silently mangling non-English names — the outcome row A1 exists to prevent. Measured red set: T7. | T7 | T1–T6, T8–T16 |
 | M8 | collapse runs — add `+` to row A4's first character class | **TRIGGER: none — the patch sits on the ordinary path.** **PATCH:** change `` /[^\p{L}\p{N}\p{M} ._-]/gu `` to `` /[^\p{L}\p{N}\p{M} ._-]+/gu ``, so a run of excluded code points becomes one `_` instead of one each; change nothing else. **MEASURED:** T7's run input is the only assertion that fires — every other test, including all the rendered-surface and EP4 tests, stays green, because a collapsed run still yields one well-formed bullet. That is why T7 carries a run input at all: without it this violation of row A2 ships green. Measured red set: T7. | T7 | T1–T6, T8–T16 |
 | M7 | make row A3 a prefix instead of a deletion — the design alternative A3 rejects | **TRIGGER: none — the patch sits on the ordinary path.** **PATCH:** replace `` .replace(/^[^\p{L}\p{N}\p{M}]+/u, '') `` with `` .replace(/^(?=[^\p{L}\p{N}\p{M}])/u, '_') ``; change nothing else. **MEASURED:** the transform stops being idempotent — `'---'` → `'_---'` → `'__---'` — so T8 fires, together with T7's leading input, T9's deep-equal and T10's exact outputs. T8 fires **only** through the leading-position input: measured, a prefix implementation is idempotent on every mid-string input, which is why T7 and T8 each test both positions. Measured red set: T7, T8, T9, T10. | T7, T8, T9, T10 | T1–T6, T11–T16 |
 
@@ -656,7 +672,7 @@ against T17's fixture (`wienerdog` and `~~~`, no daily note):
 
 | Layer | Protects (reachable path) | Does not cover (explicit) | Depends on |
 |-------|---------------------------|---------------------------|------------|
-| project display-name sanitizer at the digest render point (Table A rows A1–A5) | the `## Active projects` lines of the rendered digest, reachable from `renderDigest` (`src/core/digest.js:442`) via `src/cli/sync.js:277` and `src/cli/dream.js:378`; and the same bytes as persisted on disk, via `buildBlock` (`src/adapters/shared.js:146`) ← `applyManagedBlock` (`src/adapters/shared.js:169`) ← `src/adapters/claude.js:55` (`CLAUDE.md`) and `src/adapters/codex.js:71` (`AGENTS.md`) | the persistent-failure alert callout assembled in `formatAlerts` (`src/core/digest.js:288-308`); the dream-report enforcement and redaction rows (`src/core/dream/validate.js:1352-1353` and `:1366-1370`); the truncation behaviour of `capDigest` (`src/core/digest.js:373-399`); the daily-summary fence and anything inside the daily summary; a nested ordered-list marker inside the bullet (RES-2); the meaning of an allowlist-conforming name (RES-3); any future call site that interpolates a raw directory name (RES-1) | the EP4 secret scan for the omission decision, now with row A7's two legs; `listProjectDirs` remaining the only producer of these names (RES-1) |
+| project display-name sanitizer at the digest render point (Table A rows A1–A5) | the `## Active projects` lines of the rendered digest, reachable from `renderDigest` (`src/core/digest.js:442`) via `src/cli/sync.js:277` and `src/cli/dream.js:378`; and the same bytes as persisted on disk **except for row A9's recorded final-position divergence**, where `buildBlock`'s `trimEnd` reduces a bare bullet to a lone `-` (pinned by T17, not closed here), via `buildBlock` (`src/adapters/shared.js:146`) ← `applyManagedBlock` (`src/adapters/shared.js:169`) ← `src/adapters/claude.js:55` (`CLAUDE.md`) and `src/adapters/codex.js:71` (`AGENTS.md`) | the persistent-failure alert callout assembled in `formatAlerts` (`src/core/digest.js:288-308`); the dream-report enforcement and redaction rows (`src/core/dream/validate.js:1352-1353` and `:1366-1370`); the truncation behaviour of `capDigest` (`src/core/digest.js:373-399`); the daily-summary fence and anything inside the daily summary; a nested ordered-list marker inside the bullet (RES-2); the meaning of an allowlist-conforming name (RES-3); any future call site that interpolates a raw directory name (RES-1) | the EP4 secret scan for the omission decision, now with row A7's two legs; `listProjectDirs` remaining the only producer of these names (RES-1) |
 
 ## Out of scope (do NOT do these)
 
@@ -678,6 +694,10 @@ partially addressed here.
   **A12** governs the one bounded exception and this item does not narrow it. No
   golden is in the Deliverables table, and A12 decides what may happen to
   `tests/golden/digest-default.md`.
+- **Touching `src/adapters/shared.js` to close A9's final-position divergence.**
+  `buildBlock`'s `trimEnd` is why an empty-sanitizing name persists as a lone `-`.
+  A9 records it, T17 pins it, and this WP does not change that file — it is not in
+  the Deliverables table. Closing it belongs to whichever WP owns `shared.js`.
 - **Touching `src/core/dream/ledger.js`.** Its `displayName` keeps its ASCII set;
   aligning the two sanitizers is not this WP's call.
 - **Changing the emitted line format.** The project line stays `- <name>`. Wrapping
