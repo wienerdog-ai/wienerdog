@@ -1,0 +1,37 @@
+[codex] Starting Codex task thread.
+[codex] Thread ready (019fe260-efbe-7e10-bbb2-c2806f9b41cc).
+[codex] Turn started (019fe260-f087-78b1-86c2-f459788dcab3).
+[codex] Assistant message captured: {"verdict":"approve","summary":"A megadott egyetlen specifikációt és az engedélyezett négy fa...
+[codex] Running command: /bin/zsh -lc 'git diff --unified=80 main -- docs/specs/WP-sanitize-project-display-names.md &...
+[codex] Command completed: /bin/zsh -lc 'git diff --unified=80 main -- docs/specs/WP-sanitize-project-display-names.md &... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '250,665p' docs/specs/WP-sanitize-project-display-names.md"
+[codex] Command completed: /bin/zsh -lc "sed -n '250,665p' docs/specs/WP-sanitize-project-display-names.md" (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba docs/specs/WP-sanitize-project-display-names.md | sed -n '360,665p'"
+[codex] Command completed: /bin/zsh -lc "nl -ba docs/specs/WP-sanitize-project-display-names.md | sed -n '360,665p'" (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba src/core/digest.js | sed -n '1,80p;210,260p;280,420p;430,570p;600,640p' ...
+[codex] Command completed: /bin/zsh -lc "nl -ba src/core/digest.js | sed -n '1,80p;210,260p;280,420p;430,570p;600,640p' ... (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba docs/specs/WP-sanitize-project-display-names.md | sed -n '85,130p;180,25...
+[codex] Command completed: /bin/zsh -lc "nl -ba docs/specs/WP-sanitize-project-display-names.md | sed -n '85,130p;180,25... (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba docs/specs/WP-sanitize-project-display-names.md | sed -n '120,138p'"
+[codex] Command completed: /bin/zsh -lc "nl -ba docs/specs/WP-sanitize-project-display-names.md | sed -n '120,138p'" (exit 0)
+[codex] Running command: /bin/zsh -lc "rg -n \"exactly|min\\(K|project block|every line|emitted-line|overflow line|sur...
+[codex] Command completed: /bin/zsh -lc "rg -n \"exactly|min\\(K|project block|every line|emitted-line|overflow line|sur... (exit 0)
+[codex] Assistant message captured: {"verdict":"approve","summary":"A korábbi A9/A10-hatókör javítása a kanonikus sorokban és a S...
+[codex] Running command: /bin/zsh -lc "/usr/bin/time -p node -e \"const assert=require('node:assert/strict');function ...
+[codex] Command completed: /bin/zsh -lc "/usr/bin/time -p node -e \"const assert=require('node:assert/strict');function ... (exit 0)
+[codex] Assistant message captured: {"verdict":"needs-attention","summary":"Még ne szálljon: az A9/A10 capDigest-hatókör javítása...
+[codex] Turn completed.
+# Codex Adversarial Review
+
+Target: branch diff against main
+Verdict: needs-attention
+
+Még ne szálljon: az A9/A10 capDigest-hatókör javítása konzisztens, és más feltétel nélküli ismétlést nem találtam. A G2 kötelező vörös oldala azonban továbbra is ütközik a Deliverables-határral.
+
+Findings:
+- [medium] A G2 vörös oldala továbbra sem állítható elő szabályosan (docs/specs/WP-sanitize-project-display-names.md:127-131)
+  A megtámadott mondat: „Every other path this spec names is one the implementer reads, never writes … touching it is a boundary violation.” A G2 pontos parancsa csak akkor ad vörös eredményt, ha a golden bájtjai ideiglenesen megváltoznak. A 590. és 658. sor ugyan ezt engedélyezi tip-observe-restore formában, de az abszolút Deliverables-szabály továbbra is minden írást és puszta érintést határsértésnek nevez. Így az implementer vagy megsérti a permission boundaryt, vagy nem tudja teljesíteni a kötelező kétoldalú G2-bizonyítást és a Definition of done-t.
+  Recommendation: A Deliverables-szövegben tegyétek explicit kivétellé a G2 ideiglenes, azonnal visszaállított ellenőrző mutációját; csak a vissza nem állított vagy a végső diffben maradó módosítás legyen határsértés, pontosan a Verification és Definition of done megfogalmazásával.
+
+Next steps:
+- Oldjátok fel a Deliverables és a G2 tip-observe-restore engedélye közötti ellentmondást, majd futtassátok újra a záró ellenőrzést.
