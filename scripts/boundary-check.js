@@ -46,6 +46,12 @@ function main() {
   allowed.add('package-lock.json');
   // One appended dogfood lesson per session is allowed by CLAUDE.md.
   allowed.add('memory/lessons/inbox.md');
+  // Process records travel with any PR. A logbook entry records how a decision
+  // or a review round went; it is never an implementation surface, so it is
+  // never a Deliverables entry and a spec that listed one would be wrong. The
+  // trailing slash keeps this to the directory: docs/specs/ at large stays
+  // rejected, which is what the ADR-0029 ROADMAP case depends on.
+  allowed.add('docs/specs/logbook/');
 
   // Deliverables entries ending in '/' allow the whole directory tree.
   const dirPrefixes = [...allowed].filter((p) => p.endsWith('/'));
