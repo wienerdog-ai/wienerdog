@@ -124,6 +124,11 @@ npm test -- --test-name-pattern thing
 npm run lint
 ```
 
+- A NEW verification step is trusted only after it has been observed on
+  both sides: a real green on the compliant state, and a real red run
+  against a deliberately broken state — so a check that can never fail is
+  caught before anyone believes it. Paste both outputs.
+
 ## Out of scope (do NOT do these)
 
 - Explicitly list adjacent work that belongs to other WPs, with their ids.
