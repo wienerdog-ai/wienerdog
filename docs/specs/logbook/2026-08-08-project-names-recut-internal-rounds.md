@@ -646,3 +646,41 @@ had just replaced with a quantifier.
 
 All thirteen rows were read end to end afterwards as reddens/stays-green pairs;
 the partition is consistent and no other cell moved.
+
+## Tenth closing round — zero findings
+
+Eleventh clean run of the companion runtime. **Verdict: approve. No material
+findings.** The ruled closure criterion is met: a fresh full round, against text
+that was byte-identical to the committed spec, returned nothing.
+
+What the round confirmed rather than merely accepted: the mandated
+implementation reproduces every row of the worked table; the two named
+exceptions are gated where the table says they are — T6 for NFC/NFD, T10's
+escape-built literal for the leading-spaces row; all thirteen mutation
+reddens/stays-green sets match the tree; the seventeen-test and thirteen-row
+counts are consistent; and no contract surface remains at a narrower scope than
+the row that owns it.
+
+### The series
+
+Findings per round, from the re-cut onward: **17 → 3 → 2 → 1 → 3 → 4 → 2 → 3 →
+3 → 3 → 1 → 0.**
+
+Seventeen came from the internal fidelity and coherence passes before any
+external round. Of everything after, the findings fall into three groups. The
+first is content the eleven pre-reset rounds had passed and this run caught
+anyway — a false-green in `G1`'s envelope, the ungated trailing position, the
+ungated mixed run. The second is prose this run wrote while fixing the first,
+which is most of the middle of the series. The third is three families that kept
+reopening until each got a single owner: **A12** for the golden fixture, **A9**
+for the persisted-surface divergence, and the worked input→output table for the
+exact-mapping obligation. Every one of those three was closed by replacing an
+enumeration with a quantifier or a citation, and none of them reappeared after.
+
+Three practices were added along the way and all three paid for themselves
+inside this package: the internal coherence pass before any external round
+(Q13), the update-all-mirrors walk run whenever a canonical row changes, and
+Q15 — re-measuring every MEASURED claim a new gate could invalidate, in the same
+commit. Q15's first application caught M8; its second caught M11.
+
+The spec's `status:` stays `Draft`. Raising it to `Ready` is the owner's act.
