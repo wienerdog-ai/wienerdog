@@ -384,24 +384,29 @@ test('T16 the code-owned overflow line renders past MAX_PROJECTS', () => {
   assert.ok(OVERFLOW_LINE.test(block[50]));
 });
 
-// T17 — row A9's persisted-surface divergence, BOTH sub-cases, each needing the
-// project section in final position, so the test builds two vaults. `projectBlock`
-// is deliberately NOT used: it requires the code-owned `## Latest daily log`
-// heading, and these fixtures omit the daily note on purpose so that the project
-// section is the digest's LAST part. Both names sort after `wienerdog` (U+007A,
-// U+007E), so each is last in its own vault.
+// T17 — row A9's persisted-surface divergence: both sub-cases plus the control
+// that gates its reachability condition. `projectBlock` is deliberately NOT used
+// — it requires the code-owned `## Latest daily log` heading, and these fixtures
+// omit the daily note on purpose so the project section is the digest's LAST
+// part. `TRAILING` and `~~~` both sort after `wienerdog` (U+007A, U+007E), so
+// each is last in its own vault; in the control `zz` follows `TRAILING` instead.
 //
-// TRAILING is written with \u0020 escapes for the reason T6 literals are:
-// trailing spaces in a source line are invisible, and any formatter, editor or
-// lint pass that trims them would silently turn this case into a different one.
+// TRAILING is written with \u0020 escapes for the reason T6 literals are: trailing
+// spaces in a source line are invisible, and any formatter, editor or lint pass
+// that trims them would silently turn this case into a different one. Every
+// expectation below is built from TRAILING rather than retyped, so there is only
+// ever one copy of those bytes.
 const TRAILING = 'z\u0020\u0020\u0020';
 
-test('T17 trailing whitespace is lost in final position, in both sub-cases', () => {
-  /** @param {string[]} names @returns {string} the managed block's last line */
-  const finalLine = (names) => {
+test('T17 trailing whitespace is lost in final position, and only there', () => {
+  /** @param {string[]} names @returns {string[]} the managed block, split */
+  const persist = (names) => {
     const r = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-projname-'));
     for (const n of names) fs.mkdirSync(path.join(r, '01-Projects', n), { recursive: true });
-    const block = buildBlock(renderDigest(r, undefined, OPTS)).split('\n');
+    return buildBlock(renderDigest(r, undefined, OPTS)).split('\n');
+  };
+  const finalLine = (names) => {
+    const block = persist(names);
     return block[block.length - 2]; // the line before the END sentinel
   };
   // (a) bytes only — the spaces are gone, the A9 line form survives
@@ -412,6 +417,14 @@ test('T17 trailing whitespace is lost in final position, in both sub-cases', () 
   const b = finalLine(['wienerdog', '~~~']);
   assert.equal(b, '-', 'and an empty-sanitizing name loses the bullet space too');
   assert.equal(ALLOWED_LINE.test(b), false, 'which is the sub-case that leaves A9 rendered form');
+  // (c) control — the SAME name, not in final position. A9 requires the affected
+  // line to BE the digest last line; here `zz` follows it, so the spaces survive.
+  // Without this the spec would state a reachability condition it never gates,
+  // and a sanitizer that trimmed its own tail would pass (a) unnoticed.
+  assert.ok(
+    persist(['zz', TRAILING]).includes('- ' + TRAILING),
+    'a non-final line keeps its trailing spaces on the persisted surface'
+  );
 });
 ```
 
@@ -425,8 +438,8 @@ test('T17 trailing whitespace is lost in final position, in both sub-cases', () 
 | T4 | PB | `T4 the persisted managed block carries the same property` | `[HOSTILE_A, HOSTILE_B, HOSTILE_C, 'wienerdog']` | — |
 | T5 | D | `T5 legitimate names survive byte-unchanged` | `['Olvasnivalók', 'onboarding-redesign', 'Q3 planning', 'v1.2_final', '日本語プロジェクト']` | `fs.readdirSync(path.join(v, '01-Projects')).sort().map((n) => '- ' + n)` — read back from the filesystem, so NFC/NFD storage cannot cause a false red |
 | T6 | F | `T6 an accented name is unchanged in NFC and in NFD` | — | `const nfc = 'Olvasnival\u00f3k';` and `const nfd = 'Olvasnivalo\u0301k';` — **written with those escapes, not as literal accented characters**, because a markdown or editor pass normalizes a pasted NFD literal back to NFC and the test then silently checks NFC twice. `assert.equal(sanitizeProjectName(x), x)` for both, and `assert.notEqual(nfc, nfd)` first, so a normalized source fails loudly |
-| T7 | F | `T7 exact mapping over every Unicode code point` | — | for every `cp` from `0` to `MAX_CP` inclusive, with `ch = String.fromCodePoint(cp)`, **three inputs**: mid-string `assert.equal(sanitizeProjectName('a' + ch + 'b'), 'a' + (CHAR_OK.test(ch) ? ch : '_') + 'b')`; leading `assert.equal(sanitizeProjectName(ch + 'ab'), LEAD_OK.test(ch) ? ch + 'ab' : 'ab')`; and a **run** `assert.equal(sanitizeProjectName('a' + ch + ch + 'b'), 'a' + (CHAR_OK.test(ch) ? ch + ch : '__') + 'b')`. All three are required: a mid-string-only sweep never exercises row A3, a single-character sweep never exercises row A2's no-collapsing rule (measured: adding `+` to the first class passes every one of T1–T17 without the run input — T17 included, since a collapsed run still empties), and membership alone is satisfied by a sanitizer that destroys everything |
-| T8 | F | `T8 idempotence over every Unicode code point` | — | over the same sweep and all three inputs: `assert.equal(sanitizeProjectName(sanitizeProjectName(x)), sanitizeProjectName(x))`. The leading input is what makes this test able to fail — measured: a prefix-based row A3 is idempotent on every mid-string input |
+| T7 | F | `T7 exact mapping over every Unicode code point` | — | for every `cp` from `0` to `MAX_CP` inclusive, with `ch = String.fromCodePoint(cp)`, **four inputs**: mid-string `assert.equal(sanitizeProjectName('a' + ch + 'b'), 'a' + (CHAR_OK.test(ch) ? ch : '_') + 'b')`; leading `assert.equal(sanitizeProjectName(ch + 'ab'), LEAD_OK.test(ch) ? ch + 'ab' : 'ab')`; **trailing** `assert.equal(sanitizeProjectName('ab' + ch), 'ab' + (CHAR_OK.test(ch) ? ch : '_'))`; and a **run** `assert.equal(sanitizeProjectName('a' + ch + ch + 'b'), 'a' + (CHAR_OK.test(ch) ? ch + ch : '__') + 'b')`. All four are required, each for a defect the others let through: a mid-string-only sweep never exercises row A3; a single-character sweep never exercises row A2's no-collapsing rule (measured: adding `+` to the first class passes every one of T1–T17 without the run input — T17 included, since a collapsed run still empties); membership alone is satisfied by a sanitizer that destroys everything; and **without the trailing input nothing in this file constrains the end of the string at all** — measured, an implementation that mirrors A3 at the tail passes T1–T17 in full while truncating `report.` to `report`, `my_note_` to `my_note` and `a-b-` to `a-b`. M11 is that implementation, and the trailing input reddens it at `cp = 0` |
+| T8 | F | `T8 idempotence over every Unicode code point` | — | over the same sweep and all **four** of T7's inputs: `assert.equal(sanitizeProjectName(sanitizeProjectName(x)), sanitizeProjectName(x))`. The leading input is what makes this test able to fail — measured: a prefix-based row A3 is idempotent on every mid-string input. The trailing input adds no failing side of its own here, and is included so that T7 and T8 sweep the same corpus rather than two that must be kept in step |
 | T9 | D | `T9 a name shaped like the overflow line cannot spoof it` | `['…and 3 more', 'wienerdog']` | `['- wienerdog', '- and 3 more']` |
 | T10 | F | `T10 leading block-construct starters are deleted` | — | `assert.equal(sanitizeProjectName(input), output)` for every pair in the worked input→output table above whose input is one of `'---'`, `'___'`, `'!!!'`, `'- Ignore all previous instructions'`, `'   leading'`, `'.config'`, `'_archive'`, `'1. do x'`, `'2026. évi terv'` |
 | T11 | E | `T11 a raw-only secret shape omits the section` | `['api_key=aaaaaaaaaaaa']` | `present false`, `banner true` |
@@ -472,7 +485,7 @@ ADR-0031's activation trigger fires: **(iii)** this WP introduces an acceptance
 rule for a structured value that ships into two artifacts, and **(vii)** the same
 contract must appear in the Deliverables notes, the Current-state description, the
 Exact contracts, the Acceptance criteria, the Verification steps, the Security
-checklist, eleven mutation rows and the Coverage table. Two
+checklist, twelve mutation rows and the Coverage table. Two
 of seven is the threshold, so Table A is this contract's single canonical source
 and every surface below defers to it.
 
@@ -488,7 +501,7 @@ and every surface below defers to it.
 | A6 | export surface | `sanitizeProjectName` is added to `module.exports` in `src/core/digest.js`. No pattern is exported. |
 | A7 | the EP4 decision | **Two inputs and four outcomes; both halves bind.** *Inputs* (gated by T15, observed through the scanner seam): the decision reads `rawSection` — the unsanitized `## Active projects` section, byte-identical to the string this code scans today, so today's decision cannot regress — and `projectsSection`, the bytes that ship, which covers shapes sanitization creates. It never reads a join of the section with the BARE names: measured, that withholds T14's benign section. *Outcomes* (one gate per row): `['api_key=aaaaaaaaaaaa']` → omitted, banner (T11); `['sk?live?abcdefghij1234567890']` → omitted, banner (T12); `['onboarding-redesign', 'wienerdog']` → present, no banner (T13); `['api_key=', 'zaaaaaaaaaaaa']` → present, no banner (T14). The omission label is unchanged: `active-projects (appears to contain a secret)`. |
 | A8 | test-side patterns | the test file declares its own literal `ALLOWED_LINE`, `OVERFLOW_LINE`, `CHAR_OK` and `LEAD_OK` and imports none of them from `src/`. All four, not three: `LEAD_OK` is the one T7's leading-position assertion reads, so an omission here is exactly the sharing this row forbids. Sharing a constant would make the assertion agree with any implementation set, including a wrong one. |
-| A9 | the emitted-line property (the acceptance criterion) | **Conditional on row A7 emitting the section** — when either scan finds, there is no section and no project block, which is the T11/T12 case and is not a violation of this row. **Equally conditional on the section surviving `capDigest`** — `renderDigest` ends in `capDigest` (`src/core/digest.js:373-399`, 120 lines / 32 KiB), and identity notes are assembled before the project section, so a large approved note pushes the block past the cap. Measured on this tree with one approved identity note of plain bullet lines and `K = 20`: at 100 note lines the shipped digest carries the heading and **17** project lines; at 110, seven; at 150 the section is gone entirely, and in each of those renders row A11's boundary does not exist, so a fixture reaching this state throws rather than passing. No fixture does — `capDigest` truncation is out of scope for this WP and uncovered by design (see Coverage), and this row therefore claims nothing about a truncated render. When the section is emitted and survives, for a vault with `K` project directories the project block (row A11) contains **exactly `min(K, 50)` lines, plus one overflow line when `K > 50`**: `K` lines in the T1–T5 and T9 fixtures, 51 lines in T16's, and **every** line matches `^- (?:[\p{L}\p{N}\p{M}][\p{L}\p{N}\p{M} ._-]*)?$` or the overflow form of A10. Both halves are required — the count alone permits a mangled name, the per-line match alone permits a name that injects a second well-formed bullet. Closed-form over emitted output; never a list of attack shapes. **One divergence on the persisted surface — this row is its single owner; every other surface cites it and none restates the mechanism.** Measured, recorded rather than closed: `buildBlock` ends in `safeDigest.trimEnd()` (`src/adapters/shared.js:156`), which strips **every trailing whitespace character** from the digest's last line. On this surface only U+0020 is reachable, because A1 admits no other whitespace — tab and every other Cc, U+00A0 and U+3000 all map to `_`. It bites whenever the project section is the digest's last part, reachable whenever no daily section is emitted, and **the two sub-cases are separated by the sanitized output, not by the raw name**: **(a) bytes only** — the output is non-empty and ends in U+0020, so it renders with those spaces and persists without them; the line still matches the form above and forges nothing, and only byte-identity between the rendered and persisted copies breaks. **(b) form as well** — the output is empty, so it renders as the bare bullet A3 describes, a `-` followed by one space, and persists as a lone `-`, which does **not** match the form above. Drawing the line on the raw name would be wrong and is measured wrong: `'   '` and `'---   '` both end in spaces yet sanitize to the empty string, because A3 deletes the whole leading run — they are case (b). Both cases measured end-to-end with no daily note: a directory named `z` plus three spaces persists as `- z`, and one named `~~~` (which sorts after `wienerdog`) persists as `-`. The rendered digest is unaffected in both. `src/adapters/shared.js` is outside the Deliverables table, so this WP states the divergence and pins both sub-cases with **T17** instead of closing it; closing it belongs to whichever WP owns that file. |
+| A9 | the emitted-line property (the acceptance criterion) | **Conditional on row A7 emitting the section** — when either scan finds, there is no section and no project block, which is the T11/T12 case and is not a violation of this row. **Equally conditional on the section surviving `capDigest`** — `renderDigest` ends in `capDigest` (`src/core/digest.js:373-399`, 120 lines / 32 KiB), and identity notes are assembled before the project section, so a large approved note pushes the block past the cap. Measured on this tree with one approved identity note of plain bullet lines and `K = 20`: at 100 note lines the shipped digest carries the heading and **17** project lines; at 110, seven; at 150 the section is gone entirely, and in each of those renders row A11's boundary does not exist, so a fixture reaching this state throws rather than passing. No fixture does — `capDigest` truncation is out of scope for this WP and uncovered by design (see Coverage), and this row therefore claims nothing about a truncated render. When the section is emitted and survives, for a vault with `K` project directories the project block (row A11) contains **exactly `min(K, 50)` lines, plus one overflow line when `K > 50`**: `K` lines in the T1–T5 and T9 fixtures, 51 lines in T16's, and **every** line matches `^- (?:[\p{L}\p{N}\p{M}][\p{L}\p{N}\p{M} ._-]*)?$` or the overflow form of A10. Both halves are required — the count alone permits a mangled name, the per-line match alone permits a name that injects a second well-formed bullet. Closed-form over emitted output; never a list of attack shapes. **One divergence on the persisted surface — this row is its single owner; every other surface cites it and none restates the mechanism.** Measured, recorded rather than closed: `buildBlock` ends in `safeDigest.trimEnd()` (`src/adapters/shared.js:156`), which strips **every trailing whitespace character** from the digest's last line. On this surface only U+0020 is reachable, because A1 admits no other whitespace — tab and every other Cc, U+00A0 and U+3000 all map to `_`. **It bites only when the affected project line is itself the digest's last line** — measured, `trimEnd` touches nothing else: `'a\nb   \nc'` comes back unchanged. That needs all three of: the section is the digest's last part (no daily section emitted), the name is the last kept project, and no overflow line follows it (past `MAX_PROJECTS` the code-owned overflow line is last and every project line is safe). **The two sub-cases are then separated by the sanitized output, not by the raw name**: **(a) bytes only** — the output is non-empty and ends in U+0020, so it renders with those spaces and persists without them; the line still matches the form above and forges nothing, and only byte-identity between the rendered and persisted copies breaks. **(b) form as well** — the output is empty, so it renders as the bare bullet A3 describes, a `-` followed by one space, and persists as a lone `-`, which does **not** match the form above. Drawing the line on the raw name would be wrong and is measured wrong: `'   '` and `'---   '` both end in spaces yet sanitize to the empty string, because A3 deletes the whole leading run — they are case (b). Both cases measured end-to-end with no daily note: a directory named `z` plus three spaces persists as `- z`, and one named `~~~` (which sorts after `wienerdog`) persists as `-`. The rendered digest is unaffected in both. `src/adapters/shared.js` is outside the Deliverables table, so this WP states the divergence and pins both sub-cases with **T17** instead of closing it; closing it belongs to whichever WP owns that file. |
 | A10 | the overflow line | **Under A9's two conditions, both of which this row inherits — the section is emitted, and it survives `capDigest`.** `- …and <N> more` stays code-owned and unsanitized, appears in both `rawLines` and `projectLines` (T16 gates the rendered half and T15 gates the raw half; without T15's 55-directory fixture, deleting only the `rawLines` push leaves every other test green — measured), and is exempt from A9's per-line match via `^- …and \d+ more$`. Not spoofable: `…` (U+2026) is outside A1 and A3 deletes it in leading position, so `…and 3 more` emits `- and 3 more` (measured). |
 | A11 | project-block boundary | the lines between the `## Active projects` heading and the code-owned blank separator preceding the **last** `## Latest daily log` heading. Never "the first blank line": a hostile name emits its own blank and would shrink the inspected range to a vacuous pass. **Every fixture that uses `projectBlock` carries a daily note** so the boundary exists on both surfaces; a missing boundary throws. **T17 is the one deliberate exception and does not use `projectBlock`:** its fixture omits the daily note on purpose, which is exactly what puts an empty-sanitizing name in final position, and it reads the managed block's last line directly. |
 | A12 | golden invariance, and its one bounded exception | **This row is the single place the golden's status is decided. Every other surface cites it; none restates the rule** — that split is deliberate, because the rule previously lived in five places and three review rounds each found one more of them. `tests/golden/digest-default.md` is not in the Deliverables table and must be byte-identical in the **final** state: sha256 `68ab999675bb66f806ad785aa4de008c90e74ed822afc4af366c2c030715a8a2`. Its only project name is `onboarding-redesign`, wholly inside A1 and unaffected by A3; rendering the fixture through this change was measured byte-identical to the golden. **The exception, bounded:** `G2` is a content pin, so its red side exists only against differing bytes; a temporary tip of the file is therefore permitted **provided it is restored immediately**. An unrestored edit — or any difference surviving into the final worktree, the commit or the diff — is a boundary violation. Nothing else may touch the file, and no implementation change may alter it. |
@@ -634,7 +647,7 @@ owns its statement — this line does not repeat it.
   deliberately broken state — so a check that can never fail is caught before
   anyone believes it. Paste both outputs.
 - **Applied to the three steps above.** `G1`'s red side is supplied row by row by
-  the eleven mutation rows below — every one of T1-T17 has an observed failing
+  the twelve mutation rows below — every one of T1-T17 has an observed failing
   side there. **`G2` and `G3` carry no recorded red observation**: the implementer
   produces and pastes one for each, within the bounds row **A12** sets for
   `tests/golden/digest-default.md`. How the red side is produced is the
@@ -642,7 +655,7 @@ owns its statement — this line does not repeat it.
 
 ### Mutation rows — the both-directions proof for G1
 
-G1 is green on a correct implementation. These eleven rows are how the implementer
+G1 is green on a correct implementation. These twelve rows are how the implementer
 shows it is green **for the right reason**. Each row is one independently-
 revertible change; apply it, run G1's command, record the output in the PR body,
 revert it. Cells follow ADR-0036. **The division of labour is deliberate: the
@@ -656,23 +669,28 @@ decision reads; it is listed in each red set rather than treated as noise.
 in the note that follows them — and M10 exists solely to supply T13's, since no
 narrower mutation makes a benign section vanish.
 
-**T17's side is stated here rather than in the eleven cells**, because it was
-measured after those sets were: adding a seventeenth entry to each of twenty-two
-cells is the kind of per-item bookkeeping this spec already refused once. Measured
-against T17's fixture (`wienerdog` and `~~~`, no daily note):
+**T17's side is stated here rather than in the cells of the rows above**, because
+it was measured after those sets were: adding a seventeenth entry to each of
+twenty-four cells is the kind of per-item bookkeeping this spec already refused
+once. M11 is the exception — it was authored after T17 and carries T17 in its own
+cells, like every other row carries T1–T16. Measured against T17's three vaults
+(`wienerdog` + `TRAILING`; `wienerdog` + `~~~`; `zz` + `TRAILING`, all with no
+daily note):
 
-- **Reddens under M1, M2, M7 and M10.** In vault (b) M1 leaves the name
+- **Reddens under M1, M2, M7, M10 and M11.** In vault (b) M1 leaves the name
   unsanitized so the last persisted line is `- ~~~`, and M7's prefix form yields
   `- ____`; neither trims to `-`. M10 emits no section at all, so there is no
   project line to read. **M2 reddens through vault (a):** a total-rejecting
   sanitizer empties `TRAILING` as well, so the last line becomes `-` where `- z`
-  is required. That fourth row is what the second vault buys — with only the
-  empty-name vault, M2 was green here.
+  is required — that row is what the second vault buys, since with only the
+  empty-name vault M2 was green here. **M11 reddens through the control (c):** it
+  strips the trailing spaces in the sanitizer itself, so they are gone from a
+  line that is not final and the control's `includes` fails.
 - **Stays green under the other seven.** M8 and M9 still map `~~~` to the empty
-  string and leave `TRAILING` alone, so both sub-cases are unchanged. M3, M4 and
-  M5 move the EP4 decision, but not for these fixtures — measured, `scanAndRedact`
+  string and leave `TRAILING` alone, so every vault is unchanged. M3, M4 and M5
+  move the EP4 decision, but not for these fixtures — measured, `scanAndRedact`
   returns zero findings on the raw form, on the emitted form, and on M5's
-  forbidden join, for both vaults. M6a and M6b need more than
+  forbidden join, for all three vaults. M6a and M6b need more than
   `DigestCaps.MAX_PROJECTS` directories to reach their branch, and each of T17's
   vaults has two.
 
@@ -686,9 +704,10 @@ against T17's fixture (`wienerdog` and `~~~`, no daily note):
 | M6a | delete the overflow push onto `rawLines` only | **TRIGGER: a fixture with more than `DigestCaps.MAX_PROJECTS` (50) project directories reaches this branch; T15's and T16's 55-directory fixtures are the only ones that do.** **PATCH:** delete the single line `` rawLines.push(`- …and ${overflow} more`); ``, leaving the `projectLines` push and everything else. This is deliberately one half of the branch: the two pushes are independently revertible and have separately observable effects, so conjoining them would let a green sweep hide either one. **MEASURED:** `rawSection` loses the code-owned line, so it stops being byte-identical to today's scan input and T15's byte-equality assertion fires. Every other test — including T16, which only reads the rendered block — stays green; that is exactly the hole this row exists to prove is closed. Measured red set: T15. | T15 | T1–T14, T16 |
 | M6b | delete the overflow push onto `projectLines` only | **TRIGGER: same as M6a.** **PATCH:** delete the single line `` projectLines.push(`- …and ${overflow} more`); ``, leaving the `rawLines` push. **MEASURED:** the rendered block is 50 lines instead of 51, so T16's length assertion fires, and the emitted scan input loses the line, so T15 fires too. Measured red set: T15, T16. | T15, T16 | T1–T14 |
 | M10 | omit unconditionally — the "rejects everything" EP4 decision | **TRIGGER: none — the decision runs on the ordinary path for every fixture with at least one project directory.** **PATCH:** change the emitted leg's comparison from `` .findings.length > 0 `` to `` .findings.length >= 0 ``, so the disjunction is always true and the section is never emitted; change nothing else. **MEASURED:** T13's `present true` assertion fires — this row exists to supply T13's failing side, which no narrower mutation reaches, because a decision that wrongly withholds a *benign* section necessarily withholds every fixture's section. That is why the red set is wide: T1–T5, T9 and T16 throw on the missing heading, and T14 fires alongside T13. Measured red set: T1, T2, T3, T4, T5, T9, T13, T14, T16. | T1, T2, T3, T4, T5, T9, T13, T14, T16 | T6, T7, T8, T10, T11, T12, T15 |
-| M9 | reject one allowed astral letter | **TRIGGER: none — the patch sits on the ordinary path.** **PATCH:** change row A4's first class to `` /(?:\u{10400}\|[^\p{L}\p{N}\p{M} ._-])/gu `` (the pipe there is the regex alternation, escaped for this table), so U+10400 (DESERET CAPITAL LETTER LONG I, an allowed `\p{L}`) maps to `_` while everything else is unchanged. **MEASURED:** T7 is the only test that reddens, and all three of its inputs at `cp = 0x10400` mismatch — mid-string `a_b` for `a𐐀b`, leading `ab` for `𐐀ab`, run `a__b` for `a𐐀𐐀b`; the mid-string one is simply the first to throw. This row is why T7 sweeps the whole range rather than a sample: under a sampled 12 299-code-point corpus this patch passed every test in the file — sixteen when that was measured, and T17 is green under it too, so seventeen today — silently mangling non-English names — the outcome row A1 exists to prevent. Measured red set: T7. | T7 | T1–T6, T8–T16 |
+| M9 | reject one allowed astral letter | **TRIGGER: none — the patch sits on the ordinary path.** **PATCH:** change row A4's first class to `` /(?:\u{10400}\|[^\p{L}\p{N}\p{M} ._-])/gu `` (the pipe there is the regex alternation, escaped for this table), so U+10400 (DESERET CAPITAL LETTER LONG I, an allowed `\p{L}`) maps to `_` while everything else is unchanged. **MEASURED:** T7 is the only test that reddens, and all **four** of its inputs at `cp = 0x10400` mismatch — mid-string `a_b` for `a𐐀b`, leading `ab` for `𐐀ab`, trailing `ab_` for `ab𐐀`, run `a__b` for `a𐐀𐐀b`; the mid-string one is simply the first to throw. This row is why T7 sweeps the whole range rather than a sample: under a sampled 12 299-code-point corpus this patch passed every test in the file, silently mangling non-English names — the outcome row A1 exists to prevent. Measured red set: T7. | T7 | T1–T6, T8–T16 |
 | M8 | collapse runs — add `+` to row A4's first character class | **TRIGGER: none — the patch sits on the ordinary path.** **PATCH:** change `` /[^\p{L}\p{N}\p{M} ._-]/gu `` to `` /[^\p{L}\p{N}\p{M} ._-]+/gu ``, so a run of excluded code points becomes one `_` instead of one each; change nothing else. **MEASURED:** T7's run input is the only assertion that fires — every other test, including all the rendered-surface and EP4 tests, stays green, because a collapsed run still yields one well-formed bullet. That is why T7 carries a run input at all: without it this violation of row A2 ships green. Measured red set: T7. | T7 | T1–T6, T8–T16 |
-| M7 | make row A3 a prefix instead of a deletion — the design alternative A3 rejects | **TRIGGER: none — the patch sits on the ordinary path.** **PATCH:** replace `` .replace(/^[^\p{L}\p{N}\p{M}]+/u, '') `` with `` .replace(/^(?=[^\p{L}\p{N}\p{M}])/u, '_') ``; change nothing else. **MEASURED:** the transform stops being idempotent — `'---'` → `'_---'` → `'__---'` — so T8 fires, together with T7's leading input, T9's deep-equal and T10's exact outputs. T8 fires **only** through the leading-position input: measured, a prefix implementation is idempotent on every mid-string input, which is why T7 and T8 each test both positions. Measured red set: T7, T8, T9, T10. | T7, T8, T9, T10 | T1–T6, T11–T16 |
+| M11 | mirror row A3 at the tail — delete the trailing run instead of only the leading one | **TRIGGER: none — the patch sits on the ordinary path.** **PATCH:** append `` .replace(/[^\p{L}\p{N}\p{M}]+$/u, '') `` to `sanitizeProjectName`, leaving both existing replaces untouched. This is the design alternative nobody proposed and nothing forbade: it looks symmetric with A3 and it is wrong, because A3 exists to stop a name opening its bullet with block structure, and nothing about the END of a bullet needs protecting. **MEASURED:** before the trailing input was added to T7, this patch passed **every test in the file** — T5's legitimate names, T7's inputs as they then stood, T8's idempotence sweep, T10's worked pairs and T17's vaults — while truncating `report.` to `report`, `my_note_` to `my_note`, `a-b-` to `a-b` and `z` plus three spaces to `z`. That is the hole this row and T7's trailing input close together. With them in place the red set is exactly T7, whose trailing assertion fails at `cp = 0` (`ab_` expected, `ab` produced), and T17, whose control vault (c) loses the trailing spaces it requires to survive. T11–T14 stay green — measured, the EP4 outcome is unchanged for all four fixtures even though `api_key_` truncates to `api_key`. Measured red set: T7, T17. | T7, T17 | T1–T6, T8–T16 |
+| M7 | make row A3 a prefix instead of a deletion — the design alternative A3 rejects | **TRIGGER: none — the patch sits on the ordinary path.** **PATCH:** replace `` .replace(/^[^\p{L}\p{N}\p{M}]+/u, '') `` with `` .replace(/^(?=[^\p{L}\p{N}\p{M}])/u, '_') ``; change nothing else. **MEASURED:** the transform stops being idempotent — `'---'` → `'_---'` → `'__---'` — so T8 fires, together with T7's leading input, T9's deep-equal and T10's exact outputs. T8 fires **only** through the leading-position input: measured, a prefix implementation is idempotent on every mid-string input, which is why T7 and T8 sweep every position rather than one. Measured red set: T7, T8, T9, T10. | T7, T8, T9, T10 | T1–T6, T11–T16 |
 
 ## Coverage
 
@@ -728,8 +747,9 @@ partially addressed here.
 
 ## Definition of done
 
-1. Every verification step run, plus all eleven mutation rows (M1–M5, M6a, M6b,
-   M7, M8, M9, M10) applied, run and reverted; all output pasted into the PR body.
+1. Every verification step run, plus all twelve mutation rows (M1–M5, M6a, M6b,
+   M7, M8, M9, M10, M11) applied, run and reverted; all output pasted into the PR
+   body.
    **`G2` and `G3` additionally need a red run each**, per the two-sided rule under
    Verification steps — `G1`'s red side comes from the mutation rows, theirs does
    not exist yet and the implementer produces it, within the bounds row **A12**
