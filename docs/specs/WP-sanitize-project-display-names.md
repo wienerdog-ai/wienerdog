@@ -115,7 +115,8 @@ every non-English vault. Table A settles the set; `ledger.js` is not touched.
 exactly that path). Its single project line is `- onboarding-redesign` (line 45),
 from `tests/fixtures/identity-filled/01-Projects/onboarding-redesign`. Rendering
 that fixture through an implementation of this spec was measured byte-identical to
-the golden, so **the golden must not change**. `G2` pins it.
+the golden. Row **A12** decides what may and may not happen to that file; `G2`
+pins its bytes.
 
 ## Deliverables (permission boundary — touch ONLY these)
 
@@ -126,9 +127,10 @@ the golden, so **the golden must not change**. `G2` pins it.
 
 Per `docs/specs/_TEMPLATE.md`, this spec file and `package-lock.json` are exempt
 from every Deliverables table and are not listed. Every other path this spec names
-is one the implementer **reads**, never writes — in particular
-`tests/golden/digest-default.md` is deliberately absent: `G2` requires it to stay
-byte-identical, so touching it is a boundary violation, not a golden update.
+is one the implementer **reads**, never writes.
+`tests/golden/digest-default.md` is deliberately absent from the table; row
+**A12** decides its status, including the one bounded exception, and this
+paragraph adds nothing to it.
 
 ### Exact contracts
 
@@ -447,7 +449,7 @@ and every surface below defers to it.
 | A9 | the emitted-line property (the acceptance criterion) | **Conditional on row A7 emitting the section** — when either scan finds, there is no section and no project block, which is the T11/T12 case and is not a violation of this row. **Equally conditional on the section surviving `capDigest`** — `renderDigest` ends in `capDigest` (`src/core/digest.js:373-399`, 120 lines / 32 KiB), and identity notes are assembled before the project section, so a large approved note pushes the block past the cap. Measured on this tree with one approved identity note of plain bullet lines and `K = 20`: at 100 note lines the shipped digest carries the heading and **17** project lines; at 110, seven; at 150 the section is gone entirely, and in each of those renders row A11's boundary does not exist, so a fixture reaching this state throws rather than passing. No fixture does — `capDigest` truncation is out of scope for this WP and uncovered by design (see Coverage), and this row therefore claims nothing about a truncated render. When the section is emitted and survives, for a vault with `K` project directories the project block (row A11) contains **exactly `min(K, 50)` lines, plus one overflow line when `K > 50`**: `K` lines in the T1–T5 and T9 fixtures, 51 lines in T16's, and **every** line matches `^- (?:[\p{L}\p{N}\p{M}][\p{L}\p{N}\p{M} ._-]*)?$` or the overflow form of A10. Both halves are required — the count alone permits a mangled name, the per-line match alone permits a name that injects a second well-formed bullet. Closed-form over emitted output; never a list of attack shapes. |
 | A10 | the overflow line | **Under A9's two conditions, both of which this row inherits — the section is emitted, and it survives `capDigest`.** `- …and <N> more` stays code-owned and unsanitized, appears in both `rawLines` and `projectLines` (T16 gates the rendered half and T15 gates the raw half; without T15's 55-directory fixture, deleting only the `rawLines` push leaves every other test green — measured), and is exempt from A9's per-line match via `^- …and \d+ more$`. Not spoofable: `…` (U+2026) is outside A1 and A3 deletes it in leading position, so `…and 3 more` emits `- and 3 more` (measured). |
 | A11 | project-block boundary | the lines between the `## Active projects` heading and the code-owned blank separator preceding the **last** `## Latest daily log` heading. Never "the first blank line": a hostile name emits its own blank and would shrink the inspected range to a vacuous pass. Every fixture vault carries a daily note so the boundary exists on both surfaces; a missing boundary throws. |
-| A12 | golden invariance | `tests/golden/digest-default.md` must not change. Its only project name is `onboarding-redesign`, wholly inside A1 and unaffected by A3; rendering the fixture through this change was measured byte-identical to the golden. sha256 `68ab999675bb66f806ad785aa4de008c90e74ed822afc4af366c2c030715a8a2`. |
+| A12 | golden invariance, and its one bounded exception | **This row is the single place the golden's status is decided. Every other surface cites it; none restates the rule** — that split is deliberate, because the rule previously lived in five places and three review rounds each found one more of them. `tests/golden/digest-default.md` is not in the Deliverables table and must be byte-identical in the **final** state: sha256 `68ab999675bb66f806ad785aa4de008c90e74ed822afc4af366c2c030715a8a2`. Its only project name is `onboarding-redesign`, wholly inside A1 and unaffected by A3; rendering the fixture through this change was measured byte-identical to the golden. **The exception, bounded:** `G2` is a content pin, so its red side exists only against differing bytes; a temporary tip of the file is therefore permitted **provided it is restored immediately**. An unrestored edit — or any difference surviving into the final worktree, the commit or the diff — is a boundary violation. Nothing else may touch the file, and no implementation change may alter it. |
 
 ### Mirrored Surface Checklist
 
@@ -456,7 +458,8 @@ size is unbounded; ADR-0031 asks for the *sections* that mirror the table, so ea
 below is registered whole — every sentence in it defers to Table A.
 
 - [ ] Registered sections, each whole: **Context**; **Current state**;
-      **Deliverables** (both Notes cells); **Exact contracts** (function body and
+      **Deliverables** (both Notes cells **and the paragraph below the table**,
+      which the registry previously omitted); **Exact contracts** (function body and
       its JSDoc, splice-site block, export sentence, worked input→output pairs,
       test-file head, the five assertion shapes, T15/T16's bodies, the T1–T16
       table); **RES-1**, **RES-2**, **RES-3**; **Acceptance criteria**;
@@ -585,10 +588,9 @@ two sections, or one byte of difference in `tests/golden/digest-default.md`.
 - **Applied to the three steps above.** `G1`'s red side is supplied row by row by
   the eleven mutation rows below — every one of T1-T16 has an observed failing
   side there. **`G2` and `G3` carry no recorded red observation**: the implementer
-  produces and pastes one for each, under the standing constraint that no such
-  run may leave `tests/golden/digest-default.md` in a modified state — a
-  temporary tip-observe-restore is permitted, an unrestored edit is a boundary
-  violation, because that file is outside the Deliverables table.
+  produces and pastes one for each, within the bounds row **A12** sets for
+  `tests/golden/digest-default.md`. How the red side is produced is the
+  implementer's call; this spec prescribes no method.
 
 ### Mutation rows — the both-directions proof for G1
 
@@ -640,8 +642,8 @@ partially addressed here.
   `src/core/dream/validate.js:1352-1353` and `:1366-1370`. Whether a value can
   land at the start of a line there has not been measured, and this WP neither
   changes them nor reserves a shared mechanism for them.
-- **Updating any golden fixture.** `G2` requires `tests/golden/digest-default.md`
-  to stay byte-identical, and no golden is in the Deliverables table.
+- **Updating any golden fixture.** No golden is in the Deliverables table, and
+  row **A12** decides what may happen to `tests/golden/digest-default.md`.
 - **Touching `src/core/dream/ledger.js`.** Its `displayName` keeps its ASCII set;
   aligning the two sanitizers is not this WP's call.
 - **Changing the emitted line format.** The project line stays `- <name>`. Wrapping
@@ -654,11 +656,8 @@ partially addressed here.
    M7, M8, M9, M10) applied, run and reverted; all output pasted into the PR body.
    **`G2` and `G3` additionally need a red run each**, per the two-sided rule under
    Verification steps — `G1`'s red side comes from the mutation rows, theirs does
-   not exist yet and the implementer produces it. No such run may leave
-   `tests/golden/digest-default.md` in a modified state — a temporary
-   tip-observe-restore is permitted, an unrestored edit is a boundary violation.
-   How the red side is produced is the implementer's call; this spec does not
-   prescribe a method.
+   not exist yet and the implementer produces it, within the bounds row **A12**
+   sets for `tests/golden/digest-default.md`.
 2. Conventional commits; PR titled
    `fix(digest): sanitize vault-derived project display names (WP-sanitize-project-display-names)`.
 3. PR template filled, including "Decisions made" (or "none") and `Generated-by:`.
