@@ -32,6 +32,24 @@ round 2 (ask it to verify its own prior findings are fixed AND attack the new
 mechanisms) → repeat until clean → owner sign-off → specs move to Ready.
 ```
 
+### Finding disposition
+
+- Every finding gets exactly one disposition: **fix** (a genuine defect),
+  **residual** (accepted, one-line reason — the rule above), or **drop**
+  (style/preference; noted in the round record, never in the artifact).
+- The relay PROPOSES a disposition for every finding; the owner may accept
+  the proposals as a batch or override any single one. Deciding stays with
+  the owner; drafting the decisions does not.
+- A hardening proposal becomes text only on an explicit owner yes — never
+  folded in silently.
+- **Altitude guard (a drop sub-case):** a finding that lives one level
+  below its target document — an implementation detail raised against an
+  ADR, a code-level nit raised against a spec contract — is dropped, or
+  routed to the artifact that owns that level. It is never folded into the
+  higher document.
+- When two consecutive rounds land findings of the same kind, the next
+  step is a design question, never another textual patch.
+
 ## Dispatch-time re-verification (the last gate before an implementer starts)
 
 **`Ready` is not the same as "still true".** **The orchestrator session runs
