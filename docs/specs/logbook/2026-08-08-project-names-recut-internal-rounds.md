@@ -126,3 +126,58 @@ counter prefix — was the one flagged in this record and deliberately routed to
 the external round instead of being folded in silently. The round found nothing
 new in the content that had passed the old tip's eleven rounds; the nine
 pre-existing defects had already been taken by the internal coherence pass.
+
+## Closing round — findings and dispositions
+
+Same mechanics, same preservation discipline: raw stdout committed before any
+finding was adjudicated. The round returned **needs-attention, two findings**, so
+the ruled closure criterion — a fresh round with zero findings — was NOT met and
+the spec did not go to Ready on it. Both findings were re-measured locally before
+disposition.
+
+- **F1 (high) — the constraint on the golden said two different things in two
+  places.** The confirming round's fix rewrote the Definition of done's copy and
+  left the Verification steps copy at the older, stricter "no mutation may
+  **write**". A reader taking the stricter one still cannot produce `G2`'s red
+  side. This is an update-all-mirrors failure in a spec that carries that exact
+  obligation — one mirror was updated, the other was not. Ruled fix: the
+  Verification steps sentence now carries the Definition of done's wording.
+- **F2 (medium) — row A9's line-count guarantee is false on a reachable path.**
+  `renderDigest` ends in `capDigest` (120 lines / 32 KiB) and identity notes are
+  assembled before the project section, so a large approved note pushes the block
+  past the cap. Measured, with `K = 20` project directories and one approved
+  identity note: at 100 note lines the shipped digest carries the heading and 17
+  project lines; at 110, seven; at 150 the section is gone entirely. Two things
+  the reviewer did not say and the measurement adds: in each of those renders row
+  A11's boundary does not exist, so a fixture reaching that state would throw
+  rather than pass vacuously — the falsehood is in the spec's claim, not in the
+  gate — and no fixture reaches it, because identity injection needs a
+  hash-matched approval the tests do not supply. Ruled fix, minimal: A9 gains a
+  `capDigest`-survival condition in the same form as the EP4 condition it already
+  carried; A10 inherits it explicitly and the Security checklist restates both.
+  **No test is written for the truncated case** — `capDigest` is out of scope for
+  this WP and stays so.
+
+## Circuit breaker, and where the design question went
+
+The runbook's breaker applies when two consecutive rounds land findings of the
+same kind. It did: the confirming round's R3 and this round's F2 are one family —
+**the spec asserts a security property more widely than its gate decides it**.
+R3 was "structural forgery" claimed above what A9 gates; F2 was A9 itself claimed
+above what the shipped digest satisfies. Patching a third instance in the same
+shape would have been the wrong move.
+
+The design question raised instead: must every Table A property row state its own
+validity conditions inline — as A7 already did and A9 did not — or should the spec
+carry one collected place naming every layer that can stand in front of a measured
+property (`capDigest`, the EP4 omission, the approval gate)?
+
+Owner ruling: recorded as **Q14, with a trigger.** The minimal per-row condition is
+applied now; if a third instance of this family appears — the framing package's
+re-cut is the next measurement point — the collected-layers form becomes mandatory.
+
+## A pre-decision recorded for the specs that follow
+
+This spec closes under the current all-or-nothing criterion: a fresh round with
+zero findings. After it closes, the owner decides on a weighted closure rule for
+the following specs, on the evidence of the full round-count series.
