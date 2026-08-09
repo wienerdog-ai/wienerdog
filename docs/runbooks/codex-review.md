@@ -49,6 +49,10 @@ mechanisms) → repeat until clean → owner sign-off → specs move to Ready.
   higher document.
 - When two consecutive rounds land findings of the same kind, the next
   step is a design question, never another textual patch.
+- The reviewer's raw output is committed BEFORE anyone reads or judges
+  it — adjudication happens on evidence the adjudicator cannot have
+  shaped. This is what makes an after-the-fact ruling possible when a
+  gate was skipped: the record is intact.
 
 ### Template conformance (round zero, before any review)
 
