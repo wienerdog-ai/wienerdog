@@ -30,8 +30,9 @@ signatures being extended, sample of existing output if relevant. For greenfield
 
 ## Deliverables (permission boundary — touch ONLY these)
 
-<!-- Always allowed without listing: this spec file itself (the status flip)
-     and package-lock.json. Everything else must be listed. -->
+<!-- Always allowed without listing: this spec file itself (the status flip),
+     package-lock.json, memory/lessons/inbox.md, and docs/specs/logbook/.
+     Everything else must be listed. -->
 
 | Action | Path | Notes |
 |--------|------|-------|
