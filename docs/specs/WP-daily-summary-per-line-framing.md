@@ -141,7 +141,8 @@ every consumer of `renderDigest`'s output inherits that contract.
 | Section shape | heading line, banner line, then one emitted line per summary line, in order, and a code-owned blank line closing the block (the `parts` join already emits one; the block never ends at a content line) |
 | Emitted line | marker, then a single space and the line's content when the content is non-empty; the bare marker when it is empty |
 | Line break set (what splits the summary into lines) | LF, CRLF, CR, NEL (U+0085), VT (U+000B), FF (U+000C), U+2028, U+2029 — each splits |
-| Other control characters | no C0 or C1 control character other than TAB and the break set above reaches an emitted line raw; each appears only through a code-owned, visible encoding, so no content byte can move or overwrite a rendered marker |
+| Characters that never reach an emitted line raw | every character in Unicode categories `Cc` (controls), `Cf` (format — bidi overrides such as U+202E, zero-width and other default-ignorables) and `Cs` (surrogates, including lone ones), with exactly two exceptions named here: TAB, and the break set above (which splits instead). Nothing else in those categories passes through, so no content byte can move, hide or overwrite a rendered marker |
+| Encoding of those characters | one fixed code-owned form, `<U+XXXX>` with the code point in uppercase hex. It is deliberately NOT reversible and need not be: nothing decodes the digest, so content that already reads `<U+202E>` may collide with an encoded one — a collision costs a reader one ambiguous glyph name and cannot produce an unmarked line |
 | Marker exclusivity | no other emitter in the digest — section headings, banners, the truncation marker, `formatAlerts`, the identity-exclusion line — begins a line with the marker |
 | Content fidelity (of the framing step's output) | removing the marker (and the one following space) from each emitted line, joined with LF, reproduces the summary exactly, up to break normalization to LF and the control encoding above: the framing step drops, reorders and truncates nothing. Two later phases may still narrow what ships — the section-level secret gate (omits the whole section) and `capDigest` (truncates the digest); neither is a framing concern |
 | Secret gate ordering | the scan runs on the normalized, still-unmarked summary — the marker is code-owned and cannot carry a secret, and marking first would break rules that span a line break (`src/core/secret-scan.js:130` matches `"key"\s*:\s*"value"` across LF, which `> \|` defeats). The section-level exclusion (reason `daily-summary`) is unchanged |
@@ -155,6 +156,7 @@ every consumer of `renderDigest`'s output inherits that contract.
 | Inserted line (byte-exact, immediately after the anchor) | `- WP-daily-summary-per-line-framing — decision 1's block fence is replaced by a per-line marker on every summary line, and no closing marker is emitted, so summary bytes cannot forge the boundary.` |
 | Normative correction | ADR-0032's Decision 1 still prescribes the block fence this WP removes, so the ADR also carries a dated, append-only Amendment section at its end, `Status: PROPOSED — awaiting owner signature`. **It is ALREADY WRITTEN in this spec's commit — do not author it, do not revise it.** Signing it (replacing that status line by hand) is the OWNER's act and no agent may make it |
 | Diff | zero deletions in that file, and the byte-exact amender line above is present; nothing existing is rewritten (the amendment is append-only, per the ADR-0028 precedent) |
+| Dispatch precondition | until that amendment carries the owner's hand-written signature, ADR-0032 holds two contradictory normative states — Decision 1 still prescribes the withdrawn block fence. See Definition of done item 0 |
 
 ### Mirrored Surface Checklist
 
@@ -211,9 +213,11 @@ every consumer of `renderDigest`'s output inherits that contract.
       the marker itself, to `TRUNCATION_MARKER`, to a `##` heading, to a blank or
       whitespace-only line, and including content carrying any member of Table A's
       break set.
-- [ ] No C0/C1 control character outside TAB and the break set reaches an emitted
-      line raw; a summary carrying one still yields only marked lines, and nothing
-      it contains can move or overwrite a rendered marker.
+- [ ] No `Cc`/`Cf`/`Cs` character outside Table A's two named exceptions reaches an
+      emitted line raw — including a bidi override, a zero-width character and a
+      lone surrogate; each appears in the `<U+XXXX>` form, the summary still yields
+      only marked lines, and nothing it contains can move, hide or overwrite a
+      rendered marker.
 - [ ] A secret that today excludes the section still excludes it after this change
       — including one written across a line break, which the scan sees because it
       runs before marking.
@@ -270,6 +274,12 @@ grep -c 'DAILY_FENCE' src/core/digest.js   # must print 0
 
 ## Definition of done
 
+0. **DISPATCH PRECONDITION (Table B).** This WP is not dispatched and not
+   implemented until ADR-0032's Amendment (2026-08-09) carries the owner's
+   hand-written signature in place of its `Status: PROPOSED` line. Until then the
+   ADR holds two contradictory normative states, and an implementer reading
+   Decision 1 would rebuild the very fence this WP removes. The dispatch message
+   records that the signature was observed.
 1. All verification steps pass locally; output pasted into the PR body.
 2. Conventional commits; PR titled
    `fix(digest): mark every injected daily-summary line (WP-daily-summary-per-line-framing)`.
