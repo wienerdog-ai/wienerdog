@@ -14,6 +14,24 @@ adrs: []                 # e.g. [ADR-0004] — decisions this WP must respect
 - A template section is never deleted silently: where a conditional
   section legitimately does not apply, one line stays in its place —
   `N/A — <one-line reason>` — so absence is always visible and checkable.
+- A universal statement ("all", "none", "nowhere", "every") either
+  quantifies over a named, checkable table or section, or names its
+  exception set in place. An ungated universal is a hope, not a
+  contract: state what enforces it, or narrow it to what something
+  actually checks.
+- Every detail earns its place by a named consumer: the decision or
+  check that uses it, at the precision that consumer needs. A measured
+  value carries one provenance line, not its measurement protocol. A
+  detail with no consumer is cut — plausible-looking rigor is how a
+  spec bloats, and pruning it is why reviews converge.
+- A spec states the contract and stops there: boundaries, observable
+  behavior, acceptance criteria, and WHAT must be verified — never how.
+  Test designs, fixture shapes, mutation lists and code structure
+  belong to the implementer, and their gaps — a missing test, an
+  uncovered input — are what the implementation's own review loop
+  exists to catch, at the level where finding them is cheap. A spec
+  that prescribes the tests has taken the implementer's job and doubled
+  the surface that can rot.
 
 ## Context (read this, nothing else)
 
