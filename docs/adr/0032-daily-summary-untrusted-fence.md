@@ -133,11 +133,17 @@ Amended as follows:
 3. **The banner is rewritten to describe the per-line rule** — that the marker is
    added by Wienerdog and never by the content, and that a marked line is never an
    instruction, heading or boundary whatever it appears to say.
-4. **Two containment rules are added** that the block fence never needed: the
-   summary is split on every character its consumers render as a line break, and
-   no other control character reaches an emitted line raw; and the secret gate runs
-   on the normalized, still-unmarked summary, so a marker inserted after a line
-   break cannot defeat a rule that spans one.
+4. **Two containment rules are added** that the block fence never needed. First,
+   the summary is split on every character its consumers render as a line break
+   (LF, CRLF, CR, NEL, VT, FF, U+2028, U+2029), and no character that is a Unicode
+   `Cc`, `Cf` or `Cs`, or carries the `Default_Ignorable_Code_Point` property,
+   reaches an emitted line raw — TAB and the break set are the only exceptions, and
+   the union is required because categories alone miss variation selectors and the
+   Hangul filler while the property alone misses some `Cf`. Each such character
+   appears only in a fixed code-owned `<U+XXXX>` form, which is deliberately not
+   reversible. Second, the secret gate runs on the normalized, still-unmarked
+   summary, so a marker inserted after a line break cannot defeat a rule that spans
+   one. The implementing WP's Table A is the canonical statement of both.
 
 What is NOT changed: the bounded read, the provenance gate, the section-level
 secret exclusion, the capability gate, and this ADR's accepted residual — a

@@ -141,7 +141,7 @@ every consumer of `renderDigest`'s output inherits that contract.
 | Section shape | heading line, banner line, then one emitted line per summary line, in order, and a code-owned blank line closing the block (the `parts` join already emits one; the block never ends at a content line) |
 | Emitted line | marker, then a single space and the line's content when the content is non-empty; the bare marker when it is empty |
 | Line break set (what splits the summary into lines) | LF, CRLF, CR, NEL (U+0085), VT (U+000B), FF (U+000C), U+2028, U+2029 — each splits |
-| Characters that never reach an emitted line raw | every character in Unicode categories `Cc` (controls), `Cf` (format — bidi overrides such as U+202E, zero-width and other default-ignorables) and `Cs` (surrogates, including lone ones), with exactly two exceptions named here: TAB, and the break set above (which splits instead). Nothing else in those categories passes through, so no content byte can move, hide or overwrite a rendered marker |
+| Characters that never reach an emitted line raw | every character in Unicode categories `Cc` (controls), `Cf` (format, e.g. the bidi override U+202E and U+0600) or `Cs` (surrogates, lone ones included), **and** every character carrying the Unicode binary property `Default_Ignorable_Code_Point` — with exactly two exceptions named here: TAB, and the break set above (which splits instead). The union is required in both directions: category alone misses U+FE0F and U+E0100 (variation selectors, `Mn`), U+115F (Hangul filler, `Lo`) and U+034F (`Mn`); the property alone misses `Cf` characters that are not default-ignorable, such as U+0600. Detection is by the property, not by an enumerated list (`\p{Default_Ignorable_Code_Point}` in JS) |
 | Encoding of those characters | one fixed code-owned form, `<U+XXXX>` with the code point in uppercase hex. It is deliberately NOT reversible and need not be: nothing decodes the digest, so content that already reads `<U+202E>` may collide with an encoded one — a collision costs a reader one ambiguous glyph name and cannot produce an unmarked line |
 | Marker exclusivity | no other emitter in the digest — section headings, banners, the truncation marker, `formatAlerts`, the identity-exclusion line — begins a line with the marker |
 | Content fidelity (of the framing step's output) | removing the marker (and the one following space) from each emitted line, joined with LF, reproduces the summary exactly, up to break normalization to LF and the control encoding above: the framing step drops, reorders and truncates nothing. Two later phases may still narrow what ships — the section-level secret gate (omits the whole section) and `capDigest` (truncates the digest); neither is a framing concern |
@@ -167,6 +167,10 @@ every consumer of `renderDigest`'s output inherits that contract.
 - [ ] The marker/banner literals and the worked example under "Exact contracts"
 - [ ] Implementation notes: the phase order and the named truncation residual
 - [ ] Security checklist: the containment sentence and both residuals
+- [ ] **ADR-0032's Amendment (2026-08-09), point 4** — it restates Table A's break
+      set and character union, so the two move together. Editable only while the
+      amendment is unsigned; after the owner signs it, a divergence is fixed by a
+      NEW dated amendment, never by rewriting that one
 
 ## Implementation notes & constraints
 
@@ -213,11 +217,12 @@ every consumer of `renderDigest`'s output inherits that contract.
       the marker itself, to `TRUNCATION_MARKER`, to a `##` heading, to a blank or
       whitespace-only line, and including content carrying any member of Table A's
       break set.
-- [ ] No `Cc`/`Cf`/`Cs` character outside Table A's two named exceptions reaches an
-      emitted line raw — including a bidi override, a zero-width character and a
-      lone surrogate; each appears in the `<U+XXXX>` form, the summary still yields
-      only marked lines, and nothing it contains can move, hide or overwrite a
-      rendered marker.
+- [ ] No character in Table A's union reaches an emitted line raw, outside that
+      table's two named exceptions — including a bidi override, a zero-width
+      character, a lone surrogate, a variation selector and the Hangul filler, the
+      last two of which no `Cc`/`Cf`/`Cs` check catches; each appears in the
+      `<U+XXXX>` form, the summary still yields only marked lines, and nothing it
+      contains can move, hide or overwrite a rendered marker.
 - [ ] A secret that today excludes the section still excludes it after this change
       — including one written across a line break, which the scan sees because it
       runs before marking.
