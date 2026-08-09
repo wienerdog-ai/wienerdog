@@ -250,18 +250,24 @@ every consumer of `renderDigest`'s output inherits that contract.
 npm test -- --test-name-pattern "digest"
 npm test
 npm run lint
-# Table B gate — the ADR's deleted-lines column (second field) must be 0
-git diff --numstat main -- docs/adr/0032-daily-summary-untrusted-fence.md
-# …and the byte-exact amender line must be present exactly once
-grep -c -F -- '- WP-daily-summary-per-line-framing — decision 1' docs/adr/0032-daily-summary-untrusted-fence.md   # must print 1
+# Table B gate — the ADR deletes nothing (second numstat field must be 0)
+test "$(git diff --numstat main -- docs/adr/0032-daily-summary-untrusted-fence.md | cut -f2)" = 0
+# …and the amender line matches Table B whole-line, byte for byte, exactly once.
+# The literal goes through a quoted heredoc, not nested inline quotes, so what the
+# gate matches cannot be changed by a quoting accident.
+cat > /tmp/amender-line.txt <<'LITERAL'
+- WP-daily-summary-per-line-framing — decision 1's block fence is replaced by a per-line marker on every summary line, and no closing marker is emitted, so summary bytes cannot forge the boundary.
+LITERAL
+test "$(grep -Fxc -f /tmp/amender-line.txt docs/adr/0032-daily-summary-untrusted-fence.md)" = 1
 # Neither old fence constant survives in the module (test fixtures may still use the string)
-grep -c 'DAILY_FENCE' src/core/digest.js   # must print 0
+! grep -q 'DAILY_FENCE' src/core/digest.js
 ```
 
-- The last three are NEW steps: paste a real green on the finished state AND a real
-  red from a deliberately broken state (a deletion inside the ADR; the amender line
-  reworded; the constant left in place), so a check that cannot fail is caught
-  before anyone believes it.
+- The last three are NEW steps, and each is an ASSERTION: it exits non-zero when it
+  fails, rather than printing a number a reader has to judge. Paste a real green on
+  the finished state AND a real red from a deliberately broken state (a deletion
+  inside the ADR; the amender line reworded past its prefix; the constant left in
+  place), so a check that cannot fail is caught before anyone believes it.
 
 ## Out of scope (do NOT do these)
 
