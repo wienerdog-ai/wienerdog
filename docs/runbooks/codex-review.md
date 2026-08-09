@@ -62,6 +62,41 @@ mechanisms) → repeat until clean → owner sign-off → specs move to Ready.
   reads what it meant, not what is written. No external reviewer is used
   either — this is a conformance read, not a design critique.
 
+### Internal coherence pass (round zero's peer)
+
+- Before the first external round, one internal pass reads the spec end
+  to end for contradictions: a claim made in one place and unmade in
+  another, a count that no longer matches its list, an assertion citing
+  an input that is not there. Findings get dispositions like any round's.
+  (Measured twice: 9 and 19 substantive finds that prior external rounds
+  had not caught.)
+
+### Weighted closure
+
+- A finding is HEAVY when fixing it changes what the implementer builds
+  in the product: `src/` behavior, the ADR contract, anything a user or
+  a consuming model observes. A finding about the spec's own
+  verification machinery — tests, gates, mutation rows, wording — is
+  LIGHT. When in doubt, HEAVY.
+- HEAVY: fixes land, then a full fresh external round.
+- LIGHT: fixes land and are verified mechanically (mirror walk,
+  re-measurement); the loop closes without another external round.
+- The loop is DONE when a round finds nothing about the product.
+  Machinery findings at that point are fixed or accepted as named
+  residuals; they do not extend the loop.
+
+### The loop converges by freezing surface, not by patience
+
+- Verification machinery may GROW only to guard a product behavior, and
+  always in the smallest form that guards it. A finding about the
+  machinery itself never justifies more machinery: it is fixed within
+  the existing surface, or accepted as a named residual.
+- Why this is the convergence condition, measured: each fix injects
+  0.5-0.9 new defects. Below 1, a frozen surface makes the defect
+  supply a shrinking series — the loop ends by itself. Every round the
+  surface grows, the supply is refilled. The treadmill is the growth,
+  not the error rate.
+
 ## Dispatch-time re-verification (the last gate before an implementer starts)
 
 **`Ready` is not the same as "still true".** **The orchestrator session runs
