@@ -87,6 +87,13 @@ for the un-freeze; the alternative is keeping `daily-summary-injection` closed.
   remains a named future WP that would let trusted-authored daily lines inject
   un-fenced.
 
+Amending work packages are recorded in the list under `Amended by:` below —
+one line per package, appended by the amending package itself and verified
+by that package's own gates as a pure one-line diff. Prose never restates
+membership.
+
+Amended by:
+
 ## Alternatives considered
 
 - **Keep the gate closed.** Rejected for the un-freeze goal, but the owner may
