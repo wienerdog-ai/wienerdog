@@ -97,7 +97,7 @@ the composition — both are closed, point-in-time records.
 |--------|------|-------|
 | modify | src/core/digest.js | per-line framing of the daily summary per Table A; replace the fence constants; drop both stale gate comments (l.421-424, l.529-531) |
 | modify | tests/unit/digest.test.js | cover the acceptance criteria below (the implementer designs the cases) |
-| modify | docs/adr/0032-daily-summary-untrusted-fence.md | append EXACTLY the one line in Table B under `Amended by:` — nothing else in the file changes |
+| modify | docs/adr/0032-daily-summary-untrusted-fence.md | append the byte-exact amender line under the `Amended by:` anchor (Table B). The dated Amendment section at the file's end is **ALREADY WRITTEN by the architect in this spec's commit — do not author it, do not revise it**; it is listed so the boundary check permits it and the record is exhaustive. Nothing existing in the file is rewritten |
 
 ### Exact contracts
 
@@ -138,11 +138,14 @@ every consumer of `renderDigest`'s output inherits that contract.
 | Line marker (code-owned constant) | the `marker:` literal under "Exact contracts" |
 | Banner (code-owned constant, declarative, contains no note bytes) | the `banner:` literal under "Exact contracts" |
 | Closing marker | none is emitted; both `DAILY_FENCE_OPEN` and `DAILY_FENCE_CLOSE` are gone from the module and its exports |
-| Section shape | heading line, banner line, then one emitted line per summary line, in order |
+| Section shape | heading line, banner line, then one emitted line per summary line, in order, and a code-owned blank line closing the block (the `parts` join already emits one; the block never ends at a content line) |
 | Emitted line | marker, then a single space and the line's content when the content is non-empty; the bare marker when it is empty |
-| Line break set (what splits the summary into lines) | LF, CRLF, CR, U+2028, U+2029 — each splits; every other byte is ordinary content |
-| Content fidelity | removing the marker (and the one following space) from each emitted line, joined with LF, reproduces the summary exactly, with break sequences normalized to LF: no escaping, dropping, reordering or truncation by the framing step |
-| Preserved unchanged | the provenance gate, the bounded read, the secret scan over the emitted section (exclusion reason `daily-summary`), the caps in `capDigest`, and `renderDigest` staying pure and total |
+| Line break set (what splits the summary into lines) | LF, CRLF, CR, NEL (U+0085), VT (U+000B), FF (U+000C), U+2028, U+2029 — each splits |
+| Other control characters | no C0 or C1 control character other than TAB and the break set above reaches an emitted line raw; each appears only through a code-owned, visible encoding, so no content byte can move or overwrite a rendered marker |
+| Marker exclusivity | no other emitter in the digest — section headings, banners, the truncation marker, `formatAlerts`, the identity-exclusion line — begins a line with the marker |
+| Content fidelity (of the framing step's output) | removing the marker (and the one following space) from each emitted line, joined with LF, reproduces the summary exactly, up to break normalization to LF and the control encoding above: the framing step drops, reorders and truncates nothing. Two later phases may still narrow what ships — the section-level secret gate (omits the whole section) and `capDigest` (truncates the digest); neither is a framing concern |
+| Secret gate ordering | the scan runs on the normalized, still-unmarked summary — the marker is code-owned and cannot carry a secret, and marking first would break rules that span a line break (`src/core/secret-scan.js:130` matches `"key"\s*:\s*"value"` across LF, which `> \|` defeats). The section-level exclusion (reason `daily-summary`) is unchanged |
+| Preserved unchanged | the provenance gate, the bounded read, the caps in `capDigest`, and `renderDigest` staying pure and total |
 
 ### Table B — the ADR-0032 amendment
 
@@ -150,7 +153,8 @@ every consumer of `renderDigest`'s output inherits that contract.
 |-------------|-------|
 | Anchor | in `docs/adr/0032-daily-summary-untrusted-fence.md`, the line whose entire content is `Amended by:` — the string also occurs earlier in prose, which is NOT the anchor |
 | Inserted line (byte-exact, immediately after the anchor) | `- WP-daily-summary-per-line-framing — decision 1's block fence is replaced by a per-line marker on every summary line, and no closing marker is emitted, so summary bytes cannot forge the boundary.` |
-| Diff | exactly 1 insertion, 0 deletions in that file; ADR prose is not edited |
+| Normative correction | ADR-0032's Decision 1 still prescribes the block fence this WP removes, so the ADR also carries a dated, append-only Amendment section at its end, `Status: PROPOSED — awaiting owner signature`. **It is ALREADY WRITTEN in this spec's commit — do not author it, do not revise it.** Signing it (replacing that status line by hand) is the OWNER's act and no agent may make it |
+| Diff | zero deletions in that file, and the byte-exact amender line above is present; nothing existing is rewritten (the amendment is append-only, per the ADR-0028 precedent) |
 
 ### Mirrored Surface Checklist
 
@@ -159,6 +163,8 @@ every consumer of `renderDigest`'s output inherits that contract.
 - [ ] Verification commands (the ADR diff gate asserts Table B)
 - [ ] Current-state description (what Table A replaces)
 - [ ] The marker/banner literals and the worked example under "Exact contracts"
+- [ ] Implementation notes: the phase order and the named truncation residual
+- [ ] Security checklist: the containment sentence and both residuals
 
 ## Implementation notes & constraints
 
@@ -169,8 +175,13 @@ every consumer of `renderDigest`'s output inherits that contract.
   block, so no path can emit summary bytes unmarked.
 - `extractSection` splits on LF only; the framing step is responsible for the rest
   of Table A's break set. Changing `extractSection`'s own behavior is not required.
-- Sequencing note: the secret scan runs over the section that will be emitted, as
-  it does today.
+- The phases are ordered: normalize the summary (breaks, control encoding) → secret
+  gate on that normalized, unmarked text → framing → the existing `capDigest`.
+- **Named residual (owner-accepted, round 1 / C3):** when `capDigest` truncates
+  inside the section it appends `TRUNCATION_MARKER` with no blank line before it,
+  so a renderer may absorb that marker into the callout. The direction is
+  fail-safe — code-owned text reads as untrusted, never the reverse — and
+  `capDigest` is every section's shared path, so it is not changed here.
 - When uncertain: choose the simpler option and record it under "Decisions made" in
   the PR body. Do NOT expand scope to resolve ambiguity.
 
@@ -182,10 +193,13 @@ every consumer of `renderDigest`'s output inherits that contract.
       command construction.
 - [ ] The surface this WP actually touches is **untrusted note bytes flowing into
       instruction-adjacent model context**. Containment: every emitted summary line
-      carries the code-owned marker (Table A), no closing marker exists to forge,
-      and the provenance gate, bounded read and secret scan are preserved.
-- [ ] The residual is ADR-0032's, unchanged and not re-opened: a marked line is
-      still text a model reads.
+      carries the code-owned marker, no control character can forge or disturb one,
+      no closing marker exists to forge (Table A), and the provenance gate, bounded
+      read and secret gate are preserved — the last one strengthened by running
+      before marking.
+- [ ] Two residuals, both named: ADR-0032's own (a marked line is still text a
+      model reads), unchanged and not re-opened; and the truncation-marker
+      absorption under Implementation notes, whose direction is fail-safe.
 
 ## Acceptance criteria
 
@@ -197,17 +211,28 @@ every consumer of `renderDigest`'s output inherits that contract.
       the marker itself, to `TRUNCATION_MARKER`, to a `##` heading, to a blank or
       whitespace-only line, and including content carrying any member of Table A's
       break set.
-- [ ] Content fidelity holds as stated in Table A (marker-stripped lines reproduce
-      the summary, breaks normalized to LF).
+- [ ] No C0/C1 control character outside TAB and the break set reaches an emitted
+      line raw; a summary carrying one still yields only marked lines, and nothing
+      it contains can move or overwrite a rendered marker.
+- [ ] A secret that today excludes the section still excludes it after this change
+      — including one written across a line break, which the scan sees because it
+      runs before marking.
+- [ ] Content fidelity holds as stated in Table A for the framing step's output
+      (marker-stripped lines reproduce the summary, up to break normalization and
+      the control encoding).
 - [ ] Truncation cannot leave content unmarked: with the digest capped mid-section
       by `capDigest`, every surviving summary line still carries the marker.
 - [ ] The preserved behaviors in Table A's last row are unchanged: a daily note
       with `derived_from_untrusted: true` is omitted entirely; a summary containing
       a secret excludes the section with the `daily-summary` reason; `renderDigest`
       does not throw on any of the above.
+- [ ] No other emitter in the digest begins a line with the marker (Table A's
+      marker-exclusivity row), and the marked block is followed by a blank line.
 - [ ] `tests/golden/digest-default.md` is byte-identical and is not edited.
-- [ ] `docs/adr/0032-daily-summary-untrusted-fence.md` gains exactly the line in
-      Table B, as a 1-insertion/0-deletion diff.
+- [ ] `docs/adr/0032-daily-summary-untrusted-fence.md` carries the byte-exact
+      amender line and zero deletions (Table B); the amendment section it already
+      carries is not re-authored, and its PROPOSED status line is left for the
+      owner.
 - [ ] `npm test` and `npm run lint` pass.
 
 ## Verification steps (run these; paste output in the PR)
@@ -216,22 +241,27 @@ every consumer of `renderDigest`'s output inherits that contract.
 npm test -- --test-name-pattern "digest"
 npm test
 npm run lint
-# Table B gate — one line, tab-separated: added=1, deleted=0, then the ADR path
+# Table B gate — the ADR's deleted-lines column (second field) must be 0
 git diff --numstat main -- docs/adr/0032-daily-summary-untrusted-fence.md
+# …and the byte-exact amender line must be present exactly once
+grep -c -F -- '- WP-daily-summary-per-line-framing — decision 1' docs/adr/0032-daily-summary-untrusted-fence.md   # must print 1
 # Neither old fence constant survives in the module (test fixtures may still use the string)
 grep -c 'DAILY_FENCE' src/core/digest.js   # must print 0
 ```
 
-- The last two are NEW steps: paste a real green on the finished state AND a real
-  red from a deliberately broken state (e.g. a two-line ADR edit; the constant left
-  in place), so a check that cannot fail is caught before anyone believes it.
+- The last three are NEW steps: paste a real green on the finished state AND a real
+  red from a deliberately broken state (a deletion inside the ADR; the amender line
+  reworded; the constant left in place), so a check that cannot fail is caught
+  before anyone believes it.
 
 ## Out of scope (do NOT do these)
 
 - Entry-level daily provenance — ADR-0032's deferred full solution.
 - Re-opening ADR-0032's accepted residual, or its bounded-read and gate decisions.
-- Editing ADR-0032's prose, `docs/THREAT-MODEL.md` (its claim stays true) or
-  `docs/security-audit/2026-07-29/` (a point-in-time record).
+- Rewriting any existing line of ADR-0032 — the normative correction is the
+  append-only Amendment section already in this branch (Table B), and signing it is
+  the owner's. Likewise `docs/THREAT-MODEL.md` (its claim stays true) and
+  `docs/security-audit/2026-07-29/` (a point-in-time record) are not edited.
 - The `## Latest daily log (<date>)` heading's date, which comes from the note's
   filename — a different surface, not this WP's finding.
 - Any other fence or banner in the codebase (alerts, identity exclusions, secret
