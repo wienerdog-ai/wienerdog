@@ -1,3 +1,8 @@
+# Codex adversarial round 1 — WP-daily-summary-per-line-framing
+
+Raw runtime output, byte-unchanged inside the fence; committed verbatim before it was read (see this file's first commit). Only this header and the fence were added afterwards, so markdownlint passes.
+
+```text
 [codex] Starting Codex task thread.
 [codex] Thread ready (019fe839-8388-7153-9c7f-9e31d75e7a51).
 [codex] Turn started (019fe839-8474-7510-a647-93bf969c2bc6).
@@ -43,3 +48,4 @@ Next steps:
 - A WP biztonsági szerződésének javítása a vezérlőkarakterek, scan-sorrend és strukturális lezárás tekintetében.
 - A framing, policy gate és truncation fázisainak külön specifikálása és tesztelése.
 - ADR-0032 normatív szövegének tényleges módosítása vagy felülíró ADR készítése.
+```
