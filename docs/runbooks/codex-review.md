@@ -53,6 +53,10 @@ mechanisms) → repeat until clean → owner sign-off → specs move to Ready.
   it — adjudication happens on evidence the adjudicator cannot have
   shaped. This is what makes an after-the-fact ruling possible when a
   gate was skipped: the record is intact.
+- The review command does not run from a git worktree (measured:
+  `failed to load configuration`). Run it from the main checkout when
+  that is safe, or from a disposable plain clone of the branch —
+  identical command, and the clone is deleted after the round.
 
 ### Template conformance (round zero, before any review)
 
