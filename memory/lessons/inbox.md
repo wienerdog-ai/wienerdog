@@ -868,3 +868,13 @@ One bullet per lesson, prefixed with WP id (or M0 for foundation work). The drea
   commands need to run AFTER the commit, not against a dirty worktree, or
   they silently report "no changes" instead of the real diff.
 
+- WP-sanitize-project-display-names: Run the repo's own lint config (`npm run lint`), never bare npx defaults — the wrong config both hid six real errors for eight rounds (an unescaped `|` silently truncates markdown table cells) and invented six false ones on a clean file.
+- WP-sanitize-project-display-names: When the input space is finite, sweep it — the full 1,114,112-code-point sweep runs in 827 ms; a sampled corpus hid a selective-rejection bug that only the full range caught (twice: in spec review, and again as mutation M9).
+- M0-process: Extract fenced blocks by script and verify the bytes (sha256, `od -c`) — never retype: editor and shell channels corrupt `\u` escapes, em dashes and indents, and a `\|` in a markdown table cell reaches `grep -E` as a literal pipe. Three measured incidents.
+- M0-process: A number may wear a "measured" label only if it comes from running the document's own command, now — a computed or remembered number survives every check except the re-run (a 44-line threshold miss shipped that way).
+- WP-daily-summary-per-line-framing: Count diff lines with `git diff --numstat`, never by `+`/`-` prefixes — a markdown bullet edit renders as `+- …`/`-- …` and prefix-parsing miscounts or zeroes it.
+- WP-daily-summary-per-line-framing: When round records and commit messages cite SHAs, sync the branch by merge, not rebase — rebase falsifies the record it tidies.
+- WP-sanitize-project-display-names: PR CI runs on `refs/pull/N/merge` (the merged tree) — a branch lagging main needs no rebase for its green to be current.
+- M0-process: A measured failure plus a measured workaround still names no cause — an A-fails/B-works pair can be confounded (it was: a stale codex broker, not the git worktree). Isolate the variable, or write "observed, cause unknown" — never land a causal claim on correlation.
+- M0-process: A subagent's end-of-turn narration ("round N is still running") is text, not state — when its message arrives, the agent has stopped; trust the harness status and the transcript mtime, never the narration.
+- M0-process: Verifying the evidence an agent hands you is not verifying its claim — read the artifact on the tree (the cell, the file), not the exhibit the agent quotes; a reported edit once verified this way had never been made.
