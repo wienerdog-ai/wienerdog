@@ -1112,8 +1112,14 @@ test('framing: no other emitter opens a line with the marker, and the block is c
     section.slice(2),
     'every marked line in the whole digest belongs to the daily block'
   );
-  const lastMarked = lines.lastIndexOf(section[section.length - 1]);
-  assert.equal(lines[lastMarked + 1], '', 'the marked block is followed by a blank line');
+  // Closed by a code-owned BLANK line, not merely by the digest's terminating
+  // newline. The daily block is the last part, so the `parts` join contributes no
+  // separator of its own and the section must carry one — asserted on the bytes,
+  // because `split('\n')` cannot tell "x\n" from "x\n\n" at the end of a digest.
+  assert.ok(
+    digest.endsWith(`${section[section.length - 1]}\n\n`),
+    `expected a blank line closing the marked block, got ${JSON.stringify(digest.slice(-32))}`
+  );
   for (const emitter of [DAILY_BANNER, DigestCaps.TRUNCATION_MARKER]) {
     assert.ok(!emitter.startsWith(DAILY_LINE_MARKER), `code-owned emitter opens with the marker: ${emitter}`);
   }
