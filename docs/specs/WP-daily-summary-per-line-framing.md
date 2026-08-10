@@ -1,7 +1,7 @@
 ---
 id: WP-daily-summary-per-line-framing
 title: Mark every injected daily-summary line, so no summary byte can forge the fence boundary
-status: Ready
+status: In-Review
 model: opus
 size: S
 depends_on: []
