@@ -29,3 +29,7 @@ writing. Read both before drafting.
   both sides: a real green on the compliant state, and a real red run
   against a deliberately broken state — so a check that can never fail is
   caught before anyone believes it. Paste both outputs.
+- A fact is stated once, in the surface that owns it; every other
+  surface cites the owner instead of restating. A place that keeps
+  going stale predicting another surface's content stops predicting
+  and points — what has no content cannot go stale.
