@@ -1,0 +1,48 @@
+[codex] Starting Codex task thread.
+[codex] Thread ready (019fe2b0-3c54-7142-ae32-65426baa0c54).
+[codex] Turn started (019fe2b0-3d2f-7360-b556-0fcc1a85d3f8).
+[codex] Assistant message captured: {"verdict":"approve","summary":"Elvégzem a kért, egyfájlos adverszárius felülvizsgálatot: csa...
+[codex] Running command: /bin/zsh -lc 'git diff --unified=80 main -- docs/specs/WP-sanitize-project-display-names.md &...
+[codex] Command completed: /bin/zsh -lc 'git diff --unified=80 main -- docs/specs/WP-sanitize-project-display-names.md &... (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba docs/specs/WP-sanitize-project-display-names.md | sed -n '1,240p' nl -ba...
+[codex] Command completed: /bin/zsh -lc "nl -ba docs/specs/WP-sanitize-project-display-names.md | sed -n '1,240p' nl -ba... (exit 0)
+[codex] Assistant message captured: {"verdict":"approve","summary":"Az első sweep alapján az A12-re mutató hivatkozásokat külön e...
+[codex] Running command: /bin/zsh -lc "nl -ba docs/specs/WP-sanitize-project-display-names.md | sed -n '338,450p' nl -...
+[codex] Command completed: /bin/zsh -lc "nl -ba docs/specs/WP-sanitize-project-display-names.md | sed -n '338,450p' nl -... (exit 0)
+[codex] Running command: /bin/zsh -lc 'rg -n -i "golden|68ab999|byte-identical|one byte|temporary tip|restored|touch.*...
+[codex] Command completed: /bin/zsh -lc 'rg -n -i "golden|68ab999|byte-identical|one byte|temporary tip|restored|touch.*... (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba src/core/digest.js | sed -n '1,180p' nl -ba src/core/digest.js | sed -n ...
+[codex] Command completed: /bin/zsh -lc "nl -ba src/core/digest.js | sed -n '1,180p' nl -ba src/core/digest.js | sed -n ... (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba src/adapters/shared.js | sed -n '120,210p' nl -ba src/core/secret-scan.j...
+[codex] Command completed: /bin/zsh -lc "nl -ba src/adapters/shared.js | sed -n '120,210p' nl -ba src/core/secret-scan.j... (exit 0)
+[codex] Running command: /bin/zsh -lc "node -e 'const s=require(\"./src/core/secret-scan\"); const c={raw11:\"## Activ...
+[codex] Command completed: /bin/zsh -lc "node -e 'const s=require(\"./src/core/secret-scan\"); const c={raw11:\"## Activ... (exit 0)
+[codex] Assistant message captured: {"verdict":"needs-attention","summary":"Találtam egy, az A12-től független elérhetőségi rést ...
+[codex] Running command: /bin/zsh -lc "node -e 'const {buildBlock}=require(\"./src/adapters/shared\"); const d=\"## Ac...
+[codex] Command completed: /bin/zsh -lc "node -e 'const {buildBlock}=require(\"./src/adapters/shared\"); const d=\"## Ac... (exit 0)
+[codex] Running command: /bin/zsh -lc "rg -n \"module\\.exports|buildBlock\" src/adapters/shared.js"
+[codex] Command completed: /bin/zsh -lc "rg -n \"module\\.exports|buildBlock\" src/adapters/shared.js" (exit 0)
+[codex] Assistant message captured: {"verdict":"needs-attention","summary":"Nem szállítható. A12 önmagában konzisztens, de más sz...
+[codex] Turn completed.
+# Codex Adversarial Review
+
+Target: branch diff against main
+Verdict: needs-attention
+
+Nem szállítható. A12 önmagában konzisztens, de más szakaszok ismét szűkítik a szabályát; emellett G2 hamis zöldet enged, és a persistált felület A9 invariánsa egy normál végállapotban ténylegesen sérül.
+
+Findings:
+- [high] A persistált felület tesztje elrejti az A9-et sértő végső projekt-sort (docs/specs/WP-sanitize-project-display-names.md:238-247)
+  A megtámadott mondat: „The daily note is REQUIRED ... it makes `## Active projects` a non-final part”. Ez kizárja a normál esetet, amikor nincs kibocsátott napi rész és az Active projects az utolsó digest-rész. Az A3 szerint például `---` üres névvé alakul, így a renderelt sor `- `. A `buildBlock` azonban `safeDigest.trimEnd()`-et használ; közvetlen reprodukcióban ebből `-` lett a managed blockban. Ez nem felel meg A9 `^- ...` sorformájának, és cáfolja a Coverage „the same bytes as persisted on disk” állítását. T4 azért marad zöld, mert mindig napi részt tesz a projektblokk után. A specifikáció jelenlegi Deliverables-határa mellett az implementer nem is javíthatja ezt a `buildBlock` oldalon.
+  Recommendation: Adjon hozzá napi rész nélküli managed-block esetet egy teljesen üresre sanitizálódó névvel, majd módosítsa az A3 szerződést vagy engedélyezze a `buildBlock` szükséges változtatását, hogy a persistált sor is teljesítse A9-et.
+- [high] A12 nem maradt a golden szabály egyetlen tulajdonosa (docs/specs/WP-sanitize-project-display-names.md:128-133)
+  A megtámadott mondat: „Every other path this spec names is one the implementer reads, never writes.” Ez tiltja az A12 által kifejezetten engedett ideiglenes golden-módosítást. Ugyanezt a szabályt más felületek is újramondják: G2 „byte-identical to its state before this WP” (556), a Not relaxed rész „one byte of difference” (582), valamint az Out of scope „Updating any golden fixture” (645–646). Az utóbbi a „do NOT do these” fejléc alatt ismét megtiltja a G2 red oldalához szükséges ideiglenes eltérést. Ezért szigorú olvasatban a G2 red oldal továbbra sem állítható elő határsértés nélkül, és a Definition of done ellentmondásos.
+  Recommendation: A12-n kívül minden goldenre vonatkozó normatív mondatot cseréljen puszta A12-hivatkozásra; különösen a globális „never writes” és az Out-of-scope tiltás ne terjedjen ki az A12 ideiglenes kivételére.
+- [high] G2 hamis zöldet adhat tiltott staged vagy committed golden eltérésre (docs/specs/WP-sanitize-project-display-names.md:575)
+  A megtámadott állítás: „a staged or committed change cannot pass it”. A `shasum` kizárólag a working-tree fájlt olvassa; sem az indexet, sem a branchet vagy PR-diffet nem vizsgálja. Egy eltérő golden stagingelése után a working-tree példány visszaállítható az eredeti bájtokra: G2 ekkor zöld, miközben a staged commit továbbra is megsérti A12-t. Ugyanez committed eltérés és eredeti bájtokra visszaírt, módosított working tree mellett is lehetséges. Így a gate nem bizonyítja az A12 által előírt final worktree/commit/diff invarianciát.
+  Recommendation: A tartalomhash mellett ellenőrizze külön a working tree–index, index–main és branch/PR diff állapotát is ennél a fájlnál; ezután dokumentáljon valódi zöld és red futást az összetett G2 gate-re.
+
+Next steps:
+- Javítsa a managed-block végpozíciós eset szerződését és tesztjét.
+- Távolítsa el az A12-n kívüli normatív golden-szabályokat.
+- Egészítse ki G2-t index- és branch/diff-ellenőrzéssel.

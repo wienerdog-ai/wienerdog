@@ -240,6 +240,26 @@ function listProjectDirs(dir) {
     .sort();
 }
 
+/** Sanitize a vault-derived project directory name for interpolation into the
+ *  digest. A raw directory name is ATTACKER-INFLUENCEABLE — creating a directory
+ *  needs no approval, and a name containing a newline forges its own digest lines
+ *  and sections, which then persist into the managed block on disk.
+ *  Step 1, character allowlist: Unicode Letter, Number and Mark, plus space, `.`,
+ *  `_` and `-`; every other code point → `_`. `\p{M}` is required because macOS
+ *  delivers NFD-decomposed filenames. Step 2, leading position: drop the leading
+ *  run of characters that are not Letter/Number/Mark, so a name cannot open its
+ *  bullet with punctuation markdown reads as block structure — `- ---` a thematic
+ *  break, `- - x` a nested bullet, four leading spaces indented code. This does
+ *  NOT make the bullet construct-free: `1. do x` keeps its ordered-list marker, a
+ *  deliberate residual (closing it would mangle `2026. évi terv`). Step 2 is a
+ *  deletion, not an insertion, which keeps the transform idempotent.
+ *  @param {string} name @returns {string} */
+function sanitizeProjectName(name) {
+  return String(name)
+    .replace(/[^\p{L}\p{N}\p{M} ._-]/gu, '_')
+    .replace(/^[^\p{L}\p{N}\p{M}]+/u, '');
+}
+
 /**
  * Find the newest daily note by walking `dir` recursively and collecting files
  * whose basename matches YYYY-MM-DD.md (which sort chronologically). Handles both
@@ -514,11 +534,23 @@ function renderDigest(vaultDir, layout = defaultLayout(), opts = {}) {
   if (allProjects.length > 0) {
     const projects = allProjects.slice(0, DigestCaps.MAX_PROJECTS);
     const overflow = allProjects.length - projects.length;
-    const projectLines = projects.map((n) => `- ${n}`);
-    if (overflow > 0) projectLines.push(`- …and ${overflow} more`);
+    const rawLines = projects.map((n) => `- ${n}`);
+    const projectLines = projects.map((n) => `- ${sanitizeProjectName(n)}`);
+    if (overflow > 0) {
+      rawLines.push(`- …and ${overflow} more`);
+      projectLines.push(`- …and ${overflow} more`);
+    }
     // EP4: same one-banner exclusion list, fixed code-owned label (owner ruling).
     const projectsSection = `## Active projects\n${projectLines.join('\n')}`;
-    if (secretScan.scanAndRedact(projectsSection).findings.length > 0) {
+    // Two scans, either one omits. `rawSection` is byte-identical to what this
+    // code scanned before this WP, so the raw leg cannot regress today's decision;
+    // the emitted leg covers shapes sanitization CREATES. Never scan a join of the
+    // section with the BARE names — measured, it withholds a benign section (T14).
+    const rawSection = `## Active projects\n${rawLines.join('\n')}`;
+    if (
+      secretScan.scanAndRedact(rawSection).findings.length > 0 ||
+      secretScan.scanAndRedact(projectsSection).findings.length > 0
+    ) {
       identityExclusions.push({ file: 'active-projects', reason: 'appears to contain a secret' });
     } else {
       parts.push(projectsSection);
@@ -622,6 +654,7 @@ function listSecretQuarantine(stateDir) {
 
 module.exports = {
   renderDigest,
+  sanitizeProjectName,
   listSecretQuarantine,
   parseNoteResult,
   readNoteBounded,

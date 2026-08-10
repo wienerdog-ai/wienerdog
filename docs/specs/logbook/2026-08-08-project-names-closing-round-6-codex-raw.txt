@@ -1,0 +1,63 @@
+[codex] Starting Codex task thread.
+[codex] Thread ready (019fe313-e69d-7f43-bfd8-e56ea9cd7245).
+[codex] Turn started (019fe313-e774-7e11-b9e5-de3afdf1465c).
+[codex] Running command: /bin/zsh -lc "git diff --no-ext-diff --unified=80 main...HEAD -- docs/specs/WP-sanitize-proje...
+[codex] Command completed: /bin/zsh -lc "git diff --no-ext-diff --unified=80 main...HEAD -- docs/specs/WP-sanitize-proje... (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba docs/specs/WP-sanitize-project-display-names.md | sed -n '521,743p'"
+[codex] Running command: /bin/zsh -lc "nl -ba docs/specs/WP-sanitize-project-display-names.md | sed -n '1,260p'"
+[codex] Command completed: /bin/zsh -lc "nl -ba docs/specs/WP-sanitize-project-display-names.md | sed -n '1,260p'" (exit 0)
+[codex] Command completed: /bin/zsh -lc "nl -ba docs/specs/WP-sanitize-project-display-names.md | sed -n '521,743p'" (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba docs/specs/WP-sanitize-project-display-names.md | sed -n '261,520p'"
+[codex] Command completed: /bin/zsh -lc "nl -ba docs/specs/WP-sanitize-project-display-names.md | sed -n '261,520p'" (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba docs/specs/WP-sanitize-project-display-names.md | sed -n '345,450p'"
+[codex] Running command: /bin/zsh -lc "nl -ba docs/specs/WP-sanitize-project-display-names.md | sed -n '451,560p'"
+[codex] Command completed: /bin/zsh -lc "nl -ba docs/specs/WP-sanitize-project-display-names.md | sed -n '451,560p'" (exit 0)
+[codex] Command completed: /bin/zsh -lc "nl -ba docs/specs/WP-sanitize-project-display-names.md | sed -n '345,450p'" (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba docs/specs/WP-sanitize-project-display-names.md | sed -n '561,625p'"
+[codex] Command completed: /bin/zsh -lc "nl -ba docs/specs/WP-sanitize-project-display-names.md | sed -n '561,625p'" (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba src/core/digest.js | sed -n '1,680p'"
+[codex] Running command: /bin/zsh -lc "nl -ba src/adapters/shared.js | sed -n '1,230p'; nl -ba src/core/secret-scan.js...
+[codex] Command completed: /bin/zsh -lc "nl -ba src/adapters/shared.js | sed -n '1,230p'; nl -ba src/core/secret-scan.js... (exit 0)
+[codex] Command completed: /bin/zsh -lc "nl -ba src/core/digest.js | sed -n '1,680p'" (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba scripts/boundary-check.js | sed -n '1,320p'; shasum -a 256 tests/golden/...
+[codex] Command completed: /bin/zsh -lc "nl -ba scripts/boundary-check.js | sed -n '1,320p'; shasum -a 256 tests/golden/... (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba src/core/digest.js | sed -n '400,660p'"
+[codex] Command completed: /bin/zsh -lc "nl -ba src/core/digest.js | sed -n '400,660p'" (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba src/core/secret-scan.js | sed -n '1,80p'; nl -ba src/core/secret-scan.js...
+[codex] Command completed: /bin/zsh -lc "nl -ba src/core/secret-scan.js | sed -n '1,80p'; nl -ba src/core/secret-scan.js... (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba src/adapters/shared.js | sed -n '120,200p'"
+[codex] Command completed: /bin/zsh -lc "nl -ba src/adapters/shared.js | sed -n '120,200p'" (exit 0)
+[codex] Running command: /bin/zsh -lc "git show main:scripts/boundary-check.js | nl -ba | sed -n '35,75p'; git diff --...
+[codex] Command completed: /bin/zsh -lc "git show main:scripts/boundary-check.js | nl -ba | sed -n '35,75p'; git diff --... (exit 0)
+[codex] Running command: /bin/zsh -lc 'rg -n "sixteen|seventeen|17 tests|tests 1[0-9]|T1.?T1[0-9]|T1–T1[0-9]|T1-T1[0-9...
+[codex] Command completed: /bin/zsh -lc 'rg -n "sixteen|seventeen|17 tests|tests 1[0-9]|T1.?T1[0-9]|T1–T1[0-9]|T1-T1[0-9... (exit 0)
+[codex] Running command: /bin/zsh -lc 'node scripts/boundary-check.js docs/specs/WP-sanitize-project-display-names.md ...
+[codex] Command completed: /bin/zsh -lc 'node scripts/boundary-check.js docs/specs/WP-sanitize-project-display-names.md ... (exit 0)
+[codex] Running command: /bin/zsh -lc "node -e 'const s=require(\"./src/core/secret-scan\"); const san=x=>String(x).re...
+[codex] Command completed: /bin/zsh -lc "node -e 'const s=require(\"./src/core/secret-scan\"); const san=x=>String(x).re... (exit 0)
+[codex] Running command: /bin/zsh -lc "node -e 'const assert=require(\"node:assert/strict\"); const s=n=>String(n).rep...
+[codex] Command completed: /bin/zsh -lc "node -e 'const assert=require(\"node:assert/strict\"); const s=n=>String(n).rep... (exit 0)
+[codex] Assistant message captured: {"verdict":"needs-attention","summary":"Ne szálljon még: a kezelt blokk viselkedését és az A9...
+[codex] Turn completed.
+# Codex Adversarial Review
+
+Target: branch diff against main
+Verdict: needs-attention
+
+Ne szálljon még: a kezelt blokk viselkedését és az A9 végpozíciós eltérését több helyen pontatlanul vagy eltérő erővel írja le a specifikáció.
+
+Findings:
+- [medium] A managed-block alapállapot tévesen szűkíti a sentinel-semlegesítést (docs/specs/WP-sanitize-project-display-names.md:94-98)
+  A támadott állítás: „neutralizes only lines exactly equal to its own BEGIN/END sentinel and passes every other line through unchanged”. A `src/adapters/shared.js` valójában előbb `line.trim()`-et hív, majd annak eredményét hasonlítja a sentinelekhez. Így például egy szóközökkel körülvett sentinel-sor is módosul, pedig nyers bájtjai nem pontosan egyenlők a sentinellel. Emiatt a `trimEnd()` nem az egyetlen kivétel a specifikáció által állított globális sorazonosság alól, és a persisted-surface kiinduló szerződés ellentmond a fának.
+  Recommendation: Írja le pontosan, hogy minden olyan sort semlegesít, amelynek trimelt tartalma sentinel; külön mondja ki, hogy az Active-project bulletökön ez nem érhető el, ezért azon a felületen a `trimEnd()` az egyetlen releváns eltérés.
+- [medium] Az A9 szóközzel végződő név al-esete ellenpéldával cáfolható (docs/specs/WP-sanitize-project-display-names.md:488)
+  A támadott állítás: „a name ending in spaces sanitizes unchanged ... the line still matches the form above”. Egy kizárólag szóközökből álló könyvtárnév szóközzel végződik, de A3 a teljes vezető futamot törli, ezért az eredmény üres: renderelve `- `, persistálva `-`. Ugyanez igaz például a `---   ` névre is. Ezek tehát nem tartják meg az A9 sorformát, hanem az üresre szanitizálódó al-esetbe esnek. A jelenlegi megfogalmazás valós bemenetekre hamis és az al-eseteket átfedőként definiálja.
+  Recommendation: Az első al-esetet a nyers név helyett így határolja: „a nem üres szanitizált kimenet U+0020 szóközökkel végződik”; az üresre szanitizálódó esethez sorolja kifejezetten a csak szóközből álló neveket.
+- [low] Az A9 szélesített whitespace-szabálya nem jutott el minden tükörbe (docs/specs/WP-sanitize-project-display-names.md:578-581)
+  A támadott kifejezés: „takes every trailing space”. A kanonikus A9 „every trailing whitespace character”-t mond, miközben a Security checklist itt, továbbá a Not relaxed részben, a Coverage táblában és az Out of scope részben továbbra is csak „space/spaces” szerepel. Ez eltérő erejű szerződés ugyanazon regisztrált tükrökben, pontosan az update-all-mirrors kötelezettség ellenében.
+  Recommendation: Igazítsa az összes A9-tükröt a kanonikus „trailing whitespace character” erősséghez; a konkrét projekt-név példákban külön jelezheti, hogy A1 miatt az elérhető névvégi whitespace U+0020.
+
+Next steps:
+- Javítsa a három szerződésbeli eltérést, majd futtassa újra az A9 összes regisztrált tükrére kiterjedő ellenőrzést.
+- A T17 két vaultja mindkét megcélzott kimeneti al-esetet ténylegesen megfigyeli, és az M1/M2/M7/M10 piros, hét zöld mutációs felosztás helyes; ezen nem szükséges változtatni.
+- A fájl következetesen tizenhét aktuális tesztet ír elő; eltérő jelenlegi tesztszámot nem találtam.

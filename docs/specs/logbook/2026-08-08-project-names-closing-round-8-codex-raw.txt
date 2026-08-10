@@ -1,0 +1,52 @@
+[codex] Starting Codex task thread.
+[codex] Thread ready (019fe368-6247-7811-89d6-ece6774b4400).
+[codex] Turn started (019fe368-6314-7830-967e-d2e0cd26d05c).
+[codex] Assistant message captured: {"verdict":"approve","summary":"A kért egyetlen specifikációt és az engedélyezett implementác...
+[codex] Running command: /bin/zsh -lc 'git status --short && git diff --unified=80 main -- docs/specs/WP-sanitize-proj...
+[codex] Command completed: /bin/zsh -lc 'git status --short && git diff --unified=80 main -- docs/specs/WP-sanitize-proj... (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba docs/specs/WP-sanitize-project-display-names.md | sed -n '1,220p' nl -ba...
+[codex] Command completed: /bin/zsh -lc "nl -ba docs/specs/WP-sanitize-project-display-names.md | sed -n '1,220p' nl -ba... (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba docs/specs/WP-sanitize-project-display-names.md | sed -n '456,620p' nl -...
+[codex] Command completed: /bin/zsh -lc "nl -ba docs/specs/WP-sanitize-project-display-names.md | sed -n '456,620p' nl -... (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba docs/specs/WP-sanitize-project-display-names.md | sed -n '608,656p' rg -...
+[codex] Command completed: /bin/zsh -lc "nl -ba docs/specs/WP-sanitize-project-display-names.md | sed -n '608,656p' rg -... (exit 0)
+[codex] Assistant message captured: {"verdict":"needs-attention","summary":"Az első konkrét konzisztenciahiba már megvan: a T17 t...
+[codex] Running command: /bin/zsh -lc "nl -ba src/core/digest.js | sed -n '1,270p' nl -ba src/core/digest.js | sed -n ...
+[codex] Command completed: /bin/zsh -lc "nl -ba src/core/digest.js | sed -n '1,270p' nl -ba src/core/digest.js | sed -n ... (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba src/adapters/shared.js | sed -n '1,230p' nl -ba src/core/secret-scan.js ...
+[codex] Command completed: /bin/zsh -lc "nl -ba src/adapters/shared.js | sed -n '1,230p' nl -ba src/core/secret-scan.js ... (exit 0)
+[codex] Running command: /bin/zsh -lc 'shasum -a 256 tests/golden/digest-default.md rg -n "Active projects|project nam...
+[codex] Command completed: /bin/zsh -lc 'shasum -a 256 tests/golden/digest-default.md rg -n "Active projects|project nam... (exit 0)
+[codex] Running command: /bin/zsh -lc "node -e 'const s=require(\"./src/core/secret-scan\"); const x=[[\"t11raw\",\"##...
+[codex] Command completed: /bin/zsh -lc "node -e 'const s=require(\"./src/core/secret-scan\"); const x=[[\"t11raw\",\"##... (exit 0)
+[codex] Running command: /bin/zsh -lc "node -e 'const {buildBlock}=require(\"./src/adapters/shared\"); for(const x of ...
+[codex] Command completed: /bin/zsh -lc "node -e 'const {buildBlock}=require(\"./src/adapters/shared\"); for(const x of ... (exit 0)
+[codex] Assistant message captured: {"verdict":"needs-attention","summary":"Az A9 elérhetőségi feltétele megfelel a jelenlegi `bu...
+[codex] Running command: /bin/zsh -lc "/usr/bin/time -p node -e 'const a=require(\"node:assert/strict\"); const f=n=>S...
+[codex] Command completed: /bin/zsh -lc "/usr/bin/time -p node -e 'const a=require(\"node:assert/strict\"); const f=n=>S... (exit 0)
+[codex] Running command: /bin/zsh -lc "node -e 'const base=n=>String(n).replace(/["'^'"\\p{L}\\p{N}\\p{M} ._-]/gu,\"_\...
+[codex] Command completed: /bin/zsh -lc "node -e 'const base=n=>String(n).replace(/["'^'"\\p{L}\\p{N}\\p{M} ._-]/gu,\"_\... (exit 0)
+[codex] Assistant message captured: {"verdict":"needs-attention","summary":"Ne ship: A9 elérhetőségi feltétele és az M11 red set ...
+[codex] Turn completed.
+# Codex Adversarial Review
+
+Target: branch diff against main
+Verdict: needs-attention
+
+Ne ship: A9 elérhetőségi feltétele és az M11 red set helyes, a 17/12/4 darabszámok is konzisztensek, de a T17 szerződés elavult, a T7 indoklása ellentmond a T17 kontrollnak, és az exact mapping kapuja hiányos.
+
+Findings:
+- [medium] A T17 szerződéses sora elhagyja a kötelező kontroll vaultot (docs/specs/WP-sanitize-project-display-names.md:451)
+  A megtámadott rész: „two vaults”. A teljes T17-test valójában három vaultot használ: a két végpozíciós eset mellett a `['zz', TRAILING]` kontrollt is. Ugyanez a sor a literal tesztnevet is tévesen „in both sub-cases” alakban adja meg, míg a kötelező teljes testben „and only there” szerepel. Az implementer így nem tudja egyszerre követni a két Exact contracts felületet, és a táblázat alapján kihagyhatja az M11-et reddening kontrollt.
+  Recommendation: Igazítsa a T17 sort a teljes testhez: azonos literal név, három vault, valamint a nem végső pozíciós kontroll és elvárása szerepeljen benne.
+- [medium] A T7 M11-re vonatkozó állítása már hamis (docs/specs/WP-sanitize-project-display-names.md:441)
+  A megtámadott rész: „without the trailing input nothing in this file constrains the end of the string at all” és „M11 ... passes T1–T17 in full”. A jelenlegi T17 harmadik vaultja a trailing T7-input nélkül is reddens M11 alatt: a sanitizer eltávolítja a `TRAILING` szóközeit a nem végső sorból, ezért az `includes('- ' + TRAILING)` kontroll elbukik. Ez közvetlenül ellentmond a későbbi, helyes M11 red setnek: T7 és T17.
+  Recommendation: Cserélje az állítást egy olyan farokcsonkító mutánsra, amelyet T17 nem lát, például csak a végső `.`, `_` és `-` karaktereket törli; M11-ről pedig mondja ki, hogy a T7 mellett a T17 kontroll is elkapja.
+- [medium] A T7 nem kapuzza a pontos leképezést vegyes karakterfutamokon (docs/specs/WP-sanitize-project-display-names.md:441-442)
+  A megtámadott rész: „row A2's no-collapsing rule”. A négy input csak egyetlen `ch`-t vagy ugyanannak a `ch`-nek a dupláját vizsgálja. A megadott sanitizer után alkalmazott `.replace(/_-/g, '_')` ezért átmehet mind a 17 teszten, mégis `a\n-b` esetén az előírt `a_-b` helyett `a_b` lesz. A T1 hostile fixture továbbra is szabályos egysoros bulletet ad, mert csak alakot és sorszámot ellenőriz, nem a 212. sorban ígért pontos kimenetet. Így G1 zöld maradhat A1/A2 megsértése és felhasználói névmangling mellett.
+  Recommendation: A meglévő 17 teszt egyikében adjon byte-exact összetett ellenőrzést legalább a `HOSTILE_A` worked pairre vagy egy célzott `a\n-b` vegyes párra.
+
+Next steps:
+- Javítsa a T17 sort és a T7 M11-indoklását.
+- Egészítse ki az exact mapping kapuját vegyes karakterpárra.
+- A javítás után futtassa újra a tizenkét mutációt; M11 elvárt red setje maradjon T7 és T17.

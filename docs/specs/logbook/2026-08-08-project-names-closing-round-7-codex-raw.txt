@@ -1,0 +1,41 @@
+[codex] Starting Codex task thread.
+[codex] Thread ready (019fe336-c2ba-79c0-ac74-ce1f8e46bfb4).
+[codex] Turn started (019fe336-c382-7902-9723-0c302b0c86c7).
+[codex] Assistant message captured: {"verdict":"approve","summary":"A célfájlt és kizárólag az engedélyezett implementációs/fixtu...
+[codex] Running command: /bin/zsh -lc 'git diff --unified=80 main -- docs/specs/WP-sanitize-project-display-names.md &...
+[codex] Command completed: /bin/zsh -lc 'git diff --unified=80 main -- docs/specs/WP-sanitize-project-display-names.md &... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '1,220p' docs/specs/WP-sanitize-project-display-names.md; sed -n '221,44...
+[codex] Command completed: /bin/zsh -lc "sed -n '1,220p' docs/specs/WP-sanitize-project-display-names.md; sed -n '221,44... (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba docs/specs/WP-sanitize-project-display-names.md | sed -n '300,520p'; nl ...
+[codex] Command completed: /bin/zsh -lc "nl -ba docs/specs/WP-sanitize-project-display-names.md | sed -n '300,520p'; nl ... (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba docs/specs/WP-sanitize-project-display-names.md | sed -n '643,740p'; rg ...
+[codex] Command completed: /bin/zsh -lc "nl -ba docs/specs/WP-sanitize-project-display-names.md | sed -n '643,740p'; rg ... (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba src/adapters/shared.js | sed -n '125,180p'; nl -ba src/core/digest.js | ...
+[codex] Command completed: /bin/zsh -lc "nl -ba src/adapters/shared.js | sed -n '125,180p'; nl -ba src/core/digest.js | ... (exit 0)
+[codex] Assistant message captured: {"verdict":"approve","summary":"A három friss állítás közül a sentinel-kezelés és az A9 két, ...
+[codex] Running command: /bin/zsh -lc "node -e 'const s=require(\"./src/core/secret-scan\"); const c={t11raw:\"## Acti...
+[codex] Command completed: /bin/zsh -lc "node -e 'const s=require(\"./src/core/secret-scan\"); const c={t11raw:\"## Acti... (exit 0)
+[codex] Assistant message captured: {"verdict":"needs-attention","summary":"Ne ship: T17 nem bizonyítja, hogy a trailing whitespa...
+[codex] Turn completed.
+# Codex Adversarial Review
+
+Target: branch diff against main
+Verdict: needs-attention
+
+Ne ship: T17 nem bizonyítja, hogy a trailing whitespace csak a persisted felületen vész el, A9 túl szélesen írja le a divergencia elérhetőségét, és maradt egy tizenhatos tesztszám-állítás.
+
+Findings:
+- [high] T17 zöld marad, ha már a sanitizer törli a trailing karaktereket (docs/specs/WP-sanitize-project-display-names.md:399-438)
+  A „Together they pin both halves of row A9's recorded persisted-surface divergence” állítás nem igaz. T17 csak a buildBlock utáni managed blockot vizsgálja. Egy, a sanitizer végére tett `.trimEnd()` ugyanúgy `- z` eredményt ad az (a) esetben, ezért mind a 17 teszt átmehet, miközben a rendered digest már elvesztette a szóközöket, megsértve A1/A2/A4-et és A9 „rendered digest is unaffected” állítását. T7 sem fogja ezt meg: minden középső és run input `b`-re végződik, vezető pozíciót pedig külön vizsgál, de trailing pozíciót soha. Egy szélesebb suffix-trim a legitim záró `.`, `_` vagy `-` karaktereket is láthatóan korruptálhatja ugyanilyen zöld kapu mellett.
+  Recommendation: T7-ben minden Unicode-kódponthoz adj trailing-position exact-mapping assertiont, T17-ben pedig külön hasonlítsd össze a buildBlock előtti rendered sort és az utána persisted sort. Adj trim-tail mutációt a kétoldali bizonyításhoz.
+- [medium] A9 hibásan a teljes szakasz véghelyzetéhez köti a divergenciát (docs/specs/WP-sanitize-project-display-names.md:491)
+  Az „It bites whenever the project section is the digest's last part” állítás túl széles. A `safeDigest.trimEnd()` csak a digest legutolsó sorát módosítja. Ha például az `a   ` projektet egy `z` projekt követi, az első sor trailing szóközei megmaradnak akkor is, ha az Active projects az utolsó szakasz. Ugyanez igaz egy nem utolsó, üresre szanitizált névre; 50 feletti projektszámnál pedig az overflow sor követi az összes projektsort. A két esetet ezért nem csak a szanitált kimenet, hanem annak végső sorpozíciója is meghatározza.
+  Recommendation: A9-et korlátozd arra az esetre, amikor az érintett szanitált projektnév sora maga a digest utolsó sora, tehát utolsó kiválasztott projekt és nincs utána overflow. T17-ben legyen nem utolsó és overflow kontrolleset is.
+- [low] A spec továbbra is tizenhatos tesztszámot állít (docs/specs/WP-sanitize-project-display-names.md:689)
+  A „sixteen when that was measured” kifejezetten tizenhat tesztes mérésre hivatkozik. Ez megsérti a closing-round követelményt, hogy sehol ne szerepeljen tizenhéttől eltérő tesztszám, és a MEASURED állítást egy korábbi suite-állapothoz köti.
+  Recommendation: Futtasd újra az M9 sampled-corpus próbáját a jelenlegi 17 teszttel, és csak a jelenlegi 17-tesztes mérési eredményt rögzítsd.
+
+Next steps:
+- Zárd a trailing-position tesztboríték hiányát.
+- Pontosítsd A9 végső-sor elérhetőségi feltételét.
+- Távolítsd el a tizenhatos mérési állítást friss, 17-tesztes bizonyítékkal.
