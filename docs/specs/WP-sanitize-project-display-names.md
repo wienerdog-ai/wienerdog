@@ -131,8 +131,9 @@ pins its bytes.
 | modify | src/core/digest.js | add `sanitizeProjectName` (Table A rows A1–A4); apply it at the single splice site and make the EP4 decision satisfy row A7's truth table (rows A5, A7); export it (row A6). No other change. |
 | create | tests/unit/digest-project-name-sanitize.test.js | exactly the seventeen tests `T1`–`T17` named under "Exact contracts", built from the five assertion shapes plus the three literal bodies, with the helpers and fixture literals given there. Add nothing else. |
 
-Per `docs/specs/_TEMPLATE.md`, this spec file and `package-lock.json` are exempt
-from every Deliverables table and are not listed. Every other path this spec names
+Per `docs/specs/_TEMPLATE.md`'s always-allowed list, unlisted-but-exempt paths are
+defined there, not here — this paragraph enumerates none of them, on the same
+single-owner principle rows A9 and A12 follow. Every other path this spec names
 is one the implementer **reads**, never writes — **with one exception, and this
 clause does not overrule it**: `tests/golden/digest-default.md` is deliberately
 absent from the table, and row **A12** alone decides its status, including the
