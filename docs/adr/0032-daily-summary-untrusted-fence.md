@@ -107,7 +107,7 @@ Amended by:
 
 ## Amendment (2026-08-09) — the fence is per-line; the block fence of Decision 1 is withdrawn
 
-Status: PROPOSED — awaiting owner signature.
+Status: **ACCEPTED — OWNER-SIGNED 2026-08-10.**
 
 Decision 1 above wraps the daily summary between a `FENCE_OPEN` banner and a
 `FENCE_CLOSE` marker. The 2026-07-29 audit reproduced the consequence as finding
