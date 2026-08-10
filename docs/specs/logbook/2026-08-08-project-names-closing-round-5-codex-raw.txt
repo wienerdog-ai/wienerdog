@@ -1,0 +1,58 @@
+[codex] Starting Codex task thread.
+[codex] Thread ready (019fe2f6-eb11-7970-a8bb-a48382fef9ab).
+[codex] Turn started (019fe2f6-ebb0-7b92-94e0-ad73515e65f6).
+[codex] Assistant message captured: {"verdict":"approve","summary":"A célfájlt és kizárólag az engedélyezett implementációs/fixtu...
+[codex] Running command: /bin/zsh -lc 'git status --short --branch && git diff --unified=80 main...HEAD -- docs/specs/...
+[codex] Command completed: /bin/zsh -lc 'git status --short --branch && git diff --unified=80 main...HEAD -- docs/specs/... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '241,480p' docs/specs/WP-sanitize-project-display-names.md"
+[codex] Command completed: /bin/zsh -lc "sed -n '241,480p' docs/specs/WP-sanitize-project-display-names.md" (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '481,718p' docs/specs/WP-sanitize-project-display-names.md"
+[codex] Command completed: /bin/zsh -lc "sed -n '481,718p' docs/specs/WP-sanitize-project-display-names.md" (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '1,240p' docs/specs/WP-sanitize-project-display-names.md"
+[codex] Command completed: /bin/zsh -lc "sed -n '1,240p' docs/specs/WP-sanitize-project-display-names.md" (exit 0)
+[codex] Assistant message captured: {"verdict":"approve","summary":"A teljes fájl első söprése után most a középső szerződésrészt...
+[codex] Running command: /bin/zsh -lc "nl -ba docs/specs/WP-sanitize-project-display-names.md | sed -n '241,400p'"
+[codex] Command completed: /bin/zsh -lc "nl -ba docs/specs/WP-sanitize-project-display-names.md | sed -n '241,400p'" (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba docs/specs/WP-sanitize-project-display-names.md | sed -n '400,560p'"
+[codex] Command completed: /bin/zsh -lc "nl -ba docs/specs/WP-sanitize-project-display-names.md | sed -n '400,560p'" (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba docs/specs/WP-sanitize-project-display-names.md | sed -n '536,640p'"
+[codex] Command completed: /bin/zsh -lc "nl -ba docs/specs/WP-sanitize-project-display-names.md | sed -n '536,640p'" (exit 0)
+[codex] Running command: /bin/zsh -lc 'nl -ba src/core/secret-scan.js'
+[codex] Running command: /bin/zsh -lc 'nl -ba scripts/boundary-check.js'
+[codex] Command completed: /bin/zsh -lc 'nl -ba scripts/boundary-check.js' (exit 0)
+[codex] Command completed: /bin/zsh -lc 'nl -ba src/core/secret-scan.js' (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba src/core/digest.js | sed -n '1,70p;210,260p;280,410p;430,570p;600,650p'"
+[codex] Command completed: /bin/zsh -lc "nl -ba src/core/digest.js | sed -n '1,70p;210,260p;280,410p;430,570p;600,650p'" (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba src/adapters/shared.js | sed -n '120,200p'"
+[codex] Command completed: /bin/zsh -lc "nl -ba src/adapters/shared.js | sed -n '120,200p'" (exit 0)
+[codex] Running command: /bin/zsh -lc 'nl -ba tests/golden/digest-default.md && shasum -a 256 tests/golden/digest-defa...
+[codex] Command completed: /bin/zsh -lc 'nl -ba tests/golden/digest-default.md && shasum -a 256 tests/golden/digest-defa... (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba src/core/digest.js | sed -n '510,640p'; nl -ba src/adapters/shared.js | ...
+[codex] Command completed: /bin/zsh -lc "nl -ba src/core/digest.js | sed -n '510,640p'; nl -ba src/adapters/shared.js | ... (exit 0)
+[codex] Running command: /bin/zsh -lc "rg -n -i 'sixteen|seventeen|tests? 1[67]|pass 1[67]|T1.?T1[67]|T1–T1[67]|T1-T1[...
+[codex] Command completed: /bin/zsh -lc "rg -n -i 'sixteen|seventeen|tests? 1[67]|pass 1[67]|T1.?T1[67]|T1–T1[67]|T1-T1[... (exit 0)
+[codex] Running command: /bin/zsh -lc "node -e \"const ss=require('./src/core/secret-scan'); const san=s=>String(s).re...
+[codex] Command completed: /bin/zsh -lc "node -e \"const ss=require('./src/core/secret-scan'); const san=s=>String(s).re... (exit 0)
+[codex] Assistant message captured: {"verdict":"needs-attention","summary":"Találtam egy konkrét, a mirror walk által kihagyott v...
+[codex] Running command: /bin/zsh -lc "node -e \"const {buildBlock}=require('./src/adapters/shared'); const d='## Acti...
+[codex] Command completed: /bin/zsh -lc "node -e \"const {buildBlock}=require('./src/adapters/shared'); const d='## Acti... (exit 0)
+[codex] Assistant message captured: {"verdict":"needs-attention","summary":"Nem szállítható: a branch már megsérti a saját fájlha...
+[codex] Turn completed.
+# Codex Adversarial Review
+
+Target: branch diff against main
+Verdict: needs-attention
+
+Nem szállítható: a branch már megsérti a saját fájlhatárát, és a persisted-surface walk kihagyott egy valós trimEnd-divergenciát. A17 darabos tesztszám következetes; az egyetlen „sixteen” történeti mérés. A11 és T17 összhangban vannak.
+
+Findings:
+- [high] A jelenlegi branch diff nem tud átmenni a deklarált permission boundary ellenőrzésen (docs/specs/WP-sanitize-project-display-names.md:125-139)
+  A megtámadott állítás: „touch ONLY these” és „Every other path this spec names is one the implementer reads, never writes”. A main...HEAD diff hat logbook-fájlt tartalmaz a két Deliverable mellett. A tényleges `boundary-check.js` futtatása ezen a diffen exit 1-et adott, mind a hat fájlt határsértőként felsorolva. Így a specifikáció szerinti végállapot zöld oldala a jelenlegi branch tartalmával elérhetetlen; csak a dokumentált, PR-body `Spec:` nélküli skip kerülhetné meg, ami nem valódi megfelelés.
+  Recommendation: Távolítsák el a logbook-fájlokat a szállítandó diffből, vagy hozzanak létre szűk, explicit és a boundary-check által ténylegesen elfogadott kivételt; utána futtassák újra az ellenőrzést a teljes main...HEAD fájllistán.
+- [medium] A mirror walk kihagyta a nem üres, záró szóközös projektnevek persisted-byte eltérését (docs/specs/WP-sanitize-project-display-names.md:675)
+  A megtámadott állítás: „the same bytes as persisted on disk except for row A9's recorded final-position divergence”. A1 engedélyezi az U+0020 szóközt a név végén is, ezért például a `z   ` név sanitizálva változatlan marad és renderelve `- z   `. Ha ez a digest utolsó sora, a tényleges `buildBlock(...).trimEnd()` ezt `- z` alakban perzisztálja. Ezt közvetlenül reprodukáltam a jelenlegi `buildBlock` függvénnyel. A9, T17, az Acceptance criteria és az Out-of-scope szöveg csak az üresre sanitizált bare bullet `- ` → `-` esetét rögzíti, ezért ez a legitim névvesztés teszteletlen és a Coverage byte-azonossági állítása hamis.
+  Recommendation: Bővítsék A9-et és minden regisztrált mirror felületet úgy, hogy a final-position `trimEnd` minden záró U+0020 szóközt érint; egészítsék ki T17-et vagy vezessenek be külön tesztet, amely egy nem üres, záró szóközös nevet renderelt és persisted formában is ellenőriz.
+
+Next steps:
+- Oldják fel a branch és a Deliverables/boundary-check közötti eltérést.
+- Rögzítsék és kapuzzák a teljes final-position trailing-space divergenciát, majd ismételjék meg az update-all-mirrors walkot.

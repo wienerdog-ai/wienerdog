@@ -1,0 +1,55 @@
+[codex] Starting Codex task thread.
+[codex] Thread ready (019fe385-1946-7211-b60c-bcdb9ec9266d).
+[codex] Turn started (019fe385-1a2d-7c21-8410-401f955c0e08).
+[codex] Assistant message captured: {"verdict":"approve","summary":"A célzott specifikációt és kizárólag az engedélyezett fa-fájl...
+[codex] Running command: /bin/zsh -lc 'git diff --no-ext-diff --unified=80 main -- docs/specs/WP-sanitize-project-disp...
+[codex] Command completed: /bin/zsh -lc 'git diff --no-ext-diff --unified=80 main -- docs/specs/WP-sanitize-project-disp... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '521,762p' docs/specs/WP-sanitize-project-display-names.md | nl -ba -v521"
+[codex] Running command: /bin/zsh -lc "sed -n '1,260p' docs/specs/WP-sanitize-project-display-names.md | nl -ba -v1"
+[codex] Running command: /bin/zsh -lc "sed -n '261,520p' docs/specs/WP-sanitize-project-display-names.md | nl -ba -v261"
+[codex] Command completed: /bin/zsh -lc "sed -n '1,260p' docs/specs/WP-sanitize-project-display-names.md | nl -ba -v1" (exit 0)
+[codex] Command completed: /bin/zsh -lc "sed -n '261,520p' docs/specs/WP-sanitize-project-display-names.md | nl -ba -v261" (exit 0)
+[codex] Command completed: /bin/zsh -lc "sed -n '521,762p' docs/specs/WP-sanitize-project-display-names.md | nl -ba -v521" (exit 0)
+[codex] Running command: /bin/zsh -lc 'nl -ba src/core/digest.js && nl -ba src/adapters/shared.js && nl -ba src/core/s...
+[codex] Command completed: /bin/zsh -lc 'nl -ba src/core/digest.js && nl -ba src/adapters/shared.js && nl -ba src/core/s... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '299,520p' docs/specs/WP-sanitize-project-display-names.md | nl -ba -v299"
+[codex] Command completed: /bin/zsh -lc "sed -n '299,520p' docs/specs/WP-sanitize-project-display-names.md | nl -ba -v299" (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '509,714p' docs/specs/WP-sanitize-project-display-names.md | nl -ba -v509"
+[codex] Command completed: /bin/zsh -lc "sed -n '509,714p' docs/specs/WP-sanitize-project-display-names.md | nl -ba -v509" (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '1,230p' src/adapters/shared.js | nl -ba -v1"
+[codex] Running command: /bin/zsh -lc "sed -n '261,680p' src/core/digest.js | nl -ba -v261"
+[codex] Running command: /bin/zsh -lc "sed -n '1,260p' src/core/digest.js | nl -ba -v1"
+[codex] Command completed: /bin/zsh -lc "sed -n '1,230p' src/adapters/shared.js | nl -ba -v1" (exit 0)
+[codex] Command completed: /bin/zsh -lc "sed -n '1,260p' src/core/digest.js | nl -ba -v1" (exit 0)
+[codex] Command completed: /bin/zsh -lc "sed -n '261,680p' src/core/digest.js | nl -ba -v261" (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '401,560p' src/core/digest.js | nl -ba -v401"
+[codex] Command completed: /bin/zsh -lc "sed -n '401,560p' src/core/digest.js | nl -ba -v401" (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '1,40p' src/core/secret-scan.js | nl -ba -v1 && rg -n \"ScanLimits|SCAN_...
+[codex] Command completed: /bin/zsh -lc "sed -n '1,40p' src/core/secret-scan.js | nl -ba -v1 && rg -n \"ScanLimits|SCAN_... (exit 0)
+[codex] Running command: /bin/zsh -lc 'shasum -a 256 tests/golden/digest-default.md && rg -n "seventeen|17 tests|tests...
+[codex] Command completed: /bin/zsh -lc 'shasum -a 256 tests/golden/digest-default.md && rg -n "seventeen|17 tests|tests... (exit 0)
+[codex] Assistant message captured: {"verdict":"approve","summary":"A számlálási és partíciós ellenőrzés eddig konzisztens: 17 te...
+[codex] Running command: /bin/zsh -lc "node -e 'const s=require(\"./src/core/secret-scan\"); const sanitize=n=>String(...
+[codex] Command completed: /bin/zsh -lc "node -e 'const s=require(\"./src/core/secret-scan\"); const sanitize=n=>String(... (exit 0)
+[codex] Running command: /bin/zsh -lc "node -e 'const s=require(\"./src/core/secret-scan\"); const sanitize=n=>String(...
+[codex] Command completed: /bin/zsh -lc "node -e 'const s=require(\"./src/core/secret-scan\"); const sanitize=n=>String(... (exit 0)
+[codex] Running command: /bin/zsh -lc 'git status --short && git diff --name-only main...HEAD && git diff --check main...
+[codex] Command completed: /bin/zsh -lc 'git status --short && git diff --name-only main...HEAD && git diff --check main... (exit 0)
+[codex] Running command: /bin/zsh -lc "node -e 'const good=n=>String(n).replace(/["'^'"\\p{L}\\p{N}\\p{M} ._-]/gu,\"_\...
+[codex] Command completed: /bin/zsh -lc "node -e 'const good=n=>String(n).replace(/["'^'"\\p{L}\\p{N}\\p{M} ._-]/gu,\"_\... (exit 0)
+[codex] Assistant message captured: {"verdict":"needs-attention","summary":"Nem szállítható még: a Part A számlálásai és mind a 1...
+[codex] Turn completed.
+# Codex Adversarial Review
+
+Target: branch diff against main
+Verdict: needs-attention
+
+Nem szállítható még: a Part A számlálásai és mind a 13 mutációs partíció konzisztens, de egy előírt pontos leképezés minden kapun zölden átcsúszhat.
+
+Findings:
+- [medium] A HOSTILE_C pontos leképezését egyetlen teszt sem kényszeríti ki (docs/specs/WP-sanitize-project-display-names.md:201-202)
+  A „the implementer's tests must reproduce them exactly” állítás nem teljesül. T3 csak a sorszámot és az ALLOWED_LINE alakot ellenőrzi, T10 pedig kihagyja a HOSTILE_C párt. Egy általános utófeldolgozás, például `.replace(/ _/g, '_')`, a kötelező `log__ _end of daily log_` eredményt `log___end of daily log_` értékre rontja, miközben T1–T17 és a jelenlegi 13 mutációs protokoll zöld marad. Ez megsérti A1/A2 megengedett szóközének byte-pontos megőrzését, és észrevétlen névtorzulást enged.
+  Recommendation: Vegyék fel a HOSTILE_C pontos input–output párját T10-be, és mérjenek hozzá külön mixed-adjacency mutációt (például a fenti ` / _/ ` utófeldolgozást), majd igazítsák a mutációszámokat és partíciókat.
+
+Next steps:
+- Egészítsék ki T10-et és a kétoldali mutációs bizonyítékot, majd ismételjék meg a számlálási és partíciós ellenőrzést.

@@ -1,0 +1,65 @@
+[codex] Starting Codex task thread.
+[codex] Thread ready (019fe2d4-0d6d-7c01-805d-fc1272a92c55).
+[codex] Turn started (019fe2d4-0e39-75e2-99ec-f7d4ed971a39).
+[codex] Assistant message captured: {"verdict":"approve","summary":"A célzott specifikációt és kizárólag az engedélyezett impleme...
+[codex] Running command: /bin/zsh -lc 'git diff --no-ext-diff --unified=80 main -- docs/specs/WP-sanitize-project-disp...
+[codex] Command completed: /bin/zsh -lc 'git diff --no-ext-diff --unified=80 main -- docs/specs/WP-sanitize-project-disp... (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '1,180p' docs/specs/WP-sanitize-project-display-names.md"
+[codex] Running command: /bin/zsh -lc "sed -n '181,360p' docs/specs/WP-sanitize-project-display-names.md"
+[codex] Command completed: /bin/zsh -lc "sed -n '1,180p' docs/specs/WP-sanitize-project-display-names.md" (exit 0)
+[codex] Command completed: /bin/zsh -lc "sed -n '181,360p' docs/specs/WP-sanitize-project-display-names.md" (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '541,698p' docs/specs/WP-sanitize-project-display-names.md"
+[codex] Command completed: /bin/zsh -lc "sed -n '541,698p' docs/specs/WP-sanitize-project-display-names.md" (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '361,540p' docs/specs/WP-sanitize-project-display-names.md"
+[codex] Command completed: /bin/zsh -lc "sed -n '361,540p' docs/specs/WP-sanitize-project-display-names.md" (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '1,700p' src/core/digest.js"
+[codex] Command completed: /bin/zsh -lc "sed -n '1,700p' src/core/digest.js" (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '120,190p' src/adapters/shared.js"
+[codex] Command completed: /bin/zsh -lc "sed -n '120,190p' src/adapters/shared.js" (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '1,280p' src/core/secret-scan.js"
+[codex] Command completed: /bin/zsh -lc "sed -n '1,280p' src/core/secret-scan.js" (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '1,320p' scripts/boundary-check.js"
+[codex] Command completed: /bin/zsh -lc "sed -n '1,320p' scripts/boundary-check.js" (exit 0)
+[codex] Running command: /bin/zsh -lc "sed -n '1,120p' tests/golden/digest-default.md"
+[codex] Command completed: /bin/zsh -lc "sed -n '1,120p' tests/golden/digest-default.md" (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba docs/specs/WP-sanitize-project-display-names.md | sed -n '280,560p'"
+[codex] Command completed: /bin/zsh -lc "nl -ba docs/specs/WP-sanitize-project-display-names.md | sed -n '280,560p'" (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba docs/specs/WP-sanitize-project-display-names.md | sed -n '541,698p'"
+[codex] Command completed: /bin/zsh -lc "nl -ba docs/specs/WP-sanitize-project-display-names.md | sed -n '541,698p'" (exit 0)
+[codex] Running command: /bin/zsh -lc "nl -ba src/core/digest.js | sed -n '210,260p;360,570p;600,640p' nl -ba src/core...
+[codex] Command completed: /bin/zsh -lc "nl -ba src/core/digest.js | sed -n '210,260p;360,570p;600,640p' nl -ba src/core... (exit 0)
+[codex] Assistant message captured: {"verdict":"needs-attention","summary":"A T17 állítása és megfigyelési mechanizmusa a fa alap...
+[codex] Running command: /bin/zsh -lc "node -e 'const s=require(\"./src/core/secret-scan\"); const b=require(\"./src/a...
+[codex] Command completed: /bin/zsh -lc "node -e 'const s=require(\"./src/core/secret-scan\"); const b=require(\"./src/a... (exit 0)
+[codex] Running command: /bin/zsh -lc 'git show --no-ext-diff --format=fuller --stat --oneline 2123a29 -- docs/specs/W...
+[codex] Command completed: /bin/zsh -lc 'git show --no-ext-diff --format=fuller --stat --oneline 2123a29 -- docs/specs/W... (exit 0)
+[codex] Running command: /bin/zsh -lc 'node scripts/boundary-check.js docs/specs/WP-sanitize-project-display-names.md ...
+[codex] Command failed: /bin/zsh -lc 'node scripts/boundary-check.js docs/specs/WP-sanitize-project-display-names.md ... (exit 1)
+[codex] Assistant message captured: {"verdict":"needs-attention","summary":"Nem szállítható még. A T17 viselkedése, megfigyelhető...
+[codex] Turn completed.
+# Codex Adversarial Review
+
+Target: branch diff against main
+Verdict: needs-attention
+
+Nem szállítható még. A T17 viselkedése, megfigyelhetősége és M1/M7/M10 kontra másik nyolc mutációs partíciója helyes; az A12/G2 tulajdonosi korrekció is konzisztens. Viszont a specifikációban maradtak 16-os számlálások, a T17 ellentmond A11-nek és több tükrözött perzisztenciaállításnak, továbbá a jelenlegi branch diff megsérti a saját Deliverables-határát.
+
+Findings:
+- [medium] A branch diff megsérti a specifikáció saját permission boundary-ját (docs/specs/WP-sanitize-project-display-names.md:122-134)
+  A támadott állítás: „Deliverables (permission boundary — touch ONLY these)” és „Every other path ... reads, never writes”. A `git diff --name-only main` öt `docs/specs/logbook/**` fájlt is mutat, miközben egyik sincs a Deliverables táblában. Az engedélyezett `scripts/boundary-check.js` ugyanezzel a fájllistával determinisztikusan exit 1-et ad. Így a jelenlegi változás a saját kötelező boundary gate-jén elbukik.
+  Recommendation: Távolítsák el az öt logbook-változást a szállítandó branch diffből, majd futtassák újra a boundary checket a teljes main elleni fájllistával.
+- [medium] A fájl továbbra is 16 és 17 tesztes állításokat kever (docs/specs/WP-sanitize-project-display-names.md:403-651)
+  A támadott kifejezések: „passes all sixteen tests without the run input”, „the sixteen tests T1–T16”, „Every one of T1–T16”, valamint az M9-ben „passed all sixteen tests”. Ezek ütköznek a Deliverables, a teszttábla és a G1 envelope 17 tesztes szerződésével. Különösen az első és az M9-es MEASURED állítás tényszerűen elavult: a hozzáadott T17 az adott M8/M9 állapotokban zöld marad, ezért a módosított suite mind a 17 tesztje átmegy, nem 16.
+  Recommendation: Mérjék újra és írják le a teljes T1–T17 suite eredményeit minden számláló és mutációs állításban; a mutációs zöld halmazokba is kerüljön be T17 a megadott partíció szerint.
+- [medium] A kanonikus A11 kizárja a kötelező T17 fixture-t (docs/specs/WP-sanitize-project-display-names.md:468)
+  A támadott állítás: „Every fixture vault carries a daily note so the boundary exists on both surfaces”. T17 kötelező fixture-je kifejezetten nem tartalmaz napi jegyzetet, és éppen ettől kerül az üresre sanitizált név végső pozícióba. Emiatt a kanonikus Table A abszolút fixture-állítása hamis, miközben a T17 szerződése az ellenkezőjét követeli.
+  Recommendation: Az A11 hatókörét korlátozzák a `projectBlock`-ot használó fixture-ökre, és hivatkozzanak a T17 szándékos, napi jegyzet nélküli kivételére.
+- [medium] A Coverage továbbra is tagadja az A9/T17 perzisztált eltérését (docs/specs/WP-sanitize-project-display-names.md:659)
+  A támadott kifejezés: „and the same bytes as persisted on disk”. Ez közvetlenül ellentmond A9-nek és T17-nek: `buildBlock(...).trimEnd()` a végső `- ` sort `-`-re változtatja. Ugyanez a régi állítás maradt a Current state-ben („passes every other line through unchanged”), a Security checklist pedig korlátozás nélkül ismétli, hogy „every line matches the allowlist form”. Ezek a tükrözött felületek erősebb perzisztált garanciát ígérnek, mint a kanonikus sor.
+  Recommendation: A Current state, Security checklist és Coverage perzisztált-surface állításait igazítsák A9-hez: nevezzék meg vagy idézzék a T17 által rögzített végső-sor eltérést, és az egzakt line-form garanciát korlátozzák a renderelt felületre.
+
+Next steps:
+- Tisztítsák meg a branch diffet a Deliverables-en kívüli logbook fájloktól.
+- Egységesítsék az összes teszt- és mutációs mérési állítást T1–T17-re.
+- Javítsák az A11 fixture-hatókörét és az A9-et tükröző perzisztenciafelületeket.
+- Futtassák újra a G1 teljes mutációs mátrixát és a boundary checket.
