@@ -1,7 +1,7 @@
 ---
 id: WP-sanitize-project-display-names
 title: Sanitize vault-derived project display names before they reach the digest
-status: In-Review
+status: Done
 model: sonnet
 size: S
 depends_on: []
