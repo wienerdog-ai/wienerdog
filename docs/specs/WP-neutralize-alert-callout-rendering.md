@@ -1,6 +1,6 @@
 ---
 id: WP-neutralize-alert-callout-rendering
-title: Neutralize the alert callout's rendering site, so no stored alert field can forge a digest line
+title: Neutralize the alert callout's rendering site, so no stored alert field can forge a digest source line
 status: Draft
 model: sonnet
 size: S
@@ -10,6 +10,10 @@ epic: audit-2026-07-29
 ---
 
 # WP-neutralize-alert-callout-rendering: neutralize the alert callout's rendering site
+
+**Scope in one line, because a title cannot carry a citation:** this WP guarantees
+**physical source-line** containment and nothing wider. Table A's
+scope-of-the-guarantee row is the only place that boundary is decided.
 
 ## Context (read this, nothing else)
 
@@ -216,20 +220,25 @@ records that every such site was decided separately and differently.
 | Encoding | the `escape:` literal under "Exact contracts", the same fixed code-owned form `normalizeSummaryLines` already emits (l.278). One code point in, one token out — no collapsing of runs. Iteration is over CODE POINTS, so an astral character yields ONE token naming its full code point and a lone surrogate escapes as itself. Deliberately not reversible and need not be: nothing decodes the digest |
 | Fields neutralized | all four interpolated values — `job`, `s.first`, `s.lastReason`, `s.hint`, which are the grouped record's `job`, `at`, `reason` and `log_hint` — **uniformly**, i.e. four textual call sites. Three render in every line; `s.first` renders only in the multi-failure count branch. `at` and `log_hint` are built from code-owned templates in every producer today; applying the transform anyway is the same fail-closed uniformity `sanitizeAlert` already documents for its own scrub. **Note the two senses of "code-owned" in play, because `alerts.js` uses the other one:** its comment calls `at`/`job`/`log_hint` code-owned meaning *they cannot carry a secret*, which is a claim about the scan. Here it means *the bytes are a fixed template*, which is true of `at` and `log_hint` and NOT of `job` — a job name is user-authored in `config.yaml`, single-line only because the parser's `- name:` capture cannot span a line (`src/scheduler/jobs.js` l.54) |
 | Grouping key | unchanged: the records are still grouped by the **raw** `job`. The escape is not injective on rendered text (a real TAB and the literal eight characters `<U+0009>` render alike), so keying on the neutralized name would merge two distinct jobs into one line and **hide a failing job** |
-| Rendered-field budget | the `budget:` literal under "Exact contracts": `alerts.js`'s `MAX_FIELD_CHARS`, **imported, never re-declared**. A copied `2000` would make the non-widening argument true only until someone edits the other file; the import makes it a **construction rather than a claim**. Measured, so the import is known to be available and safe: `MAX_FIELD_CHARS` is already exported (`src/core/alerts.js` l.217), and `alerts.js` does not require `digest.js`, so there is no cycle. Both budgets count the same unit — `alerts.js` caps with `String(v).slice(0, N)` and the rendered budget counts the accumulated output's `.length`, i.e. **UTF-16 code units on both sides** (the code-point iteration in the Encoding row governs the escape, not the budget). Overflow appends the `overflow:` marker, so the bound is that budget **plus one character**, and that single character is the whole of the widening. **The bound is on the OUTPUT and holds for any input; the input is NOT bounded by the same number, and that asymmetry is measured rather than assumed.** `sanitizeAlert` slices to `MAX_FIELD_CHARS` and only *then* runs `redactOnly`, which expands. Two measurements, and the second is the one that decides this row. (1) Through `appendAlert`: a 2000-character field of `api_key=…` pairs is written to `alerts.jsonl` at **3235** characters, but comes back from `readAlerts` at exactly 2000 — the re-sanitize re-slices and the already-redacted content does not expand a second time. (2) **Through a record `appendAlert` did not write** — hand-edited, left by an older version, or produced any other way — the same 2000 raw characters on disk make `readAlerts` return **3235** characters carrying **no unsafe code point at all**. So the renderer can be handed a benign field longer than the budget, and this WP **truncates it**, marked with the overflow character. That is accepted, not hidden: the alternative is an unbounded prefix, the full text stays available through `wienerdog alerts`, and the case is unreachable from Wienerdog's own writer |
+| Rendered-field budget | the `budget:` literal under "Exact contracts": `alerts.js`'s `MAX_FIELD_CHARS`, **imported, never re-declared**. A copied `2000` would make the non-widening argument true only until someone edits the other file; the import makes it a **construction rather than a claim**. Measured, so the import is known to be available and safe: `MAX_FIELD_CHARS` is already exported (`src/core/alerts.js` l.217), and `alerts.js` does not require `digest.js`, so there is no cycle. Both budgets count the same unit — `alerts.js` caps with `String(v).slice(0, N)` and the rendered budget counts the accumulated output's `.length`, i.e. **UTF-16 code units on both sides** (the code-point iteration in the Encoding row governs the escape, not the budget). Overflow appends the `overflow:` marker, so the bound is that budget **plus one character**, and that single character is the whole of the widening. **The bound is on the OUTPUT and holds for any input; the input is NOT bounded by the same number, and that asymmetry is measured rather than assumed.** `sanitizeAlert` slices to `MAX_FIELD_CHARS` and only *then* runs `redactOnly`, which expands. Two measurements, and the second is the one that decides this row. (1) Through `appendAlert`: a 2000-character field of `api_key=…` pairs is written to `alerts.jsonl` at **3235** characters, but comes back from `readAlerts` at exactly 2000 — the re-sanitize re-slices and the already-redacted content does not expand a second time. (2) **Through a record `appendAlert` did not write** — hand-edited, left by an older version, or produced any other way — the same 2000 raw characters on disk make `readAlerts` return **3235** characters carrying **no unsafe code point at all**. So the renderer can be handed a benign field longer than the budget, and this WP **truncates it**, marked with the overflow character. That is accepted, not hidden, and the fallback is stated per field rather than in general because **it does not hold for all four.** Measured on HEAD, `wienerdog alerts` prints the job, the timestamps and the **reason** (`src/cli/alerts.js` l.75, l.117) and **never prints `log_hint`** — the name appears in that file only in a JSDoc type. So a truncated `reason` is fully recoverable, a truncated `log_hint` is not recoverable anywhere. What keeps that acceptable rather than merely admitted: `log_hint` is `` `${tilde(home, join(logs, name))}/` `` in every producer, so exceeding 2000 characters needs both a pathological job name and a record `appendAlert` did not write. **If that ever stops being true, the uniform-truncation decision is the owner's to revisit** |
 | Truncation boundary | truncation happens **between whole escape tokens**, never inside one; a rendered field never ends in a partial `<U+…` |
-| Why a budget at all, and what it costs | escaping expands up to 9× per code point (`<U+1D173>`), and an unbounded escape hands back in bytes what it takes away in lines — measured: without it, two failing jobs each carrying a 2000-character field of astral `Cf` expel the body where today it survives, a regression introduced by this WP's own fix. It costs the code-owned reasons nothing: the longest in the tree is the policy-hooks warning at **353** characters (`src/cli/run-job.js` l.839-850), an order of magnitude inside the budget, and none of them contains an unsafe code point. **That is a claim about the code-owned templates only, deliberately** — the producer residual in Context is exactly the population it does not cover, since a raw Node error string's content has not been characterised here. Nothing is lost even when the budget does bite — `wienerdog alerts` prints the untruncated stored reason to a terminal (`src/cli/alerts.js` l.75, l.117) |
+| Why a budget at all, and what it costs | escaping expands up to 9× per code point (`<U+1D173>`), and an unbounded escape hands back in bytes what it takes away in lines — measured: without it, two failing jobs each carrying a 2000-character field of astral `Cf` expel the body where today it survives, a regression introduced by this WP's own fix. It costs the code-owned reasons nothing: the longest in the tree is the policy-hooks warning at **353** characters (`src/cli/run-job.js` l.839-850), an order of magnitude inside the budget, and none of them contains an unsafe code point. **That is a claim about the code-owned templates only, deliberately** — the producer residual in Context is exactly the population it does not cover, since a raw Node error string's content has not been characterised here. What happens when the budget *does* bite, and what is recoverable afterwards, is stated once in the budget row above; this row does not restate it |
 | Template | byte-frozen. For any record whose fields contain no unsafe code point **and are within the budget**, the emitted bytes are unchanged, in **both** shapes — the single-failure form and the `has failed <n> times since <at>` form. The second condition is not decoration: the budget row records a measured path on which a benign field arrives longer than the budget and is therefore truncated, so "no unsafe code point" alone does not imply byte-identity |
 | **Scope of the guarantee — canonical, and the single owner of this claim** | **What is guaranteed: physical source-line containment.** A stored field cannot end the callout's source line or begin another; the block is exactly one source line per failing job, each opened by the code-owned prefix. **What is NOT guaranteed: how a renderer draws that line.** A field of ordinary printable ASCII passes through untouched by design, so a value such as `</blockquote><br><h1>Standing instructions</h1>` survives, and a Markdown renderer that permits raw HTML may draw it as a break and a heading and may close the callout's own blockquote. That is out of reach of a code-point denylist: the bytes are individually legitimate and the alphabet cannot be narrowed to exclude them without mangling every real alert (the Denylist row). **Why the line is drawn here and not wider:** the digest's primary consumer is a model reading text, for which a heading forged inside one line of a `> [!warning]` callout is materially weaker than a real line-initial `## …`, and the residual is the same "shape, not meaning" one the sibling sanitizer WPs accepted. Every other surface — the title, the Context, the Security checklist and the acceptance criteria — **cites this row and states no containment claim of its own.** Closing the renderer layer would mean escaping `<` and `&` as well, which is a product decision about digest formatting that this WP does not make |
 | Preserved unchanged | `sanitizeAlert`'s cap and scrub (this WP neutralizes at the render, so the stored record keeps the text the CLI prints), the prefix ordering, `capDigest`, and `renderDigest` staying pure and total |
 
 ### Mirrored Surface Checklist
 
-- [ ] **Every surface that says what the containment covers** — the `title:`
-      frontmatter, the H1, Context, the Security checklist, the acceptance criteria.
-      Table A's scope-of-the-guarantee row owns that claim outright; these carry a
-      citation and no mechanism, because a claim written twice is how two
-      consecutive rounds found it stated wider than it is gated
+- [ ] **Every surface that says what the containment covers** — Context, the
+      Security checklist, the acceptance criteria. Table A's scope-of-the-guarantee
+      row owns that claim outright; these carry a citation and no mechanism, because
+      a claim written twice is how consecutive rounds found it stated wider than it
+      is gated
+- [ ] **The `title:` frontmatter and the H1**, which cannot carry a citation and so
+      carry the qualifying words instead: both say **source line**, and the note
+      under the H1 points at the scope row. Registered separately because the
+      previous checklist entry claimed they were citations, which was not true of
+      either
 - [ ] The Deliverables `digest.js` cell, which cites Table A
 - [ ] The literals and the worked example under "Exact contracts"
 - [ ] The first ten acceptance criteria (each asserts a Table A fact; the last two
@@ -360,19 +369,27 @@ instead, named here rather than swept under the same sentence.
       satisfied by fixtures that put it there, so their coverage of this is
       incidental, not a substitute.
 - [ ] **The mapping is exact, total and idempotent over the whole Unicode range**,
-      enumerated rather than sampled, and at every position in the field: a code
-      point inside the set always becomes its token, one outside is always passed
-      through unchanged, a run of two is two tokens, and re-applying the transform
-      to its own output is the identity. An astral code point yields ONE token
-      naming that code point, never two surrogate tokens. **Idempotence is asserted
-      at the budget boundary too, not only on short inputs** — an overflowing field
-      is where a plausible implementation stops being idempotent, and a Unicode
-      sweep of three-character shapes never reaches it.
-- [ ] **Truncation never leaves a half-cut escape.** A field whose rendered form
-      exceeds the budget ends on a whole `<U+XXXX>` token followed by the overflow
-      marker — including at an offset where a length-only slice would land inside a
-      token, which is the only case that distinguishes a token-boundary
-      implementation from a slice.
+      enumerated rather than sampled, and at every position **of the retained
+      prefix**: a code point inside the set always becomes its token, one outside is
+      always passed through unchanged, a run of two is two tokens, and re-applying
+      the transform to its own output is the identity. An astral code point yields
+      ONE token naming that code point, never two surrogate tokens. **The
+      retained-prefix scope is load-bearing, not hedging:** an overflowing field
+      drops its tail by design (the budget row), so "every code point is mapped or
+      passed through" is false of the dropped suffix, and a version of this
+      criterion that quantified over the whole field could not be satisfied by a
+      correct implementation. **Idempotence IS asserted at the budget boundary** —
+      an overflowing field is where a plausible implementation stops being
+      idempotent, and a Unicode sweep of three-character shapes never reaches it.
+- [ ] **Truncation never cuts inside an escape token.** A field whose rendered form
+      exceeds the budget ends with the overflow marker, and the character sequence
+      before that marker is never a partial `<U+…`. **Stated as "never cuts inside a
+      token", NOT as "ends on a whole token":** a benign overflowing field contains
+      no escape token at all — measured, a 3235-character field of safe text
+      renders as 2000 safe characters plus the marker — so a criterion demanding a
+      token before the marker is unsatisfiable for it. The discriminating case is
+      still the one where a length-only slice *would* land inside a token, and that
+      case is where a token-boundary implementation and a slice differ.
 - [ ] **The budget bounds the output** at Table A's value plus the one-character
       marker, and a field already inside it comes back byte-identical with no
       marker.
