@@ -138,3 +138,7 @@ npm run lint
 2. Conventional commits; PR titled `feat(scope): title (WP-<slug>)`.
 3. PR template filled, including "Decisions made" (or "none") and `Generated-by:`.
 4. This spec's `status:` flipped to `In-Review` in the same PR.
+5. Both PR review gates have run on the diff and are clean or fully
+   dispositioned — they are defined in `docs/runbooks/codex-review.md`
+   and not restated here. `In-Review` marks the START of review: this
+   list is complete only when review is.
