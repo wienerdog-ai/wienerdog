@@ -52,10 +52,9 @@ starts something that keeps running, it is wrong.
 
 ## Git discipline
 - Branch: `wp/<slug>`. Never commit to main. The one exception is a
-  process landing: a change to a runbook, the spec template, or an ADR
-  that the maintainer approved as a byte-exact brief, applied by
-  copying that brief's block — never work on a work package, and never
-  a change to `src/`.
+  process landing: a documentation-only change that the maintainer
+  approved as a byte-exact brief, applied by copying that brief's
+  block — never work on a work package, and never a change to `src/`.
 - Conventional commits: `feat|fix|docs|test|chore(scope): message (WP-<slug>)`.
 - One PR per WP. Fill the PR template completely, including the
   `Generated-by: <model>` line.
