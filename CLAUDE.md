@@ -15,6 +15,12 @@ starts something that keeps running, it is wrong.
 - Read, in order: (1) this file, (2) your spec, (3) the files in the spec's
   Deliverables table. Nothing else is required; do not wander the repo. The
   spec inlines everything you need — if it doesn't, that's a spec bug: say so.
+- That reading list is what you need in order to BUILD. It is not the
+  whole of your job: opening the PR is a milestone, not the finish
+  line. Two review gates then run on the same diff — see
+  `docs/runbooks/codex-review.md`, "When it runs" — and the work
+  package is finished only when both are clean or every finding has a
+  disposition. Running them is yours; merging is the maintainer's.
 - Touch ONLY files listed in the spec's Deliverables table. CI rejects PRs
   that touch unlisted files. Found something else broken? Note it under
   "Discovered issues" in the PR body; do not fix it.
@@ -46,10 +52,9 @@ starts something that keeps running, it is wrong.
 
 ## Git discipline
 - Branch: `wp/<slug>`. Never commit to main. The one exception is a
-  process landing: a change to a runbook, the spec template, or an ADR
-  that the maintainer approved as a byte-exact brief, applied by
-  copying that brief's block — never work on a work package, and never
-  a change to `src/`.
+  process landing: a documentation-only change that the maintainer
+  approved as a byte-exact brief, applied by copying that brief's
+  block — never work on a work package, and never a change to `src/`.
 - Conventional commits: `feat|fix|docs|test|chore(scope): message (WP-<slug>)`.
 - One PR per WP. Fill the PR template completely, including the
   `Generated-by: <model>` line.
