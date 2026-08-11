@@ -21,10 +21,14 @@ beside this file, each one **before** its findings were read for adjudication.
 | 3 | external | 3 (2 high, 1 medium) |
 | 4 | external | 1 (high) |
 | 5 | external | 2 (1 high, 1 medium) |
+| — | **owner ruling (c): refusal replaces truncation** | — |
+| 6 | external (first attempt hung, cancelled, re-run) | 3 (1 high, 2 medium) |
+| 7 | external | 3 (1 high, 2 medium) |
+| 8 | external | 2 (1 high, 1 medium) |
 
-**16 → 4 → 4 → 3 → 1 → 2.** The loop has NOT met the closure criterion (a round
-finding nothing about the product), and it is being stopped deliberately rather
-than continued — see the design question below.
+**16 → 4 → 4 → 3 → 1 → 2 → 3 → 3 → 2.** The loop has NOT met the closure criterion
+and is stopped twice over: once at round 5 for the design question below, and again
+at round 8 for a **new** owner decision it surfaced.
 
 ## What the spec was before any of this
 
@@ -113,10 +117,67 @@ Three options, for the owner:
 (c) looks the strongest to the executor, and it is **not** applied: it changes what
 the user sees, and scope decisions are the owner's.
 
+## Rounds 6–8, after the owner ruled (c)
+
+The ruling worked on its own terms: **every input that generated a finding in rounds
+3–5 now takes the refusal branch**, and the family — maximality, token boundaries,
+partial fields, per-field recoverability — is gone rather than repaired. It is also
+strictly better on the axis that justified a threshold at all: six jobs each
+carrying a 2000-character field of astral `Cf` give 48 928 bytes with the body
+**gone** before, 1 792 bytes with the body **kept** after.
+
+What rounds 6–8 then found was almost entirely in the *new* prose, and in two
+recurring families:
+
+- **Family A — a rule that does not say which rendering stage it governs.** Round 6
+  named two criteria; round 7 found a third; the structural answer was to sweep all
+  twelve rather than the ones a round names, plus a Table A row defining the two
+  stages, moved to position 1. Round 8 found a fourth anyway — and how it hid is
+  the lesson: **criterion 10 said "the same properties hold on the persisted managed
+  block" and delegates by reference, so a sweep for stage words passes straight over
+  it.** A criterion that points instead of stating inherits whatever confusion it
+  points at.
+- **Family B — a frequency claim over a producer population nobody measured.**
+  Three instances across three rounds (C9, W2, X3), each finding one more unbounded
+  path: the containment probe's raw `err.message`, the external `--version` string,
+  and finally `policyHooks.sources.join(', ')` — file paths read from a drop-in
+  directory, inside the very template that had been cited as "fully code-owned".
+  The structural answer was to **delete the proportionality argument** rather than
+  narrow it a third time.
+
+## NEW OPEN OWNER DECISION — refusal can make a failing job unidentifiable
+
+Round 8 surfaced an extension of the accepted price that the ruling did not
+contemplate, and it is flagged rather than absorbed.
+
+The contract refuses **per field**, uniformly. The decision now rests entirely on
+its consequence — and that consequence is **not uniform across the four fields**.
+When the *reason* is refused, the line still names the job, the count and the log.
+When the **job name** or the **log hint** is itself refused, that field is replaced
+too: the line survives but identifies neither which job failed nor where its log
+is, and two distinct over-long job names render as two lines naming neither. The
+line-count criterion does not catch this, because it counts lines.
+
+Two ways out, for the owner:
+
+- **Accept it.** The untouched record is in `alerts.jsonl` and `wienerdog alerts`
+  prints the job and reason from it, so the information is recoverable outside the
+  digest. The criterion is now honestly named "No failing job loses its **line**".
+- **Exempt `job` from refusal.** Keeps the callout always identifiable, at the cost
+  of putting one unbounded field back into the prefix — the thing the threshold
+  exists to prevent.
+
 ## Where the spec stands
 
-`status: Draft`, 491 lines, `npm run lint` green, the Deliverables table verified
-against `scripts/boundary-check.js` in all three directions. Two further items are
-named in the spec as **open owner decisions**: whether the producer-side residual
-becomes a real work package or an explicit risk acceptance, and — added by this
-record — which of (a)/(b)/(c) the truncation contract takes.
+`status: Draft`, 520 lines, `npm run lint` green, the Deliverables table verified
+against `scripts/boundary-check.js` in all three directions.
+
+Decisions taken since this record was opened: the truncation contract is **(c),
+refusal** (owner), and the producer-side residual is a **queued follow-up package**
+(owner), not a dependency — `depends_on` stays `[]` and the self-email stays a
+named non-goal.
+
+**One decision is open and blocks closure:** the job/log-hint identifiability
+question above. It is not a wording defect and no further review round will settle
+it — a ninth round would re-examine a contract whose product question is known to
+be open.
