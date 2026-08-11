@@ -29,3 +29,12 @@ writing. Read both before drafting.
   both sides: a real green on the compliant state, and a real red run
   against a deliberately broken state — so a check that can never fail is
   caught before anyone believes it. Paste both outputs.
+- A fact is stated once, in the surface that owns it; every other
+  surface cites the owner instead of restating. A place that keeps
+  going stale predicting another surface's content stops predicting
+  and points — what has no content cannot go stale.
+- The worked example of these rules is
+  `docs/specs/done/WP-daily-summary-per-line-framing.md`. Every other
+  spec under `done/` predates them: those are RECORDS of what shipped,
+  never models of how a spec should look. Copying a pre-rules spec's
+  shape is how a 300-line contract becomes an 800-line fortress.

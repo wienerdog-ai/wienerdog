@@ -47,6 +47,18 @@ mechanisms) → repeat until clean → owner sign-off → specs move to Ready.
   ADR, a code-level nit raised against a spec contract — is dropped, or
   routed to the artifact that owns that level. It is never folded into the
   higher document.
+- Every solution starts with the value question: what does fixing this
+  protect or earn in the product, and is that worth the fix plus the
+  maintenance it creates? "Not worth solving" is a legitimate
+  disposition — a named residual — and reaching it before the first
+  patch is cheaper than after the third round. The repeat-kind rule
+  below decides HOW to solve what recurs; this question decides
+  WHETHER.
+- The same test gates every addition to the system itself: a new rule,
+  a document, a gate, a process step earns its place by the value it
+  protects, named at the moment of adding — or it is not added. Both
+  runaway loops this repo has survived were additions that each looked
+  defensible alone and never faced the aggregate question.
 - When two consecutive rounds land findings of the same kind, the next
   step is a design question, never another textual patch.
 - The reviewer's raw output is committed BEFORE anyone reads or judges
