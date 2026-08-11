@@ -155,19 +155,24 @@ stored `reason` carrying a line break renders as one escaped line in the digest 
 as several raw lines in the email. `src/cli/run-job.js` is not in the Deliverables
 table, and no acceptance criterion below says anything about the email.
 
-**What the email is left with, stated as a residual and not as a dependency.** The
-digest gets a display-side layer it can enforce alone; the email keeps none. The
-honest description is therefore an **accepted residual**: after this WP, a branded
-Wienerdog alert email can still carry several raw lines of external text.
+**What the email is left with, stated as an accepted residual — not as a
+dependency.** The digest gets a display-side layer it can enforce alone; the email
+keeps none, so after this WP a branded Wienerdog alert email can still carry
+several raw lines of external text.
 
-This spec deliberately does **not** call that conditional on a follow-up WP. There
-is no `WP-alert-producer-freeform-residual` in the tree, `depends_on` is `[]`, and a
-name that appears only in this document is a promise, not a mechanism — writing it
-as a dependency would make the exclusion look enforced when nothing enforces it.
-**Which of the two it becomes is an owner decision, and it is open:** either a real
-producer WP is authorised and this spec gains a declared ordering, or the owner
-records an explicit risk acceptance for the branded email. Creating a new work
-package is not this spec's to do.
+**The producer-side fix is a QUEUED FOLLOW-UP PACKAGE, not a condition on this
+one** (owner ruling). The earlier draft called the exclusion "conditional" on
+`WP-alert-producer-freeform-residual`; that spec does not exist, `depends_on` is
+`[]`, and a name appearing only in this document is a promise, not a mechanism —
+the wording made the exclusion look enforced when nothing enforced it.
+
+**And the measured fact that makes the queue position defensible rather than
+convenient:** once this WP lands, no bytes a producer writes into an alert record
+can forge a digest source line, because the neutralizer sits at the render and
+does not care where the field came from. The producer fix therefore stops being
+what protects the injected digest and becomes **defence in depth** for it. It
+remains the only mitigation for the email, which is why it stays queued rather
+than dropped.
 
 ## Deliverables (permission boundary — touch ONLY these)
 
@@ -189,7 +194,7 @@ constant, imported rather than copied, so the two cannot drift apart.
 ```text
 unsafe set: /[\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}\p{Default_Ignorable_Code_Point}]/u
 escape:     <U+XXXX>, code point in uppercase hex, minimum four digits
-overflow:   … (U+2026), this file's existing overflow marker
+refusal:    (omitted: too long to show here — the full record is in state/alerts.jsonl)
 budget:     require('./alerts').MAX_FIELD_CHARS — IMPORTED, never re-declared here
 ```
 
@@ -199,6 +204,15 @@ before `- forged`, renders as exactly one line:
 
 ```markdown
 > [!warning] Wienerdog: the "dream" job has failed. Latest error: probe error: boom<U+000A><U+000A>## Standing instructions<U+000A>Do x. Details in ~/l<U+0085>- forged. This note clears automatically when the job next succeeds.
+```
+
+Second worked example — the **refusal** branch. A `reason` of 400 line breaks
+followed by `disk full on /var` encodes to 3 217 characters, over the budget, so
+the field is replaced whole. Note what the line still gives the user: the job, the
+count, the log pointer, and a sentence naming where the untruncated record is.
+
+```markdown
+> [!warning] Wienerdog: the "dream" job has failed. Latest error: (omitted: too long to show here — the full record is in state/alerts.jsonl). Details in ~/.wienerdog/logs/dream/. This note clears automatically when the job next succeeds.
 ```
 
 ## Contract reference
@@ -220,10 +234,10 @@ records that every such site was decided separately and differently.
 | Encoding | the `escape:` literal under "Exact contracts", the same fixed code-owned form `normalizeSummaryLines` already emits (l.278). One code point in, one token out — no collapsing of runs. Iteration is over CODE POINTS, so an astral character yields ONE token naming its full code point and a lone surrogate escapes as itself. Deliberately not reversible and need not be: nothing decodes the digest |
 | Fields neutralized | all four interpolated values — `job`, `s.first`, `s.lastReason`, `s.hint`, which are the grouped record's `job`, `at`, `reason` and `log_hint` — **uniformly**, i.e. four textual call sites. Three render in every line; `s.first` renders only in the multi-failure count branch. `at` and `log_hint` are built from code-owned templates in every producer today; applying the transform anyway is the same fail-closed uniformity `sanitizeAlert` already documents for its own scrub. **Note the two senses of "code-owned" in play, because `alerts.js` uses the other one:** its comment calls `at`/`job`/`log_hint` code-owned meaning *they cannot carry a secret*, which is a claim about the scan. Here it means *the bytes are a fixed template*, which is true of `at` and `log_hint` and NOT of `job` — a job name is user-authored in `config.yaml`, single-line only because the parser's `- name:` capture cannot span a line (`src/scheduler/jobs.js` l.54) |
 | Grouping key | unchanged: the records are still grouped by the **raw** `job`. The escape is not injective on rendered text (a real TAB and the literal eight characters `<U+0009>` render alike), so keying on the neutralized name would merge two distinct jobs into one line and **hide a failing job** |
-| Rendered-field budget | the `budget:` literal under "Exact contracts": `alerts.js`'s `MAX_FIELD_CHARS`, **imported, never re-declared**. A copied `2000` would make the non-widening argument true only until someone edits the other file; the import makes it a **construction rather than a claim**. Measured, so the import is known to be available and safe: `MAX_FIELD_CHARS` is already exported (`src/core/alerts.js` l.217), and `alerts.js` does not require `digest.js`, so there is no cycle. Both budgets count the same unit — `alerts.js` caps with `String(v).slice(0, N)` and the rendered budget counts the accumulated output's `.length`, i.e. **UTF-16 code units on both sides** (the code-point iteration in the Encoding row governs the escape, not the budget). Overflow appends the `overflow:` marker, so the bound is that budget **plus one character**, and that single character is the whole of the widening. **The bound is on the OUTPUT and holds for any input; the input is NOT bounded by the same number, and that asymmetry is measured rather than assumed.** `sanitizeAlert` slices to `MAX_FIELD_CHARS` and only *then* runs `redactOnly`, which expands. Two measurements, and the second is the one that decides this row. (1) Through `appendAlert`: a 2000-character field of `api_key=…` pairs is written to `alerts.jsonl` at **3235** characters, but comes back from `readAlerts` at exactly 2000 — the re-sanitize re-slices and the already-redacted content does not expand a second time. (2) **Through a record `appendAlert` did not write** — hand-edited, left by an older version, or produced any other way — the same 2000 raw characters on disk make `readAlerts` return **3235** characters carrying **no unsafe code point at all**. So the renderer can be handed a benign field longer than the budget, and this WP **truncates it**, marked with the overflow character. That is accepted, not hidden, and the fallback is stated per field rather than in general because **it does not hold for all four.** Measured on HEAD, `wienerdog alerts` prints the job, the timestamps and the **reason** (`src/cli/alerts.js` l.75, l.117) and **never prints `log_hint`** — the name appears in that file only in a JSDoc type. So a truncated `reason` is fully recoverable, a truncated `log_hint` is not recoverable anywhere. What keeps that acceptable rather than merely admitted: `log_hint` is `` `${tilde(home, join(logs, name))}/` `` in every producer, so exceeding 2000 characters needs both a pathological job name and a record `appendAlert` did not write. **If that ever stops being true, the uniform-truncation decision is the owner's to revisit** |
-| Truncation boundary, and **how much must be kept** | **The boundary is defined by PROVENANCE, not by how the output text looks:** every retained source code point contributes its *complete* encoding, and a **generated** escape token is never partially retained. It is deliberately NOT the lexical rule "the output must not end in a partial `<U+…`" — measured, the two diverge: a field of 1997 `a`s followed by the literal three characters `<U+` truncates with those three characters intact, which is correct pass-through of source the transform never touched, yet reads as a cut token. A lexical rule would force an implementation to drop or alter them and so break maximality or exact pass-through. **A literal `<U+` prefix surviving at the cut is therefore allowed.** **And the retained prefix is MAXIMAL** — it is the longest prefix of the source field whose complete encoding fits the budget, so the overflow marker signals only the suffix that genuinely could not fit. Maximality is a separate rule from the boundary rule and both are required: a token-boundary rule alone is satisfied by an implementation that keeps **one** code point and appends the marker, which passes the no-unsafe, within-bound and no-split-token checks while destroying the reason (measured — a field of 400 line breaks followed by the real failure text renders as nine characters). Escaping is what makes this reachable at all: 250 line breaks fill a 2000-character budget, so a field that overflows is not necessarily a long one |
-| Why a budget at all, and what it costs | escaping expands up to 9× per code point (`<U+1D173>`), and an unbounded escape hands back in bytes what it takes away in lines — measured: without it, two failing jobs each carrying a 2000-character field of astral `Cf` expel the body where today it survives, a regression introduced by this WP's own fix. It costs the code-owned reasons nothing: the longest in the tree is the policy-hooks warning at **353** characters (`src/cli/run-job.js` l.839-850), an order of magnitude inside the budget, and none of them contains an unsafe code point. **That is a claim about the code-owned templates only, deliberately** — the producer residual in Context is exactly the population it does not cover, since a raw Node error string's content has not been characterised here. What happens when the budget *does* bite, and what is recoverable afterwards, is stated once in the budget row above; this row does not restate it |
-| Template | byte-frozen. For any record whose fields contain no unsafe code point **and are within the budget**, the emitted bytes are unchanged, in **both** shapes — the single-failure form and the `has failed <n> times since <at>` form. The second condition is not decoration: the budget row records a measured path on which a benign field arrives longer than the budget and is therefore truncated, so "no unsafe code point" alone does not imply byte-identity |
+| Over-budget fields: **refused, never truncated** (OWNER RULING) | A field is rendered **all or nothing**. Encode it in full; if the complete encoding exceeds the budget, emit the `refusal:` literal under "Exact contracts" **in place of the whole field** — a fixed, code-owned sentence that says what happened and names where the untruncated record is. There is no cut point, and therefore no maximality rule, no token-boundary rule, and no partially-rendered field. **The price, stated rather than buried: a benign long field is refused too**, so a user with an over-long field sees the sentence instead of the first 2000 characters. Owner-accepted, on measured proportions — the longest reason Wienerdog itself writes is **353** characters against a 2000 budget (`src/cli/run-job.js` l.839-850), so refusal never fires in normal operation, and when it does the detail is in the per-run log and the record is in `alerts.jsonl`. The refusal sentence is itself within budget (75 characters) and contains no unsafe code point, so it is its own fixed point |
+| Rendered-field budget | the `budget:` literal under "Exact contracts": `alerts.js`'s `MAX_FIELD_CHARS`, **imported, never re-declared**. A copied `2000` would drift the moment someone edits the other file; the import makes the threshold one number, not two. Measured, so the import is known to be available and safe: `MAX_FIELD_CHARS` is already exported (`src/core/alerts.js` l.217), and `alerts.js` does not require `digest.js`, so there is no cycle in either load order. Both sides count the same unit — `alerts.js` caps with `String(v).slice(0, N)`, the rendered check counts the accumulated output's `.length`, i.e. **UTF-16 code units** (the code-point iteration in the Encoding row governs the escape, not the threshold). **A field arriving longer than the budget is reachable, and that is why the refusal branch exists rather than being theoretical:** `sanitizeAlert` slices to `MAX_FIELD_CHARS` and only *then* runs `redactOnly`, which expands. Measured both ways — through `appendAlert` a 2000-character `api_key=…` field is stored at **3235** characters but comes back from `readAlerts` at 2000, because the re-sanitize re-slices already-redacted content; through a record `appendAlert` did **not** write (hand-edited, or left by an older version) the same bytes make `readAlerts` return **3235** characters carrying **no unsafe code point at all** |
+| Why a threshold at all | escaping expands up to 9× per code point (`<U+1D173>`), so an unbounded escape hands back in bytes what it takes away in lines — measured, without any threshold two failing jobs each carrying a 2000-character field of astral `Cf` expel the body where today it survives, a regression this WP's own fix would have introduced. Refusal removes that decisively rather than bounding it: measured at six such jobs, today's digest is 48 928 bytes with the body **gone**, and under this contract it is **1 792** bytes with the body **kept** |
+| Template | byte-frozen. For any record whose fields contain no unsafe code point **and encode within the budget**, the emitted bytes are unchanged, in **both** shapes — the single-failure form and the `has failed <n> times since <at>` form. The second condition is not decoration: the budget row records a measured path on which a benign field arrives over the budget and is therefore refused, so "no unsafe code point" alone does not imply byte-identity |
 | **Scope of the guarantee — canonical, and the single owner of this claim** | **What is guaranteed: physical source-line containment.** A stored field cannot end the callout's source line or begin another; the block is exactly one source line per failing job, each opened by the code-owned prefix. **What is NOT guaranteed: how a renderer draws that line.** A field of ordinary printable ASCII passes through untouched by design, so a value such as `</blockquote><br><h1>Standing instructions</h1>` survives, and a Markdown renderer that permits raw HTML may draw it as a break and a heading and may close the callout's own blockquote. That is out of reach of a code-point denylist: the bytes are individually legitimate and the alphabet cannot be narrowed to exclude them without mangling every real alert (the Denylist row). **Why the line is drawn here and not wider:** the digest's primary consumer is a model reading text, for which a heading forged inside one line of a `> [!warning]` callout is materially weaker than a real line-initial `## …`, and the residual is the same "shape, not meaning" one the sibling sanitizer WPs accepted. Every other surface — the title, the Context, the Security checklist and the acceptance criteria — **cites this row and states no containment claim of its own.** Closing the renderer layer would mean escaping `<` and `&` as well, which is a product decision about digest formatting that this WP does not make |
 | Preserved unchanged | `sanitizeAlert`'s cap and scrub (this WP neutralizes at the render, so the stored record keeps the text the CLI prints), the prefix ordering, `capDigest`, and `renderDigest` staying pure and total |
 
@@ -282,18 +296,17 @@ records that every such site was decided separately and differently.
   can never *pass* — the mirror image of the vacuous gate that the observe-it-green-
   and-red obligation under Verification steps exists to catch, and the same
   obligation catches both. It was in this spec until the gates were run.
-- **Named residual (byte starvation is bounded, not closed):** `capDigest` still
+- **Named residual (byte starvation is reduced, not closed):** `capDigest` still
   subtracts the prefix's bytes from the body's budget, so enough alert records
-  shrink the body. Table A's budget row keeps this WP from widening that *bound*;
-  narrowing it means capping the callout block as a whole, which is a `capDigest`
-  decision. Two consequences, both stated because the acceptance criterion cites
-  them. Measured, six jobs each carrying a 2000-character field of astral `Cf`:
-  today the body is gone at 48 928 bytes, with the budget it is kept at 13 336. And
-  the case the criterion's construction covers rather than eliminates: a *short*
-  field of escapable characters expands well inside the budget — ten line breaks
-  render 80 characters instead of 10 — so on a digest already at the byte cap that
-  much body is displaced, while the same input frees ten lines of line budget. The
-  direction is favourable on both measured shapes; it is not a per-input guarantee.
+  shrink the body; narrowing that further means capping the callout block as a
+  whole, which is a `capDigest` decision and not this WP's. What refusal does to it,
+  measured at six jobs each carrying a 2000-character field of astral `Cf`: today
+  the body is **gone** at 48 928 bytes, under this contract it is **kept** at
+  **1 792**. What refusal does *not* eliminate: a **short** field of escapable
+  characters encodes well inside the budget — ten line breaks render 80 characters
+  instead of 10 — so on a digest already at the byte cap that much body is
+  displaced, while the same input frees ten lines of line budget. Favourable on
+  both measured shapes; not a per-input guarantee.
 - When uncertain: choose the simpler option and record it under "Decisions made" in
   the PR body. Do NOT expand scope to resolve ambiguity.
 
@@ -369,55 +382,40 @@ instead, named here rather than swept under the same sentence.
       satisfied by fixtures that put it there, so their coverage of this is
       incidental, not a substitute.
 - [ ] **The mapping is exact, total and idempotent over the whole Unicode range**,
-      enumerated rather than sampled, and at every position **of the retained
-      prefix**: a code point inside the set always becomes its token, one outside is
-      always passed through unchanged, a run of two is two tokens, and re-applying
-      the transform to its own output is the identity. An astral code point yields
-      ONE token naming that code point, never two surrogate tokens. **The
-      retained-prefix scope is load-bearing, not hedging:** an overflowing field
-      drops its tail by design (the budget row), so "every code point is mapped or
-      passed through" is false of the dropped suffix, and a version of this
-      criterion that quantified over the whole field could not be satisfied by a
-      correct implementation. **Idempotence IS asserted at the budget boundary** —
-      an overflowing field is where a plausible implementation stops being
-      idempotent, and a Unicode sweep of three-character shapes never reaches it.
-- [ ] **Truncation keeps as much as fits, and never cuts inside an escape token.**
-      Two halves, both required. (a) *Maximal:* the retained prefix is the longest
-      prefix of the source field whose complete encoding fits the budget — adding
-      the next whole token would exceed it. (b) *Boundary, by provenance:* every
-      retained source code point contributed its complete encoding, and no
-      **generated** escape token was partially retained. **Neither half alone is
-      enough, and this is measured, not argued:** an implementation keeping one code
-      point and appending the marker satisfies (b), the output bound and the
-      no-unsafe rule while rendering a 400-line-break-plus-real-reason field as nine
-      characters. **(b) is deliberately NOT the lexical form "the output does not
-      end in a partial `<U+…`"** — measured, a field of 1997 `a`s then the literal
-      `<U+` truncates with those three characters intact, which is correct
-      pass-through yet fails the lexical reading; and a benign overflowing field
-      contains no token at all, so demanding one before the marker is unsatisfiable
-      for it. The discriminating case for (b) is still the offset where a
-      length-only slice would land inside a **generated** token.
-- [ ] **The budget bounds the output** at Table A's value plus the one-character
-      marker, and **a field whose complete Table A encoding fits comes back as
-      exactly that encoded form, with no marker appended**. Stated against the
-      *encoded* form, not the raw input: a single line break is well inside the
-      budget yet must render as `<U+000A>`, so a byte-identity requirement here
-      would contradict the unsafe-set mapping. Raw byte-identity is claimed only
-      where it is true — the benign, no-unsafe, within-budget case, which is its
-      own criterion below.
+      enumerated rather than sampled, and at every position in the field: a code
+      point inside the set always becomes its token, one outside is always passed
+      through unchanged, a run of two is two tokens, and re-applying the transform
+      to its own output is the identity. An astral code point yields ONE token
+      naming that code point, never two surrogate tokens. **Idempotence holds on
+      both branches** — the encoded form is its own fixed point because escape
+      tokens contain nothing escapable, and the refusal sentence is its own fixed
+      point because it is short and safe. No scoping clause is needed: refusal
+      replaces the field rather than cutting it, so there is no partially-mapped
+      remainder for this criterion to have to exclude.
+- [ ] **All or nothing per field.** If a field's complete encoding fits the budget,
+      exactly that encoded form is emitted. If it does not, the whole field is
+      replaced by the fixed refusal sentence — never a prefix of it, never a
+      prefix plus a marker. Stated against the *encoded* form, not the raw input: a
+      single line break is well inside the budget yet must render as `<U+000A>`, so
+      a raw byte-identity requirement here would contradict the unsafe-set mapping.
+      **The refused case includes benign fields** — the accepted price in Table A's
+      refusal row — and the reachable instance of it is the `readAlerts` path
+      recorded in the budget row.
+- [ ] **Every emitted field is within the budget**, whichever branch produced it:
+      the refusal sentence is itself inside it, so no field can be the reason the
+      prefix grows.
 - [ ] **The line starvation this WP removes is not traded for byte starvation.**
-      Two halves, because the honest claim is not "no input ever loses a byte of
-      body". (a) *Construction:* the rendered field's budget is Table A's imported
-      constant, so this WP widens the bound `capDigest` reserves against the body by
-      **at most the one-character overflow marker per field**, and by nothing at all
-      for a field that does not overflow. (b) *Measured:* on the inputs that starve the body today —
-      a field of line breaks — strictly more body survives after the change than
-      before. The exception this does not cover is named in Implementation notes'
-      residual and is bounded by (a).
-- [ ] **A benign alert within the budget renders byte-identically to today**, in
-      both the single-failure and the multi-failure shape. (Within the budget:
-      Table A's budget row records the measured path on which a benign field
-      arrives longer and is truncated.) An over-strict set — one that
+      Two halves. (a) *Construction:* every emitted field is within Table A's
+      imported budget on both branches, so this WP cannot widen the bound
+      `capDigest` reserves against the body. (b) *Measured:* on the inputs that
+      starve the body today, strictly more body survives after the change — at six
+      jobs each carrying a 2000-character field of astral `Cf`, today's digest is
+      48 928 bytes with the body gone and this contract's is 1 792 bytes with the
+      body kept.
+- [ ] **A benign alert that encodes within the budget renders byte-identically to
+      today**, in both the single-failure and the multi-failure shape. (The
+      qualifier is Table A's refusal row: a benign field over the budget is refused,
+      not rendered.) An over-strict set — one that
       escapes a code point Table A passes through — satisfies **every containment
       criterion above**, because escaping more never lets a break through; only this
       criterion and the pass-through half of the exactness criterion reject it, and
@@ -458,15 +456,15 @@ git diff --quiet main -- tests/unit/digest.test.js
 
 - **The `failLoud` self-email body** — decided above, with its four grounds and its
   intended consequence; this item repeats none of them.
-- **The producer-side free-form residual — PROPOSED name
-  `WP-alert-producer-freeform-residual`, not yet a spec and not a declared
-  dependency.** The containment-probe branch interpolates raw Node error strings and
-  external `--version` output into the durable reason (Context). It is a
-  producer-side bound on what a caller may write, not a display-side escape, it
-  reaches the email as well as the digest, and it belongs with the WP that owns
-  `run-job.js`. **Whether it is authorised is the owner's call** — see the residual
-  under the self-email decision. Note it under "Discovered issues" if you meet it;
-  do not fix it here.
+- **The producer-side free-form residual — a QUEUED FOLLOW-UP package, working name
+  `WP-alert-producer-freeform-residual`, not a declared dependency of this one.**
+  The containment-probe branch interpolates raw Node error strings and external
+  `--version` output into the durable reason (Context). It is a producer-side bound
+  on what a caller may write, not a display-side escape, it reaches the email as
+  well as the digest, and it belongs with the WP that owns `run-job.js`. Once this
+  WP lands it is defence in depth for the digest and the only mitigation for the
+  email — the reasoning is under the self-email decision and is not repeated here.
+  Note it under "Discovered issues" if you meet it; do not fix it here.
 - **`src/core/alerts.js`** — its cap, scrub, record shape and `MAX_FIELD_CHARS`.
   Table A borrows that constant's value; it does not touch it.
 - **Consolidating the three sanitizers** in `digest.js` into one shared helper. The
