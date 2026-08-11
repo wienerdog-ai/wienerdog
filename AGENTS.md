@@ -16,6 +16,12 @@ starts something that keeps running, it is wrong.
 - Read, in order: (1) this file, (2) your spec, (3) the files in the spec's
   Deliverables table. Nothing else is required; do not wander the repo. The
   spec inlines everything you need — if it doesn't, that's a spec bug: say so.
+- That reading list is what you need in order to BUILD. It is not the
+  whole of your job: opening the PR is a milestone, not the finish
+  line. Two review gates then run on the same diff — see
+  `docs/runbooks/codex-review.md`, "When it runs" — and the work
+  package is finished only when both are clean or every finding has a
+  disposition. Running them is yours; merging is the maintainer's.
 - Touch ONLY files listed in the spec's Deliverables table. CI rejects PRs
   that touch unlisted files. Found something else broken? Note it under
   "Discovered issues" in the PR body; do not fix it.
