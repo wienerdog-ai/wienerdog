@@ -25,10 +25,15 @@ beside this file, each one **before** its findings were read for adjudication.
 | 6 | external (first attempt hung, cancelled, re-run) | 3 (1 high, 2 medium) |
 | 7 | external | 3 (1 high, 2 medium) |
 | 8 | external | 2 (1 high, 1 medium) |
+| — | **owner ruling: accept uniform refusal, name the identifiability residual** | — |
+| 9 | external, closing | 3 (1 high, 2 medium) — **surface frozen** |
 
-**16 → 4 → 4 → 3 → 1 → 2 → 3 → 3 → 2.** The loop has NOT met the closure criterion
-and is stopped twice over: once at round 5 for the design question below, and again
-at round 8 for a **new** owner decision it surfaced.
+**16 → 4 → 4 → 3 → 1 → 2 → 3 → 3 → 2 → 3.** The loop never returned a zero-finding
+round. It closes on the **frozen-surface** condition the owner set in advance
+instead: at round 9, two of the three findings were new families in prose this run
+had itself written, which is the stated signal to stop. All three were applied as
+narrowings — two claims cut back, one label consolidated — and no rule, mechanism
+or gate was added on the way out.
 
 ## What the spec was before any of this
 
@@ -145,7 +150,47 @@ recurring families:
   The structural answer was to **delete the proportionality argument** rather than
   narrow it a third time.
 
-## NEW OPEN OWNER DECISION — refusal can make a failing job unidentifiable
+## Round 9 and the freeze
+
+Three findings. **Z2 was the only one not in this run's own prose, and it is the
+one worth keeping:** the refusal consequence promised that a refused reason's raw
+detail is in the per-run log, and the policy-hooks alert disproves it on the tree —
+`appendAlert` with `log_hint: ''` at `src/cli/run-job.js` l.840, sixty-four lines
+before the log stream opens at l.904, on a path whose reason this spec already
+records as unbounded. The uniform recovery path is `alerts.jsonl` and
+`wienerdog alerts`; the per-run log is scoped to where one was written.
+
+Z1 and Z3 were family recurrences. Z1: the byte-starvation criterion claimed strict
+improvement on *every* input that starves the body today — false, because enough
+benign within-budget alerts starve it too and the Template row requires those to
+render byte-identically, so no correct implementation could satisfy it. Z3: four
+Table A rows still read as emitted-field rules, fixed with one sentence assigning
+stages by row range rather than four separate labels.
+
+**That pattern — two of three findings in freshly written prose — is the condition
+the owner set in advance for freezing the surface, so round 9 is the last.** The
+spec closes with its residuals named rather than on a zero-finding round, which is
+the honest description of where it landed.
+
+## SETTLED — refusal can make a failing job unidentifiable (was an open decision)
+
+**Owner ruling: ACCEPT.** Refusal stays uniform across all four fields. The
+measured ground: the two fields that can lose identifiability are **user-authored,
+not attacker-influenceable** — a job name comes from the managed `jobs:` section of
+the user's own `config.yaml` inside the core (`src/core/paths.js` l.67), which the
+dream cannot write (`CURRENT-IMPLEMENTATION-REVIEW.md` l.488), and `log_hint` is
+built from that name. Losing identifiability therefore takes breaking your own
+config, which is visible where you edit it, and `wienerdog alerts` still prints the
+job name (`groupLine`, `src/cli/alerts.js` l.36-40) and the reason. The rejected
+alternative — exempting `job` from refusal — would have put an unbounded field back
+into the most instruction-adjacent position and reopened the measured starvation.
+The uncovered part is a named residual in the Security checklist, carrying its
+recovery path.
+
+The original statement of the question is kept below as the record of what was
+decided.
+
+### The question as it stood
 
 Round 8 surfaced an extension of the accepted price that the ruling did not
 contemplate, and it is flagged rather than absorbed.
@@ -158,26 +203,23 @@ too: the line survives but identifies neither which job failed nor where its log
 is, and two distinct over-long job names render as two lines naming neither. The
 line-count criterion does not catch this, because it counts lines.
 
-Two ways out, for the owner:
-
-- **Accept it.** The untouched record is in `alerts.jsonl` and `wienerdog alerts`
-  prints the job and reason from it, so the information is recoverable outside the
-  digest. The criterion is now honestly named "No failing job loses its **line**".
-- **Exempt `job` from refusal.** Keeps the callout always identifiable, at the cost
-  of putting one unbounded field back into the prefix — the thing the threshold
-  exists to prevent.
+Two ways out were put to the owner: accept it, with the criterion honestly named
+"No failing job loses its **line**"; or exempt `job` from refusal, keeping the
+callout always identifiable at the cost of an unbounded field in the prefix. The
+first was ruled, on the grounds recorded above.
 
 ## Where the spec stands
 
-`status: Draft`, 520 lines, `npm run lint` green, the Deliverables table verified
+`status: Draft`, 535 lines, `npm run lint` green, the Deliverables table verified
 against `scripts/boundary-check.js` in all three directions.
 
-Decisions taken since this record was opened: the truncation contract is **(c),
-refusal** (owner), and the producer-side residual is a **queued follow-up package**
-(owner), not a dependency — `depends_on` stays `[]` and the self-email stays a
-named non-goal.
+**No decision is open.** All four went to the owner and all four are ruled: the
+truncation contract is **(c), refusal**; refusal is **uniform across all four
+fields** with the identifiability residual accepted; the producer-side residual is
+a **queued follow-up package**, not a dependency, so `depends_on` stays `[]`; and
+the self-email body stays a **named non-goal**.
 
-**One decision is open and blocks closure:** the job/log-hint identifiability
-question above. It is not a wording defect and no further review round will settle
-it — a ninth round would re-examine a contract whose product question is known to
-be open.
+**Raising `status:` to `Ready` is the owner's act** and is deliberately not done
+here. What a reader should know before that: this spec closed on a frozen surface,
+not on a clean round, and its five named residuals are the honest boundary of what
+it buys.
