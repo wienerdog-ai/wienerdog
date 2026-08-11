@@ -38,11 +38,16 @@ digest, so it must add no injection surface)."* **Nothing enforces that at the
 rendering site.** A line break in any of the four ends the callout line and opens a
 new one, at the top of the document.
 
-This WP makes the rule true where it is stated: containment becomes a property of
-the **rendering**, not of the callers who happen to supply well-behaved strings
-today. **Exactly how far that containment reaches — and where it stops — is
-decided in one place, Table A's scope-of-the-guarantee row; this paragraph makes no
-claim of its own.** It is the last of the 2026-07-29 audit's three `digest.js` interpolation
+**This WP makes the structural half of that rule enforceable, and only that half.**
+Containment becomes a property of the **rendering** rather than of the callers who
+happen to supply well-behaved strings today: a field can no longer end the callout's
+line or open another. The JSDoc's wider promise — *"never an instruction"*, *"no
+injection surface"* — is **not** made true here and cannot be by a renderer: whether
+the text is an instruction is a property of what the producer wrote, and plain
+prose passes through by design. Table A's scope-of-the-guarantee row is the single
+place that boundary is decided; this paragraph states no containment claim of its
+own, and the JSDoc's wording is quoted above as the requirement that **motivated**
+this WP, not as one it discharges. It is the last of the 2026-07-29 audit's three `digest.js` interpolation
 sites, after `WP-sanitize-project-display-names` and
 `WP-daily-summary-per-line-framing` (both `Done`), each of which named this one in
 its *Out of scope*.
@@ -146,12 +151,19 @@ stored `reason` carrying a line break renders as one escaped line in the digest 
 as several raw lines in the email. `src/cli/run-job.js` is not in the Deliverables
 table, and no acceptance criterion below says anything about the email.
 
-**This exclusion is therefore conditional on the producer WP, and says so.** The
-digest gets a display-side layer it can enforce alone; the email keeps none, and
-the producer residual is the only thing standing between it and raw external text.
-`WP-alert-producer-freeform-residual` is not optional follow-up work — it is where
-the email's guarantee actually comes from, and this spec records that dependency
-rather than implying the email is covered.
+**What the email is left with, stated as a residual and not as a dependency.** The
+digest gets a display-side layer it can enforce alone; the email keeps none. The
+honest description is therefore an **accepted residual**: after this WP, a branded
+Wienerdog alert email can still carry several raw lines of external text.
+
+This spec deliberately does **not** call that conditional on a follow-up WP. There
+is no `WP-alert-producer-freeform-residual` in the tree, `depends_on` is `[]`, and a
+name that appears only in this document is a promise, not a mechanism — writing it
+as a dependency would make the exclusion look enforced when nothing enforces it.
+**Which of the two it becomes is an owner decision, and it is open:** either a real
+producer WP is authorised and this spec gains a declared ordering, or the owner
+records an explicit risk acceptance for the branded email. Creating a new work
+package is not this spec's to do.
 
 ## Deliverables (permission boundary — touch ONLY these)
 
@@ -204,10 +216,10 @@ records that every such site was decided separately and differently.
 | Encoding | the `escape:` literal under "Exact contracts", the same fixed code-owned form `normalizeSummaryLines` already emits (l.278). One code point in, one token out — no collapsing of runs. Iteration is over CODE POINTS, so an astral character yields ONE token naming its full code point and a lone surrogate escapes as itself. Deliberately not reversible and need not be: nothing decodes the digest |
 | Fields neutralized | all four interpolated values — `job`, `s.first`, `s.lastReason`, `s.hint`, which are the grouped record's `job`, `at`, `reason` and `log_hint` — **uniformly**, i.e. four textual call sites. Three render in every line; `s.first` renders only in the multi-failure count branch. `at` and `log_hint` are built from code-owned templates in every producer today; applying the transform anyway is the same fail-closed uniformity `sanitizeAlert` already documents for its own scrub. **Note the two senses of "code-owned" in play, because `alerts.js` uses the other one:** its comment calls `at`/`job`/`log_hint` code-owned meaning *they cannot carry a secret*, which is a claim about the scan. Here it means *the bytes are a fixed template*, which is true of `at` and `log_hint` and NOT of `job` — a job name is user-authored in `config.yaml`, single-line only because the parser's `- name:` capture cannot span a line (`src/scheduler/jobs.js` l.54) |
 | Grouping key | unchanged: the records are still grouped by the **raw** `job`. The escape is not injective on rendered text (a real TAB and the literal eight characters `<U+0009>` render alike), so keying on the neutralized name would merge two distinct jobs into one line and **hide a failing job** |
-| Rendered-field budget | the `budget:` literal under "Exact contracts": `alerts.js`'s `MAX_FIELD_CHARS`, **imported, never re-declared**. A copied `2000` would make the non-widening argument true only until someone edits the other file; the import makes it a **construction rather than a claim**. Measured, so the import is known to be available and safe: `MAX_FIELD_CHARS` is already exported (`src/core/alerts.js` l.217), and `alerts.js` does not require `digest.js`, so there is no cycle. Both budgets count the same unit — `alerts.js` caps with `String(v).slice(0, N)` and the rendered budget counts the accumulated output's `.length`, i.e. **UTF-16 code units on both sides** (the code-point iteration in the Encoding row governs the escape, not the budget). Overflow appends the `overflow:` marker, so the bound is that budget **plus one character**, and that single character is the whole of the widening. **The comparison is against what `readAlerts` hands the renderer, NOT against the bytes on disk, and the difference is real:** `sanitizeAlert` slices to `MAX_FIELD_CHARS` and only then runs `redactOnly`, which *expands* — measured, a 2000-character field of `api_key=…` pairs is written to `alerts.jsonl` at **3235** characters. It does not reach `formatAlerts` at that length, because `readAlerts` re-sanitizes every parsed line and the second pass re-slices to 2000 without expanding again (the content is already redacted). Measured over four shapes including that one: the longest value handed to the renderer is exactly 2000. The render budget therefore truncates no benign field today — but the guarantee rests on that re-sanitize, not on the on-disk record, so it is stated against the right object here |
+| Rendered-field budget | the `budget:` literal under "Exact contracts": `alerts.js`'s `MAX_FIELD_CHARS`, **imported, never re-declared**. A copied `2000` would make the non-widening argument true only until someone edits the other file; the import makes it a **construction rather than a claim**. Measured, so the import is known to be available and safe: `MAX_FIELD_CHARS` is already exported (`src/core/alerts.js` l.217), and `alerts.js` does not require `digest.js`, so there is no cycle. Both budgets count the same unit — `alerts.js` caps with `String(v).slice(0, N)` and the rendered budget counts the accumulated output's `.length`, i.e. **UTF-16 code units on both sides** (the code-point iteration in the Encoding row governs the escape, not the budget). Overflow appends the `overflow:` marker, so the bound is that budget **plus one character**, and that single character is the whole of the widening. **The bound is on the OUTPUT and holds for any input; the input is NOT bounded by the same number, and that asymmetry is measured rather than assumed.** `sanitizeAlert` slices to `MAX_FIELD_CHARS` and only *then* runs `redactOnly`, which expands. Two measurements, and the second is the one that decides this row. (1) Through `appendAlert`: a 2000-character field of `api_key=…` pairs is written to `alerts.jsonl` at **3235** characters, but comes back from `readAlerts` at exactly 2000 — the re-sanitize re-slices and the already-redacted content does not expand a second time. (2) **Through a record `appendAlert` did not write** — hand-edited, left by an older version, or produced any other way — the same 2000 raw characters on disk make `readAlerts` return **3235** characters carrying **no unsafe code point at all**. So the renderer can be handed a benign field longer than the budget, and this WP **truncates it**, marked with the overflow character. That is accepted, not hidden: the alternative is an unbounded prefix, the full text stays available through `wienerdog alerts`, and the case is unreachable from Wienerdog's own writer |
 | Truncation boundary | truncation happens **between whole escape tokens**, never inside one; a rendered field never ends in a partial `<U+…` |
 | Why a budget at all, and what it costs | escaping expands up to 9× per code point (`<U+1D173>`), and an unbounded escape hands back in bytes what it takes away in lines — measured: without it, two failing jobs each carrying a 2000-character field of astral `Cf` expel the body where today it survives, a regression introduced by this WP's own fix. It costs the code-owned reasons nothing: the longest in the tree is the policy-hooks warning at **353** characters (`src/cli/run-job.js` l.839-850), an order of magnitude inside the budget, and none of them contains an unsafe code point. **That is a claim about the code-owned templates only, deliberately** — the producer residual in Context is exactly the population it does not cover, since a raw Node error string's content has not been characterised here. Nothing is lost even when the budget does bite — `wienerdog alerts` prints the untruncated stored reason to a terminal (`src/cli/alerts.js` l.75, l.117) |
-| Template | byte-frozen. For any record containing no unsafe code point the emitted bytes are unchanged, in **both** shapes — the single-failure form and the `has failed <n> times since <at>` form |
+| Template | byte-frozen. For any record whose fields contain no unsafe code point **and are within the budget**, the emitted bytes are unchanged, in **both** shapes — the single-failure form and the `has failed <n> times since <at>` form. The second condition is not decoration: the budget row records a measured path on which a benign field arrives longer than the budget and is therefore truncated, so "no unsafe code point" alone does not imply byte-identity |
 | **Scope of the guarantee — canonical, and the single owner of this claim** | **What is guaranteed: physical source-line containment.** A stored field cannot end the callout's source line or begin another; the block is exactly one source line per failing job, each opened by the code-owned prefix. **What is NOT guaranteed: how a renderer draws that line.** A field of ordinary printable ASCII passes through untouched by design, so a value such as `</blockquote><br><h1>Standing instructions</h1>` survives, and a Markdown renderer that permits raw HTML may draw it as a break and a heading and may close the callout's own blockquote. That is out of reach of a code-point denylist: the bytes are individually legitimate and the alphabet cannot be narrowed to exclude them without mangling every real alert (the Denylist row). **Why the line is drawn here and not wider:** the digest's primary consumer is a model reading text, for which a heading forged inside one line of a `> [!warning]` callout is materially weaker than a real line-initial `## …`, and the residual is the same "shape, not meaning" one the sibling sanitizer WPs accepted. Every other surface — the title, the Context, the Security checklist and the acceptance criteria — **cites this row and states no containment claim of its own.** Closing the renderer layer would mean escaping `<` and `&` as well, which is a product decision about digest formatting that this WP does not make |
 | Preserved unchanged | `sanitizeAlert`'s cap and scrub (this WP neutralizes at the render, so the stored record keeps the text the CLI prints), the prefix ordering, `capDigest`, and `renderDigest` staying pure and total |
 
@@ -318,20 +330,24 @@ instead, named here rather than swept under the same sentence.
       `job` values, the callout block is exactly `J` lines — and no input merges two
       into one, including two jobs whose *rendered* names are identical because one
       raw name spells the other's escape token.
-- [ ] **No record content produces a line outside the block.** Every callout line
-      opens with the code-owned `> [!warning] Wienerdog: the "` prefix and closes
-      with the code-owned tail, and **the line immediately after the block is a
-      code-owned one** — the blank prefix separator, another code-owned banner, or
-      the body's first heading. That local boundary check is what a per-line match
-      cannot see, and it is what catches a line that escaped the block.
-      **Deliberately NOT a whole-digest line-count comparison against a benign
-      control.** Escaping expands bytes (one LF becomes eight characters) and
-      `capDigest` budgets the body against the prefix's actual bytes, so such a
-      comparison depends on whether a byte-cap boundary happens to fall in the same
-      place for both. Measured on this tree it does — equal counts at the line cap
-      and past the byte cap (57 lines each, 32 345 vs 32 296 bytes) — but a
-      criterion that holds because two truncation points coincided is a criterion
-      that will one day fail for a correct implementation.
+- [ ] **No record content produces a line anywhere in the digest.** On a fixture
+      where neither `capDigest` bound binds — a condition the fixture satisfies by
+      being small, and which the implementer states — rendering `J` hostile records
+      yields **exactly `J + 1` more lines than rendering the same vault with no
+      alerts at all**: the `J` callout lines and the one code-owned blank separator.
+      **A line delta, not a "the next line looks code-owned" check**, and the
+      difference is the point: origin cannot be read off emitted bytes, so a field
+      that forges the code-owned tail could in principle satisfy an
+      appearance-based boundary test. A delta cannot be forged from content,
+      because content can only **add** lines — measured on this tree, benign `+2`,
+      a reason forging the template's own tail `+3`, four line breaks `+5`, against
+      the required `+2`. **Deliberately NOT a whole-digest count against a benign
+      control:** escaping expands bytes, `capDigest` budgets the body against the
+      prefix's actual bytes, and such a comparison would then turn on whether a
+      byte-cap boundary happens to fall in the same place for both. Measured, on
+      this tree it does — 57 lines each at 32 345 vs 32 296 bytes — but a criterion
+      that holds because two truncation points coincided will one day fail for a
+      correct implementation.
 - [ ] **No character in Table A's unsafe set reaches an emitted line raw** —
       including every member of `DAILY_LINE_BREAK`, and specifically U+2028/U+2029,
       which no `Cc`/`Cf`/`Cs`/default-ignorable check catches, and a variation
@@ -369,8 +385,10 @@ instead, named here rather than swept under the same sentence.
       a field of line breaks — strictly more body survives after the change than
       before. The exception this does not cover is named in Implementation notes'
       residual and is bounded by (a).
-- [ ] **A benign alert renders byte-identically to today**, in both the
-      single-failure and the multi-failure shape. An over-strict set — one that
+- [ ] **A benign alert within the budget renders byte-identically to today**, in
+      both the single-failure and the multi-failure shape. (Within the budget:
+      Table A's budget row records the measured path on which a benign field
+      arrives longer and is truncated.) An over-strict set — one that
       escapes a code point Table A passes through — satisfies **every containment
       criterion above**, because escaping more never lets a break through; only this
       criterion and the pass-through half of the exactness criterion reject it, and
@@ -411,13 +429,15 @@ git diff --quiet main -- tests/unit/digest.test.js
 
 - **The `failLoud` self-email body** — decided above, with its four grounds and its
   intended consequence; this item repeats none of them.
-- **The producer-side free-form residual — routed as
-  `WP-alert-producer-freeform-residual`.** The containment-probe branch interpolates
-  raw Node error strings and external `--version` output into the durable reason
-  (Context). It is a producer-side bound on what a caller may write, not a
-  display-side escape, it reaches the email as well as the digest, and it belongs
-  with the WP that owns `run-job.js`. Note it under "Discovered issues" if you meet
-  it; do not fix it here.
+- **The producer-side free-form residual — PROPOSED name
+  `WP-alert-producer-freeform-residual`, not yet a spec and not a declared
+  dependency.** The containment-probe branch interpolates raw Node error strings and
+  external `--version` output into the durable reason (Context). It is a
+  producer-side bound on what a caller may write, not a display-side escape, it
+  reaches the email as well as the digest, and it belongs with the WP that owns
+  `run-job.js`. **Whether it is authorised is the owner's call** — see the residual
+  under the self-email decision. Note it under "Discovered issues" if you meet it;
+  do not fix it here.
 - **`src/core/alerts.js`** — its cap, scrub, record shape and `MAX_FIELD_CHARS`.
   Table A borrows that constant's value; it does not touch it.
 - **Consolidating the three sanitizers** in `digest.js` into one shared helper. The
