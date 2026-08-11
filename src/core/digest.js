@@ -460,20 +460,25 @@ function newestDaily(dir) {
  * status text only — never an instruction to the model (ADR-0012: it lands in the
  * injected digest, so it must add no injection surface). Empty list → ''.
  *
+ * THAT ADR-0012 SENTENCE IS THE RULE THIS BLOCK MUST OBEY — NOT A GUARANTEE THIS
+ * FUNCTION MAKES. It is the requirement that motivated the neutralizing below; it is
+ * not discharged by it, and no renderer can discharge it: whether text reads as an
+ * instruction is a property of what the producer wrote, and plain prose passes through
+ * by design.
+ *
  * All four interpolated values go through {@link renderAlertField} — UNIFORMLY, even
  * though `at` and `log_hint` are built from code-owned templates in every producer
  * today: the same fail-closed uniformity `sanitizeAlert` already documents for its own
  * scrub. (`job` is NOT code-owned in that sense — a job name is user-authored in
  * `config.yaml`.) `s.count` is a number and needs no rendering.
  *
- * WHAT THIS GUARANTEES: physical source-line containment. A stored field cannot end
- * this callout's source line or begin another, so the block is exactly one source line
- * per failing job. WHAT IT DOES NOT: how a renderer draws that line. Ordinary
- * printable ASCII passes through by design, so a value such as
- * `</blockquote><h1>x</h1>` survives and a Markdown renderer permitting raw HTML may
- * draw it as structure. That is out of reach of a code-point denylist — the bytes are
- * individually legitimate and the alphabet cannot be narrowed without mangling every
- * real alert.
+ * What that neutralizing does and does not guarantee is decided in exactly ONE place,
+ * and this comment CITES it rather than restating it: Table A's
+ * scope-of-the-guarantee row in
+ * `docs/specs/WP-neutralize-alert-callout-rendering.md`, the declared single owner of
+ * that claim. Read it before you widen, narrow or quote the guarantee anywhere. A
+ * second copy of it here is exactly how the claim came to be stated wider than it is
+ * gated.
  * @param {Array<{job:string, at:string, reason:string, log_hint:string}>} alerts
  * @returns {string}
  */
