@@ -151,9 +151,11 @@ callout and that body in one breath (`CURRENT-IMPLEMENTATION-REVIEW.md` l.498-50
 4. **Scope** — CLAUDE.md: choose the simpler option and record it.
 
 **The intended consequence, stated rather than left implicit:** after this WP a
-stored `reason` carrying a line break renders as one escaped line in the digest and
-as several raw lines in the email. `src/cli/run-job.js` is not in the Deliverables
-table, and no acceptance criterion below says anything about the email.
+stored `reason` carrying line breaks occupies exactly one contained source line in
+the digest — fully encoded when it fits the budget, otherwise replaced by the fixed
+refusal sentence — while the same reason reaches the email as several raw lines.
+`src/cli/run-job.js` is not in the Deliverables table, and no acceptance criterion
+below says anything about the email.
 
 **What the email is left with, stated as an accepted residual — not as a
 dependency.** The digest gets a display-side layer it can enforce alone; the email
@@ -234,8 +236,9 @@ records that every such site was decided separately and differently.
 | Encoding | the `escape:` literal under "Exact contracts", the same fixed code-owned form `normalizeSummaryLines` already emits (l.278). One code point in, one token out — no collapsing of runs. Iteration is over CODE POINTS, so an astral character yields ONE token naming its full code point and a lone surrogate escapes as itself. Deliberately not reversible and need not be: nothing decodes the digest |
 | Fields neutralized | all four interpolated values — `job`, `s.first`, `s.lastReason`, `s.hint`, which are the grouped record's `job`, `at`, `reason` and `log_hint` — **uniformly**, i.e. four textual call sites. Three render in every line; `s.first` renders only in the multi-failure count branch. `at` and `log_hint` are built from code-owned templates in every producer today; applying the transform anyway is the same fail-closed uniformity `sanitizeAlert` already documents for its own scrub. **Note the two senses of "code-owned" in play, because `alerts.js` uses the other one:** its comment calls `at`/`job`/`log_hint` code-owned meaning *they cannot carry a secret*, which is a claim about the scan. Here it means *the bytes are a fixed template*, which is true of `at` and `log_hint` and NOT of `job` — a job name is user-authored in `config.yaml`, single-line only because the parser's `- name:` capture cannot span a line (`src/scheduler/jobs.js` l.54) |
 | Grouping key | unchanged: the records are still grouped by the **raw** `job`. The escape is not injective on rendered text (a real TAB and the literal eight characters `<U+0009>` render alike), so keying on the neutralized name would merge two distinct jobs into one line and **hide a failing job** |
-| Over-budget fields: **refused, never truncated** (OWNER RULING) | A field is rendered **all or nothing**. Encode it in full; if the complete encoding exceeds the budget, emit the `refusal:` literal under "Exact contracts" **in place of the whole field** — a fixed, code-owned sentence that says what happened and names where the untruncated record is. There is no cut point, and therefore no maximality rule, no token-boundary rule, and no partially-rendered field. **The price, stated rather than buried: a benign long field is refused too**, so a user with an over-long field sees the sentence instead of the first 2000 characters. Owner-accepted, on measured proportions — the longest reason Wienerdog itself writes is **353** characters against a 2000 budget (`src/cli/run-job.js` l.839-850), so refusal never fires in normal operation, and when it does the detail is in the per-run log and the record is in `alerts.jsonl`. The refusal sentence is itself within budget (75 characters) and contains no unsafe code point, so it is its own fixed point |
-| Rendered-field budget | the `budget:` literal under "Exact contracts": `alerts.js`'s `MAX_FIELD_CHARS`, **imported, never re-declared**. A copied `2000` would drift the moment someone edits the other file; the import makes the threshold one number, not two. Measured, so the import is known to be available and safe: `MAX_FIELD_CHARS` is already exported (`src/core/alerts.js` l.217), and `alerts.js` does not require `digest.js`, so there is no cycle in either load order. Both sides count the same unit — `alerts.js` caps with `String(v).slice(0, N)`, the rendered check counts the accumulated output's `.length`, i.e. **UTF-16 code units** (the code-point iteration in the Encoding row governs the escape, not the threshold). **A field arriving longer than the budget is reachable, and that is why the refusal branch exists rather than being theoretical:** `sanitizeAlert` slices to `MAX_FIELD_CHARS` and only *then* runs `redactOnly`, which expands. Measured both ways — through `appendAlert` a 2000-character `api_key=…` field is stored at **3235** characters but comes back from `readAlerts` at 2000, because the re-sanitize re-slices already-redacted content; through a record `appendAlert` did **not** write (hand-edited, or left by an older version) the same bytes make `readAlerts` return **3235** characters carrying **no unsafe code point at all** |
+| **Two stages, named — the contract has different rules for each** | Rendering a field is **encode, then decide**. The **encoded form** is every code point mapped by the Encoding row, with no budget applied — total, exact, position-independent. The **emitted field** is then either that encoded form, when it fits the budget, or the refusal sentence, when it does not. Every rule in this table and every acceptance criterion names which of the two it governs, and the split is not pedantry: for an over-budget field the encoded form is computed and then **not emitted at all**, so a rule written against "the field" without saying which stage is either false or contradicts its neighbour |
+| Over-budget fields: **refused, never truncated** (OWNER RULING) | A field is rendered **all or nothing**. Encode it in full; if the complete encoding exceeds the budget, emit the `refusal:` literal under "Exact contracts" **in place of the whole field** — a fixed, code-owned sentence that says what happened and names where the untruncated record is. There is no cut point, and therefore no maximality rule, no token-boundary rule, and no partially-rendered field. **The price, stated rather than buried: a benign long field is refused too**, so a user with an over-long field sees the sentence instead of the first 2000 characters. Owner-accepted, on measured proportions — the longest **fully code-owned** reason template is **353** characters against a 2000 budget (`src/cli/run-job.js` l.839-850). **That measurement covers the fixed templates only, and deliberately does not support a claim about every producer:** the containment-probe branch interpolates `probe.claudeVersion` and `probe.reason`, the latter a raw `err.message` (Context), and neither is bounded in length or restricted to safe code points here — so a real producer path *can* reach the budget, and how often is not measured. What holds either way is the consequence, not the frequency: when refusal fires, the detail is in the per-run log and the whole record is in `alerts.jsonl`. The refusal sentence is itself within budget (75 characters) and contains no unsafe code point, so it is its own fixed point |
+| The budget — **the threshold the ENCODED FORM is measured against** | the `budget:` literal under "Exact contracts": `alerts.js`'s `MAX_FIELD_CHARS`, **imported, never re-declared**. A copied `2000` would drift the moment someone edits the other file; the import makes the threshold one number, not two. Measured, so the import is known to be available and safe: `MAX_FIELD_CHARS` is already exported (`src/core/alerts.js` l.217), and `alerts.js` does not require `digest.js`, so there is no cycle in either load order. Both sides count the same unit — `alerts.js` caps with `String(v).slice(0, N)`, the rendered check counts the accumulated output's `.length`, i.e. **UTF-16 code units** (the code-point iteration in the Encoding row governs the escape, not the threshold). **A field arriving longer than the budget is reachable, and that is why the refusal branch exists rather than being theoretical:** `sanitizeAlert` slices to `MAX_FIELD_CHARS` and only *then* runs `redactOnly`, which expands. Measured both ways — through `appendAlert` a 2000-character `api_key=…` field is stored at **3235** characters but comes back from `readAlerts` at 2000, because the re-sanitize re-slices already-redacted content; through a record `appendAlert` did **not** write (hand-edited, or left by an older version) the same bytes make `readAlerts` return **3235** characters carrying **no unsafe code point at all** |
 | Why a threshold at all | escaping expands up to 9× per code point (`<U+1D173>`), so an unbounded escape hands back in bytes what it takes away in lines — measured, without any threshold two failing jobs each carrying a 2000-character field of astral `Cf` expel the body where today it survives, a regression this WP's own fix would have introduced. Refusal removes that decisively rather than bounding it: measured at six such jobs, today's digest is 48 928 bytes with the body **gone**, and under this contract it is **1 792** bytes with the body **kept** |
 | Template | byte-frozen. For any record whose fields contain no unsafe code point **and encode within the budget**, the emitted bytes are unchanged, in **both** shapes — the single-failure form and the `has failed <n> times since <at>` form. The second condition is not decoration: the budget row records a measured path on which a benign field arrives over the budget and is therefore refused, so "no unsafe code point" alone does not imply byte-identity |
 | **Scope of the guarantee — canonical, and the single owner of this claim** | **What is guaranteed: physical source-line containment.** A stored field cannot end the callout's source line or begin another; the block is exactly one source line per failing job, each opened by the code-owned prefix. **What is NOT guaranteed: how a renderer draws that line.** A field of ordinary printable ASCII passes through untouched by design, so a value such as `</blockquote><br><h1>Standing instructions</h1>` survives, and a Markdown renderer that permits raw HTML may draw it as a break and a heading and may close the callout's own blockquote. That is out of reach of a code-point denylist: the bytes are individually legitimate and the alphabet cannot be narrowed to exclude them without mangling every real alert (the Denylist row). **Why the line is drawn here and not wider:** the digest's primary consumer is a model reading text, for which a heading forged inside one line of a `> [!warning]` callout is materially weaker than a real line-initial `## …`, and the residual is the same "shape, not meaning" one the sibling sanitizer WPs accepted. Every other surface — the title, the Context, the Security checklist and the acceptance criteria — **cites this row and states no containment claim of its own.** Closing the renderer layer would mean escaping `<` and `&` as well, which is a product decision about digest formatting that this WP does not make |
@@ -253,14 +256,21 @@ records that every such site was decided separately and differently.
       under the H1 points at the scope row. Registered separately because the
       previous checklist entry claimed they were citations, which was not true of
       either
+- [ ] **Every surface that governs a field's rendering** must name which of Table
+      A's two stages it means — the **encoded form** or the **emitted field**. A
+      rule written against "the field" is either false or contradicts its
+      neighbour, because for an over-budget field the encoded form is computed and
+      never emitted. Registered as its own item because that is exactly how two
+      acceptance criteria came to contradict each other
 - [ ] The Deliverables `digest.js` cell, which cites Table A
-- [ ] The literals and the worked example under "Exact contracts"
+- [ ] The literals and **both** worked examples under "Exact contracts" — the
+      encoded branch and the refusal branch
 - [ ] The first ten acceptance criteria (each asserts a Table A fact; the last two
       are repo hygiene and mirror nothing in the table)
 - [ ] Current-state description — what Table A replaces, and the two neutralizers it
       must not be confused with
 - [ ] Implementation notes: the two coexistence hazards and the named residual
-- [ ] Security checklist: the containment sentence and all three residuals
+- [ ] Security checklist: the containment citation and all **four** residuals
 - [ ] Out of scope: the self-email row and the consolidation row
 
 ## Implementation notes & constraints
@@ -381,23 +391,25 @@ instead, named here rather than swept under the same sentence.
       **by a case whose payload is not in the reason** — the criteria above are
       satisfied by fixtures that put it there, so their coverage of this is
       incidental, not a substitute.
-- [ ] **The mapping is exact, total and idempotent over the whole Unicode range**,
-      enumerated rather than sampled, and at every position in the field: a code
-      point inside the set always becomes its token, one outside is always passed
-      through unchanged, a run of two is two tokens, and re-applying the transform
-      to its own output is the identity. An astral code point yields ONE token
-      naming that code point, never two surrogate tokens. **Idempotence holds on
-      both branches** — the encoded form is its own fixed point because escape
-      tokens contain nothing escapable, and the refusal sentence is its own fixed
-      point because it is short and safe. No scoping clause is needed: refusal
-      replaces the field rather than cutting it, so there is no partially-mapped
-      remainder for this criterion to have to exclude.
-- [ ] **All or nothing per field.** If a field's complete encoding fits the budget,
+- [ ] **The ENCODED FORM is exact, total and idempotent over the whole Unicode
+      range** — enumerated rather than sampled, and at every position: a code point
+      inside the set always becomes its token, one outside is always passed through
+      unchanged, a run of two is two tokens. An astral code point yields ONE token
+      naming that code point, never two surrogate tokens. **This criterion is about
+      the encoded form (Table A's two-stage row), not about what is emitted** — the
+      distinction is load-bearing, because for an over-budget field the encoded form
+      is computed and then not emitted at all, and a version of this criterion that
+      quantified over the emitted field would contradict the next one.
+- [ ] **The EMITTED FIELD is all or nothing.** If the encoded form fits the budget,
       exactly that encoded form is emitted. If it does not, the whole field is
       replaced by the fixed refusal sentence — never a prefix of it, never a
       prefix plus a marker. Stated against the *encoded* form, not the raw input: a
       single line break is well inside the budget yet must render as `<U+000A>`, so
       a raw byte-identity requirement here would contradict the unsafe-set mapping.
+      **Idempotence is asserted here, on the emitted field**, and holds on both
+      branches: an emitted encoded form re-encodes to itself because escape tokens
+      contain nothing escapable, and the refusal sentence re-encodes to itself
+      because it is short and contains no unsafe code point.
       **The refused case includes benign fields** — the accepted price in Table A's
       refusal row — and the reachable instance of it is the `readAlerts` path
       recorded in the budget row.
