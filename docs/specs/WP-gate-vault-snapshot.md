@@ -38,12 +38,14 @@ three points: a per-section secret scan, a three-state fail-closed provenance
 gate on frontmatter, and per-line untrusted framing of the daily summary. **The
 snapshot path has none of them** — it copies files by name, date order and size
 only. That is finding **M3** of the 2026-07-29 audit
-(`docs/security-audit/2026-07-29/CURRENT-IMPLEMENTATION-REVIEW.md:292`,
-Major/High): attacker-steerable text reaches a session holding a send
-capability, having passed no gate at all. It also over-reaches ADR-0032's
+(`docs/security-audit/2026-07-29/CURRENT-IMPLEMENTATION-REVIEW.md:292`, its
+severity at `:294` — Major/High): attacker-steerable text reaches a session
+holding a send capability, having passed no gate at all. It also over-reaches ADR-0032's
 single-chokepoint consequence, which the audit names at `:552`.
 
-This WP ports the first two of those three gates and adds a code-owned framing
+This WP ports the first two of those three gates, adds one gate the digest does
+not have — a UTF-8 faithfulness check, because a file whose bytes a decode does
+not represent cannot be gated on its text at all — and adds a code-owned framing
 line at mount. It builds **no classifier**: the owner ruled on 2026-08-14
 (`docs/specs/logbook/2026-08-05-parked-report-provenance-product-decision.md`,
 Resolution) that every file the snapshot mounts is **untrusted-by-default**,
@@ -54,8 +56,9 @@ on essentially every run. One rule replaces a classifier and its state:
 model-written vault content is data, everywhere.
 
 What this does NOT buy is stated in "Security checklist", and the honest
-summary is there too: the daily-notes leg of M3 gains no instruction-content
-filter from this WP.
+summary is there too: **neither** leg of M3 gains an instruction-content filter
+from this WP — a secret scanner looks for credentials, not for
+instruction-shaped text.
 
 ## Current state
 
@@ -92,6 +95,13 @@ filter from this WP.
 The third digest gate, per-line framing of the daily summary
 (`digest.js:764-774`), is NOT ported — see Residual 3.
 
+**Table A adds a third gate that the digest does not have**: a UTF-8
+faithfulness check. The digest never needs one because it decodes bounded reads
+it then renders as text, whereas the snapshot COPIES raw bytes — so it can be
+handed a file whose bytes a `utf8` decode does not represent, on which the other
+two gates would be deciding about a string that is not the file. That gate is
+new work, not a port, and it carries its own skip reason.
+
 ### Measured behaviour of `parseNoteResult` (run 2026-08-13)
 
 | Input | `exclusion` |
@@ -107,12 +117,19 @@ The third digest gate, per-line framing of the daily summary
 `parse` is a FLAT `key: value` reader, not a YAML parser: an indented line is
 malformed. The last three are legitimate, currently-rendering shapes that the
 gate excludes. They are NOT a regression this WP invents — `renderDigest`
-already runs this exact function over the daily note (`digest.js:747-748`), so
+already runs this exact function over the daily note (`digest.js:747` calls
+`readNoteBounded`, which delegates to `parseNoteResult` at `:265`), so
 such a note is omitted from the digest today. But it IS a new loss on the
-snapshot path, and it is why Table A applies the gate to the notes slice ONLY:
-on the reports slice it would buy nothing (nothing ever writes the flag onto a
-report) while putting `daily-digest`'s single input at the mercy of a report
-whose model-written body happens to open with `---`.
+snapshot path, and it is one reason Table A applies the gate to the notes slice
+ONLY — the other, and the load-bearing one, is that the only writer of
+frontmatter on a report is the dream model itself, so a flag there would be a
+model-declared classification of exactly the kind the 2026-08-14 ruling removed
+from this path. Table A's exemption row states both.
+
+Note also that today's actual report shape (row 1) is trusted, so the reports
+slice is not being rescued from a defect it exhibits now; the exemption is about
+what a model-written body COULD contain, and how much of `daily-digest` rides on
+that single file.
 
 ### The routine write-back path does not exist (measured 2026-08-14)
 
@@ -175,18 +192,22 @@ and reported to the owner rather than improvised.
 | Action | Path | Notes |
 |--------|------|-------|
 | modify | src/core/vault-snapshot.js | the per-file gate chain per **Table A**: single read, UTF-8 faithfulness check, secret scan on every file, provenance gate on the notes slice — all skipping visibly through the existing `skipped[]` |
-| create | tests/unit/vault-snapshot.test.js | cover the acceptance criteria below (the implementer designs the cases) |
+| create | tests/unit/vault-snapshot.test.js | cover **Table A**'s acceptance criteria (the implementer designs the cases) |
+| modify | tests/unit/broker-wiring.test.js | `makeVaultSnapshot`'s existing coverage lives HERE — six call sites from `:133`, including `assert.deepEqual(skipped, [])` at `:147`, `:173`, `:207` and skip-reason assertions at `:182-184`, `:196-199`. Listed so the boundary check permits repairing them if a new gate fires on a fixture; the existing assertions are otherwise left alone |
 | modify | src/core/routine-runtime.js | the one-line mount framing per **Table B** |
 | modify | tests/unit/routine-runtime.test.js | cover Table B |
 | modify | docs/THREAT-MODEL.md | replace the T1 bullet at `:86-92` with **Table C**'s byte-exact text. Nothing else in the file changes |
-| modify | docs/adr/0032-daily-summary-untrusted-fence.md | append-only: the byte-exact `Amended by:` line and the dated amendment section, both per **Table D**. Zero deletions |
+| modify | docs/adr/0032-daily-summary-untrusted-fence.md | append-only, per **Table D**. The implementer adds ONE thing: the byte-exact `Amended by:` line. The dated amendment section is ALREADY WRITTEN in this spec's commit — listed so the boundary check permits the file, not as a work item. Zero deletions |
 
-Also written, on an always-allowed path (see the comment above): a dated
-**Resolution** addendum on
+On an always-allowed path (see the comment above),
 `docs/specs/logbook/2026-08-05-parked-report-provenance-product-decision.md`
-recording the ruling — exclusion rejected, label + inherit adopted always-on, no
-stamp — and citing the measurement in
-`docs/specs/logbook/2026-08-13-vault-snapshot-gating-design-blockers.md`.
+carries a dated **Resolution** section recording the ruling. **It is ALREADY
+WRITTEN in this spec's commit — do not author it, do not revise it**, per the
+precedent in `docs/specs/done/WP-daily-summary-per-line-framing.md:157`. It is
+mentioned here so the record is exhaustive, not as a work item. Note what it
+does and does not claim: it records that the ruling ADOPTED unconditional
+write-back marking, and states in its own closing paragraph that no write-back
+path exists yet and that this WP implements none of it (Residual 6).
 
 ### Exact contracts
 
@@ -219,8 +240,8 @@ now appears on both the digest and the snapshot surfaces.
 | Gate 2 — secret scan (EVERY file) | `secretScan.scanAndRedact(text).findings.length > 0` → skip. Reason: `appears to contain a secret`. ANY finding of either severity skips the WHOLE file; the redacted `.text` is DISCARDED and never copied — the digest's rule (`digest.js:701-713`) applied to a file instead of a section |
 | Gate 3 — provenance (NOTES SLICE ONLY) | `parseNoteResult(text)` imported from `src/core/digest.js` — the SAME function the digest gate calls, never a second implementation. `exclusion !== null` → skip. Reason: `provenance gate: <exclusion>`, the class verbatim (`malformed`, `untrusted-exact`, `untrusted-invalid`) |
 | How "notes slice" is decided | By a code-owned property on the plan entry, NOT by matching a directory name at the gate. Add a boolean to the `SNAPSHOT_PLANS` entries and set it on the `07-Daily` entry only; the reports entries do not carry it. The plans are already frozen code-owned objects (`:28-35`), so this keeps the decision in the one place slices are declared |
-| Why the reports slice is exempt | Nothing writes `derived_from_untrusted` onto a dream report — no stamp is built (the 2026-08-14 ruling), and no other writer sets it — so the gate could only ever fire there on `malformed`. Measured, that is a live hazard rather than a dead branch: a model-written report body opening with `---` classifies as malformed, and `daily-digest`'s ONLY input is that one file. The exemption trades an unreachable benefit for a real availability risk |
-| Gate order | Secret scan before the provenance gate is NOT required; both must run before the copy, and a file skipped by either is skipped. Where both would fire, report the FIRST one that does, in the order above, so the reason string is deterministic |
+| Why the reports slice is exempt | NOT because the flag is unwritable there — it is writable, and by exactly one writer: the dream model, which authors the report body (`skills/wienerdog-dream/SKILL.md:409-425`) and can therefore write any frontmatter it likes. That is the reason for the exemption, not an argument against it. A flag on a report would be a MODEL-DECLARED classification, and the 2026-08-14 ruling took model-declared classification off this path entirely — every mounted file is untrusted-by-default, so there is no trusted class for such a flag to move a file out of, and acting on it would reintroduce a classifier through the back door. What remains is the `malformed` branch, which no writer intends and which would put `daily-digest`'s ONLY input at the mercy of a report body that happens to open with `---`. See Residual 6 for the direction this exemption gives up |
+| Gate order | FIXED, and a file is skipped by the FIRST gate that fires, so every reason string is deterministic: **decodability → secret scan → provenance**. Decodability must lead — the other two decide on text, so nothing can run before the bytes are known to be representable. The secret scan precedes the provenance gate so that a file carrying a secret reports that fact rather than a frontmatter defect, matching the digest, where the secret scan is the last filter before content ships (`digest.js:701-703`) but is the only one that can fire on a note the provenance gate already passed |
 | What is copied | The ORIGINAL Buffer, unchanged. No gate rewrites, redacts or re-encodes a copied file — a decoded string is never written back (the round trip is lossy on non-UTF-8 bytes) |
 | Budget accounting | A file skipped by ANY gate consumes NEITHER the file count NOR the byte total — the counters advance only after a successful write, as today. A gated-out file cannot displace a later file from the snapshot |
 | Skip visibility | Through the existing `skipped[]`, surfaced unchanged on stderr by `routine-runtime.js:126-128`. No gate throws, no gate fails the run, no gate is silent — the owner-mandated exceed behaviour (`vault-snapshot.js:9-11`) extended to the new reasons |
@@ -259,26 +280,27 @@ The replacement bullet, byte-exact:
 | Anchor | The line whose entire content is `Amended by:` (`:95`). The string also occurs earlier in prose (`:90`), which is NOT the anchor |
 | Inserted line (byte-exact) | `- WP-gate-vault-snapshot — the single-chokepoint consequence is narrowed to the route renderDigest controls, and the stale "named future WP" phrase is corrected to the deferral this ADR already states.` — the SAME bytes the verification heredoc carries; if the two ever disagree, this row is canonical and the gate is wrong |
 | Where it goes | APPENDED as the LAST entry of the `Amended by:` list — after the existing `WP-daily-summary-per-line-framing` line at `:96`, not directly under the anchor. The ADR states the convention at `:90-93`: "one line per package, **appended** by the amending package itself" |
-| Amendment section | A NEW dated section appended at the file's END, carrying exactly the two corrections below and the line `Status: PROPOSED — awaiting owner signature`. The implementer writes it from this table; the OWNER signs it by replacing that status line by hand, and no agent may make that edit |
-| Correction 1 | Record a NEW realization, NOT a false statement being corrected — the ADR's sentence is literally true as written ("every consumer **of its output**"; the snapshot consumes no `renderDigest` output), and an amendment that calls a true sentence false is a worse record than the one it replaces. What is new: `renderDigest` remains the chokepoint for the route it controls, the injected digest, but the daily note reaches a model by a SECOND route that inherits nothing — `src/core/vault-snapshot.js` copies whole daily notes into a routine's staging dir. So "the fix is made once, at the source" holds for the digest and does not generalize to the daily `## Summary` as such. Those notes stay unframed on the snapshot route: this WP gates them for secrets and provenance and does not port per-line framing. The audit names the tension at `docs/security-audit/2026-07-29/CURRENT-IMPLEMENTATION-REVIEW.md:552` |
-| Correction 2 | Entry-level daily provenance is **deferred**, not "a named future WP" — the statement this file already carries at `:54-60` and in its amendment tail (`:150-151`). Reaffirmed by the owner on 2026-08-14 in the same sitting as the report-provenance ruling. It is a cross-cutting writer-side change needing its own ADR |
+| Amendment section | The dated `## Amendment (2026-08-14)` section at the file's end is **ALREADY WRITTEN by the architect in this spec's commit — do not author it, do not revise it**, matching the precedent in `docs/specs/done/WP-daily-summary-per-line-framing.md:157`. It is listed in Deliverables so the boundary check permits the file and the record is exhaustive. It carries both corrections below and the line `Status: PROPOSED — awaiting owner signature`; the OWNER signs it by replacing that status line by hand, and **no agent may make that edit** |
+| Correction 1 (already written) | Records a NEW realization, NOT a false statement corrected — the ADR's sentence is literally true as written ("every consumer **of its output**"; the snapshot consumes no `renderDigest` output), and an amendment that calls a true sentence false is a worse record than the one it replaces. What is new: the daily note reaches a model by a SECOND route that inherits nothing, so "the fix is made once, at the source" does not generalize to the daily `## Summary` as such |
+| Correction 2 (already written) | Entry-level daily provenance is **deferred**, not "a named future WP" — the statement this file already carries at `:54-60` and in the 2026-08-09 amendment's closing paragraph. Reaffirmed by the owner on 2026-08-14 |
+| What the IMPLEMENTER does to this file | Exactly one thing: append the byte-exact amender line above as the last entry of the `Amended by:` list. Nothing else |
 | Diff shape | ZERO deletions in this file. Nothing existing is rewritten — a correction to an owner-signed ADR is a new dated amendment, never an edit (the ADR-0028 and WP-daily-summary-per-line-framing precedent) |
 | Not in this amendment | Any change to Decisions 1-3 (the `## Decision` section is numbered 1, 2, 3 — the 1-4 list at `:124-146` belongs to the 2026-08-09 amendment and is a different list), to the accepted residual, or to the bounded-read and gate decisions |
 
 ### Mirrored Surface Checklist
 
-- [ ] Deliverables-table cells (each row cites its table)
+- [ ] Deliverables-table cells: the four rows that carry a contract cite their table (`vault-snapshot.js`→A, `routine-runtime.js`→B, `THREAT-MODEL.md`→C, `0032`→D); the three test rows and the logbook paragraph carry scope notes, not contracts
 - [ ] Acceptance criteria that assert each table's facts
-- [ ] Verification commands (the ADR gates assert Table D; the bullet, numstat and neutralizer gates assert Table C)
+- [ ] Verification commands (the numstat, amender-line and PROPOSED gates assert Table D; the old-string and neutralizer gates assert Table C)
 - [ ] Current-state description — what Table A adds, why the reports slice is exempt, and the two document claims Tables C and D correct
 - [ ] "Exact contracts": the unchanged signature
-- [ ] Implementation notes: the single-read rule and the replaced measurement deliverable
+- [ ] Implementation notes: the single-read rule, the fixed gate order, and the absence of a measurement deliverable
 - [ ] Security checklist: the six numbered residuals and the closing partial-close-of-M3 item
+- [ ] Context: the gate count (two ported, one new) and the neither-leg statement about M3
 
 ## Implementation notes & constraints
 
-- Zero new dependencies; plain Node ≥ 18; JSDoc types; no build step (CLAUDE.md
-  `:33-36`). Table A adds two intra-repo requires (`./digest`, `./secret-scan`)
+- Zero new dependencies; plain Node ≥ 18; JSDoc types; no build step (CLAUDE.md `:33-35`). Table A adds two intra-repo requires (`./digest`, `./secret-scan`)
   and nothing else.
 - ADR-0004: nothing here starts anything. Every gate is synchronous work inside
   a call that already runs.
@@ -389,9 +411,10 @@ The replacement bullet, byte-exact:
       `derived_from_untrusted` is exactly `true`, or whose
       `derived_from_untrusted` is present but not provably boolean is NOT
       copied, and each case reports its own exclusion class in the reason.
-- [ ] On the REPORTS slice, none of those three cases causes a skip: a report
-      whose body opens with `---` prose, and one carrying
-      `derived_from_untrusted: true`, are both copied.
+- [ ] On the REPORTS slice, none of the three exclusion classes causes a skip:
+      a report whose body opens with `---` prose (`malformed`), one carrying
+      `derived_from_untrusted: true` (`untrusted-exact`), and one carrying a
+      non-boolean value for that key (`untrusted-invalid`) are all copied.
 - [ ] A well-formed note that omits the flag, or sets it exactly `false`, IS
       copied — trusted-by-default is preserved on the notes slice.
 - [ ] The snapshot's provenance decisions track the digest's exported
@@ -399,9 +422,14 @@ The replacement bullet, byte-exact:
       behaviourally rather than by the presence of an identifier.
 - [ ] Every copied file is byte-identical to its source: no gate writes
       re-encoded or redacted content into the snapshot.
-- [ ] A file skipped by any gate consumes neither the file-count nor the
-      byte-total budget: with a gated-out file present, a later file that would
-      otherwise have been displaced is still copied.
+- [ ] A file skipped by any gate does not consume the BYTE-TOTAL budget: with a
+      gated-out file present, a later file that would otherwise have been
+      displaced by the 2 MiB cap is still copied. (The file-COUNT half of Table
+      A's budget row is not demonstrable through the public entry point and no
+      criterion asserts it: the largest plan picks 7 + 7 = 14 files against
+      `MAX_FILES = 32`, `SNAPSHOT_PLANS` is frozen, and widening it is out of
+      scope. The count rule still holds by construction — both counters advance
+      only after a successful write.)
 - [ ] No gate throws: a scan error, an unreadable file and undecodable bytes all
       yield a skip, and `makeVaultSnapshot` completes.
 - [ ] When every candidate file is gated out, `makeVaultSnapshot` returns a
@@ -413,8 +441,10 @@ The replacement bullet, byte-exact:
 - [ ] With a snapshot mounted, the routine prompt carries Table B's line exactly
       once and still names the routine; with `inbox-triage` (no snapshot) the
       composed argv is unchanged.
-- [ ] `docs/THREAT-MODEL.md` carries Table C's replacement bullet byte-exactly,
-      the false enumeration is gone, and no other line of that file changed.
+- [ ] `docs/THREAT-MODEL.md` carries Table C's replacement bullet as ONE
+      unwrapped line, the false enumeration is gone, no other line of that file
+      changed, and every claim the bullet makes is true of the tree as merged —
+      each named neutralizer exists and is on the path the bullet says it is.
 - [ ] `docs/adr/0032-daily-summary-untrusted-fence.md` carries Table D's
       byte-exact amender line exactly once, as the last entry of the list, and
       the dated amendment with its PROPOSED status line, with ZERO deletions.
@@ -454,12 +484,13 @@ test "$(grep -Fxc -f /tmp/wp-proposed-line.txt docs/adr/0032-daily-summary-untru
 
 # Table C gate — the false enumeration is gone from the threat model...
 ! grep -q 'Wienerdog-authored facts (job status; a validated semver)' docs/THREAT-MODEL.md
-# ...the replacement bullet is present whole-line, byte for byte, exactly once.
-# Copy Table C's literal into this file FIRST, as ONE unwrapped line. It is not
-# repeated here on purpose: Table C is the single place those bytes are decided,
-# and a second copy in a shell block is how the two drift apart.
-test "$(grep -Fxc -f /tmp/wp-t1-bullet.txt docs/THREAT-MODEL.md)" = 1
-# ...nothing else in that file moved: exactly 1 line added, exactly 7 removed
+# ...and nothing else in that file moved: exactly 1 line added, exactly 7 removed.
+# There is deliberately NO byte-exactness gate on the replacement bullet. The
+# obvious one — grep the file against a /tmp copy the implementer pasted — asserts
+# only that the file matches what they pasted, so a mis-copy of Table C into BOTH
+# destinations passes green; it cannot catch the drift it appears to guard. And
+# what matters about this bullet is that it is TRUE, which the two gates below
+# plus the acceptance criterion check, not that its bytes match a second copy.
 test "$(git diff --numstat main -- docs/THREAT-MODEL.md)" = "$(printf '1\t7\tdocs/THREAT-MODEL.md')"
 # ...and every neutralizer the replacement bullet names still exists in src/.
 # The trailing ` *\(` is load-bearing: a bare `grep -rq "function $fn"` matches a
@@ -469,16 +500,27 @@ for fn in renderAlertField sanitizeProjectName displayName listSecretQuarantine;
 done
 ```
 
-Every step after `npm run lint` is NEW, and each is an ASSERTION: it exits
-non-zero on failure rather than printing something a reader must judge. Per
+There are SIX new assertions after `npm run lint`, and each exits non-zero on
+failure rather than printing something a reader must judge. Per
 `docs/runbooks/codex-review.md` ("Prove a new gate in BOTH directions"), run
-each on the untouched tree and on a hand-built finished state, and paste both.
-Note which direction to expect: the ADR numstat gate and the neutralizer loop
-are GREEN on the untouched tree (nothing deleted, all four functions exist), so
-for those the red run is a deliberate break; the other five are red until the
-work is done. Include one awkward-but-legal case — an amendment whose prose is
-reworded freely while its amender and status lines stay byte-exact — so a gate
-that would punish a correct implementer is caught here.
+each on the branch as handed over AND on a hand-built finished state, and paste
+both. Which direction to expect, as handed over — note this is NOT the same as
+"before any work", because the ADR amendment and the logbook Resolution already
+landed in this spec's own commit:
+
+| Gate | On the branch as handed over | Deliberate break that must turn it red |
+|---|---|---|
+| ADR numstat = 0 | GREEN — the amendment was appended, nothing deleted | delete any existing line of ADR-0032 |
+| ADR amender line | RED — the implementer has not added it yet | — |
+| PROPOSED status line | GREEN — the amendment already carries it | sign it by hand, or drop the status line |
+| THREAT-MODEL old string absent | RED — the false bullet is still there | — |
+| THREAT-MODEL numstat `1 7` | RED — no diff row exists yet | edit any other line of that file |
+| neutralizers exist | GREEN — all four exist today | rename or delete one of the four |
+
+Include one awkward-but-legal case: an implementer who rewords the T1 bullet's
+prose while keeping it one line and keeping every claim true should stay green
+everywhere — the deliberate absence of a byte-exactness gate on that bullet is
+what makes that possible, and a gate that punished it would be wrong.
 
 ## Out of scope (do NOT do these)
 
