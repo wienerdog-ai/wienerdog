@@ -1,7 +1,7 @@
 # Runbook: Codex adversarial review loop
 
-A second, independent AI reviewer (OpenAI Codex, via the `codex@openai-codex`
-Claude Code plugin) is a standard gate in the pipeline, alongside wd-reviewer.
+A second, independent AI reviewer (a non-Claude model; backends in
+"How to run it") is a standard gate in the pipeline, alongside wd-reviewer.
 Adopted 2026-07-12 after its first outing found eight real, zero hallucinated
 findings across two rounds on the ADR-0020 / WP-080…083 spec chain.
 
@@ -25,9 +25,9 @@ findings across two rounds on the ADR-0020 / WP-080…083 spec chain.
 ## The loop (design review)
 
 ```text
-wd-architect drafts → /codex:adversarial-review (focus text scoped to the
+wd-architect drafts → adversarial design review (focus text scoped to the
 drafted docs) → orchestrator verifies citations against the files → owner
-accepts/rejects findings → wd-architect revision pass → /codex:adversarial-review
+accepts/rejects findings → wd-architect revision pass → adversarial review
 round 2 (ask it to verify its own prior findings are fixed AND attack the new
 mechanisms) → repeat until clean → owner sign-off → specs move to Ready.
 ```
@@ -215,13 +215,65 @@ instead of a blocked session.
 
 ## How to run it
 
-- Design review: `/codex:adversarial-review` with focus text naming the exact
-  files to review and the specific decisions to challenge; explicitly exclude
-  unrelated working-tree files (`docs/marketing/`, `memory/research/`,
-  `userreports/`). On round ≥ 2, list the prior findings and ask Codex to
-  verify each is genuinely fixed, not re-worded.
-- PR review: `/codex:review` (native, no focus text) against the PR branch.
+The gate is a contract, not a tool. Two backends can execute it; both
+receive the same inputs and owe the same report. Improvements to the
+gate are written into this contract (or the Rules below) — never into
+a backend bullet and never into the vendored prompts, so they hold for
+every backend.
+
+### The contract (backend-agnostic)
+
+- Reviewer instructions are the two vendored prompts in
+  `docs/runbooks/review-prompts/` — `adversarial.md` for design
+  review, `pr-rubric.md` for PR review. They are verbatim upstream
+  copies with a provenance header, and they are frozen: never edited,
+  only re-vendored wholesale when upstream moves, followed by a fresh
+  both-directions validation. Anything of ours rides in the focus text
+  or in this contract.
+- Design review input: the drafted docs, plus focus text naming the
+  exact files to review and the specific decisions to challenge;
+  explicitly exclude unrelated working-tree files (`docs/marketing/`,
+  `memory/research/`, `userreports/`). On round ≥ 2, list the prior
+  findings and ask the reviewer to verify each is genuinely fixed, not
+  re-worded.
+- PR review input: the PR branch's diff against its merge base with
+  `main`; no focus text.
+- The report states what was EXECUTED, not only what was read: did the
+  test suite actually run, and with what exit status. A verdict whose
+  tests did not run is a reading, and must say so. (Measured
+  2026-08-11: two PR-gate runs exited 1 on an unwritable TMPDIR; both
+  verdicts were readings and neither disclosed it.)
+- Review is read-only, checked mechanically: `git status --porcelain`
+  in the reviewed checkout is byte-identical before and after the run,
+  or the run is invalid.
+- Output is relayed verbatim (see Rules).
+
+### Backend selection
+
+If the `gptsol` agent is available in the current session, use it;
+otherwise use the Codex plugin. A backend counts as validated only
+after its own both-directions run (green on a compliant diff, red on
+a deliberately broken one) — one backend's green never validates the
+other.
+
+### Backend: gptsol agent (preferred where available)
+
+- One agent per gate run. Dispatch = the gate's vendored prompt
+  (placeholders filled where the prompt has them), the contract inputs
+  above, and the instruction to report what it executed and return the
+  findings verbatim as its final message.
+
+### Backend: Codex plugin (works anywhere)
+
+- Design review: `/codex:adversarial-review` with the focus text.
+- PR review: `/codex:review` (native, no focus text) against the PR
+  branch.
 - Prefer `--background`; results via `/codex:status`.
+- This backend injects its own prompt copies (the plugin's adversarial
+  prompt; the Codex CLI's built-in rubric). The vendored files pin the
+  exact versions this pipeline validated; if upstream moves, re-vendor
+  and re-validate rather than letting the gate's semantics drift
+  silently.
 
 ## Rules
 
