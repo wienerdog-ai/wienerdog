@@ -1,7 +1,7 @@
 ---
 id: WP-neutralize-alert-callout-rendering
 title: Neutralize the alert callout's rendering site, so no stored alert field can forge a digest source line
-status: In-Review
+status: Done
 model: sonnet
 size: S
 depends_on: []
