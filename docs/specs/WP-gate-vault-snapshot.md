@@ -11,6 +11,24 @@ epic: audit-2026-07-29
 
 # WP-gate-vault-snapshot: gate the second path into a model session
 
+> **⛔ NOT DISPATCHABLE — three design questions are open and belong to the
+> owner.** Three adversarial rounds each returned NO-SHIP, and round 3's
+> blockers are design faults, not wording. Per
+> `docs/runbooks/codex-review.md` ("when two consecutive rounds land findings
+> of the same kind, the next step is a design question, never another textual
+> patch") the loop is stopped here rather than patched a fourth time. The three
+> are recorded in
+> `docs/specs/logbook/2026-08-13-vault-snapshot-gating-design-blockers.md` with
+> their measurements. In short: (1) the provenance stamp lives in a
+> model-writable file, so a later same-date run can rewrite it — a MEASURED
+> escape, not a theoretical one; (2) the signal Table B needs to tell
+> message-dropping from text-capping does not exist within this WP's
+> Deliverables boundary; (3) the exclusion behaviour was measured to fire on
+> **98.57% of plausible runs**, which starves `daily-digest` of its only input
+> — that is the parked product decision, and it is the owner's to rule. Table A
+> (the snapshot's secret scan and provenance gate) is unaffected by all three
+> and is the part that survives review intact.
+
 - Authoring rules live in `docs/runbooks/spec-authoring.md` — the
   template gives the skeleton, the runbook the rules. Read both.
 
@@ -435,16 +453,23 @@ The replacement bullet, byte-exact:
       the job log. What it costs is real and is stated here: a user whose daily
       notes carry YAML lists loses them from `weekly-review` input. Widening
       `parse` is a digest-owned change and is out of scope here.
-- [ ] **Residual 7 (Table B) — the raise-only prior value is unauthenticated,
-      and fails safe.** The dream model can write the vault and authors the
-      report body, so it can write the code-owned block shape itself; the shape
-      proves nothing about authorship. The OR is asymmetric, which is what makes
-      this survivable: a forged `false` cannot lower this run's computed value,
-      so there is no escape; a forged `true` only over-excludes, and the only
-      report a hijacked dream can suppress that way is its own. Accepted rather
-      than engineered away — authenticating it needs new code-owned state
-      outside the vault, and it buys availability against an adversary who
-      already has a strictly better move: write nothing incriminating.
+- [ ] **⛔ BLOCKER 1 (Table B), was "Residual 7" — the raise-only prior value is
+      unauthenticated, and it does NOT fail safe.** An earlier draft of this
+      spec argued the OR was asymmetric: a forged `false` cannot lower this
+      run's value, so no escape. **That argument was wrong and the escape is
+      measured.** It only held within a single run. Across two runs on the same
+      date — the report file is date-keyed — the sequence is: run 1 takes
+      tainted input, code stamps `true`, the report commits; run 2 starts, the
+      dream model (which authors the report body, `skills/wienerdog-dream/SKILL.md:409-425`)
+      rewrites the leading block to `false` and leaves run 1's tainted body in
+      place; run 2's own computed value is `false`; the code reads the "prior"
+      value back **out of the file the model just rewrote**, and
+      `false OR false` is `false`. The report reaches the snapshot as trusted.
+      The fault is structural: the artifact carrying the provenance fact is
+      model-writable, so no read-back from it can be authenticated. Fixing it
+      means deriving the prior value from a pre-brain baseline or from
+      code-owned state outside the vault — a design change, which is why this
+      is a blocker and not a residual.
 - [ ] **What M3 actually closes here, and what it does not — read this before
       calling the finding resolved.** M3 has two legs. The REPORT leg closes: a
       report built from tainted input is stamped by code and excluded, and the
