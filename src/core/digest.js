@@ -6,6 +6,10 @@ const { defaultLayout } = require('./layout');
 const { isCapabilityAllowed, CAPABILITY } = require('./safety-profile');
 const { parse, readBool, INVALID } = require('./frontmatter');
 const { hashBytes, foldKey } = require('./identity-approvals');
+// The alert-field budget is IMPORTED, never re-declared here: a copied `2000` would
+// drift the moment `alerts.js` is edited. `alerts.js` does not require this module,
+// so there is no cycle in either load order.
+const { MAX_FIELD_CHARS } = require('./alerts');
 // Module-object require (not destructured): EP4's test seam stubs
 // secretScan.scanAndRedact to prove a failing scanner omits, never throws.
 const secretScan = require('./secret-scan');
@@ -58,8 +62,95 @@ const DAILY_LINE_BREAK = new RegExp('\\r\\n|[\\n\\r\\u0085\\u000B\\u000C\\u2028\
  *  (U+FE0F, U+E0100) and the Hangul filler U+115F, which are `Mn`/`Lo`; the property
  *  alone misses `Cf` characters that are not default-ignorable, such as U+0600.
  *  Detection is by the property, never by an enumerated list. TAB is the one exception
- *  kept raw; the break set above splits before this step, so it never arrives here. */
+ *  kept raw; the break set above splits before this step, so it never arrives here.
+ *
+ *  COEXISTENCE NOTE — see {@link ALERT_UNSAFE}, this file's OTHER invisible-character
+ *  set. The two are deliberately different and MUST NOT be unified into one shared
+ *  constant: this set omits `Zl`/`Zp` because the daily block SPLITS on them
+ *  ({@link DAILY_LINE_BREAK}) before reaching here, and the one-line alert callout
+ *  cannot split, so it must escape them. TAB then differs in TREATMENT, not in the
+ *  set: both sets match it (it is `Cc`); the callback below re-emits it raw because
+ *  indentation is meaningful inside a multi-line summary, and the callout has no such
+ *  exception because indentation has no role in a one-line status line. */
 const DAILY_INVISIBLE = /[\p{Cc}\p{Cf}\p{Cs}\p{Default_Ignorable_Code_Point}]/gu;
+
+/** Characters that must never reach an emitted ALERT CALLOUT line raw: the
+ *  {@link DAILY_INVISIBLE} union (`Cc`, `Cf`, `Cs`, plus every character carrying
+ *  `Default_Ignorable_Code_Point`) UNION `Zl`/`Zp`. The union is required in THREE
+ *  directions — the categories alone miss the variation selectors (U+FE0F, U+E0100)
+ *  and the Hangul filler U+115F, which are `Mn`/`Lo`; the property alone misses `Cf`
+ *  characters that are not default-ignorable, such as U+0600; and `Cc`+`Cf`+`Cs`+DI
+ *  alone miss U+2028 and U+2029, which are `Zl`/`Zp` and are two of the seven members
+ *  of {@link DAILY_LINE_BREAK}. Detection is by category and property together, never
+ *  by an enumerated list of code points.
+ *
+ *  Every member of `DAILY_LINE_BREAK` is inside this set. That overlap is the
+ *  load-bearing part: the daily block splits on those characters, a single-line
+ *  callout cannot, so here they must escape.
+ *
+ *  TAB is escaped here — deliberately unlike {@link normalizeSummaryLines}, and the
+ *  difference is in the treatment, not in the set (see that function's coexistence
+ *  note). "Every `Cc`" is a checkable universal where "every `Cc` except one" is not.
+ *
+ *  NO `g` FLAG, on purpose: the pattern is tested one code point at a time, and a `g`
+ *  pattern advances `lastIndex` between calls, returning `false` on alternate equal
+ *  inputs. Do not add one. */
+const ALERT_UNSAFE = /[\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}\p{Default_Ignorable_Code_Point}]/u;
+
+/** Emitted in place of a WHOLE alert field whose encoded form exceeds the budget.
+ *  Fixed, code-owned: it says what happened and names where the untruncated record
+ *  is. Itself within budget and free of any {@link ALERT_UNSAFE} code point, so it is
+ *  its own fixed point under {@link renderAlertField}. */
+const ALERT_REFUSAL = '(omitted: too long to show here — the full record is in state/alerts.jsonl)';
+
+/**
+ * Stage 1 of rendering a stored alert field — the ENCODED FORM: every
+ * {@link ALERT_UNSAFE} code point replaced by the fixed code-owned form `<U+XXXX>`
+ * (uppercase hex, minimum four digits), the same token {@link normalizeSummaryLines}
+ * already emits. No budget is applied here; the result is total, exact and
+ * position-independent.
+ *
+ * Iteration is over CODE POINTS, so an astral character yields ONE token naming its
+ * full code point rather than two surrogate tokens, and a lone surrogate
+ * (`String.fromCodePoint(0xD800)` returns one rather than throwing) escapes as
+ * itself. One code point in, one token out — runs are not collapsed.
+ *
+ * Deliberately not reversible and need not be: nothing decodes the digest.
+ * Pure and total.
+ * @param {string} value @returns {string}
+ */
+function encodeAlertField(value) {
+  let out = '';
+  for (const ch of String(value)) {
+    out += ALERT_UNSAFE.test(ch)
+      ? `<U+${ch.codePointAt(0).toString(16).toUpperCase().padStart(4, '0')}>`
+      : ch;
+  }
+  return out;
+}
+
+/**
+ * Stage 2 — the EMITTED FIELD: all or nothing. Encode the field in full; if the
+ * complete encoding fits the budget, emit exactly that, otherwise emit
+ * {@link ALERT_REFUSAL} in place of the WHOLE field. There is no cut point and
+ * therefore no partially-rendered field.
+ *
+ * The budget is `alerts.js`'s `MAX_FIELD_CHARS`, IMPORTED rather than re-declared: a
+ * copied `2000` would drift the moment the other file is edited. Both sides count the
+ * same unit — `sanitizeAlert` caps with `String(v).slice(0, N)` and this counts the
+ * encoded output's `.length`, i.e. UTF-16 code units (the code-point iteration above
+ * governs the escape, not the threshold).
+ *
+ * A field arriving over the budget is reachable, not theoretical: `sanitizeAlert`
+ * slices and only THEN runs `redactOnly`, which expands. The price is accepted —
+ * a benign long field is refused too (owner ruling); the untruncated record stays in
+ * `state/alerts.jsonl` and `wienerdog alerts` still prints it.
+ * @param {string} value @returns {string}
+ */
+function renderAlertField(value) {
+  const encoded = encodeAlertField(value);
+  return encoded.length <= MAX_FIELD_CHARS ? encoded : ALERT_REFUSAL;
+}
 
 /**
  * Read a note, honouring the trust gate (audit A4, ADR-0022), and report WHY it
@@ -368,6 +459,26 @@ function newestDaily(dir) {
  * with the count, earliest timestamp, latest reason, and log hint. Declarative
  * status text only — never an instruction to the model (ADR-0012: it lands in the
  * injected digest, so it must add no injection surface). Empty list → ''.
+ *
+ * THAT ADR-0012 SENTENCE IS THE RULE THIS BLOCK MUST OBEY — NOT A GUARANTEE THIS
+ * FUNCTION MAKES. It is the requirement that motivated the neutralizing below; it is
+ * not discharged by it, and no renderer can discharge it: whether text reads as an
+ * instruction is a property of what the producer wrote, and plain prose passes through
+ * by design.
+ *
+ * All four interpolated values go through {@link renderAlertField} — UNIFORMLY, even
+ * though `at` and `log_hint` are built from code-owned templates in every producer
+ * today: the same fail-closed uniformity `sanitizeAlert` already documents for its own
+ * scrub. (`job` is NOT code-owned in that sense — a job name is user-authored in
+ * `config.yaml`.) `s.count` is a number and needs no rendering.
+ *
+ * What that neutralizing does and does not guarantee is decided in exactly ONE place,
+ * and this comment CITES it rather than restating it: Table A's
+ * scope-of-the-guarantee row in
+ * `docs/specs/WP-neutralize-alert-callout-rendering.md`, the declared single owner of
+ * that claim. Read it before you widen, narrow or quote the guarantee anywhere. A
+ * second copy of it here is exactly how the claim came to be stated wider than it is
+ * gated.
  * @param {Array<{job:string, at:string, reason:string, log_hint:string}>} alerts
  * @returns {string}
  */
@@ -383,12 +494,18 @@ function formatAlerts(alerts) {
     cur.hint = a.log_hint;
     byJob.set(a.job, cur);
   }
+  // The grouping above keys on the RAW `job`, and must keep doing so. The escape is
+  // not injective on rendered text (a real TAB and the literal eight characters
+  // `<U+0009>` render alike), so keying on the neutralized name would merge two
+  // distinct jobs into one line and HIDE a failing job. Neutralize at the render only.
   const lines = [];
   for (const [job, s] of byJob) {
-    const times = s.count === 1 ? 'has failed' : `has failed ${s.count} times since ${s.first}`;
+    const times =
+      s.count === 1 ? 'has failed' : `has failed ${s.count} times since ${renderAlertField(s.first)}`;
     lines.push(
-      `> [!warning] Wienerdog: the "${job}" job ${times}. Latest error: ${s.lastReason}. ` +
-        `Details in ${s.hint}. This note clears automatically when the job next succeeds.`
+      `> [!warning] Wienerdog: the "${renderAlertField(job)}" job ${times}. ` +
+        `Latest error: ${renderAlertField(s.lastReason)}. ` +
+        `Details in ${renderAlertField(s.hint)}. This note clears automatically when the job next succeeds.`
     );
   }
   return lines.join('\n');
@@ -744,4 +861,12 @@ module.exports = {
   // through a UTF-8 file, so the normalizer's contract is only assertable in-process.
   normalizeSummaryLines,
   frameSummaryLines,
+  // Exported for the alert-callout tests, for the same reason normalizeSummaryLines
+  // is: the encoded form is an INTERNAL stage that an over-budget field never emits,
+  // and a lone surrogate cannot survive a round trip through a UTF-8 file — so both
+  // stages' contracts are only assertable in-process, and enumerating the whole
+  // Unicode range through renderDigest is not a test, it is a wait.
+  encodeAlertField,
+  renderAlertField,
+  ALERT_REFUSAL,
 };
