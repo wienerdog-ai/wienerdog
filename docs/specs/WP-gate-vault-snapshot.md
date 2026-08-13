@@ -107,9 +107,15 @@ fix; and the daily notes on this path stay unframed.
 
   The model writes the body
   (`skills/wienerdog-dream/SKILL.md:409-425`). Nothing anywhere adds frontmatter.
-- The report is appended AFTER the EP2 staged-output secret gate (comment at
-  `validate.js:1342-1344`), so **the dream's own secret gate never scans the
-  report**.
+- The report's relationship to the dream's own secret gate is PARTIAL, and the
+  precise split matters. EP2 (Step 3) runs `git add -A` and scans the staged
+  ADDED lines of every file (`validate.js:1190-1199`), so lines the MODEL wrote
+  into the report this run ARE scanned today. What is NOT scanned is what Step 4
+  appends afterwards — the enforcement and redaction sections
+  (`validate.js:1341-1358`), deliberately, so a secret-revert reason can land in
+  the report. And EP2 only ever sees THIS run's added lines, never the whole
+  committed file. So the snapshot's own scan (Table A, Gate 3) is not the
+  report's first secret scan; it is the first WHOLE-FILE, consumer-side one.
 - `validateAndCommit` already builds `extractsBySession` at
   `src/core/dream/validate.js:1103-1109` — this run's parsed extracts, keyed
   `<harness>:<session_id>`, read from `expectedScratch` (the exact scratch files
@@ -260,17 +266,20 @@ gate) cover both halves once Table B stamps the report.
 | Vocabulary (used consistently everywhere in this spec) | **The stamp** is the frontmatter block, and it is written on EVERY run without exception. The stamp **FIRES** when its value is `true`. "How often the stamp fires" — the measurement — is about the VALUE, never about whether the block is written |
 | What it asserts | Whether untrusted material could have reached this run's report — a property of the run's INPUTS, computed by code. It never parses, judges or trusts the model's prose |
 | Where computed | `validateAndCommit`, `src/core/dream/validate.js`, from the `expectedScratch` array and the `extractsBySession` map already built from it at `:1103-1109` |
-| This run's computed value = `false` | ONLY when `expectedScratch` is an array AND **every path in it** satisfies all of: the file parsed; the parsed object carried both `harness` and `session_id` (the `if` guard at `:1107` — an object missing either is silently absent from the map); its `truncated` field is not `true` (see the row below); and its `messages` contain no entry with `role === 'tool_result'`. Decide this by iterating the PATHS, not by comparing `extractsBySession.size` to `expectedScratch.length` — the map is keyed `` `${harness}:${session_id}` ``, so two paths sharing a key collapse into one entry and a size comparison under-counts |
-| This run's computed value = `true` | Every other case — any extract carrying a `tool_result` message, any truncated extract, any path that did not parse or lacked `harness`/`session_id` (not verifiable → fail closed), and `expectedScratch` absent. An EMPTY array is vacuously `false`: no transcript fed the brain, so no transcript could have tainted it |
-| A TRUNCATED extract always fires the stamp | Load-bearing, not caution. `truncateExtractToFit` keeps the NEWEST messages and drops the oldest (`dream/scratch.js:36-69`), and the message-count cap does the same (`transcripts/index.js:152-181`, which sets `truncated`). So a `tool_result` carrying attacker text can be dropped while the assistant message that summarized it survives into the extract the brain reads — the evidence is gone, the derived text is not. Scanning only what survived would read `false` on exactly the run that needs `true`. The extract's own `truncated` field is the available signal: a truncated extract is not verifiable, so it fires |
+| This run's computed value = `false` | ONLY when `expectedScratch` is an array AND **every path in it** satisfies all of: the file parsed; the parsed object carried both `harness` and `session_id` (the `if` guard at `:1107` — an object missing either is silently absent from the map); no message was DROPPED from it (see the two rows below); and its `messages` contain no entry with `role === 'tool_result'`. Decide this by iterating the PATHS, not by comparing `extractsBySession.size` to `expectedScratch.length` — the map is keyed `` `${harness}:${session_id}` ``, so two paths sharing a key collapse into one entry and a size comparison under-counts |
+| This run's computed value = `true` | Every other case — any extract carrying a `tool_result` message, any extract that may have lost messages, any path that did not parse or lacked `harness`/`session_id` (not verifiable → fail closed), and `expectedScratch` absent. An EMPTY array is vacuously `false`: no transcript fed the brain, so no transcript could have tainted it |
+| An extract that may have LOST MESSAGES fires the stamp | Load-bearing, not caution. `truncateExtractToFit` keeps the NEWEST messages and drops the oldest (`dream/scratch.js:36-69`), and the message-count cap does the same (`transcripts/index.js:152-181`). So a `tool_result` carrying attacker text can be dropped while the assistant message that summarized it survives into the extract the brain reads — the evidence is gone, the derived text is not. Scanning only what survived would read `false` on exactly the run that needs `true` |
+| …but a per-MESSAGE text cap does NOT fire it | The distinction is the whole contract, and the extract's `truncated` boolean CONFLATES the two — do not use it as the signal. `capMessage` (`transcripts/index.js:102-109`) truncates one message's TEXT and sets `capped`, which also raises `truncated`; the message and **its `role` survive**, so a `tool_result` can never be hidden this way and there is nothing to fail closed about. Measured on the maintainer's corpus (round 2): **97.13% of 9,927 parseable extracts have `truncated === true`**, and firing on that boolean would make the stamp fire on **98.64%** of extracts — at run level, effectively always, permanently starving `daily-digest`. The implementer must therefore distinguish message-DROPPING truncation from text capping. Today no single field does: `truncated` covers both. Closing that is part of this WP — either propagate a distinct signal from the two dropping sites, or derive it (a dropping site changes `messages.length` relative to the source; a text cap does not) |
 | Provenance of the underlying fact | CODE-VERIFIED, not model-declared. `role: 'tool_result'` is assigned by the transcript parsers (`transcripts/claude.js:139-141`, `transcripts/codex.js:63`, `:122`); no model assertion enters the computation. This is the same derivation `invocationWindowTainted` (`validate.js:457-474`) already relies on. The stamp is therefore NOT a proxy — see the one residual that does qualify it in "Security checklist" |
 | Where written | A code-owned frontmatter block, the FIRST bytes of the report file, written at the single site that establishes the report's leading bytes (`validate.js:1345-1350`) |
 | Written when | ALWAYS, once per run — including when the dream model created the report file itself. Today's `existsSync` guard writes nothing in that case, which is exactly the hole this closes |
 | Block bytes (byte-exact) | The three-line block shown under "Exact contracts" above — the single place these bytes are decided. The file's previous first byte follows immediately after it (on the create path, the `# Dream report — <date>` header follows) |
-| What counts as "a code-owned leading block" (for the raise-only and replace rules) | A leading frontmatter block whose ONLY key is `derived_from_untrusted` with an exact boolean value. That shape is code-written and nothing else produces it. A leading block of any other shape is model content: it is NOT replaced and NOT read for the raise-only OR — the stamp block is written in front of it, and it becomes body text |
+| What counts as "a code-owned leading block" (for the raise-only and replace rules) | A leading frontmatter block whose ONLY key is `derived_from_untrusted` with an exact boolean value. A leading block of any other shape is model content: it is NOT replaced and NOT read for the raise-only OR — the stamp block is written in front of it, and it becomes body text |
+| **The prior value read back is NOT authenticated — and that is survivable in exactly one direction** | The dream model can write to the vault and is told to author the report body (`skills/wienerdog-dream/SKILL.md:409-425`), so nothing stops it from writing that exact block shape itself. Do NOT claim the shape proves code authorship. What saves the mechanism is the OR's asymmetry: a forged `false` cannot lower anything, because `false OR <this run's value>` still yields this run's value — an escape is impossible. A forged `true` over-excludes the report. That direction is FAIL-SAFE (the routine loses an input; nothing untrusted gains entry), and it is a self-denial: the only report a hijacked dream can suppress is its own. Named as Residual 7 rather than engineered away — authenticating the value would mean new code-owned state outside the vault, which buys availability against an adversary who already has a strictly better move (write nothing incriminating at all) |
 | **RAISE-ONLY — the stamp is never lowered** | The report file is keyed by DATE, so a second run on the same date appends to the file the first run wrote. Writing this run's value blindly would let a clean second run relabel a report whose body still holds the first run's tainted text — `parseNoteResult` reads only the LEADING block, so the newer value would govern the older body and silently downgrade it to trusted. Therefore: **the value written is the OR of this run's computed value and any value already present in a code-owned leading block.** `false` is written only onto a report that carries no prior stamp or a prior `false`. This is the repo's existing raise-only idiom for exactly this flag (`validate.js:332-333`, "skill revision lowered derived_from_untrusted (raise-only)") |
 | **Exactly one block, always — replace, never stack** | When the report already carries a code-owned leading block, that block is REPLACED in place (with the raised value); a second block is never prepended in front of it. Prepending would satisfy "the leading block governs" while breaking the acceptance criterion of exactly one code-owned block, and would grow the file by one block per run |
-| **Written atomically** | Stamping an existing report is a read-modify-write, and the report sits inside the vault that Step 5's `git add -A` stages wholesale — while the NEXT dream run's `precommitSessionEdits` (`validate.js:122`) commits any dirty vault file as a user session edit. A crash midway through a plain rewrite would therefore persist a truncated report as if the user had written it. Build the full new byte sequence in memory, write it to a temp file in the SAME directory with private mode, and `rename` it into place — the atomic temp+rename this repo already uses for state writes (e.g. `scheduler/status.js:200-203`) |
+| **Written atomically** | Stamping an existing report is a read-modify-write, and the report sits inside the vault that Step 5's `git add -A` stages wholesale — while the NEXT dream run's `precommitSessionEdits` (`validate.js:122-136`) commits any dirty vault file as a user session edit. A crash midway through a plain rewrite would therefore persist a truncated report as if the user had written it. Build the full new byte sequence in memory, write it to a temp file in the SAME directory with private mode, and `rename` it into place — the atomic temp+rename this repo already uses for state writes (e.g. `scheduler/status.js:200-203`) |
+| **…and the temp file must not outlive the attempt** | The rename protects the TARGET; it does not protect against the temp file itself surviving a crash inside the vault, where the next run's `precommitSessionEdits` would commit it as a user edit — the same failure this row exists to prevent, wearing a different filename. Two requirements, both needed: (1) remove the temp in a `finally`, the precedent `validate.js:860-870` already sets for an in-vault temp ("the temp lives inside the vault, which Step 5's `git add -A` stages wholesale, so it must never survive the call"); and (2) because a `finally` cannot run after a kill, the temp name must be a fixed code-owned pattern that a subsequent run removes BEFORE `precommitSessionEdits` stages anything. Scope note: this guarantees process-interruption safety, not power-loss durability — no `fsync` is required and the acceptance criterion says "interruption", not "crash of any kind" |
 | A model-written `---` block | Harmless and requires no special case, INCLUDING the adjacent-delimiter shape this code actually creates when the model's own frontmatter started at byte 0: only the leading block is frontmatter, so the code's block governs and the model's becomes ordinary body text — even when the model's block repeats the same key (measured — see Current state) |
 | Later writes to the report | Unchanged. The enforcement and redaction sections still APPEND (`validate.js:1355-1358` and after), so nothing else in the run touches the report's leading bytes |
 | Consumer | Table A's Gate 2. A report whose stamp FIRED is skipped from the snapshot with reason `provenance gate: untrusted-exact` — fail-closed. This is the INTERIM behaviour: the parked entry (`docs/specs/logbook/2026-08-05-parked-report-provenance-product-decision.md:17-19`) describes exclusion as what the gating WP builds, and the owner has explicitly NOT ruled the alternative (`:9-13`, "undecided … nothing here is binding"). Do not describe it as ruled |
@@ -298,7 +307,7 @@ gate) cover both halves once Table B stamps the report.
 The replacement bullet, byte-exact:
 
 ```markdown
-- **Non-vault sources rendered into the digest are bounded by code at the point each value enters, not by their origin**: beyond vault notes, `state/digest.md` carries the durable-alerts block (`state/alerts.jsonl`), the Active-projects block (project directory names), the transcript- and staged-output-quarantine banners (file basenames), the identity-exclusion banner, the scheduler-status line, the insecure-modes count and the update-available line. Each is composed by code into a fixed, declarative control-plane template, and each value inside one is bounded in exactly one of two ways. Either the value is code-owned — a reason drawn from a closed enum, a count, a validated semver, one of two fixed update commands, a job name taken from Wienerdog's own scheduler descriptors — or, where it is genuinely outside Wienerdog's control, it is interpolated only through a named neutralizer: `renderAlertField` for all four alert fields, `sanitizeProjectName` for project display names, and a `[A-Za-z0-9._-]` whitelist (`displayName`, `listSecretQuarantine`) for file basenames. Note where the enforcement sits, because it is not uniform: `renderDigest` receives the quarantine, scheduler and update lines ALREADY FORMATTED, so for those three the producer is the enforcing surface and the render site only concatenates. That split is what a new source must respect — a producer that begins interpolating free text into an already-formatted line would widen the injection surface with no change to `renderDigest` at all, which is why an alert `reason` (it carries underlying runtime text) is neutralized at render rather than trusted from its producer.
+- **Non-vault sources rendered into the digest are bounded by code at the point each value enters, not by their origin**: beyond vault notes, `state/digest.md` carries the durable-alerts block (`state/alerts.jsonl`), the Active-projects block (project directory names), the transcript- and staged-output-quarantine banners (file basenames), the identity-exclusion banner, the scheduler-status line, the insecure-modes count and the update-available line. Each is composed by code into a fixed, declarative control-plane template, and each value inside one is bounded in one of two ways. Either the value is code-owned — a count, a validated semver, one of two fixed update commands, a job name re-derived from a validated scheduler-entry basename (`describeEntry`, which yields null for an unrecognized one), a quarantine reason written by Wienerdog's own code — or, where the value is genuinely outside Wienerdog's control, it is interpolated only through a named neutralizer: `renderAlertField` for all four alert fields, `sanitizeProjectName` for project display names, and a `[A-Za-z0-9._-]` whitelist (`displayName`, `listSecretQuarantine`) for file basenames. Two boundaries deserve naming rather than smoothing over. First, `renderDigest` receives the quarantine, scheduler and update lines ALREADY FORMATTED, so for those three the producer is the enforcing surface and the render site only concatenates. Second, the transcript-quarantine `reason` is read back out of the dream ledger without being re-validated against the set that wrote it, so what bounds it is the integrity of that state file, not a check at render. Both are what a new source must respect: a producer that begins interpolating free text into an already-formatted line would widen the injection surface with no change to `renderDigest` at all — which is why an alert `reason`, carrying underlying runtime text, is neutralized at render rather than trusted from its producer.
 ```
 
 ### Table E — the ADR-0032 amendment (append-only)
@@ -322,7 +331,7 @@ The replacement bullet, byte-exact:
 - [ ] Current-state description — what Tables A and B replace, and the two false document claims Tables D and E correct
 - [ ] "Exact contracts": the unchanged signature and the report's leading bytes (Table B)
 - [ ] Implementation notes: the gate order, the single-read rule, and the measurement
-- [ ] Security checklist: the SIX numbered residuals (1-3 cite Table B, 4 cites Table C, 5 cites Tables C and E, 6 cites Table A) and the closing partial-close-of-M3 item, which quantifies over Residuals 1, 5 and 6
+- [ ] Security checklist: the SEVEN numbered residuals (1-3 and 7 cite Table B, 4 cites Table C, 5 cites Tables C and E, 6 cites Table A) and the closing partial-close-of-M3 item, which quantifies over Residuals 1, 5 and 6
 - [ ] The measurement record in `docs/specs/logbook/` — it restates Table B's firing rule, so the two move together
 
 ## Implementation notes & constraints
@@ -340,15 +349,24 @@ The replacement bullet, byte-exact:
   compute it per file or re-derive it in `vault-snapshot.js` — the snapshot has
   no access to the run's transcripts, which is precisely why the fact has to be
   stamped at the producer.
-- **The measurement (a required deliverable, not a nice-to-have).** Report the
-  rate at which the stamp fires and record it in a `docs/specs/logbook/` entry
-  AND the PR body. Past runs cannot be replayed — `cleanScratch` destroys the
-  scratch dir after every run (`dream/scratch.js:245-247`) — so measure over the
-  transcripts discoverable on the machine today: the share of them that contain
-  at least one `role === 'tool_result'` message. State alongside it the
-  consequence that makes the number meaningful: a run's stamp fires if ANY of
-  its transcripts does, so the per-RUN rate is at least the per-transcript rate
-  and rises as a run covers more sessions. The entry must cite
+- **The measurement (a required deliverable, not a nice-to-have) — and it has
+  already started landing.** Report the rate at which the stamp fires and record
+  it in a `docs/specs/logbook/` entry AND the PR body. Past runs cannot be
+  replayed — `cleanScratch` destroys the scratch dir after every run
+  (`dream/scratch.js:245-247`) — so measure over the transcripts discoverable on
+  the machine today. **Measure the rule that actually decides, every branch of
+  it, not just the `tool_result` share**: a measurement of one OR-branch hides
+  the other, which is precisely how the first version of this spec nearly
+  shipped a rule that fires on almost everything. Round 2 of this spec's own
+  review measured, over 9,927 parseable extracts: `tool_result` present in
+  **89.94%**; `truncated` true in **97.13%**; the naive `truncated OR
+  tool_result` rule firing on **98.64%** — at run level, effectively always.
+  That is what forced the message-dropping/text-capping distinction in Table B,
+  and the implementer must re-measure with that distinction applied, since only
+  the dropping branch remains. State alongside the number the consequence that
+  makes it meaningful: a run's stamp fires if ANY of its transcripts does, so
+  the per-RUN rate is at least the per-transcript rate and rises as a run covers
+  more sessions. The entry must cite
   `docs/specs/logbook/2026-08-05-parked-report-provenance-product-decision.md` as
   the decision the number reopens, and must NOT rule it.
 - When uncertain: choose the simpler option and record it under "Decisions made"
@@ -417,10 +435,21 @@ The replacement bullet, byte-exact:
       the job log. What it costs is real and is stated here: a user whose daily
       notes carry YAML lists loses them from `weekly-review` input. Widening
       `parse` is a digest-owned change and is out of scope here.
+- [ ] **Residual 7 (Table B) — the raise-only prior value is unauthenticated,
+      and fails safe.** The dream model can write the vault and authors the
+      report body, so it can write the code-owned block shape itself; the shape
+      proves nothing about authorship. The OR is asymmetric, which is what makes
+      this survivable: a forged `false` cannot lower this run's computed value,
+      so there is no escape; a forged `true` only over-excludes, and the only
+      report a hijacked dream can suppress that way is its own. Accepted rather
+      than engineered away — authenticating it needs new code-owned state
+      outside the vault, and it buys availability against an adversary who
+      already has a strictly better move: write nothing incriminating.
 - [ ] **What M3 actually closes here, and what it does not — read this before
       calling the finding resolved.** M3 has two legs. The REPORT leg closes: a
       report built from tainted input is stamped by code and excluded, and the
-      report is secret-scanned for the first time ever. The DAILY-NOTE leg does
+      report gets its first WHOLE-FILE secret scan (EP2 already scans the lines
+      a run adds, but never the committed whole). The DAILY-NOTE leg does
       NOT close. Its only new content gate is the secret scan, and a secret
       scanner looks for credentials, not for instruction-shaped text — so the
       audit's own chain (untrusted content steers the dream → the dream writes
@@ -466,8 +495,12 @@ The replacement bullet, byte-exact:
 - [ ] The stamp is written on BOTH report paths — when code creates the report
       header, and when the dream model created the report file first — and in
       both cases it is the file's first bytes, exactly one code-owned block.
-- [ ] An extract whose `truncated` field is `true` fires the stamp even when no
-      surviving message has `role === 'tool_result'` (Table B's truncation row).
+- [ ] An extract from which MESSAGES WERE DROPPED fires the stamp even when no
+      surviving message has `role === 'tool_result'` — and an extract whose only
+      truncation was a per-message TEXT cap does NOT fire it, even though both
+      set `truncated` (Table B's two truncation rows).
+- [ ] A temp file left behind by an interrupted stamp write is not committed as
+      a user session edit by the next run.
 - [ ] RAISE-ONLY holds: a second run on the same date whose own computed value
       is `false`, over a report already carrying a code-owned `true` block,
       leaves the report at `true` — and the file still carries exactly ONE
@@ -541,9 +574,12 @@ test "$(grep -Fxc -f /tmp/wp-proposed-line.txt docs/adr/0032-daily-summary-untru
 test "$(grep -Fxc -f /tmp/wp-t1-bullet.txt docs/THREAT-MODEL.md)" = 1
 # ...nothing else in that file moved: exactly 1 line added, exactly 7 removed
 test "$(git diff --numstat main -- docs/THREAT-MODEL.md)" = "$(printf '1\t7\tdocs/THREAT-MODEL.md')"
-# ...and every neutralizer the replacement bullet names still exists in src/
+# ...and every neutralizer the replacement bullet names still exists in src/.
+# The trailing ` *\(` is load-bearing: a bare `grep -rq "function $fn"` matches a
+# RENAMED function by prefix (measured — `renderAlertFieldBROKEN` keeps it green),
+# so the gate would pass over exactly the change it exists to catch.
 for fn in renderAlertField sanitizeProjectName displayName listSecretQuarantine; do
-  grep -rq "function $fn" src/ || { echo "MISSING: $fn"; exit 1; }
+  grep -rqE "function $fn *\(" src/ || { echo "MISSING: $fn"; exit 1; }
 done
 
 # Table A gate — the provenance gate is REUSED, never reimplemented
@@ -600,6 +636,14 @@ gate that would punish a correct implementer is caught here or not at all.
   records). Neither has a spec file, so neither is a dependency and neither
   can be picked up from here. They are named only so this WP is not mistaken
   for the place they land.
+- **Validating the transcript-quarantine `reason` on read.** Surfaced by this
+  spec's round-2 review: `activeQuarantines` passes `String(rec.reason || …)`
+  from the dream ledger into a digest banner without re-validating it against
+  the set that wrote it, so a corrupt or forward-schema ledger could put raw
+  text — newlines included — into control-plane output. The ledger is
+  Wienerdog-written under `state/`, so this is a robustness gap rather than a
+  live path, and Table D's bullet states the real bound rather than papering
+  over it. Record it under "Discovered issues" in the PR; do NOT fix it here.
 - **Rewriting any existing line of ADR-0032** — the corrections are the
   append-only amendment (Table E), and signing it is the owner's act.
 - **`docs/security-audit/2026-07-29/`** — a point-in-time record; it is not
