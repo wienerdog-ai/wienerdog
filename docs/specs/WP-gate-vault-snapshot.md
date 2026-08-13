@@ -234,8 +234,10 @@ now appears on both the digest and the snapshot surfaces.
 
 | Fact / rule | Value |
 |---|---|
-| Position of the new gates | AFTER all five existing checks (lstat, regular-file, per-file cap, file-count cap, total-byte cap) and BEFORE the copy. An over-cap file is therefore still never read into memory |
-| Reads per file | Exactly ONE. The Buffer read for the copy is the same Buffer every gate decides on — no second read, so no TOCTOU window between deciding and copying (the rationale `digest.js:181-186` gives for `parseNoteResult`) |
+| Position of the new gates | AFTER the existing checks (regular-file, per-file cap, file-count cap, total-byte cap) and BEFORE the copy, so an over-cap file is never read into memory |
+| Opens per file | Exactly ONE, and **on a descriptor, not a path** — this is a correctness requirement, not a style preference. Today the code `lstat`s a PATH (`:81`) and later re-opens that same PATH (`:104`), and the window between them is exploitable: MEASURED on this tree, replacing the file with a symlink after the `lstat` copies an out-of-vault file, and growing the file after the `lstat` copies **262145 bytes past the 262144-byte cap with an empty `skipped[]`**. So: open the leaf ONCE without following a symlink (`O_NOFOLLOW`), `fstat` THAT descriptor for the regular-file and size checks, read THAT descriptor, and gate and copy the Buffer it produced. One object, checked and used |
+| Budget arithmetic uses the BYTES ACTUALLY READ | Not the stat size. Today `totalBytes += st.size` (`:106`) books a number that a concurrent write can make stale — measured, 14 files booked 2 MiB while 2.8 MiB was copied. Book `buf.length`. If the bytes read exceed the per-file cap (possible only if the file grew between `fstat` and read), skip the file with the existing over-cap reason rather than copying it |
+| Reads per file | Exactly ONE. The Buffer read above is the same Buffer every gate decides on and the same bytes written to the destination — no second read, so no window between deciding and copying (the rationale `digest.js:181-186` gives for `parseNoteResult`) |
 | Gate 1 — decodability (EVERY file) | The gates decide on text, so a file whose bytes UTF-8 decode does not represent faithfully is not gate-able: decode the Buffer as `utf8` and skip when re-encoding the result is not byte-identical to the Buffer. Reason: `not valid UTF-8 text` |
 | Gate 2 — secret scan (EVERY file) | `secretScan.scanAndRedact(text).findings.length > 0` → skip. Reason: `appears to contain a secret`. ANY finding of either severity skips the WHOLE file; the redacted `.text` is DISCARDED and never copied — the digest's rule (`digest.js:701-713`) applied to a file instead of a section |
 | Gate 3 — provenance (NOTES SLICE ONLY) | `parseNoteResult(text)` imported from `src/core/digest.js` — the SAME function the digest gate calls, never a second implementation. `exclusion !== null` → skip. Reason: `provenance gate: <exclusion>`, the class verbatim (`malformed`, `untrusted-exact`, `untrusted-invalid`) |
@@ -247,7 +249,8 @@ now appears on both the digest and the snapshot surfaces.
 | Skip visibility | Through the existing `skipped[]`, surfaced unchanged on stderr by `routine-runtime.js:126-128`. No gate throws, no gate fails the run, no gate is silent — the owner-mandated exceed behaviour (`vault-snapshot.js:9-11`) extended to the new reasons |
 | Empty-plan path | Unchanged: `inbox-triage` still returns `{snapshotDir: null, skipped: []}` without touching the filesystem |
 | EVERYTHING gated out | A distinct state from the empty plan: `snapshotDir` is returned non-null (the dir was created), the dir is EMPTY, and `skipped[]` explains every absence. The routine still mounts it. This is the same shape a young vault already produces — an absent source dir is `continue`d at `:68` today — so no consumer meets a new state. Do NOT add a fallback that copies an ungated file to avoid an empty snapshot: that would defeat the gate on exactly the run it fired |
-| Preserved unchanged | The three caps, the plans' `dir`/`newest` values, the filename-descending pick, the lstat symlink safety, 0700 dirs / 0600 files, the mirrored layout, and the function's signature and return shape |
+| Preserved unchanged | The three cap VALUES, the plans' `dir`/`newest` values, the filename-descending pick, the leaf symlink refusal (its mechanism changes from `lstat`-then-open to `O_NOFOLLOW`; its OUTCOME — a symlinked leaf is skipped visibly, never followed — does not), 0700 dirs / 0600 files, the mirrored layout, and the function's signature and return shape. What is NOT preserved is the exploitable path-based re-open; that is the point of the row above |
+| NOT fixed here — a symlinked SOURCE DIRECTORY | `readdirSync` follows a symlinked slice root (`:66`), so if `07-Daily` or `reports/dreams` is itself a symlink, its target's files are enumerated and — being regular files — copied. MEASURED on this tree: an external file lands in the snapshot with an empty `skipped[]`. This WP does NOT change that, and the spec does not claim otherwise. Refusing it would break a legitimate layout (a user who symlinks their daily-notes folder is doing something ordinary), so whether to refuse, resolve-and-bound, or accept it is a product decision for the owner. Recorded under "Discovered issues" in the PR; see Residual 7 |
 
 ### Table B — the mount framing line
 
@@ -270,7 +273,7 @@ now appears on both the digest and the snapshot surfaces.
 The replacement bullet, byte-exact:
 
 ```markdown
-- **Non-vault sources rendered into the digest are bounded by code at the point each value enters, not by their origin**: beyond vault notes, `state/digest.md` carries the durable-alerts block (`state/alerts.jsonl`), the Active-projects block (project directory names), the transcript- and staged-output-quarantine banners (file basenames), the identity-exclusion banner, the scheduler-status line, the insecure-modes count and the update-available line. Each is composed by code into a fixed, declarative control-plane template, and each value inside one is bounded in one of two ways. Either the value is code-owned — a count, a validated semver, one of two fixed update commands, a job name re-derived from a validated scheduler-entry basename (`describeEntry`, which yields null for an unrecognized one), a quarantine reason written by Wienerdog's own code — or, where the value is genuinely outside Wienerdog's control, it is interpolated only through a named neutralizer: `renderAlertField` for all four alert fields, `sanitizeProjectName` for project display names, and a `[A-Za-z0-9._-]` whitelist (`displayName`, `listSecretQuarantine`) for file basenames. Two boundaries deserve naming rather than smoothing over. First, `renderDigest` receives the quarantine, scheduler and update lines ALREADY FORMATTED, so for those three the producer is the enforcing surface and the render site only concatenates. Second, the transcript-quarantine `reason` is read back out of the dream ledger without being re-validated against the set that wrote it, so what bounds it is the integrity of that state file, not a check at render. Both are what a new source must respect: a producer that begins interpolating free text into an already-formatted line would widen the injection surface with no change to `renderDigest` at all — which is why an alert `reason`, carrying underlying runtime text, is neutralized at render rather than trusted from its producer.
+- **Non-vault sources rendered into the digest are bounded by code at the point each value enters, not by their origin**: beyond vault notes, `state/digest.md` carries the durable-alerts block (`state/alerts.jsonl`), the Active-projects block (project directory names), the transcript- and staged-output-quarantine banners (file basenames), the identity-exclusion banner, the scheduler-status line, the insecure-modes count and the update-available line. Each is composed by code into a fixed, declarative control-plane template, and each value inside one is bounded in one of two ways. Either the value is code-owned — a count, a validated semver, one of two fixed update commands — or, where the value is genuinely outside Wienerdog's control, it is interpolated only through a named neutralizer: `renderAlertField` for all four alert fields, `sanitizeProjectName` for project display names, and a `[A-Za-z0-9._-]` whitelist (`displayName`, `listSecretQuarantine`) for file basenames. Two boundaries deserve naming rather than smoothing over, because on both of them the bound is weaker than "code-owned" suggests. First, `renderDigest` receives the quarantine, scheduler and update lines ALREADY FORMATTED, so for those three the producer is the enforcing surface and the render site only concatenates. Second — and this is the sharp one — two of those producers read their values back out of a `state/` file WITHOUT re-validating them against the set that wrote them: the transcript-quarantine `reason` from the dream ledger, and the scheduler job NAME from the scheduler-status cache, which is interpolated into the callout with quoting but no neutralizer. What bounds those two is the integrity of a state file, not a check at render, and a name containing a newline would therefore forge a line in the digest. Wienerdog writes both files itself under `state/`, so this is a robustness boundary rather than a live path — but it is where the property actually stops, and a new source must respect it: a producer that begins interpolating free text into an already-formatted line widens the injection surface with no change to `renderDigest` at all, which is why an alert `reason`, carrying underlying runtime text, is neutralized at render rather than trusted from its producer.
 ```
 
 ### Table D — the ADR-0032 amendment (append-only)
@@ -387,6 +390,17 @@ The replacement bullet, byte-exact:
       still holds as a constraint on whoever builds that path, and Residual 1
       records where it will attach. **Reported to the owner rather than
       improvised: scope changes are owner-only.**
+- [ ] **⚠️ Residual 7 (Table A) — a symlinked SOURCE DIRECTORY is still
+      followed, and that is an owner decision, not an oversight.** The leaf
+      symlink refusal this WP hardens covers the FILE, not the directory it was
+      listed from. Measured on this tree: making `reports/dreams` a symlink puts
+      an out-of-vault file into the snapshot with an empty `skipped[]`. It is
+      left alone because refusing it would break an ordinary layout — a user who
+      symlinks their daily-notes folder — so the choice between refusing,
+      resolving-and-bounding, and accepting it is a product call. The bound that
+      still holds meanwhile: whatever is enumerated goes through Table A's
+      gates like any other file, and the mount framing covers it. Reported under
+      "Discovered issues".
 - [ ] **What M3 actually closes here, and what it does not — read this before
       calling the finding resolved.** M3 has two legs. Both gain the two filters
       Table A ports, so a report or note carrying a detectable secret, or
@@ -420,8 +434,13 @@ The replacement bullet, byte-exact:
 - [ ] The snapshot's provenance decisions track the digest's exported
       `parseNoteResult` on all three exclusion classes, demonstrated
       behaviourally rather than by the presence of an identifier.
-- [ ] Every copied file is byte-identical to its source: no gate writes
-      re-encoded or redacted content into the snapshot.
+- [ ] Every copied file is byte-identical to the bytes read from the descriptor
+      that was checked: no gate writes re-encoded or redacted content.
+- [ ] The caps hold against concurrent modification, which they do not today
+      (measured, see Table A): a file replaced by a symlink after its size check
+      is not copied, and a file grown past the per-file cap after its size check
+      is not copied. Byte accounting reflects bytes actually read, so a set of
+      files that grow after their checks cannot exceed the total cap.
 - [ ] A file skipped by any gate does not consume the BYTE-TOTAL budget: with a
       gated-out file present, a later file that would otherwise have been
       displaced by the 2 MiB cap is still copied. (The file-COUNT half of Table
@@ -447,7 +466,10 @@ The replacement bullet, byte-exact:
       each named neutralizer exists and is on the path the bullet says it is.
 - [ ] `docs/adr/0032-daily-summary-untrusted-fence.md` carries Table D's
       byte-exact amender line exactly once, as the last entry of the list, and
-      the dated amendment with its PROPOSED status line, with ZERO deletions.
+      the dated 2026-08-14 amendment section, with ZERO deletions. No criterion
+      and no gate requires that amendment's status line to still read
+      `PROPOSED`: replacing it with the owner's signature is the point, and a
+      check keyed to `PROPOSED` would go red on the owner doing so.
 - [ ] The parked decision's logbook entry carries its dated Resolution addendum.
 - [ ] `tests/golden/digest-default.md` is byte-identical and is not edited.
 - [ ] `npm test` and `npm run lint` pass.
@@ -461,10 +483,15 @@ npm test
 npm run lint
 
 # Table D gate — the ADR deletes nothing (second numstat field must be 0).
-# The `:-0` default is load-bearing: an UNTOUCHED file produces no numstat row,
-# so the bare `test "$(… | cut -f2)" = 0` form compares "" to 0 and exits 1,
-# reporting a deletion that did not happen. (Measured; the same shape in
-# docs/specs/done/WP-daily-summary-per-line-framing.md has this defect.)
+# The baseline check comes FIRST and fails closed: `git diff … main` aborts in a
+# branch-only or shallow clone, `cut` still exits 0, and the `:-0` default then
+# turns a diff that NEVER RAN into a green "zero deletions". Measured in a
+# single-branch clone: the unguarded gate reported green after a real deletion.
+git rev-parse --verify --quiet main >/dev/null || { echo "no baseline ref 'main'"; exit 1; }
+# The `:-0` default is still needed for the opposite case: an UNTOUCHED file
+# produces no numstat row at all, so the bare form compares "" to 0 and reports a
+# deletion that did not happen. (The same shape in
+# docs/specs/done/WP-daily-summary-per-line-framing.md has that defect.)
 ADR_DEL=$(git diff --numstat main -- docs/adr/0032-daily-summary-untrusted-fence.md | cut -f2)
 test "${ADR_DEL:-0}" = 0
 
@@ -476,11 +503,14 @@ cat > /tmp/wp-amender-line.txt <<'LITERAL'
 LITERAL
 test "$(grep -Fxc -f /tmp/wp-amender-line.txt docs/adr/0032-daily-summary-untrusted-fence.md)" = 1
 
-# Table D gate — the amendment is present and still visibly UNSIGNED
-cat > /tmp/wp-proposed-line.txt <<'LITERAL'
-Status: PROPOSED — awaiting owner signature
+# Table D gate — the 2026-08-14 amendment section is present. It asserts the
+# HEADING, not the status line: the status line legitimately changes from
+# PROPOSED to the owner's signature, and a gate keyed to PROPOSED would turn red
+# on the owner doing exactly what Definition of done item 6 requires.
+cat > /tmp/wp-amendment-heading.txt <<'LITERAL'
+## Amendment (2026-08-14) — the chokepoint consequence is narrowed to the route `renderDigest` controls
 LITERAL
-test "$(grep -Fxc -f /tmp/wp-proposed-line.txt docs/adr/0032-daily-summary-untrusted-fence.md)" = 1
+test "$(grep -Fxc -f /tmp/wp-amendment-heading.txt docs/adr/0032-daily-summary-untrusted-fence.md)" = 1
 
 # Table C gate — the false enumeration is gone from the threat model...
 ! grep -q 'Wienerdog-authored facts (job status; a validated semver)' docs/THREAT-MODEL.md
@@ -510,17 +540,19 @@ landed in this spec's own commit:
 
 | Gate | On the branch as handed over | Deliberate break that must turn it red |
 |---|---|---|
-| ADR numstat = 0 | GREEN — the amendment was appended, nothing deleted | delete any existing line of ADR-0032 |
+| ADR baseline + numstat = 0 | GREEN — the amendment was appended, nothing deleted | delete any existing line of ADR-0032; and separately, run it in a single-branch clone with no local `main` — it must go RED, not green |
 | ADR amender line | RED — the implementer has not added it yet | — |
-| PROPOSED status line | GREEN — the amendment already carries it | sign it by hand, or drop the status line |
+| Amendment heading present | GREEN — the section already exists | delete the amendment section |
 | THREAT-MODEL old string absent | RED — the false bullet is still there | — |
 | THREAT-MODEL numstat `1 7` | RED — no diff row exists yet | edit any other line of that file |
 | neutralizers exist | GREEN — all four exist today | rename or delete one of the four |
 
-Include one awkward-but-legal case: an implementer who rewords the T1 bullet's
-prose while keeping it one line and keeping every claim true should stay green
-everywhere — the deliberate absence of a byte-exactness gate on that bullet is
-what makes that possible, and a gate that punished it would be wrong.
+Two awkward-but-legal cases must both stay green. An implementer who rewords the
+T1 bullet's prose while keeping it one line and keeping every claim true — the
+deliberate absence of a byte-exactness gate on that bullet is what makes that
+possible, and a gate that punished it would be wrong. And the OWNER replacing
+the amendment's `PROPOSED` status line with a signature, which is Definition of
+done item 6 and must not turn any gate red.
 
 ## Out of scope (do NOT do these)
 
@@ -536,12 +568,17 @@ what makes that possible, and a gate that punished it would be wrong.
 - **Entry-level daily provenance** — deferred, reaffirmed 2026-08-14, and named
   as such by ADR-0032 and Table D's Correction 2. It needs its own ADR. Do not
   let Residual 1 or 3 tempt a partial version of it into this WP.
-- **Validating the transcript-quarantine `reason` on read.** Surfaced by this
-  spec's review: `activeQuarantines` passes `String(rec.reason || …)` from the
-  dream ledger into a digest banner without re-validating it, so a corrupt or
-  forward-schema ledger could put raw text into control-plane output. The ledger
-  is Wienerdog-written under `state/`, so this is a robustness gap rather than a
-  live path. Record it under "Discovered issues" in the PR; do NOT fix it here.
+- **Re-validating the two state-file values that reach the digest unchecked.**
+  Surfaced by this spec's review and REPRODUCED: `activeQuarantines` passes
+  `String(rec.reason || …)` from the dream ledger into a digest banner, and
+  `renderSchedulerStatusLine` interpolates the job `name` straight out of
+  `state/scheduler-status.json` — a name containing a newline forges a line in
+  the rendered callout. Both files are Wienerdog-written under `state/`, so
+  these are robustness gaps rather than live paths, and Table C's bullet now
+  states the boundary honestly instead of claiming a validation that does not
+  happen at render. Fixing them means touching `src/core/dream/ledger.js` and
+  `src/scheduler/status.js`, neither in this WP's Deliverables. Record both
+  under "Discovered issues" in the PR; do NOT fix them here.
 - **Rewriting any existing line of ADR-0032** — the corrections are the
   append-only amendment (Table D), and signing it is the owner's act.
 - **`docs/security-audit/2026-07-29/`** — a point-in-time record; it is not
@@ -564,7 +601,17 @@ what makes that possible, and a gate that punished it would be wrong.
 4. This spec's `status:` flipped to `In-Review` in the same PR.
 5. The PR body states that M3 is PARTIALLY closed, per the Security checklist's
    closing item — not resolved.
-6. Both PR review gates have run on the diff and are clean or fully
+6. **MERGE PRECONDITION — the owner has signed ADR-0032's 2026-08-14
+   amendment**, replacing its `Status: PROPOSED — awaiting owner signature` line
+   by hand. No agent may make that edit. Until it is signed, the ADR carries a
+   correction that is written but not ratified, and its Consequences section
+   still says entry-level provenance "remains a named future WP". This is a
+   MERGE precondition, not a dispatch one — unlike
+   `docs/specs/done/WP-daily-summary-per-line-framing.md:288-293`, where the
+   unsigned amendment contradicted what the implementer had to build, nothing in
+   the unratified text here would misdirect the implementation, so it need not
+   block the start of work. It does block calling the package done.
+7. Both PR review gates have run on the diff and are clean or fully
    dispositioned — they are defined in `docs/runbooks/codex-review.md` and not
    restated here. `In-Review` marks the START of review: this list is complete
    only when review is.
