@@ -37,7 +37,12 @@ Wienerdog's other route into a model session, the SessionStart **digest**
 three points: a per-section secret scan, a three-state fail-closed provenance
 gate on frontmatter, and per-line untrusted framing of the daily summary.
 **The snapshot path has none of them** — it copies files by name, date order
-and size only. That is finding **M3** of the 2026-07-29 audit
+and size only. This WP ports the first TWO of those three. The third,
+per-line framing, gets no counterpart here: a file-level frame at mount
+(Table C) is defense in depth, not an equivalent, and the daily notes
+`weekly-review` receives therefore arrive unmarked — Residual 5 states that
+plainly rather than letting "the digest's gates" imply all three.
+The gap is finding **M3** of the 2026-07-29 audit
 (`docs/security-audit/2026-07-29/CURRENT-IMPLEMENTATION-REVIEW.md:292`,
 Major/High): attacker-steerable text reaches a session holding a send
 capability, having passed no gate at all. It also falsifies ADR-0032's
@@ -45,13 +50,14 @@ single-chokepoint consequence, which the audit names at `:552` — `renderDigest
 is the chokepoint for the *digest*, and the snapshot is a second route that
 inherits nothing from it.
 
-This WP puts the digest's gates on the snapshot path, and adds the one thing
-neither path has today: a **code-computed provenance stamp** on the dream
-report, so the report — which carries no frontmatter at all today, and whose
-body no code has ever judged — becomes gate-able by the same mechanism that
-gates notes. What this does NOT buy is stated in "Security checklist": the
-stamp bounds passive pass-through, not a hijacked dream, and the framing line
-is defense in depth, not the load-bearing fix.
+So this WP ports the secret scan and the provenance gate onto the snapshot
+path, and adds the one thing neither path has today: a **code-computed
+provenance stamp** on the dream report, so the report — which carries no
+frontmatter at all today, and whose body no code has ever judged — becomes
+gate-able by the same mechanism that gates notes. What this does NOT buy is
+stated in "Security checklist": the stamp bounds passive pass-through, not a
+hijacked dream; the framing line is defense in depth, not the load-bearing
+fix; and the daily notes on this path stay unframed.
 
 ## Current state
 
@@ -70,7 +76,8 @@ is defense in depth, not the load-bearing fix.
   total-byte cap → skip; then `fs.writeFileSync(dest, fs.readFileSync(src), {mode: 0o600})`
   and the counters advance. **The file is read as a Buffer and written
   unexamined.**
-- Every skip is VISIBLE: pushed to `skipped[]` (`:42-43`) and written to stderr
+- Every skip is VISIBLE: pushed to `skipped[]` at `:83`, `:87`, `:91`, `:95`,
+  `:99` (the contract is stated in the JSDoc at `:42-43`) and written to stderr
   by the caller (`src/core/routine-runtime.js:126-128`) → the job log.
 - Measured 2026-08-13: zero occurrences of a secret scan, a frontmatter parse, or
   any framing in this file. It requires only `node:fs`, `node:path` and
@@ -103,8 +110,8 @@ is defense in depth, not the load-bearing fix.
   map. The map is in scope at the report-writing step.
 - Each extract's messages carry `role: 'user' | 'assistant' | 'tool_result'`,
   and **`tool_result` is assigned by code** in the transcript parsers
-  (`src/core/transcripts/claude.js:139-141`, `src/core/transcripts/codex.js:63`,
-  `:122`), never by a model. `validate.js:457-474` (`invocationWindowTainted`)
+  (`src/core/transcripts/claude.js:139-141`, `src/core/transcripts/codex.js:122`;
+  the mapping is named in the comment at `codex.js:63`), never by a model. `validate.js:457-474` (`invocationWindowTainted`)
   already derives taint exactly this way — `msgs[i].role === 'tool_result'`.
 - Scratch is destroyed after every run (`cleanScratch`, `src/core/dream/scratch.js:245-247`),
   so past runs cannot be replayed. This bounds how the measurement below can be taken.
@@ -119,6 +126,8 @@ Needed because Table A applies the gate to reports as well as notes:
 | `---\nderived_from_untrusted: true\n---\n# x\n` | `untrusted-exact` |
 | `---\nderived_from_untrusted: false\n---\n# x\n` | `null` |
 | A code block, then a LATER `---` block in the body | `null` — only the leading block is frontmatter |
+| `---\nderived_from_untrusted: true\n---\n` prepended to a model's OWN frontmatter block (the adjacent-delimiter shape Table B creates) | `untrusted-exact` — the code's block governs; the model's becomes body |
+| The same, where the model's own block repeats `derived_from_untrusted: false` | `untrusted-exact` — a duplicate key in the model's now-body block does not make the note malformed |
 | Empty file | `null` |
 
 So a uniform gate changes nothing for today's un-stamped reports, and a code-written
@@ -137,15 +146,21 @@ leading block governs even when the model wrote a `---` block of its own further
   (`src/core/digest.js:150-152`, `:504-508`; Table A of
   `docs/specs/done/WP-neutralize-alert-callout-rendering.md`).
 - `docs/adr/0032-daily-summary-untrusted-fence.md` says at `:80-82` that
-  `renderDigest` is "the single chokepoint", and at `:86-88` that entry-level
+  "`renderDigest` is the single chokepoint **for the daily `## Summary`**, so
+  every consumer of its output … inherits the fence". The qualifier is already
+  there and is still too wide: the snapshot hands `weekly-review` the newest 7
+  daily notes WHOLE — Summary included — without passing through `renderDigest`
+  at all, so a consumer of that Summary inherits nothing. The ADR also says at
+  `:86-88` that entry-level
   daily provenance "remains a named future WP" — stale, since the same file
-  already states the honest deferral at `:14-16` and in its amendment tail.
-  Measured 2026-08-13: the file mentions the snapshot **zero** times. It is
-  owner-signed and append-only (155 lines at HEAD).
+  already states the honest deferral at `:54-60` ("so it is deferred") and in
+  its amendment tail (`:150-151`). Measured 2026-08-13: the file mentions the
+  snapshot **zero** times. It is owner-signed and append-only (153 lines at
+  HEAD).
 
 ## Deliverables (permission boundary — touch ONLY these)
 
-<!-- Always allowed without listing, per scripts/boundary-check.js:48-54: this
+<!-- Always allowed without listing, per scripts/boundary-check.js:44-54: this
      spec file itself, package-lock.json, memory/lessons/inbox.md, and
      docs/specs/logbook/ — where this WP's measurement record and review-round
      records land. -->
@@ -155,7 +170,7 @@ leading block governs even when the model wrote a `---` block of its own further
 | modify | src/core/vault-snapshot.js | the per-file gate chain per **Table A**: single read, UTF-8 faithfulness check, provenance gate, secret scan — all skipping visibly through the existing `skipped[]` |
 | modify | src/core/dream/validate.js | the code-computed report provenance stamp per **Table B**, written at the single report-header site (`:1345-1350`) |
 | modify | src/core/routine-runtime.js | the one-line mount framing per **Table C** |
-| create | tests/unit/vault-snapshot.test.js | cover the acceptance criteria below (the implementer designs the cases) |
+| create | tests/unit/vault-snapshot.test.js | cover the Table A acceptance criteria AND the end-to-end criterion (a report whose stamp fired is excluded from a snapshot) — the implementer designs the cases |
 | modify | tests/unit/dream-validate.test.js | cover Table B's acceptance criteria (the implementer designs the cases) |
 | modify | tests/unit/routine-runtime.test.js | cover Table C |
 | modify | docs/THREAT-MODEL.md | replace the T1 bullet at `:86-92` with **Table D**'s byte-exact text. Nothing else in the file changes |
@@ -218,17 +233,18 @@ gate) cover both halves once Table B stamps the report.
 
 | Fact / rule | Value |
 |---|---|
+| Vocabulary (used consistently everywhere in this spec) | **The stamp** is the frontmatter block, and it is written on EVERY run without exception. The stamp **FIRES** when its value is `true`. "How often the stamp fires" — the measurement — is about the VALUE, never about whether the block is written |
 | What it asserts | Whether untrusted material could have reached this run's report — a property of the run's INPUTS, computed by code. It never parses, judges or trusts the model's prose |
-| Where computed | `validateAndCommit`, `src/core/dream/validate.js`, from the `extractsBySession` map already built at `:1103-1109` and the `expectedScratch` array it was built from |
-| Value = `false` (not stamped) | ONLY when all three hold: `expectedScratch` is an array; every path in it yielded an entry in `extractsBySession`; and no entry has a message with `role === 'tool_result'` |
-| Value = `true` (stamped) | Every other case — including any extract carrying a `tool_result` message, any `expectedScratch` path that did not parse (unreadable → not verifiable → fail closed), and `expectedScratch` absent. An EMPTY array is vacuously `false`: no transcript fed the brain, so no transcript could have tainted it |
+| Where computed | `validateAndCommit`, `src/core/dream/validate.js`, from the `expectedScratch` array and the `extractsBySession` map already built from it at `:1103-1109` |
+| Value = `false` | ONLY when `expectedScratch` is an array AND **every path in it** satisfies all of: the file parsed; the parsed object carried both `harness` and `session_id` (the `if` guard at `:1107` — an object missing either is silently absent from the map); and its `messages` contain no entry with `role === 'tool_result'`. Decide this by iterating the PATHS, not by comparing `extractsBySession.size` to `expectedScratch.length` — the map is keyed `` `${harness}:${session_id}` ``, so two paths sharing a key collapse into one entry and a size comparison under-counts |
+| Value = `true` | Every other case — any extract carrying a `tool_result` message, any path that did not parse or lacked `harness`/`session_id` (not verifiable → fail closed), and `expectedScratch` absent. An EMPTY array is vacuously `false`: no transcript fed the brain, so no transcript could have tainted it |
 | Provenance of the underlying fact | CODE-VERIFIED, not model-declared. `role: 'tool_result'` is assigned by the transcript parsers (`transcripts/claude.js:139-141`, `transcripts/codex.js:63`, `:122`); no model assertion enters the computation. This is the same derivation `invocationWindowTainted` (`validate.js:457-474`) already relies on. The stamp is therefore NOT a proxy — see the one residual that does qualify it in "Security checklist" |
 | Where written | A code-owned frontmatter block, the FIRST bytes of the report file, written at the single site that establishes the report's leading bytes (`validate.js:1345-1350`) |
 | Written when | ALWAYS, once per run — including when the dream model created the report file itself, in which case the block is prepended to the existing bytes. Today's `if (!fs.existsSync(...))` branch writes nothing in that case, which is exactly the hole this closes |
 | Block bytes (byte-exact) | `---\n` then `derived_from_untrusted: ` then `true` or `false` then `\n---\n`, immediately followed by what the file's first byte was before (or by the `# Dream report — <date>\n` header on the create path) |
-| A model-written `---` block | Harmless and requires no special case: only the leading block is frontmatter, so the code's block governs and the model's becomes ordinary body text (measured — see Current state) |
+| A model-written `---` block | Harmless and requires no special case, INCLUDING the adjacent-delimiter shape this code actually creates when the model's own frontmatter started at byte 0: only the leading block is frontmatter, so the code's block governs and the model's becomes ordinary body text — even when the model's block repeats the same key (measured — see Current state) |
 | Later writes to the report | Unchanged. The enforcement and redaction sections still APPEND (`validate.js:1355-1358` and after), so nothing else in the run touches the report's leading bytes |
-| Consumer | Table A's Gate 2. A stamped report is skipped from the snapshot with reason `provenance gate: untrusted-exact` — fail-closed, and the ruled interim behaviour, whose product cost is the parked decision cited under "Out of scope" |
+| Consumer | Table A's Gate 2. A report whose stamp FIRED is skipped from the snapshot with reason `provenance gate: untrusted-exact` — fail-closed. This is the INTERIM behaviour: the parked entry (`docs/specs/logbook/2026-08-05-parked-report-provenance-product-decision.md:17-19`) describes exclusion as what the gating WP builds, and the owner has explicitly NOT ruled the alternative (`:9-13`, "undecided … nothing here is binding"). Do not describe it as ruled |
 | Non-consumer | The digest. `renderDigest` reads identity notes, the newest daily note and project directory names — never `reports/dreams` — so no digest output changes |
 | Tier interaction | None. `reports/dreams` is neither the identity dir nor the skills dir, so the report is not Tier-3 and the Tier-3 floor (`validate.js:196-211`) is untouched |
 
@@ -260,23 +276,24 @@ The replacement bullet, byte-exact:
 
 | Fact / rule | Value |
 |---|---|
-| Anchor | The line whose entire content is `Amended by:` (`:95`). The string also occurs earlier in prose, which is NOT the anchor |
-| Inserted line (byte-exact, immediately after the anchor) | `- WP-gate-vault-snapshot — the single-chokepoint consequence is narrowed to the digest path, and the stale "named future WP" phrase is corrected to the deferral this ADR already states.` |
+| Anchor | The line whose entire content is `Amended by:` (`:95`). The string also occurs earlier in prose (`:90`), which is NOT the anchor |
+| Inserted line (byte-exact) | `- WP-gate-vault-snapshot — the single-chokepoint consequence is narrowed to the route renderDigest actually controls, and the stale "named future WP" phrase is corrected to the deferral this ADR already states.` |
+| Where it goes | APPENDED as the LAST entry of the `Amended by:` list — after the existing `WP-daily-summary-per-line-framing` line at `:96`, not directly under the anchor. The ADR states the convention at `:90-93`: "one line per package, **appended** by the amending package itself". The `grep -Fxc` gate below checks presence, not position, so this row is the only thing that gets the order right |
 | Amendment section | A NEW dated section appended at the file's END, carrying exactly the two corrections below and the line `Status: PROPOSED — awaiting owner signature`. The implementer writes it from this table; the OWNER signs it by replacing that status line by hand, and no agent may make that edit |
-| Correction 1 | `renderDigest` is the single chokepoint for the **digest path**. The vault snapshot (`src/core/vault-snapshot.js`) is a distinct route into a model session, outside this ADR's mechanism; it is gated separately by WP-gate-vault-snapshot. Cite the audit's own naming of the contradiction: `docs/security-audit/2026-07-29/CURRENT-IMPLEMENTATION-REVIEW.md:552` |
-| Correction 2 | Entry-level daily provenance is **deferred**, not "a named future WP" — the honest statement this file already carries at `:14-16` and in its amendment tail. It is a cross-cutting writer-side change needing its own ADR |
+| Correction 1 | State the narrowing WITHOUT claiming the snapshot is outside this ADR's subject matter — it is not. `renderDigest` is the chokepoint only for the route it controls, the injected digest. The daily `## Summary` reaches a model by a SECOND route the fence never touches: `src/core/vault-snapshot.js` copies whole daily notes into a routine's staging dir, so "every consumer inherits the fence" is false for that route. Those notes remain unfenced on it (this WP gates them for secrets and provenance, and does not port per-line framing). The audit names the contradiction at `docs/security-audit/2026-07-29/CURRENT-IMPLEMENTATION-REVIEW.md:552` |
+| Correction 2 | Entry-level daily provenance is **deferred**, not "a named future WP" — the honest statement this file already carries at `:54-60` and in its amendment tail (`:150-151`). It is a cross-cutting writer-side change needing its own ADR |
 | Diff shape | ZERO deletions in this file. Nothing existing is rewritten — a correction to an owner-signed ADR is a new dated amendment, never an edit (the ADR-0028 and WP-daily-summary-per-line-framing precedent) |
-| Not in this amendment | Any change to Decision 1-4, to the accepted residual, or to the bounded-read and gate decisions |
+| Not in this amendment | Any change to Decisions 1-3 (the `## Decision` section is numbered 1, 2, 3 — the 1-4 list at `:124-146` belongs to the 2026-08-09 amendment and is a different list), to the accepted residual, or to the bounded-read and gate decisions |
 
 ### Mirrored Surface Checklist
 
 - [ ] Deliverables-table cells (each `src/` row cites its table; the two doc rows cite D and E)
 - [ ] Acceptance criteria that assert each table's facts
-- [ ] Verification commands / greps (the ADR diff gate and amender-line gate assert Table E; the neutralizer greps assert Table D)
+- [ ] Verification commands / greps, AND the both-directions table that names each gate's red state (the ADR numstat, amender-line and PROPOSED gates assert Table E; the bullet, numstat and neutralizer gates assert Table D — the bullet gate consumes Table D's literal rather than copying it)
 - [ ] Current-state description — what Tables A and B replace, and the two false document claims Tables D and E correct
 - [ ] "Exact contracts": the unchanged signature and the report's leading bytes (Table B)
 - [ ] Implementation notes: the gate order, the single-read rule, and the measurement
-- [ ] Security checklist: the four residuals, each naming its table
+- [ ] Security checklist: the FIVE residuals — 1 and 3 cite Table B, 2 cites Table B, 4 cites Table C, 5 cites Tables C and E
 - [ ] The measurement record in `docs/specs/logbook/` — it restates Table B's firing rule, so the two move together
 
 ## Implementation notes & constraints
@@ -310,12 +327,14 @@ The replacement bullet, byte-exact:
 
 ## Security checklist
 
-- [ ] The template's untrusted-identifier item is **N/A — no untrusted
-      identifier reaches a filesystem path or a shell command here.** Snapshot
-      destination paths are built from `SNAPSHOT_PLANS`' code-owned `dir` values
-      and a filename already filtered by the existing `.md` pick and lstat
-      checks; this WP adds no path or command construction, and Table A's
-      copy path is byte-for-byte the one that exists today.
+- [ ] The template's untrusted-identifier item is **N/A — this WP adds no path
+      and no command construction.** A vault filename IS an untrusted
+      identifier and it DOES reach a filesystem path today
+      (`path.join(snapshotDir, spec.dir, name)`, `vault-snapshot.js:102`), so
+      the exemption is not that no such identifier exists — it is that Table A
+      changes nothing about how that path is built. The destination path, the
+      `.md` pick and the lstat checks are byte-for-byte the ones already
+      shipping; the new gates only decide whether the copy happens.
 - [ ] The surface this WP touches is **mixed-provenance vault bytes flowing into
       a capability-holding model session.** Containment after this WP: a file
       that cannot be decoded faithfully, whose frontmatter is malformed or flags
@@ -329,25 +348,34 @@ The replacement bullet, byte-exact:
       is not coverage, and this spec does not claim coverage. (The report half
       was inert for a different, structural reason — reports carried no
       frontmatter at all, `validate.js:1349` — and Table B closes that one.)
-- [ ] **Residual 2 — the stamp's fidelity rests on parser fidelity.** The stamp
-      is code-verified, but `role: 'tool_result'` is only correct while each
+- [ ] **Residual 2 (Table B) — the stamp's fidelity rests on parser fidelity.**
+      The stamp is code-verified, but `role: 'tool_result'` is only correct while each
       transcript parser recognizes its harness's current tool-output item types
       and classifies `message` roles by an explicit trusted-role allowlist. That
       residual is already named and owned at `docs/THREAT-MODEL.md:66-81`, with
       re-verification steps in `docs/runbooks/codex-pin-bump.md`. This WP
       inherits it and does not widen it.
-- [ ] **Residual 3 — T2, not T1.** The candidate-OR defends against PASSIVE
-      pass-through: untrusted input reaching a report through a dream that is
-      merely relaying it. It does not contain a HIJACKED dream. The stamp bounds
-      what the REPORT can carry into a routine; it does not bound what a hijacked
-      dream writes into the daily notes that `weekly-review` also reads, and
-      those notes carry no stamp (Residual 1). Containing a hijacked dream is T2
-      confused-deputy work (`docs/THREAT-MODEL.md` T2), named here and not in
-      scope.
-- [ ] **Residual 4 — the framing line is not the fix.** Table C's line is
-      defense in depth. A file-level frame sits far from the content the model
+- [ ] **Residual 3 (Table B) — T2, not T1.** The run-level OR that Table B
+      specifies defends against PASSIVE pass-through: untrusted input reaching a
+      report through a dream that is merely relaying it. It does not contain a
+      HIJACKED dream. The stamp bounds what the REPORT can carry into a routine;
+      it does not bound what a hijacked dream writes into the daily notes that
+      `weekly-review` also reads, and those notes carry no stamp (Residual 1).
+      Containing a hijacked dream is T2 confused-deputy work
+      (`docs/THREAT-MODEL.md` T2), named here and not in scope.
+- [ ] **Residual 4 (Table C) — the framing line is not the fix.** Table C's line
+      is defense in depth. A file-level frame sits far from the content the model
       chooses to read, and a model may act on a note it read without re-reading
       its prompt. Tables A and B are what actually close M3.
+- [ ] **Residual 5 — per-line framing is NOT ported to this path.** The digest
+      marks every daily-summary line (ADR-0032 as amended 2026-08-09,
+      `digest.js:764-774`). The snapshot hands `weekly-review` whole daily notes
+      with no per-line marking, and Table C's single prompt sentence is not an
+      equivalent. This is the third of the digest's three gates and it stays
+      open here deliberately: framing whole notes is a different mechanism from
+      framing an extracted section, and it belongs with the deferred entry-level
+      provenance work rather than being improvised inside this WP. Table E's
+      Correction 1 records the same fact in the ADR.
 
 ## Acceptance criteria
 
@@ -368,10 +396,11 @@ The replacement bullet, byte-exact:
 - [ ] A file skipped by any gate consumes neither the file-count nor the
       byte-total budget: with a gated-out file present, a later file that would
       otherwise have been displaced is still copied.
-- [ ] Every existing behaviour in Table A's last row is unchanged — the three
-      caps and their reasons, the filename-descending pick, symlink skipping,
-      0700/0600 modes, the mirrored layout, `inbox-triage` returning a null
-      `snapshotDir`, and the function's return shape.
+- [ ] Every item in Table A's "Preserved unchanged" row holds — the three caps,
+      `SNAPSHOT_PLANS`, the filename-descending pick, the lstat symlink safety,
+      0700/0600 modes, the mirrored layout, and the function's signature and
+      return shape — and, per Table A's empty-plan row, `inbox-triage` still
+      returns a null `snapshotDir`. Existing skip reason strings are unchanged.
 - [ ] No gate throws: a scan error, an unreadable file and undecodable bytes all
       yield a skip, and `makeVaultSnapshot` completes.
 - [ ] The dream report written by a run whose extracts contain a `tool_result`
@@ -384,9 +413,10 @@ The replacement bullet, byte-exact:
       header, and when the dream model created the report file first — and in
       both cases it is the file's first bytes, exactly one code-owned block.
 - [ ] The enforcement and redaction sections still appear in the report,
-      unchanged, after the stamped header.
-- [ ] A stamped report is excluded from a `daily-digest` snapshot by Gate 2,
-      visibly — the end-to-end path from Table B to Table A.
+      unchanged, after the stamp block and the report header.
+- [ ] A report whose stamp FIRED is excluded from a `daily-digest` snapshot by
+      Gate 2, visibly — the end-to-end path from Table B to Table A. A report
+      whose stamp did not fire is copied.
 - [ ] With a snapshot mounted, the routine prompt carries Table C's line exactly
       once and still names the routine; with `inbox-triage` (no snapshot) the
       composed argv is unchanged.
@@ -419,8 +449,24 @@ cat > /tmp/wp-amender-line.txt <<'LITERAL'
 LITERAL
 test "$(grep -Fxc -f /tmp/wp-amender-line.txt docs/adr/0032-daily-summary-untrusted-fence.md)" = 1
 
+# Table E gate — the amendment is present and still visibly UNSIGNED
+cat > /tmp/wp-proposed-line.txt <<'LITERAL'
+Status: PROPOSED — awaiting owner signature
+LITERAL
+test "$(grep -Fxc -f /tmp/wp-proposed-line.txt docs/adr/0032-daily-summary-untrusted-fence.md)" = 1
+
 # Table D gate — the false enumeration is gone from the threat model...
 ! grep -q 'Wienerdog-authored facts (job status; a validated semver)' docs/THREAT-MODEL.md
+# ...the replacement bullet is present whole-line, byte for byte, exactly once.
+# Copy Table D's literal into this file FIRST, as ONE unwrapped line. It is not
+# repeated here on purpose: Table D is the single place those bytes are decided,
+# and a second copy in a shell block is exactly how the two drift apart.
+#   cat > /tmp/wp-t1-bullet.txt <<'LITERAL'
+#   <Table D's replacement bullet, one line>
+#   LITERAL
+test "$(grep -Fxc -f /tmp/wp-t1-bullet.txt docs/THREAT-MODEL.md)" = 1
+# ...nothing else in that file moved: exactly 1 line added, exactly 7 removed
+test "$(git diff --numstat main -- docs/THREAT-MODEL.md)" = "$(printf '1\t7\tdocs/THREAT-MODEL.md')"
 # ...and every neutralizer the replacement bullet names still exists in src/
 for fn in renderAlertField sanitizeProjectName displayName listSecretQuarantine; do
   grep -rq "function $fn" src/ || { echo "MISSING: $fn"; exit 1; }
@@ -431,25 +477,40 @@ grep -q "parseNoteResult" src/core/vault-snapshot.js
 ! grep -q "derived_from_untrusted" src/core/vault-snapshot.js
 ```
 
-- The last four blocks are NEW steps, and each is an ASSERTION: it exits
-  non-zero on failure rather than printing something a reader must judge.
-- Per `docs/runbooks/codex-review.md` ("Prove a new gate in BOTH directions"),
-  run each NEW step twice and paste both outputs: once on the untouched tree
-  (expect red) and once on a hand-built version of the finished state (expect
-  green), including the awkward-but-legal cases — an amendment whose prose is
-  reworded but whose amender line is byte-exact, and a `vault-snapshot.js` that
-  calls `parseNoteResult` while a test fixture elsewhere still contains the
-  string `derived_from_untrusted`. A gate that punishes the correct answer is
-  caught here or not at all.
+Every step after `npm run lint` is NEW, and each is an ASSERTION: it exits
+non-zero on failure rather than printing something a reader must judge. Per
+`docs/runbooks/codex-review.md` ("Prove a new gate in BOTH directions"), run
+each twice and paste both outputs — but the two directions are NOT the same
+pair for every gate, so the table says which is which:
+
+| Gate | On the untouched tree | The state that must turn it red |
+|---|---|---|
+| ADR numstat = 0 | green (file untouched) | delete any existing line of ADR-0032 |
+| ADR amender line | RED (line absent) | — reword the line past its byte-exact form |
+| PROPOSED status line | RED (absent) | — sign it, or omit the status line |
+| THREAT-MODEL old string absent | RED (string present today) | — leave the old bullet in place |
+| THREAT-MODEL new bullet present | RED (absent) | — reflow the bullet across two lines |
+| THREAT-MODEL numstat `1 7` | green (no diff) | edit any other line of that file |
+| neutralizers exist | green (all four exist today) | rename or delete one of the four |
+| `parseNoteResult` present | RED (absent today) | — reimplement the gate instead of calling it |
+| `derived_from_untrusted` absent from the module | green (0 occurrences today) | mention the identifier in a comment in `vault-snapshot.js` — which is the realistic way an implementer trips it, and is why the reason strings in Table A name the exclusion CLASS rather than the flag |
+
+Four of the nine are green before any work: that is expected and is not a
+failure to reproduce red. For those four, the red run is the deliberate break
+named in the last column. Also run the green direction on a hand-built finished
+state including the awkward-but-legal case — an amendment whose prose is
+reworded freely while its amender line and status line stay byte-exact — so a
+gate that would punish a correct implementer is caught here or not at all.
 
 ## Out of scope (do NOT do these)
 
 - **The report-provenance product decision** — exclusion vs label + warn +
   inherit. PARKED and owner-owned at
   `docs/specs/logbook/2026-08-05-parked-report-provenance-product-decision.md`.
-  This WP implements the ruled interim behaviour (exclusion, Table B) and
-  supplies the measurement that reopens the decision. It never rules it, and it
-  does not implement labelling, warning or marking-inheritance.
+  This WP implements the interim behaviour that entry describes (exclusion,
+  Table B) and supplies the measurement that reopens the decision. It never
+  rules it, and it does not implement labelling, warning or
+  marking-inheritance.
 - **Entry-level daily provenance** — deferred, and named as such by ADR-0032 and
   by Table E's Correction 2. It is a cross-cutting writer-side change needing
   its own ADR. Do not add it, and do not let Residual 1 tempt a partial version
@@ -457,9 +518,12 @@ grep -q "parseNoteResult" src/core/vault-snapshot.js
 - **Code-written report accounting** — making the report's body itself
   code-generated or structured. A separate, post-measurement item.
 - **T2 hijacked-model containment** (Residual 3) — named, not built.
-- **The two queued follow-up WPs** — the secret-scan limit guard, and
-  `WP-alert-producer-freeform-residual`. Both sit behind this package in the
-  queue and are untouched by it.
+- **Two NAMED-BUT-UNWRITTEN follow-ups** — a secret-scan limit guard, and
+  `WP-alert-producer-freeform-residual` (whose non-existence
+  `docs/specs/done/WP-neutralize-alert-callout-rendering.md:167` already
+  records). Neither has a spec file, so neither is a dependency and neither
+  can be picked up from here. They are named only so this WP is not mistaken
+  for the place they land.
 - **Rewriting any existing line of ADR-0032** — the corrections are the
   append-only amendment (Table E), and signing it is the owner's act.
 - **`docs/security-audit/2026-07-29/`** — a point-in-time record; it is not
