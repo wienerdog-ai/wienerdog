@@ -475,7 +475,7 @@ function newestDaily(dir) {
  * What that neutralizing does and does not guarantee is decided in exactly ONE place,
  * and this comment CITES it rather than restating it: Table A's
  * scope-of-the-guarantee row in
- * `docs/specs/WP-neutralize-alert-callout-rendering.md`, the declared single owner of
+ * `docs/specs/done/WP-neutralize-alert-callout-rendering.md`, the declared single owner of
  * that claim. Read it before you widen, narrow or quote the guarantee anywhere. A
  * second copy of it here is exactly how the claim came to be stated wider than it is
  * gated.
