@@ -94,6 +94,7 @@ membership.
 
 Amended by:
 - WP-daily-summary-per-line-framing — decision 1's block fence is replaced by a per-line marker on every summary line, and no closing marker is emitted, so summary bytes cannot forge the boundary.
+- WP-gate-vault-snapshot — the single-chokepoint consequence is narrowed to the route renderDigest controls, and the stale "named future WP" phrase is corrected to the deferral this ADR already states.
 
 ## Alternatives considered
 
