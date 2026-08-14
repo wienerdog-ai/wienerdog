@@ -74,7 +74,10 @@ instruction-shaped text.
   `.slice(0, spec.newest)` (`:70-74`) — filenames are `YYYY-MM-DD`, so
   lexicographic order is date order.
 - Per file, in order (`:79-107`): `lstatSync` → skip `unreadable`; `!isFile()` →
-  skip (symlinks never followed); per-file cap → skip; file-count cap → skip;
+  skip (a symlinked LEAF is not followed — with two measured qualifications
+  stated in Table A's known-imperfect row: the check is on the path and can be
+  raced, and a symlinked SOURCE DIRECTORY is followed by `readdirSync`);
+  per-file cap → skip; file-count cap → skip;
   total-byte cap → skip; then `fs.writeFileSync(dest, fs.readFileSync(src), {mode: 0o600})`
   and the counters advance. **The file is read as a Buffer and written
   unexamined.**
@@ -173,7 +176,11 @@ and reported to the owner rather than improvised.
   ADR also says at `:86-88` that entry-level daily provenance "remains a named
   future WP" — stale, since the same file states the honest deferral at `:54-60`
   and in its amendment tail (`:150-151`). Measured 2026-08-13: the file mentions
-  the snapshot **zero** times. It is owner-signed and append-only (153 lines).
+  the snapshot **zero** times. It is append-only; on `main` it is 153 lines and
+  fully owner-signed, while on THIS branch it is 200, because this spec's own
+  commit already appended the dated 2026-08-14 amendment (Table D) — which does
+  mention the snapshot, and whose status line still reads `PROPOSED`, so only
+  the pre-existing part of the file is signed.
 
 ## Deliverables (permission boundary — touch ONLY these)
 
@@ -234,14 +241,15 @@ now appears on both the digest and the snapshot surfaces.
 
 | Fact / rule | Value |
 |---|---|
-| Position of the new gates | AFTER the existing checks (regular-file, per-file cap, file-count cap, total-byte cap) and BEFORE the copy, so an over-cap file is never read into memory |
-| Reads per file — **the only read requirement this WP carries** | ONE read, whose bytes feed BOTH the gate decision and the copy. Today the file is read once at copy time (`:104`); this WP moves that read earlier, gates the Buffer it produced, and writes that same Buffer. No second read, so no window between deciding and copying (the rationale `digest.js:181-186` gives for `parseNoteResult`). Everything else about how that read is performed — the `lstat`→open race, bounding the read, `O_NOFOLLOW` and its Windows semantics, descriptor lifecycle — is DELIBERATELY not specified here: the owner ruled on 2026-08-14 that it belongs to a separate queued work package (see Out of scope) |
+| Position of the new gates | AFTER all five existing checks (the `lstat` failure → `unreadable`, regular-file, per-file cap, file-count cap, total-byte cap) and BEFORE the copy. A file the caps rejected is therefore not read — bounded to what those checks can know, which is the size `lstat` reported. A file that is under-cap at `lstat` and over-cap by the time it is read IS read whole; bounding that is the queued read-path WP's, not this one's |
+| Reads per file — **the only read requirement this WP carries** | ONE read, whose bytes feed BOTH the gate decision and the copy. Today the file is read once at copy time (`:104`); this WP moves that read earlier, gates the Buffer it produced, and writes that same Buffer. No second read, so the bytes gated are the bytes written (the rationale `digest.js:181-186` gives for `parseNoteResult`). Everything else about how that read is performed — the `lstat`→open race, bounding the read, `O_NOFOLLOW` and its Windows semantics, descriptor lifecycle — is DELIBERATELY not specified here: the owner ruled on 2026-08-14 that it belongs to a separate queued work package (see Out of scope) |
+| That read must FAIL INTO A SKIP, not throw | In scope, and not the split-out "descriptor lifecycle": this is the error contract of the one read this WP owns. A read failure yields the existing `unreadable` skip for that file (`:83`) and the snapshot continues. MEASURED on this tree: a mode-`000` file passes `lstat` and then `readFileSync` throws `EACCES` **out of `makeVaultSnapshot`**, killing the whole routine composition — so today's code does NOT satisfy this, and moving the read into the gate chain makes it the gate chain's problem. Wrapping this WP's own read so it degrades to a visible skip is required; reworking how the read is performed is not |
 | Gate 1 — decodability (EVERY file) | The gates decide on text, so a file whose bytes UTF-8 decode does not represent faithfully is not gate-able: decode the Buffer as `utf8` and skip when re-encoding the result is not byte-identical to the Buffer. Reason: `not valid UTF-8 text` |
-| Gate 2 — secret scan (EVERY file) | `secretScan.scanAndRedact(text).findings.length > 0` → skip. Reason: `appears to contain a secret`. ANY finding of either severity skips the WHOLE file; the redacted `.text` is DISCARDED and never copied — the digest's rule (`digest.js:701-713`) applied to a file instead of a section |
-| Gate 3 — provenance (NOTES SLICE ONLY) | `parseNoteResult(text)` imported from `src/core/digest.js` — the SAME function the digest gate calls, never a second implementation. `exclusion !== null` → skip. Reason: `provenance gate: <exclusion>`, the class verbatim (`malformed`, `untrusted-exact`, `untrusted-invalid`) |
+| Gate 2 — provenance (NOTES SLICE ONLY) | `parseNoteResult(text)` imported from `src/core/digest.js` — the SAME function the digest gate calls, never a second implementation. `exclusion !== null` → skip. Reason: `provenance gate: <exclusion>`, the class verbatim (`malformed`, `untrusted-exact`, `untrusted-invalid`) |
+| Gate 3 — secret scan (EVERY file) | `secretScan.scanAndRedact(text).findings.length > 0` → skip. Reason: `appears to contain a secret`. ANY finding of either severity skips the WHOLE file; the redacted `.text` is DISCARDED and never copied — the digest's rule (`digest.js:701-713`) applied to a file instead of a section |
 | How "notes slice" is decided | By a code-owned property on the plan entry, NOT by matching a directory name at the gate. Add a boolean to the `SNAPSHOT_PLANS` entries and set it on the `07-Daily` entry only; the reports entries do not carry it. The plans are already frozen code-owned objects (`:28-35`), so this keeps the decision in the one place slices are declared |
-| Why the reports slice is exempt | NOT because the flag is unwritable there — it is writable, and by exactly one writer: the dream model, which authors the report body (`skills/wienerdog-dream/SKILL.md:409-425`) and can therefore write any frontmatter it likes. That is the reason for the exemption, not an argument against it. A flag on a report would be a MODEL-DECLARED classification, and the 2026-08-14 ruling took model-declared classification off this path entirely — every mounted file is untrusted-by-default, so there is no trusted class for such a flag to move a file out of, and acting on it would reintroduce a classifier through the back door. What remains is the `malformed` branch, which no writer intends and which would put `daily-digest`'s ONLY input at the mercy of a report body that happens to open with `---`. See Residual 6 for the direction this exemption gives up |
-| Gate order | FIXED, and a file is skipped by the FIRST gate that fires, so every reason string is deterministic: **decodability → secret scan → provenance**. Decodability must lead — the other two decide on text, so nothing can run before the bytes are known to be representable. The secret scan precedes the provenance gate so that a file carrying a secret reports that fact rather than a frontmatter defect, matching the digest, where the secret scan is the last filter before content ships (`digest.js:701-703`) but is the only one that can fire on a note the provenance gate already passed |
+| Why the reports slice is exempt | NOT because the flag is unwritable there — it is writable, and by exactly one writer: the dream model, which authors the report body (`skills/wienerdog-dream/SKILL.md:409-425`) and can therefore write any frontmatter it likes. That is the reason for the exemption, not an argument against it. A flag on a report would be a MODEL-DECLARED classification, and the 2026-08-14 ruling took model-declared classification off this path entirely — every mounted file is untrusted-by-default, so there is no trusted class for such a flag to move a file out of, and acting on it would reintroduce a classifier through the back door. What remains is the `malformed` branch, which no writer intends and which would put `daily-digest`'s ONLY input at the mercy of a report body that happens to open with `---`. The direction it gives up, named here because no residual covers it: a report on which the dream model wrote `derived_from_untrusted: true` is copied anyway. That is deliberate and fail-safe under the ruling — the flag would be the model's own assertion, the routine treats every mounted file as untrusted regardless, and honouring it would let a hijacked dream suppress its own report |
+| Gate order | FIXED, and a file is skipped by the FIRST gate that fires, so every reason string is deterministic: **decodability → provenance (notes slice) → secret scan**. Decodability must lead: the other two decide on text, so nothing can run before the bytes are known to be representable. Provenance before the secret scan mirrors the digest, where the scan is explicitly "the LAST filter before a section joins the digest … runs after the A3 hash gate and A4 provenance gate" (`digest.js:701-703`) — so a note excluded for provenance is never scanned there either. Order is observable only on the notes slice, since that is the only slice where two content gates can both fire |
 | What is copied | The ORIGINAL Buffer, unchanged. No gate rewrites, redacts or re-encodes a copied file — a decoded string is never written back (the round trip is lossy on non-UTF-8 bytes) |
 | Budget accounting | A file skipped by ANY gate consumes NEITHER the file count NOR the byte total — the counters advance only after a successful write, as today. A gated-out file cannot displace a later file from the snapshot |
 | Skip visibility | Through the existing `skipped[]`, surfaced unchanged on stderr by `routine-runtime.js:126-128`. No gate throws, no gate fails the run, no gate is silent — the owner-mandated exceed behaviour (`vault-snapshot.js:9-11`) extended to the new reasons |
@@ -290,13 +298,13 @@ The replacement bullet, byte-exact:
 
 ### Mirrored Surface Checklist
 
-- [ ] Deliverables-table cells: the four rows that carry a contract cite their table (`vault-snapshot.js`→A, `routine-runtime.js`→B, `THREAT-MODEL.md`→C, `0032`→D); the three test rows and the logbook paragraph carry scope notes, not contracts
+- [ ] Deliverables-table cells: the four rows that carry a contract cite their table (`vault-snapshot.js`→A, `routine-runtime.js`→B, `THREAT-MODEL.md`→C, `0032`→D); two test rows cite the table they cover (A and B) and the third plus the logbook paragraph carry scope notes only
 - [ ] Acceptance criteria that assert each table's facts
 - [ ] Verification commands (the baseline+numstat, amender-line and amendment-heading gates assert Table D; the old-string, numstat and neutralizer gates assert Table C)
 - [ ] Current-state description — what Table A adds, why the reports slice is exempt, and the two document claims Tables C and D correct
 - [ ] "Exact contracts": the unchanged signature
-- [ ] Implementation notes: the single-read rule, the fixed gate order, and the absence of a measurement deliverable
-- [ ] Security checklist: the SEVEN numbered residuals — 1, 4 and 7 cite Table A, 2 cites Table B, and 3, 5 and 6 cite no table (they name what is out of scope rather than a contract) — plus the closing partial-close-of-M3 item
+- [ ] Implementation notes: the reuse-don't-reimplement rule and the absence of a measurement deliverable (the single-read rule and the gate order live in Table A, not here)
+- [ ] Security checklist: the two unnumbered opening items, the SEVEN numbered residuals (1 and 4 cite Table A; 2 cites Table B; 3 cites Tables B and D; 7 cites Tables A and B; 5 and 6 cite none, naming what is out of scope), and the closing partial-close-of-M3 item
 - [ ] Context: the gate count (two ported, one new) and the neither-leg statement about M3
 
 ## Implementation notes & constraints
@@ -305,12 +313,13 @@ The replacement bullet, byte-exact:
   and nothing else.
 - ADR-0004: nothing here starts anything. Every gate is synchronous work inside
   a call that already runs.
-- **Reuse, do not reimplement.** Gate 3 calls the digest's exported
+- **Reuse, do not reimplement.** Gate 2 calls the digest's exported
   `parseNoteResult`. A second copy of the three-state logic is the drift this
   repo has been bitten by; the digest owns that fact and the snapshot calls it.
   A test must show the snapshot's behaviour tracks that function on all three
   exclusion classes — a grep for the identifier proves nothing about reuse.
-- **No measurement deliverable.** The 2026-08-14 ruling (point 5) replaces it
+- **No measurement deliverable.** The 2026-08-14 ruling (point 3 and its
+  Resolution preamble, where the 98.57% reasoning lives) replaces it
   with the record already in
   `docs/specs/logbook/2026-08-13-vault-snapshot-gating-design-blockers.md`. Do
   not re-measure and do not add a measurement step.
@@ -400,13 +409,20 @@ The replacement bullet, byte-exact:
       the reasoning and the measurements are in
       `docs/specs/logbook/2026-08-14-snapshot-read-hardening-scope-question.md`.
       What this WP still guarantees meanwhile: whatever the existing code
-      enumerates goes through Table A's gates like any other file, and Table B's
-      framing covers it. What it does NOT: that the file gated is still the file
-      copied under a concurrent write, or that the caps are unbypassable.
+      enumerates goes through Table A's gates like any other file, Table B's
+      framing covers it, and — because the file is read ONCE — the bytes gated
+      are always the bytes copied. What it does NOT guarantee: that the file
+      `lstat`ed is the file then read (a post-check swap redirects it), that the
+      caps cannot be exceeded by a file that grows after its size check, or that
+      the enumerated directory is inside the vault.
 - [ ] **What M3 actually closes here, and what it does not — read this before
-      calling the finding resolved.** M3 has two legs. Both gain the two filters
-      Table A ports, so a report or note carrying a detectable secret, or
-      undecodable bytes, no longer reaches a routine. Neither leg gains an
+      calling the finding resolved.** M3 has two legs, and they do NOT gain the
+      same thing. Both gain the decodability check (new here, not ported) and
+      the ported secret scan, so a file carrying a detectable secret or
+      undecodable bytes no longer reaches a routine. Only the NOTES leg gains
+      the ported provenance gate; the reports leg is exempt by design (Table A),
+      so `daily-digest`'s single input passes two filters, not three. Neither
+      leg gains an
       instruction-content filter: a secret scanner looks for credentials, not
       for instruction-shaped text. The audit's own chain (untrusted content
       steers the dream → the dream writes instruction-shaped text into a daily
@@ -468,8 +484,9 @@ The replacement bullet, byte-exact:
       and no gate requires that amendment's status line to still read
       `PROPOSED`: replacing it with the owner's signature is the point, and a
       check keyed to `PROPOSED` would go red on the owner doing so.
-- [ ] The parked decision's logbook entry carries its dated Resolution addendum.
-- [ ] `tests/golden/digest-default.md` is byte-identical and is not edited.
+- [ ] `tests/golden/digest-default.md` is byte-identical — `npm test`'s golden
+      compare asserts it, and it is not in Deliverables, so editing it would
+      fail the boundary check as well.
 - [ ] `npm test` and `npm run lint` pass.
 
 ## Verification steps (run these; paste output in the PR)
@@ -517,8 +534,11 @@ test "$(grep -Fxc -f /tmp/wp-amendment-heading.txt docs/adr/0032-daily-summary-u
 # obvious one — grep the file against a /tmp copy the implementer pasted — asserts
 # only that the file matches what they pasted, so a mis-copy of Table C into BOTH
 # destinations passes green; it cannot catch the drift it appears to guard. And
-# what matters about this bullet is that it is TRUE, which the two gates below
-# plus the acceptance criterion check, not that its bytes match a second copy.
+# what matters about this bullet is that it is TRUE. Nothing here fully checks
+# that: the numstat below bounds the EDIT, the neutralizer loop below checks four
+# of the bullet's identifiers, and the rest rests on the acceptance criterion and
+# review. That is a deliberate limit, not an oversight — a byte gate would have
+# added no truth-checking at all.
 test "$(git diff --numstat main -- docs/THREAT-MODEL.md)" = "$(printf '1\t7\tdocs/THREAT-MODEL.md')"
 # ...and every neutralizer the replacement bullet names still exists in src/.
 # The trailing ` *\(` is load-bearing: a bare `grep -rq "function $fn"` matches a
@@ -528,7 +548,8 @@ for fn in renderAlertField sanitizeProjectName displayName listSecretQuarantine;
 done
 ```
 
-There are SIX new assertions after `npm run lint`, and each exits non-zero on
+There are SEVEN new failure-exiting commands after `npm run lint` — the
+baseline guard plus six gates — and each exits non-zero on
 failure rather than printing something a reader must judge. Per
 `docs/runbooks/codex-review.md` ("Prove a new gate in BOTH directions"), run
 each on the branch as handed over AND on a hand-built finished state, and paste
@@ -559,7 +580,9 @@ done item 6 and must not turn any gate red.
   "cheap" heuristic: the measured base rate means such a signal carries no
   information, and a trusted class exists only to be wrongly entered.
 - **Hardening the snapshot's read path** — the `lstat`→open race, bounding the
-  read, `O_NOFOLLOW` and its Windows semantics, and the descriptor lifecycle.
+  read, `O_NOFOLLOW` and its Windows semantics, the descriptor lifecycle, and
+  the followed symlinked SOURCE DIRECTORY (assigned to that package by the
+  ruling's point 4, as the open product question inside it).
   Split out by owner ruling on 2026-08-14 into its own QUEUED work package,
   which is fed by the reproductions recorded in
   `docs/specs/logbook/2026-08-14-snapshot-read-hardening-scope-question.md` and
@@ -571,7 +594,7 @@ done item 6 and must not turn any gate red.
 - **Building the routine vault write-back path**, or marking one (Residual 6).
   The rule stands for whoever builds that path; this WP does not build it.
 - **A per-run warning line in routine output** — ruled out (point 4).
-- **Re-measuring the stamp firing rate** — ruled out (point 5); cite the
+- **Re-measuring the stamp firing rate** — ruled out (point 3); cite the
   logbook record instead.
 - **Entry-level daily provenance** — deferred, reaffirmed 2026-08-14, and named
   as such by ADR-0032 and Table D's Correction 2. It needs its own ADR. Do not
