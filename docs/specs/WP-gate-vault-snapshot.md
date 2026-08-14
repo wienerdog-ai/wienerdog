@@ -116,10 +116,19 @@ new work, not a port, and it carries its own skip reason.
 | `---\ntags:\n  - work\n---\n` (valid YAML list — ordinary Obsidian frontmatter) | **`malformed`** |
 | `---\nmeta:\n  a: 1\n---\n` (valid nested YAML) | **`malformed`** |
 | `---\nprose\n---\n` (a leading Markdown thematic rule) | **`malformed`** |
+| `<BOM>---\nderived_from_untrusted: true\n---\n` (UTF-8 BOM before the opener) | **`null` — TRUSTED, the flag is not seen** |
+| `\n---\nderived_from_untrusted: true\n---\n` (one leading blank line) | **`null` — TRUSTED** |
+| `<SP>---\nderived_from_untrusted: true\n---\n` (one leading space, written `<SP>` here) | **`null` — TRUSTED** |
 
-`parse` is a FLAT `key: value` reader, not a YAML parser: an indented line is
-malformed. The last three are legitimate, currently-rendering shapes that the
-gate excludes. They are NOT a regression this WP invents — `renderDigest`
+Two independent narrownesses show up here. `parse` is a FLAT `key: value`
+reader, not a YAML parser: an indented line is malformed — that is rows 5-7,
+which FAIL CLOSED (a legitimate note is excluded). And it recognizes frontmatter
+only when the first line is byte-for-byte `---` — that is the last three rows,
+which FAIL OPEN (an explicitly flagged note is treated as trusted). Residual 8
+owns the fail-open half; the rest of this paragraph is about the fail-closed
+half.
+
+Rows 5-7 are legitimate, currently-rendering shapes that the gate excludes. They are NOT a regression this WP invents — `renderDigest`
 already runs this exact function over the daily note (`digest.js:747` calls
 `readNoteBounded`, which delegates to `parseNoteResult` at `:265`), so
 such a note is omitted from the digest today. But it IS a new loss on the
@@ -247,13 +256,15 @@ now appears on both the digest and the snapshot surfaces.
 | That read must FAIL INTO A SKIP, not throw | In scope, and not the split-out "descriptor lifecycle": this is the error contract of the one read this WP owns. A read failure yields the existing `unreadable` skip for that file (`:83`) and the snapshot continues. MEASURED on this tree: a mode-`000` file passes `lstat` and then `readFileSync` throws `EACCES` **out of `makeVaultSnapshot`**, killing the whole routine composition — so today's code does NOT satisfy this, and moving the read into the gate chain makes it the gate chain's problem. Wrapping this WP's own read so it degrades to a visible skip is required; reworking how the read is performed is not |
 | Gate 1 — decodability (EVERY file) | The gates decide on text, so a file whose bytes UTF-8 decode does not represent faithfully is not gate-able: decode the Buffer as `utf8` and skip when re-encoding the result is not byte-identical to the Buffer. Reason: `not valid UTF-8 text` |
 | Gate 2 — provenance (NOTES SLICE ONLY) | `parseNoteResult(text)` imported from `src/core/digest.js` — the SAME function the digest gate calls, never a second implementation. `exclusion !== null` → skip. Reason: `provenance gate: <exclusion>`, the class verbatim (`malformed`, `untrusted-exact`, `untrusted-invalid`) |
+| What Gate 2 actually decides on — **PARSER-RECOGNIZED** leading frontmatter, not "the flag" | The gate is exactly as strong as `parse`'s notion of where frontmatter starts, and that notion is narrow: the first line must be byte-for-byte `---`. MEASURED on this tree — a leading UTF-8 BOM, a leading blank line, or a single leading space each make a note carrying an explicit `derived_from_untrusted: true` parse as **no frontmatter at all**, i.e. trusted, and it is copied. So this WP's guarantee is "a note whose frontmatter the shared parser RECOGNIZES and which flags untrusted derivation is skipped", never "a note carrying the flag is skipped". Do not write the wider sentence anywhere. This is inherited, not introduced: `renderDigest` runs the same function over the daily note (`digest.js:747` → `:265`), so the same three shapes already defeat the digest's provenance gate today. Widening `parse` is digest-owned and out of scope — recorded as a discovered issue and as Residual 8 |
 | Gate 3 — secret scan (EVERY file) | `secretScan.scanAndRedact(text).findings.length > 0` → skip. Reason: `appears to contain a secret`. ANY finding of either severity skips the WHOLE file; the redacted `.text` is DISCARDED and never copied — the digest's rule (`digest.js:701-713`) applied to a file instead of a section |
 | How "notes slice" is decided | By a code-owned property on the plan entry, NOT by matching a directory name at the gate. Add a boolean to the `SNAPSHOT_PLANS` entries and set it on the `07-Daily` entry only; the reports entries do not carry it. The plans are already frozen code-owned objects (`:28-35`), so this keeps the decision in the one place slices are declared |
 | Why the reports slice is exempt | NOT because the flag is unwritable there — it is writable, and by exactly one writer: the dream model, which authors the report body (`skills/wienerdog-dream/SKILL.md:409-425`) and can therefore write any frontmatter it likes. That is the reason for the exemption, not an argument against it. A flag on a report would be a MODEL-DECLARED classification, and the 2026-08-14 ruling took model-declared classification off this path entirely — every mounted file is untrusted-by-default, so there is no trusted class for such a flag to move a file out of, and acting on it would reintroduce a classifier through the back door. What remains is the `malformed` branch, which no writer intends and which would put `daily-digest`'s ONLY input at the mercy of a report body that happens to open with `---`. The direction it gives up, named here because no residual covers it: a report on which the dream model wrote `derived_from_untrusted: true` is copied anyway. That is deliberate and fail-safe under the ruling — the flag would be the model's own assertion, the routine treats every mounted file as untrusted regardless, and honouring it would let a hijacked dream suppress its own report |
 | Gate order | FIXED, and a file is skipped by the FIRST gate that fires, so every reason string is deterministic: **decodability → provenance (notes slice) → secret scan**. Decodability must lead: the other two decide on text, so nothing can run before the bytes are known to be representable. Provenance before the secret scan mirrors the digest, where the scan is explicitly "the LAST filter before a section joins the digest … runs after the A3 hash gate and A4 provenance gate" (`digest.js:701-703`) — so a note excluded for provenance is never scanned there either. Order is observable only on the notes slice, since that is the only slice where two content gates can both fire |
 | What is copied | The ORIGINAL Buffer, unchanged. No gate rewrites, redacts or re-encodes a copied file — a decoded string is never written back (the round trip is lossy on non-UTF-8 bytes) |
 | Budget accounting | A file skipped by ANY gate consumes NEITHER the file count NOR the byte total — the counters advance only after a successful write, as today. A gated-out file cannot displace a later file from the snapshot |
-| Skip visibility | Through the existing `skipped[]`, surfaced unchanged on stderr by `routine-runtime.js:126-128`. No gate throws, no gate fails the run, no gate is silent — the owner-mandated exceed behaviour (`vault-snapshot.js:9-11`) extended to the new reasons |
+| Skip visibility | Through the existing `skipped[]`, surfaced unchanged on stderr by `routine-runtime.js:126-128`. No gate is silent — the owner-mandated exceed behaviour (`vault-snapshot.js:9-11`) extended to the new reasons |
+| What "no gate throws" DOES and does not cover — an ENUMERATED list, not a universal | Three failure classes are required to degrade to a visible skip, and they are the three this WP can control: a filesystem read failure → `unreadable`; a degraded or erroring scanner result → the secret skip (`scanAndRedact` is total, WP-122); and bytes that fail the UTF-8 round trip → the decodability skip. **A RESOURCE failure is NOT in that list and must not be claimed.** With the read left unbounded by the split, a file that grows past `buffer.constants.MAX_STRING_LENGTH` (536,870,888) between its `lstat` and its read produces a Buffer that `toString('utf8')` cannot decode — measured, `ERR_STRING_TOO_LONG` escapes `makeVaultSnapshot`, and a plain read-error catch does not cover it because the read succeeded. Allocation failure on a large-but-decodable Buffer is the same class. Both live with the bounded read, in the queued read-path WP (Residual 7) |
 | Empty-plan path | Unchanged: `inbox-triage` still returns `{snapshotDir: null, skipped: []}` without touching the filesystem |
 | EVERYTHING gated out | A distinct state from the empty plan: `snapshotDir` is returned non-null (the dir was created), the dir is EMPTY, and `skipped[]` explains every absence. The routine still mounts it. This is the same shape a young vault already produces — an absent source dir is `continue`d at `:68` today — so no consumer meets a new state. Do NOT add a fallback that copies an ungated file to avoid an empty snapshot: that would defeat the gate on exactly the run it fired |
 | Preserved unchanged — including the parts that are known-imperfect | The three cap VALUES **and the existing `lstat`-based way they are enforced**, the plans' `dir`/`newest` values, the filename-descending pick, the existing `lstat` leaf-symlink refusal, the `st.size` byte accounting, 0700 dirs / 0600 files, the mirrored layout, and the function's signature and return shape. This WP changes WHEN the file is read and WHAT is decided from it, and nothing about HOW the path is checked or opened |
@@ -305,7 +316,7 @@ The replacement bullet, byte-exact:
 - [ ] Current-state description — what Table A adds, why the reports slice is exempt, and the two document claims Tables C and D correct
 - [ ] "Exact contracts": the unchanged signature
 - [ ] Implementation notes: the reuse-don't-reimplement rule and the absence of a measurement deliverable (the single-read rule and the gate order live in Table A, not here)
-- [ ] Security checklist: the two unnumbered opening items, the SEVEN numbered residuals (1 and 4 cite Table A; 2 cites Table B; 3 cites Tables B and D; 7 cites Tables A and B; 5 and 6 cite none, naming what is out of scope), and the closing partial-close-of-M3 item
+- [ ] Security checklist: the two unnumbered opening items, the EIGHT numbered residuals (1, 4 and 8 cite Table A; 2 cites Table B; 3 cites Tables B and D; 7 cites Tables A and B; 5 and 6 cite none, naming what is out of scope), and the closing partial-close-of-M3 item
 - [ ] Context: the gate count (two ported, one new) and the neither-leg statement about M3
 
 ## Implementation notes & constraints
@@ -416,6 +427,21 @@ The replacement bullet, byte-exact:
       `lstat`ed is the file then read (a post-check swap redirects it), that the
       caps cannot be exceeded by a file that grows after its size check, or that
       the enumerated directory is inside the vault.
+- [ ] **⚠️ Residual 8 (Table A, Gate 2) — the provenance gate is defeated by
+      three trivial opener shapes, and the DIGEST shares the defect.** `parse`
+      recognizes frontmatter only when the first line is byte-for-byte `---`.
+      Measured on this tree: a leading UTF-8 BOM, a leading blank line, or a
+      single leading space each make a note carrying an explicit
+      `derived_from_untrusted: true` parse as having no frontmatter — trusted —
+      so the snapshot copies it. It is FAIL-OPEN, and it is not introduced here:
+      `renderDigest` calls the same function on the daily note (`digest.js:747`
+      → `:265`), so such a note already renders into the SessionStart digest
+      today. That makes it a pre-existing gap this WP inherits by reusing the
+      shared parser — which remains the right call, since a second
+      implementation would diverge instead. Widening `parse` is digest-owned and
+      outside this Deliverables table. Recorded under "Discovered issues"; the
+      spec's own guarantee is narrowed to parser-recognized frontmatter
+      wherever it is stated, rather than left as a sentence the code fails.
 - [ ] **What M3 actually closes here, and what it does not — read this before
       calling the finding resolved.** M3 has two legs, and they do NOT gain the
       same thing. Both gain the decodability check (new here, not ported) and
@@ -440,10 +466,14 @@ The replacement bullet, byte-exact:
       Table A's reason — for both a daily note and a dream report.
 - [ ] A file whose bytes are not faithfully UTF-8 decodable is skipped with
       Table A's reason, in any slice.
-- [ ] On the NOTES slice, a note whose frontmatter is malformed, whose
-      `derived_from_untrusted` is exactly `true`, or whose
+- [ ] On the NOTES slice, a note whose **parser-recognized** frontmatter is
+      malformed, whose `derived_from_untrusted` is exactly `true`, or whose
       `derived_from_untrusted` is present but not provably boolean is NOT
       copied, and each case reports its own exclusion class in the reason.
+      "Parser-recognized" is load-bearing and not a hedge: a note whose first
+      line is not byte-for-byte `---` (a leading BOM, blank line or space)
+      parses as unfenced and IS copied even carrying an explicit `true` — see
+      Table A and Residual 8. A test asserting the wider claim would fail.
 - [ ] On the REPORTS slice, none of the three exclusion classes causes a skip:
       a report whose body opens with `---` prose (`malformed`), one carrying
       `derived_from_untrusted: true` (`untrusted-exact`), and one carrying a
@@ -464,8 +494,10 @@ The replacement bullet, byte-exact:
       `MAX_FILES = 32`, `SNAPSHOT_PLANS` is frozen, and widening it is out of
       scope. The count rule still holds by construction — both counters advance
       only after a successful write.)
-- [ ] No gate throws: a scan error, an unreadable file and undecodable bytes all
-      yield a skip, and `makeVaultSnapshot` completes.
+- [ ] Each of the three failure classes Table A enumerates degrades to a visible
+      skip and lets `makeVaultSnapshot` complete: a filesystem read failure, a
+      degraded scanner result, and bytes that fail the UTF-8 round trip. No
+      criterion asserts a resource failure is handled — that is Residual 7's.
 - [ ] When every candidate file is gated out, `makeVaultSnapshot` returns a
       non-null `snapshotDir` pointing at an EMPTY directory with every absence
       explained in `skipped[]`, and the routine composition still succeeds.
@@ -605,6 +637,14 @@ confirm, as this spec's author did.
 - **Entry-level daily provenance** — deferred, reaffirmed 2026-08-14, and named
   as such by ADR-0032 and Table D's Correction 2. It needs its own ADR. Do not
   let Residual 1 or 3 tempt a partial version of it into this WP.
+- **Widening `parse`'s frontmatter recognition** (`src/core/frontmatter.js` and
+  its digest consumers). Surfaced by this spec's review and REPRODUCED: a
+  leading UTF-8 BOM, blank line or space makes a note with an explicit
+  `derived_from_untrusted: true` parse as unfenced, defeating the provenance
+  gate on BOTH the snapshot path and the digest path. Fail-open, pre-existing,
+  and digest-owned. Record it under "Discovered issues"; do NOT fix it here and
+  do NOT work around it with a second parser — Residual 8 explains why reuse
+  still beats divergence.
 - **Re-validating the two state-file values that reach the digest unchecked.**
   Surfaced by this spec's review and REPRODUCED: `activeQuarantines` passes
   `String(rec.reason || …)` from the dream ledger into a digest banner, and
