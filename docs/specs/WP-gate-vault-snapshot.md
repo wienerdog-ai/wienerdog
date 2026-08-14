@@ -179,8 +179,9 @@ and reported to the owner rather than improvised.
   the snapshot **zero** times. It is append-only; on `main` it is 153 lines and
   fully owner-signed, while on THIS branch it is 200, because this spec's own
   commit already appended the dated 2026-08-14 amendment (Table D) — which does
-  mention the snapshot, and whose status line still reads `PROPOSED`, so only
-  the pre-existing part of the file is signed.
+  mention the snapshot. The owner SIGNED that amendment on 2026-08-14, so the
+  whole file is owner-signed again and the amendment text is now append-only
+  like the rest of it.
 
 ## Deliverables (permission boundary — touch ONLY these)
 
@@ -289,7 +290,7 @@ The replacement bullet, byte-exact:
 | Anchor | The line whose entire content is `Amended by:` (`:95`). The string also occurs earlier in prose (`:90`), which is NOT the anchor |
 | Inserted line (byte-exact) | `- WP-gate-vault-snapshot — the single-chokepoint consequence is narrowed to the route renderDigest controls, and the stale "named future WP" phrase is corrected to the deferral this ADR already states.` — the SAME bytes the verification heredoc carries; if the two ever disagree, this row is canonical and the gate is wrong |
 | Where it goes | APPENDED as the LAST entry of the `Amended by:` list — after the existing `WP-daily-summary-per-line-framing` line at `:96`, not directly under the anchor. The ADR states the convention at `:90-93`: "one line per package, **appended** by the amending package itself" |
-| Amendment section | The dated `## Amendment (2026-08-14)` section at the file's end is **ALREADY WRITTEN by the architect in this spec's commit — do not author it, do not revise it**, matching the precedent in `docs/specs/done/WP-daily-summary-per-line-framing.md:157`. It is listed in Deliverables so the boundary check permits the file and the record is exhaustive. It carries both corrections below and the line `Status: PROPOSED — awaiting owner signature`; the OWNER signs it by replacing that status line by hand, and **no agent may make that edit** |
+| Amendment section | The dated `## Amendment (2026-08-14)` section at the file's end is **ALREADY WRITTEN by the architect in this spec's commit — do not author it, do not revise it**, matching the precedent in `docs/specs/done/WP-daily-summary-per-line-framing.md:157`. It is listed in Deliverables so the boundary check permits the file and the record is exhaustive. It carries both corrections below. Its status line was `PROPOSED — awaiting owner signature`; the OWNER SIGNED it on 2026-08-14 and that flip is applied on this branch, so the line now reads `Status: **ACCEPTED — OWNER-SIGNED 2026-08-14.**`. **Post-signature the amendment text is APPEND-ONLY**: no round, no review finding and no implementer may reword it — a correction is a new dated amendment |
 | Correction 1 (already written) | Records a NEW realization, NOT a false statement corrected — the ADR's sentence is literally true as written ("every consumer **of its output**"; the snapshot consumes no `renderDigest` output), and an amendment that calls a true sentence false is a worse record than the one it replaces. What is new: the daily note reaches a model by a SECOND route that inherits nothing, so "the fix is made once, at the source" does not generalize to the daily `## Summary` as such |
 | Correction 2 (already written) | Entry-level daily provenance is **deferred**, not "a named future WP" — the statement this file already carries at `:54-60` and in the 2026-08-09 amendment's closing paragraph. Reaffirmed by the owner on 2026-08-14 |
 | What the IMPLEMENTER does to this file | Exactly one thing: append the byte-exact amender line above as the last entry of the `Amended by:` list. Nothing else |
@@ -482,8 +483,8 @@ The replacement bullet, byte-exact:
       byte-exact amender line exactly once, as the last entry of the list, and
       the dated 2026-08-14 amendment section, with ZERO deletions. No criterion
       and no gate requires that amendment's status line to still read
-      `PROPOSED`: replacing it with the owner's signature is the point, and a
-      check keyed to `PROPOSED` would go red on the owner doing so.
+      any particular status text: the owner's signature landed on 2026-08-14,
+      and a check keyed to `PROPOSED` would have gone red on exactly that.
 - [ ] `tests/golden/digest-default.md` is byte-identical — `npm test`'s golden
       compare asserts it, and it is not in Deliverables, so editing it would
       fail the boundary check as well.
@@ -520,7 +521,8 @@ test "$(grep -Fxc -f /tmp/wp-amender-line.txt docs/adr/0032-daily-summary-untrus
 
 # Table D gate — the 2026-08-14 amendment section is present. It asserts the
 # HEADING, not the status line: the status line legitimately changes from
-# PROPOSED to the owner's signature, and a gate keyed to PROPOSED would turn red
+# PROPOSED to the owner's signature (which landed 2026-08-14), and a gate keyed
+# to PROPOSED would turn red
 # on the owner doing exactly what Definition of done item 6 requires.
 cat > /tmp/wp-amendment-heading.txt <<'LITERAL'
 ## Amendment (2026-08-14) — the chokepoint consequence is narrowed to the route `renderDigest` controls
@@ -570,8 +572,9 @@ Two awkward-but-legal cases must both stay green. An implementer who rewords the
 T1 bullet's prose while keeping it one line and keeping every claim true — the
 deliberate absence of a byte-exactness gate on that bullet is what makes that
 possible, and a gate that punished it would be wrong. And the OWNER replacing
-the amendment's `PROPOSED` status line with a signature, which is Definition of
-done item 6 and must not turn any gate red.
+the amendment's `PROPOSED` status line with a signature — which happened on
+2026-08-14 and must not turn any gate red. Re-run the six gates after it to
+confirm, as this spec's author did.
 
 ## Out of scope (do NOT do these)
 
@@ -582,7 +585,10 @@ done item 6 and must not turn any gate red.
 - **Hardening the snapshot's read path** — the `lstat`→open race, bounding the
   read, `O_NOFOLLOW` and its Windows semantics, the descriptor lifecycle, and
   the followed symlinked SOURCE DIRECTORY (assigned to that package by the
-  ruling's point 4, as the open product question inside it).
+  ruling's point 4, as the open product question inside it — the owner
+  reconfirmed that placement on 2026-08-14, and the substantive choice there,
+  accept / forbid / resolve-and-restrict, is made in THAT package's spec phase;
+  nothing further about it happens in this one).
   Split out by owner ruling on 2026-08-14 into its own QUEUED work package,
   which is fed by the reproductions recorded in
   `docs/specs/logbook/2026-08-14-snapshot-read-hardening-scope-question.md` and
@@ -632,16 +638,16 @@ done item 6 and must not turn any gate red.
 4. This spec's `status:` flipped to `In-Review` in the same PR.
 5. The PR body states that M3 is PARTIALLY closed, per the Security checklist's
    closing item — not resolved.
-6. **MERGE PRECONDITION — the owner has signed ADR-0032's 2026-08-14
-   amendment**, replacing its `Status: PROPOSED — awaiting owner signature` line
-   by hand. No agent may make that edit. Until it is signed, the ADR carries a
-   correction that is written but not ratified, and its Consequences section
-   still says entry-level provenance "remains a named future WP". This is a
-   MERGE precondition, not a dispatch one — unlike
-   `docs/specs/done/WP-daily-summary-per-line-framing.md:288-293`, where the
-   unsigned amendment contradicted what the implementer had to build, nothing in
-   the unratified text here would misdirect the implementation, so it need not
-   block the start of work. It does block calling the package done.
+6. **MERGE PRECONDITION — SATISFIED 2026-08-14.** ADR-0032's 2026-08-14
+   amendment required the owner's hand-written signature before this package
+   could be called done, because until then the ADR carried a correction that
+   was written but not ratified. The owner signed it on 2026-08-14 and the flip
+   is applied on this branch: the status line reads
+   `Status: **ACCEPTED — OWNER-SIGNED 2026-08-14.**`. Nothing here is pending.
+   Two consequences for the implementer: **do not touch that line** — no agent
+   may write or rewrite an owner signature — and **the amendment text is now
+   append-only**, so a later correction is a NEW dated amendment, never an edit
+   to this one.
 7. Both PR review gates have run on the diff and are clean or fully
    dispositioned — they are defined in `docs/runbooks/codex-review.md` and not
    restated here. `In-Review` marks the START of review: this list is complete

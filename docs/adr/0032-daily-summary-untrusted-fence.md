@@ -154,7 +154,7 @@ Implemented by **WP-daily-summary-per-line-framing**.
 
 ## Amendment (2026-08-14) — the chokepoint consequence is narrowed to the route `renderDigest` controls
 
-Status: PROPOSED — awaiting owner signature
+Status: **ACCEPTED — OWNER-SIGNED 2026-08-14.**
 
 This amendment corrects nothing that is false. The Consequences sentence above
 reads "`renderDigest` is the single chokepoint for the daily `## Summary`, so
