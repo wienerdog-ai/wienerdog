@@ -232,8 +232,16 @@ test('vault-snapshot: the FIRST gate that fires owns the reason — decodability
   const paths = tempPaths();
   const malformedAndSecret = `---\ntags:\n  - work\n---\n# note\n\n${SECRET}\n`;
   const undecodableAndSecret = Buffer.concat([Buffer.from(`${SECRET}\n`), Buffer.from([0xff])]);
+  // Decodability must lead: the other two gates decide on TEXT. This fixture is
+  // BOTH provenance-excludable and undecodable, so it is the only one that can
+  // tell "decodability first" from "provenance first".
+  const undecodableAndMalformed = Buffer.concat([
+    Buffer.from('---\ntags:\n  - work\n---\n# note\n'),
+    Buffer.from([0xff]),
+  ]);
   writeVault(paths, '07-Daily/2026-07-07.md', malformedAndSecret);
   writeVault(paths, '07-Daily/2026-07-06.md', undecodableAndSecret);
+  writeVault(paths, '07-Daily/2026-07-05.md', undecodableAndMalformed);
   // The SAME malformed-and-secret bytes on the exempt slice fall through to the
   // scan, which shows the order is real and the exemption is slice-scoped.
   writeVault(paths, 'reports/dreams/2026-07-07.md', malformedAndSecret);
@@ -241,6 +249,9 @@ test('vault-snapshot: the FIRST gate that fires owns the reason — decodability
   const { skipped } = snapshotOf(paths, 'weekly-review');
   assert.equal(reasonFor(skipped, '07-Daily/2026-07-07.md'), 'provenance gate: malformed');
   assert.equal(reasonFor(skipped, '07-Daily/2026-07-06.md'), 'not valid UTF-8 text');
+  // Not 'provenance gate: malformed', even though the shared parser would say so.
+  assert.equal(parseNoteResult(undecodableAndMalformed.toString('utf8')).exclusion, 'malformed');
+  assert.equal(reasonFor(skipped, '07-Daily/2026-07-05.md'), 'not valid UTF-8 text');
   assert.equal(reasonFor(skipped, 'reports/dreams/2026-07-07.md'), 'appears to contain a secret');
 });
 
@@ -341,7 +352,7 @@ test('vault-snapshot: when EVERYTHING is gated out the snapshot dir exists, is e
   const { snapshotDir, skipped } = snapshotOf(paths, 'weekly-review');
   assert.notEqual(snapshotDir, null);
   assert.deepEqual(fs.readdirSync(snapshotDir), [], 'empty — no ungated fallback copy');
-  assert.equal(fs.statSync(snapshotDir).mode & 0o777, POSIX ? 0o700 : fs.statSync(snapshotDir).mode & 0o777);
+  if (POSIX) assert.equal(fs.statSync(snapshotDir).mode & 0o777, 0o700);
   assert.deepEqual(
     skipped.map((s) => s.file).sort(),
     ['07-Daily/2026-07-06.md', '07-Daily/2026-07-07.md', 'reports/dreams/2026-07-07.md']
