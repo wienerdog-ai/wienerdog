@@ -235,9 +235,13 @@ now appears on both the digest and the snapshot surfaces.
 | Fact / rule | Value |
 |---|---|
 | Position of the new gates | AFTER the existing checks (regular-file, per-file cap, file-count cap, total-byte cap) and BEFORE the copy, so an over-cap file is never read into memory |
-| Opens per file | Exactly ONE, and **on a descriptor, not a path** — this is a correctness requirement, not a style preference. Today the code `lstat`s a PATH (`:81`) and later re-opens that same PATH (`:104`), and the window between them is exploitable: MEASURED on this tree, replacing the file with a symlink after the `lstat` copies an out-of-vault file, and growing the file after the `lstat` copies **262145 bytes past the 262144-byte cap with an empty `skipped[]`**. So: open the leaf ONCE without following a symlink (`O_NOFOLLOW`), `fstat` THAT descriptor for the regular-file and size checks, read THAT descriptor, and gate and copy the Buffer it produced. One object, checked and used |
-| Budget arithmetic uses the BYTES ACTUALLY READ | Not the stat size. Today `totalBytes += st.size` (`:106`) books a number that a concurrent write can make stale — measured, 14 files booked 2 MiB while 2.8 MiB was copied. Book `buf.length`. If the bytes read exceed the per-file cap (possible only if the file grew between `fstat` and read), skip the file with the existing over-cap reason rather than copying it |
-| Reads per file | Exactly ONE. The Buffer read above is the same Buffer every gate decides on and the same bytes written to the destination — no second read, so no window between deciding and copying (the rationale `digest.js:181-186` gives for `parseNoteResult`) |
+| Opens per file | Exactly ONE, and **on a descriptor, not a path** — a correctness requirement, not a style preference. Today the code `lstat`s a PATH (`:81`) and later re-opens that same PATH (`:104`), and the window between them is exploitable: MEASURED on this tree, replacing the file with a symlink after the `lstat` copies an out-of-vault file, and growing the file after the `lstat` copies **262145 bytes past the 262144-byte cap with an empty `skipped[]`**. So: open the leaf ONCE with the never-follow flag, `fstat` THAT descriptor for the regular-file and size checks, read THAT descriptor, and gate and copy the bytes it produced. One object, checked and used |
+| Never-follow flag, and its HONEST platform bound | `const O_NOFOLLOW = fs.constants.O_NOFOLLOW \|\| 0` — the exact constant and fallback `src/core/private-fs.js:679-683` already uses, for the same reason and under the same owner-approved win32 posture (`private-fs.js:23-25`, 2026-07-17). On win32 the flag does not exist and degrades to 0, so state the guarantee the way that module states its own: the leaf-symlink refusal and the concurrent-swap guarantee are **POSIX**; on win32 the bound is the code-owned slice path plus the `fstat` regular-file check, and a concurrent swap is not defended against there. Do NOT write a spec sentence claiming the outcome is platform-independent, and do NOT invent a win32 mechanism — matching the repo's existing posture is the whole point |
+| Reads are BOUNDED, not read-to-EOF | Load-bearing, and it is what makes the "never read into memory" claim above true. Read AT MOST `MAX_FILE_BYTES + 1` bytes from the descriptor: a file that grows after its `fstat` must not be slurped whole and then rejected on length, because the rejection would come after the allocation the cap exists to prevent. The one extra byte is the over-cap signal — if the read yields more than `MAX_FILE_BYTES`, skip with the existing over-cap reason and copy nothing. "One open, no path re-open" is the invariant; a bounded read may legitimately need more than one `readSync` call to fill its buffer, and that is not a second acquisition |
+| Budget arithmetic uses the BYTES ACTUALLY READ | Not the stat size. Today `totalBytes += st.size` (`:106`) books a number a concurrent write can make stale — measured, 14 files booked 2 MiB while 2.8 MiB was copied. Book the length of what was read |
+| Descriptor lifecycle | The descriptor is closed exactly once, in a `finally`, on every path out — success, gate skip, `fstat` error, read error. A close failure must not mask the original error. `fs.readFileSync(fd)` does NOT close a caller-supplied descriptor, so this cannot be left implicit |
+| Errors on the new path stay SKIPS | An `open`, `fstat` or read failure yields the existing `unreadable` skip for that file, exactly as today's failed `lstat` does (`:83`). It must not throw out of `makeVaultSnapshot` and must not fail the routine: a transient filesystem error on one file is the case `skipped[]` exists for |
+| Reads per file | ONE acquisition. The bytes read above are the same bytes every gate decides on and the same bytes written to the destination — no path re-open, so no window between deciding and copying (the rationale `digest.js:181-186` gives for `parseNoteResult`) |
 | Gate 1 — decodability (EVERY file) | The gates decide on text, so a file whose bytes UTF-8 decode does not represent faithfully is not gate-able: decode the Buffer as `utf8` and skip when re-encoding the result is not byte-identical to the Buffer. Reason: `not valid UTF-8 text` |
 | Gate 2 — secret scan (EVERY file) | `secretScan.scanAndRedact(text).findings.length > 0` → skip. Reason: `appears to contain a secret`. ANY finding of either severity skips the WHOLE file; the redacted `.text` is DISCARDED and never copied — the digest's rule (`digest.js:701-713`) applied to a file instead of a section |
 | Gate 3 — provenance (NOTES SLICE ONLY) | `parseNoteResult(text)` imported from `src/core/digest.js` — the SAME function the digest gate calls, never a second implementation. `exclusion !== null` → skip. Reason: `provenance gate: <exclusion>`, the class verbatim (`malformed`, `untrusted-exact`, `untrusted-invalid`) |
@@ -249,7 +253,7 @@ now appears on both the digest and the snapshot surfaces.
 | Skip visibility | Through the existing `skipped[]`, surfaced unchanged on stderr by `routine-runtime.js:126-128`. No gate throws, no gate fails the run, no gate is silent — the owner-mandated exceed behaviour (`vault-snapshot.js:9-11`) extended to the new reasons |
 | Empty-plan path | Unchanged: `inbox-triage` still returns `{snapshotDir: null, skipped: []}` without touching the filesystem |
 | EVERYTHING gated out | A distinct state from the empty plan: `snapshotDir` is returned non-null (the dir was created), the dir is EMPTY, and `skipped[]` explains every absence. The routine still mounts it. This is the same shape a young vault already produces — an absent source dir is `continue`d at `:68` today — so no consumer meets a new state. Do NOT add a fallback that copies an ungated file to avoid an empty snapshot: that would defeat the gate on exactly the run it fired |
-| Preserved unchanged | The three cap VALUES, the plans' `dir`/`newest` values, the filename-descending pick, the leaf symlink refusal (its mechanism changes from `lstat`-then-open to `O_NOFOLLOW`; its OUTCOME — a symlinked leaf is skipped visibly, never followed — does not), 0700 dirs / 0600 files, the mirrored layout, and the function's signature and return shape. What is NOT preserved is the exploitable path-based re-open; that is the point of the row above |
+| Preserved unchanged | The three cap VALUES, the plans' `dir`/`newest` values, the filename-descending pick, the leaf symlink refusal (its mechanism changes from `lstat`-then-open to the never-follow open; on POSIX its outcome — a symlinked leaf is skipped visibly, never followed — is unchanged and additionally holds against a concurrent swap; on win32 see the platform-bound row), 0700 dirs / 0600 files, the mirrored layout, and the function's signature and return shape. What is NOT preserved is the exploitable path-based re-open; that is the point of the rows above |
 | NOT fixed here — a symlinked SOURCE DIRECTORY | `readdirSync` follows a symlinked slice root (`:66`), so if `07-Daily` or `reports/dreams` is itself a symlink, its target's files are enumerated and — being regular files — copied. MEASURED on this tree: an external file lands in the snapshot with an empty `skipped[]`. This WP does NOT change that, and the spec does not claim otherwise. Refusing it would break a legitimate layout (a user who symlinks their daily-notes folder is doing something ordinary), so whether to refuse, resolve-and-bound, or accept it is a product decision for the owner. Recorded under "Discovered issues" in the PR; see Residual 7 |
 
 ### Table B — the mount framing line
@@ -436,11 +440,26 @@ The replacement bullet, byte-exact:
       behaviourally rather than by the presence of an identifier.
 - [ ] Every copied file is byte-identical to the bytes read from the descriptor
       that was checked: no gate writes re-encoded or redacted content.
-- [ ] The caps hold against concurrent modification, which they do not today
-      (measured, see Table A): a file replaced by a symlink after its size check
-      is not copied, and a file grown past the per-file cap after its size check
-      is not copied. Byte accounting reflects bytes actually read, so a set of
-      files that grow after their checks cannot exceed the total cap.
+- [ ] On POSIX the caps hold against concurrent modification, which they do not
+      today (measured, see Table A): a file replaced by a symlink after its size
+      check is not copied, and a file grown past the per-file cap after its size
+      check is not copied. Byte accounting reflects bytes actually read, so a
+      set of files that grow after their checks cannot exceed the total cap.
+- [ ] The read is BOUNDED: a file that grows without limit after its `fstat` is
+      skipped with the over-cap reason, and no more than `MAX_FILE_BYTES + 1`
+      bytes are ever taken from one file — demonstrated by what the code
+      acquires, not only by what it declines to copy.
+- [ ] Every descriptor is closed on every exit path, including when `fstat` or
+      the read throws, and a close failure does not mask the original error.
+- [ ] An `open`, `fstat` or read failure on one file yields that file's
+      `unreadable` skip and the snapshot completes with the other files —
+      `makeVaultSnapshot` does not throw and the routine composition still
+      succeeds.
+- [ ] The win32 posture is stated, not silently assumed: the never-follow flag
+      degrades to 0 there per `private-fs.js:679-683`, so the tests that assert
+      the concurrent-swap guarantee are POSIX-gated the way the repo's existing
+      mode tests are, and nothing claims a Windows guarantee the code cannot
+      make.
 - [ ] A file skipped by any gate does not consume the BYTE-TOTAL budget: with a
       gated-out file present, a later file that would otherwise have been
       displaced by the 2 MiB cap is still copied. (The file-COUNT half of Table
