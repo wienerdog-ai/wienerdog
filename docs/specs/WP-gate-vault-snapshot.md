@@ -235,13 +235,7 @@ now appears on both the digest and the snapshot surfaces.
 | Fact / rule | Value |
 |---|---|
 | Position of the new gates | AFTER the existing checks (regular-file, per-file cap, file-count cap, total-byte cap) and BEFORE the copy, so an over-cap file is never read into memory |
-| Opens per file | Exactly ONE, and **on a descriptor, not a path** — a correctness requirement, not a style preference. Today the code `lstat`s a PATH (`:81`) and later re-opens that same PATH (`:104`), and the window between them is exploitable: MEASURED on this tree, replacing the file with a symlink after the `lstat` copies an out-of-vault file, and growing the file after the `lstat` copies **262145 bytes past the 262144-byte cap with an empty `skipped[]`**. So: open the leaf ONCE with the never-follow flag, `fstat` THAT descriptor for the regular-file and size checks, read THAT descriptor, and gate and copy the bytes it produced. One object, checked and used |
-| Never-follow flag, and its HONEST platform bound | `const O_NOFOLLOW = fs.constants.O_NOFOLLOW \|\| 0` — the exact constant and fallback `src/core/private-fs.js:679-683` already uses, for the same reason and under the same owner-approved win32 posture (`private-fs.js:23-25`, 2026-07-17). On win32 the flag does not exist and degrades to 0, so state the guarantee the way that module states its own: the leaf-symlink refusal and the concurrent-swap guarantee are **POSIX**; on win32 the bound is the code-owned slice path plus the `fstat` regular-file check, and a concurrent swap is not defended against there. Do NOT write a spec sentence claiming the outcome is platform-independent, and do NOT invent a win32 mechanism — matching the repo's existing posture is the whole point |
-| Reads are BOUNDED, not read-to-EOF | Load-bearing, and it is what makes the "never read into memory" claim above true. Read AT MOST `MAX_FILE_BYTES + 1` bytes from the descriptor: a file that grows after its `fstat` must not be slurped whole and then rejected on length, because the rejection would come after the allocation the cap exists to prevent. The one extra byte is the over-cap signal — if the read yields more than `MAX_FILE_BYTES`, skip with the existing over-cap reason and copy nothing. "One open, no path re-open" is the invariant; a bounded read may legitimately need more than one `readSync` call to fill its buffer, and that is not a second acquisition |
-| Budget arithmetic uses the BYTES ACTUALLY READ | Not the stat size. Today `totalBytes += st.size` (`:106`) books a number a concurrent write can make stale — measured, 14 files booked 2 MiB while 2.8 MiB was copied. Book the length of what was read |
-| Descriptor lifecycle | The descriptor is closed exactly once, in a `finally`, on every path out — success, gate skip, `fstat` error, read error. A close failure must not mask the original error. `fs.readFileSync(fd)` does NOT close a caller-supplied descriptor, so this cannot be left implicit |
-| Errors on the new path stay SKIPS | An `open`, `fstat` or read failure yields the existing `unreadable` skip for that file, exactly as today's failed `lstat` does (`:83`). It must not throw out of `makeVaultSnapshot` and must not fail the routine: a transient filesystem error on one file is the case `skipped[]` exists for |
-| Reads per file | ONE acquisition. The bytes read above are the same bytes every gate decides on and the same bytes written to the destination — no path re-open, so no window between deciding and copying (the rationale `digest.js:181-186` gives for `parseNoteResult`) |
+| Reads per file — **the only read requirement this WP carries** | ONE read, whose bytes feed BOTH the gate decision and the copy. Today the file is read once at copy time (`:104`); this WP moves that read earlier, gates the Buffer it produced, and writes that same Buffer. No second read, so no window between deciding and copying (the rationale `digest.js:181-186` gives for `parseNoteResult`). Everything else about how that read is performed — the `lstat`→open race, bounding the read, `O_NOFOLLOW` and its Windows semantics, descriptor lifecycle — is DELIBERATELY not specified here: the owner ruled on 2026-08-14 that it belongs to a separate queued work package (see Out of scope) |
 | Gate 1 — decodability (EVERY file) | The gates decide on text, so a file whose bytes UTF-8 decode does not represent faithfully is not gate-able: decode the Buffer as `utf8` and skip when re-encoding the result is not byte-identical to the Buffer. Reason: `not valid UTF-8 text` |
 | Gate 2 — secret scan (EVERY file) | `secretScan.scanAndRedact(text).findings.length > 0` → skip. Reason: `appears to contain a secret`. ANY finding of either severity skips the WHOLE file; the redacted `.text` is DISCARDED and never copied — the digest's rule (`digest.js:701-713`) applied to a file instead of a section |
 | Gate 3 — provenance (NOTES SLICE ONLY) | `parseNoteResult(text)` imported from `src/core/digest.js` — the SAME function the digest gate calls, never a second implementation. `exclusion !== null` → skip. Reason: `provenance gate: <exclusion>`, the class verbatim (`malformed`, `untrusted-exact`, `untrusted-invalid`) |
@@ -253,8 +247,8 @@ now appears on both the digest and the snapshot surfaces.
 | Skip visibility | Through the existing `skipped[]`, surfaced unchanged on stderr by `routine-runtime.js:126-128`. No gate throws, no gate fails the run, no gate is silent — the owner-mandated exceed behaviour (`vault-snapshot.js:9-11`) extended to the new reasons |
 | Empty-plan path | Unchanged: `inbox-triage` still returns `{snapshotDir: null, skipped: []}` without touching the filesystem |
 | EVERYTHING gated out | A distinct state from the empty plan: `snapshotDir` is returned non-null (the dir was created), the dir is EMPTY, and `skipped[]` explains every absence. The routine still mounts it. This is the same shape a young vault already produces — an absent source dir is `continue`d at `:68` today — so no consumer meets a new state. Do NOT add a fallback that copies an ungated file to avoid an empty snapshot: that would defeat the gate on exactly the run it fired |
-| Preserved unchanged | The three cap VALUES, the plans' `dir`/`newest` values, the filename-descending pick, the leaf symlink refusal (its mechanism changes from `lstat`-then-open to the never-follow open; on POSIX its outcome — a symlinked leaf is skipped visibly, never followed — is unchanged and additionally holds against a concurrent swap; on win32 see the platform-bound row), 0700 dirs / 0600 files, the mirrored layout, and the function's signature and return shape. What is NOT preserved is the exploitable path-based re-open; that is the point of the rows above |
-| NOT fixed here — a symlinked SOURCE DIRECTORY | `readdirSync` follows a symlinked slice root (`:66`), so if `07-Daily` or `reports/dreams` is itself a symlink, its target's files are enumerated and — being regular files — copied. MEASURED on this tree: an external file lands in the snapshot with an empty `skipped[]`. This WP does NOT change that, and the spec does not claim otherwise. Refusing it would break a legitimate layout (a user who symlinks their daily-notes folder is doing something ordinary), so whether to refuse, resolve-and-bound, or accept it is a product decision for the owner. Recorded under "Discovered issues" in the PR; see Residual 7 |
+| Preserved unchanged — including the parts that are known-imperfect | The three cap VALUES **and the existing `lstat`-based way they are enforced**, the plans' `dir`/`newest` values, the filename-descending pick, the existing `lstat` leaf-symlink refusal, the `st.size` byte accounting, 0700 dirs / 0600 files, the mirrored layout, and the function's signature and return shape. This WP changes WHEN the file is read and WHAT is decided from it, and nothing about HOW the path is checked or opened |
+| Known-imperfect, and deliberately left to the queued read-path WP | Two defects were REPRODUCED on this tree while this spec was reviewed, and both are pre-existing — they are in shipping code now, independent of any gate. (1) The `lstat`-then-reopen window: a file grown after its size check copies **262145 bytes past the 262144-byte cap with an empty `skipped[]`**, and a file swapped for a symlink after its check copies an out-of-vault file. (2) A symlinked SOURCE DIRECTORY is followed by `readdirSync` (`:66`), so a symlinked `07-Daily` or `reports/dreams` puts an external file into the snapshot, also with an empty `skipped[]`. **This WP fixes neither and claims neither is fixed.** Both, plus the bounded read, the `O_NOFOLLOW` Windows semantics and the descriptor lifecycle, belong to the queued read-path hardening WP (owner ruling, 2026-08-14 — see Out of scope). What still holds meanwhile: whatever is enumerated goes through this table's gates like any other file, and Table B's framing covers it |
 
 ### Table B — the mount framing line
 
@@ -298,11 +292,11 @@ The replacement bullet, byte-exact:
 
 - [ ] Deliverables-table cells: the four rows that carry a contract cite their table (`vault-snapshot.js`→A, `routine-runtime.js`→B, `THREAT-MODEL.md`→C, `0032`→D); the three test rows and the logbook paragraph carry scope notes, not contracts
 - [ ] Acceptance criteria that assert each table's facts
-- [ ] Verification commands (the numstat, amender-line and PROPOSED gates assert Table D; the old-string and neutralizer gates assert Table C)
+- [ ] Verification commands (the baseline+numstat, amender-line and amendment-heading gates assert Table D; the old-string, numstat and neutralizer gates assert Table C)
 - [ ] Current-state description — what Table A adds, why the reports slice is exempt, and the two document claims Tables C and D correct
 - [ ] "Exact contracts": the unchanged signature
 - [ ] Implementation notes: the single-read rule, the fixed gate order, and the absence of a measurement deliverable
-- [ ] Security checklist: the six numbered residuals and the closing partial-close-of-M3 item
+- [ ] Security checklist: the SEVEN numbered residuals — 1, 4 and 7 cite Table A, 2 cites Table B, and 3, 5 and 6 cite no table (they name what is out of scope rather than a contract) — plus the closing partial-close-of-M3 item
 - [ ] Context: the gate count (two ported, one new) and the neither-leg statement about M3
 
 ## Implementation notes & constraints
@@ -394,17 +388,21 @@ The replacement bullet, byte-exact:
       still holds as a constraint on whoever builds that path, and Residual 1
       records where it will attach. **Reported to the owner rather than
       improvised: scope changes are owner-only.**
-- [ ] **⚠️ Residual 7 (Table A) — a symlinked SOURCE DIRECTORY is still
-      followed, and that is an owner decision, not an oversight.** The leaf
-      symlink refusal this WP hardens covers the FILE, not the directory it was
-      listed from. Measured on this tree: making `reports/dreams` a symlink puts
-      an out-of-vault file into the snapshot with an empty `skipped[]`. It is
-      left alone because refusing it would break an ordinary layout — a user who
-      symlinks their daily-notes folder — so the choice between refusing,
-      resolving-and-bounding, and accepting it is a product call. The bound that
-      still holds meanwhile: whatever is enumerated goes through Table A's
-      gates like any other file, and the mount framing covers it. Reported under
-      "Discovered issues".
+- [ ] **⚠️ Residual 7 (Table A) — the snapshot's READ PATH is not hardened by
+      this WP, by owner ruling.** Two defects were reproduced here and both are
+      pre-existing: the `lstat`-then-reopen window (a file grown after its size
+      check copied 262145 bytes past a 262144-byte cap with an empty
+      `skipped[]`; a post-check symlink swap copied an out-of-vault file), and a
+      symlinked SOURCE DIRECTORY being followed (an external file lands in the
+      snapshot, also silently). The owner ruled on 2026-08-14 that these — with
+      the bounded read, the `O_NOFOLLOW` Windows semantics and the descriptor
+      lifecycle — go to their own queued work package rather than riding here;
+      the reasoning and the measurements are in
+      `docs/specs/logbook/2026-08-14-snapshot-read-hardening-scope-question.md`.
+      What this WP still guarantees meanwhile: whatever the existing code
+      enumerates goes through Table A's gates like any other file, and Table B's
+      framing covers it. What it does NOT: that the file gated is still the file
+      copied under a concurrent write, or that the caps are unbypassable.
 - [ ] **What M3 actually closes here, and what it does not — read this before
       calling the finding resolved.** M3 has two legs. Both gain the two filters
       Table A ports, so a report or note carrying a detectable secret, or
@@ -438,28 +436,9 @@ The replacement bullet, byte-exact:
 - [ ] The snapshot's provenance decisions track the digest's exported
       `parseNoteResult` on all three exclusion classes, demonstrated
       behaviourally rather than by the presence of an identifier.
-- [ ] Every copied file is byte-identical to the bytes read from the descriptor
-      that was checked: no gate writes re-encoded or redacted content.
-- [ ] On POSIX the caps hold against concurrent modification, which they do not
-      today (measured, see Table A): a file replaced by a symlink after its size
-      check is not copied, and a file grown past the per-file cap after its size
-      check is not copied. Byte accounting reflects bytes actually read, so a
-      set of files that grow after their checks cannot exceed the total cap.
-- [ ] The read is BOUNDED: a file that grows without limit after its `fstat` is
-      skipped with the over-cap reason, and no more than `MAX_FILE_BYTES + 1`
-      bytes are ever taken from one file — demonstrated by what the code
-      acquires, not only by what it declines to copy.
-- [ ] Every descriptor is closed on every exit path, including when `fstat` or
-      the read throws, and a close failure does not mask the original error.
-- [ ] An `open`, `fstat` or read failure on one file yields that file's
-      `unreadable` skip and the snapshot completes with the other files —
-      `makeVaultSnapshot` does not throw and the routine composition still
-      succeeds.
-- [ ] The win32 posture is stated, not silently assumed: the never-follow flag
-      degrades to 0 there per `private-fs.js:679-683`, so the tests that assert
-      the concurrent-swap guarantee are POSIX-gated the way the repo's existing
-      mode tests are, and nothing claims a Windows guarantee the code cannot
-      make.
+- [ ] Every copied file is byte-identical to its source, and to the bytes the
+      gates decided on: the file is read ONCE and no gate writes re-encoded or
+      redacted content.
 - [ ] A file skipped by any gate does not consume the BYTE-TOTAL budget: with a
       gated-out file present, a later file that would otherwise have been
       displaced by the 2 MiB cap is still copied. (The file-COUNT half of Table
@@ -579,6 +558,16 @@ done item 6 and must not turn any gate red.
   Ruled out on 2026-08-14. Do not reintroduce one in any form, including a
   "cheap" heuristic: the measured base rate means such a signal carries no
   information, and a trusted class exists only to be wrongly entered.
+- **Hardening the snapshot's read path** — the `lstat`→open race, bounding the
+  read, `O_NOFOLLOW` and its Windows semantics, and the descriptor lifecycle.
+  Split out by owner ruling on 2026-08-14 into its own QUEUED work package,
+  which is fed by the reproductions recorded in
+  `docs/specs/logbook/2026-08-14-snapshot-read-hardening-scope-question.md` and
+  whose **dispatch waits until this WP lands**, because both edit
+  `src/core/vault-snapshot.js`. This WP carries exactly ONE read requirement —
+  a single read whose bytes feed both the gate decision and the copy (Table A) —
+  and specifies nothing else about how that read is performed. Do not harden it
+  here, and do not "improve" the surrounding read while you are in the file.
 - **Building the routine vault write-back path**, or marking one (Residual 6).
   The rule stands for whoever builds that path; this WP does not build it.
 - **A per-run warning line in routine output** — ruled out (point 4).

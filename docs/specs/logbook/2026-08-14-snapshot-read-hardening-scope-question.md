@@ -6,7 +6,10 @@ related_wps: [WP-gate-vault-snapshot]
 
 # Design question: the snapshot read-path hardening (2026-08-14)
 
-**Status: OPEN — owner decision. Nothing is split or rescoped on this record.**
+**Status: RULED by the owner on 2026-08-14 — the split is APPROVED.** See the
+Resolution at the end. Everything between here and that section is the record as
+it stood when the question was raised, kept unchanged so the evidence that led
+to the ruling stays readable.
 
 ## Why this is being raised now
 
@@ -102,3 +105,42 @@ contract converged and the read contract did not, and they fail independently.
   this is a robustness boundary rather than a live path — and
   `docs/THREAT-MODEL.md`'s rewritten T1 bullet now states it as such rather than
   claiming a validation that does not happen.
+
+## Resolution (2026-08-14)
+
+**The split is APPROVED.**
+
+1. **`WP-gate-vault-snapshot` keeps exactly ONE read requirement**: a single read
+   whose bytes feed both the gate decision and the copy. That is the part the
+   gates genuinely need — it closes the gate→copy window, which is new with the
+   gates — and it is now the only thing the spec says about reading. Everything
+   else it had accumulated (the `lstat`→open race, the bounded read, the
+   `O_NOFOLLOW` Windows semantics, the descriptor lifecycle) has been removed
+   from that spec rather than reworded.
+
+2. **The read-path hardening becomes its own QUEUED work package**, covering the
+   `lstat`→open race, the bounded read, `O_NOFOLLOW` Windows semantics, and the
+   descriptor lifecycle. Its inputs are the measured reproductions recorded above
+   — they are the reason it exists and should not be re-derived.
+
+3. **Its dispatch waits until `WP-gate-vault-snapshot` lands**, because both edit
+   `src/core/vault-snapshot.js` and the Deliverables table is a hard permission
+   boundary. Sequencing, not dependency: the hardening does not need the gates to
+   be correct, it needs the file to be free.
+
+4. **The symlinked-source-directory behaviour travels with the read-path
+   package** as the open product question inside it (refuse, resolve-and-bound,
+   or accept), since it is the same file and the same class of defect. It is
+   named in the gate spec as Residual 7 and fixed by neither package until ruled.
+
+**Value line.** The gate contract converged and the read contract did not, across
+two rounds; they fail independently, so reviewing them together bought nothing
+and cost boundedness. Splitting lets the Windows question in particular get its
+own attention instead of riding along in a package whose subject is something
+else.
+
+**What this does not change.** The gates (secret scan, notes-slice provenance,
+mount framing) are untouched by this ruling — they drew zero findings in both
+rounds. Nothing here reopens the 2026-08-14 report-provenance ruling. And the
+read defects remain real and reproduced; the ruling decides which package fixes
+them, not whether they matter.
