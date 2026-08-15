@@ -155,7 +155,7 @@ named residual, never a tested claim.
 
 | Action | Path | Notes |
 |--------|------|-------|
-| modify | src/core/vault-snapshot.js | the read path per **Table A**, with the open flags composed per **Table B**; the coupling statement at `MAX_FILE_BYTES`; and the four registered comment mirrors brought back into agreement with what the code then does |
+| modify | src/core/vault-snapshot.js | the read path per **Table A**, refusing in the order **Table C** fixes, with the open flags composed per **Table B**; the coupling statement at `MAX_FILE_BYTES`; and the four registered comment mirrors brought back into agreement with what the code then does |
 | modify | tests/unit/vault-snapshot.test.js | cover the acceptance criteria below (the implementer designs the cases), and update the registered mirror at `:407-408` per the Mirrored Surface Checklist |
 | modify | tests/unit/broker-wiring.test.js | `makeVaultSnapshot`'s older coverage lives here (Current state). Table A changes no observable behaviour these tests assert, so they are expected to pass UNCHANGED; listed so the boundary check permits a repair if one of them turns out to depend on an ordering this WP moves — a repair, if one is made, is recorded under "Decisions made" in the PR. Do not otherwise edit it |
 
@@ -179,7 +179,9 @@ Activation (ADR-0031, 2-of-7) — two fire: **(iv)** the error, fallback and
 precedence behaviour of every failure on this path changes (which check refuses
 a file, and what a failed open or a failed close does); **(vii)** the same
 contract appears in this spec, in four code comments, in a test comment, and in
-several rows of a Done spec — the mirrors are registered below.
+several rows of a Done spec — the mirrors are registered below. Three canonical
+tables, not two: **Table C** was extracted after two consecutive external rounds
+landed a finding on the refusal-order contract, per ADR-0031's circuit-breaker.
 
 ### Table A — the snapshot's per-file read path
 
@@ -188,20 +190,20 @@ several rows of a Done spec — the mirrors are registered below.
 | SOURCE-path resolutions per candidate | Exactly TWO: the existing `lstat` (`:156`) and ONE `open`. After the open, every decision about the source is made on the **descriptor** — `fstat`, and the bytes read from it — and never by re-resolving the source path. Today's second resolution (`readFileSync(src)`, `:184`) IS the `lstat`→open window; it goes away. The DESTINATION side (`mkdirPrivate` and `writeFileSync`, `:194-196`) is unchanged and outside this count |
 | What the pre-open `lstat` still decides | ONE thing: the non-regular-file refusal and its reason `not a regular file (symlinks are never followed)` (`:161-164`), unchanged, and on win32 it is the only symlink refusal there is (Table B). It decides NO cap — `st.size` stops being read. It stays for that ONE reason and cannot be dropped: on POSIX a symlink refused at the open reports only `unreadable`, and the reason string above is a preserved contract. It is advisory by construction — anything swapped in after it is caught at the open (POSIX) or at the `fstat`, with the single exception Table B names as the win32 residual |
 | The open | `fs.openSync(src, FLAGS)` with FLAGS composed per **Table B** |
-| Open failure → one reason | ANY failure to open → the existing `unreadable` skip, and the run continues. Deliberately NOT split per errno: the design must not depend on which errno a platform reports for a refused symlink, and `unreadable` is true of every case. No new reason string |
-| `fstat` on the descriptor | The authoritative type check for anything that OPENS: `st.isFile()` false → the same `not a regular file (symlinks are never followed)` skip. WHICH objects reach it is decided by the precedence row below, not by this one |
-| Precedence — which check refuses what, by the FIRST operation that fails | **(1)** A candidate already non-regular when the `lstat` runs — symlink, socket, FIFO, directory — is refused THERE with the non-regular reason and never opened. **(2)** A candidate swapped in after the `lstat` whose OPEN fails is `unreadable`: a symlink under `O_NOFOLLOW`, and a socket, which fails before any descriptor exists (measured 2026-08-15 on darwin). **(3)** Only a non-regular object that OPENS SUCCESSFULLY reaches the `fstat` and takes its reason — a directory, and on POSIX a FIFO under `O_NONBLOCK` (both measured). A socket is deliberately absent from (3): no supported platform was found that hands one through `fs.openSync`, so a contract requiring that outcome would be unrealizable |
-| The read | BOUNDED: at most `MAX_FILE_BYTES + 1` bytes, read from that descriptor to EOF. No whole-file read of a path or a descriptor anywhere in the module. The `+ 1` is what makes "it grew past the cap" observable instead of silently truncated |
-| Read failure | → `unreadable`, exactly as today (`:185-187`) |
-| Cap decisions — all three, ONE surface | The bytes ACTUALLY READ, evaluated after the read, in today's order and with today's reason strings: per-file (`bytesRead > MAX_FILE_BYTES`) → file count (`fileCount + 1 > MAX_FILES`) → total (`totalBytes + bytesRead > MAX_TOTAL_BYTES`). Neither `lstat` nor `fstat` size decides a cap. This is the fix for Current state measurements 1 and 4: a file that grows in the window is refused by the cap it exceeds rather than copied past it, and a partially-read file is never copied as if it were whole |
+| Open failure | → the existing `unreadable` skip, whatever the errno, and the run continues. Deliberately NOT split per errno: the design must not depend on which errno a platform reports for a refused symlink, and `unreadable` is true of every case. Its position in the order, and what that position changes: **Table C, row 3** |
+| `fstat` on the descriptor | The authoritative type check for anything that OPENS: `st.isFile()` false → the `not a regular file (symlinks are never followed)` skip. WHICH objects reach it, and with what precedence: **Table C, rows 2-5** |
+| The read | BOUNDED: at most `MAX_FILE_BYTES + 1` bytes, read from that descriptor to EOF. No whole-file read of a path or a descriptor anywhere in the module. The `+ 1` is what makes "it grew past the cap" observable instead of silently truncated. WHAT exactly is bounded is three quantities, not one — see the row below |
+| What is BOUNDED — three distinct quantities, and (c) is not implied by (a) and (b) | **(a) bytes requested** from the read primitive: never more than `MAX_FILE_BYTES + 1` for one candidate. **(b) bytes accumulated** across the reads for that candidate: the same bound. **(c) allocated capacity** held for that candidate's source content: the same bound, REGARDLESS of what `fstat` reported or how large the source is. (c) is listed separately because (a) and (b) do not give it — measured 2026-08-15: a Buffer sized to a 120,965,360-byte source and filled with only `MAX_FILE_BYTES + 1` bytes satisfies (a) and (b), produces the required cap skip, and still holds 461× the cap in memory. The resource-exhaustion class this WP closes is (c) as much as (a) |
+| Read failure | → `unreadable`, the same reason as today (`:185-187`); its position in the order: **Table C, row 6** |
+| Cap decisions — all three, ONE surface | The bytes ACTUALLY READ, evaluated after the read, with today's reason strings: per-file (`bytesRead > MAX_FILE_BYTES`) → file count (`fileCount + 1 > MAX_FILES`) → total (`totalBytes + bytesRead > MAX_TOTAL_BYTES`) — **Table C, rows 7-9**. Neither `lstat` nor `fstat` size decides a cap. This is the fix for Current state measurements 1 and 4: a file that grows in the window is refused by the cap it exceeds rather than copied past it, and a partially-read file is never copied as if it were whole |
 | Byte accounting | `totalBytes += bytesRead` (was `st.size`, `:198`). The bytes charged are the bytes copied |
-| What deciding after the read costs | An over-cap file is now opened and read up to the bound before it is refused, where today it is refused on `lstat` size and never opened. Nothing observable changes: the caps still precede the gate chain, so no content gate can decide an over-cap file, and the allocation stays bounded by the cap. Note what it does to the comment at `tests/unit/vault-snapshot.test.js:407-408`: only its derived half survives ("no content gate can have decided it"), while its first clause ("rejected on its lstat size — it is never read") is exactly what this row inverts — which is why that comment is a registered mirror below. Accepted for the single decision surface it buys — the alternative is the same cap rule written twice, which is the mirror this repo keeps getting bitten by |
+| What deciding after the read costs | An over-cap file is now opened and read up to the bound before it is refused, where today it is refused on `lstat` size and never opened. Two consequences, both stated rather than smoothed over: the reason-assignment crossover (**Table C**'s two closing rows), and the memory question, which is why boundedness is pinned as THREE separate quantities in the row below. What does NOT change: the caps still precede the gate chain, so no content gate can decide an over-cap file. Note what it does to the comment at `tests/unit/vault-snapshot.test.js:407-408`: only its derived half survives ("no content gate can have decided it"), while its first clause ("rejected on its lstat size — it is never read") is exactly what this row inverts — which is why that comment is a registered mirror below |
 | Descriptor lifecycle — the scope BEGINS AT THE OPEN and ends with the read | ONE descriptor per candidate, inside a `try`/`finally` that opens IMMEDIATELY after a successful `open` — before the `fstat`, not around the read alone — and closes when the bounded read returns or fails, ahead of the cap decisions, the gate chain and the write. Every skip decided inside that scope leaves through the `finally`. A narrower scope leaks, measured 2026-08-15: a directory OPENS successfully under these flags and is then refused by the `fstat` type check having read nothing, so a `finally` around the read alone never runs. An `fstat` failure maps to the existing `unreadable` skip. Because the descriptor is gone before the write, the write side stays outside this question: `mkdirPrivate`, called at `:195`, THROWS `WienerdogError` "on a symlinked ancestor OR a symlink/non-dir at the final component" (its own documented contract, `src/core/private-fs.js:237-238`, thrown at `:244`) — pre-existing behaviour this WP does not change, and it now has nothing open to leak |
 | Close posture — what is promised, and what is not | PROMISED: every successful `open` is paired with EXACTLY ONE `close`, on every path. That is the promise because it is what code can guarantee and a test can assert. NOT promised: that the kernel never retains a descriptor — darwin documents `EINTR` on `close(2)` (measured 2026-08-15, `man 2 close`). A `close` that fails is SWALLOWED: it never throws out of `makeVaultSnapshot` and never turns a completed copy into a skip. Retrying a failed `close` is deliberately not required — the value of a retry is not established here, and this WP does not add a mechanism on that basis |
 | The single-read invariant, inherited and unchanged | ONE read whose bytes feed BOTH the gate decision and the copy (`docs/specs/done/WP-gate-vault-snapshot.md:255`). Hardening the read must not reintroduce a gate→copy window: the bytes gated, the bytes written and the bytes charged are the same bytes, from the same read |
 | The `MAX_FILE_BYTES` / `SCAN_MAX_BYTES` coupling, made explicit | The scan runs on `buf.toString('utf8')`, and gate 1 has already established that this text re-encodes to exactly `buf`, so the scanner sees exactly `bytesRead` bytes. While `MAX_FILE_BYTES <= ScanLimits.SCAN_MAX_BYTES`, the scanner's oversized bail (`secret-scan.js:283`) is therefore unreachable from this path; today it IS reachable, through the grow case (Current state, measurement 1). Raise `MAX_FILE_BYTES` above `SCAN_MAX_BYTES` and legitimately-sized files start being withheld WHOLE under a reason that does not describe what happened. REQUIRED: state the relation where `MAX_FILE_BYTES` is declared, and ASSERT it, so raising one without the other fails a test instead of silently degrading the product |
 | ACCEPTED, not changed — a symlinked source DIRECTORY is FOLLOWED | Ruled by the owner on 2026-08-15 and recorded in `docs/specs/logbook/2026-08-15-snapshot-symlinked-source-directory-ruling.md`, which carries the ruling, its grounds and its rejected alternatives; this row applies it: a symlinked source directory is the user's own configuration choice and is followed. `readdirSync` resolves it (`:141`) and `O_NOFOLLOW` refuses only the FINAL path component, so files enumerated through a symlinked `07-Daily` or `reports/dreams` are copied (measured — Current state, measurement 3). Considered and rejected: **refuse** — breaks an ordinary layout, e.g. a user who symlinks their daily-notes folder in from a cloud-synced directory loses their routine's input overnight; and **resolve-and-bound** — a new mechanism and a new error class (mount points, case sensitivity, path normalization) that still breaks that same user, whose target is outside the vault root by definition. Grounds: planting the symlink needs write access to the vault directory on the user's machine, which is outside the threat model's remote attacker, who reaches Wienerdog through content. The file-LEVEL refusal is unchanged and not in question. **The obligation this carries:** the JSDoc claim at `:107-109` currently reads as a whole-path property and must instead state that the refusal is file-level and that a symlinked source directory is followed by design |
-| Reason vocabulary | UNCHANGED and complete: `unreadable`, `not a regular file (symlinks are never followed)`, the three cap strings, and the three gate reasons. Nothing is added, nothing is removed, and for a candidate that fails several checks the reason is the one today's order already produces. **The symlink phrasing inside `not a regular file (symlinks are never followed)` is preserved verbatim, deliberately**: it is printed only when a LEAF refusal fires, so in the only context it ever reaches a user it is accurate, and rewording it would break the vocabulary this row freezes. The whole-path reading is corrected in the documentation prose instead — see the accepted-directory row's JSDoc obligation |
+| Reason vocabulary | UNCHANGED and complete: `unreadable`, `not a regular file (symlinks are never followed)`, the three cap strings, and the three gate reasons. Nothing is added and nothing is removed. WHICH of them a candidate failing several checks takes is decided by **Table C**, not here, and Table C names the single assignment that changes. **The symlink phrasing inside `not a regular file (symlinks are never followed)` is preserved verbatim, deliberately**: it is printed only when a LEAF refusal fires, so in the only context it ever reaches a user it is accurate, and rewording it would break the vocabulary this row freezes. The whole-path reading is corrected in the documentation prose instead — see the accepted-directory row's JSDoc obligation |
 | Preserved unchanged | The three cap VALUES, `SNAPSHOT_PLANS` and its `dir`/`newest`/`provenanceGated` values, the filename-descending pick, the gate chain and its order, the write of the ORIGINAL bytes, the budget rule that a skipped file consumes neither count nor bytes, the visible-skip contract, 0700 dirs / 0600 files, the mirrored layout, the empty-plan path, the everything-gated-out shape, and the function's signature and return shape |
 
 ### Table B — platform posture, per flag
@@ -218,9 +220,39 @@ that makes this necessary is in Current state and is not restated here.
 | Composition rule | an EXPLICIT branch whose fallback names, in a comment, what is absent and what is lost by its absence | same | Whether that branch keys on `process.platform === 'win32'` or on whether the constant is present is the implementer's call, recorded under "Decisions made" — the contract deliberately does not rest on the win32 claim this table could not measure. What IS forbidden is the bare `\|\| 0` idiom: it makes a missing flag look like a present one |
 | win32 posture, stated | — | The leaf-symlink refusal on win32 is the pre-open `lstat` ALONE, so the `lstat`→open window stays open there for a symlink swap. Every OTHER defect this WP fixes is closed on win32 too: the caps move to the bytes read, the read is bounded, and the descriptor lifecycle is defined | a **named residual**, on the same grounds as the source-directory ruling above — planting the symlink needs local write access to the vault directory, which the threat model's remote attacker does not have. Not CI-testable (Current state: there is no win32 runner) |
 
+### Table C — the refusal ladder
+
+Every per-candidate refusal, in evaluation order. This table is the single place
+the ORDER and the REASON ASSIGNMENT are decided; Table A's rows cite it instead
+of restating it. It exists because two consecutive external rounds landed a
+finding on this contract family, which is the ADR-0031 circuit-breaker's
+condition for extracting a contract rather than patching it again.
+
+| # | The check | Reason it produces | Same assignment as today? |
+|---|---|---|---|
+| 1 | `lstat` fails | `unreadable` | yes |
+| 2 | `lstat` reports a non-regular file — symlink, socket, FIFO, directory, device | `not a regular file (symlinks are never followed)` | yes; the candidate is never opened |
+| 3 | `open` fails, ANY errno — `ELOOP` for a symlink swapped in under `O_NOFOLLOW`, `EACCES` for an unreadable file, and a socket, whose open fails before a descriptor exists (measured 2026-08-15) | `unreadable` | **NO — this is the crossover.** Today the per-file cap is decided on `lstat` size before any open, so a candidate that is BOTH over-cap and unopenable reports the cap reason: measured 2026-08-15, a 300 KiB mode-`000` file yields `exceeds the 262144-byte per-file cap`. Under this ladder it yields `unreadable`. **Owner-ruled 2026-08-16:** accepted and stated, rather than preserved by restoring an `lstat`-size pre-check — the contract this WP preserves is the reason VOCABULARY and the visible-skip property, not every assignment produced by the `lstat`-size-first order this WP exists to replace, and a second cap surface is the duplication the original defect came from |
+| 4 | `fstat` fails | `unreadable` | new position; the reason class is unchanged |
+| 5 | `fstat` reports a non-regular file — a directory, or on POSIX a FIFO under `O_NONBLOCK`; measured, a character device too | `not a regular file (symlinks are never followed)` | **NO** — today nothing checks the type after the open, so a post-`lstat` swap goes undetected. This row is the fix |
+| 6 | the bounded read fails | `unreadable` | reason unchanged; **new position** — it now precedes every cap reason, the same crossover as row 3 |
+| 7 | `bytesRead > MAX_FILE_BYTES` | `exceeds the ${MAX_FILE_BYTES}-byte per-file cap` | reason unchanged; decided on the bytes READ, not on `lstat` size |
+| 8 | `fileCount + 1 > MAX_FILES` | `exceeds the ${MAX_FILES}-file cap` | yes |
+| 9 | `totalBytes + bytesRead > MAX_TOTAL_BYTES` | `exceeds the ${MAX_TOTAL_BYTES}-byte total cap` | reason unchanged; decided on the bytes read |
+| 10 | the gate chain — decodability → provenance (notes slice) → secret scan, first gate that fires | its three reasons, verbatim | yes — Done work (`WP-gate-vault-snapshot` Table A), called and not changed |
+
+| What the ladder preserves | What it changes |
+|---|---|
+| The eight reason STRINGS exactly — none added, none removed; the visible-skip contract; caps before gates; one refusal per candidate | Access, type and read failures (rows 3-6) now precede every cap reason (rows 7-9), so a candidate failing BOTH an access/type check and a cap reports the access/type failure. That is the direct consequence of deciding caps on the bytes actually read, and rows 3 and 5 are the ONLY reason-assignment changes in this WP |
+
 ### Mirrored Surface Checklist
 
-- [ ] Deliverables-table cells (the `vault-snapshot.js` row cites Tables A and B)
+- [ ] Deliverables-table cells (the `vault-snapshot.js` row cites Tables A, B and C)
+- [ ] **Table C is canonical for refusal order and reason assignment.** Its
+      mirrors are Table A's open-failure, `fstat`, read-failure, cap-decision,
+      cost and reason-vocabulary rows — each cites it and none restates it — plus
+      the acceptance criteria on type refusals and on the reason set. A finding
+      about the order is fixed in Table C first, then walked through those
 - [ ] Acceptance criteria that assert Table A, and Table B's three flag rows.
       Table B's COMPOSITION RULE is review-checked, not test-checked — with no
       win32 runner there is nothing a test can assert about it, and the
@@ -331,12 +363,10 @@ that makes this necessary is in Current state and is not restated here.
 - [ ] A candidate replaced by a symlink after its type check is never copied
       (POSIX), and its skip is visible in `skipped[]` (Current state,
       measurement 2).
-- [ ] The type refusals land where Table A's precedence row puts them: a
-      pre-existing non-regular candidate is refused at the `lstat` with the
-      non-regular reason; a post-`lstat` swap whose open fails is `unreadable`;
-      and a non-regular object that opens successfully — a directory, or a FIFO
-      on POSIX — is refused at the `fstat` with the non-regular reason. In no
-      case does the run hang or throw.
+- [ ] The type refusals land where **Table C** puts them: a pre-existing
+      non-regular candidate at row 2; a post-`lstat` swap whose open fails at
+      row 3; a non-regular object that opens successfully — a directory, or a
+      FIFO on POSIX — at row 5. In no case does the run hang or throw.
 - [ ] A candidate that cannot be OPENED is skipped with `unreadable`, whatever
       the failure was, and the run continues — the failure class whose producer
       this WP moves from the read to the open. The existing mode-000 case
@@ -344,18 +374,22 @@ that makes this necessary is in Current state and is not restated here.
       than at the read and must still report exactly that reason.
 - [ ] Every copied file is byte-identical to the bytes read from its descriptor,
       and the byte budget is charged those same bytes.
-- [ ] The reason set is exactly today's (Table A's reason-vocabulary row): no
-      new string, none missing, and a candidate failing several checks reports
-      the one today's order produces.
-- [ ] The read is bounded AT THE PRIMITIVE, not merely in its outcome: for one
-      candidate the implementation never requests, and never accumulates, more
-      than `MAX_FILE_BYTES + 1` bytes — a property observable where the read is
-      issued. An outcome-only check does not establish this, measured
-      2026-08-15: a whole-file read of a 120,965,360-byte source succeeds in
-      milliseconds, so an implementation that slurps the file and then compares
-      its length produces the very same per-file cap reason. Alongside the
-      bound, and not instead of it: such a source is skipped with the per-file
-      cap reason and nothing is copied.
+- [ ] The reason set is exactly today's eight strings: none added, none missing.
+      A candidate failing several checks reports the one **Table C** assigns —
+      including the crossover it names: a candidate that is BOTH over the
+      per-file cap and unopenable reports `unreadable`, where today it reports
+      the cap reason.
+- [ ] All THREE bounded quantities in Table A's boundedness row hold for one
+      candidate, each asserted separately because none implies the next:
+      **(a)** no read request exceeds `MAX_FILE_BYTES + 1` bytes; **(b)** the
+      bytes accumulated never exceed it; **(c)** the source-content capacity
+      allocated or retained never exceeds it, whatever `fstat` reported and
+      however large the source is. Neither an outcome check nor (a)+(b) gives
+      (c) — measured 2026-08-15: a whole-file read of a 120,965,360-byte source
+      succeeds in milliseconds, and a Buffer sized to that source but filled
+      with only `MAX_FILE_BYTES + 1` bytes satisfies (a) and (b) while holding
+      461× the cap. Alongside all three, and not instead of them: such a source
+      is skipped with the per-file cap reason and nothing is copied.
 - [ ] Every successful open is paired with exactly one close, on every path —
       including the `fstat` type refusal, which reads nothing; an open-time
       refusal; a read failure; a cap skip; a gate skip; a successful copy; and a
