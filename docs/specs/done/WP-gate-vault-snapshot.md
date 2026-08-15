@@ -1,7 +1,7 @@
 ---
 id: WP-gate-vault-snapshot
 title: Gate the vault snapshot — secret scan, provenance gate for the notes half, and untrusted framing at mount
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: []
