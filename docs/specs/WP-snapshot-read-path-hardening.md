@@ -45,9 +45,13 @@ This work package is the read-path half of the owner's 2026-08-14 split ruling
 Resolution). The gate half shipped and is Done; its spec states in its own words
 what it deliberately reserved for here — "nothing about HOW the path is checked
 or opened" (`docs/specs/done/WP-gate-vault-snapshot.md:270`), the known-imperfect
-row at `:271`, and Residual 7 at `:412`. The ruling names four subjects: the
+row at `:271`, and Residual 7 at `:412`. The ruling's point 2 names four subjects: the
 `lstat`→open race, the bounded read, `O_NOFOLLOW` Windows semantics, and the
-descriptor lifecycle. Sequencing, not dependency: this package needed the file
+descriptor lifecycle; its point 4 additionally routes the
+symlinked-source-directory behaviour here as this package's open product
+question, which the owner has since ruled
+(`docs/specs/logbook/2026-08-15-snapshot-symlinked-source-directory-ruling.md`).
+Sequencing, not dependency: this package needed the file
 free, and it is (`e3c7474`).
 
 **Value line.** The caps and the gates become properties of *the bytes that are
@@ -57,8 +61,9 @@ promise stops being conditional on nothing having changed on disk in between.
 
 **What this package deliberately does not do.** It does not touch the gates
 (they took zero findings across both external rounds and are Done), does not
-change any cap VALUE, and — by the owner's 2026-08-15 ruling recorded in Table A
-— does not refuse a symlinked source DIRECTORY.
+change any cap VALUE, and — by the owner's 2026-08-15 ruling, recorded in
+`docs/specs/logbook/2026-08-15-snapshot-symlinked-source-directory-ruling.md`
+and applied in Table A — does not refuse a symlinked source DIRECTORY.
 
 ## Current state
 
@@ -117,14 +122,18 @@ Two more facts the contract below depends on, both measured on this tree
   coincidence, coupled in behaviour, documented nowhere. Surfaced by the gate
   WP's implementer, 2026-08-15.
 
-**Prose describing the snapshot's symlink posture exists in exactly one place:**
-the `makeVaultSnapshot` JSDoc, `Symlink-safe: every source is lstat-checked and
-only regular files are copied (a symlink is skipped visibly, never followed)`
-(`:107-109`). `docs/THREAT-MODEL.md` mentions the snapshot only as "bounded
-snapshots" (`:97`) and says nothing about symlinks; the two routine skills
-describe `vault-snapshot/` as a read-only copy and say nothing about symlinks.
-So the JSDoc is the surface the 2026-08-15 ruling's stating obligation lands on,
-and it is inside this WP's Deliverables already.
+**Two surfaces describe the snapshot's symlink posture, and both read as a
+whole-path claim.** One is documentation: the `makeVaultSnapshot` JSDoc,
+`Symlink-safe: every source is lstat-checked and only regular files are copied
+(a symlink is skipped visibly, never followed)` (`:107-109`). The other is
+user-visible at runtime: the skip reason `not a regular file (symlinks are never
+followed)` (`:162`), which `src/core/routine-runtime.js:142` writes to stderr for
+every skipped file. Nothing else in the repo describes it — `docs/THREAT-MODEL.md`
+mentions the snapshot only as "bounded snapshots" (`:97`) and says nothing about
+symlinks, `docs/ARCHITECTURE.md` does not mention the snapshot at all, and the two
+routine skills describe `vault-snapshot/` as a read-only copy without naming
+symlinks. Both surfaces are inside this WP's reach; Table A decides what happens
+to each, and they are not decided the same way.
 
 **Existing coverage.** `tests/unit/vault-snapshot.test.js` (411 lines) covers the
 gates; `:390-411` covers the pre-existing skip reasons and records the property
@@ -132,7 +141,7 @@ gates; `:390-411` covers the pre-existing skip reasons and records the property
 content gate can have decided it" (`:407-408`).
 `tests/unit/broker-wiring.test.js` holds `makeVaultSnapshot`'s older coverage —
 six call sites from `:140`, including the over-cap and leaf-symlink skips at
-`:176-199` and `assert.deepEqual(skipped, [])` at `:147`, `:173`, `:207`.
+`:176-200` and `assert.deepEqual(skipped, [])` at `:147`, `:173`, `:207`.
 
 **CI runs ubuntu-latest and macos-latest only** (`.github/workflows/ci.yml:33`).
 There is no win32 runner, so a win32-only behaviour is a stated posture and a
@@ -147,8 +156,8 @@ named residual, never a tested claim.
 | Action | Path | Notes |
 |--------|------|-------|
 | modify | src/core/vault-snapshot.js | the read path per **Table A**, with the open flags composed per **Table B**; the coupling statement at `MAX_FILE_BYTES`; and the four registered comment mirrors brought back into agreement with what the code then does |
-| modify | tests/unit/vault-snapshot.test.js | cover the acceptance criteria below (the implementer designs the cases) |
-| modify | tests/unit/broker-wiring.test.js | `makeVaultSnapshot`'s older coverage lives here (Current state). Table A changes no observable behaviour these tests assert, so they are expected to pass UNCHANGED; listed so the boundary check permits a repair if one of them turns out to depend on an ordering this WP moves. Do not otherwise edit it |
+| modify | tests/unit/vault-snapshot.test.js | cover the acceptance criteria below (the implementer designs the cases), and update the registered mirror at `:407-408` per the Mirrored Surface Checklist |
+| modify | tests/unit/broker-wiring.test.js | `makeVaultSnapshot`'s older coverage lives here (Current state). Table A changes no observable behaviour these tests assert, so they are expected to pass UNCHANGED; listed so the boundary check permits a repair if one of them turns out to depend on an ordering this WP moves — a repair, if one is made, is recorded under "Decisions made" in the PR. Do not otherwise edit it |
 
 ### Exact contracts
 
@@ -169,14 +178,14 @@ function makeVaultSnapshot(paths, routineId, stagingDir)
 Activation (ADR-0031, 2-of-7) — two fire: **(iv)** the error, fallback and
 precedence behaviour of every failure on this path changes (which check refuses
 a file, and what a failed open or a failed close does); **(vii)** the same
-contract appears in this spec, in three code comments, and in two rows of a Done
-spec — the mirrors are registered below.
+contract appears in this spec, in four code comments, in a test comment, and in
+several rows of a Done spec — the mirrors are registered below.
 
 ### Table A — the snapshot's per-file read path
 
 | Fact / rule | Value |
 |---|---|
-| Path resolutions per candidate | Exactly TWO: the existing `lstat` (`:156`) and ONE `open`. After the open, every decision is made on the **descriptor** — `fstat`, and the bytes read from it — and never by re-resolving the path. Today's second resolution (`readFileSync(src)`, `:184`) IS the `lstat`→open window; it goes away |
+| SOURCE-path resolutions per candidate | Exactly TWO: the existing `lstat` (`:156`) and ONE `open`. After the open, every decision about the source is made on the **descriptor** — `fstat`, and the bytes read from it — and never by re-resolving the source path. Today's second resolution (`readFileSync(src)`, `:184`) IS the `lstat`→open window; it goes away. The DESTINATION side (`mkdirPrivate` and `writeFileSync`, `:194-196`) is unchanged and outside this count |
 | What the pre-open `lstat` still decides | ONE thing: the non-regular-file refusal and its reason `not a regular file (symlinks are never followed)` (`:161-164`), unchanged, and on win32 it is the only symlink refusal there is (Table B). It decides NO cap — `st.size` stops being read. It stays for that ONE reason and cannot be dropped: on POSIX a symlink refused at the open reports only `unreadable`, and the reason string above is a preserved contract. It is advisory by construction — anything swapped in after it is caught at the open (POSIX) or at the `fstat`, with the single exception Table B names as the win32 residual |
 | The open | `fs.openSync(src, FLAGS)` with FLAGS composed per **Table B** |
 | Open failure → one reason | ANY failure to open → the existing `unreadable` skip, and the run continues. Deliberately NOT split per errno: the design must not depend on which errno a platform reports for a refused symlink, and `unreadable` is true of every case. No new reason string |
@@ -185,38 +194,48 @@ spec — the mirrors are registered below.
 | Read failure | → `unreadable`, exactly as today (`:185-187`) |
 | Cap decisions — all three, ONE surface | The bytes ACTUALLY READ, evaluated after the read, in today's order and with today's reason strings: per-file (`bytesRead > MAX_FILE_BYTES`) → file count (`fileCount + 1 > MAX_FILES`) → total (`totalBytes + bytesRead > MAX_TOTAL_BYTES`). Neither `lstat` nor `fstat` size decides a cap. This is the fix for Current state measurements 1 and 4: a file that grows in the window is refused by the cap it exceeds rather than copied past it, and a partially-read file is never copied as if it were whole |
 | Byte accounting | `totalBytes += bytesRead` (was `st.size`, `:198`). The bytes charged are the bytes copied |
-| What deciding after the read costs | An over-cap file is now opened and read up to the bound before it is refused, where today it is refused on `lstat` size and never opened. Nothing observable changes: the caps precede the gate chain, so no content gate can decide an over-cap file (the property recorded at `tests/unit/vault-snapshot.test.js:407-408` still holds), and the allocation stays bounded by the cap. Accepted for the single decision surface it buys — the alternative is the same cap rule written twice, which is the mirror this repo keeps getting bitten by |
-| Descriptor lifecycle | ONE descriptor per candidate, closed on EVERY exit path: cap skip, gate skip, read error, successful copy. A close failure is swallowed — it never throws out of `makeVaultSnapshot`, and it never turns a completed copy into a skip. No descriptor outlives its loop iteration |
+| What deciding after the read costs | An over-cap file is now opened and read up to the bound before it is refused, where today it is refused on `lstat` size and never opened. Nothing observable changes: the caps still precede the gate chain, so no content gate can decide an over-cap file, and the allocation stays bounded by the cap. Note what it does to the comment at `tests/unit/vault-snapshot.test.js:407-408`: only its derived half survives ("no content gate can have decided it"), while its first clause ("rejected on its lstat size — it is never read") is exactly what this row inverts — which is why that comment is a registered mirror below. Accepted for the single decision surface it buys — the alternative is the same cap rule written twice, which is the mirror this repo keeps getting bitten by |
+| Descriptor lifecycle — the life ENDS WITH THE READ | ONE descriptor per candidate, closed as soon as the bounded read returns or fails, BEFORE the cap decisions, the gate chain and the write. Closing is unconditional (one `finally` around the read, not a close call per exit path), so no enumeration of exit paths has to stay complete as the code changes. This is what keeps the write side out of the lifecycle question: `mkdirPrivate`, called at `:195`, THROWS `WienerdogError` "on a symlinked ancestor OR a symlink/non-dir at the final component" (its own documented contract, `src/core/private-fs.js:237-238`, thrown at `:244`), and that throw — pre-existing behaviour this WP does not change — now leaves nothing open. A close failure is swallowed: it never throws out of `makeVaultSnapshot` and never turns a completed copy into a skip |
 | The single-read invariant, inherited and unchanged | ONE read whose bytes feed BOTH the gate decision and the copy (`docs/specs/done/WP-gate-vault-snapshot.md:255`). Hardening the read must not reintroduce a gate→copy window: the bytes gated, the bytes written and the bytes charged are the same bytes, from the same read |
 | The `MAX_FILE_BYTES` / `SCAN_MAX_BYTES` coupling, made explicit | The scan runs on `buf.toString('utf8')`, and gate 1 has already established that this text re-encodes to exactly `buf`, so the scanner sees exactly `bytesRead` bytes. While `MAX_FILE_BYTES <= ScanLimits.SCAN_MAX_BYTES`, the scanner's oversized bail (`secret-scan.js:283`) is therefore unreachable from this path; today it IS reachable, through the grow case (Current state, measurement 1). Raise `MAX_FILE_BYTES` above `SCAN_MAX_BYTES` and legitimately-sized files start being withheld WHOLE under a reason that does not describe what happened. REQUIRED: state the relation where `MAX_FILE_BYTES` is declared, and ASSERT it, so raising one without the other fails a test instead of silently degrading the product |
-| ACCEPTED, not changed — a symlinked source DIRECTORY is FOLLOWED | Ruled by the owner, 2026-08-15: a symlinked source directory is the user's own configuration choice and is followed. `readdirSync` resolves it (`:141`) and `O_NOFOLLOW` refuses only the FINAL path component, so files enumerated through a symlinked `07-Daily` or `reports/dreams` are copied (measured — Current state, measurement 3). Considered and rejected: **refuse** — breaks an ordinary layout, e.g. a user who symlinks their daily-notes folder in from a cloud-synced directory loses their routine's input overnight; and **resolve-and-bound** — a new mechanism and a new error class (mount points, case sensitivity, path normalization) that still breaks that same user, whose target is outside the vault root by definition. Grounds: planting the symlink needs write access to the vault directory on the user's machine, which is outside the threat model's remote attacker, who reaches Wienerdog through content. The file-LEVEL refusal is unchanged and not in question. **The obligation this carries:** the JSDoc claim at `:107-109` currently reads as a whole-path property and must instead state that the refusal is file-level and that a symlinked source directory is followed by design |
-| Reason vocabulary | UNCHANGED and complete: `unreadable`, `not a regular file (symlinks are never followed)`, the three cap strings, and the three gate reasons. Nothing is added, nothing is removed, and for a candidate that fails several checks the reason is the one today's order already produces |
+| ACCEPTED, not changed — a symlinked source DIRECTORY is FOLLOWED | Ruled by the owner on 2026-08-15 and recorded in `docs/specs/logbook/2026-08-15-snapshot-symlinked-source-directory-ruling.md`, which carries the ruling, its grounds and its rejected alternatives; this row applies it: a symlinked source directory is the user's own configuration choice and is followed. `readdirSync` resolves it (`:141`) and `O_NOFOLLOW` refuses only the FINAL path component, so files enumerated through a symlinked `07-Daily` or `reports/dreams` are copied (measured — Current state, measurement 3). Considered and rejected: **refuse** — breaks an ordinary layout, e.g. a user who symlinks their daily-notes folder in from a cloud-synced directory loses their routine's input overnight; and **resolve-and-bound** — a new mechanism and a new error class (mount points, case sensitivity, path normalization) that still breaks that same user, whose target is outside the vault root by definition. Grounds: planting the symlink needs write access to the vault directory on the user's machine, which is outside the threat model's remote attacker, who reaches Wienerdog through content. The file-LEVEL refusal is unchanged and not in question. **The obligation this carries:** the JSDoc claim at `:107-109` currently reads as a whole-path property and must instead state that the refusal is file-level and that a symlinked source directory is followed by design |
+| Reason vocabulary | UNCHANGED and complete: `unreadable`, `not a regular file (symlinks are never followed)`, the three cap strings, and the three gate reasons. Nothing is added, nothing is removed, and for a candidate that fails several checks the reason is the one today's order already produces. **The symlink phrasing inside `not a regular file (symlinks are never followed)` is preserved verbatim, deliberately**: it is printed only when a LEAF refusal fires, so in the only context it ever reaches a user it is accurate, and rewording it would break the vocabulary this row freezes. The whole-path reading is corrected in the documentation prose instead — see the accepted-directory row's JSDoc obligation |
 | Preserved unchanged | The three cap VALUES, `SNAPSHOT_PLANS` and its `dir`/`newest`/`provenanceGated` values, the filename-descending pick, the gate chain and its order, the write of the ORIGINAL bytes, the budget rule that a skipped file consumes neither count nor bytes, the visible-skip contract, 0700 dirs / 0600 files, the mirrored layout, the empty-plan path, the everything-gated-out shape, and the function's signature and return shape |
 
 ### Table B — platform posture, per flag
 
 The whole point of this table is that a flag which does not exist on a platform
-is a **stated posture**, never an inherited one. `fs.constants.O_NOFOLLOW || 0`
-degrades the refusal to "follow" silently (measured — Current state).
+is a **stated posture**, never an inherited one. The silent-degrade measurement
+that makes this necessary is in Current state and is not restated here.
 
 | Flag | POSIX | win32 | Consumer |
 |---|---|---|---|
 | `O_RDONLY` | present | present | the open is read-only; the snapshot never writes through this descriptor |
-| `O_NOFOLLOW` | present; an open whose final path component is a symlink FAILS (measured) | **does not exist** | closes the swap case (Current state, measurement 2) at the open, on the only platform that can. Read the value from `fs.constants`; never hardcode a number — it is platform-specific |
-| `O_NONBLOCK` | present; a FIFO opens at once instead of blocking until a writer appears (measured: without it the open blocked past 3 s) | **does not exist**; the hazard it guards — an open that blocks until a writer appears — is the POSIX FIFO one measured above | turns "a FIFO swapped in after the `lstat` hangs the routine forever" into an ordinary visible skip, via the `fstat` type check |
-| Composition rule | branch explicitly on `process.platform === 'win32'` and name what is absent in a comment | same | **`\|\| 0` is forbidden in this module**: it makes a missing flag look like a present one |
-| win32 posture, stated | — | The leaf-symlink refusal on win32 is the pre-open `lstat` ALONE, so the `lstat`→open window stays open there for a symlink swap. Every OTHER defect this WP fixes is closed on win32 too: the caps move to the bytes read, the read is bounded, and the descriptor lifecycle is defined | a **named residual**, on the same grounds as the source-directory ruling above — planting the symlink needs local write access to the vault directory, which the threat model's remote attacker does not have. Not CI-testable: the matrix is ubuntu + macos (`.github/workflows/ci.yml:33`) |
+| `O_NOFOLLOW` | present; an open whose final path component is a symlink FAILS — **measured here on darwin**; ubuntu-latest is the other CI leg | **documented by Node as absent — NOT measured here**, and the contract below is written so nothing rests on that | closes the swap case (Current state, measurement 2) at the open, on the platform that can. Read the value from `fs.constants`; never hardcode a number — it is platform-specific |
+| `O_NONBLOCK` | present; a FIFO opens at once instead of blocking (measured here on darwin — Current state) | **documented as absent — NOT measured here**; the hazard it guards is the POSIX FIFO one | turns "a FIFO swapped in after the `lstat` hangs the routine forever" into an ordinary visible skip, via the `fstat` type check |
+| Composition rule | an EXPLICIT branch whose fallback names, in a comment, what is absent and what is lost by its absence | same | Whether that branch keys on `process.platform === 'win32'` or on whether the constant is present is the implementer's call, recorded under "Decisions made" — the contract deliberately does not rest on the win32 claim this table could not measure. What IS forbidden is the bare `\|\| 0` idiom: it makes a missing flag look like a present one |
+| win32 posture, stated | — | The leaf-symlink refusal on win32 is the pre-open `lstat` ALONE, so the `lstat`→open window stays open there for a symlink swap. Every OTHER defect this WP fixes is closed on win32 too: the caps move to the bytes read, the read is bounded, and the descriptor lifecycle is defined | a **named residual**, on the same grounds as the source-directory ruling above — planting the symlink needs local write access to the vault directory, which the threat model's remote attacker does not have. Not CI-testable (Current state: there is no win32 runner) |
 
 ### Mirrored Surface Checklist
 
 - [ ] Deliverables-table cells (the `vault-snapshot.js` row cites Tables A and B)
-- [ ] Acceptance criteria that assert Tables A and B
-- [ ] Verification commands (the two greps assert Table A's "no whole-file read"
-      and Table B's "`|| 0` is forbidden")
+- [ ] Acceptance criteria that assert Table A, and Table B's three flag rows.
+      Table B's COMPOSITION RULE is review-checked, not test-checked — with no
+      win32 runner there is nothing a test can assert about it, and the
+      round-zero pass that dropped the two candidate greps is why no
+      verification command mirrors this table either (Implementation notes)
 - [ ] Current-state description — the four measurements and the coupling
 - [ ] Implementation notes: the descriptor lifecycle and the named residuals
 - [ ] Security checklist: the accepted symlinked source directory and the win32
       residual
+- [ ] **The accepted-directory fact appears in five places in this spec and they
+      move together:** the Context paragraph ("What this package deliberately
+      does not do"), Table A's accepted-directory row (canonical here), the
+      security checklist, the Out-of-scope bullet, and the acceptance criterion
+      on the JSDoc statement. Its own record —
+      `docs/specs/logbook/2026-08-15-snapshot-symlinked-source-directory-ruling.md`
+      — is the RULING, not a mirror: a later round updates this spec to it,
+      never it to this spec
 - [ ] **Three comment mirrors inside `src/core/vault-snapshot.js`**, registered
       here on the recommendation carried over from PR #7's spec-fidelity review,
       finding 5. Each restates a contract fact this WP touches, so each moves
@@ -233,6 +252,12 @@ degrades the refusal to "follow" silently (measured — Current state).
       VISIBLY … never silently, and never failing the whole run for one
       oversized file"). Table A preserves it exactly; it is registered so a later
       round that changes the cap contract cannot leave it behind
+- [ ] **A fifth mirror, and the only one outside `src/`:** the comment at
+      `tests/unit/vault-snapshot.test.js:407-408` — "The over-cap file is
+      rejected on its lstat size — it is never read, so no content gate can have
+      decided it." Table A's cost row keeps the second clause and abolishes the
+      first, so the comment is rewritten with this change. It sits in a
+      Deliverables file, so no boundary stands in the way
 
 ## Implementation notes & constraints
 
@@ -253,6 +278,19 @@ degrades the refusal to "follow" silently (measured — Current state).
   so `ERR_STRING_TOO_LONG` and the large-allocation class are closed here. That
   row is a mirror of this contract; it is not edited, because a Done spec is a
   record of what shipped.
+- **Named residual (round zero) — no mechanical guard against reintroducing
+  either idiom.** Two verification greps were drafted and dropped:
+  `! grep -q 'readFileSync' …` did not guard what it claimed (a `readSync` loop
+  to EOF passes it while violating Table A's bound) and would go RED on a
+  correct implementation, because this spec itself orders the read-site comment
+  rewritten and the natural rewrite names `readFileSync`; `! grep -q '|| 0' …`
+  collides head-on with Table B, which requires a comment NAMING the absent
+  flag. A check that punishes the correct answer is worse than no check
+  (`docs/runbooks/codex-review.md`, "Prove a new gate in BOTH directions"), and
+  machinery may grow only in the smallest form that guards a product behaviour.
+  What guards these instead: the acceptance criteria below — a source far larger
+  than the cap must be refused BY THE CAP, which an unbounded read cannot do —
+  and review.
 - When uncertain: choose the simpler option and record it under "Decisions made"
   in the PR body. Do NOT expand scope to resolve ambiguity.
 
@@ -290,16 +328,25 @@ degrades the refusal to "follow" silently (measured — Current state).
 - [ ] A candidate that is a non-regular file at the descriptor — directory,
       FIFO, socket — is skipped with `not a regular file (symlinks are never
       followed)`, and the run neither hangs nor throws.
+- [ ] A candidate that cannot be OPENED is skipped with `unreadable`, whatever
+      the failure was, and the run continues — the failure class whose producer
+      this WP moves from the read to the open. The existing mode-000 case
+      (`tests/unit/vault-snapshot.test.js:310-321`) now fails at the open rather
+      than at the read and must still report exactly that reason.
 - [ ] Every copied file is byte-identical to the bytes read from its descriptor,
       and the byte budget is charged those same bytes.
 - [ ] The reason set is exactly today's (Table A's reason-vocabulary row): no
       new string, none missing, and a candidate failing several checks reports
       the one today's order produces.
-- [ ] No path in the module reads a whole file into memory: a source far larger
-      than the per-file cap is refused with the per-file cap reason and the run
-      completes normally.
-- [ ] A snapshot run that exercises every exit path — copy, cap skip, gate skip,
-      read error — leaves no descriptor open.
+- [ ] No path in the module reads a whole file into memory. The discriminating
+      case: with the pre-read checks seeing an under-reported size (the staged
+      window), a source FAR larger than the per-file cap is refused with the
+      PER-FILE CAP reason and the run completes normally — an implementation
+      that slurps it whole cannot produce that reason, because the read fails or
+      exhausts memory first.
+- [ ] No descriptor is left open after a snapshot run, including runs that
+      exercise a copy, a cap skip, a gate skip, an open failure and a read
+      failure — and including a run in which the write side throws.
 - [ ] `MAX_FILE_BYTES <= ScanLimits.SCAN_MAX_BYTES` is asserted, and the
       relation and its consequence are stated where `MAX_FILE_BYTES` is
       declared (Table A's coupling row).
@@ -310,8 +357,10 @@ degrades the refusal to "follow" silently (measured — Current state).
 - [ ] Everything in Table A's preserved-unchanged row is unchanged, including
       the gate chain and its order, the caps' values, the empty-plan path and
       the everything-gated-out shape.
-- [ ] `npm test` and `npm run lint` pass, and `tests/unit/broker-wiring.test.js`
-      passes without being edited.
+- [ ] `npm test` and `npm run lint` pass. `tests/unit/broker-wiring.test.js` is
+      expected to pass UNCHANGED; if a case there turns out to depend on an
+      ordering this WP moves, its Deliverables row permits the repair and the
+      repair is recorded under "Decisions made".
 
 ## Verification steps (run these; paste output in the PR)
 
@@ -319,30 +368,29 @@ degrades the refusal to "follow" silently (measured — Current state).
 npm test -- --test-name-pattern "vault-snapshot"
 npm test
 npm run lint
-# Table A — no whole-file read survives in the module (the unbounded read is gone)
-! grep -q 'readFileSync' src/core/vault-snapshot.js
-# Table B — the silent-degrade idiom is absent: a missing flag is a branch, not `|| 0`
-! grep -q '|| 0' src/core/vault-snapshot.js
 ```
 
-- The last two are NEW steps and each is an ASSERTION: it exits non-zero when
-  the check fails, rather than printing something a reader has to judge. Run
-  each on its own, and paste a real GREEN from the finished state AND a real RED
-  from a deliberately broken one (put a `readFileSync` back; write
-  `fs.constants.O_NOFOLLOW || 0`), so a check that cannot fail is caught before
-  anyone believes it.
+- This WP adds NO new verification step, deliberately: the two greps drafted for
+  it were dropped in round zero (Implementation notes), so there is nothing here
+  that needs a both-directions proof. Every acceptance criterion above is
+  asserted by the test suite the first command runs.
 
 ## Out of scope (do NOT do these)
 
 - The gates themselves — Table A's chain, its order and its reasons are Done
   work (`WP-gate-vault-snapshot`) and are called, not changed.
 - Refusing or resolving a symlinked source DIRECTORY — ruled ACCEPTED by the
-  owner on 2026-08-15 (Table A). Note the resolution here; do not edit the Done
-  spec whose Residual 7 predates the ruling.
+  owner on 2026-08-15
+  (`docs/specs/logbook/2026-08-15-snapshot-symlinked-source-directory-ruling.md`,
+  applied in Table A). Note the resolution here; do not edit the Done spec whose
+  Residual 7 predates the ruling.
 - The frontmatter parser's fail-open on five opener shapes (BOM, blank line,
   space, CRLF, tab) — its own queued item, and digest-owned.
-- The scan-limit guard, and `WP-alert-producer-freeform-residual` — queued
-  behind this one.
+- The two named-but-unwritten follow-ups — a secret-scan limit guard, and
+  `WP-alert-producer-freeform-residual` (whose non-existence
+  `docs/specs/done/WP-neutralize-alert-callout-rendering.md:167` records).
+  Neither has a spec file, so neither is a dependency of this one and neither is
+  "queued" by anything enforceable.
 - The `state/` read-back robustness boundary (scheduler job name, dream ledger)
   — a named candidate, not queued, and not a live path.
 - Widening or narrowing any cap VALUE, plan `dir`/`newest`, or the
