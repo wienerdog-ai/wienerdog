@@ -18,6 +18,7 @@ introduced it — the rule at `docs/runbooks/codex-review.md` ("Rules"), landed 
 | 0a | Template conformance | internal, clean context (spec + template only) | CONFORMANT | — | `2026-08-15-snapshot-read-path-r0-template-conformance-raw.md` | `a74fd99` |
 | 0b | Internal coherence | internal, fresh context | 20 findings | 6 heavy / 14 light | `2026-08-15-snapshot-read-path-r0-internal-coherence-raw.md` | `a74fd99` |
 | 1 | Adversarial design review | gptsol | NEEDS-ATTENTION | 3, all heavy | `2026-08-15-snapshot-read-path-codex-round-1-raw.md` | `a82de32` |
+| 2 | Adversarial design review, round 2 | gptsol | NEEDS-ATTENTION | 2, both heavy | `2026-08-15-snapshot-read-path-codex-round-2-raw.md` | `d71cbfb` |
 
 ## When each raw output was committed — the part that is not recoverable later
 
@@ -26,6 +27,8 @@ was judged, paraphrased or shaped before `a82de32` existed. One transport
 artifact was decoded on the way in (`&amp;&amp;` → `&&` inside one `executed`
 string) and is disclosed in that file's header; no finding text, verdict,
 confidence or line number was altered.
+
+**Round 2: committed BEFORE adjudication**, in `d71cbfb`, same as round 1.
 
 **Rounds 0a and 0b: committed AFTER adjudication**, retrospectively, in
 `a74fd99`. The text is verbatim, but the ordering property the rule buys was not
@@ -90,8 +93,67 @@ being acted on, per the spot-check rule.
    descriptor exists, so it can never reach `fstat`. Refusals are now ordered by
    the first operation that fails.
 
+### Round 2 — 2 fixed, extracted rather than patched
+
+Applied in `58de7ea`. The reviewer was required, as a round ≥ 2, to verify each
+round-1 finding was genuinely fixed rather than re-worded, and returned:
+descriptor scope **genuinely-fixed**, socket precedence **genuinely-fixed**,
+bounded read **partially-fixed** — the bound covered bytes read but not bytes
+allocated. Both new findings reproduced on the orchestrator's machine first.
+
+1. **The primitive bound still permitted whole-source allocation.** A Buffer
+   sized to a 120,965,360-byte source and filled with only `MAX_FILE_BYTES + 1`
+   bytes satisfies "never request or accumulate more than the cap" and still
+   holds 461× the cap. Boundedness is now three named quantities — bytes
+   requested, bytes accumulated, allocated capacity — each with its own
+   assertion, because the first two do not give the third.
+2. **The operation order could not preserve today's reason assignment.** See the
+   ruling below.
+
+### The circuit-breaker fired, and the fix is an extraction
+
+Rounds 1 and 2 each landed a finding on the SAME two contract families:
+
+| Family | Round 1 | Round 2 |
+|---|---|---|
+| What exactly is bounded, and what pins it | the criterion did not distinguish bounded from unbounded reading | the primitive bound still permitted whole-source allocation |
+| Refusal order and reason assignment | the socket criterion contradicted open-failure precedence | the new order could not preserve today's reason assignment |
+
+Two consecutive rounds on the same contract family is ADR-0031's circuit-breaker
+condition (`docs/runbooks/codex-review.md`, "Loop circuit-breaker"), and the
+runbook's own rule is that the next step is a design question, never another
+textual patch. So round 2 was closed by **extracting Table C — the refusal
+ladder**: ten rows in evaluation order, each with the reason it produces and
+whether that assignment differs from today, with Table A's six affected rows
+reduced to citations. The scattered ordering prose that both rounds kept hitting
+no longer exists to be hit.
+
+### Owner ruling, 2026-08-16 — the crossover is accepted and stated
+
+The design question the breaker surfaced: deciding the caps on the bytes
+actually read necessarily moves access, type and read failures AHEAD of the cap
+reasons, so a candidate that fails both reports the access failure. Measured: a
+300 KiB mode-`000` file reports `exceeds the 262144-byte per-file cap` today and
+`unreadable` under the new contract.
+
+- **Option A — accept and state it.** One cap decision surface; the spec drops
+  its false "nothing observable changes" claim and names the one assignment that
+  changes.
+- **Option B — restore an `lstat`-size pre-check** purely to preserve the old
+  assignment, with the authoritative decision still on bytes read. Cost: the cap
+  rule appears twice.
+
+**The owner ruled A on 2026-08-16.** Grounds: what this WP preserves is the
+reason VOCABULARY and the visible-skip property, not every assignment produced
+by the `lstat`-size-first order the WP exists to replace; and a second cap
+surface is exactly the duplication the original defect came from. Recorded in
+Table C, row 3.
+
 ## What follows
 
-All three round-1 findings are HEAVY — each changes what the implementer builds
-— so weighted closure requires a **full fresh external round**, not a mechanical
-re-check. Round 2 runs on `b0f18a0`.
+Weighted closure: findings that change what the implementer builds are HEAVY,
+and both rounds' findings were. Round 3 runs on `58de7ea`, and is asked to
+verify round 2's two findings are genuinely fixed rather than re-worded, and to
+attack Table C itself — a newly extracted table is new surface, and the loop
+ends when a round finds nothing about the product, not when the author is
+tired.
