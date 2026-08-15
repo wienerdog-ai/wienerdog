@@ -64,7 +64,13 @@ mechanisms) → repeat until clean → owner sign-off → specs move to Ready.
 - The reviewer's raw output is committed BEFORE anyone reads or judges
   it — adjudication happens on evidence the adjudicator cannot have
   shaped. This is what makes an after-the-fact ruling possible when a
-  gate was skipped: the record is intact.
+  gate was skipped: the record is intact. The round record cites, per
+  round, the raw file's path AND the SHA of the commit that introduced
+  it: a SHA cannot be cited before the commit exists, so a skipped
+  raw-commit is visible at the moment of adjudication — not at a later
+  audit, when the property is no longer recoverable. A round row
+  without that SHA is a round where this rule did not run. No tooling,
+  no hook — one more line in a record that is already being written.
 - `failed to load configuration: No such file or directory` means a
   stale plugin broker, not a bad checkout. The plugin keeps one broker
   process per workspace PATH; if that directory was deleted and
