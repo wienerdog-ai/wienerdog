@@ -94,6 +94,7 @@ membership.
 
 Amended by:
 - WP-daily-summary-per-line-framing — decision 1's block fence is replaced by a per-line marker on every summary line, and no closing marker is emitted, so summary bytes cannot forge the boundary.
+- WP-gate-vault-snapshot — the single-chokepoint consequence is narrowed to the route renderDigest controls, and the stale "named future WP" phrase is corrected to the deferral this ADR already states.
 
 ## Alternatives considered
 
@@ -151,3 +152,50 @@ labelled line is still natural-language text a model reads. Entry-level daily
 provenance remains the deferred full solution.
 
 Implemented by **WP-daily-summary-per-line-framing**.
+
+## Amendment (2026-08-14) — the chokepoint consequence is narrowed to the route `renderDigest` controls
+
+Status: **ACCEPTED — OWNER-SIGNED 2026-08-14.**
+
+This amendment corrects nothing that is false. The Consequences sentence above
+reads "`renderDigest` is the single chokepoint for the daily `## Summary`, so
+every consumer of its output (SessionStart injection and any managed-block
+compile) inherits the fence — the fix is made once, at the source." Read
+strictly, that is TRUE: it quantifies over consumers **of `renderDigest`'s
+output**, and the route described below consumes none of it. What this
+amendment records is a NEW realization about how far the sentence's reassurance
+travels.
+
+1. **There is a second route from a daily note into a model session, and it
+   inherits nothing from this ADR's mechanism.** `src/core/vault-snapshot.js`
+   copies WHOLE daily notes — Summary included, not just the extracted
+   section — into a scheduled routine's staging directory, which the routine
+   mounts read-only. That path never calls `renderDigest`. So "the fix is made
+   once, at the source" holds for the digest and does not generalize to the
+   daily `## Summary` as such: on the snapshot route those bytes reach a
+   capability-holding model session unframed. The 2026-07-29 audit names the
+   tension at `docs/security-audit/2026-07-29/CURRENT-IMPLEMENTATION-REVIEW.md:552`
+   (finding M3).
+
+2. **What is being done about it, and what is not.**
+   `WP-gate-vault-snapshot` gates that route for secrets and, on the daily-notes
+   slice, for frontmatter provenance, and adds a code-owned framing line when
+   the snapshot is mounted. It deliberately does NOT port this ADR's per-line
+   framing to whole notes: framing an entire note is a different mechanism from
+   framing an extracted section, and it belongs with the deferred entry-level
+   provenance rather than being improvised. The snapshot route therefore gains
+   no instruction-content filter, and that work package records M3 as PARTIALLY
+   closed.
+
+3. **The stale phrase in Consequences is corrected.** "Entry-level daily
+   provenance remains a named future WP" is not accurate and has not been for
+   some time: this file already states the honest position in Context and in the
+   2026-08-09 amendment's closing paragraph — entry-level daily provenance is
+   **deferred**, a cross-cutting writer-side contract needing its own ADR, not a
+   WP waiting to be picked up. The owner reaffirmed that deferral on 2026-08-14,
+   in the same sitting as the report-provenance ruling.
+
+Nothing in Decisions 1-3, in the accepted residual, or in the bounded-read and
+gate decisions is changed by this amendment.
+
+Implemented by **WP-gate-vault-snapshot**.
