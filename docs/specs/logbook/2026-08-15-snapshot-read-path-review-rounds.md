@@ -20,6 +20,7 @@ introduced it — the rule at `docs/runbooks/codex-review.md` ("Rules"), landed 
 | 1 | Adversarial design review | gptsol | NEEDS-ATTENTION | 3, all heavy | `2026-08-15-snapshot-read-path-codex-round-1-raw.md` | `a82de32` |
 | 2 | Adversarial design review, round 2 | gptsol | NEEDS-ATTENTION | 2, both heavy | `2026-08-15-snapshot-read-path-codex-round-2-raw.md` | `d71cbfb` |
 | 3 | Adversarial design review, round 3 | gptsol | NEEDS-ATTENTION | 3, all heavy | `2026-08-15-snapshot-read-path-codex-round-3-raw.md` | `4606e36` |
+| 4 | Adversarial design review, round 4 | gptsol | NEEDS-ATTENTION | 1, LIGHT | `2026-08-15-snapshot-read-path-codex-round-4-raw.md` | `056e22c` |
 
 ## When each raw output was committed — the part that is not recoverable later
 
@@ -29,7 +30,7 @@ artifact was decoded on the way in (`&amp;&amp;` → `&&` inside one `executed`
 string) and is disclosed in that file's header; no finding text, verdict,
 confidence or line number was altered.
 
-**Rounds 2 and 3: committed BEFORE adjudication**, in `d71cbfb` and `4606e36`, same as round 1.
+**Rounds 2, 3 and 4: committed BEFORE adjudication**, in `d71cbfb`, `4606e36` and `056e22c`, same as round 1.
 
 **Rounds 0a and 0b: committed AFTER adjudication**, retrospectively, in
 `a74fd99`. The text is verbatim, but the ordering property the rule buys was not
@@ -186,6 +187,33 @@ and hands onward that buffer or a copy of its filled prefix, never a view onto a
 larger allocation — which is one sentence, is checkable, and refuses both
 counterexamples outright.
 
+### Round 4 — 1 fixed, and the loop closes
+
+Applied in `7158956`. The reviewer verified round 3's allocation mechanism and
+Table C crossover split as **genuinely-fixed**, and its reason set as
+**partially-fixed** — right as code vocabulary, wrong as reachable outcomes.
+
+Its single finding: Table C called all ten reason strings concrete outcomes of
+today's code, and an acceptance criterion demanded exactly that set. Measured
+2026-08-16, `MAX_FILES` is 32 while the frozen plans expose at most 1, 14 and 0
+candidates, so `exceeds the 32-file cap` is a literal the code contains and no
+valid call can emit — the criterion was unassertable. The vocabulary (ten
+literals) and the reachable set (nine) are now two rows, asserted separately.
+The dormancy is pre-existing and stays: the plans and the cap values are in the
+preserved-unchanged row, and widening either to make a string reachable was
+explicitly refused.
+
+**Why this closes the loop rather than buying a fifth round.** The runbook's own
+test: a finding is HEAVY when fixing it changes what the implementer builds in
+the product; a finding about the spec's own verification machinery is LIGHT, and
+"the loop is DONE when a round finds nothing about the product. Machinery
+findings at that point are fixed or accepted as named residuals; they do not
+extend the loop." Round 4 found nothing about the product — the reviewer said so
+in its own summary, unprompted except by being asked to distinguish the two —
+and the fix landed and was verified by a mirror walk over every surface stating
+the reason count. The stop condition below was therefore never needed: the loop
+ended on the runbook's criterion, not on the budget.
+
 ### The declared stop condition
 
 Three consecutive rounds have landed findings in the same two families:
@@ -201,4 +229,19 @@ survived says a loop with no declared end is the failure mode. **Agreed with the
 owner before round 4 ran:** round 4 is the last one this package pays for on
 these families. If either family produces again, what remains is closed as a
 NAMED RESIDUAL and the spec goes to `Ready` with it, rather than a fifth patch.
-Round 4 runs on `57eb54c`.
+Round 4 ran on `57eb54c` and did not need it — see above. It is recorded because
+the condition was agreed BEFORE the round ran, which is the only time such a
+condition means anything; a stop condition invented after seeing the result is
+not one.
+
+## Where the package stands
+
+Design review is complete: four external rounds plus round zero's two internal
+passes, twenty-nine findings, all dispositioned — fixed, or dropped after the
+orchestrator re-ran them. No finding is carried as an unaccepted residual. The
+spec awaits the owner's sign-off to move `Draft` → `Ready`
+(`docs/specs/README.md`: only the architect or the owner moves a spec to
+`Ready`; `docs/runbooks/codex-review.md`: a spec does not move until the review
+returns no findings the owner has not explicitly accepted). Implementation then
+runs in this same package, under the same branch, and faces the two PR gates on
+its diff.
