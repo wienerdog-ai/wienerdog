@@ -19,6 +19,7 @@ introduced it — the rule at `docs/runbooks/codex-review.md` ("Rules"), landed 
 | 0b | Internal coherence | internal, fresh context | 20 findings | 6 heavy / 14 light | `2026-08-15-snapshot-read-path-r0-internal-coherence-raw.md` | `a74fd99` |
 | 1 | Adversarial design review | gptsol | NEEDS-ATTENTION | 3, all heavy | `2026-08-15-snapshot-read-path-codex-round-1-raw.md` | `a82de32` |
 | 2 | Adversarial design review, round 2 | gptsol | NEEDS-ATTENTION | 2, both heavy | `2026-08-15-snapshot-read-path-codex-round-2-raw.md` | `d71cbfb` |
+| 3 | Adversarial design review, round 3 | gptsol | NEEDS-ATTENTION | 3, all heavy | `2026-08-15-snapshot-read-path-codex-round-3-raw.md` | `4606e36` |
 
 ## When each raw output was committed — the part that is not recoverable later
 
@@ -28,7 +29,7 @@ artifact was decoded on the way in (`&amp;&amp;` → `&&` inside one `executed`
 string) and is disclosed in that file's header; no finding text, verdict,
 confidence or line number was altered.
 
-**Round 2: committed BEFORE adjudication**, in `d71cbfb`, same as round 1.
+**Rounds 2 and 3: committed BEFORE adjudication**, in `d71cbfb` and `4606e36`, same as round 1.
 
 **Rounds 0a and 0b: committed AFTER adjudication**, retrospectively, in
 `a74fd99`. The text is verbatim, but the ordering property the rule buys was not
@@ -149,11 +150,55 @@ by the `lstat`-size-first order the WP exists to replace; and a second cap
 surface is exactly the duplication the original defect came from. Recorded in
 Table C, row 3.
 
-## What follows
+### Round 3 — 3 fixed, one of them against the reviewer's own recommendation
 
-Weighted closure: findings that change what the implementer builds are HEAVY,
-and both rounds' findings were. Round 3 runs on `58de7ea`, and is asked to
-verify round 2's two findings are genuinely fixed rather than re-worded, and to
-attack Table C itself — a newly extracted table is new surface, and the loop
-ends when a round finds nothing about the product, not when the author is
-tired.
+Applied in `57eb54c`. The reviewer verified round 2's crossover fix as
+**genuinely-fixed** and its allocation fix as **partially-fixed**. All three new
+findings reproduced on the orchestrator's machine first.
+
+Two were errors in the Table C extraction itself — the injected-defect rate the
+runbook measures, not a design problem:
+
+1. **Table C denied a crossover it created.** It claimed rows 3 and 5 were the
+   only reason-assignment changes while row 6 said otherwise. Measured: an
+   over-cap candidate whose read fails reports the cap reason today, without the
+   read being attempted. The closing contract now separates CHANGED PRECEDENCE
+   (rows 3, 4, 6) from a NEW REFUSAL (row 5), and a criterion covers both halves
+   of the crossover.
+2. **The reason set said eight strings; there are ten.**
+   `provenance gate: <exclusion>` is one form but three strings, and Table A
+   requires the class verbatim. Enumerated once in Table C, cited elsewhere.
+
+The third was different in kind, and its disposition **departs from the
+reviewer's recommendation**, with the owner ratifying the departure on
+2026-08-16:
+
+**The allocation bound had no testable unit.** Measured: a 262,145-byte view
+keeps a 120,965,360-byte backing store alive, so a length assertion proves
+nothing. The reviewer recommended defining a memory metric — aggregate
+backing-store capacity, aliases counted once, gate representations excluded by a
+named multiple. That was NOT taken: a metric of that shape is test design, which
+`docs/runbooks/spec-authoring.md` puts on the implementer's side of the line,
+and three consecutive rounds of trying to pin this family as a metric produced
+three different readings. The spec now states the MECHANISM instead — the read
+stage allocates at the bound, never at the source size or the `fstat` report,
+and hands onward that buffer or a copy of its filled prefix, never a view onto a
+larger allocation — which is one sentence, is checkable, and refuses both
+counterexamples outright.
+
+### The declared stop condition
+
+Three consecutive rounds have landed findings in the same two families:
+
+| Family | Round 1 | Round 2 | Round 3 |
+|---|---|---|---|
+| What exactly is bounded | the criterion did not distinguish bounded from unbounded | the bound permitted whole-source allocation | the allocation bound had no testable unit |
+| Refusal order and reason assignment | the socket criterion contradicted open-failure precedence | the order could not preserve today's assignment | Table C denied its own crossover; the reason count was wrong |
+
+The circuit-breaker already fired once and produced Table C, so a further
+extraction is not the answer, and the runaway-loop lesson this repo has twice
+survived says a loop with no declared end is the failure mode. **Agreed with the
+owner before round 4 ran:** round 4 is the last one this package pays for on
+these families. If either family produces again, what remains is closed as a
+NAMED RESIDUAL and the spec goes to `Ready` with it, rather than a fifth patch.
+Round 4 runs on `57eb54c`.
