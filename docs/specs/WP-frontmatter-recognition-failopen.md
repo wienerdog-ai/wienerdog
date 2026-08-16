@@ -5,8 +5,8 @@ status: Draft
 model: opus
 size: M
 depends_on: []
-adrs: [ADR-0022, ADR-0021, ADR-0032, ADR-0004, ADR-0005, ADR-0031]
-epic: audit-a4
+adrs: [ADR-0022, ADR-0004, ADR-0031]
+epic: audit-2026-07-29
 ---
 
 # WP-frontmatter-recognition-failopen: honour the untrusted flag through a BOM or a CRLF opener
