@@ -404,8 +404,325 @@ test('vault-snapshot: the pre-existing skip reasons and the newest-first pick st
     reasonFor(skipped, 'reports/dreams/2026-07-08.md'),
     `exceeds the ${MAX_FILE_BYTES}-byte per-file cap`
   );
-  // The over-cap file is rejected on its lstat size — it is never read, so no
-  // content gate can have decided it.
+  // The over-cap file is rejected before any content gate runs, so no gate can
+  // have decided it. (It IS opened and read up to the bound first — the caps
+  // are decided on the bytes actually read, WP-snapshot-read-path-hardening
+  // Table A — but those bytes reach nothing.)
   assert.ok(copied(snapshotDir, 'reports/dreams/2026-07-07.md'));
   assert.equal(fs.statSync(path.join(snapshotDir, 'reports/dreams/2026-07-07.md')).mode & 0o777, 0o600);
+});
+
+// ============================================================== the read path
+// WP-snapshot-read-path-hardening. Everything below is about WHICH file the
+// snapshot ends up reading and how much of it: the file opened is the file
+// read, the caps are enforced against the bytes actually read, and the read is
+// bounded. The race cases are staged deterministically by hooking `lstatSync`
+// for the one candidate path — that reproduces the window's OUTCOME (the
+// checked file is not the read file) without depending on timing.
+
+/**
+ * Run one snapshot with `fs` instrumented. The read primitive and the
+ * descriptor lifecycle are only observable from here: Table A's bounds and the
+ * close posture are properties of HOW the read is performed, not of the result.
+ * @returns {{result?: object, threw?: Error, opens: number, closes: number,
+ *            reads: Array<{requested: number, bufferLength: number, got: number}>,
+ *            written: Buffer[]}}
+ */
+function instrumented(paths, routineId, hooks = {}) {
+  const real = {
+    openSync: fs.openSync,
+    closeSync: fs.closeSync,
+    readSync: fs.readSync,
+    lstatSync: fs.lstatSync,
+    writeFileSync: fs.writeFileSync,
+  };
+  const log = { opens: 0, closes: 0, leaked: 0, reads: [], written: [] };
+  // Count ONLY descriptors on vault paths. The staging side (mkdirPrivate, the
+  // copy) opens descriptors of its own, and counting those would make this
+  // assertion pass for reasons that have nothing to do with the read path.
+  const vaultFds = new Set();
+  fs.openSync = (p, ...rest) => {
+    const fd = real.openSync(p, ...rest);
+    if (String(p).startsWith(paths.vault)) {
+      log.opens += 1;
+      vaultFds.add(fd);
+    }
+    return fd;
+  };
+  fs.closeSync = (fd, ...rest) => {
+    if (vaultFds.has(fd)) {
+      log.closes += 1;
+      vaultFds.delete(fd);
+    }
+    return real.closeSync(fd, ...rest);
+  };
+  fs.readSync = (fd, buf, off, len, pos) => {
+    if (hooks.readSync) hooks.readSync();
+    const got = real.readSync(fd, buf, off, len, pos);
+    log.reads.push({ requested: len, bufferLength: buf.length, got });
+    return got;
+  };
+  if (hooks.lstatSync) fs.lstatSync = (...a) => hooks.lstatSync(real.lstatSync, ...a);
+  fs.writeFileSync = (dest, buf, opts) => {
+    log.written.push(buf);
+    if (hooks.writeFileSync) return hooks.writeFileSync();
+    return real.writeFileSync(dest, buf, opts);
+  };
+  try {
+    log.result = snapshotOf(paths, routineId);
+  } catch (e) {
+    log.threw = e;
+  } finally {
+    Object.assign(fs, real);
+  }
+  log.leaked = vaultFds.size;
+  return log;
+}
+
+/** Stage the check→open window: `lstat` reports `size` for `src`, disk does not. */
+const underReport = (src, size) => (real, p, ...rest) => {
+  const st = real(p, ...rest);
+  if (p === src) Object.defineProperty(st, 'size', { value: size });
+  return st;
+};
+
+// ------------------------------------------------- the check→open window
+
+test('vault-snapshot: a file that grows past the cap after its type check is refused BY THE CAP', () => {
+  const paths = tempPaths();
+  const rel = 'reports/dreams/2026-08-16.md';
+  const src = writeVault(paths, rel, `# grown\n${'a'.repeat(MAX_FILE_BYTES + 1 - 9)}\n`);
+  const { result } = instrumented(paths, 'daily-digest', { lstatSync: underReport(src, 100) });
+
+  assert.equal(reasonFor(result.skipped, rel), `exceeds the ${MAX_FILE_BYTES}-byte per-file cap`);
+  // Not `appears to contain a secret`, which is what today's code answers: the
+  // scanner's oversized bail firing because the caps were enforced against the
+  // size lstat reported. Nothing is copied, and nothing is copied truncated.
+  assert.ok(!copied(result.snapshotDir, rel));
+});
+
+test('vault-snapshot: a symlink swapped in after the type check is never read through', { skip: !POSIX }, () => {
+  const paths = tempPaths();
+  const outside = writeVault(paths, 'outside.md', '# out-of-vault\n\nprose the gates accept.\n');
+  const rel = 'reports/dreams/2026-08-16.md';
+  const src = writeVault(paths, rel, '# innocent\n');
+  const { result } = instrumented(paths, 'daily-digest', {
+    lstatSync: (real, p, ...rest) => {
+      const st = real(p, ...rest);
+      if (p === src) {
+        fs.unlinkSync(src);
+        fs.symlinkSync(outside, src);
+      }
+      return st;
+    },
+  });
+
+  assert.ok(!copied(result.snapshotDir, rel), 'the out-of-vault file is not copied');
+  assert.equal(reasonFor(result.skipped, rel), 'unreadable', 'the open fails; one reason for every open failure');
+});
+
+test('vault-snapshot: a directory swapped in after the type check opens, and the DESCRIPTOR refuses it', { skip: !POSIX }, () => {
+  const paths = tempPaths();
+  const rel = 'reports/dreams/2026-08-16.md';
+  const src = writeVault(paths, rel, '# innocent\n');
+  const log = instrumented(paths, 'daily-digest', {
+    lstatSync: (real, p, ...rest) => {
+      const st = real(p, ...rest);
+      if (p === src) {
+        fs.unlinkSync(src);
+        fs.mkdirSync(src);
+      }
+      return st;
+    },
+  });
+
+  assert.equal(
+    reasonFor(log.result.skipped, rel),
+    'not a regular file (symlinks are never followed)'
+  );
+  // This is the path a `finally` around the READ alone would leak: a descriptor
+  // exists, and nothing is ever read through it.
+  assert.equal(log.reads.length, 0, 'the fstat refusal reads nothing');
+  assert.equal(log.opens, 1);
+  assert.equal(log.closes, 1, 'closed anyway');
+  assert.equal(log.leaked, 0);
+});
+
+// ------------------------------------------------------------- the crossover
+
+test('vault-snapshot: a failed open outranks a cap reason when both apply', { skip: !UNPRIVILEGED }, () => {
+  const paths = tempPaths();
+  const rel = 'reports/dreams/2026-08-16.md';
+  const src = writeVault(paths, rel, 'x'.repeat(300 * 1024)); // over the per-file cap
+  fs.chmodSync(src, 0o000); // and unopenable
+  try {
+    const { skipped } = snapshotOf(paths, 'daily-digest');
+    // Today this reports the cap reason, because the cap is decided on the size
+    // lstat reported, before any open. The owner accepted the crossover.
+    assert.equal(reasonFor(skipped, rel), 'unreadable');
+  } finally {
+    fs.chmodSync(src, 0o600);
+  }
+});
+
+test('vault-snapshot: a failed bounded read outranks a cap reason too', () => {
+  const paths = tempPaths();
+  const rel = 'reports/dreams/2026-08-16.md';
+  writeVault(paths, rel, 'x'.repeat(300 * 1024));
+  const { result } = instrumented(paths, 'daily-digest', {
+    readSync: () => {
+      throw Object.assign(new Error('staged read failure'), { code: 'EIO' });
+    },
+  });
+
+  assert.equal(reasonFor(result.skipped, rel), 'unreadable');
+  assert.ok(!copied(result.snapshotDir, rel));
+});
+
+// -------------------------------------------------------------- boundedness
+
+test('vault-snapshot: the read is bounded at the primitive — requested, accumulated, and the buffer itself', () => {
+  const paths = tempPaths();
+  const rel = 'reports/dreams/2026-08-16.md';
+  const src = writeVault(paths, rel, 'x'.repeat(4 * 1024 * 1024)); // 16× the cap
+  const log = instrumented(paths, 'daily-digest', { lstatSync: underReport(src, 100) });
+
+  assert.ok(log.reads.length > 0, 'the file really was read');
+  for (const r of log.reads) {
+    assert.ok(r.requested <= MAX_FILE_BYTES + 1, `(a) requested ${r.requested} > the bound`);
+    assert.equal(r.bufferLength, MAX_FILE_BYTES + 1, '(c) the buffer is allocated AT the bound');
+  }
+  const accumulated = log.reads.reduce((n, r) => n + r.got, 0);
+  assert.ok(accumulated <= MAX_FILE_BYTES + 1, `(b) accumulated ${accumulated} > the bound`);
+  assert.equal(
+    reasonFor(log.result.skipped, rel),
+    `exceeds the ${MAX_FILE_BYTES}-byte per-file cap`
+  );
+});
+
+test('vault-snapshot: what is written is a COPY of the filled prefix, never a view onto a larger allocation', () => {
+  const paths = tempPaths();
+  const rel = 'reports/dreams/2026-08-16.md';
+  const body = '# report\n\nshort.\n';
+  writeVault(paths, rel, body);
+  const log = instrumented(paths, 'daily-digest');
+
+  assert.deepEqual(log.result.skipped, []);
+  assert.equal(log.written.length, 1);
+  const buf = log.written[0];
+  assert.equal(buf.length, Buffer.byteLength(body));
+  assert.ok(
+    buf.buffer.byteLength < MAX_FILE_BYTES + 1,
+    'a view onto the bounded read buffer would keep all of it alive'
+  );
+});
+
+// ------------------------------------------------------ descriptor lifecycle
+
+test('vault-snapshot: every successful open is paired with exactly one close, on every path', () => {
+  const paths = tempPaths();
+  // a copy, a gate skip, a cap skip and a read failure in one run
+  writeVault(paths, '07-Daily/2026-07-09.md', '# clean\n');
+  writeVault(paths, '07-Daily/2026-07-08.md', `# n\n\n${SECRET}\n`);
+  writeVault(paths, '07-Daily/2026-07-07.md', 'x'.repeat(MAX_FILE_BYTES + 1));
+  const log = instrumented(paths, 'weekly-review');
+
+  assert.ok(log.opens >= 3, 'the run really opened files under the vault');
+  assert.equal(log.closes, log.opens, 'one close per open');
+  assert.equal(log.leaked, 0);
+});
+
+test('vault-snapshot: the descriptor is already closed when the write side throws', () => {
+  const paths = tempPaths();
+  writeVault(paths, 'reports/dreams/2026-08-16.md', '# report\n');
+  const log = instrumented(paths, 'daily-digest', {
+    writeFileSync: () => {
+      throw new Error('staged write failure');
+    },
+  });
+
+  assert.ok(log.threw, 'the write-side throw is pre-existing behaviour and still escapes');
+  assert.equal(log.opens, 1);
+  assert.equal(log.closes, 1, 'the descriptor did not leak past the read');
+  assert.equal(log.leaked, 0);
+});
+
+// ------------------------------------------------------- the reason contract
+
+test('vault-snapshot: the nine REACHABLE reasons are each produced by their own check', { skip: !POSIX }, () => {
+  const seen = new Set();
+
+  {
+    const paths = tempPaths();
+    const dreams = path.join(paths.vault, 'reports', 'dreams');
+    fs.mkdirSync(dreams, { recursive: true });
+    fs.symlinkSync(writeVault(paths, 'x.txt', 'p'), path.join(dreams, '2026-07-09.md'));
+    writeVault(paths, '07-Daily/2026-07-08.md', 'x'.repeat(MAX_FILE_BYTES + 1));
+    writeVault(paths, '07-Daily/2026-07-07.md', Buffer.from([0xff]));
+    writeVault(paths, '07-Daily/2026-07-06.md', '---\ntags:\n  - w\n---\n# n\n');
+    writeVault(paths, '07-Daily/2026-07-05.md', '---\nderived_from_untrusted: true\n---\n# n\n');
+    writeVault(paths, '07-Daily/2026-07-04.md', '---\nderived_from_untrusted: True\n---\n# n\n');
+    writeVault(paths, '07-Daily/2026-07-03.md', `# n\n\n${SECRET}\n`);
+    snapshotOf(paths, 'weekly-review').skipped.forEach((s) => seen.add(s.reason));
+  }
+  {
+    // `unreadable` without needing an unprivileged uid
+    const paths = tempPaths();
+    writeVault(paths, 'reports/dreams/2026-07-09.md', '# r\n');
+    instrumented(paths, 'daily-digest', {
+      readSync: () => {
+        throw Object.assign(new Error('staged'), { code: 'EIO' });
+      },
+    }).result.skipped.forEach((s) => seen.add(s.reason));
+  }
+  {
+    // the byte-total cap
+    const paths = tempPaths();
+    const filler = (t) => `# ${t}\n\n${'a'.repeat(250000)}\n`;
+    for (let d = 1; d <= 7; d += 1) writeVault(paths, `07-Daily/2026-07-0${d}.md`, filler(`d${d}`));
+    for (let d = 1; d <= 7; d += 1) {
+      writeVault(paths, `reports/dreams/2026-07-0${d}.md`, filler(`r${d}`));
+    }
+    snapshotOf(paths, 'weekly-review').skipped.forEach((s) => seen.add(s.reason));
+  }
+
+  assert.deepEqual(
+    [...seen].sort(),
+    [
+      'appears to contain a secret',
+      // sorted: "2097152" precedes "262144" lexicographically
+      `exceeds the ${MAX_TOTAL_BYTES}-byte total cap`,
+      `exceeds the ${MAX_FILE_BYTES}-byte per-file cap`,
+      'not a regular file (symlinks are never followed)',
+      'not valid UTF-8 text',
+      'provenance gate: malformed',
+      'provenance gate: untrusted-exact',
+      'provenance gate: untrusted-invalid',
+      'unreadable',
+    ]
+  );
+});
+
+test('vault-snapshot: the file-count reason is VOCABULARY only — dormant under every frozen plan', () => {
+  const source = fs.readFileSync(
+    path.join(__dirname, '..', '..', 'src', 'core', 'vault-snapshot.js'),
+    'utf8'
+  );
+  assert.ok(
+    source.includes('-file cap'),
+    'the literal is still in the module: the vocabulary is preserved'
+  );
+  // …and no valid plan can reach it, so no test can assert it as an outcome.
+  for (const [id, plan] of Object.entries(SNAPSHOT_PLANS)) {
+    const candidates = plan.reduce((n, s) => n + s.newest, 0);
+    assert.ok(candidates <= MAX_FILES, `${id} exposes ${candidates} candidates against a ${MAX_FILES}-file cap`);
+  }
+});
+
+test('vault-snapshot: the per-file cap never exceeds the scanner limit, so the oversized bail stays unreachable', () => {
+  // Equal by coincidence, coupled in behaviour: every file that reaches the
+  // secret scan passed the per-file cap on the bytes actually read, so raising
+  // MAX_FILE_BYTES above SCAN_MAX_BYTES would start withholding
+  // legitimately-sized files under `appears to contain a secret`.
+  assert.ok(MAX_FILE_BYTES <= secretScan.ScanLimits.SCAN_MAX_BYTES);
 });
