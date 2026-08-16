@@ -1,7 +1,7 @@
 ---
 id: WP-snapshot-read-path-hardening
 title: Harden the vault snapshot's read path — open once, decide on the descriptor, bound the read
-status: In-Review
+status: Done
 model: opus
 size: M
 depends_on: []
