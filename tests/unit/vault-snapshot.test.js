@@ -727,12 +727,14 @@ test('vault-snapshot: the file-count reason is VOCABULARY only — dormant under
     path.join(__dirname, '..', '..', 'src', 'core', 'vault-snapshot.js'),
     'utf8'
   );
-  // `-file cap` alone also matches `per-file cap`, so it would stay true after
-  // the dormant literal was deleted. Match the template text as it appears in
-  // the source instead.
+  // Match the WHOLE frozen form as it appears in the source. `-file cap` alone
+  // also matches `per-file cap`, so it would survive the literal's deletion;
+  // and the tail alone would survive a re-wording of the prefix. Table C
+  // freezes the whole string, and this is the one literal with no runtime
+  // outcome behind it, so this match is its only guard.
   assert.ok(
-    source.includes('${MAX_FILES}-file cap'),
-    'the literal is still in the module: the vocabulary is preserved'
+    source.includes('exceeds the ${MAX_FILES}-file cap'),
+    'the literal is still in the module, whole: the vocabulary is preserved'
   );
   // …and no valid plan can reach it, so no test can assert it as an outcome.
   for (const [id, plan] of Object.entries(SNAPSHOT_PLANS)) {
@@ -783,18 +785,27 @@ fs.lstatSync = (p, ...rest) => {
   }
   return st;
 };
-process.stdout.write(JSON.stringify(makeVaultSnapshot(paths, 'daily-digest', stage).skipped));
+const out = makeVaultSnapshot(paths, 'daily-digest', stage);
+process.stdout.write(
+  JSON.stringify({
+    skipped: out.skipped,
+    copied: out.snapshotDir !== null && fs.existsSync(out.snapshotDir + '/' + process.argv[5]),
+  })
+);
 `
   );
 
-  const out = require('node:child_process').execFileSync(
-    process.execPath,
-    [child, root, stage, src],
-    { timeout: 10000, encoding: 'utf8' }
+  const out = JSON.parse(
+    require('node:child_process').execFileSync(
+      process.execPath,
+      [child, root, stage, src, rel],
+      { timeout: 10000, encoding: 'utf8' }
+    )
   );
   assert.equal(
-    reasonFor(JSON.parse(out), rel),
+    reasonFor(out.skipped, rel),
     'not a regular file (symlinks are never followed)',
     'the descriptor refuses it — and the open returned at all, which is O_NONBLOCK doing its job'
   );
+  assert.equal(out.copied, false, 'and nothing reached the snapshot');
 });
