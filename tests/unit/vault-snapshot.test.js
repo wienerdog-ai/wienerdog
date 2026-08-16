@@ -459,7 +459,15 @@ function instrumented(paths, routineId, hooks = {}) {
   fs.readSync = (fd, buf, off, len, pos) => {
     if (hooks.readSync) hooks.readSync();
     const got = real.readSync(fd, buf, off, len, pos);
-    log.reads.push({ requested: len, bufferLength: buf.length, got });
+    // `buf.length` is the VIEW; `buf.buffer.byteLength` is what is actually
+    // allocated. A subarray of a source-sized Buffer has the right view length
+    // and the wrong allocation, which is the whole point of bound (c).
+    log.reads.push({
+      requested: len,
+      bufferLength: buf.length,
+      backing: buf.buffer.byteLength,
+      got,
+    });
     return got;
   };
   if (hooks.lstatSync) fs.lstatSync = (...a) => hooks.lstatSync(real.lstatSync, ...a);
@@ -569,14 +577,20 @@ test('vault-snapshot: a failed bounded read outranks a cap reason too', () => {
   const paths = tempPaths();
   const rel = 'reports/dreams/2026-08-16.md';
   writeVault(paths, rel, 'x'.repeat(300 * 1024));
-  const { result } = instrumented(paths, 'daily-digest', {
+  const log = instrumented(paths, 'daily-digest', {
     readSync: () => {
       throw Object.assign(new Error('staged read failure'), { code: 'EIO' });
     },
   });
 
-  assert.equal(reasonFor(result.skipped, rel), 'unreadable');
-  assert.ok(!copied(result.snapshotDir, rel));
+  assert.equal(reasonFor(log.result.skipped, rel), 'unreadable');
+  assert.ok(!copied(log.result.snapshotDir, rel));
+  // The descriptor was acquired and must still be closed on this path — the
+  // lifecycle test's fixtures never stage a read failure, so without this the
+  // leak would only exist here and nothing would catch it.
+  assert.equal(log.opens, 1);
+  assert.equal(log.closes, 1);
+  assert.equal(log.leaked, 0);
 });
 
 // -------------------------------------------------------------- boundedness
@@ -590,7 +604,12 @@ test('vault-snapshot: the read is bounded at the primitive — requested, accumu
   assert.ok(log.reads.length > 0, 'the file really was read');
   for (const r of log.reads) {
     assert.ok(r.requested <= MAX_FILE_BYTES + 1, `(a) requested ${r.requested} > the bound`);
-    assert.equal(r.bufferLength, MAX_FILE_BYTES + 1, '(c) the buffer is allocated AT the bound');
+    assert.equal(r.bufferLength, MAX_FILE_BYTES + 1, '(c) the read view is the bound');
+    assert.equal(
+      r.backing,
+      MAX_FILE_BYTES + 1,
+      '(c) and the ALLOCATION behind it is the bound too — not a view onto a source-sized buffer'
+    );
   }
   const accumulated = log.reads.reduce((n, r) => n + r.got, 0);
   assert.ok(accumulated <= MAX_FILE_BYTES + 1, `(b) accumulated ${accumulated} > the bound`);
@@ -708,8 +727,11 @@ test('vault-snapshot: the file-count reason is VOCABULARY only — dormant under
     path.join(__dirname, '..', '..', 'src', 'core', 'vault-snapshot.js'),
     'utf8'
   );
+  // `-file cap` alone also matches `per-file cap`, so it would stay true after
+  // the dormant literal was deleted. Match the template text as it appears in
+  // the source instead.
   assert.ok(
-    source.includes('-file cap'),
+    source.includes('${MAX_FILES}-file cap'),
     'the literal is still in the module: the vocabulary is preserved'
   );
   // …and no valid plan can reach it, so no test can assert it as an outcome.
@@ -725,4 +747,54 @@ test('vault-snapshot: the per-file cap never exceeds the scanner limit, so the o
   // MAX_FILE_BYTES above SCAN_MAX_BYTES would start withholding
   // legitimately-sized files under `appears to contain a secret`.
   assert.ok(MAX_FILE_BYTES <= secretScan.ScanLimits.SCAN_MAX_BYTES);
+});
+
+test('vault-snapshot: a FIFO swapped in after the type check is refused, and does NOT hang the run', { skip: !POSIX }, () => {
+  // Deliberately run in a CHILD process with a hard timeout. Without
+  // `O_NONBLOCK` the open on a FIFO blocks the event loop SYNCHRONOUSLY while
+  // it waits for a writer, so an in-process test timeout could never fire and a
+  // regression would wedge the suite instead of failing it. `execFileSync`'s
+  // timeout kills the child, which turns that regression into a red test.
+  const paths = tempPaths();
+  const root = path.dirname(paths.vault);
+  const rel = 'reports/dreams/2026-08-16.md';
+  const src = writeVault(paths, rel, '# innocent\n');
+  const stage = staging();
+  const child = path.join(root, 'fifo-probe.js');
+  fs.writeFileSync(
+    child,
+    `'use strict';
+const fs = require('node:fs');
+const cp = require('node:child_process');
+const { makeVaultSnapshot } = require(${JSON.stringify(require.resolve('../../src/core/vault-snapshot'))});
+const { getPaths } = require(${JSON.stringify(require.resolve('../../src/core/paths'))});
+const [, , root, stage, src] = process.argv;
+const paths = getPaths({
+  HOME: root,
+  WIENERDOG_HOME: root + '/wd',
+  WIENERDOG_VAULT: root + '/vault',
+});
+const real = fs.lstatSync;
+fs.lstatSync = (p, ...rest) => {
+  const st = real(p, ...rest);
+  if (p === src) {
+    fs.unlinkSync(src);
+    cp.execFileSync('mkfifo', [src]);
+  }
+  return st;
+};
+process.stdout.write(JSON.stringify(makeVaultSnapshot(paths, 'daily-digest', stage).skipped));
+`
+  );
+
+  const out = require('node:child_process').execFileSync(
+    process.execPath,
+    [child, root, stage, src],
+    { timeout: 10000, encoding: 'utf8' }
+  );
+  assert.equal(
+    reasonFor(JSON.parse(out), rel),
+    'not a regular file (symlinks are never followed)',
+    'the descriptor refuses it — and the open returned at all, which is O_NONBLOCK doing its job'
+  );
 });
