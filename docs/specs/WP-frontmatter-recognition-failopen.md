@@ -86,7 +86,7 @@ grep -n "KNOWN = {" -A 6 src/cli/memory.js
 
 | Action | Path | Notes |
 |--------|------|-------|
-| modify | src/core/dream/validate.js | one guard: `parseFrontmatter` (`:161`) yields an empty record when `parse()` reports `malformed` |
+| modify | src/core/dream/validate.js | each security decision rejects a malformed block before comparing fields — six sites, see Exact contracts. NOT a guard inside `parseFrontmatter`: that shape was measured to be a regression |
 | modify | src/core/digest.js | the daily path (`:745-748`) pushes an anomalous exclusion onto the banner list it already uses at `:766`; the banner wording (`:784`) becomes accurate for a heterogeneous list |
 | modify | tests/unit/dream-validate.test.js | the Tier-3 floor, the preservation checks and the raise-only guard under a malformed block |
 | modify | tests/unit/digest.test.js | the daily path's banner and its wording |
@@ -98,13 +98,35 @@ sentinel is untouched.
 
 ### Exact contracts
 
-**The validator guard.** `parseFrontmatter` (`validate.js:161`) yields an
-empty record when `parse()` reports `malformed`, so a malformed block cannot
-present fields to the Tier-3 floor (`:195`), the registry/preservation checks
-(`:317`/`:325`/`:500`), the raise-only guard (`:332`), or the new-skill-draft
-registration (`:1170`). It keeps the existing
-`'Tier-3 path missing provenance frontmatter (…)'` reason — **no new reason
-string**. This is ADR-0022 §4 applied where it was not.
+**The validator guard — at the DECISIONS, not in the view.** An earlier draft
+of this spec put the guard in `parseFrontmatter` (`validate.js:161`), making
+it yield an empty record on `malformed`. **That is a regression and must not
+be built.** Measured: with a malformed HEAD carrying protected `id`,
+`origin`, `created` and an explicit `derived_from_untrusted: true`, against a
+revision that omits all four, today's checks report **four** violations
+(`id changed`, `origin changed`, `created changed`, `raise-only lowered`)
+while the empty-record version reports **none** and admits the revision.
+Emptying the view erases the difference between *absent* and *hidden*, and
+every one of these checks reads absence as agreement.
+
+The contract is therefore: **each security decision rejects a malformed block
+before it compares any field.** `parse()` already reports `malformed`; the
+decision sites must consult it.
+
+| Site | Decision | On `malformed` |
+|---|---|---|
+| `:195` | Tier-3 floor | reject — the existing `'Tier-3 path missing provenance frontmatter (…)'` reason already covers it |
+| `:317` / `:325` | skill-revision preservation, either side | reject before comparing `id`/`origin`/`created` |
+| `:332` | raise-only guard | reject before comparing the flag; never treat an unreadable HEAD as "not `true`" |
+| `:500` | learnings-ledger parent-skill identity | reject before comparing against the registry |
+| `:1170` | new-skill-draft registration | reject; never register default values from an unreadable reread |
+| `:343` | `skillBody` body comparison | out of scope: it compares bodies, not security fields, and this WP does not change what `body` is |
+
+**This needs one new reason string**, on the revision path: the existing
+vocabulary has no accurate way to say "this file's frontmatter block is
+malformed", and reusing the Tier-3 or path-reuse reason there would report
+the wrong cause. An earlier draft claimed no new reason string; that claim was
+only true of the design that regressed.
 
 **The daily banner.** The daily path pushes onto the same
 `identityExclusions` list it already uses at `digest.js:766`, with the same
@@ -124,10 +146,26 @@ at `:786-790` holds when the list is empty.
 
 ## Contract reference
 
-N/A — with recognition out of scope this WP changes no API shape, no status
-taxonomy, no parsing, and introduces no reason code. It applies two existing
-contracts (ADR-0022 §4 and its Consequences) at two consumers that do not.
-Fewer than two of ADR-0031's seven criteria fire.
+Activation (ADR-0031's 2-of-7): **(iv)** error/reason-code behavior changes —
+a new rejection reason on the revision path, and a changed outcome at five
+decision sites; **(vi)** multiple consumers inherit the rule. Two of seven,
+so the discipline fires. An earlier draft marked this section N/A on the
+strength of the empty-record design, which introduced no reason code because
+it also introduced a regression.
+
+### Table A — where a malformed block is rejected
+
+The canonical table is the six-row site table under **Exact contracts**. It is
+not restated here; this section exists to point at it and to register its
+mirrors.
+
+### Mirrored Surface Checklist
+
+- [ ] The Deliverables note for `src/core/dream/validate.js`
+- [ ] Acceptance criteria AC1 and AC2
+- [ ] The Security checklist's reason-string claim
+- [ ] The Implementation-notes trap, which this contract now resolves rather
+      than hands over
 
 ## Implementation notes & constraints
 
@@ -140,35 +178,47 @@ Fewer than two of ADR-0031's seven criteria fire.
   today and rejected after. That direction is fail-closed and is what
   ADR-0022 §4 requires, but it is a real change on notes that have nothing to
   do with any parsing edge case. It must be visible in the PR body.
-- **Trap — an empty record must not make a check vacuously pass.** The
-  preservation checks compare `cur.id !== head.id` and friends; with both
-  sides empty those comparisons succeed. Verify each call site fails closed
-  rather than falling through, and report any that cannot.
+- **Why the guard is at the decisions and not in the view.** Every one of
+  these checks compares two records, and `cur.id !== head.id` and friends read
+  ABSENCE as agreement. A view that empties itself on `malformed` therefore
+  silences the very checks it was meant to strengthen — measured, four
+  violations became zero. The site table in Exact contracts is the resolution;
+  do not reintroduce the view-level guard as a shortcut.
 - When uncertain: choose the simpler option and note it in the PR under
   "Decisions made". Do NOT expand scope to resolve ambiguity.
 
 ## Security checklist
 
 - [ ] No untrusted identifier introduced by this WP flows into a filesystem
-      path or a shell command: the change is one guard and one push of a
-      code-owned label onto an existing banner list. No path, filename or
-      command is constructed. The anchored-pattern rule has no subject here —
-      stated rather than deleted so the absence is checkable.
+      path or a shell command: the change is a set of rejection branches in
+      the validator and one push of a code-owned label onto an existing
+      banner list. No path, filename or command is constructed. The
+      anchored-pattern rule has no subject here — stated rather than deleted
+      so the absence is checkable.
 - [ ] The banner carries no note content: a fixed label and two fixed reason
       strings, the same code-owned rule as `:784`.
-- [ ] Both changes move notes toward exclusion or toward visibility. Neither
-      admits anything that is excluded today.
+- [ ] **Nothing rejected today becomes admitted — checked against the
+      measured case, not asserted.** The AC2 regression input is the test:
+      an earlier design of this same guard turned four detected violations
+      into zero, so this box is only tickable by running that input.
 
 ## Acceptance criteria
 
-- [ ] **AC1** — A block reported `malformed` presents **no** fields to the
-      validator, so a Tier-3 write with a malformed block and otherwise
-      floor-passing values is rejected with the existing missing-provenance
-      reason.
-- [ ] **AC2** — The empty record does not make any preservation, registry or
-      raise-only check pass vacuously: each of the six call sites
-      (`:195, 317, 325, 343, 500, 1170`) is exercised with a malformed block
-      and asserted to fail closed.
+- [ ] **AC1** — A Tier-3 write whose block is `malformed` is rejected with
+      the existing missing-provenance reason, even when its readable fields
+      would meet the floor.
+- [ ] **AC2** — **The regression case is a required test.** A malformed HEAD
+      carrying `id`, `origin`, `created` and `derived_from_untrusted: true`,
+      against a revision that omits all four, is REJECTED. Today's code
+      reports four violations on that input and the empty-record design
+      reported none; the test must fail on the empty-record design. Each
+      remaining decision site (`:195, 317, 325, 500, 1170`) is exercised with
+      a malformed block on each side and asserted to reject before any field
+      comparison. `:343` is excluded by the site table and needs no case.
+- [ ] **AC2a** — No decision may reject by *coincidence*. For each site, the
+      malformed case and a genuinely-absent-field case are asserted
+      separately, so a rejection that comes from absence rather than from the
+      malformed state is visible as a distinct assertion.
 - [ ] **AC3** — A daily note excluded as `malformed` or `untrusted-invalid`
       produces a banner entry labelled `daily-summary` with the identity
       path's existing reason string; an `untrusted-exact` exclusion and an
@@ -206,11 +256,28 @@ git diff --stat -- tests/golden/
 
 `parse()` recognizes frontmatter only when line 0 is byte-exactly `---` and a
 later line is byte-exactly `---`. **Every other leading shape makes an
-explicitly written `derived_from_untrusted: true` invisible**, and the note
-reads as trusted at the digest's two paths, the snapshot notes slice, and the
-dream validator. This WP does not change that. `WP-gate-vault-snapshot`
-Residual 8 already records the defect; this residual supersedes its
-three-shape enumeration with what seven rounds measured.
+explicitly written `derived_from_untrusted: true` invisible**. This WP does
+not change that. `WP-gate-vault-snapshot` Residual 8 already records the
+defect; this residual supersedes its three-shape enumeration with what seven
+rounds measured.
+
+**Per consumer, because the outcome differs and an earlier draft of this
+residual got it wrong.** Measured on this tree for a BOM opener, a CRLF
+block, a leading blank line, and an opener with no closer:
+
+| Consumer | Outcome for an unrecognized block |
+|---|---|
+| digest identity injection (`digest.js:689`) | **fails OPEN** — `exclusion` is `null`, the body is injected including its frontmatter text |
+| digest daily summary (`digest.js:747`) | **fails OPEN** for the BOM, blank-line and no-closer shapes — the flag is invisible and the `## Summary` section is extracted. **Not for CRLF**, which is masked by a second, unrelated defect: `extractSection`'s heading match (`:327`) cannot match `## Summary\r`, so a CRLF daily note emits no summary either way |
+| snapshot notes slice (`vault-snapshot.js:151`) | **fails OPEN** — raw bytes copied |
+| dream Tier-3 floor (`validate.js:195`) | **fails CLOSED** — zero fields reach the view, `hasAll` is false, and the write is rejected as missing provenance |
+| dream raise-only guard (`validate.js:332`) | **fails OPEN in effect** — an unrecognized HEAD cannot be seen to carry `true`, so a lowering revision is not caught, though the Tier-3 floor rejects the write on other grounds |
+
+An earlier draft said these shapes "read as trusted at … the dream
+validator". That was false and is corrected here: the dream gate rejects
+them. Conflating the digest's trusted-by-default rule with the dream's
+stricter schema would have handed the successor a wrong cross-consumer
+invariant.
 
 Shapes measured to be trusted today, each carrying an explicit `true`:
 
