@@ -75,7 +75,23 @@ stored values strip trailing `[ \t\r]+` (`:67`). **The two delimiter lines
 are the only CRLF-blind part of the module** — an inconsistency, not a
 doctrine.
 
-Three supporting measurements, all run on this tree (provenance: `7be88c0`):
+Five supporting measurements, all run on this tree (provenance: `7be88c0`
+for the first three, `74550a9` for the last two):
+
+- **The digest renderer already splits on eight separators that `parse` does
+  not.** `DAILY_LINE_BREAK` (`digest.js:56`) treats CRLF, LF, CR, NEL
+  `U+0085`, VT `U+000B`, FF `U+000C`, LS `U+2028` and PS `U+2029` as line
+  breaks, with a comment saying exactly why. `parse` splits on LF only, so a
+  leading `---` / flag / `---` region built from any of the other six is one
+  parser line: measured, **all six** yield `exclusion = null`, i.e. trusted,
+  while the renderer would show them as separate visual lines. This is the
+  product disagreeing with itself about what a line is, inside the one
+  module ADR-0022 made the single lexer.
+- **`trim()` covers the whitespace family but not NEL.** Measured:
+  `String.prototype.trim()` strips BOM, NBSP, every Unicode space, VT, FF,
+  CR, LS and PS — but **not** NEL `U+0085`, and not ZWSP `U+200B`. It is a
+  fixed point. That gap is why Table A's contract is a *composition* of
+  splitting and trimming rather than either alone.
 
 - **The closer misses too.** In a CRLF file the closing line is `---\r`, so
   `:43` does not match either and `end` stays `-1`. Recognition cannot be
@@ -140,7 +156,7 @@ spec is not edited; this spec records how far the sentence may now widen.
 |--------|------|-------|
 | modify | src/core/frontmatter.js | the two delimiter decisions (`:40`, `:43`) per Table A; the docstring's recognition clause (`:14-16`), whose "missing close → no frontmatter" sentence Table A invalidates |
 | modify | src/core/dream/validate.js | one guard: `parseFrontmatter` (`:161`) yields an empty record when `parse()` reports `malformed` (row B7) |
-| modify | src/core/digest.js | the daily path (`:745-748`) surfaces an anomalous exclusion through the banner list that path already uses (row B2) |
+| modify | src/core/digest.js | the daily path (`:745-748`) surfaces an anomalous exclusion through the banner list that path already uses, and the banner's wording (`:784`) becomes accurate for a heterogeneous list (row B2, Exact contracts) |
 | modify | src/core/vault-snapshot.js | comment only (`:129-134`): the Gate-2 narrowing note is replaced by what the gate now decides on |
 | modify | docs/adr/0022-single-strict-frontmatter-parser.md | amendment: the recognition/fail-closed contract (Table A) + the uniqueness sentinel (see Exact contracts) |
 | modify | tests/unit/frontmatter.test.js | parser-level coverage incl. Table A's boundary set; **two** existing tests assert the old contract and flip — see Exact contracts |
@@ -194,14 +210,25 @@ or the raise-only guard. It keeps the existing
 `'Tier-3 path missing provenance frontmatter (…)'` reason — no new reason
 string.
 
-**The B2 banner.** The daily path pushes onto the same `identityExclusions`
-list it already uses at `digest.js:766`, with the same **code-owned** label
-`'daily-summary'` (never note content — the banner's existing rule) and the
-same reason strings the identity path uses at `:691-692`:
-`'malformed frontmatter'` for `malformed`, `'unclear derived_from_untrusted
-value'` for `untrusted-invalid`. `untrusted-exact` and an absent flag stay
-**silent** — they are normal policy, not anomalies (ADR-0022 §4). No new
-reason string, no new banner, no new mechanism.
+**The B2 banner, and its wording.** The daily path pushes onto the same
+`identityExclusions` list it already uses at `digest.js:766`, with the same
+**code-owned** label `'daily-summary'` (never note content — the banner's
+existing rule) and the same reason strings the identity path uses at
+`:691-692`: `'malformed frontmatter'` for `malformed`, `'unclear
+derived_from_untrusted value'` for `untrusted-invalid`. `untrusted-exact`
+and an absent flag stay **silent** — normal policy, not anomalies
+(ADR-0022 §4). No new reason string, no new mechanism.
+
+The banner's **wording** must also become accurate, because it is now
+assembled from a heterogeneous list. Today `:784` says "some identity notes
+were left out" and directs the user to `wienerdog memory approve <note>` —
+and that command accepts only the four fixed identity notes (`memory.js`'s
+`KNOWN` map, measured: `profile`, `preferences`, `goals`, `instructions`).
+A daily-summary entry therefore gets a wrong noun and an impossible remedy.
+The fix is within this file: a noun that covers both kinds, and the
+approval sentence included only when an identity entry is actually present.
+All wording stays code-owned and fixed-template, so the golden-frozen
+property at `:786-790` is preserved when the list is empty.
 
 **The ADR-0022 uniqueness sentinel names a property, not a command.**
 ADR-0022 §1 names the literal expression `lines[0] !== '---'` as the grep
@@ -241,92 +268,156 @@ baseline opener already collides, measurably, and that collision is accepted
 the writer did not choose, or **selectable formatting** an attacker can ask
 for.
 
-**Normalization, used by every rule below.** A **BOM** is a `U+FEFF` at byte
-0 of the file. A **tolerated closer** is a later line that, after a single
-trailing `\r` is stripped, is exactly `---`.
+**The classification is a TOTAL function, proved by construction — not by
+enumeration.** Three earlier drafts of this table enumerated deviant shapes
+and were each defeated by a shape outside the enumeration (whitespace
+combinations, then a trailing space and a fourth hyphen, then non-LF line
+separators). The contract below therefore fixes the *shape of the proof*:
+a normalization with a named character set, a single `if / else if / else`
+whose branches are exhaustive because they are the only branches, and a
+generated-input sweep instead of a case list.
 
-**The classes are decided by three rules, first match wins.** This
-precedence is the contract: an input matching more than one row's *prose*
-is decided by the earliest rule, and there is no input that matches none.
+**Step 1 — split the leading region.** Split on **exactly the character set
+the digest renderer treats as a line break**: `DAILY_LINE_BREAK`
+(`digest.js:56`) — CRLF as one, then LF, CR, NEL `U+0085`, VT `U+000B`,
+FF `U+000C`, LS `U+2028`, PS `U+2029`. **Eight separators, measured from the
+constant, not assumed**: an earlier draft of this rule said "all four" and
+would have left NEL, VT and FF open. The two sets **must be identical** —
+where the constant lives is the implementer's choice (`frontmatter.js` cannot
+require `digest.js`; that would be circular), but a test must assert the
+equality so the two cannot drift.
 
-| Rule | Predicate | Class | Examples |
-|---|---|---|---|
-| R1 | The file's FIRST line, after removing a BOM and a single trailing `\r`, is exactly `---` — **and** a tolerated closer exists | **RECOGNIZED** | exact `---`; BOM + `---`; CRLF `---\r`; mixed LF opener / CRLF closer |
-| R2 | R1's first line matches but **no** tolerated closer exists; **or** the file's first line that is non-empty (after stripping a trailing `\r`), once any leading `U+FEFF` characters and surrounding `[ \t]` are removed, matches `-{3,}` | **FAIL-CLOSED** (`malformed`) | `---` with no closer; blank line, space, or tab before `---`; a trailing-space `---`; `----`; a blank line then a BOM then `---` |
-| R3 | Everything else, including an empty file and an all-blank file | no frontmatter (unchanged) | plain prose; a `***` or `___` thematic break; empty string |
+**Step 2 — normalize each leading line with `String.prototype.trim()`.**
+That is the named character set: ECMAScript WhiteSpace ∪ LineTerminator ∪
+`U+FEFF`. One anchored operation, not ordered replacements, and a fixed
+point (`s.trim() === s.trim().trim()`). It covers BOM, NBSP `U+00A0`, and
+every Unicode space. `trim()` alone does **not** strip NEL — measured — but
+NEL is a Step-1 separator, so the composition has no gap on the renderer's
+set. Neither step alone is sufficient; the contract is the pair.
 
-**Why R1 is narrow and R2 is wide.** R1 recognizes only what an editor can
-produce without the author choosing it: a BOM and a line-ending convention.
-Everything else in the leading hyphen-run family is selectable, so it fails
-closed — including the two shapes an earlier draft of this table left
-undefined (a trailing-space `---`, and `----`), which fell through to R3 and stayed trusted.
-Deleting the closing delimiter is exactly as cheap as adding a leading
-space, so R2 covers it too.
+**Step 3 — classify. First match wins; the three branches are total.**
 
-**Why R3 stops where it does.** A leading `***` or `___` break, or ordinary
-prose, is not a frontmatter attempt in any convention, and a note with no
-provenance block is trusted **by ADR-0022 §5's explicit decision** — treating
-an absent flag as untrusted would empty the digest and break M2. R3 is that
-decision, not a gap in this one.
+| Rule | Predicate | Class |
+|---|---|---|
+| R1 | Line 0, after removing a `U+FEFF` at byte 0, is exactly `---`; a **tolerated closer** exists (a later leading line whose `trim()` is `---`); and every separator inside the block is LF or CRLF | **RECOGNIZED** |
+| R2 | Line 0 matches R1's first clause but there is no tolerated closer, or a separator inside the block is not LF/CRLF; **or** the first leading line whose `trim()` is non-empty has a `trim()` matching `-{3,}` | **FAIL-CLOSED** (`malformed`) |
+| R3 | Everything else, including an empty file and an all-blank file | no frontmatter (unchanged) |
 
-**A3 is indivisible.** Tolerating the CRLF opener without the CRLF closer
-leaves `delimited:false` (measured, Current state) — the fail-open is not
-closed, only relocated. Both delimiter decisions move together.
+**Why R1 requires an LF/CRLF-delimited block.** The field lexer still splits
+on LF. A block delimited by CR-only, NEL, VT, FF, LS or PS cannot have its
+fields lexed, so recognizing it would produce a block whose contents we
+cannot read — it fails closed instead. Making the whole parser agree on what
+a line is belongs to the successor WP (Out of scope), and R2 holds the
+boundary until it lands.
+
+**Why R1 is narrow and R2 is wide.** R1 recognizes only what an editor
+produces without the author choosing it: a BOM and an LF/CRLF convention.
+Every other leading hyphen-run is selectable by whoever formats the note, so
+it fails closed.
+
+**Why R3 stops where it does, and the one invisible it keeps.** A leading
+`***` or `___` break, or ordinary prose, is not a frontmatter attempt in any
+convention, and a note with no provenance block is trusted **by ADR-0022
+§5's explicit decision** — treating an absent flag as untrusted would empty
+the digest and break M2. One invisible survives `trim()` and therefore lands
+in R3: ZWSP `U+200B`. That is not an oversight — measured, `DAILY_INVISIBLE`
+(`digest.js:75`) **encodes** it, so a ZWSP-prefixed line renders visibly as
+`<U+200B>---` and is not a silent delimiter to a human either. Any future
+invisible that is neither trimmed nor encoded would be a real gap, and the
+sweep below is what would find it.
 
 **Measured cost.** On the product corpus, the population that changes
-classification under R2 is **zero** files (Current state).
+classification is **zero** files (Current state).
 
-#### Table A — boundary probe
+#### Table A — totality probe and generated sweep
 
-Run from the repo root. It classifies an enumerated boundary set by the
-three rules above and prints each input's behaviour **today**, so the
-partition is checkable (every input lands in exactly one class) and the
-defect is visible (today only the first row is gated). The reference
-classifier fixes the CLASS each input lands in; the representation
-(`delimited`, `fields`, `body`) remains the implementer's, per Exact
-contracts.
+This is the *reference* classifier, not the implementation: it fixes which
+class each input lands in, while the representation (`delimited`, `fields`,
+`body`) stays the implementer's per Exact contracts. Two things it must
+show, and the second is the one an enumeration cannot give you:
+
+1. a worked set landing in exactly one class each, and
+2. a **generated sweep** over an alphabet of hyphens, all eight separators,
+   trim-set whitespace, BOM, ZWSP and field text, asserting **totality**
+   (every input gets one of the three classes) and the **leak property**
+   (no input whose first non-blank leading line trims to a hyphen run is
+   classified R3).
+
+It goes through a quoted heredoc, not an inline one-liner — a pattern passed
+through nested quotes silently changes what it matched
+(`docs/runbooks/codex-review.md`, Rules). **Every control character is an
+escape**: a literal one does not survive a copy/paste round trip, and a probe
+that loses its characters reports the wrong class while looking healthy —
+observed once while writing this spec.
 
 ```bash
-node -e '
-const { parse } = require("./src/core/frontmatter");
-const { parseNoteResult } = require("./src/core/digest");
-const F = "derived_from_untrusted: true";
-function classify(text) {
-  const lines = text.split("\n");
-  const closer = (from) => lines.slice(from + 1).some((l) => l.replace(/\r$/, "") === "---");
-  const l0 = lines[0].replace(/^﻿/, "").replace(/\r$/, "");
-  if (l0 === "---") return closer(0) ? "RECOGNIZED" : "FAIL-CLOSED";
-  const ci = lines.findIndex((l) => l.replace(/\r$/, "") !== "");
-  if (ci < 0) return "no frontmatter";
-  const c = lines[ci].replace(/\r$/, "").replace(/^﻿+/, "").replace(/^[ \t]+|[ \t]+$/g, "");
-  return /^-{3,}$/.test(c) ? "FAIL-CLOSED" : "no frontmatter";
+cat > /tmp/wd-tableA.js <<'PROBE'
+'use strict';
+const SEP = new RegExp('(\\r\\n|[\\n\\r\\u0085\\u000B\\u000C\\u2028\\u2029])');
+const NEL='', VT='', FF='', LS=' ', PS=' ';
+const BOM='﻿', NBSP=' ', ZWSP='​';
+function splitLeading(t){const p=String(t).split(SEP),l=[],s=[];
+  for(let i=0;i<p.length;i+=2){l.push(p[i]);s.push(p[i+1]);}return{lines:l,seps:s};}
+const LF_LIKE=(s)=>s==='\n'||s==='\r\n';
+function classify(text){
+  const {lines,seps}=splitLeading(text);
+  if(lines[0].replace(/^﻿/,'')==='---'){
+    let end=-1; for(let i=1;i<lines.length;i++) if(lines[i].trim()==='---'){end=i;break;}
+    if(end===-1) return 'FAIL-CLOSED';
+    for(let i=0;i<end;i++) if(!LF_LIKE(seps[i])) return 'FAIL-CLOSED';
+    return 'RECOGNIZED';
+  }
+  const ci=lines.findIndex((l)=>l.trim()!=='');
+  if(ci<0) return 'no frontmatter';
+  return /^-{3,}$/.test(lines[ci].trim())?'FAIL-CLOSED':'no frontmatter';
 }
-const cases = {
-  "R1 exact + closer": `---\n${F}\n---\nb\n`,
-  "R1 BOM + closer": `﻿---\n${F}\n---\nb\n`,
-  "R1 CRLF both": `---\n${F}\n---\nb\n`.replace(/\n/g, "\r\n"),
-  "R1 mixed LF/CRLF closer": `---\n${F}\r\n---\r\nb\n`,
-  "R2 blank line + closer": `\n---\n${F}\n---\nb\n`,
-  "R2 space + closer": ` ---\n${F}\n---\nb\n`,
-  "R2 tab + closer": `\t---\n${F}\n---\nb\n`,
-  "R2 exact, NO closer": `---\n${F}\nno close\n`,
-  "R2 trailing space": `--- \n${F}\n---\nb\n`,
-  "R2 four hyphens": `----\n${F}\n---\nb\n`,
-  "R2 blank + BOM + ---": `\n﻿---\n${F}\n---\nb\n`,
-  "R3 all-blank": "\n\n\n",
-  "R3 empty string": "",
-  "R3 plain prose": "no frontmatter here\n",
-  "R3 *** not hyphen-run": `***\n${F}\n---\nb\n`,
+console.log('constants:',[NEL,VT,FF,LS,PS,BOM,NBSP,ZWSP]
+  .map((c)=>'U+'+c.codePointAt(0).toString(16).toUpperCase()).join(' '));
+const F='derived_from_untrusted: true';
+const cases={
+  'R1 exact + closer':'---\n'+F+'\n---\nb\n',
+  'R1 BOM + closer':BOM+'---\n'+F+'\n---\nb\n',
+  'R1 CRLF both':'---\r\n'+F+'\r\n---\r\nb\r\n',
+  'R1 mixed LF/CRLF':'---\n'+F+'\r\n---\r\nb\n',
+  'R2 space-only line':' \n---\n'+F+'\n---\nb\n',
+  'R2 tab-only line':'\t\n---\n'+F+'\n---\nb\n',
+  'R2 space BOM ---':' '+BOM+'---\n'+F+'\n---\nb\n',
+  'R2 BOM space BOM ---':BOM+' '+BOM+'---\n'+F+'\n---\nb\n',
+  'R2 NBSP ---':NBSP+'---\n'+F+'\n---\nb\n',
+  'R2 NEL block':['---',F,'---','b'].join(NEL)+'\n',
+  'R2 VT block':['---',F,'---','b'].join(VT)+'\n',
+  'R2 FF block':['---',F,'---','b'].join(FF)+'\n',
+  'R2 CR-only block':['---',F,'---','b'].join('\r')+'\n',
+  'R2 LS block':['---',F,'---','b'].join(LS)+'\n',
+  'R2 PS block':['---',F,'---','b'].join(PS)+'\n',
+  'R2 four hyphens':'----\n'+F+'\n---\nb\n',
+  'R2 trailing space':'--- \n'+F+'\n---\nb\n',
+  'R2 no closer':'---\n'+F+'\nno close\n',
+  'R3 ZWSP ---':ZWSP+'---\n'+F+'\n---\nb\n',
+  'R3 all-blank':'\n\n\n',
+  'R3 empty':'',
+  'R3 plain prose':'no frontmatter here\n',
+  'R3 asterisk break':'***\n'+F+'\n---\nb\n',
 };
-const seen = {};
-for (const [k, v] of Object.entries(cases)) {
-  const cls = classify(v); seen[cls] = (seen[cls] || 0) + 1;
-  const r = parse(v);
-  console.log(k.padEnd(26), "|", cls.padEnd(14), "| today", `${r.delimited}/${r.malformed}`.padEnd(12),
-    "| excl", String(parseNoteResult(v).exclusion));
+const seen={};
+for(const [k,v] of Object.entries(cases)){const c=classify(v);seen[c]=(seen[c]||0)+1;
+  console.log(k.padEnd(24),'->',c);}
+console.log('\nworked set:',Object.values(seen).reduce((a,b)=>a+b,0),'of',
+  Object.keys(cases).length,JSON.stringify(seen));
+const ALPH=['-','---','----',' ','\t',NBSP,BOM,ZWSP,'\n','\r\n','\r',NEL,VT,FF,LS,PS,'k: v','x'];
+function rnd(seed){let s=seed;return()=>(s=(s*1103515245+12345)&0x7fffffff)/0x7fffffff;}
+const r=rnd(20260817); let n=0,bad=0,leak=0;
+for(let i=0;i<50000;i++){
+  let t=''; const len=1+Math.floor(r()*10);
+  for(let j=0;j<len;j++) t+=ALPH[Math.floor(r()*ALPH.length)];
+  const c=classify(t); n++;
+  if(!['RECOGNIZED','FAIL-CLOSED','no frontmatter'].includes(c)) bad++;
+  const {lines}=splitLeading(t); const ci=lines.findIndex((l)=>l.trim()!=='');
+  if(ci>=0 && /^-{3,}$/.test(lines[ci].trim()) && c==='no frontmatter') leak++;
 }
-console.log("classified", Object.values(seen).reduce((a,b)=>a+b,0), "of", Object.keys(cases).length, JSON.stringify(seen));
-'
+console.log('\nsweep:',n,'inputs | unclassified:',bad,'| hyphen-run leaks to R3:',leak);
+PROBE
+node /tmp/wd-tableA.js
 ```
 
 **The widened sentence.** After this WP, and only this far: *a note whose
@@ -408,9 +499,11 @@ Table A's mirrors:
 - [ ] `src/core/vault-snapshot.js:129-134` (the Gate-2 comment)
 - [ ] ADR-0022's recognition description
 - [ ] The **two** re-aimed tests in `tests/unit/frontmatter.test.js`
-- [ ] The boundary probe's enumerated case set
+- [ ] The totality probe's worked set AND its sweep properties
+- [ ] `DAILY_LINE_BREAK` (`digest.js:56`) — Step 1's set must equal it, and
+      the equality test is the mirror that keeps them from drifting
 - [ ] The "widened sentence" paragraph
-- [ ] Acceptance criteria AC1–AC3
+- [ ] Acceptance criteria AC1–AC3b
 
 Table B's mirrors:
 
@@ -427,10 +520,24 @@ Table B's mirrors:
 - **Zero new dependencies**; plain Node ≥ 18; JSDoc annotations only, no
   TypeScript; no build step. Nothing here starts a process (ADR-0004).
 - **A BOM is one character, not three bytes, at this layer.** `parse`
-  receives a decoded string, so a BOM appears as a single `U+FEFF`. Note
-  R2's normalization strips leading `U+FEFF` characters wherever the
-  candidate line begins, precisely so a BOM that is *not* at byte 0 cannot
-  smuggle a delimiter past R1.
+  receives a decoded string, so a BOM appears as a single `U+FEFF`. Step 2's
+  `trim()` removes it wherever it sits in a leading line, precisely so a BOM
+  that is *not* at byte 0 cannot smuggle a delimiter past R1.
+- **The separator constant cannot simply be imported.** `digest.js` requires
+  `frontmatter.js`, so the reverse require would be circular. Where the
+  shared constant lives is your call within the listed files; what is not
+  optional is the test asserting the two sets are identical (Table A, Step 1).
+- **The sweep's generator is your call, and belongs in "Decisions made".**
+  A property-based library would be a devDependency (permitted — CLAUDE.md
+  bars *runtime* deps), and a seeded PRNG in the test file avoids the
+  question entirely. Either is acceptable; state which you chose and why.
+  What the spec fixes is the two properties the sweep must assert
+  (totality, no hyphen-run leak to R3), not the machinery that asserts them.
+- **Write control characters as escapes, never literals.** Both in tests and
+  in anything pasted into the PR. A literal NEL/VT/FF does not survive a
+  copy/paste round trip, and a probe that silently loses its characters
+  reports a healthy-looking wrong answer — this happened once while writing
+  this spec and cost a re-measurement.
 - **Do not let a tolerated artifact leak into the data.** A BOM must not
   become part of a field name and a `\r` must not become part of a stored
   value — `:67` already strips a trailing `\r` from values; confirm rather
@@ -470,22 +577,40 @@ Table B's mirrors:
 
 ## Acceptance criteria
 
-- [ ] **AC1** — Every input in the boundary probe's enumerated set lands in
-      exactly one Table A class, and the RECOGNIZED ones return
-      `delimited:true` with the same `fields` and `malformed` as an exact
-      opener, and `body` = the text after the closing delimiter. (Table A)
+- [ ] **AC1** — RECOGNIZED inputs return `delimited:true` with the same
+      `fields` and `malformed` as an exact opener, and `body` = the text
+      after the closing delimiter. RECOGNIZED requires an LF/CRLF-delimited
+      block: a block whose separators include CR-only, NEL, VT, FF, LS or PS
+      is NOT recognized. (Table A, R1)
 - [ ] **AC2** — Every FAIL-CLOSED input reports `malformed`, so
-      `parseNoteResult` returns the `'malformed'` exclusion. This includes
-      a trailing-space `---`, `----`, and a blank line followed by a BOM and
-      `---` — the three an earlier draft left undefined. (Table A, R2)
-- [ ] **AC3** — Every R3 input, including an empty file and an all-blank
-      file, is unchanged from today (`delimited:false, malformed:false`,
-      body = the whole text). (Table A, R3)
+      `parseNoteResult` returns the `'malformed'` exclusion. This covers, at
+      minimum, the three families earlier drafts left open: the
+      whitespace/BOM combinations (a whitespace-only line before `---`, a
+      space before an embedded BOM, interleaved BOM and space, NBSP), the
+      near-delimiter shapes (a trailing-space `---`, `----`), and a leading
+      delimiter region built from any of the six non-LF separators.
+      (Table A, R2)
+- [ ] **AC3** — Every R3 input, including an empty file, an all-blank file,
+      and a ZWSP-prefixed `---`, is unchanged from today
+      (`delimited:false, malformed:false`, body = the whole text).
+      (Table A, R3)
+- [ ] **AC3a** — **Totality and no-leak, under a generated sweep, not an
+      enumeration.** Over randomized inputs drawn from an alphabet of
+      hyphens, all eight separators, trim-set whitespace, BOM, ZWSP and field
+      text: every input receives exactly one of the three classes, and no
+      input whose first non-blank leading line trims to a hyphen run is
+      classified R3. This is the criterion that three enumerated case lists
+      failed to provide. (Table A probe)
+- [ ] **AC3b** — The leading-region separator set is **identical** to the
+      renderer's `DAILY_LINE_BREAK` (`digest.js:56`), asserted by a test that
+      compares the two rather than restating either. (Table A, Step 1)
 - [ ] **AC4** — A note carrying `derived_from_untrusted: true` is excluded by
-      the digest at **both** its paths under R1 and R2; and for a FAIL-CLOSED
+      the digest at **both** its paths under R1 and R2; for a FAIL-CLOSED
       note **both** paths emit the banner, the daily one via the code-owned
-      `'daily-summary'` label. An `untrusted-exact` exclusion emits no banner
-      on either path. (B1, B2)
+      `'daily-summary'` label; an `untrusted-exact` exclusion emits no banner
+      on either path; and the banner's text is accurate for a list containing
+      a daily entry — no identity-only noun, and no approval instruction
+      unless an identity entry is present. (B1, B2)
 - [ ] **AC5** — The snapshot notes-slice gate skips the file with reason
       `provenance gate: <class>`, the class being `untrusted-exact` when
       RECOGNIZED and `malformed` when FAIL-CLOSED; the reason vocabulary
@@ -511,10 +636,13 @@ Table B's mirrors:
 
 ## Verification steps (run these; paste output in the PR)
 
-Every new assertion added for AC1–AC9 is a NEW verification step, so each
-must be observed **on both sides** — green on the finished state and red on
-a deliberately broken one (revert the delimiter decisions, the B7 guard, and
-the B2 push, each separately, and re-run). Paste both outputs.
+Every new assertion added for AC1–AC9 (including AC3a and AC3b) is a NEW
+verification step, so each must be observed **on both sides** — green on the
+finished state and red on a deliberately broken one (revert the delimiter
+decisions, the B7 guard, the B2 push, and the banner wording, each
+separately, and re-run). Paste both outputs. For AC3a, "red" means a
+classifier missing one of the three branches, or one that lets a hyphen-run
+input reach R3 — the sweep must actually catch both, or it is decorative.
 
 ```bash
 # V1 — the one-lexer property (AC9): the implementer's check plus its FOUR
@@ -534,12 +662,21 @@ git diff --stat -- tests/golden/
 
 ## Out of scope (do NOT do these)
 
-- **Exclusion visibility beyond the daily path** — successor
-  `WP-digest-exclusion-visibility`, now narrowed to what is genuinely
-  separate work: the banner's noun ("some identity notes") is inaccurate for
-  a daily-summary entry, and the snapshot's `skipped` list and the dream's
-  enforcement report use their own reporting shapes. This WP adds the daily
-  path's missing push and nothing else.
+- **A product-wide shared notion of a line** — successor
+  `WP-shared-line-boundary`. `parse` splits on LF, `DAILY_LINE_BREAK`
+  (`digest.js:56`) on eight separators, `extractSection` (`:327`) on LF with
+  a CRLF-blind heading match, and the secret scanner has its own rules that
+  span breaks. This WP makes the **leading region** agree with the renderer,
+  which is what closes the classification bypass; it does **not** unify the
+  field lexer, the body, `extractSection`, or the scanner. Carry these
+  measurements over: all six non-LF separators yield `exclusion = null`
+  today; `trim()` does not strip NEL; `DAILY_INVISIBLE` (`:75`) encodes ZWSP
+  but not LS/PS (they are split on instead, per the coexistence note at
+  `:69-70`).
+- **Exclusion visibility beyond the daily path** — the snapshot's `skipped`
+  list and the dream's enforcement report use their own reporting shapes and
+  are not touched here. This WP adds the daily path's missing push and the
+  banner wording that push makes inaccurate, and nothing else.
 - **Line-ending normalization anywhere but the delimiter decisions.** In
   particular `extractSection`'s CRLF-blind heading match (`digest.js:327`,
   measured in B2) is left exactly as it is: fixing it would change which
