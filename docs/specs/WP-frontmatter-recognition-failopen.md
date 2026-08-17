@@ -97,17 +97,19 @@ field lines (`:55`) and values (`:67`) — is untouched.
   BRAILLE BLANK `U+2800` is `So` — in no whitespace, control, format,
   surrogate or default-ignorable class, and not stripped by `trim()`. A
   shape-only predicate therefore cannot close this space, which is why the
-  attempt predicate below has a second trigger.
+  attempt predicate below keys on hyphens and the absence of letters, not on any
+  character class.
 - **`DAILY_INVISIBLE` cannot rescue it.** An earlier draft justified leaving
   ZWSP trusted because `digest.js:75` encodes it visibly. Measured, that is
   wrong twice: it does not cover `U+2800`, and it only ever runs on the
   **extracted Summary** — the opener line is never in the emitted text.
 - **The product corpus is clean.** 48 `.md`/`.txt` files under `templates/`,
   `skills/`, `tests/golden/`, `tests/fixtures/` — the files Wienerdog ships
-  or pins. Delimiter attempts that would newly fail closed: **0**. Files that
-  would trip the field trigger: **0** (seven mention the field, all inside a
-  recognized block or outside a leading region). Bounds the repo, not user
-  vaults — see Implementation notes.
+  or pins. Delimiter attempts that would newly fail closed: **0**. Separately
+  measured, a content-keyed rule — the shape an earlier draft used — wrongly
+  excluded **four** prose forms that the final structural predicate leaves
+  untouched. These counts bound the repo, not user vaults — see
+  Implementation notes.
 
 **Who inherits the defect.** `parse` has three direct `src/` consumers
 (`digest.js:7`, `cli/memory.js:9`, `dream/validate.js:13`). `layout.js` and
@@ -169,30 +171,41 @@ is recognized behaves exactly as today, including its `malformed` rules and
 its `body`.
 
 **The added class: a delimiter attempt fails closed.** When the input is not
-recognized, it is a **delimiter attempt** if either trigger fires, and a
-delimiter attempt must produce a result every security consumer treats as
-excluded — concretely `malformed` is true, so `ok-to-trust`
-(`delimited && !malformed`) is false and `parseNoteResult` returns the
-existing `'malformed'` exclusion. Whether `delimited` is true or false, and
-how `fields`/`body` are populated, is the implementer's choice within that
-property, with one obligation: `skillBody` (`validate.js:343`) reads `body`
-without consulting `malformed`, so confirm no user-observable difference on
-that path, and report it if there is one.
+recognized, it is a **delimiter attempt**, and a delimiter attempt must
+produce a result every security consumer treats as excluded — concretely
+`malformed` is true, so `ok-to-trust` (`delimited && !malformed`) is false
+and `parseNoteResult` returns the existing `'malformed'` exclusion. Whether
+`delimited` is true or false, and how `fields`/`body` are populated, is the
+implementer's choice within that property, with one obligation: `skillBody`
+(`validate.js:343`) reads `body` without consulting `malformed`, so confirm
+no user-observable difference on that path, and report it if there is one.
 
-- **Trigger 1 — shape.** Split the leading region on exactly the renderer's
-  `DAILY_LINE_BREAK` set (`digest.js:56`; eight separators). Take the first
-  line that is non-empty after removing
-  `[\p{White_Space}\p{Cc}\p{Cf}\p{Cs}\p{Default_Ignorable_Code_Point}]`.
-  If that line, with the same set removed, is `-{3,}`, it is an attempt.
-- **Trigger 2 — field.** If the leading region carries a line matching
-  `/^[^\p{L}\p{N}]*derived_from_untrusted[^\p{L}\p{N}]*:/u`, it is an
-  attempt. **This trigger is load-bearing and was added beyond the ruled
-  shape rule**: measured, trigger 1 catches a ZWSP prefix (it is `Cf`) but
-  **not** `U+2800`, which is in no invisible class. No shape predicate can
-  close that space; keying on the security field itself does. Measured
-  false-positive population on the product corpus: **0**.
+**The delimiter-attempt predicate — one rule, purely structural.** Split the
+leading region on exactly the renderer's `DAILY_LINE_BREAK` set
+(`digest.js:56`; eight separators). Take the first line that is non-empty
+after removing
+`[\p{White_Space}\p{Cc}\p{Cf}\p{Cs}\p{Default_Ignorable_Code_Point}]`. That
+line is a delimiter attempt when it **contains a run of three or more
+hyphens and contains no letter and no digit** (`\p{L}`, `\p{N}`).
 
-Neither trigger widens recognition. Both only ever move an input from
+Three things follow, and each was measured rather than reasoned:
+
+- **Invisibles cannot evade it.** A prefix is irrelevant unless it is a
+  letter or a digit, so `U+200B` (`Cf`) and `U+2800` (`So`, in no invisible
+  class at all) are both caught by the same clause. An earlier draft needed
+  a second, content-keyed trigger for exactly this and still missed a case;
+  this predicate needs none.
+- **Prose cannot trip it.** A line carrying any letter is not a candidate,
+  so `> derived_from_untrusted: means the trust marker.`,
+  `` `derived_from_untrusted`: … ``, `- derived_from_untrusted: false is
+  required.` and `---title` all stay in the unchanged class. The earlier
+  content-keyed trigger failed all four.
+- **There is no window.** The predicate reads one line — the first non-empty
+  one — so there is no bounded region for a flag to hide behind. An earlier
+  reference implementation silently used a twelve-line window, and a note
+  with `U+2800 + ---` on line 1 and the flag on line 13 slipped through it.
+
+The predicate never widens recognition; it only ever moves an input from
 trusted toward excluded.
 
 **The B7 guard.** `parseFrontmatter` (`validate.js:161`) yields an empty
@@ -232,7 +245,7 @@ downstream consumers inherit the contract.
 | Class | Predicate | Result |
 |---|---|---|
 | **RECOGNIZED** | line 0 byte-exactly `---`, and a later line byte-exactly `---` | unchanged from today, in every respect |
-| **FAIL-CLOSED** | not recognized, and trigger 1 or trigger 2 fires (Exact contracts) | `malformed` — excluded, visibly, at every gate in Table B |
+| **FAIL-CLOSED** | not recognized, and the delimiter-attempt predicate fires (Exact contracts) | `malformed` — excluded, visibly, at every gate in Table B |
 | **no frontmatter** | everything else, including an empty and an all-blank file | unchanged from today |
 
 **The direction property is the contract.** No input moves from a gated
@@ -269,6 +282,24 @@ The four asserted properties, and the mutant each one catches:
 | P2 direction — nothing gated by today's `parse` becomes trusted | a tolerance that admits a currently excluded note |
 | P3 no attempt reaches "no frontmatter" | a leak of a delimiter attempt to the trusted class |
 | P4 conservation — a non-attempt, non-recognized input classifies exactly as today | an over-broad classifier that fails closed on ordinary prose |
+| **P5 recognition is frozen** — `class === RECOGNIZED` **if and only if** today's byte-exact predicate holds, computed independently | a classifier that widens recognition, or that drops a currently recognized input into another class |
+| **P6 an attempt is exactly FAIL-CLOSED**, not merely "not trusted" | a classifier that promotes an attempt to RECOGNIZED |
+
+**P5 and P6 exist because P1–P4 did not express this ruling's central
+claim.** Measured: a mutant mapping every attempt to RECOGNIZED, and one
+mapping every recognized input to FAIL-CLOSED, both passed P1–P4 with every
+counter at zero. P5 is the biconditional that closes it; it must be computed
+from an independent implementation of today's predicate, not from the
+classifier under test.
+
+**The generator must actually produce recognized inputs, and this must be
+asserted.** Measured: a flat token generator produced **0** recognized inputs
+in 50,000, which would make P5 and P6 vacuous while showing green. Report the
+count of recognized inputs the sweep saw, and fail if it is zero. A balanced
+generator — roughly half structured blocks built from an opener, fields, a
+closer and a separator, half free-form noise including prose that quotes the
+field name — produced 387 in 50,000, enough for P5 to catch both recognition
+mutants.
 
 The implementer builds both from the contract above; the reference form used
 to measure this spec's own claims is committed alongside the round-5 record
@@ -334,7 +365,7 @@ Table A's mirrors:
 - [ ] `src/core/vault-snapshot.js:129-134` (the Gate-2 comment)
 - [ ] ADR-0022's amendment — **and the §1 sentinel, which must remain untouched**
 - [ ] The **two** re-aimed tests in `tests/unit/frontmatter.test.js`
-- [ ] `DAILY_LINE_BREAK` (`digest.js:56`) — trigger 1's split set must equal it, asserted by a test
+- [ ] `DAILY_LINE_BREAK` (`digest.js:56`) — the predicate's split set must equal it, asserted by a test
 - [ ] Acceptance criteria AC1–AC4
 
 Table B's mirrors:
@@ -397,16 +428,21 @@ Table B's mirrors:
       the design review produced: BOM; CRLF; leading blank/space/tab;
       whitespace-only line; NBSP; interleaved BOM; trailing-space `---`;
       `----`; ZWSP; `U+2800`; each of the six non-LF separators; and an
-      opener with no closer. (Table A, triggers 1 and 2)
+      opener with no closer; and the case where an invisible prefix sits on the
+      opener while the flag sits many lines below it, which an earlier windowed
+      rule let through. (Table A, the delimiter-attempt predicate)
 - [ ] **AC3** — Inputs in the "no frontmatter" class, including an empty
       file, an all-blank file, and prose containing a `---` thematic break
       that is not a leading delimiter attempt, classify exactly as today.
-- [ ] **AC4** — The sweep asserts P1–P4 and **exits non-zero** when any is
-      violated, demonstrated by running it against four deliberately broken
-      classifiers: a missing branch, a leak to "no frontmatter", an
-      over-broad fail-closed classifier, and one returning a non-class.
-      Paste all four red runs.
-- [ ] **AC5** — Trigger 1's split set is **identical** to
+- [ ] **AC4** — The sweep asserts P1–P6 and **exits non-zero** when any is
+      violated, demonstrated against SIX deliberately broken classifiers: a
+      missing branch, a leak to "no frontmatter", an over-broad fail-closed
+      classifier, one returning a non-class, one promoting every attempt to
+      RECOGNIZED, and one demoting every recognized input to FAIL-CLOSED.
+      Paste all six red runs. The sweep also reports how many RECOGNIZED
+      inputs it generated and fails if that count is zero — otherwise P5 and
+      P6 are vacuous while showing green.
+- [ ] **AC5** — The predicate's split set is **identical** to
       `DAILY_LINE_BREAK` (`digest.js:56`), asserted by a test comparing the
       two rather than restating either.
 - [ ] **AC6** — A note carrying `derived_from_untrusted: true` in a
@@ -430,7 +466,7 @@ Every new assertion is a NEW verification step, so each must be observed on
 both sides — green on the finished state and red on a deliberately broken
 one (revert the classification branch, the B7 guard, the B2 push, and the
 banner wording, each separately). Paste both outputs. For AC4 the red runs
-are the four mutants, and their non-zero exit codes are the evidence.
+are the six mutants, and their non-zero exit codes are the evidence.
 
 ```bash
 # V1 — the parser and the four protected paths.
@@ -452,7 +488,7 @@ git diff --stat -- tests/golden/
   `WP-shared-line-boundary`. `parse` splits on LF, `DAILY_LINE_BREAK` on
   eight separators, `extractSection` (`:327`) on LF with a CRLF-blind
   heading match, and the secret scanner has its own rules spanning breaks.
-  Trigger 1 makes the **attempt predicate** agree with the renderer; it does
+  The predicate makes the ATTEMPT TEST agree with the renderer; it does
   not unify the field lexer, the body, `extractSection`, or the scanner.
 - **Exclusion visibility beyond the daily path** — the snapshot's `skipped`
   list and the dream's enforcement report use their own reporting shapes.
@@ -466,7 +502,7 @@ git diff --stat -- tests/golden/
 ## Definition of done
 
 1. All verification steps pass locally; output pasted into the PR body,
-   including the deliberately-broken red runs and AC4's four mutant runs.
+   including the deliberately-broken red runs and AC4's six mutant runs.
 2. Conventional commits; PR titled
    `fix(frontmatter): close the recognition fail-open by failing closed (WP-frontmatter-recognition-failopen)`.
 3. PR template filled, including "Decisions made" (or "none") and
