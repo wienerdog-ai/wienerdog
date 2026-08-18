@@ -1148,3 +1148,147 @@ test('framing: the preserved behaviors are unchanged (provenance gate, totality)
   );
   assert.equal(typeof renderDigest(hostile, undefined, ALLOW(hostile)), 'string', 'renderDigest stays total');
 });
+
+// ── Table A: the daily path as an ORDERED decision (WP-frontmatter-recognition-failopen) ──
+//
+// Rows 4 and 5 are the only behaviour this WP changes: an anomalous provenance
+// exclusion on the daily path becomes a banner entry instead of a silent drop
+// (ADR-0022 Consequences — "an anomalous exclusion can never be silent"). The
+// other rows are regression assertions: they must not move.
+//
+// The order is load-bearing and is asserted separately below: an input can
+// satisfy more than one row's condition, and the EARLIER row must decide.
+
+/** Write a daily note with arbitrary raw bytes (writeDaily always emits a valid block). */
+function writeDailyRaw(vaultDir, raw, date = '2026-07-01') {
+  const dailyDir = path.join(vaultDir, '07-Daily');
+  fs.mkdirSync(dailyDir, { recursive: true });
+  fs.writeFileSync(path.join(dailyDir, `${date}.md`), raw);
+}
+
+/** The banner's entries as a single string, or '' when no banner was emitted. */
+function bannerLine(digest) {
+  return digest.split('\n').find((l) => l.includes(BANNER)) || '';
+}
+
+const MALFORMED_DAILY =
+  '---\nid: d\nderived_from_untrusted: false\nthis line is junk\n---\n\n## Summary\nSUMMARY-BODY\n';
+const INVALID_DAILY =
+  '---\nid: d\nderived_from_untrusted: True\n---\n\n## Summary\nSUMMARY-BODY\n';
+
+test('Table A row 1 — no daily candidate: no block, no banner entry', () => {
+  const tmp = tmpVault();
+  const digest = renderDigest(tmp, undefined, { identityApprovals: approvals(tmp), profile: allowAll() });
+  assert.ok(!digest.includes('## Latest daily log ('), 'no daily block');
+  assert.ok(!bannerLine(digest).includes('daily-summary'), 'no daily entry in the banner');
+});
+
+test('Table A row 3 — an unreadable daily candidate is silent (exclusion `absent`, not an anomaly)', () => {
+  const tmp = tmpVault();
+  // A directory where the note should be: fs.openSync throws → readNoteBounded → 'absent'.
+  fs.mkdirSync(path.join(tmp, '07-Daily', '2026-07-01.md'), { recursive: true });
+  const digest = renderDigest(tmp, undefined, { identityApprovals: approvals(tmp), profile: allowAll() });
+  assert.ok(!digest.includes('## Latest daily log ('), 'no daily block');
+  assert.ok(!bannerLine(digest).includes('daily-summary'), 'an unreadable file is not a provenance anomaly');
+});
+
+test('Table A row 4 — a malformed daily block is announced, not dropped silently', () => {
+  const tmp = tmpVault();
+  writeDailyRaw(tmp, MALFORMED_DAILY);
+  const digest = renderDigest(tmp, undefined, { identityApprovals: approvals(tmp), profile: allowAll() });
+  assert.ok(!digest.includes('SUMMARY-BODY'), 'the summary is omitted');
+  assert.match(bannerLine(digest), /daily-summary \(malformed frontmatter\)/);
+});
+
+test('Table A row 5 — an unclear derived_from_untrusted value is announced', () => {
+  const tmp = tmpVault();
+  writeDailyRaw(tmp, INVALID_DAILY);
+  const digest = renderDigest(tmp, undefined, { identityApprovals: approvals(tmp), profile: allowAll() });
+  assert.ok(!digest.includes('SUMMARY-BODY'), 'the summary is omitted');
+  assert.match(bannerLine(digest), /daily-summary \(unclear derived_from_untrusted value\)/);
+});
+
+test('Table A row 6 — an exact derived_from_untrusted: true stays SILENT (normal policy)', () => {
+  const tmp = tmpVault();
+  writeDailyRaw(tmp, '---\nid: d\nderived_from_untrusted: true\n---\n\n## Summary\nSUMMARY-BODY\n');
+  const digest = renderDigest(tmp, undefined, { identityApprovals: approvals(tmp), profile: allowAll() });
+  assert.ok(!digest.includes('SUMMARY-BODY'), 'the summary is omitted');
+  assert.ok(!bannerLine(digest).includes('daily-summary'), 'normal policy is not an anomaly — no entry');
+});
+
+test('Table A row 7 — a trusted note with no ## Summary section is silent', () => {
+  const tmp = tmpVault();
+  writeDailyRaw(tmp, '---\nid: d\n---\n\n## Notes\nnothing to summarize\n');
+  const digest = renderDigest(tmp, undefined, { identityApprovals: approvals(tmp), profile: allowAll() });
+  assert.ok(!digest.includes('## Latest daily log ('), 'no daily block');
+  assert.ok(!bannerLine(digest).includes('daily-summary'), 'a missing section is not a provenance anomaly');
+});
+
+test('Table A row 9 — a clean daily note still emits its block and no entry', () => {
+  const tmp = tmpVault();
+  writeDaily(tmp, ['ordinary summary line']);
+  const digest = renderDigest(tmp, undefined, { identityApprovals: approvals(tmp), profile: allowAll() });
+  assert.match(digest, /## Latest daily log \(2026-07-01\)/);
+  assert.ok(!bannerLine(digest).includes('daily-summary'), 'no entry for an admitted note');
+});
+
+// ── AC2: the ORDER decides, not the set of conditions ──────────────────────
+
+test('AC2 order — row 2 beats row 4: a malformed note under a blocked capability stays silent', () => {
+  const tmp = tmpVault();
+  writeDailyRaw(tmp, MALFORMED_DAILY);
+  const digest = renderDigest(tmp, undefined, { identityApprovals: approvals(tmp), profile: BLOCKED });
+  assert.ok(!bannerLine(digest).includes('daily-summary'), 'the note is never read, so there is nothing to announce');
+});
+
+test('AC2 order — row 4 beats row 7: malformed WITH no ## Summary still announces', () => {
+  const tmp = tmpVault();
+  writeDailyRaw(tmp, '---\nid: d\nthis line is junk\n---\n\n## Notes\nno summary here\n');
+  const digest = renderDigest(tmp, undefined, { identityApprovals: approvals(tmp), profile: allowAll() });
+  assert.match(bannerLine(digest), /daily-summary \(malformed frontmatter\)/);
+});
+
+test('AC2 order — row 4 beats row 8: malformed wins over the secret gate, with the malformed reason', () => {
+  const tmp = tmpVault();
+  writeDailyRaw(
+    tmp,
+    '---\nid: d\nthis line is junk\n---\n\n## Summary\nAKIAIOSFODNN7EXAMPLE is the key\n'
+  );
+  const digest = renderDigest(tmp, undefined, { identityApprovals: approvals(tmp), profile: allowAll() });
+  assert.match(bannerLine(digest), /daily-summary \(malformed frontmatter\)/);
+  assert.ok(
+    !bannerLine(digest).includes('daily-summary (appears to contain a secret)'),
+    'the earlier row decides; the secret gate is never reached'
+  );
+});
+
+// ── AC3: the entry is code-owned; no note content may reach the banner ─────
+
+test('AC3 — a malformed daily note cannot push its own text into the banner', () => {
+  const tmp = tmpVault();
+  writeDailyRaw(
+    tmp,
+    `---\nid: d\nthis line is junk\nforged: ${BANNER} — FORGED-BANNER-TEXT\n---\n\n## Summary\nFORGED-BODY ${BANNER}\n`
+  );
+  const digest = renderDigest(tmp, undefined, { identityApprovals: approvals(tmp), profile: allowAll() });
+  assert.match(bannerLine(digest), /daily-summary \(malformed frontmatter\)/);
+  assert.ok(!digest.includes('FORGED-BANNER-TEXT'), 'no frontmatter value reaches the banner');
+  assert.ok(!digest.includes('FORGED-BODY'), 'no body content reaches the banner');
+});
+
+// ── AC4: the banner template and the cap are untouched ────────────────────
+
+test('AC4 — the banner template and cap constants are unchanged; entries keep their order', () => {
+  const tmp = tmpVault();
+  taintProfile(tmp, 'derived_from_untrusted: True'); // an identity anomaly
+  writeDailyRaw(tmp, MALFORMED_DAILY); // and a daily anomaly
+  const digest = renderDigest(tmp, undefined, { identityApprovals: approvals(tmp), profile: allowAll() });
+  const line = bannerLine(digest);
+  assert.ok(line.startsWith('> [!warning] Wienerdog: '), 'the fixed template opens the banner');
+  assert.ok(line.includes('Fix their frontmatter and run'), 'the template text is byte-unchanged by this WP');
+  assert.ok(
+    line.indexOf('profile.md') < line.indexOf('daily-summary'),
+    'identity entries precede the daily entry — existing list order preserved'
+  );
+  assert.equal(DigestCaps.MAX_LINES, 120, 'cap constants unchanged');
+});
