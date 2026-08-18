@@ -1183,10 +1183,26 @@ test('Table A row 1 — no daily candidate: no block, no banner entry', () => {
   assert.ok(!bannerLine(digest).includes('daily-summary'), 'no daily entry in the banner');
 });
 
-test('Table A row 3 — an unreadable daily candidate is silent (exclusion `absent`, not an anomaly)', () => {
+test('readNoteBounded reports `absent` when the path cannot be opened', () => {
+  // Pins the class itself, independent of platform permission behaviour: a
+  // directory is never openable as a file, so fs.openSync throws.
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-absent-'));
+  const dir = path.join(tmp, 'not-a-file.md');
+  fs.mkdirSync(dir, { recursive: true });
+  assert.equal(readNoteBounded(dir, 4096).exclusion, 'absent');
+});
+
+test('Table A row 3 — an unreadable daily candidate is silent (exclusion `absent`, not an anomaly)', (t) => {
+  // The candidate must be a REAL file: newestDaily recurses into directories and
+  // collects only `entry.isFile()` matches (digest.js:441-445), so a directory
+  // named 2026-07-01.md yields NO candidate and this test would silently become a
+  // duplicate of row 1. That is what an earlier version of it did — and a mutation
+  // pushing on `absent` too passed the whole suite. Root can read a 0o000 file, so
+  // skip rather than invert the assertion there.
+  if (process.getuid?.() === 0) return t.skip('root can open a 0o000 file');
   const tmp = tmpVault();
-  // A directory where the note should be: fs.openSync throws → readNoteBounded → 'absent'.
-  fs.mkdirSync(path.join(tmp, '07-Daily', '2026-07-01.md'), { recursive: true });
+  writeDaily(tmp, ['unreadable']);
+  fs.chmodSync(path.join(tmp, '07-Daily', '2026-07-01.md'), 0o000);
   const digest = renderDigest(tmp, undefined, { identityApprovals: approvals(tmp), profile: allowAll() });
   assert.ok(!digest.includes('## Latest daily log ('), 'no daily block');
   assert.ok(!bannerLine(digest).includes('daily-summary'), 'an unreadable file is not a provenance anomaly');
@@ -1222,6 +1238,14 @@ test('Table A row 7 — a trusted note with no ## Summary section is silent', ()
   const digest = renderDigest(tmp, undefined, { identityApprovals: approvals(tmp), profile: allowAll() });
   assert.ok(!digest.includes('## Latest daily log ('), 'no daily block');
   assert.ok(!bannerLine(digest).includes('daily-summary'), 'a missing section is not a provenance anomaly');
+});
+
+test('Table A row 7 — an EMPTY ## Summary section is silent too', () => {
+  const tmp = tmpVault();
+  writeDailyRaw(tmp, '---\nid: d\n---\n\n## Summary\n\n## Notes\nelsewhere\n');
+  const digest = renderDigest(tmp, undefined, { identityApprovals: approvals(tmp), profile: allowAll() });
+  assert.ok(!digest.includes('## Latest daily log ('), 'no daily block for an empty section');
+  assert.ok(!bannerLine(digest).includes('daily-summary'), 'an empty section is not a provenance anomaly');
 });
 
 test('Table A row 9 — a clean daily note still emits its block and no entry', () => {
@@ -1291,4 +1315,29 @@ test('AC4 — the banner template and cap constants are unchanged; entries keep 
     'identity entries precede the daily entry — existing list order preserved'
   );
   assert.equal(DigestCaps.MAX_LINES, 120, 'cap constants unchanged');
+});
+
+test('AC4 — under cap pressure WITH a daily entry, both caps hold and the marker is retained', () => {
+  // Table B's measured claim: a new prefix line displaces body content, and the
+  // cap's algorithm, constants and truncation marker are unchanged. Nothing
+  // pinned that before; a constant-equality check does not exercise the cap.
+  const tmp = tmpVault();
+  writeDailyRaw(tmp, MALFORMED_DAILY); // puts `daily-summary` in the prefix
+  // Push the body well past both caps.
+  const goals = path.join(tmp, '06-Identity', 'goals.md');
+  const bulk = Array.from({ length: 400 }, (_, i) => `- goals-line-${i}`).join('\n');
+  fs.writeFileSync(goals, `${fs.readFileSync(goals, 'utf8')}\n${bulk}\n`);
+
+  const digest = renderDigest(tmp, undefined, { identityApprovals: approvals(tmp), profile: allowAll() });
+
+  assert.match(bannerLine(digest), /daily-summary \(malformed frontmatter\)/, 'the daily entry is in the prefix');
+  assert.ok(
+    digest.split('\n').length <= DigestCaps.MAX_LINES + 1,
+    `line cap holds with the daily entry present (got ${digest.split('\n').length})`
+  );
+  assert.ok(
+    Buffer.byteLength(digest, 'utf8') <= DigestCaps.MAX_BYTES,
+    'byte cap holds with the daily entry present'
+  );
+  assert.ok(digest.includes(DigestCaps.TRUNCATION_MARKER), 'the existing truncation marker is retained');
 });

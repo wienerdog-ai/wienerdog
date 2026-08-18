@@ -16,14 +16,15 @@ epic: audit-2026-07-29
 
 > **Read this first.** This package once tried to close the frontmatter
 > **recognition** fail-open, then to guard two consumers that ignore
-> `malformed`. Nine design-review rounds narrowed it twice. **What ships here
+> `malformed`. Eleven design-review rounds narrowed it three times. **What ships here
 > is one thing**: the digest's daily path stops dropping an anomalous
 > exclusion silently, which ADR-0022's Consequences require. Three things it
 > does NOT do, each stated with its evidence below — it does not close the
 > recognition fail-open (`## Residual R-RECOGNITION`), it does not fix the
 > dream validator's handling of `malformed`, and it does not fix the banner's
-> remedy text (both `## Successors`). The spec's `id` is kept so ten rounds
-> of logbook record stay attached to it; the title says what it now does.
+> remedy text (both `## Successors`). The spec's `id` is kept so the whole
+> logbook record stays attached to it — eleven rounds, two round-zero passes
+> and one aborted attempt; the title says what it now does.
 
 ## Context (read this, nothing else)
 
@@ -67,8 +68,10 @@ it.** Six sites push onto that list — `:682`, `:691`, `:692`, `:711`, `:738`,
 frontmatter" or run `wienerdog memory approve`. Measured: `memory approve`
 records an exact-byte **hash** only (`memory.js:19-21`), so it cannot resolve
 a malformed block, an unclear flag, or a secret; and `active-projects`
-(`:738`) has no frontmatter to fix. The remedy is therefore wrong for four of
-the six classes **before** this WP. Making it right is a six-class problem
+(`:738`) has no frontmatter to fix. **Every one of the six classes is offered
+at least one remedy that cannot resolve it, and three of them — the secret
+rows — are offered none that can** (the canonical table is in successor
+charter B; this sentence is its mirror and must not diverge from it). Making it right is a six-class problem
 with no connection to provenance, so it is chartered as a successor rather
 than folded in here.
 
@@ -102,8 +105,11 @@ read/decide/commit ordering in scope, which this package does not have.
 existing rule — and the reason strings the identity path already uses at
 `:691-692`: `'malformed frontmatter'` for `malformed`, `'unclear
 derived_from_untrusted value'` for `untrusted-invalid`. An `untrusted-exact`
-exclusion and an absent flag stay **silent**: they are normal policy, not
-anomalies (ADR-0022 §4). No new reason string, no new banner, no new
+exclusion and a **missing `derived_from_untrusted` key** stay **silent**:
+they are normal policy, not anomalies (ADR-0022 §4). Note the collision of
+words — this "missing key" sense is not Table A row 3's `absent`, which is the
+exclusion class meaning *the file could not be opened*. Both are silent, for
+different reasons. No new reason string, no new banner, no new
 mechanism.
 
 ## Contract reference
@@ -228,7 +234,10 @@ truncation marker, and the list's ordering.
 ## Verification steps (run these; paste output in the PR)
 
 Each new assertion must be observed on both sides — green on the finished
-state, red with the guard and the push reverted separately. Paste both.
+state, and red with the push reverted — and, separately, with each of its two
+branches reverted on its own, since either alone must be non-vacuous. Paste
+each red run. There is no second artifact to revert: round 10 narrowed this
+package to the push alone.
 
 ```bash
 node --test tests/unit/digest.test.js
@@ -314,7 +323,7 @@ Shapes measured to be trusted today, each carrying an explicit `true`:
   candidate rule so far has had a false-positive class that only user content
   would reveal.
 
-The raw record of all seven rounds, and the reference implementations that
+The raw record of all eleven rounds, and the reference implementations that
 were measured, are in `docs/specs/logbook/` under
 `2026-08-1{6,7}-frontmatter-recognition-*`.
 

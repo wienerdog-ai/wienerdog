@@ -607,10 +607,12 @@ function capDigest(assembled, prefix) {
  * daily note under {daily_dir} (found recursively), and {projects_dir}/* directory
  * names — all resolved from `layout` (defaults == today's hardcoded paths). Notes
  * flagged `derived_from_untrusted: true` and blocks whose source is missing/empty
- * are omitted. An ANOMALOUS identity exclusion (malformed frontmatter block, or a
+ * are omitted. An ANOMALOUS exclusion (malformed frontmatter block, or a
  * derived_from_untrusted value that is not an exact boolean) is omitted fail-closed
  * AND surfaced via a fixed warning banner placed first in the prefix (audit A4,
- * ADR-0022); an exact `true` is normal policy and stays silent.
+ * ADR-0022) — for an identity note and, since
+ * WP-frontmatter-recognition-failopen, for the daily note too. An exact `true` is
+ * normal policy and stays silent, as is a daily note that cannot be opened.
  * Output is capped to `DigestCaps.MAX_LINES` lines AND `DigestCaps.MAX_BYTES` bytes,
  * with the control-plane banner prefix always preserved; over-cap content is
  * truncated at a line boundary with a fixed marker (audit A6, F3/F5). When
