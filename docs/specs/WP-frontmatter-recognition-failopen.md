@@ -325,7 +325,7 @@ Shapes measured to be trusted today, each carrying an explicit `true`:
 
 The raw record of all eleven rounds, and the reference implementations that
 were measured, are in `docs/specs/logbook/` under
-`2026-08-1{6,7}-frontmatter-recognition-*`.
+`2026-08-1{6,7,8}-frontmatter-recognition-*`.
 
 ## Successors — chartered, not specced
 

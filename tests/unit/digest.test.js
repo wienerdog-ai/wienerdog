@@ -1184,22 +1184,28 @@ test('Table A row 1 — no daily candidate: no block, no banner entry', () => {
 });
 
 test('readNoteBounded reports `absent` when the path cannot be opened', () => {
-  // Pins the class itself, independent of platform permission behaviour: a
-  // directory is never openable as a file, so fs.openSync throws.
+  // Pins the class itself, independent of platform permission behaviour. A
+  // directory cannot be READ as a file: openSync may well succeed (measured on
+  // darwin: it does), but readSync throws EISDIR — and readNoteBounded's try
+  // wraps both, so `absent` comes back either way.
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'wd-absent-'));
   const dir = path.join(tmp, 'not-a-file.md');
   fs.mkdirSync(dir, { recursive: true });
   assert.equal(readNoteBounded(dir, 4096).exclusion, 'absent');
 });
 
-test('Table A row 3 — an unreadable daily candidate is silent (exclusion `absent`, not an anomaly)', (t) => {
+// Skipped where 0o000 does not deny a read: root can open anything, and on
+// win32 chmod only toggles the read-only bit. The direct readNoteBounded
+// assertion above still pins the `absent` class on those platforms, because
+// EISDIR is uid- and platform-independent.
+test('Table A row 3 — an unreadable daily candidate is silent (exclusion `absent`, not an anomaly)', {
+  skip: process.platform === 'win32' || process.getuid?.() === 0,
+}, () => {
   // The candidate must be a REAL file: newestDaily recurses into directories and
   // collects only `entry.isFile()` matches (digest.js:441-445), so a directory
   // named 2026-07-01.md yields NO candidate and this test would silently become a
   // duplicate of row 1. That is what an earlier version of it did — and a mutation
-  // pushing on `absent` too passed the whole suite. Root can read a 0o000 file, so
-  // skip rather than invert the assertion there.
-  if (process.getuid?.() === 0) return t.skip('root can open a 0o000 file');
+  // pushing on `absent` too passed the whole suite.
   const tmp = tmpVault();
   writeDaily(tmp, ['unreadable']);
   fs.chmodSync(path.join(tmp, '07-Daily', '2026-07-01.md'), 0o000);
@@ -1323,10 +1329,17 @@ test('AC4 — under cap pressure WITH a daily entry, both caps hold and the mark
   // pinned that before; a constant-equality check does not exercise the cap.
   const tmp = tmpVault();
   writeDailyRaw(tmp, MALFORMED_DAILY); // puts `daily-summary` in the prefix
-  // Push the body well past both caps.
-  const goals = path.join(tmp, '06-Identity', 'goals.md');
-  const bulk = Array.from({ length: 400 }, (_, i) => `- goals-line-${i}`).join('\n');
-  fs.writeFileSync(goals, `${fs.readFileSync(goals, 'utf8')}\n${bulk}\n`);
+  // Fill ALL FOUR identity notes, not just one: each is capped to
+  // MAX_NOTE_BYTES (8 KiB) before it joins the digest, so one fat note can
+  // never approach the 32 KiB whole-digest ceiling. Long lines rather than
+  // many short ones, so the bytes that survive the line cap are near the byte
+  // ceiling too — measured 31.7 KiB of 32 KiB here. See the note below on
+  // why the byte path still cannot be driven all the way.
+  for (const f of ['profile.md', 'preferences.md', 'goals.md', 'instructions.md']) {
+    const note = path.join(tmp, '06-Identity', f);
+    const bulk = Array.from({ length: 60 }, (_, i) => `- ${f}-${i} ${'x'.repeat(400)}`).join('\n');
+    fs.writeFileSync(note, `${fs.readFileSync(note, 'utf8')}\n${bulk}\n`);
+  }
 
   const digest = renderDigest(tmp, undefined, { identityApprovals: approvals(tmp), profile: allowAll() });
 
@@ -1335,6 +1348,16 @@ test('AC4 — under cap pressure WITH a daily entry, both caps hold and the mark
     digest.split('\n').length <= DigestCaps.MAX_LINES + 1,
     `line cap holds with the daily entry present (got ${digest.split('\n').length})`
   );
+  // The LINE half above is tight: mutating `lineBudget` to drop its prefix
+  // reservation turns this test red. The BYTE half below is NOT, and saying so
+  // is more useful than implying otherwise. Measured: with all four identity
+  // notes filled to their per-note ceiling AND 60 projects, renderDigest tops
+  // out at ~31.4 KiB against MAX_BYTES = 32 KiB, because MAX_NOTE_BYTES (8 KiB)
+  // x 4 notes cannot reach it and the line cap trims first. Dropping
+  // `prefixBytes` from `bodyByteBudget` leaves the whole suite green. Closing
+  // that needs either an exported `capDigest` or different caps — neither is in
+  // this WP's contract, and `capDigest` is byte-untouched by this diff. Kept as
+  // a ceiling regression guard, not as a claim that it pins the byte budget.
   assert.ok(
     Buffer.byteLength(digest, 'utf8') <= DigestCaps.MAX_BYTES,
     'byte cap holds with the daily entry present'
