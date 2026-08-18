@@ -4,7 +4,7 @@ title: "WP-frontmatter-recognition-failopen review rounds — the record, with e
 related_wps: [WP-frontmatter-recognition-failopen]
 ---
 
-# WP-frontmatter-recognition-failopen review rounds (2026-08-16/18)
+# WP-frontmatter-recognition-failopen review rounds (2026-08-16/19)
 
 Each round's raw final output is committed alongside this entry, one file per
 round, and each row below cites that file's path AND the SHA of the commit
@@ -152,6 +152,46 @@ spec's own `node -e` measurement, Table A's order against `:745-772`,
 `readNoteBounded`'s fifth `absent` class, and Table B's two cap lines — all
 reproduced. The spec moved to `Ready` on that evidence.
 
+## The PR gates — PR #11
+
+The design loop above ends at `Ready`. These are the two merge gates, run on
+the implementation diff, and they are a separate sequence.
+
+| # | Gate | Result | Findings | Raw file | Raw commit |
+|---|---|---|---|---|---|
+| 1 | wd-reviewer (spec fidelity) | REQUEST-CHANGES | 7 | `2026-08-18-…-pr11-wd-reviewer-raw.md` | `16af28d` |
+| 1 | external (frozen pr-rubric, no focus text) | patch is incorrect | 2, both P2 | `2026-08-18-…-pr11-external-raw.md` | `16af28d` |
+| 2 | wd-reviewer | **APPROVE** | 4 text-only nits | `2026-08-18-…-pr11-wd-reviewer-round2-raw.md` | `513665e` |
+| 2 | external | patch is incorrect | 2 (P1, P2) | `2026-08-18-…-pr11-external-round2-raw.md` | `513665e` |
+| 3 | external | **patch is correct, zero findings** | 0 | `2026-08-19-…-pr11-external-round3-raw.md` | (this commit) |
+
+**Both gates are clean.** Every finding across both was accepted and fixed;
+none was rejected, and none was dropped as style.
+
+**The one finding that mattered most was a vacuous test of mine.** Round 1's
+row-3 fixture created a *directory* named `2026-07-01.md`, but `newestDaily`
+recurses into directories and collects only `entry.isFile()` matches, so it
+yielded no candidate and the test silently duplicated row 1. The proof was a
+mutation: pushing on `absent` too — a direct contract violation — left all 75
+tests green. After the fix that mutation goes red. Both gates found it
+independently.
+
+**One finding could not be fully closed, and is recorded as a measured
+limit rather than a fix.** The byte-cap assertion cannot be driven past
+`MAX_BYTES` through `renderDigest`: each identity note is capped to
+`MAX_NOTE_BYTES` (8 KiB) before joining, four notes cannot reach the 32 KiB
+whole-digest ceiling, and the line cap trims first. Measured maximum with all
+four notes filled and 60 projects: 31.4 KiB. The fixture was widened from 6.7
+KiB to that maximum and the limit written into the test as measurement.
+Closing it needs an exported `capDigest` or different caps — neither in this
+WP's contract. Round 3 did not re-flag it.
+
+**Twice I stated a mechanism I had not run.** Round 1's blocker was one (a
+directory does not make `newestDaily` produce a candidate); round 2 found the
+second, in a comment — "a directory is never openable as a file, so
+`fs.openSync` throws". Measured: `openSync` succeeds on a directory;
+`readSync` throws `EISDIR`. The assertion was right for the wrong reason.
+
 ## Lessons — the package's bullets, for the PR body
 
 One bullet per lesson, prefixed with the WP id, per CLAUDE.md. They are kept
@@ -185,6 +225,12 @@ edit that file — parallel branches conflict on it.
   checkout while a review gate is running, logbook files included. Round 7 was
   invalidated by exactly that, and the invariant cannot tell my write from the
   reviewer's.
+- `WP-frontmatter-recognition-failopen`: **a test that names a case does not
+  necessarily reach it.** Two of this package's assertions named a thing they
+  never touched — a fixture that produced no candidate at all, and a byte-cap
+  assertion 20% below its ceiling. Both looked like coverage and were green.
+  The only reliable check is a mutation that violates the contract: if the
+  suite stays green, the assertion is decorative.
 - `WP-frontmatter-recognition-failopen`: literal control characters do not
   survive a copy/paste round trip. A probe silently lost its NEL/VT/FF and
   reported a healthy-looking wrong classification. Escapes only, and print the
