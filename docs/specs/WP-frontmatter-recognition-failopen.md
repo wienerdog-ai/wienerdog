@@ -116,42 +116,61 @@ An earlier revision marked this section N/A counting only (iv); the
 mirrored-surface trigger was the one that had already produced a
 self-contradicting acceptance criterion.
 
-### Table A — the daily path's outcome, per exclusion class
+### Table A — the daily path, as an ORDERED decision
+
+**First row whose condition holds decides; later rows are not reached.** The
+order is the code's own (`digest.js:745-772`), not a reading of it — two
+earlier revisions of this contract used independent tables and were defeated
+by inputs that satisfied more than one, or none. Ordering makes the table
+mutually exclusive and exhaustive by construction rather than by enumeration.
 
 **Outcome only.** What the banner *says* — its noun and its remedy — is not
-this WP's contract; see the successors. This table decides whether the
-summary appears and whether an entry is emitted.
+this WP's contract; see the successors.
 
-| `parseNoteResult` class | Summary in the digest | Banner entry | Label / reason |
-|---|---|---|---|
-| `malformed` | absent | **yes** | `daily-summary` / `malformed frontmatter` |
-| `untrusted-invalid` | absent | **yes** | `daily-summary` / `unclear derived_from_untrusted value` |
-| `untrusted-exact` | absent | no — normal policy, not an anomaly (ADR-0022 §4) | — |
-| none (flag absent, or exactly `false`) | present, if Table B admits it | no | — |
+| # | Condition, evaluated in this order | Summary block | Banner entry | Change |
+|---|---|---|---|---|
+| 1 | `newestDaily` finds no candidate | none | none | unchanged |
+| 2 | `DAILY_SUMMARY_INJECTION` not allowed for the profile | none — **the note is never read** | none | unchanged. This is why a malformed note under a blocked capability stays silent |
+| 3 | `readNoteBounded` → `absent` (the file could not be opened) | none | none | unchanged — an unreadable file is not a provenance anomaly |
+| 4 | → `malformed` | none | **`daily-summary` / `malformed frontmatter`** | **NEW** |
+| 5 | → `untrusted-invalid` | none | **`daily-summary` / `unclear derived_from_untrusted value`** | **NEW** |
+| 6 | → `untrusted-exact` | none | none — normal policy, not an anomaly (ADR-0022 §4) | unchanged |
+| 7 | `extractSection` finds no `## Summary`, or an empty one | none | none | unchanged. Includes the CRLF case, where the heading match cannot fire (`:327`) |
+| 8 | the secret gate fires on the normalized summary (`:765-766`) | none | the **existing** `daily-summary` / `appears to contain a secret` | unchanged |
+| 9 | otherwise | emitted, framed per ADR-0032 | none | unchanged |
 
-### Table B — preconditions this WP does NOT change
+**Rows 4 and 5 are the whole change.** Every other row states today's
+behaviour so the implementer can see that it must not move, and so the
+acceptance criteria have something exhaustive to assert against.
 
-The summary can be absent for reasons that have nothing to do with
-provenance. Each keeps today's behaviour exactly, and none of them may be
-made to emit the new entry. This table exists because an earlier acceptance
-criterion asserted "absent exactly when a banner is emitted", which is false
-against every row here.
+**The bounded read is a prefix, and that is not a new hazard.**
+`readNoteBounded` reads at most `MAX_DAILY_READ_BYTES` and trims a partial
+UTF-8 tail, so rows 4–9 all decide on a prefix. A `## Summary` beyond that
+bound is invisible today and stays invisible; the classification in rows 4–6
+is the prefix's classification, exactly as now.
 
-| Precondition | Today's outcome | After |
-|---|---|---|
-| no `## Summary` section, or an empty one | absent, no banner | unchanged |
-| `DAILY_SUMMARY_INJECTION` capability blocked | absent, no banner | unchanged |
-| secret gate fires on the summary (`:765-766`) | absent, banner with the existing secret reason | unchanged |
-| `extractSection` cannot match the heading (e.g. `## Summary\r`) | absent, no banner | unchanged |
-| overall digest cap displaces the block | absent, existing marker | unchanged |
+### Table B — the cap, which this WP does make worse
+
+| Fact | Value |
+|---|---|
+| `capDigest` reserves the prefix's lines first | `lineBudget = MAX_LINES - prefixLineCount` (`:583`) |
+| and its bytes first | `bodyByteBudget = MAX_BYTES - prefixBytes - markerBytes` (`:599`) |
+| so a new prefix line | **displaces body content** when the digest is at the cap |
+| measured | adding the row-4 entry to a digest at the 120-line cap dropped two previously emitted identity body lines, truncation marker retained |
+
+This is a real user-visible consequence and it is **authorized, not denied**:
+the prefix-first policy is existing, deliberate (`:580-582` says the prefix
+"can never be squeezed out by the body's line budget"), and this WP adds one
+line to it. What must not change is the cap's constants, its algorithm, its
+truncation marker, and the list's ordering.
 
 ### Mirrored Surface Checklist
 
 - [ ] The Deliverables cell for `src/core/digest.js`
 - [ ] Current state's description of the silent drop
 - [ ] Exact contracts' "The daily banner" paragraph
-- [ ] The Security checklist's no-note-content and no-new-omission claims
-- [ ] Acceptance criteria AC1–AC4
+- [ ] The Security checklist's no-note-content claim and its cap wording
+- [ ] Acceptance criteria AC1–AC5
 - [ ] The verification steps
 
 ## Implementation notes & constraints
@@ -173,26 +192,35 @@ against every row here.
       checkable.
 - [ ] The banner carries no note content: a fixed label and two fixed reason
       strings, the same code-owned rule as `:784`.
-- [ ] Nothing that reaches the digest today stops reaching it, and nothing
-      that is omitted today starts reaching it: this package changes only
-      whether an omission is *announced*, never whether it happens.
+- [ ] **Admission is unchanged; the cap is not.** No note that is admitted
+      today becomes omitted, and none omitted today becomes admitted — Table
+      A's rows 1-3 and 6-9 are all "unchanged". But an added prefix line
+      **does** displace body content when the digest is at its cap (Table B,
+      measured), so the claim is bounded to admission decisions before
+      `capDigest`. An earlier revision of this box claimed nothing stops
+      reaching the digest, which the cap's prefix-first policy makes false.
 
 ## Acceptance criteria
 
-- [ ] **AC1** — Each of Table A's four classes produces exactly the summary
-      presence and the banner entry that row states, asserted per row.
-- [ ] **AC2** — Each of Table B's five preconditions produces its stated
-      outcome unchanged, and **none of them emits the new entry**. This is the
-      criterion that replaces an earlier "absent exactly when a banner is
-      emitted", which contradicted Table A's `untrusted-exact` row and every
-      Table B row.
+- [ ] **AC1** — **Every row of Table A is asserted, in order.** Each of the
+      nine rows produces exactly the summary presence and the banner entry it
+      states. Rows 4 and 5 are the only ones whose "after" differs from
+      today; the other seven are regression assertions.
+- [ ] **AC2** — **The ordering itself is asserted, not just the rows.** At
+      least three inputs satisfying more than one row's condition are tested
+      and land on the earlier row: a malformed note under a blocked
+      capability (row 2 wins over row 4), a malformed note with no `##
+      Summary` (row 4 wins over row 7), and a malformed note whose summary
+      would trip the secret gate (row 4 wins over row 8). An earlier revision
+      of this contract used independent tables and could be satisfied by
+      choosing fixtures that never overlapped.
 - [ ] **AC3** — The emitted entry carries no note content: with a daily note
       whose body and frontmatter contain banner-shaped text, the entry is the
       fixed label and the fixed reason and nothing else.
-- [ ] **AC4** — The banner template at `:784` is byte-unchanged, and the
-      entry appears in the existing list in the existing position — no
-      reordering, no dedup change, no cap change relative to the identity,
-      `active-projects` and secret entries.
+- [ ] **AC4** — The banner template at `:784` is byte-unchanged, and the cap's
+      constants, algorithm, truncation marker and list ordering are unchanged.
+      Body displacement under cap pressure is **expected**, per Table B, and
+      is pinned by a line-cap and a byte-cap assertion rather than denied.
 - [ ] **AC5** — The full suite and lint are green. Golden fixtures change
       only where a banner entry is newly emitted; with an empty exclusion
       list the digest bytes are unchanged.
@@ -346,7 +374,8 @@ reason comes back.
 ### B. The banner's remedy accuracy
 
 `digest.js:784` renders one fixed template for a list six different sites
-write to, and its remedy is wrong for four of them **today**, before this WP.
+write to, and its remedy is inaccurate for **every one of them** today, before this
+WP — in two different degrees, set out in the table.
 This WP adds a seventh writer and leaves the template byte-unchanged; making
 the template accurate is a separate, six-class problem with no connection to
 provenance.
@@ -365,6 +394,12 @@ allowlist is exactly `profile`, `preferences`, `goals`, `instructions`
 | `:738` | `active-projects` | `appears to contain a secret` | both | **neither**, and it has no frontmatter to fix |
 | `:766` | `daily-summary` | `appears to contain a secret` | both | **neither** |
 | *new here* | `daily-summary` | provenance (Table A) | both | "fix frontmatter" is correct; `memory approve` cannot help |
+
+**Two degrees, counted explicitly** — an earlier draft said "wrong for four
+of six" without stating its unit, and no reading of the table produced four.
+Every one of the six existing rows is offered at least one remedy that cannot
+resolve it. Three of them — the secret rows `:711`, `:738`, `:766` — are
+offered **no** valid remedy at all.
 
 **The charter.** Remedy text is a function of the reason class, not of the
 banner. Either key it per class, or replace it with one sentence that is true
