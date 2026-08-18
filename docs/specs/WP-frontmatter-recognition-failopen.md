@@ -1,7 +1,7 @@
 ---
 id: WP-frontmatter-recognition-failopen
 title: Stop the digest dropping a daily note silently
-status: Ready
+status: In-Review
 model: sonnet
 size: S
 depends_on: []
