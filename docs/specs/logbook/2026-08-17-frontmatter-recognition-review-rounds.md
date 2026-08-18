@@ -28,6 +28,7 @@ round row without that SHA is a round where the raw-commit rule did not run.
 | 8 | Adversarial design review of the narrowed package | gptsol | NEEDS-ATTENTION | 2 (1 design-level / 1 mechanical) | `2026-08-17-…-round-8-raw.md` | `2167b76` |
 | 9 | Adversarial design review | gptsol | NEEDS-ATTENTION | 3 (1 design-level / 2 mechanical) | `2026-08-17-…-round-9-raw.md` | `68f6732` |
 | 10 | Adversarial design review of the digest half | gptsol | NEEDS-ATTENTION | 3 (2 design-level / 1 mechanical) | `2026-08-18-…-round-10-raw.md` | `6fc7943` |
+| 11 | Adversarial design review — **the closing round** | gptsol | NEEDS-ATTENTION | 3, all LIGHT under weighted closure | `2026-08-18-…-round-11-raw.md` | `28dc9f7` |
 
 The aborted attempt is listed as a row with no number because it produced no
 verdict and read nothing. It must not be counted toward the loop's closure
@@ -124,6 +125,32 @@ Named residuals carried forward:
   ordering in scope) and the digest banner's remedy accuracy across all six
   exclusion classes. Each carries its measurements so a successor starts from
   evidence.
+
+## How the loop closed
+
+Round 11 returned three findings and **none of them was about the product**,
+which is the runbook's stated closure condition. Under weighted closure a
+finding is HEAVY only when fixing it changes what the implementer builds:
+
+- The ordered-table finding changed how the contract is *expressed and
+  asserted*. Table A's rows 4 and 5 — the only behaviour this package changes
+  — are byte-identical to what round 10 landed.
+- The cap finding surfaced a real user-visible consequence, but its fix was
+  to **state and pin** the displacement rather than alter it: the prefix-first
+  policy is pre-existing and deliberate (`digest.js:580-582`), and this WP
+  adds one line to a list six other sites already write to. The owner
+  adjudicated this LIGHT explicitly.
+- The count finding was a number in a successor charter.
+
+All three landed and were verified mechanically, so the loop closed without a
+twelfth external round, exactly as the runbook prescribes for LIGHT findings.
+
+**Dispatch-time re-verification** then ran against `4461227`: seven executable
+Current-state claims — the discarded `r.exclusion` at `:748`, the six push
+sites, `memory.js`'s `KNOWN` allowlist and `approve`'s hash-only scope, the
+spec's own `node -e` measurement, Table A's order against `:745-772`,
+`readNoteBounded`'s fifth `absent` class, and Table B's two cap lines — all
+reproduced. The spec moved to `Ready` on that evidence.
 
 ## Lessons — the package's bullets, for the PR body
 
