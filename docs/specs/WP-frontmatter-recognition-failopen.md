@@ -1,6 +1,6 @@
 ---
 id: WP-frontmatter-recognition-failopen
-title: Stop the digest dropping a daily note silently, and make its banner accurate
+title: Stop the digest dropping a daily note silently
 status: Draft
 model: sonnet
 size: S
@@ -9,7 +9,7 @@ adrs: [ADR-0022, ADR-0004]
 epic: audit-2026-07-29
 ---
 
-# WP-frontmatter-recognition-failopen: the digest banner half
+# WP-frontmatter-recognition-failopen: the silent daily exclusion
 
 - Authoring rules live in `docs/runbooks/spec-authoring.md` — the
   template gives the skeleton, the runbook the rules. Read both.
@@ -17,13 +17,13 @@ epic: audit-2026-07-29
 > **Read this first.** This package once tried to close the frontmatter
 > **recognition** fail-open, then to guard two consumers that ignore
 > `malformed`. Nine design-review rounds narrowed it twice. **What ships here
-> is the digest half only**: the daily path's silent exclusion and the
-> banner's inaccurate wording. Two things it does NOT do, both stated with
-> their evidence below — it does not close the recognition fail-open
-> (`## Residual R-RECOGNITION`), and it does not fix the dream validator's
-> handling of `malformed` (`## Successor — the validator half`). The spec's
-> `id` is kept so nine rounds of logbook record stay attached to it; the
-> title says what it now does.
+> is one thing**: the digest's daily path stops dropping an anomalous
+> exclusion silently, which ADR-0022's Consequences require. Three things it
+> does NOT do, each stated with its evidence below — it does not close the
+> recognition fail-open (`## Residual R-RECOGNITION`), it does not fix the
+> dream validator's handling of `malformed`, and it does not fix the banner's
+> remedy text (both `## Successors`). The spec's `id` is kept so ten rounds
+> of logbook record stay attached to it; the title says what it now does.
 
 ## Context (read this, nothing else)
 
@@ -61,13 +61,16 @@ for provenance, only for a secret finding (`:766`). So a daily note excluded
 as `malformed` or `untrusted-invalid` disappears with no signal —
 contradicting ADR-0022's Consequences.
 
-**And the banner's wording is already inaccurate for that list.** `:784`
-reads "some identity notes were left out" and directs the user to
-`wienerdog memory approve <note>`, which accepts only the four fixed identity
-notes — measured, `src/cli/memory.js`'s `KNOWN` map is exactly `profile`,
-`preferences`, `goals`, `instructions`. A `daily-summary` entry already
-appears in that list today via `:766`, so the wrong noun and the impossible
-remedy are a present defect, not one this WP introduces.
+**The banner's remedy text is inaccurate today, and this WP does not fix
+it.** Six sites push onto that list — `:682`, `:691`, `:692`, `:711`, `:738`,
+`:766` — and `:784`'s single template tells every one of them to "fix their
+frontmatter" or run `wienerdog memory approve`. Measured: `memory approve`
+records an exact-byte **hash** only (`memory.js:19-21`), so it cannot resolve
+a malformed block, an unclear flag, or a secret; and `active-projects`
+(`:738`) has no frontmatter to fix. The remedy is therefore wrong for four of
+the six classes **before** this WP. Making it right is a six-class problem
+with no connection to provenance, so it is chartered as a successor rather
+than folded in here.
 
 ```bash
 node -e 'const{parseNoteResult:p}=require("./src/core/digest");const t="---\nderived_from_untrusted: true\n---\n## Summary\nx\n";console.log("daily read exclusion =",String(p(t).exclusion),"— and digest.js:748 discards it")'
@@ -82,8 +85,8 @@ grep -n "KNOWN = {" -A 6 src/cli/memory.js
 
 | Action | Path | Notes |
 |--------|------|-------|
-| modify | src/core/digest.js | the daily path (`:745-748`) pushes an anomalous exclusion onto the banner list it already uses at `:766`; the banner wording (`:784`) becomes accurate for a heterogeneous list |
-| modify | tests/unit/digest.test.js | the daily path's banner and its wording |
+| modify | src/core/digest.js | the daily path (`:745-748`) pushes an anomalous exclusion onto the banner list it already uses at `:766`. The banner template at `:784` is **not** touched |
+| modify | tests/unit/digest.test.js | the daily path against Table A |
 
 **Two files, both in the digest.** `src/core/frontmatter.js` is not listed:
 recognition is unchanged, so nothing here needs an ADR amendment and
@@ -103,21 +106,53 @@ exclusion and an absent flag stay **silent**: they are normal policy, not
 anomalies (ADR-0022 §4). No new reason string, no new banner, no new
 mechanism.
 
-**The banner wording.** `:784` must be accurate for a list that already
-mixes identity notes and a daily-summary entry: a noun covering both, and
-the `memory approve` sentence only when an identity entry is present. All
-wording stays fixed-template and code-owned, so the golden-frozen property
-at `:786-790` holds when the list is empty.
-
 ## Contract reference
 
-N/A — one of ADR-0031's seven criteria fires, not two. The daily path begins
-emitting a banner entry it never emitted **(iv)**, but it introduces no new
-reason string, no new label, no shape change, no taxonomy, and no second
-consumer: it reuses the identity path's existing strings on the list that
-path already writes. An earlier revision of this spec marked this section
-active on the strength of a validator contract that has since left the
-package.
+Activation (ADR-0031's 2-of-7): **(iv)** the daily path begins emitting a
+banner entry it never emitted, and **(vii)** the same outcome contract appears
+in the Deliverables cell, Current state, Exact contracts, the Security
+checklist, the acceptance criteria and the verification steps. Two of seven.
+An earlier revision marked this section N/A counting only (iv); the
+mirrored-surface trigger was the one that had already produced a
+self-contradicting acceptance criterion.
+
+### Table A — the daily path's outcome, per exclusion class
+
+**Outcome only.** What the banner *says* — its noun and its remedy — is not
+this WP's contract; see the successors. This table decides whether the
+summary appears and whether an entry is emitted.
+
+| `parseNoteResult` class | Summary in the digest | Banner entry | Label / reason |
+|---|---|---|---|
+| `malformed` | absent | **yes** | `daily-summary` / `malformed frontmatter` |
+| `untrusted-invalid` | absent | **yes** | `daily-summary` / `unclear derived_from_untrusted value` |
+| `untrusted-exact` | absent | no — normal policy, not an anomaly (ADR-0022 §4) | — |
+| none (flag absent, or exactly `false`) | present, if Table B admits it | no | — |
+
+### Table B — preconditions this WP does NOT change
+
+The summary can be absent for reasons that have nothing to do with
+provenance. Each keeps today's behaviour exactly, and none of them may be
+made to emit the new entry. This table exists because an earlier acceptance
+criterion asserted "absent exactly when a banner is emitted", which is false
+against every row here.
+
+| Precondition | Today's outcome | After |
+|---|---|---|
+| no `## Summary` section, or an empty one | absent, no banner | unchanged |
+| `DAILY_SUMMARY_INJECTION` capability blocked | absent, no banner | unchanged |
+| secret gate fires on the summary (`:765-766`) | absent, banner with the existing secret reason | unchanged |
+| `extractSection` cannot match the heading (e.g. `## Summary\r`) | absent, no banner | unchanged |
+| overall digest cap displaces the block | absent, existing marker | unchanged |
+
+### Mirrored Surface Checklist
+
+- [ ] The Deliverables cell for `src/core/digest.js`
+- [ ] Current state's description of the silent drop
+- [ ] Exact contracts' "The daily banner" paragraph
+- [ ] The Security checklist's no-note-content and no-new-omission claims
+- [ ] Acceptance criteria AC1–AC4
+- [ ] The verification steps
 
 ## Implementation notes & constraints
 
@@ -144,23 +179,23 @@ package.
 
 ## Acceptance criteria
 
-- [ ] **AC1** — A daily note excluded as `malformed` or `untrusted-invalid`
-      produces a banner entry labelled `daily-summary` carrying the identity
-      path's existing reason string; an `untrusted-exact` exclusion and an
-      absent flag produce **none**.
-- [ ] **AC2** — The daily note's summary is absent from the digest in exactly
-      the cases AC1 banners, and present otherwise. A banner without the
-      omission, or an omission without the banner, both fail.
-- [ ] **AC3** — The banner's text is accurate for a list containing a daily
-      entry: no identity-only noun, and no `memory approve` instruction
-      unless an identity entry is present. Asserted on all three list shapes
-      — identity-only, daily-only, and mixed.
-- [ ] **AC4** — The banner carries no note content: with a daily note whose
-      body and frontmatter contain banner-shaped text, the emitted banner
-      contains only the fixed label and the fixed reason.
+- [ ] **AC1** — Each of Table A's four classes produces exactly the summary
+      presence and the banner entry that row states, asserted per row.
+- [ ] **AC2** — Each of Table B's five preconditions produces its stated
+      outcome unchanged, and **none of them emits the new entry**. This is the
+      criterion that replaces an earlier "absent exactly when a banner is
+      emitted", which contradicted Table A's `untrusted-exact` row and every
+      Table B row.
+- [ ] **AC3** — The emitted entry carries no note content: with a daily note
+      whose body and frontmatter contain banner-shaped text, the entry is the
+      fixed label and the fixed reason and nothing else.
+- [ ] **AC4** — The banner template at `:784` is byte-unchanged, and the
+      entry appears in the existing list in the existing position — no
+      reordering, no dedup change, no cap change relative to the identity,
+      `active-projects` and secret entries.
 - [ ] **AC5** — The full suite and lint are green. Golden fixtures change
-      only where a banner is actually emitted; with an empty exclusion list
-      the digest bytes are unchanged.
+      only where a banner entry is newly emitted; with an empty exclusion
+      list the digest bytes are unchanged.
 
 ## Verification steps (run these; paste output in the PR)
 
@@ -180,6 +215,8 @@ git diff --stat -- tests/golden/
   open.** See below. Nothing in `src/core/frontmatter.js` is touched.
 - **The dream validator's `malformed` hole** — chartered as a successor at
   the end of this spec. Nothing in `src/core/dream/validate.js` is touched.
+- **The banner's remedy accuracy across all six exclusion classes** — also
+  chartered at the end. `digest.js:784` is byte-unchanged here.
 - **A product-wide shared notion of a line** — successor
   `WP-shared-line-boundary`.
 - **Exclusion visibility beyond the daily path** — the snapshot's `skipped`
@@ -253,7 +290,9 @@ The raw record of all seven rounds, and the reference implementations that
 were measured, are in `docs/specs/logbook/` under
 `2026-08-1{6,7}-frontmatter-recognition-*`.
 
-## Successor — the validator half, chartered not specced
+## Successors — chartered, not specced
+
+### A. The validator half
 
 Two rounds established that the dream validator's `malformed` hole cannot be
 closed by adding checks to this package. It needs its own WP, and that WP's
@@ -303,6 +342,35 @@ second read to disagree with the first.
 the validator "reports four violations" on that input. It does not: it
 returns the **first** reason. Four invariants are independently violated; one
 reason comes back.
+
+### B. The banner's remedy accuracy
+
+`digest.js:784` renders one fixed template for a list six different sites
+write to, and its remedy is wrong for four of them **today**, before this WP.
+This WP adds a seventh writer and leaves the template byte-unchanged; making
+the template accurate is a separate, six-class problem with no connection to
+provenance.
+
+Measured, so the successor does not re-derive it. `memory approve` records an
+exact-byte **hash** and nothing else (`src/cli/memory.js:19-21`), and its
+allowlist is exactly `profile`, `preferences`, `goals`, `instructions`
+(`memory.js:27-32`).
+
+| Push site | Entry | Reason | What the template tells the user | Valid? |
+|---|---|---|---|---|
+| `:682` | an identity note | not yet approved / changed since approval | fix frontmatter, **or** `memory approve` | the `memory approve` half is correct; "fix their frontmatter" is not |
+| `:691` | an identity note | `malformed frontmatter` | both | "fix frontmatter" is correct; `memory approve` cannot help |
+| `:692` | an identity note | `unclear derived_from_untrusted value` | both | same as `:691` |
+| `:711` | an identity note | `appears to contain a secret` | both | **neither** — the secret must be removed |
+| `:738` | `active-projects` | `appears to contain a secret` | both | **neither**, and it has no frontmatter to fix |
+| `:766` | `daily-summary` | `appears to contain a secret` | both | **neither** |
+| *new here* | `daily-summary` | provenance (Table A) | both | "fix frontmatter" is correct; `memory approve` cannot help |
+
+**The charter.** Remedy text is a function of the reason class, not of the
+banner. Either key it per class, or replace it with one sentence that is true
+for every member. Keep every string code-owned and fixed-template — the
+banner's existing rule (`:782-784`) is that no note content may enter it, and
+that rule is not in question.
 
 ## Definition of done
 

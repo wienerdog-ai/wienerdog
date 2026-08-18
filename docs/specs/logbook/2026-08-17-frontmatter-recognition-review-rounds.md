@@ -4,7 +4,7 @@ title: "WP-frontmatter-recognition-failopen review rounds — the record, with e
 related_wps: [WP-frontmatter-recognition-failopen]
 ---
 
-# WP-frontmatter-recognition-failopen review rounds (2026-08-16/17)
+# WP-frontmatter-recognition-failopen review rounds (2026-08-16/18)
 
 Each round's raw final output is committed alongside this entry, one file per
 round, and each row below cites that file's path AND the SHA of the commit
@@ -24,6 +24,10 @@ round row without that SHA is a round where the raw-commit rule did not run.
 | — | **ABORTED, no verdict** | gptsol | infrastructure failure | — | `2026-08-17-…-round-5-aborted-raw.md` | `29fc701` |
 | 5 | Adversarial design review (retry) | gptsol | NEEDS-ATTENTION | 3 (2 high / 1 medium) | `2026-08-17-…-round-5-raw.md` | `2424372` |
 | 6 | Adversarial design review | gptsol | NEEDS-ATTENTION | 3 (1 high / 2 medium) | `2026-08-17-…-round-6-raw.md` | `57196ad` |
+| 7 | Adversarial design review — **INVALID**, see below | gptsol | NEEDS-ATTENTION | 4 (2 high / 2 medium), 3 design-level | `2026-08-17-…-round-7-raw.md` | `b061f5b` |
+| 8 | Adversarial design review of the narrowed package | gptsol | NEEDS-ATTENTION | 2 (1 design-level / 1 mechanical) | `2026-08-17-…-round-8-raw.md` | `2167b76` |
+| 9 | Adversarial design review | gptsol | NEEDS-ATTENTION | 3 (1 design-level / 2 mechanical) | `2026-08-17-…-round-9-raw.md` | `68f6732` |
+| 10 | Adversarial design review of the digest half | gptsol | NEEDS-ATTENTION | 3 (2 design-level / 1 mechanical) | `2026-08-18-…-round-10-raw.md` | `6fc7943` |
 
 The aborted attempt is listed as a row with no number because it produced no
 verdict and read nothing. It must not be counted toward the loop's closure
@@ -31,9 +35,17 @@ condition, which is a round that finds nothing **about the product**.
 
 ## When each raw output was committed — the part that is not recoverable later
 
-**Rounds 1 through 6, and the aborted attempt: committed BEFORE adjudication**,
-in the SHAs above. Nothing in them was judged, paraphrased or shaped before the
-commit existed.
+**Every external round, and the aborted attempt: committed BEFORE
+adjudication**, in the SHAs above. Nothing in them was judged, paraphrased or
+shaped before the commit existed.
+
+**Round 7 is INVALID under the read-only invariant, and the cause was the
+relay's.** `git status --porcelain` was not byte-identical across the run
+because the relay created this very file while the round was in flight. The
+reviewer detected it and declared its own run invalid, correctly. Its three
+design-level findings were therefore re-verified independently from a clean
+tree before any of them was acted on. Rounds 8, 9 and 10 were byte-identical
+on both sides.
 
 **Round 0b: committed AFTER adjudication.** It ran inline during drafting and
 both findings were fixed in the same breath, so the ordering property did not
@@ -47,10 +59,16 @@ fixes. Raised as a runbook question, not patched here.
 
 ## What the loop actually cost, and what turned it
 
-Findings per round: 4, 4, 2, 3, 3, 3. Spec length: 375 → 480 → 508 → 572 →
-709 → 513 lines. The count never fell, and for five rounds the surface grew —
-the treadmill condition named in `docs/runbooks/codex-review.md`
-("The loop converges by freezing surface, not by patience").
+Findings per round: 4, 4, 2, 3, 3, 3, 4, 2, 3, 3. Spec length: 375 → 480 →
+508 → 572 → 709 → 513 → 477 → 331 → 264 → 317 → 385 lines. The count never
+fell below two, and for five rounds the surface grew — the treadmill
+condition named in `docs/runbooks/codex-review.md` ("The loop converges by
+freezing surface, not by patience"). What eventually moved it was not a
+better mechanism but **three successive narrowings of what the package
+claims**: recognition frozen (after round 5), the recognition work dropped
+entirely (after round 7), and the validator half chartered out (after round
+9). Each narrowing removed a class of question rather than answering it
+again.
 
 **Six findings across the loop were one recurring kind**: a claim about a
 specific code path asserted without measuring *that* path — Table A's
@@ -79,12 +97,19 @@ elaboration it replaced.
 
 ## Dispositions
 
-Every finding across rounds 1–6 was accepted and fixed; none was dropped as a
-residual, and none was rejected. The owner ruled on six scope questions:
+Every finding across all ten rounds was accepted; none was rejected and none
+was dropped as a style residual. The owner ruled on nine scope questions:
 covering the dream validator's third path; splitting the daily-path
 visibility and then reversing that split when ADR-0022's Consequences made
-visibility binding; closing the unclosed-block case; the (B) re-ruling and
-its stated price; and the round-6 criterion recorded below.
+visibility binding; closing the unclosed-block case; the (B) re-ruling that
+froze recognition, and its stated price; the fallback that removed the
+recognition work; the split at the two consumer holes; and the ruling that
+the banner's remedy accuracy is a successor rather than this package's work.
+
+**Two pre-agreed criteria were set and both fired as written**, which is why
+the last three narrowings took one turn each instead of a debate: a
+design-level finding rooted in the previous fix triggered the fallback
+(round 7) and then a stop-and-ask (round 9).
 
 Named residuals carried forward:
 
@@ -94,3 +119,46 @@ Named residuals carried forward:
 - Successor `WP-shared-line-boundary`: `parse`, `DAILY_LINE_BREAK`,
   `extractSection` and the secret scanner do not agree on what a line is.
   Round 4's and round 5's measurements are carried into it.
+- Residual `R-RECOGNITION`, and two charters in the spec itself: the dream
+  validator's `malformed` hole (needs the commit pipeline's read/decide/commit
+  ordering in scope) and the digest banner's remedy accuracy across all six
+  exclusion classes. Each carries its measurements so a successor starts from
+  evidence.
+
+## Lessons — the package's bullets, for the PR body
+
+One bullet per lesson, prefixed with the WP id, per CLAUDE.md. They are kept
+here rather than in `memory/lessons/inbox.md` because a WP branch must not
+edit that file — parallel branches conflict on it.
+
+- `WP-frontmatter-recognition-failopen`: **zero findings is not readiness if
+  the review's focus never went there.** The digest half was called "clean
+  across three rounds" and used as the argument for shipping it; the first
+  round that actually attacked it returned two design-level findings. A
+  finding count only means something over surface the reviewer was pointed
+  at — say which surface a clean round covered, never just that it was clean.
+- `WP-frontmatter-recognition-failopen`: a claim about a specific code path
+  must be measured on *that* path. Six findings across the loop were this one
+  defect — a rationale, a banner's visibility, a corpus predicate, a partition
+  universal, a normalization order, an invisible-prefix justification.
+- `WP-frontmatter-recognition-failopen`: when the same author writes both the
+  contract and its proof, the proof inherits the contract's blind spots. Two
+  structural answers — per-cell reproduction, then a totality sweep — were each
+  defeated by the very blind spot they were built to catch. A property whose
+  oracle calls the implementation's own helper is a tautology.
+- `WP-frontmatter-recognition-failopen`: a fail-closed guard belongs at the
+  decision, not in the view it reads. Emptying a record on `malformed` erased
+  the difference between *absent* and *hidden*, and every preservation check
+  reads absence as agreement — four detected violations became zero.
+- `WP-frontmatter-recognition-failopen`: an enumeration cannot prove a
+  partition exhaustive. Three enumerated case lists were each defeated by a
+  shape outside the list; only a ruling change — recognition never widens —
+  removed the unbounded question instead of answering it again.
+- `WP-frontmatter-recognition-failopen`: do not write into the reviewed
+  checkout while a review gate is running, logbook files included. Round 7 was
+  invalidated by exactly that, and the invariant cannot tell my write from the
+  reviewer's.
+- `WP-frontmatter-recognition-failopen`: literal control characters do not
+  survive a copy/paste round trip. A probe silently lost its NEL/VT/FF and
+  reported a healthy-looking wrong classification. Escapes only, and print the
+  code points before asserting anything.
