@@ -18,8 +18,13 @@ nothing. `git status --porcelain` was empty before and after.
 **Committed BEFORE adjudication.**
 
 Everything below the line is the reviewer's final message, verbatim.
+Markdownlint is disabled below it so the bytes stay unedited — the same
+device `docs/runbooks/review-prompts/adversarial.md` uses for vendored text
+that may not be touched.
 
 ---
+
+<!-- markdownlint-disable -->
 
 ## Verdict
 PASS
