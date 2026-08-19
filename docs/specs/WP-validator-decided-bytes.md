@@ -11,10 +11,8 @@ epic: audit-2026-07-29
 
 # WP-validator-decided-bytes: refuse a malformed block at the decisions
 
-**The `id` is deliberately unchanged.** It no longer matches the title: rounds 1
-and 2 split the commit-ordering half out of this package (see The charter), and
-the id is the identifier three logbook files, the round record and the branch
-already cite. Renaming it would orphan that record to fix a cosmetic mismatch.
+**The `id` is historical**: it names the commit-ordering scope that rounds 1–3
+moved to The charter, and it is kept because the review record cites it.
 
 ## Context (read this, nothing else)
 
@@ -47,13 +45,14 @@ node -e 'const{parse}=require("./src/core/frontmatter");const{parseFrontmatter:P
 # parse.malformed=true fieldsExposed=3 floorPasses=true
 ```
 
-**This package closes exactly that, and nothing more.** Two adversarial review
+**This package closes exactly that, and nothing more.** Three adversarial review
 rounds established that the pipeline's read/decide/commit ordering is a larger
 and partly different problem — it contains an authorization gap this package
-does not touch — so it is chartered out rather than half-solved here (see The
-charter). **Read the charter before you assume any ordering property**: what
-this WP guarantees is narrower than its history suggests, and both narrowings
-are stated in C1 and C2 as measured limits, not as caveats.
+does not touch — so all of it is chartered out rather than half-solved here (see
+The charter). What remains is one contract, C1. **Read the charter before you
+assume any ordering, registration or commit-side property**: this WP guarantees
+less than its history suggests, and the limit is stated in C1 as a measured
+fact, not a caveat.
 
 This package is the validator half of the charter in
 `docs/specs/done/WP-frontmatter-recognition-failopen.md` (`:332`, part A). Done
@@ -83,15 +82,9 @@ stage-and-commit (`:1378`), and record new skills in the ownership registry
   it reverts is `LEARNINGS.md`; the bytes it parses are the sibling
   `SKILL.md`'s.
 - `:1170` — after the Tier-3 decision accepted the file at `:1161`,
-  registration re-reads it to lift `id` and `created` for the registry.
-
-**The reads of a current file are four, not one** (`:190`, `:321`, `:496`,
-`:506`), and no two are bound to each other. Which fire depends on the path:
-a *tracked* skill revision is read at `:321` then `:190`; an *untracked* new
-draft skips `skillBodyViolation` and is read at `:190` then `:1170`. `:496`
-reads a **different** file — the parent `SKILL.md` of a `LEARNINGS.md` under
-validation — and `:506` reads that ledger itself. Table B says what C2 does and
-does not do about this; the gap between `:321` and `:190` is the charter's.
+  registration re-reads it to lift `id` and `created` for the registry. **This
+  read stays exactly as it is** (Out of scope); Table A explains why no check
+  can live here, and The charter carries what is wrong with it.
 
 `parseFrontmatter` is exported (`:1430`) and `tests/unit/frontmatter-unify.test.js`
 asserts its plain-record return shape (`:61`, `:93-94`); `tier3Decision`,
@@ -119,19 +112,19 @@ charter's first hole.
 
 | Action | Path | Notes |
 |--------|------|-------|
-| modify | src/core/dream/validate.js | the malformed guard at the five decision sites (Table A), removing the `:1170` re-read (Table B), and the two reason strings (Table C) |
+| modify | src/core/dream/validate.js | the malformed guard at the five decision sites (Table A) and the two reason strings (Table C). Nothing else — no read is added, moved or removed |
 | modify | tests/unit/dream-validate.test.js | cover the acceptance criteria below (the implementer designs the cases and fixtures) |
-| modify | tests/unit/frontmatter-digest-differential.test.js | extend the ADR-0022 parity gate to malformed blocks (AC5). Change no existing case |
+| modify | tests/unit/frontmatter-digest-differential.test.js | extend the ADR-0022 parity gate to malformed blocks (AC4). Change no existing case |
 
 Two files are **deliberately absent**: `src/core/frontmatter.js` (Out of scope)
 and `src/core/secret-scan.js` (The charter). Round 1 also weighed
-`src/cli/dream.js` and `src/core/layout.js`; both were needed only by the
-commit-ordering contract this package no longer carries, so they are moot here
-and belong to the charter's successor.
+`src/cli/dream.js` and `src/core/layout.js`, and round 3 removed the last
+registration work; all of it was needed only by contracts this package no longer
+carries, so those files are moot here and belong to the charter's successor.
 
 ### Exact contracts
 
-Two contracts, canonical in Tables A–C. Everything below cites them.
+One contract, canonical in Tables A and C. Everything below cites them.
 
 **C1 — the guard is at the decisions, never in the view.** Each of the five
 security decisions in Table A refuses a malformed block *before* it compares any
@@ -160,23 +153,19 @@ rejected today and **admitted** under that design — visible only when the
 registry entry's `id` is absent, since a healthy entry rejects at
 `cur.id !== entry.id` (`:328`). AC2 pins that registry state.
 
-**C2 — registration uses the bytes the floor decided on.** The Tier-3 decision
-carries the bytes it accepted forward to registration; the `:1170` re-read is
-removed (Table B). On the new-draft path that is the whole of the second read,
-so the ownership registry can no longer record an `id`/`created` that the
-accepting decision never saw.
-
-**What C2 does NOT claim.** It does not make "one read per path" true. Three
-reads of a current file remain (`:190`, `:321`, `:496`), none bound to another,
-and the window between `:321` and `:190` on a tracked skill revision is an
-**authorization gap**, not a durability one — measured, and the charter's second
-hole. No surface in this spec may describe C2 as decide-once.
-
 ## Contract reference
 
-Activation (ADR-0031's 2-of-7), two of seven: **(iv)** two new reason strings
-and a changed outcome at five decision sites; **(vi)** the ownership registry
-inherits C2's byte-reuse contract.
+Activation (ADR-0031's 2-of-7) is now **one of seven** — **(iv)** two new reason
+strings and a changed outcome at five decision sites. Trigger (vi) went with the
+registration contract in round 3, so the threshold is **not** met.
+
+**The tables stay anyway, and not by inertia.** Table A is not a summary of the
+contract, it *is* the contract: "these five sites and no others" is only
+checkable as a per-site disposition list, and the two rows marked *Refined* carry
+the reason a site's outcome differs from the predecessor's ruling. Table C is a
+byte-exact literal registry that a verification step greps. The Mirrored Surface
+Checklist stays for the same reason — the mirrors exist whether or not a
+threshold named them.
 
 ### Table A — where a malformed block is rejected
 
@@ -190,25 +179,13 @@ refined; each refinement is marked and its cause given.
 | `:332` | raise-only guard | **reject** with R1 before comparing the flag. A malformed HEAD must never read as "not `true`" — the absence-as-agreement hole |
 | `:353` | promotion allowlist | covered by the `:317`/`:325` rejection: the loop is reached only after both sides parsed clean |
 | `:500` | learnings-ledger parent-skill identity | **reject** with **R1L** before comparing against the ownership registry. *Refined:* the path this site reverts is `LEARNINGS.md` but the malformed bytes are the sibling `SKILL.md`'s, so R1's wording would point the user at the wrong file |
-| `:1170` | new-skill-draft registration | **no decision here** — under C2 this read does not exist. Round 9 measured why a check here cannot work: the file is already accepted and no caller converts a reason into a revert, so `if (parse(text).malformed) continue` skips only the registry insert while Steps 3 and 5 still commit the malformed bytes — `reverted: []`, a committed and ownerless Tier-3 skill |
+| `:1170` | new-skill-draft registration | **no decision here, and the read stays.** Round 9 measured why a check here cannot work: the file is already accepted and no caller converts a reason into a revert, so `if (parse(text).malformed) continue` skips only the registry insert while Steps 3 and 5 still commit the malformed bytes — `reverted: []`, a committed and ownerless Tier-3 skill |
 | `:343` | `skillBody` body comparison | **out of scope, deliberately.** It compares bodies, not security fields, and this WP does not change what `body` is |
 
 The five rejecting decision sites above are the whole of the guard: no other
 site in the file reads a frontmatter field to make a security decision. They are
 also its whole **extent** — a rewrite that happens after all five (the redact
 arm) is not covered, by measurement and not by omission.
-
-### Table B — the reads, and exactly what C2 changes
-
-| Fact / rule | Value |
-|---|---|
-| Reads of a current file today | four sites, none bound to another: `:190` (floor), `:321` (revision guard), `:496` (a ledger's parent skill — a different path), `:506` (the ledger itself). Plus `:1170`, the registration re-read |
-| Which fire per path | a *tracked* skill revision: `:321` then `:190`. An *untracked* new draft: `:190` then `:1170` (`skillBodyViolation` returns null for new ADDs) |
-| What C2 removes | the `:1170` re-read only. Registration takes `id` and `created` from the bytes `:195` decided on |
-| What C2 therefore guarantees | the ownership registry cannot record an `id`/`created` that the accepting Tier-3 decision never saw |
-| What C2 does NOT guarantee | one read per path. The `:321`→`:190` window remains and is an **authorization gap**: bytes swapped there pass the immutable-field, raise-only and authorization checks on one version and commit another. Measured — The charter, hole 2 |
-| Not in this package | any invariant over what reaches the commit. Late-arriving Tier-3 paths, the working-tree/blob question and the redact arm's rewrite are all the charter's |
-| Preserved unchanged | the Tier-3 thresholds, the identity freeze (`:1142`), the revision guard's own rules, the secret gate's classification and both arms, the retention pruning, the single commit, and registry-after-commit (`:1410`) |
 
 ### Table C — the reason-string vocabulary
 
@@ -222,19 +199,18 @@ two and changes none. Byte-exact, code-owned, never containing note content.
 
 ### Mirrored Surface Checklist
 
-- [ ] The Deliverables row for `src/core/dream/validate.js` (cites A, B and C)
-      and the absent/moot-files paragraph beneath it (cites Out of scope and
-      The charter)
+- [ ] The Deliverables row for `src/core/dream/validate.js` (cites A and C) and
+      the absent/moot-files paragraph beneath it (cites Out of scope and The
+      charter)
 - [ ] The title, the H1, and the Context paragraph that scopes this package —
-      none of which may promise a commit-side or decide-once property
-- [ ] C1's and C2's "does NOT claim" paragraphs, and the two Security-checklist
-      residuals that carry the same two limits
-- [ ] Acceptance criteria AC1–AC3 and AC7 (Table A), AC4 (Table B), AC6
-      (Table C, including R1L's site)
-- [ ] The verification steps' greps for the R1 / R1L literals and for the
-      removed `:1170` expression
-- [ ] The Current-state list of the six parse sites and the four read sites —
-      Table A dispositions each parse site, Table B each read site
+      none of which may promise a commit-side, registration or ordering property
+- [ ] C1's "does NOT claim" paragraph, and the four Security-checklist residuals
+      that carry the limits it names
+- [ ] Acceptance criteria AC1–AC3 and AC6 (Table A), AC5 (Table C, including
+      R1L's site)
+- [ ] The verification steps' greps for the R1 / R1L literals
+- [ ] The Current-state list of the six parse sites — Table A dispositions each
+      of them, including the two that make no decision
 
 ## Implementation notes & constraints
 
@@ -256,7 +232,7 @@ two and changes none. Byte-exact, code-owned, never containing note content.
 
 - [ ] The template's untrusted-identifier item is **N/A — this WP constructs no
       new filesystem path and no shell command.** It adds refusals at existing
-      decision sites and removes one read.
+      decision sites and changes nothing else.
 - [ ] The surface is **untrusted brain-written bytes reaching a Tier-3 path**,
       standing context for every later AI session. Containment added here: the
       five decisions in Table A refuse a malformed block instead of comparing
@@ -270,7 +246,19 @@ two and changes none. Byte-exact, code-owned, never containing note content.
 - [ ] Named residual — **the reads between decisions are unbound, and that is
       an authorization gap.** Bytes swapped between `:321` and `:190` commit an
       `id` the immutable-field check never saw. Measured; The charter, hole 2.
-      This is the more serious of the two and is the successor's first duty.
+      This is the most serious of the residuals and is the successor's first
+      duty.
+- [ ] Named residual — **registration keeps a re-read that can in principle
+      disagree with the decision.** `:1170` re-reads an accepted path to lift
+      `id`/`created`. Removing it was carried through three rounds and dropped:
+      the window it closes contains no scheduling point, and the read carries an
+      `ENOENT` fail-stop that removing it would delete. Measured; The charter,
+      hole 2.
+- [ ] Named residual — **`{id: '', created: <run date>}` ships as-is.** The floor
+      requires only the three provenance fields, so a floor-passing skill with no
+      `id`/`created` is registered with an empty id and the run date — a value
+      never present in the bytes the decision read. Measured; The charter,
+      hole 2.
 - [ ] Named residual — **R1 does not say which side of a revision is
       malformed.** The remedies differ (repair the working copy vs. commit a
       repair over a malformed HEAD), and distinguishing them costs a third
@@ -300,24 +288,19 @@ two and changes none. Byte-exact, code-owned, never containing note content.
       omitting all four, the revision is reverted.
 - [ ] AC3 — A malformed HEAD cannot launder a lowering: the raise-only guard
       rejects rather than reading the absent flag as "not `true`".
-- [ ] AC4 — C2 holds, and only C2: an accepted new skill draft is registered
-      with the `id` and `created` of the bytes its Tier-3 decision read, and no
-      read of that path happens after the decision. A test asserting anything
-      about bytes changing *between other* decisions belongs to the charter, not
-      here.
-- [ ] AC5 — The ADR-0022 parity gate is no longer vacuous with respect to
+- [ ] AC4 — The ADR-0022 parity gate is no longer vacuous with respect to
       malformed blocks: for inputs `parse` reports as malformed, the digest-side
       classifier (`parseNoteResult` → `exclusion: 'malformed'`) and the
       validator's Tier-3 decision both refuse. Existing cases are unchanged.
-- [ ] AC6 — Exactly the two literals in Table C are added to the validator's
+- [ ] AC5 — Exactly the two literals in Table C are added to the validator's
       reason vocabulary, no existing reason string changes, and the
       learnings-ledger site fires **R1L** — naming the parent `SKILL.md` — not
       R1, because the path it reverts is not the path whose bytes are malformed.
-- [ ] AC7 — The guard does not leak below Tier-3: a malformed Tier-1/2 note (a
+- [ ] AC6 — The guard does not leak below Tier-3: a malformed Tier-1/2 note (a
       daily log, a report, an ordinary note) is committed exactly as it is
       today. Table A is a list of Tier-3 decision sites and this WP adds no
       floor where there was none.
-- [ ] AC8 — `npm test` and `npm run lint` pass, and running the dream twice over
+- [ ] AC7 — `npm test` and `npm run lint` pass, and running the dream twice over
       an unchanged vault is idempotent (second run: zero changes).
 
 ## Verification steps (run these; paste output in the PR)
@@ -332,10 +315,6 @@ npm run lint
 # test suite above, not by this line.)
 node -e 'const{parse}=require("./src/core/frontmatter");const{parseFrontmatter:P}=require("./src/core/dream/validate");const t="---\nconfidence: 0.9\nrecurrence: 5\nderived_from_untrusted: false\njunk line\n---\nb\n";if(!parse(t).malformed)throw new Error("fixture is no longer malformed — the test lost its subject");console.log("parse.malformed=true, fieldsExposed="+Object.keys(P(t)).length)'
 
-# Table B: the `:1170` registration re-read is gone. A tripwire for the exact
-# expression removed, not a proof of C2 — AC4's behavioural case asserts that.
-! grep -n 'parseFrontmatter(fs.readFileSync' src/core/dream/validate.js
-
 # Table C: both literals are present, byte for byte (a quoted heredoc, so no
 # quoting accident can change what is matched).
 cat > /tmp/wd-reasons.txt <<'LITERAL'
@@ -345,18 +324,22 @@ LITERAL
 test "$(grep -Fof /tmp/wd-reasons.txt src/core/dream/validate.js | sort -u | wc -l | tr -d ' ')" = 2
 ```
 
-The last three are NEW steps and each is an assertion — non-zero exit on
-failure, never a number for a reader to judge. Measured at `390ebe3` before any
-work: the `:1170` tripwire and the literal count exit **1** (they assert the
-fix); the fixture guard exits **0** (it asserts a subject, not the fix). Paste a
-real green on the finished state **and** a real red from a deliberately broken
-state, one recipe per step: the fixture's junk line repaired; the `:1170`
-re-read restored; one reason literal reworded.
+The last two are NEW steps and each is an assertion — non-zero exit on failure,
+never a number for a reader to judge. Measured at `c575605` before any work: the
+literal count exits **1** (it asserts the fix); the fixture guard exits **0** (it
+asserts a subject, not the fix). Paste a real green on the finished state **and**
+a real red from a deliberately broken state, one recipe per step: the fixture's
+junk line repaired; one reason literal reworded.
 
 ## Out of scope (do NOT do these)
 
 - **The whole read/decide/commit ordering** — The charter. Nothing in this WP
   binds a read to another read, to staging, or to the commit.
+- **Registration's byte reuse.** Do **not** remove or alter the `:1170` re-read.
+  Removing it was this package's C2 through three rounds and was chartered out in
+  round 3: the window it closes contains no scheduling point, and the read
+  carries an `ENOENT` fail-stop against a path that vanishes after acceptance.
+  The registry's absent-metadata and commit-membership semantics go with it.
 - `src/core/frontmatter.js`. Recognition — what counts as a block at all — stays
   byte-for-byte, by ruling and not by omission (Security checklist). No
   widening, no narrowing, no ADR-0022 amendment.
@@ -420,23 +403,49 @@ alike: `reverted: []`, `secretRedactions: 1`, committed, `parse().malformed`
 measured, not assumed** — it takes `Number()` on the same line and has the same
 exposure. A malformed check never sees limb B.
 
-**The boundary, measured, so the successor does not re-derive it.** Only the
-hexadecimal form reaches limb B. **Decimal cannot:** a floor-passing decimal
-`confidence` is digits-only, and a digits-only run caps at `log2(10) = 3.3219`
-bits/char — below `ScanLimits.ENTROPY_MIN_BITS_PER_CHAR = 3.5`
-(`src/core/secret-scan.js:24`). `0b…` (alphabet of 2) and `0o…` (alphabet of 8)
-are floor-passing but clean for the same reason, and hex at 23 characters is
-clean because it is under `ENTROPY_MIN_LEN = 24` (`:23`). Eight
-`Number()`-parsable forms were measured; exactly the two hex forms of 24
-characters or more are redacted. The obvious decimal constructions do not work,
-and that is why the limb reads as impossible until you try a radix prefix.
+**Limb B's reach was NOT enumerated, and cannot be characterized by syntax
+class.** Redaction is a predicate on the literal's *characters* — an unbroken run
+of ≥ 24 over `[A-Za-z0-9+=/]` whose Shannon entropy is ≥ 3.5 bits/char.
+`Number()` acceptance is a predicate on the literal's *syntax*. The two are
+independent, so **no syntactic class is uniformly redacted or uniformly clean.**
+The decisive pair — same syntax class, both floor-passing, opposite outcomes:
+
+```text
+10293847561029384756E+12   len 24, 3.522 bits/char  ->  REDACTED
+102938475610293847561E12   len 24, 3.387 bits/char  ->  clean
+```
+
+The `+` is what lifts the first over the entropy floor: `ENTROPY_CORE_CLASS` is
+`A-Za-z0-9+=`, so a sign is a candidate character like any other.
+
+**Measured positive classes — evidence, not an inventory.** 24-character
+hexadecimal, upper (`0xABCDEF0123456789ABCDEF`, 4.002 bits/char) and lower; and
+scientific notation carrying a `+`, with either `E` or `e` (3.522 bits/char).
+
+**The one negative that holds, correctly scoped.** An *ordinary decimal digit
+run* cannot reach limb B: digits cap at `log2(10) = 3.3219` bits/char, below
+`ScanLimits.ENTROPY_MIN_BITS_PER_CHAR = 3.5` (`src/core/secret-scan.js:24`).
+`0b…` (alphabet of 2) and `0o…` (alphabet of 8) are clean for the same reason,
+and hex at 23 characters is clean because it is under `ENTROPY_MIN_LEN = 24`
+(`:23`). That is a statement about decimal runs and nothing else.
+
+**Not enumerated.** The intersection of `Number()`-accepted syntax with the
+scanner's candidate grammar was never computed. **A successor must treat any
+class-based characterization of limb B as unsound — including the list above.**
+Two earlier drafts of this paragraph each stated a boundary ("decimal only", then
+"hexadecimal only") and each was falsified by the next review round. The
+per-literal predicate is the only sound statement.
 
 ### Hole 2 — the reads between decisions are unbound (an authorization gap)
 
-`:190`, `:321` and `:496` are separate reads of a current file, and no two are
-bound. On a tracked skill revision the order is `:321` (the revision guard, which
-owns the immutable-field, raise-only and authorization checks) then `:190` (the
-floor). Bytes replaced in that window are checked in one version and committed in
+There are four reads of a current file — `:190` (the floor), `:321` (the revision
+guard), `:496` (a *ledger's parent skill*, a different path) and `:506` (the
+ledger itself) — plus `:1170`, the registration re-read, and **no two are bound
+to each other.** Which fire depends on the path: a *tracked* skill revision is
+read at `:321` then `:190`; an *untracked* new draft skips `skillBodyViolation`
+and is read at `:190` then `:1170`. On a tracked revision `:321` owns the
+immutable-field, raise-only and authorization checks and runs *before* the floor,
+so bytes replaced in that window are checked in one version and committed in
 another:
 
 ```bash
@@ -457,6 +466,50 @@ COMMITTED "id: bar" | registry id: "foo"
 **This is an authorization gap, not a durability one** — the immutable-field,
 raise-only and authorization checks are all bypassable — and it is the more
 serious of the two holes.
+
+#### The registration facts, measured in round 3
+
+"Registration reuses the decided bytes" was this package's C2 through three
+rounds and was removed in round 3 as measurably not worth its cost. What was
+measured about it belongs here, because the ownership registry is the
+tamper-resistant write-origin marker that authorizes every later revision.
+
+**(i) The registry already records values that were never in the decided
+bytes.** The floor requires only `confidence`, `recurrence` and
+`derived_from_untrusted`; `id` and `created` may be absent, and `:1171`
+synthesizes both — `String(fm.id || '')` and `String(fm.created || date)`.
+Measured end to end on a floor-passing skill carrying only the three provenance
+fields: `reverted: []`, committed, registry entry
+`{"created":"2026-08-19","id":""}` — the run date, never present in the bytes the
+decision read. Byte reuse alone does not fix this; the absent-metadata semantics
+have to be decided.
+
+**(ii) The `:1170` read is load-bearing beyond its stated purpose.** Its
+`readFileSync` throws `ENOENT` if the accepted path vanished between the floor
+and registration, and nothing catches it — that throw is the only fail-stop
+against a vanished-after-acceptance path reaching Step 6. Measured with an `fs`
+seam that deletes the path after the floor read: `reads: 2`, then
+`ENOENT: no such file or directory, open …` propagating out of
+`validateAndCommit`. **A successor that removes this read must replace the guard
+deliberately.** Three review rounds and two reviewers missed it.
+
+**(iii) Commit-membership and registry-membership can disagree in both
+directions.** Round 3 compiled a scratch mutant of the literal carry-forward:
+when the accepted path *disappears* after the floor, Step 5 commits nothing for
+it while Step 6 still registers it; when it *moves*, the new path is committed
+unchecked while the registry records the old one. Round 3's own fix — register
+only when the accepted rel is present as an added/modified path in the completed
+commit — is candidate **(A)** under another name, which is why this belongs in
+the charter and not in a byte-reuse package.
+
+**(iv) And the window byte reuse would have closed is the narrowest in the
+file.** Between the floor's read (`:190`) and the registration read (`:1170`) on
+the accepting path there are **zero** subprocesses and no I/O other than the
+`:1170` read itself — pure synchronous straight-line code with no scheduling
+point. By contrast `:321`→`:190` spans a `git show HEAD:<rel>` subprocess, and
+`:190`→Step 5's `git add -A` spans the whole EP2 gate (**6** `git()` call sites).
+The reachable registry defect is the redacted-id divergence below, which comes
+from the redact arm — not from this window. Fix the wide windows first.
 
 ### Context the successor inherits, not separate problems
 
