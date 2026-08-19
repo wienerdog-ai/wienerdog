@@ -607,10 +607,12 @@ function capDigest(assembled, prefix) {
  * daily note under {daily_dir} (found recursively), and {projects_dir}/* directory
  * names — all resolved from `layout` (defaults == today's hardcoded paths). Notes
  * flagged `derived_from_untrusted: true` and blocks whose source is missing/empty
- * are omitted. An ANOMALOUS identity exclusion (malformed frontmatter block, or a
+ * are omitted. An ANOMALOUS exclusion (malformed frontmatter block, or a
  * derived_from_untrusted value that is not an exact boolean) is omitted fail-closed
  * AND surfaced via a fixed warning banner placed first in the prefix (audit A4,
- * ADR-0022); an exact `true` is normal policy and stays silent.
+ * ADR-0022) — for an identity note and, since
+ * WP-frontmatter-recognition-failopen, for the daily note too. An exact `true` is
+ * normal policy and stays silent, as is a daily note that cannot be opened.
  * Output is capped to `DigestCaps.MAX_LINES` lines AND `DigestCaps.MAX_BYTES` bytes,
  * with the control-plane banner prefix always preserved; over-cap content is
  * truncated at a line boundary with a fixed marker (audit A6, F3/F5). When
@@ -745,6 +747,18 @@ function renderDigest(vaultDir, layout = defaultLayout(), opts = {}) {
   if (daily && isCapabilityAllowed(CAPABILITY.DAILY_SUMMARY_INJECTION, opts.profile)) {
     // Bounded read (ADR-0032): a daily note can be large; never readFileSync it whole.
     const r = readNoteBounded(daily.path, DigestCaps.MAX_DAILY_READ_BYTES);
+    // ADR-0022's Consequences: an anomalous exclusion can never be silent. The
+    // identity path banners these two classes (:691-692); this path used to
+    // discard `r.exclusion` entirely and drop the note without a word
+    // (WP-frontmatter-recognition-failopen). Same list, same code-owned rule as
+    // the secret push below: a FIXED label and a FIXED reason, never note bytes.
+    // `untrusted-exact` is normal policy and `absent` is an unreadable file —
+    // neither is an anomaly, so both stay silent.
+    if (r.exclusion === 'malformed') {
+      identityExclusions.push({ file: 'daily-summary', reason: 'malformed frontmatter' });
+    } else if (r.exclusion === 'untrusted-invalid') {
+      identityExclusions.push({ file: 'daily-summary', reason: 'unclear derived_from_untrusted value' });
+    }
     const summary = r.note && extractSection(r.note.body, 'Summary');
     if (summary) {
       // Per-line framing (ADR-0032 as amended 2026-08-09): the daily note is a
