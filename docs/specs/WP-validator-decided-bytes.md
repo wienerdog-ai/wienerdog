@@ -282,10 +282,23 @@ two and changes none. Byte-exact, code-owned, never containing note content.
       `malformed` (indented line, duplicate top-level key, non-`key: value`
       line), including the repro above, whose three floor fields are all present
       and floor-passing.
-- [ ] AC2 — The regression in C1 does not ship: with an ownership-registry entry
-      whose `id` is absent, a malformed committed HEAD carrying `id`, `origin`,
-      `created` and `derived_from_untrusted: true`, and a floor-passing revision
-      omitting all four, the revision is reverted.
+- [ ] AC2 — The regression in C1 does not ship. **This criterion is a
+      discrimination, not a revert**: it is met only if the test would FAIL on
+      the view-level design C1 forbids. Fixture — an ownership-registry entry for
+      the skill whose `id` is **absent**; a committed HEAD whose block is
+      **malformed** and carries `id`, `origin`, `created` and
+      `derived_from_untrusted: true`; and a revision that omits `id`, `origin`
+      and `created` but **carries `derived_from_untrusted: false`,
+      `confidence: 0.9` and `recurrence: 3`**, with its body change authorized so
+      that no unrelated branch does the rejecting. Required outcome: the
+      view-level design **admits and commits** that revision; C1 **reverts** it
+      with R1. How the forbidden design is exhibited is the implementer's choice.
+      **Do not weaken this to "the revision is reverted."** Measured: with the
+      revision also omitting `derived_from_untrusted`, the floor's `hasAll`
+      (`:196`) rejects it under *both* designs — `'Tier-3 path missing provenance
+      frontmatter …'` — so the assertion goes green on the very design it exists
+      to forbid. That wording was inherited from the predecessor's round-8
+      finding and survived four review rounds here before it was measured.
 - [ ] AC3 — A malformed HEAD cannot launder a lowering: the raise-only guard
       rejects rather than reading the absent flag as "not `true`".
 - [ ] AC4 — The ADR-0022 parity gate is no longer vacuous with respect to
@@ -403,12 +416,13 @@ alike: `reverted: []`, `secretRedactions: 1`, committed, `parse().malformed`
 measured, not assumed** — it takes `Number()` on the same line and has the same
 exposure. A malformed check never sees limb B.
 
-**Limb B's reach was NOT enumerated, and cannot be characterized by syntax
-class.** Redaction is a predicate on the literal's *characters* — an unbroken run
-of ≥ 24 over `[A-Za-z0-9+=/]` whose Shannon entropy is ≥ 3.5 bits/char.
-`Number()` acceptance is a predicate on the literal's *syntax*. The two are
-independent, so **no syntactic class is uniformly redacted or uniformly clean.**
-The decisive pair — same syntax class, both floor-passing, opposite outcomes:
+**Limb B's reach was NOT enumerated, and a broad syntax label alone does not
+determine scanner behaviour.** Redaction is a predicate on the literal's
+*characters* — an unbroken run of ≥ 24 over `[A-Za-z0-9+=/]` whose Shannon
+entropy is ≥ 3.5 bits/char. `Number()` acceptance is a predicate on the literal's
+*syntax*. The two are independent, so naming a syntax class settles nothing by
+itself. The decisive pair — one syntax class, both floor-passing, opposite
+outcomes:
 
 ```text
 10293847561029384756E+12   len 24, 3.522 bits/char  ->  REDACTED
@@ -422,19 +436,32 @@ The `+` is what lifts the first over the entropy floor: `ENTROPY_CORE_CLASS` is
 hexadecimal, upper (`0xABCDEF0123456789ABCDEF`, 4.002 bits/char) and lower; and
 scientific notation carrying a `+`, with either `E` or `e` (3.522 bits/char).
 
-**The one negative that holds, correctly scoped.** An *ordinary decimal digit
-run* cannot reach limb B: digits cap at `log2(10) = 3.3219` bits/char, below
-`ScanLimits.ENTROPY_MIN_BITS_PER_CHAR = 3.5` (`src/core/secret-scan.js:24`).
-`0b…` (alphabet of 2) and `0o…` (alphabet of 8) are clean for the same reason,
-and hex at 23 characters is clean because it is under `ENTROPY_MIN_LEN = 24`
-(`:23`). That is a statement about decimal runs and nothing else.
+**Proven negative classes — these ARE uniform, because each carries a
+character-level bound.** A class *can* be characterized when its alphabet or its
+length is bounded, and these four are:
 
-**Not enumerated.** The intersection of `Number()`-accepted syntax with the
-scanner's candidate grammar was never computed. **A successor must treat any
-class-based characterization of limb B as unsound — including the list above.**
-Two earlier drafts of this paragraph each stated a boundary ("decimal only", then
-"hexadecimal only") and each was falsified by the next review round. The
-per-literal predicate is the only sound statement.
+| Class | Bound | Why it is uniformly clean |
+|---|---|---|
+| ordinary decimal digit run | alphabet ≤ 10 | max `log2(10) = 3.3219` bits/char, under the 3.5 floor |
+| `0b…` binary literal | alphabet ≤ 3 (`0`, `1`, `b`) | max `log2(3) = 1.5850` |
+| `0o…` octal literal | alphabet ≤ 9 (`0`–`7`, `o`) | max `log2(9) = 3.1699` |
+| any candidate under 24 characters | length | below `ENTROPY_MIN_LEN = 24` (`:23`) — not a candidate at all |
+
+Measured at the maximal end of each rather than on one instance: a 122-character
+binary literal (1.060 bits/char) and a 98-character octal literal (3.051) are
+clean, while a 90-character hexadecimal literal (4.496) is redacted.
+**Hexadecimal has no such bound** — its 23-symbol alphabet allows up to 4.5236
+bits/char, above the floor — which is why it appears in the positive list.
+
+**The rule for the successor.** Use the **character-level predicate** — an
+unbroken run of ≥ 24 over `[A-Za-z0-9+=/]` at ≥ 3.5 bits/char — **unless you can
+supply a bound proof for a narrower class, as the table above does.** The
+positive classes are evidence, not an inventory: the intersection of
+`Number()`-accepted syntax with the scanner's candidate grammar was never
+computed. Three earlier drafts of this paragraph each asserted a boundary —
+"decimal only", then "hexadecimal only", then "no class can be characterized at
+all" — and each was falsified by the next review round. The first two were too
+narrow; the third was too broad, and this table is the counterexample to it.
 
 ### Hole 2 — the reads between decisions are unbound (an authorization gap)
 
