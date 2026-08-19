@@ -178,6 +178,27 @@ function parseFrontmatter(fileText) {
   return data;
 }
 
+// ── malformed-block refusal (ADR-0022 Decision 4) ───────────────────────────
+// A block the ONE shared strict parser reports as `malformed` (a duplicate
+// top-level key, an indented line, or a line that is not `key: value`) excludes
+// the note UNCONDITIONALLY — whether or not it also carries floor-passing
+// values. The refusal lives at the SECURITY DECISIONS below, never in the view
+// above: emptying parseFrontmatter's record on `malformed` would erase the
+// difference between a field being ABSENT and one being HIDDEN, and every
+// preservation check reads absence as agreement.
+const MALFORMED_REASON = 'malformed frontmatter block (a duplicate key, an indented line, or a line that is not key: value)';
+const MALFORMED_PARENT_SKILL_REASON = 'malformed frontmatter block in the parent skill SKILL.md (a duplicate key, an indented line, or a line that is not key: value)';
+
+/**
+ * Does `text` carry a frontmatter block the shared strict parser rejects? Called
+ * on exactly the bytes the calling decision is about to compare fields from.
+ * @param {string} text
+ * @returns {boolean}
+ */
+function blockMalformed(text) {
+  return parse(text).malformed;
+}
+
 /**
  * Decide whether a Tier-3 write satisfies the fixed code floor.
  * @param {string} vaultDir
@@ -192,6 +213,10 @@ function tier3Decision(vaultDir, rel) {
     // Missing (e.g. the brain deleted an identity file) → not satisfied; restore.
     return { ok: false, reason: 'Tier-3 path removed or unreadable; restored to HEAD' };
   }
+  // Refuse a malformed block BEFORE the floor: its junk can sit beside three
+  // present, floor-passing provenance values, and the missing-frontmatter reason
+  // would then state a falsehood.
+  if (blockMalformed(text)) return { ok: false, reason: MALFORMED_REASON };
   const fm = parseFrontmatter(text);
   const hasAll = 'confidence' in fm && 'recurrence' in fm && 'derived_from_untrusted' in fm;
   if (!hasAll) {
@@ -314,6 +339,10 @@ function skillBodyViolation(vaultDir, rel, change, layout, registry, date) {
 
   const headRes = git(vaultDir, ['show', `HEAD:${rel}`], { allowFail: true });
   if (headRes.status !== 0) return 'skill body modified but its committed version is unreadable';
+  // A malformed side is not evidence of agreement. Refuse before the immutable
+  // field comparisons AND before the raise-only flag read below — a malformed
+  // HEAD must never read as "not true".
+  if (blockMalformed(headRes.stdout)) return MALFORMED_REASON;
   const head = parseFrontmatter(headRes.stdout);
 
   let curText;
@@ -322,6 +351,7 @@ function skillBodyViolation(vaultDir, rel, change, layout, registry, date) {
   } catch {
     return 'skill body unreadable after revision';
   }
+  if (blockMalformed(curText)) return MALFORMED_REASON;
   const cur = parseFrontmatter(curText);
 
   // PRESERVATION: registry id match (catch path reuse) + WP-040 immutables.
@@ -497,6 +527,9 @@ function ledgerViolation(vaultDir, rel, change, layout, registry, extractsBySess
   } catch {
     return 'learnings ledger beside a registered skill whose SKILL.md is missing (fail closed)';
   }
+  // The malformed bytes here are the sibling SKILL.md's, but the path this site
+  // reverts is LEARNINGS.md — so the reason names the parent skill.
+  if (blockMalformed(skillText)) return MALFORMED_PARENT_SKILL_REASON;
   const skillFm = parseFrontmatter(skillText);
   if (skillFm.id !== regEntry.id) return 'learnings ledger parent skill id does not match the registry (path reuse)';
   if (skillFm.created !== regEntry.created) return 'learnings ledger parent skill created does not match the registry (path reuse)';
