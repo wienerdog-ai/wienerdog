@@ -49,7 +49,28 @@ residual — it never justifies more machinery.
 
 | # | Round | Backend | Result | Findings | Raw file | Raw commit |
 |---|---|---|---|---|---|---|
-| — | *pending* | — | — | — | — | — |
+| 0a | Template conformance | internal, clean context (spec + template only) | PASS | 0 blocking, 5 non-blocking | `2026-08-19-…-r0-template-conformance-raw.md` | `b9b9c26` |
+| 0b | Internal coherence | internal, **fresh** context (not the drafting one) | 4 FINDINGS | 4 fixed, all LIGHT | `2026-08-19-…-r0-internal-coherence-raw.md` | `b9b9c26` |
+
+Round 0a's five non-blocking observations: NB-1 (the template's
+authoring-rules bullet is absent) and NB-3 (the H1 restates rather than copies
+`title`) are **drop** — measured against the corpus, 3 of 211 done specs carry
+that bullet and the runbook's own named worked example
+(`WP-daily-summary-per-line-framing`) carries neither. NB-2, NB-4 and NB-5 are
+informational and assert conformance rather than divergence. Nothing from 0a
+changed a byte of the spec.
+
+Round 0b's four findings are dispositioned in `29bb661`, each spot-checked
+against the files first. All four are LIGHT — spec wording, no change to what
+the implementer builds — so under weighted closure they owe no fresh external
+round.
+
+**The raw-commit ordering held for both**, including 0b: `b9b9c26` contains
+the raw output and a byte-unchanged spec, and the fixes land two commits later
+in `29bb661`. `f3d5ccd` sits between them and touches only the raw files'
+headers — markdownlint was red on `b9b9c26` and the fix was to disable the
+linter below the verbatim separator rather than edit a reviewer's byte. That
+commit's message records the process slip that let a red gate through.
 
 ## Session-shape disclosure
 
