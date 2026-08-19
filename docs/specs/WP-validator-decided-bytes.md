@@ -320,7 +320,7 @@ two and changes none. Byte-exact, code-owned, never containing note content.
       consecutive runs over an unchanged vault produce the same outcome before
       and after the change. **The template's boilerplate "second run: zero
       changes" does not apply to this component and must not be restored** —
-      Step 4's enforcement append (`:1388`) is unconditional, so every run
+      Step 4's enforcement append (`:1355`) is unconditional, so every run
       appends a `## Reverted by orchestrator` section and commits. Measured on
       both trees: `reverted 0 / reverted 0`, HEAD moves, and the trees differ by
       `reports/dreams/<date>.md | 3 +++`. See Out of scope.
@@ -358,7 +358,7 @@ junk line repaired; one reason literal reworded.
 - **The whole read/decide/commit ordering** — The charter. Nothing in this WP
   binds a read to another read, to staging, or to the commit.
 - **The dream's non-idempotency.** Do **not** make a no-op run leave the vault
-  unchanged. Step 4's enforcement append (`:1388`) is unconditional — it writes
+  unchanged. Step 4's enforcement append (`:1355`) is unconditional — it writes
   `- none` when nothing was reverted — so every `validateAndCommit` run appends a
   section and makes a commit. Pre-existing and measured identically on the
   pre-fix tree (`d670e8c`); note it under "Discovered issues" in the PR body and
