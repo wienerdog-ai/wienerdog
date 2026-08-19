@@ -71,7 +71,7 @@ stage-and-commit (`:1378`), and record new skills in the ownership registry
 (`:1410`). Six sites consult the shared parser, five through
 `parseFrontmatter` and one through `skillBody`:
 
-- `:195` — `tier3Decision` (`:187`) reads the working copy (`:189`) and applies
+- `:195` — `tier3Decision` (`:187`) reads the working copy (`:190`) and applies
   the floor. It reads the **working tree only**; it never reads HEAD.
 - `:317` / `:325` — `skillBodyViolation` (`:295`) parses HEAD and the current
   copy, then compares `id`, `origin`, `created` (`:327-330`), applies the
@@ -167,7 +167,7 @@ refined; the refinement is marked and its cause given.
 
 | Site | Decision | On `malformed` |
 |---|---|---|
-| `:195` | Tier-3 floor | **reject**, with the new malformed reason (Table C, R1). *Refined:* round 8 reused the existing `'Tier-3 path missing provenance frontmatter (…)'` reason here. On the repro above all three fields are present, so that reason states a falsehood and sends the user to add fields that are already there — the inaccurate-remedy defect this repo is already tracking as the charter's successor B |
+| `:195` | Tier-3 floor | **reject**, with the new malformed reason (Table C, R1). *Refined:* round 8 reused the existing `'Tier-3 path missing provenance frontmatter (…)'` reason here. On the repro above all three fields are present, so that reason states a falsehood and sends the user to add fields that are already there — the same inaccurate-remedy failure mode the charter's successor B tracks, on a different surface (that one is the digest banner's template) |
 | `:317` / `:325` | skill-revision preservation, either side | **reject** before comparing `id` / `origin` / `created` (R1). A malformed side is not evidence of agreement |
 | `:332` | raise-only guard | **reject** before comparing the flag (R1). A malformed HEAD must never read as "not `true`" — the absence-as-agreement hole |
 | `:346` | promotion allowlist | covered by the `:317`/`:325` rejection: the loop is reached only after both sides parsed clean |
@@ -175,7 +175,7 @@ refined; the refinement is marked and its cause given.
 | `:1170` | new-skill-draft registration | **no decision here.** Under C2 this read does not exist; the bytes come from `:195`'s decision. Round 9 measured why a check here cannot work: by `:1170` the file is already accepted, no caller converts a reason into a revert, and `if (parse(text).malformed) continue` skips only the registry insert while Step 3 stages and Step 5 commits the malformed bytes — `reverted: []`, a committed and ownerless Tier-3 skill |
 | `:343` | `skillBody` body comparison | **out of scope, deliberately.** It compares bodies, not security fields, and this WP does not change what `body` is |
 
-The four rejecting rows above — five parse sites — are the whole of the
+The four rejecting rows above — five decision sites — are the whole of the
 guard: no other site in the file reads a frontmatter field to make a security
 decision.
 
@@ -215,7 +215,8 @@ the run aborts instead (Table B).
 - [ ] Acceptance criteria AC1–AC5 and AC8 (Table A and Table B facts), AC7
       (Table C)
 - [ ] The verification steps' greps for the R1–R3 literals
-- [ ] The Current-state list of the six parse sites (Table A's rows)
+- [ ] The Current-state list of the six parse sites — Table A dispositions each
+      of them, plus the two decisions (`:332`, `:346`) that reuse those parses
 - [ ] Implementation notes: the redact-arm interaction and the ordering trap
 - [ ] Security checklist: the reason-string and containment claims
 
@@ -320,7 +321,7 @@ npm run lint
 # test suite above, not by this line.)
 node -e 'const{parse}=require("./src/core/frontmatter");const{parseFrontmatter:P}=require("./src/core/dream/validate");const t="---\nconfidence: 0.9\nrecurrence: 5\nderived_from_untrusted: false\njunk line\n---\nb\n";if(!parse(t).malformed)throw new Error("fixture is no longer malformed — the test lost its subject");console.log("parse.malformed=true, fieldsExposed="+Object.keys(P(t)).length)'
 
-# Table A: no second read of a decided Tier-3 path survives at registration.
+# Table B (C2): no second read of a decided Tier-3 path survives at registration.
 ! grep -n 'parseFrontmatter(fs.readFileSync' src/core/dream/validate.js
 
 # Table C: all three literals are present, byte for byte (a quoted heredoc, so
@@ -337,11 +338,13 @@ grep -A1 'Retention, once per run' src/core/dream/validate.js | grep -qF 'pruneR
 ```
 
 The last four are NEW steps and each is an assertion — it exits non-zero on
-failure rather than printing a number a reader must judge. Paste a real green
-on the finished state **and** a real red from a deliberately broken state (the
-`:1170` re-read restored; one reason literal reworded; a line inserted between
-the retention comment and its call), so a check that cannot fail is caught
-before anyone believes it.
+failure rather than leaving a number for a reader to judge. (The fixture guard
+also prints the exposed-field count as evidence; that number is not what it
+asserts.) Paste a real green on the finished state **and** a real red from a
+deliberately broken state, one recipe per step: the fixture's junk line
+repaired; the `:1170` re-read restored; one reason literal reworded; a line
+inserted between the retention comment and its call. A check that cannot fail
+is then caught before anyone believes it.
 
 ## Out of scope (do NOT do these)
 
