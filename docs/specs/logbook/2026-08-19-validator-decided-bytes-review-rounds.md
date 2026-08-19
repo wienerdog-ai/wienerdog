@@ -51,6 +51,7 @@ residual — it never justifies more machinery.
 |---|---|---|---|---|---|---|
 | 0a | Template conformance | internal, clean context (spec + template only) | PASS | 0 blocking, 5 non-blocking | `2026-08-19-…-r0-template-conformance-raw.md` | `b9b9c26` |
 | 0b | Internal coherence | internal, **fresh** context (not the drafting one) | 4 FINDINGS | 4 fixed, all LIGHT | `2026-08-19-…-r0-internal-coherence-raw.md` | `b9b9c26` |
+| 1 | Adversarial design review | gptsol | NEEDS-ATTENTION | 7 (6 DESIGN-LEVEL/HEAVY, 1 MECHANICAL/LIGHT) | `2026-08-19-…-round-1-raw.md` | `ced70d4` |
 
 Round 0a's five non-blocking observations: NB-1 (the template's
 authoring-rules bullet is absent) and NB-3 (the H1 restates rather than copies
@@ -71,6 +72,45 @@ in `29bb661`. `f3d5ccd` sits between them and touches only the raw files'
 headers — markdownlint was red on `b9b9c26` and the fix was to disable the
 linter below the verbatim separator rather than edit a reviewer's byte. That
 commit's message records the process slip that let a red gate through.
+
+## Round 1's adjudication, and the criterion re-pinned for round 2
+
+Round 1's seven findings are ruled on in
+`2026-08-19-validator-decided-bytes-round-1-architect-ruling.md`. **The ruling
+is the architect's, not the relay's** — and it exists because the owner asked
+whether the architect had seen it, and the answer was no. One session had
+drafted the spec, relayed the gate, and then proposed its own design
+resolution: the exact conflict the runbook's role separation prevents. The
+relay's measurements went to the architect as claims to RE-RUN, with its probe
+scripts handed over so the instrument could be audited too. One of the seven
+came back **failed as stated** — a claim the relay had run partially and
+generalized fully — and the error worked against the relay's own proposal.
+
+The ruling's finding: **the seven findings are one defect seen six times, and
+it is C3's quantifier.** C3 quantified over the commit; the package's authority
+is the paths its own decision accepted. C3 narrows to C3′, the abort and the
+re-decision and R3 are deleted, three universals become three named residuals,
+and both reviewer-recommended deliverable additions are refused. Neither of the
+two mechanisms the relay put to the owner is taken: the id divergence is
+executed-proven pre-existing and fail-closed, so CLAUDE.md's rule applies — it
+is noted, not fixed — and a successor charter carries (A), (D) and a third
+option, (E), that the relay's binary framing had hidden.
+
+**Owner ruling, 2026-08-19: all three acceptances granted** — the Q1
+narrowing, the re-pinned fallback below, and the id divergence disposed as a
+noted defect plus a charter.
+
+### The criterion, re-pinned before round 2
+
+The runbook requires the stop criterion to be re-stated whenever a HEAVY fix
+triggers a fresh round. **Round 1 falsified the original fallback's premise.**
+It was aimed at R3 — one finding — while the actual failure was the quantifier,
+which is six. The revision goes further than the fallback, which is the
+direction the fallback pointed.
+
+Everything else in the criterion above stands unchanged. The fallback is
+replaced by: **if round 2 lands a HEAVY finding on C3′, split — ship C1 + C2 as
+this WP and charter C3′ separately.**
 
 ## Session-shape disclosure
 
