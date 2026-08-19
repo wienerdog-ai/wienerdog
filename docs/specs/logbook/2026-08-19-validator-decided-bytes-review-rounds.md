@@ -52,6 +52,7 @@ residual — it never justifies more machinery.
 | 0a | Template conformance | internal, clean context (spec + template only) | PASS | 0 blocking, 5 non-blocking | `2026-08-19-…-r0-template-conformance-raw.md` | `b9b9c26` |
 | 0b | Internal coherence | internal, **fresh** context (not the drafting one) | 4 FINDINGS | 4 fixed, all LIGHT | `2026-08-19-…-r0-internal-coherence-raw.md` | `b9b9c26` |
 | 1 | Adversarial design review | gptsol | NEEDS-ATTENTION | 7 (6 DESIGN-LEVEL/HEAVY, 1 MECHANICAL/LIGHT) | `2026-08-19-…-round-1-raw.md` | `ced70d4` |
+| 2 | Adversarial design review — **the fallback round** | gptsol | NEEDS-ATTENTION | 5 (4 DESIGN-LEVEL/HEAVY, 1 MECHANICAL/LIGHT); 5 of round 1's 10 dispositions NOT-FIXED | `2026-08-19-…-round-2-raw.md` | `dabe91d` |
 
 Round 0a's five non-blocking observations: NB-1 (the template's
 authoring-rules bullet is absent) and NB-3 (the H1 restates rather than copies
@@ -111,6 +112,48 @@ direction the fallback pointed.
 Everything else in the criterion above stands unchanged. The fallback is
 replaced by: **if round 2 lands a HEAVY finding on C3′, split — ship C1 + C2 as
 this WP and charter C3′ separately.**
+
+## Round 2 — the fallback fired
+
+Four HEAVY findings landed on C3′. That is exactly the condition the fallback
+was re-pinned for **before this round ran**, so it fires without a new
+judgement call: **split — C1 + C2 ship as this WP, C3′ is chartered out.**
+
+**What round 2 actually measured, and it is worse than "C3′ needs work".**
+The narrowing did not close the ordering hole; it moved the hole outside the
+contract. A malformed `SKILL.md` created during Step 4 was committed with
+`reverted: []`, because Step 2 never saw it and C3′ no longer says anything
+about it.
+
+**Two holes the fallback did not anticipate, because they hit C1 and C2 rather
+than C3′.** Both executed by the reviewer, both reproduced independently by the
+relay:
+
+- **C2's "decide once" was never true.** There are three separate reads of a
+  current Tier-3 file — `validate.js:190` (the floor), `:321` (the revision
+  guard), `:506` (the ledger's parent-skill check) — and C2 removes only the
+  fourth, at `:1170`. Measured: a tracked skill swapped between the revision
+  guard and the floor commits an `id` of `bar` while the ownership registry
+  still holds `foo`, `reverted: []`. The immutable-field, raise-only and
+  authorization checks are bypassable. **This is an authorization gap, not a
+  durability one.**
+- **C1's containment claim is false as written.** C1 does what it says at its
+  five decision sites, but the Security checklist's broader sentence does not
+  survive: the redact arm rewrites frontmatter *after every decision has run*.
+  Measured — redacting a high-entropy frontmatter KEY turns a well-formed block
+  malformed (`false` → `true`); redacting a floor VALUE yields
+  `confidence: [REDACTED:high-entropy]`, which `Number()` makes `NaN`. Both
+  commit today.
+
+So the split is not a deletion. **The claims that remain must be narrowed to
+what they were measured to do**, with the difference disclosed as named
+residuals.
+
+**Owner ruling, 2026-08-19:** proceed with the split; the charter's main
+content is those two holes rather than a restatement of C3′; and option **(E)**
+— route Tier-3 redact-severity findings to the withhold arm instead of
+scrubbing in place — is its first candidate. (E) is the one branch that would
+close the redact-arm hole and the id divergence together.
 
 ## Session-shape disclosure
 
