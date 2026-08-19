@@ -1,7 +1,7 @@
 ---
 id: WP-validator-decided-bytes
 title: Refuse a malformed frontmatter block at every Tier-3 security decision
-status: Draft
+status: Ready
 model: opus
 size: S
 depends_on: []

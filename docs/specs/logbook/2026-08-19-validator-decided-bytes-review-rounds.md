@@ -54,6 +54,7 @@ residual — it never justifies more machinery.
 | 1 | Adversarial design review | gptsol | NEEDS-ATTENTION | 7 (6 DESIGN-LEVEL/HEAVY, 1 MECHANICAL/LIGHT) | `2026-08-19-…-round-1-raw.md` | `ced70d4` |
 | 2 | Adversarial design review — **the fallback round** | gptsol | NEEDS-ATTENTION | 5 (4 DESIGN-LEVEL/HEAVY, 1 MECHANICAL/LIGHT); 5 of round 1's 10 dispositions NOT-FIXED | `2026-08-19-…-round-2-raw.md` | `dabe91d` |
 | 3 | Adversarial design review of the SPLIT package | gptsol | NEEDS-ATTENTION | 3 (2 DESIGN-LEVEL/HEAVY, 1 MECHANICAL/LIGHT); 5 of round 2's 6 dispositions VERIFIED-DISPOSED | `2026-08-19-…-round-3-raw.md` | `c575605` |
+| 4 | Adversarial design review — **the closing round** | gptsol | NEEDS-ATTENTION | 2, **both LIGHT**; nothing about the product | `2026-08-19-…-round-4-raw.md` | `a00f0dd` |
 
 Round 0a's five non-blocking observations: NB-1 (the template's
 authoring-rules bullet is absent) and NB-3 (the H1 restates rather than copies
@@ -211,6 +212,73 @@ not to a round 5. A finding on the charter is LIGHT by construction — the
 charter is evidence for a future package, not a contract this implementer
 builds — and is fixed inside the existing surface or accepted as a named
 residual.
+
+## Round 4 — the loop closes
+
+**The reviewer validated C1**: *"C1's placement is coherent and the five
+guarded parse inputs cover the validator's security-bearing frontmatter
+decisions."* **Nothing was found about the product.** Two findings remained,
+both about the spec's own evidence, both fixed in `f156dec`.
+
+**AC2 had been vacuous for four rounds.** It asked for a floor-passing revision
+omitting `derived_from_untrusted`, which the floor requires present and exactly
+`false` — so a literal test was reverted for missing provenance regardless of
+the guard, and would have stayed green on the empty-record design AC2 exists to
+forbid. The wording came from the predecessor's round-8 finding, was carried
+into the first draft here, and was re-read in every revision pass without once
+being run. The architect fixed it by building **both designs as runnable
+mutants** and executing the real `validateAndCommit` against each:
+
+```text
+FIXTURE A (as written)  forbidden: reverted   C1: reverted            -> vacuous
+FIXTURE B (corrected)   forbidden: COMMITTED  C1: reverted with R1
+```
+
+AC2 is now a discrimination criterion carrying the prohibition *"Do not weaken
+this to 'the revision is reverted'"*.
+
+**The charter's boundary paragraph took three drafts and overstated in all
+three** — "decimal only", then "hexadecimal only", then an anti-universal
+claiming no class can be characterized at all. It is now a proof table: a class
+*can* be characterized when it carries a character-level bound, with
+distinct-symbol counts measured rather than assumed. All three failures stay in
+the record, because the pattern is the lesson.
+
+**Classification.** Both findings are **LIGHT with high severity**. The
+runbook's definition decides it: a finding about the spec's own verification
+machinery is LIGHT. Neither fix moves a `src/` byte, Table A, Table C or a
+reason string. The reviewer marked AC2 HEAVY, but the relay's brief had said
+"when in doubt, HEAVY" and the same brief had *forbidden* folding severity into
+weight for charter findings — applying that distinction only where it was
+convenient would have been the actual error. The architect concurred and
+attached the condition that matters: **closure is earned by the mechanical
+verification, not by the label**, which is why it executed the discrimination
+rather than asserting it.
+
+**Owner ruling, 2026-08-19: the design loop is CLOSED. Status moves to
+`Ready`.**
+
+### Convergence, four rounds
+
+| | Contract | Verification steps |
+|---|---|---|
+| Round 1 | C1 + C2 + C3 | 4 |
+| Round 2 (split) | C1 + C2 | 3 |
+| Round 3 (C2 dropped) | **C1** | 2 |
+| Round 4 (closing) | C1 | 2 — the freeze held |
+
+Three narrowings in four rounds. The predecessor's record said narrowing is
+what moves these loops, and it is the only thing that moved this one: no round
+was closed by a better mechanism.
+
+### What this loop cost, and what it caught
+
+Findings per round: 4 (round 0), 7, 5, 3, 2. **Four false universals were
+written and caught** — three in the charter's boundary paragraph and one in the
+relay's `iff`-on-length claim — and every one of them was written by an actor
+reasoning from a property instead of enumerating the alphabet. Each was caught
+by the *next* reader running it. That is the gate working as designed, and it
+is the single most repeated failure of the package.
 
 ## Session-shape disclosure
 
