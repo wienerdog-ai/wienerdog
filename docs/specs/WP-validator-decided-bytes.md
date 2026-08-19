@@ -313,8 +313,17 @@ two and changes none. Byte-exact, code-owned, never containing note content.
       daily log, a report, an ordinary note) is committed exactly as it is
       today. Table A is a list of Tier-3 decision sites and this WP adds no
       floor where there was none.
-- [ ] AC7 — `npm test` and `npm run lint` pass, and running the dream twice over
-      an unchanged vault is idempotent (second run: zero changes).
+- [ ] AC7 — `npm test` and `npm run lint` pass, and **this WP adds no write**:
+      the set of write-effecting calls in `validate.js` is unchanged, so the
+      dream's existing non-idempotency is neither worsened nor introduced here.
+      Demonstrate it against the pre-fix tree, not in the abstract: two
+      consecutive runs over an unchanged vault produce the same outcome before
+      and after the change. **The template's boilerplate "second run: zero
+      changes" does not apply to this component and must not be restored** —
+      Step 4's enforcement append (`:1388`) is unconditional, so every run
+      appends a `## Reverted by orchestrator` section and commits. Measured on
+      both trees: `reverted 0 / reverted 0`, HEAD moves, and the trees differ by
+      `reports/dreams/<date>.md | 3 +++`. See Out of scope.
 
 ## Verification steps (run these; paste output in the PR)
 
@@ -348,6 +357,12 @@ junk line repaired; one reason literal reworded.
 
 - **The whole read/decide/commit ordering** — The charter. Nothing in this WP
   binds a read to another read, to staging, or to the commit.
+- **The dream's non-idempotency.** Do **not** make a no-op run leave the vault
+  unchanged. Step 4's enforcement append (`:1388`) is unconditional — it writes
+  `- none` when nothing was reverted — so every `validateAndCommit` run appends a
+  section and makes a commit. Pre-existing and measured identically on the
+  pre-fix tree (`d670e8c`); note it under "Discovered issues" in the PR body and
+  fix nothing (CLAUDE.md).
 - **Registration's byte reuse.** Do **not** remove or alter the `:1170` re-read.
   Removing it was this package's C2 through three rounds and was chartered out in
   round 3: the window it closes contains no scheduling point, and the read
