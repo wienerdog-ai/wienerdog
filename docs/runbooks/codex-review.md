@@ -61,6 +61,16 @@ mechanisms) → repeat until clean → owner sign-off → specs move to Ready.
   defensible alone and never faced the aggregate question.
 - When two consecutive rounds land findings of the same kind, the next
   step is a design question, never another textual patch.
+- A design loop states its STOP CRITERION in the round record BEFORE
+  the first adversarial round, and re-states it whenever a HEAVY fix
+  triggers a fresh round: which outcome closes the loop, and which
+  outcome escalates — to a design question, a fallback, or an owner
+  ruling. Measured across two packages: every phase that ran under a
+  pre-pinned criterion closed within one or two rounds; every phase
+  without one drifted — the treadmill's fuel is an undefined finish
+  line. A round record with no stated criterion is a loop where this
+  rule did not run. No tooling, no hook — one more line in a record
+  that is already being written.
 - The reviewer's raw output is committed BEFORE anyone reads or judges
   it — adjudication happens on evidence the adjudicator cannot have
   shaped. This is what makes an after-the-fact ruling possible when a
