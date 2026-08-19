@@ -53,6 +53,7 @@ residual — it never justifies more machinery.
 | 0b | Internal coherence | internal, **fresh** context (not the drafting one) | 4 FINDINGS | 4 fixed, all LIGHT | `2026-08-19-…-r0-internal-coherence-raw.md` | `b9b9c26` |
 | 1 | Adversarial design review | gptsol | NEEDS-ATTENTION | 7 (6 DESIGN-LEVEL/HEAVY, 1 MECHANICAL/LIGHT) | `2026-08-19-…-round-1-raw.md` | `ced70d4` |
 | 2 | Adversarial design review — **the fallback round** | gptsol | NEEDS-ATTENTION | 5 (4 DESIGN-LEVEL/HEAVY, 1 MECHANICAL/LIGHT); 5 of round 1's 10 dispositions NOT-FIXED | `2026-08-19-…-round-2-raw.md` | `dabe91d` |
+| 3 | Adversarial design review of the SPLIT package | gptsol | NEEDS-ATTENTION | 3 (2 DESIGN-LEVEL/HEAVY, 1 MECHANICAL/LIGHT); 5 of round 2's 6 dispositions VERIFIED-DISPOSED | `2026-08-19-…-round-3-raw.md` | `c575605` |
 
 Round 0a's five non-blocking observations: NB-1 (the template's
 authoring-rules bullet is absent) and NB-3 (the H1 restates rather than copies
@@ -154,6 +155,62 @@ content is those two holes rather than a restatement of C3′; and option **(E)*
 — route Tier-3 redact-severity findings to the withhold arm instead of
 scrubbing in place — is its first candidate. (E) is the one branch that would
 close the redact-arm hole and the id divergence together.
+
+## Round 3 — the design question, and the third narrowing
+
+The split held: five of six round-2 dispositions came back VERIFIED-DISPOSED
+and the reviewer calls C1 coherent. Two HEAVY findings remained, so **the
+round-3 escalation trigger fired** — the criterion pinned before round 1 said
+that three consecutive HEAVY rounds go to the design question, not a fourth
+patch. It went to the architect, whose ruling is
+`2026-08-19-validator-decided-bytes-round-3-architect-ruling.md`.
+
+**Ruling: C2 does not ship. The package is pure C1.** The deciding measurement
+was not the relay's. The relay argued "C2 drew findings in two rounds and what
+it buys was measured fail-closed"; the architect measured the windows and found
+that **C2 closes the only window in the pipeline containing no scheduling
+point** (`:190`→`:1170`: zero subprocess call sites) while leaving open both
+that span subprocess execution. That converts "arguably not worth it" into
+"measurably not worth it". C2 also removes a guard — the `:1170` read's ENOENT
+fail-stop — that three consecutive reviews had failed to inventory.
+
+**On the charter's redaction boundary: two false universals in two rounds.**
+First "decimal only, cannot" (architect, broken by the relay with a hex
+literal), then "hex only" (architect, broken by the reviewer with `E+`). The
+remedy is deletion rather than a third boundary, because exhaustiveness by
+syntax class is impossible in principle — redaction is a predicate on the
+literal's characters, `Number()` acceptance on its syntax, and the two are
+independent. The proof is one measured pair, same syntax class, opposite
+outcome:
+
+```text
+10293847561029384756E+12   3.522 bits/char   REDACTED
+102938475610293847561E12   3.387 bits/char   clean
+```
+
+**Owner ruling, 2026-08-19:** accepted in full. Separately: the `id` stays, the
+title is corrected to the actual scope, and one line records that the `id` is
+historical.
+
+### Convergence
+
+| | Contract | Verification steps |
+|---|---|---|
+| Round 1 | C1 + C2 + C3 | 4 |
+| Round 2 (split) | C1 + C2 | 3 |
+| Round 3 (this ruling) | **C1** | **2** |
+
+Three narrowings, three rounds — the predecessor's record said narrowing is
+what moves these loops, and it is the only thing that has moved this one.
+
+### Round 4's criterion — pinned before the round
+
+Round 4 is the last under the hard cap. **It reviews C1's coherence and the
+charter's accuracy only.** A HEAVY finding on C1 goes to the owner as a ruling,
+not to a round 5. A finding on the charter is LIGHT by construction — the
+charter is evidence for a future package, not a contract this implementer
+builds — and is fixed inside the existing surface or accepted as a named
+residual.
 
 ## Session-shape disclosure
 
