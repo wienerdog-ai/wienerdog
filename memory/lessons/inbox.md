@@ -888,3 +888,55 @@ One bullet per lesson, prefixed with WP id (or M0 for foundation work). The drea
 - WP-snapshot-read-path-hardening: the honest form of a mutation check runs the mutation against the test file before AND after the fix — "red now" alone does not prove the fix fixes; only the green-before/red-after pair does.
 - WP-snapshot-read-path-hardening: a wrong mutation gives false comfort — a `continue` inside a `try` still runs the `finally`, so a mutation meant to "prove" a descriptor leak never leaked, and the observed failures came from elsewhere. Verify that the mutation breaks what you intend it to break.
 - WP-snapshot-read-path-hardening: a record that claims "byte-unchanged" is falsified by any convenience abbreviation made while transcribing — eight shortened paths did it here; restored. For a file meant as evidence, "almost verbatim" is not a category.
+- `WP-frontmatter-recognition-failopen`: **zero findings is not readiness if
+  the review's focus never went there.** The digest half was called "clean
+  across three rounds" and used as the argument for shipping it; the first
+  round that actually attacked it returned two design-level findings. A
+  finding count only means something over surface the reviewer was pointed
+  at — say which surface a clean round covered, never just that it was clean.
+- `WP-frontmatter-recognition-failopen`: a claim about a specific code path
+  must be measured on *that* path. Six findings across the loop were this one
+  defect — a rationale, a banner's visibility, a corpus predicate, a partition
+  universal, a normalization order, an invisible-prefix justification.
+- `WP-frontmatter-recognition-failopen`: when the same author writes both the
+  contract and its proof, the proof inherits the contract's blind spots. Two
+  structural answers — per-cell reproduction, then a totality sweep — were each
+  defeated by the very blind spot they were built to catch. A property whose
+  oracle calls the implementation's own helper is a tautology.
+- `WP-frontmatter-recognition-failopen`: a fail-closed guard belongs at the
+  decision, not in the view it reads. Emptying a record on `malformed` erased
+  the difference between *absent* and *hidden*, and every preservation check
+  reads absence as agreement — four detected violations became zero.
+- `WP-frontmatter-recognition-failopen`: an enumeration cannot prove a
+  partition exhaustive. Three enumerated case lists were each defeated by a
+  shape outside the list; only a ruling change — recognition never widens —
+  removed the unbounded question instead of answering it again.
+- `WP-frontmatter-recognition-failopen`: do not write into the reviewed
+  checkout while a review gate is running, logbook files included. Round 7 was
+  invalidated by exactly that, and the invariant cannot tell my write from the
+  reviewer's.
+- `WP-frontmatter-recognition-failopen`: **a test that names a case does not
+  necessarily reach it.** Two of this package's assertions named a thing they
+  never touched — a fixture that produced no candidate at all, and a byte-cap
+  assertion 20% below its ceiling. Both looked like coverage and were green.
+  The only reliable check is a mutation that violates the contract: if the
+  suite stays green, the assertion is decorative.
+- `WP-frontmatter-recognition-failopen`: literal control characters do not
+  survive a copy/paste round trip. A probe silently lost its NEL/VT/FF and
+  reported a healthy-looking wrong classification. Escapes only, and print the
+  code points before asserting anything.
+- `WP-frontmatter-recognition-failopen`: `git status --short`'s `RM` is two
+  columns — a staged Rename and an unstaged Modify — never one signal. A
+  done-flip shipped as a pure rename because the `sed` after `git mv` was
+  never staged, and the "verification" grepped the working tree while the
+  claim was about the commit. Assert against the artifact the claim is
+  about: `git show` / `git diff --cached`, never the file.
+- Pipeline (maintainer): in a two-remote checkout `gh` defaults to the
+  upstream, which here is PUBLIC — every `gh pr`/`gh issue` call must carry
+  `--repo felho/wienerdog`, or a security package's PR opens in a public
+  repo. Hit twice (a gate queried upstream's PR by number; a session caught
+  it pre-flight before opening).
+- Pipeline (maintainer): push local main before opening a PR from a branch
+  based on it — an unpushed main commit under a rebased WP branch appears
+  in the PR diff and turns the boundary check red (measured on PR #9;
+  prevented by a pre-flight check on PR #11).
