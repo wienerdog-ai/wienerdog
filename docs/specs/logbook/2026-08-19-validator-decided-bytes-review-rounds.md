@@ -280,6 +280,42 @@ reasoning from a property instead of enumerating the alphabet. Each was caught
 by the *next* reader running it. That is the gate working as designed, and it
 is the single most repeated failure of the package.
 
+## Dispatch-time re-verification — the gate before the implementer
+
+Run by the orchestrator immediately before dispatch, per
+`docs/runbooks/codex-review.md`, "Dispatch-time re-verification". **`Ready` is
+not the same as "still true".**
+
+**Dispatch SHA (`origin/main`, the authority — not the local branch):**
+`be3db29d9d99074df3b65d0a9924750bd9c6f08c`. Unchanged from the intent brief's
+pinned SHA; nothing merged during the design loop.
+
+**This branch changes only `docs/`.** `git diff origin/main..HEAD -- src/
+tests/` is EMPTY, so every claim verified on the branch holds identically on
+the tree the implementer will find.
+
+**What was re-RUN, not re-read:**
+
+- **26 `validate.js` line citations, verified BY CONTENT** against
+  `git show origin/main:src/core/dream/validate.js` — all OK, gate exit 0.
+- **5 cross-file citations** (`secret-scan.js:23`/`:24`, `digest.js:193`, the
+  differential test's corpus, the unify test) — all OK.
+- **All 4 executable blocks in the spec** — the Context repro and both charter
+  repros and the fixture guard — run, exit 0, output matching what the spec
+  records.
+- **Both verification steps** — fixture guard exit 0, literal count exit 1
+  (red before the work, as the spec records).
+
+**One process note, because the failure is instructive.** The first run of the
+citation gate was an inline shell one-liner and reported **12 false STALEs**.
+The cause was zsh treating `$MAIN:src/core/dre…` as a `:s` substitution
+modifier, silently rewriting the path the gate asked git for. That is exactly
+the hazard `docs/runbooks/codex-review.md` names under "Rules" — *run a gate
+from a script, not from an inline shell one-liner* — reproduced by the person
+relaying that rule. The gate was rewritten to a file, quoted once, and re-run
+green. **A false red is not a harmless false alarm: had it been believed, it
+would have blocked a dispatch on a spec that was fine.**
+
 ## Session-shape disclosure
 
 One session drafted the spec and relays the gate. The runbook's separation
