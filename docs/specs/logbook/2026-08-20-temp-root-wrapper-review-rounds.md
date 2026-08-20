@@ -59,6 +59,6 @@ without a fresh round being triggered by this wave.
 
 | # | Finding (short) | Weight | Disposition |
 |---|---|---|---|
-| N1 | Step 5's declared deliberate-red cannot fire: skip-mode runs create zero temp entries, so the count is 0→0 with or without injection (measured both ways) | LIGHT | (pending) |
-| N2 | The extended AC says "Table A's three exit-status rows"; there are four — it omits "teardown never overrides a failure" | LIGHT | (pending) |
-| N3 | The AC promises `null` status → `1` but nothing exercises it; a conforming wrapper was measured to do the right thing (signal-killed child → exit 1), so step 7 needs one added line | LIGHT | (pending) |
+| N1 | Step 5's declared deliberate-red cannot fire: skip-mode runs create zero temp entries, so the count is 0→0 with or without injection (measured both ways) | LIGHT | FIX — step 5 leaves that deliberate-red entry (owner ruled 2026-08-20) |
+| N2 | The extended AC says "Table A's three exit-status rows"; there are four — it omits "teardown never overrides a failure" | LIGHT | FIX — count corrected, fourth row named (owner ruled 2026-08-20) |
+| N3 | The AC promises `null` status → `1` but nothing exercises it; a conforming wrapper was measured to do the right thing (signal-killed child → exit 1), so step 7 needs one added line | LIGHT | FIX — signal case added to step 7 (owner ruled 2026-08-20); closes the null-branch gap flagged at the fix wave |
