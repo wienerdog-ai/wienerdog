@@ -25,7 +25,8 @@ through `78eb84f` by the coherence pass itself).
 | 0a | Template conformance (clean context, spec+template only) | `2026-08-20-temp-root-wrapper-r0-template-conformance-raw.md` | `a7f4f15` | PASS — 0 blocking, 3 non-blocking deviations |
 | 0b | Internal coherence + runnable claims (78 checked, full suite ×3 under isolated temp root) | `2026-08-20-temp-root-wrapper-r0-internal-coherence-raw.md` | `78eb84f` | 7 coherence findings, 2 measured-claim failures, 4 corrections; mechanism and filesystem facts hold |
 | 0c | Fix wave `38f7823` (the twelve accepted fixes) + mechanical re-verification | `2026-08-20-temp-root-wrapper-r0-fixverify-raw.md` | `279c7d9` | all twelve hold (A1's old hole demonstrably closed: five wrapper variants, each red attributable); three residual items N1–N3 below |
-| 1 | External adversarial round | — | — | pending; runs after round-zero dispositions land |
+| 0d | N-wave: fixes `aea64e2` + re-verification (appended to fixverify raw) + N1 umbrella completion `d928a81` (relay grep-verified) | `2026-08-20-temp-root-wrapper-r0-fixverify-raw.md` (append) | `99f649d` | N2, N3 hold exactly (both reds discriminating); N1 holds after the umbrella completion. **Round zero closed.** |
+| 1 | External adversarial round (backend: gptsol, vendored `adversarial.md`) | — | — | pending |
 
 ## Round-zero dispositions
 
