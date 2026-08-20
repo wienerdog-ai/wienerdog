@@ -15,8 +15,8 @@ adrs: [ADR-0004, ADR-0031]
 Wienerdog is a zero-runtime-dependency Node package that installs files. The
 **iron rule (ADR-0004)** is that Wienerdog is just files: nothing it ships may
 start a process that outlives its job. This work package respects that trivially
-— it adds no process at all, only a directory created and removed inside one
-already-running command.
+— it starts no background process at all: it spawns one child, waits for it, and
+removes a directory inside one already-running command.
 
 The problem is in the **test harness**, not in shipped code. Test files across
 the suite create scratch directories with
@@ -251,14 +251,15 @@ Tables A and B are the single place those facts are decided.
 |-------------|-------|
 | Invocation | `node tests/with-temp-root.js <script.js> [args…]` |
 | What it runs | `process.execPath` with `[<script.js>, ...args]` — a **Node script path plus its arguments**, never an arbitrary command string. No shell, no `PATH` resolution. This keeps a test helper from becoming a general execution seam |
-| Argument forwarding | every argument after `<script.js>` is passed through unchanged. This is what makes `npm test -- --test-name-pattern X` keep working: npm appends those args to the script body, so they arrive here and must reach the script |
+| Argument forwarding | every argument after `<script.js>` is passed through **byte-exact and in order** — none dropped, reordered, re-quoted or merged, including arguments containing spaces. This is what makes `npm test -- --test-name-pattern X` keep working: npm appends those args to the script body, so they arrive here and must reach the script |
 | Where the root is created | before the child is spawned: `fs.mkdtempSync(path.join(os.tmpdir(), 'wd-testrun-'))`. `os.tmpdir()` here resolves against the **ambient** temp directory, so a caller who already redirects `TMPDIR` keeps control of where the root lands |
 | Variables injected into the child env | `TMPDIR`, `TMP` and `TEMP`, all three set to the root, on every platform. The rest of `process.env` passes through unchanged |
 | Why all three | Node resolves `os.tmpdir()` from `TMPDIR`→`TMP`→`TEMP`→`/tmp` on POSIX and from `TEMP`→`TMP`→`SystemRoot\temp` on win32 (Current state); the repo is cross-platform, so one variable is not enough |
 | **What it must NOT inject** | nothing else — in particular **not** `WIENERDOG_TEST_NO_REAL_SCHEDULER` and **not** `WIENERDOG_RUN_SCENARIOS`. `tests/run.js` sets the scheduler guard for the unit suite itself and is untouched; the scenario harnesses exist to drive real paths and must not have it forced on them. A child sees either variable only if the caller's own environment already had it |
-| When teardown runs | after the child has exited, on every path out of the spawn — normal exit, signal death, or a throw from `spawnSync` itself (i.e. from a `finally`) |
+| When teardown runs | after the child has exited, on every path out of the spawn — the child's normal exit, the child's signal death, or a throw from `spawnSync` itself (i.e. from a `finally`). This covers what happens to the CHILD. It does **not** cover a signal delivered to the WRAPPER itself: see the named residual below and in Implementation notes |
+| Wrapper's own interruption (named residual, owner-accepted) | `spawnSync` blocks the wrapper, so a `SIGINT`/`SIGTERM`/CI-cancellation delivered to the wrapper terminates it **without running the `finally`**. Measured on the specified shape: `wrapper_signal=SIGTERM`, `finally_ran=false`, `root_survived=true`, and `child_finished_after_wrapper_exit=true` — i.e. the run root survives that interrupt, and the child can outlive the wrapper. Accepted as-is by owner ruling; an asynchronous child lifecycle that forwards termination was offered and declined as out of size for this WP |
 | Teardown step 1 — permission restore | walk the root recursively and `chmod` every **directory** to owner read+write+execute, applying the `chmod` to a directory **before** reading its entries (an unreadable directory cannot be listed until it is restored). Required because `rmSync` alone throws `ENOTEMPTY` on the mode-`0o000` tree the suite leaves behind (Current state) |
-| Symlinks during the walk | never followed and never `chmod`ed — classified with `lstat`, and a symbolic link is left for `rmSync` to unlink. Some tests deliberately create links pointing outside their own root; a following walk would change modes outside the run root |
+| Symlinks during the walk | never followed and never `chmod`ed — classified with `lstat`, and a symbolic link is left for `rmSync` to unlink. Some tests deliberately create links pointing outside their own root; a following walk would change modes outside the run root. This holds against links **already on disk** when teardown starts, which is the real case; it is not race-safe against a process still writing inside the root, and does not claim to be — see the Security checklist |
 | Teardown step 2 — removal | `fs.rmSync(root, { recursive: true, force: true })` |
 | Teardown never throws | every filesystem call in teardown is individually best-effort; a failure is recorded, not propagated. Teardown must not be able to turn a run's outcome into a crash |
 | Diagnostics on failure | when the root still exists after teardown, one clearly-labelled message on **stderr** naming the root and up to ~10 surviving paths, so the failure is actionable |
@@ -268,7 +269,7 @@ Tables A and B are the single place those facts are decided.
 | Exit status — child passed | when the child's status is `0`: exit `0` if the root no longer exists after teardown, and exit `1` if it does. A run that passes while leaving an unremovable temp root is the regression this WP exists to prevent, and it must be loud rather than a warning in a log |
 | Missing or empty first argument | exit non-zero with a one-line usage message on stderr, rather than spawning nothing and reporting success |
 | Dependencies | none. The walk is hand-rolled on `node:fs`; no `rimraf`, no new dependency of any kind (CLAUDE.md: zero runtime dependencies) |
-| Nothing is started | no watcher, no background process, nothing that outlives the `node tests/with-temp-root.js` process (ADR-0004) |
+| Nothing is started | the wrapper starts no watcher, no daemon and no background process — it spawns one child and waits for it. That is the whole of ADR-0004's demand here, and it is what this row claims. It is **not** a claim that nothing can ever outlive the wrapper process: in the interrupt case above the child can, because the wrapper died first. That is an interrupted run, not a started background process |
 
 ### Table B — the `package.json` wiring
 
@@ -297,7 +298,20 @@ Tables A and B are the single place those facts are decided.
       measurements, the six entry-point bodies)
 - [ ] Implementation notes — the "do not run these" list and the teardown cost
 - [ ] The **must-not-inject** rule, which appears in Table A, in the
-      Acceptance criteria and in verification step 8 — all three move together
+      Acceptance criteria and in verification step **8a** — all three move
+      together
+- [ ] Its other half, **env passthrough** ("the rest of `process.env` passes
+      through unchanged"): Table A's injected-variables row, the same acceptance
+      criterion, and verification step **8b**
+- [ ] **Argument forwarding**: Table A's forwarding row, its acceptance
+      criterion, and verification step **4a** (4b is a smoke check and pins
+      nothing — do not treat it as a mirror)
+- [ ] **The wrapper's own interruption** (owner-accepted residual): Table A's
+      "Wrapper's own interruption" and "Nothing is started" rows, the
+      Implementation-notes bullet, and the ADR-0004 sentence in Context. Any
+      change to how much is claimed there must move all four
+- [ ] **The containment's exact strength** (not race-safe; trusted-test threat
+      model): the Security checklist item and Table A's symlink row
 - [ ] The `"//"` convention note. Table B holds its literal text and is the only
       surface that carries it; the Deliverables cell, one acceptance criterion
       and verification step 10 mirror it only as **presence plus the
@@ -345,6 +359,17 @@ Tables A and B are the single place those facts are decided.
   **still-running** child process holding the directory, the resulting red is
   correct and points at a real bug in that test — do not weaken Table A's
   exit-status rule to accommodate it.
+- **Interrupting the wrapper itself leaks the run root — named, measured and
+  accepted.** `spawnSync` blocks the wrapper, so a `SIGINT` (Ctrl-C), `SIGTERM`
+  or CI cancellation delivered to the wrapper kills it before the `finally` can
+  run: measured `finally_ran=false`, `root_survived=true`, and the spawned child
+  can keep running after the wrapper is gone (`child_finished_after_wrapper_exit
+  =true`). So a developer who Ctrl-Cs a long run still leaves one root behind,
+  and may leave descendants running. The fix — an asynchronous child lifecycle
+  that receives the signal, forwards termination, waits, tears down, then
+  re-raises — was offered in round 1 and **declined by the owner as out of size
+  for this WP**. Do not implement it here, and do not paper over it: the cost is
+  one leftover root per interrupt, against ~1,676 per completed run today.
 - When uncertain: choose the simpler option and record it under "Decisions
   made" in the PR body. Do NOT expand scope to resolve ambiguity.
 
@@ -359,10 +384,21 @@ Tables A and B are the single place those facts are decided.
 - [ ] **The wrapper must not become a command-execution surface.** Table A
       restricts it to `process.execPath` plus a script path and arguments — no
       shell, no `PATH` resolution, no command string.
-- [ ] **Recursive `chmod` + recursive delete must not escape the run root.**
-      Entries are classified with `lstat` and symbolic links are never followed
-      or `chmod`ed (Table A), and the root is a fresh `mkdtempSync` directory
-      owned by this process, so no pre-existing path is reachable through it.
+- [ ] **Recursive `chmod` + recursive delete, and the exact strength of the
+      containment.** Entries are classified with `lstat` and symbolic links are
+      never followed or `chmod`ed (Table A), and the root is a fresh
+      `mkdtempSync` directory owned by this process, so no pre-existing path is
+      reachable through it. **What this does NOT claim:** the walk is not
+      race-safe. `lstat`-then-`chmod` is a TOCTOU pair, so a process writing
+      inside the root *while teardown runs* could swap a directory for a symlink
+      between the two calls and steer a `chmod` outside the root. That is
+      accepted, because the threat model here is **leftover artifacts of this
+      repo's own trusted test code**, not a hostile concurrent writer: by the
+      time teardown runs the child has exited, and anything still running inside
+      the root is itself a bug — one the green-run hard fail (Table A) is
+      designed to surface rather than hide. A wrapper facing untrusted
+      concurrent writers would need a different mechanism (`openat`-style
+      handle-relative traversal), and that is not this WP.
 
 ## Acceptance criteria
 
@@ -382,14 +418,21 @@ Tables A and B are the single place those facts are decided.
       Table B, and the guard test asserts it is present and names
       `tests/with-temp-root.js` — a presence check, not an enforcement
       mechanism, and `npm test` still runs normally with the key in place.
-- [ ] Argument forwarding survives the extra hop: `npm test -- <a test file
-      path>` and `npm test -- --test-name-pattern <x>` still include what they
-      include today. (Per the WP-073 lesson in Current state, the pattern flag
-      does not filter the run — do not assert that it does.)
+- [ ] Argument forwarding survives the extra hop **byte-exact and order-exact**:
+      every argument after the script path reaches the child unchanged,
+      including one containing a space. The npm-level forms (`npm test -- <a
+      test file path>`, `npm test -- --test-name-pattern <x>`) still include what
+      they include today, but they are smoke checks only — they pass even
+      against a wrapper that drops every argument, so the byte-exact assertion
+      is what actually guards this row. (Per the WP-073 lesson in Current state,
+      the pattern flag does not filter the run — do not assert that it does.)
 - [ ] The wrapper injects **only** `TMPDIR`, `TMP` and `TEMP`: a child run
       through it sees neither `WIENERDOG_TEST_NO_REAL_SCHEDULER` nor
-      `WIENERDOG_RUN_SCENARIOS` — not even as a present-but-empty value —
-      unless the caller's own environment had them.
+      `WIENERDOG_RUN_SCENARIOS` — not even as a present-but-empty value.
+- [ ] The other half of that row: the wrapper **removes nothing either**. When
+      the caller's own environment carries those variables, they reach the child
+      **byte-exact** — a wrapper that deletes them satisfies the criterion above
+      and fails this one.
 - [ ] The unit suite still receives `WIENERDOG_TEST_NO_REAL_SCHEDULER=1`, from
       the untouched `tests/run.js`.
 - [ ] All five scenario scripts still exit 0 in skip mode and still print their
@@ -419,7 +462,12 @@ Tables A and B are the single place those facts are decided.
 ## Verification steps (run these; paste output in the PR)
 
 Run the whole block in ONE shell session, top to bottom: the preamble's exports
-and `$COUNT` are used by later steps.
+and `$COUNT` are used by later steps. The block is **fail-closed** — `set -eo
+pipefail` means any unexpected non-zero stops it at that line instead of letting
+a later green paper over it, and cleanup is an `EXIT` trap that preserves the
+failing status rather than replacing it with its own 0. The only places where a
+non-zero exit is *expected* carve it out explicitly with `|| RC=$?`, and each
+carve-out is followed immediately by the assertion that judges it.
 
 ```bash
 # 0 — PREAMBLE (required). Every counted step below must observe a temp
@@ -432,8 +480,18 @@ and `$COUNT` are used by later steps.
 #     for a contract gap: Table A states that a caller who already redirects
 #     TMPDIR keeps control of where the run root lands, so this exercises the
 #     documented behavior.
+set -eo pipefail
 WD_VERIFY_TMP=$(mktemp -d)
+D=$(mktemp -d)                 # scratch for the synthetic children used below
 export TMPDIR="$WD_VERIFY_TMP" TMP="$WD_VERIFY_TMP" TEMP="$WD_VERIFY_TMP"
+cleanup() {
+  rc=$?                        # preserve the real outcome; cleanup must not mask it
+  chmod -R u+rwx "$WD_VERIFY_TMP" 2>/dev/null || true
+  rm -rf "$WD_VERIFY_TMP" || true
+  if [ -n "${D:-}" ]; then rm -rf "$D" || true; fi
+  exit $rc
+}
+trap cleanup EXIT
 echo "isolated verification temp root: $WD_VERIFY_TMP"
 
 # 1 — the suite is green, through the wrapper
@@ -455,7 +513,18 @@ test "$BEFORE" = "$AFTER"
 
 # 3 — run step 2 again; same result (idempotence)
 
-# 4 — argument forwarding survives the wrapper hop
+# 4 — argument forwarding survives the wrapper hop.
+#     4a is the real assertion: an argv-echo child pins byte-exact, order-exact
+#     forwarding. The npm-level commands in 4b CANNOT catch a wrapper that drops
+#     every argument, because `node --test` with no paths still runs the whole
+#     suite and still exits 0 — they are smoke checks, not guards. One argument
+#     deliberately carries a space. ASSERTION.
+printf "console.log(JSON.stringify(process.argv.slice(2)));\n" > "$D/argv.js"
+ARGV=$(node tests/with-temp-root.js "$D/argv.js" --flag value "two words" --k=v | tail -1)
+echo "child argv: $ARGV"
+test "$ARGV" = '["--flag","value","two words","--k=v"]'
+# 4b — smoke checks at the npm level. Per the WP-073 lesson in Current state the
+#      pattern flag does not filter the run; do not assert that it does.
 npm test -- tests/unit/manifest.test.js
 npm test -- --test-name-pattern "tmpdir-leak-guard"
 
@@ -466,7 +535,7 @@ npm test -- --test-name-pattern "tmpdir-leak-guard"
 BEFORE=$(node -e "$COUNT")
 for s in scenarios scenarios:negative broker:selfcheck scenarios:broker-e2e scenarios:a7-integrity; do
   echo "--- $s (skip mode) ---"
-  WIENERDOG_TEST_NO_REAL_SCHEDULER=1 npm run --silent "$s" || exit 1
+  WIENERDOG_TEST_NO_REAL_SCHEDULER=1 npm run --silent "$s"
 done
 AFTER=$(node -e "$COUNT")
 echo "ambient wd-* before=$BEFORE after=$AFTER"
@@ -475,7 +544,6 @@ test "$BEFORE" = "$AFTER"
 # 6 — the mechanism itself, proved with a SYNTHETIC leaky child: it creates two
 #     temp dirs and makes one unreadable — the case rmSync alone cannot remove.
 #     ASSERTION: exits non-zero if anything survives.
-D=$(mktemp -d)
 cat > "$D/leaky.js" <<'LEAKY'
 const fs = require('node:fs'), os = require('node:os'), path = require('node:path');
 fs.mkdtempSync(path.join(os.tmpdir(), 'wd-synthleak-'));
@@ -485,7 +553,7 @@ fs.writeFileSync(path.join(b, 'locked', 'f'), 'x');
 fs.chmodSync(path.join(b, 'locked'), 0o000);
 LEAKY
 BEFORE=$(node -e "$COUNT")
-node tests/with-temp-root.js "$D/leaky.js"; echo "wrapper exit=$?"
+node tests/with-temp-root.js "$D/leaky.js"   # exit 0 expected; set -e enforces it
 AFTER=$(node -e "$COUNT")
 echo "ambient wd-* before=$BEFORE after=$AFTER"
 test "$BEFORE" = "$AFTER"
@@ -495,12 +563,14 @@ test "$BEFORE" = "$AFTER"
 #     `null` branch (signal death), which the numeric line cannot reach: a
 #     wrapper that propagates numbers correctly but maps `null` to 0 passes the
 #     first assertion and fails only this one.
+#     CARVE-OUT: both invocations are expected to exit non-zero, so each is
+#     guarded with `|| RC=$?` and judged by the assertion on the next line.
 printf "process.exit(7);\n" > "$D/boom.js"
 printf "process.kill(process.pid, 'SIGKILL');\n" > "$D/signal.js"
-node tests/with-temp-root.js "$D/signal.js" 2>/dev/null; RC_SIG=$?
+RC_SIG=0; node tests/with-temp-root.js "$D/signal.js" 2>/dev/null || RC_SIG=$?
 echo "signal-killed child produced wrapper exit $RC_SIG"
 test "$RC_SIG" -eq 1
-node tests/with-temp-root.js "$D/boom.js"; RC=$?
+RC=0; node tests/with-temp-root.js "$D/boom.js" || RC=$?
 echo "child status propagated as $RC"
 test "$RC" -eq 7
 
@@ -516,13 +586,24 @@ const names = ['WIENERDOG_TEST_NO_REAL_SCHEDULER', 'WIENERDOG_RUN_SCENARIOS'];
 console.log(names.map((n) => `${n}=${n in process.env ? JSON.stringify(process.env[n]) : '<unset>'}`).join(' '));
 ENVJS
 SEEN=$(env -u WIENERDOG_TEST_NO_REAL_SCHEDULER -u WIENERDOG_RUN_SCENARIOS node tests/with-temp-root.js "$D/env.js" | tail -1)
-echo "child saw: $SEEN"
+echo "8a child saw: $SEEN"
 test "$SEEN" = "WIENERDOG_TEST_NO_REAL_SCHEDULER=<unset> WIENERDOG_RUN_SCENARIOS=<unset>"
+# 8b — the other half of the same Table A row: the caller's OWN values must
+#      arrive BYTE-EXACT ("the rest of process.env passes through unchanged").
+#      8a alone cannot see this — a wrapper that DELETES both variables passes
+#      8a and fails only here (verified against a deleting stand-in). The values
+#      are inert: env.js only prints them, no scenario code runs, and
+#      WIENERDOG_RUN_SCENARIOS=passthru2 is not the `1` any harness gates on.
+#      ASSERTION.
+PASS=$(WIENERDOG_TEST_NO_REAL_SCHEDULER=passthru1 WIENERDOG_RUN_SCENARIOS=passthru2 node tests/with-temp-root.js "$D/env.js" | tail -1)
+echo "8b child saw: $PASS"
+test "$PASS" = 'WIENERDOG_TEST_NO_REAL_SCHEDULER="passthru1" WIENERDOG_RUN_SCENARIOS="passthru2"'
 
-# 9 — no argument: usage, not silent success. ASSERTION.
-node tests/with-temp-root.js; RC=$?
+# 9 — no argument: usage, not silent success. CARVE-OUT: non-zero is the
+#     expected observation here. ASSERTION.
+RC=0; node tests/with-temp-root.js || RC=$?
+echo "no-argument invocation exited $RC"
 test "$RC" -ne 0
-rm -rf "$D"
 
 # 10 — the convention note is present and names the wrapper (Table B). ASSERTION.
 node -e 'const s=require("./package.json").scripts; const n=s["//"]||""; console.log("note:", n||"<missing>"); process.exit(n.includes("tests/with-temp-root.js") ? 0 : 1)'
@@ -530,15 +611,14 @@ node -e 'const s=require("./package.json").scripts; const n=s["//"]||""; console
 # 11 — lint
 npm run lint
 
-# 12 — TEARDOWN of the isolated root. The chmod is what lets this succeed if a
-#      deliberate-red run above left an unreadable directory behind; `|| true`
-#      keeps the teardown from being the thing that fails the block.
-chmod -R u+rwx "$WD_VERIFY_TMP" 2>/dev/null || true
-rm -rf "$WD_VERIFY_TMP"
+# 12 — TEARDOWN happens in the EXIT trap armed in step 0, so it runs whether the
+#      block finished or died at an assertion, and it re-exits with the original
+#      status. The chmod inside it is what lets removal succeed when a
+#      deliberate-red run left an unreadable directory behind.
 ```
 
-Steps 2 and 5–10 are NEW, and each is an assertion that exits non-zero on failure
-rather than printing something a reader must judge. Per
+Steps 2, 4a and 5–10 are NEW, and each is an assertion that exits non-zero on
+failure rather than printing something a reader must judge. Per
 `docs/runbooks/spec-authoring.md`, each of them **except step 5** must be
 observed on **both** sides — paste a real green on the finished state AND a real
 red from a deliberately broken state. Step 5 is green-only by nature, not by
@@ -562,7 +642,13 @@ unreadable directory) in the isolated root; step 12 is written to clear it.
   `0` while numeric statuses still propagate. The second variant is what proves
   the signal line carries its own weight: the numeric assertion still passes and
   only the signal assertion fires;
-- step 8: run the red **twice**, once with `WIENERDOG_TEST_NO_REAL_SCHEDULER:
+- step 4a: with the wrapper passing only the script path and dropping every
+  trailing argument. Note that 4b stays **green** in that state — which is
+  exactly why 4a exists;
+- step 8b: with the wrapper *deleting* `WIENERDOG_TEST_NO_REAL_SCHEDULER` and
+  `WIENERDOG_RUN_SCENARIOS` from the child env instead of merely not injecting
+  them. Step 8a stays green in that state, so only 8b fires;
+- step 8a: run the red **twice**, once with `WIENERDOG_TEST_NO_REAL_SCHEDULER:
   '1'` added to the wrapper's injected env and once with
   `WIENERDOG_RUN_SCENARIOS: '1'` — the trap Table A names. Both must go red
   separately, which is what proves the step discriminates on each variable
