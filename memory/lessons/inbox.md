@@ -1031,3 +1031,35 @@ One bullet per lesson, prefixed with WP id (or M0 for foundation work). The drea
   a section and makes a commit, growing the day's report with duplicate empty
   sections. Measured identically before and after the change. Every nightly
   no-op run commits.
+- `WP-temp-root-wrapper` (spec loop): **the Mirrored Surface Checklist is a
+  thing to RUN after every edit wave, not a section to author.** Two stale
+  mirrors survived fix waves until the walk actually ran; the sharpened form
+  that finally produced a clean walk: when a wave CREATES a surface (splits a
+  criterion, adds a step), re-derive the governing invariant — every new step
+  has a deliberate-red, every split covers the whole input space — instead of
+  only re-reading the mirrors that already existed.
+- `WP-temp-root-wrapper`: **`find -mtime +1` means "older than 48 hours", not
+  24** — age is floored to whole 24h units before the `+1` comparison. A
+  minute-exact cutoff needs `-mmin +1440`. Measured during the host sweep:
+  the `-mtime` pass deleted 16,923 entries where the 24h intent covered 58,259.
+- `WP-temp-root-wrapper`: **"the file contains zero cleanup calls" is a false-
+  negative leak heuristic.** Audit per-file deficit (mkdtempSync count minus
+  removal-call count) instead: the worst offender (50 mkdtempSync, 1 rmSync —
+  aimed at a file, not the roots) passes the binary filter and leaks all 50.
+- `WP-temp-root-wrapper`: **on a multi-session machine, any verification that
+  counts entries in the shared `$TMPDIR` is flaky by construction** (~30k new
+  `wd-*` dirs/day here, one every few seconds). Counted asserts must run under
+  a pre-redirected private temp root; false greens (leak+delete cancelling)
+  are possible, not just false reds.
+- `WP-temp-root-wrapper`: **`VAR= cmd` sets an empty string, not unset** — an
+  env-purity assert needs `env -u VAR cmd`, and the child must discriminate
+  with `'VAR' in process.env`, not truthiness. The empty-string form passed
+  green against a wrapper that injected `''`.
+- `WP-temp-root-wrapper`: **macOS `mktemp -d` does not honor an exported
+  `TMPDIR`** — it creates siblings in the original ambient directory, while
+  Node's `os.tmpdir()` follows the export. Shell scratch dirs and Node temp
+  are two separate worlds in one verification block.
+- `WP-temp-root-wrapper`: **`set -e` alone does not fail-close a verification
+  block containing pipes** — a failing producer piped into `tail` exits 0
+  without `pipefail`. Measured: with `set -e` only, the block continued past a
+  failing wrapper and exited 0; `set -eo pipefail` is load-bearing.
