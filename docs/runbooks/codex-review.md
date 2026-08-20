@@ -111,6 +111,17 @@ mechanisms) → repeat until clean → owner sign-off → specs move to Ready.
   an input that is not there. Findings get dispositions like any round's.
   (Measured twice: 9 and 19 substantive finds that prior external rounds
   had not caught.)
+- The same pass RUNS every acceptance criterion and verification step
+  that has a runnable form: commands executed on the tree the claim
+  names, fixtures parsed, per-criterion exit status in the round-zero
+  record. A criterion that cannot discriminate — or cannot be
+  satisfied at all — is a round-zero finding. Reading is not
+  evidence: measured in one package, a non-discriminating fixture
+  survived four read-only rounds, a template-inherited criterion was
+  unsatisfiable from the first draft, and one command was run on the
+  WRONG tree — a number from the wrong base looks like evidence and
+  is not. Runnable means runnable now, on the pinned base, with what
+  the spec itself provides.
 
 ### Weighted closure
 
