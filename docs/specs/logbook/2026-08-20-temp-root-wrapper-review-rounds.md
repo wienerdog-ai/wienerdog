@@ -26,7 +26,24 @@ through `78eb84f` by the coherence pass itself).
 | 0b | Internal coherence + runnable claims (78 checked, full suite ×3 under isolated temp root) | `2026-08-20-temp-root-wrapper-r0-internal-coherence-raw.md` | `78eb84f` | 7 coherence findings, 2 measured-claim failures, 4 corrections; mechanism and filesystem facts hold |
 | 0c | Fix wave `38f7823` (the twelve accepted fixes) + mechanical re-verification | `2026-08-20-temp-root-wrapper-r0-fixverify-raw.md` | `279c7d9` | all twelve hold (A1's old hole demonstrably closed: five wrapper variants, each red attributable); three residual items N1–N3 below |
 | 0d | N-wave: fixes `aea64e2` + re-verification (appended to fixverify raw) + N1 umbrella completion `d928a81` (relay grep-verified) | `2026-08-20-temp-root-wrapper-r0-fixverify-raw.md` (append) | `99f649d` | N2, N3 hold exactly (both reds discriminating); N1 holds after the umbrella completion. **Round zero closed.** |
-| 1 | External adversarial round (backend: gptsol, vendored `adversarial.md`) | — | — | pending |
+| 1 | External adversarial round (backend: gptsol, vendored `adversarial.md`; read-only verified; suite not run — disclosed) | `2026-08-20-temp-root-wrapper-round-1-raw.md` | `12fc563` | needs-attention, 5 findings; citations relay-verified against the spec at `5eaa897`; dispositions below |
+
+## Round-1 dispositions
+
+Owner ruled 2026-08-20: batch accepted as proposed. Zero HEAVY — none of the
+dispositions changes what the implementer builds; per the pinned stop
+criterion the loop closes after these fixes land and are mechanically
+verified. Value line: F1/F2 make the spec's claims exactly as strong as the
+mechanism (no over-claim survives); F3–F5 give three Table A product rows a
+discriminating guard each, in the smallest form.
+
+| # | Finding (short) | Weight | Disposition |
+|---|---|---|---|
+| F1 | Wrapper's own signal death skips `finally` (measured); child can outlive the wrapper | LIGHT | RESIDUAL re-affirmed (owner ruling of the earlier walkthrough, decision 6) + wording fix: the accepted-gap text absorbs both measured facts. An async-lifecycle fix was offered and declined as HEAVY/out-of-size |
+| F2 | lstat-then-chmod is a TOCTOU race; a live descendant could swap dir→symlink and the walk would chmod outside the root | LIGHT | FIX — narrow the security claim to the real threat model (leftover artifacts of trusted test code, not concurrent hostile writers; a surviving writer is itself a bug the hard fail surfaces). No mechanism change |
+| F3 | Env passthrough (Table A row) has no verification: a var-deleting wrapper passes step 8 | LIGHT | FIX — add a passthrough assert: caller-supplied distinct values must reach the child byte-exact |
+| F4 | Step 4's forwarding commands pass even if the wrapper drops every argument | LIGHT | FIX — synthetic argv-echo child, byte-exact assert on forwarded args |
+| F5 | The one-session verification block can mask an intermediate red (no fail-fast; cleanup exits 0) | LIGHT | FIX — fail-closed block: `set -e` + EXIT-trap cleanup + explicit carve-outs where non-zero is expected |
 
 ## Round-zero dispositions
 
