@@ -940,3 +940,94 @@ One bullet per lesson, prefixed with WP id (or M0 for foundation work). The drea
   based on it — an unpushed main commit under a rebased WP branch appears
   in the PR diff and turns the boundary check red (measured on PR #9;
   prevented by a pre-flight check on PR #11).
+- `WP-validator-decided-bytes`: **the package's one repeated defect, six times
+  over — an assertion that was read, found plausible, and never run.** The
+  charter's redaction boundary ("decimal only, cannot" → "hexadecimal only" →
+  "no class can be characterized"), AC2's fixture, AC7's idempotence line, and
+  a relay `iff`-on-length claim. Every one was written by an actor reasoning
+  from a property instead of enumerating the alphabet, and every one was caught
+  by the *next* reader running it. The gate works; the writing is what fails.
+- `WP-validator-decided-bytes`: **the sixth instance is the dangerous shape —
+  it WAS run, against the wrong tree.** A `grep -n fs.appendFileSync` executed
+  on the working tree *after* the implementation landed gave `:1388`, which is
+  a HEAD line number where the spec's convention is base-tree (`:1355`, the
+  diff adds +33). The relay produced it, the architect "confirmed" it on the
+  same post-change tree, and the PR gate caught it. Running the wrong tree is
+  not better than reading — it is worse, because the command exits 0 and
+  returns a number, so nothing looks suspicious.
+- `WP-validator-decided-bytes`: **an acceptance criterion is a claim about
+  behaviour, so it is a claim to be RUN at the moment it is written.**
+  Boilerplate copied from `_TEMPLATE.md` is the highest-risk kind, because
+  nobody treats a template line as an assertion. AC7's "second run: zero
+  changes" was false for this component from the first draft and survived round
+  0b, four adversarial rounds and dispatch-time re-verification — five gates
+  that all *read* it. Structural fix worth considering: make round 0b run every
+  acceptance criterion that has a runnable form and report its exit status;
+  AC2 and AC7 would both have died in round zero instead of at round four and
+  implementation.
+- `WP-validator-decided-bytes`: **exhaustiveness by syntax class is impossible
+  when the two predicates live on different axes.** Redaction is a predicate on
+  a literal's *characters* (an unbroken run ≥ 24 over `[A-Za-z0-9+=/]` at
+  ≥ 3.5 bits/char); `Number()` acceptance is a predicate on its *syntax*. Proof
+  in one measured pair, same syntax class, opposite outcome:
+  `10293847561029384756E+12` (3.522 bits) is redacted,
+  `102938475610293847561E12` (3.387) is clean. A charter that names classes
+  hands a successor a boundary that does not exist — state measured positives
+  as evidence and say plainly that the intersection was not enumerated.
+- `WP-validator-decided-bytes`: **a "the forbidden design must fail this test"
+  criterion is only credible if the forbidden design is COMPILED FROM THE
+  SHIPPED SOURCE.** Two asserted-unique string substitutions plus
+  `Module.prototype._compile` on the real file give a mutant that cannot
+  silently drift; a hand-written one rots into agreement. AC2 spent four design
+  rounds vacuous in the weakened "the revision is reverted" form — which both
+  designs satisfy — and only the discrimination form (forbidden ADMITS, shipped
+  REVERTS, identical bytes) catches it.
+- `WP-validator-decided-bytes`: **which malformation rule a fixture uses is a
+  security decision, not a stylistic one.** Only an *indented* line both sets
+  `malformed` and withholds the field from the view; a duplicate key keeps the
+  first value visible, so the pre-existing raise-only check does the rejecting
+  and the guard under test is never exercised.
+- `WP-validator-decided-bytes`: **put the non-vacuity assertion inside the
+  fixture loop, next to the bytes.** Asserting per case that `parse` reports
+  malformed AND that the view still shows floor-passing fields is what proves
+  the guard did the rejecting rather than a weak floor — and it survives a
+  future edit to the fixture in a way a prose comment does not.
+- `WP-validator-decided-bytes`: **write a revert reason from the reverted
+  path's point of view, not the decision's.** Two of five guarded sites parse
+  bytes that are not the reverted file's — the ledger site parses the sibling
+  `SKILL.md`, the revision guard parses HEAD. A reason written from the
+  decision would send the user to repair a file that is fine. This only becomes
+  visible when you place the check.
+- `WP-validator-decided-bytes`: **run a gate from a script, not an inline shell
+  one-liner** — the runbook's own rule, reproduced by the session relaying it.
+  `"$MAIN:src/core/dre…"` in zsh is a `:s` substitution *modifier*, so the path
+  git was asked for was silently rewritten and the dispatch gate reported
+  **12 false STALEs** on a spec that was fine. A false red is not a harmless
+  false alarm: believed, it blocks a dispatch.
+- `WP-validator-decided-bytes` (pipeline): **`gh` resolves to the wrong remote
+  in this checkout.** There are two — `origin` = `felho/wienerdog` (where the
+  work and every PR lives) and `upstream` = `wienerdog-ai/wienerdog`. Bare
+  `gh pr create` picked upstream and failed with "No commits between main
+  and …", which reads like a branch problem. Pass `--repo felho/wienerdog` on
+  every `gh` call; a "no such PR" answer against the other repo looks equally
+  plausible.
+- `WP-validator-decided-bytes` (pipeline): **verify a done-flip on the STAGED
+  diff, with rename detection on.** `c04cd08` on the predecessor landed as a
+  pure rename, 0 insertions / 0 deletions, because `git mv` staged the move
+  while the status `sed` was never `git add`-ed and the working tree was
+  checked instead. `git diff --cached --find-renames --numstat` must show
+  `1  1`, not `0  0`.
+- `WP-validator-decided-bytes` (design loop): **three narrowings in four
+  rounds, and no round was closed by a better mechanism.** Contract went
+  C1+C2+C3 → C1+C2 → C1; verification steps 4 → 3 → 2. The predecessor's record
+  predicted exactly this. Corollary that paid off: pin the fallback *before*
+  the round, and let it be a floor of shrinkage rather than a ceiling — round 1
+  falsified the first fallback's premise (it aimed at one finding; the real
+  failure was six), and going further than it pointed was right.
+- `WP-validator-decided-bytes` (discovered, not fixed): **the dream is not
+  idempotent and never was.** Step 4's enforcement append
+  (`src/core/dream/validate.js:1355` at base) is unconditional — it writes
+  `- none` when nothing was reverted — so every `validateAndCommit` run appends
+  a section and makes a commit, growing the day's report with duplicate empty
+  sections. Measured identically before and after the change. Every nightly
+  no-op run commits.
