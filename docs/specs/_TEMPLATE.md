@@ -119,7 +119,9 @@ spot (register-new-mirrors):
 ## Acceptance criteria
 
 - [ ] Objective, binary criteria only — each maps to a verification step below.
-- [ ] Running the command twice is idempotent (second run: zero changes).
+- [ ] Running the command twice is idempotent (second run: zero changes) —
+      applies when the WP ships a command or writes outside the repo; a WP
+      with no such surface marks it `N/A — <what the WP ships instead>`.
 
 ## Verification steps (run these; paste output in the PR)
 
