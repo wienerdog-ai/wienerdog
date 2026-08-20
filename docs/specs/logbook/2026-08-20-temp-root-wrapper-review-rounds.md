@@ -57,9 +57,15 @@ findings at closure are fixed or named residuals and do not extend the loop.
 
 | # | Residual (short) | Weight | Disposition |
 |---|---|---|---|
-| R1-a | The split env criteria contradict each other in prose (criterion 1 absolute, criterion 2 scoped); Table A and steps 8a/8b already implement the scoped reading | LIGHT | (pending) |
-| R1-b | The env-passthrough checklist item says "the same acceptance criterion" where that half now has its own | LIGHT | (pending) |
-| R1-c | The both-sides umbrella demands a red for every step except 5, but the red list has no step-9 entry (trivially producible) | LIGHT | (pending) |
+| R1-a | The split env criteria contradict each other in prose (criterion 1 absolute, criterion 2 scoped); Table A and steps 8a/8b already implement the scoped reading | LIGHT | FIX — criterion 1 scoped to the caller-lacks case; the two criteria now partition the input space (owner ruled 2026-08-20) |
+| R1-b | The env-passthrough checklist item says "the same acceptance criterion" where that half now has its own | LIGHT | FIX — "its acceptance criterion" (owner ruled 2026-08-20) |
+| R1-c | The both-sides umbrella demands a red for every step except 5, but the red list has no step-9 entry (trivially producible) | LIGHT | FIX — step-9 red added; red-list coverage now mechanically diffed against the umbrella's NEW set, complete (owner ruled 2026-08-20) |
+
+R1 fixes landed as `03d1ad8` and were relay grep-verified (scoping clause
+present and "sees neither" occurs only inside it; old phrasing gone; step-9
+red at its place in step order). The author's mirror walk found nothing new —
+the first clean walk of this spec. **Loop closed; awaiting the owner's
+sign-off read, then the `Draft → Ready` flip as a separate commit.**
 
 ## Round-zero dispositions
 
