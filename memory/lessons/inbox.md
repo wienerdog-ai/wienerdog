@@ -1063,3 +1063,65 @@ One bullet per lesson, prefixed with WP id (or M0 for foundation work). The drea
   block containing pipes** — a failing producer piped into `tail` exits 0
   without `pipefail`. Measured: with `set -e` only, the block continued past a
   failing wrapper and exited 0; `set -eo pipefail` is load-bearing.
+- `WP-temp-root-wrapper` (close-out): **when a spec claims a coverage universal
+  ("all four rows"), the exception set belongs in that criterion, not in the
+  canonical contract table.** Table A decides what the code must do; it does not
+  decide what is testable. Two exit-status rows here have no CI-portable case —
+  both need a genuinely unremovable directory (`chflags uchg` on macOS,
+  root-only `chattr +i` on Linux), so a case built for either of CI's two
+  runners fails on the other. Recording that in Table A would have made the
+  canonical table own a fact it cannot arbitrate.
+- `WP-temp-root-wrapper` (close-out): **a guard test that pins `package.json`
+  byte-exact is a mirrored surface and belongs on the Mirrored Surface
+  Checklist.** Executable mirrors are structurally easy to miss at authoring
+  time because they do not exist yet — they arrive with the implementation, so
+  registering them is inherently a post-merge move. Here a seventh test-running
+  npm script moves *three* surfaces, not the two the checklist listed.
+- `WP-temp-root-wrapper` (close-out): corollary to the existing
+  `WP-validator-decided-bytes` done-flip rule — because the flip's integrity
+  check is read off the staged, rename-detected diff (`1 1`, not `0 0`), it is
+  only readable when the flip commit contains **nothing but the status line**.
+  So post-merge spec amendments belong in a *separate commit on the same
+  branch*, not folded into the flip. Two prior commits in this repo folded them
+  together; nothing forbids it, but it costs the check.
+- `WP-temp-root-wrapper` (pipeline): **a subagent inherits the parent session's
+  worktree pin, and the pin governs Bash but not Read.** A worktree created
+  under `<shared-checkout>/.claude/worktrees/` is refused for a subagent's every
+  Bash call ("resolved to the shared checkout") while `Read` on the same paths
+  works — which reads like a permissions puzzle rather than a pin. Worse,
+  `EnterWorktree` **reports success** and Bash still refuses. A whole implementer
+  session was lost to this. Create implementer worktrees as **siblings** of the
+  repo root, tell the agent never to call `EnterWorktree`, and to prefix every
+  Bash call with `cd <abs worktree path> &&` (the shell cwd resets between
+  calls).
+- `WP-temp-root-wrapper` (pipeline): **reproduce a review finding before
+  accepting it — the first attempt failing is not an acquittal.** The external
+  gate reported that the failed-teardown diagnostic follows symlinks out of the
+  run root. The first reproduction did *not* trigger it, because `rmSync`
+  unlinks the escaping symlink before the diagnostic reaches it; the bug needs
+  the *link itself* to survive removal (an immutable run root). Stopping at
+  "not reproducible" would have shipped a real containment bug.
+- `WP-temp-root-wrapper` (post-merge, operational): **a wrapped run leaves ZERO
+  top-level `wd-*` residue, which turns the temp directory into an attribution
+  tool.** Any surviving top-level `wd-*` block proves a wrapper-less checkout
+  ran the suite, and the absence of `wd-tmpguard-` / `wd-testrun-` prefixes in a
+  burst rules out a post-fix producer. Measured on merge evening: two discrete
+  bursts (1,670 and 1,878 dirs) that nobody believed existed, the second with a
+  different prefix profile — i.e. a different test set — than the canonical
+  baseline.
+- `WP-temp-root-wrapper` (post-merge, operational): **the fix is per-checkout.**
+  Right after the merge, 9 of the 10 checkouts on the maintainer's machine (all
+  the `wp/*` worktrees, the war-room worktree, and the shared main checkout)
+  still lacked `tests/with-temp-root.js` and kept leaking ~1,670 directories per
+  `npm test`. A merged leak fix does not stop the leak until every live worktree
+  carries it — budget for that when judging whether a sweep "worked".
+- Pipeline (maintainer, Actions-quota condition): when GitHub Actions minutes
+  are exhausted, jobs fail in 2–4 s with **zero steps executed** and no logs, on
+  every workflow and every branch including docs-only pushes to `main` — a red
+  that says nothing about the diff. Substitute by running the blocked jobs
+  locally and posting them as `local-ci/*` commit statuses on the head SHA, plus
+  one PR comment naming what has **no** local substitute. Never substitute the
+  smoke job: `scripts/smoke-install.sh` reaches the real user-global
+  launchd/systemd label domain, which its throwaway `HOME` does not scope, and
+  running it locally on 2026-08-20 booted out the live `ai.wienerdog.dream` and
+  `ai.wienerdog.catchup` agents.
