@@ -64,8 +64,9 @@ findings at closure are fixed or named residuals and do not extend the loop.
 R1 fixes landed as `03d1ad8` and were relay grep-verified (scoping clause
 present and "sees neither" occurs only inside it; old phrasing gone; step-9
 red at its place in step order). The author's mirror walk found nothing new —
-the first clean walk of this spec. **Loop closed; awaiting the owner's
-sign-off read, then the `Draft → Ready` flip as a separate commit.**
+the first clean walk of this spec. **Loop closed.** Owner sign-off received 2026-08-20 (summary-based, with the
+one undiscussed frontmatter decision — `model: sonnet` — surfaced explicitly
+and ratified); `Draft → Ready` flipped in the same commit as this line.
 
 ## Round-zero dispositions
 
