@@ -45,6 +45,22 @@ discriminating guard each, in the smallest form.
 | F4 | Step 4's forwarding commands pass even if the wrapper drops every argument | LIGHT | FIX — synthetic argv-echo child, byte-exact assert on forwarded args |
 | F5 | The one-session verification block can mask an intermediate red (no fail-fast; cleanup exits 0) | LIGHT | FIX — fail-closed block: `set -e` + EXIT-trap cleanup + explicit carve-outs where non-zero is expected |
 
+## Round-1 fix wave and closure
+
+| Round | What | Raw file | Raw committed as | Result |
+|---|---|---|---|---|
+| 1-fix | Fix wave `1f3a723` (five fixes + Mirrored Surface Checklist walk, which caught four extra stale mirrors) + mechanical re-verification | `2026-08-20-temp-root-wrapper-r0-fixverify-raw.md` (append) | `c224e1c` | F1–F5 all hold (each machinery fix proved discriminating both directions; pipefail measured load-bearing); all gates green; three LIGHT residuals R1-a/b/c below |
+
+Per the pinned stop criterion, round 1 landed **zero HEAVY** findings and its
+LIGHT fixes are mechanically verified: **the loop is closed.** Machinery
+findings at closure are fixed or named residuals and do not extend the loop.
+
+| # | Residual (short) | Weight | Disposition |
+|---|---|---|---|
+| R1-a | The split env criteria contradict each other in prose (criterion 1 absolute, criterion 2 scoped); Table A and steps 8a/8b already implement the scoped reading | LIGHT | (pending) |
+| R1-b | The env-passthrough checklist item says "the same acceptance criterion" where that half now has its own | LIGHT | (pending) |
+| R1-c | The both-sides umbrella demands a red for every step except 5, but the red list has no step-9 entry (trivially producible) | LIGHT | (pending) |
+
 ## Round-zero dispositions
 
 Owner ruled 2026-08-20: batch accepted as proposed — every finding LIGHT, twelve
