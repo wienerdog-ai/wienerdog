@@ -1,7 +1,7 @@
 ---
 id: WP-temp-root-wrapper
 title: Front every test entry point with a run-scoped temp root, so test runs stop leaking directories
-status: In-Review
+status: Done
 model: sonnet
 size: S
 depends_on: []
