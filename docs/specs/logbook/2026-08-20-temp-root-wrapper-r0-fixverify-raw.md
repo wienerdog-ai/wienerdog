@@ -169,3 +169,135 @@ area: **N2** and **N3** were introduced by the A5 acceptance-criterion
 extension (a four-row table described as three rows; a promoted `null`-status
 behavior with no verification step), and **N1** is a pre-existing unfirable red
 for step 5 that the A4 discriminating-power sweep surfaced.
+
+---
+
+# N-wave re-verification, spec commit `aea64e2`
+
+*Appended 2026-08-20. Everything above this heading is the earlier, committed
+`38f7823` evidence and is left unchanged.*
+
+**Spec commit:** `aea64e2` (`docs(specs): apply the three fix-verification
+residual fixes (WP-temp-root-wrapper)`)
+**HEAD verified:** yes — `git log --oneline -1` → `aea64e2`;
+`git merge-base --is-ancestor aea64e2 HEAD` → exit 0. Diff touches only
+`docs/specs/WP-temp-root-wrapper.md` (+24 / −7).
+**Scope:** N1, N2, N3 only, plus the four conformance gates. Nothing else
+re-measured.
+**Full suite runs this wave:** **0**.
+**Safety:** `WIENERDOG_RUN_SCENARIOS` never set; no scenario script and no
+`bin/wienerdog.js` verb run at all this wave; the step-7 children are two
+one-line scripts. The counted work ran under a fresh `mktemp -d` root with
+`TMPDIR`/`TMP`/`TEMP` exported to it, removed afterwards (verified).
+**Stand-in wrapper:** `/tmp/wd-r0-fixverify/wrapper-variant.js`, extended this
+wave with a `null-zero` variant (numeric statuses still propagate, the `null`
+branch maps to `0`). Driver: `/tmp/wd-r0-fixverify/step7-nwave.sh`.
+
+## N1 — step 5 removed from the deliberate-red list
+
+**What was re-checked.** (a) the rewritten red-list entry; (b) whether any other
+list, count or range in the spec still places step 5 on the must-go-red side.
+
+**Observed.** The entry at `:549-553` now reads "steps 2 **and 6**" and adds the
+reason: step 5's "count is taken around skip-mode runs, which create nothing in
+the temp directory at all, so it reads `0 → 0` with or without injection
+(measured both ways) and cannot go red. It earns its place in the block as a
+regression check that the five entry points still exit 0 through the wrapper,
+not as a discriminating count." That matches this reviewer's measurement exactly
+(`wrapper=correct before=0 after=0 GREEN` / `wrapper=no-inject before=0 after=0
+GREEN`).
+
+Sweep for other claims — `grep -n "step 5\|steps 2\|Steps 2\|skip-mode loop"`:
+
+| Line | Text | Claims a step-5 red? |
+|---|---|---|
+| `:293` | Mirrored Surface Checklist — "the skip-mode loop" | no |
+| `:512` | step 8's comment — "would turn step 5's skip-mode runs into live … ones" | no |
+| `:549` | the rewritten red-list entry | no — states the opposite, correctly |
+| **`:540-543`** | "**Steps 2 and 5–10** are NEW, and each is an assertion that exits non-zero on failure … Per `docs/runbooks/spec-authoring.md`, **each must be observed on both sides — paste a real green on the finished state AND a real red from a deliberately broken state.**" | **YES** |
+
+**Verdict: does not fully hold.** The red-list entry itself is fixed, accurate
+and well-reasoned. But the umbrella sentence at `:540-543` still sweeps step 5
+into the range `5–10` and demands, for every step in that range, exactly the
+"real red from a deliberately broken state" that the new list entry nine lines
+later says step 5 cannot produce. The two passages now contradict each other
+directly. Smallest honest fix: change the range to "Steps 2 and 6–10" and let
+step 5 keep the green-only role the new list entry gives it (or add "except step
+5, which is green-only — see the red list below" to the umbrella sentence).
+
+## N2 — the exit-status row count
+
+**What was re-checked.** The AC's stated count and its enumeration against Table
+A's actual rows.
+
+**Observed.** `grep -c "^| Exit status" docs/specs/WP-temp-root-wrapper.md` →
+**4**. The four rows (`:265-268`) and the AC's four clauses (`:403-406`) map one
+to one:
+
+| Table A row | AC clause |
+|---|---|
+| `:265` child failed with a numeric status → exits exactly that number | "a non-zero numeric child status reaches the caller unchanged" |
+| `:266` child died on a signal or failed to spawn → exits `1` | "a `null` status (signal death / spawn failure) becomes `1`" |
+| `:267` teardown never overrides a failure | "a teardown problem never overrides either failure" |
+| `:268` child passed → `0`, or `1` if the root survived | "a passing child exits 0 (or 1 if the root survived)" |
+
+The AC now reads "all **four** of Table A's exit-status rows". The previously
+omitted row `:267` is present, and the fourth clause also picked up the
+root-survived half of `:268` that the old wording dropped.
+
+**Verdict: holds** (exact — count matches the list, and every row has a clause).
+
+## N3 — the `null` branch now has a verification step
+
+**What was re-checked.** The new step-7 lines run **verbatim** against a
+conforming stand-in, plus both deliberate reds the author declares for the step.
+
+**Command.** `bash /tmp/wd-r0-fixverify/step7-nwave.sh` (the spec's step-7 block
+copied unchanged; only the wrapper path substituted).
+
+```text
+=== conforming wrapper (expect both GREEN) ===
+  signal-killed child produced wrapper exit 1
+  child status propagated as 7
+  => signal assertion: GREEN | numeric assertion: GREEN
+=== red 1: exit rule always 0 (author claims BOTH assertions go red) ===
+  signal-killed child produced wrapper exit 0
+  child status propagated as 0
+  => signal assertion: RED   | numeric assertion: RED
+=== red 2: only the null branch mapped to 0 (author claims ONLY the signal assertion fires) ===
+  signal-killed child produced wrapper exit 0
+  child status propagated as 7
+  => signal assertion: RED   | numeric assertion: GREEN
+```
+
+Every claim the author makes about this step is confirmed:
+
+- the signal line asserts `test "$RC_SIG" -eq 1` and a conforming wrapper
+  produces exactly `1` — green side observed;
+- the "always exit `0`" red fires **both** assertions, as the list says;
+- the "only the `null` branch mapped to `0`" red fires **only** the signal
+  assertion while the numeric one stays green — which is precisely what proves
+  the new line carries its own weight rather than riding on the numeric one.
+
+The measured form also matches this reviewer's own r0-fixverify probe
+(`signal-killed child -> wrapper exit=1`), and the step's `2>/dev/null` keeps
+the shell's own SIGKILL notice out of the pasted output without hiding the
+status.
+
+**Verdict: holds** (exact, on both sides, for both declared reds).
+
+## Conformance gates (re-run at `aea64e2`)
+
+| Gate | Command | Exit | Verdict |
+|---|---|---|---|
+| Frontmatter schema | `node scripts/check-frontmatter.js` | **0** — "frontmatter check passed: 221 spec(s), 4 agent(s)" | passes |
+| Markdownlint (repo config) | `npx --no-install markdownlint-cli2 --config package.json --configPointer /markdownlint-cli2 "docs/specs/WP-temp-root-wrapper.md"` | **0** — "Summary: 0 error(s)" | passes |
+| Boundary check, positive | `node scripts/boundary-check.js docs/specs/WP-temp-root-wrapper.md tests/with-temp-root.js tests/unit/tmpdir-leak-guard.test.js package.json` | **0** | passes |
+| Boundary check, negative control | `node scripts/boundary-check.js docs/specs/WP-temp-root-wrapper.md tests/run.js` | **1** — "Files outside the spec's Deliverables table: tests/run.js" | passes (correctly rejected) |
+
+## N-wave summary
+
+N2 and N3 hold exactly. N1's substance is fixed — the red list is now correct
+and says why — but the change did not reach the umbrella "both sides" sentence
+at `:540-543`, which still ranges over `5–10` and so still demands a red for
+step 5. One sentence, one range, and the wave is clean.
