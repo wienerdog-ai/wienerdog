@@ -28,20 +28,28 @@ through `78eb84f` by the coherence pass itself).
 
 ## Round-zero dispositions
 
-Recorded after the owner's ruling; proposals relayed 2026-08-20.
+Owner ruled 2026-08-20: batch accepted as proposed — every finding LIGHT, twelve
+fixes, one named-residual group. Value line for the wave: each fix protects the
+spec's evidentiary reliability (numbers a reviewer can re-measure, verification
+steps that discriminate); the residuals are conformance cosmetics whose fixing
+would protect nothing.
 
 | # | Finding (short) | Weight | Disposition |
 |---|---|---|---|
-| A1 | Verification step 8 tests only one of the two must-not-inject variables, and its `VAR=` form passes on present-but-empty | LIGHT | (pending) |
-| A2 | "same pass/skip counts" AC cites a skip count the spec never records (measured: 9) | LIGHT | (pending) |
-| A3 | Mirrored Surface Checklist claims literal-text mirroring of the `//` note in three places; all three check presence + substring only | LIGHT | (pending) |
-| A4 | The "guard cases demonstrated by a real red run" AC has no deliberate-red entry | LIGHT | (pending) |
-| A5 | Table A "exits with exactly that status" contradicts its own `status == null → 1` branch | LIGHT | (pending) |
-| A6 | Table B never states the six + two exclusions exhaust the scripts object | LIGHT | (pending) |
-| A7 | Frontmatter `adrs:` omits ADR-0031 while the body activates it | LIGHT | (pending) |
-| B7 | "~90 distinct wd-* prefixes" measured false (257 distinct; 92 recurring) | LIGHT | (pending) |
-| B20 | "~39-second suite" does not reproduce (45.1–45.9 s ×3); the ratio drawn from it still holds | LIGHT | (pending) |
-| B6 | 1,677 dirs incl. Node's `node-compile-cache`; 1,676 test-created (1,670 `wd-*` + 6 `gen-agents-md-*`) — the prose's pronoun over-covers | LIGHT | (pending) |
-| B39 | `tests/unit/exec-identity.test.js:229` hardcodes `/tmp`, outside the wrapper's redirection and step 2's count; self-cleans | LIGHT | (pending) |
-| B3/B23 | Minor: three comment lines not "two comments"; `run-scenarios.js` also sets `process.exitCode = 0`, so the two guard descriptions don't distinguish the files | LIGHT | (pending) |
-| T1–T3 | Template deviations: missing author-facing scaffolding bullet; contract tables renamed Table A/B; H1 reworded vs `title` | LIGHT | (pending) |
+| A1 | Verification step 8 tests only one of the two must-not-inject variables, and its `VAR=` form passes on present-but-empty | LIGHT | FIX — step 8 asserts BOTH variables, in a truly-unset env |
+| A2 | "same pass/skip counts" AC cites a skip count the spec never records (measured: 9) | LIGHT | FIX — record 2028 pass / 0 fail / 9 skip in Current state |
+| A3 | Mirrored Surface Checklist claims literal-text mirroring of the `//` note in three places; all three check presence + substring only | LIGHT | FIX — checklist claim weakened to presence + wrapper substring |
+| A4 | The "guard cases demonstrated by a real red run" AC has no deliberate-red entry | LIGHT | FIX — the two guard-case reds join the deliberate-red list |
+| A5 | Table A "exits with exactly that status" contradicts its own `status == null → 1` branch | LIGHT | FIX — row split: non-zero propagates exactly; null → 1 |
+| A6 | Table B never states the six + two exclusions exhaust the scripts object | LIGHT | FIX — one clause: six + two exclusions + the `//` note exhaust the scripts object |
+| A7 | Frontmatter `adrs:` omits ADR-0031 while the body activates it | LIGHT | FIX — ADR-0031 added to frontmatter adrs |
+| B7 | "~90 distinct wd-* prefixes" measured false (257 distinct; 92 recurring) | LIGHT | FIX — 257 distinct / 92 recurring |
+| B20 | "~39-second suite" does not reproduce (45.1–45.9 s ×3); the ratio drawn from it still holds | LIGHT | FIX — reworded as a machine-dependent approximation |
+| B6 | 1,677 dirs incl. Node's `node-compile-cache`; 1,676 test-created (1,670 `wd-*` + 6 `gen-agents-md-*`) — the prose's pronoun over-covers | LIGHT | FIX — one clarifying sentence |
+| B39 | `tests/unit/exec-identity.test.js:229` hardcodes `/tmp`, outside the wrapper's redirection and step 2's count; self-cleans | LIGHT | FIX — one naming sentence; no code change |
+| B3/B23 | Minor: three comment lines not "two comments"; `run-scenarios.js` also sets `process.exitCode = 0`, so the two guard descriptions don't distinguish the files | LIGHT | FIX — factual corrections |
+| T1–T3 | Template deviations: missing author-facing scaffolding bullet; contract tables renamed Table A/B; H1 reworded vs `title` | LIGHT | NO ACTION — named residuals |
+
+All dispositions LIGHT → per the pinned stop criterion, fixes are verified
+mechanically (re-measurement of the corrected claims) and round 1 follows
+without a fresh round being triggered by this wave.
