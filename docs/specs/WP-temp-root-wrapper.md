@@ -400,9 +400,10 @@ Tables A and B are the single place those facts are decided.
 - [ ] Teardown does not follow a symbolic link out of the root: a link inside
       the root pointing at a directory outside it is unlinked, and the target
       directory keeps its modes and contents.
-- [ ] Exit status follows Table A's three exit-status rows: a non-zero numeric
-      child status reaches the caller unchanged, a `null` status (signal death /
-      spawn failure) becomes `1`, and a passing child exits 0.
+- [ ] Exit status follows all **four** of Table A's exit-status rows: a non-zero
+      numeric child status reaches the caller unchanged, a `null` status (signal
+      death / spawn failure) becomes `1`, a teardown problem never overrides
+      either failure, and a passing child exits 0 (or 1 if the root survived).
 - [ ] `node tests/with-temp-root.js` with no argument exits non-zero with a
       usage message rather than reporting success.
 - [ ] The guard cases fail if the env injection is removed from the wrapper, and
@@ -489,9 +490,16 @@ AFTER=$(node -e "$COUNT")
 echo "ambient wd-* before=$BEFORE after=$AFTER"
 test "$BEFORE" = "$AFTER"
 
-# 7 — exit status, red side. ASSERTION: non-zero only if the wrapper FAILED to
-#     propagate the child's status.
+# 7 — exit status, both failure branches of Table A. ASSERTIONS: non-zero only
+#     if the wrapper FAILED to follow the table. The second line covers the
+#     `null` branch (signal death), which the numeric line cannot reach: a
+#     wrapper that propagates numbers correctly but maps `null` to 0 passes the
+#     first assertion and fails only this one.
 printf "process.exit(7);\n" > "$D/boom.js"
+printf "process.kill(process.pid, 'SIGKILL');\n" > "$D/signal.js"
+node tests/with-temp-root.js "$D/signal.js" 2>/dev/null; RC_SIG=$?
+echo "signal-killed child produced wrapper exit $RC_SIG"
+test "$RC_SIG" -eq 1
 node tests/with-temp-root.js "$D/boom.js"; RC=$?
 echo "child status propagated as $RC"
 test "$RC" -eq 7
@@ -538,10 +546,19 @@ what makes a red mean "the break caused this" rather than "another session wrote
 into the temp directory mid-run". A red may leave residue (including an
 unreadable directory) in the isolated root; step 12 is written to clear it.
 
-- steps 2, 5 and 6: with the three temp variables removed from the wrapper's env;
+- steps 2 and 6: with the three temp variables removed from the wrapper's env.
+  Step 5 is deliberately **not** in this list: its count is taken around
+  skip-mode runs, which create nothing in the temp directory at all, so it reads
+  `0 → 0` with or without injection (measured both ways) and cannot go red. It
+  earns its place in the block as a regression check that the five entry points
+  still exit 0 through the wrapper, not as a discriminating count;
 - step 6 again: with the permission-restore walk removed, leaving only `rmSync`
   — the case measured to throw `ENOTEMPTY`;
-- step 7: with the exit rule changed to always exit `0`;
+- step 7: twice — once with the exit rule changed to always exit `0` (both of
+  the step's assertions go red), and once with only the `null` branch mapped to
+  `0` while numeric statuses still propagate. The second variant is what proves
+  the signal line carries its own weight: the numeric assertion still passes and
+  only the signal assertion fires;
 - step 8: run the red **twice**, once with `WIENERDOG_TEST_NO_REAL_SCHEDULER:
   '1'` added to the wrapper's injected env and once with
   `WIENERDOG_RUN_SCENARIOS: '1'` — the trap Table A names. Both must go red
