@@ -301,7 +301,7 @@ Tables A and B are the single place those facts are decided.
       Acceptance criteria and in verification step **8a** — all three move
       together
 - [ ] Its other half, **env passthrough** ("the rest of `process.env` passes
-      through unchanged"): Table A's injected-variables row, the same acceptance
+      through unchanged"): Table A's injected-variables row, its acceptance
       criterion, and verification step **8b**
 - [ ] **Argument forwarding**: Table A's forwarding row, its acceptance
       criterion, and verification step **4a** (4b is a smoke check and pins
@@ -426,9 +426,12 @@ Tables A and B are the single place those facts are decided.
       against a wrapper that drops every argument, so the byte-exact assertion
       is what actually guards this row. (Per the WP-073 lesson in Current state,
       the pattern flag does not filter the run — do not assert that it does.)
-- [ ] The wrapper injects **only** `TMPDIR`, `TMP` and `TEMP`: a child run
-      through it sees neither `WIENERDOG_TEST_NO_REAL_SCHEDULER` nor
-      `WIENERDOG_RUN_SCENARIOS` — not even as a present-but-empty value.
+- [ ] The wrapper injects **only** `TMPDIR`, `TMP` and `TEMP`: **when the
+      caller's own environment does not carry them**, a child run through it
+      sees neither `WIENERDOG_TEST_NO_REAL_SCHEDULER` nor
+      `WIENERDOG_RUN_SCENARIOS` — not even as a present-but-empty value. (Table
+      A: "a child sees either variable only if the caller's own environment
+      already had it".)
 - [ ] The other half of that row: the wrapper **removes nothing either**. When
       the caller's own environment carries those variables, they reach the child
       **byte-exact** — a wrapper that deletes them satisfies the criterion above
@@ -653,6 +656,8 @@ unreadable directory) in the isolated root; step 12 is written to clear it.
   `WIENERDOG_RUN_SCENARIOS: '1'` — the trap Table A names. Both must go red
   separately, which is what proves the step discriminates on each variable
   rather than passing on the strength of the other;
+- step 9: with the wrapper reporting success on a missing argument — e.g.
+  returning `0` instead of the usage error when `process.argv[2]` is absent;
 - step 10: with the `"//"` key removed from `scripts`;
 - **the guard test itself** (`tests/unit/tmpdir-leak-guard.test.js`, via
   `npm test`) must be observed red twice, once with the env injection removed
