@@ -81,27 +81,40 @@ function restorePermissions(entryPath) {
 }
 
 /**
- * Collect up to `limit` paths still present under `dirPath`, for a
+ * Collect up to `limit` paths still present at or under `entryPath`, for a
  * diagnostic message when teardown fails to remove the root. Best-effort:
  * an unreadable entry is simply not descended into.
  *
- * @param {string} dirPath
+ * Entries are classified with `lstat`, exactly as the permission-restore
+ * walk does, so a symbolic link is NAMED but never descended into. Reading
+ * through a link would enumerate paths outside the run root — the
+ * diagnostic has to stay inside the root just as teardown does, and a
+ * surviving link pointing outside is precisely the case where it would not.
+ *
+ * @param {string} entryPath
  * @param {string[]} out
  * @param {number} limit
  * @returns {void}
  */
-function collectSurvivors(dirPath, out, limit) {
+function collectSurvivors(entryPath, out, limit) {
   if (out.length >= limit) return;
-  out.push(dirPath);
+  out.push(entryPath);
+  let stat;
+  try {
+    stat = fs.lstatSync(entryPath);
+  } catch {
+    return;
+  }
+  if (!stat.isDirectory()) return; // files and symlinks: named, not descended
   let entries;
   try {
-    entries = fs.readdirSync(dirPath);
+    entries = fs.readdirSync(entryPath);
   } catch {
     return;
   }
   for (const entry of entries) {
     if (out.length >= limit) return;
-    collectSurvivors(path.join(dirPath, entry), out, limit);
+    collectSurvivors(path.join(entryPath, entry), out, limit);
   }
 }
 
@@ -128,8 +141,19 @@ function teardown(root) {
   if (!fs.existsSync(root)) {
     return { removed: true, survivors: [] };
   }
+  // The root itself is named in the message header, so list what is left
+  // INSIDE it — otherwise the root would occupy one of the reported slots.
   const survivors = [];
-  collectSurvivors(root, survivors, MAX_SURVIVOR_PATHS);
+  let rootEntries;
+  try {
+    rootEntries = fs.readdirSync(root);
+  } catch {
+    rootEntries = [];
+  }
+  for (const entry of rootEntries) {
+    if (survivors.length >= MAX_SURVIVOR_PATHS) break;
+    collectSurvivors(path.join(root, entry), survivors, MAX_SURVIVOR_PATHS);
+  }
   return { removed: false, survivors };
 }
 
