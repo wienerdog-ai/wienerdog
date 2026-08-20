@@ -539,9 +539,12 @@ rm -rf "$WD_VERIFY_TMP"
 
 Steps 2 and 5–10 are NEW, and each is an assertion that exits non-zero on failure
 rather than printing something a reader must judge. Per
-`docs/runbooks/spec-authoring.md`, each must be observed on **both** sides —
-paste a real green on the finished state AND a real red from a deliberately
-broken state. Run each red under the step-0 preamble as well: the isolation is
+`docs/runbooks/spec-authoring.md`, each of them **except step 5** must be
+observed on **both** sides — paste a real green on the finished state AND a real
+red from a deliberately broken state. Step 5 is green-only by nature, not by
+omission: its count runs around skip-mode invocations that create nothing, so no
+break of this WP's mechanism can move it off `0 → 0`; the deliberate-red list
+below records why. Run each red under the step-0 preamble as well: the isolation is
 what makes a red mean "the break caused this" rather than "another session wrote
 into the temp directory mid-run". A red may leave residue (including an
 unreadable directory) in the isolated root; step 12 is written to clear it.
