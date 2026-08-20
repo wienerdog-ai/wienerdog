@@ -301,3 +301,201 @@ N2 and N3 hold exactly. N1's substance is fixed — the red list is now correct
 and says why — but the change did not reach the umbrella "both sides" sentence
 at `:540-543`, which still ranges over `5–10` and so still demands a red for
 step 5. One sentence, one range, and the wave is clean.
+
+---
+
+# Round-1 fix-wave re-verification, spec commit `1f3a723`
+
+*Appended 2026-08-20. Everything above this heading is earlier, committed
+evidence (`38f7823` and `aea64e2` waves) and is left byte-unchanged.*
+
+**Spec commit:** `1f3a723` (`docs(specs): apply the five round-1 fixes
+(WP-temp-root-wrapper)`)
+**HEAD verified:** yes — `git log --oneline -1` → `1f3a723`;
+`git merge-base --is-ancestor 1f3a723 HEAD` → exit 0. Diff touches only
+`docs/specs/WP-temp-root-wrapper.md` (+123 / −37).
+**Scope:** F1–F5, the four Mirrored-Surface-walk catches, and the four gates.
+**Full suite runs this wave:** **0**.
+**Safety:** `WIENERDOG_RUN_SCENARIOS` was never set to `1` — the only value it
+ever carried was step 8b's inert literal `passthru2`, read by a print-only
+probe. No scenario harness and no `bin/wienerdog.js` verb ran.
+`WIENERDOG_TEST_NO_REAL_SCHEDULER=1` was set on every `tests/run.js`
+invocation. Every scenario ran under a fresh `mktemp -d` root with
+`TMPDIR`/`TMP`/`TEMP` exported to it, removed afterwards.
+**Stand-in wrapper:** `/tmp/wd-r0-fixverify/wrapper-variant.js`, extended this
+wave with `del-env` (deletes both must-not-inject variables) and `drop-args`
+(forwards only the script path). Drivers: `f3-step8.sh`, `f4-step4.sh`,
+`f5-scenarios.sh`.
+
+**Bonus:** the N-wave residual this reviewer left open — the umbrella sentence
+still ranging over `5–10` — is **fixed** in this commit: it now reads "Steps 2,
+4a and 5–10 … each of them **except step 5** must be observed on both sides",
+and adds why step 5 is green-only by nature. That closes the last N-wave item.
+
+## F1 — the interruption residual (wording only)
+
+| Check | Observation | Verdict |
+|---|---|---|
+| Mechanism untouched | `grep -n "spawnSync\|spawn(\|await \|async \|child_process"` → hits only at `:89`/`:91` (the inlined `tests/run.js`), `:259`, `:260`, `:363`. No async lifecycle appeared; `:260`'s only mention of one is "an asynchronous child lifecycle … was **offered and declined**" — a disclaimer, not an adoption | holds |
+| The new Table A row carries the reviewer's measured facts | `:260` carries `wrapper_signal=SIGTERM`, `finally_ran=false`, `root_survived=true`, `child_finished_after_wrapper_exit=true` — **four** tokens, matching the round-1 raw's probe (`round-1-raw.md:20` and `:74`) verbatim. The probe's fifth key, `wrapper_exit_code=null`, is not restated; it is entailed by `wrapper_signal=SIGTERM` | holds |
+| "When teardown runs" scopes to the child | `:259` now reads "the **child's** normal exit, the **child's** signal death, or a throw from `spawnSync` … This covers what happens to the CHILD. It does **not** cover a signal delivered to the WRAPPER itself" | holds |
+| No remaining over-claim, whole-spec sweep | `grep -n "outlive\|outlives\|ADR-0004\|background process"` → `:16-18` Context (now "it **starts no background process at all**: it spawns one child, waits for it" — restates ADR-0004's own "start a process that outlives its job" and narrows the WP's claim to *starting*); `:260` residual row; `:272` "Nothing is started" (explicitly: "It is **not** a claim that nothing can ever outlive the wrapper process"); `:311` checklist; `:363-370` notes bullet. `grep -n "every path"` → only `:259` (now child-scoped) and `:191` (an unrelated sentence about `mkdtempSync` call sites) | holds — no surface still claims teardown covers the wrapper's own signal death, and none claims nothing can outlive the wrapper |
+
+## F2 — the containment's exact strength (wording only)
+
+| Check | Observation | Verdict |
+|---|---|---|
+| Security item names the TOCTOU pair | `:392` — "the walk is not race-safe. `lstat`-then-`chmod` is a **TOCTOU pair**, so a process writing inside the root *while teardown runs* could swap a directory for a symlink between the two calls and steer a `chmod` outside the root" | holds |
+| …and states the threat model | `:396-400` — "the threat model here is **leftover artifacts of this repo's own trusted test code**, not a hostile concurrent writer … A wrapper facing untrusted concurrent writers would need a different mechanism (`openat`-style handle-relative traversal), and that is not this WP" | holds |
+| Table A's symlink row carries the matching narrowing | `:262` — "This holds against links **already on disk** when teardown starts, which is the real case; it is not race-safe against a process still writing inside the root, and does not claim to be — see the Security checklist" | holds — the two surfaces agree in both directions |
+| No surface still claims absolute no-escape | The item's heading changed from "**must not escape the run root**" to "**and the exact strength of the containment**". `grep -n "escape"` → only `:675`, an unrelated "escape hatch" for direct `node --test` runs | holds |
+
+## F3 — step 8b, run verbatim
+
+**Command.** `bash /tmp/wd-r0-fixverify/f3-step8.sh` (the spec's 8a and 8b lines
+and their `env.js` heredoc copied unchanged; only the wrapper path substituted).
+
+```text
+=== wrapper variant: correct ===
+  8a child saw: WIENERDOG_TEST_NO_REAL_SCHEDULER=<unset> WIENERDOG_RUN_SCENARIOS=<unset>
+  8b child saw: WIENERDOG_TEST_NO_REAL_SCHEDULER="passthru1" WIENERDOG_RUN_SCENARIOS="passthru2"
+  => 8a: GREEN | 8b: GREEN
+=== wrapper variant: del-env ===
+  8a child saw: WIENERDOG_TEST_NO_REAL_SCHEDULER=<unset> WIENERDOG_RUN_SCENARIOS=<unset>
+  8b child saw: WIENERDOG_TEST_NO_REAL_SCHEDULER=<unset> WIENERDOG_RUN_SCENARIOS=<unset>
+  => 8a: GREEN | 8b: RED
+=== wrapper variant: guard-one ===
+  => 8a: RED   | 8b: RED
+=== wrapper variant: scen-one ===
+  => 8a: RED   | 8b: RED
+```
+
+**Verdict: holds.** The conforming wrapper passes both. The deleting wrapper is
+the exact discriminating pair the author claims — **8a GREEN, 8b RED** — so 8b
+catches a class 8a structurally cannot see. Both must-not-inject reds still fire
+on 8a (`guard-one`, `scen-one`), each attributable to its own variable.
+
+## F4 — step 4a, run verbatim
+
+**Command.** `bash /tmp/wd-r0-fixverify/f4-step4.sh`.
+
+```text
+=== 4a, verbatim from the spec ===
+  wrapper=correct   child argv: ["--flag","value","two words","--k=v"]   => 4a: GREEN
+  wrapper=drop-args child argv: []                                       => 4a: RED
+=== 4b claim: does dropping every argument still exit 0 at the npm level? ===
+  wrapper=correct    tests/run.js exit=0  ℹ pass 1 ℹ fail 0   => 4b smoke check: GREEN
+  wrapper=drop-args  tests/run.js exit=0  ℹ pass 1 ℹ fail 0   => 4b smoke check: GREEN
+```
+
+**Verdict: holds.** Byte-exact and order-exact, including the space-containing
+argument and the `--k=v` form, against a conforming wrapper; RED against the
+declared arg-dropping red. And the author's note is confirmed: **4b stays green
+in exactly that broken state**, so 4a is the only discriminator for this row.
+
+The 4b half was proved on a scoped fixture (one passing test file, `tests/run.js`
+invoked through both wrappers) rather than the repo's 2037-test suite. That
+isolates the load-bearing sub-claim — "`node --test` with no path arguments
+still runs and still exits 0" — exactly; that the repo suite itself is green
+(`2028 pass / 0 fail`, three runs) is already committed r0 evidence, so no full
+suite run was needed.
+
+## F5 — the block's control flow
+
+**Command.** `bash /tmp/wd-r0-fixverify/f5-scenarios.sh` — each scenario
+reproduces the spec's step-0 preamble (`set -eo pipefail` + the `cleanup` EXIT
+trap) verbatim, then a representative slice.
+
+| Sub-check | Observed | Verdict |
+|---|---|---|
+| (a) all-green path | `block exit=0`, `cleanup ran: yes` — the root was gone afterwards | holds |
+| (c) the step 7 and step 9 carve-outs | `signal-killed child produced wrapper exit 1` / `child status propagated as 7` / `no-argument invocation exited 2`, then "reached the end of the block" — three expected non-zero observations, none of which killed the block | holds |
+| (b) injected mid-block failure | a mid-block `node -e 'process.exit(7)'` stopped the block (the following "THIS LINE MUST NOT BE REACHED" never printed) and the block exited **7** — the original status, not masked to 0 by the trap and not flattened to 1 | holds — nothing masked |
+| (d) does `pipefail` matter? | with `set -eo pipefail`: a failing wrapper piped to `tail` gave `block exit=1` and the following line never printed. With `set -e` alone: `SEEN=` (empty), `BLOCK CONTINUED PAST A FAILING WRAPPER`, `block exit=0` | holds — `pipefail` is load-bearing; without it `tail`'s 0 masks the wrapper's failure exactly as the fix claims |
+
+Cleanup ran and removed the isolated root in **all four** scenarios, including
+the two that died mid-block.
+
+## The four Mirrored-Surface-walk catches
+
+| Catch | Spot-check | Verdict |
+|---|---|---|
+| **8a naming** | Checklist `:300-302` and the red list both say "step **8a**"/"step 8b". The block's header is `# 8 —` with `# 8b —` introducing the second half, and the first assertion echoes `8a child saw:`. This matches the pattern step 4 uses (`# 4 —` … `# 4b —`), so the convention is uniform, not drift | consistent |
+| **env passthrough entry + "removes nothing" AC** | The AC now exists as its own bullet (`:430-433`) and step 8b exists and discriminates (F3). Table A's injected-variables row `:256` carries "The rest of `process.env` passes through unchanged" | present and consistent — but see **R1-b** for the checklist's citation wording, and **R1-a** for the AC pair |
+| **byte-exact / order-exact forwarding** | Three surfaces named, three exist: Table A `:254` ("byte-exact and in order — none dropped, reordered, re-quoted or merged, including arguments containing spaces"), AC `:421-428`, step 4a. The item explicitly excludes 4b ("a smoke check and pins nothing — do not treat it as a mirror"), which F4 measured to be exactly right | consistent |
+| **interrupt residual, multi-surface** | Item says "must move all **four**" and names four: Table A's "Wrapper's own interruption" row (`:260`), Table A's "Nothing is started" row (`:272`), the Implementation-notes bullet (`:363-370`), the ADR-0004 sentence in Context (`:16-18`). All four exist and agree | consistent — **count matches list** |
+
+The fifth new item ("The containment's exact strength") names two surfaces —
+the Security checklist item and Table A's symlink row — and both exist and
+agree (F2).
+
+## Residual observations from this wave
+
+### R1-a — the two env acceptance criteria now contradict each other (LIGHT, new)
+
+Splitting the env criterion in two dropped the clause that reconciled them. The
+first criterion (`:427-429`) previously ended "— not even as a present-but-empty
+value — **unless the caller's own environment had them**"; the fix deleted that
+final clause, so it now reads as an absolute:
+
+> The wrapper injects **only** `TMPDIR`, `TMP` and `TEMP`: a child run through it
+> sees neither `WIENERDOG_TEST_NO_REAL_SCHEDULER` nor `WIENERDOG_RUN_SCENARIOS`
+> — not even as a present-but-empty value.
+
+The new second criterion (`:430-433`) says the opposite for the same case:
+
+> When the caller's own environment carries those variables, they reach the child
+> **byte-exact**
+
+As literally written no wrapper can satisfy both, and the second criterion's own
+closing clause — "a wrapper that deletes them satisfies the criterion above and
+fails this one" — is true only under the absolute reading, which makes the pair
+self-referentially inconsistent rather than merely loose.
+
+This is prose only. The canonical table is **correct**: Table A `:257` still
+carries "A child sees either variable only if the caller's own environment
+already had it". The verification steps are correct too and implement the scoped
+reading — 8a runs under `env -u` (caller has neither), 8b with the caller
+carrying values — which is why a conforming stand-in passes both (F3). Smallest
+fix: scope the first criterion again, e.g. "sees neither … **injected by the
+wrapper**", or restore "unless the caller's own environment had them (see the
+next criterion)".
+
+### R1-b — one checklist citation points at the wrong criterion (LIGHT, new)
+
+The env-passthrough checklist item (`:303-305`) cites "Table A's
+injected-variables row, **the same acceptance criterion**, and verification step
+8b". After this wave the passthrough half has its **own** criterion, not the same
+one. The very next checklist item gets this right for its row ("Table A's
+forwarding row, **its** acceptance criterion, and verification step 4a"). One
+word.
+
+### R1-c — step 9 is demanded a red it is never given (LIGHT, pre-existing)
+
+Not introduced by this wave, recorded for completeness. The umbrella sentence
+requires each of "Steps 2, 4a and 5–10", except step 5, to be observed on both
+sides; the deliberate-red list enumerates reds for steps 2, 4a, 6 (×2), 7 (×2),
+8a (×2), 8b, 10 and the guard test (×2) — but **not step 9**. A step-9 red is
+trivially producible and discriminating (a wrapper that exits 0 with no
+argument), so this is a bookkeeping omission rather than an unfirable red like
+the old step-5 entry. Present since the original draft.
+
+## Conformance gates (re-run at `1f3a723`)
+
+| Gate | Command | Exit | Verdict |
+|---|---|---|---|
+| Frontmatter schema | `node scripts/check-frontmatter.js` | **0** — "frontmatter check passed: 221 spec(s), 4 agent(s)" | passes |
+| Markdownlint (repo config) | `npx --no-install markdownlint-cli2 --config package.json --configPointer /markdownlint-cli2 "docs/specs/WP-temp-root-wrapper.md"` | **0** — "Summary: 0 error(s)" | passes |
+| Boundary check, positive | `node scripts/boundary-check.js docs/specs/WP-temp-root-wrapper.md tests/with-temp-root.js tests/unit/tmpdir-leak-guard.test.js package.json` | **0** | passes |
+| Boundary check, negative control | `node scripts/boundary-check.js docs/specs/WP-temp-root-wrapper.md tests/run.js` | **1** — "Files outside the spec's Deliverables table: tests/run.js" | passes (correctly rejected) |
+
+## Round-1 wave summary
+
+F1, F2, F3, F4 and F5 all hold, each verified mechanically where it was
+runnable; the four mirror-walk catches are internally consistent with no
+count/list mismatch; all four gates pass; and the outstanding N-wave umbrella
+residual was closed in the same commit. Two LIGHT wording residuals remain
+(**R1-a**, the env criterion pair that lost its reconciling clause; **R1-b**, one
+mis-pointed checklist citation), plus one pre-existing bookkeeping gap
+(**R1-c**, no step-9 red). Nothing HEAVY; nothing that changes the mechanism,
+any table, or any verification result.
